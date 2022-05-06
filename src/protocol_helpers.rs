@@ -22,10 +22,6 @@ pub fn recv_u64(fd: RawFd) -> Result<u64, String> {
 
 /// Send `len` bytes from `buf` to a connection-oriented socket
 pub fn send_loop(fd: RawFd, buf: &[u8], len: u64) -> Result<(), String> {
-    // println!("Sending...");
-    // println!("  Length: {}", len);
-    // println!("  Content: {:?}", buf);
-
     let len: usize = len.try_into().map_err(|err| format!("{:?}", err))?;
     let mut send_bytes = 0;
 
