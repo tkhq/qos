@@ -1,0 +1,21 @@
+# Let there be async!
+edition = "2021"
+
+# Tabs
+hard_tabs = true
+tab_spaces = 4
+
+# Line wrapping
+use_small_heuristics = "Max"
+wrap_comments = true
+max_width = 80
+
+# Imports
+imports_granularity = "Crate"
+reorder_imports = true
+group_imports = "StdExternalCrate"
+
+# Random
+use_field_init_shorthand = true
+newline_style = "Unix"
+trailing_semicolon = false
