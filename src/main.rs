@@ -5,14 +5,14 @@
 mod protocol;
 
 pub fn main() {
-  println!("Hello, world");
+	println!("Hello, world");
 }
 
-// // "The client making a connection should provide the CID of a remote virtual machine or host."
-// const SERVER_CID: u32 = libc::VMADDR_CID_ANY;
+// // "The client making a connection should provide the CID of a remote virtual
+// machine or host." const SERVER_CID: u32 = libc::VMADDR_CID_ANY;
 
-// // "The port number is arbitrary, although server (listener) and client (connector) must use the same number,"
-// const SERVER_PORT: u32 = 1234;
+// // "The port number is arbitrary, although server (listener) and client
+// (connector) must use the same number," const SERVER_PORT: u32 = 1234;
 
 // // Commands
 // #[derive(Debug, StructOpt)]
