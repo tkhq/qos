@@ -1,48 +1,33 @@
 .PHONY: build
 build:
 	docker build \
-		--tag qos \
+		--tag apeclave \
 		.
 
 .PHONY: volume
 volume:
-	docker volume create qos
+	docker volume create vapecave
 
-.PHONY: enclave
-enclave: build volume
+.PHONY: server
+server: build volume
 	docker run \
 		--rm \
-		-it \
-		-v qos:/var/run/qos:rw \
-		qos \
-		./qos server --port 3000
+		-v vapecave:/var/run/vapecave:rw \
+		apeclave \
+		server
 
 .PHONY: client
 client: build volume
 	docker run \
 		--rm \
-		-it \
-		-v qos:/var/run/qos:rw \
-		qos \
-		./qos client --cid 3 --port 5005
+		-v vapecave:/var/run/vapecave:rw \
+		apeclave \
+		client
 
 .PHONY: shell
 shell: build volume
 	docker run \
 		--rm \
 		-it \
-		-v qos:/var/run/qos:rw \
-		qos \
+		-v vapecave:/var/run/vapecave:rw \
 		bash
-
-# server: build
-# 	docker build -t vsock-sample-server -f Dockerfile.server .
-# 	nitro-cli build-enclave --docker-uri vsock-sample-server --output-file vsock_sample_server.eif
-
-# client: build
-# 	docker build -t vsock-sample-client -f Dockerfile.client .
-# 	nitro-cli build-enclave --docker-uri vsock-sample-client --output-file vsock_sample_client.eif
-
-# .PHONY: clean
-# clean:
-# 	rm -rf ${RUST_DIR}/target ${RUST_DIR}/vsock_sample_*.eif ${RUST_DIR}/vsock-sample

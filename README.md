@@ -1,22 +1,12 @@
-# Quorum OS
+qiq mafs
 
-This is in a very rough state...
-
-### Development
-
-Ensure that the location of the socket is r/w:
-
-```shell
-make shell
-> chmod 777 /var/run/qos
 ```
+# start server
+maker server
 
-Run the enclave:
-```shell
-make enclave
-```
-
-Run the client:
-```shell
+# start client
 make client
+
+# make code pretttty
+cargo +nightly fmt
 ```

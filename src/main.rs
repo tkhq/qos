@@ -1,39 +1,64 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(warnings)]
+use structopt::StructOpt;
 
-use clap::{App, AppSettings, Arg, SubCommand};
-use qos::create_app;
-use qos::enclave;
+mod io;
+mod server;
 
-const BACKLOG: usize = 128;
-const BUF_MAX_LEN: usize = 8192;
-const MAX_CONNECTION_ATTEMPTS: usize = 5;
+// "The client making a connection should provide the CID of a remote virtual machine or host."
+const SERVER_CID: u32 = libc::VMADDR_CID_ANY;
 
-fn main() {
-  ctrlc::set_handler(move || {
-    std::process::exit(1);
-  }).expect("Error setting Ctrl-C handler");
+// "The port number is arbitrary, although server (listener) and client (connector) must use the same number,"
+const SERVER_PORT: u32 = 1234;
 
-  let app = create_app!();
-  let args = app.get_matches();
+// Commands
+#[derive(Debug, StructOpt)]
+#[structopt(name = "Command")]
+enum Cmd {
+	Server, //{
+	// #[structopt(subcommand)]
+	// opt: Opt,
+	// },
+	Client, // {
+	        // #[structopt(subcommand)]
+	        // opt: Opt,
+	        // }
+}
 
-  match args.subcommand() {
-    ("server", Some(args)) => {
-      let s = enclave::Server::new().unwrap();
-      s.serve();
-    }
-    ("client", Some(args)) => {
-      let c = enclave::Client::new().unwrap();
-      let data = "Hello, server!".as_bytes();
-      match c.send(&data) {
-        Ok(response) => {
-          println!("Response!");
-          println!("{}", String::from_utf8(response).unwrap());
-        },
-        Err(err) => println!("{:?}", err)
-      };
-    }
-    (&_, _) => {}
-  }
+// Options
+// #[derive(Debug, StructOpt)]
+// struct Opt {
+// 	#[structopt(long)]
+// 	port: u32,
+// 	#[structopt(long)]
+// 	cid: u32,
+// }
+
+fn main() -> Result<(), io::IOError> {
+	ctrlc::set_handler(move || {
+		std::process::exit(1);
+	})
+	.expect("Error setting Ctrl-C handler");
+
+	println!("enter bin");
+
+	match Cmd::from_args() {
+		Cmd::Server => {
+			println!("server");
+			server::ClientServer::try_serve(SERVER_CID, SERVER_PORT)?
+		}
+		Cmd::Client => {
+			println!("client");
+
+			let server =
+				server::ClientServer::try_connect(SERVER_CID, SERVER_PORT)?;
+
+			server.send_buf(&b"HELLO WORLD :)".to_vec())?;
+
+			let resp = server.recv_buf()?;
+			println!("Received: {:?}", resp);
+		}
+	}
+
+	println!("exiting");
+
+	Ok(())
 }

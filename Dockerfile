@@ -1,38 +1,22 @@
-FROM rust:1.60 as builder
+FROM lukemathwalker/cargo-chef:latest-rust-1.56.0 AS chef
+WORKDIR app
 
-RUN USER=root cargo new --bin qos
-WORKDIR ./qos
-COPY ./Cargo.toml ./Cargo.toml
-COPY ./Cargo.lock ./Cargo.lock
-RUN cargo build --release
-RUN rm src/*.rs
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-ADD . ./
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+# Build dependencies - this is the caching Docker layer!
+RUN cargo chef cook --recipe-path recipe.json
+# Build application
+COPY . .
+RUN cargo build --bin apeclave
 
-RUN rm ./target/release/deps/qos*
-RUN cargo build --release
-
-FROM debian
-ARG APP=/usr/src/app
-
-RUN apt-get update \
-    && apt-get install -y ca-certificates tzdata procps netcat \
-    && rm -rf /var/lib/apt/lists/*
-
-EXPOSE 8000
-
-ENV TZ=Etc/UTC \
-    APP_USER=appuser
-
-RUN groupadd $APP_USER \
-    && useradd -g $APP_USER $APP_USER \
-    && mkdir -p ${APP}
-
-COPY --from=builder /qos/target/release/qos ${APP}/qos
-
-RUN chown -R $APP_USER:$APP_USER ${APP}
-
-USER $APP_USER
-WORKDIR ${APP}
-
-# CMD ["./enclave", "server", "--port", "5005"]
+# We do not need the Rust toolchain to run the binary!
+FROM debian:buster-slim AS runtime
+WORKDIR app
+# NOTE: We ommitted the release flag, so these are faster debug builds and thus under the debug
+# directory
+COPY --from=builder /app/target/debug/apeclave /usr/local/bin
+ENTRYPOINT ["/usr/local/bin/apeclave"]
