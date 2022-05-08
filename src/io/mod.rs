@@ -1,7 +1,8 @@
 //! Interaction with any sys calls should be contained within this module.
 
 pub(crate) mod raw_fd;
-pub(crate) mod stream_endpoint;
+// pub(crate) mod stream_endpoint;
+pub(crate) mod stream;
 
 #[derive(Debug)]
 pub enum IOError {
@@ -9,4 +10,10 @@ pub enum IOError {
 	ArithmeticSaturation,
 	UnsupportedAddr,
 	UnknownError,
+}
+
+impl From<nix::Error> for IOError {
+	fn from(err: nix::Error) -> Self {
+		Self::NixError(err)
+	}
 }
