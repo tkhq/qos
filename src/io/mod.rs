@@ -1,7 +1,5 @@
 //! Interaction with any sys calls should be contained within this module.
 
-pub(crate) mod raw_fd;
-// pub(crate) mod stream_endpoint;
 pub(crate) mod stream;
 
 #[derive(Debug)]

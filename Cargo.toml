@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 nix = { version = "0.24.1", features = ["socket"] }
 
-[feature]
+[features]
+default=["local"]
 local = []
 vm = []

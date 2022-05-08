@@ -1,45 +1,87 @@
+//! Stream
+
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(warnings)]
 
-use std::os::unix::io::{RawFd};
-use std::mem::size_of;
 use nix::{
 	sys::socket::{
-		bind, connect, accept, listen, shutdown, socket, recv, AddressFamily,
-		Shutdown, SockFlag, SockType, SockaddrLike, MsgFlags, send
+		accept, bind, connect, listen, recv, send, shutdown, socket,
+		AddressFamily, MsgFlags, Shutdown, SockAddr, SockFlag, SockType,
+		SockaddrLike,
 	},
 	unistd::close,
 };
+use std::fs::remove_file;
+use std::mem::size_of;
+use std::os::unix::io::RawFd;
+use std::path::Path;
 
 use super::IOError;
 
-#[cfg(feature="vm")]
+#[cfg(feature = "vm")]
 use nix::sys::socket::VsockAddr;
 
 #[cfg(feature = "local")]
 use nix::sys::socket::UnixAddr;
+
+#[derive(Clone)]
+enum SocketAddr {
+	#[cfg(feature = "vm")]
+	Vsock(VsockAddr),
+	#[cfg(feature = "local")]
+	Unix(UnixAddr),
+}
+
+impl SocketAddr {
+	fn family(&self) -> AddressFamily {
+		match *self {
+			#[cfg(feature = "vm")]
+			Self::Vsock(_) => AddressFamily::Vsock,
+			#[cfg(feature = "local")]
+			Self::Unix(_) => AddressFamily::Unix,
+			_ => {
+				panic!("Unknown socket addr")
+			}
+		}
+	}
+
+	// Convenience method for accessing the wrapped address
+	fn addr(&self) -> impl SockaddrLike {
+		match *self {
+			#[cfg(feature = "vm")]
+			Self::Vsock(vsa) => return vsa,
+			#[cfg(feature = "local")]
+			Self::Unix(ua) => return ua,
+			_ => {
+				panic!("Unknown socket addr")
+			}
+		}
+	}
+}
 
 // TODO: mutual exclusive compilation local/vm compile time check
 
 const MAX_RETRY: usize = 8;
 const BACKLOG: usize = 128;
 
-struct Stream { fd: RawFd }
+struct Stream {
+	fd: RawFd,
+}
 
 impl Stream {
-	fn connect(addr: &dyn SockaddrLike) -> Result<Self, IOError> {
+	fn connect(addr: &SocketAddr) -> Result<Self, IOError> {
 		let mut err = IOError::UnknownError;
 
 		for i in 0..MAX_RETRY {
 			let fd = socket_fd(addr)?;
 			let stream = Self { fd };
 
-      // TODO: Revisit these options
+			// TODO: Revisit these options
 			// setsockopt(vsock.as_raw_fd(), sockopt::ReuseAddr, &true)?;
 			// setsockopt(vsock.as_raw_fd(), sockopt::ReusePort, &true)?;
 
-			match connect(stream.fd, addr) {
+			match connect(stream.fd, &addr.addr()) {
 				Ok(_) => return Ok(stream),
 				Err(e) => err = IOError::NixError(e),
 			}
@@ -51,7 +93,7 @@ impl Stream {
 		Err(err)
 	}
 
-	fn send(fd: RawFd, buf: &Vec<u8>) -> Result<(), IOError>{
+	fn send(&self, buf: &Vec<u8>) -> Result<(), IOError> {
 		let len = buf.len();
 
 		// First, send the length of the buffer
@@ -62,7 +104,7 @@ impl Stream {
 			let mut sent_bytes = 0;
 			while sent_bytes < len_buf.len() {
 				sent_bytes += match send(
-					fd,
+					self.fd,
 					&len_buf[sent_bytes..len_buf.len()],
 					MsgFlags::empty(),
 				) {
@@ -77,19 +119,22 @@ impl Stream {
 		{
 			let mut sent_bytes = 0;
 			while sent_bytes < len {
-				sent_bytes +=
-					match send(fd, &buf[sent_bytes..len], MsgFlags::empty()) {
-						Ok(size) => size,
-						Err(nix::Error::EINTR) => 0,
-						Err(err) => return Err(IOError::NixError(err)),
-					}
+				sent_bytes += match send(
+					self.fd,
+					&buf[sent_bytes..len],
+					MsgFlags::empty(),
+				) {
+					Ok(size) => size,
+					Err(nix::Error::EINTR) => 0,
+					Err(err) => return Err(IOError::NixError(err)),
+				}
 			}
 		}
 
 		Ok(())
 	}
-  
-	pub fn recv(fd: RawFd) -> Result<Vec<u8>, IOError> {
+
+	pub fn recv(&self) -> Result<Vec<u8>, IOError> {
 		// First, read the length
 		let length: usize = {
 			{
@@ -100,7 +145,7 @@ impl Stream {
 				let mut received_bytes = 0;
 				while received_bytes < len {
 					received_bytes += match recv(
-						fd,
+						self.fd,
 						&mut buf[received_bytes..len],
 						MsgFlags::empty(),
 					) {
@@ -121,12 +166,12 @@ impl Stream {
 		};
 
 		// Then, read the buffer
-		let mut buf = Vec::with_capacity(length);
+		let mut buf = vec![0; length];
 		{
 			let mut received_bytes = 0;
 			while received_bytes < length {
 				received_bytes += match recv(
-					fd,
+					self.fd,
 					&mut buf[received_bytes..length],
 					MsgFlags::empty(),
 				) {
@@ -137,7 +182,7 @@ impl Stream {
 			}
 		}
 
-		Ok(buf)		
+		Ok(buf)
 	}
 }
 
@@ -151,17 +196,20 @@ impl Drop for Stream {
 	}
 }
 
-struct Listener { fd: RawFd }
+struct Listener {
+	fd: RawFd,
+	addr: SocketAddr,
+}
 
 impl Listener {
 	/// Bind and listen on the given address.
-	fn serve(addr: &dyn SockaddrLike) -> Result<Self, IOError> {
-		let fd = socket_fd(addr)?;
+	fn serve(addr: SocketAddr) -> Result<Self, IOError> {
+		let fd = socket_fd(&addr)?;
 
-		bind(fd, addr)?;
+		bind(fd, &addr.addr())?;
 		listen(fd, BACKLOG)?;
 
-		Ok(Self { fd })
+		Ok(Self { fd, addr })
 	}
 
 	fn accept(&self) -> Result<Stream, IOError> {
@@ -185,26 +233,53 @@ impl Drop for Listener {
 		});
 		close(self.fd)
 			.unwrap_or_else(|e| eprintln!("Failed to close socket: {:?}", e));
+
+		#[cfg(feature = "local")]
+		{
+			if let SocketAddr::Unix(addr) = self.addr {
+				if let Some(path) = addr.path() {
+					if path.exists() {
+						remove_file(path);
+					}
+				}
+			}
+		}
 	}
 }
 
-fn socket_fd(addr: &dyn SockaddrLike) -> Result<RawFd, IOError> {
-		let addr_family = match addr.family() {
-			Some(AddressFamily::Unix) =>  AddressFamily::Unix ,
-			#[cfg(feature = "vm")]
-			Some(AddressFamily::Vsock) => AddressFamily::Vsock,
-			_ => return Err(IOError::UnsupportedAddr),
-		};
+fn socket_fd(addr: &SocketAddr) -> Result<RawFd, IOError> {
+	socket(
+		addr.family(),
+		// Type - sequenced, two way byte stream. (full duplexed).
+		// Stream must be in a connected state before send/recieve.
+		SockType::Stream,
+		// Flags
+		SockFlag::empty(),
+		// Protocol - no protocol needs to be specified as SOCK_STREAM
+		// is both a type and protocol.
+		None,
+	)
+	.map_err(|e| IOError::NixError(e))
+}
 
-		socket(
-			addr_family,
-			// Type - sequenced, two way byte stream. (full duplexed).
-			// Stream must be in a connected state before send/recieve.
-			SockType::Stream,
-			// Flags
-			SockFlag::empty(),
-			// Protocol - no protocol needs to be specified as SOCK_STREAM
-			// is both a type and protocol.
-			None,
-		).map_err(|e| IOError::NixError(e))
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn stream_integration_test() {
+		let unix_addr =
+			nix::sys::socket::UnixAddr::new("./test.socket").unwrap();
+		let addr = SocketAddr::Unix(unix_addr);
+		let listener = Listener::serve(addr.clone()).unwrap();
+		let client = Stream::connect(&addr).unwrap();
+		let server = listener.accept().unwrap();
+
+		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
+		client.send(&data);
+
+		let resp = server.recv().unwrap();
+
+		assert_eq!(data, resp);
+	}
 }
