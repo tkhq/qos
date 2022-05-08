@@ -1,6 +1,4 @@
-// use structopt::StructOpt;
-
-// mod io;
+mod io;
 // mod server;
 mod protocol;
 
