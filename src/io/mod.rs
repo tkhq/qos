@@ -2,11 +2,10 @@
 
 pub(crate) mod stream;
 
-#[derive(Debug)]
+#[cfg_attr(test, derive(Debug))]
 pub enum IOError {
 	NixError(nix::Error),
 	ArithmeticSaturation,
-	UnsupportedAddr,
 	UnknownError,
 }
 

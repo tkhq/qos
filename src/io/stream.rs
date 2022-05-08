@@ -40,9 +40,6 @@ impl SocketAddr {
 			Self::Vsock(_) => AddressFamily::Vsock,
 			#[cfg(feature = "local")]
 			Self::Unix(_) => AddressFamily::Unix,
-			_ => {
-				panic!("Unknown socket addr")
-			}
 		}
 	}
 
@@ -53,14 +50,9 @@ impl SocketAddr {
 			Self::Vsock(vsa) => return vsa,
 			#[cfg(feature = "local")]
 			Self::Unix(ua) => return ua,
-			_ => {
-				panic!("Unknown socket addr")
-			}
 		}
 	}
 }
-
-// TODO: mutual exclusive compilation local/vm compile time check
 
 const MAX_RETRY: usize = 8;
 const BACKLOG: usize = 128;
@@ -188,11 +180,8 @@ impl Stream {
 
 impl Drop for Stream {
 	fn drop(&mut self) {
-		shutdown(self.fd, Shutdown::Both).unwrap_or_else(|e| {
-			eprintln!("Failed to shutdown socket: {:?}", e)
-		});
-		close(self.fd)
-			.unwrap_or_else(|e| eprintln!("Failed to close socket: {:?}", e));
+		shutdown(self.fd, Shutdown::Both);
+		close(self.fd);
 	}
 }
 
@@ -228,11 +217,8 @@ impl Iterator for Listener {
 
 impl Drop for Listener {
 	fn drop(&mut self) {
-		shutdown(self.fd, Shutdown::Both).unwrap_or_else(|e| {
-			eprintln!("Failed to shutdown socket: {:?}", e)
-		});
-		close(self.fd)
-			.unwrap_or_else(|e| eprintln!("Failed to close socket: {:?}", e));
+		shutdown(self.fd, Shutdown::Both);
+		close(self.fd);
 
 		#[cfg(feature = "local")]
 		{
@@ -265,11 +251,11 @@ fn socket_fd(addr: &SocketAddr) -> Result<RawFd, IOError> {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use async_std;
 
 	#[test]
 	fn stream_integration_test() {
-		let unix_addr =
-			nix::sys::socket::UnixAddr::new("./test.socket").unwrap();
+		let unix_addr = nix::sys::socket::UnixAddr::new("./test.sock").unwrap();
 		let addr = SocketAddr::Unix(unix_addr);
 		let listener = Listener::serve(addr.clone()).unwrap();
 		let client = Stream::connect(&addr).unwrap();
@@ -281,5 +267,30 @@ mod test {
 		let resp = server.recv().unwrap();
 
 		assert_eq!(data, resp);
+	}
+
+	fn listener_iterator_test() {
+		let unix_addr = nix::sys::socket::UnixAddr::new("./test.sock").unwrap();
+		let addr = SocketAddr::Unix(unix_addr);
+
+		let mut listener = Listener::serve(addr.clone()).unwrap();
+
+		let handler = std::thread::spawn(move || {
+			while let Some(stream) = listener.next() {
+				let req = stream.recv().unwrap();
+				stream.send(&req);
+				break;
+			}
+		});
+
+		let client = Stream::connect(&addr).unwrap();
+
+		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
+		let _ = client.send(&data).unwrap();
+		let resp = client.recv().unwrap();
+
+		assert_eq!(data, resp);
+
+		handler.join().unwrap()
 	}
 }
