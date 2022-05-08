@@ -1,67 +1,41 @@
+use std::env;
+
+use crate::protocol::{ProtocolRequest, Serialize};
 mod io;
-// mod server;
 mod protocol;
+mod server;
 
 pub fn main() {
-	println!("Hello, world");
+	let args: Vec<String> = env::args().collect();
+
+	match args.get(1).map(|a| a.as_str()) {
+		Some("server") => run_server(),
+		Some("client") => run_client(),
+		Some(_) | None => println!("Unknown command..."),
+	};
 }
 
-// // "The client making a connection should provide the CID of a remote virtual
-// machine or host." const SERVER_CID: u32 = libc::VMADDR_CID_ANY;
+fn run_client() {
+	let addr = io::stream::SocketAddress::Unix(
+		nix::sys::socket::UnixAddr::new("./dev.sock").unwrap(),
+	);
+	let client = io::stream::Stream::connect(&addr).unwrap();
 
-// // "The port number is arbitrary, although server (listener) and client
-// (connector) must use the same number," const SERVER_PORT: u32 = 1234;
+	let data = b"Hello, world!".to_vec();
+	println!("Payload: {:?}", data);
 
-// // Commands
-// #[derive(Debug, StructOpt)]
-// #[structopt(name = "Command")]
-// enum Cmd {
-// 	Server, //{
-// 	// #[structopt(subcommand)]
-// 	// opt: Opt,
-// 	// },
-// 	Client, // {
-// 	        // #[structopt(subcommand)]
-// 	        // opt: Opt,
-// 	        // }
-// }
+	let payload = protocol::EchoRequest { data };
+	let request = ProtocolRequest::Echo(payload);
 
-// // Options
-// // #[derive(Debug, StructOpt)]
-// // struct Opt {
-// // 	#[structopt(long)]
-// // 	port: u32,
-// // 	#[structopt(long)]
-// // 	cid: u32,
-// // }
+	client.send(&request.serialize()).unwrap();
+	let result = client.recv().unwrap();
 
-// fn main() -> Result<(), io::IOError> {
-// 	ctrlc::set_handler(move || {
-// 		std::process::exit(1);
-// 	})
-// 	.expect("Error setting Ctrl-C handler");
+	println!("Result: {:?}", result);
+}
 
-// 	println!("enter bin");
-
-// 	match Cmd::from_args() {
-// 		Cmd::Server => {
-// 			println!("server");
-// 			server::ClientServer::try_serve(SERVER_CID, SERVER_PORT)?
-// 		}
-// 		Cmd::Client => {
-// 			println!("client");
-
-// 			let server =
-// 				server::ClientServer::try_connect(SERVER_CID, SERVER_PORT)?;
-
-// 			server.send_buf(&b"HELLO WORLD :)".to_vec())?;
-
-// 			let resp = server.recv_buf()?;
-// 			println!("Received: {:?}", resp);
-// 		}
-// 	}
-
-// 	println!("exiting");
-
-// 	Ok(())
-// }
+fn run_server() {
+	let addr = io::stream::SocketAddress::Unix(
+		nix::sys::socket::UnixAddr::new("./dev.sock").unwrap(),
+	);
+	server::Server::listen(addr).unwrap();
+}

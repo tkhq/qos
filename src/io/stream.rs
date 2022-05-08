@@ -6,9 +6,9 @@
 
 use nix::{
 	sys::socket::{
-		accept, bind, connect, listen, recv, send, shutdown, socket,
-		AddressFamily, MsgFlags, Shutdown, SockAddr, SockFlag, SockType,
-		SockaddrLike,
+		accept, bind, connect, listen, recv, send, setsockopt, shutdown,
+		socket, sockopt, AddressFamily, MsgFlags, Shutdown, SockAddr, SockFlag,
+		SockType, SockaddrLike,
 	},
 	unistd::close,
 };
@@ -26,14 +26,14 @@ use nix::sys::socket::VsockAddr;
 use nix::sys::socket::UnixAddr;
 
 #[derive(Clone)]
-enum SocketAddr {
+pub enum SocketAddress {
 	#[cfg(feature = "vm")]
 	Vsock(VsockAddr),
 	#[cfg(feature = "local")]
 	Unix(UnixAddr),
 }
 
-impl SocketAddr {
+impl SocketAddress {
 	fn family(&self) -> AddressFamily {
 		match *self {
 			#[cfg(feature = "vm")]
@@ -57,12 +57,13 @@ impl SocketAddr {
 const MAX_RETRY: usize = 8;
 const BACKLOG: usize = 128;
 
-struct Stream {
+pub struct Stream {
 	fd: RawFd,
 }
 
 impl Stream {
-	fn connect(addr: &SocketAddr) -> Result<Self, IOError> {
+	#[must_use]
+	pub fn connect(addr: &SocketAddress) -> Result<Self, IOError> {
 		let mut err = IOError::UnknownError;
 
 		for i in 0..MAX_RETRY {
@@ -70,8 +71,8 @@ impl Stream {
 			let stream = Self { fd };
 
 			// TODO: Revisit these options
-			// setsockopt(vsock.as_raw_fd(), sockopt::ReuseAddr, &true)?;
-			// setsockopt(vsock.as_raw_fd(), sockopt::ReusePort, &true)?;
+			// setsockopt(fd, sockopt::ReuseAddr, &true)?;
+			// setsockopt(fd, sockopt::ReusePort, &true)?;
 
 			match connect(stream.fd, &addr.addr()) {
 				Ok(_) => return Ok(stream),
@@ -85,7 +86,8 @@ impl Stream {
 		Err(err)
 	}
 
-	fn send(&self, buf: &Vec<u8>) -> Result<(), IOError> {
+	#[must_use]
+	pub fn send(&self, buf: &Vec<u8>) -> Result<(), IOError> {
 		let len = buf.len();
 
 		// First, send the length of the buffer
@@ -126,6 +128,7 @@ impl Stream {
 		Ok(())
 	}
 
+	#[must_use]
 	pub fn recv(&self) -> Result<Vec<u8>, IOError> {
 		// First, read the length
 		let length: usize = {
@@ -185,14 +188,16 @@ impl Drop for Stream {
 	}
 }
 
-struct Listener {
+pub struct Listener {
 	fd: RawFd,
-	addr: SocketAddr,
+	addr: SocketAddress,
 }
 
 impl Listener {
 	/// Bind and listen on the given address.
-	fn serve(addr: SocketAddr) -> Result<Self, IOError> {
+	pub fn listen(addr: SocketAddress) -> Result<Self, IOError> {
+		Self::clean(&addr);
+
 		let fd = socket_fd(&addr)?;
 
 		bind(fd, &addr.addr())?;
@@ -205,6 +210,20 @@ impl Listener {
 		let fd = accept(self.fd)?;
 
 		Ok(Stream { fd })
+	}
+
+	/// Remove Unix socket if it exists
+	fn clean(addr: &SocketAddress) {
+		#[cfg(feature = "local")]
+		{
+			if let SocketAddress::Unix(addr) = addr {
+				if let Some(path) = addr.path() {
+					if path.exists() {
+						remove_file(path);
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -219,21 +238,11 @@ impl Drop for Listener {
 	fn drop(&mut self) {
 		shutdown(self.fd, Shutdown::Both);
 		close(self.fd);
-
-		#[cfg(feature = "local")]
-		{
-			if let SocketAddr::Unix(addr) = self.addr {
-				if let Some(path) = addr.path() {
-					if path.exists() {
-						remove_file(path);
-					}
-				}
-			}
-		}
+		Self::clean(&self.addr)
 	}
 }
 
-fn socket_fd(addr: &SocketAddr) -> Result<RawFd, IOError> {
+fn socket_fd(addr: &SocketAddress) -> Result<RawFd, IOError> {
 	socket(
 		addr.family(),
 		// Type - sequenced, two way byte stream. (full duplexed).
@@ -251,13 +260,12 @@ fn socket_fd(addr: &SocketAddr) -> Result<RawFd, IOError> {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use async_std;
 
 	#[test]
 	fn stream_integration_test() {
 		let unix_addr = nix::sys::socket::UnixAddr::new("./test.sock").unwrap();
-		let addr = SocketAddr::Unix(unix_addr);
-		let listener = Listener::serve(addr.clone()).unwrap();
+		let addr = SocketAddress::Unix(unix_addr);
+		let listener = Listener::listen(addr.clone()).unwrap();
 		let client = Stream::connect(&addr).unwrap();
 		let server = listener.accept().unwrap();
 
@@ -271,9 +279,9 @@ mod test {
 
 	fn listener_iterator_test() {
 		let unix_addr = nix::sys::socket::UnixAddr::new("./test.sock").unwrap();
-		let addr = SocketAddr::Unix(unix_addr);
+		let addr = SocketAddress::Unix(unix_addr);
 
-		let mut listener = Listener::serve(addr.clone()).unwrap();
+		let mut listener = Listener::listen(addr.clone()).unwrap();
 
 		let handler = std::thread::spawn(move || {
 			while let Some(stream) = listener.next() {

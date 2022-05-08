@@ -2,7 +2,8 @@
 
 pub(crate) mod stream;
 
-#[cfg_attr(test, derive(Debug))]
+// #[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 pub enum IOError {
 	NixError(nix::Error),
 	ArithmeticSaturation,

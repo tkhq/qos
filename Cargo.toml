@@ -9,7 +9,7 @@ edition = "2021"
 nix = { version = "0.24.1", features = ["socket"] }
 
 [dev-dependencies]
-async-std = { version = "1.11.0", features = ["attributes"] }
+# async-std = { version = "1.11.0", features = ["attributes"] }
 
 [features]
 default=["local"]

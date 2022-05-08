@@ -1,45 +1,64 @@
-// use std::os::unix::io::AsRawFd;
+use crate::io;
+use crate::io::stream::SocketAddress;
+use crate::io::stream::{Listener, Stream};
+use crate::protocol::{self, ProtocolRequest, Serialize};
 
-// use crate::io::{self, vsock::VsockSocket};
+#[derive(Debug)]
+pub enum ServerError {
+	IOError(io::IOError),
+	UnknownError,
+	ProtocolError(protocol::ProtocolError),
+}
 
-// pub struct ClientServer {
-// 	vsock: VsockSocket,
-// }
+impl From<io::IOError> for ServerError {
+	fn from(err: io::IOError) -> Self {
+		Self::IOError(err)
+	}
+}
 
-// impl ClientServer {
-// 	pub fn try_connect(cid: u32, port: u32) -> Result<Self, io::IOError> {
-// 		Ok(Self {
-// 			vsock: VsockSocket::try_connect(cid, port)
-// 				.map_err(|e| io::IOError::NixError(e))?,
-// 		})
-// 	}
+impl From<protocol::ProtocolError> for ServerError {
+	fn from(err: protocol::ProtocolError) -> Self {
+		Self::ProtocolError(err)
+	}
+}
 
-// 	pub fn send_buf(&self, buf: &Vec<u8>) -> Result<(), io::IOError> {
-// 		io::raw_fd::send_buf(self.vsock.as_raw_fd(), buf)
-// 	}
+pub struct Server {
+	// listener: Listener,
+}
 
-// 	pub fn recv_buf(&self) -> Result<Vec<u8>, io::IOError> {
-// 		io::raw_fd::recv_buf(self.vsock.as_raw_fd())
-// 	}
+impl Server {
+	pub fn listen(addr: SocketAddress) -> Result<(), ServerError> {
+		let mut listener = Listener::listen(addr)?;
+		while let Some(stream) = listener.next() {
+			match stream.recv() {
+				Ok(payload) => Self::respond(stream, payload),
+				Err(err) => println!("Received error: {:?}", err),
+			}
+		}
 
-// 	pub fn try_serve(cid: u32, port: u32) -> Result<(), io::IOError> {
-// 		let server = Self {
-// 			vsock: VsockSocket::try_listen(cid, port)
-// 				.map_err(|e| io::IOError::NixError(e))?,
-// 		};
+		Ok(())
+	}
 
-// 		loop {
-// 			if let Ok(mut req) = server.recv_buf() {
-// 				println!("APECLAVE received {:#?}", req);
+	fn respond(stream: Stream, mut payload: Vec<u8>) {
+		let request = ProtocolRequest::deserialize(&mut payload);
 
-// 				// Extend the request to ack we recieved
-// 				req.extend(b" - signed by APECLAVE".iter());
+		let result: Result<(), ServerError> = match request {
+			Ok(ProtocolRequest::Empty) => {
+				println!("Empty request...");
+				let res = b"Empty!".to_vec();
+				stream.send(&res).map_err(Into::into)
+			}
+			Ok(ProtocolRequest::Echo(e)) => {
+				println!("Received echo...");
+				let res = e.serialize();
+				stream.send(&res).map_err(Into::into)
+			}
+			Err(e) => {
+				println!("Unknown request...");
+				Err(e.into())
+			}
+		};
 
-// 				// Echo back, but with the extended request
-// 				server.send_buf(&req)?;
-// 			}
-// 		}
-
-// 		// Ok(server)
-// 	}
-// }
+		println!("respond result: {:?}", result);
+	}
+}
