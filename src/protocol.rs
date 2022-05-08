@@ -19,18 +19,27 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 	}
 
 	fn deserialize(data: &mut Vec<u8>) -> Result<Vec<u8>, ProtocolError> {
+    // Error if the payload size cannot be determined
+    if data.len() < su32 {
+      return Err(ProtocolError::DeserializationError);
+    }
     let len_bytes: [u8; su32] = data.drain(0..su32)
       .collect::<Vec<u8>>() // create Vec<u8>
       .try_into() // convert to [u8; 4]
       .map_err(|_| ProtocolError::DeserializationError)?;
     let len_bytes = u32::from_le_bytes(len_bytes) as usize;
+
+    // Error if the payload size is incorrect
+    if data.len() < len_bytes {
+      return Err(ProtocolError::DeserializationError)
+    }
     let result: Vec<u8> = data.drain(0..len_bytes).collect();
 
 		Ok(result)
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ProtocolError {
 	UnknownError,
 	DeserializationError,
@@ -236,17 +245,51 @@ mod test {
     assert_eq!(expected, deserialized);
   }
 
-  // Input too short for data
-  // Index out of range
-  // Input 
+  #[test]
+  fn deserialization_input_too_short() {
+    let mut data = vec![1];
+    let deserialized = Vec::<u8>::deserialize(&mut data);
+    assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
 
+    let mut data = vec![1,0,0,0];
+    let deserialized = Vec::<u8>::deserialize(&mut data);
+    assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
+
+    let mut data = vec![3,0,0,0,1,1];
+    let deserialized = Vec::<u8>::deserialize(&mut data);
+    assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
+
+    let mut data = vec![1];
+    let deserialized = EchoRequest::deserialize(&mut data);
+    assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
+
+    let mut data = vec![1,0,0,0];
+    let deserialized = EchoRequest::deserialize(&mut data);
+    assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
+
+    let mut data = vec![3,0,0,0,1,1];
+    let deserialized = EchoRequest::deserialize(&mut data);
+    assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
+
+    let mut data = vec![];
+    let deserialized = ProtocolRequest::deserialize(&mut data);
+    assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
+
+    let mut data = vec![1,2,0,0,0,1];
+    let deserialized = ProtocolRequest::deserialize(&mut data);
+    assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
+
+    let mut data = vec![99,2,0,0,0,1];
+    let deserialized = ProtocolRequest::deserialize(&mut data);
+    assert_eq!(deserialized, Err(ProtocolError::DeserializationError));   
+  }
+
+  // CAUTION: This test takes a really long time...
   // #[test]
-  // fn deserialize_protocol_request() {
-
+  // fn deserialization_payload_too_large() {
+  //   let req = EchoRequest{ data: (0..(u32::MAX)).map(|_| u8::MAX).collect() };
+  //   let mut serialized = req.serialize();
+  //   let deserialized = EchoRequest::deserialize(&mut serialized).unwrap();
+  //   assert_eq!(deserialized, req);
   // }
-
-	// #[test]
-	// fn serialize_echo() {
-	//   let expected = vec![ProtocolRequest::Echo.index(), ];
-	// }
 }
