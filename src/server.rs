@@ -22,9 +22,7 @@ impl From<protocol::ProtocolError> for ServerError {
 	}
 }
 
-pub struct Server {
-	// listener: Listener,
-}
+pub struct Server {}
 
 impl Server {
 	pub fn listen(addr: SocketAddress) -> Result<(), ServerError> {
@@ -32,7 +30,7 @@ impl Server {
 		while let Some(stream) = listener.next() {
 			match stream.recv() {
 				Ok(payload) => Self::respond(stream, payload),
-				Err(err) => println!("Received error: {:?}", err),
+				Err(err) => eprintln!("Server::listen error: {:?}", err),
 			}
 		}
 
@@ -54,7 +52,7 @@ impl Server {
 				let _ = stream.send(&res);
 			}
 			Err(e) => {
-				println!("Unknown request...");
+				eprintln!("Server::respond error: unknown request: {:?}", e);
 			}
 		};
 	}

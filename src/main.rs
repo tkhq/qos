@@ -1,6 +1,6 @@
 use std::env;
 
-use crate::protocol::{ProtocolRequest, Serialize};
+use crate::protocol::ProtocolRequest;
 mod client;
 mod io;
 mod protocol;

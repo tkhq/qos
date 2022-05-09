@@ -1,10 +1,6 @@
-//! Stream
+//! Abstractions to handle connection based socket streams.
 
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(warnings)]
-
-use std::{fs::remove_file, mem::size_of, os::unix::io::RawFd, path::Path};
+use std::{fs::remove_file, mem::size_of, os::unix::io::RawFd};
 
 #[cfg(feature = "local")]
 use nix::sys::socket::UnixAddr;
@@ -12,14 +8,16 @@ use nix::sys::socket::UnixAddr;
 use nix::sys::socket::VsockAddr;
 use nix::{
 	sys::socket::{
-		accept, bind, connect, listen, recv, send, setsockopt, shutdown,
-		socket, sockopt, AddressFamily, MsgFlags, Shutdown, SockAddr, SockFlag,
-		SockType, SockaddrLike,
+		accept, bind, connect, listen, recv, send, shutdown, socket,
+		AddressFamily, MsgFlags, Shutdown, SockFlag, SockType, SockaddrLike,
 	},
 	unistd::close,
 };
 
 use super::IOError;
+
+const MAX_RETRY: usize = 8;
+const BACKLOG: usize = 128;
 
 #[derive(Clone)]
 pub enum SocketAddress {
@@ -49,9 +47,6 @@ impl SocketAddress {
 		}
 	}
 }
-
-const MAX_RETRY: usize = 8;
-const BACKLOG: usize = 128;
 
 pub struct Stream {
 	fd: RawFd,
@@ -179,11 +174,14 @@ impl Stream {
 
 impl Drop for Stream {
 	fn drop(&mut self) {
-		shutdown(self.fd, Shutdown::Both);
-		close(self.fd);
+		// Its ok if either of these error - likely means the other end of the connection has been
+		// shutdown
+		let _ = shutdown(self.fd, Shutdown::Both);
+		let _ = close(self.fd);
 	}
 }
 
+/// Abstraction to listen for incoming stream connections.
 pub struct Listener {
 	fd: RawFd,
 	addr: SocketAddress,
@@ -192,6 +190,7 @@ pub struct Listener {
 impl Listener {
 	/// Bind and listen on the given address.
 	pub fn listen(addr: SocketAddress) -> Result<Self, IOError> {
+		// In case the last connection at this addr did not shutdown correctly
 		Self::clean(&addr);
 
 		let fd = socket_fd(&addr)?;
@@ -212,10 +211,11 @@ impl Listener {
 	fn clean(addr: &SocketAddress) {
 		#[cfg(feature = "local")]
 		{
+			#![warn(irrefutable_let_patterns)] // not irrefutable when vm is enabled
 			if let SocketAddress::Unix(addr) = addr {
 				if let Some(path) = addr.path() {
 					if path.exists() {
-						remove_file(path);
+						let _ = remove_file(path);
 					}
 				}
 			}
@@ -232,8 +232,10 @@ impl Iterator for Listener {
 
 impl Drop for Listener {
 	fn drop(&mut self) {
-		shutdown(self.fd, Shutdown::Both);
-		close(self.fd);
+		// Its ok if either of these error - likely means the other end of the connection has been
+		// shutdown
+		let _ = shutdown(self.fd, Shutdown::Both);
+		let _ = close(self.fd);
 		Self::clean(&self.addr)
 	}
 }
@@ -266,13 +268,14 @@ mod test {
 		let server = listener.accept().unwrap();
 
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
-		client.send(&data);
+		client.send(&data).unwrap();
 
 		let resp = server.recv().unwrap();
 
 		assert_eq!(data, resp);
 	}
 
+	#[test]
 	fn listener_iterator_test() {
 		let unix_addr = nix::sys::socket::UnixAddr::new("./test.sock").unwrap();
 		let addr = SocketAddress::Unix(unix_addr);
@@ -282,8 +285,8 @@ mod test {
 		let handler = std::thread::spawn(move || {
 			while let Some(stream) = listener.next() {
 				let req = stream.recv().unwrap();
-				stream.send(&req);
-				break
+				stream.send(&req).unwrap();
+				break;
 			}
 		});
 
