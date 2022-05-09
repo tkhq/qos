@@ -1,12 +1,9 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(warnings)]
+//! Enclave I/O message format and serialization.
 
-const su32: usize = std::mem::size_of::<u32>();
+const SU32: usize = std::mem::size_of::<u32>();
 
 #[derive(Debug, PartialEq)]
 pub enum ProtocolError {
-	UnknownError,
 	DeserializationError,
 }
 
@@ -17,7 +14,7 @@ pub trait Serialize<T> {
 
 impl Serialize<Vec<u8>> for Vec<u8> {
 	fn serialize(&self) -> Vec<u8> {
-		let mut vec: Vec<u8> = Vec::with_capacity(self.len() + su32);
+		let mut vec: Vec<u8> = Vec::with_capacity(self.len() + SU32);
 		let len = self.len() as u32;
 		vec.extend(len.to_le_bytes().iter());
 		vec.extend(self.iter());
@@ -25,20 +22,20 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 	}
 
 	fn deserialize(data: &mut Vec<u8>) -> Result<Vec<u8>, ProtocolError> {
-		// Error if the payload size cannot be determined
-		if data.len() < su32 {
-			return Err(ProtocolError::DeserializationError);
+		if data.len() < SU32 {
+			// Payload size cannot be determined
+			return Err(ProtocolError::DeserializationError)
 		}
-		let len_bytes: [u8; su32] = data
-			.drain(0..su32)
+		let len_bytes: [u8; SU32] = data
+			.drain(0..SU32)
 			.collect::<Vec<u8>>() // create Vec<u8>
 			.try_into() // convert to [u8; 4]
 			.map_err(|_| ProtocolError::DeserializationError)?;
 		let len_bytes = u32::from_le_bytes(len_bytes) as usize;
 
-		// Error if the payload size is incorrect
 		if data.len() < len_bytes {
-			return Err(ProtocolError::DeserializationError);
+			// Payload size is incorrect
+			return Err(ProtocolError::DeserializationError)
 		}
 		let result: Vec<u8> = data.drain(0..len_bytes).collect();
 
@@ -291,8 +288,8 @@ mod test {
 	// CAUTION: This test takes a really long time...
 	// #[test]
 	// fn deserialization_payload_too_large() {
-	//   let req = EchoRequest{ data: (0..(u32::MAX)).map(|_| u8::MAX).collect() };
-	//   let mut serialized = req.serialize();
+	//   let req = EchoRequest{ data: (0..(u32::MAX)).map(|_| u8::MAX).collect()
+	// };   let mut serialized = req.serialize();
 	//   let deserialized = EchoRequest::deserialize(&mut serialized).unwrap();
 	//   assert_eq!(deserialized, req);
 	// }

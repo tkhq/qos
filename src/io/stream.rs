@@ -1,29 +1,23 @@
-//! Stream
+//! Abstractions to handle connection based socket streams.
 
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(warnings)]
-
-use nix::{
-	sys::socket::{
-		accept, bind, connect, listen, recv, send, setsockopt, shutdown,
-		socket, sockopt, AddressFamily, MsgFlags, Shutdown, SockAddr, SockFlag,
-		SockType, SockaddrLike,
-	},
-	unistd::close,
-};
-use std::fs::remove_file;
-use std::mem::size_of;
-use std::os::unix::io::RawFd;
-use std::path::Path;
-
-use super::IOError;
-
-#[cfg(feature = "vm")]
-use nix::sys::socket::VsockAddr;
+use std::{fs::remove_file, mem::size_of, os::unix::io::RawFd};
 
 #[cfg(feature = "local")]
 use nix::sys::socket::UnixAddr;
+#[cfg(feature = "vm")]
+use nix::sys::socket::VsockAddr;
+use nix::{
+	sys::socket::{
+		accept, bind, connect, listen, recv, send, shutdown, socket,
+		AddressFamily, MsgFlags, Shutdown, SockFlag, SockType, SockaddrLike,
+	},
+	unistd::close,
+};
+
+use super::IOError;
+
+const MAX_RETRY: usize = 8;
+const BACKLOG: usize = 128;
 
 #[derive(Clone)]
 pub enum SocketAddress {
@@ -54,16 +48,13 @@ impl SocketAddress {
 	}
 }
 
-const MAX_RETRY: usize = 8;
-const BACKLOG: usize = 128;
-
 pub struct Stream {
 	fd: RawFd,
 }
 
 impl Stream {
 	#[must_use]
-	pub fn connect(addr: &SocketAddress) -> Result<Self, IOError> {
+	pub(crate) fn connect(addr: &SocketAddress) -> Result<Self, IOError> {
 		let mut err = IOError::UnknownError;
 
 		for i in 0..MAX_RETRY {
@@ -87,7 +78,7 @@ impl Stream {
 	}
 
 	#[must_use]
-	pub fn send(&self, buf: &Vec<u8>) -> Result<(), IOError> {
+	pub(crate) fn send(&self, buf: &Vec<u8>) -> Result<(), IOError> {
 		let len = buf.len();
 
 		// First, send the length of the buffer
@@ -129,7 +120,7 @@ impl Stream {
 	}
 
 	#[must_use]
-	pub fn recv(&self) -> Result<Vec<u8>, IOError> {
+	pub(crate) fn recv(&self) -> Result<Vec<u8>, IOError> {
 		// First, read the length
 		let length: usize = {
 			{
@@ -146,8 +137,8 @@ impl Stream {
 					) {
 						Ok(size) => size,
 						// https://stackoverflow.com/questions/1674162/how-to-handle-eintr-interrupted-system-call#1674348
-						// Not necessarily actually an error, just the syscall was
-						// interrupted while in progress.
+						// Not necessarily actually an error, just the syscall
+						// was interrupted while in progress.
 						Err(nix::Error::EINTR) => 0,
 						Err(err) => return Err(IOError::NixError(err)),
 					};
@@ -183,19 +174,23 @@ impl Stream {
 
 impl Drop for Stream {
 	fn drop(&mut self) {
-		shutdown(self.fd, Shutdown::Both);
-		close(self.fd);
+		// Its ok if either of these error - likely means the other end of the
+		// connection has been shutdown
+		let _ = shutdown(self.fd, Shutdown::Both);
+		let _ = close(self.fd);
 	}
 }
 
-pub struct Listener {
+/// Abstraction to listen for incoming stream connections.
+pub(crate) struct Listener {
 	fd: RawFd,
 	addr: SocketAddress,
 }
 
 impl Listener {
 	/// Bind and listen on the given address.
-	pub fn listen(addr: SocketAddress) -> Result<Self, IOError> {
+	pub(crate) fn listen(addr: SocketAddress) -> Result<Self, IOError> {
+		// In case the last connection at this addr did not shutdown correctly
 		Self::clean(&addr);
 
 		let fd = socket_fd(&addr)?;
@@ -216,10 +211,12 @@ impl Listener {
 	fn clean(addr: &SocketAddress) {
 		#[cfg(feature = "local")]
 		{
+			// Not irrefutable when "vm" is enabled
+			#[allow(irrefutable_let_patterns)]
 			if let SocketAddress::Unix(addr) = addr {
 				if let Some(path) = addr.path() {
 					if path.exists() {
-						remove_file(path);
+						let _ = remove_file(path);
 					}
 				}
 			}
@@ -236,8 +233,10 @@ impl Iterator for Listener {
 
 impl Drop for Listener {
 	fn drop(&mut self) {
-		shutdown(self.fd, Shutdown::Both);
-		close(self.fd);
+		// Its ok if either of these error - likely means the other end of the
+		// connection has been shutdown
+		let _ = shutdown(self.fd, Shutdown::Both);
+		let _ = close(self.fd);
 		Self::clean(&self.addr)
 	}
 }
@@ -263,22 +262,31 @@ mod test {
 
 	#[test]
 	fn stream_integration_test() {
-		let unix_addr = nix::sys::socket::UnixAddr::new("./test.sock").unwrap();
+		// Ensure concurrent tests are not attempting to listen at the same
+		// address
+		let unix_addr =
+			nix::sys::socket::UnixAddr::new("./stream_integration_test.sock")
+				.unwrap();
 		let addr = SocketAddress::Unix(unix_addr);
 		let listener = Listener::listen(addr.clone()).unwrap();
 		let client = Stream::connect(&addr).unwrap();
 		let server = listener.accept().unwrap();
 
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
-		client.send(&data);
+		client.send(&data).unwrap();
 
 		let resp = server.recv().unwrap();
 
 		assert_eq!(data, resp);
 	}
 
+	#[test]
 	fn listener_iterator_test() {
-		let unix_addr = nix::sys::socket::UnixAddr::new("./test.sock").unwrap();
+		// Ensure concurrent tests are not attempting to listen at the same
+		// address
+		let unix_addr =
+			nix::sys::socket::UnixAddr::new("./listener_iterator_test.sock")
+				.unwrap();
 		let addr = SocketAddress::Unix(unix_addr);
 
 		let mut listener = Listener::listen(addr.clone()).unwrap();
@@ -286,8 +294,8 @@ mod test {
 		let handler = std::thread::spawn(move || {
 			while let Some(stream) = listener.next() {
 				let req = stream.recv().unwrap();
-				stream.send(&req);
-				break;
+				stream.send(&req).unwrap();
+				break
 			}
 		});
 
@@ -299,6 +307,6 @@ mod test {
 
 		assert_eq!(data, resp);
 
-		handler.join().unwrap()
+		handler.join().unwrap();
 	}
 }

@@ -1,12 +1,15 @@
-use crate::io;
-use crate::io::stream::SocketAddress;
-use crate::io::stream::{Listener, Stream};
-use crate::protocol::{self, ProtocolRequest, Serialize};
+//! Streaming socket based server for use in an enclave. Listens for connections
+//! from [`client::Client`].
+
+use crate::{
+	io,
+	io::{Listener, SocketAddress, Stream},
+	protocol::{self, ProtocolRequest, Serialize},
+};
 
 #[derive(Debug)]
 pub enum ServerError {
 	IOError(io::IOError),
-	UnknownError,
 	ProtocolError(protocol::ProtocolError),
 }
 
@@ -22,9 +25,7 @@ impl From<protocol::ProtocolError> for ServerError {
 	}
 }
 
-pub struct Server {
-	// listener: Listener,
-}
+pub struct Server {}
 
 impl Server {
 	pub fn listen(addr: SocketAddress) -> Result<(), ServerError> {
@@ -32,7 +33,7 @@ impl Server {
 		while let Some(stream) = listener.next() {
 			match stream.recv() {
 				Ok(payload) => Self::respond(stream, payload),
-				Err(err) => println!("Received error: {:?}", err),
+				Err(err) => eprintln!("Server::listen error: {:?}", err),
 			}
 		}
 
@@ -54,7 +55,7 @@ impl Server {
 				let _ = stream.send(&res);
 			}
 			Err(e) => {
-				println!("Unknown request...");
+				eprintln!("Server::respond error: unknown request: {:?}", e);
 			}
 		};
 	}

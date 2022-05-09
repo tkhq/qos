@@ -1,6 +1,9 @@
-use crate::io;
-use crate::io::stream::SocketAddress;
-use crate::protocol::{ProtocolError, ProtocolRequest, Serialize};
+//! Streaming socket based client to connect with [`server::Server`].
+
+use crate::{
+	io::{self, SocketAddress, Stream},
+	protocol::{ProtocolError, ProtocolRequest, Serialize},
+};
 
 #[derive(Debug)]
 pub enum ClientError {
@@ -33,7 +36,7 @@ impl Client {
 		&self,
 		request: ProtocolRequest,
 	) -> Result<ProtocolRequest, ClientError> {
-		let stream = io::stream::Stream::connect(&self.addr)?;
+		let stream = Stream::connect(&self.addr)?;
 		stream.send(&request.serialize())?;
 		let mut response = stream.recv()?;
 		ProtocolRequest::deserialize(&mut response).map_err(Into::into)
