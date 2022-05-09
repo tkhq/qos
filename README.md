@@ -21,3 +21,6 @@ cargo +nightly fmt
 
 # End user
 - Anything making request to host
+
+TODO:
+- no default features for all crates
