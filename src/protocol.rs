@@ -95,7 +95,7 @@ impl Serialize<Self> for ProtocolRequest {
 
 #[derive(PartialEq, Debug)]
 pub struct EchoRequest {
-	pub(crate) data: Vec<u8>,
+	pub data: Vec<u8>,
 }
 
 impl Serialize<Self> for EchoRequest {

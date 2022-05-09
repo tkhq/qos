@@ -1,6 +1,6 @@
 //! Interaction with any sys calls should be contained within this module.
 
-pub(crate) mod stream;
+pub mod stream;
 
 // #[cfg_attr(test, derive(Debug))]
 #[derive(Debug)]
