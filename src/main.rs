@@ -2,9 +2,9 @@ use std::env;
 
 use qos::{
 	client::Client,
+	io::SocketAddress,
 	protocol::{EchoRequest, ProtocolRequest},
 	server::Server,
-	SocketAddress,
 };
 
 pub fn main() {

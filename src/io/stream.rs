@@ -295,7 +295,7 @@ mod test {
 			while let Some(stream) = listener.next() {
 				let req = stream.recv().unwrap();
 				stream.send(&req).unwrap();
-				break;
+				break
 			}
 		});
 

@@ -1,9 +1,9 @@
 use nix::sys::socket::UnixAddr;
 use qos::{
 	client::Client,
+	io::SocketAddress,
 	protocol::{EchoRequest, ProtocolRequest},
 	server::Server,
-	SocketAddress,
 };
 
 #[test]
