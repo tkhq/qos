@@ -23,6 +23,7 @@ impl From<ProtocolError> for ClientError {
 	}
 }
 
+#[derive(Debug)]
 pub struct Client {
 	addr: SocketAddress,
 }

@@ -19,7 +19,7 @@ use super::IOError;
 const MAX_RETRY: usize = 8;
 const BACKLOG: usize = 128;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SocketAddress {
 	#[cfg(feature = "vm")]
 	Vsock(VsockAddr),
