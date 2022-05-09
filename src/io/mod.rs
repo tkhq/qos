@@ -1,4 +1,7 @@
-//! Interaction with any sys calls should be contained within this module.
+//! Abstractions for low level I/O.
+//!
+//! NOTE TO MAINTAINERS: Interaction with any sys calls should be contained
+//! within this module.
 
 mod stream;
 

@@ -1,3 +1,6 @@
+//! Streaming socket based server for use in an enclave. Listens for connections
+//! from [`client::Client`].
+
 use crate::{
 	io,
 	io::{Listener, SocketAddress, Stream},

@@ -1,3 +1,5 @@
+//! Streaming socket based client to connect with [`server::Server`].
+
 use crate::{
 	io::{self, SocketAddress, Stream},
 	protocol::{ProtocolError, ProtocolRequest, Serialize},
