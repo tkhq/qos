@@ -54,7 +54,7 @@ pub struct Stream {
 
 impl Stream {
 	#[must_use]
-	pub fn connect(addr: &SocketAddress) -> Result<Self, IOError> {
+	pub(crate) fn connect(addr: &SocketAddress) -> Result<Self, IOError> {
 		let mut err = IOError::UnknownError;
 
 		for i in 0..MAX_RETRY {
@@ -78,7 +78,7 @@ impl Stream {
 	}
 
 	#[must_use]
-	pub fn send(&self, buf: &Vec<u8>) -> Result<(), IOError> {
+	pub(crate) fn send(&self, buf: &Vec<u8>) -> Result<(), IOError> {
 		let len = buf.len();
 
 		// First, send the length of the buffer
@@ -120,7 +120,7 @@ impl Stream {
 	}
 
 	#[must_use]
-	pub fn recv(&self) -> Result<Vec<u8>, IOError> {
+	pub(crate) fn recv(&self) -> Result<Vec<u8>, IOError> {
 		// First, read the length
 		let length: usize = {
 			{
@@ -174,22 +174,22 @@ impl Stream {
 
 impl Drop for Stream {
 	fn drop(&mut self) {
-		// Its ok if either of these error - likely means the other end of the connection has been
-		// shutdown
+		// Its ok if either of these error - likely means the other end of the
+		// connection has been shutdown
 		let _ = shutdown(self.fd, Shutdown::Both);
 		let _ = close(self.fd);
 	}
 }
 
 /// Abstraction to listen for incoming stream connections.
-pub struct Listener {
+pub(crate) struct Listener {
 	fd: RawFd,
 	addr: SocketAddress,
 }
 
 impl Listener {
 	/// Bind and listen on the given address.
-	pub fn listen(addr: SocketAddress) -> Result<Self, IOError> {
+	pub(crate) fn listen(addr: SocketAddress) -> Result<Self, IOError> {
 		// In case the last connection at this addr did not shutdown correctly
 		Self::clean(&addr);
 
@@ -211,7 +211,8 @@ impl Listener {
 	fn clean(addr: &SocketAddress) {
 		#[cfg(feature = "local")]
 		{
-			#![warn(irrefutable_let_patterns)] // not irrefutable when vm is enabled
+			// Not irrefutable when "vm" is enabled
+			#[allow(irrefutable_let_patterns)]
 			if let SocketAddress::Unix(addr) = addr {
 				if let Some(path) = addr.path() {
 					if path.exists() {
@@ -232,8 +233,8 @@ impl Iterator for Listener {
 
 impl Drop for Listener {
 	fn drop(&mut self) {
-		// Its ok if either of these error - likely means the other end of the connection has been
-		// shutdown
+		// Its ok if either of these error - likely means the other end of the
+		// connection has been shutdown
 		let _ = shutdown(self.fd, Shutdown::Both);
 		let _ = close(self.fd);
 		Self::clean(&self.addr)
@@ -261,7 +262,11 @@ mod test {
 
 	#[test]
 	fn stream_integration_test() {
-		let unix_addr = nix::sys::socket::UnixAddr::new("./test.sock").unwrap();
+		// Ensure concurrent tests are not attempting to listen at the same
+		// address
+		let unix_addr =
+			nix::sys::socket::UnixAddr::new("./stream_integration_test.sock")
+				.unwrap();
 		let addr = SocketAddress::Unix(unix_addr);
 		let listener = Listener::listen(addr.clone()).unwrap();
 		let client = Stream::connect(&addr).unwrap();
@@ -277,7 +282,11 @@ mod test {
 
 	#[test]
 	fn listener_iterator_test() {
-		let unix_addr = nix::sys::socket::UnixAddr::new("./test.sock").unwrap();
+		// Ensure concurrent tests are not attempting to listen at the same
+		// address
+		let unix_addr =
+			nix::sys::socket::UnixAddr::new("./listener_iterator_test.sock")
+				.unwrap();
 		let addr = SocketAddress::Unix(unix_addr);
 
 		let mut listener = Listener::listen(addr.clone()).unwrap();
@@ -298,6 +307,6 @@ mod test {
 
 		assert_eq!(data, resp);
 
-		handler.join().unwrap()
+		handler.join().unwrap();
 	}
 }

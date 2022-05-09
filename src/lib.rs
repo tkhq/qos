@@ -1,4 +1,5 @@
 pub mod client;
-pub mod io;
+mod io;
 pub mod protocol;
 pub mod server;
+pub use io::SocketAddress;

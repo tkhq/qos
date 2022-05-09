@@ -1,12 +1,9 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(warnings)]
+//! Enclave I/O message format and serialization.
 
-const su32: usize = std::mem::size_of::<u32>();
+const SU32: usize = std::mem::size_of::<u32>();
 
 #[derive(Debug, PartialEq)]
 pub enum ProtocolError {
-	UnknownError,
 	DeserializationError,
 }
 
@@ -17,7 +14,7 @@ pub trait Serialize<T> {
 
 impl Serialize<Vec<u8>> for Vec<u8> {
 	fn serialize(&self) -> Vec<u8> {
-		let mut vec: Vec<u8> = Vec::with_capacity(self.len() + su32);
+		let mut vec: Vec<u8> = Vec::with_capacity(self.len() + SU32);
 		let len = self.len() as u32;
 		vec.extend(len.to_le_bytes().iter());
 		vec.extend(self.iter());
@@ -25,12 +22,12 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 	}
 
 	fn deserialize(data: &mut Vec<u8>) -> Result<Vec<u8>, ProtocolError> {
-		if data.len() < su32 {
+		if data.len() < SU32 {
 			// Payload size cannot be determined
-			return Err(ProtocolError::DeserializationError);
+			return Err(ProtocolError::DeserializationError)
 		}
-		let len_bytes: [u8; su32] = data
-			.drain(0..su32)
+		let len_bytes: [u8; SU32] = data
+			.drain(0..SU32)
 			.collect::<Vec<u8>>() // create Vec<u8>
 			.try_into() // convert to [u8; 4]
 			.map_err(|_| ProtocolError::DeserializationError)?;
@@ -38,7 +35,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 
 		if data.len() < len_bytes {
 			// Payload size is incorrect
-			return Err(ProtocolError::DeserializationError);
+			return Err(ProtocolError::DeserializationError)
 		}
 		let result: Vec<u8> = data.drain(0..len_bytes).collect();
 

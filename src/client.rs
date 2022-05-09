@@ -1,6 +1,5 @@
 use crate::{
-	io,
-	io::stream::SocketAddress,
+	io::{self, SocketAddress, Stream},
 	protocol::{ProtocolError, ProtocolRequest, Serialize},
 };
 
@@ -35,7 +34,7 @@ impl Client {
 		&self,
 		request: ProtocolRequest,
 	) -> Result<ProtocolRequest, ClientError> {
-		let stream = io::stream::Stream::connect(&self.addr)?;
+		let stream = Stream::connect(&self.addr)?;
 		stream.send(&request.serialize())?;
 		let mut response = stream.recv()?;
 		ProtocolRequest::deserialize(&mut response).map_err(Into::into)

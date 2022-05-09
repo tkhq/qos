@@ -1,6 +1,9 @@
 //! Interaction with any sys calls should be contained within this module.
 
-pub mod stream;
+mod stream;
+
+pub use stream::SocketAddress;
+pub(crate) use stream::{Listener, Stream};
 
 // #[cfg_attr(test, derive(Debug))]
 #[derive(Debug)]

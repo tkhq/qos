@@ -1,6 +1,6 @@
 use crate::{
 	io,
-	io::stream::{Listener, SocketAddress, Stream},
+	io::{Listener, SocketAddress, Stream},
 	protocol::{self, ProtocolRequest, Serialize},
 };
 
