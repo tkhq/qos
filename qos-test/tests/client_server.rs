@@ -1,5 +1,4 @@
-use nix::sys::socket::UnixAddr;
-use qos::{
+use qos_core::{
 	client::Client,
 	io::SocketAddress,
 	protocol::{EchoRequest, ProtocolRequest},
@@ -7,18 +6,11 @@ use qos::{
 };
 
 #[test]
-fn smoke_test() {
-	assert_eq!(1, 1);
-}
-
-#[test]
 fn client_server() {
 	// Ensure concurrent tests are not attempting to listen at the same
 	// address
-	let addr = SocketAddress::Unix(
-		UnixAddr::new("./integration_tests_client_server.sock").unwrap(),
-	);
-
+	let addr =
+		SocketAddress::new_unix("./integration_tests_client_server.sock");
 	let addr2 = addr.clone();
 	// Note that thread handle gets detached on drop
 	let _ = std::thread::spawn(move || {

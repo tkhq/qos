@@ -28,6 +28,15 @@ pub enum SocketAddress {
 }
 
 impl SocketAddress {
+	pub fn new_unix(path: &str) -> Self {
+		let addr = UnixAddr::new(path).unwrap();
+		Self::Unix(addr)
+	}
+
+	pub fn new_vsock(_cid: u32, _port: u32) -> Self {
+		unimplemented!()
+	}
+
 	fn family(&self) -> AddressFamily {
 		match *self {
 			#[cfg(feature = "vm")]
@@ -295,7 +304,7 @@ mod test {
 			while let Some(stream) = listener.next() {
 				let req = stream.recv().unwrap();
 				stream.send(&req).unwrap();
-				break
+				break;
 			}
 		});
 

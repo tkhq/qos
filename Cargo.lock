@@ -48,8 +48,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "qos"
+name = "qos-core"
 version = "0.1.0"
 dependencies = [
  "nix",
+]
+
+[[package]]
+name = "qos-core-cli"
+version = "0.1.0"
+dependencies = [
+ "qos-core",
+]
+
+[[package]]
+name = "qos-integration-tests"
+version = "0.1.0"
+dependencies = [
+ "qos-core",
 ]
