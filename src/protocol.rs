@@ -27,7 +27,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 	fn deserialize(data: &mut Vec<u8>) -> Result<Vec<u8>, ProtocolError> {
 		// Error if the payload size cannot be determined
 		if data.len() < su32 {
-			return Err(ProtocolError::DeserializationError);
+			return Err(ProtocolError::DeserializationError)
 		}
 		let len_bytes: [u8; su32] = data
 			.drain(0..su32)
@@ -38,7 +38,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 
 		// Error if the payload size is incorrect
 		if data.len() < len_bytes {
-			return Err(ProtocolError::DeserializationError);
+			return Err(ProtocolError::DeserializationError)
 		}
 		let result: Vec<u8> = data.drain(0..len_bytes).collect();
 
@@ -291,8 +291,8 @@ mod test {
 	// CAUTION: This test takes a really long time...
 	// #[test]
 	// fn deserialization_payload_too_large() {
-	//   let req = EchoRequest{ data: (0..(u32::MAX)).map(|_| u8::MAX).collect() };
-	//   let mut serialized = req.serialize();
+	//   let req = EchoRequest{ data: (0..(u32::MAX)).map(|_| u8::MAX).collect()
+	// };   let mut serialized = req.serialize();
 	//   let deserialized = EchoRequest::deserialize(&mut serialized).unwrap();
 	//   assert_eq!(deserialized, req);
 	// }

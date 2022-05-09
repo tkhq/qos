@@ -4,6 +4,12 @@
 #![allow(unused_variables)]
 #![allow(warnings)]
 
+use std::{fs::remove_file, mem::size_of, os::unix::io::RawFd, path::Path};
+
+#[cfg(feature = "local")]
+use nix::sys::socket::UnixAddr;
+#[cfg(feature = "vm")]
+use nix::sys::socket::VsockAddr;
 use nix::{
 	sys::socket::{
 		accept, bind, connect, listen, recv, send, setsockopt, shutdown,
@@ -12,18 +18,8 @@ use nix::{
 	},
 	unistd::close,
 };
-use std::fs::remove_file;
-use std::mem::size_of;
-use std::os::unix::io::RawFd;
-use std::path::Path;
 
 use super::IOError;
-
-#[cfg(feature = "vm")]
-use nix::sys::socket::VsockAddr;
-
-#[cfg(feature = "local")]
-use nix::sys::socket::UnixAddr;
 
 #[derive(Clone)]
 pub enum SocketAddress {
@@ -146,8 +142,8 @@ impl Stream {
 					) {
 						Ok(size) => size,
 						// https://stackoverflow.com/questions/1674162/how-to-handle-eintr-interrupted-system-call#1674348
-						// Not necessarily actually an error, just the syscall was
-						// interrupted while in progress.
+						// Not necessarily actually an error, just the syscall
+						// was interrupted while in progress.
 						Err(nix::Error::EINTR) => 0,
 						Err(err) => return Err(IOError::NixError(err)),
 					};
@@ -287,7 +283,7 @@ mod test {
 			while let Some(stream) = listener.next() {
 				let req = stream.recv().unwrap();
 				stream.send(&req);
-				break;
+				break
 			}
 		});
 

@@ -1,6 +1,8 @@
-use crate::io;
-use crate::io::stream::SocketAddress;
-use crate::protocol::{ProtocolError, ProtocolRequest, Serialize};
+use crate::{
+	io,
+	io::stream::SocketAddress,
+	protocol::{ProtocolError, ProtocolRequest, Serialize},
+};
 
 #[derive(Debug)]
 pub enum ClientError {

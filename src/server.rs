@@ -1,12 +1,12 @@
-use crate::io;
-use crate::io::stream::SocketAddress;
-use crate::io::stream::{Listener, Stream};
-use crate::protocol::{self, ProtocolRequest, Serialize};
+use crate::{
+	io,
+	io::stream::{Listener, SocketAddress, Stream},
+	protocol::{self, ProtocolRequest, Serialize},
+};
 
 #[derive(Debug)]
 pub enum ServerError {
 	IOError(io::IOError),
-	UnknownError,
 	ProtocolError(protocol::ProtocolError),
 }
 
