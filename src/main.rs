@@ -1,6 +1,7 @@
 use std::env;
 
 use crate::protocol::{ProtocolRequest, Serialize};
+mod client;
 mod io;
 mod protocol;
 mod server;
@@ -19,18 +20,18 @@ fn run_client() {
 	let addr = io::stream::SocketAddress::Unix(
 		nix::sys::socket::UnixAddr::new("./dev.sock").unwrap(),
 	);
-	let client = io::stream::Stream::connect(&addr).unwrap();
-
+	let client = client::Client::new(addr);
 	let data = b"Hello, world!".to_vec();
-	println!("Payload: {:?}", data);
-
-	let payload = protocol::EchoRequest { data };
-	let request = ProtocolRequest::Echo(payload);
-
-	client.send(&request.serialize()).unwrap();
-	let result = client.recv().unwrap();
-
-	println!("Result: {:?}", result);
+	let request = ProtocolRequest::Echo(protocol::EchoRequest { data });
+	let response = client.send(request).unwrap();
+	match response {
+		ProtocolRequest::Echo(er) => {
+			println!("{}", String::from_utf8(er.data).unwrap());
+		}
+		_ => {
+			println!("Unhandled...")
+		}
+	}
 }
 
 fn run_server() {

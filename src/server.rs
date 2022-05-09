@@ -42,23 +42,20 @@ impl Server {
 	fn respond(stream: Stream, mut payload: Vec<u8>) {
 		let request = ProtocolRequest::deserialize(&mut payload);
 
-		let result: Result<(), ServerError> = match request {
+		match request {
 			Ok(ProtocolRequest::Empty) => {
 				println!("Empty request...");
 				let res = b"Empty!".to_vec();
-				stream.send(&res).map_err(Into::into)
+				let _ = stream.send(&res);
 			}
 			Ok(ProtocolRequest::Echo(e)) => {
 				println!("Received echo...");
-				let res = e.serialize();
-				stream.send(&res).map_err(Into::into)
+				let res = ProtocolRequest::Echo(e).serialize();
+				let _ = stream.send(&res);
 			}
 			Err(e) => {
 				println!("Unknown request...");
-				Err(e.into())
 			}
 		};
-
-		println!("respond result: {:?}", result);
 	}
 }
