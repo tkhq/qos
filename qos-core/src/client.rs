@@ -23,16 +23,19 @@ impl From<ProtocolError> for ClientError {
 	}
 }
 
+/// Client for communicating with the enclave [`server::Server`].
 #[derive(Debug)]
 pub struct Client {
 	addr: SocketAddress,
 }
 
 impl Client {
+	/// Create a new client.
 	pub fn new(addr: SocketAddress) -> Self {
 		Self { addr }
 	}
 
+	/// Send a [`ProtocolRequest`] and return the response.
 	pub fn send(
 		&self,
 		request: ProtocolRequest,

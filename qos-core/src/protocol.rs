@@ -24,7 +24,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 	fn deserialize(data: &mut Vec<u8>) -> Result<Vec<u8>, ProtocolError> {
 		if data.len() < SU32 {
 			// Payload size cannot be determined
-			return Err(ProtocolError::DeserializationError);
+			return Err(ProtocolError::DeserializationError)
 		}
 		let len_bytes: [u8; SU32] = data
 			.drain(0..SU32)
@@ -35,7 +35,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 
 		if data.len() < len_bytes {
 			// Payload size is incorrect
-			return Err(ProtocolError::DeserializationError);
+			return Err(ProtocolError::DeserializationError)
 		}
 		let result: Vec<u8> = data.drain(0..len_bytes).collect();
 

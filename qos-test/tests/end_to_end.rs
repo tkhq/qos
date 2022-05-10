@@ -1,8 +1,11 @@
-use qos_core::io::SocketAddress;
-use qos_core::protocol::{EchoRequest, ProtocolRequest, Serialize};
-use qos_core::server::Server;
-use qos_host::HostServer;
 use std::io::Read;
+
+use qos_core::{
+	io::SocketAddress,
+	protocol::{EchoRequest, ProtocolRequest, Serialize},
+	server::Server,
+};
+use qos_host::HostServer;
 
 const MAX_SIZE: u64 = u32::MAX as u64;
 

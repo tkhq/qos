@@ -1,11 +1,14 @@
-use qos_core::protocol::{EchoRequest, ProtocolRequest, Serialize};
+#![forbid(unsafe_code)]
+
 use std::io::Read;
+
+use qos_core::protocol::{EchoRequest, ProtocolRequest, Serialize};
 
 const MAX_SIZE: u64 = u32::MAX as u64;
 
 fn main() {
 	let url = "http:127.0.0.1:3000";
-	let body: String = ureq::get(&format!("{}/{}", url, "health"))
+	let _body: String = ureq::get(&format!("{}/{}", url, "health"))
 		.call()
 		.unwrap()
 		.into_string()

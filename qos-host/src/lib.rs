@@ -1,33 +1,52 @@
+//! Enclave host implementation. The host primarily consists of a HTTP server
+//! that proxies requests to the enclave by establishing a client connection
+//! with the enclave.
+//!
+//! # IMPLEMENTORS NOTE
+//!
+//! The host HTTP server is currently implemented using the `axum` framework.
+//! This may be swapped out in the the future in favor of a lighter package in
+//! order to slim the dependency tree. In the mean time, these resources can
+//! help familiarize you with the abstractions
+//! * Request body extractors: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/extract.md/>
+//! * Response: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/response.md/>
+//! * Responding with error: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/error_handling.md/>
+#![forbid(unsafe_code)]
+
+use std::{net::SocketAddr, sync::Arc};
+
 use axum::{
-	body::{Body, Bytes},
-	extract::Host,
+	body::Bytes,
 	http::StatusCode,
-	response::Html,
-	response::{IntoResponse, Response},
+	response::{Html, IntoResponse},
 	routing::{get, post},
 	Extension, Router,
 };
-use qos_core::io::SocketAddress;
-use qos_core::protocol::ProtocolRequest;
-use qos_core::{client::Client, protocol::Serialize};
-use std::net::SocketAddr;
-use std::sync::Arc;
+use qos_core::{
+	client::Client,
+	io::SocketAddress,
+	protocol::{ProtocolRequest, Serialize},
+};
 
-pub struct HostServer {
-	enclave_addr: SocketAddress,
-	addr: SocketAddr,
-}
-
+/// Resources shared across threads in the [`HostServer`].
 #[derive(Debug)]
 struct State {
 	enclave_client: Client,
 }
 
+/// HTTP server for the host of the enclave. Proxies requests to the enclave.
+pub struct HostServer {
+	enclave_addr: SocketAddress,
+	addr: SocketAddr,
+}
+
 impl HostServer {
+	/// Create a new [`HostServer`].
 	pub fn new(enclave_addr: SocketAddress, ip: [u8; 4], port: u16) -> Self {
 		Self { addr: SocketAddr::from((ip, port)), enclave_addr }
 	}
 
+	/// Start the server, running indefinitely.
 	pub async fn serve(&self) -> Result<(), String> {
 		let state = Arc::new(State {
 			enclave_client: Client::new(self.enclave_addr.clone()),
@@ -48,6 +67,7 @@ impl HostServer {
 		Ok(())
 	}
 
+	/// Health route handler.
 	async fn health(
 		Extension(_state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
@@ -55,14 +75,11 @@ impl HostServer {
 		Html("Ok!")
 	}
 
-	// request: https://github.com/tokio-rs/axum/blob/main/axum/src/docs/extract.md
-	// response: https://github.com/tokio-rs/axum/blob/main/axum/src/docs/response.md
-	// error response: https://github.com/tokio-rs/axum/blob/main/axum/src/docs/error_handling.md
+	/// Message route handler.
 	async fn message(
 		body: Bytes,
 		Extension(state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
-		println!("Received message");
 		let mut body = body.to_vec();
 		match ProtocolRequest::deserialize(&mut body) {
 			Err(_) => {
@@ -72,16 +89,14 @@ impl HostServer {
 				)
 			}
 			Ok(request) => match state.enclave_client.send(request) {
-				Err(_) => {
-					return (
-						StatusCode::INTERNAL_SERVER_ERROR,
-						b"Received error from enclave...".to_vec(),
-					)
-				}
+				Err(_) => (
+					StatusCode::INTERNAL_SERVER_ERROR,
+					b"Received error from enclave...".to_vec(),
+				),
 				Ok(response) => {
 					println!("Responding to message...");
 					println!("{:?}", response.serialize());
-					return (StatusCode::OK, response.serialize());
+					(StatusCode::OK, response.serialize())
 				}
 			},
 		}
