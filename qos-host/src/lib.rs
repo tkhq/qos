@@ -2,12 +2,13 @@
 //! that proxies requests to the enclave by establishing a client connection
 //! with the enclave.
 //!
-//! # IMPLEMENTORS NOTE
+//! # IMPLEMENTERS NOTE
 //!
 //! The host HTTP server is currently implemented using the `axum` framework.
 //! This may be swapped out in the the future in favor of a lighter package in
 //! order to slim the dependency tree. In the mean time, these resources can
-//! help familiarize you with the abstractions
+//! help familiarize you with the abstractions:
+//!
 //! * Request body extractors: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/extract.md/>
 //! * Response: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/response.md/>
 //! * Responding with error: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/error_handling.md/>
@@ -28,13 +29,13 @@ use qos_core::{
 	protocol::{ProtocolRequest, Serialize},
 };
 
-/// Resources shared across threads in the [`HostServer`].
+/// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]
 struct State {
 	enclave_client: Client,
 }
 
-/// HTTP server for the host of the enclave. Proxies requests to the enclave.
+/// HTTP server for the host of the enclave; proxies requests to the enclave.
 pub struct HostServer {
 	enclave_addr: SocketAddress,
 	addr: SocketAddr,
