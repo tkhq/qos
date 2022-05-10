@@ -7,4 +7,6 @@ edition = "2021"
 
 [dependencies]
 qos-core = { path = "../qos-core" }
-ureq = "2.4"
+
+# Third party
+ureq = { version = "2.4", default-features = false }

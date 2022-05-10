@@ -1,5 +1,5 @@
 [package]
-name = "qos-integration-tests"
+name = "qos-test"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -7,6 +7,5 @@ publish = false
 [dev-dependencies]
 qos-core = { path = "../qos-core" }
 qos-host = { path = "../qos-host" }
-ureq = "2.4"
-futures = "0.3"
-tokio = { version = "1.18", features = ["full"], default-features = false }
+ureq = { version = "2.4", default-features = false }
+tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
