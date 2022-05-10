@@ -56,6 +56,7 @@ pub enum ProtocolMsg {
 	EchoResponse(Echo),
 	ProvisionRequest(ProvisionRequest),
 	ReconstructRequest,
+	NsmRequest(NsmRequest),
 }
 
 const PROTOCOL_MSG_SUCCESS_RESPONSE: u8 = 0;
@@ -66,6 +67,7 @@ const PROTOCOL_MSG_ECHO_REQUEST: u8 = 4;
 const PROTOCOL_MSG_ECHO_RESPONSE: u8 = 5;
 const PROTOCOL_MSG_PROVISION_REQUEST: u8 = 6;
 const PROTOCOL_MSG_RECONSTRUCT_REQUEST: u8 = 7;
+const PROTOCOL_MSG_NSM_REQUEST: u8 = 8;
 
 // TODO: declaritive macro to create index
 impl ProtocolMsg {
@@ -79,6 +81,7 @@ impl ProtocolMsg {
 			Self::EchoResponse(_) => PROTOCOL_MSG_ECHO_RESPONSE,
 			Self::ProvisionRequest(_) => PROTOCOL_MSG_PROVISION_REQUEST,
 			Self::ReconstructRequest => PROTOCOL_MSG_RECONSTRUCT_REQUEST,
+			Self::NsmRequest(_) => PROTOCOL_MSG_NSM_REQUEST,
 		}
 	}
 }
@@ -96,6 +99,9 @@ impl Serialize<Self> for ProtocolMsg {
 				result.extend(req.serialize().iter());
 			}
 			Self::ProvisionRequest(req) => {
+				result.extend(req.serialize().iter());
+			}
+			Self::NsmRequest(req) => {
 				result.extend(req.serialize().iter());
 			}
 		}
@@ -142,7 +148,7 @@ impl Serialize<Self> for Echo {
 
 	fn deserialize(payload: &mut Vec<u8>) -> Result<Self, ProtocolError> {
 		let data = Vec::<u8>::deserialize(payload)?;
-		Ok(Echo { data })
+		Ok(Self { data })
 	}
 }
 
@@ -163,6 +169,22 @@ impl Serialize<Self> for ProvisionRequest {
 
 #[derive(PartialEq, Debug)]
 pub struct ProvisionResponse {}
+
+#[derive(Debug, PartialEq)]
+pub struct NsmRequest {
+	pub data: Vec<u8>,
+}
+
+impl Serialize<Self> for NsmRequest {
+	fn serialize(&self) -> Vec<u8> {
+		self.data.serialize()
+	}
+
+	fn deserialize(payload: &mut Vec<u8>) -> Result<Self, ProtocolError> {
+		let data = Vec::<u8>::deserialize(payload)?;
+		Ok(Self { data })
+	}
+}
 
 #[cfg(test)]
 mod test {

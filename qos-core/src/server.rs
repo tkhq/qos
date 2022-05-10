@@ -112,11 +112,15 @@ impl Server {
 				match self.provisioner.add_share(share) {
 					Ok(_) => {
 						let res = ProtocolMsg::SuccessResponse.serialize();
-						stream.send(&res);
+						let _ = stream.send(&res).map(|e| {
+							eprintln!("enclave::server::response: {:?}", e)
+						});
 					}
 					Err(_) => {
 						let res = ProtocolMsg::ErrorResponse.serialize();
-						stream.send(&res);
+						let _ = stream.send(&res).map(|e| {
+							eprintln!("enclave::server::response: {:?}", e)
+						});
 					}
 				}
 			}
@@ -125,11 +129,16 @@ impl Server {
 					Ok(secret) => {
 						self.secret = Some(secret);
 						let res = ProtocolMsg::SuccessResponse.serialize();
-						stream.send(&res);
+						let _ = stream.send(&res).map(|e| {
+							eprintln!("enclave::server::response: {:?}", e)
+						});
 					}
 					Err(_) => {
 						let res = ProtocolMsg::ErrorResponse.serialize();
-						stream.send(&res);
+						let _ = stream.send(&res).map(|e| {
+							// TODO: make eprint_and_ignore_err macro
+							eprintln!("enclave::server::response: {:?}", e)
+						});
 					}
 				}
 			}

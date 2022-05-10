@@ -1,11 +1,7 @@
 #![forbid(unsafe_code)]
 
-use std::io::Read;
-
 use qos_cli;
-use qos_core::protocol::{Echo, ProtocolMsg, Serialize};
-
-const MAX_SIZE: u64 = u32::MAX as u64;
+use qos_core::protocol::{Echo, ProtocolMsg};
 
 fn main() {
 	let url = "http://127.0.0.1:3000";
