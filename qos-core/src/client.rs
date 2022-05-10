@@ -35,7 +35,7 @@ impl Client {
 		Self { addr }
 	}
 
-	/// Send a [`ProtocolRequest`] and return the response.
+	/// Send a [`ProtocolMsg`] and return the response.
 	pub fn send(
 		&self,
 		request: ProtocolMsg,

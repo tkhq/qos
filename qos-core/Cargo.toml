@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+qos-crypto = { path = "../qos-crypto" }
+
 nix = { version = "0.24.1", features = ["socket"], default-features = false }
 
 [features]

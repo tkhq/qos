@@ -95,8 +95,10 @@ impl HostServer {
 					b"Received error from enclave...".to_vec(),
 				),
 				Ok(response) => {
-					println!("Responding to message...");
-					println!("{:?}", response.serialize());
+					println!(
+						"host_server: POST /message body: {:?}",
+						response.serialize()
+					);
 					(StatusCode::OK, response.serialize())
 				}
 			},

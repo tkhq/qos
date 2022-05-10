@@ -6,6 +6,8 @@ publish = false
 
 [dev-dependencies]
 qos-core = { path = "../qos-core" }
+qos-cli = { path = "../qos-cli" }
 qos-host = { path = "../qos-host" }
+qos-crypto = { path = "../qos-crypto" }
 ureq = { version = "2.4", default-features = false }
 tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }

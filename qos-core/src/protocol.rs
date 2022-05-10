@@ -5,6 +5,8 @@ const SU32: usize = std::mem::size_of::<u32>();
 #[derive(Debug, PartialEq)]
 pub enum ProtocolError {
 	DeserializationError,
+	InvalidShare,
+	ReconstructionError,
 }
 
 pub trait Serialize<T> {
@@ -46,6 +48,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 #[derive(Debug, PartialEq)]
 pub enum ProtocolMsg {
 	SuccessResponse,
+	// TODO: Error response should hold a protocol error
 	ErrorResponse,
 	EmptyRequest,
 	EmptyResponse,

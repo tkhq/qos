@@ -407,6 +407,7 @@ name = "qos-core"
 version = "0.1.0"
 dependencies = [
  "nix",
+ "qos-crypto",
 ]
 
 [[package]]
@@ -436,7 +437,9 @@ dependencies = [
 name = "qos-test"
 version = "0.1.0"
 dependencies = [
+ "qos-cli",
  "qos-core",
+ "qos-crypto",
  "qos-host",
  "tokio",
  "ureq",
