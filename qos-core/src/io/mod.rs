@@ -8,7 +8,6 @@ mod stream;
 pub use stream::SocketAddress;
 pub(crate) use stream::{Listener, Stream};
 
-// #[cfg_attr(test, derive(Debug))]
 #[derive(Debug)]
 pub enum IOError {
 	NixError(nix::Error),

@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::env;
 
 use qos_core::{
