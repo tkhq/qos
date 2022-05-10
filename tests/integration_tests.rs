@@ -1,5 +1,4 @@
-use std::env;
-
+use nix::sys::socket::UnixAddr;
 use qos::{
 	client::Client,
 	io::SocketAddress,
@@ -7,20 +6,25 @@ use qos::{
 	server::Server,
 };
 
-pub fn main() {
-	let args: Vec<String> = env::args().collect();
-
-	match args.get(1).map(|a| a.as_str()) {
-		Some("server") => run_server(),
-		Some("client") => run_client(),
-		Some(_) | None => println!("Unknown command..."),
-	};
+#[test]
+fn smoke_test() {
+	assert_eq!(1, 1);
 }
 
-fn run_client() {
+#[test]
+fn client_server() {
+	// Ensure concurrent tests are not attempting to listen at the same
+	// address
 	let addr = SocketAddress::Unix(
-		nix::sys::socket::UnixAddr::new("./dev.sock").unwrap(),
+		UnixAddr::new("./integration_tests_client_server.sock").unwrap(),
 	);
+
+	let addr2 = addr.clone();
+	// Note that thread handle gets detached on drop
+	let _ = std::thread::spawn(move || {
+		Server::listen(addr2).unwrap();
+	});
+
 	let client = Client::new(addr);
 	let data = b"Hello, world!".to_vec();
 	let request = ProtocolRequest::Echo(EchoRequest { data });
@@ -33,11 +37,4 @@ fn run_client() {
 			println!("Unhandled...")
 		}
 	}
-}
-
-fn run_server() {
-	let addr = SocketAddress::Unix(
-		nix::sys::socket::UnixAddr::new("./dev.sock").unwrap(),
-	);
-	Server::listen(addr).unwrap();
 }

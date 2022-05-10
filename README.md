@@ -1,22 +1,23 @@
-# Quorum OS
+qiq mafs
 
-This is in a very rough state...
-
-### Development
-
-Ensure that the location of the socket is r/w:
-
-```shell
-make shell
-> chmod 777 /var/run/qos
 ```
+# start server
+maker server
 
-Run the enclave:
-```shell
-make enclave
-```
-
-Run the client:
-```shell
+# start client
 make client
+
+# make code pretttty
+cargo +nightly fmt
 ```
+
+# Enclave
+- houses nitro server
+
+# Host
+- EC2 instance where the nitro enclave lives inside
+- has client for talking to nitro enclave
+- has server for incoming request from outside world 
+
+# End user
+- Anything making request to host

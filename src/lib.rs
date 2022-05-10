@@ -1,4 +1,6 @@
-pub mod command_parser;
-pub mod protocol_helpers;
-pub mod utils;
-pub mod enclave;
+#![forbid(unsafe_code)]
+
+pub mod client;
+pub mod io;
+pub mod protocol;
+pub mod server;
