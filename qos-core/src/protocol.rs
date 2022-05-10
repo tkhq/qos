@@ -5,6 +5,8 @@ const SU32: usize = std::mem::size_of::<u32>();
 #[derive(Debug, PartialEq)]
 pub enum ProtocolError {
 	DeserializationError,
+	InvalidShare,
+	ReconstructionError,
 }
 
 pub trait Serialize<T> {
@@ -24,7 +26,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 	fn deserialize(data: &mut Vec<u8>) -> Result<Vec<u8>, ProtocolError> {
 		if data.len() < SU32 {
 			// Payload size cannot be determined
-			return Err(ProtocolError::DeserializationError)
+			return Err(ProtocolError::DeserializationError);
 		}
 		let len_bytes: [u8; SU32] = data
 			.drain(0..SU32)
@@ -35,7 +37,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 
 		if data.len() < len_bytes {
 			// Payload size is incorrect
-			return Err(ProtocolError::DeserializationError)
+			return Err(ProtocolError::DeserializationError);
 		}
 		let result: Vec<u8> = data.drain(0..len_bytes).collect();
 
@@ -44,45 +46,83 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum ProtocolRequest {
-	Empty,
-	Echo(EchoRequest),
+pub enum ProtocolMsg {
+	SuccessResponse,
+	// TODO: Error response should hold a protocol error
+	ErrorResponse,
+	EmptyRequest,
+	EmptyResponse,
+	EchoRequest(Echo),
+	EchoResponse(Echo),
+	ProvisionRequest(ProvisionRequest),
+	ReconstructRequest,
 }
 
-const PROTOCOL_REQUEST_EMPTY: u8 = 0;
-const PROTOCOL_REQUEST_ECHO: u8 = 1;
+const PROTOCOL_MSG_SUCCESS_RESPONSE: u8 = 0;
+const PROTOCOL_MSG_ERROR_RESPONSE: u8 = 1;
+const PROTOCOL_MSG_EMPTY_REQUEST: u8 = 2;
+const PROTOCOL_MSG_EMPTY_RESPONSE: u8 = 3;
+const PROTOCOL_MSG_ECHO_REQUEST: u8 = 4;
+const PROTOCOL_MSG_ECHO_RESPONSE: u8 = 5;
+const PROTOCOL_MSG_PROVISION_REQUEST: u8 = 6;
+const PROTOCOL_MSG_RECONSTRUCT_REQUEST: u8 = 7;
 
-impl ProtocolRequest {
+// TODO: declaritive macro to create index
+impl ProtocolMsg {
 	fn index(&self) -> u8 {
 		match self {
-			Self::Empty => PROTOCOL_REQUEST_EMPTY,
-			Self::Echo(_) => PROTOCOL_REQUEST_ECHO,
+			Self::SuccessResponse => PROTOCOL_MSG_SUCCESS_RESPONSE,
+			Self::ErrorResponse => PROTOCOL_MSG_ERROR_RESPONSE,
+			Self::EmptyRequest => PROTOCOL_MSG_EMPTY_REQUEST,
+			Self::EmptyResponse => PROTOCOL_MSG_EMPTY_RESPONSE,
+			Self::EchoRequest(_) => PROTOCOL_MSG_ECHO_REQUEST,
+			Self::EchoResponse(_) => PROTOCOL_MSG_ECHO_RESPONSE,
+			Self::ProvisionRequest(_) => PROTOCOL_MSG_PROVISION_REQUEST,
+			Self::ReconstructRequest => PROTOCOL_MSG_RECONSTRUCT_REQUEST,
 		}
 	}
 }
 
-impl Serialize<Self> for ProtocolRequest {
+impl Serialize<Self> for ProtocolMsg {
 	fn serialize(&self) -> Vec<u8> {
 		let mut result = vec![self.index()];
 		match self {
-			Self::Empty => {}
-			Self::Echo(req) => {
+			Self::SuccessResponse
+			| Self::ErrorResponse
+			| Self::ReconstructRequest
+			| Self::EmptyResponse
+			| Self::EmptyRequest => {}
+			Self::EchoRequest(req) | Self::EchoResponse(req) => {
+				result.extend(req.serialize().iter());
+			}
+			Self::ProvisionRequest(req) => {
 				result.extend(req.serialize().iter());
 			}
 		}
 		result
 	}
 
-	fn deserialize(
-		data: &mut Vec<u8>,
-	) -> Result<ProtocolRequest, ProtocolError> {
+	fn deserialize(data: &mut Vec<u8>) -> Result<ProtocolMsg, ProtocolError> {
 		let index = data.get(0).ok_or(ProtocolError::DeserializationError)?;
 		let req = match *index {
-			PROTOCOL_REQUEST_EMPTY => ProtocolRequest::Empty,
-			PROTOCOL_REQUEST_ECHO => {
-				let req = EchoRequest::deserialize(&mut data[1..].to_vec())?;
-				ProtocolRequest::Echo(req)
+			PROTOCOL_MSG_SUCCESS_RESPONSE => ProtocolMsg::SuccessResponse,
+			PROTOCOL_MSG_ERROR_RESPONSE => ProtocolMsg::ErrorResponse,
+			PROTOCOL_MSG_EMPTY_REQUEST => ProtocolMsg::EmptyRequest,
+			PROTOCOL_MSG_EMPTY_RESPONSE => ProtocolMsg::EmptyResponse,
+			PROTOCOL_MSG_ECHO_REQUEST => {
+				let req = Echo::deserialize(&mut data[1..].to_vec())?;
+				ProtocolMsg::EchoRequest(req)
 			}
+			PROTOCOL_MSG_ECHO_RESPONSE => {
+				let req = Echo::deserialize(&mut data[1..].to_vec())?;
+				ProtocolMsg::EchoResponse(req)
+			}
+			PROTOCOL_MSG_PROVISION_REQUEST => {
+				let req =
+					ProvisionRequest::deserialize(&mut data[1..].to_vec())?;
+				ProtocolMsg::ProvisionRequest(req)
+			}
+			PROTOCOL_MSG_RECONSTRUCT_REQUEST => ProtocolMsg::ReconstructRequest,
 			_ => return Err(ProtocolError::DeserializationError),
 		};
 
@@ -91,48 +131,38 @@ impl Serialize<Self> for ProtocolRequest {
 }
 
 #[derive(PartialEq, Debug)]
-pub struct EchoRequest {
+pub struct Echo {
 	pub data: Vec<u8>,
 }
 
-impl Serialize<Self> for EchoRequest {
+impl Serialize<Self> for Echo {
 	fn serialize(&self) -> Vec<u8> {
 		self.data.serialize()
 	}
 
 	fn deserialize(payload: &mut Vec<u8>) -> Result<Self, ProtocolError> {
 		let data = Vec::<u8>::deserialize(payload)?;
-		Ok(EchoRequest { data })
+		Ok(Echo { data })
 	}
 }
 
-#[derive(Debug, PartialEq)]
-struct NestedRequest {
-	nested_struct: EchoRequest,
-	data2: Vec<u8>,
+#[derive(PartialEq, Debug)]
+pub struct ProvisionRequest {
+	pub share: Vec<u8>,
 }
 
-impl Serialize<Self> for NestedRequest {
+impl Serialize<Self> for ProvisionRequest {
 	fn serialize(&self) -> Vec<u8> {
-		let serialized_nested_struct = self.nested_struct.serialize();
-		let serialized_data2 = self.data2.serialize();
-
-		let mut result = Vec::with_capacity(
-			serialized_nested_struct.len() + serialized_data2.len(),
-		);
-		result.extend(serialized_nested_struct.iter());
-		result.extend(serialized_data2.iter());
-
-		result
+		self.share.serialize()
 	}
 
-	fn deserialize(payload: &mut Vec<u8>) -> Result<Self, ProtocolError> {
-		Ok(Self {
-			nested_struct: EchoRequest::deserialize(payload)?,
-			data2: Vec::<u8>::deserialize(payload)?,
-		})
+	fn deserialize(data: &mut Vec<u8>) -> Result<Self, ProtocolError> {
+		Ok(Self { share: Vec::<u8>::deserialize(data)? })
 	}
 }
+
+#[derive(PartialEq, Debug)]
+pub struct ProvisionResponse {}
 
 #[cfg(test)]
 mod test {
@@ -164,8 +194,8 @@ mod test {
 
 	#[test]
 	fn serialize_empty() {
-		let expected = vec![ProtocolRequest::Empty.index()];
-		let request = ProtocolRequest::Empty;
+		let expected = vec![ProtocolMsg::EmptyRequest.index()];
+		let request = ProtocolMsg::EmptyRequest;
 		let serialized = request.serialize();
 		assert_eq!(expected, serialized);
 	}
@@ -173,77 +203,43 @@ mod test {
 	#[test]
 	fn serialize_echo_request() {
 		let expected = vec![4, 0, 0, 0, 1, 2, 3, 4];
-		let req = EchoRequest { data: vec![1, 2, 3, 4] };
+		let req = Echo { data: vec![1, 2, 3, 4] };
 		let serialized = req.serialize();
 		assert_eq!(expected, serialized);
 	}
 
 	#[test]
 	fn deserialize_echo_request() {
-		let expected = EchoRequest { data: vec![1, 2, 3, 4] };
+		let expected = Echo { data: vec![1, 2, 3, 4] };
 		let mut data = vec![4, 0, 0, 0, 1, 2, 3, 4];
-		let deserialized = EchoRequest::deserialize(&mut data).unwrap();
+		let deserialized = Echo::deserialize(&mut data).unwrap();
 		assert_eq!(expected, deserialized);
 	}
 
 	#[test]
 	fn serialize_integration_echo_request() {
-		let req = EchoRequest { data: vec![1, 2, 3, 4] };
+		let req = Echo { data: vec![1, 2, 3, 4] };
 		let mut serialized = req.serialize();
-		let deserialized = EchoRequest::deserialize(&mut serialized).unwrap();
+		let deserialized = Echo::deserialize(&mut serialized).unwrap();
 		assert_eq!(req, deserialized);
 	}
 
 	#[test]
 	fn serialize_protocol_request() {
-		let expected = vec![1, 4, 0, 0, 0, 1, 2, 3, 4];
-		let req = EchoRequest { data: vec![1, 2, 3, 4] };
-		let pr = ProtocolRequest::Echo(req);
+		let expected = vec![4, 4, 0, 0, 0, 1, 2, 3, 4];
+		let req = Echo { data: vec![1, 2, 3, 4] };
+		let pr = ProtocolMsg::EchoRequest(req);
 		let serialized = pr.serialize();
 		assert_eq!(expected, serialized);
 	}
 
 	#[test]
 	fn deserialize_protocol_request() {
-		let req = EchoRequest { data: vec![1, 2, 3, 4] };
-		let pr = ProtocolRequest::Echo(req);
-		let mut data = vec![1, 4, 0, 0, 0, 1, 2, 3, 4];
-		let deserialized = ProtocolRequest::deserialize(&mut data).unwrap();
+		let req = Echo { data: vec![1, 2, 3, 4] };
+		let pr = ProtocolMsg::EchoRequest(req);
+		let mut data = vec![4, 4, 0, 0, 0, 1, 2, 3, 4];
+		let deserialized = ProtocolMsg::deserialize(&mut data).unwrap();
 		assert_eq!(pr, deserialized);
-	}
-
-	#[test]
-	fn serialize_nested_request() {
-		let echo_request = EchoRequest { data: vec![1, 2, 3, 4] };
-		let nested_request = NestedRequest {
-			nested_struct: echo_request,
-			data2: vec![50, 60, 70, 80],
-		};
-		let serialized = nested_request.serialize();
-
-		let expected = vec![
-			4, 0, 0, 0, // nested_request length
-			1, 2, 3, 4, // nested request
-			4, 0, 0, 0, // data2 length
-			50, 60, 70, 80, // data2
-		];
-		assert_eq!(expected, serialized);
-	}
-
-	#[test]
-	fn deserialize_nested_request() {
-		let mut data = vec![
-			4, 0, 0, 0, // nested_request length
-			1, 2, 3, 4, // nested request
-			4, 0, 0, 0, // data2 length
-			5, 6, 7, 8, // data2
-		];
-		let expected = NestedRequest {
-			nested_struct: EchoRequest { data: vec![1, 2, 3, 4] },
-			data2: vec![5, 6, 7, 8],
-		};
-		let deserialized = NestedRequest::deserialize(&mut data).unwrap();
-		assert_eq!(expected, deserialized);
 	}
 
 	#[test]
@@ -261,36 +257,36 @@ mod test {
 		assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
 
 		let mut data = vec![1];
-		let deserialized = EchoRequest::deserialize(&mut data);
+		let deserialized = Echo::deserialize(&mut data);
 		assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
 
 		let mut data = vec![1, 0, 0, 0];
-		let deserialized = EchoRequest::deserialize(&mut data);
+		let deserialized = Echo::deserialize(&mut data);
 		assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
 
 		let mut data = vec![3, 0, 0, 0, 1, 1];
-		let deserialized = EchoRequest::deserialize(&mut data);
+		let deserialized = Echo::deserialize(&mut data);
 		assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
 
 		let mut data = vec![];
-		let deserialized = ProtocolRequest::deserialize(&mut data);
+		let deserialized = ProtocolMsg::deserialize(&mut data);
 		assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
 
-		let mut data = vec![1, 2, 0, 0, 0, 1];
-		let deserialized = ProtocolRequest::deserialize(&mut data);
+		let mut data = vec![4, 2, 0, 0, 0, 1];
+		let deserialized = ProtocolMsg::deserialize(&mut data);
 		assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
 
 		let mut data = vec![99, 2, 0, 0, 0, 1];
-		let deserialized = ProtocolRequest::deserialize(&mut data);
+		let deserialized = ProtocolMsg::deserialize(&mut data);
 		assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
 	}
 
 	// CAUTION: This test takes a really long time...
 	// #[test]
 	// fn deserialization_payload_too_large() {
-	//   let req = EchoRequest{ data: (0..(u32::MAX)).map(|_| u8::MAX).collect()
+	//   let req = Echo{ data: (0..(u32::MAX)).map(|_| u8::MAX).collect()
 	// };   let mut serialized = req.serialize();
-	//   let deserialized = EchoRequest::deserialize(&mut serialized).unwrap();
+	//   let deserialized = Echo::deserialize(&mut serialized).unwrap();
 	//   assert_eq!(deserialized, req);
 	// }
 }
