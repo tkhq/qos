@@ -2,7 +2,7 @@
 
 use crate::{
 	io::{self, SocketAddress, Stream},
-	protocol::{ProtocolError, ProtocolRequest, Serialize},
+	protocol::{ProtocolError, ProtocolMsg, Serialize},
 };
 
 #[derive(Debug)]
@@ -23,22 +23,26 @@ impl From<ProtocolError> for ClientError {
 	}
 }
 
+/// Client for communicating with the enclave [`server::Server`].
+#[derive(Debug)]
 pub struct Client {
 	addr: SocketAddress,
 }
 
 impl Client {
+	/// Create a new client.
 	pub fn new(addr: SocketAddress) -> Self {
 		Self { addr }
 	}
 
+	/// Send a [`ProtocolMsg`] and return the response.
 	pub fn send(
 		&self,
-		request: ProtocolRequest,
-	) -> Result<ProtocolRequest, ClientError> {
+		request: ProtocolMsg,
+	) -> Result<ProtocolMsg, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
 		stream.send(&request.serialize())?;
 		let mut response = stream.recv()?;
-		ProtocolRequest::deserialize(&mut response).map_err(Into::into)
+		ProtocolMsg::deserialize(&mut response).map_err(Into::into)
 	}
 }
