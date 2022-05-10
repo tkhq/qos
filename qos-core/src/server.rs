@@ -51,7 +51,7 @@ impl Server {
 			}
 			Ok(ProtocolMsg::EchoRequest(e)) => {
 				println!("Received echo...");
-				let res = ProtocolMsg::EchoRequest(e).serialize();
+				let res = ProtocolMsg::EchoResponse(e).serialize();
 				let _ = stream.send(&res);
 			}
 			Err(e) => {

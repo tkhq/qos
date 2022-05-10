@@ -2,7 +2,7 @@ use std::io::Read;
 
 use qos_core::{
 	io::SocketAddress,
-	protocol::{EchoRequest, ProtocolRequest, Serialize},
+	protocol::{Echo, ProtocolMsg, Serialize},
 	server::Server,
 };
 use qos_host::HostServer;
@@ -10,7 +10,7 @@ use qos_host::HostServer;
 const MAX_SIZE: u64 = u32::MAX as u64;
 
 // TODO: Fix flakey test...
-// #[tokio::test]
+#[tokio::test]
 async fn end_to_end() {
 	let enclave_addr = SocketAddress::new_unix("./end_to_end.sock");
 	let enclave_addr2 = enclave_addr.clone();
@@ -46,7 +46,7 @@ async fn end_to_end() {
 
 	// Test message endpoint
 	let data = b"Hello, world!".to_vec();
-	let request = ProtocolRequest::Echo(EchoRequest { data: data.clone() });
+	let request = ProtocolMsg::EchoRequest(Echo { data: data.clone() });
 	let response = ureq::post(&format!("{}/{}", url, "message"))
 		.send_bytes(&request.serialize())
 		.unwrap();
@@ -54,7 +54,7 @@ async fn end_to_end() {
 	let mut buf: Vec<u8> = vec![];
 	response.into_reader().take(MAX_SIZE).read_to_end(&mut buf).unwrap();
 
-	let pr = ProtocolRequest::deserialize(&mut buf).unwrap();
+	let pr = ProtocolMsg::deserialize(&mut buf).unwrap();
 
-	assert_eq!(pr, ProtocolRequest::Echo(EchoRequest { data }));
+	assert_eq!(pr, ProtocolMsg::EchoResponse(Echo { data }));
 }

@@ -2,7 +2,7 @@
 
 use std::io::Read;
 
-use qos_core::protocol::{EchoRequest, ProtocolMsg, Serialize};
+use qos_core::protocol::{Echo, ProtocolMsg, Serialize};
 
 const MAX_SIZE: u64 = u32::MAX as u64;
 
@@ -15,7 +15,7 @@ fn main() {
 		.unwrap();
 
 	let data = b"Hello, world!".to_vec();
-	let request = ProtocolMsg::Echo(EchoRequest { data });
+	let request = ProtocolMsg::EchoRequest(Echo { data });
 	let response = ureq::post(&format!("{}/{}", url, "message"))
 		.send_bytes(&request.serialize())
 		.unwrap();
@@ -27,8 +27,8 @@ fn main() {
 
 	let pr = ProtocolMsg::deserialize(&mut buf).unwrap();
 	match pr {
-		ProtocolMsg::Echo(_) => {
-			println!("Echo")
+		ProtocolMsg::EchoResponse(_) => {
+			println!("EchoResponse")
 		}
 		_ => {
 			println!("Unknown request...")

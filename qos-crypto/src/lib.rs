@@ -1,8 +1,8 @@
 // Grabbed from here:
 // https://github.com/veracruz-project/veracruz/blob/main/sdk/data-generators/shamir-secret-sharing/src/main.rs
 
-use rand::{prelude::SliceRandom, Rng};
-use std::{convert::TryFrom, error, iter};
+use rand::Rng;
+use std::{convert::TryFrom, iter};
 
 // lookup tables for log and exp of polynomials in GF(256),
 #[rustfmt::skip]
@@ -159,7 +159,7 @@ fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 
 /// generate n shares requiring k shares to reconstruct
 // #[allow(clippy::needless_range_loop)]
-fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
+pub fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
 	let mut shares = vec![vec![]; n];
 
 	// we need to store x for each point somewhere, so just prepend
@@ -185,7 +185,7 @@ fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
 }
 
 /// reconstruct our secret
-fn shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
+pub fn shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
 	let len = shares.iter().map(|s| s.as_ref().len()).min().unwrap_or(0);
 	// rather than erroring, return empty secrets if input is malformed.
 	// This matches the behavior of bad shares (random output) and simplifies
@@ -206,31 +206,36 @@ fn shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
 	secret
 }
 
-#[test]
-fn make_and_reconstruct_shares() {
-	let secret = b"this is a crazy secret";
-	let n = 6;
-	let k = 3;
-	let all_shares = shares_generate(secret, n, k);
+#[cfg(test)]
+mod test {
+	use super::*;
+	use rand::prelude::SliceRandom;
+	#[test]
+	fn make_and_reconstruct_shares() {
+		let secret = b"this is a crazy secret";
+		let n = 6;
+		let k = 3;
+		let all_shares = shares_generate(secret, n, k);
 
-	// Reconstruct with all the shares
-	let shares = all_shares.clone();
-	let reconstructed = shares_reconstruct(&shares);
-	assert_eq!(secret.to_vec(), reconstructed);
+		// Reconstruct with all the shares
+		let shares = all_shares.clone();
+		let reconstructed = shares_reconstruct(&shares);
+		assert_eq!(secret.to_vec(), reconstructed);
 
-	// Reconstruct with enough shares
-	let shares = &all_shares[..k];
-	let reconstructed = shares_reconstruct(shares);
-	assert_eq!(secret.to_vec(), reconstructed);
+		// Reconstruct with enough shares
+		let shares = &all_shares[..k];
+		let reconstructed = shares_reconstruct(shares);
+		assert_eq!(secret.to_vec(), reconstructed);
 
-	// Reconstruct with not enough shares
-	let shares = &all_shares[..(k - 1)];
-	let reconstructed = shares_reconstruct(shares);
-	assert!(secret.to_vec() != reconstructed);
+		// Reconstruct with not enough shares
+		let shares = &all_shares[..(k - 1)];
+		let reconstructed = shares_reconstruct(shares);
+		assert!(secret.to_vec() != reconstructed);
 
-	// Reconstruct with enough shuffled shares
-	let mut shares = all_shares.clone()[..k].to_vec();
-	shares.shuffle(&mut rand::thread_rng());
-	let reconstructed = shares_reconstruct(&shares);
-	assert_eq!(secret.to_vec(), reconstructed);
+		// Reconstruct with enough shuffled shares
+		let mut shares = all_shares.clone()[..k].to_vec();
+		shares.shuffle(&mut rand::thread_rng());
+		let reconstructed = shares_reconstruct(&shares);
+		assert_eq!(secret.to_vec(), reconstructed);
+	}
 }
