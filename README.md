@@ -23,4 +23,8 @@ cargo +nightly fmt
 - Anything making request to host
 
 TODO:
+- sanity check vsock - aws or qemu
+- big: aws attestation flow - cannot be developed locally
+- shamir logic
+  - simple cli for posting shards
 - no default features for all crates

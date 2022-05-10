@@ -5,7 +5,7 @@ use std::env;
 use qos_core::{
 	client::Client,
 	io::SocketAddress,
-	protocol::{EchoRequest, ProtocolRequest},
+	protocol::{EchoRequest, ProtocolMsg},
 	server::Server,
 };
 
@@ -23,10 +23,10 @@ fn run_client() {
 	let addr = SocketAddress::new_unix("./dev.sock");
 	let client = Client::new(addr);
 	let data = b"Hello, world!".to_vec();
-	let request = ProtocolRequest::Echo(EchoRequest { data });
+	let request = ProtocolMsg::Echo(EchoRequest { data });
 	let response = client.send(request).unwrap();
 	match response {
-		ProtocolRequest::Echo(er) => {
+		ProtocolMsg::Echo(er) => {
 			println!("{}", String::from_utf8(er.data).unwrap());
 		}
 		_ => {

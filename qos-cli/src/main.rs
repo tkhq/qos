@@ -2,12 +2,12 @@
 
 use std::io::Read;
 
-use qos_core::protocol::{EchoRequest, ProtocolRequest, Serialize};
+use qos_core::protocol::{EchoRequest, ProtocolMsg, Serialize};
 
 const MAX_SIZE: u64 = u32::MAX as u64;
 
 fn main() {
-	let url = "http:127.0.0.1:3000";
+	let url = "http://127.0.0.1:3000";
 	let _body: String = ureq::get(&format!("{}/{}", url, "health"))
 		.call()
 		.unwrap()
@@ -15,7 +15,7 @@ fn main() {
 		.unwrap();
 
 	let data = b"Hello, world!".to_vec();
-	let request = ProtocolRequest::Echo(EchoRequest { data });
+	let request = ProtocolMsg::Echo(EchoRequest { data });
 	let response = ureq::post(&format!("{}/{}", url, "message"))
 		.send_bytes(&request.serialize())
 		.unwrap();
@@ -25,9 +25,9 @@ fn main() {
 
 	println!("{:?}", buf);
 
-	let pr = ProtocolRequest::deserialize(&mut buf).unwrap();
+	let pr = ProtocolMsg::deserialize(&mut buf).unwrap();
 	match pr {
-		ProtocolRequest::Echo(_) => {
+		ProtocolMsg::Echo(_) => {
 			println!("Echo")
 		}
 		_ => {

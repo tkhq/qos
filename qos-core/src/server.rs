@@ -4,7 +4,7 @@
 use crate::{
 	io,
 	io::{Listener, SocketAddress, Stream},
-	protocol::{self, ProtocolRequest, Serialize},
+	protocol::{self, ProtocolMsg, Serialize},
 };
 
 #[derive(Debug)]
@@ -41,22 +41,23 @@ impl Server {
 	}
 
 	fn respond(stream: Stream, mut payload: Vec<u8>) {
-		let request = ProtocolRequest::deserialize(&mut payload);
+		let request = ProtocolMsg::deserialize(&mut payload);
 
 		match request {
-			Ok(ProtocolRequest::Empty) => {
+			Ok(ProtocolMsg::EmptyRequest) => {
 				println!("Empty request...");
 				let res = b"Empty!".to_vec();
 				let _ = stream.send(&res);
 			}
-			Ok(ProtocolRequest::Echo(e)) => {
+			Ok(ProtocolMsg::EchoRequest(e)) => {
 				println!("Received echo...");
-				let res = ProtocolRequest::Echo(e).serialize();
+				let res = ProtocolMsg::EchoRequest(e).serialize();
 				let _ = stream.send(&res);
 			}
 			Err(e) => {
 				eprintln!("Server::respond error: unknown request: {:?}", e);
 			}
+			_ => unimplemented!(),
 		};
 	}
 }

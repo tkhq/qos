@@ -26,7 +26,7 @@ use axum::{
 use qos_core::{
 	client::Client,
 	io::SocketAddress,
-	protocol::{ProtocolRequest, Serialize},
+	protocol::{ProtocolMsg, Serialize},
 };
 
 /// Resource shared across tasks in the [`HostServer`].
@@ -82,7 +82,7 @@ impl HostServer {
 		Extension(state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
 		let mut body = body.to_vec();
-		match ProtocolRequest::deserialize(&mut body) {
+		match ProtocolMsg::deserialize(&mut body) {
 			Err(_) => {
 				return (
 					StatusCode::INTERNAL_SERVER_ERROR,

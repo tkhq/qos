@@ -2,7 +2,7 @@
 
 use crate::{
 	io::{self, SocketAddress, Stream},
-	protocol::{ProtocolError, ProtocolRequest, Serialize},
+	protocol::{ProtocolError, ProtocolMsg, Serialize},
 };
 
 #[derive(Debug)]
@@ -38,11 +38,11 @@ impl Client {
 	/// Send a [`ProtocolRequest`] and return the response.
 	pub fn send(
 		&self,
-		request: ProtocolRequest,
-	) -> Result<ProtocolRequest, ClientError> {
+		request: ProtocolMsg,
+	) -> Result<ProtocolMsg, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
 		stream.send(&request.serialize())?;
 		let mut response = stream.recv()?;
-		ProtocolRequest::deserialize(&mut response).map_err(Into::into)
+		ProtocolMsg::deserialize(&mut response).map_err(Into::into)
 	}
 }
