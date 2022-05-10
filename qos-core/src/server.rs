@@ -4,11 +4,15 @@
 use crate::{
 	io,
 	io::{Listener, SocketAddress, Stream},
-	protocol::{self, ProtocolError, ProtocolMsg, ProvisionRequest, Serialize},
+	protocol::{
+		self, NsmRequest, ProtocolError, ProtocolMsg, ProvisionRequest,
+		Serialize,
+	},
 };
+use aws_nitro_enclaves_nsm_api as nsm;
 use qos_crypto;
-use std::fs::File;
-use std::io::Write;
+use std::{collections::BTreeSet, fs::File};
+use std::{io::Write, marker::PhantomData};
 
 #[derive(Debug)]
 pub enum ServerError {
@@ -70,17 +74,84 @@ impl Provisioner {
 	}
 }
 
-type Secret = Vec<u8>;
-pub struct Server {
-	provisioner: Provisioner,
-	secret: Option<Secret>,
+// https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md
+
+pub trait NsmProvider {
+	/// See [`aws_nitro_enclaves_nsm_api::driver::process_request`]
+	fn process_request(
+		fd: i32,
+		request: nsm::api::Request,
+	) -> nsm::api::Response;
+
+	/// See [`aws_nitro_enclaves_nsm_api::driver::nsm_init`]
+	fn nsm_init() -> i32;
+
+	/// See [`aws_nitro_enclaves_nsm_api::driver::nsm_exit`]
+	fn nsm_exit(fd: i32);
 }
 
-impl Server {
+/// TODO - this should be moved to its own crate as it will likely need some additional deps
+/// like Serde
+pub struct MockNsm {}
+
+impl NsmProvider for MockNsm {
+	fn process_request(
+		_fd: i32,
+		request: nsm::api::Request,
+	) -> nsm::api::Response {
+		use nsm::api::{Request as Req, Response as Resp};
+		println!("MockNsm::process_request request={:?}", request);
+		match request {
+			Req::Attestation { user_data: _, nonce: _, public_key: _ } => {
+				// TODO: this should be a CBOR-encoded AttestationDocument as the payload
+				Resp::Attestation { document: Vec::new() }
+			}
+			Req::DescribeNSM => Resp::DescribeNSM {
+				version_major: 1,
+				version_minor: 2,
+				version_patch: 14,
+				module_id: "mock_module_id".to_string(),
+				max_pcrs: 1024,
+				locked_pcrs: BTreeSet::from([90, 91, 92]),
+				digest: nsm::api::Digest::SHA256,
+			},
+			Req::ExtendPCR { index: _, data: _ } => {
+				Resp::ExtendPCR { data: vec![3, 4, 7, 4] }
+			}
+			Req::GetRandom => Resp::GetRandom { random: vec![4, 2, 0, 69] },
+			Req::LockPCR { index: _ } => Resp::LockPCR,
+			Req::LockPCRs { range: _ } => Resp::LockPCRs,
+			Req::DescribePCR { index: _ } => {
+				Resp::DescribePCR { lock: false, data: vec![3, 4, 7, 4] }
+			}
+			_ => Resp::Error(nsm::api::ErrorCode::InternalError),
+		}
+	}
+
+	fn nsm_init() -> i32 {
+		33
+	}
+
+	fn nsm_exit(fd: i32) {
+		// Should be hardcoded to value returned by nsm_int
+		assert_eq!(fd, 33);
+		println!("nsm_exit");
+	}
+}
+
+type Secret = Vec<u8>;
+pub struct Server<N: NsmProvider> {
+	provisioner: Provisioner,
+	secret: Option<Secret>,
+	nsm: N,
+}
+
+impl<N: NsmProvider> Server<N> {
 	pub fn listen(addr: SocketAddress) -> Result<(), ServerError> {
 		let mut server = Server {
 			provisioner: Provisioner { shares: Shares::new() },
 			secret: None,
+			_phantom: PhantomData::<N>,
 		};
 
 		let mut listener = Listener::listen(addr)?;
@@ -141,6 +212,11 @@ impl Server {
 						});
 					}
 				}
+			}
+			Ok(ProtocolMsg::NsmRequest(NsmRequest { data: _ })) => {
+				let fd = <Self::N as NsmProvider>::nsm_init();
+
+				<Self::N as NsmProvider>::process_request
 			}
 			Err(e) => {
 				eprintln!("Server::respond error: unknown request: {:?}", e);
