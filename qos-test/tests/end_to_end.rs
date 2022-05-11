@@ -4,8 +4,10 @@ use aws_nitro_enclaves_nsm_api as nsm;
 use qos_cli;
 use qos_core::{
 	io::SocketAddress,
-	protocol::{Echo, ProtocolMsg, ProvisionRequest},
-	server::{MockNsm, Server},
+	protocol::{
+		Echo, MockNsm, ProtocolMsg, ProtocolState, ProvisionRequest, Router,
+	},
+	server::SocketServer,
 };
 use qos_crypto;
 use qos_host::HostServer;
@@ -23,7 +25,11 @@ async fn end_to_end() {
 
 	// Spawn enclave
 	std::thread::spawn(move || {
-		Server::<MockNsm>::listen(enclave_addr).unwrap();
+		let attestor = MockNsm {};
+		let mut state = ProtocolState::new(attestor);
+		let router = Router::new();
+
+		SocketServer::listen(enclave_addr, router, state).unwrap()
 	});
 
 	std::thread::spawn(move || {
@@ -37,6 +43,7 @@ async fn end_to_end() {
 		rt.block_on(host.serve())
 	});
 
+	// Enclave + host need time to bind before serving requests...
 	std::thread::sleep(std::time::Duration::from_secs(1));
 
 	// Test health endpoint
@@ -75,7 +82,7 @@ async fn end_to_end() {
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
-	let path = Path::new(qos_core::server::SECRET_FILE);
+	let path = Path::new(qos_core::protocol::SECRET_FILE);
 	assert!(!path.exists());
 
 	let rr = ProtocolMsg::ReconstructRequest;
@@ -85,10 +92,11 @@ async fn end_to_end() {
 
 	assert!(path.exists());
 	let mut content = Vec::new();
-	let mut file = File::open(qos_core::server::SECRET_FILE).unwrap();
+	let mut file = File::open(qos_core::protocol::SECRET_FILE).unwrap();
 	file.read_to_end(&mut content).unwrap();
 
 	assert_eq!(content, secret);
+
 	// Delete file
 	std::fs::remove_file(path).unwrap();
 
