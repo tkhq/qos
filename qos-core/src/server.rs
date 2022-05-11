@@ -13,19 +13,19 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub enum ServerError {
+pub enum SocketServerError {
 	IOError(io::IOError),
 	ProtocolError(protocol::ProtocolError),
 	NotFound,
 }
 
-impl From<io::IOError> for ServerError {
+impl From<io::IOError> for SocketServerError {
 	fn from(err: io::IOError) -> Self {
 		Self::IOError(err)
 	}
 }
 
-impl From<protocol::ProtocolError> for ServerError {
+impl From<protocol::ProtocolError> for SocketServerError {
 	fn from(err: protocol::ProtocolError) -> Self {
 		Self::ProtocolError(err)
 	}
@@ -41,9 +41,9 @@ struct Provisioner {
 }
 
 impl Provisioner {
-	fn add_share(&mut self, share: Share) -> Result<(), ServerError> {
+	fn add_share(&mut self, share: Share) -> Result<(), SocketServerError> {
 		if share.len() == 0 {
-			return Err(ServerError::ProtocolError(
+			return Err(SocketServerError::ProtocolError(
 				ProtocolError::InvalidShare,
 			));
 		}
@@ -52,12 +52,12 @@ impl Provisioner {
 		Ok(())
 	}
 
-	fn reconstruct(&mut self) -> Result<Secret, ServerError> {
+	fn reconstruct(&mut self) -> Result<Secret, SocketServerError> {
 		let secret = qos_crypto::shares_reconstruct(&self.shares);
 
 		// TODO: Add better validation...
 		if secret.len() == 0 {
-			return Err(ServerError::ProtocolError(
+			return Err(SocketServerError::ProtocolError(
 				ProtocolError::ReconstructionError,
 			));
 		}
@@ -78,15 +78,16 @@ impl Provisioner {
 pub trait NsmProvider {
 	/// See [`aws_nitro_enclaves_nsm_api::driver::process_request`]
 	fn nsm_process_request(
+		&self,
 		fd: i32,
 		request: nsm::api::Request,
 	) -> nsm::api::Response;
 
 	/// See [`aws_nitro_enclaves_nsm_api::driver::nsm_init`]
-	fn nsm_init() -> i32;
+	fn nsm_init(&self) -> i32;
 
 	/// See [`aws_nitro_enclaves_nsm_api::driver::nsm_exit`]
-	fn nsm_exit(fd: i32);
+	fn nsm_exit(&self, fd: i32);
 }
 
 /// TODO - this should be moved to its own crate as it will likely need some
@@ -95,6 +96,7 @@ pub struct MockNsm {}
 
 impl NsmProvider for MockNsm {
 	fn nsm_process_request(
+		&self,
 		_fd: i32,
 		request: nsm::api::Request,
 	) -> nsm::api::Response {
@@ -128,11 +130,11 @@ impl NsmProvider for MockNsm {
 		}
 	}
 
-	fn nsm_init() -> i32 {
+	fn nsm_init(&self) -> i32 {
 		33
 	}
 
-	fn nsm_exit(fd: i32) {
+	fn nsm_exit(&self, fd: i32) {
 		// Should be hardcoded to value returned by nsm_init
 		assert_eq!(fd, 33);
 		println!("nsm_exit");
@@ -140,15 +142,15 @@ impl NsmProvider for MockNsm {
 }
 
 type Secret = Vec<u8>;
-pub struct Server<N: NsmProvider> {
+pub struct SocketServer<N: NsmProvider> {
 	provisioner: Provisioner,
 	secret: Option<Secret>,
 	_phantom: PhantomData<N>,
 }
 
-impl<N: NsmProvider> Server<N> {
-	pub fn listen(addr: SocketAddress) -> Result<(), ServerError> {
-		let mut server = Server {
+impl<N: NsmProvider> SocketServer<N> {
+	pub fn listen(addr: SocketAddress) -> Result<(), SocketServerError> {
+		let mut server = SocketServer {
 			provisioner: Provisioner { shares: Shares::new() },
 			secret: None,
 			_phantom: PhantomData::<N>,
@@ -229,44 +231,133 @@ impl<N: NsmProvider> Server<N> {
 	}
 }
 
-trait ReqProcessor<Msg: Serialize<Msg>> {
-	fn process_req(&self, req: Msg) -> Result<Msg, ServerError>;
+trait ReqProcessor<S> {
+	fn process_req(
+		&self,
+		req: Vec<u8>,
+		state: S,
+	) -> Result<Vec<u8>, SocketServerError>;
 }
 
-type Handler<Msg> = dyn Fn(Msg) -> Option<Result<Msg, ServerError>>;
+type ProtocolHandler =
+	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
 
-struct MsgRouter<Handler, Msg> {
-	routes: Vec<Box<dyn Handler>>,
+struct Router {
+	routes: Vec<Box<ProtocolHandler>>,
 }
 
-impl<Handler, Msg> MsgRouter<Handler, Msg>
-where
-	Handler: Fn(Msg) -> Option<Result<Msg, ServerError>>,
-	Msg: Serialize<Msg>,
-{
+impl Router {
 	fn new() -> Self {
 		Self { routes: Vec::new() }
 	}
 
-	fn mount_route(mut self, f: F) -> Self {
+	/// Mounter a `ProtocolHandler`.
+	fn mount(mut self, f: Box<ProtocolHandler>) -> Self {
 		self.routes.push(f);
 		self
 	}
 }
 
-// impl<Handler, Msg> ReqProcessor<Msg> for MsgRouter<Handler>
-// where
-// 	Handler: Fn(Msg) -> Option<Result<Msg, ServerError>,
-// 	Msg: Serialize<Msg>,
-// {
-// fn process_req(&self, req: R) -> Result<R, ServerError> {
-// 	for route in self.routes {
-// 		if let Some(result) = route(req) {
-// 			return result;
-// 		}
-// 	}
+struct ProtocolState {
+	provisioner: Provisioner,
+	secret: Option<Secret>,
+	// TODO make this gneric over NsmProvider
+	attestor: MockNsm,
+}
 
-// 	Err(ServerError::NotFound)
-// }
+impl ReqProcessor<ProtocolState> for Router {
+	fn process_req(
+		&self,
+		mut req_bytes: Vec<u8>,
+		state: ProtocolState,
+	) -> Result<Vec<u8>, SocketServerError> {
+		use protocol::Serialize as _;
 
-// }
+		let mut msg_req = match ProtocolMsg::deserialize(&mut req_bytes) {
+			Ok(req) => req,
+			Err(_) => return Ok(ProtocolMsg::ErrorResponse.serialize()),
+		};
+
+		// outer scope
+		for handler in self.routes.iter() {
+			match handler(&msg_req, &mut state) {
+				Some(msg_resp) => return Ok(msg_resp.serialize()),
+				None => continue,
+			}
+		}
+
+		Err(SocketServerError::NotFound)
+	}
+}
+
+mod handlers {
+	use super::*;
+
+	pub(super) fn empty(
+		req: &ProtocolMsg,
+		_state: &mut ProtocolState,
+	) -> Option<ProtocolMsg> {
+		if let ProtocolMsg::EmptyRequest = req {
+			Some(ProtocolMsg::EmptyResponse)
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn echo(
+		req: &ProtocolMsg,
+		_state: &mut ProtocolState,
+	) -> Option<ProtocolMsg> {
+		if let ProtocolMsg::EchoRequest(e) = req {
+			Some(ProtocolMsg::EchoResponse(e.clone()))
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn provision(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> Option<ProtocolMsg> {
+		if let ProtocolMsg::ProvisionRequest(pr) = req {
+			match state.provisioner.add_share(pr.share) {
+				Ok(_) => Some(ProtocolMsg::SuccessResponse),
+				Err(_) => Some(ProtocolMsg::ErrorResponse),
+			}
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn reconstruct(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> Option<ProtocolMsg> {
+		if let ProtocolMsg::ReconstructRequest = req {
+			match state.provisioner.reconstruct() {
+				Ok(secret) => {
+					state.secret = Some(secret);
+					Some(ProtocolMsg::SuccessResponse)
+				}
+				Err(_) => Some(ProtocolMsg::ErrorResponse),
+			}
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn nsm(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> Option<ProtocolMsg> {
+		if let ProtocolMsg::NsmRequest(_nsmr) = req {
+			let fd = state.attestor.nsm_init();
+			let response = state
+				.attestor
+				.nsm_process_request(fd, nsm::api::Request::DescribeNSM);
+			Some(ProtocolMsg::NsmResponse(response))
+		} else {
+			None
+		}
+	}
+}

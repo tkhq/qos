@@ -166,7 +166,7 @@ impl PartialEq for ProtocolMsg {
 	}
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Echo {
 	pub data: Vec<u8>,
 }
@@ -182,7 +182,7 @@ impl Serialize<Self> for Echo {
 	}
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ProvisionRequest {
 	pub share: Vec<u8>,
 }
@@ -197,7 +197,7 @@ impl Serialize<Self> for ProvisionRequest {
 	}
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ProvisionResponse {}
 
 #[cfg(test)]
