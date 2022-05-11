@@ -1,8 +1,9 @@
 // Grabbed from here:
 // https://github.com/veracruz-project/veracruz/blob/main/sdk/data-generators/shamir-secret-sharing/src/main.rs
 
-use rand::Rng;
 use std::{convert::TryFrom, iter};
+
+use rand::Rng;
 
 // lookup tables for log and exp of polynomials in GF(256),
 #[rustfmt::skip]
@@ -191,7 +192,7 @@ pub fn shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
 	// This matches the behavior of bad shares (random output) and simplifies
 	// consumers.
 	if len == 0 {
-		return vec![];
+		return vec![]
 	}
 
 	let mut secret = vec![];
@@ -208,8 +209,9 @@ pub fn shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
 
 #[cfg(test)]
 mod test {
-	use super::*;
 	use rand::prelude::SliceRandom;
+
+	use super::*;
 	#[test]
 	fn make_and_reconstruct_shares() {
 		let secret = b"this is a crazy secret";

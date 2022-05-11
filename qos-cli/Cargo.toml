@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 qos-core = { path = "../qos-core" }
+aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 
 # Third party
 ureq = { version = "2.4", default-features = false }

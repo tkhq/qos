@@ -1,18 +1,16 @@
 //! Streaming socket based server for use in an enclave. Listens for connections
 //! from [`client::Client`].
 
+use std::{collections::BTreeSet, fs::File, io::Write};
+
+use aws_nitro_enclaves_nsm_api as nsm;
+use qos_crypto;
+
 use crate::{
 	io,
 	io::{Listener, SocketAddress, Stream},
-	protocol::{
-		self, NsmRequest, ProtocolError, ProtocolMsg, ProvisionRequest,
-		Serialize,
-	},
+	protocol::{self, ProtocolError, ProtocolMsg, ProvisionRequest, Serialize},
 };
-use aws_nitro_enclaves_nsm_api as nsm;
-use qos_crypto;
-use std::{collections::BTreeSet, fs::File};
-use std::{io::Write, marker::PhantomData};
 
 #[derive(Debug)]
 pub enum ServerError {
@@ -78,24 +76,28 @@ impl Provisioner {
 
 pub trait NsmProvider {
 	/// See [`aws_nitro_enclaves_nsm_api::driver::process_request`]
-	fn process_request(
+	fn nsm_process_request(
+		&self,
 		fd: i32,
 		request: nsm::api::Request,
 	) -> nsm::api::Response;
 
 	/// See [`aws_nitro_enclaves_nsm_api::driver::nsm_init`]
-	fn nsm_init() -> i32;
+	fn nsm_init(&self) -> i32;
 
 	/// See [`aws_nitro_enclaves_nsm_api::driver::nsm_exit`]
-	fn nsm_exit(fd: i32);
+	fn nsm_exit(&self, fd: i32);
+
+	fn new() -> Self;
 }
 
-/// TODO - this should be moved to its own crate as it will likely need some additional deps
-/// like Serde
+/// TODO - this should be moved to its own crate as it will likely need some
+/// additional deps like Serde
 pub struct MockNsm {}
 
 impl NsmProvider for MockNsm {
-	fn process_request(
+	fn nsm_process_request(
+		&self,
 		_fd: i32,
 		request: nsm::api::Request,
 	) -> nsm::api::Response {
@@ -103,7 +105,8 @@ impl NsmProvider for MockNsm {
 		println!("MockNsm::process_request request={:?}", request);
 		match request {
 			Req::Attestation { user_data: _, nonce: _, public_key: _ } => {
-				// TODO: this should be a CBOR-encoded AttestationDocument as the payload
+				// TODO: this should be a CBOR-encoded AttestationDocument as
+				// the payload
 				Resp::Attestation { document: Vec::new() }
 			}
 			Req::DescribeNSM => Resp::DescribeNSM {
@@ -128,14 +131,17 @@ impl NsmProvider for MockNsm {
 		}
 	}
 
-	fn nsm_init() -> i32 {
+	fn nsm_init(&self) -> i32 {
 		33
 	}
 
-	fn nsm_exit(fd: i32) {
+	fn nsm_exit(&self, fd: i32) {
 		// Should be hardcoded to value returned by nsm_int
 		assert_eq!(fd, 33);
 		println!("nsm_exit");
+	}
+	fn new() -> Self {
+		Self {}
 	}
 }
 
@@ -151,7 +157,7 @@ impl<N: NsmProvider> Server<N> {
 		let mut server = Server<N> {
 			provisioner: Provisioner { shares: Shares::new() },
 			secret: None,
-			nsm: PhantomData::<N>
+			nsm: N::new(),
 		};
 
 		let mut listener = Listener::listen(addr)?;
@@ -183,13 +189,13 @@ impl<N: NsmProvider> Server<N> {
 				match self.provisioner.add_share(share) {
 					Ok(_) => {
 						let res = ProtocolMsg::SuccessResponse.serialize();
-						let _ = stream.send(&res).map(|e| {
+						let _ = stream.send(&res).map_err(|e| {
 							eprintln!("enclave::server::response: {:?}", e)
 						});
 					}
 					Err(_) => {
 						let res = ProtocolMsg::ErrorResponse.serialize();
-						let _ = stream.send(&res).map(|e| {
+						let _ = stream.send(&res).map_err(|e| {
 							eprintln!("enclave::server::response: {:?}", e)
 						});
 					}
@@ -200,23 +206,26 @@ impl<N: NsmProvider> Server<N> {
 					Ok(secret) => {
 						self.secret = Some(secret);
 						let res = ProtocolMsg::SuccessResponse.serialize();
-						let _ = stream.send(&res).map(|e| {
+						let _ = stream.send(&res).map_err(|e| {
 							eprintln!("enclave::server::response: {:?}", e)
 						});
 					}
 					Err(_) => {
 						let res = ProtocolMsg::ErrorResponse.serialize();
-						let _ = stream.send(&res).map(|e| {
+						let _ = stream.send(&res).map_err(|e| {
 							// TODO: make eprint_and_ignore_err macro
 							eprintln!("enclave::server::response: {:?}", e)
 						});
 					}
 				}
 			}
-			Ok(ProtocolMsg::NsmRequest(NsmRequest { data: _ })) => {
-				let fd = <Self::N as NsmProvider>::nsm_init();
+			Ok(ProtocolMsg::NsmRequest(nsm_request)) => {
+				let fd = self.nsm.nsm_init();
+				let response = self.nsm.nsm_process_request(fd, nsm_request);
+				self.nsm.nsm_exit(fd);
 
-				<Self::N as NsmProvider>::process_request
+				let res = ProtocolMsg::NsmResponse(response).serialize();
+				let _ = stream.send(&res);
 			}
 			Err(e) => {
 				eprintln!("Server::respond error: unknown request: {:?}", e);

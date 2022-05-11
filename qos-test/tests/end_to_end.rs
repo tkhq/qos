@@ -1,20 +1,19 @@
-use std::fs::remove_file;
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
+use std::collections::BTreeSet;
+use std::{fs::File, io::Read, path::Path};
 
+use aws_nitro_enclaves_nsm_api as nsm;
 use qos_cli;
+use qos_core::protocol::Serialize;
 use qos_core::{
 	io::SocketAddress,
-	protocol::{Echo, ProtocolMsg, ProvisionRequest, Serialize},
-	server::Server,
+	protocol::{Echo, ProtocolMsg, ProvisionRequest},
+	server::{MockNsm, Server},
 };
 use qos_crypto;
 use qos_host::HostServer;
 
 const MAX_SIZE: u64 = u32::MAX as u64;
 
-// TODO: Fix flakey test...
 #[tokio::test]
 async fn end_to_end() {
 	let enclave_addr = SocketAddress::new_unix("./end_to_end.sock");
@@ -28,7 +27,7 @@ async fn end_to_end() {
 
 	// Spawn enclave
 	std::thread::spawn(move || {
-		Server::listen(enclave_addr).unwrap();
+		Server::<MockNsm>::listen(enclave_addr).unwrap();
 	});
 
 	std::thread::spawn(move || {
@@ -53,7 +52,8 @@ async fn end_to_end() {
 	let data = b"Hello, world!".to_vec();
 	let request = ProtocolMsg::EchoRequest(Echo { data: data.clone() });
 	let response = qos_cli::post(&message_url, request).unwrap();
-	assert_eq!(response, ProtocolMsg::EchoResponse(Echo { data }));
+	let expected = ProtocolMsg::EchoResponse(Echo { data });
+	eq(expected, response);
 
 	// Test reconstruction
 	let secret = b"This is extremely secret".to_vec();
@@ -64,24 +64,28 @@ async fn end_to_end() {
 	let s1 = all_shares[0].clone();
 	let r1 = ProtocolMsg::ProvisionRequest(ProvisionRequest { share: s1 });
 	let response = qos_cli::post(&message_url, r1).unwrap();
-	assert_eq!(response, ProtocolMsg::SuccessResponse);
+	let expected = ProtocolMsg::SuccessResponse;
+	eq(expected, response);
 
 	let s2 = all_shares[1].clone();
 	let r2 = ProtocolMsg::ProvisionRequest(ProvisionRequest { share: s2 });
 	let response = qos_cli::post(&message_url, r2).unwrap();
-	assert_eq!(response, ProtocolMsg::SuccessResponse);
+	let expected = ProtocolMsg::SuccessResponse;
+	eq(expected, response);
 
 	let s3 = all_shares[2].clone();
 	let r3 = ProtocolMsg::ProvisionRequest(ProvisionRequest { share: s3 });
 	let response = qos_cli::post(&message_url, r3).unwrap();
-	assert_eq!(response, ProtocolMsg::SuccessResponse);
+	let expected = ProtocolMsg::SuccessResponse;
+	eq(expected, response);
 
 	let path = Path::new(qos_core::server::SECRET_FILE);
 	assert!(!path.exists());
 
 	let rr = ProtocolMsg::ReconstructRequest;
 	let response = qos_cli::post(&message_url, rr).unwrap();
-	assert_eq!(response, ProtocolMsg::SuccessResponse);
+	let expected = ProtocolMsg::SuccessResponse;
+	eq(expected, response);
 
 	assert!(path.exists());
 	let mut content = Vec::new();
@@ -89,7 +93,24 @@ async fn end_to_end() {
 	file.read_to_end(&mut content).unwrap();
 
 	assert_eq!(content, secret);
-
 	// Delete file
 	std::fs::remove_file(path).unwrap();
+
+	// Test NSM connection
+	let request = ProtocolMsg::NsmRequest(nsm::api::Request::DescribeNSM);
+	let response = qos_cli::post(&message_url, request).unwrap();
+	let expected = ProtocolMsg::NsmResponse(nsm::api::Response::DescribeNSM {
+		version_major: 1,
+		version_minor: 2,
+		version_patch: 14,
+		module_id: "mock_module_id".to_string(),
+		max_pcrs: 1024,
+		locked_pcrs: BTreeSet::from([90, 91, 92]),
+		digest: nsm::api::Digest::SHA256,
+	});
+	eq(response, expected);
+}
+
+fn eq(pr1: ProtocolMsg, pr2: ProtocolMsg) {
+	assert_eq!(pr1.serialize(), pr2.serialize());
 }
