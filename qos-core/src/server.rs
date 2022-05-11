@@ -148,10 +148,10 @@ pub struct Server<N: NsmProvider> {
 
 impl<N: NsmProvider> Server<N> {
 	pub fn listen(addr: SocketAddress) -> Result<(), ServerError> {
-		let mut server = Server {
+		let mut server = Server<N> {
 			provisioner: Provisioner { shares: Shares::new() },
 			secret: None,
-			_phantom: PhantomData::<N>,
+			nsm: PhantomData::<N>
 		};
 
 		let mut listener = Listener::listen(addr)?;
