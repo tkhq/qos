@@ -20,7 +20,7 @@ impl From<io::IOError> for SocketServerError {
 }
 
 pub struct SocketServer<R: Routable> {
-	_phantom: PhantomData<(R)>,
+	_phantom: PhantomData<R>,
 }
 
 impl<R: Routable> SocketServer<R> {

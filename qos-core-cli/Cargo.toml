@@ -1,7 +1,0 @@
-[package]
-name = "qos-core-cli"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-qos-core = { path = "../qos-core" }

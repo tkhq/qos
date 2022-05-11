@@ -14,8 +14,8 @@ pub trait NsmProvider {
 	fn nsm_exit(&self, fd: i32);
 }
 
-pub struct NSM {}
-impl NsmProvider for NSM {
+pub struct Nsm {}
+impl NsmProvider for Nsm {
 	fn nsm_process_request(
 		&self,
 		fd: i32,

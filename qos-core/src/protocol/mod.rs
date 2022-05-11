@@ -8,7 +8,7 @@ use crate::server;
 use attestor::*;
 use provisioner::*;
 
-pub use attestor::MockNsm;
+pub use attestor::{MockNsm, Nsm};
 pub use provisioner::SECRET_FILE;
 pub use types::*;
 
