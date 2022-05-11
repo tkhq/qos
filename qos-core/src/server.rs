@@ -16,6 +16,7 @@ use crate::{
 pub enum ServerError {
 	IOError(io::IOError),
 	ProtocolError(protocol::ProtocolError),
+	NotFound,
 }
 
 impl From<io::IOError> for ServerError {
@@ -86,8 +87,6 @@ pub trait NsmProvider {
 
 	/// See [`aws_nitro_enclaves_nsm_api::driver::nsm_exit`]
 	fn nsm_exit(fd: i32);
-
-	// fn new() -> Self;
 }
 
 /// TODO - this should be moved to its own crate as it will likely need some
@@ -229,3 +228,45 @@ impl<N: NsmProvider> Server<N> {
 		};
 	}
 }
+
+trait ReqProcessor<Msg: Serialize<Msg>> {
+	fn process_req(&self, req: Msg) -> Result<Msg, ServerError>;
+}
+
+type Handler<Msg> = dyn Fn(Msg) -> Option<Result<Msg, ServerError>>;
+
+struct MsgRouter<Handler, Msg> {
+	routes: Vec<Box<dyn Handler>>,
+}
+
+impl<Handler, Msg> MsgRouter<Handler, Msg>
+where
+	Handler: Fn(Msg) -> Option<Result<Msg, ServerError>>,
+	Msg: Serialize<Msg>,
+{
+	fn new() -> Self {
+		Self { routes: Vec::new() }
+	}
+
+	fn mount_route(mut self, f: F) -> Self {
+		self.routes.push(f);
+		self
+	}
+}
+
+// impl<Handler, Msg> ReqProcessor<Msg> for MsgRouter<Handler>
+// where
+// 	Handler: Fn(Msg) -> Option<Result<Msg, ServerError>,
+// 	Msg: Serialize<Msg>,
+// {
+// fn process_req(&self, req: R) -> Result<R, ServerError> {
+// 	for route in self.routes {
+// 		if let Some(result) = route(req) {
+// 			return result;
+// 		}
+// 	}
+
+// 	Err(ServerError::NotFound)
+// }
+
+// }
