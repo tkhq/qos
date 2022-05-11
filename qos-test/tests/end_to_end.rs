@@ -5,7 +5,7 @@ use qos_cli;
 use qos_core::{
 	io::SocketAddress,
 	protocol::{
-		Echo, MockNsm, ProtocolMsg, ProtocolState, ProvisionRequest, Router,
+		Echo, Executor, MockNsm, ProtocolMsg, ProtocolState, ProvisionRequest,
 	},
 	server::SocketServer,
 };
@@ -26,10 +26,9 @@ async fn end_to_end() {
 	// Spawn enclave
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
-		let mut state = ProtocolState::new(attestor);
-		let router = Router::new();
+		let executor = Executor::new(attestor);
 
-		SocketServer::listen(enclave_addr, router, state).unwrap()
+		SocketServer::listen(enclave_addr, executor).unwrap()
 	});
 
 	std::thread::spawn(move || {

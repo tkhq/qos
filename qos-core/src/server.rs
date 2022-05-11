@@ -19,21 +19,20 @@ impl From<io::IOError> for SocketServerError {
 	}
 }
 
-pub struct SocketServer<R: Routable<S>, S> {
-	_phantom: PhantomData<(R, S)>,
+pub struct SocketServer<R: Routable> {
+	_phantom: PhantomData<(R)>,
 }
 
-impl<R: Routable<S>, S> SocketServer<R, S> {
+impl<R: Routable> SocketServer<R> {
 	pub fn listen(
 		addr: SocketAddress,
-		processor: R,
-		mut state: S,
+		mut processor: R,
 	) -> Result<(), SocketServerError> {
 		let mut listener = Listener::listen(addr)?;
 		while let Some(stream) = listener.next() {
 			match stream.recv() {
 				Ok(payload) => {
-					let response = processor.process(payload, &mut state);
+					let response = processor.process(payload);
 					let _ = stream.send(&response);
 				}
 				Err(err) => eprintln!("Server::listen error: {:?}", err),
@@ -44,6 +43,6 @@ impl<R: Routable<S>, S> SocketServer<R, S> {
 	}
 }
 
-pub trait Routable<S> {
-	fn process(&self, req: Vec<u8>, state: &mut S) -> Vec<u8>;
+pub trait Routable {
+	fn process(&mut self, req: Vec<u8>) -> Vec<u8>;
 }

@@ -28,12 +28,13 @@ impl ProtocolState {
 	}
 }
 
-pub struct Router {
+pub struct Executor {
 	routes: Vec<Box<ProtocolHandler>>,
+	state: ProtocolState,
 }
 
-impl Router {
-	pub fn new() -> Self {
+impl Executor {
+	pub fn new(attestor: MockNsm) -> Self {
 		Self {
 			routes: vec![
 				Box::new(handlers::empty),
@@ -42,16 +43,13 @@ impl Router {
 				Box::new(handlers::reconstruct),
 				Box::new(handlers::nsm),
 			],
+			state: ProtocolState::new(attestor),
 		}
 	}
 }
 
-impl server::Routable<ProtocolState> for Router {
-	fn process(
-		&self,
-		mut req_bytes: Vec<u8>,
-		state: &mut ProtocolState,
-	) -> Vec<u8> {
+impl server::Routable for Executor {
+	fn process(&mut self, mut req_bytes: Vec<u8>) -> Vec<u8> {
 		use types::Serialize as _;
 
 		let mut msg_req = match ProtocolMsg::deserialize(&mut req_bytes) {
@@ -61,7 +59,7 @@ impl server::Routable<ProtocolState> for Router {
 
 		// outer scope
 		for handler in self.routes.iter() {
-			match handler(&msg_req, state) {
+			match handler(&msg_req, &mut self.state) {
 				Some(msg_resp) => return msg_resp.serialize(),
 				None => continue,
 			}
@@ -71,7 +69,7 @@ impl server::Routable<ProtocolState> for Router {
 	}
 }
 
-pub mod handlers {
+mod handlers {
 	use super::*;
 
 	pub fn empty(
