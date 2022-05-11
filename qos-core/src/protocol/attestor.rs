@@ -3,18 +3,34 @@ use std::collections::BTreeSet;
 
 // https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md
 pub trait NsmProvider {
-	/// See [`aws_nitro_enclaves_nsm_api::driver::process_request`]
 	fn nsm_process_request(
 		&self,
 		fd: i32,
 		request: nsm::api::Request,
 	) -> nsm::api::Response;
 
-	/// See [`aws_nitro_enclaves_nsm_api::driver::nsm_init`]
 	fn nsm_init(&self) -> i32;
 
-	/// See [`aws_nitro_enclaves_nsm_api::driver::nsm_exit`]
 	fn nsm_exit(&self, fd: i32);
+}
+
+pub struct NSM {}
+impl NsmProvider for NSM {
+	fn nsm_process_request(
+		&self,
+		fd: i32,
+		request: nsm::api::Request,
+	) -> nsm::api::Response {
+		nsm::driver::nsm_process_request(fd, request)
+	}
+
+	fn nsm_init(&self) -> i32 {
+		nsm::driver::nsm_init()
+	}
+
+	fn nsm_exit(&self, fd: i32) {
+		nsm::driver::nsm_exit(fd)
+	}
 }
 
 /// TODO - this should be moved to its own crate as it will likely need some

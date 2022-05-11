@@ -17,7 +17,7 @@ type ProtocolHandler =
 
 pub struct ProtocolState {
 	provisioner: SecretProvisioner,
-	// TODO make this gneric over NsmProvider
+	// TODO: make this gneric over NsmProvider
 	attestor: MockNsm,
 }
 
@@ -57,7 +57,6 @@ impl server::Routable for Executor {
 			Err(_) => return ProtocolMsg::ErrorResponse.serialize(),
 		};
 
-		// outer scope
 		for handler in self.routes.iter() {
 			match handler(&msg_req, &mut self.state) {
 				Some(msg_resp) => return msg_resp.serialize(),
