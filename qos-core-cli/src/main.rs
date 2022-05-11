@@ -6,7 +6,7 @@ use qos_core::{
 	client::Client,
 	io::SocketAddress,
 	protocol::{Echo, ProtocolMsg},
-	server::Server,
+	server::{MockNsm, Server},
 };
 
 pub fn main() {
@@ -37,5 +37,5 @@ fn run_client() {
 
 fn run_server() {
 	let addr = SocketAddress::new_unix("./dev.sock");
-	// Server::listen(addr).unwrap();
+	Server::<MockNsm>::listen(addr).unwrap();
 }

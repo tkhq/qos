@@ -213,12 +213,12 @@ impl Serialize<Self> for ProtocolMsg {
 			PROTOCOL_MSG_RECONSTRUCT_REQUEST => ProtocolMsg::ReconstructRequest,
 			PROTOCOL_MSG_NSM_REQUEST => {
 				let req = serde_cbor::from_slice(&data[1..])
-					.map_err(|e| ProtocolError::DeserializationError)?;
+					.map_err(|_| ProtocolError::DeserializationError)?;
 				ProtocolMsg::NsmRequest(req)
 			}
 			PROTOCOL_MSG_NSM_RESPONSE => {
 				let req = serde_cbor::from_slice(&data[1..])
-					.map_err(|e| ProtocolError::DeserializationError)?;
+					.map_err(|_| ProtocolError::DeserializationError)?;
 				ProtocolMsg::NsmResponse(req)
 			}
 			_ => return Err(ProtocolError::DeserializationError),

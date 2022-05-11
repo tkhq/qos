@@ -12,8 +12,6 @@ use qos_core::{
 use qos_crypto;
 use qos_host::HostServer;
 
-const MAX_SIZE: u64 = u32::MAX as u64;
-
 #[tokio::test]
 async fn end_to_end() {
 	let enclave_addr = SocketAddress::new_unix("./end_to_end.sock");
