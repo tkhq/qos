@@ -1,35 +1,36 @@
-qiq mafs
+Quick start
 
 ```
-# start server
-maker server
+# run tests
+cargo test --all
 
-# start client
-make client
-
-# make code pretttty
+# format code
 cargo +nightly fmt
 ```
 
-# Enclave
+# Key parts
+
+## Enclave
+
 - houses nitro server
 
-# Host
+## Host
+
 - EC2 instance where the nitro enclave lives inside
 - has client for talking to nitro enclave
-- has server for incoming request from outside world 
+- has server for incoming request from outside world
 
-# End user
+## End user
+
 - Anything making request to host
 
-### Decisions / Things to Revisit:
-- Use Serde in `qos-core`. We've decided to do this right now for agility; but we should probably 
-make our own simple macro.
+# Decisions / Things to Revisit:
 
-TODO:
-- zeke use end_to_end eq for protocol message
-- sanity check vsock - aws or qemu
-- big: aws attestation flow - cannot be developed locally
-- shamir logic
-  - simple cli for posting shards
-- no default features for all crates
+- Use Serde in `qos-core`. We've decided to do this right now for agility; but we should probably make our own simple macro or find a secure serialization lib (look into borsch?)
+
+# TODO:
+
+- Cli for posting shards, nsm attestation flow
+- Sanity check vsock - aws or qemu
+- Run deployed aws attestation flow (save nsm responses for stubbing)
+- Smart shamir logic in enclave, don't randomly reconstruct
