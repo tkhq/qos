@@ -1,7 +1,7 @@
 //! Streaming socket based server for use in an enclave. Listens for connections
 //! from [`client::Client`].
 
-use std::{collections::BTreeSet, fs::File, io::Write};
+use std::{collections::BTreeSet, fs::File, io::Write, marker::PhantomData};
 
 use aws_nitro_enclaves_nsm_api as nsm;
 use qos_crypto;
@@ -77,18 +77,17 @@ impl Provisioner {
 pub trait NsmProvider {
 	/// See [`aws_nitro_enclaves_nsm_api::driver::process_request`]
 	fn nsm_process_request(
-		&self,
 		fd: i32,
 		request: nsm::api::Request,
 	) -> nsm::api::Response;
 
 	/// See [`aws_nitro_enclaves_nsm_api::driver::nsm_init`]
-	fn nsm_init(&self) -> i32;
+	fn nsm_init() -> i32;
 
 	/// See [`aws_nitro_enclaves_nsm_api::driver::nsm_exit`]
-	fn nsm_exit(&self, fd: i32);
+	fn nsm_exit(fd: i32);
 
-	fn new() -> Self;
+	// fn new() -> Self;
 }
 
 /// TODO - this should be moved to its own crate as it will likely need some
@@ -97,7 +96,6 @@ pub struct MockNsm {}
 
 impl NsmProvider for MockNsm {
 	fn nsm_process_request(
-		&self,
 		_fd: i32,
 		request: nsm::api::Request,
 	) -> nsm::api::Response {
@@ -131,18 +129,14 @@ impl NsmProvider for MockNsm {
 		}
 	}
 
-	fn nsm_init(&self) -> i32 {
+	fn nsm_init() -> i32 {
 		33
 	}
 
-	fn nsm_exit(&self, fd: i32) {
+	fn nsm_exit(fd: i32) {
 		// Should be hardcoded to value returned by nsm_init
 		assert_eq!(fd, 33);
 		println!("nsm_exit");
-	}
-
-	fn new() -> Self {
-		Self {}
 	}
 }
 
@@ -150,7 +144,7 @@ type Secret = Vec<u8>;
 pub struct Server<N: NsmProvider> {
 	provisioner: Provisioner,
 	secret: Option<Secret>,
-	nsm: N,
+	_phantom: PhantomData<N>,
 }
 
 impl<N: NsmProvider> Server<N> {
@@ -158,7 +152,7 @@ impl<N: NsmProvider> Server<N> {
 		let mut server = Server {
 			provisioner: Provisioner { shares: Shares::new() },
 			secret: None,
-			nsm: N::new(),
+			_phantom: PhantomData::<N>,
 		};
 
 		let mut listener = Listener::listen(addr)?;
@@ -221,9 +215,9 @@ impl<N: NsmProvider> Server<N> {
 				}
 			}
 			Ok(ProtocolMsg::NsmRequest(nsm_request)) => {
-				let fd = self.nsm.nsm_init();
-				let response = self.nsm.nsm_process_request(fd, nsm_request);
-				self.nsm.nsm_exit(fd);
+				let fd = N::nsm_init();
+				let response = N::nsm_process_request(fd, nsm_request);
+				N::nsm_exit(fd);
 
 				let res = ProtocolMsg::NsmResponse(response).serialize();
 				let _ = stream.send(&res);
