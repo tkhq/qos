@@ -22,7 +22,12 @@ cargo +nightly fmt
 # End user
 - Anything making request to host
 
+### Decisions / Things to Revisit:
+- Use Serde in `qos-core`. We've decided to do this right now for agility; but we should probably 
+make our own simple macro.
+
 TODO:
+- zeke use end_to_end eq for protocol message
 - sanity check vsock - aws or qemu
 - big: aws attestation flow - cannot be developed locally
 - shamir logic

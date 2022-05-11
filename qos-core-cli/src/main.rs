@@ -37,5 +37,5 @@ fn run_client() {
 
 fn run_server() {
 	let addr = SocketAddress::new_unix("./dev.sock");
-	Server::listen(addr).unwrap();
+	// Server::listen(addr).unwrap();
 }

@@ -2,7 +2,7 @@ use qos_core::{
 	client::Client,
 	io::SocketAddress,
 	protocol::{Echo, ProtocolMsg},
-	server::Server,
+	server::{MockNsm, Server},
 };
 
 #[test]
@@ -14,7 +14,7 @@ fn client_server() {
 	let addr2 = addr.clone();
 	// Note that thread handle gets detached on drop
 	let _ = std::thread::spawn(move || {
-		Server::listen(addr2).unwrap();
+		Server::<MockNsm>::listen(addr2).unwrap();
 	});
 
 	let client = Client::new(addr);
