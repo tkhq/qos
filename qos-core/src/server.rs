@@ -136,10 +136,11 @@ impl NsmProvider for MockNsm {
 	}
 
 	fn nsm_exit(&self, fd: i32) {
-		// Should be hardcoded to value returned by nsm_int
+		// Should be hardcoded to value returned by nsm_init
 		assert_eq!(fd, 33);
 		println!("nsm_exit");
 	}
+
 	fn new() -> Self {
 		Self {}
 	}

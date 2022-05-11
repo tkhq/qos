@@ -4,77 +4,6 @@ use serde_cbor;
 
 const SU32: usize = std::mem::size_of::<u32>();
 
-// #[derive(serde::Serialize, serde::Deserialize)]
-// struct NsmRequest(nsm::api::Request);
-// impl std::cmp::PartialEq for NsmRequest {
-// 	fn eq(&self, _other: &Self) -> bool {
-// 		std::matches!(self, _other)
-// 	}
-
-// 	fn ne(&self, _other: &Self) -> bool {
-// 		!std::matches!(self, _other)
-// 	}
-// }
-
-// impl std::fmt::Debug for NsmRequest {
-// 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-// 		f.debug_struct("THIS IS BAD DEBUG SORRY VITALIK")
-// 			//  .field("x", &self.x)
-// 			//  .field("y", &self.y)
-// 			.finish()
-// 	}
-// }
-
-// impl std::ops::Deref for NsmRequest {
-// 	type Target = nsm::api::Request;
-
-// 	fn deref(&self) -> &Self::Target {
-// 		&self.0
-// 	}
-// }
-
-// impl std::ops::DerefMut for NsmRequest {
-// 	fn deref_mut(&mut self) -> &mut Self::Target {
-// 		&mut self.0
-// 	}
-// }
-
-// #[derive(serde::Serialize, serde::Deserialize)]
-// struct NsmResponse(nsm::api::Response);
-
-// impl std::cmp::PartialEq for NsmResponse {
-// 	fn eq(&self, _other: &Self) -> bool {
-// 		std::matches!(self, _other)
-// 	}
-
-// 	fn ne(&self, _other: &Self) -> bool {
-// 		!std::matches!(self, _other)
-// 	}
-// }
-
-// impl std::fmt::Debug for NsmResponse {
-// 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-// 		f.debug_struct("THIS IS BAD DEBUG SORRY VITALIK")
-// 			//  .field("x", &self.x)
-// 			//  .field("y", &self.y)
-// 			.finish()
-// 	}
-// }
-
-// impl std::ops::Deref for NsmResponse {
-// 	type Target = nsm::api::Request;
-
-// 	fn deref(&self) -> &Self::Target {
-// 		&self.0
-// 	}
-// }
-
-// impl std::ops::DerefMut for NsmResponse {
-// 	fn deref_mut(&mut self) -> &mut Self::Target {
-// 		&mut self.0
-// 	}
-// }
-
 #[derive(Debug, PartialEq)]
 pub enum ProtocolError {
 	DeserializationError,
@@ -228,6 +157,15 @@ impl Serialize<Self> for ProtocolMsg {
 	}
 }
 
+impl PartialEq for ProtocolMsg {
+	fn eq(&self, other: &Self) -> bool {
+		self.serialize() == other.serialize()
+	}
+	fn ne(&self, other: &Self) -> bool {
+		self.serialize() != other.serialize()
+	}
+}
+
 #[derive(PartialEq, Debug)]
 pub struct Echo {
 	pub data: Vec<u8>,
@@ -261,22 +199,6 @@ impl Serialize<Self> for ProvisionRequest {
 
 #[derive(PartialEq, Debug)]
 pub struct ProvisionResponse {}
-
-// #[derive(Debug, PartialEq)]
-// pub struct NsmRequest {
-// 	pub data: Vec<u8>,
-// }
-
-// impl Serialize<Self> for NsmRequest {
-// 	fn serialize(&self) -> Vec<u8> {
-// 		self.data.serialize()
-// 	}
-
-// 	fn deserialize(payload: &mut Vec<u8>) -> Result<Self, ProtocolError> {
-// 		let data = Vec::<u8>::deserialize(payload)?;
-// 		Ok(Self { data })
-// 	}
-// }
 
 #[cfg(test)]
 mod test {
@@ -385,17 +307,17 @@ mod test {
 
 		// TODO: Re-implement these tests!
 
-		// let mut data = vec![];
-		// let deserialized = ProtocolMsg::deserialize(&mut data);
-		// assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
+		let mut data = vec![];
+		let deserialized = ProtocolMsg::deserialize(&mut data);
+		assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
 
-		// let mut data = vec![4, 2, 0, 0, 0, 1];
-		// let deserialized = ProtocolMsg::deserialize(&mut data);
-		// assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
+		let mut data = vec![4, 2, 0, 0, 0, 1];
+		let deserialized = ProtocolMsg::deserialize(&mut data);
+		assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
 
-		// let mut data = vec![99, 2, 0, 0, 0, 1];
-		// let deserialized = ProtocolMsg::deserialize(&mut data);
-		// assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
+		let mut data = vec![99, 2, 0, 0, 0, 1];
+		let deserialized = ProtocolMsg::deserialize(&mut data);
+		assert_eq!(deserialized, Err(ProtocolError::DeserializationError));
 	}
 
 	// CAUTION: This test takes a really long time...

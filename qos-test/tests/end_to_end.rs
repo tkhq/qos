@@ -1,9 +1,7 @@
-use std::collections::BTreeSet;
-use std::{fs::File, io::Read, path::Path};
+use std::{collections::BTreeSet, fs::File, io::Read, path::Path};
 
 use aws_nitro_enclaves_nsm_api as nsm;
 use qos_cli;
-use qos_core::protocol::Serialize;
 use qos_core::{
 	io::SocketAddress,
 	protocol::{Echo, ProtocolMsg, ProvisionRequest},
@@ -51,7 +49,7 @@ async fn end_to_end() {
 	let request = ProtocolMsg::EchoRequest(Echo { data: data.clone() });
 	let response = qos_cli::post(&message_url, request).unwrap();
 	let expected = ProtocolMsg::EchoResponse(Echo { data });
-	eq(expected, response);
+	assert_eq!(expected, response);
 
 	// Test reconstruction
 	let secret = b"This is extremely secret".to_vec();
@@ -63,19 +61,19 @@ async fn end_to_end() {
 	let r1 = ProtocolMsg::ProvisionRequest(ProvisionRequest { share: s1 });
 	let response = qos_cli::post(&message_url, r1).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
-	eq(expected, response);
+	assert_eq!(expected, response);
 
 	let s2 = all_shares[1].clone();
 	let r2 = ProtocolMsg::ProvisionRequest(ProvisionRequest { share: s2 });
 	let response = qos_cli::post(&message_url, r2).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
-	eq(expected, response);
+	assert_eq!(expected, response);
 
 	let s3 = all_shares[2].clone();
 	let r3 = ProtocolMsg::ProvisionRequest(ProvisionRequest { share: s3 });
 	let response = qos_cli::post(&message_url, r3).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
-	eq(expected, response);
+	assert_eq!(expected, response);
 
 	let path = Path::new(qos_core::server::SECRET_FILE);
 	assert!(!path.exists());
@@ -83,7 +81,7 @@ async fn end_to_end() {
 	let rr = ProtocolMsg::ReconstructRequest;
 	let response = qos_cli::post(&message_url, rr).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
-	eq(expected, response);
+	assert_eq!(expected, response);
 
 	assert!(path.exists());
 	let mut content = Vec::new();
@@ -106,9 +104,5 @@ async fn end_to_end() {
 		locked_pcrs: BTreeSet::from([90, 91, 92]),
 		digest: nsm::api::Digest::SHA256,
 	});
-	eq(response, expected);
-}
-
-fn eq(pr1: ProtocolMsg, pr2: ProtocolMsg) {
-	assert_eq!(pr1.serialize(), pr2.serialize());
+	assert_eq!(response, expected);
 }
