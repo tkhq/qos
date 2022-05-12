@@ -25,6 +25,15 @@ impl HostOptions {
 	}
 }
 
+/// Host server command line interface.
+///
+/// # Options
+///
+/// * `--host-port` - the port for the host server to bind (ex: `3000`).
+/// * `--host-ip` - the ip address the host server will bind to (ex: `127.0.0.1`)
+/// * `--port` - the port the enclave socket is listening on (only for VSOCK)
+/// * `--cid` - context identifier for the enclave socket (only for VSOCK)
+/// * `--usock` - name of the socket file (ex: `dev.sock`) (only for unix sockets)
 pub struct CLI;
 impl CLI {
 	pub async fn execute() {
