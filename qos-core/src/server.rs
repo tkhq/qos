@@ -3,7 +3,7 @@
 
 use crate::{
 	io,
-	io::{Listener, SocketAddress, Stream},
+	io::{Listener, SocketAddress},
 };
 use std::marker::PhantomData;
 
@@ -28,7 +28,10 @@ impl<R: Routable> SocketServer<R> {
 		addr: SocketAddress,
 		mut processor: R,
 	) -> Result<(), SocketServerError> {
+		println!("SocketServer listening on {:?}", addr);
+
 		let mut listener = Listener::listen(addr)?;
+
 		while let Some(stream) = listener.next() {
 			match stream.recv() {
 				Ok(payload) => {

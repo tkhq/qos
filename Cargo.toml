@@ -2,7 +2,6 @@
 members = [
   "qos-cli",
   "qos-core",
-  "qos-core-cli",
   "qos-crypto",
   "qos-host",
   "qos-test"

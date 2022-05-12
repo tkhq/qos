@@ -30,7 +30,11 @@ cargo +nightly fmt
 
 # TODO:
 
+- Build crypto  - all public key + hashing logic. High level so we can swap. Bring in OpenSSL
+- Pivot logic
 - Cli for posting shards, nsm attestation flow
+- Research flow for attestation - with nsm / nitro enclave docs
+
 - Sanity check vsock - aws or qemu
 - Run deployed aws attestation flow (save nsm responses for stubbing)
 - Smart shamir logic in enclave, don't randomly reconstruct

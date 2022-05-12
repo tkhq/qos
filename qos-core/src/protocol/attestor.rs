@@ -1,3 +1,4 @@
+use super::msg::*;
 use aws_nitro_enclaves_nsm_api as nsm;
 use std::collections::BTreeSet;
 
@@ -21,7 +22,7 @@ impl NsmProvider for Nsm {
 		fd: i32,
 		request: nsm::api::Request,
 	) -> nsm::api::Response {
-		nsm::driver::nsm_process_request(fd, request)
+		nsm::driver::nsm_process_request(fd, request.into()).into()
 	}
 
 	fn nsm_init(&self) -> i32 {
@@ -43,15 +44,19 @@ impl NsmProvider for MockNsm {
 		_fd: i32,
 		request: nsm::api::Request,
 	) -> nsm::api::Response {
-		use nsm::api::{Request as Req, Response as Resp};
+		// use nsm::api::{Request as Req, Response as Resp};
 		println!("MockNsm::process_request request={:?}", request);
 		match request {
-			Req::Attestation { user_data: _, nonce: _, public_key: _ } => {
+			nsm::api::Request::Attestation {
+				user_data: _,
+				nonce: _,
+				public_key: _,
+			} => {
 				// TODO: this should be a CBOR-encoded AttestationDocument as
 				// the payload
-				Resp::Attestation { document: Vec::new() }
+				nsm::api::Response::Attestation { document: Vec::new() }
 			}
-			Req::DescribeNSM => Resp::DescribeNSM {
+			nsm::api::Request::DescribeNSM => nsm::api::Response::DescribeNSM {
 				version_major: 1,
 				version_minor: 2,
 				version_patch: 14,
@@ -60,16 +65,25 @@ impl NsmProvider for MockNsm {
 				locked_pcrs: BTreeSet::from([90, 91, 92]),
 				digest: nsm::api::Digest::SHA256,
 			},
-			Req::ExtendPCR { index: _, data: _ } => {
-				Resp::ExtendPCR { data: vec![3, 4, 7, 4] }
+			nsm::api::Request::ExtendPCR { index: _, data: _ } => {
+				nsm::api::Response::ExtendPCR { data: vec![3, 4, 7, 4] }
 			}
-			Req::GetRandom => Resp::GetRandom { random: vec![4, 2, 0, 69] },
-			Req::LockPCR { index: _ } => Resp::LockPCR,
-			Req::LockPCRs { range: _ } => Resp::LockPCRs,
-			Req::DescribePCR { index: _ } => {
-				Resp::DescribePCR { lock: false, data: vec![3, 4, 7, 4] }
+			nsm::api::Request::GetRandom => {
+				nsm::api::Response::GetRandom { random: vec![4, 2, 0, 69] }
 			}
-			_ => Resp::Error(nsm::api::ErrorCode::InternalError),
+			nsm::api::Request::LockPCR { index: _ } => {
+				nsm::api::Response::LockPCR
+			}
+			nsm::api::Request::LockPCRs { range: _ } => {
+				nsm::api::Response::LockPCRs
+			}
+			nsm::api::Request::DescribePCR { index: _ } => {
+				nsm::api::Response::DescribePCR {
+					lock: false,
+					data: vec![3, 4, 7, 4],
+				}
+			}
+			_ => nsm::api::Response::Error(nsm::api::ErrorCode::InternalError),
 		}
 	}
 

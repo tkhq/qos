@@ -1,16 +1,16 @@
 use aws_nitro_enclaves_nsm_api as nsm;
 
 mod attestor;
+mod msg;
 mod provisioner;
-pub mod types;
 
 use crate::server;
 use attestor::*;
 use provisioner::*;
 
 pub use attestor::{MockNsm, Nsm};
+pub use msg::*;
 pub use provisioner::SECRET_FILE;
-pub use types::*;
 
 type ProtocolHandler =
 	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
@@ -50,9 +50,9 @@ impl Executor {
 
 impl server::Routable for Executor {
 	fn process(&mut self, mut req_bytes: Vec<u8>) -> Vec<u8> {
-		use types::Serialize as _;
+		use msg::Serialize as _;
 
-		let mut msg_req = match ProtocolMsg::deserialize(&mut req_bytes) {
+		let msg_req = match ProtocolMsg::deserialize(&mut req_bytes) {
 			Ok(req) => req,
 			Err(_) => return ProtocolMsg::ErrorResponse.serialize(),
 		};
@@ -133,6 +133,7 @@ mod handlers {
 			let response = state
 				.attestor
 				.nsm_process_request(fd, nsm::api::Request::DescribeNSM);
+			println!("NSM process request: {:?}", response);
 			Some(ProtocolMsg::NsmResponse(response))
 		} else {
 			None

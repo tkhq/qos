@@ -26,7 +26,6 @@ impl CLI {
 		let addr = addr_from_options(options);
 		let executor = Executor::new(MockNsm {});
 
-		println!("{:?}", addr);
 		SocketServer::listen(addr, executor).unwrap();
 	}
 }

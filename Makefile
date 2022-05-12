@@ -1,33 +1,15 @@
-.PHONY: build
-build:
-	docker build \
-		--tag apeclave \
-		.
+.PHONY: test
+test:
+	cargo test -- --nocapture
 
-.PHONY: volume
-volume:
-	docker volume create vapecave
+.PHONY: enclave
+enclave:
+	cargo run --bin qos-core -- --usock ./dev.sock
 
-.PHONY: server
-server: build volume
-	docker run \
-		--rm \
-		-v vapecave:/var/run/vapecave:rw \
-		apeclave \
-		server
+.PHONY: host
+host:
+	cargo run --bin qos-host
 
 .PHONY: client
-client: build volume
-	docker run \
-		--rm \
-		-v vapecave:/var/run/vapecave:rw \
-		apeclave \
-		client
-
-.PHONY: shell
-shell: build volume
-	docker run \
-		--rm \
-		-it \
-		-v vapecave:/var/run/vapecave:rw \
-		bash
+client: 
+	cargo run --bin qos-cli

@@ -453,13 +453,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "qos-core-cli"
-version = "0.1.0"
-dependencies = [
- "qos-core",
-]
-
-[[package]]
 name = "qos-crypto"
 version = "0.1.0"
 dependencies = [
