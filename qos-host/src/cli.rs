@@ -64,14 +64,14 @@ fn parse_ip(cmd: &str, arg: &str, options: &mut HostOptions) {
 	match cmd {
 		"--host-ip" => {
 			let re = Regex::new(IP_REGEX)
-				.expect("Could not parse value from `--ip`");
+				.expect("Could not parse value from `--host-ip`");
 			let mut iter = re.captures_iter(arg);
 
 			let parse = |string: &str| {
 				string
 					.to_string()
 					.parse::<u8>()
-					.expect("Could not parse value from `--ip`")
+					.expect("Could not parse value from `--host-ip`")
 			};
 
 			if let Some(cap) = iter.next() {
@@ -132,7 +132,7 @@ mod test {
 
 	fn expect_ip(arg: &str, expected: [u8; 4]) {
 		let mut options = HostOptions::new();
-		parse_ip(&"--ip", arg, &mut options);
+		parse_ip(&"--host-ip", arg, &mut options);
 
 		if let Some(ip) = options.ip {
 			assert_eq!(ip[0], expected[0]);
