@@ -2,7 +2,7 @@
 // Port/Host bindings
 use std::{env, net::SocketAddr};
 
-use qos_core::cli::{parse_enclave_options, EnclaveOptions};
+use qos_core::cli::EnclaveOptions;
 use regex::Regex;
 
 use crate::HostServer;
@@ -37,7 +37,7 @@ impl HostOptions {
 			return format!(
 				"http://{}.{}.{}.{}:{}",
 				ip[0], ip[1], ip[2], ip[3], port
-			)
+			);
 		} else {
 			panic!("Couldn't parse URL from options.")
 		}
@@ -112,7 +112,7 @@ impl CLI {
 		args.remove(0);
 		let options = parse_args(args);
 		let addr = host_addr_from_options(options.host.clone());
-		let enclave_addr = qos_core::cli::addr_from_options(options.enclave);
+		let enclave_addr = options.enclave.addr();
 		HostServer::new_with_socket_addr(enclave_addr, addr)
 			.serve()
 			.await
@@ -129,57 +129,11 @@ pub fn parse_args(args: Vec<String>) -> HostServerOptions {
 	}
 	while let Some([cmd, arg]) = chunks.next() {
 		options.host.parse(cmd, arg);
-		parse_enclave_options(cmd.clone(), arg.clone(), &mut options.enclave);
-		// parse_host_addr(cmd, arg, &mut options.host);
+		options.enclave.parse(cmd, arg);
 	}
 
 	options
 }
-
-// fn parse_host_addr(cmd: &str, arg: &str, options: &mut HostOptions) {
-// 	parse_ip(&cmd, &arg, options);
-// 	parse_port(&cmd, &arg, options);
-// }
-
-// pub fn parse_ip(cmd: &str, arg: &str, options: &mut HostOptions) {
-// 	match cmd {
-// 		"--host-ip" => {
-// 			let re = Regex::new(IP_REGEX)
-// 				.expect("Could not parse value from `--host-ip`");
-// 			let mut iter = re.captures_iter(arg);
-
-// 			let parse = |string: &str| {
-// 				string
-// 					.to_string()
-// 					.parse::<u8>()
-// 					.expect("Could not parse value from `--host-ip`")
-// 			};
-
-// 			if let Some(cap) = iter.next() {
-// 				let ip1 = parse(&cap[1]);
-// 				let ip2 = parse(&cap[2]);
-// 				let ip3 = parse(&cap[3]);
-// 				let ip4 = parse(&cap[4]);
-// 				options.ip = Some([ip1, ip2, ip3, ip4]);
-// 			}
-// 		}
-// 		_ => {}
-// 	}
-// }
-
-// pub fn parse_port(cmd: &str, arg: &str, options: &mut HostOptions) {
-// 	match cmd {
-// 		"--host-port" => {
-// 			options.port = arg
-// 				.parse::<u16>()
-// 				.map_err(|_| {
-// 					panic!("Could not parse provided value for `--port`")
-// 				})
-// 				.ok();
-// 		}
-// 		_ => {}
-// 	}
-// }
 
 pub fn host_addr_from_options(options: HostOptions) -> SocketAddr {
 	if let HostOptions { ip: Some(ip), port: Some(port), .. } = options {

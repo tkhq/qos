@@ -16,13 +16,20 @@ host:
 		--host-port 3000 \
 		--usock ./dev.sock
 
-.PHONY: clientecho
-clientecho:
+.PHONY: client-echo
+client-echo:
 	cargo run --bin qos-client \
 		echo \
 		--host-ip 127.0.0.1 \
 		--host-port 3000 \
-		--echo-data "vape nation"
+		--data "vape nation"
+
+.PHONY: client-describe-nsm
+client-describe-nsm:
+	cargo run --bin qos-client \
+		describe-nsm \
+		--host-ip 127.0.0.1 \
+		--host-port 3000
 
 .PHONY: client
 client:

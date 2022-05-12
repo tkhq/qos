@@ -2,7 +2,7 @@ use std::env;
 
 use crate::{
 	io::SocketAddress,
-	protocol::{Executor, MockNsm},
+	protocol::{Executor, MockNsm, Nsm, NsmProvider},
 	server::SocketServer,
 };
 
@@ -11,11 +11,96 @@ pub struct EnclaveOptions {
 	cid: Option<u32>,
 	port: Option<u32>,
 	usock: Option<String>,
+	mock: bool,
 }
 
 impl EnclaveOptions {
 	pub fn new() -> Self {
-		Self { cid: None, port: None, usock: None }
+		Self { cid: None, port: None, usock: None, mock: false }
+	}
+
+	fn from(args: Vec<String>) -> EnclaveOptions {
+		let mut options = EnclaveOptions::new();
+
+		let mut chunks = args.chunks_exact(2);
+		if chunks.remainder().len() > 0 {
+			panic!("Unexepected number of arguments")
+		}
+
+		while let Some([cmd, arg]) = chunks.next() {
+			options.parse(cmd, arg);
+		}
+
+		options
+	}
+
+	pub fn parse(&mut self, cmd: &str, arg: &str) {
+		self.parse_cid(cmd, arg);
+		self.parse_port(cmd, arg);
+		self.parse_usock(cmd, arg);
+	}
+
+	pub fn parse_cid(&mut self, cmd: &str, arg: &str) {
+		match cmd {
+			"--cid" => {
+				self.cid = arg
+					.parse::<u32>()
+					.map_err(|_| {
+						panic!("Could not parse provided value for `--cid`")
+					})
+					.ok();
+			}
+			_ => {}
+		}
+	}
+
+	pub fn parse_port(&mut self, cmd: &str, arg: &str) {
+		match cmd {
+			"--port" => {
+				self.port = arg
+					.parse::<u32>()
+					.map_err(|_| {
+						panic!("Could not parse provided value for `--port`")
+					})
+					.ok();
+			}
+			_ => {}
+		}
+	}
+
+	pub fn parse_usock(&mut self, cmd: &str, arg: &str) {
+		match cmd {
+			"--usock" => self.usock = Some(arg.to_string()),
+			_ => {}
+		}
+	}
+
+	pub fn parse_mock(&mut self, cmd: &str, arg: &str) {
+		match cmd {
+			"--mock" => self.mock = arg == "true",
+			_ => {}
+		}
+	}
+
+	pub fn addr(&self) -> SocketAddress {
+		match self.clone() {
+			#[cfg(feature = "vm")]
+			EnclaveOptions {
+				cid: Some(c), port: Some(p), usock: None, ..
+			} => SocketAddress::new_vsock(c, p),
+			EnclaveOptions {
+				cid: None, port: None, usock: Some(u), ..
+			} => SocketAddress::new_unix(&u),
+			_ => panic!("Invalid options..."),
+		}
+	}
+
+	pub fn nsm(&self) -> Box<dyn NsmProvider> {
+		if self.mock {
+			Box::new(MockNsm)
+		} else {
+			Box::new(Nsm)
+		}
 	}
 }
 
@@ -25,83 +110,13 @@ impl CLI {
 		let mut args: Vec<String> = env::args().collect();
 		args.remove(0);
 
-		let options = parse_args(args);
-		let addr = addr_from_options(options);
-		let executor = Executor::new(MockNsm {});
+		let options = EnclaveOptions::from(args);
+
+		let addr = options.addr();
+		let nsm = options.nsm();
+		let executor = Executor::new(nsm);
 
 		SocketServer::listen(addr, executor).unwrap();
-	}
-}
-
-fn parse_args(args: Vec<String>) -> EnclaveOptions {
-	let mut options = EnclaveOptions::new();
-
-	let mut chunks = args.chunks_exact(2);
-	if chunks.remainder().len() > 0 {
-		panic!("Unexepected number of arguments")
-	}
-	while let Some([cmd, arg]) = chunks.next() {
-		parse_enclave_options(cmd.clone(), arg.clone(), &mut options);
-	}
-
-	options
-}
-
-pub fn parse_enclave_options(
-	cmd: String,
-	arg: String,
-	options: &mut EnclaveOptions,
-) {
-	parse_cid(&cmd, &arg, options);
-	parse_port(&cmd, &arg, options);
-	parse_usock(&cmd, &arg, options);
-}
-
-pub fn parse_cid(cmd: &String, arg: &String, options: &mut EnclaveOptions) {
-	match cmd.as_str() {
-		"--cid" => {
-			options.cid = arg
-				.parse::<u32>()
-				.map_err(|_| {
-					panic!("Could not parse provided value for `--cid`")
-				})
-				.ok();
-		}
-		_ => {}
-	}
-}
-
-pub fn parse_port(cmd: &String, arg: &String, options: &mut EnclaveOptions) {
-	match cmd.as_str() {
-		"--port" => {
-			options.port = arg
-				.parse::<u32>()
-				.map_err(|_| {
-					panic!("Could not parse provided value for `--port`")
-				})
-				.ok();
-		}
-		_ => {}
-	}
-}
-
-pub fn parse_usock(cmd: &String, arg: &String, options: &mut EnclaveOptions) {
-	match cmd.as_str() {
-		"--usock" => options.usock = Some(arg.clone()),
-		_ => {}
-	}
-}
-
-pub fn addr_from_options(options: EnclaveOptions) -> SocketAddress {
-	match options {
-		#[cfg(feature = "vm")]
-		EnclaveOptions { cid: Some(c), port: Some(p), usock: None } => {
-			SocketAddress::new_vsock(c, p)
-		}
-		EnclaveOptions { cid: None, port: None, usock: Some(u) } => {
-			SocketAddress::new_unix(&u)
-		}
-		_ => panic!("Invalid options..."),
 	}
 }
 
@@ -115,11 +130,16 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let options = parse_args(args);
+		let options = EnclaveOptions::from(args);
 
 		assert_eq!(
 			options,
-			EnclaveOptions { cid: Some(6), port: Some(3999), usock: None }
+			EnclaveOptions {
+				cid: Some(6),
+				port: Some(3999),
+				usock: None,
+				mock: false
+			}
 		)
 	}
 
@@ -129,14 +149,15 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let options = parse_args(args);
+		let options = EnclaveOptions::from(args);
 
 		assert_eq!(
 			options,
 			EnclaveOptions {
 				cid: None,
 				port: None,
-				usock: Some("./test.sock".to_string())
+				usock: Some("./test.sock".to_string()),
+				mock: false
 			}
 		)
 	}
@@ -148,23 +169,32 @@ mod test {
 			cid: Some(1),
 			port: Some(3000),
 			usock: Some("./test.sock".to_string()),
+			mock: false,
 		};
-		addr_from_options(options);
+		options.addr();
 	}
 
 	#[test]
 	#[should_panic]
 	fn panic_on_not_enough_options() {
-		let options =
-			EnclaveOptions { cid: None, port: Some(3000), usock: None };
-		addr_from_options(options);
+		let options = EnclaveOptions {
+			cid: None,
+			port: Some(3000),
+			usock: None,
+			mock: false,
+		};
+		options.addr();
 	}
 
 	#[test]
 	#[cfg(feature = "vm")]
 	fn build_vsock() {
-		let options =
-			EnclaveOptions { cid: Some(3), port: Some(3000), usock: None };
+		let options = EnclaveOptions {
+			cid: Some(3),
+			port: Some(3000),
+			usock: None,
+			mock: false,
+		};
 		match addr_from_options(options) {
 			SocketAddress::Vsock(_) => {}
 			_ => {
@@ -179,8 +209,9 @@ mod test {
 			cid: None,
 			port: None,
 			usock: Some("./dev.sock".to_string()),
+			mock: false,
 		};
-		match addr_from_options(options) {
+		match options.addr() {
 			SocketAddress::Unix(_) => {}
 			#[cfg(feature = "vm")]
 			_ => {
@@ -196,7 +227,7 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let _options = parse_args(args);
+		let _options = EnclaveOptions::from(args);
 	}
 
 	#[test]
@@ -206,6 +237,6 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let _options = parse_args(args);
+		let _options = EnclaveOptions::from(args);
 	}
 }

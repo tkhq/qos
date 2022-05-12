@@ -7,12 +7,14 @@ use qos_host::cli::HostOptions;
 enum Command {
 	Health,
 	Echo,
+	DescribeNsm,
 }
 impl Command {
 	fn run(&self, options: ClientOptions) {
 		match self {
 			Command::Health => handlers::health(options),
 			Command::Echo => handlers::echo(options),
+			Command::DescribeNsm => handlers::describe_nsm(options),
 		}
 	}
 }
@@ -21,6 +23,7 @@ impl Into<Command> for &str {
 		match self {
 			"health" => Command::Health,
 			"echo" => Command::Echo,
+			"describe-nsm" => Command::DescribeNsm,
 			_ => panic!("Unrecognized command"),
 		}
 	}
@@ -50,7 +53,11 @@ impl ClientOptions {
 
 		while let Some([cmd, arg]) = chunks.next() {
 			options.host.parse(&cmd, &arg);
-			options.echo.parse(&cmd, arg);
+			match options.cmd {
+				Command::Echo => options.echo.parse(&cmd, arg),
+				Command::Health => {}
+				Command::DescribeNsm => {}
+			}
 		}
 
 		options
@@ -84,12 +91,12 @@ impl EchoOptions {
 	}
 	fn parse(&mut self, cmd: &str, arg: &str) {
 		match cmd {
-			"--echo-data" => self.data = Some(arg.to_string()),
+			"--data" => self.data = Some(arg.to_string()),
 			_ => {}
 		};
 	}
 	fn data(&self) -> String {
-		self.data.clone().expect("No `--echo-data` given for echo request")
+		self.data.clone().expect("No `--data` given for echo request")
 	}
 }
 
@@ -103,6 +110,8 @@ impl CLI {
 }
 
 mod handlers {
+	use qos_core::protocol::NsmRequest;
+
 	use super::*;
 	use crate::request;
 
@@ -135,8 +144,21 @@ mod handlers {
 		};
 	}
 
-	// pub(super) fn nsm_describe(options: ClientOptions) {
-	// 	let path = &options.host.path("message");
+	pub(super) fn describe_nsm(options: ClientOptions) {
+		let path = &options.host.path("message");
 
-	// }
+		let response = request::post(
+			path,
+			ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM),
+		)
+		.map_err(|e| println!("{:?}", e))
+		.expect("Echo message failed");
+
+		match response {
+			ProtocolMsg::NsmResponse(describe_nsm_response) => {
+				println!("{:?}", describe_nsm_response)
+			}
+			_ => panic!("Unexpected describe nsm response"),
+		}
+	}
 }

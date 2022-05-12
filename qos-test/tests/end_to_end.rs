@@ -26,7 +26,7 @@ async fn end_to_end() {
 	// Spawn enclave
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
-		let executor = Executor::new(attestor);
+		let executor = Executor::new(Box::new(attestor));
 
 		SocketServer::listen(enclave_addr, executor).unwrap()
 	});
