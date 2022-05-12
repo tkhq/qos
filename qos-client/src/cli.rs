@@ -1,14 +1,20 @@
-use qos_core::protocol::{Echo, ProtocolMsg};
-use qos_host::cli::{
-	host_addr_from_options, parse_ip, parse_port, HostOptions,
-};
 use std::env;
+
+use qos_core::protocol::{Echo, ProtocolMsg};
+use qos_host::cli::{parse_ip, parse_port, HostOptions};
 
 enum Command {
 	Health,
 	Echo,
 }
-
+impl Command {
+	fn run(&self, options: ClientOptions) {
+		match self {
+			Command::Health => handlers::health(options),
+			Command::Echo => handlers::echo(options),
+		}
+	}
+}
 impl Into<Command> for &str {
 	fn into(self) -> Command {
 		match self {
@@ -19,12 +25,34 @@ impl Into<Command> for &str {
 	}
 }
 
-impl Command {
-	fn run(&self, options: HostOptions) {
-		match self {
-			Command::Health => handlers::health(options),
-			Command::Echo => handlers::echo(options),
-		}
+#[derive(Clone, PartialEq, Debug)]
+struct ClientOptions {
+	host: HostOptions,
+	echo: EchoOptions,
+	// ... other options
+}
+impl ClientOptions {
+	fn new() -> Self {
+		Self { host: HostOptions::new(), echo: EchoOptions::new() }
+	}
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct EchoOptions {
+	data: Option<String>,
+}
+impl EchoOptions {
+	fn new() -> Self {
+		Self { data: None }
+	}
+	fn parse(&mut self, cmd: &str, arg: &str) {
+		match cmd {
+			"--echo-data" => self.data = Some(arg.to_string()),
+			_ => {}
+		};
+	}
+	fn data(&self) -> String {
+		self.data.clone().expect("No `--echo-data` given for echo request")
 	}
 }
 
@@ -41,21 +69,21 @@ impl CLI {
 		args.remove(0);
 
 		let options = parse_args(args);
-		let addr = host_addr_from_options(options.clone());
 		command.run(options);
 	}
 }
 
-fn parse_args(args: Vec<String>) -> HostOptions {
-	let mut options = HostOptions::new();
+fn parse_args(args: Vec<String>) -> ClientOptions {
+	let mut options = ClientOptions::new();
 	let mut chunks = args.chunks_exact(2);
 	if chunks.remainder().len() > 0 {
 		panic!("Unexpected number of arguments");
 	}
 
 	while let Some([cmd, arg]) = chunks.next() {
-		parse_ip(&cmd, &arg, &mut options);
-		parse_port(&cmd, &arg, &mut options);
+		parse_ip(&cmd, &arg, &mut options.host);
+		parse_port(&cmd, &arg, &mut options.host);
+		options.echo.parse(&cmd, arg);
 	}
 
 	options
@@ -65,8 +93,8 @@ mod handlers {
 	use super::*;
 	use crate::request;
 
-	pub fn health(options: HostOptions) {
-		let path = &options.path("health");
+	pub(super) fn health(options: ClientOptions) {
+		let path = &options.host.path("health");
 		if let Ok(response) = request::get(path) {
 			println!("{}", response);
 		} else {
@@ -74,9 +102,9 @@ mod handlers {
 		}
 	}
 
-	pub fn echo(options: HostOptions) {
-		let path = &options.path("message");
-		let msg = b"Hello, world!".to_vec();
+	pub(super) fn echo(options: ClientOptions) {
+		let path = &options.host.path("message");
+		let msg = options.echo.data().into_bytes();
 		let response =
 			request::post(path, ProtocolMsg::EchoRequest(Echo { data: msg }))
 				.map_err(|e| println!("{:?}", e))
@@ -88,7 +116,9 @@ mod handlers {
 					.expect("Couldn't convert Echo to UTF-8");
 				println!("{}", resp_msg);
 			}
-			_ => { panic!("Unexpected Echo response")}
+			_ => {
+				panic!("Unexpected Echo response")
+			}
 		};
 	}
 }
