@@ -6,14 +6,14 @@ use crate::{
 	server::SocketServer,
 };
 
-#[derive(Debug, PartialEq)]
-struct CLIOptions {
+#[derive(Clone, Debug, PartialEq)]
+pub struct EnclaveOptions {
 	cid: Option<u32>,
 	port: Option<u32>,
 	usock: Option<String>,
 }
 
-impl CLIOptions {
+impl EnclaveOptions {
 	pub fn new() -> Self {
 		Self { cid: None, port: None, usock: None }
 	}
@@ -33,48 +33,72 @@ impl CLI {
 	}
 }
 
-fn parse_args(args: Vec<String>) -> CLIOptions {
-	let mut options = CLIOptions::new();
+fn parse_args(args: Vec<String>) -> EnclaveOptions {
+	let mut options = EnclaveOptions::new();
 
 	let mut chunks = args.chunks_exact(2);
 	if chunks.remainder().len() > 0 {
 		panic!("Unexepected number of arguments")
 	}
 	while let Some([cmd, arg]) = chunks.next() {
-		match cmd.as_str() {
-			"--cid" => {
-				options.cid = arg
-					.parse::<u32>()
-					.map_err(|_| {
-						panic!("Could not parse provided value for `--cid`")
-					})
-					.ok()
-			}
-			"--port" => {
-				options.port = arg
-					.parse::<u32>()
-					.map_err(|_| {
-						panic!("Could not parse provided value for `--port`")
-					})
-					.ok();
-			}
-			"--usock" => options.usock = Some(arg.clone()),
-			_ => {
-				panic!("Could not parse command...")
-			}
-		}
+		parse_enclave_options(cmd.clone(), arg.clone(), &mut options);
 	}
 
 	options
 }
 
-fn addr_from_options(options: CLIOptions) -> SocketAddress {
+pub fn parse_enclave_options(
+	cmd: String,
+	arg: String,
+	options: &mut EnclaveOptions,
+) {
+	parse_cid(&cmd, &arg, options);
+	parse_port(&cmd, &arg, options);
+	parse_usock(&cmd, &arg, options);
+}
+
+pub fn parse_cid(cmd: &String, arg: &String, options: &mut EnclaveOptions) {
+	match cmd.as_str() {
+		"--cid" => {
+			options.cid = arg
+				.parse::<u32>()
+				.map_err(|_| {
+					panic!("Could not parse provided value for `--cid`")
+				})
+				.ok();
+		}
+		_ => {}
+	}
+}
+
+pub fn parse_port(cmd: &String, arg: &String, options: &mut EnclaveOptions) {
+	match cmd.as_str() {
+		"--port" => {
+			options.port = arg
+				.parse::<u32>()
+				.map_err(|_| {
+					panic!("Could not parse provided value for `--port`")
+				})
+				.ok();
+		}
+		_ => {}
+	}
+}
+
+pub fn parse_usock(cmd: &String, arg: &String, options: &mut EnclaveOptions) {
+	match cmd.as_str() {
+		"--usock" => options.usock = Some(arg.clone()),
+		_ => {}
+	}
+}
+
+pub fn addr_from_options(options: EnclaveOptions) -> SocketAddress {
 	match options {
 		#[cfg(feature = "vm")]
-		CLIOptions { cid: Some(c), port: Some(p), usock: None } => {
+		EnclaveOptions { cid: Some(c), port: Some(p), usock: None } => {
 			SocketAddress::new_vsock(c, p)
 		}
-		CLIOptions { cid: None, port: None, usock: Some(u) } => {
+		EnclaveOptions { cid: None, port: None, usock: Some(u) } => {
 			SocketAddress::new_unix(&u)
 		}
 		_ => panic!("Invalid options..."),
@@ -95,7 +119,7 @@ mod test {
 
 		assert_eq!(
 			options,
-			CLIOptions { cid: Some(6), port: Some(3999), usock: None }
+			EnclaveOptions { cid: Some(6), port: Some(3999), usock: None }
 		)
 	}
 
@@ -109,7 +133,7 @@ mod test {
 
 		assert_eq!(
 			options,
-			CLIOptions {
+			EnclaveOptions {
 				cid: None,
 				port: None,
 				usock: Some("./test.sock".to_string())
@@ -120,7 +144,7 @@ mod test {
 	#[test]
 	#[should_panic]
 	fn panic_on_too_many_options() {
-		let options = CLIOptions {
+		let options = EnclaveOptions {
 			cid: Some(1),
 			port: Some(3000),
 			usock: Some("./test.sock".to_string()),
@@ -131,7 +155,8 @@ mod test {
 	#[test]
 	#[should_panic]
 	fn panic_on_not_enough_options() {
-		let options = CLIOptions { cid: None, port: Some(3000), usock: None };
+		let options =
+			EnclaveOptions { cid: None, port: Some(3000), usock: None };
 		addr_from_options(options);
 	}
 
@@ -139,7 +164,7 @@ mod test {
 	#[cfg(feature = "vm")]
 	fn build_vsock() {
 		let options =
-			CLIOptions { cid: Some(3), port: Some(3000), usock: None };
+			EnclaveOptions { cid: Some(3), port: Some(3000), usock: None };
 		match addr_from_options(options) {
 			SocketAddress::Vsock(_) => {}
 			_ => {
@@ -150,7 +175,7 @@ mod test {
 
 	#[test]
 	fn build_usock() {
-		let options = CLIOptions {
+		let options = EnclaveOptions {
 			cid: None,
 			port: None,
 			usock: Some("./dev.sock".to_string()),

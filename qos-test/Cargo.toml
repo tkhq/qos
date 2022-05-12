@@ -6,7 +6,7 @@ publish = false
 
 [dev-dependencies]
 qos-core = { path = "../qos-core" }
-qos-cli = { path = "../qos-cli" }
+qos-client = { path = "../qos-client" }
 qos-host = { path = "../qos-host" }
 qos-crypto = { path = "../qos-crypto" }
 ureq = { version = "2.4", default-features = false }

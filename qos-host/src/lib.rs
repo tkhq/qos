@@ -29,6 +29,8 @@ use qos_core::{
 	protocol::{ProtocolMsg, Serialize},
 };
 
+pub mod cli;
+
 /// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]
 struct State {
@@ -45,6 +47,13 @@ impl HostServer {
 	/// Create a new [`HostServer`].
 	pub fn new(enclave_addr: SocketAddress, ip: [u8; 4], port: u16) -> Self {
 		Self { addr: SocketAddr::from((ip, port)), enclave_addr }
+	}
+
+	pub fn new_with_socket_addr(
+		enclave_addr: SocketAddress,
+		addr: SocketAddr,
+	) -> Self {
+		Self { addr, enclave_addr }
 	}
 
 	/// Start the server, running indefinitely.

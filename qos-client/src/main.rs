@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 
-use qos_cli;
 use qos_core::protocol::{NsmRequest, ProtocolMsg};
 
 fn main() {
@@ -14,7 +13,7 @@ fn main() {
 	println!("Health response: {:?}", _body);
 
 	let request = ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM);
-	match qos_cli::post(&message_url, request).unwrap() {
+	match qos_client::request::post(&message_url, request).unwrap() {
 		ProtocolMsg::EchoResponse(_) => {
 			println!("EchoResponse")
 		}
