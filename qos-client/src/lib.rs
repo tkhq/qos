@@ -1,6 +1,7 @@
 use std::io::Read;
 
 use qos_core::protocol::{Echo, NsmRequest, ProtocolMsg, Serialize};
+pub mod cli;
 
 const MAX_SIZE: u64 = u32::MAX as u64;
 
@@ -84,7 +85,7 @@ pub mod request {
 		Ok(pr)
 	}
 
-	fn get(url: &str) -> Result<String, String> {
+	pub fn get(url: &str) -> Result<String, String> {
 		ureq::get(url)
 			.call()
 			.unwrap()

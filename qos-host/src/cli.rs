@@ -2,10 +2,7 @@
 // Port/Host bindings
 use std::{env, net::SocketAddr};
 
-use qos_core::{
-	cli::{parse_enclave_options, EnclaveOptions},
-	io::SocketAddress,
-};
+use qos_core::cli::{parse_enclave_options, EnclaveOptions};
 use regex::Regex;
 
 use crate::HostServer;
@@ -13,15 +10,42 @@ use crate::HostServer;
 const IP_REGEX: &'static str = r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$";
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct HostOptions {
+pub struct HostServerOptions {
 	enclave: EnclaveOptions,
+	host: HostOptions,
+}
+
+impl HostServerOptions {
+	fn new() -> Self {
+		Self { enclave: EnclaveOptions::new(), host: HostOptions::new() }
+	}
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostOptions {
 	ip: Option<[u8; 4]>,
 	port: Option<u16>,
 }
 
 impl HostOptions {
-	fn new() -> Self {
-		Self { enclave: EnclaveOptions::new(), ip: None, port: None }
+	pub fn new() -> Self {
+		Self { ip: None, port: None }
+	}
+
+	pub fn url(&self) -> String {
+		if let Self { ip: Some(ip), port: Some(port) } = self.clone() {
+			return format!(
+				"http://{}.{}.{}.{}:{}",
+				ip[0], ip[1], ip[2], ip[3], port
+			);
+		} else {
+			panic!("Couldn't parse URL from options.")
+		}
+	}
+
+	pub fn path(&self, path: &str) -> String {
+		let url = self.url();
+		format!("{}/{}", url, path)
 	}
 }
 
@@ -40,8 +64,8 @@ impl CLI {
 		let mut args: Vec<String> = env::args().collect();
 		args.remove(0);
 		let options = parse_args(args);
-		let addr = host_addr_from_options(options.clone());
-		let enclave_addr = enclave_addr_from_options(options.clone());
+		let addr = host_addr_from_options(options.host.clone());
+		let enclave_addr = qos_core::cli::addr_from_options(options.enclave);
 		HostServer::new_with_socket_addr(enclave_addr, addr)
 			.serve()
 			.await
@@ -49,8 +73,8 @@ impl CLI {
 	}
 }
 
-fn parse_args(args: Vec<String>) -> HostOptions {
-	let mut options = HostOptions::new();
+pub fn parse_args(args: Vec<String>) -> HostServerOptions {
+	let mut options = HostServerOptions::new();
 
 	let mut chunks = args.chunks_exact(2);
 	if chunks.remainder().len() > 0 {
@@ -58,7 +82,7 @@ fn parse_args(args: Vec<String>) -> HostOptions {
 	}
 	while let Some([cmd, arg]) = chunks.next() {
 		parse_enclave_options(cmd.clone(), arg.clone(), &mut options.enclave);
-		parse_host_addr(cmd, arg, &mut options);
+		parse_host_addr(cmd, arg, &mut options.host);
 	}
 
 	options
@@ -69,7 +93,7 @@ fn parse_host_addr(cmd: &str, arg: &str, options: &mut HostOptions) {
 	parse_port(&cmd, &arg, options);
 }
 
-fn parse_ip(cmd: &str, arg: &str, options: &mut HostOptions) {
+pub fn parse_ip(cmd: &str, arg: &str, options: &mut HostOptions) {
 	match cmd {
 		"--host-ip" => {
 			let re = Regex::new(IP_REGEX)
@@ -95,7 +119,7 @@ fn parse_ip(cmd: &str, arg: &str, options: &mut HostOptions) {
 	}
 }
 
-fn parse_port(cmd: &str, arg: &str, options: &mut HostOptions) {
+pub fn parse_port(cmd: &str, arg: &str, options: &mut HostOptions) {
 	match cmd {
 		"--host-port" => {
 			options.port = arg
@@ -109,11 +133,7 @@ fn parse_port(cmd: &str, arg: &str, options: &mut HostOptions) {
 	}
 }
 
-fn enclave_addr_from_options(options: HostOptions) -> SocketAddress {
-	qos_core::cli::addr_from_options(options.enclave)
-}
-
-fn host_addr_from_options(options: HostOptions) -> SocketAddr {
+pub fn host_addr_from_options(options: HostOptions) -> SocketAddr {
 	if let HostOptions { ip: Some(ip), port: Some(port), .. } = options {
 		SocketAddr::from((ip, port))
 	} else {
