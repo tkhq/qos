@@ -2,8 +2,9 @@
 use std::collections::BTreeSet;
 
 use aws_nitro_enclaves_nsm_api as nsm;
+use nsm::api::{Digest, ErrorCode, Request, Response};
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub enum NsmErrorCode {
 	/// No errors
 	Success,
@@ -26,9 +27,26 @@ pub enum NsmErrorCode {
 	InternalError,
 }
 
-impl From<nsm::api::ErrorCode> for NsmErrorCode {
-	fn from(e: nsm::api::ErrorCode) -> Self {
-		use nsm::api::ErrorCode as E;
+impl From<ErrorCode> for NsmErrorCode {
+	fn from(e: ErrorCode) -> Self {
+		use ErrorCode as E;
+		match e {
+			E::Success => Self::Success,
+			E::InvalidArgument => Self::InvalidArgument,
+			E::InvalidIndex => Self::InvalidIndex,
+			E::InvalidResponse => Self::InvalidResponse,
+			E::ReadOnlyIndex => Self::ReadOnlyIndex,
+			E::InvalidOperation => Self::InvalidOperation,
+			E::BufferTooSmall => Self::BufferTooSmall,
+			E::InputTooLarge => Self::InputTooLarge,
+			E::InternalError => Self::InternalError,
+		}
+	}
+}
+
+impl From<NsmErrorCode> for ErrorCode {
+	fn from(e: NsmErrorCode) -> Self {
+		use NsmErrorCode as E;
 		match e {
 			E::Success => Self::Success,
 			E::InvalidArgument => Self::InvalidArgument,
@@ -55,9 +73,9 @@ pub enum NsmDigest {
 	SHA512,
 }
 
-impl From<nsm::api::Digest> for NsmDigest {
-	fn from(d: nsm::api::Digest) -> Self {
-		use nsm::api::Digest as D;
+impl From<Digest> for NsmDigest {
+	fn from(d: Digest) -> Self {
+		use Digest as D;
 		match d {
 			D::SHA256 => Self::SHA256,
 			D::SHA384 => Self::SHA384,
@@ -66,7 +84,18 @@ impl From<nsm::api::Digest> for NsmDigest {
 	}
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+impl From<NsmDigest> for Digest {
+	fn from(d: NsmDigest) -> Self {
+		use NsmDigest as D;
+		match d {
+			D::SHA256 => Self::SHA256,
+			D::SHA384 => Self::SHA384,
+			D::SHA512 => Self::SHA512,
+		}
+	}
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub enum NsmRequest {
 	/// Read data from PlatformConfigurationRegister at `index`
 	DescribePCR {
@@ -111,13 +140,14 @@ pub enum NsmRequest {
 	GetRandom,
 }
 
-impl From<nsm::api::Request> for NsmRequest {
-	fn from(req: nsm::api::Request) -> Self {
-		use nsm::api::Request as R;
+impl From<Request> for NsmRequest {
+	fn from(req: Request) -> Self {
+		use Request as R;
 		match req {
 			R::DescribePCR { index } => Self::DescribePCR { index },
 			R::ExtendPCR { index, data } => Self::ExtendPCR { index, data },
 			R::LockPCR { index } => Self::LockPCR { index },
+			R::LockPCRs { range } => Self::LockPCRs { range },
 			R::DescribeNSM => Self::DescribeNSM,
 			R::Attestation { user_data, nonce, public_key } => {
 				Self::Attestation {
@@ -127,13 +157,35 @@ impl From<nsm::api::Request> for NsmRequest {
 				}
 			}
 			R::GetRandom => Self::GetRandom,
-			_ => panic!("Not recognized nsm::api::Request"),
+			_ => panic!("Un-recognized aws-nsm Request"),
 		}
 	}
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq)]
-enum NsmResponse {
+impl From<NsmRequest> for Request {
+	fn from(req: NsmRequest) -> Self {
+		use serde_bytes::ByteBuf;
+		use NsmRequest as R;
+		match req {
+			R::DescribePCR { index } => Self::DescribePCR { index },
+			R::ExtendPCR { index, data } => Self::ExtendPCR { index, data },
+			R::LockPCR { index } => Self::LockPCR { index },
+			R::LockPCRs { range } => Self::LockPCRs { range },
+			R::DescribeNSM => Self::DescribeNSM,
+			R::Attestation { user_data, nonce, public_key } => {
+				Self::Attestation {
+					user_data: user_data.map(ByteBuf::from),
+					nonce: nonce.map(ByteBuf::from),
+					public_key: public_key.map(ByteBuf::from),
+				}
+			}
+			R::GetRandom => Self::GetRandom,
+		}
+	}
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+pub enum NsmResponse {
 	/// returns the current PlatformConfigurationRegister state
 	DescribePCR {
 		/// true if the PCR is read-only, false otherwise
@@ -190,9 +242,9 @@ enum NsmResponse {
 	Error(NsmErrorCode),
 }
 
-impl From<nsm::api::Response> for NsmResponse {
-	fn from(req: nsm::api::Response) -> Self {
-		use nsm::api::Response as R;
+impl From<Response> for NsmResponse {
+	fn from(req: Response) -> Self {
+		use Response as R;
 		match req {
 			R::DescribePCR { lock, data } => Self::DescribePCR { lock, data },
 			R::ExtendPCR { data } => Self::ExtendPCR { data },
@@ -217,7 +269,39 @@ impl From<nsm::api::Response> for NsmResponse {
 			R::Attestation { document } => Self::Attestation { document },
 			R::GetRandom { random } => Self::GetRandom { random },
 			R::Error(e) => Self::Error(e.into()),
-			_ => Self::Error(NsmErrorCode::InternalError),
+			_ => Self::Error(ErrorCode::InternalError.into()),
+		}
+	}
+}
+
+impl From<NsmResponse> for nsm::api::Response {
+	fn from(req: NsmResponse) -> Self {
+		use NsmResponse as R;
+		match req {
+			R::DescribePCR { lock, data } => Self::DescribePCR { lock, data },
+			R::ExtendPCR { data } => Self::ExtendPCR { data },
+			R::LockPCR => Self::LockPCR,
+			R::DescribeNSM {
+				version_major,
+				version_minor,
+				version_patch,
+				module_id,
+				max_pcrs,
+				locked_pcrs,
+				digest,
+			} => Self::DescribeNSM {
+				version_major,
+				version_minor,
+				version_patch,
+				module_id,
+				max_pcrs,
+				locked_pcrs,
+				digest: digest.into(),
+			},
+			R::Attestation { document } => Self::Attestation { document },
+			R::GetRandom { random } => Self::GetRandom { random },
+			R::Error(e) => Self::Error(e.into()),
+			_ => Self::Error(ErrorCode::InternalError.into()),
 		}
 	}
 }

@@ -1,6 +1,7 @@
 //! Enclave I/O message format and serialization.
-use aws_nitro_enclaves_nsm_api as nsm;
 use serde_cbor;
+
+use super::{NsmRequest, NsmResponse};
 
 const SU32: usize = std::mem::size_of::<u32>();
 
@@ -28,7 +29,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 	fn deserialize(data: &mut Vec<u8>) -> Result<Vec<u8>, ProtocolError> {
 		if data.len() < SU32 {
 			// Payload size cannot be determined
-			return Err(ProtocolError::DeserializationError);
+			return Err(ProtocolError::DeserializationError)
 		}
 		let len_bytes: [u8; SU32] = data
 			.drain(0..SU32)
@@ -39,7 +40,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 
 		if data.len() < len_bytes {
 			// Payload size is incorrect
-			return Err(ProtocolError::DeserializationError);
+			return Err(ProtocolError::DeserializationError)
 		}
 		let result: Vec<u8> = data.drain(0..len_bytes).collect();
 
@@ -59,8 +60,8 @@ pub enum ProtocolMsg {
 	EchoResponse(Echo),
 	ProvisionRequest(ProvisionRequest),
 	ReconstructRequest,
-	NsmRequest(nsm::api::Request),
-	NsmResponse(nsm::api::Response),
+	NsmRequest(NsmRequest),
+	NsmResponse(NsmResponse),
 }
 
 const PROTOCOL_MSG_SUCCESS_RESPONSE: u8 = 0;

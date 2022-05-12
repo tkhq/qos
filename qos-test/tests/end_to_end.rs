@@ -1,10 +1,12 @@
 use std::{collections::BTreeSet, fs::File, io::Read, path::Path};
 
-use aws_nitro_enclaves_nsm_api as nsm;
 use qos_cli;
 use qos_core::{
 	io::SocketAddress,
-	protocol::{Echo, Executor, MockNsm, ProtocolMsg, ProvisionRequest},
+	protocol::{
+		Echo, Executor, MockNsm, NsmRequest, NsmResponse, ProtocolMsg,
+		ProvisionRequest, NsmDigest,
+	},
 	server::SocketServer,
 };
 use qos_crypto;
@@ -98,16 +100,16 @@ async fn end_to_end() {
 	std::fs::remove_file(path).unwrap();
 
 	// Test NSM connection
-	let request = ProtocolMsg::NsmRequest(nsm::api::Request::DescribeNSM);
+	let request = ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM);
 	let response = qos_cli::post(&message_url, request).unwrap();
-	let expected = ProtocolMsg::NsmResponse(nsm::api::Response::DescribeNSM {
+	let expected = ProtocolMsg::NsmResponse(NsmResponse::DescribeNSM {
 		version_major: 1,
 		version_minor: 2,
 		version_patch: 14,
 		module_id: "mock_module_id".to_string(),
 		max_pcrs: 1024,
 		locked_pcrs: BTreeSet::from([90, 91, 92]),
-		digest: nsm::api::Digest::SHA256,
+		digest: NsmDigest::SHA256,
 	});
 	assert_eq!(response, expected);
 }

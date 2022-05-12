@@ -1,8 +1,7 @@
 #![forbid(unsafe_code)]
 
-use aws_nitro_enclaves_nsm_api as nsm;
 use qos_cli;
-use qos_core::protocol::ProtocolMsg;
+use qos_core::protocol::{NsmRequest, ProtocolMsg};
 
 fn main() {
 	let url = "http://127.0.0.1:3000";
@@ -14,7 +13,7 @@ fn main() {
 
 	println!("Health response: {:?}", _body);
 
-	let request = ProtocolMsg::NsmRequest(nsm::api::Request::DescribeNSM);
+	let request = ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM);
 	match qos_cli::post(&message_url, request).unwrap() {
 		ProtocolMsg::EchoResponse(_) => {
 			println!("EchoResponse")

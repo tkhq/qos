@@ -449,6 +449,7 @@ dependencies = [
  "nix 0.24.1",
  "qos-crypto",
  "serde",
+ "serde_bytes",
  "serde_cbor",
 ]
 

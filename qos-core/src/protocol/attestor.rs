@@ -2,26 +2,20 @@ use std::collections::BTreeSet;
 
 use aws_nitro_enclaves_nsm_api as nsm;
 
+use crate::protocol::{NsmDigest, NsmRequest, NsmResponse};
+
 // https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md
 pub trait NsmProvider {
-	fn nsm_process_request(
-		&self,
-		fd: i32,
-		request: nsm::api::Request,
-	) -> nsm::api::Response;
+	fn nsm_process_request(&self, fd: i32, request: NsmRequest) -> NsmResponse;
 
 	fn nsm_init(&self) -> i32;
 
 	fn nsm_exit(&self, fd: i32);
 }
 
-pub struct Nsm {}
+pub struct Nsm;
 impl NsmProvider for Nsm {
-	fn nsm_process_request(
-		&self,
-		fd: i32,
-		request: nsm::api::Request,
-	) -> nsm::api::Response {
+	fn nsm_process_request(&self, fd: i32, request: NsmRequest) -> NsmResponse {
 		nsm::driver::nsm_process_request(fd, request.into()).into()
 	}
 
@@ -36,54 +30,44 @@ impl NsmProvider for Nsm {
 
 /// TODO: - this should be moved to its own crate as it will likely need some
 /// additional deps like Serde
-pub struct MockNsm {}
+pub struct MockNsm;
 
 impl NsmProvider for MockNsm {
 	fn nsm_process_request(
 		&self,
 		_fd: i32,
-		request: nsm::api::Request,
-	) -> nsm::api::Response {
-		// use nsm::api::{Request as Req, Response as Resp};
-		println!("MockNsm::process_request request={:?}", request);
+		request: NsmRequest,
+	) -> NsmResponse {
 		match request {
-			nsm::api::Request::Attestation {
+			NsmRequest::Attestation {
 				user_data: _,
 				nonce: _,
 				public_key: _,
 			} => {
 				// TODO: this should be a CBOR-encoded AttestationDocument as
 				// the payload
-				nsm::api::Response::Attestation { document: Vec::new() }
+				NsmResponse::Attestation { document: Vec::new() }
 			}
-			nsm::api::Request::DescribeNSM => nsm::api::Response::DescribeNSM {
+			NsmRequest::DescribeNSM => NsmResponse::DescribeNSM {
 				version_major: 1,
 				version_minor: 2,
 				version_patch: 14,
 				module_id: "mock_module_id".to_string(),
 				max_pcrs: 1024,
 				locked_pcrs: BTreeSet::from([90, 91, 92]),
-				digest: nsm::api::Digest::SHA256,
+				digest: NsmDigest::SHA256,
 			},
-			nsm::api::Request::ExtendPCR { index: _, data: _ } => {
-				nsm::api::Response::ExtendPCR { data: vec![3, 4, 7, 4] }
+			NsmRequest::ExtendPCR { index: _, data: _ } => {
+				NsmResponse::ExtendPCR { data: vec![3, 4, 7, 4] }
 			}
-			nsm::api::Request::GetRandom => {
-				nsm::api::Response::GetRandom { random: vec![4, 2, 0, 69] }
+			NsmRequest::GetRandom => {
+				NsmResponse::GetRandom { random: vec![4, 2, 0, 69] }
 			}
-			nsm::api::Request::LockPCR { index: _ } => {
-				nsm::api::Response::LockPCR
+			NsmRequest::LockPCR { index: _ } => NsmResponse::LockPCR,
+			NsmRequest::LockPCRs { range: _ } => NsmResponse::LockPCRs,
+			NsmRequest::DescribePCR { index: _ } => {
+				NsmResponse::DescribePCR { lock: false, data: vec![3, 4, 7, 4] }
 			}
-			nsm::api::Request::LockPCRs { range: _ } => {
-				nsm::api::Response::LockPCRs
-			}
-			nsm::api::Request::DescribePCR { index: _ } => {
-				nsm::api::Response::DescribePCR {
-					lock: false,
-					data: vec![3, 4, 7, 4],
-				}
-			}
-			_ => nsm::api::Response::Error(nsm::api::ErrorCode::InternalError),
 		}
 	}
 

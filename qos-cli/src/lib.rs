@@ -1,7 +1,6 @@
 use std::io::Read;
 
-use aws_nitro_enclaves_nsm_api as nsm;
-use qos_core::protocol::{Echo, ProtocolMsg, Serialize};
+use qos_core::protocol::{Echo, NsmRequest, ProtocolMsg, Serialize};
 
 const MAX_SIZE: u64 = u32::MAX as u64;
 
@@ -53,7 +52,7 @@ fn run_cmd(cmd: HostCmd, url: &str) {
 		HostCmd::NsmDescribe => {
 			match post(
 				&message_url,
-				ProtocolMsg::NsmRequest(nsm::api::Request::DescribeNSM),
+				ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM),
 			)
 			.unwrap()
 			{

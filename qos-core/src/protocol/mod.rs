@@ -1,4 +1,4 @@
-use aws_nitro_enclaves_nsm_api as nsm;
+//! OS execution protocol.
 
 mod attestor;
 mod msg;
@@ -6,12 +6,11 @@ mod nitro_types;
 mod provisioner;
 
 use attestor::*;
-use provisioner::*;
-
 pub use attestor::{MockNsm, Nsm};
 pub use msg::*;
 pub use nitro_types::*;
 pub use provisioner::SECRET_FILE;
+use provisioner::*;
 
 use crate::server;
 
@@ -20,7 +19,6 @@ type ProtocolHandler<A> =
 
 pub struct ProtocolState<A: NsmProvider> {
 	provisioner: SecretProvisioner,
-	// TODO: make this gneric over NsmProvider
 	attestor: A,
 }
 
@@ -133,9 +131,8 @@ mod handlers {
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::NsmRequest(_nsmr) = req {
 			let fd = state.attestor.nsm_init();
-			let response = state
-				.attestor
-				.nsm_process_request(fd, nsm::api::Request::DescribeNSM);
+			let response =
+				state.attestor.nsm_process_request(fd, NsmRequest::DescribeNSM);
 			println!("NSM process request: {:?}", response);
 			Some(ProtocolMsg::NsmResponse(response))
 		} else {

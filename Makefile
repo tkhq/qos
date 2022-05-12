@@ -11,5 +11,5 @@ host:
 	cargo run --bin qos-host
 
 .PHONY: client
-client: 
+client:
 	cargo run --bin qos-cli
