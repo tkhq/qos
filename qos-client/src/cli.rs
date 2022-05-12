@@ -1,7 +1,7 @@
 use std::env;
 
 use qos_core::protocol::{Echo, ProtocolMsg};
-use qos_host::cli::{parse_ip, parse_port, HostOptions};
+use qos_host::cli::HostOptions;
 
 enum Command {
 	Health,
@@ -81,8 +81,7 @@ fn parse_args(args: Vec<String>) -> ClientOptions {
 	}
 
 	while let Some([cmd, arg]) = chunks.next() {
-		parse_ip(&cmd, &arg, &mut options.host);
-		parse_port(&cmd, &arg, &mut options.host);
+		options.host.parse(&cmd, &arg);
 		options.echo.parse(&cmd, arg);
 	}
 

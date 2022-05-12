@@ -37,7 +37,7 @@ impl HostOptions {
 			return format!(
 				"http://{}.{}.{}.{}:{}",
 				ip[0], ip[1], ip[2], ip[3], port
-			)
+			);
 		} else {
 			panic!("Couldn't parse URL from options.")
 		}
@@ -46,6 +46,51 @@ impl HostOptions {
 	pub fn path(&self, path: &str) -> String {
 		let url = self.url();
 		format!("{}/{}", url, path)
+	}
+
+	pub fn parse(&mut self, cmd: &str, arg: &str) {
+		self.parse_ip(cmd, arg);
+		self.parse_port(cmd, arg);
+	}
+
+	pub fn parse_ip(&mut self, cmd: &str, arg: &str) {
+		match cmd {
+			"--host-ip" => {
+				let re = Regex::new(IP_REGEX)
+					.expect("Could not parse value from `--host-ip`");
+				let mut iter = re.captures_iter(arg);
+
+				let parse = |string: &str| {
+					string
+						.to_string()
+						.parse::<u8>()
+						.expect("Could not parse value from `--host-ip`")
+				};
+
+				if let Some(cap) = iter.next() {
+					let ip1 = parse(&cap[1]);
+					let ip2 = parse(&cap[2]);
+					let ip3 = parse(&cap[3]);
+					let ip4 = parse(&cap[4]);
+					self.ip = Some([ip1, ip2, ip3, ip4]);
+				}
+			}
+			_ => {}
+		}
+	}
+
+	pub fn parse_port(&mut self, cmd: &str, arg: &str) {
+		match cmd {
+			"--host-port" => {
+				self.port = arg
+					.parse::<u16>()
+					.map_err(|_| {
+						panic!("Could not parse provided value for `--port`")
+					})
+					.ok();
+			}
+			_ => {}
+		}
 	}
 }
 
@@ -83,57 +128,58 @@ pub fn parse_args(args: Vec<String>) -> HostServerOptions {
 		panic!("Unexepected number of arguments")
 	}
 	while let Some([cmd, arg]) = chunks.next() {
+		options.host.parse(cmd, arg);
 		parse_enclave_options(cmd.clone(), arg.clone(), &mut options.enclave);
-		parse_host_addr(cmd, arg, &mut options.host);
+		// parse_host_addr(cmd, arg, &mut options.host);
 	}
 
 	options
 }
 
-fn parse_host_addr(cmd: &str, arg: &str, options: &mut HostOptions) {
-	parse_ip(&cmd, &arg, options);
-	parse_port(&cmd, &arg, options);
-}
+// fn parse_host_addr(cmd: &str, arg: &str, options: &mut HostOptions) {
+// 	parse_ip(&cmd, &arg, options);
+// 	parse_port(&cmd, &arg, options);
+// }
 
-pub fn parse_ip(cmd: &str, arg: &str, options: &mut HostOptions) {
-	match cmd {
-		"--host-ip" => {
-			let re = Regex::new(IP_REGEX)
-				.expect("Could not parse value from `--host-ip`");
-			let mut iter = re.captures_iter(arg);
+// pub fn parse_ip(cmd: &str, arg: &str, options: &mut HostOptions) {
+// 	match cmd {
+// 		"--host-ip" => {
+// 			let re = Regex::new(IP_REGEX)
+// 				.expect("Could not parse value from `--host-ip`");
+// 			let mut iter = re.captures_iter(arg);
 
-			let parse = |string: &str| {
-				string
-					.to_string()
-					.parse::<u8>()
-					.expect("Could not parse value from `--host-ip`")
-			};
+// 			let parse = |string: &str| {
+// 				string
+// 					.to_string()
+// 					.parse::<u8>()
+// 					.expect("Could not parse value from `--host-ip`")
+// 			};
 
-			if let Some(cap) = iter.next() {
-				let ip1 = parse(&cap[1]);
-				let ip2 = parse(&cap[2]);
-				let ip3 = parse(&cap[3]);
-				let ip4 = parse(&cap[4]);
-				options.ip = Some([ip1, ip2, ip3, ip4]);
-			}
-		}
-		_ => {}
-	}
-}
+// 			if let Some(cap) = iter.next() {
+// 				let ip1 = parse(&cap[1]);
+// 				let ip2 = parse(&cap[2]);
+// 				let ip3 = parse(&cap[3]);
+// 				let ip4 = parse(&cap[4]);
+// 				options.ip = Some([ip1, ip2, ip3, ip4]);
+// 			}
+// 		}
+// 		_ => {}
+// 	}
+// }
 
-pub fn parse_port(cmd: &str, arg: &str, options: &mut HostOptions) {
-	match cmd {
-		"--host-port" => {
-			options.port = arg
-				.parse::<u16>()
-				.map_err(|_| {
-					panic!("Could not parse provided value for `--port`")
-				})
-				.ok();
-		}
-		_ => {}
-	}
-}
+// pub fn parse_port(cmd: &str, arg: &str, options: &mut HostOptions) {
+// 	match cmd {
+// 		"--host-port" => {
+// 			options.port = arg
+// 				.parse::<u16>()
+// 				.map_err(|_| {
+// 					panic!("Could not parse provided value for `--port`")
+// 				})
+// 				.ok();
+// 		}
+// 		_ => {}
+// 	}
+// }
 
 pub fn host_addr_from_options(options: HostOptions) -> SocketAddr {
 	if let HostOptions { ip: Some(ip), port: Some(port), .. } = options {
@@ -163,7 +209,7 @@ mod test {
 
 	fn expect_ip(arg: &str, expected: [u8; 4]) {
 		let mut options = HostOptions::new();
-		parse_ip(&"--host-ip", arg, &mut options);
+		options.parse_ip(&"--host-ip", arg);
 
 		if let Some(ip) = options.ip {
 			assert_eq!(ip[0], expected[0]);
