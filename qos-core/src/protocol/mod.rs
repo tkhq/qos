@@ -4,13 +4,13 @@ mod attestor;
 mod msg;
 mod provisioner;
 
-use crate::server;
 use attestor::*;
-use provisioner::*;
-
 pub use attestor::{MockNsm, Nsm};
 pub use msg::*;
 pub use provisioner::SECRET_FILE;
+use provisioner::*;
+
+use crate::server;
 
 type ProtocolHandler =
 	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;

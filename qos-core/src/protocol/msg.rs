@@ -1,7 +1,8 @@
 //! Enclave I/O message format and serialization.
+use std::collections::BTreeSet;
+
 use aws_nitro_enclaves_nsm_api as nsm;
 use serde_cbor;
-use std::collections::BTreeSet;
 
 const SU32: usize = std::mem::size_of::<u32>();
 
@@ -29,7 +30,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 	fn deserialize(data: &mut Vec<u8>) -> Result<Vec<u8>, ProtocolError> {
 		if data.len() < SU32 {
 			// Payload size cannot be determined
-			return Err(ProtocolError::DeserializationError);
+			return Err(ProtocolError::DeserializationError)
 		}
 		let len_bytes: [u8; SU32] = data
 			.drain(0..SU32)
@@ -40,7 +41,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 
 		if data.len() < len_bytes {
 			// Payload size is incorrect
-			return Err(ProtocolError::DeserializationError);
+			return Err(ProtocolError::DeserializationError)
 		}
 		let result: Vec<u8> = data.drain(0..len_bytes).collect();
 
@@ -278,22 +279,25 @@ pub enum NsmRequest {
 		/// data to extend it with
 		data: Vec<u8>,
 	},
-	/// Lock PlatformConfigurationRegister at `index` from further modifications
+	/// Lock PlatformConfigurationRegister at `index` from further
+	/// modifications
 	LockPCR {
 		/// index to lock
 		index: u16,
 	},
-	/// Lock PlatformConfigurationRegisters at indexes `[0, range)` from further modifications
+	/// Lock PlatformConfigurationRegisters at indexes `[0, range)` from
+	/// further modifications
 	LockPCRs {
 		/// number of PCRs to lock, starting from index 0
 		range: u16,
 	},
-	/// Return capabilities and version of the connected NitroSecureModule. Clients are recommended to decode
-	/// major_version and minor_version first, and use an appropriate structure to hold this data, or fail
+	/// Return capabilities and version of the connected NitroSecureModule.
+	/// Clients are recommended to decode major_version and minor_version
+	/// first, and use an appropriate structure to hold this data, or fail
 	/// if the version is not supported.
 	DescribeNSM,
-	/// Requests the NSM to create an AttestationDoc and sign it with it's private key to ensure
-	/// authenticity.
+	/// Requests the NSM to create an AttestationDoc and sign it with it's
+	/// private key to ensure authenticity.
 	Attestation {
 		/// Includes additional user data in the AttestationDoc.
 		user_data: Option<Vec<u8>>,
@@ -336,22 +340,27 @@ enum NsmResponse {
 		/// the current value of the PCR
 		data: Vec<u8>,
 	},
-	/// returned if PlatformConfigurationRegister has been successfully extended
+	/// returned if PlatformConfigurationRegister has been successfully
+	/// extended
 	ExtendPCR {
-		/// The new value of the PCR after extending the data into the register.
+		/// The new value of the PCR after extending the data into the
+		/// register.
 		data: Vec<u8>,
 	},
 	/// returned if PlatformConfigurationRegister has been successfully locked
 	LockPCR,
-	/// returned if PlatformConfigurationRegisters have been successfully locked
+	/// returned if PlatformConfigurationRegisters have been successfully
+	/// locked
 	LockPCRs,
 	/// returns the runtime configuration of the NitroSecureModule
 	DescribeNSM {
 		/// Breaking API changes are denoted by `major_version`
 		version_major: u16,
-		/// Minor API changes are denoted by `minor_version`. Minor versions should be backwards compatible.
+		/// Minor API changes are denoted by `minor_version`. Minor versions
+		/// should be backwards compatible.
 		version_minor: u16,
-		/// Patch version. These are security and stability updates and do not affect API.
+		/// Patch version. These are security and stability updates and do not
+		/// affect API.
 		version_patch: u16,
 		/// `module_id` is an identifier for a singular NitroSecureModule
 		module_id: String,
@@ -362,10 +371,12 @@ enum NsmResponse {
 		/// The digest of the PCR Bank
 		digest: NsmDigest,
 	},
-	/// A response to an Attestation Request containing the CBOR-encoded AttestationDoc and the
-	/// signature generated from the doc by the NitroSecureModule
+	/// A response to an Attestation Request containing the CBOR-encoded
+	/// AttestationDoc and the signature generated from the doc by the
+	/// NitroSecureModule
 	Attestation {
-		/// A signed COSE structure containing a CBOR-encoded AttestationDocument as the payload.
+		/// A signed COSE structure containing a CBOR-encoded
+		/// AttestationDocument as the payload.
 		document: Vec<u8>,
 	},
 	/// A response containing a number of bytes of entropy.
@@ -373,7 +384,8 @@ enum NsmResponse {
 		/// The random bytes.
 		random: Vec<u8>,
 	},
-	/// An error has occured, and the NitroSecureModule could not successfully complete the operation
+	/// An error has occured, and the NitroSecureModule could not successfully
+	/// complete the operation
 	Error(NsmErrorCode),
 }
 

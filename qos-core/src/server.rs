@@ -1,11 +1,12 @@
 //! Streaming socket based server for use in an enclave. Listens for connections
 //! from [`client::Client`].
 
+use std::marker::PhantomData;
+
 use crate::{
 	io,
 	io::{Listener, SocketAddress},
 };
-use std::marker::PhantomData;
 
 #[derive(Debug)]
 pub enum SocketServerError {

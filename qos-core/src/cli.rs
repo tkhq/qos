@@ -1,7 +1,10 @@
-use crate::io::SocketAddress;
-use crate::protocol::{Executor, MockNsm};
-use crate::server::SocketServer;
 use std::env;
+
+use crate::{
+	io::SocketAddress,
+	protocol::{Executor, MockNsm},
+	server::SocketServer,
+};
 
 #[derive(Debug, PartialEq)]
 struct CLIOptions {

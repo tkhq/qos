@@ -1,6 +1,8 @@
-use super::msg::*;
-use aws_nitro_enclaves_nsm_api as nsm;
 use std::collections::BTreeSet;
+
+use aws_nitro_enclaves_nsm_api as nsm;
+
+use super::msg::*;
 
 // https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md
 pub trait NsmProvider {
