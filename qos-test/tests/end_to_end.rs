@@ -4,9 +4,7 @@ use aws_nitro_enclaves_nsm_api as nsm;
 use qos_cli;
 use qos_core::{
 	io::SocketAddress,
-	protocol::{
-		Echo, Executor, MockNsm, ProtocolMsg, ProtocolState, ProvisionRequest,
-	},
+	protocol::{Echo, Executor, MockNsm, ProtocolMsg, ProvisionRequest},
 	server::SocketServer,
 };
 use qos_crypto;

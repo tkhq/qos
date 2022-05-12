@@ -2,8 +2,6 @@ use std::collections::BTreeSet;
 
 use aws_nitro_enclaves_nsm_api as nsm;
 
-use super::msg::*;
-
 // https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md
 pub trait NsmProvider {
 	fn nsm_process_request(
@@ -36,7 +34,7 @@ impl NsmProvider for Nsm {
 	}
 }
 
-/// TODO - this should be moved to its own crate as it will likely need some
+/// TODO: - this should be moved to its own crate as it will likely need some
 /// additional deps like Serde
 pub struct MockNsm {}
 

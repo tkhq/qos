@@ -12,29 +12,29 @@ use provisioner::*;
 
 use crate::server;
 
-type ProtocolHandler =
-	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
+type ProtocolHandler<A> =
+	dyn Fn(&ProtocolMsg, &mut ProtocolState<A>) -> Option<ProtocolMsg>;
 
-pub struct ProtocolState {
+pub struct ProtocolState<A: NsmProvider> {
 	provisioner: SecretProvisioner,
 	// TODO: make this gneric over NsmProvider
-	attestor: MockNsm,
+	attestor: A,
 }
 
-impl ProtocolState {
-	pub fn new(attestor: MockNsm) -> Self {
+impl<A: NsmProvider> ProtocolState<A> {
+	pub fn new(attestor: A) -> Self {
 		let provisioner = SecretProvisioner::new();
 		Self { attestor, provisioner }
 	}
 }
 
-pub struct Executor {
-	routes: Vec<Box<ProtocolHandler>>,
-	state: ProtocolState,
+pub struct Executor<A: NsmProvider> {
+	routes: Vec<Box<ProtocolHandler<A>>>,
+	state: ProtocolState<A>,
 }
 
-impl Executor {
-	pub fn new(attestor: MockNsm) -> Self {
+impl<A: 'static + NsmProvider> Executor<A> {
+	pub fn new(attestor: A) -> Self {
 		Self {
 			routes: vec![
 				Box::new(handlers::empty),
@@ -48,7 +48,7 @@ impl Executor {
 	}
 }
 
-impl server::Routable for Executor {
+impl<A: NsmProvider> server::Routable for Executor<A> {
 	fn process(&mut self, mut req_bytes: Vec<u8>) -> Vec<u8> {
 		use msg::Serialize as _;
 
@@ -71,9 +71,9 @@ impl server::Routable for Executor {
 mod handlers {
 	use super::*;
 
-	pub fn empty(
+	pub fn empty<A: NsmProvider>(
 		req: &ProtocolMsg,
-		_state: &mut ProtocolState,
+		_state: &mut ProtocolState<A>,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::EmptyRequest = req {
 			Some(ProtocolMsg::EmptyResponse)
@@ -82,9 +82,9 @@ mod handlers {
 		}
 	}
 
-	pub fn echo(
+	pub fn echo<A: NsmProvider>(
 		req: &ProtocolMsg,
-		_state: &mut ProtocolState,
+		_state: &mut ProtocolState<A>,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::EchoRequest(e) = req {
 			Some(ProtocolMsg::EchoResponse(e.clone()))
@@ -93,9 +93,9 @@ mod handlers {
 		}
 	}
 
-	pub fn provision(
+	pub fn provision<A: NsmProvider>(
 		req: &ProtocolMsg,
-		state: &mut ProtocolState,
+		state: &mut ProtocolState<A>,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::ProvisionRequest(pr) = req {
 			match state.provisioner.add_share(pr.share.clone()) {
@@ -107,9 +107,9 @@ mod handlers {
 		}
 	}
 
-	pub fn reconstruct(
+	pub fn reconstruct<A: NsmProvider>(
 		req: &ProtocolMsg,
-		state: &mut ProtocolState,
+		state: &mut ProtocolState<A>,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::ReconstructRequest = req {
 			match state.provisioner.reconstruct() {
@@ -124,9 +124,9 @@ mod handlers {
 		}
 	}
 
-	pub fn nsm(
+	pub fn nsm<A: NsmProvider>(
 		req: &ProtocolMsg,
-		state: &mut ProtocolState,
+		state: &mut ProtocolState<A>,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::NsmRequest(_nsmr) = req {
 			let fd = state.attestor.nsm_init();

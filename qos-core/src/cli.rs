@@ -153,6 +153,7 @@ mod test {
 		};
 		match addr_from_options(options) {
 			SocketAddress::Unix(_) => {}
+			#[cfg(feature = "vm")]
 			_ => {
 				panic!("Can't build SocketAddress:Unix from options")
 			}
