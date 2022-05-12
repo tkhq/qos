@@ -3,10 +3,7 @@
 
 use std::marker::PhantomData;
 
-use crate::{
-	io,
-	io::{Listener, SocketAddress},
-};
+use crate::io::{self, Listener, SocketAddress};
 
 #[derive(Debug)]
 pub enum SocketServerError {

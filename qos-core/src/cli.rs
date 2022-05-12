@@ -42,18 +42,22 @@ fn parse_args(args: Vec<String>) -> CLIOptions {
 	}
 	while let Some([cmd, arg]) = chunks.next() {
 		match cmd.as_str() {
-			"--cid" => match arg.parse::<u32>() {
-				Ok(cid) => options.cid = Some(cid),
-				_ => {
-					panic!("Could not parse provided value for `--cid`")
-				}
-			},
-			"--port" => match arg.parse::<u32>() {
-				Ok(port) => options.port = Some(port),
-				_ => {
-					panic!("Could not parse provided value for `--port`")
-				}
-			},
+			"--cid" => {
+				options.cid = arg
+					.parse::<u32>()
+					.map_err(|_| {
+						panic!("Could not parse provided value for `--cid`")
+					})
+					.ok()
+			}
+			"--port" => {
+				options.port = arg
+					.parse::<u32>()
+					.map_err(|_| {
+						panic!("Could not parse provided value for `--port`")
+					})
+					.ok();
+			}
 			"--usock" => options.usock = Some(arg.clone()),
 			_ => {
 				panic!("Could not parse command...")
