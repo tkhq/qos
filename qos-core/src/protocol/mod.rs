@@ -2,13 +2,16 @@ use aws_nitro_enclaves_nsm_api as nsm;
 
 mod attestor;
 mod msg;
+mod nitro_types;
 mod provisioner;
 
 use attestor::*;
+use provisioner::*;
+
 pub use attestor::{MockNsm, Nsm};
 pub use msg::*;
+pub use nitro_types::*;
 pub use provisioner::SECRET_FILE;
-use provisioner::*;
 
 use crate::server;
 
