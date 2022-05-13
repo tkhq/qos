@@ -1,33 +1,36 @@
-.PHONY: build
-build:
-	docker build \
-		--tag apeclave \
-		.
+.PHONY: test
+test:
+	cargo test -- --nocapture
 
-.PHONY: volume
-volume:
-	docker volume create vapecave
+.PHONY: enclave
+enclave:
+	cargo run --bin qos-core \
+		-- \
+		--usock ./dev.sock
 
-.PHONY: server
-server: build volume
-	docker run \
-		--rm \
-		-v vapecave:/var/run/vapecave:rw \
-		apeclave \
-		server
+.PHONY: host
+host:
+	cargo run --bin qos-host \
+		-- \
+		--host-ip 127.0.0.1 \
+		--host-port 3000 \
+		--usock ./dev.sock
+
+.PHONY: client-echo
+client-echo:
+	cargo run --bin qos-client \
+		echo \
+		--host-ip 127.0.0.1 \
+		--host-port 3000 \
+		--data "vape nation"
+
+.PHONY: client-describe-nsm
+client-describe-nsm:
+	cargo run --bin qos-client \
+		describe-nsm \
+		--host-ip 127.0.0.1 \
+		--host-port 3000
 
 .PHONY: client
-client: build volume
-	docker run \
-		--rm \
-		-v vapecave:/var/run/vapecave:rw \
-		apeclave \
-		client
-
-.PHONY: shell
-shell: build volume
-	docker run \
-		--rm \
-		-it \
-		-v vapecave:/var/run/vapecave:rw \
-		bash
+client:
+	cargo run --bin qos-client

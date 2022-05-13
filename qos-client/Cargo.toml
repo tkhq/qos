@@ -1,10 +1,11 @@
 [package]
-name = "qos-cli"
+name = "qos-client"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 qos-core = { path = "../qos-core" }
+qos-host = { path = "../qos-host" }
 
 # Third party
 ureq = { version = "2.4", default-features = false }

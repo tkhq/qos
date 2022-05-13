@@ -6,8 +6,9 @@ publish = false
 
 [dev-dependencies]
 qos-core = { path = "../qos-core" }
-qos-cli = { path = "../qos-cli" }
+qos-client = { path = "../qos-client" }
 qos-host = { path = "../qos-host" }
 qos-crypto = { path = "../qos-crypto" }
 ureq = { version = "2.4", default-features = false }
 tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
+aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }

@@ -29,6 +29,8 @@ use qos_core::{
 	protocol::{ProtocolMsg, Serialize},
 };
 
+pub mod cli;
+
 /// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]
 struct State {
@@ -45,6 +47,13 @@ impl HostServer {
 	/// Create a new [`HostServer`].
 	pub fn new(enclave_addr: SocketAddress, ip: [u8; 4], port: u16) -> Self {
 		Self { addr: SocketAddr::from((ip, port)), enclave_addr }
+	}
+
+	pub fn new_with_socket_addr(
+		enclave_addr: SocketAddress,
+		addr: SocketAddr,
+	) -> Self {
+		Self { addr, enclave_addr }
 	}
 
 	/// Start the server, running indefinitely.
@@ -94,13 +103,7 @@ impl HostServer {
 					StatusCode::INTERNAL_SERVER_ERROR,
 					b"Received error from enclave...".to_vec(),
 				),
-				Ok(response) => {
-					println!(
-						"host_server: POST /message body: {:?}",
-						response.serialize()
-					);
-					(StatusCode::OK, response.serialize())
-				}
+				Ok(response) => (StatusCode::OK, response.serialize()),
 			},
 		}
 	}
