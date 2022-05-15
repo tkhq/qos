@@ -2,9 +2,7 @@
 
 use crate::{
 	io::{self, SocketAddress, Stream},
-	protocol::{
-		ProtocolError, ProtocolMsg, Serialize,
-	},
+	protocol::{ProtocolError, ProtocolMsg, Serialize},
 };
 
 #[derive(Debug)]
