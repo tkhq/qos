@@ -120,23 +120,6 @@ impl TryFrom<PKey<Private>> for RsaPub {
 	}
 }
 
-// END GOAL
-// - inside the enclave, asses if a particular file has been approved
-//  based on RSA keys
-// - read in file and verify signature
-// - have trusted RSA keys on disk
-
-// Pivot
-// - executable: binary on enclave sent over message endpoints (payload ++
-//   signatures)
-//   - cli: allow to send random bytes
-// - pivot: check that file and included signatures actually works
-
-// Load in public key from a file (for now...)
-// Verify a signature with public key
-// (Test): Generate an RSA key
-// (Test): Sign with an RSA key
-
 #[cfg(test)]
 mod test {
 	use super::*;
