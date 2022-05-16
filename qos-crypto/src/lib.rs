@@ -82,8 +82,6 @@ impl RsaPub {
 		file.read_to_end(&mut content)?;
 
 		Self::from_pem(&content[..])
-
-		// Ok(Self { pub_key: Rsa::public_key_from_pem(&content[..])? })
 	}
 
 	pub fn from_pem(pem: &[u8]) -> Result<Self, CryptoError> {
