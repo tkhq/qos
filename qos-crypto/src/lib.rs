@@ -1,14 +1,17 @@
 mod shamir;
+use std::{
+	fs::File,
+	io::{Read, Write},
+	path::Path,
+};
+
+use openssl::{
+	hash::MessageDigest,
+	pkey::{PKey, Private, Public},
+	rsa::Rsa,
+	sign::{Signer, Verifier},
+};
 pub use shamir::*;
-
-use openssl::hash::MessageDigest;
-use openssl::pkey::{PKey, Private, Public};
-use openssl::rsa::Rsa;
-use openssl::sign::{Signer, Verifier};
-
-use std::fs::File;
-use std::io::{Read, Write};
-use std::path::Path;
 
 #[derive(Debug)]
 pub enum CryptoError {
@@ -26,17 +29,6 @@ impl From<openssl::error::ErrorStack> for CryptoError {
 	fn from(_err: openssl::error::ErrorStack) -> Self {
 		CryptoError::OpenSSLError(openssl::error::ErrorStack::get())
 	}
-}
-
-pub fn sign_with_key(
-	key: Rsa<Private>,
-	message: Vec<u8>,
-) -> Result<Vec<u8>, CryptoError> {
-	let keypair = PKey::from_rsa(key)?;
-	let mut signer = Signer::new(MessageDigest::sha256(), &keypair)?;
-	signer.update(&message)?;
-	let signature = signer.sign_to_vec()?;
-	Ok(signature)
 }
 
 /// RSA Private key pair.
@@ -129,7 +121,8 @@ impl TryFrom<PKey<Private>> for RsaPub {
 // - have trusted RSA keys on disk
 
 // Pivot
-// - executable: binary on enclave sent over message endpoints (payload ++ signatures)
+// - executable: binary on enclave sent over message endpoints (payload ++
+//   signatures)
 //   - cli: allow to send random bytes
 // - pivot: check that file and included signatures actually works
 

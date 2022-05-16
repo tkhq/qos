@@ -29,7 +29,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 	fn deserialize(data: &mut Vec<u8>) -> Result<Vec<u8>, ProtocolError> {
 		if data.len() < SU32 {
 			// Payload size cannot be determined
-			return Err(ProtocolError::DeserializationError)
+			return Err(ProtocolError::DeserializationError);
 		}
 		let len_bytes: [u8; SU32] = data
 			.drain(0..SU32)
@@ -40,7 +40,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 
 		if data.len() < len_bytes {
 			// Payload size is incorrect
-			return Err(ProtocolError::DeserializationError)
+			return Err(ProtocolError::DeserializationError);
 		}
 		let result: Vec<u8> = data.drain(0..len_bytes).collect();
 
@@ -62,6 +62,7 @@ pub enum ProtocolMsg {
 	ReconstructRequest,
 	NsmRequest(NsmRequest),
 	NsmResponse(NsmResponse),
+	LoadRequest(Load),
 }
 
 const PROTOCOL_MSG_SUCCESS_RESPONSE: u8 = 0;
@@ -74,6 +75,7 @@ const PROTOCOL_MSG_PROVISION_REQUEST: u8 = 6;
 const PROTOCOL_MSG_RECONSTRUCT_REQUEST: u8 = 7;
 const PROTOCOL_MSG_NSM_REQUEST: u8 = 8;
 const PROTOCOL_MSG_NSM_RESPONSE: u8 = 9;
+const PROTOCOL_MSG_LOAD_REQUEST: u8 = 10;
 
 // TODO: declaritive macro to create index
 impl ProtocolMsg {
@@ -89,6 +91,7 @@ impl ProtocolMsg {
 			Self::ReconstructRequest => PROTOCOL_MSG_RECONSTRUCT_REQUEST,
 			Self::NsmRequest(_) => PROTOCOL_MSG_NSM_REQUEST,
 			Self::NsmResponse(_) => PROTOCOL_MSG_NSM_RESPONSE,
+			Self::LoadRequest(_) => PROTOCOL_MSG_LOAD_REQUEST,
 		}
 	}
 }
@@ -115,6 +118,11 @@ impl Serialize<Self> for ProtocolMsg {
 			Self::NsmResponse(res) => {
 				let buff = serde_cbor::to_vec(res).unwrap();
 				result.extend(buff.iter());
+			}
+			Self::LoadRequest(req) => {
+				// TODO: use something other then cbor, just using for now because its convenient
+				let buff = serde_cbor::to_vec(req).unwrap();
+				result.extend(buff.iter())
 			}
 		}
 		result
@@ -150,6 +158,11 @@ impl Serialize<Self> for ProtocolMsg {
 				let req = serde_cbor::from_slice(&data[1..])
 					.map_err(|_| ProtocolError::DeserializationError)?;
 				ProtocolMsg::NsmResponse(req)
+			}
+			PROTOCOL_MSG_LOAD_REQUEST => {
+				let req = serde_cbor::from_slice(&data[..])
+					.map_err(|_| ProtocolError::DeserializationError)?;
+				ProtocolMsg::LoadRequest(req)
 			}
 			_ => return Err(ProtocolError::DeserializationError),
 		};
@@ -200,6 +213,18 @@ impl Serialize<Self> for ProvisionRequest {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct ProvisionResponse {}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+pub struct SignatureWithPubKey {
+	pub signature: Vec<u8>,
+	pub pem: Vec<u8>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+pub struct Load {
+	data: Vec<u8>,
+	signatures: Vec<SignatureWithPubKey>,
+}
 
 #[cfg(test)]
 mod test {
