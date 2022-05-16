@@ -195,7 +195,7 @@ mod test {
 			usock: None,
 			mock: false,
 		};
-		match addr_from_options(options) {
+		match options.addr() {
 			SocketAddress::Vsock(_) => {}
 			_ => {
 				panic!("Can't build SocketAddress:Vsock from options")

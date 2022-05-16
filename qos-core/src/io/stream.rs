@@ -47,12 +47,12 @@ impl SocketAddress {
 	}
 
 	// Convenience method for accessing the wrapped address
-	fn addr(&self) -> impl SockaddrLike {
+	fn addr(&self) -> Box<dyn SockaddrLike> {
 		match *self {
 			#[cfg(feature = "vm")]
-			Self::Vsock(vsa) => return vsa,
+			Self::Vsock(vsa) => Box::new(vsa),
 			#[cfg(feature = "local")]
-			Self::Unix(ua) => return ua,
+			Self::Unix(ua) => Box::new(ua),
 		}
 	}
 }
@@ -74,7 +74,7 @@ impl Stream {
 			// setsockopt(fd, sockopt::ReuseAddr, &true)?;
 			// setsockopt(fd, sockopt::ReusePort, &true)?;
 
-			match connect(stream.fd, &addr.addr()) {
+			match connect(stream.fd, &*addr.addr()) {
 				Ok(_) => return Ok(stream),
 				Err(e) => err = IOError::NixError(e),
 			}
@@ -204,7 +204,7 @@ impl Listener {
 
 		let fd = socket_fd(&addr)?;
 
-		bind(fd, &addr.addr())?;
+		bind(fd, &*addr.addr())?;
 		listen(fd, BACKLOG)?;
 
 		Ok(Self { fd, addr })

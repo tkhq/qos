@@ -1,11 +1,10 @@
 //! OS execution protocol.
 
-pub(crate) mod attestor;
+mod attestor;
 mod msg;
 mod nitro_types;
 mod provisioner;
 
-use attestor::*;
 pub use attestor::{MockNsm, Nsm, NsmProvider};
 pub use msg::*;
 pub use nitro_types::*;
