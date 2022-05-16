@@ -1,8 +1,9 @@
 pub mod cli;
 
 pub mod request {
-	use qos_core::protocol::{ProtocolMsg, Serialize};
 	use std::io::Read;
+
+	use qos_core::protocol::{ProtocolMsg, Serialize};
 
 	const MAX_SIZE: u64 = u32::MAX as u64;
 
