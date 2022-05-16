@@ -222,8 +222,8 @@ pub struct SignatureWithPubKey {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct Load {
-	data: Vec<u8>,
-	signatures: Vec<SignatureWithPubKey>,
+	pub data: Vec<u8>,
+	pub signatures: Vec<SignatureWithPubKey>,
 }
 
 #[cfg(test)]
