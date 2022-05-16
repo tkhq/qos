@@ -146,15 +146,15 @@ mod handlers {
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::LoadRequest(Load { data, signatures }) = req {
 			use qos_crypto::RsaPub;
-			for SignatureWithPubKey { signature, pem } in signatures {
-				let pub_key = match RsaPub::from_pem(&pem[..]) {
+			for SignatureWithPubKey { signature, path } in signatures {
+				let pub_key = match RsaPub::from_pem_file(path) {
 					Ok(p) => p,
 					Err(_) => return Some(ProtocolMsg::ErrorResponse),
 				};
 
 				match pub_key.verify_sha256(&signature[..], &data[..]) {
 					Ok(_) => {}
-					Err(_) => return Some(ProtocolMsg::EmptyResponse),
+					Err(_) => return Some(ProtocolMsg::ErrorResponse),
 				}
 			}
 

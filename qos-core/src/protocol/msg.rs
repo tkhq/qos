@@ -29,7 +29,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 	fn deserialize(data: &mut Vec<u8>) -> Result<Vec<u8>, ProtocolError> {
 		if data.len() < SU32 {
 			// Payload size cannot be determined
-			return Err(ProtocolError::DeserializationError);
+			return Err(ProtocolError::DeserializationError)
 		}
 		let len_bytes: [u8; SU32] = data
 			.drain(0..SU32)
@@ -40,7 +40,7 @@ impl Serialize<Vec<u8>> for Vec<u8> {
 
 		if data.len() < len_bytes {
 			// Payload size is incorrect
-			return Err(ProtocolError::DeserializationError);
+			return Err(ProtocolError::DeserializationError)
 		}
 		let result: Vec<u8> = data.drain(0..len_bytes).collect();
 
@@ -120,7 +120,8 @@ impl Serialize<Self> for ProtocolMsg {
 				result.extend(buff.iter());
 			}
 			Self::LoadRequest(req) => {
-				// TODO: use something other then cbor, just using for now because its convenient
+				// TODO: use something other then cbor, just using for now
+				// because its convenient
 				let buff = serde_cbor::to_vec(req).unwrap();
 				result.extend(buff.iter())
 			}
@@ -160,7 +161,7 @@ impl Serialize<Self> for ProtocolMsg {
 				ProtocolMsg::NsmResponse(req)
 			}
 			PROTOCOL_MSG_LOAD_REQUEST => {
-				let req = serde_cbor::from_slice(&data[..])
+				let req = serde_cbor::from_slice(&data[1..])
 					.map_err(|_| ProtocolError::DeserializationError)?;
 				ProtocolMsg::LoadRequest(req)
 			}
@@ -216,13 +217,18 @@ pub struct ProvisionResponse {}
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct SignatureWithPubKey {
+	/// Signature
 	pub signature: Vec<u8>,
-	pub pem: Vec<u8>,
+	/// Path to the file containing the public key associated with this
+	/// signature.
+	pub path: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct Load {
+	/// Some data
 	pub data: Vec<u8>,
+	//// Signatures of the data
 	pub signatures: Vec<SignatureWithPubKey>,
 }
 

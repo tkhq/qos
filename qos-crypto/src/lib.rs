@@ -65,6 +65,12 @@ impl TryFrom<PKey<Private>> for RsaPair {
 	}
 }
 
+impl From<Rsa<Private>> for RsaPair {
+	fn from(private_key: Rsa<Private>) -> Self {
+		Self { private_key }
+	}
+}
+
 pub struct RsaPub {
 	pub_key: Rsa<Public>,
 }
