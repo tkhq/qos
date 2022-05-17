@@ -8,6 +8,7 @@ mod provisioner;
 pub use attestor::{MockNsm, Nsm, NsmProvider};
 pub use msg::*;
 pub use nitro_types::*;
+use openssl::rsa::Rsa;
 pub use provisioner::SECRET_FILE;
 use provisioner::*;
 
@@ -128,10 +129,26 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::NsmRequest(_nsmr) = req {
+		if let ProtocolMsg::NsmRequest(NsmRequest::Attestation { .. }) = req {
+			let attestation = NsmRequest::Attestation {
+				user_data: None,
+				nonce: None,
+				public_key: Some(
+					Rsa::generate(4096).unwrap().public_key_to_pem().unwrap(),
+				),
+			};
 			let fd = state.attestor.nsm_init();
-			let response =
-				state.attestor.nsm_process_request(fd, NsmRequest::DescribeNSM);
+			let response = state.attestor.nsm_process_request(fd, attestation);
+			match response {
+				NsmResponse::Attestation { document } => {
+					use std::fs::File;
+					use std::io::Write;
+					let mut file =
+						File::create("/home/tk/attest_document").unwrap();
+					file.write_all(&document).unwrap();
+				}
+				_ => panic!("Not an attestation response"),
+			}
 			println!("NSM process request: {:?}", response);
 			Some(ProtocolMsg::NsmResponse(response))
 		} else {
