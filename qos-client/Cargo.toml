@@ -9,3 +9,6 @@ qos-host = { path = "../qos-host" }
 
 # Third party
 ureq = { version = "2.4", default-features = false }
+serde_cbor = "0.11"
+aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
+

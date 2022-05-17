@@ -38,6 +38,7 @@ impl EnclaveOptions {
 		self.parse_cid(cmd, arg);
 		self.parse_port(cmd, arg);
 		self.parse_usock(cmd, arg);
+		self.parse_mock(cmd, arg)
 	}
 
 	pub fn parse_cid(&mut self, cmd: &str, arg: &str) {
@@ -77,7 +78,10 @@ impl EnclaveOptions {
 
 	pub fn parse_mock(&mut self, cmd: &str, arg: &str) {
 		match cmd {
-			"--mock" => self.mock = arg == "true",
+			"--mock" => {
+				println!("mock arg: {}", arg);
+				self.mock = arg == "true"
+			}
 			_ => {}
 		}
 	}
@@ -97,8 +101,11 @@ impl EnclaveOptions {
 
 	pub fn nsm(&self) -> Box<dyn NsmProvider> {
 		if self.mock {
+			println!("using mock");
 			Box::new(protocol::MockNsm)
 		} else {
+			println!("not using mock");
+
 			Box::new(Nsm)
 		}
 	}

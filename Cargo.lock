@@ -505,8 +505,10 @@ dependencies = [
 name = "qos-client"
 version = "0.1.0"
 dependencies = [
+ "aws-nitro-enclaves-nsm-api",
  "qos-core",
  "qos-host",
+ "serde_cbor",
  "ureq",
 ]
 

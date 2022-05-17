@@ -140,6 +140,7 @@ mod handlers {
 			};
 			let fd = state.attestor.nsm_init();
 			let response = state.attestor.nsm_process_request(fd, attestation);
+			println!("response={:?}", response);
 			// match response {
 			// 	NsmResponse::Attestation { ref document } => {
 			// 		// use std::fs::File;

@@ -6,7 +6,8 @@ test:
 enclave:
 	cargo run --bin qos-core \
 		-- \
-		--usock ./dev.sock
+		--usock ./dev.sock \
+		--mock true
 
 .PHONY: local-host
 local-host:

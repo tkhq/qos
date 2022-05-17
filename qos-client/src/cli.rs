@@ -149,15 +149,23 @@ mod handlers {
 
 		let response = request::post(
 			path,
-			ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM),
+			ProtocolMsg::NsmRequest(NsmRequest::Attestation {
+				user_data: None,
+				nonce: None,
+				public_key: None,
+			}),
 		)
 		.map_err(|e| println!("{:?}", e))
 		.expect("Echo message failed");
 
 		match response {
-			ProtocolMsg::NsmResponse(NsmResponse::Attestation {
-				ref document,
-			}) => {
+			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
+				println!("{:?}", document);
+				use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
+
+				let doc = AttestationDoc::from_binary(&document[..]);
+				println!("doc={:?}", doc);
+
 				// TODO: delete this stuff
 				// use std::{fs::File, io::Write};
 				// let mut file =
@@ -166,13 +174,6 @@ mod handlers {
 				// file.write_all(&output.as_bytes()).unwrap();
 			}
 			_ => panic!("Not an attestation response"),
-		}
-
-		match response {
-			ProtocolMsg::NsmResponse(describe_nsm_response) => {
-				println!("{:?}", describe_nsm_response)
-			}
-			_ => panic!("Unexpected describe nsm response"),
 		}
 	}
 }
