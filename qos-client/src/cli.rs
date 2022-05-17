@@ -3,6 +3,8 @@ use std::env;
 use qos_core::protocol::{Echo, ProtocolMsg};
 use qos_host::cli::HostOptions;
 
+use std::time::*;
+
 #[derive(Clone, PartialEq, Debug)]
 enum Command {
 	Health,
@@ -112,6 +114,7 @@ impl CLI {
 mod handlers {
 	use super::*;
 	use crate::request;
+	use qos_core::protocol::{NsmDigest, NsmRequest, NsmResponse};
 
 	pub(super) fn health(options: ClientOptions) {
 		let path = &options.host.path("health");
@@ -166,8 +169,22 @@ mod handlers {
 					ec::{EcGroup, EcKey, EcPoint},
 					nid::Nid,
 				};
-				use qos_core::protocol::{NsmDigest, NsmRequest, NsmResponse};
 				use x509_parser::pem::Pem;
+				static ALL_SIGALGS: &[&webpki::SignatureAlgorithm] = &[
+					&webpki::ECDSA_P256_SHA256,
+					&webpki::ECDSA_P256_SHA384,
+					&webpki::ECDSA_P384_SHA256,
+					&webpki::ECDSA_P384_SHA384,
+					&webpki::ED25519,
+					#[cfg(feature = "alloc")]
+					&webpki::RSA_PKCS1_2048_8192_SHA256,
+					#[cfg(feature = "alloc")]
+					&webpki::RSA_PKCS1_2048_8192_SHA384,
+					#[cfg(feature = "alloc")]
+					&webpki::RSA_PKCS1_2048_8192_SHA512,
+					#[cfg(feature = "alloc")]
+					&webpki::RSA_PKCS1_3072_8192_SHA384,
+				];
 				////
 				// Truths:
 				////
@@ -223,18 +240,49 @@ mod handlers {
 
 					// Bundle starts with root certificate - we want to replace the root
 					// with our hardcoded known certificate, so we remove the root (first element)
-					let bundle: Vec<_> = attestation_doc.cabundle[1..]
+					let intermediate_certs: Vec<_> = attestation_doc.cabundle
+						[1..]
 						.into_iter()
 						.map(|x| x.as_slice())
 						.collect();
 
-					let mut pem_iter = Pem::iter_from_buffer(AWS_ROOT_CERT)
-					let root_cert = pem_iter.next().expect("Hardcoded aws root cert should be valid PEM");
-					assert!(pem_iter.next().is_none(), "More then 1 cert detected in hardcoded aws root");
+					let mut pem_iter = Pem::iter_from_buffer(AWS_ROOT_CERT);
+					let root_cert = pem_iter
+						.next()
+						.expect("Hardcoded aws root cert should be valid PEM")
+						.expect("Hardcoded aws root cert should be valid PEM");
+					assert!(
+						pem_iter.next().is_none(),
+						"More then 1 cert detected in hardcoded aws root"
+					);
 
-					let anchor =
-						webpki::TrustAnchor::try_from_cert_der(x509_parser::pem_to_der(IGCA_PEM);)
-							.expect("Could not decode DER cabundle");
+					let anchor = webpki::TrustAnchor::try_from_cert_der(
+						&root_cert.contents[..],
+					)
+					.expect("Could not decode DER cabundle");
+					let anchors = vec![anchor];
+					let anchors = webpki::TlsServerTrustAnchors(&anchors);
+
+					// let second_since_epoch = std::time::SystemTime::now()
+					// 	.duration_since(std::time::SystemTime::UNIX_EPOCH)
+					// 	.unwrap().as_secs()
+					let seconds_since_epoch = 1652756400;
+					let time = webpki::Time::from_seconds_since_unix_epoch(
+						seconds_since_epoch,
+					);
+
+					// Cert
+					let ee_raw: &[u8] = attestation_doc.certificate.as_ref();
+					let cert = webpki::EndEntityCert::try_from(ee_raw)
+						.expect("Could not decode target cert");
+
+					cert.verify_is_valid_tls_server_cert(
+						ALL_SIGALGS,
+						&anchors,
+						&intermediate_certs,
+						time,
+					)
+					.expect("Invalid CA bundle");
 				}
 
 				// Certificate & CA bundle verification example: https://github.com/ppmag/aws-nitro-enclaves-attestation/blob/83ca87233298c302973a5bdbbb394c36cd7eb6e6/src/lib.rs#L233-L235
