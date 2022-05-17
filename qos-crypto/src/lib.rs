@@ -8,7 +8,7 @@ use openssl::{
 	hash::MessageDigest,
 	pkey::{PKey, Private, Public},
 	rsa::Rsa,
-	sign::{Signer, Verifier},
+	sign::Signer,
 };
 pub use shamir::*;
 
@@ -24,7 +24,7 @@ impl From<std::io::Error> for CryptographyError {
 }
 
 impl From<openssl::error::ErrorStack> for CryptographyError {
-	fn from(err: openssl::error::ErrorStack) -> Self {
+	fn from(_: openssl::error::ErrorStack) -> Self {
 		CryptographyError::OpenSSLError(openssl::error::ErrorStack::get())
 	}
 }
@@ -65,6 +65,8 @@ pub fn sign_with_key(
 
 #[cfg(test)]
 mod test {
+	use openssl::sign::Verifier;
+
 	use super::*;
 
 	#[test]

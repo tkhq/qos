@@ -1,3 +1,4 @@
+pub(crate) mod attestation;
 pub mod cli;
 
 pub mod request {
