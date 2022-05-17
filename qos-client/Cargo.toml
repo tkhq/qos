@@ -6,9 +6,16 @@ edition = "2021"
 [dependencies]
 qos-core = { path = "../qos-core" }
 qos-host = { path = "../qos-host" }
+openssl = "0.10.40"
 
 # Third party
 ureq = { version = "2.4", default-features = false }
 serde_cbor = "0.11"
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 
+
+# For handling Attestation Doc
+aws-nitro-enclaves-cose = "0.4.0"
+der = "0.6.0"
+webpki = "0.22.0"
+x509-parser = "0.13"
