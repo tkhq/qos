@@ -110,12 +110,15 @@ impl CLI {
 }
 
 mod handlers {
+	use std::time::Duration;
+
+	use aws_nitro_enclaves_nsm_api::api::Digest;
 	use openssl::{
 		bn::BigNumContext,
 		ec::{EcGroup, EcKey, EcPoint},
 		nid::Nid,
 	};
-	use qos_core::protocol::{NsmRequest, NsmResponse};
+	use qos_core::protocol::{NsmDigest, NsmRequest, NsmResponse};
 
 	use super::*;
 	use crate::request;
@@ -167,100 +170,100 @@ mod handlers {
 			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
 				use aws_nitro_enclaves_cose::CoseSign1;
 				use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
-				// TODO: semantic verification from: https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md
-
-				let cose_sign1 = CoseSign1::from_bytes(&document[..]).unwrap();
-				let encoded_document = cose_sign1.get_payload(None).unwrap();
-				let decoded_document =
-					AttestationDoc::from_binary(&encoded_document[..]).unwrap();
-
-				let pcrs = decoded_document.pcrs;
-
-				let module = decoded_document.module_id;
-				// println!("module id: {:?}", module);
-
-				if let Some(public_key) = decoded_document.public_key {
-					// println!("public key: {:?}", public_key);
-				}
-
-				let cabundle = decoded_document.cabundle;
-				// println!("CA bundle: {:?}", cabundle);
-
-				// Target Certificate in
-				// let certificate = decoded_document.certificate;
-				// println!("Certificate: {:?}", certificate);
-
-				// let c = std::str::from_utf8(&certificate);
-				// println!("Certificate:");
-				// println!("{:?}", c);
-
-				//
-
-				// Trying to do... Certificate -> Public Key
-				// Certificate & CA bundle verification example: https://github.com/ppmag/aws-nitro-enclaves-attestation/blob/83ca87233298c302973a5bdbbb394c36cd7eb6e6/src/lib.rs#L233-L235
-				match x509_parser::parse_x509_certificate(
-					&decoded_document.certificate.clone(),
-				) {
-					Ok((remaining_input, certificate)) => {
-						assert!(
-							remaining_input.len() == 0,
-							"certificate was not valid DER encoding"
-						);
-
-						assert!(
-							certificate.tbs_certificate.version()
-								== x509_parser::x509::X509Version::V3,
-							"Wrong certificate version"
-						);
-
-						let extracted_key = {
-							let pub_key = certificate
-								.tbs_certificate
-								.subject_pki
-								.subject_public_key
-								.data;
-
-							let group =
-								EcGroup::from_curve_name(Nid::SECP384R1)
-									.unwrap();
-							let mut ctx = BigNumContext::new().unwrap();
-							let point =
-								EcPoint::from_bytes(&group, &pub_key, &mut ctx)
-									.unwrap();
-							let ec_key =
-								EcKey::from_public_key(&group, &point).unwrap();
-
-							openssl::pkey::PKey::try_from(ec_key).expect("EC Key could not be converted to open ssl primitive")
-						};
-
-						assert!(
-							cose_sign1.verify_signature(&extracted_key).unwrap(),
-							"Could not verify attestation document with target certificate"
-						);
-						println!("Verified att_doc target cert signature!")
-					}
-					Err(_) => panic!("Could not parse target certificate"),
-				}
-
-				// use openssl::ec::EcKey;
-				// let key = EcKey::public_key_from_der(&certificate);
-				// println!("Public Key: {:?}", key);
-
 				////
 				// Truths:
 				////
 
-				// 1. AWS Nitro Enclaves use ES384 algorithm to sign the document
-				// 2. Certificate is DER-encoded
+				// 1. AWS Nitro Enclaves use ES384 algorithm to sign the
+				// document 2. Certificate is DER-encoded
 				//
 
 				// Verification Flow:
-				// 1. Check signature from the Certificate over the AttestationDocument
-				// 2. Verify the CA Bundle using the known root of trust and Certificate
+				// 1. Check signature from the Certificate over the
+				// AttestationDocument 2. Verify the CA Bundle using the known
+				// root of trust and Certificate
 				//   - Assume ROT is known ahead of time
 				// 3. Business logic
-				//   - Is the application that is being run (as evidenced by the PCRs) the expected application to have possession of *this* key?
-				//   - (Human): How do I know that this build artifact is correct?
+				//   - Is the application that is being run (as evidenced by the
+				//     PCRs) the expected application to have possession of
+				//     *this* key?
+				//   - (Human): How do I know that this build artifact is
+				//     correct?
+				// TODO: semantic verification from: https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md
+
+				let cose_sign1 = CoseSign1::from_bytes(&document[..]).unwrap();
+				let raw_attestation_doc = cose_sign1.get_payload(None).unwrap();
+				let attestation_doc =
+					AttestationDoc::from_binary(&raw_attestation_doc[..])
+						.expect("Attestation doc could not be decoded.");
+
+				// Basic syntactic validation
+				{
+					assert!(
+						attestation_doc.module_id.len() > 0,
+						"Invalid Module ID"
+					);
+					assert!(
+						attestation_doc.digest == Digest::SHA384,
+						"Invalid Digest"
+					);
+
+					// let ts_start = Utc.ymd(2020, 1, 1).and_hms(0, 0, 0);
+					// let ts_end = Utc::now() + Duration::days(1);
+					// (attestation_doc.timestamp > ts_start &&
+					// attestation_doc.timestamp < ts_end)
+
+					//TODO: add all validations as specified in https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md#32-syntactical-validation
+				}
+
+				// CA bundle verification
+				{}
+
+				// Certificate & CA bundle verification example: https://github.com/ppmag/aws-nitro-enclaves-attestation/blob/83ca87233298c302973a5bdbbb394c36cd7eb6e6/src/lib.rs#L233-L235
+				{
+					let (remaining_input, certificate) =
+						x509_parser::parse_x509_certificate(
+							&attestation_doc.certificate,
+						)
+						.expect("Could not parse target certificate");
+
+					// Basic semantic checks
+					assert!(
+						remaining_input.len() == 0,
+						"certificate was not valid DER encoding"
+					);
+					assert!(
+						certificate.tbs_certificate.version()
+							== x509_parser::x509::X509Version::V3,
+						"Wrong certificate version"
+					);
+
+					// Get the public key the cose sign1 object was signed with
+					let extracted_key = {
+						let pub_key = certificate
+							.tbs_certificate
+							.subject_pki
+							.subject_public_key
+							.data;
+
+						let group =
+							EcGroup::from_curve_name(Nid::SECP384R1).unwrap();
+						let mut ctx = BigNumContext::new().unwrap();
+						let point =
+							EcPoint::from_bytes(&group, &pub_key, &mut ctx)
+								.unwrap();
+						let ec_key =
+							EcKey::from_public_key(&group, &point).unwrap();
+
+						openssl::pkey::PKey::try_from(ec_key).expect("EC Key could not be converted to open ssl primitive")
+					};
+
+					// Verify the signature against the extracted public key
+					assert!(
+							cose_sign1.verify_signature(&extracted_key).expect("Error with cose signature verification."),
+							"Could not verify attestation document with target certificate"
+						);
+				}
 			}
 			_ => panic!("Not an attestation response"),
 		}
