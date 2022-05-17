@@ -129,7 +129,8 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::NsmRequest(NsmRequest::Attestation { .. }) = req {
+		// if let ProtocolMsg::NsmRequest(NsmRequest::Attestation { .. }) = req {
+		if let ProtocolMsg::NsmRequest(_req) = req {
 			let attestation = NsmRequest::Attestation {
 				user_data: None,
 				nonce: None,
