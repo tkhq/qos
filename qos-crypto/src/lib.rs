@@ -1,13 +1,16 @@
 mod shamir;
+use std::{
+	fs::File,
+	io::{Read, Write},
+};
+
+use openssl::{
+	hash::MessageDigest,
+	pkey::{PKey, Private, Public},
+	rsa::Rsa,
+	sign::{Signer, Verifier},
+};
 pub use shamir::*;
-
-use openssl::hash::MessageDigest;
-use openssl::pkey::{PKey, Private, Public};
-use openssl::rsa::Rsa;
-use openssl::sign::{Signer, Verifier};
-
-use std::fs::File;
-use std::io::{Read, Write};
 
 pub enum CryptographyError {
 	IOError(std::io::Error),

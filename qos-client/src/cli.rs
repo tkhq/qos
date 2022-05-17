@@ -158,12 +158,12 @@ mod handlers {
 			ProtocolMsg::NsmResponse(NsmResponse::Attestation {
 				ref document,
 			}) => {
-				use std::fs::File;
-				use std::io::Write;
-				let mut file =
-					File::create("/home/tk/attest_document").unwrap();
-				let output = format!("{:?}", document);
-				file.write_all(&output.as_bytes()).unwrap();
+				// TODO: delete this stuff
+				// use std::{fs::File, io::Write};
+				// let mut file =
+				// 	File::create("/home/tk/attest_document").unwrap();
+				// let output = format!("{:?}", document);
+				// file.write_all(&output.as_bytes()).unwrap();
 			}
 			_ => panic!("Not an attestation response"),
 		}
