@@ -141,7 +141,7 @@ mod handlers {
 			let fd = state.attestor.nsm_init();
 			let response = state.attestor.nsm_process_request(fd, attestation);
 			match response {
-				NsmResponse::Attestation { document } => {
+				NsmResponse::Attestation { ref document } => {
 					use std::fs::File;
 					use std::io::Write;
 					let mut file =
