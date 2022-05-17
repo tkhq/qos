@@ -71,7 +71,7 @@ pub mod nitro {
 
 		// TODO: [now] basic syntactical validation as per nsm api docs
 
-		// CA bundle verification
+		// CA bundle verification aka verify certificate chain with the root certificate
 		{
 			// Bundle starts with root certificate - we want to replace the root
 			// with our hardcoded known certificate, so we remove the root
@@ -154,5 +154,63 @@ pub mod nitro {
 		}
 
 		Ok(attestation_doc)
+	}
+
+	mod syntactic_validation {
+		/// Mandatory field
+		fn module_id() {
+			todo!()
+		}
+		/// Mandatory field
+		fn pcrs() {
+			todo!()
+		}
+		/// Mandatory field
+		fn cabundle() {
+			todo!()
+		}
+		/// Mandatory field
+		fn digest() {
+			todo!()
+		}
+		/// Mandatory field
+		fn timestamp() {
+			todo!()
+		}
+		/// Optional field
+		fn public_key() {
+			todo!()
+		}
+		/// Optional field
+		fn user_data() {
+			todo!()
+		}
+		/// Optional field
+		fn nonce() {
+			todo!()
+		}
+	}
+}
+
+#[cfg(test)]
+mod test {
+	mod nitro {
+		#[test]
+		fn attestation_doc_from_der_time_is_late() {}
+
+		#[test]
+		fn attestation_doc_from_der_time_is_early() {}
+
+		#[test]
+		fn attestation_doc_from_der_corrupt_cabundle() {}
+
+		#[test]
+		fn attestation_doc_from_der_corrupt_target_certificate() {}
+
+		#[test]
+		fn attestation_doc_from_der_bad_sign1_sig() {}
+
+		#[test]
+		fn attestation_doc_from_der_corrupt_root_certificate() {}
 	}
 }
