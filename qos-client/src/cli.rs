@@ -162,7 +162,8 @@ mod handlers {
 				use std::io::Write;
 				let mut file =
 					File::create("/home/tk/attest_document").unwrap();
-				file.write_all(&document).unwrap();
+				let output = format!("{:?}", document);
+				file.write_all(&output.as_bytes()).unwrap();
 			}
 			_ => panic!("Not an attestation response"),
 		}

@@ -2,7 +2,7 @@ use std::env;
 
 use crate::{
 	io::SocketAddress,
-	protocol::{Executor, MockNsm, Nsm, NsmProvider},
+	protocol::{self, Executor, Nsm, NsmProvider},
 	server::SocketServer,
 };
 
@@ -97,7 +97,7 @@ impl EnclaveOptions {
 
 	pub fn nsm(&self) -> Box<dyn NsmProvider> {
 		if self.mock {
-			Box::new(MockNsm)
+			Box::new(protocol::MockNsm)
 		} else {
 			Box::new(Nsm)
 		}

@@ -31,7 +31,6 @@ impl NsmProvider for Nsm {
 /// TODO: - this should be moved to its own crate as it will likely need some
 /// additional deps like Serde
 pub struct MockNsm;
-
 impl NsmProvider for MockNsm {
 	fn nsm_process_request(
 		&self,

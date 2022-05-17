@@ -1,4 +1,8 @@
 FROM rust:1.60 as builder
+COPY ./Cargo.toml ./Cargo.toml
+COPY ./Cargo.lock ./Cargo.lock
+RUN cargo build
+
 COPY ./ ./
 RUN cargo build --bin qos-core --features vm --no-default-features
 
