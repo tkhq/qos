@@ -110,7 +110,7 @@ impl CLI {
 }
 
 mod handlers {
-	use qos_core::protocol::NsmRequest;
+	use qos_core::protocol::{NsmRequest, NsmResponse};
 
 	use super::*;
 	use crate::request;
@@ -153,6 +153,19 @@ mod handlers {
 		)
 		.map_err(|e| println!("{:?}", e))
 		.expect("Echo message failed");
+
+		match response {
+			ProtocolMsg::NsmResponse(NsmResponse::Attestation {
+				ref document,
+			}) => {
+				use std::fs::File;
+				use std::io::Write;
+				let mut file =
+					File::create("/home/tk/attest_document").unwrap();
+				file.write_all(&document).unwrap();
+			}
+			_ => panic!("Not an attestation response"),
+		}
 
 		match response {
 			ProtocolMsg::NsmResponse(describe_nsm_response) => {
