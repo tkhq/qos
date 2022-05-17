@@ -110,16 +110,6 @@ impl CLI {
 }
 
 mod handlers {
-	use std::time::Duration;
-
-	use aws_nitro_enclaves_nsm_api::api::Digest;
-	use openssl::{
-		bn::BigNumContext,
-		ec::{EcGroup, EcKey, EcPoint},
-		nid::Nid,
-	};
-	use qos_core::protocol::{NsmDigest, NsmRequest, NsmResponse};
-
 	use super::*;
 	use crate::request;
 
@@ -170,6 +160,14 @@ mod handlers {
 			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
 				use aws_nitro_enclaves_cose::CoseSign1;
 				use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
+				use aws_nitro_enclaves_nsm_api::api::Digest;
+				use openssl::{
+					bn::BigNumContext,
+					ec::{EcGroup, EcKey, EcPoint},
+					nid::Nid,
+				};
+				use qos_core::protocol::{NsmDigest, NsmRequest, NsmResponse};
+				use x509_parser::pem::Pem;
 				////
 				// Truths:
 				////
@@ -217,7 +215,27 @@ mod handlers {
 				}
 
 				// CA bundle verification
-				{}
+				{
+					const AWS_ROOT_CERT: &'static [u8] =
+						std::include_bytes!("./aws_root_cert.pem");
+					// aws root cert checksum:
+					// 8cf60e2b2efca96c6a9e71e851d00c1b6991cc09eadbe64a6a1d1b1eb9faff7c
+
+					// Bundle starts with root certificate - we want to replace the root
+					// with our hardcoded known certificate, so we remove the root (first element)
+					let bundle: Vec<_> = attestation_doc.cabundle[1..]
+						.into_iter()
+						.map(|x| x.as_slice())
+						.collect();
+
+					let mut pem_iter = Pem::iter_from_buffer(AWS_ROOT_CERT)
+					let root_cert = pem_iter.next().expect("Hardcoded aws root cert should be valid PEM");
+					assert!(pem_iter.next().is_none(), "More then 1 cert detected in hardcoded aws root");
+
+					let anchor =
+						webpki::TrustAnchor::try_from_cert_der(x509_parser::pem_to_der(IGCA_PEM);)
+							.expect("Could not decode DER cabundle");
+				}
 
 				// Certificate & CA bundle verification example: https://github.com/ppmag/aws-nitro-enclaves-attestation/blob/83ca87233298c302973a5bdbbb394c36cd7eb6e6/src/lib.rs#L233-L235
 				{
@@ -239,6 +257,7 @@ mod handlers {
 					);
 
 					// Get the public key the cose sign1 object was signed with
+					// https://github.com/briansmith/webpki/issues/85
 					let extracted_key = {
 						let pub_key = certificate
 							.tbs_certificate
