@@ -40,6 +40,7 @@ impl From<aws_nitro_enclaves_nsm_api::api::Error> for AttestError {
 pub mod nitro {
 	use aws_nitro_enclaves_cose::CoseSign1;
 	use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
+	use serde_bytes::ByteBuf;
 
 	use super::AttestError;
 
@@ -81,11 +82,11 @@ pub mod nitro {
 	///   valid. This is measured in seconds since the unix epoch. Most likely
 	///   this will be the current time.
 	pub fn attestation_doc_from_der(
-		bytes: &[u8],
+		cose_sign1_der: &[u8],
 		root_cert: &[u8],
 		validation_time: u64, // seconds since unix epoch
 	) -> Result<AttestationDoc, AttestError> {
-		let cose_sign1 = CoseSign1::from_bytes(&bytes[..])
+		let cose_sign1 = CoseSign1::from_bytes(cose_sign1_der)
 			.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
 		let attestation_doc = {
 			let raw_attestation_doc = cose_sign1
@@ -94,8 +95,6 @@ pub mod nitro {
 
 			AttestationDoc::from_binary(&raw_attestation_doc[..])?
 		};
-
-		// Syntactical validation
 
 		syntactic_validation::module_id(&attestation_doc.module_id)?;
 		syntactic_validation::digest(attestation_doc.digest)?;
@@ -106,71 +105,81 @@ pub mod nitro {
 		syntactic_validation::user_data(&attestation_doc.user_data)?;
 		syntactic_validation::nonce(&attestation_doc.nonce)?;
 
-		// Semantic validation
-
-		// CA bundle verification, in other words verify certificate chain with
-		// the root certificate
-		{
-			// Bundle starts with root certificate - we want to replace the root
-			// with our hardcoded known certificate, so we remove the root
-			// (first element). Ordering is: root cert .. intermediate certs ..
-			// end entity cert.
-			let intermediate_certs: Vec<_> = attestation_doc.cabundle[1..]
-				.into_iter()
-				.map(|x| x.as_slice())
-				.collect();
-
-			// The root CA
-			let anchors =
-				vec![webpki::TrustAnchor::try_from_cert_der(root_cert)?];
-			let anchors = webpki::TlsServerTrustAnchors(&anchors);
-
-			let time =
-				webpki::Time::from_seconds_since_unix_epoch(validation_time);
-
-			let cert_raw: &[u8] = attestation_doc.certificate.as_ref();
-			let cert = webpki::EndEntityCert::try_from(cert_raw)?;
-
-			// TODO: double check this is the correct verification
-			cert.verify_is_valid_tls_server_cert(
-				AWS_NITRO_CERT_SIG_ALG,
-				&anchors,
-				&intermediate_certs,
-				time,
-			)
-			.map_err(|e| AttestError::InvalidCertChain(e))?;
-		}
-
-		// Check that cose sign1 structure is signed with the key in the end
-		// entity certificate.
-		{
-			let ee_cert =
-				openssl::x509::X509::from_der(&attestation_doc.certificate)?;
-
-			// Expect v3 (0 corresponds to v1 etc.)
-			if ee_cert.version() != 2 {
-				return Err(AttestError::InvalidEndEntityCert);
-			}
-
-			let ee_cert_pub_key = ee_cert.public_key()?;
-
-			// Verify the signature against the extracted public key
-			if !cose_sign1
-				.verify_signature(&ee_cert_pub_key)
-				.map_err(|_| AttestError::InvalidCOSESign1Signature)?
-			{
-				return Err(AttestError::InvalidCOSESign1Signature);
-			}
-		}
+		verify_certificate_chain(
+			&attestation_doc.cabundle,
+			root_cert,
+			&attestation_doc.certificate,
+			validation_time,
+		)?;
+		verify_cose_sign1_sig(&attestation_doc.certificate, &cose_sign1)?;
 
 		Ok(attestation_doc)
+	}
+
+	/// Verify the certificate chain against the root & end entity certificates.
+	fn verify_certificate_chain(
+		cabundle: &Vec<ByteBuf>,
+		root_cert: &[u8],
+		end_entity_certificate: &[u8],
+		validation_time: u64,
+	) -> Result<(), AttestError> {
+		// Bundle starts with root certificate - we want to replace the root
+		// with our hardcoded known certificate, so we remove the root
+		// (first element). Ordering is: root cert .. intermediate certs ..
+		// end entity cert.
+		let intermediate_certs: Vec<_> =
+			cabundle[1..].into_iter().map(|x| x.as_slice()).collect();
+
+		// The root CA
+		let anchors = vec![webpki::TrustAnchor::try_from_cert_der(root_cert)?];
+		let anchors = webpki::TlsServerTrustAnchors(&anchors);
+
+		let time = webpki::Time::from_seconds_since_unix_epoch(validation_time);
+
+		let cert = webpki::EndEntityCert::try_from(end_entity_certificate)?;
+
+		// TODO: double check this is the correct verification
+		cert.verify_is_valid_tls_server_cert(
+			AWS_NITRO_CERT_SIG_ALG,
+			&anchors,
+			&intermediate_certs,
+			time,
+		)
+		.map_err(|e| AttestError::InvalidCertChain(e))?;
+
+		Ok(())
+	}
+
+	// Check that cose sign1 structure is signed with the key in the end
+	// entity certificate.
+	fn verify_cose_sign1_sig(
+		end_entity_certificate: &[u8],
+		cose_sign1: &CoseSign1,
+	) -> Result<(), AttestError> {
+		let ee_cert = openssl::x509::X509::from_der(end_entity_certificate)?;
+
+		// Expect v3 (0 corresponds to v1 etc.)
+		if ee_cert.version() != 2 {
+			return Err(AttestError::InvalidEndEntityCert);
+		}
+
+		let ee_cert_pub_key = ee_cert.public_key()?;
+
+		// Verify the signature against the extracted public key
+		if !cose_sign1
+			.verify_signature(&ee_cert_pub_key)
+			.map_err(|_| AttestError::InvalidCOSESign1Signature)?
+		{
+			Err(AttestError::InvalidCOSESign1Signature)
+		} else {
+			Ok(())
+		}
 	}
 
 	mod syntactic_validation {
 		use std::collections::BTreeMap;
 
 		use aws_nitro_enclaves_nsm_api::api::Digest;
-		use serde_bytes::ByteBuf;
 
 		use super::*;
 
@@ -425,41 +434,84 @@ pub mod nitro {
 		}
 
 		#[test]
-		// fn attestation_doc_from_der_corrupt_end_entity_certificate() {
-		// 	let (private, _) = generate_ec512_test_key();
-		// 	let root_cert = cert_from_pem(AWS_ROOT_CERT).unwrap();
-		// 	let attestation_doc = attestation_doc_from_der(
-		// 		MOCK_NSM_ATTESTATION_DOCUMENT,
-		// 		&root_cert[..],
-		// 		MOCK_SECONDS_SINCE_EPOCH,
-		// 	)
-		// 	.unwrap();
+		fn attestation_doc_from_der_corrupt_end_entity_certificate() {
+			let (private, _) = generate_ec512_test_key();
+			let root_cert = cert_from_pem(AWS_ROOT_CERT).unwrap();
+			let mut attestation_doc = attestation_doc_from_der(
+				MOCK_NSM_ATTESTATION_DOCUMENT,
+				&root_cert[..],
+				MOCK_SECONDS_SINCE_EPOCH,
+			)
+			.unwrap();
 
-		// 	let (r, mut cert) = x509_parser::parse_x509_certificate(
-		// 		&attestation_doc.certificate,
-		// 	)
-		// 	.unwrap();
-		// 	assert_eq!(r.len(), 0);
+			// Corrupt the end entity certificate
+			attestation_doc.certificate.pop();
+			attestation_doc.certificate.push(0xff);
 
-		// 	let mut corrupt_pub_key = cert
-		// 		.tbs_certificate
-		// 		.subject_pki
-		// 		.subject_public_key
-		// 		.data
-		// 		.to_vec();
+			let corrupt_cose_sign1 = CoseSign1::new(
+				&attestation_doc.to_binary(),
+				&HeaderMap::new(),
+				&private,
+			)
+			.unwrap();
 
-		// 	// Modify the pubkey by swapping out some random bytes.
-		// 	corrupt_pub_key.pop();
-		// 	corrupt_pub_key.push(0xff);
-		// 	cert.tbs_certificate.subject_pki.subject_public_key.data =
-		// 		&corrupt_pub_key;
+			let corrupt_document1 = corrupt_cose_sign1.as_bytes(true).unwrap();
+			let err_result = attestation_doc_from_der(
+				&corrupt_document1,
+				&root_cert[..],
+				MOCK_SECONDS_SINCE_EPOCH,
+			);
 
-		// 	// attestation_doc.certificate = cert.
+			match err_result {
+				Err(AttestError::InvalidCertChain(
+					webpki::Error::UnknownIssuer,
+				)) => {}
+				_ => panic!("{:?}", err_result),
+			};
+		}
+
+		#[test]
+		fn attestation_doc_from_der_bad_sign1_sig() {
+			let root_cert = cert_from_pem(AWS_ROOT_CERT).unwrap();
+			let (private, _) = generate_ec512_test_key();
+			let document =
+				CoseSign1::from_bytes(MOCK_NSM_ATTESTATION_DOCUMENT).unwrap();
+
+			let unprotected = document.get_unprotected();
+			let (_protected, payload) =
+				document.get_protected_and_payload(None).unwrap();
+
+			// Sign the document with a private key that isn't in the end entity
+			// certificate
+
+			let corrupt_document =
+				CoseSign1::new(&payload, unprotected, &private).unwrap();
+			let err_result = attestation_doc_from_der(
+				&corrupt_document.as_bytes(true).unwrap(),
+				&root_cert[..],
+				MOCK_SECONDS_SINCE_EPOCH,
+			);
+
+			match err_result {
+				Err(AttestError::InvalidCOSESign1Signature) => {}
+				_ => panic!("{:?}", err_result),
+			}
+		}
+
+		// #[test]
+		// fn attestation_doc_from_der_corrupt_root_certificate() {
+		// 	let root_cert =
+		// 		openssl::x509::X509::from_pem(AWS_ROOT_CERT).unwrap();
+
+		// 	let builder = openssl::x509::X509Builder::new().unwrap();
+		// 	builder.set_subject_name(root_cert.subject_name()).unwrap();
+		// 	builder.set_not_before(root_cert.not_before());
+		// 	builder.set_not_after(root_cert.not_after());
+		// 	builder.set_version(root_cert.version());
+		// 	builder.set_serial_number(root_cert.serial_number());
+		// 	builder.set_issuer_name(root_cert.issuer_name());
+		// 	builder.set_subject_name(root_cert.subject_name());
+		// 	builder.set_pubkey(&root_cert.public_key().unwrap());
 		// }
-		#[test]
-		fn attestation_doc_from_der_bad_sign1_sig() {}
-
-		#[test]
-		fn attestation_doc_from_der_corrupt_root_certificate() {}
 	}
 }
