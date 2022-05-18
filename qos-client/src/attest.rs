@@ -162,7 +162,7 @@ pub mod nitro {
 
 		// Expect v3 (0 corresponds to v1 etc.)
 		if ee_cert.version() != 2 {
-			return Err(AttestError::InvalidEndEntityCert);
+			return Err(AttestError::InvalidEndEntityCert)
 		}
 
 		let ee_cert_pub_key = ee_cert.public_key()?;
