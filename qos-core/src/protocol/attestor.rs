@@ -83,7 +83,8 @@ impl NsmProvider for MockNsm {
 	}
 }
 
-const MOCK_NSM_ATTESTATION_DOCUMENT: &[u8] = &[
+/// DO NOT USE IN PRODUCTION - only for tests.
+pub const MOCK_NSM_ATTESTATION_DOCUMENT: &[u8] = &[
 	132, 68, 161, 1, 56, 34, 160, 89, 19, 220, 169, 105, 109, 111, 100, 117,
 	108, 101, 95, 105, 100, 120, 39, 105, 45, 48, 99, 54, 56, 101, 99, 57, 100,
 	50, 99, 55, 102, 56, 56, 50, 101, 56, 45, 101, 110, 99, 48, 49, 56, 48, 99,

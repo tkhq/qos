@@ -187,7 +187,7 @@ mod handlers {
 				let root_cert =
 					cert_from_pem(AWS_ROOT_CERT).expect("Invalid root cert");
 				match attestation_doc_from_der(
-					document,
+					&document,
 					&root_cert[..],
 					MOCK_SECONDS_SINCE_EPOCH,
 				) {

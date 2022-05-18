@@ -3,6 +3,7 @@
 #[derive(Debug)]
 pub enum AttestError {
 	WebPki(webpki::Error),
+	InvalidCertChain(webpki::Error),
 	OpenSSLError(openssl::error::ErrorStack),
 	PEMError(x509_parser::prelude::PEMError),
 	X509(x509_parser::nom::Err<x509_parser::prelude::X509Error>),
@@ -11,7 +12,6 @@ pub enum AttestError {
 	InvalidEndEntityCert,
 	InvalidCOSESign1Signature,
 	InvalidCOSESign1Structure,
-	InvalidCertChain,
 	InvalidPem,
 	InvalidDigest,
 	InvalidModuleId,
@@ -109,17 +109,19 @@ pub mod nitro {
 	///   valid. This is measured in seconds since the unix epoch. Most likely
 	///   this will be the current time.
 	pub fn attestation_doc_from_der(
-		bytes: Vec<u8>,
+		bytes: &[u8],
 		root_cert: &[u8],
 		validation_time: u64, // seconds since unix epoch
 	) -> Result<AttestationDoc, AttestError> {
 		let cose_sign1 = CoseSign1::from_bytes(&bytes[..])
 			.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
-		let raw_attestation_doc = cose_sign1
-			.get_payload(None)
-			.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
-		let attestation_doc =
-			AttestationDoc::from_binary(&raw_attestation_doc[..])?;
+		let attestation_doc = {
+			let raw_attestation_doc = cose_sign1
+				.get_payload(None)
+				.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
+
+			AttestationDoc::from_binary(&raw_attestation_doc[..])?
+		};
 
 		// Syntactical validation
 
@@ -139,7 +141,8 @@ pub mod nitro {
 		{
 			// Bundle starts with root certificate - we want to replace the root
 			// with our hardcoded known certificate, so we remove the root
-			// (first element)
+			// (first element). Ordering is: root cert .. intermediate certs ..
+			// end entity cert.
 			let intermediate_certs: Vec<_> = attestation_doc.cabundle[1..]
 				.into_iter()
 				.map(|x| x.as_slice())
@@ -163,7 +166,7 @@ pub mod nitro {
 				&intermediate_certs,
 				time,
 			)
-			.map_err(|_| AttestError::InvalidCertChain)?;
+			.map_err(|e| AttestError::InvalidCertChain(e))?;
 		}
 
 		// Check that cose sign1 structure is signed with the key in the end
@@ -179,7 +182,7 @@ pub mod nitro {
 				|| certificate.tbs_certificate.version()
 					!= x509_parser::x509::X509Version::V3
 			{
-				return Err(AttestError::InvalidEndEntityCert);
+				return Err(AttestError::InvalidEndEntityCert)
 			}
 
 			// Get the public key the cose sign1 object was signed with
@@ -210,7 +213,7 @@ pub mod nitro {
 				.verify_signature(&extracted_key)
 				.map_err(|_| AttestError::InvalidCOSESign1Signature)?
 			{
-				return Err(AttestError::InvalidCOSESign1Signature);
+				return Err(AttestError::InvalidCOSESign1Signature)
 			}
 		}
 
@@ -240,9 +243,9 @@ pub mod nitro {
 			let is_valid_pcr_count = pcrs.len() > 0 && pcrs.len() <= 32;
 
 			let is_valid_index_and_len = pcrs.iter().all(|(idx, pcr)| {
-				let is_valid_idx = *idx > 0 && *idx <= 32;
+				let is_valid_idx = *idx <= 32;
 				let is_valid_pcr_len = [32, 48, 64].contains(&pcr.len());
-				!is_valid_idx || !is_valid_pcr_len
+				is_valid_idx && is_valid_pcr_len
 			});
 
 			if !is_valid_index_and_len || !is_valid_pcr_count {
@@ -256,8 +259,9 @@ pub mod nitro {
 			cabundle: &Vec<ByteBuf>,
 		) -> Result<(), AttestError> {
 			let is_valid_len = cabundle.len() > 0;
-			let is_valid_entries =
-				cabundle.iter().all(|cert| cert.len() < 1 || cert.len() > 1024);
+			let is_valid_entries = cabundle
+				.iter()
+				.all(|cert| cert.len() >= 1 || cert.len() <= 1024);
 
 			if !is_valid_len || !is_valid_entries {
 				Err(AttestError::InvalidCABundle)
@@ -314,19 +318,165 @@ pub mod nitro {
 			Ok(())
 		}
 	}
-}
 
-#[cfg(test)]
-mod test {
-	mod nitro {
-		#[test]
-		fn attestation_doc_from_der_time_is_late() {}
+	#[cfg(test)]
+	mod test {
+		use aws_nitro_enclaves_cose::header_map::HeaderMap;
+		use openssl::pkey::{PKey, Private, Public};
+		use qos_core::protocol::MOCK_NSM_ATTESTATION_DOCUMENT;
+
+		use super::{AttestError, *};
+
+		/// Taken from aws-nitro-enclaves-cose-0.4.0
+		/// Randomly generate SECP521R1/P-512 key to use for validating signing
+		/// internally
+		fn generate_ec512_test_key() -> (PKey<Private>, PKey<Public>) {
+			let alg = openssl::ec::EcGroup::from_curve_name(
+				openssl::nid::Nid::SECP521R1,
+			)
+			.unwrap();
+			let ec_private = openssl::ec::EcKey::generate(&alg).unwrap();
+			let ec_public = openssl::ec::EcKey::from_public_key(
+				&alg,
+				ec_private.public_key(),
+			)
+			.unwrap();
+			(
+				PKey::from_ec_key(ec_private).unwrap(),
+				PKey::from_ec_key(ec_public).unwrap(),
+			)
+		}
 
 		#[test]
-		fn attestation_doc_from_der_time_is_early() {}
+		fn attestation_doc_from_der_time_is_late() {
+			let day_after = MOCK_SECONDS_SINCE_EPOCH + 86400;
+			let root_cert = cert_from_pem(AWS_ROOT_CERT).unwrap();
+			let err_result = attestation_doc_from_der(
+				MOCK_NSM_ATTESTATION_DOCUMENT,
+				&root_cert[..],
+				day_after,
+			);
+
+			match err_result {
+				Err(AttestError::InvalidCertChain(
+					webpki::Error::CertExpired,
+				)) => {}
+				_ => panic!("{:?}", err_result),
+			};
+		}
 
 		#[test]
-		fn attestation_doc_from_der_corrupt_cabundle() {}
+		fn attestation_doc_from_der_time_is_early() {
+			let day_before = MOCK_SECONDS_SINCE_EPOCH - 86400;
+			let root_cert = cert_from_pem(AWS_ROOT_CERT).unwrap();
+			let err_result = attestation_doc_from_der(
+				MOCK_NSM_ATTESTATION_DOCUMENT,
+				&root_cert[..],
+				day_before,
+			);
+
+			match err_result {
+				Err(AttestError::InvalidCertChain(
+					webpki::Error::CertNotValidYet,
+				)) => {}
+				_ => panic!("{:?}", err_result),
+			};
+		}
+
+		#[test]
+		fn attestation_doc_from_der_corrupt_cabundle() {
+			let (private, _) = generate_ec512_test_key();
+			let root_cert = cert_from_pem(AWS_ROOT_CERT).unwrap();
+			let attestation_doc = attestation_doc_from_der(
+				MOCK_NSM_ATTESTATION_DOCUMENT,
+				&root_cert[..],
+				MOCK_SECONDS_SINCE_EPOCH,
+			)
+			.unwrap();
+
+			{
+				let mut corrupt = attestation_doc.clone();
+				// Remove the end entity cert
+				corrupt.cabundle.pop();
+
+				let corrupt_cose_sign1 = CoseSign1::new(
+					&corrupt.to_binary(),
+					&HeaderMap::new(),
+					&private,
+				)
+				.unwrap();
+
+				let corrupt_document1 =
+					corrupt_cose_sign1.as_bytes(true).unwrap();
+				let err_result = attestation_doc_from_der(
+					&corrupt_document1,
+					&root_cert[..],
+					MOCK_SECONDS_SINCE_EPOCH,
+				);
+
+				match err_result {
+					Err(AttestError::InvalidCertChain(
+						webpki::Error::UnknownIssuer,
+					)) => {}
+					_ => panic!("{:?}", err_result),
+				};
+			}
+
+			{
+				let mut corrupt = attestation_doc.clone();
+				// Remove the root certificate, causing the verification flow to
+				// think the 2nd intermediate cert is the 1st
+				corrupt.cabundle.remove(0);
+
+				let corrupt_cose_sign1 = CoseSign1::new(
+					&corrupt.to_binary(),
+					&HeaderMap::new(),
+					&private,
+				)
+				.unwrap();
+
+				let corrupt_document1 =
+					corrupt_cose_sign1.as_bytes(true).unwrap();
+				let err_result = attestation_doc_from_der(
+					&corrupt_document1,
+					&root_cert[..],
+					MOCK_SECONDS_SINCE_EPOCH,
+				);
+
+				match err_result {
+					Err(AttestError::InvalidCertChain(
+						webpki::Error::UnknownIssuer,
+					)) => {}
+					_ => panic!("{:?}", err_result),
+				};
+			}
+
+			{
+				let valid = attestation_doc.clone();
+				// Don't pop anything, just want to sanity check that we get a
+				// corrupt signature on the cose sign1 structure.
+
+				let corrupt_cose_sign1 = CoseSign1::new(
+					&valid.to_binary(),
+					&HeaderMap::new(),
+					&private,
+				)
+				.unwrap();
+
+				let corrupt_document1 =
+					corrupt_cose_sign1.as_bytes(true).unwrap();
+				let err_result = attestation_doc_from_der(
+					&corrupt_document1,
+					&root_cert[..],
+					MOCK_SECONDS_SINCE_EPOCH,
+				);
+
+				match err_result {
+					Err(AttestError::InvalidCOSESign1Signature) => {}
+					_ => panic!("{:?}", err_result),
+				};
+			}
+		}
 
 		#[test]
 		fn attestation_doc_from_der_corrupt_target_certificate() {}

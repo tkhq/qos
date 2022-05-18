@@ -5,7 +5,7 @@ mod msg;
 mod nitro_types;
 mod provisioner;
 
-pub use attestor::{MockNsm, Nsm, NsmProvider};
+pub use attestor::{MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT};
 pub use msg::*;
 pub use nitro_types::*;
 use openssl::rsa::Rsa;
