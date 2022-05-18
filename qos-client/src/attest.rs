@@ -2,11 +2,17 @@
 
 #[derive(Debug)]
 pub enum AttestError {
-	InvalidCertChain,
 	WebPki(webpki::Error),
 	OpenSSLError(openssl::error::ErrorStack),
-	InvalidPem,
 	PEMError(x509_parser::prelude::PEMError),
+	X509(x509_parser::nom::Err<x509_parser::prelude::X509Error>),
+	Nsm(aws_nitro_enclaves_nsm_api::api::Error),
+	CertKeyExtractionFailure,
+	InvalidEndEntityCert,
+	InvalidCOSESign1Signature,
+	InvalidCOSESign1Structure,
+	InvalidCertChain,
+	InvalidPem,
 	InvalidDigest,
 	InvalidModuleId,
 	InvalidPcr,
@@ -31,6 +37,20 @@ impl From<openssl::error::ErrorStack> for AttestError {
 impl From<x509_parser::prelude::PEMError> for AttestError {
 	fn from(e: x509_parser::prelude::PEMError) -> Self {
 		Self::PEMError(e)
+	}
+}
+
+impl From<x509_parser::nom::Err<x509_parser::prelude::X509Error>>
+	for AttestError
+{
+	fn from(e: x509_parser::nom::Err<x509_parser::prelude::X509Error>) -> Self {
+		Self::X509(e)
+	}
+}
+
+impl From<aws_nitro_enclaves_nsm_api::api::Error> for AttestError {
+	fn from(e: aws_nitro_enclaves_nsm_api::api::Error) -> Self {
+		Self::Nsm(e)
 	}
 }
 
@@ -88,17 +108,18 @@ pub mod nitro {
 	/// * `validation_time` - a moment in time that the certificates should be
 	///   valid. This is measured in seconds since the unix epoch. Most likely
 	///   this will be the current time.
-	/// TODO: convert expects into Errors - this shouldn't panic
 	pub fn attestation_doc_from_der(
 		bytes: Vec<u8>,
 		root_cert: &[u8],
 		validation_time: u64, // seconds since unix epoch
 	) -> Result<AttestationDoc, AttestError> {
-		let cose_sign1 = CoseSign1::from_bytes(&bytes[..]).unwrap();
-		let raw_attestation_doc = cose_sign1.get_payload(None).unwrap();
+		let cose_sign1 = CoseSign1::from_bytes(&bytes[..])
+			.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
+		let raw_attestation_doc = cose_sign1
+			.get_payload(None)
+			.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
 		let attestation_doc =
-			AttestationDoc::from_binary(&raw_attestation_doc[..])
-				.expect("Attestation doc could not be decoded.");
+			AttestationDoc::from_binary(&raw_attestation_doc[..])?;
 
 		// Syntactical validation
 
@@ -151,19 +172,15 @@ pub mod nitro {
 			let (remaining_input, certificate) =
 				x509_parser::parse_x509_certificate(
 					&attestation_doc.certificate,
-				)
-				.expect("Could not parse target certificate");
+				)?;
 
 			// Basic checks
-			assert!(
-				remaining_input.len() == 0,
-				"certificate was not valid DER encoding"
-			);
-			assert!(
-				certificate.tbs_certificate.version()
-					== x509_parser::x509::X509Version::V3,
-				"Wrong certificate version"
-			);
+			if remaining_input.len() != 0
+				|| certificate.tbs_certificate.version()
+					!= x509_parser::x509::X509Version::V3
+			{
+				return Err(AttestError::InvalidEndEntityCert);
+			}
 
 			// Get the public key the cose sign1 object was signed with
 			// https://github.com/briansmith/webpki/issues/85
@@ -174,24 +191,27 @@ pub mod nitro {
 					.subject_public_key
 					.data;
 
-				let group = EcGroup::from_curve_name(Nid::SECP384R1).unwrap();
-				let mut ctx = BigNumContext::new().unwrap();
-				let point =
-					EcPoint::from_bytes(&group, &pub_key, &mut ctx).unwrap();
-				let ec_key = EcKey::from_public_key(&group, &point).unwrap();
+				let group = EcGroup::from_curve_name(Nid::SECP384R1)
+					.map_err(|_| AttestError::CertKeyExtractionFailure)?;
+				let mut ctx = BigNumContext::new()
+					.map_err(|_| AttestError::CertKeyExtractionFailure)?;
+				let point = EcPoint::from_bytes(&group, &pub_key, &mut ctx)
+					.map_err(|_| AttestError::CertKeyExtractionFailure)?;
+				let ec_key = EcKey::from_public_key(&group, &point)
+					.map_err(|_| AttestError::CertKeyExtractionFailure)?;
 
-				openssl::pkey::PKey::try_from(ec_key).expect(
-					"EC Key could not be converted to open ssl primitive",
-				)
+				openssl::pkey::PKey::try_from(ec_key)
+					.map_err(|_| AttestError::CertKeyExtractionFailure)?
 			};
 
 			// Verify the signature against the extracted public key
-			assert!(
-				cose_sign1
-					.verify_signature(&extracted_key)
-					.expect("Error with cose signature verification."),
-				"Could not verify attestation document with target certificate"
-			);
+
+			if !cose_sign1
+				.verify_signature(&extracted_key)
+				.map_err(|_| AttestError::InvalidCOSESign1Signature)?
+			{
+				return Err(AttestError::InvalidCOSESign1Signature);
+			}
 		}
 
 		Ok(attestation_doc)
