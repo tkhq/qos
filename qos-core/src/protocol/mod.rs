@@ -43,6 +43,7 @@ impl Executor {
 				Box::new(handlers::provision),
 				Box::new(handlers::reconstruct),
 				Box::new(handlers::nsm),
+				Box::new(handlers::load),
 			],
 			state: ProtocolState::new(attestor),
 		}
@@ -142,6 +143,30 @@ mod handlers {
 			let fd = state.attestor.nsm_init();
 			let response = state.attestor.nsm_process_request(fd, attestation);
 			Some(ProtocolMsg::NsmResponse(response))
+		} else {
+			None
+		}
+	}
+
+	pub fn load(
+		req: &ProtocolMsg,
+		_state: &mut ProtocolState,
+	) -> Option<ProtocolMsg> {
+		if let ProtocolMsg::LoadRequest(Load { data, signatures }) = req {
+			use qos_crypto::RsaPub;
+			for SignatureWithPubKey { signature, path } in signatures {
+				let pub_key = match RsaPub::from_pem_file(path) {
+					Ok(p) => p,
+					Err(_) => return Some(ProtocolMsg::ErrorResponse),
+				};
+
+				match pub_key.verify_sha256(&signature[..], &data[..]) {
+					Ok(_) => {}
+					Err(_) => return Some(ProtocolMsg::ErrorResponse),
+				}
+			}
+
+			Some(ProtocolMsg::SuccessResponse)
 		} else {
 			None
 		}
