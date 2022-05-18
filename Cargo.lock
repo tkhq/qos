@@ -673,6 +673,7 @@ dependencies = [
  "openssl",
  "qos-core",
  "qos-host",
+ "serde_bytes",
  "serde_cbor",
  "ureq",
  "webpki",

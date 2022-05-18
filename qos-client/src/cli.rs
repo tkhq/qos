@@ -113,7 +113,7 @@ mod handlers {
 	use qos_core::protocol::{NsmRequest, NsmResponse};
 
 	use super::*;
-	use crate::{attestation, request};
+	use crate::{attest, request};
 
 	pub(super) fn health(options: ClientOptions) {
 		let path = &options.host.path("health");
@@ -160,9 +160,9 @@ mod handlers {
 
 		match response {
 			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
-				use attestation::nitro::{
-					attestation_doc_from_der, root_cert_from_pem,
-					AWS_ROOT_CERT, MOCK_SECONDS_SINCE_EPOCH,
+				use attest::nitro::{
+					attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT,
+					MOCK_SECONDS_SINCE_EPOCH,
 				};
 				////
 				// Truths:
@@ -184,7 +184,8 @@ mod handlers {
 				//     correct?
 				// TODO: semantic verification from: https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md
 
-				let root_cert = root_cert_from_pem(AWS_ROOT_CERT);
+				let root_cert =
+					cert_from_pem(AWS_ROOT_CERT).expect("Invalid root cert");
 				match attestation_doc_from_der(
 					document,
 					&root_cert[..],
