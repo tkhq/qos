@@ -16,5 +16,4 @@ aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 # For handling Attestation Doc
 aws-nitro-enclaves-cose = "0.4.0"
 webpki = "0.22.0"
-x509-parser = "0.13"
 serde_bytes = "0.11"

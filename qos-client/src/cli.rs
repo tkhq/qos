@@ -173,7 +173,8 @@ mod handlers {
 
 				// Verification Flow:
 				// 1. Check signature from the Certificate over the
-				// AttestationDocument 2. Verify the CA Bundle using the known
+				// AttestationDocument
+				// 2. Verify the CA Bundle using the known
 				// root of trust and Certificate
 				//   - Assume ROT is known ahead of time
 				// 3. Business logic
@@ -183,7 +184,6 @@ mod handlers {
 				//   - (Human): How do I know that this build artifact is
 				//     correct?
 				// TODO: semantic verification from: https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md
-
 				let root_cert =
 					cert_from_pem(AWS_ROOT_CERT).expect("Invalid root cert");
 				match attestation_doc_from_der(

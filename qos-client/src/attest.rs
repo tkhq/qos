@@ -5,14 +5,11 @@ pub enum AttestError {
 	WebPki(webpki::Error),
 	InvalidCertChain(webpki::Error),
 	OpenSSLError(openssl::error::ErrorStack),
-	PEMError(x509_parser::prelude::PEMError),
-	X509(x509_parser::nom::Err<x509_parser::prelude::X509Error>),
+
 	Nsm(aws_nitro_enclaves_nsm_api::api::Error),
-	CertKeyExtractionFailure,
 	InvalidEndEntityCert,
 	InvalidCOSESign1Signature,
 	InvalidCOSESign1Structure,
-	InvalidPem,
 	InvalidDigest,
 	InvalidModuleId,
 	InvalidPcr,
@@ -34,20 +31,6 @@ impl From<openssl::error::ErrorStack> for AttestError {
 	}
 }
 
-impl From<x509_parser::prelude::PEMError> for AttestError {
-	fn from(e: x509_parser::prelude::PEMError) -> Self {
-		Self::PEMError(e)
-	}
-}
-
-impl From<x509_parser::nom::Err<x509_parser::prelude::X509Error>>
-	for AttestError
-{
-	fn from(e: x509_parser::nom::Err<x509_parser::prelude::X509Error>) -> Self {
-		Self::X509(e)
-	}
-}
-
 impl From<aws_nitro_enclaves_nsm_api::api::Error> for AttestError {
 	fn from(e: aws_nitro_enclaves_nsm_api::api::Error) -> Self {
 		Self::Nsm(e)
@@ -57,12 +40,6 @@ impl From<aws_nitro_enclaves_nsm_api::api::Error> for AttestError {
 pub mod nitro {
 	use aws_nitro_enclaves_cose::CoseSign1;
 	use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
-	use openssl::{
-		bn::BigNumContext,
-		ec::{EcGroup, EcKey, EcPoint},
-		nid::Nid,
-	};
-	use x509_parser::pem::Pem;
 
 	use super::AttestError;
 
@@ -85,12 +62,7 @@ pub mod nitro {
 	/// Extract a DER encoded certificate from bytes representing a PEM encoded
 	/// certificate.
 	pub(crate) fn cert_from_pem(pem: &[u8]) -> Result<Vec<u8>, AttestError> {
-		let mut pem_iter = Pem::iter_from_buffer(pem);
-		let root_cert = pem_iter.next().ok_or(AttestError::InvalidPem)??;
-		// Ensure there is only one cert in the given PEM
-		pem_iter.next().is_none().then(|| ()).ok_or(AttestError::InvalidPem)?;
-
-		Ok(root_cert.contents)
+		Ok(openssl::x509::X509::from_pem(pem)?.to_der()?)
 	}
 
 	/// Extract the DER encoded `AttestationDoc` from the nsm provided
@@ -172,48 +144,22 @@ pub mod nitro {
 		// Check that cose sign1 structure is signed with the key in the end
 		// entity certificate.
 		{
-			let (remaining_input, certificate) =
-				x509_parser::parse_x509_certificate(
-					&attestation_doc.certificate,
-				)?;
+			let ee_cert =
+				openssl::x509::X509::from_der(&attestation_doc.certificate)?;
 
-			// Basic checks
-			if remaining_input.len() != 0
-				|| certificate.tbs_certificate.version()
-					!= x509_parser::x509::X509Version::V3
-			{
-				return Err(AttestError::InvalidEndEntityCert)
+			// Expect v3 (0 corresponds to v1 etc.)
+			if ee_cert.version() != 2 {
+				return Err(AttestError::InvalidEndEntityCert);
 			}
 
-			// Get the public key the cose sign1 object was signed with
-			// https://github.com/briansmith/webpki/issues/85
-			let extracted_key = {
-				let pub_key = certificate
-					.tbs_certificate
-					.subject_pki
-					.subject_public_key
-					.data;
-
-				let group = EcGroup::from_curve_name(Nid::SECP384R1)
-					.map_err(|_| AttestError::CertKeyExtractionFailure)?;
-				let mut ctx = BigNumContext::new()
-					.map_err(|_| AttestError::CertKeyExtractionFailure)?;
-				let point = EcPoint::from_bytes(&group, &pub_key, &mut ctx)
-					.map_err(|_| AttestError::CertKeyExtractionFailure)?;
-				let ec_key = EcKey::from_public_key(&group, &point)
-					.map_err(|_| AttestError::CertKeyExtractionFailure)?;
-
-				openssl::pkey::PKey::try_from(ec_key)
-					.map_err(|_| AttestError::CertKeyExtractionFailure)?
-			};
+			let ee_cert_pub_key = ee_cert.public_key()?;
 
 			// Verify the signature against the extracted public key
-
 			if !cose_sign1
-				.verify_signature(&extracted_key)
+				.verify_signature(&ee_cert_pub_key)
 				.map_err(|_| AttestError::InvalidCOSESign1Signature)?
 			{
-				return Err(AttestError::InvalidCOSESign1Signature)
+				return Err(AttestError::InvalidCOSESign1Signature);
 			}
 		}
 
@@ -479,8 +425,37 @@ pub mod nitro {
 		}
 
 		#[test]
-		fn attestation_doc_from_der_corrupt_target_certificate() {}
+		// fn attestation_doc_from_der_corrupt_end_entity_certificate() {
+		// 	let (private, _) = generate_ec512_test_key();
+		// 	let root_cert = cert_from_pem(AWS_ROOT_CERT).unwrap();
+		// 	let attestation_doc = attestation_doc_from_der(
+		// 		MOCK_NSM_ATTESTATION_DOCUMENT,
+		// 		&root_cert[..],
+		// 		MOCK_SECONDS_SINCE_EPOCH,
+		// 	)
+		// 	.unwrap();
 
+		// 	let (r, mut cert) = x509_parser::parse_x509_certificate(
+		// 		&attestation_doc.certificate,
+		// 	)
+		// 	.unwrap();
+		// 	assert_eq!(r.len(), 0);
+
+		// 	let mut corrupt_pub_key = cert
+		// 		.tbs_certificate
+		// 		.subject_pki
+		// 		.subject_public_key
+		// 		.data
+		// 		.to_vec();
+
+		// 	// Modify the pubkey by swapping out some random bytes.
+		// 	corrupt_pub_key.pop();
+		// 	corrupt_pub_key.push(0xff);
+		// 	cert.tbs_certificate.subject_pki.subject_public_key.data =
+		// 		&corrupt_pub_key;
+
+		// 	// attestation_doc.certificate = cert.
+		// }
 		#[test]
 		fn attestation_doc_from_der_bad_sign1_sig() {}
 
