@@ -131,8 +131,8 @@ mod handlers {
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::NsmRequest(req) = req {
-			// HACK: this should be replaced pretty soon, right now just here for backwards compat
-			// with tests
+			// HACK: this should be replaced pretty soon, right now just here
+			// for backwards compat with tests
 			let request = if *req == NsmRequest::DescribeNSM {
 				NsmRequest::DescribeNSM
 			} else {

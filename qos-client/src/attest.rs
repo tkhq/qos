@@ -5,7 +5,6 @@ pub enum AttestError {
 	WebPki(webpki::Error),
 	InvalidCertChain(webpki::Error),
 	OpenSSLError(openssl::error::ErrorStack),
-
 	Nsm(aws_nitro_enclaves_nsm_api::api::Error),
 	InvalidEndEntityCert,
 	InvalidCOSESign1Signature,
@@ -66,15 +65,15 @@ pub mod nitro {
 		Ok(openssl::x509::X509::from_pem(pem)?.to_der()?)
 	}
 
-	/// Extract the DER encoded `AttestationDoc` from the nsm provided
-	/// attestation document. This function will verify the the root certificate
-	/// authority via the CA bundle and that verify "target" (aka "end entity")
-	/// certificate signed the COSE Sign1 message.
+	/// Extract the DER encoded `AttestationDoc` from the nitro secure module
+	/// (nsm) provided COSE Sign1 structure. This function will verify the the
+	/// root certificate authority via the CA bundle and verify that the end
+	/// entity certificate signed the COSE Sign1 structure.
 	///
 	/// # Arguments
 	///
-	/// * `bytes` - the DER encoded COSE Sign1 structure containing the
-	///   attestation document.
+	/// * `cose_sign1_der` - the DER encoded COSE Sign1 structure containing the
+	///   attestation document payload.
 	/// * `root_cert` - the DER encoded root certificate. This should be a
 	///   hardcoded root certificate from amazon and its authenticity should be
 	///   validated out of band.
