@@ -105,6 +105,8 @@ pub mod nitro {
 		syntactic_validation::user_data(&attestation_doc.user_data)?;
 		syntactic_validation::nonce(&attestation_doc.nonce)?;
 
+		// TODO: Ensure verification conforms exactly to section 3.2.3.*
+		// https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md#32-syntactical-validation
 		verify_certificate_chain(
 			&attestation_doc.cabundle,
 			root_cert,
@@ -498,20 +500,35 @@ pub mod nitro {
 			}
 		}
 
-		// #[test]
-		// fn attestation_doc_from_der_corrupt_root_certificate() {
-		// 	let root_cert =
-		// 		openssl::x509::X509::from_pem(AWS_ROOT_CERT).unwrap();
+		#[test]
+		fn attestation_doc_from_der_corrupt_root_certificate() {
+			let root_cert =
+				openssl::x509::X509::from_pem(AWS_ROOT_CERT).unwrap();
 
-		// 	let builder = openssl::x509::X509Builder::new().unwrap();
-		// 	builder.set_subject_name(root_cert.subject_name()).unwrap();
-		// 	builder.set_not_before(root_cert.not_before());
-		// 	builder.set_not_after(root_cert.not_after());
-		// 	builder.set_version(root_cert.version());
-		// 	builder.set_serial_number(root_cert.serial_number());
-		// 	builder.set_issuer_name(root_cert.issuer_name());
-		// 	builder.set_subject_name(root_cert.subject_name());
-		// 	builder.set_pubkey(&root_cert.public_key().unwrap());
-		// }
+			// Build a root certificate with no extensions;
+			let mut builder = openssl::x509::X509Builder::new().unwrap();
+			builder.set_subject_name(root_cert.subject_name()).unwrap();
+			builder.set_not_before(root_cert.not_before()).unwrap();
+			builder.set_not_after(root_cert.not_after()).unwrap();
+			builder.set_version(root_cert.version()).unwrap();
+			builder.set_serial_number(root_cert.serial_number()).unwrap();
+			builder.set_issuer_name(root_cert.issuer_name()).unwrap();
+			builder.set_subject_name(root_cert.subject_name()).unwrap();
+			builder.set_pubkey(&root_cert.public_key().unwrap()).unwrap();
+
+			let corrupt_root_cert = builder.build().to_der().unwrap();
+			let err_result = attestation_doc_from_der(
+				MOCK_NSM_ATTESTATION_DOCUMENT,
+				&corrupt_root_cert[..],
+				MOCK_SECONDS_SINCE_EPOCH,
+			);
+
+			match err_result {
+				Err(AttestError::WebPki(
+					webpki::Error::MissingOrMalformedExtensions,
+				)) => {}
+				_ => panic!("{:?}", err_result),
+			}
+		}
 	}
 }
