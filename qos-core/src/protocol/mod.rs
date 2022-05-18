@@ -130,18 +130,25 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		// if let ProtocolMsg::NsmRequest(NsmRequest::Attestation { .. }) = req
-		// {
-		if let ProtocolMsg::NsmRequest(_req) = req {
-			let attestation = NsmRequest::Attestation {
-				user_data: None,
-				nonce: None,
-				public_key: Some(
-					Rsa::generate(4096).unwrap().public_key_to_pem().unwrap(),
-				),
+		if let ProtocolMsg::NsmRequest(req) = req {
+			// HACK: this should be replaced pretty soon, right now just here for backwards compat
+			// with tests
+			let request = if *req == NsmRequest::DescribeNSM {
+				NsmRequest::DescribeNSM
+			} else {
+				NsmRequest::Attestation {
+					user_data: None,
+					nonce: None,
+					public_key: Some(
+						Rsa::generate(4096)
+							.unwrap()
+							.public_key_to_pem()
+							.unwrap(),
+					),
+				}
 			};
 			let fd = state.attestor.nsm_init();
-			let response = state.attestor.nsm_process_request(fd, attestation);
+			let response = state.attestor.nsm_process_request(fd, request);
 			Some(ProtocolMsg::NsmResponse(response))
 		} else {
 			None
