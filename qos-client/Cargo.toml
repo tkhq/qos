@@ -10,10 +10,10 @@ openssl = "0.10.40"
 
 # Third party
 ureq = { version = "2.4", default-features = false }
-serde_cbor = "0.11"
+serde_cbor = { version = "0.11", default-features = false }
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 
 # For handling Attestation Doc
-aws-nitro-enclaves-cose = "0.4.0"
-webpki = "0.22.0"
-serde_bytes = "0.11"
+aws-nitro-enclaves-cose = { version = "0.4.0", default-features = false, features = ["key_openssl_pkey"] }
+webpki = { version =  "0.22.0", default-features = false }
+serde_bytes = { version = "0.11", default-features = false }
