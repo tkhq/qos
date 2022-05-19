@@ -70,7 +70,7 @@ local-client-mock-attest:
 		--host-port 3000
 
 .PHONY: vm-client-mock-attest
-vm-client-mock-attest:
+vm-client-attest:
 	OPENSSL_DIR=/usr cargo run \
 		--bin qos-client \
 		--features vm \
