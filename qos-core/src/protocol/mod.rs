@@ -2,17 +2,18 @@
 
 mod attestor;
 mod msg;
-mod nitro_types;
 mod provisioner;
 
 pub use attestor::{MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT};
 pub use msg::*;
-pub use nitro_types::*;
 use openssl::rsa::Rsa;
 pub use provisioner::SECRET_FILE;
 use provisioner::*;
 
 use crate::server;
+
+const MEGABYTE: usize = 1024 * 1024;
+const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
 
 type ProtocolHandler =
 	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
@@ -52,25 +53,38 @@ impl Executor {
 
 impl server::Routable for Executor {
 	fn process(&mut self, mut req_bytes: Vec<u8>) -> Vec<u8> {
-		use msg::Serialize as _;
+		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
+			return serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+				.expect("ProtocolMsg can always be serialized. qed.");
+		}
 
-		let msg_req = match ProtocolMsg::deserialize(&mut req_bytes) {
+		let msg_req = match serde_cbor::from_slice(&mut req_bytes) {
 			Ok(req) => req,
-			Err(_) => return ProtocolMsg::ErrorResponse.serialize(),
+			Err(_) => {
+				return serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+					.expect("ProtocolMsg can always be serialized. qed.")
+			}
 		};
 
 		for handler in self.routes.iter() {
 			match handler(&msg_req, &mut self.state) {
-				Some(msg_resp) => return msg_resp.serialize(),
+				Some(msg_resp) => {
+					return serde_cbor::to_vec(&msg_resp)
+						.expect("ProtocolMsg can always be serialized. qed.")
+				}
 				None => continue,
 			}
 		}
 
-		ProtocolMsg::ErrorResponse.serialize()
+		serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+			.expect("ProtocolMsg can always be serialized. qed.")
 	}
 }
 
 mod handlers {
+	use qos_crypto::RsaPub;
+	use serde_bytes::ByteBuf;
+
 	use super::*;
 
 	pub fn empty(
@@ -131,21 +145,18 @@ mod handlers {
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::NsmRequest(req) = req {
-			// HACK: this should be replaced pretty soon, right now just here
-			// for backwards compat with tests
-			let request = if *req == NsmRequest::DescribeNSM {
-				NsmRequest::DescribeNSM
-			} else {
-				NsmRequest::Attestation {
+			let request = match req {
+				NsmRequest::Attestation { .. } => NsmRequest::Attestation {
 					user_data: None,
 					nonce: None,
-					public_key: Some(
+					public_key: Some(ByteBuf::from(
 						Rsa::generate(4096)
 							.unwrap()
 							.public_key_to_pem()
 							.unwrap(),
-					),
-				}
+					)),
+				},
+				_ => panic!(""),
 			};
 			let fd = state.attestor.nsm_init();
 			let response = state.attestor.nsm_process_request(fd, request);
@@ -160,7 +171,6 @@ mod handlers {
 		_state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::LoadRequest(Load { data, signatures }) = req {
-			use qos_crypto::RsaPub;
 			for SignatureWithPubKey { signature, path } in signatures {
 				let pub_key = match RsaPub::from_pem_file(path) {
 					Ok(p) => p,

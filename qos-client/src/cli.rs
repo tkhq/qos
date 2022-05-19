@@ -116,6 +116,7 @@ impl CLI {
 mod handlers {
 
 	use qos_core::protocol::{NsmRequest, NsmResponse};
+use serde_bytes::ByteBuf;
 
 	use super::*;
 	use crate::{attest, request};
@@ -175,9 +176,9 @@ mod handlers {
 			ProtocolMsg::NsmRequest(NsmRequest::Attestation {
 				user_data: None,
 				nonce: None,
-				public_key: Some(
+				public_key: Some(ByteBuf::from(
 					Rsa::generate(4096).unwrap().public_key_to_pem().unwrap(),
-				),
+				)),
 			}),
 		)
 		.map_err(|e| println!("{:?}", e))

@@ -4,7 +4,7 @@ pub mod cli;
 pub mod request {
 	use std::io::Read;
 
-	use qos_core::protocol::{ProtocolMsg, Serialize};
+	use qos_core::protocol::ProtocolMsg;
 
 	const MAX_SIZE: u64 = u32::MAX as u64;
 
@@ -12,7 +12,10 @@ pub mod request {
 		let mut buf: Vec<u8> = vec![];
 
 		let response = ureq::post(url)
-			.send_bytes(&msg.serialize())
+			.send_bytes(
+				&serde_cbor::to_vec(&msg)
+					.expect("ProtocolMsg can always be serialized. qed."),
+			)
 			.map_err(|e| format!("post err: {:?}", e))?;
 
 		response
@@ -21,7 +24,7 @@ pub mod request {
 			.read_to_end(&mut buf)
 			.map_err(|_| "send response error".to_string())?;
 
-		let pr = ProtocolMsg::deserialize(&mut buf)
+		let pr = serde_cbor::from_slice(&mut buf)
 			.map_err(|_| "send response error".to_string())?;
 
 		Ok(pr)

@@ -16,6 +16,9 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
+const MEGABYTE: usize = 1024 * 1024;
+const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
+
 use axum::{
 	body::Bytes,
 	http::StatusCode,
@@ -23,11 +26,7 @@ use axum::{
 	routing::{get, post},
 	Extension, Router,
 };
-use qos_core::{
-	client::Client,
-	io::SocketAddress,
-	protocol::{ProtocolMsg, Serialize},
-};
+use qos_core::{client::Client, io::SocketAddress, protocol::ProtocolMsg};
 
 pub mod cli;
 
@@ -90,20 +89,33 @@ impl HostServer {
 		body: Bytes,
 		Extension(state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
-		let mut body = body.to_vec();
-		match ProtocolMsg::deserialize(&mut body) {
+		if body.len() > MAX_ENCODED_MSG_LEN {
+			return (
+				StatusCode::BAD_REQUEST,
+				serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+					.expect("ProtocolMsg can always serialize. qed."),
+			)
+		}
+
+		match serde_cbor::from_slice(&body) {
 			Err(_) => {
 				return (
-					StatusCode::INTERNAL_SERVER_ERROR,
-					b"Cannot parse payload...".to_vec(),
+					StatusCode::BAD_REQUEST,
+					serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+						.expect("ProtocolMsg can always serialize. qed."),
 				)
 			}
 			Ok(request) => match state.enclave_client.send(request) {
 				Err(_) => (
 					StatusCode::INTERNAL_SERVER_ERROR,
-					b"Received error from enclave...".to_vec(),
+					serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+						.expect("ProtocolMsg can always serialize. qed."),
 				),
-				Ok(response) => (StatusCode::OK, response.serialize()),
+				Ok(response) => (
+					StatusCode::OK,
+					serde_cbor::to_vec(&response)
+						.expect("ProtocolMsg can always serialize. qed."),
+				),
 			},
 		}
 	}
