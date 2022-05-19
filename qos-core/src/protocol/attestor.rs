@@ -68,6 +68,7 @@ impl NsmProvider for MockNsm {
 			NsmRequest::DescribePCR { index: _ } => {
 				NsmResponse::DescribePCR { lock: false, data: vec![3, 4, 7, 4] }
 			}
+			_ => unreachable!(),
 		}
 	}
 

@@ -1,5 +1,8 @@
 //! Enclave I/O message format and serialization.
-use super::{NsmRequest, NsmResponse};
+
+pub use aws_nitro_enclaves_nsm_api::api::{
+	Digest as NsmDigest, Request as NsmRequest, Response as NsmResponse,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum ProtocolError {
@@ -7,7 +10,7 @@ pub enum ProtocolError {
 	ReconstructionError,
 }
 
-#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ProtocolMsg {
 	SuccessResponse,
 	// TODO: Error response should hold a protocol error
@@ -21,6 +24,17 @@ pub enum ProtocolMsg {
 	NsmRequest(NsmRequest),
 	NsmResponse(NsmResponse),
 	LoadRequest(Load),
+}
+
+impl PartialEq for ProtocolMsg {
+	fn eq(&self, other: &Self) -> bool {
+		serde_cbor::to_vec(self).expect("ProtocolMsg serializes. qed.")
+			== serde_cbor::to_vec(other).expect("ProtocolMsg serializes. qed.")
+	}
+
+	fn ne(&self, other: &Self) -> bool {
+		!self.eq(other)
+	}
 }
 
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
