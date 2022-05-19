@@ -13,6 +13,9 @@ use provisioner::*;
 
 use crate::server;
 
+const MEGABYTE: usize = 1024 * 1024;
+const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
+
 type ProtocolHandler =
 	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
 
@@ -51,6 +54,11 @@ impl Executor {
 
 impl server::Routable for Executor {
 	fn process(&mut self, mut req_bytes: Vec<u8>) -> Vec<u8> {
+		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
+			return serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+				.expect("ProtocolMsg can always be serialized. qed.");
+		}
+
 		let msg_req = match serde_cbor::from_slice(&mut req_bytes) {
 			Ok(req) => req,
 			Err(_) => {
