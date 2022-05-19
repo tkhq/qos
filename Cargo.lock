@@ -545,6 +545,7 @@ name = "qos-test"
 version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
+ "openssl",
  "qos-client",
  "qos-core",
  "qos-crypto",
