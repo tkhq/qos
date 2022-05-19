@@ -51,26 +51,32 @@ impl Executor {
 
 impl server::Routable for Executor {
 	fn process(&mut self, mut req_bytes: Vec<u8>) -> Vec<u8> {
-		use msg::Serialize as _;
-
-		let msg_req = match ProtocolMsg::deserialize(&mut req_bytes) {
+		let msg_req = match serde_cbor::from_slice(&mut req_bytes) {
 			Ok(req) => req,
-			Err(_) => return ProtocolMsg::ErrorResponse.serialize(),
+			Err(_) => {
+				return serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+					.expect("ProtocolMsg can always be serialized. qed.")
+			}
 		};
 
 		for handler in self.routes.iter() {
 			match handler(&msg_req, &mut self.state) {
-				Some(msg_resp) => return msg_resp.serialize(),
+				Some(msg_resp) => {
+					return serde_cbor::to_vec(&msg_resp)
+						.expect("ProtocolMsg can always be serialized. qed.")
+				}
 				None => continue,
 			}
 		}
 
-		ProtocolMsg::ErrorResponse.serialize()
+		serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+			.expect("ProtocolMsg can always be serialized. qed.")
 	}
 }
 
 mod handlers {
 	use super::*;
+	use qos_crypto::RsaPub;
 
 	pub fn empty(
 		req: &ProtocolMsg,
@@ -145,7 +151,6 @@ mod handlers {
 		_state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::LoadRequest(Load { data, signatures }) = req {
-			use qos_crypto::RsaPub;
 			for SignatureWithPubKey { signature, path } in signatures {
 				let pub_key = match RsaPub::from_pem_file(path) {
 					Ok(p) => p,

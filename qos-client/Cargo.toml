@@ -9,3 +9,4 @@ qos-host = { path = "../qos-host" }
 
 # Third party
 ureq = { version = "2.4", default-features = false }
+serde_cbor = { version = "0.11", default-features = false }

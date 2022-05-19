@@ -1,14 +1,14 @@
 //! Streaming socket based client to connect with [`server::Server`].
-
 use crate::{
 	io::{self, SocketAddress, Stream},
-	protocol::{ProtocolError, ProtocolMsg, Serialize},
+	protocol::{ProtocolError, ProtocolMsg},
 };
 
 #[derive(Debug)]
 pub enum ClientError {
 	IOError(io::IOError),
 	ProtocolError(ProtocolError),
+	SerdeCBOR(serde_cbor::Error),
 }
 
 impl From<io::IOError> for ClientError {
@@ -20,6 +20,12 @@ impl From<io::IOError> for ClientError {
 impl From<ProtocolError> for ClientError {
 	fn from(err: ProtocolError) -> Self {
 		Self::ProtocolError(err)
+	}
+}
+
+impl From<serde_cbor::Error> for ClientError {
+	fn from(err: serde_cbor::Error) -> Self {
+		Self::SerdeCBOR(err)
 	}
 }
 
@@ -41,8 +47,11 @@ impl Client {
 		request: ProtocolMsg,
 	) -> Result<ProtocolMsg, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
-		stream.send(&request.serialize())?;
+		stream.send(
+			&serde_cbor::to_vec(&request)
+				.expect("ProtocolMsg can be serialized. qed."),
+		)?;
 		let mut response = stream.recv()?;
-		ProtocolMsg::deserialize(&mut response).map_err(Into::into)
+		serde_cbor::from_slice(&mut response).map_err(Into::into)
 	}
 }

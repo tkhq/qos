@@ -9,7 +9,7 @@ use nix::sys::socket::VsockAddr;
 use nix::{
 	sys::socket::{
 		accept, bind, connect, listen, recv, send, shutdown, socket,
-		AddressFamily, MsgFlags, Shutdown, SockFlag, SockType, SockaddrLike
+		AddressFamily, MsgFlags, Shutdown, SockFlag, SockType, SockaddrLike,
 	},
 	unistd::close,
 };
@@ -33,6 +33,7 @@ impl SocketAddress {
 		Self::Unix(addr)
 	}
 
+	#[cfg(feature = "vm")]
 	pub fn new_vsock(cid: u32, port: u32) -> Self {
 		let addr = VsockAddr::new(cid, port);
 		Self::Vsock(addr)
@@ -305,7 +306,7 @@ mod test {
 			while let Some(stream) = listener.next() {
 				let req = stream.recv().unwrap();
 				stream.send(&req).unwrap();
-				break
+				break;
 			}
 		});
 
