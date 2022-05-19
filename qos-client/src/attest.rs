@@ -275,6 +275,54 @@ pub mod nitro {
 
 			Ok(())
 		}
+
+		#[cfg(test)]
+		mod test {
+			use super::*;
+
+			#[test]
+			fn user_data_works() {
+				assert!(user_data(&None).is_ok());
+				assert!(user_data(&Some(ByteBuf::new())).is_ok());
+				assert!(user_data(&Some(ByteBuf::from(
+					(0..513).map(|_| 42u8).collect::<Vec<_>>()
+				)))
+				.is_err());
+			}
+
+			#[test]
+			fn nonce_works() {
+				assert!(nonce(&None).is_ok());
+				assert!(nonce(&Some(ByteBuf::new())).is_ok());
+				assert!(nonce(&Some(ByteBuf::from(
+					(0..513).map(|_| 42u8).collect::<Vec<_>>()
+				)))
+				.is_err());
+			}
+
+			#[test]
+			fn public_key_works() {
+				assert!(public_key(&None).is_ok());
+				assert!(public_key(&Some(ByteBuf::new())).is_err());
+				assert!(public_key(&Some(ByteBuf::from(vec![1u8]))).is_ok());
+				assert!(public_key(&Some(ByteBuf::from(
+					(0..1025).map(|_| 42u8).collect::<Vec<_>>()
+				)))
+				.is_err());
+			}
+
+			#[test]
+			fn timestamp_works() {
+				assert!(timestamp(0).is_err());
+				assert!(timestamp(1).is_ok());
+			}
+
+			#[test]
+			fn digest_works() {
+				assert!(digest(Digest::SHA256).is_err());
+				assert!(digest(Digest::SHA384).is_ok());
+			}
+		}
 	}
 
 	#[cfg(test)]
