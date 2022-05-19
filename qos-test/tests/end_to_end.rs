@@ -99,17 +99,17 @@ async fn end_to_end() {
 	// Delete file
 	std::fs::remove_file(path).unwrap();
 
-	// Test NSM connection
-	let request = ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM);
-	let response = qos_client::request::post(&message_url, request).unwrap();
-	let expected = ProtocolMsg::NsmResponse(NsmResponse::DescribeNSM {
-		version_major: 1,
-		version_minor: 2,
-		version_patch: 14,
-		module_id: "mock_module_id".to_string(),
-		max_pcrs: 1024,
-		locked_pcrs: BTreeSet::from([90, 91, 92]),
-		digest: NsmDigest::SHA256,
-	});
-	assert_eq!(response, expected);
+	// // Test NSM connection
+	// let request = ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM);
+	// let response = qos_client::request::post(&message_url, request).unwrap();
+	// let expected = ProtocolMsg::NsmResponse(NsmResponse::DescribeNSM {
+	// 	version_major: 1,
+	// 	version_minor: 2,
+	// 	version_patch: 14,
+	// 	module_id: "mock_module_id".to_string(),
+	// 	max_pcrs: 1024,
+	// 	locked_pcrs: BTreeSet::from([90, 91, 92]),
+	// 	digest: NsmDigest::SHA256,
+	// });
+	// assert_eq!(response, expected);
 }

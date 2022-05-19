@@ -156,6 +156,7 @@ mod handlers {
 							.unwrap(),
 					)),
 				},
+				/// TODO: return error and don;t panic=
 				_ => panic!(""),
 			};
 			let fd = state.attestor.nsm_init();

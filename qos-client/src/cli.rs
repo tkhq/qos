@@ -3,12 +3,19 @@ use std::env;
 use qos_core::protocol::{Echo, ProtocolMsg};
 use qos_host::cli::HostOptions;
 
+use openssl::rsa::Rsa;
+
+use crate::attest::nitro::{
+	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT,
+};
+
 #[derive(Clone, PartialEq, Debug)]
 enum Command {
 	Health,
 	Echo,
 	DescribeNsm,
 	MockAttestation,
+	Attestation,
 }
 impl Command {
 	fn run(&self, options: ClientOptions) {
@@ -17,6 +24,7 @@ impl Command {
 			Command::Echo => handlers::echo(options),
 			Command::DescribeNsm => handlers::describe_nsm(options),
 			Command::MockAttestation => handlers::mock_attestation(options),
+			Command::Attestation => handlers::attestation(options),
 		}
 	}
 }
@@ -27,6 +35,7 @@ impl Into<Command> for &str {
 			"echo" => Command::Echo,
 			"describe-nsm" => Command::DescribeNsm,
 			"mock-attestation" => Command::MockAttestation,
+			"attestation" => Command::Attestation,
 			_ => panic!("Unrecognized command"),
 		}
 	}
@@ -61,6 +70,7 @@ impl ClientOptions {
 				Command::Health => {}
 				Command::DescribeNsm => {}
 				Command::MockAttestation => {}
+				Command::Attestation => {}
 			}
 		}
 
@@ -116,7 +126,7 @@ impl CLI {
 mod handlers {
 
 	use qos_core::protocol::{NsmRequest, NsmResponse};
-use serde_bytes::ByteBuf;
+	use serde_bytes::ByteBuf;
 
 	use super::*;
 	use crate::{attest, request};
@@ -166,9 +176,40 @@ use serde_bytes::ByteBuf;
 		}
 	}
 
-	pub(super) fn mock_attestation(options: ClientOptions) {
-		use openssl::rsa::Rsa;
+	pub(super) fn attestation(options: ClientOptions) {
+		let path = &options.host.path("message");
+		let response = request::post(
+			path,
+			ProtocolMsg::NsmRequest(NsmRequest::Attestation {
+				user_data: None,
+				nonce: None,
+				public_key: None,
+			}),
+		)
+		.map_err(|e| println!("{:?}", e))
+		.expect("Attestation request failed");
 
+		match response {
+			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
+				let root_cert =
+					cert_from_pem(AWS_ROOT_CERT).expect("Invalid root cert");
+				let now = std::time::SystemTime::now();
+				let seconds_since_epoch =
+					now.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+				match attestation_doc_from_der(
+					&document,
+					&root_cert[..],
+					seconds_since_epoch,
+				) {
+					Ok(_) => println!("Attestation doc verified!"),
+					Err(e) => panic!("{:?}", e),
+				};
+			}
+			_ => panic!("Not an attestation response"),
+		}
+	}
+
+	pub(super) fn mock_attestation(options: ClientOptions) {
 		let path = &options.host.path("message");
 
 		let response = request::post(
@@ -186,32 +227,7 @@ use serde_bytes::ByteBuf;
 
 		match response {
 			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
-				use attest::nitro::{
-					attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT,
-					MOCK_SECONDS_SINCE_EPOCH,
-				};
-
-				//
-				// Truths:
-				//
-				// 1) AWS Nitro Enclaves use ES384 algorithm to sign the
-				// document
-				//
-				// 2) Certificate is DER-encoded
-				//
-
-				// Verification Flow:
-				// 1. Check signature from the Certificate over the
-				// AttestationDocument
-				// 2. Verify the CA Bundle using the known
-				// root of trust and Certificate
-				//   - Assume ROOT is known ahead of time
-				// 3. Business logic
-				//   - Is the application that is being run (as evidenced by the
-				//     PCRs) the expected application to have possession of
-				//     *this* key?
-				//   - (Human): How do I know that this build artifact is
-				//     correct?
+				use attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
 				let root_cert =
 					cert_from_pem(AWS_ROOT_CERT).expect("Invalid root cert");
 				match attestation_doc_from_der(
