@@ -156,8 +156,7 @@ mod handlers {
 							.unwrap(),
 					)),
 				},
-				/// TODO: return error and don;t panic=
-				_ => panic!(""),
+				_ => return Some(ProtocolMsg::ErrorResponse),
 			};
 			let fd = state.attestor.nsm_init();
 			let response = state.attestor.nsm_process_request(fd, request);
