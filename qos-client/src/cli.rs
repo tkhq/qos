@@ -194,8 +194,10 @@ mod handlers {
 				let root_cert =
 					cert_from_pem(AWS_ROOT_CERT).expect("Invalid root cert");
 				let now = std::time::SystemTime::now();
-				let seconds_since_epoch =
-					now.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+				let seconds_since_epoch = now
+					.duration_since(std::time::UNIX_EPOCH)
+					.unwrap()
+					.as_secs();
 				match attestation_doc_from_der(
 					&document,
 					&root_cert[..],
