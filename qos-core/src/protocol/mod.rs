@@ -75,8 +75,9 @@ impl server::Routable for Executor {
 }
 
 mod handlers {
-	use super::*;
 	use qos_crypto::RsaPub;
+
+	use super::*;
 
 	pub fn empty(
 		req: &ProtocolMsg,
