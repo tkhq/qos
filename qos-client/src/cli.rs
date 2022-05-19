@@ -195,6 +195,7 @@ mod handlers {
 				//
 				// 1) AWS Nitro Enclaves use ES384 algorithm to sign the
 				// document
+				//
 				// 2) Certificate is DER-encoded
 				//
 

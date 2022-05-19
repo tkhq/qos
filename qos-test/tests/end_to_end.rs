@@ -17,7 +17,7 @@ async fn end_to_end() {
 	let enclave_addr = SocketAddress::new_unix("./end_to_end.sock");
 	let enclave_addr2 = enclave_addr.clone();
 	let ip = [127, 0, 0, 1];
-	let port = 3000;
+	let port = 3002;
 	let url =
 		format!("http://{}.{}.{}.{}:{}", ip[0], ip[1], ip[2], ip[3], port);
 	let health_url = format!("{}/{}", url, "health");

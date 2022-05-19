@@ -138,20 +138,15 @@ pub mod nitro {
 		let intermediate_certs: Vec<_> =
 			cabundle[1..].into_iter().map(|x| x.as_slice()).collect();
 
-		// The root CA
-		let anchors = vec![webpki::TrustAnchor::try_from_cert_der(root_cert)?];
-		let anchors = webpki::TlsServerTrustAnchors(&anchors);
-
-		let time = webpki::Time::from_seconds_since_unix_epoch(validation_time);
+		let anchor = vec![webpki::TrustAnchor::try_from_cert_der(root_cert)?];
+		let anchors = webpki::TlsServerTrustAnchors(&anchor);
 
 		let cert = webpki::EndEntityCert::try_from(end_entity_certificate)?;
-
-		// TODO: double check this is the correct verification
 		cert.verify_is_valid_tls_server_cert(
 			AWS_NITRO_CERT_SIG_ALG,
 			&anchors,
 			&intermediate_certs,
-			time,
+			webpki::Time::from_seconds_since_unix_epoch(validation_time),
 		)
 		.map_err(|e| AttestError::InvalidCertChain(e))?;
 
