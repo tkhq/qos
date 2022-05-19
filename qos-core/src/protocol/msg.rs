@@ -23,15 +23,6 @@ pub enum ProtocolMsg {
 	LoadRequest(Load),
 }
 
-// impl PartialEq for ProtocolMsg {
-// 	fn eq(&self, other: &Self) -> bool {
-// 		self.serialize() == other.serialize()
-// 	}
-// 	fn ne(&self, other: &Self) -> bool {
-// 		self.serialize() != other.serialize()
-// 	}
-// }
-
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Echo {
 	pub data: Vec<u8>,
