@@ -16,6 +16,9 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
+const MEGABYTE: usize = 1024 * 1024;
+const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
+
 use axum::{
 	body::Bytes,
 	http::StatusCode,
@@ -86,10 +89,18 @@ impl HostServer {
 		body: Bytes,
 		Extension(state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
+		if body.len() > MAX_ENCODED_MSG_LEN {
+			return (
+				StatusCode::BAD_REQUEST,
+				serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+					.expect("ProtocolMsg can always serialize. qed."),
+			);
+		}
+
 		match serde_cbor::from_slice(&body) {
 			Err(_) => {
 				return (
-					StatusCode::INTERNAL_SERVER_ERROR,
+					StatusCode::BAD_REQUEST,
 					serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
 						.expect("ProtocolMsg can always serialize. qed."),
 				)
@@ -97,7 +108,8 @@ impl HostServer {
 			Ok(request) => match state.enclave_client.send(request) {
 				Err(_) => (
 					StatusCode::INTERNAL_SERVER_ERROR,
-					b"Received error from enclave...".to_vec(),
+					serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+						.expect("ProtocolMsg can always serialize. qed."),
 				),
 				Ok(response) => (
 					StatusCode::OK,
