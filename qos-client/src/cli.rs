@@ -8,6 +8,7 @@ enum Command {
 	Health,
 	Echo,
 	DescribeNsm,
+	MockAttestation,
 }
 impl Command {
 	fn run(&self, options: ClientOptions) {
@@ -15,6 +16,7 @@ impl Command {
 			Command::Health => handlers::health(options),
 			Command::Echo => handlers::echo(options),
 			Command::DescribeNsm => handlers::describe_nsm(options),
+			Command::MockAttestation => handlers::mock_attestation(options),
 		}
 	}
 }
@@ -24,6 +26,7 @@ impl Into<Command> for &str {
 			"health" => Command::Health,
 			"echo" => Command::Echo,
 			"describe-nsm" => Command::DescribeNsm,
+			"mock-attestation" => Command::MockAttestation,
 			_ => panic!("Unrecognized command"),
 		}
 	}
@@ -57,6 +60,7 @@ impl ClientOptions {
 				Command::Echo => options.echo.parse(&cmd, arg),
 				Command::Health => {}
 				Command::DescribeNsm => {}
+				Command::MockAttestation => {}
 			}
 		}
 
@@ -110,6 +114,7 @@ impl CLI {
 }
 
 mod handlers {
+
 	use qos_core::protocol::{NsmRequest, NsmResponse};
 
 	use super::*;
@@ -146,17 +151,37 @@ mod handlers {
 
 	pub(super) fn describe_nsm(options: ClientOptions) {
 		let path = &options.host.path("message");
+		match request::post(
+			path,
+			ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM),
+		)
+		.map_err(|e| println!("{:?}", e))
+		.expect("Attestation request failed")
+		{
+			ProtocolMsg::NsmResponse(description) => {
+				println!("{:#?}", description)
+			}
+			other => panic!("Unexpected response {:?}", other),
+		}
+	}
+
+	pub(super) fn mock_attestation(options: ClientOptions) {
+		use openssl::rsa::Rsa;
+
+		let path = &options.host.path("message");
 
 		let response = request::post(
 			path,
 			ProtocolMsg::NsmRequest(NsmRequest::Attestation {
 				user_data: None,
 				nonce: None,
-				public_key: None,
+				public_key: Some(
+					Rsa::generate(4096).unwrap().public_key_to_pem().unwrap(),
+				),
 			}),
 		)
 		.map_err(|e| println!("{:?}", e))
-		.expect("Echo message failed");
+		.expect("Attestation request failed");
 
 		match response {
 			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
@@ -164,11 +189,13 @@ mod handlers {
 					attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT,
 					MOCK_SECONDS_SINCE_EPOCH,
 				};
-				////
+
+				//
 				// Truths:
-				////
-				// 1. AWS Nitro Enclaves use ES384 algorithm to sign the
-				// document 2. Certificate is DER-encoded
+				//
+				// 1) AWS Nitro Enclaves use ES384 algorithm to sign the
+				// document
+				// 2) Certificate is DER-encoded
 				//
 
 				// Verification Flow:
@@ -176,14 +203,13 @@ mod handlers {
 				// AttestationDocument
 				// 2. Verify the CA Bundle using the known
 				// root of trust and Certificate
-				//   - Assume ROT is known ahead of time
+				//   - Assume ROOT is known ahead of time
 				// 3. Business logic
 				//   - Is the application that is being run (as evidenced by the
 				//     PCRs) the expected application to have possession of
 				//     *this* key?
 				//   - (Human): How do I know that this build artifact is
 				//     correct?
-				// TODO: semantic verification from: https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md
 				let root_cert =
 					cert_from_pem(AWS_ROOT_CERT).expect("Invalid root cert");
 				match attestation_doc_from_der(

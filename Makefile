@@ -62,6 +62,13 @@ vm-client-describe-nsm:
 		--host-ip 127.0.0.1 \
 		--host-port 3000
 
+.PHONY: local-client-mock-attest
+local-client-mock-attest:
+	cargo run --bin qos-client \
+		mock-attestation \
+		--host-ip 127.0.0.1 \
+		--host-port 3000
+
 .PHONY: client
 client:
 	cargo run --bin qos-client

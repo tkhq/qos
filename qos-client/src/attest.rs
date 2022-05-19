@@ -114,6 +114,13 @@ pub mod nitro {
 		)?;
 		verify_cose_sign1_sig(&attestation_doc.certificate, &cose_sign1)?;
 
+		// TODO:
+		// Additional validation for
+		// - timestamp is reasonable
+		// - nonce, user data, public key match user provided data
+		// - module id is what we expect
+		// - pcr validation
+
 		Ok(attestation_doc)
 	}
 

@@ -42,13 +42,9 @@ impl NsmProvider for MockNsm {
 				user_data: _,
 				nonce: _,
 				public_key: _,
-			} => {
-				// TODO: this should be a CBOR-encoded AttestationDocument as
-				// the payload
-				NsmResponse::Attestation {
-					document: MOCK_NSM_ATTESTATION_DOCUMENT.to_vec(),
-				}
-			}
+			} => NsmResponse::Attestation {
+				document: MOCK_NSM_ATTESTATION_DOCUMENT.to_vec(),
+			},
 			NsmRequest::DescribeNSM => NsmResponse::DescribeNSM {
 				version_major: 1,
 				version_minor: 2,
