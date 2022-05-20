@@ -177,4 +177,10 @@ mod test {
 
 		assert!(pcrs(&BTreeMap::from([(5, pcr_invalid)])).is_err());
 	}
+
+	#[test]
+	fn module_id_works() {
+		assert!(module_id(&"".to_string()).is_err());
+		assert!(module_id(&"1".to_string()).is_ok());
+	}
 }
