@@ -135,7 +135,7 @@ fn verify_cose_sign1_sig(
 
 	// Expect v3
 	if ee_cert.version() != X509_V3 {
-		return Err(AttestError::InvalidEndEntityCert)
+		return Err(AttestError::InvalidEndEntityCert);
 	}
 
 	let ee_cert_pub_key = ee_cert.public_key()?;
@@ -174,6 +174,17 @@ mod test {
 			PKey::from_ec_key(ec_private).unwrap(),
 			PKey::from_ec_key(ec_public).unwrap(),
 		)
+	}
+
+	#[test]
+	fn attestation_doc_from_der_works_with_valid_payload() {
+		let root_cert = cert_from_pem(AWS_ROOT_CERT).unwrap();
+		assert!(attestation_doc_from_der(
+			MOCK_NSM_ATTESTATION_DOCUMENT,
+			&root_cert[..],
+			MOCK_SECONDS_SINCE_EPOCH,
+		)
+		.is_ok());
 	}
 
 	#[test]
