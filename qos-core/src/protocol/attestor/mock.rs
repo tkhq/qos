@@ -1,8 +1,8 @@
 //! Mocks for external attest endpoints.
 
-use crate::protocol::NsmProvider;
-use crate::protocol::{NsmDigest, NsmRequest, NsmResponse};
 use std::collections::BTreeSet;
+
+use crate::protocol::{NsmDigest, NsmProvider, NsmRequest, NsmResponse};
 
 pub struct MockNsm;
 impl NsmProvider for MockNsm {

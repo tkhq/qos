@@ -1,5 +1,6 @@
-use crate::protocol::{NsmRequest, NsmResponse};
 use aws_nitro_enclaves_nsm_api as nsm;
+
+use crate::protocol::{NsmRequest, NsmResponse};
 
 mod mock;
 pub use mock::{MockNsm, MOCK_NSM_ATTESTATION_DOCUMENT};
