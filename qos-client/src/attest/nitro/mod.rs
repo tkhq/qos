@@ -9,6 +9,9 @@ use super::AttestError;
 
 mod syntactic_validation;
 
+/// Version 3 for the X509 certificate format (0 corresponds to v1 etc.)
+const X509_V3: i32 = 2;
+
 /// Signing algorithms we expect the certificates to use. Any other
 /// algorithms will be considered invalid. NOTE: this list was deduced just
 /// by trial and error and thus its unclear if it should include more types.
@@ -130,8 +133,8 @@ fn verify_cose_sign1_sig(
 ) -> Result<(), AttestError> {
 	let ee_cert = openssl::x509::X509::from_der(end_entity_certificate)?;
 
-	// Expect v3 (0 corresponds to v1 etc.)
-	if ee_cert.version() != 2 {
+	// Expect v3
+	if ee_cert.version() != X509_V3 {
 		return Err(AttestError::InvalidEndEntityCert)
 	}
 
