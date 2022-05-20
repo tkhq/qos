@@ -1,4 +1,5 @@
-//! Logic for decoding and validating the Nitro Secure Module Attestation Document.
+//! Logic for decoding and validating the Nitro Secure Module Attestation
+//! Document.
 
 use aws_nitro_enclaves_cose::CoseSign1;
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
@@ -19,8 +20,11 @@ static AWS_NITRO_CERT_SIG_ALG: &[&webpki::SignatureAlgorithm] =
 pub(crate) const MOCK_SECONDS_SINCE_EPOCH: u64 = 1652756400;
 
 /// AWS Nitro root CA certificate.
-/// This should be validated against the below checksum:
-/// `8cf60e2b2efca96c6a9e71e851d00c1b6991cc09eadbe64a6a1d1b1eb9faff7c`
+///
+/// This should be validated against the checksum:
+/// `8cf60e2b2efca96c6a9e71e851d00c1b6991cc09eadbe64a6a1d1b1eb9faff7c`. This
+/// checksum and the certificate should be manually verified against
+/// https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html.
 pub(crate) const AWS_ROOT_CERT: &'static [u8] =
 	std::include_bytes!("./static/aws_root_cert.pem");
 
@@ -39,12 +43,12 @@ pub(crate) fn cert_from_pem(pem: &[u8]) -> Result<Vec<u8>, AttestError> {
 ///
 /// * `cose_sign1_der` - the DER encoded COSE Sign1 structure containing the
 ///   attestation document payload.
-/// * `root_cert` - the DER encoded root certificate. This should be a
-///   hardcoded root certificate from amazon and its authenticity should be
-///   validated out of band.
+/// * `root_cert` - the DER encoded root certificate. This should be a hardcoded
+///   root certificate from amazon and its authenticity should be validated out
+///   of band.
 /// * `validation_time` - a moment in time that the certificates should be
-///   valid. This is measured in seconds since the unix epoch. Most likely
-///   this will be the current time.
+///   valid. This is measured in seconds since the unix epoch. Most likely this
+///   will be the current time.
 pub fn attestation_doc_from_der(
 	cose_sign1_der: &[u8],
 	root_cert: &[u8],
@@ -128,7 +132,7 @@ fn verify_cose_sign1_sig(
 
 	// Expect v3 (0 corresponds to v1 etc.)
 	if ee_cert.version() != 2 {
-		return Err(AttestError::InvalidEndEntityCert);
+		return Err(AttestError::InvalidEndEntityCert)
 	}
 
 	let ee_cert_pub_key = ee_cert.public_key()?;
