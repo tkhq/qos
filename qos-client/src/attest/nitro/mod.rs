@@ -1,3 +1,5 @@
+//! Logic for decoding and validating the Nitro Secure Module Attestation Document.
+
 use aws_nitro_enclaves_cose::CoseSign1;
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use serde_bytes::ByteBuf;

@@ -1,3 +1,5 @@
+//! Basic validation for fields of the Nitro Secure Module Attestation Document.
+
 use std::collections::BTreeMap;
 
 use aws_nitro_enclaves_nsm_api::api::Digest;
@@ -149,6 +151,7 @@ mod test {
 		let pcr32 = ByteBuf::from((0..32).map(|_| 3).collect::<Vec<_>>());
 		let pcr48 = ByteBuf::from((0..48).map(|_| 3).collect::<Vec<_>>());
 		let pcr64 = ByteBuf::from((0..64).map(|_| 3).collect::<Vec<_>>());
+		let pcr_invalid = ByteBuf::from((0..31).map(|_| 3).collect::<Vec<_>>());
 
 		let inner: [(usize, ByteBuf); 33] = (0..33)
 			.map(|i| (i, pcr32.clone()))
@@ -171,5 +174,7 @@ mod test {
 			(5, pcr64.clone())
 		]))
 		.is_ok());
+
+		assert!(pcrs(&BTreeMap::from([(5, pcr_invalid)])).is_err());
 	}
 }
