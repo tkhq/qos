@@ -219,7 +219,7 @@ pub mod nitro {
 			let is_valid_len = cabundle.len() > 0;
 			let is_valid_entries = cabundle
 				.iter()
-				.all(|cert| cert.len() >= 1 || cert.len() <= 1024);
+				.all(|cert| cert.len() >= 1 && cert.len() <= 1024);
 
 			if !is_valid_len || !is_valid_entries {
 				Err(AttestError::InvalidCABundle)
@@ -321,6 +321,37 @@ pub mod nitro {
 			fn digest_works() {
 				assert!(digest(Digest::SHA256).is_err());
 				assert!(digest(Digest::SHA384).is_ok());
+			}
+
+			#[test]
+			fn cabundle_works() {
+				let valid_cert = ByteBuf::from(vec![42]);
+				assert!(cabundle(&vec![valid_cert]).is_ok());
+
+				assert!(cabundle(&vec![]).is_err());
+
+				let short_cert = ByteBuf::new();
+				assert!(cabundle(&vec![short_cert]).is_err());
+
+				let long_cert =
+					ByteBuf::from((0..1025).map(|_| 3).collect::<Vec<_>>());
+				assert!(cabundle(&vec![long_cert]).is_err());
+			}
+
+			fn pcrs_works() {
+				let pcr32 =
+					ByteBuf::from((0..32).map(|_| 3).collect::<Vec<_>>());
+				let pcr48 =
+					ByteBuf::from((0..48).map(|_| 3).collect::<Vec<_>>());
+				let pcr64 =
+					ByteBuf::from((0..64).map(|_| 3).collect::<Vec<_>>());
+
+				let inner: [(usize, ByteBuf); 33] = (0..33)
+					.map(|i| (i, pcr32.clone()))
+					.collect::<Vec<_>>()
+					.try_into()
+					.unwrap();
+				let too_many_pcrs = BTreeMap::from(inner);
 			}
 		}
 	}
