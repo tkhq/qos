@@ -1,35 +1,9 @@
+//! Mocks for external attest endpoints.
+
+use crate::protocol::NsmProvider;
+use crate::protocol::{NsmDigest, NsmRequest, NsmResponse};
 use std::collections::BTreeSet;
 
-use aws_nitro_enclaves_nsm_api as nsm;
-
-use crate::protocol::{NsmDigest, NsmRequest, NsmResponse};
-
-// https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md
-pub trait NsmProvider {
-	fn nsm_process_request(&self, fd: i32, request: NsmRequest) -> NsmResponse;
-
-	fn nsm_init(&self) -> i32;
-
-	fn nsm_exit(&self, fd: i32);
-}
-
-pub struct Nsm;
-impl NsmProvider for Nsm {
-	fn nsm_process_request(&self, fd: i32, request: NsmRequest) -> NsmResponse {
-		nsm::driver::nsm_process_request(fd, request.into()).into()
-	}
-
-	fn nsm_init(&self) -> i32 {
-		nsm::driver::nsm_init()
-	}
-
-	fn nsm_exit(&self, fd: i32) {
-		nsm::driver::nsm_exit(fd)
-	}
-}
-
-/// TODO: - this should be moved to its own crate as it will likely need some
-/// additional deps like Serde
 pub struct MockNsm;
 impl NsmProvider for MockNsm {
 	fn nsm_process_request(
