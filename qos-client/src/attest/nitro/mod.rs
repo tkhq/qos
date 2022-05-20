@@ -141,10 +141,10 @@ fn verify_cose_sign1_sig(
 	let ee_cert_pub_key = ee_cert.public_key()?;
 
 	// Verify the signature against the extracted public key
-	if !cose_sign1
+	let is_valid_sig = cose_sign1
 		.verify_signature(&ee_cert_pub_key)
-		.map_err(|_| AttestError::InvalidCOSESign1Signature)?
-	{
+		.map_err(|_| AttestError::InvalidCOSESign1Signature)?;
+	if !is_valid_sig {
 		Err(AttestError::InvalidCOSESign1Signature)
 	} else {
 		Ok(())
@@ -179,6 +179,7 @@ mod test {
 	#[test]
 	fn attestation_doc_from_der_works_with_valid_payload() {
 		let root_cert = cert_from_pem(AWS_ROOT_CERT).unwrap();
+		// TODO: verify each field on doc is as expected
 		assert!(attestation_doc_from_der(
 			MOCK_NSM_ATTESTATION_DOCUMENT,
 			&root_cert[..],
