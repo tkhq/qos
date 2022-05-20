@@ -157,7 +157,7 @@ mod test {
 	use openssl::pkey::{PKey, Private, Public};
 	use qos_core::protocol::MOCK_NSM_ATTESTATION_DOCUMENT;
 
-	use super::{AttestError, *};
+	use super::*;
 
 	/// Taken from aws-nitro-enclaves-cose-0.4.0
 	/// Randomly generate SECP521R1/P-512 key to use for validating signing
