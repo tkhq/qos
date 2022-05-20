@@ -7,10 +7,10 @@ mod provisioner;
 pub use attestor::{MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT};
 pub use msg::*;
 use openssl::rsa::Rsa;
-pub use provisioner::SECRET_FILE;
 use provisioner::*;
+use std::fs::File;
 
-use crate::server;
+use crate::{server, PIVOT_FILE};
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
@@ -86,6 +86,15 @@ mod handlers {
 	use serde_bytes::ByteBuf;
 
 	use super::*;
+
+	macro_rules! ok_or_return {
+		( $e:expr ) => {
+			match $e {
+				Ok(x) => x,
+				Err(_) => return Some(ProtocolMsg::ErrorResponse),
+			}
+		};
+	}
 
 	pub fn empty(
 		req: &ProtocolMsg,
@@ -170,18 +179,21 @@ mod handlers {
 		req: &ProtocolMsg,
 		_state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::LoadRequest(Load { data, signatures }) = req {
-			for SignatureWithPubKey { signature, path } in signatures {
-				let pub_key = match RsaPub::from_pem_file(path) {
-					Ok(p) => p,
-					Err(_) => return Some(ProtocolMsg::ErrorResponse),
-				};
+		if let ProtocolMsg::LoadRequest(Load { executable, signatures }) = req {
+			// for SignatureWithPubKey { signature, path } in signatures {
+			// 	let pub_key = match RsaPub::from_pem_file(path) {
+			// 		Ok(p) => p,
+			// 		Err(_) => return Some(ProtocolMsg::ErrorResponse),
+			// 	};
+			// 	match pub_key.verify_sha256(&signature[..], &data[..]) {
+			// 		Ok(_) => {}
+			// 		Err(_) => return Some(ProtocolMsg::ErrorResponse),
+			// 	}
+			// }
 
-				match pub_key.verify_sha256(&signature[..], &data[..]) {
-					Ok(_) => {}
-					Err(_) => return Some(ProtocolMsg::ErrorResponse),
-				}
-			}
+			let file = ok_or_return!(File::create(PIVOT_FILE));
+			let mut metadata = ok_or_return!(file.metadata());
+			ok_or_return!(metadata.permissions()).set_mode(0o700);
 
 			Some(ProtocolMsg::SuccessResponse)
 		} else {
