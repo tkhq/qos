@@ -6,7 +6,8 @@ test:
 enclave:
 	cargo run --bin qos-core \
 		-- \
-		--usock ./dev.sock
+		--usock ./dev.sock \
+		--mock true
 
 .PHONY: local-host
 local-host:
@@ -18,7 +19,7 @@ local-host:
 
 .PHONY: vm-host
 vm-host:
-	cargo run \
+	OPENSSL_DIR=/usr cargo run \
 		--bin qos-host \
 		--features vm \
 		-- \
@@ -37,7 +38,7 @@ local-client-echo:
 
 .PHONY: vm-client-echo
 vm-client-echo:
-	cargo run \
+	OPENSSL_DIR=/usr cargo run \
 		--bin qos-client \
 		--features vm \
 		echo \
@@ -54,10 +55,26 @@ local-client-describe-nsm:
 
 .PHONY: vm-client-describe-nsm
 vm-client-describe-nsm:
-	cargo run \
+	OPENSSL_DIR=/usr cargo run \
 		--bin qos-client \
 		--features vm \
 		describe-nsm \
+		--host-ip 127.0.0.1 \
+		--host-port 3000
+
+.PHONY: local-client-mock-attest
+local-client-mock-attest:
+	cargo run --bin qos-client \
+		mock-attestation \
+		--host-ip 127.0.0.1 \
+		--host-port 3000
+
+.PHONY: vm-client-mock-attest
+vm-client-attest:
+	OPENSSL_DIR=/usr cargo run \
+		--bin qos-client \
+		--features vm \
+		attestation \
 		--host-ip 127.0.0.1 \
 		--host-port 3000
 

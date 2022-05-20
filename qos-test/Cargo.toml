@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
-[dev-dependencies]
+[dependencies]
 qos-core = { path = "../qos-core" }
+
+[dev-dependencies]
 qos-client = { path = "../qos-client" }
 qos-host = { path = "../qos-host" }
 qos-crypto = { path = "../qos-crypto" }

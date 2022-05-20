@@ -3,11 +3,19 @@ use std::env;
 use qos_core::protocol::{Echo, ProtocolMsg};
 use qos_host::cli::HostOptions;
 
+use openssl::rsa::Rsa;
+
+use crate::attest::nitro::{
+	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT,
+};
+
 #[derive(Clone, PartialEq, Debug)]
 enum Command {
 	Health,
 	Echo,
 	DescribeNsm,
+	MockAttestation,
+	Attestation,
 }
 impl Command {
 	fn run(&self, options: ClientOptions) {
@@ -15,6 +23,8 @@ impl Command {
 			Command::Health => handlers::health(options),
 			Command::Echo => handlers::echo(options),
 			Command::DescribeNsm => handlers::describe_nsm(options),
+			Command::MockAttestation => handlers::mock_attestation(options),
+			Command::Attestation => handlers::attestation(options),
 		}
 	}
 }
@@ -24,6 +34,8 @@ impl Into<Command> for &str {
 			"health" => Command::Health,
 			"echo" => Command::Echo,
 			"describe-nsm" => Command::DescribeNsm,
+			"mock-attestation" => Command::MockAttestation,
+			"attestation" => Command::Attestation,
 			_ => panic!("Unrecognized command"),
 		}
 	}
@@ -57,6 +69,8 @@ impl ClientOptions {
 				Command::Echo => options.echo.parse(&cmd, arg),
 				Command::Health => {}
 				Command::DescribeNsm => {}
+				Command::MockAttestation => {}
+				Command::Attestation => {}
 			}
 		}
 
@@ -110,10 +124,12 @@ impl CLI {
 }
 
 mod handlers {
-	use qos_core::protocol::NsmRequest;
+
+	use qos_core::protocol::{NsmRequest, NsmResponse};
+	use serde_bytes::ByteBuf;
 
 	use super::*;
-	use crate::request;
+	use crate::{attest, request};
 
 	pub(super) fn health(options: ClientOptions) {
 		let path = &options.host.path("health");
@@ -146,19 +162,86 @@ mod handlers {
 
 	pub(super) fn describe_nsm(options: ClientOptions) {
 		let path = &options.host.path("message");
-
-		let response = request::post(
+		match request::post(
 			path,
 			ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM),
 		)
 		.map_err(|e| println!("{:?}", e))
-		.expect("Echo message failed");
+		.expect("Attestation request failed")
+		{
+			ProtocolMsg::NsmResponse(description) => {
+				println!("{:#?}", description)
+			}
+			other => panic!("Unexpected response {:?}", other),
+		}
+	}
+
+	pub(super) fn attestation(options: ClientOptions) {
+		let path = &options.host.path("message");
+		let response = request::post(
+			path,
+			ProtocolMsg::NsmRequest(NsmRequest::Attestation {
+				user_data: None,
+				nonce: None,
+				public_key: None,
+			}),
+		)
+		.map_err(|e| println!("{:?}", e))
+		.expect("Attestation request failed");
 
 		match response {
-			ProtocolMsg::NsmResponse(describe_nsm_response) => {
-				println!("{:?}", describe_nsm_response)
+			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
+				let root_cert =
+					cert_from_pem(AWS_ROOT_CERT).expect("Invalid root cert");
+				let now = std::time::SystemTime::now();
+				let seconds_since_epoch = now
+					.duration_since(std::time::UNIX_EPOCH)
+					.unwrap()
+					.as_secs();
+				match attestation_doc_from_der(
+					&document,
+					&root_cert[..],
+					seconds_since_epoch,
+				) {
+					Ok(_) => println!("Attestation doc verified!"),
+					Err(e) => panic!("{:?}", e),
+				};
 			}
-			_ => panic!("Unexpected describe nsm response"),
+			_ => panic!("Not an attestation response"),
+		}
+	}
+
+	pub(super) fn mock_attestation(options: ClientOptions) {
+		let path = &options.host.path("message");
+
+		let response = request::post(
+			path,
+			ProtocolMsg::NsmRequest(NsmRequest::Attestation {
+				user_data: None,
+				nonce: None,
+				public_key: Some(ByteBuf::from(
+					Rsa::generate(4096).unwrap().public_key_to_pem().unwrap(),
+				)),
+			}),
+		)
+		.map_err(|e| println!("{:?}", e))
+		.expect("Attestation request failed");
+
+		match response {
+			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
+				use attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
+				let root_cert =
+					cert_from_pem(AWS_ROOT_CERT).expect("Invalid root cert");
+				match attestation_doc_from_der(
+					&document,
+					&root_cert[..],
+					MOCK_SECONDS_SINCE_EPOCH,
+				) {
+					Ok(_) => println!("Attestation doc verified!"),
+					Err(e) => panic!("{:?}", e),
+				};
+			}
+			_ => panic!("Not an attestation response"),
 		}
 	}
 }

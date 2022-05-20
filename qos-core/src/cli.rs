@@ -38,6 +38,7 @@ impl EnclaveOptions {
 		self.parse_cid(cmd, arg);
 		self.parse_port(cmd, arg);
 		self.parse_usock(cmd, arg);
+		self.parse_mock(cmd, arg)
 	}
 
 	pub fn parse_cid(&mut self, cmd: &str, arg: &str) {

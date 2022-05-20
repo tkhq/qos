@@ -105,7 +105,8 @@ impl RsaPub {
 	) -> Result<bool, CryptoError> {
 		let public = PKey::from_rsa(self.pub_key.clone())?;
 		let mut verifier = Verifier::new(MessageDigest::sha256(), &public)?;
-		verifier.verify_oneshot(signature, msg).map_err(Into::into)
+		verifier.update(msg)?;
+		verifier.verify(signature).map_err(Into::into)
 	}
 }
 
@@ -120,6 +121,8 @@ impl TryFrom<PKey<Private>> for RsaPub {
 
 #[cfg(test)]
 mod test {
+	use openssl::sign::Verifier;
+
 	use super::*;
 
 	#[test]
