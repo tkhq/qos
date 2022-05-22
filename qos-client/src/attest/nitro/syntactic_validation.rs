@@ -6,6 +6,11 @@ use aws_nitro_enclaves_nsm_api::api::Digest;
 
 use super::*;
 
+const MIN_PCR_COUNT: usize = 1;
+const MAX_PRC_COUNT: usize = 32;
+const MAX_PCR_INDEX: usize = 32;
+const VALID_PCR_LENS: [usize; 3] = [32, 48, 64];
+
 /// Mandatory field
 pub(super) fn module_id(id: &String) -> Result<(), AttestError> {
 	if id.len() < 1 {
@@ -16,11 +21,12 @@ pub(super) fn module_id(id: &String) -> Result<(), AttestError> {
 }
 /// Mandatory field
 pub(super) fn pcrs(pcrs: &BTreeMap<usize, ByteBuf>) -> Result<(), AttestError> {
-	let is_valid_pcr_count = pcrs.len() > 0 && pcrs.len() <= 32;
+	let is_valid_pcr_count =
+		pcrs.len() >= MIN_PCR_COUNT && pcrs.len() <= MAX_PRC_COUNT;
 
 	let is_valid_index_and_len = pcrs.iter().all(|(idx, pcr)| {
-		let is_valid_idx = *idx <= 32;
-		let is_valid_pcr_len = [32, 48, 64].contains(&pcr.len());
+		let is_valid_idx = *idx <= MAX_PCR_INDEX;
+		let is_valid_pcr_len = VALID_PCR_LENS.contains(&pcr.len());
 		is_valid_idx && is_valid_pcr_len
 	});
 
