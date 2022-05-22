@@ -17,3 +17,4 @@ aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 aws-nitro-enclaves-cose = { version = "0.4.0", default-features = false, features = ["key_openssl_pkey"] }
 webpki = { version =  "0.22.0", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
+x509-parser = { version = "0.13.2", default-features = false }

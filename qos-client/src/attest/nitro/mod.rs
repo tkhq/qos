@@ -86,6 +86,13 @@ pub fn attestation_doc_from_der(
 	)?;
 	verify_cose_sign1_sig(&attestation_doc.certificate, &cose_sign1)?;
 
+	aws_spec_verify_cert_chain(
+		&attestation_doc.cabundle,
+		root_cert,
+		&attestation_doc.certificate,
+		validation_time,
+	)?;
+
 	// TODO:
 	// Additional validation for
 	// - timestamp is reasonable
@@ -121,6 +128,86 @@ fn verify_certificate_chain(
 		webpki::Time::from_seconds_since_unix_epoch(validation_time),
 	)
 	.map_err(|e| AttestError::InvalidCertChain(e))?;
+
+	Ok(())
+}
+
+fn aws_spec_verify_cert_chain(
+	cabundle: &Vec<ByteBuf>,
+	root_cert: &[u8],
+	end_entity_certificate: &[u8],
+	validation_time: u64,
+) -> Result<(), AttestError> {
+	use openssl::{
+		asn1::Asn1Time,
+		x509::{X509Req, X509},
+	};
+	use x509_parser::prelude::{FromDer, X509Certificate};
+	// For each certificate
+	// - verify the time is within the certificates current validity period
+
+	// Basic constraint: check the `pathLen`.
+	// For each certificate in the chain, only `pathLen` certificates may appear
+	// after it. This field must always be gte to the remaining chain wherever
+	// it appears. The identifier for basic constraints is 2.5.29.19
+	// As specified in section 3.2.3.2.
+	{
+		let chain = cabundle.iter().map(|encoded| {
+			let (_, cert) = X509Certificate::from_der(encoded).unwrap();
+			cert
+		});
+
+		let (_, ee_cert) =
+			X509Certificate::from_der(end_entity_certificate).unwrap();
+
+		let ee_value = ee_cert.basic_constraints().unwrap().unwrap().value;
+		// End entity is not a ca and it should not have a path len
+		assert!(!ee_value.ca);
+		assert!(ee_value.path_len_constraint.is_none());
+
+		// Reverse the chain, so we start with the end entity at index 0, and
+		// the root is at index len -1.
+		let valid_path_lens = chain.rev().enumerate().all(|(idx, cert)| {
+			// Verify pathLenConstraint
+			let value = cert.basic_constraints().unwrap().unwrap().value;
+			println!("value={:?}, idx={}", value, idx);
+			if value.ca {
+				true
+			} else if let Some(path_len) = value.path_len_constraint {
+				path_len == idx as u32
+			} else {
+				false
+			}
+		});
+
+		assert!(valid_path_lens);
+	}
+
+	let root_cert = X509::from_der(root_cert).unwrap();
+	let end_entity_cert = X509::from_der(end_entity_certificate).unwrap();
+	let cert_chain: Vec<X509> = cabundle
+		.iter()
+		.map(|encoded_cert| {
+			openssl::x509::X509::from_der(encoded_cert).unwrap()
+		})
+		.collect();
+
+	let asn1_time = Asn1Time::from_unix(validation_time as i64).unwrap();
+	let verify_time = |cert: &X509| {
+		*cert.not_after() > asn1_time && *cert.not_before() < asn1_time
+	};
+
+	// Verify the time
+	// As specified in section 3.2.3.1.
+	{
+		let valid_times = cert_chain.iter().all(|cert| verify_time(cert));
+		// Verify all certs in chain
+		assert!(valid_times);
+		// Verify EE
+		assert!(verify_time(&end_entity_cert));
+		// Verify root
+		assert!(verify_time(&root_cert))
+	}
 
 	Ok(())
 }
