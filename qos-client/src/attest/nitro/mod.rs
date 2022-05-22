@@ -167,10 +167,9 @@ fn aws_spec_verify_cert_chain(
 
 		// Reverse the chain, so we start with the end entity at index 0, and
 		// the root is at index len -1.
-		let valid_path_lens = chain.rev().enumerate().all(|(idx, cert)| {
+		let is_valid_path_lens = chain.rev().enumerate().all(|(idx, cert)| {
 			// Verify pathLenConstraint
 			let value = cert.basic_constraints().unwrap().unwrap().value;
-			println!("value={:?}, idx={}", value, idx);
 			if value.ca {
 				true
 			} else if let Some(path_len) = value.path_len_constraint {
@@ -180,7 +179,29 @@ fn aws_spec_verify_cert_chain(
 			}
 		});
 
-		assert!(valid_path_lens);
+		assert!(is_valid_path_lens);
+	}
+
+	// Key usage extension validation as specified in 3.2.3.3
+	{
+		let (_, ee_cert) =
+			X509Certificate::from_der(end_entity_certificate).unwrap();
+		let ee_has_digi_sig = ee_cert.key_usage().unwrap().unwrap().value.digital_signature();
+		assert!(ee_has_digi_sig);
+
+		let (_, root) = X509Certificate::from_der(root_cert).unwrap();
+		let root_has_key_cert_sign = root.key_usage().unwrap().unwrap().value.key_cert_sign();
+		assert!(root_has_key_cert_sign);
+
+		let mut chain = cabundle.iter().map(|encoded| {
+			let (_, cert) = X509Certificate::from_der(encoded).unwrap();
+			cert
+		});
+		let is_valid_key_cert_sign_bit = chain.all(|cert| {
+			let key_usage = cert.key_usage().unwrap().unwrap().value;
+			key_usage.key_cert_sign()
+		});
+		assert!(is_valid_key_cert_sign_bit);
 	}
 
 	let root_cert = X509::from_der(root_cert).unwrap();
