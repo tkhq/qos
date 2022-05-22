@@ -11,6 +11,13 @@ const MAX_PRC_COUNT: usize = 32;
 const MAX_PCR_INDEX: usize = 32;
 const VALID_PCR_LENS: [usize; 3] = [32, 48, 64];
 
+const MIN_PUB_KEY_LEN: usize = 1;
+const MIN_CERT_CHAIN_LEN: usize = 1;
+const MAX_PUB_KEY_LEN: usize = 1024;
+
+const MIN_CERT_LEN: usize = 1;
+const MAX_CERT_LEN: usize = 1024;
+
 /// Mandatory field
 pub(super) fn module_id(id: &String) -> Result<(), AttestError> {
 	if id.len() < 1 {
@@ -38,9 +45,10 @@ pub(super) fn pcrs(pcrs: &BTreeMap<usize, ByteBuf>) -> Result<(), AttestError> {
 }
 /// Mandatory field
 pub(super) fn cabundle(cabundle: &Vec<ByteBuf>) -> Result<(), AttestError> {
-	let is_valid_len = cabundle.len() > 0;
-	let is_valid_entries =
-		cabundle.iter().all(|cert| cert.len() >= 1 && cert.len() <= 1024);
+	let is_valid_len = cabundle.len() >= MIN_CERT_CHAIN_LEN;
+	let is_valid_entries = cabundle
+		.iter()
+		.all(|cert| cert.len() >= MIN_CERT_LEN && cert.len() <= MAX_CERT_LEN);
 
 	if !is_valid_len || !is_valid_entries {
 		Err(AttestError::InvalidCABundle)
@@ -67,7 +75,7 @@ pub(super) fn timestamp(t: u64) -> Result<(), AttestError> {
 /// Optional field
 pub(super) fn public_key(pub_key: &Option<ByteBuf>) -> Result<(), AttestError> {
 	if let Some(key) = pub_key {
-		(key.len() >= 1 && key.len() <= 1024)
+		(key.len() >= MIN_PUB_KEY_LEN && key.len() <= MAX_PUB_KEY_LEN)
 			.then(|| ())
 			.ok_or(AttestError::InvalidPubKey)?
 	}
