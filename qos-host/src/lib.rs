@@ -44,14 +44,12 @@ pub struct HostServer {
 
 impl HostServer {
 	/// Create a new [`HostServer`].
-	pub fn new(enclave_addr: SocketAddress, ip: [u8; 4], port: u16) -> Self {
-		Self { addr: SocketAddr::from((ip, port)), enclave_addr }
-	}
-
-	pub fn new_with_socket_addr(
-		enclave_addr: SocketAddress,
-		addr: SocketAddr,
-	) -> Self {
+	///
+	/// # Arguments
+	///
+	/// * `enclave_addr` - address of the enclave server.
+	/// * `addr` - address this server should bind to and listen on.
+	pub fn new(enclave_addr: SocketAddress, addr: SocketAddr) -> Self {
 		Self { addr, enclave_addr }
 	}
 
@@ -94,7 +92,7 @@ impl HostServer {
 				StatusCode::BAD_REQUEST,
 				serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
 					.expect("ProtocolMsg can always serialize. qed."),
-			)
+			);
 		}
 
 		match serde_cbor::from_slice(&body) {

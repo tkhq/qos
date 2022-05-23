@@ -1,4 +1,9 @@
-use std::{fs::File, io::Read, path::Path};
+use std::{
+	fs::File,
+	io::Read,
+	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+	path::Path,
+};
 
 use qos_client;
 use qos_core::{
@@ -13,8 +18,10 @@ use qos_host::HostServer;
 async fn end_to_end() {
 	let enclave_addr = SocketAddress::new_unix("./end_to_end.sock");
 	let enclave_addr2 = enclave_addr.clone();
-	let ip = [127, 0, 0, 1];
+	let ip = [127u8, 0, 0, 1];
 	let port = 3002;
+	let socket_addr = SocketAddrV4::new(Ipv4Addr::from(ip), port);
+	println!("test: {}", socket_addr.to_string());
 	let url =
 		format!("http://{}.{}.{}.{}:{}", ip[0], ip[1], ip[2], ip[3], port);
 	let health_url = format!("{}/{}", url, "health");
@@ -29,7 +36,10 @@ async fn end_to_end() {
 	});
 
 	std::thread::spawn(move || {
-		let host = HostServer::new(enclave_addr2, ip, port);
+		let host = HostServer::new(
+			enclave_addr2,
+			SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::from(ip), port)),
+		);
 
 		let rt = tokio::runtime::Builder::new_current_thread()
 			.enable_all()

@@ -9,5 +9,4 @@ qos-core = { path = "../qos-core" }
 # Third party
 axum = { version = "0.5.4", features = ["http1"], default-features = false }
 tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
-regex = { version = "1", default-features = false, features = ["std", "unicode"] }
 serde_cbor = { version = "0.11", default-features = false }

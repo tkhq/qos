@@ -192,7 +192,7 @@ pub fn shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
 	// This matches the behavior of bad shares (random output) and simplifies
 	// consumers.
 	if len == 0 {
-		return vec![]
+		return vec![];
 	}
 
 	let mut secret = vec![];

@@ -7,15 +7,15 @@ tab_spaces = 4
 
 # Line wrapping
 use_small_heuristics = "Max"
-wrap_comments = true
+# wrap_comments = true # waiting to be stable
 max_width = 80
 
 # Imports
-imports_granularity = "Crate"
+# imports_granularity = "Crate"  # waiting to be stable
 reorder_imports = true
-group_imports = "StdExternalCrate"
+# group_imports = "StdExternalCrate" # waiting to be stable
 
 # Random
 use_field_init_shorthand = true
 newline_style = "Unix"
-trailing_semicolon = false
+# trailing_semicolon = false # waiting to be stable

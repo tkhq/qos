@@ -1,3 +1,5 @@
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+
 use openssl::rsa::Rsa;
 use qos_core::{
 	io::SocketAddress,
@@ -76,7 +78,10 @@ fn protocol_load_e2e() {
 	});
 
 	std::thread::spawn(move || {
-		let host = HostServer::new(enclave_addr2, ip, port);
+		let host = HostServer::new(
+			enclave_addr2,
+			SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::from(ip), port)),
+		);
 
 		let rt = tokio::runtime::Builder::new_current_thread()
 			.enable_all()
