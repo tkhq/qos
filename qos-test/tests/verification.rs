@@ -23,7 +23,7 @@ fn protocol_load_e2e() {
 	//
 	// Part 1 - create signatures
 	//
-	let data = b"vape nation".to_vec();
+	let executable = b"vape nation".to_vec();
 	let key_range = 0..5;
 	let pairs: Vec<_> = key_range
 		.clone()
@@ -52,7 +52,7 @@ fn protocol_load_e2e() {
 		.iter()
 		.enumerate()
 		.map(|(i, pair)| SignatureWithPubKey {
-			signature: pair.sign_sha256(&mut data.clone()[..]).unwrap(),
+			signature: pair.sign_sha256(&mut executable.clone()[..]).unwrap(),
 			path: paths[i].to_string_lossy().into_owned(),
 		})
 		.collect();
@@ -93,7 +93,7 @@ fn protocol_load_e2e() {
 	//
 	// Part 3 - make request
 	//
-	let load_request = ProtocolMsg::LoadRequest(Load { data, signatures });
+	let load_request = ProtocolMsg::LoadRequest(Load { executable, signatures });
 	let response =
 		qos_client::request::post(&message_url, load_request).unwrap();
 	assert_eq!(response, ProtocolMsg::SuccessResponse);

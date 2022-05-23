@@ -82,7 +82,8 @@ impl server::Routable for Executor {
 }
 
 mod handlers {
-	use qos_crypto::RsaPub;
+	use std::io::Write;
+
 	use serde_bytes::ByteBuf;
 
 	use super::*;
@@ -179,7 +180,8 @@ mod handlers {
 		req: &ProtocolMsg,
 		_state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::LoadRequest(Load { executable, signatures }) = req {
+		if let ProtocolMsg::LoadRequest(Load { executable, signatures: _ }) = req {
+			 use std::os::unix::fs::PermissionsExt;
 			// for SignatureWithPubKey { signature, path } in signatures {
 			// 	let pub_key = match RsaPub::from_pem_file(path) {
 			// 		Ok(p) => p,
@@ -191,9 +193,9 @@ mod handlers {
 			// 	}
 			// }
 
-			let file = ok_or_return!(File::create(PIVOT_FILE));
-			let mut metadata = ok_or_return!(file.metadata());
-			ok_or_return!(metadata.permissions()).set_mode(0o700);
+			let mut file = ok_or_return!(File::create(PIVOT_FILE));
+			ok_or_return!(file.write_all(executable));
+			ok_or_return!(file.metadata()).permissions().set_mode(0o700);
 
 			Some(ProtocolMsg::SuccessResponse)
 		} else {

@@ -4,7 +4,8 @@ members = [
   "qos-core",
   "qos-crypto",
   "qos-host",
-  "qos-test"
+  "qos-test",
+  "pivot-test-bin"
 ]
 
 # [dependencies]

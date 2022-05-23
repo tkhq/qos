@@ -3,8 +3,7 @@ use std::env;
 use crate::{
 	coordinator::Coordinator,
 	io::SocketAddress,
-	protocol::{Executor, MockNsm, Nsm, NsmProvider},
-	server::SocketServer,
+	protocol::{MockNsm, Nsm, NsmProvider},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -115,11 +114,6 @@ impl CLI {
 		let options = EnclaveOptions::from(args);
 
 		Coordinator::execute(options);
-		// let addr = options.addr();
-		// let nsm = options.nsm();
-		// let executor = Executor::new(nsm);
-
-		// SocketServer::listen(addr, executor).unwrap();
 	}
 }
 

@@ -1,3 +1,6 @@
+//! The coordinator is responsible for initializing the enclave processes. Concretely it spawns
+//! the enclave server and launches the "pivot" executable once it becomes available in the file
+//! system.
 use std::fs::File;
 use std::process::Command;
 
@@ -5,8 +8,10 @@ use crate::cli::EnclaveOptions;
 use crate::{protocol::Executor, server::SocketServer};
 use crate::{PIVOT_FILE, SECRET_FILE};
 
+// TODO: should this be renamed to drive?
 pub struct Coordinator;
 impl Coordinator {
+	/// Run the coordinator.
 	pub fn execute(options: EnclaveOptions) {
 		std::thread::spawn(move || {
 			let addr = options.addr();
@@ -14,8 +19,6 @@ impl Coordinator {
 			let executor = Executor::new(nsm);
 			SocketServer::listen(addr, executor).unwrap();
 		});
-
-		// TODO: Reaper
 
 		loop {
 			if is_secret_loaded() && is_pivot_loaded() {
@@ -25,15 +28,16 @@ impl Coordinator {
 			std::thread::sleep(std::time::Duration::from_secs(1));
 		}
 
+		// "Pivot" to the executable by spawning a child process running the executable.
 		let mut pivot = Command::new(PIVOT_FILE);
-		let mut handle = pivot.spawn().expect("Process failed to execute...");
+		let mut child_process = pivot.spawn().expect("Process failed to execute...");
 
-		// restart loop
+		// Child process restart logic
 		loop {
-			match handle.wait() {
-				Ok(_) => {}
+			match child_process.wait() {
+				Ok(_) => { println!("Child process exited with no error")}, // TODO: should we break here?
 				Err(_) => {
-					handle =
+					child_process =
 						pivot.spawn().expect("Process failed to execute...");
 					continue;
 				}

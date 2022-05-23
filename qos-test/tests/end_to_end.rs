@@ -81,7 +81,7 @@ async fn end_to_end() {
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
-	let path = Path::new(qos_core::protocol::SECRET_FILE);
+	let path = Path::new(qos_core::SECRET_FILE);
 	assert!(!path.exists());
 
 	let rr = ProtocolMsg::ReconstructRequest;
@@ -91,7 +91,7 @@ async fn end_to_end() {
 
 	assert!(path.exists());
 	let mut content = Vec::new();
-	let mut file = File::open(qos_core::protocol::SECRET_FILE).unwrap();
+	let mut file = File::open(qos_core::SECRET_FILE).unwrap();
 	file.read_to_end(&mut content).unwrap();
 
 	assert_eq!(content, secret);
