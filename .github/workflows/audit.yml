@@ -1,4 +1,5 @@
 # Perform a audit any time a change is dependencies is detected in Cargo.toml or Cargo.lock
+# See: https://github.com/actions-rs/audit-check
 
 name: Security audit
 on:

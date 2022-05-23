@@ -20,7 +20,7 @@ impl SecretProvisioner {
 
 	pub fn add_share(&mut self, share: Share) -> Result<(), ProtocolError> {
 		if share.len() == 0 {
-			return Err(ProtocolError::InvalidShare)
+			return Err(ProtocolError::InvalidShare);
 		}
 
 		self.shares.push(share);
@@ -32,7 +32,7 @@ impl SecretProvisioner {
 
 		// TODO: Add better validation...
 		if secret.len() == 0 {
-			return Err(ProtocolError::ReconstructionError)
+			return Err(ProtocolError::ReconstructionError);
 		}
 
 		// TODO: Make errors more specific...
