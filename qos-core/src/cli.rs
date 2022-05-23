@@ -50,6 +50,7 @@ impl EnclaveOptions {
 		self.parse_usock(cmd, arg);
 		self.parse_mock(cmd, arg);
 		self.parse_secret_file(cmd, arg);
+		self.parse_pivot_file(cmd, arg);
 	}
 
 	pub fn parse_cid(&mut self, cmd: &str, arg: &str) {
@@ -180,6 +181,38 @@ mod test {
 				mock: false,
 				pivot_file: PIVOT_FILE.to_string(),
 				secret_file: SECRET_FILE.to_string(),
+			}
+		)
+	}
+
+	#[test]
+	fn parse_pivot_file_and_secret_file() {
+		let pivot = "pivot.file";
+		let secret = "secret.file";
+		let args = vec![
+			"--cid",
+			"6",
+			"--port",
+			"3999",
+			"--secret-file",
+			secret,
+			"--pivot-file",
+			pivot,
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+		let options = EnclaveOptions::from_args(args);
+
+		assert_eq!(
+			options,
+			EnclaveOptions {
+				cid: Some(6),
+				port: Some(3999),
+				usock: None,
+				mock: false,
+				pivot_file: pivot.to_string(),
+				secret_file: secret.to_string(),
 			}
 		)
 	}

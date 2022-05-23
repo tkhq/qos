@@ -46,20 +46,23 @@ impl Coordinator {
 
 		// Child process restart logic
 		loop {
-			match child_process.wait() {
-				Ok(status) => {
-					println!("Pivot executable exited with {}", status);
-					break
-				} // TODO: should we break here?
-				Err(status) => {
-					println!("Pivot executable error-ed with {}", status);
-					println!("Re-spawning pivot executable child process ...");
-					child_process =
-						pivot.spawn().expect("Process failed to execute...");
-					continue
-				}
+			let status = child_process
+				.wait()
+				.expect("Pivot executable never started...");
+			if status.success() {
+				println!("Pivot executable exited successfully ...");
+				break
+			} else {
+				println!(
+					"Re-spawning pivot executable child process - {}",
+					status
+				);
+				child_process =
+					pivot.spawn().expect("Process failed to execute ...");
 			}
 		}
+
+		println!("Coordinator exiting ...");
 	}
 }
 
