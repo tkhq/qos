@@ -29,7 +29,7 @@ impl Command {
 	}
 }
 
-impl From<&str > for Command {
+impl From<&str> for Command {
 	fn from(s: &str) -> Command {
 		match s {
 			"health" => Command::Health,
@@ -41,7 +41,6 @@ impl From<&str > for Command {
 		}
 	}
 }
-
 
 #[derive(Clone, PartialEq, Debug)]
 struct ClientOptions {
