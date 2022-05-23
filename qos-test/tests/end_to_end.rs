@@ -1,12 +1,9 @@
-use std::{collections::BTreeSet, fs::File, io::Read, path::Path};
+use std::{fs::File, io::Read, path::Path};
 
 use qos_client;
 use qos_core::{
 	io::SocketAddress,
-	protocol::{
-		Echo, Executor, MockNsm, NsmDigest, NsmRequest, NsmResponse,
-		ProtocolMsg, ProvisionRequest,
-	},
+	protocol::{Echo, Executor, MockNsm, ProtocolMsg, ProvisionRequest},
 	server::SocketServer,
 };
 use qos_crypto;

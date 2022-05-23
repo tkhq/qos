@@ -43,7 +43,7 @@ impl Executor {
 				Box::new(handlers::echo),
 				Box::new(handlers::provision),
 				Box::new(handlers::reconstruct),
-				Box::new(handlers::nsm),
+				Box::new(handlers::nsm_attestation),
 				Box::new(handlers::load),
 			],
 			state: ProtocolState::new(attestor),
@@ -55,7 +55,7 @@ impl server::Routable for Executor {
 	fn process(&mut self, mut req_bytes: Vec<u8>) -> Vec<u8> {
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
 			return serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
-				.expect("ProtocolMsg can always be serialized. qed.");
+				.expect("ProtocolMsg can always be serialized. qed.")
 		}
 
 		let msg_req = match serde_cbor::from_slice(&mut req_bytes) {
@@ -150,23 +150,17 @@ mod handlers {
 		}
 	}
 
-	pub fn nsm(
+	pub fn nsm_attestation(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::NsmRequest(req) = req {
-			let request = match req {
-				NsmRequest::Attestation { .. } => NsmRequest::Attestation {
-					user_data: None,
-					nonce: None,
-					public_key: Some(ByteBuf::from(
-						Rsa::generate(4096)
-							.unwrap()
-							.public_key_to_pem()
-							.unwrap(),
-					)),
-				},
-				_ => return Some(ProtocolMsg::ErrorResponse),
+		if let ProtocolMsg::NsmRequest(NsmRequest::Attestation { .. }) = req {
+			let request = NsmRequest::Attestation {
+				user_data: None,
+				nonce: None,
+				public_key: Some(ByteBuf::from(
+					Rsa::generate(4096).unwrap().public_key_to_pem().unwrap(),
+				)),
 			};
 			let fd = state.attestor.nsm_init();
 			let response = state.attestor.nsm_process_request(fd, request);
