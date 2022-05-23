@@ -6,26 +6,26 @@ on: [pull_request]
 name: PR
 
 jobs:
-  # build:
-  #   name: Build
-  #   runs-on: ubuntu-latest
-  #   strategy:
-  #     matrix:
-  #       target:
-  #         - ubuntu-latest
-  #         - macOS-latest
-  #   steps:
-  #     - uses: actions/checkout@v2
-  #     - uses: actions-rs/toolchain@v1
-  #       with:
-  #         toolchain: stable
-  #         target: ${{ matrix.target }}
-  #         override: true
-  #     - uses: actions-rs/cargo@v1
-  #       with:
-  #         use-cross: true
-  #         command: build
-  #         args: --release --target=${{ matrix.target }}
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - ubuntu-latest
+          - macOS-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release --target=${{ matrix.target }}
 
   test:
     name: Test Suite
