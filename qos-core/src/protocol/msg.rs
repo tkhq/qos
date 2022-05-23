@@ -31,10 +31,6 @@ impl PartialEq for ProtocolMsg {
 		serde_cbor::to_vec(self).expect("ProtocolMsg serializes. qed.")
 			== serde_cbor::to_vec(other).expect("ProtocolMsg serializes. qed.")
 	}
-
-	fn ne(&self, other: &Self) -> bool {
-		!self.eq(other)
-	}
 }
 
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]

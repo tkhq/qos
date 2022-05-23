@@ -28,9 +28,10 @@ impl Command {
 		}
 	}
 }
-impl Into<Command> for &str {
-	fn into(self) -> Command {
-		match self {
+
+impl From<&str > for Command {
+	fn from(s: &str) -> Command {
+		match s {
 			"health" => Command::Health,
 			"echo" => Command::Echo,
 			"describe-nsm" => Command::DescribeNsm,
@@ -41,12 +42,12 @@ impl Into<Command> for &str {
 	}
 }
 
+
 #[derive(Clone, PartialEq, Debug)]
 struct ClientOptions {
 	cmd: Command,
 	host: HostOptions,
 	echo: EchoOptions,
-	// ... other options
 }
 impl ClientOptions {
 	/// Create `ClientOptions` from the command line arguments.
@@ -59,14 +60,14 @@ impl ClientOptions {
 		};
 
 		let mut chunks = args.chunks_exact(2);
-		if chunks.remainder().len() > 0 {
+		if !chunks.remainder().is_empty() {
 			panic!("Unexpected number of arguments");
 		}
 
 		while let Some([cmd, arg]) = chunks.next() {
-			options.host.parse(&cmd, &arg);
+			options.host.parse(cmd, arg);
 			match options.cmd {
-				Command::Echo => options.echo.parse(&cmd, arg),
+				Command::Echo => options.echo.parse(cmd, arg),
 				Command::Health => {}
 				Command::DescribeNsm => {}
 				Command::MockAttestation => {}
@@ -104,9 +105,8 @@ impl EchoOptions {
 		Self { data: None }
 	}
 	fn parse(&mut self, cmd: &str, arg: &str) {
-		match cmd {
-			"--data" => self.data = Some(arg.to_string()),
-			_ => {}
+		if cmd == "--data" {
+			self.data = Some(arg.to_string())
 		};
 	}
 	fn data(&self) -> String {

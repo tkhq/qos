@@ -28,9 +28,9 @@ impl<R: Routable> SocketServer<R> {
 	) -> Result<(), SocketServerError> {
 		println!("SocketServer listening on {:?}", addr);
 
-		let mut listener = Listener::listen(addr)?;
+		let listener = Listener::listen(addr)?;
 
-		while let Some(stream) = listener.next() {
+		for stream in listener {
 			match stream.recv() {
 				Ok(payload) => {
 					let response = processor.process(payload);

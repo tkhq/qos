@@ -52,13 +52,13 @@ impl Executor {
 }
 
 impl server::Routable for Executor {
-	fn process(&mut self, mut req_bytes: Vec<u8>) -> Vec<u8> {
+	fn process(&mut self, req_bytes: Vec<u8>) -> Vec<u8> {
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
 			return serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
 				.expect("ProtocolMsg can always be serialized. qed.");
 		}
 
-		let msg_req = match serde_cbor::from_slice(&mut req_bytes) {
+		let msg_req = match serde_cbor::from_slice(&req_bytes) {
 			Ok(req) => req,
 			Err(_) => {
 				return serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)

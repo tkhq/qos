@@ -165,8 +165,8 @@ pub fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
 
 	// we need to store x for each point somewhere, so just prepend
 	// each array with it
-	for i in 0..n {
-		shares[i].push(u8::try_from(i + 1).expect("exceeded 255 shares"));
+	for (i, share) in shares.iter_mut().enumerate().take(n) {
+		share.push(u8::try_from(i + 1).expect("exceeded 255 shares"));
 	}
 
 	for x in secret {
@@ -174,8 +174,8 @@ pub fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
 		let f = gf256_generate(*x, k - 1);
 
 		// assign each share a point at f(i)
-		for i in 0..n {
-			shares[i].push(gf256_eval(
+		for (i, share) in shares.iter_mut().enumerate().take(n) {
+			share.push(gf256_eval(
 				&f,
 				u8::try_from(i + 1).expect("exceeeded 255 shares"),
 			));

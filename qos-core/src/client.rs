@@ -51,7 +51,7 @@ impl Client {
 			&serde_cbor::to_vec(&request)
 				.expect("ProtocolMsg can be serialized. qed."),
 		)?;
-		let mut response = stream.recv()?;
-		serde_cbor::from_slice(&mut response).map_err(Into::into)
+		let response = stream.recv()?;
+		serde_cbor::from_slice(&response).map_err(Into::into)
 	}
 }

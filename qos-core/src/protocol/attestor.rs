@@ -16,7 +16,7 @@ pub trait NsmProvider {
 pub struct Nsm;
 impl NsmProvider for Nsm {
 	fn nsm_process_request(&self, fd: i32, request: NsmRequest) -> NsmResponse {
-		nsm::driver::nsm_process_request(fd, request.into()).into()
+		nsm::driver::nsm_process_request(fd, request)
 	}
 
 	fn nsm_init(&self) -> i32 {

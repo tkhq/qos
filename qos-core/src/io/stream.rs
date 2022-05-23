@@ -64,7 +64,6 @@ pub struct Stream {
 }
 
 impl Stream {
-	#[must_use]
 	pub(crate) fn connect(addr: &SocketAddress) -> Result<Self, IOError> {
 		let mut err = IOError::UnknownError;
 
@@ -88,8 +87,7 @@ impl Stream {
 		Err(err)
 	}
 
-	#[must_use]
-	pub(crate) fn send(&self, buf: &Vec<u8>) -> Result<(), IOError> {
+	pub(crate) fn send(&self, buf: &[u8]) -> Result<(), IOError> {
 		let len = buf.len();
 
 		// First, send the length of the buffer
@@ -130,7 +128,6 @@ impl Stream {
 		Ok(())
 	}
 
-	#[must_use]
 	pub(crate) fn recv(&self) -> Result<Vec<u8>, IOError> {
 		// First, read the length
 		let length: usize = {
@@ -264,7 +261,7 @@ fn socket_fd(addr: &SocketAddress) -> Result<RawFd, IOError> {
 		// is both a type and protocol.
 		None,
 	)
-	.map_err(|e| IOError::NixError(e))
+	.map_err(IOError::NixError)
 }
 
 #[cfg(test)]

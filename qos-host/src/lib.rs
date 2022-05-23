@@ -98,13 +98,11 @@ impl HostServer {
 		}
 
 		match serde_cbor::from_slice(&body) {
-			Err(_) => {
-				return (
-					StatusCode::BAD_REQUEST,
-					serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
-						.expect("ProtocolMsg can always serialize. qed."),
-				)
-			}
+			Err(_) => (
+				StatusCode::BAD_REQUEST,
+				serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+					.expect("ProtocolMsg can always serialize. qed."),
+			),
 			Ok(request) => match state.enclave_client.send(request) {
 				Err(_) => (
 					StatusCode::INTERNAL_SERVER_ERROR,

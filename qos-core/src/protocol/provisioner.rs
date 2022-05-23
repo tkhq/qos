@@ -19,7 +19,7 @@ impl SecretProvisioner {
 	}
 
 	pub fn add_share(&mut self, share: Share) -> Result<(), ProtocolError> {
-		if share.len() == 0 {
+		if share.is_empty() {
 			return Err(ProtocolError::InvalidShare);
 		}
 
@@ -31,7 +31,7 @@ impl SecretProvisioner {
 		let secret = qos_crypto::shares_reconstruct(&self.shares);
 
 		// TODO: Add better validation...
-		if secret.len() == 0 {
+		if secret.is_empty() {
 			return Err(ProtocolError::ReconstructionError);
 		}
 

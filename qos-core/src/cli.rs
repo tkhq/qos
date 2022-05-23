@@ -6,7 +6,7 @@ use crate::{
 	server::SocketServer,
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Default, Clone, Debug, PartialEq)]
 pub struct EnclaveOptions {
 	cid: Option<u32>,
 	port: Option<u32>,
@@ -16,14 +16,14 @@ pub struct EnclaveOptions {
 
 impl EnclaveOptions {
 	pub fn new() -> Self {
-		Self { cid: None, port: None, usock: None, mock: false }
+		Default::default()
 	}
 
 	fn from(args: Vec<String>) -> EnclaveOptions {
 		let mut options = EnclaveOptions::new();
 
 		let mut chunks = args.chunks_exact(2);
-		if chunks.remainder().len() > 0 {
+		if !chunks.remainder().is_empty() {
 			panic!("Unexepected number of arguments")
 		}
 
@@ -42,45 +42,37 @@ impl EnclaveOptions {
 	}
 
 	pub fn parse_cid(&mut self, cmd: &str, arg: &str) {
-		match cmd {
-			"--cid" => {
-				self.cid = arg
-					.parse::<u32>()
-					.map_err(|_| {
-						panic!("Could not parse provided value for `--cid`")
-					})
-					.ok();
-			}
-			_ => {}
+		if cmd == "--cid" {
+			self.cid = arg
+				.parse::<u32>()
+				.map_err(|_| {
+					panic!("Could not parse provided value for `--cid`")
+				})
+				.ok();
 		}
 	}
 
 	pub fn parse_port(&mut self, cmd: &str, arg: &str) {
-		match cmd {
-			"--port" => {
-				self.port = arg
-					.parse::<u32>()
-					.map_err(|_| {
-						panic!("Could not parse provided value for `--port`")
-					})
-					.ok();
-			}
-			_ => {}
+		if cmd == "--port" {
+			self.port = arg
+				.parse::<u32>()
+				.map_err(|_| {
+					panic!("Could not parse provided value for `--port`")
+				})
+				.ok();
 		}
 	}
 
 	pub fn parse_usock(&mut self, cmd: &str, arg: &str) {
-		match cmd {
-			"--usock" => self.usock = Some(arg.to_string()),
-			_ => {}
+		if cmd == "--usock" {
+			self.usock = Some(arg.to_string())
 		}
 	}
 
 	pub fn parse_mock(&mut self, cmd: &str, arg: &str) {
-		match cmd {
-			"--mock" => self.mock = arg == "true",
-			_ => {}
-		}
+		if cmd == "--mock" {
+			self.mock = arg == "true"
+		};
 	}
 
 	pub fn addr(&self) -> SocketAddress {

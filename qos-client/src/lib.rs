@@ -24,7 +24,7 @@ pub mod request {
 			.read_to_end(&mut buf)
 			.map_err(|_| "send response error".to_string())?;
 
-		let pr = serde_cbor::from_slice(&mut buf)
+		let pr = serde_cbor::from_slice(&buf)
 			.map_err(|_| "send response error".to_string())?;
 
 		Ok(pr)

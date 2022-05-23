@@ -56,7 +56,7 @@ pub mod nitro {
 	/// AWS Nitro root CA certificate.
 	/// This should be validated against the below checksum:
 	/// `8cf60e2b2efca96c6a9e71e851d00c1b6991cc09eadbe64a6a1d1b1eb9faff7c`
-	pub(crate) const AWS_ROOT_CERT: &'static [u8] =
+	pub(crate) const AWS_ROOT_CERT: &[u8] =
 		std::include_bytes!("./aws_root_cert.pem");
 
 	/// Extract a DER encoded certificate from bytes representing a PEM encoded
@@ -126,7 +126,7 @@ pub mod nitro {
 
 	/// Verify the certificate chain against the root & end entity certificates.
 	fn verify_certificate_chain(
-		cabundle: &Vec<ByteBuf>,
+		cabundle: &[ByteBuf],
 		root_cert: &[u8],
 		end_entity_certificate: &[u8],
 		validation_time: u64,
@@ -136,7 +136,7 @@ pub mod nitro {
 		// (first element). Ordering is: root cert .. intermediate certs ..
 		// end entity cert.
 		let intermediate_certs: Vec<_> =
-			cabundle[1..].into_iter().map(|x| x.as_slice()).collect();
+			cabundle[1..].iter().map(|x| x.as_slice()).collect();
 
 		let anchor = vec![webpki::TrustAnchor::try_from_cert_der(root_cert)?];
 		let anchors = webpki::TlsServerTrustAnchors(&anchor);
@@ -148,7 +148,7 @@ pub mod nitro {
 			&intermediate_certs,
 			webpki::Time::from_seconds_since_unix_epoch(validation_time),
 		)
-		.map_err(|e| AttestError::InvalidCertChain(e))?;
+		.map_err(AttestError::InvalidCertChain)?;
 
 		Ok(())
 	}
@@ -187,8 +187,8 @@ pub mod nitro {
 		use super::*;
 
 		/// Mandatory field
-		pub(super) fn module_id(id: &String) -> Result<(), AttestError> {
-			if id.len() < 1 {
+		pub(super) fn module_id(id: &str) -> Result<(), AttestError> {
+			if id.is_empty() {
 				Err(AttestError::InvalidModuleId)
 			} else {
 				Ok(())
@@ -198,7 +198,7 @@ pub mod nitro {
 		pub(super) fn pcrs(
 			pcrs: &BTreeMap<usize, ByteBuf>,
 		) -> Result<(), AttestError> {
-			let is_valid_pcr_count = pcrs.len() > 0 && pcrs.len() <= 32;
+			let is_valid_pcr_count = !pcrs.is_empty() && pcrs.len() <= 32;
 
 			let is_valid_index_and_len = pcrs.iter().all(|(idx, pcr)| {
 				let is_valid_idx = *idx <= 32;
@@ -214,9 +214,9 @@ pub mod nitro {
 		}
 		/// Mandatory field
 		pub(super) fn cabundle(
-			cabundle: &Vec<ByteBuf>,
+			cabundle: &[ByteBuf],
 		) -> Result<(), AttestError> {
-			let is_valid_len = cabundle.len() > 0;
+			let is_valid_len = !cabundle.is_empty();
 			let is_valid_entries = cabundle
 				.iter()
 				.all(|cert| cert.len() >= 1 || cert.len() <= 1024);
