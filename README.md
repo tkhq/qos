@@ -8,6 +8,10 @@ cargo test --all
 cargo +nightly fmt
 ```
 
+# System requirements
+
+- openssl >= 1.1.0
+
 # Key parts
 
 ## Enclave
