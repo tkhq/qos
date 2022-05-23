@@ -18,6 +18,8 @@ pub enum AttestError {
 	InvalidTimeStamp,
 	InvalidPubKey,
 	InvalidBytes,
+	InvalidIntermediateCerts,
+	InvalidRootCert,
 }
 
 impl From<webpki::Error> for AttestError {

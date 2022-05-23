@@ -93,6 +93,13 @@ pub fn attestation_doc_from_der(
 		validation_time,
 	)?;
 
+	aws_spec_verify_certs_only_openssl(
+		&attestation_doc.cabundle,
+		root_cert,
+		&attestation_doc.certificate,
+		validation_time,
+	)?;
+
 	// TODO:
 	// Additional validation for
 	// - timestamp is reasonable
@@ -138,13 +145,50 @@ fn aws_spec_verify_cert_chain(
 	end_entity_certificate: &[u8],
 	validation_time: u64,
 ) -> Result<(), AttestError> {
-	use openssl::{
-		asn1::Asn1Time,
-		x509::{X509Req, X509},
-	};
 	use x509_parser::prelude::{FromDer, X509Certificate};
-	// For each certificate
-	// - verify the time is within the certificates current validity period
+
+	{
+		let (_, ee_cert) =
+			X509Certificate::from_der(end_entity_certificate).unwrap();
+		let subject = ee_cert.subject();
+
+		let organization = subject
+			.iter_organization()
+			.map(|org| org.attr_value().content.clone())
+			.collect::<Vec<_>>();
+		assert_eq!("Amazon", organization[0].as_str().unwrap());
+
+		let organizational_unit = subject
+			.iter_organizational_unit()
+			.map(|org| org.attr_value().content.clone())
+			.collect::<Vec<_>>();
+		assert_eq!("AWS", organizational_unit[0].as_str().unwrap());
+
+		let country = subject
+			.iter_country()
+			.map(|org| org.attr_value().content.clone())
+			.collect::<Vec<_>>();
+		assert_eq!("US", country[0].as_str().unwrap());
+
+		let state_or_provence = subject
+			.iter_state_or_province()
+			.map(|org| org.attr_value().content.clone())
+			.collect::<Vec<_>>();
+		assert_eq!("Washington", state_or_provence[0].as_str().unwrap());
+
+		let locality = subject
+			.iter_locality()
+			.map(|org| org.attr_value().content.clone())
+			.collect::<Vec<_>>();
+		assert_eq!("Seattle", locality[0].as_str().unwrap());
+
+		// ee_cert.serial.gt(1);
+		// ee_cert.serial.lt(2.pow(160));
+	}
+
+	{}
+
+	// Root cert: CN=aws.nitro-enclaves, C=US, O=Amazon, OU=AWS
 
 	// Basic constraint: check the `pathLen`.
 	// For each certificate in the chain, only `pathLen` certificates may appear
@@ -186,11 +230,13 @@ fn aws_spec_verify_cert_chain(
 	{
 		let (_, ee_cert) =
 			X509Certificate::from_der(end_entity_certificate).unwrap();
-		let ee_has_digi_sig = ee_cert.key_usage().unwrap().unwrap().value.digital_signature();
+		let ee_has_digi_sig =
+			ee_cert.key_usage().unwrap().unwrap().value.digital_signature();
 		assert!(ee_has_digi_sig);
 
 		let (_, root) = X509Certificate::from_der(root_cert).unwrap();
-		let root_has_key_cert_sign = root.key_usage().unwrap().unwrap().value.key_cert_sign();
+		let root_has_key_cert_sign =
+			root.key_usage().unwrap().unwrap().value.key_cert_sign();
 		assert!(root_has_key_cert_sign);
 
 		let mut chain = cabundle.iter().map(|encoded| {
@@ -204,31 +250,91 @@ fn aws_spec_verify_cert_chain(
 		assert!(is_valid_key_cert_sign_bit);
 	}
 
-	let root_cert = X509::from_der(root_cert).unwrap();
-	let end_entity_cert = X509::from_der(end_entity_certificate).unwrap();
-	let cert_chain: Vec<X509> = cabundle
-		.iter()
-		.map(|encoded_cert| {
-			openssl::x509::X509::from_der(encoded_cert).unwrap()
-		})
-		.collect();
+	Ok(())
+}
+
+/// Do all the verification we can with just the rust openssl library.
+fn aws_spec_verify_certs_only_openssl(
+	cabundle: &Vec<ByteBuf>,
+	root_cert: &[u8],
+	end_entity_certificate: &[u8],
+	validation_time: u64,
+) -> Result<(), AttestError> {
+	use openssl::{asn1::Asn1Time, nid::Nid, x509::X509};
 
 	let asn1_time = Asn1Time::from_unix(validation_time as i64).unwrap();
 	let verify_time = |cert: &X509| {
 		*cert.not_after() > asn1_time && *cert.not_before() < asn1_time
 	};
 
-	// Verify the time
-	// As specified in section 3.2.3.1.
+	// End entity cert verification
 	{
-		let valid_times = cert_chain.iter().all(|cert| verify_time(cert));
-		// Verify all certs in chain
-		assert!(valid_times);
-		// Verify EE
-		assert!(verify_time(&end_entity_cert));
-		// Verify root
-		assert!(verify_time(&root_cert))
+		let end_entity_cert = X509::from_der(end_entity_certificate).unwrap();
+		let verify_name = |cert: &X509| {
+			cert.subject_name().entries().all(|field| {
+				let data = field.data().as_utf8().unwrap().to_string();
+				match field.object().nid() {
+					Nid::COMMONNAME => {
+						/* nitro module id  .. region */
+						true
+					}
+					Nid::ORGANIZATIONNAME => data == "Amazon".to_string(),
+					Nid::ORGANIZATIONALUNITNAME => data == "AWS".to_string(),
+					Nid::COUNTRYNAME => data == "US".to_string(),
+					Nid::STATEORPROVINCENAME => {
+						data == "Washington".to_string()
+					}
+					Nid::LOCALITYNAME => data == "Seattle".to_string(),
+					_ => {
+						// /* "unexpected x509 subject name" */
+						false
+					}
+				}
+			})
+		};
+
+		(verify_time(&end_entity_cert) && verify_name(&end_entity_cert))
+			.then(|| ())
+			.ok_or(AttestError::InvalidEndEntityCert)?;
 	}
+
+	// Root cert verification
+	{
+		let root_cert = X509::from_der(root_cert).unwrap();
+		let verify_name = |cert: &X509| {
+			cert.subject_name().entries().all(|field| {
+				let data = field.data().as_utf8().unwrap().to_string();
+				match field.object().nid() {
+					Nid::COMMONNAME => data == "aws.nitro-enclaves",
+					Nid::ORGANIZATIONNAME => data == "Amazon".to_string(),
+					Nid::ORGANIZATIONALUNITNAME => data == "AWS".to_string(),
+					Nid::COUNTRYNAME => data == "US".to_string(),
+					Nid::STATEORPROVINCENAME => {
+						data == "Washington".to_string()
+					}
+					Nid::LOCALITYNAME => data == "Seattle".to_string(),
+					_ => {
+						/* "unexpected x509 subject name" */
+						false
+					}
+				}
+			})
+		};
+
+		(verify_time(&root_cert) && verify_name(&root_cert))
+			.then(|| ())
+			.ok_or(AttestError::InvalidRootCert)?;
+	}
+
+	// Intermediate cert verification
+	cabundle
+		.iter()
+		.map(|encoded_cert| {
+			openssl::x509::X509::from_der(encoded_cert).unwrap()
+		})
+		.all(|cert| verify_time(&cert))
+		.then(|| ())
+		.ok_or(AttestError::InvalidIntermediateCerts)?;
 
 	Ok(())
 }
