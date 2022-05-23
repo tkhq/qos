@@ -25,7 +25,6 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --target=${{ matrix.target }}
 
   test:
     name: Test Suite
