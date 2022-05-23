@@ -86,7 +86,7 @@ pub fn attestation_doc_from_der(
 	)?;
 	verify_cose_sign1_sig(&attestation_doc.certificate, &cose_sign1)?;
 
-	aws_spec_verify_cert_chain(
+	aws_spec_verify_cert_chain_x509_parse(
 		&attestation_doc.cabundle,
 		root_cert,
 		&attestation_doc.certificate,
@@ -139,121 +139,86 @@ fn verify_certificate_chain(
 	Ok(())
 }
 
-fn aws_spec_verify_cert_chain(
+/// Verification of the cert chain that requires the x509 parse library.
+/// Includes verifying the basic constraints and key usage.
+fn aws_spec_verify_cert_chain_x509_parse(
 	cabundle: &Vec<ByteBuf>,
 	root_cert: &[u8],
 	end_entity_certificate: &[u8],
-	validation_time: u64,
+	_validation_time: u64,
 ) -> Result<(), AttestError> {
 	use x509_parser::prelude::{FromDer, X509Certificate};
 
+	// End entity cert verification
 	{
 		let (_, ee_cert) =
 			X509Certificate::from_der(end_entity_certificate).unwrap();
-		let subject = ee_cert.subject();
+		let ee_basic_constraints =
+			ee_cert.basic_constraints().unwrap().unwrap().value;
 
-		let organization = subject
-			.iter_organization()
-			.map(|org| org.attr_value().content.clone())
-			.collect::<Vec<_>>();
-		assert_eq!("Amazon", organization[0].as_str().unwrap());
+		//  Basic constraint validation as specified in section 3.2.3.2.
+		let is_not_ca = !ee_basic_constraints.ca;
+		let is_none_path_len =
+			ee_basic_constraints.path_len_constraint.is_none();
 
-		let organizational_unit = subject
-			.iter_organizational_unit()
-			.map(|org| org.attr_value().content.clone())
-			.collect::<Vec<_>>();
-		assert_eq!("AWS", organizational_unit[0].as_str().unwrap());
-
-		let country = subject
-			.iter_country()
-			.map(|org| org.attr_value().content.clone())
-			.collect::<Vec<_>>();
-		assert_eq!("US", country[0].as_str().unwrap());
-
-		let state_or_provence = subject
-			.iter_state_or_province()
-			.map(|org| org.attr_value().content.clone())
-			.collect::<Vec<_>>();
-		assert_eq!("Washington", state_or_provence[0].as_str().unwrap());
-
-		let locality = subject
-			.iter_locality()
-			.map(|org| org.attr_value().content.clone())
-			.collect::<Vec<_>>();
-		assert_eq!("Seattle", locality[0].as_str().unwrap());
-
-		// ee_cert.serial.gt(1);
-		// ee_cert.serial.lt(2.pow(160));
-	}
-
-	{}
-
-	// Root cert: CN=aws.nitro-enclaves, C=US, O=Amazon, OU=AWS
-
-	// Basic constraint: check the `pathLen`.
-	// For each certificate in the chain, only `pathLen` certificates may appear
-	// after it. This field must always be gte to the remaining chain wherever
-	// it appears. The identifier for basic constraints is 2.5.29.19
-	// As specified in section 3.2.3.2.
-	{
-		let chain = cabundle.iter().map(|encoded| {
-			let (_, cert) = X509Certificate::from_der(encoded).unwrap();
-			cert
-		});
-
-		let (_, ee_cert) =
-			X509Certificate::from_der(end_entity_certificate).unwrap();
-
-		let ee_value = ee_cert.basic_constraints().unwrap().unwrap().value;
-		// End entity is not a ca and it should not have a path len
-		assert!(!ee_value.ca);
-		assert!(ee_value.path_len_constraint.is_none());
-
-		// Reverse the chain, so we start with the end entity at index 0, and
-		// the root is at index len -1.
-		let is_valid_path_lens = chain.rev().enumerate().all(|(idx, cert)| {
-			// Verify pathLenConstraint
-			let value = cert.basic_constraints().unwrap().unwrap().value;
-			if value.ca {
-				true
-			} else if let Some(path_len) = value.path_len_constraint {
-				path_len == idx as u32
-			} else {
-				false
-			}
-		});
-
-		assert!(is_valid_path_lens);
-	}
-
-	// Key usage extension validation as specified in 3.2.3.3
-	{
-		let (_, ee_cert) =
-			X509Certificate::from_der(end_entity_certificate).unwrap();
-		let ee_has_digi_sig =
+		// Key usage extension validation as specified in 3.2.3.3
+		let is_marked_digital_signature =
 			ee_cert.key_usage().unwrap().unwrap().value.digital_signature();
-		assert!(ee_has_digi_sig);
 
+		(is_none_path_len && is_not_ca && is_marked_digital_signature)
+			.then(|| ())
+			.ok_or(AttestError::InvalidEndEntityCert)?;
+	}
+
+	// Root cert verification
+	{
 		let (_, root) = X509Certificate::from_der(root_cert).unwrap();
-		let root_has_key_cert_sign =
+		let root_is_marked_key_cert_sign =
 			root.key_usage().unwrap().unwrap().value.key_cert_sign();
-		assert!(root_has_key_cert_sign);
+		root_is_marked_key_cert_sign
+			.then(|| ())
+			.ok_or(AttestError::InvalidRootCert)?;
+	}
 
-		let mut chain = cabundle.iter().map(|encoded| {
+	// Intermediate certificate verification
+	cabundle
+		.iter()
+		.map(|encoded| {
 			let (_, cert) = X509Certificate::from_der(encoded).unwrap();
 			cert
-		});
-		let is_valid_key_cert_sign_bit = chain.all(|cert| {
-			let key_usage = cert.key_usage().unwrap().unwrap().value;
-			key_usage.key_cert_sign()
-		});
-		assert!(is_valid_key_cert_sign_bit);
-	}
+		})
+		.enumerate()
+		// Reverse it so the first certificate is the one right before the end
+		// entity and thus has the shortest path length.
+		.rev()
+		.all(|(idx, cert)| {
+			// Key usage extension validation as specified in 3.2.3.3
+			let is_marked_key_cert_sign =
+				cert.key_usage().unwrap().unwrap().value.key_cert_sign();
+
+			//  Basic constraint validation as specified in section 3.2.3.2.
+			let basic_constraints =
+				cert.basic_constraints().unwrap().unwrap().value;
+			let is_correct_path_len_constraint = if basic_constraints.ca {
+				true
+			} else {
+				if let Some(path_len) = basic_constraints.path_len_constraint {
+					path_len as usize >= idx
+				} else {
+					false
+				}
+			};
+
+			is_marked_key_cert_sign && is_correct_path_len_constraint
+		})
+		.then(|| ())
+		.ok_or(AttestError::InvalidIntermediateCerts)?;
 
 	Ok(())
 }
 
 /// Do all the verification we can with just the rust openssl library.
+/// Includes verifying the time and name of the certificates.
 fn aws_spec_verify_certs_only_openssl(
 	cabundle: &Vec<ByteBuf>,
 	root_cert: &[u8],
