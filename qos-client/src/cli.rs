@@ -1,9 +1,8 @@
 use std::env;
 
+use openssl::rsa::Rsa;
 use qos_core::protocol::{Echo, ProtocolMsg};
 use qos_host::cli::HostOptions;
-
-use openssl::rsa::Rsa;
 
 use crate::attest::nitro::{
 	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT,
