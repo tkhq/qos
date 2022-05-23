@@ -8,7 +8,7 @@ name: PR
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.target }}
     strategy:
       matrix:
         target:
@@ -25,6 +25,7 @@ jobs:
         with:
           use-cross: true
           command: build
+          args: --target=${{ matrix.target }}
 
   test:
     name: Test Suite
