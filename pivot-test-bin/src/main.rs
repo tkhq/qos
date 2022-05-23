@@ -5,7 +5,8 @@ fn main() {
 		let mut rng = rand::thread_rng();
 
 		let n: u64 = rng.gen();
-		if n % 20 == 0 {
+		if n % u8::MAX as u64 == 0 {
+			// Randomly panic sometimes
 			panic!("The pivot binary is panicking")
 		}
 	}
