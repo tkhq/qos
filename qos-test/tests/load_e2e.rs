@@ -8,7 +8,7 @@ use qos_crypto::{RsaPair, RsaPub};
 use qos_host::HostServer;
 
 #[test]
-fn protocol_load_e2e() {
+fn load_e2e() {
 	let mut base_path = std::env::current_dir().unwrap();
 	base_path.push("mock");
 	// ensure the base path exists
@@ -77,7 +77,8 @@ fn protocol_load_e2e() {
 	// Spawn enclave
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
-		let executor = Executor::new(Box::new(attestor), secret_file2, pivot_file2);
+		let executor =
+			Executor::new(Box::new(attestor), secret_file2, pivot_file2);
 
 		SocketServer::listen(enclave_addr, executor).unwrap()
 	});

@@ -10,7 +10,7 @@ use qos_crypto;
 use qos_host::HostServer;
 
 #[tokio::test]
-async fn end_to_end() {
+async fn provision_e2e() {
 	let enclave_addr = SocketAddress::new_unix("./end_to_end.sock");
 	let enclave_addr2 = enclave_addr.clone();
 	let ip = [127, 0, 0, 1];
