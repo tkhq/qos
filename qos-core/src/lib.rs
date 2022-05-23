@@ -15,6 +15,6 @@ pub const SECRET_FILE: &str = "./qos.secret";
 pub const SECRET_FILE: &str = "/qos.secret";
 
 #[cfg(not(feature = "vm"))]
-pub const PIVOT_FILE: &str = "./qos.pivot";
+pub const PIVOT_FILE: &str = "../target/debug/pivot-test-bin";
 #[cfg(feature = "vm")]
 pub const PIVOT_FILE: &str = "/qos.pivot";

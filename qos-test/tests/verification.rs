@@ -67,11 +67,17 @@ fn protocol_load_e2e() {
 	let url =
 		format!("http://{}.{}.{}.{}:{}", ip[0], ip[1], ip[2], ip[3], port);
 	let message_url = format!("{}/{}", url, "message");
+	let pivot_file = "./verification.pivot".to_string();
+	let secret_file = "./verification.secret".to_string();
+
+	// Spawn enclave
+	let pivot_file2 = pivot_file.clone();
+	let secret_file2 = secret_file.clone();
 
 	// Spawn enclave
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
-		let executor = Executor::new(Box::new(attestor));
+		let executor = Executor::new(Box::new(attestor), secret_file2, pivot_file2);
 
 		SocketServer::listen(enclave_addr, executor).unwrap()
 	});
@@ -93,7 +99,8 @@ fn protocol_load_e2e() {
 	//
 	// Part 3 - make request
 	//
-	let load_request = ProtocolMsg::LoadRequest(Load { executable, signatures });
+	let load_request =
+		ProtocolMsg::LoadRequest(Load { executable, signatures });
 	let response =
 		qos_client::request::post(&message_url, load_request).unwrap();
 	assert_eq!(response, ProtocolMsg::SuccessResponse);
@@ -101,6 +108,7 @@ fn protocol_load_e2e() {
 	//
 	// Part 4 - clean up the generated keys
 	//
+	std::fs::remove_file(&pivot_file).unwrap();
 	for path in paths {
 		std::fs::remove_file(path).unwrap()
 	}

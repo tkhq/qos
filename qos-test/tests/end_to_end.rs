@@ -20,10 +20,16 @@ async fn end_to_end() {
 	let health_url = format!("{}/{}", url, "health");
 	let message_url = format!("{}/{}", url, "message");
 
+	let pivot_file = "./end-to-end.pivot".to_string();
+	let secret_file = "./end-to-end.secret".to_string();
+
 	// Spawn enclave
+	let pivot_file2 = pivot_file.clone();
+	let secret_file2 = secret_file.clone();
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
-		let executor = Executor::new(Box::new(attestor));
+		let executor =
+			Executor::new(Box::new(attestor), secret_file2, pivot_file2);
 
 		SocketServer::listen(enclave_addr, executor).unwrap()
 	});
@@ -78,7 +84,7 @@ async fn end_to_end() {
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
-	let path = Path::new(qos_core::SECRET_FILE);
+	let path = Path::new(&secret_file);
 	assert!(!path.exists());
 
 	let rr = ProtocolMsg::ReconstructRequest;
@@ -88,7 +94,7 @@ async fn end_to_end() {
 
 	assert!(path.exists());
 	let mut content = Vec::new();
-	let mut file = File::open(qos_core::SECRET_FILE).unwrap();
+	let mut file = File::open(&secret_file).unwrap();
 	file.read_to_end(&mut content).unwrap();
 
 	assert_eq!(content, secret);
@@ -109,4 +115,6 @@ async fn end_to_end() {
 	// 	digest: NsmDigest::SHA256,
 	// });
 	// assert_eq!(response, expected);
+
+	// Clean up
 }

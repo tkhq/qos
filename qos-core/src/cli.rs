@@ -4,6 +4,7 @@ use crate::{
 	coordinator::Coordinator,
 	io::SocketAddress,
 	protocol::{MockNsm, Nsm, NsmProvider},
+	PIVOT_FILE, SECRET_FILE,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -12,11 +13,20 @@ pub struct EnclaveOptions {
 	port: Option<u32>,
 	usock: Option<String>,
 	mock: bool,
+	secret_file: String,
+	pivot_file: String,
 }
 
 impl EnclaveOptions {
 	pub fn new() -> Self {
-		Self { cid: None, port: None, usock: None, mock: false }
+		Self {
+			cid: None,
+			port: None,
+			usock: None,
+			mock: false,
+			secret_file: SECRET_FILE.to_owned(),
+			pivot_file: PIVOT_FILE.to_owned(),
+		}
 	}
 
 	fn from(args: Vec<String>) -> EnclaveOptions {
@@ -38,7 +48,8 @@ impl EnclaveOptions {
 		self.parse_cid(cmd, arg);
 		self.parse_port(cmd, arg);
 		self.parse_usock(cmd, arg);
-		self.parse_mock(cmd, arg)
+		self.parse_mock(cmd, arg);
+		self.parse_secret_file(cmd, arg);
 	}
 
 	pub fn parse_cid(&mut self, cmd: &str, arg: &str) {
@@ -83,6 +94,18 @@ impl EnclaveOptions {
 		}
 	}
 
+	pub fn parse_secret_file(&mut self, cmd: &str, arg: &str) {
+		if cmd == "--secret-file" {
+			self.secret_file = arg.to_owned()
+		}
+	}
+
+	pub fn parse_pivot_file(&mut self, cmd: &str, arg: &str) {
+		if cmd == "--pivot-file" {
+			self.pivot_file = arg.to_owned()
+		}
+	}
+
 	pub fn addr(&self) -> SocketAddress {
 		match self.clone() {
 			#[cfg(feature = "vm")]
@@ -102,6 +125,16 @@ impl EnclaveOptions {
 		} else {
 			Box::new(Nsm)
 		}
+	}
+
+	/// Defaults to [`SECRET_FILE`] if not explicitly specified/
+	pub fn secret_file(&self) -> String {
+		self.secret_file.clone()
+	}
+
+	/// Defaults to [`PIVOT_FILE`] if not explicitly specified/
+	pub fn pivot_file(&self) -> String {
+		self.pivot_file.clone()
 	}
 }
 
@@ -135,7 +168,9 @@ mod test {
 				cid: Some(6),
 				port: Some(3999),
 				usock: None,
-				mock: false
+				mock: false,
+				pivot_file: PIVOT_FILE.to_string(),
+				secret_file: SECRET_FILE.to_string(),
 			}
 		)
 	}
@@ -154,7 +189,9 @@ mod test {
 				cid: None,
 				port: None,
 				usock: Some("./test.sock".to_string()),
-				mock: false
+				mock: false,
+				pivot_file: PIVOT_FILE.to_string(),
+				secret_file: SECRET_FILE.to_string(),
 			}
 		)
 	}
@@ -167,6 +204,8 @@ mod test {
 			port: Some(3000),
 			usock: Some("./test.sock".to_string()),
 			mock: false,
+			pivot_file: PIVOT_FILE.to_string(),
+			secret_file: SECRET_FILE.to_string(),
 		};
 		options.addr();
 	}
@@ -179,6 +218,8 @@ mod test {
 			port: Some(3000),
 			usock: None,
 			mock: false,
+			pivot_file: PIVOT_FILE.to_string(),
+			secret_file: SECRET_FILE.to_string(),
 		};
 		options.addr();
 	}
@@ -191,6 +232,8 @@ mod test {
 			port: Some(3000),
 			usock: None,
 			mock: false,
+			pivot_file: PIVOT_FILE.to_string(),
+			secret_file: SECRET_FILE.to_string(),
 		};
 		match options.addr() {
 			SocketAddress::Vsock(_) => {}
@@ -207,6 +250,8 @@ mod test {
 			port: None,
 			usock: Some("./dev.sock".to_string()),
 			mock: false,
+			pivot_file: PIVOT_FILE.to_string(),
+			secret_file: SECRET_FILE.to_string(),
 		};
 		match options.addr() {
 			SocketAddress::Unix(_) => {}

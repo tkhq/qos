@@ -4,13 +4,14 @@ mod attestor;
 mod msg;
 mod provisioner;
 
+use std::fs::File;
+
 pub use attestor::{MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT};
 pub use msg::*;
 use openssl::rsa::Rsa;
 use provisioner::*;
-use std::fs::File;
 
-use crate::{server, PIVOT_FILE};
+use crate::server;
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
@@ -21,12 +22,17 @@ type ProtocolHandler =
 pub struct ProtocolState {
 	provisioner: SecretProvisioner,
 	attestor: Box<dyn NsmProvider>,
+	pivot_file: String,
 }
 
 impl ProtocolState {
-	pub fn new(attestor: Box<dyn NsmProvider>) -> Self {
-		let provisioner = SecretProvisioner::new();
-		Self { attestor, provisioner }
+	fn new(
+		attestor: Box<dyn NsmProvider>,
+		secret_file: String,
+		pivot_file: String,
+	) -> Self {
+		let provisioner = SecretProvisioner::new(secret_file);
+		Self { attestor, provisioner, pivot_file }
 	}
 }
 
@@ -36,7 +42,11 @@ pub struct Executor {
 }
 
 impl Executor {
-	pub fn new(attestor: Box<dyn NsmProvider>) -> Self {
+	pub fn new(
+		attestor: Box<dyn NsmProvider>,
+		secret_file: String,
+		pivot_file: String,
+	) -> Self {
 		Self {
 			routes: vec![
 				Box::new(handlers::empty),
@@ -46,7 +56,7 @@ impl Executor {
 				Box::new(handlers::nsm_attestation),
 				Box::new(handlers::load),
 			],
-			state: ProtocolState::new(attestor),
+			state: ProtocolState::new(attestor, secret_file, pivot_file),
 		}
 	}
 }
@@ -172,10 +182,12 @@ mod handlers {
 
 	pub fn load(
 		req: &ProtocolMsg,
-		_state: &mut ProtocolState,
+		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::LoadRequest(Load { executable, signatures: _ }) = req {
-			 use std::os::unix::fs::PermissionsExt;
+		if let ProtocolMsg::LoadRequest(Load { executable, signatures: _ }) =
+			req
+		{
+			use std::os::unix::fs::PermissionsExt;
 			// for SignatureWithPubKey { signature, path } in signatures {
 			// 	let pub_key = match RsaPub::from_pem_file(path) {
 			// 		Ok(p) => p,
@@ -187,7 +199,8 @@ mod handlers {
 			// 	}
 			// }
 
-			let mut file = ok_or_return!(File::create(PIVOT_FILE));
+			let mut file =
+				ok_or_return!(File::create(state.pivot_file.clone()));
 			ok_or_return!(file.write_all(executable));
 			ok_or_return!(file.metadata()).permissions().set_mode(0o700);
 
