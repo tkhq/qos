@@ -29,7 +29,7 @@ impl EnclaveOptions {
 		}
 	}
 
-	fn from(args: Vec<String>) -> EnclaveOptions {
+	fn from_args(args: Vec<String>) -> EnclaveOptions {
 		let mut options = EnclaveOptions::new();
 
 		let mut chunks = args.chunks_exact(2);
@@ -138,13 +138,19 @@ impl EnclaveOptions {
 	}
 }
 
+impl From<Vec<String>> for EnclaveOptions {
+	fn from(args: Vec<String>) -> Self {
+		Self::from_args(args)
+	}
+}
+
 pub struct CLI {}
 impl CLI {
 	pub fn execute() {
 		let mut args: Vec<String> = env::args().collect();
 		args.remove(0);
 
-		let options = EnclaveOptions::from(args);
+		let options = EnclaveOptions::from_args(args);
 
 		Coordinator::execute(options);
 	}
@@ -154,13 +160,16 @@ impl CLI {
 mod test {
 	use super::*;
 
+	// TODO: add tests for parsing file paths - verify that file paths are valid
+	// on unix.
+
 	#[test]
 	fn parse_cid_and_port() {
 		let args = vec!["--cid", "6", "--port", "3999"]
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let options = EnclaveOptions::from(args);
+		let options = EnclaveOptions::from_args(args);
 
 		assert_eq!(
 			options,
@@ -181,7 +190,7 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let options = EnclaveOptions::from(args);
+		let options = EnclaveOptions::from_args(args);
 
 		assert_eq!(
 			options,
@@ -269,7 +278,7 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let _options = EnclaveOptions::from(args);
+		let _options = EnclaveOptions::from_args(args);
 	}
 
 	#[test]
@@ -279,6 +288,6 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let _options = EnclaveOptions::from(args);
+		let _options = EnclaveOptions::from_args(args);
 	}
 }

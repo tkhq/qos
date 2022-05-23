@@ -1,6 +1,9 @@
 Quick start
 
 ```
+# make sure you have the latest rustc stable
+rustup update stable
+
 # run tests
 cargo test --all
 

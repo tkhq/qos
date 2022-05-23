@@ -14,6 +14,9 @@ openssl = { version = "0.10.40", default-features = false }
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 
+[dev-dependencies]
+pivot-test-bin = { path = "../pivot-test-bin" }
+
 [features]
 default=["local"]
 local = []
