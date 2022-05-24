@@ -118,8 +118,7 @@ fn coordinator_works() {
 	let secret_path =
 		"./coordinator_exits_cleanly_with_non_panicking_executable.secret";
 	let usock = "./coordinator_exits_cleanly_with_non_panicking_executable.sock";
-	// For our sanity, ensure the secret does not yet exist. (Errors if file
-	// doesn't exist)
+	// For our sanity, ensure the secret does not yet exist
 	let _ = std::fs::remove_file(secret_path);
 	assert!(File::open(PIVOT_OK_PATH).is_ok(),);
 
@@ -214,8 +213,7 @@ fn coordinator_handles_non_zero_exits() {
 fn coordinator_handles_panic() {
 	let secret_path = "./coordinator_handles_panics.secret";
 	let usock = "./coordinator_handles_panics.sock";
-	// For our sanity, ensure the secret does not yet exist. (Errors if file
-	// doesn't exist)
+	// For our sanity, ensure the secret does not yet exist
 	let _ = std::fs::remove_file(secret_path);
 	assert!(File::open(PIVOT_PANIC_PATH).is_ok(),);
 
