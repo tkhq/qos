@@ -195,15 +195,11 @@ fn coordinator_handles_non_zero_exits() {
 	// to start executable.
 	std::fs::write(secret_path, b"super dank tank secret tech").unwrap();
 
-	// Ensure the coordinator has enough time to detect the secret now exists
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	// Ensure the coordinator has enough time to detect the secret, launch the pivot,
+	// and let the pivot exit.
+	std::thread::sleep(std::time::Duration::from_secs(2));
 
-	for _ in 0..3 {
-		std::thread::sleep(std::time::Duration::from_millis(1));
-		// Check that the coordinator is still running, presumably restarting
-		// the child process
-		assert!(!coordinator_handle.is_finished());
-	}
+	assert!(coordinator_handle.is_finished());
 
 	let _ = std::fs::remove_file(secret_path);
 	let _ = std::fs::remove_file(usock);
@@ -245,12 +241,11 @@ fn coordinator_handles_panic() {
 	// to start executable.
 	std::fs::write(secret_path, b"super dank tank secret tech").unwrap();
 
-	for _ in 0..3 {
-		std::thread::sleep(std::time::Duration::from_millis(1));
-		// Check that the coordinator is still running, presumably restarting
-		// the child process
-		assert!(!coordinator_handle.is_finished());
-	}
+	// Ensure the coordinator has enough time to detect the secret, launch the pivot,
+	// and let the pivot exit.
+	std::thread::sleep(std::time::Duration::from_secs(2));
+
+	assert!(coordinator_handle.is_finished());
 
 	// Clean up
 	let _ = std::fs::remove_file(secret_path);

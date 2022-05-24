@@ -42,22 +42,15 @@ impl Coordinator {
 		let mut child_process =
 			pivot.spawn().expect("Process failed to execute...");
 
-		// Child process restart logic
-		loop {
-			let status = child_process
-				.wait()
-				.expect("Pivot executable never started...");
-			if status.success() {
-				println!("Pivot executable exited successfully ...");
-				break
-			} else {
-				println!(
-					"Re-spawning pivot executable child process - {}",
-					status
-				);
-				child_process =
-					pivot.spawn().expect("Process failed to execute ...");
-			}
+		// Wait for the child process to finish
+		let status = child_process
+			.wait()
+			.expect("Pivot executable never started...");
+		// and log some information about the exit status
+		if status.success() {
+			println!("Pivot executable exited successfully: {}", status);
+		} else {
+			println!("Pivot executable exited with a non zero status: {}", status)
 		}
 
 		println!("Coordinator exiting ...");
