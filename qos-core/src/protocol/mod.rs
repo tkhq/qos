@@ -188,6 +188,8 @@ mod handlers {
 		if let ProtocolMsg::LoadRequest(Load { executable, signatures: _ }) =
 			req
 		{
+			// TODO: this should be fixed when we have the executable load logic
+			// figured out
 			// for SignatureWithPubKey { signature, path } in signatures {
 			// 	let pub_key = match RsaPub::from_pem_file(path) {
 			// 		Ok(p) => p,

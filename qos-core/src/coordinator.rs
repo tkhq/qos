@@ -8,11 +8,9 @@ use std::{path::Path, process::Command};
 
 use crate::{cli::EnclaveOptions, protocol::Executor, server::SocketServer};
 
-// TODO: should this be renamed to drive?
 pub struct Coordinator;
 impl Coordinator {
 	/// Run the coordinator.
-	/// TODO: make the pivot and secret file paths injectable
 	pub fn execute(opts: EnclaveOptions) {
 		let secret_file = opts.secret_file();
 		let pivot_file = opts.pivot_file();

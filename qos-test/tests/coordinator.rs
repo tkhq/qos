@@ -20,7 +20,8 @@ async fn coordinator_e2e() {
 	let secret_file = "./coordinator_e2e.secret";
 	let pivot_file = "./coordinator_e2e.pivot";
 
-	// For our sanity, make the sure the pivot success file is not present.
+	// For our sanity, make sure the files that should be artifacts only of
+	// this test are not present.
 	let _ = std::fs::remove_file(qos_test::PIVOT_OK_SUCCESS_FILE);
 	let _ = std::fs::remove_file(pivot_file);
 	let _ = std::fs::remove_file(secret_file);
@@ -116,7 +117,7 @@ fn coordinator_works() {
 	let _ = std::fs::remove_file(secret_path);
 	assert!(File::open(PIVOT_OK_PATH).is_ok(),);
 
-	let opts = [
+	let opts: Vec<_>  = [
 		"--usock",
 		"./coordinator_exits_cleanly_with_non_panicking_executable.sock",
 		"--mock",
@@ -128,7 +129,7 @@ fn coordinator_works() {
 	]
 	.into_iter()
 	.map(String::from)
-	.collect::<Vec<String>>();
+	.collect();
 
 	let coordinator_handle =
 		std::thread::spawn(move || Coordinator::execute(opts.into()));
@@ -155,12 +156,11 @@ fn coordinator_works() {
 fn coordinator_handles_non_zero_exits() {
 	let secret_path =
 		"./coordinator_keeps_re_spawning_pivot_executable_that_panics.secret";
-	// For our sanity, ensure the secret does not yet exist. (Errors if file
-	// doesn't exist)
+	// For our sanity, ensure the secret does not yet exist
 	let _ = std::fs::remove_file(secret_path);
 	assert!(File::open(PIVOT_ABORT_PATH).is_ok(),);
 
-	let opts = [
+	let opts: Vec<_> = [
 		"--usock",
 		"./coordinator_keeps_re_spawning_pivot_executable_that_panics.sock",
 		"--mock",
@@ -172,7 +172,7 @@ fn coordinator_handles_non_zero_exits() {
 	]
 	.into_iter()
 	.map(String::from)
-	.collect::<Vec<String>>();
+	.collect();
 
 	let coordinator_handle =
 		std::thread::spawn(move || Coordinator::execute(opts.into()));
@@ -207,7 +207,7 @@ fn coordinator_handles_panic() {
 	let _ = std::fs::remove_file(secret_path);
 	assert!(File::open(PIVOT_PANIC_PATH).is_ok(),);
 
-	let opts = [
+	let opts: Vec<_>  = [
 		"--usock",
 		"./coordinator_handles_panics.sock",
 		"--mock",
