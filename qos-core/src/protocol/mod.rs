@@ -4,8 +4,6 @@ mod attestor;
 mod msg;
 mod provisioner;
 
-use std::fs::File;
-
 pub use attestor::{MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT};
 pub use msg::*;
 use openssl::rsa::Rsa;
@@ -92,8 +90,6 @@ impl server::Routable for Executor {
 }
 
 mod handlers {
-	use std::io::Write;
-
 	use serde_bytes::ByteBuf;
 
 	use super::*;
@@ -187,9 +183,10 @@ mod handlers {
 		if let ProtocolMsg::LoadRequest(Load { executable, signatures: _ }) =
 			req
 		{
-			use std::os::unix::fs::PermissionsExt;
-			use std::fs::set_permissions;
-			use std::fs::Permissions;
+			use std::{
+				fs::{set_permissions, Permissions},
+				os::unix::fs::PermissionsExt,
+			};
 			// for SignatureWithPubKey { signature, path } in signatures {
 			// 	let pub_key = match RsaPub::from_pem_file(path) {
 			// 		Ok(p) => p,
@@ -201,10 +198,12 @@ mod handlers {
 			// 	}
 			// }
 
-			let mut file =
-				ok_or_return!(File::create(state.pivot_file.clone()));
-			ok_or_return!(file.write_all(executable));
-			ok_or_return!(set_permissions(&state.pivot_file,  Permissions::from_mode(0o111)));
+			ok_or_return!(std::fs::write(&state.pivot_file, executable));
+			ok_or_return!(set_permissions(
+				&state.pivot_file,
+				Permissions::from_mode(0o111)
+			));
+
 			Some(ProtocolMsg::SuccessResponse)
 		} else {
 			None

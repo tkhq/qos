@@ -4,7 +4,7 @@
 //!
 //! The pivot is an executable the enclave runs to initialize the secure
 //! applications.
-use std::{fs::File, process::Command};
+use std::{path::Path, process::Command};
 
 use crate::{cli::EnclaveOptions, protocol::Executor, server::SocketServer};
 
@@ -49,7 +49,6 @@ impl Coordinator {
 			let status = child_process
 				.wait()
 				.expect("Pivot executable never started...");
-			dbg!(status);
 			if status.success() {
 				println!("Pivot executable exited successfully ...");
 				break
@@ -68,16 +67,7 @@ impl Coordinator {
 }
 
 fn is_file(path: &str) -> bool {
-	match File::open(path) {
-		Ok(file) => {
-			if let Ok(metadata) = file.metadata() {
-				return metadata.len() > 0
-			} else {
-				return false
-			}
-		}
-		Err(_) => return false,
-	}
+	Path::new(path).exists()
 }
 
 // See qos-test/tests/coordinator for tests

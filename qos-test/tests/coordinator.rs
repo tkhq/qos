@@ -21,7 +21,7 @@ async fn coordinator_e2e() {
 	let pivot_file = "./coordinator_e2e.pivot";
 
 	// For our sanity, make the sure the pivot success file is not present.
-	let _ = std::fs::remove_file("./pivot_ok_works");
+	let _ = std::fs::remove_file(qos_test::PIVOT_OK_SUCCESS_FILE);
 	let _ = std::fs::remove_file(pivot_file);
 	let _ = std::fs::remove_file(secret_file);
 
@@ -53,7 +53,7 @@ async fn coordinator_e2e() {
 		.spawn()
 		.unwrap();
 
-	// Make sure the enclave and host have time to boot
+	// -- Make sure the enclave and host have time to boot
 	std::thread::sleep(std::time::Duration::from_secs(1));
 
 	// **Load the executable**
@@ -72,7 +72,7 @@ async fn coordinator_e2e() {
 	// -- Check that the executable got written as a file
 	assert!(Path::new(pivot_file).exists());
 
-	// **Post user shards**
+	// **Post user shards to provision**
 
 	// -- Create shards
 	let secret = b"only the real vape nationers would get this";
@@ -82,26 +82,28 @@ async fn coordinator_e2e() {
 
 	// -- For each shard send it and expect a success response
 	for share in all_shares.into_iter().take(k) {
-		let provision_msg = ProtocolMsg::ProvisionRequest( Provision { share });
+		let provision_msg = ProtocolMsg::ProvisionRequest(Provision { share });
 		let response = request::post(&message_url, provision_msg).unwrap();
 		assert_eq!(response, ProtocolMsg::SuccessResponse);
 	}
 
 	// -- Send reconstruct request to create secret file from shards
-	let response = request::post(&message_url, ProtocolMsg::ReconstructRequest).unwrap();
+	let response =
+		request::post(&message_url, ProtocolMsg::ReconstructRequest).unwrap();
 	assert_eq!(response, ProtocolMsg::SuccessResponse);
 	assert!(Path::new(secret_file).exists());
 
-	// -- Wait for the coordinator to check if the both the secret and pivot exist
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	// -- Wait for the coordinator to check if the both the secret and pivot
+	// exist
+	std::thread::sleep(std::time::Duration::from_secs(5));
 
-	// assert!(Path::new(qos_test::PIVOT_OK_SUCCESS_FILE).exists());
-
+	// -- Kill the enclave and host since we don't need them anymore
 	enclave_child_process.kill().unwrap();
 	host_child_process.kill().unwrap();
 
 	// -- Check that the pivot ran
-	// Note that "./pivot_ok_works" gets written by the `pivot_ok` binary when it runs.
+	// Note that PIVOT_OK_SUCCESS_FILE gets written by the `pivot_ok` binary
+	// when it runs.
 	assert!(std::fs::remove_file(qos_test::PIVOT_OK_SUCCESS_FILE).is_ok());
 }
 
