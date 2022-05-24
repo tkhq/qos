@@ -1,4 +1,9 @@
-//! OS execution protocol.
+//! Quorum protocol.
+
+use std::{
+	fs::{set_permissions, Permissions},
+	os::unix::fs::PermissionsExt,
+};
 
 mod attestor;
 mod msg;
@@ -183,10 +188,6 @@ mod handlers {
 		if let ProtocolMsg::LoadRequest(Load { executable, signatures: _ }) =
 			req
 		{
-			use std::{
-				fs::{set_permissions, Permissions},
-				os::unix::fs::PermissionsExt,
-			};
 			// for SignatureWithPubKey { signature, path } in signatures {
 			// 	let pub_key = match RsaPub::from_pem_file(path) {
 			// 		Ok(p) => p,
