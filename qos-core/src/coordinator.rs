@@ -49,6 +49,7 @@ impl Coordinator {
 			let status = child_process
 				.wait()
 				.expect("Pivot executable never started...");
+			dbg!(status);
 			if status.success() {
 				println!("Pivot executable exited successfully ...");
 				break
