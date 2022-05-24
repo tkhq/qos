@@ -3,6 +3,5 @@ fn main() {
 		println!("Pivot ABORT Binary. Iteration #{}", i);
 	}
 
-	// panic!("Pivot ABORT Binary is ... panicking");
 	std::process::abort();
 }

@@ -188,6 +188,8 @@ mod handlers {
 			req
 		{
 			use std::os::unix::fs::PermissionsExt;
+			use std::fs::set_permissions;
+			use std::fs::Permissions;
 			// for SignatureWithPubKey { signature, path } in signatures {
 			// 	let pub_key = match RsaPub::from_pem_file(path) {
 			// 		Ok(p) => p,
@@ -202,8 +204,7 @@ mod handlers {
 			let mut file =
 				ok_or_return!(File::create(state.pivot_file.clone()));
 			ok_or_return!(file.write_all(executable));
-			ok_or_return!(file.metadata()).permissions().set_mode(0o700);
-
+			ok_or_return!(set_permissions(&state.pivot_file,  Permissions::from_mode(0o111)));
 			Some(ProtocolMsg::SuccessResponse)
 		} else {
 			None

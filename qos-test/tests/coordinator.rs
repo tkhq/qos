@@ -11,10 +11,6 @@ const PIVOT_OK_PATH: &str = "../target/debug/pivot_ok";
 const PIVOT_ABORT_PATH: &str = "../target/debug/pivot_abort";
 const PIVOT_PANIC_PATH: &str = "../target/debug/pivot_panic";
 
-/// - Setup the enclave
-/// - Load the pivot binary
-/// - Post shards, which the provisioner should put together and write to secret file
-/// - 
 #[tokio::test]
 async fn coordinator_e2e() {
 	let usock = "coordinator_e2e.sock";
@@ -29,7 +25,7 @@ async fn coordinator_e2e() {
 	let _ = std::fs::remove_file(pivot_file);
 	let _ = std::fs::remove_file(secret_file);
 
-	// Start enclave
+	// **Start enclave**
 	let mut enclave_child_process = Command::new("../target/debug/core_cli")
 		.args([
 			"--usock",
@@ -44,31 +40,27 @@ async fn coordinator_e2e() {
 		.spawn()
 		.unwrap();
 
-	// Start host
+	// **Start host**
+	let mut host_child_process = Command::new("../target/debug/host_cli")
+		.args([
+			"--host-port",
+			host_port,
+			"--host-ip",
+			host_ip,
+			"--usock",
+			usock,
+		])
+		.spawn()
+		.unwrap();
 
-	// std::thread::spawn(move || {
-		let mut handle = Command::new("../target/debug/host_cli")
-			.args([
-				"--host-port",
-				host_port,
-				"--host-ip",
-				host_ip,
-				"--usock",
-				usock,
-			])
-			.spawn()
-			.unwrap();
-
-		// std::thread::sleep(std::time::Duration::from_secs(3));
-		// handle.kill().unwrap();
-	// });
-
-
+	// Make sure the enclave and host have time to boot
 	std::thread::sleep(std::time::Duration::from_secs(1));
 
-	// Load the executable
+	// **Load the executable**
+
 	// -- Convert the executable to bytes
 	let pivot_bytes = std::fs::read(PIVOT_OK_PATH).unwrap();
+
 	// -- Send that executable via the ProtocolLoad message
 	let load_msg = ProtocolMsg::LoadRequest(Load {
 		executable: pivot_bytes,
@@ -76,33 +68,41 @@ async fn coordinator_e2e() {
 	});
 	let response = request::post(&message_url, load_msg).unwrap();
 	assert_eq!(response, ProtocolMsg::SuccessResponse);
+
 	// -- Check that the executable got written as a file
 	assert!(Path::new(pivot_file).exists());
 
-	// Post user shards
+	// **Post user shards**
+
 	// -- Create shards
-	let secret = b"real vapers would get this";
+	let secret = b"only the real vape nationers would get this";
 	let n = 6;
 	let k = 3;
 	let all_shares = shares_generate(secret, n, k);
 
-	// -- For each shard send it and expect a succesus response
-	for share in all_shares.into_iter().take(k + 1) {
+	// -- For each shard send it and expect a success response
+	for share in all_shares.into_iter().take(k) {
 		let provision_msg = ProtocolMsg::ProvisionRequest( Provision { share });
 		let response = request::post(&message_url, provision_msg).unwrap();
 		assert_eq!(response, ProtocolMsg::SuccessResponse);
 	}
 
-	// Wait for the coirdinator to check if the both the secret and pivot exist
+	// -- Send reconstruct request to create secret file from shards
+	let response = request::post(&message_url, ProtocolMsg::ReconstructRequest).unwrap();
+	assert_eq!(response, ProtocolMsg::SuccessResponse);
+	assert!(Path::new(secret_file).exists());
+
+	// -- Wait for the coordinator to check if the both the secret and pivot exist
 	std::thread::sleep(std::time::Duration::from_secs(1));
+
+	// assert!(Path::new(qos_test::PIVOT_OK_SUCCESS_FILE).exists());
+
+	enclave_child_process.kill().unwrap();
+	host_child_process.kill().unwrap();
 
 	// -- Check that the pivot ran
 	// Note that "./pivot_ok_works" gets written by the `pivot_ok` binary when it runs.
-	assert!(std::fs::remove_file("./pivot_ok_works").is_ok());
-
-	// For our sanity, make the sure the pivot success file is not present.
-	enclave_child_process.kill().unwrap();
-	handle.kill().unwrap();
+	assert!(std::fs::remove_file(qos_test::PIVOT_OK_SUCCESS_FILE).is_ok());
 }
 
 #[test]
