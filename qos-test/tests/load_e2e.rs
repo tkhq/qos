@@ -73,8 +73,6 @@ fn load_e2e() {
 	// Spawn enclave
 	let pivot_file2 = pivot_file.clone();
 	let secret_file2 = secret_file.clone();
-
-	// Spawn enclave
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
 		let executor =

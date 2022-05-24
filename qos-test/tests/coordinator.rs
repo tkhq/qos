@@ -17,14 +17,14 @@ async fn coordinator_e2e() {
 	let host_port = "3007";
 	let host_ip = "127.0.0.1";
 	let message_url = format!("http://{}:{}/message", host_ip, host_port);
-	let secret_file = "./coordinator_e2e.secret";
-	let pivot_file = "./coordinator_e2e.pivot";
+	let secret_path = "./coordinator_e2e.secret";
+	let pivot_path = "./coordinator_e2e.pivot";
 
 	// For our sanity, make sure the files that should be artifacts only of
 	// this test are not present.
 	let _ = std::fs::remove_file(qos_test::PIVOT_OK_SUCCESS_FILE);
-	let _ = std::fs::remove_file(pivot_file);
-	let _ = std::fs::remove_file(secret_file);
+	let _ = std::fs::remove_file(pivot_path);
+	let _ = std::fs::remove_file(secret_path);
 
 	// **Start enclave**
 	let mut enclave_child_process = Command::new("../target/debug/core_cli")
@@ -32,9 +32,9 @@ async fn coordinator_e2e() {
 			"--usock",
 			usock,
 			"--secret-file",
-			secret_file,
+			secret_path,
 			"--pivot-file",
-			pivot_file,
+			pivot_path,
 			"--mock",
 			"true",
 		])
@@ -71,7 +71,7 @@ async fn coordinator_e2e() {
 	assert_eq!(response, ProtocolMsg::SuccessResponse);
 
 	// -- Check that the executable got written as a file
-	assert!(Path::new(pivot_file).exists());
+	assert!(Path::new(pivot_path).exists());
 
 	// **Post user shards to provision**
 
@@ -92,7 +92,7 @@ async fn coordinator_e2e() {
 	let response =
 		request::post(&message_url, ProtocolMsg::ReconstructRequest).unwrap();
 	assert_eq!(response, ProtocolMsg::SuccessResponse);
-	assert!(Path::new(secret_file).exists());
+	assert!(Path::new(secret_path).exists());
 
 	// -- Wait for the coordinator to check if the both the secret and pivot
 	// exist
@@ -106,12 +106,18 @@ async fn coordinator_e2e() {
 	// Note that PIVOT_OK_SUCCESS_FILE gets written by the `pivot_ok` binary
 	// when it runs.
 	assert!(std::fs::remove_file(qos_test::PIVOT_OK_SUCCESS_FILE).is_ok());
+
+	// Clean up
+	let _ = std::fs::remove_file(secret_path);
+	let _ = std::fs::remove_file(pivot_path);
+	let _ = std::fs::remove_file(usock);
 }
 
 #[test]
 fn coordinator_works() {
 	let secret_path =
 		"./coordinator_exits_cleanly_with_non_panicking_executable.secret";
+	let usock = "./coordinator_exits_cleanly_with_non_panicking_executable.sock";
 	// For our sanity, ensure the secret does not yet exist. (Errors if file
 	// doesn't exist)
 	let _ = std::fs::remove_file(secret_path);
@@ -119,7 +125,7 @@ fn coordinator_works() {
 
 	let opts: Vec<_>  = [
 		"--usock",
-		"./coordinator_exits_cleanly_with_non_panicking_executable.sock",
+		usock,
 		"--mock",
 		"true",
 		"--secret-file",
@@ -149,20 +155,22 @@ fn coordinator_works() {
 	coordinator_handle.join().unwrap();
 
 	// Clean up
-	std::fs::remove_file(secret_path).unwrap();
+	let _ = std::fs::remove_file(secret_path);
+	let _ = std::fs::remove_file(usock);
 }
 
 #[test]
 fn coordinator_handles_non_zero_exits() {
 	let secret_path =
 		"./coordinator_keeps_re_spawning_pivot_executable_that_panics.secret";
+	let usock = "./coordinator_keeps_re_spawning_pivot_executable_that_panics.sock";
 	// For our sanity, ensure the secret does not yet exist
 	let _ = std::fs::remove_file(secret_path);
 	assert!(File::open(PIVOT_ABORT_PATH).is_ok(),);
 
 	let opts: Vec<_> = [
 		"--usock",
-		"./coordinator_keeps_re_spawning_pivot_executable_that_panics.sock",
+		usock,
 		"--mock",
 		"true",
 		"--secret-file",
@@ -192,16 +200,20 @@ fn coordinator_handles_non_zero_exits() {
 	std::thread::sleep(std::time::Duration::from_secs(1));
 
 	for _ in 0..3 {
-		std::thread::sleep(std::time::Duration::from_millis(100));
+		std::thread::sleep(std::time::Duration::from_millis(1));
 		// Check that the coordinator is still running, presumably restarting
 		// the child process
 		assert!(!coordinator_handle.is_finished());
 	}
+
+	let _ = std::fs::remove_file(secret_path);
+	let _ = std::fs::remove_file(usock);
 }
 
 #[test]
 fn coordinator_handles_panic() {
 	let secret_path = "./coordinator_handles_panics.secret";
+	let usock = "./coordinator_handles_panics.sock";
 	// For our sanity, ensure the secret does not yet exist. (Errors if file
 	// doesn't exist)
 	let _ = std::fs::remove_file(secret_path);
@@ -209,7 +221,7 @@ fn coordinator_handles_panic() {
 
 	let opts: Vec<_>  = [
 		"--usock",
-		"./coordinator_handles_panics.sock",
+		usock,
 		"--mock",
 		"true",
 		"--secret-file",
@@ -236,9 +248,13 @@ fn coordinator_handles_panic() {
 	std::fs::write(secret_path, b"super dank tank secret tech").unwrap();
 
 	for _ in 0..3 {
-		std::thread::sleep(std::time::Duration::from_millis(100));
+		std::thread::sleep(std::time::Duration::from_millis(1));
 		// Check that the coordinator is still running, presumably restarting
 		// the child process
 		assert!(!coordinator_handle.is_finished());
 	}
+
+	// Clean up
+	let _ = std::fs::remove_file(secret_path);
+	let _ = std::fs::remove_file(usock);
 }
