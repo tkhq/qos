@@ -3,7 +3,7 @@ use std::{fs::File, io::Read, path::Path};
 use qos_client;
 use qos_core::{
 	io::SocketAddress,
-	protocol::{Echo, Executor, MockNsm, ProtocolMsg, ProvisionRequest},
+	protocol::{Echo, Executor, MockNsm, ProtocolMsg, Provision},
 	server::SocketServer,
 };
 use qos_crypto;
@@ -67,19 +67,19 @@ async fn provision_e2e() {
 	let all_shares = qos_crypto::shares_generate(&secret, n, k);
 
 	let s1 = all_shares[0].clone();
-	let r1 = ProtocolMsg::ProvisionRequest(ProvisionRequest { share: s1 });
+	let r1 = ProtocolMsg::ProvisionRequest(Provision { share: s1 });
 	let response = qos_client::request::post(&message_url, r1).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
 	let s2 = all_shares[1].clone();
-	let r2 = ProtocolMsg::ProvisionRequest(ProvisionRequest { share: s2 });
+	let r2 = ProtocolMsg::ProvisionRequest(Provision { share: s2 });
 	let response = qos_client::request::post(&message_url, r2).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
 	let s3 = all_shares[2].clone();
-	let r3 = ProtocolMsg::ProvisionRequest(ProvisionRequest { share: s3 });
+	let r3 = ProtocolMsg::ProvisionRequest(Provision { share: s3 });
 	let response = qos_client::request::post(&message_url, r3).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);

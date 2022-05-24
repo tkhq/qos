@@ -20,7 +20,7 @@ pub enum ProtocolMsg {
 	EmptyResponse,
 	EchoRequest(Echo),
 	EchoResponse(Echo),
-	ProvisionRequest(ProvisionRequest),
+	ProvisionRequest(Provision),
 	ReconstructRequest,
 	NsmRequest(NsmRequest),
 	NsmResponse(NsmResponse),
@@ -44,11 +44,9 @@ pub struct Echo {
 }
 
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ProvisionRequest {
+pub struct Provision {
 	pub share: Vec<u8>,
 }
-#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ProvisionResponse {}
 
 #[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SignatureWithPubKey {
