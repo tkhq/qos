@@ -8,6 +8,7 @@ pub use aws_nitro_enclaves_nsm_api::api::{
 pub enum ProtocolError {
 	InvalidShare,
 	ReconstructionError,
+	IOError,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -19,7 +20,7 @@ pub enum ProtocolMsg {
 	EmptyResponse,
 	EchoRequest(Echo),
 	EchoResponse(Echo),
-	ProvisionRequest(ProvisionRequest),
+	ProvisionRequest(Provision),
 	ReconstructRequest,
 	NsmRequest(NsmRequest),
 	NsmResponse(NsmResponse),
@@ -43,11 +44,9 @@ pub struct Echo {
 }
 
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ProvisionRequest {
+pub struct Provision {
 	pub share: Vec<u8>,
 }
-#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ProvisionResponse {}
 
 #[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SignatureWithPubKey {
@@ -60,8 +59,8 @@ pub struct SignatureWithPubKey {
 
 #[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Load {
-	/// Some data
-	pub data: Vec<u8>,
+	/// The executable to pivot to
+	pub executable: Vec<u8>,
 	//// Signatures of the data
 	pub signatures: Vec<SignatureWithPubKey>,
 }

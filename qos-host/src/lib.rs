@@ -29,6 +29,7 @@ use axum::{
 use qos_core::{client::Client, io::SocketAddress, protocol::ProtocolMsg};
 
 pub mod cli;
+pub use cli::CLI;
 
 /// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]

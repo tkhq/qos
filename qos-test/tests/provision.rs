@@ -3,14 +3,14 @@ use std::{fs::File, io::Read, path::Path};
 use qos_client;
 use qos_core::{
 	io::SocketAddress,
-	protocol::{Echo, Executor, MockNsm, ProtocolMsg, ProvisionRequest},
+	protocol::{Echo, Executor, MockNsm, ProtocolMsg, Provision},
 	server::SocketServer,
 };
 use qos_crypto;
 use qos_host::HostServer;
 
 #[tokio::test]
-async fn end_to_end() {
+async fn provision_e2e() {
 	let enclave_addr = SocketAddress::new_unix("./end_to_end.sock");
 	let enclave_addr2 = enclave_addr.clone();
 	let ip = [127, 0, 0, 1];
@@ -20,10 +20,16 @@ async fn end_to_end() {
 	let health_url = format!("{}/{}", url, "health");
 	let message_url = format!("{}/{}", url, "message");
 
+	let pivot_file = "./end-to-end.pivot".to_string();
+	let secret_file = "./end-to-end.secret".to_string();
+
 	// Spawn enclave
+	let pivot_file2 = pivot_file.clone();
+	let secret_file2 = secret_file.clone();
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
-		let executor = Executor::new(Box::new(attestor));
+		let executor =
+			Executor::new(Box::new(attestor), secret_file2, pivot_file2);
 
 		SocketServer::listen(enclave_addr, executor).unwrap()
 	});
@@ -61,24 +67,24 @@ async fn end_to_end() {
 	let all_shares = qos_crypto::shares_generate(&secret, n, k);
 
 	let s1 = all_shares[0].clone();
-	let r1 = ProtocolMsg::ProvisionRequest(ProvisionRequest { share: s1 });
+	let r1 = ProtocolMsg::ProvisionRequest(Provision { share: s1 });
 	let response = qos_client::request::post(&message_url, r1).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
 	let s2 = all_shares[1].clone();
-	let r2 = ProtocolMsg::ProvisionRequest(ProvisionRequest { share: s2 });
+	let r2 = ProtocolMsg::ProvisionRequest(Provision { share: s2 });
 	let response = qos_client::request::post(&message_url, r2).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
 	let s3 = all_shares[2].clone();
-	let r3 = ProtocolMsg::ProvisionRequest(ProvisionRequest { share: s3 });
+	let r3 = ProtocolMsg::ProvisionRequest(Provision { share: s3 });
 	let response = qos_client::request::post(&message_url, r3).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
-	let path = Path::new(qos_core::protocol::SECRET_FILE);
+	let path = Path::new(&secret_file);
 	assert!(!path.exists());
 
 	let rr = ProtocolMsg::ReconstructRequest;
@@ -88,7 +94,7 @@ async fn end_to_end() {
 
 	assert!(path.exists());
 	let mut content = Vec::new();
-	let mut file = File::open(qos_core::protocol::SECRET_FILE).unwrap();
+	let mut file = File::open(&secret_file).unwrap();
 	file.read_to_end(&mut content).unwrap();
 
 	assert_eq!(content, secret);

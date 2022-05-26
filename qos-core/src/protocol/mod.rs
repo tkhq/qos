@@ -1,4 +1,9 @@
-//! OS execution protocol.
+//! Quorum protocol.
+
+use std::{
+	fs::{set_permissions, Permissions},
+	os::unix::fs::PermissionsExt,
+};
 
 mod attestor;
 mod msg;
@@ -7,7 +12,6 @@ mod provisioner;
 pub use attestor::{MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT};
 pub use msg::*;
 use openssl::rsa::Rsa;
-pub use provisioner::SECRET_FILE;
 use provisioner::*;
 
 use crate::server;
@@ -21,12 +25,17 @@ type ProtocolHandler =
 pub struct ProtocolState {
 	provisioner: SecretProvisioner,
 	attestor: Box<dyn NsmProvider>,
+	pivot_file: String,
 }
 
 impl ProtocolState {
-	pub fn new(attestor: Box<dyn NsmProvider>) -> Self {
-		let provisioner = SecretProvisioner::new();
-		Self { attestor, provisioner }
+	fn new(
+		attestor: Box<dyn NsmProvider>,
+		secret_file: String,
+		pivot_file: String,
+	) -> Self {
+		let provisioner = SecretProvisioner::new(secret_file);
+		Self { attestor, provisioner, pivot_file }
 	}
 }
 
@@ -36,7 +45,11 @@ pub struct Executor {
 }
 
 impl Executor {
-	pub fn new(attestor: Box<dyn NsmProvider>) -> Self {
+	pub fn new(
+		attestor: Box<dyn NsmProvider>,
+		secret_file: String,
+		pivot_file: String,
+	) -> Self {
 		Self {
 			routes: vec![
 				Box::new(handlers::empty),
@@ -46,7 +59,7 @@ impl Executor {
 				Box::new(handlers::nsm_attestation),
 				Box::new(handlers::load),
 			],
-			state: ProtocolState::new(attestor),
+			state: ProtocolState::new(attestor, secret_file, pivot_file),
 		}
 	}
 }
@@ -82,10 +95,18 @@ impl server::Routable for Executor {
 }
 
 mod handlers {
-	use qos_crypto::RsaPub;
 	use serde_bytes::ByteBuf;
 
 	use super::*;
+
+	macro_rules! ok_or_return {
+		( $e:expr ) => {
+			match $e {
+				Ok(x) => x,
+				Err(_) => return Some(ProtocolMsg::ErrorResponse),
+			}
+		};
+	}
 
 	pub fn empty(
 		req: &ProtocolMsg,
@@ -162,20 +183,29 @@ mod handlers {
 
 	pub fn load(
 		req: &ProtocolMsg,
-		_state: &mut ProtocolState,
+		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::LoadRequest(Load { data, signatures }) = req {
-			for SignatureWithPubKey { signature, path } in signatures {
-				let pub_key = match RsaPub::from_pem_file(path) {
-					Ok(p) => p,
-					Err(_) => return Some(ProtocolMsg::ErrorResponse),
-				};
+		if let ProtocolMsg::LoadRequest(Load { executable, signatures: _ }) =
+			req
+		{
+			// TODO: this should be fixed when we have the executable load logic
+			// figured out
+			// for SignatureWithPubKey { signature, path } in signatures {
+			// 	let pub_key = match RsaPub::from_pem_file(path) {
+			// 		Ok(p) => p,
+			// 		Err(_) => return Some(ProtocolMsg::ErrorResponse),
+			// 	};
+			// 	match pub_key.verify_sha256(&signature[..], &data[..]) {
+			// 		Ok(_) => {}
+			// 		Err(_) => return Some(ProtocolMsg::ErrorResponse),
+			// 	}
+			// }
 
-				match pub_key.verify_sha256(&signature[..], &data[..]) {
-					Ok(_) => {}
-					Err(_) => return Some(ProtocolMsg::ErrorResponse),
-				}
-			}
+			ok_or_return!(std::fs::write(&state.pivot_file, executable));
+			ok_or_return!(set_permissions(
+				&state.pivot_file,
+				Permissions::from_mode(0o111)
+			));
 
 			Some(ProtocolMsg::SuccessResponse)
 		} else {

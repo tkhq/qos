@@ -1,9 +1,10 @@
 use std::env;
 
 use crate::{
+	coordinator::Coordinator,
 	io::SocketAddress,
-	protocol::{Executor, MockNsm, Nsm, NsmProvider},
-	server::SocketServer,
+	protocol::{MockNsm, Nsm, NsmProvider},
+	PIVOT_FILE, SECRET_FILE,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -12,14 +13,23 @@ pub struct EnclaveOptions {
 	port: Option<u32>,
 	usock: Option<String>,
 	mock: bool,
+	secret_file: String,
+	pivot_file: String,
 }
 
 impl EnclaveOptions {
 	pub fn new() -> Self {
-		Self { cid: None, port: None, usock: None, mock: false }
+		Self {
+			cid: None,
+			port: None,
+			usock: None,
+			mock: false,
+			secret_file: SECRET_FILE.to_owned(),
+			pivot_file: PIVOT_FILE.to_owned(),
+		}
 	}
 
-	fn from(args: Vec<String>) -> EnclaveOptions {
+	fn from_args(args: Vec<String>) -> EnclaveOptions {
 		let mut options = EnclaveOptions::new();
 
 		let mut chunks = args.chunks_exact(2);
@@ -38,7 +48,9 @@ impl EnclaveOptions {
 		self.parse_cid(cmd, arg);
 		self.parse_port(cmd, arg);
 		self.parse_usock(cmd, arg);
-		self.parse_mock(cmd, arg)
+		self.parse_mock(cmd, arg);
+		self.parse_secret_file(cmd, arg);
+		self.parse_pivot_file(cmd, arg);
 	}
 
 	pub fn parse_cid(&mut self, cmd: &str, arg: &str) {
@@ -83,6 +95,18 @@ impl EnclaveOptions {
 		}
 	}
 
+	pub fn parse_secret_file(&mut self, cmd: &str, arg: &str) {
+		if cmd == "--secret-file" {
+			self.secret_file = arg.to_owned()
+		}
+	}
+
+	pub fn parse_pivot_file(&mut self, cmd: &str, arg: &str) {
+		if cmd == "--pivot-file" {
+			self.pivot_file = arg.to_owned()
+		}
+	}
+
 	pub fn addr(&self) -> SocketAddress {
 		match self.clone() {
 			#[cfg(feature = "vm")]
@@ -103,6 +127,22 @@ impl EnclaveOptions {
 			Box::new(Nsm)
 		}
 	}
+
+	/// Defaults to [`SECRET_FILE`] if not explicitly specified/
+	pub fn secret_file(&self) -> String {
+		self.secret_file.clone()
+	}
+
+	/// Defaults to [`PIVOT_FILE`] if not explicitly specified/
+	pub fn pivot_file(&self) -> String {
+		self.pivot_file.clone()
+	}
+}
+
+impl From<Vec<String>> for EnclaveOptions {
+	fn from(args: Vec<String>) -> Self {
+		Self::from_args(args)
+	}
 }
 
 pub struct CLI {}
@@ -111,13 +151,9 @@ impl CLI {
 		let mut args: Vec<String> = env::args().collect();
 		args.remove(0);
 
-		let options = EnclaveOptions::from(args);
+		let options = EnclaveOptions::from_args(args);
 
-		let addr = options.addr();
-		let nsm = options.nsm();
-		let executor = Executor::new(nsm);
-
-		SocketServer::listen(addr, executor).unwrap();
+		Coordinator::execute(options);
 	}
 }
 
@@ -125,13 +161,16 @@ impl CLI {
 mod test {
 	use super::*;
 
+	// TODO: add tests for parsing file paths - verify that file paths are valid
+	// on unix.
+
 	#[test]
 	fn parse_cid_and_port() {
 		let args = vec!["--cid", "6", "--port", "3999"]
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let options = EnclaveOptions::from(args);
+		let options = EnclaveOptions::from_args(args);
 
 		assert_eq!(
 			options,
@@ -139,7 +178,41 @@ mod test {
 				cid: Some(6),
 				port: Some(3999),
 				usock: None,
-				mock: false
+				mock: false,
+				pivot_file: PIVOT_FILE.to_string(),
+				secret_file: SECRET_FILE.to_string(),
+			}
+		)
+	}
+
+	#[test]
+	fn parse_pivot_file_and_secret_file() {
+		let pivot = "pivot.file";
+		let secret = "secret.file";
+		let args = vec![
+			"--cid",
+			"6",
+			"--port",
+			"3999",
+			"--secret-file",
+			secret,
+			"--pivot-file",
+			pivot,
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+		let options = EnclaveOptions::from_args(args);
+
+		assert_eq!(
+			options,
+			EnclaveOptions {
+				cid: Some(6),
+				port: Some(3999),
+				usock: None,
+				mock: false,
+				pivot_file: pivot.to_string(),
+				secret_file: secret.to_string(),
 			}
 		)
 	}
@@ -150,7 +223,7 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let options = EnclaveOptions::from(args);
+		let options = EnclaveOptions::from_args(args);
 
 		assert_eq!(
 			options,
@@ -158,7 +231,9 @@ mod test {
 				cid: None,
 				port: None,
 				usock: Some("./test.sock".to_string()),
-				mock: false
+				mock: false,
+				pivot_file: PIVOT_FILE.to_string(),
+				secret_file: SECRET_FILE.to_string(),
 			}
 		)
 	}
@@ -171,6 +246,8 @@ mod test {
 			port: Some(3000),
 			usock: Some("./test.sock".to_string()),
 			mock: false,
+			pivot_file: PIVOT_FILE.to_string(),
+			secret_file: SECRET_FILE.to_string(),
 		};
 		options.addr();
 	}
@@ -183,6 +260,8 @@ mod test {
 			port: Some(3000),
 			usock: None,
 			mock: false,
+			pivot_file: PIVOT_FILE.to_string(),
+			secret_file: SECRET_FILE.to_string(),
 		};
 		options.addr();
 	}
@@ -195,6 +274,8 @@ mod test {
 			port: Some(3000),
 			usock: None,
 			mock: false,
+			pivot_file: PIVOT_FILE.to_string(),
+			secret_file: SECRET_FILE.to_string(),
 		};
 		match options.addr() {
 			SocketAddress::Vsock(_) => {}
@@ -211,6 +292,8 @@ mod test {
 			port: None,
 			usock: Some("./dev.sock".to_string()),
 			mock: false,
+			pivot_file: PIVOT_FILE.to_string(),
+			secret_file: SECRET_FILE.to_string(),
 		};
 		match options.addr() {
 			SocketAddress::Unix(_) => {}
@@ -228,7 +311,7 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let _options = EnclaveOptions::from(args);
+		let _options = EnclaveOptions::from_args(args);
 	}
 
 	#[test]
@@ -238,6 +321,6 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let _options = EnclaveOptions::from(args);
+		let _options = EnclaveOptions::from_args(args);
 	}
 }

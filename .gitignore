@@ -3,3 +3,5 @@
 target/
 *.sock
 *.key
+*.pivot
+*.secret

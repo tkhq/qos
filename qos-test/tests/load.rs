@@ -8,7 +8,7 @@ use qos_crypto::{RsaPair, RsaPub};
 use qos_host::HostServer;
 
 #[test]
-fn protocol_load_e2e() {
+fn load_e2e() {
 	let mut base_path = std::env::current_dir().unwrap();
 	base_path.push("mock");
 	// ensure the base path exists
@@ -23,7 +23,7 @@ fn protocol_load_e2e() {
 	//
 	// Part 1 - create signatures
 	//
-	let data = b"vape nation".to_vec();
+	let executable = b"vape nation".to_vec();
 	let key_range = 0..5;
 	let pairs: Vec<_> = key_range
 		.clone()
@@ -52,7 +52,7 @@ fn protocol_load_e2e() {
 		.iter()
 		.enumerate()
 		.map(|(i, pair)| SignatureWithPubKey {
-			signature: pair.sign_sha256(&mut data.clone()[..]).unwrap(),
+			signature: pair.sign_sha256(&mut executable.clone()[..]).unwrap(),
 			path: paths[i].to_string_lossy().into_owned(),
 		})
 		.collect();
@@ -67,11 +67,16 @@ fn protocol_load_e2e() {
 	let url =
 		format!("http://{}.{}.{}.{}:{}", ip[0], ip[1], ip[2], ip[3], port);
 	let message_url = format!("{}/{}", url, "message");
+	let pivot_file = "./verification.pivot".to_string();
+	let secret_file = "./verification.secret".to_string();
 
 	// Spawn enclave
+	let pivot_file2 = pivot_file.clone();
+	let secret_file2 = secret_file.clone();
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
-		let executor = Executor::new(Box::new(attestor));
+		let executor =
+			Executor::new(Box::new(attestor), secret_file2, pivot_file2);
 
 		SocketServer::listen(enclave_addr, executor).unwrap()
 	});
@@ -93,7 +98,8 @@ fn protocol_load_e2e() {
 	//
 	// Part 3 - make request
 	//
-	let load_request = ProtocolMsg::LoadRequest(Load { data, signatures });
+	let load_request =
+		ProtocolMsg::LoadRequest(Load { executable, signatures });
 	let response =
 		qos_client::request::post(&message_url, load_request).unwrap();
 	assert_eq!(response, ProtocolMsg::SuccessResponse);
@@ -101,6 +107,7 @@ fn protocol_load_e2e() {
 	//
 	// Part 4 - clean up the generated keys
 	//
+	std::fs::remove_file(&pivot_file).unwrap();
 	for path in paths {
 		std::fs::remove_file(path).unwrap()
 	}
