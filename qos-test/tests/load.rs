@@ -1,3 +1,5 @@
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+
 use openssl::rsa::Rsa;
 use qos_core::{
 	io::SocketAddress,
@@ -62,11 +64,10 @@ fn load_e2e() {
 	//
 	let enclave_addr = SocketAddress::new_unix("./rsa_verify_payload.sock");
 	let enclave_addr2 = enclave_addr.clone();
-	let ip = [127, 0, 0, 1];
+	let ip = Ipv4Addr::from([127, 0, 0, 1]);
 	let port = 3001; // Use a unique port so we don't collide with other tests
-	let url =
-		format!("http://{}.{}.{}.{}:{}", ip[0], ip[1], ip[2], ip[3], port);
-	let message_url = format!("{}/{}", url, "message");
+	let socket_addr = SocketAddrV4::new(ip, port);
+	let message_url = format!("http://{}/message", socket_addr.to_string());
 	let pivot_file = "./verification.pivot".to_string();
 	let secret_file = "./verification.secret".to_string();
 
@@ -82,7 +83,7 @@ fn load_e2e() {
 	});
 
 	std::thread::spawn(move || {
-		let host = HostServer::new(enclave_addr2, ip, port);
+		let host = HostServer::new(enclave_addr2, SocketAddr::V4(socket_addr));
 
 		let rt = tokio::runtime::Builder::new_current_thread()
 			.enable_all()

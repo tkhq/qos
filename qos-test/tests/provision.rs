@@ -1,4 +1,9 @@
-use std::{fs::File, io::Read, path::Path};
+use std::{
+	fs::File,
+	io::Read,
+	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+	path::Path,
+};
 
 use qos_client;
 use qos_core::{
@@ -11,12 +16,12 @@ use qos_host::HostServer;
 
 #[tokio::test]
 async fn provision_e2e() {
-	let enclave_addr = SocketAddress::new_unix("./end_to_end.sock");
+	let enclave_addr = SocketAddress::new_unix("./provision_e2e.sock");
 	let enclave_addr2 = enclave_addr.clone();
-	let ip = [127, 0, 0, 1];
+	let ip = Ipv4Addr::from([127u8, 0, 0, 1]);
 	let port = 3002;
-	let url =
-		format!("http://{}.{}.{}.{}:{}", ip[0], ip[1], ip[2], ip[3], port);
+	let socket_addr = SocketAddrV4::new(ip, port);
+	let url = format!("http://{}", socket_addr.to_string());
 	let health_url = format!("{}/{}", url, "health");
 	let message_url = format!("{}/{}", url, "message");
 
@@ -35,7 +40,7 @@ async fn provision_e2e() {
 	});
 
 	std::thread::spawn(move || {
-		let host = HostServer::new(enclave_addr2, ip, port);
+		let host = HostServer::new(enclave_addr2, SocketAddr::V4(socket_addr));
 
 		let rt = tokio::runtime::Builder::new_current_thread()
 			.enable_all()
@@ -101,18 +106,4 @@ async fn provision_e2e() {
 
 	// Delete file
 	std::fs::remove_file(path).unwrap();
-
-	// // Test NSM connection
-	// let request = ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM);
-	// let response = qos_client::request::post(&message_url, request).unwrap();
-	// let expected = ProtocolMsg::NsmResponse(NsmResponse::DescribeNSM {
-	// 	version_major: 1,
-	// 	version_minor: 2,
-	// 	version_patch: 14,
-	// 	module_id: "mock_module_id".to_string(),
-	// 	max_pcrs: 1024,
-	// 	locked_pcrs: BTreeSet::from([90, 91, 92]),
-	// 	digest: NsmDigest::SHA256,
-	// });
-	// assert_eq!(response, expected);
 }

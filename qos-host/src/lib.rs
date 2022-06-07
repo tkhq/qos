@@ -44,12 +44,8 @@ pub struct HostServer {
 }
 
 impl HostServer {
-	/// Create a new [`HostServer`].
-	pub fn new(enclave_addr: SocketAddress, ip: [u8; 4], port: u16) -> Self {
-		Self { addr: SocketAddr::from((ip, port)), enclave_addr }
-	}
-
-	pub fn new_with_socket_addr(
+	/// Create a new [`HostServer`]. See [`Self::serve`] for starting the server.
+	pub fn new(
 		enclave_addr: SocketAddress,
 		addr: SocketAddr,
 	) -> Self {
