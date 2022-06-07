@@ -6,13 +6,13 @@ publish = false
 
 [dependencies]
 qos-core = { path = "../qos-core" }
+qos-host = { path = "../qos-host" }
+tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
 
 [dev-dependencies]
 qos-client = { path = "../qos-client" }
-qos-host = { path = "../qos-host" }
 qos-crypto = { path = "../qos-crypto" }
 
 openssl = "0.10.40"
 ureq = { version = "2.4", default-features = false }
-tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }

@@ -4,7 +4,7 @@ members = [
   "qos-core",
   "qos-crypto",
   "qos-host",
-  "qos-test"
+  "qos-test",
 ]
 
 # [dependencies]

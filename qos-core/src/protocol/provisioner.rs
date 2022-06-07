@@ -2,8 +2,6 @@ use std::{fs::File, io::Write};
 
 use super::ProtocolError;
 
-pub const SECRET_FILE: &str = "./qos.key";
-
 type Secret = Vec<u8>;
 type Share = Vec<u8>;
 type Shares = Vec<Share>;
@@ -11,11 +9,12 @@ type Shares = Vec<Share>;
 pub struct SecretProvisioner {
 	shares: Shares,
 	pub secret: Option<Secret>,
+	secret_file: String,
 }
 
 impl SecretProvisioner {
-	pub fn new() -> Self {
-		Self { shares: Vec::new(), secret: None }
+	pub fn new(secret_file: String) -> Self {
+		Self { shares: Vec::new(), secret: None, secret_file }
 	}
 
 	pub fn add_share(&mut self, share: Share) -> Result<(), ProtocolError> {
@@ -36,7 +35,7 @@ impl SecretProvisioner {
 		}
 
 		// TODO: Make errors more specific...
-		let mut file = File::create(SECRET_FILE)
+		let mut file = File::create(&self.secret_file)
 			.map_err(|_e| ProtocolError::ReconstructionError)?;
 
 		file.write_all(&secret)

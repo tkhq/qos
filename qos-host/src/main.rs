@@ -7,5 +7,5 @@ async fn main() {
 	// 		--host-port 3000 \
 	// 		--host-ip 0.0.0.0 \
 	// ```
-	qos_host::cli::CLI::execute().await;
+	qos_host::CLI::execute().await;
 }
