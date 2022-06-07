@@ -30,7 +30,7 @@ impl Coordinator {
 			let pivot_file_exists = is_file(&pivot_file);
 
 			if secret_file_exists && pivot_file_exists {
-				break
+				break;
 			}
 
 			std::thread::sleep(std::time::Duration::from_secs(1));
@@ -43,14 +43,16 @@ impl Coordinator {
 			pivot.spawn().expect("Process failed to execute...");
 
 		// Wait for the child process to finish
-		let status = child_process
-			.wait()
-			.expect("Pivot executable never started...");
+		let status =
+			child_process.wait().expect("Pivot executable never started...");
 		// and log some information about the exit status
 		if status.success() {
 			println!("Pivot executable exited successfully: {}", status);
 		} else {
-			println!("Pivot executable exited with a non zero status: {}", status)
+			println!(
+				"Pivot executable exited with a non zero status: {}",
+				status
+			)
 		}
 
 		println!("Coordinator exiting ...");

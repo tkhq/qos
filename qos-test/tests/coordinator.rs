@@ -117,12 +117,13 @@ async fn coordinator_e2e() {
 fn coordinator_works() {
 	let secret_path =
 		"./coordinator_exits_cleanly_with_non_panicking_executable.secret";
-	let usock = "./coordinator_exits_cleanly_with_non_panicking_executable.sock";
+	let usock =
+		"./coordinator_exits_cleanly_with_non_panicking_executable.sock";
 	// For our sanity, ensure the secret does not yet exist
 	let _ = std::fs::remove_file(secret_path);
 	assert!(File::open(PIVOT_OK_PATH).is_ok(),);
 
-	let opts: Vec<_>  = [
+	let opts: Vec<_> = [
 		"--usock",
 		usock,
 		"--mock",
@@ -162,7 +163,8 @@ fn coordinator_works() {
 fn coordinator_handles_non_zero_exits() {
 	let secret_path =
 		"./coordinator_keeps_re_spawning_pivot_executable_that_panics.secret";
-	let usock = "./coordinator_keeps_re_spawning_pivot_executable_that_panics.sock";
+	let usock =
+		"./coordinator_keeps_re_spawning_pivot_executable_that_panics.sock";
 	// For our sanity, ensure the secret does not yet exist
 	let _ = std::fs::remove_file(secret_path);
 	assert!(File::open(PIVOT_ABORT_PATH).is_ok(),);
@@ -213,7 +215,7 @@ fn coordinator_handles_panic() {
 	let _ = std::fs::remove_file(secret_path);
 	assert!(File::open(PIVOT_PANIC_PATH).is_ok(),);
 
-	let opts: Vec<_>  = [
+	let opts: Vec<_> = [
 		"--usock",
 		usock,
 		"--mock",
