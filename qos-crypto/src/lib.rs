@@ -1,3 +1,9 @@
+// TODO: Audit encryption strategy
+// This file implements an envelope encryption strategy using RSA and AES 256 CBC
+// Ensure that this is a sensible approach.
+// Should we use AES 256 CBC?
+// Is there a better envelope encryption strategy to use? Something native to OpenSSL?
+
 mod shamir;
 use std::{
 	fs::File,
@@ -8,8 +14,10 @@ use std::{
 use openssl::{
 	hash::MessageDigest,
 	pkey::{PKey, Private, Public},
-	rsa::Rsa,
+	rsa::{Rsa, Padding},
 	sign::{Signer, Verifier},
+	symm::{self, Cipher},
+	rand
 };
 pub use shamir::*;
 
@@ -56,6 +64,19 @@ impl RsaPair {
 	pub fn public_key_pem(&self) -> Result<Vec<u8>, CryptoError> {
 		self.private_key.public_key_to_pem().map_err(Into::into)
 	}
+
+	pub fn decrypt(&self, data: &[u8]) -> Vec<u8> {
+		let mut to = vec![0; self.private_key.size() as usize];
+		let size = self.private_key.private_decrypt(data, &mut to, Padding::PKCS1_OAEP).expect("TODO");
+		to[0..size].to_vec()
+	}
+
+	pub fn envelope_decrypt(&self, envelope: &Envelope) -> Vec<u8> {
+		let key = self.decrypt(&envelope.encrypted_symm_key);
+		let cipher = Cipher::aes_256_cbc();
+
+		symm::decrypt(cipher, &key, Some(&envelope.iv), &envelope.encrypted_data).expect("TODO")
+	}
 }
 
 impl TryFrom<PKey<Private>> for RsaPair {
@@ -70,6 +91,7 @@ impl From<Rsa<Private>> for RsaPair {
 		Self { private_key }
 	}
 }
+
 
 pub struct RsaPub {
 	pub pub_key: Rsa<Public>,
@@ -113,9 +135,41 @@ impl RsaPub {
 		verifier.verify(signature).map_err(Into::into)
 	}
 
+	/// # Panics
+	///
+	/// Panics if the payload is too big.
 	pub fn encrypt(&self, data: &[u8]) -> Vec<u8> {
-		
+		let mut to = vec![0; self.pub_key.size() as usize];
+		let size = self.pub_key.public_encrypt(data, &mut to, Padding::PKCS1_OAEP).expect("TODO");
+		to[0..size].to_vec()
 	}
+
+	pub fn envelope_encrypt(&self, data: &[u8]) -> Envelope {
+		let cipher = Cipher::aes_256_cbc();
+		
+		let key = {
+			let mut buf = vec![0; cipher.key_len()];
+			rand::rand_bytes(buf.as_mut_slice());
+			buf
+		};
+
+		let iv = {
+			let mut buf = vec![0; cipher.iv_len().expect("AES 256 CBC has an IV")];
+			rand::rand_bytes(buf.as_mut_slice());
+			buf
+		};
+
+		let encrypted_data = symm::encrypt(cipher, &key, Some(&iv), &data).expect("TODO");
+		let encrypted_symm_key = self.encrypt(&key);
+
+		Envelope { encrypted_data, encrypted_symm_key, iv }
+	}
+}
+
+pub struct Envelope {
+	pub encrypted_symm_key: Vec<u8>,
+	pub encrypted_data: Vec<u8>,
+	pub iv: Vec<u8>
 }
 
 impl TryFrom<PKey<Private>> for RsaPub {
@@ -191,5 +245,32 @@ mod test {
 		let pub_pem = pair.public_key_pem().unwrap();
 		let rsa_pub: RsaPub = RsaPub::from_pem(&pub_pem[..]).unwrap();
 		assert!(rsa_pub.verify_sha256(&signature, msg).unwrap());
+	}
+
+	#[test]
+	fn e2e_envelope_crypto() {
+		let data = b"a nation that vapes big puffy clouds";
+		let pair = Rsa::generate(4096).unwrap();
+
+		let pub_key = RsaPub::from_der(&pair.public_key_to_der().unwrap()).unwrap();
+		let envelope = pub_key.envelope_encrypt(data);
+
+		let priv_key: RsaPair = pair.into();
+		let decrypted = priv_key.envelope_decrypt(&envelope);
+
+		assert_eq!(data.to_vec(), decrypted);
+	}
+
+	#[test]
+	fn e2e_rsa_crypto() {
+		let data = b"small data";
+		let pair = Rsa::generate(4096).unwrap();
+		let pub_key = RsaPub::from_der(&pair.public_key_to_der().unwrap()).unwrap();
+		let encrypted = pub_key.encrypt(data);
+
+		let priv_key: RsaPair = pair.into();
+		let decrypted = priv_key.decrypt(&encrypted);
+
+		assert_eq!(data.to_vec(), decrypted);
 	}
 }
