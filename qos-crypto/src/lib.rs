@@ -33,6 +33,8 @@ pub use shamir::*;
 pub enum CryptoError {
 	IOError(std::io::Error),
 	OpenSSLError(openssl::error::ErrorStack),
+	DecryptError(openssl::error::ErrorStack),
+	InvalidEnvelope,
 }
 
 impl From<std::io::Error> for CryptoError {
@@ -75,19 +77,24 @@ impl RsaPair {
 		self.private_key.public_key_to_pem().map_err(Into::into)
 	}
 
-	pub fn decrypt(&self, data: &[u8]) -> Vec<u8> {
+	pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		let mut to = vec![0; self.private_key.size() as usize];
-		let size = self
-			.private_key
-			.private_decrypt(data, &mut to, Padding::PKCS1_OAEP)
-			.expect("TODO");
-		to[0..size].to_vec()
+		let size = self.private_key.private_decrypt(
+			data,
+			&mut to,
+			Padding::PKCS1_OAEP,
+		)?;
+
+		Ok(to[0..size].to_vec())
 	}
 
-	pub fn envelope_decrypt(&self, data: &[u8]) -> Vec<u8> {
-		let envelope: Envelope =
-			serde_cbor::from_slice(&data[..]).expect("TODO");
-		let key = self.decrypt(&envelope.encrypted_symm_key);
+	pub fn envelope_decrypt(
+		&self,
+		data: &[u8],
+	) -> Result<Vec<u8>, CryptoError> {
+		let envelope: Envelope = serde_cbor::from_slice(&data[..])
+			.map_err(|_| CryptoError::InvalidEnvelope)?;
+		let key = self.decrypt(&envelope.encrypted_symm_key)?;
 		let cipher = Cipher::aes_256_cbc();
 
 		symm::decrypt(
@@ -96,16 +103,19 @@ impl RsaPair {
 			Some(&envelope.iv),
 			&envelope.encrypted_data,
 		)
-		.expect("TODO")
+		.map_err(CryptoError::from)
 	}
 
 	/// Encrypt using the RsaPair's associated RsaPub
-	pub fn encrypt(&self, data: &[u8]) -> Vec<u8> {
+	pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		self.public_key.encrypt(data)
 	}
 
 	/// Envelope encrypt using the RsaPair's associated RsaPub
-	pub fn envelope_encrypt(&self, data: &[u8]) -> Vec<u8> {
+	pub fn envelope_encrypt(
+		&self,
+		data: &[u8],
+	) -> Result<Vec<u8>, CryptoError> {
 		self.public_key.envelope_encrypt(data)
 	}
 }
@@ -172,36 +182,40 @@ impl RsaPub {
 	/// # Panics
 	///
 	/// Panics if the payload is too big.
-	pub fn encrypt(&self, data: &[u8]) -> Vec<u8> {
+	pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		let mut to = vec![0; self.public_key.size() as usize];
-		let size = self
-			.public_key
-			.public_encrypt(data, &mut to, Padding::PKCS1_OAEP)
-			.expect("TODO");
-		to[0..size].to_vec()
+		let size = self.public_key.public_encrypt(
+			data,
+			&mut to,
+			Padding::PKCS1_OAEP,
+		)?;
+
+		Ok(to[0..size].to_vec())
 	}
 
-	pub fn envelope_encrypt(&self, data: &[u8]) -> Vec<u8> {
+	pub fn envelope_encrypt(
+		&self,
+		data: &[u8],
+	) -> Result<Vec<u8>, CryptoError> {
 		let cipher = Cipher::aes_256_cbc();
 		let key = {
 			let mut buf = vec![0; cipher.key_len()];
-			rand::rand_bytes(buf.as_mut_slice());
+			rand::rand_bytes(buf.as_mut_slice())?;
 			buf
 		};
 
 		let iv = {
 			let mut buf =
 				vec![0; cipher.iv_len().expect("AES 256 CBC has an IV")];
-			rand::rand_bytes(buf.as_mut_slice());
+			rand::rand_bytes(buf.as_mut_slice())?;
 			buf
 		};
 
-		let encrypted_data =
-			symm::encrypt(cipher, &key, Some(&iv), &data).expect("TODO");
-		let encrypted_symm_key = self.encrypt(&key);
+		let encrypted_data = symm::encrypt(cipher, &key, Some(&iv), &data)?;
+		let encrypted_symm_key = self.encrypt(&key)?;
 
 		let envelope = Envelope { encrypted_data, encrypted_symm_key, iv };
-		serde_cbor::to_vec(&envelope).expect("TODO")
+		Ok(serde_cbor::to_vec(&envelope).expect("Envelope is valid"))
 	}
 }
 
@@ -328,11 +342,11 @@ mod test {
 
 		let public_key =
 			RsaPub::from_der(&private.public_key_to_der().unwrap()).unwrap();
-		let envelope = public_key.envelope_encrypt(data);
+		let envelope = public_key.envelope_encrypt(data).unwrap();
 
 		let pair: RsaPair = private.try_into().unwrap();
 		// let decrypted = pair.envelope_decrypt(&envelope);
-		let decrypted = pair.envelope_decrypt(&envelope);
+		let decrypted = pair.envelope_decrypt(&envelope).unwrap();
 
 		assert_eq!(data.to_vec(), decrypted);
 	}
@@ -343,10 +357,10 @@ mod test {
 		let private = Rsa::generate(4096).unwrap();
 		let public_key =
 			RsaPub::from_der(&private.public_key_to_der().unwrap()).unwrap();
-		let encrypted = public_key.encrypt(data);
+		let encrypted = public_key.encrypt(data).unwrap();
 
 		let pair: RsaPair = private.try_into().unwrap();
-		let decrypted = pair.decrypt(&encrypted);
+		let decrypted = pair.decrypt(&encrypted).unwrap();
 
 		assert_eq!(data.to_vec(), decrypted);
 	}
