@@ -114,14 +114,7 @@ impl RsaPair {
 		.map_err(CryptoError::from)
 	}
 
-	/// Encrypt the given `data` to the RSA public key.
-	///
-	/// If the size of the `data` can be larger then the RSA public key use
-	/// [`Self::envelope_encrypt`]
-	///
-	/// # Error
-	///
-	/// Errors if the `data` is bigger then the public key.
+	/// Exactly the same as [`RsaPub::encrypt`] executed with this pairs public key.
 	pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		self.public_key.encrypt(data)
 	}
@@ -204,15 +197,16 @@ impl RsaPub {
 
 	/// Encrypt the given `data` to the RSA public key.
 	///
-	/// If the size of the `data` can be larger then the RSA public key use
-	/// [`Self::envelope_encrypt`]
+	/// If the size of the `data` can be greater then or equal to the RSA public
+	/// key use [`Self::envelope_encrypt`]
 	///
 	/// # Error
 	///
 	/// Errors if the `data` is bigger then the public key.
 	pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		let public_key_size = self.public_key.size() as usize;
-		if data.len() > public_key_size {
+		// TODO: WTF?
+		if data.len() > public_key_size - 42 {
 			return Err(CryptoError::EncryptionPayloadTooBig)
 		}
 
@@ -274,13 +268,6 @@ impl From<RsaPair> for RsaPub {
 	}
 }
 
-impl TryFrom<Rsa<Private>> for RsaPub {
-	type Error = CryptoError;
-	fn try_from(private_key: Rsa<Private>) -> Result<Self, Self::Error> {
-		Self::from_der(&private_key.public_key_to_der()?)
-	}
-}
-
 impl TryFrom<&Rsa<Private>> for RsaPub {
 	type Error = CryptoError;
 	fn try_from(private_key: &Rsa<Private>) -> Result<Self, Self::Error> {
@@ -334,8 +321,44 @@ mod test {
 		let _pair = RsaPair::from_pem_file(path.clone()).unwrap();
 	}
 
-	fn rsa_pub_encrypt_and_decrypt() {}
+	#[test]
+	fn rsa_pub_encrypt() {
+		let pair = RsaPair::generate().unwrap();
+		let public = RsaPub::try_from(&*pair).unwrap();
 
+		let oversize = vec![u8::MAX; public.size() as usize - 41];
+		assert!(public.encrypt(&oversize).is_err());
+
+		// TODO: WTF?
+		let perfect_size = vec![u8::MAX; public.size() as usize - 42];
+		let encrypted = public.encrypt(&perfect_size).unwrap();
+		let decrypted = pair.decrypt(&encrypted).unwrap();
+		assert_eq!(decrypted, perfect_size);
+
+		let smaller_size = vec![u8::MAX; public.size() as usize - 43];
+		let encrypted = public.encrypt(&smaller_size).unwrap();
+		let decrypted = pair.decrypt(&encrypted).unwrap();
+		assert_eq!(decrypted, smaller_size);
+	}
+
+	#[test]
+	fn rsa_pair_encrypt() {
+		let pair = RsaPair::generate().unwrap();
+
+		let oversize = vec![u8::MAX; pair.size() as usize - 41];
+		assert!(pair.encrypt(&oversize).is_err());
+
+		// TODO: WTF?
+		let perfect_size = vec![u8::MAX; pair.size() as usize - 42];
+		let encrypted = pair.encrypt(&perfect_size).unwrap();
+		let decrypted = pair.decrypt(&encrypted).unwrap();
+		assert_eq!(decrypted, perfect_size);
+
+		let smaller_size = vec![u8::MAX; pair.size() as usize - 43];
+		let encrypted = pair.encrypt(&smaller_size).unwrap();
+		let decrypted = pair.decrypt(&encrypted).unwrap();
+		assert_eq!(decrypted, smaller_size);
+	}
 	#[test]
 	fn e2e_crypto() {
 		let rsa = Rsa::generate(4096).unwrap();

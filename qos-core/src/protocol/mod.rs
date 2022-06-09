@@ -280,7 +280,7 @@ mod handlers {
 					// let members: Vec<GenesisMemberOutput> =
 					// config.setup_set.members.iter().enumerate().map(|(i,
 					// setup_member)| { 	let personal_key =
-					// Rsa::generate(4096).unwrap(); 	let setup_key =
+					// RsaPair::generate().unwrap(); 	let setup_key =
 					// RsaPub::from_der(&setup_member.pub_key).expect("TODO");
 					// 	let encrypted_shard =
 					// setup_key.envelope_encrypt(&personal_key.
