@@ -20,6 +20,6 @@ pub const PIVOT_FILE: &str = "../target/debug/pivot_ok";
 pub const PIVOT_FILE: &str = "/qos.pivot";
 
 #[cfg(not(feature = "vm"))]
-pub const EPHEM: &str = "./qos.ephemeral.key";
+pub const EPHEMERAL_KEY_FILE: &str = "./qos.ephemeral.key";
 #[cfg(feature = "vm")]
-pub const PIVOT_FILE: &str = "/qos.ephemeral.key";
+pub const EPHEMERAL_KEY_FILE: &str = "/qos.ephemeral.key";

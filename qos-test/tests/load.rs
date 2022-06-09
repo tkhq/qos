@@ -69,14 +69,16 @@ fn load_e2e() {
 	let message_url = format!("{}/{}", url, "message");
 	let pivot_file = "./verification.pivot".to_string();
 	let secret_file = "./verification.secret".to_string();
+	let ephemeral_file = "./verification.ephemeral".to_string();
 
 	// Spawn enclave
 	let pivot_file2 = pivot_file.clone();
 	let secret_file2 = secret_file.clone();
+	let ephemeral_file2 = ephemeral_file.clone();
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
 		let executor =
-			Executor::new(Box::new(attestor), secret_file2, pivot_file2);
+			Executor::new(Box::new(attestor), secret_file2, pivot_file2, ephemeral_file2);
 
 		SocketServer::listen(enclave_addr, executor).unwrap()
 	});

@@ -20,6 +20,7 @@ impl Coordinator {
 				opts.nsm(),
 				opts.secret_file(),
 				opts.pivot_file(),
+				opts.ephemeral_key_file()
 			);
 			SocketServer::listen(opts.addr(), executor).unwrap();
 		});

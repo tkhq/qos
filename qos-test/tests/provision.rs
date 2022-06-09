@@ -22,14 +22,16 @@ async fn provision_e2e() {
 
 	let pivot_file = "./end-to-end.pivot".to_string();
 	let secret_file = "./end-to-end.secret".to_string();
+	let ephemeral_file = "./end-to-end.ephemeral".to_string();
 
 	// Spawn enclave
 	let pivot_file2 = pivot_file.clone();
 	let secret_file2 = secret_file.clone();
+	let ephemeral_file2 = ephemeral_file.clone();
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
 		let executor =
-			Executor::new(Box::new(attestor), secret_file2, pivot_file2);
+			Executor::new(Box::new(attestor), secret_file2, pivot_file2, ephemeral_file2);
 
 		SocketServer::listen(enclave_addr, executor).unwrap()
 	});

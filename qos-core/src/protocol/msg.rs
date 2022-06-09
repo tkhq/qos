@@ -138,6 +138,7 @@ pub struct ManifestEnvelope {
 	pub approvals: Vec<Approval>,
 }
 
+#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GenesisMemberOutput {
 	pub alias: String,
 	pub encrypted_quorum_key_share: Vec<u8>,

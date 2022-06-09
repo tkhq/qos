@@ -35,9 +35,10 @@ impl ProtocolState {
 		attestor: Box<dyn NsmProvider>,
 		secret_file: String,
 		pivot_file: String,
+		ephemeral_key_file: String,
 	) -> Self {
 		let provisioner = SecretProvisioner::new(secret_file);
-		Self { attestor, provisioner, pivot_file }
+		Self { attestor, provisioner, pivot_file, ephemeral_key_file }
 	}
 }
 
@@ -51,6 +52,7 @@ impl Executor {
 		attestor: Box<dyn NsmProvider>,
 		secret_file: String,
 		pivot_file: String,
+		ephemeral_key_file: String,
 	) -> Self {
 		Self {
 			routes: vec![
@@ -62,7 +64,7 @@ impl Executor {
 				Box::new(handlers::load),
 				Box::new(handlers::boot_instruction),
 			],
-			state: ProtocolState::new(attestor, secret_file, pivot_file),
+			state: ProtocolState::new(attestor, secret_file, pivot_file, ephemeral_key_file),
 		}
 	}
 }
@@ -233,7 +235,7 @@ mod handlers {
 
 					let ephemeral_key = Rsa::generate(4096).unwrap();
 					ok_or_return!(std::fs::write(
-						state.ephemeral_key_file,
+						state.ephemeral_key_file.clone(),
 						ephemeral_key.private_key_to_der().expect("TODO")
 					));
 
@@ -265,18 +267,25 @@ mod handlers {
 					);
 
 					// TODO: Recovery logic!
+					// How many permutations of `threshold` keys should we use to reconstruct the original Quorum Key?
 
-					let members: Vec<GenesisMemberOutput> = config.setup_set.members.iter().enumerate().map(|(i, setup_member)| {
-						let personal_key = Rsa::generate(4096).unwrap();
-						let setup_key = RsaPub::from_der(&setup_member.pub_key).expect("TODO");
-						let encrypted_shard = setup_key.pub_key.public_encrypt(&shares[i], buf, openssl::rsa::Padding::PKCS1_OAEP);
+					// TODO: Disaster recovery logic!
+
+					// let members: Vec<GenesisMemberOutput> = config.setup_set.members.iter().enumerate().map(|(i, setup_member)| {
+					// 	let personal_key = Rsa::generate(4096).unwrap();
+					// 	let setup_key = RsaPub::from_der(&setup_member.pub_key).expect("TODO");
+					// 	let encrypted_shard = setup_key.envelope_encrypt(&personal_key.private_key_to_der().expect("TODO"));
+
+					// 	let quorum_key_share = shares[i];
+					// 	let personal_key: RsaPair = personal_key.into();
+					// 	let encrypted_quorum_key_share = personal_key.envelope_encrypt(quorum_key_share);
 						
-						// let personal_key = .. generate key;
-						// let encrypted_shard = personal_key.encrypt(shard);
-						// let encrypted_personal_key = setup_member.pub_key.encrypt(personal_key);
+					// 	// let personal_key = .. generate key;
+					// 	// let encrypted_shard = personal_key.encrypt(shard);
+					// 	// let encrypted_personal_key = setup_member.pub_key.encrypt(personal_key);
 						
-						GenesisMemberOutput { alias: setup_member.alias, encrypted_personal_key: '', encrypted_quorum_key_share: ''}
-					}).collect();
+					// 	GenesisMemberOutput { alias: setup_member.alias, encrypted_personal_key: '', encrypted_quorum_key_share: ''}
+					// }).collect();
 
 
 

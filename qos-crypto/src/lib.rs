@@ -4,12 +4,18 @@
 // Should we use AES 256 CBC?
 // Is there a better envelope encryption strategy to use? Something native to OpenSSL?
 
+// TODO build out utilties for
+// - converting private -> pub
+// - private wraps most methods for pub ... like encrypt etc
+
 mod shamir;
 use std::{
 	fs::File,
 	io::{Read, Write},
 	path::Path,
 };
+
+use serde_cbor;
 
 use openssl::{
 	hash::MessageDigest,
@@ -71,12 +77,26 @@ impl RsaPair {
 		to[0..size].to_vec()
 	}
 
-	pub fn envelope_decrypt(&self, envelope: &Envelope) -> Vec<u8> {
+	pub fn envelope_decrypt(&self, data: &[u8]) -> Vec<u8> {
+		let envelope: Envelope = serde_cbor::from_slice(&data[..]).expect("TODO");
 		let key = self.decrypt(&envelope.encrypted_symm_key);
 		let cipher = Cipher::aes_256_cbc();
 
 		symm::decrypt(cipher, &key, Some(&envelope.iv), &envelope.encrypted_data).expect("TODO")
 	}
+
+	/// Encrypt using the RsaPair's associated RsaPub
+	pub fn encrypt(&self, data: &[u8]) -> Vec<u8> {
+		let public = RsaPub::from_der(&self.private_key.public_key_to_der().expect("TODO")).expect("TODO");
+		public.encrypt(data)
+	} 
+
+	/// Envelope encrypt using the RsaPair's associated RsaPub
+	pub fn envelope_encrypt(&self, data: &[u8]) -> Vec<u8> {
+		let public = RsaPub::from_der(&self.private_key.public_key_to_der().expect("TODO")).expect("TODO");
+		let envelope = public.envelope_encrypt(data);
+		serde_cbor::to_vec(&envelope).expect("TODO")
+	} 
 }
 
 impl TryFrom<PKey<Private>> for RsaPair {
@@ -144,7 +164,7 @@ impl RsaPub {
 		to[0..size].to_vec()
 	}
 
-	pub fn envelope_encrypt(&self, data: &[u8]) -> Envelope {
+	pub fn envelope_encrypt(&self, data: &[u8]) -> Vec<u8> {
 		let cipher = Cipher::aes_256_cbc();
 		
 		let key = {
@@ -162,10 +182,12 @@ impl RsaPub {
 		let encrypted_data = symm::encrypt(cipher, &key, Some(&iv), &data).expect("TODO");
 		let encrypted_symm_key = self.encrypt(&key);
 
-		Envelope { encrypted_data, encrypted_symm_key, iv }
+		let envelope = Envelope { encrypted_data, encrypted_symm_key, iv };
+		serde_cbor::to_vec(&envelope).expect("TODO")
 	}
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Envelope {
 	pub encrypted_symm_key: Vec<u8>,
 	pub encrypted_data: Vec<u8>,
