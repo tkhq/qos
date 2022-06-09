@@ -105,6 +105,7 @@ impl server::Routable for Executor {
 }
 
 mod handlers {
+	use qos_crypto::RsaPair;
 	use serde_bytes::ByteBuf;
 
 	use super::*;
@@ -180,7 +181,7 @@ mod handlers {
 				user_data: None,
 				nonce: None,
 				public_key: Some(ByteBuf::from(
-					Rsa::generate(4096).unwrap().public_key_to_pem().unwrap(),
+					RsaPair::generate().unwrap().public_key_to_pem().unwrap(),
 				)),
 			};
 			let fd = state.attestor.nsm_init();
@@ -236,7 +237,7 @@ mod handlers {
 						return Some(ProtocolMsg::ErrorResponse)
 					}
 
-					let ephemeral_key = Rsa::generate(4096).unwrap();
+					let ephemeral_key = RsaPair::generate().unwrap();
 					ok_or_return!(std::fs::write(
 						state.ephemeral_key_file.clone(),
 						ephemeral_key.private_key_to_der().expect("TODO")
@@ -263,7 +264,7 @@ mod handlers {
 					// share to their public key
 
 					// TODO: Entropy!
-					let quorum_key = Rsa::generate(4096).unwrap();
+					let quorum_key = RsaPair::generate().unwrap();
 					let shares = qos_crypto::shares_generate(
 						&quorum_key.private_key_to_der().expect("TODO"),
 						config.setup_set.members.len(),

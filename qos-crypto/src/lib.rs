@@ -29,12 +29,16 @@ mod shamir;
 
 pub use shamir::*;
 
+/// Standard length for QuorumOS RSA keys, specified in bits.
+pub const RSA_KEY_LEN: u32 = 4096;
+
 #[derive(Debug)]
 pub enum CryptoError {
 	IOError(std::io::Error),
 	OpenSSLError(openssl::error::ErrorStack),
 	DecryptError(openssl::error::ErrorStack),
 	InvalidEnvelope,
+	EncryptionPayloadTooBig,
 }
 
 impl From<std::io::Error> for CryptoError {
@@ -56,6 +60,10 @@ pub struct RsaPair {
 }
 
 impl RsaPair {
+	pub fn generate() -> Result<Self, CryptoError> {
+		Rsa::generate(RSA_KEY_LEN)?.try_into()
+	}
+
 	pub fn from_pem_file<P: AsRef<Path>>(path: P) -> Result<Self, CryptoError> {
 		let mut content = Vec::new();
 		let mut file = File::open(path)?;
@@ -106,7 +114,14 @@ impl RsaPair {
 		.map_err(CryptoError::from)
 	}
 
-	/// Encrypt using the RsaPair's associated RsaPub
+	/// Encrypt the given `data` to the RSA public key.
+	///
+	/// If the size of the `data` can be larger then the RSA public key use
+	/// [`Self::envelope_encrypt`]
+	///
+	/// # Error
+	///
+	/// Errors if the `data` is bigger then the public key.
 	pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		self.public_key.encrypt(data)
 	}
@@ -134,6 +149,14 @@ impl TryFrom<Rsa<Private>> for RsaPair {
 	fn try_from(private_key: Rsa<Private>) -> Result<Self, Self::Error> {
 		let public_key = RsaPub::try_from(&private_key)?;
 		Ok(Self { private_key, public_key })
+	}
+}
+
+impl Deref for RsaPair {
+	type Target = Rsa<Private>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.private_key
 	}
 }
 
@@ -179,11 +202,22 @@ impl RsaPub {
 		verifier.verify(signature).map_err(Into::into)
 	}
 
-	/// # Panics
+	/// Encrypt the given `data` to the RSA public key.
 	///
-	/// Panics if the payload is too big.
+	/// If the size of the `data` can be larger then the RSA public key use
+	/// [`Self::envelope_encrypt`]
+	///
+	/// # Error
+	///
+	/// Errors if the `data` is bigger then the public key.
 	pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
-		let mut to = vec![0; self.public_key.size() as usize];
+		let public_key_size = self.public_key.size() as usize;
+		if data.len() > public_key_size {
+			return Err(CryptoError::EncryptionPayloadTooBig)
+		}
+
+		let mut to = vec![0; public_key_size];
+
 		let size = self.public_key.public_encrypt(
 			data,
 			&mut to,
@@ -215,7 +249,8 @@ impl RsaPub {
 		let encrypted_symm_key = self.encrypt(&key)?;
 
 		let envelope = Envelope { encrypted_data, encrypted_symm_key, iv };
-		Ok(serde_cbor::to_vec(&envelope).expect("Envelope is valid"))
+		Ok(serde_cbor::to_vec(&envelope)
+			.expect("`Envelope` impls cbor serialization"))
 	}
 }
 
@@ -298,6 +333,8 @@ mod test {
 
 		let _pair = RsaPair::from_pem_file(path.clone()).unwrap();
 	}
+
+	fn rsa_pub_encrypt_and_decrypt() {}
 
 	#[test]
 	fn e2e_crypto() {

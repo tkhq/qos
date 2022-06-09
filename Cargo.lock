@@ -523,6 +523,7 @@ dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "openssl",
  "qos-core",
+ "qos-crypto",
  "qos-host",
  "serde_bytes",
  "serde_cbor",

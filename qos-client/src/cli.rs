@@ -1,7 +1,7 @@
 use std::env;
 
-use openssl::rsa::Rsa;
 use qos_core::protocol::{Echo, ProtocolMsg};
+use qos_crypto::RsaPair;
 use qos_host::cli::HostOptions;
 
 use crate::attest::nitro::{
@@ -219,7 +219,7 @@ mod handlers {
 				user_data: None,
 				nonce: None,
 				public_key: Some(ByteBuf::from(
-					Rsa::generate(4096).unwrap().public_key_to_pem().unwrap(),
+					RsaPair::generate().unwrap().public_key_to_pem().unwrap(),
 				)),
 			}),
 		)
