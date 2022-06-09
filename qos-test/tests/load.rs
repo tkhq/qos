@@ -29,7 +29,7 @@ fn load_e2e() {
 		.clone()
 		.map(|_| {
 			//TO
-			let pair: RsaPair = Rsa::generate(4096).unwrap().into();
+			let pair: RsaPair = Rsa::generate(4096).unwrap().try_into().unwrap();
 			pair
 		})
 		.collect();

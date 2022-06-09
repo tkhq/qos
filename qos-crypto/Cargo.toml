@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
 openssl = "0.10.40"
-serde = { version = "1.0", default-features = false, features = ["derive"] }
-serde_cbor = { version = "0.11", default-features = false }
+serde = { version = "1.0", default-features = false, features = ["derive", "std"] }
+serde_cbor = { version = "0.11", default-features = false, features = ["std"] }

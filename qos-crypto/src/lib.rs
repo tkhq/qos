@@ -8,14 +8,11 @@
 // - converting private -> pub
 // - private wraps most methods for pub ... like encrypt etc
 
-mod shamir;
 use std::{
 	fs::File,
 	io::{Read, Write},
-	path::Path,
+	path::Path, ops::Deref,
 };
-
-use serde_cbor;
 
 use openssl::{
 	hash::MessageDigest,
@@ -25,6 +22,9 @@ use openssl::{
 	symm::{self, Cipher},
 	rand
 };
+
+mod shamir;
+
 pub use shamir::*;
 
 #[derive(Debug)]
@@ -48,6 +48,7 @@ impl From<openssl::error::ErrorStack> for CryptoError {
 /// RSA Private key pair.
 pub struct RsaPair {
 	private_key: Rsa<Private>,
+	public_key: RsaPub,
 }
 
 impl RsaPair {
@@ -55,8 +56,9 @@ impl RsaPair {
 		let mut content = Vec::new();
 		let mut file = File::open(path)?;
 		file.read_to_end(&mut content)?;
+		let private_key = Rsa::private_key_from_pem(&content[..])?;
 
-		Ok(Self { private_key: Rsa::private_key_from_pem(&content[..])? })
+		private_key.try_into()
 	}
 
 	/// Sign the sha256 digest of `msg`. Returns the signature as a byte vec.
@@ -87,34 +89,34 @@ impl RsaPair {
 
 	/// Encrypt using the RsaPair's associated RsaPub
 	pub fn encrypt(&self, data: &[u8]) -> Vec<u8> {
-		let public = RsaPub::from_der(&self.private_key.public_key_to_der().expect("TODO")).expect("TODO");
-		public.encrypt(data)
-	} 
+		self.public_key.encrypt(data)
+	}
 
 	/// Envelope encrypt using the RsaPair's associated RsaPub
 	pub fn envelope_encrypt(&self, data: &[u8]) -> Vec<u8> {
-		let public = RsaPub::from_der(&self.private_key.public_key_to_der().expect("TODO")).expect("TODO");
-		let envelope = public.envelope_encrypt(data);
-		serde_cbor::to_vec(&envelope).expect("TODO")
-	} 
+		self.public_key.envelope_encrypt(data)
+	}
 }
 
 impl TryFrom<PKey<Private>> for RsaPair {
 	type Error = CryptoError;
 	fn try_from(private_key: PKey<Private>) -> Result<Self, Self::Error> {
-		Ok(Self { private_key: private_key.rsa()? })
+		let private_key = private_key.rsa()?;
+		let public_key =  RsaPub::try_from(&private_key)?;
+		Ok(Self { private_key, public_key })
 	}
 }
 
-impl From<Rsa<Private>> for RsaPair {
-	fn from(private_key: Rsa<Private>) -> Self {
-		Self { private_key }
+impl TryFrom<Rsa<Private>> for RsaPair {
+	type Error = CryptoError;
+	fn try_from(private_key: Rsa<Private>) -> Result<Self, Self::Error> {
+		let public_key =  RsaPub::try_from(&private_key)?;
+		Ok(Self { private_key, public_key })
 	}
 }
-
 
 pub struct RsaPub {
-	pub pub_key: Rsa<Public>,
+	public_key: Rsa<Public>,
 }
 
 impl RsaPub {
@@ -127,18 +129,18 @@ impl RsaPub {
 	}
 
 	pub fn from_pem(pem: &[u8]) -> Result<Self, CryptoError> {
-		Ok(Self { pub_key: Rsa::public_key_from_pem(pem)? })
+		Ok(Self { public_key: Rsa::public_key_from_pem(pem)? })
 	}
 
 	pub fn from_der(der: &[u8]) -> Result<Self, CryptoError> {
-		Ok(Self { pub_key: Rsa::public_key_from_der(der)? })
+		Ok(Self { public_key: Rsa::public_key_from_der(der)? })
 	}
 
 	pub fn write_pem_file<P: AsRef<Path>>(
 		&self,
 		path: P,
 	) -> Result<(), CryptoError> {
-		let bytes = self.pub_key.public_key_to_pem()?;
+		let bytes = self.public_key.public_key_to_pem()?;
 		let mut file = File::create(path)?;
 		file.write_all(&bytes)?;
 		Ok(())
@@ -149,7 +151,7 @@ impl RsaPub {
 		signature: &[u8],
 		msg: &[u8],
 	) -> Result<bool, CryptoError> {
-		let public = PKey::from_rsa(self.pub_key.clone())?;
+		let public = PKey::from_rsa(self.public_key.clone())?;
 		let mut verifier = Verifier::new(MessageDigest::sha256(), &public)?;
 		verifier.update(msg)?;
 		verifier.verify(signature).map_err(Into::into)
@@ -159,14 +161,13 @@ impl RsaPub {
 	///
 	/// Panics if the payload is too big.
 	pub fn encrypt(&self, data: &[u8]) -> Vec<u8> {
-		let mut to = vec![0; self.pub_key.size() as usize];
-		let size = self.pub_key.public_encrypt(data, &mut to, Padding::PKCS1_OAEP).expect("TODO");
+		let mut to = vec![0; self.public_key.size() as usize];
+		let size = self.public_key.public_encrypt(data, &mut to, Padding::PKCS1_OAEP).expect("TODO");
 		to[0..size].to_vec()
 	}
 
 	pub fn envelope_encrypt(&self, data: &[u8]) -> Vec<u8> {
 		let cipher = Cipher::aes_256_cbc();
-		
 		let key = {
 			let mut buf = vec![0; cipher.key_len()];
 			rand::rand_bytes(buf.as_mut_slice());
@@ -187,7 +188,41 @@ impl RsaPub {
 	}
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+impl Deref for RsaPub {
+	type Target = Rsa<Public>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.public_key
+    }
+}
+
+impl From<Rsa<Public>> for RsaPub {
+	fn from(public_key: Rsa<Public>) -> Self {
+		Self { public_key }
+	}
+}
+
+impl From<RsaPair> for RsaPub {
+	fn from(pair: RsaPair) -> Self {
+		Self { public_key: pair.public_key.public_key }
+	}
+}
+
+impl TryFrom<Rsa<Private>> for RsaPub {
+	type Error = CryptoError;
+	fn try_from(private_key: Rsa<Private>) -> Result<Self, Self::Error> {
+		Self::from_der(&private_key.public_key_to_der()?)
+	}
+}
+
+impl TryFrom<&Rsa<Private>> for RsaPub {
+	type Error = CryptoError;
+	fn try_from(private_key: &Rsa<Private>) -> Result<Self, Self::Error> {
+		Self::from_der(&private_key.public_key_to_der()?)
+	}
+}
+
+#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Envelope {
 	pub encrypted_symm_key: Vec<u8>,
 	pub encrypted_data: Vec<u8>,
@@ -198,8 +233,8 @@ impl TryFrom<PKey<Private>> for RsaPub {
 	type Error = CryptoError;
 	fn try_from(pkey: PKey<Private>) -> Result<Self, Self::Error> {
 		let pem = pkey.public_key_to_pem()?;
-		let pub_key = Rsa::public_key_from_pem(&pem[..])?;
-		Ok(Self { pub_key })
+		let public_key = Rsa::public_key_from_pem(&pem[..])?;
+		Ok(Self { public_key })
 	}
 }
 
@@ -221,7 +256,7 @@ mod test {
 		path.push("mock");
 		path.push("rsa_public.mock.pem");
 
-		let _pub_key = RsaPub::from_pem_file(path.clone()).unwrap();
+		let _public_key = RsaPub::from_pem_file(path.clone()).unwrap();
 	}
 
 	#[test]
@@ -272,13 +307,14 @@ mod test {
 	#[test]
 	fn e2e_envelope_crypto() {
 		let data = b"a nation that vapes big puffy clouds";
-		let pair = Rsa::generate(4096).unwrap();
+		let private = Rsa::generate(4096).unwrap();
 
-		let pub_key = RsaPub::from_der(&pair.public_key_to_der().unwrap()).unwrap();
-		let envelope = pub_key.envelope_encrypt(data);
+		let public_key = RsaPub::from_der(&private.public_key_to_der().unwrap()).unwrap();
+		let envelope = public_key.envelope_encrypt(data);
 
-		let priv_key: RsaPair = pair.into();
-		let decrypted = priv_key.envelope_decrypt(&envelope);
+		let pair: RsaPair = private.try_into().unwrap();
+		// let decrypted = pair.envelope_decrypt(&envelope);
+		let decrypted = pair.envelope_decrypt(&envelope);
 
 		assert_eq!(data.to_vec(), decrypted);
 	}
@@ -286,12 +322,12 @@ mod test {
 	#[test]
 	fn e2e_rsa_crypto() {
 		let data = b"small data";
-		let pair = Rsa::generate(4096).unwrap();
-		let pub_key = RsaPub::from_der(&pair.public_key_to_der().unwrap()).unwrap();
-		let encrypted = pub_key.encrypt(data);
+		let private = Rsa::generate(4096).unwrap();
+		let public_key = RsaPub::from_der(&private.public_key_to_der().unwrap()).unwrap();
+		let encrypted = public_key.encrypt(data);
 
-		let priv_key: RsaPair = pair.into();
-		let decrypted = priv_key.decrypt(&encrypted);
+		let pair: RsaPair = private.try_into().unwrap();
+		let decrypted = pair.decrypt(&encrypted);
 
 		assert_eq!(data.to_vec(), decrypted);
 	}
