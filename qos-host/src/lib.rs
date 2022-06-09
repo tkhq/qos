@@ -95,7 +95,7 @@ impl HostServer {
 				StatusCode::BAD_REQUEST,
 				serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
 					.expect("ProtocolMsg can always serialize. qed."),
-			)
+			);
 		}
 
 		match serde_cbor::from_slice(&body) {

@@ -37,7 +37,7 @@ impl HostOptions {
 			return format!(
 				"http://{}.{}.{}.{}:{}",
 				ip[0], ip[1], ip[2], ip[3], port
-			)
+			);
 		} else {
 			panic!("Couldn't parse URL from options.")
 		}

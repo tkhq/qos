@@ -72,7 +72,7 @@ impl From<Rsa<Private>> for RsaPair {
 }
 
 pub struct RsaPub {
-	pub_key: Rsa<Public>,
+	pub pub_key: Rsa<Public>,
 }
 
 impl RsaPub {
@@ -86,6 +86,10 @@ impl RsaPub {
 
 	pub fn from_pem(pem: &[u8]) -> Result<Self, CryptoError> {
 		Ok(Self { pub_key: Rsa::public_key_from_pem(pem)? })
+	}
+
+	pub fn from_der(der: &[u8]) -> Result<Self, CryptoError> {
+		Ok(Self { pub_key: Rsa::public_key_from_der(der)? })
 	}
 
 	pub fn write_pem_file<P: AsRef<Path>>(
@@ -108,6 +112,10 @@ impl RsaPub {
 		verifier.update(msg)?;
 		verifier.verify(signature).map_err(Into::into)
 	}
+
+	pub fn encrypt(&self, data: &[u8]) -> Vec<u8> {
+		
+	}
 }
 
 impl TryFrom<PKey<Private>> for RsaPub {
@@ -117,6 +125,12 @@ impl TryFrom<PKey<Private>> for RsaPub {
 		let pub_key = Rsa::public_key_from_pem(&pem[..])?;
 		Ok(Self { pub_key })
 	}
+}
+
+pub fn sha_256_hash(buf: &[u8]) -> [u8; 32] {
+	let mut hasher = openssl::sha::Sha256::new();
+	hasher.update(buf);
+	hasher.finish()
 }
 
 #[cfg(test)]

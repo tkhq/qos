@@ -18,3 +18,8 @@ pub const SECRET_FILE: &str = "/qos.secret";
 pub const PIVOT_FILE: &str = "../target/debug/pivot_ok";
 #[cfg(feature = "vm")]
 pub const PIVOT_FILE: &str = "/qos.pivot";
+
+#[cfg(not(feature = "vm"))]
+pub const EPHEM: &str = "./qos.ephemeral.key";
+#[cfg(feature = "vm")]
+pub const PIVOT_FILE: &str = "/qos.ephemeral.key";
