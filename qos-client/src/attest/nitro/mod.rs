@@ -135,7 +135,7 @@ fn verify_cose_sign1_sig(
 
 	// Expect v3
 	if ee_cert.version() != X509_V3 {
-		return Err(AttestError::InvalidEndEntityCert);
+		return Err(AttestError::InvalidEndEntityCert)
 	}
 
 	let ee_cert_pub_key = ee_cert.public_key()?;

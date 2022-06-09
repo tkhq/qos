@@ -64,7 +64,12 @@ impl Executor {
 				Box::new(handlers::load),
 				Box::new(handlers::boot_instruction),
 			],
-			state: ProtocolState::new(attestor, secret_file, pivot_file, ephemeral_key_file),
+			state: ProtocolState::new(
+				attestor,
+				secret_file,
+				pivot_file,
+				ephemeral_key_file,
+			),
 		}
 	}
 }
@@ -73,7 +78,7 @@ impl server::Routable for Executor {
 	fn process(&mut self, mut req_bytes: Vec<u8>) -> Vec<u8> {
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
 			return serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
-				.expect("ProtocolMsg can always be serialized. qed.");
+				.expect("ProtocolMsg can always be serialized. qed.")
 		}
 
 		let msg_req = match serde_cbor::from_slice(&mut req_bytes) {
@@ -100,8 +105,6 @@ impl server::Routable for Executor {
 }
 
 mod handlers {
-	use std::fs::File;
-
 	use serde_bytes::ByteBuf;
 
 	use super::*;
@@ -230,7 +233,7 @@ mod handlers {
 					let is_manifest_verified =
 						verify_manifest_approvals(manifest_envelope);
 					if !is_manifest_verified {
-						return Some(ProtocolMsg::ErrorResponse);
+						return Some(ProtocolMsg::ErrorResponse)
 					}
 
 					let ephemeral_key = Rsa::generate(4096).unwrap();
@@ -254,9 +257,10 @@ mod handlers {
 				}
 				BootInstruction::Genesis { config } => {
 					// Generate the Quorum Key
-					// Generate a Quorum Set with the same aliases as the Setup Set
-					// Shard the Quorum Key and assign one share to each member of the Quorum Set
-					// Encrypt each Quorum Member's share to their public key
+					// Generate a Quorum Set with the same aliases as the Setup
+					// Set Shard the Quorum Key and assign one share to each
+					// member of the Quorum Set Encrypt each Quorum Member's
+					// share to their public key
 
 					// TODO: Entropy!
 					let quorum_key = Rsa::generate(4096).unwrap();
@@ -267,40 +271,52 @@ mod handlers {
 					);
 
 					// TODO: Recovery logic!
-					// How many permutations of `threshold` keys should we use to reconstruct the original Quorum Key?
+					// How many permutations of `threshold` keys should we use
+					// to reconstruct the original Quorum Key?
 
 					// TODO: Disaster recovery logic!
 
-					// let members: Vec<GenesisMemberOutput> = config.setup_set.members.iter().enumerate().map(|(i, setup_member)| {
-					// 	let personal_key = Rsa::generate(4096).unwrap();
-					// 	let setup_key = RsaPub::from_der(&setup_member.pub_key).expect("TODO");
-					// 	let encrypted_shard = setup_key.envelope_encrypt(&personal_key.private_key_to_der().expect("TODO"));
+					// let members: Vec<GenesisMemberOutput> =
+					// config.setup_set.members.iter().enumerate().map(|(i,
+					// setup_member)| { 	let personal_key =
+					// Rsa::generate(4096).unwrap(); 	let setup_key =
+					// RsaPub::from_der(&setup_member.pub_key).expect("TODO");
+					// 	let encrypted_shard =
+					// setup_key.envelope_encrypt(&personal_key.
+					// private_key_to_der().expect("TODO"));
 
 					// 	let quorum_key_share = shares[i];
 					// 	let personal_key: RsaPair = personal_key.into();
-					// 	let encrypted_quorum_key_share = personal_key.envelope_encrypt(quorum_key_share);
-						
+					// 	let encrypted_quorum_key_share =
+					// personal_key.envelope_encrypt(quorum_key_share);
+
 					// 	// let personal_key = .. generate key;
 					// 	// let encrypted_shard = personal_key.encrypt(shard);
-					// 	// let encrypted_personal_key = setup_member.pub_key.encrypt(personal_key);
-						
-					// 	GenesisMemberOutput { alias: setup_member.alias, encrypted_personal_key: '', encrypted_quorum_key_share: ''}
-					// }).collect();
+					// 	// let encrypted_personal_key =
+					// setup_member.pub_key.encrypt(personal_key);
 
-
+					// 	GenesisMemberOutput { alias: setup_member.alias,
+					// encrypted_personal_key: '', encrypted_quorum_key_share:
+					// ''} }).collect();
 
 					// Output of a genesis ceremony is:
 					//  - Quorum Key has been created
 					//  - Quorum Set has been created
-					//  - Quorum Key has been sharded to that specific Quorum Set
+					//  - Quorum Key has been sharded to that specific Quorum
+					//    Set
 					//  - NOT: A manifest file
 					// Immediately after a genesis ceremony:
-					//  - Members of the Quorum Set sign the Quorum Configuration
-					//  - This serves as the initial proof-of-access for that Quorum Set
-					// Then, a manifest file is constructed using that Quorum Set
+					//  - Members of the Quorum Set sign the Quorum
+					//    Configuration
+					//  - This serves as the initial proof-of-access for that
+					//    Quorum Set
+					// Then, a manifest file is constructed using that Quorum
+					// Set
 					//  - Threshold members sign this manifest file
-					// Later, on some cadence, Quorum Members sign a separate proof-of-access
-					//  - This second proof-of-access necessitates using a something "recent" like a hash of a recent ETH block
+					// Later, on some cadence, Quorum Members sign a separate
+					// proof-of-access
+					//  - This second proof-of-access necessitates using a
+					//    something "recent" like a hash of a recent ETH block
 				}
 			}
 
@@ -325,7 +341,7 @@ mod handlers {
 				Err(_) => return false,
 				Ok(verified) => {
 					if !verified {
-						return false;
+						return false
 					}
 				}
 			}

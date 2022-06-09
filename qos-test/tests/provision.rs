@@ -30,8 +30,12 @@ async fn provision_e2e() {
 	let ephemeral_file2 = ephemeral_file.clone();
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
-		let executor =
-			Executor::new(Box::new(attestor), secret_file2, pivot_file2, ephemeral_file2);
+		let executor = Executor::new(
+			Box::new(attestor),
+			secret_file2,
+			pivot_file2,
+			ephemeral_file2,
+		);
 
 		SocketServer::listen(enclave_addr, executor).unwrap()
 	});

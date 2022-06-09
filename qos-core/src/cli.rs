@@ -4,7 +4,7 @@ use crate::{
 	coordinator::Coordinator,
 	io::SocketAddress,
 	protocol::{MockNsm, Nsm, NsmProvider},
-	PIVOT_FILE, SECRET_FILE, EPHEMERAL_KEY_FILE
+	EPHEMERAL_KEY_FILE, PIVOT_FILE, SECRET_FILE,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -15,7 +15,7 @@ pub struct EnclaveOptions {
 	mock: bool,
 	secret_file: String,
 	pivot_file: String,
-	ephemeral_key_file: String
+	ephemeral_key_file: String,
 }
 
 impl EnclaveOptions {
@@ -27,7 +27,7 @@ impl EnclaveOptions {
 			mock: false,
 			secret_file: SECRET_FILE.to_owned(),
 			pivot_file: PIVOT_FILE.to_owned(),
-			ephemeral_key_file: EPHEMERAL_KEY_FILE.to_owned()
+			ephemeral_key_file: EPHEMERAL_KEY_FILE.to_owned(),
 		}
 	}
 
@@ -215,7 +215,7 @@ mod test {
 			"--pivot-file",
 			pivot,
 			"--ephemeral-key-file",
-			ephemeral
+			ephemeral,
 		]
 		.into_iter()
 		.map(String::from)
@@ -268,7 +268,7 @@ mod test {
 			mock: false,
 			pivot_file: PIVOT_FILE.to_string(),
 			secret_file: SECRET_FILE.to_string(),
-			ephemeral_key_file: EPHEMERAL_KEY_FILE.to_string()
+			ephemeral_key_file: EPHEMERAL_KEY_FILE.to_string(),
 		};
 		options.addr();
 	}
@@ -283,7 +283,7 @@ mod test {
 			mock: false,
 			pivot_file: PIVOT_FILE.to_string(),
 			secret_file: SECRET_FILE.to_string(),
-			ephemeral_key_file: EPHEMERAL_KEY_FILE.to_string()
+			ephemeral_key_file: EPHEMERAL_KEY_FILE.to_string(),
 		};
 		options.addr();
 	}
@@ -316,7 +316,7 @@ mod test {
 			mock: false,
 			pivot_file: PIVOT_FILE.to_string(),
 			secret_file: SECRET_FILE.to_string(),
-			ephemeral_key_file: EPHEMERAL_KEY_FILE.to_string()
+			ephemeral_key_file: EPHEMERAL_KEY_FILE.to_string(),
 		};
 		match options.addr() {
 			SocketAddress::Unix(_) => {}

@@ -142,7 +142,7 @@ pub struct ManifestEnvelope {
 pub struct GenesisMemberOutput {
 	pub alias: String,
 	pub encrypted_quorum_key_share: Vec<u8>,
-	pub encrypted_personal_key: Vec<u8>
+	pub encrypted_personal_key: Vec<u8>,
 }
 
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]

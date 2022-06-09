@@ -20,7 +20,7 @@ impl Coordinator {
 				opts.nsm(),
 				opts.secret_file(),
 				opts.pivot_file(),
-				opts.ephemeral_key_file()
+				opts.ephemeral_key_file(),
 			);
 			SocketServer::listen(opts.addr(), executor).unwrap();
 		});
@@ -31,7 +31,7 @@ impl Coordinator {
 			let pivot_file_exists = is_file(&pivot_file);
 
 			if secret_file_exists && pivot_file_exists {
-				break;
+				break
 			}
 
 			std::thread::sleep(std::time::Duration::from_secs(1));

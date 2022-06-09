@@ -1,8 +1,9 @@
 // TODO: Audit encryption strategy
-// This file implements an envelope encryption strategy using RSA and AES 256 CBC
-// Ensure that this is a sensible approach.
+// This file implements an envelope encryption strategy using RSA and AES 256
+// CBC Ensure that this is a sensible approach.
 // Should we use AES 256 CBC?
-// Is there a better envelope encryption strategy to use? Something native to OpenSSL?
+// Is there a better envelope encryption strategy to use? Something native to
+// OpenSSL?
 
 // TODO build out utilties for
 // - converting private -> pub
@@ -11,16 +12,17 @@
 use std::{
 	fs::File,
 	io::{Read, Write},
-	path::Path, ops::Deref,
+	ops::Deref,
+	path::Path,
 };
 
 use openssl::{
 	hash::MessageDigest,
 	pkey::{PKey, Private, Public},
-	rsa::{Rsa, Padding},
+	rand,
+	rsa::{Padding, Rsa},
 	sign::{Signer, Verifier},
 	symm::{self, Cipher},
-	rand
 };
 
 mod shamir;
@@ -75,16 +77,26 @@ impl RsaPair {
 
 	pub fn decrypt(&self, data: &[u8]) -> Vec<u8> {
 		let mut to = vec![0; self.private_key.size() as usize];
-		let size = self.private_key.private_decrypt(data, &mut to, Padding::PKCS1_OAEP).expect("TODO");
+		let size = self
+			.private_key
+			.private_decrypt(data, &mut to, Padding::PKCS1_OAEP)
+			.expect("TODO");
 		to[0..size].to_vec()
 	}
 
 	pub fn envelope_decrypt(&self, data: &[u8]) -> Vec<u8> {
-		let envelope: Envelope = serde_cbor::from_slice(&data[..]).expect("TODO");
+		let envelope: Envelope =
+			serde_cbor::from_slice(&data[..]).expect("TODO");
 		let key = self.decrypt(&envelope.encrypted_symm_key);
 		let cipher = Cipher::aes_256_cbc();
 
-		symm::decrypt(cipher, &key, Some(&envelope.iv), &envelope.encrypted_data).expect("TODO")
+		symm::decrypt(
+			cipher,
+			&key,
+			Some(&envelope.iv),
+			&envelope.encrypted_data,
+		)
+		.expect("TODO")
 	}
 
 	/// Encrypt using the RsaPair's associated RsaPub
@@ -102,7 +114,7 @@ impl TryFrom<PKey<Private>> for RsaPair {
 	type Error = CryptoError;
 	fn try_from(private_key: PKey<Private>) -> Result<Self, Self::Error> {
 		let private_key = private_key.rsa()?;
-		let public_key =  RsaPub::try_from(&private_key)?;
+		let public_key = RsaPub::try_from(&private_key)?;
 		Ok(Self { private_key, public_key })
 	}
 }
@@ -110,7 +122,7 @@ impl TryFrom<PKey<Private>> for RsaPair {
 impl TryFrom<Rsa<Private>> for RsaPair {
 	type Error = CryptoError;
 	fn try_from(private_key: Rsa<Private>) -> Result<Self, Self::Error> {
-		let public_key =  RsaPub::try_from(&private_key)?;
+		let public_key = RsaPub::try_from(&private_key)?;
 		Ok(Self { private_key, public_key })
 	}
 }
@@ -162,7 +174,10 @@ impl RsaPub {
 	/// Panics if the payload is too big.
 	pub fn encrypt(&self, data: &[u8]) -> Vec<u8> {
 		let mut to = vec![0; self.public_key.size() as usize];
-		let size = self.public_key.public_encrypt(data, &mut to, Padding::PKCS1_OAEP).expect("TODO");
+		let size = self
+			.public_key
+			.public_encrypt(data, &mut to, Padding::PKCS1_OAEP)
+			.expect("TODO");
 		to[0..size].to_vec()
 	}
 
@@ -175,12 +190,14 @@ impl RsaPub {
 		};
 
 		let iv = {
-			let mut buf = vec![0; cipher.iv_len().expect("AES 256 CBC has an IV")];
+			let mut buf =
+				vec![0; cipher.iv_len().expect("AES 256 CBC has an IV")];
 			rand::rand_bytes(buf.as_mut_slice());
 			buf
 		};
 
-		let encrypted_data = symm::encrypt(cipher, &key, Some(&iv), &data).expect("TODO");
+		let encrypted_data =
+			symm::encrypt(cipher, &key, Some(&iv), &data).expect("TODO");
 		let encrypted_symm_key = self.encrypt(&key);
 
 		let envelope = Envelope { encrypted_data, encrypted_symm_key, iv };
@@ -191,9 +208,9 @@ impl RsaPub {
 impl Deref for RsaPub {
 	type Target = Rsa<Public>;
 
-    fn deref(&self) -> &Self::Target {
-        &self.public_key
-    }
+	fn deref(&self) -> &Self::Target {
+		&self.public_key
+	}
 }
 
 impl From<Rsa<Public>> for RsaPub {
@@ -226,7 +243,7 @@ impl TryFrom<&Rsa<Private>> for RsaPub {
 pub struct Envelope {
 	pub encrypted_symm_key: Vec<u8>,
 	pub encrypted_data: Vec<u8>,
-	pub iv: Vec<u8>
+	pub iv: Vec<u8>,
 }
 
 impl TryFrom<PKey<Private>> for RsaPub {
@@ -309,7 +326,8 @@ mod test {
 		let data = b"a nation that vapes big puffy clouds";
 		let private = Rsa::generate(4096).unwrap();
 
-		let public_key = RsaPub::from_der(&private.public_key_to_der().unwrap()).unwrap();
+		let public_key =
+			RsaPub::from_der(&private.public_key_to_der().unwrap()).unwrap();
 		let envelope = public_key.envelope_encrypt(data);
 
 		let pair: RsaPair = private.try_into().unwrap();
@@ -323,7 +341,8 @@ mod test {
 	fn e2e_rsa_crypto() {
 		let data = b"small data";
 		let private = Rsa::generate(4096).unwrap();
-		let public_key = RsaPub::from_der(&private.public_key_to_der().unwrap()).unwrap();
+		let public_key =
+			RsaPub::from_der(&private.public_key_to_der().unwrap()).unwrap();
 		let encrypted = public_key.encrypt(data);
 
 		let pair: RsaPair = private.try_into().unwrap();

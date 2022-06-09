@@ -29,7 +29,8 @@ fn load_e2e() {
 		.clone()
 		.map(|_| {
 			//TO
-			let pair: RsaPair = Rsa::generate(4096).unwrap().try_into().unwrap();
+			let pair: RsaPair =
+				Rsa::generate(4096).unwrap().try_into().unwrap();
 			pair
 		})
 		.collect();
@@ -77,8 +78,12 @@ fn load_e2e() {
 	let ephemeral_file2 = ephemeral_file.clone();
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
-		let executor =
-			Executor::new(Box::new(attestor), secret_file2, pivot_file2, ephemeral_file2);
+		let executor = Executor::new(
+			Box::new(attestor),
+			secret_file2,
+			pivot_file2,
+			ephemeral_file2,
+		);
 
 		SocketServer::listen(enclave_addr, executor).unwrap()
 	});
