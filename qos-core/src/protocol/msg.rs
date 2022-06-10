@@ -4,7 +4,11 @@ pub use aws_nitro_enclaves_nsm_api::api::{
 	Digest as NsmDigest, Request as NsmRequest, Response as NsmResponse,
 };
 
-use super::{boot::ManifestEnvelope, genesis::GenesisConfig, ProtocolError};
+use super::{
+	boot::ManifestEnvelope,
+	genesis::{GenesisOutput, GenesisSet},
+	ProtocolError,
+};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ProtocolMsg {
@@ -28,7 +32,12 @@ pub enum ProtocolMsg {
 
 	BootRequest(BootInstruction),
 	BootStandardResponse(NsmResponse),
-	BootGenesisResponse,
+	BootGenesisResponse {
+		/// COSE SIGN1 structure with Attestation Doc
+		attestation_doc: NsmResponse,
+		/// Output from the Genesis flow.
+		genesis_output: GenesisOutput,
+	},
 
 	ProtocolErrorResponse(ProtocolError),
 }
@@ -74,5 +83,5 @@ pub struct Load {
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum BootInstruction {
 	Standard { manifest_envelope: ManifestEnvelope, pivot: Vec<u8> },
-	Genesis { config: GenesisConfig },
+	Genesis { set: GenesisSet },
 }

@@ -1,8 +1,6 @@
 use qos_crypto::RsaPub;
 
-use crate::protocol::ProtocolError;
-
-pub type Hash256 = [u8; 32];
+use super::{Hash256, ProtocolError};
 
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NitroConfig {
@@ -37,6 +35,7 @@ pub struct PivotConfig {
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QuorumMember {
 	pub alias: String,
+	/// DER encoded RSA public key
 	pub pub_key: Vec<u8>,
 }
 
@@ -89,7 +88,6 @@ impl ManifestEnvelope {
 					dbg!(e, approval);
 					ProtocolError::CryptoError
 				})?;
-
 			if !is_valid_signature {
 				return Err(ProtocolError::InvalidManifestApproval(
 					approval.clone(),

@@ -2,6 +2,8 @@
 
 use std::{
 	fs::{set_permissions, Permissions},
+	iter::zip,
+	ops::Deref,
 	os::unix::fs::PermissionsExt,
 };
 
@@ -15,6 +17,9 @@ mod provisioner;
 
 pub use attestor::{MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT};
 pub use boot::{Approval, ManifestEnvelope};
+pub use genesis::{
+	GenesisMemberOutput, GenesisOutput, GenesisSet, SetupMember,
+};
 pub use msg::*;
 use provisioner::*;
 
@@ -25,6 +30,8 @@ const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
 
 type ProtocolHandler =
 	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
+
+pub type Hash256 = [u8; 32];
 
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ProtocolError {
@@ -171,7 +178,7 @@ mod handlers {
 			match $e {
 				Ok(x) => x,
 				Err(_) => {
-					// $state.phase = ProtocolPhase::UnrecoverableError;
+					$state.phase = ProtocolPhase::UnrecoverableError;
 					return Some(ProtocolMsg::ErrorResponse)
 				}
 			}
@@ -300,7 +307,7 @@ mod handlers {
 	) -> Option<ProtocolMsg> {
 		macro_rules! ok {
 			( $e:expr ) => {
-				ok_unrecoverable!($e, state);
+				ok_unrecoverable!($e, state)
 			};
 		}
 
@@ -348,7 +355,7 @@ mod handlers {
 				state.manifest = Some(manifest_envelope.clone());
 
 				// Get the attestation document from the NSM
-				let sign_cose1_attestation_doc = {
+				let nsm_response = {
 					let request = NsmRequest::Attestation {
 						user_data: Some(ByteBuf::from(
 							manifest_envelope.manifest.hash(),
@@ -363,55 +370,14 @@ mod handlers {
 					state.attestor.nsm_process_request(fd, request)
 				};
 
+				// TODO: Should we check PCRs to reduce chance of user error?
+
 				state.phase = ProtocolPhase::WaitingForQuorumShards;
-				Some(ProtocolMsg::BootStandardResponse(
-					sign_cose1_attestation_doc,
-				))
+				Some(ProtocolMsg::BootStandardResponse(nsm_response))
 			}
-			ProtocolMsg::BootRequest(BootInstruction::Genesis { config }) => {
-				// Generate the Quorum Key
-				// Generate a Quorum Set with the same aliases as the Setup
-				// Set Shard the Quorum Key and assign one share to each
-				// member of the Quorum Set Encrypt each Quorum Member's
-				// share to their public key
-
-				// TODO: Entropy!
-				let quorum_key = ok!(RsaPair::generate());
-				let shares = qos_crypto::shares_generate(
-					&ok!(quorum_key.private_key_to_der()),
-					config.setup_set.members.len(),
-					config.setup_set.threshold as usize,
-				);
-
-				// TODO: Recovery logic!
-				// How many permutations of `threshold` keys should we use
-				// to reconstruct the original Quorum Key?
-
-				// TODO: Disaster recovery logic!
-
-				// let members: Vec<GenesisMemberOutput> =
-				// config.setup_set.members.iter().enumerate().map(|(i,
-				// setup_member)| { 	let personal_key =
-				// RsaPair::generate().unwrap(); 	let setup_key =
-				// RsaPub::from_der(&setup_member.pub_key).expect("TODO");
-				// 	let encrypted_shard =
-				// setup_key.envelope_encrypt(&personal_key.
-				// private_key_to_der().expect("TODO"));
-
-				// 	let quorum_key_share = shares[i];
-				// 	let personal_key: RsaPair = personal_key.into();
-				// 	let encrypted_quorum_key_share =
-				// personal_key.envelope_encrypt(quorum_key_share);
-
-				// 	// let personal_key = .. generate key;
-				// 	// let encrypted_shard = personal_key.encrypt(shard);
-				// 	// let encrypted_personal_key =
-				// setup_member.pub_key.encrypt(personal_key);
-
-				// 	GenesisMemberOutput { alias: setup_member.alias,
-				// encrypted_personal_key: '', encrypted_quorum_key_share:
-				// ''} }).collect();
-
+			ProtocolMsg::BootRequest(BootInstruction::Genesis {
+				set: GenesisSet { members, threshold },
+			}) => {
 				// Output of a genesis ceremony is:
 				//  - Quorum Key has been created
 				//  - Quorum Set has been created
@@ -429,7 +395,69 @@ mod handlers {
 				//  - This second proof-of-access necessitates using a something
 				//    "recent" like a hash of a recent ETH block
 
-				unimplemented!()
+				// TODO: Entropy!
+				let quorum_pair = ok!(RsaPair::generate());
+				let shares = qos_crypto::shares_generate(
+					&ok!(quorum_pair.private_key_to_der()),
+					members.len(),
+					*threshold as usize,
+				);
+
+				// TODO: Recovery logic!
+				// How many permutations of `threshold` keys should we use
+				// to reconstruct the original Quorum Key?
+
+				// TODO: Disaster recovery logic!
+
+				// -- create `GenesisMemberOutput`s
+				let mut member_outputs = Vec::with_capacity(shares.len());
+				let zipped = zip(shares, members.iter().cloned());
+				for (share, setup_member) in zipped {
+					// -- generate Personal Key pair
+					let personal_pair = ok!(RsaPair::generate());
+
+					// -- encrypt Personal Key to Setup Key
+					let encrypted_personal_key = {
+						let setup_key: RsaPub =
+							ok!(RsaPub::from_der(&setup_member.pub_key));
+						let personal_der =
+							ok!(personal_pair.private_key_to_der());
+
+						ok!(setup_key.envelope_encrypt(&personal_der))
+					};
+
+					// -- encrypt the Quorum Share to the Personal Key
+					let encrypted_quorum_key_share =
+						ok!(personal_pair.envelope_encrypt(&share));
+
+					member_outputs.push(GenesisMemberOutput {
+						setup_member,
+						encrypted_personal_key,
+						encrypted_quorum_key_share,
+					});
+				}
+
+				let genesis_output = GenesisOutput {
+					quorum_key: ok!(quorum_pair.public_key_to_der()),
+					member_outputs,
+				};
+
+				// Get the attestation document from the NSM
+				let nsm_response = {
+					let request = NsmRequest::Attestation {
+						user_data: Some(ByteBuf::from(genesis_output.hash())),
+						nonce: None,
+						public_key: None,
+					};
+					let fd = state.attestor.nsm_init();
+
+					state.attestor.nsm_process_request(fd, request)
+				};
+
+				Some(ProtocolMsg::BootGenesisResponse {
+					attestation_doc: nsm_response,
+					genesis_output,
+				})
 			}
 			_ => None,
 		}
