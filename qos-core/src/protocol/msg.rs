@@ -4,14 +4,7 @@ pub use aws_nitro_enclaves_nsm_api::api::{
 	Digest as NsmDigest, Request as NsmRequest, Response as NsmResponse,
 };
 
-use super::{boot::ManifestEnvelope, genesis::GenesisConfig};
-
-#[derive(Debug, PartialEq)]
-pub enum ProtocolError {
-	InvalidShare,
-	ReconstructionError,
-	IOError,
-}
+use super::{boot::ManifestEnvelope, genesis::GenesisConfig, ProtocolError};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ProtocolMsg {
@@ -36,6 +29,8 @@ pub enum ProtocolMsg {
 	BootRequest(BootInstruction),
 	BootStandardResponse(NsmResponse),
 	BootGenesisResponse,
+
+	ProtocolErrorResponse(ProtocolError),
 }
 
 impl PartialEq for ProtocolMsg {

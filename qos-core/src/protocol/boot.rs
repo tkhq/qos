@@ -1,3 +1,7 @@
+use qos_crypto::RsaPub;
+
+use crate::protocol::ProtocolError;
+
 pub type Hash256 = [u8; 32];
 
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -26,7 +30,7 @@ pub enum RestartPolicy {
 
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PivotConfig {
-	hash: Hash256,
+	pub hash: Hash256,
 	pub restart: RestartPolicy,
 }
 
@@ -71,4 +75,28 @@ pub struct Approval {
 pub struct ManifestEnvelope {
 	pub manifest: Manifest,
 	pub approvals: Vec<Approval>,
+}
+
+impl ManifestEnvelope {
+	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
+		for approval in self.approvals.iter() {
+			let pub_key = RsaPub::from_der(&approval.member.pub_key)
+				.map_err(|_| ProtocolError::CryptoError)?;
+
+			let is_valid_signature = pub_key
+				.verify_sha256(&approval.signature, &self.manifest.hash())
+				.map_err(|e| {
+					dbg!(e, approval);
+					ProtocolError::CryptoError
+				})?;
+
+			if !is_valid_signature {
+				return Err(ProtocolError::InvalidManifestApproval(
+					approval.clone(),
+				))
+			}
+		}
+
+		Ok(())
+	}
 }

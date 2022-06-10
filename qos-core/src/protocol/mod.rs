@@ -5,7 +5,7 @@ use std::{
 	os::unix::fs::PermissionsExt,
 };
 
-use qos_crypto::RsaPub;
+use qos_crypto::{CryptoError, RsaPub};
 
 mod attestor;
 mod boot;
@@ -14,7 +14,7 @@ mod msg;
 mod provisioner;
 
 pub use attestor::{MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT};
-use boot::ManifestEnvelope;
+pub use boot::{Approval, ManifestEnvelope};
 pub use msg::*;
 use provisioner::*;
 
@@ -26,10 +26,22 @@ const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
 type ProtocolHandler =
 	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
 
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum ProtocolError {
+	InvalidShare,
+	ReconstructionError,
+	IOError,
+	CryptoError,
+	InvalidManifestApproval(Approval),
+	NoMatchingRoute(ProtocolPhase),
+	InvalidPivotHash,
+}
+
 #[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ProtocolPhase {
 	UnrecoverableError,
 	WaitingForBootInstruction,
+	WaitingForQuorumShards,
 }
 
 pub struct ProtocolState {
@@ -38,6 +50,7 @@ pub struct ProtocolState {
 	pivot_file: String,
 	ephemeral_key_file: String,
 	phase: ProtocolPhase,
+	manifest: Option<ManifestEnvelope>,
 }
 
 impl ProtocolState {
@@ -54,6 +67,7 @@ impl ProtocolState {
 			pivot_file,
 			ephemeral_key_file,
 			phase: ProtocolPhase::WaitingForBootInstruction,
+			manifest: None,
 		}
 	}
 }
@@ -96,6 +110,11 @@ impl Executor {
 				Box::new(handlers::status),
 				Box::new(handlers::boot_instruction),
 			],
+			ProtocolPhase::WaitingForQuorumShards => vec![
+				Box::new(handlers::provision),
+				// Drop this .. Just wait for K'th key to reconstruct
+				Box::new(handlers::reconstruct),
+			],
 		}
 	}
 }
@@ -126,12 +145,14 @@ impl server::Routable for Executor {
 			}
 		}
 
-		err_resp()
+		let err = ProtocolError::NoMatchingRoute(self.state.phase.clone());
+		serde_cbor::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
+			.expect("ProtocolMsg can always be serialized. qed.")
 	}
 }
 
 mod handlers {
-	use qos_crypto::RsaPair;
+	use qos_crypto::{sha_256, RsaPair};
 	use serde_bytes::ByteBuf;
 
 	use super::*;
@@ -277,9 +298,21 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		macro_rules! ok_u {
+		macro_rules! ok {
 			( $e:expr ) => {
 				ok_unrecoverable!($e, state);
+			};
+		}
+
+		macro_rules! ok_or_err {
+			( $e:expr ) => {
+				match $e {
+					Ok(r) => r,
+					Err(e) => {
+						state.phase = ProtocolPhase::UnrecoverableError;
+						return Some(ProtocolMsg::ProtocolErrorResponse(e))
+					}
+				}
 			};
 		}
 
@@ -288,39 +321,49 @@ mod handlers {
 				manifest_envelope,
 				pivot,
 			}) => {
-				let is_manifest_verified =
-					verify_manifest_approvals(manifest_envelope);
-				if !is_manifest_verified {
-					return Some(ProtocolMsg::ErrorResponse)
-				}
+				ok_or_err!(manifest_envelope.check_approvals());
 
-				let ephemeral_key = ok_u!(RsaPair::generate());
+				let ephemeral_key = ok!(RsaPair::generate());
 
 				// Write the ephemeral key to the filesystem
-				ok_u!(std::fs::write(
+				ok!(std::fs::write(
 					state.ephemeral_key_file.clone(),
-					ok_u!(ephemeral_key.private_key_to_der()),
+					ok!(ephemeral_key.private_key_to_der()),
 				));
 
-				// TODO
-				// - Verify pivot hash matches specified hash
-				// - Write pivot to disk
-				// - Save pivot config to state
+				// TODO: should we encode the pivot before hashing it?
+				if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
+					return Some(ProtocolMsg::ProtocolErrorResponse(
+						ProtocolError::InvalidPivotHash,
+					))
+				};
+				ok!(std::fs::write(&state.pivot_file, pivot));
+				ok!(std::fs::set_permissions(
+					&state.pivot_file,
+					Permissions::from_mode(0o111)
+				));
+				// Pivot config is implicitly saved to state when we add the
+				// manifest
+
+				state.manifest = Some(manifest_envelope.clone());
 
 				// Get the attestation document from the NSM
-				let request = NsmRequest::Attestation {
-					user_data: Some(ByteBuf::from(
-						manifest_envelope.manifest.hash(),
-					)),
-					nonce: None,
-					public_key: Some(ByteBuf::from(
-						ephemeral_key.public_key_to_pem().unwrap(),
-					)),
-				};
-				let fd = state.attestor.nsm_init();
-				let sign_cose1_attestation_doc =
-					state.attestor.nsm_process_request(fd, request);
+				let sign_cose1_attestation_doc = {
+					let request = NsmRequest::Attestation {
+						user_data: Some(ByteBuf::from(
+							manifest_envelope.manifest.hash(),
+						)),
+						nonce: None,
+						public_key: Some(ByteBuf::from(
+							ephemeral_key.public_key_to_pem().unwrap(),
+						)),
+					};
+					let fd = state.attestor.nsm_init();
 
+					state.attestor.nsm_process_request(fd, request)
+				};
+
+				state.phase = ProtocolPhase::WaitingForQuorumShards;
 				Some(ProtocolMsg::BootStandardResponse(
 					sign_cose1_attestation_doc,
 				))
@@ -333,9 +376,9 @@ mod handlers {
 				// share to their public key
 
 				// TODO: Entropy!
-				let quorum_key = RsaPair::generate().unwrap();
+				let quorum_key = ok!(RsaPair::generate());
 				let shares = qos_crypto::shares_generate(
-					&quorum_key.private_key_to_der().expect("TODO"),
+					&ok!(quorum_key.private_key_to_der()),
 					config.setup_set.members.len(),
 					config.setup_set.threshold as usize,
 				);
@@ -390,27 +433,5 @@ mod handlers {
 			}
 			_ => None,
 		}
-	}
-
-	fn verify_manifest_approvals(manifest_envelope: &ManifestEnvelope) -> bool {
-		for approval in manifest_envelope.approvals.iter() {
-			let pub_key =
-				RsaPub::from_der(&approval.member.pub_key).expect("TODO");
-			let verification_result = pub_key.verify_sha256(
-				&approval.signature,
-				&manifest_envelope.manifest.hash(),
-			);
-
-			match verification_result {
-				Err(_) => return false,
-				Ok(verified) => {
-					if !verified {
-						return false
-					}
-				}
-			}
-		}
-
-		true
 	}
 }
