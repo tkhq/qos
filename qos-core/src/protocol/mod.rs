@@ -2,12 +2,9 @@
 
 use std::{
 	fs::{set_permissions, Permissions},
-	iter::zip,
-	ops::Deref,
 	os::unix::fs::PermissionsExt,
 };
 
-use qos_crypto::{CryptoError, RsaPub};
 
 mod attestor;
 mod boot;
@@ -42,6 +39,18 @@ pub enum ProtocolError {
 	InvalidManifestApproval(Approval),
 	NoMatchingRoute(ProtocolPhase),
 	InvalidPivotHash,
+}
+
+impl From<qos_crypto::CryptoError> for ProtocolError {
+	fn from(_: qos_crypto::CryptoError) -> Self {
+		Self::CryptoError
+	}
+}
+
+impl From<openssl::error::ErrorStack> for ProtocolError {
+	fn from(_err: openssl::error::ErrorStack) -> Self {
+		Self::CryptoError
+	}
 }
 
 #[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
@@ -376,7 +385,7 @@ mod handlers {
 				Some(ProtocolMsg::BootStandardResponse(nsm_response))
 			}
 			ProtocolMsg::BootRequest(BootInstruction::Genesis {
-				set: GenesisSet { members, threshold },
+				set,
 			}) => {
 				// Output of a genesis ceremony is:
 				//  - Quorum Key has been created
@@ -397,50 +406,8 @@ mod handlers {
 
 				// TODO: Entropy!
 				let quorum_pair = ok!(RsaPair::generate());
-				let shares = qos_crypto::shares_generate(
-					&ok!(quorum_pair.private_key_to_der()),
-					members.len(),
-					*threshold as usize,
-				);
 
-				// TODO: Recovery logic!
-				// How many permutations of `threshold` keys should we use
-				// to reconstruct the original Quorum Key?
-
-				// TODO: Disaster recovery logic!
-
-				// -- create `GenesisMemberOutput`s
-				let mut member_outputs = Vec::with_capacity(shares.len());
-				let zipped = zip(shares, members.iter().cloned());
-				for (share, setup_member) in zipped {
-					// -- generate Personal Key pair
-					let personal_pair = ok!(RsaPair::generate());
-
-					// -- encrypt Personal Key to Setup Key
-					let encrypted_personal_key = {
-						let setup_key: RsaPub =
-							ok!(RsaPub::from_der(&setup_member.pub_key));
-						let personal_der =
-							ok!(personal_pair.private_key_to_der());
-
-						ok!(setup_key.envelope_encrypt(&personal_der))
-					};
-
-					// -- encrypt the Quorum Share to the Personal Key
-					let encrypted_quorum_key_share =
-						ok!(personal_pair.envelope_encrypt(&share));
-
-					member_outputs.push(GenesisMemberOutput {
-						setup_member,
-						encrypted_personal_key,
-						encrypted_quorum_key_share,
-					});
-				}
-
-				let genesis_output = GenesisOutput {
-					quorum_key: ok!(quorum_pair.public_key_to_der()),
-					member_outputs,
-				};
+				let genesis_output = ok_or_err!(GenesisOutput::try_from(&quorum_pair, set));
 
 				// Get the attestation document from the NSM
 				let nsm_response = {

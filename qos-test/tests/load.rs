@@ -1,4 +1,3 @@
-use openssl::rsa::Rsa;
 use qos_core::{
 	io::SocketAddress,
 	protocol::{Executor, Load, MockNsm, ProtocolMsg, SignatureWithPubKey},

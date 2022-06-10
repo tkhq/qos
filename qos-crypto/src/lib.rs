@@ -43,13 +43,13 @@ pub enum CryptoError {
 
 impl From<std::io::Error> for CryptoError {
 	fn from(err: std::io::Error) -> Self {
-		CryptoError::IOError(err)
+		Self::IOError(err)
 	}
 }
 
 impl From<openssl::error::ErrorStack> for CryptoError {
 	fn from(_err: openssl::error::ErrorStack) -> Self {
-		CryptoError::OpenSSLError(openssl::error::ErrorStack::get())
+		Self::OpenSSLError(openssl::error::ErrorStack::get())
 	}
 }
 
