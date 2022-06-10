@@ -624,10 +624,9 @@ dependencies = [
 name = "qos-crypto"
 version = "0.1.0"
 dependencies = [
+ "borsh",
  "openssl",
  "rand",
- "serde",
- "serde_cbor",
 ]
 
 [[package]]

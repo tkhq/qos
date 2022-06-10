@@ -15,6 +15,7 @@ use std::{
 	ops::Deref,
 	path::Path,
 };
+use borsh::{BorshSerialize, BorshDeserialize};
 
 use openssl::{
 	hash::MessageDigest,
@@ -104,7 +105,7 @@ impl RsaPair {
 		&self,
 		data: &[u8],
 	) -> Result<Vec<u8>, CryptoError> {
-		let envelope: Envelope = serde_cbor::from_slice(data)
+		let envelope: Envelope = Envelope::try_from_slice(data)
 			.map_err(|_| CryptoError::InvalidEnvelope)?;
 		let key = self.decrypt(&envelope.encrypted_symm_key)?;
 		let cipher = Cipher::aes_256_cbc();
@@ -248,8 +249,8 @@ impl RsaPub {
 		let encrypted_symm_key = self.encrypt(&key)?;
 
 		let envelope = Envelope { encrypted_data, encrypted_symm_key, iv };
-		Ok(serde_cbor::to_vec(&envelope)
-			.expect("`Envelope` impls cbor serialization"))
+		Ok(envelope.try_to_vec()
+			.expect("`Envelope` impls serialization"))
 	}
 }
 
@@ -280,7 +281,7 @@ impl TryFrom<&Rsa<Private>> for RsaPub {
 	}
 }
 
-#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Debug, Clone, BorshSerialize, BorshDeserialize,)]
 pub struct Envelope {
 	pub encrypted_symm_key: Vec<u8>,
 	pub encrypted_data: Vec<u8>,
