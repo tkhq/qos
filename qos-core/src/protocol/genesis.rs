@@ -131,3 +131,54 @@ pub fn boot_genesis(
 
 	Ok((genesis_output, nsm_response))
 }
+
+#[cfg(test)]
+mod test {
+	use crate::protocol::MockNsm;
+
+use super::*;
+
+	#[test]
+	fn boot_genesis_works() {
+		let mut protocol_state = ProtocolState::new(Box::new(MockNsm), "secret".to_string(), "pivot".to_string(), "ephemeral".to_string());
+		let member1_pair = RsaPair::generate().unwrap();
+		let member2_pair = RsaPair::generate().unwrap();
+		let member3_pair = RsaPair::generate().unwrap();
+
+		let genesis_members = vec![
+			SetupMember {
+				alias: "member1".to_string(),
+				pub_key: member1_pair.public_key_to_der().unwrap()
+			},
+			SetupMember {
+				alias: "member2".to_string(),
+				pub_key: member2_pair.public_key_to_der().unwrap()
+			},
+			SetupMember {
+				alias: "member3".to_string(),
+				pub_key: member3_pair.public_key_to_der().unwrap()
+			}			
+		];
+
+		let member_pairs = vec![member1_pair, member2_pair, member3_pair];
+
+		let threshold = 2;
+		let genesis_set = GenesisSet {
+			members: genesis_members,
+			threshold			
+		};
+
+		let (output, _nsm_response) = boot_genesis(&mut protocol_state, &genesis_set).unwrap();
+		let zipped = std::iter::zip(output.member_outputs, member_pairs);
+		let shares: Vec<Vec<u8>> = zipped.map(|(output, pair)| {
+			let personal_key = RsaPair::from_der(&pair.envelope_decrypt(&output.encrypted_personal_key).unwrap()).unwrap();
+			personal_key.envelope_decrypt(&output.encrypted_quorum_key_share).unwrap()
+		}).collect();
+
+		let reconstructed = qos_crypto::shares_reconstruct(&shares[0..threshold as usize]);
+		let reconstructed_quorum_key = RsaPair::from_der(&reconstructed).unwrap();
+
+		let quorum_public_key = RsaPub::from_der(&output.quorum_key).unwrap();
+		assert_eq!(reconstructed_quorum_key.public_key(), &quorum_public_key);
+	}
+}

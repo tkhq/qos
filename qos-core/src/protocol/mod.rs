@@ -38,6 +38,7 @@ pub enum ProtocolError {
 	IOError,
 	CryptoError,
 	InvalidManifestApproval(Approval),
+	NotEnoughApprovals,
 	NoMatchingRoute(ProtocolPhase),
 	InvalidPivotHash,
 }

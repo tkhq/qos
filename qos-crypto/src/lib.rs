@@ -78,6 +78,11 @@ impl RsaPair {
 		private_key.try_into()
 	}
 
+	pub fn from_der(data: &[u8]) -> Result<Self, CryptoError> {
+		let private_key = Rsa::private_key_from_der(data)?;
+		private_key.try_into()
+	}
+
 	/// Sign the sha256 digest of `msg`. Returns the signature as a byte vec.
 	pub fn sign_sha256(&self, msg: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		let pkey = PKey::from_rsa(self.private_key.clone())?;
@@ -159,6 +164,7 @@ impl Deref for RsaPair {
 	}
 }
 
+#[derive(Debug)]
 pub struct RsaPub {
 	public_key: Rsa<Public>,
 }
@@ -280,6 +286,14 @@ impl TryFrom<&Rsa<Private>> for RsaPub {
 		Self::from_der(&private_key.public_key_to_der()?)
 	}
 }
+
+impl PartialEq for RsaPub {
+	fn eq(&self, other: &Self) -> bool {
+		self.public_key_to_der().expect("RsaPub can DER-encode")
+			== other.public_key_to_der().expect("RsaPub can DER-encode")
+	}
+}
+
 
 #[derive(PartialEq, Debug, Clone, BorshSerialize, BorshDeserialize,)]
 pub struct Envelope {

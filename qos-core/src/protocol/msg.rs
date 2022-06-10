@@ -112,10 +112,6 @@ impl PartialEq for ProtocolMsg {
 		self.try_to_vec().expect("ProtocolMsg serializes. qed.")
 			== other.try_to_vec().expect("ProtocolMsg serializes. qed.")
 	}
-
-	fn ne(&self, other: &Self) -> bool {
-		!self.eq(other)
-	}
 }
 
 #[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
