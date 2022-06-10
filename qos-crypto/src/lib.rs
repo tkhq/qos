@@ -60,6 +60,10 @@ pub struct RsaPair {
 }
 
 impl RsaPair {
+	pub fn public_key(&self) -> &RsaPub {
+		&self.public_key
+	}
+
 	pub fn generate() -> Result<Self, CryptoError> {
 		Rsa::generate(RSA_KEY_LEN)?.try_into()
 	}
@@ -74,7 +78,7 @@ impl RsaPair {
 	}
 
 	/// Sign the sha256 digest of `msg`. Returns the signature as a byte vec.
-	pub fn sign_sha256(&self, msg: &mut [u8]) -> Result<Vec<u8>, CryptoError> {
+	pub fn sign_sha256(&self, msg: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		let pkey = PKey::from_rsa(self.private_key.clone())?;
 		let mut signer = Signer::new(MessageDigest::sha256(), &pkey)?;
 		signer.update(msg)?;
@@ -286,8 +290,8 @@ pub struct Envelope {
 impl TryFrom<PKey<Private>> for RsaPub {
 	type Error = CryptoError;
 	fn try_from(pkey: PKey<Private>) -> Result<Self, Self::Error> {
-		let pem = pkey.public_key_to_pem()?;
-		let public_key = Rsa::public_key_from_pem(&pem[..])?;
+		let der = pkey.public_key_to_der()?;
+		let public_key = Rsa::public_key_from_der(&der[..])?;
 		Ok(Self { public_key })
 	}
 }
@@ -363,21 +367,10 @@ mod test {
 	}
 	#[test]
 	fn e2e_crypto() {
-		let rsa = Rsa::generate(4096).unwrap();
-		let pair = PKey::from_rsa(rsa).unwrap();
-
+		let pair = RsaPair::generate().unwrap();
 		let data = b"vape nation";
-		let mut signer = Signer::new(MessageDigest::sha256(), &pair).unwrap();
-		signer.update(data).unwrap();
-		let signature = signer.sign_to_vec().unwrap();
-
-		let mut verifier =
-			Verifier::new(MessageDigest::sha256(), &pair).unwrap();
-		verifier.update(data).unwrap();
-		assert!(verifier.verify(&signature).unwrap());
-
-		let rsa_pub: RsaPub = pair.clone().try_into().unwrap();
-		assert!(rsa_pub.verify_sha256(&signature, data).unwrap());
+		let signature = pair.sign_sha256(data).unwrap();
+		assert!(pair.public_key().verify_sha256(&signature, data).unwrap());
 	}
 
 	#[test]
@@ -400,29 +393,9 @@ mod test {
 	#[test]
 	fn e2e_envelope_crypto() {
 		let data = b"a nation that vapes big puffy clouds";
-		let private = Rsa::generate(4096).unwrap();
-
-		let public_key =
-			RsaPub::from_der(&private.public_key_to_der().unwrap()).unwrap();
-		let envelope = public_key.envelope_encrypt(data).unwrap();
-
-		let pair: RsaPair = private.try_into().unwrap();
-		// let decrypted = pair.envelope_decrypt(&envelope);
-		let decrypted = pair.envelope_decrypt(&envelope).unwrap();
-
-		assert_eq!(data.to_vec(), decrypted);
-	}
-
-	#[test]
-	fn e2e_rsa_crypto() {
-		let data = b"small data";
-		let private = Rsa::generate(4096).unwrap();
-		let public_key =
-			RsaPub::from_der(&private.public_key_to_der().unwrap()).unwrap();
-		let encrypted = public_key.encrypt(data).unwrap();
-
-		let pair: RsaPair = private.try_into().unwrap();
-		let decrypted = pair.decrypt(&encrypted).unwrap();
+		let private = RsaPair::generate().unwrap();
+		let envelope = private.public_key.envelope_encrypt(data).unwrap();
+		let decrypted = private.envelope_decrypt(&envelope).unwrap();
 
 		assert_eq!(data.to_vec(), decrypted);
 	}

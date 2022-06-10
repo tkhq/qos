@@ -16,6 +16,9 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
+use borsh::{BorshSerialize, BorshDeserialize};
+
+
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
 
@@ -93,28 +96,28 @@ impl HostServer {
 		if body.len() > MAX_ENCODED_MSG_LEN {
 			return (
 				StatusCode::BAD_REQUEST,
-				serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+				ProtocolMsg::ErrorResponse.try_to_vec()
 					.expect("ProtocolMsg can always serialize. qed."),
 			)
 		}
 
-		match serde_cbor::from_slice(&body) {
+		match ProtocolMsg::try_from_slice(&body) {
 			Err(_) => {
 				return (
 					StatusCode::BAD_REQUEST,
-					serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+					ProtocolMsg::ErrorResponse.try_to_vec()
 						.expect("ProtocolMsg can always serialize. qed."),
 				)
 			}
 			Ok(request) => match state.enclave_client.send(request) {
 				Err(_) => (
 					StatusCode::INTERNAL_SERVER_ERROR,
-					serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+					ProtocolMsg::ErrorResponse.try_to_vec()
 						.expect("ProtocolMsg can always serialize. qed."),
 				),
 				Ok(response) => (
 					StatusCode::OK,
-					serde_cbor::to_vec(&response)
+					response.try_to_vec()
 						.expect("ProtocolMsg can always serialize. qed."),
 				),
 			},

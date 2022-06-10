@@ -3,12 +3,14 @@ use crate::{
 	io::{self, SocketAddress, Stream},
 	protocol::{ProtocolError, ProtocolMsg},
 };
+use borsh::{BorshSerialize, BorshDeserialize};
 
 #[derive(Debug)]
 pub enum ClientError {
 	IOError(io::IOError),
 	ProtocolError(ProtocolError),
 	SerdeCBOR(serde_cbor::Error),
+	BorshError(borsh::maybestd::io::Error)
 }
 
 impl From<io::IOError> for ClientError {
@@ -26,6 +28,12 @@ impl From<ProtocolError> for ClientError {
 impl From<serde_cbor::Error> for ClientError {
 	fn from(err: serde_cbor::Error) -> Self {
 		Self::SerdeCBOR(err)
+	}
+}
+
+impl From<borsh::maybestd::io::Error> for ClientError {
+	fn from(err: borsh::maybestd::io::Error) -> Self {
+		Self::BorshError(err)
 	}
 }
 
@@ -48,10 +56,10 @@ impl Client {
 	) -> Result<ProtocolMsg, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
 		stream.send(
-			&serde_cbor::to_vec(&request)
+			&request.try_to_vec()
 				.expect("ProtocolMsg can be serialized. qed."),
 		)?;
-		let mut response = stream.recv()?;
-		serde_cbor::from_slice(&mut response).map_err(Into::into)
+		let response = stream.recv()?;
+		ProtocolMsg::try_from_slice(&response).map_err(Into::into)
 	}
 }

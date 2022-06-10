@@ -1,6 +1,6 @@
 use std::env;
 
-use qos_core::protocol::{Echo, ProtocolMsg};
+use qos_core::protocol::{Echo, ProtocolMsg, NsmRequestWrapper, NsmResponseWrapper};
 use qos_crypto::RsaPair;
 use qos_host::cli::HostOptions;
 
@@ -163,7 +163,7 @@ mod handlers {
 		let path = &options.host.path("message");
 		match request::post(
 			path,
-			ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM),
+			ProtocolMsg::NsmRequest(NsmRequestWrapper(NsmRequest::DescribeNSM)),
 		)
 		.map_err(|e| println!("{:?}", e))
 		.expect("Attestation request failed")
@@ -179,17 +179,17 @@ mod handlers {
 		let path = &options.host.path("message");
 		let response = request::post(
 			path,
-			ProtocolMsg::NsmRequest(NsmRequest::Attestation {
+			ProtocolMsg::NsmRequest(NsmRequestWrapper(NsmRequest::Attestation {
 				user_data: None,
 				nonce: None,
 				public_key: None,
-			}),
+			})),
 		)
 		.map_err(|e| println!("{:?}", e))
 		.expect("Attestation request failed");
 
 		match response {
-			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
+			ProtocolMsg::NsmResponse(NsmResponseWrapper(NsmResponse::Attestation { document })) => {
 				let root_cert =
 					cert_from_pem(AWS_ROOT_CERT).expect("Invalid root cert");
 				let now = std::time::SystemTime::now();
@@ -215,19 +215,19 @@ mod handlers {
 
 		let response = request::post(
 			path,
-			ProtocolMsg::NsmRequest(NsmRequest::Attestation {
+			ProtocolMsg::NsmRequest(NsmRequestWrapper(NsmRequest::Attestation {
 				user_data: None,
 				nonce: None,
 				public_key: Some(ByteBuf::from(
 					RsaPair::generate().unwrap().public_key_to_pem().unwrap(),
 				)),
-			}),
+			})),
 		)
 		.map_err(|e| println!("{:?}", e))
 		.expect("Attestation request failed");
 
 		match response {
-			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
+			ProtocolMsg::NsmResponse(NsmResponseWrapper(NsmResponse::Attestation { document })) => {
 				use attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
 				let root_cert =
 					cert_from_pem(AWS_ROOT_CERT).expect("Invalid root cert");

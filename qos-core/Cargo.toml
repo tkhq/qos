@@ -10,6 +10,7 @@ nix = { version = "0.24.1", features = ["socket"], default-features = false }
 openssl = { version = "0.10.40", default-features = false }
 serde = { version = "1.0", default-features = false, features = ["derive", "std"] }
 serde_cbor = { version = "0.11", default-features = false, features = ["std"] }
+borsh = { version = "0.9" }
 
 # For AWS Nitro
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }

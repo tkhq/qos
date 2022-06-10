@@ -1,8 +1,11 @@
-use qos_crypto::RsaPub;
+use qos_crypto::{sha_256, RsaPub, RsaPair};
+use borsh::{BorshSerialize, BorshDeserialize};
+use super::{Hash256, ProtocolError, ProtocolState, NsmResponse};
+// pub use attestor::{MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT};
+use super::{msg::NsmRequest, ProtocolPhase};
+use serde_bytes::ByteBuf;
 
-use super::{Hash256, ProtocolError};
-
-#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct NitroConfig {
 	/// VSOCK Context ID - component of VSockAddress.
 	pub vsock_cid: u16,
@@ -18,7 +21,7 @@ pub struct NitroConfig {
 	pub aws_root_certificate: Vec<u8>,
 }
 
-#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum RestartPolicy {
 	/// Never restart the pivot application
 	Never,
@@ -26,26 +29,26 @@ pub enum RestartPolicy {
 	Always,
 }
 
-#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct PivotConfig {
 	pub hash: Hash256,
 	pub restart: RestartPolicy,
 }
 
-#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct QuorumMember {
 	pub alias: String,
 	/// DER encoded RSA public key
 	pub pub_key: Vec<u8>,
 }
 
-#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct QuorumSet {
 	pub threshold: u32,
 	pub members: Vec<QuorumMember>,
 }
 
-#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Manifest {
 	pub nonce: u32,
 	pub namespace: String,
@@ -58,19 +61,19 @@ pub struct Manifest {
 impl Manifest {
 	pub fn hash(&self) -> Hash256 {
 		qos_crypto::sha_256(
-			&serde_cbor::to_vec(&self)
+			&self.try_to_vec()
 				.expect("`Manifest` serializes with cbor"),
 		)
 	}
 }
 
-#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Approval {
 	pub signature: Vec<u8>,
 	pub member: QuorumMember,
 }
 
-#[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ManifestEnvelope {
 	pub manifest: Manifest,
 	pub approvals: Vec<Approval>,
@@ -97,4 +100,211 @@ impl ManifestEnvelope {
 
 		Ok(())
 	}
+}
+
+pub fn boot_standard(
+	state: &mut ProtocolState, 
+	manifest_envelope: ManifestEnvelope, 
+	pivot: &Vec<u8>
+) -> Result<NsmResponse, ProtocolError> {
+	use std::os::unix::fs::PermissionsExt as _;
+
+	manifest_envelope.check_approvals()?;
+
+	let ephemeral_key = RsaPair::generate()?;
+	// Write the ephemeral key to the filesystem
+	std::fs::write(
+		state.ephemeral_key_file.clone(),
+		ephemeral_key.private_key_to_der()?,
+	)?;
+
+	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
+		return Err(ProtocolError::InvalidPivotHash);
+	};
+
+	std::fs::write(&state.pivot_file, pivot)?;
+	std::fs::set_permissions(
+		&state.pivot_file,
+		std::fs::Permissions::from_mode(0o111)
+	)?;
+
+	state.manifest = Some(manifest_envelope.clone());
+
+	let nsm_response = {
+		let request = NsmRequest::Attestation {
+			user_data: Some(ByteBuf::from(
+				manifest_envelope.manifest.hash(),
+			)),
+			nonce: None,
+			public_key: Some(ByteBuf::from(
+				ephemeral_key.public_key_to_pem().unwrap(),
+			)),
+		};
+		let fd = state.attestor.nsm_init();
+
+		state.attestor.nsm_process_request(fd, request)
+	};
+
+	state.phase = ProtocolPhase::WaitingForQuorumShards;
+
+	Ok(nsm_response)
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use crate::protocol::MockNsm;
+	use std::path::Path;
+
+	fn get_manifest() -> (
+		Manifest, 
+		Vec<(RsaPair, QuorumMember)>,
+		Vec<u8>,
+	) {
+		let quorum_pair = RsaPair::generate().unwrap();
+		let member1_pair = RsaPair::generate().unwrap();
+		let member2_pair = RsaPair::generate().unwrap();
+		let member3_pair = RsaPair::generate().unwrap();
+
+
+		let pivot = b"this is a pivot binary".to_vec();
+
+		let quorum_members = vec![
+					QuorumMember {
+						alias: "member1".to_string(),
+						pub_key: member1_pair.public_key_to_der().unwrap()
+					},
+					QuorumMember {
+						alias: "member2".to_string(),
+						pub_key: member1_pair.public_key_to_der().unwrap()
+					},
+					QuorumMember {
+						alias: "member3".to_string(),
+						pub_key: member1_pair.public_key_to_der().unwrap()
+					}
+				];
+
+		let member_with_keys = vec![
+			(member1_pair, quorum_members.get(0).unwrap().clone()),
+			(member2_pair, quorum_members.get(1).unwrap().clone()),
+			(member3_pair, quorum_members.get(2).unwrap().clone()),
+		];
+
+		let manifest = Manifest {
+			nonce: 420,
+			namespace: "vape lord".to_string(),
+			enclave: NitroConfig {
+				vsock_cid: 69,
+				vsock_port: 42069,
+				pcr0: [4; 32],
+				pcr1: [2; 32],
+				pcr2: [0; 32],
+				aws_root_certificate: b"cert lord".to_vec()
+			},
+			pivot: PivotConfig {
+				hash: sha_256(&pivot),
+				restart: RestartPolicy::Always,
+			},
+			quorum_key: quorum_pair.public_key_to_der().unwrap(),
+			quorum_set: QuorumSet {
+				threshold: 2,
+				members: quorum_members.clone(),
+			}
+		};
+
+		(manifest, member_with_keys, pivot)
+	}
+
+	#[test]
+	fn manifest_hash() {
+		let (manifest, _members, _pivot) = get_manifest();
+
+		let hashes: Vec<_> = (0..10).map(|_| manifest.hash()).collect();
+		let is_valid = (1..10).all(|i|  dbg!(hashes[i] == hashes[0]));
+		assert!(is_valid);
+	}
+
+	#[test]
+	fn boot_standard_accepts_approved_manifest() {
+		let quorum_pair = RsaPair::generate().unwrap();
+		let member1_pair = RsaPair::generate().unwrap();
+		let member2_pair = RsaPair::generate().unwrap();
+		let member3_pair = RsaPair::generate().unwrap();
+
+
+		let pivot = b"this is a pivot binary".to_vec();
+
+		let quorum_members = vec![
+					QuorumMember {
+						alias: "member1".to_string(),
+						pub_key: member1_pair.public_key_to_der().unwrap()
+					},
+					QuorumMember {
+						alias: "member2".to_string(),
+						pub_key: member1_pair.public_key_to_der().unwrap()
+					},
+					QuorumMember {
+						alias: "member3".to_string(),
+						pub_key: member1_pair.public_key_to_der().unwrap()
+					}
+				];
+
+		let member_with_keys = vec![
+			(member1_pair, quorum_members.get(0).unwrap()),
+			(member2_pair, quorum_members.get(1).unwrap()),
+			(member3_pair, quorum_members.get(2).unwrap()),
+		];
+
+		let manifest = Manifest {
+			nonce: 420,
+			namespace: "vape lord".to_string(),
+			enclave: NitroConfig {
+				vsock_cid: 69,
+				vsock_port: 42069,
+				pcr0: [4; 32],
+				pcr1: [2; 32],
+				pcr2: [0; 32],
+				aws_root_certificate: b"cert lord".to_vec()
+			},
+			pivot: PivotConfig {
+				hash: sha_256(&pivot),
+				restart: RestartPolicy::Always,
+			},
+			quorum_key: quorum_pair.public_key_to_der().unwrap(),
+			quorum_set: QuorumSet {
+				threshold: 2,
+				members: quorum_members.clone(),
+			}
+		};
+
+		let manifest_envelope = {
+			let manifest_hash = manifest.hash();
+			let approvals = member_with_keys.into_iter().map(|(pair, member)| {
+				return Approval {
+					signature: pair.sign_sha256(&manifest_hash).unwrap(),
+					member: member.clone(),
+				};
+			})
+			.collect();
+
+			ManifestEnvelope { manifest, approvals }
+		};
+		// - pivot file is written to disk as an executable
+
+		let pivot_file = "boot_standard_works.pivot".to_string();
+		let ephemeral_file = "boot_standard_works_eph.secret".to_string();
+		let mut protocol_state = ProtocolState::new(Box::new(MockNsm), "secret".to_string(), pivot_file.clone(), ephemeral_file.clone());
+
+		let _nsm_resposne = boot_standard(&mut protocol_state, manifest_envelope, &pivot).unwrap();
+		// assert!(matches!(nsm_response, NsmResponse::Attestation { document }))
+
+		assert!(Path::new(&pivot_file).exists());
+		assert!(Path::new(&ephemeral_file).exists());
+
+		std::fs::remove_file(pivot_file).unwrap();
+		std::fs::remove_file(ephemeral_file).unwrap();
+	}
+
+	#[test]
+	fn boot_standard_rejects_unapproved_manifest() {}
 }

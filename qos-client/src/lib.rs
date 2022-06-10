@@ -2,6 +2,8 @@ pub(crate) mod attest;
 pub mod cli;
 
 pub mod request {
+	use borsh::{BorshSerialize, BorshDeserialize};
+
 	use std::io::Read;
 
 	use qos_core::protocol::ProtocolMsg;
@@ -13,7 +15,7 @@ pub mod request {
 
 		let response = ureq::post(url)
 			.send_bytes(
-				&serde_cbor::to_vec(&msg)
+				&msg.try_to_vec()
 					.expect("ProtocolMsg can always be serialized. qed."),
 			)
 			.map_err(|e| format!("post err: {:?}", e))?;
@@ -24,7 +26,7 @@ pub mod request {
 			.read_to_end(&mut buf)
 			.map_err(|_| "send response error".to_string())?;
 
-		let pr = serde_cbor::from_slice(&mut buf)
+		let pr = ProtocolMsg::try_from_slice(&buf)
 			.map_err(|_| "send response error".to_string())?;
 
 		Ok(pr)
