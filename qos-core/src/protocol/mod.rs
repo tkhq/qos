@@ -5,7 +5,6 @@ use std::{
 	os::unix::fs::PermissionsExt,
 };
 
-
 mod attestor;
 mod boot;
 mod genesis;
@@ -384,9 +383,7 @@ mod handlers {
 				state.phase = ProtocolPhase::WaitingForQuorumShards;
 				Some(ProtocolMsg::BootStandardResponse(nsm_response))
 			}
-			ProtocolMsg::BootRequest(BootInstruction::Genesis {
-				set,
-			}) => {
+			ProtocolMsg::BootRequest(BootInstruction::Genesis { set }) => {
 				// Output of a genesis ceremony is:
 				//  - Quorum Key has been created
 				//  - Quorum Set has been created
@@ -407,7 +404,8 @@ mod handlers {
 				// TODO: Entropy!
 				let quorum_pair = ok!(RsaPair::generate());
 
-				let genesis_output = ok_or_err!(GenesisOutput::try_from(&quorum_pair, set));
+				let genesis_output =
+					ok_or_err!(GenesisOutput::try_from(&quorum_pair, set));
 
 				// Get the attestation document from the NSM
 				let nsm_response = {

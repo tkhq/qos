@@ -34,7 +34,6 @@ pub struct GenesisSet {
 	pub threshold: u32,
 }
 
-
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct MemberShard {
 	// TODO: is this taking up too much unnecessary space?
@@ -87,8 +86,7 @@ impl GenesisOutput {
 			// 2) encrypt Personal Key to Setup Key
 			let encrypted_personal_key = {
 				let setup_key = RsaPub::from_der(&setup_member.pub_key)?;
-				let personal_der = personal_pair
-					.private_key_to_der()?;
+				let personal_der = personal_pair.private_key_to_der()?;
 
 				setup_key.envelope_encrypt(&personal_der)?
 			};
@@ -106,10 +104,9 @@ impl GenesisOutput {
 
 		Ok(Self {
 			member_outputs,
-			quorum_key: quorum_pair
-				.public_key_to_der()?,
+			quorum_key: quorum_pair.public_key_to_der()?,
 			// TODO: generate N choose K recovery permutations
-			recovery_permutations: vec![]
+			recovery_permutations: vec![],
 		})
 	}
 }
