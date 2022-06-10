@@ -360,7 +360,7 @@ mod handlers {
 				// Pivot config is implicitly saved to state when we add the
 				// manifest
 
-				state.manifest = Some(manifest_envelope.clone());
+				state.manifest = Some(*manifest_envelope.clone());
 
 				// Get the attestation document from the NSM
 				let nsm_response = {

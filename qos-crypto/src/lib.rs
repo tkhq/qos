@@ -100,7 +100,7 @@ impl RsaPair {
 		&self,
 		data: &[u8],
 	) -> Result<Vec<u8>, CryptoError> {
-		let envelope: Envelope = serde_cbor::from_slice(&data[..])
+		let envelope: Envelope = serde_cbor::from_slice(data)
 			.map_err(|_| CryptoError::InvalidEnvelope)?;
 		let key = self.decrypt(&envelope.encrypted_symm_key)?;
 		let cipher = Cipher::aes_256_cbc();
@@ -240,7 +240,7 @@ impl RsaPub {
 			buf
 		};
 
-		let encrypted_data = symm::encrypt(cipher, &key, Some(&iv), &data)?;
+		let encrypted_data = symm::encrypt(cipher, &key, Some(&iv), data)?;
 		let encrypted_symm_key = self.encrypt(&key)?;
 
 		let envelope = Envelope { encrypted_data, encrypted_symm_key, iv };

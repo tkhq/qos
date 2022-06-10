@@ -82,6 +82,6 @@ pub struct Load {
 
 #[derive(PartialEq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum BootInstruction {
-	Standard { manifest_envelope: ManifestEnvelope, pivot: Vec<u8> },
+	Standard { manifest_envelope: Box<ManifestEnvelope>, pivot: Vec<u8> },
 	Genesis { set: GenesisSet },
 }
