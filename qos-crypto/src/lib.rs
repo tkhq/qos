@@ -114,7 +114,8 @@ impl RsaPair {
 		.map_err(CryptoError::from)
 	}
 
-	/// Exactly the same as [`RsaPub::encrypt`] executed with this pairs public key.
+	/// Exactly the same as [`RsaPub::encrypt`] executed with this pairs public
+	/// key.
 	pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		self.public_key.encrypt(data)
 	}
@@ -291,7 +292,8 @@ impl TryFrom<PKey<Private>> for RsaPub {
 	}
 }
 
-pub fn sha_256_hash(buf: &[u8]) -> [u8; 32] {
+/// Create a SHA256 hash digest of `buf`.
+pub fn sha_256(buf: &[u8]) -> [u8; 32] {
 	let mut hasher = openssl::sha::Sha256::new();
 	hasher.update(buf);
 	hasher.finish()
