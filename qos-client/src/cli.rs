@@ -228,7 +228,6 @@ impl CLI {
 }
 
 mod handlers {
-
 	use borsh::BorshDeserialize;
 	use qos_core::protocol::{
 		BootInstruction, GenesisSet, NsmRequest, NsmResponse, SetupMember,

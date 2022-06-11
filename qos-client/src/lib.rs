@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub(crate) mod attest;
 pub mod cli;
 
