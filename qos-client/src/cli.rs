@@ -20,34 +20,37 @@ enum Command {
 	Attestation,
 	GenerateSetupKey,
 	GenerateGenesisConfiguration,
+	BootGenesis,
 }
 impl Command {
 	fn run(&self, options: ClientOptions) {
 		match self {
-			Command::Health => handlers::health(options),
-			Command::Echo => handlers::echo(options),
-			Command::DescribeNsm => handlers::describe_nsm(options),
-			Command::MockAttestation => handlers::mock_attestation(options),
-			Command::Attestation => handlers::attestation(options),
-			Command::GenerateSetupKey => handlers::generate_setup_key(options),
-			Command::GenerateGenesisConfiguration => {
+			Self::Health => handlers::health(options),
+			Self::Echo => handlers::echo(options),
+			Self::DescribeNsm => handlers::describe_nsm(options),
+			Self::MockAttestation => handlers::mock_attestation(options),
+			Self::Attestation => handlers::attestation(options),
+			Self::GenerateSetupKey => handlers::generate_setup_key(options),
+			Self::GenerateGenesisConfiguration => {
 				handlers::generate_genesis_configuration(options)
 			}
+			Self::BootGenesis => handlers::boot_genesis(options),
 		}
 	}
 }
-impl Into<Command> for &str {
-	fn into(self) -> Command {
-		match self {
-			"health" => Command::Health,
-			"echo" => Command::Echo,
-			"describe-nsm" => Command::DescribeNsm,
-			"mock-attestation" => Command::MockAttestation,
-			"attestation" => Command::Attestation,
-			"generate-setup-key" => Command::GenerateSetupKey,
+impl From<&str> for Command {
+	fn from(s: &str) -> Self {
+		match s {
+			"health" => Self::Health,
+			"echo" => Self::Echo,
+			"describe-nsm" => Self::DescribeNsm,
+			"mock-attestation" => Self::MockAttestation,
+			"attestation" => Self::Attestation,
+			"generate-setup-key" => Self::GenerateSetupKey,
 			"generate-genesis-configuration" => {
-				Command::GenerateGenesisConfiguration
+				Self::GenerateGenesisConfiguration
 			}
+			"boot-genesis" => Self::BootGenesis,
 			_ => panic!("Unrecognized command"),
 		}
 	}
@@ -60,6 +63,7 @@ struct ClientOptions {
 	echo: EchoOptions,
 	generate_setup_key: GenerateSetupKeyOptions,
 	generate_genesis_configuration: GenerateGenesisConfiguration,
+	boot_genesis: BootGenesisOptions,
 	// ... other options
 }
 impl ClientOptions {
@@ -71,6 +75,7 @@ impl ClientOptions {
 			echo: EchoOptions::new(),
 			generate_setup_key: GenerateSetupKeyOptions::new(),
 			generate_genesis_configuration: GenerateGenesisConfiguration::new(),
+			boot_genesis: BootGenesisOptions::new(),
 			cmd: Self::extract_command(&mut args),
 		};
 
@@ -93,6 +98,7 @@ impl ClientOptions {
 				Command::DescribeNsm => {}
 				Command::MockAttestation => {}
 				Command::Attestation => {}
+				Command::BootGenesis => options.boot_genesis.parse(&cmd, arg),
 			}
 		}
 
@@ -194,6 +200,24 @@ impl GenerateGenesisConfiguration {
 	}
 }
 
+#[derive(Clone, PartialEq, Debug)]
+struct BootGenesisOptions {
+	genesis_set_path: Option<String>,
+}
+impl BootGenesisOptions {
+	fn new() -> Self {
+		Self { genesis_set_path: None }
+	}
+	fn parse(&mut self, cmd: &str, arg: &str) {
+		if cmd == "--genesis-set-path" {
+			self.genesis_set_path = Some(arg.to_string())
+		}
+	}
+	fn genesis_set_path(&self) -> String {
+		self.genesis_set_path.clone().expect("No `--genesis-set-path` provided")
+	}
+}
+
 pub struct CLI;
 impl CLI {
 	pub fn execute() {
@@ -205,8 +229,9 @@ impl CLI {
 
 mod handlers {
 
+	use borsh::BorshDeserialize;
 	use qos_core::protocol::{
-		GenesisSet, NsmRequest, NsmResponse, SetupMember,
+		BootInstruction, GenesisSet, NsmRequest, NsmResponse, SetupMember,
 	};
 	use qos_crypto::RsaPub;
 	use serde_bytes::ByteBuf;
@@ -423,5 +448,34 @@ mod handlers {
 			genesis_set.try_to_vec().unwrap(),
 		)
 		.unwrap();
+	}
+
+	pub(super) fn boot_genesis(options: ClientOptions) {
+		let uri = &options.host.path("message");
+
+		let genesis_set = options.boot_genesis.genesis_set_path();
+
+		let genesis_set = {
+			let genesis_set =
+				std::fs::read(genesis_set).expect("Could not open file");
+			GenesisSet::try_from_slice(&genesis_set)
+				.expect("Could not Deserialize `GenesisSet`")
+		};
+
+		let req = ProtocolMsg::BootRequest(BootInstruction::Genesis {
+			set: genesis_set,
+		});
+
+		match request::post(uri, req).unwrap() {
+			ProtocolMsg::BootGenesisResponse {
+				attestation_doc,
+				genesis_output,
+			} => {
+				// TODO
+				// - where should we writ the attestation doc?
+				// - where should we write the genesis output?
+			}
+			_ => panic!("Unexpected response"),
+		}
 	}
 }
