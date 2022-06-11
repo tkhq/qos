@@ -1,11 +1,13 @@
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshSerialize;
 use qos_crypto::{sha_256, RsaPair, RsaPub};
 use serde_bytes::ByteBuf;
 
 // pub use attestor::{MockNsm, Nsm, NsmProvider,
 // MOCK_NSM_ATTESTATION_DOCUMENT};
-use super::{msg::NsmRequest, ProtocolPhase};
-use super::{Hash256, NsmResponse, ProtocolError, ProtocolState};
+use super::{
+	msg::NsmRequest, Hash256, NsmResponse, ProtocolError, ProtocolPhase,
+	ProtocolState,
+};
 
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,

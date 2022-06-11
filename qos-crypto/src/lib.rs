@@ -5,10 +5,6 @@
 // Is there a better envelope encryption strategy to use? Something native to
 // OpenSSL?
 
-// TODO build out utilties for
-// - converting private -> pub
-// - private wraps most methods for pub ... like encrypt etc
-
 use std::{
 	fs::File,
 	io::{Read, Write},
@@ -318,8 +314,6 @@ pub fn sha_256(buf: &[u8]) -> [u8; 32] {
 
 #[cfg(test)]
 mod test {
-	use openssl::sign::Verifier;
-
 	use super::*;
 
 	#[test]

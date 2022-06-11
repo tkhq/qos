@@ -601,7 +601,6 @@ dependencies = [
  "qos-crypto",
  "qos-host",
  "serde_bytes",
- "serde_cbor",
  "ureq",
  "webpki",
 ]
@@ -637,7 +636,6 @@ dependencies = [
  "borsh",
  "qos-core",
  "regex",
- "serde_cbor",
  "tokio",
 ]
 

@@ -5,7 +5,7 @@ use std::{io::Write, ops::Deref};
 pub use aws_nitro_enclaves_nsm_api::api::{
 	Digest as NsmDigest, Request as NsmRequest, Response as NsmResponse,
 };
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshSerialize;
 
 use super::{
 	boot::ManifestEnvelope,
@@ -39,7 +39,7 @@ impl borsh::BorshSerialize for NsmResponseWrapper {
 			)
 		})?;
 
-		writer.write(&temp_vec);
+		writer.write(&temp_vec)?;
 		Ok(())
 	}
 }
