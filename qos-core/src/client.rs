@@ -1,16 +1,17 @@
 //! Streaming socket based client to connect with [`server::Server`].
+use borsh::{BorshDeserialize, BorshSerialize};
+
 use crate::{
 	io::{self, SocketAddress, Stream},
 	protocol::{ProtocolError, ProtocolMsg},
 };
-use borsh::{BorshSerialize, BorshDeserialize};
 
 #[derive(Debug)]
 pub enum ClientError {
 	IOError(io::IOError),
 	ProtocolError(ProtocolError),
 	SerdeCBOR(serde_cbor::Error),
-	BorshError(borsh::maybestd::io::Error)
+	BorshError(borsh::maybestd::io::Error),
 }
 
 impl From<io::IOError> for ClientError {
@@ -56,8 +57,7 @@ impl Client {
 	) -> Result<ProtocolMsg, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
 		stream.send(
-			&request.try_to_vec()
-				.expect("ProtocolMsg can be serialized. qed."),
+			&request.try_to_vec().expect("ProtocolMsg can be serialized. qed."),
 		)?;
 		let response = stream.recv()?;
 		ProtocolMsg::try_from_slice(&response).map_err(Into::into)

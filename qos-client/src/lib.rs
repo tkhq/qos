@@ -2,10 +2,9 @@ pub(crate) mod attest;
 pub mod cli;
 
 pub mod request {
-	use borsh::{BorshSerialize, BorshDeserialize};
-
 	use std::io::Read;
 
+	use borsh::{BorshDeserialize, BorshSerialize};
 	use qos_core::protocol::ProtocolMsg;
 
 	const MAX_SIZE: u64 = u32::MAX as u64;

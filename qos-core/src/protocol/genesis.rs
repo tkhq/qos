@@ -1,15 +1,17 @@
 use std::iter::zip;
 
+use borsh::BorshSerialize;
 use qos_crypto::{RsaPair, RsaPub};
 use serde_bytes::ByteBuf;
-use borsh::BorshSerialize;
 
 use super::{
 	msg::{NsmRequest, NsmResponse},
 	Hash256, ProtocolError, ProtocolState,
 };
 
-#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub struct GenesisMemberOutput {
 	/// The Quorum Member whom's Setup Key was used.
 	pub setup_member: SetupMember,
@@ -19,7 +21,9 @@ pub struct GenesisMemberOutput {
 	pub encrypted_personal_key: Vec<u8>,
 }
 
-#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub struct SetupMember {
 	/// A unique UTF-8 encoded string to help Human participants to identify
 	/// this member.
@@ -30,7 +34,9 @@ pub struct SetupMember {
 }
 
 /// Configuration for sharding a Quorum Key created in the Genesis flow.
-#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub struct GenesisSet {
 	/// Quorum Member's whoms setup key will be used to encrypt Genesis flow
 	/// outputs.
@@ -39,17 +45,23 @@ pub struct GenesisSet {
 	pub threshold: u32,
 }
 
-#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 struct MemberShard {
 	// TODO: is this taking up too much unnecessary space?
 	member: SetupMember,
 	shard: Vec<u8>,
 }
 
-#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub struct RecoveredPermutation(Vec<MemberShard>);
 
-#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub struct GenesisOutput {
 	/// Quorum Key - RSA public key
 	pub quorum_key: Vec<u8>,
@@ -61,8 +73,7 @@ pub struct GenesisOutput {
 impl GenesisOutput {
 	pub fn hash(&self) -> Hash256 {
 		qos_crypto::sha_256(
-			&self.try_to_vec()
-				.expect("`Manifest` serializes with cbor"),
+			&self.try_to_vec().expect("`Manifest` serializes with cbor"),
 		)
 	}
 }
@@ -134,13 +145,17 @@ pub fn boot_genesis(
 
 #[cfg(test)]
 mod test {
+	use super::*;
 	use crate::protocol::MockNsm;
-
-use super::*;
 
 	#[test]
 	fn boot_genesis_works() {
-		let mut protocol_state = ProtocolState::new(Box::new(MockNsm), "secret".to_string(), "pivot".to_string(), "ephemeral".to_string());
+		let mut protocol_state = ProtocolState::new(
+			Box::new(MockNsm),
+			"secret".to_string(),
+			"pivot".to_string(),
+			"ephemeral".to_string(),
+		);
 		let member1_pair = RsaPair::generate().unwrap();
 		let member2_pair = RsaPair::generate().unwrap();
 		let member3_pair = RsaPair::generate().unwrap();
@@ -148,35 +163,44 @@ use super::*;
 		let genesis_members = vec![
 			SetupMember {
 				alias: "member1".to_string(),
-				pub_key: member1_pair.public_key_to_der().unwrap()
+				pub_key: member1_pair.public_key_to_der().unwrap(),
 			},
 			SetupMember {
 				alias: "member2".to_string(),
-				pub_key: member2_pair.public_key_to_der().unwrap()
+				pub_key: member2_pair.public_key_to_der().unwrap(),
 			},
 			SetupMember {
 				alias: "member3".to_string(),
-				pub_key: member3_pair.public_key_to_der().unwrap()
-			}			
+				pub_key: member3_pair.public_key_to_der().unwrap(),
+			},
 		];
 
 		let member_pairs = vec![member1_pair, member2_pair, member3_pair];
 
 		let threshold = 2;
-		let genesis_set = GenesisSet {
-			members: genesis_members,
-			threshold			
-		};
+		let genesis_set = GenesisSet { members: genesis_members, threshold };
 
-		let (output, _nsm_response) = boot_genesis(&mut protocol_state, &genesis_set).unwrap();
+		let (output, _nsm_response) =
+			boot_genesis(&mut protocol_state, &genesis_set).unwrap();
 		let zipped = std::iter::zip(output.member_outputs, member_pairs);
-		let shares: Vec<Vec<u8>> = zipped.map(|(output, pair)| {
-			let personal_key = RsaPair::from_der(&pair.envelope_decrypt(&output.encrypted_personal_key).unwrap()).unwrap();
-			personal_key.envelope_decrypt(&output.encrypted_quorum_key_share).unwrap()
-		}).collect();
+		let shares: Vec<Vec<u8>> = zipped
+			.map(|(output, pair)| {
+				let personal_key = RsaPair::from_der(
+					&pair
+						.envelope_decrypt(&output.encrypted_personal_key)
+						.unwrap(),
+				)
+				.unwrap();
+				personal_key
+					.envelope_decrypt(&output.encrypted_quorum_key_share)
+					.unwrap()
+			})
+			.collect();
 
-		let reconstructed = qos_crypto::shares_reconstruct(&shares[0..threshold as usize]);
-		let reconstructed_quorum_key = RsaPair::from_der(&reconstructed).unwrap();
+		let reconstructed =
+			qos_crypto::shares_reconstruct(&shares[0..threshold as usize]);
+		let reconstructed_quorum_key =
+			RsaPair::from_der(&reconstructed).unwrap();
 
 		let quorum_public_key = RsaPub::from_der(&output.quorum_key).unwrap();
 		assert_eq!(reconstructed_quorum_key.public_key(), &quorum_public_key);

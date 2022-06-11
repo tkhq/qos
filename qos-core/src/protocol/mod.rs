@@ -5,7 +5,7 @@ use std::{
 	os::unix::fs::PermissionsExt,
 };
 
-use borsh::{BorshSerialize, BorshDeserialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attestor;
 mod boot;
@@ -61,7 +61,9 @@ impl From<std::io::Error> for ProtocolError {
 	}
 }
 
-#[derive(Debug, PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	Debug, PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub enum ProtocolPhase {
 	UnrecoverableError,
 	WaitingForBootInstruction,
@@ -146,7 +148,8 @@ impl Executor {
 impl server::Routable for Executor {
 	fn process(&mut self, req_bytes: Vec<u8>) -> Vec<u8> {
 		let err_resp = || {
-			ProtocolMsg::ErrorResponse.try_to_vec()
+			ProtocolMsg::ErrorResponse
+				.try_to_vec()
 				.expect("ProtocolMsg can always be serialized. qed.")
 		};
 
@@ -162,7 +165,8 @@ impl server::Routable for Executor {
 		for handler in self.routes().iter() {
 			match handler(&msg_req, &mut self.state) {
 				Some(msg_resp) => {
-					return msg_resp.try_to_vec()
+					return msg_resp
+						.try_to_vec()
 						.expect("ProtocolMsg can always be serialized. qed.")
 				}
 				None => continue,
@@ -170,7 +174,8 @@ impl server::Routable for Executor {
 		}
 
 		let err = ProtocolError::NoMatchingRoute(self.state.phase.clone());
-		ProtocolMsg::ProtocolErrorResponse(err).try_to_vec()
+		ProtocolMsg::ProtocolErrorResponse(err)
+			.try_to_vec()
 			.expect("ProtocolMsg can always be serialized. qed.")
 	}
 }
@@ -258,7 +263,10 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::NsmRequest(NsmRequestWrapper(NsmRequest::Attestation { .. })) = req {
+		if let ProtocolMsg::NsmRequest(NsmRequestWrapper(
+			NsmRequest::Attestation { .. },
+		)) = req
+		{
 			let request = NsmRequest::Attestation {
 				user_data: None,
 				nonce: None,
@@ -332,7 +340,9 @@ mod handlers {
 					*manifest_envelope.clone(),
 					pivot
 				));
-				Some(ProtocolMsg::BootStandardResponse(NsmResponseWrapper(nsm_response)))
+				Some(ProtocolMsg::BootStandardResponse(NsmResponseWrapper(
+					nsm_response,
+				)))
 			}
 			ProtocolMsg::BootRequest(BootInstruction::Genesis { set }) => {
 				let (genesis_output, nsm_response) =

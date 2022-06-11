@@ -15,8 +15,8 @@ use std::{
 	ops::Deref,
 	path::Path,
 };
-use borsh::{BorshSerialize, BorshDeserialize};
 
+use borsh::{BorshDeserialize, BorshSerialize};
 use openssl::{
 	hash::MessageDigest,
 	pkey::{PKey, Private, Public},
@@ -255,8 +255,7 @@ impl RsaPub {
 		let encrypted_symm_key = self.encrypt(&key)?;
 
 		let envelope = Envelope { encrypted_data, encrypted_symm_key, iv };
-		Ok(envelope.try_to_vec()
-			.expect("`Envelope` impls serialization"))
+		Ok(envelope.try_to_vec().expect("`Envelope` impls serialization"))
 	}
 }
 
@@ -294,8 +293,7 @@ impl PartialEq for RsaPub {
 	}
 }
 
-
-#[derive(PartialEq, Debug, Clone, BorshSerialize, BorshDeserialize,)]
+#[derive(PartialEq, Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct Envelope {
 	pub encrypted_symm_key: Vec<u8>,
 	pub encrypted_data: Vec<u8>,

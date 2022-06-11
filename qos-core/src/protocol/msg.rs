@@ -1,11 +1,11 @@
 //! Enclave I/O message format and serialization.
 
+use std::{io::Write, ops::Deref};
+
 pub use aws_nitro_enclaves_nsm_api::api::{
 	Digest as NsmDigest, Request as NsmRequest, Response as NsmResponse,
 };
-use std::ops::Deref;
-use std::io::Write;
-use borsh::{BorshSerialize, BorshDeserialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 
 use super::{
 	boot::ManifestEnvelope,
@@ -13,10 +13,11 @@ use super::{
 	ProtocolError,
 };
 
-// NsmResponse is from `aws-nitro-enclaves-nsm-api` and serializes with serde_cbor
-// Here, we implement BorshSerialize for NsmResponse by serializing with serde_cbor
-// This (likely) breaks one of the native assumptions about borsh -- deterministic serialization
-// However, we'll never actually need determinism over the NsmResponse so this is OK
+// NsmResponse is from `aws-nitro-enclaves-nsm-api` and serializes with
+// serde_cbor Here, we implement BorshSerialize for NsmResponse by serializing
+// with serde_cbor This (likely) breaks one of the native assumptions about
+// borsh -- deterministic serialization However, we'll never actually need
+// determinism over the NsmResponse so this is OK
 #[derive(Debug)]
 pub struct NsmResponseWrapper(pub NsmResponse);
 impl Deref for NsmResponseWrapper {
@@ -28,9 +29,15 @@ impl Deref for NsmResponseWrapper {
 }
 
 impl borsh::BorshSerialize for NsmResponseWrapper {
-	fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
-		let temp_vec = serde_cbor::to_vec(&self.0)
-			.map_err(|_| borsh::maybestd::io::Error::from(borsh::maybestd::io::ErrorKind::Other))?;
+	fn serialize<W: Write>(
+		&self,
+		writer: &mut W,
+	) -> borsh::maybestd::io::Result<()> {
+		let temp_vec = serde_cbor::to_vec(&self.0).map_err(|_| {
+			borsh::maybestd::io::Error::from(
+				borsh::maybestd::io::ErrorKind::Other,
+			)
+		})?;
 
 		writer.write(&temp_vec);
 		Ok(())
@@ -39,9 +46,12 @@ impl borsh::BorshSerialize for NsmResponseWrapper {
 
 impl borsh::BorshDeserialize for NsmResponseWrapper {
 	fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
-		let inner = serde_cbor::from_slice(buf)
-			.map_err(|_| borsh::maybestd::io::Error::from(borsh::maybestd::io::ErrorKind::Other))?;
-	
+		let inner = serde_cbor::from_slice(buf).map_err(|_| {
+			borsh::maybestd::io::Error::from(
+				borsh::maybestd::io::ErrorKind::Other,
+			)
+		})?;
+
 		Ok(Self(inner))
 	}
 }
@@ -57,9 +67,15 @@ impl Deref for NsmRequestWrapper {
 }
 
 impl borsh::BorshSerialize for NsmRequestWrapper {
-	fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
-		let temp_vec = serde_cbor::to_vec(&self.0)
-			.map_err(|_| borsh::maybestd::io::Error::from(borsh::maybestd::io::ErrorKind::Other))?;
+	fn serialize<W: Write>(
+		&self,
+		writer: &mut W,
+	) -> borsh::maybestd::io::Result<()> {
+		let temp_vec = serde_cbor::to_vec(&self.0).map_err(|_| {
+			borsh::maybestd::io::Error::from(
+				borsh::maybestd::io::ErrorKind::Other,
+			)
+		})?;
 
 		writer.write(&temp_vec)?;
 		Ok(())
@@ -68,9 +84,12 @@ impl borsh::BorshSerialize for NsmRequestWrapper {
 
 impl borsh::BorshDeserialize for NsmRequestWrapper {
 	fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
-		let inner = serde_cbor::from_slice(buf)
-			.map_err(|_| borsh::maybestd::io::Error::from(borsh::maybestd::io::ErrorKind::Other))?;
-	
+		let inner = serde_cbor::from_slice(buf).map_err(|_| {
+			borsh::maybestd::io::Error::from(
+				borsh::maybestd::io::ErrorKind::Other,
+			)
+		})?;
+
 		Ok(Self(inner))
 	}
 }
@@ -114,17 +133,23 @@ impl PartialEq for ProtocolMsg {
 	}
 }
 
-#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub struct Echo {
 	pub data: Vec<u8>,
 }
 
-#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub struct Provision {
 	pub share: Vec<u8>,
 }
 
-#[derive(Debug, PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	Debug, PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub struct SignatureWithPubKey {
 	/// Signature
 	pub signature: Vec<u8>,
@@ -133,7 +158,9 @@ pub struct SignatureWithPubKey {
 	pub path: String,
 }
 
-#[derive(Debug, PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	Debug, PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub struct Load {
 	/// The executable to pivot to
 	pub executable: Vec<u8>,
@@ -141,7 +168,9 @@ pub struct Load {
 	pub signatures: Vec<SignatureWithPubKey>,
 }
 
-#[derive(PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub enum BootInstruction {
 	Standard { manifest_envelope: Box<ManifestEnvelope>, pivot: Vec<u8> },
 	Genesis { set: GenesisSet },
