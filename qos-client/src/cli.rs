@@ -231,7 +231,6 @@ mod handlers {
 		BootInstruction, GenesisSet, NsmRequest, NsmResponse, SetupMember,
 	};
 	use qos_crypto::RsaPub;
-	use serde_bytes::ByteBuf;
 
 	use super::*;
 	use crate::{attest, request};

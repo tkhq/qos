@@ -10,7 +10,6 @@ use crate::{
 pub enum ClientError {
 	IOError(io::IOError),
 	ProtocolError(ProtocolError),
-	SerdeCBOR(serde_cbor::Error),
 	BorshError(borsh::maybestd::io::Error),
 }
 
@@ -23,12 +22,6 @@ impl From<io::IOError> for ClientError {
 impl From<ProtocolError> for ClientError {
 	fn from(err: ProtocolError) -> Self {
 		Self::ProtocolError(err)
-	}
-}
-
-impl From<serde_cbor::Error> for ClientError {
-	fn from(err: serde_cbor::Error) -> Self {
-		Self::SerdeCBOR(err)
 	}
 }
 

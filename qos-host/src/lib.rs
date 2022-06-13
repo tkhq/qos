@@ -114,15 +114,12 @@ impl HostServer {
 		};
 
 		match response {
-			Err(e) => {
-				dbg!(e);
-				(
-					StatusCode::INTERNAL_SERVER_ERROR,
-					ProtocolMsg::ErrorResponse
-						.try_to_vec()
-						.expect("ProtocolMsg can always serialize. qed."),
-				)
-			}
+			Err(e) => (
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ProtocolMsg::ErrorResponse
+					.try_to_vec()
+					.expect("ProtocolMsg can always serialize. qed."),
+			),
 			Ok(response) => (
 				StatusCode::OK,
 				response
