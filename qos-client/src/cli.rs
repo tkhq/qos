@@ -144,17 +144,17 @@ impl EchoOptions {
 
 #[derive(Clone, PartialEq, Debug)]
 struct GenerateSetupKeyOptions {
-	path: Option<String>,
+	key_directory: Option<String>,
 	alias: Option<String>,
 	namespace: Option<String>,
 }
 impl GenerateSetupKeyOptions {
 	fn new() -> Self {
-		Self { alias: None, namespace: None, path: None }
+		Self { alias: None, namespace: None, key_directory: None }
 	}
 	fn parse(&mut self, cmd: &str, arg: &str) {
 		match cmd {
-			"--path" => self.path = Some(arg.to_string()),
+			"--key-directory" => self.key_directory = Some(arg.to_string()),
 			"--namespace" => self.namespace = Some(arg.to_string()),
 			"--alias" => self.alias = Some(arg.to_string()),
 			_ => {}
@@ -166,23 +166,23 @@ impl GenerateSetupKeyOptions {
 	fn namespace(&self) -> String {
 		self.namespace.clone().expect("No `--namespace` provided")
 	}
-	fn path(&self) -> String {
-		self.path.clone().expect("No `--path` provided")
+	fn key_directory(&self) -> String {
+		self.key_directory.clone().expect("No `--key-directory` provided")
 	}
 }
 
 #[derive(Clone, PartialEq, Debug)]
 struct GenerateGenesisConfiguration {
-	path: Option<String>,
+	key_directory: Option<String>,
 	threshold: Option<u32>,
 }
 impl GenerateGenesisConfiguration {
 	fn new() -> Self {
-		Self { path: None, threshold: None }
+		Self { key_directory: None, threshold: None }
 	}
 	fn parse(&mut self, cmd: &str, arg: &str) {
 		match cmd {
-			"--path" => self.path = Some(arg.to_string()),
+			"--key-directory" => self.key_directory = Some(arg.to_string()),
 			"--threshold" => {
 				self.threshold =
 					Some(arg.parse::<u32>().expect(
@@ -192,8 +192,8 @@ impl GenerateGenesisConfiguration {
 			_ => {}
 		}
 	}
-	fn path(&self) -> String {
-		self.path.clone().expect("No `--path` provided")
+	fn key_directory(&self) -> String {
+		self.key_directory.clone().expect("No `--key-directory` provided")
 	}
 	fn threshold(&self) -> u32 {
 		self.threshold.clone().expect("No `--threshold` provided")
@@ -366,12 +366,12 @@ mod handlers {
 	pub(super) fn generate_setup_key(options: ClientOptions) {
 		let alias = options.generate_setup_key.alias();
 		let namespace = options.generate_setup_key.namespace();
-		let key_directory = options.generate_setup_key.path();
+		let key_directory = options.generate_setup_key.key_directory();
 
 		let key_directory_path = std::path::Path::new(&key_directory);
 
 		if !key_directory_path.is_dir() {
-			panic!("Provided path is not valid");
+			panic!("Provided `--key-directory` does not exist is not valid");
 		}
 
 		let private_key_file_name =
@@ -400,7 +400,8 @@ mod handlers {
 
 	pub(super) fn generate_genesis_configuration(options: ClientOptions) {
 		let threshold = options.generate_genesis_configuration.threshold();
-		let key_directory = options.generate_genesis_configuration.path();
+		let key_directory =
+			options.generate_genesis_configuration.key_directory();
 
 		let key_directory_path = std::path::Path::new(&key_directory);
 		if !key_directory_path.is_dir() {
@@ -409,22 +410,28 @@ mod handlers {
 
 		let key_iter = std::fs::read_dir(key_directory_path)
 			.expect("Failed to read key directory");
-		let members: Vec<SetupMember> = key_iter
-			.map(|key_path| {
-				let path = key_path.unwrap().path();
-				let file_name = path.file_name();
-				let split: Vec<_> =
-					file_name.unwrap().to_str().unwrap().split(".").collect();
-				let alias = split.get(0).unwrap().to_string();
+		let mut members = vec![];
+		for key_path in key_iter {
+			let path = key_path.unwrap().path();
+			let file_name = path.file_name();
+			let split: Vec<_> =
+				file_name.unwrap().to_str().unwrap().split(".").collect();
+			if *split.last().unwrap() != ".key" {
+				println!("A non key was found in the setup key directory");
+				// Skip if its not a key
+				continue
+			}
+			let alias = split.get(0).unwrap().to_string();
 
-				let public_key = RsaPub::from_pem_file(path).unwrap();
+			dbg!(&path);
+			let public_key = RsaPub::from_pem_file(path)
+				.expect("Failed to read in rsa pub key.");
 
-				SetupMember {
-					alias,
-					pub_key: public_key.public_key_to_der().unwrap(),
-				}
-			})
-			.collect();
+			members.push(SetupMember {
+				alias,
+				pub_key: public_key.public_key_to_der().unwrap(),
+			});
+		}
 
 		println!("Threshold: {}", threshold);
 		println!("Members:");
