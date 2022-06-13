@@ -405,25 +405,25 @@ mod handlers {
 
 		let key_directory_path = std::path::Path::new(&key_directory);
 		if !key_directory_path.is_dir() {
-			panic!("Provided path is not valid");
+			panic!("Provided path is not a valid directory");
 		}
 
 		let key_iter = std::fs::read_dir(key_directory_path)
 			.expect("Failed to read key directory");
+
 		let mut members = vec![];
 		for key_path in key_iter {
 			let path = key_path.unwrap().path();
 			let file_name = path.file_name();
 			let split: Vec<_> =
 				file_name.unwrap().to_str().unwrap().split(".").collect();
-			if *split.last().unwrap() != ".key" {
-				println!("A non key was found in the setup key directory");
-				// Skip if its not a key
+
+			if *split.last().unwrap() != "pub" {
+				println!("A non `.pub` file was found in the setup key directory - skipping.");
 				continue
 			}
 			let alias = split.get(0).unwrap().to_string();
 
-			dbg!(&path);
 			let public_key = RsaPub::from_pem_file(path)
 				.expect("Failed to read in rsa pub key.");
 

@@ -101,7 +101,7 @@ impl HostServer {
 			)
 		}
 
-		match ProtocolMsg::try_from_slice(&body) {
+		let response = match ProtocolMsg::try_from_slice(&body) {
 			Err(_) => {
 				return (
 					StatusCode::BAD_REQUEST,
@@ -110,20 +110,25 @@ impl HostServer {
 						.expect("ProtocolMsg can always serialize. qed."),
 				)
 			}
-			Ok(request) => match state.enclave_client.send(request) {
-				Err(_) => (
+			Ok(request) => state.enclave_client.send(request),
+		};
+
+		match response {
+			Err(e) => {
+				dbg!(e);
+				(
 					StatusCode::INTERNAL_SERVER_ERROR,
 					ProtocolMsg::ErrorResponse
 						.try_to_vec()
 						.expect("ProtocolMsg can always serialize. qed."),
-				),
-				Ok(response) => (
-					StatusCode::OK,
-					response
-						.try_to_vec()
-						.expect("ProtocolMsg can always serialize. qed."),
-				),
-			},
+				)
+			}
+			Ok(response) => (
+				StatusCode::OK,
+				response
+					.try_to_vec()
+					.expect("ProtocolMsg can always serialize. qed."),
+			),
 		}
 	}
 }

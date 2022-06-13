@@ -50,16 +50,18 @@ impl Client {
 		Self { addr }
 	}
 
-	/// Send a [`ProtocolMsg`] and return the response.
+	/// Send a [`ProtocolMsg`] and wait for the response.
 	pub fn send(
 		&self,
 		request: ProtocolMsg,
 	) -> Result<ProtocolMsg, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
+
 		stream.send(
 			&request.try_to_vec().expect("ProtocolMsg can be serialized. qed."),
 		)?;
 		let response = stream.recv()?;
+
 		ProtocolMsg::try_from_slice(&response).map_err(Into::into)
 	}
 }

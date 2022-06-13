@@ -112,6 +112,7 @@ fn load_e2e() {
 	// Part 4 - clean up the generated keys
 	//
 	std::fs::remove_file(&pivot_file).unwrap();
+	let _ = std::fs::remove_file("./rsa_verify_payload.sock");
 	for path in paths {
 		std::fs::remove_file(path).unwrap()
 	}

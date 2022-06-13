@@ -167,10 +167,7 @@ pub struct RsaPub {
 
 impl RsaPub {
 	pub fn from_pem_file<P: AsRef<Path>>(path: P) -> Result<Self, CryptoError> {
-		let mut content = Vec::new();
-		let mut file = File::open(path)?;
-		file.read_to_end(&mut content)?;
-
+		let content = std::fs::read(path)?;
 		Self::from_pem(&content[..])
 	}
 

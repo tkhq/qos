@@ -11,7 +11,8 @@ use qos_host::HostServer;
 
 #[tokio::test]
 async fn provision_e2e() {
-	let enclave_addr = SocketAddress::new_unix("./end_to_end.sock");
+	let usock = "./provisions_e2e.sock";
+	let enclave_addr = SocketAddress::new_unix(usock);
 	let enclave_addr2 = enclave_addr.clone();
 	let ip = [127, 0, 0, 1];
 	let port = 3002;
@@ -107,18 +108,5 @@ async fn provision_e2e() {
 
 	// Delete file
 	std::fs::remove_file(path).unwrap();
-
-	// // Test NSM connection
-	// let request = ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM);
-	// let response = qos_client::request::post(&message_url, request).unwrap();
-	// let expected = ProtocolMsg::NsmResponse(NsmResponse::DescribeNSM {
-	// 	version_major: 1,
-	// 	version_minor: 2,
-	// 	version_patch: 14,
-	// 	module_id: "mock_module_id".to_string(),
-	// 	max_pcrs: 1024,
-	// 	locked_pcrs: BTreeSet::from([90, 91, 92]),
-	// 	digest: NsmDigest::SHA256,
-	// });
-	// assert_eq!(response, expected);
+	let _ = std::fs::remove_file(usock);
 }

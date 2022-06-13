@@ -16,7 +16,7 @@ use super::{
 // NsmResponse is from `aws-nitro-enclaves-nsm-api` and serializes with
 // serde_cbor Here, we implement BorshSerialize for NsmResponse by serializing
 // with serde_cbor This (likely) breaks one of the native assumptions about
-// borsh -- deterministic serialization However, we'll never actually need
+// borsh -- deterministic serialization. However, we'll never actually need
 // determinism over the NsmResponse so this is OK
 #[derive(Debug)]
 pub struct NsmResponseWrapper(pub NsmResponse);
@@ -33,7 +33,7 @@ impl borsh::BorshSerialize for NsmResponseWrapper {
 		&self,
 		writer: &mut W,
 	) -> borsh::maybestd::io::Result<()> {
-		let temp_vec = serde_cbor::to_vec(&self.0).map_err(|_| {
+		let temp_vec = serde_cbor::to_vec(&self.0).map_err(|e| {
 			borsh::maybestd::io::Error::from(
 				borsh::maybestd::io::ErrorKind::Other,
 			)
@@ -46,11 +46,13 @@ impl borsh::BorshSerialize for NsmResponseWrapper {
 
 impl borsh::BorshDeserialize for NsmResponseWrapper {
 	fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
-		let inner = serde_cbor::from_slice(buf).map_err(|_| {
+		let inner = serde_cbor::from_slice(buf).map_err(|e| {
 			borsh::maybestd::io::Error::from(
 				borsh::maybestd::io::ErrorKind::Other,
 			)
 		})?;
+		// Update the buffer to point only at the unread bytes.
+		*buf = &buf[buf.len()..];
 
 		Ok(Self(inner))
 	}
@@ -174,4 +176,32 @@ pub struct Load {
 pub enum BootInstruction {
 	Standard { manifest_envelope: Box<ManifestEnvelope>, pivot: Vec<u8> },
 	Genesis { set: GenesisSet },
+}
+
+#[cfg(test)]
+mod test {
+	use borsh::{BorshDeserialize, BorshSerialize};
+
+	use super::*;
+
+	#[test]
+	fn boot_genesis_response_deserilization() {
+		let nsm = NsmResponseWrapper(NsmResponse::LockPCR);
+
+		let vec = nsm.try_to_vec().unwrap();
+		let test = NsmResponseWrapper::try_from_slice(&vec).unwrap();
+		assert_eq!(nsm.try_to_vec().unwrap(), test.try_to_vec().unwrap());
+
+		let genesis_response = ProtocolMsg::BootGenesisResponse {
+			attestation_doc: nsm,
+			genesis_output: GenesisOutput {
+				quorum_key: vec![3, 2, 1],
+				member_outputs: vec![],
+				recovery_permutations: vec![],
+			},
+		};
+
+		let vec = genesis_response.try_to_vec().unwrap();
+		let test = ProtocolMsg::try_from_slice(&vec).unwrap();
+	}
 }
