@@ -2,12 +2,8 @@ use std::iter::zip;
 
 use borsh::BorshSerialize;
 use qos_crypto::{RsaPair, RsaPub};
-use serde_bytes::ByteBuf;
 
-use super::{
-	msg::{NsmRequest, NsmResponse},
-	Hash256, ProtocolError, ProtocolState,
-};
+use super::{Hash256, NsmRequest, NsmResponse, ProtocolError, ProtocolState};
 
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
@@ -131,7 +127,7 @@ pub fn boot_genesis(
 
 	let nsm_response = {
 		let request = NsmRequest::Attestation {
-			user_data: Some(ByteBuf::from(genesis_output.hash())),
+			user_data: Some(genesis_output.hash().to_vec()),
 			nonce: None,
 			public_key: None,
 		};

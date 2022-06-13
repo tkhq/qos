@@ -1,16 +1,11 @@
 //! Enclave I/O message format and serialization.
 
-use std::{io::Write, ops::Deref};
-
-pub use aws_nitro_enclaves_nsm_api::api::{
-	Digest as NsmDigest, Request as NsmRequest, Response as NsmResponse,
-};
 use borsh::BorshSerialize;
 
 use super::{
 	boot::ManifestEnvelope,
 	genesis::{GenesisOutput, GenesisSet},
-	ProtocolError,
+	NsmRequest, NsmResponse, ProtocolError,
 };
 
 // NsmResponse is from `aws-nitro-enclaves-nsm-api` and serializes with
@@ -18,83 +13,83 @@ use super::{
 // with serde_cbor This (likely) breaks one of the native assumptions about
 // borsh -- deterministic serialization. However, we'll never actually need
 // determinism over the NsmResponse so this is OK
-#[derive(Debug)]
-pub struct NsmResponseWrapper(pub NsmResponse);
-impl Deref for NsmResponseWrapper {
-	type Target = NsmResponse;
+// #[derive(Debug)]
+// pub struct NsmResponseWrapper(pub NsmResponse);
+// impl Deref for NsmResponseWrapper {
+// 	type Target = NsmResponse;
 
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
+// 	fn deref(&self) -> &Self::Target {
+// 		&self.0
+// 	}
+// }
 
-impl borsh::BorshSerialize for NsmResponseWrapper {
-	fn serialize<W: Write>(
-		&self,
-		writer: &mut W,
-	) -> borsh::maybestd::io::Result<()> {
-		let temp_vec = serde_cbor::to_vec(&self.0).map_err(|e| {
-			borsh::maybestd::io::Error::from(
-				borsh::maybestd::io::ErrorKind::Other,
-			)
-		})?;
+// impl borsh::BorshSerialize for NsmResponseWrapper {
+// 	fn serialize<W: Write>(
+// 		&self,
+// 		writer: &mut W,
+// 	) -> borsh::maybestd::io::Result<()> {
+// 		let temp_vec = serde_cbor::to_vec(&self.0).map_err(|e| {
+// 			borsh::maybestd::io::Error::from(
+// 				borsh::maybestd::io::ErrorKind::Other,
+// 			)
+// 		})?;
 
-		writer.write(&temp_vec)?;
-		Ok(())
-	}
-}
+// 		writer.write(&temp_vec)?;
+// 		Ok(())
+// 	}
+// }
 
-impl borsh::BorshDeserialize for NsmResponseWrapper {
-	fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
-		let inner = serde_cbor::from_slice(buf).map_err(|e| {
-			borsh::maybestd::io::Error::from(
-				borsh::maybestd::io::ErrorKind::Other,
-			)
-		})?;
-		// Update the buffer to point only at the unread bytes.
-		*buf = &buf[buf.len()..];
+// impl borsh::BorshDeserialize for NsmResponseWrapper {
+// 	fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
+// 		let inner = serde_cbor::from_slice(buf).map_err(|e| {
+// 			borsh::maybestd::io::Error::from(
+// 				borsh::maybestd::io::ErrorKind::Other,
+// 			)
+// 		})?;
+// 		// Update the buffer to point only at the unread bytes.
+// 		*buf = &buf[buf.len()..];
 
-		Ok(Self(inner))
-	}
-}
+// 		Ok(Self(inner))
+// 	}
+// }
 
-#[derive(Debug)]
-pub struct NsmRequestWrapper(pub NsmRequest);
-impl Deref for NsmRequestWrapper {
-	type Target = NsmRequest;
+// #[derive(Debug)]
+// pub struct NsmRequestWrapper(pub NsmRequest);
+// impl Deref for NsmRequestWrapper {
+// 	type Target = NsmRequest;
 
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
+// 	fn deref(&self) -> &Self::Target {
+// 		&self.0
+// 	}
+// }
 
-impl borsh::BorshSerialize for NsmRequestWrapper {
-	fn serialize<W: Write>(
-		&self,
-		writer: &mut W,
-	) -> borsh::maybestd::io::Result<()> {
-		let temp_vec = serde_cbor::to_vec(&self.0).map_err(|_| {
-			borsh::maybestd::io::Error::from(
-				borsh::maybestd::io::ErrorKind::Other,
-			)
-		})?;
+// impl borsh::BorshSerialize for NsmRequestWrapper {
+// 	fn serialize<W: Write>(
+// 		&self,
+// 		writer: &mut W,
+// 	) -> borsh::maybestd::io::Result<()> {
+// 		let temp_vec = serde_cbor::to_vec(&self.0).map_err(|_| {
+// 			borsh::maybestd::io::Error::from(
+// 				borsh::maybestd::io::ErrorKind::Other,
+// 			)
+// 		})?;
 
-		writer.write(&temp_vec)?;
-		Ok(())
-	}
-}
+// 		writer.write(&temp_vec)?;
+// 		Ok(())
+// 	}
+// }
 
-impl borsh::BorshDeserialize for NsmRequestWrapper {
-	fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
-		let inner = serde_cbor::from_slice(buf).map_err(|_| {
-			borsh::maybestd::io::Error::from(
-				borsh::maybestd::io::ErrorKind::Other,
-			)
-		})?;
+// impl borsh::BorshDeserialize for NsmRequestWrapper {
+// 	fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
+// 		let inner = serde_cbor::from_slice(buf).map_err(|_| {
+// 			borsh::maybestd::io::Error::from(
+// 				borsh::maybestd::io::ErrorKind::Other,
+// 			)
+// 		})?;
 
-		Ok(Self(inner))
-	}
-}
+// 		Ok(Self(inner))
+// 	}
+// }
 
 #[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum ProtocolMsg {
@@ -109,18 +104,18 @@ pub enum ProtocolMsg {
 	EchoResponse(Echo),
 	ProvisionRequest(Provision),
 	ReconstructRequest,
-	NsmRequest(NsmRequestWrapper),
-	NsmResponse(NsmResponseWrapper),
+	NsmRequest(NsmRequest),
+	NsmResponse(NsmResponse),
 	LoadRequest(Load),
 
 	StatusRequest,
 	StatusResponse(super::ProtocolPhase),
 
 	BootRequest(BootInstruction),
-	BootStandardResponse(NsmResponseWrapper),
+	BootStandardResponse(NsmResponse),
 	BootGenesisResponse {
 		/// COSE SIGN1 structure with Attestation Doc
-		attestation_doc: NsmResponseWrapper,
+		attestation_doc: NsmResponse,
 		/// Output from the Genesis flow.
 		genesis_output: GenesisOutput,
 	},
@@ -184,12 +179,33 @@ mod test {
 
 	use super::*;
 
+	// #[test]
+	// fn boot_genesis_response_deserilization() {
+	// 	let nsm = NsmResponseWrapper(NsmResponse::LockPCR);
+
+	// 	let vec = nsm.try_to_vec().unwrap();
+	// 	let test = NsmResponseWrapper::try_from_slice(&vec).unwrap();
+	// 	assert_eq!(nsm.try_to_vec().unwrap(), test.try_to_vec().unwrap());
+
+	// 	let genesis_response = ProtocolMsg::BootGenesisResponse {
+	// 		attestation_doc: nsm,
+	// 		genesis_output: GenesisOutput {
+	// 			quorum_key: vec![3, 2, 1],
+	// 			member_outputs: vec![],
+	// 			recovery_permutations: vec![],
+	// 		},
+	// 	};
+
+	// 	let vec = genesis_response.try_to_vec().unwrap();
+	// 	let test = ProtocolMsg::try_from_slice(&vec).unwrap();
+	// }
+
 	#[test]
 	fn boot_genesis_response_deserilization() {
-		let nsm = NsmResponseWrapper(NsmResponse::LockPCR);
+		let nsm = NsmResponse::LockPCR;
 
 		let vec = nsm.try_to_vec().unwrap();
-		let test = NsmResponseWrapper::try_from_slice(&vec).unwrap();
+		let test = NsmResponse::try_from_slice(&vec).unwrap();
 		assert_eq!(nsm.try_to_vec().unwrap(), test.try_to_vec().unwrap());
 
 		let genesis_response = ProtocolMsg::BootGenesisResponse {
@@ -203,5 +219,7 @@ mod test {
 
 		let vec = genesis_response.try_to_vec().unwrap();
 		let test = ProtocolMsg::try_from_slice(&vec).unwrap();
+
+		assert_eq!(test, genesis_response);
 	}
 }

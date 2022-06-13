@@ -1,11 +1,8 @@
 use borsh::BorshSerialize;
 use qos_crypto::{sha_256, RsaPair, RsaPub};
-use serde_bytes::ByteBuf;
 
-// pub use attestor::{MockNsm, Nsm, NsmProvider,
-// MOCK_NSM_ATTESTATION_DOCUMENT};
 use super::{
-	msg::NsmRequest, Hash256, NsmResponse, ProtocolError, ProtocolPhase,
+	Hash256, NsmRequest, NsmResponse, ProtocolError, ProtocolPhase,
 	ProtocolState,
 };
 
@@ -155,11 +152,9 @@ pub fn boot_standard(
 
 	let nsm_response = {
 		let request = NsmRequest::Attestation {
-			user_data: Some(ByteBuf::from(manifest_envelope.manifest.hash())),
+			user_data: Some(manifest_envelope.manifest.hash().to_vec()),
 			nonce: None,
-			public_key: Some(ByteBuf::from(
-				ephemeral_key.public_key_to_pem().unwrap(),
-			)),
+			public_key: Some(ephemeral_key.public_key_to_pem().unwrap()),
 		};
 		let fd = state.attestor.nsm_init();
 

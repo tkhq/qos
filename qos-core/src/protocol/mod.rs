@@ -13,7 +13,10 @@ mod genesis;
 mod msg;
 mod provisioner;
 
-pub use attestor::{MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT};
+pub use attestor::{
+	types::{NsmDigest, NsmRequest, NsmResponse},
+	MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT,
+};
 pub use boot::{Approval, ManifestEnvelope};
 pub use genesis::{
 	GenesisMemberOutput, GenesisOutput, GenesisSet, SetupMember,
@@ -182,7 +185,6 @@ impl server::Routable for Executor {
 
 mod handlers {
 	use qos_crypto::RsaPair;
-	use serde_bytes::ByteBuf;
 
 	use super::*;
 
@@ -263,20 +265,17 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::NsmRequest(NsmRequestWrapper(
-			NsmRequest::Attestation { .. },
-		)) = req
-		{
+		if let ProtocolMsg::NsmRequest(NsmRequest::Attestation { .. }) = req {
 			let request = NsmRequest::Attestation {
 				user_data: None,
 				nonce: None,
-				public_key: Some(ByteBuf::from(
+				public_key: Some(
 					RsaPair::generate().unwrap().public_key_to_pem().unwrap(),
-				)),
+				),
 			};
 			let fd = state.attestor.nsm_init();
 			let response = state.attestor.nsm_process_request(fd, request);
-			Some(ProtocolMsg::NsmResponse(NsmResponseWrapper(response)))
+			Some(ProtocolMsg::NsmResponse(response))
 		} else {
 			None
 		}
@@ -340,16 +339,15 @@ mod handlers {
 					*manifest_envelope.clone(),
 					pivot
 				));
-				Some(ProtocolMsg::BootStandardResponse(NsmResponseWrapper(
-					nsm_response,
-				)))
+				Some(ProtocolMsg::BootStandardResponse(nsm_response))
 			}
 			ProtocolMsg::BootRequest(BootInstruction::Genesis { set }) => {
 				let (genesis_output, nsm_response) =
 					ok_or_err!(genesis::boot_genesis(state, set));
 
 				Some(ProtocolMsg::BootGenesisResponse {
-					attestation_doc: NsmResponseWrapper(nsm_response),
+					// attestation_doc: NsmResponseWrapper(nsm_response),
+					attestation_doc: nsm_response,
 					genesis_output,
 				})
 			}
