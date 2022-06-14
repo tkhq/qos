@@ -54,7 +54,6 @@ impl Client {
 			&request.try_to_vec().expect("ProtocolMsg can be serialized. qed."),
 		)?;
 		let response = stream.recv()?;
-
 		ProtocolMsg::try_from_slice(&response).map_err(Into::into)
 	}
 }

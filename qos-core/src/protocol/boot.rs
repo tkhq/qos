@@ -104,7 +104,6 @@ impl ManifestEnvelope {
 			let is_valid_signature = pub_key
 				.verify_sha256(&approval.signature, &self.manifest.hash())
 				.map_err(|e| {
-					dbg!(e, approval);
 					ProtocolError::CryptoError
 				})?;
 			if !is_valid_signature {
@@ -132,7 +131,6 @@ pub fn boot_standard(
 	manifest_envelope.check_approvals()?;
 
 	let ephemeral_key = RsaPair::generate()?;
-	// Write the ephemeral key to the filesystem
 	std::fs::write(
 		state.ephemeral_key_file.clone(),
 		ephemeral_key.private_key_to_der()?,
@@ -152,6 +150,7 @@ pub fn boot_standard(
 
 	let nsm_response = {
 		let request = NsmRequest::Attestation {
+                         // TODO: make sure CLI verifies the manifest hash is correct
 			user_data: Some(manifest_envelope.manifest.hash().to_vec()),
 			nonce: None,
 			public_key: Some(ephemeral_key.public_key_to_pem().unwrap()),
@@ -254,7 +253,6 @@ mod test {
 
 			ManifestEnvelope { manifest, approvals }
 		};
-		// - pivot file is written to disk as an executable
 
 		let pivot_file =
 			"boot_standard_accepts_approved_manifest.pivot".to_string();
@@ -299,7 +297,6 @@ mod test {
 
 			ManifestEnvelope { manifest, approvals }
 		};
-		// - pivot file is written to disk as an executable
 
 		let pivot_file = "boot_standard_works.pivot".to_string();
 		let ephemeral_file = "boot_standard_works_eph.secret".to_string();
@@ -333,7 +330,6 @@ mod test {
 
 			ManifestEnvelope { manifest, approvals }
 		};
-		// - pivot file is written to disk as an executable
 
 		let pivot_file = "boot_standard_works.pivot".to_string();
 		let ephemeral_file = "boot_standard_works_eph.secret".to_string();
