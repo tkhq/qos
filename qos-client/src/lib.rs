@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-pub(crate) mod attest;
+pub mod attest;
 pub mod cli;
 
 pub mod request {

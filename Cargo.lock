@@ -648,6 +648,7 @@ dependencies = [
  "qos-core",
  "qos-crypto",
  "qos-host",
+ "rand",
  "tokio",
  "ureq",
 ]

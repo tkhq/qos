@@ -8,18 +8,6 @@ use super::{Hash256, NsmRequest, NsmResponse, ProtocolError, ProtocolState};
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
-pub struct GenesisMemberOutput {
-	/// The Quorum Member whom's Setup Key was used.
-	pub setup_member: SetupMember,
-	/// Quorum Key Share encrypted to the Personal Key.
-	pub encrypted_quorum_key_share: Vec<u8>,
-	/// Personal Key encrypted to the Quorum Member's Setup Key.
-	pub encrypted_personal_key: Vec<u8>,
-}
-
-#[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
-)]
 pub struct SetupMember {
 	/// A unique UTF-8 encoded string to help Human participants to identify
 	/// this member.
@@ -58,8 +46,20 @@ pub struct RecoveredPermutation(Vec<MemberShard>);
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+pub struct GenesisMemberOutput {
+	/// The Quorum Member whom's Setup Key was used.
+	pub setup_member: SetupMember,
+	/// Quorum Key Share encrypted to the Personal Key.
+	pub encrypted_quorum_key_share: Vec<u8>,
+	/// Personal Key encrypted to the Quorum Member's Setup Key.
+	pub encrypted_personal_key: Vec<u8>,
+}
+
+#[derive(
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub struct GenesisOutput {
-	/// Quorum Key - RSA public key
+	/// Quorum Key - DER encoded RSA public key
 	pub quorum_key: Vec<u8>,
 	/// Quorum Member specific outputs from the genesis ceremony.
 	pub member_outputs: Vec<GenesisMemberOutput>,

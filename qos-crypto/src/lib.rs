@@ -66,11 +66,13 @@ impl RsaPair {
 	}
 
 	pub fn from_pem_file<P: AsRef<Path>>(path: P) -> Result<Self, CryptoError> {
-		let mut content = Vec::new();
-		let mut file = File::open(path)?;
-		file.read_to_end(&mut content)?;
+		let content = std::fs::read(path)?;
 		let private_key = Rsa::private_key_from_pem(&content[..])?;
+		private_key.try_into()
+	}
 
+	pub fn from_pem(data: &[u8]) -> Result<Self, CryptoError> {
+		let private_key = Rsa::private_key_from_pem(data)?;
 		private_key.try_into()
 	}
 
@@ -91,7 +93,7 @@ impl RsaPair {
 		self.private_key.public_key_to_pem().map_err(Into::into)
 	}
 
-	pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
+	fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		let mut to = vec![0; self.private_key.size() as usize];
 		let size = self.private_key.private_decrypt(
 			data,
@@ -122,7 +124,7 @@ impl RsaPair {
 
 	/// Exactly the same as [`RsaPub::encrypt`] executed with this pairs public
 	/// key.
-	pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
+	fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		self.public_key.encrypt(data)
 	}
 
@@ -208,7 +210,7 @@ impl RsaPub {
 	/// # Error
 	///
 	/// Errors if the `data` is bigger then the public key.
-	pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
+	fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		let public_key_size = self.public_key.size() as usize;
 		// TODO: WTF?
 		if data.len() > public_key_size - 42 {

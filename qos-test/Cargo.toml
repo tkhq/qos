@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 qos-core = { path = "../qos-core" }
 qos-host = { path = "../qos-host" }
-qos-client = { path = "../qos-client" }
+qos-client = { path = "../qos-client", features = ["mock"] }
 tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
 
 [dev-dependencies]
@@ -16,3 +16,4 @@ borsh = { version = "0.9" }
 openssl = "0.10.40"
 ureq = { version = "2.4", default-features = false }
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
+rand = "0.8"

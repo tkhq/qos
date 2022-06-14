@@ -69,7 +69,7 @@ impl HostServer {
 			.route("/message", post(Self::message))
 			.layer(Extension(state));
 
-		println!("Listening on {}", self.addr);
+		println!("HostServer listening on {}", self.addr);
 
 		axum::Server::bind(&self.addr)
 			.serve(app.into_make_service())
@@ -114,7 +114,7 @@ impl HostServer {
 		};
 
 		match response {
-			Err(e) => (
+			Err(_) => (
 				StatusCode::INTERNAL_SERVER_ERROR,
 				ProtocolMsg::ErrorResponse
 					.try_to_vec()

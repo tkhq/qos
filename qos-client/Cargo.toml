@@ -18,3 +18,6 @@ borsh = { version = "0.9" }
 aws-nitro-enclaves-cose = { version = "0.4.0", default-features = false, features = ["key_openssl_pkey"] }
 webpki = { version =  "0.22.0", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
+
+[features]
+mock = []
