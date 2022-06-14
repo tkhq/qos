@@ -346,8 +346,7 @@ mod handlers {
 					ok_or_err!(genesis::boot_genesis(state, set));
 
 				Some(ProtocolMsg::BootGenesisResponse {
-					// attestation_doc: NsmResponseWrapper(nsm_response),
-					attestation_doc: nsm_response,
+					nsm_response,
 					genesis_output,
 				})
 			}

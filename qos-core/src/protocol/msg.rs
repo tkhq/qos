@@ -30,7 +30,7 @@ pub enum ProtocolMsg {
 	BootStandardResponse(NsmResponse),
 	BootGenesisResponse {
 		/// COSE SIGN1 structure with Attestation Doc
-		attestation_doc: NsmResponse,
+		nsm_response: NsmResponse,
 		/// Output from the Genesis flow.
 		genesis_output: GenesisOutput,
 	},
@@ -89,14 +89,14 @@ mod test {
 
 	#[test]
 	fn boot_genesis_response_deserialize() {
-		let nsm = NsmResponse::LockPCR;
+		let nsm_response = NsmResponse::LockPCR;
 
-		let vec = nsm.try_to_vec().unwrap();
+		let vec = nsm_response.try_to_vec().unwrap();
 		let test = NsmResponse::try_from_slice(&vec).unwrap();
-		assert_eq!(nsm.try_to_vec().unwrap(), test.try_to_vec().unwrap());
+		assert_eq!(nsm_response, test);
 
 		let genesis_response = ProtocolMsg::BootGenesisResponse {
-			attestation_doc: nsm,
+			nsm_response,
 			genesis_output: GenesisOutput {
 				quorum_key: vec![3, 2, 1],
 				member_outputs: vec![],

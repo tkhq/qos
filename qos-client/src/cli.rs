@@ -17,7 +17,6 @@ enum Command {
 	MockAttestation,
 	Attestation,
 	GenerateSetupKey,
-	// GenerateGenesisConfig,
 	BootGenesis,
 }
 impl Command {
@@ -332,35 +331,39 @@ mod handlers {
 		let alias = options.generate_setup_key.alias();
 		let namespace = options.generate_setup_key.namespace();
 		let key_dir = options.generate_setup_key.key_dir();
-
 		let key_dir_path = std::path::Path::new(&key_dir);
 
 		if !key_dir_path.is_dir() {
 			panic!("Provided `--key-dir` does not exist is not valid");
 		}
 
-		let private_key_file_name =
-			format!("{}.{}.setup.key", alias, namespace);
-		let private_key_file_path = key_dir_path.join(private_key_file_name);
-		let public_key_file_name = format!("{}.{}.setup.pub", alias, namespace);
-		let public_key_file_path = key_dir_path.join(public_key_file_name);
-
 		let setup_key = RsaPair::generate().expect("RSA key generation failed");
-		let private_key_content = setup_key
-			.private_key_to_pem()
-			.expect("Private key PEM conversion failed");
-		let public_key_content = setup_key
-			.public_key_to_pem()
-			.expect("Public key PEM conversion failed");
-
-		std::fs::write(private_key_file_path, private_key_content)
-			.expect("Writing private key failed");
-		std::fs::write(public_key_file_path, public_key_content)
-			.expect("Writing public key failed");
+		// Write the setup key secret
+		{
+			let private_key_file_path =
+				key_dir_path.join(format!("{}.{}.setup.key", alias, namespace));
+			let private_key_content = setup_key
+				.private_key_to_pem()
+				.expect("Private key PEM conversion failed");
+			std::fs::write(private_key_file_path, private_key_content)
+				.expect("Writing private key failed");
+		}
+		// Write the setup key public key
+		{
+			let public_key_file_path =
+				key_dir_path.join(format!("{}.{}.setup.pub", alias, namespace));
+			let public_key_content = setup_key
+				.public_key_to_pem()
+				.expect("Public key PEM conversion failed");
+			std::fs::write(public_key_file_path, public_key_content)
+				.expect("Writing public key failed");
+		}
 
 		println!("Setup keys generated!");
 	}
 
+	// TODO: verify AWS_ROOT_CERT_PEM against a checksum
+	// TODO: verify PCRs
 	pub(super) fn boot_genesis(options: ClientOptions) {
 		let uri = &options.host.path("message");
 
@@ -372,50 +375,46 @@ mod handlers {
 			set: genesis_set.clone(),
 		});
 
-		// TODO verify AWS_ROOT_CERT_PEM against a checksum
-
 		let (nsm_response, genesis_output) =
 			match request::post(uri, req).unwrap() {
 				ProtocolMsg::BootGenesisResponse {
-					attestation_doc, // TODO: rename to nsm_response
+					nsm_response,
 					genesis_output,
-				} => (attestation_doc, genesis_output),
+				} => (nsm_response, genesis_output),
 				_ => panic!("Unexpected response"),
 			};
-
 		let cose_sign1_der = match nsm_response {
 			NsmResponse::Attestation { document } => document,
 			_ => panic!("NSM response was not an attestation document"),
 		};
 
-		#[cfg(feature = "mock")]
-		let validation_time = attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
-		#[cfg(not(feature = "mock"))]
-		let validation_time = std::time::SystemTime::now()
-			.duration_since(std::time::UNIX_EPOCH)
-			.unwrap()
-			.as_secs();
-		let _ = attestation_doc_from_der(
-			&cose_sign1_der,
-			&cert_from_pem(AWS_ROOT_CERT_PEM)
-				.expect("AWS ROOT CERT is not valid PEM"),
-			validation_time,
-		)
-		.unwrap();
-		// TODO more verify attestation doc logic
-		// - should we have an input attestation doc? Or just CLI args?
-		// - verify PCRs .. what else? (cert chain is already verified)
-
-		// - write the attestation doc?
-
-		// - sanity check the genesis output
-		assert!(
-					genesis_set.members.len() == genesis_output.member_outputs.len(),
-					 "Output of genesis ceremony does not have same members as Setup Set"
-				);
-		assert!(genesis_output.member_outputs.iter().all(|member_out|
-					genesis_set.members.contains(&member_out.setup_member)
-				), "Output of genesis ceremony does not have same members as Setup Set");
+		// Sanity check the genesis output
+		{
+			assert!(
+				genesis_set.members.len() == genesis_output.member_outputs.len(),
+					"Output of genesis ceremony does not have same members as Setup Set"
+			);
+			assert!(genesis_output.member_outputs.iter().all(|member_out|
+						genesis_set.members.contains(&member_out.setup_member)
+					), "Output of genesis ceremony does not have same members as Setup Set");
+		}
+		// Check the attestation document
+		{
+			#[cfg(feature = "mock")]
+			let validation_time = attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
+			#[cfg(not(feature = "mock"))]
+			let validation_time = std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.unwrap()
+				.as_secs();
+			let _ = attestation_doc_from_der(
+				&cose_sign1_der,
+				&cert_from_pem(AWS_ROOT_CERT_PEM)
+					.expect("AWS ROOT CERT is not valid PEM"),
+				validation_time,
+			)
+			.unwrap();
+		}
 
 		let attestation_doc_path = output_dir.join("attestation_doc.genesis");
 		let genesis_output_path = output_dir.join("output.genesis");

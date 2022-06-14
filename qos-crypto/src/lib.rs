@@ -93,8 +93,8 @@ impl RsaPair {
 		self.private_key.public_key_to_pem().map_err(Into::into)
 	}
 
-	// RSA decrypt. Should never be used on arbitrary data directly. Instead always
-	// prefer [`Self::envelope_decrypt`].
+	// RSA decrypt. Should never be used on arbitrary data directly. Instead
+	// always prefer [`Self::envelope_decrypt`].
 	fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		let mut to = vec![0; self.private_key.size() as usize];
 		let size = self.private_key.private_decrypt(
