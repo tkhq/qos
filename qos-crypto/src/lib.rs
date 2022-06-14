@@ -5,12 +5,7 @@
 // Is there a better envelope encryption strategy to use? Something native to
 // OpenSSL?
 
-use std::{
-	fs::File,
-	io::{Read, Write},
-	ops::Deref,
-	path::Path,
-};
+use std::{fs::File, io::Write, ops::Deref, path::Path};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use openssl::{
@@ -120,12 +115,6 @@ impl RsaPair {
 			&envelope.encrypted_data,
 		)
 		.map_err(CryptoError::from)
-	}
-
-	/// Exactly the same as [`RsaPub::encrypt`] executed with this pairs public
-	/// key.
-	fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
-		self.public_key.encrypt(data)
 	}
 
 	/// Envelope encrypt using the RsaPair's associated RsaPub

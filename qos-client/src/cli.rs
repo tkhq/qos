@@ -309,7 +309,9 @@ mod handlers {
 		.expect("Attestation request failed");
 
 		match response {
-			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
+			ProtocolMsg::NsmResponse(NsmResponse::Attestation {
+				document: _,
+			}) => {
 				// use attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
 				// let root_cert =
 				// 	cert_from_pem(AWS_ROOT_CERT_PEM).expect("Invalid root cert");
