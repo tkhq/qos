@@ -29,9 +29,6 @@ impl Command {
 			Self::MockAttestation => handlers::mock_attestation(options),
 			Self::Attestation => handlers::attestation(options),
 			Self::GenerateSetupKey => handlers::generate_setup_key(options),
-			// Self::GenerateGenesisConfig => {
-			// 	handlers::generate_genesis_config(options)
-			// }
 			Self::BootGenesis => handlers::boot_genesis(options),
 		}
 	}
@@ -45,7 +42,6 @@ impl From<&str> for Command {
 			"mock-attestation" => Self::MockAttestation,
 			"attestation" => Self::Attestation,
 			"generate-setup-key" => Self::GenerateSetupKey,
-			// "generate-genesis-config" => Self::GenerateGenesisConfig,
 			"boot-genesis" => Self::BootGenesis,
 			_ => panic!("Unrecognized command"),
 		}
@@ -58,7 +54,6 @@ struct ClientOptions {
 	host: HostOptions,
 	echo: EchoOptions,
 	generate_setup_key: GenerateSetupKeyOptions,
-	// generate_genesis_config: GenerateGenesisConfigOptions,
 	boot_genesis: BootGenesisOptions,
 	// ... other options
 }
@@ -70,7 +65,6 @@ impl ClientOptions {
 			host: HostOptions::new(),
 			echo: EchoOptions::new(),
 			generate_setup_key: GenerateSetupKeyOptions::new(),
-			// generate_genesis_config: GenerateGenesisConfigOptions::new(),
 			boot_genesis: BootGenesisOptions::new(),
 			cmd: Self::extract_command(&mut args),
 		};
@@ -87,9 +81,6 @@ impl ClientOptions {
 				Command::GenerateSetupKey => {
 					options.generate_setup_key.parse(&cmd, arg)
 				}
-				// Command::GenerateGenesisConfig => {
-				// 	options.generate_genesis_config.parse(&cmd, arg)
-				// }
 				Command::Health => {}
 				Command::DescribeNsm => {}
 				Command::MockAttestation => {}
@@ -166,35 +157,6 @@ impl GenerateSetupKeyOptions {
 		self.key_dir.clone().expect("No `--key-dir` provided")
 	}
 }
-
-// #[derive(Clone, PartialEq, Debug)]
-// struct GenerateGenesisConfigOptions {
-// 	key_dir: Option<String>,
-// 	threshold: Option<u32>,
-// }
-// impl GenerateGenesisConfigOptions {
-// 	fn new() -> Self {
-// 		Self { key_dir: None, threshold: None }
-// 	}
-// 	fn parse(&mut self, cmd: &str, arg: &str) {
-// 		match cmd {
-// 			"--key-dir" => self.key_dir = Some(arg.to_string()),
-// 			"--threshold" => {
-// 				self.threshold =
-// 					Some(arg.parse::<u32>().expect(
-// 						"Could not parse provided value for `--threshold`",
-// 					))
-// 			}
-// 			_ => {}
-// 		}
-// 	}
-// 	fn key_dir(&self) -> String {
-// 		self.key_dir.clone().expect("No `--key-dir` provided")
-// 	}
-// 	fn threshold(&self) -> u32 {
-// 		self.threshold.clone().expect("No `--threshold` provided")
-// 	}
-// }
 
 #[derive(Clone, PartialEq, Debug)]
 struct BootGenesisOptions {
@@ -396,63 +358,6 @@ mod handlers {
 
 		println!("Setup keys generated!");
 	}
-
-	// pub(super) fn generate_genesis_config(options: ClientOptions) {
-	// 	let threshold = options.generate_genesis_config.threshold();
-	// 	let key_dir = options.generate_genesis_config.key_dir();
-
-	// 	let key_dir_path = std::path::Path::new(&key_dir);
-	// 	if !key_dir_path.is_dir() {
-	// 		panic!("Provided path is not a valid directory");
-	// 	}
-
-	// 	let key_iter = std::fs::read_dir(key_dir_path)
-	// 		.expect("Failed to read key directory");
-
-	// 	let mut members = vec![];
-	// 	for key_path in key_iter {
-	// 		let path = key_path.unwrap().path();
-	// 		let file_name = path.file_name();
-	// 		let split: Vec<_> =
-	// 			file_name.unwrap().to_str().unwrap().split(".").collect();
-
-	// 		if *split.last().unwrap() != "pub" {
-	// 			println!("A non `.pub` file was found in the setup key directory -
-	// skipping."); 			continue
-	// 		}
-	// 		let alias = split.get(0).unwrap().to_string();
-
-	// 		let public_key = RsaPub::from_pem_file(path)
-	// 			.expect("Failed to read in rsa pub key.");
-
-	// 		members.push(SetupMember {
-	// 			alias,
-	// 			pub_key: public_key.public_key_to_der().unwrap(),
-	// 		});
-	// 	}
-
-	// 	println!("Threshold: {}", threshold);
-	// 	println!("Members:");
-	// 	for member in members.clone() {
-	// 		let pem = RsaPub::from_der(&member.pub_key)
-	// 			.unwrap()
-	// 			.public_key_to_pem()
-	// 			.unwrap();
-	// 		println!("  Alias: {}", member.alias);
-	// 		println!("  Public Key: \n{}", String::from_utf8_lossy(&pem));
-	// 	}
-
-	// 	let genesis_set = GenesisSet { members, threshold };
-	// 	let current_dir = std::env::current_dir().unwrap();
-	// 	let genesis_configuration_file =
-	// 		current_dir.join("genesis.configuration");
-
-	// 	std::fs::write(
-	// 		genesis_configuration_file,
-	// 		genesis_set.try_to_vec().unwrap(),
-	// 	)
-	// 	.unwrap();
-	// }
 
 	pub(super) fn boot_genesis(options: ClientOptions) {
 		let uri = &options.host.path("message");
