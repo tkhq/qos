@@ -343,24 +343,6 @@ mod test {
 	}
 
 	#[test]
-	fn rsa_pair_encrypt() {
-		let pair = RsaPair::generate().unwrap();
-
-		let oversize = vec![u8::MAX; pair.size() as usize - 41];
-		assert!(pair.encrypt(&oversize).is_err());
-
-		// TODO: WTF?
-		let perfect_size = vec![u8::MAX; pair.size() as usize - 42];
-		let encrypted = pair.encrypt(&perfect_size).unwrap();
-		let decrypted = pair.decrypt(&encrypted).unwrap();
-		assert_eq!(decrypted, perfect_size);
-
-		let smaller_size = vec![u8::MAX; pair.size() as usize - 43];
-		let encrypted = pair.encrypt(&smaller_size).unwrap();
-		let decrypted = pair.decrypt(&encrypted).unwrap();
-		assert_eq!(decrypted, smaller_size);
-	}
-	#[test]
 	fn e2e_crypto() {
 		let pair = RsaPair::generate().unwrap();
 		let data = b"vape nation";
