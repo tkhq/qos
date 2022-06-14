@@ -52,25 +52,30 @@ pub struct RsaPair {
 }
 
 impl RsaPair {
+	/// Get the public key of this pair.
 	pub fn public_key(&self) -> &RsaPub {
 		&self.public_key
 	}
 
+	/// Generate a new 4096 RSA key pair.
 	pub fn generate() -> Result<Self, CryptoError> {
 		Rsa::generate(RSA_KEY_LEN)?.try_into()
 	}
 
+	/// Create [`Self`] from a file that has a PEM encoded RSA private key.
 	pub fn from_pem_file<P: AsRef<Path>>(path: P) -> Result<Self, CryptoError> {
 		let content = std::fs::read(path)?;
 		let private_key = Rsa::private_key_from_pem(&content[..])?;
 		private_key.try_into()
 	}
 
+	/// Create [`Self`] from a PEM encoded RSA private key.
 	pub fn from_pem(data: &[u8]) -> Result<Self, CryptoError> {
 		let private_key = Rsa::private_key_from_pem(data)?;
 		private_key.try_into()
 	}
 
+	/// Create [`Self`] from a DER encoded RSA private key.
 	pub fn from_der(data: &[u8]) -> Result<Self, CryptoError> {
 		let private_key = Rsa::private_key_from_der(data)?;
 		private_key.try_into()
@@ -88,6 +93,8 @@ impl RsaPair {
 		self.private_key.public_key_to_pem().map_err(Into::into)
 	}
 
+	// RSA decrypt. Should never be used on arbitrary data directly. Instead always
+	// prefer [`Self::envelope_decrypt`].
 	fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, CryptoError> {
 		let mut to = vec![0; self.private_key.size() as usize];
 		let size = self.private_key.private_decrypt(
