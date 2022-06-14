@@ -131,7 +131,6 @@ pub fn boot_standard(
 	manifest_envelope.check_approvals()?;
 
 	let ephemeral_key = RsaPair::generate()?;
-	// Write the ephemeral key to the filesystem
 	std::fs::write(
 		state.ephemeral_key_file.clone(),
 		ephemeral_key.private_key_to_der()?,
@@ -254,7 +253,6 @@ mod test {
 
 			ManifestEnvelope { manifest, approvals }
 		};
-		// - pivot file is written to disk as an executable
 
 		let pivot_file =
 			"boot_standard_accepts_approved_manifest.pivot".to_string();
