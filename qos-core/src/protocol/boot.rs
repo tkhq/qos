@@ -104,7 +104,6 @@ impl ManifestEnvelope {
 			let is_valid_signature = pub_key
 				.verify_sha256(&approval.signature, &self.manifest.hash())
 				.map_err(|e| {
-					dbg!(e, approval);
 					ProtocolError::CryptoError
 				})?;
 			if !is_valid_signature {
