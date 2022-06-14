@@ -297,7 +297,6 @@ mod test {
 
 			ManifestEnvelope { manifest, approvals }
 		};
-		// - pivot file is written to disk as an executable
 
 		let pivot_file = "boot_standard_works.pivot".to_string();
 		let ephemeral_file = "boot_standard_works_eph.secret".to_string();
