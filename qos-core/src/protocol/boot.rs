@@ -151,6 +151,7 @@ pub fn boot_standard(
 
 	let nsm_response = {
 		let request = NsmRequest::Attestation {
+                         // TODO: make sure CLI verifies the manifest hash is correct
 			user_data: Some(manifest_envelope.manifest.hash().to_vec()),
 			nonce: None,
 			public_key: Some(ephemeral_key.public_key_to_pem().unwrap()),
