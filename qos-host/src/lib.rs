@@ -13,6 +13,9 @@
 //! * Response: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/response.md/>
 //! * Responding with error: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/error_handling.md/>
 #![forbid(unsafe_code)]
+#![deny(clippy::all)]
+#![warn(missing_docs, clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -47,19 +50,27 @@ pub struct HostServer {
 
 impl HostServer {
 	/// Create a new [`HostServer`].
+	#[must_use]
 	pub fn new(enclave_addr: SocketAddress, ip: [u8; 4], port: u16) -> Self {
 		Self { addr: SocketAddr::from((ip, port)), enclave_addr }
 	}
 
+	/// Create a new [`HostServer`].
+	#[must_use]
 	pub fn new_with_socket_addr(
 		enclave_addr: SocketAddress,
 		addr: SocketAddr,
 	) -> Self {
-		Self { addr, enclave_addr }
+		Self { enclave_addr, addr }
 	}
 
 	/// Start the server, running indefinitely.
-	pub async fn serve(&self) -> Result<(), String> {
+	///
+	/// # Panics
+	///
+	/// Panics if there is an issue starting the server.
+	// pub async fn serve(&self) -> Result<(), String> {
+	pub async fn serve(&self) {
 		let state = Arc::new(State {
 			enclave_client: Client::new(self.enclave_addr.clone()),
 		});
@@ -76,7 +87,7 @@ impl HostServer {
 			.await
 			.unwrap();
 
-		Ok(())
+		// Ok(())
 	}
 
 	/// Health route handler.
@@ -98,7 +109,7 @@ impl HostServer {
 				ProtocolMsg::ErrorResponse
 					.try_to_vec()
 					.expect("ProtocolMsg can always serialize. qed."),
-			)
+			);
 		}
 
 		let response = match ProtocolMsg::try_from_slice(&body) {
@@ -110,7 +121,7 @@ impl HostServer {
 						.expect("ProtocolMsg can always serialize. qed."),
 				)
 			}
-			Ok(request) => state.enclave_client.send(request),
+			Ok(request) => state.enclave_client.send(&request),
 		};
 
 		match response {

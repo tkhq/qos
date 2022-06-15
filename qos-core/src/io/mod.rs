@@ -8,10 +8,14 @@ mod stream;
 pub use stream::SocketAddress;
 pub(crate) use stream::{Listener, Stream};
 
+/// QOS I/O error
 #[derive(Debug)]
 pub enum IOError {
+	/// `nix::Error` wrapper.
 	NixError(nix::Error),
+	/// Arithmetic operation saturated.
 	ArithmeticSaturation,
+	/// Unknown error.
 	UnknownError,
 }
 

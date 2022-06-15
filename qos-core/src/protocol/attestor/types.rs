@@ -1,9 +1,13 @@
-//! Types specific to AWS nitro enclave protocol implementation.
+//! Types specific to AWS nitro enclave protocol implementation. We have types
+//! that map 1 to 1 with the types we use from `ws_nitro_enclaves_nsm_api::api`
+//! so we can derive borsh, among other things.
+
 use std::collections::BTreeSet;
 
 use aws_nitro_enclaves_nsm_api as nsm;
 use nsm::api::{Digest, ErrorCode, Request, Response};
 
+/// Possible error codes from the Nitro Secure Module API.
 #[derive(
 	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Clone,
 )]
@@ -63,6 +67,7 @@ impl From<NsmErrorCode> for ErrorCode {
 	}
 }
 
+/// Possible hash digest for the Nitro Secure Module API.
 #[derive(
 	Debug,
 	borsh::BorshSerialize,
@@ -102,6 +107,7 @@ impl From<NsmDigest> for Digest {
 	}
 }
 
+/// Request type for the Nitro Secure Module API.
 #[derive(
 	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Clone,
 )]
@@ -193,6 +199,7 @@ impl From<NsmRequest> for Request {
 	}
 }
 
+/// Response type for the Nitro Secure Module API.
 #[derive(
 	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Clone,
 )]
@@ -260,6 +267,7 @@ impl From<Response> for NsmResponse {
 			R::DescribePCR { lock, data } => Self::DescribePCR { lock, data },
 			R::ExtendPCR { data } => Self::ExtendPCR { data },
 			R::LockPCR => Self::LockPCR,
+			R::LockPCRs => Self::LockPCRs,
 			R::DescribeNSM {
 				version_major,
 				version_minor,
@@ -292,6 +300,7 @@ impl From<NsmResponse> for nsm::api::Response {
 			R::DescribePCR { lock, data } => Self::DescribePCR { lock, data },
 			R::ExtendPCR { data } => Self::ExtendPCR { data },
 			R::LockPCR => Self::LockPCR,
+			R::LockPCRs => Self::LockPCRs,
 			R::DescribeNSM {
 				version_major,
 				version_minor,
@@ -312,7 +321,6 @@ impl From<NsmResponse> for nsm::api::Response {
 			R::Attestation { document } => Self::Attestation { document },
 			R::GetRandom { random } => Self::GetRandom { random },
 			R::Error(e) => Self::Error(e.into()),
-			_ => Self::Error(ErrorCode::InternalError.into()),
 		}
 	}
 }

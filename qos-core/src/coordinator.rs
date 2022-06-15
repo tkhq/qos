@@ -8,9 +8,17 @@ use std::{path::Path, process::Command};
 
 use crate::{cli::EnclaveOptions, protocol::Executor, server::SocketServer};
 
+/// Primary entry point for running the enclave. Coordinates spawning the server
+/// and pivot binary.
 pub struct Coordinator;
 impl Coordinator {
 	/// Run the coordinator.
+	///
+	/// # Panics
+	///
+	/// - If any enclave options are incorrect
+	/// - If spawning the pivot error.
+	/// - If waiting for the pivot errors.
 	pub fn execute(opts: EnclaveOptions) {
 		let secret_file = opts.secret_file();
 		let pivot_file = opts.pivot_file();
@@ -31,7 +39,7 @@ impl Coordinator {
 			let pivot_file_exists = is_file(&pivot_file);
 
 			if secret_file_exists && pivot_file_exists {
-				break
+				break;
 			}
 
 			std::thread::sleep(std::time::Duration::from_secs(1));
@@ -53,7 +61,7 @@ impl Coordinator {
 			println!(
 				"Pivot executable exited with a non zero status: {}",
 				status
-			)
+			);
 		}
 
 		println!("Coordinator exiting ...");

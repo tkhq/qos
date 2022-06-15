@@ -21,15 +21,15 @@ static AWS_NITRO_CERT_SIG_ALG: &[&webpki::SignatureAlgorithm] =
 /// Corresponds to `MockNsm` attestation document response. This time is
 /// valid for the mock and should only be used for testing.
 #[cfg(any(feature = "mock", test))]
-pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1652756400;
+pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1_652_756_400;
 
 /// AWS Nitro root CA certificate.
 ///
 /// This should be validated against the checksum:
 /// `8cf60e2b2efca96c6a9e71e851d00c1b6991cc09eadbe64a6a1d1b1eb9faff7c`. This
 /// checksum and the certificate should be manually verified against
-/// https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html.
-pub const AWS_ROOT_CERT_PEM: &'static [u8] =
+/// <https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html/>.
+pub const AWS_ROOT_CERT_PEM: &[u8] =
 	std::include_bytes!("./static/aws_root_cert.pem");
 
 /// Extract a DER encoded certificate from bytes representing a PEM encoded
@@ -99,7 +99,7 @@ pub fn attestation_doc_from_der(
 
 /// Verify the certificate chain against the root & end entity certificates.
 fn verify_certificate_chain(
-	cabundle: &Vec<ByteBuf>,
+	cabundle: &[ByteBuf],
 	root_cert: &[u8],
 	end_entity_certificate: &[u8],
 	validation_time: u64,
@@ -109,7 +109,7 @@ fn verify_certificate_chain(
 	// (first element). Ordering is: root cert .. intermediate certs ..
 	// end entity cert.
 	let intermediate_certs: Vec<_> =
-		cabundle[1..].into_iter().map(|x| x.as_slice()).collect();
+		cabundle[1..].iter().map(|x| x.as_slice()).collect();
 
 	let anchor = vec![webpki::TrustAnchor::try_from_cert_der(root_cert)?];
 	let anchors = webpki::TlsServerTrustAnchors(&anchor);
@@ -121,7 +121,7 @@ fn verify_certificate_chain(
 		&intermediate_certs,
 		webpki::Time::from_seconds_since_unix_epoch(validation_time),
 	)
-	.map_err(|e| AttestError::InvalidCertChain(e))?;
+	.map_err(AttestError::InvalidCertChain)?;
 
 	Ok(())
 }
@@ -136,7 +136,7 @@ fn verify_cose_sign1_sig(
 
 	// Expect v3
 	if ee_cert.version() != X509_V3 {
-		return Err(AttestError::InvalidEndEntityCert)
+		return Err(AttestError::InvalidEndEntityCert);
 	}
 
 	let ee_cert_pub_key = ee_cert.public_key()?;
@@ -145,10 +145,10 @@ fn verify_cose_sign1_sig(
 	let is_valid_sig = cose_sign1
 		.verify_signature(&ee_cert_pub_key)
 		.map_err(|_| AttestError::InvalidCOSESign1Signature)?;
-	if !is_valid_sig {
-		Err(AttestError::InvalidCOSESign1Signature)
-	} else {
+	if is_valid_sig {
 		Ok(())
+	} else {
+		Err(AttestError::InvalidCOSESign1Signature)
 	}
 }
 
@@ -290,7 +290,7 @@ mod test {
 		}
 
 		{
-			let valid = attestation_doc.clone();
+			let valid = attestation_doc;
 			// Don't pop anything, just want to sanity check that we get a
 			// corrupt signature on the cose sign1 structure.
 

@@ -15,7 +15,7 @@ fn load_e2e() {
 
 	let make_path = |n: usize| {
 		let mut path = base_path.clone();
-		path.push(format!("rsa_public_{}.mock.pem", n.to_string()));
+		path.push(format!("rsa_public_{}.mock.pem", n));
 		path
 	};
 
@@ -24,13 +24,8 @@ fn load_e2e() {
 	//
 	let executable = b"vape nation".to_vec();
 	let key_range = 0..5;
-	let pairs: Vec<_> = key_range
-		.clone()
-		.map(|_| {
-			let pair = RsaPair::generate().unwrap();
-			pair
-		})
-		.collect();
+	let pairs: Vec<_> =
+		key_range.map(|_| RsaPair::generate().unwrap()).collect();
 
 	let paths: Vec<_> = pairs
 		.iter()
@@ -50,7 +45,7 @@ fn load_e2e() {
 		.iter()
 		.enumerate()
 		.map(|(i, pair)| SignatureWithPubKey {
-			signature: pair.sign_sha256(&mut executable.clone()[..]).unwrap(),
+			signature: pair.sign_sha256(&executable.clone()[..]).unwrap(),
 			path: paths[i].to_string_lossy().into_owned(),
 		})
 		.collect();
@@ -71,8 +66,8 @@ fn load_e2e() {
 
 	// Spawn enclave
 	let pivot_file2 = pivot_file.clone();
-	let secret_file2 = secret_file.clone();
-	let ephemeral_file2 = ephemeral_file.clone();
+	let secret_file2 = secret_file;
+	let ephemeral_file2 = ephemeral_file;
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
 		let executor = Executor::new(
@@ -105,7 +100,7 @@ fn load_e2e() {
 	let load_request =
 		ProtocolMsg::LoadRequest(Load { executable, signatures });
 	let response =
-		qos_client::request::post(&message_url, load_request).unwrap();
+		qos_client::request::post(&message_url, &load_request).unwrap();
 	assert_eq!(response, ProtocolMsg::SuccessResponse);
 
 	//

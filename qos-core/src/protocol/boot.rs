@@ -34,11 +34,14 @@ pub enum RestartPolicy {
 	Always,
 }
 
+/// Pivot binary configuration
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct PivotConfig {
+	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
 	pub hash: Hash256,
+	/// Restart policy for running the pivot binary.
 	pub restart: RestartPolicy,
 }
 
@@ -46,32 +49,57 @@ pub struct PivotConfig {
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct QuorumMember {
+	/// A human readable alias to identify the member. Must be unique to the
+	/// Quorum Set.
 	pub alias: String,
 	/// DER encoded RSA public key
 	pub pub_key: Vec<u8>,
 }
 
+/// The Quorum Set.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct QuorumSet {
+	/// The threshold, K, of signatures necessary to have  quorum.
 	pub threshold: u32,
+	/// Members composing the set. The length of this, N, must be gte to the
+	/// `threshold`, K.
 	pub members: Vec<QuorumMember>,
 }
 
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+pub struct Namespace {
+	/// The namespace. This should be unique relative to other namespaces the
+	/// organization running QuorumOs has.
+	name: String,
+	/// A monotonically increasing value, used to identify the order in which
+	/// manifests for this namespace have been created. This is used to prevent
+	/// downgrade attacks - quorum members should only approve a manifest that
+	/// has the highest nonce.
+	nonce: u32,
+}
+
+#[derive(
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub struct Manifest {
-	pub nonce: u32,
-	pub namespace: String,
+	/// Namespace this manifest belongs too.
+	pub namespace: Namespace,
+	/// Configuration and verifiable values for the enclave hardware.
 	pub enclave: NitroConfig,
+	/// Pivot binary configuration and verifiable values.
 	pub pivot: PivotConfig,
+	/// Quorum Key as a DER encoded RSA public key.
 	pub quorum_key: Vec<u8>,
+	/// Quorum Set members and threshold.
 	pub quorum_set: QuorumSet,
 }
 
 impl Manifest {
+	/// Canonical hash for the manifest.
 	pub fn hash(&self) -> Hash256 {
 		qos_crypto::sha_256(
 			&self.try_to_vec().expect("`Manifest` serializes with cbor"),
@@ -79,25 +107,32 @@ impl Manifest {
 	}
 }
 
+/// An approval by a Quorum Member.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct Approval {
+	/// Quorum Member's signature.
 	pub signature: Vec<u8>,
+	/// Description of the Quorum Member
 	pub member: QuorumMember,
 }
 
+/// [`Manifest`] with accompanying [`Approval`]s.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct ManifestEnvelope {
+	/// Encapsulated manifest.
 	pub manifest: Manifest,
+	/// Approvals for [`Self::manifest`].
 	pub approvals: Vec<Approval>,
 }
 
 impl ManifestEnvelope {
+	/// Check if the encapsulated manifest has K valid approvals.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
-		for approval in self.approvals.iter() {
+		for approval in &self.approvals {
 			let pub_key = RsaPub::from_der(&approval.member.pub_key)
 				.map_err(|_| ProtocolError::CryptoError)?;
 
@@ -107,21 +142,21 @@ impl ManifestEnvelope {
 			if !is_valid_signature {
 				return Err(ProtocolError::InvalidManifestApproval(
 					approval.clone(),
-				))
+				));
 			}
 		}
 
 		if self.approvals.len() < self.manifest.quorum_set.threshold as usize {
-			return Err(ProtocolError::NotEnoughApprovals)
+			return Err(ProtocolError::NotEnoughApprovals);
 		}
 
 		Ok(())
 	}
 }
 
-pub fn boot_standard(
+pub(super) fn boot_standard(
 	state: &mut ProtocolState,
-	manifest_envelope: ManifestEnvelope,
+	manifest_envelope: &ManifestEnvelope,
 	pivot: &Vec<u8>,
 ) -> Result<NsmResponse, ProtocolError> {
 	use std::os::unix::fs::PermissionsExt as _;
@@ -135,7 +170,7 @@ pub fn boot_standard(
 	)?;
 
 	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
-		return Err(ProtocolError::InvalidPivotHash)
+		return Err(ProtocolError::InvalidPivotHash);
 	};
 
 	std::fs::write(&state.pivot_file, pivot)?;
@@ -200,8 +235,7 @@ mod test {
 		];
 
 		let manifest = Manifest {
-			nonce: 420,
-			namespace: "vape lord".to_string(),
+			namespace: Namespace { nonce: 420, name: "vape lord".to_string() },
 			enclave: NitroConfig {
 				vsock_cid: 69,
 				vsock_port: 42069,
@@ -215,10 +249,7 @@ mod test {
 				restart: RestartPolicy::Always,
 			},
 			quorum_key: quorum_pair.public_key_to_der().unwrap(),
-			quorum_set: QuorumSet {
-				threshold: 2,
-				members: quorum_members.clone(),
-			},
+			quorum_set: QuorumSet { threshold: 2, members: quorum_members },
 		};
 
 		(manifest, member_with_keys, pivot)
@@ -241,11 +272,9 @@ mod test {
 			let manifest_hash = manifest.hash();
 			let approvals = members
 				.into_iter()
-				.map(|(pair, member)| {
-					return Approval {
-						signature: pair.sign_sha256(&manifest_hash).unwrap(),
-						member: member.clone(),
-					}
+				.map(|(pair, member)| Approval {
+					signature: pair.sign_sha256(&manifest_hash).unwrap(),
+					member,
 				})
 				.collect();
 
@@ -264,7 +293,7 @@ mod test {
 		);
 
 		let _nsm_resposne =
-			boot_standard(&mut protocol_state, manifest_envelope, &pivot)
+			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
 				.unwrap();
 
 		assert!(Path::new(&pivot_file).exists());
@@ -284,12 +313,10 @@ mod test {
 			let manifest_hash = manifest.hash();
 			let approvals = members
 				[0usize..manifest.quorum_set.threshold as usize - 1]
-				.into_iter()
-				.map(|(pair, member)| {
-					return Approval {
-						signature: pair.sign_sha256(&manifest_hash).unwrap(),
-						member: member.clone(),
-					}
+				.iter()
+				.map(|(pair, member)| Approval {
+					signature: pair.sign_sha256(&manifest_hash).unwrap(),
+					member: member.clone(),
 				})
 				.collect();
 
@@ -301,12 +328,12 @@ mod test {
 		let mut protocol_state = ProtocolState::new(
 			Box::new(MockNsm),
 			"secret".to_string(),
-			pivot_file.clone(),
-			ephemeral_file.clone(),
+			pivot_file,
+			ephemeral_file,
 		);
 
 		let nsm_resposne =
-			boot_standard(&mut protocol_state, manifest_envelope, &pivot);
+			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
 
 		assert!(nsm_resposne.is_err());
 	}
@@ -318,11 +345,9 @@ mod test {
 		let manifest_envelope = {
 			let approvals = members
 				.into_iter()
-				.map(|(_pair, member)| {
-					return Approval {
-						signature: vec![0, 0],
-						member: member.clone(),
-					}
+				.map(|(_pair, member)| Approval {
+					signature: vec![0, 0],
+					member,
 				})
 				.collect();
 
@@ -334,12 +359,12 @@ mod test {
 		let mut protocol_state = ProtocolState::new(
 			Box::new(MockNsm),
 			"secret".to_string(),
-			pivot_file.clone(),
-			ephemeral_file.clone(),
+			pivot_file,
+			ephemeral_file,
 		);
 
 		let nsm_resposne =
-			boot_standard(&mut protocol_state, manifest_envelope, &pivot);
+			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
 
 		assert!(nsm_resposne.is_err());
 	}

@@ -6,10 +6,14 @@ use crate::{
 	protocol::{ProtocolError, ProtocolMsg},
 };
 
+/// Enclave client error.
 #[derive(Debug)]
 pub enum ClientError {
+	/// [`io::IOError`] wrapper.
 	IOError(io::IOError),
+	/// `ProtocolError` error wrapper.
 	ProtocolError(ProtocolError),
+	/// `borsh::maybestd::io::Error` wrapper.
 	BorshError(borsh::maybestd::io::Error),
 }
 
@@ -39,6 +43,7 @@ pub struct Client {
 
 impl Client {
 	/// Create a new client.
+	#[must_use]
 	pub fn new(addr: SocketAddress) -> Self {
 		Self { addr }
 	}
@@ -46,7 +51,7 @@ impl Client {
 	/// Send a [`ProtocolMsg`] and wait for the response.
 	pub fn send(
 		&self,
-		request: ProtocolMsg,
+		request: &ProtocolMsg,
 	) -> Result<ProtocolMsg, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
 

@@ -22,7 +22,7 @@ pub use genesis::{
 	GenesisMemberOutput, GenesisOutput, GenesisSet, SetupMember,
 };
 pub use msg::*;
-use provisioner::*;
+use provisioner::SecretProvisioner;
 
 use crate::server;
 
@@ -32,17 +32,29 @@ const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
 type ProtocolHandler =
 	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
 
+/// 256bit hash
 pub type Hash256 = [u8; 32];
 
+/// A error from protocol execution.
 #[derive(Debug, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum ProtocolError {
+	/// TODO
 	InvalidShare,
+	/// TODO
 	ReconstructionError,
+	/// Filesystem error
 	IOError,
+	/// Cryptography error
 	CryptoError,
+	/// Approval was not valid for a manifest.
 	InvalidManifestApproval(Approval),
+	/// [`ManifestEnvelope`] did not have approvals
 	NotEnoughApprovals,
+	/// Protocol Message could not be matched against an available route.
+	/// Ensure the executor is in the correct phase.
 	NoMatchingRoute(ProtocolPhase),
+	/// Hash of the Pivot binary does not match the pivot configuration in the
+	/// manifest.
 	InvalidPivotHash,
 }
 
@@ -64,15 +76,22 @@ impl From<std::io::Error> for ProtocolError {
 	}
 }
 
+/// Protocol executor state.
 #[derive(
 	Debug, PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub enum ProtocolPhase {
+	/// The state machine cannot recover. The enclave must be rebooted.
 	UnrecoverableError,
+	/// Waiting to receive a boot instruction.
 	WaitingForBootInstruction,
+	/// Waiting to receive K quorum shards
 	WaitingForQuorumShards,
 }
 
+/// Enclave executor state
+// TODO only include mutables in here, all else should be written to file as
+// read only
 pub struct ProtocolState {
 	provisioner: SecretProvisioner,
 	attestor: Box<dyn NsmProvider>,
@@ -101,11 +120,15 @@ impl ProtocolState {
 	}
 }
 
+/// Maybe rename state machine?
+/// Enclave state machine that executes when given a `ProtocolMsg`.
 pub struct Executor {
 	state: ProtocolState,
 }
 
 impl Executor {
+	/// Create a new `Self`.
+	#[must_use]
 	pub fn new(
 		attestor: Box<dyn NsmProvider>,
 		secret_file: String,
@@ -157,7 +180,7 @@ impl server::Routable for Executor {
 		};
 
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
-			return err_resp()
+			return err_resp();
 		}
 
 		let msg_req = match ProtocolMsg::try_from_slice(&req_bytes) {
@@ -165,7 +188,7 @@ impl server::Routable for Executor {
 			Err(_) => return err_resp(),
 		};
 
-		for handler in self.routes().iter() {
+		for handler in &self.routes() {
 			match handler(&msg_req, &mut self.state) {
 				Some(msg_resp) => {
 					return msg_resp
@@ -186,7 +209,10 @@ impl server::Routable for Executor {
 mod handlers {
 	use qos_crypto::RsaPair;
 
-	use super::*;
+	use super::{
+		boot, genesis, set_permissions, BootInstruction, Load, NsmRequest,
+		Permissions, PermissionsExt, ProtocolMsg, ProtocolPhase, ProtocolState,
+	};
 
 	/// Unwrap an ok or return early with a generic error.
 	/// TODO: this try and pass through the returned error
@@ -200,7 +226,8 @@ mod handlers {
 	}
 
 	// TODO: Add tests for this in the middle of some integration tests
-	pub fn status(
+	/// Status of the enclave.
+	pub(super) fn status(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
@@ -211,7 +238,8 @@ mod handlers {
 		}
 	}
 
-	pub fn empty(
+	/// TODO: remove
+	pub(super) fn empty(
 		req: &ProtocolMsg,
 		_state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
@@ -222,7 +250,8 @@ mod handlers {
 		}
 	}
 
-	pub fn echo(
+	/// TODO: remove
+	pub(super) fn echo(
 		req: &ProtocolMsg,
 		_state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
@@ -233,7 +262,7 @@ mod handlers {
 		}
 	}
 
-	pub fn provision(
+	pub(super) fn provision(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
@@ -247,14 +276,15 @@ mod handlers {
 		}
 	}
 
-	pub fn reconstruct(
+	/// TODO: remove
+	pub(super) fn reconstruct(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::ReconstructRequest = req {
 			match state.provisioner.reconstruct() {
-				Ok(secret) => {
-					state.provisioner.secret = Some(secret);
+				Ok(_secret) => {
+					// state.provisioner.secret = Some(secret);
 					Some(ProtocolMsg::SuccessResponse)
 				}
 				Err(_) => Some(ProtocolMsg::ErrorResponse),
@@ -264,7 +294,8 @@ mod handlers {
 		}
 	}
 
-	pub fn nsm_attestation(
+	/// TODO: remove
+	pub(super) fn nsm_attestation(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
@@ -284,7 +315,8 @@ mod handlers {
 		}
 	}
 
-	pub fn load(
+	/// TODO: remove
+	pub(super) fn load(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
@@ -316,7 +348,8 @@ mod handlers {
 		}
 	}
 
-	pub fn boot_instruction(
+	/// TODO: remove
+	pub(super) fn boot_instruction(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
@@ -326,7 +359,7 @@ mod handlers {
 					Ok(r) => r,
 					Err(e) => {
 						state.phase = ProtocolPhase::UnrecoverableError;
-						return Some(ProtocolMsg::ProtocolErrorResponse(e))
+						return Some(ProtocolMsg::ProtocolErrorResponse(e));
 					}
 				}
 			};
@@ -341,7 +374,7 @@ mod handlers {
 			}) => {
 				let nsm_response = ok_or_err!(boot::boot_standard(
 					state,
-					*manifest_envelope.clone(),
+					manifest_envelope,
 					pivot
 				));
 				Some(ProtocolMsg::BootStandardResponse(nsm_response))

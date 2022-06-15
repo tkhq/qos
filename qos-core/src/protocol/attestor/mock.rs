@@ -7,6 +7,7 @@ use super::{
 	NsmProvider,
 };
 
+/// Mock Nitro Secure Module endpoint that should only ever be used for testing.
 pub struct MockNsm;
 impl NsmProvider for MockNsm {
 	fn nsm_process_request(
