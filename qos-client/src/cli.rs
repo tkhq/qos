@@ -416,70 +416,91 @@ mod handlers {
 			.unwrap();
 		}
 
-		let attestation_doc_path = output_dir.join("attestation_doc.genesis");
 		let genesis_output_path = output_dir.join("output.genesis");
 		std::fs::create_dir_all(&output_dir).unwrap();
-		std::fs::write(&attestation_doc_path, cose_sign1_der)
-			.expect("Failed to write attestation doc.");
-		std::fs::write(
-			&genesis_output_path,
-			genesis_output.try_to_vec().unwrap(),
-		)
-		.expect("Failed to write genesis output");
 
-		println!(
-			"Attestation document written to {}",
-			attestation_doc_path.as_os_str().to_os_string().to_str().unwrap()
-		);
-		println!(
-			"Genesis output written to {}",
-			genesis_output_path.as_os_str().to_os_string().to_str().unwrap()
-		);
+		// Write the attestation doc
+		{
+			let attestation_doc_path =
+				output_dir.join("attestation_doc.genesis");
+			std::fs::write(&attestation_doc_path, cose_sign1_der)
+				.expect("Failed to write attestation doc.");
+			println!(
+				"Attestation document written to {}",
+				attestation_doc_path
+					.as_os_str()
+					.to_os_string()
+					.to_str()
+					.unwrap()
+			);
+		}
+		// Write the genesis output
+		{
+			std::fs::write(
+				&genesis_output_path,
+				genesis_output.try_to_vec().unwrap(),
+			)
+			.expect("Failed to write genesis output");
+			println!(
+				"Genesis output written to {}",
+				genesis_output_path
+					.as_os_str()
+					.to_os_string()
+					.to_str()
+					.unwrap()
+			);
+		}
 	}
 
 	fn create_genesis_set(options: &ClientOptions) -> GenesisSet {
 		let threshold = options.boot_genesis.threshold();
 		let key_dir = options.boot_genesis.key_dir();
 
-		let key_dir_path = std::path::Path::new(&key_dir);
-		if !key_dir_path.is_dir() {
-			panic!("Provided path is not a valid directory");
-		}
+		// Get all the files in the key directory
+		let key_files = {
+			let key_dir_path = std::path::Path::new(&key_dir);
+			if !key_dir_path.is_dir() {
+				panic!("Provided path is not a valid directory");
+			};
+			std::fs::read_dir(key_dir_path)
+				.expect("Failed to read key directory")
+		};
 
-		let key_iter = std::fs::read_dir(key_dir_path)
-			.expect("Failed to read key directory");
+		// Assemble the genesis members from all the public keys in the key
+		// directory
+		let members: Vec<_> = key_files
+			.filter_map(|key_path| {
+				let path = key_path.unwrap().path();
+				let split: Vec<_> = path
+					.file_name()
+					.unwrap()
+					.to_str()
+					.unwrap()
+					.split(".")
+					.collect();
 
-		let mut members = vec![];
-		for key_path in key_iter {
-			let path = key_path.unwrap().path();
-			let file_name = path.file_name();
-			let split: Vec<_> =
-				file_name.unwrap().to_str().unwrap().split(".").collect();
+				// TODO: do we want to dissallow having anything in this folder
+				// that is not a public key for the quorum set?
+				if *split.last().unwrap() != "pub" {
+					println!("A non `.pub` file was found in the setup key directory - skipping.");
+					return None
+				}
 
-			if *split.last().unwrap() != "pub" {
-				println!("A non `.pub` file was found in the setup key directory - skipping.");
-				continue
-			}
-			let alias = split.get(0).unwrap().to_string();
+				let public_key = RsaPub::from_pem_file(path)
+					.expect("Failed to read in rsa pub key.");
 
-			let public_key = RsaPub::from_pem_file(path)
-				.expect("Failed to read in rsa pub key.");
-
-			members.push(SetupMember {
-				alias,
-				pub_key: public_key.public_key_to_der().unwrap(),
-			});
-		}
+				Some(SetupMember {
+					alias: split.get(0).unwrap().to_string(),
+					pub_key: public_key.public_key_to_der().unwrap(),
+				})
+			})
+			.collect();
 
 		println!("Threshold: {}", threshold);
+		println!("N: {}", members.len());
 		println!("Members:");
 		for member in members.clone() {
 			println!("  Alias: {}", member.alias);
-			// let pem = RsaPub::from_der(&member.pub_key)
-			// 	.unwrap()
-			// 	.public_key_to_pem()
-			// 	.unwrap();
-			// println!("  Public Key: \n{}", String::from_utf8_lossy(&pem));
 		}
 
 		GenesisSet { members, threshold }

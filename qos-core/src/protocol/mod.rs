@@ -188,6 +188,8 @@ mod handlers {
 
 	use super::*;
 
+	/// Unwrap an ok or return early with a generic error.
+	/// TODO: this try and pass through the returned error
 	macro_rules! ok {
 		( $e:expr ) => {
 			match $e {
@@ -329,6 +331,8 @@ mod handlers {
 			};
 		}
 
+		// TODO: look into breaking this up into separate handler since there
+		// services are totally different.
 		match req {
 			ProtocolMsg::BootRequest(BootInstruction::Standard {
 				manifest_envelope,

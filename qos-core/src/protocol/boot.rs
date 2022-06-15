@@ -103,9 +103,7 @@ impl ManifestEnvelope {
 
 			let is_valid_signature = pub_key
 				.verify_sha256(&approval.signature, &self.manifest.hash())
-				.map_err(|e| {
-					ProtocolError::CryptoError
-				})?;
+				.map_err(|e| ProtocolError::CryptoError)?;
 			if !is_valid_signature {
 				return Err(ProtocolError::InvalidManifestApproval(
 					approval.clone(),
@@ -150,7 +148,7 @@ pub fn boot_standard(
 
 	let nsm_response = {
 		let request = NsmRequest::Attestation {
-                         // TODO: make sure CLI verifies the manifest hash is correct
+			// TODO: make sure CLI verifies the manifest hash is correct
 			user_data: Some(manifest_envelope.manifest.hash().to_vec()),
 			nonce: None,
 			public_key: Some(ephemeral_key.public_key_to_pem().unwrap()),
