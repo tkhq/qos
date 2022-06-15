@@ -47,6 +47,7 @@ impl<R: Routable> SocketServer<R> {
 	}
 }
 
+/// Something that can process requests.
 pub trait Routable {
 	/// Process an incoming request and return a response.
 	///

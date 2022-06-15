@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::all)]
 #![warn(missing_docs, clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
 
 use std::{net::SocketAddr, sync::Arc};
 

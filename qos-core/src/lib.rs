@@ -20,7 +20,7 @@ pub mod io;
 /// QuorumOS protocol details
 pub mod protocol;
 /// Basic socket server
-mod server;
+pub mod server;
 
 /// Path to Quorum Key secret.
 #[cfg(not(feature = "vm"))]

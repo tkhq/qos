@@ -1,8 +1,9 @@
-//! Cryptographic primitves for use with QuorumOS.
+//! Cryptographic primitves for use with `QuorumOS`.
 
 #![forbid(unsafe_code)]
 #![deny(clippy::all)]
 #![warn(missing_docs, clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
 
 // TODO: Audit encryption strategy
 // This file implements an envelope encryption strategy using RSA and AES 256
@@ -27,7 +28,7 @@ mod shamir;
 
 pub use shamir::*;
 
-/// Standard length for QuorumOS RSA keys, specified in bits.
+/// Standard length for `QuorumOS` RSA keys, specified in bits.
 pub const RSA_KEY_LEN: u32 = 4096;
 
 /// Errors for this crate.
@@ -58,7 +59,7 @@ impl From<openssl::error::ErrorStack> for CryptoError {
 }
 
 /// Create a SHA256 hash digest of `buf`.
-pub fn sha_256(buf: &[u8]) -> [u8; 32] {
+#[must_use] pub fn sha_256(buf: &[u8]) -> [u8; 32] {
 	let mut hasher = openssl::sha::Sha256::new();
 	hasher.update(buf);
 	hasher.finish()
@@ -73,7 +74,7 @@ pub struct RsaPair {
 
 impl RsaPair {
 	/// Get the public key of this pair.
-	pub fn public_key(&self) -> &RsaPub {
+	#[must_use] pub fn public_key(&self) -> &RsaPub {
 		&self.public_key
 	}
 
@@ -146,7 +147,7 @@ impl RsaPair {
 		.map_err(CryptoError::from)
 	}
 
-	/// Envelope encrypt using the RsaPair's associated RsaPub
+	/// Envelope encrypt using the `RsaPair`'s associated `RsaPub`
 	pub fn envelope_encrypt(
 		&self,
 		data: &[u8],
@@ -277,7 +278,7 @@ impl RsaPub {
 		let encrypted_data = symm::encrypt(cipher, &key, Some(&iv), data)?;
 		let encrypted_symm_key = self.encrypt(&key)?;
 
-		let envelope = Envelope { encrypted_data, encrypted_symm_key, iv };
+		let envelope = Envelope { encrypted_symm_key, encrypted_data, iv };
 		Ok(envelope.try_to_vec().expect("`Envelope` impls serialization"))
 	}
 }
