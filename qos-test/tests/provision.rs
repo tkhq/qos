@@ -20,7 +20,7 @@ async fn provision_e2e() {
 	let ip = Ipv4Addr::from([127u8, 0, 0, 1]);
 	let port = 3002;
 	let socket_addr = SocketAddrV4::new(ip, port);
-	let url = format!("http://{}", socket_addr.to_string());
+	let url = format!("http://{}", socket_addr);
 	let health_url = format!("{}/{}", url, "health");
 	let message_url = format!("{}/{}", url, "message");
 

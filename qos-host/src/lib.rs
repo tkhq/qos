@@ -49,9 +49,11 @@ pub struct HostServer {
 }
 
 impl HostServer {
-	/// Create a new [`HostServer`]. See [`Self::serve`] for starting the server.
+	/// Create a new [`HostServer`]. See [`Self::serve`] for starting the
+	/// server.
+	#[must_use]
 	pub fn new(enclave_addr: SocketAddress, addr: SocketAddr) -> Self {
-		Self { addr, enclave_addr }
+		Self { enclave_addr, addr }
 	}
 
 	/// Start the server, running indefinitely.

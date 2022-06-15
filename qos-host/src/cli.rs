@@ -43,8 +43,8 @@ impl HostOptions {
 	/// Panics if the url cannot be parsed from options
 	#[must_use]
 	pub fn url(&self) -> String {
-		if let Self { ip: Some(ip), port: Some(port) } = self.clone() {
-			return format!("http://{}:{}", ip.to_string(), port);
+		if let Self { ip: Some(ip), port: Some(port) } = *self {
+			return format!("http://{}:{}", ip, port);
 		}
 
 		panic!("Couldn't parse URL from options.")
@@ -67,7 +67,7 @@ impl HostOptions {
 		if cmd == "--host-ip" {
 			self.ip = Some(
 				arg.parse().expect("Could not parse value from `--host-ip`"),
-			)
+			);
 		}
 	}
 

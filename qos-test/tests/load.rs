@@ -1,6 +1,5 @@
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-use openssl::rsa::Rsa;
 use qos_core::{
 	io::SocketAddress,
 	protocol::{Executor, Load, MockNsm, ProtocolMsg, SignatureWithPubKey},
@@ -61,7 +60,7 @@ fn load_e2e() {
 	let ip = Ipv4Addr::from([127, 0, 0, 1]);
 	let port = 3001; // Use a unique port so we don't collide with other tests
 	let socket_addr = SocketAddrV4::new(ip, port);
-	let message_url = format!("http://{}/message", socket_addr.to_string());
+	let message_url = format!("http://{}/message", socket_addr);
 	let pivot_file = "./verification.pivot".to_string();
 	let secret_file = "./verification.secret".to_string();
 	let ephemeral_file = "./verification.ephemeral".to_string();
