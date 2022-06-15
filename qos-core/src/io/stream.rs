@@ -297,10 +297,10 @@ mod test {
 				.unwrap();
 		let addr = SocketAddress::Unix(unix_addr);
 
-		let mut listener = Listener::listen(addr.clone()).unwrap();
+		let listener = Listener::listen(addr.clone()).unwrap();
 
 		let handler = std::thread::spawn(move || {
-			for stream in listener.by_ref() {
+			for stream in listener {
 				let req = stream.recv().unwrap();
 				stream.send(&req).unwrap();
 				break;
@@ -312,7 +312,6 @@ mod test {
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
 		let _ = client.send(&data).unwrap();
 		let resp = client.recv().unwrap();
-
 		assert_eq!(data, resp);
 
 		handler.join().unwrap();
