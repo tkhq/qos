@@ -1,16 +1,15 @@
-//! Command line interface for creating a host server and helpers for parsing
-//! host specific command line arguments.
+//! Command line interface for running a QOS Host server.
 
-use std::{env, net::SocketAddr};
+use std::{
+	env,
+	net::{IpAddr, Ipv4Addr, SocketAddr},
+};
 
 use qos_core::cli::EnclaveOptions;
-use regex::Regex;
 
 use crate::HostServer;
 
-const IP_REGEX: &str = r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$";
-
-/// CLI options for starting a host server
+/// CLI options for starting a host server.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HostServerOptions {
 	enclave: EnclaveOptions,
@@ -26,7 +25,7 @@ impl HostServerOptions {
 /// CLI options for host IP address and Port.
 #[derive(Default, Clone, Copy, Debug, PartialEq)]
 pub struct HostOptions {
-	ip: Option<[u8; 4]>,
+	ip: Option<Ipv4Addr>,
 	port: Option<u16>,
 }
 
@@ -44,11 +43,8 @@ impl HostOptions {
 	/// Panics if the url cannot be parsed from options
 	#[must_use]
 	pub fn url(&self) -> String {
-		if let Self { ip: Some(ip), port: Some(port) } = self {
-			return format!(
-				"http://{}.{}.{}.{}:{}",
-				ip[0], ip[1], ip[2], ip[3], port
-			);
+		if let Self { ip: Some(ip), port: Some(port) } = *self {
+			return format!("http://{}:{}", ip, port);
 		}
 
 		panic!("Couldn't parse URL from options.")
@@ -69,24 +65,9 @@ impl HostOptions {
 
 	fn parse_ip(&mut self, cmd: &str, arg: &str) {
 		if cmd == "--host-ip" {
-			let re = Regex::new(IP_REGEX)
-				.expect("Could not parse value from `--host-ip`");
-			let mut iter = re.captures_iter(arg);
-
-			let parse = |string: &str| {
-				string
-					.to_string()
-					.parse::<u8>()
-					.expect("Could not parse value from `--host-ip`")
-			};
-
-			if let Some(cap) = iter.next() {
-				let ip1 = parse(&cap[1]);
-				let ip2 = parse(&cap[2]);
-				let ip3 = parse(&cap[3]);
-				let ip4 = parse(&cap[4]);
-				self.ip = Some([ip1, ip2, ip3, ip4]);
-			}
+			self.ip = Some(
+				arg.parse().expect("Could not parse value from `--host-ip`"),
+			);
 		}
 	}
 
@@ -122,7 +103,7 @@ impl CLI {
 		let options = parse_args(&args);
 		let addr = host_addr_from_options(options.host);
 		let enclave_addr = options.enclave.addr();
-		HostServer::new_with_socket_addr(enclave_addr, addr).serve().await;
+		HostServer::new(enclave_addr, addr).serve().await;
 	}
 }
 
@@ -141,41 +122,8 @@ fn parse_args(args: &[String]) -> HostServerOptions {
 
 fn host_addr_from_options(options: HostOptions) -> SocketAddr {
 	if let HostOptions { ip: Some(ip), port: Some(port), .. } = options {
-		SocketAddr::from((ip, port))
+		SocketAddr::new(IpAddr::V4(ip), port)
 	} else {
 		panic!("Invalid host address options")
-	}
-}
-
-#[cfg(test)]
-mod test {
-	use super::*;
-
-	#[test]
-	fn parse_ip_with_regex() {
-		expect_ip("1.1.1.1", [1, 1, 1, 1]);
-		expect_ip("1.2.3.4", [1, 2, 3, 4]);
-		expect_ip("12.34.56.78", [12, 34, 56, 78]);
-		expect_ip("111.222.244.255", [111, 222, 244, 255]);
-	}
-
-	#[test]
-	#[should_panic]
-	fn no_parse_ip() {
-		expect_ip("something111.222.244.255", [111, 222, 244, 255]);
-	}
-
-	fn expect_ip(arg: &str, expected: [u8; 4]) {
-		let mut options = HostOptions::new();
-		options.parse_ip("--host-ip", arg);
-
-		if let Some(ip) = options.ip {
-			assert_eq!(ip[0], expected[0]);
-			assert_eq!(ip[1], expected[1]);
-			assert_eq!(ip[2], expected[2]);
-			assert_eq!(ip[3], expected[3]);
-		} else {
-			panic!("Couldn't parse ip address");
-		}
 	}
 }
