@@ -32,24 +32,29 @@ pub struct HostOptions {
 
 impl HostOptions {
 	/// Create a new instance of [`self`].
+	#[must_use]
 	pub fn new() -> Self {
-		Default::default()
+		Self::default()
 	}
 
 	/// Get the host server url.
-	pub fn url(&self) -> String {
+	///
+	/// # Panics
+	///
+	/// Panics if the url cannot be parsed from options
+	#[must_use] pub fn url(&self) -> String {
 		if let Self { ip: Some(ip), port: Some(port) } = self.clone() {
 			return format!(
 				"http://{}.{}.{}.{}:{}",
 				ip[0], ip[1], ip[2], ip[3], port
 			);
-		} else {
-			panic!("Couldn't parse URL from options.")
 		}
+
+		panic!("Couldn't parse URL from options.")
 	}
 
 	/// Get the resource path.
-	pub fn path(&self, path: &str) -> String {
+	#[must_use] pub fn path(&self, path: &str) -> String {
 		let url = self.url();
 		format!("{}/{}", url, path)
 	}
@@ -117,8 +122,7 @@ impl CLI {
 		let enclave_addr = options.enclave.addr();
 		HostServer::new_with_socket_addr(enclave_addr, addr)
 			.serve()
-			.await
-			.unwrap();
+			.await;
 	}
 }
 

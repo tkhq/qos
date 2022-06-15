@@ -14,7 +14,7 @@
 //! * Responding with error: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/error_handling.md/>
 #![forbid(unsafe_code)]
 #![deny(clippy::all)]
-#![warn(missing_docs)]
+#![warn(missing_docs, clippy::pedantic)]
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -54,15 +54,20 @@ impl HostServer {
 	}
 
 	/// Create a new [`HostServer`].
-	pub fn new_with_socket_addr(
+	 #[must_use] pub fn new_with_socket_addr(
 		enclave_addr: SocketAddress,
 		addr: SocketAddr,
 	) -> Self {
-		Self { addr, enclave_addr }
+		Self { enclave_addr, addr }
 	}
 
 	/// Start the server, running indefinitely.
-	pub async fn serve(&self) -> Result<(), String> {
+	///
+	/// # Panics
+	///
+	/// Panics if there is an issue starting the server.
+	// pub async fn serve(&self) -> Result<(), String> {
+	pub async fn serve(&self) {
 		let state = Arc::new(State {
 			enclave_client: Client::new(self.enclave_addr.clone()),
 		});
@@ -79,7 +84,7 @@ impl HostServer {
 			.await
 			.unwrap();
 
-		Ok(())
+		// Ok(())
 	}
 
 	/// Health route handler.
