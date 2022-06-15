@@ -1,4 +1,4 @@
-use std::{fs::File};
+use std::fs::File;
 
 use qos_core::coordinator::Coordinator;
 
