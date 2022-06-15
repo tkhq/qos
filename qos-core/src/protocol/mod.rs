@@ -51,7 +51,7 @@ pub enum ProtocolError {
 	/// Hash of the Pivot binary does not match the pivot configuration in the
 	/// manifest.
 	InvalidPivotHash,
-	/// The [`Msg`] is too large.
+	/// The message is too large.
 	OversizeMsg,
 	/// Message could not be deserialized
 	InvalidMsg,
