@@ -1,3 +1,5 @@
+//! QuorumOS client command line interface.
+
 use std::env;
 
 use borsh::BorshSerialize;
@@ -190,8 +192,10 @@ impl BootGenesisOptions {
 	}
 }
 
+/// Client command line interface
 pub struct CLI;
 impl CLI {
+	/// Execute this command line interface.
 	pub fn execute() {
 		let args: Vec<String> = env::args().collect();
 		let options = ClientOptions::from(args);

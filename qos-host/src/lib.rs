@@ -13,6 +13,8 @@
 //! * Response: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/response.md/>
 //! * Responding with error: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/error_handling.md/>
 #![forbid(unsafe_code)]
+#![deny(clippy::all)]
+#![warn(missing_docs)]
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -51,6 +53,7 @@ impl HostServer {
 		Self { addr: SocketAddr::from((ip, port)), enclave_addr }
 	}
 
+	/// Create a new [`HostServer`].
 	pub fn new_with_socket_addr(
 		enclave_addr: SocketAddress,
 		addr: SocketAddr,

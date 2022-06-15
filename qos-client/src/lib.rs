@@ -1,8 +1,13 @@
+//! CLI Client for interacting with QuorumOS enclave and host.
+
 #![forbid(unsafe_code)]
+#![deny(clippy::all)]
+#![warn(missing_docs)]
 
 pub mod attest;
 pub mod cli;
 
+/// Host HTTP request helpers.
 pub mod request {
 	use std::io::Read;
 
@@ -11,6 +16,7 @@ pub mod request {
 
 	const MAX_SIZE: u64 = u32::MAX as u64;
 
+	/// Post a [`qos_core::protocol::ProtocolMsg`] to the given host `url`.
 	pub fn post(url: &str, msg: ProtocolMsg) -> Result<ProtocolMsg, String> {
 		let mut buf: Vec<u8> = vec![];
 
@@ -33,6 +39,7 @@ pub mod request {
 		Ok(pr)
 	}
 
+	/// Get the resource at the given host `url`.
 	pub fn get(url: &str) -> Result<String, String> {
 		ureq::get(url)
 			.call()

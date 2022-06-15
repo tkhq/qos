@@ -1,5 +1,6 @@
-// Enclave socket address
-// Port/Host bindings
+//! Command line interface for creating a host server and helpers for parsing
+//! host specific command line arguments.
+
 use std::{env, net::SocketAddr};
 
 use qos_core::cli::EnclaveOptions;
@@ -9,6 +10,7 @@ use crate::HostServer;
 
 const IP_REGEX: &str = r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$";
 
+/// CLI options for starting a host server
 #[derive(Clone, Debug, PartialEq)]
 pub struct HostServerOptions {
 	enclave: EnclaveOptions,
@@ -21,6 +23,7 @@ impl HostServerOptions {
 	}
 }
 
+/// CLI options for host IP address and Port.
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct HostOptions {
 	ip: Option<[u8; 4]>,
@@ -28,10 +31,12 @@ pub struct HostOptions {
 }
 
 impl HostOptions {
+	/// Create a new instance of [`self`].
 	pub fn new() -> Self {
 		Default::default()
 	}
 
+	/// Get the host server url.
 	pub fn url(&self) -> String {
 		if let Self { ip: Some(ip), port: Some(port) } = self.clone() {
 			return format!(
@@ -43,17 +48,19 @@ impl HostOptions {
 		}
 	}
 
+	/// Get the resource path.
 	pub fn path(&self, path: &str) -> String {
 		let url = self.url();
 		format!("{}/{}", url, path)
 	}
 
+	/// Parse host options.
 	pub fn parse(&mut self, cmd: &str, arg: &str) {
 		self.parse_ip(cmd, arg);
 		self.parse_port(cmd, arg);
 	}
 
-	pub fn parse_ip(&mut self, cmd: &str, arg: &str) {
+	fn parse_ip(&mut self, cmd: &str, arg: &str) {
 		if cmd == "--host-ip" {
 			let re = Regex::new(IP_REGEX)
 				.expect("Could not parse value from `--host-ip`");
@@ -76,7 +83,7 @@ impl HostOptions {
 		}
 	}
 
-	pub fn parse_port(&mut self, cmd: &str, arg: &str) {
+	fn parse_port(&mut self, cmd: &str, arg: &str) {
 		if cmd == "--host-port" {
 			self.port = arg
 				.parse::<u16>()
@@ -101,6 +108,7 @@ impl HostOptions {
 ///   sockets)
 pub struct CLI;
 impl CLI {
+	/// Execute the command line interface.
 	pub async fn execute() {
 		let mut args: Vec<String> = env::args().collect();
 		args.remove(0);
@@ -114,7 +122,7 @@ impl CLI {
 	}
 }
 
-pub fn parse_args(args: Vec<String>) -> HostServerOptions {
+fn parse_args(args: Vec<String>) -> HostServerOptions {
 	let mut options = HostServerOptions::new();
 
 	let mut chunks = args.chunks_exact(2);
@@ -129,7 +137,7 @@ pub fn parse_args(args: Vec<String>) -> HostServerOptions {
 	options
 }
 
-pub fn host_addr_from_options(options: HostOptions) -> SocketAddr {
+fn host_addr_from_options(options: HostOptions) -> SocketAddr {
 	if let HostOptions { ip: Some(ip), port: Some(port), .. } = options {
 		SocketAddr::from((ip, port))
 	} else {
