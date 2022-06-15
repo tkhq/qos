@@ -267,6 +267,7 @@ impl From<Response> for NsmResponse {
 			R::DescribePCR { lock, data } => Self::DescribePCR { lock, data },
 			R::ExtendPCR { data } => Self::ExtendPCR { data },
 			R::LockPCR => Self::LockPCR,
+			R::LockPCRs => Self::LockPCRs,
 			R::DescribeNSM {
 				version_major,
 				version_minor,
@@ -299,6 +300,7 @@ impl From<NsmResponse> for nsm::api::Response {
 			R::DescribePCR { lock, data } => Self::DescribePCR { lock, data },
 			R::ExtendPCR { data } => Self::ExtendPCR { data },
 			R::LockPCR => Self::LockPCR,
+			R::LockPCRs => Self::LockPCRs,
 			R::DescribeNSM {
 				version_major,
 				version_minor,
@@ -319,7 +321,6 @@ impl From<NsmResponse> for nsm::api::Response {
 			R::Attestation { document } => Self::Attestation { document },
 			R::GetRandom { random } => Self::GetRandom { random },
 			R::Error(e) => Self::Error(e.into()),
-			_ => Self::Error(ErrorCode::InternalError),
 		}
 	}
 }

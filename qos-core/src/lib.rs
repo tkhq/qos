@@ -7,7 +7,8 @@
 
 #![forbid(unsafe_code)]
 #![deny(clippy::all)]
-#![warn(missing_docs)]
+#![warn(missing_docs, clippy::pedantic)]
+#![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
 /// Command line interface
 pub mod cli;
@@ -17,7 +18,7 @@ pub mod client;
 pub mod coordinator;
 /// Basic IO capabilities
 pub mod io;
-/// QuorumOS protocol details
+/// `QuorumOS` protocol details
 pub mod protocol;
 /// Basic socket server
 pub mod server;

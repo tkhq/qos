@@ -43,14 +43,14 @@ pub struct Client {
 
 impl Client {
 	/// Create a new client.
-	pub fn new(addr: SocketAddress) -> Self {
+	#[must_use] pub fn new(addr: SocketAddress) -> Self {
 		Self { addr }
 	}
 
 	/// Send a [`ProtocolMsg`] and wait for the response.
 	pub fn send(
 		&self,
-		request: ProtocolMsg,
+		request: &ProtocolMsg,
 	) -> Result<ProtocolMsg, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
 

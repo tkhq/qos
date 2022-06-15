@@ -119,7 +119,7 @@ impl HostServer {
 						.expect("ProtocolMsg can always serialize. qed."),
 				)
 			}
-			Ok(request) => state.enclave_client.send(request),
+			Ok(request) => state.enclave_client.send(&request),
 		};
 
 		match response {

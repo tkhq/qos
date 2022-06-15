@@ -22,7 +22,7 @@ pub use genesis::{
 	GenesisMemberOutput, GenesisOutput, GenesisSet, SetupMember,
 };
 pub use msg::*;
-use provisioner::*;
+use provisioner::SecretProvisioner;
 
 use crate::server;
 
@@ -128,7 +128,7 @@ pub struct Executor {
 
 impl Executor {
 	/// Create a new `Self`.
-	pub fn new(
+	#[must_use] pub fn new(
 		attestor: Box<dyn NsmProvider>,
 		secret_file: String,
 		pivot_file: String,
@@ -187,7 +187,7 @@ impl server::Routable for Executor {
 			Err(_) => return err_resp(),
 		};
 
-		for handler in self.routes().iter() {
+		for handler in &self.routes() {
 			match handler(&msg_req, &mut self.state) {
 				Some(msg_resp) => {
 					return msg_resp
@@ -208,7 +208,7 @@ impl server::Routable for Executor {
 mod handlers {
 	use qos_crypto::RsaPair;
 
-	use super::*;
+	use super::{BootInstruction, Load, NsmRequest, Permissions, PermissionsExt, ProtocolMsg, ProtocolPhase, ProtocolState, boot, genesis, set_permissions};
 
 	/// Unwrap an ok or return early with a generic error.
 	/// TODO: this try and pass through the returned error
@@ -370,7 +370,7 @@ mod handlers {
 			}) => {
 				let nsm_response = ok_or_err!(boot::boot_standard(
 					state,
-					*manifest_envelope.clone(),
+					manifest_envelope,
 					pivot
 				));
 				Some(ProtocolMsg::BootStandardResponse(nsm_response))

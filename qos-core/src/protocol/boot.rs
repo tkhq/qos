@@ -132,7 +132,7 @@ pub struct ManifestEnvelope {
 impl ManifestEnvelope {
 	/// Check if the encapsulated manifest has K valid approvals.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
-		for approval in self.approvals.iter() {
+		for approval in &self.approvals {
 			let pub_key = RsaPub::from_der(&approval.member.pub_key)
 				.map_err(|_| ProtocolError::CryptoError)?;
 
@@ -156,7 +156,7 @@ impl ManifestEnvelope {
 
 pub(super) fn boot_standard(
 	state: &mut ProtocolState,
-	manifest_envelope: ManifestEnvelope,
+	manifest_envelope: &ManifestEnvelope,
 	pivot: &Vec<u8>,
 ) -> Result<NsmResponse, ProtocolError> {
 	use std::os::unix::fs::PermissionsExt as _;
@@ -296,7 +296,7 @@ mod test {
 		);
 
 		let _nsm_resposne =
-			boot_standard(&mut protocol_state, manifest_envelope, &pivot)
+			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
 				.unwrap();
 
 		assert!(Path::new(&pivot_file).exists());
@@ -336,7 +336,7 @@ mod test {
 		);
 
 		let nsm_resposne =
-			boot_standard(&mut protocol_state, manifest_envelope, &pivot);
+			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
 
 		assert!(nsm_resposne.is_err());
 	}
@@ -367,7 +367,7 @@ mod test {
 		);
 
 		let nsm_resposne =
-			boot_standard(&mut protocol_state, manifest_envelope, &pivot);
+			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
 
 		assert!(nsm_resposne.is_err());
 	}

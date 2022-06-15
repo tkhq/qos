@@ -47,6 +47,6 @@ impl NsmProvider for Nsm {
 	}
 
 	fn nsm_exit(&self, fd: i32) {
-		nsm::driver::nsm_exit(fd)
+		nsm::driver::nsm_exit(fd);
 	}
 }

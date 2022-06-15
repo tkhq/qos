@@ -13,6 +13,12 @@ use crate::{cli::EnclaveOptions, protocol::Executor, server::SocketServer};
 pub struct Coordinator;
 impl Coordinator {
 	/// Run the coordinator.
+	///
+	/// # Panics
+	///
+	/// - If any enclave options are incorrect
+	/// - If spawning the pivot error.
+	/// - If waiting for the pivot errors.
 	pub fn execute(opts: EnclaveOptions) {
 		let secret_file = opts.secret_file();
 		let pivot_file = opts.pivot_file();
@@ -55,7 +61,7 @@ impl Coordinator {
 			println!(
 				"Pivot executable exited with a non zero status: {}",
 				status
-			)
+			);
 		}
 
 		println!("Coordinator exiting ...");
