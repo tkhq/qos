@@ -20,6 +20,7 @@ impl Coordinator {
 				opts.nsm(),
 				opts.secret_file(),
 				opts.pivot_file(),
+				opts.ephemeral_key_file(),
 			);
 			SocketServer::listen(opts.addr(), executor).unwrap();
 		});
@@ -43,14 +44,16 @@ impl Coordinator {
 			pivot.spawn().expect("Process failed to execute...");
 
 		// Wait for the child process to finish
-		let status = child_process
-			.wait()
-			.expect("Pivot executable never started...");
+		let status =
+			child_process.wait().expect("Pivot executable never started...");
 		// and log some information about the exit status
 		if status.success() {
 			println!("Pivot executable exited successfully: {}", status);
 		} else {
-			println!("Pivot executable exited with a non zero status: {}", status)
+			println!(
+				"Pivot executable exited with a non zero status: {}",
+				status
+			)
 		}
 
 		println!("Coordinator exiting ...");
