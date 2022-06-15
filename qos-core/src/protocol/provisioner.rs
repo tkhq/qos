@@ -1,5 +1,3 @@
-use std::{fs::File, io::Write};
-
 use super::ProtocolError;
 
 type Secret = Vec<u8>;
@@ -9,15 +7,13 @@ type Shares = Vec<Share>;
 /// Shamir Secret provisioner.
 pub struct SecretProvisioner {
 	shares: Shares,
-	// TODO: maybe don't store secret and just return it on reconstruct
-	secret: Option<Secret>,
 	secret_file: String,
 }
 
 impl SecretProvisioner {
 	/// Create a instance of [`Self`].
 	pub fn new(secret_file: String) -> Self {
-		Self { shares: Vec::new(), secret: None, secret_file }
+		Self { shares: Vec::new(), secret_file }
 	}
 
 	/// Add a share to later be used to reconstruct.
@@ -39,14 +35,19 @@ impl SecretProvisioner {
 			return Err(ProtocolError::ReconstructionError);
 		}
 
-		// TODO: Make errors more specific...
-		let mut file = File::create(&self.secret_file)
-			.map_err(|_e| ProtocolError::ReconstructionError)?;
-
-		file.write_all(&secret)
-			.map_err(|_e| ProtocolError::ReconstructionError)?;
-
-		self.secret = Some(secret.clone());
 		Ok(secret)
 	}
+
+	/// The count of shares.
+	pub fn count(&self) -> usize {
+		self.shares.len()
+	}
+
+	/// Path to the secrete file
+	pub fn secret_file(&self) -> &str {
+		&self.secret_file
+	}
 }
+
+// TODO: Basic unit tests
+// TODO: put service here

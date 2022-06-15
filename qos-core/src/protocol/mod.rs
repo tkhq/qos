@@ -1,9 +1,4 @@
-//! Quorum protocol.
-
-use std::{
-	fs::{set_permissions, Permissions},
-	os::unix::fs::PermissionsExt,
-};
+//! Quorum protocol state machine.
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -56,6 +51,12 @@ pub enum ProtocolError {
 	/// Hash of the Pivot binary does not match the pivot configuration in the
 	/// manifest.
 	InvalidPivotHash,
+	/// The [`Msg`] is too large.
+	OversizeMsg,
+	/// Message could not be deserialized
+	InvalidMsg,
+	/// An error occurred with the enclave client.
+	EnclaveClient,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
@@ -151,21 +152,16 @@ impl Executor {
 				vec![Box::new(handlers::status)]
 			}
 			ProtocolPhase::WaitingForBootInstruction => vec![
-				// TODO: should only be `boot_instruction` & status, but don't
-				// want to break tests
-				Box::new(handlers::empty),
-				Box::new(handlers::echo),
-				Box::new(handlers::provision),
-				Box::new(handlers::reconstruct),
-				Box::new(handlers::nsm_attestation),
-				Box::new(handlers::load),
 				Box::new(handlers::status),
-				Box::new(handlers::boot_instruction),
+				Box::new(handlers::boot_genesis),
+				Box::new(handlers::boot_standard),
+				// Below are here just for development convenience
+				Box::new(handlers::nsm_request),
 			],
 			ProtocolPhase::WaitingForQuorumShards => vec![
+				Box::new(handlers::status),
+				// TODO: reconstruct when the K'th key is received
 				Box::new(handlers::provision),
-				// Drop this .. Just wait for K'th key to reconstruct
-				Box::new(handlers::reconstruct),
 			],
 		}
 	}
@@ -207,11 +203,8 @@ impl server::Routable for Executor {
 }
 
 mod handlers {
-	use qos_crypto::RsaPair;
-
 	use super::{
-		boot, genesis, set_permissions, BootInstruction, Load, NsmRequest,
-		Permissions, PermissionsExt, ProtocolMsg, ProtocolPhase, ProtocolState,
+		boot, genesis, ProtocolError, ProtocolMsg, ProtocolPhase, ProtocolState,
 	};
 
 	/// Unwrap an ok or return early with a generic error.
@@ -238,25 +231,17 @@ mod handlers {
 		}
 	}
 
-	/// TODO: remove
-	pub(super) fn empty(
+	pub(super) fn nsm_request(
 		req: &ProtocolMsg,
-		_state: &mut ProtocolState,
+		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::EmptyRequest = req {
-			Some(ProtocolMsg::EmptyResponse)
-		} else {
-			None
-		}
-	}
+		if let ProtocolMsg::NsmRequest { nsm_request } = req {
+			let nsm_response = {
+				let fd = state.attestor.nsm_init();
+				state.attestor.nsm_process_request(fd, nsm_request.clone())
+			};
 
-	/// TODO: remove
-	pub(super) fn echo(
-		req: &ProtocolMsg,
-		_state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::EchoRequest(e) = req {
-			Some(ProtocolMsg::EchoResponse(e.clone()))
+			Some(ProtocolMsg::NsmResponse { nsm_response })
 		} else {
 			None
 		}
@@ -266,26 +251,58 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::ProvisionRequest(pr) = req {
+		if let ProtocolMsg::ProvisionRequest { share: pr } = req {
+			// TODO: share should be encrypted to ephemeral key
+			// TODO: ensure state is waiting for provision
 			match state.provisioner.add_share(pr.share.clone()) {
-				Ok(_) => Some(ProtocolMsg::SuccessResponse),
-				Err(_) => Some(ProtocolMsg::ErrorResponse),
-			}
-		} else {
-			None
-		}
-	}
+				Ok(_) => {
+					// TODO: change phase to attempting to constructing quorum
+					// key
 
-	/// TODO: remove
-	pub(super) fn reconstruct(
-		req: &ProtocolMsg,
-		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::ReconstructRequest = req {
-			match state.provisioner.reconstruct() {
-				Ok(_secret) => {
-					// state.provisioner.secret = Some(secret);
-					Some(ProtocolMsg::SuccessResponse)
+					if state.provisioner.count()
+						>= state
+							.manifest
+							.as_ref()
+							.unwrap()
+							.manifest
+							.quorum_set
+							.threshold as usize
+					{
+						let private_key_der =
+							ok!(state.provisioner.reconstruct());
+						let public_key_der = ok!(ok!(
+							qos_crypto::RsaPair::from_der(&private_key_der)
+						)
+						.public_key_to_der());
+						// Verify we constructed the correct key
+						if public_key_der
+							!= state
+								.manifest
+								.as_ref()
+								.unwrap()
+								.manifest
+								.quorum_key
+						{
+							state.phase = ProtocolPhase::UnrecoverableError;
+							return Some(ProtocolMsg::ProtocolErrorResponse(
+								ProtocolError::ReconstructionError,
+							));
+						}
+						// Write the secrete to file
+						ok!(std::fs::write(
+							state.provisioner.secret_file(),
+							private_key_der
+						));
+						// Let the caller know we reconstructed the secrete
+						// TODO: set phase to ProvisionFinished
+						Some(ProtocolMsg::ProvisionResponse {
+							reconstructed: true,
+						})
+					} else {
+						Some(ProtocolMsg::ProvisionResponse {
+							reconstructed: false,
+						})
+					}
 				}
 				Err(_) => Some(ProtocolMsg::ErrorResponse),
 			}
@@ -294,101 +311,49 @@ mod handlers {
 		}
 	}
 
-	/// TODO: remove
-	pub(super) fn nsm_attestation(
+	/// Handle `ProtocolMsg::BootStandardRequest`.
+	pub(super) fn boot_standard(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::NsmRequest(NsmRequest::Attestation { .. }) = req {
-			let request = NsmRequest::Attestation {
-				user_data: None,
-				nonce: None,
-				public_key: Some(
-					RsaPair::generate().unwrap().public_key_to_pem().unwrap(),
-				),
-			};
-			let fd = state.attestor.nsm_init();
-			let response = state.attestor.nsm_process_request(fd, request);
-			Some(ProtocolMsg::NsmResponse(response))
-		} else {
-			None
-		}
-	}
-
-	/// TODO: remove
-	pub(super) fn load(
-		req: &ProtocolMsg,
-		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::LoadRequest(Load { executable, signatures: _ }) =
+		if let ProtocolMsg::BootStandardRequest { manifest_envelope, pivot } =
 			req
 		{
-			// TODO: this should be fixed when we have the executable load logic
-			// figured out
-			// for SignatureWithPubKey { signature, path } in signatures {
-			// 	let pub_key = match RsaPub::from_pem_file(path) {
-			// 		Ok(p) => p,
-			// 		Err(_) => return Some(ProtocolMsg::ErrorResponse),
-			// 	};
-			// 	match pub_key.verify_sha256(&signature[..], &data[..]) {
-			// 		Ok(_) => {}
-			// 		Err(_) => return Some(ProtocolMsg::ErrorResponse),
-			// 	}
-			// }
-
-			ok!(std::fs::write(&state.pivot_file, executable));
-			ok!(set_permissions(
-				&state.pivot_file,
-				Permissions::from_mode(0o111)
-			));
-
-			Some(ProtocolMsg::SuccessResponse)
-		} else {
-			None
-		}
-	}
-
-	/// TODO: remove
-	pub(super) fn boot_instruction(
-		req: &ProtocolMsg,
-		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
-		macro_rules! ok_or_err {
-			( $e:expr ) => {
-				match $e {
+			let nsm_response =
+				match boot::boot_standard(state, manifest_envelope, pivot) {
 					Ok(r) => r,
 					Err(e) => {
 						state.phase = ProtocolPhase::UnrecoverableError;
 						return Some(ProtocolMsg::ProtocolErrorResponse(e));
 					}
-				}
-			};
+				};
+
+			Some(ProtocolMsg::BootStandardResponse { nsm_response })
+		} else {
+			None
 		}
+	}
 
-		// TODO: look into breaking this up into separate handler since there
-		// services are totally different.
-		match req {
-			ProtocolMsg::BootRequest(BootInstruction::Standard {
-				manifest_envelope,
-				pivot,
-			}) => {
-				let nsm_response = ok_or_err!(boot::boot_standard(
-					state,
-					manifest_envelope,
-					pivot
-				));
-				Some(ProtocolMsg::BootStandardResponse(nsm_response))
-			}
-			ProtocolMsg::BootRequest(BootInstruction::Genesis { set }) => {
-				let (genesis_output, nsm_response) =
-					ok_or_err!(genesis::boot_genesis(state, set));
+	pub(super) fn boot_genesis(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> Option<ProtocolMsg> {
+		if let ProtocolMsg::BootGenesisRequest { set } = req {
+			let (genesis_output, nsm_response) =
+				match genesis::boot_genesis(state, set) {
+					Ok(r) => r,
+					Err(e) => {
+						state.phase = ProtocolPhase::UnrecoverableError;
+						return Some(ProtocolMsg::ProtocolErrorResponse(e));
+					}
+				};
 
-				Some(ProtocolMsg::BootGenesisResponse {
-					nsm_response,
-					genesis_output,
-				})
-			}
-			_ => None,
+			Some(ProtocolMsg::BootGenesisResponse {
+				nsm_response,
+				genesis_output,
+			})
+		} else {
+			None
 		}
 	}
 }

@@ -9,31 +9,20 @@ use super::{
 /// Message types for communicating with protocol executor.
 #[derive(Debug, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum ProtocolMsg {
-	/// The executor encountered an unrecoverable error.
-	UnrecoverableErrorResponse,
-	/// Could not process response because in unrecoverable phase. TODO: maybe
-	/// remove
-	InUnrecoverablePhaseResponse,
-
 	/// A error from executing the protocol.
 	ProtocolErrorResponse(ProtocolError),
 
 	/// TODO: remove
-	EmptyRequest,
+	NsmRequest {
+		/// A [`NsmRequest`]
+		nsm_request: NsmRequest,
+	},
 	/// TODO: remove
-	EmptyResponse,
-	/// TODO: remove
-	EchoRequest(Echo),
-	/// TODO: remove
-	EchoResponse(Echo),
-	/// TODO: remove
-	ReconstructRequest,
-	/// TODO: remove
-	NsmRequest(NsmRequest),
-	/// TODO: remove
-	NsmResponse(NsmResponse),
-	/// TODO: remove
-	LoadRequest(Load),
+	NsmResponse {
+		/// A [`NsmResponse`]
+		nsm_response: NsmResponse,
+	},
+
 	/// Request was succesful. TODO: remove
 	SuccessResponse,
 	/// TODO: Error response should hold a protocol error, Remove
@@ -44,10 +33,24 @@ pub enum ProtocolMsg {
 	/// Response for [`StatusRequest`]
 	StatusResponse(super::ProtocolPhase),
 
-	/// Send the boot instruction.
-	BootRequest(BootInstruction),
+	/// Execute Standard Boot.
+	BootStandardRequest {
+		/// Manifest with approvals
+		manifest_envelope: Box<ManifestEnvelope>,
+		/// Pivot binary
+		pivot: Vec<u8>,
+	},
 	/// Response for Standard Boot.
-	BootStandardResponse(NsmResponse),
+	BootStandardResponse {
+		/// Should be `[NsmResponse::Attestation`]
+		nsm_response: NsmResponse,
+	},
+
+	/// Execute Genesis Boot.
+	BootGenesisRequest {
+		/// Parameters for creating a Quorum Set
+		set: GenesisSet,
+	},
 	/// Response for Genesis Boot.
 	BootGenesisResponse {
 		/// COSE SIGN1 structure with Attestation Doc
@@ -55,17 +58,18 @@ pub enum ProtocolMsg {
 		/// Output from the Genesis flow.
 		genesis_output: GenesisOutput,
 	},
-	/// Post a quorum key shard
-	ProvisionRequest(Provision),
-}
 
-/// TODO: remove
-#[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
-)]
-pub struct Echo {
-	/// TODO: remove
-	pub data: Vec<u8>,
+	/// Post a quorum key shard
+	ProvisionRequest {
+		/// TODO: flatten
+		share: Provision,
+	},
+	/// Response to a Provision Request
+	ProvisionResponse {
+		/// If the Quorum key was reconstructed. False indicates still waiting
+		/// for the Kth share.
+		reconstructed: bool,
+	},
 }
 
 /// TODO: replace with provision service etc
@@ -75,48 +79,6 @@ pub struct Echo {
 pub struct Provision {
 	/// TODO: remove
 	pub share: Vec<u8>,
-}
-
-/// TODO: remove
-#[derive(
-	Debug, PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
-)]
-pub struct SignatureWithPubKey {
-	/// Signature
-	pub signature: Vec<u8>,
-	/// Path to the file containing the public key associated with this
-	/// signature.
-	pub path: String,
-}
-
-/// TODO: remove
-#[derive(
-	Debug, PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
-)]
-pub struct Load {
-	/// The executable to pivot to
-	pub executable: Vec<u8>,
-	/// Signatures of the data
-	pub signatures: Vec<SignatureWithPubKey>,
-}
-
-/// Instruction for initiate the enclave boot interactive process.
-#[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
-)]
-pub enum BootInstruction {
-	/// Execute Standard Boot.
-	Standard {
-		/// Manifest with approvals
-		manifest_envelope: Box<ManifestEnvelope>,
-		/// Pivot binary
-		pivot: Vec<u8>,
-	},
-	/// Execute Genesis Boot.
-	Genesis {
-		/// Parameters for creating a Quorum Set
-		set: GenesisSet,
-	},
 }
 
 #[cfg(test)]

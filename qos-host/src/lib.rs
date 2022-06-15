@@ -31,7 +31,11 @@ use axum::{
 	routing::{get, post},
 	Extension, Router,
 };
-use qos_core::{client::Client, io::SocketAddress, protocol::ProtocolMsg};
+use qos_core::{
+	client::Client,
+	io::SocketAddress,
+	protocol::{ProtocolError, ProtocolMsg},
+};
 
 pub mod cli;
 pub use cli::CLI;
@@ -96,9 +100,10 @@ impl HostServer {
 		Extension(state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
 		if body.len() > MAX_ENCODED_MSG_LEN {
+			dbg!("OversizeMsg");
 			return (
 				StatusCode::BAD_REQUEST,
-				ProtocolMsg::ErrorResponse
+				ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg)
 					.try_to_vec()
 					.expect("ProtocolMsg can always serialize. qed."),
 			);
@@ -106,12 +111,15 @@ impl HostServer {
 
 		let response = match ProtocolMsg::try_from_slice(&body) {
 			Err(_) => {
+				dbg!("InvalidMsg");
 				return (
 					StatusCode::BAD_REQUEST,
-					ProtocolMsg::ErrorResponse
-						.try_to_vec()
-						.expect("ProtocolMsg can always serialize. qed."),
-				)
+					ProtocolMsg::ProtocolErrorResponse(
+						ProtocolError::InvalidMsg,
+					)
+					.try_to_vec()
+					.expect("ProtocolMsg can always serialize. qed."),
+				);
 			}
 			Ok(request) => state.enclave_client.send(&request),
 		};
@@ -119,9 +127,11 @@ impl HostServer {
 		match response {
 			Err(_) => (
 				StatusCode::INTERNAL_SERVER_ERROR,
-				ProtocolMsg::ErrorResponse
-					.try_to_vec()
-					.expect("ProtocolMsg can always serialize. qed."),
+				ProtocolMsg::ProtocolErrorResponse(
+					ProtocolError::EnclaveClient,
+				)
+				.try_to_vec()
+				.expect("ProtocolMsg can always serialize. qed."),
 			),
 			Ok(response) => (
 				StatusCode::OK,

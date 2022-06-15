@@ -3,7 +3,7 @@
 use std::env;
 
 use borsh::BorshSerialize;
-use qos_core::protocol::{Echo, ProtocolMsg};
+use qos_core::protocol::ProtocolMsg;
 use qos_crypto::RsaPair;
 use qos_host::cli::HostOptions;
 
@@ -13,22 +13,16 @@ use crate::attest::nitro::{
 
 #[derive(Clone, PartialEq, Debug)]
 enum Command {
-	Health,
-	Echo,
+	HostHealth,
 	DescribeNsm,
-	MockAttestation,
-	Attestation,
 	GenerateSetupKey,
 	BootGenesis,
 }
 impl Command {
 	fn run(&self, options: &ClientOptions) {
 		match self {
-			Self::Health => handlers::health(options),
-			Self::Echo => handlers::echo(options),
+			Self::HostHealth => handlers::host_health(options),
 			Self::DescribeNsm => handlers::describe_nsm(options),
-			Self::MockAttestation => handlers::mock_attestation(options),
-			Self::Attestation => handlers::attestation(options),
 			Self::GenerateSetupKey => handlers::generate_setup_key(options),
 			Self::BootGenesis => handlers::boot_genesis(options),
 		}
@@ -37,11 +31,8 @@ impl Command {
 impl From<&str> for Command {
 	fn from(s: &str) -> Self {
 		match s {
-			"health" => Self::Health,
-			"echo" => Self::Echo,
+			"host-health" => Self::HostHealth,
 			"describe-nsm" => Self::DescribeNsm,
-			"mock-attestation" => Self::MockAttestation,
-			"attestation" => Self::Attestation,
 			"generate-setup-key" => Self::GenerateSetupKey,
 			"boot-genesis" => Self::BootGenesis,
 			_ => panic!("Unrecognized command"),
@@ -53,7 +44,6 @@ impl From<&str> for Command {
 struct ClientOptions {
 	cmd: Command,
 	host: HostOptions,
-	echo: EchoOptions,
 	generate_setup_key: GenerateSetupKeyOptions,
 	boot_genesis: BootGenesisOptions,
 	// ... other options
@@ -64,7 +54,6 @@ impl ClientOptions {
 		// Remove the executable name
 		let mut options = Self {
 			host: HostOptions::new(),
-			echo: EchoOptions::new(),
 			generate_setup_key: GenerateSetupKeyOptions::new(),
 			boot_genesis: BootGenesisOptions::new(),
 			cmd: Self::extract_command(&mut args),
@@ -79,15 +68,11 @@ impl ClientOptions {
 		while let Some([cmd, arg]) = chunks.next() {
 			options.host.parse(cmd, arg);
 			match options.cmd {
-				Command::Echo => options.echo.parse(cmd, arg),
 				Command::GenerateSetupKey => {
 					options.generate_setup_key.parse(cmd, arg);
 				}
-				Command::Health
-				| Command::DescribeNsm
-				| Command::MockAttestation
-				| Command::Attestation => {}
 				Command::BootGenesis => options.boot_genesis.parse(cmd, arg),
+				Command::HostHealth | Command::DescribeNsm => {}
 			}
 		}
 
@@ -109,24 +94,6 @@ impl ClientOptions {
 		args.remove(0);
 
 		command
-	}
-}
-
-#[derive(Clone, PartialEq, Debug)]
-struct EchoOptions {
-	data: Option<String>,
-}
-impl EchoOptions {
-	fn new() -> Self {
-		Self { data: None }
-	}
-	fn parse(&mut self, cmd: &str, arg: &str) {
-		if cmd == "--data" {
-			self.data = Some(arg.to_string());
-		};
-	}
-	fn data(&self) -> String {
-		self.data.clone().expect("No `--data` given for echo request")
 	}
 }
 
@@ -207,17 +174,17 @@ mod handlers {
 	use std::path::Path;
 
 	use qos_core::protocol::{
-		BootInstruction, GenesisSet, NsmRequest, NsmResponse, SetupMember,
+		GenesisSet, NsmRequest, NsmResponse, SetupMember,
 	};
 	use qos_crypto::RsaPub;
 
 	use super::{
 		attestation_doc_from_der, cert_from_pem, BorshSerialize, ClientOptions,
-		Echo, ProtocolMsg, RsaPair, AWS_ROOT_CERT_PEM,
+		ProtocolMsg, RsaPair, AWS_ROOT_CERT_PEM,
 	};
 	use crate::{attest, request};
 
-	pub(super) fn health(options: &ClientOptions) {
+	pub(super) fn host_health(options: &ClientOptions) {
 		let path = &options.host.path("health");
 		if let Ok(response) = request::get(path) {
 			println!("{}", response);
@@ -226,110 +193,28 @@ mod handlers {
 		}
 	}
 
-	pub(super) fn echo(options: &ClientOptions) {
-		let path = &options.host.path("message");
-		let msg = options.echo.data().into_bytes();
-		let response =
-			request::post(path, &ProtocolMsg::EchoRequest(Echo { data: msg }))
-				.map_err(|e| println!("{:?}", e))
-				.expect("Echo message failed");
+	// TODO: get info from the status endpoitn
+	// Status endpoint should return
+	// - ManifestEnvelope if it exists
+	// - Phase
+	// - Attestation doc generated at boot, if it exists
+	// - Current time in enclave
+	// - Data signed by quorum key
 
-		match response {
-			ProtocolMsg::EchoResponse(Echo { data }) => {
-				let resp_msg = std::str::from_utf8(&data[..])
-					.expect("Couldn't convert Echo to UTF-8");
-				println!("{}", resp_msg);
-			}
-			_ => {
-				panic!("Unexpected Echo response")
-			}
-		};
-	}
-
+	// TODO: this should eventually be removed since it only applies to nitro
 	pub(super) fn describe_nsm(options: &ClientOptions) {
 		let path = &options.host.path("message");
 		match request::post(
 			path,
-			&ProtocolMsg::NsmRequest(NsmRequest::DescribeNSM),
+			&ProtocolMsg::NsmRequest { nsm_request: NsmRequest::DescribeNSM },
 		)
 		.map_err(|e| println!("{:?}", e))
 		.expect("Attestation request failed")
 		{
-			ProtocolMsg::NsmResponse(description) => {
-				println!("{:#?}", description);
+			ProtocolMsg::NsmResponse { nsm_response } => {
+				println!("{:#?}", nsm_response);
 			}
 			other => panic!("Unexpected response {:?}", other),
-		}
-	}
-
-	pub(super) fn attestation(options: &ClientOptions) {
-		let path = &options.host.path("message");
-		let response = request::post(
-			path,
-			&ProtocolMsg::NsmRequest(NsmRequest::Attestation {
-				user_data: None,
-				nonce: None,
-				public_key: None,
-			}),
-		)
-		.map_err(|e| println!("{:?}", e))
-		.expect("Attestation request failed");
-
-		match response {
-			ProtocolMsg::NsmResponse(NsmResponse::Attestation { document }) => {
-				let root_cert = cert_from_pem(AWS_ROOT_CERT_PEM)
-					.expect("Invalid root cert");
-				let now = std::time::SystemTime::now();
-				let seconds_since_epoch = now
-					.duration_since(std::time::UNIX_EPOCH)
-					.unwrap()
-					.as_secs();
-				match attestation_doc_from_der(
-					&document,
-					&root_cert[..],
-					seconds_since_epoch,
-				) {
-					Ok(_) => println!("Attestation doc verified!"),
-					Err(e) => panic!("{:?}", e),
-				};
-			}
-			_ => panic!("Not an attestation response"),
-		}
-	}
-
-	pub(super) fn mock_attestation(options: &ClientOptions) {
-		let path = &options.host.path("message");
-
-		let response = request::post(
-			path,
-			&ProtocolMsg::NsmRequest(NsmRequest::Attestation {
-				user_data: None,
-				nonce: None,
-				public_key: Some(
-					RsaPair::generate().unwrap().public_key_to_pem().unwrap(),
-				),
-			}),
-		)
-		.map_err(|e| println!("{:?}", e))
-		.expect("Attestation request failed");
-
-		match response {
-			ProtocolMsg::NsmResponse(NsmResponse::Attestation {
-				document: _,
-			}) => {
-				// use attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
-				// let root_cert =
-				// 	cert_from_pem(AWS_ROOT_CERT_PEM).expect("Invalid root cert");
-				// match attestation_doc_from_der(
-				// 	&document,
-				// 	&root_cert[..],
-				// 	MOCK_SECONDS_SINCE_EPOCH,
-				// ) {
-				// 	Ok(_) => println!("Attestation doc verified!"),
-				// 	Err(e) => panic!("{:?}", e),
-				// };
-			}
-			_ => panic!("Not an attestation response"),
 		}
 	}
 
@@ -378,9 +263,7 @@ mod handlers {
 		let output_dir = options.boot_genesis.out_dir();
 		let output_dir = Path::new(&output_dir);
 
-		let req = ProtocolMsg::BootRequest(BootInstruction::Genesis {
-			set: genesis_set.clone(),
-		});
+		let req = ProtocolMsg::BootGenesisRequest { set: genesis_set.clone() };
 
 		let (nsm_response, genesis_output) =
 			match request::post(uri, &req).unwrap() {
