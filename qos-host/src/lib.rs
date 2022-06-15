@@ -100,7 +100,6 @@ impl HostServer {
 		Extension(state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
 		if body.len() > MAX_ENCODED_MSG_LEN {
-			dbg!("OversizeMsg");
 			return (
 				StatusCode::BAD_REQUEST,
 				ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg)
@@ -111,7 +110,6 @@ impl HostServer {
 
 		let response = match ProtocolMsg::try_from_slice(&body) {
 			Err(_) => {
-				dbg!("InvalidMsg");
 				return (
 					StatusCode::BAD_REQUEST,
 					ProtocolMsg::ProtocolErrorResponse(
