@@ -24,7 +24,7 @@ impl HostServerOptions {
 }
 
 /// CLI options for host IP address and Port.
-#[derive(Default, Clone, Debug, PartialEq)]
+#[derive(Default, Clone, Copy, Debug, PartialEq)]
 pub struct HostOptions {
 	ip: Option<[u8; 4]>,
 	port: Option<u16>,
@@ -32,8 +32,7 @@ pub struct HostOptions {
 
 impl HostOptions {
 	/// Create a new instance of [`self`].
-	#[must_use]
-	pub fn new() -> Self {
+	#[must_use] pub fn new() -> Self {
 		Self::default()
 	}
 
@@ -43,7 +42,7 @@ impl HostOptions {
 	///
 	/// Panics if the url cannot be parsed from options
 	#[must_use] pub fn url(&self) -> String {
-		if let Self { ip: Some(ip), port: Some(port) } = self.clone() {
+		if let Self { ip: Some(ip), port: Some(port) } = self {
 			return format!(
 				"http://{}.{}.{}.{}:{}",
 				ip[0], ip[1], ip[2], ip[3], port
@@ -117,8 +116,8 @@ impl CLI {
 	pub async fn execute() {
 		let mut args: Vec<String> = env::args().collect();
 		args.remove(0);
-		let options = parse_args(args);
-		let addr = host_addr_from_options(options.host.clone());
+		let options = parse_args(&args);
+		let addr = host_addr_from_options(options.host);
 		let enclave_addr = options.enclave.addr();
 		HostServer::new_with_socket_addr(enclave_addr, addr)
 			.serve()
@@ -126,13 +125,11 @@ impl CLI {
 	}
 }
 
-fn parse_args(args: Vec<String>) -> HostServerOptions {
+fn parse_args(args: &[String]) -> HostServerOptions {
 	let mut options = HostServerOptions::new();
 
 	let mut chunks = args.chunks_exact(2);
-	if !chunks.remainder().is_empty() {
-		panic!("Unexepected number of arguments")
-	}
+	assert!(chunks.remainder().is_empty(), "Unexepected number of arguments");
 	while let Some([cmd, arg]) = chunks.next() {
 		options.host.parse(cmd, arg);
 		options.enclave.parse(cmd, arg);

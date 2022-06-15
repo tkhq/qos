@@ -2,7 +2,7 @@
 
 #![forbid(unsafe_code)]
 #![deny(clippy::all)]
-#![warn(missing_docs)]
+#![warn(missing_docs, clippy::pedantic)]
 
 // TODO: Audit encryption strategy
 // This file implements an envelope encryption strategy using RSA and AES 256
