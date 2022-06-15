@@ -61,7 +61,7 @@ async fn provision_e2e() {
 	// Test message endpoint
 	let data = b"Hello, world!".to_vec();
 	let request = ProtocolMsg::EchoRequest(Echo { data: data.clone() });
-	let response = qos_client::request::post(&message_url, request).unwrap();
+	let response = qos_client::request::post(&message_url, &request).unwrap();
 	let expected = ProtocolMsg::EchoResponse(Echo { data });
 	assert_eq!(expected, response);
 
@@ -73,19 +73,19 @@ async fn provision_e2e() {
 
 	let s1 = all_shares[0].clone();
 	let r1 = ProtocolMsg::ProvisionRequest(Provision { share: s1 });
-	let response = qos_client::request::post(&message_url, r1).unwrap();
+	let response = qos_client::request::post(&message_url, &r1).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
 	let s2 = all_shares[1].clone();
 	let r2 = ProtocolMsg::ProvisionRequest(Provision { share: s2 });
-	let response = qos_client::request::post(&message_url, r2).unwrap();
+	let response = qos_client::request::post(&message_url, &r2).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
 	let s3 = all_shares[2].clone();
 	let r3 = ProtocolMsg::ProvisionRequest(Provision { share: s3 });
-	let response = qos_client::request::post(&message_url, r3).unwrap();
+	let response = qos_client::request::post(&message_url, &r3).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
@@ -93,7 +93,7 @@ async fn provision_e2e() {
 	assert!(!path.exists());
 
 	let rr = ProtocolMsg::ReconstructRequest;
-	let response = qos_client::request::post(&message_url, rr).unwrap();
+	let response = qos_client::request::post(&message_url, &rr).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 

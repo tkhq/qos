@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use aws_nitro_enclaves_nsm_api::api::Digest;
 
-use super::*;
+use super::{AttestError, ByteBuf};
 
 const MIN_PCR_COUNT: usize = 1;
 const MAX_PRC_COUNT: usize = 32;
@@ -58,10 +58,10 @@ pub(super) fn cabundle(cabundle: &[ByteBuf]) -> Result<(), AttestError> {
 }
 /// Mandatory field
 pub(super) fn digest(d: Digest) -> Result<(), AttestError> {
-	if d != Digest::SHA384 {
-		Err(AttestError::InvalidDigest)
-	} else {
+	if d == Digest::SHA384 {
 		Ok(())
+	} else {
+		Err(AttestError::InvalidDigest)
 	}
 }
 /// Mandatory field
@@ -77,7 +77,7 @@ pub(super) fn public_key(pub_key: &Option<ByteBuf>) -> Result<(), AttestError> {
 	if let Some(key) = pub_key {
 		(key.len() >= MIN_PUB_KEY_LEN && key.len() <= MAX_PUB_KEY_LEN)
 			.then(|| ())
-			.ok_or(AttestError::InvalidPubKey)?
+			.ok_or(AttestError::InvalidPubKey)?;
 	}
 
 	Ok(())
@@ -93,7 +93,7 @@ pub(super) fn nonce(n: &Option<ByteBuf>) -> Result<(), AttestError> {
 
 fn bytes_512(val: &Option<ByteBuf>) -> Result<(), AttestError> {
 	if let Some(val) = val {
-		(val.len() <= 512).then(|| ()).ok_or(AttestError::InvalidBytes)?
+		(val.len() <= 512).then(|| ()).ok_or(AttestError::InvalidBytes)?;
 	}
 
 	Ok(())

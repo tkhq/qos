@@ -21,14 +21,14 @@ static AWS_NITRO_CERT_SIG_ALG: &[&webpki::SignatureAlgorithm] =
 /// Corresponds to `MockNsm` attestation document response. This time is
 /// valid for the mock and should only be used for testing.
 #[cfg(any(feature = "mock", test))]
-pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1652756400;
+pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1_652_756_400;
 
 /// AWS Nitro root CA certificate.
 ///
 /// This should be validated against the checksum:
 /// `8cf60e2b2efca96c6a9e71e851d00c1b6991cc09eadbe64a6a1d1b1eb9faff7c`. This
 /// checksum and the certificate should be manually verified against
-/// https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html.
+/// <https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html/>.
 pub const AWS_ROOT_CERT_PEM: &[u8] =
 	std::include_bytes!("./static/aws_root_cert.pem");
 
@@ -145,10 +145,10 @@ fn verify_cose_sign1_sig(
 	let is_valid_sig = cose_sign1
 		.verify_signature(&ee_cert_pub_key)
 		.map_err(|_| AttestError::InvalidCOSESign1Signature)?;
-	if !is_valid_sig {
-		Err(AttestError::InvalidCOSESign1Signature)
-	} else {
+	if is_valid_sig {
 		Ok(())
+	} else {
+		Err(AttestError::InvalidCOSESign1Signature)
 	}
 }
 

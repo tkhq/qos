@@ -67,7 +67,7 @@ async fn coordinator_e2e() {
 		executable: pivot_bytes,
 		signatures: vec![],
 	});
-	let response = request::post(&message_url, load_msg).unwrap();
+	let response = request::post(&message_url, &load_msg).unwrap();
 	assert_eq!(response, ProtocolMsg::SuccessResponse);
 
 	// -- Check that the executable got written as a file
@@ -84,13 +84,13 @@ async fn coordinator_e2e() {
 	// -- For each shard send it and expect a success response
 	for share in all_shares.into_iter().take(k) {
 		let provision_msg = ProtocolMsg::ProvisionRequest(Provision { share });
-		let response = request::post(&message_url, provision_msg).unwrap();
+		let response = request::post(&message_url, &provision_msg).unwrap();
 		assert_eq!(response, ProtocolMsg::SuccessResponse);
 	}
 
 	// -- Send reconstruct request to create secret file from shards
 	let response =
-		request::post(&message_url, ProtocolMsg::ReconstructRequest).unwrap();
+		request::post(&message_url, &ProtocolMsg::ReconstructRequest).unwrap();
 	assert_eq!(response, ProtocolMsg::SuccessResponse);
 	assert!(Path::new(secret_path).exists());
 

@@ -100,7 +100,7 @@ fn load_e2e() {
 	let load_request =
 		ProtocolMsg::LoadRequest(Load { executable, signatures });
 	let response =
-		qos_client::request::post(&message_url, load_request).unwrap();
+		qos_client::request::post(&message_url, &load_request).unwrap();
 	assert_eq!(response, ProtocolMsg::SuccessResponse);
 
 	//
