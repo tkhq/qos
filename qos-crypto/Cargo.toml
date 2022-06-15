@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
 openssl = "0.10.40"
+borsh = { version = "0.9" }

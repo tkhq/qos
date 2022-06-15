@@ -5,3 +5,5 @@ target/
 *.key
 *.pivot
 *.secret
+*.configuration
+*.pub

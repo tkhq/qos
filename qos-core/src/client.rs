@@ -1,14 +1,20 @@
 //! Streaming socket based client to connect with [`server::Server`].
+use borsh::{BorshDeserialize, BorshSerialize};
+
 use crate::{
 	io::{self, SocketAddress, Stream},
 	protocol::{ProtocolError, ProtocolMsg},
 };
 
+/// Enclave client error.
 #[derive(Debug)]
 pub enum ClientError {
+	/// [`io::IOError`] wrapper.
 	IOError(io::IOError),
+	/// `ProtocolError` error wrapper.
 	ProtocolError(ProtocolError),
-	SerdeCBOR(serde_cbor::Error),
+	/// `borsh::maybestd::io::Error` wrapper.
+	BorshError(borsh::maybestd::io::Error),
 }
 
 impl From<io::IOError> for ClientError {
@@ -23,9 +29,9 @@ impl From<ProtocolError> for ClientError {
 	}
 }
 
-impl From<serde_cbor::Error> for ClientError {
-	fn from(err: serde_cbor::Error) -> Self {
-		Self::SerdeCBOR(err)
+impl From<borsh::maybestd::io::Error> for ClientError {
+	fn from(err: borsh::maybestd::io::Error) -> Self {
+		Self::BorshError(err)
 	}
 }
 
@@ -37,21 +43,22 @@ pub struct Client {
 
 impl Client {
 	/// Create a new client.
+	#[must_use]
 	pub fn new(addr: SocketAddress) -> Self {
 		Self { addr }
 	}
 
-	/// Send a [`ProtocolMsg`] and return the response.
+	/// Send a [`ProtocolMsg`] and wait for the response.
 	pub fn send(
 		&self,
-		request: ProtocolMsg,
+		request: &ProtocolMsg,
 	) -> Result<ProtocolMsg, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
+
 		stream.send(
-			&serde_cbor::to_vec(&request)
-				.expect("ProtocolMsg can be serialized. qed."),
+			&request.try_to_vec().expect("ProtocolMsg can be serialized. qed."),
 		)?;
 		let response = stream.recv()?;
-		serde_cbor::from_slice(&response).map_err(Into::into)
+		ProtocolMsg::try_from_slice(&response).map_err(Into::into)
 	}
 }

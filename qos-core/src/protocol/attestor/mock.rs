@@ -2,8 +2,12 @@
 
 use std::collections::BTreeSet;
 
-use crate::protocol::{NsmDigest, NsmProvider, NsmRequest, NsmResponse};
+use super::{
+	types::{NsmDigest, NsmRequest, NsmResponse},
+	NsmProvider,
+};
 
+/// Mock Nitro Secure Module endpoint that should only ever be used for testing.
 pub struct MockNsm;
 impl NsmProvider for MockNsm {
 	fn nsm_process_request(
@@ -39,7 +43,6 @@ impl NsmProvider for MockNsm {
 			NsmRequest::DescribePCR { index: _ } => {
 				NsmResponse::DescribePCR { lock: false, data: vec![3, 4, 7, 4] }
 			}
-			_ => unreachable!(),
 		}
 	}
 

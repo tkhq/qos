@@ -5,18 +5,17 @@ use std::{
 	path::Path,
 };
 
-use qos_client;
 use qos_core::{
 	io::SocketAddress,
 	protocol::{Echo, Executor, MockNsm, ProtocolMsg, Provision},
 	server::SocketServer,
 };
-use qos_crypto;
 use qos_host::HostServer;
 
 #[tokio::test]
 async fn provision_e2e() {
-	let enclave_addr = SocketAddress::new_unix("./provision_e2e.sock");
+	let usock = "./provisions_e2e.sock";
+	let enclave_addr = SocketAddress::new_unix(usock);
 	let enclave_addr2 = enclave_addr.clone();
 	let ip = Ipv4Addr::from([127u8, 0, 0, 1]);
 	let port = 3002;
@@ -27,14 +26,20 @@ async fn provision_e2e() {
 
 	let pivot_file = "./end-to-end.pivot".to_string();
 	let secret_file = "./end-to-end.secret".to_string();
+	let ephemeral_file = "./end-to-end.ephemeral".to_string();
 
 	// Spawn enclave
-	let pivot_file2 = pivot_file.clone();
+	let pivot_file2 = pivot_file;
 	let secret_file2 = secret_file.clone();
+	let ephemeral_file2 = ephemeral_file;
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
-		let executor =
-			Executor::new(Box::new(attestor), secret_file2, pivot_file2);
+		let executor = Executor::new(
+			Box::new(attestor),
+			secret_file2,
+			pivot_file2,
+			ephemeral_file2,
+		);
 
 		SocketServer::listen(enclave_addr, executor).unwrap()
 	});
@@ -61,7 +66,7 @@ async fn provision_e2e() {
 	// Test message endpoint
 	let data = b"Hello, world!".to_vec();
 	let request = ProtocolMsg::EchoRequest(Echo { data: data.clone() });
-	let response = qos_client::request::post(&message_url, request).unwrap();
+	let response = qos_client::request::post(&message_url, &request).unwrap();
 	let expected = ProtocolMsg::EchoResponse(Echo { data });
 	assert_eq!(expected, response);
 
@@ -73,19 +78,19 @@ async fn provision_e2e() {
 
 	let s1 = all_shares[0].clone();
 	let r1 = ProtocolMsg::ProvisionRequest(Provision { share: s1 });
-	let response = qos_client::request::post(&message_url, r1).unwrap();
+	let response = qos_client::request::post(&message_url, &r1).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
 	let s2 = all_shares[1].clone();
 	let r2 = ProtocolMsg::ProvisionRequest(Provision { share: s2 });
-	let response = qos_client::request::post(&message_url, r2).unwrap();
+	let response = qos_client::request::post(&message_url, &r2).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
 	let s3 = all_shares[2].clone();
 	let r3 = ProtocolMsg::ProvisionRequest(Provision { share: s3 });
-	let response = qos_client::request::post(&message_url, r3).unwrap();
+	let response = qos_client::request::post(&message_url, &r3).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
@@ -93,7 +98,7 @@ async fn provision_e2e() {
 	assert!(!path.exists());
 
 	let rr = ProtocolMsg::ReconstructRequest;
-	let response = qos_client::request::post(&message_url, rr).unwrap();
+	let response = qos_client::request::post(&message_url, &rr).unwrap();
 	let expected = ProtocolMsg::SuccessResponse;
 	assert_eq!(expected, response);
 
@@ -106,4 +111,5 @@ async fn provision_e2e() {
 
 	// Delete file
 	std::fs::remove_file(path).unwrap();
+	std::fs::remove_file(usock).unwrap();
 }

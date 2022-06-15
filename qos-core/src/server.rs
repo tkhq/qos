@@ -5,10 +5,11 @@ use std::marker::PhantomData;
 
 use crate::io::{self, Listener, SocketAddress};
 
+/// Error variants for [`SocketServer`]
 #[derive(Debug)]
 pub enum SocketServerError {
+	/// `io::IOError` wrapper.
 	IOError(io::IOError),
-	NotFound,
 }
 
 impl From<io::IOError> for SocketServerError {
@@ -17,16 +18,18 @@ impl From<io::IOError> for SocketServerError {
 	}
 }
 
+/// A bare bare bones, socket based server.
 pub struct SocketServer<R: Routable> {
 	_phantom: PhantomData<R>,
 }
 
 impl<R: Routable> SocketServer<R> {
+	/// Listen and respond to incoming requests with the given `processor`.
 	pub fn listen(
 		addr: SocketAddress,
 		mut processor: R,
 	) -> Result<(), SocketServerError> {
-		println!("SocketServer listening on {:?}", addr);
+		println!("`SocketServer` listening on {:?}", addr);
 
 		let listener = Listener::listen(addr)?;
 
@@ -44,6 +47,12 @@ impl<R: Routable> SocketServer<R> {
 	}
 }
 
+/// Something that can process requests.
 pub trait Routable {
-	fn process(&mut self, req: Vec<u8>) -> Vec<u8>;
+	/// Process an incoming request and return a response.
+	///
+	/// The request and response are raw bytes. Likely this should be encoded
+	/// data and logic inside of this function should take care of decoding the
+	/// request and encoding a response.
+	fn process(&mut self, request: Vec<u8>) -> Vec<u8>;
 }

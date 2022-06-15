@@ -13,8 +13,13 @@
 //! * Response: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/response.md/>
 //! * Responding with error: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/error_handling.md/>
 #![forbid(unsafe_code)]
+#![deny(clippy::all)]
+#![warn(missing_docs, clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
 
 use std::{net::SocketAddr, sync::Arc};
+
+use borsh::{BorshDeserialize, BorshSerialize};
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
@@ -50,7 +55,12 @@ impl HostServer {
 	}
 
 	/// Start the server, running indefinitely.
-	pub async fn serve(&self) -> Result<(), String> {
+	///
+	/// # Panics
+	///
+	/// Panics if there is an issue starting the server.
+	// pub async fn serve(&self) -> Result<(), String> {
+	pub async fn serve(&self) {
 		let state = Arc::new(State {
 			enclave_client: Client::new(self.enclave_addr.clone()),
 		});
@@ -60,14 +70,14 @@ impl HostServer {
 			.route("/message", post(Self::message))
 			.layer(Extension(state));
 
-		println!("Listening on {}", self.addr);
+		println!("HostServer listening on {}", self.addr);
 
 		axum::Server::bind(&self.addr)
 			.serve(app.into_make_service())
 			.await
 			.unwrap();
 
-		Ok(())
+		// Ok(())
 	}
 
 	/// Health route handler.
@@ -86,29 +96,37 @@ impl HostServer {
 		if body.len() > MAX_ENCODED_MSG_LEN {
 			return (
 				StatusCode::BAD_REQUEST,
-				serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+				ProtocolMsg::ErrorResponse
+					.try_to_vec()
 					.expect("ProtocolMsg can always serialize. qed."),
 			);
 		}
 
-		match serde_cbor::from_slice(&body) {
+		let response = match ProtocolMsg::try_from_slice(&body) {
+			Err(_) => {
+				return (
+					StatusCode::BAD_REQUEST,
+					ProtocolMsg::ErrorResponse
+						.try_to_vec()
+						.expect("ProtocolMsg can always serialize. qed."),
+				)
+			}
+			Ok(request) => state.enclave_client.send(&request),
+		};
+
+		match response {
 			Err(_) => (
-				StatusCode::BAD_REQUEST,
-				serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
+				StatusCode::INTERNAL_SERVER_ERROR,
+				ProtocolMsg::ErrorResponse
+					.try_to_vec()
 					.expect("ProtocolMsg can always serialize. qed."),
 			),
-			Ok(request) => match state.enclave_client.send(request) {
-				Err(_) => (
-					StatusCode::INTERNAL_SERVER_ERROR,
-					serde_cbor::to_vec(&ProtocolMsg::ErrorResponse)
-						.expect("ProtocolMsg can always serialize. qed."),
-				),
-				Ok(response) => (
-					StatusCode::OK,
-					serde_cbor::to_vec(&response)
-						.expect("ProtocolMsg can always serialize. qed."),
-				),
-			},
+			Ok(response) => (
+				StatusCode::OK,
+				response
+					.try_to_vec()
+					.expect("ProtocolMsg can always serialize. qed."),
+			),
 		}
 	}
 }
