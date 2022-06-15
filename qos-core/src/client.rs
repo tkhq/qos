@@ -3,7 +3,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
 	io::{self, SocketAddress, Stream},
-	protocol::{ProtocolError, ProtocolMsg},
+	protocol::ProtocolMsg,
 };
 
 /// Enclave client error.
@@ -11,8 +11,6 @@ use crate::{
 pub enum ClientError {
 	/// [`io::IOError`] wrapper.
 	IOError(io::IOError),
-	/// `ProtocolError` error wrapper.
-	ProtocolError(ProtocolError),
 	/// `borsh::maybestd::io::Error` wrapper.
 	BorshError(borsh::maybestd::io::Error),
 }
@@ -20,12 +18,6 @@ pub enum ClientError {
 impl From<io::IOError> for ClientError {
 	fn from(err: io::IOError) -> Self {
 		Self::IOError(err)
-	}
-}
-
-impl From<ProtocolError> for ClientError {
-	fn from(err: ProtocolError) -> Self {
-		Self::ProtocolError(err)
 	}
 }
 
