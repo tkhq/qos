@@ -34,11 +34,14 @@ pub enum RestartPolicy {
 	Always,
 }
 
+/// Pivot binary configuration
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct PivotConfig {
+	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
 	pub hash: Hash256,
+	/// Restart policy for running the pivot binary.
 	pub restart: RestartPolicy,
 }
 
@@ -46,32 +49,57 @@ pub struct PivotConfig {
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct QuorumMember {
+	/// A human readable alias to identify the member. Must be unique to the
+	/// Quorum Set.
 	pub alias: String,
 	/// DER encoded RSA public key
 	pub pub_key: Vec<u8>,
 }
 
+/// The Quorum Set.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct QuorumSet {
+	/// The threshold, K, of signatures necessary to have  quorum.
 	pub threshold: u32,
+	/// Members composing the set. The length of this, N, must be gte to the
+	/// `threshold`, K.
 	pub members: Vec<QuorumMember>,
 }
 
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+pub struct Namespace {
+	/// The namespace. This should be unique relative to other namespaces the
+	/// organization running QuorumOs has.
+	name: String,
+	/// A monotonically increasing value, used to identify the order in which
+	/// manifests for this namespace have been created. This is used to prevent
+	/// downgrade attacks - quorum members should only approve a manifest that
+	/// has the highest nonce.
+	nonce: u32,
+}
+
+#[derive(
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub struct Manifest {
-	pub nonce: u32,
-	pub namespace: String,
+	/// Namespace this manifest belongs too.
+	pub namespace: Namespace,
+	/// Configuration and verifiable values for the enclave hardware.
 	pub enclave: NitroConfig,
+	/// Pivot binary configuration and verifiable values.
 	pub pivot: PivotConfig,
+	/// Quorum Key as a DER encoded RSA public key.
 	pub quorum_key: Vec<u8>,
+	/// Quorum Set members and threshold.
 	pub quorum_set: QuorumSet,
 }
 
 impl Manifest {
+	/// Canonical hash for the manifest.
 	pub fn hash(&self) -> Hash256 {
 		qos_crypto::sha_256(
 			&self.try_to_vec().expect("`Manifest` serializes with cbor"),
@@ -79,23 +107,30 @@ impl Manifest {
 	}
 }
 
+/// An approval by a Quorum Member.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct Approval {
+	/// Quorum Member's signature.
 	pub signature: Vec<u8>,
+	/// Description of the Quorum Member
 	pub member: QuorumMember,
 }
 
+/// [`Manifest`] with accompanying [`Approval`]s.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct ManifestEnvelope {
+	/// Encapsulated manifest.
 	pub manifest: Manifest,
+	/// Approvals for [`Self::manifest`].
 	pub approvals: Vec<Approval>,
 }
 
 impl ManifestEnvelope {
+	/// Check if the encapsulated manifest has K valid approvals.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
 		for approval in self.approvals.iter() {
 			let pub_key = RsaPub::from_der(&approval.member.pub_key)
@@ -119,7 +154,7 @@ impl ManifestEnvelope {
 	}
 }
 
-pub fn boot_standard(
+pub(super) fn boot_standard(
 	state: &mut ProtocolState,
 	manifest_envelope: ManifestEnvelope,
 	pivot: &Vec<u8>,

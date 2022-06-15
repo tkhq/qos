@@ -45,7 +45,7 @@ fn load_e2e() {
 		.iter()
 		.enumerate()
 		.map(|(i, pair)| SignatureWithPubKey {
-			signature: pair.sign_sha256(&mut executable.clone()[..]).unwrap(),
+			signature: pair.sign_sha256(&executable.clone()[..]).unwrap(),
 			path: paths[i].to_string_lossy().into_owned(),
 		})
 		.collect();

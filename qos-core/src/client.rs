@@ -6,10 +6,14 @@ use crate::{
 	protocol::{ProtocolError, ProtocolMsg},
 };
 
+/// Enclave client error.
 #[derive(Debug)]
 pub enum ClientError {
+	/// [`io::IOError`] wrapper.
 	IOError(io::IOError),
+	/// `ProtocolError` error wrapper.
 	ProtocolError(ProtocolError),
+	/// `borsh::maybestd::io::Error` wrapper.
 	BorshError(borsh::maybestd::io::Error),
 }
 

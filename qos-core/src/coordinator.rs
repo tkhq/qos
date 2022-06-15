@@ -8,6 +8,8 @@ use std::{path::Path, process::Command};
 
 use crate::{cli::EnclaveOptions, protocol::Executor, server::SocketServer};
 
+/// Primary entry point for running the enclave. Coordinates spawning the server
+/// and pivot binary.
 pub struct Coordinator;
 impl Coordinator {
 	/// Run the coordinator.

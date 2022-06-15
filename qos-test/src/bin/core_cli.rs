@@ -1,3 +1,3 @@
 fn main() {
-	qos_core::CLI::execute()
+	qos_core::cli::CLI::execute()
 }

@@ -111,7 +111,7 @@ const GF256_EXP: [u8; 2*255] = [
     0x1c, 0x24, 0x6c, 0xb4, 0xc7, 0x52, 0xf6,
 ];
 
-/// multiply in GF(256)
+/// Multiply in GF(256).
 fn gf256_mul(a: u8, b: u8) -> u8 {
 	if a == 0 || b == 0 {
 		0
@@ -121,18 +121,18 @@ fn gf256_mul(a: u8, b: u8) -> u8 {
 	}
 }
 
-/// divide in GF(256)
+/// Divide in GF(256)/
 fn gf256_div(a: u8, b: u8) -> u8 {
 	// multiply a against inverse b
 	gf256_mul(a, GF256_EXP[usize::from(255 - GF256_LOG[usize::from(b)])])
 }
 
-/// evaluate a polynomial at x over GF(256) using Horner's method
+/// Evaluate a polynomial at x over GF(256) using Horner's method.
 fn gf256_eval(f: &[u8], x: u8) -> u8 {
 	f.iter().rev().fold(0, |acc, c| gf256_mul(acc, x) ^ c)
 }
 
-/// generate a random polynomial of given degree, fixing f(0) = secret
+/// Generate a random polynomial of given degree, fixing f(0) = secret.
 fn gf256_generate(secret: u8, degree: usize) -> Vec<u8> {
 	// TODO: improve randomness
 	let mut rng = rand::thread_rng();
@@ -141,7 +141,7 @@ fn gf256_generate(secret: u8, degree: usize) -> Vec<u8> {
 		.collect()
 }
 
-/// find f(0) using Lagrange interpolation
+/// Find f(0) using Lagrange interpolation.
 fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 	assert!(xs.len() == ys.len());
 	let mut y = 0u8;
@@ -159,8 +159,7 @@ fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 	y
 }
 
-/// generate n shares requiring k shares to reconstruct
-// #[allow(clippy::needless_range_loop)]
+/// Generate n shares requiring k shares to reconstruct.
 pub fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
 	let mut shares = vec![vec![]; n];
 
@@ -186,7 +185,7 @@ pub fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
 	shares
 }
 
-/// reconstruct our secret
+/// Reconstruct our secret from the given `shares`.
 pub fn shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
 	let len = shares.iter().map(|s| s.as_ref().len()).min().unwrap_or(0);
 	// rather than erroring, return empty secrets if input is malformed.

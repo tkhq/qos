@@ -5,6 +5,7 @@ use qos_crypto::{RsaPair, RsaPub};
 
 use super::{Hash256, NsmRequest, NsmResponse, ProtocolError, ProtocolState};
 
+/// Member of the [`SetupSet`].
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
@@ -34,39 +35,49 @@ pub struct GenesisSet {
 )]
 struct MemberShard {
 	// TODO: is this taking up too much unnecessary space?
+	/// Member of the Setup Set.
 	member: SetupMember,
+	/// Shard of the generated Quorum Key, encrypted to the `member`s Setup
+	/// Key.
 	shard: Vec<u8>,
 }
 
+/// A set of member shards used to succesfully recover the quorum key during the
+/// genesis ceremony.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct RecoveredPermutation(Vec<MemberShard>);
 
+/// Genesis output per Setup Member.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct GenesisMemberOutput {
 	/// The Quorum Member whom's Setup Key was used.
 	pub setup_member: SetupMember,
-	/// Quorum Key Share encrypted to the Personal Key.
+	/// Quorum Key Share encrypted to the `setup_member`'s Personal Key.
 	pub encrypted_quorum_key_share: Vec<u8>,
-	/// Personal Key encrypted to the Quorum Member's Setup Key.
+	/// Personal Key encrypted to the `setup_member`'s Setup Key.
 	pub encrypted_personal_key: Vec<u8>,
 }
 
+/// Output from running Genesis Boot.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct GenesisOutput {
-	/// Quorum Key - DER encoded RSA public key
+	/// Public Quorum Key, DER encoded.
 	pub quorum_key: Vec<u8>,
 	/// Quorum Member specific outputs from the genesis ceremony.
 	pub member_outputs: Vec<GenesisMemberOutput>,
+	/// All successfully `RecoveredPermutation`s completed during the genesis
+	/// process.
 	pub recovery_permutations: Vec<RecoveredPermutation>,
 }
 
 impl GenesisOutput {
+	/// Canonical hash of [`Self`]
 	pub fn hash(&self) -> Hash256 {
 		qos_crypto::sha_256(
 			&self.try_to_vec().expect("`Manifest` serializes with cbor"),
@@ -80,7 +91,7 @@ impl GenesisOutput {
 //
 // TODO: Disaster recovery logic!
 // Maybe we can just accept 2 set configs, and one is the recovery set?``
-pub fn boot_genesis(
+pub(super) fn boot_genesis(
 	state: &mut ProtocolState,
 	genesis_set: &GenesisSet,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {

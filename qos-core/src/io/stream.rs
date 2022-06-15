@@ -19,26 +19,32 @@ use super::IOError;
 const MAX_RETRY: usize = 8;
 const BACKLOG: usize = 128;
 
+/// Socket address.
 #[derive(Clone, Debug)]
 pub enum SocketAddress {
+	/// VSOCK address.
 	#[cfg(feature = "vm")]
 	Vsock(VsockAddr),
+	/// Unix address.
 	#[cfg(feature = "local")]
 	Unix(UnixAddr),
 }
 
 impl SocketAddress {
+	/// Create a new Unix socket.
 	pub fn new_unix(path: &str) -> Self {
 		let addr = UnixAddr::new(path).unwrap();
 		Self::Unix(addr)
 	}
 
+	/// Create a new Vsock socket.
 	#[cfg(feature = "vm")]
 	pub fn new_vsock(cid: u32, port: u32) -> Self {
 		let addr = VsockAddr::new(cid, port);
 		Self::Vsock(addr)
 	}
 
+	/// Get the `AddressFamily` of the socket.
 	fn family(&self) -> AddressFamily {
 		match *self {
 			#[cfg(feature = "vm")]
@@ -59,7 +65,8 @@ impl SocketAddress {
 	}
 }
 
-pub struct Stream {
+/// Handle on a stream
+pub(crate) struct Stream {
 	fd: RawFd,
 }
 
@@ -297,13 +304,12 @@ mod test {
 				.unwrap();
 		let addr = SocketAddress::Unix(unix_addr);
 
-		let listener = Listener::listen(addr.clone()).unwrap();
+		let mut listener = Listener::listen(addr.clone()).unwrap();
 
 		let handler = std::thread::spawn(move || {
-			for stream in listener {
+			if let Some(stream) = listener.next() {
 				let req = stream.recv().unwrap();
 				stream.send(&req).unwrap();
-				break;
 			}
 		});
 

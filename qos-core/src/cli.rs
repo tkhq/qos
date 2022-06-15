@@ -7,6 +7,7 @@ use crate::{
 	EPHEMERAL_KEY_FILE, PIVOT_FILE, SECRET_FILE,
 };
 
+/// CLI options for starting up the enclave server.
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct EnclaveOptions {
 	cid: Option<u32>,
@@ -19,6 +20,7 @@ pub struct EnclaveOptions {
 }
 
 impl EnclaveOptions {
+	/// Create a new instance of [`Self`] with some defaults.
 	pub fn new() -> Self {
 		Self {
 			cid: None,
@@ -46,6 +48,7 @@ impl EnclaveOptions {
 		options
 	}
 
+	/// Parse a set of command and argument.
 	pub fn parse(&mut self, cmd: &str, arg: &str) {
 		self.parse_cid(cmd, arg);
 		self.parse_port(cmd, arg);
@@ -56,7 +59,7 @@ impl EnclaveOptions {
 		self.parse_ephemeral_key_file(cmd, arg);
 	}
 
-	pub fn parse_cid(&mut self, cmd: &str, arg: &str) {
+	fn parse_cid(&mut self, cmd: &str, arg: &str) {
 		if cmd == "--cid" {
 			self.cid = arg
 				.parse::<u32>()
@@ -67,7 +70,7 @@ impl EnclaveOptions {
 		}
 	}
 
-	pub fn parse_port(&mut self, cmd: &str, arg: &str) {
+	fn parse_port(&mut self, cmd: &str, arg: &str) {
 		if cmd == "--port" {
 			self.port = arg
 				.parse::<u32>()
@@ -78,36 +81,37 @@ impl EnclaveOptions {
 		}
 	}
 
-	pub fn parse_usock(&mut self, cmd: &str, arg: &str) {
+	fn parse_usock(&mut self, cmd: &str, arg: &str) {
 		if cmd == "--usock" {
 			self.usock = Some(arg.to_string())
 		}
 	}
 
-	pub fn parse_mock(&mut self, cmd: &str, arg: &str) {
+	fn parse_mock(&mut self, cmd: &str, arg: &str) {
 		if cmd == "--mock" {
 			self.mock = arg == "true"
 		};
 	}
 
-	pub fn parse_secret_file(&mut self, cmd: &str, arg: &str) {
+	fn parse_secret_file(&mut self, cmd: &str, arg: &str) {
 		if cmd == "--secret-file" {
 			self.secret_file = arg.to_owned()
 		}
 	}
 
-	pub fn parse_pivot_file(&mut self, cmd: &str, arg: &str) {
+	fn parse_pivot_file(&mut self, cmd: &str, arg: &str) {
 		if cmd == "--pivot-file" {
 			self.pivot_file = arg.to_owned()
 		}
 	}
 
-	pub fn parse_ephemeral_key_file(&mut self, cmd: &str, arg: &str) {
+	fn parse_ephemeral_key_file(&mut self, cmd: &str, arg: &str) {
 		if cmd == "--ephemeral-key-file" {
 			self.ephemeral_key_file = arg.to_owned()
 		}
 	}
 
+	/// Get the `SocketAddress` for the enclave server.
 	pub fn addr(&self) -> SocketAddress {
 		match self.clone() {
 			#[cfg(feature = "vm")]
@@ -121,6 +125,7 @@ impl EnclaveOptions {
 		}
 	}
 
+	/// Get the [`NsmProvider`]
 	pub fn nsm(&self) -> Box<dyn NsmProvider> {
 		if self.mock {
 			Box::new(MockNsm)
@@ -151,8 +156,10 @@ impl From<Vec<String>> for EnclaveOptions {
 	}
 }
 
+/// Enclave server CLI.
 pub struct CLI {}
 impl CLI {
+	/// Execute the enclave server CLI with the environment args.
 	pub fn execute() {
 		let mut args: Vec<String> = env::args().collect();
 		args.remove(0);

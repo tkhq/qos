@@ -1,3 +1,9 @@
+//! Cryptographic primitves for use with QuorumOS.
+
+#![forbid(unsafe_code)]
+#![deny(clippy::all)]
+#![warn(missing_docs)]
+
 // TODO: Audit encryption strategy
 // This file implements an envelope encryption strategy using RSA and AES 256
 // CBC Ensure that this is a sensible approach.
@@ -24,12 +30,18 @@ pub use shamir::*;
 /// Standard length for QuorumOS RSA keys, specified in bits.
 pub const RSA_KEY_LEN: u32 = 4096;
 
+/// Errors for this crate.
 #[derive(Debug)]
 pub enum CryptoError {
+	/// Wrapper for `std::io::Error`.
 	IOError(std::io::Error),
+	/// Wrapper for `openssl::error::ErrorStack`.
 	OpenSSLError(openssl::error::ErrorStack),
+	/// Error while trying to decrypt.
 	DecryptError(openssl::error::ErrorStack),
+	/// An `Envelope` could not be deserialized.
 	InvalidEnvelope,
+	/// Cannot encrypt a payload because it is too big.
 	EncryptionPayloadTooBig,
 }
 
@@ -43,6 +55,13 @@ impl From<openssl::error::ErrorStack> for CryptoError {
 	fn from(_err: openssl::error::ErrorStack) -> Self {
 		Self::OpenSSLError(openssl::error::ErrorStack::get())
 	}
+}
+
+/// Create a SHA256 hash digest of `buf`.
+pub fn sha_256(buf: &[u8]) -> [u8; 32] {
+	let mut hasher = openssl::sha::Sha256::new();
+	hasher.update(buf);
+	hasher.finish()
 }
 
 /// RSA Private key pair.
@@ -90,6 +109,7 @@ impl RsaPair {
 		signer.sign_to_vec().map_err(Into::into)
 	}
 
+	/// Get the PEM encoded private key.
 	pub fn public_key_pem(&self) -> Result<Vec<u8>, CryptoError> {
 		self.private_key.public_key_to_pem().map_err(Into::into)
 	}
@@ -107,6 +127,7 @@ impl RsaPair {
 		Ok(to[0..size].to_vec())
 	}
 
+	/// Decrypt envelope encrypted `data`. Also see [`Self::envelope_encrypt`].
 	pub fn envelope_decrypt(
 		&self,
 		data: &[u8],
@@ -159,25 +180,30 @@ impl Deref for RsaPair {
 	}
 }
 
+/// RSA public key.
 #[derive(Debug, Clone)]
 pub struct RsaPub {
 	public_key: Rsa<Public>,
 }
 
 impl RsaPub {
+	/// Create [`Self`] from a PEM encoded RSA public key from a file.
 	pub fn from_pem_file<P: AsRef<Path>>(path: P) -> Result<Self, CryptoError> {
 		let content = std::fs::read(path)?;
 		Self::from_pem(&content[..])
 	}
 
+	/// Create [`Self`] from a PEM encoded RSA public key.
 	pub fn from_pem(pem: &[u8]) -> Result<Self, CryptoError> {
 		Ok(Self { public_key: Rsa::public_key_from_pem(pem)? })
 	}
 
+	/// Create [`Self`] from a DER encoded RSA public key.
 	pub fn from_der(der: &[u8]) -> Result<Self, CryptoError> {
 		Ok(Self { public_key: Rsa::public_key_from_der(der)? })
 	}
 
+	/// Write the PEM encoded public key to file.
 	pub fn write_pem_file<P: AsRef<Path>>(
 		&self,
 		path: P,
@@ -188,6 +214,7 @@ impl RsaPub {
 		Ok(())
 	}
 
+	/// Verify the signature over the SHA-256 digest of `msg`.
 	pub fn verify_sha256(
 		&self,
 		signature: &[u8],
@@ -225,6 +252,9 @@ impl RsaPub {
 		Ok(to[0..size].to_vec())
 	}
 
+	/// Encrypt `data` using envelope encryption. The data is encrypted with AES
+	/// 256 CBC, a symmetric encryption key. The AES 256 CBC key is encrypted
+	/// with this public RSA key.
 	pub fn envelope_encrypt(
 		&self,
 		data: &[u8],
@@ -287,7 +317,7 @@ impl PartialEq for RsaPub {
 }
 
 #[derive(PartialEq, Debug, Clone, BorshSerialize, BorshDeserialize)]
-pub struct Envelope {
+struct Envelope {
 	pub encrypted_symm_key: Vec<u8>,
 	pub encrypted_data: Vec<u8>,
 	pub iv: Vec<u8>,
@@ -300,13 +330,6 @@ impl TryFrom<PKey<Private>> for RsaPub {
 		let public_key = Rsa::public_key_from_der(&der[..])?;
 		Ok(Self { public_key })
 	}
-}
-
-/// Create a SHA256 hash digest of `buf`.
-pub fn sha_256(buf: &[u8]) -> [u8; 32] {
-	let mut hasher = openssl::sha::Sha256::new();
-	hasher.update(buf);
-	hasher.finish()
 }
 
 #[cfg(test)]
