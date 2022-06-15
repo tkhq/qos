@@ -157,7 +157,7 @@ impl server::Routable for Executor {
 		};
 
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
-			return err_resp()
+			return err_resp();
 		}
 
 		let msg_req = match ProtocolMsg::try_from_slice(&req_bytes) {
@@ -326,7 +326,7 @@ mod handlers {
 					Ok(r) => r,
 					Err(e) => {
 						state.phase = ProtocolPhase::UnrecoverableError;
-						return Some(ProtocolMsg::ProtocolErrorResponse(e))
+						return Some(ProtocolMsg::ProtocolErrorResponse(e));
 					}
 				}
 			};

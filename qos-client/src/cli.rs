@@ -76,15 +76,15 @@ impl ClientOptions {
 		while let Some([cmd, arg]) = chunks.next() {
 			options.host.parse(cmd, arg);
 			match options.cmd {
-				Command::Echo => options.echo.parse(&cmd, arg),
+				Command::Echo => options.echo.parse(cmd, arg),
 				Command::GenerateSetupKey => {
-					options.generate_setup_key.parse(&cmd, arg)
+					options.generate_setup_key.parse(cmd, arg)
 				}
 				Command::Health => {}
 				Command::DescribeNsm => {}
 				Command::MockAttestation => {}
 				Command::Attestation => {}
-				Command::BootGenesis => options.boot_genesis.parse(&cmd, arg),
+				Command::BootGenesis => options.boot_genesis.parse(cmd, arg),
 			}
 		}
 
@@ -186,7 +186,7 @@ impl BootGenesisOptions {
 		self.key_dir.clone().expect("No `--key-dir` provided")
 	}
 	fn threshold(&self) -> u32 {
-		self.threshold.clone().expect("No `--threshold` provided")
+		self.threshold.expect("No `--threshold` provided")
 	}
 }
 
@@ -472,13 +472,13 @@ mod handlers {
 			.filter_map(|key_path| {
 				let file_name =
 					key_path.file_name().map(|f| f.to_string_lossy()).unwrap();
-				let split: Vec<_> = file_name.split(".").collect();
+				let split: Vec<_> = file_name.split('.').collect();
 
 				// TODO: do we want to dissallow having anything in this folder
 				// that is not a public key for the quorum set?
 				if *split.last().unwrap() != "pub" {
 					println!("A non `.pub` file was found in the setup key directory - skipping.");
-					return None
+					return None;
 				}
 
 				let public_key = RsaPub::from_pem_file(key_path.clone())

@@ -107,12 +107,12 @@ impl ManifestEnvelope {
 			if !is_valid_signature {
 				return Err(ProtocolError::InvalidManifestApproval(
 					approval.clone(),
-				))
+				));
 			}
 		}
 
 		if self.approvals.len() < self.manifest.quorum_set.threshold as usize {
-			return Err(ProtocolError::NotEnoughApprovals)
+			return Err(ProtocolError::NotEnoughApprovals);
 		}
 
 		Ok(())
@@ -135,7 +135,7 @@ pub fn boot_standard(
 	)?;
 
 	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
-		return Err(ProtocolError::InvalidPivotHash)
+		return Err(ProtocolError::InvalidPivotHash);
 	};
 
 	std::fs::write(&state.pivot_file, pivot)?;
@@ -215,10 +215,7 @@ mod test {
 				restart: RestartPolicy::Always,
 			},
 			quorum_key: quorum_pair.public_key_to_der().unwrap(),
-			quorum_set: QuorumSet {
-				threshold: 2,
-				members: quorum_members.clone(),
-			},
+			quorum_set: QuorumSet { threshold: 2, members: quorum_members },
 		};
 
 		(manifest, member_with_keys, pivot)
@@ -241,11 +238,9 @@ mod test {
 			let manifest_hash = manifest.hash();
 			let approvals = members
 				.into_iter()
-				.map(|(pair, member)| {
-					return Approval {
-						signature: pair.sign_sha256(&manifest_hash).unwrap(),
-						member: member.clone(),
-					}
+				.map(|(pair, member)| Approval {
+					signature: pair.sign_sha256(&manifest_hash).unwrap(),
+					member,
 				})
 				.collect();
 
@@ -284,12 +279,10 @@ mod test {
 			let manifest_hash = manifest.hash();
 			let approvals = members
 				[0usize..manifest.quorum_set.threshold as usize - 1]
-				.into_iter()
-				.map(|(pair, member)| {
-					return Approval {
-						signature: pair.sign_sha256(&manifest_hash).unwrap(),
-						member: member.clone(),
-					}
+				.iter()
+				.map(|(pair, member)| Approval {
+					signature: pair.sign_sha256(&manifest_hash).unwrap(),
+					member: member.clone(),
 				})
 				.collect();
 
@@ -301,8 +294,8 @@ mod test {
 		let mut protocol_state = ProtocolState::new(
 			Box::new(MockNsm),
 			"secret".to_string(),
-			pivot_file.clone(),
-			ephemeral_file.clone(),
+			pivot_file,
+			ephemeral_file,
 		);
 
 		let nsm_resposne =
@@ -318,11 +311,9 @@ mod test {
 		let manifest_envelope = {
 			let approvals = members
 				.into_iter()
-				.map(|(_pair, member)| {
-					return Approval {
-						signature: vec![0, 0],
-						member: member.clone(),
-					}
+				.map(|(_pair, member)| Approval {
+					signature: vec![0, 0],
+					member,
 				})
 				.collect();
 
@@ -334,8 +325,8 @@ mod test {
 		let mut protocol_state = ProtocolState::new(
 			Box::new(MockNsm),
 			"secret".to_string(),
-			pivot_file.clone(),
-			ephemeral_file.clone(),
+			pivot_file,
+			ephemeral_file,
 		);
 
 		let nsm_resposne =

@@ -312,7 +312,7 @@ impl From<NsmResponse> for nsm::api::Response {
 			R::Attestation { document } => Self::Attestation { document },
 			R::GetRandom { random } => Self::GetRandom { random },
 			R::Error(e) => Self::Error(e.into()),
-			_ => Self::Error(ErrorCode::InternalError.into()),
+			_ => Self::Error(ErrorCode::InternalError),
 		}
 	}
 }

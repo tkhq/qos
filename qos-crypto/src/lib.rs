@@ -211,7 +211,7 @@ impl RsaPub {
 		let public_key_size = self.public_key.size() as usize;
 		// TODO: WTF?
 		if data.len() > public_key_size - 42 {
-			return Err(CryptoError::EncryptionPayloadTooBig)
+			return Err(CryptoError::EncryptionPayloadTooBig);
 		}
 
 		let mut to = vec![0; public_key_size];

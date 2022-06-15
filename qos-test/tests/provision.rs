@@ -1,12 +1,10 @@
 use std::{fs::File, io::Read, path::Path};
 
-use qos_client;
 use qos_core::{
 	io::SocketAddress,
 	protocol::{Echo, Executor, MockNsm, ProtocolMsg, Provision},
 	server::SocketServer,
 };
-use qos_crypto;
 use qos_host::HostServer;
 
 #[tokio::test]
@@ -26,9 +24,9 @@ async fn provision_e2e() {
 	let ephemeral_file = "./end-to-end.ephemeral".to_string();
 
 	// Spawn enclave
-	let pivot_file2 = pivot_file.clone();
+	let pivot_file2 = pivot_file;
 	let secret_file2 = secret_file.clone();
-	let ephemeral_file2 = ephemeral_file.clone();
+	let ephemeral_file2 = ephemeral_file;
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
 		let executor = Executor::new(

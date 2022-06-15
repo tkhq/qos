@@ -157,7 +157,7 @@ mod test {
 
 	fn expect_ip(arg: &str, expected: [u8; 4]) {
 		let mut options = HostOptions::new();
-		options.parse_ip(&"--host-ip", arg);
+		options.parse_ip("--host-ip", arg);
 
 		if let Some(ip) = options.ip {
 			assert_eq!(ip[0], expected[0]);

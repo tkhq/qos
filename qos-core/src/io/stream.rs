@@ -300,7 +300,7 @@ mod test {
 		let mut listener = Listener::listen(addr.clone()).unwrap();
 
 		let handler = std::thread::spawn(move || {
-			while let Some(stream) = listener.next() {
+			for stream in listener.by_ref() {
 				let req = stream.recv().unwrap();
 				stream.send(&req).unwrap();
 				break;

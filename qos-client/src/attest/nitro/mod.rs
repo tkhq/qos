@@ -29,7 +29,7 @@ pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1652756400;
 /// `8cf60e2b2efca96c6a9e71e851d00c1b6991cc09eadbe64a6a1d1b1eb9faff7c`. This
 /// checksum and the certificate should be manually verified against
 /// https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html.
-pub const AWS_ROOT_CERT_PEM: &'static [u8] =
+pub const AWS_ROOT_CERT_PEM: &[u8] =
 	std::include_bytes!("./static/aws_root_cert.pem");
 
 /// Extract a DER encoded certificate from bytes representing a PEM encoded
@@ -290,7 +290,7 @@ mod test {
 		}
 
 		{
-			let valid = attestation_doc.clone();
+			let valid = attestation_doc;
 			// Don't pop anything, just want to sanity check that we get a
 			// corrupt signature on the cose sign1 structure.
 

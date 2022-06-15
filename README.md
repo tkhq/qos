@@ -1,47 +1,47 @@
-Quick start
+## Submitting a PR
 
-```
-# make sure you have the latest rustc stable
-rustup update stable
+Before a PR can be merged it must:
 
-# run tests
-cargo test --all
+Be formatted
 
-# format code
-cargo +nightly fmt
+```bash
+cargo +nightly
 ```
 
-# System requirements
+Pass the linter
+
+```bash
+cargo clippy
+
+# to fix some types of lints you can run
+cargo clippy --fix
+```
+
+And pass all tests
+
+```bash
+cargo test
+```
+
+## System requirements
 
 - openssl >= 1.1.0
 
-# Key parts
+## Key parts
 
-## Enclave
+### Enclave
 
 - houses nitro server
+- see `qos-core`
 
 ## Host
 
 - EC2 instance where the nitro enclave lives inside
 - has client for talking to nitro enclave
 - has server for incoming request from outside world
+- see `qos-host`
 
 ## End user
 
-- Anything making request to host
-
-# Decisions / Things to Revisit:
-
-- Use Serde in `qos-core`. We've decided to do this right now for agility; but we should probably make our own simple macro or find a secure serialization lib (look into borsch?)
-
-# TODO:
-
-- Build crypto  - all public key + hashing logic. High level so we can swap. Bring in OpenSSL
-- Pivot logic
-- Cli for posting shards, nsm attestation flow
-- Research flow for attestation - with nsm / nitro enclave docs
-
-- Sanity check vsock - aws or qemu
-- Run deployed aws attestation flow (save nsm responses for stubbing)
-- Smart shamir logic in enclave, don't randomly reconstruct
+- anything making request to host
+- see `qos-client`

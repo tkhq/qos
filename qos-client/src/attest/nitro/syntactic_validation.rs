@@ -149,15 +149,15 @@ mod test {
 	#[test]
 	fn cabundle_works() {
 		let valid_cert = ByteBuf::from(vec![42]);
-		assert!(cabundle(&vec![valid_cert]).is_ok());
+		assert!(cabundle(&[valid_cert]).is_ok());
 
-		assert!(cabundle(&vec![]).is_err());
+		assert!(cabundle(&[]).is_err());
 
 		let short_cert = ByteBuf::new();
-		assert!(cabundle(&vec![short_cert]).is_err());
+		assert!(cabundle(&[short_cert]).is_err());
 
 		let long_cert = ByteBuf::from((0..1025).map(|_| 3).collect::<Vec<_>>());
-		assert!(cabundle(&vec![long_cert]).is_err());
+		assert!(cabundle(&[long_cert]).is_err());
 	}
 
 	#[test]
@@ -182,19 +182,15 @@ mod test {
 		assert!(pcrs(&BTreeMap::from([(33, pcr32.clone())])).is_err());
 
 		// Valid
-		assert!(pcrs(&BTreeMap::from([
-			(0, pcr48.clone()),
-			(32, pcr32.clone()),
-			(5, pcr64.clone())
-		]))
-		.is_ok());
+		assert!(pcrs(&BTreeMap::from([(0, pcr48), (32, pcr32), (5, pcr64)]))
+			.is_ok());
 
 		assert!(pcrs(&BTreeMap::from([(5, pcr_invalid)])).is_err());
 	}
 
 	#[test]
 	fn module_id_works() {
-		assert!(module_id(&"".to_string()).is_err());
-		assert!(module_id(&"1".to_string()).is_ok());
+		assert!(module_id("").is_err());
+		assert!(module_id("1").is_ok());
 	}
 }
