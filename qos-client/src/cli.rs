@@ -469,15 +469,11 @@ mod handlers {
 		// Assemble the genesis members from all the public keys in the key
 		// directory
 		let members: Vec<_> = key_files
+			.map(|maybe_key_path| maybe_key_path.unwrap().path())
 			.filter_map(|key_path| {
-				let path = key_path.unwrap().path();
-				let split: Vec<_> = path
-					.file_name()
-					.unwrap()
-					.to_str()
-					.unwrap()
-					.split(".")
-					.collect();
+				let file_name =
+					key_path.file_name().map(|f| f.to_string_lossy()).unwrap();
+				let split: Vec<_> = file_name.split(".").collect();
 
 				// TODO: do we want to dissallow having anything in this folder
 				// that is not a public key for the quorum set?
@@ -486,7 +482,7 @@ mod handlers {
 					return None
 				}
 
-				let public_key = RsaPub::from_pem_file(path)
+				let public_key = RsaPub::from_pem_file(key_path.clone())
 					.expect("Failed to read in rsa pub key.");
 
 				Some(SetupMember {

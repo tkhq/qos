@@ -46,6 +46,7 @@ impl From<openssl::error::ErrorStack> for CryptoError {
 }
 
 /// RSA Private key pair.
+#[derive(Clone)]
 pub struct RsaPair {
 	private_key: Rsa<Private>,
 	public_key: RsaPub,
@@ -158,7 +159,7 @@ impl Deref for RsaPair {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RsaPub {
 	public_key: Rsa<Public>,
 }
@@ -375,10 +376,21 @@ mod test {
 	}
 
 	#[test]
-	fn e2e_envelope_crypto() {
+	fn e2e_envelope_crypto_private_key() {
 		let data = b"a nation that vapes big puffy clouds";
 		let private = RsaPair::generate().unwrap();
-		let envelope = private.public_key.envelope_encrypt(data).unwrap();
+		let envelope = private.envelope_encrypt(data).unwrap();
+		let decrypted = private.envelope_decrypt(&envelope).unwrap();
+
+		assert_eq!(data.to_vec(), decrypted);
+	}
+
+	#[test]
+	fn e2e_envelope_crypto_public_key() {
+		let data = b"a nation that vapes big puffy clouds";
+		let private = RsaPair::generate().unwrap();
+		let public: RsaPub = private.clone().try_into().unwrap();
+		let envelope = public.envelope_encrypt(data).unwrap();
 		let decrypted = private.envelope_decrypt(&envelope).unwrap();
 
 		assert_eq!(data.to_vec(), decrypted);

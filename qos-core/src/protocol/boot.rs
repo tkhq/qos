@@ -103,7 +103,7 @@ impl ManifestEnvelope {
 
 			let is_valid_signature = pub_key
 				.verify_sha256(&approval.signature, &self.manifest.hash())
-				.map_err(|e| ProtocolError::CryptoError)?;
+				.map_err(|_| ProtocolError::CryptoError)?;
 			if !is_valid_signature {
 				return Err(ProtocolError::InvalidManifestApproval(
 					approval.clone(),

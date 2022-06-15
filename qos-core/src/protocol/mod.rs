@@ -199,6 +199,7 @@ mod handlers {
 		};
 	}
 
+	// TODO: Add tests for this in the middle of some integration tests
 	pub fn status(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
