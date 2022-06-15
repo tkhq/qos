@@ -134,7 +134,7 @@ async fn genesis_e2e() {
 	)
 	.unwrap();
 
-	// 	-- Recreate the quorum key from the encrypted shares.
+	// -- Recreate the quorum key from the encrypted shares.
 	let mut decrypted_shares: Vec<_> = genesis_output
 		.member_outputs
 		.iter()
@@ -142,6 +142,8 @@ async fn genesis_e2e() {
 			let (private_setup, _) =
 				get_key_paths(member.setup_member.alias.clone());
 			let setup_pair = RsaPair::from_pem_file(private_setup).unwrap();
+
+			// Decrypt the personal key with the setup key
 			let personal_key = RsaPair::from_der(
 				&setup_pair
 					.envelope_decrypt(&member.encrypted_personal_key)

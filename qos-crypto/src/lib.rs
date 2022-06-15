@@ -231,6 +231,7 @@ impl RsaPub {
 	) -> Result<Vec<u8>, CryptoError> {
 		let cipher = Cipher::aes_256_cbc();
 		let key = {
+			// TODO: better entropy?
 			let mut buf = vec![0; cipher.key_len()];
 			rand::rand_bytes(buf.as_mut_slice())?;
 			buf

@@ -108,5 +108,5 @@ async fn provision_e2e() {
 
 	// Delete file
 	std::fs::remove_file(path).unwrap();
-	let _ = std::fs::remove_file(usock);
+	std::fs::remove_file(usock).unwrap();
 }
