@@ -1,4 +1,3 @@
-use openssl::rsa::Rsa;
 use qos_core::{
 	io::SocketAddress,
 	protocol::{Executor, Load, MockNsm, ProtocolMsg, SignatureWithPubKey},
@@ -28,8 +27,7 @@ fn load_e2e() {
 	let pairs: Vec<_> = key_range
 		.clone()
 		.map(|_| {
-			//TO
-			let pair: RsaPair = Rsa::generate(4096).unwrap().into();
+			let pair = RsaPair::generate().unwrap();
 			pair
 		})
 		.collect();
@@ -69,14 +67,20 @@ fn load_e2e() {
 	let message_url = format!("{}/{}", url, "message");
 	let pivot_file = "./verification.pivot".to_string();
 	let secret_file = "./verification.secret".to_string();
+	let ephemeral_file = "./verification.ephemeral".to_string();
 
 	// Spawn enclave
 	let pivot_file2 = pivot_file.clone();
 	let secret_file2 = secret_file.clone();
+	let ephemeral_file2 = ephemeral_file.clone();
 	std::thread::spawn(move || {
 		let attestor = MockNsm {};
-		let executor =
-			Executor::new(Box::new(attestor), secret_file2, pivot_file2);
+		let executor = Executor::new(
+			Box::new(attestor),
+			secret_file2,
+			pivot_file2,
+			ephemeral_file2,
+		);
 
 		SocketServer::listen(enclave_addr, executor).unwrap()
 	});
@@ -108,6 +112,7 @@ fn load_e2e() {
 	// Part 4 - clean up the generated keys
 	//
 	std::fs::remove_file(&pivot_file).unwrap();
+	let _ = std::fs::remove_file("./rsa_verify_payload.sock");
 	for path in paths {
 		std::fs::remove_file(path).unwrap()
 	}

@@ -134,6 +134,7 @@ fn gf256_eval(f: &[u8], x: u8) -> u8 {
 
 /// generate a random polynomial of given degree, fixing f(0) = secret
 fn gf256_generate(secret: u8, degree: usize) -> Vec<u8> {
+	// TODO: improve randomness
 	let mut rng = rand::thread_rng();
 	iter::once(secret)
 		.chain(iter::repeat_with(|| rng.gen_range(1..=255)).take(degree))

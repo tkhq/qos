@@ -4,7 +4,7 @@ use crate::{
 	coordinator::Coordinator,
 	io::SocketAddress,
 	protocol::{MockNsm, Nsm, NsmProvider},
-	PIVOT_FILE, SECRET_FILE,
+	EPHEMERAL_KEY_FILE, PIVOT_FILE, SECRET_FILE,
 };
 
 #[derive(Default, Clone, Debug, PartialEq)]
@@ -15,6 +15,7 @@ pub struct EnclaveOptions {
 	mock: bool,
 	secret_file: String,
 	pivot_file: String,
+	ephemeral_key_file: String,
 }
 
 impl EnclaveOptions {
@@ -26,6 +27,7 @@ impl EnclaveOptions {
 			mock: false,
 			secret_file: SECRET_FILE.to_owned(),
 			pivot_file: PIVOT_FILE.to_owned(),
+			ephemeral_key_file: EPHEMERAL_KEY_FILE.to_owned(),
 		}
 	}
 
@@ -51,6 +53,7 @@ impl EnclaveOptions {
 		self.parse_mock(cmd, arg);
 		self.parse_secret_file(cmd, arg);
 		self.parse_pivot_file(cmd, arg);
+		self.parse_ephemeral_key_file(cmd, arg);
 	}
 
 	pub fn parse_cid(&mut self, cmd: &str, arg: &str) {
@@ -99,6 +102,12 @@ impl EnclaveOptions {
 		}
 	}
 
+	pub fn parse_ephemeral_key_file(&mut self, cmd: &str, arg: &str) {
+		if cmd == "--ephemeral-key-file" {
+			self.ephemeral_key_file = arg.to_owned()
+		}
+	}
+
 	pub fn addr(&self) -> SocketAddress {
 		match self.clone() {
 			#[cfg(feature = "vm")]
@@ -120,14 +129,19 @@ impl EnclaveOptions {
 		}
 	}
 
-	/// Defaults to [`SECRET_FILE`] if not explicitly specified/
+	/// Defaults to [`SECRET_FILE`] if not explicitly specified
 	pub fn secret_file(&self) -> String {
 		self.secret_file.clone()
 	}
 
-	/// Defaults to [`PIVOT_FILE`] if not explicitly specified/
+	/// Defaults to [`PIVOT_FILE`] if not explicitly specified
 	pub fn pivot_file(&self) -> String {
 		self.pivot_file.clone()
+	}
+
+	/// Defaults to [`EPHEMERAL_KEY_FILE`] if not explicitly specified
+	pub fn ephemeral_key_file(&self) -> String {
+		self.ephemeral_key_file.clone()
 	}
 }
 
@@ -173,6 +187,7 @@ mod test {
 				mock: false,
 				pivot_file: PIVOT_FILE.to_string(),
 				secret_file: SECRET_FILE.to_string(),
+				ephemeral_key_file: EPHEMERAL_KEY_FILE.to_string(),
 			}
 		)
 	}
@@ -181,6 +196,7 @@ mod test {
 	fn parse_pivot_file_and_secret_file() {
 		let pivot = "pivot.file";
 		let secret = "secret.file";
+		let ephemeral = "ephemeral.file";
 		let args = vec![
 			"--cid",
 			"6",
@@ -190,6 +206,8 @@ mod test {
 			secret,
 			"--pivot-file",
 			pivot,
+			"--ephemeral-key-file",
+			ephemeral,
 		]
 		.into_iter()
 		.map(String::from)
@@ -205,6 +223,7 @@ mod test {
 				mock: false,
 				pivot_file: pivot.to_string(),
 				secret_file: secret.to_string(),
+				ephemeral_key_file: ephemeral.to_string()
 			}
 		)
 	}
@@ -226,6 +245,7 @@ mod test {
 				mock: false,
 				pivot_file: PIVOT_FILE.to_string(),
 				secret_file: SECRET_FILE.to_string(),
+				ephemeral_key_file: EPHEMERAL_KEY_FILE.to_string()
 			}
 		)
 	}
@@ -240,6 +260,7 @@ mod test {
 			mock: false,
 			pivot_file: PIVOT_FILE.to_string(),
 			secret_file: SECRET_FILE.to_string(),
+			ephemeral_key_file: EPHEMERAL_KEY_FILE.to_string(),
 		};
 		options.addr();
 	}
@@ -254,6 +275,7 @@ mod test {
 			mock: false,
 			pivot_file: PIVOT_FILE.to_string(),
 			secret_file: SECRET_FILE.to_string(),
+			ephemeral_key_file: EPHEMERAL_KEY_FILE.to_string(),
 		};
 		options.addr();
 	}
@@ -286,6 +308,7 @@ mod test {
 			mock: false,
 			pivot_file: PIVOT_FILE.to_string(),
 			secret_file: SECRET_FILE.to_string(),
+			ephemeral_key_file: EPHEMERAL_KEY_FILE.to_string(),
 		};
 		match options.addr() {
 			SocketAddress::Unix(_) => {}

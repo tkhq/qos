@@ -1,4 +1,6 @@
 //! Streaming socket based client to connect with [`server::Server`].
+use borsh::{BorshDeserialize, BorshSerialize};
+
 use crate::{
 	io::{self, SocketAddress, Stream},
 	protocol::{ProtocolError, ProtocolMsg},
@@ -8,7 +10,7 @@ use crate::{
 pub enum ClientError {
 	IOError(io::IOError),
 	ProtocolError(ProtocolError),
-	SerdeCBOR(serde_cbor::Error),
+	BorshError(borsh::maybestd::io::Error),
 }
 
 impl From<io::IOError> for ClientError {
@@ -23,9 +25,9 @@ impl From<ProtocolError> for ClientError {
 	}
 }
 
-impl From<serde_cbor::Error> for ClientError {
-	fn from(err: serde_cbor::Error) -> Self {
-		Self::SerdeCBOR(err)
+impl From<borsh::maybestd::io::Error> for ClientError {
+	fn from(err: borsh::maybestd::io::Error) -> Self {
+		Self::BorshError(err)
 	}
 }
 
@@ -41,17 +43,17 @@ impl Client {
 		Self { addr }
 	}
 
-	/// Send a [`ProtocolMsg`] and return the response.
+	/// Send a [`ProtocolMsg`] and wait for the response.
 	pub fn send(
 		&self,
 		request: ProtocolMsg,
 	) -> Result<ProtocolMsg, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
+
 		stream.send(
-			&serde_cbor::to_vec(&request)
-				.expect("ProtocolMsg can be serialized. qed."),
+			&request.try_to_vec().expect("ProtocolMsg can be serialized. qed."),
 		)?;
 		let response = stream.recv()?;
-		serde_cbor::from_slice(&response).map_err(Into::into)
+		ProtocolMsg::try_from_slice(&response).map_err(Into::into)
 	}
 }

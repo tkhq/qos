@@ -2,7 +2,10 @@
 
 use std::collections::BTreeSet;
 
-use crate::protocol::{NsmDigest, NsmProvider, NsmRequest, NsmResponse};
+use super::{
+	types::{NsmDigest, NsmRequest, NsmResponse},
+	NsmProvider,
+};
 
 pub struct MockNsm;
 impl NsmProvider for MockNsm {
@@ -39,7 +42,6 @@ impl NsmProvider for MockNsm {
 			NsmRequest::DescribePCR { index: _ } => {
 				NsmResponse::DescribePCR { lock: false, data: vec![3, 4, 7, 4] }
 			}
-			_ => unreachable!(),
 		}
 	}
 
