@@ -160,7 +160,8 @@ fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 }
 
 /// Generate n shares requiring k shares to reconstruct.
-#[must_use] pub fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
+#[must_use]
+pub fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
 	let mut shares = vec![vec![]; n];
 
 	// we need to store x for each point somewhere, so just prepend

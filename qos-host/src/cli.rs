@@ -32,7 +32,8 @@ pub struct HostOptions {
 
 impl HostOptions {
 	/// Create a new instance of [`self`].
-	#[must_use] pub fn new() -> Self {
+	#[must_use]
+	pub fn new() -> Self {
 		Self::default()
 	}
 
@@ -41,7 +42,8 @@ impl HostOptions {
 	/// # Panics
 	///
 	/// Panics if the url cannot be parsed from options
-	#[must_use] pub fn url(&self) -> String {
+	#[must_use]
+	pub fn url(&self) -> String {
 		if let Self { ip: Some(ip), port: Some(port) } = self {
 			return format!(
 				"http://{}.{}.{}.{}:{}",
@@ -53,7 +55,8 @@ impl HostOptions {
 	}
 
 	/// Get the resource path.
-	#[must_use] pub fn path(&self, path: &str) -> String {
+	#[must_use]
+	pub fn path(&self, path: &str) -> String {
 		let url = self.url();
 		format!("{}/{}", url, path)
 	}
@@ -119,9 +122,7 @@ impl CLI {
 		let options = parse_args(&args);
 		let addr = host_addr_from_options(options.host);
 		let enclave_addr = options.enclave.addr();
-		HostServer::new_with_socket_addr(enclave_addr, addr)
-			.serve()
-			.await;
+		HostServer::new_with_socket_addr(enclave_addr, addr).serve().await;
 	}
 }
 

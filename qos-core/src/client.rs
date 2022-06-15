@@ -43,7 +43,8 @@ pub struct Client {
 
 impl Client {
 	/// Create a new client.
-	#[must_use] pub fn new(addr: SocketAddress) -> Self {
+	#[must_use]
+	pub fn new(addr: SocketAddress) -> Self {
 		Self { addr }
 	}
 

@@ -78,7 +78,8 @@ pub struct GenesisOutput {
 
 impl GenesisOutput {
 	/// Canonical hash of [`Self`]
-	#[must_use] pub fn hash(&self) -> Hash256 {
+	#[must_use]
+	pub fn hash(&self) -> Hash256 {
 		qos_crypto::sha_256(
 			&self.try_to_vec().expect("`Manifest` serializes with cbor"),
 		)
@@ -122,7 +123,11 @@ pub(super) fn boot_genesis(
 		let encrypted_quorum_key_share =
 			personal_pair.envelope_encrypt(&share)?;
 
-		member_outputs.push(GenesisMemberOutput { setup_member, encrypted_quorum_key_share, encrypted_personal_key });
+		member_outputs.push(GenesisMemberOutput {
+			setup_member,
+			encrypted_quorum_key_share,
+			encrypted_personal_key,
+		});
 	}
 
 	let genesis_output = GenesisOutput {

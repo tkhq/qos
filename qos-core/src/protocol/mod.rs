@@ -128,7 +128,8 @@ pub struct Executor {
 
 impl Executor {
 	/// Create a new `Self`.
-	#[must_use] pub fn new(
+	#[must_use]
+	pub fn new(
 		attestor: Box<dyn NsmProvider>,
 		secret_file: String,
 		pivot_file: String,
@@ -208,7 +209,10 @@ impl server::Routable for Executor {
 mod handlers {
 	use qos_crypto::RsaPair;
 
-	use super::{BootInstruction, Load, NsmRequest, Permissions, PermissionsExt, ProtocolMsg, ProtocolPhase, ProtocolState, boot, genesis, set_permissions};
+	use super::{
+		boot, genesis, set_permissions, BootInstruction, Load, NsmRequest,
+		Permissions, PermissionsExt, ProtocolMsg, ProtocolPhase, ProtocolState,
+	};
 
 	/// Unwrap an ok or return early with a generic error.
 	/// TODO: this try and pass through the returned error

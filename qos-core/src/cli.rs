@@ -21,7 +21,8 @@ pub struct EnclaveOptions {
 
 impl EnclaveOptions {
 	/// Create a new instance of [`Self`] with some defaults.
-	#[must_use] pub fn new() -> Self {
+	#[must_use]
+	pub fn new() -> Self {
 		Self {
 			cid: None,
 			port: None,
@@ -37,7 +38,10 @@ impl EnclaveOptions {
 		let mut options = EnclaveOptions::new();
 
 		let mut chunks = args.chunks_exact(2);
-		assert!(chunks.remainder().is_empty(), "Unexepected number of arguments");
+		assert!(
+			chunks.remainder().is_empty(),
+			"Unexepected number of arguments"
+		);
 
 		while let Some([cmd, arg]) = chunks.next() {
 			options.parse(cmd, arg);
@@ -114,7 +118,8 @@ impl EnclaveOptions {
 	/// # Panics
 	///
 	/// Panics if the options are not valid for exactly one of unix or vsock.
-	#[must_use] pub fn addr(&self) -> SocketAddress {
+	#[must_use]
+	pub fn addr(&self) -> SocketAddress {
 		match self.clone() {
 			#[cfg(feature = "vm")]
 			EnclaveOptions {
@@ -128,7 +133,8 @@ impl EnclaveOptions {
 	}
 
 	/// Get the [`NsmProvider`]
-	#[must_use] pub fn nsm(&self) -> Box<dyn NsmProvider> {
+	#[must_use]
+	pub fn nsm(&self) -> Box<dyn NsmProvider> {
 		if self.mock {
 			Box::new(MockNsm)
 		} else {
@@ -137,17 +143,20 @@ impl EnclaveOptions {
 	}
 
 	/// Defaults to [`SECRET_FILE`] if not explicitly specified
-	#[must_use] pub fn secret_file(&self) -> String {
+	#[must_use]
+	pub fn secret_file(&self) -> String {
 		self.secret_file.clone()
 	}
 
 	/// Defaults to [`PIVOT_FILE`] if not explicitly specified
-	#[must_use] pub fn pivot_file(&self) -> String {
+	#[must_use]
+	pub fn pivot_file(&self) -> String {
 		self.pivot_file.clone()
 	}
 
 	/// Defaults to [`EPHEMERAL_KEY_FILE`] if not explicitly specified
-	#[must_use] pub fn ephemeral_key_file(&self) -> String {
+	#[must_use]
+	pub fn ephemeral_key_file(&self) -> String {
 		self.ephemeral_key_file.clone()
 	}
 }

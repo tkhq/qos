@@ -71,7 +71,10 @@ impl ClientOptions {
 		};
 
 		let mut chunks = args.chunks_exact(2);
-		assert!(chunks.remainder().is_empty(), "Unexpected number of arguments");
+		assert!(
+			chunks.remainder().is_empty(),
+			"Unexpected number of arguments"
+		);
 
 		while let Some([cmd, arg]) = chunks.next() {
 			options.host.parse(cmd, arg);
@@ -80,10 +83,10 @@ impl ClientOptions {
 				Command::GenerateSetupKey => {
 					options.generate_setup_key.parse(cmd, arg);
 				}
-				Command::Health |
-				Command::DescribeNsm |
-				Command::MockAttestation |
-				Command::Attestation => {}
+				Command::Health
+				| Command::DescribeNsm
+				| Command::MockAttestation
+				| Command::Attestation => {}
 				Command::BootGenesis => options.boot_genesis.parse(cmd, arg),
 			}
 		}
@@ -170,10 +173,9 @@ impl BootGenesisOptions {
 		match cmd {
 			"--key-dir" => self.key_dir = Some(arg.to_string()),
 			"--threshold" => {
-				self.threshold =
-					Some(arg.parse::<u32>().expect(
-						"Could not parse provided value for `--threshold`",
-					));
+				self.threshold = Some(arg.parse::<u32>().expect(
+					"Could not parse provided value for `--threshold`",
+				));
 			}
 			"--out-dir" => self.out_dir = Some(arg.to_string()),
 			_ => {}
@@ -209,7 +211,10 @@ mod handlers {
 	};
 	use qos_crypto::RsaPub;
 
-	use super::{AWS_ROOT_CERT_PEM, BorshSerialize, ClientOptions, Echo, ProtocolMsg, RsaPair, attestation_doc_from_der, cert_from_pem};
+	use super::{
+		attestation_doc_from_der, cert_from_pem, BorshSerialize, ClientOptions,
+		Echo, ProtocolMsg, RsaPair, AWS_ROOT_CERT_PEM,
+	};
 	use crate::{attest, request};
 
 	pub(super) fn health(options: &ClientOptions) {
@@ -334,7 +339,10 @@ mod handlers {
 		let key_dir = options.generate_setup_key.key_dir();
 		let key_dir_path = std::path::Path::new(&key_dir);
 
-		assert!(key_dir_path.is_dir(), "Provided `--key-dir` does not exist is not valid");
+		assert!(
+			key_dir_path.is_dir(),
+			"Provided `--key-dir` does not exist is not valid"
+		);
 
 		let setup_key = RsaPair::generate().expect("RSA key generation failed");
 		// Write the setup key secret
@@ -458,7 +466,10 @@ mod handlers {
 		// Get all the files in the key directory
 		let key_files = {
 			let key_dir_path = std::path::Path::new(&key_dir);
-			assert!(key_dir_path.is_dir(), "Provided path is not a valid directory");
+			assert!(
+				key_dir_path.is_dir(),
+				"Provided path is not a valid directory"
+			);
 			std::fs::read_dir(key_dir_path)
 				.expect("Failed to read key directory")
 		};
@@ -468,8 +479,10 @@ mod handlers {
 		let members: Vec<_> = key_files
 			.map(|maybe_key_path| maybe_key_path.unwrap().path())
 			.filter_map(|key_path| {
-				let file_name =
-					key_path.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap();
+				let file_name = key_path
+					.file_name()
+					.map(std::ffi::OsStr::to_string_lossy)
+					.unwrap();
 				let split: Vec<_> = file_name.split('.').collect();
 
 				// TODO: do we want to dissallow having anything in this folder

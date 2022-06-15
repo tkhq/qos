@@ -36,7 +36,8 @@ impl SocketAddress {
 	/// # Panics
 	///
 	/// Panics if `nix::sys::socket::UnixAddr::new` panics.
-	#[must_use] pub fn new_unix(path: &str) -> Self {
+	#[must_use]
+	pub fn new_unix(path: &str) -> Self {
 		let addr = UnixAddr::new(path).unwrap();
 		Self::Unix(addr)
 	}

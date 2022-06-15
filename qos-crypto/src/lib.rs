@@ -59,7 +59,8 @@ impl From<openssl::error::ErrorStack> for CryptoError {
 }
 
 /// Create a SHA256 hash digest of `buf`.
-#[must_use] pub fn sha_256(buf: &[u8]) -> [u8; 32] {
+#[must_use]
+pub fn sha_256(buf: &[u8]) -> [u8; 32] {
 	let mut hasher = openssl::sha::Sha256::new();
 	hasher.update(buf);
 	hasher.finish()
@@ -74,7 +75,8 @@ pub struct RsaPair {
 
 impl RsaPair {
 	/// Get the public key of this pair.
-	#[must_use] pub fn public_key(&self) -> &RsaPub {
+	#[must_use]
+	pub fn public_key(&self) -> &RsaPub {
 		&self.public_key
 	}
 

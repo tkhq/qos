@@ -235,10 +235,7 @@ mod test {
 		];
 
 		let manifest = Manifest {
-			namespace: Namespace {
-				nonce: 420,
-				name: "vape lord".to_string(),
-			},
+			namespace: Namespace { nonce: 420, name: "vape lord".to_string() },
 			enclave: NitroConfig {
 				vsock_cid: 69,
 				vsock_port: 42069,
