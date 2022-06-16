@@ -3,21 +3,18 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attestor;
-mod boot;
-mod genesis;
 mod msg;
-mod provisioner;
+mod services;
 
 pub use attestor::{
 	types::{NsmDigest, NsmRequest, NsmResponse},
 	MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT,
 };
-pub use boot::{Approval, ManifestEnvelope};
-pub use genesis::{
-	GenesisMemberOutput, GenesisOutput, GenesisSet, SetupMember,
-};
 pub use msg::*;
-use provisioner::SecretProvisioner;
+pub use services::{
+	boot::{Approval, ManifestEnvelope},
+	genesis::{GenesisMemberOutput, GenesisOutput, GenesisSet, SetupMember},
+};
 
 use crate::server;
 
@@ -88,16 +85,19 @@ pub enum ProtocolPhase {
 	WaitingForBootInstruction,
 	/// Waiting to receive K quorum shards
 	WaitingForQuorumShards,
+	/// The enclave has successfully provisioned its quorum key.
+	QuorumKeyProvisioned,
 }
 
 /// Enclave executor state
 // TODO only include mutables in here, all else should be written to file as
 // read only
 pub struct ProtocolState {
-	provisioner: SecretProvisioner,
+	provisioner: services::provision::SecretBuilder,
 	attestor: Box<dyn NsmProvider>,
 	pivot_file: String,
 	ephemeral_key_file: String,
+	secret_file: String,
 	phase: ProtocolPhase,
 	manifest: Option<ManifestEnvelope>,
 }
@@ -109,12 +109,13 @@ impl ProtocolState {
 		pivot_file: String,
 		ephemeral_key_file: String,
 	) -> Self {
-		let provisioner = SecretProvisioner::new(secret_file);
+		let provisioner = services::provision::SecretBuilder::new();
 		Self {
 			attestor,
 			provisioner,
 			pivot_file,
 			ephemeral_key_file,
+			secret_file,
 			phase: ProtocolPhase::WaitingForBootInstruction,
 			manifest: None,
 		}
@@ -158,11 +159,12 @@ impl Executor {
 				// Below are here just for development convenience
 				Box::new(handlers::nsm_request),
 			],
-			ProtocolPhase::WaitingForQuorumShards => vec![
-				Box::new(handlers::status),
-				// TODO: reconstruct when the K'th key is received
-				Box::new(handlers::provision),
-			],
+			ProtocolPhase::WaitingForQuorumShards => {
+				vec![Box::new(handlers::status), Box::new(handlers::provision)]
+			}
+			ProtocolPhase::QuorumKeyProvisioned => {
+				vec![Box::new(handlers::status), Box::new(handlers::proxy)]
+			}
 		}
 	}
 }
@@ -204,19 +206,9 @@ impl server::Routable for Executor {
 
 mod handlers {
 	use super::{
-		boot, genesis, ProtocolError, ProtocolMsg, ProtocolPhase, ProtocolState,
+		services::{boot, genesis, provision},
+		ProtocolMsg, ProtocolPhase, ProtocolState,
 	};
-
-	/// Unwrap an ok or return early with a generic error.
-	/// TODO: this try and pass through the returned error
-	macro_rules! ok {
-		( $e:expr ) => {
-			match $e {
-				Ok(x) => x,
-				Err(_) => return Some(ProtocolMsg::ErrorResponse),
-			}
-		};
-	}
 
 	// TODO: Add tests for this in the middle of some integration tests
 	/// Status of the enclave.
@@ -229,6 +221,14 @@ mod handlers {
 		} else {
 			None
 		}
+	}
+
+	pub(super) fn proxy(
+		_req: &ProtocolMsg,
+		_state: &mut ProtocolState,
+	) -> Option<ProtocolMsg> {
+		// TODO
+		None
 	}
 
 	pub(super) fn nsm_request(
@@ -251,60 +251,15 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::ProvisionRequest { share: pr } = req {
-			// TODO: share should be encrypted to ephemeral key
-			// TODO: ensure state is waiting for provision
-			match state.provisioner.add_share(pr.share.clone()) {
-				Ok(_) => {
-					// TODO: change phase to attempting to constructing quorum
-					// key
-
-					if state.provisioner.count()
-						>= state
-							.manifest
-							.as_ref()
-							.unwrap()
-							.manifest
-							.quorum_set
-							.threshold as usize
-					{
-						let private_key_der =
-							ok!(state.provisioner.reconstruct());
-						let public_key_der = ok!(ok!(
-							qos_crypto::RsaPair::from_der(&private_key_der)
-						)
-						.public_key_to_der());
-						// Verify we constructed the correct key
-						if public_key_der
-							!= state
-								.manifest
-								.as_ref()
-								.unwrap()
-								.manifest
-								.quorum_key
-						{
-							state.phase = ProtocolPhase::UnrecoverableError;
-							return Some(ProtocolMsg::ProtocolErrorResponse(
-								ProtocolError::ReconstructionError,
-							));
-						}
-						// Write the secrete to file
-						ok!(std::fs::write(
-							state.provisioner.secret_file(),
-							private_key_der
-						));
-						// Let the caller know we reconstructed the secrete
-						// TODO: set phase to ProvisionFinished
-						Some(ProtocolMsg::ProvisionResponse {
-							reconstructed: true,
-						})
-					} else {
-						Some(ProtocolMsg::ProvisionResponse {
-							reconstructed: false,
-						})
-					}
+		if let ProtocolMsg::ProvisionRequest { share } = req {
+			match provision::provision(share, state) {
+				Ok(reconstructed) => {
+					Some(ProtocolMsg::ProvisionResponse { reconstructed })
 				}
-				Err(_) => Some(ProtocolMsg::ErrorResponse),
+				Err(e) => {
+					state.phase = ProtocolPhase::UnrecoverableError;
+					Some(ProtocolMsg::ProtocolErrorResponse(e))
+				}
 			}
 		} else {
 			None
@@ -319,16 +274,15 @@ mod handlers {
 		if let ProtocolMsg::BootStandardRequest { manifest_envelope, pivot } =
 			req
 		{
-			let nsm_response =
-				match boot::boot_standard(state, manifest_envelope, pivot) {
-					Ok(r) => r,
-					Err(e) => {
-						state.phase = ProtocolPhase::UnrecoverableError;
-						return Some(ProtocolMsg::ProtocolErrorResponse(e));
-					}
-				};
-
-			Some(ProtocolMsg::BootStandardResponse { nsm_response })
+			match boot::boot_standard(state, manifest_envelope, pivot) {
+				Ok(nsm_response) => {
+					Some(ProtocolMsg::BootStandardResponse { nsm_response })
+				}
+				Err(e) => {
+					state.phase = ProtocolPhase::UnrecoverableError;
+					Some(ProtocolMsg::ProtocolErrorResponse(e))
+				}
+			}
 		} else {
 			None
 		}
@@ -339,19 +293,18 @@ mod handlers {
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::BootGenesisRequest { set } = req {
-			let (genesis_output, nsm_response) =
-				match genesis::boot_genesis(state, set) {
-					Ok(r) => r,
-					Err(e) => {
-						state.phase = ProtocolPhase::UnrecoverableError;
-						return Some(ProtocolMsg::ProtocolErrorResponse(e));
-					}
-				};
-
-			Some(ProtocolMsg::BootGenesisResponse {
-				nsm_response,
-				genesis_output,
-			})
+			match genesis::boot_genesis(state, set) {
+				Ok((genesis_output, nsm_response)) => {
+					Some(ProtocolMsg::BootGenesisResponse {
+						nsm_response,
+						genesis_output,
+					})
+				}
+				Err(e) => {
+					state.phase = ProtocolPhase::UnrecoverableError;
+					Some(ProtocolMsg::ProtocolErrorResponse(e))
+				}
+			}
 		} else {
 			None
 		}

@@ -1,8 +1,10 @@
 //! Enclave executor message types.
 
-use super::{
-	boot::ManifestEnvelope,
-	genesis::{GenesisOutput, GenesisSet},
+use crate::protocol::{
+	services::{
+		boot::ManifestEnvelope,
+		genesis::{GenesisOutput, GenesisSet},
+	},
 	NsmRequest, NsmResponse, ProtocolError,
 };
 
@@ -61,8 +63,8 @@ pub enum ProtocolMsg {
 
 	/// Post a quorum key shard
 	ProvisionRequest {
-		/// TODO: flatten
-		share: Provision,
+		/// Quorum Key share encrypted to the Ephemeral Key.
+		share: Vec<u8>,
 	},
 	/// Response to a Provision Request
 	ProvisionResponse {

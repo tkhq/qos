@@ -3,7 +3,9 @@ use std::iter::zip;
 use borsh::BorshSerialize;
 use qos_crypto::{RsaPair, RsaPub};
 
-use super::{Hash256, NsmRequest, NsmResponse, ProtocolError, ProtocolState};
+use crate::protocol::{
+	Hash256, NsmRequest, NsmResponse, ProtocolError, ProtocolState,
+};
 
 /// Member of the [`SetupSet`].
 #[derive(
@@ -92,7 +94,7 @@ impl GenesisOutput {
 //
 // TODO: Disaster recovery logic!
 // Maybe we can just accept 2 set configs, and one is the recovery set?``
-pub(super) fn boot_genesis(
+pub(in crate::protocol) fn boot_genesis(
 	state: &mut ProtocolState,
 	genesis_set: &GenesisSet,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {

@@ -4,6 +4,28 @@
 //!
 //! This crate should have as minimal dependencies as possible to decrease
 //! supply chain attack vectors and audit burden.
+//!
+//! # Quorum OS
+//!
+//! ## Overview
+//!
+//! ## Key Terms
+//!
+//! ### Quorum Key
+//!
+//! ### Quorum Member
+//!
+//! ### Personal Key
+//!
+//! ### Setup Key
+//!
+//! ### Manifest
+//!
+//! ### Namespace
+//!
+//! ### Secure App
+//!
+//! ### Enclave
 
 #![forbid(unsafe_code)]
 #![deny(clippy::all)]

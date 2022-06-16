@@ -1,7 +1,7 @@
 use borsh::BorshSerialize;
 use qos_crypto::{sha_256, RsaPair, RsaPub};
 
-use super::{
+use crate::protocol::{
 	Hash256, NsmRequest, NsmResponse, ProtocolError, ProtocolPhase,
 	ProtocolState,
 };
@@ -154,7 +154,7 @@ impl ManifestEnvelope {
 	}
 }
 
-pub(super) fn boot_standard(
+pub(in crate::protocol) fn boot_standard(
 	state: &mut ProtocolState,
 	manifest_envelope: &ManifestEnvelope,
 	pivot: &Vec<u8>,
