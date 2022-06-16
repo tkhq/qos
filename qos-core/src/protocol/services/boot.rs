@@ -74,12 +74,12 @@ pub struct QuorumSet {
 pub struct Namespace {
 	/// The namespace. This should be unique relative to other namespaces the
 	/// organization running QuorumOs has.
-	name: String,
+	pub name: String,
 	/// A monotonically increasing value, used to identify the order in which
 	/// manifests for this namespace have been created. This is used to prevent
 	/// downgrade attacks - quorum members should only approve a manifest that
 	/// has the highest nonce.
-	nonce: u32,
+	pub nonce: u32,
 }
 
 #[derive(

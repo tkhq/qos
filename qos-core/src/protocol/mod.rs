@@ -6,12 +6,15 @@ mod attestor;
 mod msg;
 mod services;
 
+// TODO: don't flatten exports
 pub use attestor::{
 	types::{NsmDigest, NsmRequest, NsmResponse},
 	MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT,
 };
+// TODO: don't flatten exports
 pub use msg::*;
 pub use services::{
+	// TODO: don't flatten exports
 	boot::{Approval, ManifestEnvelope},
 	genesis::{GenesisMemberOutput, GenesisOutput, GenesisSet, SetupMember},
 };
@@ -32,7 +35,7 @@ pub type Hash256 = [u8; 32];
 pub enum ProtocolError {
 	/// TODO
 	InvalidShare,
-	/// TODO
+	/// Error while trying to reconstruct the quorum key while provisioning.
 	ReconstructionError,
 	/// Filesystem error
 	IOError,
@@ -54,6 +57,10 @@ pub enum ProtocolError {
 	InvalidMsg,
 	/// An error occurred with the enclave client.
 	EnclaveClient,
+	/// Failed attempting to decrypt something.
+	DecryptionFailed,
+	/// Could not create a private key.
+	InvalidPrivateKey,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {

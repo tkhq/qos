@@ -98,6 +98,12 @@ impl RsaPair {
 		private_key.try_into()
 	}
 
+	/// Create [`Self`] from a file that has a DER encoded RSA private key.
+	pub fn from_der_file<P: AsRef<Path>>(path: P) -> Result<Self, CryptoError> {
+		let content = std::fs::read(path)?;
+		Self::from_der(&content[..])
+	}
+
 	/// Create [`Self`] from a DER encoded RSA private key.
 	pub fn from_der(data: &[u8]) -> Result<Self, CryptoError> {
 		let private_key = Rsa::private_key_from_der(data)?;
