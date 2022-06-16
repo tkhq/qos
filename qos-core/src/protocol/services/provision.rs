@@ -6,7 +6,7 @@ type Secret = Vec<u8>;
 type Share = Vec<u8>;
 type Shares = Vec<Share>;
 
-/// Shamir Secret provisioner.
+/// Shamir Secret builder.
 pub(crate) struct SecretBuilder {
 	shares: Shares,
 }

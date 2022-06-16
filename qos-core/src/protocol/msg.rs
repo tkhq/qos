@@ -74,15 +74,6 @@ pub enum ProtocolMsg {
 	},
 }
 
-/// TODO: replace with provision service etc
-#[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
-)]
-pub struct Provision {
-	/// TODO: remove
-	pub share: Vec<u8>,
-}
-
 #[cfg(test)]
 mod test {
 	use borsh::{BorshDeserialize, BorshSerialize};
