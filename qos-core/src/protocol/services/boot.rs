@@ -1,11 +1,14 @@
+//! Standard boot logic and types.
+
 use borsh::BorshSerialize;
 use qos_crypto::{sha_256, RsaPair, RsaPub};
 
 use crate::protocol::{
-	Hash256, NsmRequest, NsmResponse, ProtocolError, ProtocolPhase,
+	Hash256, attestor::types::{NsmRequest, NsmResponse}, ProtocolError, ProtocolPhase,
 	ProtocolState,
 };
 
+/// Enclave configuration specific to AWS Nitro.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
@@ -24,6 +27,7 @@ pub struct NitroConfig {
 	pub aws_root_certificate: Vec<u8>,
 }
 
+/// Policy for restarting the pivot binary.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
@@ -45,6 +49,7 @@ pub struct PivotConfig {
 	pub restart: RestartPolicy,
 }
 
+/// A quorum member's alias and personal key.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
@@ -68,6 +73,7 @@ pub struct QuorumSet {
 	pub members: Vec<QuorumMember>,
 }
 
+/// A Namespace and its relative nonce.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
@@ -82,6 +88,7 @@ pub struct Namespace {
 	pub nonce: u32,
 }
 
+/// The Manifest for the enclave.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
@@ -100,7 +107,7 @@ pub struct Manifest {
 
 impl Manifest {
 	/// Canonical hash for the manifest.
-	pub fn hash(&self) -> Hash256 {
+	#[must_use] pub fn hash(&self) -> Hash256 {
 		qos_crypto::sha_256(
 			&self.try_to_vec().expect("`Manifest` serializes with cbor"),
 		)
@@ -203,7 +210,7 @@ mod test {
 	use std::path::Path;
 
 	use super::*;
-	use crate::protocol::MockNsm;
+	use crate::protocol::attestor::mock::MockNsm;
 
 	fn get_manifest() -> (Manifest, Vec<(RsaPair, QuorumMember)>, Vec<u8>) {
 		let quorum_pair = RsaPair::generate().unwrap();

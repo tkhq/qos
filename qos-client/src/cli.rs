@@ -3,7 +3,7 @@
 use std::env;
 
 use borsh::BorshSerialize;
-use qos_core::protocol::ProtocolMsg;
+use qos_core::protocol::msg::ProtocolMsg;
 use qos_crypto::RsaPair;
 use qos_host::cli::HostOptions;
 
@@ -174,7 +174,7 @@ mod handlers {
 	use std::path::Path;
 
 	use qos_core::protocol::{
-		GenesisSet, NsmRequest, NsmResponse, SetupMember,
+		services::genesis::GenesisSet, attestor::types::{NsmRequest, NsmResponse}, services::genesis::SetupMember,
 	};
 	use qos_crypto::RsaPub;
 

@@ -1,3 +1,4 @@
+//! Shamir Secret Sharing implementation.
 // Grabbed from here:
 // https://github.com/veracruz-project/veracruz/blob/main/sdk/data-generators/shamir-secret-sharing/src/main.rs
 

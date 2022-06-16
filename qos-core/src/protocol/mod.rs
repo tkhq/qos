@@ -2,24 +2,15 @@
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
-mod attestor;
-mod msg;
-mod services;
-
-// TODO: don't flatten exports
-pub use attestor::{
-	types::{NsmDigest, NsmRequest, NsmResponse},
-	MockNsm, Nsm, NsmProvider, MOCK_NSM_ATTESTATION_DOCUMENT,
-};
-// TODO: don't flatten exports
-pub use msg::*;
-pub use services::{
-	// TODO: don't flatten exports
-	boot::{Approval, ManifestEnvelope},
-	genesis::{GenesisMemberOutput, GenesisOutput, GenesisSet, SetupMember},
-};
-
 use crate::server;
+
+pub mod attestor;
+pub mod msg;
+pub mod services;
+
+use msg::ProtocolMsg;
+use services::boot;
+use attestor::NsmProvider;
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
@@ -42,7 +33,7 @@ pub enum ProtocolError {
 	/// Cryptography error
 	CryptoError,
 	/// Approval was not valid for a manifest.
-	InvalidManifestApproval(Approval),
+	InvalidManifestApproval(boot::Approval),
 	/// [`ManifestEnvelope`] did not have approvals
 	NotEnoughApprovals,
 	/// Protocol Message could not be matched against an available route.
@@ -106,7 +97,7 @@ pub struct ProtocolState {
 	ephemeral_key_file: String,
 	secret_file: String,
 	phase: ProtocolPhase,
-	manifest: Option<ManifestEnvelope>,
+	manifest: Option<boot::ManifestEnvelope>,
 }
 
 impl ProtocolState {
@@ -214,7 +205,7 @@ impl server::Routable for Executor {
 mod handlers {
 	use super::{
 		services::{boot, genesis, provision},
-		ProtocolMsg, ProtocolPhase, ProtocolState,
+		msg::ProtocolMsg, ProtocolPhase, ProtocolState,
 	};
 
 	// TODO: Add tests for this in the middle of some integration tests
