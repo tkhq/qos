@@ -35,7 +35,7 @@ pub type Hash256 = [u8; 32];
 pub enum ProtocolError {
 	/// TODO
 	InvalidShare,
-	/// Error while trying to reconstruct the quorum key while provisioning.
+	/// Failed to reconstruct the quorum key while provisioning.
 	ReconstructionError,
 	/// Filesystem error
 	IOError,
