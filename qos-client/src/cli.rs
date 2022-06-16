@@ -3,7 +3,7 @@
 use std::env;
 
 use borsh::BorshSerialize;
-use qos_core::protocol::msg::ProtocolMsg;
+use qos_core::{hex, protocol::msg::ProtocolMsg};
 use qos_crypto::RsaPair;
 use qos_host::cli::HostOptions;
 
@@ -17,6 +17,7 @@ enum Command {
 	DescribeNsm,
 	GenerateSetupKey,
 	BootGenesis,
+	PostGenesis,
 }
 impl Command {
 	fn run(&self, options: &ClientOptions) {
@@ -25,6 +26,7 @@ impl Command {
 			Self::DescribeNsm => handlers::describe_nsm(options),
 			Self::GenerateSetupKey => handlers::generate_setup_key(options),
 			Self::BootGenesis => handlers::boot_genesis(options),
+			Self::PostGenesis => handlers::post_genesis(options),
 		}
 	}
 }
@@ -35,6 +37,7 @@ impl From<&str> for Command {
 			"describe-nsm" => Self::DescribeNsm,
 			"generate-setup-key" => Self::GenerateSetupKey,
 			"boot-genesis" => Self::BootGenesis,
+			"post-genesis" => Self::PostGenesis,
 			_ => panic!("Unrecognized command"),
 		}
 	}
@@ -46,6 +49,7 @@ struct ClientOptions {
 	host: HostOptions,
 	generate_setup_key: GenerateSetupKeyOptions,
 	boot_genesis: BootGenesisOptions,
+	post_genesis: PostGenesisOptions,
 	// ... other options
 }
 impl ClientOptions {
@@ -56,6 +60,7 @@ impl ClientOptions {
 			host: HostOptions::new(),
 			generate_setup_key: GenerateSetupKeyOptions::new(),
 			boot_genesis: BootGenesisOptions::new(),
+			post_genesis: PostGenesisOptions::new(),
 			cmd: Self::extract_command(&mut args),
 		};
 
@@ -72,6 +77,7 @@ impl ClientOptions {
 					options.generate_setup_key.parse(cmd, arg);
 				}
 				Command::BootGenesis => options.boot_genesis.parse(cmd, arg),
+				Command::PostGenesis => options.post_genesis.parse(cmd, arg),
 				Command::HostHealth | Command::DescribeNsm => {}
 			}
 		}
@@ -159,6 +165,41 @@ impl BootGenesisOptions {
 	}
 }
 
+#[derive(Default, Clone, PartialEq, Debug)]
+struct PostGenesisOptions {
+	/// The directory containing the genesis ceremony output and attestation
+	/// doc. Exact same contents as the out dir in the boot genesis command.
+	genesis_dir: Option<String>,
+	/// Path to the file containing the setup key.
+	setup_key_path: Option<String>,
+	pcr0: Option<Vec<u8>>,
+	pcr1: Option<Vec<u8>>,
+	pcr2: Option<Vec<u8>>,
+}
+impl PostGenesisOptions {
+	fn new() -> Self {
+		Self::default()
+	}
+	fn parse(&mut self, cmd: &str, arg: &str) {
+		match cmd {
+			"--genesis-dir" => self.genesis_dir = Some(arg.to_string()),
+			"--setup-key-path" => {
+				self.setup_key_path = Some(arg.to_string());
+			}
+			"--pcr0" => {
+				self.pcr0 = Some(hex::decode(arg).expect("pcr0: Invalid hex"));
+			}
+			_ => {}
+		}
+	}
+	fn genesis_dir(&self) -> String {
+		self.genesis_dir.clone().expect("No `--genesis-dir` provided")
+	}
+	fn setup_key_path(&self) -> String {
+		self.setup_key_path.clone().expect("No `--setup-key-path` provided")
+	}
+}
+
 /// Client command line interface
 pub struct CLI;
 impl CLI {
@@ -179,11 +220,14 @@ mod handlers {
 	};
 	use qos_crypto::RsaPub;
 
-	use super::{
-		attestation_doc_from_der, cert_from_pem, BorshSerialize, ClientOptions,
-		ProtocolMsg, RsaPair, AWS_ROOT_CERT_PEM,
+	use crate::{
+		attest,
+		cli::{
+			attestation_doc_from_der, cert_from_pem, BorshSerialize,
+			ClientOptions, ProtocolMsg, RsaPair, AWS_ROOT_CERT_PEM,
+		},
+		request,
 	};
-	use crate::{attest, request};
 
 	pub(super) fn host_health(options: &ClientOptions) {
 		let path = &options.host.path("health");
@@ -313,6 +357,7 @@ mod handlers {
 		// Write the attestation doc
 		{
 			let attestation_doc_path =
+			// TODO: make these file names constants when possible.
 				output_dir.join("attestation_doc.genesis");
 			std::fs::write(&attestation_doc_path, cose_sign1_der)
 				.expect("Failed to write attestation doc.");
@@ -394,5 +439,21 @@ mod handlers {
 		}
 
 		GenesisSet { members, threshold }
+	}
+
+	pub(super) fn post_genesis(options: &ClientOptions) {
+		let _genesis_dir = options.post_genesis.genesis_dir();
+		let _setup_key_path = options.post_genesis.genesis_dir();
+
+		// 1) Read in the setup key
+		// 2) Get the alias from the setup key file name
+		// 3) Read in the attestation doc from the genesis directory
+		// 3) Read in the genesis output from the genesis directory
+		// 5) Verify the genesis doc ..
+		// 	- cert chain is valid
+		// 	- user data is hash of genesis output
+		// 	- nonce is none
+		// 	- public key is none
+		// 	- PCRs match expected pcrs
 	}
 }

@@ -39,6 +39,7 @@ pub mod cli;
 pub mod client;
 /// Entry point for starting up enclave
 pub mod coordinator;
+pub mod hex;
 /// Basic IO capabilities
 pub mod io;
 /// `QuorumOS` protocol details
