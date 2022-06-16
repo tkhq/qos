@@ -218,8 +218,7 @@ mod test {
 			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 		}
 
-		// 6) For shard K, call provision, make sure returns true and writes
-		// quorum key as a ready only file
+		// 6) Add Kth shard of the random key
 		let share = &encrypted_shares[threshold];
 		assert_eq!(
 			provision(share, &mut state),
@@ -256,8 +255,7 @@ mod test {
 			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 		}
 
-		// 6) For shard K, call provision, make sure returns true and writes
-		// quorum key as a ready only file
+		// 6) Add a bogus shard as the Kth shard
 		let bogus_share = &[69u8; 2349];
 		let encrypted_bogus_share =
 			eph_pair.envelope_encrypt(bogus_share).unwrap();

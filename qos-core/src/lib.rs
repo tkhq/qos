@@ -4,7 +4,8 @@
 //!
 //! This crate should have as minimal dependencies as possible to decrease
 //! supply chain attack vectors and audit burden.
-//!
+//! TODO: high level docs explaining QOS, including key terms
+//! Route specific docs should go on protocol message
 //! # Quorum OS
 //!
 //! ## Overview
