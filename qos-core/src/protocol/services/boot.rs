@@ -1,7 +1,7 @@
 use borsh::BorshSerialize;
 use qos_crypto::{sha_256, RsaPair, RsaPub};
 
-use super::{
+use crate::protocol::{
 	Hash256, NsmRequest, NsmResponse, ProtocolError, ProtocolPhase,
 	ProtocolState,
 };
@@ -74,12 +74,12 @@ pub struct QuorumSet {
 pub struct Namespace {
 	/// The namespace. This should be unique relative to other namespaces the
 	/// organization running QuorumOs has.
-	name: String,
+	pub name: String,
 	/// A monotonically increasing value, used to identify the order in which
 	/// manifests for this namespace have been created. This is used to prevent
 	/// downgrade attacks - quorum members should only approve a manifest that
 	/// has the highest nonce.
-	nonce: u32,
+	pub nonce: u32,
 }
 
 #[derive(
@@ -154,7 +154,7 @@ impl ManifestEnvelope {
 	}
 }
 
-pub(super) fn boot_standard(
+pub(in crate::protocol) fn boot_standard(
 	state: &mut ProtocolState,
 	manifest_envelope: &ManifestEnvelope,
 	pivot: &Vec<u8>,
