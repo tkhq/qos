@@ -4,8 +4,8 @@ use borsh::BorshSerialize;
 use qos_crypto::{sha_256, RsaPair, RsaPub};
 
 use crate::protocol::{
-	Hash256, attestor::types::{NsmRequest, NsmResponse}, ProtocolError, ProtocolPhase,
-	ProtocolState,
+	attestor::types::{NsmRequest, NsmResponse},
+	Hash256, ProtocolError, ProtocolPhase, ProtocolState,
 };
 
 /// Enclave configuration specific to AWS Nitro.
@@ -107,7 +107,8 @@ pub struct Manifest {
 
 impl Manifest {
 	/// Canonical hash for the manifest.
-	#[must_use] pub fn hash(&self) -> Hash256 {
+	#[must_use]
+	pub fn hash(&self) -> Hash256 {
 		qos_crypto::sha_256(
 			&self.try_to_vec().expect("`Manifest` serializes with cbor"),
 		)

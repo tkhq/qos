@@ -8,9 +8,9 @@ pub mod attestor;
 pub mod msg;
 pub mod services;
 
+use attestor::NsmProvider;
 use msg::ProtocolMsg;
 use services::boot;
-use attestor::NsmProvider;
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
@@ -203,9 +203,10 @@ impl server::Routable for Executor {
 }
 
 mod handlers {
-	use super::{
+	use crate::protocol::{
+		msg::ProtocolMsg,
 		services::{boot, genesis, provision},
-		msg::ProtocolMsg, ProtocolPhase, ProtocolState,
+		ProtocolPhase, ProtocolState,
 	};
 
 	// TODO: Add tests for this in the middle of some integration tests

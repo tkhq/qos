@@ -6,7 +6,8 @@ use borsh::BorshSerialize;
 use qos_crypto::{RsaPair, RsaPub};
 
 use crate::protocol::{
-	Hash256, attestor::types::{NsmRequest, NsmResponse}, ProtocolError, ProtocolState,
+	attestor::types::{NsmRequest, NsmResponse},
+	Hash256, ProtocolError, ProtocolState,
 };
 
 /// Member of the [`SetupSet`].
@@ -209,8 +210,9 @@ mod test {
 			})
 			.collect();
 
-		let reconstructed =
-			qos_crypto::shamir::shares_reconstruct(&shares[0..threshold as usize]);
+		let reconstructed = qos_crypto::shamir::shares_reconstruct(
+			&shares[0..threshold as usize],
+		);
 		let reconstructed_quorum_key =
 			RsaPair::from_der(&reconstructed).unwrap();
 

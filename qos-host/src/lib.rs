@@ -19,8 +19,6 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
-use borsh::{BorshSerialize};
-use borsh::BorshDeserialize;
 use axum::{
 	body::Bytes,
 	http::StatusCode,
@@ -28,12 +26,11 @@ use axum::{
 	routing::{get, post},
 	Extension, Router,
 };
+use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::Client,
 	io::SocketAddress,
-	protocol::{ProtocolError,
-	msg::ProtocolMsg
-	},
+	protocol::{msg::ProtocolMsg, ProtocolError},
 };
 
 pub mod cli;

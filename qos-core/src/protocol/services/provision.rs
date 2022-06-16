@@ -99,6 +99,7 @@ mod test {
 
 	use super::*;
 	use crate::protocol::{
+		attestor::mock::MockNsm,
 		services::{
 			boot::{
 				Manifest, ManifestEnvelope, Namespace, NitroConfig,
@@ -106,7 +107,6 @@ mod test {
 			},
 			provision,
 		},
-		attestor::mock::MockNsm,
 	};
 
 	fn setup(

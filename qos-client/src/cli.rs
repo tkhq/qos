@@ -174,7 +174,8 @@ mod handlers {
 	use std::path::Path;
 
 	use qos_core::protocol::{
-		services::genesis::GenesisSet, attestor::types::{NsmRequest, NsmResponse}, services::genesis::SetupMember,
+		attestor::types::{NsmRequest, NsmResponse},
+		services::genesis::{GenesisSet, SetupMember},
 	};
 	use qos_crypto::RsaPub;
 
