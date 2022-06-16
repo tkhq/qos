@@ -2,8 +2,8 @@ use std::{path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
 use qos_client::attest;
-use qos_core::protocol::GenesisOutput;
-use qos_crypto::{shares_reconstruct, RsaPair, RsaPub};
+use qos_core::protocol::services::genesis::GenesisOutput;
+use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
 use rand::{seq::SliceRandom, thread_rng};
 
 #[tokio::test]

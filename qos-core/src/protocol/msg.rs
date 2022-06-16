@@ -1,11 +1,12 @@
 //! Enclave executor message types.
 
 use crate::protocol::{
+	attestor::types::{NsmRequest, NsmResponse},
 	services::{
 		boot::ManifestEnvelope,
 		genesis::{GenesisOutput, GenesisSet},
 	},
-	NsmRequest, NsmResponse, ProtocolError,
+	ProtocolError,
 };
 
 /// Message types for communicating with protocol executor.
@@ -25,7 +26,7 @@ pub enum ProtocolMsg {
 		nsm_response: NsmResponse,
 	},
 
-	/// Request was succesful. TODO: remove
+	/// Request was successful. TODO: remove
 	SuccessResponse,
 	/// TODO: Error response should hold a protocol error, Remove
 	ErrorResponse,

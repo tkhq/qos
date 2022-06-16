@@ -24,9 +24,7 @@ use openssl::{
 	symm::{self, Cipher},
 };
 
-mod shamir;
-
-pub use shamir::*;
+pub mod shamir;
 
 /// Standard length for `QuorumOS` RSA keys, specified in bits.
 pub const RSA_KEY_LEN: u32 = 4096;

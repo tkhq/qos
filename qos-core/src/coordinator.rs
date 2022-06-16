@@ -17,7 +17,7 @@ impl Coordinator {
 	/// # Panics
 	///
 	/// - If any enclave options are incorrect
-	/// - If spawning the pivot error.
+	/// - If spawning the pivot errors.
 	/// - If waiting for the pivot errors.
 	pub fn execute(opts: EnclaveOptions) {
 		let secret_file = opts.secret_file();

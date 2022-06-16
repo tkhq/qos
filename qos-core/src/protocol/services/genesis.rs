@@ -1,10 +1,13 @@
+//! Genesis boot logic and types.
+
 use std::iter::zip;
 
 use borsh::BorshSerialize;
 use qos_crypto::{RsaPair, RsaPub};
 
 use crate::protocol::{
-	Hash256, NsmRequest, NsmResponse, ProtocolError, ProtocolState,
+	attestor::types::{NsmRequest, NsmResponse},
+	Hash256, ProtocolError, ProtocolState,
 };
 
 /// Member of the [`SetupSet`].
@@ -101,7 +104,7 @@ pub(in crate::protocol) fn boot_genesis(
 	// TODO: Entropy!
 	let quorum_pair = RsaPair::generate()?;
 
-	let shares = qos_crypto::shares_generate(
+	let shares = qos_crypto::shamir::shares_generate(
 		&quorum_pair.private_key_to_der()?,
 		genesis_set.members.len(),
 		genesis_set.threshold as usize,
@@ -156,7 +159,7 @@ pub(in crate::protocol) fn boot_genesis(
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::protocol::MockNsm;
+	use crate::protocol::attestor::mock::MockNsm;
 
 	#[test]
 	fn boot_genesis_works() {
@@ -207,8 +210,9 @@ mod test {
 			})
 			.collect();
 
-		let reconstructed =
-			qos_crypto::shares_reconstruct(&shares[0..threshold as usize]);
+		let reconstructed = qos_crypto::shamir::shares_reconstruct(
+			&shares[0..threshold as usize],
+		);
 		let reconstructed_quorum_key =
 			RsaPair::from_der(&reconstructed).unwrap();
 

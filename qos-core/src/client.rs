@@ -3,7 +3,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
 	io::{self, SocketAddress, Stream},
-	protocol::ProtocolMsg,
+	protocol::msg::ProtocolMsg,
 };
 
 /// Enclave client error.

@@ -3,7 +3,7 @@ use std::env;
 use crate::{
 	coordinator::Coordinator,
 	io::SocketAddress,
-	protocol::{MockNsm, Nsm, NsmProvider},
+	protocol::attestor::{mock::MockNsm, Nsm, NsmProvider},
 	EPHEMERAL_KEY_FILE, PIVOT_FILE, SECRET_FILE,
 };
 

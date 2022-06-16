@@ -1,8 +1,9 @@
+//! Endpoints and types for an enclaves attestation flow.
+
 use aws_nitro_enclaves_nsm_api as nsm;
 
-mod mock;
+pub mod mock;
 pub mod types;
-pub use mock::{MockNsm, MOCK_NSM_ATTESTATION_DOCUMENT};
 
 /// Something that implements the Nitro Secure Module endpoints. This is made
 /// generic so mock providers can be subbed in for testing. In production use

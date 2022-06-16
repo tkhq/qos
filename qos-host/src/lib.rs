@@ -19,11 +19,6 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
-use borsh::{BorshDeserialize, BorshSerialize};
-
-const MEGABYTE: usize = 1024 * 1024;
-const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
-
 use axum::{
 	body::Bytes,
 	http::StatusCode,
@@ -31,14 +26,17 @@ use axum::{
 	routing::{get, post},
 	Extension, Router,
 };
+use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::Client,
 	io::SocketAddress,
-	protocol::{ProtocolError, ProtocolMsg},
+	protocol::{msg::ProtocolMsg, ProtocolError},
 };
 
 pub mod cli;
-pub use cli::CLI;
+
+const MEGABYTE: usize = 1024 * 1024;
+const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
 
 /// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]

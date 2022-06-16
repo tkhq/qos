@@ -1,3 +1,5 @@
+//! Quorum Key provisioning logic and types.
+
 use qos_crypto::RsaPair;
 
 use crate::protocol::{ProtocolError, ProtocolPhase, ProtocolState};
@@ -32,7 +34,7 @@ impl SecretBuilder {
 
 	/// Attempt to reconstruct the secret from the
 	pub(crate) fn build(&self) -> Result<Secret, ProtocolError> {
-		let secret = qos_crypto::shares_reconstruct(&self.shares);
+		let secret = qos_crypto::shamir::shares_reconstruct(&self.shares);
 
 		if secret.is_empty() {
 			return Err(ProtocolError::ReconstructionError);
@@ -93,10 +95,11 @@ pub(in crate::protocol) fn provision(
 mod test {
 	use std::path::Path;
 
-	use qos_crypto::{sha_256, shares_generate};
+	use qos_crypto::{sha_256, shamir::shares_generate};
 
 	use super::*;
 	use crate::protocol::{
+		attestor::mock::MockNsm,
 		services::{
 			boot::{
 				Manifest, ManifestEnvelope, Namespace, NitroConfig,
@@ -104,7 +107,6 @@ mod test {
 			},
 			provision,
 		},
-		MockNsm,
 	};
 
 	fn setup(

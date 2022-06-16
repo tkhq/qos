@@ -13,7 +13,7 @@ pub mod request {
 	use std::io::Read;
 
 	use borsh::{BorshDeserialize, BorshSerialize};
-	use qos_core::protocol::ProtocolMsg;
+	use qos_core::protocol::msg::ProtocolMsg;
 
 	const MAX_SIZE: u64 = u32::MAX as u64;
 

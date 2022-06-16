@@ -156,7 +156,7 @@ fn verify_cose_sign1_sig(
 mod test {
 	use aws_nitro_enclaves_cose::header_map::HeaderMap;
 	use openssl::pkey::{PKey, Private, Public};
-	use qos_core::protocol::MOCK_NSM_ATTESTATION_DOCUMENT;
+	use qos_core::protocol::attestor::mock::MOCK_NSM_ATTESTATION_DOCUMENT;
 
 	use super::*;
 
