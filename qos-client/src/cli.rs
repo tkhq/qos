@@ -459,13 +459,13 @@ mod handlers {
 
 		// Read in the attestation doc from the genesis directory
 		let cose_sign1 = std::fs::read(attestation_doc_path)
-		.expect("Could not read attestation_doc");
+			.expect("Could not read attestation_doc");
 		let attestation_doc = extract_attestation_doc(&cose_sign1);
 
 		// Read in the genesis output from the genesis directory
 		let genesis_output = GenesisOutput::try_from_slice(
 			&std::fs::read(genesis_set_path)
-			.expect("Failed to read genesis set"),
+				.expect("Failed to read genesis set"),
 		)
 		.expect("Could not deserialize the genesis set");
 
@@ -542,7 +542,6 @@ mod handlers {
 
 	fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
 		let path_str = path.as_os_str().to_string_lossy();
-		// let path_str = p.to_str().unwrap();
 		std::fs::write(path, buf).unwrap_or_else(|_| {
 			panic!("Failed writing {} to file", path_str.clone())
 		});
