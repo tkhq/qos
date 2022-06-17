@@ -323,7 +323,7 @@ mod handlers {
 				.public_key_to_pem()
 				.expect("Public key PEM conversion failed"),
 			"Setup Public Key",
-		)
+		);
 	}
 
 	// TODO: verify AWS_ROOT_CERT_PEM against a checksum
@@ -545,7 +545,7 @@ mod handlers {
 		let path_str = path.as_os_str().to_string_lossy();
 		// let path_str = p.to_str().unwrap();
 		std::fs::write(path, buf)
-			.expect(&format!("Failed writing {} to file", path_str.clone()));
+			.unwrap_or_else(|_| panic!("Failed writing {} to file", path_str.clone()));
 		println!("{} written to: {}", item_name, path_str);
 	}
 
