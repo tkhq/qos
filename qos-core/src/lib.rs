@@ -33,18 +33,13 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
-/// Command line interface
 pub mod cli;
-/// Client for communicating with the enclave server
 pub mod client;
-/// Entry point for starting up enclave
 pub mod coordinator;
 pub mod hex;
-/// Basic IO capabilities
 pub mod io;
-/// `QuorumOS` protocol details
+pub mod parser;
 pub mod protocol;
-/// Basic socket server
 pub mod server;
 
 /// Path to Quorum Key secret.
