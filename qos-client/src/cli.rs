@@ -304,27 +304,26 @@ mod handlers {
 
 		let setup_key = RsaPair::generate().expect("RSA key generation failed");
 		// Write the setup key secret
-		{
-			let private_key_file_path = key_dir_path
-				.join(format!("{}.{}{}", alias, namespace, SETUP_PRIV_EXT));
-			let private_key_content = setup_key
+		let private_key_file_path = key_dir_path
+			.join(format!("{}.{}{}", alias, namespace, SETUP_PRIV_EXT));
+		write_with_msg(
+			&private_key_file_path,
+			&setup_key
 				.private_key_to_pem()
-				.expect("Private key PEM conversion failed");
-			std::fs::write(private_key_file_path, private_key_content)
-				.expect("Writing private key failed");
-		}
+				.expect("Private key PEM conversion failed"),
+			"Setup Private Key",
+		);
 		// Write the setup key public key
-		{
-			let public_key_file_path = key_dir_path
-				.join(format!("{}.{}{}", alias, namespace, SETUP_PUB_EXT));
-			let public_key_content = setup_key
-				.public_key_to_pem()
-				.expect("Public key PEM conversion failed");
-			std::fs::write(public_key_file_path, public_key_content)
-				.expect("Writing public key failed");
-		}
+		let public_key_file_path = key_dir_path
+			.join(format!("{}.{}{}", alias, namespace, SETUP_PUB_EXT));
 
-		println!("Setup keys generated!");
+		write_with_msg(
+			&public_key_file_path,
+			&setup_key
+				.public_key_to_pem()
+				.expect("Public key PEM conversion failed"),
+			"Setup Public Key",
+		)
 	}
 
 	// TODO: verify AWS_ROOT_CERT_PEM against a checksum
@@ -367,37 +366,21 @@ mod handlers {
 		std::fs::create_dir_all(&output_dir).unwrap();
 
 		// Write the attestation doc
-		{
-			let attestation_doc_path =
-			// TODO: make these file names constants when possible.
-				output_dir.join(GENESIS_ATTESTATION_DOC_FILE);
-			std::fs::write(&attestation_doc_path, cose_sign1_der)
-				.expect("Failed to write attestation doc.");
-			println!(
-				"Attestation document written to {}",
-				attestation_doc_path
-					.as_os_str()
-					.to_os_string()
-					.to_str()
-					.unwrap()
-			);
-		}
+		let attestation_doc_path =
+		// TODO: make these file names constants when possible.
+			output_dir.join(GENESIS_ATTESTATION_DOC_FILE);
+		write_with_msg(
+			&attestation_doc_path,
+			&cose_sign1_der,
+			"COSE Sign1 Attestation Doc",
+		);
+
 		// Write the genesis output
-		{
-			std::fs::write(
-				&genesis_output_path,
-				genesis_output.try_to_vec().unwrap(),
-			)
-			.expect("Failed to write genesis output");
-			println!(
-				"Genesis output written to {}",
-				genesis_output_path
-					.as_os_str()
-					.to_os_string()
-					.to_str()
-					.unwrap()
-			);
-		}
+		write_with_msg(
+			&genesis_output_path,
+			&genesis_output.try_to_vec().unwrap(),
+			"`GenesisOutput`",
+		);
 	}
 
 	fn create_genesis_set(options: &ClientOptions) -> GenesisSet {
@@ -529,40 +512,41 @@ mod handlers {
 		// Store the encrypted share
 		let share_path =
 			genesis_dir.join(format!("{}.{}{}", alias, namespace, SHARE_EXT));
-		std::fs::write(&share_path, &member_output.encrypted_quorum_key_share)
-			.expect("Error trying to write share");
-		println!(
-			"Encrypted Quorum Share written to {}",
-			share_path.as_os_str().to_os_string().to_str().unwrap()
+		write_with_msg(
+			share_path.as_path(),
+			&member_output.encrypted_quorum_key_share,
+			"Encrypted Quorum Share",
 		);
 
 		// Store the Personal Key, TODO: password encrypt the private key
+		// Public
 		let personal_key_pub_path = genesis_dir
 			.join(format!("{}.{}{}", alias, namespace, PERSONAL_KEY_PUB_EXT));
-		std::fs::write(
-			&personal_key_pub_path,
-			personal_pair
+		write_with_msg(
+			personal_key_pub_path.as_path(),
+			&personal_pair
 				.public_key_to_pem()
 				.expect("Could not create public key from personal pair"),
-		)
-		.expect("Failed writing personal key public to file");
-		println!(
-			"Personal Public Key written to {}",
-			personal_key_pub_path.as_os_str().to_os_string().to_str().unwrap()
+			"Personal Public Key",
 		);
+		// Private
 		let personal_key_priv_path = genesis_dir
 			.join(format!("{}.{}{}", alias, namespace, PERSONAL_KEY_PRIV_EXT));
-		std::fs::write(
-			&personal_key_priv_path,
-			personal_pair
+		write_with_msg(
+			personal_key_priv_path.as_path(),
+			&personal_pair
 				.private_key_to_pem()
 				.expect("Could not create private key from personal pair"),
-		)
-		.expect("Failed writing personal key public to file");
-		println!(
-			"Personal Private Key written to {}",
-			personal_key_priv_path.as_os_str().to_os_string().to_str().unwrap()
+			"Personal Private Key",
 		);
+	}
+
+	fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
+		let path_str = path.as_os_str().to_string_lossy();
+		// let path_str = p.to_str().unwrap();
+		std::fs::write(path, buf)
+			.expect(&format!("Failed writing {} to file", path_str.clone()));
+		println!("{} written to: {}", item_name, path_str);
 	}
 
 	/// Panics if verification fails
