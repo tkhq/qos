@@ -1,11 +1,10 @@
 //! Standard boot logic and types.
 
-use borsh::BorshSerialize;
 use qos_crypto::{sha_256, RsaPair, RsaPub};
 
 use crate::protocol::{
 	attestor::types::{NsmRequest, NsmResponse},
-	Hash256, ProtocolError, ProtocolPhase, ProtocolState,
+	Hash256, ProtocolError, ProtocolPhase, ProtocolState, QosHash,
 };
 
 /// Enclave configuration specific to AWS Nitro.
@@ -105,16 +104,6 @@ pub struct Manifest {
 	pub quorum_set: QuorumSet,
 }
 
-impl Manifest {
-	/// Canonical hash for the manifest.
-	#[must_use]
-	pub fn hash(&self) -> Hash256 {
-		qos_crypto::sha_256(
-			&self.try_to_vec().expect("`Manifest` serializes with cbor"),
-		)
-	}
-}
-
 /// An approval by a Quorum Member.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
@@ -145,7 +134,7 @@ impl ManifestEnvelope {
 				.map_err(|_| ProtocolError::CryptoError)?;
 
 			let is_valid_signature = pub_key
-				.verify_sha256(&approval.signature, &self.manifest.hash())
+				.verify_sha256(&approval.signature, &self.manifest.qos_hash())
 				.map_err(|_| ProtocolError::CryptoError)?;
 			if !is_valid_signature {
 				return Err(ProtocolError::InvalidManifestApproval(
@@ -192,7 +181,7 @@ pub(in crate::protocol) fn boot_standard(
 	let nsm_response = {
 		let request = NsmRequest::Attestation {
 			// TODO: make sure CLI verifies the manifest hash is correct
-			user_data: Some(manifest_envelope.manifest.hash().to_vec()),
+			user_data: Some(manifest_envelope.manifest.qos_hash().to_vec()),
 			nonce: None,
 			public_key: Some(ephemeral_key.public_key_to_pem().unwrap()),
 		};
@@ -267,7 +256,7 @@ mod test {
 	fn manifest_hash() {
 		let (manifest, _members, _pivot) = get_manifest();
 
-		let hashes: Vec<_> = (0..10).map(|_| manifest.hash()).collect();
+		let hashes: Vec<_> = (0..10).map(|_| manifest.qos_hash()).collect();
 		let is_valid = (1..10).all(|i| hashes[i] == hashes[0]);
 		assert!(is_valid);
 	}
@@ -277,7 +266,7 @@ mod test {
 		let (manifest, members, pivot) = get_manifest();
 
 		let manifest_envelope = {
-			let manifest_hash = manifest.hash();
+			let manifest_hash = manifest.qos_hash();
 			let approvals = members
 				.into_iter()
 				.map(|(pair, member)| Approval {
@@ -318,7 +307,7 @@ mod test {
 		let (manifest, members, pivot) = get_manifest();
 
 		let manifest_envelope = {
-			let manifest_hash = manifest.hash();
+			let manifest_hash = manifest.qos_hash();
 			let approvals = members
 				[0usize..manifest.quorum_set.threshold as usize - 1]
 				.iter()

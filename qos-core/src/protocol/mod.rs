@@ -1,6 +1,7 @@
 //! Quorum protocol state machine.
 
 use borsh::{BorshDeserialize, BorshSerialize};
+use qos_crypto::sha_256;
 
 use crate::server;
 
@@ -20,6 +21,17 @@ type ProtocolHandler =
 
 /// 256bit hash
 pub type Hash256 = [u8; 32];
+
+/// Canonical hash of `QuorumOS` types.
+pub trait QosHash: BorshSerialize {
+	/// Get the canonical hash.
+	fn qos_hash(&self) -> Hash256 {
+		sha_256(&self.try_to_vec().expect("Implements borsh serialize"))
+	}
+}
+
+// Blanket implement QosHash for any type that implements BorshSerialize.
+impl<T: BorshSerialize> QosHash for T {}
 
 /// A error from protocol execution.
 #[derive(Debug, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
