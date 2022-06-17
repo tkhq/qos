@@ -1,5 +1,6 @@
 //! Command line token parser.
-use std::{collections::HashMap, fmt};
+use core::marker::PhantomData;
+use std::{collections::HashMap, convert::From, fmt};
 
 const HELP_INPUT: &str = "--help";
 const VERSION_INPUT: &str = "--version";
@@ -22,6 +23,44 @@ pub enum ParserError {
 	MissingInput(String),
 }
 
+/// Something that has method to get a parser.
+pub trait GetParser {
+	/// A parser
+	fn parser(&self) -> Parser;
+}
+
+/// Parse inputs for a command. Assumes the format `command-name --token1 value1
+/// --flag --token2 value2`.
+pub struct CommandParser<C: From<String> + GetParser> {
+	_phantom: PhantomData<C>,
+}
+
+impl<C: From<String> + GetParser> CommandParser<C> {
+	/// Parse inputs for the command `C`.
+	pub fn parse(inputs: &mut Vec<String>) -> Result<(C, Parser), ParserError> {
+		let command = Self::extract_command(inputs);
+		let mut parser = command.parser();
+		parser.parse(inputs)?;
+
+		Ok((command, parser))
+	}
+
+	/// Helper function to extract the command from inputs.
+	/// WARNING: this removes the first two items from `args`
+	fn extract_command(inputs: &mut Vec<String>) -> C {
+		// Remove the binary name
+		inputs.remove(0);
+
+		let command: C =
+			inputs.get(0).expect("No command provided").clone().into();
+
+		// Remove the command
+		inputs.remove(0);
+
+		command
+	}
+}
+
 /// Simple parser for CLIs. Reads input and parses them into [`Token`]s.
 /// See [`Token`] and [`TokenType`] for options on possible commands.
 #[derive(Default, Clone)]
@@ -30,10 +69,10 @@ pub struct Parser {
 }
 
 impl Parser {
-	/// Create a new instance of [`Self`].
+	/// Create a new instance of [`Self`] with the given `cmd`.
 	#[must_use]
 	pub fn new() -> Self {
-		Parser::default()
+		Self::default()
 	}
 
 	/// Add an expected Token to parse.
@@ -181,15 +220,15 @@ impl Token {
 
 	/// Specify another token that must be present when this one is.
 	#[must_use]
-	pub fn requires(mut self, other_arg: String) -> Self {
-		self.requires = Some(other_arg);
+	pub fn requires(mut self, required: &str) -> Self {
+		self.requires = Some(required.to_string());
 		self
 	}
 
 	/// Specify other tokens that are mutually exclusive of self.
 	#[must_use]
-	pub fn forbids(mut self, args: Vec<String>) -> Self {
-		self.forbids = args;
+	pub fn forbids(mut self, forbidden: Vec<&str>) -> Self {
+		self.forbids = forbidden.into_iter().map(String::from).collect();
 		self
 	}
 
@@ -204,8 +243,8 @@ impl Token {
 	/// Keep a default value which will be used if the user didn't provide a
 	/// value for the token.
 	#[must_use]
-	pub fn default_value(mut self, default_value: String) -> Self {
-		self.default_value = Some(TokenType::Single(default_value));
+	pub fn default_value(mut self, default: &str) -> Self {
+		self.default_value = Some(TokenType::Single(default.to_string()));
 		self
 	}
 
@@ -409,5 +448,51 @@ impl TokenMap {
 	/// Insert a `Token`
 	fn insert(&mut self, token: Token) {
 		self.tokens.insert(token.name.clone(), token);
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	fn setup() -> Parser {
+		Parser::new()
+			.token(
+				Token::new("required-with-value", "required-with-value")
+					.required(true)
+					.takes_value(true),
+			)
+			.token(
+				Token::new("requires-no-value", "requires-no-value")
+					.requires("optional-value")
+					.takes_value(false),
+			)
+			.token(
+				Token::new("optional-with-default", "optional-with-default")
+					.takes_value(true)
+					.default_value("default1"),
+			)
+			.token(
+				Token::new("with-default", "with-default info")
+					.takes_value(true)
+					.default_value("default2"),
+			)
+			.token(
+				Token::new("forbid1-with-value", "forbid1-with-value info")
+					.takes_value(true)
+					.forbids(vec!["forbid2-no-value"]),
+			)
+			.token(
+				Token::new("forbid2-no-value", "forbid2-no-value info")
+					.forbids(vec!["forbid1-with-value"]),
+			)
+			.token(
+				Token::new("optional-value", "optional-value info")
+					.takes_value(true),
+			)
+	}
+
+	#[test]
+	fn parser_works() {
+		drop(setup());
 	}
 }
