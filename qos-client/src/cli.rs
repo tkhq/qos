@@ -367,7 +367,7 @@ mod handlers {
 
 		// Write the attestation doc
 		let attestation_doc_path =
-			output_dir.join(GENES©4IS_ATTESTATION_DOC_FILE);
+			output_dir.join(GENESIS_ATTESTATION_DOC_FILE);
 		write_with_msg(
 			&attestation_doc_path,
 			&cose_sign1_der,
