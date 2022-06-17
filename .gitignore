@@ -7,3 +7,4 @@ target/
 *.secret
 *.configuration
 *.pub
+*.share

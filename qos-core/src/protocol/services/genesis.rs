@@ -2,12 +2,11 @@
 
 use std::iter::zip;
 
-use borsh::BorshSerialize;
 use qos_crypto::{RsaPair, RsaPub};
 
 use crate::protocol::{
 	attestor::types::{NsmRequest, NsmResponse},
-	Hash256, ProtocolError, ProtocolState,
+	ProtocolError, ProtocolState, QosHash,
 };
 
 /// Member of the [`SetupSet`].
@@ -18,8 +17,8 @@ pub struct SetupMember {
 	/// A unique UTF-8 encoded string to help Human participants to identify
 	/// this member.
 	pub alias: String,
-	/// A Setup Key that will be used by the Genesis flow to encrypt a
-	/// Personal Key.
+	/// A DER encoded Setup Key that will be used by the Genesis flow to
+	/// encrypt a Personal Key.
 	pub pub_key: Vec<u8>,
 }
 
@@ -81,16 +80,6 @@ pub struct GenesisOutput {
 	pub recovery_permutations: Vec<RecoveredPermutation>,
 }
 
-impl GenesisOutput {
-	/// Canonical hash of [`Self`]
-	#[must_use]
-	pub fn hash(&self) -> Hash256 {
-		qos_crypto::sha_256(
-			&self.try_to_vec().expect("`Manifest` serializes with cbor"),
-		)
-	}
-}
-
 // TODO: Recovery logic!
 // How many permutations of `threshold` keys should we use
 // to reconstruct the original Quorum Key?
@@ -144,7 +133,7 @@ pub(in crate::protocol) fn boot_genesis(
 
 	let nsm_response = {
 		let request = NsmRequest::Attestation {
-			user_data: Some(genesis_output.hash().to_vec()),
+			user_data: Some(genesis_output.qos_hash().to_vec()),
 			nonce: None,
 			public_key: None,
 		};
