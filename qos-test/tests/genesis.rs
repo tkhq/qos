@@ -15,7 +15,7 @@ async fn genesis_e2e() {
 	let pivot_path = "./genesis_e2e.pivot";
 
 	let key_dir = "./genesis-setup-tmp";
-	let namespace = "vapers-only";
+	let namespace = "quit-coding-to-vape";
 	let genesis_output_dir = "./genesis-out-tmp";
 	let attestation_doc_path =
 		format!("{}/attestation_doc.genesis", genesis_output_dir);
@@ -45,9 +45,9 @@ async fn genesis_e2e() {
 	// Make sure the directory keys are getting written to already exist.
 	let _ = std::fs::create_dir(key_dir);
 	for (u, private, public) in [
-		(user1, user1_private_setup, user1_public_setup),
-		(user2, user2_private_setup, user2_public_setup),
-		(user3, user3_private_setup, user3_public_setup),
+		(&user1, &user1_private_setup, &user1_public_setup),
+		(&user2, &user2_private_setup, &user2_public_setup),
+		(&user3, &user3_private_setup, &user3_public_setup),
 	] {
 		assert!(Command::new("../target/debug/client_cli")
 			.args([
@@ -166,6 +166,65 @@ async fn genesis_e2e() {
 		*reconstructed.public_key(),
 		RsaPub::from_der(&genesis_output.quorum_key).unwrap()
 	);
+
+	// -- CLIENT make sure each user can run `after-genesis` against their
+	// member output and setup key
+	let get_after_paths = |user: String| {
+		(
+			format!(
+				"{}/{}.{}.personal.pub",
+				genesis_output_dir, user, namespace
+			),
+			format!(
+				"{}/{}.{}.personal.key",
+				genesis_output_dir, user, namespace
+			),
+			format!("{}/{}.{}.share", genesis_output_dir, user, namespace),
+		)
+	};
+	let mock_pcr = &qos_core::hex::encode(&[0u8; 48]);
+	for (u, setup_key_path) in [
+		(user1, &user1_private_setup),
+		(user2, &user2_private_setup),
+		(user3, &user3_private_setup),
+	] {
+		assert!(Command::new("../target/debug/client_cli")
+			.args([
+				"after-genesis",
+				"--setup-key-path",
+				setup_key_path,
+				"--genesis-dir",
+				genesis_output_dir,
+				"--pcr0",
+				mock_pcr,
+				"--pcr1",
+				mock_pcr,
+				"--pcr2",
+				mock_pcr
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
+		let (personal_pub, personal_priv, share_path) =
+			get_after_paths(u.to_string());
+
+		// Read in the personal public and private key
+		let public = RsaPub::from_pem_file(personal_pub).unwrap();
+		let private = RsaPair::from_pem_file(personal_priv).unwrap();
+		assert_eq!(
+			private.public_key_to_der().unwrap(),
+			public.public_key_to_der().unwrap()
+		);
+		// Check the share is encrypted to personal key
+		let share = private
+			.envelope_decrypt(&std::fs::read(share_path).unwrap())
+			.unwrap();
+		// Cross check that the share belongs `decrypted_shares`, which we
+		// created out of band in this test.
+		assert!(decrypted_shares.contains(&share));
+	}
 
 	// -- Clean up
 	for file in

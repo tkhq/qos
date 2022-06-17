@@ -39,7 +39,7 @@ impl From<&str> for Command {
 			"describe-nsm" => Self::DescribeNsm,
 			"generate-setup-key" => Self::GenerateSetupKey,
 			"boot-genesis" => Self::BootGenesis,
-			"post-genesis" => Self::AfterGenesis,
+			"after-genesis" => Self::AfterGenesis,
 			_ => panic!("Unrecognized command"),
 		}
 	}
@@ -456,11 +456,9 @@ mod handlers {
 	pub(super) fn after_genesis(options: &ClientOptions) {
 		let genesis_dir = &options.after_genesis.genesis_dir();
 		let genesis_dir = Path::new(genesis_dir);
-
 		let attestation_doc_path =
 			genesis_dir.join(GENESIS_ATTESTATION_DOC_FILE);
 		let genesis_set_path = genesis_dir.join(GENESIS_OUTPUT_FILE);
-
 		let setup_key_path = &options.after_genesis.setup_key_path();
 		let setup_key_path = Path::new(setup_key_path);
 
@@ -469,11 +467,7 @@ mod handlers {
 			.expect("Failed to read Setup Key");
 		// Get the alias from the setup key file name
 		let (alias, namespace) = {
-			let file_name = setup_key_path
-				.file_name()
-				.map(std::ffi::OsStr::to_string_lossy)
-				.unwrap();
-			let split: Vec<_> = file_name.split('.').collect();
+			let split = split_file_name(setup_key_path);
 			(
 				(*split.get(0).unwrap()).to_string(),
 				(*split.get(1).unwrap()).to_string(),
@@ -503,13 +497,13 @@ mod handlers {
 		);
 
 		// Get the members specific output based on alias & setup key
-		let setup_key =
-			setup_pair.private_key_to_der().expect("Invalid setup key");
+		let setup_public =
+			setup_pair.public_key_to_der().expect("Invalid setup key");
 		let member_output = genesis_output
 			.member_outputs
 			.iter()
 			.find(|m| {
-				m.setup_member.pub_key == setup_key
+				m.setup_member.pub_key == setup_public
 					&& m.setup_member.alias == alias
 			})
 			.expect(
@@ -533,73 +527,77 @@ mod handlers {
 		);
 
 		// Store the encrypted share
-		{
-			let share_path = genesis_dir
-				.join(format!("{}.{}{}", alias, namespace, SHARE_EXT));
-			std::fs::write(
-				share_path,
-				&member_output.encrypted_quorum_key_share,
-			)
-			.expect("Error try to write share");
-		}
+		let share_path =
+			genesis_dir.join(format!("{}.{}{}", alias, namespace, SHARE_EXT));
+		std::fs::write(&share_path, &member_output.encrypted_quorum_key_share)
+			.expect("Error trying to write share");
+		println!(
+			"Encrypted Quorum Share written to {}",
+			share_path.as_os_str().to_os_string().to_str().unwrap()
+		);
 
-		// Store the Personal Key, encrypted with a password
-		// TODO: password cli encryption see https://github.com/conradkleinespel/rpassword/blob/master/src/rpassword/all.rs
-		// Probably use argon2 + salt to hash the password and create entropy to
-		// create the key https://www.ismailzai.com/blog/using-a-secret-phrase-to-seed-an-rsa-or-x25519-cryptographic-keys
-		{
-			let personal_key_pub_path = genesis_dir.join(format!(
-				"{}.{}{}",
-				alias, namespace, PERSONAL_KEY_PUB_EXT
-			));
-			std::fs::write(
-				personal_key_pub_path,
-				personal_pair
-					.public_key_to_pem()
-					.expect("Could not create public key from personal pair"),
-			)
-			.expect("Failed writing personal key public to file");
-		}
-		{
-			let personal_key_priv_path = genesis_dir.join(format!(
-				"{}.{}{}",
-				alias, namespace, PERSONAL_KEY_PRIV_EXT
-			));
-			std::fs::write(
-				personal_key_priv_path,
-				personal_pair
-					.private_key_to_pem()
-					.expect("Could not create private key from personal pair"),
-			)
-			.expect("Failed writing personal key public to file");
-		}
+		// Store the Personal Key, TODO: password encrypt the private key
+		let personal_key_pub_path = genesis_dir
+			.join(format!("{}.{}{}", alias, namespace, PERSONAL_KEY_PUB_EXT));
+		std::fs::write(
+			&personal_key_pub_path,
+			personal_pair
+				.public_key_to_pem()
+				.expect("Could not create public key from personal pair"),
+		)
+		.expect("Failed writing personal key public to file");
+		println!(
+			"Personal Public Key written to {}",
+			personal_key_pub_path.as_os_str().to_os_string().to_str().unwrap()
+		);
+		let personal_key_priv_path = genesis_dir
+			.join(format!("{}.{}{}", alias, namespace, PERSONAL_KEY_PRIV_EXT));
+		std::fs::write(
+			&personal_key_priv_path,
+			personal_pair
+				.private_key_to_pem()
+				.expect("Could not create private key from personal pair"),
+		)
+		.expect("Failed writing personal key public to file");
+		println!(
+			"Personal Private Key written to {}",
+			personal_key_priv_path.as_os_str().to_os_string().to_str().unwrap()
+		);
 	}
 
 	/// Panics if verification fails
 	fn verify_attestation_doc_against_user_input(
 		attestation_doc: &AttestationDoc,
-		user_data: &[u8],
+		_user_data: &[u8],
 		pcr0: &[u8],
 		pcr1: &[u8],
 		pcr2: &[u8],
 	) {
-		// user data is hash of genesis output
-		assert_eq!(
-			user_data,
-			attestation_doc.user_data.as_ref().unwrap().to_vec(),
-			"Attestation doc does not have hash of genesis output."
+		// TODO: this is a hack - we should instead have more realistic
+		// mock attestation docs
+		#[cfg(not(feature = "mock"))]
+		{
+			// user data is hash of genesis output
+			assert_eq!(
+				_user_data,
+				attestation_doc.user_data.as_ref().unwrap().to_vec(),
+				"Attestation doc does not have hash of genesis output."
+			);
+			// public key is none
+			assert_eq!(
+				attestation_doc.public_key, None,
+				"Attestation doc has a public_key when none was expected."
+			);
+		}
+		#[cfg(feature = "mock")]
+		println!(
+			"WARNING: SKIPPING ATTESTATION DOC CHECK. DO NOT USE IN PRODUCTION"
 		);
 
 		// nonce is none
 		assert_eq!(
 			attestation_doc.nonce, None,
 			"Attestation doc has a nonce when none was expected."
-		);
-
-		// public key is none
-		assert_eq!(
-			attestation_doc.public_key, None,
-			"Attestation doc has a public_key when none was expected."
 		);
 
 		// pcr0 matches
@@ -658,5 +656,12 @@ mod handlers {
 			validation_time,
 		)
 		.expect("Issue extracting and verifying attestation doc")
+	}
+
+	// Get the file name from a path and split on `"."`.
+	fn split_file_name(p: &Path) -> Vec<String> {
+		let file_name =
+			p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap();
+		file_name.split('.').map(String::from).collect()
 	}
 }
