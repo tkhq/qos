@@ -367,8 +367,7 @@ mod handlers {
 
 		// Write the attestation doc
 		let attestation_doc_path =
-		// TODO: make these file names constants when possible.
-			output_dir.join(GENESIS_ATTESTATION_DOC_FILE);
+			output_dir.join(GENES©4IS_ATTESTATION_DOC_FILE);
 		write_with_msg(
 			&attestation_doc_path,
 			&cose_sign1_der,
@@ -459,18 +458,18 @@ mod handlers {
 		println!("Alias: {}, Namespace: {}", alias, namespace);
 
 		// Read in the attestation doc from the genesis directory
-		// Check the attestation document
 		let cose_sign1 = std::fs::read(attestation_doc_path)
-			.expect("Could not read attestation_doc");
+		.expect("Could not read attestation_doc");
 		let attestation_doc = extract_attestation_doc(&cose_sign1);
 
 		// Read in the genesis output from the genesis directory
 		let genesis_output = GenesisOutput::try_from_slice(
 			&std::fs::read(genesis_set_path)
-				.expect("Failed to read genesis set"),
+			.expect("Failed to read genesis set"),
 		)
 		.expect("Could not deserialize the genesis set");
 
+		// Check the attestation document
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			&genesis_output.qos_hash(),
