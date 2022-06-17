@@ -544,8 +544,9 @@ mod handlers {
 	fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
 		let path_str = path.as_os_str().to_string_lossy();
 		// let path_str = p.to_str().unwrap();
-		std::fs::write(path, buf)
-			.unwrap_or_else(|_| panic!("Failed writing {} to file", path_str.clone()));
+		std::fs::write(path, buf).unwrap_or_else(|_| {
+			panic!("Failed writing {} to file", path_str.clone())
+		});
 		println!("{} written to: {}", item_name, path_str);
 	}
 

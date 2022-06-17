@@ -3,6 +3,8 @@
 
 use std::num::ParseIntError;
 
+/// 255 ordered pairs of characters. The first pair decodes to 0 and the last
+/// pair decodes to 255.
 const HEX_BYTES: &str = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\
                          202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f\
                          404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f\
@@ -29,6 +31,8 @@ impl From<ParseIntError> for HexError {
 
 /// Decode bytes from a hex encoded string.
 ///
+/// This handles both strings prefixed with `0x` and non-prefixed strings.
+///
 /// # Errors
 ///
 /// - if the input is an odd length
@@ -49,7 +53,7 @@ pub fn decode(s: &str) -> Result<Vec<u8>, HexError> {
 	}
 }
 
-/// Encode a byte slice to hex string.
+/// Encode a byte slice to hex string. Always encodes with lowercase characters.
 #[must_use]
 pub fn encode(bytes: &[u8]) -> String {
 	bytes
