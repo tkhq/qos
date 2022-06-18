@@ -83,6 +83,11 @@ impl Parser {
 	}
 
 	/// Parse the command line arguments.
+	///
+	/// # Note
+	///
+	/// When getting env args, the first value will be the binary name. That
+	/// needs to be removed before calling this.
 	pub fn parse(&mut self, inputs: &[String]) -> Result<(), ParserError> {
 		self.token_map.parse(inputs)
 	}
@@ -307,7 +312,7 @@ impl TokenMap {
 			return Ok(());
 		}
 
-		self.parse_helper(inputs)
+		self.do_parse(inputs)
 	}
 
 	/// Get the value of `name` if the token exists and its of type Multiple.
@@ -331,8 +336,8 @@ impl TokenMap {
 	}
 
 	/// Fill the tokens in the map with user provided inputs.
-	fn parse_helper(&mut self, inputs: &[String]) -> Result<(), ParserError> {
-		let mut iter = inputs.iter();
+	fn do_parse(&mut self, inputs: &[String]) -> Result<(), ParserError> {
+		let mut iter = inputs.iter().peekable();
 		while let Some(input) = iter.next() {
 			self.check_input(input)?;
 
@@ -346,11 +351,19 @@ impl TokenMap {
 
 			let user_value = if token.takes_value {
 				// Find the value
-				let value = iter
-					.next()
-					.filter(|i| !i.starts_with(INPUT_PREFIX))
-					.ok_or_else(|| ParserError::MissingValue(name.to_string()))?
-					.clone();
+				let value = if let Some(v) =
+					iter.peek().filter(|i| !i.starts_with(INPUT_PREFIX))
+				{
+					(*v).to_string()
+				} else if let Some(ref d) = token.default_value {
+					// Couldn't find a value, so take the default
+					d.to_string()
+				} else {
+					// No value and not default??? go home, you're drunk!
+					Err(ParserError::MissingValue(name.to_string()))?
+				};
+				// Advance the iterator since we only peaked above
+				iter.next();
 
 				// Store the value
 				if token.allow_multiple {
@@ -388,7 +401,7 @@ impl TokenMap {
 		for token in self.tokens.values() {
 			// Check if a value is required for the token.
 			if token.required && token.user_value.is_none() {
-				Err(ParserError::MissingValue(token.name.to_string()))?;
+				Err(ParserError::MissingInput(token.name.to_string()))?;
 			}
 
 			if token.user_value.is_some() {
@@ -417,7 +430,7 @@ impl TokenMap {
 	}
 
 	fn check_input(&self, input: &str) -> Result<(), ParserError> {
-		if input.starts_with(INPUT_PREFIX) {
+		if !input.starts_with(INPUT_PREFIX) {
 			return Err(ParserError::UnexpectedInput(input.to_string()));
 		}
 		let name = &input[INPUT_PREFIX.len()..];
@@ -431,7 +444,7 @@ impl TokenMap {
 		if !token.allow_multiple && token.user_value.is_some() {
 			// We don't allow multiple of this token, but we already have a
 			// value for it
-			return Err(ParserError::DuplicateInput(input.to_string()));
+			return Err(ParserError::DuplicateInput(name.to_string()));
 		}
 
 		Ok(())
@@ -485,6 +498,102 @@ mod test {
 					.forbids(vec!["forbid1-with-value"]),
 			)
 			.token(Token::new("optional-value", "info 7").takes_value(true))
+	}
+
+	#[test]
+	fn parse_works() {
+		// default values with no value
+		// no value
+		// default with value
+		// multiple
+	}
+
+	#[test]
+	fn parser_errors_correctly() {
+		// Errors with missing value
+		let input = [
+			"--requires-no-value",
+			"--required-with-value",
+			"--forbid2-with-default",
+			"a",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect::<Vec<String>>();
+		assert_eq!(
+			setup().parse(&input),
+			Err(ParserError::MissingValue("required-with-value".to_string()))
+		);
+
+		// Errors with duplicate inputs
+		let input: Vec<_> = [
+			"--forbid2-no-value",
+			"--required-with-value",
+			"a",
+			"--forbid2-no-value",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+		assert_eq!(
+			setup().parse(&input),
+			Err(ParserError::DuplicateInput("forbid2-no-value".to_string()))
+		);
+
+		// Errors when a required input is missing
+		let input: Vec<_> =
+			vec!["--requires-no-value", "--with-default", "420"]
+				.into_iter()
+				.map(String::from)
+				.collect();
+		assert_eq!(
+			setup().parse(&input),
+			Err(ParserError::MissingInput("required-with-value".to_string()))
+		);
+
+		// Errors with an unexpected input that is preceeded by `--`
+		let input: Vec<_> = vec![
+			"--requires-no-value",
+			"--required-with-value",
+			"brawndo",
+			"--vape-nation",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+
+		assert_eq!(
+			setup().parse(&input),
+			Err(ParserError::UnexpectedInput("--vape-nation".to_string()))
+		);
+
+		// Errors with an unexpected input
+		let input: Vec<_> = vec![
+			"--requires-no-value",
+			"--required-with-value",
+			"brawndo",
+			"one-vape-world",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+		assert_eq!(
+			setup().parse(&input),
+			Err(ParserError::UnexpectedInput("one-vape-world".to_string()))
+		);
+
+		let input =
+			vec!["--forbid1-with-value", "eataly", "--forbid2-no-value"]
+				.into_iter()
+				.map(String::from)
+				.collect::<Vec<String>>();
+		assert_eq!(
+			setup().parse(&input),
+			Err(ParserError::MutuallyExclusiveInput(
+				"forbid1-with-value".to_string(),
+				"forbid2-no-value".to_string(),
+			))
+		);
 	}
 
 	#[test]
