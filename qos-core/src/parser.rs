@@ -216,6 +216,13 @@ impl Token {
 		}
 	}
 
+	/// Let their multiple of this token.
+	#[must_use]
+	pub fn allow_multiple(mut self, multiple: bool) -> Self {
+		self.allow_multiple = multiple;
+		self
+	}
+
 	/// Require that the user must provide this token.
 	#[must_use]
 	pub fn required(mut self, required: bool) -> Self {
@@ -328,11 +335,8 @@ impl TokenMap {
 	/// Get a bool indicating if the flags state. Always false if the token is
 	/// not a flag.
 	#[must_use]
-	pub fn get_flag(&self, name: &str) -> bool {
-		match self.type_of(name) {
-			Some(t) => t.as_flag(),
-			None => false,
-		}
+	pub fn get_flag(&self, name: &str) -> Option<bool> {
+		self.type_of(name).map(TokenType::as_flag)
 	}
 
 	/// Fill the tokens in the map with user provided inputs.
@@ -351,10 +355,13 @@ impl TokenMap {
 
 			let user_value = if token.takes_value {
 				// Find the value
-				let value = if let Some(v) =
-					iter.peek().filter(|i| !i.starts_with(INPUT_PREFIX))
+				let value = if iter
+					.peek()
+					.filter(|i| !i.starts_with(INPUT_PREFIX))
+					.is_some()
 				{
-					(*v).to_string()
+					// Advance the iterator since we only peaked above
+					iter.next().unwrap().to_string()
 				} else if let Some(ref d) = token.default_value {
 					// Couldn't find a value, so take the default
 					d.to_string()
@@ -362,8 +369,6 @@ impl TokenMap {
 					// No value and not default??? go home, you're drunk!
 					Err(ParserError::MissingValue(name.to_string()))?
 				};
-				// Advance the iterator since we only peaked above
-				iter.next();
 
 				// Store the value
 				if token.allow_multiple {
@@ -479,14 +484,14 @@ mod test {
 					.takes_value(false),
 			)
 			.token(
+				Token::new("multiple", "info 69")
+					.allow_multiple(true)
+					.takes_value(true),
+			)
+			.token(
 				Token::new("optional-with-default", "info 3")
 					.takes_value(true)
 					.default_value("default1"),
-			)
-			.token(
-				Token::new("with-default", "info 4")
-					.takes_value(true)
-					.default_value("default2"),
 			)
 			.token(
 				Token::new("forbid1-with-value", "info 5")
@@ -502,10 +507,57 @@ mod test {
 
 	#[test]
 	fn parse_works() {
-		// default values with no value
-		// no value
-		// default with value
-		// multiple
+		let input: Vec<_> = vec![
+			"--required-with-value",
+			"val1",
+			"--requires-no-value",
+			"--multiple",
+			"val2",
+			"--multiple",
+			"val3",
+			"--optional-with-default",
+			"--forbid1-with-value",
+			"val4",
+			"--optional-value",
+			"val5",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect::<Vec<String>>();
+		let mut parser = setup();
+		parser.parse(&input).unwrap();
+
+		assert_eq!(
+			parser.token_map().get_single("required-with-value"),
+			Some(&"val1".to_string())
+		);
+
+		assert_eq!(
+			parser.token_map().get_flag("requires-no-value"),
+			Some(true)
+		);
+		// Mistype name
+		assert_eq!(parser.token_map().get_flag("requires-no-va"), None);
+
+		assert_eq!(
+			parser.token_map().get_multiple("multiple"),
+			Some(&["val2".to_string(), "val3".to_string()][..])
+		);
+
+		assert_eq!(
+			parser.token_map().get_single("optional-with-default"),
+			Some(&"default1".to_string())
+		);
+
+		assert_eq!(
+			parser.token_map().get_single("forbid1-with-value"),
+			Some(&"val4".to_string())
+		);
+
+		assert_eq!(
+			parser.token_map().get_single("optional-value"),
+			Some(&"val5".to_string())
+		);
 	}
 
 	#[test]
@@ -528,9 +580,13 @@ mod test {
 		// Errors with duplicate inputs
 		let input: Vec<_> = [
 			"--forbid2-no-value",
+			"--multiple",
+			"beans",
 			"--required-with-value",
 			"a",
 			"--forbid2-no-value",
+			"--multiple",
+			"based",
 		]
 		.into_iter()
 		.map(String::from)
@@ -542,7 +598,7 @@ mod test {
 
 		// Errors when a required input is missing
 		let input: Vec<_> =
-			vec!["--requires-no-value", "--with-default", "420"]
+			vec!["--requires-no-value", "--optional-with-default", "420"]
 				.into_iter()
 				.map(String::from)
 				.collect();
@@ -606,7 +662,7 @@ mod test {
 		let mut parser = setup();
 		parser.parse(&input).unwrap();
 
-		assert!(parser.token_map.get_flag("version"));
+		assert_eq!(parser.token_map.get_flag("version"), Some(true));
 	}
 
 	#[test]
@@ -624,7 +680,7 @@ mod test {
 		let mut parser = setup();
 		parser.parse(&input).unwrap();
 
-		assert!(parser.token_map.get_flag("help"));
+		assert_eq!(parser.token_map.get_flag("help"), Some(true));
 	}
 
 	#[test]
