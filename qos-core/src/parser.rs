@@ -1,6 +1,6 @@
 //! Command line token parser.
 use core::marker::PhantomData;
-use std::{collections::HashMap, convert::From, fmt};
+use std::{collections::BTreeMap, convert::From, fmt};
 
 const HELP_INPUT: &str = "--help";
 const VERSION_INPUT: &str = "--version";
@@ -125,11 +125,11 @@ impl Parser {
 			.collect();
 
 		let width =
-			tokens.iter().map(|arg| arg.format_name().len()).max().unwrap_or(0);
+			tokens.iter().map(|arg| arg.name().len()).max().unwrap_or(0);
 
 		tokens
 			.into_iter()
-			.map(|arg| arg.format_info(width))
+			.map(|arg| arg.info(width))
 			.collect::<Vec<_>>()
 			.join("\n")
 	}
@@ -248,7 +248,7 @@ impl Token {
 		self
 	}
 
-	fn format_name(&self) -> String {
+	fn name(&self) -> String {
 		if self.takes_value {
 			format!("	--{} <{}>", self.name, self.name)
 		} else {
@@ -256,10 +256,9 @@ impl Token {
 		}
 	}
 
-	fn format_info(&self, width: usize) -> String {
+	fn info(&self, width: usize) -> String {
 		let mut info = vec![
-			format!("{:<width$}", self.format_name(), width = width),
-			"	".to_string(),
+			format!("{:<width$}", self.name(), width = width),
 			self.help.clone(),
 		];
 
@@ -286,7 +285,7 @@ fn help() -> Token {
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct TokenMap {
 	/// Map of token name to `Token`.
-	tokens: HashMap<String, Token>,
+	tokens: BTreeMap<String, Token>,
 }
 impl TokenMap {
 	/// Parse tokens based on given input and expected tokens.
@@ -321,7 +320,7 @@ impl TokenMap {
 		self.type_of(name).and_then(TokenType::as_single)
 	}
 
-	/// Get a bool indicating if the flags state. Always false if the token is a
+	/// Get a bool indicating if the flags state. Always false if the token is
 	/// not a flag.
 	#[must_use]
 	pub fn get_flag(&self, name: &str) -> bool {
@@ -457,42 +456,89 @@ mod test {
 	fn setup() -> Parser {
 		Parser::new()
 			.token(
-				Token::new("required-with-value", "required-with-value")
+				Token::new("required-with-value", "info 1")
 					.required(true)
 					.takes_value(true),
 			)
 			.token(
-				Token::new("requires-no-value", "requires-no-value")
+				Token::new("requires-no-value", "info 2")
 					.requires("optional-value")
 					.takes_value(false),
 			)
 			.token(
-				Token::new("optional-with-default", "optional-with-default")
+				Token::new("optional-with-default", "info 3")
 					.takes_value(true)
 					.default_value("default1"),
 			)
 			.token(
-				Token::new("with-default", "with-default info")
+				Token::new("with-default", "info 4")
 					.takes_value(true)
 					.default_value("default2"),
 			)
 			.token(
-				Token::new("forbid1-with-value", "forbid1-with-value info")
+				Token::new("forbid1-with-value", "info 5")
 					.takes_value(true)
 					.forbids(vec!["forbid2-no-value"]),
 			)
 			.token(
-				Token::new("forbid2-no-value", "forbid2-no-value info")
+				Token::new("forbid2-no-value", "info 6")
 					.forbids(vec!["forbid1-with-value"]),
 			)
-			.token(
-				Token::new("optional-value", "optional-value info")
-					.takes_value(true),
-			)
+			.token(Token::new("optional-value", "info 7").takes_value(true))
 	}
 
 	#[test]
-	fn parser_works() {
-		drop(setup());
+	fn version_works() {
+		let input: Vec<_> = ["--version", "right to bear vapes"]
+			.into_iter()
+			.map(String::from)
+			.collect();
+
+		let mut parser = setup();
+		parser.parse(&input).unwrap();
+
+		assert!(parser.token_map.get_flag("version"));
+	}
+
+	#[test]
+	fn help_works() {
+		let input: Vec<_> = [
+			"--help",
+			"your body needs to vape",
+			"--because",
+			"vapes got what your body needs",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+
+		let mut parser = setup();
+		parser.parse(&input).unwrap();
+
+		assert!(parser.token_map.get_flag("help"));
+	}
+
+	#[test]
+	fn info_works() {
+		let parser = Parser::new()
+			.token(
+				Token::new("token1", "info 1").required(true).takes_value(true),
+			)
+			.token(
+				Token::new("token2-is-super-long", "info 2").takes_value(false),
+			)
+			.token(
+				Token::new("token3", "info 3")
+					.takes_value(false)
+					.default_value("token3-default"),
+			);
+		let expected = "Required CLI inputs:
+\t--token1 <token1> info 1
+
+Optional CLI inputs:
+\t--token2-is-super-long info 2
+\t--token3               info 3 [default: token3-default]";
+
+		assert_eq!(parser.info(), expected);
 	}
 }
