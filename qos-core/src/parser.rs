@@ -2,7 +2,9 @@
 use core::marker::PhantomData;
 use std::{collections::BTreeMap, convert::From, fmt};
 
+const HELP: &str = "help";
 const HELP_INPUT: &str = "--help";
+const VERSION: &str = "version";
 const VERSION_INPUT: &str = "--version";
 const INPUT_PREFIX: &str = "--";
 
@@ -24,18 +26,47 @@ pub enum ParserError {
 }
 
 /// Something that has method to get a parser.
-pub trait GetParser {
-	/// A parser
+pub trait GetParserForOptions {
+	/// Get the parser
+	fn parser() -> Parser;
+}
+
+/// Parser input that does not include a command, just options. If you need to parse a command as well
+/// use [`CommandParser`].
+///
+/// Assumes the format `--token1 value1 --flag --token2 value2`.
+pub struct OptionsParser<T: GetParserForOptions> {
+	_phantom: PhantomData<T>,
+}
+
+impl<T: GetParserForOptions> OptionsParser<T> {
+	/// Parse inputs for `C`.
+	pub fn parse(inputs: &mut Vec<String>) -> Result<Parser, ParserError> {
+		// Remove the binary name
+		inputs.remove(0);
+		let mut parser = T::parser();
+		parser.parse(inputs)?;
+
+		Ok(parser)
+	}
+}
+
+/// Something that has method to get a parser.
+pub trait GetParserForCommand {
+	/// Get the parser
 	fn parser(&self) -> Parser;
 }
 
-/// Parse inputs for a command. Assumes the format `command-name --token1 value1
-/// --flag --token2 value2`.
-pub struct CommandParser<C: From<String> + GetParser> {
+/// Parse inputs for a command. If you do not need to parse a command but instead just options, use
+/// [`OptionsParser`]. Note that subcommands are not supported.
+///
+///
+/// Assumes the format `command-name --token1 value1 --flag --token2 value2`.
+pub struct CommandParser<C: From<String> + GetParserForCommand> {
 	_phantom: PhantomData<C>,
 }
 
-impl<C: From<String> + GetParser> CommandParser<C> {
+impl<C: From<String> + GetParserForCommand> CommandParser<C> {
 	/// Parse inputs for the command `C`.
 	pub fn parse(inputs: &mut Vec<String>) -> Result<(C, Parser), ParserError> {
 		let command = Self::extract_command(inputs);
@@ -75,11 +106,39 @@ impl Parser {
 		Self::default()
 	}
 
-	/// Add an expected Token to parse.
+	/// Register a Token with the parser.
 	#[must_use]
 	pub fn token(mut self, token: Token) -> Self {
 		self.token_map.insert(token);
 		self
+	}
+
+	/// Wether or not the user passed in `--help`. Should always be checked.
+	#[must_use] pub fn help(&self) -> bool {
+		self.token_map.get_flag(HELP).unwrap_or(false)
+	}
+
+	/// Wether or not the user passed in `--version`. Should always be checked.
+	#[must_use] pub fn version(&self) -> bool {
+		self.token_map.get_flag(VERSION).unwrap_or(false)
+	}
+
+	/// Returns a bool indicating if the flag with `name` was passed. None if
+	/// `name` is not a token in registered in the parser parser
+	#[must_use] pub fn flag(&self, name: &str) -> Option<bool> {
+		self.token_map.get_flag(name)
+	}
+
+	/// Returns the value of `name` if the token exists and it only accepts one
+	/// value.
+	#[must_use] pub fn single(&self, name: &str) -> Option<&String> {
+		self.token_map.get_single(name)
+	}
+
+	/// Returns the value of `name` if the token exists and it accepts multiple
+	/// values.
+	#[must_use] pub fn multiple(&self, name: &str) -> Option<&[String]> {
+		self.token_map.get_multiple(name)
 	}
 
 	/// Parse the command line arguments.
@@ -90,12 +149,6 @@ impl Parser {
 	/// needs to be removed before calling this.
 	pub fn parse(&mut self, inputs: &[String]) -> Result<(), ParserError> {
 		self.token_map.parse(inputs)
-	}
-
-	/// Tokens stored in the parser.
-	#[must_use]
-	pub fn token_map(&self) -> &TokenMap {
-		&self.token_map
 	}
 
 	/// Info message about tokens.
@@ -137,57 +190,6 @@ impl Parser {
 			.map(|arg| arg.info(width))
 			.collect::<Vec<_>>()
 			.join("\n")
-	}
-}
-
-/// Token type.
-#[derive(Clone, Debug, PartialEq)]
-pub enum TokenType {
-	/// A type that has no value and just has meaning by being present or not.
-	Flag,
-	/// A type that has a single value.
-	Single(String),
-	/// A type that has multiple values.
-	Multiple(Vec<String>),
-}
-
-impl TokenType {
-	fn as_single(&self) -> Option<&String> {
-		match self {
-			TokenType::Single(s) => Some(s),
-			_ => None,
-		}
-	}
-
-	fn as_multiple(&self) -> Option<&[String]> {
-		match self {
-			TokenType::Multiple(v) => Some(v),
-			_ => None,
-		}
-	}
-
-	fn as_flag(&self) -> bool {
-		matches!(self, TokenType::Flag)
-	}
-
-	fn push_val(&mut self, val: &str) -> Result<(), ParserError> {
-		match self {
-			TokenType::Multiple(ref mut v) => {
-				v.push(val.to_string());
-				Ok(())
-			}
-			_ => Err(ParserError::DuplicateInput(val.to_string())),
-		}
-	}
-}
-
-impl fmt::Display for TokenType {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			TokenType::Flag => write!(f, "true"),
-			TokenType::Single(s) => write!(f, "{}", s),
-			TokenType::Multiple(v) => write!(f, "{:?}", v),
-		}
 	}
 }
 
@@ -282,20 +284,60 @@ impl Token {
 	}
 }
 
-fn version() -> Token {
-	let mut t = Token::new("version", "Display the version");
-	t.user_value = Some(TokenType::Flag);
-	t
+/// Token type.
+#[derive(Clone, Debug, PartialEq)]
+enum TokenType {
+	/// A type that has no value and just has meaning by being present or not.
+	Flag,
+	/// A type that has a single value.
+	Single(String),
+	/// A type that has multiple values.
+	Multiple(Vec<String>),
 }
-fn help() -> Token {
-	let mut t = Token::new("help", "Display a help message");
-	t.user_value = Some(TokenType::Flag);
-	t
+
+impl TokenType {
+	fn as_single(&self) -> Option<&String> {
+		match self {
+			TokenType::Single(s) => Some(s),
+			_ => None,
+		}
+	}
+
+	fn as_multiple(&self) -> Option<&[String]> {
+		match self {
+			TokenType::Multiple(v) => Some(v),
+			_ => None,
+		}
+	}
+
+	fn as_flag(&self) -> bool {
+		matches!(self, TokenType::Flag)
+	}
+
+	fn push_val(&mut self, val: &str) -> Result<(), ParserError> {
+		match self {
+			TokenType::Multiple(ref mut v) => {
+				v.push(val.to_string());
+				Ok(())
+			}
+			_ => Err(ParserError::DuplicateInput(val.to_string())),
+		}
+	}
+}
+
+impl fmt::Display for TokenType {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			TokenType::Flag => write!(f, "true"),
+			TokenType::Single(s) => write!(f, "{}", s),
+			TokenType::Multiple(v) => write!(f, "{:?}", v),
+		}
+	}
 }
 
 /// Stores the tokens of the parser
-#[derive(Default, Clone, Debug, PartialEq)]
-pub struct TokenMap {
+#[derive(Clone, Debug, PartialEq)]
+struct TokenMap {
 	/// Map of token name to `Token`.
 	tokens: BTreeMap<String, Token>,
 }
@@ -306,16 +348,22 @@ impl TokenMap {
 	///
 	/// * If `--help` is present, we ignore all the inputs.
 	/// * If `--version` is present, we ignore all other inputs except help.
-	pub fn parse(&mut self, inputs: &[String]) -> Result<(), ParserError> {
+	fn parse(&mut self, inputs: &[String]) -> Result<(), ParserError> {
 		// Skip parsing rest of help parameter exists.
 		if inputs.contains(&HELP_INPUT.to_string()) {
-			self.insert(help());
+			let h = self.tokens.get_mut(HELP).expect(
+				"CLI Parser internal error: help token does not exist"
+			);
+			h.user_value = Some(TokenType::Flag);
 			return Ok(());
 		}
 
 		// Skip parsing rest if version parameter exists.
 		if inputs.contains(&VERSION_INPUT.to_string()) {
-			self.insert(version());
+			let v = self.tokens.get_mut(VERSION).expect(
+				"CLI Parser internal error: version token does not exist"
+			);
+			v.user_value = Some(TokenType::Flag);
 			return Ok(());
 		}
 
@@ -323,19 +371,18 @@ impl TokenMap {
 	}
 
 	/// Get the value of `name` if the token exists and its of type Multiple.
-	pub fn get_multiple(&self, name: &'static str) -> Option<&[String]> {
+	fn get_multiple(&self, name: &str) -> Option<&[String]> {
 		self.type_of(name).and_then(TokenType::as_multiple)
 	}
 
 	/// Get the value of `name` if the token exists and its of type Single.
-	pub fn get_single(&self, name: &str) -> Option<&String> {
+	fn get_single(&self, name: &str) -> Option<&String> {
 		self.type_of(name).and_then(TokenType::as_single)
 	}
 
-	/// Get a bool indicating if the flags state. Always false if the token is
-	/// not a flag.
-	#[must_use]
-	pub fn get_flag(&self, name: &str) -> Option<bool> {
+	/// Get a bool indicating if the flag was passed. None if the `name` is not
+	/// a [`Token`] in the parser.
+	fn get_flag(&self, name: &str) -> Option<bool> {
 		self.type_of(name).map(TokenType::as_flag)
 	}
 
@@ -468,6 +515,19 @@ impl TokenMap {
 	}
 }
 
+impl Default for TokenMap {
+	fn default() -> Self {
+		let mut token_map = Self { tokens: BTreeMap::<String, Token>::default() };
+
+		// Add the help and version token to ensure that the options are always
+		// displayed in the help menu.
+		token_map.insert(Token::new(HELP, "Display the help message."));
+		token_map.insert(Token::new(VERSION, "Display the version"));
+
+		token_map
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -528,36 +588,30 @@ mod test {
 		parser.parse(&input).unwrap();
 
 		assert_eq!(
-			parser.token_map().get_single("required-with-value"),
+			parser.single("required-with-value"),
 			Some(&"val1".to_string())
 		);
 
-		assert_eq!(
-			parser.token_map().get_flag("requires-no-value"),
-			Some(true)
-		);
+		assert_eq!(parser.flag("requires-no-value"), Some(true));
 		// Mistype name
-		assert_eq!(parser.token_map().get_flag("requires-no-va"), None);
+		assert_eq!(parser.flag("requires-no-va"), None);
 
 		assert_eq!(
-			parser.token_map().get_multiple("multiple"),
+			parser.multiple("multiple"),
 			Some(&["val2".to_string(), "val3".to_string()][..])
 		);
 
 		assert_eq!(
-			parser.token_map().get_single("optional-with-default"),
+			parser.single("optional-with-default"),
 			Some(&"default1".to_string())
 		);
 
 		assert_eq!(
-			parser.token_map().get_single("forbid1-with-value"),
+			parser.single("forbid1-with-value"),
 			Some(&"val4".to_string())
 		);
 
-		assert_eq!(
-			parser.token_map().get_single("optional-value"),
-			Some(&"val5".to_string())
-		);
+		assert_eq!(parser.single("optional-value"), Some(&"val5".to_string()));
 	}
 
 	#[test]
@@ -662,7 +716,7 @@ mod test {
 		let mut parser = setup();
 		parser.parse(&input).unwrap();
 
-		assert_eq!(parser.token_map.get_flag("version"), Some(true));
+		assert!(parser.version());
 	}
 
 	#[test]
@@ -680,7 +734,7 @@ mod test {
 		let mut parser = setup();
 		parser.parse(&input).unwrap();
 
-		assert_eq!(parser.token_map.get_flag("help"), Some(true));
+		assert!(parser.help());
 	}
 
 	#[test]
@@ -701,9 +755,10 @@ mod test {
 \t--token1 <token1> info 1
 
 Optional CLI inputs:
+\t--help                 Display the help message.
 \t--token2-is-super-long info 2
-\t--token3               info 3 [default: token3-default]";
-
+\t--token3               info 3 [default: token3-default]
+\t--version              Display the version";
 		assert_eq!(parser.info(), expected);
 	}
 }
