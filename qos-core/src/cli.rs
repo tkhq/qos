@@ -1,3 +1,5 @@
+//! CLI for running an enclave binary.
+
 use std::env;
 
 use crate::{
