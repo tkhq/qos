@@ -11,9 +11,9 @@ const INPUT_PREFIX: &str = "--";
 /// Token parsing error.
 #[derive(Debug, PartialEq)]
 pub enum ParserError {
-	/// The input was was not expected.
+	/// Input was was not expected.
 	UnexpectedInput(String),
-	/// The input was provided more than once.
+	/// Input was provided more than once.
 	DuplicateInput(String),
 	/// Inputs are mutually exclusive.
 	MutuallyExclusiveInput(String, String),
@@ -28,7 +28,7 @@ impl fmt::Display for ParserError {
 		match self {
 			Self::UnexpectedInput(u) => write!(f, "found {u}, which was not an expected argument"),
 			Self::DuplicateInput(i) => write!(f, "found argument {i} more then once, but only one instance was expected"),
-			Self::MutuallyExclusiveInput(y, z) => write!(f, "arguments {y} and {z} are mutually exclusive and can be used at the same time"),
+			Self::MutuallyExclusiveInput(y, z) => write!(f, "arguments {y} and {z} are mutually exclusive and cannot be used at the same time"),
 			Self::MissingValue(i) => write!(f, "found argument {i}, which requires a value, but no value was given"),
 			Self::MissingInput(i) => write!(f, "argument {i} is required but was not found"),
 		}
@@ -42,7 +42,7 @@ pub trait GetParserForOptions {
 	fn parser() -> Parser;
 }
 
-/// Parser input that does not include a command, just options. If you need to
+/// Parse input that does not include a command, just options. If you need to
 /// parse a command as well use [`CommandParser`].
 ///
 /// Assumes the format `--token1 value1 --flag --token2 value2`.
@@ -69,10 +69,10 @@ pub trait GetParserForCommand {
 	fn parser(&self) -> Parser;
 }
 
-/// Parse inputs for a command. If you do not need to parse a command but
-/// instead just options, use [`OptionsParser`]. Note that subcommands are not
-/// supported.
+/// Parse input for a command. If you do not need to parse a command but
+/// instead just options, use [`OptionsParser`].
 ///
+///  Note that subcommands are not supported.
 ///
 /// Assumes the format `command-name --token1 value1 --flag --token2 value2`.
 pub struct CommandParser<C: From<String> + GetParserForCommand> {
@@ -105,8 +105,22 @@ impl<C: From<String> + GetParserForCommand> CommandParser<C> {
 	}
 }
 
-/// Simple parser for CLIs. Reads input and parses them into [`Token`]s.
-/// See [`Token`] and [`TokenType`] for options on possible commands.
+/// Parser, primarily designed for CLI inputs. This reads input and parses them
+/// into [`Token`]s. See [`Token`] for options on possible commands.
+///
+/// After registering tokens with [`Self::token`], you can call [`Self::parse`]
+/// to populate the parser with the provided input. To display a help / info
+/// message based on all the registered tokens see [`Self::info`].
+///
+/// Both `--help` and `--version` are always registered as tokens.
+///
+/// To access the parsed input based on the expected type see:
+///
+/// * [`Self::help`]
+/// * [`Self::version`]
+/// * [`Self::flag`]
+/// * [`Self::single`]
+/// * [`Self::multiple`]
 #[derive(Default, Clone)]
 pub struct Parser {
 	token_map: TokenMap,
@@ -139,27 +153,28 @@ impl Parser {
 	}
 
 	/// Returns a bool indicating if the flag with `name` was passed. None if
-	/// `name` is not a token in registered in the parser parser
+	/// `name` is not a token in registered in the parser.
 	#[must_use]
 	pub fn flag(&self, name: &str) -> Option<bool> {
 		self.token_map.get_flag(name)
 	}
 
-	/// Returns the value of `name` if the token exists and it only accepts one
-	/// value.
+	/// Returns the value of `name` if the token exists and it only can be in
+	/// the input once.
 	#[must_use]
 	pub fn single(&self, name: &str) -> Option<&String> {
 		self.token_map.get_single(name)
 	}
 
-	/// Returns the value of `name` if the token exists and it accepts multiple
-	/// values.
+	/// Returns the value of `name` if the token exists and it can be in the
+	/// input multiple times.
 	#[must_use]
 	pub fn multiple(&self, name: &str) -> Option<&[String]> {
 		self.token_map.get_multiple(name)
 	}
 
-	/// Parse the command line arguments.
+	/// Parse the command line arguments. Instead of using this directly it is
+	/// preferred to use [`OptionsParser`] or [`CommandParser`].
 	///
 	/// # Note
 	///
@@ -211,7 +226,7 @@ impl Parser {
 	}
 }
 
-/// Configuration for parsing a token.
+/// Configuration for a parsing token.
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct Token {
 	name: String,
@@ -257,7 +272,7 @@ impl Token {
 		self
 	}
 
-	/// Specify other tokens that are mutually exclusive of self.
+	/// Specify other tokens that are mutually exclusive of this token.
 	#[must_use]
 	pub fn forbids(mut self, forbidden: Vec<&str>) -> Self {
 		self.forbids = forbidden.into_iter().map(String::from).collect();
@@ -272,7 +287,7 @@ impl Token {
 		self
 	}
 
-	/// Keep a default value which will be used if the user didn't provide a
+	/// Specify a default value which will be used if the user didn't provide a
 	/// value for the token.
 	#[must_use]
 	pub fn default_value(mut self, default: &str) -> Self {
@@ -360,7 +375,7 @@ struct TokenMap {
 	tokens: BTreeMap<String, Token>,
 }
 impl TokenMap {
-	/// Parse tokens based on given input and expected tokens.
+	/// Parse input based on expected tokens.
 	///
 	/// # Special Cases
 	///
@@ -432,7 +447,7 @@ impl TokenMap {
 					// Couldn't find a value, so take the default
 					d.to_string()
 				} else {
-					// No value and not default??? go home, you're drunk!
+					// No value and no default??? go home, you're drunk!
 					Err(ParserError::MissingValue(name.to_string()))?
 				};
 
@@ -470,7 +485,7 @@ impl TokenMap {
 	///   token.
 	fn check_constraints(&self, inputs: &[String]) -> Result<(), ParserError> {
 		for token in self.tokens.values() {
-			// Check if a value is required for the token.
+			// Check if a value is required for the token
 			if token.required && token.user_value.is_none() {
 				Err(ParserError::MissingInput(token.name.to_string()))?;
 			}
@@ -500,6 +515,7 @@ impl TokenMap {
 		Ok(())
 	}
 
+	/// Check if a single `input` is baseline valid and registered to a token.
 	fn check_input(&self, input: &str) -> Result<(), ParserError> {
 		if !input.starts_with(INPUT_PREFIX) {
 			return Err(ParserError::UnexpectedInput(input.to_string()));
