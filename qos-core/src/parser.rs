@@ -31,8 +31,8 @@ pub trait GetParserForOptions {
 	fn parser() -> Parser;
 }
 
-/// Parser input that does not include a command, just options. If you need to parse a command as well
-/// use [`CommandParser`].
+/// Parser input that does not include a command, just options. If you need to
+/// parse a command as well use [`CommandParser`].
 ///
 /// Assumes the format `--token1 value1 --flag --token2 value2`.
 pub struct OptionsParser<T: GetParserForOptions> {
@@ -57,8 +57,9 @@ pub trait GetParserForCommand {
 	fn parser(&self) -> Parser;
 }
 
-/// Parse inputs for a command. If you do not need to parse a command but instead just options, use
-/// [`OptionsParser`]. Note that subcommands are not supported.
+/// Parse inputs for a command. If you do not need to parse a command but
+/// instead just options, use [`OptionsParser`]. Note that subcommands are not
+/// supported.
 ///
 ///
 /// Assumes the format `command-name --token1 value1 --flag --token2 value2`.
@@ -114,30 +115,35 @@ impl Parser {
 	}
 
 	/// Wether or not the user passed in `--help`. Should always be checked.
-	#[must_use] pub fn help(&self) -> bool {
+	#[must_use]
+	pub fn help(&self) -> bool {
 		self.token_map.get_flag(HELP).unwrap_or(false)
 	}
 
 	/// Wether or not the user passed in `--version`. Should always be checked.
-	#[must_use] pub fn version(&self) -> bool {
+	#[must_use]
+	pub fn version(&self) -> bool {
 		self.token_map.get_flag(VERSION).unwrap_or(false)
 	}
 
 	/// Returns a bool indicating if the flag with `name` was passed. None if
 	/// `name` is not a token in registered in the parser parser
-	#[must_use] pub fn flag(&self, name: &str) -> Option<bool> {
+	#[must_use]
+	pub fn flag(&self, name: &str) -> Option<bool> {
 		self.token_map.get_flag(name)
 	}
 
 	/// Returns the value of `name` if the token exists and it only accepts one
 	/// value.
-	#[must_use] pub fn single(&self, name: &str) -> Option<&String> {
+	#[must_use]
+	pub fn single(&self, name: &str) -> Option<&String> {
 		self.token_map.get_single(name)
 	}
 
 	/// Returns the value of `name` if the token exists and it accepts multiple
 	/// values.
-	#[must_use] pub fn multiple(&self, name: &str) -> Option<&[String]> {
+	#[must_use]
+	pub fn multiple(&self, name: &str) -> Option<&[String]> {
 		self.token_map.get_multiple(name)
 	}
 
@@ -351,9 +357,10 @@ impl TokenMap {
 	fn parse(&mut self, inputs: &[String]) -> Result<(), ParserError> {
 		// Skip parsing rest of help parameter exists.
 		if inputs.contains(&HELP_INPUT.to_string()) {
-			let h = self.tokens.get_mut(HELP).expect(
-				"CLI Parser internal error: help token does not exist"
-			);
+			let h = self
+				.tokens
+				.get_mut(HELP)
+				.expect("CLI Parser internal error: help token does not exist");
 			h.user_value = Some(TokenType::Flag);
 			return Ok(());
 		}
@@ -361,7 +368,7 @@ impl TokenMap {
 		// Skip parsing rest if version parameter exists.
 		if inputs.contains(&VERSION_INPUT.to_string()) {
 			let v = self.tokens.get_mut(VERSION).expect(
-				"CLI Parser internal error: version token does not exist"
+				"CLI Parser internal error: version token does not exist",
 			);
 			v.user_value = Some(TokenType::Flag);
 			return Ok(());
@@ -517,7 +524,8 @@ impl TokenMap {
 
 impl Default for TokenMap {
 	fn default() -> Self {
-		let mut token_map = Self { tokens: BTreeMap::<String, Token>::default() };
+		let mut token_map =
+			Self { tokens: BTreeMap::<String, Token>::default() };
 
 		// Add the help and version token to ensure that the options are always
 		// displayed in the help menu.
