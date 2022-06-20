@@ -10,9 +10,12 @@ use crate::{
 	EPHEMERAL_KEY_FILE, PIVOT_FILE, SECRET_FILE,
 };
 
-const CID: &str = "cid";
-const PORT: &str = "port";
-const USOCK: &str = "usock";
+/// "cid"
+pub const CID: &str = "cid";
+/// "port"
+pub const PORT: &str = "port";
+/// "usock"
+pub const USOCK: &str = "usock";
 const MOCK: &str = "mock";
 const SECRET_FILE_OPT: &str = "secret-file";
 const PIVOT_FILE_OPT: &str = "pivot-file";
@@ -31,7 +34,7 @@ impl EnclaveOptions {
 		let parsed = OptionsParser::<EnclaveParser>::parse(args)
 			.expect("Entered invalid CLI args");
 
-		Self { parsed, ..Default::default() }
+		Self { parsed }
 	}
 
 	/// Get the `SocketAddress` for the enclave server.

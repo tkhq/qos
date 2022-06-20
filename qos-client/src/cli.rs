@@ -59,7 +59,7 @@ impl ClientOptions {
 	pub fn from(mut args: Vec<String>) -> Self {
 		// Remove the executable name
 		let mut options = Self {
-			host: HostOptions::new(),
+			host: HostOption::new(),
 			generate_setup_key: GenerateSetupKeyOptions::new(),
 			boot_genesis: BootGenesisOptions::new(),
 			after_genesis: AfterGenesisOptions::new(),
