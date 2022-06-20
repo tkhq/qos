@@ -13,19 +13,30 @@ const INPUT_PREFIX: &str = "--";
 pub enum ParserError {
 	/// The input was was not expected.
 	UnexpectedInput(String),
-	/// A value for the input was not provided.
-	MissingInputValue(String),
 	/// The input was provided more than once.
 	DuplicateInput(String),
 	/// Inputs are mutually exclusive.
 	MutuallyExclusiveInput(String, String),
-	/// The a value is required for the given token.
+	/// A value is required for the given token, but none was given
 	MissingValue(String),
 	/// An expected input is missing.
 	MissingInput(String),
 }
 
-/// Something that has method to get a parser.
+impl fmt::Display for ParserError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Self::UnexpectedInput(u) => write!(f, "found {u}, which was not an expected argument"),
+			Self::DuplicateInput(i) => write!(f, "found argument {i} more then once, but only one instance was expected"),
+			Self::MutuallyExclusiveInput(y, z) => write!(f, "arguments {y} and {z} are mutually exclusive and can be used at the same time"),
+			Self::MissingValue(i) => write!(f, "found argument {i}, which requires a value, but no value was given"),
+			Self::MissingInput(i) => write!(f, "argument {i} is required but was not found"),
+		}
+	}
+}
+
+/// Something that has method to get a parser. Meant to be used with
+/// [`OptionsParser`].
 pub trait GetParserForOptions {
 	/// Get the parser
 	fn parser() -> Parser;
@@ -51,7 +62,8 @@ impl<T: GetParserForOptions> OptionsParser<T> {
 	}
 }
 
-/// Something that has method to get a parser.
+/// Something that has method to get a parser. Meant to be used with
+/// [`CommandParser`].
 pub trait GetParserForCommand {
 	/// Get the parser
 	fn parser(&self) -> Parser;
@@ -334,9 +346,9 @@ impl TokenType {
 impl fmt::Display for TokenType {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			TokenType::Flag => write!(f, "true"),
-			TokenType::Single(s) => write!(f, "{}", s),
-			TokenType::Multiple(v) => write!(f, "{:?}", v),
+			Self::Flag => write!(f, "true"),
+			Self::Single(s) => write!(f, "{}", s),
+			Self::Multiple(v) => write!(f, "{:?}", v),
 		}
 	}
 }
