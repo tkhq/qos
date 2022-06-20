@@ -12,7 +12,7 @@ use crate::HostServer;
 /// CLI options for starting a host server.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HostServerOptions {
-	enclave: EnclaveOptions,
+	enclave: EnclaveParser,
 	host: HostOptions,
 }
 
