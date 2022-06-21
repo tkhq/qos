@@ -4,8 +4,8 @@ use std::env;
 
 use qos_core::{
 	hex,
-	parser::{GetParserForCommand, Parser, Token, CommandParser},
-	protocol::{msg::ProtocolMsg, QosHash, },
+	parser::{CommandParser, GetParserForCommand, Parser, Token},
+	protocol::{msg::ProtocolMsg, QosHash},
 };
 use qos_crypto::RsaPair;
 
@@ -56,7 +56,6 @@ impl From<String> for Command {
 		Self::from(s.as_str())
 	}
 }
-
 
 impl Command {
 	fn base() -> Parser {
@@ -209,7 +208,6 @@ impl ClientOptions {
 	fn pcr1(&self) -> Vec<u8> {
 		hex::decode(self.parsed.single(PCR1).expect("required arg"))
 			.expect("Could not parse `--pcr1` to bytes")
-
 	}
 	fn pcr2(&self) -> Vec<u8> {
 		hex::decode(self.parsed.single(PCR2).expect("required arg"))
@@ -221,7 +219,11 @@ impl ClientOptions {
 		self.parsed.single(OUT_DIR).expect("required arg").to_string()
 	}
 	fn threshold(&self) -> u32 {
-		self.parsed.single(THRESHOLD).expect("required arg").parse::<u32>().expect("Could not parse `--threshold` as u32")
+		self.parsed
+			.single(THRESHOLD)
+			.expect("required arg")
+			.parse::<u32>()
+			.expect("Could not parse `--threshold` as u32")
 	}
 }
 

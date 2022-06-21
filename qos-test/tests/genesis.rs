@@ -100,8 +100,7 @@ async fn genesis_e2e() {
 
 	// -- CLIENT Read in files with keys, create genesis input, send genesis
 	// input, and write genesis output to file
-	assert!(
-		Command::new("../target/debug/client_cli")
+	assert!(Command::new("../target/debug/client_cli")
 		.args([
 			"boot-genesis",
 			"--threshold",
@@ -119,8 +118,7 @@ async fn genesis_e2e() {
 		.unwrap()
 		.wait()
 		.unwrap()
-		.success()
-	);
+		.success());
 
 	// -- Read in files generated from the genesis boot
 	// Decode the attestation doc to make sure it passes basic checks
