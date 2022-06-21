@@ -106,7 +106,7 @@ impl HostOptions {
 		) {
 			#[cfg(feature = "vm")]
 			(Some(c), Some(p), None) => SocketAddress::new_vsock(c, p),
-			#[cfg(feature = "local")]
+			// #[cfg(feature = "local")]
 			(None, None, Some(u)) => SocketAddress::new_unix(u),
 			_ => panic!("Invalid enclave socket options"),
 		}

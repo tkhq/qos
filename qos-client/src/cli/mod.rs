@@ -119,6 +119,8 @@ impl Command {
 			)
 			.token(
 				Token::new(OUT_DIR, "directory to write all the genesis outputs too.")
+					.takes_value(true)
+					.required(true)
 			)
 	}
 
@@ -161,8 +163,7 @@ impl Command {
 impl GetParserForCommand for Command {
 	fn parser(&self) -> Parser {
 		match self {
-			Self::HostHealth => Self::base(),
-			Self::DescribeNsm => Self::base(),
+			Self::HostHealth | Self::DescribeNsm => Self::base(),
 			Self::GenerateSetupKey => Self::generate_setup_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
@@ -250,7 +251,7 @@ impl ClientRunner {
 				Command::HostHealth => handlers::host_health(&self.opts),
 				Command::DescribeNsm => handlers::describe_nsm(&self.opts),
 				Command::GenerateSetupKey => {
-					handlers::generate_setup_key(&self.opts)
+					handlers::generate_setup_key(&self.opts);
 				}
 				Command::BootGenesis => handlers::boot_genesis(&self.opts),
 				Command::AfterGenesis => handlers::after_genesis(&self.opts),
@@ -377,7 +378,6 @@ mod handlers {
 		let genesis_set = create_genesis_set(options);
 		let output_dir = options.out_dir();
 		let output_dir = Path::new(&output_dir);
-
 		let req = ProtocolMsg::BootGenesisRequest { set: genesis_set.clone() };
 
 		let (nsm_response, genesis_output) =
@@ -594,7 +594,7 @@ mod handlers {
 	/// Panics if verification fails
 	fn verify_attestation_doc_against_user_input(
 		attestation_doc: &AttestationDoc,
-		_user_data: &[u8],
+		user_data: &[u8],
 		pcr0: &[u8],
 		pcr1: &[u8],
 		pcr2: &[u8],
@@ -605,7 +605,7 @@ mod handlers {
 		{
 			// user data is hash of genesis output
 			assert_eq!(
-				_user_data,
+				user_data,
 				attestation_doc.user_data.as_ref().unwrap().to_vec(),
 				"Attestation doc does not have hash of genesis output."
 			);
@@ -667,7 +667,7 @@ mod handlers {
 	/// Panics if extraction or validation fails.
 	fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
 		#[cfg(feature = "mock")]
-		let validation_time = attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
+		let validation_time = crate::attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
 		#[cfg(not(feature = "mock"))]
 		// TODO: we should probably insert the validation time into the genesis
 		// doc?
