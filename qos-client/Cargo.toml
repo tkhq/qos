@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 qos-core = { path = "../qos-core" }
-qos-host = { path = "../qos-host" }
 qos-crypto = { path = "../qos-crypto" }
 
 # Third party

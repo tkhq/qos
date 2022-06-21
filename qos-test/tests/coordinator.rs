@@ -1,6 +1,6 @@
 use std::fs::File;
 
-use qos_core::coordinator::Coordinator;
+use qos_core::{cli::EnclaveOptions, coordinator::Coordinator};
 
 const PIVOT_OK_PATH: &str = "../target/debug/pivot_ok";
 const PIVOT_ABORT_PATH: &str = "../target/debug/pivot_abort";
@@ -119,11 +119,11 @@ fn coordinator_works() {
 	let _ = std::fs::remove_file(secret_path);
 	assert!(File::open(PIVOT_OK_PATH).is_ok(),);
 
-	let opts: Vec<_> = [
+	let mut opts: Vec<_> = [
+		"binary",
 		"--usock",
 		usock,
 		"--mock",
-		"true",
 		"--secret-file",
 		secret_path,
 		"--pivot-file",
@@ -133,8 +133,9 @@ fn coordinator_works() {
 	.map(String::from)
 	.collect();
 
-	let coordinator_handle =
-		std::thread::spawn(move || Coordinator::execute(opts.into()));
+	let coordinator_handle = std::thread::spawn(move || {
+		Coordinator::execute(EnclaveOptions::new(&mut opts))
+	});
 
 	// Give the enclave server time to bind to the socket
 	std::thread::sleep(std::time::Duration::from_secs(1));
@@ -166,11 +167,11 @@ fn coordinator_handles_non_zero_exits() {
 	let _ = std::fs::remove_file(secret_path);
 	assert!(File::open(PIVOT_ABORT_PATH).is_ok(),);
 
-	let opts: Vec<_> = [
+	let mut opts: Vec<_> = [
+		"binary",
 		"--usock",
 		usock,
 		"--mock",
-		"true",
 		"--secret-file",
 		secret_path,
 		"--pivot-file",
@@ -180,8 +181,9 @@ fn coordinator_handles_non_zero_exits() {
 	.map(String::from)
 	.collect();
 
-	let coordinator_handle =
-		std::thread::spawn(move || Coordinator::execute(opts.into()));
+	let coordinator_handle = std::thread::spawn(move || {
+		Coordinator::execute(EnclaveOptions::new(&mut opts))
+	});
 
 	// Give the enclave server time to bind to the socket
 	std::thread::sleep(std::time::Duration::from_secs(1));
@@ -212,11 +214,11 @@ fn coordinator_handles_panic() {
 	let _ = std::fs::remove_file(secret_path);
 	assert!(File::open(PIVOT_PANIC_PATH).is_ok(),);
 
-	let opts: Vec<_> = [
+	let mut opts: Vec<_> = [
+		"binary",
 		"--usock",
 		usock,
 		"--mock",
-		"true",
 		"--secret-file",
 		secret_path,
 		"--pivot-file",
@@ -226,8 +228,9 @@ fn coordinator_handles_panic() {
 	.map(String::from)
 	.collect::<Vec<String>>();
 
-	let coordinator_handle =
-		std::thread::spawn(move || Coordinator::execute(opts.into()));
+	let coordinator_handle = std::thread::spawn(move || {
+		Coordinator::execute(EnclaveOptions::new(&mut opts))
+	});
 
 	// Give the enclave server time to bind to the socket
 	std::thread::sleep(std::time::Duration::from_secs(1));

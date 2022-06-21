@@ -3,37 +3,66 @@
 use std::{
 	env,
 	net::{IpAddr, Ipv4Addr, SocketAddr},
+	str::FromStr,
 };
 
-use qos_core::cli::EnclaveOptions;
+use qos_core::{
+	cli::{CID, PORT, USOCK},
+	io::SocketAddress,
+	parser::{GetParserForOptions, OptionsParser, Parser, Token},
+};
 
 use crate::HostServer;
 
-/// CLI options for starting a host server.
-#[derive(Clone, Debug, PartialEq)]
-pub struct HostServerOptions {
-	enclave: EnclaveOptions,
-	host: HostOptions,
-}
+const HOST_IP: &str = "host-ip";
+const HOST_PORT: &str = "host-port";
 
-impl HostServerOptions {
-	fn new() -> Self {
-		Self { enclave: EnclaveOptions::new(), host: HostOptions::new() }
+struct HostParser;
+impl GetParserForOptions for HostParser {
+	fn parser() -> Parser {
+		Parser::new()
+			.token(
+				Token::new(CID, "context identifier for the enclave socket (only for VSOCK)")
+					.takes_value(true)
+					.forbids(vec![USOCK])
+					.requires(PORT),
+			)
+			.token(
+				Token::new(PORT, "the port the enclave socket is listening on (only for VSOCK)")
+					.takes_value(true)
+					.forbids(vec![USOCK])
+					.requires(CID),
+			)
+			.token(
+				Token::new(USOCK, "name of the socket file (ex: `dev.sock`) (only for unix sockets)")
+					.takes_value(true)
+					.forbids(vec!["port", "cid"])
+			)
+			.token(
+				Token::new(HOST_IP, "IP address this server should listen on")
+					.takes_value(true)
+					.required(true)
+			)
+			.token(
+				Token::new(HOST_PORT, "IP address this server should listen on")
+					.takes_value(true)
+					.required(true)
+			)
 	}
 }
 
-/// CLI options for host IP address and Port.
-#[derive(Default, Clone, Copy, Debug, PartialEq)]
+/// CLI options for starting a host server.
+#[derive(Clone, Debug, PartialEq)]
 pub struct HostOptions {
-	ip: Option<Ipv4Addr>,
-	port: Option<u16>,
+	parsed: Parser,
 }
 
 impl HostOptions {
-	/// Create a new instance of [`self`].
-	#[must_use]
-	pub fn new() -> Self {
-		Self::default()
+	fn new(args: &mut Vec<String>) -> Self {
+		let parsed = OptionsParser::<HostParser>::parse(args)
+			.expect("Entered invalid CLI args");
+
+		Self { parsed }
 	}
 
 	/// Get the host server url.
@@ -43,11 +72,7 @@ impl HostOptions {
 	/// Panics if the url cannot be parsed from options
 	#[must_use]
 	pub fn url(&self) -> String {
-		if let Self { ip: Some(ip), port: Some(port) } = *self {
-			return format!("http://{}:{}", ip, port);
-		}
-
-		panic!("Couldn't parse URL from options.")
+		format!("http://{}:{}", self.ip(), self.port())
 	}
 
 	/// Get the resource path.
@@ -57,73 +82,61 @@ impl HostOptions {
 		format!("{}/{}", url, path)
 	}
 
-	/// Parse host options.
-	pub fn parse(&mut self, cmd: &str, arg: &str) {
-		self.parse_ip(cmd, arg);
-		self.parse_port(cmd, arg);
+	/// Address the host server should listen on.
+	#[must_use]
+	pub fn host_addr(&self) -> SocketAddr {
+		let ip = Ipv4Addr::from_str(&self.ip())
+			.expect("Could not parser ip to IP v4");
+		let port =
+			self.port().parse::<u16>().expect("Could not parse port to u16");
+		SocketAddr::new(IpAddr::V4(ip), port)
 	}
 
-	fn parse_ip(&mut self, cmd: &str, arg: &str) {
-		if cmd == "--host-ip" {
-			self.ip = Some(
-				arg.parse().expect("Could not parse value from `--host-ip`"),
-			);
+	/// Get the `SocketAddress` for the enclave server.
+	///
+	/// # Panics
+	///
+	/// Panics if the options are not valid for exactly one of unix or vsock.
+	#[must_use]
+	pub fn enclave_addr(&self) -> SocketAddress {
+		match (
+			self.parsed.single(CID),
+			self.parsed.single(PORT),
+			self.parsed.single(USOCK),
+		) {
+			#[cfg(feature = "vm")]
+			(Some(c), Some(p), None) => SocketAddress::new_vsock(c, p),
+			// #[cfg(feature = "local")]
+			(None, None, Some(u)) => SocketAddress::new_unix(u),
+			_ => panic!("Invalid enclave socket options"),
 		}
 	}
 
-	fn parse_port(&mut self, cmd: &str, arg: &str) {
-		if cmd == "--host-port" {
-			self.port = arg
-				.parse::<u16>()
-				.map_err(|_| {
-					panic!("Could not parse provided value for `--port`")
-				})
-				.ok();
-		}
+	fn ip(&self) -> String {
+		self.parsed.single(HOST_IP).expect("required arg").clone()
+	}
+
+	fn port(&self) -> String {
+		self.parsed.single(HOST_PORT).expect("required arg").clone()
 	}
 }
 
 /// Host server command line interface.
-///
-/// # Options
-///
-/// * `--host-port` - the port for the host server to bind (ex: `3000`).
-/// * `--host-ip` - the ip address the host server will bind to (ex:
-///   `127.0.0.1`)
-/// * `--port` - the port the enclave socket is listening on (only for VSOCK)
-/// * `--cid` - context identifier for the enclave socket (only for VSOCK)
-/// * `--usock` - name of the socket file (ex: `dev.sock`) (only for unix
-///   sockets)
 pub struct CLI;
 impl CLI {
 	/// Execute the command line interface.
 	pub async fn execute() {
 		let mut args: Vec<String> = env::args().collect();
-		args.remove(0);
-		let options = parse_args(&args);
-		let addr = host_addr_from_options(options.host);
-		let enclave_addr = options.enclave.addr();
-		HostServer::new(enclave_addr, addr).serve().await;
-	}
-}
+		let options = HostOptions::new(&mut args);
 
-fn parse_args(args: &[String]) -> HostServerOptions {
-	let mut options = HostServerOptions::new();
-
-	let mut chunks = args.chunks_exact(2);
-	assert!(chunks.remainder().is_empty(), "Unexepected number of arguments");
-	while let Some([cmd, arg]) = chunks.next() {
-		options.host.parse(cmd, arg);
-		options.enclave.parse(cmd, arg);
-	}
-
-	options
-}
-
-fn host_addr_from_options(options: HostOptions) -> SocketAddr {
-	if let HostOptions { ip: Some(ip), port: Some(port), .. } = options {
-		SocketAddr::new(IpAddr::V4(ip), port)
-	} else {
-		panic!("Invalid host address options")
+		if options.parsed.version() {
+			println!("version: {}", env!("CARGO_PKG_VERSION"));
+		} else if options.parsed.help() {
+			println!("{}", options.parsed.info());
+		} else {
+			HostServer::new(options.enclave_addr(), options.host_addr())
+				.serve()
+				.await;
+		}
 	}
 }

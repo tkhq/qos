@@ -78,7 +78,6 @@ async fn genesis_e2e() {
 			"--pivot-file",
 			pivot_path,
 			"--mock",
-			"true",
 		])
 		.spawn()
 		.unwrap();

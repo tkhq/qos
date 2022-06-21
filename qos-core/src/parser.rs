@@ -9,7 +9,7 @@ const VERSION_INPUT: &str = "--version";
 const INPUT_PREFIX: &str = "--";
 
 /// Token parsing error.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ParserError {
 	/// Input was was not expected.
 	UnexpectedInput(String),
@@ -26,11 +26,11 @@ pub enum ParserError {
 impl fmt::Display for ParserError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Self::UnexpectedInput(u) => write!(f, "found {u}, which was not an expected argument"),
-			Self::DuplicateInput(i) => write!(f, "found argument {i} more then once, but only one instance was expected"),
-			Self::MutuallyExclusiveInput(y, z) => write!(f, "arguments {y} and {z} are mutually exclusive and cannot be used at the same time"),
-			Self::MissingValue(i) => write!(f, "found argument {i}, which requires a value, but no value was given"),
-			Self::MissingInput(i) => write!(f, "argument {i} is required but was not found"),
+			Self::UnexpectedInput(u) => write!(f, "found {}, which was not an expected argument", u),
+			Self::DuplicateInput(i) => write!(f, "found argument {} more then once, but only one instance was expected", i),
+			Self::MutuallyExclusiveInput(y, z) => write!(f, "arguments {} and {} are mutually exclusive and cannot be used at the same time", y, z),
+			Self::MissingValue(i) => write!(f, "found argument {}, which requires a value, but no value was given", i),
+			Self::MissingInput(i) => write!(f, "argument {} is required but was not found", i),
 		}
 	}
 }
@@ -46,6 +46,7 @@ pub trait GetParserForOptions {
 /// parse a command as well use [`CommandParser`].
 ///
 /// Assumes the format `--token1 value1 --flag --token2 value2`.
+#[derive(Debug, PartialEq, Clone)]
 pub struct OptionsParser<T: GetParserForOptions> {
 	_phantom: PhantomData<T>,
 }
@@ -75,6 +76,7 @@ pub trait GetParserForCommand {
 ///  Note that subcommands are not supported.
 ///
 /// Assumes the format `command-name --token1 value1 --flag --token2 value2`.
+#[derive(Debug, PartialEq, Clone)]
 pub struct CommandParser<C: From<String> + GetParserForCommand> {
 	_phantom: PhantomData<C>,
 }
@@ -121,7 +123,7 @@ impl<C: From<String> + GetParserForCommand> CommandParser<C> {
 /// * [`Self::flag`]
 /// * [`Self::single`]
 /// * [`Self::multiple`]
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug, PartialEq)]
 pub struct Parser {
 	token_map: TokenMap,
 }
