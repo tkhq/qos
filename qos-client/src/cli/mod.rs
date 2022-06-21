@@ -5,7 +5,7 @@ use std::env;
 use qos_core::{
 	hex,
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
-	protocol::msg::ProtocolMsg,
+	protocol::{msg::ProtocolMsg, services::boot},
 };
 use qos_crypto::RsaPair;
 
@@ -31,6 +31,12 @@ const PCR2: &str = "pcr2";
 const THRESHOLD: &str = "threshold";
 const OUT_DIR: &str = "out-dir";
 
+const GENESIS_OUT_PATH: &str = "genesis-out-path";
+const NONCE: &str = "nonce";
+const PIVOT_HASH: &str = "pivot-hash";
+const RESTART_POLICY: &str = "restart-policy";
+const ROOT_CERT_PATH: &str = "root-cert-path";
+
 #[derive(Clone, PartialEq, Debug)]
 enum Command {
 	HostHealth,
@@ -38,6 +44,7 @@ enum Command {
 	GenerateSetupKey,
 	BootGenesis,
 	AfterGenesis,
+	GenerateManifest,
 }
 
 impl From<&str> for Command {
@@ -48,6 +55,7 @@ impl From<&str> for Command {
 			"generate-setup-key" => Self::GenerateSetupKey,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
+			"generate-manifest" => Self::GenerateManifest,
 			_ => panic!("Unrecognized command"),
 		}
 	}
@@ -113,7 +121,6 @@ impl Command {
 				Token::new(THRESHOLD, "the threshold to be considered a quorum, K.")
 					.takes_value(true)
 					.required(true)
-
 			)
 			.token(
 				Token::new(OUT_DIR, "directory to write all the genesis outputs too.")
@@ -156,6 +163,75 @@ impl Command {
 					.required(true),
 			)
 	}
+
+	fn generate_manifest() -> Parser {
+		Parser::new()
+			.token(
+				Token::new(
+					GENESIS_OUT_PATH,
+					"path to file with genesis outputs to use for Quorum Set.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+			.token(
+				Token::new(
+					NONCE,
+					"nonce of the manifest relative to the namespace.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+			.token(
+				Token::new(
+					NAMESPACE,
+					"namespace this manifest will belong to.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+			.token(
+				Token::new(
+					PIVOT_HASH,
+					"SHA-256 hash of the pivot executable encoded as a Vec<u8>",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+			.token(
+				Token::new(RESTART_POLICY, "one of: `never`, `always`.")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(PCR0, "hex encoded pcr0")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(PCR1, "hex encoded pcr1")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(PCR2, "hex encoded pcr2")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(
+					ROOT_CERT_PATH,
+					"path to file containing PEM encoded AWS root cert",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+			.token(
+				Token::new(OUT_DIR, "directory to write the manifest in.")
+					.takes_value(true)
+					.required(true),
+			)
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -165,16 +241,17 @@ impl GetParserForCommand for Command {
 			Self::GenerateSetupKey => Self::generate_setup_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
+			Self::GenerateManifest => Self::generate_manifest(),
 		}
 	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
-struct ClientOptions {
+struct ClientOpts {
 	parsed: Parser,
 }
 
-impl ClientOptions {
+impl ClientOpts {
 	fn path(&self, uri: &str) -> String {
 		let ip = self.parsed.single(HOST_IP).expect("required arg");
 		let port = self.parsed.single(HOST_PORT).expect("required arg");
@@ -182,7 +259,7 @@ impl ClientOptions {
 		format!("http://{}:{}/{}", ip, port, uri)
 	}
 
-	// Generate setup key options
+	// Generate setup key opts
 	fn key_dir(&self) -> String {
 		self.parsed.single(KEY_DIR).expect("required arg").to_string()
 	}
@@ -193,7 +270,7 @@ impl ClientOptions {
 		self.parsed.single(NAMESPACE).expect("required arg").to_string()
 	}
 
-	// AfterGenesis options
+	// AfterGenesis opts
 	fn genesis_dir(&self) -> String {
 		self.parsed.single(GENESIS_DIR).expect("required arg").to_string()
 	}
@@ -213,7 +290,7 @@ impl ClientOptions {
 			.expect("Could not parse `--pcr2` to bytes")
 	}
 
-	// BootGenesis options
+	// BootGenesis opts
 	fn out_dir(&self) -> String {
 		self.parsed.single(OUT_DIR).expect("required arg").to_string()
 	}
@@ -224,12 +301,39 @@ impl ClientOptions {
 			.parse::<u32>()
 			.expect("Could not parse `--threshold` as u32")
 	}
+
+	// GenerateManifest opts
+	fn genesis_out_path(&self) -> String {
+		self.parsed.single(GENESIS_OUT_PATH).expect("required arg").to_string()
+	}
+	fn nonce(&self) -> u32 {
+		self.parsed
+			.single(NONCE)
+			.expect("required arg")
+			.parse::<u32>()
+			.expect("Could not parse `--nonce` as u32")
+	}
+	fn pivot_hash(&self) -> Vec<u8> {
+		hex::decode(self.parsed.single(PIVOT_HASH).expect("required arg"))
+			.expect("Could not parse `--pcr2` to bytes")
+	}
+	fn restart_policy(&self) -> boot::RestartPolicy {
+		self.parsed
+			.single(RESTART_POLICY)
+			.expect("required arg")
+			.to_string()
+			.try_into()
+			.expect("Failed to parser `--restart-policy`")
+	}
+	fn root_cert_path(&self) -> String {
+		self.parsed.single(ROOT_CERT_PATH).expect("required arg").to_string()
+	}
 }
 
 #[derive(Clone, PartialEq, Debug)]
 struct ClientRunner {
 	cmd: Command,
-	opts: ClientOptions,
+	opts: ClientOpts,
 }
 impl ClientRunner {
 	/// Create [`Self`] from the command line arguments.
@@ -237,7 +341,7 @@ impl ClientRunner {
 		let (cmd, parsed) =
 			CommandParser::<Command>::parse(args).expect("Invalid CLI args");
 
-		Self { cmd, opts: ClientOptions { parsed } }
+		Self { cmd, opts: ClientOpts { parsed } }
 	}
 
 	/// Run the given command.
@@ -256,6 +360,9 @@ impl ClientRunner {
 				}
 				Command::BootGenesis => handlers::boot_genesis(&self.opts),
 				Command::AfterGenesis => handlers::after_genesis(&self.opts),
+				Command::GenerateManifest => {
+					handlers::generate_manifest(&self.opts);
+				}
 			}
 		}
 	}
@@ -277,14 +384,16 @@ impl CLI {
 mod handlers {
 	use qos_core::protocol::attestor::types::NsmRequest;
 
-	use super::services;
 	use crate::{
-		cli::{ClientOptions, ProtocolMsg},
+		cli::{
+			services::{self, GenerateManifestArgs},
+			ClientOpts, ProtocolMsg,
+		},
 		request,
 	};
 
-	pub(super) fn host_health(options: &ClientOptions) {
-		let path = &options.path("health");
+	pub(super) fn host_health(opts: &ClientOpts) {
+		let path = &opts.path("health");
 		if let Ok(response) = request::get(path) {
 			println!("{}", response);
 		} else {
@@ -301,8 +410,8 @@ mod handlers {
 	// - Data signed by quorum key
 
 	// TODO: this should eventually be removed since it only applies to nitro
-	pub(super) fn describe_nsm(options: &ClientOptions) {
-		let path = &options.path("message");
+	pub(super) fn describe_nsm(opts: &ClientOpts) {
+		let path = &opts.path("message");
 		match request::post(
 			path,
 			&ProtocolMsg::NsmRequest { nsm_request: NsmRequest::DescribeNSM },
@@ -317,32 +426,61 @@ mod handlers {
 		}
 	}
 
-	pub(super) fn generate_setup_key(options: &ClientOptions) {
+	pub(super) fn generate_setup_key(opts: &ClientOpts) {
 		services::generate_setup_key(
-			&options.alias(),
-			&options.namespace(),
-			options.key_dir(),
+			&opts.alias(),
+			&opts.namespace(),
+			opts.key_dir(),
 		);
 	}
 
 	// TODO: verify AWS_ROOT_CERT_PEM against a checksum
 	// TODO: verify PCRs
-	pub(super) fn boot_genesis(options: &ClientOptions) {
+	pub(super) fn boot_genesis(opts: &ClientOpts) {
 		services::boot_genesis(
-			&options.path("message"),
-			options.out_dir(),
-			options.key_dir(),
-			options.threshold(),
+			&opts.path("message"),
+			opts.out_dir(),
+			opts.key_dir(),
+			opts.threshold(),
 		);
 	}
 
-	pub(super) fn after_genesis(options: &ClientOptions) {
+	pub(super) fn after_genesis(opts: &ClientOpts) {
 		services::after_genesis(
-			options.genesis_dir(),
-			options.setup_key_path(),
-			&options.pcr0(),
-			&options.pcr1(),
-			&options.pcr2(),
+			opts.genesis_dir(),
+			opts.setup_key_path(),
+			&opts.pcr0(),
+			&opts.pcr1(),
+			&opts.pcr2(),
 		);
 	}
+
+	/// Generate a manifest with given inputs
+	/// TODO: can we write the manifest in plain english?
+	pub(super) fn generate_manifest(opts: &ClientOpts) {
+		services::generate_manifest(GenerateManifestArgs {
+			genesis_out_path: opts.genesis_out_path(),
+			nonce: opts.nonce(),
+			namespace: opts.namespace(),
+			pivot_hash: opts.pivot_hash().try_into().unwrap(),
+			restart_policy: opts.restart_policy(),
+			pcr0: opts.pcr0(),
+			pcr1: opts.pcr1(),
+			pcr2: opts.pcr2(),
+			root_cert_path: opts.root_cert_path(),
+			out_dir: opts.out_dir(),
+		});
+	}
+
+	// /// Sign a manifest, writing the signature++member ID to file.
+	// ///
+	// /// Verifies that the manifest corresponds to expected in inputs.
+	// pub(super) fn sign_manifest(opts: &ClientOpts) {}
+
+	// /// # Arguments
+	// ///
+	// /// * path to manifest
+	// /// * various manifest verification params
+	// /// * directory containing signatures++member ID over manifests
+	// pub(super) fn boot_standard(opts: &ClientOpts) {}
 }

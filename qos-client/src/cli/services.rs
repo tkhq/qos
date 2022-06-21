@@ -4,8 +4,14 @@ use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::protocol::{
 	attestor::types::NsmResponse,
-	services::genesis::{GenesisOutput, GenesisSet, SetupMember},
-	QosHash,
+	services::{
+		boot::{
+			Manifest, Namespace, NitroConfig, PivotConfig, QuorumMember,
+			QuorumSet, RestartPolicy,
+		},
+		genesis::{GenesisOutput, GenesisSet, SetupMember},
+	},
+	Hash256, QosHash,
 };
 use qos_crypto::RsaPub;
 
@@ -235,6 +241,11 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		RsaPair::from_der(&personal_key)
 			.expect("Failed to create RsaPair from decrypted personal key")
 	};
+	// Sanity check
+	assert_eq!(
+		personal_pair.public_key_to_der().unwrap(),
+		member_output.public_personal_key
+	);
 
 	// Make sure we can decrypt the Share with the Personal Key
 	drop(
@@ -369,6 +380,74 @@ fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
 		validation_time,
 	)
 	.expect("Issue extracting and verifying attestation doc")
+}
+
+pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
+	pub genesis_out_path: P,
+	pub nonce: u32,
+	pub namespace: String,
+	pub pivot_hash: Hash256,
+	pub restart_policy: RestartPolicy,
+	pub pcr0: Vec<u8>,
+	pub pcr1: Vec<u8>,
+	pub pcr2: Vec<u8>,
+	pub root_cert_path: P,
+	pub out_dir: P,
+}
+
+pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
+	let GenerateManifestArgs {
+		genesis_out_path,
+		nonce,
+		namespace,
+		pivot_hash,
+		restart_policy,
+		pcr0,
+		pcr1,
+		pcr2,
+		root_cert_path,
+		out_dir,
+	} = args;
+
+	let aws_root_certificate = {
+		let pem = std::fs::read(root_cert_path.as_ref())
+			.expect("Failed to read in root cert");
+		cert_from_pem(&pem)
+			.expect("AWS root cert: failed to convert PEM to DER")
+	};
+
+	let genesis_output = {
+		let buf = std::fs::read(genesis_out_path.as_ref())
+			.expect("Failed to read genesis output file");
+		GenesisOutput::try_from_slice(&buf)
+			.expect("Failed to decode genesis output")
+	};
+
+	let members: Vec<_> = genesis_output
+		.member_outputs
+		.iter()
+		.map(|m| QuorumMember {
+			alias: m.setup_member.alias.clone(),
+			pub_key: m.public_personal_key.clone(),
+		})
+		.collect();
+
+	let manifest = Manifest {
+		namespace: Namespace { name: namespace.clone(), nonce },
+		pivot: PivotConfig { hash: pivot_hash, restart: restart_policy },
+		quorum_key: genesis_output.quorum_key,
+		quorum_set: QuorumSet { threshold: genesis_output.threshold, members },
+		enclave: NitroConfig {
+			pcr0: pcr0.try_into().expect("Failed to convert to fixed size"),
+			pcr1: pcr1.try_into().expect("Failed to convert to fixed size"),
+			pcr2: pcr2.try_into().expect("Failed to convert to fixed size"),
+			aws_root_certificate,
+		},
+	};
+
+	let manifest_path =
+		out_dir.as_ref().join(format!("./{}.{}.manifest", namespace, nonce));
+	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");
 }
 
 // Get the file name from a path and split on `"."`.

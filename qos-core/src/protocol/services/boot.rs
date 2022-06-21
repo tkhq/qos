@@ -12,10 +12,6 @@ use crate::protocol::{
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct NitroConfig {
-	/// VSOCK Context ID - component of VSockAddress.
-	pub vsock_cid: u16,
-	/// VSOCK Port - component of VSockAddress.
-	pub vsock_port: u16,
 	/// The hash of the enclave image file
 	pub pcr0: Hash256,
 	/// The hash of the Linux kernel and bootstrap
@@ -35,6 +31,18 @@ pub enum RestartPolicy {
 	Never,
 	/// Always restart the pivot application
 	Always,
+}
+
+impl TryFrom<String> for RestartPolicy {
+	type Error = ProtocolError;
+
+	fn try_from(s: String) -> Result<RestartPolicy, Self::Error> {
+		match s.to_ascii_lowercase().as_str() {
+			"never" => Ok(Self::Never),
+			"always" => Ok(Self::Always),
+			_ => Err(ProtocolError::FailedToParseFromString),
+		}
+	}
 }
 
 /// Pivot binary configuration
@@ -94,14 +102,14 @@ pub struct Namespace {
 pub struct Manifest {
 	/// Namespace this manifest belongs too.
 	pub namespace: Namespace,
-	/// Configuration and verifiable values for the enclave hardware.
-	pub enclave: NitroConfig,
 	/// Pivot binary configuration and verifiable values.
 	pub pivot: PivotConfig,
 	/// Quorum Key as a DER encoded RSA public key.
 	pub quorum_key: Vec<u8>,
 	/// Quorum Set members and threshold.
 	pub quorum_set: QuorumSet,
+	/// Configuration and verifiable values for the enclave hardware.
+	pub enclave: NitroConfig,
 }
 
 /// An approval by a Quorum Member.

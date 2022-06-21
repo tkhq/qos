@@ -64,9 +64,12 @@ pub struct GenesisMemberOutput {
 	pub encrypted_quorum_key_share: Vec<u8>,
 	/// Personal Key encrypted to the `setup_member`'s Setup Key.
 	pub encrypted_personal_key: Vec<u8>,
+	/// Public key for Personal Key
+	pub public_personal_key: Vec<u8>,
 }
 
-/// Output from running Genesis Boot.
+/// Output from running Genesis Boot. Should contain all information relevant to
+/// how the quorum shares where created.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
@@ -78,6 +81,8 @@ pub struct GenesisOutput {
 	/// All successfully `RecoveredPermutation`s completed during the genesis
 	/// process.
 	pub recovery_permutations: Vec<RecoveredPermutation>,
+	/// The threshold, K, used to generate the shards.
+	pub threshold: u32,
 }
 
 // TODO: Recovery logic!
@@ -121,12 +126,14 @@ pub(in crate::protocol) fn boot_genesis(
 			setup_member,
 			encrypted_quorum_key_share,
 			encrypted_personal_key,
+			public_personal_key: personal_pair.public_key_to_der()?,
 		});
 	}
 
 	let genesis_output = GenesisOutput {
 		member_outputs,
 		quorum_key: quorum_pair.public_key_to_der()?,
+		threshold: genesis_set.threshold,
 		// TODO: generate N choose K recovery permutations
 		recovery_permutations: vec![],
 	};
