@@ -437,12 +437,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		pivot: PivotConfig { hash: pivot_hash, restart: restart_policy },
 		quorum_key: genesis_output.quorum_key,
 		quorum_set: QuorumSet { threshold: genesis_output.threshold, members },
-		enclave: NitroConfig {
-			pcr0: pcr0.try_into().expect("Failed to convert to fixed size"),
-			pcr1: pcr1.try_into().expect("Failed to convert to fixed size"),
-			pcr2: pcr2.try_into().expect("Failed to convert to fixed size"),
-			aws_root_certificate,
-		},
+		enclave: NitroConfig { pcr0, pcr1, pcr2, aws_root_certificate },
 	};
 
 	let manifest_path =

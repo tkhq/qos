@@ -13,11 +13,11 @@ use crate::protocol::{
 )]
 pub struct NitroConfig {
 	/// The hash of the enclave image file
-	pub pcr0: Hash256,
+	pub pcr0: Vec<u8>,
 	/// The hash of the Linux kernel and bootstrap
-	pub pcr1: Hash256,
+	pub pcr1: Vec<u8>,
 	/// The hash of the application
-	pub pcr2: Hash256,
+	pub pcr2: Vec<u8>,
 	/// DER encoded X509 AWS root certificate
 	pub aws_root_certificate: Vec<u8>,
 }
@@ -242,11 +242,9 @@ mod test {
 		let manifest = Manifest {
 			namespace: Namespace { nonce: 420, name: "vape lord".to_string() },
 			enclave: NitroConfig {
-				vsock_cid: 69,
-				vsock_port: 42069,
-				pcr0: [4; 32],
-				pcr1: [2; 32],
-				pcr2: [0; 32],
+				pcr0: vec![4; 32],
+				pcr1: vec![2; 32],
+				pcr2: vec![0; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
 			},
 			pivot: PivotConfig {

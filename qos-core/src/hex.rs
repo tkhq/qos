@@ -3,6 +3,11 @@
 
 use std::num::ParseIntError;
 
+// TODO: enforce a max length for decoding/ encoding to help prevent
+// resource exhaustion attacks.
+// const MEGABYTE: usize = 1024 * 1024;
+// const MAX_LENGTH: usize = 1024 * MEGABYTE;
+
 /// 255 ordered pairs of characters. The first pair decodes to 0 and the last
 /// pair decodes to 255.
 const HEX_BYTES: &str = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\

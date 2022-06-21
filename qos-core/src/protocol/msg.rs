@@ -95,6 +95,7 @@ mod test {
 				quorum_key: vec![3, 2, 1],
 				member_outputs: vec![],
 				recovery_permutations: vec![],
+				threshold: 2,
 			},
 		};
 
