@@ -599,7 +599,6 @@ dependencies = [
  "openssl",
  "qos-core",
  "qos-crypto",
- "qos-host",
  "serde_bytes",
  "ureq",
  "webpki",

@@ -4,14 +4,30 @@ use std::env;
 
 use qos_core::{
 	hex,
-	protocol::{msg::ProtocolMsg, QosHash},
+	parser::{GetParserForCommand, Parser, Token, CommandParser},
+	protocol::{msg::ProtocolMsg, QosHash, },
 };
 use qos_crypto::RsaPair;
-use qos_host::cli::HostOptions;
 
 use crate::attest::nitro::{
 	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
 };
+
+const HOST_IP: &str = "host-ip";
+const HOST_PORT: &str = "host-port";
+
+const KEY_DIR: &str = "key-dir";
+const ALIAS: &str = "alias";
+const NAMESPACE: &str = "namespace";
+
+const GENESIS_DIR: &str = "genesis-dir";
+const SETUP_KEY_PATH: &str = "setup-key-path";
+const PCR0: &str = "pcr0";
+const PCR1: &str = "pcr1";
+const PCR2: &str = "pcr2";
+
+const THRESHOLD: &str = "threshold";
+const OUT_DIR: &str = "out-dir";
 
 #[derive(Clone, PartialEq, Debug)]
 enum Command {
@@ -21,17 +37,7 @@ enum Command {
 	BootGenesis,
 	AfterGenesis,
 }
-impl Command {
-	fn run(&self, options: &ClientOptions) {
-		match self {
-			Self::HostHealth => handlers::host_health(options),
-			Self::DescribeNsm => handlers::describe_nsm(options),
-			Self::GenerateSetupKey => handlers::generate_setup_key(options),
-			Self::BootGenesis => handlers::boot_genesis(options),
-			Self::AfterGenesis => handlers::after_genesis(options),
-		}
-	}
-}
+
 impl From<&str> for Command {
 	fn from(s: &str) -> Self {
 		match s {
@@ -45,175 +51,211 @@ impl From<&str> for Command {
 	}
 }
 
-#[derive(Clone, PartialEq, Debug)]
+impl From<String> for Command {
+	fn from(s: String) -> Self {
+		Self::from(s.as_str())
+	}
+}
+
+
+impl Command {
+	fn base() -> Parser {
+		Parser::new()
+			.token(
+				Token::new(HOST_IP, "IP address this server should listen on")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(
+					HOST_PORT,
+					"IP address this server should listen on",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+	}
+
+	fn generate_setup_key() -> Parser {
+		Parser::new()
+			.token(
+				Token::new(
+					ALIAS,
+					"alias of the Quorum Member this key belongs too.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+			.token(
+				Token::new(
+					KEY_DIR,
+					"directory to save the generated Setup Key files.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+			.token(
+				Token::new(
+					NAMESPACE,
+					"namespace the alias and Setup Key belong too.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+	}
+
+	fn boot_genesis() -> Parser {
+		Self::base()
+			.token(
+				Token::new(KEY_DIR, "directory containing all the setup public keys to use for genesis.")
+					.takes_value(true)
+					.required(true)
+				)
+			.token(
+				Token::new(THRESHOLD, "directory containing all the setup public keys to use for genesis.")
+					.takes_value(true)
+					.required(true)
+
+			)
+			.token(
+				Token::new(OUT_DIR, "directory to write all the genesis outputs too.")
+			)
+	}
+
+	fn after_genesis() -> Parser {
+		Parser::new()
+			.token(
+				Token::new(
+					GENESIS_DIR,
+					"directory with outputs from running genesis.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+			.token(
+				Token::new(
+					SETUP_KEY_PATH,
+					"path to the setup key you used as an input to genesis.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+			.token(
+				Token::new(PCR0, "hex encoded pcr0")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(PCR1, "hex encoded pcr1")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(PCR2, "hex encoded pcr2")
+					.takes_value(true)
+					.required(true),
+			)
+	}
+}
+
+impl GetParserForCommand for Command {
+	fn parser(&self) -> Parser {
+		match self {
+			Self::HostHealth => Self::base(),
+			Self::DescribeNsm => Self::base(),
+			Self::GenerateSetupKey => Self::generate_setup_key(),
+			Self::BootGenesis => Self::boot_genesis(),
+			Self::AfterGenesis => Self::after_genesis(),
+		}
+	}
+}
+
+#[derive(Debug, PartialEq, Clone)]
 struct ClientOptions {
-	cmd: Command,
-	host: HostOptions,
-	generate_setup_key: GenerateSetupKeyOptions,
-	boot_genesis: BootGenesisOptions,
-	after_genesis: AfterGenesisOptions,
-	// ... other options
+	parsed: Parser,
 }
+
 impl ClientOptions {
-	/// Create `ClientOptions` from the command line arguments.
-	pub fn from(mut args: Vec<String>) -> Self {
-		// Remove the executable name
-		let mut options = Self {
-			host: HostOption::new(),
-			generate_setup_key: GenerateSetupKeyOptions::new(),
-			boot_genesis: BootGenesisOptions::new(),
-			after_genesis: AfterGenesisOptions::new(),
-			cmd: Self::extract_command(&mut args),
-		};
+	fn path(&self, uri: &str) -> String {
+		let ip = self.parsed.single(HOST_IP).expect("required arg");
+		let port = self.parsed.single(HOST_PORT).expect("required arg");
 
-		let mut chunks = args.chunks_exact(2);
-		assert!(
-			chunks.remainder().is_empty(),
-			"Unexpected number of arguments"
-		);
-
-		while let Some([cmd, arg]) = chunks.next() {
-			options.host.parse(cmd, arg);
-			match options.cmd {
-				Command::GenerateSetupKey => {
-					options.generate_setup_key.parse(cmd, arg);
-				}
-				Command::BootGenesis => options.boot_genesis.parse(cmd, arg),
-				Command::AfterGenesis => options.after_genesis.parse(cmd, arg),
-				Command::HostHealth | Command::DescribeNsm => {}
-			}
-		}
-
-		options
+		format!("http://{}:{}/{}", ip, port, uri)
 	}
 
-	/// Run the given given command.
-	pub fn run(self) {
-		self.cmd.run(&self);
-	}
-
-	/// Helper function to extract the command from arguments.
-	/// WARNING: this removes the first two items from `args`
-	fn extract_command(args: &mut Vec<String>) -> Command {
-		args.remove(0);
-		let command: Command =
-			args.get(0).expect("No command provided").as_str().into();
-		// Remove the command
-		args.remove(0);
-
-		command
-	}
-}
-
-#[derive(Clone, PartialEq, Debug)]
-struct GenerateSetupKeyOptions {
-	key_dir: Option<String>,
-	alias: Option<String>,
-	namespace: Option<String>,
-}
-impl GenerateSetupKeyOptions {
-	fn new() -> Self {
-		Self { alias: None, namespace: None, key_dir: None }
-	}
-	fn parse(&mut self, cmd: &str, arg: &str) {
-		match cmd {
-			"--key-dir" => self.key_dir = Some(arg.to_string()),
-			"--namespace" => self.namespace = Some(arg.to_string()),
-			"--alias" => self.alias = Some(arg.to_string()),
-			_ => {}
-		}
+	// Generate setup key options
+	fn key_dir(&self) -> String {
+		self.parsed.single(KEY_DIR).expect("required arg").to_string()
 	}
 	fn alias(&self) -> String {
-		self.alias.clone().expect("No `--alias` provided")
+		self.parsed.single(ALIAS).expect("required arg").to_string()
 	}
 	fn namespace(&self) -> String {
-		self.namespace.clone().expect("No `--namespace` provided")
+		self.parsed.single(NAMESPACE).expect("required arg").to_string()
 	}
-	fn key_dir(&self) -> String {
-		self.key_dir.clone().expect("No `--key-dir` provided")
+
+	// AfterGenesis options
+	fn genesis_dir(&self) -> String {
+		self.parsed.single(GENESIS_DIR).expect("required arg").to_string()
+	}
+	fn setup_key_path(&self) -> String {
+		self.parsed.single(SETUP_KEY_PATH).expect("required arg").to_string()
+	}
+	fn pcr0(&self) -> Vec<u8> {
+		hex::decode(self.parsed.single(PCR0).expect("required arg"))
+			.expect("Could not parse `--pcr0` to bytes")
+	}
+	fn pcr1(&self) -> Vec<u8> {
+		hex::decode(self.parsed.single(PCR1).expect("required arg"))
+			.expect("Could not parse `--pcr1` to bytes")
+
+	}
+	fn pcr2(&self) -> Vec<u8> {
+		hex::decode(self.parsed.single(PCR2).expect("required arg"))
+			.expect("Could not parse `--pcr2` to bytes")
+	}
+
+	// BootGenesis options
+	fn out_dir(&self) -> String {
+		self.parsed.single(OUT_DIR).expect("required arg").to_string()
+	}
+	fn threshold(&self) -> u32 {
+		self.parsed.single(THRESHOLD).expect("required arg").parse::<u32>().expect("Could not parse `--threshold` as u32")
 	}
 }
 
 #[derive(Clone, PartialEq, Debug)]
-struct BootGenesisOptions {
-	key_dir: Option<String>,
-	out_dir: Option<String>,
-	threshold: Option<u32>,
+struct ClientRunner {
+	cmd: Command,
+	opts: ClientOptions,
 }
-impl BootGenesisOptions {
-	fn new() -> Self {
-		Self { key_dir: None, out_dir: None, threshold: None }
-	}
-	fn parse(&mut self, cmd: &str, arg: &str) {
-		match cmd {
-			"--key-dir" => self.key_dir = Some(arg.to_string()),
-			"--threshold" => {
-				self.threshold = Some(arg.parse::<u32>().expect(
-					"Could not parse provided value for `--threshold`",
-				));
-			}
-			"--out-dir" => self.out_dir = Some(arg.to_string()),
-			_ => {}
-		}
-	}
-	fn out_dir(&self) -> String {
-		self.out_dir.clone().expect("No `--out-dir` provided")
-	}
-	fn key_dir(&self) -> String {
-		self.key_dir.clone().expect("No `--key-dir` provided")
-	}
-	fn threshold(&self) -> u32 {
-		self.threshold.expect("No `--threshold` provided")
-	}
-}
+impl ClientRunner {
+	/// Create [`Self`] from the command line arguments.
+	pub fn new(args: &mut Vec<String>) -> Self {
+		let (cmd, parsed) =
+			CommandParser::<Command>::parse(args).expect("Invalid CLI args");
 
-#[derive(Default, Clone, PartialEq, Debug)]
-struct AfterGenesisOptions {
-	/// The directory containing the genesis ceremony output and attestation
-	/// doc. Exact same contents as the out dir in the boot genesis command.
-	genesis_dir: Option<String>,
-	/// Path to the file containing the setup key.
-	setup_key_path: Option<String>,
-	pcr0: Option<Vec<u8>>,
-	pcr1: Option<Vec<u8>>,
-	pcr2: Option<Vec<u8>>,
-}
-impl AfterGenesisOptions {
-	fn new() -> Self {
-		Self::default()
+		Self { cmd, opts: ClientOptions { parsed } }
 	}
-	fn parse(&mut self, cmd: &str, arg: &str) {
-		match cmd {
-			"--genesis-dir" => self.genesis_dir = Some(arg.to_string()),
-			"--setup-key-path" => {
-				self.setup_key_path = Some(arg.to_string());
+
+	/// Run the given command.
+	pub fn run(self) {
+		if self.opts.parsed.version() {
+			todo!()
+		} else if self.opts.parsed.help() {
+			println!("Command: {:?}", self.cmd);
+			println!("{}", self.opts.parsed.info());
+		} else {
+			match self.cmd {
+				Command::HostHealth => handlers::host_health(&self.opts),
+				Command::DescribeNsm => handlers::describe_nsm(&self.opts),
+				Command::GenerateSetupKey => {
+					handlers::generate_setup_key(&self.opts)
+				}
+				Command::BootGenesis => handlers::boot_genesis(&self.opts),
+				Command::AfterGenesis => handlers::after_genesis(&self.opts),
 			}
-			"--pcr0" => {
-				self.pcr0 = Some(hex::decode(arg).expect("pcr0: Invalid hex"));
-			}
-			"--pcr1" => {
-				self.pcr1 = Some(hex::decode(arg).expect("pcr1: Invalid hex"));
-			}
-			"--pcr2" => {
-				self.pcr2 = Some(hex::decode(arg).expect("pcr2: Invalid hex"));
-			}
-			_ => {}
 		}
-	}
-	fn genesis_dir(&self) -> String {
-		self.genesis_dir.clone().expect("No `--genesis-dir` provided")
-	}
-	fn setup_key_path(&self) -> String {
-		self.setup_key_path.clone().expect("No `--setup-key-path` provided")
-	}
-	fn pcr0(&self) -> Vec<u8> {
-		self.pcr0.as_ref().unwrap().clone()
-	}
-	fn pcr1(&self) -> Vec<u8> {
-		self.pcr1.as_ref().unwrap().clone()
-	}
-	fn pcr2(&self) -> Vec<u8> {
-		self.pcr2.as_ref().unwrap().clone()
 	}
 }
 
@@ -222,9 +264,11 @@ pub struct CLI;
 impl CLI {
 	/// Execute this command line interface.
 	pub fn execute() {
-		let args: Vec<String> = env::args().collect();
-		let options = ClientOptions::from(args);
-		options.run();
+		let mut args: Vec<String> = env::args().collect();
+
+		let runner = ClientRunner::new(&mut args);
+
+		runner.run();
 	}
 }
 
@@ -241,7 +285,6 @@ mod handlers {
 
 	use super::QosHash;
 	use crate::{
-		attest,
 		cli::{
 			attestation_doc_from_der, cert_from_pem, ClientOptions,
 			ProtocolMsg, RsaPair, AWS_ROOT_CERT_PEM,
@@ -258,7 +301,7 @@ mod handlers {
 	const PERSONAL_KEY_PRIV_EXT: &str = ".personal.key";
 
 	pub(super) fn host_health(options: &ClientOptions) {
-		let path = &options.host.path("health");
+		let path = &options.path("health");
 		if let Ok(response) = request::get(path) {
 			println!("{}", response);
 		} else {
@@ -276,7 +319,7 @@ mod handlers {
 
 	// TODO: this should eventually be removed since it only applies to nitro
 	pub(super) fn describe_nsm(options: &ClientOptions) {
-		let path = &options.host.path("message");
+		let path = &options.path("message");
 		match request::post(
 			path,
 			&ProtocolMsg::NsmRequest { nsm_request: NsmRequest::DescribeNSM },
@@ -292,9 +335,9 @@ mod handlers {
 	}
 
 	pub(super) fn generate_setup_key(options: &ClientOptions) {
-		let alias = options.generate_setup_key.alias();
-		let namespace = options.generate_setup_key.namespace();
-		let key_dir = options.generate_setup_key.key_dir();
+		let alias = options.alias();
+		let namespace = options.namespace();
+		let key_dir = options.key_dir();
 		let key_dir_path = std::path::Path::new(&key_dir);
 
 		assert!(
@@ -329,10 +372,10 @@ mod handlers {
 	// TODO: verify AWS_ROOT_CERT_PEM against a checksum
 	// TODO: verify PCRs
 	pub(super) fn boot_genesis(options: &ClientOptions) {
-		let uri = &options.host.path("message");
+		let uri = &options.path("message");
 
 		let genesis_set = create_genesis_set(options);
-		let output_dir = options.boot_genesis.out_dir();
+		let output_dir = options.out_dir();
 		let output_dir = Path::new(&output_dir);
 
 		let req = ProtocolMsg::BootGenesisRequest { set: genesis_set.clone() };
@@ -383,8 +426,8 @@ mod handlers {
 	}
 
 	fn create_genesis_set(options: &ClientOptions) -> GenesisSet {
-		let threshold = options.boot_genesis.threshold();
-		let key_dir = options.boot_genesis.key_dir();
+		let threshold = options.threshold();
+		let key_dir = options.key_dir();
 
 		// Get all the files in the key directory
 		let key_files = {
@@ -436,12 +479,12 @@ mod handlers {
 	}
 
 	pub(super) fn after_genesis(options: &ClientOptions) {
-		let genesis_dir = &options.after_genesis.genesis_dir();
+		let genesis_dir = &options.genesis_dir();
 		let genesis_dir = Path::new(genesis_dir);
 		let attestation_doc_path =
 			genesis_dir.join(GENESIS_ATTESTATION_DOC_FILE);
 		let genesis_set_path = genesis_dir.join(GENESIS_OUTPUT_FILE);
-		let setup_key_path = &options.after_genesis.setup_key_path();
+		let setup_key_path = &options.setup_key_path();
 		let setup_key_path = Path::new(setup_key_path);
 
 		// Read in the setup key
@@ -473,9 +516,9 @@ mod handlers {
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			&genesis_output.qos_hash(),
-			&options.after_genesis.pcr0(),
-			&options.after_genesis.pcr1(),
-			&options.after_genesis.pcr2(),
+			&options.pcr0(),
+			&options.pcr1(),
+			&options.pcr2(),
 		);
 
 		// Get the members specific output based on alias & setup key

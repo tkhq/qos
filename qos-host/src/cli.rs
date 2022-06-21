@@ -83,7 +83,8 @@ impl HostOptions {
 	}
 
 	/// Address the host server should listen on.
-	#[must_use] pub fn host_addr(&self) -> SocketAddr {
+	#[must_use]
+	pub fn host_addr(&self) -> SocketAddr {
 		let ip = Ipv4Addr::from_str(&self.ip())
 			.expect("Could not parser ip to IP v4");
 		let port =
@@ -128,8 +129,14 @@ impl CLI {
 		let mut args: Vec<String> = env::args().collect();
 		let options = HostOptions::new(&mut args);
 
-		HostServer::new(options.enclave_addr(), options.host_addr())
-			.serve()
-			.await;
+		if options.parsed.version() {
+			todo!()
+		} else if options.parsed.help() {
+			println!("{}", options.parsed.info());
+		} else {
+			HostServer::new(options.enclave_addr(), options.host_addr())
+				.serve()
+				.await;
+		}
 	}
 }

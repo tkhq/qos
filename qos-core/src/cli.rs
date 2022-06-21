@@ -103,7 +103,13 @@ impl CLI {
 		let mut args: Vec<String> = env::args().collect();
 		let options = EnclaveOptions::new(&mut args);
 
-		Coordinator::execute(options);
+		if options.parsed.version() {
+			todo!()
+		} else if options.parsed.help() {
+			println!("{}", options.parsed.info());
+		} else {
+			Coordinator::execute(options);
+		}
 	}
 }
 
