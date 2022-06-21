@@ -30,16 +30,17 @@ pub(crate) fn generate_setup_key<P: AsRef<Path>>(
 	namespace: &str,
 	key_dir_path: P,
 ) {
-	let key_dir_path: &Path = key_dir_path.as_ref();
 	assert!(
-		key_dir_path.is_dir(),
+		key_dir_path.as_ref().is_dir(),
 		"Provided `--key-dir` does not exist is not valid"
 	);
 
 	let setup_key = RsaPair::generate().expect("RSA key generation failed");
 	// Write the setup key secret
-	let private_key_file_path =
-		key_dir_path.join(format!("{}.{}{}", alias, namespace, SETUP_PRIV_EXT));
+	// TODO: password encryption
+	let private_key_file_path = key_dir_path
+		.as_ref()
+		.join(format!("{}.{}{}", alias, namespace, SETUP_PRIV_EXT));
 	write_with_msg(
 		&private_key_file_path,
 		&setup_key
@@ -48,8 +49,9 @@ pub(crate) fn generate_setup_key<P: AsRef<Path>>(
 		"Setup Private Key",
 	);
 	// Write the setup key public key
-	let public_key_file_path =
-		key_dir_path.join(format!("{}.{}{}", alias, namespace, SETUP_PUB_EXT));
+	let public_key_file_path = key_dir_path
+		.as_ref()
+		.join(format!("{}.{}{}", alias, namespace, SETUP_PUB_EXT));
 
 	write_with_msg(
 		&public_key_file_path,

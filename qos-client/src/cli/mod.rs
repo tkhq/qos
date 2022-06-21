@@ -68,12 +68,9 @@ impl Command {
 					.required(true),
 			)
 			.token(
-				Token::new(
-					HOST_PORT,
-					"Port this server should listen on",
-				)
-				.takes_value(true)
-				.required(true),
+				Token::new(HOST_PORT, "Port this server should listen on")
+					.takes_value(true)
+					.required(true),
 			)
 	}
 
