@@ -104,7 +104,7 @@ impl CLI {
 		let options = EnclaveOptions::new(&mut args);
 
 		if options.parsed.version() {
-			todo!()
+			println!("version: {}", env!("CARGO_PKG_VERSION"));
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
 		} else {
