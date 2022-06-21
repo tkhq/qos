@@ -70,7 +70,7 @@ impl Command {
 			.token(
 				Token::new(
 					HOST_PORT,
-					"IP address this server should listen on",
+					"Port this server should listen on",
 				)
 				.takes_value(true)
 				.required(true),
@@ -113,7 +113,7 @@ impl Command {
 					.required(true)
 				)
 			.token(
-				Token::new(THRESHOLD, "directory containing all the setup public keys to use for genesis.")
+				Token::new(THRESHOLD, "the threshold to be considered a quorum, K.")
 					.takes_value(true)
 					.required(true)
 
@@ -138,7 +138,7 @@ impl Command {
 			.token(
 				Token::new(
 					SETUP_KEY_PATH,
-					"path to the setup key you used as an input to genesis.",
+					"path to the Setup Key you used as an input to genesis.",
 				)
 				.takes_value(true)
 				.required(true),
