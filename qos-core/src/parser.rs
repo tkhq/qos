@@ -560,7 +560,7 @@ impl Default for TokenMap {
 		// Add the help and version token to ensure that the options are always
 		// displayed in the help menu.
 		token_map.insert(Token::new(HELP, "Display the help message."));
-		token_map.insert(Token::new(VERSION, "Display the version"));
+		token_map.insert(Token::new(VERSION, "Display the version."));
 
 		token_map
 	}

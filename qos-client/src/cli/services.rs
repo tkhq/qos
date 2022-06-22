@@ -295,7 +295,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 /// Panics if verification fails
 fn verify_attestation_doc_against_user_input(
 	attestation_doc: &AttestationDoc,
-	user_data: &[u8],
+	_user_data: &[u8],
 	pcr0: &[u8],
 	pcr1: &[u8],
 	pcr2: &[u8],
@@ -306,7 +306,7 @@ fn verify_attestation_doc_against_user_input(
 	{
 		// user data is hash of genesis output
 		assert_eq!(
-			user_data,
+			_user_data,
 			attestation_doc.user_data.as_ref().unwrap().to_vec(),
 			"Attestation doc does not have hash of genesis output."
 		);
@@ -654,4 +654,9 @@ fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
 		panic!("Failed writing {} to file", path_str.clone())
 	});
 	println!("{} written to: {}", item_name, path_str);
+}
+
+#[cfg(test)]
+mod test {
+	// TODO
 }

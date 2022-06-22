@@ -77,12 +77,12 @@ impl Command {
 	fn base() -> Parser {
 		Parser::new()
 			.token(
-				Token::new(HOST_IP, "IP address this server should listen on")
+				Token::new(HOST_IP, "IP address this server should listen on.")
 					.takes_value(true)
 					.required(true),
 			)
 			.token(
-				Token::new(HOST_PORT, "Port this server should listen on")
+				Token::new(HOST_PORT, "Port this server should listen on.")
 					.takes_value(true)
 					.required(true),
 			)
@@ -93,7 +93,7 @@ impl Command {
 			.token(
 				Token::new(
 					ALIAS,
-					"alias of the Quorum Member this key will belong too.",
+					"Alias of the Quorum Member this key will belong too.",
 				)
 				.takes_value(true)
 				.required(true),
@@ -101,7 +101,7 @@ impl Command {
 			.token(
 				Token::new(
 					KEY_DIR,
-					"directory to save the generated Setup Key files.",
+					"Directory to save the generated Setup Key files.",
 				)
 				.takes_value(true)
 				.required(true),
@@ -109,7 +109,7 @@ impl Command {
 			.token(
 				Token::new(
 					NAMESPACE,
-					"namespace the alias and Setup Key will belong too.",
+					"Namespace the alias and Setup Key will belong too.",
 				)
 				.takes_value(true)
 				.required(true),
@@ -119,17 +119,17 @@ impl Command {
 	fn boot_genesis() -> Parser {
 		Self::base()
 			.token(
-				Token::new(KEY_DIR, "directory containing all the setup public keys to use for genesis.")
+				Token::new(KEY_DIR, "Directory containing all the setup public keys to use for genesis.")
 					.takes_value(true)
 					.required(true)
 				)
 			.token(
-				Token::new(THRESHOLD, "the threshold to be considered a quorum, K.")
+				Token::new(THRESHOLD, "The threshold to be considered a quorum, K.")
 					.takes_value(true)
 					.required(true)
 			)
 			.token(
-				Token::new(OUT_DIR, "directory to write all the genesis outputs too.")
+				Token::new(OUT_DIR, "Directory to write all the genesis outputs too.")
 					.takes_value(true)
 					.required(true)
 			)
@@ -140,7 +140,7 @@ impl Command {
 			.token(
 				Token::new(
 					GENESIS_DIR,
-					"directory with outputs from running genesis.",
+					"Directory with outputs from running genesis.",
 				)
 				.takes_value(true)
 				.required(true),
@@ -148,23 +148,23 @@ impl Command {
 			.token(
 				Token::new(
 					SETUP_KEY_PATH,
-					"path to the Setup Key you used as an input to genesis.",
+					"Path to the Setup Key you used as an input to genesis.",
 				)
 				.takes_value(true)
 				.required(true),
 			)
 			.token(
-				Token::new(PCR0, "hex encoded pcr0")
+				Token::new(PCR0, "Hex encoded pcr0.")
 					.takes_value(true)
 					.required(true),
 			)
 			.token(
-				Token::new(PCR1, "hex encoded pcr1")
+				Token::new(PCR1, "Hex encoded pcr1.")
 					.takes_value(true)
 					.required(true),
 			)
 			.token(
-				Token::new(PCR2, "hex encoded pcr2")
+				Token::new(PCR2, "Hex encoded pcr2.")
 					.takes_value(true)
 					.required(true),
 			)
@@ -175,7 +175,7 @@ impl Command {
 			.token(
 				Token::new(
 					GENESIS_OUT_PATH,
-					"path to file with genesis outputs to use for Quorum Set.",
+					"Path to file with genesis outputs to use for Quorum Set.",
 				)
 				.takes_value(true)
 				.required(true),
@@ -183,7 +183,7 @@ impl Command {
 			.token(
 				Token::new(
 					NONCE,
-					"nonce of the manifest relative to the namespace.",
+					"Nonce of the manifest relative to the namespace.",
 				)
 				.takes_value(true)
 				.required(true),
@@ -191,7 +191,7 @@ impl Command {
 			.token(
 				Token::new(
 					NAMESPACE,
-					"namespace this manifest will belong to.",
+					"Namespace this manifest will belong to.",
 				)
 				.takes_value(true)
 				.required(true),
@@ -199,41 +199,41 @@ impl Command {
 			.token(
 				Token::new(
 					PIVOT_HASH,
-					"hex encoded SHA-256 hash of the pivot executable encoded as a Vec<u8>",
+					"Hex encoded SHA-256 hash of the pivot executable encoded as a Vec<u8>.",
 				)
 				.takes_value(true)
 				.required(true),
 			)
 			.token(
-				Token::new(RESTART_POLICY, "one of: `never`, `always`.")
+				Token::new(RESTART_POLICY, "One of: `never`, `always`.")
 					.takes_value(true)
 					.required(true),
 			)
 			.token(
-				Token::new(PCR0, "hex encoded pcr0")
+				Token::new(PCR0, "Hex encoded pcr0.")
 					.takes_value(true)
 					.required(true),
 			)
 			.token(
-				Token::new(PCR1, "hex encoded pcr1")
+				Token::new(PCR1, "Hex encoded pcr1.")
 					.takes_value(true)
 					.required(true),
 			)
 			.token(
-				Token::new(PCR2, "hex encoded pcr2")
+				Token::new(PCR2, "Hex encoded pcr2.")
 					.takes_value(true)
 					.required(true),
 			)
 			.token(
 				Token::new(
 					ROOT_CERT_PATH,
-					"path to file containing PEM encoded AWS root cert",
+					"Path to file containing PEM encoded AWS root cert.",
 				)
 				.takes_value(true)
 				.required(true),
 			)
 			.token(
-				Token::new(OUT_DIR, "directory to write the manifest in.")
+				Token::new(OUT_DIR, "Directory to write the manifest in.")
 					.takes_value(true)
 					.required(true),
 			)
@@ -244,23 +244,23 @@ impl Command {
 			.token(
 				Token::new(
 					MANIFEST_HASH,
-					"hex encoded hash of the manifest to sign.",
+					"Hex encoded hash of the manifest to sign.",
 				)
 				.takes_value(true)
 				.required(true),
 			)
 			.token(
-				Token::new(PERSONAL_KEY_PATH, "path to personal private key.")
+				Token::new(PERSONAL_KEY_PATH, "Path to personal private key.")
 					.takes_value(true)
 					.required(true),
 			)
 			.token(
-				Token::new(MANIFEST_PATH, "path to the manifest to sign.")
+				Token::new(MANIFEST_PATH, "Path to the manifest to sign.")
 					.takes_value(true)
 					.required(true),
 			)
 			.token(
-				Token::new(OUT_DIR, "directory to write the manifest in.")
+				Token::new(OUT_DIR, "Directory to write the manifest in.")
 					.takes_value(true)
 					.required(true),
 			)
@@ -269,14 +269,14 @@ impl Command {
 	fn boot_standard() -> Parser {
 		Self::base()
 			.token(
-				Token::new(PIVOT_PATH, "path to the pivot binary")
+				Token::new(PIVOT_PATH, "Path to the pivot binary.")
 					.takes_value(true)
 					.required(true),
 			)
 			.token(
 				Token::new(
 					BOOT_DIR,
-					"directory containing the manifest and K Approvals.",
+					"Directory containing the manifest and K Approvals.",
 				)
 				.takes_value(true)
 				.required(true),
