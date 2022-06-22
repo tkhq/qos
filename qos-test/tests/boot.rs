@@ -301,7 +301,7 @@ async fn boot_e2e() {
 		Manifest {
 			namespace: Namespace { name: namespace.to_string(), nonce: 2 },
 			pivot: PivotConfig {
-				hash: mock_pivot_hash.try_into().unwrap(),
+				hash: mock_pivot_hash,
 				restart: RestartPolicy::Always
 			},
 			quorum_key: genesis_output.quorum_key.clone(),

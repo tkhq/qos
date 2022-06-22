@@ -12,33 +12,20 @@ mod services;
 
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
-
-const KEY_DIR: &str = "key-dir";
 const ALIAS: &str = "alias";
 const NAMESPACE: &str = "namespace";
-
-const GENESIS_DIR: &str = "genesis-dir";
-const SETUP_KEY_PATH: &str = "setup-key-path";
 const PCR0: &str = "pcr0";
 const PCR1: &str = "pcr1";
 const PCR2: &str = "pcr2";
-
 const THRESHOLD: &str = "threshold";
-const OUT_DIR: &str = "out-dir";
-
-const GENESIS_OUT_PATH: &str = "genesis-out-path";
 const NONCE: &str = "nonce";
 const PIVOT_HASH: &str = "pivot-hash";
 const RESTART_POLICY: &str = "restart-policy";
 const ROOT_CERT_PATH: &str = "root-cert-path";
-
 const MANIFEST_HASH: &str = "manifest-hash";
-const PERSONAL_KEY_PATH: &str = "personal-key-path";
-const MANIFEST_PATH: &str = "manifest-path";
-
 const PIVOT_PATH: &str = "pivot-path";
+const GENESIS_DIR: &str = "genesis-dir";
 const BOOT_DIR: &str = "boot-dir";
-
 const PERSONAL_DIR: &str = "personal-dir";
 
 #[derive(Clone, PartialEq, Debug)]
@@ -80,6 +67,44 @@ impl From<String> for Command {
 }
 
 impl Command {
+	fn boot_dir_token() -> Token {
+		Token::new(
+			BOOT_DIR,
+			"Directory (eventually) containing the manifest, K approvals, and attestation doc.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn manifest_hash_token() -> Token {
+		Token::new(MANIFEST_HASH, "Hex encoded hash of the expected manifest.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn personal_dir_token() -> Token {
+		Token::new(PERSONAL_DIR, "Directory (eventually) containing personal key, share, and setup key associated with 1 genesis ceremony.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn genesis_dir_token() -> Token {
+		Token::new(GENESIS_DIR, "Directory (eventually) containing genesis output, setup public keys, and attestation doc.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn pcr0_token() -> Token {
+		Token::new(PCR0, "Hex encoded pcr0.").takes_value(true).required(true)
+	}
+	fn pcr1_token() -> Token {
+		Token::new(PCR1, "Hex encoded pcr0.").takes_value(true).required(true)
+	}
+	fn pcr2_token() -> Token {
+		Token::new(PCR2, "Hex encoded pcr2.").takes_value(true).required(true)
+	}
+	fn namespace_token() -> Token {
+		Token::new(NAMESPACE, "Namespace for the associated manifest.")
+			.takes_value(true)
+			.required(true)
+	}
+
 	fn base() -> Parser {
 		Parser::new()
 			.token(
@@ -104,87 +129,29 @@ impl Command {
 				.takes_value(true)
 				.required(true),
 			)
-			.token(
-				Token::new(
-					KEY_DIR,
-					"Directory to save the generated Setup Key files.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
-			.token(
-				Token::new(
-					NAMESPACE,
-					"Namespace the alias and Setup Key will belong too.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
+			.token(Self::personal_dir_token())
+			.token(Self::namespace_token())
 	}
 
 	fn boot_genesis() -> Parser {
 		Self::base()
-			.token(
-				Token::new(KEY_DIR, "Directory containing all the setup public keys to use for genesis.")
-					.takes_value(true)
-					.required(true)
-				)
-			.token(
-				Token::new(THRESHOLD, "The threshold to be considered a quorum, K.")
-					.takes_value(true)
-					.required(true)
-			)
-			.token(
-				Token::new(OUT_DIR, "Directory to write all the genesis outputs too.")
-					.takes_value(true)
-					.required(true)
-			)
+			.token(Self::genesis_dir_token())
+			.token(Self::boot_dir_token())
 	}
 
 	fn after_genesis() -> Parser {
 		Parser::new()
-			.token(
-				Token::new(
-					GENESIS_DIR,
-					"Directory with outputs from running genesis.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
-			.token(
-				Token::new(
-					SETUP_KEY_PATH,
-					"Path to the Setup Key you used as an input to genesis.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
-			.token(
-				Token::new(PCR0, "Hex encoded pcr0.")
-					.takes_value(true)
-					.required(true),
-			)
-			.token(
-				Token::new(PCR1, "Hex encoded pcr1.")
-					.takes_value(true)
-					.required(true),
-			)
-			.token(
-				Token::new(PCR2, "Hex encoded pcr2.")
-					.takes_value(true)
-					.required(true),
-			)
+			.token(Self::genesis_dir_token())
+			.token(Self::personal_dir_token())
+			.token(Self::pcr0_token())
+			.token(Self::pcr1_token())
+			.token(Self::pcr2_token())
 	}
 
 	fn generate_manifest() -> Parser {
 		Parser::new()
 			.token(
-				Token::new(
-					GENESIS_OUT_PATH,
-					"Path to file with genesis outputs to use for Quorum Set.",
-				)
-				.takes_value(true)
-				.required(true),
+				Self::genesis_dir_token()
 			)
 			.token(
 				Token::new(
@@ -195,12 +162,7 @@ impl Command {
 				.required(true),
 			)
 			.token(
-				Token::new(
-					NAMESPACE,
-					"Namespace this manifest will belong to.",
-				)
-				.takes_value(true)
-				.required(true),
+				Self::namespace_token()
 			)
 			.token(
 				Token::new(
@@ -216,19 +178,13 @@ impl Command {
 					.required(true),
 			)
 			.token(
-				Token::new(PCR0, "Hex encoded pcr0.")
-					.takes_value(true)
-					.required(true),
+				Self::pcr0_token()
 			)
 			.token(
-				Token::new(PCR1, "Hex encoded pcr1.")
-					.takes_value(true)
-					.required(true),
+				Self::pcr1_token()
 			)
 			.token(
-				Token::new(PCR2, "Hex encoded pcr2.")
-					.takes_value(true)
-					.required(true),
+				Self::pcr2_token()
 			)
 			.token(
 				Token::new(
@@ -239,37 +195,15 @@ impl Command {
 				.required(true),
 			)
 			.token(
-				Token::new(OUT_DIR, "Directory to write the manifest in.")
-					.takes_value(true)
-					.required(true),
+				Self::boot_dir_token()
 			)
 	}
 
 	fn sign_manifest() -> Parser {
 		Parser::new()
-			.token(
-				Token::new(
-					MANIFEST_HASH,
-					"Hex encoded hash of the manifest to sign.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
-			.token(
-				Token::new(PERSONAL_KEY_PATH, "Path to personal private key.")
-					.takes_value(true)
-					.required(true),
-			)
-			.token(
-				Token::new(MANIFEST_PATH, "Path to the manifest to sign.")
-					.takes_value(true)
-					.required(true),
-			)
-			.token(
-				Token::new(OUT_DIR, "Directory to write the manifest in.")
-					.takes_value(true)
-					.required(true),
-			)
+			.token(Self::manifest_hash_token())
+			.token(Self::personal_dir_token())
+			.token(Self::boot_dir_token())
 	}
 
 	fn boot_standard() -> Parser {
@@ -279,39 +213,11 @@ impl Command {
 					.takes_value(true)
 					.required(true),
 			)
-			.token(
-				Token::new(
-					BOOT_DIR,
-					"Directory containing the manifest and K Approvals.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
+			.token(Self::boot_dir_token())
 	}
 
 	fn post_share() -> Parser {
-		Self::base()
-			.token(
-				Token::new(PERSONAL_DIR, "Directory with personal key and share for the relevant quorum set.")
-					.takes_value(true)
-					.required(true),
-			)
-			.token(
-				Token::new(
-					BOOT_DIR,
-					"Directory containing the manifest and K Approvals.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
-			.token(
-				Token::new(
-					MANIFEST_HASH,
-					"Hex encoded hash of the manifest to sign.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
+		Self::sign_manifest()
 	}
 }
 
@@ -343,41 +249,33 @@ impl ClientOpts {
 		format!("http://{}:{}/{}", ip, port, uri)
 	}
 
-	// Generate setup key opts
-	fn key_dir(&self) -> String {
-		self.parsed.single(KEY_DIR).expect("required arg").to_string()
-	}
 	fn alias(&self) -> String {
 		self.parsed.single(ALIAS).expect("required arg").to_string()
 	}
+
 	fn namespace(&self) -> String {
 		self.parsed.single(NAMESPACE).expect("required arg").to_string()
 	}
 
-	// AfterGenesis opts
 	fn genesis_dir(&self) -> String {
 		self.parsed.single(GENESIS_DIR).expect("required arg").to_string()
 	}
-	fn setup_key_path(&self) -> String {
-		self.parsed.single(SETUP_KEY_PATH).expect("required arg").to_string()
-	}
+
 	fn pcr0(&self) -> Vec<u8> {
 		hex::decode(self.parsed.single(PCR0).expect("required arg"))
 			.expect("Could not parse `--pcr0` to bytes")
 	}
+
 	fn pcr1(&self) -> Vec<u8> {
 		hex::decode(self.parsed.single(PCR1).expect("required arg"))
 			.expect("Could not parse `--pcr1` to bytes")
 	}
+
 	fn pcr2(&self) -> Vec<u8> {
 		hex::decode(self.parsed.single(PCR2).expect("required arg"))
 			.expect("Could not parse `--pcr2` to bytes")
 	}
 
-	// BootGenesis opts
-	fn out_dir(&self) -> String {
-		self.parsed.single(OUT_DIR).expect("required arg").to_string()
-	}
 	fn threshold(&self) -> u32 {
 		self.parsed
 			.single(THRESHOLD)
@@ -386,10 +284,6 @@ impl ClientOpts {
 			.expect("Could not parse `--threshold` as u32")
 	}
 
-	// GenerateManifest opts
-	fn genesis_out_path(&self) -> String {
-		self.parsed.single(GENESIS_OUT_PATH).expect("required arg").to_string()
-	}
 	fn nonce(&self) -> u32 {
 		self.parsed
 			.single(NONCE)
@@ -397,10 +291,12 @@ impl ClientOpts {
 			.parse::<u32>()
 			.expect("Could not parse `--nonce` as u32")
 	}
+
 	fn pivot_hash(&self) -> Vec<u8> {
 		hex::decode(self.parsed.single(PIVOT_HASH).expect("required arg"))
 			.expect("Could not parse `--pivot-hash` to bytes")
 	}
+
 	fn restart_policy(&self) -> boot::RestartPolicy {
 		self.parsed
 			.single(RESTART_POLICY)
@@ -409,17 +305,11 @@ impl ClientOpts {
 			.try_into()
 			.expect("Could not parse `--restart-policy`")
 	}
+
 	fn root_cert_path(&self) -> String {
 		self.parsed.single(ROOT_CERT_PATH).expect("required arg").to_string()
 	}
 
-	// SignManifest options
-	fn personal_key_path(&self) -> String {
-		self.parsed.single(PERSONAL_KEY_PATH).expect("required arg").to_string()
-	}
-	fn manifest_path(&self) -> String {
-		self.parsed.single(MANIFEST_PATH).expect("required arg").to_string()
-	}
 	fn manifest_hash(&self) -> Hash256 {
 		hex::decode(self.parsed.single(MANIFEST_HASH).expect("required arg"))
 			.expect("Could not parse `--manifest-hash` to bytes")
@@ -427,10 +317,10 @@ impl ClientOpts {
 			.expect("Could not convert manifest hash to Hash256")
 	}
 
-	// BootStandard options
 	fn pivot_path(&self) -> String {
 		self.parsed.single(PIVOT_PATH).expect("required arg").to_string()
 	}
+
 	fn boot_dir(&self) -> String {
 		self.parsed.single(BOOT_DIR).expect("required arg").to_string()
 	}
@@ -543,7 +433,7 @@ mod handlers {
 		services::generate_setup_key(
 			&opts.alias(),
 			&opts.namespace(),
-			opts.key_dir(),
+			opts.personal_dir(),
 		);
 	}
 
@@ -552,8 +442,7 @@ mod handlers {
 	pub(super) fn boot_genesis(opts: &ClientOpts) {
 		services::boot_genesis(
 			&opts.path("message"),
-			opts.out_dir(),
-			opts.key_dir(),
+			opts.genesis_dir(),
 			opts.threshold(),
 		);
 	}
@@ -561,7 +450,7 @@ mod handlers {
 	pub(super) fn after_genesis(opts: &ClientOpts) {
 		services::after_genesis(
 			opts.genesis_dir(),
-			opts.setup_key_path(),
+			opts.personal_dir(),
 			&opts.pcr0(),
 			&opts.pcr1(),
 			&opts.pcr2(),
@@ -571,7 +460,7 @@ mod handlers {
 	/// TODO: can we write the manifest in plain english?
 	pub(super) fn generate_manifest(opts: &ClientOpts) {
 		services::generate_manifest(GenerateManifestArgs {
-			genesis_out_path: opts.genesis_out_path(),
+			genesis_dir: opts.genesis_dir(),
 			nonce: opts.nonce(),
 			namespace: opts.namespace(),
 			pivot_hash: opts.pivot_hash().try_into().unwrap(),
@@ -580,16 +469,15 @@ mod handlers {
 			pcr1: opts.pcr1(),
 			pcr2: opts.pcr2(),
 			root_cert_path: opts.root_cert_path(),
-			out_dir: opts.out_dir(),
+			boot_dir: opts.boot_dir(),
 		});
 	}
 
 	pub(super) fn sign_manifest(opts: &ClientOpts) {
 		services::sign_manifest(
 			opts.manifest_hash(),
-			opts.personal_key_path(),
-			opts.manifest_path(),
-			opts.out_dir(),
+			opts.personal_dir(),
+			opts.boot_dir(),
 		);
 	}
 
