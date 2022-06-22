@@ -7,11 +7,6 @@ use qos_core::{
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
 	protocol::{msg::ProtocolMsg, services::boot, Hash256},
 };
-use qos_crypto::RsaPair;
-
-use crate::attest::nitro::{
-	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
-};
 
 mod services;
 
@@ -41,6 +36,9 @@ const MANIFEST_HASH: &str = "manifest-hash";
 const PERSONAL_KEY_PATH: &str = "personal-key-path";
 const MANIFEST_PATH: &str = "manifest-path";
 
+const PIVOT_PATH: &str = "pivot-path";
+const BOOT_DIR: &str = "boot-dir";
+
 #[derive(Clone, PartialEq, Debug)]
 enum Command {
 	HostHealth,
@@ -50,6 +48,7 @@ enum Command {
 	AfterGenesis,
 	GenerateManifest,
 	SignManifest,
+	BootStandard,
 }
 
 impl From<&str> for Command {
@@ -62,6 +61,7 @@ impl From<&str> for Command {
 			"after-genesis" => Self::AfterGenesis,
 			"generate-manifest" => Self::GenerateManifest,
 			"sign-manifest" => Self::SignManifest,
+			"boot-standard" => Self::BootStandard,
 			_ => panic!("Unrecognized command"),
 		}
 	}
@@ -265,6 +265,23 @@ impl Command {
 					.required(true),
 			)
 	}
+
+	fn boot_standard() -> Parser {
+		Self::base()
+			.token(
+				Token::new(PIVOT_PATH, "path to the pivot binary")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(
+					BOOT_DIR,
+					"directory containing the manifest and K Approvals.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -276,6 +293,7 @@ impl GetParserForCommand for Command {
 			Self::AfterGenesis => Self::after_genesis(),
 			Self::GenerateManifest => Self::generate_manifest(),
 			Self::SignManifest => Self::sign_manifest(),
+			Self::BootStandard => Self::boot_standard(),
 		}
 	}
 }
@@ -376,6 +394,14 @@ impl ClientOpts {
 			.try_into()
 			.expect("Could not convert manifest hash to Hash256")
 	}
+
+	// BootStandard options
+	fn pivot_path(&self) -> String {
+		self.parsed.single(PIVOT_PATH).expect("required arg").to_string()
+	}
+	fn boot_dir(&self) -> String {
+		self.parsed.single(BOOT_DIR).expect("required arg").to_string()
+	}
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -412,6 +438,7 @@ impl ClientRunner {
 					handlers::generate_manifest(&self.opts);
 				}
 				Command::SignManifest => handlers::sign_manifest(&self.opts),
+				Command::BootStandard => handlers::boot_standard(&self.opts),
 			}
 		}
 	}
@@ -533,10 +560,17 @@ mod handlers {
 		);
 	}
 
-	// /// # Arguments
-	// ///
-	// /// * path to manifest
-	// /// * various manifest verification params
-	// /// * directory containing signatures++member ID over manifests
-	// pub(super) fn boot_standard(opts: &ClientOpts) {}
+	/// # Arguments
+	///
+	/// * path to manifest
+	/// * various manifest verification params
+	/// * directory containing signatures++member ID over manifests
+	pub(super) fn boot_standard(opts: &ClientOpts) {
+		// path to directory with manifest and approvals
+		services::boot_standard(
+			&opts.path("message"),
+			opts.pivot_path(),
+			opts.boot_dir(),
+		);
+	}
 }

@@ -1,37 +1,39 @@
-use std::path::Path;
+use std::{fs, path::Path};
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::protocol::{
 	attestor::types::NsmResponse,
+	msg::ProtocolMsg,
 	services::{
 		boot::{
-			Approval, Manifest, Namespace, NitroConfig, PivotConfig,
-			QuorumMember, QuorumSet, RestartPolicy,
+			Approval, Manifest, ManifestEnvelope, Namespace, NitroConfig,
+			PivotConfig, QuorumMember, QuorumSet, RestartPolicy,
 		},
 		genesis::{GenesisOutput, GenesisSet, SetupMember},
 	},
 	Hash256, QosHash,
 };
-use qos_crypto::RsaPub;
+use qos_crypto::{sha_256, RsaPair, RsaPub};
 
 use crate::{
-	cli::{
-		attestation_doc_from_der, cert_from_pem, ProtocolMsg, RsaPair,
-		AWS_ROOT_CERT_PEM,
+	attest::nitro::{
+		attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
 	},
 	request,
 };
 
 const GENESIS_ATTESTATION_DOC_FILE: &str = "attestation_doc.genesis";
 const GENESIS_OUTPUT_FILE: &str = "output.genesis";
-const SETUP_PUB_EXT: &str = ".setup.pub";
-const SETUP_PRIV_EXT: &str = ".setup.key";
-const SHARE_EXT: &str = ".share";
-const PERSONAL_KEY_PUB_EXT: &str = ".personal.pub";
-const PERSONAL_KEY_PRIV_EXT: &str = ".personal.key";
-const MANIFEST_EXT: &str = ".manifest";
-const APPROVAL_EXT: &str = ".approval";
+const SETUP_PUB_EXT: &str = "setup.pub";
+const SETUP_PRIV_EXT: &str = "setup.key";
+const SHARE_EXT: &str = "share";
+const PERSONAL_KEY_PUB_EXT: &str = "personal.pub";
+const PERSONAL_KEY_PRIV_EXT: &str = "personal.key";
+const MANIFEST_EXT: &str = "manifest";
+const APPROVAL_EXT: &str = "approval";
+const EPHEMERAL_KEY_PUB_EXT: &str = "ephemeral.pub";
+const STANDARD_ATTESTATION_DOC_FILE: &str = "attestation_doc.standard";
 
 pub(crate) fn generate_setup_key<P: AsRef<Path>>(
 	alias: &str,
@@ -48,7 +50,7 @@ pub(crate) fn generate_setup_key<P: AsRef<Path>>(
 	// TODO: password encryption
 	let private_key_file_path = key_dir_path
 		.as_ref()
-		.join(format!("{}.{}{}", alias, namespace, SETUP_PRIV_EXT));
+		.join(format!("{}.{}.{}", alias, namespace, SETUP_PRIV_EXT));
 	write_with_msg(
 		&private_key_file_path,
 		&setup_key
@@ -59,7 +61,7 @@ pub(crate) fn generate_setup_key<P: AsRef<Path>>(
 	// Write the setup key public key
 	let public_key_file_path = key_dir_path
 		.as_ref()
-		.join(format!("{}.{}{}", alias, namespace, SETUP_PUB_EXT));
+		.join(format!("{}.{}.{}", alias, namespace, SETUP_PUB_EXT));
 
 	write_with_msg(
 		&public_key_file_path,
@@ -108,7 +110,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	drop(extract_attestation_doc(&cose_sign1_der));
 
 	let genesis_output_path = out_dir.as_ref().join(GENESIS_OUTPUT_FILE);
-	std::fs::create_dir_all(out_dir.as_ref()).unwrap();
+	fs::create_dir_all(out_dir.as_ref()).unwrap();
 
 	// Write the attestation doc
 	let attestation_doc_path =
@@ -137,8 +139,7 @@ fn create_genesis_set<P: AsRef<Path>>(
 			key_dir.as_ref().is_dir(),
 			"Provided path is not a valid directory"
 		);
-		std::fs::read_dir(key_dir.as_ref())
-			.expect("Failed to read key directory")
+		fs::read_dir(key_dir.as_ref()).expect("Failed to read key directory")
 	};
 
 	// Assemble the genesis members from all the public keys in the key
@@ -204,13 +205,13 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	println!("Alias: {}, Namespace: {}", alias, namespace);
 
 	// Read in the attestation doc from the genesis directory
-	let cose_sign1 = std::fs::read(attestation_doc_path)
-		.expect("Could not read attestation_doc");
+	let cose_sign1 =
+		fs::read(attestation_doc_path).expect("Could not read attestation_doc");
 	let attestation_doc = extract_attestation_doc(&cose_sign1);
 
 	// Read in the genesis output from the genesis directory
 	let genesis_output = GenesisOutput::try_from_slice(
-		&std::fs::read(genesis_set_path).expect("Failed to read genesis set"),
+		&fs::read(genesis_set_path).expect("Failed to read genesis set"),
 	)
 	.expect("Could not deserialize the genesis set");
 
@@ -259,7 +260,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	// Store the encrypted share
 	let share_path = genesis_dir
 		.as_ref()
-		.join(format!("{}.{}{}", alias, namespace, SHARE_EXT));
+		.join(format!("{}.{}.{}", alias, namespace, SHARE_EXT));
 	write_with_msg(
 		share_path.as_path(),
 		&member_output.encrypted_quorum_key_share,
@@ -270,7 +271,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	// Public
 	let personal_key_pub_path = genesis_dir
 		.as_ref()
-		.join(format!("{}.{}{}", alias, namespace, PERSONAL_KEY_PUB_EXT));
+		.join(format!("{}.{}.{}", alias, namespace, PERSONAL_KEY_PUB_EXT));
 	write_with_msg(
 		personal_key_pub_path.as_path(),
 		&personal_pair
@@ -281,7 +282,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	// Private
 	let personal_key_priv_path = genesis_dir
 		.as_ref()
-		.join(format!("{}.{}{}", alias, namespace, PERSONAL_KEY_PRIV_EXT));
+		.join(format!("{}.{}.{}", alias, namespace, PERSONAL_KEY_PRIV_EXT));
 	write_with_msg(
 		personal_key_priv_path.as_path(),
 		&personal_pair
@@ -294,7 +295,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 /// Panics if verification fails
 fn verify_attestation_doc_against_user_input(
 	attestation_doc: &AttestationDoc,
-	_user_data: &[u8],
+	user_data: &[u8],
 	pcr0: &[u8],
 	pcr1: &[u8],
 	pcr2: &[u8],
@@ -310,10 +311,10 @@ fn verify_attestation_doc_against_user_input(
 			"Attestation doc does not have hash of genesis output."
 		);
 		// public key is none
-		assert_eq!(
-			attestation_doc.public_key, None,
-			"Attestation doc has a public_key when none was expected."
-		);
+		// assert_eq!(
+		// 	attestation_doc.public_key, None,
+		// 	"Attestation doc has a public_key when none was expected."
+		// );
 	}
 	#[cfg(feature = "mock")]
 	println!(
@@ -412,14 +413,14 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	} = args;
 
 	let aws_root_certificate = {
-		let pem = std::fs::read(root_cert_path.as_ref())
+		let pem = fs::read(root_cert_path.as_ref())
 			.expect("Failed to read in root cert");
 		cert_from_pem(&pem)
 			.expect("AWS root cert: failed to convert PEM to DER")
 	};
 
 	let genesis_output = {
-		let buf = std::fs::read(genesis_out_path.as_ref())
+		let buf = fs::read(genesis_out_path.as_ref())
 			.expect("Failed to read genesis output file");
 		GenesisOutput::try_from_slice(&buf)
 			.expect("Failed to decode genesis output")
@@ -444,7 +445,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 
 	let manifest_path = out_dir
 		.as_ref()
-		.join(format!("{}.{}{}", namespace, nonce, MANIFEST_EXT));
+		.join(format!("{}.{}.{}", namespace, nonce, MANIFEST_EXT));
 	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");
 }
 
@@ -455,8 +456,8 @@ pub(crate) fn sign_manifest<P: AsRef<Path>>(
 	out_dir: P,
 ) {
 	let manifest = {
-		let buf = std::fs::read(manifest_path.as_ref())
-			.expect("Failed to read manifest");
+		let buf =
+			fs::read(manifest_path.as_ref()).expect("Failed to read manifest");
 		Manifest::try_from_slice(&buf).expect("Failed to deserialize manifest")
 	};
 
@@ -493,7 +494,7 @@ pub(crate) fn sign_manifest<P: AsRef<Path>>(
 	};
 
 	let approval_file = format!(
-		"{}.{}.{}{}",
+		"{}.{}.{}.{}",
 		alias, namespace, manifest.namespace.nonce, APPROVAL_EXT
 	);
 	let approval_path = out_dir.as_ref().join(approval_file);
@@ -502,6 +503,142 @@ pub(crate) fn sign_manifest<P: AsRef<Path>>(
 		&approval.try_to_vec().expect("Failed to serialize approval"),
 		"Manifest Approval",
 	);
+}
+
+pub(crate) fn boot_standard<P: AsRef<Path>>(
+	uri: &str,
+	pivot_path: P,
+	boot_dir: P,
+) {
+	// Read in pivot binary
+	let pivot =
+		fs::read(pivot_path.as_ref()).expect("Failed to read pivot binary");
+	// Read in manifest
+	let (manifest, approvals) = find_manifest_and_approvals(&boot_dir);
+	let manifest_hash = manifest.qos_hash();
+	assert_eq!(
+		sha_256(&pivot),
+		manifest.pivot.hash,
+		"Hash of pivot binary does not match manifest"
+	);
+
+	// Create manifest envelope
+	let manifest_envelope =
+		Box::new(ManifestEnvelope { manifest: manifest.clone(), approvals });
+
+	// Broadcast boot standard instruction and extract the attestation doc from
+	// the response.
+	let req = ProtocolMsg::BootStandardRequest { manifest_envelope, pivot };
+	let cose_sign1_der = match request::post(uri, &req).unwrap() {
+		ProtocolMsg::BootStandardResponse {
+			nsm_response: NsmResponse::Attestation { document },
+		} => document,
+		_ => panic!("Unexpected response"),
+	};
+	let attestation_doc = extract_attestation_doc(&cose_sign1_der);
+
+	// Verify attestation document
+	// TODO: anything else to verify here?
+	verify_attestation_doc_against_user_input(
+		&attestation_doc,
+		&manifest_hash,
+		&manifest.enclave.pcr0,
+		&manifest.enclave.pcr1,
+		&manifest.enclave.pcr2,
+	);
+
+	let ephemeral_key = attestation_doc
+		.public_key
+		.expect("No ephemeral key in the attestation doc");
+
+	// Write the ephemeral key
+	let ephemeral_path = boot_dir.as_ref().join(format!(
+		"{}.{}.{}",
+		manifest.namespace.name,
+		manifest.namespace.nonce,
+		EPHEMERAL_KEY_PUB_EXT
+	));
+	write_with_msg(&ephemeral_path, &ephemeral_key, "Ephemeral Public Key");
+
+	// write attestation doc
+	let attestation_doc_path =
+		boot_dir.as_ref().join(STANDARD_ATTESTATION_DOC_FILE);
+	write_with_msg(
+		&attestation_doc_path,
+		&cose_sign1_der,
+		"COSE Sign1 Attestation Doc",
+	);
+}
+
+fn find_manifest_and_approvals<P: AsRef<Path>>(
+	boot_dir: P,
+) -> (Manifest, Vec<Approval>) {
+	let files: Vec<_> = {
+		assert!(
+			boot_dir.as_ref().is_dir(),
+			"Provided path is not a valid directory"
+		);
+		fs::read_dir(boot_dir.as_ref())
+			.expect("Failed to read boot directory")
+			.map(|p| p.unwrap().path())
+			.collect()
+	};
+	let m: Vec<_> = files
+		.iter()
+		.filter_map(|path| {
+			let file_name = split_file_name(path);
+			if file_name.last().map_or(true, |s| s.as_str() != MANIFEST_EXT) {
+				return None;
+			};
+
+			let buf = fs::read(path).expect("Failed to read manifest");
+			Some(
+				Manifest::try_from_slice(&buf)
+					.expect("Failed to deserialize manifest"),
+			)
+		})
+		.collect();
+	// Make sure there is exactly one manifest
+	assert_eq!(m.len(), 1, "Did not find correct number of manifests");
+	let manifest = m.first().expect("No manifest in directory").clone();
+
+	let approvals: Vec<_> = files
+		.iter()
+		.filter_map(|path| {
+			let file_name = split_file_name(path);
+			// Only look at files with the approval extension
+			if file_name
+				.last()
+				.map_or(true, |s| s.as_str() != APPROVAL_EXT)
+			{
+				return None;
+			};
+
+			let approval = Approval::try_from_slice(
+				&fs::read(path).expect("Failed to read in approval"),
+			)
+			.expect("Failed to deserialize approval");
+
+			assert!(
+				manifest.quorum_set.members.contains(&approval.member),
+				"Found approval from member ({:?}) not included in the Quorum Set", approval.member.alias
+			);
+
+			let pub_key = RsaPub::from_der(&approval.member.pub_key)
+				.expect("Failed to interpret pub key");
+			assert!(
+				pub_key
+					.verify_sha256(&approval.signature, &manifest.qos_hash())
+					.unwrap(),
+				"Approval signature could not be verified against manifest"
+			);
+
+			Some(approval)
+		})
+		.collect();
+	assert!(approvals.len() > manifest.quorum_set.threshold as usize);
+
+	(manifest, approvals)
 }
 
 // Get the file name from a path and split on `"."`.
@@ -513,7 +650,7 @@ fn split_file_name(p: &Path) -> Vec<String> {
 
 fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
 	let path_str = path.as_os_str().to_string_lossy();
-	std::fs::write(path, buf).unwrap_or_else(|_| {
+	fs::write(path, buf).unwrap_or_else(|_| {
 		panic!("Failed writing {} to file", path_str.clone())
 	});
 	println!("{} written to: {}", item_name, path_str);
