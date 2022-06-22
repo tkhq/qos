@@ -136,7 +136,11 @@ impl Command {
 	fn boot_genesis() -> Parser {
 		Self::base()
 			.token(Self::genesis_dir_token())
-			.token(Self::boot_dir_token())
+			.token(
+				Token::new(THRESHOLD, "Threshold, K, for having a quorum. K shares will reconstruct the Quorum key and K signatures are considered a quorum")
+				.required(true)
+				.takes_value(true)
+			)
 	}
 
 	fn after_genesis() -> Parser {

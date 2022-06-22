@@ -103,6 +103,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 
 	// Check the attestation document
 	drop(extract_attestation_doc(&cose_sign1));
+	// TODO should we check against expected PCRs here?
 
 	// Write the attestation doc
 	let attestation_doc_path =
@@ -233,7 +234,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	);
 
 	// Store the encrypted share
-	let share_path = genesis_dir
+	let share_path = personal_dir
 		.as_ref()
 		.join(format!("{}.{}.{}", alias, namespace, SHARE_EXT));
 	write_with_msg(
@@ -244,7 +245,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 
 	// Store the Personal Key, TODO: password encrypt the private key
 	// Public
-	let personal_key_pub_path = genesis_dir
+	let personal_key_pub_path = personal_dir
 		.as_ref()
 		.join(format!("{}.{}.{}", alias, namespace, PERSONAL_KEY_PUB_EXT));
 	write_with_msg(
@@ -255,7 +256,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		"Personal Public Key",
 	);
 	// Private
-	let personal_key_priv_path = genesis_dir
+	let personal_key_priv_path = personal_dir
 		.as_ref()
 		.join(format!("{}.{}.{}", alias, namespace, PERSONAL_KEY_PRIV_EXT));
 	write_with_msg(
