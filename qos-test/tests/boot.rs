@@ -4,12 +4,15 @@ use borsh::de::BorshDeserialize;
 use qos_client::attest;
 use qos_core::{
 	hex,
-	protocol::services::{
-		boot::{
-			Manifest, Namespace, NitroConfig, PivotConfig, QuorumMember,
-			QuorumSet, RestartPolicy,
+	protocol::{
+		services::{
+			boot::{
+				Approval, Manifest, Namespace, NitroConfig, PivotConfig,
+				QuorumMember, QuorumSet, RestartPolicy,
+			},
+			genesis::GenesisOutput,
 		},
-		genesis::GenesisOutput,
+		QosHash,
 	},
 };
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
@@ -23,9 +26,10 @@ async fn boot_e2e() {
 	let secret_path = "./boot_e2e.secret";
 	let pivot_path = "./boot_e2e.pivot";
 
-	let key_dir = "./genesis-setup-tmp";
+	let manifest_dir = "./boot-e2e-manifest-tmp";
+	let key_dir = "./boot-e2e-genesis-setup-tmp";
 	let namespace = "quit-coding-to-vape";
-	let genesis_output_dir = "./genesis-out-tmp";
+	let genesis_output_dir = "./boot-e2e-genesis-out-tmp";
 	let attestation_doc_path =
 		format!("{}/attestation_doc.genesis", genesis_output_dir);
 	let genesis_output_path = format!("{}/output.genesis", genesis_output_dir);
@@ -240,10 +244,12 @@ async fn boot_e2e() {
 	}
 
 	// -- CLIENT create manifest.
+	// Make sure the dir we are writing the manifest too exists
+	let _ = std::fs::create_dir(manifest_dir);
 	let mock_pivot_hash = vec![69u8; 32];
 	let mock_pivot_hash_hex = hex::encode(&mock_pivot_hash);
 	// Put the root cert in the key dir just to make after test clean up easier
-	let root_cert_path = format!("{}/root-cert.pem", key_dir);
+	let root_cert_path = format!("{}/root-cert.pem", manifest_dir);
 	std::fs::write(&root_cert_path, attest::nitro::AWS_ROOT_CERT_PEM).unwrap();
 
 	assert!(Command::new("../target/debug/client_cli")
@@ -268,7 +274,7 @@ async fn boot_e2e() {
 			"--root-cert-path",
 			&root_cert_path,
 			"--out-dir",
-			genesis_output_dir,
+			manifest_dir,
 		])
 		.spawn()
 		.unwrap()
@@ -277,8 +283,7 @@ async fn boot_e2e() {
 		.success());
 
 	// Check the manifest written to file
-	let manifest_path =
-		format!("{}/{}.2.manifest", genesis_output_dir, namespace);
+	let manifest_path = format!("{}/{}.2.manifest", manifest_dir, namespace);
 	println!("manifest_path={}", manifest_path);
 	let manifest = {
 		let buf = std::fs::read(&manifest_path).unwrap();
@@ -317,6 +322,43 @@ async fn boot_e2e() {
 		}
 	);
 
+	// -- Client sign manifest
+	for alias in [user1, user2, user3] {
+		let (_, personal_path, _) = get_after_paths(alias.to_string());
+		let approval_path = format!(
+			"{}/{}.{}.{}.approval",
+			manifest_dir, alias, namespace, manifest.namespace.nonce,
+		);
+
+		assert!(!Path::new(&approval_path).exists());
+		assert!(Command::new("../target/debug/client_cli")
+			.args([
+				"sign-manifest",
+				"--manifest-hash",
+				hex::encode(&manifest.qos_hash()).as_str(),
+				"--personal-key-path",
+				&personal_path,
+				"--manifest-path",
+				&manifest_path,
+				"--out-dir",
+				manifest_dir,
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
+
+		let approval =
+			Approval::try_from_slice(&std::fs::read(approval_path).unwrap())
+				.unwrap();
+		let personal_pair = RsaPair::from_pem_file(personal_path).unwrap();
+
+		let signature =
+			personal_pair.sign_sha256(&manifest.qos_hash()).unwrap();
+		assert_eq!(approval.signature, signature);
+	}
+
 	// -- Clean up
 	for file in
 		[secret_path.to_string(), pivot_path.to_string(), usock.to_string()]
@@ -325,6 +367,7 @@ async fn boot_e2e() {
 	}
 	let _ = std::fs::remove_dir_all(key_dir);
 	let _ = std::fs::remove_dir_all(genesis_output_dir);
+	let _ = std::fs::remove_dir_all(manifest_dir);
 	enclave_child_process.kill().unwrap();
 	host_child_process.kill().unwrap();
 }

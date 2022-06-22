@@ -6,8 +6,8 @@ use qos_core::protocol::{
 	attestor::types::NsmResponse,
 	services::{
 		boot::{
-			Manifest, Namespace, NitroConfig, PivotConfig, QuorumMember,
-			QuorumSet, RestartPolicy,
+			Approval, Manifest, Namespace, NitroConfig, PivotConfig,
+			QuorumMember, QuorumSet, RestartPolicy,
 		},
 		genesis::{GenesisOutput, GenesisSet, SetupMember},
 	},
@@ -30,6 +30,8 @@ const SETUP_PRIV_EXT: &str = ".setup.key";
 const SHARE_EXT: &str = ".share";
 const PERSONAL_KEY_PUB_EXT: &str = ".personal.pub";
 const PERSONAL_KEY_PRIV_EXT: &str = ".personal.key";
+const MANIFEST_EXT: &str = ".manifest";
+const APPROVAL_EXT: &str = ".approval";
 
 pub(crate) fn generate_setup_key<P: AsRef<Path>>(
 	alias: &str,
@@ -440,9 +442,66 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		enclave: NitroConfig { pcr0, pcr1, pcr2, aws_root_certificate },
 	};
 
-	let manifest_path =
-		out_dir.as_ref().join(format!("./{}.{}.manifest", namespace, nonce));
+	let manifest_path = out_dir
+		.as_ref()
+		.join(format!("{}.{}{}", namespace, nonce, MANIFEST_EXT));
 	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");
+}
+
+pub(crate) fn sign_manifest<P: AsRef<Path>>(
+	manifest_hash: Hash256,
+	personal_key_path: P,
+	manifest_path: P,
+	out_dir: P,
+) {
+	let manifest = {
+		let buf = std::fs::read(manifest_path.as_ref())
+			.expect("Failed to read manifest");
+		Manifest::try_from_slice(&buf).expect("Failed to deserialize manifest")
+	};
+
+	assert_eq!(
+		manifest.qos_hash(),
+		manifest_hash,
+		"Manifest hashes do not match"
+	);
+
+	let (alias, namespace) = {
+		let split = split_file_name(personal_key_path.as_ref());
+		(split[0].clone(), split[1].clone())
+	};
+	println!("Alias: {}, Namespace: {}", alias, namespace);
+
+	assert_eq!(
+		manifest.namespace.name, namespace,
+		"namespace in file name does not match namespace in manifest"
+	);
+
+	let personal_pair = RsaPair::from_pem_file(personal_key_path.as_ref())
+		.expect("Failed to read Personal Key");
+
+	let approval = Approval {
+		signature: personal_pair
+			.sign_sha256(&manifest_hash)
+			.expect("Failed to sign"),
+		member: QuorumMember {
+			pub_key: personal_pair
+				.public_key_to_der()
+				.expect("Failed to get public key"),
+			alias: alias.clone(),
+		},
+	};
+
+	let approval_file = format!(
+		"{}.{}.{}{}",
+		alias, namespace, manifest.namespace.nonce, APPROVAL_EXT
+	);
+	let approval_path = out_dir.as_ref().join(approval_file);
+	write_with_msg(
+		&approval_path,
+		&approval.try_to_vec().expect("Failed to serialize approval"),
+		"Manifest Approval",
+	);
 }
 
 // Get the file name from a path and split on `"."`.

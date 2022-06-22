@@ -5,7 +5,7 @@ use std::env;
 use qos_core::{
 	hex,
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
-	protocol::{msg::ProtocolMsg, services::boot},
+	protocol::{msg::ProtocolMsg, services::boot, Hash256},
 };
 use qos_crypto::RsaPair;
 
@@ -37,6 +37,10 @@ const PIVOT_HASH: &str = "pivot-hash";
 const RESTART_POLICY: &str = "restart-policy";
 const ROOT_CERT_PATH: &str = "root-cert-path";
 
+const MANIFEST_HASH: &str = "manifest-hash";
+const PERSONAL_KEY_PATH: &str = "personal-key-path";
+const MANIFEST_PATH: &str = "manifest-path";
+
 #[derive(Clone, PartialEq, Debug)]
 enum Command {
 	HostHealth,
@@ -45,6 +49,7 @@ enum Command {
 	BootGenesis,
 	AfterGenesis,
 	GenerateManifest,
+	SignManifest,
 }
 
 impl From<&str> for Command {
@@ -56,6 +61,7 @@ impl From<&str> for Command {
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
 			"generate-manifest" => Self::GenerateManifest,
+			"sign-manifest" => Self::SignManifest,
 			_ => panic!("Unrecognized command"),
 		}
 	}
@@ -193,7 +199,7 @@ impl Command {
 			.token(
 				Token::new(
 					PIVOT_HASH,
-					"SHA-256 hash of the pivot executable encoded as a Vec<u8>",
+					"hex encoded SHA-256 hash of the pivot executable encoded as a Vec<u8>",
 				)
 				.takes_value(true)
 				.required(true),
@@ -232,6 +238,33 @@ impl Command {
 					.required(true),
 			)
 	}
+
+	fn sign_manifest() -> Parser {
+		Parser::new()
+			.token(
+				Token::new(
+					MANIFEST_HASH,
+					"hex encoded hash of the manifest to sign.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+			.token(
+				Token::new(PERSONAL_KEY_PATH, "path to personal private key.")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(MANIFEST_PATH, "path to the manifest to sign.")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(OUT_DIR, "directory to write the manifest in.")
+					.takes_value(true)
+					.required(true),
+			)
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -242,6 +275,7 @@ impl GetParserForCommand for Command {
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
 			Self::GenerateManifest => Self::generate_manifest(),
+			Self::SignManifest => Self::sign_manifest(),
 		}
 	}
 }
@@ -315,7 +349,7 @@ impl ClientOpts {
 	}
 	fn pivot_hash(&self) -> Vec<u8> {
 		hex::decode(self.parsed.single(PIVOT_HASH).expect("required arg"))
-			.expect("Could not parse `--pcr2` to bytes")
+			.expect("Could not parse `--pivot-hash` to bytes")
 	}
 	fn restart_policy(&self) -> boot::RestartPolicy {
 		self.parsed
@@ -323,10 +357,24 @@ impl ClientOpts {
 			.expect("required arg")
 			.to_string()
 			.try_into()
-			.expect("Failed to parser `--restart-policy`")
+			.expect("Could not parse `--restart-policy`")
 	}
 	fn root_cert_path(&self) -> String {
 		self.parsed.single(ROOT_CERT_PATH).expect("required arg").to_string()
+	}
+
+	// SignManifest options
+	fn personal_key_path(&self) -> String {
+		self.parsed.single(PERSONAL_KEY_PATH).expect("required arg").to_string()
+	}
+	fn manifest_path(&self) -> String {
+		self.parsed.single(MANIFEST_PATH).expect("required arg").to_string()
+	}
+	fn manifest_hash(&self) -> Hash256 {
+		hex::decode(self.parsed.single(MANIFEST_HASH).expect("required arg"))
+			.expect("Could not parse `--manifest-hash` to bytes")
+			.try_into()
+			.expect("Could not convert manifest hash to Hash256")
 	}
 }
 
@@ -363,6 +411,7 @@ impl ClientRunner {
 				Command::GenerateManifest => {
 					handlers::generate_manifest(&self.opts);
 				}
+				Command::SignManifest => handlers::sign_manifest(&self.opts),
 			}
 		}
 	}
@@ -472,10 +521,17 @@ mod handlers {
 		});
 	}
 
-	// /// Sign a manifest, writing the signature++member ID to file.
-	// ///
-	// /// Verifies that the manifest corresponds to expected in inputs.
-	// pub(super) fn sign_manifest(opts: &ClientOpts) {}
+	/// Sign a manifest, writing the signature++member ID to file.
+	///
+	/// Verifies that the manifest corresponds to expected in inputs.
+	pub(super) fn sign_manifest(opts: &ClientOpts) {
+		services::sign_manifest(
+			opts.manifest_hash(),
+			opts.personal_key_path(),
+			opts.manifest_path(),
+			opts.out_dir(),
+		);
+	}
 
 	// /// # Arguments
 	// ///
