@@ -1,6 +1,7 @@
 .DS_Store
 .vscode
 target/
+
 *.sock
 *.key
 *.pivot
@@ -9,7 +10,6 @@ target/
 *.pub
 *.share
 
-# For mock files
-!user1.*
-!user2.*
-!user3.*
+!mock/*/user1.*
+!mock/*/user2.*
+!mock/*/user3.*

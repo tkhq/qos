@@ -21,6 +21,7 @@ use qos_core::{
 		QosHash,
 	},
 };
+ use qos_test::PIVOT_OK2_PATH;
 use qos_crypto::{sha_256, shamir::shares_reconstruct, RsaPair, RsaPub};
 use qos_test::PIVOT_OK_PATH;
 use rand::{seq::SliceRandom, thread_rng};
@@ -35,7 +36,9 @@ async fn boot_e2e() {
 
 	let boot_dir = "./boot-e2e-boot-dir-tmp";
 	let all_personal_dir = "./mock/boot-e2e/personal-dir";
-	let genesis_dir = "./mock/boot-e2e/boot-e2e-genesis-tmp";
+	let genesis_dir = "./mock/boot-e2e/genesis-dir";
+	let root_cert_path = "./mock/boot-e2e/root-cert.pem";
+
 	let namespace = "quit-coding-to-vape";
 
 	let attestation_doc_path =
@@ -55,44 +58,41 @@ async fn boot_e2e() {
 	// Make sure the directory keys are getting written to already exist.
 
 	// // -- CLIENT create manifest.
-	// // Make sure the dir we are writing the manifest too exists
-	// let _ = fs::create_dir(manifest_dir);
-	// let pivot = fs::read(PIVOT_OK_PATH).unwrap();
-	// let mock_pivot_hash = sha_256(&pivot);
-	// let mock_pivot_hash_hex = hex::encode(&mock_pivot_hash);
-	// // Put the root cert in the key dir just to make after test clean up
-	// easier let root_cert_path = format!("{}/root-cert.pem", manifest_dir);
-	// fs::write(&root_cert_path, attest::nitro::AWS_ROOT_CERT_PEM).unwrap();
+	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
+	let mock_pivot_hash = sha_256(&pivot);
+	let mock_pivot_hash_hex = hex::encode(&mock_pivot_hash);
+	let mock_pcr = vec![0; 48];
+	let mock_pcr_hex = hex::encode(&mock_pcr);
 
-	// assert!(Command::new("../target/debug/client_cli")
-	// 	.args([
-	// 		"generate-manifest",
-	// 		"--genesis-out-path",
-	// 		genesis_output_path.as_str(),
-	// 		"--nonce",
-	// 		"2",
-	// 		"--namespace",
-	// 		namespace,
-	// 		"--pivot-hash",
-	// 		&mock_pivot_hash_hex,
-	// 		"--restart-policy",
-	// 		"always",
-	// 		"--pcr0",
-	// 		mock_pcr_hex,
-	// 		"--pcr1",
-	// 		mock_pcr_hex,
-	// 		"--pcr2",
-	// 		mock_pcr_hex,
-	// 		"--root-cert-path",
-	// 		&root_cert_path,
-	// 		"--out-dir",
-	// 		manifest_dir,
-	// 	])
-	// 	.spawn()
-	// 	.unwrap()
-	// 	.wait()
-	// 	.unwrap()
-	// 	.success());
+	assert!(Command::new("../target/debug/client_cli")
+		.args([
+			"generate-manifest",
+			"--genesis-dir",
+			genesis_dir,
+			"--nonce",
+			"2",
+			"--namespace",
+			namespace,
+			"--pivot-hash",
+			&mock_pivot_hash_hex,
+			"--restart-policy",
+			"always",
+			"--pcr0",
+			&mock_pcr_hex,
+			"--pcr1",
+			&mock_pcr_hex,
+			"--pcr2",
+			&mock_pcr_hex,
+			"--root-cert-path",
+			&root_cert_path,
+			"--boot-dir",
+			boot_dir,
+		])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
 
 	// // Check the manifest written to file
 	// let manifest_path = format!("{}/{}.2.manifest", manifest_dir, namespace);
@@ -230,8 +230,7 @@ async fn boot_e2e() {
 	// {
 	// 	drop(fs::remove_file(path));
 	// }
-	// drop(fs::remove_dir_all(genesis_dir));
-	// drop(fs::remove_dir_all(all_personal_dir));
+	drop(fs::remove_dir_all(boot_dir));
 	// enclave_child_process.kill().unwrap();
 	// host_child_process.kill().unwrap();
 }

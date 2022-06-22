@@ -2,7 +2,6 @@ use std::{path::Path, process::Command, fs};
 
 use borsh::de::BorshDeserialize;
 use qos_client::attest::{
-	self,
 	nitro::{
 		attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
 		MOCK_SECONDS_SINCE_EPOCH,
@@ -20,7 +19,6 @@ async fn genesis_e2e() {
 	let secret_path = "./genesis_e2e.secret";
 	let pivot_path = "./genesis_e2e.pivot";
 
-	let boot_dir = "./genesis-e2e-boot-tmp";
 	let all_personal_dir = "./genesis-e2e-personal-tmp";
 	let genesis_dir = "./genesis-e2e-genesis-tmp";
 
@@ -235,6 +233,12 @@ async fn genesis_e2e() {
 		assert!(decrypted_shares.contains(&share));
 	}
 
-	assert!(host_child_process.kill().is_ok());
-	assert!(enclave_child_process.kill().is_ok());
+	for path in [&secret_path, &pivot_path, &usock]
+	{
+		drop(fs::remove_file(path));
+	}
+	drop(fs::remove_dir_all(genesis_dir));
+	drop(fs::remove_dir_all(all_personal_dir));
+	enclave_child_process.kill().unwrap();
+	host_child_process.kill().unwrap();
 }

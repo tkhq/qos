@@ -320,6 +320,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		enclave: NitroConfig { pcr0, pcr1, pcr2, aws_root_certificate },
 	};
 
+	fs::create_dir_all(&boot_dir).expect("Failed to created boot dir");
 	let manifest_path = boot_dir
 		.as_ref()
 		.join(format!("{}.{}.{}", namespace, nonce, MANIFEST_EXT));
