@@ -66,7 +66,9 @@ impl From<&str> for Command {
 			"sign-manifest" => Self::SignManifest,
 			"boot-standard" => Self::BootStandard,
 			"post-share" => Self::PostShare,
-			_ => panic!("Unrecognized command, try something like `host-health --help`"),
+			_ => panic!(
+				"Unrecognized command, try something like `host-health --help`"
+			),
 		}
 	}
 }
@@ -323,6 +325,7 @@ impl GetParserForCommand for Command {
 			Self::GenerateManifest => Self::generate_manifest(),
 			Self::SignManifest => Self::sign_manifest(),
 			Self::BootStandard => Self::boot_standard(),
+			Self::PostShare => Self::post_share(),
 		}
 	}
 }
@@ -431,6 +434,10 @@ impl ClientOpts {
 	fn boot_dir(&self) -> String {
 		self.parsed.single(BOOT_DIR).expect("required arg").to_string()
 	}
+
+	fn personal_dir(&self) -> String {
+		self.parsed.single(PERSONAL_DIR).expect("required arg").to_string()
+	}
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -468,6 +475,7 @@ impl ClientRunner {
 				}
 				Command::SignManifest => handlers::sign_manifest(&self.opts),
 				Command::BootStandard => handlers::boot_standard(&self.opts),
+				Command::PostShare => handlers::post_share(&self.opts),
 			}
 		}
 	}
@@ -598,6 +606,7 @@ mod handlers {
 			&opts.path("message"),
 			opts.personal_dir(),
 			opts.boot_dir(),
-		)
+			opts.manifest_hash(),
+		);
 	}
 }

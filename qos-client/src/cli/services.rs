@@ -1,4 +1,7 @@
-use std::{fs, path::Path};
+use std::{
+	fs,
+	path::{Path, PathBuf},
+};
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -516,7 +519,8 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	let pivot =
 		fs::read(pivot_path.as_ref()).expect("Failed to read pivot binary");
 	// Read in manifest
-	let (manifest, approvals) = find_manifest_and_approvals(&boot_dir);
+	let manifest = find_manifest(&boot_dir);
+	let approvals = find_approvals(&boot_dir, &manifest);
 	let manifest_hash = manifest.qos_hash();
 	assert_eq!(
 		sha_256(&pivot),
@@ -553,8 +557,8 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		.public_key
 		.expect("No ephemeral key in the attestation doc");
 
-	// TODO - don't write the ephemeral key, always extract it from the attestation document
-	// Write the ephemeral key
+	// TODO - don't write the ephemeral key, always extract it from the
+	// attestation document Write the ephemeral key
 	let ephemeral_path = boot_dir.as_ref().join(format!(
 		"{}.{}.{}",
 		manifest.namespace.name,
@@ -573,39 +577,46 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	);
 }
 
-fn find_manifest_and_approvals<P: AsRef<Path>>(
+pub(crate) fn post_share<P: AsRef<Path>>(
+	_uri: &str,
+	personal_dir: P,
 	boot_dir: P,
-) -> (Manifest, Vec<Approval>) {
-	let files: Vec<_> = {
-		assert!(
-			boot_dir.as_ref().is_dir(),
-			"Provided path is not a valid directory"
-		);
-		fs::read_dir(boot_dir.as_ref())
-			.expect("Failed to read boot directory")
-			.map(|p| p.unwrap().path())
-			.collect()
-	};
-	let m: Vec<_> = files
-		.iter()
-		.filter_map(|path| {
-			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != MANIFEST_EXT) {
-				return None;
-			};
+	_manifest_hash: Hash256,
+) {
+	// Read in manifest, share and personal key
+	let _manifest = find_manifest(&boot_dir);
+	let _encrypted_share = find_share(&personal_dir);
+	let _personal_pair = find_personal_key(&personal_dir);
+	let _cose_sign1_der = find_attestation_doc(&boot_dir);
 
-			let buf = fs::read(path).expect("Failed to read manifest");
-			Some(
-				Manifest::try_from_slice(&buf)
-					.expect("Failed to deserialize manifest"),
-			)
-		})
-		.collect();
-	// Make sure there is exactly one manifest
-	assert_eq!(m.len(), 1, "Did not find correct number of manifests");
-	let manifest = m.first().expect("No manifest in directory").clone();
+	// // Make sure hash matches the manifest hash
+	// assert_eq!(
+	// 	&manifest.qos_hash(),
+	// 	manifest_hash,
+	// 	"Given hash did not match the hash of the manifest"
+	// );
 
-	let approvals: Vec<_> = files
+	// let attestation_doc = extract_attestation_doc(&cose_sign1_der);
+
+	// Validate attestation doc
+	// Get ephemeral key from attestation doc
+	// Decrypt share and re-encrypt to ephemeral key
+	// Post shard and make sure received a success response
+}
+
+fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
+	assert!(dir.as_ref().is_dir(), "Provided path is not a valid directory");
+	fs::read_dir(dir.as_ref())
+		.expect("Failed to read directory")
+		.map(|p| p.unwrap().path())
+		.collect()
+}
+
+fn find_approvals<P: AsRef<Path>>(
+	boot_dir: P,
+	manifest: &Manifest,
+) -> Vec<Approval> {
+	let approvals: Vec<_> =  find_file_paths(&boot_dir)
 		.iter()
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
@@ -641,18 +652,103 @@ fn find_manifest_and_approvals<P: AsRef<Path>>(
 		.collect();
 	assert!(approvals.len() > manifest.quorum_set.threshold as usize);
 
-	(manifest, approvals)
+	approvals
 }
 
-pub(crate) fn post_share<P: AsRef<Path>>(
-	uri: &str,
-	personal_dir: P,
-	boot_dir: P
-	manifest_hash: Hash256,
-) {
-	// TODO validate the manifest is the expected one
+fn find_manifest<P: AsRef<Path>>(boot_dir: P) -> Manifest {
+	let mut m: Vec<_> = find_file_paths(&boot_dir)
+		.iter()
+		.filter_map(|path| {
+			let file_name = split_file_name(path);
+			if file_name.last().map_or(true, |s| s.as_str() != MANIFEST_EXT) {
+				return None;
+			};
 
-	// read in attestation document
+			let buf = fs::read(path).expect("Failed to read manifest");
+			Some(
+				Manifest::try_from_slice(&buf)
+					.expect("Failed to deserialize manifest"),
+			)
+		})
+		.collect();
+	// Make sure there is exactly one manifest
+	assert_eq!(m.len(), 1, "Did not find correct number of manifests");
+
+	m.remove(0)
+}
+
+fn find_personal_key<P: AsRef<Path>>(personal_dir: P) -> RsaPair {
+	let mut p: Vec<_> = find_file_paths(&personal_dir)
+		.iter()
+		.filter_map(|path| {
+			let file_name = split_file_name(path);
+			// Only look at files with the personal.key extension
+			if file_name.last().map_or(true, |s| s.as_str() != "key")
+				|| file_name
+					.get(file_name.len() - 2)
+					.map_or(true, |s| s.as_str() != "personal")
+			{
+				return None;
+			};
+
+			Some(
+				RsaPair::from_pem_file(path)
+					.expect("Could not read PEM from personal.key"),
+			)
+		})
+		.collect();
+	assert_eq!(
+		p.len(),
+		1,
+		"Did not find exactly 1 personal key in the personal-dir"
+	);
+
+	p.remove(0)
+}
+
+fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
+	let mut s: Vec<_> = find_file_paths(&personal_dir)
+		.iter()
+		.filter_map(|path| {
+			let file_name = split_file_name(path);
+			// Only look at files with the personal.key extension
+			if file_name.last().map_or(true, |s| s.as_str() != "share") {
+				return None;
+			};
+
+			Some(fs::read(path).expect("Failed to read in share"))
+		})
+		.collect();
+	assert_eq!(s.len(), 1, "Did not find exactly 1 share in the personal-dir");
+
+	s.remove(0)
+}
+
+/// Find the standard boot attestation doc in a directory.
+fn find_attestation_doc<P: AsRef<Path>>(boot_dir: P) -> AttestationDoc {
+	let mut a: Vec<_> = find_file_paths(&boot_dir)
+		.iter()
+		.filter_map(|path| {
+			let file_name =
+				path.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap();
+
+			if file_name != STANDARD_ATTESTATION_DOC_FILE {
+				return None;
+			}
+
+			Some(extract_attestation_doc(
+				&fs::read(&path)
+					.expect("Failed to read standard attestation doc"),
+			))
+		})
+		.collect();
+	assert_eq!(
+		a.len(),
+		1,
+		"Did not find exactly 1 attestation doc in the personal-dir"
+	);
+
+	a.remove(0)
 }
 
 // Get the file name from a path and split on `"."`.
