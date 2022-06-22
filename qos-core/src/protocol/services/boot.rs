@@ -188,7 +188,8 @@ pub(in crate::protocol) fn boot_standard(
 
 	let nsm_response = {
 		let request = NsmRequest::Attestation {
-			// TODO: make sure CLI verifies the manifest hash is correct
+			// TODO: make sure CLI verifies the manifest hash is correct?
+			// TODO: is it better to use the hash of the manifest envelope?
 			user_data: Some(manifest_envelope.manifest.qos_hash().to_vec()),
 			nonce: None,
 			public_key: Some(ephemeral_key.public_key_to_pem().unwrap()),

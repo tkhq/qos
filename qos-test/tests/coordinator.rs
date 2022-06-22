@@ -1,7 +1,7 @@
 use std::fs::File;
 
 use qos_core::{cli::EnclaveOptions, coordinator::Coordinator};
-use qos_test::{PIVOT_OK_PATH, PIVOT_ABORT_PATH, PIVOT_PANIC_PATH};
+use qos_test::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
 
 #[tokio::test]
 async fn coordinator_e2e() {

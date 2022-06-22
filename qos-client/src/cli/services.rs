@@ -33,7 +33,9 @@ const PERSONAL_KEY_PRIV_EXT: &str = "personal.key";
 const MANIFEST_EXT: &str = "manifest";
 const APPROVAL_EXT: &str = "approval";
 const EPHEMERAL_KEY_PUB_EXT: &str = "ephemeral.pub";
-const STANDARD_ATTESTATION_DOC_FILE: &str = "attestation_doc.standard";
+const STANDARD_ATTESTATION_DOC_FILE: &str = "attestation_doc.boot";
+
+// TODO: <https://github.com/tkhq/qos/issues/59/>
 
 pub(crate) fn generate_setup_key<P: AsRef<Path>>(
 	alias: &str,
@@ -551,6 +553,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		.public_key
 		.expect("No ephemeral key in the attestation doc");
 
+	// TODO - don't write the ephemeral key, always extract it from the attestation document
 	// Write the ephemeral key
 	let ephemeral_path = boot_dir.as_ref().join(format!(
 		"{}.{}.{}",
@@ -639,6 +642,17 @@ fn find_manifest_and_approvals<P: AsRef<Path>>(
 	assert!(approvals.len() > manifest.quorum_set.threshold as usize);
 
 	(manifest, approvals)
+}
+
+pub(crate) fn post_share<P: AsRef<Path>>(
+	uri: &str,
+	personal_dir: P,
+	boot_dir: P
+	manifest_hash: Hash256,
+) {
+	// TODO validate the manifest is the expected one
+
+	// read in attestation document
 }
 
 // Get the file name from a path and split on `"."`.

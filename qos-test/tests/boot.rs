@@ -1,4 +1,4 @@
-use std::{path::Path, process::Command, fs};
+use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
 use qos_client::attest;
@@ -15,10 +15,9 @@ use qos_core::{
 		QosHash,
 	},
 };
-use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
-use rand::{seq::SliceRandom, thread_rng};
+use qos_crypto::{sha_256, shamir::shares_reconstruct, RsaPair, RsaPub};
 use qos_test::PIVOT_OK_PATH;
-use qos_crypto::sha_256;
+use rand::{seq::SliceRandom, thread_rng};
 
 #[tokio::test]
 async fn boot_e2e() {
@@ -147,10 +146,9 @@ async fn boot_e2e() {
 			.expect("AWS ROOT CERT is not valid PEM"),
 		attest::nitro::MOCK_SECONDS_SINCE_EPOCH,
 	);
-	let genesis_output = GenesisOutput::try_from_slice(
-		&fs::read(&genesis_output_path).unwrap(),
-	)
-	.unwrap();
+	let genesis_output =
+		GenesisOutput::try_from_slice(&fs::read(&genesis_output_path).unwrap())
+			.unwrap();
 
 	// -- Recreate the quorum key from the encrypted shares.
 	let mut decrypted_shares: Vec<_> = genesis_output
@@ -237,9 +235,8 @@ async fn boot_e2e() {
 			public.public_key_to_der().unwrap()
 		);
 		// Check the share is encrypted to personal key
-		let share = private
-			.envelope_decrypt(&fs::read(share_path).unwrap())
-			.unwrap();
+		let share =
+			private.envelope_decrypt(&fs::read(share_path).unwrap()).unwrap();
 		// Cross check that the share belongs `decrypted_shares`, which we
 		// created out of band in this test.
 		assert!(decrypted_shares.contains(&share));

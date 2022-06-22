@@ -39,6 +39,8 @@ const MANIFEST_PATH: &str = "manifest-path";
 const PIVOT_PATH: &str = "pivot-path";
 const BOOT_DIR: &str = "boot-dir";
 
+const PERSONAL_DIR: &str = "personal-dir";
+
 #[derive(Clone, PartialEq, Debug)]
 enum Command {
 	HostHealth,
@@ -49,6 +51,7 @@ enum Command {
 	GenerateManifest,
 	SignManifest,
 	BootStandard,
+	PostShare,
 }
 
 impl From<&str> for Command {
@@ -62,7 +65,8 @@ impl From<&str> for Command {
 			"generate-manifest" => Self::GenerateManifest,
 			"sign-manifest" => Self::SignManifest,
 			"boot-standard" => Self::BootStandard,
-			_ => panic!("Unrecognized command"),
+			"post-share" => Self::PostShare,
+			_ => panic!("Unrecognized command, try something like `host-health --help`"),
 		}
 	}
 }
@@ -277,6 +281,31 @@ impl Command {
 				Token::new(
 					BOOT_DIR,
 					"Directory containing the manifest and K Approvals.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+	}
+
+	fn post_share() -> Parser {
+		Self::base()
+			.token(
+				Token::new(PERSONAL_DIR, "Directory with personal key and share for the relevant quorum set.")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(
+					BOOT_DIR,
+					"Directory containing the manifest and K Approvals.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+			.token(
+				Token::new(
+					MANIFEST_HASH,
+					"Hex encoded hash of the manifest to sign.",
 				)
 				.takes_value(true)
 				.required(true),
@@ -531,7 +560,6 @@ mod handlers {
 		);
 	}
 
-	/// Generate a manifest with given inputs
 	/// TODO: can we write the manifest in plain english?
 	pub(super) fn generate_manifest(opts: &ClientOpts) {
 		services::generate_manifest(GenerateManifestArgs {
@@ -548,9 +576,6 @@ mod handlers {
 		});
 	}
 
-	/// Sign a manifest, writing the signature++member ID to file.
-	///
-	/// Verifies that the manifest corresponds to expected in inputs.
 	pub(super) fn sign_manifest(opts: &ClientOpts) {
 		services::sign_manifest(
 			opts.manifest_hash(),
@@ -560,17 +585,19 @@ mod handlers {
 		);
 	}
 
-	/// # Arguments
-	///
-	/// * path to manifest
-	/// * various manifest verification params
-	/// * directory containing signatures++member ID over manifests
 	pub(super) fn boot_standard(opts: &ClientOpts) {
-		// path to directory with manifest and approvals
 		services::boot_standard(
 			&opts.path("message"),
 			opts.pivot_path(),
 			opts.boot_dir(),
 		);
+	}
+
+	pub(super) fn post_share(opts: &ClientOpts) {
+		services::post_share(
+			&opts.path("message"),
+			opts.personal_dir(),
+			opts.boot_dir(),
+		)
 	}
 }
