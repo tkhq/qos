@@ -8,3 +8,8 @@ target/
 *.configuration
 *.pub
 *.share
+
+# For mock files
+!user1.*
+!user2.*
+!user3.*
