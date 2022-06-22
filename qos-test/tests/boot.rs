@@ -1,4 +1,4 @@
-use std::{path::Path, process::Command};
+use std::{path::Path, process::Command, fs};
 
 use borsh::de::BorshDeserialize;
 use qos_client::attest;
@@ -17,6 +17,8 @@ use qos_core::{
 };
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
 use rand::{seq::SliceRandom, thread_rng};
+use qos_test::PIVOT_OK_PATH;
+use qos_crypto::sha_256;
 
 #[tokio::test]
 async fn boot_e2e() {
@@ -56,7 +58,7 @@ async fn boot_e2e() {
 
 	// -- CLIENT Create 3 setup keys
 	// Make sure the directory keys are getting written to already exist.
-	let _ = std::fs::create_dir(key_dir);
+	let _ = fs::create_dir(key_dir);
 	for (u, private, public) in [
 		(&user1, &user1_private_setup, &user1_public_setup),
 		(&user2, &user2_private_setup, &user2_public_setup),
@@ -81,7 +83,7 @@ async fn boot_e2e() {
 		assert!(Path::new(&private).is_file());
 	}
 
-	// -- ENCLAVE Start enclave
+	// -- ENCLAVE start enclave
 	let mut enclave_child_process = Command::new("../target/debug/core_cli")
 		.args([
 			"--usock",
@@ -133,20 +135,20 @@ async fn boot_e2e() {
 		.unwrap()
 		.success());
 
-	// Kill the enclave and host. We will need a "new" enclave later
+	// Kill the enclave and host - we will restart them later for standard boot
 	assert!(host_child_process.kill().is_ok());
 	assert!(enclave_child_process.kill().is_ok());
 
 	// -- Read in files generated from the genesis boot
 	// Decode the attestation doc to make sure it passes basic checks
 	let _attestation_doc = attest::nitro::attestation_doc_from_der(
-		&std::fs::read(attestation_doc_path).unwrap(),
+		&fs::read(attestation_doc_path).unwrap(),
 		&attest::nitro::cert_from_pem(attest::nitro::AWS_ROOT_CERT_PEM)
 			.expect("AWS ROOT CERT is not valid PEM"),
 		attest::nitro::MOCK_SECONDS_SINCE_EPOCH,
 	);
 	let genesis_output = GenesisOutput::try_from_slice(
-		&std::fs::read(&genesis_output_path).unwrap(),
+		&fs::read(&genesis_output_path).unwrap(),
 	)
 	.unwrap();
 
@@ -236,7 +238,7 @@ async fn boot_e2e() {
 		);
 		// Check the share is encrypted to personal key
 		let share = private
-			.envelope_decrypt(&std::fs::read(share_path).unwrap())
+			.envelope_decrypt(&fs::read(share_path).unwrap())
 			.unwrap();
 		// Cross check that the share belongs `decrypted_shares`, which we
 		// created out of band in this test.
@@ -245,12 +247,13 @@ async fn boot_e2e() {
 
 	// -- CLIENT create manifest.
 	// Make sure the dir we are writing the manifest too exists
-	let _ = std::fs::create_dir(manifest_dir);
-	let mock_pivot_hash = vec![69u8; 32];
+	let _ = fs::create_dir(manifest_dir);
+	let pivot = fs::read(PIVOT_OK_PATH).unwrap();
+	let mock_pivot_hash = sha_256(&pivot);
 	let mock_pivot_hash_hex = hex::encode(&mock_pivot_hash);
 	// Put the root cert in the key dir just to make after test clean up easier
 	let root_cert_path = format!("{}/root-cert.pem", manifest_dir);
-	std::fs::write(&root_cert_path, attest::nitro::AWS_ROOT_CERT_PEM).unwrap();
+	fs::write(&root_cert_path, attest::nitro::AWS_ROOT_CERT_PEM).unwrap();
 
 	assert!(Command::new("../target/debug/client_cli")
 		.args([
@@ -284,9 +287,8 @@ async fn boot_e2e() {
 
 	// Check the manifest written to file
 	let manifest_path = format!("{}/{}.2.manifest", manifest_dir, namespace);
-	println!("manifest_path={}", manifest_path);
 	let manifest = {
-		let buf = std::fs::read(&manifest_path).unwrap();
+		let buf = fs::read(&manifest_path).unwrap();
 		Manifest::try_from_slice(&buf).unwrap()
 	};
 	let quorum_set_members: Vec<_> = genesis_output
@@ -322,15 +324,15 @@ async fn boot_e2e() {
 		}
 	);
 
-	// -- Client sign manifest
+	// -- CLIENT make sure each user can run `sign-manifest`
 	for alias in [user1, user2, user3] {
 		let (_, personal_path, _) = get_after_paths(alias.to_string());
 		let approval_path = format!(
 			"{}/{}.{}.{}.approval",
 			manifest_dir, alias, namespace, manifest.namespace.nonce,
 		);
-
 		assert!(!Path::new(&approval_path).exists());
+
 		assert!(Command::new("../target/debug/client_cli")
 			.args([
 				"sign-manifest",
@@ -349,25 +351,81 @@ async fn boot_e2e() {
 			.unwrap()
 			.success());
 
+		// Read in the generated approval to check it was created correctly
 		let approval =
-			Approval::try_from_slice(&std::fs::read(approval_path).unwrap())
+			Approval::try_from_slice(&fs::read(approval_path).unwrap())
 				.unwrap();
 		let personal_pair = RsaPair::from_pem_file(personal_path).unwrap();
 
 		let signature =
 			personal_pair.sign_sha256(&manifest.qos_hash()).unwrap();
 		assert_eq!(approval.signature, signature);
+
+		assert_eq!(approval.member.alias, alias);
+		assert_eq!(
+			approval.member.pub_key,
+			personal_pair.public_key_to_der().unwrap(),
+		);
 	}
+
+	// -- ENCLAVE start enclave
+	let mut enclave_child_process = Command::new("../target/debug/core_cli")
+		.args([
+			"--usock",
+			usock,
+			"--secret-file",
+			secret_path,
+			"--pivot-file",
+			pivot_path,
+			"--mock",
+		])
+		.spawn()
+		.unwrap();
+
+	// -- HOST start host
+	let mut host_child_process = Command::new("../target/debug/host_cli")
+		.args([
+			"--host-port",
+			host_port,
+			"--host-ip",
+			host_ip,
+			"--usock",
+			usock,
+		])
+		.spawn()
+		.unwrap();
+
+	// -- Make sure the enclave and host have time to boot
+	std::thread::sleep(std::time::Duration::from_secs(1));
+
+	// -- CLIENT broadcast boot standard instruction
+	assert!(Command::new("../target/debug/client_cli")
+		.args([
+			"boot-standard",
+			"--boot-dir",
+			manifest_dir,
+			"--pivot-path",
+			PIVOT_OK_PATH,
+			"--host-port",
+			host_port,
+			"--host-ip",
+			host_ip,
+		])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
 
 	// -- Clean up
 	for file in
 		[secret_path.to_string(), pivot_path.to_string(), usock.to_string()]
 	{
-		let _ = std::fs::remove_file(file);
+		let _ = fs::remove_file(file);
 	}
-	let _ = std::fs::remove_dir_all(key_dir);
-	let _ = std::fs::remove_dir_all(genesis_output_dir);
-	let _ = std::fs::remove_dir_all(manifest_dir);
+	let _ = fs::remove_dir_all(key_dir);
+	let _ = fs::remove_dir_all(genesis_output_dir);
+	let _ = fs::remove_dir_all(manifest_dir);
 	enclave_child_process.kill().unwrap();
 	host_child_process.kill().unwrap();
 }
