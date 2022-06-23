@@ -10,3 +10,8 @@ qos-core = { path = "../qos-core" }
 axum = { version = "0.5.4", features = ["http1"], default-features = false }
 tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
 borsh = { version = "0.9" }
+
+[features]
+default=["local"]
+local = ["qos-core/local"]
+vm = ["qos-core/vm"]
