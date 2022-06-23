@@ -99,16 +99,16 @@ impl HostOptions {
 	/// Panics if the options are not valid for exactly one of unix or vsock.
 	#[must_use]
 	pub fn enclave_addr(&self) -> SocketAddress {
-		match (
+		match dbg!((
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
 			self.parsed.single(USOCK),
-		) {
+		)) {
 			#[cfg(feature = "vm")]
 			(Some(c), Some(p), None) => SocketAddress::new_vsock(c, p),
 			// #[cfg(feature = "local")]
 			(None, None, Some(u)) => SocketAddress::new_unix(u),
-			_ => panic!("Invalid enclave socket options"),
+			_ => panic!("Invalid enclave socket options - check that vm feature is enabled."),
 		}
 	}
 
