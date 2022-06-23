@@ -37,8 +37,6 @@ const MANIFEST_EXT: &str = "manifest";
 const APPROVAL_EXT: &str = "approval";
 const STANDARD_ATTESTATION_DOC_FILE: &str = "attestation_doc.boot";
 
-// TODO: <https://github.com/tkhq/qos/issues/59/>
-
 pub(crate) fn generate_setup_key<P: AsRef<Path>>(
 	alias: &str,
 	namespace: &str,
@@ -132,7 +130,7 @@ fn create_genesis_set<P: AsRef<Path>>(
 	let members: Vec<_> = find_file_paths(&genesis_dir)
 		.iter()
 		.filter_map(|path| {
-			let n = split_file_name(path);
+			let mut n = split_file_name(path);
 
 			// TODO: do we want to dissallow having anything in this folder
 			// that is not a public key for the quorum set?
@@ -145,7 +143,7 @@ fn create_genesis_set<P: AsRef<Path>>(
 			let public_key = RsaPub::from_pem_file(&path)
 				.expect("Failed to read in rsa pub key.");
 			Some(SetupMember {
-				alias: (*n.get(0).unwrap()).to_string(),
+				alias: mem::take(&mut n[0]),
 				pub_key: public_key.public_key_to_der().unwrap(),
 			})
 		})
@@ -173,11 +171,12 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	let genesis_set_path = genesis_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 
 	// Read in the setup key
-	let (setup_pair, setup_file_name) = find_setup_key(&personal_dir);
+	let (setup_pair, mut setup_file_name) = find_setup_key(&personal_dir);
 
 	// Get the alias from the setup key file name
-	let alias = (*setup_file_name.get(0).unwrap()).to_string();
-	let namespace = (*setup_file_name.get(1).unwrap()).to_string();
+	let alias = mem::take(&mut setup_file_name[0]);
+	let namespace = mem::take(&mut setup_file_name[1]);
+	drop(setup_file_name);
 	println!("Alias: {}, Namespace: {}", alias, namespace);
 
 	// Read in the attestation doc from the genesis directory
@@ -336,6 +335,7 @@ pub(crate) fn sign_manifest<P: AsRef<Path>>(
 	let (personal_pair, mut personal_path) = find_personal_key(&personal_dir);
 	let alias = mem::take(&mut personal_path[0]);
 	let namespace = mem::take(&mut personal_path[1]);
+	drop(personal_path);
 
 	assert_eq!(
 		manifest.qos_hash(),
