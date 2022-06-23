@@ -14,8 +14,6 @@ vm-enclave:
 		--bin qos-core \
 		--features vm \
 		-- \
-		--host-ip 127.0.0.1 \
-		--host-port 3000 \
 		--cid 16 \
 		--port 6969
 
