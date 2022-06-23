@@ -132,6 +132,8 @@ async fn boot_e2e() {
 			boot_dir, alias, namespace, manifest.namespace.nonce,
 		);
 
+		println!("{}", hex::encode(&manifest.qos_hash()));
+
 		assert!(Command::new("../target/debug/client_cli")
 			.args([
 				"sign-manifest",

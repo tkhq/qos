@@ -60,7 +60,7 @@ impl EnclaveOptions {
 	/// Get the [`NsmProvider`]
 	#[must_use]
 	pub fn nsm(&self) -> Box<dyn NsmProvider> {
-		if self.parsed.flag(MOCK).expect("mock is a flag") {
+		if self.parsed.flag(MOCK).unwrap_or(false) {
 			Box::new(MockNsm)
 		} else {
 			Box::new(Nsm)

@@ -8,10 +8,10 @@ publish = false
 qos-core = { path = "../qos-core" }
 qos-host = { path = "../qos-host" }
 qos-client = { path = "../qos-client", features = ["mock"] }
+qos-crypto = { path = "../qos-crypto" }
 tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
 
 [dev-dependencies]
-qos-crypto = { path = "../qos-crypto" }
 borsh = { version = "0.9" }
 openssl = "0.10.40"
 ureq = { version = "2.4", default-features = false }
