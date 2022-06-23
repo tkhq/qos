@@ -1,4 +1,4 @@
-use std::{fs, process::Command};
+use std::{fs, process::Command, path::Path};
 
 use borsh::de::BorshDeserialize;
 use qos_client::attest::nitro::{
@@ -20,6 +20,7 @@ use qos_core::{
 };
 use qos_crypto::{sha_256, RsaPair};
 use qos_test::PIVOT_OK2_PATH;
+use qos_test::PIVOT_OK2_SUCCESS_FILE;
 
 
 
@@ -83,7 +84,7 @@ async fn boot_e2e() {
 			"--pivot-hash",
 			&mock_pivot_hash_hex,
 			"--restart-policy",
-			"always",
+			"never",
 			"--pcr0",
 			PCR0,
 			"--pcr1",
@@ -124,7 +125,7 @@ async fn boot_e2e() {
 			namespace: Namespace { name: namespace.to_string(), nonce: 2 },
 			pivot: PivotConfig {
 				hash: mock_pivot_hash,
-				restart: RestartPolicy::Always
+				restart: RestartPolicy::Never
 			},
 			quorum_key: genesis_output.quorum_key.clone(),
 			quorum_set: QuorumSet {
@@ -255,7 +256,7 @@ async fn boot_e2e() {
 			"--boot-dir",
 			boot_dir,
 			"--personal-dir",
-			&personal_dir(&user1),
+			&personal_dir(&user),
 			"--manifest-hash",
 			hex::encode(&manifest.qos_hash()).as_str(),
 			"--host-port",
@@ -270,7 +271,11 @@ async fn boot_e2e() {
 		.success());
 	}
 
-	for f in [&secret_path, &pivot_path, &usock, &eph_path] {
+	std::thread::sleep(std::time::Duration::from_secs(1));
+	assert!(Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
+	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
+
+	for f in [&secret_path, &pivot_path, &usock] {
 		drop(fs::remove_file(f));
 	}
 	drop(fs::remove_dir_all(boot_dir));

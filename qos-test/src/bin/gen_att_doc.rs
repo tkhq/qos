@@ -13,8 +13,14 @@ use qos_core::{
 };
 use qos_crypto::RsaPair;
 
+// 1) On the aws host run `make image` and then `build-enclave`.
+// 2) Take the PCRs output from `build-enclave` and update the hardcoded values in the boot e2e test
+// 3) Run the test and log the value of the manifest hash
+// 4) Update the manifest hash here
+// 5) Run this script
+
 const MANIFEST_HASH: &str =
-	"7d2fb72c3e819375ac2d330987d825431e2abdcebd0429e80d33c621ce995aaf";
+	"a4e45eedaad1fa7c5e21fbc9659603e0f602e876fb4a6cff72bd8a4710bea1e5";
 
 #[tokio::main]
 async fn main() {
@@ -54,7 +60,7 @@ async fn main() {
 	println!("Got a response!");
 
 	let att_path =
-		"./qos-core/src/protocol/attestor/static/boot_e2e_mock_attestation_doc.boot";
+		"./qos-core/src/protocol/attestor/static/boot_e2e_mock_attestation_doc";
 	fs::write(&att_path, cose_sign1).unwrap();
 
 	println!("DONE");

@@ -57,7 +57,9 @@ pub(in crate::protocol) fn provision(
 	encrypted_share: &[u8],
 	state: &mut ProtocolState,
 ) -> Result<bool, ProtocolError> {
-	let ephemeral_key = RsaPair::from_der_file(&state.ephemeral_key_file)?;
+	&state.ephemeral_key_file;
+
+	let ephemeral_key = RsaPair::from_pem_file(&state.ephemeral_key_file)?;
 
 	let share = ephemeral_key
 		.envelope_decrypt(encrypted_share)

@@ -182,7 +182,7 @@ pub(in crate::protocol) fn boot_standard(
 		let ephemeral_key = RsaPair::generate()?;
 		fs::write(
 			state.ephemeral_key_file.clone(),
-			ephemeral_key.private_key_to_der()?,
+			ephemeral_key.private_key_to_pem()?,
 		)?;
 
 		ephemeral_key
