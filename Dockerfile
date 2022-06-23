@@ -8,10 +8,9 @@ WORKDIR app
 RUN apt-get update \
   && apt-get install -y libssl-dev
 COPY --from=builder /target/debug/qos-core /usr/local/bin
-RUN ls -a /lib/
 RUN ls -a /lib/x86_64-linux-gnu/
-# ENTRYPOINT ["/usr/local/bin/qos-core", "--port", "6969", "--cid", "16"]
-ENTRYPOINT ["ls", "-a", "/lib/x86_64-linux-gnu/"]
+ENTRYPOINT ["/usr/local/bin/qos-core", "--port", "6969", "--cid", "16"]
+# ENTRYPOINT ["ls", "-a", "/lib/x86_64-linux-gnu/"]
 
 
 # Leveraging the pre-built Docker images with 
