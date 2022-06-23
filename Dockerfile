@@ -1,9 +1,9 @@
-FROM rust:buster as builder
+FROM rust:bullseye as builder
 COPY ./ ./
 RUN cargo build --bin qos-core --features vm --no-default-features
 
 # We don't need the Rust toolchain to run the binary!
-FROM debian:buster AS runtime
+FROM debian:bullseye AS runtime
 WORKDIR app
 RUN apt-get update && apt-get install -y libssl-dev
 COPY --from=builder /target/debug/qos-core /usr/local/bin
