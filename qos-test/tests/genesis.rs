@@ -1,7 +1,10 @@
-use std::{path::Path, process::Command};
+use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
-use qos_client::attest;
+use qos_client::attest::nitro::{
+	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
+	MOCK_SECONDS_SINCE_EPOCH,
+};
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
 use rand::{seq::SliceRandom, thread_rng};
@@ -14,37 +17,36 @@ async fn genesis_e2e() {
 	let secret_path = "./genesis_e2e.secret";
 	let pivot_path = "./genesis_e2e.pivot";
 
-	let key_dir = "./genesis-setup-tmp";
-	let namespace = "quit-coding-to-vape";
-	let genesis_output_dir = "./genesis-out-tmp";
-	let attestation_doc_path =
-		format!("{}/attestation_doc.genesis", genesis_output_dir);
-	let genesis_output_path = format!("{}/output.genesis", genesis_output_dir);
+	let all_personal_dir = "./genesis-e2e-personal-tmp";
+	let genesis_dir = "./genesis-e2e-genesis-tmp";
 
-	let get_key_paths = |user: String| {
+	let namespace = "quit-coding-to-vape";
+	let attestation_doc_path =
+		format!("{}/attestation_doc.genesis", genesis_dir);
+	let genesis_output_path = format!("{}/output.genesis", genesis_dir);
+
+	let personal_dir =
+		|user: &str| format!("{}/{}-dir", all_personal_dir, user);
+	let get_key_paths = |user: &str| {
 		(
-			format!("{}/{}.{}.setup.key", key_dir, user, namespace),
-			format!("{}/{}.{}.setup.pub", key_dir, user, namespace),
+			format!("{}.{}.setup.key", user, namespace),
+			format!("{}.{}.setup.pub", user, namespace),
 		)
 	};
 
 	let threshold = 2;
 	let user1 = "user1";
-	let (user1_private_setup, user1_public_setup) =
-		get_key_paths(user1.to_string());
+	let (user1_private_setup, user1_public_setup) = get_key_paths(user1);
 
 	let user2 = "user2";
-	let (user2_private_setup, user2_public_setup) =
-		get_key_paths(user2.to_string());
+	let (user2_private_setup, user2_public_setup) = get_key_paths(user2);
 
 	let user3 = "user3";
-	let (user3_private_setup, user3_public_setup) =
-		get_key_paths(user3.to_string());
+	let (user3_private_setup, user3_public_setup) = get_key_paths(user3);
 
 	// -- CLIENT Create 3 setup keys
 	// Make sure the directory keys are getting written to already exist.
-	let _ = std::fs::create_dir(key_dir);
-	for (u, private, public) in [
+	for (user, private, public) in [
 		(&user1, &user1_private_setup, &user1_public_setup),
 		(&user2, &user2_private_setup, &user2_public_setup),
 		(&user3, &user3_private_setup, &user3_public_setup),
@@ -52,23 +54,36 @@ async fn genesis_e2e() {
 		assert!(Command::new("../target/debug/client_cli")
 			.args([
 				"generate-setup-key",
-				"--key-dir",
-				key_dir,
+				"--personal-dir",
+				&personal_dir(user),
 				"--namespace",
 				namespace,
 				"--alias",
-				u,
+				user,
 			])
 			.spawn()
 			.unwrap()
 			.wait()
 			.unwrap()
 			.success());
-		assert!(Path::new(&public).is_file());
-		assert!(Path::new(&private).is_file());
+		assert!(Path::new(&personal_dir(user)).join(public).is_file());
+		assert!(Path::new(&personal_dir(user)).join(private).is_file());
 	}
 
-	// -- ENCLAVE Start enclave
+	// Make the genesis dir
+	fs::create_dir_all(genesis_dir).unwrap();
+	// Move the setup keys to the genesis dir - this will be the Genesis Set
+	for (user, public) in [
+		(&user1, &user1_public_setup),
+		(&user2, &user2_public_setup),
+		(&user3, &user3_public_setup),
+	] {
+		let from = Path::new(&personal_dir(user)).join(public);
+		let to = Path::new(genesis_dir).join(public);
+		fs::copy(from, to).unwrap();
+	}
+
+	// -- ENCLAVE start enclave
 	let mut enclave_child_process = Command::new("../target/debug/core_cli")
 		.args([
 			"--usock",
@@ -98,17 +113,15 @@ async fn genesis_e2e() {
 	// -- Make sure the enclave and host have time to boot
 	std::thread::sleep(std::time::Duration::from_secs(1));
 
-	// -- CLIENT Read in files with keys, create genesis input, send genesis
-	// input, and write genesis output to file
+	// -- CLIENT Run boot genesis, creating a genesis set from the setup keys in
+	// the genesis dir
 	assert!(Command::new("../target/debug/client_cli")
 		.args([
 			"boot-genesis",
 			"--threshold",
 			"2", // threshold
-			"--key-dir",
-			key_dir,
-			"--out-dir",
-			genesis_output_dir,
+			"--genesis-dir",
+			genesis_dir,
 			"--host-ip",
 			host_ip,
 			"--host-port",
@@ -120,27 +133,28 @@ async fn genesis_e2e() {
 		.unwrap()
 		.success());
 
-	// -- Read in files generated from the genesis boot
-	// Decode the attestation doc to make sure it passes basic checks
-	let _attestation_doc = attest::nitro::attestation_doc_from_der(
-		&std::fs::read(attestation_doc_path).unwrap(),
-		&attest::nitro::cert_from_pem(attest::nitro::AWS_ROOT_CERT_PEM)
+	// -- Check files generated from the genesis boot
+	drop(attestation_doc_from_der(
+		&fs::read(attestation_doc_path).unwrap(),
+		&cert_from_pem(AWS_ROOT_CERT_PEM)
 			.expect("AWS ROOT CERT is not valid PEM"),
-		attest::nitro::MOCK_SECONDS_SINCE_EPOCH,
-	);
-	let genesis_output = GenesisOutput::try_from_slice(
-		&std::fs::read(genesis_output_path).unwrap(),
-	)
-	.unwrap();
+		MOCK_SECONDS_SINCE_EPOCH,
+	));
+	let genesis_output =
+		GenesisOutput::try_from_slice(&fs::read(&genesis_output_path).unwrap())
+			.unwrap();
 
 	// -- Recreate the quorum key from the encrypted shares.
 	let mut decrypted_shares: Vec<_> = genesis_output
 		.member_outputs
 		.iter()
 		.map(|member| {
-			let (private_setup, _) =
-				get_key_paths(member.setup_member.alias.clone());
-			let setup_pair = RsaPair::from_pem_file(private_setup).unwrap();
+			let alias = &member.setup_member.alias;
+			let (private_setup, _) = get_key_paths(alias);
+			let setup_pair = RsaPair::from_pem_file(
+				Path::new(&personal_dir(alias)).join(private_setup),
+			)
+			.unwrap();
 
 			// Decrypt the personal key with the setup key
 			let personal_key = RsaPair::from_der(
@@ -157,6 +171,7 @@ async fn genesis_e2e() {
 		})
 		.collect();
 
+	// Try recovering from a random permutation
 	decrypted_shares.shuffle(&mut thread_rng());
 	let reconstructed =
 		RsaPair::from_der(&shares_reconstruct(&decrypted_shares[0..threshold]))
@@ -168,71 +183,56 @@ async fn genesis_e2e() {
 
 	// -- CLIENT make sure each user can run `after-genesis` against their
 	// member output and setup key
-	let get_after_paths = |user: String| {
-		(
-			format!(
-				"{}/{}.{}.personal.pub",
-				genesis_output_dir, user, namespace
-			),
-			format!(
-				"{}/{}.{}.personal.key",
-				genesis_output_dir, user, namespace
-			),
-			format!("{}/{}.{}.share", genesis_output_dir, user, namespace),
-		)
-	};
-	let mock_pcr = &qos_core::hex::encode(&[0u8; 48]);
-	for (u, setup_key_path) in [
-		(user1, &user1_private_setup),
-		(user2, &user2_private_setup),
-		(user3, &user3_private_setup),
-	] {
+	let mock_pcr = vec![0u8; 48];
+	let mock_pcr_hex = &qos_core::hex::encode(&mock_pcr);
+
+	for user in [&user1, &user2, &user3] {
 		assert!(Command::new("../target/debug/client_cli")
 			.args([
 				"after-genesis",
-				"--setup-key-path",
-				setup_key_path,
+				"--personal-dir",
+				&personal_dir(user),
 				"--genesis-dir",
-				genesis_output_dir,
+				genesis_dir,
 				"--pcr0",
-				mock_pcr,
+				mock_pcr_hex,
 				"--pcr1",
-				mock_pcr,
+				mock_pcr_hex,
 				"--pcr2",
-				mock_pcr
+				mock_pcr_hex
 			])
 			.spawn()
 			.unwrap()
 			.wait()
 			.unwrap()
 			.success());
-		let (personal_pub, personal_priv, share_path) =
-			get_after_paths(u.to_string());
 
+		let personal_pub = Path::new(&personal_dir(user))
+			.join(format!("{}.{}.personal.pub", user, namespace));
+		let personal_key = Path::new(&personal_dir(user))
+			.join(format!("{}.{}.personal.key", user, namespace));
+		let share_path = Path::new(&personal_dir(user))
+			.join(format!("{}.{}.share", user, namespace));
 		// Read in the personal public and private key
 		let public = RsaPub::from_pem_file(personal_pub).unwrap();
-		let private = RsaPair::from_pem_file(personal_priv).unwrap();
+		let private = RsaPair::from_pem_file(personal_key).unwrap();
 		assert_eq!(
 			private.public_key_to_der().unwrap(),
 			public.public_key_to_der().unwrap()
 		);
 		// Check the share is encrypted to personal key
-		let share = private
-			.envelope_decrypt(&std::fs::read(share_path).unwrap())
-			.unwrap();
+		let share =
+			private.envelope_decrypt(&fs::read(share_path).unwrap()).unwrap();
 		// Cross check that the share belongs `decrypted_shares`, which we
 		// created out of band in this test.
 		assert!(decrypted_shares.contains(&share));
 	}
 
-	// -- Clean up
-	for file in
-		[secret_path.to_string(), pivot_path.to_string(), usock.to_string()]
-	{
-		let _ = std::fs::remove_file(file);
+	for path in [&secret_path, &pivot_path, &usock] {
+		drop(fs::remove_file(path));
 	}
-	let _ = std::fs::remove_dir_all(key_dir);
-	let _ = std::fs::remove_dir_all(genesis_output_dir);
+	drop(fs::remove_dir_all(genesis_dir));
+	drop(fs::remove_dir_all(all_personal_dir));
 	enclave_child_process.kill().unwrap();
 	host_child_process.kill().unwrap();
 }

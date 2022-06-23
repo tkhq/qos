@@ -64,6 +64,8 @@ pub enum ProtocolError {
 	DecryptionFailed,
 	/// Could not create a private key.
 	InvalidPrivateKey,
+	/// Failed to parse from string.
+	FailedToParseFromString,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {

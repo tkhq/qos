@@ -5,31 +5,28 @@ use std::env;
 use qos_core::{
 	hex,
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
-	protocol::msg::ProtocolMsg,
-};
-use qos_crypto::RsaPair;
-
-use crate::attest::nitro::{
-	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
+	protocol::{msg::ProtocolMsg, services::boot, Hash256},
 };
 
 mod services;
 
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
-
-const KEY_DIR: &str = "key-dir";
 const ALIAS: &str = "alias";
 const NAMESPACE: &str = "namespace";
-
-const GENESIS_DIR: &str = "genesis-dir";
-const SETUP_KEY_PATH: &str = "setup-key-path";
 const PCR0: &str = "pcr0";
 const PCR1: &str = "pcr1";
 const PCR2: &str = "pcr2";
-
 const THRESHOLD: &str = "threshold";
-const OUT_DIR: &str = "out-dir";
+const NONCE: &str = "nonce";
+const PIVOT_HASH: &str = "pivot-hash";
+const RESTART_POLICY: &str = "restart-policy";
+const ROOT_CERT_PATH: &str = "root-cert-path";
+const MANIFEST_HASH: &str = "manifest-hash";
+const PIVOT_PATH: &str = "pivot-path";
+const GENESIS_DIR: &str = "genesis-dir";
+const BOOT_DIR: &str = "boot-dir";
+const PERSONAL_DIR: &str = "personal-dir";
 
 #[derive(Clone, PartialEq, Debug)]
 enum Command {
@@ -38,6 +35,10 @@ enum Command {
 	GenerateSetupKey,
 	BootGenesis,
 	AfterGenesis,
+	GenerateManifest,
+	SignManifest,
+	BootStandard,
+	PostShare,
 }
 
 impl From<&str> for Command {
@@ -48,7 +49,13 @@ impl From<&str> for Command {
 			"generate-setup-key" => Self::GenerateSetupKey,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
-			_ => panic!("Unrecognized command"),
+			"generate-manifest" => Self::GenerateManifest,
+			"sign-manifest" => Self::SignManifest,
+			"boot-standard" => Self::BootStandard,
+			"post-share" => Self::PostShare,
+			_ => panic!(
+				"Unrecognized command, try something like `host-health --help`"
+			),
 		}
 	}
 }
@@ -60,15 +67,53 @@ impl From<String> for Command {
 }
 
 impl Command {
+	fn boot_dir_token() -> Token {
+		Token::new(
+			BOOT_DIR,
+			"Directory (eventually) containing the manifest, K approvals, and attestation doc.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn manifest_hash_token() -> Token {
+		Token::new(MANIFEST_HASH, "Hex encoded hash of the expected manifest.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn personal_dir_token() -> Token {
+		Token::new(PERSONAL_DIR, "Directory (eventually) containing personal key, share, and setup key associated with 1 genesis ceremony.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn genesis_dir_token() -> Token {
+		Token::new(GENESIS_DIR, "Directory (eventually) containing genesis output, setup public keys, and attestation doc.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn pcr0_token() -> Token {
+		Token::new(PCR0, "Hex encoded pcr0.").takes_value(true).required(true)
+	}
+	fn pcr1_token() -> Token {
+		Token::new(PCR1, "Hex encoded pcr0.").takes_value(true).required(true)
+	}
+	fn pcr2_token() -> Token {
+		Token::new(PCR2, "Hex encoded pcr2.").takes_value(true).required(true)
+	}
+	fn namespace_token() -> Token {
+		Token::new(NAMESPACE, "Namespace for the associated manifest.")
+			.takes_value(true)
+			.required(true)
+	}
+
 	fn base() -> Parser {
 		Parser::new()
 			.token(
-				Token::new(HOST_IP, "IP address this server should listen on")
+				Token::new(HOST_IP, "IP address this server should listen on.")
 					.takes_value(true)
 					.required(true),
 			)
 			.token(
-				Token::new(HOST_PORT, "Port this server should listen on")
+				Token::new(HOST_PORT, "Port this server should listen on.")
 					.takes_value(true)
 					.required(true),
 			)
@@ -79,82 +124,107 @@ impl Command {
 			.token(
 				Token::new(
 					ALIAS,
-					"alias of the Quorum Member this key will belong too.",
+					"Alias of the Quorum Member this key will belong too.",
 				)
 				.takes_value(true)
 				.required(true),
 			)
-			.token(
-				Token::new(
-					KEY_DIR,
-					"directory to save the generated Setup Key files.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
-			.token(
-				Token::new(
-					NAMESPACE,
-					"namespace the alias and Setup Key will belong too.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
+			.token(Self::personal_dir_token())
+			.token(Self::namespace_token())
 	}
 
 	fn boot_genesis() -> Parser {
 		Self::base()
+			.token(Self::genesis_dir_token())
 			.token(
-				Token::new(KEY_DIR, "directory containing all the setup public keys to use for genesis.")
-					.takes_value(true)
-					.required(true)
-				)
-			.token(
-				Token::new(THRESHOLD, "the threshold to be considered a quorum, K.")
-					.takes_value(true)
-					.required(true)
-
-			)
-			.token(
-				Token::new(OUT_DIR, "directory to write all the genesis outputs too.")
-					.takes_value(true)
-					.required(true)
+				Token::new(THRESHOLD, "Threshold, K, for having a quorum. K shares will reconstruct the Quorum key and K signatures are considered a quorum")
+				.required(true)
+				.takes_value(true)
 			)
 	}
 
 	fn after_genesis() -> Parser {
 		Parser::new()
+			.token(Self::genesis_dir_token())
+			.token(Self::personal_dir_token())
+			.token(Self::pcr0_token())
+			.token(Self::pcr1_token())
+			.token(Self::pcr2_token())
+	}
+
+	fn generate_manifest() -> Parser {
+		Parser::new()
+			.token(
+				Self::genesis_dir_token()
+			)
 			.token(
 				Token::new(
-					GENESIS_DIR,
-					"directory with outputs from running genesis.",
+					NONCE,
+					"Nonce of the manifest relative to the namespace.",
 				)
 				.takes_value(true)
 				.required(true),
 			)
 			.token(
+				Self::namespace_token()
+			)
+			.token(
 				Token::new(
-					SETUP_KEY_PATH,
-					"path to the Setup Key you used as an input to genesis.",
+					PIVOT_HASH,
+					"Hex encoded SHA-256 hash of the pivot executable encoded as a Vec<u8>.",
 				)
 				.takes_value(true)
 				.required(true),
 			)
 			.token(
-				Token::new(PCR0, "hex encoded pcr0")
+				Token::new(RESTART_POLICY, "One of: `never`, `always`.")
 					.takes_value(true)
 					.required(true),
 			)
 			.token(
-				Token::new(PCR1, "hex encoded pcr1")
-					.takes_value(true)
-					.required(true),
+				Self::pcr0_token()
 			)
 			.token(
-				Token::new(PCR2, "hex encoded pcr2")
+				Self::pcr1_token()
+			)
+			.token(
+				Self::pcr2_token()
+			)
+			.token(
+				Token::new(
+					ROOT_CERT_PATH,
+					"Path to file containing PEM encoded AWS root cert.",
+				)
+				.takes_value(true)
+				.required(true),
+			)
+			.token(
+				Self::boot_dir_token()
+			)
+	}
+
+	fn sign_manifest() -> Parser {
+		Parser::new()
+			.token(Self::manifest_hash_token())
+			.token(Self::personal_dir_token())
+			.token(Self::boot_dir_token())
+	}
+
+	fn boot_standard() -> Parser {
+		Self::base()
+			.token(
+				Token::new(PIVOT_PATH, "Path to the pivot binary.")
 					.takes_value(true)
 					.required(true),
 			)
+			.token(Self::boot_dir_token())
+	}
+
+	fn post_share() -> Parser {
+		Self::base()
+			.token(Self::manifest_hash_token())
+			.token(Self::personal_dir_token())
+			.token(Self::boot_dir_token())
 	}
 }
 
@@ -165,16 +235,20 @@ impl GetParserForCommand for Command {
 			Self::GenerateSetupKey => Self::generate_setup_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
+			Self::GenerateManifest => Self::generate_manifest(),
+			Self::SignManifest => Self::sign_manifest(),
+			Self::BootStandard => Self::boot_standard(),
+			Self::PostShare => Self::post_share(),
 		}
 	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
-struct ClientOptions {
+struct ClientOpts {
 	parsed: Parser,
 }
 
-impl ClientOptions {
+impl ClientOpts {
 	fn path(&self, uri: &str) -> String {
 		let ip = self.parsed.single(HOST_IP).expect("required arg");
 		let port = self.parsed.single(HOST_PORT).expect("required arg");
@@ -182,41 +256,33 @@ impl ClientOptions {
 		format!("http://{}:{}/{}", ip, port, uri)
 	}
 
-	// Generate setup key options
-	fn key_dir(&self) -> String {
-		self.parsed.single(KEY_DIR).expect("required arg").to_string()
-	}
 	fn alias(&self) -> String {
 		self.parsed.single(ALIAS).expect("required arg").to_string()
 	}
+
 	fn namespace(&self) -> String {
 		self.parsed.single(NAMESPACE).expect("required arg").to_string()
 	}
 
-	// AfterGenesis options
 	fn genesis_dir(&self) -> String {
 		self.parsed.single(GENESIS_DIR).expect("required arg").to_string()
 	}
-	fn setup_key_path(&self) -> String {
-		self.parsed.single(SETUP_KEY_PATH).expect("required arg").to_string()
-	}
+
 	fn pcr0(&self) -> Vec<u8> {
 		hex::decode(self.parsed.single(PCR0).expect("required arg"))
 			.expect("Could not parse `--pcr0` to bytes")
 	}
+
 	fn pcr1(&self) -> Vec<u8> {
 		hex::decode(self.parsed.single(PCR1).expect("required arg"))
 			.expect("Could not parse `--pcr1` to bytes")
 	}
+
 	fn pcr2(&self) -> Vec<u8> {
 		hex::decode(self.parsed.single(PCR2).expect("required arg"))
 			.expect("Could not parse `--pcr2` to bytes")
 	}
 
-	// BootGenesis options
-	fn out_dir(&self) -> String {
-		self.parsed.single(OUT_DIR).expect("required arg").to_string()
-	}
 	fn threshold(&self) -> u32 {
 		self.parsed
 			.single(THRESHOLD)
@@ -224,12 +290,57 @@ impl ClientOptions {
 			.parse::<u32>()
 			.expect("Could not parse `--threshold` as u32")
 	}
+
+	fn nonce(&self) -> u32 {
+		self.parsed
+			.single(NONCE)
+			.expect("required arg")
+			.parse::<u32>()
+			.expect("Could not parse `--nonce` as u32")
+	}
+
+	fn pivot_hash(&self) -> Vec<u8> {
+		hex::decode(self.parsed.single(PIVOT_HASH).expect("required arg"))
+			.expect("Could not parse `--pivot-hash` to bytes")
+	}
+
+	fn restart_policy(&self) -> boot::RestartPolicy {
+		self.parsed
+			.single(RESTART_POLICY)
+			.expect("required arg")
+			.to_string()
+			.try_into()
+			.expect("Could not parse `--restart-policy`")
+	}
+
+	fn root_cert_path(&self) -> String {
+		self.parsed.single(ROOT_CERT_PATH).expect("required arg").to_string()
+	}
+
+	fn manifest_hash(&self) -> Hash256 {
+		hex::decode(self.parsed.single(MANIFEST_HASH).expect("required arg"))
+			.expect("Could not parse `--manifest-hash` to bytes")
+			.try_into()
+			.expect("Could not convert manifest hash to Hash256")
+	}
+
+	fn pivot_path(&self) -> String {
+		self.parsed.single(PIVOT_PATH).expect("required arg").to_string()
+	}
+
+	fn boot_dir(&self) -> String {
+		self.parsed.single(BOOT_DIR).expect("required arg").to_string()
+	}
+
+	fn personal_dir(&self) -> String {
+		self.parsed.single(PERSONAL_DIR).expect("required arg").to_string()
+	}
 }
 
 #[derive(Clone, PartialEq, Debug)]
 struct ClientRunner {
 	cmd: Command,
-	opts: ClientOptions,
+	opts: ClientOpts,
 }
 impl ClientRunner {
 	/// Create [`Self`] from the command line arguments.
@@ -237,7 +348,7 @@ impl ClientRunner {
 		let (cmd, parsed) =
 			CommandParser::<Command>::parse(args).expect("Invalid CLI args");
 
-		Self { cmd, opts: ClientOptions { parsed } }
+		Self { cmd, opts: ClientOpts { parsed } }
 	}
 
 	/// Run the given command.
@@ -256,6 +367,12 @@ impl ClientRunner {
 				}
 				Command::BootGenesis => handlers::boot_genesis(&self.opts),
 				Command::AfterGenesis => handlers::after_genesis(&self.opts),
+				Command::GenerateManifest => {
+					handlers::generate_manifest(&self.opts);
+				}
+				Command::SignManifest => handlers::sign_manifest(&self.opts),
+				Command::BootStandard => handlers::boot_standard(&self.opts),
+				Command::PostShare => handlers::post_share(&self.opts),
 			}
 		}
 	}
@@ -277,14 +394,16 @@ impl CLI {
 mod handlers {
 	use qos_core::protocol::attestor::types::NsmRequest;
 
-	use super::services;
 	use crate::{
-		cli::{ClientOptions, ProtocolMsg},
+		cli::{
+			services::{self, GenerateManifestArgs},
+			ClientOpts, ProtocolMsg,
+		},
 		request,
 	};
 
-	pub(super) fn host_health(options: &ClientOptions) {
-		let path = &options.path("health");
+	pub(super) fn host_health(opts: &ClientOpts) {
+		let path = &opts.path("health");
 		if let Ok(response) = request::get(path) {
 			println!("{}", response);
 		} else {
@@ -301,8 +420,8 @@ mod handlers {
 	// - Data signed by quorum key
 
 	// TODO: this should eventually be removed since it only applies to nitro
-	pub(super) fn describe_nsm(options: &ClientOptions) {
-		let path = &options.path("message");
+	pub(super) fn describe_nsm(opts: &ClientOpts) {
+		let path = &opts.path("message");
 		match request::post(
 			path,
 			&ProtocolMsg::NsmRequest { nsm_request: NsmRequest::DescribeNSM },
@@ -317,32 +436,72 @@ mod handlers {
 		}
 	}
 
-	pub(super) fn generate_setup_key(options: &ClientOptions) {
+	pub(super) fn generate_setup_key(opts: &ClientOpts) {
 		services::generate_setup_key(
-			&options.alias(),
-			&options.namespace(),
-			options.key_dir(),
+			&opts.alias(),
+			&opts.namespace(),
+			opts.personal_dir(),
 		);
 	}
 
 	// TODO: verify AWS_ROOT_CERT_PEM against a checksum
 	// TODO: verify PCRs
-	pub(super) fn boot_genesis(options: &ClientOptions) {
+	pub(super) fn boot_genesis(opts: &ClientOpts) {
 		services::boot_genesis(
-			&options.path("message"),
-			options.out_dir(),
-			options.key_dir(),
-			options.threshold(),
+			&opts.path("message"),
+			opts.genesis_dir(),
+			opts.threshold(),
 		);
 	}
 
-	pub(super) fn after_genesis(options: &ClientOptions) {
+	pub(super) fn after_genesis(opts: &ClientOpts) {
 		services::after_genesis(
-			options.genesis_dir(),
-			options.setup_key_path(),
-			&options.pcr0(),
-			&options.pcr1(),
-			&options.pcr2(),
+			opts.genesis_dir(),
+			opts.personal_dir(),
+			&opts.pcr0(),
+			&opts.pcr1(),
+			&opts.pcr2(),
+		);
+	}
+
+	/// TODO: can we write the manifest in plain english?
+	pub(super) fn generate_manifest(opts: &ClientOpts) {
+		services::generate_manifest(GenerateManifestArgs {
+			genesis_dir: opts.genesis_dir(),
+			nonce: opts.nonce(),
+			namespace: opts.namespace(),
+			pivot_hash: opts.pivot_hash().try_into().unwrap(),
+			restart_policy: opts.restart_policy(),
+			pcr0: opts.pcr0(),
+			pcr1: opts.pcr1(),
+			pcr2: opts.pcr2(),
+			root_cert_path: opts.root_cert_path(),
+			boot_dir: opts.boot_dir(),
+		});
+	}
+
+	pub(super) fn sign_manifest(opts: &ClientOpts) {
+		services::sign_manifest(
+			opts.manifest_hash(),
+			opts.personal_dir(),
+			opts.boot_dir(),
+		);
+	}
+
+	pub(super) fn boot_standard(opts: &ClientOpts) {
+		services::boot_standard(
+			&opts.path("message"),
+			opts.pivot_path(),
+			opts.boot_dir(),
+		);
+	}
+
+	pub(super) fn post_share(opts: &ClientOpts) {
+		services::post_share(
+			&opts.path("message"),
+			opts.personal_dir(),
+			opts.boot_dir(),
+			opts.manifest_hash(),
 		);
 	}
 }

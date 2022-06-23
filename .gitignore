@@ -1,6 +1,7 @@
 .DS_Store
 .vscode
 target/
+
 *.sock
 *.key
 *.pivot
@@ -8,3 +9,7 @@ target/
 *.configuration
 *.pub
 *.share
+
+!mock/*/user1.*
+!mock/*/user2.*
+!mock/*/user3.*

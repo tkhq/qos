@@ -12,16 +12,12 @@ use crate::protocol::{
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct NitroConfig {
-	/// VSOCK Context ID - component of VSockAddress.
-	pub vsock_cid: u16,
-	/// VSOCK Port - component of VSockAddress.
-	pub vsock_port: u16,
 	/// The hash of the enclave image file
-	pub pcr0: Hash256,
+	pub pcr0: Vec<u8>,
 	/// The hash of the Linux kernel and bootstrap
-	pub pcr1: Hash256,
+	pub pcr1: Vec<u8>,
 	/// The hash of the application
-	pub pcr2: Hash256,
+	pub pcr2: Vec<u8>,
 	/// DER encoded X509 AWS root certificate
 	pub aws_root_certificate: Vec<u8>,
 }
@@ -35,6 +31,18 @@ pub enum RestartPolicy {
 	Never,
 	/// Always restart the pivot application
 	Always,
+}
+
+impl TryFrom<String> for RestartPolicy {
+	type Error = ProtocolError;
+
+	fn try_from(s: String) -> Result<RestartPolicy, Self::Error> {
+		match s.to_ascii_lowercase().as_str() {
+			"never" => Ok(Self::Never),
+			"always" => Ok(Self::Always),
+			_ => Err(ProtocolError::FailedToParseFromString),
+		}
+	}
 }
 
 /// Pivot binary configuration
@@ -94,14 +102,14 @@ pub struct Namespace {
 pub struct Manifest {
 	/// Namespace this manifest belongs too.
 	pub namespace: Namespace,
-	/// Configuration and verifiable values for the enclave hardware.
-	pub enclave: NitroConfig,
 	/// Pivot binary configuration and verifiable values.
 	pub pivot: PivotConfig,
 	/// Quorum Key as a DER encoded RSA public key.
 	pub quorum_key: Vec<u8>,
 	/// Quorum Set members and threshold.
 	pub quorum_set: QuorumSet,
+	/// Configuration and verifiable values for the enclave hardware.
+	pub enclave: NitroConfig,
 }
 
 /// An approval by a Quorum Member.
@@ -180,7 +188,6 @@ pub(in crate::protocol) fn boot_standard(
 
 	let nsm_response = {
 		let request = NsmRequest::Attestation {
-			// TODO: make sure CLI verifies the manifest hash is correct
 			user_data: Some(manifest_envelope.manifest.qos_hash().to_vec()),
 			nonce: None,
 			public_key: Some(ephemeral_key.public_key_to_pem().unwrap()),
@@ -234,11 +241,9 @@ mod test {
 		let manifest = Manifest {
 			namespace: Namespace { nonce: 420, name: "vape lord".to_string() },
 			enclave: NitroConfig {
-				vsock_cid: 69,
-				vsock_port: 42069,
-				pcr0: [4; 32],
-				pcr1: [2; 32],
-				pcr2: [0; 32],
+				pcr0: vec![4; 32],
+				pcr1: vec![2; 32],
+				pcr2: vec![0; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
 			},
 			pivot: PivotConfig {

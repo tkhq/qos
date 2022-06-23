@@ -58,6 +58,7 @@ pub(in crate::protocol) fn provision(
 	state: &mut ProtocolState,
 ) -> Result<bool, ProtocolError> {
 	let ephemeral_key = RsaPair::from_der_file(&state.ephemeral_key_file)?;
+
 	let share = ephemeral_key
 		.envelope_decrypt(encrypted_share)
 		.map_err(|_| ProtocolError::DecryptionFailed)?;
@@ -125,11 +126,9 @@ mod test {
 		let manifest = Manifest {
 			namespace: Namespace { nonce: 420, name: "vape-space".to_string() },
 			enclave: NitroConfig {
-				vsock_cid: 69,
-				vsock_port: 42069,
-				pcr0: [4; 32],
-				pcr1: [2; 32],
-				pcr2: [0; 32],
+				pcr0: vec![4; 32],
+				pcr1: vec![2; 32],
+				pcr2: vec![0; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
 			},
 			pivot: PivotConfig {
