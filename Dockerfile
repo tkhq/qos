@@ -3,7 +3,7 @@ COPY ./ ./
 RUN cargo build --bin qos-core --features vm --no-default-features
 
 # We don't need the Rust toolchain to run the binary!
-FROM rust:bullseye AS runtime
+FROM debian:bullseye-slim AS runtime
 WORKDIR app
 RUN apt-get update \
   && apt-get install -y libssl-dev
