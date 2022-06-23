@@ -1,4 +1,4 @@
-FROM rust:1.60 as builder
+FROM rust:latest as builder
 COPY ./ ./
 RUN cargo build --bin qos-core --features vm --no-default-features
 
