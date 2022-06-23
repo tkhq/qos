@@ -1,11 +1,9 @@
-use std::{path::Path, process::Command, fs};
+use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
-use qos_client::attest::{
-	nitro::{
-		attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
-		MOCK_SECONDS_SINCE_EPOCH,
-	},
+use qos_client::attest::nitro::{
+	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
+	MOCK_SECONDS_SINCE_EPOCH,
 };
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
@@ -209,15 +207,12 @@ async fn genesis_e2e() {
 			.unwrap()
 			.success());
 
-		let personal_pub = Path::new(&personal_dir(&user)).join(
-			format!("{}.{}.personal.pub", user, namespace)
-		);
-		let personal_key = Path::new(&personal_dir(&user)).join(
-			format!("{}.{}.personal.key", user, namespace)
-		);
-		let share_path = Path::new(&personal_dir(&user)).join(
-			format!("{}.{}.share", user, namespace)
-		);
+		let personal_pub = Path::new(&personal_dir(&user))
+			.join(format!("{}.{}.personal.pub", user, namespace));
+		let personal_key = Path::new(&personal_dir(&user))
+			.join(format!("{}.{}.personal.key", user, namespace));
+		let share_path = Path::new(&personal_dir(&user))
+			.join(format!("{}.{}.share", user, namespace));
 		// Read in the personal public and private key
 		let public = RsaPub::from_pem_file(personal_pub).unwrap();
 		let private = RsaPair::from_pem_file(personal_key).unwrap();
@@ -233,8 +228,7 @@ async fn genesis_e2e() {
 		assert!(decrypted_shares.contains(&share));
 	}
 
-	for path in [&secret_path, &pivot_path, &usock]
-	{
+	for path in [&secret_path, &pivot_path, &usock] {
 		drop(fs::remove_file(path));
 	}
 	drop(fs::remove_dir_all(genesis_dir));

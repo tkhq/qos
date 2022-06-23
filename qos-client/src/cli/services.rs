@@ -400,7 +400,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		ProtocolMsg::BootStandardResponse {
 			nsm_response: NsmResponse::Attestation { document },
 		} => document,
-		_ => panic!("Unexpected response"),
+		r => panic!("Unexpected response: {:?}", r),
 	};
 
 	let attestation_doc = extract_attestation_doc(&cose_sign1);
@@ -415,6 +415,9 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	);
 
 	// Make sure the ephemeral key is valid.
+	// TODO: hack - we need to get a real attestation doc and make sure to save
+	// the ephemeral key
+	#[cfg(not(feature = "mock"))]
 	drop(
 		RsaPub::from_der(
 			&attestation_doc

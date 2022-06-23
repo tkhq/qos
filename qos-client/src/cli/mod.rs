@@ -221,7 +221,10 @@ impl Command {
 	}
 
 	fn post_share() -> Parser {
-		Self::sign_manifest()
+		Self::base()
+			.token(Self::manifest_hash_token())
+			.token(Self::personal_dir_token())
+			.token(Self::boot_dir_token())
 	}
 }
 
