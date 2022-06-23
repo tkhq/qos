@@ -24,16 +24,17 @@ use qos_test::PIVOT_OK2_PATH;
 // {
 //   "Measurements": {
 //     "HashAlgorithm": "Sha384 { ... }",
-//     "PCR0": "fed83aacdbec7bfcd423b186c4825b576432e65c2def0ec192ed8da93b1582436a2dffeb3911a523118ea41453e1b905",
+//     "PCR0": "f6a3bb54c089b9b7b046a6d44370b887d9efcb131e03ed0384060a64021e53564d0c6f07d52d8410fc0acd9bcc9ddd9d",
 //     "PCR1": "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f",
-//     "PCR2": "9f08233ae4777e2b0962a1df3eecff6b0dd9315ec0185472f7a2b047226cdf7218195d03cd14680934954ccdd2840a8b"
+//     "PCR2": "7df6e4c7b729407191e925ad0ec757a02f79158f6b24cb20d4633b58f2df3d65a0557409f25ab90d0dc614513d18a66a"
 //   }
 // }
 
 const EPH_PATH: &str = "../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
-const PCR0: &str = "fed83aacdbec7bfcd423b186c4825b576432e65c2def0ec192ed8da93b1582436a2dffeb3911a523118ea41453e1b905";
+const PCR0: &str = "f6a3bb54c089b9b7b046a6d44370b887d9efcb131e03ed0384060a64021e53564d0c6f07d52d8410fc0acd9bcc9ddd9d";
 const PCR1: &str = "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f";
-const PCR2: &str = "9f08233ae4777e2b0962a1df3eecff6b0dd9315ec0185472f7a2b047226cdf7218195d03cd14680934954ccdd2840a8b";
+const PCR2: &str = "7df6e4c7b729407191e925ad0ec757a02f79158f6b24cb20d4633b58f2df3d65a0557409f25ab90d0dc614513d18a66a";
+
 const manifest_hash = "ef3decf6a20cee82b0891383a59940960435349a334792866d0ae570fc8eef2c";
 
 #[tokio::test]
