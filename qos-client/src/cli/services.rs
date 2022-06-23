@@ -84,7 +84,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 			nsm_response: NsmResponse::Attestation { document },
 			genesis_output,
 		} => (document, genesis_output),
-		_ => panic!("Unexpected response"),
+		r => panic!("Unexpected response: {:?}", r),
 	};
 
 	// Sanity check the genesis output
@@ -485,7 +485,7 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	let req = ProtocolMsg::ProvisionRequest { share };
 	let is_reconstructed = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::ProvisionResponse { reconstructed } => reconstructed,
-		_ => panic!("Unexpected response"),
+		r => panic!("Unexpected response: {:?}", r),
 	};
 
 	if is_reconstructed {
