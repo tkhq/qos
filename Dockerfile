@@ -31,5 +31,8 @@ RUN cargo build --bin qos-core --release --features vm --no-default-features
 FROM debian:bullseye-slim AS runtime
 WORKDIR app
 # COPY --from=builder /app/target/release/app /usr/local/bin
+RUN apt-get update \
+  && apt-get install -y libssl-dev \
+  && apt-get install libc6-dev -y
 COPY --from=builder /app/target/release/qos-core /usr/local/bin
 ENTRYPOINT ["/usr/local/bin/qos-core", "--port", "6969", "--cid", "16"]
