@@ -14,16 +14,7 @@ use qos_core::{
 use qos_crypto::RsaPair;
 
 const MANIFEST_HASH: &str =
-	"ad2d8c29e61f5541b72eecdb558c69792436128c7ab7bd87c6204816be87a59d";
-
-// {
-//   "Measurements": {
-//     "HashAlgorithm": "Sha384 { ... }",
-//     "PCR0": "5fc7fd14e63c72968105b2632b6c9249b8c50e1e901c11301fc179d7fe9767b796ee30e07f019c09bac2b12bdafff56e",
-//     "PCR1": "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f",
-//     "PCR2": "9c706b679dffdb49241c40d9c52f6c8e301b8d82de53ff41feae7ccaacbb5eb08c51fe3e163a719c311b9c093f91f0da"
-//   }
-// }
+	"7d2fb72c3e819375ac2d330987d825431e2abdcebd0429e80d33c621ce995aaf";
 
 #[tokio::main]
 async fn main() {
