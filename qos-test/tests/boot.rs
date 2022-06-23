@@ -19,8 +19,7 @@ use qos_core::{
 	},
 };
 use qos_crypto::{sha_256, RsaPair};
-use qos_test::{PIVOT_OK2_PATH};
-
+use qos_test::PIVOT_OK2_PATH;
 
 #[tokio::test]
 async fn boot_e2e() {
