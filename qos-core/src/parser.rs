@@ -789,14 +789,8 @@ mod test {
 					.takes_value(false)
 					.default_value("token3-default"),
 			);
-		let expected = "Required CLI inputs:
-\t--token1 <token1> info 1
+		let expected = "Required CLI inputs:\n\t--token1 <token1> info 1\n\nOptional CLI inputs:\n\t--help                 Display the help message.\n\t--token2-is-super-long info 2\n\t--token3               info 3 [default: token3-default]\n\t--version              Display the version.";
 
-Optional CLI inputs:
-\t--help                 Display the help message.
-\t--token2-is-super-long info 2
-\t--token3               info 3 [default: token3-default]
-\t--version              Display the version";
 		assert_eq!(parser.info(), expected);
 	}
 }

@@ -1,4 +1,4 @@
-use std::{fs, path::Path, process::Command};
+use std::{fs, process::Command};
 
 use borsh::de::BorshDeserialize;
 use qos_client::attest::nitro::{
@@ -18,9 +18,9 @@ use qos_core::{
 		QosHash,
 	},
 };
-use qos_crypto::{sha_256, shamir::shares_reconstruct, RsaPair, RsaPub};
-use qos_test::{PIVOT_OK2_PATH, PIVOT_OK_PATH};
-use rand::{seq::SliceRandom, thread_rng};
+use qos_crypto::{sha_256, RsaPair};
+use qos_test::{PIVOT_OK2_PATH};
+
 
 #[tokio::test]
 async fn boot_e2e() {
@@ -46,7 +46,6 @@ async fn boot_e2e() {
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", all_personal_dir, user);
 
-	let threshold = 2;
 	let user1 = "user1";
 	let user2 = "user2";
 	let user3 = "user3";
@@ -78,7 +77,7 @@ async fn boot_e2e() {
 			"--pcr2",
 			&mock_pcr_hex,
 			"--root-cert-path",
-			&root_cert_path,
+			root_cert_path,
 			"--boot-dir",
 			boot_dir,
 		])
@@ -140,7 +139,7 @@ async fn boot_e2e() {
 				"--manifest-hash",
 				hex::encode(&manifest.qos_hash()).as_str(),
 				"--personal-dir",
-				&personal_dir(&alias),
+				&personal_dir(alias),
 				"--boot-dir",
 				boot_dir,
 			])
@@ -156,7 +155,7 @@ async fn boot_e2e() {
 				.unwrap();
 		let personal_pair = RsaPair::from_pem_file(&format!(
 			"{}/{}.{}.personal.key",
-			personal_dir(&alias),
+			personal_dir(alias),
 			alias,
 			namespace
 		))

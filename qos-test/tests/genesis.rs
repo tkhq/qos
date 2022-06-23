@@ -150,9 +150,9 @@ async fn genesis_e2e() {
 		.iter()
 		.map(|member| {
 			let alias = &member.setup_member.alias;
-			let (private_setup, _) = get_key_paths(&alias);
+			let (private_setup, _) = get_key_paths(alias);
 			let setup_pair = RsaPair::from_pem_file(
-				Path::new(&personal_dir(&alias)).join(private_setup),
+				Path::new(&personal_dir(alias)).join(private_setup),
 			)
 			.unwrap();
 
@@ -191,7 +191,7 @@ async fn genesis_e2e() {
 			.args([
 				"after-genesis",
 				"--personal-dir",
-				&personal_dir(&user),
+				&personal_dir(user),
 				"--genesis-dir",
 				genesis_dir,
 				"--pcr0",
@@ -207,11 +207,11 @@ async fn genesis_e2e() {
 			.unwrap()
 			.success());
 
-		let personal_pub = Path::new(&personal_dir(&user))
+		let personal_pub = Path::new(&personal_dir(user))
 			.join(format!("{}.{}.personal.pub", user, namespace));
-		let personal_key = Path::new(&personal_dir(&user))
+		let personal_key = Path::new(&personal_dir(user))
 			.join(format!("{}.{}.personal.key", user, namespace));
-		let share_path = Path::new(&personal_dir(&user))
+		let share_path = Path::new(&personal_dir(user))
 			.join(format!("{}.{}.share", user, namespace));
 		// Read in the personal public and private key
 		let public = RsaPub::from_pem_file(personal_pub).unwrap();
