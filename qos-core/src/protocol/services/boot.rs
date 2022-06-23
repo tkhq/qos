@@ -192,11 +192,11 @@ pub(in crate::protocol) fn boot_standard(
 		return Err(ProtocolError::InvalidPivotHash);
 	};
 
-	dbg!(std::fs::write(&state.pivot_file, pivot))?;
-	dbg!(std::fs::set_permissions(
+	std::fs::write(&state.pivot_file, pivot)?;
+	std::fs::set_permissions(
 		&state.pivot_file,
 		std::fs::Permissions::from_mode(0o111),
-	))?;
+	)?;
 
 	state.manifest = Some(manifest_envelope.clone());
 

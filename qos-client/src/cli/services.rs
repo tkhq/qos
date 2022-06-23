@@ -404,8 +404,10 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	};
 
 	let attestation_doc = extract_attestation_doc(&cose_sign1);
+
+	dbg!(&attestation_doc.pcrs);
+
 	// Verify attestation document
-	// TODO: anything else to verify here?
 	verify_attestation_doc_against_user_input(
 		&attestation_doc,
 		&manifest_hash,
@@ -415,11 +417,8 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	);
 
 	// Make sure the ephemeral key is valid.
-	// TODO: hack - we need to get a real attestation doc and make sure to save
-	// the ephemeral key
-	#[cfg(not(feature = "mock"))]
 	drop(
-		RsaPub::from_der(
+		RsaPub::from_pem(
 			&attestation_doc
 				.public_key
 				.expect("No ephemeral key in the attestation doc"),
@@ -712,6 +711,7 @@ fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
 		.duration_since(std::time::UNIX_EPOCH)
 		.unwrap()
 		.as_secs();
+
 	attestation_doc_from_der(
 		cose_sign1_der,
 		&cert_from_pem(AWS_ROOT_CERT_PEM)
@@ -769,7 +769,7 @@ fn verify_attestation_doc_against_user_input(
 	// 	"pcr1 does not match attestation doc"
 	// );
 
-	// // pcr2 matches
+	// pcr2 matches
 	// assert_eq!(
 	// 	pcr2,
 	// 	attestation_doc

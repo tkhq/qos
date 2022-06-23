@@ -21,7 +21,7 @@ impl NsmProvider for MockNsm {
 				nonce: _,
 				public_key,
 			} => {
-				let document = if public_key == Some(mock_boot_e2e_ephemeral_key_pub()) {
+				let document = if dbg!(public_key == Some(mock_boot_e2e_ephemeral_key_pub())) {
 					MOCK_BOOT_E2E_ATTESTATION_DOC.to_vec()
 				} else {
 					MOCK_NSM_ATTESTATION_DOCUMENT.to_vec()

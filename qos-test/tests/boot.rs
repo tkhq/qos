@@ -22,20 +22,10 @@ use qos_crypto::{sha_256, RsaPair};
 use qos_test::PIVOT_OK2_PATH;
 use qos_test::PIVOT_OK2_SUCCESS_FILE;
 
-
-
-//   "Measurements": {                                                                                                   │69 |     BadEphemeralKeyPath
-//     "HashAlgorithm": "Sha384 { ... }",                                                                                │   |     ^^^^^^^^^^^^^^^^^^^
-//     "PCR0": "8cceb679ae5c334c88b21a40478593f2ae8fbf2c63f0705cc503aa129ef9341e6f55f2d4b0e0c99e7ef30d6b13ead8af",       │
-//     "PCR1": "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f",       │   Compiling qos-host v0.1.0 (/home/tk/src/qos/qos-host)
-//     "PCR2": "99e38c61adeda7c1686416518f9e9f5516e5c6b3d4046de6da99702febf39efa5162d9ce74320e3f05defef3b694c296"        │warning: `qos-core` (lib) generated 2 warnings
-//   }   
-
 const EPH_PATH: &str = "../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 const PCR0: &str = "8cceb679ae5c334c88b21a40478593f2ae8fbf2c63f0705cc503aa129ef9341e6f55f2d4b0e0c99e7ef30d6b13ead8af";
 const PCR1: &str = "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f";
 const PCR2: &str = "99e38c61adeda7c1686416518f9e9f5516e5c6b3d4046de6da99702febf39efa5162d9ce74320e3f05defef3b694c296";
-
 
 #[tokio::test]
 async fn boot_e2e() {
@@ -239,13 +229,19 @@ async fn boot_e2e() {
 		.wait()
 		.unwrap()
 		.success());
+
 	// Check that the attestation doc was written
-	drop(attestation_doc_from_der(
-		&fs::read(attestation_doc_path).unwrap(),
-		&cert_from_pem(AWS_ROOT_CERT_PEM)
-			.expect("AWS ROOT CERT is not valid PEM"),
-		MOCK_SECONDS_SINCE_EPOCH,
-	));
+	// drop(attestation_doc_from_der(
+	// 	&fs::read(attestation_doc_path).unwrap(),
+	// 	&cert_from_pem(AWS_ROOT_CERT_PEM)
+	// 		.expect("AWS ROOT CERT is not valid PEM"),
+	// 	MOCK_SECONDS_SINCE_EPOCH,
+	// ));
+
+	assert_eq!(
+		fs::read(&attestation_doc_path).unwrap(),
+		fs::read("../qos-core/src/protocol/attestor/static/boot_e2e_mock_attestation_doc").unwrap()
+	);
 
 	// TODO: need to have an attestation doc with an ephemeral key we know
 	// For each user, post a share
