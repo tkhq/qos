@@ -35,10 +35,10 @@ const PCR0: &str = "f6a3bb54c089b9b7b046a6d44370b887d9efcb131e03ed0384060a64021e
 const PCR1: &str = "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f";
 const PCR2: &str = "7df6e4c7b729407191e925ad0ec757a02f79158f6b24cb20d4633b58f2df3d65a0557409f25ab90d0dc614513d18a66a";
 
-const manifest_hash = "ef3decf6a20cee82b0891383a59940960435349a334792866d0ae570fc8eef2c";
 
 #[tokio::test]
 async fn boot_e2e() {
+	let manifest_hash = "ef3decf6a20cee82b0891383a59940960435349a334792866d0ae570fc8eef2c";
 	let eph_path = EPH_PATH;
 
 	let usock = "boot_e2e.sock";
@@ -70,8 +70,6 @@ async fn boot_e2e() {
 	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
 	let mock_pivot_hash_hex = hex::encode(&mock_pivot_hash);
-	let mock_pcr = vec![0; 48];
-	let mock_pcr_hex = hex::encode(&mock_pcr);
 
 	assert!(Command::new("../target/debug/client_cli")
 		.args([
@@ -134,9 +132,9 @@ async fn boot_e2e() {
 				members: quorum_set_members
 			},
 			enclave: NitroConfig {
-				pcr0: mock_pcr.clone(),
-				pcr1: mock_pcr.clone(),
-				pcr2: mock_pcr,
+				pcr0: hex::decode(PCR0).unwrap(),
+				pcr1: hex::decode(PCR1).unwrap(),
+				pcr2: hex::decode(PCR2).unwrap(),
 				aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap()
 			},
 		}

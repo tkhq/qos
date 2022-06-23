@@ -14,7 +14,7 @@ use qos_core::{
 use qos_crypto::RsaPair;
 
 const MANIFEST_HASH: &str =
-	"ef3decf6a20cee82b0891383a59940960435349a334792866d0ae570fc8eef2c";
+	"ad2d8c29e61f5541b72eecdb558c69792436128c7ab7bd87c6204816be87a59d";
 
 // {
 //   "Measurements": {

@@ -705,7 +705,7 @@ fn find_attestation_doc<P: AsRef<Path>>(boot_dir: P) -> AttestationDoc {
 fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
 	#[cfg(feature = "mock")]
 	// let validation_time = crate::attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
-	let validation_time = 1656019733;
+	let validation_time = 1656022441;
 	#[cfg(not(feature = "mock"))]
 	// TODO: put validation time into genesis
 	let validation_time = std::time::SystemTime::now()
