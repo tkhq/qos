@@ -14,7 +14,7 @@ use qos_core::{
 use qos_crypto::RsaPair;
 
 const MANIFEST_HASH: &str =
-	"e921a73712542adffa99089a16c07c52c49f642ca2cd757597a9a81ae6d6438d";
+	"ef3decf6a20cee82b0891383a59940960435349a334792866d0ae570fc8eef2c";
 
 // {
 //   "Measurements": {
@@ -32,7 +32,7 @@ async fn main() {
 	let uri = "http://127.0.0.1:3000/message";
 
 	let eph_path = Path::new(
-		"./qos-client/src/attest/nitro/static/boot_e2e_mock_eph.secret",
+		"./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret",
 	);
 	// Create / read in mock ephemeral key
 	let eph_pair = if eph_path.exists() {
@@ -49,7 +49,7 @@ async fn main() {
 	let nsm_request = NsmRequest::Attestation {
 		user_data: Some(manifest_hash),
 		nonce: None,
-		public_key: Some(eph_pair.public_key_to_der().unwrap()),
+		public_key: Some(eph_pair.public_key_to_pem().unwrap()),
 	};
 	let req = ProtocolMsg::NsmRequest { nsm_request };
 
@@ -63,7 +63,7 @@ async fn main() {
 	println!("Got a response!");
 
 	let att_path =
-		"./qos-client/src/attest/nitro/static/boot_e2e_mock_attestation_doc.boot";
+		"./qos-core/src/protocol/attestor/static/boot_e2e_mock_attestation_doc.boot";
 	fs::write(&att_path, cose_sign1).unwrap();
 
 	println!("DONE");

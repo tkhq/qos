@@ -18,3 +18,4 @@ serde_bytes = { version = "0.11", default-features = false }
 default=["local"]
 local = []
 vm = []
+mock = []

@@ -466,7 +466,7 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	);
 
 	// Get ephemeral key from attestation doc
-	let ephemeral_pub = RsaPub::from_der(
+	let ephemeral_pub = RsaPub::from_pem(
 		&attestation_doc
 			.public_key
 			.expect("No ephemeral key in attestation doc"),
@@ -704,10 +704,10 @@ fn find_attestation_doc<P: AsRef<Path>>(boot_dir: P) -> AttestationDoc {
 /// Panics if extraction or validation fails.
 fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
 	#[cfg(feature = "mock")]
-	let validation_time = crate::attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
+	// let validation_time = crate::attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
+	let validation_time = 1656019733;
 	#[cfg(not(feature = "mock"))]
-	// TODO: we should probably insert the validation time into the genesis
-	// doc?
+	// TODO: put validation time into genesis
 	let validation_time = std::time::SystemTime::now()
 		.duration_since(std::time::UNIX_EPOCH)
 		.unwrap()
@@ -728,30 +728,15 @@ fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
 /// Panics if verification fails.
 fn verify_attestation_doc_against_user_input(
 	attestation_doc: &AttestationDoc,
-	_user_data: &[u8],
+	user_data: &[u8],
 	pcr0: &[u8],
 	pcr1: &[u8],
 	pcr2: &[u8],
 ) {
-	// TODO: this is a hack - we should instead have more realistic
-	// mock attestation docs
-	#[cfg(not(feature = "mock"))]
-	{
-		// user data is hash of genesis output
-		assert_eq!(
-			_user_data,
-			attestation_doc.user_data.as_ref().unwrap().to_vec(),
-			"Attestation doc does not have hash of genesis output."
-		);
-		// public key is none
-		// assert_eq!(
-		// 	attestation_doc.public_key, None,
-		// 	"Attestation doc has a public_key when none was expected."
-		// );
-	}
-	#[cfg(feature = "mock")]
-	println!(
-		"WARNING: SKIPPING ATTESTATION DOC CHECK. DO NOT USE IN PRODUCTION"
+	assert_eq!(
+		user_data,
+		attestation_doc.user_data.as_ref().unwrap().to_vec(),
+		"Attestation doc does not have anticipated user data."
 	);
 
 	// nonce is none

@@ -19,9 +19,14 @@ impl NsmProvider for MockNsm {
 			NsmRequest::Attestation {
 				user_data: _,
 				nonce: _,
-				public_key: _,
-			} => NsmResponse::Attestation {
-				document: MOCK_NSM_ATTESTATION_DOCUMENT.to_vec(),
+				public_key,
+			} => {
+				let document = if public_key == Some(mock_boot_e2e_ephemeral_key_pub()) {
+					MOCK_BOOT_E2E_ATTESTATION_DOC.to_vec()
+				} else {
+					MOCK_NSM_ATTESTATION_DOCUMENT.to_vec()
+				};
+				NsmResponse::Attestation { document }
 			},
 			NsmRequest::DescribeNSM => NsmResponse::DescribeNSM {
 				version_major: 1,
@@ -56,6 +61,13 @@ impl NsmProvider for MockNsm {
 		println!("nsm_exit");
 	}
 }
+
+fn mock_boot_e2e_ephemeral_key_pub() -> Vec<u8> {
+	qos_crypto::RsaPair::from_pem(MOCK_BOOT_E2E_EPHEMERAL_KEY).unwrap().public_key_to_pem().unwrap()
+}
+
+pub const MOCK_BOOT_E2E_ATTESTATION_DOC: &[u8] = include_bytes!("./static/boot_e2e_mock_attestation_doc");
+const MOCK_BOOT_E2E_EPHEMERAL_KEY: &[u8] = include_bytes!("./static/boot_e2e_mock_eph.secret");
 
 /// DO NOT USE IN PRODUCTION - only for tests.
 pub const MOCK_NSM_ATTESTATION_DOCUMENT: &[u8] = &[

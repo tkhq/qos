@@ -66,6 +66,7 @@ pub enum ProtocolError {
 	InvalidPrivateKey,
 	/// Failed to parse from string.
 	FailedToParseFromString,
+	BadEphemeralKeyPath
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {

@@ -21,8 +21,25 @@ use qos_core::{
 use qos_crypto::{sha_256, RsaPair};
 use qos_test::PIVOT_OK2_PATH;
 
+// {
+//   "Measurements": {
+//     "HashAlgorithm": "Sha384 { ... }",
+//     "PCR0": "fed83aacdbec7bfcd423b186c4825b576432e65c2def0ec192ed8da93b1582436a2dffeb3911a523118ea41453e1b905",
+//     "PCR1": "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f",
+//     "PCR2": "9f08233ae4777e2b0962a1df3eecff6b0dd9315ec0185472f7a2b047226cdf7218195d03cd14680934954ccdd2840a8b"
+//   }
+// }
+
+const EPH_PATH: &str = "../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
+const PCR0: &str = "fed83aacdbec7bfcd423b186c4825b576432e65c2def0ec192ed8da93b1582436a2dffeb3911a523118ea41453e1b905";
+const PCR1: &str = "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f";
+const PCR2: &str = "9f08233ae4777e2b0962a1df3eecff6b0dd9315ec0185472f7a2b047226cdf7218195d03cd14680934954ccdd2840a8b";
+const manifest_hash = "ef3decf6a20cee82b0891383a59940960435349a334792866d0ae570fc8eef2c";
+
 #[tokio::test]
 async fn boot_e2e() {
+	let eph_path = EPH_PATH;
+
 	let usock = "boot_e2e.sock";
 	let host_port = "3009";
 	let host_ip = "127.0.0.1";
@@ -30,7 +47,6 @@ async fn boot_e2e() {
 	fs::create_dir_all(tmp).unwrap();
 	let secret_path = "./tmp/boot_e2e.secret";
 	let pivot_path = "./tmp/boot_e2e.pivot";
-	let eph_path = "./tmp/boot_e2e_eph.secret";
 
 	let boot_dir = "./boot-e2e-boot-dir-tmp";
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
@@ -70,11 +86,11 @@ async fn boot_e2e() {
 			"--restart-policy",
 			"always",
 			"--pcr0",
-			&mock_pcr_hex,
+			PCR0,
 			"--pcr1",
-			&mock_pcr_hex,
+			PCR1,
 			"--pcr2",
-			&mock_pcr_hex,
+			PCR2,
 			"--root-cert-path",
 			root_cert_path,
 			"--boot-dir",
@@ -233,27 +249,27 @@ async fn boot_e2e() {
 
 	// TODO: need to have an attestation doc with an ephemeral key we know
 	// For each user, post a share
-	// for user in [&user1, &user2] {
-	// 	assert!(Command::new("../target/debug/client_cli")
-	// 	.args([
-	// 		"post-share",
-	// 		"--boot-dir",
-	// 		boot_dir,
-	// 		"--personal-dir",
-	// 		&personal_dir(&user1),
-	// 		"--manifest-hash",
-	// 		hex::encode(&manifest.qos_hash()).as_str(),
-	// 		"--host-port",
-	// 		host_port,
-	// 		"--host-ip",
-	// 		host_ip,
-	// 	])
-	// 	.spawn()
-	// 	.unwrap()
-	// 	.wait()
-	// 	.unwrap()
-	// 	.success());
-	// }
+	for user in [&user1, &user2] {
+		assert!(Command::new("../target/debug/client_cli")
+		.args([
+			"post-share",
+			"--boot-dir",
+			boot_dir,
+			"--personal-dir",
+			&personal_dir(&user1),
+			"--manifest-hash",
+			hex::encode(&manifest.qos_hash()).as_str(),
+			"--host-port",
+			host_port,
+			"--host-ip",
+			host_ip,
+		])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+	}
 
 	for f in [&secret_path, &pivot_path, &usock, &eph_path] {
 		drop(fs::remove_file(f));
