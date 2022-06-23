@@ -19,9 +19,9 @@ const MANIFEST_HASH: &str =
 // {
 //   "Measurements": {
 //     "HashAlgorithm": "Sha384 { ... }",
-//     "PCR0": "c3dbb63a4854b9e9dab9f344e855a17a07ca17137d001235e56ed3524b671151619adde60e9c4a901d87eb5c183dd558",
+//     "PCR0": "5fc7fd14e63c72968105b2632b6c9249b8c50e1e901c11301fc179d7fe9767b796ee30e07f019c09bac2b12bdafff56e",
 //     "PCR1": "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f",
-//     "PCR2": "d271fb47273a891101621eca216262e661e91d36d0b91a41510ea477e2c499ea3f3d6464919c3ddb5aaba92d8894a75b"
+//     "PCR2": "9c706b679dffdb49241c40d9c52f6c8e301b8d82de53ff41feae7ccaacbb5eb08c51fe3e163a719c311b9c093f91f0da"
 //   }
 // }
 

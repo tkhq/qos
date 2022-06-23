@@ -54,7 +54,7 @@ local-client-describe-nsm:
 
 .PHONY: gen-att-doc
 gen-att-doc:
-	cargo run --bin gen_att_doc
+	OPENSSL_DIR=/usr cargo run --bin gen_att_doc
 
 .PHONY: image
 image:

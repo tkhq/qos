@@ -99,11 +99,11 @@ impl HostOptions {
 	/// Panics if the options are not valid for exactly one of unix or vsock.
 	#[must_use]
 	pub fn enclave_addr(&self) -> SocketAddress {
-		match dbg!((
+		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
 			self.parsed.single(USOCK),
-		)) {
+		) {
 			#[cfg(feature = "vm")]
 			(Some(c), Some(p), None) => SocketAddress::new_vsock(
 				c.parse::<u32>().unwrap(),
