@@ -230,14 +230,6 @@ async fn boot_e2e() {
 		.unwrap()
 		.success());
 
-	// Check that the attestation doc was written
-	// drop(attestation_doc_from_der(
-	// 	&fs::read(attestation_doc_path).unwrap(),
-	// 	&cert_from_pem(AWS_ROOT_CERT_PEM)
-	// 		.expect("AWS ROOT CERT is not valid PEM"),
-	// 	MOCK_SECONDS_SINCE_EPOCH,
-	// ));
-
 	assert_eq!(
 		fs::read(&attestation_doc_path).unwrap(),
 		fs::read("../qos-core/src/protocol/attestor/static/boot_e2e_mock_attestation_doc").unwrap()
