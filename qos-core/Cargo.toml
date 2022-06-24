@@ -16,6 +16,9 @@ serde_bytes = { version = "0.11", default-features = false }
 
 [features]
 default=["local"]
+# Support for unix sockets
 local = []
+# Support for VSOCL
 vm = []
+# Never use in production - support for mock NSM
 mock = []

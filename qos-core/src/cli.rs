@@ -6,7 +6,7 @@ use crate::{
 	coordinator::Coordinator,
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
-	protocol::attestor::{mock::MockNsm, Nsm, NsmProvider},
+	protocol::attestor::{Nsm, NsmProvider},
 	EPHEMERAL_KEY_FILE, PIVOT_FILE, SECRET_FILE,
 };
 
@@ -64,7 +64,12 @@ impl EnclaveOptions {
 	#[must_use]
 	pub fn nsm(&self) -> Box<dyn NsmProvider> {
 		if self.parsed.flag(MOCK).unwrap_or(false) {
-			Box::new(MockNsm)
+			#[cfg(feature = "mock")]{
+				Box::new(crate::protocol::attestor::mock::MockNsm)
+			}
+			#[cfg(not(feature = "mock"))]{
+				panic!("\"mock\" feature must be enabled to use `MockNsm`")
+			}
 		} else {
 			Box::new(Nsm)
 		}

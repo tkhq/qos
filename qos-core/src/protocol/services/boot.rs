@@ -10,7 +10,6 @@ use crate::protocol::{
 };
 
 // Path to the ephemeral key used for testing. Must not be used in production.
-#[cfg(feature = "mock")]
 const MOCK_EPH_PATH: &str =
 	"../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 
