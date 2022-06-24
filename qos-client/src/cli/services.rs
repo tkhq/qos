@@ -37,6 +37,9 @@ const MANIFEST_EXT: &str = "manifest";
 const APPROVAL_EXT: &str = "approval";
 const STANDARD_ATTESTATION_DOC_FILE: &str = "attestation_doc.boot";
 
+const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
+const DANGEROUS_DEV_BOOT_NAMESPACE: &str = "DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
+
 pub(crate) fn generate_setup_key<P: AsRef<Path>>(
 	alias: &str,
 	namespace: &str,
@@ -506,7 +509,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	let quorum_pair = RsaPair::generate().expect("Failed RSA gen");
 	let quorum_public_der = quorum_pair.public_key_to_der().unwrap();
 	let member = QuorumMember {
-		alias: "DANGEROUS_DEV_BOOT_MEMBER".to_string(),
+		alias: DANGEROUS_DEV_BOOT_MEMBER.to_string(),
 		pub_key: quorum_public_der.clone(),
 	};
 
@@ -533,7 +536,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	// pivot config
 	let manifest = Manifest {
 		namespace: Namespace {
-			name: "DANGEROUS_DEV_BOOT".to_string(),
+			name: DANGEROUS_DEV_BOOT_NAMESPACE.to_string(),
 			nonce: u32::MAX,
 		},
 		enclave: NitroConfig {
