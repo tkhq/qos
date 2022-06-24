@@ -5,17 +5,20 @@ use std::{
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
-use qos_core::protocol::{
-	attestor::types::NsmResponse,
-	msg::ProtocolMsg,
-	services::{
-		boot::{
-			Approval, Manifest, ManifestEnvelope, Namespace, NitroConfig,
-			PivotConfig, QuorumMember, QuorumSet, RestartPolicy,
+use qos_core::{
+	hex,
+	protocol::{
+		attestor::types::NsmResponse,
+		msg::ProtocolMsg,
+		services::{
+			boot::{
+				Approval, Manifest, ManifestEnvelope, Namespace, NitroConfig,
+				PivotConfig, QuorumMember, QuorumSet, RestartPolicy,
+			},
+			genesis::{GenesisOutput, GenesisSet, SetupMember},
 		},
-		genesis::{GenesisOutput, GenesisSet, SetupMember},
+		Hash256, QosHash,
 	},
-	Hash256, QosHash,
 };
 use qos_crypto::{sha_256, RsaPair, RsaPub};
 
@@ -190,10 +193,15 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	)
 	.expect("Could not deserialize the genesis set");
 
+	#[cfg(feature = "mock")]
+	let user_data = &hex::decode(qos_core::protocol::attestor::mock::MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap();
+	#[cfg(not(feature = "mock"))]
+	let user_data = &genesis_output.qos_hash();
+
 	// Check the attestation document
 	verify_attestation_doc_against_user_input(
 		&attestation_doc,
-		&genesis_output.qos_hash(),
+		user_data,
 		pcr0,
 		pcr1,
 		pcr2,
@@ -701,8 +709,7 @@ fn find_attestation_doc<P: AsRef<Path>>(boot_dir: P) -> AttestationDoc {
 /// Panics if extraction or validation fails.
 fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
 	#[cfg(feature = "mock")]
-	// // let validation_time = crate::attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
-	let validation_time = 1656030657;
+	let validation_time = crate::attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
 	#[cfg(not(feature = "mock"))]
 	// TODO: put validation time into genesis
 	let validation_time = std::time::SystemTime::now()
@@ -746,17 +753,17 @@ fn verify_attestation_doc_against_user_input(
 	{
 		// pcr0 matches
 		assert_eq!(
-				pcr0,
-				attestation_doc
-					.pcrs
-					.get(&0)
-					.expect("pcr0 not found")
-					.clone()
-					.into_vec(),
-				"pcr0 does not match attestation doc"
-			);
+			pcr0,
+			attestation_doc
+				.pcrs
+				.get(&0)
+				.expect("pcr0 not found")
+				.clone()
+				.into_vec(),
+			"pcr0 does not match attestation doc"
+		);
 
-	// pcr1 matches
+		// pcr1 matches
 		assert_eq!(
 			pcr1,
 			attestation_doc

@@ -52,7 +52,7 @@ impl EnclaveOptions {
 			#[cfg(feature = "vm")]
 			(Some(c), Some(p), None) => SocketAddress::new_vsock(
 				c.parse::<u32>().unwrap(),
-				p.parse::<u32>().unwrap()
+				p.parse::<u32>().unwrap(),
 			),
 			#[cfg(feature = "local")]
 			(None, None, Some(u)) => SocketAddress::new_unix(u),

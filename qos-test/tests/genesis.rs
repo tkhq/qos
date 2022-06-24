@@ -5,7 +5,10 @@ use qos_client::attest::nitro::{
 	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
 	MOCK_SECONDS_SINCE_EPOCH,
 };
-use qos_core::protocol::services::genesis::GenesisOutput;
+use qos_core::protocol::{
+	attestor::mock::{MOCK_PCR0, MOCK_PCR1, MOCK_PCR2},
+	services::genesis::GenesisOutput,
+};
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
 use rand::{seq::SliceRandom, thread_rng};
 
@@ -183,9 +186,6 @@ async fn genesis_e2e() {
 
 	// -- CLIENT make sure each user can run `after-genesis` against their
 	// member output and setup key
-	let mock_pcr = vec![0u8; 48];
-	let mock_pcr_hex = &qos_core::hex::encode(&mock_pcr);
-
 	for user in [&user1, &user2, &user3] {
 		assert!(Command::new("../target/debug/client_cli")
 			.args([
@@ -195,11 +195,11 @@ async fn genesis_e2e() {
 				"--genesis-dir",
 				genesis_dir,
 				"--pcr0",
-				mock_pcr_hex,
+				MOCK_PCR0,
 				"--pcr1",
-				mock_pcr_hex,
+				MOCK_PCR1,
 				"--pcr2",
-				mock_pcr_hex
+				MOCK_PCR2
 			])
 			.spawn()
 			.unwrap()

@@ -1,5 +1,15 @@
 //! Helper script to generate a mock attestation document that works for the
 //! boot_e2e.
+//!
+//! Rough use instructions:
+//!
+//! 1) On the aws host run `make image`, `build-enclave` and then run the
+//! enclave, ensuring that debug mode is not enabled. Debug mode will lead to
+//! the PCRs being zeroed out. 2) Take the PCRs output from `build-enclave` and
+//! update the hardcoded values in the boot e2e test 3) Run the test and log the
+//! value of the manifest hash 4) Update the manifest hash here
+//! 5) Run this script
+//! 6) Commit the updated files
 
 use std::{fs, path::Path};
 
@@ -7,20 +17,17 @@ use qos_client::request;
 use qos_core::{
 	hex,
 	protocol::{
-		attestor::types::{NsmRequest, NsmResponse},
+		attestor::{
+			mock::MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT,
+			types::{NsmRequest, NsmResponse},
+		},
 		msg::ProtocolMsg,
 	},
 };
 use qos_crypto::RsaPair;
 
-// 1) On the aws host run `make image` and then `build-enclave`.
-// 2) Take the PCRs output from `build-enclave` and update the hardcoded values in the boot e2e test
-// 3) Run the test and log the value of the manifest hash
-// 4) Update the manifest hash here
-// 5) Run this script
-
-const MANIFEST_HASH: &str =
-	"a4e45eedaad1fa7c5e21fbc9659603e0f602e876fb4a6cff72bd8a4710bea1e5";
+const EPHEMERAL_KEY_RELATIVE_PATH: &str =
+	"./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 
 #[tokio::main]
 async fn main() {
@@ -28,9 +35,7 @@ async fn main() {
 
 	let uri = "http://127.0.0.1:3000/message";
 
-	let eph_path = Path::new(
-		"./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret",
-	);
+	let eph_path = Path::new(EPHEMERAL_KEY_RELATIVE_PATH);
 	// Create / read in mock ephemeral key
 	let eph_pair = if eph_path.exists() {
 		RsaPair::from_pem_file(&eph_path).unwrap()
@@ -42,7 +47,8 @@ async fn main() {
 	};
 
 	// Create an nsm attestation request
-	let manifest_hash = hex::decode(MANIFEST_HASH).unwrap();
+	let manifest_hash =
+		hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap();
 	let nsm_request = NsmRequest::Attestation {
 		user_data: Some(manifest_hash),
 		nonce: None,

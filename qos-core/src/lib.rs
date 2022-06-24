@@ -33,6 +33,12 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
+// "vm" is necessary for production and we don't want any mock data slipping in.
+#[cfg(all(feature = "vm", feature = "mock"))]
+compile_error!(
+	"feature \"vm\" and feature \"mock\" cannot be enabled at the same time"
+);
+
 pub mod cli;
 pub mod client;
 pub mod coordinator;

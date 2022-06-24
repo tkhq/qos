@@ -233,7 +233,9 @@ impl Command {
 impl GetParserForCommand for Command {
 	fn parser(&self) -> Parser {
 		match self {
-			Self::HostHealth | Self::DescribeNsm | Self::DescribePcr => Self::base(),
+			Self::HostHealth | Self::DescribeNsm | Self::DescribePcr => {
+				Self::base()
+			}
 			Self::GenerateSetupKey => Self::generate_setup_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
@@ -447,7 +449,9 @@ mod handlers {
 
 			match request::post(
 				path,
-				&ProtocolMsg::NsmRequest { nsm_request: NsmRequest::DescribePCR { index: i } },
+				&ProtocolMsg::NsmRequest {
+					nsm_request: NsmRequest::DescribePCR { index: i },
+				},
 			)
 			.map_err(|e| println!("{:?}", e))
 			.expect("Attestation request failed")

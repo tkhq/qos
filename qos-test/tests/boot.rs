@@ -1,4 +1,4 @@
-use std::{fs, process::Command, path::Path};
+use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
 use qos_client::attest::nitro::{
@@ -8,6 +8,7 @@ use qos_client::attest::nitro::{
 use qos_core::{
 	hex,
 	protocol::{
+		attestor::mock::{MOCK_PCR0, MOCK_PCR1, MOCK_PCR2},
 		services::{
 			boot::{
 				Approval, Manifest, Namespace, NitroConfig, PivotConfig,
@@ -19,17 +20,15 @@ use qos_core::{
 	},
 };
 use qos_crypto::{sha_256, RsaPair};
-use qos_test::PIVOT_OK2_PATH;
-use qos_test::PIVOT_OK2_SUCCESS_FILE;
+use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 
-const EPH_PATH: &str = "../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
-const PCR0: &str = "8cceb679ae5c334c88b21a40478593f2ae8fbf2c63f0705cc503aa129ef9341e6f55f2d4b0e0c99e7ef30d6b13ead8af";
-const PCR1: &str = "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f";
-const PCR2: &str = "99e38c61adeda7c1686416518f9e9f5516e5c6b3d4046de6da99702febf39efa5162d9ce74320e3f05defef3b694c296";
+const EPH_PATH: &str =
+	"../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 
 #[tokio::test]
 async fn boot_e2e() {
-	let manifest_hash = "ef3decf6a20cee82b0891383a59940960435349a334792866d0ae570fc8eef2c";
+	let _manifest_hash =
+		"ef3decf6a20cee82b0891383a59940960435349a334792866d0ae570fc8eef2c";
 	let eph_path = EPH_PATH;
 
 	let usock = "boot_e2e.sock";
@@ -76,11 +75,11 @@ async fn boot_e2e() {
 			"--restart-policy",
 			"never",
 			"--pcr0",
-			PCR0,
+			MOCK_PCR0,
 			"--pcr1",
-			PCR1,
+			MOCK_PCR1,
 			"--pcr2",
-			PCR2,
+			MOCK_PCR2,
 			"--root-cert-path",
 			root_cert_path,
 			"--boot-dir",
@@ -123,9 +122,9 @@ async fn boot_e2e() {
 				members: quorum_set_members
 			},
 			enclave: NitroConfig {
-				pcr0: hex::decode(PCR0).unwrap(),
-				pcr1: hex::decode(PCR1).unwrap(),
-				pcr2: hex::decode(PCR2).unwrap(),
+				pcr0: hex::decode(MOCK_PCR0).unwrap(),
+				pcr1: hex::decode(MOCK_PCR1).unwrap(),
+				pcr2: hex::decode(MOCK_PCR2).unwrap(),
 				aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap()
 			},
 		}
@@ -230,33 +229,39 @@ async fn boot_e2e() {
 		.unwrap()
 		.success());
 
+	let att_doc = fs::read(&attestation_doc_path).unwrap();
 	assert_eq!(
-		fs::read(&attestation_doc_path).unwrap(),
+		att_doc,
 		fs::read("../qos-core/src/protocol/attestor/static/boot_e2e_mock_attestation_doc").unwrap()
 	);
+	drop(attestation_doc_from_der(
+		&att_doc,
+		AWS_ROOT_CERT_PEM,
+		MOCK_SECONDS_SINCE_EPOCH,
+	));
 
 	// TODO: need to have an attestation doc with an ephemeral key we know
 	// For each user, post a share
 	for user in [&user1, &user2] {
 		assert!(Command::new("../target/debug/client_cli")
-		.args([
-			"post-share",
-			"--boot-dir",
-			boot_dir,
-			"--personal-dir",
-			&personal_dir(&user),
-			"--manifest-hash",
-			hex::encode(&manifest.qos_hash()).as_str(),
-			"--host-port",
-			host_port,
-			"--host-ip",
-			host_ip,
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+			.args([
+				"post-share",
+				"--boot-dir",
+				boot_dir,
+				"--personal-dir",
+				&personal_dir(user),
+				"--manifest-hash",
+				hex::encode(&manifest.qos_hash()).as_str(),
+				"--host-port",
+				host_port,
+				"--host-ip",
+				host_ip,
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
 	}
 
 	std::thread::sleep(std::time::Duration::from_secs(1));

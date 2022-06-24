@@ -57,8 +57,6 @@ pub(in crate::protocol) fn provision(
 	encrypted_share: &[u8],
 	state: &mut ProtocolState,
 ) -> Result<bool, ProtocolError> {
-	&state.ephemeral_key_file;
-
 	let ephemeral_key = RsaPair::from_pem_file(&state.ephemeral_key_file)?;
 
 	let share = ephemeral_key
@@ -118,7 +116,7 @@ mod test {
 	) -> (RsaPair, RsaPair, usize, ProtocolState) {
 		// 1) Create and write eph key
 		let eph_pair = RsaPair::generate().unwrap();
-		std::fs::write(eph_file, &eph_pair.private_key_to_der().unwrap())
+		std::fs::write(eph_file, &eph_pair.private_key_to_pem().unwrap())
 			.unwrap();
 
 		// 2) Create and write manifest with threshold and quorum key

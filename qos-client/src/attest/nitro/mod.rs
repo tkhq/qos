@@ -21,7 +21,7 @@ static AWS_NITRO_CERT_SIG_ALG: &[&webpki::SignatureAlgorithm] =
 /// Corresponds to `MockNsm` attestation document response. This time is
 /// valid for the mock and should only be used for testing.
 #[cfg(any(feature = "mock", test))]
-pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1_652_756_400;
+pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1_656_030_657;
 
 /// AWS Nitro root CA certificate.
 ///
@@ -42,6 +42,8 @@ pub fn cert_from_pem(pem: &[u8]) -> Result<Vec<u8>, AttestError> {
 /// (nsm) provided COSE Sign1 structure. This function will verify the the
 /// root certificate authority via the CA bundle and verify that the end
 /// entity certificate signed the COSE Sign1 structure.
+///
+/// While this does some basic verification, it is up to the user to verify
 ///
 /// # Arguments
 ///
@@ -86,13 +88,6 @@ pub fn attestation_doc_from_der(
 		validation_time,
 	)?;
 	verify_cose_sign1_sig(&attestation_doc.certificate, &cose_sign1)?;
-
-	// TODO:
-	// Additional validation for
-	// - timestamp is reasonable
-	// - nonce, user data, public key match user provided data
-	// - module id is what we expect
-	// - pcr validation
 
 	Ok(attestation_doc)
 }
