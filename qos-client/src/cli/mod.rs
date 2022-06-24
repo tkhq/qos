@@ -40,6 +40,7 @@ enum Command {
 	SignManifest,
 	BootStandard,
 	PostShare,
+	DangerousDevBoot,
 }
 
 impl From<&str> for Command {
@@ -55,6 +56,7 @@ impl From<&str> for Command {
 			"sign-manifest" => Self::SignManifest,
 			"boot-standard" => Self::BootStandard,
 			"post-share" => Self::PostShare,
+			"dangerous-dev-boot" => Self::DangerousDevBoot,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -103,6 +105,16 @@ impl Command {
 	}
 	fn namespace_token() -> Token {
 		Token::new(NAMESPACE, "Namespace for the associated manifest.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn pivot_path_token() -> Token {
+		Token::new(PIVOT_PATH, "Path to the pivot binary.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn restart_policy_token() -> Token {
+		Token::new(RESTART_POLICY, "One of: `never`, `always`.")
 			.takes_value(true)
 			.required(true)
 	}
@@ -179,9 +191,7 @@ impl Command {
 				.required(true),
 			)
 			.token(
-				Token::new(RESTART_POLICY, "One of: `never`, `always`.")
-					.takes_value(true)
-					.required(true),
+				Self::restart_policy_token(),
 			)
 			.token(
 				Self::pcr0_token()
@@ -214,11 +224,7 @@ impl Command {
 
 	fn boot_standard() -> Parser {
 		Self::base()
-			.token(
-				Token::new(PIVOT_PATH, "Path to the pivot binary.")
-					.takes_value(true)
-					.required(true),
-			)
+			.token(Self::pivot_path_token())
 			.token(Self::boot_dir_token())
 	}
 
@@ -227,6 +233,12 @@ impl Command {
 			.token(Self::manifest_hash_token())
 			.token(Self::personal_dir_token())
 			.token(Self::boot_dir_token())
+	}
+
+	fn dangerous_dev_boot() -> Parser {
+		Self::base()
+			.token(Self::pivot_path_token())
+			.token(Self::restart_policy_token())
 	}
 }
 
@@ -243,6 +255,7 @@ impl GetParserForCommand for Command {
 			Self::SignManifest => Self::sign_manifest(),
 			Self::BootStandard => Self::boot_standard(),
 			Self::PostShare => Self::post_share(),
+			Self::DangerousDevBoot => Self::dangerous_dev_boot(),
 		}
 	}
 }
@@ -378,6 +391,9 @@ impl ClientRunner {
 				Command::SignManifest => handlers::sign_manifest(&self.opts),
 				Command::BootStandard => handlers::boot_standard(&self.opts),
 				Command::PostShare => handlers::post_share(&self.opts),
+				Command::DangerousDevBoot => {
+					handlers::dangerous_dev_boot(&self.opts);
+				}
 			}
 		}
 	}
@@ -530,6 +546,14 @@ mod handlers {
 			opts.personal_dir(),
 			opts.boot_dir(),
 			opts.manifest_hash(),
+		);
+	}
+
+	pub(super) fn dangerous_dev_boot(opts: &ClientOpts) {
+		services::dangerous_dev_boot(
+			&opts.path("message"),
+			opts.pivot_path(),
+			opts.restart_policy(),
 		);
 	}
 }
