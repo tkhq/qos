@@ -1,4 +1,6 @@
 //! `QuorumOS` client command line interface.
+//!
+//! See [`Command`] for all possible commands.
 
 use std::env;
 
@@ -28,18 +30,61 @@ const GENESIS_DIR: &str = "genesis-dir";
 const BOOT_DIR: &str = "boot-dir";
 const PERSONAL_DIR: &str = "personal-dir";
 
+/// Commands for the Client CLI.
+///
+/// To get the possible arguments for any given command pass the help flag. For
+/// example, to get the arguments for [`Self::GenerateManifest`] run:
+///
+/// ```
+/// cargo run --bin qos-client -- generate-manifest --help
+/// ```
 #[derive(Clone, PartialEq, Debug)]
-enum Command {
+pub enum Command {
+	/// Query the health endpoint of the enclave host server.
 	HostHealth,
+	/// Query the NSM with `NsmRequest::DescribeNsm`. Normally only useful for
+	/// development.
 	DescribeNsm,
+	/// Query the NSM with `NsmRequest::DescribePcr` for PCR indexes 0..3.
 	DescribePcr,
+	/// Generate a Setup Key for use in the Genesis ceremony.
 	GenerateSetupKey,
+	/// Run the the Boot Genesis logic to generate and shard a Quorum Key
+	/// across the given Setup Keys. Each setup key will correspond to a Quorum
+	/// Set Member, so N will equal the number of SetupKeys. This will output
+	/// `GenesisOutput` and an `AttestationDoc` embedded in a COSE Sign1
+	/// structure. The `GenesisOutput` contains the public Quorum Key, each
+	/// members personal key (encrypted to setup key), and each members share
+	/// (encrypted to personal key).
 	BootGenesis,
+	/// Decrypt the Personal Key and Quorum Share share from the Genesis
+	/// Ceremony outputs. This will output the decrypted Personal Key
+	/// associated with your Setup Key.
 	AfterGenesis,
+	/// Using the given Personal Keys as the Quorum Set, generate a manifest.
 	GenerateManifest,
+	/// Sign a trusted Manifest. This will output a manifest `Approval`.
 	SignManifest,
+	/// Given a `Manifest` and K `Approval`s, send the boot standard
+	/// instruction to the enclave. This will output the COSE Sign1 structure
+	/// with an embedded `AttestationDoc`.
 	BootStandard,
+	/// Post a share to enclave that is not yet provisioned, but already has a
+	/// manifest.
+	///
+	/// This will encrypt your personal share to the ephemeral key of the
+	/// enclave. The ephemeral key will be pulled out of the given attestation
+	/// document, so use caution to only run this against an attestation
+	/// document and manifest you have reviewed and trust.
 	PostShare,
+	/// For development only. Should never be used in production. The goal of
+	/// this command is to pivot the enclave running the specified pivot
+	/// binary.
+	///
+	/// This command goes through the steps of generating a quorum key,
+	/// sharding it (N=1), creating/signing/posting manifest, and provisioning
+	/// the quorum key.  The only parameters are the host address and pivot
+	/// configuration.
 	DangerousDevBoot,
 }
 
