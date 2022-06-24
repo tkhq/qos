@@ -2,7 +2,9 @@
 
 use aws_nitro_enclaves_nsm_api as nsm;
 
+#[cfg(any(feature = "mock", test))]
 pub mod mock;
+
 pub mod types;
 
 /// Something that implements the Nitro Secure Module endpoints. This is made

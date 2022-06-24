@@ -648,7 +648,6 @@ dependencies = [
  "qos-host",
  "rand",
  "tokio",
- "ureq",
 ]
 
 [[package]]

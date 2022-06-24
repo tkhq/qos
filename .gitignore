@@ -13,3 +13,4 @@ target/
 !mock/*/user1.*
 !mock/*/user2.*
 !mock/*/user3.*
+!boot_e2e_mock_eph.secret

@@ -1,13 +1,16 @@
-use std::{fs, process::Command};
+use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
 use qos_client::attest::nitro::{
 	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
-	MOCK_SECONDS_SINCE_EPOCH,
 };
 use qos_core::{
 	hex,
 	protocol::{
+		attestor::mock::{
+			MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
+			MOCK_SECONDS_SINCE_EPOCH,
+		},
 		services::{
 			boot::{
 				Approval, Manifest, Namespace, NitroConfig, PivotConfig,
@@ -19,7 +22,10 @@ use qos_core::{
 	},
 };
 use qos_crypto::{sha_256, RsaPair};
-use qos_test::PIVOT_OK2_PATH;
+use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
+
+const EPH_PATH: &str =
+	"../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 
 #[tokio::test]
 async fn boot_e2e() {
@@ -30,7 +36,6 @@ async fn boot_e2e() {
 	fs::create_dir_all(tmp).unwrap();
 	let secret_path = "./tmp/boot_e2e.secret";
 	let pivot_path = "./tmp/boot_e2e.pivot";
-	let eph_path = "./tmp/boot_e2e_eph.secret";
 
 	let boot_dir = "./boot-e2e-boot-dir-tmp";
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
@@ -53,8 +58,6 @@ async fn boot_e2e() {
 	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
 	let mock_pivot_hash_hex = hex::encode(&mock_pivot_hash);
-	let mock_pcr = vec![0; 48];
-	let mock_pcr_hex = hex::encode(&mock_pcr);
 
 	assert!(Command::new("../target/debug/client_cli")
 		.args([
@@ -68,13 +71,13 @@ async fn boot_e2e() {
 			"--pivot-hash",
 			&mock_pivot_hash_hex,
 			"--restart-policy",
-			"always",
+			"never",
 			"--pcr0",
-			&mock_pcr_hex,
+			MOCK_PCR0,
 			"--pcr1",
-			&mock_pcr_hex,
+			MOCK_PCR1,
 			"--pcr2",
-			&mock_pcr_hex,
+			MOCK_PCR2,
 			"--root-cert-path",
 			root_cert_path,
 			"--boot-dir",
@@ -109,7 +112,7 @@ async fn boot_e2e() {
 			namespace: Namespace { name: namespace.to_string(), nonce: 2 },
 			pivot: PivotConfig {
 				hash: mock_pivot_hash,
-				restart: RestartPolicy::Always
+				restart: RestartPolicy::Never
 			},
 			quorum_key: genesis_output.quorum_key.clone(),
 			quorum_set: QuorumSet {
@@ -117,9 +120,9 @@ async fn boot_e2e() {
 				members: quorum_set_members
 			},
 			enclave: NitroConfig {
-				pcr0: mock_pcr.clone(),
-				pcr1: mock_pcr.clone(),
-				pcr2: mock_pcr,
+				pcr0: hex::decode(MOCK_PCR0).unwrap(),
+				pcr1: hex::decode(MOCK_PCR1).unwrap(),
+				pcr2: hex::decode(MOCK_PCR2).unwrap(),
 				aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap()
 			},
 		}
@@ -181,7 +184,7 @@ async fn boot_e2e() {
 			"--pivot-file",
 			pivot_path,
 			"--ephemeral-file",
-			eph_path,
+			EPH_PATH,
 			"--mock",
 		])
 		.spawn()
@@ -221,39 +224,46 @@ async fn boot_e2e() {
 		.wait()
 		.unwrap()
 		.success());
-	// Check that the attestation doc was written
+
+	let att_doc = fs::read(&attestation_doc_path).unwrap();
+	assert_eq!(att_doc, MOCK_NSM_ATTESTATION_DOCUMENT);
 	drop(attestation_doc_from_der(
-		&fs::read(attestation_doc_path).unwrap(),
-		&cert_from_pem(AWS_ROOT_CERT_PEM)
-			.expect("AWS ROOT CERT is not valid PEM"),
+		&att_doc,
+		AWS_ROOT_CERT_PEM,
 		MOCK_SECONDS_SINCE_EPOCH,
 	));
 
-	// TODO: need to have an attestation doc with an ephemeral key we know
-	// For each user, post a share
-	// for user in [&user1, &user2] {
-	// 	assert!(Command::new("../target/debug/client_cli")
-	// 	.args([
-	// 		"post-share",
-	// 		"--boot-dir",
-	// 		boot_dir,
-	// 		"--personal-dir",
-	// 		&personal_dir(&user1),
-	// 		"--manifest-hash",
-	// 		hex::encode(&manifest.qos_hash()).as_str(),
-	// 		"--host-port",
-	// 		host_port,
-	// 		"--host-ip",
-	// 		host_ip,
-	// 	])
-	// 	.spawn()
-	// 	.unwrap()
-	// 	.wait()
-	// 	.unwrap()
-	// 	.success());
-	// }
+	// For each user, post a share,
+	// and sanity check the pivot has not yet executed.
+	assert!(!Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
+	for user in [&user1, &user2] {
+		assert!(Command::new("../target/debug/client_cli")
+			.args([
+				"post-share",
+				"--boot-dir",
+				boot_dir,
+				"--personal-dir",
+				&personal_dir(user),
+				"--manifest-hash",
+				hex::encode(&manifest.qos_hash()).as_str(),
+				"--host-port",
+				host_port,
+				"--host-ip",
+				host_ip,
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
+	}
 
-	for f in [&secret_path, &pivot_path, &usock, &eph_path] {
+	std::thread::sleep(std::time::Duration::from_secs(1));
+	// Check that the pivot executed
+	assert!(Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
+	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
+
+	for f in [&secret_path, &pivot_path, &usock] {
 		drop(fs::remove_file(f));
 	}
 	drop(fs::remove_dir_all(boot_dir));

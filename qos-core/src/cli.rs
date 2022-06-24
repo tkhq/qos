@@ -6,7 +6,7 @@ use crate::{
 	coordinator::Coordinator,
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
-	protocol::attestor::{mock::MockNsm, Nsm, NsmProvider},
+	protocol::attestor::{Nsm, NsmProvider},
 	EPHEMERAL_KEY_FILE, PIVOT_FILE, SECRET_FILE,
 };
 
@@ -50,7 +50,10 @@ impl EnclaveOptions {
 			self.parsed.single(USOCK),
 		) {
 			#[cfg(feature = "vm")]
-			(Some(c), Some(p), None) => SocketAddress::new_vsock(c, p),
+			(Some(c), Some(p), None) => SocketAddress::new_vsock(
+				c.parse::<u32>().unwrap(),
+				p.parse::<u32>().unwrap(),
+			),
 			#[cfg(feature = "local")]
 			(None, None, Some(u)) => SocketAddress::new_unix(u),
 			_ => panic!("Invalid socket options"),
@@ -60,8 +63,15 @@ impl EnclaveOptions {
 	/// Get the [`NsmProvider`]
 	#[must_use]
 	pub fn nsm(&self) -> Box<dyn NsmProvider> {
-		if self.parsed.flag(MOCK).expect("mock is a flag") {
-			Box::new(MockNsm)
+		if self.parsed.flag(MOCK).unwrap_or(false) {
+			#[cfg(feature = "mock")]
+			{
+				Box::new(crate::protocol::attestor::mock::MockNsm)
+			}
+			#[cfg(not(feature = "mock"))]
+			{
+				panic!("\"mock\" feature must be enabled to use `MockNsm`")
+			}
 		} else {
 			Box::new(Nsm)
 		}

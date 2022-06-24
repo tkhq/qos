@@ -190,10 +190,15 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	)
 	.expect("Could not deserialize the genesis set");
 
+	#[cfg(feature = "mock")]
+	let user_data = &qos_core::hex::decode(qos_core::protocol::attestor::mock::MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap();
+	#[cfg(not(feature = "mock"))]
+	let user_data = &genesis_output.qos_hash();
+
 	// Check the attestation document
 	verify_attestation_doc_against_user_input(
 		&attestation_doc,
-		&genesis_output.qos_hash(),
+		user_data,
 		pcr0,
 		pcr1,
 		pcr2,
@@ -404,8 +409,8 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	};
 
 	let attestation_doc = extract_attestation_doc(&cose_sign1);
+
 	// Verify attestation document
-	// TODO: anything else to verify here?
 	verify_attestation_doc_against_user_input(
 		&attestation_doc,
 		&manifest_hash,
@@ -415,11 +420,8 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	);
 
 	// Make sure the ephemeral key is valid.
-	// TODO: hack - we need to get a real attestation doc and make sure to save
-	// the ephemeral key
-	#[cfg(not(feature = "mock"))]
 	drop(
-		RsaPub::from_der(
+		RsaPub::from_pem(
 			&attestation_doc
 				.public_key
 				.expect("No ephemeral key in the attestation doc"),
@@ -466,7 +468,7 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	);
 
 	// Get ephemeral key from attestation doc
-	let ephemeral_pub = RsaPub::from_der(
+	let ephemeral_pub = RsaPub::from_pem(
 		&attestation_doc
 			.public_key
 			.expect("No ephemeral key in attestation doc"),
@@ -704,14 +706,15 @@ fn find_attestation_doc<P: AsRef<Path>>(boot_dir: P) -> AttestationDoc {
 /// Panics if extraction or validation fails.
 fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
 	#[cfg(feature = "mock")]
-	let validation_time = crate::attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
+	let validation_time =
+		qos_core::protocol::attestor::mock::MOCK_SECONDS_SINCE_EPOCH;
 	#[cfg(not(feature = "mock"))]
-	// TODO: we should probably insert the validation time into the genesis
-	// doc?
+	// TODO: put validation time into genesis
 	let validation_time = std::time::SystemTime::now()
 		.duration_since(std::time::UNIX_EPOCH)
 		.unwrap()
 		.as_secs();
+
 	attestation_doc_from_der(
 		cose_sign1_der,
 		&cert_from_pem(AWS_ROOT_CERT_PEM)
@@ -728,30 +731,15 @@ fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
 /// Panics if verification fails.
 fn verify_attestation_doc_against_user_input(
 	attestation_doc: &AttestationDoc,
-	_user_data: &[u8],
+	user_data: &[u8],
 	pcr0: &[u8],
 	pcr1: &[u8],
 	pcr2: &[u8],
 ) {
-	// TODO: this is a hack - we should instead have more realistic
-	// mock attestation docs
-	#[cfg(not(feature = "mock"))]
-	{
-		// user data is hash of genesis output
-		assert_eq!(
-			_user_data,
-			attestation_doc.user_data.as_ref().unwrap().to_vec(),
-			"Attestation doc does not have hash of genesis output."
-		);
-		// public key is none
-		// assert_eq!(
-		// 	attestation_doc.public_key, None,
-		// 	"Attestation doc has a public_key when none was expected."
-		// );
-	}
-	#[cfg(feature = "mock")]
-	println!(
-		"WARNING: SKIPPING ATTESTATION DOC CHECK. DO NOT USE IN PRODUCTION"
+	assert_eq!(
+		user_data,
+		attestation_doc.user_data.as_ref().unwrap().to_vec(),
+		"Attestation doc does not have anticipated user data."
 	);
 
 	// nonce is none
@@ -760,42 +748,43 @@ fn verify_attestation_doc_against_user_input(
 		"Attestation doc has a nonce when none was expected."
 	);
 
-	// pcr0 matches
-	assert_eq!(
-		pcr0,
-		attestation_doc
-			.pcrs
-			.get(&0)
-			.expect("pcr0 not found")
-			.clone()
-			.into_vec(),
-		"pcr0 does not match attestation doc"
-	);
+	{
+		// pcr0 matches
+		assert_eq!(
+			pcr0,
+			attestation_doc
+				.pcrs
+				.get(&0)
+				.expect("pcr0 not found")
+				.clone()
+				.into_vec(),
+			"pcr0 does not match attestation doc"
+		);
 
-	// pcr1 matches
-	assert_eq!(
-		pcr1,
-		attestation_doc
-			.pcrs
-			.get(&1)
-			.expect("pcr1 not found")
-			.clone()
-			.into_vec(),
-		"pcr1 does not match attestation doc"
-	);
+		// pcr1 matches
+		assert_eq!(
+			pcr1,
+			attestation_doc
+				.pcrs
+				.get(&1)
+				.expect("pcr1 not found")
+				.clone()
+				.into_vec(),
+			"pcr1 does not match attestation doc"
+		);
 
-	// pcr2 matches
-	assert_eq!(
-		pcr2,
-		attestation_doc
-			.pcrs
-			.get(&2)
-			.expect("pcr2 not found")
-			.clone()
-			.into_vec(),
-		"pcr2 does not match attestation doc"
-	);
-	// - TODO: how do we want to validate the module id?
+		// pcr2 matches
+		assert_eq!(
+			pcr2,
+			attestation_doc
+				.pcrs
+				.get(&2)
+				.expect("pcr2 not found")
+				.clone()
+				.into_vec(),
+			"pcr2 does not match attestation doc"
+		);
+	}
 }
 
 /// Get the file name from a path and split on `"."`.

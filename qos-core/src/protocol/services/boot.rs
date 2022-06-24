@@ -1,11 +1,17 @@
 //! Standard boot logic and types.
 
+use std::fs;
+
 use qos_crypto::{sha_256, RsaPair, RsaPub};
 
 use crate::protocol::{
 	attestor::types::{NsmRequest, NsmResponse},
 	Hash256, ProtocolError, ProtocolPhase, ProtocolState, QosHash,
 };
+
+// Path to the ephemeral key used for testing. Must not be used in production.
+const MOCK_EPH_PATH: &str =
+	"../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
@@ -168,11 +174,24 @@ pub(in crate::protocol) fn boot_standard(
 
 	manifest_envelope.check_approvals()?;
 
-	let ephemeral_key = RsaPair::generate()?;
-	std::fs::write(
-		state.ephemeral_key_file.clone(),
-		ephemeral_key.private_key_to_der()?,
-	)?;
+	let ephemeral_key = if state.ephemeral_key_file == MOCK_EPH_PATH {
+		#[cfg(feature = "mock")]
+		{
+			RsaPair::from_pem_file(MOCK_EPH_PATH)?
+		}
+		#[cfg(not(feature = "mock"))]
+		{
+			Err(ProtocolError::BadEphemeralKeyPath)?
+		}
+	} else {
+		let ephemeral_key = RsaPair::generate()?;
+		fs::write(
+			state.ephemeral_key_file.clone(),
+			ephemeral_key.private_key_to_pem()?,
+		)?;
+
+		ephemeral_key
+	};
 
 	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
 		return Err(ProtocolError::InvalidPivotHash);

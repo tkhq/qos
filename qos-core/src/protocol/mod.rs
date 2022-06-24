@@ -66,6 +66,10 @@ pub enum ProtocolError {
 	InvalidPrivateKey,
 	/// Failed to parse from string.
 	FailedToParseFromString,
+	/// Got a path to a key that is used for testing. This error only occurs
+	/// when the "mock" feature is disabled, which should always be the case in
+	/// production.
+	BadEphemeralKeyPath,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
