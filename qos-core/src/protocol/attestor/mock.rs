@@ -1,4 +1,4 @@
-//! Mocks for external attest endpoints.
+//! Mocks for external attest endpoints. Only for testing.
 
 use std::collections::BTreeSet;
 
@@ -11,6 +11,10 @@ use super::{
 /// The `user_data` for [`MOCK_NSM_ATTESTATION_DOCUMENT`].
 pub const MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT: &str =
 	"a4e45eedaad1fa7c5e21fbc9659603e0f602e876fb4a6cff72bd8a4710bea1e5";
+
+/// A valid time to validated the cert chain against in
+/// [`MOCK_NSM_ATTESTATION_DOCUMENT`].
+pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1_656_030_657;
 
 /// PCR index 0 for [`MOCK_NSM_ATTESTATION_DOCUMENT`].
 pub const MOCK_PCR0: &str = "8cceb679ae5c334c88b21a40478593f2ae8fbf2c63f0705cc503aa129ef9341e6f55f2d4b0e0c99e7ef30d6b13ead8af";

@@ -706,7 +706,8 @@ fn find_attestation_doc<P: AsRef<Path>>(boot_dir: P) -> AttestationDoc {
 /// Panics if extraction or validation fails.
 fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
 	#[cfg(feature = "mock")]
-	let validation_time = crate::attest::nitro::MOCK_SECONDS_SINCE_EPOCH;
+	let validation_time =
+		qos_core::protocol::attestor::mock::MOCK_SECONDS_SINCE_EPOCH;
 	#[cfg(not(feature = "mock"))]
 	// TODO: put validation time into genesis
 	let validation_time = std::time::SystemTime::now()

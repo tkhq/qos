@@ -3,10 +3,11 @@ use std::{fs, path::Path, process::Command};
 use borsh::de::BorshDeserialize;
 use qos_client::attest::nitro::{
 	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
-	MOCK_SECONDS_SINCE_EPOCH,
 };
 use qos_core::protocol::{
-	attestor::mock::{MOCK_PCR0, MOCK_PCR1, MOCK_PCR2},
+	attestor::mock::{
+		MOCK_PCR0, MOCK_PCR1, MOCK_PCR2, MOCK_SECONDS_SINCE_EPOCH,
+	},
 	services::genesis::GenesisOutput,
 };
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};

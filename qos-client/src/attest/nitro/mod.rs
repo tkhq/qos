@@ -18,11 +18,6 @@ const X509_V3: i32 = 2;
 static AWS_NITRO_CERT_SIG_ALG: &[&webpki::SignatureAlgorithm] =
 	&[&webpki::ECDSA_P384_SHA384];
 
-/// Corresponds to `MockNsm` attestation document response. This time is
-/// valid for the mock and should only be used for testing.
-#[cfg(any(feature = "mock", test))]
-pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1_656_030_657;
-
 /// AWS Nitro root CA certificate.
 ///
 /// This should be validated against the checksum:
@@ -151,7 +146,9 @@ fn verify_cose_sign1_sig(
 mod test {
 	use aws_nitro_enclaves_cose::header_map::HeaderMap;
 	use openssl::pkey::{PKey, Private, Public};
-	use qos_core::protocol::attestor::mock::MOCK_NSM_ATTESTATION_DOCUMENT;
+	use qos_core::protocol::attestor::mock::{
+		MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_SECONDS_SINCE_EPOCH,
+	};
 
 	use super::*;
 

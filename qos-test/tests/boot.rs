@@ -3,12 +3,14 @@ use std::{fs, path::Path, process::Command};
 use borsh::de::BorshDeserialize;
 use qos_client::attest::nitro::{
 	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
-	MOCK_SECONDS_SINCE_EPOCH,
 };
 use qos_core::{
 	hex,
 	protocol::{
-		attestor::mock::{MOCK_PCR0, MOCK_PCR1, MOCK_PCR2},
+		attestor::mock::{
+			MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
+			MOCK_SECONDS_SINCE_EPOCH,
+		},
 		services::{
 			boot::{
 				Approval, Manifest, Namespace, NitroConfig, PivotConfig,
@@ -27,10 +29,6 @@ const EPH_PATH: &str =
 
 #[tokio::test]
 async fn boot_e2e() {
-	let _manifest_hash =
-		"ef3decf6a20cee82b0891383a59940960435349a334792866d0ae570fc8eef2c";
-	let eph_path = EPH_PATH;
-
 	let usock = "boot_e2e.sock";
 	let host_port = "3009";
 	let host_ip = "127.0.0.1";
@@ -137,8 +135,6 @@ async fn boot_e2e() {
 			boot_dir, alias, namespace, manifest.namespace.nonce,
 		);
 
-		println!("{}", hex::encode(&manifest.qos_hash()));
-
 		assert!(Command::new("../target/debug/client_cli")
 			.args([
 				"sign-manifest",
@@ -188,7 +184,7 @@ async fn boot_e2e() {
 			"--pivot-file",
 			pivot_path,
 			"--ephemeral-file",
-			eph_path,
+			EPH_PATH,
 			"--mock",
 		])
 		.spawn()
@@ -230,18 +226,16 @@ async fn boot_e2e() {
 		.success());
 
 	let att_doc = fs::read(&attestation_doc_path).unwrap();
-	assert_eq!(
-		att_doc,
-		fs::read("../qos-core/src/protocol/attestor/static/boot_e2e_mock_attestation_doc").unwrap()
-	);
+	assert_eq!(att_doc, MOCK_NSM_ATTESTATION_DOCUMENT);
 	drop(attestation_doc_from_der(
 		&att_doc,
 		AWS_ROOT_CERT_PEM,
 		MOCK_SECONDS_SINCE_EPOCH,
 	));
 
-	// TODO: need to have an attestation doc with an ephemeral key we know
-	// For each user, post a share
+	// For each user, post a share,
+	// and sanity check the pivot has not yet executed.
+	assert!(!Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
 	for user in [&user1, &user2] {
 		assert!(Command::new("../target/debug/client_cli")
 			.args([
@@ -265,6 +259,7 @@ async fn boot_e2e() {
 	}
 
 	std::thread::sleep(std::time::Duration::from_secs(1));
+	// Check that the pivot executed
 	assert!(Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
 	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
 

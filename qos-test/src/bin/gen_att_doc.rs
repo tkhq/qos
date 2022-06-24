@@ -5,11 +5,18 @@
 //!
 //! 1) On the aws host run `make image`, `build-enclave` and then run the
 //! enclave, ensuring that debug mode is not enabled. Debug mode will lead to
-//! the PCRs being zeroed out. 2) Take the PCRs output from `build-enclave` and
-//! update the hardcoded values in the boot e2e test 3) Run the test and log the
-//! value of the manifest hash 4) Update the manifest hash here
-//! 5) Run this script
-//! 6) Commit the updated files
+//! the PCRs being zeroed out.
+//!
+//! 2) Take the PCRs output from `build-enclave` and update the hardcoded values
+//! in the boot e2e test.
+//!
+//! 3) Run the test and log the value of the manifest hash.
+//!
+//! 4) Update `MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT` with the manifest hash.
+//!
+//! 5) Run this script.
+//!
+//! 6) Commit the updated files.
 
 use std::{fs, path::Path};
 
@@ -31,8 +38,6 @@ const EPHEMERAL_KEY_RELATIVE_PATH: &str =
 
 #[tokio::main]
 async fn main() {
-	// Get hash of manifest used for boot e2e
-
 	let uri = "http://127.0.0.1:3000/message";
 
 	let eph_path = Path::new(EPHEMERAL_KEY_RELATIVE_PATH);
@@ -63,11 +68,10 @@ async fn main() {
 		} => document,
 		r => panic!("Unexpected response: {:?}", r),
 	};
-	println!("Got a response!");
 
 	let att_path =
 		"./qos-core/src/protocol/attestor/static/boot_e2e_mock_attestation_doc";
 	fs::write(&att_path, cose_sign1).unwrap();
 
-	println!("DONE");
+	println!("Done");
 }
