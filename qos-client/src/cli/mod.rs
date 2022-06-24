@@ -35,7 +35,7 @@ const PERSONAL_DIR: &str = "personal-dir";
 /// To get the possible arguments for any given command pass the help flag. For
 /// example, to get the arguments for [`Self::GenerateManifest`] run:
 ///
-/// ```
+/// ```bash
 /// cargo run --bin qos-client -- generate-manifest --help
 /// ```
 ///
