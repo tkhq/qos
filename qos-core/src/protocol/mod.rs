@@ -13,6 +13,8 @@ use attestor::NsmProvider;
 use msg::ProtocolMsg;
 use services::boot;
 
+use crate::handles::Handles;
+
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
 
@@ -113,29 +115,18 @@ pub enum ProtocolPhase {
 pub struct ProtocolState {
 	provisioner: services::provision::SecretBuilder,
 	attestor: Box<dyn NsmProvider>,
-	pivot_file: String,
-	ephemeral_key_file: String,
-	secret_file: String,
 	phase: ProtocolPhase,
-	manifest: Option<boot::ManifestEnvelope>,
+	handles: Handles,
 }
 
 impl ProtocolState {
-	fn new(
-		attestor: Box<dyn NsmProvider>,
-		secret_file: String,
-		pivot_file: String,
-		ephemeral_key_file: String,
-	) -> Self {
+	fn new(attestor: Box<dyn NsmProvider>, handles: Handles) -> Self {
 		let provisioner = services::provision::SecretBuilder::new();
 		Self {
 			attestor,
 			provisioner,
-			pivot_file,
-			ephemeral_key_file,
-			secret_file,
 			phase: ProtocolPhase::WaitingForBootInstruction,
-			manifest: None,
+			handles,
 		}
 	}
 }
@@ -149,20 +140,8 @@ pub struct Executor {
 impl Executor {
 	/// Create a new `Self`.
 	#[must_use]
-	pub fn new(
-		attestor: Box<dyn NsmProvider>,
-		secret_file: String,
-		pivot_file: String,
-		ephemeral_key_file: String,
-	) -> Self {
-		Self {
-			state: ProtocolState::new(
-				attestor,
-				secret_file,
-				pivot_file,
-				ephemeral_key_file,
-			),
-		}
+	pub fn new(attestor: Box<dyn NsmProvider>, handles: Handles) -> Self {
+		Self { state: ProtocolState::new(attestor, handles) }
 	}
 
 	fn routes(&self) -> Vec<Box<ProtocolHandler>> {

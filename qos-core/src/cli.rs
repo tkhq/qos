@@ -4,10 +4,11 @@ use std::env;
 
 use crate::{
 	coordinator::Coordinator,
+	handles::Handles,
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 	protocol::attestor::{Nsm, NsmProvider},
-	EPHEMERAL_KEY_FILE, PIVOT_FILE, SECRET_FILE,
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, SECRET_FILE,
 };
 
 /// "cid"
@@ -20,14 +21,15 @@ const MOCK: &str = "mock";
 const SECRET_FILE_OPT: &str = "secret-file";
 const PIVOT_FILE_OPT: &str = "pivot-file";
 const EPHEMERAL_FILE_OPT: &str = "ephemeral-file";
+const MANIFEST_FILE_OPT: &str = "manifest-file";
 
-/// CLI options for starting up the enclave server.
+/// CLI opts for starting up the enclave server.
 #[derive(Default, Clone, Debug, PartialEq)]
-pub struct EnclaveOptions {
+pub struct EnclaveOpts {
 	parsed: Parser,
 }
 
-impl EnclaveOptions {
+impl EnclaveOpts {
 	/// Create a new instance of [`Self`] with some defaults.
 	#[must_use]
 	pub fn new(args: &mut Vec<String>) -> Self {
@@ -41,7 +43,7 @@ impl EnclaveOptions {
 	///
 	/// # Panics
 	///
-	/// Panics if the options are not valid for exactly one of unix or vsock.
+	/// Panics if the opts are not valid for exactly one of unix or vsock.
 	#[must_use]
 	pub fn addr(&self) -> SocketAddress {
 		match (
@@ -56,13 +58,13 @@ impl EnclaveOptions {
 			),
 			#[cfg(feature = "local")]
 			(None, None, Some(u)) => SocketAddress::new_unix(u),
-			_ => panic!("Invalid socket options"),
+			_ => panic!("Invalid socket opts"),
 		}
 	}
 
 	/// Get the [`NsmProvider`]
 	#[must_use]
-	pub fn nsm(&self) -> Box<dyn NsmProvider> {
+	pub fn nsm(&self) -> Box<dyn NsmProvider + Send> {
 		if self.parsed.flag(MOCK).unwrap_or(false) {
 			#[cfg(feature = "mock")]
 			{
@@ -103,6 +105,10 @@ impl EnclaveOptions {
 			.expect("has a default value.")
 			.clone()
 	}
+
+	fn manifest_file(&self) -> String {
+		self.parsed.single(MANIFEST_FILE).expect("has a default value.").clone()
+	}
 }
 
 /// Enclave server CLI.
@@ -111,14 +117,23 @@ impl CLI {
 	/// Execute the enclave server CLI with the environment args.
 	pub fn execute() {
 		let mut args: Vec<String> = env::args().collect();
-		let options = EnclaveOptions::new(&mut args);
+		let opts = EnclaveOpts::new(&mut args);
 
-		if options.parsed.version() {
+		if opts.parsed.version() {
 			println!("version: {}", env!("CARGO_PKG_VERSION"));
-		} else if options.parsed.help() {
-			println!("{}", options.parsed.info());
+		} else if opts.parsed.help() {
+			println!("{}", opts.parsed.info());
 		} else {
-			Coordinator::execute(options);
+			Coordinator::execute(
+				Handles::new(
+					opts.ephemeral_file(),
+					opts.secret_file(), // TODO change to quorum file
+					opts.manifest_file(),
+					opts.pivot_file(),
+				),
+				opts.nsm(),
+				opts.addr(),
+			);
 		}
 	}
 }
@@ -163,6 +178,11 @@ impl GetParserForOptions for EnclaveParser {
 					.takes_value(true)
 					.default_value(EPHEMERAL_KEY_FILE)
 			)
+			.token(
+				Token::new(MANIFEST_FILE_OPT, "path to file where the Manifest should be written.")
+					.takes_value(true)
+					.default_value(MANIFEST_FILE)
+			)
 	}
 }
 
@@ -176,10 +196,10 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let options = EnclaveOptions::new(&mut args);
+		let opts = EnclaveOpts::new(&mut args);
 
-		assert_eq!(*options.parsed.single(CID).unwrap(), "6".to_string());
-		assert_eq!(*options.parsed.single(PORT).unwrap(), "3999".to_string());
+		assert_eq!(*opts.parsed.single(CID).unwrap(), "6".to_string());
+		assert_eq!(*opts.parsed.single(PORT).unwrap(), "3999".to_string());
 	}
 
 	#[test]
@@ -203,13 +223,13 @@ mod test {
 		.into_iter()
 		.map(String::from)
 		.collect();
-		let options = EnclaveOptions::new(&mut args);
+		let opts = EnclaveOpts::new(&mut args);
 
-		assert_eq!(*options.parsed.single(CID).unwrap(), "6");
-		assert_eq!(*options.parsed.single(PORT).unwrap(), "3999");
-		assert_eq!(options.secret_file(), secret);
-		assert_eq!(options.pivot_file(), pivot);
-		assert_eq!(options.ephemeral_file(), ephemeral);
+		assert_eq!(*opts.parsed.single(CID).unwrap(), "6");
+		assert_eq!(*opts.parsed.single(PORT).unwrap(), "3999");
+		assert_eq!(opts.secret_file(), secret);
+		assert_eq!(opts.pivot_file(), pivot);
+		assert_eq!(opts.ephemeral_file(), ephemeral);
 	}
 
 	#[test]
@@ -218,31 +238,31 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let options = EnclaveOptions::new(&mut args);
+		let opts = EnclaveOpts::new(&mut args);
 
-		assert_eq!(options.addr(), SocketAddress::new_unix("./test.sock"));
+		assert_eq!(opts.addr(), SocketAddress::new_unix("./test.sock"));
 	}
 
 	#[test]
 	#[should_panic = "Entered invalid CLI args: MutuallyExclusiveInput(\"cid\", \"usock\")"]
-	fn panic_on_too_many_options() {
+	fn panic_on_too_many_opts() {
 		let mut args: Vec<_> = vec![
 			"binary", "--cid", "6", "--port", "3999", "--usock", "my.sock",
 		]
 		.into_iter()
 		.map(String::from)
 		.collect();
-		let _options = EnclaveOptions::new(&mut args);
+		let _opts = EnclaveOpts::new(&mut args);
 	}
 
 	#[test]
 	#[should_panic = "Entered invalid CLI args: MissingInput(\"port\")"]
-	fn panic_on_not_enough_options() {
+	fn panic_on_not_enough_opts() {
 		let mut args: Vec<_> = vec!["binary", "--cid", "6"]
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let _options = EnclaveOptions::new(&mut args);
+		let _opts = EnclaveOpts::new(&mut args);
 	}
 
 	#[test]
@@ -252,9 +272,9 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let options = EnclaveOptions::new(&mut args);
+		let opts = EnclaveOpts::new(&mut args);
 
-		assert_eq!(options.addr(), SocketAddress::new_vsock(6, 3999));
+		assert_eq!(opts.addr(), SocketAddress::new_vsock(6, 3999));
 	}
 
 	#[test]
@@ -262,6 +282,6 @@ mod test {
 	fn panic_when_mistyped_cid() {
 		let mut args: Vec<_> =
 			vec!["--usock", "durp"].into_iter().map(String::from).collect();
-		let _options = EnclaveOptions::new(&mut args);
+		let _opts = EnclaveOpts::new(&mut args);
 	}
 }

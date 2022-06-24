@@ -1,7 +1,4 @@
 //! Quorum Key provisioning logic and types.
-
-use qos_crypto::RsaPair;
-
 use crate::protocol::{ProtocolError, ProtocolPhase, ProtocolState};
 
 type Secret = Vec<u8>;
@@ -57,7 +54,7 @@ pub(in crate::protocol) fn provision(
 	encrypted_share: &[u8],
 	state: &mut ProtocolState,
 ) -> Result<bool, ProtocolError> {
-	let ephemeral_key = RsaPair::from_pem_file(&state.ephemeral_key_file)?;
+	let ephemeral_key = state.handles.get_ephemeral_key()?;
 
 	let share = ephemeral_key
 		.envelope_decrypt(encrypted_share)
@@ -65,19 +62,19 @@ pub(in crate::protocol) fn provision(
 
 	state.provisioner.add_share(share)?;
 
-	let quorum_threshold =
-		state.manifest.as_ref().unwrap().manifest.quorum_set.threshold as usize;
+	let manifest = state.handles.get_manifest_envelope()?.manifest;
+	let quorum_threshold = manifest.quorum_set.threshold as usize;
 	if state.provisioner.count() < quorum_threshold {
 		// Nothing else to do if we don't have the threshold to reconstruct
 		return Ok(false);
 	}
 
 	let private_key_der = state.provisioner.build()?;
-	let public_key_der = qos_crypto::RsaPair::from_der(&private_key_der)
-		.map_err(|_| ProtocolError::InvalidPrivateKey)?
-		.public_key_to_der()?;
+	let pair = qos_crypto::RsaPair::from_der(&private_key_der)
+		.map_err(|_| ProtocolError::InvalidPrivateKey)?;
+	let public_key_der = pair.public_key_to_der()?;
 
-	if public_key_der != state.manifest.as_ref().unwrap().manifest.quorum_key {
+	if public_key_der != manifest.quorum_key {
 		// We did not construct the intended key
 		// Something went wrong, so clear the existing shares just to be
 		// careful.
@@ -85,8 +82,7 @@ pub(in crate::protocol) fn provision(
 		return Err(ProtocolError::ReconstructionError);
 	}
 
-	// TODO: should be read only
-	std::fs::write(&state.secret_file, private_key_der)?;
+	state.handles.put_quorum_key(&pair)?;
 
 	state.phase = ProtocolPhase::QuorumKeyProvisioned;
 	Ok(true)

@@ -1,7 +1,5 @@
 //! Standard boot logic and types.
 
-use std::fs;
-
 use qos_crypto::{sha_256, RsaPair, RsaPub};
 
 use crate::protocol::{
@@ -30,7 +28,12 @@ pub struct NitroConfig {
 
 /// Policy for restarting the pivot binary.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Debug,
+	Clone,
+	Copy,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
 )]
 pub enum RestartPolicy {
 	/// Never restart the pivot application
@@ -168,16 +171,14 @@ impl ManifestEnvelope {
 pub(in crate::protocol) fn boot_standard(
 	state: &mut ProtocolState,
 	manifest_envelope: &ManifestEnvelope,
-	pivot: &Vec<u8>,
+	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
-	use std::os::unix::fs::PermissionsExt as _;
-
 	manifest_envelope.check_approvals()?;
 
-	let ephemeral_key = if state.ephemeral_key_file == MOCK_EPH_PATH {
+	let ephemeral_key = if state.handles.ephemeral_key_path() == MOCK_EPH_PATH {
 		#[cfg(feature = "mock")]
 		{
-			RsaPair::from_pem_file(MOCK_EPH_PATH)?
+			state.handles.get_ephemeral_key()?
 		}
 		#[cfg(not(feature = "mock"))]
 		{
@@ -185,10 +186,7 @@ pub(in crate::protocol) fn boot_standard(
 		}
 	} else {
 		let ephemeral_key = RsaPair::generate()?;
-		fs::write(
-			&state.ephemeral_key_file,
-			ephemeral_key.private_key_to_pem()?,
-		)?;
+		state.handles.put_ephemeral_key(&ephemeral_key)?;
 
 		ephemeral_key
 	};
@@ -196,14 +194,10 @@ pub(in crate::protocol) fn boot_standard(
 	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
 		return Err(ProtocolError::InvalidPivotHash);
 	};
+	state.handles.put_pivot(pivot)?;
 
-	std::fs::write(&state.pivot_file, pivot)?;
-	std::fs::set_permissions(
-		&state.pivot_file,
-		std::fs::Permissions::from_mode(0o111),
-	)?;
-
-	state.manifest = Some(manifest_envelope.clone());
+	// Write the manifest
+	state.handles.put_manifest_envelope(manifest_envelope)?;
 
 	let nsm_response = {
 		let request = NsmRequest::Attestation {

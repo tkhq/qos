@@ -4,9 +4,16 @@
 //!
 //! The pivot is an executable the enclave runs to initialize the secure
 //! applications.
-use std::{path::Path, process::Command};
+use std::{process::Command};
 
-use crate::{cli::EnclaveOptions, protocol::Executor, server::SocketServer};
+use crate::{
+	handles::Handles,
+	io::SocketAddress,
+	protocol::{
+		attestor::NsmProvider, services::boot::RestartPolicy, Executor,
+	},
+	server::SocketServer,
+};
 
 /// Primary entry point for running the enclave. Coordinates spawning the server
 /// and pivot binary.
@@ -19,57 +26,59 @@ impl Coordinator {
 	/// - If any enclave options are incorrect
 	/// - If spawning the pivot errors.
 	/// - If waiting for the pivot errors.
-	pub fn execute(opts: EnclaveOptions) {
-		let secret_file = opts.secret_file();
-		let pivot_file = opts.pivot_file();
-
+	pub fn execute(
+		handles: Handles,
+		nsm: Box<dyn NsmProvider + Send>,
+		addr: SocketAddress,
+	) {
+		let handles2 = handles.clone();
 		std::thread::spawn(move || {
-			let executor = Executor::new(
-				opts.nsm(),
-				opts.secret_file(),
-				opts.pivot_file(),
-				opts.ephemeral_file(),
-			);
-			SocketServer::listen(opts.addr(), executor).unwrap();
+			let executor = Executor::new(nsm, handles2);
+			SocketServer::listen(addr, executor).unwrap();
 		});
 
-		// Check if the enclaves secret and the pivot executable is loaded.
 		loop {
-			let secret_file_exists = is_file(&secret_file);
-			let pivot_file_exists = is_file(&pivot_file);
-
-			if secret_file_exists && pivot_file_exists {
+			if handles.quorum_key_exists()
+				&& handles.pivot_exists()
+				&& handles.manifest_envelope_exists()
+			{
+				// The state required to pivot exists, so we can break this
+				// holding pattern and start the pivot.
 				break;
 			}
 
 			std::thread::sleep(std::time::Duration::from_secs(1));
 		}
 
-		// "Pivot" to the executable by spawning a child process running the
-		// executable.
-		let mut pivot = Command::new(pivot_file);
-		let mut child_process =
-			pivot.spawn().expect("Process failed to execute...");
+		let mut pivot = Command::new(handles.pivot_path());
+		let restart_policy = handles
+			.get_manifest_envelope()
+			.expect("Checked above that the manifest exists.")
+			.manifest
+			.pivot
+			.restart;
+		if matches!(restart_policy, RestartPolicy::Always) {
+			loop {
+				let status = pivot
+					.spawn()
+					.expect("Failed to spawn")
+					.wait()
+					.expect("Pivot executable never started...");
 
-		// Wait for the child process to finish
-		let status =
-			child_process.wait().expect("Pivot executable never started...");
-		// and log some information about the exit status
-		if status.success() {
-			println!("Pivot executable exited successfully: {}", status);
+				println!("Pivot exited with status: {}", status);
+				println!("Restarting pivot ...");
+			}
 		} else {
-			println!(
-				"Pivot executable exited with a non zero status: {}",
-				status
-			);
+			let status = pivot
+				.spawn()
+				.expect("Failed to spawn")
+				.wait()
+				.expect("Pivot executable never started...");
+			println!("Pivot exited with status: {}", status);
 		}
 
 		println!("Coordinator exiting ...");
 	}
 }
 
-fn is_file(path: &str) -> bool {
-	Path::new(path).exists()
-}
-
-// See qos-test/tests/coordinator for tests
+// TODO: test restart policy is respected
