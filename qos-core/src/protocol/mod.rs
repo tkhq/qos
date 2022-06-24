@@ -70,6 +70,8 @@ pub enum ProtocolError {
 	/// when the "mock" feature is disabled, which should always be the case in
 	/// production.
 	BadEphemeralKeyPath,
+	/// Tried to modify state that must be static post pivoting.
+	CannotModifyPostPivotStatic,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
