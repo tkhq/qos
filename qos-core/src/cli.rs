@@ -64,10 +64,12 @@ impl EnclaveOptions {
 	#[must_use]
 	pub fn nsm(&self) -> Box<dyn NsmProvider> {
 		if self.parsed.flag(MOCK).unwrap_or(false) {
-			#[cfg(feature = "mock")]{
+			#[cfg(feature = "mock")]
+			{
 				Box::new(crate::protocol::attestor::mock::MockNsm)
 			}
-			#[cfg(not(feature = "mock"))]{
+			#[cfg(not(feature = "mock"))]
+			{
 				panic!("\"mock\" feature must be enabled to use `MockNsm`")
 			}
 		} else {

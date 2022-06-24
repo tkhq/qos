@@ -18,5 +18,9 @@ aws-nitro-enclaves-cose = { version = "0.4.0", default-features = false, feature
 webpki = { version =  "0.22.0", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 
+[dev-dependencies]
+# We need mock enabled to grab things related to the mock NSM.
+qos-core = { path = "../qos-core" , features = ["mock"]}
+
 [features]
 mock = []

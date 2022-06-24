@@ -5,20 +5,17 @@ use std::{
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
-use qos_core::{
-	hex,
-	protocol::{
-		attestor::types::NsmResponse,
-		msg::ProtocolMsg,
-		services::{
-			boot::{
-				Approval, Manifest, ManifestEnvelope, Namespace, NitroConfig,
-				PivotConfig, QuorumMember, QuorumSet, RestartPolicy,
-			},
-			genesis::{GenesisOutput, GenesisSet, SetupMember},
+use qos_core::protocol::{
+	attestor::types::NsmResponse,
+	msg::ProtocolMsg,
+	services::{
+		boot::{
+			Approval, Manifest, ManifestEnvelope, Namespace, NitroConfig,
+			PivotConfig, QuorumMember, QuorumSet, RestartPolicy,
 		},
-		Hash256, QosHash,
+		genesis::{GenesisOutput, GenesisSet, SetupMember},
 	},
+	Hash256, QosHash,
 };
 use qos_crypto::{sha_256, RsaPair, RsaPub};
 
@@ -194,7 +191,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	.expect("Could not deserialize the genesis set");
 
 	#[cfg(feature = "mock")]
-	let user_data = &hex::decode(qos_core::protocol::attestor::mock::MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap();
+	let user_data = &qos_core::hex::decode(qos_core::protocol::attestor::mock::MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap();
 	#[cfg(not(feature = "mock"))]
 	let user_data = &genesis_output.qos_hash();
 
