@@ -1,4 +1,6 @@
 //! `QuorumOS` client command line interface.
+//!
+//! See [`Command`] for all possible commands.
 
 use std::env;
 
@@ -28,18 +30,76 @@ const GENESIS_DIR: &str = "genesis-dir";
 const BOOT_DIR: &str = "boot-dir";
 const PERSONAL_DIR: &str = "personal-dir";
 
+/// Commands for the Client CLI.
+///
+/// To get the possible arguments for any given command pass the help flag. For
+/// example, to get the arguments for [`Self::GenerateManifest`] run:
+///
+/// ```bash
+/// cargo run --bin qos-client -- generate-manifest --help
+/// ```
+///
+/// Note that the command name is kebab-case.
 #[derive(Clone, PartialEq, Debug)]
-enum Command {
+pub enum Command {
+	/// Query the health endpoint of the enclave host server.
 	HostHealth,
+	/// Query the NSM with `NsmRequest::DescribeNsm`. Normally only useful for
+	/// development.
 	DescribeNsm,
+	/// Query the NSM with `NsmRequest::DescribePcr` for PCR indexes 0..3.
 	DescribePcr,
+	/// Generate a Setup Key for use in the Genesis ceremony.
 	GenerateSetupKey,
+	/// Run the the Boot Genesis logic to generate and shard a Quorum Key
+	/// across the given Setup Keys. Each setup key will correspond to a Quorum
+	/// Set Member, so N will equal the number of Setup Keys.
+	///
+	/// This will output `GenesisOutput` and an `AttestationDoc` embedded in a
+	/// COSE Sign1 structure. The `GenesisOutput` contains the public Quorum
+	/// Key, each members personal key (encrypted to setup key), and each
+	/// members share (encrypted to personal key).
 	BootGenesis,
+	/// Decrypt the Personal Key and Personal Share share from the Genesis
+	/// Ceremony outputs (`GenesisOutput` and the `AttestationDoc` is used to
+	/// verify the enclave composition).
+	///
+	/// This will output the decrypted Personal Key associated with your Setup
+	/// Key.
 	AfterGenesis,
+	/// Using the given Personal Keys as the Quorum Set, generate a manifest.
 	GenerateManifest,
+	/// Sign a trusted Manifest.
+	///
+	/// This will output a manifest `Approval`.
+	///
+	/// Careful - only ever sign a manifest you have inspected, trust and know
+	/// is the latest one for the namespace.
 	SignManifest,
+	/// Start booting an enclave.
+	///
+	/// Given a `Manifest` and K `Approval`s, send the boot standard
+	/// instruction to the enclave.
+	///
+	/// This will output the COSE Sign1 structure with an embedded
+	/// `AttestationDoc`.
 	BootStandard,
+	/// Post a share to enclave that is not yet provisioned, but already has a
+	/// manifest.
+	///
+	/// This will encrypt your Personal Share to the Ephemeral Key of the
+	/// enclave. The ephemeral key will be pulled out of the given Attestation
+	/// Document, so use caution to only run this against an Attestation
+	/// Document and Manifest you have reviewed and trust.
 	PostShare,
+	/// ** Never use in production**.
+	///
+	/// Pivot the enclave to the specified binary.
+	///
+	/// This command goes through the steps of generating a Quorum Key,
+	/// sharding it (N=1), creating/signing/posting a Manifest, and
+	/// provisioning the quorum key.
+	DangerousDevBoot,
 }
 
 impl From<&str> for Command {
@@ -55,6 +115,7 @@ impl From<&str> for Command {
 			"sign-manifest" => Self::SignManifest,
 			"boot-standard" => Self::BootStandard,
 			"post-share" => Self::PostShare,
+			"dangerous-dev-boot" => Self::DangerousDevBoot,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -103,6 +164,16 @@ impl Command {
 	}
 	fn namespace_token() -> Token {
 		Token::new(NAMESPACE, "Namespace for the associated manifest.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn pivot_path_token() -> Token {
+		Token::new(PIVOT_PATH, "Path to the pivot binary.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn restart_policy_token() -> Token {
+		Token::new(RESTART_POLICY, "One of: `never`, `always`.")
 			.takes_value(true)
 			.required(true)
 	}
@@ -179,9 +250,7 @@ impl Command {
 				.required(true),
 			)
 			.token(
-				Token::new(RESTART_POLICY, "One of: `never`, `always`.")
-					.takes_value(true)
-					.required(true),
+				Self::restart_policy_token(),
 			)
 			.token(
 				Self::pcr0_token()
@@ -214,11 +283,7 @@ impl Command {
 
 	fn boot_standard() -> Parser {
 		Self::base()
-			.token(
-				Token::new(PIVOT_PATH, "Path to the pivot binary.")
-					.takes_value(true)
-					.required(true),
-			)
+			.token(Self::pivot_path_token())
 			.token(Self::boot_dir_token())
 	}
 
@@ -227,6 +292,12 @@ impl Command {
 			.token(Self::manifest_hash_token())
 			.token(Self::personal_dir_token())
 			.token(Self::boot_dir_token())
+	}
+
+	fn dangerous_dev_boot() -> Parser {
+		Self::base()
+			.token(Self::pivot_path_token())
+			.token(Self::restart_policy_token())
 	}
 }
 
@@ -243,6 +314,7 @@ impl GetParserForCommand for Command {
 			Self::SignManifest => Self::sign_manifest(),
 			Self::BootStandard => Self::boot_standard(),
 			Self::PostShare => Self::post_share(),
+			Self::DangerousDevBoot => Self::dangerous_dev_boot(),
 		}
 	}
 }
@@ -378,6 +450,9 @@ impl ClientRunner {
 				Command::SignManifest => handlers::sign_manifest(&self.opts),
 				Command::BootStandard => handlers::boot_standard(&self.opts),
 				Command::PostShare => handlers::post_share(&self.opts),
+				Command::DangerousDevBoot => {
+					handlers::dangerous_dev_boot(&self.opts);
+				}
 			}
 		}
 	}
@@ -530,6 +605,14 @@ mod handlers {
 			opts.personal_dir(),
 			opts.boot_dir(),
 			opts.manifest_hash(),
+		);
+	}
+
+	pub(super) fn dangerous_dev_boot(opts: &ClientOpts) {
+		services::dangerous_dev_boot(
+			&opts.path("message"),
+			opts.pivot_path(),
+			opts.restart_policy(),
 		);
 	}
 }

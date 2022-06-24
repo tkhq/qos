@@ -186,7 +186,7 @@ pub(in crate::protocol) fn boot_standard(
 	} else {
 		let ephemeral_key = RsaPair::generate()?;
 		fs::write(
-			state.ephemeral_key_file.clone(),
+			&state.ephemeral_key_file,
 			ephemeral_key.private_key_to_pem()?,
 		)?;
 

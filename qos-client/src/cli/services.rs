@@ -37,6 +37,10 @@ const MANIFEST_EXT: &str = "manifest";
 const APPROVAL_EXT: &str = "approval";
 const STANDARD_ATTESTATION_DOC_FILE: &str = "attestation_doc.boot";
 
+const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
+const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
+	"DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
+
 pub(crate) fn generate_setup_key<P: AsRef<Path>>(
 	alias: &str,
 	namespace: &str,
@@ -495,6 +499,102 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	} else {
 		println!("The quorum key has *not* been reconstructed.");
 	}
+}
+
+pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
+	uri: &str,
+	pivot_path: P,
+	restart: RestartPolicy,
+) {
+	// Generate a quorum key
+	let quorum_pair = RsaPair::generate().expect("Failed RSA gen");
+	let quorum_public_der = quorum_pair.public_key_to_der().unwrap();
+	let member = QuorumMember {
+		alias: DANGEROUS_DEV_BOOT_MEMBER.to_string(),
+		pub_key: quorum_public_der.clone(),
+	};
+
+	// Shard it with N=1, K=1
+	let share = {
+		let mut shares = qos_crypto::shamir::shares_generate(
+			&quorum_pair.private_key_to_der().unwrap(),
+			1,
+			1,
+		);
+		assert_eq!(
+			shares.len(),
+			1,
+			"Error generating shares - did not get exactly one share."
+		);
+		shares.remove(0)
+	};
+
+	// Read in the pivot
+	let pivot = fs::read(&pivot_path).expect("Failed to ready pivot binary.");
+
+	let mock_pcr = vec![0; 48];
+	// Create a manifest with quorum set of 1 - everything hardcoded expect
+	// pivot config
+	let manifest = Manifest {
+		namespace: Namespace {
+			name: DANGEROUS_DEV_BOOT_NAMESPACE.to_string(),
+			nonce: u32::MAX,
+		},
+		enclave: NitroConfig {
+			pcr0: mock_pcr.clone(),
+			pcr1: mock_pcr.clone(),
+			pcr2: mock_pcr,
+			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
+		},
+		pivot: PivotConfig { hash: sha_256(&pivot), restart },
+		quorum_key: quorum_public_der,
+		quorum_set: QuorumSet {
+			threshold: 1,
+			// The only member is the quorum member
+			members: vec![member.clone()],
+		},
+	};
+
+	// Create and post the boot standard instruction
+	let manifest_envelope = {
+		let signature = quorum_pair
+			.sign_sha256(&manifest.qos_hash())
+			.expect("Failed to sign");
+		Box::new(ManifestEnvelope {
+			manifest,
+			approvals: vec![Approval { signature, member }],
+		})
+	};
+	let req = ProtocolMsg::BootStandardRequest { manifest_envelope, pivot };
+	let attestation_doc = match request::post(uri, &req).unwrap() {
+		ProtocolMsg::BootStandardResponse {
+			nsm_response: NsmResponse::Attestation { document },
+		} => extract_attestation_doc(&document),
+		r => panic!("Unexpected response: {:?}", r),
+	};
+
+	// Pull out the ephemeral key
+	let eph_pub = RsaPub::from_pem(
+		&attestation_doc
+			.public_key
+			.expect("No ephemeral key in the attestation doc"),
+	)
+	.expect("Ephemeral key not valid public key");
+
+	// Post the share
+	let req = ProtocolMsg::ProvisionRequest {
+		share: eph_pub
+			.envelope_encrypt(&share)
+			.expect("Failed to encrypt share to eph key."),
+	};
+	match request::post(uri, &req).unwrap() {
+		ProtocolMsg::ProvisionResponse { reconstructed } => {
+			assert!(reconstructed, "Quorum Key was not reconstructed");
+		}
+		r => panic!("Unexpected response: {:?}", r),
+	};
+
+	println!("Enclave should be finished booting!");
 }
 
 fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
