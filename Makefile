@@ -36,8 +36,8 @@ vm-host:
 		--cid 16 \
 		--port 6969
 
-.PHONY: vm-client-describe-nsm
-vm-client-describe-nsm:
+.PHONY: vm-describe-nsm
+vm-describe-nsm:
 	OPENSSL_DIR=/usr cargo run \
 		--bin qos-client \
 		--features vm \
@@ -45,10 +45,25 @@ vm-client-describe-nsm:
 		--host-ip 127.0.0.1 \
 		--host-port 3000
 
-.PHONY: local-client-describe-nsm
-local-client-describe-nsm:
+.PHONY: local-describe-nsm
+local-describe-nsm:
 	cargo run --bin qos-client \
 		describe-nsm \
+		--host-ip 127.0.0.1 \
+		--host-port 3000
+
+.PHONY: vm-describe-pcr
+vm-describe-pcr:
+		OPENSSL_DIR=/usr cargo run \
+		--bin qos-client \
+		describe-pcr \
+		--host-ip 127.0.0.1 \
+		--host-port 3000
+
+.PHONY: local-describe-pcr
+local-describe-pcr:
+	cargo run --bin qos-client \
+		describe-pcr \
 		--host-ip 127.0.0.1 \
 		--host-port 3000
 

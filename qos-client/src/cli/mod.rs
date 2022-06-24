@@ -32,6 +32,7 @@ const PERSONAL_DIR: &str = "personal-dir";
 enum Command {
 	HostHealth,
 	DescribeNsm,
+	DescribePcr,
 	GenerateSetupKey,
 	BootGenesis,
 	AfterGenesis,
@@ -46,6 +47,7 @@ impl From<&str> for Command {
 		match s {
 			"host-health" => Self::HostHealth,
 			"describe-nsm" => Self::DescribeNsm,
+			"describe-pcr" => Self::DescribePcr,
 			"generate-setup-key" => Self::GenerateSetupKey,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
@@ -231,7 +233,7 @@ impl Command {
 impl GetParserForCommand for Command {
 	fn parser(&self) -> Parser {
 		match self {
-			Self::HostHealth | Self::DescribeNsm => Self::base(),
+			Self::HostHealth | Self::DescribeNsm | Self::DescribePcr => Self::base(),
 			Self::GenerateSetupKey => Self::generate_setup_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
@@ -362,6 +364,7 @@ impl ClientRunner {
 			match self.cmd {
 				Command::HostHealth => handlers::host_health(&self.opts),
 				Command::DescribeNsm => handlers::describe_nsm(&self.opts),
+				Command::DescribePcr => handlers::describe_pcr(&self.opts),
 				Command::GenerateSetupKey => {
 					handlers::generate_setup_key(&self.opts);
 				}
@@ -433,6 +436,27 @@ mod handlers {
 				println!("{:#?}", nsm_response);
 			}
 			other => panic!("Unexpected response {:?}", other),
+		}
+	}
+
+	pub(super) fn describe_pcr(opts: &ClientOpts) {
+		let path = &opts.path("message");
+
+		for i in 0..3 {
+			println!("PCR index {i}");
+
+			match request::post(
+				path,
+				&ProtocolMsg::NsmRequest { nsm_request: NsmRequest::DescribePCR { index: i } },
+			)
+			.map_err(|e| println!("{:?}", e))
+			.expect("Attestation request failed")
+			{
+				ProtocolMsg::NsmResponse { nsm_response } => {
+					println!("{:#?}", nsm_response);
+				}
+				other => panic!("Unexpected response {:?}", other),
+			}
 		}
 	}
 
