@@ -22,10 +22,7 @@ use qos_core::{
 	},
 };
 use qos_crypto::{sha_256, RsaPair};
-use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
-
-const EPH_PATH: &str =
-	"../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
+use qos_test::{MOCK_EPH_PATH, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 
 #[tokio::test]
 async fn boot_e2e() {
@@ -184,7 +181,7 @@ async fn boot_e2e() {
 			"--pivot-file",
 			pivot_path,
 			"--ephemeral-file",
-			EPH_PATH,
+			MOCK_EPH_PATH,
 			"--mock",
 		])
 		.spawn()

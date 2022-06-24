@@ -511,16 +511,19 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 
 	// Shard it with N=1, K=1
-	let shares = qos_crypto::shamir::shares_generate(
-		&quorum_pair.private_key_to_der().unwrap(),
-		1,
-		1,
-	);
-	assert_eq!(
-		shares.len(),
-		1,
-		"Error generating shares - did not get exactly one share."
-	);
+	let share = {
+		let mut shares = qos_crypto::shamir::shares_generate(
+			&quorum_pair.private_key_to_der().unwrap(),
+			1,
+			1,
+		);
+		assert_eq!(
+			shares.len(),
+			1,
+			"Error generating shares - did not get exactly one share."
+		);
+		shares.remove(0)
+	};
 
 	// Read in the pivot
 	let pivot = fs::read(&pivot_path).expect("Failed to ready pivot binary.");
@@ -577,7 +580,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	// Post the share
 	let req = ProtocolMsg::ProvisionRequest {
 		share: eph_pub
-			.envelope_encrypt(&shares[0])
+			.envelope_encrypt(&share)
 			.expect("Failed to encrypt share to eph key."),
 	};
 	match request::post(uri, &req).unwrap() {
