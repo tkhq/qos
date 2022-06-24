@@ -38,7 +38,8 @@ const APPROVAL_EXT: &str = "approval";
 const STANDARD_ATTESTATION_DOC_FILE: &str = "attestation_doc.boot";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
-const DANGEROUS_DEV_BOOT_NAMESPACE: &str = "DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
+const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
+	"DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
 
 pub(crate) fn generate_setup_key<P: AsRef<Path>>(
 	alias: &str,
