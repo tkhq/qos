@@ -1,7 +1,10 @@
-use std::fs::File;
+use std::fs;
 
 use qos_core::{coordinator::Coordinator};
 use qos_test::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
+use qos_core::io::SocketAddress;
+use qos_core::handles::Handles;
+use qos_core::protocol::attestor::mock::MockNsm;
 
 #[tokio::test]
 async fn coordinator_e2e() {
@@ -109,29 +112,32 @@ async fn coordinator_e2e() {
 #[test]
 fn coordinator_works() {
 	let secret_path =
-		"./coordinator_exits_cleanly_with_non_panicking_executable.secret";
+		"./coordinator_works.secret";
+	// let eph_path = "coordinator_works.eph.key";
 	let usock =
-		"./coordinator_exits_cleanly_with_non_panicking_executable.sock";
-	// For our sanity, ensure the secret does not yet exist
-	let _ = std::fs::remove_file(secret_path);
-	assert!(File::open(PIVOT_OK_PATH).is_ok(),);
+		"./coordinator_works/coordinator_works.sock";
+	let manifest_path = "coordinator_works.manifest";
 
-	let mut opts: Vec<_> = [
-		"binary",
-		"--usock",
-		usock,
-		"--mock",
-		"--secret-file",
-		secret_path,
-		"--pivot-file",
-		PIVOT_OK_PATH,
-	]
-	.into_iter()
-	.map(String::from)
-	.collect();
+	// For our sanity, ensure the secret does not yet exist
+	drop(fs::remove_file(secret_path));
+
+	let handles = Handles::new(
+		"eph_path".to_string(),
+		secret_path.to_string(),
+		manifest_path.to_string(),
+		PIVOT_OK_PATH.to_string(),
+	);
+
+	// Make sure we have written everything necessary to pivot, except the quorum key
+	handles.put_manifest_envelope(&Default::default()).unwrap();
+	assert!(handles.pivot_exists());
 
 	let coordinator_handle = std::thread::spawn(move || {
-		Coordinator::execute(EnclaveOptions::new(&mut opts))
+		Coordinator::execute(
+			handles,
+			Box::new(MockNsm),
+			SocketAddress::new_unix(usock)
+		)
 	});
 
 	// Give the enclave server time to bind to the socket
@@ -143,43 +149,47 @@ fn coordinator_works() {
 
 	// Create the file with the secret, which should cause the coordinator
 	// to start executable.
-	std::fs::write(secret_path, b"super dank tank secret tech").unwrap();
+	fs::write(secret_path, b"super dank tank secret tech").unwrap();
 
 	// Make the sure the coordinator executed successfully.
 	coordinator_handle.join().unwrap();
-	assert!(std::fs::remove_file(qos_test::PIVOT_OK_SUCCESS_FILE).is_ok());
+	assert!(fs::remove_file(qos_test::PIVOT_OK_SUCCESS_FILE).is_ok());
 
 	// Clean up
-	let _ = std::fs::remove_file(secret_path);
-	let _ = std::fs::remove_file(usock);
+	drop(fs::remove_file(secret_path));
+	drop(fs::remove_file(usock));
+	drop(fs::remove_file(manifest_path));
 }
 
 #[test]
 fn coordinator_handles_non_zero_exits() {
 	let secret_path =
-		"./coordinator_keeps_re_spawning_pivot_executable_that_panics.secret";
+		"./coordinator_handles_non_zero_exits.secret";
 	let usock =
-		"./coordinator_keeps_re_spawning_pivot_executable_that_panics.sock";
-	// For our sanity, ensure the secret does not yet exist
-	let _ = std::fs::remove_file(secret_path);
-	assert!(File::open(PIVOT_ABORT_PATH).is_ok(),);
+		"./coordinator_handles_non_zero_exits.sock";
+	let manifest_path =
+		"./coordinator_handles_non_zero_exits.manifest";
 
-	let mut opts: Vec<_> = [
-		"binary",
-		"--usock",
-		usock,
-		"--mock",
-		"--secret-file",
-		secret_path,
-		"--pivot-file",
-		PIVOT_ABORT_PATH,
-	]
-	.into_iter()
-	.map(String::from)
-	.collect();
+	// For our sanity, ensure the secret does not yet exist
+	drop(fs::remove_file(secret_path));
+
+	let handles = Handles::new(
+		"eph_path".to_string(),
+		secret_path.to_string(),
+		manifest_path.to_string(),
+		PIVOT_ABORT_PATH.to_string(),
+	);
+
+	// Make sure we have written everything necessary to pivot, except the quorum key
+	handles.put_manifest_envelope(&Default::default()).unwrap();
+	assert!(handles.pivot_exists());
 
 	let coordinator_handle = std::thread::spawn(move || {
-		Coordinator::execute(EnclaveOptions::new(&mut opts))
+		Coordinator::execute(
+			handles,
+			Box::new(MockNsm),
+			SocketAddress::new_unix(usock)
+		)
 	});
 
 	// Give the enclave server time to bind to the socket
@@ -191,7 +201,7 @@ fn coordinator_handles_non_zero_exits() {
 
 	// Create the file with the secret, which should cause the coordinator
 	// to start executable.
-	std::fs::write(secret_path, b"super dank tank secret tech").unwrap();
+	fs::write(secret_path, b"super dank tank secret tech").unwrap();
 
 	// Ensure the coordinator has enough time to detect the secret, launch the
 	// pivot, and let the pivot exit.
@@ -199,34 +209,39 @@ fn coordinator_handles_non_zero_exits() {
 
 	assert!(coordinator_handle.is_finished());
 
-	let _ = std::fs::remove_file(secret_path);
-	let _ = std::fs::remove_file(usock);
+	// Clean up
+	drop(fs::remove_file(secret_path));
+	drop(fs::remove_file(usock));
+	drop(fs::remove_file(manifest_path));
 }
 
 #[test]
 fn coordinator_handles_panic() {
 	let secret_path = "./coordinator_handles_panics.secret";
 	let usock = "./coordinator_handles_panics.sock";
-	// For our sanity, ensure the secret does not yet exist
-	let _ = std::fs::remove_file(secret_path);
-	assert!(File::open(PIVOT_PANIC_PATH).is_ok(),);
+	let manifest_path =
+		"./coordinator_handles_non_zero_exits.manifest";
 
-	let mut opts: Vec<_> = [
-		"binary",
-		"--usock",
-		usock,
-		"--mock",
-		"--secret-file",
-		secret_path,
-		"--pivot-file",
-		PIVOT_PANIC_PATH,
-	]
-	.into_iter()
-	.map(String::from)
-	.collect::<Vec<String>>();
+	// For our sanity, ensure the secret does not yet exist
+	drop(fs::remove_file(secret_path));
+
+	let handles = Handles::new(
+		"eph_path".to_string(),
+		secret_path.to_string(),
+		manifest_path.to_string(),
+		PIVOT_PANIC_PATH.to_string(),
+	);
+
+	// Make sure we have written everything necessary to pivot, except the quorum key
+	handles.put_manifest_envelope(&Default::default()).unwrap();
+	assert!(handles.pivot_exists());
 
 	let coordinator_handle = std::thread::spawn(move || {
-		Coordinator::execute(EnclaveOptions::new(&mut opts))
+		Coordinator::execute(
+			handles,
+			Box::new(MockNsm),
+			SocketAddress::new_unix(usock)
+		)
 	});
 
 	// Give the enclave server time to bind to the socket
@@ -238,7 +253,7 @@ fn coordinator_handles_panic() {
 
 	// Create the file with the secret, which should cause the coordinator
 	// to start executable.
-	std::fs::write(secret_path, b"super dank tank secret tech").unwrap();
+	fs::write(secret_path, b"super dank tank secret tech").unwrap();
 
 	// Ensure the coordinator has enough time to detect the secret, launch the
 	// pivot, and let the pivot exit.
@@ -247,6 +262,7 @@ fn coordinator_handles_panic() {
 	assert!(coordinator_handle.is_finished());
 
 	// Clean up
-	let _ = std::fs::remove_file(secret_path);
-	let _ = std::fs::remove_file(usock);
+	drop(fs::remove_file(secret_path));
+	drop(fs::remove_file(usock));
+	drop(fs::remove_file(manifest_path));
 }

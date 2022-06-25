@@ -13,8 +13,9 @@ const MOCK_EPH_PATH: &str =
 
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize, 
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct NitroConfig {
 	/// The hash of the enclave image file
 	pub pcr0: Vec<u8>,
@@ -42,6 +43,13 @@ pub enum RestartPolicy {
 	Always,
 }
 
+#[cfg(any(feature = "mock", test))]
+impl Default for RestartPolicy {
+	fn default() -> Self {
+		Self::Never
+	}
+}
+
 impl TryFrom<String> for RestartPolicy {
 	type Error = ProtocolError;
 
@@ -58,6 +66,7 @@ impl TryFrom<String> for RestartPolicy {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfig {
 	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
 	pub hash: Hash256,
@@ -69,6 +78,7 @@ pub struct PivotConfig {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct QuorumMember {
 	/// A human readable alias to identify the member. Must be unique to the
 	/// Quorum Set.
@@ -81,6 +91,7 @@ pub struct QuorumMember {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct QuorumSet {
 	/// The threshold, K, of signatures necessary to have  quorum.
 	pub threshold: u32,
@@ -93,6 +104,7 @@ pub struct QuorumSet {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Namespace {
 	/// The namespace. This should be unique relative to other namespaces the
 	/// organization running QuorumOs has.
@@ -108,6 +120,7 @@ pub struct Namespace {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Manifest {
 	/// Namespace this manifest belongs too.
 	pub namespace: Namespace,
@@ -125,6 +138,7 @@ pub struct Manifest {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Approval {
 	/// Quorum Member's signature.
 	pub signature: Vec<u8>,
@@ -136,6 +150,7 @@ pub struct Approval {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestEnvelope {
 	/// Encapsulated manifest.
 	pub manifest: Manifest,

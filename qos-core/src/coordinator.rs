@@ -4,7 +4,7 @@
 //!
 //! The pivot is an executable the enclave runs to initialize the secure
 //! applications.
-use std::process::Command;
+use std::{process::Command};
 
 use crate::{
 	handles::Handles,
@@ -81,3 +81,6 @@ impl Coordinator {
 }
 
 // TODO: test restart policy is respected
+
+// - always: binary that panics every seconds still running after 3 seconds
+// - never: binary that panics every seconds is not running after 1.1 seconds
