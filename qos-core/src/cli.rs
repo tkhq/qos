@@ -25,14 +25,13 @@ const MANIFEST_FILE_OPT: &str = "manifest-file";
 
 /// CLI opts for starting up the enclave server.
 #[derive(Default, Clone, Debug, PartialEq)]
-pub struct EnclaveOpts {
+struct EnclaveOpts {
 	parsed: Parser,
 }
 
 impl EnclaveOpts {
 	/// Create a new instance of [`Self`] with some defaults.
-	#[must_use]
-	pub fn new(args: &mut Vec<String>) -> Self {
+	fn new(args: &mut Vec<String>) -> Self {
 		let parsed = OptionsParser::<EnclaveParser>::parse(args)
 			.expect("Entered invalid CLI args");
 
@@ -44,8 +43,7 @@ impl EnclaveOpts {
 	/// # Panics
 	///
 	/// Panics if the opts are not valid for exactly one of unix or vsock.
-	#[must_use]
-	pub fn addr(&self) -> SocketAddress {
+	fn addr(&self) -> SocketAddress {
 		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
@@ -63,8 +61,7 @@ impl EnclaveOpts {
 	}
 
 	/// Get the [`NsmProvider`]
-	#[must_use]
-	pub fn nsm(&self) -> Box<dyn NsmProvider + Send> {
+	fn nsm(&self) -> Box<dyn NsmProvider + Send> {
 		if self.parsed.flag(MOCK).unwrap_or(false) {
 			#[cfg(feature = "mock")]
 			{
@@ -80,8 +77,7 @@ impl EnclaveOpts {
 	}
 
 	/// Defaults to [`SECRET_FILE`] if not explicitly specified
-	#[must_use]
-	pub fn secret_file(&self) -> String {
+	fn secret_file(&self) -> String {
 		self.parsed
 			.single(SECRET_FILE_OPT)
 			.expect("has a default value.")
@@ -89,8 +85,7 @@ impl EnclaveOpts {
 	}
 
 	/// Defaults to [`PIVOT_FILE`] if not explicitly specified
-	#[must_use]
-	pub fn pivot_file(&self) -> String {
+	fn pivot_file(&self) -> String {
 		self.parsed
 			.single(PIVOT_FILE_OPT)
 			.expect("has a default value.")
@@ -98,8 +93,7 @@ impl EnclaveOpts {
 	}
 
 	/// Defaults to [`EPHEMERAL_KEY_FILE`] if not explicitly specified
-	#[must_use]
-	pub fn ephemeral_file(&self) -> String {
+	fn ephemeral_file(&self) -> String {
 		self.parsed
 			.single(EPHEMERAL_FILE_OPT)
 			.expect("has a default value.")
@@ -139,7 +133,7 @@ impl CLI {
 }
 
 /// Parser for enclave CLI
-pub struct EnclaveParser;
+struct EnclaveParser;
 impl GetParserForOptions for EnclaveParser {
 	fn parser() -> Parser {
 		Parser::new()

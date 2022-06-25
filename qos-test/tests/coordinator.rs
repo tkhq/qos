@@ -1,6 +1,6 @@
 use std::fs::File;
 
-use qos_core::{cli::EnclaveOptions, coordinator::Coordinator};
+use qos_core::{coordinator::Coordinator};
 use qos_test::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
 
 #[tokio::test]
