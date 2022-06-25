@@ -26,7 +26,8 @@ pub struct Handles {
 // TODO: granular error for put and get
 impl Handles {
 	/// Create a new instance of [`Self`].
-	#[must_use] pub fn new(
+	#[must_use]
+	pub fn new(
 		ephemeral: String,
 		quorum: String,
 		manifest: String,
@@ -36,7 +37,8 @@ impl Handles {
 	}
 
 	/// Get the path to the Ephemeral Key.
-	#[must_use] pub fn ephemeral_key_path(&self) -> String {
+	#[must_use]
+	pub fn ephemeral_key_path(&self) -> String {
 		self.ephemeral.clone()
 	}
 
@@ -82,7 +84,8 @@ impl Handles {
 	}
 
 	/// Returns true if the Quorum Key file exists.
-	#[must_use] pub fn quorum_key_exists(&self) -> bool {
+	#[must_use]
+	pub fn quorum_key_exists(&self) -> bool {
 		Path::new(&self.quorum).exists()
 	}
 
@@ -115,12 +118,14 @@ impl Handles {
 	}
 
 	/// Returns true if the Manifest file exists.
-	#[must_use] pub fn manifest_envelope_exists(&self) -> bool {
+	#[must_use]
+	pub fn manifest_envelope_exists(&self) -> bool {
 		Path::new(&self.manifest).exists()
 	}
 
 	/// Get the path to the Pivot binary.
-	#[must_use] pub fn pivot_path(&self) -> String {
+	#[must_use]
+	pub fn pivot_path(&self) -> String {
 		self.pivot.clone()
 	}
 
@@ -139,7 +144,8 @@ impl Handles {
 	}
 
 	/// Returns true if the Pivot file exists.
-	#[must_use] pub fn pivot_exists(&self) -> bool {
+	#[must_use]
+	pub fn pivot_exists(&self) -> bool {
 		Path::new(&self.pivot).exists()
 	}
 
@@ -157,3 +163,5 @@ impl Handles {
 		Ok(())
 	}
 }
+
+// TODO unit tests

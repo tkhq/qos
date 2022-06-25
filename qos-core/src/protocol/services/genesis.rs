@@ -155,16 +155,18 @@ pub(in crate::protocol) fn boot_genesis(
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::protocol::attestor::mock::MockNsm;
+	use crate::{handles::Handles, protocol::attestor::mock::MockNsm};
 
 	#[test]
 	fn boot_genesis_works() {
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			"secret".to_string(),
-			"pivot".to_string(),
-			"ephemeral".to_string(),
+		let handles = Handles::new(
+			"EPH".to_string(),
+			"QUO".to_string(),
+			"MAN".to_string(),
+			"PIV".to_string(),
 		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles.clone());
 		let member1_pair = RsaPair::generate().unwrap();
 		let member2_pair = RsaPair::generate().unwrap();
 		let member3_pair = RsaPair::generate().unwrap();
@@ -214,5 +216,10 @@ mod test {
 
 		let quorum_public_key = RsaPub::from_der(&output.quorum_key).unwrap();
 		assert_eq!(reconstructed_quorum_key.public_key(), &quorum_public_key);
+
+		// Sanity check
+		assert!(!handles.quorum_key_exists());
+		assert!(!handles.manifest_envelope_exists());
+		assert!(!handles.pivot_exists());
 	}
 }

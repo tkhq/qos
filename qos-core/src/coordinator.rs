@@ -4,7 +4,7 @@
 //!
 //! The pivot is an executable the enclave runs to initialize the secure
 //! applications.
-use std::{process::Command};
+use std::process::Command;
 
 use crate::{
 	handles::Handles,
@@ -23,7 +23,6 @@ impl Coordinator {
 	///
 	/// # Panics
 	///
-	/// - If any enclave options are incorrect
 	/// - If spawning the pivot errors.
 	/// - If waiting for the pivot errors.
 	pub fn execute(

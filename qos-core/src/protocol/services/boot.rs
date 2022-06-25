@@ -220,7 +220,7 @@ mod test {
 	use std::path::Path;
 
 	use super::*;
-	use crate::protocol::attestor::mock::MockNsm;
+	use crate::{handles::Handles, protocol::attestor::mock::MockNsm};
 
 	fn get_manifest() -> (Manifest, Vec<(RsaPair, QuorumMember)>, Vec<u8>) {
 		let quorum_pair = RsaPair::generate().unwrap();
@@ -300,12 +300,16 @@ mod test {
 			"boot_standard_accepts_approved_manifest.pivot".to_string();
 		let ephemeral_file =
 			"boot_standard_accepts_approved_manifest_eph.secret".to_string();
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			"secret".to_string(),
-			pivot_file.clone(),
+		let manifest_file =
+			"boot_standard_accepts_approved_manifest.manifest".to_string();
+		let handles = Handles::new(
 			ephemeral_file.clone(),
+			"quorum_key".to_string(),
+			manifest_file.clone(),
+			pivot_file.clone(),
 		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles.clone());
 
 		let _nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
@@ -314,8 +318,11 @@ mod test {
 		assert!(Path::new(&pivot_file).exists());
 		assert!(Path::new(&ephemeral_file).exists());
 
+		assert_eq!(handles.get_manifest_envelope().unwrap(), manifest_envelope);
+
 		std::fs::remove_file(pivot_file).unwrap();
 		std::fs::remove_file(ephemeral_file).unwrap();
+		std::fs::remove_file(manifest_file).unwrap();
 
 		assert_eq!(protocol_state.phase, ProtocolPhase::WaitingForQuorumShards);
 	}
@@ -338,18 +345,30 @@ mod test {
 			ManifestEnvelope { manifest, approvals }
 		};
 
-		let pivot_file = "boot_standard_works.pivot".to_string();
-		let ephemeral_file = "boot_standard_works_eph.secret".to_string();
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			"secret".to_string(),
+		let pivot_file =
+			"boot_standard_rejects_manifest_if_not_enough_approvals.pivot"
+				.to_string();
+		let ephemeral_file =
+			"boot_standard_rejects_manifest_if_not_enough_approvals.secret"
+				.to_string();
+		let manifest_file =
+			"boot_standard_rejects_manifest_if_not_enough_approvals.manifest"
+				.to_string();
+		let handles = Handles::new(
+			ephemeral_file.clone(),
+			"quorum_key".to_string(),
+			manifest_file,
 			pivot_file,
-			ephemeral_file,
 		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles.clone());
 
 		let nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
 
+		assert!(!handles.manifest_envelope_exists());
+		assert!(!handles.pivot_exists());
+		assert!(!Path::new(&ephemeral_file).exists());
 		assert!(nsm_resposne.is_err());
 	}
 
@@ -369,18 +388,27 @@ mod test {
 			ManifestEnvelope { manifest, approvals }
 		};
 
-		let pivot_file = "boot_standard_works.pivot".to_string();
-		let ephemeral_file = "boot_standard_works_eph.secret".to_string();
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			"secret".to_string(),
+		let pivot_file =
+			"boot_standard_rejects_unapproved_manifest.pivot".to_string();
+		let ephemeral_file =
+			"boot_standard_rejects_unapproved_manifest.secret".to_string();
+		let manifest_file =
+			"boot_standard_rejects_unapproved_manifest.manifest".to_string();
+		let handles = Handles::new(
+			ephemeral_file.clone(),
+			"quorum_key".to_string(),
+			manifest_file,
 			pivot_file,
-			ephemeral_file,
 		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles.clone());
 
 		let nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
 
+		assert!(!handles.manifest_envelope_exists());
+		assert!(!handles.pivot_exists());
+		assert!(!Path::new(&ephemeral_file).exists());
 		assert!(nsm_resposne.is_err());
 	}
 }
