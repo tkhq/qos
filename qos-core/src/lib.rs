@@ -51,10 +51,10 @@ pub mod server;
 
 /// Path to Quorum Key secret.
 #[cfg(not(feature = "vm"))]
-pub const SECRET_FILE: &str = "./qos.quorum.key";
+pub const QUORUM_FILE: &str = "./qos.quorum.key";
 /// Path to Quorum Key secret.
 #[cfg(feature = "vm")]
-pub const SECRET_FILE: &str = "/qos.quorum.key";
+pub const QUORUM_FILE: &str = "/qos.quorum.key";
 
 /// Path to Pivot binary.
 #[cfg(not(feature = "vm"))]

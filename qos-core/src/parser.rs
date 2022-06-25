@@ -73,7 +73,7 @@ pub trait GetParserForCommand {
 /// Parse input for a command. If you do not need to parse a command but
 /// instead just options, use [`OptionsParser`].
 ///
-///  Note that subcommands are not supported.
+/// Note that subcommands are not supported.
 ///
 /// Assumes the format `command-name --token1 value1 --flag --token2 value2`.
 #[derive(Debug, PartialEq, Clone)]
