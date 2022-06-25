@@ -1,18 +1,16 @@
 use std::fs;
 
-use qos_core::{coordinator::Coordinator};
+use qos_core::{
+	coordinator::Coordinator, handles::Handles, io::SocketAddress,
+	protocol::attestor::mock::MockNsm,
+};
 use qos_test::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
-use qos_core::io::SocketAddress;
-use qos_core::handles::Handles;
-use qos_core::protocol::attestor::mock::MockNsm;
 
 #[test]
 fn coordinator_works() {
-	let secret_path =
-		"./coordinator_works.secret";
+	let secret_path = "./coordinator_works.secret";
 	// let eph_path = "coordinator_works.eph.key";
-	let usock =
-		"./coordinator_works/coordinator_works.sock";
+	let usock = "./coordinator_works/coordinator_works.sock";
 	let manifest_path = "coordinator_works.manifest";
 
 	// For our sanity, ensure the secret does not yet exist
@@ -25,15 +23,16 @@ fn coordinator_works() {
 		PIVOT_OK_PATH.to_string(),
 	);
 
-	// Make sure we have written everything necessary to pivot, except the quorum key
+	// Make sure we have written everything necessary to pivot, except the
+	// quorum key
 	handles.put_manifest_envelope(&Default::default()).unwrap();
 	assert!(handles.pivot_exists());
 
 	let coordinator_handle = std::thread::spawn(move || {
 		Coordinator::execute(
-			handles,
+			&handles,
 			Box::new(MockNsm),
-			SocketAddress::new_unix(usock)
+			SocketAddress::new_unix(usock),
 		)
 	});
 
@@ -60,12 +59,9 @@ fn coordinator_works() {
 
 #[test]
 fn coordinator_handles_non_zero_exits() {
-	let secret_path =
-		"./coordinator_handles_non_zero_exits.secret";
-	let usock =
-		"./coordinator_handles_non_zero_exits.sock";
-	let manifest_path =
-		"./coordinator_handles_non_zero_exits.manifest";
+	let secret_path = "./coordinator_handles_non_zero_exits.secret";
+	let usock = "./coordinator_handles_non_zero_exits.sock";
+	let manifest_path = "./coordinator_handles_non_zero_exits.manifest";
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(fs::remove_file(secret_path));
@@ -77,15 +73,16 @@ fn coordinator_handles_non_zero_exits() {
 		PIVOT_ABORT_PATH.to_string(),
 	);
 
-	// Make sure we have written everything necessary to pivot, except the quorum key
+	// Make sure we have written everything necessary to pivot, except the
+	// quorum key
 	handles.put_manifest_envelope(&Default::default()).unwrap();
 	assert!(handles.pivot_exists());
 
 	let coordinator_handle = std::thread::spawn(move || {
 		Coordinator::execute(
-			handles,
+			&handles,
 			Box::new(MockNsm),
-			SocketAddress::new_unix(usock)
+			SocketAddress::new_unix(usock),
 		)
 	});
 
@@ -116,8 +113,7 @@ fn coordinator_handles_non_zero_exits() {
 fn coordinator_handles_panic() {
 	let secret_path = "./coordinator_handles_panics.secret";
 	let usock = "./coordinator_handles_panics.sock";
-	let manifest_path =
-		"./coordinator_handles_non_zero_exits.manifest";
+	let manifest_path = "./coordinator_handles_non_zero_exits.manifest";
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(fs::remove_file(secret_path));
@@ -129,15 +125,16 @@ fn coordinator_handles_panic() {
 		PIVOT_PANIC_PATH.to_string(),
 	);
 
-	// Make sure we have written everything necessary to pivot, except the quorum key
+	// Make sure we have written everything necessary to pivot, except the
+	// quorum key
 	handles.put_manifest_envelope(&Default::default()).unwrap();
 	assert!(handles.pivot_exists());
 
 	let coordinator_handle = std::thread::spawn(move || {
 		Coordinator::execute(
-			handles,
+			&handles,
 			Box::new(MockNsm),
-			SocketAddress::new_unix(usock)
+			SocketAddress::new_unix(usock),
 		)
 	});
 

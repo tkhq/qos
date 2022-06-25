@@ -119,7 +119,7 @@ impl CLI {
 			println!("{}", opts.parsed.info());
 		} else {
 			Coordinator::execute(
-				Handles::new(
+				&Handles::new(
 					opts.ephemeral_file(),
 					opts.secret_file(), // TODO change to quorum file
 					opts.manifest_file(),

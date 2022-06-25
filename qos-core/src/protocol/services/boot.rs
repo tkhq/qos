@@ -13,7 +13,7 @@ const MOCK_EPH_PATH: &str =
 
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize, 
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct NitroConfig {
