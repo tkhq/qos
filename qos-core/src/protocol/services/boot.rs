@@ -64,7 +64,7 @@ pub struct PivotConfig {
 
 /// A quorum member's alias and personal key.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize, Eq, PartialOrd, Ord,
 )]
 pub struct QuorumMember {
 	/// A human readable alias to identify the member. Must be unique to the

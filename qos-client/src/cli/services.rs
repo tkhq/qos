@@ -311,7 +311,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 
 	let genesis_output = find_genesis_output(&genesis_dir);
 
-	let members: Vec<_> = genesis_output
+	let mut  members: Vec<_> = genesis_output
 		.member_outputs
 		.iter()
 		.map(|m| QuorumMember {
@@ -319,6 +319,10 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 			pub_key: m.public_personal_key.clone(),
 		})
 		.collect();
+		// We want to try and build the same manifest regardless of the OS. This
+		// isn't necessarily important for production, but it helps make sure
+		// our test suite will always work.
+	members.sort();
 
 	let manifest = Manifest {
 		namespace: Namespace { name: namespace.clone(), nonce },

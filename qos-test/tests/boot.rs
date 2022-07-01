@@ -95,7 +95,7 @@ async fn boot_e2e() {
 		GenesisOutput::try_from_slice(&fs::read(&genesis_output_path).unwrap())
 			.unwrap();
 
-	let quorum_set_members: Vec<_> = genesis_output
+	let mut quorum_set_members: Vec<_> = genesis_output
 		.member_outputs
 		.iter()
 		.map(|m| QuorumMember {
@@ -103,6 +103,8 @@ async fn boot_e2e() {
 			pub_key: m.public_personal_key.clone(),
 		})
 		.collect();
+	quorum_set_members.sort();
+
 	assert_eq!(
 		manifest,
 		Manifest {
