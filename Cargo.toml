@@ -6,14 +6,3 @@ members = [
   "qos-host",
   "qos-test",
 ]
-
-# [dependencies]
-# nix = { version = "0.24.1", features = ["socket"] }
-
-# [dev-dependencies]
-# async-std = { version = "1.11.0", features = ["attributes"] }
-
-# [features]
-# default=["local"]
-# local = []
-# vm = []
