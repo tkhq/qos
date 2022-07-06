@@ -76,7 +76,14 @@ pub struct PivotConfig {
 
 /// A quorum member's alias and personal key.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Debug,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	Eq,
+	PartialOrd,
+	Ord,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct QuorumMember {
