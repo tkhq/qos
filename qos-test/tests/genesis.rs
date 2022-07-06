@@ -98,7 +98,7 @@ async fn genesis_e2e() {
 			"--pivot-file",
 			pivot_path,
 			"--mock",
-			"--manifest-path",
+			"--manifest-file",
 			manifest_path,
 		])
 		.spawn()
