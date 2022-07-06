@@ -259,7 +259,7 @@ async fn boot_e2e() {
 			.success());
 	}
 
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	std::thread::sleep(std::time::Duration::from_secs(2));
 	// Check that the pivot executed
 	assert!(Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
 	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
