@@ -14,7 +14,7 @@ pub const MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT: &str =
 
 /// A valid time to validated the cert chain against in
 /// [`MOCK_NSM_ATTESTATION_DOCUMENT`].
-pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1_656_030_657;
+pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1657117192;
 
 /// PCR index 0 for [`MOCK_NSM_ATTESTATION_DOCUMENT`].
 pub const MOCK_PCR0: &str = "f8bb0133c427bc49aa39f6811a01077ce9ab7e635fa1f5439c9c8bf99754f8230e41b09426b0e595eebdc4d6ed4bc3b6";
