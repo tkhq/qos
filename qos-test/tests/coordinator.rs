@@ -160,3 +160,16 @@ fn coordinator_handles_panic() {
 	drop(fs::remove_file(usock));
 	drop(fs::remove_file(manifest_path));
 }
+
+#[test]
+fn can_restart_panicking_pivot() {
+	// Create a manifest with restart option
+
+	// Create a different panicking pivot
+
+	// Start coordinator
+
+	// Make sure it hasn't finished
+
+	// Write the secret
+}

@@ -84,3 +84,10 @@ impl Coordinator {
 
 // - always: binary that panics every seconds still running after 3 seconds
 // - never: binary that panics every seconds is not running after 1.1 seconds
+#[cfg(test)]
+mod test {
+	#[test]
+	fn coordinator_handles_can_restart_panicking_pivot() {
+		// Get a handle on the panic
+	}
+}
