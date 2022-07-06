@@ -323,6 +323,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	// isn't necessarily important for production, but it helps make sure
 	// our test suite will always work.
 	members.sort();
+	dbg!(&members.iter().map(|m| m.alias.clone()).collect::<Vec<_>>());
 
 	let manifest = Manifest {
 		namespace: Namespace { name: namespace.clone(), nonce },
