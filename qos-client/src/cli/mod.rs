@@ -113,10 +113,6 @@
 //!     - attestation_doc.genesis
 //!     - output.genesis
 //!
-//! Now each quorum member has their decrypted personal key and a quorum share
-//! encrypted to their personal key. (TODO: the personal key should be password
-//! protected.)
-//!
 //! ## Boot Standard an Enclave
 //!
 //! Broadly speaking, the boot flow for an enclave can be broken down to 3
