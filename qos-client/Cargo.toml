@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-qos-core = { path = "../qos-core" }
-qos-crypto = { path = "../qos-crypto" }
+qos-core = { path = "../qos-core", default-features = false }
+qos-crypto = { path = "../qos-crypto", default-features = false }
 
 # Third party
 ureq = { version = "2.4", default-features = false }
@@ -20,7 +20,8 @@ serde_bytes = { version = "0.11", default-features = false }
 
 [dev-dependencies]
 # We need mock enabled to grab things related to the mock NSM.
-qos-core = { path = "../qos-core" , features = ["mock"]}
+qos-core = { path = "../qos-core", features = ["mock"]}
 
 [features]
+default = []
 mock = []

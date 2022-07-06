@@ -95,7 +95,7 @@ async fn boot_e2e() {
 		GenesisOutput::try_from_slice(&fs::read(&genesis_output_path).unwrap())
 			.unwrap();
 
-	let quorum_set_members: Vec<_> = genesis_output
+	let mut quorum_set_members: Vec<_> = genesis_output
 		.member_outputs
 		.iter()
 		.map(|m| QuorumMember {
@@ -103,6 +103,8 @@ async fn boot_e2e() {
 			pub_key: m.public_personal_key.clone(),
 		})
 		.collect();
+	quorum_set_members.sort();
+
 	assert_eq!(
 		manifest,
 		Manifest {
@@ -255,7 +257,7 @@ async fn boot_e2e() {
 			.success());
 	}
 
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	std::thread::sleep(std::time::Duration::from_secs(2));
 	// Check that the pivot executed
 	assert!(Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
 	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();

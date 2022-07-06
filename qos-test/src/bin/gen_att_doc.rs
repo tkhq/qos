@@ -14,7 +14,7 @@
 //!
 //! 4) Update `MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT` with the manifest hash.
 //!
-//! 5) Run this script.
+//! 5) Run this script (the enclave should be running from step 1).
 //!
 //! 6) Commit the updated files.
 

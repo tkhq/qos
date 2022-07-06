@@ -10,20 +10,20 @@ use super::{
 /// DO NOT USE IN PRODUCTION - ONLY FOR TESTS.
 /// The `user_data` for [`MOCK_NSM_ATTESTATION_DOCUMENT`].
 pub const MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT: &str =
-	"a4e45eedaad1fa7c5e21fbc9659603e0f602e876fb4a6cff72bd8a4710bea1e5";
+	"a2ec4272c44690b2dc32ed89d4bdd266ec2b0e753dff2f25f08b5d2a15cfe2e6";
 
 /// A valid time to validated the cert chain against in
 /// [`MOCK_NSM_ATTESTATION_DOCUMENT`].
-pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1_656_030_657;
+pub const MOCK_SECONDS_SINCE_EPOCH: u64 = 1_657_117_192;
 
 /// PCR index 0 for [`MOCK_NSM_ATTESTATION_DOCUMENT`].
-pub const MOCK_PCR0: &str = "8cceb679ae5c334c88b21a40478593f2ae8fbf2c63f0705cc503aa129ef9341e6f55f2d4b0e0c99e7ef30d6b13ead8af";
+pub const MOCK_PCR0: &str = "f8bb0133c427bc49aa39f6811a01077ce9ab7e635fa1f5439c9c8bf99754f8230e41b09426b0e595eebdc4d6ed4bc3b6";
 
 /// PCR index 1 for [`MOCK_NSM_ATTESTATION_DOCUMENT`].
 pub const MOCK_PCR1: &str = "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19e6b29c37ee80b214a414b7607236edf26fcb78654e63f";
 
 /// PCR index 2 for [`MOCK_NSM_ATTESTATION_DOCUMENT`].
-pub const MOCK_PCR2: &str = "99e38c61adeda7c1686416518f9e9f5516e5c6b3d4046de6da99702febf39efa5162d9ce74320e3f05defef3b694c296";
+pub const MOCK_PCR2: &str = "c185515d78cb90a2dc1fa49ea232fb44645acd18652c96dd05a92b9c5dbfa36d61d7c7d9e71d51de38de914cd00214bb";
 
 /// DO NOT USE IN PRODUCTION - ONLY FOR TESTS.
 /// The `user_data` for the doc is the hash of the manifest used for the boot
