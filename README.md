@@ -27,6 +27,14 @@ And pass all tests
 cargo test
 ```
 
+## View the docs
+
+In the root of this project run
+
+```bash
+cargo doc --open
+```
+
 ## System requirements
 
 - openssl >= 1.1.0

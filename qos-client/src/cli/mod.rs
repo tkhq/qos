@@ -16,7 +16,7 @@
 //!
 //! ```shell
 //! cargo run --bin qos-cli generate-setup-key \
-//!     --namespace our-namespace \
+//!     --namespace our_namespace \
 //!     --alias alice \
 //!     --personal-dir ~/qos/our_namespace/personal
 //! ```
@@ -31,8 +31,8 @@
 //! ### Send Boot Genesis Instruction
 //!
 //! The genesis ceremony leader will need to have a directory that contains the
-//! setup keys of all the quorum members. For example, Alice was the ceremony
-//! leader and members={Alice, BoB, Eve}, the leader would need to have the
+//! setup keys of all the quorum members. For example, if Alice was the ceremony
+//! leader and members={Alice, BoB, Eve}, Alice would need to have the
 //! following directory structure:
 //!
 //! - personal
@@ -77,7 +77,7 @@
 //!
 //! Within the [`qos_core::protocol::services::GenesisOutput`] are the encrypted
 //! Personal Keys and Quorum Shares for each member. Each member's personal key
-//! is encrypted to their setup key, so they will need their setup key secret.
+//! is encrypted to their setup key, so they will need their setup key to decrypt the personal key.
 //! The quorum share is encrypted to the personal key.
 //!
 //! Each member will use [`Command::AfterGenesis`] to decrypt the outputs and
@@ -90,10 +90,15 @@
 //!     - attestation_doc.genesis
 //!     - output.genesis
 //!
-//! Given the above directory structure, Bob can run [`Command::AfterGenesis`]
-//! with
+//! Given the above directory structure, Bob can run [`Command::AfterGenesis`]:
 //!
 //! ```shell
+//! cargo run --bin qos-cli after-genesis \
+//!    --genesis-dir  ~/qos/our_namespace/genesis \
+//!    --personal-dir  ~/qos/our_namespace/personal \
+//!    --pcr0 0xf0f0f0f0f0f0f0 \
+//!    --pcr1 0xf0f0f0f0f0f0f0 \
+//!    --pcr2 0xf0f0f0f0f0f0f0 \
 //! ```
 //!
 //! Which will extract Bob's personal key and share, resulting in the following
