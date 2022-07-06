@@ -105,8 +105,6 @@ async fn boot_e2e() {
 		.collect();
 	quorum_set_members.sort();
 
-	dbg!(hex::encode(&manifest.qos_hash()));
-
 	assert_eq!(
 		manifest,
 		Manifest {
