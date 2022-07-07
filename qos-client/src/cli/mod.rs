@@ -2,11 +2,26 @@
 //!
 //! See [`Command`] for all possible commands.
 //!
-//! ## Quorum Key Generation
+//! ## Primary QuorumOS Flows
 //!
-//! QuorumOS requires a Quorum Key. The Quorum
+//! - [Quorum Key Generation](quorum-key-generation)
+//! - [Boot Standard](boot-standard)
 //!
-//! ### Generate Setup Keys
+//! ### Terms
+//!
+//! * **Leader**: the entity that runs a flow. In other words, this is an entity
+//!   that executes the commands in flow that don't need to be executed by
+//!   individual quorum members.
+//! * **Approver(s)**: a quorum member that approves something by signing it.
+//!
+//! ### Quorum Key Generation
+//!
+//! QuorumOS requires a Quorum Key. Each member of the Quorum Set holds a share
+//! of the Quorum Key. (The shares are created using Shamir Secret Sharing) It
+//! is expected that the Quorum Key is only ever fully reconstructed in an
+//! enclave
+//!
+//! #### Generate Setup Keys
 //!
 //! The enclave has a special "genesis" service to generate a quorum key and
 //! shard it across the quorum members.
@@ -30,7 +45,7 @@
 //!     - alice.our_namespace.setup.key
 //!     - alice.our_namespace.setup.pub
 //!
-//! ### Send Boot Genesis Instruction
+//! #### Send Boot Genesis Instruction
 //!
 //! The genesis ceremony leader will need to have a directory that contains the
 //! setup keys of all the quorum members. For example, if Alice was the ceremony
@@ -75,12 +90,12 @@
 //! Module used to attest to the validity of the QOS image used to run the
 //! genesis service.
 //!
-//! ### Decrypt Personal Keys
+//! #### Decrypt Personal Keys
 //!
 //! Within the [`qos_core::protocol::services::GenesisOutput`] are the encrypted
 //! Personal Keys and Quorum Shares for each member. Each member's personal key
-//! is encrypted to their setup key, so they will need their setup key to decrypt the personal key.
-//! The quorum share is encrypted to the personal key.
+//! is encrypted to their setup key, so they will need their setup key to
+//! decrypt the personal key. The quorum share is encrypted to the personal key.
 //!
 //! Each member will use [`Command::AfterGenesis`] to decrypt the outputs and
 //! verify the attestation document. Prior to running [`Command::AfterGenesis`],
@@ -115,7 +130,7 @@
 //!     - attestation_doc.genesis
 //!     - output.genesis
 //!
-//! ## Boot Standard an Enclave
+//! ### Boot Standard
 //!
 //! Broadly speaking, the boot flow for an enclave can be broken down to 3
 //! steps:
@@ -131,7 +146,7 @@
 //! document from the enclave. (The attestation document should contain a
 //! reference to the manifest).
 //!
-//! ### Generate a Manifest
+//! #### Generate a Manifest
 //!
 //! The leader for the standard boot will need to generate a manifest using
 //! [`Command::GenerateManifest`]. Given the quorum set mentioned in the above
@@ -165,7 +180,7 @@
 //! - genesis
 //!    - output.genesis
 //!
-//! ### Approve the Manifest
+//! #### Approve the Manifest
 //!
 //! K of the quorum members need to approve and sign the manifest with their
 //! personal key. A quorum member can use [`Command::SignManifest`] to do this.
@@ -196,7 +211,7 @@
 //!    - our_namespace.0.manifest
 //!    - bob.our_namespace.0.approval
 //!
-//! ### Send Boot Standard Instruction
+//! #### Send Boot Standard Instruction
 //!
 //! Once K approvals have been collected for a manifest, the leader can use
 //! [`Command::BootStandard`] to send the boot standard instruction to start the
@@ -234,7 +249,7 @@
 //!    - attestation_doc.boot # TODO: Just have posters request the attestation
 //!      doc as they go
 //!
-//! ### Post Quorum Shards
+//! #### Post Quorum Shards
 //!
 //! Once the enclave has the pivot and manifest loaded with boot standard, K
 //! quorum members can independently verify the attestation document and post
