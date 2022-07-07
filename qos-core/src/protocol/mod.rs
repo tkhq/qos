@@ -36,7 +36,9 @@ pub trait QosHash: BorshSerialize {
 impl<T: BorshSerialize> QosHash for T {}
 
 /// A error from protocol execution.
-#[derive(Debug, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub enum ProtocolError {
 	/// TODO
 	InvalidShare,
@@ -74,6 +76,20 @@ pub enum ProtocolError {
 	BadEphemeralKeyPath,
 	/// Tried to modify state that must be static post pivoting.
 	CannotModifyPostPivotStatic,
+	/// For some reason the Ephemeral could not be read/created from the file
+	/// system.
+	FailedToGetEphemeralKey,
+	/// Failed to write the Ephemeral key to the file system.
+	FailedToPutEphemeralKey,
+	/// Failed to put the quorum key into the file system
+	FailedToPutQuorumKey,
+	/// For some reason the manifest envelope could not be read from the file
+	/// system or decoded.
+	FailedToGetManifestEnvelope,
+	/// Failed to put the manifest envelope.
+	FailedToPutManifestEnvelope,
+	/// Failed to put the pivot executable.
+	FailedToPutPivot,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {

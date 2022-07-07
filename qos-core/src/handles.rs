@@ -9,8 +9,8 @@ use crate::protocol::{services::boot::ManifestEnvelope, ProtocolError};
 
 /// Handles for read only state accessible to all of QOS.
 ///
-/// All data here should be put once at some point in the boot flow, and then
-/// only ever read after that.
+/// All data here should be "put" once at some point in the boot flow. Once
+/// "put", it can only be read.
 #[derive(Debug, Clone)]
 pub struct Handles {
 	/// Path to file containing the PEM encoded Ephemeral Key.
@@ -23,7 +23,6 @@ pub struct Handles {
 	pivot: String,
 }
 
-// TODO: granular error for put and get
 impl Handles {
 	/// Create a new instance of [`Self`].
 	#[must_use]
@@ -48,7 +47,8 @@ impl Handles {
 	///
 	/// Errors if the Ephemeral Key has not been put.
 	pub fn get_ephemeral_key(&self) -> Result<RsaPair, ProtocolError> {
-		let pair = RsaPair::from_pem_file(&self.ephemeral)?;
+		let pair = RsaPair::from_pem_file(&self.ephemeral)
+			.map_err(|_| ProtocolError::FailedToGetEphemeralKey)?;
 		Ok(pair)
 	}
 
@@ -61,7 +61,11 @@ impl Handles {
 		&self,
 		pair: &RsaPair,
 	) -> Result<(), ProtocolError> {
-		Self::write_as_read_only(&self.ephemeral, &pair.private_key_to_pem()?)
+		Self::write_as_read_only(
+			&self.ephemeral,
+			&pair.private_key_to_pem()?,
+			ProtocolError::FailedToPutEphemeralKey,
+		)
 	}
 
 	/// Put the Quorum Key pair.
@@ -69,18 +73,12 @@ impl Handles {
 	/// # Errors
 	///
 	/// Errors if the Quorum Key has already been put.
-	// fn get_quorum_key(&self) -> Result<RsaPair, ProtocolError> {
-	// 	let pair = RsaPair::from_pem_file(&self.quorum)?;
-	// 	Ok(pair)
-	// }
-
-	/// Put the Quorum Key pair.
-	///
-	/// # Errors
-	///
-	/// Errors if the Quorum Key has already been put.
 	pub fn put_quorum_key(&self, pair: &RsaPair) -> Result<(), ProtocolError> {
-		Self::write_as_read_only(&self.quorum, &pair.private_key_to_pem()?)
+		Self::write_as_read_only(
+			&self.quorum,
+			&pair.private_key_to_pem()?,
+			ProtocolError::FailedToPutManifestEnvelope,
+		)
 	}
 
 	/// Returns true if the Quorum Key file exists.
@@ -97,8 +95,10 @@ impl Handles {
 	pub fn get_manifest_envelope(
 		&self,
 	) -> Result<ManifestEnvelope, ProtocolError> {
-		let manifest =
-			ManifestEnvelope::try_from_slice(&fs::read(&self.manifest)?)?;
+		let contents = fs::read(&self.manifest)
+			.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)?;
+		let manifest = ManifestEnvelope::try_from_slice(&contents)
+			.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)?;
 		Ok(manifest)
 	}
 
@@ -114,6 +114,7 @@ impl Handles {
 		Self::write_as_read_only(
 			&self.manifest,
 			&manifest_envelope.try_to_vec()?,
+			ProtocolError::FailedToPutManifestEnvelope,
 		)
 	}
 
@@ -135,11 +136,13 @@ impl Handles {
 			Err(ProtocolError::CannotModifyPostPivotStatic)?;
 		}
 
-		fs::write(&self.pivot, pivot)?;
+		fs::write(&self.pivot, pivot)
+			.map_err(|_| ProtocolError::FailedToPutPivot)?;
 		fs::set_permissions(
 			&self.pivot,
 			std::fs::Permissions::from_mode(0o111),
-		)?;
+		)
+		.map_err(|_| ProtocolError::FailedToPutPivot)?;
 		Ok(())
 	}
 
@@ -153,15 +156,17 @@ impl Handles {
 	fn write_as_read_only<P: AsRef<Path>>(
 		path: P,
 		buf: &[u8],
+		err: ProtocolError,
 	) -> Result<(), ProtocolError> {
 		if path.as_ref().exists() {
 			Err(ProtocolError::CannotModifyPostPivotStatic)?;
 		}
 
-		fs::write(&path, buf)?;
-		fs::set_permissions(&path, fs::Permissions::from_mode(0o444))?;
+		fs::write(&path, buf).map_err(|_| err.clone())?;
+		fs::set_permissions(&path, fs::Permissions::from_mode(0o444))
+			.map_err(|_| err)?;
 		Ok(())
 	}
 }
 
-// TODO unit tests
+// TODO unit tests <https://github.com/tkhq/qos/issues/78/>
