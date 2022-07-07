@@ -43,6 +43,7 @@
 pub mod cli;
 pub mod client;
 pub mod coordinator;
+pub mod handles;
 pub mod hex;
 pub mod io;
 pub mod parser;
@@ -51,17 +52,17 @@ pub mod server;
 
 /// Path to Quorum Key secret.
 #[cfg(not(feature = "vm"))]
-pub const SECRET_FILE: &str = "./qos.secret";
+pub const QUORUM_FILE: &str = "./qos.quorum.key";
 /// Path to Quorum Key secret.
 #[cfg(feature = "vm")]
-pub const SECRET_FILE: &str = "/qos.secret";
+pub const QUORUM_FILE: &str = "/qos.quorum.key";
 
 /// Path to Pivot binary.
 #[cfg(not(feature = "vm"))]
 pub const PIVOT_FILE: &str = "../target/debug/pivot_ok";
 /// Path to Pivot binary.
 #[cfg(feature = "vm")]
-pub const PIVOT_FILE: &str = "/qos.pivot";
+pub const PIVOT_FILE: &str = "/qos.pivot.bin";
 
 /// Path to Ephemeral Key.
 #[cfg(not(feature = "vm"))]
@@ -69,3 +70,10 @@ pub const EPHEMERAL_KEY_FILE: &str = "./qos.ephemeral.key";
 /// Path to Ephemeral Key.
 #[cfg(feature = "vm")]
 pub const EPHEMERAL_KEY_FILE: &str = "/qos.ephemeral.key";
+
+/// Path to the Manifest.
+#[cfg(not(feature = "vm"))]
+pub const MANIFEST_FILE: &str = "./qos.manifest";
+/// Path to the Manifest.
+#[cfg(feature = "vm")]
+pub const MANIFEST_FILE: &str = "/qos.manifest";

@@ -9,6 +9,7 @@ async fn dev_boot_e2e() {
 	let usock = "./dev-boot-e2e-tmp/sock.sock";
 	let secret_path = "./dev-boot-e2e-tmp/quorum.secret";
 	let pivot_path = "./dev-boot-e2e-tmp/pivot.pivot";
+	let manifest_path = "./dev-boot-e2e-tmp/manifest.manifest";
 
 	let host_port = "3010";
 	let host_ip = "127.0.0.1";
@@ -18,7 +19,7 @@ async fn dev_boot_e2e() {
 		.args([
 			"--usock",
 			usock,
-			"--secret-file",
+			"--quorum-file",
 			secret_path,
 			"--pivot-file",
 			pivot_path,
@@ -27,6 +28,8 @@ async fn dev_boot_e2e() {
 			// this case will be the mock attestation doc
 			MOCK_EPH_PATH,
 			"--mock",
+			"--manifest-file",
+			manifest_path,
 		])
 		.spawn()
 		.unwrap();

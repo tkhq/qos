@@ -1,7 +1,5 @@
 //! Standard boot logic and types.
 
-use std::fs;
-
 use qos_crypto::{sha_256, RsaPair, RsaPub};
 
 use crate::protocol::{
@@ -17,6 +15,7 @@ const MOCK_EPH_PATH: &str =
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct NitroConfig {
 	/// The hash of the enclave image file
 	pub pcr0: Vec<u8>,
@@ -30,13 +29,25 @@ pub struct NitroConfig {
 
 /// Policy for restarting the pivot binary.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Debug,
+	Clone,
+	Copy,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
 )]
 pub enum RestartPolicy {
 	/// Never restart the pivot application
 	Never,
 	/// Always restart the pivot application
 	Always,
+}
+
+#[cfg(any(feature = "mock", test))]
+impl Default for RestartPolicy {
+	fn default() -> Self {
+		Self::Never
+	}
 }
 
 impl TryFrom<String> for RestartPolicy {
@@ -55,6 +66,7 @@ impl TryFrom<String> for RestartPolicy {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfig {
 	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
 	pub hash: Hash256,
@@ -73,6 +85,7 @@ pub struct PivotConfig {
 	PartialOrd,
 	Ord,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct QuorumMember {
 	/// A human readable alias to identify the member. Must be unique to the
 	/// Quorum Set.
@@ -85,6 +98,7 @@ pub struct QuorumMember {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct QuorumSet {
 	/// The threshold, K, of signatures necessary to have  quorum.
 	pub threshold: u32,
@@ -97,6 +111,7 @@ pub struct QuorumSet {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Namespace {
 	/// The namespace. This should be unique relative to other namespaces the
 	/// organization running QuorumOs has.
@@ -112,6 +127,7 @@ pub struct Namespace {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Manifest {
 	/// Namespace this manifest belongs too.
 	pub namespace: Namespace,
@@ -129,6 +145,7 @@ pub struct Manifest {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Approval {
 	/// Quorum Member's signature.
 	pub signature: Vec<u8>,
@@ -140,6 +157,7 @@ pub struct Approval {
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestEnvelope {
 	/// Encapsulated manifest.
 	pub manifest: Manifest,
@@ -175,16 +193,13 @@ impl ManifestEnvelope {
 pub(in crate::protocol) fn boot_standard(
 	state: &mut ProtocolState,
 	manifest_envelope: &ManifestEnvelope,
-	pivot: &Vec<u8>,
+	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
-	use std::os::unix::fs::PermissionsExt as _;
-
 	manifest_envelope.check_approvals()?;
-
-	let ephemeral_key = if state.ephemeral_key_file == MOCK_EPH_PATH {
+	let ephemeral_key = if state.handles.ephemeral_key_path() == MOCK_EPH_PATH {
 		#[cfg(feature = "mock")]
 		{
-			RsaPair::from_pem_file(MOCK_EPH_PATH)?
+			state.handles.get_ephemeral_key()?
 		}
 		#[cfg(not(feature = "mock"))]
 		{
@@ -192,10 +207,7 @@ pub(in crate::protocol) fn boot_standard(
 		}
 	} else {
 		let ephemeral_key = RsaPair::generate()?;
-		fs::write(
-			&state.ephemeral_key_file,
-			ephemeral_key.private_key_to_pem()?,
-		)?;
+		state.handles.put_ephemeral_key(&ephemeral_key)?;
 
 		ephemeral_key
 	};
@@ -203,14 +215,9 @@ pub(in crate::protocol) fn boot_standard(
 	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
 		return Err(ProtocolError::InvalidPivotHash);
 	};
+	state.handles.put_pivot(pivot)?;
 
-	std::fs::write(&state.pivot_file, pivot)?;
-	std::fs::set_permissions(
-		&state.pivot_file,
-		std::fs::Permissions::from_mode(0o111),
-	)?;
-
-	state.manifest = Some(manifest_envelope.clone());
+	state.handles.put_manifest_envelope(manifest_envelope)?;
 
 	let nsm_response = {
 		let request = NsmRequest::Attestation {
@@ -233,7 +240,7 @@ mod test {
 	use std::path::Path;
 
 	use super::*;
-	use crate::protocol::attestor::mock::MockNsm;
+	use crate::{handles::Handles, protocol::attestor::mock::MockNsm};
 
 	fn get_manifest() -> (Manifest, Vec<(RsaPair, QuorumMember)>, Vec<u8>) {
 		let quorum_pair = RsaPair::generate().unwrap();
@@ -313,12 +320,16 @@ mod test {
 			"boot_standard_accepts_approved_manifest.pivot".to_string();
 		let ephemeral_file =
 			"boot_standard_accepts_approved_manifest_eph.secret".to_string();
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			"secret".to_string(),
-			pivot_file.clone(),
+		let manifest_file =
+			"boot_standard_accepts_approved_manifest.manifest".to_string();
+		let handles = Handles::new(
 			ephemeral_file.clone(),
+			"quorum_key".to_string(),
+			manifest_file.clone(),
+			pivot_file.clone(),
 		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles.clone());
 
 		let _nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
@@ -327,8 +338,11 @@ mod test {
 		assert!(Path::new(&pivot_file).exists());
 		assert!(Path::new(&ephemeral_file).exists());
 
+		assert_eq!(handles.get_manifest_envelope().unwrap(), manifest_envelope);
+
 		std::fs::remove_file(pivot_file).unwrap();
 		std::fs::remove_file(ephemeral_file).unwrap();
+		std::fs::remove_file(manifest_file).unwrap();
 
 		assert_eq!(protocol_state.phase, ProtocolPhase::WaitingForQuorumShards);
 	}
@@ -351,18 +365,30 @@ mod test {
 			ManifestEnvelope { manifest, approvals }
 		};
 
-		let pivot_file = "boot_standard_works.pivot".to_string();
-		let ephemeral_file = "boot_standard_works_eph.secret".to_string();
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			"secret".to_string(),
+		let pivot_file =
+			"boot_standard_rejects_manifest_if_not_enough_approvals.pivot"
+				.to_string();
+		let ephemeral_file =
+			"boot_standard_rejects_manifest_if_not_enough_approvals.secret"
+				.to_string();
+		let manifest_file =
+			"boot_standard_rejects_manifest_if_not_enough_approvals.manifest"
+				.to_string();
+		let handles = Handles::new(
+			ephemeral_file.clone(),
+			"quorum_key".to_string(),
+			manifest_file,
 			pivot_file,
-			ephemeral_file,
 		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles.clone());
 
 		let nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
 
+		assert!(!handles.manifest_envelope_exists());
+		assert!(!handles.pivot_exists());
+		assert!(!Path::new(&ephemeral_file).exists());
 		assert!(nsm_resposne.is_err());
 	}
 
@@ -382,18 +408,27 @@ mod test {
 			ManifestEnvelope { manifest, approvals }
 		};
 
-		let pivot_file = "boot_standard_works.pivot".to_string();
-		let ephemeral_file = "boot_standard_works_eph.secret".to_string();
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			"secret".to_string(),
+		let pivot_file =
+			"boot_standard_rejects_unapproved_manifest.pivot".to_string();
+		let ephemeral_file =
+			"boot_standard_rejects_unapproved_manifest.secret".to_string();
+		let manifest_file =
+			"boot_standard_rejects_unapproved_manifest.manifest".to_string();
+		let handles = Handles::new(
+			ephemeral_file.clone(),
+			"quorum_key".to_string(),
+			manifest_file,
 			pivot_file,
-			ephemeral_file,
 		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles.clone());
 
 		let nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
 
+		assert!(!handles.manifest_envelope_exists());
+		assert!(!handles.pivot_exists());
+		assert!(!Path::new(&ephemeral_file).exists());
 		assert!(nsm_resposne.is_err());
 	}
 }

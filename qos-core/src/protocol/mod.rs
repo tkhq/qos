@@ -13,6 +13,8 @@ use attestor::NsmProvider;
 use msg::ProtocolMsg;
 use services::boot;
 
+use crate::handles::Handles;
+
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
 
@@ -34,7 +36,9 @@ pub trait QosHash: BorshSerialize {
 impl<T: BorshSerialize> QosHash for T {}
 
 /// A error from protocol execution.
-#[derive(Debug, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub enum ProtocolError {
 	/// TODO
 	InvalidShare,
@@ -46,7 +50,7 @@ pub enum ProtocolError {
 	CryptoError,
 	/// Approval was not valid for a manifest.
 	InvalidManifestApproval(boot::Approval),
-	/// [`ManifestEnvelope`] did not have approvals
+	/// [`services::boot::ManifestEnvelope`] did not have approvals
 	NotEnoughApprovals,
 	/// Protocol Message could not be matched against an available route.
 	/// Ensure the executor is in the correct phase.
@@ -70,6 +74,22 @@ pub enum ProtocolError {
 	/// when the "mock" feature is disabled, which should always be the case in
 	/// production.
 	BadEphemeralKeyPath,
+	/// Tried to modify state that must be static post pivoting.
+	CannotModifyPostPivotStatic,
+	/// For some reason the Ephemeral could not be read/created from the file
+	/// system.
+	FailedToGetEphemeralKey,
+	/// Failed to write the Ephemeral key to the file system.
+	FailedToPutEphemeralKey,
+	/// Failed to put the quorum key into the file system
+	FailedToPutQuorumKey,
+	/// For some reason the manifest envelope could not be read from the file
+	/// system or decoded.
+	FailedToGetManifestEnvelope,
+	/// Failed to put the manifest envelope.
+	FailedToPutManifestEnvelope,
+	/// Failed to put the pivot executable.
+	FailedToPutPivot,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
@@ -111,29 +131,18 @@ pub enum ProtocolPhase {
 pub struct ProtocolState {
 	provisioner: services::provision::SecretBuilder,
 	attestor: Box<dyn NsmProvider>,
-	pivot_file: String,
-	ephemeral_key_file: String,
-	secret_file: String,
 	phase: ProtocolPhase,
-	manifest: Option<boot::ManifestEnvelope>,
+	handles: Handles,
 }
 
 impl ProtocolState {
-	fn new(
-		attestor: Box<dyn NsmProvider>,
-		secret_file: String,
-		pivot_file: String,
-		ephemeral_key_file: String,
-	) -> Self {
+	fn new(attestor: Box<dyn NsmProvider>, handles: Handles) -> Self {
 		let provisioner = services::provision::SecretBuilder::new();
 		Self {
 			attestor,
 			provisioner,
-			pivot_file,
-			ephemeral_key_file,
-			secret_file,
 			phase: ProtocolPhase::WaitingForBootInstruction,
-			manifest: None,
+			handles,
 		}
 	}
 }
@@ -147,20 +156,8 @@ pub struct Executor {
 impl Executor {
 	/// Create a new `Self`.
 	#[must_use]
-	pub fn new(
-		attestor: Box<dyn NsmProvider>,
-		secret_file: String,
-		pivot_file: String,
-		ephemeral_key_file: String,
-	) -> Self {
-		Self {
-			state: ProtocolState::new(
-				attestor,
-				secret_file,
-				pivot_file,
-				ephemeral_key_file,
-			),
-		}
+	pub fn new(attestor: Box<dyn NsmProvider>, handles: Handles) -> Self {
+		Self { state: ProtocolState::new(attestor, handles) }
 	}
 
 	fn routes(&self) -> Vec<Box<ProtocolHandler>> {
