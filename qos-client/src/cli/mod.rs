@@ -4,6 +4,8 @@
 //!
 //! ## Quorum Key Generation
 //!
+//! QuorumOS requires a Quorum Key. The Quorum
+//!
 //! ### Generate Setup Keys
 //!
 //! The enclave has a special "genesis" service to generate a quorum key and
