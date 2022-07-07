@@ -7,6 +7,9 @@
 //! - [Quorum Key Generation](quorum-key-generation)
 //! - [Boot Standard](boot-standard)
 //!
+//! **Note:** The below walk-throughs assume there is already an enclave up and
+//! running with QuorumOS.
+//!
 //! ### Terms
 //!
 //! * **Leader**: the entity that runs a flow. In other words, this is an entity
