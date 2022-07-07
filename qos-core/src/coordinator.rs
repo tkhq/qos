@@ -58,18 +58,16 @@ impl Coordinator {
 			.restart;
 
 		match restart_policy {
-			RestartPolicy::Always => {
-				loop {
-					let status = pivot
-						.spawn()
-						.expect("Failed to spawn")
-						.wait()
-						.expect("Pivot executable never started...");
+			RestartPolicy::Always => loop {
+				let status = pivot
+					.spawn()
+					.expect("Failed to spawn")
+					.wait()
+					.expect("Pivot executable never started...");
 
-					println!("Pivot exited with status: {}", status);
-					println!("Restarting pivot ...");
-				}
-			}
+				println!("Pivot exited with status: {}", status);
+				println!("Restarting pivot ...");
+			},
 			RestartPolicy::Never => {
 				let status = pivot
 					.spawn()
@@ -83,3 +81,5 @@ impl Coordinator {
 		println!("Coordinator exiting ...");
 	}
 }
+
+// See qos-test/tests/coordinator for tests

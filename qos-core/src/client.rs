@@ -1,4 +1,5 @@
-//! Streaming socket based client to connect with [`server::Server`].
+//! Streaming socket based client to connect with
+//! [`crate::server::SocketServer`].
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
@@ -27,7 +28,7 @@ impl From<borsh::maybestd::io::Error> for ClientError {
 	}
 }
 
-/// Client for communicating with the enclave [`server::Server`].
+/// Client for communicating with the enclave [`crate::server::SocketServer`].
 #[derive(Debug)]
 pub struct Client {
 	addr: SocketAddress,

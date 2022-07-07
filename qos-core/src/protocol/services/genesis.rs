@@ -9,7 +9,7 @@ use crate::protocol::{
 	ProtocolError, ProtocolState, QosHash,
 };
 
-/// Member of the [`SetupSet`].
+/// Member of the [`GenesisSet`].
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]

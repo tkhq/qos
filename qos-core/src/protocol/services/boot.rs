@@ -217,7 +217,6 @@ pub(in crate::protocol) fn boot_standard(
 	};
 	state.handles.put_pivot(pivot)?;
 
-	// Write the manifest
 	state.handles.put_manifest_envelope(manifest_envelope)?;
 
 	let nsm_response = {

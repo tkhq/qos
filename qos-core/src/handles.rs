@@ -13,13 +13,13 @@ use crate::protocol::{services::boot::ManifestEnvelope, ProtocolError};
 /// "put", it can only be read.
 #[derive(Debug, Clone)]
 pub struct Handles {
-	/// Path to file containing the PEM encoded Ephemeral Key.
+	/// Path to the file containing the PEM encoded Ephemeral Key.
 	ephemeral: String,
-	/// Path to file containing the PEM encoded Quorum Key.
+	/// Path to the file containing the PEM encoded Quorum Key.
 	quorum: String,
-	/// Path to the file container the Borsh encoded [`ManifestEnvelope`].
+	/// Path to the file containing the Borsh encoded [`ManifestEnvelope`].
 	manifest: String,
-	/// Path to the file containing the pivot
+	/// Path to the file containing the pivot.
 	pivot: String,
 }
 
