@@ -56,24 +56,28 @@ impl Coordinator {
 			.manifest
 			.pivot
 			.restart;
-		if matches!(restart_policy, RestartPolicy::Always) {
-			loop {
+
+		match restart_policy {
+			RestartPolicy::Always => {
+				loop {
+					let status = pivot
+						.spawn()
+						.expect("Failed to spawn")
+						.wait()
+						.expect("Pivot executable never started...");
+
+					println!("Pivot exited with status: {}", status);
+					println!("Restarting pivot ...");
+				}
+			}
+			RestartPolicy::Never => {
 				let status = pivot
 					.spawn()
 					.expect("Failed to spawn")
 					.wait()
 					.expect("Pivot executable never started...");
-
 				println!("Pivot exited with status: {}", status);
-				println!("Restarting pivot ...");
 			}
-		} else {
-			let status = pivot
-				.spawn()
-				.expect("Failed to spawn")
-				.wait()
-				.expect("Pivot executable never started...");
-			println!("Pivot exited with status: {}", status);
 		}
 
 		println!("Coordinator exiting ...");
