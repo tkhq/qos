@@ -10,11 +10,11 @@
 //! **Notes:**
 //!
 //! * The below guides assume there is already an enclave up and running
-//! with QuorumOS.
+//! with `QuorumOS`.
 //! * PCR{0, 1, 2} are referenced through out the guide. Every release of
-//! QuorumOS will have different PCRs and it is up to the CLI user to exercise
+//! `QuorumOS` will have different PCRs and it is up to the CLI user to exercise
 //! diligence in specifying specifying those PCRs as they are used to verify the
-//! enclave is running the correct version of QuorumOS. Read more about PCRs
+//! enclave is running the correct version of `QuorumOS`. Read more about PCRs
 //! here: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html/>.
 //!
 //! ### Terms
@@ -26,12 +26,12 @@
 //!
 //! ### Quorum Key Generation
 //!
-//! QuorumOS requires a Quorum Key. Each member of the Quorum Set holds a share
+//! `QuorumOS` requires a Quorum Key. Each member of the Quorum Set holds a share
 //! of the Quorum Key. (The shares are created using Shamir Secret Sharing) It
 //! is expected that the Quorum Key is only ever fully reconstructed in an
 //! enclave.
 //!
-//! In order to generate a Quorum Key, QuorumOs has a special "genesis" service.
+//! In order to generate a Quorum Key, `QuorumOs` has a special "genesis" service.
 //! The genesis service bypasses the standard boot and pivot flow, and thus is
 //! commonly referred to as boot genesis. Instead it simply generates a Quorum
 //! Key and shards it across quorum members. From a high level, the steps to
@@ -68,23 +68,23 @@
 //! like:
 //!
 //! - personal
-//!     - alice.our_namespace.setup.key
-//!     - alice.our_namespace.setup.pub
+//!     - `alice.our_namespace.setup.key`
+//!     - `alice.our_namespace.setup.pub`
 //!
 //! #### Send Boot Genesis Instruction
 //!
 //! The genesis ceremony leader will need to have a directory that contains the
 //! setup keys of all the quorum members. For example, if Alice was the ceremony
-//! leader and members={Alice, BoB, Eve}, Alice would need to have the
+//! leader and members={Alice, Bob, Eve}, Alice would need to have the
 //! following directory structure:
 //!
 //! - personal
-//!     - alice.our_namespace.setup.key
-//!     - alice.our_namespace.setup.pub
+//!     - `alice.our_namespace.setup.key`
+//!     - `alice.our_namespace.setup.pub`
 //! - genesis
-//!     - alice.our_namespace.setup.pub
-//!     - bob.our_namespace.setup.pub
-//!     - eve.our_namespace.setup.pub
+//!     - `alice.our_namespace.setup.pub`
+//!     - `bob.our_namespace.setup.pub`
+//!     - `eve.our_namespace.setup.pub`
 //!
 //! Given the above directory structure, Alice can now generate the genesis
 //! outputs by running [`Command::BootGenesis`] (doesn't need to be a
@@ -101,37 +101,38 @@
 //! On success this will result in the following directory structure:
 //!
 //! - personal
-//!     - alice.our_namespace.setup.key
-//!     - alice.our_namespace.setup.pub
+//!     - `alice.our_namespace.setup.key`
+//!     - `alice.our_namespace.setup.pub`
 //! - genesis
-//!     - alice.our_namespace.setup.pub
-//!     - bob.our_namespace.setup.pub
-//!     - eve.our_namespace.setup.pub
-//!     - attestation_doc.genesis
-//!     - output.genesis
+//!     - `alice.our_namespace.setup.pub`
+//!     - `bob.our_namespace.setup.pub`
+//!     - `eve.our_namespace.setup.pub`
+//!     - `attestation_doc.genesis`
+//!     - `output.genesis`
 //!
-//! Note that _output.genesis_ is an encoded
+//! Note that `output.genesis` is an encoded
 //! [`qos_core::protocol::services::genesis::GenesisOutput`] and
-//! _attestation_doc.genesis_ is a COSE Sign1 structure from the Nitro Secure
+//! _`attestation_doc.genesis`_ is a COSE Sign1 structure from the Nitro Secure
 //! Module used to attest to the validity of the QOS image used to run the
 //! genesis service.
 //!
 //! #### Decrypt Personal Keys
 //!
-//! Within the [`qos_core::protocol::services::genesis::GenesisOutput`] are the encrypted
-//! Personal Keys and Quorum Shares for each member. Each member's personal key
-//! is encrypted to their setup key, so they will need their setup key to
-//! decrypt the personal key. The quorum share is encrypted to the personal key.
+//! Within the [`qos_core::protocol::services::genesis::GenesisOutput`] are the
+//! encrypted Personal Keys and Quorum Shares for each member. Each member's
+//! personal key is encrypted to their setup key, so they will need their setup
+//! key to decrypt the personal key. The quorum share is encrypted to the
+//! personal key.
 //!
 //! Each member will use [`Command::AfterGenesis`] to decrypt the outputs and
 //! verify the attestation document. Prior to running [`Command::AfterGenesis`],
 //! each member will need a directory structure with at minimum:
 //!
 //! - personal
-//!     - bob.our_namespace.setup.key
+//!     - `bob.our_namespace.setup.key`
 //! - genesis
-//!     - attestation_doc.genesis
-//!     - output.genesis
+//!     - `attestation_doc.genesis`
+//!     - `output.genesis`
 //!
 //! Given the above directory structure, Bob can run [`Command::AfterGenesis`]:
 //!
@@ -148,13 +149,13 @@
 //! directory structure:
 //!
 //! - personal
-//!     - bob.our_namespace.setup.key
-//!     - bob.our_namespace.share
-//!     - bob.our_namespace.personal.pub
-//!     - bob.our_namespace.personal.key
+//!     - `bob.our_namespace.setup.key`
+//!     - `bob.our_namespace.share`
+//!     - `bob.our_namespace.personal.pub`
+//!     - `bob.our_namespace.personal.key`
 //! - genesis
-//!     - attestation_doc.genesis
-//!     - output.genesis
+//!     - `attestation_doc.genesis`
+//!     - `output.genesis`
 //!
 //! ### Boot Standard
 //!
@@ -181,7 +182,7 @@
 //!
 //! - boot
 //! - genesis
-//!    - output.genesis
+//!    - `output.genesis`
 //!
 //! Given the above directory structure, the leader can run
 //!
@@ -202,9 +203,9 @@
 //! After running the above, the directory structure will look like:
 //!
 //! - boot
-//!    - our_namespace.0.manifest
+//!    - `our_namespace.0.manifest`
 //! - genesis
-//!    - output.genesis
+//!    - `output.genesis`
 //!
 //! #### Approve the Manifest
 //!
@@ -215,9 +216,9 @@
 //! personal machine:
 //!
 //! - personal
-//!     - bob.our_namespace.personal.key
+//!     - `bob.our_namespace.personal.key`
 //! - boot
-//!     - our_namespace.0.manifest
+//!     - `our_namespace.0.manifest`
 //!
 //! Given the above directory structure, Bob can create an approval for the
 //! manifest by running:
@@ -232,10 +233,10 @@
 //! After running the above, Bob's directory structure would look like:
 //!
 //! - personal
-//!    - bob.our_namespace.personal.key
+//!    - `bob.our_namespace.personal.key`
 //! - boot
-//!    - our_namespace.0.manifest
-//!    - bob.our_namespace.0.approval
+//!    - `our_namespace.0.manifest`
+//!    - `bob.our_namespace.0.approval`
 //!
 //! #### Send Boot Standard Instruction
 //!
@@ -247,10 +248,10 @@
 //! following directory structure:
 //!
 //! - boot
-//!    - our_namespace.0.manifest
-//!    - alice.our_namespace.0.approval
-//!    - bob.our_namespace.0.approval
-//!    - eve.our_namespace.0.approval
+//!    - `our_namespace.0.manifest`
+//!    - `alice.our_namespace.0.approval`
+//!    - `bob.our_namespace.0.approval`
+//!    - `eve.our_namespace.0.approval`
 //!
 //! The leader can then run:
 //!
@@ -268,11 +269,11 @@
 //! Specifically, the leader's directory structure will look like:
 //!
 //! - boot
-//!    - our_namespace.0.manifest
-//!    - alice.our_namespace.0.approval
-//!    - bob.our_namespace.0.approval
-//!    - eve.our_namespace.0.approval
-//!    - attestation_doc.boot # TODO: Just have posters request the attestation
+//!    - `our_namespace.0.manifest`
+//!    - `alice.our_namespace.0.approval`
+//!    - `bob.our_namespace.0.approval`
+//!    - `eve.our_namespace.0.approval`
+//!    - `attestation_doc.boot` # TODO: Just have posters request the attestation
 //!      doc as they go
 //!
 //! #### Post Quorum Shards
@@ -284,11 +285,11 @@
 //! For Bob to post his share he would need the following directory structure:
 //!
 //! - personal
-//!     - bob.our_namespace.share
-//!     - bob.our_namespace.personal.key
+//!     - `bob.our_namespace.share`
+//!     - `bob.our_namespace.personal.key`
 //! - boot
-//!    - our_namespace.0.manifest
-//!    - attestation_doc.boot
+//!    - `our_namespace.0.manifest`
+//!    - `attestation_doc.boot`
 //!
 //! With the above directory structure, Bob can run:
 //!

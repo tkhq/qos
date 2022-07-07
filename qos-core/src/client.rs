@@ -1,4 +1,5 @@
-//! Streaming socket based client to connect with [`crate::server::SocketServer`].
+//! Streaming socket based client to connect with
+//! [`crate::server::SocketServer`].
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
