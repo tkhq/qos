@@ -1,5 +1,9 @@
 # QuorumOS
 
+QuorumOS is a trusted computation layer for hosting secure apps at modern cloud scale.
+
+Fundamentally, the OS architecture is based on the first principle that a threshold of members from a set can deem an enclave trustworthy and execute root system calls.
+
 This is a WIP.
 
 ## Submitting a PR

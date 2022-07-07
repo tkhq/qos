@@ -1,7 +1,4 @@
 //! Quorum Key provisioning logic and types.
-
-use qos_crypto::RsaPair;
-
 use crate::protocol::{ProtocolError, ProtocolPhase, ProtocolState};
 
 type Secret = Vec<u8>;
@@ -57,7 +54,7 @@ pub(in crate::protocol) fn provision(
 	encrypted_share: &[u8],
 	state: &mut ProtocolState,
 ) -> Result<bool, ProtocolError> {
-	let ephemeral_key = RsaPair::from_pem_file(&state.ephemeral_key_file)?;
+	let ephemeral_key = state.handles.get_ephemeral_key()?;
 
 	let share = ephemeral_key
 		.envelope_decrypt(encrypted_share)
@@ -65,19 +62,19 @@ pub(in crate::protocol) fn provision(
 
 	state.provisioner.add_share(share)?;
 
-	let quorum_threshold =
-		state.manifest.as_ref().unwrap().manifest.quorum_set.threshold as usize;
+	let manifest = state.handles.get_manifest_envelope()?.manifest;
+	let quorum_threshold = manifest.quorum_set.threshold as usize;
 	if state.provisioner.count() < quorum_threshold {
 		// Nothing else to do if we don't have the threshold to reconstruct
 		return Ok(false);
 	}
 
 	let private_key_der = state.provisioner.build()?;
-	let public_key_der = qos_crypto::RsaPair::from_der(&private_key_der)
-		.map_err(|_| ProtocolError::InvalidPrivateKey)?
-		.public_key_to_der()?;
+	let pair = qos_crypto::RsaPair::from_der(&private_key_der)
+		.map_err(|_| ProtocolError::InvalidPrivateKey)?;
+	let public_key_der = pair.public_key_to_der()?;
 
-	if public_key_der != state.manifest.as_ref().unwrap().manifest.quorum_key {
+	if public_key_der != manifest.quorum_key {
 		// We did not construct the intended key
 		// Something went wrong, so clear the existing shares just to be
 		// careful.
@@ -85,8 +82,7 @@ pub(in crate::protocol) fn provision(
 		return Err(ProtocolError::ReconstructionError);
 	}
 
-	// TODO: should be read only
-	std::fs::write(&state.secret_file, private_key_der)?;
+	state.handles.put_quorum_key(&pair)?;
 
 	state.phase = ProtocolPhase::QuorumKeyProvisioned;
 	Ok(true)
@@ -96,28 +92,37 @@ pub(in crate::protocol) fn provision(
 mod test {
 	use std::path::Path;
 
-	use qos_crypto::{sha_256, shamir::shares_generate};
+	use qos_crypto::{sha_256, shamir::shares_generate, RsaPair};
 
-	use super::*;
-	use crate::protocol::{
-		attestor::mock::MockNsm,
-		services::{
-			boot::{
-				Manifest, ManifestEnvelope, Namespace, NitroConfig,
-				PivotConfig, QuorumSet, RestartPolicy,
+	use crate::{
+		handles::Handles,
+		protocol::{
+			attestor::mock::MockNsm,
+			services::{
+				boot::{
+					Manifest, ManifestEnvelope, Namespace, NitroConfig,
+					PivotConfig, QuorumSet, RestartPolicy,
+				},
+				provision::{self, provision},
 			},
-			provision,
+			ProtocolError, ProtocolPhase, ProtocolState,
 		},
 	};
 
 	fn setup(
 		eph_file: &str,
 		quorum_file: &str,
+		manifest_file: &str,
 	) -> (RsaPair, RsaPair, usize, ProtocolState) {
+		let handles = Handles::new(
+			eph_file.to_string(),
+			quorum_file.to_string(),
+			manifest_file.to_string(),
+			"pivot".to_string(),
+		);
 		// 1) Create and write eph key
 		let eph_pair = RsaPair::generate().unwrap();
-		std::fs::write(eph_file, &eph_pair.private_key_to_pem().unwrap())
-			.unwrap();
+		handles.put_ephemeral_key(&eph_pair).unwrap();
 
 		// 2) Create and write manifest with threshold and quorum key
 		let quorum_pair = RsaPair::generate().unwrap();
@@ -143,16 +148,14 @@ mod test {
 		};
 		let manifest_envelope =
 			ManifestEnvelope { manifest, approvals: vec![] };
+		handles.put_manifest_envelope(&manifest_envelope).unwrap();
 
 		// 3) Create state with eph key and manifest
 		let state = ProtocolState {
 			provisioner: provision::SecretBuilder::new(),
 			attestor: Box::new(MockNsm),
-			pivot_file: "pivot".to_string(),
-			ephemeral_key_file: eph_file.to_string(),
-			secret_file: quorum_file.to_string(),
 			phase: ProtocolPhase::WaitingForQuorumShards,
-			manifest: Some(manifest_envelope),
+			handles,
 		};
 
 		(quorum_pair, eph_pair, threshold, state)
@@ -162,9 +165,10 @@ mod test {
 	fn provision_works() {
 		let quorum_file = "./provision_works.quorum.key";
 		let eph_file = "./provision_works.eph.key";
+		let manifest_file = "./provision_works.manifest";
 
 		let (quorum_pair, eph_pair, threshold, mut state) =
-			setup(eph_file, quorum_file);
+			setup(eph_file, quorum_file, manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
 		let quorum_key = quorum_pair.private_key_to_der().unwrap();
@@ -187,20 +191,22 @@ mod test {
 		let share = &encrypted_shares[threshold];
 		assert_eq!(provision(share, &mut state), Ok(true));
 		let quorum_key = std::fs::read(quorum_file).unwrap();
-		assert_eq!(quorum_key, quorum_pair.private_key_to_der().unwrap());
+		assert_eq!(quorum_key, quorum_pair.private_key_to_pem().unwrap());
 		assert_eq!(state.phase, ProtocolPhase::QuorumKeyProvisioned);
 
 		std::fs::remove_file(eph_file).unwrap();
 		std::fs::remove_file(quorum_file).unwrap();
+		std::fs::remove_file(manifest_file).unwrap();
 	}
 
 	#[test]
 	fn provision_rejects_the_wrong_key() {
 		let eph_file = "./provision_rejects_the_wrong_key.eph.key";
 		let quorum_file = "./provision_rejects_the_wrong_key.quorum.key";
+		let manifest_file = "./provision_rejects_the_wrong_key.manifest";
 
 		let (_quorum_pair, eph_pair, threshold, mut state) =
-			setup(eph_file, quorum_file);
+			setup(eph_file, quorum_file, manifest_file);
 
 		// 4) Create shards of a RANDOM KEY and encrypt them to eph key
 		let random_key =
@@ -230,6 +236,7 @@ mod test {
 		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 
 		std::fs::remove_file(eph_file).unwrap();
+		std::fs::remove_file(manifest_file).unwrap();
 	}
 
 	#[test]
@@ -237,8 +244,10 @@ mod test {
 		let eph_file = "./provision_rejects_if_a_shard_is_invalid.eph.key";
 		let quorum_file =
 			"./provision_rejects_if_a_shard_is_invalid.quorum.key";
+		let manifest_file =
+			"./provision_rejects_if_a_shard_is_invalid.manifest";
 		let (quorum_pair, eph_pair, threshold, mut state) =
-			setup(eph_file, quorum_file);
+			setup(eph_file, quorum_file, manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
 		let quorum_key = quorum_pair.private_key_to_der().unwrap();
@@ -269,5 +278,6 @@ mod test {
 		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 
 		std::fs::remove_file(eph_file).unwrap();
+		std::fs::remove_file(manifest_file).unwrap();
 	}
 }

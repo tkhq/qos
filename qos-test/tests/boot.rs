@@ -27,13 +27,15 @@ use qos_test::{MOCK_EPH_PATH, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 #[ignore]
 #[tokio::test]
 async fn boot_e2e() {
-	let usock = "boot_e2e.sock";
 	let host_port = "3009";
 	let host_ip = "127.0.0.1";
-	let tmp = "./tmp";
+	let tmp = "./boot-e2e-tmp";
 	fs::create_dir_all(tmp).unwrap();
-	let secret_path = "./tmp/boot_e2e.secret";
-	let pivot_path = "./tmp/boot_e2e.pivot";
+
+	let usock = "./boot-e2e-tmp/boot_e2e.sock";
+	let secret_path = "./boot-e2e-tmp/boot_e2e.secret";
+	let pivot_path = "./boot-e2e-tmp/boot_e2e.pivot";
+	let manifest_path = "./boot-e2e-tmp/boot_e2e.manifest";
 
 	let boot_dir = "./boot-e2e-boot-dir-tmp";
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
@@ -88,9 +90,10 @@ async fn boot_e2e() {
 		.success());
 
 	// Check the manifest written to file
-	let manifest_path = format!("{}/{}.2.manifest", boot_dir, namespace);
+	let cli_manifest_path = format!("{}/{}.2.manifest", boot_dir, namespace);
 	let manifest =
-		Manifest::try_from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
+			.unwrap();
 
 	let genesis_output =
 		GenesisOutput::try_from_slice(&fs::read(&genesis_output_path).unwrap())
@@ -179,13 +182,15 @@ async fn boot_e2e() {
 		.args([
 			"--usock",
 			usock,
-			"--secret-file",
+			"--quorum-file",
 			secret_path,
 			"--pivot-file",
 			pivot_path,
 			"--ephemeral-file",
 			MOCK_EPH_PATH,
 			"--mock",
+			"--manifest-file",
+			manifest_path,
 		])
 		.spawn()
 		.unwrap();

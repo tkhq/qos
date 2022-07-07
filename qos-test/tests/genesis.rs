@@ -20,6 +20,7 @@ async fn genesis_e2e() {
 	let host_ip = "127.0.0.1";
 	let secret_path = "./genesis_e2e.secret";
 	let pivot_path = "./genesis_e2e.pivot";
+	let manifest_path = "./genesis_e2e/manifest.manifest";
 
 	let all_personal_dir = "./genesis-e2e-personal-tmp";
 	let genesis_dir = "./genesis-e2e-genesis-tmp";
@@ -92,11 +93,13 @@ async fn genesis_e2e() {
 		.args([
 			"--usock",
 			usock,
-			"--secret-file",
+			"--quorum-file",
 			secret_path,
 			"--pivot-file",
 			pivot_path,
 			"--mock",
+			"--manifest-file",
+			manifest_path,
 		])
 		.spawn()
 		.unwrap();
