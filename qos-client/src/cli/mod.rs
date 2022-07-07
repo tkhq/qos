@@ -2,13 +2,20 @@
 //!
 //! See [`Command`] for all possible commands.
 //!
-//! ## Primary QuorumOS Flows
+//! ## Guides
 //!
 //! - [Quorum Key Generation](quorum-key-generation)
 //! - [Boot Standard](boot-standard)
 //!
-//! **Note:** The below walk-throughs assume there is already an enclave up and
-//! running with QuorumOS.
+//! **Notes:**
+//!
+//! * The below guides assume there is already an enclave up and running
+//! with QuorumOS.
+//! * PCR{0, 1, 2} are referenced through out the guide. Every release of
+//! QuorumOS will have different PCRs and it is up to the CLI user to exercise
+//! diligence in specifying specifying those PCRs as they are used to verify the
+//! enclave is running the correct version of QuorumOS. Read more about PCRs
+//! here: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html/>.
 //!
 //! ### Terms
 //!
