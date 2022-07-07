@@ -18,6 +18,16 @@ impl From<io::IOError> for SocketServerError {
 	}
 }
 
+/// Something that can process requests.
+pub trait Routable {
+	/// Process an incoming request and return a response.
+	///
+	/// The request and response are raw bytes. Likely this should be encoded
+	/// data and logic inside of this function should take care of decoding the
+	/// request and encoding a response.
+	fn process(&mut self, request: Vec<u8>) -> Vec<u8>;
+}
+
 /// A bare bare bones, socket based server.
 pub struct SocketServer<R: Routable> {
 	_phantom: PhantomData<R>,
@@ -45,14 +55,4 @@ impl<R: Routable> SocketServer<R> {
 
 		Ok(())
 	}
-}
-
-/// Something that can process requests.
-pub trait Routable {
-	/// Process an incoming request and return a response.
-	///
-	/// The request and response are raw bytes. Likely this should be encoded
-	/// data and logic inside of this function should take care of decoding the
-	/// request and encoding a response.
-	fn process(&mut self, request: Vec<u8>) -> Vec<u8>;
 }
