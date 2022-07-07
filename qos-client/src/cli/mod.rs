@@ -183,8 +183,8 @@
 //! #### Generate a Manifest
 //!
 //! The leader for the boot standard flow will need to generate a manifest using
-//! [`Command::GenerateManifest`]. Given the quorum set mentioned in the above genesis
-//! guide, [`Command::GenerateManifest`] expects the following directory
+//! [`Command::GenerateManifest`]. Given the quorum set mentioned in the above
+//! genesis guide, [`Command::GenerateManifest`] expects the following directory
 //! structure:
 //!
 //! - boot
@@ -271,9 +271,10 @@
 //! ```
 //!
 //! After running the above, the boot directory will contain an attestation
-//! document from the enclave. Importantly, the attestation document references the manifest and has an
-//! ephemeral key which can be used for encrypting messages to the enclave.
-//! Specifically, the leader's directory structure will look like:
+//! document from the enclave. Importantly, the attestation document references
+//! the manifest and has an ephemeral key which can be used for encrypting
+//! messages to the enclave. Specifically, the leader's directory structure will
+//! look like:
 //!
 //! - boot
 //!    - `our_namespace.0.manifest`
