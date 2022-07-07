@@ -281,8 +281,7 @@
 //!    - `alice.our_namespace.0.approval`
 //!    - `bob.our_namespace.0.approval`
 //!    - `eve.our_namespace.0.approval`
-//!    - `attestation_doc.boot` # TODO: Just have posters request the
-//!      attestation doc as they go
+//!    - `attestation_doc.boot`
 //!
 //! #### Post Quorum Shards
 //!
