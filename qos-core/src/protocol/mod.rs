@@ -46,7 +46,7 @@ pub enum ProtocolError {
 	CryptoError,
 	/// Approval was not valid for a manifest.
 	InvalidManifestApproval(boot::Approval),
-	/// [`ManifestEnvelope`] did not have approvals
+	/// [`services::boot::ManifestEnvelope`] did not have approvals
 	NotEnoughApprovals,
 	/// Protocol Message could not be matched against an available route.
 	/// Ensure the executor is in the correct phase.

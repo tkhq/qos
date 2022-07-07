@@ -33,7 +33,7 @@ pub enum ProtocolMsg {
 
 	/// Request the status of the enclave.
 	StatusRequest,
-	/// Response for [`StatusRequest`]
+	/// Response for [`Self::StatusRequest`]
 	StatusResponse(super::ProtocolPhase),
 
 	/// Execute Standard Boot.

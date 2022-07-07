@@ -111,14 +111,14 @@
 //!     - output.genesis
 //!
 //! Note that _output.genesis_ is an encoded
-//! [`qos_core::protocol::services::GenesisOutput`] and
+//! [`qos_core::protocol::services::genesis::GenesisOutput`] and
 //! _attestation_doc.genesis_ is a COSE Sign1 structure from the Nitro Secure
 //! Module used to attest to the validity of the QOS image used to run the
 //! genesis service.
 //!
 //! #### Decrypt Personal Keys
 //!
-//! Within the [`qos_core::protocol::services::GenesisOutput`] are the encrypted
+//! Within the [`qos_core::protocol::services::genesis::GenesisOutput`] are the encrypted
 //! Personal Keys and Quorum Shares for each member. Each member's personal key
 //! is encrypted to their setup key, so they will need their setup key to
 //! decrypt the personal key. The quorum share is encrypted to the personal key.

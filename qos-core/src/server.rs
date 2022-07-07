@@ -1,5 +1,5 @@
 //! Streaming socket based server for use in an enclave. Listens for connections
-//! from [`client::Client`].
+//! from [`crate::client::Client`].
 
 use std::marker::PhantomData;
 
