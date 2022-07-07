@@ -194,9 +194,9 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	)
 	.expect("Could not deserialize the genesis set");
 
-	#[cfg(feature = "mock")]
-	let user_data = &qos_core::hex::decode(qos_core::protocol::attestor::mock::MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap();
-	#[cfg(not(feature = "mock"))]
+	// #[cfg(feature = "mock")]
+	// let user_data = &qos_core::hex::decode(qos_core::protocol::attestor::mock::MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap();
+	// #[cfg(not(feature = "mock"))]
 	let user_data = &genesis_output.qos_hash();
 
 	// Check the attestation document
@@ -797,10 +797,10 @@ fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
 ///
 /// Panics if extraction or validation fails.
 pub(crate) fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
-	#[cfg(feature = "mock")]
-	let validation_time =
-		qos_core::protocol::attestor::mock::MOCK_SECONDS_SINCE_EPOCH;
-	#[cfg(not(feature = "mock"))]
+	// #[cfg(feature = "mock")]
+	// let validation_time =
+	// 	qos_core::protocol::attestor::mock::MOCK_SECONDS_SINCE_EPOCH;
+	// #[cfg(not(feature = "mock"))]
 	// TODO: put validation time into genesis
 	let validation_time = std::time::SystemTime::now()
 		.duration_since(std::time::UNIX_EPOCH)
