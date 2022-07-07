@@ -19,16 +19,32 @@
 //! QuorumOS requires a Quorum Key. Each member of the Quorum Set holds a share
 //! of the Quorum Key. (The shares are created using Shamir Secret Sharing) It
 //! is expected that the Quorum Key is only ever fully reconstructed in an
-//! enclave
+//! enclave.
+//!
+//! In order to generate a Quorum Key, QuorumOs has a special "genesis" service.
+//! The genesis service bypasses the standard boot and pivot flow, and thus is
+//! commonly referred to as boot genesis. Instead it simply generates a Quorum
+//! Key and shards it across quorum members. From a high level, the steps to
+//! create a Quorum Key and Quorum Set with the genesis service are:
+//!
+//! 1) Every Quorum Member generates a Setup Key.
+//! 2) The genesis service is invoked with N setup keys and a reconstruction
+//! threshold, K.
+//! 3) The genesis service then executes the following:
+//!     1) Generates a Quorum Key.
+//!     2) Splits the quorum key into N shares.
+//!     3) Generates N personal keys.
+//!     4) Encrypts each share to a personal key.
+//!     5) Encrypts each personal key to a setup key.
+//!     6) Returns shares, personal keys, quorum key, and an attestation
+//!     document.
+//! 4) Each quorum member verifies the attestation document and then
+//! decrypts their personal key and share.
 //!
 //! #### Generate Setup Keys
 //!
-//! The enclave has a special "genesis" service to generate a quorum key and
-//! shard it across the quorum members.
-//!
 //! For each member of the Quorum Set, the genesis service needs a corresponding
-//! Setup Key as input. (This key is used to encrypt the member specific outputs
-//! from the genesis ceremony). To produce the setup key, a member can run the
+//! Setup Key as input. To produce a setup key, a member can run the
 //! [`Command::GenerateSetupKey`] on a secure device:
 //!
 //! ```shell
