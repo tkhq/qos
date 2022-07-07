@@ -2,6 +2,12 @@
 //!
 //! See [`Command`] for all possible commands.
 //!
+//! The arguments for each command can be discovered by running:
+//!
+//! ```shell
+//! cargo run --bin qos-client <command-name> --help
+//! ```
+//!
 //! ## Guides
 //!
 //! - [Quorum Key Generation](quorum-key-generation)
@@ -26,16 +32,16 @@
 //!
 //! ### Quorum Key Generation
 //!
-//! `QuorumOS` requires a Quorum Key. Each member of the Quorum Set holds a share
-//! of the Quorum Key. (The shares are created using Shamir Secret Sharing) It
-//! is expected that the Quorum Key is only ever fully reconstructed in an
-//! enclave.
+//! `QuorumOS` requires a Quorum Key. Each member of the Quorum Set holds a
+//! share of the Quorum Key. (The shares are created using Shamir Secret
+//! Sharing) It is expected that the Quorum Key is only ever fully reconstructed
+//! in an enclave.
 //!
-//! In order to generate a Quorum Key, `QuorumOs` has a special "genesis" service.
-//! The genesis service bypasses the standard boot and pivot flow, and thus is
-//! commonly referred to as boot genesis. Instead it simply generates a Quorum
-//! Key and shards it across quorum members. From a high level, the steps to
-//! create a Quorum Key and Quorum Set with the genesis service are:
+//! In order to generate a Quorum Key, `QuorumOs` has a special "genesis"
+//! service. The genesis service bypasses the standard boot and pivot flow, and
+//! thus is commonly referred to as boot genesis. Instead it simply generates a
+//! Quorum Key and shards it across quorum members. From a high level, the steps
+//! to create a Quorum Key and Quorum Set with the genesis service are:
 //!
 //! 1) Every Quorum Member generates a Setup Key.
 //! 2) The genesis service is invoked with N setup keys and a reconstruction
@@ -112,7 +118,7 @@
 //!
 //! Note that `output.genesis` is an encoded
 //! [`qos_core::protocol::services::genesis::GenesisOutput`] and
-//! _`attestation_doc.genesis`_ is a COSE Sign1 structure from the Nitro Secure
+//! `attestation_doc.genesis` is a COSE Sign1 structure from the Nitro Secure
 //! Module used to attest to the validity of the QOS image used to run the
 //! genesis service.
 //!
@@ -145,8 +151,8 @@
 //!    --pcr2 0xf0f0f0f0f0f0f0 \
 //! ```
 //!
-//! Which will extract Bob's personal key and share, resulting in the following
-//! directory structure:
+//! [`Command::AfterGenesis`] will extract Bob's personal key and share,
+//! resulting in the following directory structure:
 //!
 //! - personal
 //!     - `bob.our_namespace.setup.key`
@@ -159,15 +165,16 @@
 //!
 //! ### Boot Standard
 //!
-//! Broadly speaking, the boot flow for an enclave can be broken down to 3
+//! Boot Standard, or just Boot, is the name of the flow for provisioning a
+//! `QuorumOS` instance with a Quorum Key and Pivot Executable.
+//!
+//! From a high level, the boot flow for an enclave can be broken down to 3
 //! steps:
 //!
 //! 1) Gather signatures for a [`qos_core::protocol::services::boot::Manifest`]
 //! from K of the quorum members.
-//!
-//! 2) Post a Manifest with the K signatures and the pivot binary referenced in
+//! 2) Post a Manifest with K signatures and the pivot binary referenced in
 //! the manifest.
-//!
 //! 3) Each quorum member will post their share, encrypted to the Ephemeral Key
 //! of the enclave, after they have verified the validity of an attestation
 //! document from the enclave. (The attestation document should contain a
@@ -175,9 +182,9 @@
 //!
 //! #### Generate a Manifest
 //!
-//! The leader for the standard boot will need to generate a manifest using
-//! [`Command::GenerateManifest`]. Given the quorum set mentioned in the above
-//! section, [`Command::GenerateManifest`] expects the following directory
+//! The leader for the boot standard flow will need to generate a manifest using
+//! [`Command::GenerateManifest`]. Given the quorum set mentioned in the above genesis
+//! guide, [`Command::GenerateManifest`] expects the following directory
 //! structure:
 //!
 //! - boot
@@ -209,7 +216,7 @@
 //!
 //! #### Approve the Manifest
 //!
-//! K of the quorum members need to approve and sign the manifest with their
+//! K of the quorum members need to approve (sign) the manifest with their
 //! personal key. A quorum member can use [`Command::SignManifest`] to do this.
 //!
 //! [`Command::SignManifest`] expects the following directory structure on Bob's
@@ -244,7 +251,7 @@
 //! [`Command::BootStandard`] to send the boot standard instruction to start the
 //! enclave.
 //!
-//! Given the Quorum Set mentioned above, [`Command::BootStandard`] expects the
+//! Given the Quorum Set referenced above, [`Command::BootStandard`] expects the
 //! following directory structure:
 //!
 //! - boot
@@ -264,7 +271,7 @@
 //! ```
 //!
 //! After running the above, the boot directory will contain an attestation
-//! document from the enclave, which references the manifest and has an
+//! document from the enclave. Importantly, the attestation document references the manifest and has an
 //! ephemeral key which can be used for encrypting messages to the enclave.
 //! Specifically, the leader's directory structure will look like:
 //!
@@ -273,8 +280,8 @@
 //!    - `alice.our_namespace.0.approval`
 //!    - `bob.our_namespace.0.approval`
 //!    - `eve.our_namespace.0.approval`
-//!    - `attestation_doc.boot` # TODO: Just have posters request the attestation
-//!      doc as they go
+//!    - `attestation_doc.boot` # TODO: Just have posters request the
+//!      attestation doc as they go
 //!
 //! #### Post Quorum Shards
 //!
