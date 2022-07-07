@@ -24,6 +24,7 @@ use qos_core::{
 use qos_crypto::{sha_256, RsaPair};
 use qos_test::{MOCK_EPH_PATH, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 
+#[ignore]
 #[tokio::test]
 async fn boot_e2e() {
 	let host_port = "3009";
