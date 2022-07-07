@@ -7,6 +7,7 @@ local-enclave:
 	cargo run --bin qos-core \
 		-- \
 		--usock ./dev.sock \
+		--mock
 
 .PHONY: vm-enclave
 vm-enclave:
