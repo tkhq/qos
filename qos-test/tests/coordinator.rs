@@ -113,7 +113,7 @@ fn coordinator_handles_non_zero_exits() {
 fn coordinator_handles_panic() {
 	let secret_path = "./coordinator_handles_panics.secret";
 	let usock = "./coordinator_handles_panics.sock";
-	let manifest_path = "./coordinator_handles_non_zero_exits.manifest";
+	let manifest_path = "./coordinator_handles_panics.manifest";
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(fs::remove_file(secret_path));
