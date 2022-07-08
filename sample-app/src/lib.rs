@@ -32,7 +32,6 @@ pub enum AppMsg {
 pub struct AppProcessor;
 impl Routable for AppProcessor {
 	fn process(&mut self, request: Vec<u8>) -> Vec<u8> {
-		dbg!(&request);
 		let request = match AppMsg::try_from_slice(&request) {
 			Ok(request) => request,
 			Err(_) => {

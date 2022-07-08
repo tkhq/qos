@@ -46,7 +46,6 @@ impl<R: Routable> SocketServer<R> {
 		for stream in listener {
 			match stream.recv() {
 				Ok(payload) => {
-					dbg!(&payload);
 					let response = processor.process(payload);
 					let _ = stream.send(&response);
 				}

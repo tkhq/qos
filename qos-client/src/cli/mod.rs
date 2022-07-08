@@ -556,7 +556,6 @@ mod handlers {
 				.try_to_vec()
 				.expect("Failed to serialize app msg");
 
-			dbg!(&encoded_app_req);
 			let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
 
 			let app_msg = match request::post(&_opts.path("message"), &req)

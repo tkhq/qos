@@ -59,7 +59,7 @@ impl Client {
 	pub fn send_raw(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
 
-		stream.send(&request)?;
+		stream.send(request)?;
 		stream.recv().map_err(Into::into)
 	}
 }

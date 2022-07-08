@@ -200,7 +200,6 @@ pub(in crate::protocol) fn boot_standard(
 	let ephemeral_key = if state.handles.ephemeral_key_path() == MOCK_EPH_PATH {
 		#[cfg(feature = "mock")]
 		{
-			dbg!("A");
 			state.handles.get_ephemeral_key()?
 		}
 		#[cfg(not(feature = "mock"))]
