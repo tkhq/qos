@@ -77,3 +77,10 @@ pub const MANIFEST_FILE: &str = "./qos.manifest";
 /// Path to the Manifest.
 #[cfg(feature = "vm")]
 pub const MANIFEST_FILE: &str = "/qos.manifest";
+
+/// Default socket for enclave <-> secure app communication.
+#[cfg(not(feature = "vm"))]
+pub const SEC_APP_SOCK: &str = "./sec_app.sock";
+/// Default socket for enclave <-> secure app communication.
+#[cfg(feature = "vm")]
+pub const SEC_APP_SOCK: &str = "/sec_app.sock";

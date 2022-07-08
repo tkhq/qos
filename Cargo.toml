@@ -5,4 +5,5 @@ members = [
   "qos-crypto",
   "qos-host",
   "qos-test",
+  "sample-app",
 ]

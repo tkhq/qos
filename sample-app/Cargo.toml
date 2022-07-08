@@ -1,8 +1,17 @@
 [package]
-name = "sample-test"
+name = "sample-app"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [dependencies]
 qos-core = { path = "../qos-core" }
+
+borsh = { version = "0.9" }
+
+[features]
+default=["local"]
+# Support for unix sockets
+local = ["qos-core/local"]
+# Production settings
+vm = ["qos-core/vm"]

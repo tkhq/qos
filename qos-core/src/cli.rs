@@ -18,10 +18,14 @@ pub const PORT: &str = "port";
 /// "usock"
 pub const USOCK: &str = "usock";
 const MOCK: &str = "mock";
-const QUORUM_FILE_OPT: &str = "quorum-file";
-const PIVOT_FILE_OPT: &str = "pivot-file";
-const EPHEMERAL_FILE_OPT: &str = "ephemeral-file";
-const MANIFEST_FILE_OPT: &str = "manifest-file";
+/// Name for the option to specify the quorum key file.
+pub const QUORUM_FILE_OPT: &str = "quorum-file";
+/// Name for the option to specify the pivot key file.
+pub const PIVOT_FILE_OPT: &str = "pivot-file";
+/// Name for the option to specify the ephemeral key file.
+pub const EPHEMERAL_FILE_OPT: &str = "ephemeral-file";
+/// Name for the option to specify the manifest file.
+pub const MANIFEST_FILE_OPT: &str = "manifest-file";
 
 /// CLI options for starting up the enclave server.
 #[derive(Default, Clone, Debug, PartialEq)]
@@ -109,7 +113,7 @@ impl EnclaveOpts {
 }
 
 /// Enclave server CLI.
-pub struct CLI {}
+pub struct CLI;
 impl CLI {
 	/// Execute the enclave server CLI with the environment args.
 	pub fn execute() {
