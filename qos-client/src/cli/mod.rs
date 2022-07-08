@@ -49,6 +49,9 @@ pub enum Command {
 	DescribeNsm,
 	/// Query the NSM with `NsmRequest::DescribePcr` for PCR indexes 0..3.
 	DescribePcr,
+	/// Query the NSM with `NsmRequest::Attestation` and verify the cert chain
+	/// using the current time.
+	RequestAttestationDoc,
 	/// Generate a Setup Key for use in the Genesis ceremony.
 	GenerateSetupKey,
 	/// Run the the Boot Genesis logic to generate and shard a Quorum Key
@@ -108,6 +111,7 @@ impl From<&str> for Command {
 			"host-health" => Self::HostHealth,
 			"describe-nsm" => Self::DescribeNsm,
 			"describe-pcr" => Self::DescribePcr,
+			"request-attestation-doc" => Self::RequestAttestationDoc,
 			"generate-setup-key" => Self::GenerateSetupKey,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
@@ -304,9 +308,10 @@ impl Command {
 impl GetParserForCommand for Command {
 	fn parser(&self) -> Parser {
 		match self {
-			Self::HostHealth | Self::DescribeNsm | Self::DescribePcr => {
-				Self::base()
-			}
+			Self::HostHealth
+			| Self::DescribeNsm
+			| Self::DescribePcr
+			| Self::RequestAttestationDoc => Self::base(),
 			Self::GenerateSetupKey => Self::generate_setup_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
@@ -439,6 +444,9 @@ impl ClientRunner {
 				Command::HostHealth => handlers::host_health(&self.opts),
 				Command::DescribeNsm => handlers::describe_nsm(&self.opts),
 				Command::DescribePcr => handlers::describe_pcr(&self.opts),
+				Command::RequestAttestationDoc => {
+					handlers::request_attestation_doc(&self.opts);
+				}
 				Command::GenerateSetupKey => {
 					handlers::generate_setup_key(&self.opts);
 				}
@@ -472,7 +480,7 @@ impl CLI {
 }
 
 mod handlers {
-	use qos_core::protocol::attestor::types::NsmRequest;
+	use qos_core::protocol::attestor::types::{NsmRequest, NsmResponse};
 
 	use crate::{
 		cli::{
@@ -537,6 +545,36 @@ mod handlers {
 				other => panic!("Unexpected response {:?}", other),
 			}
 		}
+	}
+
+	pub(super) fn request_attestation_doc(opts: &ClientOpts) {
+		// TODO make a `opts.message_path` function instead of just path
+		let path = &opts.path("message");
+
+		let req = ProtocolMsg::NsmRequest {
+			nsm_request: NsmRequest::Attestation {
+				user_data: None,
+				nonce: None,
+				public_key: None,
+			},
+		};
+
+		println!("Requesting attestation doc ... ");
+		let cose_sign1 = match request::post(path, &req)
+			.map_err(|e| println!("{:?}", e))
+			.expect("Attestation request failed")
+		{
+			ProtocolMsg::NsmResponse {
+				nsm_response: NsmResponse::Attestation { document },
+			} => document,
+			other => panic!("Unexpected response {:?}", other),
+		};
+
+		println!("Attestation doc received. Checking cert chain ..");
+
+		drop(services::extract_attestation_doc(&cose_sign1));
+
+		println!("Attestation doc cert chain successfully verified!");
 	}
 
 	pub(super) fn generate_setup_key(opts: &ClientOpts) {

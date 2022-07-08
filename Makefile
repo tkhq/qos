@@ -68,6 +68,13 @@ local-describe-pcr:
 		--host-ip 127.0.0.1 \
 		--host-port 3000
 
+.PHONY: local-req-att-doc
+local-req-att-doc:
+	cargo run --bin qos-client \
+		request-attestation-doc \
+		--host-ip 127.0.0.1 \
+		--host-port 3000
+
 .PHONY: gen-att-doc
 gen-att-doc:
 	OPENSSL_DIR=/usr cargo run --bin gen_att_doc
