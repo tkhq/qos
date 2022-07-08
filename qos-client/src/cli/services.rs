@@ -808,7 +808,7 @@ fn find_attestation_doc<P: AsRef<Path>>(boot_dir: P) -> AttestationDoc {
 /// # Panics
 ///
 /// Panics if extraction or validation fails.
-fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
+pub(crate) fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
 	#[cfg(feature = "mock")]
 	let validation_time =
 		qos_core::protocol::attestor::mock::MOCK_SECONDS_SINCE_EPOCH;
