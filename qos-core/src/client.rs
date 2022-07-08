@@ -59,9 +59,7 @@ impl Client {
 	pub fn send_raw(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
 
-		stream.send(
-			&request.try_to_vec().expect("ProtocolMsg can be serialized. qed."),
-		)?;
+		stream.send(&request)?;
 		stream.recv().map_err(Into::into)
 	}
 }

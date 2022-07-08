@@ -100,6 +100,8 @@ pub enum Command {
 	/// sharding it (N=1), creating/signing/posting a Manifest, and
 	/// provisioning the quorum key.
 	DangerousDevBoot,
+	/// Send a simple echo request to the sample secure app.
+	AppEcho,
 }
 
 impl From<&str> for Command {
@@ -116,6 +118,7 @@ impl From<&str> for Command {
 			"boot-standard" => Self::BootStandard,
 			"post-share" => Self::PostShare,
 			"dangerous-dev-boot" => Self::DangerousDevBoot,
+			"app-echo" => Self::AppEcho,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -304,9 +307,10 @@ impl Command {
 impl GetParserForCommand for Command {
 	fn parser(&self) -> Parser {
 		match self {
-			Self::HostHealth | Self::DescribeNsm | Self::DescribePcr => {
-				Self::base()
-			}
+			Self::HostHealth
+			| Self::DescribeNsm
+			| Self::DescribePcr
+			| Self::AppEcho => Self::base(),
 			Self::GenerateSetupKey => Self::generate_setup_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
@@ -439,6 +443,7 @@ impl ClientRunner {
 				Command::HostHealth => handlers::host_health(&self.opts),
 				Command::DescribeNsm => handlers::describe_nsm(&self.opts),
 				Command::DescribePcr => handlers::describe_pcr(&self.opts),
+				Command::AppEcho => handlers::app_echo(&self.opts),
 				Command::GenerateSetupKey => {
 					handlers::generate_setup_key(&self.opts);
 				}
@@ -536,6 +541,48 @@ mod handlers {
 				}
 				other => panic!("Unexpected response {:?}", other),
 			}
+		}
+	}
+
+	pub(super) fn app_echo(_opts: &ClientOpts) {
+		use borsh::{BorshDeserialize, BorshSerialize};
+		#[cfg(feature = "sample")]
+		{
+			use sample_app::AppMsg;
+
+			let echo_data = "some data to echo".to_string();
+
+			let encoded_app_req = AppMsg::EchoReq { data: echo_data.clone() }
+				.try_to_vec()
+				.expect("Failed to serialize app msg");
+
+			dbg!(&encoded_app_req);
+			let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
+
+			let app_msg = match request::post(&_opts.path("message"), &req)
+				.map_err(|e| println!("{:?}", e))
+				.expect("App echo request failed")
+			{
+				ProtocolMsg::ProxyResponse { data } => AppMsg::try_from_slice(
+					&data,
+				)
+				.expect("Failed to deserialize app msg in proxy response"),
+				other => panic!("Unexpected protocol response {:?}", other),
+			};
+
+			match app_msg {
+				AppMsg::EchoResp { data } => assert_eq!(
+					data, echo_data,
+					"Echoed data is not what was sent"
+				),
+				other => panic!("Unexpected app response {:?}", other),
+			}
+
+			println!("App echo successful!")
+		}
+		#[cfg(not(feature = "sample"))]
+		{
+			panic!("Must have \"sample\" feature enable to use this")
 		}
 	}
 
