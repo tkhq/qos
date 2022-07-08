@@ -29,10 +29,11 @@ impl Coordinator {
 		handles: &Handles,
 		nsm: Box<dyn NsmProvider + Send>,
 		addr: SocketAddress,
+		app_addr: SocketAddress,
 	) {
 		let handles2 = handles.clone();
 		std::thread::spawn(move || {
-			let executor = Executor::new(nsm, handles2);
+			let executor = Executor::new(nsm, handles2, app_addr);
 			SocketServer::listen(addr, executor).unwrap();
 		});
 

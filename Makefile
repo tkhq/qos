@@ -7,6 +7,7 @@ local-enclave:
 	cargo run --bin qos-core \
 		-- \
 		--usock ./dev.sock \
+		--ephemeral-file ./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret \
 		--mock
 
 .PHONY: vm-enclave
@@ -67,6 +68,17 @@ local-describe-pcr:
 		describe-pcr \
 		--host-ip 127.0.0.1 \
 		--host-port 3000
+
+.PHONY: local-dev-boot
+local-dev-boot:
+	cargo build --release
+	pwd
+	cargo run --bin qos-client \
+	dangerous-dev-boot \
+	--host-ip 127.0.0.1 \
+	--host-port 3000 \
+	--restart-policy always \
+	--pivot-path ./target/release/sample-app
 
 .PHONY: gen-att-doc
 gen-att-doc:

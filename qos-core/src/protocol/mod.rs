@@ -3,7 +3,11 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_crypto::sha_256;
 
-use crate::server;
+use crate::{
+	client::{self, Client},
+	io::SocketAddress,
+	server,
+};
 
 pub mod attestor;
 pub mod msg;
@@ -90,6 +94,8 @@ pub enum ProtocolError {
 	FailedToPutManifestEnvelope,
 	/// Failed to put the pivot executable.
 	FailedToPutPivot,
+	/// An error occurred with the app client.
+	AppClientError,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
@@ -107,6 +113,12 @@ impl From<openssl::error::ErrorStack> for ProtocolError {
 impl From<std::io::Error> for ProtocolError {
 	fn from(_err: std::io::Error) -> Self {
 		Self::IOError
+	}
+}
+
+impl From<client::ClientError> for ProtocolError {
+	fn from(_: client::ClientError) -> Self {
+		Self::AppClientError
 	}
 }
 
@@ -133,16 +145,22 @@ pub struct ProtocolState {
 	attestor: Box<dyn NsmProvider>,
 	phase: ProtocolPhase,
 	handles: Handles,
+	app_client: Client,
 }
 
 impl ProtocolState {
-	fn new(attestor: Box<dyn NsmProvider>, handles: Handles) -> Self {
+	fn new(
+		attestor: Box<dyn NsmProvider>,
+		handles: Handles,
+		app_addr: SocketAddress,
+	) -> Self {
 		let provisioner = services::provision::SecretBuilder::new();
 		Self {
 			attestor,
 			provisioner,
 			phase: ProtocolPhase::WaitingForBootInstruction,
 			handles,
+			app_client: Client::new(app_addr.clone()),
 		}
 	}
 }
@@ -156,8 +174,12 @@ pub struct Executor {
 impl Executor {
 	/// Create a new `Self`.
 	#[must_use]
-	pub fn new(attestor: Box<dyn NsmProvider>, handles: Handles) -> Self {
-		Self { state: ProtocolState::new(attestor, handles) }
+	pub fn new(
+		attestor: Box<dyn NsmProvider>,
+		handles: Handles,
+		app_addr: SocketAddress,
+	) -> Self {
+		Self { state: ProtocolState::new(attestor, handles, app_addr) }
 	}
 
 	fn routes(&self) -> Vec<Box<ProtocolHandler>> {
@@ -238,11 +260,21 @@ mod handlers {
 	}
 
 	pub(super) fn proxy(
-		_req: &ProtocolMsg,
-		_state: &mut ProtocolState,
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		// TODO
-		None
+		if let ProtocolMsg::ProxyRequest { data: req_data } = req {
+			let resp_data = match state.app_client.send_raw(req_data) {
+				Ok(resp_data) => resp_data,
+				Err(e) => {
+					return Some(ProtocolMsg::ProtocolErrorResponse(e.into()))
+				}
+			};
+
+			Some(ProtocolMsg::ProxyResponse { data: resp_data })
+		} else {
+			None
+		}
 	}
 
 	pub(super) fn nsm_request(

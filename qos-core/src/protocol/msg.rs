@@ -73,6 +73,17 @@ pub enum ProtocolMsg {
 		/// for the Kth share.
 		reconstructed: bool,
 	},
+
+	/// Proxy the encoded `data` to the secure app.
+	ProxyRequest {
+		/// Encoded data that will be sent from the enclave to the secure app.
+		data: Vec<u8>,
+	},
+	/// Response to the proxy request.
+	ProxyResponse {
+		/// Encoded data the secure app responded with to the enclave.
+		data: Vec<u8>,
+	},
 }
 
 #[cfg(test)]

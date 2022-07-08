@@ -9,7 +9,8 @@ use crate::protocol::{
 
 // Path to the ephemeral key used for testing. Must not be used in production.
 const MOCK_EPH_PATH: &str =
-	"../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
+	// "../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
+	"./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
@@ -199,6 +200,7 @@ pub(in crate::protocol) fn boot_standard(
 	let ephemeral_key = if state.handles.ephemeral_key_path() == MOCK_EPH_PATH {
 		#[cfg(feature = "mock")]
 		{
+			dbg!("A");
 			state.handles.get_ephemeral_key()?
 		}
 		#[cfg(not(feature = "mock"))]

@@ -569,14 +569,20 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			approvals: vec![Approval { signature, member }],
 		})
 	};
+
+	println!("Making request");
 	let req = ProtocolMsg::BootStandardRequest { manifest_envelope, pivot };
 	let attestation_doc = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::BootStandardResponse {
 			nsm_response: NsmResponse::Attestation { document },
-		} => extract_attestation_doc(&document),
+		} => {
+			println!("received response");
+			extract_attestation_doc(&document)
+		}
 		r => panic!("Unexpected response: {:?}", r),
 	};
 
+	println!("Received attestation doc");
 	// Pull out the ephemeral key
 	let eph_pub = RsaPub::from_pem(
 		&attestation_doc

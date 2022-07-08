@@ -8,7 +8,7 @@ use crate::{
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 	protocol::attestor::{Nsm, NsmProvider},
-	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE,
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
 };
 
 /// "cid"
@@ -26,6 +26,7 @@ pub const PIVOT_FILE_OPT: &str = "pivot-file";
 pub const EPHEMERAL_FILE_OPT: &str = "ephemeral-file";
 /// Name for the option to specify the manifest file.
 pub const MANIFEST_FILE_OPT: &str = "manifest-file";
+const APP_USOCK: &str = "app-usock";
 
 /// CLI options for starting up the enclave server.
 #[derive(Default, Clone, Debug, PartialEq)]
@@ -62,6 +63,14 @@ impl EnclaveOpts {
 			(None, None, Some(u)) => SocketAddress::new_unix(u),
 			_ => panic!("Invalid socket opts"),
 		}
+	}
+
+	fn app_addr(&self) -> SocketAddress {
+		SocketAddress::new_unix(
+			self.parsed
+				.single(APP_USOCK)
+				.expect("app-usock has a default value."),
+		)
 	}
 
 	/// Get the [`NsmProvider`]
@@ -134,6 +143,7 @@ impl CLI {
 				),
 				opts.nsm(),
 				opts.addr(),
+				opts.app_addr(),
 			);
 		}
 	}
@@ -183,6 +193,11 @@ impl GetParserForOptions for EnclaveParser {
 				Token::new(MANIFEST_FILE_OPT, "path to file where the Manifest should be written. Use default for production")
 					.takes_value(true)
 					.default_value(MANIFEST_FILE)
+			)
+			.token(
+				Token::new(APP_USOCK, "the socket the secure app is listening on.")
+					.takes_value(true)
+					.default_value(SEC_APP_SOCK)
 			)
 	}
 }

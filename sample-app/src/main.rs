@@ -2,12 +2,11 @@
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
-	cli::{
-		USOCK,
-	},
+	cli::USOCK,
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
-	server::{Routable, SocketServer}, SEC_APP_SOCK,
+	server::{Routable, SocketServer},
+	SEC_APP_SOCK,
 };
 
 /// Endpoints for this app.
@@ -129,7 +128,7 @@ struct Cli;
 impl Cli {
 	fn execute() {
 		// TODO: figure out how we want this to be configurable.
-		let mut args: Vec<String> = vec!["--usock", SEC_APP_SOCK]
+		let mut args: Vec<String> = vec!["bin-name", "--usock", SEC_APP_SOCK]
 			.into_iter()
 			.map(String::from)
 			.collect();
@@ -141,6 +140,7 @@ impl Cli {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
+			println!("Starting secure app server");
 			SocketServer::listen(opts.addr(), AppProcessor).unwrap();
 		}
 	}
