@@ -14,3 +14,5 @@ target/
 !mock/*/user2.*
 !mock/*/user3.*
 !boot_e2e_mock_eph.secret
+
+local-enclave/
