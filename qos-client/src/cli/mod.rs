@@ -545,9 +545,9 @@ mod handlers {
 	}
 
 	pub(super) fn app_echo(_opts: &ClientOpts) {
-		use borsh::{BorshDeserialize, BorshSerialize};
 		#[cfg(feature = "sample")]
 		{
+			use borsh::{BorshDeserialize, BorshSerialize};
 			use sample_app::AppMsg;
 
 			let echo_data = "some data to echo".to_string();

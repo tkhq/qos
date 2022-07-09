@@ -155,7 +155,9 @@ pub(in crate::protocol) fn boot_genesis(
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{handles::Handles, protocol::attestor::mock::MockNsm};
+	use crate::{
+		handles::Handles, io::SocketAddress, protocol::attestor::mock::MockNsm,
+	};
 
 	#[test]
 	fn boot_genesis_works() {
@@ -165,8 +167,11 @@ mod test {
 			"MAN".to_string(),
 			"PIV".to_string(),
 		);
-		let mut protocol_state =
-			ProtocolState::new(Box::new(MockNsm), handles.clone());
+		let mut protocol_state = ProtocolState::new(
+			Box::new(MockNsm),
+			handles.clone(),
+			SocketAddress::new_unix("./never.sock"),
+		);
 		let member1_pair = RsaPair::generate().unwrap();
 		let member2_pair = RsaPair::generate().unwrap();
 		let member3_pair = RsaPair::generate().unwrap();
