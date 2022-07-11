@@ -102,6 +102,8 @@ pub enum Command {
 	DangerousDevBoot,
 	/// Send a simple echo request to the sample secure app.
 	AppEcho,
+	/// Send a read QOS files request to the sample secure app.
+	AppReadFiles,
 }
 
 impl From<&str> for Command {
@@ -119,6 +121,7 @@ impl From<&str> for Command {
 			"post-share" => Self::PostShare,
 			"dangerous-dev-boot" => Self::DangerousDevBoot,
 			"app-echo" => Self::AppEcho,
+			"app-read-files" => Self::AppReadFiles,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -310,7 +313,8 @@ impl GetParserForCommand for Command {
 			Self::HostHealth
 			| Self::DescribeNsm
 			| Self::DescribePcr
-			| Self::AppEcho => Self::base(),
+			| Self::AppEcho
+			| Self::AppReadFiles => Self::base(),
 			Self::GenerateSetupKey => Self::generate_setup_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
@@ -444,6 +448,7 @@ impl ClientRunner {
 				Command::DescribeNsm => handlers::describe_nsm(&self.opts),
 				Command::DescribePcr => handlers::describe_pcr(&self.opts),
 				Command::AppEcho => handlers::app_echo(&self.opts),
+				Command::AppReadFiles => handlers::app_read_files(&self.opts),
 				Command::GenerateSetupKey => {
 					handlers::generate_setup_key(&self.opts);
 				}
@@ -581,7 +586,44 @@ mod handlers {
 		}
 		#[cfg(not(feature = "sample"))]
 		{
-			panic!("Must have \"sample\" feature enable to use this")
+			panic!("Must have \"sample\" feature enable to call app-read-files")
+		}
+	}
+
+	pub(super) fn app_read_files(_opts: &ClientOpts) {
+		#[cfg(feature = "sample")]
+		{
+			use borsh::{BorshDeserialize, BorshSerialize};
+			use sample_app::AppMsg;
+
+			let encoded_app_req = AppMsg::ReadQOSFilesReq
+				.try_to_vec()
+				.expect("Failed to serialize app msg");
+
+			let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
+
+			let resp = match request::post(&_opts.path("message"), &req)
+				.map_err(|e| println!("{:?}", e))
+				.expect("App read QOS files request failed")
+			{
+				ProtocolMsg::ProxyResponse { data } => AppMsg::try_from_slice(
+					&data,
+				)
+				.expect("Failed to deserialize app msg in proxy response"),
+				other => panic!("Unexpected protocol response {:?}", other),
+			};
+
+			match resp {
+				AppMsg::ReadQOSFilesResp { .. } => {}
+				other => panic!("Unexpected app response {:?}", other),
+			}
+
+			println!("App read files was successful!");
+			println!("Note that the files themselves where not verified.");
+		}
+		#[cfg(not(feature = "sample"))]
+		{
+			panic!("Must have \"sample\" feature enable to call app-read-files")
 		}
 	}
 

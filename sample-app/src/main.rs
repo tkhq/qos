@@ -1,14 +1,19 @@
 //! Demo for a secure application.
 
 use qos_core::{
-	cli::USOCK,
+	cli::{
+		EPHEMERAL_FILE_OPT, MANIFEST_FILE_OPT, PIVOT_FILE_OPT, QUORUM_FILE_OPT,
+		USOCK,
+	},
+	handles::Handles,
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
+	protocol::services::boot::MOCK_EPH_PATH_ROOT,
 	server::SocketServer,
-	SEC_APP_SOCK,
+	QUORUM_FILE, SEC_APP_SOCK,
 };
 
-// TODO: make a route that responds with the attestation doc, ephemeral key etc
+const DEFAULT_PIVOT_PATH: &str = "./target/release/sample-app";
 
 /// CLI options for starting up the app server.
 #[derive(Default, Clone, Debug, PartialEq)]
@@ -36,36 +41,36 @@ impl AppOpts {
 		)
 	}
 
-	// /// Defaults to [`QUORUM_FILE`] if not explicitly specified
-	// fn quorum_file(&self) -> String {
-	// 	self.parsed
-	// 		.single(QUORUM_FILE_OPT)
-	// 		.expect("has a default value.")
-	// 		.clone()
-	// }
+	/// Defaults to [`QUORUM_FILE`] if not explicitly specified
+	fn quorum_file(&self) -> String {
+		self.parsed
+			.single(QUORUM_FILE_OPT)
+			.expect("has a default value.")
+			.clone()
+	}
 
-	// /// Defaults to [`PIVOT_FILE`] if not explicitly specified
-	// fn pivot_file(&self) -> String {
-	// 	self.parsed
-	// 		.single(PIVOT_FILE_OPT)
-	// 		.expect("has a default value.")
-	// 		.clone()
-	// }
+	/// Defaults to [`PIVOT_FILE`] if not explicitly specified
+	fn pivot_file(&self) -> String {
+		self.parsed
+			.single(PIVOT_FILE_OPT)
+			.expect("has a default value.")
+			.clone()
+	}
 
-	// /// Defaults to [`EPHEMERAL_KEY_FILE`] if not explicitly specified
-	// fn ephemeral_file(&self) -> String {
-	// 	self.parsed
-	// 		.single(EPHEMERAL_FILE_OPT)
-	// 		.expect("has a default value.")
-	// 		.clone()
-	// }
+	/// Defaults to [`EPHEMERAL_KEY_FILE`] if not explicitly specified
+	fn ephemeral_file(&self) -> String {
+		self.parsed
+			.single(EPHEMERAL_FILE_OPT)
+			.expect("has a default value.")
+			.clone()
+	}
 
-	// fn manifest_file(&self) -> String {
-	// 	self.parsed
-	// 		.single(MANIFEST_FILE_OPT)
-	// 		.expect("has a default value.")
-	// 		.clone()
-	// }
+	fn manifest_file(&self) -> String {
+		self.parsed
+			.single(MANIFEST_FILE_OPT)
+			.expect("has a default value.")
+			.clone()
+	}
 }
 
 /// Parser for enclave CLI
@@ -75,24 +80,29 @@ impl GetParserForOptions for AppParser {
 		Parser::new().token(
 			Token::new(USOCK, "unix socket (`.sock`) to listen on.")
 				.takes_value(true)
-				.forbids(vec!["port", "cid"]),
+				.forbids(vec!["port", "cid"])
+				.default_value(SEC_APP_SOCK),
 		)
-		// .token(
-		// 	Token::new(QUORUM_FILE_OPT, "path to file where the Quorum Key secret
-		// should be stored. Use default for production.") 		.takes_value(true)
-		// 		.default_value(QUORUM_FILE)
-		// )
-		// .token(
-		// 	Token::new(EPHEMERAL_FILE_OPT, "path to file where the Ephemeral Key
-		// secret should be written. Use default for production.")
-		// 		.takes_value(true)
-		// 		.default_value(EPHEMERAL_KEY_FILE)
-		// )
-		// .token(
-		// 	Token::new(MANIFEST_FILE_OPT, "path to file where the Manifest should
-		// be written. Use default for production") 		.takes_value(true)
-		// 		.default_value(MANIFEST_FILE_OPT)
-		// )
+		.token(
+			Token::new(QUORUM_FILE_OPT, "path to file where the Quorum Key secret should be stored. Use default for production.")
+				.takes_value(true)
+				.default_value(QUORUM_FILE)
+		)
+		.token(
+			Token::new(EPHEMERAL_FILE_OPT, "path to file where the Ephemeral Key secret should be written. Use default for production.")
+				.takes_value(true)
+				.default_value(MOCK_EPH_PATH_ROOT)
+		)
+		.token(
+			Token::new(MANIFEST_FILE_OPT, "path to file where the Manifest should be written. Use default for production")
+				.takes_value(true)
+				.default_value(MANIFEST_FILE_OPT)
+		)
+		.token(
+			Token::new(PIVOT_FILE_OPT, "path to file where the Pivot Binary should be written. Use default for production.")
+				.takes_value(true)
+				.default_value(DEFAULT_PIVOT_PATH),
+		)
 	}
 }
 
@@ -100,10 +110,8 @@ struct Cli;
 impl Cli {
 	fn execute() {
 		// TODO: figure out how we want this to be configurable.
-		let mut args: Vec<String> = vec!["bin-name", "--usock", SEC_APP_SOCK]
-			.into_iter()
-			.map(String::from)
-			.collect();
+		let mut args: Vec<String> =
+			vec!["bin-name"].into_iter().map(String::from).collect();
 
 		let opts = AppOpts::new(&mut args);
 
@@ -112,9 +120,14 @@ impl Cli {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
+			let processor = sample_app::AppProcessor::new(Handles::new(
+				opts.ephemeral_file(),
+				opts.quorum_file(),
+				opts.manifest_file(),
+				opts.pivot_file(),
+			));
 			println!("Starting secure app server");
-			SocketServer::listen(opts.addr(), sample_app::AppProcessor)
-				.unwrap();
+			SocketServer::listen(opts.addr(), processor).unwrap();
 		}
 	}
 }

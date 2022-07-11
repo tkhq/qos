@@ -138,7 +138,8 @@ impl Handles {
 
 		if let Some(parent) = Path::new(&self.pivot).parent() {
 			if !parent.exists() {
-				fs::create_dir_all(parent).map_err(|_| ProtocolError::FailedToPutPivot)?;
+				fs::create_dir_all(parent)
+					.map_err(|_| ProtocolError::FailedToPutPivot)?;
 			}
 		}
 

@@ -7,13 +7,13 @@ use crate::protocol::{
 	Hash256, ProtocolError, ProtocolPhase, ProtocolState, QosHash,
 };
 
-// Path to the ephemeral key used for binaries run from the root that need to
-// use the mock attestation doc (i.e. the sample app). Must not be used in
-// production.
-const MOCK_EPH_PATH_ROOT: &str =
+/// Path to the ephemeral key used for binaries run from the root that need to
+/// use the mock attestation doc (i.e. the sample app). Must not be used in
+/// production.
+pub const MOCK_EPH_PATH_ROOT: &str =
 	"./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
-// Path to the ephemeral key used for testing. Must not be used in production.
-const MOCK_EPH_PATH_TEST: &str =
+/// Path to the ephemeral key used for testing. Must not be used in production.
+pub const MOCK_EPH_PATH_TEST: &str =
 	"../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
@@ -203,6 +203,8 @@ pub(in crate::protocol) fn boot_standard(
 	let eph_path = state.handles.ephemeral_key_path();
 	let ephemeral_key =
 		if eph_path == MOCK_EPH_PATH_TEST || eph_path == MOCK_EPH_PATH_ROOT {
+			dbg!("there is a mock eph path");
+			dbg!(&eph_path);
 			#[cfg(feature = "mock")]
 			{
 				state.handles.get_ephemeral_key()?
@@ -214,6 +216,9 @@ pub(in crate::protocol) fn boot_standard(
 		} else {
 			let ephemeral_key = RsaPair::generate()?;
 			state.handles.put_ephemeral_key(&ephemeral_key)?;
+
+			dbg!("put a new epheremal key");
+			dbg!(state.handles.ephemeral_key_path());
 
 			ephemeral_key
 		};

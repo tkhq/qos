@@ -87,6 +87,13 @@ app-echo:
 	--host-ip 127.0.0.1 \
 	--host-port 3000
 
+.PHONY: app-read-files
+app-read-files:
+	cargo run --features sample --bin qos-client  \
+	app-read-files \
+	--host-ip 127.0.0.1 \
+	--host-port 3000
+
 .PHONY: gen-att-doc
 gen-att-doc:
 	OPENSSL_DIR=/usr cargo run --bin gen_att_doc
