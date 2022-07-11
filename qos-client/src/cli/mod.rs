@@ -1,6 +1,315 @@
 //! `QuorumOS` client command line interface.
 //!
 //! See [`Command`] for all possible commands.
+//!
+//! The arguments for each command can be discovered by running:
+//!
+//! ```shell
+//! cargo run --bin qos-client <command-name> --help
+//! ```
+//!
+//! ## Guides
+//!
+//! - [Quorum Key Generation](quorum-key-generation)
+//! - [Boot Standard](boot-standard)
+//!
+//! **Notes:**
+//!
+//! * The below guides assume there is already an enclave up and running
+//! with `QuorumOS`.
+//! * PCR{0, 1, 2} are referenced through out the guide. Every release of
+//! `QuorumOS` will have different PCRs and it is up to the CLI user to exercise
+//! diligence in specifying specifying those PCRs as they are used to verify the
+//! enclave is running the correct version of `QuorumOS`. Read more about PCRs
+//! here: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html/>.
+//!
+//! ### Terms
+//!
+//! * **Leader**: the entity that runs a flow. In other words, this is an entity
+//!   that executes the commands in flow that don't need to be executed by
+//!   individual quorum members.
+//! * **Approver(s)**: a quorum member that approves something by signing it.
+//!
+//! ### Quorum Key Generation
+//!
+//! `QuorumOS` requires a Quorum Key. Each member of the Quorum Set holds a
+//! share of the Quorum Key. (The shares are created using Shamir Secret
+//! Sharing) It is expected that the Quorum Key is only ever fully reconstructed
+//! in an enclave.
+//!
+//! In order to generate a Quorum Key, `QuorumOs` has a special "genesis"
+//! service. The genesis service bypasses the standard boot and pivot flow, and
+//! thus is commonly referred to as boot genesis. Instead it simply generates a
+//! Quorum Key and shards it across quorum members. From a high level, the steps
+//! to create a Quorum Key and Quorum Set with the genesis service are:
+//!
+//! 1) Every Quorum Member generates a Setup Key.
+//! 2) The genesis service is invoked with N setup keys and a reconstruction
+//! threshold, K.
+//! 3) The genesis service then executes the following:
+//!     1) Generates a Quorum Key.
+//!     2) Splits the quorum key into N shares.
+//!     3) Generates N personal keys.
+//!     4) Encrypts each share to a personal key.
+//!     5) Encrypts each personal key to a setup key.
+//!     6) Returns shares, personal keys, quorum key, and an attestation
+//!     document.
+//! 4) Each quorum member verifies the attestation document and then
+//! decrypts their personal key and share.
+//!
+//! #### Generate Setup Keys
+//!
+//! For each member of the Quorum Set, the genesis service needs a corresponding
+//! Setup Key as input. To produce a setup key, a member can run the
+//! [`Command::GenerateSetupKey`] on a secure device:
+//!
+//! ```shell
+//! cargo run --bin qos-cli generate-setup-key \
+//!     --namespace our_namespace \
+//!     --alias alice \
+//!     --personal-dir ~/qos/our_namespace/personal
+//! ```
+//!
+//! If successful, the `our_namespace` directory on Alice's machine will look
+//! like:
+//!
+//! - personal
+//!     - `alice.our_namespace.setup.key`
+//!     - `alice.our_namespace.setup.pub`
+//!
+//! #### Send Boot Genesis Instruction
+//!
+//! The genesis ceremony leader will need to have a directory that contains the
+//! setup keys of all the quorum members. For example, if Alice was the ceremony
+//! leader and members={Alice, Bob, Eve}, Alice would need to have the
+//! following directory structure:
+//!
+//! - personal
+//!     - `alice.our_namespace.setup.key`
+//!     - `alice.our_namespace.setup.pub`
+//! - genesis
+//!     - `alice.our_namespace.setup.pub`
+//!     - `bob.our_namespace.setup.pub`
+//!     - `eve.our_namespace.setup.pub`
+//!
+//! Given the above directory structure, Alice can now generate the genesis
+//! outputs by running [`Command::BootGenesis`] (doesn't need to be a
+//! secure device because we are not holding private key material):
+//!
+//! ```shell
+//! cargo run --bin qos-cli boot-genesis \
+//!    --host-ip 127.0.0.1 \
+//!    --host-port 3000 \
+//!    --threshold 2 \
+//!    --genesis-dir  ~/qos/our_namespace/genesis
+//! ```
+//!
+//! On success this will result in the following directory structure:
+//!
+//! - personal
+//!     - `alice.our_namespace.setup.key`
+//!     - `alice.our_namespace.setup.pub`
+//! - genesis
+//!     - `alice.our_namespace.setup.pub`
+//!     - `bob.our_namespace.setup.pub`
+//!     - `eve.our_namespace.setup.pub`
+//!     - `attestation_doc.genesis`
+//!     - `output.genesis`
+//!
+//! Note that `output.genesis` is an encoded
+//! [`qos_core::protocol::services::genesis::GenesisOutput`] and
+//! `attestation_doc.genesis` is a COSE Sign1 structure from the Nitro Secure
+//! Module used to attest to the validity of the QOS image used to run the
+//! genesis service.
+//!
+//! #### Decrypt Personal Keys
+//!
+//! Within the [`qos_core::protocol::services::genesis::GenesisOutput`] are the
+//! encrypted Personal Keys and Quorum Shares for each member. Each member's
+//! personal key is encrypted to their setup key, so they will need their setup
+//! key to decrypt the personal key. The quorum share is encrypted to the
+//! personal key.
+//!
+//! Each member will use [`Command::AfterGenesis`] to decrypt the outputs and
+//! verify the attestation document. Prior to running [`Command::AfterGenesis`],
+//! each member will need a directory structure with at minimum:
+//!
+//! - personal
+//!     - `bob.our_namespace.setup.key`
+//! - genesis
+//!     - `attestation_doc.genesis`
+//!     - `output.genesis`
+//!
+//! Given the above directory structure, Bob can run [`Command::AfterGenesis`]:
+//!
+//! ```shell
+//! cargo run --bin qos-cli after-genesis \
+//!    --genesis-dir  ~/qos/our_namespace/genesis \
+//!    --personal-dir  ~/qos/our_namespace/personal \
+//!    --pcr0 0xf0f0f0f0f0f0f0 \
+//!    --pcr1 0xf0f0f0f0f0f0f0 \
+//!    --pcr2 0xf0f0f0f0f0f0f0 \
+//! ```
+//!
+//! [`Command::AfterGenesis`] will extract Bob's personal key and share,
+//! resulting in the following directory structure:
+//!
+//! - personal
+//!     - `bob.our_namespace.setup.key`
+//!     - `bob.our_namespace.share`
+//!     - `bob.our_namespace.personal.pub`
+//!     - `bob.our_namespace.personal.key`
+//! - genesis
+//!     - `attestation_doc.genesis`
+//!     - `output.genesis`
+//!
+//! ### Boot Standard
+//!
+//! Boot Standard, or just Boot, is the name of the flow for provisioning a
+//! `QuorumOS` instance with a Quorum Key and Pivot Executable.
+//!
+//! From a high level, the boot flow for an enclave can be broken down to 3
+//! steps:
+//!
+//! 1) Gather signatures for a [`qos_core::protocol::services::boot::Manifest`]
+//! from K of the quorum members.
+//! 2) Post a Manifest with K signatures and the pivot binary referenced in
+//! the manifest.
+//! 3) Each quorum member will post their share, encrypted to the Ephemeral Key
+//! of the enclave, after they have verified the validity of an attestation
+//! document from the enclave. (The attestation document should contain a
+//! reference to the manifest).
+//!
+//! #### Generate a Manifest
+//!
+//! The leader for the boot standard flow will need to generate a manifest using
+//! [`Command::GenerateManifest`]. Given the quorum set mentioned in the above
+//! genesis guide, [`Command::GenerateManifest`] expects the following directory
+//! structure:
+//!
+//! - boot
+//! - genesis
+//!    - `output.genesis`
+//!
+//! Given the above directory structure, the leader can run
+//!
+//! ```shell
+//! cargo run --bin qos-cli generate-manifest \
+//!    --genesis-dir  ~/qos/our_namespace/genesis \
+//!    --boot-dir ~/qos/our_namespace/boot \
+//!    --nonce 0 \
+//!    --namespace our_namespace \
+//!    --pivot-hash 0xf0f0f0f0f0f0f0 \
+//!    --restart-policy always \
+//!    --pcr0 0xf0f0f0f0f0f0f0 \
+//!    --pcr1 0xf0f0f0f0f0f0f0 \
+//!    --pcr2 0xf0f0f0f0f0f0f0 \
+//!    --root-cert-path ~/qos/aws_nitro_root_cert.pem
+//! ```
+//!
+//! After running the above, the directory structure will look like:
+//!
+//! - boot
+//!    - `our_namespace.0.manifest`
+//! - genesis
+//!    - `output.genesis`
+//!
+//! #### Approve the Manifest
+//!
+//! K of the quorum members need to approve (sign) the manifest with their
+//! personal key. A quorum member can use [`Command::SignManifest`] to do this.
+//!
+//! [`Command::SignManifest`] expects the following directory structure on Bob's
+//! personal machine:
+//!
+//! - personal
+//!     - `bob.our_namespace.personal.key`
+//! - boot
+//!     - `our_namespace.0.manifest`
+//!
+//! Given the above directory structure, Bob can create an approval for the
+//! manifest by running:
+//!
+//! ```shell
+//! cargo run --bin qos-cli generate-manifest \
+//!    --personal-dir  ~/qos/our_namespace/personal \
+//!    --boot-dir ~/qos/our_namespace/boot \
+//!    --manifest-hash 0xf0f0f0f0f0f0f0
+//! ```
+//!
+//! After running the above, Bob's directory structure would look like:
+//!
+//! - personal
+//!    - `bob.our_namespace.personal.key`
+//! - boot
+//!    - `our_namespace.0.manifest`
+//!    - `bob.our_namespace.0.approval`
+//!
+//! #### Send Boot Standard Instruction
+//!
+//! Once K approvals have been collected for a manifest, the leader can use
+//! [`Command::BootStandard`] to send the boot standard instruction to start the
+//! enclave.
+//!
+//! Given the Quorum Set referenced above, [`Command::BootStandard`] expects the
+//! following directory structure:
+//!
+//! - boot
+//!    - `our_namespace.0.manifest`
+//!    - `alice.our_namespace.0.approval`
+//!    - `bob.our_namespace.0.approval`
+//!    - `eve.our_namespace.0.approval`
+//!
+//! The leader can then run:
+//!
+//! ```shell
+//! cargo run --bin qos-cli boot-standard \
+//!    --host-ip 127.0.0.1 \
+//!    --host-port 3000 \
+//!    --pivot-path ~/qos/our_namespace/pivot.executable
+//!    --boot-dir ~/qos/our_namespace/boot
+//! ```
+//!
+//! After running the above, the boot directory will contain an attestation
+//! document from the enclave. Importantly, the attestation document references
+//! the manifest and has an ephemeral key which can be used for encrypting
+//! messages to the enclave. Specifically, the leader's directory structure will
+//! look like:
+//!
+//! - boot
+//!    - `our_namespace.0.manifest`
+//!    - `alice.our_namespace.0.approval`
+//!    - `bob.our_namespace.0.approval`
+//!    - `eve.our_namespace.0.approval`
+//!    - `attestation_doc.boot`
+//!
+//! #### Post Quorum Shards
+//!
+//! Once the enclave has the pivot and manifest loaded with boot standard, K
+//! quorum members can independently verify the attestation document and post
+//! their quorum share using [`Command::PostShare`].
+//!
+//! For Bob to post his share he would need the following directory structure:
+//!
+//! - personal
+//!     - `bob.our_namespace.share`
+//!     - `bob.our_namespace.personal.key`
+//! - boot
+//!    - `our_namespace.0.manifest`
+//!    - `attestation_doc.boot`
+//!
+//! With the above directory structure, Bob can run:
+//!
+//! ```shell
+//! cargo run --bin qos-cli boot-standard \
+//!    --host-ip 127.0.0.1 \
+//!    --host-port 3000 \
+//!    --personal-dir ~/qos/our_namespace/personal \
+//!    --boot-dir ~/qos/our_namespace/boot
+//! ```
+//!
+//! Once the Kth share is successfully posted, the enclave will automatically
+//! pivot to running the binary.
 
 use std::env;
 
