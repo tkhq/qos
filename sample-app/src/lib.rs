@@ -11,6 +11,8 @@ use qos_core::{
 	server::Routable,
 };
 
+pub mod cli;
+
 /// Possible errors for this application
 #[derive(
 	Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize,
@@ -112,9 +114,7 @@ impl Routable for AppProcessor {
 			};
 		}
 
-		let request = ok!(AppMsg::try_from_slice(&request));
-
-		let response = match request {
+		let response = match ok!(AppMsg::try_from_slice(&request)) {
 			AppMsg::EchoReq { data } => AppMsg::EchoResp { data },
 			AppMsg::ReadQOSFilesReq => {
 				let ephemeral_pair = ok!(self.handles.get_ephemeral_key());
