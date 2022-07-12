@@ -5,6 +5,12 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
+// "vm" is necessary for production and we don't want any mock data slipping in.
+#[cfg(all(feature = "default", feature = "mock"))]
+compile_error!(
+	"feature \"default\" and feature \"mock\" cannot be enabled at the same time"
+);
+
 pub mod attest;
 pub mod cli;
 
