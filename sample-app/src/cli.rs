@@ -110,6 +110,10 @@ impl GetParserForOptions for AppParser {
 pub struct Cli;
 impl Cli {
 	/// Execute the CLI.
+	///
+	/// # Panics
+	///
+	/// Panics if the socket server errors.
 	pub fn execute() {
 		// TODO: figure out how we want this to be configurable.
 		let mut args: Vec<String> = std::env::args().collect();
