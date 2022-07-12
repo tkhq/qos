@@ -2,18 +2,18 @@ use std::{fs, process::Command};
 
 use qos_test::MOCK_EPH_PATH;
 
-const SAMPLE_APP_PATH: &str = "./target/release/sample-app";
+const SAMPLE_APP_PATH: &str = "../target/debug/sample-app";
 
 #[tokio::test]
 async fn sample_app_e2e() {
-	let tmp = "./sample-app-e2e/";
+	let tmp = "./sample-app-e2e-tmp/";
 	drop(fs::create_dir_all(tmp));
 
-	let enclave_usock = "./dev-boot-e2e-tmp/enclave_sock.sock";
-	let _app_usock = "./dev-boot-e2e-tmp/app_sock.sock";
-	let secret_path = "./dev-boot-e2e-tmp/quorum.secret";
-	let pivot_path = "./dev-boot-e2e-tmp/pivot.pivot";
-	let manifest_path = "./dev-boot-e2e-tmp/manifest.manifest";
+	let enclave_usock = "./sample-app-e2e-tmp/enclave_sock.sock";
+	let _app_usock = "./sample-app-e2e-tmp/app_sock.sock";
+	let quorum_path = "./sample-app-e2e-tmp/quorum.secret";
+	let pivot_path = "./sample-app-e2e-tmp/pivot.pivot";
+	let manifest_path = "./sample-app-e2e-tmp/manifest.manifest";
 
 	let host_port = "3011";
 	let host_ip = "127.0.0.1";
@@ -24,7 +24,7 @@ async fn sample_app_e2e() {
 			"--usock",
 			enclave_usock,
 			"--quorum-file",
-			secret_path,
+			quorum_path,
 			"--pivot-file",
 			pivot_path,
 			"--ephemeral-file",
