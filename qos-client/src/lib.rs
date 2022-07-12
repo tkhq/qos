@@ -5,7 +5,7 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
-// "vm" is necessary for production and we don't want any mock data slipping in.
+// Stop gap measure to help prevent mock from slipping into production usage.
 #[cfg(all(feature = "default", feature = "mock"))]
 compile_error!(
 	"feature \"default\" and feature \"mock\" cannot be enabled at the same time"
