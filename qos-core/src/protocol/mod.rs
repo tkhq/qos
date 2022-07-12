@@ -71,8 +71,8 @@ pub enum ProtocolError {
 	/// Failed to parse from string.
 	FailedToParseFromString,
 	/// Got a path to a key that is used for testing. This error only occurs
-	/// when the "mock" feature is disabled, which should always be the case in
-	/// production.
+	/// when the "mock" feature is disabled, which should always be the
+	/// case in production.
 	BadEphemeralKeyPath,
 	/// Tried to modify state that must be static post pivoting.
 	CannotModifyPostPivotStatic,

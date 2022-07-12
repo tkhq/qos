@@ -5,6 +5,12 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
+// Stop gap measure to help prevent mock from slipping into production usage.
+#[cfg(all(feature = "default", feature = "mock"))]
+compile_error!(
+	"feature \"default\" and feature \"mock\" cannot be enabled at the same time"
+);
+
 pub mod attest;
 pub mod cli;
 

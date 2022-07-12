@@ -20,8 +20,7 @@ serde_bytes = { version = "0.11", default-features = false }
 
 [dev-dependencies]
 # We need mock enabled to grab things related to the mock NSM.
-qos-core = { path = "../qos-core", features = ["mock"]}
+qos-core = { path = "../qos-core", features = ["mock"], default-features = false }
 
 [features]
-default = []
-mock = []
+mock = ["qos-core/mock"]
