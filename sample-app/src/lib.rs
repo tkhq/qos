@@ -1,11 +1,51 @@
+//! A sample secure application.
+
+#![forbid(unsafe_code)]
+#![deny(clippy::all)]
+#![warn(missing_docs, clippy::pedantic)]
+#![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	handles::Handles, protocol::services::boot::ManifestEnvelope,
 	server::Routable,
 };
 
+/// Possible errors for this application
+#[derive(
+	Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub enum AppError {
-	
+	/// Error serializing an message.
+	Serialization,
+	/// Error parsing an message.
+	Parsing,
+	/// `qos_core::protocol::ProtocolError` wrapper.
+	Protocol(qos_core::protocol::ProtocolError),
+	/// `borsh::maybestd::io::Error` wrapper.
+	BorshIO,
+	/// Error executing cryptographic functions.
+	Crypto,
+	/// Received an invalid request.
+	InvalidRequest,
+}
+
+impl From<qos_core::protocol::ProtocolError> for AppError {
+	fn from(e: qos_core::protocol::ProtocolError) -> Self {
+		Self::Protocol(e)
+	}
+}
+
+impl From<borsh::maybestd::io::Error> for AppError {
+	fn from(_: borsh::maybestd::io::Error) -> Self {
+		Self::BorshIO
+	}
+}
+
+impl From<qos_crypto::CryptoError> for AppError {
+	fn from(_: qos_crypto::CryptoError) -> Self {
+		Self::Crypto
+	}
 }
 
 /// Endpoints for this app.
@@ -25,11 +65,6 @@ pub enum AppMsg {
 		data: String,
 	},
 
-	/// Ping request.
-	PingReq,
-	/// Successful ping response.
-	PingResp,
-
 	/// Request the data in files QOS writes.
 	ReadQOSFilesReq,
 	/// Response to read QOS files request.
@@ -45,7 +80,7 @@ pub enum AppMsg {
 	/// Error response.
 	Error {
 		/// Information about the error.
-		msg: String,
+		err: AppError,
 	},
 }
 
@@ -56,6 +91,7 @@ pub struct AppProcessor {
 
 impl AppProcessor {
 	/// Create a new instance of [`Self`].
+	#[must_use]
 	pub fn new(handles: Handles) -> Self {
 		Self { handles }
 	}
@@ -64,64 +100,39 @@ impl AppProcessor {
 impl Routable for AppProcessor {
 	fn process(&mut self, request: Vec<u8>) -> Vec<u8> {
 		macro_rules! ok {
-			( $e:expr, $encoded_err:expr ) => {
+			( $e:expr ) => {
 				match $e {
 					Ok(x) => x,
-					/// TODO: make the app error be able to impl From for all error types we encounter
-					/// here. Then we can return the actual error nested in an app err.
-					Err(_) => return $encoded_err,
+					Err(error) => {
+						return AppMsg::Error { err: AppError::from(error) }
+							.try_to_vec()
+							.expect("Has valid borsh encoding")
+					}
 				}
 			};
 		}
-		let parsing_err =
-			AppMsg::Error { msg: "Error parsing request.".to_string() }
-				.try_to_vec()
-				.expect("Valid app msg");
-		let serialize_err =
-			AppMsg::Error { msg: "Failed to serialize `AppMsg`".to_string() }
-				.try_to_vec()
-				.expect("Valid app msg");
-		let eph_err =
-			AppMsg::Error { msg: "Failed to get eph key".to_string() }
-				.try_to_vec()
-				.expect("Valid app msg");
 
-		let request = ok!(AppMsg::try_from_slice(&request), parsing_err);
+		let request = ok!(AppMsg::try_from_slice(&request));
 
 		let response = match request {
 			AppMsg::EchoReq { data } => AppMsg::EchoResp { data },
-			AppMsg::PingReq => AppMsg::PingResp,
 			AppMsg::ReadQOSFilesReq => {
-				let ephemeral_pair = ok!(
-					self
-					   .handles
-					   .get_ephemeral_key(),
-					eph_err
-				);
-				let quorum_pair = ok!(
-					self.handles.get_
-				)
+				let ephemeral_pair = ok!(self.handles.get_ephemeral_key());
+				let quorum_pair = ok!(self.handles.get_quorum_key());
 
 				AppMsg::ReadQOSFilesResp {
-				   ephemeral_key:
-						ephemeral_pair
-						.public_key_pem()
-						.unwrap(),
-				   quorum_key: self
-					   .handles
-					   .get_quorum_key()
-					   .unwrap()
-					   .public_key_pem()
-					   .unwrap(),
-				   manifest_envelope: Box::new(
-					   self.handles.get_manifest_envelope().unwrap(),
-				   ),
+					ephemeral_key: ok!(ephemeral_pair.public_key_pem()),
+					quorum_key: ok!(quorum_pair.public_key_pem()),
+					manifest_envelope: Box::new(ok!(self
+						.handles
+						.get_manifest_envelope())),
+				}
 			}
-			},
-			x => AppMsg::Error { msg: format!("{:?}", x) },
+			AppMsg::EchoResp { .. }
+			| AppMsg::ReadQOSFilesResp { .. }
+			| AppMsg::Error { .. } => AppMsg::Error { err: AppError::InvalidRequest },
 		};
 
-
-		ok!(response.try_to_vec(), serialize_err)
+		ok!(response.try_to_vec())
 	}
 }

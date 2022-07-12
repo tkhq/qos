@@ -711,6 +711,7 @@ version = "0.1.0"
 dependencies = [
  "borsh",
  "qos-core",
+ "qos-crypto",
 ]
 
 [[package]]
