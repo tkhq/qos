@@ -86,8 +86,9 @@ impl RsaPair {
 	/// Create [`Self`] from a file that has a PEM encoded RSA private key.
 	pub fn from_pem_file<P: AsRef<Path>>(path: P) -> Result<Self, CryptoError> {
 		let content = std::fs::read(path)?;
-		let private_key = Rsa::private_key_from_pem(&content[..])?;
-		private_key.try_into()
+		// let private_key = Rsa::private_key_from_pem(&content[..])?;
+		Self::from_pem(&content)
+		// private_key.try_into()
 	}
 
 	/// Create [`Self`] from a PEM encoded RSA private key.

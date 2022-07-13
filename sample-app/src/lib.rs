@@ -5,6 +5,8 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
+use std::path::Path;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	handles::Handles, protocol::services::boot::ManifestEnvelope,
@@ -117,27 +119,21 @@ impl Routable for AppProcessor {
 			};
 		}
 
-		let dir = std::env::current_dir();
-		dbg!(&dir);
-
 		let response = match ok!(AppMsg::try_from_slice(&request)) {
 			AppMsg::EchoReq { data } => AppMsg::EchoResp { data },
 			AppMsg::ReadQOSFilesReq => {
-				println!("MATCHED");
-						dbg!(&dir);
 
-				// let ephemeral_pair = ok!(self.handles.get_ephemeral_key());
-				// let quorum_pair = ok!(self.handles.get_quorum_key());
+				let ephemeral_pair = ok!(self.handles.get_ephemeral_key());
+				let quorum_pair = ok!(self.handles.get_quorum_key());
 
-				// AppMsg::ReadQOSFilesResp {
-				// 	ephemeral_key: ok!(ephemeral_pair.public_key_pem()),
-				// 	quorum_key: ok!(quorum_pair.public_key_pem()),
-				// 	manifest_envelope: Box::new(ok!(self
-				// 		.handles
-				// 		.get_manifest_envelope())),
-				// }
-
-				AppMsg::EchoResp { data: "swag".to_string() }
+				AppMsg::ReadQOSFilesResp {
+					ephemeral_key: ok!(ephemeral_pair.public_key_pem()),
+					quorum_key: ok!(quorum_pair.public_key_pem()),
+					manifest_envelope: Box::new(ok!(self
+						.handles
+						.get_manifest_envelope())),
+				}
+				// AppMsg::EchoResp { data: "swag".to_string() }
 			}
 			AppMsg::EchoResp { .. }
 			| AppMsg::ReadQOSFilesResp { .. }

@@ -648,6 +648,7 @@ dependencies = [
  "qos-crypto",
  "qos-host",
  "rand",
+ "sample-app",
  "tokio",
 ]
 

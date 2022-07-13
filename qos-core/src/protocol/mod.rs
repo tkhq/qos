@@ -80,11 +80,14 @@ pub enum ProtocolError {
 	BadEphemeralKeyPath,
 	/// Tried to modify state that must be static post pivoting.
 	CannotModifyPostPivotStatic,
-	/// For some reason the Ephemeral could not be read/created from the file
+	/// For some reason the Ephemeral could not be read from the file
 	/// system.
 	FailedToGetEphemeralKey,
 	/// Failed to write the Ephemeral key to the file system.
 	FailedToPutEphemeralKey,
+	/// For some reason the Quorum Key could not be read from the file
+	/// system.
+	FailedToGetQuorumKey,
 	/// Failed to put the quorum key into the file system
 	FailedToPutQuorumKey,
 	/// For some reason the manifest envelope could not be read from the file

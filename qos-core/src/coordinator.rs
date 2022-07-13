@@ -52,17 +52,21 @@ impl Coordinator {
 			std::thread::sleep(std::time::Duration::from_secs(1));
 		}
 
+		dbg!("Going to start pivot");
+
 		let PivotConfig { args, restart, .. } = handles
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest
 			.pivot;
 
-		dbg!(&args);
+		// dbg!(&args);
 
 		let mut pivot = Command::new(handles.pivot_path());
 		match restart {
 			RestartPolicy::Always => loop {
+				dbg!("Starting pivot");
+
 				let status = pivot
 					.args(&args[..])
 					.spawn()
