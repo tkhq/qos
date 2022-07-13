@@ -206,11 +206,8 @@ pub(in crate::protocol) fn boot_standard(
 	let eph_path = state.handles.ephemeral_key_path();
 	let ephemeral_key =
 		if eph_path == MOCK_EPH_PATH_TEST || eph_path == MOCK_EPH_PATH_ROOT {
-			dbg!("there is a mock eph path");
-			dbg!(&eph_path);
 			#[cfg(feature = "mock")]
 			{
-				dbg!("getting boot eph key");
 				state.handles.get_ephemeral_key()?
 			}
 			#[cfg(not(feature = "mock"))]
@@ -220,9 +217,6 @@ pub(in crate::protocol) fn boot_standard(
 		} else {
 			let ephemeral_key = RsaPair::generate()?;
 			state.handles.put_ephemeral_key(&ephemeral_key)?;
-
-			dbg!("put a new epheremal key");
-			dbg!(state.handles.ephemeral_key_path());
 
 			ephemeral_key
 		};

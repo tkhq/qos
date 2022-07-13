@@ -600,6 +600,9 @@ impl Command {
 			.token(
 				Self::boot_dir_token()
 			)
+			.token(
+				Self::pivot_args_token()
+			)
 	}
 
 	fn sign_manifest() -> Parser {
@@ -879,8 +882,8 @@ mod handlers {
 			.map_err(|e| println!("{:?}", e))
 			.expect("Attestation request failed")
 			{
-				ProtocolMsg::NsmResponse { nsm_response } => {
-					println!("{:#?}", nsm_response);
+				ProtocolMsg::NsmResponse { nsm_response: NsmResponse::DescribePCR { lock: _, data } } => {
+					println!("{:#?}", qos_core::hex::encode(&data));
 				}
 				other => panic!("Unexpected response {:?}", other),
 			}
@@ -1036,6 +1039,7 @@ mod handlers {
 			pcr2: opts.pcr2(),
 			root_cert_path: opts.root_cert_path(),
 			boot_dir: opts.boot_dir(),
+			pivot_args: opts.pivot_args(),
 		});
 	}
 

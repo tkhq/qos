@@ -28,7 +28,7 @@ pub trait Routable {
 	fn process(&mut self, request: Vec<u8>) -> Vec<u8>;
 }
 
-/// A bare bare bones, socket based server.
+/// A bare bones, socket based server.
 pub struct SocketServer<R: Routable> {
 	_phantom: PhantomData<R>,
 }
@@ -46,7 +46,6 @@ impl<R: Routable> SocketServer<R> {
 		for stream in listener {
 			match stream.recv() {
 				Ok(payload) => {
-					dbg!("calling processor");
 					let response = processor.process(payload);
 					let _ = stream.send(&response);
 				}

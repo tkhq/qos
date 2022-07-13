@@ -287,6 +287,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub pcr2: Vec<u8>,
 	pub root_cert_path: P,
 	pub boot_dir: P,
+	pub pivot_args: Vec<String>,
 }
 
 pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
@@ -301,6 +302,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		pcr2,
 		root_cert_path,
 		boot_dir,
+		pivot_args,
 	} = args;
 
 	let aws_root_certificate = cert_from_pem(
@@ -329,7 +331,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		pivot: PivotConfig {
 			hash: pivot_hash,
 			restart: restart_policy,
-			args: vec![], // TODO: need to specify args here
+			args: pivot_args,
 		},
 		quorum_key: genesis_output.quorum_key,
 		quorum_set: QuorumSet { threshold: genesis_output.threshold, members },

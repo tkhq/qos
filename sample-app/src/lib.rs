@@ -5,8 +5,6 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
-use std::path::Path;
-
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	handles::Handles, protocol::services::boot::ManifestEnvelope,
@@ -103,9 +101,6 @@ impl AppProcessor {
 
 impl Routable for AppProcessor {
 	fn process(&mut self, request: Vec<u8>) -> Vec<u8> {
-		dbg!("In secure app");
-		dbg!("here");
-		println!("HELPPPPP");
 		macro_rules! ok {
 			( $e:expr ) => {
 				match $e {
@@ -132,7 +127,6 @@ impl Routable for AppProcessor {
 						.handles
 						.get_manifest_envelope())),
 				}
-				// AppMsg::EchoResp { data: "swag".to_string() }
 			}
 			AppMsg::EchoResp { .. }
 			| AppMsg::ReadQOSFilesResp { .. }

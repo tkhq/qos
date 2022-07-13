@@ -74,9 +74,6 @@ impl Handles {
 	///
 	/// Errors if the Ephemeral Key has not been put.
 	pub fn get_quorum_key(&self) -> Result<RsaPair, ProtocolError> {
-		dbg!(&self.quorum);
-		dbg!(Path::new(&self.quorum).exists());
-		dbg!(std::env::current_dir().unwrap());
 		let pair = RsaPair::from_pem_file(&self.quorum)
 			.map_err(|_| ProtocolError::FailedToGetQuorumKey)?;
 		Ok(pair)
