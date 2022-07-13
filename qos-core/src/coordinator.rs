@@ -10,7 +10,9 @@ use crate::{
 	handles::Handles,
 	io::SocketAddress,
 	protocol::{
-		attestor::NsmProvider, services::boot::RestartPolicy, Executor,
+		attestor::NsmProvider,
+		services::boot::{PivotConfig, RestartPolicy},
+		Executor,
 	},
 	server::SocketServer,
 };
@@ -50,17 +52,19 @@ impl Coordinator {
 			std::thread::sleep(std::time::Duration::from_secs(1));
 		}
 
-		let mut pivot = Command::new(handles.pivot_path());
-		let restart_policy = handles
+		let PivotConfig { args, restart, .. } = handles
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest
-			.pivot
-			.restart;
+			.pivot;
 
-		match restart_policy {
+		dbg!(&args);
+
+		let mut pivot = Command::new(handles.pivot_path());
+		match restart {
 			RestartPolicy::Always => loop {
 				let status = pivot
+					.args(&args[..])
 					.spawn()
 					.expect("Failed to spawn")
 					.wait()
@@ -71,6 +75,7 @@ impl Coordinator {
 			},
 			RestartPolicy::Never => {
 				let status = pivot
+					.args(args)
 					.spawn()
 					.expect("Failed to spawn")
 					.wait()
@@ -84,3 +89,4 @@ impl Coordinator {
 }
 
 // See qos-test/tests/coordinator for tests
+// TODO: add a test to shoe the args thing works

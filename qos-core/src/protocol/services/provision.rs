@@ -141,6 +141,7 @@ mod test {
 			pivot: PivotConfig {
 				hash: sha_256(pivot),
 				restart: RestartPolicy::Always,
+				args: vec![],
 			},
 			quorum_key: quorum_pair.public_key_to_der().unwrap(),
 			quorum_set: QuorumSet {

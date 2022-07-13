@@ -326,7 +326,11 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 
 	let manifest = Manifest {
 		namespace: Namespace { name: namespace.clone(), nonce },
-		pivot: PivotConfig { hash: pivot_hash, restart: restart_policy },
+		pivot: PivotConfig {
+			hash: pivot_hash,
+			restart: restart_policy,
+			..Default::default() // TODO: need to specify args here
+		},
 		quorum_key: genesis_output.quorum_key,
 		quorum_set: QuorumSet { threshold: genesis_output.threshold, members },
 		enclave: NitroConfig { pcr0, pcr1, pcr2, aws_root_certificate },
@@ -509,6 +513,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	uri: &str,
 	pivot_path: P,
 	restart: RestartPolicy,
+	args: Vec<String>,
 ) {
 	// Generate a quorum key
 	let quorum_pair = RsaPair::generate().expect("Failed RSA gen");
@@ -550,7 +555,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			pcr2: mock_pcr,
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
-		pivot: PivotConfig { hash: sha_256(&pivot), restart },
+		pivot: PivotConfig { hash: sha_256(&pivot), restart, args },
 		quorum_key: quorum_public_der,
 		quorum_set: QuorumSet {
 			threshold: 1,

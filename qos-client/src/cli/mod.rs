@@ -29,6 +29,7 @@ const PIVOT_PATH: &str = "pivot-path";
 const GENESIS_DIR: &str = "genesis-dir";
 const BOOT_DIR: &str = "boot-dir";
 const PERSONAL_DIR: &str = "personal-dir";
+const PIVOT_ARGS: &str = "pivot-args";
 
 /// Commands for the Client CLI.
 ///
@@ -183,6 +184,14 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn pivot_args_token() -> Token {
+		Token::new(
+			PIVOT_ARGS,
+			"Comma seperated, [] wrapped CLI args for pivot. e.g. `[--usock,dev.sock,--path,./path-to-file]`"
+		)
+		.takes_value(true)
+		.default_value("[]")
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -304,6 +313,7 @@ impl Command {
 		Self::base()
 			.token(Self::pivot_path_token())
 			.token(Self::restart_policy_token())
+			.token(Self::pivot_args_token())
 	}
 }
 
@@ -418,6 +428,17 @@ impl ClientOpts {
 
 	fn personal_dir(&self) -> String {
 		self.parsed.single(PERSONAL_DIR).expect("required arg").to_string()
+	}
+
+	fn pivot_args(&self) -> Vec<String> {
+		let v = self.parsed.single(PIVOT_ARGS).expect("required arg");
+		let mut chars = v.chars();
+		// assert_eq!(chars.next().expect("Missing opening ["), "[");
+		// TODO: assert that the remove chars are "[" and "]"
+		chars.next(); // remove "[""
+		chars.next_back(); // remove ""]"
+
+		chars.as_str().split(",").map(String::from).collect()
 	}
 }
 
@@ -701,6 +722,7 @@ mod handlers {
 			&opts.path("message"),
 			opts.pivot_path(),
 			opts.restart_policy(),
+			opts.pivot_args(),
 		);
 	}
 }

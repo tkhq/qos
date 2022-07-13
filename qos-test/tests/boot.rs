@@ -115,7 +115,8 @@ async fn boot_e2e() {
 			namespace: Namespace { name: namespace.to_string(), nonce: 2 },
 			pivot: PivotConfig {
 				hash: mock_pivot_hash,
-				restart: RestartPolicy::Never
+				restart: RestartPolicy::Never,
+				args: vec![]
 			},
 			quorum_key: genesis_output.quorum_key.clone(),
 			quorum_set: QuorumSet {

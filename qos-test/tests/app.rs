@@ -10,7 +10,7 @@ async fn sample_app_e2e() {
 	drop(fs::create_dir_all(tmp));
 
 	let enclave_usock = "./sample-app-e2e-tmp/enclave_sock.sock";
-	let _app_usock = "./sample-app-e2e-tmp/app_sock.sock";
+	let app_usock = "./sample-app-e2e-tmp/app_sock.sock";
 	let quorum_path = "./sample-app-e2e-tmp/quorum.secret";
 	let pivot_path = "./sample-app-e2e-tmp/pivot.pivot";
 	let manifest_path = "./sample-app-e2e-tmp/manifest.manifest";
@@ -34,6 +34,8 @@ async fn sample_app_e2e() {
 			"--mock",
 			"--manifest-file",
 			manifest_path,
+			"--app-usock",
+			app_usock,
 		])
 		.spawn()
 		.unwrap();
@@ -51,7 +53,28 @@ async fn sample_app_e2e() {
 		.spawn()
 		.unwrap();
 
+	// Query the secure app for the attestation doc
+	// assert!(Command::new("../target/debug/sample_app")
+	// 	.args([
+	// 		"--usock",
+	// 		app_usock,
+	// 		"--quorum-file",
+	// 		quorum_path,
+	// 		"--pivot-file",
+	// 		pivot_path,
+	// 		"--ephemeral-file",
+	// 		MOCK_EPH_PATH,
+	// 		"--manifest-file",
+	// 		manifest_path,
+	// 	])
+	// 	.spawn()
+	// 	.unwrap()
+	// 	.wait()
+	// 	.unwrap()
+	// 	.success());
+
 	// Run `dangerous-dev-boot`
+	let pivot_args = format!("[--usock,{app_usock},--quorum-file,{pivot_path},--ephemeral-file,{MOCK_EPH_PATH},--manifest-file,{manifest_path}]");
 	assert!(Command::new("../target/debug/client_cli")
 		.args([
 			"dangerous-dev-boot",
@@ -63,6 +86,8 @@ async fn sample_app_e2e() {
 			SAMPLE_APP_PATH,
 			"--restart-policy",
 			"never",
+			"--pivot-args",
+			&pivot_args[..]
 		])
 		.spawn()
 		.unwrap()
@@ -70,9 +95,21 @@ async fn sample_app_e2e() {
 		.unwrap()
 		.success());
 
-	// Query the secure app for the attestation doc
+	std::thread::sleep(std::time::Duration::from_secs(1));
 
-	// - make CLI command to query sample app for attestation docs
+	assert!(Command::new("../target/debug/client_cli")
+		.args([
+			"app-echo",
+			"--host-port",
+			host_port,
+			"--host-ip",
+			host_ip
+		])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
 
 	// Clean up services
 	enclave_child_process.kill().unwrap();

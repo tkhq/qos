@@ -76,6 +76,9 @@ pub struct PivotConfig {
 	pub hash: Hash256,
 	/// Restart policy for running the pivot binary.
 	pub restart: RestartPolicy,
+	/// The CLI arguments to invoke the command with. Leave this empty if no
+	/// arguments are necessary.
+	pub args: Vec<String>,
 }
 
 /// A quorum member's alias and personal key.
@@ -295,6 +298,7 @@ mod test {
 			pivot: PivotConfig {
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
+				args: vec![],
 			},
 			quorum_key: quorum_pair.public_key_to_der().unwrap(),
 			quorum_set: QuorumSet { threshold: 2, members: quorum_members },
