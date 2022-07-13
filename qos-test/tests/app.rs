@@ -95,15 +95,15 @@ async fn sample_app_e2e() {
 		.unwrap()
 		.success());
 
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	std::thread::sleep(std::time::Duration::from_secs(5));
 
 	assert!(Command::new("../target/debug/client_cli")
 		.args([
-			"app-echo",
+			"app-read-files",
 			"--host-port",
 			host_port,
 			"--host-ip",
-			host_ip
+			host_ip,
 		])
 		.spawn()
 		.unwrap()

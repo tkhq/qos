@@ -210,6 +210,7 @@ pub(in crate::protocol) fn boot_standard(
 			dbg!(&eph_path);
 			#[cfg(feature = "mock")]
 			{
+				dbg!("getting boot eph key");
 				state.handles.get_ephemeral_key()?
 			}
 			#[cfg(not(feature = "mock"))]

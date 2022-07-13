@@ -101,6 +101,9 @@ impl AppProcessor {
 
 impl Routable for AppProcessor {
 	fn process(&mut self, request: Vec<u8>) -> Vec<u8> {
+		dbg!("In secure app");
+		dbg!("here");
+		println!("HELPPPPP");
 		macro_rules! ok {
 			( $e:expr ) => {
 				match $e {
@@ -114,19 +117,27 @@ impl Routable for AppProcessor {
 			};
 		}
 
+		let dir = std::env::current_dir();
+		dbg!(&dir);
+
 		let response = match ok!(AppMsg::try_from_slice(&request)) {
 			AppMsg::EchoReq { data } => AppMsg::EchoResp { data },
 			AppMsg::ReadQOSFilesReq => {
-				let ephemeral_pair = ok!(self.handles.get_ephemeral_key());
-				let quorum_pair = ok!(self.handles.get_quorum_key());
+				println!("MATCHED");
+						dbg!(&dir);
 
-				AppMsg::ReadQOSFilesResp {
-					ephemeral_key: ok!(ephemeral_pair.public_key_pem()),
-					quorum_key: ok!(quorum_pair.public_key_pem()),
-					manifest_envelope: Box::new(ok!(self
-						.handles
-						.get_manifest_envelope())),
-				}
+				// let ephemeral_pair = ok!(self.handles.get_ephemeral_key());
+				// let quorum_pair = ok!(self.handles.get_quorum_key());
+
+				// AppMsg::ReadQOSFilesResp {
+				// 	ephemeral_key: ok!(ephemeral_pair.public_key_pem()),
+				// 	quorum_key: ok!(quorum_pair.public_key_pem()),
+				// 	manifest_envelope: Box::new(ok!(self
+				// 		.handles
+				// 		.get_manifest_envelope())),
+				// }
+
+				AppMsg::EchoResp { data: "swag".to_string() }
 			}
 			AppMsg::EchoResp { .. }
 			| AppMsg::ReadQOSFilesResp { .. }
