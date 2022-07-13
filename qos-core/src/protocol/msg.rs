@@ -73,6 +73,15 @@ pub enum ProtocolMsg {
 		/// for the Kth share.
 		reconstructed: bool,
 	},
+
+	/// Request an attestation document that includes references to the
+	/// manifest (in `user_data`) and the ephemeral key (`public_key`).
+	LiveAttestationDocRequest,
+	/// Response to live attestation document request.
+	LiveAttestationDocResponse {
+		/// TODO
+		nsm_response: NsmResponse,
+	},
 }
 
 #[cfg(test)]
