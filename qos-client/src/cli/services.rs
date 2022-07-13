@@ -698,7 +698,7 @@ fn find_approvals<P: AsRef<Path>>(
 			Some(approval)
 		})
 		.collect();
-	assert!(approvals.len() > manifest.quorum_set.threshold as usize);
+	assert!(approvals.len() >= manifest.quorum_set.threshold as usize);
 
 	approvals
 }

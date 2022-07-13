@@ -173,10 +173,18 @@ impl Executor {
 				Box::new(handlers::nsm_request),
 			],
 			ProtocolPhase::WaitingForQuorumShards => {
-				vec![Box::new(handlers::status), Box::new(handlers::provision)]
+				vec![
+					Box::new(handlers::status),
+					Box::new(handlers::provision),
+					Box::new(handlers::nsm_request),
+				]
 			}
 			ProtocolPhase::QuorumKeyProvisioned => {
-				vec![Box::new(handlers::status), Box::new(handlers::proxy)]
+				vec![
+					Box::new(handlers::status),
+					Box::new(handlers::proxy),
+					Box::new(handlers::nsm_request),
+				]
 			}
 		}
 	}

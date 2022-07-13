@@ -23,4 +23,5 @@ serde_bytes = { version = "0.11", default-features = false }
 qos-core = { path = "../qos-core", features = ["mock"], default-features = false }
 
 [features]
-mock = ["qos-core/mock"]
+default = []
+mock = []
