@@ -122,7 +122,6 @@ impl Routable for AppProcessor {
 		let response = match ok!(AppMsg::try_from_slice(&request)) {
 			AppMsg::EchoReq { data } => AppMsg::EchoResp { data },
 			AppMsg::ReadQOSFilesReq => {
-
 				let ephemeral_pair = ok!(self.handles.get_ephemeral_key());
 				let quorum_pair = ok!(self.handles.get_quorum_key());
 

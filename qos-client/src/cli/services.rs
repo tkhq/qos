@@ -329,7 +329,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		pivot: PivotConfig {
 			hash: pivot_hash,
 			restart: restart_policy,
-			args: vec![] // TODO: need to specify args here
+			args: vec![], // TODO: need to specify args here
 		},
 		quorum_key: genesis_output.quorum_key,
 		quorum_set: QuorumSet { threshold: genesis_output.threshold, members },

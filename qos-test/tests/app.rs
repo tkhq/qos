@@ -53,26 +53,6 @@ async fn sample_app_e2e() {
 		.spawn()
 		.unwrap();
 
-	// Query the secure app for the attestation doc
-	// assert!(Command::new("../target/debug/sample_app")
-	// 	.args([
-	// 		"--usock",
-	// 		app_usock,
-	// 		"--quorum-file",
-	// 		quorum_path,
-	// 		"--pivot-file",
-	// 		pivot_path,
-	// 		"--ephemeral-file",
-	// 		MOCK_EPH_PATH,
-	// 		"--manifest-file",
-	// 		manifest_path,
-	// 	])
-	// 	.spawn()
-	// 	.unwrap()
-	// 	.wait()
-	// 	.unwrap()
-	// 	.success());
-
 	// Run `dangerous-dev-boot`
 	let pivot_args = format!("[--usock,{app_usock},--quorum-file,{quorum_path},--ephemeral-file,{MOCK_EPH_PATH},--manifest-file,{manifest_path}]");
 	assert!(Command::new("../target/debug/client_cli")
@@ -95,7 +75,7 @@ async fn sample_app_e2e() {
 		.unwrap()
 		.success());
 
-	std::thread::sleep(std::time::Duration::from_secs(5));
+	std::thread::sleep(std::time::Duration::from_secs(2));
 
 	assert!(Command::new("../target/debug/client_cli")
 		.args([

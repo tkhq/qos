@@ -134,7 +134,6 @@ impl CLI {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
-			dbg!("bouta call coordinator");
 			Coordinator::execute(
 				&Handles::new(
 					opts.ephemeral_file(),
