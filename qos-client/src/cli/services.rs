@@ -783,33 +783,6 @@ fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
 	s.remove(0)
 }
 
-/// Find the standard boot attestation doc in a directory.
-fn find_attestation_doc<P: AsRef<Path>>(boot_dir: P) -> AttestationDoc {
-	let mut a: Vec<_> = find_file_paths(&boot_dir)
-		.iter()
-		.filter_map(|path| {
-			let file_name =
-				path.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap();
-
-			if file_name != STANDARD_ATTESTATION_DOC_FILE {
-				return None;
-			}
-
-			Some(extract_attestation_doc(
-				&fs::read(&path)
-					.expect("Failed to read standard attestation doc"),
-			))
-		})
-		.collect();
-	assert_eq!(
-		a.len(),
-		1,
-		"Did not find exactly 1 attestation doc in the personal-dir"
-	);
-
-	a.remove(0)
-}
-
 /// Extract the attestation doc from a COSE Sign1 structure. Validates the cert
 /// chain and basic semantics.
 ///
@@ -848,12 +821,11 @@ fn verify_attestation_doc_against_user_input(
 	pcr1: &[u8],
 	pcr2: &[u8],
 ) {
-	// TODO: now!
-	// assert_eq!(
-	// 	user_data,
-	// 	attestation_doc.user_data.as_ref().unwrap().to_vec(),
-	// 	"Attestation doc does not have anticipated user data."
-	// );
+	assert_eq!(
+		user_data,
+		attestation_doc.user_data.as_ref().unwrap().to_vec(),
+		"Attestation doc does not have anticipated user data."
+	);
 
 	// nonce is none
 	assert_eq!(
