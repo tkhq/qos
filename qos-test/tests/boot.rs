@@ -82,6 +82,8 @@ async fn boot_e2e() {
 			root_cert_path,
 			"--boot-dir",
 			boot_dir,
+			"--pivot-args",
+			"[--msg,testing420]"
 		])
 		.spawn()
 		.unwrap()
