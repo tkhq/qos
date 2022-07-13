@@ -23,6 +23,7 @@ async fn main() {
 	#[cfg(feature = "mock")]
 	{
 		use std::{fs, path::Path};
+
 		use qos_client::request;
 		use qos_core::{
 			hex,
