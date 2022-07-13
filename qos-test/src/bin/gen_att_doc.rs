@@ -18,60 +18,66 @@
 //!
 //! 6) Commit the updated files.
 
-use std::{fs, path::Path};
-
-use qos_client::request;
-use qos_core::{
-	hex,
-	protocol::{
-		attestor::{
-			mock::MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT,
-			types::{NsmRequest, NsmResponse},
-		},
-		msg::ProtocolMsg,
-	},
-};
-use qos_crypto::RsaPair;
-
-const EPHEMERAL_KEY_RELATIVE_PATH: &str =
-	"./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
-
 #[tokio::main]
 async fn main() {
-	let uri = "http://127.0.0.1:3000/message";
+	#[cfg(feature = "mock")]
+	{
+		use std::{fs, path::Path};
+		use qos_client::request;
+		use qos_core::{
+			hex,
+			protocol::{
+				attestor::{
+					mock::MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT,
+					types::{NsmRequest, NsmResponse},
+				},
+				msg::ProtocolMsg,
+			},
+		};
+		use qos_crypto::RsaPair;
 
-	let eph_path = Path::new(EPHEMERAL_KEY_RELATIVE_PATH);
-	// Create / read in mock ephemeral key
-	let eph_pair = if eph_path.exists() {
-		RsaPair::from_pem_file(&eph_path).unwrap()
-	} else {
-		let pair = RsaPair::generate().unwrap();
-		fs::write(&eph_path, pair.private_key_to_pem().unwrap()).unwrap();
+		const EPHEMERAL_KEY_RELATIVE_PATH: &str =
+			"./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 
-		pair
-	};
+		let uri = "http://127.0.0.1:3000/message";
 
-	// Create an nsm attestation request
-	let manifest_hash =
-		hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap();
-	let nsm_request = NsmRequest::Attestation {
-		user_data: Some(manifest_hash),
-		nonce: None,
-		public_key: Some(eph_pair.public_key_to_pem().unwrap()),
-	};
-	let req = ProtocolMsg::NsmRequest { nsm_request };
+		let eph_path = Path::new(EPHEMERAL_KEY_RELATIVE_PATH);
+		// Create / read in mock ephemeral key
+		let eph_pair = if eph_path.exists() {
+			RsaPair::from_pem_file(&eph_path).unwrap()
+		} else {
+			let pair = RsaPair::generate().unwrap();
+			fs::write(&eph_path, pair.private_key_to_pem().unwrap()).unwrap();
 
-	println!("Making request to {uri} ...");
-	let cose_sign1 = match request::post(uri, &req).unwrap() {
-		ProtocolMsg::NsmResponse {
-			nsm_response: NsmResponse::Attestation { document },
-		} => document,
-		r => panic!("Unexpected response: {:?}", r),
-	};
+			pair
+		};
 
-	let att_path =
-		"./qos-core/src/protocol/attestor/static/boot_e2e_mock_attestation_doc";
-	fs::write(&att_path, cose_sign1).unwrap();
+		// Create an nsm attestation request
+		let manifest_hash =
+			hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap();
+		let nsm_request = NsmRequest::Attestation {
+			user_data: Some(manifest_hash),
+			nonce: None,
+			public_key: Some(eph_pair.public_key_to_pem().unwrap()),
+		};
+		let req = ProtocolMsg::NsmRequest { nsm_request };
 
-	println!("Done");
+		println!("Making request to {uri} ...");
+		let cose_sign1 = match request::post(uri, &req).unwrap() {
+			ProtocolMsg::NsmResponse {
+				nsm_response: NsmResponse::Attestation { document },
+			} => document,
+			r => panic!("Unexpected response: {:?}", r),
+		};
+
+		let att_path =
+			"./qos-core/src/protocol/attestor/static/boot_e2e_mock_attestation_doc";
+		fs::write(&att_path, cose_sign1).unwrap();
+
+		println!("Done");
+	}
+	#[cfg(not(feature = "mock"))]
+	{
+		panic!("qos-test's \"mock\" feature must be enabled to run this binary")
+	}
 }

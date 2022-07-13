@@ -1,6 +1,6 @@
 //! Abstractions to handle connection based socket streams.
 
-use std::{fs::remove_file, mem::size_of, os::unix::io::RawFd};
+use std::{mem::size_of, os::unix::io::RawFd};
 
 #[cfg(feature = "local")]
 use nix::sys::socket::UnixAddr;
@@ -237,7 +237,7 @@ impl Listener {
 			if let SocketAddress::Unix(addr) = addr {
 				if let Some(path) = addr.path() {
 					if path.exists() {
-						drop(remove_file(path));
+						drop(std::fs::remove_file(path));
 					}
 				}
 			}

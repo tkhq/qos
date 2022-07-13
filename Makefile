@@ -2,6 +2,10 @@
 test:
 	cargo test -- --nocapture
 
+.PHONY: client
+client:
+	cargo run --manifest-path ./qos-client/Cargo.toml --bin qos-client
+
 .PHONY: local-enclave
 local-enclave:
 	cargo run --bin qos-core \
@@ -41,6 +45,7 @@ vm-host:
 vm-describe-nsm:
 	OPENSSL_DIR=/usr cargo run \
 		--bin qos-client \
+		--manifest-path ./qos-client/Cargo.toml \
 		--features vm \
 		describe-nsm \
 		--host-ip 127.0.0.1 \
@@ -49,6 +54,7 @@ vm-describe-nsm:
 .PHONY: local-describe-nsm
 local-describe-nsm:
 	cargo run --bin qos-client \
+		--manifest-path ./qos-client/Cargo.toml \
 		describe-nsm \
 		--host-ip 127.0.0.1 \
 		--host-port 3000
@@ -57,6 +63,7 @@ local-describe-nsm:
 vm-describe-pcr:
 		OPENSSL_DIR=/usr cargo run \
 		--bin qos-client \
+		--manifest-path ./qos-client/Cargo.toml \
 		describe-pcr \
 		--host-ip 127.0.0.1 \
 		--host-port 3000
@@ -64,6 +71,7 @@ vm-describe-pcr:
 .PHONY: local-describe-pcr
 local-describe-pcr:
 	cargo run --bin qos-client \
+		--manifest-path ./qos-client/Cargo.toml \
 		describe-pcr \
 		--host-ip 127.0.0.1 \
 		--host-port 3000
@@ -71,6 +79,7 @@ local-describe-pcr:
 .PHONY: local-req-att-doc
 local-req-att-doc:
 	cargo run --bin qos-client \
+		--manifest-path ./qos-client/Cargo.toml \
 		request-attestation-doc \
 		--host-ip 127.0.0.1 \
 		--host-port 3000
@@ -82,3 +91,9 @@ gen-att-doc:
 .PHONY: image
 image:
 	docker build -t tkhq/qos .
+
+.PHONY: lint
+lint:
+	cargo +nightly version
+	cargo clippy --fix --allow-dirty
+	cargo +nightly fmt
