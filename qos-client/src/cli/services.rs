@@ -457,7 +457,6 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	let manifest = find_manifest(&boot_dir);
 	let encrypted_share = find_share(&personal_dir);
 	let (personal_pair, _) = find_personal_key(&personal_dir);
-	// let attestation_doc = find_attestation_doc(&boot_dir);
 
 	// Make sure hash matches the manifest hash
 	assert_eq!(

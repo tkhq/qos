@@ -79,7 +79,7 @@ pub enum ProtocolMsg {
 	LiveAttestationDocRequest,
 	/// Response to live attestation document request.
 	LiveAttestationDocResponse {
-		/// TODO
+		/// COSE SIGN1 structure with Attestation Doc
 		nsm_response: NsmResponse,
 	},
 }

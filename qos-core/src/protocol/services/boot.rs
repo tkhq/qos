@@ -227,6 +227,7 @@ pub(in crate::protocol) fn boot_standard(
 	);
 
 	state.phase = ProtocolPhase::WaitingForQuorumShards;
+
 	Ok(nsm_response)
 }
 
