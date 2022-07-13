@@ -329,7 +329,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		pivot: PivotConfig {
 			hash: pivot_hash,
 			restart: restart_policy,
-			..Default::default() // TODO: need to specify args here
+			args: vec![] // TODO: need to specify args here
 		},
 		quorum_key: genesis_output.quorum_key,
 		quorum_set: QuorumSet { threshold: genesis_output.threshold, members },
@@ -709,7 +709,7 @@ fn find_approvals<P: AsRef<Path>>(
 			Some(approval)
 		})
 		.collect();
-	assert!(approvals.len() > manifest.quorum_set.threshold as usize);
+	assert!(approvals.len() >= manifest.quorum_set.threshold as usize);
 
 	approvals
 }
@@ -819,7 +819,7 @@ fn find_attestation_doc<P: AsRef<Path>>(boot_dir: P) -> AttestationDoc {
 /// # Panics
 ///
 /// Panics if extraction or validation fails.
-fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
+pub(crate) fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
 	#[cfg(feature = "mock")]
 	let validation_time =
 		qos_core::protocol::attestor::mock::MOCK_SECONDS_SINCE_EPOCH;

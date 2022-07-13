@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-qos-core = { path = "../qos-core" }
+qos-core = { path = "../qos-core", default-features = false }
 
 # Third party
 axum = { version = "0.5.4", features = ["http1"], default-features = false }

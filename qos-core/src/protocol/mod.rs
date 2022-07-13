@@ -75,8 +75,8 @@ pub enum ProtocolError {
 	/// Failed to parse from string.
 	FailedToParseFromString,
 	/// Got a path to a key that is used for testing. This error only occurs
-	/// when the "mock" feature is disabled, which should always be the case in
-	/// production.
+	/// when the "mock" feature is disabled, which should always be the
+	/// case in production.
 	BadEphemeralKeyPath,
 	/// Tried to modify state that must be static post pivoting.
 	CannotModifyPostPivotStatic,
@@ -195,10 +195,18 @@ impl Executor {
 				Box::new(handlers::nsm_request),
 			],
 			ProtocolPhase::WaitingForQuorumShards => {
-				vec![Box::new(handlers::status), Box::new(handlers::provision)]
+				vec![
+					Box::new(handlers::status),
+					Box::new(handlers::provision),
+					Box::new(handlers::nsm_request),
+				]
 			}
 			ProtocolPhase::QuorumKeyProvisioned => {
-				vec![Box::new(handlers::status), Box::new(handlers::proxy)]
+				vec![
+					Box::new(handlers::status),
+					Box::new(handlers::proxy),
+					Box::new(handlers::nsm_request),
+				]
 			}
 		}
 	}
