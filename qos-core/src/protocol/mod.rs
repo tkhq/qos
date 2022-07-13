@@ -177,6 +177,7 @@ impl Executor {
 					Box::new(handlers::status),
 					Box::new(handlers::provision),
 					Box::new(handlers::nsm_request),
+					Box::new(handlers::live_attestation_doc),
 				]
 			}
 			ProtocolPhase::QuorumKeyProvisioned => {
@@ -184,6 +185,7 @@ impl Executor {
 					Box::new(handlers::status),
 					Box::new(handlers::proxy),
 					Box::new(handlers::nsm_request),
+					Box::new(handlers::live_attestation_doc),
 				]
 			}
 		}
@@ -226,6 +228,7 @@ impl server::Routable for Executor {
 }
 
 mod handlers {
+	use super::services::attestation;
 	use crate::protocol::{
 		msg::ProtocolMsg,
 		services::{boot, genesis, provision},
@@ -320,6 +323,27 @@ mod handlers {
 					Some(ProtocolMsg::BootGenesisResponse {
 						nsm_response,
 						genesis_output,
+					})
+				}
+				Err(e) => {
+					state.phase = ProtocolPhase::UnrecoverableError;
+					Some(ProtocolMsg::ProtocolErrorResponse(e))
+				}
+			}
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn live_attestation_doc(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> Option<ProtocolMsg> {
+		if let ProtocolMsg::LiveAttestationDocRequest = req {
+			match attestation::live_attestation_doc(state) {
+				Ok(nsm_response) => {
+					Some(ProtocolMsg::LiveAttestationDocResponse {
+						nsm_response,
 					})
 				}
 				Err(e) => {

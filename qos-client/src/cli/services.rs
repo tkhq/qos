@@ -457,7 +457,6 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	let manifest = find_manifest(&boot_dir);
 	let encrypted_share = find_share(&personal_dir);
 	let (personal_pair, _) = find_personal_key(&personal_dir);
-	let attestation_doc = find_attestation_doc(&boot_dir);
 
 	// Make sure hash matches the manifest hash
 	assert_eq!(
@@ -465,6 +464,14 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 		manifest_hash,
 		"Given hash did not match the hash of the manifest"
 	);
+
+	let attestation_doc =
+		match request::post(uri, &ProtocolMsg::LiveAttestationDocRequest) {
+			Ok(ProtocolMsg::LiveAttestationDocResponse {
+				nsm_response: NsmResponse::Attestation { document },
+			}) => extract_attestation_doc(&document),
+			r => panic!("Unexpected response: {:?}", r),
+		};
 
 	// Validate attestation doc
 	verify_attestation_doc_against_user_input(
@@ -773,33 +780,6 @@ fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
 	assert_eq!(s.len(), 1, "Did not find exactly 1 share in the personal-dir");
 
 	s.remove(0)
-}
-
-/// Find the standard boot attestation doc in a directory.
-fn find_attestation_doc<P: AsRef<Path>>(boot_dir: P) -> AttestationDoc {
-	let mut a: Vec<_> = find_file_paths(&boot_dir)
-		.iter()
-		.filter_map(|path| {
-			let file_name =
-				path.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap();
-
-			if file_name != STANDARD_ATTESTATION_DOC_FILE {
-				return None;
-			}
-
-			Some(extract_attestation_doc(
-				&fs::read(&path)
-					.expect("Failed to read standard attestation doc"),
-			))
-		})
-		.collect();
-	assert_eq!(
-		a.len(),
-		1,
-		"Did not find exactly 1 attestation doc in the personal-dir"
-	);
-
-	a.remove(0)
 }
 
 /// Extract the attestation doc from a COSE Sign1 structure. Validates the cert
