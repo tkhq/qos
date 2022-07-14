@@ -22,7 +22,6 @@ struct AppOpts {
 }
 
 impl AppOpts {
-	/// Create a new instance of [`Self`] with some defaults.
 	fn new(args: &mut Vec<String>) -> Self {
 		let parsed = OptionsParser::<AppParser>::parse(args)
 			.expect("Entered invalid CLI args");
@@ -30,18 +29,12 @@ impl AppOpts {
 		Self { parsed }
 	}
 
-	/// Get the `SocketAddress` for the enclave server.
-	///
-	/// # Panics
-	///
-	/// Panics if the opts are not valid for exactly one of unix or vsock.
 	fn addr(&self) -> SocketAddress {
 		SocketAddress::new_unix(
 			self.parsed.single(USOCK).expect("Unix socket is required"),
 		)
 	}
 
-	/// Defaults to [`QUORUM_FILE`] if not explicitly specified
 	fn quorum_file(&self) -> String {
 		self.parsed
 			.single(QUORUM_FILE_OPT)
@@ -49,7 +42,6 @@ impl AppOpts {
 			.clone()
 	}
 
-	/// Defaults to [`PIVOT_FILE`] if not explicitly specified
 	fn pivot_file(&self) -> String {
 		self.parsed
 			.single(PIVOT_FILE_OPT)
@@ -57,7 +49,6 @@ impl AppOpts {
 			.clone()
 	}
 
-	/// Defaults to [`EPHEMERAL_KEY_FILE`] if not explicitly specified
 	fn ephemeral_file(&self) -> String {
 		self.parsed
 			.single(EPHEMERAL_FILE_OPT)
@@ -73,7 +64,7 @@ impl AppOpts {
 	}
 }
 
-/// Parser for enclave CLI
+/// Parser for the app CLI.
 struct AppParser;
 impl GetParserForOptions for AppParser {
 	fn parser() -> Parser {
@@ -115,7 +106,6 @@ impl Cli {
 	///
 	/// Panics if the socket server errors.
 	pub fn execute() {
-		// TODO: figure out how we want this to be configurable.
 		let mut args: Vec<String> = std::env::args().collect();
 
 		let opts = AppOpts::new(&mut args);

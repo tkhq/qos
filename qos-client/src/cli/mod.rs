@@ -899,7 +899,7 @@ mod handlers {
 		}
 	}
 
-	pub(super) fn app_echo(_opts: &ClientOpts) {
+	pub(super) fn app_echo(opts: &ClientOpts) {
 		#[cfg(feature = "sample")]
 		{
 			use borsh::{BorshDeserialize, BorshSerialize};
@@ -913,7 +913,7 @@ mod handlers {
 
 			let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
 
-			let app_msg = match request::post(&_opts.path("message"), &req)
+			let app_msg = match request::post(&opts.path("message"), &req)
 				.map_err(|e| println!("{:?}", e))
 				.expect("App echo request failed")
 			{
@@ -932,7 +932,7 @@ mod handlers {
 				other => panic!("Unexpected app response {:?}", other),
 			}
 
-			println!("App echo successful!")
+			println!("App echo successful!");
 		}
 		#[cfg(not(feature = "sample"))]
 		{
@@ -940,7 +940,7 @@ mod handlers {
 		}
 	}
 
-	pub(super) fn app_read_files(_opts: &ClientOpts) {
+	pub(super) fn app_read_files(opts: &ClientOpts) {
 		#[cfg(feature = "sample")]
 		{
 			use borsh::{BorshDeserialize, BorshSerialize};
@@ -952,7 +952,7 @@ mod handlers {
 
 			let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
 
-			let resp = match request::post(&_opts.path("message"), &req)
+			let resp = match request::post(&opts.path("message"), &req)
 				.map_err(|e| println!("{:?}", e))
 				.expect("App read QOS files request failed")
 			{

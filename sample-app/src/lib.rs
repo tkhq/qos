@@ -18,15 +18,15 @@ pub mod cli;
 	Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub enum AppError {
-	/// Error serializing an message.
+	/// Error serializing a message.
 	Serialization,
-	/// Error parsing an message.
+	/// Error parsing a message.
 	Parsing,
 	/// `qos_core::protocol::ProtocolError` wrapper.
 	Protocol(qos_core::protocol::ProtocolError),
 	/// `borsh::maybestd::io::Error` wrapper.
 	BorshIO,
-	/// Error executing cryptographic functions.
+	/// Error executing qos-crypto methods.
 	Crypto,
 	/// Received an invalid request.
 	InvalidRequest,
@@ -69,7 +69,7 @@ pub enum AppMsg {
 
 	/// Request the data in files QOS writes.
 	ReadQOSFilesReq,
-	/// Response to read QOS files request.
+	/// Successful response to [`Self::ReadQOSFilesReq`].
 	ReadQOSFilesResp {
 		/// PEM encoded ephemeral key.
 		ephemeral_key: Vec<u8>,
@@ -119,13 +119,13 @@ impl Routable for AppProcessor {
 			AppMsg::ReadQOSFilesReq => {
 				let ephemeral_pair = ok!(self.handles.get_ephemeral_key());
 				let quorum_pair = ok!(self.handles.get_quorum_key());
+				let manifest_envelope =
+					ok!(self.handles.get_manifest_envelope());
 
 				AppMsg::ReadQOSFilesResp {
 					ephemeral_key: ok!(ephemeral_pair.public_key_pem()),
 					quorum_key: ok!(quorum_pair.public_key_pem()),
-					manifest_envelope: Box::new(ok!(self
-						.handles
-						.get_manifest_envelope())),
+					manifest_envelope: Box::new(manifest_envelope),
 				}
 			}
 			AppMsg::EchoResp { .. }

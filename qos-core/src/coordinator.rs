@@ -59,10 +59,10 @@ impl Coordinator {
 			.pivot;
 
 		let mut pivot = Command::new(handles.pivot_path());
+		pivot.args(&args[..]);
 		match restart {
 			RestartPolicy::Always => loop {
 				let status = pivot
-					.args(&args[..])
 					.spawn()
 					.expect("Failed to spawn")
 					.wait()
@@ -73,7 +73,6 @@ impl Coordinator {
 			},
 			RestartPolicy::Never => {
 				let status = pivot
-					.args(args)
 					.spawn()
 					.expect("Failed to spawn")
 					.wait()
@@ -87,4 +86,3 @@ impl Coordinator {
 }
 
 // See qos-test/tests/coordinator for tests
-// TODO: add a test to shoe the args thing works

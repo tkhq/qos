@@ -28,7 +28,6 @@ pub const MOCK_EPH_PATH: &str =
 
 const MSG: &str = "msg";
 
-// TODO get this to write a message
 struct PivotParser;
 impl GetParserForOptions for PivotParser {
 	fn parser() -> Parser {

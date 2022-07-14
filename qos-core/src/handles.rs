@@ -72,7 +72,7 @@ impl Handles {
 	///
 	/// # Errors
 	///
-	/// Errors if the Ephemeral Key has not been put.
+	/// Errors if the Quorum Key has not been put.
 	pub fn get_quorum_key(&self) -> Result<RsaPair, ProtocolError> {
 		let pair = RsaPair::from_pem_file(&self.quorum)
 			.map_err(|_| ProtocolError::FailedToGetQuorumKey)?;

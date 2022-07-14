@@ -68,7 +68,7 @@ async fn dev_boot_e2e() {
 		.unwrap();
 
 	// Give the coordinator time to pivot
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	std::thread::sleep(std::time::Duration::from_secs(2));
 
 	// Clean up services
 	enclave_child_process.kill().unwrap();

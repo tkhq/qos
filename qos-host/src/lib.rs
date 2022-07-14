@@ -117,8 +117,8 @@ impl HostServer {
 					.expect("ProtocolMsg can always serialize. qed."),
 				);
 			}
-			// TODO - don't de-serialize here, but we just have to re-serialize
-			// before sending
+			// TODO - don't de-serialize here, we just end up serializing it
+			// inside of send. <https://github.com/tkhq/qos/issues/90/>
 			Ok(request) => state.enclave_client.send(&request),
 		};
 
