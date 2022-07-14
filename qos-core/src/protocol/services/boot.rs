@@ -2,9 +2,10 @@
 
 use qos_crypto::{sha_256, RsaPair, RsaPub};
 
+use super::attestation;
 use crate::protocol::{
-	attestor::types::{NsmRequest, NsmResponse},
-	Hash256, ProtocolError, ProtocolPhase, ProtocolState, QosHash,
+	attestor::types::NsmResponse, Hash256, ProtocolError, ProtocolPhase,
+	ProtocolState, QosHash,
 };
 
 /// Path to the ephemeral key used for binaries run from the root that need to
@@ -228,16 +229,11 @@ pub(in crate::protocol) fn boot_standard(
 
 	state.handles.put_manifest_envelope(manifest_envelope)?;
 
-	let nsm_response = {
-		let request = NsmRequest::Attestation {
-			user_data: Some(manifest_envelope.manifest.qos_hash().to_vec()),
-			nonce: None,
-			public_key: Some(ephemeral_key.public_key_to_pem().unwrap()),
-		};
-		let fd = state.attestor.nsm_init();
-
-		state.attestor.nsm_process_request(fd, request)
-	};
+	let nsm_response = attestation::get_post_boot_attestation_doc(
+		&*state.attestor,
+		ephemeral_key.public_key_to_pem()?,
+		manifest_envelope.manifest.qos_hash().to_vec(),
+	);
 
 	state.phase = ProtocolPhase::WaitingForQuorumShards;
 

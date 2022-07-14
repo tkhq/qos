@@ -84,6 +84,15 @@ pub enum ProtocolMsg {
 		/// Encoded data the secure app responded with to the enclave.
 		data: Vec<u8>,
 	},
+
+	/// Request an attestation document that includes references to the
+	/// manifest (in `user_data`) and the ephemeral key (`public_key`).
+	LiveAttestationDocRequest,
+	/// Response to live attestation document request.
+	LiveAttestationDocResponse {
+		/// COSE SIGN1 structure with Attestation Doc
+		nsm_response: NsmResponse,
+	},
 }
 
 #[cfg(test)]
