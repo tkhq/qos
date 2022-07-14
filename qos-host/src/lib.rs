@@ -26,7 +26,7 @@ use axum::{
 	routing::{get, post},
 	Extension, Router,
 };
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshSerialize;
 use qos_core::{
 	client::Client,
 	io::SocketAddress,
@@ -94,10 +94,10 @@ impl HostServer {
 
 	/// Message route handler.
 	async fn message(
-		body: Bytes,
+		encoded_request: Bytes,
 		Extension(state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
-		if body.len() > MAX_ENCODED_MSG_LEN {
+		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
 			return (
 				StatusCode::BAD_REQUEST,
 				ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg)
@@ -106,23 +106,8 @@ impl HostServer {
 			);
 		}
 
-		let response = match ProtocolMsg::try_from_slice(&body) {
-			Err(_) => {
-				return (
-					StatusCode::BAD_REQUEST,
-					ProtocolMsg::ProtocolErrorResponse(
-						ProtocolError::InvalidMsg,
-					)
-					.try_to_vec()
-					.expect("ProtocolMsg can always serialize. qed."),
-				);
-			}
-			// TODO - don't de-serialize here, we just end up serializing it
-			// inside of send. <https://github.com/tkhq/qos/issues/90/>
-			Ok(request) => state.enclave_client.send(&request),
-		};
-
-		match response {
+		match state.enclave_client.send(&encoded_request) {
+			Ok(encoded_response) => (StatusCode::OK, encoded_response),
 			Err(_) => (
 				StatusCode::INTERNAL_SERVER_ERROR,
 				ProtocolMsg::ProtocolErrorResponse(
@@ -130,12 +115,6 @@ impl HostServer {
 				)
 				.try_to_vec()
 				.expect("ProtocolMsg can always serialize. qed."),
-			),
-			Ok(response) => (
-				StatusCode::OK,
-				response
-					.try_to_vec()
-					.expect("ProtocolMsg can always serialize. qed."),
 			),
 		}
 	}

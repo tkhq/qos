@@ -278,7 +278,7 @@ mod handlers {
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::ProxyRequest { data: req_data } = req {
-			let resp_data = match state.app_client.send_raw(req_data) {
+			let resp_data = match state.app_client.send(req_data) {
 				Ok(resp_data) => resp_data,
 				Err(e) => {
 					return Some(ProtocolMsg::ProtocolErrorResponse(e.into()))
