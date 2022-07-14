@@ -577,7 +577,6 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		})
 	};
 
-	println!("Making request");
 	let req = ProtocolMsg::BootStandardRequest { manifest_envelope, pivot };
 	let attestation_doc = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::BootStandardResponse {

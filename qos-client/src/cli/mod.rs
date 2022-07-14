@@ -906,13 +906,10 @@ mod handlers {
 			use sample_app::AppMsg;
 
 			let echo_data = "some data to echo".to_string();
-
 			let encoded_app_req = AppMsg::EchoReq { data: echo_data.clone() }
 				.try_to_vec()
 				.expect("Failed to serialize app msg");
-
 			let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
-
 			let app_msg = match request::post(&opts.path("message"), &req)
 				.map_err(|e| println!("{:?}", e))
 				.expect("App echo request failed")
@@ -949,9 +946,7 @@ mod handlers {
 			let encoded_app_req = AppMsg::ReadQOSFilesReq
 				.try_to_vec()
 				.expect("Failed to serialize app msg");
-
 			let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
-
 			let resp = match request::post(&opts.path("message"), &req)
 				.map_err(|e| println!("{:?}", e))
 				.expect("App read QOS files request failed")
