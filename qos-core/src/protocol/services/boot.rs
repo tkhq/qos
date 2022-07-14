@@ -77,8 +77,7 @@ pub struct PivotConfig {
 	pub hash: Hash256,
 	/// Restart policy for running the pivot binary.
 	pub restart: RestartPolicy,
-	/// The CLI arguments to invoke the command with. Leave this empty if no
-	/// arguments are necessary.
+	/// Arguments to invoke the binary with. Leave this empty if none are needed.
 	pub args: Vec<String>,
 }
 
