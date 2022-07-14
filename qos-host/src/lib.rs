@@ -36,7 +36,7 @@ use qos_core::{
 pub mod cli;
 
 const MEGABYTE: usize = 1024 * 1024;
-const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
+const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
 
 /// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]
