@@ -500,7 +500,7 @@ impl Command {
 	fn pivot_args_token() -> Token {
 		Token::new(
 			PIVOT_ARGS,
-			"Comma seperated, [] wrapped CLI args for pivot. e.g. `[--usock,dev.sock,--path,./path-to-file]`"
+			"Comma separated, [] wrapped CLI args for pivot. e.g. `[--usock,dev.sock,--path,./path-to-file]`"
 		)
 		.takes_value(true)
 		.default_value("[]")

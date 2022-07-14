@@ -15,7 +15,7 @@ async fn sample_app_e2e() {
 	let pivot_path = "./sample-app-e2e-tmp/pivot.pivot";
 	let manifest_path = "./sample-app-e2e-tmp/manifest.manifest";
 
-	let host_port = "3011";
+	let host_port = "3232";
 	let host_ip = "127.0.0.1";
 
 	// Start Enclave
