@@ -20,7 +20,7 @@ use services::boot;
 use crate::handles::Handles;
 
 const MEGABYTE: usize = 1024 * 1024;
-const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
+const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
 
 type ProtocolHandler =
 	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
@@ -99,6 +99,9 @@ pub enum ProtocolError {
 	FailedToPutPivot,
 	/// An error occurred with the app client.
 	AppClientError,
+	/// Payload is too big. See `MAX_ENCODED_MSG_LEN` for the upper bound on
+	/// message size.
+	OversizedPayload,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
@@ -226,7 +229,11 @@ impl server::RequestProcessor for Executor {
 		};
 
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
-			return err_resp();
+			return ProtocolMsg::ProtocolErrorResponse(
+				ProtocolError::OversizedPayload,
+			)
+			.try_to_vec()
+			.expect("ProtocolMsg can always be serialized. qed.");
 		}
 
 		let msg_req = match ProtocolMsg::try_from_slice(&req_bytes) {
