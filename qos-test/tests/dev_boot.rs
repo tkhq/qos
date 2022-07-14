@@ -59,6 +59,8 @@ async fn dev_boot_e2e() {
 			PIVOT_OK3_PATH,
 			"--restart-policy",
 			"never",
+			"--pivot-args",
+			"[--msg,vapers-only]",
 		])
 		.spawn()
 		.unwrap()
@@ -76,5 +78,8 @@ async fn dev_boot_e2e() {
 	// Make sure pivot ran
 	assert!(res.success());
 	assert!(Path::new(PIVOT_OK3_SUCCESS_FILE).exists());
+
+	let contents = fs::read(PIVOT_OK3_SUCCESS_FILE).unwrap();
+	assert_eq!(std::str::from_utf8(&contents).unwrap(), "vapers-only");
 	fs::remove_file(PIVOT_OK3_SUCCESS_FILE).unwrap();
 }

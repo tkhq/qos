@@ -750,10 +750,17 @@ impl ClientOpts {
 	fn pivot_args(&self) -> Vec<String> {
 		let v = self.parsed.single(PIVOT_ARGS).expect("required arg");
 		let mut chars = v.chars();
-		// assert_eq!(chars.next().expect("Missing opening ["), "[");
-		// TODO: assert that the remove chars are "[" and "]"
-		chars.next(); // remove "[""
-		chars.next_back(); // remove ""]"
+
+		assert_eq!(
+			chars.next().unwrap(),
+			'[',
+			"Pivot args must start with a \"[\""
+		);
+		assert_eq!(
+			chars.next_back().unwrap(),
+			']',
+			"Pivot args must end with a \"]\""
+		);
 
 		chars.as_str().split(',').map(String::from).collect()
 	}
