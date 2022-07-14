@@ -9,6 +9,7 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -25,7 +26,7 @@ jobs:
         with:
           command: test
 
-  rustfmt:
+  rustfmt:``
     name: rustfmt
     runs-on: ubuntu-latest
     steps:
