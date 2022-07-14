@@ -98,6 +98,8 @@ impl HostServer {
 		Extension(state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
+			dbg!(encoded_request.len());
+			dbg!(MAX_ENCODED_MSG_LEN);
 			return (
 				StatusCode::BAD_REQUEST,
 				ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg)
