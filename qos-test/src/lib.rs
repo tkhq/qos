@@ -4,6 +4,8 @@
 #![deny(clippy::all)]
 #![warn(missing_docs)]
 
+use qos_core::parser::{GetParserForOptions, OptionsParser, Parser, Token};
+
 /// Path to the file `pivot_ok` writes on success for tests.
 pub const PIVOT_OK_SUCCESS_FILE: &str = "./pivot_ok_works";
 /// Path to the file `pivot_ok2` writes on success for tests.
@@ -23,3 +25,34 @@ pub const PIVOT_PANIC_PATH: &str = "../target/debug/pivot_panic";
 /// Path to Ephemeral Key for tests using the mock attestation doc.
 pub const MOCK_EPH_PATH: &str =
 	"../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
+
+const MSG: &str = "msg";
+
+// TODO get this to write a message
+struct PivotParser;
+impl GetParserForOptions for PivotParser {
+	fn parser() -> Parser {
+		Parser::new().token(
+			Token::new(MSG, "A msg to write").takes_value(true).required(true),
+		)
+	}
+}
+
+/// Simple pivot CLI.
+pub struct Cli;
+impl Cli {
+	/// Execute the CLI.
+	pub fn execute(path: &str) {
+		for i in 0..3 {
+			std::thread::sleep(std::time::Duration::from_millis(i));
+		}
+
+		let mut args: Vec<String> = std::env::args().collect();
+		let opts = OptionsParser::<PivotParser>::parse(&mut args)
+			.expect("Entered invalid CLI args");
+
+		let msg = opts.single(MSG).expect("required argument.");
+
+		std::fs::write(path, msg).expect("Failed to write to pivot success");
+	}
+}

@@ -755,7 +755,7 @@ impl ClientOpts {
 		chars.next(); // remove "[""
 		chars.next_back(); // remove ""]"
 
-		chars.as_str().split(",").map(String::from).collect()
+		chars.as_str().split(',').map(String::from).collect()
 	}
 }
 
@@ -882,7 +882,9 @@ mod handlers {
 			.map_err(|e| println!("{:?}", e))
 			.expect("Attestation request failed")
 			{
-				ProtocolMsg::NsmResponse { nsm_response: NsmResponse::DescribePCR { lock: _, data } } => {
+				ProtocolMsg::NsmResponse {
+					nsm_response: NsmResponse::DescribePCR { lock: _, data },
+				} => {
 					println!("{:#?}", qos_core::hex::encode(&data));
 				}
 				other => panic!("Unexpected response {:?}", other),

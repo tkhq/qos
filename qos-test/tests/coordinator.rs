@@ -1,8 +1,10 @@
 use std::fs;
 
 use qos_core::{
-	coordinator::Coordinator, handles::Handles, io::SocketAddress,
-	protocol::attestor::mock::MockNsm,
+	coordinator::Coordinator,
+	handles::Handles,
+	io::SocketAddress,
+	protocol::{attestor::mock::MockNsm, services::boot::ManifestEnvelope},
 };
 use qos_test::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
 
@@ -12,6 +14,7 @@ fn coordinator_works() {
 	// let eph_path = "coordinator_works.eph.key";
 	let usock = "./coordinator_works/coordinator_works.sock";
 	let manifest_path = "coordinator_works.manifest";
+	let msg = "durp-a-durp";
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(fs::remove_file(secret_path));
@@ -25,7 +28,11 @@ fn coordinator_works() {
 
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key
-	handles.put_manifest_envelope(&Default::default()).unwrap();
+	let mut manifest_envelope = ManifestEnvelope::default();
+	manifest_envelope.manifest.pivot.args =
+		vec!["--msg".to_string(), msg.to_string()];
+
+	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());
 
 	let coordinator_handle = std::thread::spawn(move || {
@@ -50,6 +57,8 @@ fn coordinator_works() {
 
 	// Make the sure the coordinator executed successfully.
 	coordinator_handle.join().unwrap();
+	let contents = fs::read(qos_test::PIVOT_OK_SUCCESS_FILE).unwrap();
+	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
 	assert!(fs::remove_file(qos_test::PIVOT_OK_SUCCESS_FILE).is_ok());
 
 	// Clean up

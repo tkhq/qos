@@ -58,6 +58,8 @@ async fn boot_e2e() {
 	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
 	let mock_pivot_hash_hex = hex::encode(&mock_pivot_hash);
+	let msg = "testing420";
+	let pivot_args = format!("[--msg,{}]", msg);
 
 	assert!(Command::new("../target/debug/client_cli")
 		.args([
@@ -83,7 +85,7 @@ async fn boot_e2e() {
 			"--boot-dir",
 			boot_dir,
 			"--pivot-args",
-			"[--msg,testing420]"
+			&pivot_args,
 		])
 		.spawn()
 		.unwrap()
@@ -118,7 +120,7 @@ async fn boot_e2e() {
 			pivot: PivotConfig {
 				hash: mock_pivot_hash,
 				restart: RestartPolicy::Never,
-				args: vec![]
+				args: vec!["--msg".to_string(), msg.to_string()]
 			},
 			quorum_key: genesis_output.quorum_key.clone(),
 			quorum_set: QuorumSet {
@@ -267,8 +269,10 @@ async fn boot_e2e() {
 	}
 
 	std::thread::sleep(std::time::Duration::from_secs(2));
+
 	// Check that the pivot executed
-	assert!(Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
+	let contents = std::fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
+	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
 	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
 
 	for f in [&secret_path, &pivot_path, &usock] {
