@@ -217,7 +217,7 @@ impl Executor {
 	}
 }
 
-impl server::Routable for Executor {
+impl server::RequestProcessor for Executor {
 	fn process(&mut self, req_bytes: Vec<u8>) -> Vec<u8> {
 		let err_resp = || {
 			ProtocolMsg::ErrorResponse

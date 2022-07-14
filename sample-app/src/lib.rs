@@ -8,7 +8,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	handles::Handles, protocol::services::boot::ManifestEnvelope,
-	server::Routable,
+	server::RequestProcessor,
 };
 
 pub mod cli;
@@ -99,7 +99,7 @@ impl AppProcessor {
 	}
 }
 
-impl Routable for AppProcessor {
+impl RequestProcessor for AppProcessor {
 	fn process(&mut self, request: Vec<u8>) -> Vec<u8> {
 		macro_rules! ok {
 			( $e:expr ) => {

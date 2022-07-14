@@ -76,12 +76,14 @@ pub enum ProtocolMsg {
 
 	/// Proxy the encoded `data` to the secure app.
 	ProxyRequest {
-		/// Encoded data that will be sent from the nitro enclave serverga to the secure app.
+		/// Encoded data that will be sent from the nitro enclave serverga to
+		/// the secure app.
 		data: Vec<u8>,
 	},
 	/// Response to the proxy request.
 	ProxyResponse {
-		/// Encoded data the secure app responded with to the nitro enclave server.
+		/// Encoded data the secure app responded with to the nitro enclave
+		/// server.
 		data: Vec<u8>,
 	},
 
