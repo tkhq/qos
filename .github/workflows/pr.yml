@@ -9,7 +9,7 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 75
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
