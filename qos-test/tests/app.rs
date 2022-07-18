@@ -4,6 +4,7 @@ use qos_test::MOCK_EPH_PATH;
 
 const SAMPLE_APP_PATH: &str = "../target/debug/sample_app";
 
+#[ignore]
 #[tokio::test]
 async fn sample_app_e2e() {
 	let tmp = "./sample-app-e2e-tmp/";
