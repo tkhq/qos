@@ -24,7 +24,7 @@ struct AppOpts {
 impl AppOpts {
 	fn new(args: &mut Vec<String>) -> Self {
 		let parsed = OptionsParser::<AppParser>::parse(args)
-			.expect("Entered invalid CLI args");
+			.expect("Sample App: Entered invalid CLI args");
 
 		Self { parsed }
 	}
