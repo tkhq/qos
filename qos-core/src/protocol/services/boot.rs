@@ -8,10 +8,14 @@ use crate::protocol::{
 	ProtocolState, QosHash,
 };
 
-// Path to the ephemeral key used for testing. Must not be used in production.
-const MOCK_EPH_PATH: &str =
+/// Path to the ephemeral key used for binaries run from the root that need to
+/// use the mock attestation doc (i.e. the sample app). Must not be used in
+/// production.
+pub const MOCK_EPH_PATH_ROOT: &str =
+	"./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
+/// Path to the ephemeral key used for testing. Must not be used in production.
+pub const MOCK_EPH_PATH_TEST: &str =
 	"../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
-
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
@@ -73,6 +77,9 @@ pub struct PivotConfig {
 	pub hash: Hash256,
 	/// Restart policy for running the pivot binary.
 	pub restart: RestartPolicy,
+	/// Arguments to invoke the binary with. Leave this empty if none are
+	/// needed.
+	pub args: Vec<String>,
 }
 
 /// A quorum member's alias and personal key.
@@ -197,21 +204,23 @@ pub(in crate::protocol) fn boot_standard(
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	manifest_envelope.check_approvals()?;
-	let ephemeral_key = if state.handles.ephemeral_key_path() == MOCK_EPH_PATH {
-		#[cfg(feature = "mock")]
-		{
-			state.handles.get_ephemeral_key()?
-		}
-		#[cfg(not(feature = "mock"))]
-		{
-			Err(ProtocolError::BadEphemeralKeyPath)?
-		}
-	} else {
-		let ephemeral_key = RsaPair::generate()?;
-		state.handles.put_ephemeral_key(&ephemeral_key)?;
+	let eph_path = state.handles.ephemeral_key_path();
+	let ephemeral_key =
+		if eph_path == MOCK_EPH_PATH_TEST || eph_path == MOCK_EPH_PATH_ROOT {
+			#[cfg(feature = "mock")]
+			{
+				state.handles.get_ephemeral_key()?
+			}
+			#[cfg(not(feature = "mock"))]
+			{
+				Err(ProtocolError::BadEphemeralKeyPath)?
+			}
+		} else {
+			let ephemeral_key = RsaPair::generate()?;
+			state.handles.put_ephemeral_key(&ephemeral_key)?;
 
-		ephemeral_key
-	};
+			ephemeral_key
+		};
 
 	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
 		return Err(ProtocolError::InvalidPivotHash);
@@ -236,7 +245,9 @@ mod test {
 	use std::path::Path;
 
 	use super::*;
-	use crate::{handles::Handles, protocol::attestor::mock::MockNsm};
+	use crate::{
+		handles::Handles, io::SocketAddress, protocol::attestor::mock::MockNsm,
+	};
 
 	fn get_manifest() -> (Manifest, Vec<(RsaPair, QuorumMember)>, Vec<u8>) {
 		let quorum_pair = RsaPair::generate().unwrap();
@@ -278,6 +289,7 @@ mod test {
 			pivot: PivotConfig {
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
+				args: vec![],
 			},
 			quorum_key: quorum_pair.public_key_to_der().unwrap(),
 			quorum_set: QuorumSet { threshold: 2, members: quorum_members },
@@ -324,8 +336,11 @@ mod test {
 			manifest_file.clone(),
 			pivot_file.clone(),
 		);
-		let mut protocol_state =
-			ProtocolState::new(Box::new(MockNsm), handles.clone());
+		let mut protocol_state = ProtocolState::new(
+			Box::new(MockNsm),
+			handles.clone(),
+			SocketAddress::new_unix("./never.sock"),
+		);
 
 		let _nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
@@ -376,8 +391,11 @@ mod test {
 			manifest_file,
 			pivot_file,
 		);
-		let mut protocol_state =
-			ProtocolState::new(Box::new(MockNsm), handles.clone());
+		let mut protocol_state = ProtocolState::new(
+			Box::new(MockNsm),
+			handles.clone(),
+			SocketAddress::new_unix("./never.sock"),
+		);
 
 		let nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
@@ -416,8 +434,11 @@ mod test {
 			manifest_file,
 			pivot_file,
 		);
-		let mut protocol_state =
-			ProtocolState::new(Box::new(MockNsm), handles.clone());
+		let mut protocol_state = ProtocolState::new(
+			Box::new(MockNsm),
+			handles.clone(),
+			SocketAddress::new_unix("./never.sock"),
+		);
 
 		let nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);

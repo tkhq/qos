@@ -1,7 +1,5 @@
-fn main() {
-	for i in 0..3 {
-		std::thread::sleep(std::time::Duration::from_millis(i));
-	}
+use qos_test::PIVOT_OK3_SUCCESS_FILE;
 
-	std::fs::write(qos_test::PIVOT_OK3_SUCCESS_FILE, b"contents").unwrap();
+fn main() {
+	qos_test::Cli::execute(PIVOT_OK3_SUCCESS_FILE);
 }

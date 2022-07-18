@@ -1,11 +1,6 @@
 //! Streaming socket based client to connect with
 //! [`crate::server::SocketServer`].
-use borsh::{BorshDeserialize, BorshSerialize};
-
-use crate::{
-	io::{self, SocketAddress, Stream},
-	protocol::msg::ProtocolMsg,
-};
+use crate::io::{self, SocketAddress, Stream};
 
 /// Enclave client error.
 #[derive(Debug)]
@@ -41,17 +36,11 @@ impl Client {
 		Self { addr }
 	}
 
-	/// Send a [`ProtocolMsg`] and wait for the response.
-	pub fn send(
-		&self,
-		request: &ProtocolMsg,
-	) -> Result<ProtocolMsg, ClientError> {
+	/// Send raw bytes and wait for a response.
+	pub fn send(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
 
-		stream.send(
-			&request.try_to_vec().expect("ProtocolMsg can be serialized. qed."),
-		)?;
-		let response = stream.recv()?;
-		ProtocolMsg::try_from_slice(&response).map_err(Into::into)
+		stream.send(request)?;
+		stream.recv().map_err(Into::into)
 	}
 }

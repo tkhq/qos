@@ -26,7 +26,7 @@ use axum::{
 	routing::{get, post},
 	Extension, Router,
 };
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshSerialize;
 use qos_core::{
 	client::Client,
 	io::SocketAddress,
@@ -36,7 +36,7 @@ use qos_core::{
 pub mod cli;
 
 const MEGABYTE: usize = 1024 * 1024;
-const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
+const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
 
 /// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]
@@ -94,10 +94,12 @@ impl HostServer {
 
 	/// Message route handler.
 	async fn message(
-		body: Bytes,
+		encoded_request: Bytes,
 		Extension(state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
-		if body.len() > MAX_ENCODED_MSG_LEN {
+		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
+			dbg!(encoded_request.len());
+			dbg!(MAX_ENCODED_MSG_LEN);
 			return (
 				StatusCode::BAD_REQUEST,
 				ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg)
@@ -106,21 +108,8 @@ impl HostServer {
 			);
 		}
 
-		let response = match ProtocolMsg::try_from_slice(&body) {
-			Err(_) => {
-				return (
-					StatusCode::BAD_REQUEST,
-					ProtocolMsg::ProtocolErrorResponse(
-						ProtocolError::InvalidMsg,
-					)
-					.try_to_vec()
-					.expect("ProtocolMsg can always serialize. qed."),
-				);
-			}
-			Ok(request) => state.enclave_client.send(&request),
-		};
-
-		match response {
+		match state.enclave_client.send(&encoded_request) {
+			Ok(encoded_response) => (StatusCode::OK, encoded_response),
 			Err(_) => (
 				StatusCode::INTERNAL_SERVER_ERROR,
 				ProtocolMsg::ProtocolErrorResponse(
@@ -128,12 +117,6 @@ impl HostServer {
 				)
 				.try_to_vec()
 				.expect("ProtocolMsg can always serialize. qed."),
-			),
-			Ok(response) => (
-				StatusCode::OK,
-				response
-					.try_to_vec()
-					.expect("ProtocolMsg can always serialize. qed."),
 			),
 		}
 	}

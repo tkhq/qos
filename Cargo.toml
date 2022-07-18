@@ -5,6 +5,7 @@ members = [
   "qos-crypto",
   "qos-host",
   "qos-test",
+  "sample-app",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.

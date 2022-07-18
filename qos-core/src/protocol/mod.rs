@@ -3,7 +3,11 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_crypto::sha_256;
 
-use crate::server;
+use crate::{
+	client::{self, Client},
+	io::SocketAddress,
+	server,
+};
 
 pub mod attestor;
 pub mod msg;
@@ -16,7 +20,7 @@ use services::boot;
 use crate::handles::Handles;
 
 const MEGABYTE: usize = 1024 * 1024;
-const MAX_ENCODED_MSG_LEN: usize = 10 * MEGABYTE;
+const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
 
 type ProtocolHandler =
 	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
@@ -76,11 +80,14 @@ pub enum ProtocolError {
 	BadEphemeralKeyPath,
 	/// Tried to modify state that must be static post pivoting.
 	CannotModifyPostPivotStatic,
-	/// For some reason the Ephemeral could not be read/created from the file
+	/// For some reason the Ephemeral could not be read from the file
 	/// system.
 	FailedToGetEphemeralKey,
 	/// Failed to write the Ephemeral key to the file system.
 	FailedToPutEphemeralKey,
+	/// For some reason the Quorum Key could not be read from the file
+	/// system.
+	FailedToGetQuorumKey,
 	/// Failed to put the quorum key into the file system
 	FailedToPutQuorumKey,
 	/// For some reason the manifest envelope could not be read from the file
@@ -90,6 +97,11 @@ pub enum ProtocolError {
 	FailedToPutManifestEnvelope,
 	/// Failed to put the pivot executable.
 	FailedToPutPivot,
+	/// An error occurred with the app client.
+	AppClientError,
+	/// Payload is too big. See `MAX_ENCODED_MSG_LEN` for the upper bound on
+	/// message size.
+	OversizedPayload,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
@@ -107,6 +119,12 @@ impl From<openssl::error::ErrorStack> for ProtocolError {
 impl From<std::io::Error> for ProtocolError {
 	fn from(_err: std::io::Error) -> Self {
 		Self::IOError
+	}
+}
+
+impl From<client::ClientError> for ProtocolError {
+	fn from(_: client::ClientError) -> Self {
+		Self::AppClientError
 	}
 }
 
@@ -133,16 +151,22 @@ pub struct ProtocolState {
 	attestor: Box<dyn NsmProvider>,
 	phase: ProtocolPhase,
 	handles: Handles,
+	app_client: Client,
 }
 
 impl ProtocolState {
-	fn new(attestor: Box<dyn NsmProvider>, handles: Handles) -> Self {
+	fn new(
+		attestor: Box<dyn NsmProvider>,
+		handles: Handles,
+		app_addr: SocketAddress,
+	) -> Self {
 		let provisioner = services::provision::SecretBuilder::new();
 		Self {
 			attestor,
 			provisioner,
 			phase: ProtocolPhase::WaitingForBootInstruction,
 			handles,
+			app_client: Client::new(app_addr),
 		}
 	}
 }
@@ -156,8 +180,12 @@ pub struct Executor {
 impl Executor {
 	/// Create a new `Self`.
 	#[must_use]
-	pub fn new(attestor: Box<dyn NsmProvider>, handles: Handles) -> Self {
-		Self { state: ProtocolState::new(attestor, handles) }
+	pub fn new(
+		attestor: Box<dyn NsmProvider>,
+		handles: Handles,
+		app_addr: SocketAddress,
+	) -> Self {
+		Self { state: ProtocolState::new(attestor, handles, app_addr) }
 	}
 
 	fn routes(&self) -> Vec<Box<ProtocolHandler>> {
@@ -192,7 +220,7 @@ impl Executor {
 	}
 }
 
-impl server::Routable for Executor {
+impl server::RequestProcessor for Executor {
 	fn process(&mut self, req_bytes: Vec<u8>) -> Vec<u8> {
 		let err_resp = || {
 			ProtocolMsg::ErrorResponse
@@ -201,7 +229,11 @@ impl server::Routable for Executor {
 		};
 
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
-			return err_resp();
+			return ProtocolMsg::ProtocolErrorResponse(
+				ProtocolError::OversizedPayload,
+			)
+			.try_to_vec()
+			.expect("ProtocolMsg can always be serialized. qed.");
 		}
 
 		let msg_req = match ProtocolMsg::try_from_slice(&req_bytes) {
@@ -249,11 +281,21 @@ mod handlers {
 	}
 
 	pub(super) fn proxy(
-		_req: &ProtocolMsg,
-		_state: &mut ProtocolState,
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		// TODO
-		None
+		if let ProtocolMsg::ProxyRequest { data: req_data } = req {
+			let resp_data = match state.app_client.send(req_data) {
+				Ok(resp_data) => resp_data,
+				Err(e) => {
+					return Some(ProtocolMsg::ProtocolErrorResponse(e.into()))
+				}
+			};
+
+			Some(ProtocolMsg::ProxyResponse { data: resp_data })
+		} else {
+			None
+		}
 	}
 
 	pub(super) fn nsm_request(

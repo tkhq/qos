@@ -1,26 +1,31 @@
-use std::{fs, path::Path, process::Command};
+use std::{fs, process::Command};
 
-use qos_test::{MOCK_EPH_PATH, PIVOT_OK3_PATH, PIVOT_OK3_SUCCESS_FILE};
+use qos_test::MOCK_EPH_PATH;
 
+const SAMPLE_APP_PATH: &str = "../target/debug/sample_app";
+
+#[ignore]
 #[tokio::test]
-async fn dev_boot_e2e() {
-	let tmp = "./dev-boot-e2e-tmp/";
+async fn sample_app_e2e() {
+	let tmp = "./sample-app-e2e-tmp/";
 	drop(fs::create_dir_all(tmp));
-	let usock = "./dev-boot-e2e-tmp/sock.sock";
-	let secret_path = "./dev-boot-e2e-tmp/quorum.secret";
-	let pivot_path = "./dev-boot-e2e-tmp/pivot.pivot";
-	let manifest_path = "./dev-boot-e2e-tmp/manifest.manifest";
 
-	let host_port = "3010";
+	let enclave_usock = "./sample-app-e2e-tmp/enclave_sock.sock";
+	let app_usock = "./sample-app-e2e-tmp/app_sock.sock";
+	let quorum_path = "./sample-app-e2e-tmp/quorum.secret";
+	let pivot_path = "./sample-app-e2e-tmp/pivot.pivot";
+	let manifest_path = "./sample-app-e2e-tmp/manifest.manifest";
+
+	let host_port = "3232";
 	let host_ip = "127.0.0.1";
 
 	// Start Enclave
 	let mut enclave_child_process = Command::new("../target/debug/core_cli")
 		.args([
 			"--usock",
-			usock,
+			enclave_usock,
 			"--quorum-file",
-			secret_path,
+			quorum_path,
 			"--pivot-file",
 			pivot_path,
 			"--ephemeral-file",
@@ -30,11 +35,13 @@ async fn dev_boot_e2e() {
 			"--mock",
 			"--manifest-file",
 			manifest_path,
+			"--app-usock",
+			app_usock,
 		])
 		.spawn()
 		.unwrap();
 
-	// Start Host
+	// Start host
 	let mut host_child_process = Command::new("../target/debug/host_cli")
 		.args([
 			"--host-port",
@@ -42,13 +49,14 @@ async fn dev_boot_e2e() {
 			"--host-ip",
 			host_ip,
 			"--usock",
-			usock,
+			enclave_usock,
 		])
 		.spawn()
 		.unwrap();
 
 	// Run `dangerous-dev-boot`
-	let res = Command::new("../target/debug/client_cli")
+	let pivot_args = format!("[--usock,{app_usock},--quorum-file,{quorum_path},--ephemeral-file,{MOCK_EPH_PATH},--manifest-file,{manifest_path}]");
+	assert!(Command::new("../target/debug/client_cli")
 		.args([
 			"dangerous-dev-boot",
 			"--host-port",
@@ -56,30 +64,36 @@ async fn dev_boot_e2e() {
 			"--host-ip",
 			host_ip,
 			"--pivot-path",
-			PIVOT_OK3_PATH,
+			SAMPLE_APP_PATH,
 			"--restart-policy",
 			"never",
 			"--pivot-args",
-			"[--msg,vapers-only]",
+			&pivot_args[..]
 		])
 		.spawn()
 		.unwrap()
 		.wait()
-		.unwrap();
+		.unwrap()
+		.success());
 
-	// Give the coordinator time to pivot
 	std::thread::sleep(std::time::Duration::from_secs(2));
+
+	assert!(Command::new("../target/debug/client_cli")
+		.args([
+			"app-read-files",
+			"--host-port",
+			host_port,
+			"--host-ip",
+			host_ip,
+		])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
 
 	// Clean up services
 	enclave_child_process.kill().unwrap();
 	host_child_process.kill().unwrap();
 	drop(fs::remove_dir_all(tmp));
-
-	// Make sure pivot ran
-	assert!(res.success());
-	assert!(Path::new(PIVOT_OK3_SUCCESS_FILE).exists());
-
-	let contents = fs::read(PIVOT_OK3_SUCCESS_FILE).unwrap();
-	assert_eq!(std::str::from_utf8(&contents).unwrap(), "vapers-only");
-	fs::remove_file(PIVOT_OK3_SUCCESS_FILE).unwrap();
 }

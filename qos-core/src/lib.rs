@@ -51,28 +51,35 @@ pub mod server;
 
 /// Path to Quorum Key secret.
 #[cfg(not(feature = "vm"))]
-pub const QUORUM_FILE: &str = "./qos.quorum.key";
+pub const QUORUM_FILE: &str = "./local-enclave/qos.quorum.key";
 /// Path to Quorum Key secret.
 #[cfg(feature = "vm")]
 pub const QUORUM_FILE: &str = "/qos.quorum.key";
 
 /// Path to Pivot binary.
 #[cfg(not(feature = "vm"))]
-pub const PIVOT_FILE: &str = "../target/debug/pivot_ok";
+pub const PIVOT_FILE: &str = "./local-enclave/qos.pivot.bin";
 /// Path to Pivot binary.
 #[cfg(feature = "vm")]
 pub const PIVOT_FILE: &str = "/qos.pivot.bin";
 
 /// Path to Ephemeral Key.
 #[cfg(not(feature = "vm"))]
-pub const EPHEMERAL_KEY_FILE: &str = "./qos.ephemeral.key";
+pub const EPHEMERAL_KEY_FILE: &str = "./local-enclave/qos.ephemeral.key";
 /// Path to Ephemeral Key.
 #[cfg(feature = "vm")]
 pub const EPHEMERAL_KEY_FILE: &str = "/qos.ephemeral.key";
 
 /// Path to the Manifest.
 #[cfg(not(feature = "vm"))]
-pub const MANIFEST_FILE: &str = "./qos.manifest";
+pub const MANIFEST_FILE: &str = "./local-enclave/qos.manifest";
 /// Path to the Manifest.
 #[cfg(feature = "vm")]
 pub const MANIFEST_FILE: &str = "/qos.manifest";
+
+/// Default socket for enclave <-> secure app communication.
+#[cfg(not(feature = "vm"))]
+pub const SEC_APP_SOCK: &str = "./local-enclave/sec_app.sock";
+/// Default socket for enclave <-> secure app communication.
+#[cfg(feature = "vm")]
+pub const SEC_APP_SOCK: &str = "/sec_app.sock";

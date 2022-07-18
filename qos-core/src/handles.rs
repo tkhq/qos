@@ -68,6 +68,17 @@ impl Handles {
 		)
 	}
 
+	/// Get the Quorum Key pair.
+	///
+	/// # Errors
+	///
+	/// Errors if the Quorum Key has not been put.
+	pub fn get_quorum_key(&self) -> Result<RsaPair, ProtocolError> {
+		let pair = RsaPair::from_pem_file(&self.quorum)
+			.map_err(|_| ProtocolError::FailedToGetQuorumKey)?;
+		Ok(pair)
+	}
+
 	/// Put the Quorum Key pair.
 	///
 	/// # Errors
@@ -136,6 +147,13 @@ impl Handles {
 			Err(ProtocolError::CannotModifyPostPivotStatic)?;
 		}
 
+		if let Some(parent) = Path::new(&self.pivot).parent() {
+			if !parent.exists() {
+				fs::create_dir_all(parent)
+					.map_err(|_| ProtocolError::FailedToPutPivot)?;
+			}
+		}
+
 		fs::write(&self.pivot, pivot)
 			.map_err(|_| ProtocolError::FailedToPutPivot)?;
 		fs::set_permissions(
@@ -162,9 +180,16 @@ impl Handles {
 			Err(ProtocolError::CannotModifyPostPivotStatic)?;
 		}
 
+		if let Some(parent) = path.as_ref().parent() {
+			if !parent.exists() {
+				fs::create_dir_all(parent).map_err(|_| err.clone())?;
+			}
+		}
+
 		fs::write(&path, buf).map_err(|_| err.clone())?;
 		fs::set_permissions(&path, fs::Permissions::from_mode(0o444))
 			.map_err(|_| err)?;
+
 		Ok(())
 	}
 }

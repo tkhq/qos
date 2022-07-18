@@ -11,6 +11,7 @@ local-enclave:
 	cargo run --bin qos-core \
 		-- \
 		--usock ./dev.sock \
+		--ephemeral-file ./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret \
 		--mock
 
 .PHONY: vm-enclave

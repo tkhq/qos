@@ -95,7 +95,9 @@ mod test {
 	use qos_crypto::{sha_256, shamir::shares_generate, RsaPair};
 
 	use crate::{
+		client::Client,
 		handles::Handles,
+		io::SocketAddress,
 		protocol::{
 			attestor::mock::MockNsm,
 			services::{
@@ -139,6 +141,7 @@ mod test {
 			pivot: PivotConfig {
 				hash: sha_256(pivot),
 				restart: RestartPolicy::Always,
+				args: vec![],
 			},
 			quorum_key: quorum_pair.public_key_to_der().unwrap(),
 			quorum_set: QuorumSet {
@@ -156,6 +159,7 @@ mod test {
 			attestor: Box::new(MockNsm),
 			phase: ProtocolPhase::WaitingForQuorumShards,
 			handles,
+			app_client: Client::new(SocketAddress::new_unix("./never.sock")),
 		};
 
 		(quorum_pair, eph_pair, threshold, state)

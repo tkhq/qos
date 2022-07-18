@@ -287,6 +287,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub pcr2: Vec<u8>,
 	pub root_cert_path: P,
 	pub boot_dir: P,
+	pub pivot_args: Vec<String>,
 }
 
 pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
@@ -301,6 +302,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		pcr2,
 		root_cert_path,
 		boot_dir,
+		pivot_args,
 	} = args;
 
 	let aws_root_certificate = cert_from_pem(
@@ -326,7 +328,11 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 
 	let manifest = Manifest {
 		namespace: Namespace { name: namespace.clone(), nonce },
-		pivot: PivotConfig { hash: pivot_hash, restart: restart_policy },
+		pivot: PivotConfig {
+			hash: pivot_hash,
+			restart: restart_policy,
+			args: pivot_args,
+		},
 		quorum_key: genesis_output.quorum_key,
 		quorum_set: QuorumSet { threshold: genesis_output.threshold, members },
 		enclave: NitroConfig { pcr0, pcr1, pcr2, aws_root_certificate },
@@ -516,6 +522,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	uri: &str,
 	pivot_path: P,
 	restart: RestartPolicy,
+	args: Vec<String>,
 ) {
 	// Generate a quorum key
 	let quorum_pair = RsaPair::generate().expect("Failed RSA gen");
@@ -557,7 +564,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			pcr2: mock_pcr,
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
-		pivot: PivotConfig { hash: sha_256(&pivot), restart },
+		pivot: PivotConfig { hash: sha_256(&pivot), restart, args },
 		quorum_key: quorum_public_der,
 		quorum_set: QuorumSet {
 			threshold: 1,
@@ -576,6 +583,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			approvals: vec![Approval { signature, member }],
 		})
 	};
+
 	let req = ProtocolMsg::BootStandardRequest { manifest_envelope, pivot };
 	let attestation_doc = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::BootStandardResponse {

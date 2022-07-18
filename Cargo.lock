@@ -599,6 +599,7 @@ dependencies = [
  "openssl",
  "qos-core",
  "qos-crypto",
+ "sample-app",
  "serde_bytes",
  "ureq",
  "webpki",
@@ -647,6 +648,7 @@ dependencies = [
  "qos-crypto",
  "qos-host",
  "rand",
+ "sample-app",
  "tokio",
 ]
 
@@ -702,6 +704,15 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
+]
+
+[[package]]
+name = "sample-app"
+version = "0.1.0"
+dependencies = [
+ "borsh",
+ "qos-core",
+ "qos-crypto",
 ]
 
 [[package]]

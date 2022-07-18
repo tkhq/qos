@@ -35,16 +35,19 @@ pub mod request {
 			)
 			.map_err(|e| format!("post err: {:?}", e))?;
 
-		response
-			.into_reader()
-			.take(MAX_SIZE)
-			.read_to_end(&mut buf)
-			.map_err(|_| "send response error".to_string())?;
+		response.into_reader().take(MAX_SIZE).read_to_end(&mut buf).map_err(
+			|_| {
+				"qos_client::request::post: reading response bytes error"
+					.to_string()
+			},
+		)?;
 
-		let pr = ProtocolMsg::try_from_slice(&buf)
-			.map_err(|_| "send response error".to_string())?;
+		let decoded_response =
+			ProtocolMsg::try_from_slice(&buf).map_err(|_| {
+				"qos_client::request::post: deserialization error".to_string()
+			})?;
 
-		Ok(pr)
+		Ok(decoded_response)
 	}
 
 	/// Get the resource at the given host `url`.
