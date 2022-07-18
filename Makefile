@@ -9,7 +9,7 @@ client:
 .PHONY: local-enclave
 local-enclave:
 	cargo run --bin qos-core \
-	 --features mock \
+		--features mock \
 		-- \
 		--usock ./dev.sock \
 		--ephemeral-file ./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret \
