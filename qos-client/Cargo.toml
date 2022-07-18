@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-qos-core = { path = "../qos-core", default-features = false }
+qos-core = { path = "../qos-core", default-features = false, features = ["local"] }
 qos-crypto = { path = "../qos-crypto", default-features = false }
 
 # Third party

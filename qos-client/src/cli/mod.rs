@@ -762,7 +762,11 @@ impl ClientOpts {
 			"Pivot args must end with a \"]\""
 		);
 
-		chars.as_str().split(',').map(String::from).collect()
+		if chars.clone().count() > 0 {
+			chars.as_str().split(',').map(String::from).collect()
+		} else {
+			vec![]
+		}
 	}
 }
 
