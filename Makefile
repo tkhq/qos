@@ -1,4 +1,5 @@
 REGISTRY := 339735964233.dkr.ecr.us-east-1.amazonaws.com
+BUCKET := tkhq-development-qos-resources
 
 .PHONY: local-enclave
 local-enclave:
@@ -88,6 +89,31 @@ build-core:
 .PHONY: push-core
 push-core:
 	docker push $(REGISTRY)/qos/core
+
+.PHONY: sample-app
+sample-app: clean clean-sample-app build-sample-app push-sample-app
+
+.PHONY: clean-sample-app
+clean-sample-app:
+	rm -f ./pivot.executable
+
+.PHONY: build-sample-app
+build-sample-app:
+	docker build \
+		--file images/sample-app/Dockerfile \
+		--tag $(REGISTRY)/qos/sample-app \
+		$(PWD); \
+	docker create \
+		--name qos-sample-app \
+		$(REGISTRY)/qos/sample-app; \
+	docker cp qos-sample-app:/usr/local/bin/sample-app ./pivot.executable
+
+.PHONY: push-sample-app
+push-sample-app:
+	PIVOT_HASH=0x$(shell shasum -a256 "./pivot.executable" | cut -d ' ' -f1); \
+	BUCKET="tkhq-development-qos-resources" ; \
+	echo $$PIVOT_HASH; \
+	aws s3 cp ./pivot.executable s3://$${BUCKET}/$${PIVOT_HASH}/pivot.executable
 
 .PHONY: lint
 lint:
