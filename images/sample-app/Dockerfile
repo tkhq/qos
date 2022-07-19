@@ -1,6 +1,6 @@
 FROM rust:bullseye as builder
 COPY ./ ./
-RUN cargo build --bin sample-app
+RUN cargo build --bin sample-app --features vm --no-default-features
 
 # We don't need the Rust toolchain to run the binary!
 FROM debian:bullseye-slim AS runtime
