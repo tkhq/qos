@@ -646,6 +646,7 @@ impl Command {
 			.token(Self::personal_dir_token())
 			.token(Self::boot_dir_token())
 			.token(Self::unsafe_skip_attestation_token())
+			.token(Self::unsafe_eph_path_override_token())
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -1117,6 +1118,7 @@ mod handlers {
 			opts.boot_dir(),
 			opts.manifest_hash(),
 			opts.unsafe_skip_attestation(),
+			opts.unsafe_eph_path_override(),
 		);
 	}
 
