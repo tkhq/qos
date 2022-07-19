@@ -34,6 +34,30 @@ pub fn cert_from_pem(pem: &[u8]) -> Result<Vec<u8>, AttestError> {
 }
 
 /// Extract the DER encoded `AttestationDoc` from the nitro secure module
+/// (nsm) provided COSE Sign1 structure.
+///
+/// WARNING: This will not perform any validation of the attestation doc and
+/// should not be used directly in production; instead use
+/// [`attestation_doc_from_der`].
+///
+/// # Arguments
+///
+/// * `cose_sign1_der` - the DER encoded COSE Sign1 structure containing the
+///   attestation document payload.
+pub fn unsafe_attestation_doc_from_der(
+	cose_sign1_der: &[u8],
+) -> Result<AttestationDoc, AttestError> {
+	let cose_sign1 = CoseSign1::from_bytes(cose_sign1_der)
+		.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
+
+	let raw_attestation_doc = cose_sign1
+		.get_payload(None)
+		.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
+
+	AttestationDoc::from_binary(&raw_attestation_doc[..]).map_err(Into::into)
+}
+
+/// Extract the DER encoded `AttestationDoc` from the nitro secure module
 /// (nsm) provided COSE Sign1 structure. This function will verify the the
 /// root certificate authority via the CA bundle and verify that the end
 /// entity certificate signed the COSE Sign1 structure.
@@ -55,15 +79,9 @@ pub fn attestation_doc_from_der(
 	root_cert: &[u8],
 	validation_time: u64, // seconds since unix epoch
 ) -> Result<AttestationDoc, AttestError> {
+	let attestation_doc = unsafe_attestation_doc_from_der(cose_sign1_der)?;
 	let cose_sign1 = CoseSign1::from_bytes(cose_sign1_der)
 		.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
-	let attestation_doc = {
-		let raw_attestation_doc = cose_sign1
-			.get_payload(None)
-			.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
-
-		AttestationDoc::from_binary(&raw_attestation_doc[..])?
-	};
 
 	syntactic_validation::module_id(&attestation_doc.module_id)?;
 	syntactic_validation::digest(attestation_doc.digest)?;
