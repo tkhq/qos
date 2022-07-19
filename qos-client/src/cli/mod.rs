@@ -207,6 +207,8 @@
 //!    --root-cert-path ~/qos/aws_nitro_root_cert.pem
 //! ```
 //!
+//! **Note**: For pivot's that require CLI arguments, you can use the `--pivot-args` options. `--pivot-args` accepts a separated, [] wrapped CLI args for pivot. e.g. `[--usock,dev.sock,--path,./path-to-file].
+//!
 //! After running the above, the directory structure will look like:
 //!
 //! - boot
@@ -520,7 +522,7 @@ impl Command {
 	fn unsafe_eph_path_override_token() -> Token {
 		Token::new(
 			UNSAFE_EPH_PATH_OVERRIDE,
-			"NEVER USE IN PRODUCTION! Use the given key to encrypt data sent to the enclave, instead of extracting it from the attestation doc."
+			"NEVER USE IN PRODUCTION! Use the secret at the given path to encrypt data sent to the enclave, instead of extracting it from the attestation doc."
 		)
 		.takes_value(true)
 	}

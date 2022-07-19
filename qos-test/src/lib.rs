@@ -22,9 +22,6 @@ pub const PIVOT_OK3_PATH: &str = "../target/debug/pivot_ok3";
 pub const PIVOT_ABORT_PATH: &str = "../target/debug/pivot_abort";
 /// Path to pivot panic for tests.
 pub const PIVOT_PANIC_PATH: &str = "../target/debug/pivot_panic";
-/// Path to Ephemeral Key for tests using the mock attestation doc.
-pub const MOCK_EPH_PATH: &str =
-	"../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 
 const MSG: &str = "msg";
 

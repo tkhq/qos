@@ -28,7 +28,7 @@ pub const MOCK_PCR2: &str = "c185515d78cb90a2dc1fa49ea232fb44645acd18652c96dd05a
 /// DO NOT USE IN PRODUCTION - ONLY FOR TESTS.
 // This was generate using the `gen_att_doc` script in `qos-test`.
 pub const MOCK_NSM_ATTESTATION_DOCUMENT: &[u8] =
-	include_bytes!("./static/boot_e2e_mock_attestation_doc");
+	include_bytes!("./static/mock_attestation_doc");
 
 /// Mock Nitro Secure Module endpoint that should only ever be used for testing.
 pub struct MockNsm;

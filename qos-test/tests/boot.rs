@@ -1,15 +1,12 @@
 use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
-use qos_client::attest::nitro::{
-	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
-};
+use qos_client::attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 use qos_core::{
 	hex,
 	protocol::{
 		attestor::mock::{
 			MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
-			MOCK_SECONDS_SINCE_EPOCH,
 		},
 		services::{
 			boot::{
@@ -24,7 +21,6 @@ use qos_core::{
 use qos_crypto::{sha_256, RsaPair};
 use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 
-// #[ignore]
 #[tokio::test]
 async fn boot_e2e() {
 	let host_port = "3009";

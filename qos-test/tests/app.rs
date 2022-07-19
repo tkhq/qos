@@ -1,9 +1,8 @@
 use std::{fs, process::Command};
 
-use qos_test::MOCK_EPH_PATH;
-
 const SAMPLE_APP_PATH: &str = "../target/debug/sample_app";
 
+#[ignore]
 #[tokio::test]
 async fn sample_app_e2e() {
 	let tmp = "./sample-app-e2e-tmp/";
@@ -53,7 +52,7 @@ async fn sample_app_e2e() {
 		.unwrap();
 
 	// Run `dangerous-dev-boot`
-	let pivot_args = format!("[--usock,{app_usock},--quorum-file,{quorum_path},--ephemeral-file,{MOCK_EPH_PATH},--manifest-file,{manifest_path}]");
+	let pivot_args = format!("[--usock,{app_usock},--quorum-file,{quorum_path},--ephemeral-file,{eph_path},--manifest-file,{manifest_path}]");
 	assert!(Command::new("../target/debug/client_cli")
 		.args([
 			"dangerous-dev-boot",
