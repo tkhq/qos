@@ -48,27 +48,27 @@ clean:
 	cargo clean
 
 .PHONY: host
-host: build-host push-host
+host: clean build-host push-host
 
 .PHONY: client
-client: build-client push-client
+client: clean build-client push-client
 
 .PHONY: core
-core: build-core push-core
+core: clean build-core push-core
 
 .PHONY: build-host
-build-host: clean
+build-host:
 	docker build \
 		--file images/host/Dockerfile \
 		--tag $(REGISTRY)/qos/host \
 		$(PWD)
 
 .PHONY: push-host
-push-host: build-host
+push-host:
 	docker push $(REGISTRY)/qos/host
 
 .PHONY: build-client
-build-client: clean
+build-client:
 	docker build \
 		--file images/client/Dockerfile \
 		--tag $(REGISTRY)/qos/client \
@@ -79,14 +79,14 @@ push-client:
 	docker push $(REGISTRY)/qos/client
 
 .PHONY: build-core
-build-core: clean
+build-core:
 	docker build \
 		--file images/client/Dockerfile \
 		--tag $(REGISTRY)/qos/core \
 		$(PWD)
 
 .PHONY: push-core
-push-core: build-core
+push-core:
 	docker push $(REGISTRY)/qos/core
 
 .PHONY: lint
