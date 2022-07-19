@@ -1,15 +1,8 @@
 use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
-use qos_client::attest::nitro::{
-	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
-};
-use qos_core::protocol::{
-	attestor::mock::{
-		MOCK_PCR0, MOCK_PCR1, MOCK_PCR2, MOCK_SECONDS_SINCE_EPOCH,
-	},
-	services::genesis::GenesisOutput,
-};
+use qos_client::attest::nitro::unsafe_attestation_doc_from_der;
+use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
 use rand::{seq::SliceRandom, thread_rng};
 
@@ -132,7 +125,8 @@ async fn genesis_e2e() {
 			"--host-ip",
 			host_ip,
 			"--host-port",
-			host_port
+			host_port,
+			"--unsafe-skip-attestation"
 		])
 		.spawn()
 		.unwrap()
@@ -141,11 +135,8 @@ async fn genesis_e2e() {
 		.success());
 
 	// -- Check files generated from the genesis boot
-	drop(attestation_doc_from_der(
+	drop(unsafe_attestation_doc_from_der(
 		&fs::read(attestation_doc_path).unwrap(),
-		&cert_from_pem(AWS_ROOT_CERT_PEM)
-			.expect("AWS ROOT CERT is not valid PEM"),
-		MOCK_SECONDS_SINCE_EPOCH,
 	));
 	let genesis_output =
 		GenesisOutput::try_from_slice(&fs::read(&genesis_output_path).unwrap())
@@ -199,11 +190,12 @@ async fn genesis_e2e() {
 				"--genesis-dir",
 				genesis_dir,
 				"--pcr0",
-				MOCK_PCR0,
+				"0xff",
 				"--pcr1",
-				MOCK_PCR1,
+				"0xff",
 				"--pcr2",
-				MOCK_PCR2
+				"0xff",
+				"--unsafe-skip-attestation"
 			])
 			.spawn()
 			.unwrap()
