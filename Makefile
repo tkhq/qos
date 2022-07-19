@@ -50,12 +50,6 @@ clean:
 .PHONY: host
 host: clean build-host push-host
 
-.PHONY: client
-client: clean build-client push-client
-
-.PHONY: core
-core: clean build-core push-core
-
 .PHONY: build-host
 build-host:
 	docker build \
@@ -66,6 +60,9 @@ build-host:
 .PHONY: push-host
 push-host:
 	docker push $(REGISTRY)/qos/host
+
+.PHONY: client
+client: clean build-client push-client
 
 .PHONY: build-client
 build-client:
@@ -78,10 +75,13 @@ build-client:
 push-client:
 	docker push $(REGISTRY)/qos/client
 
+.PHONY: core
+core: clean build-core push-core
+
 .PHONY: build-core
 build-core:
 	docker build \
-		--file images/client/Dockerfile \
+		--file images/core/Dockerfile \
 		--tag $(REGISTRY)/qos/core \
 		$(PWD)
 
