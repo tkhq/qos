@@ -1,9 +1,5 @@
 REGISTRY := 339735964233.dkr.ecr.us-east-1.amazonaws.com
 
-.PHONY: client
-client:
-	cargo run --manifest-path ./qos-client/Cargo.toml --bin qos-client
-
 .PHONY: local-enclave
 local-enclave:
 	cargo run --bin qos-core \
@@ -79,7 +75,7 @@ build-client: clean
 		$(PWD)
 
 .PHONY: push-client
-push-client: build-client
+push-client:
 	docker push $(REGISTRY)/qos/client
 
 .PHONY: build-core
