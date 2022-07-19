@@ -9,10 +9,3 @@ qos-core = { path = "../qos-core", default-features = false }
 qos-crypto = { path = "../qos-crypto", default-features = false }
 
 borsh = { version = "0.9" }
-
-[features]
-default=["local"]
-# Support for unix sockets
-local = ["qos-core/local"]
-# Production settings
-vm = ["qos-core/vm"]
