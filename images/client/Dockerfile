@@ -9,5 +9,4 @@ RUN apt-get update \
   && apt-get install -y libssl-dev
 COPY --from=builder /target/debug/qos-client /usr/local/bin
 
-ADD run-forever /usr/local/bin
 ENTRYPOINT ["/usr/local/bin/qos-client"]
