@@ -117,7 +117,7 @@ impl HostServer {
 
 				match decoded_response {
 					ProtocolMsg::StatusResponse(phase) => {
-						let inner = format!("{:?}\n", phase);
+						let inner = format!("{:?}", phase);
 						Html(inner)
 					}
 					other => {
