@@ -27,5 +27,4 @@ qos-core = { path = "../qos-core", features = ["mock", "local"], default-feature
 
 [features]
 default = []
-mock = []
 sample = ["sample-app"]

@@ -14,11 +14,8 @@ tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-fe
 
 [dev-dependencies]
 qos-core = { path = "../qos-core", features = ["mock","local"], default-features = false }
-qos-client = { path = "../qos-client", features = ["mock"], default-features = false }
+qos-client = { path = "../qos-client", default-features = false }
 borsh = { version = "0.9" }
 openssl = "0.10.40"
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 rand = "0.8"
-
-[features]
-mock = ["qos-client/mock"]

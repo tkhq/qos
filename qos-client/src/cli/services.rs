@@ -22,7 +22,8 @@ use qos_crypto::{sha_256, RsaPair, RsaPub};
 use crate::{
 	attest::nitro::{
 		attestation_doc_from_der, cert_from_pem,
-		unsafe_attestation_doc_from_der, AWS_ROOT_CERT_PEM,
+		unsafe_attestation_doc_from_der,
+		verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
 	},
 	request,
 };
@@ -831,69 +832,6 @@ pub(crate) fn extract_attestation_doc(
 			validation_time,
 		)
 		.expect("Failed to extract and verify attestation doc")
-	}
-}
-
-/// Verify that `attestation_doc` matches the specified parameters.
-///
-/// # Panics
-///
-/// Panics if verification fails.
-fn verify_attestation_doc_against_user_input(
-	attestation_doc: &AttestationDoc,
-	user_data: &[u8],
-	pcr0: &[u8],
-	pcr1: &[u8],
-	pcr2: &[u8],
-) {
-	assert_eq!(
-		user_data,
-		attestation_doc.user_data.as_ref().unwrap().to_vec(),
-		"Attestation doc does not have anticipated user data."
-	);
-
-	// nonce is none
-	assert_eq!(
-		attestation_doc.nonce, None,
-		"Attestation doc has a nonce when none was expected."
-	);
-
-	{
-		// pcr0 matches
-		assert_eq!(
-			pcr0,
-			attestation_doc
-				.pcrs
-				.get(&0)
-				.expect("pcr0 not found")
-				.clone()
-				.into_vec(),
-			"pcr0 does not match attestation doc"
-		);
-
-		// pcr1 matches
-		assert_eq!(
-			pcr1,
-			attestation_doc
-				.pcrs
-				.get(&1)
-				.expect("pcr1 not found")
-				.clone()
-				.into_vec(),
-			"pcr1 does not match attestation doc"
-		);
-
-		// pcr2 matches
-		assert_eq!(
-			pcr2,
-			attestation_doc
-				.pcrs
-				.get(&2)
-				.expect("pcr2 not found")
-				.clone()
-				.into_vec(),
-			"pcr2 does not match attestation doc"
-		);
 	}
 }
 
