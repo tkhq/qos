@@ -1,6 +1,6 @@
 FROM rust:bullseye as builder
 COPY ./ ./
-RUN cargo build --manifest-path ./qos-host/Cargo.toml --bin qos-host --features vm --no-default-features
+RUN cargo build --manifest-path ./qos-host/Cargo.toml --bin qos-host --features vm,local --no-default-features
 
 FROM debian:bullseye-slim AS runtime
 WORKDIR app
