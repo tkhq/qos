@@ -16,10 +16,11 @@ local-enclave:
 .PHONY: sample-app-dangerous-dev-boot
 local-dangerous-dev-boot:
 	# This is a bit confusing: the mock attestation doc contains the mock eph secret
-	# because it is hardcoded. However, the enclave will look in the local file system
-	# for the key, not the attestation doc; so we need to point to the key on the local
-	# file system and use that for encrypting the key shares. In other words, the
-	# local enclave will write the eph secret to LOCAL_EPH_PATH and we are
+	# because it is hardcoded. However, when attempting to decrypt quorum shares
+	# the enclave will look in the local file system for the key, not the
+	# attestation doc; so we need to point to the key on the local
+	# file system and use that for encrypting the key shares. In other words,
+	# the local enclave will write the eph secret to LOCAL_EPH_PATH and we are
 	# telling the client to look at that same file and use that key for encryption.
 	cargo run --bin qos-client \
 		-- \
