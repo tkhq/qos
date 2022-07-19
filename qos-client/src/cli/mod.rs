@@ -354,6 +354,8 @@ const PIVOT_ARGS: &str = "pivot-args";
 pub enum Command {
 	/// Query the health endpoint of the enclave host server.
 	HostHealth,
+	/// Query the status of the enclave.
+	EnclaveStatus,
 	/// Query the NSM with `NsmRequest::DescribeNsm`. Normally only useful for
 	/// development.
 	DescribeNsm,
@@ -423,6 +425,7 @@ impl From<&str> for Command {
 	fn from(s: &str) -> Self {
 		match s {
 			"host-health" => Self::HostHealth,
+			"enclave-status" => Self::EnclaveStatus,
 			"describe-nsm" => Self::DescribeNsm,
 			"describe-pcr" => Self::DescribePcr,
 			"request-attestation-doc" => Self::RequestAttestationDoc,
@@ -641,7 +644,8 @@ impl GetParserForCommand for Command {
 			| Self::DescribePcr
 			| Self::AppEcho
 			| Self::AppReadFiles
-			| Self::RequestAttestationDoc => Self::base(),
+			| Self::RequestAttestationDoc
+			| Self::EnclaveStatus => Self::base(),
 			Self::GenerateSetupKey => Self::generate_setup_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
@@ -794,6 +798,7 @@ impl ClientRunner {
 		} else {
 			match self.cmd {
 				Command::HostHealth => handlers::host_health(&self.opts),
+				Command::EnclaveStatus => handlers::enclave_status(&self.opts),
 				Command::DescribeNsm => handlers::describe_nsm(&self.opts),
 				Command::DescribePcr => handlers::describe_pcr(&self.opts),
 				Command::AppEcho => handlers::app_echo(&self.opts),
@@ -853,13 +858,20 @@ mod handlers {
 		}
 	}
 
-	// TODO: get info from the status endpoint
-	// Status endpoint should return
-	// - ManifestEnvelope if it exists
-	// - Phase
-	// - Attestation doc generated at boot, if it exists
-	// - Current time in enclave
-	// - Data signed by quorum key
+	pub(super) fn enclave_status(opts: &ClientOpts) {
+		let path = &opts.path("message");
+
+		let response = request::post(path, &ProtocolMsg::StatusRequest)
+			.map_err(|e| println!("{:?}", e))
+			.expect("Enclave request failed");
+
+		match response {
+			ProtocolMsg::StatusResponse(phase) => {
+				println!("Enclave phase: {:?}", phase);
+			}
+			other => panic!("Unexpected response {:?}", other),
+		}
+	}
 
 	// TODO: this should eventually be removed since it only applies to nitro
 	pub(super) fn describe_nsm(opts: &ClientOpts) {
