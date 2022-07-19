@@ -15,9 +15,6 @@ aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 
 [features]
-default=["local"]
-# Support for unix sockets
-local = []
 # Support for VSOCK
 vm = []
 # Never use in production - support for mock NSM

@@ -12,6 +12,4 @@ tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-fe
 borsh = { version = "0.9" }
 
 [features]
-default = ["local"]
-local = ["qos-core/local"]
 vm = ["qos-core/vm"]

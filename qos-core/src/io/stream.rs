@@ -2,14 +2,13 @@
 
 use std::{mem::size_of, os::unix::io::RawFd};
 
-#[cfg(feature = "local")]
-use nix::sys::socket::UnixAddr;
 #[cfg(feature = "vm")]
 use nix::sys::socket::VsockAddr;
 use nix::{
 	sys::socket::{
 		accept, bind, connect, listen, recv, send, shutdown, socket,
 		AddressFamily, MsgFlags, Shutdown, SockFlag, SockType, SockaddrLike,
+		UnixAddr,
 	},
 	unistd::close,
 };
@@ -26,7 +25,6 @@ pub enum SocketAddress {
 	#[cfg(feature = "vm")]
 	Vsock(VsockAddr),
 	/// Unix address.
-	#[cfg(feature = "local")]
 	Unix(UnixAddr),
 }
 
@@ -37,7 +35,6 @@ impl SocketAddress {
 	///
 	/// Panics if `nix::sys::socket::UnixAddr::new` panics.
 	#[must_use]
-	#[cfg(feature = "local")]
 	pub fn new_unix(path: &str) -> Self {
 		let addr = UnixAddr::new(path).unwrap();
 		Self::Unix(addr)
@@ -55,7 +52,6 @@ impl SocketAddress {
 		match *self {
 			#[cfg(feature = "vm")]
 			Self::Vsock(_) => AddressFamily::Vsock,
-			#[cfg(feature = "local")]
 			Self::Unix(_) => AddressFamily::Unix,
 		}
 	}
@@ -65,7 +61,6 @@ impl SocketAddress {
 		match *self {
 			#[cfg(feature = "vm")]
 			Self::Vsock(vsa) => Box::new(vsa),
-			#[cfg(feature = "local")]
 			Self::Unix(ua) => Box::new(ua),
 		}
 	}
@@ -230,15 +225,12 @@ impl Listener {
 
 	/// Remove Unix socket if it exists
 	fn clean(addr: &SocketAddress) {
-		#[cfg(feature = "local")]
-		{
-			// Not irrefutable when "vm" is enabled
-			#[allow(irrefutable_let_patterns)]
-			if let SocketAddress::Unix(addr) = addr {
-				if let Some(path) = addr.path() {
-					if path.exists() {
-						drop(std::fs::remove_file(path));
-					}
+		// Not irrefutable when "vm" is enabled
+		#[allow(irrefutable_let_patterns)]
+		if let SocketAddress::Unix(addr) = addr {
+			if let Some(path) = addr.path() {
+				if path.exists() {
+					drop(std::fs::remove_file(path));
 				}
 			}
 		}
