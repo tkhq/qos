@@ -14,4 +14,4 @@ target/
 !mock/*/user2.*
 !mock/*/user3.*
 
-local-enclave/
+local-enclave/ls
