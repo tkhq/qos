@@ -21,7 +21,9 @@ use qos_crypto::{sha_256, RsaPair, RsaPub};
 
 use crate::{
 	attest::nitro::{
-		attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
+		attestation_doc_from_der, cert_from_pem,
+		unsafe_attestation_doc_from_der,
+		verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
 	},
 	request,
 };
@@ -79,6 +81,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	uri: &str,
 	genesis_dir: P,
 	threshold: u32,
+	unsafe_skip_attestation: bool,
 ) {
 	let genesis_set = create_genesis_set(&genesis_dir, threshold);
 
@@ -104,7 +107,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	);
 
 	// Check the attestation document
-	drop(extract_attestation_doc(&cose_sign1));
+	drop(extract_attestation_doc(&cose_sign1, unsafe_skip_attestation));
 	// TODO should we check against expected PCRs here?
 
 	// Write the attestation doc
@@ -169,6 +172,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	pcr0: &[u8],
 	pcr1: &[u8],
 	pcr2: &[u8],
+	unsafe_skip_attestation: bool,
 ) {
 	let attestation_doc_path =
 		genesis_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
@@ -186,7 +190,8 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	// Read in the attestation doc from the genesis directory
 	let cose_sign1 =
 		fs::read(attestation_doc_path).expect("Could not read attestation_doc");
-	let attestation_doc = extract_attestation_doc(&cose_sign1);
+	let attestation_doc =
+		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
 
 	// Read in the genesis output from the genesis directory
 	let genesis_output = GenesisOutput::try_from_slice(
@@ -194,19 +199,19 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	)
 	.expect("Could not deserialize the genesis set");
 
-	#[cfg(feature = "mock")]
-	let user_data = &qos_core::hex::decode(qos_core::protocol::attestor::mock::MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap();
-	#[cfg(not(feature = "mock"))]
-	let user_data = &genesis_output.qos_hash();
-
 	// Check the attestation document
-	verify_attestation_doc_against_user_input(
-		&attestation_doc,
-		user_data,
-		pcr0,
-		pcr1,
-		pcr2,
-	);
+	if unsafe_skip_attestation {
+		println!("**WARNING:** Skipping attestation document verification.");
+	} else {
+		let user_data = &genesis_output.qos_hash();
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			user_data,
+			pcr0,
+			pcr1,
+			pcr2,
+		);
+	}
 
 	// Get the members specific output based on alias & setup key
 	let setup_public =
@@ -393,6 +398,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	uri: &str,
 	pivot_path: P,
 	boot_dir: P,
+	unsafe_skip_attestation: bool,
 ) {
 	// Read in pivot binary
 	let pivot =
@@ -422,16 +428,21 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		r => panic!("Unexpected response: {:?}", r),
 	};
 
-	let attestation_doc = extract_attestation_doc(&cose_sign1);
+	let attestation_doc =
+		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
 
 	// Verify attestation document
-	verify_attestation_doc_against_user_input(
-		&attestation_doc,
-		&manifest_hash,
-		&manifest.enclave.pcr0,
-		&manifest.enclave.pcr1,
-		&manifest.enclave.pcr2,
-	);
+	if unsafe_skip_attestation {
+		println!("**WARNING:** Skipping attestation document verification.");
+	} else {
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			&manifest_hash,
+			&manifest.enclave.pcr0,
+			&manifest.enclave.pcr1,
+			&manifest.enclave.pcr2,
+		);
+	}
 
 	// Make sure the ephemeral key is valid.
 	drop(
@@ -458,6 +469,7 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	personal_dir: P,
 	boot_dir: P,
 	manifest_hash: Hash256,
+	unsafe_skip_attestation: bool,
 ) {
 	// Read in manifest, share and personal key
 	let manifest = find_manifest(&boot_dir);
@@ -475,18 +487,22 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 		match request::post(uri, &ProtocolMsg::LiveAttestationDocRequest) {
 			Ok(ProtocolMsg::LiveAttestationDocResponse {
 				nsm_response: NsmResponse::Attestation { document },
-			}) => extract_attestation_doc(&document),
+			}) => extract_attestation_doc(&document, unsafe_skip_attestation),
 			r => panic!("Unexpected response: {:?}", r),
 		};
 
 	// Validate attestation doc
-	verify_attestation_doc_against_user_input(
-		&attestation_doc,
-		&manifest_hash,
-		&manifest.enclave.pcr0,
-		&manifest.enclave.pcr1,
-		&manifest.enclave.pcr2,
-	);
+	if unsafe_skip_attestation {
+		println!("**WARNING:** Skipping attestation document verification.");
+	} else {
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			&manifest_hash,
+			&manifest.enclave.pcr0,
+			&manifest.enclave.pcr1,
+			&manifest.enclave.pcr2,
+		);
+	}
 
 	// Get ephemeral key from attestation doc
 	let ephemeral_pub = RsaPub::from_pem(
@@ -588,7 +604,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	let attestation_doc = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::BootStandardResponse {
 			nsm_response: NsmResponse::Attestation { document },
-		} => extract_attestation_doc(&document),
+		} => extract_attestation_doc(&document, true),
 		r => panic!("Unexpected response: {:?}", r),
 	};
 
@@ -796,86 +812,26 @@ fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
 /// # Panics
 ///
 /// Panics if extraction or validation fails.
-pub(crate) fn extract_attestation_doc(cose_sign1_der: &[u8]) -> AttestationDoc {
-	#[cfg(feature = "mock")]
-	let validation_time =
-		qos_core::protocol::attestor::mock::MOCK_SECONDS_SINCE_EPOCH;
-	#[cfg(not(feature = "mock"))]
-	// TODO: put validation time into genesis
-	let validation_time = std::time::SystemTime::now()
-		.duration_since(std::time::UNIX_EPOCH)
-		.unwrap()
-		.as_secs();
+pub(crate) fn extract_attestation_doc(
+	cose_sign1_der: &[u8],
+	unsafe_skip_attestation: bool,
+) -> AttestationDoc {
+	if unsafe_skip_attestation {
+		unsafe_attestation_doc_from_der(cose_sign1_der)
+			.expect("Failed to extract attestation doc")
+	} else {
+		let validation_time = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap()
+			.as_secs();
 
-	attestation_doc_from_der(
-		cose_sign1_der,
-		&cert_from_pem(AWS_ROOT_CERT_PEM)
-			.expect("AWS ROOT CERT is not valid PEM"),
-		validation_time,
-	)
-	.expect("Issue extracting and verifying attestation doc")
-}
-
-/// Verify that `attestation_doc` matches the specified parameters.
-///
-/// # Panics
-///
-/// Panics if verification fails.
-fn verify_attestation_doc_against_user_input(
-	attestation_doc: &AttestationDoc,
-	user_data: &[u8],
-	pcr0: &[u8],
-	pcr1: &[u8],
-	pcr2: &[u8],
-) {
-	assert_eq!(
-		user_data,
-		attestation_doc.user_data.as_ref().unwrap().to_vec(),
-		"Attestation doc does not have anticipated user data."
-	);
-
-	// nonce is none
-	assert_eq!(
-		attestation_doc.nonce, None,
-		"Attestation doc has a nonce when none was expected."
-	);
-
-	{
-		// pcr0 matches
-		assert_eq!(
-			pcr0,
-			attestation_doc
-				.pcrs
-				.get(&0)
-				.expect("pcr0 not found")
-				.clone()
-				.into_vec(),
-			"pcr0 does not match attestation doc"
-		);
-
-		// pcr1 matches
-		assert_eq!(
-			pcr1,
-			attestation_doc
-				.pcrs
-				.get(&1)
-				.expect("pcr1 not found")
-				.clone()
-				.into_vec(),
-			"pcr1 does not match attestation doc"
-		);
-
-		// pcr2 matches
-		assert_eq!(
-			pcr2,
-			attestation_doc
-				.pcrs
-				.get(&2)
-				.expect("pcr2 not found")
-				.clone()
-				.into_vec(),
-			"pcr2 does not match attestation doc"
-		);
+		attestation_doc_from_der(
+			cose_sign1_der,
+			&cert_from_pem(AWS_ROOT_CERT_PEM)
+				.expect("AWS ROOT CERT is not valid PEM"),
+			validation_time,
+		)
+		.expect("Failed to extract and verify attestation doc")
 	}
 }
 

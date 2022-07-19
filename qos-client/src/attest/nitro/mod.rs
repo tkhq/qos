@@ -33,6 +33,102 @@ pub fn cert_from_pem(pem: &[u8]) -> Result<Vec<u8>, AttestError> {
 	Ok(openssl::x509::X509::from_pem(pem)?.to_der()?)
 }
 
+/// Verify that `attestation_doc` matches the specified parameters.
+///
+/// To learn more about the attestation document fields see:
+/// <https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md#22-attestation-document-specification/>.
+///
+/// # Arguments
+///
+/// * `attestation_doc` - the attestation document to verify.
+/// * `user_data` - expected value of the `user_data` field.
+/// * `pcr0` - expected value of PCR index 0.
+/// * `pcr1` - expected value of PCR index 1.
+/// * `pcr2` - expected value of PCR index 3.
+///
+/// # Panics
+///
+/// Panics if any part of verification fails.
+pub fn verify_attestation_doc_against_user_input(
+	attestation_doc: &AttestationDoc,
+	user_data: &[u8],
+	pcr0: &[u8],
+	pcr1: &[u8],
+	pcr2: &[u8],
+) {
+	assert_eq!(
+		user_data,
+		attestation_doc.user_data.as_ref().unwrap().to_vec(),
+		"Attestation doc does not have anticipated user data."
+	);
+
+	// nonce is none
+	assert_eq!(
+		attestation_doc.nonce, None,
+		"Attestation doc has a nonce when none was expected."
+	);
+
+	// pcr0 matches
+	assert_eq!(
+		pcr0,
+		attestation_doc
+			.pcrs
+			.get(&0)
+			.expect("pcr0 not found")
+			.clone()
+			.into_vec(),
+		"pcr0 does not match attestation doc"
+	);
+
+	// pcr1 matches
+	assert_eq!(
+		pcr1,
+		attestation_doc
+			.pcrs
+			.get(&1)
+			.expect("pcr1 not found")
+			.clone()
+			.into_vec(),
+		"pcr1 does not match attestation doc"
+	);
+
+	// pcr2 matches
+	assert_eq!(
+		pcr2,
+		attestation_doc
+			.pcrs
+			.get(&2)
+			.expect("pcr2 not found")
+			.clone()
+			.into_vec(),
+		"pcr2 does not match attestation doc"
+	);
+}
+
+/// Extract the DER encoded `AttestationDoc` from the nitro secure module
+/// (nsm) provided COSE Sign1 structure.
+///
+/// WARNING: This will not perform any validation of the attestation doc and
+/// should not be used directly in production; instead use
+/// [`attestation_doc_from_der`].
+///
+/// # Arguments
+///
+/// * `cose_sign1_der` - the DER encoded COSE Sign1 structure containing the
+///   attestation document payload.
+pub fn unsafe_attestation_doc_from_der(
+	cose_sign1_der: &[u8],
+) -> Result<AttestationDoc, AttestError> {
+	let cose_sign1 = CoseSign1::from_bytes(cose_sign1_der)
+		.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
+
+	let raw_attestation_doc = cose_sign1
+		.get_payload(None)
+		.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
+
+	AttestationDoc::from_binary(&raw_attestation_doc[..]).map_err(Into::into)
+}
+
 /// Extract the DER encoded `AttestationDoc` from the nitro secure module
 /// (nsm) provided COSE Sign1 structure. This function will verify the the
 /// root certificate authority via the CA bundle and verify that the end
@@ -55,15 +151,9 @@ pub fn attestation_doc_from_der(
 	root_cert: &[u8],
 	validation_time: u64, // seconds since unix epoch
 ) -> Result<AttestationDoc, AttestError> {
+	let attestation_doc = unsafe_attestation_doc_from_der(cose_sign1_der)?;
 	let cose_sign1 = CoseSign1::from_bytes(cose_sign1_der)
 		.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
-	let attestation_doc = {
-		let raw_attestation_doc = cose_sign1
-			.get_payload(None)
-			.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
-
-		AttestationDoc::from_binary(&raw_attestation_doc[..])?
-	};
 
 	syntactic_validation::module_id(&attestation_doc.module_id)?;
 	syntactic_validation::digest(attestation_doc.digest)?;
@@ -146,8 +236,12 @@ fn verify_cose_sign1_sig(
 mod test {
 	use aws_nitro_enclaves_cose::header_map::HeaderMap;
 	use openssl::pkey::{PKey, Private, Public};
-	use qos_core::protocol::attestor::mock::{
-		MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_SECONDS_SINCE_EPOCH,
+	use qos_core::{
+		hex,
+		protocol::attestor::mock::{
+			MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
+			MOCK_SECONDS_SINCE_EPOCH, MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT,
+		},
 	};
 
 	use super::*;
@@ -367,6 +461,104 @@ mod test {
 			Err(AttestError::InvalidCOSESign1Signature) => {}
 			_ => panic!("{:?}", err_result),
 		}
+	}
+
+	#[test]
+	fn verify_attestation_doc_against_user_input_works() {
+		let attestation_doc =
+			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
+				.unwrap();
+		// Accepts valid inputs
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			&hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&hex::decode(MOCK_PCR0).unwrap(),
+			&hex::decode(MOCK_PCR1).unwrap(),
+			&hex::decode(MOCK_PCR2).unwrap(),
+		);
+	}
+
+	#[test]
+	#[should_panic = "Attestation doc does not have anticipated user data"]
+	fn verify_attestation_doc_against_user_input_panics_invalid_user_data() {
+		let attestation_doc =
+			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
+				.unwrap();
+
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			&[255; 32],
+			&hex::decode(MOCK_PCR0).unwrap(),
+			&hex::decode(MOCK_PCR1).unwrap(),
+			&hex::decode(MOCK_PCR2).unwrap(),
+		);
+	}
+
+	#[test]
+	#[should_panic = "Attestation doc has a nonce when none was expected."]
+	fn verify_attestation_doc_against_user_input_panics_some_nonce() {
+		let mut attestation_doc =
+			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
+				.unwrap();
+
+		// Set the nonce to Some
+		attestation_doc.nonce = Some(ByteBuf::default());
+
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			&hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&hex::decode(MOCK_PCR0).unwrap(),
+			&hex::decode(MOCK_PCR1).unwrap(),
+			&hex::decode(MOCK_PCR2).unwrap(),
+		);
+	}
+
+	#[test]
+	#[should_panic = "pcr0 does not match attestation doc"]
+	fn verify_attestation_doc_against_user_input_panics_invalid_pcr0() {
+		let attestation_doc =
+			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
+				.unwrap();
+
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			&hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&[255; 48],
+			&hex::decode(MOCK_PCR1).unwrap(),
+			&hex::decode(MOCK_PCR2).unwrap(),
+		);
+	}
+
+	#[test]
+	#[should_panic = "pcr1 does not match attestation doc"]
+	fn verify_attestation_doc_against_user_input_panics_invalid_pcr1() {
+		let attestation_doc =
+			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
+				.unwrap();
+
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			&hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&hex::decode(MOCK_PCR0).unwrap(),
+			&[255; 48],
+			&hex::decode(MOCK_PCR2).unwrap(),
+		);
+	}
+
+	#[test]
+	#[should_panic = "pcr2 does not match attestation doc"]
+	fn verify_attestation_doc_against_user_input_panics_invalid_pcr2() {
+		let attestation_doc =
+			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
+				.unwrap();
+
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			&hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&hex::decode(MOCK_PCR0).unwrap(),
+			&hex::decode(MOCK_PCR1).unwrap(),
+			&[255; 48],
+		);
 	}
 
 	// #[test]

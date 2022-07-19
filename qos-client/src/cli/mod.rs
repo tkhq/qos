@@ -339,6 +339,7 @@ const GENESIS_DIR: &str = "genesis-dir";
 const BOOT_DIR: &str = "boot-dir";
 const PERSONAL_DIR: &str = "personal-dir";
 const PIVOT_ARGS: &str = "pivot-args";
+const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 
 /// Commands for the Client CLI.
 ///
@@ -508,6 +509,13 @@ impl Command {
 		.takes_value(true)
 		.default_value("[]")
 	}
+	fn unsafe_skip_attestation_token() -> Token {
+		Token::new(
+			UNSAFE_SKIP_ATTESTATION,
+			"NEVER USE IN PRODUCTION! Skip all attestation document checks, including basic cert chain validation."
+		)
+		.takes_value(false)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -545,6 +553,7 @@ impl Command {
 				.required(true)
 				.takes_value(true)
 			)
+			.token(Self::unsafe_skip_attestation_token())
 	}
 
 	fn after_genesis() -> Parser {
@@ -554,6 +563,7 @@ impl Command {
 			.token(Self::pcr0_token())
 			.token(Self::pcr1_token())
 			.token(Self::pcr2_token())
+			.token(Self::unsafe_skip_attestation_token())
 	}
 
 	fn generate_manifest() -> Parser {
@@ -619,6 +629,7 @@ impl Command {
 		Self::base()
 			.token(Self::pivot_path_token())
 			.token(Self::boot_dir_token())
+			.token(Self::unsafe_skip_attestation_token())
 	}
 
 	fn post_share() -> Parser {
@@ -626,6 +637,7 @@ impl Command {
 			.token(Self::manifest_hash_token())
 			.token(Self::personal_dir_token())
 			.token(Self::boot_dir_token())
+			.token(Self::unsafe_skip_attestation_token())
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -772,6 +784,10 @@ impl ClientOpts {
 			vec![]
 		}
 	}
+
+	fn unsafe_skip_attestation(&self) -> bool {
+		self.parsed.flag(UNSAFE_SKIP_ATTESTATION).unwrap_or(false)
+	}
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -873,7 +889,6 @@ mod handlers {
 		}
 	}
 
-	// TODO: this should eventually be removed since it only applies to nitro
 	pub(super) fn describe_nsm(opts: &ClientOpts) {
 		let path = &opts.path("message");
 		match request::post(
@@ -1013,7 +1028,7 @@ mod handlers {
 
 		println!("Attestation doc received. Checking cert chain ..");
 
-		drop(services::extract_attestation_doc(&cose_sign1));
+		drop(services::extract_attestation_doc(&cose_sign1, false));
 
 		println!("Attestation doc cert chain successfully verified!");
 	}
@@ -1033,6 +1048,7 @@ mod handlers {
 			&opts.path("message"),
 			opts.genesis_dir(),
 			opts.threshold(),
+			opts.unsafe_skip_attestation(),
 		);
 	}
 
@@ -1043,6 +1059,7 @@ mod handlers {
 			&opts.pcr0(),
 			&opts.pcr1(),
 			&opts.pcr2(),
+			opts.unsafe_skip_attestation(),
 		);
 	}
 
@@ -1076,6 +1093,7 @@ mod handlers {
 			&opts.path("message"),
 			opts.pivot_path(),
 			opts.boot_dir(),
+			opts.unsafe_skip_attestation(),
 		);
 	}
 
@@ -1085,6 +1103,7 @@ mod handlers {
 			opts.personal_dir(),
 			opts.boot_dir(),
 			opts.manifest_hash(),
+			opts.unsafe_skip_attestation(),
 		);
 	}
 
