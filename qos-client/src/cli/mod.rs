@@ -207,7 +207,9 @@
 //!    --root-cert-path ~/qos/aws_nitro_root_cert.pem
 //! ```
 //!
-//! **Note**: For pivot's that require CLI arguments, you can use the `--pivot-args` options. `--pivot-args` accepts a separated, [] wrapped CLI args for pivot. e.g. `[--usock,dev.sock,--path,./path-to-file].
+//! **Note**: For pivot's that require CLI arguments, you can use the
+//! `--pivot-args` options. `--pivot-args` accepts a separated, [] wrapped CLI
+//! args for pivot. e.g. `[--usock,dev.sock,--path,./path-to-file]`.
 //!
 //! After running the above, the directory structure will look like:
 //!
