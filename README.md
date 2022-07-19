@@ -39,6 +39,39 @@ In the root of this project run
 cargo doc --open
 ```
 
+## Commands
+
+Run tests for the full project:
+```shell
+cargo test -- --nocapture
+```
+
+Run a local "enclave":
+```shell
+cargo run --bin qos-core \
+  -- \
+  --usock ./dev.sock \
+  --mock
+```
+
+Run the enclave host:
+```shell
+cargo run --bin qos-host \
+  -- \
+  --host-ip 127.0.0.1 \
+  --host-port 3000 \
+  --usock ./dev.sock
+```
+
+Run a command against a running "enclave" and host:
+```shell
+cargo run --bin qos-client \
+  --manifest-path ./qos-client/Cargo.toml \
+  describe-nsm \
+  --host-ip 127.0.0.1 \
+  --host-port 3000
+```
+
 ## System requirements
 
 - openssl >= 1.1.0
