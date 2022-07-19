@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 qos-core = { path = "../qos-core", default-features = false }
 qos-host = { path = "../qos-host", default-features = false }
-qos-client = { path = "../qos-client", features = ["sample"], default-features = false }
+qos-client = { path = "../qos-client", default-features = false }
 qos-crypto = { path = "../qos-crypto" }
 sample-app = { path = "../sample-app" }
 tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
