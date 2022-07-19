@@ -857,18 +857,15 @@ mod handlers {
 	pub(super) fn enclave_status(opts: &ClientOpts) {
 		let path = &opts.path("message");
 
-		let response = request::post(
-			path,
-			&ProtocolMsg::StatusRequest,
-		)
-		.map_err(|e| println!("{:?}", e))
-		.expect("Enclave request failed");
+		let response = request::post(path, &ProtocolMsg::StatusRequest)
+			.map_err(|e| println!("{:?}", e))
+			.expect("Enclave request failed");
 
 		match response {
 			ProtocolMsg::StatusResponse(phase) => {
 				println!("Enclave phase: {:?}", phase);
-			},
-			other => panic!("Unexpected response {:?}", other)
+			}
+			other => panic!("Unexpected response {:?}", other),
 		}
 	}
 

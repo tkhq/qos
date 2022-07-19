@@ -26,7 +26,7 @@ use axum::{
 	routing::{get, post},
 	Extension, Router,
 };
-use borsh::BorshSerialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::Client,
 	io::SocketAddress,
@@ -70,7 +70,8 @@ impl HostServer {
 		});
 
 		let app = Router::new()
-			.route("/health", get(Self::health))
+			.route("/host-health", get(Self::host_health))
+			.route("/enclave-health", get(Self::enclave_health))
 			.route("/message", post(Self::message))
 			.layer(Extension(state));
 
@@ -80,16 +81,53 @@ impl HostServer {
 			.serve(app.into_make_service())
 			.await
 			.unwrap();
-
-		// Ok(())
 	}
 
 	/// Health route handler.
-	async fn health(
+	async fn host_health(
 		Extension(_state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
-		println!("Health...");
+		println!("Host health...");
 		Html("Ok!")
+	}
+
+	/// Health route handler.
+	async fn enclave_health(
+		Extension(state): Extension<Arc<State>>,
+	) -> impl IntoResponse {
+		println!("Enclave health...");
+
+		let encoded_request = ProtocolMsg::StatusRequest
+			.try_to_vec()
+			.expect("ProtocolMsg can always serialize. qed.");
+		let encoded_response = state.enclave_client.send(&encoded_request);
+
+		match encoded_response {
+			Ok(encoded_response) => {
+				let decoded_response =
+					match ProtocolMsg::try_from_slice(&encoded_response) {
+						Ok(resp) => resp,
+						Err(_) => {
+							return Html(
+								"Error decoding response from enclave"
+									.to_string(),
+							)
+						}
+					};
+
+				match decoded_response {
+					ProtocolMsg::StatusResponse(phase) => {
+						let inner = format!("{:?}\n", phase);
+						Html(inner)
+					}
+					other => {
+						let inner = format!("Unexpected response: {:?}", other);
+						Html(inner)
+					}
+				}
+			}
+			Err(_) => Html("Enclave request failed".to_string()),
+		}
 	}
 
 	/// Message route handler.
@@ -98,8 +136,6 @@ impl HostServer {
 		Extension(state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
-			dbg!(encoded_request.len());
-			dbg!(MAX_ENCODED_MSG_LEN);
 			return (
 				StatusCode::BAD_REQUEST,
 				ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg)
