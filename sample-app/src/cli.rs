@@ -121,7 +121,8 @@ impl Cli {
 				opts.manifest_file(),
 				opts.pivot_file(),
 			));
-			println!("Starting secure app server");
+			println!("---- Starting secure app server -----");
+
 			SocketServer::listen(opts.addr(), processor).unwrap();
 		}
 	}
