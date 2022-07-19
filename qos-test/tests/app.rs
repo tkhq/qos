@@ -29,8 +29,6 @@ async fn sample_app_e2e() {
 			"--pivot-file",
 			pivot_path,
 			"--ephemeral-file",
-			// We pull the ephemeral key out of the attestation doc, which in
-			// this case will be the mock attestation doc
 			eph_path,
 			"--mock",
 			"--manifest-file",
