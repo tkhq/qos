@@ -340,6 +340,7 @@ const BOOT_DIR: &str = "boot-dir";
 const PERSONAL_DIR: &str = "personal-dir";
 const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
+const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 
 /// Commands for the Client CLI.
 ///
@@ -516,6 +517,13 @@ impl Command {
 		)
 		.takes_value(false)
 	}
+	fn unsafe_eph_path_override_token() -> Token {
+		Token::new(
+			UNSAFE_EPH_PATH_OVERRIDE,
+			"NEVER USE IN PRODUCTION! Use the given key to encrypt data sent to the enclave, instead of extracting it from the attestation doc."
+		)
+		.takes_value(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -645,6 +653,7 @@ impl Command {
 			.token(Self::pivot_path_token())
 			.token(Self::restart_policy_token())
 			.token(Self::pivot_args_token())
+			.token(Self::unsafe_eph_path_override_token())
 	}
 }
 
@@ -787,6 +796,10 @@ impl ClientOpts {
 
 	fn unsafe_skip_attestation(&self) -> bool {
 		self.parsed.flag(UNSAFE_SKIP_ATTESTATION).unwrap_or(false)
+	}
+
+	fn unsafe_eph_path_override(&self) -> Option<String> {
+		self.parsed.single(UNSAFE_EPH_PATH_OVERRIDE).map(String::from)
 	}
 }
 
@@ -1113,6 +1126,7 @@ mod handlers {
 			opts.pivot_path(),
 			opts.restart_policy(),
 			opts.pivot_args(),
+			opts.unsafe_eph_path_override(),
 		);
 	}
 }

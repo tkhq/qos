@@ -539,6 +539,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	pivot_path: P,
 	restart: RestartPolicy,
 	args: Vec<String>,
+	unsafe_eph_path_override: Option<String>,
 ) {
 	// Generate a quorum key
 	let quorum_pair = RsaPair::generate().expect("Failed RSA gen");
@@ -608,13 +609,17 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		r => panic!("Unexpected response: {:?}", r),
 	};
 
-	// Pull out the ephemeral key
-	let eph_pub = RsaPub::from_pem(
-		&attestation_doc
-			.public_key
-			.expect("No ephemeral key in the attestation doc"),
-	)
-	.expect("Ephemeral key not valid public key");
+	// Pull out the ephemeral key or use the override
+	let eph_pub: RsaPub = if let Some(eph_path) = unsafe_eph_path_override {
+		RsaPair::from_pem_file(&eph_path).expect("Could not read ephemeral key override").into()
+	} else {
+		RsaPub::from_pem(
+			&attestation_doc
+				.public_key
+				.expect("No ephemeral key in the attestation doc"),
+		)
+		.expect("Ephemeral key not valid public key")
+	};
 
 	// Post the share
 	let req = ProtocolMsg::ProvisionRequest {

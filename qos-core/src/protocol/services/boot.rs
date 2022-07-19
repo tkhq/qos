@@ -204,23 +204,8 @@ pub(in crate::protocol) fn boot_standard(
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	manifest_envelope.check_approvals()?;
-	let eph_path = state.handles.ephemeral_key_path();
-	let ephemeral_key =
-		if eph_path == MOCK_EPH_PATH_TEST || eph_path == MOCK_EPH_PATH_ROOT {
-			#[cfg(feature = "mock")]
-			{
-				state.handles.get_ephemeral_key()?
-			}
-			#[cfg(not(feature = "mock"))]
-			{
-				Err(ProtocolError::BadEphemeralKeyPath)?
-			}
-		} else {
-			let ephemeral_key = RsaPair::generate()?;
-			state.handles.put_ephemeral_key(&ephemeral_key)?;
-
-			ephemeral_key
-		};
+	let ephemeral_key = RsaPair::generate()?;
+	state.handles.put_ephemeral_key(&ephemeral_key)?;
 
 	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
 		return Err(ProtocolError::InvalidPivotHash);
