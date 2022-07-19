@@ -1,6 +1,6 @@
 FROM rust:bullseye as builder
 COPY ./ ./
-RUN cargo build --manifest-path ./qos-core/Cargo.toml --bin qos-core --features vm --no-default-features
+RUN cargo build --manifest-path ./qos-core/Cargo.toml --bin qos-core --features vm,local --no-default-features
 
 # We don't need the Rust toolchain to run the binary!
 FROM debian:bullseye-slim AS runtime
