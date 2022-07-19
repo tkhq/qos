@@ -239,11 +239,6 @@ async fn boot_e2e() {
 
 	let att_doc = fs::read(&attestation_doc_path).unwrap();
 	assert_eq!(att_doc, MOCK_NSM_ATTESTATION_DOCUMENT);
-	drop(attestation_doc_from_der(
-		&att_doc,
-		AWS_ROOT_CERT_PEM,
-		MOCK_SECONDS_SINCE_EPOCH,
-	));
 
 	// For each user, post a share,
 	// and sanity check the pivot has not yet executed.

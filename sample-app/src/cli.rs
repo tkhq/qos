@@ -8,9 +8,8 @@ use qos_core::{
 	handles::Handles,
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
-	protocol::services::boot::MOCK_EPH_PATH_ROOT,
 	server::SocketServer,
-	QUORUM_FILE, SEC_APP_SOCK,
+	EPHEMERAL_KEY_FILE, QUORUM_FILE, SEC_APP_SOCK,
 };
 
 const DEFAULT_PIVOT_PATH: &str = "./target/release/sample-app";
@@ -82,7 +81,7 @@ impl GetParserForOptions for AppParser {
 		.token(
 			Token::new(EPHEMERAL_FILE_OPT, "path to file where the Ephemeral Key secret should be written. Use default for production.")
 				.takes_value(true)
-				.default_value(MOCK_EPH_PATH_ROOT)
+				.default_value(EPHEMERAL_KEY_FILE)
 		)
 		.token(
 			Token::new(MANIFEST_FILE_OPT, "path to file where the Manifest should be written. Use default for production")

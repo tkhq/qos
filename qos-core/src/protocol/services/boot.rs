@@ -8,14 +8,6 @@ use crate::protocol::{
 	ProtocolState, QosHash,
 };
 
-/// Path to the ephemeral key used for binaries run from the root that need to
-/// use the mock attestation doc (i.e. the sample app). Must not be used in
-/// production.
-pub const MOCK_EPH_PATH_ROOT: &str =
-	"./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
-/// Path to the ephemeral key used for testing. Must not be used in production.
-pub const MOCK_EPH_PATH_TEST: &str =
-	"../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
