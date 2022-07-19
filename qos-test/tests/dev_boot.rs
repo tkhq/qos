@@ -10,6 +10,7 @@ async fn dev_boot_e2e() {
 	let secret_path = "./dev-boot-e2e-tmp/quorum.secret";
 	let pivot_path = "./dev-boot-e2e-tmp/pivot.pivot";
 	let manifest_path = "./dev-boot-e2e-tmp/manifest.manifest";
+	let _eph_secret = "./dev-boot-e2e-tmp/eph.secret";
 
 	let host_port = "3010";
 	let host_ip = "127.0.0.1";

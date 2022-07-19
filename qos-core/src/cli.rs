@@ -59,7 +59,6 @@ impl EnclaveOpts {
 				c.parse::<u32>().unwrap(),
 				p.parse::<u32>().unwrap(),
 			),
-			#[cfg(feature = "local")]
 			(None, None, Some(u)) => SocketAddress::new_unix(u),
 			_ => panic!("Invalid socket opts"),
 		}

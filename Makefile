@@ -1,10 +1,4 @@
-.PHONY: test
-test:
-	cargo test -- --nocapture
-
-.PHONY: client
-client:
-	cargo run --manifest-path ./qos-client/Cargo.toml --bin qos-client
+REGISTRY := 339735964233.dkr.ecr.us-east-1.amazonaws.com
 
 .PHONY: local-enclave
 local-enclave:
@@ -43,56 +37,57 @@ vm-host:
 		--cid 16 \
 		--port 6969
 
-.PHONY: vm-describe-nsm
-vm-describe-nsm:
-	OPENSSL_DIR=/usr cargo run \
-		--bin qos-client \
-		--manifest-path ./qos-client/Cargo.toml \
-		--features vm \
-		describe-nsm \
-		--host-ip 127.0.0.1 \
-		--host-port 3000
+.DEFAULT_GOAL := all
+default: all
 
-.PHONY: local-describe-nsm
-local-describe-nsm:
-	cargo run --bin qos-client \
-		--manifest-path ./qos-client/Cargo.toml \
-		describe-nsm \
-		--host-ip 127.0.0.1 \
-		--host-port 3000
+.PHONY: all
+all: host client core
 
-.PHONY: vm-describe-pcr
-vm-describe-pcr:
-		OPENSSL_DIR=/usr cargo run \
-		--bin qos-client \
-		--manifest-path ./qos-client/Cargo.toml \
-		describe-pcr \
-		--host-ip 127.0.0.1 \
-		--host-port 3000
+.PHONY: clean
+clean:
+	cargo clean
 
-.PHONY: local-describe-pcr
-local-describe-pcr:
-	cargo run --bin qos-client \
-		--manifest-path ./qos-client/Cargo.toml \
-		describe-pcr \
-		--host-ip 127.0.0.1 \
-		--host-port 3000
+.PHONY: host
+host: clean build-host push-host
 
-.PHONY: local-req-att-doc
-local-req-att-doc:
-	cargo run --bin qos-client \
-		--manifest-path ./qos-client/Cargo.toml \
-		request-attestation-doc \
-		--host-ip 127.0.0.1 \
-		--host-port 3000
+.PHONY: build-host
+build-host:
+	docker build \
+		--file images/host/Dockerfile \
+		--tag $(REGISTRY)/qos/host \
+		$(PWD)
 
-.PHONY: gen-att-doc
-gen-att-doc:
-	OPENSSL_DIR=/usr cargo run --bin gen_att_doc
+.PHONY: push-host
+push-host:
+	docker push $(REGISTRY)/qos/host
 
-.PHONY: image
-image:
-	docker build -t tkhq/qos .
+.PHONY: client
+client: clean build-client push-client
+
+.PHONY: build-client
+build-client:
+	docker build \
+		--file images/client/Dockerfile \
+		--tag $(REGISTRY)/qos/client \
+		$(PWD)
+
+.PHONY: push-client
+push-client:
+	docker push $(REGISTRY)/qos/client
+
+.PHONY: core
+core: clean build-core push-core
+
+.PHONY: build-core
+build-core:
+	docker build \
+		--file images/core/Dockerfile \
+		--tag $(REGISTRY)/qos/core \
+		$(PWD)
+
+.PHONY: push-core
+push-core:
+	docker push $(REGISTRY)/qos/core
 
 .PHONY: lint
 lint:

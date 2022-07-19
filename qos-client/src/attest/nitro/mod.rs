@@ -68,43 +68,41 @@ pub fn verify_attestation_doc_against_user_input(
 		"Attestation doc has a nonce when none was expected."
 	);
 
-	{
-		// pcr0 matches
-		assert_eq!(
-			pcr0,
-			attestation_doc
-				.pcrs
-				.get(&0)
-				.expect("pcr0 not found")
-				.clone()
-				.into_vec(),
-			"pcr0 does not match attestation doc"
-		);
+	// pcr0 matches
+	assert_eq!(
+		pcr0,
+		attestation_doc
+			.pcrs
+			.get(&0)
+			.expect("pcr0 not found")
+			.clone()
+			.into_vec(),
+		"pcr0 does not match attestation doc"
+	);
 
-		// pcr1 matches
-		assert_eq!(
-			pcr1,
-			attestation_doc
-				.pcrs
-				.get(&1)
-				.expect("pcr1 not found")
-				.clone()
-				.into_vec(),
-			"pcr1 does not match attestation doc"
-		);
+	// pcr1 matches
+	assert_eq!(
+		pcr1,
+		attestation_doc
+			.pcrs
+			.get(&1)
+			.expect("pcr1 not found")
+			.clone()
+			.into_vec(),
+		"pcr1 does not match attestation doc"
+	);
 
-		// pcr2 matches
-		assert_eq!(
-			pcr2,
-			attestation_doc
-				.pcrs
-				.get(&2)
-				.expect("pcr2 not found")
-				.clone()
-				.into_vec(),
-			"pcr2 does not match attestation doc"
-		);
-	}
+	// pcr2 matches
+	assert_eq!(
+		pcr2,
+		attestation_doc
+			.pcrs
+			.get(&2)
+			.expect("pcr2 not found")
+			.clone()
+			.into_vec(),
+		"pcr2 does not match attestation doc"
+	);
 }
 
 /// Extract the DER encoded `AttestationDoc` from the nitro secure module
