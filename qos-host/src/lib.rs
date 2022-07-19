@@ -30,7 +30,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::Client,
 	io::SocketAddress,
-	protocol::{msg::ProtocolMsg, ProtocolError},
+	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase},
 };
 
 pub mod cli;
@@ -102,31 +102,45 @@ impl HostServer {
 			.expect("ProtocolMsg can always serialize. qed.");
 		let encoded_response = state.enclave_client.send(&encoded_request);
 
-		match encoded_response {
+		let decoded_response = match encoded_response {
 			Ok(encoded_response) => {
-				let decoded_response =
-					match ProtocolMsg::try_from_slice(&encoded_response) {
-						Ok(resp) => resp,
-						Err(_) => {
-							return Html(
+				match ProtocolMsg::try_from_slice(&encoded_response) {
+					Ok(resp) => resp,
+					Err(_) => {
+						return (
+							StatusCode::INTERNAL_SERVER_ERROR,
+							Html(
 								"Error decoding response from enclave"
 									.to_string(),
-							)
-						}
-					};
-
-				match decoded_response {
-					ProtocolMsg::StatusResponse(phase) => {
-						let inner = format!("{:?}", phase);
-						Html(inner)
-					}
-					other => {
-						let inner = format!("Unexpected response: {:?}", other);
-						Html(inner)
+							),
+						)
 					}
 				}
 			}
-			Err(_) => Html("Enclave request failed".to_string()),
+			Err(_) => {
+				return (
+					StatusCode::INTERNAL_SERVER_ERROR,
+					Html("Enclave request failed".to_string()),
+				)
+			}
+		};
+
+		match decoded_response {
+			ProtocolMsg::StatusResponse(phase) => {
+				let inner = format!("{:?}", phase);
+				let status = match phase {
+					ProtocolPhase::UnrecoverableError
+					| ProtocolPhase::WaitingForBootInstruction
+					| ProtocolPhase::WaitingForQuorumShards => StatusCode::SERVICE_UNAVAILABLE,
+					ProtocolPhase::QuorumKeyProvisioned => StatusCode::OK,
+				};
+
+				(status, Html(inner))
+			}
+			other => {
+				let inner = format!("Unexpected response: {:?}", other);
+				(StatusCode::INTERNAL_SERVER_ERROR, Html(inner))
+			}
 		}
 	}
 
