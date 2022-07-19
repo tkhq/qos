@@ -103,6 +103,7 @@ build-sample-app:
 		--file images/sample-app/Dockerfile \
 		--tag $(REGISTRY)/qos/sample-app \
 		$(PWD); \
+	docker rm -f qos-sample-app; \
 	docker create \
 		--name qos-sample-app \
 		$(REGISTRY)/qos/sample-app; \
