@@ -970,7 +970,7 @@ mod handlers {
 
 		match app_msg {
 			AppMsg::EchoResp { data } => {
-				assert_eq!(data, echo_data, "Echoed data is not what was sent")
+				assert_eq!(data, echo_data, "Echoed data is not what was sent");
 			}
 			other => panic!("Unexpected app response {:?}", other),
 		}
