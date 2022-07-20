@@ -961,18 +961,17 @@ mod handlers {
 			.map_err(|e| println!("{:?}", e))
 			.expect("App echo request failed")
 		{
-			ProtocolMsg::ProxyResponse { data } => AppMsg::try_from_slice(
-				&data,
-			)
-			.expect("Failed to deserialize app msg in proxy response"),
+			ProtocolMsg::ProxyResponse { data } => {
+				AppMsg::try_from_slice(&data)
+					.expect("Failed to deserialize app msg in proxy response")
+			}
 			other => panic!("Unexpected protocol response {:?}", other),
 		};
 
 		match app_msg {
-			AppMsg::EchoResp { data } => assert_eq!(
-				data, echo_data,
-				"Echoed data is not what was sent"
-			),
+			AppMsg::EchoResp { data } => {
+				assert_eq!(data, echo_data, "Echoed data is not what was sent")
+			}
 			other => panic!("Unexpected app response {:?}", other),
 		}
 
@@ -991,10 +990,10 @@ mod handlers {
 			.map_err(|e| println!("{:?}", e))
 			.expect("App read QOS files request failed")
 		{
-			ProtocolMsg::ProxyResponse { data } => AppMsg::try_from_slice(
-				&data,
-			)
-			.expect("Failed to deserialize app msg in proxy response"),
+			ProtocolMsg::ProxyResponse { data } => {
+				AppMsg::try_from_slice(&data)
+					.expect("Failed to deserialize app msg in proxy response")
+			}
 			other => panic!("Unexpected protocol response {:?}", other),
 		};
 
