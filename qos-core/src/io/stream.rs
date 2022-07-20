@@ -207,15 +207,12 @@ impl Listener {
 	/// Bind and listen on the given address.
 	pub(crate) fn listen(addr: SocketAddress) -> Result<Self, IOError> {
 		// In case the last connection at this addr did not shutdown correctly
-		dbg!("About to clean");
 		Self::clean(&addr);
 
-		dbg!("About to create socket fd");
 		let fd = socket_fd(&addr)?;
 
-		dbg!("About to bind");
-		dbg!(bind(fd, &*addr.addr()))?;
-		dbg!(listen(fd, BACKLOG))?;
+		bind(fd, &*addr.addr())?;
+		listen(fd, BACKLOG)?;
 
 		Ok(Self { fd, addr })
 	}
