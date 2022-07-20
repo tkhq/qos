@@ -958,7 +958,7 @@ mod handlers {
 			other => panic!("Unexpected app response {:?}", other),
 		}
 
-		println!("App echo successful!");
+		println!("App echo s uccessful!");
 	}
 
 	pub(super) fn app_read_files(opts: &ClientOpts) {
