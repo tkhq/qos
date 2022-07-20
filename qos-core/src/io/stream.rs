@@ -210,7 +210,6 @@ impl Listener {
 		Self::clean(&addr);
 
 		let fd = socket_fd(&addr)?;
-
 		bind(fd, &*addr.addr())?;
 		listen(fd, BACKLOG)?;
 

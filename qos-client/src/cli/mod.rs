@@ -949,76 +949,62 @@ mod handlers {
 	}
 
 	pub(super) fn app_echo(opts: &ClientOpts) {
-		#[cfg(feature = "sample")]
+		use borsh::{BorshDeserialize, BorshSerialize};
+		use sample_app::AppMsg;
+
+		let echo_data = "some data to echo".to_string();
+		let encoded_app_req = AppMsg::EchoReq { data: echo_data.clone() }
+			.try_to_vec()
+			.expect("Failed to serialize app msg");
+		let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
+		let app_msg = match request::post(&opts.path("message"), &req)
+			.map_err(|e| println!("{:?}", e))
+			.expect("App echo request failed")
 		{
-			use borsh::{BorshDeserialize, BorshSerialize};
-			use sample_app::AppMsg;
+			ProtocolMsg::ProxyResponse { data } => AppMsg::try_from_slice(
+				&data,
+			)
+			.expect("Failed to deserialize app msg in proxy response"),
+			other => panic!("Unexpected protocol response {:?}", other),
+		};
 
-			let echo_data = "some data to echo".to_string();
-			let encoded_app_req = AppMsg::EchoReq { data: echo_data.clone() }
-				.try_to_vec()
-				.expect("Failed to serialize app msg");
-			let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
-			let app_msg = match request::post(&opts.path("message"), &req)
-				.map_err(|e| println!("{:?}", e))
-				.expect("App echo request failed")
-			{
-				ProtocolMsg::ProxyResponse { data } => AppMsg::try_from_slice(
-					&data,
-				)
-				.expect("Failed to deserialize app msg in proxy response"),
-				other => panic!("Unexpected protocol response {:?}", other),
-			};
-
-			match app_msg {
-				AppMsg::EchoResp { data } => assert_eq!(
-					data, echo_data,
-					"Echoed data is not what was sent"
-				),
-				other => panic!("Unexpected app response {:?}", other),
-			}
-
-			println!("App echo successful!");
+		match app_msg {
+			AppMsg::EchoResp { data } => assert_eq!(
+				data, echo_data,
+				"Echoed data is not what was sent"
+			),
+			other => panic!("Unexpected app response {:?}", other),
 		}
-		#[cfg(not(feature = "sample"))]
-		{
-			panic!("Must have \"sample\" feature enable to call app-read-files")
-		}
+
+		println!("App echo s uccessful!");
 	}
 
 	pub(super) fn app_read_files(opts: &ClientOpts) {
-		#[cfg(feature = "sample")]
+		use borsh::{BorshDeserialize, BorshSerialize};
+		use sample_app::AppMsg;
+
+		let encoded_app_req = AppMsg::ReadQOSFilesReq
+			.try_to_vec()
+			.expect("Failed to serialize app msg");
+		let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
+		let resp = match request::post(&opts.path("message"), &req)
+			.map_err(|e| println!("{:?}", e))
+			.expect("App read QOS files request failed")
 		{
-			use borsh::{BorshDeserialize, BorshSerialize};
-			use sample_app::AppMsg;
+			ProtocolMsg::ProxyResponse { data } => AppMsg::try_from_slice(
+				&data,
+			)
+			.expect("Failed to deserialize app msg in proxy response"),
+			other => panic!("Unexpected protocol response {:?}", other),
+		};
 
-			let encoded_app_req = AppMsg::ReadQOSFilesReq
-				.try_to_vec()
-				.expect("Failed to serialize app msg");
-			let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
-			let resp = match request::post(&opts.path("message"), &req)
-				.map_err(|e| println!("{:?}", e))
-				.expect("App read QOS files request failed")
-			{
-				ProtocolMsg::ProxyResponse { data } => AppMsg::try_from_slice(
-					&data,
-				)
-				.expect("Failed to deserialize app msg in proxy response"),
-				other => panic!("Unexpected protocol response {:?}", other),
-			};
-
-			match resp {
-				AppMsg::ReadQOSFilesResp { .. } => {}
-				other => panic!("Unexpected app response {:?}", other),
-			}
-
-			println!("App read files was successful!");
-			println!("Note that the files themselves where not verified.");
+		match resp {
+			AppMsg::ReadQOSFilesResp { .. } => {}
+			other => panic!("Unexpected app response {:?}", other),
 		}
-		#[cfg(not(feature = "sample"))]
-		{
-			panic!("Must have \"sample\" feature enable to call app-read-files")
-		}
+
+		println!("App read files was successful!");
+		println!("Note that the files themselves where not verified.");
 	}
 
 	pub(super) fn request_attestation_doc(opts: &ClientOpts) {
