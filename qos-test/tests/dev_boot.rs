@@ -1,6 +1,6 @@
 use std::{fs, path::Path, process::Command};
 
-use qos_test::{MOCK_EPH_PATH, PIVOT_OK3_PATH, PIVOT_OK3_SUCCESS_FILE};
+use qos_test::{PIVOT_OK3_PATH, PIVOT_OK3_SUCCESS_FILE};
 
 #[tokio::test]
 async fn dev_boot_e2e() {
@@ -10,7 +10,7 @@ async fn dev_boot_e2e() {
 	let secret_path = "./dev-boot-e2e-tmp/quorum.secret";
 	let pivot_path = "./dev-boot-e2e-tmp/pivot.pivot";
 	let manifest_path = "./dev-boot-e2e-tmp/manifest.manifest";
-	let _eph_secret = "./dev-boot-e2e-tmp/eph.secret";
+	let eph_path = "./dev-boot-e2e-tmp/eph.secret";
 
 	let host_port = "3010";
 	let host_ip = "127.0.0.1";
@@ -25,9 +25,7 @@ async fn dev_boot_e2e() {
 			"--pivot-file",
 			pivot_path,
 			"--ephemeral-file",
-			// We pull the ephemeral key out of the attestation doc, which in
-			// this case will be the mock attestation doc
-			MOCK_EPH_PATH,
+			eph_path,
 			"--mock",
 			"--manifest-file",
 			manifest_path,
@@ -62,6 +60,8 @@ async fn dev_boot_e2e() {
 			"never",
 			"--pivot-args",
 			"[--msg,vapers-only]",
+			"--unsafe-eph-path-override",
+			eph_path,
 		])
 		.spawn()
 		.unwrap()
@@ -77,8 +77,8 @@ async fn dev_boot_e2e() {
 	drop(fs::remove_dir_all(tmp));
 
 	// Make sure pivot ran
-	assert!(res.success());
 	assert!(Path::new(PIVOT_OK3_SUCCESS_FILE).exists());
+	assert!(res.success());
 
 	let contents = fs::read(PIVOT_OK3_SUCCESS_FILE).unwrap();
 	assert_eq!(std::str::from_utf8(&contents).unwrap(), "vapers-only");

@@ -206,19 +206,12 @@ pub(crate) struct Listener {
 impl Listener {
 	/// Bind and listen on the given address.
 	pub(crate) fn listen(addr: SocketAddress) -> Result<Self, IOError> {
-		dbg!(&addr);
 		// In case the last connection at this addr did not shutdown correctly
-		dbg!("About to clean");
 		Self::clean(&addr);
 
-		dbg!("About to create socket fd");
 		let fd = socket_fd(&addr)?;
-
-		dbg!("About to bind");
-		dbg!(bind(fd, &*addr.addr()))?;
-
-		dbg!("About to listen");
-		dbg!(listen(fd, BACKLOG))?;
+		bind(fd, &*addr.addr())?;
+		listen(fd, BACKLOG)?;
 
 		Ok(Self { fd, addr })
 	}
@@ -236,16 +229,9 @@ impl Listener {
 		if let SocketAddress::Unix(addr) = addr {
 			if let Some(path) = addr.path() {
 				if path.exists() {
-					println!("clean: Removing path={:?}", path);
 					drop(std::fs::remove_file(path));
-				} else {
-					println!("clean: path={:?} does not exist", path);
 				}
-			} else {
-				println!("clean: No path to remove");
 			}
-		} else {
-			println!("clean: Not a unix socket .. nothing to clean")
 		}
 	}
 }

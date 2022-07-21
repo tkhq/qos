@@ -8,14 +8,6 @@ use crate::protocol::{
 	ProtocolState, QosHash,
 };
 
-/// Path to the ephemeral key used for binaries run from the root that need to
-/// use the mock attestation doc (i.e. the sample app). Must not be used in
-/// production.
-pub const MOCK_EPH_PATH_ROOT: &str =
-	"./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
-/// Path to the ephemeral key used for testing. Must not be used in production.
-pub const MOCK_EPH_PATH_TEST: &str =
-	"../qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
@@ -204,23 +196,8 @@ pub(in crate::protocol) fn boot_standard(
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	manifest_envelope.check_approvals()?;
-	let eph_path = state.handles.ephemeral_key_path();
-	let ephemeral_key =
-		if eph_path == MOCK_EPH_PATH_TEST || eph_path == MOCK_EPH_PATH_ROOT {
-			#[cfg(feature = "mock")]
-			{
-				state.handles.get_ephemeral_key()?
-			}
-			#[cfg(not(feature = "mock"))]
-			{
-				Err(ProtocolError::BadEphemeralKeyPath)?
-			}
-		} else {
-			let ephemeral_key = RsaPair::generate()?;
-			state.handles.put_ephemeral_key(&ephemeral_key)?;
-
-			ephemeral_key
-		};
+	let ephemeral_key = RsaPair::generate()?;
+	state.handles.put_ephemeral_key(&ephemeral_key)?;
 
 	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
 		return Err(ProtocolError::InvalidPivotHash);

@@ -1,15 +1,12 @@
 use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
-use qos_client::attest::nitro::{
-	attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM,
-};
+use qos_client::attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 use qos_core::{
 	hex,
 	protocol::{
 		attestor::mock::{
 			MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
-			MOCK_SECONDS_SINCE_EPOCH,
 		},
 		services::{
 			boot::{
@@ -22,9 +19,8 @@ use qos_core::{
 	},
 };
 use qos_crypto::{sha_256, RsaPair};
-use qos_test::{MOCK_EPH_PATH, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
+use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 
-#[ignore]
 #[tokio::test]
 async fn boot_e2e() {
 	let host_port = "3009";
@@ -36,6 +32,7 @@ async fn boot_e2e() {
 	let secret_path = "./boot-e2e-tmp/boot_e2e.secret";
 	let pivot_path = "./boot-e2e-tmp/boot_e2e.pivot";
 	let manifest_path = "./boot-e2e-tmp/boot_e2e.manifest";
+	let eph_path = "./boot-e2e-tmp/ephemeral_key.secret";
 
 	let boot_dir = "./boot-e2e-boot-dir-tmp";
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
@@ -192,7 +189,7 @@ async fn boot_e2e() {
 			"--pivot-file",
 			pivot_path,
 			"--ephemeral-file",
-			MOCK_EPH_PATH,
+			eph_path,
 			"--mock",
 			"--manifest-file",
 			manifest_path,
@@ -228,6 +225,7 @@ async fn boot_e2e() {
 			host_port,
 			"--host-ip",
 			host_ip,
+			"--unsafe-skip-attestation",
 		])
 		.spawn()
 		.unwrap()
@@ -237,11 +235,6 @@ async fn boot_e2e() {
 
 	let att_doc = fs::read(&attestation_doc_path).unwrap();
 	assert_eq!(att_doc, MOCK_NSM_ATTESTATION_DOCUMENT);
-	drop(attestation_doc_from_der(
-		&att_doc,
-		AWS_ROOT_CERT_PEM,
-		MOCK_SECONDS_SINCE_EPOCH,
-	));
 
 	// For each user, post a share,
 	// and sanity check the pivot has not yet executed.
@@ -260,6 +253,9 @@ async fn boot_e2e() {
 				host_port,
 				"--host-ip",
 				host_ip,
+				"--unsafe-skip-attestation",
+				"--unsafe-eph-path-override",
+				eph_path,
 			])
 			.spawn()
 			.unwrap()

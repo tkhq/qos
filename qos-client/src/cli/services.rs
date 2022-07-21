@@ -470,6 +470,7 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	boot_dir: P,
 	manifest_hash: Hash256,
 	unsafe_skip_attestation: bool,
+	unsafe_eph_path_override: Option<String>,
 ) {
 	// Read in manifest, share and personal key
 	let manifest = find_manifest(&boot_dir);
@@ -504,16 +505,22 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 		);
 	}
 
-	// Get ephemeral key from attestation doc
-	let ephemeral_pub = RsaPub::from_pem(
-		&attestation_doc
-			.public_key
-			.expect("No ephemeral key in attestation doc"),
-	)
-	.expect("Failed to read ephemeral key");
+	// Pull out the ephemeral key or use the override
+	let eph_pub: RsaPub = if let Some(eph_path) = unsafe_eph_path_override {
+		RsaPair::from_pem_file(&eph_path)
+			.expect("Could not read ephemeral key override")
+			.into()
+	} else {
+		RsaPub::from_pem(
+			&attestation_doc
+				.public_key
+				.expect("No ephemeral key in the attestation doc"),
+		)
+		.expect("Ephemeral key not valid public key")
+	};
 
 	// Decrypt share and re-encrypt to ephemeral key
-	let share = ephemeral_pub
+	let share = eph_pub
 		.envelope_encrypt(
 			&personal_pair
 				.envelope_decrypt(&encrypted_share)
@@ -539,6 +546,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	pivot_path: P,
 	restart: RestartPolicy,
 	args: Vec<String>,
+	unsafe_eph_path_override: Option<String>,
 ) {
 	// Generate a quorum key
 	let quorum_pair = RsaPair::generate().expect("Failed RSA gen");
@@ -608,13 +616,19 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		r => panic!("Unexpected response: {:?}", r),
 	};
 
-	// Pull out the ephemeral key
-	let eph_pub = RsaPub::from_pem(
-		&attestation_doc
-			.public_key
-			.expect("No ephemeral key in the attestation doc"),
-	)
-	.expect("Ephemeral key not valid public key");
+	// Pull out the ephemeral key or use the override
+	let eph_pub: RsaPub = if let Some(eph_path) = unsafe_eph_path_override {
+		RsaPair::from_pem_file(&eph_path)
+			.expect("Could not read ephemeral key override")
+			.into()
+	} else {
+		RsaPub::from_pem(
+			&attestation_doc
+				.public_key
+				.expect("No ephemeral key in the attestation doc"),
+		)
+		.expect("Ephemeral key not valid public key")
+	};
 
 	// Post the share
 	let req = ProtocolMsg::ProvisionRequest {

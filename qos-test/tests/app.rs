@@ -1,7 +1,5 @@
 use std::{fs, process::Command};
 
-use qos_test::MOCK_EPH_PATH;
-
 const SAMPLE_APP_PATH: &str = "../target/debug/sample_app";
 
 #[ignore]
@@ -15,6 +13,7 @@ async fn sample_app_e2e() {
 	let quorum_path = "./sample-app-e2e-tmp/quorum.secret";
 	let pivot_path = "./sample-app-e2e-tmp/pivot.pivot";
 	let manifest_path = "./sample-app-e2e-tmp/manifest.manifest";
+	let eph_path = "./sample-app-e2e-tmp/eph.secret";
 
 	let host_port = "3232";
 	let host_ip = "127.0.0.1";
@@ -29,9 +28,7 @@ async fn sample_app_e2e() {
 			"--pivot-file",
 			pivot_path,
 			"--ephemeral-file",
-			// We pull the ephemeral key out of the attestation doc, which in
-			// this case will be the mock attestation doc
-			MOCK_EPH_PATH,
+			eph_path,
 			"--mock",
 			"--manifest-file",
 			manifest_path,
@@ -55,7 +52,7 @@ async fn sample_app_e2e() {
 		.unwrap();
 
 	// Run `dangerous-dev-boot`
-	let pivot_args = format!("[--usock,{app_usock},--quorum-file,{quorum_path},--ephemeral-file,{MOCK_EPH_PATH},--manifest-file,{manifest_path}]");
+	let pivot_args = format!("[--usock,{app_usock},--quorum-file,{quorum_path},--ephemeral-file,{eph_path},--manifest-file,{manifest_path}]");
 	assert!(Command::new("../target/debug/client_cli")
 		.args([
 			"dangerous-dev-boot",
@@ -68,7 +65,9 @@ async fn sample_app_e2e() {
 			"--restart-policy",
 			"never",
 			"--pivot-args",
-			&pivot_args[..]
+			&pivot_args[..],
+			"--unsafe-eph-path-override",
+			eph_path,
 		])
 		.spawn()
 		.unwrap()

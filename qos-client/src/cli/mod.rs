@@ -207,6 +207,10 @@
 //!    --root-cert-path ~/qos/aws_nitro_root_cert.pem
 //! ```
 //!
+//! **Note**: For pivot's that require CLI arguments, you can use the
+//! `--pivot-args` options. `--pivot-args` accepts a separated, [] wrapped CLI
+//! args for pivot. e.g. `[--usock,dev.sock,--path,./path-to-file]`.
+//!
 //! After running the above, the directory structure will look like:
 //!
 //! - boot
@@ -340,6 +344,7 @@ const BOOT_DIR: &str = "boot-dir";
 const PERSONAL_DIR: &str = "personal-dir";
 const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
+const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 
 /// Commands for the Client CLI.
 ///
@@ -516,6 +521,13 @@ impl Command {
 		)
 		.takes_value(false)
 	}
+	fn unsafe_eph_path_override_token() -> Token {
+		Token::new(
+			UNSAFE_EPH_PATH_OVERRIDE,
+			"NEVER USE IN PRODUCTION! Use the secret at the given path to encrypt data sent to the enclave, instead of extracting it from the attestation doc."
+		)
+		.takes_value(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -638,6 +650,7 @@ impl Command {
 			.token(Self::personal_dir_token())
 			.token(Self::boot_dir_token())
 			.token(Self::unsafe_skip_attestation_token())
+			.token(Self::unsafe_eph_path_override_token())
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -645,6 +658,7 @@ impl Command {
 			.token(Self::pivot_path_token())
 			.token(Self::restart_policy_token())
 			.token(Self::pivot_args_token())
+			.token(Self::unsafe_eph_path_override_token())
 	}
 }
 
@@ -787,6 +801,10 @@ impl ClientOpts {
 
 	fn unsafe_skip_attestation(&self) -> bool {
 		self.parsed.flag(UNSAFE_SKIP_ATTESTATION).unwrap_or(false)
+	}
+
+	fn unsafe_eph_path_override(&self) -> Option<String> {
+		self.parsed.single(UNSAFE_EPH_PATH_OVERRIDE).map(String::from)
 	}
 }
 
@@ -943,18 +961,17 @@ mod handlers {
 			.map_err(|e| println!("{:?}", e))
 			.expect("App echo request failed")
 		{
-			ProtocolMsg::ProxyResponse { data } => AppMsg::try_from_slice(
-				&data,
-			)
-			.expect("Failed to deserialize app msg in proxy response"),
+			ProtocolMsg::ProxyResponse { data } => {
+				AppMsg::try_from_slice(&data)
+					.expect("Failed to deserialize app msg in proxy response")
+			}
 			other => panic!("Unexpected protocol response {:?}", other),
 		};
 
 		match app_msg {
-			AppMsg::EchoResp { data } => assert_eq!(
-				data, echo_data,
-				"Echoed data is not what was sent"
-			),
+			AppMsg::EchoResp { data } => {
+				assert_eq!(data, echo_data, "Echoed data is not what was sent");
+			}
 			other => panic!("Unexpected app response {:?}", other),
 		}
 
@@ -973,10 +990,10 @@ mod handlers {
 			.map_err(|e| println!("{:?}", e))
 			.expect("App read QOS files request failed")
 		{
-			ProtocolMsg::ProxyResponse { data } => AppMsg::try_from_slice(
-				&data,
-			)
-			.expect("Failed to deserialize app msg in proxy response"),
+			ProtocolMsg::ProxyResponse { data } => {
+				AppMsg::try_from_slice(&data)
+					.expect("Failed to deserialize app msg in proxy response")
+			}
 			other => panic!("Unexpected protocol response {:?}", other),
 		};
 
@@ -1090,6 +1107,7 @@ mod handlers {
 			opts.boot_dir(),
 			opts.manifest_hash(),
 			opts.unsafe_skip_attestation(),
+			opts.unsafe_eph_path_override(),
 		);
 	}
 
@@ -1099,6 +1117,7 @@ mod handlers {
 			opts.pivot_path(),
 			opts.restart_policy(),
 			opts.pivot_args(),
+			opts.unsafe_eph_path_override(),
 		);
 	}
 }
