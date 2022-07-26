@@ -7,6 +7,31 @@ use qos_crypto::RsaPair;
 
 use crate::protocol::{services::boot::ManifestEnvelope, ProtocolError};
 
+/// Handle for accessing the quorum key.
+#[derive(Debug, Clone)]
+pub struct QuorumKeyHandle {
+	quorum: String,
+}
+
+impl QuorumKeyHandle {
+	/// Create a new instance of [`Self`].
+	#[must_use]
+	pub fn new(quorum: String) -> Self {
+		Self { quorum }
+	}
+
+	/// Get the Quorum Key pair.
+	///
+	/// # Errors
+	///
+	/// Errors if the Quorum Key has not been put.
+	pub fn get_quorum_key(&self) -> Result<RsaPair, ProtocolError> {
+		let pair = RsaPair::from_pem_file(&self.quorum)
+			.map_err(|_| ProtocolError::FailedToGetQuorumKey)?;
+		Ok(pair)
+	}
+}
+
 /// Handles for read only state accessible to all of QOS.
 ///
 /// All data here should be "put" once at some point in the boot flow. Once
@@ -16,7 +41,7 @@ pub struct Handles {
 	/// Path to the file containing the PEM encoded Ephemeral Key.
 	ephemeral: String,
 	/// Path to the file containing the PEM encoded Quorum Key.
-	quorum: String,
+	quorum: QuorumKeyHandle,
 	/// Path to the file containing the Borsh encoded [`ManifestEnvelope`].
 	manifest: String,
 	/// Path to the file containing the pivot.
@@ -32,7 +57,12 @@ impl Handles {
 		manifest: String,
 		pivot: String,
 	) -> Self {
-		Self { ephemeral, quorum, manifest, pivot }
+		Self {
+			ephemeral,
+			quorum: QuorumKeyHandle::new(quorum),
+			manifest,
+			pivot,
+		}
 	}
 
 	/// Get the path to the Ephemeral Key.
@@ -74,9 +104,7 @@ impl Handles {
 	///
 	/// Errors if the Quorum Key has not been put.
 	pub fn get_quorum_key(&self) -> Result<RsaPair, ProtocolError> {
-		let pair = RsaPair::from_pem_file(&self.quorum)
-			.map_err(|_| ProtocolError::FailedToGetQuorumKey)?;
-		Ok(pair)
+		self.quorum.get_quorum_key()
 	}
 
 	/// Put the Quorum Key pair.
@@ -86,7 +114,7 @@ impl Handles {
 	/// Errors if the Quorum Key has already been put.
 	pub fn put_quorum_key(&self, pair: &RsaPair) -> Result<(), ProtocolError> {
 		Self::write_as_read_only(
-			&self.quorum,
+			&self.quorum.quorum,
 			&pair.private_key_to_pem()?,
 			ProtocolError::FailedToPutManifestEnvelope,
 		)
@@ -95,7 +123,7 @@ impl Handles {
 	/// Returns true if the Quorum Key file exists.
 	#[must_use]
 	pub fn quorum_key_exists(&self) -> bool {
-		Path::new(&self.quorum).exists()
+		Path::new(&self.quorum.quorum).exists()
 	}
 
 	/// Get the Manifest.
