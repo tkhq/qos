@@ -1,7 +1,7 @@
 use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
-use qos_client::attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
+use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 use qos_core::{
 	hex,
 	protocol::{

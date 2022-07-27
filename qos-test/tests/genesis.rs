@@ -1,7 +1,7 @@
 use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
-use qos_client::attest::nitro::unsafe_attestation_doc_from_der;
+use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
 use rand::{seq::SliceRandom, thread_rng};
