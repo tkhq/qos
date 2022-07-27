@@ -5,6 +5,10 @@ use std::{
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
+use qos_attest::nitro::{
+	attestation_doc_from_der, cert_from_pem, unsafe_attestation_doc_from_der,
+	verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
+};
 use qos_core::protocol::{
 	attestor::types::NsmResponse,
 	msg::ProtocolMsg,
@@ -18,11 +22,7 @@ use qos_core::protocol::{
 	Hash256, QosHash,
 };
 use qos_crypto::{sha_256, RsaPair, RsaPub};
-use qos_attest::nitro::{
-	attestation_doc_from_der, cert_from_pem,
-	unsafe_attestation_doc_from_der,
-	verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
-};
+
 use crate::request;
 
 const GENESIS_ATTESTATION_DOC_FILE: &str = "attestation_doc.genesis";
