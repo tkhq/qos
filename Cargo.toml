@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "qos-attest",
   "qos-client",
   "qos-core",
   "qos-crypto",

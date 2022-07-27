@@ -5,7 +5,6 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
-pub mod attest;
 pub mod cli;
 
 /// Host HTTP request helpers.

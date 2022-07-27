@@ -18,15 +18,12 @@ use qos_core::protocol::{
 	Hash256, QosHash,
 };
 use qos_crypto::{sha_256, RsaPair, RsaPub};
-
-use crate::{
-	attest::nitro::{
-		attestation_doc_from_der, cert_from_pem,
-		unsafe_attestation_doc_from_der,
-		verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
-	},
-	request,
+use qos_attest::nitro::{
+	attestation_doc_from_der, cert_from_pem,
+	unsafe_attestation_doc_from_der,
+	verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
 };
+use crate::request;
 
 const GENESIS_ATTESTATION_DOC_FILE: &str = "attestation_doc.genesis";
 const GENESIS_OUTPUT_FILE: &str = "output.genesis";
