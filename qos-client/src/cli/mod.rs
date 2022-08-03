@@ -467,12 +467,9 @@ impl Command {
 		.required(true)
 	}
 	fn manifest_hash_token() -> Token {
-		Token::new(
-			MANIFEST_HASH,
-			"Hex encoded hash of the expected manifest.",
-		)
-		.takes_value(true)
-		.required(true)
+		Token::new(MANIFEST_HASH, "Hex encoded hash of the expected manifest.")
+			.takes_value(true)
+			.required(true)
 	}
 	fn personal_dir_token() -> Token {
 		Token::new(PERSONAL_DIR, "Directory (eventually) containing personal key, share, and setup key associated with 1 genesis ceremony.")
@@ -485,19 +482,13 @@ impl Command {
 			.required(true)
 	}
 	fn pcr0_token() -> Token {
-		Token::new(PCR0, "Hex encoded pcr0.")
-			.takes_value(true)
-			.required(true)
+		Token::new(PCR0, "Hex encoded pcr0.").takes_value(true).required(true)
 	}
 	fn pcr1_token() -> Token {
-		Token::new(PCR1, "Hex encoded pcr0.")
-			.takes_value(true)
-			.required(true)
+		Token::new(PCR1, "Hex encoded pcr0.").takes_value(true).required(true)
 	}
 	fn pcr2_token() -> Token {
-		Token::new(PCR2, "Hex encoded pcr2.")
-			.takes_value(true)
-			.required(true)
+		Token::new(PCR2, "Hex encoded pcr2.").takes_value(true).required(true)
 	}
 	fn namespace_token() -> Token {
 		Token::new(NAMESPACE, "Namespace for the associated manifest.")
