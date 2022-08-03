@@ -318,7 +318,6 @@
 use std::env;
 
 use qos_core::{
-	hex,
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
 	protocol::{msg::ProtocolMsg, services::boot, Hash256},
 };
@@ -468,9 +467,12 @@ impl Command {
 		.required(true)
 	}
 	fn manifest_hash_token() -> Token {
-		Token::new(MANIFEST_HASH, "Hex encoded hash of the expected manifest.")
-			.takes_value(true)
-			.required(true)
+		Token::new(
+			MANIFEST_HASH,
+			"qos_hex encoded hash of the expected manifest.",
+		)
+		.takes_value(true)
+		.required(true)
 	}
 	fn personal_dir_token() -> Token {
 		Token::new(PERSONAL_DIR, "Directory (eventually) containing personal key, share, and setup key associated with 1 genesis ceremony.")
@@ -483,13 +485,19 @@ impl Command {
 			.required(true)
 	}
 	fn pcr0_token() -> Token {
-		Token::new(PCR0, "Hex encoded pcr0.").takes_value(true).required(true)
+		Token::new(PCR0, "qos_hex encoded pcr0.")
+			.takes_value(true)
+			.required(true)
 	}
 	fn pcr1_token() -> Token {
-		Token::new(PCR1, "Hex encoded pcr0.").takes_value(true).required(true)
+		Token::new(PCR1, "qos_hex encoded pcr0.")
+			.takes_value(true)
+			.required(true)
 	}
 	fn pcr2_token() -> Token {
-		Token::new(PCR2, "Hex encoded pcr2.").takes_value(true).required(true)
+		Token::new(PCR2, "qos_hex encoded pcr2.")
+			.takes_value(true)
+			.required(true)
 	}
 	fn namespace_token() -> Token {
 		Token::new(NAMESPACE, "Namespace for the associated manifest.")
@@ -597,7 +605,7 @@ impl Command {
 			.token(
 				Token::new(
 					PIVOT_HASH,
-					"Hex encoded SHA-256 hash of the pivot executable encoded as a Vec<u8>.",
+					"qos_hex encoded SHA-256 hash of the pivot executable encoded as a Vec<u8>.",
 				)
 				.takes_value(true)
 				.required(true),
@@ -710,17 +718,17 @@ impl ClientOpts {
 	}
 
 	fn pcr0(&self) -> Vec<u8> {
-		hex::decode(self.parsed.single(PCR0).expect("required arg"))
+		qos_hex::decode(self.parsed.single(PCR0).expect("required arg"))
 			.expect("Could not parse `--pcr0` to bytes")
 	}
 
 	fn pcr1(&self) -> Vec<u8> {
-		hex::decode(self.parsed.single(PCR1).expect("required arg"))
+		qos_hex::decode(self.parsed.single(PCR1).expect("required arg"))
 			.expect("Could not parse `--pcr1` to bytes")
 	}
 
 	fn pcr2(&self) -> Vec<u8> {
-		hex::decode(self.parsed.single(PCR2).expect("required arg"))
+		qos_hex::decode(self.parsed.single(PCR2).expect("required arg"))
 			.expect("Could not parse `--pcr2` to bytes")
 	}
 
@@ -741,7 +749,7 @@ impl ClientOpts {
 	}
 
 	fn pivot_hash(&self) -> Vec<u8> {
-		hex::decode(self.parsed.single(PIVOT_HASH).expect("required arg"))
+		qos_hex::decode(self.parsed.single(PIVOT_HASH).expect("required arg"))
 			.expect("Could not parse `--pivot-hash` to bytes")
 	}
 
@@ -759,10 +767,12 @@ impl ClientOpts {
 	}
 
 	fn manifest_hash(&self) -> Hash256 {
-		hex::decode(self.parsed.single(MANIFEST_HASH).expect("required arg"))
-			.expect("Could not parse `--manifest-hash` to bytes")
-			.try_into()
-			.expect("Could not convert manifest hash to Hash256")
+		qos_hex::decode(
+			self.parsed.single(MANIFEST_HASH).expect("required arg"),
+		)
+		.expect("Could not parse `--manifest-hash` to bytes")
+		.try_into()
+		.expect("Could not convert manifest hash to Hash256")
 	}
 
 	fn pivot_path(&self) -> String {
@@ -941,7 +951,7 @@ mod handlers {
 				ProtocolMsg::NsmResponse {
 					nsm_response: NsmResponse::DescribePCR { lock: _, data },
 				} => {
-					println!("{:#?}", qos_core::hex::encode(&data));
+					println!("{:#?}", qos_hex::encode(&data));
 				}
 				other => panic!("Unexpected response {:?}", other),
 			}

@@ -7,6 +7,7 @@ edition = "2021"
 qos-core = { path = "../qos-core", default-features = false }
 qos-crypto = { path = "../qos-crypto", default-features = false }
 qos-attest = { path = "../qos-attest", default-features = false }
+qos-hex = { path = "../qos-hex" }
 
 # Third party
 ureq = { version = "2.4", default-features = false }

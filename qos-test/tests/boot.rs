@@ -2,21 +2,18 @@ use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
 use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
-use qos_core::{
-	hex,
-	protocol::{
-		attestor::mock::{
-			MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
-		},
-		services::{
-			boot::{
-				Approval, Manifest, Namespace, NitroConfig, PivotConfig,
-				QuorumMember, QuorumSet, RestartPolicy,
-			},
-			genesis::GenesisOutput,
-		},
-		QosHash,
+use qos_core::protocol::{
+	attestor::mock::{
+		MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
 	},
+	services::{
+		boot::{
+			Approval, Manifest, Namespace, NitroConfig, PivotConfig,
+			QuorumMember, QuorumSet, RestartPolicy,
+		},
+		genesis::GenesisOutput,
+	},
+	QosHash,
 };
 use qos_crypto::{sha_256, RsaPair};
 use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
@@ -54,7 +51,7 @@ async fn boot_e2e() {
 	// // -- CLIENT create manifest.
 	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
-	let mock_pivot_hash_hex = hex::encode(&mock_pivot_hash);
+	let mock_pivot_hash_qos_hex = qos_hex::encode(&mock_pivot_hash);
 	let msg = "testing420";
 	let pivot_args = format!("[--msg,{}]", msg);
 
@@ -68,7 +65,7 @@ async fn boot_e2e() {
 			"--namespace",
 			namespace,
 			"--pivot-hash",
-			&mock_pivot_hash_hex,
+			&mock_pivot_hash_qos_hex,
 			"--restart-policy",
 			"never",
 			"--pcr0",
@@ -125,9 +122,9 @@ async fn boot_e2e() {
 				members: quorum_set_members
 			},
 			enclave: NitroConfig {
-				pcr0: hex::decode(MOCK_PCR0).unwrap(),
-				pcr1: hex::decode(MOCK_PCR1).unwrap(),
-				pcr2: hex::decode(MOCK_PCR2).unwrap(),
+				pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),
+				pcr1: qos_hex::decode(MOCK_PCR1).unwrap(),
+				pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
 				aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap()
 			},
 		}
@@ -144,7 +141,7 @@ async fn boot_e2e() {
 			.args([
 				"sign-manifest",
 				"--manifest-hash",
-				hex::encode(&manifest.qos_hash()).as_str(),
+				qos_hex::encode(&manifest.qos_hash()).as_str(),
 				"--personal-dir",
 				&personal_dir(alias),
 				"--boot-dir",
@@ -248,7 +245,7 @@ async fn boot_e2e() {
 				"--personal-dir",
 				&personal_dir(user),
 				"--manifest-hash",
-				hex::encode(&manifest.qos_hash()).as_str(),
+				qos_hex::encode(&manifest.qos_hash()).as_str(),
 				"--host-port",
 				host_port,
 				"--host-ip",

@@ -43,7 +43,6 @@ pub mod cli;
 pub mod client;
 pub mod coordinator;
 pub mod handles;
-pub mod hex;
 pub mod io;
 pub mod parser;
 pub mod protocol;
