@@ -51,7 +51,7 @@ async fn boot_e2e() {
 	// // -- CLIENT create manifest.
 	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
-	let mock_pivot_hash_qos_hex = qos_hex::encode(&mock_pivot_hash);
+	let mock_pivot_hash_hex = qos_hex::encode(&mock_pivot_hash);
 	let msg = "testing420";
 	let pivot_args = format!("[--msg,{}]", msg);
 
@@ -65,7 +65,7 @@ async fn boot_e2e() {
 			"--namespace",
 			namespace,
 			"--pivot-hash",
-			&mock_pivot_hash_qos_hex,
+			&mock_pivot_hash_hex,
 			"--restart-policy",
 			"never",
 			"--pcr0",
