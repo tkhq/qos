@@ -469,7 +469,7 @@ impl Command {
 	fn manifest_hash_token() -> Token {
 		Token::new(
 			MANIFEST_HASH,
-			"qos_hex encoded hash of the expected manifest.",
+			"Hex encoded hash of the expected manifest.",
 		)
 		.takes_value(true)
 		.required(true)
@@ -485,17 +485,17 @@ impl Command {
 			.required(true)
 	}
 	fn pcr0_token() -> Token {
-		Token::new(PCR0, "qos_hex encoded pcr0.")
+		Token::new(PCR0, "Hex encoded pcr0.")
 			.takes_value(true)
 			.required(true)
 	}
 	fn pcr1_token() -> Token {
-		Token::new(PCR1, "qos_hex encoded pcr0.")
+		Token::new(PCR1, "Hex encoded pcr0.")
 			.takes_value(true)
 			.required(true)
 	}
 	fn pcr2_token() -> Token {
-		Token::new(PCR2, "qos_hex encoded pcr2.")
+		Token::new(PCR2, "Hex encoded pcr2.")
 			.takes_value(true)
 			.required(true)
 	}
@@ -605,7 +605,7 @@ impl Command {
 			.token(
 				Token::new(
 					PIVOT_HASH,
-					"qos_hex encoded SHA-256 hash of the pivot executable encoded as a Vec<u8>.",
+					"Hex encoded SHA-256 hash of the pivot executable encoded as a Vec<u8>.",
 				)
 				.takes_value(true)
 				.required(true),
