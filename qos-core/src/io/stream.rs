@@ -12,6 +12,9 @@ use nix::{
 	},
 	unistd::close,
 };
+use core::task::Poll;
+use core::task::Context;
+use core::pin::Pin;
 
 use super::IOError;
 
@@ -240,6 +243,16 @@ impl Iterator for Listener {
 	type Item = Stream;
 	fn next(&mut self) -> Option<Self::Item> {
 		self.accept().ok()
+	}
+}
+
+impl futures::stream::Stream for Listener {
+	type Item = Stream;
+	fn poll_next(
+		self: Pin<&mut Self>,
+		_cx: &mut Context<'_>
+	) -> Poll<Option<Self::Item>> {
+		Poll::Ready(self.accept().ok())
 	}
 }
 

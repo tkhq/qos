@@ -9,6 +9,7 @@ qos-crypto = { path = "../qos-crypto" }
 nix = { version = "0.24.1", features = ["socket"], default-features = false }
 openssl = { version = "0.10.40", default-features = false }
 borsh = { version = "0.9" }
+futures = { version = "0.3", default-features = false }
 
 # For AWS Nitro
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
