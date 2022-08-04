@@ -4,8 +4,7 @@
 use std::num::ParseIntError;
 
 const MEGABYTE: usize = 1024 * 1024;
-const GIGABYTE: usize = 1024 * MEGABYTE;
-const STR_MAX_LENGTH: usize = GIGABYTE;
+const STR_MAX_LENGTH: usize = 256 * MEGABYTE;
 
 /// 255 ordered pairs of characters. The first pair decodes to 0 and the last
 /// pair decodes to 255.
