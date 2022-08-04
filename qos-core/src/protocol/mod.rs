@@ -1,5 +1,7 @@
 //! Quorum protocol state machine.
 
+use std::sync::{Arc, RwLock};
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_crypto::sha_256;
 
@@ -102,6 +104,7 @@ pub enum ProtocolError {
 	/// Payload is too big. See `MAX_ENCODED_MSG_LEN` for the upper bound on
 	/// message size.
 	OversizedPayload,
+	InUnrecoverablePhase,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
@@ -130,7 +133,7 @@ impl From<client::ClientError> for ProtocolError {
 
 /// Protocol executor state.
 #[derive(
-	Debug, PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	Debug, PartialEq, Copy, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub enum ProtocolPhase {
 	/// The state machine cannot recover. The enclave must be rebooted.
@@ -143,13 +146,29 @@ pub enum ProtocolPhase {
 	QuorumKeyProvisioned,
 }
 
+impl ProtocolPhase {
+	/// Try to update the `current` phase to the `target` phase. If the current phase is not updatable,
+	/// the phase will not be updated.
+	///
+	/// Returns a copy of the new current phase, which will match `target` if `current` was updated.
+	fn update(current: &Arc<RwLock<ProtocolPhase>>, target: ProtocolPhase) -> Result<(), ProtocolError> {
+		let mut current = current.write().unwrap();
+		if *current == ProtocolPhase::UnrecoverableError {
+			Err(ProtocolError::InUnrecoverablePhase)
+		} else {
+			*current = target;
+			Ok(())
+		}
+	}
+}
+
 /// Enclave executor state
 // TODO only include mutables in here, all else should be written to file as
 // read only
 pub struct ProtocolState {
-	provisioner: services::provision::SecretBuilder,
+	provisioner: Arc<RwLock<services::provision::SecretBuilder>>,
 	attestor: Box<dyn NsmProvider>,
-	phase: ProtocolPhase,
+	phase: Arc<RwLock<ProtocolPhase>>,
 	handles: Handles,
 	app_client: Client,
 }
@@ -163,8 +182,8 @@ impl ProtocolState {
 		let provisioner = services::provision::SecretBuilder::new();
 		Self {
 			attestor,
-			provisioner,
-			phase: ProtocolPhase::WaitingForBootInstruction,
+			provisioner: Arc::new(RwLock::new(provisioner)),
+			phase: Arc::new(RwLock::new(ProtocolPhase::WaitingForBootInstruction)),
 			handles,
 			app_client: Client::new(app_addr),
 		}
@@ -189,7 +208,7 @@ impl Executor {
 	}
 
 	fn routes(&self) -> Vec<Box<ProtocolHandler>> {
-		match self.state.phase {
+		match *self.state.phase.read().unwrap() {
 			ProtocolPhase::UnrecoverableError => {
 				vec![Box::new(handlers::status)]
 			}
@@ -252,7 +271,7 @@ impl server::RequestProcessor for Executor {
 			}
 		}
 
-		let err = ProtocolError::NoMatchingRoute(self.state.phase.clone());
+		let err = ProtocolError::NoMatchingRoute(*self.state.phase.read().unwrap());
 		ProtocolMsg::ProtocolErrorResponse(err)
 			.try_to_vec()
 			.expect("ProtocolMsg can always be serialized. qed.")
@@ -274,7 +293,7 @@ mod handlers {
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::StatusRequest = req {
-			Some(ProtocolMsg::StatusResponse(state.phase.clone()))
+			Some(ProtocolMsg::StatusResponse(*state.phase.read().unwrap()))
 		} else {
 			None
 		}
@@ -324,7 +343,7 @@ mod handlers {
 					Some(ProtocolMsg::ProvisionResponse { reconstructed })
 				}
 				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
+					*state.phase.write().unwrap() = ProtocolPhase::UnrecoverableError;
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
@@ -346,7 +365,7 @@ mod handlers {
 					Some(ProtocolMsg::BootStandardResponse { nsm_response })
 				}
 				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
+					*state.phase.write().unwrap() = ProtocolPhase::UnrecoverableError;
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
@@ -368,7 +387,7 @@ mod handlers {
 					})
 				}
 				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
+					*state.phase.write().unwrap() = ProtocolPhase::UnrecoverableError;
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
@@ -389,7 +408,7 @@ mod handlers {
 					})
 				}
 				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
+					*state.phase.write().unwrap() = ProtocolPhase::UnrecoverableError;
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}

@@ -60,16 +60,17 @@ pub(in crate::protocol) fn provision(
 		.envelope_decrypt(encrypted_share)
 		.map_err(|_| ProtocolError::DecryptionFailed)?;
 
-	state.provisioner.add_share(share)?;
+	let mut provisioner = state.provisioner.write().unwrap();
+	provisioner.add_share(share)?;
 
 	let manifest = state.handles.get_manifest_envelope()?.manifest;
 	let quorum_threshold = manifest.quorum_set.threshold as usize;
-	if state.provisioner.count() < quorum_threshold {
+	if provisioner.count() < quorum_threshold {
 		// Nothing else to do if we don't have the threshold to reconstruct
 		return Ok(false);
 	}
 
-	let private_key_der = state.provisioner.build()?;
+	let private_key_der = provisioner.build()?;
 	let pair = qos_crypto::RsaPair::from_der(&private_key_der)
 		.map_err(|_| ProtocolError::InvalidPrivateKey)?;
 	let public_key_der = pair.public_key_to_der()?;
@@ -78,13 +79,13 @@ pub(in crate::protocol) fn provision(
 		// We did not construct the intended key
 		// Something went wrong, so clear the existing shares just to be
 		// careful.
-		state.provisioner.clear();
+		provisioner.clear();
 		return Err(ProtocolError::ReconstructionError);
 	}
 
 	state.handles.put_quorum_key(&pair)?;
 
-	state.phase = ProtocolPhase::QuorumKeyProvisioned;
+	ProtocolPhase::update(&state.phase, ProtocolPhase::QuorumKeyProvisioned)?;
 	Ok(true)
 }
 

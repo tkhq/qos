@@ -31,6 +31,7 @@ pub const MOCK_NSM_ATTESTATION_DOCUMENT: &[u8] =
 	include_bytes!("./static/mock_attestation_doc");
 
 /// Mock Nitro Secure Module endpoint that should only ever be used for testing.
+#[derive(Clone)]
 pub struct MockNsm;
 impl NsmProvider for MockNsm {
 	fn nsm_process_request(

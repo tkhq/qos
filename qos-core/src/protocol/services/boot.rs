@@ -212,7 +212,7 @@ pub(in crate::protocol) fn boot_standard(
 		manifest_envelope.manifest.qos_hash().to_vec(),
 	);
 
-	state.phase = ProtocolPhase::WaitingForQuorumShards;
+	ProtocolPhase::update(&state.phase, ProtocolPhase::WaitingForQuorumShards)?;
 
 	Ok(nsm_response)
 }
