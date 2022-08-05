@@ -1,10 +1,11 @@
 //! Streaming socket based server for use in an enclave. Listens for connections
 //! from [`crate::client::Client`].
 
-use std::{marker::PhantomData};
+use std::{marker::PhantomData, sync::Arc};
 
+use crate::io::{self, threadpool::ThreadPool, Listener, SocketAddress};
 
-use crate::io::{self, Listener, SocketAddress};
+const DEFAULT_THREAD_COUNT: usize = 4;
 
 /// Error variants for [`SocketServer`]
 #[derive(Debug)]
@@ -38,55 +39,38 @@ impl<R: RequestProcessor> SocketServer<R> {
 	/// Listen and respond to incoming requests with the given `processor`.
 	pub fn listen(
 		addr: SocketAddress,
-		mut processor: R,
+		mut processor: Arc<R>,
+		thread_count: Option<usize>,
 	) -> Result<(), SocketServerError> {
-		println!("`SocketServer` listening on {:?}", addr);
+		let thread_count = thread_count.unwrap_or(DEFAULT_THREAD_COUNT);
+		println!(
+			"`SocketServer` listening on {:?} with thread count {thread_count}",
+			addr
+		);
 
 		let listener = Listener::listen(addr)?;
-		// let threads = Vec::new();
-		// let proccesor_locked = Arc::new(Mutex::new(processor));
 
-		// futures::executor::block_on(listener.for_each_concurrent(None,  move|stream| {
-		// 	match stream.recv() {
-		// 		Ok(payload) => {
-		// 			let response = proccesor_locked.clone().lock().unwrap().process(payload);
-		// 			// let _ = stream.send(&response);
-		// 		}
-		// 		Err(err) => eprintln!("Server::listen error: {:?}", err),
-		// 	}
-		// }));
-
+		let thread_pool = ThreadPool::new(thread_count);
 		for stream in listener {
-				match stream.recv() {
-					Ok(payload) => {
-						let response = processor.process(payload);
-						let _ = stream.send(&response);
-					}
-					Err(err) => eprintln!("Server::listen error: {:?}", err),
-				}
+			let processor2 = processor.clone();
+
+			let result = thread_pool
+				.execute(move || Self::handle_stream(processor2, stream))
+				.map_err(|e| eprintln!("`SocketServer::listen`: {:?}", e));
+
+			drop(result)
 		}
 
-		// for stream in listener {
-		// 	// TODO: wait if threads are maxed out
-		// 	let processor2 = processor.clone();
-		// 	let thread = std::thread::spawn(move || {
-		// 			match stream.recv() {
-		// 				Ok(payload) => {
-		// 					let response = processor.process(payload);
-		// 					let _ = stream.send(&response);
-		// 				}
-		// 				Err(err) => eprintln!("Server::listen error: {:?}", err),
-		// 			}
-		// 		}
-		// 	);
-		// 	threads.push(thread);
-
-		// }
-
-		// for thread in threads {
-		// 	drop(thread.join());
-		// }
-
 		Ok(())
+	}
+
+	fn handle_stream(processor: Arc<R>, stream: io::Stream) {
+		match stream.recv() {
+			Ok(payload) => {
+				let response = processor.process(payload);
+				let _ = stream.send(&response);
+			}
+			Err(err) => eprintln!("Server::listen error: {:?}", err),
+		}
 	}
 }

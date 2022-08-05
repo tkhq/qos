@@ -4,6 +4,7 @@
 //! within this module.
 
 mod stream;
+pub mod threadpool;
 
 pub use stream::SocketAddress;
 pub(crate) use stream::{Listener, Stream};

@@ -133,7 +133,12 @@ impl From<client::ClientError> for ProtocolError {
 
 /// Protocol executor state.
 #[derive(
-	Debug, PartialEq, Copy, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	Debug,
+	PartialEq,
+	Copy,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
 )]
 pub enum ProtocolPhase {
 	/// The state machine cannot recover. The enclave must be rebooted.
@@ -147,11 +152,15 @@ pub enum ProtocolPhase {
 }
 
 impl ProtocolPhase {
-	/// Try to update the `current` phase to the `target` phase. If the current phase is not updatable,
-	/// the phase will not be updated.
+	/// Try to update the `current` phase to the `target` phase. If the current
+	/// phase is not updatable, the phase will not be updated.
 	///
-	/// Returns a copy of the new current phase, which will match `target` if `current` was updated.
-	fn update(current: &Arc<RwLock<ProtocolPhase>>, target: ProtocolPhase) -> Result<(), ProtocolError> {
+	/// Returns a copy of the new current phase, which will match `target` if
+	/// `current` was updated.
+	fn update(
+		current: &Arc<RwLock<ProtocolPhase>>,
+		target: ProtocolPhase,
+	) -> Result<(), ProtocolError> {
 		let mut current = current.write().unwrap();
 		if *current == ProtocolPhase::UnrecoverableError {
 			Err(ProtocolError::InUnrecoverablePhase)
@@ -183,7 +192,9 @@ impl ProtocolState {
 		Self {
 			attestor,
 			provisioner: Arc::new(RwLock::new(provisioner)),
-			phase: Arc::new(RwLock::new(ProtocolPhase::WaitingForBootInstruction)),
+			phase: Arc::new(RwLock::new(
+				ProtocolPhase::WaitingForBootInstruction,
+			)),
 			handles,
 			app_client: Client::new(app_addr),
 		}
@@ -271,7 +282,8 @@ impl server::RequestProcessor for Executor {
 			}
 		}
 
-		let err = ProtocolError::NoMatchingRoute(*self.state.phase.read().unwrap());
+		let err =
+			ProtocolError::NoMatchingRoute(*self.state.phase.read().unwrap());
 		ProtocolMsg::ProtocolErrorResponse(err)
 			.try_to_vec()
 			.expect("ProtocolMsg can always be serialized. qed.")
@@ -343,7 +355,8 @@ mod handlers {
 					Some(ProtocolMsg::ProvisionResponse { reconstructed })
 				}
 				Err(e) => {
-					*state.phase.write().unwrap() = ProtocolPhase::UnrecoverableError;
+					*state.phase.write().unwrap() =
+						ProtocolPhase::UnrecoverableError;
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
@@ -365,7 +378,8 @@ mod handlers {
 					Some(ProtocolMsg::BootStandardResponse { nsm_response })
 				}
 				Err(e) => {
-					*state.phase.write().unwrap() = ProtocolPhase::UnrecoverableError;
+					*state.phase.write().unwrap() =
+						ProtocolPhase::UnrecoverableError;
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
@@ -387,7 +401,8 @@ mod handlers {
 					})
 				}
 				Err(e) => {
-					*state.phase.write().unwrap() = ProtocolPhase::UnrecoverableError;
+					*state.phase.write().unwrap() =
+						ProtocolPhase::UnrecoverableError;
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
@@ -408,7 +423,8 @@ mod handlers {
 					})
 				}
 				Err(e) => {
-					*state.phase.write().unwrap() = ProtocolPhase::UnrecoverableError;
+					*state.phase.write().unwrap() =
+						ProtocolPhase::UnrecoverableError;
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}

@@ -1,5 +1,9 @@
 //! Abstractions to handle connection based socket streams.
 
+use core::{
+	pin::Pin,
+	task::{Context, Poll},
+};
 use std::{mem::size_of, os::unix::io::RawFd};
 
 #[cfg(feature = "vm")]
@@ -12,9 +16,6 @@ use nix::{
 	},
 	unistd::close,
 };
-use core::task::Poll;
-use core::task::Context;
-use core::pin::Pin;
 
 use super::IOError;
 
@@ -250,7 +251,7 @@ impl futures::stream::Stream for Listener {
 	type Item = Stream;
 	fn poll_next(
 		self: Pin<&mut Self>,
-		_cx: &mut Context<'_>
+		_cx: &mut Context<'_>,
 	) -> Poll<Option<Self::Item>> {
 		Poll::Ready(self.accept().ok())
 	}
