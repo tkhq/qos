@@ -146,7 +146,6 @@ mod test {
 
 		let db = Arc::new(Mutex::new(db));
 
-		// create job that
 		let thread_pool = ThreadPool::new(128);
 
 		for _ in 0..EXECUTIONS {
