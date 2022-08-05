@@ -48,14 +48,31 @@ struct State {
 pub struct HostServer {
 	enclave_addr: SocketAddress,
 	addr: SocketAddr,
+	base_path: Option<String>,
 }
+
+const HOST_HEALTH: &str = "/host-health";
+const ENCLAVE_HEALTH: &str = "/enclave-health";
+const MESSAGE: &str = "/message";
 
 impl HostServer {
 	/// Create a new [`HostServer`]. See [`Self::serve`] for starting the
 	/// server.
 	#[must_use]
-	pub fn new(enclave_addr: SocketAddress, addr: SocketAddr) -> Self {
-		Self { enclave_addr, addr }
+	pub fn new(
+		enclave_addr: SocketAddress,
+		addr: SocketAddr,
+		base_path: Option<String>,
+	) -> Self {
+		Self { enclave_addr, addr, base_path }
+	}
+
+	fn path(&self, endpoint: &str) -> String {
+		if let Some(path) = self.base_path.as_ref() {
+			format!("/{path}{endpoint}")
+		} else {
+			format!("/qos{endpoint}")
+		}
 	}
 
 	/// Start the server, running indefinitely.
@@ -70,9 +87,9 @@ impl HostServer {
 		});
 
 		let app = Router::new()
-			.route("/host-health", get(Self::host_health))
-			.route("/enclave-health", get(Self::enclave_health))
-			.route("/message", post(Self::message))
+			.route(&self.path(HOST_HEALTH), get(Self::host_health))
+			.route(&self.path(ENCLAVE_HEALTH), get(Self::enclave_health))
+			.route(&self.path(MESSAGE), post(Self::message))
 			.layer(Extension(state));
 
 		println!("HostServer listening on {}", self.addr);
