@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 qos-core = { path = "../qos-core", default-features = false }
+qos-hex = { path = "../qos-hex" }
 
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 aws-nitro-enclaves-cose = { version = "0.4.0", default-features = false, features = ["key_openssl_pkey"] }

@@ -318,7 +318,6 @@
 use std::env;
 
 use qos_core::{
-	hex,
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
 	protocol::{msg::ProtocolMsg, services::boot, Hash256},
 };
@@ -710,17 +709,17 @@ impl ClientOpts {
 	}
 
 	fn pcr0(&self) -> Vec<u8> {
-		hex::decode(self.parsed.single(PCR0).expect("required arg"))
+		qos_hex::decode(self.parsed.single(PCR0).expect("required arg"))
 			.expect("Could not parse `--pcr0` to bytes")
 	}
 
 	fn pcr1(&self) -> Vec<u8> {
-		hex::decode(self.parsed.single(PCR1).expect("required arg"))
+		qos_hex::decode(self.parsed.single(PCR1).expect("required arg"))
 			.expect("Could not parse `--pcr1` to bytes")
 	}
 
 	fn pcr2(&self) -> Vec<u8> {
-		hex::decode(self.parsed.single(PCR2).expect("required arg"))
+		qos_hex::decode(self.parsed.single(PCR2).expect("required arg"))
 			.expect("Could not parse `--pcr2` to bytes")
 	}
 
@@ -741,7 +740,7 @@ impl ClientOpts {
 	}
 
 	fn pivot_hash(&self) -> Vec<u8> {
-		hex::decode(self.parsed.single(PIVOT_HASH).expect("required arg"))
+		qos_hex::decode(self.parsed.single(PIVOT_HASH).expect("required arg"))
 			.expect("Could not parse `--pivot-hash` to bytes")
 	}
 
@@ -759,10 +758,12 @@ impl ClientOpts {
 	}
 
 	fn manifest_hash(&self) -> Hash256 {
-		hex::decode(self.parsed.single(MANIFEST_HASH).expect("required arg"))
-			.expect("Could not parse `--manifest-hash` to bytes")
-			.try_into()
-			.expect("Could not convert manifest hash to Hash256")
+		qos_hex::decode(
+			self.parsed.single(MANIFEST_HASH).expect("required arg"),
+		)
+		.expect("Could not parse `--manifest-hash` to bytes")
+		.try_into()
+		.expect("Could not convert manifest hash to Hash256")
 	}
 
 	fn pivot_path(&self) -> String {
@@ -941,7 +942,7 @@ mod handlers {
 				ProtocolMsg::NsmResponse {
 					nsm_response: NsmResponse::DescribePCR { lock: _, data },
 				} => {
-					println!("{:#?}", qos_core::hex::encode(&data));
+					println!("{:#?}", qos_hex::encode(&data));
 				}
 				other => panic!("Unexpected response {:?}", other),
 			}

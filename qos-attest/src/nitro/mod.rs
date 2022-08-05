@@ -236,12 +236,9 @@ fn verify_cose_sign1_sig(
 mod test {
 	use aws_nitro_enclaves_cose::header_map::HeaderMap;
 	use openssl::pkey::{PKey, Private, Public};
-	use qos_core::{
-		hex,
-		protocol::attestor::mock::{
-			MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
-			MOCK_SECONDS_SINCE_EPOCH, MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT,
-		},
+	use qos_core::protocol::attestor::mock::{
+		MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
+		MOCK_SECONDS_SINCE_EPOCH, MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT,
 	};
 
 	use super::*;
@@ -471,10 +468,10 @@ mod test {
 		// Accepts valid inputs
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
-			&hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
-			&hex::decode(MOCK_PCR0).unwrap(),
-			&hex::decode(MOCK_PCR1).unwrap(),
-			&hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&qos_hex::decode(MOCK_PCR0).unwrap(),
+			&qos_hex::decode(MOCK_PCR1).unwrap(),
+			&qos_hex::decode(MOCK_PCR2).unwrap(),
 		);
 	}
 
@@ -488,9 +485,9 @@ mod test {
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			&[255; 32],
-			&hex::decode(MOCK_PCR0).unwrap(),
-			&hex::decode(MOCK_PCR1).unwrap(),
-			&hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_PCR0).unwrap(),
+			&qos_hex::decode(MOCK_PCR1).unwrap(),
+			&qos_hex::decode(MOCK_PCR2).unwrap(),
 		);
 	}
 
@@ -506,10 +503,10 @@ mod test {
 
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
-			&hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
-			&hex::decode(MOCK_PCR0).unwrap(),
-			&hex::decode(MOCK_PCR1).unwrap(),
-			&hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&qos_hex::decode(MOCK_PCR0).unwrap(),
+			&qos_hex::decode(MOCK_PCR1).unwrap(),
+			&qos_hex::decode(MOCK_PCR2).unwrap(),
 		);
 	}
 
@@ -522,10 +519,10 @@ mod test {
 
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
-			&hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
 			&[255; 48],
-			&hex::decode(MOCK_PCR1).unwrap(),
-			&hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_PCR1).unwrap(),
+			&qos_hex::decode(MOCK_PCR2).unwrap(),
 		);
 	}
 
@@ -538,10 +535,10 @@ mod test {
 
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
-			&hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
-			&hex::decode(MOCK_PCR0).unwrap(),
+			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&qos_hex::decode(MOCK_PCR0).unwrap(),
 			&[255; 48],
-			&hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_PCR2).unwrap(),
 		);
 	}
 
@@ -554,9 +551,9 @@ mod test {
 
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
-			&hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
-			&hex::decode(MOCK_PCR0).unwrap(),
-			&hex::decode(MOCK_PCR1).unwrap(),
+			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&qos_hex::decode(MOCK_PCR0).unwrap(),
+			&qos_hex::decode(MOCK_PCR1).unwrap(),
 			&[255; 48],
 		);
 	}

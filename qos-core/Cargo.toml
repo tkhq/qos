@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 qos-crypto = { path = "../qos-crypto" }
+qos-hex = { path = "../qos-hex" }
 
 nix = { version = "0.24.1", features = ["socket"], default-features = false }
 openssl = { version = "0.10.40", default-features = false }

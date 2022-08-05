@@ -10,6 +10,7 @@ qos-host = { path = "../qos-host", default-features = false }
 qos-client = { path = "../qos-client", default-features = false }
 qos-crypto = { path = "../qos-crypto" }
 qos-attest = { path = "../qos-attest", default-features = false }
+qos-hex = { path = "../qos-hex" }
 sample-app = { path = "../sample-app" }
 
 tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
