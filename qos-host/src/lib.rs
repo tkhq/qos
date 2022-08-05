@@ -71,7 +71,7 @@ impl HostServer {
 		if let Some(path) = self.base_path.as_ref() {
 			format!("/{path}{endpoint}")
 		} else {
-			endpoint.to_string()
+			format!("/qos{endpoint}")
 		}
 	}
 

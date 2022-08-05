@@ -704,7 +704,7 @@ impl ClientOpts {
 		if let Some(base) = self.parsed.single(ENDPOINT_BASE_PATH) {
 			format!("http://{ip}:{port}/{base}/{uri}")
 		} else {
-			format!("http://{ip}:{port}/{uri}")
+			format!("http://{ip}:{port}/qos/{uri}")
 		}
 	}
 
