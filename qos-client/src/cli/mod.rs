@@ -897,7 +897,7 @@ mod handlers {
 	};
 
 	pub(super) fn host_health(opts: &ClientOpts) {
-		let path = &opts.path("health");
+		let path = &opts.path("host-health");
 		if let Ok(response) = request::get(path) {
 			println!("{}", response);
 		} else {
