@@ -344,6 +344,7 @@ const PERSONAL_DIR: &str = "personal-dir";
 const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
+const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 
 /// Commands for the Client CLI.
 ///
@@ -540,6 +541,13 @@ impl Command {
 					.takes_value(true)
 					.required(true),
 			)
+			.token(
+				Token::new(
+					ENDPOINT_BASE_PATH,
+					"base path for all endpoints. e.g. <BASE>/enclave-health",
+				)
+				.takes_value(true),
+			)
 	}
 
 	fn generate_setup_key() -> Parser {
@@ -693,7 +701,11 @@ impl ClientOpts {
 		let ip = self.parsed.single(HOST_IP).expect("required arg");
 		let port = self.parsed.single(HOST_PORT).expect("required arg");
 
-		format!("http://{}:{}/{}", ip, port, uri)
+		if let Some(base) = self.parsed.single(ENDPOINT_BASE_PATH) {
+			format!("http://{ip}:{port}/{base}/{uri}")
+		} else {
+			format!("http://{ip}:{port}/{uri}")
+		}
 	}
 
 	fn alias(&self) -> String {
