@@ -37,6 +37,13 @@ pub struct SocketServer<R: RequestProcessor> {
 
 impl<R: RequestProcessor + Send + Sync + 'static + Clone> SocketServer<R> {
 	/// Listen and respond to incoming requests with the given `processor`.
+	///
+	/// # Note Importantly
+	///
+	/// The `processor` must afford the ability to be cloned and passed to a new
+	/// thread. For every new request, the `processor` will be cloned and passed
+	/// to a new thread, so if it has any state that state needs to be thread
+	/// safe after being cloned.
 	#[allow(clippy::needless_pass_by_value)]
 	pub fn listen(
 		addr: SocketAddress,
@@ -50,8 +57,8 @@ impl<R: RequestProcessor + Send + Sync + 'static + Clone> SocketServer<R> {
 		);
 
 		let listener = Listener::listen(addr)?;
-
 		let thread_pool = ThreadPool::new(thread_count);
+
 		for stream in listener {
 			let processor2 = processor.clone();
 
@@ -63,6 +70,7 @@ impl<R: RequestProcessor + Send + Sync + 'static + Clone> SocketServer<R> {
 		Ok(())
 	}
 
+	#[allow(clippy::needless_pass_by_value)]
 	fn handle_stream(mut processor: R, stream: io::Stream) {
 		match stream.recv() {
 			Ok(payload) => {
@@ -71,7 +79,5 @@ impl<R: RequestProcessor + Send + Sync + 'static + Clone> SocketServer<R> {
 			}
 			Err(err) => eprintln!("Server::listen error: {:?}", err),
 		}
-		drop(processor);
-		drop(stream);
 	}
 }
