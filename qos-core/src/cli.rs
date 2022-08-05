@@ -17,7 +17,6 @@ pub const CID: &str = "cid";
 pub const PORT: &str = "port";
 /// "usock"
 pub const USOCK: &str = "usock";
-const MOCK: &str = "mock";
 /// Name for the option to specify the quorum key file.
 pub const QUORUM_FILE_OPT: &str = "quorum-file";
 /// Name for the option to specify the pivot key file.
@@ -26,7 +25,11 @@ pub const PIVOT_FILE_OPT: &str = "pivot-file";
 pub const EPHEMERAL_FILE_OPT: &str = "ephemeral-file";
 /// Name for the option to specify the manifest file.
 pub const MANIFEST_FILE_OPT: &str = "manifest-file";
+/// Name for the option to specify the number of threads for the socket server's
+/// thread pool.
+pub const THREAD_COUNT: &str = "thread-count";
 const APP_USOCK: &str = "app-usock";
+const MOCK: &str = "mock";
 
 /// CLI options for starting up the enclave server.
 #[derive(Default, Clone, Debug, PartialEq)]
@@ -118,6 +121,12 @@ impl EnclaveOpts {
 			.expect("has a default value.")
 			.clone()
 	}
+
+	fn thread_count(&self) -> Option<usize> {
+		self.parsed
+			.single(THREAD_COUNT)
+			.map(|n| n.parse().expect("failed to parse `--thread-count`"))
+	}
 }
 
 /// Enclave server CLI.
@@ -143,6 +152,7 @@ impl CLI {
 				opts.nsm(),
 				opts.addr(),
 				opts.app_addr(),
+				opts.thread_count(),
 			);
 		}
 	}
@@ -197,6 +207,10 @@ impl GetParserForOptions for EnclaveParser {
 				Token::new(APP_USOCK, "the socket the secure app is listening on.")
 					.takes_value(true)
 					.default_value(SEC_APP_SOCK)
+			)
+			.token(
+				Token::new(THREAD_COUNT, "count of threads for the socket servers thread pool")
+					.takes_value(true)
 			)
 	}
 }

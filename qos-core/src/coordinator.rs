@@ -32,11 +32,12 @@ impl Coordinator {
 		nsm: Box<dyn NsmProvider>,
 		addr: SocketAddress,
 		app_addr: SocketAddress,
+		thread_count: Option<usize>,
 	) {
 		let handles2 = handles.clone();
 		std::thread::spawn(move || {
 			let executor = Executor::new(nsm, handles2, app_addr);
-			SocketServer::listen(addr, executor, None).unwrap();
+			SocketServer::listen(addr, executor, thread_count).unwrap();
 		});
 
 		loop {
