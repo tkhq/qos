@@ -209,7 +209,7 @@ impl GetParserForOptions for EnclaveParser {
 					.default_value(SEC_APP_SOCK)
 			)
 			.token(
-				Token::new(THREAD_COUNT, "count of threads for the socket servers thread pool")
+				Token::new(THREAD_COUNT, "count of threads for the socket server's thread pool")
 					.takes_value(true)
 			)
 	}
