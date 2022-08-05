@@ -126,3 +126,41 @@ impl Worker {
 		Worker { thread: Some(thread) }
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use std::{
+		collections::HashMap,
+		sync::{Arc, Mutex},
+	};
+
+	use super::ThreadPool;
+
+	#[test]
+	fn graceful_shutdown_works() {
+		const KEY: &str = "key";
+		const EXECUTIONS: usize = 500;
+
+		let mut db = HashMap::new();
+		db.insert(KEY, 0);
+
+		let db = Arc::new(Mutex::new(db));
+
+		// create job that
+		let thread_pool = ThreadPool::new(128);
+
+		for _ in 0..EXECUTIONS {
+			let db2 = db.clone();
+			thread_pool
+				.execute(move || {
+					*db2.lock().unwrap().get_mut(KEY).unwrap() += 1;
+				})
+				.unwrap();
+		}
+
+		// Graceful shutdown
+		drop(thread_pool);
+
+		assert_eq!(*db.lock().unwrap().get(KEY).unwrap(), EXECUTIONS);
+	}
+}
