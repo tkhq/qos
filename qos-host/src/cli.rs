@@ -16,6 +16,7 @@ use crate::HostServer;
 
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
+const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 
 struct HostParser;
 impl GetParserForOptions for HostParser {
@@ -47,6 +48,10 @@ impl GetParserForOptions for HostParser {
 				Token::new(HOST_PORT, "IP address this server should listen on")
 					.takes_value(true)
 					.required(true)
+			)
+			.token(
+				Token::new(ENDPOINT_BASE_PATH, "base path for all endpoints. e.g. <BASE>/enclave-health")
+					.takes_value(true)
 			)
 	}
 }
@@ -121,6 +126,10 @@ impl HostOptions {
 	fn port(&self) -> String {
 		self.parsed.single(HOST_PORT).expect("required arg").clone()
 	}
+
+	fn base_path(&self) -> Option<String> {
+		self.parsed.single(ENDPOINT_BASE_PATH).map(Clone::clone)
+	}
 }
 
 /// Host server command line interface.
@@ -136,9 +145,13 @@ impl CLI {
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
 		} else {
-			HostServer::new(options.enclave_addr(), options.host_addr())
-				.serve()
-				.await;
+			HostServer::new(
+				options.enclave_addr(),
+				options.host_addr(),
+				options.base_path(),
+			)
+			.serve()
+			.await;
 		}
 	}
 }
