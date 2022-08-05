@@ -91,7 +91,10 @@ pub(in crate::protocol) fn provision(
 
 #[cfg(test)]
 mod test {
-	use std::path::Path;
+	use std::{
+		path::Path,
+		sync::{Arc, RwLock},
+	};
 
 	use qos_crypto::{sha_256, shamir::shares_generate, RsaPair};
 
@@ -156,9 +159,9 @@ mod test {
 
 		// 3) Create state with eph key and manifest
 		let state = ProtocolState {
-			provisioner: provision::SecretBuilder::new(),
-			attestor: Box::new(MockNsm),
-			phase: ProtocolPhase::WaitingForQuorumShards,
+			provisioner: Arc::new(RwLock::new(provision::SecretBuilder::new())),
+			attestor: Arc::new(Box::new(MockNsm)),
+			phase: Arc::new(RwLock::new(ProtocolPhase::WaitingForQuorumShards)),
 			handles,
 			app_client: Client::new(SocketAddress::new_unix("./never.sock")),
 		};
@@ -188,7 +191,10 @@ mod test {
 		for share in &encrypted_shares[..threshold - 1] {
 			assert_eq!(provision(share, &mut state), Ok(false));
 			assert!(!Path::new(quorum_file).exists());
-			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+			assert_eq!(
+				*state.phase.read().unwrap(),
+				ProtocolPhase::WaitingForQuorumShards
+			);
 		}
 
 		// 6) For shard K, call provision, make sure returns true and writes
@@ -197,7 +203,10 @@ mod test {
 		assert_eq!(provision(share, &mut state), Ok(true));
 		let quorum_key = std::fs::read(quorum_file).unwrap();
 		assert_eq!(quorum_key, quorum_pair.private_key_to_pem().unwrap());
-		assert_eq!(state.phase, ProtocolPhase::QuorumKeyProvisioned);
+		assert_eq!(
+			*state.phase.read().unwrap(),
+			ProtocolPhase::QuorumKeyProvisioned
+		);
 
 		std::fs::remove_file(eph_file).unwrap();
 		std::fs::remove_file(quorum_file).unwrap();
@@ -227,7 +236,10 @@ mod test {
 		for share in &encrypted_shares[..threshold - 1] {
 			assert_eq!(provision(share, &mut state), Ok(false));
 			assert!(!Path::new(quorum_file).exists());
-			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+			assert_eq!(
+				*state.phase.read().unwrap(),
+				ProtocolPhase::WaitingForQuorumShards
+			);
 		}
 
 		// 6) Add Kth shard of the random key
@@ -238,7 +250,10 @@ mod test {
 		);
 		assert!(!Path::new(quorum_file).exists());
 		// Note that the handler should set the state to unrecoverable error
-		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+		assert_eq!(
+			*state.phase.read().unwrap(),
+			ProtocolPhase::WaitingForQuorumShards
+		);
 
 		std::fs::remove_file(eph_file).unwrap();
 		std::fs::remove_file(manifest_file).unwrap();
@@ -267,7 +282,10 @@ mod test {
 		for share in &encrypted_shares[..threshold - 1] {
 			assert_eq!(provision(share, &mut state), Ok(false));
 			assert!(!Path::new(quorum_file).exists());
-			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+			assert_eq!(
+				*state.phase.read().unwrap(),
+				ProtocolPhase::WaitingForQuorumShards
+			);
 		}
 
 		// 6) Add a bogus shard as the Kth shard
@@ -280,7 +298,10 @@ mod test {
 		);
 		assert!(!Path::new(quorum_file).exists());
 		// Note that the handler should set the state to unrecoverable error
-		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+		assert_eq!(
+			*state.phase.read().unwrap(),
+			ProtocolPhase::WaitingForQuorumShards
+		);
 
 		std::fs::remove_file(eph_file).unwrap();
 		std::fs::remove_file(manifest_file).unwrap();

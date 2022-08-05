@@ -1,7 +1,7 @@
 //! Streaming socket based server for use in an enclave. Listens for connections
 //! from [`crate::client::Client`].
 
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 use crate::io::{self, threadpool::ThreadPool, Listener, SocketAddress};
 
@@ -35,11 +35,12 @@ pub struct SocketServer<R: RequestProcessor> {
 	_phantom: PhantomData<R>,
 }
 
-impl<R: RequestProcessor> SocketServer<R> {
+impl<R: RequestProcessor + Send + Sync + 'static + Clone> SocketServer<R> {
 	/// Listen and respond to incoming requests with the given `processor`.
+	#[allow(clippy::needless_pass_by_value)]
 	pub fn listen(
 		addr: SocketAddress,
-		mut processor: Arc<R>,
+		processor: R,
 		thread_count: Option<usize>,
 	) -> Result<(), SocketServerError> {
 		let thread_count = thread_count.unwrap_or(DEFAULT_THREAD_COUNT);
@@ -54,17 +55,15 @@ impl<R: RequestProcessor> SocketServer<R> {
 		for stream in listener {
 			let processor2 = processor.clone();
 
-			let result = thread_pool
+			let _ = thread_pool
 				.execute(move || Self::handle_stream(processor2, stream))
 				.map_err(|e| eprintln!("`SocketServer::listen`: {:?}", e));
-
-			drop(result)
 		}
 
 		Ok(())
 	}
 
-	fn handle_stream(processor: Arc<R>, stream: io::Stream) {
+	fn handle_stream(mut processor: R, stream: io::Stream) {
 		match stream.recv() {
 			Ok(payload) => {
 				let response = processor.process(payload);
@@ -72,5 +71,7 @@ impl<R: RequestProcessor> SocketServer<R> {
 			}
 			Err(err) => eprintln!("Server::listen error: {:?}", err),
 		}
+		drop(processor);
+		drop(stream);
 	}
 }

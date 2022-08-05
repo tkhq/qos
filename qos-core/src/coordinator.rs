@@ -4,7 +4,7 @@
 //!
 //! The pivot is an executable the enclave runs to initialize the secure
 //! applications.
-use std::{process::Command, sync::Arc};
+use std::process::Command;
 
 use crate::{
 	handles::Handles,
@@ -29,14 +29,14 @@ impl Coordinator {
 	/// - If waiting for the pivot errors.
 	pub fn execute(
 		handles: &Handles,
-		nsm: Box<dyn NsmProvider + Send>,
+		nsm: Box<dyn NsmProvider>,
 		addr: SocketAddress,
 		app_addr: SocketAddress,
 	) {
 		let handles2 = handles.clone();
 		std::thread::spawn(move || {
 			let executor = Executor::new(nsm, handles2, app_addr);
-			SocketServer::listen(addr, Arc::new(executor)).unwrap();
+			SocketServer::listen(addr, executor, None).unwrap();
 		});
 
 		loop {

@@ -122,7 +122,7 @@ impl Cli {
 			));
 			println!("---- Starting secure app server -----");
 
-			SocketServer::listen(opts.addr(), processor).unwrap();
+			SocketServer::listen(opts.addr(), processor, Some(4)).unwrap();
 		}
 	}
 }

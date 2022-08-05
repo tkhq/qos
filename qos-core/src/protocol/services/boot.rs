@@ -207,7 +207,7 @@ pub(in crate::protocol) fn boot_standard(
 	state.handles.put_manifest_envelope(manifest_envelope)?;
 
 	let nsm_response = attestation::get_post_boot_attestation_doc(
-		&*state.attestor,
+		&**state.attestor,
 		ephemeral_key.public_key_to_pem()?,
 		manifest_envelope.manifest.qos_hash().to_vec(),
 	);
@@ -332,7 +332,10 @@ mod test {
 		std::fs::remove_file(ephemeral_file).unwrap();
 		std::fs::remove_file(manifest_file).unwrap();
 
-		assert_eq!(protocol_state.phase, ProtocolPhase::WaitingForQuorumShards);
+		assert_eq!(
+			*protocol_state.phase.read().unwrap(),
+			ProtocolPhase::WaitingForQuorumShards
+		);
 	}
 
 	#[test]

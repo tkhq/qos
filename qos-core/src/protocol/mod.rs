@@ -104,6 +104,8 @@ pub enum ProtocolError {
 	/// Payload is too big. See `MAX_ENCODED_MSG_LEN` for the upper bound on
 	/// message size.
 	OversizedPayload,
+	/// The enclave is in an unrecoverable phase and could not complete the
+	/// request.
 	InUnrecoverablePhase,
 }
 
@@ -174,9 +176,10 @@ impl ProtocolPhase {
 /// Enclave executor state
 // TODO only include mutables in here, all else should be written to file as
 // read only
+#[derive(Clone)]
 pub struct ProtocolState {
 	provisioner: Arc<RwLock<services::provision::SecretBuilder>>,
-	attestor: Box<dyn NsmProvider>,
+	attestor: Arc<Box<dyn NsmProvider>>,
 	phase: Arc<RwLock<ProtocolPhase>>,
 	handles: Handles,
 	app_client: Client,
@@ -190,7 +193,7 @@ impl ProtocolState {
 	) -> Self {
 		let provisioner = services::provision::SecretBuilder::new();
 		Self {
-			attestor,
+			attestor: Arc::new(attestor),
 			provisioner: Arc::new(RwLock::new(provisioner)),
 			phase: Arc::new(RwLock::new(
 				ProtocolPhase::WaitingForBootInstruction,
@@ -203,6 +206,7 @@ impl ProtocolState {
 
 /// Maybe rename state machine?
 /// Enclave state machine that executes when given a `ProtocolMsg`.
+#[derive(Clone)]
 pub struct Executor {
 	state: ProtocolState,
 }

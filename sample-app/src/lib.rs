@@ -87,6 +87,7 @@ pub enum AppMsg {
 }
 
 /// Request router for the app.
+#[derive(Clone)]
 pub struct AppProcessor {
 	handles: Handles,
 }

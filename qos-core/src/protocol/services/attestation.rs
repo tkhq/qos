@@ -15,7 +15,7 @@ pub(in crate::protocol) fn live_attestation_doc(
 		state.handles.get_manifest_envelope()?.manifest.qos_hash().to_vec();
 
 	Ok(get_post_boot_attestation_doc(
-		&*state.attestor,
+		&**state.attestor,
 		ephemeral_public_key,
 		manifest_hash,
 	))

@@ -1,3 +1,5 @@
+//! Simple thread pool for running concurrent jobs on separate threads.
+
 use std::{
 	sync::{mpsc, Arc, Mutex},
 	thread,
@@ -6,7 +8,9 @@ use std::{
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
 /// Errors for a [`ThreadPool`]
+#[derive(Debug)]
 pub enum ThreadPoolError {
+	/// Wrapper for `std::sync::mpsc::SendError<Message>`.
 	MpscSendError(std::sync::mpsc::SendError<Message>),
 }
 
@@ -19,7 +23,9 @@ pub struct ThreadPool {
 
 /// Message sent to a worker thread in the thread pool.
 pub enum Message {
+	/// Start a new Job.
 	NewJob(Job),
+	/// Terminate the thread.
 	Terminate,
 }
 
@@ -33,6 +39,7 @@ impl ThreadPool {
 	/// # Panics
 	///
 	/// Panics if the `size` is zero.
+	#[must_use]
 	pub fn new(size: usize) -> ThreadPool {
 		assert!(size > 0);
 
@@ -42,8 +49,8 @@ impl ThreadPool {
 
 		let mut workers = Vec::with_capacity(size);
 
-		for id in 0..size {
-			workers.push(Worker::new(id, Arc::clone(&receiver)));
+		for _ in 0..size {
+			workers.push(Worker::new(Arc::clone(&receiver)));
 		}
 
 		ThreadPool { workers, sender }
@@ -62,7 +69,7 @@ impl ThreadPool {
 
 		self.sender
 			.send(Message::NewJob(job))
-			.map_err(|e| ThreadPoolError::MpscSendError(e));
+			.map_err(ThreadPoolError::MpscSendError)?;
 		Ok(())
 	}
 }
@@ -77,30 +84,28 @@ impl Drop for ThreadPool {
 		// receive the message. Thus, if we have N workers and send N terminate
 		// messages we will terminate all worker threads.
 		for _ in &self.workers {
-			drop(
-				self.sender
-					.send(Message::Terminate)
-					.map_err(|e| eprintln!("`ThreadPool::drop`: {:?}", e)),
-			);
+			let _ = self
+				.sender
+				.send(Message::Terminate)
+				.map_err(|e| eprintln!("`ThreadPool::drop`: {:?}", e));
 		}
 
 		for worker in &mut self.workers {
 			if let Some(thread) = worker.thread.take() {
-				drop(thread.join().map_err(|e| {
-					eprintln!("`ThreadPool::drop: failed to join: {:?}`", e)
-				}))
+				let _ = thread.join().map_err(|e| {
+					eprintln!("`ThreadPool::drop: failed to join: {:?}`", e);
+				});
 			}
 		}
 	}
 }
 
 struct Worker {
-	id: usize,
 	thread: Option<thread::JoinHandle<()>>,
 }
 
 impl Worker {
-	fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Worker {
+	fn new(receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Worker {
 		let thread = thread::spawn(move || loop {
 			let message = receiver
 				.lock()
@@ -110,18 +115,14 @@ impl Worker {
 
 			match message {
 				Message::NewJob(job) => {
-					println!("Worker {} got a job; executing.", id);
-
 					job();
 				}
 				Message::Terminate => {
-					println!("Worker {} was told to terminate.", id);
-
 					break;
 				}
 			}
 		});
 
-		Worker { id, thread: Some(thread) }
+		Worker { thread: Some(thread) }
 	}
 }
