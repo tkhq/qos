@@ -9,7 +9,7 @@ use rand::{seq::SliceRandom, thread_rng};
 #[tokio::test]
 async fn genesis_e2e() {
 	let usock = "genesis_e2e.sock";
-	let host_port = "3008";
+	let host_port = "3808";
 	let host_ip = "127.0.0.1";
 	let secret_path = "./genesis_e2e.secret";
 	let pivot_path = "./genesis_e2e.pivot";
