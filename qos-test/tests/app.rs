@@ -1,22 +1,24 @@
 use std::{fs, process::Command};
 
 use qos_test::LOCAL_HOST;
-use test_primitives::ChildWrapper;
+use test_primitives::{ChildWrapper, PathWrapper};
 
 const SAMPLE_APP_PATH: &str = "../target/debug/sample_app";
 
 #[ignore]
 #[tokio::test]
 async fn sample_app_e2e() {
-	let tmp = "./sample-app-e2e-tmp/";
-	drop(fs::create_dir_all(tmp));
+	let tmp: PathWrapper = "/tmp/sample-app-e2e".into();
+	drop(fs::create_dir_all(*tmp));
 
-	let enclave_usock = "./sample-app-e2e-tmp/enclave_sock.sock";
-	let app_usock = "./sample-app-e2e-tmp/app_sock.sock";
-	let quorum_path = "./sample-app-e2e-tmp/quorum.secret";
-	let pivot_path = "./sample-app-e2e-tmp/pivot.pivot";
-	let manifest_path = "./sample-app-e2e-tmp/manifest.manifest";
-	let eph_path = "./sample-app-e2e-tmp/eph.secret";
+	let enclave_usock: PathWrapper =
+		"/tmp/sample-app-e2e/enclave_sock.sock".into();
+	let app_usock: PathWrapper = "/tmp/sample-app-e2e/app_sock.sock".into();
+	let quorum_path: PathWrapper = "/tmp/sample-app-e2e/quorum.secret".into();
+	let pivot_path: PathWrapper = "/tmp/sample-app-e2e/pivot.pivot".into();
+	let manifest_path: PathWrapper =
+		"/tmp/sample-app-e2e/manifest.manifest".into();
+	let eph_path: PathWrapper = "/tmp/sample-app-e2e/eph.secret".into();
 
 	let host_port = test_primitives::find_free_port().unwrap();
 
@@ -25,18 +27,18 @@ async fn sample_app_e2e() {
 		Command::new("../target/debug/core_cli")
 			.args([
 				"--usock",
-				enclave_usock,
+				*enclave_usock,
 				"--quorum-file",
-				quorum_path,
+				*quorum_path,
 				"--pivot-file",
-				pivot_path,
+				*pivot_path,
 				"--ephemeral-file",
-				eph_path,
+				*eph_path,
 				"--mock",
 				"--manifest-file",
-				manifest_path,
+				*manifest_path,
 				"--app-usock",
-				app_usock,
+				*app_usock,
 			])
 			.spawn()
 			.unwrap()
@@ -51,14 +53,17 @@ async fn sample_app_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				enclave_usock,
+				*enclave_usock,
 			])
 			.spawn()
 			.unwrap()
 			.into();
 
 	// Run `dangerous-dev-boot`
-	let pivot_args = format!("[--usock,{app_usock},--quorum-file,{quorum_path},--ephemeral-file,{eph_path},--manifest-file,{manifest_path}]");
+	let pivot_args = format!(
+		"[--usock,{},--quorum-file,{},--ephemeral-file,{},--manifest-file,{}]",
+		*app_usock, *quorum_path, *eph_path, *manifest_path
+	);
 	assert!(Command::new("../target/debug/client_cli")
 		.args([
 			"dangerous-dev-boot",
@@ -73,7 +78,7 @@ async fn sample_app_e2e() {
 			"--pivot-args",
 			&pivot_args[..],
 			"--unsafe-eph-path-override",
-			eph_path,
+			*eph_path,
 		])
 		.spawn()
 		.unwrap()
@@ -96,7 +101,4 @@ async fn sample_app_e2e() {
 		.wait()
 		.unwrap()
 		.success());
-
-	// Clean up services
-	drop(fs::remove_dir_all(tmp));
 }

@@ -1,6 +1,6 @@
 use std::{fs, path::Path, process::Command};
 
-use qos_test::{PIVOT_OK3_PATH, PIVOT_OK3_SUCCESS_FILE, LOCAL_HOST};
+use qos_test::{LOCAL_HOST, PIVOT_OK3_PATH, PIVOT_OK3_SUCCESS_FILE};
 use test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]
@@ -10,7 +10,8 @@ async fn dev_boot_e2e() {
 	let usock: PathWrapper = "/tmp/dev-boot-e2e-tmp/sock.sock".into();
 	let secret_path: PathWrapper = "/tmp/dev-boot-e2e-tmp/quorum.secret".into();
 	let pivot_path: PathWrapper = "/tmp/dev-boot-e2e-tmp/pivot.pivot".into();
-	let manifest_path: PathWrapper = "/tmp/dev-boot-e2e-tmp/manifest.manifest".into();
+	let manifest_path: PathWrapper =
+		"/tmp/dev-boot-e2e-tmp/manifest.manifest".into();
 	let eph_path: PathWrapper = "/tmp/dev-boot-e2e-tmp/eph.secret".into();
 
 	let host_port = test_primitives::find_free_port().unwrap();

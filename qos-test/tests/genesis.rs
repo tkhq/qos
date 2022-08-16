@@ -5,8 +5,8 @@ use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
 use qos_test::LOCAL_HOST;
-use test_primitives::ChildWrapper;
 use rand::{seq::SliceRandom, thread_rng};
+use test_primitives::ChildWrapper;
 
 #[tokio::test]
 async fn genesis_e2e() {
