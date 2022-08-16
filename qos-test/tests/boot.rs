@@ -17,28 +17,28 @@ use qos_core::protocol::{
 };
 use qos_crypto::{sha_256, RsaPair};
 use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE, LOCAL_HOST};
-use test_primitives::ChildWrapper;
+use test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]
 async fn boot_e2e() {
 	let host_port = test_primitives::find_free_port().unwrap();
-	let tmp = "./boot-e2e-tmp";
-	fs::create_dir_all(tmp).unwrap();
+	let tmp: PathWrapper = "/tmp/boot-e2e".into();
+	fs::create_dir_all(*tmp).unwrap();
 
-	let usock = "./boot-e2e-tmp/boot_e2e.sock";
-	let secret_path = "./boot-e2e-tmp/boot_e2e.secret";
-	let pivot_path = "./boot-e2e-tmp/boot_e2e.pivot";
-	let manifest_path = "./boot-e2e-tmp/boot_e2e.manifest";
-	let eph_path = "./boot-e2e-tmp/ephemeral_key.secret";
+	let usock: PathWrapper = "/tmp/boot-e2e/boot_e2e.sock".into();
+	let secret_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.secret".into();
+	let pivot_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.pivot".into();
+	let manifest_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.manifest".into();
+	let eph_path: PathWrapper = "/tmp/boot-e2e/ephemeral_key.secret".into();
 
-	let boot_dir = "./boot-e2e-boot-dir-tmp";
+	let boot_dir: PathWrapper = "./boot-e2e-boot-dir".into();
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
 	let genesis_dir = "./mock/boot-e2e/genesis-dir";
 	let root_cert_path = "./mock/boot-e2e/root-cert.pem";
 
 	let namespace = "quit-coding-to-vape";
 
-	let attestation_doc_path = format!("{}/attestation_doc.boot", boot_dir);
+	let attestation_doc_path = format!("{}/attestation_doc.boot", *boot_dir);
 	let genesis_output_path = format!("{}/output.genesis", genesis_dir);
 
 	let personal_dir =
@@ -77,7 +77,7 @@ async fn boot_e2e() {
 			"--root-cert-path",
 			root_cert_path,
 			"--boot-dir",
-			boot_dir,
+			*boot_dir,
 			"--pivot-args",
 			&pivot_args,
 		])
@@ -88,7 +88,7 @@ async fn boot_e2e() {
 		.success());
 
 	// Check the manifest written to file
-	let cli_manifest_path = format!("{}/{}.2.manifest", boot_dir, namespace);
+	let cli_manifest_path = format!("{}/{}.2.manifest", *boot_dir, namespace);
 	let manifest =
 		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
 			.unwrap();
@@ -134,7 +134,7 @@ async fn boot_e2e() {
 	for alias in [user1, user2, user3] {
 		let approval_path = format!(
 			"{}/{}.{}.{}.approval",
-			boot_dir, alias, namespace, manifest.namespace.nonce,
+			*boot_dir, alias, namespace, manifest.namespace.nonce,
 		);
 
 		assert!(Command::new("../target/debug/client_cli")
@@ -145,7 +145,7 @@ async fn boot_e2e() {
 				"--personal-dir",
 				&personal_dir(alias),
 				"--boot-dir",
-				boot_dir,
+				*boot_dir,
 			])
 			.spawn()
 			.unwrap()
@@ -181,16 +181,16 @@ async fn boot_e2e() {
 		Command::new("../target/debug/core_cli")
 			.args([
 				"--usock",
-				usock,
+				*usock,
 				"--quorum-file",
-				secret_path,
+				*secret_path,
 				"--pivot-file",
-				pivot_path,
+				*pivot_path,
 				"--ephemeral-file",
-				eph_path,
+				*eph_path,
 				"--mock",
 				"--manifest-file",
-				manifest_path,
+				*manifest_path,
 			])
 			.spawn()
 			.unwrap()
@@ -205,7 +205,7 @@ async fn boot_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				usock,
+				*usock,
 			])
 			.spawn()
 			.unwrap()
@@ -219,7 +219,7 @@ async fn boot_e2e() {
 		.args([
 			"boot-standard",
 			"--boot-dir",
-			boot_dir,
+			*boot_dir,
 			"--pivot-path",
 			PIVOT_OK2_PATH,
 			"--host-port",
@@ -245,7 +245,7 @@ async fn boot_e2e() {
 			.args([
 				"post-share",
 				"--boot-dir",
-				boot_dir,
+				*boot_dir,
 				"--personal-dir",
 				&personal_dir(user),
 				"--manifest-hash",
@@ -256,7 +256,7 @@ async fn boot_e2e() {
 				LOCAL_HOST,
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
-				eph_path,
+				*eph_path,
 			])
 			.spawn()
 			.unwrap()
@@ -265,16 +265,11 @@ async fn boot_e2e() {
 			.success());
 	}
 
+	// Give the enclave time to start the pivot
 	std::thread::sleep(std::time::Duration::from_secs(2));
 
 	// Check that the pivot executed
 	let contents = std::fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
 	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
 	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
-
-	for f in [&secret_path, &pivot_path, &usock] {
-		drop(fs::remove_file(f));
-	}
-	drop(fs::remove_dir_all(boot_dir));
-	drop(fs::remove_dir_all(tmp));
 }
