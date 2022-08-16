@@ -6,26 +6,29 @@ use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
 use qos_test::LOCAL_HOST;
 use rand::{seq::SliceRandom, thread_rng};
-use test_primitives::ChildWrapper;
+use test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]
 async fn genesis_e2e() {
-	let usock = "genesis_e2e.sock";
 	let host_port = test_primitives::find_free_port().unwrap();
-	let secret_path = "./genesis_e2e.secret";
-	let pivot_path = "./genesis_e2e.pivot";
-	let manifest_path = "./genesis_e2e/manifest.manifest";
+	let tmp: PathWrapper = "/tmp/genesis-e2e".into();
+	fs::create_dir_all(*tmp).unwrap();
 
-	let all_personal_dir = "./genesis-e2e-personal-tmp";
-	let genesis_dir = "./genesis-e2e-genesis-tmp";
+	let usock: PathWrapper = "/tmp/genesis-e2e/genesis_e2e.sock".into();
+	let secret_path: PathWrapper = "/tmp/genesis-e2e/genesis_e2e.secret".into();
+	let pivot_path: PathWrapper = "/tmp/genesis-e2e/genesis_e2e.pivot".into();
+	let manifest_path = "/tmp/genesis-e2e/manifest.manifest";
+
+	let all_personal_dir: PathWrapper  = "/tmp/genesis-e2e-personal".into();
+	let genesis_dir: PathWrapper  = "/tmp/genesis-e2e-genesis".into();
 
 	let namespace = "quit-coding-to-vape";
 	let attestation_doc_path =
-		format!("{}/attestation_doc.genesis", genesis_dir);
-	let genesis_output_path = format!("{}/output.genesis", genesis_dir);
+		format!("{}/attestation_doc.genesis", *genesis_dir);
+	let genesis_output_path = format!("{}/output.genesis", *genesis_dir);
 
 	let personal_dir =
-		|user: &str| format!("{}/{}-dir", all_personal_dir, user);
+		|user: &str| format!("{}/{}-dir", *all_personal_dir, user);
 	let get_key_paths = |user: &str| {
 		(
 			format!("{}.{}.setup.key", user, namespace),
@@ -70,7 +73,7 @@ async fn genesis_e2e() {
 	}
 
 	// Make the genesis dir
-	fs::create_dir_all(genesis_dir).unwrap();
+	fs::create_dir_all(*genesis_dir).unwrap();
 	// Move the setup keys to the genesis dir - this will be the Genesis Set
 	for (user, public) in [
 		(&user1, &user1_public_setup),
@@ -78,7 +81,7 @@ async fn genesis_e2e() {
 		(&user3, &user3_public_setup),
 	] {
 		let from = Path::new(&personal_dir(user)).join(public);
-		let to = Path::new(genesis_dir).join(public);
+		let to = Path::new(*genesis_dir).join(public);
 		fs::copy(from, to).unwrap();
 	}
 
@@ -87,11 +90,11 @@ async fn genesis_e2e() {
 		Command::new("../target/debug/core_cli")
 			.args([
 				"--usock",
-				usock,
+				*usock,
 				"--quorum-file",
-				secret_path,
+				*secret_path,
 				"--pivot-file",
-				pivot_path,
+				*pivot_path,
 				"--mock",
 				"--manifest-file",
 				manifest_path,
@@ -109,7 +112,7 @@ async fn genesis_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				usock,
+				*usock,
 			])
 			.spawn()
 			.unwrap()
@@ -126,7 +129,7 @@ async fn genesis_e2e() {
 			"--threshold",
 			"2", // threshold
 			"--genesis-dir",
-			genesis_dir,
+			*genesis_dir,
 			"--host-ip",
 			LOCAL_HOST,
 			"--host-port",
@@ -193,7 +196,7 @@ async fn genesis_e2e() {
 				"--personal-dir",
 				&personal_dir(user),
 				"--genesis-dir",
-				genesis_dir,
+				*genesis_dir,
 				"--pcr0",
 				"0xff",
 				"--pcr1",
@@ -227,11 +230,5 @@ async fn genesis_e2e() {
 		// Cross check that the share belongs `decrypted_shares`, which we
 		// created out of band in this test.
 		assert!(decrypted_shares.contains(&share));
-	}
-
-	for path in [&secret_path, &pivot_path, &usock] {
-		drop(fs::remove_file(path));
-	}
-	drop(fs::remove_dir_all(genesis_dir));
-	drop(fs::remove_dir_all(all_personal_dir));
+	}gi
 }
