@@ -1,6 +1,6 @@
 use std::{fs, path::Path, process::Command};
 
-use qos_test::{PIVOT_OK3_PATH, PIVOT_OK3_SUCCESS_FILE};
+use qos_test::{PIVOT_OK3_PATH, PIVOT_OK3_SUCCESS_FILE, LOCAL_HOST};
 use test_primitives::ChildWrapper;
 
 #[tokio::test]
@@ -14,7 +14,6 @@ async fn dev_boot_e2e() {
 	let eph_path = "./dev-boot-e2e-tmp/eph.secret";
 
 	let host_port = test_primitives::find_free_port().unwrap();
-	let host_ip = "127.0.0.1";
 
 	// Start Enclave
 	let mut _enclave_child_process: ChildWrapper =
@@ -43,7 +42,7 @@ async fn dev_boot_e2e() {
 				"--host-port",
 				&host_port.to_string(),
 				"--host-ip",
-				host_ip,
+				LOCAL_HOST,
 				"--usock",
 				usock,
 			])
@@ -60,7 +59,7 @@ async fn dev_boot_e2e() {
 			"--host-port",
 			&host_port.to_string(),
 			"--host-ip",
-			host_ip,
+			LOCAL_HOST,
 			"--pivot-path",
 			PIVOT_OK3_PATH,
 			"--restart-policy",

@@ -16,13 +16,12 @@ use qos_core::protocol::{
 	QosHash,
 };
 use qos_crypto::{sha_256, RsaPair};
-use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
+use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE, LOCAL_HOST};
 use test_primitives::ChildWrapper;
 
 #[tokio::test]
 async fn boot_e2e() {
 	let host_port = test_primitives::find_free_port().unwrap();
-	let host_ip = "127.0.0.1";
 	let tmp = "./boot-e2e-tmp";
 	fs::create_dir_all(tmp).unwrap();
 
@@ -204,7 +203,7 @@ async fn boot_e2e() {
 				"--host-port",
 				&host_port.to_string(),
 				"--host-ip",
-				host_ip,
+				LOCAL_HOST,
 				"--usock",
 				usock,
 			])
@@ -226,7 +225,7 @@ async fn boot_e2e() {
 			"--host-port",
 			&host_port.to_string(),
 			"--host-ip",
-			host_ip,
+			LOCAL_HOST,
 			"--unsafe-skip-attestation",
 		])
 		.spawn()
@@ -254,7 +253,7 @@ async fn boot_e2e() {
 				"--host-port",
 				&host_port.to_string(),
 				"--host-ip",
-				host_ip,
+				LOCAL_HOST,
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
 				eph_path,

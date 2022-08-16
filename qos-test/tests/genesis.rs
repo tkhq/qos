@@ -4,6 +4,7 @@ use borsh::de::BorshDeserialize;
 use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
+use qos_test::LOCAL_HOST;
 use test_primitives::ChildWrapper;
 use rand::{seq::SliceRandom, thread_rng};
 
@@ -11,7 +12,6 @@ use rand::{seq::SliceRandom, thread_rng};
 async fn genesis_e2e() {
 	let usock = "genesis_e2e.sock";
 	let host_port = test_primitives::find_free_port().unwrap();
-	let host_ip = "127.0.0.1";
 	let secret_path = "./genesis_e2e.secret";
 	let pivot_path = "./genesis_e2e.pivot";
 	let manifest_path = "./genesis_e2e/manifest.manifest";
@@ -107,7 +107,7 @@ async fn genesis_e2e() {
 				"--host-port",
 				&host_port.to_string(),
 				"--host-ip",
-				host_ip,
+				LOCAL_HOST,
 				"--usock",
 				usock,
 			])
@@ -128,7 +128,7 @@ async fn genesis_e2e() {
 			"--genesis-dir",
 			genesis_dir,
 			"--host-ip",
-			host_ip,
+			LOCAL_HOST,
 			"--host-port",
 			&host_port.to_string(),
 			"--unsafe-skip-attestation"

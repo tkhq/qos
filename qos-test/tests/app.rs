@@ -1,5 +1,6 @@
 use std::{fs, process::Command};
 
+use qos_test::LOCAL_HOST;
 use test_primitives::ChildWrapper;
 
 const SAMPLE_APP_PATH: &str = "../target/debug/sample_app";
@@ -18,7 +19,6 @@ async fn sample_app_e2e() {
 	let eph_path = "./sample-app-e2e-tmp/eph.secret";
 
 	let host_port = test_primitives::find_free_port().unwrap();
-	let host_ip = "127.0.0.1";
 
 	// Start Enclave
 	let mut _enclave_child_process: ChildWrapper =
@@ -49,7 +49,7 @@ async fn sample_app_e2e() {
 				"--host-port",
 				&host_port.to_string(),
 				"--host-ip",
-				host_ip,
+				LOCAL_HOST,
 				"--usock",
 				enclave_usock,
 			])
@@ -65,7 +65,7 @@ async fn sample_app_e2e() {
 			"--host-port",
 			&host_port.to_string(),
 			"--host-ip",
-			host_ip,
+			LOCAL_HOST,
 			"--pivot-path",
 			SAMPLE_APP_PATH,
 			"--restart-policy",
@@ -89,7 +89,7 @@ async fn sample_app_e2e() {
 			"--host-port",
 			&host_port.to_string(),
 			"--host-ip",
-			host_ip,
+			LOCAL_HOST,
 		])
 		.spawn()
 		.unwrap()
