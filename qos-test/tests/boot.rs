@@ -16,7 +16,7 @@ use qos_core::protocol::{
 	QosHash,
 };
 use qos_crypto::{sha_256, RsaPair};
-use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
+use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE, ChildWrapper};
 
 #[ignore]
 #[tokio::test]
@@ -178,7 +178,7 @@ async fn boot_e2e() {
 	}
 
 	// -- ENCLAVE start enclave
-	let mut enclave_child_process = Command::new("../target/debug/core_cli")
+	let mut _enclave_child_process: ChildWrapper = Command::new("../target/debug/core_cli")
 		.args([
 			"--usock",
 			usock,
@@ -193,10 +193,11 @@ async fn boot_e2e() {
 			manifest_path,
 		])
 		.spawn()
-		.unwrap();
+		.unwrap()
+		.into();
 
 	// -- HOST start host
-	let mut host_child_process = Command::new("../target/debug/host_cli")
+	let mut _host_child_process: ChildWrapper = Command::new("../target/debug/host_cli")
 		.args([
 			"--host-port",
 			host_port,
@@ -206,7 +207,8 @@ async fn boot_e2e() {
 			usock,
 		])
 		.spawn()
-		.unwrap();
+		.unwrap()
+		.into();
 
 	// -- Make sure the enclave and host have time to boot
 	std::thread::sleep(std::time::Duration::from_secs(1));
@@ -274,6 +276,4 @@ async fn boot_e2e() {
 	}
 	drop(fs::remove_dir_all(boot_dir));
 	drop(fs::remove_dir_all(tmp));
-	enclave_child_process.kill().unwrap();
-	host_child_process.kill().unwrap();
 }
