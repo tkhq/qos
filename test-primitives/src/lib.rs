@@ -1,6 +1,6 @@
 //! Primitive types for test setup.
 
-use std::{net::TcpListener, ops::Range, thread, time::Duration};
+use std::{net::TcpListener, ops::{Range, Deref}, thread, time::Duration};
 
 use rand::prelude::*;
 
@@ -24,6 +24,35 @@ impl Drop for ChildWrapper {
 	fn drop(&mut self) {
 		// Kill the process and explicitly ignore the result
 		drop(self.0.kill());
+	}
+}
+
+/// Wrapper type for [`std::path::Path`] that attempts to remove a file or directory
+/// at the path on drop.
+#[derive(Debug)]
+pub struct PathWrapper(&'static str);
+
+impl From<&'static str> for PathWrapper {
+	fn from(path: &'static str) -> Self {
+		Self(path)
+	}
+}
+
+impl Drop  for PathWrapper {
+	fn drop(&mut self) {
+		// Try removing it both as a file and as a directory. One of these
+		// will always fail
+		drop(std::fs::remove_dir_all(self.0));
+		drop(std::fs::remove_file(self.0
+		));
+	}
+}
+
+impl Deref for PathWrapper {
+	type Target = &'static str;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
 	}
 }
 
