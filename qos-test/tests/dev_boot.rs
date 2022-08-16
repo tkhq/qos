@@ -13,7 +13,7 @@ async fn dev_boot_e2e() {
 	let manifest_path = "./dev-boot-e2e-tmp/manifest.manifest";
 	let eph_path = "./dev-boot-e2e-tmp/eph.secret";
 
-	let host_port = "3010";
+	let host_port = test_primitives::find_free_port().unwrap();
 	let host_ip = "127.0.0.1";
 
 	// Start Enclave
@@ -41,7 +41,7 @@ async fn dev_boot_e2e() {
 		Command::new("../target/debug/host_cli")
 			.args([
 				"--host-port",
-				host_port,
+				&host_port.to_string(),
 				"--host-ip",
 				host_ip,
 				"--usock",
@@ -51,12 +51,14 @@ async fn dev_boot_e2e() {
 			.unwrap()
 			.into();
 
+	test_primitives::wait_until_port_is_bound(host_port);
+
 	// Run `dangerous-dev-boot`
 	let res = Command::new("../target/debug/client_cli")
 		.args([
 			"dangerous-dev-boot",
 			"--host-port",
-			host_port,
+			&host_port.to_string(),
 			"--host-ip",
 			host_ip,
 			"--pivot-path",

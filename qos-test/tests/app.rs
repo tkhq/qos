@@ -17,7 +17,7 @@ async fn sample_app_e2e() {
 	let manifest_path = "./sample-app-e2e-tmp/manifest.manifest";
 	let eph_path = "./sample-app-e2e-tmp/eph.secret";
 
-	let host_port = "3232";
+	let host_port = test_primitives::find_free_port().unwrap();
 	let host_ip = "127.0.0.1";
 
 	// Start Enclave
@@ -47,7 +47,7 @@ async fn sample_app_e2e() {
 		Command::new("../target/debug/host_cli")
 			.args([
 				"--host-port",
-				host_port,
+				&host_port.to_string(),
 				"--host-ip",
 				host_ip,
 				"--usock",
@@ -63,7 +63,7 @@ async fn sample_app_e2e() {
 		.args([
 			"dangerous-dev-boot",
 			"--host-port",
-			host_port,
+			&host_port.to_string(),
 			"--host-ip",
 			host_ip,
 			"--pivot-path",
@@ -81,13 +81,13 @@ async fn sample_app_e2e() {
 		.unwrap()
 		.success());
 
-	std::thread::sleep(std::time::Duration::from_secs(2));
+	test_primitives::wait_until_port_is_bound(host_port);
 
 	assert!(Command::new("../target/debug/client_cli")
 		.args([
 			"app-read-files",
 			"--host-port",
-			host_port,
+			&host_port.to_string(),
 			"--host-ip",
 			host_ip,
 		])

@@ -10,7 +10,7 @@ use rand::{seq::SliceRandom, thread_rng};
 #[tokio::test]
 async fn genesis_e2e() {
 	let usock = "genesis_e2e.sock";
-	let host_port = "3808";
+	let host_port = test_primitives::find_free_port().unwrap();
 	let host_ip = "127.0.0.1";
 	let secret_path = "./genesis_e2e.secret";
 	let pivot_path = "./genesis_e2e.pivot";
@@ -105,7 +105,7 @@ async fn genesis_e2e() {
 		Command::new("../target/debug/host_cli")
 			.args([
 				"--host-port",
-				host_port,
+				&host_port.to_string(),
 				"--host-ip",
 				host_ip,
 				"--usock",
@@ -116,7 +116,7 @@ async fn genesis_e2e() {
 			.into();
 
 	// -- Make sure the enclave and host have time to boot
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	test_primitives::wait_until_port_is_bound(host_port);
 
 	// -- CLIENT Run boot genesis, creating a genesis set from the setup keys in
 	// the genesis dir
@@ -130,7 +130,7 @@ async fn genesis_e2e() {
 			"--host-ip",
 			host_ip,
 			"--host-port",
-			host_port,
+			&host_port.to_string(),
 			"--unsafe-skip-attestation"
 		])
 		.spawn()
