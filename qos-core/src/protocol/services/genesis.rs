@@ -11,7 +11,7 @@ use crate::protocol::{
 
 /// Member of the [`GenesisSet`].
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct SetupMember {
 	/// A unique UTF-8 encoded string to help Human participants to identify
@@ -24,7 +24,7 @@ pub struct SetupMember {
 
 /// Configuration for sharding a Quorum Key created in the Genesis flow.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct GenesisSet {
 	/// Quorum Member's whoms setup key will be used to encrypt Genesis flow
@@ -55,7 +55,7 @@ pub struct RecoveredPermutation(Vec<MemberShard>);
 
 /// Genesis output per Setup Member.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct GenesisMemberOutput {
 	/// The Quorum Member whom's Setup Key was used.

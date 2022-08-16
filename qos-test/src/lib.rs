@@ -6,9 +6,8 @@
 
 use std::{net::TcpListener, ops::Range, thread, time::Duration};
 
-use rand::prelude::*;
-
 use qos_core::parser::{GetParserForOptions, OptionsParser, Parser, Token};
+use rand::prelude::*;
 
 const MAX_PORT_BIND_WAIT_TIME: Duration = Duration::from_secs(90);
 const PORT_BIND_WAIT_TIME_INCREMENT: Duration = Duration::from_millis(500);

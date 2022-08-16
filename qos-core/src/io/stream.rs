@@ -19,7 +19,7 @@ const MAX_RETRY: usize = 8;
 const BACKLOG: usize = 128;
 
 /// Socket address.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SocketAddress {
 	/// VSOCK address.
 	#[cfg(feature = "vm")]

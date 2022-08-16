@@ -15,7 +15,7 @@ pub mod cli;
 
 /// Possible errors for this application
 #[derive(
-	Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize,
+	Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub enum AppError {
 	/// Error serializing a message.
@@ -52,7 +52,7 @@ impl From<qos_crypto::CryptoError> for AppError {
 
 /// Endpoints for this app.
 #[derive(
-	Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize,
+	Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub enum AppMsg {
 	/// Request an echo.

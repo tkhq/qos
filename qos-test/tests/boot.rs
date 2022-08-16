@@ -16,7 +16,7 @@ use qos_core::protocol::{
 	QosHash,
 };
 use qos_crypto::{sha_256, RsaPair};
-use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE, ChildWrapper};
+use qos_test::{ChildWrapper, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 
 #[ignore]
 #[tokio::test]
@@ -178,37 +178,39 @@ async fn boot_e2e() {
 	}
 
 	// -- ENCLAVE start enclave
-	let mut _enclave_child_process: ChildWrapper = Command::new("../target/debug/core_cli")
-		.args([
-			"--usock",
-			usock,
-			"--quorum-file",
-			secret_path,
-			"--pivot-file",
-			pivot_path,
-			"--ephemeral-file",
-			eph_path,
-			"--mock",
-			"--manifest-file",
-			manifest_path,
-		])
-		.spawn()
-		.unwrap()
-		.into();
+	let mut _enclave_child_process: ChildWrapper =
+		Command::new("../target/debug/core_cli")
+			.args([
+				"--usock",
+				usock,
+				"--quorum-file",
+				secret_path,
+				"--pivot-file",
+				pivot_path,
+				"--ephemeral-file",
+				eph_path,
+				"--mock",
+				"--manifest-file",
+				manifest_path,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// -- HOST start host
-	let mut _host_child_process: ChildWrapper = Command::new("../target/debug/host_cli")
-		.args([
-			"--host-port",
-			host_port,
-			"--host-ip",
-			host_ip,
-			"--usock",
-			usock,
-		])
-		.spawn()
-		.unwrap()
-		.into();
+	let mut _host_child_process: ChildWrapper =
+		Command::new("../target/debug/host_cli")
+			.args([
+				"--host-port",
+				host_port,
+				"--host-ip",
+				host_ip,
+				"--usock",
+				usock,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// -- Make sure the enclave and host have time to boot
 	std::thread::sleep(std::time::Duration::from_secs(1));
