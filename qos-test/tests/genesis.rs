@@ -4,6 +4,7 @@ use borsh::de::BorshDeserialize;
 use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
+use qos_test::ChildWrapper;
 use rand::{seq::SliceRandom, thread_rng};
 
 #[tokio::test]
@@ -82,33 +83,37 @@ async fn genesis_e2e() {
 	}
 
 	// -- ENCLAVE start enclave
-	let mut enclave_child_process = Command::new("../target/debug/core_cli")
-		.args([
-			"--usock",
-			usock,
-			"--quorum-file",
-			secret_path,
-			"--pivot-file",
-			pivot_path,
-			"--mock",
-			"--manifest-file",
-			manifest_path,
-		])
-		.spawn()
-		.unwrap();
+	let mut _enclave_child_process: ChildWrapper =
+		Command::new("../target/debug/core_cli")
+			.args([
+				"--usock",
+				usock,
+				"--quorum-file",
+				secret_path,
+				"--pivot-file",
+				pivot_path,
+				"--mock",
+				"--manifest-file",
+				manifest_path,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// -- HOST start host
-	let mut host_child_process = Command::new("../target/debug/host_cli")
-		.args([
-			"--host-port",
-			host_port,
-			"--host-ip",
-			host_ip,
-			"--usock",
-			usock,
-		])
-		.spawn()
-		.unwrap();
+	let mut _host_child_process: ChildWrapper =
+		Command::new("../target/debug/host_cli")
+			.args([
+				"--host-port",
+				host_port,
+				"--host-ip",
+				host_ip,
+				"--usock",
+				usock,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// -- Make sure the enclave and host have time to boot
 	std::thread::sleep(std::time::Duration::from_secs(1));
@@ -229,6 +234,4 @@ async fn genesis_e2e() {
 	}
 	drop(fs::remove_dir_all(genesis_dir));
 	drop(fs::remove_dir_all(all_personal_dir));
-	enclave_child_process.kill().unwrap();
-	host_child_process.kill().unwrap();
 }

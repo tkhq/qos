@@ -1,5 +1,7 @@
 use std::{fs, process::Command};
 
+use qos_test::ChildWrapper;
+
 const SAMPLE_APP_PATH: &str = "../target/debug/sample_app";
 
 #[ignore]
@@ -19,37 +21,41 @@ async fn sample_app_e2e() {
 	let host_ip = "127.0.0.1";
 
 	// Start Enclave
-	let mut enclave_child_process = Command::new("../target/debug/core_cli")
-		.args([
-			"--usock",
-			enclave_usock,
-			"--quorum-file",
-			quorum_path,
-			"--pivot-file",
-			pivot_path,
-			"--ephemeral-file",
-			eph_path,
-			"--mock",
-			"--manifest-file",
-			manifest_path,
-			"--app-usock",
-			app_usock,
-		])
-		.spawn()
-		.unwrap();
+	let mut _enclave_child_process: ChildWrapper =
+		Command::new("../target/debug/core_cli")
+			.args([
+				"--usock",
+				enclave_usock,
+				"--quorum-file",
+				quorum_path,
+				"--pivot-file",
+				pivot_path,
+				"--ephemeral-file",
+				eph_path,
+				"--mock",
+				"--manifest-file",
+				manifest_path,
+				"--app-usock",
+				app_usock,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// Start host
-	let mut host_child_process = Command::new("../target/debug/host_cli")
-		.args([
-			"--host-port",
-			host_port,
-			"--host-ip",
-			host_ip,
-			"--usock",
-			enclave_usock,
-		])
-		.spawn()
-		.unwrap();
+	let mut _host_child_process: ChildWrapper =
+		Command::new("../target/debug/host_cli")
+			.args([
+				"--host-port",
+				host_port,
+				"--host-ip",
+				host_ip,
+				"--usock",
+				enclave_usock,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// Run `dangerous-dev-boot`
 	let pivot_args = format!("[--usock,{app_usock},--quorum-file,{quorum_path},--ephemeral-file,{eph_path},--manifest-file,{manifest_path}]");
@@ -92,7 +98,5 @@ async fn sample_app_e2e() {
 		.success());
 
 	// Clean up services
-	enclave_child_process.kill().unwrap();
-	host_child_process.kill().unwrap();
 	drop(fs::remove_dir_all(tmp));
 }

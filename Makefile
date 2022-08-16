@@ -150,4 +150,4 @@ test-all:
 	@# we build all the workspace targets.
 	cargo build --all
 	@# Run all tests, including tests marked `ignore`
-	cargo test --all-targets -- --include-ignored
+	cargo test --all-targets
