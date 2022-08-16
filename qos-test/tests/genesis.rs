@@ -20,8 +20,8 @@ async fn genesis_e2e() {
 	let pivot_path: PathWrapper = "/tmp/genesis-e2e/genesis_e2e.pivot".into();
 	let manifest_path = "/tmp/genesis-e2e/manifest.manifest";
 
-	let all_personal_dir: PathWrapper  = "/tmp/genesis-e2e-personal".into();
-	let genesis_dir: PathWrapper  = "/tmp/genesis-e2e-genesis".into();
+	let all_personal_dir: PathWrapper = "/tmp/genesis-e2e-personal".into();
+	let genesis_dir: PathWrapper = "/tmp/genesis-e2e-genesis".into();
 
 	let namespace = "quit-coding-to-vape";
 	let attestation_doc_path =

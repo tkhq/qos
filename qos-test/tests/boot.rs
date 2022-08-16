@@ -19,6 +19,7 @@ use qos_crypto::{sha_256, RsaPair};
 use qos_test::{LOCAL_HOST, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 use test_primitives::{ChildWrapper, PathWrapper};
 
+#[ignore]
 #[tokio::test]
 async fn boot_e2e() {
 	let host_port = test_primitives::find_free_port().unwrap();
