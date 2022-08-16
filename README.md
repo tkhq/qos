@@ -13,22 +13,13 @@ Before a PR can be merged it must:
 Be formatted
 
 ```bash
-cargo +nightly
-```
-
-Pass the linter
-
-```bash
-cargo clippy
-
-# to fix some types of lints you can run
-cargo clippy --fix
+make lint
 ```
 
 And pass all tests
 
 ```bash
-cargo test
+make test-all
 ```
 
 ## View the docs
@@ -42,11 +33,13 @@ cargo doc --open
 ## Commands
 
 Run tests for the full project:
+
 ```shell
 cargo test -- --nocapture
 ```
 
 Run a local "enclave":
+
 ```shell
 cargo run --bin qos-core \
   -- \
@@ -55,6 +48,7 @@ cargo run --bin qos-core \
 ```
 
 Run the enclave host:
+
 ```shell
 cargo run --bin qos-host \
   -- \
@@ -64,6 +58,7 @@ cargo run --bin qos-host \
 ```
 
 Run a command against a running "enclave" and host:
+
 ```shell
 cargo run --bin qos-client \
   --manifest-path ./qos-client/Cargo.toml \
