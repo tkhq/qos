@@ -3,6 +3,7 @@ use std::{fs, path::Path, process::Command};
 use qos_test::{LOCAL_HOST, PIVOT_OK3_PATH, PIVOT_OK3_SUCCESS_FILE};
 use test_primitives::{ChildWrapper, PathWrapper};
 
+#[ignore]
 #[tokio::test]
 async fn dev_boot_e2e() {
 	let tmp: PathWrapper = "/tmp/dev-boot-e2e-tmp".into();
@@ -18,7 +19,7 @@ async fn dev_boot_e2e() {
 
 	// Start Enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/core_cli")
+		Command::new("../target/debug/qos-core")
 			.args([
 				"--usock",
 				*usock,
@@ -38,7 +39,7 @@ async fn dev_boot_e2e() {
 
 	// Start Host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/host_cli")
+		Command::new("../target/debug/qos-host")
 			.args([
 				"--host-port",
 				&host_port.to_string(),
@@ -53,8 +54,8 @@ async fn dev_boot_e2e() {
 
 	test_primitives::wait_until_port_is_bound(host_port);
 
-	// Run `dangerous-dev-boot`
-	let res = Command::new("../target/debug/client_cli")
+	// Run `dangerous-dev-boot
+	let res = Command::new("../target/debug/qos-client")
 		.args([
 			"dangerous-dev-boot",
 			"--host-port",

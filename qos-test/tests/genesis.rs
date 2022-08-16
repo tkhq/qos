@@ -8,6 +8,7 @@ use qos_test::LOCAL_HOST;
 use rand::{seq::SliceRandom, thread_rng};
 use test_primitives::{ChildWrapper, PathWrapper};
 
+#[ignore]
 #[tokio::test]
 async fn genesis_e2e() {
 	let host_port = test_primitives::find_free_port().unwrap();
@@ -53,7 +54,7 @@ async fn genesis_e2e() {
 		(&user2, &user2_private_setup, &user2_public_setup),
 		(&user3, &user3_private_setup, &user3_public_setup),
 	] {
-		assert!(Command::new("../target/debug/client_cli")
+		assert!(Command::new("../target/debug/qos-client")
 			.args([
 				"generate-setup-key",
 				"--personal-dir",
@@ -87,7 +88,7 @@ async fn genesis_e2e() {
 
 	// -- ENCLAVE start enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/core_cli")
+		Command::new("../target/debug/qos-core")
 			.args([
 				"--usock",
 				*usock,
@@ -105,7 +106,7 @@ async fn genesis_e2e() {
 
 	// -- HOST start host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/host_cli")
+		Command::new("../target/debug/qos-host")
 			.args([
 				"--host-port",
 				&host_port.to_string(),
@@ -123,7 +124,7 @@ async fn genesis_e2e() {
 
 	// -- CLIENT Run boot genesis, creating a genesis set from the setup keys in
 	// the genesis dir
-	assert!(Command::new("../target/debug/client_cli")
+	assert!(Command::new("../target/debug/qos-client")
 		.args([
 			"boot-genesis",
 			"--threshold",
@@ -190,7 +191,7 @@ async fn genesis_e2e() {
 	// -- CLIENT make sure each user can run `after-genesis` against their
 	// member output and setup key
 	for user in [&user1, &user2, &user3] {
-		assert!(Command::new("../target/debug/client_cli")
+		assert!(Command::new("../target/debug/qos-client")
 			.args([
 				"after-genesis",
 				"--personal-dir",
@@ -230,5 +231,5 @@ async fn genesis_e2e() {
 		// Cross check that the share belongs `decrypted_shares`, which we
 		// created out of band in this test.
 		assert!(decrypted_shares.contains(&share));
-	}gi
+	}
 }

@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-qos-core = { path = "../qos-core", default-features = false }
+qos-core = { path = "../qos-core", features = ["mock"], default-features = false }
 qos-host = { path = "../qos-host", default-features = false }
 qos-client = { path = "../qos-client", default-features = false }
 qos-crypto = { path = "../qos-crypto" }
