@@ -3,7 +3,7 @@ use std::{fs, process::Command};
 use qos_test::LOCAL_HOST;
 use test_primitives::{ChildWrapper, PathWrapper};
 
-const SAMPLE_APP_PATH: &str = "../target/debug/sample_app";
+const SAMPLE_APP_PATH: &str = "../target/debug/sample-app";
 
 #[ignore]
 #[tokio::test]
@@ -24,7 +24,7 @@ async fn sample_app_e2e() {
 
 	// Start Enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/core_cli")
+		Command::new("../target/debug/qos-core")
 			.args([
 				"--usock",
 				*enclave_usock,
@@ -46,7 +46,7 @@ async fn sample_app_e2e() {
 
 	// Start host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/host_cli")
+		Command::new("../target/debug/qos-host")
 			.args([
 				"--host-port",
 				&host_port.to_string(),
@@ -64,7 +64,7 @@ async fn sample_app_e2e() {
 		"[--usock,{},--quorum-file,{},--ephemeral-file,{},--manifest-file,{}]",
 		*app_usock, *quorum_path, *eph_path, *manifest_path
 	);
-	assert!(Command::new("../target/debug/client_cli")
+	assert!(Command::new("../target/debug/qos-client")
 		.args([
 			"dangerous-dev-boot",
 			"--host-port",
@@ -88,7 +88,7 @@ async fn sample_app_e2e() {
 
 	test_primitives::wait_until_port_is_bound(host_port);
 
-	assert!(Command::new("../target/debug/client_cli")
+	assert!(Command::new("../target/debug/qos-client")
 		.args([
 			"app-read-files",
 			"--host-port",

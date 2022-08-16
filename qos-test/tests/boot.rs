@@ -55,7 +55,7 @@ async fn boot_e2e() {
 	let msg = "testing420";
 	let pivot_args = format!("[--msg,{}]", msg);
 
-	assert!(Command::new("../target/debug/client_cli")
+	assert!(Command::new("../target/debug/qos-client")
 		.args([
 			"generate-manifest",
 			"--genesis-dir",
@@ -137,7 +137,7 @@ async fn boot_e2e() {
 			*boot_dir, alias, namespace, manifest.namespace.nonce,
 		);
 
-		assert!(Command::new("../target/debug/client_cli")
+		assert!(Command::new("../target/debug/qos-client")
 			.args([
 				"sign-manifest",
 				"--manifest-hash",
@@ -178,7 +178,7 @@ async fn boot_e2e() {
 
 	// -- ENCLAVE start enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/core_cli")
+		Command::new("../target/debug/qos-core")
 			.args([
 				"--usock",
 				*usock,
@@ -198,7 +198,7 @@ async fn boot_e2e() {
 
 	// -- HOST start host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/host_cli")
+		Command::new("../target/debug/qos-host")
 			.args([
 				"--host-port",
 				&host_port.to_string(),
@@ -215,7 +215,7 @@ async fn boot_e2e() {
 	test_primitives::wait_until_port_is_bound(host_port);
 
 	// -- CLIENT broadcast boot standard instruction
-	assert!(Command::new("../target/debug/client_cli")
+	assert!(Command::new("../target/debug/qos-client")
 		.args([
 			"boot-standard",
 			"--boot-dir",
@@ -241,7 +241,7 @@ async fn boot_e2e() {
 	// and sanity check the pivot has not yet executed.
 	assert!(!Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
 	for user in [&user1, &user2] {
-		assert!(Command::new("../target/debug/client_cli")
+		assert!(Command::new("../target/debug/qos-client")
 			.args([
 				"post-share",
 				"--boot-dir",
