@@ -1,6 +1,6 @@
 use std::{fs, process::Command};
 
-use qos_test::ChildWrapper;
+use test_primitives::ChildWrapper;
 
 const SAMPLE_APP_PATH: &str = "../target/debug/sample_app";
 

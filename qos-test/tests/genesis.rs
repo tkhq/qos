@@ -4,7 +4,7 @@ use borsh::de::BorshDeserialize;
 use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
-use qos_test::ChildWrapper;
+use test_primitives::ChildWrapper;
 use rand::{seq::SliceRandom, thread_rng};
 
 #[tokio::test]
