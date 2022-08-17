@@ -5,7 +5,6 @@ use test_primitives::{ChildWrapper, PathWrapper};
 
 const SAMPLE_APP_PATH: &str = "../target/debug/sample-app";
 
-#[ignore]
 #[tokio::test]
 async fn sample_app_e2e() {
 	let tmp: PathWrapper = "/tmp/sample-app-e2e".into();

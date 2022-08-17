@@ -3,7 +3,6 @@ use std::{fs, path::Path, process::Command};
 use qos_test::{LOCAL_HOST, PIVOT_OK3_PATH, PIVOT_OK3_SUCCESS_FILE};
 use test_primitives::{ChildWrapper, PathWrapper};
 
-#[ignore]
 #[tokio::test]
 async fn dev_boot_e2e() {
 	let tmp: PathWrapper = "/tmp/dev-boot-e2e-tmp".into();

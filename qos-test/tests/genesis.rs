@@ -8,7 +8,6 @@ use qos_test::LOCAL_HOST;
 use rand::{seq::SliceRandom, thread_rng};
 use test_primitives::{ChildWrapper, PathWrapper};
 
-#[ignore]
 #[tokio::test]
 async fn genesis_e2e() {
 	let host_port = test_primitives::find_free_port().unwrap();
