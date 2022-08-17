@@ -54,7 +54,7 @@ async fn dev_boot_e2e() {
 
 	test_primitives::wait_until_port_is_bound(host_port);
 
-	// Run `dangerous-dev-boot
+	// Run `dangerous-dev-boot`
 	let res = Command::new("../target/debug/qos-client")
 		.args([
 			"dangerous-dev-boot",
