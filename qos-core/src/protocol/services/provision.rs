@@ -93,7 +93,7 @@ mod test {
 	use std::path::Path;
 
 	use qos_crypto::{sha_256, shamir::shares_generate, RsaPair};
-	use test_primitives::PathWrapper;
+	use qos_test_primitives::PathWrapper;
 
 	use crate::{
 		client::Client,

@@ -1,7 +1,7 @@
 use std::{fs, process::Command};
 
 use qos_test::LOCAL_HOST;
-use test_primitives::{ChildWrapper, PathWrapper};
+use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 const SAMPLE_APP_PATH: &str = "../target/debug/sample-app";
 
@@ -19,7 +19,7 @@ async fn sample_app_e2e() {
 		"/tmp/sample-app-e2e/manifest.manifest".into();
 	let eph_path: PathWrapper = "/tmp/sample-app-e2e/eph.secret".into();
 
-	let host_port = test_primitives::find_free_port().unwrap();
+	let host_port = qos_test_primitives::find_free_port().unwrap();
 
 	// Start Enclave
 	let mut _enclave_child_process: ChildWrapper =
@@ -85,7 +85,7 @@ async fn sample_app_e2e() {
 		.unwrap()
 		.success());
 
-	test_primitives::wait_until_port_is_bound(host_port);
+	qos_test_primitives::wait_until_port_is_bound(host_port);
 
 	assert!(Command::new("../target/debug/qos-client")
 		.args([

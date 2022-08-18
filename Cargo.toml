@@ -8,7 +8,7 @@ members = [
   "qos-test",
   "qos-hex",
   "sample-app",
-  "test-primitives",
+  "qos-test-primitives",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.

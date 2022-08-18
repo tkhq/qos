@@ -17,11 +17,11 @@ use qos_core::protocol::{
 };
 use qos_crypto::{sha_256, RsaPair};
 use qos_test::{LOCAL_HOST, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
-use test_primitives::{ChildWrapper, PathWrapper};
+use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]
 async fn boot_e2e() {
-	let host_port = test_primitives::find_free_port().unwrap();
+	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/boot-e2e".into();
 	fs::create_dir_all(*tmp).unwrap();
 
@@ -212,7 +212,7 @@ async fn boot_e2e() {
 			.into();
 
 	// -- Make sure the enclave and host have time to boot
-	test_primitives::wait_until_port_is_bound(host_port);
+	qos_test_primitives::wait_until_port_is_bound(host_port);
 
 	// -- CLIENT broadcast boot standard instruction
 	assert!(Command::new("../target/debug/qos-client")
