@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-qos-crypto = { path = "../qos-crypto" }
-qos-hex = { path = "../qos-hex" }
+qos_crypto = { path = "../qos_crypto" }
+qos_hex = { path = "../qos_hex" }
 
 nix = { version = "0.24.1", features = ["socket"], default-features = false }
 openssl = { version = "0.10.40", default-features = false }
@@ -16,7 +16,7 @@ aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 
 [dev-dependencies]
-qos-test-primitives = { path = "../qos-test-primitives" }
+qos_test_primitives = { path = "../qos_test_primitives" }
 
 [features]
 # Support for VSOCK

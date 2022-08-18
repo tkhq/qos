@@ -12,7 +12,7 @@ use qos_core::{
 	EPHEMERAL_KEY_FILE, QUORUM_FILE, SEC_APP_SOCK,
 };
 
-const DEFAULT_PIVOT_PATH: &str = "./target/release/sample-app";
+const DEFAULT_PIVOT_PATH: &str = "./target/release/sample_app";
 
 /// CLI options for starting up the app server.
 #[derive(Default, Clone, Debug, PartialEq)]

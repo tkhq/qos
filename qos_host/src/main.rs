@@ -2,7 +2,7 @@
 async fn main() {
 	// Development quick start
 	// ```
-	// `cargo run --bin qos-host -- \
+	// `cargo run --bin qos_host -- \
 	// 		--usock tk.sock \
 	// 		--host-port 3000 \
 	// 		--host-ip 0.0.0.0 \

@@ -6,13 +6,13 @@ publish = false
 
 [dependencies]
 qos_core = { path = "../qos_core", features = ["mock"], default-features = false }
-qos-host = { path = "../qos-host", default-features = false }
-qos-client = { path = "../qos-client", default-features = false }
-qos-crypto = { path = "../qos-crypto" }
-qos-attest = { path = "../qos-attest", default-features = false }
-qos-hex = { path = "../qos-hex" }
-sample-app = { path = "../sample-app" }
-qos-test-primitives = { path = "../qos-test-primitives" }
+qos_host = { path = "../qos_host", default-features = false }
+qos_client = { path = "../qos_client", default-features = false }
+qos_crypto = { path = "../qos_crypto" }
+qos_attest = { path = "../qos_attest", default-features = false }
+qos_hex = { path = "../qos_hex" }
+sample_app = { path = "../sample_app" }
+qos_test_primitives = { path = "../qos_test_primitives" }
 
 tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
 

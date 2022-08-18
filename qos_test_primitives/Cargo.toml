@@ -1,5 +1,5 @@
 [package]
-name = "qos-test-primitives"
+name = "qos_test_primitives"
 version = "0.1.0"
 edition = "2021"
 

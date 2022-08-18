@@ -368,15 +368,15 @@ dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "openssl",
- "qos-attest",
- "qos-client",
- "qos-crypto",
- "qos-hex",
- "qos-host",
- "qos-test-primitives",
+ "qos_attest",
+ "qos_client",
  "qos_core",
+ "qos_crypto",
+ "qos_hex",
+ "qos_host",
+ "qos_test_primitives",
  "rand",
- "sample-app",
+ "sample_app",
  "tokio",
 ]
 
@@ -603,60 +603,30 @@ dependencies = [
 ]
 
 [[package]]
-name = "qos-attest"
+name = "qos_attest"
 version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-cose",
  "aws-nitro-enclaves-nsm-api",
  "openssl",
- "qos-hex",
  "qos_core",
+ "qos_hex",
  "serde_bytes",
  "webpki",
 ]
 
 [[package]]
-name = "qos-client"
+name = "qos_client"
 version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
- "qos-attest",
- "qos-crypto",
- "qos-hex",
+ "qos_attest",
  "qos_core",
- "sample-app",
+ "qos_crypto",
+ "qos_hex",
+ "sample_app",
  "ureq",
-]
-
-[[package]]
-name = "qos-crypto"
-version = "0.1.0"
-dependencies = [
- "borsh",
- "openssl",
- "rand",
-]
-
-[[package]]
-name = "qos-hex"
-version = "0.1.0"
-
-[[package]]
-name = "qos-host"
-version = "0.1.0"
-dependencies = [
- "axum",
- "borsh",
- "qos_core",
- "tokio",
-]
-
-[[package]]
-name = "qos-test-primitives"
-version = "0.1.0"
-dependencies = [
- "rand",
 ]
 
 [[package]]
@@ -667,10 +637,40 @@ dependencies = [
  "borsh",
  "nix 0.24.1",
  "openssl",
- "qos-crypto",
- "qos-hex",
- "qos-test-primitives",
+ "qos_crypto",
+ "qos_hex",
+ "qos_test_primitives",
  "serde_bytes",
+]
+
+[[package]]
+name = "qos_crypto"
+version = "0.1.0"
+dependencies = [
+ "borsh",
+ "openssl",
+ "rand",
+]
+
+[[package]]
+name = "qos_hex"
+version = "0.1.0"
+
+[[package]]
+name = "qos_host"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "borsh",
+ "qos_core",
+ "tokio",
+]
+
+[[package]]
+name = "qos_test_primitives"
+version = "0.1.0"
+dependencies = [
+ "rand",
 ]
 
 [[package]]
@@ -728,12 +728,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "sample-app"
+name = "sample_app"
 version = "0.1.0"
 dependencies = [
  "borsh",
- "qos-crypto",
  "qos_core",
+ "qos_crypto",
 ]
 
 [[package]]

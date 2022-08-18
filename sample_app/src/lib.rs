@@ -26,7 +26,7 @@ pub enum AppError {
 	Protocol(qos_core::protocol::ProtocolError),
 	/// `borsh::maybestd::io::Error` wrapper.
 	BorshIO,
-	/// Error executing qos-crypto methods.
+	/// Error executing qos_crypto methods.
 	Crypto,
 	/// Received an invalid request.
 	InvalidRequest,

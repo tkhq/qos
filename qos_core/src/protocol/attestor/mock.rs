@@ -26,7 +26,7 @@ pub const MOCK_PCR1: &str = "bcdf05fefccaa8e55bf2c8d6dee9e79bbff31e34bf28a99aa19
 pub const MOCK_PCR2: &str = "c185515d78cb90a2dc1fa49ea232fb44645acd18652c96dd05a92b9c5dbfa36d61d7c7d9e71d51de38de914cd00214bb";
 
 /// DO NOT USE IN PRODUCTION - ONLY FOR TESTS.
-// This was generate using the `gen_att_doc` script in `qos-test`.
+// This was generate using the `gen_att_doc` script in `qos_test`.
 pub const MOCK_NSM_ATTESTATION_DOCUMENT: &[u8] =
 	include_bytes!("./static/mock_attestation_doc");
 

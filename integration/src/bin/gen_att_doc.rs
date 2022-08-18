@@ -79,6 +79,6 @@ async fn main() {
 	}
 	#[cfg(not(feature = "mock"))]
 	{
-		panic!("qos-test's \"mock\" feature must be enabled to run this binary")
+		panic!("qos_test's \"mock\" feature must be enabled to run this binary")
 	}
 }

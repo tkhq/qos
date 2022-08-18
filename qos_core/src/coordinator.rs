@@ -90,4 +90,4 @@ impl Coordinator {
 	}
 }
 
-// See qos-test/tests/coordinator for tests
+// See qos_test/tests/coordinator for tests

@@ -1,5 +1,5 @@
 REGISTRY := 339735964233.dkr.ecr.us-east-1.amazonaws.com
-BUCKET := tkhq-development-qos-resources
+BUCKET := tkhq-development-qos_resources
 
 LOCAL_EPH_PATH := ./local-enclave/qos.ephemeral.key
 
@@ -23,7 +23,7 @@ local-dangerous-dev-boot:
 	@# file system and use that for encrypting the key shares. In other words,
 	@# the local enclave will write the eph secret to LOCAL_EPH_PATH and we are
 	@# telling the client to look at that same file and use that key for encryption.
-	cargo run --bin qos-client \
+	cargo run --bin qos_client \
 		-- \
 		dangerous-dev-boot \
 		--host-ip 127.0.0.1 \
@@ -43,7 +43,7 @@ vm-enclave:
 
 .PHONY: local-host
 local-host:
-	cargo run --bin qos-host \
+	cargo run --bin qos_host \
 		-- \
 		--host-ip 127.0.0.1 \
 		--host-port 3000 \
@@ -52,7 +52,7 @@ local-host:
 .PHONY: vm-host
 vm-host:
 	OPENSSL_DIR=/usr cargo run \
-		--bin qos-host \
+		--bin qos_host \
 		--features vm \
 		-- \
 		--host-ip 127.0.0.1 \
@@ -125,16 +125,16 @@ build-sample-app:
 		--file images/sample-app/Dockerfile \
 		--tag $(REGISTRY)/qos/sample-app \
 		$(PWD); \
-	docker rm -f qos-sample-app; \
+	docker rm -f qos_sample-app; \
 	docker create \
-		--name qos-sample-app \
+		--name qos_sample-app \
 		$(REGISTRY)/qos/sample-app; \
-	docker cp qos-sample-app:/usr/local/bin/sample-app ./pivot.executable
+	docker cp qos_sample-app:/usr/local/bin/sample-app ./pivot.executable
 
 .PHONY: push-sample-app
 push-sample-app:
 	PIVOT_HASH=0x$(shell shasum -a256 "./pivot.executable" | cut -d ' ' -f1); \
-	BUCKET="tkhq-development-qos-resources" ; \
+	BUCKET="tkhq-development-qos_resources" ; \
 	echo $$PIVOT_HASH; \
 	aws s3 cp ./pivot.executable s3://$${BUCKET}/$${PIVOT_HASH}/pivot.executable
 

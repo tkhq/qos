@@ -5,7 +5,7 @@
 //! The arguments for each command can be discovered by running:
 //!
 //! ```shell
-//! cargo run --bin qos-client <command-name> --help
+//! cargo run --bin qos_client <command-name> --help
 //! ```
 //!
 //! ## Guides
@@ -64,7 +64,7 @@
 //! [`Command::GenerateSetupKey`] on a secure device:
 //!
 //! ```shell
-//! cargo run --bin qos-client generate-setup-key \
+//! cargo run --bin qos_client generate-setup-key \
 //!     --namespace our_namespace \
 //!     --alias alice \
 //!     --personal-dir ~/qos/our_namespace/personal
@@ -97,7 +97,7 @@
 //! secure device because we are not holding private key material):
 //!
 //! ```shell
-//! cargo run --bin qos-client boot-genesis \
+//! cargo run --bin qos_client boot-genesis \
 //!    --host-ip 127.0.0.1 \
 //!    --host-port 3000 \
 //!    --threshold 2 \
@@ -143,7 +143,7 @@
 //! Given the above directory structure, Bob can run [`Command::AfterGenesis`]:
 //!
 //! ```shell
-//! cargo run --bin qos-client after-genesis \
+//! cargo run --bin qos_client after-genesis \
 //!    --genesis-dir  ~/qos/our_namespace/genesis \
 //!    --personal-dir  ~/qos/our_namespace/personal \
 //!    --pcr0 0xf0f0f0f0f0f0f0 \
@@ -194,7 +194,7 @@
 //! Given the above directory structure, the leader can run
 //!
 //! ```shell
-//! cargo run --bin qos-client generate-manifest \
+//! cargo run --bin qos_client generate-manifest \
 //!    --genesis-dir  ~/qos/our_namespace/genesis \
 //!    --boot-dir ~/qos/our_namespace/boot \
 //!    --nonce 0 \
@@ -235,7 +235,7 @@
 //! manifest by running:
 //!
 //! ```shell
-//! cargo run --bin qos-client generate-manifest \
+//! cargo run --bin qos_client generate-manifest \
 //!    --personal-dir  ~/qos/our_namespace/personal \
 //!    --boot-dir ~/qos/our_namespace/boot \
 //!    --manifest-hash 0xf0f0f0f0f0f0f0
@@ -267,7 +267,7 @@
 //! The leader can then run:
 //!
 //! ```shell
-//! cargo run --bin qos-client boot-standard \
+//! cargo run --bin qos_client boot-standard \
 //!    --host-ip 127.0.0.1 \
 //!    --host-port 3000 \
 //!    --pivot-path ~/qos/our_namespace/pivot.executable
@@ -305,7 +305,7 @@
 //! With the above directory structure, Bob can run:
 //!
 //! ```shell
-//! cargo run --bin qos-client boot-standard \
+//! cargo run --bin qos_client boot-standard \
 //!    --host-ip 127.0.0.1 \
 //!    --host-port 3000 \
 //!    --personal-dir ~/qos/our_namespace/personal \
@@ -352,7 +352,7 @@ const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 /// example, to get the arguments for [`Self::GenerateManifest`] run:
 ///
 /// ```bash
-/// cargo run --bin qos-client -- generate-manifest --help
+/// cargo run --bin qos_client -- generate-manifest --help
 /// ```
 ///
 /// Note that the command name is kebab-case.

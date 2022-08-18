@@ -1,11 +1,11 @@
 [package]
-name = "qos-attest"
+name = "qos_attest"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 qos_core = { path = "../qos_core", default-features = false }
-qos-hex = { path = "../qos-hex" }
+qos_hex = { path = "../qos_hex" }
 
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 aws-nitro-enclaves-cose = { version = "0.4.0", default-features = false, features = ["key_openssl_pkey"] }

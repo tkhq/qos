@@ -1,14 +1,14 @@
 [workspace]
 members = [
   "integration",
-  "qos-attest",
-  "qos-client",
+  "qos_attest",
+  "qos_client",
   "qos_core",
-  "qos-crypto",
-  "qos-host",
-  "qos-hex",
-  "sample-app",
-  "qos-test-primitives",
+  "qos_crypto",
+  "qos_host",
+  "qos_hex",
+  "sample_app",
+  "qos_test_primitives",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.

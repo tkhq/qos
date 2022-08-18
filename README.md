@@ -50,7 +50,7 @@ cargo run --bin qos_core \
 Run the enclave host:
 
 ```shell
-cargo run --bin qos-host \
+cargo run --bin qos_host \
   -- \
   --host-ip 127.0.0.1 \
   --host-port 3000 \
@@ -60,8 +60,8 @@ cargo run --bin qos-host \
 Run a command against a running "enclave" and host:
 
 ```shell
-cargo run --bin qos-client \
-  --manifest-path ./qos-client/Cargo.toml \
+cargo run --bin qos_client \
+  --manifest-path ./qos_client/Cargo.toml \
   describe-nsm \
   --host-ip 127.0.0.1 \
   --host-port 3000
@@ -83,9 +83,9 @@ cargo run --bin qos-client \
 - EC2 instance where the nitro enclave lives inside
 - has client for talking to nitro enclave
 - has server for incoming request from outside world
-- see `qos-host`
+- see `qos_host`
 
 ## End user
 
 - anything making request to host
-- see `qos-client`
+- see `qos_client`
