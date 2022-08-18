@@ -16,7 +16,7 @@ use qos_core::protocol::{
 	QosHash,
 };
 use qos_crypto::{sha_256, RsaPair};
-use qos_test::{LOCAL_HOST, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
+use integration::{LOCAL_HOST, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]

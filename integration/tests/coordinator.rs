@@ -6,7 +6,7 @@ use qos_core::{
 	io::SocketAddress,
 	protocol::{attestor::mock::MockNsm, services::boot::ManifestEnvelope},
 };
-use qos_test::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
+use integration::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
 
 #[test]
 fn coordinator_works() {
@@ -57,9 +57,9 @@ fn coordinator_works() {
 
 	// Make the sure the coordinator executed successfully.
 	coordinator_handle.join().unwrap();
-	let contents = fs::read(qos_test::PIVOT_OK_SUCCESS_FILE).unwrap();
+	let contents = fs::read(integration::PIVOT_OK_SUCCESS_FILE).unwrap();
 	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
-	assert!(fs::remove_file(qos_test::PIVOT_OK_SUCCESS_FILE).is_ok());
+	assert!(fs::remove_file(integration::PIVOT_OK_SUCCESS_FILE).is_ok());
 
 	// Clean up
 	drop(fs::remove_file(secret_path));

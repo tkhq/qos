@@ -1,6 +1,6 @@
 use std::{fs, process::Command};
 
-use qos_test::LOCAL_HOST;
+use integration::LOCAL_HOST;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 const SAMPLE_APP_PATH: &str = "../target/debug/sample-app";

@@ -362,6 +362,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "integration"
+version = "0.1.0"
+dependencies = [
+ "aws-nitro-enclaves-nsm-api",
+ "borsh",
+ "openssl",
+ "qos-attest",
+ "qos-client",
+ "qos-core",
+ "qos-crypto",
+ "qos-hex",
+ "qos-host",
+ "qos-test-primitives",
+ "rand",
+ "sample-app",
+ "tokio",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -644,25 +663,6 @@ dependencies = [
  "axum",
  "borsh",
  "qos-core",
- "tokio",
-]
-
-[[package]]
-name = "qos-test"
-version = "0.1.0"
-dependencies = [
- "aws-nitro-enclaves-nsm-api",
- "borsh",
- "openssl",
- "qos-attest",
- "qos-client",
- "qos-core",
- "qos-crypto",
- "qos-hex",
- "qos-host",
- "qos-test-primitives",
- "rand",
- "sample-app",
  "tokio",
 ]
 

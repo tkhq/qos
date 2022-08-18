@@ -1,11 +1,11 @@
 [workspace]
 members = [
+  "integration",
   "qos-attest",
   "qos-client",
   "qos-core",
   "qos-crypto",
   "qos-host",
-  "qos-test",
   "qos-hex",
   "sample-app",
   "qos-test-primitives",

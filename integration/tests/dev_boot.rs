@@ -1,6 +1,6 @@
 use std::{fs, path::Path, process::Command};
 
-use qos_test::{LOCAL_HOST, PIVOT_OK3_PATH, PIVOT_OK3_SUCCESS_FILE};
+use integration::{LOCAL_HOST, PIVOT_OK3_PATH, PIVOT_OK3_SUCCESS_FILE};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]
