@@ -41,7 +41,7 @@ cargo test -- --nocapture
 Run a local "enclave":
 
 ```shell
-cargo run --bin qos-core \
+cargo run --bin qos_core \
   -- \
   --usock ./dev.sock \
   --mock
@@ -76,7 +76,7 @@ cargo run --bin qos-client \
 ### Enclave
 
 - houses nitro server
-- see `qos-core`
+- see `qos_core`
 
 ## Host
 

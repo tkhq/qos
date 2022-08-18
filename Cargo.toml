@@ -3,7 +3,7 @@ members = [
   "integration",
   "qos-attest",
   "qos-client",
-  "qos-core",
+  "qos_core",
   "qos-crypto",
   "qos-host",
   "qos-hex",

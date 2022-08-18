@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-qos-core = { path = "../qos-core", default-features = false }
+qos_core = { path = "../qos_core", default-features = false }
 
 # Third party
 axum = { version = "0.5.4", features = ["http1"], default-features = false }
@@ -12,4 +12,4 @@ tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-fe
 borsh = { version = "0.9" }
 
 [features]
-vm = ["qos-core/vm"]
+vm = ["qos_core/vm"]

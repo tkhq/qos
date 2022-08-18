@@ -87,7 +87,7 @@ async fn genesis_e2e() {
 
 	// -- ENCLAVE start enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/qos-core")
+		Command::new("../target/debug/qos_core")
 			.args([
 				"--usock",
 				*usock,

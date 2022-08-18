@@ -370,11 +370,11 @@ dependencies = [
  "openssl",
  "qos-attest",
  "qos-client",
- "qos-core",
  "qos-crypto",
  "qos-hex",
  "qos-host",
  "qos-test-primitives",
+ "qos_core",
  "rand",
  "sample-app",
  "tokio",
@@ -609,8 +609,8 @@ dependencies = [
  "aws-nitro-enclaves-cose",
  "aws-nitro-enclaves-nsm-api",
  "openssl",
- "qos-core",
  "qos-hex",
+ "qos_core",
  "serde_bytes",
  "webpki",
 ]
@@ -622,25 +622,11 @@ dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "qos-attest",
- "qos-core",
  "qos-crypto",
  "qos-hex",
+ "qos_core",
  "sample-app",
  "ureq",
-]
-
-[[package]]
-name = "qos-core"
-version = "0.1.0"
-dependencies = [
- "aws-nitro-enclaves-nsm-api",
- "borsh",
- "nix 0.24.1",
- "openssl",
- "qos-crypto",
- "qos-hex",
- "qos-test-primitives",
- "serde_bytes",
 ]
 
 [[package]]
@@ -662,7 +648,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "borsh",
- "qos-core",
+ "qos_core",
  "tokio",
 ]
 
@@ -671,6 +657,20 @@ name = "qos-test-primitives"
 version = "0.1.0"
 dependencies = [
  "rand",
+]
+
+[[package]]
+name = "qos_core"
+version = "0.1.0"
+dependencies = [
+ "aws-nitro-enclaves-nsm-api",
+ "borsh",
+ "nix 0.24.1",
+ "openssl",
+ "qos-crypto",
+ "qos-hex",
+ "qos-test-primitives",
+ "serde_bytes",
 ]
 
 [[package]]
@@ -732,8 +732,8 @@ name = "sample-app"
 version = "0.1.0"
 dependencies = [
  "borsh",
- "qos-core",
  "qos-crypto",
+ "qos_core",
 ]
 
 [[package]]

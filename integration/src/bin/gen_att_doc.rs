@@ -38,7 +38,7 @@ async fn main() {
 		use qos_crypto::RsaPair;
 
 		const EPHEMERAL_KEY_RELATIVE_PATH: &str =
-			"./qos-core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
+			"./qos_core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";
 
 		let uri = "http://127.0.0.1:3000/message";
 
@@ -72,7 +72,7 @@ async fn main() {
 		};
 
 		let att_path =
-			"./qos-core/src/protocol/attestor/static/boot_e2e_mock_attestation_doc";
+			"./qos_core/src/protocol/attestor/static/boot_e2e_mock_attestation_doc";
 		fs::write(&att_path, cose_sign1).unwrap();
 
 		println!("Done");

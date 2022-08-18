@@ -18,7 +18,7 @@ async fn dev_boot_e2e() {
 
 	// Start Enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/qos-core")
+		Command::new("../target/debug/qos_core")
 			.args([
 				"--usock",
 				*usock,

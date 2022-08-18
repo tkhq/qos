@@ -8,7 +8,7 @@ local-enclave:
 	@# Remove the directory where we default to setting up the enclave file system
 	rm -rf ./local-encalve
 	@# Start the enclave with mock feature and mock flag so we can use the MockNSM
-	cargo run --bin qos-core \
+	cargo run --bin qos_core \
 		--features mock \
 		-- \
 		--usock ./dev.sock \
@@ -35,7 +35,7 @@ local-dangerous-dev-boot:
 .PHONY: vm-enclave
 vm-enclave:
 	OPENSSL_DIR=/usr cargo run \
-		--bin qos-core \
+		--bin qos_core \
 		--features vm \
 		-- \
 		--cid 16 \
