@@ -93,6 +93,7 @@ mod test {
 	use std::path::Path;
 
 	use qos_crypto::{sha_256, shamir::shares_generate, RsaPair};
+	use test_primitives::PathWrapper;
 
 	use crate::{
 		client::Client,
@@ -167,12 +168,12 @@ mod test {
 
 	#[test]
 	fn provision_works() {
-		let quorum_file = "./provision_works.quorum.key";
-		let eph_file = "./provision_works.eph.key";
-		let manifest_file = "./provision_works.manifest";
+		let quorum_file: PathWrapper = "./provision_works.quorum.key".into();
+		let eph_file: PathWrapper = "./provision_works.eph.key".into();
+		let manifest_file: PathWrapper = "./provision_works.manifest".into();
 
 		let (quorum_pair, eph_pair, threshold, mut state) =
-			setup(eph_file, quorum_file, manifest_file);
+			setup(*eph_file, *quorum_file, *manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
 		let quorum_key = quorum_pair.private_key_to_der().unwrap();
@@ -186,7 +187,7 @@ mod test {
 		// write quorum key
 		for share in &encrypted_shares[..threshold - 1] {
 			assert_eq!(provision(share, &mut state), Ok(false));
-			assert!(!Path::new(quorum_file).exists());
+			assert!(!Path::new(*quorum_file).exists());
 			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 		}
 
@@ -194,23 +195,22 @@ mod test {
 		// quorum key as a ready only file
 		let share = &encrypted_shares[threshold];
 		assert_eq!(provision(share, &mut state), Ok(true));
-		let quorum_key = std::fs::read(quorum_file).unwrap();
+		let quorum_key = std::fs::read(*quorum_file).unwrap();
 		assert_eq!(quorum_key, quorum_pair.private_key_to_pem().unwrap());
 		assert_eq!(state.phase, ProtocolPhase::QuorumKeyProvisioned);
-
-		std::fs::remove_file(eph_file).unwrap();
-		std::fs::remove_file(quorum_file).unwrap();
-		std::fs::remove_file(manifest_file).unwrap();
 	}
 
 	#[test]
 	fn provision_rejects_the_wrong_key() {
-		let eph_file = "./provision_rejects_the_wrong_key.eph.key";
-		let quorum_file = "./provision_rejects_the_wrong_key.quorum.key";
-		let manifest_file = "./provision_rejects_the_wrong_key.manifest";
+		let eph_file: PathWrapper =
+			"./provision_rejects_the_wrong_key.eph.key".into();
+		let quorum_file: PathWrapper =
+			"./provision_rejects_the_wrong_key.quorum.key".into();
+		let manifest_file: PathWrapper =
+			"./provision_rejects_the_wrong_key.manifest".into();
 
 		let (_quorum_pair, eph_pair, threshold, mut state) =
-			setup(eph_file, quorum_file, manifest_file);
+			setup(*eph_file, *quorum_file, *manifest_file);
 
 		// 4) Create shards of a RANDOM KEY and encrypt them to eph key
 		let random_key =
@@ -225,7 +225,7 @@ mod test {
 		// write quorum key
 		for share in &encrypted_shares[..threshold - 1] {
 			assert_eq!(provision(share, &mut state), Ok(false));
-			assert!(!Path::new(quorum_file).exists());
+			assert!(!Path::new(*quorum_file).exists());
 			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 		}
 
@@ -235,23 +235,21 @@ mod test {
 			provision(share, &mut state),
 			Err(ProtocolError::ReconstructionError)
 		);
-		assert!(!Path::new(quorum_file).exists());
+		assert!(!Path::new(*quorum_file).exists());
 		// Note that the handler should set the state to unrecoverable error
 		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
-
-		std::fs::remove_file(eph_file).unwrap();
-		std::fs::remove_file(manifest_file).unwrap();
 	}
 
 	#[test]
 	fn provision_rejects_if_a_shard_is_invalid() {
-		let eph_file = "./provision_rejects_if_a_shard_is_invalid.eph.key";
-		let quorum_file =
-			"./provision_rejects_if_a_shard_is_invalid.quorum.key";
-		let manifest_file =
-			"./provision_rejects_if_a_shard_is_invalid.manifest";
+		let eph_file: PathWrapper =
+			"./provision_rejects_if_a_shard_is_invalid.eph.key".into();
+		let quorum_file: PathWrapper =
+			"./provision_rejects_if_a_shard_is_invalid.quorum.key".into();
+		let manifest_file: PathWrapper =
+			"./provision_rejects_if_a_shard_is_invalid.manifest".into();
 		let (quorum_pair, eph_pair, threshold, mut state) =
-			setup(eph_file, quorum_file, manifest_file);
+			setup(*eph_file, *quorum_file, *manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
 		let quorum_key = quorum_pair.private_key_to_der().unwrap();
@@ -265,7 +263,7 @@ mod test {
 		// write quorum key
 		for share in &encrypted_shares[..threshold - 1] {
 			assert_eq!(provision(share, &mut state), Ok(false));
-			assert!(!Path::new(quorum_file).exists());
+			assert!(!Path::new(*quorum_file).exists());
 			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 		}
 
@@ -277,11 +275,8 @@ mod test {
 			provision(&encrypted_bogus_share, &mut state),
 			Err(ProtocolError::InvalidPrivateKey)
 		);
-		assert!(!Path::new(quorum_file).exists());
+		assert!(!Path::new(*quorum_file).exists());
 		// Note that the handler should set the state to unrecoverable error
 		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
-
-		std::fs::remove_file(eph_file).unwrap();
-		std::fs::remove_file(manifest_file).unwrap();
 	}
 }

@@ -143,3 +143,11 @@ lint:
 	cargo +nightly version
 	cargo clippy --fix --allow-dirty
 	cargo +nightly fmt
+
+.PHONY: test-all
+test-all:
+	@# The integration tests rely on binaries from other crates being built, so
+	@# we build all the workspace targets.
+	cargo build --all
+	@# Run all tests, including tests marked `ignore`
+	cargo test --all-targets

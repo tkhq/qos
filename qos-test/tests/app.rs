@@ -1,65 +1,75 @@
 use std::{fs, process::Command};
 
-const SAMPLE_APP_PATH: &str = "../target/debug/sample_app";
+use qos_test::LOCAL_HOST;
+use test_primitives::{ChildWrapper, PathWrapper};
 
-#[ignore]
+const SAMPLE_APP_PATH: &str = "../target/debug/sample-app";
+
 #[tokio::test]
 async fn sample_app_e2e() {
-	let tmp = "./sample-app-e2e-tmp/";
-	drop(fs::create_dir_all(tmp));
+	let tmp: PathWrapper = "/tmp/sample-app-e2e".into();
+	drop(fs::create_dir_all(*tmp));
 
-	let enclave_usock = "./sample-app-e2e-tmp/enclave_sock.sock";
-	let app_usock = "./sample-app-e2e-tmp/app_sock.sock";
-	let quorum_path = "./sample-app-e2e-tmp/quorum.secret";
-	let pivot_path = "./sample-app-e2e-tmp/pivot.pivot";
-	let manifest_path = "./sample-app-e2e-tmp/manifest.manifest";
-	let eph_path = "./sample-app-e2e-tmp/eph.secret";
+	let enclave_usock: PathWrapper =
+		"/tmp/sample-app-e2e/enclave_sock.sock".into();
+	let app_usock: PathWrapper = "/tmp/sample-app-e2e/app_sock.sock".into();
+	let quorum_path: PathWrapper = "/tmp/sample-app-e2e/quorum.secret".into();
+	let pivot_path: PathWrapper = "/tmp/sample-app-e2e/pivot.pivot".into();
+	let manifest_path: PathWrapper =
+		"/tmp/sample-app-e2e/manifest.manifest".into();
+	let eph_path: PathWrapper = "/tmp/sample-app-e2e/eph.secret".into();
 
-	let host_port = "3232";
-	let host_ip = "127.0.0.1";
+	let host_port = test_primitives::find_free_port().unwrap();
 
 	// Start Enclave
-	let mut enclave_child_process = Command::new("../target/debug/core_cli")
-		.args([
-			"--usock",
-			enclave_usock,
-			"--quorum-file",
-			quorum_path,
-			"--pivot-file",
-			pivot_path,
-			"--ephemeral-file",
-			eph_path,
-			"--mock",
-			"--manifest-file",
-			manifest_path,
-			"--app-usock",
-			app_usock,
-		])
-		.spawn()
-		.unwrap();
+	let mut _enclave_child_process: ChildWrapper =
+		Command::new("../target/debug/qos-core")
+			.args([
+				"--usock",
+				*enclave_usock,
+				"--quorum-file",
+				*quorum_path,
+				"--pivot-file",
+				*pivot_path,
+				"--ephemeral-file",
+				*eph_path,
+				"--mock",
+				"--manifest-file",
+				*manifest_path,
+				"--app-usock",
+				*app_usock,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// Start host
-	let mut host_child_process = Command::new("../target/debug/host_cli")
-		.args([
-			"--host-port",
-			host_port,
-			"--host-ip",
-			host_ip,
-			"--usock",
-			enclave_usock,
-		])
-		.spawn()
-		.unwrap();
+	let mut _host_child_process: ChildWrapper =
+		Command::new("../target/debug/qos-host")
+			.args([
+				"--host-port",
+				&host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--usock",
+				*enclave_usock,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// Run `dangerous-dev-boot`
-	let pivot_args = format!("[--usock,{app_usock},--quorum-file,{quorum_path},--ephemeral-file,{eph_path},--manifest-file,{manifest_path}]");
-	assert!(Command::new("../target/debug/client_cli")
+	let pivot_args = format!(
+		"[--usock,{},--quorum-file,{},--ephemeral-file,{},--manifest-file,{}]",
+		*app_usock, *quorum_path, *eph_path, *manifest_path
+	);
+	assert!(Command::new("../target/debug/qos-client")
 		.args([
 			"dangerous-dev-boot",
 			"--host-port",
-			host_port,
+			&host_port.to_string(),
 			"--host-ip",
-			host_ip,
+			LOCAL_HOST,
 			"--pivot-path",
 			SAMPLE_APP_PATH,
 			"--restart-policy",
@@ -67,7 +77,7 @@ async fn sample_app_e2e() {
 			"--pivot-args",
 			&pivot_args[..],
 			"--unsafe-eph-path-override",
-			eph_path,
+			*eph_path,
 		])
 		.spawn()
 		.unwrap()
@@ -75,24 +85,19 @@ async fn sample_app_e2e() {
 		.unwrap()
 		.success());
 
-	std::thread::sleep(std::time::Duration::from_secs(2));
+	test_primitives::wait_until_port_is_bound(host_port);
 
-	assert!(Command::new("../target/debug/client_cli")
+	assert!(Command::new("../target/debug/qos-client")
 		.args([
 			"app-read-files",
 			"--host-port",
-			host_port,
+			&host_port.to_string(),
 			"--host-ip",
-			host_ip,
+			LOCAL_HOST,
 		])
 		.spawn()
 		.unwrap()
 		.wait()
 		.unwrap()
 		.success());
-
-	// Clean up services
-	enclave_child_process.kill().unwrap();
-	host_child_process.kill().unwrap();
-	drop(fs::remove_dir_all(tmp));
 }

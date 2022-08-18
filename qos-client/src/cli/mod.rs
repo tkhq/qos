@@ -356,7 +356,7 @@ const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 /// ```
 ///
 /// Note that the command name is kebab-case.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Command {
 	/// Query the health endpoint of the enclave host server.
 	HostHealth,

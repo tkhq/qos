@@ -9,7 +9,7 @@ const VERSION_INPUT: &str = "--version";
 const INPUT_PREFIX: &str = "--";
 
 /// Token parsing error.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ParserError {
 	/// Input was was not expected.
 	UnexpectedInput(String),
@@ -46,7 +46,7 @@ pub trait GetParserForOptions {
 /// parse a command as well use [`CommandParser`].
 ///
 /// Assumes the format `--token1 value1 --flag --token2 value2`.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct OptionsParser<T: GetParserForOptions> {
 	_phantom: PhantomData<T>,
 }
@@ -76,7 +76,7 @@ pub trait GetParserForCommand {
 /// Note that subcommands are not supported.
 ///
 /// Assumes the format `command-name --token1 value1 --flag --token2 value2`.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CommandParser<C: From<String> + GetParserForCommand> {
 	_phantom: PhantomData<C>,
 }

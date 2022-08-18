@@ -4,27 +4,31 @@ use borsh::de::BorshDeserialize;
 use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
+use qos_test::LOCAL_HOST;
 use rand::{seq::SliceRandom, thread_rng};
+use test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]
 async fn genesis_e2e() {
-	let usock = "genesis_e2e.sock";
-	let host_port = "3808";
-	let host_ip = "127.0.0.1";
-	let secret_path = "./genesis_e2e.secret";
-	let pivot_path = "./genesis_e2e.pivot";
-	let manifest_path = "./genesis_e2e/manifest.manifest";
+	let host_port = test_primitives::find_free_port().unwrap();
+	let tmp: PathWrapper = "/tmp/genesis-e2e".into();
+	fs::create_dir_all(*tmp).unwrap();
 
-	let all_personal_dir = "./genesis-e2e-personal-tmp";
-	let genesis_dir = "./genesis-e2e-genesis-tmp";
+	let usock: PathWrapper = "/tmp/genesis-e2e/genesis_e2e.sock".into();
+	let secret_path: PathWrapper = "/tmp/genesis-e2e/genesis_e2e.secret".into();
+	let pivot_path: PathWrapper = "/tmp/genesis-e2e/genesis_e2e.pivot".into();
+	let manifest_path = "/tmp/genesis-e2e/manifest.manifest";
+
+	let all_personal_dir: PathWrapper = "/tmp/genesis-e2e-personal".into();
+	let genesis_dir: PathWrapper = "/tmp/genesis-e2e-genesis".into();
 
 	let namespace = "quit-coding-to-vape";
 	let attestation_doc_path =
-		format!("{}/attestation_doc.genesis", genesis_dir);
-	let genesis_output_path = format!("{}/output.genesis", genesis_dir);
+		format!("{}/attestation_doc.genesis", *genesis_dir);
+	let genesis_output_path = format!("{}/output.genesis", *genesis_dir);
 
 	let personal_dir =
-		|user: &str| format!("{}/{}-dir", all_personal_dir, user);
+		|user: &str| format!("{}/{}-dir", *all_personal_dir, user);
 	let get_key_paths = |user: &str| {
 		(
 			format!("{}.{}.setup.key", user, namespace),
@@ -49,7 +53,7 @@ async fn genesis_e2e() {
 		(&user2, &user2_private_setup, &user2_public_setup),
 		(&user3, &user3_private_setup, &user3_public_setup),
 	] {
-		assert!(Command::new("../target/debug/client_cli")
+		assert!(Command::new("../target/debug/qos-client")
 			.args([
 				"generate-setup-key",
 				"--personal-dir",
@@ -69,7 +73,7 @@ async fn genesis_e2e() {
 	}
 
 	// Make the genesis dir
-	fs::create_dir_all(genesis_dir).unwrap();
+	fs::create_dir_all(*genesis_dir).unwrap();
 	// Move the setup keys to the genesis dir - this will be the Genesis Set
 	for (user, public) in [
 		(&user1, &user1_public_setup),
@@ -77,55 +81,59 @@ async fn genesis_e2e() {
 		(&user3, &user3_public_setup),
 	] {
 		let from = Path::new(&personal_dir(user)).join(public);
-		let to = Path::new(genesis_dir).join(public);
+		let to = Path::new(*genesis_dir).join(public);
 		fs::copy(from, to).unwrap();
 	}
 
 	// -- ENCLAVE start enclave
-	let mut enclave_child_process = Command::new("../target/debug/core_cli")
-		.args([
-			"--usock",
-			usock,
-			"--quorum-file",
-			secret_path,
-			"--pivot-file",
-			pivot_path,
-			"--mock",
-			"--manifest-file",
-			manifest_path,
-		])
-		.spawn()
-		.unwrap();
+	let mut _enclave_child_process: ChildWrapper =
+		Command::new("../target/debug/qos-core")
+			.args([
+				"--usock",
+				*usock,
+				"--quorum-file",
+				*secret_path,
+				"--pivot-file",
+				*pivot_path,
+				"--mock",
+				"--manifest-file",
+				manifest_path,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// -- HOST start host
-	let mut host_child_process = Command::new("../target/debug/host_cli")
-		.args([
-			"--host-port",
-			host_port,
-			"--host-ip",
-			host_ip,
-			"--usock",
-			usock,
-		])
-		.spawn()
-		.unwrap();
+	let mut _host_child_process: ChildWrapper =
+		Command::new("../target/debug/qos-host")
+			.args([
+				"--host-port",
+				&host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--usock",
+				*usock,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// -- Make sure the enclave and host have time to boot
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	test_primitives::wait_until_port_is_bound(host_port);
 
 	// -- CLIENT Run boot genesis, creating a genesis set from the setup keys in
 	// the genesis dir
-	assert!(Command::new("../target/debug/client_cli")
+	assert!(Command::new("../target/debug/qos-client")
 		.args([
 			"boot-genesis",
 			"--threshold",
 			"2", // threshold
 			"--genesis-dir",
-			genesis_dir,
+			*genesis_dir,
 			"--host-ip",
-			host_ip,
+			LOCAL_HOST,
 			"--host-port",
-			host_port,
+			&host_port.to_string(),
 			"--unsafe-skip-attestation"
 		])
 		.spawn()
@@ -182,13 +190,13 @@ async fn genesis_e2e() {
 	// -- CLIENT make sure each user can run `after-genesis` against their
 	// member output and setup key
 	for user in [&user1, &user2, &user3] {
-		assert!(Command::new("../target/debug/client_cli")
+		assert!(Command::new("../target/debug/qos-client")
 			.args([
 				"after-genesis",
 				"--personal-dir",
 				&personal_dir(user),
 				"--genesis-dir",
-				genesis_dir,
+				*genesis_dir,
 				"--pcr0",
 				"0xff",
 				"--pcr1",
@@ -223,12 +231,4 @@ async fn genesis_e2e() {
 		// created out of band in this test.
 		assert!(decrypted_shares.contains(&share));
 	}
-
-	for path in [&secret_path, &pivot_path, &usock] {
-		drop(fs::remove_file(path));
-	}
-	drop(fs::remove_dir_all(genesis_dir));
-	drop(fs::remove_dir_all(all_personal_dir));
-	enclave_child_process.kill().unwrap();
-	host_child_process.kill().unwrap();
 }

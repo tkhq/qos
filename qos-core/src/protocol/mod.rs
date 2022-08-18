@@ -41,7 +41,7 @@ impl<T: BorshSerialize> QosHash for T {}
 
 /// A error from protocol execution.
 #[derive(
-	Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize,
+	Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub enum ProtocolError {
 	/// TODO
@@ -130,7 +130,7 @@ impl From<client::ClientError> for ProtocolError {
 
 /// Protocol executor state.
 #[derive(
-	Debug, PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	Debug, PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub enum ProtocolPhase {
 	/// The state machine cannot recover. The enclave must be rebooted.

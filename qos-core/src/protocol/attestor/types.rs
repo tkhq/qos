@@ -9,7 +9,7 @@ use nsm::api::{Digest, ErrorCode, Request, Response};
 
 /// Possible error codes from the Nitro Secure Module API.
 #[derive(
-	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Clone,
+	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Eq, Clone,
 )]
 pub enum NsmErrorCode {
 	/// No errors
@@ -75,6 +75,7 @@ impl From<NsmErrorCode> for ErrorCode {
 	Copy,
 	Clone,
 	PartialEq,
+	Eq,
 )]
 pub enum NsmDigest {
 	/// SHA256
@@ -109,7 +110,7 @@ impl From<NsmDigest> for Digest {
 
 /// Request type for the Nitro Secure Module API.
 #[derive(
-	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Clone,
+	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Eq, Clone,
 )]
 pub enum NsmRequest {
 	/// Read data from PlatformConfigurationRegister at `index`
@@ -201,7 +202,7 @@ impl From<NsmRequest> for Request {
 
 /// Response type for the Nitro Secure Module API.
 #[derive(
-	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Clone,
+	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Eq, Clone,
 )]
 pub enum NsmResponse {
 	/// returns the current PlatformConfigurationRegister state

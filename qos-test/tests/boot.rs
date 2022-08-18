@@ -16,29 +16,29 @@ use qos_core::protocol::{
 	QosHash,
 };
 use qos_crypto::{sha_256, RsaPair};
-use qos_test::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
+use qos_test::{LOCAL_HOST, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
+use test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]
 async fn boot_e2e() {
-	let host_port = "3009";
-	let host_ip = "127.0.0.1";
-	let tmp = "./boot-e2e-tmp";
-	fs::create_dir_all(tmp).unwrap();
+	let host_port = test_primitives::find_free_port().unwrap();
+	let tmp: PathWrapper = "/tmp/boot-e2e".into();
+	fs::create_dir_all(*tmp).unwrap();
 
-	let usock = "./boot-e2e-tmp/boot_e2e.sock";
-	let secret_path = "./boot-e2e-tmp/boot_e2e.secret";
-	let pivot_path = "./boot-e2e-tmp/boot_e2e.pivot";
-	let manifest_path = "./boot-e2e-tmp/boot_e2e.manifest";
-	let eph_path = "./boot-e2e-tmp/ephemeral_key.secret";
+	let usock: PathWrapper = "/tmp/boot-e2e/boot_e2e.sock".into();
+	let secret_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.secret".into();
+	let pivot_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.pivot".into();
+	let manifest_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.manifest".into();
+	let eph_path: PathWrapper = "/tmp/boot-e2e/ephemeral_key.secret".into();
 
-	let boot_dir = "./boot-e2e-boot-dir-tmp";
+	let boot_dir: PathWrapper = "./boot-e2e-boot-dir".into();
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
 	let genesis_dir = "./mock/boot-e2e/genesis-dir";
 	let root_cert_path = "./mock/boot-e2e/root-cert.pem";
 
 	let namespace = "quit-coding-to-vape";
 
-	let attestation_doc_path = format!("{}/attestation_doc.boot", boot_dir);
+	let attestation_doc_path = format!("{}/attestation_doc.boot", *boot_dir);
 	let genesis_output_path = format!("{}/output.genesis", genesis_dir);
 
 	let personal_dir =
@@ -55,7 +55,7 @@ async fn boot_e2e() {
 	let msg = "testing420";
 	let pivot_args = format!("[--msg,{}]", msg);
 
-	assert!(Command::new("../target/debug/client_cli")
+	assert!(Command::new("../target/debug/qos-client")
 		.args([
 			"generate-manifest",
 			"--genesis-dir",
@@ -77,7 +77,7 @@ async fn boot_e2e() {
 			"--root-cert-path",
 			root_cert_path,
 			"--boot-dir",
-			boot_dir,
+			*boot_dir,
 			"--pivot-args",
 			&pivot_args,
 		])
@@ -88,7 +88,7 @@ async fn boot_e2e() {
 		.success());
 
 	// Check the manifest written to file
-	let cli_manifest_path = format!("{}/{}.2.manifest", boot_dir, namespace);
+	let cli_manifest_path = format!("{}/{}.2.manifest", *boot_dir, namespace);
 	let manifest =
 		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
 			.unwrap();
@@ -134,10 +134,10 @@ async fn boot_e2e() {
 	for alias in [user1, user2, user3] {
 		let approval_path = format!(
 			"{}/{}.{}.{}.approval",
-			boot_dir, alias, namespace, manifest.namespace.nonce,
+			*boot_dir, alias, namespace, manifest.namespace.nonce,
 		);
 
-		assert!(Command::new("../target/debug/client_cli")
+		assert!(Command::new("../target/debug/qos-client")
 			.args([
 				"sign-manifest",
 				"--manifest-hash",
@@ -145,7 +145,7 @@ async fn boot_e2e() {
 				"--personal-dir",
 				&personal_dir(alias),
 				"--boot-dir",
-				boot_dir,
+				*boot_dir,
 			])
 			.spawn()
 			.unwrap()
@@ -177,51 +177,55 @@ async fn boot_e2e() {
 	}
 
 	// -- ENCLAVE start enclave
-	let mut enclave_child_process = Command::new("../target/debug/core_cli")
-		.args([
-			"--usock",
-			usock,
-			"--quorum-file",
-			secret_path,
-			"--pivot-file",
-			pivot_path,
-			"--ephemeral-file",
-			eph_path,
-			"--mock",
-			"--manifest-file",
-			manifest_path,
-		])
-		.spawn()
-		.unwrap();
+	let mut _enclave_child_process: ChildWrapper =
+		Command::new("../target/debug/qos-core")
+			.args([
+				"--usock",
+				*usock,
+				"--quorum-file",
+				*secret_path,
+				"--pivot-file",
+				*pivot_path,
+				"--ephemeral-file",
+				*eph_path,
+				"--mock",
+				"--manifest-file",
+				*manifest_path,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// -- HOST start host
-	let mut host_child_process = Command::new("../target/debug/host_cli")
-		.args([
-			"--host-port",
-			host_port,
-			"--host-ip",
-			host_ip,
-			"--usock",
-			usock,
-		])
-		.spawn()
-		.unwrap();
+	let mut _host_child_process: ChildWrapper =
+		Command::new("../target/debug/qos-host")
+			.args([
+				"--host-port",
+				&host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--usock",
+				*usock,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// -- Make sure the enclave and host have time to boot
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	test_primitives::wait_until_port_is_bound(host_port);
 
 	// -- CLIENT broadcast boot standard instruction
-	assert!(Command::new("../target/debug/client_cli")
+	assert!(Command::new("../target/debug/qos-client")
 		.args([
 			"boot-standard",
 			"--boot-dir",
-			boot_dir,
+			*boot_dir,
 			"--pivot-path",
 			PIVOT_OK2_PATH,
 			"--host-port",
-			host_port,
+			&host_port.to_string(),
 			"--host-ip",
-			host_ip,
+			LOCAL_HOST,
 			"--unsafe-skip-attestation",
 		])
 		.spawn()
@@ -237,22 +241,22 @@ async fn boot_e2e() {
 	// and sanity check the pivot has not yet executed.
 	assert!(!Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
 	for user in [&user1, &user2] {
-		assert!(Command::new("../target/debug/client_cli")
+		assert!(Command::new("../target/debug/qos-client")
 			.args([
 				"post-share",
 				"--boot-dir",
-				boot_dir,
+				*boot_dir,
 				"--personal-dir",
 				&personal_dir(user),
 				"--manifest-hash",
 				qos_hex::encode(&manifest.qos_hash()).as_str(),
 				"--host-port",
-				host_port,
+				&host_port.to_string(),
 				"--host-ip",
-				host_ip,
+				LOCAL_HOST,
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
-				eph_path,
+				*eph_path,
 			])
 			.spawn()
 			.unwrap()
@@ -261,18 +265,11 @@ async fn boot_e2e() {
 			.success());
 	}
 
+	// Give the enclave time to start the pivot
 	std::thread::sleep(std::time::Duration::from_secs(2));
 
 	// Check that the pivot executed
 	let contents = std::fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
 	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
 	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
-
-	for f in [&secret_path, &pivot_path, &usock] {
-		drop(fs::remove_file(f));
-	}
-	drop(fs::remove_dir_all(boot_dir));
-	drop(fs::remove_dir_all(tmp));
-	enclave_child_process.kill().unwrap();
-	host_child_process.kill().unwrap();
 }

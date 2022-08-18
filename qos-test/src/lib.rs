@@ -22,6 +22,8 @@ pub const PIVOT_OK3_PATH: &str = "../target/debug/pivot_ok3";
 pub const PIVOT_ABORT_PATH: &str = "../target/debug/pivot_abort";
 /// Path to pivot panic for tests.
 pub const PIVOT_PANIC_PATH: &str = "../target/debug/pivot_panic";
+/// Local host IP address.
+pub const LOCAL_HOST: &str = "127.0.0.1";
 
 const MSG: &str = "msg";
 

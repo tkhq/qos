@@ -10,7 +10,7 @@ use crate::protocol::{
 
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct NitroConfig {
@@ -27,6 +27,7 @@ pub struct NitroConfig {
 /// Policy for restarting the pivot binary.
 #[derive(
 	PartialEq,
+	Eq,
 	Debug,
 	Clone,
 	Copy,
@@ -61,7 +62,7 @@ impl TryFrom<String> for RestartPolicy {
 
 /// Pivot binary configuration
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfig {
@@ -96,7 +97,7 @@ pub struct QuorumMember {
 
 /// The Quorum Set.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct QuorumSet {
@@ -109,7 +110,7 @@ pub struct QuorumSet {
 
 /// A Namespace and its relative nonce.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Namespace {
@@ -125,7 +126,7 @@ pub struct Namespace {
 
 /// The Manifest for the enclave.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Manifest {
@@ -143,7 +144,7 @@ pub struct Manifest {
 
 /// An approval by a Quorum Member.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Approval {
@@ -155,7 +156,7 @@ pub struct Approval {
 
 /// [`Manifest`] with accompanying [`Approval`]s.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestEnvelope {
