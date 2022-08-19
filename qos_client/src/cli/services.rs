@@ -384,8 +384,6 @@ pub(crate) fn sign_manifest<P: AsRef<Path>>(
 		"{}.{}.{}.{}",
 		alias, namespace, manifest.namespace.nonce, APPROVAL_EXT
 	));
-
-	println!("boot dir = {:?}", boot_dir.as_ref());
 	write_with_msg(
 		&approval_path,
 		&approval.try_to_vec().expect("Failed to serialize approval"),
