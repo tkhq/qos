@@ -31,7 +31,9 @@ async fn boot_e2e() {
 	let manifest_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.manifest".into();
 	let eph_path: PathWrapper = "/tmp/boot-e2e/ephemeral_key.secret".into();
 
-	let boot_dir: PathWrapper = "./boot-e2e-boot-dir".into();
+	let boot_dir: PathWrapper = "/tmp/boot-e2e/boot-dir".into();
+	fs::create_dir_all(*boot_dir).unwrap();
+
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
 	let genesis_dir = "./mock/boot-e2e/genesis-dir";
 	let root_cert_path = "./mock/boot-e2e/root-cert.pem";
