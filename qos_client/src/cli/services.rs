@@ -344,6 +344,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	let manifest_path = boot_dir
 		.as_ref()
 		.join(format!("{}.{}.{}", namespace, nonce, MANIFEST_EXT));
+	println!("manifest path {:?}", boot_dir.as_ref());
 	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");
 }
 
@@ -384,6 +385,8 @@ pub(crate) fn sign_manifest<P: AsRef<Path>>(
 		"{}.{}.{}.{}",
 		alias, namespace, manifest.namespace.nonce, APPROVAL_EXT
 	));
+
+	println!("boot dir = {:?}", boot_dir.as_ref());
 	write_with_msg(
 		&approval_path,
 		&approval.try_to_vec().expect("Failed to serialize approval"),
@@ -644,7 +647,9 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 }
 
 fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
-	assert!(dir.as_ref().is_dir(), "Provided path is not a valid directory");
+	dbg!(&dir.as_ref());
+	println!("dir = {:?}", dir.as_ref());
+	// assert!(dir.as_ref().is_dir(), "Provided path is not a valid directory");
 	fs::read_dir(dir.as_ref())
 		.expect("Failed to read directory")
 		.map(|p| p.unwrap().path())
