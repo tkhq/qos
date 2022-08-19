@@ -1,0 +1,27 @@
+[package]
+name = "qos_client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+qos_core = { path = "../qos_core", default-features = false }
+qos_crypto = { path = "../qos_crypto", default-features = false }
+qos_attest = { path = "../qos_attest", default-features = false }
+qos_hex = { path = "../qos_hex" }
+
+# Third party
+ureq = { version = "2.4", default-features = false }
+aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
+
+borsh = { version = "0.9" }
+
+# TODO: rip out
+sample_app = { path = "../sample_app" }
+
+[dev-dependencies]
+# We need mock enabled to grab things related to the mock NSM.
+qos_core = { path = "../qos_core", features = ["mock"], default-features = false }
+
+[features]
+default = []
+

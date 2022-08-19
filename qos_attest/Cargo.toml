@@ -1,0 +1,14 @@
+[package]
+name = "qos_attest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+qos_core = { path = "../qos_core", default-features = false }
+qos_hex = { path = "../qos_hex" }
+
+aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
+aws-nitro-enclaves-cose = { version = "0.4.0", default-features = false, features = ["key_openssl_pkey"] }
+webpki = { version =  "0.22.0", default-features = false }
+serde_bytes = { version = "0.11", default-features = false }
+openssl = "0.10.40"
