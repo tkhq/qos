@@ -1,12 +1,12 @@
 use std::fs;
 
+use integration::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
 use qos_core::{
 	coordinator::Coordinator,
 	handles::Handles,
 	io::SocketAddress,
 	protocol::{attestor::mock::MockNsm, services::boot::ManifestEnvelope},
 };
-use integration::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
 
 #[test]
 fn coordinator_works() {

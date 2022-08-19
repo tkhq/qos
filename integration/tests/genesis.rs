@@ -1,12 +1,12 @@
 use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
+use integration::LOCAL_HOST;
 use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
-use integration::LOCAL_HOST;
-use rand::{seq::SliceRandom, thread_rng};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
+use rand::{seq::SliceRandom, thread_rng};
 
 #[tokio::test]
 async fn genesis_e2e() {
