@@ -10,8 +10,10 @@ target/
 *.pub
 *.share
 
-!mock/*/user1.*
-!mock/*/user2.*
-!mock/*/user3.*
+# Mock data
+!integration/mock/boot-e2e/all-personal-dir/user1-dir/*
+!integration/mock/boot-e2e/all-personal-dir/user2-dir/*
+!integration/mock/boot-e2e/all-personal-dir/user3-dir/*
+!integration/mock/boot-e2e/genesis-dir/*
 
 local-enclave/ls
