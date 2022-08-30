@@ -40,6 +40,8 @@ pub enum AttestError {
 	InvalidPubKey,
 	/// Invalid bytes.
 	InvalidBytes,
+	/// The NSM returned an unexpected response when querried
+	UnexpectedNsmResponse(qos_core::protocol::attestor::types::NsmResponse),
 }
 
 impl From<webpki::Error> for AttestError {
@@ -58,4 +60,28 @@ impl From<aws_nitro_enclaves_nsm_api::api::Error> for AttestError {
 	fn from(e: aws_nitro_enclaves_nsm_api::api::Error) -> Self {
 		Self::Nsm(e)
 	}
+}
+
+/// Get the current time based on the NSM attestation document.
+pub fn current_time(
+	nsm: &dyn qos_core::protocol::attestor::NsmProvider,
+) -> Result<u64, AttestError> {
+	let nsm_request =
+		qos_core::protocol::attestor::types::NsmRequest::Attestation {
+			user_data: None,
+			nonce: None,
+			public_key: None,
+		};
+	let fd = nsm.nsm_init();
+	let nsm_response = nsm.nsm_process_request(fd, nsm_request);
+	let nsm_response = match nsm_response {
+		qos_core::protocol::attestor::types::NsmResponse::Attestation {
+			document,
+		} => document,
+		resp => return Err(AttestError::UnexpectedNsmResponse(resp)),
+	};
+	let attestation_document =
+		nitro::unsafe_attestation_doc_from_der(&nsm_response)?;
+
+	Ok(attestation_document.timestamp)
 }
