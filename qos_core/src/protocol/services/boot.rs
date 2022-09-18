@@ -218,6 +218,51 @@ pub(in crate::protocol) fn boot_standard(
 	Ok(nsm_response)
 }
 
+pub(in crate::protocol) fn boot_chain(
+	state: &mut ProtocolState,
+	manifest_envelope: &ManifestEnvelope,
+	pivot: &[u8],
+) -> Result<NsmResponse, ProtocolError> {
+	// TODO: DRY this boot_standard, only difference is the phase they set at
+	// teh end
+	manifest_envelope.check_approvals()?;
+	let ephemeral_key = RsaPair::generate()?;
+	state.handles.put_ephemeral_key(&ephemeral_key)?;
+
+	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
+		return Err(ProtocolError::InvalidPivotHash);
+	};
+	state.handles.put_pivot(pivot)?;
+
+	let nsm_response = attestation::get_post_boot_attestation_doc(
+		&*state.attestor,
+		ephemeral_key.public_key_to_pem()?,
+		manifest_envelope.manifest.qos_hash().to_vec(),
+	);
+
+	state.phase = ProtocolPhase::WaitingForQuorumKeyInjection;
+
+	Ok(nsm_response)
+}
+
+pub(in crate::protocol) fn quorum_key_inject(
+	state: &mut ProtocolState,
+	encrypted_quorum_key: &[u8],
+) -> Result<(), ProtocolError> {
+	let ephemeral_key = state.handles.get_ephemeral_key()?;
+
+	// Decrypt the key pair with the ephemeral key
+	let pem_encoded = ephemeral_key.envelope_decrypt(encrypted_quorum_key)?;
+	let pair = RsaPair::from_pem(&pem_encoded)?;
+
+	// Store the ephemeral key key
+	state.handles.put_quorum_key(&pair)?;
+
+	state.phase = ProtocolPhase::QuorumKeyProvisioned;
+
+	Ok(())
+}
+
 #[cfg(test)]
 mod test {
 	use std::path::Path;

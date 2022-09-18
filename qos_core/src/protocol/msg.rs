@@ -95,6 +95,41 @@ pub enum ProtocolMsg {
 		/// COSE SIGN1 structure with Attestation Doc
 		nsm_response: NsmResponse,
 	},
+
+	/// A request to a New Node to initiate the chained boot process.
+	BootChainRequest {
+		/// The manifest envelope for the new node.
+		manifest_envelope: ManifestEnvelope,
+		/// Pivot binary
+		pivot: Vec<u8>,
+	},
+
+	/// A request from a new node to an original node for the quorum key.
+	///
+	/// Also the the response to a BootChainRequest TODO: does this make sense?
+	/// Should we have another type for the response which doesn't include the
+	/// manifest envelope?
+	ChainQuorumKeyRequest {
+		/// COSE SIGN1 structure containing the attestation doc and a signature
+		/// from the NSM end entity certificate.
+		///
+		/// The user data field should have the hash of the manifest. The
+		/// public key field should have the new nodes ephemeral key, which
+		/// should be used to encrypt the
+		cose_sign1_attestation_doc: Vec<u8>,
+		/// The manifest Envelope for the new node making the request. This is
+		/// referenced as the user data in the attestation document.
+		manifest_envelope: ManifestEnvelope,
+	},
+
+	/// The response to a chain quorum
+	InjectQuorumKeyRequest {
+		/// PEM encoded quorum private key, encrypted to the ephemeral key in
+		/// the attestation document request.
+		encrypted_quorum_key: Vec<u8>,
+	},
+	/// A quorum key was successfully injected.
+	InjectQuorumKeyResponse,
 }
 
 #[cfg(test)]
