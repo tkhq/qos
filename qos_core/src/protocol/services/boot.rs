@@ -222,7 +222,7 @@ pub(in crate::protocol) fn boot_chain(
 	state: &mut ProtocolState,
 	manifest_envelope: &ManifestEnvelope,
 	pivot: &[u8],
-) -> Result<NsmResponse, ProtocolError> {
+) -> Result<Vec<u8>, ProtocolError> {
 	// TODO: DRY this boot_standard, only difference is the phase they set at
 	// teh end
 	manifest_envelope.check_approvals()?;
@@ -240,9 +240,12 @@ pub(in crate::protocol) fn boot_chain(
 		manifest_envelope.manifest.qos_hash().to_vec(),
 	);
 
-	state.phase = ProtocolPhase::WaitingForQuorumKeyInjection;
-
-	Ok(nsm_response)
+	if let NsmResponse::Attestation { document } = nsm_response {
+		state.phase = ProtocolPhase::WaitingForQuorumKeyInjection;
+		Ok(document)
+	} else {
+		Err(ProtocolError::UnexpectedNsmResponse)
+	}
 }
 
 pub(in crate::protocol) fn quorum_key_inject(
