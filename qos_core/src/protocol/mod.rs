@@ -102,6 +102,8 @@ pub enum ProtocolError {
 	/// Payload is too big. See `MAX_ENCODED_MSG_LEN` for the upper bound on
 	/// message size.
 	OversizedPayload,
+	/// A protocol message could not be deserialized.
+	ProtocolMsgDeserialization,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
@@ -222,12 +224,6 @@ impl Executor {
 
 impl server::RequestProcessor for Executor {
 	fn process(&mut self, req_bytes: Vec<u8>) -> Vec<u8> {
-		let err_resp = || {
-			ProtocolMsg::ErrorResponse
-				.try_to_vec()
-				.expect("ProtocolMsg can always be serialized. qed.")
-		};
-
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
 			return ProtocolMsg::ProtocolErrorResponse(
 				ProtocolError::OversizedPayload,
@@ -238,7 +234,13 @@ impl server::RequestProcessor for Executor {
 
 		let msg_req = match ProtocolMsg::try_from_slice(&req_bytes) {
 			Ok(req) => req,
-			Err(_) => return err_resp(),
+			Err(_) => {
+				return ProtocolMsg::ProtocolErrorResponse(
+					ProtocolError::ProtocolMsgDeserialization,
+				)
+				.try_to_vec()
+				.expect("ProtocolMsg can always be serialized. qed.")
+			}
 		};
 
 		for handler in &self.routes() {

@@ -26,11 +26,6 @@ pub enum ProtocolMsg {
 		nsm_response: NsmResponse,
 	},
 
-	/// Request was successful. TODO: remove
-	SuccessResponse,
-	/// TODO: Error response should hold a protocol error, Remove
-	ErrorResponse,
-
 	/// Request the status of the enclave.
 	StatusRequest,
 	/// Response for [`Self::StatusRequest`]
