@@ -1,32 +1,11 @@
-//! Core components of QOS.
+//! Core components and logic for QOS. This contains both the logic for the
+//! process running in the enclave and exports for use by secure apps and QOS
+//! clients
 //!
-//! Any code that runs in the enclave should be contained here.
+//! # Maintainers Notes
 //!
 //! This crate should have as minimal dependencies as possible to decrease
-//! supply chain attack vectors and audit burden.
-//! TODO: high level docs explaining QOS, including key terms
-//! Route specific docs should go on protocol message
-//! # Quorum OS
-//!
-//! ## Overview
-//!
-//! ## Key Terms
-//!
-//! ### Quorum Key
-//!
-//! ### Quorum Member
-//!
-//! ### Personal Key
-//!
-//! ### Setup Key
-//!
-//! ### Manifest
-//!
-//! ### Namespace
-//!
-//! ### Secure App
-//!
-//! ### Enclave
+//! supply chain attack vectors and audit burden
 
 #![forbid(unsafe_code)]
 #![deny(clippy::all)]
