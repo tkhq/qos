@@ -102,8 +102,6 @@ pub enum ProtocolError {
 	/// Payload is too big. See `MAX_ENCODED_MSG_LEN` for the upper bound on
 	/// message size.
 	OversizedPayload,
-	/// Did not get the expected response from the NSM.
-	UnexpectedNsmResponse,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
@@ -438,10 +436,8 @@ mod handlers {
 		if let ProtocolMsg::BootChainRequest { manifest_envelope, pivot } = req
 		{
 			match boot::boot_chain(state, manifest_envelope, pivot) {
-				Ok(cose_sign1_attestation_doc) => {
-					Some(ProtocolMsg::BootChainResponse {
-						cose_sign1_attestation_doc,
-					})
+				Ok(nsm_response) => {
+					Some(ProtocolMsg::BootStandardResponse { nsm_response })
 				}
 				Err(e) => {
 					state.phase = ProtocolPhase::UnrecoverableError;

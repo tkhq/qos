@@ -103,15 +103,12 @@ pub enum ProtocolMsg {
 		/// Pivot binary
 		pivot: Vec<u8>,
 	},
-	/// Response to BootChainRequest
-	BootChainResponse {
-		/// COSE SIGN1 structure holding the attestation documentm
-		cose_sign1_attestation_doc: Vec<u8>,
-	},
 
 	/// A request from a new node to an original node for the quorum key.
 	///
-	/// Also the the response to a BootChainRequest
+	/// Also the the response to a BootChainRequest TODO: does this make sense?
+	/// Should we have another type for the response which doesn't include the
+	/// manifest envelope?
 	ChainQuorumKeyRequest {
 		/// COSE SIGN1 structure containing the attestation doc and a signature
 		/// from the NSM end entity certificate.
