@@ -248,6 +248,16 @@ pub(in crate::protocol) fn boot_chain(
 	}
 }
 
+pub (in crate::protocol) fn chain_quorum_key(
+	state: &mut ProtocolState,
+	manifest_envelope: &ManifestEnvelope,
+	cose_sign1_attestation_doc: Vec<u8>,
+) -> Result<Vec<u8>, ProtocolError> {
+
+
+	Ok(vec![])
+}
+
 pub(in crate::protocol) fn quorum_key_inject(
 	state: &mut ProtocolState,
 	encrypted_quorum_key: &[u8],

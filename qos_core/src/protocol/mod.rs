@@ -226,6 +226,7 @@ impl Executor {
 				vec![
 					Box::new(handlers::status),
 					Box::new(handlers::proxy),
+					Box::new(handlers::chain_quorum_key),
 					Box::new(handlers::nsm_request),
 					Box::new(handlers::live_attestation_doc),
 				]
@@ -438,6 +439,28 @@ mod handlers {
 		if let ProtocolMsg::BootChainRequest { manifest_envelope, pivot } = req
 		{
 			match boot::boot_chain(state, manifest_envelope, pivot) {
+				Ok(cose_sign1_attestation_doc) => {
+					Some(ProtocolMsg::BootChainResponse {
+						cose_sign1_attestation_doc,
+					})
+				}
+				Err(e) => {
+					state.phase = ProtocolPhase::UnrecoverableError;
+					Some(ProtocolMsg::ProtocolErrorResponse(e))
+				}
+			}
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn chain_quorum_key(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> Option<ProtocolMsg> {
+		if let ProtocolMsg::ChainQuorumKeyRequest { cose_sign1_attestation_doc, manifest_envelope } = req
+		{
+			match boot::chain_quorum_key(state, manifest_envelope, pivot) {
 				Ok(cose_sign1_attestation_doc) => {
 					Some(ProtocolMsg::BootChainResponse {
 						cose_sign1_attestation_doc,

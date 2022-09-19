@@ -105,7 +105,7 @@ pub enum ProtocolMsg {
 	},
 	/// Response to BootChainRequest
 	BootChainResponse {
-		/// COSE SIGN1 structure holding the attestation documentm
+		/// COSE SIGN1 structure holding the attestation document
 		cose_sign1_attestation_doc: Vec<u8>,
 	},
 
@@ -123,6 +123,11 @@ pub enum ProtocolMsg {
 		/// The manifest Envelope for the new node making the request. This is
 		/// referenced as the user data in the attestation document.
 		manifest_envelope: ManifestEnvelope,
+	},
+	ChainQuorumKeyResponse {
+		/// PEM encoded quorum private key, encrypted to the ephemeral key in
+		/// the attestation document request.
+		encrypted_quorum_key: Vec<u8>,
 	},
 
 	/// The response to a chain quorum
