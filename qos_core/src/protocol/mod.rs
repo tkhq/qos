@@ -139,9 +139,6 @@ pub enum ProtocolPhase {
 	WaitingForBootInstruction,
 	/// Waiting to receive K quorum shards
 	WaitingForQuorumShards,
-	/// The enclave got a chained boot and instruction and is now waiting for a
-	/// quorum key injection.
-	WaitingForQuorumKeyInjection,
 	/// The enclave has successfully provisioned its quorum key.
 	QuorumKeyProvisioned,
 }
@@ -200,7 +197,6 @@ impl Executor {
 				Box::new(handlers::status),
 				Box::new(handlers::boot_genesis),
 				Box::new(handlers::boot_standard),
-				Box::new(handlers::boot_chain),
 				// Below are here just for development convenience
 				Box::new(handlers::nsm_request),
 			],
@@ -208,14 +204,6 @@ impl Executor {
 				vec![
 					Box::new(handlers::status),
 					Box::new(handlers::provision),
-					Box::new(handlers::nsm_request),
-					Box::new(handlers::live_attestation_doc),
-				]
-			}
-			ProtocolPhase::WaitingForQuorumKeyInjection => {
-				vec![
-					Box::new(handlers::status),
-					Box::new(handlers::quorum_key_inject),
 					Box::new(handlers::nsm_request),
 					Box::new(handlers::live_attestation_doc),
 				]
@@ -399,45 +387,6 @@ mod handlers {
 					Some(ProtocolMsg::LiveAttestationDocResponse {
 						nsm_response,
 					})
-				}
-				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
-					Some(ProtocolMsg::ProtocolErrorResponse(e))
-				}
-			}
-		} else {
-			None
-		}
-	}
-
-	pub(super) fn quorum_key_inject(
-		req: &ProtocolMsg,
-		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::InjectQuorumKeyRequest { encrypted_quorum_key } =
-			req
-		{
-			match boot::quorum_key_inject(state, encrypted_quorum_key) {
-				Ok(()) => Some(ProtocolMsg::InjectQuorumKeyResponse),
-				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
-					Some(ProtocolMsg::ProtocolErrorResponse(e))
-				}
-			}
-		} else {
-			None
-		}
-	}
-
-	pub(super) fn boot_chain(
-		req: &ProtocolMsg,
-		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::BootChainRequest { manifest_envelope, pivot } = req
-		{
-			match boot::boot_chain(state, manifest_envelope, pivot) {
-				Ok(nsm_response) => {
-					Some(ProtocolMsg::BootStandardResponse { nsm_response })
 				}
 				Err(e) => {
 					state.phase = ProtocolPhase::UnrecoverableError;
