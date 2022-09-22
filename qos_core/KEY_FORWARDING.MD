@@ -46,7 +46,7 @@ The details for how QOS nodes communicate with each other can vary, but for the 
 
 4) The Original Node processes the request by
     1) Check the basic validity of the attestation doc (cert chain etc). Ensures that the attestation document is actually from an AWS controlled NSM module and was recent.
-    2) Check the signatures over the manifest. Ensures that K Quorum Members approved the manifest.
+    1) Check the signatures over the manifest. Ensures that K Quorum Members approved the manifest.
     1) Check that the Quorum Key of the Local Manifest matches the Quorum Key of the New Manifest. This ensures the request is for the correct Quorum Key.
     1) Check that the Quorum Set of the New Manifest matches the Quorum Set of the old manifest. Ensures that the signatures are from a trusted Quorum Set. Note that their is still a vulnerability here if we have try to retire a Quorum Set because a critical threshold of it was compromised - that malicious Quorum Set could boot off of an older Node - thus its important to retire all Nodes ASAP that use compromised Quorum Sets.
     1) Check that the namespace of the Local Manifest matches the namespace of the New Manifest. Namespaces are a social construct, but we only want to allow forwarding a Quorum Key to nodes in the same Namespace to help ensure that the nonce is not abused.
