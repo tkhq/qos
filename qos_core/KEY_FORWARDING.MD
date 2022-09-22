@@ -1,4 +1,4 @@
-## GOAL
+## Goal
 
 Boot new QOS nodes without manually posting shards. Instead, a new QOS node should be able to provision a quorum key from another, already provisioned node. The new QOS nodes should be in the same namespace as the ones they are requesting the Quorum Key from.
 
