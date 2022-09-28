@@ -15,11 +15,27 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+        id: toolchain
+        uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.63.0
           override: true
+          components: rustfmt, clippy
+
+      # https://github.com/actions/cache/blob/main/examples.md#rust---cargo
+      - uses: actions/cache@30f413bfed0a2bc738fdfd409e5a9e96b24545fd # v3.0.3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            rust/target/
+          key: ${{ runner.os }}-rust-cache-v2-toolchain-${{ steps.toolchain.outputs.rustc_hash }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-cache-v2-toolchain-${{ steps.toolchain.outputs.rustc_hash }}-cargo-
+            ${{ runner.os }}-rust-cache-v2-toolchain-
 
       - name: Run cargo test
         run: make test-all
@@ -32,12 +48,12 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
         with:
           profile: minimal
           toolchain: nightly
           override: true
-          components: rustfmt, clippy
+          components: rustfmt
 
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
@@ -53,12 +69,27 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+        id: toolchain
+        uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.63.0
           override: true
-          components: rustfmt, clippy
+          components: clippy
+
+      # https://github.com/actions/cache/blob/main/examples.md#rust---cargo
+      - uses: actions/cache@30f413bfed0a2bc738fdfd409e5a9e96b24545fd # v3.0.3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            rust/target/
+          key: ${{ runner.os }}-rust-cache-v2-toolchain-${{ steps.toolchain.outputs.rustc_hash }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-cache-v2-toolchain-${{ steps.toolchain.outputs.rustc_hash }}-cargo-
+            ${{ runner.os }}-rust-cache-v2-toolchain-
 
       - name: Run cargo clippy
         uses: actions-rs/cargo@v1
