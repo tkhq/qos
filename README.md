@@ -1,12 +1,12 @@
 # QuorumOS
 
-QuorumOS is a trusted computation layer for hosting secure apps at modern cloud scale. The OS architecture is based on the principle that threshold, or _quorum_, of actors must coordinate to provision a secure compute environment with sensitive application logic and secret material; no single actor can provision the environment or key material.
+QuorumOS is a trusted computation layer for hosting enclave apps at modern cloud scale. The OS architecture is based on the principle that threshold, or _quorum_, of actors must coordinate to provision a secure compute environment with sensitive application logic and secret material; no single actor can unilaterally provision the environment or secret material.
 
-QuorumOS is designed to boot in an enclave by attesting to the enclave configuration, reconstructing a Quorum Key and then launching a single secure application that can leverage the Quorum Key to encrypt and authenticate data.
+Concretely, QuorumOS is designed to boot in an enclave by attesting to the enclave configuration, reconstructing a Quorum Key and then launching a single enclave app that can leverage the Quorum Key to encrypt and authenticate data.
 
-The consensus on environment configuration is coordinated through the Manifest document which describes, among other things, the enclave image configuration, application boot configuration, Quorum Key, and Quorum Set members. During the bootstrapping process, a threshold of Quorum Key members will attest to the enclaves configuration against the manifest out of band and then post their respective Quorum Key share. See the [instance provision](#instance-provision) section for details.
+The consensus on environment configuration is coordinated through the Manifest document which describes, among other things, the enclave image configuration, application CLI arguments, public Quorum Key, and Quorum Set. During the bootstrapping process, a threshold of Quorum Members will attest to the enclaves configuration against the Manifest out of band and then post their respective Quorum Key share. See the [instance provision](#instance-provision) section for details.
 
-The Quorum Key itself is can be used by QuorumOS and applications running within to encrypt and authenticate data.
+The Quorum Key itself can be used by QuorumOS and enclave apps to encrypt and authenticate data.
 
 ## System requirements
 
@@ -46,25 +46,25 @@ cargo doc --open
 
 - houses server for listening to the Host
 - contains logic for quorum key genesis, booting, and running a Enclave App
-- see `qos_core`
+- see crate `qos_core`
 
 #### Host
 
 - EC2 instance housing the nitro enclave
 - has client for talking to nitro enclave
 - has server for incoming request from outside world
-- see `qos_host`
+- see crate `qos_host`
 
 #### Client
 
 - anything making request to host
-- see `qos_client`
+- see crate `qos_client`
 
 ### Key Terms
 
 #### Quorum Key
 
-An asymmetric key used to uniquely authenticate and encrypt data. This key should only ever be reconstituted inside of an enclave. Additionally, the full provisioning of the Quorum Key concludes the attestation flow launches, at which point QuorumOS pivots to launching the specified enclave app.
+An asymmetric key used to uniquely authenticate and encrypt data. This key should only ever be reconstituted inside of an enclave. Additionally, the full provisioning of the Quorum Key concludes the attestation flow launches, at which point QuorumOS pivots to launching the specified enclave app. At rest outside of the enclave, the key is intended to be stored across shares using shamir's secret sharing.
 
 #### Quorum Member
 
@@ -96,15 +96,15 @@ A single machine compute instance running QuorumOS.
 
 #### Namespace
 
-A group of QuorumOS Nodes running the same Enclave App and using the same Quorum Key. A Namespace contains many live Nodes. Some of these instances could be using different Manifests, but all of them use the same Quorum Key.
+A group of QuorumOS Nodes running the same Enclave App and using the same Quorum Key. A Namespace contains many live Nodes all with the same Quorum Key and enclave app. Some of these nodes could be using different Manifests and different versions of the same enclave app.
 
 ### Pivot / Enclave App
 
-The application QuorumOS pivots to once it finishes booting. This applications binary hash and CLI arguments are specified the Manifest file.
+The application QuorumOS pivots to once it finishes booting. This applications binary hash and CLI arguments are specified in the Manifest file.
 
 ### Instance Provision
 
-Immediately after a valid manifest file is loaded into QuorumOS, the instance will generate an Ephemeral Key. This key is specific to a particular individual machine and, after successfully verifying the machine image and metadata contained in the manifest file, will be used by the Quorum Members to post their shares into the machine.
+Immediately after a valid Manifest is loaded into QuorumOS, the instance will generate an Ephemeral Key. This key is specific to a particular individual machine and, after successfully verifying the machine image and metadata contained in the manifest file, will be used by the Quorum Members to post their shares into the machine.
 
 Prior to posting their share to the machine, Quorum Members use a variety of cryptographic attestations and social coordination to determine if it is appropriate to provision a particular instance of QuorumOS with a given secret.
 
@@ -112,7 +112,7 @@ Upon successful verification of the attestation outputs, each member will encryp
 
 #### Remote Attestation
 
-The purpose of remote attestation is to prove that an environment is running a particular piece of software. In the case of AWS Nitro Enclaves, an enclave can uniquely ask the Nitro Security Module (NSM) for an attestation document containing details of the enclave. This document is signed by the Nitro Attestation PKI and is tied back to the AWS Nitro Attestation PKI Root.
+The purpose of remote attestation is to prove that an environment is running a particular piece of software. In the case of AWS Nitro Enclaves, an enclave can uniquely asks the Nitro Security Module (NSM) for an attestation document containing details of the enclave. This document is signed by the Nitro Attestation PKI and is tied back to the AWS Nitro Attestation PKI Root.
 
 As defined in the [AWS documentation](https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html) the instance can request the Nitro Security Module (NSM) to produce an attestation document on its behalf. Additionally, the attestation document contains two fields that can be modified by the enclave itself. The attestation document request contains the Ephemeral Key and the hash of manifest so Quorum Set members can verify the data is correct.
 
