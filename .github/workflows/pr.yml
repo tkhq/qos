@@ -15,11 +15,13 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+        id: toolchain
+        uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.63.0
           override: true
+          components: rustfmt, clippy
 
       - name: Run cargo test
         run: make test-all
@@ -31,13 +33,13 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
         with:
           profile: minimal
           toolchain: nightly
           override: true
-          components: rustfmt, clippy
+          components: rustfmt
 
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
@@ -53,12 +55,13 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+        id: toolchain
+        uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.63.0
           override: true
-          components: rustfmt, clippy
+          components: clippy
 
       - name: Run cargo clippy
         uses: actions-rs/cargo@v1
