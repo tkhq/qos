@@ -23,20 +23,6 @@ jobs:
           override: true
           components: rustfmt, clippy
 
-      # https://github.com/actions/cache/blob/main/examples.md#rust---cargo
-      - uses: actions/cache@30f413bfed0a2bc738fdfd409e5a9e96b24545fd # v3.0.3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-rust-cache-v2-toolchain-${{ steps.toolchain.outputs.rustc_hash }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-rust-cache-v2-toolchain-${{ steps.toolchain.outputs.rustc_hash }}-cargo-
-            ${{ runner.os }}-rust-cache-v2-toolchain-
-
       - name: Run cargo test
         run: make test-all
 
@@ -76,20 +62,6 @@ jobs:
           toolchain: 1.63.0
           override: true
           components: clippy
-
-      # https://github.com/actions/cache/blob/main/examples.md#rust---cargo
-      - uses: actions/cache@30f413bfed0a2bc738fdfd409e5a9e96b24545fd # v3.0.3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-rust-cache-v2-toolchain-${{ steps.toolchain.outputs.rustc_hash }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-rust-cache-v2-toolchain-${{ steps.toolchain.outputs.rustc_hash }}-cargo-
-            ${{ runner.os }}-rust-cache-v2-toolchain-
 
       - name: Run cargo clippy
         uses: actions-rs/cargo@v1
