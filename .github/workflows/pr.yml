@@ -31,7 +31,7 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            rust/target/
+            target/
           key: ${{ runner.os }}-rust-cache-v2-toolchain-${{ steps.toolchain.outputs.rustc_hash }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-rust-cache-v2-toolchain-${{ steps.toolchain.outputs.rustc_hash }}-cargo-
@@ -47,7 +47,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install stable toolchain
+      - name: Install nightly toolchain
         uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
         with:
           profile: minimal
@@ -85,7 +85,7 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            rust/target/
+            target/
           key: ${{ runner.os }}-rust-cache-v2-toolchain-${{ steps.toolchain.outputs.rustc_hash }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-rust-cache-v2-toolchain-${{ steps.toolchain.outputs.rustc_hash }}-cargo-

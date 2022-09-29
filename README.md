@@ -1,6 +1,6 @@
 # QuorumOS
 
-QuorumOS is a trusted computation layer for hosting enclave apps at modern cloud scale. The OS architecture is based on the principle that threshold, or _quorum_, of actors must coordinate to provision a secure compute environment with sensitive application logic and secret material; no single actor can unilaterally provision the environment or secret material.
+QuorumOS is a trusted computation layer for hosting enclave apps at modern cloud scale. The OS architecture is based on the principle that a threshold of actors must coordinate to provision a secure compute environment with sensitive application logic and secret material; no single actor can unilaterally provision the environment or secret material.
 
 Concretely, QuorumOS is designed to boot in an enclave by attesting to the enclave configuration, reconstructing a Quorum Key and then launching a single enclave app that can leverage the Quorum Key to encrypt and authenticate data.
 
@@ -64,7 +64,7 @@ cargo doc --open
 
 #### Quorum Key
 
-An asymmetric key used to uniquely authenticate and encrypt data. This key should only ever be reconstituted inside of an enclave. Additionally, the full provisioning of the Quorum Key concludes the attestation flow launches, at which point QuorumOS pivots to launching the specified enclave app. At rest outside of the enclave, the key is intended to be stored across shares using shamir's secret sharing.
+An asymmetric key used to uniquely authenticate and encrypt data. This key should only ever be reconstituted inside of an enclave. Additionally, the full provisioning of the Quorum Key concludes the attestation flow, at which point QuorumOS pivots to launching the specified enclave app. At rest, outside of the enclave, the key is intended to be stored across shares using shamir's secret sharing. Note that key shares are always intended to be stored encrypted to the Personal Key, never in plaintext.
 
 #### Quorum Member
 
