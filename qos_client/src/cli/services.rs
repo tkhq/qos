@@ -461,6 +461,39 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	);
 }
 
+pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
+	uri: &str,
+	attestation_dir: P,
+) {
+	let (cose_sign1, manifest_envelope) =
+		match request::post(uri, &ProtocolMsg::LiveAttestationDocRequest) {
+			Ok(ProtocolMsg::LiveAttestationDocResponse {
+				nsm_response: NsmResponse::Attestation { document },
+				manifest_envelope: Some(manifest_envelope),
+			}) => (document, manifest_envelope),
+			Ok(ProtocolMsg::LiveAttestationDocResponse {
+				nsm_response: _,
+				manifest_envelope: None
+			}) => panic!("ManifestEnvelope does not exist in enclave - likely waiting for boot instruction"),
+			r => panic!("Unexpected response: {:?}", r),
+		};
+
+	let attestation_doc_path =
+		attestation_dir.as_ref().join(STANDARD_ATTESTATION_DOC_FILE);
+	write_with_msg(
+		&attestation_doc_path,
+		&cose_sign1,
+		"COSE Sign1 Attestation Doc",
+	);
+
+	let manifest_envelope_path = attestation_dir.as_ref().join(MANIFEST_EXT);
+	write_with_msg(
+		&manifest_envelope_path,
+		&manifest_envelope.try_to_vec().expect("borsh works"),
+		"ManifestEnvelope",
+	);
+}
+
 pub(crate) fn post_share<P: AsRef<Path>>(
 	uri: &str,
 	personal_dir: P,
@@ -485,6 +518,7 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 		match request::post(uri, &ProtocolMsg::LiveAttestationDocRequest) {
 			Ok(ProtocolMsg::LiveAttestationDocResponse {
 				nsm_response: NsmResponse::Attestation { document },
+				manifest_envelope: _,
 			}) => extract_attestation_doc(&document, unsafe_skip_attestation),
 			r => panic!("Unexpected response: {:?}", r),
 		};

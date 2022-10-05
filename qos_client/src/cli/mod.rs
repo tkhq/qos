@@ -685,12 +685,14 @@ impl Command {
 	}
 
 	fn post_share() -> Parser {
-		Self::base()
-			.token(
-				Token::new(SHARE_PATH, "path to the share encrypted to the Ephemeral Key.")
-				.takes_value(true)
-				.required(true)
+		Self::base().token(
+			Token::new(
+				SHARE_PATH,
+				"path to the share encrypted to the Ephemeral Key.",
 			)
+			.takes_value(true)
+			.required(true),
+		)
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -741,6 +743,10 @@ impl ClientOpts {
 		} else {
 			format!("http://{ip}:{port}/qos/{uri}")
 		}
+	}
+
+	fn path_message(&self) -> String {
+		self.path("message")
 	}
 
 	fn alias(&self) -> String {
@@ -825,6 +831,10 @@ impl ClientOpts {
 		self.parsed.single(PERSONAL_DIR).expect("required arg").to_string()
 	}
 
+	fn attestation_dir(&self) -> String {
+		self.parsed.single(ATTESTATION_DIR).expect("required arg").to_string()
+	}
+
 	fn pivot_args(&self) -> Vec<String> {
 		let v = self.parsed.single(PIVOT_ARGS).expect("required arg");
 		let mut chars = v.chars();
@@ -898,8 +908,12 @@ impl ClientRunner {
 				}
 				Command::SignManifest => handlers::sign_manifest(&self.opts),
 				Command::BootStandard => handlers::boot_standard(&self.opts),
-				Command::GetAttestationDoc => handlers::get_attestation_doc(&self.opts),
-				Command::ProxyReEncryptShare => handlers::proxy_re_encrypt_share(&self.opts),
+				Command::GetAttestationDoc => {
+					handlers::get_attestation_doc(&self.opts)
+				}
+				Command::ProxyReEncryptShare => {
+					handlers::proxy_re_encrypt_share(&self.opts)
+				}
 				Command::PostShare => handlers::post_share(&self.opts),
 				Command::DangerousDevBoot => {
 					handlers::dangerous_dev_boot(&self.opts);
@@ -943,7 +957,7 @@ mod handlers {
 	}
 
 	pub(super) fn enclave_status(opts: &ClientOpts) {
-		let path = &opts.path("message");
+		let path = &opts.path_message();
 
 		let response = request::post(path, &ProtocolMsg::StatusRequest)
 			.map_err(|e| println!("{:?}", e))
@@ -958,7 +972,7 @@ mod handlers {
 	}
 
 	pub(super) fn describe_nsm(opts: &ClientOpts) {
-		let path = &opts.path("message");
+		let path = &opts.path_message();
 		match request::post(
 			path,
 			&ProtocolMsg::NsmRequest { nsm_request: NsmRequest::DescribeNSM },
@@ -974,7 +988,7 @@ mod handlers {
 	}
 
 	pub(super) fn describe_pcr(opts: &ClientOpts) {
-		let path = &opts.path("message");
+		let path = &opts.path_message();
 
 		for i in 0..3 {
 			println!("PCR index {i}");
@@ -1007,7 +1021,7 @@ mod handlers {
 			.try_to_vec()
 			.expect("Failed to serialize app msg");
 		let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
-		let app_msg = match request::post(&opts.path("message"), &req)
+		let app_msg = match request::post(&opts.path_message(), &req)
 			.map_err(|e| println!("{:?}", e))
 			.expect("App echo request failed")
 		{
@@ -1036,7 +1050,7 @@ mod handlers {
 			.try_to_vec()
 			.expect("Failed to serialize app msg");
 		let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
-		let resp = match request::post(&opts.path("message"), &req)
+		let resp = match request::post(&opts.path_message(), &req)
 			.map_err(|e| println!("{:?}", e))
 			.expect("App read QOS files request failed")
 		{
@@ -1058,7 +1072,7 @@ mod handlers {
 
 	pub(super) fn request_attestation_doc(opts: &ClientOpts) {
 		// TODO make a `opts.message_path` function instead of just path
-		let path = &opts.path("message");
+		let path = &opts.path_message();
 
 		let req = ProtocolMsg::NsmRequest {
 			nsm_request: NsmRequest::Attestation {
@@ -1098,7 +1112,7 @@ mod handlers {
 	// TODO: verify PCRs
 	pub(super) fn boot_genesis(opts: &ClientOpts) {
 		services::boot_genesis(
-			&opts.path("message"),
+			&opts.path_message(),
 			opts.genesis_dir(),
 			opts.threshold(),
 			opts.unsafe_skip_attestation(),
@@ -1143,7 +1157,7 @@ mod handlers {
 
 	pub(super) fn boot_standard(opts: &ClientOpts) {
 		services::boot_standard(
-			&opts.path("message"),
+			&opts.path_message(),
 			opts.pivot_path(),
 			opts.boot_dir(),
 			opts.unsafe_skip_attestation(),
@@ -1151,16 +1165,17 @@ mod handlers {
 	}
 
 	pub(super) fn get_attestation_doc(opts: &ClientOpts) {
-		// services::get_attestation_doc
+		services::get_attestation_doc(
+			&opts.path_message(),
+			opts.attestation_dir(),
+		);
 	}
 
-	pub(super) fn proxy_re_encrypt_share(opts: &ClientOpts) {
-
-	}
+	pub(super) fn proxy_re_encrypt_share(_opts: &ClientOpts) {}
 
 	pub(super) fn post_share(opts: &ClientOpts) {
 		services::post_share(
-			&opts.path("message"),
+			&opts.path_message(),
 			opts.personal_dir(),
 			opts.boot_dir(),
 			opts.manifest_hash(),
@@ -1171,7 +1186,7 @@ mod handlers {
 
 	pub(super) fn dangerous_dev_boot(opts: &ClientOpts) {
 		services::dangerous_dev_boot(
-			&opts.path("message"),
+			&opts.path_message(),
 			opts.pivot_path(),
 			opts.restart_policy(),
 			opts.pivot_args(),

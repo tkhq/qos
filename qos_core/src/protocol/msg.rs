@@ -89,6 +89,8 @@ pub enum ProtocolMsg {
 	LiveAttestationDocResponse {
 		/// COSE SIGN1 structure with Attestation Doc
 		nsm_response: NsmResponse,
+		/// Manifest Envelope, if it exists, otherwise None.
+		manifest_envelope: Option<ManifestEnvelope>,
 	},
 }
 

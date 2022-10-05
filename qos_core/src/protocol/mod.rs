@@ -388,6 +388,10 @@ mod handlers {
 				Ok(nsm_response) => {
 					Some(ProtocolMsg::LiveAttestationDocResponse {
 						nsm_response,
+						manifest_envelope: state
+							.handles
+							.get_manifest_envelope()
+							.ok(),
 					})
 				}
 				Err(e) => {
