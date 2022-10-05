@@ -345,6 +345,8 @@ const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
+const ATTESTATION_DIR: &str = "attestation-dir";
+const SHARE_PATH: &str = "share-path";
 
 /// Commands for the Client CLI.
 ///
@@ -405,13 +407,24 @@ pub enum Command {
 	/// This will output the COSE Sign1 structure with an embedded
 	/// `AttestationDoc`.
 	BootStandard,
-	/// Post a share to enclave that is not yet provisioned, but already has a
-	/// manifest.
+	/// Get the attestation document from an enclave.
 	///
-	/// This will encrypt your Personal Share to the Ephemeral Key of the
-	/// enclave. The ephemeral key will be pulled out of the given Attestation
-	/// Document, so use caution to only run this against an Attestation
-	/// Document and Manifest you have reviewed and trust.
+	/// The main use case for this in the release flow is to get the
+	/// attestation document so it can be used offline for encrypting shares.
+	GetAttestationDoc,
+	/// Given an attestation document from an enclave waiting for shares,
+	/// re-encrypt the local share to the Ephemeral Key from the attestation
+	/// doc.
+	///
+	/// The Ephemeral Key is pulled out of the attestation document.
+	///
+	/// This command will check the manifest signatures and then verify that
+	/// the manifest correctly lines up with the enclave document.
+	///
+	/// This command must be used very cautiously and should only be used with
+	/// trusted manifests.
+	ProxyReEncryptShare,
+	/// Submit an encrypted share to an enclave.
 	PostShare,
 	/// ** Never use in production**.
 	///
@@ -441,6 +454,8 @@ impl From<&str> for Command {
 			"generate-manifest" => Self::GenerateManifest,
 			"sign-manifest" => Self::SignManifest,
 			"boot-standard" => Self::BootStandard,
+			"get-attestation-doc" => Self::GetAttestationDoc,
+			"proxy-re-encrypt-share" => Self::ProxyReEncryptShare,
 			"post-share" => Self::PostShare,
 			"dangerous-dev-boot" => Self::DangerousDevBoot,
 			"app-echo" => Self::AppEcho,
@@ -651,13 +666,31 @@ impl Command {
 			.token(Self::unsafe_skip_attestation_token())
 	}
 
-	fn post_share() -> Parser {
+	fn get_attestation_doc() -> Parser {
 		Self::base()
-			.token(Self::manifest_hash_token())
-			.token(Self::personal_dir_token())
-			.token(Self::boot_dir_token())
+	}
+
+	fn proxy_re_encrypt_share() -> Parser {
+		Parser::new()
+			.token(
+				Token::new(
+					ATTESTATION_DIR,
+					"Path to dir containing attestation doc and manifest envelope",
+				)
+				.takes_value(true)
+				.required(true)
+			)
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
+	}
+
+	fn post_share() -> Parser {
+		Self::base()
+			.token(
+				Token::new(SHARE_PATH, "path to the share encrypted to the Ephemeral Key.")
+				.takes_value(true)
+				.required(true)
+			)
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -685,6 +718,8 @@ impl GetParserForCommand for Command {
 			Self::GenerateManifest => Self::generate_manifest(),
 			Self::SignManifest => Self::sign_manifest(),
 			Self::BootStandard => Self::boot_standard(),
+			Self::GetAttestationDoc => Self::get_attestation_doc(),
+			Self::ProxyReEncryptShare => Self::proxy_re_encrypt_share(),
 			Self::PostShare => Self::post_share(),
 			Self::DangerousDevBoot => Self::dangerous_dev_boot(),
 		}
@@ -863,6 +898,8 @@ impl ClientRunner {
 				}
 				Command::SignManifest => handlers::sign_manifest(&self.opts),
 				Command::BootStandard => handlers::boot_standard(&self.opts),
+				Command::GetAttestationDoc => handlers::get_attestation_doc(&self.opts),
+				Command::ProxyReEncryptShare => handlers::proxy_re_encrypt_share(&self.opts),
 				Command::PostShare => handlers::post_share(&self.opts),
 				Command::DangerousDevBoot => {
 					handlers::dangerous_dev_boot(&self.opts);
@@ -1111,6 +1148,14 @@ mod handlers {
 			opts.boot_dir(),
 			opts.unsafe_skip_attestation(),
 		);
+	}
+
+	pub(super) fn get_attestation_doc(opts: &ClientOpts) {
+		// services::get_attestation_doc
+	}
+
+	pub(super) fn proxy_re_encrypt_share(opts: &ClientOpts) {
+
 	}
 
 	pub(super) fn post_share(opts: &ClientOpts) {
