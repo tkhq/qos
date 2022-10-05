@@ -369,9 +369,6 @@ pub enum Command {
 	DescribeNsm,
 	/// Query the NSM with `NsmRequest::DescribePcr` for PCR indexes 0..3.
 	DescribePcr,
-	/// Query the NSM with `NsmRequest::Attestation` and verify the cert chain
-	/// using the current time.
-	RequestAttestationDoc,
 	/// Generate a Setup Key for use in the Genesis ceremony.
 	GenerateSetupKey,
 	/// Run the the Boot Genesis logic to generate and shard a Quorum Key
@@ -447,7 +444,6 @@ impl From<&str> for Command {
 			"enclave-status" => Self::EnclaveStatus,
 			"describe-nsm" => Self::DescribeNsm,
 			"describe-pcr" => Self::DescribePcr,
-			"request-attestation-doc" => Self::RequestAttestationDoc,
 			"generate-setup-key" => Self::GenerateSetupKey,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
@@ -680,6 +676,8 @@ impl Command {
 				.takes_value(true)
 				.required(true)
 			)
+			.token(Self::manifest_hash_token())
+			.token(Self::personal_dir_token()) // TODO: remove
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
 	}
@@ -712,7 +710,6 @@ impl GetParserForCommand for Command {
 			| Self::DescribePcr
 			| Self::AppEcho
 			| Self::AppReadFiles
-			| Self::RequestAttestationDoc
 			| Self::EnclaveStatus => Self::base(),
 			Self::GenerateSetupKey => Self::generate_setup_key(),
 			Self::BootGenesis => Self::boot_genesis(),
@@ -895,9 +892,6 @@ impl ClientRunner {
 				Command::DescribePcr => handlers::describe_pcr(&self.opts),
 				Command::AppEcho => handlers::app_echo(&self.opts),
 				Command::AppReadFiles => handlers::app_read_files(&self.opts),
-				Command::RequestAttestationDoc => {
-					handlers::request_attestation_doc(&self.opts);
-				}
 				Command::GenerateSetupKey => {
 					handlers::generate_setup_key(&self.opts);
 				}
@@ -909,10 +903,10 @@ impl ClientRunner {
 				Command::SignManifest => handlers::sign_manifest(&self.opts),
 				Command::BootStandard => handlers::boot_standard(&self.opts),
 				Command::GetAttestationDoc => {
-					handlers::get_attestation_doc(&self.opts)
+					handlers::get_attestation_doc(&self.opts);
 				}
 				Command::ProxyReEncryptShare => {
-					handlers::proxy_re_encrypt_share(&self.opts)
+					handlers::proxy_re_encrypt_share(&self.opts);
 				}
 				Command::PostShare => handlers::post_share(&self.opts),
 				Command::DangerousDevBoot => {
@@ -1070,36 +1064,6 @@ mod handlers {
 		println!("Note that the files themselves where not verified.");
 	}
 
-	pub(super) fn request_attestation_doc(opts: &ClientOpts) {
-		// TODO make a `opts.message_path` function instead of just path
-		let path = &opts.path_message();
-
-		let req = ProtocolMsg::NsmRequest {
-			nsm_request: NsmRequest::Attestation {
-				user_data: None,
-				nonce: None,
-				public_key: None,
-			},
-		};
-
-		println!("Requesting attestation doc ... ");
-		let cose_sign1 = match request::post(path, &req)
-			.map_err(|e| println!("{:?}", e))
-			.expect("Attestation request failed")
-		{
-			ProtocolMsg::NsmResponse {
-				nsm_response: NsmResponse::Attestation { document },
-			} => document,
-			other => panic!("Unexpected response {:?}", other),
-		};
-
-		println!("Attestation doc received. Checking cert chain ..");
-
-		drop(services::extract_attestation_doc(&cose_sign1, false));
-
-		println!("Attestation doc cert chain successfully verified!");
-	}
-
 	pub(super) fn generate_setup_key(opts: &ClientOpts) {
 		services::generate_setup_key(
 			&opts.alias(),
@@ -1171,7 +1135,15 @@ mod handlers {
 		);
 	}
 
-	pub(super) fn proxy_re_encrypt_share(_opts: &ClientOpts) {}
+	pub(super) fn proxy_re_encrypt_share(opts: &ClientOpts) {
+		services::proxy_re_encrypt_share(
+			opts.attestation_dir(),
+			opts.manifest_hash(),
+			opts.personal_dir(),
+			false,
+			None,
+		);
+	}
 
 	pub(super) fn post_share(opts: &ClientOpts) {
 		services::post_share(

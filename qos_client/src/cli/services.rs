@@ -33,8 +33,10 @@ const SHARE_EXT: &str = "share";
 const PERSONAL_KEY_PUB_EXT: &str = "personal.pub";
 const PERSONAL_KEY_PRIV_EXT: &str = "personal.key";
 const MANIFEST_EXT: &str = "manifest";
+const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
 const STANDARD_ATTESTATION_DOC_FILE: &str = "attestation_doc.boot";
+const EPH_WRAPPED_SHARE: &str = "ephemeral_key_wrapped.share";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -347,6 +349,13 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");
 }
 
+// TODO for verifing the manifest
+// - verify PCR3 (enter pre-image as arg)
+// - verify that this manifest is in the manifest repo & correct nonce (point to
+//   manifest repo)
+// - verify the manifest namespace (prompt user)
+// - verify the public quorum key (either prompt user or enter as CLI input)
+// - verify the CLI args (prompt user)
 pub(crate) fn sign_manifest<P: AsRef<Path>>(
 	manifest_hash: Hash256,
 	personal_dir: P,
@@ -486,12 +495,92 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 		"COSE Sign1 Attestation Doc",
 	);
 
-	let manifest_envelope_path = attestation_dir.as_ref().join(MANIFEST_EXT);
+	let manifest_envelope_path =
+		attestation_dir.as_ref().join(MANIFEST_ENVELOPE);
 	write_with_msg(
 		&manifest_envelope_path,
 		&manifest_envelope.try_to_vec().expect("borsh works"),
 		"ManifestEnvelope",
 	);
+}
+
+pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
+	attestation_dir: P,
+	manifest_hash: Hash256,
+	personal_dir: P, // TODO: replace this with just using yubikey to sign
+	unsafe_skip_attestation: bool,
+	unsafe_eph_path_override: Option<String>,
+) {
+	let manifest_envelope = find_manifest_envelope(&attestation_dir);
+	let attestation_doc = find_attestation_doc(&attestation_dir);
+	let encrypted_share = find_share(&personal_dir);
+	let (personal_pair, _) = find_personal_key(&personal_dir);
+
+	// Check manifest signatures
+	manifest_envelope
+		.check_approvals()
+		.expect("Manifest does not correct manifest set approvals");
+
+	// Make sure given hash matches the manifest hash
+	assert_eq!(
+		manifest_envelope.manifest.qos_hash(),
+		manifest_hash,
+		"Given hash did not match the hash of the manifest"
+	);
+
+	// TODO:
+	// - point the keys directory and print the names of those who signed with
+	//   manifest keys
+	// 	- prompt with name and key of each person who signed
+	//  - prompt with the number of people who signed
+	// - verify PCR3 (enter pre-image as arg)
+
+	// Verify the attestation doc matches up with the pcrs in the manifest
+	verify_attestation_doc_against_user_input(
+		&attestation_doc,
+		&manifest_hash,
+		&manifest_envelope.manifest.enclave.pcr0,
+		&manifest_envelope.manifest.enclave.pcr1,
+		&manifest_envelope.manifest.enclave.pcr2,
+	);
+
+	if unsafe_skip_attestation {
+		println!("**WARNING:** Skipping attestation document verification.");
+	} else {
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			&manifest_hash,
+			&manifest_envelope.manifest.enclave.pcr0,
+			&manifest_envelope.manifest.enclave.pcr1,
+			&manifest_envelope.manifest.enclave.pcr2,
+		);
+	}
+
+	// Pull out the ephemeral key or use the override
+	let eph_pub: RsaPub = if let Some(eph_path) = unsafe_eph_path_override {
+		RsaPair::from_pem_file(&eph_path)
+			.expect("Could not read ephemeral key override")
+			.into()
+	} else {
+		RsaPub::from_pem(
+			&attestation_doc
+				.public_key
+				.expect("No ephemeral key in the attestation doc"),
+		)
+		.expect("Ephemeral key not valid public key")
+	};
+
+	let share = {
+		let plaintext_share = &personal_pair
+			.envelope_decrypt(&encrypted_share)
+			.expect("Failed to decrypt share with personal key.");
+		eph_pub
+			.envelope_encrypt(plaintext_share)
+			.expect("Envelope encryption error")
+	};
+
+	let share_path = attestation_dir.as_ref().join(EPH_WRAPPED_SHARE);
+	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
 }
 
 pub(crate) fn post_share<P: AsRef<Path>>(
@@ -779,8 +868,8 @@ fn find_approvals<P: AsRef<Path>>(
 	approvals
 }
 
-fn find_manifest<P: AsRef<Path>>(boot_dir: P) -> Manifest {
-	let mut m: Vec<_> = find_file_paths(&boot_dir)
+fn find_manifest<P: AsRef<Path>>(dir: P) -> Manifest {
+	let mut m: Vec<_> = find_file_paths(&dir)
 		.iter()
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
@@ -799,6 +888,59 @@ fn find_manifest<P: AsRef<Path>>(boot_dir: P) -> Manifest {
 	assert_eq!(m.len(), 1, "Did not find correct number of manifests");
 
 	m.remove(0)
+}
+
+fn find_attestation_doc<P: AsRef<Path>>(dir: P) -> AttestationDoc {
+	let mut a: Vec<_> = find_file_paths(&dir)
+		.iter()
+		.map(|p| p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
+		.filter_map(|path| {
+			if path == STANDARD_ATTESTATION_DOC_FILE {
+				let cose_sign1_der = fs::read(path.as_ref())
+					.expect("Failed to read attestation doc");
+
+				Some(extract_attestation_doc(&cose_sign1_der, false))
+			} else {
+				None
+			}
+		})
+		.collect();
+
+	assert_eq!(a.len(), 1, "Not exactly one attestation doc");
+
+	if let Some(attestation_doc) = a.pop() {
+		attestation_doc
+	} else {
+		panic!("No attestation doc found")
+	}
+}
+
+fn find_manifest_envelope<P: AsRef<Path>>(dir: P) -> ManifestEnvelope {
+	let mut a: Vec<_> = find_file_paths(&dir)
+		.iter()
+		.map(|p| p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
+		.filter_map(|path| {
+			if path == MANIFEST_ENVELOPE {
+				let manifest_envelope = fs::read(path.as_ref())
+					.expect("Failed to read attestation doc");
+
+				Some(
+					ManifestEnvelope::try_from_slice(&manifest_envelope)
+						.expect("Could not decode manifest envelope"),
+				)
+			} else {
+				None
+			}
+		})
+		.collect();
+
+	assert_eq!(a.len(), 1, "Not exactly one manifest envelope in directory");
+
+	if let Some(manifest_envelope) = a.pop() {
+		manifest_envelope
+	} else {
+		panic!("No attestation doc found")
+	}
 }
 
 fn find_personal_key<P: AsRef<Path>>(
@@ -824,6 +966,7 @@ fn find_personal_key<P: AsRef<Path>>(
 			))
 		})
 		.collect();
+
 	assert_eq!(
 		p.len(),
 		1,
