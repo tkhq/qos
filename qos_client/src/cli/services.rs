@@ -585,68 +585,10 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 
 pub(crate) fn post_share<P: AsRef<Path>>(
 	uri: &str,
-	personal_dir: P,
-	boot_dir: P,
-	manifest_hash: Hash256,
-	unsafe_skip_attestation: bool,
-	unsafe_eph_path_override: Option<String>,
+	attestation_dir: P,
 ) {
-	// Read in manifest, share and personal key
-	let manifest = find_manifest(&boot_dir);
-	let encrypted_share = find_share(&personal_dir);
-	let (personal_pair, _) = find_personal_key(&personal_dir);
-
-	// Make sure hash matches the manifest hash
-	assert_eq!(
-		manifest.qos_hash(),
-		manifest_hash,
-		"Given hash did not match the hash of the manifest"
-	);
-
-	let attestation_doc =
-		match request::post(uri, &ProtocolMsg::LiveAttestationDocRequest) {
-			Ok(ProtocolMsg::LiveAttestationDocResponse {
-				nsm_response: NsmResponse::Attestation { document },
-				manifest_envelope: _,
-			}) => extract_attestation_doc(&document, unsafe_skip_attestation),
-			r => panic!("Unexpected response: {:?}", r),
-		};
-
-	// Validate attestation doc
-	if unsafe_skip_attestation {
-		println!("**WARNING:** Skipping attestation document verification.");
-	} else {
-		verify_attestation_doc_against_user_input(
-			&attestation_doc,
-			&manifest_hash,
-			&manifest.enclave.pcr0,
-			&manifest.enclave.pcr1,
-			&manifest.enclave.pcr2,
-		);
-	}
-
-	// Pull out the ephemeral key or use the override
-	let eph_pub: RsaPub = if let Some(eph_path) = unsafe_eph_path_override {
-		RsaPair::from_pem_file(&eph_path)
-			.expect("Could not read ephemeral key override")
-			.into()
-	} else {
-		RsaPub::from_pem(
-			&attestation_doc
-				.public_key
-				.expect("No ephemeral key in the attestation doc"),
-		)
-		.expect("Ephemeral key not valid public key")
-	};
-
-	// Decrypt share and re-encrypt to ephemeral key
-	let share = eph_pub
-		.envelope_encrypt(
-			&personal_pair
-				.envelope_decrypt(&encrypted_share)
-				.expect("Failed to decrypt share with personal key."),
-		)
-		.expect("Failed to encrypt share to ephemeral key");
+	// Get the ephemeral key wrapped share
+	let share = find_share(&attestation_dir);
 
 	let req = ProtocolMsg::ProvisionRequest { share };
 	let is_reconstructed = match request::post(uri, &req).unwrap() {
@@ -908,11 +850,7 @@ fn find_attestation_doc<P: AsRef<Path>>(dir: P) -> AttestationDoc {
 
 	assert_eq!(a.len(), 1, "Not exactly one attestation doc");
 
-	if let Some(attestation_doc) = a.pop() {
-		attestation_doc
-	} else {
-		panic!("No attestation doc found")
-	}
+	a.remove(0)
 }
 
 fn find_manifest_envelope<P: AsRef<Path>>(dir: P) -> ManifestEnvelope {
@@ -936,11 +874,7 @@ fn find_manifest_envelope<P: AsRef<Path>>(dir: P) -> ManifestEnvelope {
 
 	assert_eq!(a.len(), 1, "Not exactly one manifest envelope in directory");
 
-	if let Some(manifest_envelope) = a.pop() {
-		manifest_envelope
-	} else {
-		panic!("No attestation doc found")
-	}
+	a.remove(0)
 }
 
 fn find_personal_key<P: AsRef<Path>>(
@@ -989,7 +923,7 @@ fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
 			Some(fs::read(path).expect("Failed to read in share"))
 		})
 		.collect();
-	assert_eq!(s.len(), 1, "Did not find exactly 1 share in the personal-dir");
+	assert_eq!(s.len(), 1, "Did not find exactly 1 share in the directory");
 
 	s.remove(0)
 }

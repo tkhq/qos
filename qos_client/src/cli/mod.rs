@@ -346,7 +346,7 @@ const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const ATTESTATION_DIR: &str = "attestation-dir";
-const SHARE_PATH: &str = "share-path";
+
 
 /// Commands for the Client CLI.
 ///
@@ -539,6 +539,14 @@ impl Command {
 		)
 		.takes_value(true)
 	}
+	fn attestation_dir_token() -> Token {
+		Token::new(
+			ATTESTATION_DIR,
+			"Path to dir containing attestation doc and manifest envelope",
+		)
+		.takes_value(true)
+		.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -668,14 +676,7 @@ impl Command {
 
 	fn proxy_re_encrypt_share() -> Parser {
 		Parser::new()
-			.token(
-				Token::new(
-					ATTESTATION_DIR,
-					"Path to dir containing attestation doc and manifest envelope",
-				)
-				.takes_value(true)
-				.required(true)
-			)
+			.token(Self::attestation_dir_token())
 			.token(Self::manifest_hash_token())
 			.token(Self::personal_dir_token()) // TODO: remove
 			.token(Self::unsafe_skip_attestation_token())
@@ -683,14 +684,8 @@ impl Command {
 	}
 
 	fn post_share() -> Parser {
-		Self::base().token(
-			Token::new(
-				SHARE_PATH,
-				"path to the share encrypted to the Ephemeral Key.",
-			)
-			.takes_value(true)
-			.required(true),
-		)
+		Self::base()
+			.token(Self::attestation_dir_token())
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -1148,11 +1143,7 @@ mod handlers {
 	pub(super) fn post_share(opts: &ClientOpts) {
 		services::post_share(
 			&opts.path_message(),
-			opts.personal_dir(),
-			opts.boot_dir(),
-			opts.manifest_hash(),
-			opts.unsafe_skip_attestation(),
-			opts.unsafe_eph_path_override(),
+			opts.attestation_dir(),
 		);
 	}
 
