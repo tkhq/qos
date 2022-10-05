@@ -262,11 +262,6 @@ async fn boot_e2e() {
 			.unwrap()
 			.success());
 
-		assert!(Path::new(
-			"/tmp/boot-e2e/attestation-dir/attestation_doc.boot"
-		)
-		.exists());
-
 		// Encrypt share to ephemeral key
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
