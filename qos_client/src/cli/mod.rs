@@ -671,6 +671,7 @@ impl Command {
 
 	fn get_attestation_doc() -> Parser {
 		Self::base()
+			.token(Self::attestation_dir_token())
 	}
 
 	fn proxy_re_encrypt_share() -> Parser {
@@ -1133,8 +1134,8 @@ mod handlers {
 			opts.attestation_dir(),
 			opts.manifest_hash(),
 			opts.personal_dir(),
-			false,
-			None,
+			opts.unsafe_skip_attestation(),
+			opts.unsafe_eph_path_override(),
 		);
 	}
 

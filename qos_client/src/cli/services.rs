@@ -828,10 +828,12 @@ fn find_attestation_doc<P: AsRef<Path>>(
 ) -> AttestationDoc {
 	let mut a: Vec<_> = find_file_paths(&dir)
 		.iter()
-		.map(|p| p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
-		.filter_map(|path| {
-			if path == STANDARD_ATTESTATION_DOC_FILE {
-				let cose_sign1_der = fs::read(path.as_ref())
+		.map(|p| 
+			(p, p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
+		)
+		.filter_map(|(path, file)| {
+			if file == STANDARD_ATTESTATION_DOC_FILE {
+				let cose_sign1_der = fs::read(path)
 					.expect("Failed to read attestation doc");
 
 				Some(extract_attestation_doc(
@@ -852,11 +854,11 @@ fn find_attestation_doc<P: AsRef<Path>>(
 fn find_manifest_envelope<P: AsRef<Path>>(dir: P) -> ManifestEnvelope {
 	let mut a: Vec<_> = find_file_paths(&dir)
 		.iter()
-		.map(|p| p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
-		.filter_map(|path| {
-			if path == MANIFEST_ENVELOPE {
-				let manifest_envelope = fs::read(path.as_ref())
-					.expect("Failed to read attestation doc");
+		.map(|p| (p, p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap()))
+		.filter_map(|(path, file)| {
+			if file == MANIFEST_ENVELOPE {
+				let manifest_envelope = fs::read(path)
+					.expect("Failed to read manifest envelope");
 
 				Some(
 					ManifestEnvelope::try_from_slice(&manifest_envelope)
