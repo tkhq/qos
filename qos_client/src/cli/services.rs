@@ -512,7 +512,8 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	unsafe_eph_path_override: Option<String>,
 ) {
 	let manifest_envelope = find_manifest_envelope(&attestation_dir);
-	let attestation_doc = find_attestation_doc(&attestation_dir);
+	let attestation_doc =
+		find_attestation_doc(&attestation_dir, unsafe_skip_attestation);
 	let encrypted_share = find_share(&personal_dir);
 	let (personal_pair, _) = find_personal_key(&personal_dir);
 
@@ -536,14 +537,6 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	// - verify PCR3 (enter pre-image as arg)
 
 	// Verify the attestation doc matches up with the pcrs in the manifest
-	verify_attestation_doc_against_user_input(
-		&attestation_doc,
-		&manifest_hash,
-		&manifest_envelope.manifest.enclave.pcr0,
-		&manifest_envelope.manifest.enclave.pcr1,
-		&manifest_envelope.manifest.enclave.pcr2,
-	);
-
 	if unsafe_skip_attestation {
 		println!("**WARNING:** Skipping attestation document verification.");
 	} else {
@@ -583,10 +576,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
 }
 
-pub(crate) fn post_share<P: AsRef<Path>>(
-	uri: &str,
-	attestation_dir: P,
-) {
+pub(crate) fn post_share<P: AsRef<Path>>(uri: &str, attestation_dir: P) {
 	// Get the ephemeral key wrapped share
 	let share = find_share(&attestation_dir);
 
@@ -832,7 +822,10 @@ fn find_manifest<P: AsRef<Path>>(dir: P) -> Manifest {
 	m.remove(0)
 }
 
-fn find_attestation_doc<P: AsRef<Path>>(dir: P) -> AttestationDoc {
+fn find_attestation_doc<P: AsRef<Path>>(
+	dir: P,
+	unsafe_skip_attestation: bool,
+) -> AttestationDoc {
 	let mut a: Vec<_> = find_file_paths(&dir)
 		.iter()
 		.map(|p| p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
@@ -841,7 +834,10 @@ fn find_attestation_doc<P: AsRef<Path>>(dir: P) -> AttestationDoc {
 				let cose_sign1_der = fs::read(path.as_ref())
 					.expect("Failed to read attestation doc");
 
-				Some(extract_attestation_doc(&cose_sign1_der, false))
+				Some(extract_attestation_doc(
+					&cose_sign1_der,
+					unsafe_skip_attestation,
+				))
 			} else {
 				None
 			}

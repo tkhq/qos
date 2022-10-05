@@ -347,7 +347,6 @@ const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const ATTESTATION_DIR: &str = "attestation-dir";
 
-
 /// Commands for the Client CLI.
 ///
 /// To get the possible arguments for any given command pass the help flag. For
@@ -418,8 +417,8 @@ pub enum Command {
 	/// This command will check the manifest signatures and then verify that
 	/// the manifest correctly lines up with the enclave document.
 	///
-	/// This command must be used very cautiously and should only be used with
-	/// trusted manifests.
+	/// This command should only be used in highly secure environments as the
+	/// quorum share momentarily in plaintext.
 	ProxyReEncryptShare,
 	/// Submit an encrypted share to an enclave.
 	PostShare,
@@ -542,7 +541,7 @@ impl Command {
 	fn attestation_dir_token() -> Token {
 		Token::new(
 			ATTESTATION_DIR,
-			"Path to dir containing attestation doc and manifest envelope",
+			"Path to dir containing attestation flow artifacts (attestation doc, manifest envelope, EK wrapped share).",
 		)
 		.takes_value(true)
 		.required(true)
@@ -678,14 +677,13 @@ impl Command {
 		Parser::new()
 			.token(Self::attestation_dir_token())
 			.token(Self::manifest_hash_token())
-			.token(Self::personal_dir_token()) // TODO: remove
+			.token(Self::personal_dir_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
 	}
 
 	fn post_share() -> Parser {
-		Self::base()
-			.token(Self::attestation_dir_token())
+		Self::base().token(Self::attestation_dir_token())
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -1141,10 +1139,7 @@ mod handlers {
 	}
 
 	pub(super) fn post_share(opts: &ClientOpts) {
-		services::post_share(
-			&opts.path_message(),
-			opts.attestation_dir(),
-		);
+		services::post_share(&opts.path_message(), opts.attestation_dir());
 	}
 
 	pub(super) fn dangerous_dev_boot(opts: &ClientOpts) {
