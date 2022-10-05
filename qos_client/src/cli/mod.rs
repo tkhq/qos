@@ -670,8 +670,7 @@ impl Command {
 	}
 
 	fn get_attestation_doc() -> Parser {
-		Self::base()
-			.token(Self::attestation_dir_token())
+		Self::base().token(Self::attestation_dir_token())
 	}
 
 	fn proxy_re_encrypt_share() -> Parser {

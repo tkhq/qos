@@ -245,29 +245,6 @@ async fn boot_e2e() {
 	// and sanity check the pivot has not yet executed.
 	assert!(!Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
 	for user in [&user1, &user2] {
-		// assert!(Command::new("../target/debug/qos_client")
-		// 	.args([
-		// 		"post-share",
-		// 		"--boot-dir",
-		// 		*boot_dir,
-		// 		"--personal-dir",
-		// 		&personal_dir(user),
-		// 		"--manifest-hash",
-		// 		qos_hex::encode(&manifest.qos_hash()).as_str(),
-		// 		"--host-port",
-		// 		&host_port.to_string(),
-		// 		"--host-ip",
-		// 		LOCAL_HOST,
-		// 		"--unsafe-skip-attestation",
-		// 		"--unsafe-eph-path-override",
-		// 		*eph_path,
-		// 	])
-		// 	.spawn()
-		// 	.unwrap()
-		// 	.wait()
-		// 	.unwrap()
-		// 	.success());
-
 		// Get attestation doc and manifest
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
@@ -285,9 +262,10 @@ async fn boot_e2e() {
 			.unwrap()
 			.success());
 
-		assert!(
-			Path::new("/tmp/boot-e2e/attestation-dir/attestation_doc.boot").exists()
-		);
+		assert!(Path::new(
+			"/tmp/boot-e2e/attestation-dir/attestation_doc.boot"
+		)
+		.exists());
 
 		// Encrypt share to ephemeral key
 		assert!(Command::new("../target/debug/qos_client")
@@ -309,23 +287,22 @@ async fn boot_e2e() {
 			.unwrap()
 			.success());
 
-		assert!(
-			Command::new("../target/debug/qos_client")
-				.args([
-					"post-share",
-					"--host-port",
-					&host_port.to_string(),
-					"--host-ip",
-					LOCAL_HOST,
-					"--attestation-dir",
-					*attestation_dir
-				])
-				.spawn()
-				.unwrap()
-				.wait()
-				.unwrap()
-				.success()
-		);
+		// Post the encrypted share
+		assert!(Command::new("../target/debug/qos_client")
+			.args([
+				"post-share",
+				"--host-port",
+				&host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--attestation-dir",
+				*attestation_dir
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
 	}
 
 	// Give the enclave time to start the pivot
