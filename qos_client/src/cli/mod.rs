@@ -403,10 +403,8 @@ pub enum Command {
 	/// This will output the COSE Sign1 structure with an embedded
 	/// `AttestationDoc`.
 	BootStandard,
-	/// Get the attestation document from an enclave.
-	///
-	/// The main use case for this in the release flow is to get the
-	/// attestation document so it can be used offline for encrypting shares.
+	/// Get the attestation document from an enclave. Will also get the
+	/// manifest envelope if it exists.
 	GetAttestationDoc,
 	/// Given an attestation document from an enclave waiting for shares,
 	/// re-encrypt the local share to the Ephemeral Key from the attestation
@@ -414,8 +412,8 @@ pub enum Command {
 	///
 	/// The Ephemeral Key is pulled out of the attestation document.
 	///
-	/// This command will check the manifest signatures and then verify that
-	/// the manifest correctly lines up with the enclave document.
+	/// This command will check the manifest signatures and verify that the
+	/// manifest correctly lines up with the enclave document.
 	///
 	/// This command should only be used in highly secure environments as the
 	/// quorum share momentarily in plaintext.
