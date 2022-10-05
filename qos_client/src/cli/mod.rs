@@ -32,7 +32,7 @@
 //!
 //! ### Quorum Key Generation
 //!
-//! `QuorumOS` requires a Quorum Key. Each member of the Quorum Set holds a
+//! `QuorumOS` requires a Quorum Key. Each member of the Manifest Set holds a
 //! share of the Quorum Key. (The shares are created using Shamir Secret
 //! Sharing) It is expected that the Quorum Key is only ever fully reconstructed
 //! in an enclave.
@@ -41,7 +41,7 @@
 //! service. The genesis service bypasses the standard boot and pivot flow, and
 //! thus is commonly referred to as boot genesis. Instead it simply generates a
 //! Quorum Key and shards it across quorum members. From a high level, the steps
-//! to create a Quorum Key and Quorum Set with the genesis service are:
+//! to create a Quorum Key and Manifest Set with the genesis service are:
 //!
 //! 1) Every Quorum Member generates a Setup Key.
 //! 2) The genesis service is invoked with N setup keys and a reconstruction
@@ -59,9 +59,9 @@
 //!
 //! #### Generate Setup Keys
 //!
-//! For each member of the Quorum Set, the genesis service needs a corresponding
-//! Setup Key as input. To produce a setup key, a member can run the
-//! [`Command::GenerateSetupKey`] on a secure device:
+//! For each member of the Manifest Set, the genesis service needs a
+//! corresponding Setup Key as input. To produce a setup key, a member can run
+//! the [`Command::GenerateSetupKey`] on a secure device:
 //!
 //! ```shell
 //! cargo run --bin qos_client generate-setup-key \
@@ -183,7 +183,7 @@
 //! #### Generate a Manifest
 //!
 //! The leader for the boot standard flow will need to generate a manifest using
-//! [`Command::GenerateManifest`]. Given the quorum set mentioned in the above
+//! [`Command::GenerateManifest`]. Given the manifest set mentioned in the above
 //! genesis guide, [`Command::GenerateManifest`] expects the following directory
 //! structure:
 //!
@@ -255,8 +255,8 @@
 //! [`Command::BootStandard`] to send the boot standard instruction to start the
 //! enclave.
 //!
-//! Given the Quorum Set referenced above, [`Command::BootStandard`] expects the
-//! following directory structure:
+//! Given the Manifest Set referenced above, [`Command::BootStandard`] expects
+//! the following directory structure:
 //!
 //! - boot
 //!    - `our_namespace.0.manifest`
@@ -386,7 +386,7 @@ pub enum Command {
 	/// This will output the decrypted Personal Key associated with your Setup
 	/// Key.
 	AfterGenesis,
-	/// Using the given Personal Keys as the Quorum Set, generate a manifest.
+	/// Using the given Personal Keys as the Manifest Set, generate a manifest.
 	GenerateManifest,
 	/// Sign a trusted Manifest.
 	///

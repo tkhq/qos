@@ -104,6 +104,9 @@ pub enum ProtocolError {
 	OversizedPayload,
 	/// A protocol message could not be deserialized.
 	ProtocolMsgDeserialization,
+	/// Share set approvals existed in the manifest envelope when they should
+	/// not have.
+	BadShareSetApprovals,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
@@ -391,7 +394,8 @@ mod handlers {
 						manifest_envelope: state
 							.handles
 							.get_manifest_envelope()
-							.ok(),
+							.ok()
+							.map(Box::new),
 					})
 				}
 				Err(e) => {

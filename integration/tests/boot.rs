@@ -9,8 +9,8 @@ use qos_core::protocol::{
 	},
 	services::{
 		boot::{
-			Approval, Manifest, Namespace, NitroConfig, PivotConfig,
-			QuorumMember, QuorumSet, RestartPolicy,
+			Approval, Manifest, ManifestSet, Namespace, NitroConfig,
+			PivotConfig, QuorumMember, RestartPolicy, ShareSet,
 		},
 		genesis::GenesisOutput,
 	},
@@ -101,7 +101,7 @@ async fn boot_e2e() {
 		GenesisOutput::try_from_slice(&fs::read(&genesis_output_path).unwrap())
 			.unwrap();
 
-	let mut quorum_set_members: Vec<_> = genesis_output
+	let mut manifest_set_members: Vec<_> = genesis_output
 		.member_outputs
 		.iter()
 		.map(|m| QuorumMember {
@@ -109,7 +109,7 @@ async fn boot_e2e() {
 			pub_key: m.public_personal_key.clone(),
 		})
 		.collect();
-	quorum_set_members.sort();
+	manifest_set_members.sort();
 
 	assert_eq!(
 		manifest,
@@ -121,9 +121,13 @@ async fn boot_e2e() {
 				args: vec!["--msg".to_string(), msg.to_string()]
 			},
 			quorum_key: genesis_output.quorum_key.clone(),
-			quorum_set: QuorumSet {
+			manifest_set: ManifestSet {
 				threshold: genesis_output.threshold,
-				members: quorum_set_members
+				members: manifest_set_members.clone()
+			},
+			share_set: ShareSet {
+				threshold: genesis_output.threshold,
+				members: manifest_set_members
 			},
 			enclave: NitroConfig {
 				pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),

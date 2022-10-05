@@ -63,7 +63,7 @@ pub(in crate::protocol) fn provision(
 	state.provisioner.add_share(share)?;
 
 	let manifest = state.handles.get_manifest_envelope()?.manifest;
-	let quorum_threshold = manifest.quorum_set.threshold as usize;
+	let quorum_threshold = manifest.manifest_set.threshold as usize;
 	if state.provisioner.count() < quorum_threshold {
 		// Nothing else to do if we don't have the threshold to reconstruct
 		return Ok(false);
@@ -103,8 +103,8 @@ mod test {
 			attestor::mock::MockNsm,
 			services::{
 				boot::{
-					Manifest, ManifestEnvelope, Namespace, NitroConfig,
-					PivotConfig, QuorumSet, RestartPolicy,
+					Manifest, ManifestEnvelope, ManifestSet, Namespace,
+					NitroConfig, PivotConfig, RestartPolicy, ShareSet,
 				},
 				provision::{self, provision},
 			},
@@ -145,13 +145,20 @@ mod test {
 				args: vec![],
 			},
 			quorum_key: quorum_pair.public_key_to_der().unwrap(),
-			quorum_set: QuorumSet {
+			manifest_set: ManifestSet {
+				threshold: threshold.try_into().unwrap(),
+				members: vec![],
+			},
+			share_set: ShareSet {
 				threshold: threshold.try_into().unwrap(),
 				members: vec![],
 			},
 		};
-		let manifest_envelope =
-			ManifestEnvelope { manifest, approvals: vec![] };
+		let manifest_envelope = ManifestEnvelope {
+			manifest,
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		};
 		handles.put_manifest_envelope(&manifest_envelope).unwrap();
 
 		// 3) Create state with eph key and manifest

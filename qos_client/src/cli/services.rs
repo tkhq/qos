@@ -14,8 +14,8 @@ use qos_core::protocol::{
 	msg::ProtocolMsg,
 	services::{
 		boot::{
-			Approval, Manifest, ManifestEnvelope, Namespace, NitroConfig,
-			PivotConfig, QuorumMember, QuorumSet, RestartPolicy,
+			Approval, Manifest, ManifestEnvelope, ManifestSet, Namespace,
+			NitroConfig, PivotConfig, QuorumMember, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisOutput, GenesisSet, SetupMember},
 	},
@@ -139,7 +139,7 @@ fn create_genesis_set<P: AsRef<Path>>(
 			let mut n = split_file_name(path);
 
 			// TODO: do we want to dissallow having anything in this folder
-			// that is not a public key for the quorum set?
+			// that is not a public key for the manifest set?
 			if n.last().map_or(true, |s| s.as_str() != "pub")
 				|| n.get(n.len() - 2).map_or(true, |s| s.as_str() != "setup")
 			{
@@ -325,9 +325,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 			pub_key: m.public_personal_key.clone(),
 		})
 		.collect();
-	// We want to try and build the same manifest regardless of the OS. This
-	// isn't necessarily important for production, but it helps make sure
-	// our test suite will always work.
+	// We want to try and build the same manifest regardless of the OS.
 	members.sort();
 
 	let manifest = Manifest {
@@ -338,7 +336,13 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 			args: pivot_args,
 		},
 		quorum_key: genesis_output.quorum_key,
-		quorum_set: QuorumSet { threshold: genesis_output.threshold, members },
+		// TODO: the members of the manifest set should not be from the genesis
+		// output, instead should be from some other directory of keys
+		manifest_set: ManifestSet {
+			threshold: genesis_output.threshold,
+			members: members.clone(),
+		},
+		share_set: ShareSet { threshold: genesis_output.threshold, members },
 		enclave: NitroConfig { pcr0, pcr1, pcr2, aws_root_certificate },
 	};
 
@@ -421,8 +425,11 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	);
 
 	// Create manifest envelope
-	let manifest_envelope =
-		Box::new(ManifestEnvelope { manifest: manifest.clone(), approvals });
+	let manifest_envelope = Box::new(ManifestEnvelope {
+		manifest: manifest.clone(),
+		manifest_set_approvals: approvals,
+		share_set_approvals: vec![],
+	});
 
 	let req = ProtocolMsg::BootStandardRequest { manifest_envelope, pivot };
 	// Broadcast boot standard instruction and extract the attestation doc from
@@ -627,7 +634,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	let pivot = fs::read(&pivot_path).expect("Failed to ready pivot binary.");
 
 	let mock_pcr = vec![0; 48];
-	// Create a manifest with quorum set of 1 - everything hardcoded expect
+	// Create a manifest with manifest set of 1 - everything hardcoded expect
 	// pivot config
 	let manifest = Manifest {
 		namespace: Namespace {
@@ -642,7 +649,12 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		},
 		pivot: PivotConfig { hash: sha_256(&pivot), restart, args },
 		quorum_key: quorum_public_der,
-		quorum_set: QuorumSet {
+		manifest_set: ManifestSet {
+			threshold: 1,
+			// The only member is the quorum member
+			members: vec![member.clone()],
+		},
+		share_set: ShareSet {
 			threshold: 1,
 			// The only member is the quorum member
 			members: vec![member.clone()],
@@ -656,7 +668,8 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			.expect("Failed to sign");
 		Box::new(ManifestEnvelope {
 			manifest,
-			approvals: vec![Approval { signature, member }],
+			manifest_set_approvals: vec![Approval { signature, member }],
+			share_set_approvals: vec![],
 		})
 	};
 
@@ -779,8 +792,8 @@ fn find_approvals<P: AsRef<Path>>(
 			.expect("Failed to deserialize approval");
 
 			assert!(
-				manifest.quorum_set.members.contains(&approval.member),
-				"Found approval from member ({:?}) not included in the Quorum Set", approval.member.alias
+				manifest.manifest_set.members.contains(&approval.member),
+				"Found approval from member ({:?}) not included in the Manifest Set", approval.member.alias
 			);
 
 			let pub_key = RsaPub::from_der(&approval.member.pub_key)
@@ -795,7 +808,7 @@ fn find_approvals<P: AsRef<Path>>(
 			Some(approval)
 		})
 		.collect();
-	assert!(approvals.len() >= manifest.quorum_set.threshold as usize);
+	assert!(approvals.len() >= manifest.manifest_set.threshold as usize);
 
 	approvals
 }
