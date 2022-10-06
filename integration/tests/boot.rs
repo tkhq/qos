@@ -111,7 +111,9 @@ async fn boot_e2e() {
 		.collect();
 	manifest_set_members.sort();
 
-	let share_set_members = manifest_set_members.clone().into_iter()
+	let share_set_members = manifest_set_members
+		.clone()
+		.into_iter()
 		.map(|mut m| {
 			m.alias = "SHARE_SET".to_string();
 			m

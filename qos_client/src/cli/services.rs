@@ -330,7 +330,9 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	// We want to try and build the same manifest regardless of the OS.
 	members.sort();
 
-	let share_set_members = members.clone().into_iter()
+	let share_set_members = members
+		.clone()
+		.into_iter()
 		.map(|mut m| {
 			m.alias = SHARE_SET.to_string();
 			m
@@ -351,7 +353,10 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 			threshold: genesis_output.threshold,
 			members: members.clone(),
 		},
-		share_set: ShareSet { threshold: genesis_output.threshold, members: share_set_members },
+		share_set: ShareSet {
+			threshold: genesis_output.threshold,
+			members: share_set_members,
+		},
 		enclave: NitroConfig { pcr0, pcr1, pcr2, aws_root_certificate },
 	};
 
