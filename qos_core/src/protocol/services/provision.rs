@@ -259,6 +259,8 @@ mod test {
 		let quorum_key = std::fs::read(*quorum_file).unwrap();
 		assert_eq!(quorum_key, quorum_pair.private_key_to_pem().unwrap());
 		assert_eq!(state.phase, ProtocolPhase::QuorumKeyProvisioned);
+		// Make sure the EK is deleted
+		assert!(!Path::new(*eph_file).exists());
 
 		// The share set approvals where recorded in the manifest envelope
 		assert_eq!(
