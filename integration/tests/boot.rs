@@ -33,6 +33,8 @@ async fn boot_e2e() {
 
 	let boot_dir: PathWrapper = "/tmp/boot-e2e/boot-dir".into();
 	fs::create_dir_all(*boot_dir).unwrap();
+	let attestation_dir: PathWrapper = "/tmp/boot-e2e/attestation-dir".into();
+	fs::create_dir_all(*attestation_dir).unwrap();
 
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
 	let genesis_dir = "./mock/boot-e2e/genesis-dir";
@@ -243,22 +245,53 @@ async fn boot_e2e() {
 	// and sanity check the pivot has not yet executed.
 	assert!(!Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
 	for user in [&user1, &user2] {
+		// Get attestation doc and manifest
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
-				"post-share",
-				"--boot-dir",
-				*boot_dir,
-				"--personal-dir",
-				&personal_dir(user),
-				"--manifest-hash",
-				qos_hex::encode(&manifest.qos_hash()).as_str(),
+				"get-attestation-doc",
 				"--host-port",
 				&host_port.to_string(),
 				"--host-ip",
 				LOCAL_HOST,
+				"--attestation-dir",
+				*attestation_dir
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
+
+		// Encrypt share to ephemeral key
+		assert!(Command::new("../target/debug/qos_client")
+			.args([
+				"proxy-re-encrypt-share",
+				"--attestation-dir",
+				*attestation_dir,
+				"--manifest-hash",
+				qos_hex::encode(&manifest.qos_hash()).as_str(),
+				"--personal-dir",
+				&personal_dir(user),
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
 				*eph_path,
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
+
+		// Post the encrypted share
+		assert!(Command::new("../target/debug/qos_client")
+			.args([
+				"post-share",
+				"--host-port",
+				&host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--attestation-dir",
+				*attestation_dir
 			])
 			.spawn()
 			.unwrap()

@@ -345,6 +345,7 @@ const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
+const ATTESTATION_DIR: &str = "attestation-dir";
 
 /// Commands for the Client CLI.
 ///
@@ -367,9 +368,6 @@ pub enum Command {
 	DescribeNsm,
 	/// Query the NSM with `NsmRequest::DescribePcr` for PCR indexes 0..3.
 	DescribePcr,
-	/// Query the NSM with `NsmRequest::Attestation` and verify the cert chain
-	/// using the current time.
-	RequestAttestationDoc,
 	/// Generate a Setup Key for use in the Genesis ceremony.
 	GenerateSetupKey,
 	/// Run the the Boot Genesis logic to generate and shard a Quorum Key
@@ -405,13 +403,22 @@ pub enum Command {
 	/// This will output the COSE Sign1 structure with an embedded
 	/// `AttestationDoc`.
 	BootStandard,
-	/// Post a share to enclave that is not yet provisioned, but already has a
-	/// manifest.
+	/// Get the attestation document from an enclave. Will also get the
+	/// manifest envelope if it exists.
+	GetAttestationDoc,
+	/// Given an attestation document from an enclave waiting for shares,
+	/// re-encrypt the local share to the Ephemeral Key from the attestation
+	/// doc.
 	///
-	/// This will encrypt your Personal Share to the Ephemeral Key of the
-	/// enclave. The ephemeral key will be pulled out of the given Attestation
-	/// Document, so use caution to only run this against an Attestation
-	/// Document and Manifest you have reviewed and trust.
+	/// The Ephemeral Key is pulled out of the attestation document.
+	///
+	/// This command will check the manifest signatures and verify that the
+	/// manifest correctly lines up with the enclave document.
+	///
+	/// This command should only be used in highly secure environments as the
+	/// quorum share momentarily in plaintext.
+	ProxyReEncryptShare,
+	/// Submit an encrypted share to an enclave.
 	PostShare,
 	/// ** Never use in production**.
 	///
@@ -434,13 +441,14 @@ impl From<&str> for Command {
 			"enclave-status" => Self::EnclaveStatus,
 			"describe-nsm" => Self::DescribeNsm,
 			"describe-pcr" => Self::DescribePcr,
-			"request-attestation-doc" => Self::RequestAttestationDoc,
 			"generate-setup-key" => Self::GenerateSetupKey,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
 			"generate-manifest" => Self::GenerateManifest,
 			"sign-manifest" => Self::SignManifest,
 			"boot-standard" => Self::BootStandard,
+			"get-attestation-doc" => Self::GetAttestationDoc,
+			"proxy-re-encrypt-share" => Self::ProxyReEncryptShare,
 			"post-share" => Self::PostShare,
 			"dangerous-dev-boot" => Self::DangerousDevBoot,
 			"app-echo" => Self::AppEcho,
@@ -527,6 +535,14 @@ impl Command {
 			"NEVER USE IN PRODUCTION! Use the secret at the given path to encrypt data sent to the enclave, instead of extracting it from the attestation doc."
 		)
 		.takes_value(true)
+	}
+	fn attestation_dir_token() -> Token {
+		Token::new(
+			ATTESTATION_DIR,
+			"Path to dir containing attestation flow artifacts (attestation doc, manifest envelope, EK wrapped share).",
+		)
+		.takes_value(true)
+		.required(true)
 	}
 
 	fn base() -> Parser {
@@ -651,13 +667,21 @@ impl Command {
 			.token(Self::unsafe_skip_attestation_token())
 	}
 
-	fn post_share() -> Parser {
-		Self::base()
+	fn get_attestation_doc() -> Parser {
+		Self::base().token(Self::attestation_dir_token())
+	}
+
+	fn proxy_re_encrypt_share() -> Parser {
+		Parser::new()
+			.token(Self::attestation_dir_token())
 			.token(Self::manifest_hash_token())
 			.token(Self::personal_dir_token())
-			.token(Self::boot_dir_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
+	}
+
+	fn post_share() -> Parser {
+		Self::base().token(Self::attestation_dir_token())
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -677,7 +701,6 @@ impl GetParserForCommand for Command {
 			| Self::DescribePcr
 			| Self::AppEcho
 			| Self::AppReadFiles
-			| Self::RequestAttestationDoc
 			| Self::EnclaveStatus => Self::base(),
 			Self::GenerateSetupKey => Self::generate_setup_key(),
 			Self::BootGenesis => Self::boot_genesis(),
@@ -685,6 +708,8 @@ impl GetParserForCommand for Command {
 			Self::GenerateManifest => Self::generate_manifest(),
 			Self::SignManifest => Self::sign_manifest(),
 			Self::BootStandard => Self::boot_standard(),
+			Self::GetAttestationDoc => Self::get_attestation_doc(),
+			Self::ProxyReEncryptShare => Self::proxy_re_encrypt_share(),
 			Self::PostShare => Self::post_share(),
 			Self::DangerousDevBoot => Self::dangerous_dev_boot(),
 		}
@@ -706,6 +731,10 @@ impl ClientOpts {
 		} else {
 			format!("http://{ip}:{port}/qos/{uri}")
 		}
+	}
+
+	fn path_message(&self) -> String {
+		self.path("message")
 	}
 
 	fn alias(&self) -> String {
@@ -790,6 +819,10 @@ impl ClientOpts {
 		self.parsed.single(PERSONAL_DIR).expect("required arg").to_string()
 	}
 
+	fn attestation_dir(&self) -> String {
+		self.parsed.single(ATTESTATION_DIR).expect("required arg").to_string()
+	}
+
 	fn pivot_args(&self) -> Vec<String> {
 		let v = self.parsed.single(PIVOT_ARGS).expect("required arg");
 		let mut chars = v.chars();
@@ -850,9 +883,6 @@ impl ClientRunner {
 				Command::DescribePcr => handlers::describe_pcr(&self.opts),
 				Command::AppEcho => handlers::app_echo(&self.opts),
 				Command::AppReadFiles => handlers::app_read_files(&self.opts),
-				Command::RequestAttestationDoc => {
-					handlers::request_attestation_doc(&self.opts);
-				}
 				Command::GenerateSetupKey => {
 					handlers::generate_setup_key(&self.opts);
 				}
@@ -863,6 +893,12 @@ impl ClientRunner {
 				}
 				Command::SignManifest => handlers::sign_manifest(&self.opts),
 				Command::BootStandard => handlers::boot_standard(&self.opts),
+				Command::GetAttestationDoc => {
+					handlers::get_attestation_doc(&self.opts);
+				}
+				Command::ProxyReEncryptShare => {
+					handlers::proxy_re_encrypt_share(&self.opts);
+				}
 				Command::PostShare => handlers::post_share(&self.opts),
 				Command::DangerousDevBoot => {
 					handlers::dangerous_dev_boot(&self.opts);
@@ -906,7 +942,7 @@ mod handlers {
 	}
 
 	pub(super) fn enclave_status(opts: &ClientOpts) {
-		let path = &opts.path("message");
+		let path = &opts.path_message();
 
 		let response = request::post(path, &ProtocolMsg::StatusRequest)
 			.map_err(|e| println!("{:?}", e))
@@ -921,7 +957,7 @@ mod handlers {
 	}
 
 	pub(super) fn describe_nsm(opts: &ClientOpts) {
-		let path = &opts.path("message");
+		let path = &opts.path_message();
 		match request::post(
 			path,
 			&ProtocolMsg::NsmRequest { nsm_request: NsmRequest::DescribeNSM },
@@ -937,7 +973,7 @@ mod handlers {
 	}
 
 	pub(super) fn describe_pcr(opts: &ClientOpts) {
-		let path = &opts.path("message");
+		let path = &opts.path_message();
 
 		for i in 0..3 {
 			println!("PCR index {i}");
@@ -970,7 +1006,7 @@ mod handlers {
 			.try_to_vec()
 			.expect("Failed to serialize app msg");
 		let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
-		let app_msg = match request::post(&opts.path("message"), &req)
+		let app_msg = match request::post(&opts.path_message(), &req)
 			.map_err(|e| println!("{:?}", e))
 			.expect("App echo request failed")
 		{
@@ -999,7 +1035,7 @@ mod handlers {
 			.try_to_vec()
 			.expect("Failed to serialize app msg");
 		let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
-		let resp = match request::post(&opts.path("message"), &req)
+		let resp = match request::post(&opts.path_message(), &req)
 			.map_err(|e| println!("{:?}", e))
 			.expect("App read QOS files request failed")
 		{
@@ -1019,36 +1055,6 @@ mod handlers {
 		println!("Note that the files themselves where not verified.");
 	}
 
-	pub(super) fn request_attestation_doc(opts: &ClientOpts) {
-		// TODO make a `opts.message_path` function instead of just path
-		let path = &opts.path("message");
-
-		let req = ProtocolMsg::NsmRequest {
-			nsm_request: NsmRequest::Attestation {
-				user_data: None,
-				nonce: None,
-				public_key: None,
-			},
-		};
-
-		println!("Requesting attestation doc ... ");
-		let cose_sign1 = match request::post(path, &req)
-			.map_err(|e| println!("{:?}", e))
-			.expect("Attestation request failed")
-		{
-			ProtocolMsg::NsmResponse {
-				nsm_response: NsmResponse::Attestation { document },
-			} => document,
-			other => panic!("Unexpected response {:?}", other),
-		};
-
-		println!("Attestation doc received. Checking cert chain ..");
-
-		drop(services::extract_attestation_doc(&cose_sign1, false));
-
-		println!("Attestation doc cert chain successfully verified!");
-	}
-
 	pub(super) fn generate_setup_key(opts: &ClientOpts) {
 		services::generate_setup_key(
 			&opts.alias(),
@@ -1061,7 +1067,7 @@ mod handlers {
 	// TODO: verify PCRs
 	pub(super) fn boot_genesis(opts: &ClientOpts) {
 		services::boot_genesis(
-			&opts.path("message"),
+			&opts.path_message(),
 			opts.genesis_dir(),
 			opts.threshold(),
 			opts.unsafe_skip_attestation(),
@@ -1106,27 +1112,37 @@ mod handlers {
 
 	pub(super) fn boot_standard(opts: &ClientOpts) {
 		services::boot_standard(
-			&opts.path("message"),
+			&opts.path_message(),
 			opts.pivot_path(),
 			opts.boot_dir(),
 			opts.unsafe_skip_attestation(),
 		);
 	}
 
-	pub(super) fn post_share(opts: &ClientOpts) {
-		services::post_share(
-			&opts.path("message"),
-			opts.personal_dir(),
-			opts.boot_dir(),
+	pub(super) fn get_attestation_doc(opts: &ClientOpts) {
+		services::get_attestation_doc(
+			&opts.path_message(),
+			opts.attestation_dir(),
+		);
+	}
+
+	pub(super) fn proxy_re_encrypt_share(opts: &ClientOpts) {
+		services::proxy_re_encrypt_share(
+			opts.attestation_dir(),
 			opts.manifest_hash(),
+			opts.personal_dir(),
 			opts.unsafe_skip_attestation(),
 			opts.unsafe_eph_path_override(),
 		);
 	}
 
+	pub(super) fn post_share(opts: &ClientOpts) {
+		services::post_share(&opts.path_message(), opts.attestation_dir());
+	}
+
 	pub(super) fn dangerous_dev_boot(opts: &ClientOpts) {
 		services::dangerous_dev_boot(
-			&opts.path("message"),
+			&opts.path_message(),
 			opts.pivot_path(),
 			opts.restart_policy(),
 			opts.pivot_args(),
