@@ -98,6 +98,12 @@ impl Handles {
 		)
 	}
 
+	/// Delete the Ephemeral Key. Silently fails if the Ephemeral Key does not
+	/// exist.
+	pub fn delete_ephemeral_key(&self) {
+		drop(fs::remove_file(&self.ephemeral));
+	}
+
 	/// Get the Quorum Key pair.
 	///
 	/// # Errors

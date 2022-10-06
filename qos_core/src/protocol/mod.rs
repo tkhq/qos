@@ -107,6 +107,10 @@ pub enum ProtocolError {
 	/// Share set approvals existed in the manifest envelope when they should
 	/// not have.
 	BadShareSetApprovals,
+	/// Could not verify a message against an approval
+	CouldNotVerifyApproval,
+	/// Not a member of the `ShareSet`.
+	NotShareSetMember,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
@@ -323,8 +327,8 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::ProvisionRequest { share } = req {
-			match provision::provision(share, state) {
+		if let ProtocolMsg::ProvisionRequest { share, approval } = req {
+			match provision::provision(share, approval.clone(), state) {
 				Ok(reconstructed) => {
 					Some(ProtocolMsg::ProvisionResponse { reconstructed })
 				}

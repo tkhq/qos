@@ -169,6 +169,19 @@ pub struct Approval {
 	pub member: QuorumMember,
 }
 
+impl Approval {
+	/// Verify that the approval is a valid a signature for the given `msg`.
+	pub(crate) fn verify(&self, msg: &[u8]) -> Result<(), ProtocolError> {
+		let pub_key = RsaPub::from_pem(&self.member.pub_key)?;
+
+		if pub_key.verify_sha256(&self.signature, msg)? {
+			Ok(())
+		} else {
+			Err(ProtocolError::CouldNotVerifyApproval)
+		}
+	}
+}
+
 /// [`Manifest`] with accompanying [`Approval`]s.
 #[derive(
 	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,

@@ -3,7 +3,7 @@
 use crate::protocol::{
 	attestor::types::{NsmRequest, NsmResponse},
 	services::{
-		boot::ManifestEnvelope,
+		boot::{Approval, ManifestEnvelope},
 		genesis::{GenesisOutput, GenesisSet},
 	},
 	ProtocolError,
@@ -61,6 +61,8 @@ pub enum ProtocolMsg {
 	ProvisionRequest {
 		/// Quorum Key share encrypted to the Ephemeral Key.
 		share: Vec<u8>,
+		/// Approval of the manifest from a member of the share set.
+		approval: Approval,
 	},
 	/// Response to a Provision Request
 	ProvisionResponse {

@@ -37,6 +37,7 @@ const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
 const STANDARD_ATTESTATION_DOC_FILE: &str = "attestation_doc.boot";
 const EPH_WRAPPED_SHARE: &str = "ephemeral_key_wrapped.share";
+const ATTESTATION_APPROVAL: &str = "attestation_approval";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -579,6 +580,23 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 			.expect("Envelope encryption error")
 	};
 
+	let approval = Approval {
+		signature: personal_pair
+			.sign_sha256(&manifest_envelope.manifest.qos_hash())
+			.expect("Failed to sign"),
+		member: QuorumMember {
+			pub_key: personal_pair
+				.public_key_to_der()
+				.expect("Failed to get public key"),
+			alias: "SHARE_SET".to_string(),
+		},
+	}
+	.try_to_vec()
+	.expect("Could not serialize Approval");
+
+	let approval_path = attestation_dir.as_ref().join(ATTESTATION_APPROVAL);
+	write_with_msg(&approval_path, &approval, "Share Set Approval");
+
 	let share_path = attestation_dir.as_ref().join(EPH_WRAPPED_SHARE);
 	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
 }
@@ -586,8 +604,9 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 pub(crate) fn post_share<P: AsRef<Path>>(uri: &str, attestation_dir: P) {
 	// Get the ephemeral key wrapped share
 	let share = find_share(&attestation_dir);
+	let approval = find_attestation_approval(&attestation_dir);
 
-	let req = ProtocolMsg::ProvisionRequest { share };
+	let req = ProtocolMsg::ProvisionRequest { share, approval };
 	let is_reconstructed = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::ProvisionResponse { reconstructed } => reconstructed,
 		r => panic!("Unexpected response: {:?}", r),
@@ -673,7 +692,10 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		})
 	};
 
-	let req = ProtocolMsg::BootStandardRequest { manifest_envelope, pivot };
+	let req = ProtocolMsg::BootStandardRequest {
+		manifest_envelope: manifest_envelope.clone(),
+		pivot,
+	};
 	let attestation_doc = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::BootStandardResponse {
 			nsm_response: NsmResponse::Attestation { document },
@@ -695,11 +717,25 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		.expect("Ephemeral key not valid public key")
 	};
 
+	// Create ShareSet approval
+	let approval = Approval {
+		signature: quorum_pair
+			.sign_sha256(&manifest_envelope.manifest.qos_hash())
+			.expect("Failed to sign"),
+		member: QuorumMember {
+			pub_key: quorum_pair
+				.public_key_to_der()
+				.expect("Failed to get public key"),
+			alias: "SHARE_SET".to_string(),
+		},
+	};
+
 	// Post the share
 	let req = ProtocolMsg::ProvisionRequest {
 		share: eph_pub
 			.envelope_encrypt(&share)
 			.expect("Failed to encrypt share to eph key."),
+		approval,
 	};
 	match request::post(uri, &req).unwrap() {
 		ProtocolMsg::ProvisionResponse { reconstructed } => {
@@ -877,6 +913,32 @@ fn find_manifest_envelope<P: AsRef<Path>>(dir: P) -> ManifestEnvelope {
 
 				Some(
 					ManifestEnvelope::try_from_slice(&manifest_envelope)
+						.expect("Could not decode manifest envelope"),
+				)
+			} else {
+				None
+			}
+		})
+		.collect();
+
+	assert_eq!(a.len(), 1, "Not exactly one manifest envelope in directory");
+
+	a.remove(0)
+}
+
+fn find_attestation_approval<P: AsRef<Path>>(dir: P) -> Approval {
+	let mut a: Vec<_> = find_file_paths(&dir)
+		.iter()
+		.map(|p| {
+			(p, p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
+		})
+		.filter_map(|(path, file)| {
+			if file == ATTESTATION_APPROVAL {
+				let manifest_envelope =
+					fs::read(path).expect("Failed to read manifest envelope");
+
+				Some(
+					Approval::try_from_slice(&manifest_envelope)
 						.expect("Could not decode manifest envelope"),
 				)
 			} else {

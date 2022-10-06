@@ -1,5 +1,8 @@
 //! Quorum Key provisioning logic and types.
-use crate::protocol::{ProtocolError, ProtocolPhase, ProtocolState};
+use crate::protocol::{
+	services::boot::Approval, ProtocolError, ProtocolPhase, ProtocolState,
+	QosHash,
+};
 
 type Secret = Vec<u8>;
 type Share = Vec<u8>;
@@ -52,8 +55,24 @@ impl SecretBuilder {
 
 pub(in crate::protocol) fn provision(
 	encrypted_share: &[u8],
+	approval: Approval,
 	state: &mut ProtocolState,
 ) -> Result<bool, ProtocolError> {
+	let mut manifest_envelope = state.handles.get_manifest_envelope()?;
+
+	// Check that the approval is valid
+	// 1) the approver belongs to the share set
+	if !manifest_envelope.manifest.share_set.members.contains(&approval.member)
+	{
+		return Err(ProtocolError::NotShareSetMember);
+	}
+	// 2) the signature is valid
+	approval.verify(&manifest_envelope.manifest.qos_hash())?;
+
+	// Record the share set approval
+	manifest_envelope.share_set_approvals.push(approval);
+	state.handles.put_manifest_envelope(&manifest_envelope)?;
+
 	let ephemeral_key = state.handles.get_ephemeral_key()?;
 
 	let share = ephemeral_key
@@ -62,8 +81,8 @@ pub(in crate::protocol) fn provision(
 
 	state.provisioner.add_share(share)?;
 
-	let manifest = state.handles.get_manifest_envelope()?.manifest;
-	let quorum_threshold = manifest.manifest_set.threshold as usize;
+	let quorum_threshold =
+		manifest_envelope.manifest.share_set.threshold as usize;
 	if state.provisioner.count() < quorum_threshold {
 		// Nothing else to do if we don't have the threshold to reconstruct
 		return Ok(false);
@@ -74,7 +93,7 @@ pub(in crate::protocol) fn provision(
 		.map_err(|_| ProtocolError::InvalidPrivateKey)?;
 	let public_key_der = pair.public_key_to_der()?;
 
-	if public_key_der != manifest.quorum_key {
+	if public_key_der != manifest_envelope.manifest.quorum_key {
 		// We did not construct the intended key
 		// Something went wrong, so clear the existing shares just to be
 		// careful.
@@ -83,6 +102,9 @@ pub(in crate::protocol) fn provision(
 	}
 
 	state.handles.put_quorum_key(&pair)?;
+	// We want to minimize the use of the Ephemeral Key because it is
+	// provisioned before we can externally seed the entropy pool.
+	state.handles.delete_ephemeral_key();
 
 	state.phase = ProtocolPhase::QuorumKeyProvisioned;
 	Ok(true)
@@ -90,7 +112,7 @@ pub(in crate::protocol) fn provision(
 
 #[cfg(test)]
 mod test {
-	use std::path::Path;
+	use std::{iter::zip, path::Path};
 
 	use qos_crypto::{sha_256, shamir::shares_generate, RsaPair};
 	use qos_test_primitives::PathWrapper;
@@ -103,20 +125,25 @@ mod test {
 			attestor::mock::MockNsm,
 			services::{
 				boot::{
-					Manifest, ManifestEnvelope, ManifestSet, Namespace,
-					NitroConfig, PivotConfig, RestartPolicy, ShareSet,
+					Approval, Manifest, ManifestEnvelope, ManifestSet,
+					Namespace, NitroConfig, PivotConfig, QuorumMember,
+					RestartPolicy, ShareSet,
 				},
 				provision::{self, provision},
 			},
-			ProtocolError, ProtocolPhase, ProtocolState,
+			ProtocolError, ProtocolPhase, ProtocolState, QosHash,
 		},
 	};
 
-	fn setup(
-		eph_file: &str,
-		quorum_file: &str,
-		manifest_file: &str,
-	) -> (RsaPair, RsaPair, usize, ProtocolState) {
+	struct Setup {
+		quorum_pair: RsaPair,
+		eph_pair: RsaPair,
+		threshold: usize,
+		state: ProtocolState,
+		approvals: Vec<Approval>,
+	}
+
+	fn setup(eph_file: &str, quorum_file: &str, manifest_file: &str) -> Setup {
 		let handles = Handles::new(
 			eph_file.to_string(),
 			quorum_file.to_string(),
@@ -131,6 +158,27 @@ mod test {
 		let quorum_pair = RsaPair::generate().unwrap();
 		let threshold = 3usize;
 		let pivot = b"this is a pivot binary";
+
+		let pairs = vec![
+			RsaPair::generate().unwrap(),
+			RsaPair::generate().unwrap(),
+			RsaPair::generate().unwrap(),
+		];
+		let members = vec![
+			QuorumMember {
+				alias: "0".to_string(),
+				pub_key: pairs[0].public_key_to_der().unwrap(),
+			},
+			QuorumMember {
+				alias: "1".to_string(),
+				pub_key: pairs[1].public_key_to_der().unwrap(),
+			},
+			QuorumMember {
+				alias: "2".to_string(),
+				pub_key: pairs[1].public_key_to_der().unwrap(),
+			},
+		];
+
 		let manifest = Manifest {
 			namespace: Namespace { nonce: 420, name: "vape-space".to_string() },
 			enclave: NitroConfig {
@@ -151,9 +199,17 @@ mod test {
 			},
 			share_set: ShareSet {
 				threshold: threshold.try_into().unwrap(),
-				members: vec![],
+				members: members.clone(),
 			},
 		};
+
+		let approvals = zip(members, pairs)
+			.map(|(member, pair)| Approval {
+				member,
+				signature: pair.sign_sha256(&manifest.qos_hash()).unwrap(),
+			})
+			.collect();
+
 		let manifest_envelope = ManifestEnvelope {
 			manifest,
 			manifest_set_approvals: vec![],
@@ -170,7 +226,7 @@ mod test {
 			app_client: Client::new(SocketAddress::new_unix("./never.sock")),
 		};
 
-		(quorum_pair, eph_pair, threshold, state)
+		Setup { quorum_pair, eph_pair, threshold, state, approvals }
 	}
 
 	#[test]
@@ -179,7 +235,7 @@ mod test {
 		let eph_file: PathWrapper = "./provision_works.eph.key".into();
 		let manifest_file: PathWrapper = "./provision_works.manifest".into();
 
-		let (quorum_pair, eph_pair, threshold, mut state) =
+		let Setup { quorum_pair, eph_pair, threshold, mut state, approvals } =
 			setup(*eph_file, *quorum_file, *manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
@@ -192,8 +248,9 @@ mod test {
 
 		// 5) For K-1 shards call provision, make sure returns false and doesn't
 		// write quorum key
-		for share in &encrypted_shares[..threshold - 1] {
-			assert_eq!(provision(share, &mut state), Ok(false));
+		for (i, share) in encrypted_shares[..threshold - 1].iter().enumerate() {
+			let approval = approvals[i].clone();
+			assert_eq!(provision(share, approval, &mut state), Ok(false));
 			assert!(!Path::new(*quorum_file).exists());
 			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 		}
@@ -201,10 +258,22 @@ mod test {
 		// 6) For shard K, call provision, make sure returns true and writes
 		// quorum key as a ready only file
 		let share = &encrypted_shares[threshold];
-		assert_eq!(provision(share, &mut state), Ok(true));
+		let approval = approvals[threshold].clone();
+		assert_eq!(provision(share, approval, &mut state), Ok(true));
 		let quorum_key = std::fs::read(*quorum_file).unwrap();
 		assert_eq!(quorum_key, quorum_pair.private_key_to_pem().unwrap());
 		assert_eq!(state.phase, ProtocolPhase::QuorumKeyProvisioned);
+
+		// The share set approvals where recorded in the manifest envelope
+		assert_eq!(
+			state
+				.handles
+				.get_manifest_envelope()
+				.unwrap()
+				.share_set_approvals
+				.len(),
+			threshold
+		);
 	}
 
 	#[test]
@@ -216,7 +285,7 @@ mod test {
 		let manifest_file: PathWrapper =
 			"./provision_rejects_the_wrong_key.manifest".into();
 
-		let (_quorum_pair, eph_pair, threshold, mut state) =
+		let Setup { eph_pair, threshold, mut state, approvals, .. } =
 			setup(*eph_file, *quorum_file, *manifest_file);
 
 		// 4) Create shards of a RANDOM KEY and encrypt them to eph key
@@ -230,16 +299,18 @@ mod test {
 
 		// 5) For K-1 shards call provision, make sure returns false and doesn't
 		// write quorum key
-		for share in &encrypted_shares[..threshold - 1] {
-			assert_eq!(provision(share, &mut state), Ok(false));
+		for (i, share) in encrypted_shares[..threshold - 1].iter().enumerate() {
+			let approval = approvals[i].clone();
+			assert_eq!(provision(share, approval, &mut state), Ok(false));
 			assert!(!Path::new(*quorum_file).exists());
 			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 		}
 
 		// 6) Add Kth shard of the random key
 		let share = &encrypted_shares[threshold];
+		let approval = approvals[threshold].clone();
 		assert_eq!(
-			provision(share, &mut state),
+			provision(share, approval, &mut state),
 			Err(ProtocolError::ReconstructionError)
 		);
 		assert!(!Path::new(*quorum_file).exists());
@@ -255,7 +326,7 @@ mod test {
 			"./provision_rejects_if_a_shard_is_invalid.quorum.key".into();
 		let manifest_file: PathWrapper =
 			"./provision_rejects_if_a_shard_is_invalid.manifest".into();
-		let (quorum_pair, eph_pair, threshold, mut state) =
+		let Setup { quorum_pair, eph_pair, threshold, mut state, approvals } =
 			setup(*eph_file, *quorum_file, *manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
@@ -268,8 +339,9 @@ mod test {
 
 		// 5) For K-1 shards call provision, make sure returns false and doesn't
 		// write quorum key
-		for share in &encrypted_shares[..threshold - 1] {
-			assert_eq!(provision(share, &mut state), Ok(false));
+		for (i, share) in encrypted_shares[..threshold - 1].iter().enumerate() {
+			let approval = approvals[i].clone();
+			assert_eq!(provision(share, approval, &mut state), Ok(false));
 			assert!(!Path::new(*quorum_file).exists());
 			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 		}
@@ -278,12 +350,23 @@ mod test {
 		let bogus_share = &[69u8; 2349];
 		let encrypted_bogus_share =
 			eph_pair.envelope_encrypt(bogus_share).unwrap();
+		let approval = approvals[threshold].clone();
 		assert_eq!(
-			provision(&encrypted_bogus_share, &mut state),
+			provision(&encrypted_bogus_share, approval, &mut state),
 			Err(ProtocolError::InvalidPrivateKey)
 		);
 		assert!(!Path::new(*quorum_file).exists());
 		// Note that the handler should set the state to unrecoverable error
 		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+	}
+
+	#[test]
+	fn provisions_rejects_if_an_approval_is_invalid() {
+		todo!()
+	}
+
+	#[test]
+	fn provision_rejects_if_approval_is_not_from_share_set_member() {
+		todo!()
 	}
 }
