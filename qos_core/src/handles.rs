@@ -182,9 +182,10 @@ impl Handles {
 			&self.manifest,
 			std::fs::Permissions::from_mode(0o666),
 		)?;
-		dbg!(fs::write(&self.manifest, &manifest_envelope.try_to_vec()?))
+		fs::write(&self.manifest, &manifest_envelope.try_to_vec()?)
 			.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?;
 
+		// Set the permissions back to read only
 		fs::set_permissions(
 			&self.manifest,
 			std::fs::Permissions::from_mode(0o444),

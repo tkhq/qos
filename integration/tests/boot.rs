@@ -111,6 +111,13 @@ async fn boot_e2e() {
 		.collect();
 	manifest_set_members.sort();
 
+	let share_set_members = manifest_set_members.clone().into_iter()
+		.map(|mut m| {
+			m.alias = "SHARE_SET".to_string();
+			m
+		})
+		.collect();
+
 	assert_eq!(
 		manifest,
 		Manifest {
@@ -123,11 +130,11 @@ async fn boot_e2e() {
 			quorum_key: genesis_output.quorum_key.clone(),
 			manifest_set: ManifestSet {
 				threshold: genesis_output.threshold,
-				members: manifest_set_members.clone()
+				members: manifest_set_members
 			},
 			share_set: ShareSet {
 				threshold: genesis_output.threshold,
-				members: manifest_set_members
+				members: share_set_members
 			},
 			enclave: NitroConfig {
 				pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),

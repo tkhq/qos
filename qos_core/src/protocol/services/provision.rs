@@ -156,7 +156,6 @@ mod test {
 		// 1) Create and write eph key
 		let eph_pair = RsaPair::generate().unwrap();
 		handles.put_ephemeral_key(&eph_pair).unwrap();
-
 		// 2) Create and write manifest with threshold and quorum key
 		let quorum_pair = RsaPair::generate().unwrap();
 		let threshold = 3usize;

@@ -38,6 +38,7 @@ const APPROVAL_EXT: &str = "approval";
 const STANDARD_ATTESTATION_DOC_FILE: &str = "attestation_doc.boot";
 const EPH_WRAPPED_SHARE: &str = "ephemeral_key_wrapped.share";
 const ATTESTATION_APPROVAL: &str = "attestation_approval";
+const SHARE_SET: &str = "SHARE_SET";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -329,6 +330,13 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	// We want to try and build the same manifest regardless of the OS.
 	members.sort();
 
+	let share_set_members = members.clone().into_iter()
+		.map(|mut m| {
+			m.alias = SHARE_SET.to_string();
+			m
+		})
+		.collect();
+
 	let manifest = Manifest {
 		namespace: Namespace { name: namespace.clone(), nonce },
 		pivot: PivotConfig {
@@ -343,7 +351,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 			threshold: genesis_output.threshold,
 			members: members.clone(),
 		},
-		share_set: ShareSet { threshold: genesis_output.threshold, members },
+		share_set: ShareSet { threshold: genesis_output.threshold, members: share_set_members },
 		enclave: NitroConfig { pcr0, pcr1, pcr2, aws_root_certificate },
 	};
 
@@ -588,7 +596,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 			pub_key: personal_pair
 				.public_key_to_der()
 				.expect("Failed to get public key"),
-			alias: "SHARE_SET".to_string(),
+			alias: SHARE_SET.to_string(),
 		},
 	}
 	.try_to_vec()
@@ -726,7 +734,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			pub_key: quorum_pair
 				.public_key_to_der()
 				.expect("Failed to get public key"),
-			alias: "SHARE_SET".to_string(),
+			alias: DANGEROUS_DEV_BOOT_MEMBER.to_string(),
 		},
 	};
 
