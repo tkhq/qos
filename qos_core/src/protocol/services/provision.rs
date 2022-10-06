@@ -58,7 +58,7 @@ pub(in crate::protocol) fn provision(
 	approval: Approval,
 	state: &mut ProtocolState,
 ) -> Result<bool, ProtocolError> {
-	let mut manifest_envelope = state.handles.get_manifest_envelope()?;
+	let manifest_envelope = state.handles.get_manifest_envelope()?;
 
 	// Check that the approval is valid
 	// 1) the approver belongs to the share set
@@ -70,8 +70,10 @@ pub(in crate::protocol) fn provision(
 	approval.verify(&manifest_envelope.manifest.qos_hash())?;
 
 	// Record the share set approval
-	manifest_envelope.share_set_approvals.push(approval);
-	state.handles.put_manifest_envelope(&manifest_envelope)?;
+	state.handles.mutate_manifest_envelope(|mut envelope| {
+		envelope.share_set_approvals.push(approval);
+		envelope
+	})?;
 
 	let ephemeral_key = state.handles.get_ephemeral_key()?;
 
@@ -89,6 +91,7 @@ pub(in crate::protocol) fn provision(
 	}
 
 	let private_key_der = state.provisioner.build()?;
+
 	let pair = qos_crypto::RsaPair::from_der(&private_key_der)
 		.map_err(|_| ProtocolError::InvalidPrivateKey)?;
 	let public_key_der = pair.public_key_to_der()?;
@@ -112,7 +115,7 @@ pub(in crate::protocol) fn provision(
 
 #[cfg(test)]
 mod test {
-	use std::{iter::zip, path::Path};
+	use std::path::Path;
 
 	use qos_crypto::{sha_256, shamir::shares_generate, RsaPair};
 	use qos_test_primitives::PathWrapper;
@@ -159,25 +162,18 @@ mod test {
 		let threshold = 3usize;
 		let pivot = b"this is a pivot binary";
 
-		let pairs = vec![
-			RsaPair::generate().unwrap(),
-			RsaPair::generate().unwrap(),
-			RsaPair::generate().unwrap(),
-		];
-		let members = vec![
-			QuorumMember {
-				alias: "0".to_string(),
-				pub_key: pairs[0].public_key_to_der().unwrap(),
-			},
-			QuorumMember {
-				alias: "1".to_string(),
-				pub_key: pairs[1].public_key_to_der().unwrap(),
-			},
-			QuorumMember {
-				alias: "2".to_string(),
-				pub_key: pairs[1].public_key_to_der().unwrap(),
-			},
-		];
+		let members: Vec<_> = (0..4)
+			.map(|_| RsaPair::generate().unwrap())
+			.enumerate()
+			.map(|(i, pair)| {
+				let member = QuorumMember {
+					alias: i.to_string(),
+					pub_key: pair.public_key_to_der().unwrap(),
+				};
+
+				(member, pair)
+			})
+			.collect();
 
 		let manifest = Manifest {
 			namespace: Namespace { nonce: 420, name: "vape-space".to_string() },
@@ -199,11 +195,12 @@ mod test {
 			},
 			share_set: ShareSet {
 				threshold: threshold.try_into().unwrap(),
-				members: members.clone(),
+				members: members.clone().into_iter().map(|(m, _)| m).collect(),
 			},
 		};
 
-		let approvals = zip(members, pairs)
+		let approvals: Vec<_> = members
+			.into_iter()
 			.map(|(member, pair)| Approval {
 				member,
 				signature: pair.sign_sha256(&manifest.qos_hash()).unwrap(),
@@ -362,11 +359,78 @@ mod test {
 
 	#[test]
 	fn provisions_rejects_if_an_approval_is_invalid() {
-		todo!()
+		let eph_file: PathWrapper =
+			"./provisions_rejects_if_an_approval_is_invalid.eph.key".into();
+		let quorum_file: PathWrapper =
+			"./provisions_rejects_if_an_approval_is_invalid.quorum.key".into();
+		let manifest_file: PathWrapper =
+			"./provisions_rejects_if_an_approval_is_invalid.manifest".into();
+
+		let Setup {
+			quorum_pair,
+			eph_pair,
+			threshold,
+			mut state,
+			mut approvals,
+		} = setup(*eph_file, *quorum_file, *manifest_file);
+
+		let quorum_key = quorum_pair.private_key_to_der().unwrap();
+		let mut encrypted_shares: Vec<_> =
+			shares_generate(&quorum_key, 4, threshold as usize)
+				.iter()
+				.map(|shard| eph_pair.envelope_encrypt(shard).unwrap())
+				.collect();
+
+		let share = encrypted_shares.remove(0);
+		let mut approval = approvals.remove(0);
+		approval.signature =
+			b"ffffffffffffffffffffffffffffffffffffffffffffff".to_vec();
+		assert_eq!(
+			provision(&share, approval, &mut state).unwrap_err(),
+			ProtocolError::CouldNotVerifyApproval
+		);
+		assert!(!Path::new(*quorum_file).exists());
+		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 	}
 
 	#[test]
 	fn provision_rejects_if_approval_is_not_from_share_set_member() {
-		todo!()
+		let eph_file: PathWrapper =
+			"./provision_rejects_if_approval_is_not_from_share_set_member.eph.key".into();
+		let quorum_file: PathWrapper =
+			"./provision_rejects_if_approval_is_not_from_share_set_member.quorum.key".into();
+		let manifest_file: PathWrapper =
+			"./provision_rejects_if_approval_is_not_from_share_set_member.manifest".into();
+
+		let Setup {
+			quorum_pair,
+			eph_pair,
+			threshold,
+			mut state,
+			mut approvals,
+		} = setup(*eph_file, *quorum_file, *manifest_file);
+
+		let quorum_key = quorum_pair.private_key_to_der().unwrap();
+		let mut encrypted_shares: Vec<_> =
+			shares_generate(&quorum_key, 4, threshold as usize)
+				.iter()
+				.map(|shard| eph_pair.envelope_encrypt(shard).unwrap())
+				.collect();
+
+		let manifest = state.handles.get_manifest_envelope().unwrap().manifest;
+		let mut approval = approvals.remove(0);
+		let pair = RsaPair::generate().unwrap();
+
+		// Change the member so that are not recognized as part of the set
+		approval.member.pub_key = pair.public_key_to_der().unwrap();
+		approval.signature = pair.sign_sha256(&manifest.qos_hash()).unwrap();
+
+		let share = encrypted_shares.remove(0);
+		assert_eq!(
+			provision(&share, approval, &mut state).unwrap_err(),
+			ProtocolError::NotShareSetMember
+		);
+		assert!(!Path::new(*quorum_file).exists());
+		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 	}
 }

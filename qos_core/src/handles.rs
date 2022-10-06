@@ -163,6 +163,36 @@ impl Handles {
 		)
 	}
 
+	/// Put the Manifest, overwriting it if it already exists.
+	///
+	/// **Warning**: This should not be used after pivoting. It is only meant to
+	/// be used when updating the manifest envelope while provisioning.
+	pub(crate) fn mutate_manifest_envelope<
+		F: FnOnce(ManifestEnvelope) -> ManifestEnvelope,
+	>(
+		&self,
+		mutate: F,
+	) -> Result<(), ProtocolError> {
+		let manifest_envelope = self.get_manifest_envelope()?;
+
+		let manifest_envelope = mutate(manifest_envelope);
+
+		// Temporarily set permissions so we can write the manifest envelope
+		fs::set_permissions(
+			&self.manifest,
+			std::fs::Permissions::from_mode(0o666),
+		)?;
+		dbg!(fs::write(&self.manifest, &manifest_envelope.try_to_vec()?))
+			.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?;
+
+		fs::set_permissions(
+			&self.manifest,
+			std::fs::Permissions::from_mode(0o444),
+		)?;
+
+		Ok(())
+	}
+
 	/// Returns true if the Manifest file exists.
 	#[must_use]
 	pub fn manifest_envelope_exists(&self) -> bool {
