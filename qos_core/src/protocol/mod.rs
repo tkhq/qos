@@ -109,8 +109,10 @@ pub enum ProtocolError {
 	BadShareSetApprovals,
 	/// Could not verify a message against an approval
 	CouldNotVerifyApproval,
-	/// Not a member of the `ShareSet`.
+	/// Not a member of the [`ShareSet`].
 	NotShareSetMember,
+	/// Not a member of the [`ManifestSet`].
+	NotManifestSetMember,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {

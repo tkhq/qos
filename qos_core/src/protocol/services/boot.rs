@@ -214,7 +214,10 @@ impl ManifestEnvelope {
 					approval.clone(),
 				));
 			}
-			// TODO: check that the member belongs to the manifest set
+
+			if !self.manifest.manifest_set.members.contains(&approval.member) {
+				return Err(ProtocolError::NotManifestSetMember);
+			}
 		}
 
 		if self.manifest_set_approvals.len()
@@ -532,7 +535,67 @@ mod test {
 		assert!(!Path::new(&*ephemeral_file).exists());
 		assert!(!Path::new(&*manifest_file).exists());
 
-		assert!(handles.get_manifest_envelope().is_err());
+		assert_eq!(
+			protocol_state.phase,
+			ProtocolPhase::WaitingForBootInstruction
+		);
+	}
+
+	#[test]
+	fn boot_standard_rejects_approval_from_non_manifest_set_member() {
+		let (manifest, members, pivot) = get_manifest();
+
+		let manifest_envelope = {
+			let manifest_hash = manifest.qos_hash();
+			let mut approvals: Vec<_> = members
+				.into_iter()
+				.map(|(pair, member)| Approval {
+					signature: pair.sign_sha256(&manifest_hash).unwrap(),
+					member,
+				})
+				.collect();
+
+			// Change a member so that are not recognized as part of the manifest set.
+			let mut approval = approvals.get_mut(0).unwrap();
+			let pair = RsaPair::generate().unwrap();
+			approval.member.pub_key = pair.public_key_to_der().unwrap();
+			approval.signature = pair.sign_sha256(&manifest.qos_hash()).unwrap();
+
+			ManifestEnvelope {
+				manifest,
+				manifest_set_approvals: approvals.clone(),
+				share_set_approvals: vec![],
+			}
+		};
+
+		let pivot_file: PathWrapper =
+			"boot_standard_rejects_approval_from_non_manifest_set_member.pivot".into();
+		let ephemeral_file: PathWrapper =
+			"boot_standard_rejects_approval_from_non_manifest_set_member.secret".into();
+		let manifest_file: PathWrapper =
+			"boot_standard_rejects_approval_from_non_manifest_set_member.manifest".into();
+
+		let handles = Handles::new(
+			(*ephemeral_file.deref()).to_string(),
+			"quorum_key".to_string(),
+			(*manifest_file.deref()).to_string(),
+			(*pivot_file.deref()).to_string(),
+		);
+		let mut protocol_state = ProtocolState::new(
+			Box::new(MockNsm),
+			handles.clone(),
+			SocketAddress::new_unix("./never.sock"),
+		);
+
+		let error =
+			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
+				.unwrap_err();
+
+		assert_eq!(error, ProtocolError::NotManifestSetMember);
+
+		assert!(!Path::new(&*pivot_file).exists());
+		assert!(!Path::new(&*ephemeral_file).exists());
+		assert!(!Path::new(&*manifest_file).exists());
 
 		assert_eq!(
 			protocol_state.phase,
