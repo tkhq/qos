@@ -293,7 +293,8 @@
 //! share set members can independently verify the attestation document and post
 //! their shares. In order to only ever re-encrypt the share on an airgapped
 //! device this is split up into 3 steps: 1) fetch attestation doc, 2) verify
-//! attestation doc and re-encrypt key on airgapped device, 3) post re-encrypted share.
+//! attestation doc and re-encrypt key on airgapped device, 3) post re-encrypted
+//! share.
 //!
 //! 1) Run [`Command::GetAttestationDoc`] on Bob's production machine:
 //!
