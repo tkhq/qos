@@ -521,7 +521,7 @@ mod test {
 		);
 		let mut protocol_state = ProtocolState::new(
 			Box::new(MockNsm),
-			handles.clone(),
+			handles,
 			SocketAddress::new_unix("./never.sock"),
 		);
 
@@ -555,11 +555,13 @@ mod test {
 				})
 				.collect();
 
-			// Change a member so that are not recognized as part of the manifest set.
+			// Change a member so that are not recognized as part of the
+			// manifest set.
 			let mut approval = approvals.get_mut(0).unwrap();
 			let pair = RsaPair::generate().unwrap();
 			approval.member.pub_key = pair.public_key_to_der().unwrap();
-			approval.signature = pair.sign_sha256(&manifest.qos_hash()).unwrap();
+			approval.signature =
+				pair.sign_sha256(&manifest.qos_hash()).unwrap();
 
 			ManifestEnvelope {
 				manifest,
@@ -569,7 +571,8 @@ mod test {
 		};
 
 		let pivot_file: PathWrapper =
-			"boot_standard_rejects_approval_from_non_manifest_set_member.pivot".into();
+			"boot_standard_rejects_approval_from_non_manifest_set_member.pivot"
+				.into();
 		let ephemeral_file: PathWrapper =
 			"boot_standard_rejects_approval_from_non_manifest_set_member.secret".into();
 		let manifest_file: PathWrapper =
@@ -583,7 +586,7 @@ mod test {
 		);
 		let mut protocol_state = ProtocolState::new(
 			Box::new(MockNsm),
-			handles.clone(),
+			handles,
 			SocketAddress::new_unix("./never.sock"),
 		);
 
