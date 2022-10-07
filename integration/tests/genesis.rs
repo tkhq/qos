@@ -24,14 +24,14 @@ async fn genesis_e2e() {
 
 	let namespace = "quit-coding-to-vape";
 	let attestation_doc_path =
-		format!("{}/attestation_doc.genesis", *genesis_dir);
-	let genesis_output_path = format!("{}/output.genesis", *genesis_dir);
+		format!("{}/genesis_attestation_doc", *genesis_dir);
+	let genesis_output_path = format!("{}/genesis_output", *genesis_dir);
 
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", *all_personal_dir, user);
 	let get_key_paths = |user: &str| {
 		(
-			format!("{}.{}.setup.key", user, namespace),
+			format!("{}.{}.setup.secret", user, namespace),
 			format!("{}.{}.setup.pub", user, namespace),
 		)
 	};
@@ -214,7 +214,7 @@ async fn genesis_e2e() {
 		let personal_pub = Path::new(&personal_dir(user))
 			.join(format!("{}.{}.personal.pub", user, namespace));
 		let personal_key = Path::new(&personal_dir(user))
-			.join(format!("{}.{}.personal.key", user, namespace));
+			.join(format!("{}.{}.personal.secret", user, namespace));
 		let share_path = Path::new(&personal_dir(user))
 			.join(format!("{}.{}.share", user, namespace));
 		// Read in the personal public and private key

@@ -25,20 +25,21 @@ use qos_crypto::{sha_256, RsaPair, RsaPub};
 
 use crate::request;
 
-const GENESIS_ATTESTATION_DOC_FILE: &str = "attestation_doc.genesis";
-const GENESIS_OUTPUT_FILE: &str = "output.genesis";
+const SECRET_EXT: &str = "secret";
+const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
+const GENESIS_OUTPUT_FILE: &str = "genesis_output";
 const SETUP_PUB_EXT: &str = "setup.pub";
-const SETUP_PRIV_EXT: &str = "setup.key";
+const SETUP_PRIV_EXT: &str = "setup.secret";
 const SHARE_EXT: &str = "share";
 const PERSONAL_KEY_PUB_EXT: &str = "personal.pub";
-const PERSONAL_KEY_PRIV_EXT: &str = "personal.key";
+const PERSONAL_KEY_PRIV_EXT: &str = "personal.secret";
 const MANIFEST_EXT: &str = "manifest";
 const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
-const STANDARD_ATTESTATION_DOC_FILE: &str = "attestation_doc.boot";
-const EPH_WRAPPED_SHARE: &str = "ephemeral_key_wrapped.share";
-const ATTESTATION_APPROVAL: &str = "attestation_approval";
-const SHARE_SET: &str = "SHARE_SET";
+const STANDARD_ATTESTATION_DOC_FILE: &str = "boot_attestation_doc";
+const EPH_WRAPPED_SHARE_FILE: &str = "ephemeral_key_wrapped.share";
+const ATTESTATION_APPROVAL_FILE: &str = "attestation_approval";
+const SHARE_SET_ALIAS: &str = "SHARE_SET_ALIAS";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -334,7 +335,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		.clone()
 		.into_iter()
 		.map(|mut m| {
-			m.alias = SHARE_SET.to_string();
+			m.alias = SHARE_SET_ALIAS.to_string();
 			m
 		})
 		.collect();
@@ -601,16 +602,17 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 			pub_key: personal_pair
 				.public_key_to_der()
 				.expect("Failed to get public key"),
-			alias: SHARE_SET.to_string(),
+			alias: SHARE_SET_ALIAS.to_string(),
 		},
 	}
 	.try_to_vec()
 	.expect("Could not serialize Approval");
 
-	let approval_path = attestation_dir.as_ref().join(ATTESTATION_APPROVAL);
+	let approval_path =
+		attestation_dir.as_ref().join(ATTESTATION_APPROVAL_FILE);
 	write_with_msg(&approval_path, &approval, "Share Set Approval");
 
-	let share_path = attestation_dir.as_ref().join(EPH_WRAPPED_SHARE);
+	let share_path = attestation_dir.as_ref().join(EPH_WRAPPED_SHARE_FILE);
 	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
 }
 
@@ -773,7 +775,7 @@ fn find_setup_key<P: AsRef<Path>>(personal_dir: P) -> (RsaPair, Vec<String>) {
 		.iter()
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != "key")
+			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT)
 				|| file_name
 					.get(file_name.len() - 2)
 					.map_or(true, |s| s.as_str() != "setup")
@@ -946,7 +948,7 @@ fn find_attestation_approval<P: AsRef<Path>>(dir: P) -> Approval {
 			(p, p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
 		})
 		.filter_map(|(path, file)| {
-			if file == ATTESTATION_APPROVAL {
+			if file == ATTESTATION_APPROVAL_FILE {
 				let manifest_envelope =
 					fs::read(path).expect("Failed to read manifest envelope");
 
@@ -973,7 +975,7 @@ fn find_personal_key<P: AsRef<Path>>(
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
 			// Only look at files with the personal.key extension
-			if file_name.last().map_or(true, |s| s.as_str() != "key")
+			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT)
 				|| file_name
 					.get(file_name.len() - 2)
 					.map_or(true, |s| s.as_str() != "personal")
@@ -983,7 +985,7 @@ fn find_personal_key<P: AsRef<Path>>(
 
 			Some((
 				RsaPair::from_pem_file(path)
-					.expect("Could not read PEM from personal.key"),
+					.expect("Could not read PEM from personal.secret"),
 				file_name,
 			))
 		})
@@ -992,7 +994,7 @@ fn find_personal_key<P: AsRef<Path>>(
 	assert_eq!(
 		p.len(),
 		1,
-		"Did not find exactly 1 personal key in the personal-dir"
+		"Did not find exactly 1 personal secret in the personal-dir"
 	);
 
 	p.remove(0)
