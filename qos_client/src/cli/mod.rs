@@ -290,30 +290,58 @@
 //! #### Post Quorum Shards
 //!
 //! Once the enclave has the pivot and manifest loaded with boot standard, K
-//! quorum members can independently verify the attestation document and post
-//! their quorum share using [`Command::PostShare`].
+//! share set members can independently verify the attestation document and post
+//! their shares. In order to only ever re-encrypt the share on an airgapped
+//! device this is split up into 3 steps: 1) fetch attestation doc, 2) verify
+//! attestation doc and re-encrypt key on airgapped device, 3) post re-encrypted share.
 //!
-//! For Bob to post his share he would need the following directory structure:
-//!
-//! - personal
-//!     - `bob.our_namespace.share`
-//!     - `bob.our_namespace.personal.key`
-//! - boot
-//!    - `our_namespace.0.manifest`
-//!    - `attestation_doc.boot`
-//!
-//! With the above directory structure, Bob can run:
+//! 1) Run [`Command::GetAttestationDoc`] on Bob's production machine:
 //!
 //! ```shell
-//! cargo run --bin qos_client boot-standard \
+//! cargo run --bin qos_client get-attestation-doc
 //!    --host-ip 127.0.0.1 \
 //!    --host-port 3000 \
-//!    --personal-dir ~/qos/our_namespace/personal \
-//!    --boot-dir ~/qos/our_namespace/boot
+//!    --attestation-dir ~/qos/our_namespace/attestation
 //! ```
 //!
-//! Once the Kth share is successfully posted, the enclave will automatically
-//! pivot to running the binary.
+//! After running the above, the attestation directory should be populated like:
+//!
+//! - attestation
+//!  - `boot_attestation_doc`
+//!  - `manifest_envelope`
+//!
+//! 2) Bob transfers the personal directory and attestation directory onto
+//! an airgapped machine. Bob then runs [`Command::ProxyReEncryptShare`]:
+//!
+//! ```shell
+//! cargo run --bin qos_client proxy-re-encrypt-share
+//!    --attestation-dir ~/qos/our_namespace/nonce_1/attestation \
+//!    --personal-dir  ~/qos/our_namespace/personal \
+//!    --manifest-hash 0xf0f0f0f0f0f0f0
+//! ```
+//!
+//! After running the above, the attestation directory should now have the
+//! attestation approval and ephemeral key encrypted share:
+//!
+//! - attestation
+//!  - `boot_attestation_doc`
+//!  - `manifest_envelope`
+//!  - `attestation_approval`
+//!  - `ephemeral_key_wrapped.share`
+//!
+//! 3) Bob then moves the ephemeral key encrypted share and attestation approval
+//! back to the attestation directory on his production machine and then runs
+//! [`Command::PostShare`]:
+//!
+//! ```shell
+//! cargo run --bin qos_client post-share
+//!    --host-ip 127.0.0.1 \
+//!    --host-port 3000 \
+//!    --attestation-dir ~/qos/our_namespace/attestation
+//! ```
+//!
+//! Once the Kth share is successfully posted by a share set member, the enclave
+//! will automatically pivot to running the binary.
 
 use std::env;
 
