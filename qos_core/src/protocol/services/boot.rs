@@ -88,8 +88,9 @@ pub struct PivotConfig {
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct QuorumMember {
-	/// A human readable alias to identify the member. Must be unique to the
-	/// Manifest Set.
+	/// A human readable alias to identify the member. The alias is not
+	/// cryptographically guaranteed and thus should not be trusted without
+	/// verification.
 	pub alias: String,
 	/// DER encoded RSA public key
 	pub pub_key: Vec<u8>,
