@@ -76,7 +76,7 @@ There are two typs of quorum sets:
 
 ##### Manifest Set
 
-The collection of members whom can approve a manifest.ma
+The collection of members whom can approve a manifest.
 
 ##### Share Set
 
