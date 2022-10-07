@@ -70,11 +70,15 @@ An asymmetric key used to uniquely authenticate and encrypt data. This key shoul
 
 An entity that is a member of the Manifest Set and holds a share of the Quorum Key.
 
-#### Manifest Set
+#### Quorum Sets
+
+There are two typs of quorum sets:
+
+##### Manifest Set
 
 The collection of members whom can approve a manifest.ma
 
-#### Share Set
+##### Share Set
 
 The collection of members whom each hold shares of the Quorum Key and thus provision an enclave by attesting and then posting their shares. When posting shares, these members will also provide a signature of the manifest. The signature is recorded in manifest envelope in order to leave an audit trail. This way, third parties can check which share set members actually participated in provisioning the quorum key
 
