@@ -24,47 +24,47 @@ jobs:
           components: rustfmt, clippy
 
       - name: Run cargo test
-        run: make test-all
+        run: make -C src test-all
 
-  rustfmt:
-    name: rustfmt
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
+  # rustfmt:
+  #   name: rustfmt
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout sources
+  #       uses: actions/checkout@v2
 
-      - name: Install nightly toolchain
-        uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-          components: rustfmt
+  #     - name: Install nightly toolchain
+  #       uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
+  #       with:
+  #         profile: minimal
+  #         toolchain: nightly
+  #         override: true
+  #         components: rustfmt
 
-      - name: Run cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+  #     - name: Run cargo fmt
+  #       uses: actions-rs/cargo@v1
+  #       with:
+  #         command: fmt
+  #         args: --all -- --check
 
-  clippy:
-    name: clippy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
+  # clippy:
+  #   name: clippy
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout sources
+  #       uses: actions/checkout@v2
 
-      - name: Install stable toolchain
-        id: toolchain
-        uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
-        with:
-          profile: minimal
-          toolchain: 1.61
-          override: true
-          components: clippy
+  #     - name: Install stable toolchain
+  #       id: toolchain
+  #       uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
+  #       with:
+  #         profile: minimal
+  #         toolchain: 1.61
+  #         override: true
+  #         components: clippy
 
-      - name: Run cargo clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-targets -- -D warnings
+  #     - name: Run cargo clippy
+  #       uses: actions-rs/cargo@v1
+  #       with:
+  #         command: clippy
+  #         args: --all-targets -- -D warnings
