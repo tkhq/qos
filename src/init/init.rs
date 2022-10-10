@@ -213,11 +213,15 @@ pub fn boot() {
 
 fn main() {
 	use qos_core::{
-		EPHEMERAL_KEY_FILE, QUORUM_FILE, MANIFEST_FILE, PIVOT_FILE, Nsm, SEC_APP_SOCK
+		EPHEMERAL_KEY_FILE, QUORUM_FILE, MANIFEST_FILE, PIVOT_FILE, SEC_APP_SOCK,
+		io::SocketAddress,
+		protocol::attestor::Nsm,
+		handles::Handles,
+		coordinator::Coordinator
 	};
 
 	boot();
-	info("EnclaveOS Booted".to_string());
+	info("QuorumOS Booted".to_string());
 
 	let handles = Handles::new(
 		EPHEMERAL_KEY_FILE,
@@ -225,7 +229,7 @@ fn main() {
 		MANIFEST_FILE,
 		PIVOT_FILE
 	);
-	coordinator::execute(
+	Coordinator::execute(
 		handles,
 		Box::new(Nsm),
 		// TODO port for host<>enclave
