@@ -212,30 +212,31 @@ pub fn boot() {
 }
 
 fn main() {
-	use qos_core::{
-		EPHEMERAL_KEY_FILE, QUORUM_FILE, MANIFEST_FILE, PIVOT_FILE, SEC_APP_SOCK,
-		io::SocketAddress,
-		protocol::attestor::Nsm,
-		handles::Handles,
-		coordinator::Coordinator
-	};
+	// use qos_core::{
+	// 	EPHEMERAL_KEY_FILE, QUORUM_FILE, MANIFEST_FILE, PIVOT_FILE, SEC_APP_SOCK,
+	// 	io::SocketAddress,
+	// 	protocol::attestor::Nsm,
+	// 	handles::Handles,
+	// 	coordinator::Coordinator
+	// };
+	// use qos_core;
 
 	boot();
 	info("QuorumOS Booted".to_string());
 
-	let handles = Handles::new(
-		EPHEMERAL_KEY_FILE,
-		QUORUM_FILE,
-		MANIFEST_FILE,
-		PIVOT_FILE
-	);
-	Coordinator::execute(
-		handles,
-		Box::new(Nsm),
-		// TODO port for host<>enclave
-		SocketAddress::new_vsock(16, 3),
-		SocketAddress::new_unix(SEC_APP_SOCK)
-	);
+	// let handles = Handles::new(
+	// 	EPHEMERAL_KEY_FILE.to_string(),
+	// 	QUORUM_FILE.to_string(),
+	// 	MANIFEST_FILE.to_string(),
+	// 	PIVOT_FILE.to_string(),
+	// );
+	// Coordinator::execute(
+	// 	&handles,
+	// 	Box::new(Nsm),
+	// 	// TODO port for host<>enclave
+	// 	SocketAddress::new_vsock(16, 3),
+	// 	SocketAddress::new_unix(SEC_APP_SOCK)
+	// );
 
 	reboot();
 }
