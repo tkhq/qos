@@ -212,7 +212,26 @@ pub fn boot() {
 }
 
 fn main() {
+	use qos_core::{
+		EPHEMERAL_KEY_FILE, QUORUM_FILE, MANIFEST_FILE, PIVOT_FILE, Nsm, SEC_APP_SOCK
+	};
+
 	boot();
 	info("EnclaveOS Booted".to_string());
+
+	let handles = Handles::new(
+		EPHEMERAL_KEY_FILE,
+		QUORUM_FILE,
+		MANIFEST_FILE,
+		PIVOT_FILE
+	);
+	coordinator::execute(
+		handles,
+		Box::new(Nsm),
+		// TODO port for host<>enclave
+		SocketAddress::new_vsock(16, 3),
+		SocketAddress::new_unix(SEC_APP_SOCK)
+	);
+
 	reboot();
 }
