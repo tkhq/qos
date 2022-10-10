@@ -2,3 +2,22 @@ out/*
 cache/*
 .*
 src/init/target
+.DS_Store
+.vscode
+target/
+
+*.sock
+*.key
+*.pivot
+*.secret
+*.configuration
+*.pub
+*.share
+
+# Mock data
+!integration/mock/boot-e2e/all-personal-dir/user1-dir/*
+!integration/mock/boot-e2e/all-personal-dir/user2-dir/*
+!integration/mock/boot-e2e/all-personal-dir/user3-dir/*
+!integration/mock/boot-e2e/genesis-dir/*
+
+local-enclave/ls
