@@ -1,4 +1,3 @@
-extern crate libc;
 use std::{
 	ffi::CString,
 	fs::File,
@@ -9,25 +8,27 @@ use std::{
 use libc::{c_int, c_ulong, c_void, MS_NODEV, MS_NOEXEC, MS_NOSUID};
 
 // Log errors to console
-pub fn error(message: String) {
+fn error(message: String) {
 	eprintln!("{} {}", boot_time(), message);
 }
 
 // Log info to console
-pub fn info(message: String) {
+fn info(message: String) {
 	println!("{} {}", boot_time(), message);
 }
 
-pub fn reboot() {
+fn reboot() {
 	use libc::{reboot, RB_AUTOBOOT};
+
 	unsafe {
 		reboot(RB_AUTOBOOT);
 	}
 }
 
 // Dmesg formatted seconds since boot
-pub fn boot_time() -> String {
+fn boot_time() -> String {
 	use libc::{clock_gettime, timespec, CLOCK_BOOTTIME};
+
 	let mut t = timespec { tv_sec: 0, tv_nsec: 0 };
 	unsafe {
 		clock_gettime(CLOCK_BOOTTIME, &mut t as *mut timespec);
@@ -36,7 +37,7 @@ pub fn boot_time() -> String {
 }
 
 // libc::mount casting/error wrapper
-pub fn mount(
+fn mount(
 	src: &str,
 	target: &str,
 	fstype: &str,
@@ -44,6 +45,7 @@ pub fn mount(
 	data: &str,
 ) {
 	use libc::mount;
+
 	let src_cs = CString::new(src).unwrap();
 	let fstype_cs = CString::new(fstype).unwrap();
 	let data_cs = CString::new(data).unwrap();
@@ -65,8 +67,9 @@ pub fn mount(
 }
 
 // libc::freopen casting/error wrapper
-pub fn freopen(filename: &str, mode: &str, file: c_int) {
+fn freopen(filename: &str, mode: &str, file: c_int) {
 	use libc::{fdopen, freopen};
+
 	let filename_cs = CString::new(filename).unwrap();
 	let mode_cs = CString::new(mode).unwrap();
 	if unsafe {
@@ -83,8 +86,9 @@ pub fn freopen(filename: &str, mode: &str, file: c_int) {
 }
 
 // Insert kernel module into memory
-pub fn insmod(path: &str) {
+fn insmod(path: &str) {
 	use libc::{syscall, SYS_finit_module};
+
 	let file = File::open(path).unwrap();
 	let fd = file.as_raw_fd();
 	if unsafe { syscall(SYS_finit_module, fd, &[0u8; 1], 0) } < 0 {
@@ -95,11 +99,12 @@ pub fn insmod(path: &str) {
 }
 
 // Signal to Nitro hypervisor that booting was successful
-pub fn nitro_heartbeat() {
+fn nitro_heartbeat() {
 	use libc::{
 		close, connect, read, sockaddr, sockaddr_vm, socket, write, AF_VSOCK,
 		SOCK_STREAM,
 	};
+
 	let mut buf: [u8; 1] = [0; 1];
 	buf[0] = 0xB7; // AWS Nitro heartbeat value
 	unsafe {
@@ -107,6 +112,7 @@ pub fn nitro_heartbeat() {
 		sa.svm_family = AF_VSOCK as _;
 		sa.svm_port = 9000;
 		sa.svm_cid = 3;
+
 		let fd = socket(AF_VSOCK, SOCK_STREAM, 0);
 		connect(
 			fd,
@@ -117,11 +123,12 @@ pub fn nitro_heartbeat() {
 		read(fd, buf.as_ptr() as _, 1);
 		close(fd);
 	}
+
 	info(format!("Sent NSM heartbeat"));
 }
 
 // Get entropy sample from Nitro device
-pub fn nitro_get_entropy() -> [u8; 256] {
+fn nitro_get_entropy() -> [u8; 256] {
 	use nsm_api::api::ErrorCode;
 	use nsm_lib::{nsm_get_random, nsm_lib_init};
 
@@ -130,7 +137,7 @@ pub fn nitro_get_entropy() -> [u8; 256] {
 		error(format!("Failed to connect to NSM device"));
 	};
 
-	let mut dest: [u8; 256] = [0; 256];
+	let mut dest = [0u8; 256];
 	let mut dest_len = dest.len();
 
 	let status =
@@ -147,14 +154,14 @@ pub fn nitro_get_entropy() -> [u8; 256] {
 	}
 }
 
-pub fn init_nitro() {
+fn init_nitro() {
 	nitro_heartbeat();
 	insmod("/nsm.ko");
 	nitro_get_entropy();
 }
 
 // Initialize console with stdin/stdout/stderr
-pub fn init_console() {
+fn init_console() {
 	freopen("/dev/console", "r", 0);
 	freopen("/dev/console", "w", 1);
 	freopen("/dev/console", "w", 2);
