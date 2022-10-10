@@ -7,10 +7,17 @@ CACHE_DIR := cache
 CONFIG_DIR := config
 SRC_DIR := src
 USER := $(shell id -g):$(shell id -g)
-CPUS := $(shell nproc)
 ARCH := x86_64
 TARGET_NAME := bzImage
 , := ,
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+	TOTAL_CPUS := $(shell sysctl -n hw.logicalcpu)
+	CPUS := $(shell echo "$(TOTAL_CPUS) - 2" | bc)
+endif
+ifeq ($(UNAME_S),Linux)
+	CPUS := $(shell nproc)
+endif
 
 include $(PWD)/config/global.env
 
@@ -193,6 +200,7 @@ $(OUT_DIR)/toolchain.tar:
 		--build-arg CARGO_REF=$(CARGO_REF) \
 		--build-arg CONFIG_DIR=$(CONFIG_DIR) \
 		--build-arg SCRIPTS_DIR=$(SRC_DIR)/toolchain/scripts \
+		--platform=linux/$(ARCH) \
 		-f $(SRC_DIR)/toolchain/Dockerfile \
 		.
 	docker save "local/$(NAME)-build" -o "$@"
@@ -210,6 +218,7 @@ define toolchain
 		--volume $(PWD)/$(KEY_DIR):/keys \
 		--volume $(PWD)/$(OUT_DIR):/out \
 		--volume $(PWD)/$(SRC_DIR):/src \
+		--cpus $(CPUS) \
 		--env GNUPGHOME=/cache/.gnupg \
 		--env ARCH=$(ARCH) \
 		--env KBUILD_BUILD_USER=$(KBUILD_BUILD_USER) \
@@ -255,7 +264,7 @@ $(OUT_DIR)/init:
 		RUSTFLAGS='-C target-feature=+crt-static' cargo build \
 			--target x86_64-unknown-linux-gnu \
 			--release && \
-		cp /src/init/target/release/init /out/init \
+		cp /src/init/target/x86_64-unknown-linux-gnu/release/init /out/init \
 	")
 
 
