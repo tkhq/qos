@@ -3,7 +3,7 @@
 use crate::protocol::{
 	attestor::types::{NsmRequest, NsmResponse},
 	services::{
-		boot::ManifestEnvelope,
+		boot::{Approval, ManifestEnvelope},
 		genesis::{GenesisOutput, GenesisSet},
 	},
 	ProtocolError,
@@ -46,7 +46,7 @@ pub enum ProtocolMsg {
 
 	/// Execute Genesis Boot.
 	BootGenesisRequest {
-		/// Parameters for creating a Quorum Set
+		/// Parameters for creating a Manifest Set
 		set: GenesisSet,
 	},
 	/// Response for Genesis Boot.
@@ -61,6 +61,8 @@ pub enum ProtocolMsg {
 	ProvisionRequest {
 		/// Quorum Key share encrypted to the Ephemeral Key.
 		share: Vec<u8>,
+		/// Approval of the manifest from a member of the share set.
+		approval: Approval,
 	},
 	/// Response to a Provision Request
 	ProvisionResponse {
@@ -90,7 +92,7 @@ pub enum ProtocolMsg {
 		/// COSE SIGN1 structure with Attestation Doc
 		nsm_response: NsmResponse,
 		/// Manifest Envelope, if it exists, otherwise None.
-		manifest_envelope: Option<ManifestEnvelope>,
+		manifest_envelope: Option<Box<ManifestEnvelope>>,
 	},
 }
 

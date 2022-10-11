@@ -71,8 +71,6 @@ pub enum AppMsg {
 	ReadQOSFilesReq,
 	/// Successful response to [`Self::ReadQOSFilesReq`].
 	ReadQOSFilesResp {
-		/// PEM encoded ephemeral key.
-		ephemeral_key: Vec<u8>,
 		/// PEM encoded quorum key.
 		quorum_key: Vec<u8>,
 		/// Borsh encoded manifest envelope.
@@ -117,13 +115,11 @@ impl RequestProcessor for AppProcessor {
 		let response = match ok!(AppMsg::try_from_slice(&request)) {
 			AppMsg::EchoReq { data } => AppMsg::EchoResp { data },
 			AppMsg::ReadQOSFilesReq => {
-				let ephemeral_pair = ok!(self.handles.get_ephemeral_key());
 				let quorum_pair = ok!(self.handles.get_quorum_key());
 				let manifest_envelope =
 					ok!(self.handles.get_manifest_envelope());
 
 				AppMsg::ReadQOSFilesResp {
-					ephemeral_key: ok!(ephemeral_pair.public_key_pem()),
 					quorum_key: ok!(quorum_pair.public_key_pem()),
 					manifest_envelope: Box::new(manifest_envelope),
 				}

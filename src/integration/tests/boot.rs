@@ -9,8 +9,8 @@ use qos_core::protocol::{
 	},
 	services::{
 		boot::{
-			Approval, Manifest, Namespace, NitroConfig, PivotConfig,
-			QuorumMember, QuorumSet, RestartPolicy,
+			Approval, Manifest, ManifestSet, Namespace, NitroConfig,
+			PivotConfig, QuorumMember, RestartPolicy, ShareSet,
 		},
 		genesis::GenesisOutput,
 	},
@@ -42,8 +42,8 @@ async fn boot_e2e() {
 
 	let namespace = "quit-coding-to-vape";
 
-	let attestation_doc_path = format!("{}/attestation_doc.boot", *boot_dir);
-	let genesis_output_path = format!("{}/output.genesis", genesis_dir);
+	let attestation_doc_path = format!("{}/boot_attestation_doc", *boot_dir);
+	let genesis_output_path = format!("{}/genesis_output", genesis_dir);
 
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", all_personal_dir, user);
@@ -101,7 +101,7 @@ async fn boot_e2e() {
 		GenesisOutput::try_from_slice(&fs::read(&genesis_output_path).unwrap())
 			.unwrap();
 
-	let mut quorum_set_members: Vec<_> = genesis_output
+	let mut manifest_set_members: Vec<_> = genesis_output
 		.member_outputs
 		.iter()
 		.map(|m| QuorumMember {
@@ -109,7 +109,16 @@ async fn boot_e2e() {
 			pub_key: m.public_personal_key.clone(),
 		})
 		.collect();
-	quorum_set_members.sort();
+	manifest_set_members.sort();
+
+	let share_set_members = manifest_set_members
+		.clone()
+		.into_iter()
+		.map(|mut m| {
+			m.alias = "SHARE_SET_ALIAS".to_string();
+			m
+		})
+		.collect();
 
 	assert_eq!(
 		manifest,
@@ -121,9 +130,13 @@ async fn boot_e2e() {
 				args: vec!["--msg".to_string(), msg.to_string()]
 			},
 			quorum_key: genesis_output.quorum_key.clone(),
-			quorum_set: QuorumSet {
+			manifest_set: ManifestSet {
 				threshold: genesis_output.threshold,
-				members: quorum_set_members
+				members: manifest_set_members
+			},
+			share_set: ShareSet {
+				threshold: genesis_output.threshold,
+				members: share_set_members
 			},
 			enclave: NitroConfig {
 				pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),
@@ -162,7 +175,7 @@ async fn boot_e2e() {
 			Approval::try_from_slice(&fs::read(approval_path).unwrap())
 				.unwrap();
 		let personal_pair = RsaPair::from_pem_file(&format!(
-			"{}/{}.{}.personal.key",
+			"{}/{}.{}.personal.secret",
 			personal_dir(alias),
 			alias,
 			namespace

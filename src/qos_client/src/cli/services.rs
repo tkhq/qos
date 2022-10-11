@@ -14,8 +14,8 @@ use qos_core::protocol::{
 	msg::ProtocolMsg,
 	services::{
 		boot::{
-			Approval, Manifest, ManifestEnvelope, Namespace, NitroConfig,
-			PivotConfig, QuorumMember, QuorumSet, RestartPolicy,
+			Approval, Manifest, ManifestEnvelope, ManifestSet, Namespace,
+			NitroConfig, PivotConfig, QuorumMember, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisOutput, GenesisSet, SetupMember},
 	},
@@ -25,18 +25,21 @@ use qos_crypto::{sha_256, RsaPair, RsaPub};
 
 use crate::request;
 
-const GENESIS_ATTESTATION_DOC_FILE: &str = "attestation_doc.genesis";
-const GENESIS_OUTPUT_FILE: &str = "output.genesis";
+const SECRET_EXT: &str = "secret";
+const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
+const GENESIS_OUTPUT_FILE: &str = "genesis_output";
 const SETUP_PUB_EXT: &str = "setup.pub";
-const SETUP_PRIV_EXT: &str = "setup.key";
+const SETUP_PRIV_EXT: &str = "setup.secret";
 const SHARE_EXT: &str = "share";
 const PERSONAL_KEY_PUB_EXT: &str = "personal.pub";
-const PERSONAL_KEY_PRIV_EXT: &str = "personal.key";
+const PERSONAL_KEY_PRIV_EXT: &str = "personal.secret";
 const MANIFEST_EXT: &str = "manifest";
 const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
-const STANDARD_ATTESTATION_DOC_FILE: &str = "attestation_doc.boot";
-const EPH_WRAPPED_SHARE: &str = "ephemeral_key_wrapped.share";
+const STANDARD_ATTESTATION_DOC_FILE: &str = "boot_attestation_doc";
+const EPH_WRAPPED_SHARE_FILE: &str = "ephemeral_key_wrapped.share";
+const ATTESTATION_APPROVAL_FILE: &str = "attestation_approval";
+const SHARE_SET_ALIAS: &str = "SHARE_SET_ALIAS";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -139,7 +142,7 @@ fn create_genesis_set<P: AsRef<Path>>(
 			let mut n = split_file_name(path);
 
 			// TODO: do we want to dissallow having anything in this folder
-			// that is not a public key for the quorum set?
+			// that is not a public key for the manifest set?
 			if n.last().map_or(true, |s| s.as_str() != "pub")
 				|| n.get(n.len() - 2).map_or(true, |s| s.as_str() != "setup")
 			{
@@ -325,10 +328,17 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 			pub_key: m.public_personal_key.clone(),
 		})
 		.collect();
-	// We want to try and build the same manifest regardless of the OS. This
-	// isn't necessarily important for production, but it helps make sure
-	// our test suite will always work.
+	// We want to try and build the same manifest regardless of the OS.
 	members.sort();
+
+	let share_set_members = members
+		.clone()
+		.into_iter()
+		.map(|mut m| {
+			m.alias = SHARE_SET_ALIAS.to_string();
+			m
+		})
+		.collect();
 
 	let manifest = Manifest {
 		namespace: Namespace { name: namespace.clone(), nonce },
@@ -338,7 +348,16 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 			args: pivot_args,
 		},
 		quorum_key: genesis_output.quorum_key,
-		quorum_set: QuorumSet { threshold: genesis_output.threshold, members },
+		// TODO: the members of the manifest set should not be from the genesis
+		// output, instead should be from some other directory of keys
+		manifest_set: ManifestSet {
+			threshold: genesis_output.threshold,
+			members: members.clone(),
+		},
+		share_set: ShareSet {
+			threshold: genesis_output.threshold,
+			members: share_set_members,
+		},
 		enclave: NitroConfig { pcr0, pcr1, pcr2, aws_root_certificate },
 	};
 
@@ -421,8 +440,11 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	);
 
 	// Create manifest envelope
-	let manifest_envelope =
-		Box::new(ManifestEnvelope { manifest: manifest.clone(), approvals });
+	let manifest_envelope = Box::new(ManifestEnvelope {
+		manifest: manifest.clone(),
+		manifest_set_approvals: approvals,
+		share_set_approvals: vec![],
+	});
 
 	let req = ProtocolMsg::BootStandardRequest { manifest_envelope, pivot };
 	// Broadcast boot standard instruction and extract the attestation doc from
@@ -572,15 +594,34 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 			.expect("Envelope encryption error")
 	};
 
-	let share_path = attestation_dir.as_ref().join(EPH_WRAPPED_SHARE);
+	let approval = Approval {
+		signature: personal_pair
+			.sign_sha256(&manifest_envelope.manifest.qos_hash())
+			.expect("Failed to sign"),
+		member: QuorumMember {
+			pub_key: personal_pair
+				.public_key_to_der()
+				.expect("Failed to get public key"),
+			alias: SHARE_SET_ALIAS.to_string(),
+		},
+	}
+	.try_to_vec()
+	.expect("Could not serialize Approval");
+
+	let approval_path =
+		attestation_dir.as_ref().join(ATTESTATION_APPROVAL_FILE);
+	write_with_msg(&approval_path, &approval, "Share Set Approval");
+
+	let share_path = attestation_dir.as_ref().join(EPH_WRAPPED_SHARE_FILE);
 	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
 }
 
 pub(crate) fn post_share<P: AsRef<Path>>(uri: &str, attestation_dir: P) {
 	// Get the ephemeral key wrapped share
 	let share = find_share(&attestation_dir);
+	let approval = find_attestation_approval(&attestation_dir);
 
-	let req = ProtocolMsg::ProvisionRequest { share };
+	let req = ProtocolMsg::ProvisionRequest { share, approval };
 	let is_reconstructed = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::ProvisionResponse { reconstructed } => reconstructed,
 		r => panic!("Unexpected response: {:?}", r),
@@ -627,7 +668,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	let pivot = fs::read(&pivot_path).expect("Failed to ready pivot binary.");
 
 	let mock_pcr = vec![0; 48];
-	// Create a manifest with quorum set of 1 - everything hardcoded expect
+	// Create a manifest with manifest set of 1 - everything hardcoded expect
 	// pivot config
 	let manifest = Manifest {
 		namespace: Namespace {
@@ -642,7 +683,12 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		},
 		pivot: PivotConfig { hash: sha_256(&pivot), restart, args },
 		quorum_key: quorum_public_der,
-		quorum_set: QuorumSet {
+		manifest_set: ManifestSet {
+			threshold: 1,
+			// The only member is the quorum member
+			members: vec![member.clone()],
+		},
+		share_set: ShareSet {
 			threshold: 1,
 			// The only member is the quorum member
 			members: vec![member.clone()],
@@ -656,11 +702,15 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			.expect("Failed to sign");
 		Box::new(ManifestEnvelope {
 			manifest,
-			approvals: vec![Approval { signature, member }],
+			manifest_set_approvals: vec![Approval { signature, member }],
+			share_set_approvals: vec![],
 		})
 	};
 
-	let req = ProtocolMsg::BootStandardRequest { manifest_envelope, pivot };
+	let req = ProtocolMsg::BootStandardRequest {
+		manifest_envelope: manifest_envelope.clone(),
+		pivot,
+	};
 	let attestation_doc = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::BootStandardResponse {
 			nsm_response: NsmResponse::Attestation { document },
@@ -682,11 +732,25 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		.expect("Ephemeral key not valid public key")
 	};
 
+	// Create ShareSet approval
+	let approval = Approval {
+		signature: quorum_pair
+			.sign_sha256(&manifest_envelope.manifest.qos_hash())
+			.expect("Failed to sign"),
+		member: QuorumMember {
+			pub_key: quorum_pair
+				.public_key_to_der()
+				.expect("Failed to get public key"),
+			alias: DANGEROUS_DEV_BOOT_MEMBER.to_string(),
+		},
+	};
+
 	// Post the share
 	let req = ProtocolMsg::ProvisionRequest {
 		share: eph_pub
 			.envelope_encrypt(&share)
 			.expect("Failed to encrypt share to eph key."),
+		approval,
 	};
 	match request::post(uri, &req).unwrap() {
 		ProtocolMsg::ProvisionResponse { reconstructed } => {
@@ -711,7 +775,7 @@ fn find_setup_key<P: AsRef<Path>>(personal_dir: P) -> (RsaPair, Vec<String>) {
 		.iter()
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != "key")
+			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT)
 				|| file_name
 					.get(file_name.len() - 2)
 					.map_or(true, |s| s.as_str() != "setup")
@@ -779,8 +843,8 @@ fn find_approvals<P: AsRef<Path>>(
 			.expect("Failed to deserialize approval");
 
 			assert!(
-				manifest.quorum_set.members.contains(&approval.member),
-				"Found approval from member ({:?}) not included in the Quorum Set", approval.member.alias
+				manifest.manifest_set.members.contains(&approval.member),
+				"Found approval from member ({:?}) not included in the Manifest Set", approval.member.alias
 			);
 
 			let pub_key = RsaPub::from_der(&approval.member.pub_key)
@@ -795,7 +859,7 @@ fn find_approvals<P: AsRef<Path>>(
 			Some(approval)
 		})
 		.collect();
-	assert!(approvals.len() >= manifest.quorum_set.threshold as usize);
+	assert!(approvals.len() >= manifest.manifest_set.threshold as usize);
 
 	approvals
 }
@@ -877,6 +941,32 @@ fn find_manifest_envelope<P: AsRef<Path>>(dir: P) -> ManifestEnvelope {
 	a.remove(0)
 }
 
+fn find_attestation_approval<P: AsRef<Path>>(dir: P) -> Approval {
+	let mut a: Vec<_> = find_file_paths(&dir)
+		.iter()
+		.map(|p| {
+			(p, p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
+		})
+		.filter_map(|(path, file)| {
+			if file == ATTESTATION_APPROVAL_FILE {
+				let manifest_envelope =
+					fs::read(path).expect("Failed to read manifest envelope");
+
+				Some(
+					Approval::try_from_slice(&manifest_envelope)
+						.expect("Could not decode manifest envelope"),
+				)
+			} else {
+				None
+			}
+		})
+		.collect();
+
+	assert_eq!(a.len(), 1, "Not exactly one manifest envelope in directory");
+
+	a.remove(0)
+}
+
 fn find_personal_key<P: AsRef<Path>>(
 	personal_dir: P,
 ) -> (RsaPair, Vec<String>) {
@@ -885,7 +975,7 @@ fn find_personal_key<P: AsRef<Path>>(
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
 			// Only look at files with the personal.key extension
-			if file_name.last().map_or(true, |s| s.as_str() != "key")
+			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT)
 				|| file_name
 					.get(file_name.len() - 2)
 					.map_or(true, |s| s.as_str() != "personal")
@@ -895,7 +985,7 @@ fn find_personal_key<P: AsRef<Path>>(
 
 			Some((
 				RsaPair::from_pem_file(path)
-					.expect("Could not read PEM from personal.key"),
+					.expect("Could not read PEM from personal.secret"),
 				file_name,
 			))
 		})
@@ -904,7 +994,7 @@ fn find_personal_key<P: AsRef<Path>>(
 	assert_eq!(
 		p.len(),
 		1,
-		"Did not find exactly 1 personal key in the personal-dir"
+		"Did not find exactly 1 personal secret in the personal-dir"
 	);
 
 	p.remove(0)

@@ -88,19 +88,33 @@ pub struct PivotConfig {
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct QuorumMember {
-	/// A human readable alias to identify the member. Must be unique to the
-	/// Quorum Set.
+	/// A human readable alias to identify the member. The alias is not
+	/// cryptographically guaranteed and thus should not be trusted without
+	/// verification.
 	pub alias: String,
 	/// DER encoded RSA public key
 	pub pub_key: Vec<u8>,
 }
 
-/// The Quorum Set.
+/// The Manifest Set.
 #[derive(
 	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct QuorumSet {
+pub struct ManifestSet {
+	/// The threshold, K, of signatures necessary to have  quorum.
+	pub threshold: u32,
+	/// Members composing the set. The length of this, N, must be gte to the
+	/// `threshold`, K.
+	pub members: Vec<QuorumMember>,
+}
+
+/// The set of share keys that can post shares.
+#[derive(
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
+pub struct ShareSet {
 	/// The threshold, K, of signatures necessary to have  quorum.
 	pub threshold: u32,
 	/// Members composing the set. The length of this, N, must be gte to the
@@ -136,8 +150,10 @@ pub struct Manifest {
 	pub pivot: PivotConfig,
 	/// Quorum Key as a DER encoded RSA public key.
 	pub quorum_key: Vec<u8>,
-	/// Quorum Set members and threshold.
-	pub quorum_set: QuorumSet,
+	/// Manifest Set members and threshold.
+	pub manifest_set: ManifestSet,
+	/// Share Set members and threshold
+	pub share_set: ShareSet,
 	/// Configuration and verifiable values for the enclave hardware.
 	pub enclave: NitroConfig,
 }
@@ -154,6 +170,19 @@ pub struct Approval {
 	pub member: QuorumMember,
 }
 
+impl Approval {
+	/// Verify that the approval is a valid a signature for the given `msg`.
+	pub(crate) fn verify(&self, msg: &[u8]) -> Result<(), ProtocolError> {
+		let pub_key = RsaPub::from_der(&self.member.pub_key)?;
+
+		if pub_key.verify_sha256(&self.signature, msg)? {
+			Ok(())
+		} else {
+			Err(ProtocolError::CouldNotVerifyApproval)
+		}
+	}
+}
+
 /// [`Manifest`] with accompanying [`Approval`]s.
 #[derive(
 	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
@@ -162,14 +191,18 @@ pub struct Approval {
 pub struct ManifestEnvelope {
 	/// Encapsulated manifest.
 	pub manifest: Manifest,
-	/// Approvals for [`Self::manifest`].
-	pub approvals: Vec<Approval>,
+	/// Approvals for [`Self::manifest`] from the manifest set.
+	pub manifest_set_approvals: Vec<Approval>,
+	///  Approvals for [`Self::manifest`] from the share set. This is primarily
+	/// used to audit what share holders provisioned the quorum key.
+	pub share_set_approvals: Vec<Approval>,
 }
 
 impl ManifestEnvelope {
-	/// Check if the encapsulated manifest has K valid approvals.
+	/// Check if the encapsulated manifest has K valid approvals from the
+	/// manifest approval set.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
-		for approval in &self.approvals {
+		for approval in &self.manifest_set_approvals {
 			let pub_key = RsaPub::from_der(&approval.member.pub_key)
 				.map_err(|_| ProtocolError::CryptoError)?;
 
@@ -181,9 +214,15 @@ impl ManifestEnvelope {
 					approval.clone(),
 				));
 			}
+
+			if !self.manifest.manifest_set.members.contains(&approval.member) {
+				return Err(ProtocolError::NotManifestSetMember);
+			}
 		}
 
-		if self.approvals.len() < self.manifest.quorum_set.threshold as usize {
+		if self.manifest_set_approvals.len()
+			< self.manifest.manifest_set.threshold as usize
+		{
 			return Err(ProtocolError::NotEnoughApprovals);
 		}
 
@@ -197,12 +236,16 @@ pub(in crate::protocol) fn boot_standard(
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	manifest_envelope.check_approvals()?;
-	let ephemeral_key = RsaPair::generate()?;
-	state.handles.put_ephemeral_key(&ephemeral_key)?;
-
+	if !manifest_envelope.share_set_approvals.is_empty() {
+		return Err(ProtocolError::BadShareSetApprovals);
+	}
 	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
 		return Err(ProtocolError::InvalidPivotHash);
 	};
+
+	let ephemeral_key = RsaPair::generate()?;
+	state.handles.put_ephemeral_key(&ephemeral_key)?;
+
 	state.handles.put_pivot(pivot)?;
 
 	state.handles.put_manifest_envelope(manifest_envelope)?;
@@ -220,7 +263,9 @@ pub(in crate::protocol) fn boot_standard(
 
 #[cfg(test)]
 mod test {
-	use std::path::Path;
+	use std::{ops::Deref, path::Path};
+
+	use qos_test_primitives::PathWrapper;
 
 	use super::*;
 	use crate::{
@@ -270,7 +315,8 @@ mod test {
 				args: vec![],
 			},
 			quorum_key: quorum_pair.public_key_to_der().unwrap(),
-			quorum_set: QuorumSet { threshold: 2, members: quorum_members },
+			manifest_set: ManifestSet { threshold: 2, members: quorum_members },
+			share_set: ShareSet { threshold: 2, members: vec![] },
 		};
 
 		(manifest, member_with_keys, pivot)
@@ -299,7 +345,11 @@ mod test {
 				})
 				.collect();
 
-			ManifestEnvelope { manifest, approvals }
+			ManifestEnvelope {
+				manifest,
+				manifest_set_approvals: approvals,
+				share_set_approvals: vec![],
+			}
 		};
 
 		let pivot_file =
@@ -343,7 +393,7 @@ mod test {
 		let manifest_envelope = {
 			let manifest_hash = manifest.qos_hash();
 			let approvals = members
-				[0usize..manifest.quorum_set.threshold as usize - 1]
+				[0usize..manifest.manifest_set.threshold as usize - 1]
 				.iter()
 				.map(|(pair, member)| Approval {
 					signature: pair.sign_sha256(&manifest_hash).unwrap(),
@@ -351,7 +401,11 @@ mod test {
 				})
 				.collect();
 
-			ManifestEnvelope { manifest, approvals }
+			ManifestEnvelope {
+				manifest,
+				manifest_set_approvals: approvals,
+				share_set_approvals: vec![],
+			}
 		};
 
 		let pivot_file =
@@ -397,7 +451,11 @@ mod test {
 				})
 				.collect();
 
-			ManifestEnvelope { manifest, approvals }
+			ManifestEnvelope {
+				manifest,
+				manifest_set_approvals: approvals,
+				share_set_approvals: vec![],
+			}
 		};
 
 		let pivot_file =
@@ -425,5 +483,126 @@ mod test {
 		assert!(!handles.pivot_exists());
 		assert!(!Path::new(&ephemeral_file).exists());
 		assert!(nsm_resposne.is_err());
+	}
+
+	#[test]
+	fn boot_standard_rejects_manifest_envelope_with_share_set_approvals() {
+		let (manifest, members, pivot) = get_manifest();
+
+		let manifest_envelope = {
+			let manifest_hash = manifest.qos_hash();
+			let mut approvals: Vec<_> = members
+				.into_iter()
+				.map(|(pair, member)| Approval {
+					signature: pair.sign_sha256(&manifest_hash).unwrap(),
+					member,
+				})
+				.collect();
+
+			ManifestEnvelope {
+				manifest,
+				manifest_set_approvals: approvals.clone(),
+				share_set_approvals: vec![approvals.remove(0)],
+			}
+		};
+
+		let pivot_file: PathWrapper =
+			"boot_standard_rejects_manifest_envelope_with_share_set_approvals.pivot".into();
+		let ephemeral_file: PathWrapper =
+			"boot_standard_rejects_manifest_envelope_with_share_set_approvals_eph.secret".into();
+		let manifest_file: PathWrapper =
+			"boot_standard_rejects_manifest_envelope_with_share_set_approvals.manifest".into();
+
+		let handles = Handles::new(
+			(*ephemeral_file.deref()).to_string(),
+			"quorum_key".to_string(),
+			(*manifest_file.deref()).to_string(),
+			(*pivot_file.deref()).to_string(),
+		);
+		let mut protocol_state = ProtocolState::new(
+			Box::new(MockNsm),
+			handles,
+			SocketAddress::new_unix("./never.sock"),
+		);
+
+		let error =
+			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
+				.unwrap_err();
+
+		assert_eq!(error, ProtocolError::BadShareSetApprovals);
+
+		assert!(!Path::new(&*pivot_file).exists());
+		assert!(!Path::new(&*ephemeral_file).exists());
+		assert!(!Path::new(&*manifest_file).exists());
+
+		assert_eq!(
+			protocol_state.phase,
+			ProtocolPhase::WaitingForBootInstruction
+		);
+	}
+
+	#[test]
+	fn boot_standard_rejects_approval_from_non_manifest_set_member() {
+		let (manifest, members, pivot) = get_manifest();
+
+		let manifest_envelope = {
+			let manifest_hash = manifest.qos_hash();
+			let mut approvals: Vec<_> = members
+				.into_iter()
+				.map(|(pair, member)| Approval {
+					signature: pair.sign_sha256(&manifest_hash).unwrap(),
+					member,
+				})
+				.collect();
+
+			// Change a member so that are not recognized as part of the
+			// manifest set.
+			let mut approval = approvals.get_mut(0).unwrap();
+			let pair = RsaPair::generate().unwrap();
+			approval.member.pub_key = pair.public_key_to_der().unwrap();
+			approval.signature =
+				pair.sign_sha256(&manifest.qos_hash()).unwrap();
+
+			ManifestEnvelope {
+				manifest,
+				manifest_set_approvals: approvals.clone(),
+				share_set_approvals: vec![],
+			}
+		};
+
+		let pivot_file: PathWrapper =
+			"boot_standard_rejects_approval_from_non_manifest_set_member.pivot"
+				.into();
+		let ephemeral_file: PathWrapper =
+			"boot_standard_rejects_approval_from_non_manifest_set_member.secret".into();
+		let manifest_file: PathWrapper =
+			"boot_standard_rejects_approval_from_non_manifest_set_member.manifest".into();
+
+		let handles = Handles::new(
+			(*ephemeral_file.deref()).to_string(),
+			"quorum_key".to_string(),
+			(*manifest_file.deref()).to_string(),
+			(*pivot_file.deref()).to_string(),
+		);
+		let mut protocol_state = ProtocolState::new(
+			Box::new(MockNsm),
+			handles,
+			SocketAddress::new_unix("./never.sock"),
+		);
+
+		let error =
+			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
+				.unwrap_err();
+
+		assert_eq!(error, ProtocolError::NotManifestSetMember);
+
+		assert!(!Path::new(&*pivot_file).exists());
+		assert!(!Path::new(&*ephemeral_file).exists());
+		assert!(!Path::new(&*manifest_file).exists());
+
+		assert_eq!(
+			protocol_state.phase,
+			ProtocolPhase::WaitingForBootInstruction
+		);
 	}
 }
