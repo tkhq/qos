@@ -1,3 +1,7 @@
+out/*
+cache/*
+.*
+src/init/target
 .DS_Store
 .vscode
 target/
@@ -11,9 +15,9 @@ target/
 *.share
 
 # Mock data
-!integration/mock/boot-e2e/all-personal-dir/user1-dir/*
-!integration/mock/boot-e2e/all-personal-dir/user2-dir/*
-!integration/mock/boot-e2e/all-personal-dir/user3-dir/*
-!integration/mock/boot-e2e/genesis-dir/*
+!src/integration/mock/boot-e2e/all-personal-dir/user1-dir/*
+!src/integration/mock/boot-e2e/all-personal-dir/user2-dir/*
+!src/integration/mock/boot-e2e/all-personal-dir/user3-dir/*
+!src/integration/mock/boot-e2e/genesis-dir/*
 
 local-enclave/ls

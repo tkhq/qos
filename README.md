@@ -1,127 +1,72 @@
-# QuorumOS
+# EnclaveOS #
 
-QuorumOS is a trusted computation layer for hosting enclave apps at modern cloud scale. The OS architecture is based on the principle that a threshold of actors must coordinate to provision a secure compute environment with sensitive application logic and secret material; no single actor can unilaterally provision the environment or secret material.
+<https://github.com/distrust-foundation/enclaveos>
 
-Concretely, QuorumOS is designed to boot in an enclave by attesting to the enclave configuration, reconstructing a Quorum Key and then launching a single enclave app that can leverage the Quorum Key to encrypt and authenticate data.
+## About ##
 
-The consensus on environment configuration is coordinated through the Manifest document which describes, among other things, the enclave image configuration, application CLI arguments, public Quorum Key, and quorum sets. During the bootstrapping process, a threshold of Quorum Members will attest to the enclaves configuration against the Manifest out of band and then post their respective Quorum Key share. See the [instance provision](#instance-provision) section for details.
+A minimal, immutable, and deterministic Linux unikernel build system targeting
+various Trusted Execution Environments for use cases that require high security
+and accountability.
 
-The Quorum Key itself can be used by QuorumOS and enclave apps to encrypt and authenticate data.
+This is intended as a reference repository which could serve as a boilerplate
+to build your own hardened and immutable operating system images for high
+security applications.
 
-## System requirements
+## Platforms ##
 
-- openssl >= 1.1.0
+| Platform                   | Target  | Status   | Verified boot Method  |
+|----------------------------|:-------:|:--------:|:---------------------:|
+| Generic/Qemu               | generic | working  | Safeboot or Heads     |
+| AWS Nitro Enclaves         | aws     | building | Nitro attestation API |
+| GCP Confidential Compute   | gcp     | research | vTPM 2.0 attestation  |
+| Azure Confidential VMs     | azure   | research | vTPM 2.0 attestation  |
 
-## Development
+## Features ##
 
-### Submitting a PR
+ * Immutability
+   * Root filesystem is a CPIO filesystem extracted to a RamFS at boot
+ * Minimalism
+   * < 5MB footprint
+   * Nothing is included but a kernel and your target binary by default
+   * Sample "hello world" included as a default reference
+   * Debug builds include busybox init shim and drop to a shell
+ * Determinism
+   * Multiple people can build artifacts and get identical hashes
+   * Allows one to prove distributed artifacts correspond to published sources
+ * Hardening
+   * No TCP/IP network support
+     * Favor using a virtual socket or physical interface to a gateway system
+   * Most unessesary kernel features are disabled at compile time
+   * Follow [Kernel Self Protection Project](kspp) recommendations
 
-Before a PR can be merged it must:
+[  kspp]: https://kernsec.org/wiki/index.php/Kernel_Self_Protection_Project
 
-Be formatted
+## Development ##
 
-```bash
-make lint
+### Requirements ###
+
+ * 10GB+ free RAM
+ * Docker 20+
+ * GNU Make
+
+### Examples ###
+
+### Build given target
+```
+make TARGET=generic
 ```
 
-And pass all tests
-
-```bash
-make test-all
+### Boot generic image in Qemu
+```
+make run
 ```
 
-### View the docs
-
-In the root of this project run
-
-```bash
-cargo doc --open
+### Enter shell in toolchain environment
+```
+make toolchain-shell
 ```
 
-## Conceptual
-
-### Major Components
-
-#### Enclave
-
-- houses server for listening to the Host
-- contains logic for quorum key genesis, booting, and running a Enclave App
-- see crate `qos_core`
-
-#### Host
-
-- EC2 instance housing the nitro enclave
-- has client for talking to nitro enclave
-- has server for incoming request from outside world
-- see crate `qos_host`
-
-#### Client
-
-- anything making request to host
-- see crate `qos_client`
-
-### Key Terms
-
-#### Quorum Key
-
-An asymmetric key used to uniquely authenticate and encrypt data. This key should only ever be reconstituted inside of an enclave. Additionally, the full provisioning of the Quorum Key concludes the attestation flow, at which point QuorumOS pivots to launching the specified enclave app. At rest, outside of the enclave, the key is intended to be stored across shares using shamir's secret sharing. Note that key shares are always intended to be stored encrypted to the Personal Key, never in plaintext.
-
-#### Quorum Member
-
-An entity that is a member of the Manifest Set and holds a share of the Quorum Key.
-
-#### Quorum Sets
-
-There are two typs of quorum sets:
-
-##### Manifest Set
-
-The collection of members whom can approve a manifest.
-
-##### Share Set
-
-The collection of members whom each hold shares of the Quorum Key and thus provision an enclave by attesting and then posting their shares. When posting shares, these members will also provide a signature of the manifest. The signature is recorded in manifest envelope in order to leave an audit trail. This way, third parties can check which share set members actually participated in provisioning the quorum key
-
-#### Personal Key
-
-A key held by a Quorum Member that can be used to encrypt/decrypt their share of the Quorum Key.
-
-#### Personal Setup Key
-
-A key held by a Quorum Member that can be used to encrypt secret data before a QuorumOS instance has been fully bootstrapped.
-
-#### Ephemeral Key
-
-An asymmetric key that is generated by a QuorumOS instance immediately after boot. Once Quorum Members are able to verify the integrity of a QuorumOS instance, they encrypt their Quorum Key shares to the Ephemeral Key and submit to the instance for reconstruction.
-
-#### Manifest
-
-A file that contains the static configuration to launch an instance of QuorumOS. The composition of the Manifest is attested to in the boot process. All Quorum Members will agree to the Manifest by signing it (QuorumOS should reject a submitted manifest if it has less than threshold signatures.)
-
-#### Node
-
-A single machine compute instance running QuorumOS.
-
-#### Namespace
-
-A group of QuorumOS Nodes running the same Enclave App and using the same Quorum Key. A Namespace contains many live Nodes all with the same Quorum Key and enclave app. Some of these nodes could be using different Manifests and different versions of the same enclave app.
-
-#### Pivot / Enclave App
-
-The application QuorumOS pivots to once it finishes booting. This applications binary hash and CLI arguments are specified in the Manifest file.
-
-### Instance Provision
-
-Immediately after a valid Manifest is loaded into QuorumOS, the instance will generate an Ephemeral Key. This key is specific to a particular individual machine and, after successfully verifying the machine image and metadata contained in the manifest file, will be used by the Quorum Members to post their shares into the machine.
-
-Prior to posting their share to the machine, Quorum Members use a variety of cryptographic attestations and social coordination to determine if it is appropriate to provision a particular instance of QuorumOS with a given secret.
-
-Upon successful verification of the attestation outputs, each member will encrypt their share to an Ephemeral Key. Once threshold shares have been collected by the instance, it will use Shamir’s Secret Sharing to reconstruct the Quorum Key.
-
-#### Remote Attestation
-
-The purpose of remote attestation is to prove that an environment is running a particular piece of software. In the case of AWS Nitro Enclaves, an enclave can uniquely asks the Nitro Security Module (NSM) for an attestation document containing details of the enclave. This document is signed by the Nitro Attestation PKI and is tied back to the AWS Nitro Attestation PKI Root.
-
-As defined in the [AWS documentation](https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html) the instance can request the Nitro Security Module (NSM) to produce an attestation document on its behalf. Additionally, the attestation document contains two fields that can be modified by the enclave itself. The attestation document request contains the Ephemeral Key and the hash of manifest so Share Set members can verify the data is correct.
-
-Before provisioning a namespace with the Quorum Key, a Share Set will use the output of the attestation process against the enclave to verify that the enclave is running the expected version of QuorumOS and that that instance is configured in the expected manner as to warrant being provisioned with that Quorum Key.
+### Update toolchain depedendency pins
+```
+make toolchain-update
+```
