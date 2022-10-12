@@ -20,11 +20,11 @@ compile_error!(
 
 pub mod cli;
 pub mod client;
-pub mod reaper;
 pub mod handles;
 pub mod io;
 pub mod parser;
 pub mod protocol;
+pub mod reaper;
 pub mod server;
 
 /// Path to Quorum Key secret.
