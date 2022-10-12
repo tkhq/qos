@@ -92,4 +92,4 @@ impl Reaper {
 	}
 }
 
-// See qos_test/tests/Reaper for tests
+// See qos_test/tests/reaper for tests
