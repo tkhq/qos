@@ -140,8 +140,16 @@ push-sample-app:
 
 .PHONY: lint
 lint:
-	cargo +nightly version
+	make clippy
+	make fmt
+
+.PHONY: clippy
+clippy:
 	cargo clippy --fix --allow-dirty
+
+.PHONY: fmt
+fmt:
+	cargo +nightly version
 	cargo +nightly fmt
 
 .PHONY: test-all
