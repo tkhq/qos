@@ -217,7 +217,7 @@ fn main() {
 	// 	io::SocketAddress,
 	// 	protocol::attestor::Nsm,
 	// 	handles::Handles,
-	// 	coordinator::Coordinator
+	// 	reaper::Reaper
 	// };
 	// use qos_core;
 
@@ -230,7 +230,7 @@ fn main() {
 	// 	MANIFEST_FILE.to_string(),
 	// 	PIVOT_FILE.to_string(),
 	// );
-	// Coordinator::execute(
+	// Reaper::execute(
 	// 	&handles,
 	// 	Box::new(Nsm),
 	// 	// TODO port for host<>enclave

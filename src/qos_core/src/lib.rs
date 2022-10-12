@@ -20,7 +20,7 @@ compile_error!(
 
 pub mod cli;
 pub mod client;
-pub mod coordinator;
+pub mod reaper;
 pub mod handles;
 pub mod io;
 pub mod parser;

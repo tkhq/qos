@@ -3,7 +3,7 @@
 use std::env;
 
 use crate::{
-	coordinator::Coordinator,
+	reaper::Reaper,
 	handles::Handles,
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
@@ -133,7 +133,7 @@ impl CLI {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
-			Coordinator::execute(
+			Reaper::execute(
 				&Handles::new(
 					opts.ephemeral_file(),
 					opts.quorum_file(),
