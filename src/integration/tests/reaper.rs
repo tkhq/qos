@@ -2,7 +2,7 @@ use std::fs;
 
 use integration::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
 use qos_core::{
-	coordinator::Coordinator,
+	reaper::Reaper,
 	handles::Handles,
 	io::SocketAddress,
 	protocol::{attestor::mock::MockNsm, services::boot::ManifestEnvelope},
@@ -36,7 +36,7 @@ fn coordinator_works() {
 	assert!(handles.pivot_exists());
 
 	let coordinator_handle = std::thread::spawn(move || {
-		Coordinator::execute(
+		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
 			SocketAddress::new_unix(usock),
@@ -89,7 +89,7 @@ fn coordinator_handles_non_zero_exits() {
 	assert!(handles.pivot_exists());
 
 	let coordinator_handle = std::thread::spawn(move || {
-		Coordinator::execute(
+		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
 			SocketAddress::new_unix(usock),
@@ -142,7 +142,7 @@ fn coordinator_handles_panic() {
 	assert!(handles.pivot_exists());
 
 	let coordinator_handle = std::thread::spawn(move || {
-		Coordinator::execute(
+		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
 			SocketAddress::new_unix(usock),

@@ -1,4 +1,4 @@
-//! The coordinator is responsible for initializing the enclave's primary
+//! The Reaper is responsible for initializing the enclave's primary
 //! processes. Concretely it spawns the enclave server and launches the "pivot"
 //! executable once it becomes available in the file system.
 //!
@@ -21,9 +21,9 @@ const BINARY_EXIT_RESTART_DELAY: u64 = 3;
 
 /// Primary entry point for running the enclave. Coordinates spawning the server
 /// and pivot binary.
-pub struct Coordinator;
-impl Coordinator {
-	/// Run the coordinator.
+pub struct Reaper;
+impl Reaper {
+	/// Run the Reaper.
 	///
 	/// # Panics
 	///
@@ -35,7 +35,7 @@ impl Coordinator {
 		addr: SocketAddress,
 		app_addr: SocketAddress,
 	) {
-		println!("coordinator::execute starting");
+		println!("Reaper::execute starting");
 
 		let handles2 = handles.clone();
 		std::thread::spawn(move || {
@@ -88,8 +88,8 @@ impl Coordinator {
 			}
 		}
 
-		println!("Coordinator exiting ...");
+		println!("Reaper exiting ...");
 	}
 }
 
-// See qos_test/tests/coordinator for tests
+// See qos_test/tests/reaper for tests
