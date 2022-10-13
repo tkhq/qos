@@ -76,7 +76,7 @@ pub(super) fn timestamp(t: u64) -> Result<(), AttestError> {
 pub(super) fn public_key(pub_key: &Option<ByteBuf>) -> Result<(), AttestError> {
 	if let Some(key) = pub_key {
 		(key.len() >= MIN_PUB_KEY_LEN && key.len() <= MAX_PUB_KEY_LEN)
-			.then_some(())
+			.then(|| ())
 			.ok_or(AttestError::InvalidPubKey)?;
 	}
 
@@ -93,7 +93,7 @@ pub(super) fn nonce(n: &Option<ByteBuf>) -> Result<(), AttestError> {
 
 fn bytes_512(val: &Option<ByteBuf>) -> Result<(), AttestError> {
 	if let Some(val) = val {
-		(val.len() <= 512).then_some(()).ok_or(AttestError::InvalidBytes)?;
+		(val.len() <= 512).then(|| ()).ok_or(AttestError::InvalidBytes)?;
 	}
 
 	Ok(())
