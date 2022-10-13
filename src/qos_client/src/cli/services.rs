@@ -347,7 +347,7 @@ pub(crate) fn sign_manifest<P: AsRef<Path>>(
 	boot_dir: P,
 ) {
 	let manifest = find_manifest(&boot_dir);
-	let (personal_pair, mut personal_path) = find_personal_key(&personal_dir);
+	let (personal_pair, mut personal_path) = find_share_key(&personal_dir);
 	let alias = mem::take(&mut personal_path[0]);
 	let namespace = mem::take(&mut personal_path[1]);
 	drop(personal_path);
@@ -503,7 +503,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	let attestation_doc =
 		find_attestation_doc(&attestation_dir, unsafe_skip_attestation);
 	let encrypted_share = find_share(&personal_dir);
-	let (personal_pair, _) = find_personal_key(&personal_dir);
+	let (personal_pair, _) = find_share_key(&personal_dir);
 
 	// Check manifest signatures
 	manifest_envelope
@@ -751,7 +751,7 @@ fn find_share_key<P: AsRef<Path>>(personal_dir: P) -> (RsaPair, Vec<String>) {
 
 			Some((
 				RsaPair::from_pem_file(path)
-					.expect("Could not read PEM from setup.key"),
+					.expect("Could not read PEM from share_key.key"),
 				file_name,
 			))
 		})
@@ -933,38 +933,38 @@ fn find_attestation_approval<P: AsRef<Path>>(dir: P) -> Approval {
 	a.remove(0)
 }
 
-fn find_personal_key<P: AsRef<Path>>(
-	personal_dir: P,
-) -> (RsaPair, Vec<String>) {
-	let mut p: Vec<_> = find_file_paths(&personal_dir)
-		.iter()
-		.filter_map(|path| {
-			let file_name = split_file_name(path);
-			// Only look at files with the personal.key extension
-			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT)
-				|| file_name
-					.get(file_name.len() - 2)
-					.map_or(true, |s| s.as_str() != "personal")
-			{
-				return None;
-			};
+// fn find_personal_key<P: AsRef<Path>>(
+// 	personal_dir: P,
+// ) -> (RsaPair, Vec<String>) {
+// 	let mut p: Vec<_> = find_file_paths(&personal_dir)
+// 		.iter()
+// 		.filter_map(|path| {
+// 			let file_name = split_file_name(path);
+// 			// Only look at files with the personal.key extension
+// 			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT)
+// 				|| file_name
+// 					.get(file_name.len() - 2)
+// 					.map_or(true, |s| s.as_str() != "personal")
+// 			{
+// 				return None;
+// 			};
 
-			Some((
-				RsaPair::from_pem_file(path)
-					.expect("Could not read PEM from personal.secret"),
-				file_name,
-			))
-		})
-		.collect();
+// 			Some((
+// 				RsaPair::from_pem_file(path)
+// 					.expect("Could not read PEM from personal.secret"),
+// 				file_name,
+// 			))
+// 		})
+// 		.collect();
 
-	assert_eq!(
-		p.len(),
-		1,
-		"Did not find exactly 1 personal secret in the personal-dir"
-	);
+// 	assert_eq!(
+// 		p.len(),
+// 		1,
+// 		"Did not find exactly 1 personal secret in the personal-dir"
+// 	);
 
-	p.remove(0)
-}
+// 	p.remove(0)
+// }
 
 fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
 	let mut s: Vec<_> = find_file_paths(&personal_dir)

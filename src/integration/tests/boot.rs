@@ -172,7 +172,7 @@ async fn boot_e2e() {
 			Approval::try_from_slice(&fs::read(approval_path).unwrap())
 				.unwrap();
 		let personal_pair = RsaPair::from_pem_file(&format!(
-			"{}/{}.{}.personal.secret",
+			"{}/{}.{}.share_key.secret",
 			personal_dir(alias),
 			alias,
 			namespace
