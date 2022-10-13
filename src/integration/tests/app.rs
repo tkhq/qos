@@ -8,7 +8,7 @@ const SAMPLE_APP_PATH: &str = "../target/debug/sample_app";
 #[tokio::test]
 async fn sample_app_e2e() {
 	let tmp: PathWrapper = "/tmp/sample_app_e2e".into();
-	drop(fs::create_dir_all(*tmp));
+	drop(fs::create_dir_all(&*tmp));
 
 	let enclave_usock: PathWrapper =
 		"/tmp/sample_app_e2e/enclave_sock.sock".into();
@@ -26,18 +26,18 @@ async fn sample_app_e2e() {
 		Command::new("../target/debug/qos_core")
 			.args([
 				"--usock",
-				*enclave_usock,
+				&*enclave_usock,
 				"--quorum-file",
-				*quorum_path,
+				&*quorum_path,
 				"--pivot-file",
-				*pivot_path,
+				&*pivot_path,
 				"--ephemeral-file",
-				*eph_path,
+				&*eph_path,
 				"--mock",
 				"--manifest-file",
-				*manifest_path,
+				&*manifest_path,
 				"--app-usock",
-				*app_usock,
+				&*app_usock,
 			])
 			.spawn()
 			.unwrap()
@@ -52,7 +52,7 @@ async fn sample_app_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				*enclave_usock,
+				&*enclave_usock,
 			])
 			.spawn()
 			.unwrap()
@@ -61,7 +61,7 @@ async fn sample_app_e2e() {
 	// Run `dangerous-dev-boot`
 	let pivot_args = format!(
 		"[--usock,{},--quorum-file,{},--ephemeral-file,{},--manifest-file,{}]",
-		*app_usock, *quorum_path, *eph_path, *manifest_path
+		&*app_usock, &*quorum_path, &*eph_path, &*manifest_path
 	);
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
@@ -77,7 +77,7 @@ async fn sample_app_e2e() {
 			"--pivot-args",
 			&pivot_args[..],
 			"--unsafe-eph-path-override",
-			*eph_path,
+			&*eph_path,
 		])
 		.spawn()
 		.unwrap()

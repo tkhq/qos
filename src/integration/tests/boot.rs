@@ -23,7 +23,7 @@ use qos_test_primitives::{ChildWrapper, PathWrapper};
 async fn boot_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/boot-e2e".into();
-	fs::create_dir_all(*tmp).unwrap();
+	fs::create_dir_all(&*tmp).unwrap();
 
 	let usock: PathWrapper = "/tmp/boot-e2e/boot_e2e.sock".into();
 	let secret_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.secret".into();
@@ -32,9 +32,9 @@ async fn boot_e2e() {
 	let eph_path: PathWrapper = "/tmp/boot-e2e/ephemeral_key.secret".into();
 
 	let boot_dir: PathWrapper = "/tmp/boot-e2e/boot-dir".into();
-	fs::create_dir_all(*boot_dir).unwrap();
+	fs::create_dir_all(&*boot_dir).unwrap();
 	let attestation_dir: PathWrapper = "/tmp/boot-e2e/attestation-dir".into();
-	fs::create_dir_all(*attestation_dir).unwrap();
+	fs::create_dir_all(&*attestation_dir).unwrap();
 
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
 	let genesis_dir = "./mock/boot-e2e/genesis-dir";
@@ -42,7 +42,7 @@ async fn boot_e2e() {
 
 	let namespace = "quit-coding-to-vape";
 
-	let attestation_doc_path = format!("{}/boot_attestation_doc", *boot_dir);
+	let attestation_doc_path = format!("{}/boot_attestation_doc", &*boot_dir);
 	let genesis_output_path = format!("{}/genesis_output", genesis_dir);
 
 	let personal_dir =
@@ -81,7 +81,7 @@ async fn boot_e2e() {
 			"--root-cert-path",
 			root_cert_path,
 			"--boot-dir",
-			*boot_dir,
+			&*boot_dir,
 			"--pivot-args",
 			&pivot_args,
 		])
@@ -92,7 +92,7 @@ async fn boot_e2e() {
 		.success());
 
 	// Check the manifest written to file
-	let cli_manifest_path = format!("{}/{}.2.manifest", *boot_dir, namespace);
+	let cli_manifest_path = format!("{}/{}.2.manifest", &*boot_dir, namespace);
 	let manifest =
 		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
 			.unwrap();
@@ -148,7 +148,7 @@ async fn boot_e2e() {
 	for alias in [user1, user2, user3] {
 		let approval_path = format!(
 			"{}/{}.{}.{}.approval",
-			*boot_dir, alias, namespace, manifest.namespace.nonce,
+			&*boot_dir, alias, namespace, manifest.namespace.nonce,
 		);
 
 		assert!(Command::new("../target/debug/qos_client")
@@ -159,7 +159,7 @@ async fn boot_e2e() {
 				"--personal-dir",
 				&personal_dir(alias),
 				"--boot-dir",
-				*boot_dir,
+				&*boot_dir,
 			])
 			.spawn()
 			.unwrap()
@@ -195,16 +195,16 @@ async fn boot_e2e() {
 		Command::new("../target/debug/qos_core")
 			.args([
 				"--usock",
-				*usock,
+				&*usock,
 				"--quorum-file",
-				*secret_path,
+				&*secret_path,
 				"--pivot-file",
-				*pivot_path,
+				&*pivot_path,
 				"--ephemeral-file",
-				*eph_path,
+				&*eph_path,
 				"--mock",
 				"--manifest-file",
-				*manifest_path,
+				&*manifest_path,
 			])
 			.spawn()
 			.unwrap()
@@ -219,7 +219,7 @@ async fn boot_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				*usock,
+				&*usock,
 			])
 			.spawn()
 			.unwrap()
@@ -233,7 +233,7 @@ async fn boot_e2e() {
 		.args([
 			"boot-standard",
 			"--boot-dir",
-			*boot_dir,
+			&*boot_dir,
 			"--pivot-path",
 			PIVOT_OK2_PATH,
 			"--host-port",
@@ -264,7 +264,7 @@ async fn boot_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--attestation-dir",
-				*attestation_dir
+				&*attestation_dir
 			])
 			.spawn()
 			.unwrap()
@@ -277,14 +277,14 @@ async fn boot_e2e() {
 			.args([
 				"proxy-re-encrypt-share",
 				"--attestation-dir",
-				*attestation_dir,
+				&*attestation_dir,
 				"--manifest-hash",
 				qos_hex::encode(&manifest.qos_hash()).as_str(),
 				"--personal-dir",
 				&personal_dir(user),
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
-				*eph_path,
+				&*eph_path,
 			])
 			.spawn()
 			.unwrap()
@@ -301,7 +301,7 @@ async fn boot_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--attestation-dir",
-				*attestation_dir
+				&*attestation_dir
 			])
 			.spawn()
 			.unwrap()

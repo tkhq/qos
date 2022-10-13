@@ -6,7 +6,7 @@ use qos_test_primitives::{ChildWrapper, PathWrapper};
 #[tokio::test]
 async fn dev_boot_e2e() {
 	let tmp: PathWrapper = "/tmp/dev-boot-e2e-tmp".into();
-	drop(fs::create_dir_all(*tmp));
+	drop(fs::create_dir_all(&*tmp));
 	let usock: PathWrapper = "/tmp/dev-boot-e2e-tmp/sock.sock".into();
 	let secret_path: PathWrapper = "/tmp/dev-boot-e2e-tmp/quorum.secret".into();
 	let pivot_path: PathWrapper = "/tmp/dev-boot-e2e-tmp/pivot.pivot".into();
@@ -21,16 +21,16 @@ async fn dev_boot_e2e() {
 		Command::new("../target/debug/qos_core")
 			.args([
 				"--usock",
-				*usock,
+				&*usock,
 				"--quorum-file",
-				*secret_path,
+				&*secret_path,
 				"--pivot-file",
-				*pivot_path,
+				&*pivot_path,
 				"--ephemeral-file",
-				*eph_path,
+				&*eph_path,
 				"--mock",
 				"--manifest-file",
-				*manifest_path,
+				&*manifest_path,
 			])
 			.spawn()
 			.unwrap()
@@ -45,7 +45,7 @@ async fn dev_boot_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				*usock,
+				&*usock,
 			])
 			.spawn()
 			.unwrap()
@@ -68,7 +68,7 @@ async fn dev_boot_e2e() {
 			"--pivot-args",
 			"[--msg,vapers-only]",
 			"--unsafe-eph-path-override",
-			*eph_path,
+			&*eph_path,
 		])
 		.spawn()
 		.unwrap()
