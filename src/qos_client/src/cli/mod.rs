@@ -61,10 +61,10 @@
 //!
 //! For each member of the Manifest Set, the genesis service needs a
 //! corresponding Setup Key as input. To produce a setup key, a member can run
-//! the [`Command::GenerateSetupKey`] on a secure device:
+//! the [`Command::GenerateShareKey`] on a secure device:
 //!
 //! ```shell
-//! cargo run --bin qos_client generate-setup-key \
+//! cargo run --bin qos_client generate-share-key \
 //!     --namespace our_namespace \
 //!     --alias alice \
 //!     --personal-dir ~/qos/our_namespace/personal
@@ -74,23 +74,23 @@
 //! like:
 //!
 //! - personal
-//!     - `alice.our_namespace.setup.key`
-//!     - `alice.our_namespace.setup.pub`
+//!     - `alice.our_namespace.personal.key`
+//!     - `alice.our_namespace.personal.pub`
 //!
 //! #### Send Boot Genesis Instruction
 //!
 //! The genesis ceremony leader will need to have a directory that contains the
-//! setup keys of all the quorum members. For example, if Alice was the ceremony
-//! leader and members={Alice, Bob, Eve}, Alice would need to have the
+//! personal keys of all the quorum members. For example, if Alice was the
+//! ceremony leader and members={Alice, Bob, Eve}, Alice would need to have the
 //! following directory structure:
 //!
 //! - personal
-//!     - `alice.our_namespace.setup.key`
-//!     - `alice.our_namespace.setup.pub`
+//!     - `alice.our_namespace.personal.key`
+//!     - `alice.our_namespace.personal.pub`
 //! - genesis
-//!     - `alice.our_namespace.setup.pub`
-//!     - `bob.our_namespace.setup.pub`
-//!     - `eve.our_namespace.setup.pub`
+//!     - `alice.our_namespace.personal.pub`
+//!     - `bob.our_namespace.personal.pub`
+//!     - `eve.our_namespace.personal.pub`
 //!
 //! Given the above directory structure, Alice can now generate the genesis
 //! outputs by running [`Command::BootGenesis`] (doesn't need to be a
@@ -375,6 +375,7 @@ const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const ATTESTATION_DIR: &str = "attestation-dir";
+const QOS_BUILD_FINGERPRINTS: &str = "qos-build-fingerprints";
 
 /// Commands for the Client CLI.
 ///
@@ -398,7 +399,7 @@ pub enum Command {
 	/// Query the NSM with `NsmRequest::DescribePcr` for PCR indexes 0..3.
 	DescribePcr,
 	/// Generate a Setup Key for use in the Genesis ceremony.
-	GenerateSetupKey,
+	GenerateShareKey,
 	/// Run the the Boot Genesis logic to generate and shard a Quorum Key
 	/// across the given Setup Keys. Each setup key will correspond to a Quorum
 	/// Set Member, so N will equal the number of Setup Keys.
@@ -470,7 +471,7 @@ impl From<&str> for Command {
 			"enclave-status" => Self::EnclaveStatus,
 			"describe-nsm" => Self::DescribeNsm,
 			"describe-pcr" => Self::DescribePcr,
-			"generate-setup-key" => Self::GenerateSetupKey,
+			"generate-share-key" => Self::GenerateShareKey,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
 			"generate-manifest" => Self::GenerateManifest,
@@ -573,6 +574,14 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn qos_build_fingerprints_token() -> Token {
+		Token::new(
+			QOS_BUILD_FINGERPRINTS,
+			"Path to file with QOS build fingerprints (PCR{1, 2, 3}).",
+		)
+		.takes_value(true)
+		.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -595,7 +604,7 @@ impl Command {
 			)
 	}
 
-	fn generate_setup_key() -> Parser {
+	fn generate_share_key() -> Parser {
 		Parser::new()
 			.token(
 				Token::new(
@@ -618,6 +627,7 @@ impl Command {
 				.takes_value(true)
 			)
 			.token(Self::unsafe_skip_attestation_token())
+			.token(Self::qos_build_fingerprints_token())
 	}
 
 	fn after_genesis() -> Parser {
@@ -628,6 +638,7 @@ impl Command {
 			.token(Self::pcr1_token())
 			.token(Self::pcr2_token())
 			.token(Self::unsafe_skip_attestation_token())
+			.token(Self::qos_build_fingerprints_token())
 	}
 
 	fn generate_manifest() -> Parser {
@@ -731,7 +742,7 @@ impl GetParserForCommand for Command {
 			| Self::AppEcho
 			| Self::AppReadFiles
 			| Self::EnclaveStatus => Self::base(),
-			Self::GenerateSetupKey => Self::generate_setup_key(),
+			Self::GenerateShareKey => Self::generate_share_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
 			Self::GenerateManifest => Self::generate_manifest(),
@@ -852,6 +863,13 @@ impl ClientOpts {
 		self.parsed.single(ATTESTATION_DIR).expect("required arg").to_string()
 	}
 
+	fn qos_build_fingerprints(&self) -> String {
+		self.parsed
+			.single(QOS_BUILD_FINGERPRINTS)
+			.expect("qos-build-fingerprints is a required arg")
+			.to_string()
+	}
+
 	fn pivot_args(&self) -> Vec<String> {
 		let v = self.parsed.single(PIVOT_ARGS).expect("required arg");
 		let mut chars = v.chars();
@@ -912,8 +930,8 @@ impl ClientRunner {
 				Command::DescribePcr => handlers::describe_pcr(&self.opts),
 				Command::AppEcho => handlers::app_echo(&self.opts),
 				Command::AppReadFiles => handlers::app_read_files(&self.opts),
-				Command::GenerateSetupKey => {
-					handlers::generate_setup_key(&self.opts);
+				Command::GenerateShareKey => {
+					handlers::generate_share_key(&self.opts);
 				}
 				Command::BootGenesis => handlers::boot_genesis(&self.opts),
 				Command::AfterGenesis => handlers::after_genesis(&self.opts),
@@ -1084,8 +1102,8 @@ mod handlers {
 		println!("Note that the files themselves where not verified.");
 	}
 
-	pub(super) fn generate_setup_key(opts: &ClientOpts) {
-		services::generate_setup_key(
+	pub(super) fn generate_share_key(opts: &ClientOpts) {
+		services::generate_share_key(
 			&opts.alias(),
 			&opts.namespace(),
 			opts.personal_dir(),
@@ -1099,6 +1117,7 @@ mod handlers {
 			&opts.path_message(),
 			opts.genesis_dir(),
 			opts.threshold(),
+			opts.qos_build_fingerprints(),
 			opts.unsafe_skip_attestation(),
 		);
 	}
@@ -1110,6 +1129,7 @@ mod handlers {
 			&opts.pcr0(),
 			&opts.pcr1(),
 			&opts.pcr2(),
+			opts.qos_build_fingerprints(),
 			opts.unsafe_skip_attestation(),
 		);
 	}

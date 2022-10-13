@@ -10,9 +10,9 @@ use qos_core::protocol::{
 	services::{
 		boot::{
 			Approval, Manifest, ManifestSet, Namespace, NitroConfig,
-			PivotConfig, QuorumMember, RestartPolicy, ShareSet,
+			PivotConfig, RestartPolicy, ShareSet,
 		},
-		genesis::GenesisOutput,
+		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
 	QosHash,
 };
@@ -103,11 +103,8 @@ async fn boot_e2e() {
 
 	let mut manifest_set_members: Vec<_> = genesis_output
 		.member_outputs
-		.iter()
-		.map(|m| QuorumMember {
-			alias: m.setup_member.alias.clone(),
-			pub_key: m.public_personal_key.clone(),
-		})
+		.into_iter()
+		.map(|GenesisMemberOutput { share_set_member, .. }| share_set_member)
 		.collect();
 	manifest_set_members.sort();
 

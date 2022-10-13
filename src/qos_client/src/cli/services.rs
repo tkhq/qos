@@ -17,7 +17,7 @@ use qos_core::protocol::{
 			Approval, Manifest, ManifestEnvelope, ManifestSet, Namespace,
 			NitroConfig, PivotConfig, QuorumMember, RestartPolicy, ShareSet,
 		},
-		genesis::{GenesisOutput, GenesisSet, SetupMember},
+		genesis::{GenesisMemberOutput, GenesisOutput, GenesisSet},
 	},
 	Hash256, QosHash,
 };
@@ -28,11 +28,9 @@ use crate::request;
 const SECRET_EXT: &str = "secret";
 const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
 const GENESIS_OUTPUT_FILE: &str = "genesis_output";
-const SETUP_PUB_EXT: &str = "setup.pub";
-const SETUP_PRIV_EXT: &str = "setup.secret";
 const SHARE_EXT: &str = "share";
-const PERSONAL_KEY_PUB_EXT: &str = "personal.pub";
-const PERSONAL_KEY_PRIV_EXT: &str = "personal.secret";
+const SHARE_KEY_PUB_EXT: &str = "share_key.pub";
+const SHARE_KEY_PRIV_EXT: &str = "share_key.secret";
 const MANIFEST_EXT: &str = "manifest";
 const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
@@ -45,44 +43,48 @@ const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 	"DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
 
-pub(crate) fn generate_setup_key<P: AsRef<Path>>(
+pub(crate) fn generate_share_key<P: AsRef<Path>>(
 	alias: &str,
 	namespace: &str,
 	personal_dir: P,
 ) {
 	fs::create_dir_all(personal_dir.as_ref()).unwrap();
 
-	let setup_key = RsaPair::generate().expect("RSA key generation failed");
-	// Write the setup key secret
+	let share_key_pair =
+		RsaPair::generate().expect("RSA key generation failed");
+	// Write the personal key secret
 	// TODO: password encryption
 	let private_path = personal_dir
 		.as_ref()
-		.join(format!("{}.{}.{}", alias, namespace, SETUP_PRIV_EXT));
+		.join(format!("{}.{}.{}", alias, namespace, SHARE_KEY_PRIV_EXT));
 	write_with_msg(
 		&private_path,
-		&setup_key
+		&share_key_pair
 			.private_key_to_pem()
 			.expect("Private key PEM conversion failed"),
-		"Setup Private Key",
+		"Share Key Secret",
 	);
 
 	// Write the setup key public key
 	let public_path = personal_dir
 		.as_ref()
-		.join(format!("{}.{}.{}", alias, namespace, SETUP_PUB_EXT));
+		.join(format!("{}.{}.{}", alias, namespace, SHARE_KEY_PUB_EXT));
 	write_with_msg(
 		&public_path,
-		&setup_key
+		&share_key_pair
 			.public_key_to_pem()
 			.expect("Public key PEM conversion failed"),
-		"Setup Public Key",
+		"Share Key Public",
 	);
 }
 
+// TODO: verify PCR3
 pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	uri: &str,
 	genesis_dir: P,
 	threshold: u32,
+	// Path to qos build fingerprints
+	_qos_build_fingerprints: P,
 	unsafe_skip_attestation: bool,
 ) {
 	let genesis_set = create_genesis_set(&genesis_dir, threshold);
@@ -99,13 +101,13 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	// Sanity check the genesis output
 	assert!(
 		genesis_set.members.len() == genesis_output.member_outputs.len(),
-		"Output of genesis ceremony does not have same members as Setup Set"
+		"Output of genesis ceremony does not have same members as Genesis Set"
 	);
 	assert!(
 		genesis_output.member_outputs.iter().all(|member_out| genesis_set
 			.members
-			.contains(&member_out.setup_member)),
-		"Output of genesis ceremony does not have same members as Setup Set"
+			.contains(&member_out.share_set_member)),
+		"Output of genesis ceremony does not have same members as Genesis Set"
 	);
 
 	// Check the attestation document
@@ -141,17 +143,16 @@ fn create_genesis_set<P: AsRef<Path>>(
 		.filter_map(|path| {
 			let mut n = split_file_name(path);
 
-			// TODO: do we want to dissallow having anything in this folder
-			// that is not a public key for the manifest set?
 			if n.last().map_or(true, |s| s.as_str() != "pub")
-				|| n.get(n.len() - 2).map_or(true, |s| s.as_str() != "setup")
+				|| n.get(n.len() - 2)
+					.map_or(true, |s| s.as_str() != "share_key")
 			{
 				return None;
 			}
 
 			let public_key = RsaPub::from_pem_file(&path)
 				.expect("Failed to read in rsa pub key.");
-			Some(SetupMember {
+			Some(QuorumMember {
 				alias: mem::take(&mut n[0]),
 				pub_key: public_key.public_key_to_der().unwrap(),
 			})
@@ -168,12 +169,14 @@ fn create_genesis_set<P: AsRef<Path>>(
 	GenesisSet { members, threshold }
 }
 
+/// TODO: verify pcr3
 pub(crate) fn after_genesis<P: AsRef<Path>>(
 	genesis_dir: P,
 	personal_dir: P,
 	pcr0: &[u8],
 	pcr1: &[u8],
 	pcr2: &[u8],
+	_qos_build_fingerprints: P,
 	unsafe_skip_attestation: bool,
 ) {
 	let attestation_doc_path =
@@ -181,12 +184,12 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	let genesis_set_path = genesis_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 
 	// Read in the setup key
-	let (setup_pair, mut setup_file_name) = find_setup_key(&personal_dir);
+	let (share_key_pair, mut key_file_name) = find_share_key(&personal_dir);
 
 	// Get the alias from the setup key file name
-	let alias = mem::take(&mut setup_file_name[0]);
-	let namespace = mem::take(&mut setup_file_name[1]);
-	drop(setup_file_name);
+	let alias = mem::take(&mut key_file_name[0]);
+	let namespace = mem::take(&mut key_file_name[1]);
+	drop(key_file_name);
 	println!("Alias: {}, Namespace: {}", alias, namespace);
 
 	// Read in the attestation doc from the genesis directory
@@ -216,36 +219,26 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	}
 
 	// Get the members specific output based on alias & setup key
-	let setup_public =
-		setup_pair.public_key_to_der().expect("Invalid setup key");
+	let share_key_public =
+		share_key_pair.public_key_to_der().expect("Invalid setup key");
 	let member_output = genesis_output
 		.member_outputs
 		.iter()
 		.find(|m| {
-			m.setup_member.pub_key == setup_public
-				&& m.setup_member.alias == alias
+			m.share_set_member.pub_key == share_key_public
+				&& m.share_set_member.alias == alias
 		})
 		.expect("Could not find a member output associated with the setup key");
 
-	// Decrypt the Personal Key with the Setup Key
-	let personal_pair = {
-		let personal_key = setup_pair
-			.envelope_decrypt(&member_output.encrypted_personal_key)
-			.expect("Failed to decrypt personal key");
-		RsaPair::from_der(&personal_key)
-			.expect("Failed to create RsaPair from decrypted personal key")
-	};
-	// Sanity check
-	assert_eq!(
-		personal_pair.public_key_to_der().unwrap(),
-		member_output.public_personal_key
-	);
-
 	// Make sure we can decrypt the Share with the Personal Key
-	drop(
-		personal_pair
-			.envelope_decrypt(&member_output.encrypted_quorum_key_share)
-			.expect("Share could not be decrypted with personal key"),
+	let plaintext_share = share_key_pair
+		.envelope_decrypt(&member_output.encrypted_quorum_key_share)
+		.expect("Share could not be decrypted with personal key");
+
+	assert_eq!(
+		sha_256(&plaintext_share),
+		member_output.share_hash,
+		"Expected share hash do not match the actual share hash"
 	);
 
 	// Store the encrypted share
@@ -256,30 +249,6 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		share_path.as_path(),
 		&member_output.encrypted_quorum_key_share,
 		"Encrypted Quorum Share",
-	);
-
-	// Store the Personal Key, TODO: password encrypt the private key
-	// Public
-	let personal_key_pub_path = personal_dir
-		.as_ref()
-		.join(format!("{}.{}.{}", alias, namespace, PERSONAL_KEY_PUB_EXT));
-	write_with_msg(
-		personal_key_pub_path.as_path(),
-		&personal_pair
-			.public_key_to_pem()
-			.expect("Could not create public key from personal pair"),
-		"Personal Public Key",
-	);
-	// Private
-	let personal_key_priv_path = personal_dir
-		.as_ref()
-		.join(format!("{}.{}.{}", alias, namespace, PERSONAL_KEY_PRIV_EXT));
-	write_with_msg(
-		personal_key_priv_path.as_path(),
-		&personal_pair
-			.private_key_to_pem()
-			.expect("Could not create private key from personal pair"),
-		"Personal Private Key",
 	);
 }
 
@@ -322,11 +291,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 
 	let mut members: Vec<_> = genesis_output
 		.member_outputs
-		.iter()
-		.map(|m| QuorumMember {
-			alias: m.setup_member.alias.clone(),
-			pub_key: m.public_personal_key.clone(),
-		})
+		.into_iter()
+		.map(|GenesisMemberOutput { share_set_member, .. }| share_set_member)
 		.collect();
 	// We want to try and build the same manifest regardless of the OS.
 	members.sort();
@@ -352,7 +318,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		// output, instead should be from some other directory of keys
 		manifest_set: ManifestSet {
 			threshold: genesis_output.threshold,
-			members: members.clone(),
+			members,
 		},
 		share_set: ShareSet {
 			threshold: genesis_output.threshold,
@@ -770,7 +736,7 @@ fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
 		.collect()
 }
 
-fn find_setup_key<P: AsRef<Path>>(personal_dir: P) -> (RsaPair, Vec<String>) {
+fn find_share_key<P: AsRef<Path>>(personal_dir: P) -> (RsaPair, Vec<String>) {
 	let mut s: Vec<_> = find_file_paths(&personal_dir)
 		.iter()
 		.filter_map(|path| {
@@ -778,7 +744,7 @@ fn find_setup_key<P: AsRef<Path>>(personal_dir: P) -> (RsaPair, Vec<String>) {
 			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT)
 				|| file_name
 					.get(file_name.len() - 2)
-					.map_or(true, |s| s.as_str() != "setup")
+					.map_or(true, |s| s.as_str() != "share_key")
 			{
 				return None;
 			};

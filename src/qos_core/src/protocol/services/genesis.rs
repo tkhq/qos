@@ -2,12 +2,12 @@
 
 use std::iter::zip;
 
-use qos_crypto::{RsaPair, RsaPub, sha_256};
+use qos_crypto::{sha_256, RsaPair, RsaPub};
 
 use crate::protocol::{
 	attestor::types::{NsmRequest, NsmResponse},
 	boot::QuorumMember,
-	ProtocolError, ProtocolState, QosHash, Hash256
+	Hash256, ProtocolError, ProtocolState, QosHash,
 };
 
 /// Configuration for sharding a Quorum Key created in the Genesis flow.
@@ -34,8 +34,8 @@ struct MemberShard {
 	shard: Vec<u8>,
 }
 
-/// A set of member shards used to successfully recover the quorum key during the
-/// genesis ceremony.
+/// A set of member shards used to successfully recover the quorum key during
+/// the genesis ceremony.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
@@ -179,13 +179,10 @@ mod test {
 		let shares: Vec<Vec<u8>> = zipped
 			.map(|(output, pair)| {
 				let decrypted_share = &pair
-						.envelope_decrypt(&output.encrypted_quorum_key_share)
-						.unwrap();
+					.envelope_decrypt(&output.encrypted_quorum_key_share)
+					.unwrap();
 
-				assert_eq!(
-					sha_256(decrypted_share),
-					output.share_hash
-				);
+				assert_eq!(sha_256(decrypted_share), output.share_hash);
 
 				decrypted_share.clone()
 			})
