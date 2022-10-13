@@ -11,19 +11,25 @@ use rand::{seq::SliceRandom, thread_rng};
 #[tokio::test]
 async fn genesis_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
-	let tmp: PathWrapper = "/tmp/genesis-e2e".into();
+	// let tmp: PathWrapper = "/tmp/genesis-e2e".into();
+	let tmp = "./mock/boot-e2e";
 	fs::create_dir_all(&*tmp).unwrap();
-	let tmp_dir = |file: &str| -> PathWrapper {
-		format!("{}/{file}", &*tmp).into()
+	let tmp_dir = |file: &str| {
+		format!("{}/{file}", &*tmp)
 	};
+	// let tmp_dir = |file: &str| -> PathWrapper {
+	// 	format!("{}/{file}", &*tmp).into()
+	// };
 
-	let usock = tmp_dir("genesis_e2e.sock");
-	let secret_path = tmp_dir("genesis_e2e.secret");
-	let pivot_path = tmp_dir("genesis_e2e.pivot");
-	let manifest_path = tmp_dir("manifest.manifest");
+	let usock: PathWrapper = tmp_dir("genesis_e2e.sock").into();
+	let secret_path: PathWrapper = tmp_dir("genesis_e2e.secret").into();
+	let pivot_path: PathWrapper = tmp_dir("genesis_e2e.pivot").into();
+	let manifest_path: PathWrapper = tmp_dir("manifest.manifest").into();
 
-	let all_personal_dir: PathWrapper = "/tmp/genesis-e2e-personal".into();
-	let genesis_dir: PathWrapper = tmp_dir("genesis");
+	// let all_personal_dir: PathWrapper = "/tmp/genesis-e2e-personal".into();
+	// let genesis_dir: PathWrapper = tmp_dir("genesis");
+	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
+	let genesis_dir = tmp_dir("genesis-dir");
 
 	let namespace = "quit-coding-to-vape";
 	let attestation_doc_path = format!("{}/genesis_attestation_doc", &*genesis_dir);
