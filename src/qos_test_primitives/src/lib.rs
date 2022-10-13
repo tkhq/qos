@@ -35,7 +35,7 @@ impl Drop for ChildWrapper {
 #[derive(Debug)]
 enum Internal<'a> {
 	String(String),
-	Str(&'a str)
+	Str(&'a str),
 }
 
 /// Wrapper type for [`std::path::Path`] that attempts to remove a file or

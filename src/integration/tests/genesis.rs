@@ -13,9 +13,8 @@ async fn genesis_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/genesis-e2e".into();
 	fs::create_dir_all(&*tmp).unwrap();
-	let tmp_dir = |file: &str| -> PathWrapper {
-		format!("{}/{file}", &*tmp).into()
-	};
+	let tmp_dir =
+		|file: &str| -> PathWrapper { format!("{}/{file}", &*tmp).into() };
 
 	let usock = tmp_dir("genesis_e2e.sock");
 	let secret_path = tmp_dir("genesis_e2e.secret");
@@ -26,7 +25,8 @@ async fn genesis_e2e() {
 	let genesis_dir = tmp_dir("genesis-dir");
 
 	let namespace = "quit-coding-to-vape";
-	let attestation_doc_path = format!("{}/genesis_attestation_doc", &*genesis_dir);
+	let attestation_doc_path =
+		format!("{}/genesis_attestation_doc", &*genesis_dir);
 	let genesis_output_path = format!("{}/genesis_output", &*genesis_dir);
 
 	let personal_dir =
@@ -153,9 +153,10 @@ async fn genesis_e2e() {
 	drop(unsafe_attestation_doc_from_der(
 		&fs::read(&*attestation_doc_path).unwrap(),
 	));
-	let genesis_output =
-		GenesisOutput::try_from_slice(&fs::read(&*genesis_output_path).unwrap())
-			.unwrap();
+	let genesis_output = GenesisOutput::try_from_slice(
+		&fs::read(&*genesis_output_path).unwrap(),
+	)
+	.unwrap();
 
 	// -- Recreate the quorum key from the encrypted shares.
 	let mut decrypted_shares: Vec<_> = genesis_output
