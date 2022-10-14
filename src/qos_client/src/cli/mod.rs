@@ -32,7 +32,7 @@
 //!
 //! ### Quorum Key Generation
 //!
-//! `QuorumOS` requires a Quorum Key. Each member of the Manifest Set holds a
+//! `QuorumOS` requires a Quorum Key. Each member of the Share Set holds a
 //! share of the Quorum Key. (The shares are created using Shamir Secret
 //! Sharing) It is expected that the Quorum Key is only ever fully reconstructed
 //! in an enclave.
@@ -40,27 +40,24 @@
 //! In order to generate a Quorum Key, `QuorumOs` has a special "genesis"
 //! service. The genesis service bypasses the standard boot and pivot flow, and
 //! thus is commonly referred to as boot genesis. Instead it simply generates a
-//! Quorum Key and shards it across quorum members. From a high level, the steps
-//! to create a Quorum Key and Manifest Set with the genesis service are:
+//! Quorum Key and shards it across share set members. From a high level, the
+//! steps to create a Quorum Key and Manifest Set with the genesis service are:
 //!
-//! 1) Every Quorum Member generates a Setup Key.
-//! 2) The genesis service is invoked with N setup keys and a reconstruction
+//! 1) Every Share Set Member generates a Share Key.
+//! 2) The genesis service is invoked with N Share Keys and a reconstruction
 //! threshold, K.
 //! 3) The genesis service then executes the following:
 //!     1) Generates a Quorum Key.
 //!     2) Splits the quorum key into N shares.
-//!     3) Generates N personal keys.
-//!     4) Encrypts each share to a personal key.
-//!     5) Encrypts each personal key to a setup key.
-//!     6) Returns shares, personal keys, quorum key, and an attestation
-//!     document.
-//! 4) Each quorum member verifies the attestation document and then
-//! decrypts their personal key and share.
+//!     3) Encrypts each share to a share key.
+//!     6) Returns encrypted shares, quorum key, and an attestation document.
+//! 4) Each share set member verifies the attestation document and then
+//! verifies they can decrypt the correct share with their setup key.
 //!
-//! #### Generate Setup Keys
+//! #### Generate Share Keys
 //!
-//! For each member of the Manifest Set, the genesis service needs a
-//! corresponding Setup Key as input. To produce a setup key, a member can run
+//! For each member of the Share Set, the genesis service needs a
+//! corresponding Share Key as input. To produce a Share Key, a member can run
 //! the [`Command::GenerateShareKey`] on a secure device:
 //!
 //! ```shell
@@ -74,23 +71,23 @@
 //! like:
 //!
 //! - personal
-//!     - `alice.our_namespace.personal.key`
-//!     - `alice.our_namespace.personal.pub`
+//!     - `alice.our_namespace.share_key.secret`
+//!     - `alice.our_namespace.share_key.pub`
 //!
 //! #### Send Boot Genesis Instruction
 //!
 //! The genesis ceremony leader will need to have a directory that contains the
-//! personal keys of all the quorum members. For example, if Alice was the
+//! share keys of all the share set members. For example, if Alice was the
 //! ceremony leader and members={Alice, Bob, Eve}, Alice would need to have the
 //! following directory structure:
 //!
 //! - personal
-//!     - `alice.our_namespace.personal.key`
-//!     - `alice.our_namespace.personal.pub`
+//!     - `alice.our_namespace.share_key.secret`
+//!     - `alice.our_namespace.share_key.pub`
 //! - genesis
-//!     - `alice.our_namespace.personal.pub`
-//!     - `bob.our_namespace.personal.pub`
-//!     - `eve.our_namespace.personal.pub`
+//!     - `alice.our_namespace.share_key.pub`
+//!     - `bob.our_namespace.share_key.pub`
+//!     - `eve.our_namespace.share_key.pub`
 //!
 //! Given the above directory structure, Alice can now generate the genesis
 //! outputs by running [`Command::BootGenesis`] (doesn't need to be a
@@ -102,43 +99,50 @@
 //!    --host-port 3000 \
 //!    --threshold 2 \
 //!    --genesis-dir  ~/qos/our_namespace/genesis
+//!    --qos-build-fingerprints ~/qos/our_namespace/qos-build-fingerprints.txt
 //! ```
 //!
 //! On success this will result in the following directory structure:
 //!
 //! - personal
-//!     - `alice.our_namespace.setup.key`
-//!     - `alice.our_namespace.setup.pub`
+//!     - `alice.our_namespace.share_key.key`
+//!     - `alice.our_namespace.share_key.pub`
 //! - genesis
-//!     - `alice.our_namespace.setup.pub`
-//!     - `bob.our_namespace.setup.pub`
-//!     - `eve.our_namespace.setup.pub`
-//!     - `attestation_doc.genesis`
-//!     - `output.genesis`
+//!     - `alice.our_namespace.share_key.pub`
+//!     - `bob.our_namespace.share_key.pub`
+//!     - `eve.our_namespace.share_key.pub`
+//!     - `genesis_attestation_doc`
+//!     - `genesis_output`
 //!
-//! Note that `output.genesis` is an encoded
+//! Note that `genesis_output` is an encoded
 //! [`qos_core::protocol::services::genesis::GenesisOutput`] and
-//! `attestation_doc.genesis` is a COSE Sign1 structure from the Nitro Secure
+//! `genesis_attestation_doc` is a COSE Sign1 structure from the Nitro Secure
 //! Module used to attest to the validity of the QOS image used to run the
 //! genesis service.
 //!
-//! #### Decrypt Personal Keys
+//! #### Attest and verify genesis outputs
+//!
+//! **WARNING:** this command should be run on an airgapped machine as it
+//! decrypts the quorum share.
 //!
 //! Within the [`qos_core::protocol::services::genesis::GenesisOutput`] are the
-//! encrypted Personal Keys and Quorum Shares for each member. Each member's
-//! personal key is encrypted to their setup key, so they will need their setup
-//! key to decrypt the personal key. The quorum share is encrypted to the
-//! personal key.
+//! encrypted Quorum Shares for each member. The quorum share is encrypted to
+//! the Share Key. The genesis output contains a hash of the plaintext share;
+//! the below command unencrypts the share, hashes it, and uses the digest to
+//! check that the local, unencrypted share matches what was created inside of
+//! the enclave. The recovery permutations inside the enclave
+//! references the share by hash, so it helps reinforce the case that recovery
+//! is possible if we can verify the hash.
 //!
 //! Each member will use [`Command::AfterGenesis`] to decrypt the outputs and
 //! verify the attestation document. Prior to running [`Command::AfterGenesis`],
 //! each member will need a directory structure with at minimum:
 //!
 //! - personal
-//!     - `bob.our_namespace.setup.key`
+//!     - `bob.our_namespace.share_key.secret`
 //! - genesis
-//!     - `attestation_doc.genesis`
-//!     - `output.genesis`
+//!     - `genesis_attestation_doc`
+//!     - `genesis_output`
 //!
 //! Given the above directory structure, Bob can run [`Command::AfterGenesis`]:
 //!
@@ -146,22 +150,18 @@
 //! cargo run --bin qos_client after-genesis \
 //!    --genesis-dir  ~/qos/our_namespace/genesis \
 //!    --personal-dir  ~/qos/our_namespace/personal \
-//!    --pcr0 0xf0f0f0f0f0f0f0 \
-//!    --pcr1 0xf0f0f0f0f0f0f0 \
-//!    --pcr2 0xf0f0f0f0f0f0f0 \
+//!    --qos-build-fingerprints ~/qos/our_namespace/qos-build-fingerprints.txt
 //! ```
 //!
-//! [`Command::AfterGenesis`] will extract Bob's personal key and share,
-//! resulting in the following directory structure:
+//! [`Command::AfterGenesis`] will extract Bob's quorum share, resulting in the
+//! following directory structure:
 //!
 //! - personal
-//!     - `bob.our_namespace.setup.key`
 //!     - `bob.our_namespace.share`
-//!     - `bob.our_namespace.personal.pub`
-//!     - `bob.our_namespace.personal.key`
+//!     - `bob.our_namespace.share_key.secret`
 //! - genesis
-//!     - `attestation_doc.genesis`
-//!     - `output.genesis`
+//!     - `genesis_attestation_doc`
+//!     - `genesis_output`
 //!
 //! ### Boot Standard
 //!

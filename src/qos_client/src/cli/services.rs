@@ -184,12 +184,13 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	let genesis_set_path = genesis_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 
 	// Read in the setup key
-	let (share_key_pair, mut key_file_name) = find_share_key(&personal_dir);
+	let (share_key_pair, mut share_key_file_name) =
+		find_share_key(&personal_dir);
 
 	// Get the alias from the setup key file name
-	let alias = mem::take(&mut key_file_name[0]);
-	let namespace = mem::take(&mut key_file_name[1]);
-	drop(key_file_name);
+	let alias = mem::take(&mut share_key_file_name[0]);
+	let namespace = mem::take(&mut share_key_file_name[1]);
+	drop(share_key_file_name);
 	println!("Alias: {}, Namespace: {}", alias, namespace);
 
 	// Read in the attestation doc from the genesis directory
@@ -240,6 +241,8 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		member_output.share_hash,
 		"Expected share hash do not match the actual share hash"
 	);
+
+	drop(plaintext_share);
 
 	// Store the encrypted share
 	let share_path = personal_dir
