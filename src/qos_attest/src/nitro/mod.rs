@@ -112,7 +112,6 @@ pub fn verify_attestation_doc_against_user_input(
 		"pcr2 does not match attestation doc"
 	);
 
-	// TODO: add unit tests
 	// pcr3 matches
 	assert_eq!(
 		qos_hex::encode(pcr3),
