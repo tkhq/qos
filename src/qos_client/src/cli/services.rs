@@ -86,8 +86,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	uri: &str,
 	genesis_dir: P,
 	threshold: u32,
-	// Path to qos build fingerprints
-	_qos_build_fingerprints: P,
+	qos_build_fingerprints_path: P,
 	unsafe_skip_attestation: bool,
 ) {
 	let genesis_set = create_genesis_set(&genesis_dir, threshold);
@@ -100,6 +99,12 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		} => (document, genesis_output),
 		r => panic!("Unexpected response: {:?}", r),
 	};
+	let attestation_doc =
+		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
+
+	let qos_build_fingerprints =
+		extract_qos_build_fingerprints(qos_build_fingerprints_path);
+
 
 	// Sanity check the genesis output
 	assert!(
@@ -114,7 +119,18 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	);
 
 	// Check the attestation document
-	drop(extract_attestation_doc(&cose_sign1, unsafe_skip_attestation));
+	if unsafe_skip_attestation {
+		println!("**WARNING:** Skipping attestation document verification.");
+	} else {
+		let user_data = &genesis_output.qos_hash();
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			user_data,
+			&qos_build_fingerprints.pcr0,
+			&qos_build_fingerprints.pcr1,
+			&qos_build_fingerprints.pcr2,
+		);
+	}
 	// TODO should we check against expected PCRs here?
 
 	// Write the attestation doc

@@ -1107,7 +1107,6 @@ mod handlers {
 		);
 	}
 
-	// TODO: verify AWS_ROOT_CERT_PEM against a checksum
 	// TODO: verify PCRs
 	pub(super) fn boot_genesis(opts: &ClientOpts) {
 		services::boot_genesis(
