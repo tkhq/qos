@@ -1,7 +1,7 @@
 use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
-use integration::{LOCAL_HOST, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE, PCR3};
+use integration::{LOCAL_HOST, PCR3, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 use qos_core::protocol::{
 	attestor::mock::{
