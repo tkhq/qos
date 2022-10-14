@@ -201,14 +201,8 @@ async fn genesis_e2e() {
 				&personal_dir(user),
 				"--genesis-dir",
 				&*genesis_dir,
-				"--pcr0",
-				"0xff",
-				"--pcr1",
-				"0xff",
-				"--pcr2",
-				"0xff",
 				"--qos-build-fingerprints",
-				"TODO!",
+				"./mock/qos-build-fingerprints.txt",
 				"--unsafe-skip-attestation"
 			])
 			.spawn()
