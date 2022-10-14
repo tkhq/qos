@@ -634,11 +634,8 @@ impl Command {
 		Parser::new()
 			.token(Self::genesis_dir_token())
 			.token(Self::personal_dir_token())
-			.token(Self::pcr0_token())
-			.token(Self::pcr1_token())
-			.token(Self::pcr2_token())
-			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::qos_build_fingerprints_token())
+			.token(Self::unsafe_skip_attestation_token())
 	}
 
 	fn generate_manifest() -> Parser {
@@ -1110,7 +1107,6 @@ mod handlers {
 		);
 	}
 
-	// TODO: verify AWS_ROOT_CERT_PEM against a checksum
 	// TODO: verify PCRs
 	pub(super) fn boot_genesis(opts: &ClientOpts) {
 		services::boot_genesis(
@@ -1126,9 +1122,6 @@ mod handlers {
 		services::after_genesis(
 			opts.genesis_dir(),
 			opts.personal_dir(),
-			&opts.pcr0(),
-			&opts.pcr1(),
-			&opts.pcr2(),
 			opts.qos_build_fingerprints(),
 			opts.unsafe_skip_attestation(),
 		);

@@ -1,5 +1,8 @@
 use std::{
-	fs, mem,
+	fs,
+	fs::File,
+	io::BufRead,
+	mem,
 	path::{Path, PathBuf},
 };
 
@@ -83,8 +86,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	uri: &str,
 	genesis_dir: P,
 	threshold: u32,
-	// Path to qos build fingerprints
-	_qos_build_fingerprints: P,
+	qos_build_fingerprints_path: P,
 	unsafe_skip_attestation: bool,
 ) {
 	let genesis_set = create_genesis_set(&genesis_dir, threshold);
@@ -97,6 +99,12 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		} => (document, genesis_output),
 		r => panic!("Unexpected response: {:?}", r),
 	};
+	let attestation_doc =
+		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
+
+	let qos_build_fingerprints =
+		extract_qos_build_fingerprints(qos_build_fingerprints_path);
+
 
 	// Sanity check the genesis output
 	assert!(
@@ -111,8 +119,18 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	);
 
 	// Check the attestation document
-	drop(extract_attestation_doc(&cose_sign1, unsafe_skip_attestation));
-	// TODO should we check against expected PCRs here?
+	if unsafe_skip_attestation {
+		println!("**WARNING:** Skipping attestation document verification.");
+	} else {
+		let user_data = &genesis_output.qos_hash();
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			user_data,
+			&qos_build_fingerprints.pcr0,
+			&qos_build_fingerprints.pcr1,
+			&qos_build_fingerprints.pcr2,
+		);
+	}
 
 	// Write the attestation doc
 	let attestation_doc_path =
@@ -173,10 +191,7 @@ fn create_genesis_set<P: AsRef<Path>>(
 pub(crate) fn after_genesis<P: AsRef<Path>>(
 	genesis_dir: P,
 	personal_dir: P,
-	pcr0: &[u8],
-	pcr1: &[u8],
-	pcr2: &[u8],
-	_qos_build_fingerprints: P,
+	qos_build_fingerprints_path: P,
 	unsafe_skip_attestation: bool,
 ) {
 	let attestation_doc_path =
@@ -186,6 +201,14 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	// Read in the setup key
 	let (share_key_pair, mut share_key_file_name) =
 		find_share_key(&personal_dir);
+
+	// Get the PCRs for QOS so we can verify
+	let qos_build_fingerprints =
+		extract_qos_build_fingerprints(qos_build_fingerprints_path);
+	println!(
+		"QOS build fingerprints taken from commit: {}",
+		qos_build_fingerprints.commit_ref
+	);
 
 	// Get the alias from the setup key file name
 	let alias = mem::take(&mut share_key_file_name[0]);
@@ -213,9 +236,9 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			user_data,
-			pcr0,
-			pcr1,
-			pcr2,
+			&qos_build_fingerprints.pcr0,
+			&qos_build_fingerprints.pcr1,
+			&qos_build_fingerprints.pcr2,
 		);
 	}
 
@@ -985,6 +1008,31 @@ fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
 	assert_eq!(s.len(), 1, "Did not find exactly 1 share in the directory");
 
 	s.remove(0)
+}
+
+struct QosBuildFingerPrints {
+	pcr0: Vec<u8>,
+	pcr1: Vec<u8>,
+	pcr2: Vec<u8>,
+	commit_ref: String,
+}
+
+fn extract_qos_build_fingerprints<P: AsRef<Path>>(
+	file_path: P,
+) -> QosBuildFingerPrints {
+	let file = File::open(file_path)
+		.expect("failed to open qos build fingerprints file");
+	let mut lines = std::io::BufReader::new(file)
+		.lines()
+		.collect::<Result<Vec<_>, _>>()
+		.unwrap();
+
+	QosBuildFingerPrints {
+		pcr0: qos_hex::decode(&lines[0]).expect("Invalid hex for pcr0"),
+		pcr1: qos_hex::decode(&lines[1]).expect("Invalid hex for pcr1"),
+		pcr2: qos_hex::decode(&lines[2]).expect("Invalid hex for pcr2"),
+		commit_ref: mem::take(&mut lines[3]),
+	}
 }
 
 /// Extract the attestation doc from a COSE Sign1 structure. Validates the cert
