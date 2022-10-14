@@ -4,7 +4,7 @@ QuorumOS is a trusted computation layer for hosting enclave apps at modern cloud
 
 Concretely, QuorumOS is designed to boot in an enclave by attesting to the enclave configuration, reconstructing a Quorum Key and then launching a single enclave app that can leverage the Quorum Key to encrypt and authenticate data.
 
-The consensus on environment configuration is coordinated through the Manifest document which describes, among other things, the enclave image configuration, application CLI arguments, public Quorum Key, and Quorum Set. During the bootstrapping process, a threshold of Quorum Members will attest to the enclaves configuration against the Manifest out of band and then post their respective Quorum Key share. See the [instance provision](#instance-provision) section for details.
+The consensus on environment configuration is coordinated through the Manifest document which describes, among other things, the enclave image configuration, application CLI arguments, public Quorum Key, and quorum sets. During the bootstrapping process, a threshold of Quorum Members will attest to the enclaves configuration against the Manifest out of band and then post their respective Quorum Key share. See the [instance provision](#instance-provision) section for details.
 
 The Quorum Key itself can be used by QuorumOS and enclave apps to encrypt and authenticate data.
 
