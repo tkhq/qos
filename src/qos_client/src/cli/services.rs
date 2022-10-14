@@ -131,7 +131,6 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 			&qos_build_fingerprints.pcr2,
 		);
 	}
-	// TODO should we check against expected PCRs here?
 
 	// Write the attestation doc
 	let attestation_doc_path =
