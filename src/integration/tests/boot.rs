@@ -6,6 +6,7 @@ use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 use qos_core::protocol::{
 	attestor::mock::{
 		MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
+		MOCK_PCR3,
 	},
 	services::{
 		boot::{
@@ -139,6 +140,7 @@ async fn boot_e2e() {
 				pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),
 				pcr1: qos_hex::decode(MOCK_PCR1).unwrap(),
 				pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
+				pcr3: qos_hex::decode(MOCK_PCR3).unwrap(),
 				aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap()
 			},
 		}

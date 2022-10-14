@@ -24,7 +24,7 @@ use qos_core::protocol::{
 	},
 	Hash256, QosHash,
 };
-use qos_crypto::{sha_256, RsaPair, RsaPub};
+use qos_crypto::{sha_256, sha_384, RsaPair, RsaPub};
 
 use crate::request;
 
@@ -87,6 +87,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	genesis_dir: P,
 	threshold: u32,
 	qos_build_fingerprints_path: P,
+	pcr3_preimage_path: P,
 	unsafe_skip_attestation: bool,
 ) {
 	let genesis_set = create_genesis_set(&genesis_dir, threshold);
@@ -128,6 +129,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 			&qos_build_fingerprints.pcr0,
 			&qos_build_fingerprints.pcr1,
 			&qos_build_fingerprints.pcr2,
+			&extract_pcr3(pcr3_preimage_path),
 		);
 	}
 
@@ -191,6 +193,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	genesis_dir: P,
 	personal_dir: P,
 	qos_build_fingerprints_path: P,
+	pcr3_preimage_path: P,
 	unsafe_skip_attestation: bool,
 ) {
 	let attestation_doc_path =
@@ -238,6 +241,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 			&qos_build_fingerprints.pcr0,
 			&qos_build_fingerprints.pcr1,
 			&qos_build_fingerprints.pcr2,
+			&extract_pcr3(pcr3_preimage_path),
 		);
 	}
 
@@ -283,9 +287,8 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub namespace: String,
 	pub pivot_hash: Hash256,
 	pub restart_policy: RestartPolicy,
-	pub pcr0: Vec<u8>,
-	pub pcr1: Vec<u8>,
-	pub pcr2: Vec<u8>,
+	pub qos_build_fingerprints_path: P,
+	pub pcr3_preimage_path: P,
 	pub root_cert_path: P,
 	pub boot_dir: P,
 	pub pivot_args: Vec<String>,
@@ -298,9 +301,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		namespace,
 		pivot_hash,
 		restart_policy,
-		pcr0,
-		pcr1,
-		pcr2,
+		qos_build_fingerprints_path,
+		pcr3_preimage_path,
 		root_cert_path,
 		boot_dir,
 		pivot_args,
@@ -311,6 +313,10 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 			.expect("Failed to read in root cert"),
 	)
 	.expect("AWS root cert: failed to convert PEM to DER");
+
+	let pcr3 = extract_pcr3(pcr3_preimage_path);
+	let QosBuildFingerPrints { pcr0, pcr1, pcr2, .. } =
+		extract_qos_build_fingerprints(qos_build_fingerprints_path);
 
 	let genesis_output = find_genesis_output(&genesis_dir);
 
@@ -349,7 +355,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 			threshold: genesis_output.threshold,
 			members: share_set_members,
 		},
-		enclave: NitroConfig { pcr0, pcr1, pcr2, aws_root_certificate },
+		enclave: NitroConfig { pcr0, pcr1, pcr2, pcr3, aws_root_certificate },
 	};
 
 	fs::create_dir_all(&boot_dir).expect("Failed to created boot dir");
@@ -370,6 +376,9 @@ pub(crate) fn sign_manifest<P: AsRef<Path>>(
 	manifest_hash: Hash256,
 	personal_dir: P,
 	boot_dir: P,
+	// TODO
+	// qos_build_fingerprints_path: P,
+	// pcr3_preimage_path: P,
 ) {
 	let manifest = find_manifest(&boot_dir);
 	let (personal_pair, mut personal_path) = find_share_key(&personal_dir);
@@ -414,6 +423,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	uri: &str,
 	pivot_path: P,
 	boot_dir: P,
+	pcr3_preimage_path: P,
 	unsafe_skip_attestation: bool,
 ) {
 	// Read in pivot binary
@@ -460,6 +470,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 			&manifest.enclave.pcr0,
 			&manifest.enclave.pcr1,
 			&manifest.enclave.pcr2,
+			&extract_pcr3(pcr3_preimage_path),
 		);
 	}
 
@@ -521,6 +532,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	attestation_dir: P,
 	manifest_hash: Hash256,
 	personal_dir: P, // TODO: replace this with just using yubikey to sign
+	pcr3_preimage_path: P,
 	unsafe_skip_attestation: bool,
 	unsafe_eph_path_override: Option<String>,
 ) {
@@ -559,6 +571,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 			&manifest_envelope.manifest.enclave.pcr0,
 			&manifest_envelope.manifest.enclave.pcr1,
 			&manifest_envelope.manifest.enclave.pcr2,
+			&extract_pcr3(pcr3_preimage_path),
 		);
 	}
 
@@ -669,7 +682,8 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		enclave: NitroConfig {
 			pcr0: mock_pcr.clone(),
 			pcr1: mock_pcr.clone(),
-			pcr2: mock_pcr,
+			pcr2: mock_pcr.clone(),
+			pcr3: mock_pcr,
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
 		pivot: PivotConfig { hash: sha_256(&pivot), restart, args },
@@ -1032,6 +1046,26 @@ fn extract_qos_build_fingerprints<P: AsRef<Path>>(
 		pcr2: qos_hex::decode(&lines[2]).expect("Invalid hex for pcr2"),
 		commit_ref: mem::take(&mut lines[3]),
 	}
+}
+
+fn extract_pcr3<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
+	let file = File::open(file_path)
+		.expect("failed to open qos build fingerprints file");
+	let mut lines = std::io::BufReader::new(file)
+		.lines()
+		.collect::<Result<Vec<_>, _>>()
+		.unwrap();
+
+	let role_arn = std::mem::take(&mut lines[0]);
+
+	let preimage = {
+		// Pad preimage with 48 bytes
+		let mut preimage = [0u8; 48].to_vec();
+		preimage.extend_from_slice(role_arn.as_bytes());
+		preimage
+	};
+
+	sha_384(&preimage).to_vec()
 }
 
 /// Extract the attestation doc from a COSE Sign1 structure. Validates the cert
