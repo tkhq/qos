@@ -105,7 +105,6 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	let qos_build_fingerprints =
 		extract_qos_build_fingerprints(qos_build_fingerprints_path);
 
-
 	// Sanity check the genesis output
 	assert!(
 		genesis_set.members.len() == genesis_output.member_outputs.len(),
