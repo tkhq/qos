@@ -574,7 +574,7 @@ impl Command {
 	fn pcr3_preimage_path_token() -> Token {
 		Token::new(
 			PCR3_PREIMAGE_PATH,
-			"Path to file with pcr3 preimage, the ARN of the instance.",
+			"Path to file with pcr3 preimage, the Amazon resource name (ARN) of the instance.",
 		)
 		.takes_value(true)
 		.required(true)
