@@ -209,7 +209,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		extract_qos_build_fingerprints(qos_build_fingerprints_path);
 	println!(
 		"QOS build fingerprints taken from commit: {}",
-		qos_build_fingerprints.commit_ref
+		qos_build_fingerprints.qos_commit
 	);
 
 	// Get the alias from the setup key file name
@@ -285,8 +285,8 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub genesis_dir: P,
 	pub nonce: u32,
 	pub namespace: String,
-	pub pivot_hash: Hash256,
 	pub restart_policy: RestartPolicy,
+	pub pivot_build_fingerprints_path: P,
 	pub qos_build_fingerprints_path: P,
 	pub pcr3_preimage_path: P,
 	pub root_cert_path: P,
@@ -299,7 +299,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		genesis_dir,
 		nonce,
 		namespace,
-		pivot_hash,
+		pivot_build_fingerprints_path,
 		restart_policy,
 		qos_build_fingerprints_path,
 		pcr3_preimage_path,
@@ -315,8 +315,10 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	.expect("AWS root cert: failed to convert PEM to DER");
 
 	let pcr3 = extract_pcr3(pcr3_preimage_path);
-	let QosBuildFingerPrints { pcr0, pcr1, pcr2, .. } =
+	let QosBuildFingerprints { pcr0, pcr1, pcr2, qos_commit } =
 		extract_qos_build_fingerprints(qos_build_fingerprints_path);
+	let PivotBuildFingerprints { pivot_hash, pivot_commit } =
+		extract_pivot_build_fingerprints(pivot_build_fingerprints_path);
 
 	let genesis_output = find_genesis_output(&genesis_dir);
 
@@ -340,7 +342,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	let manifest = Manifest {
 		namespace: Namespace { name: namespace.clone(), nonce },
 		pivot: PivotConfig {
-			hash: pivot_hash,
+			commit: pivot_commit,
+			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
 		},
@@ -356,6 +359,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 			members: share_set_members,
 		},
 		enclave: NitroConfig { pcr0, pcr1, pcr2, pcr3, aws_root_certificate },
+		qos_commit,
 	};
 
 	fs::create_dir_all(&boot_dir).expect("Failed to created boot dir");
@@ -379,6 +383,7 @@ pub(crate) fn sign_manifest<P: AsRef<Path>>(
 	// TODO
 	// qos_build_fingerprints_path: P,
 	// pcr3_preimage_path: P,
+	// pivot_build_fingerprints_path: P,
 ) {
 	let manifest = find_manifest(&boot_dir);
 	let (personal_pair, mut personal_path) = find_share_key(&personal_dir);
@@ -638,6 +643,7 @@ pub(crate) fn post_share<P: AsRef<Path>>(uri: &str, attestation_dir: P) {
 	}
 }
 
+#[allow(clippy::too_many_lines)]
 pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	uri: &str,
 	pivot_path: P,
@@ -686,7 +692,12 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			pcr3: mock_pcr,
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
-		pivot: PivotConfig { hash: sha_256(&pivot), restart, args },
+		pivot: PivotConfig {
+			commit: "mock-commit-ref".to_string(),
+			hash: sha_256(&pivot),
+			restart,
+			args,
+		},
 		quorum_key: quorum_public_der,
 		manifest_set: ManifestSet {
 			threshold: 1,
@@ -698,6 +709,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			// The only member is the quorum member
 			members: vec![member.clone()],
 		},
+		qos_commit: "mock-qos-commit-ref".to_string(),
 	};
 
 	// Create and post the boot standard instruction
@@ -1023,16 +1035,16 @@ fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
 	s.remove(0)
 }
 
-struct QosBuildFingerPrints {
+struct QosBuildFingerprints {
 	pcr0: Vec<u8>,
 	pcr1: Vec<u8>,
 	pcr2: Vec<u8>,
-	commit_ref: String,
+	qos_commit: String,
 }
 
 fn extract_qos_build_fingerprints<P: AsRef<Path>>(
 	file_path: P,
-) -> QosBuildFingerPrints {
+) -> QosBuildFingerprints {
 	let file = File::open(file_path)
 		.expect("failed to open qos build fingerprints file");
 	let mut lines = std::io::BufReader::new(file)
@@ -1040,11 +1052,11 @@ fn extract_qos_build_fingerprints<P: AsRef<Path>>(
 		.collect::<Result<Vec<_>, _>>()
 		.unwrap();
 
-	QosBuildFingerPrints {
+	QosBuildFingerprints {
 		pcr0: qos_hex::decode(&lines[0]).expect("Invalid hex for pcr0"),
 		pcr1: qos_hex::decode(&lines[1]).expect("Invalid hex for pcr1"),
 		pcr2: qos_hex::decode(&lines[2]).expect("Invalid hex for pcr2"),
-		commit_ref: mem::take(&mut lines[3]),
+		qos_commit: mem::take(&mut lines[3]),
 	}
 }
 
@@ -1066,6 +1078,28 @@ fn extract_pcr3<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
 	};
 
 	sha_384(&preimage).to_vec()
+}
+
+struct PivotBuildFingerprints {
+	pivot_hash: Vec<u8>,
+	pivot_commit: String,
+}
+
+fn extract_pivot_build_fingerprints<P: AsRef<Path>>(
+	file_path: P,
+) -> PivotBuildFingerprints {
+	let file = File::open(file_path)
+		.expect("failed to open qos build fingerprints file");
+	let mut lines = std::io::BufReader::new(file)
+		.lines()
+		.collect::<Result<Vec<_>, _>>()
+		.unwrap();
+
+	PivotBuildFingerprints {
+		pivot_hash: qos_hex::decode(&lines[0])
+			.expect("Invalid hex for pivot hash"),
+		pivot_commit: mem::take(&mut lines[1]),
+	}
 }
 
 /// Extract the attestation doc from a COSE Sign1 structure. Validates the cert
