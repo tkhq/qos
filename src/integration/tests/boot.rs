@@ -19,6 +19,9 @@ use qos_core::protocol::{
 use qos_crypto::{sha_256, RsaPair};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
+const PIVOT_BUILD_FINGERPRINTS_PATH: &str =
+	"./mock/pivot-build-fingerprints.txt";
+
 #[tokio::test]
 async fn boot_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
@@ -52,10 +55,21 @@ async fn boot_e2e() {
 	let user2 = "user2";
 	let user3 = "user3";
 
-	// // -- CLIENT create manifest.
+	// -- Create pivot-build-fingerprints.txt
 	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
-	let mock_pivot_hash_hex = qos_hex::encode(&mock_pivot_hash);
+
+	let build_fingerprints = {
+		let mut build_fingerprints =
+			qos_hex::encode(&mock_pivot_hash).as_bytes().to_vec();
+		build_fingerprints.extend_from_slice(b"\n");
+		build_fingerprints.extend_from_slice(b"mock-pivot-commit");
+		build_fingerprints
+	};
+
+	std::fs::write(PIVOT_BUILD_FINGERPRINTS_PATH, build_fingerprints).unwrap();
+
+	// -- CLIENT create manifest.
 	let msg = "testing420";
 	let pivot_args = format!("[--msg,{}]", msg);
 
@@ -68,10 +82,10 @@ async fn boot_e2e() {
 			"2",
 			"--namespace",
 			namespace,
-			"--pivot-hash",
-			&mock_pivot_hash_hex,
 			"--restart-policy",
 			"never",
+			"--pivot-build-fingerprints",
+			"./mock/pivot-build-fingerprints.txt",
 			"--qos-build-fingerprints",
 			"./mock/qos-build-fingerprints.txt",
 			"--pcr3-preimage-path",
@@ -120,7 +134,7 @@ async fn boot_e2e() {
 		Manifest {
 			namespace: Namespace { name: namespace.to_string(), nonce: 2 },
 			pivot: PivotConfig {
-				commit: "abcdef".to_string(),
+				commit: "mock-pivot-commit".to_string(),
 				hash: mock_pivot_hash,
 				restart: RestartPolicy::Never,
 				args: vec!["--msg".to_string(), msg.to_string()]
@@ -163,6 +177,8 @@ async fn boot_e2e() {
 				&*boot_dir,
 				"--pcr3-preimage-path",
 				"./mock/pcr3-preimage.txt",
+				"--pivot-build-fingerprints",
+				"./mock/pivot-build-fingerprints.txt",
 			])
 			.spawn()
 			.unwrap()
