@@ -376,6 +376,7 @@ const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const ATTESTATION_DIR: &str = "attestation-dir";
 const QOS_BUILD_FINGERPRINTS: &str = "qos-build-fingerprints";
+const PIVOT_BUILD_FINGERPRINTS: &str = "pivot-build-fingerprints";
 
 /// Commands for the Client CLI.
 ///
@@ -582,6 +583,14 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn pivot_build_fingerprints_token() -> Token {
+		Token::new(
+			PIVOT_BUILD_FINGERPRINTS,
+			"Path to file with Pivot build fingerprints.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -655,12 +664,7 @@ impl Command {
 				Self::namespace_token()
 			)
 			.token(
-				Token::new(
-					PIVOT_HASH,
-					"Hex encoded SHA-256 hash of the pivot executable encoded as a Vec<u8>.",
-				)
-				.takes_value(true)
-				.required(true),
+				Self::pivot_build_fingerprints_token()
 			)
 			.token(
 				Self::restart_policy_token(),

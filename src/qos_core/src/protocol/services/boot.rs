@@ -66,6 +66,8 @@ impl TryFrom<String> for RestartPolicy {
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfig {
+	/// Reference to the commit the pivot was built off of.
+	commit: String,
 	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
 	pub hash: Hash256,
 	/// Restart policy for running the pivot binary.
@@ -156,6 +158,8 @@ pub struct Manifest {
 	pub share_set: ShareSet,
 	/// Configuration and verifiable values for the enclave hardware.
 	pub enclave: NitroConfig,
+	/// Reference to the commit QOS was built off of.
+	pub qos_commit: String,
 }
 
 /// An approval by a Quorum Member.
