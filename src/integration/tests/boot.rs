@@ -120,6 +120,7 @@ async fn boot_e2e() {
 		Manifest {
 			namespace: Namespace { name: namespace.to_string(), nonce: 2 },
 			pivot: PivotConfig {
+				commit: "abcdef".to_string(),
 				hash: mock_pivot_hash,
 				restart: RestartPolicy::Never,
 				args: vec!["--msg".to_string(), msg.to_string()]
@@ -140,6 +141,7 @@ async fn boot_e2e() {
 				pcr3: qos_hex::decode(PCR3).unwrap(),
 				aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap()
 			},
+			qos_commit: "abcdef".to_string(),
 		}
 	);
 

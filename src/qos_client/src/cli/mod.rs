@@ -359,7 +359,6 @@ const ALIAS: &str = "alias";
 const NAMESPACE: &str = "namespace";
 const THRESHOLD: &str = "threshold";
 const NONCE: &str = "nonce";
-const PIVOT_HASH: &str = "pivot-hash";
 const RESTART_POLICY: &str = "restart-policy";
 const ROOT_CERT_PATH: &str = "root-cert-path";
 const MANIFEST_HASH: &str = "manifest-hash";
@@ -650,9 +649,7 @@ impl Command {
 
 	fn generate_manifest() -> Parser {
 		Parser::new()
-			.token(
-				Self::genesis_dir_token()
-			)
+			.token(Self::genesis_dir_token())
 			.token(
 				Token::new(
 					NONCE,
@@ -661,21 +658,11 @@ impl Command {
 				.takes_value(true)
 				.required(true),
 			)
-			.token(
-				Self::namespace_token()
-			)
-			.token(
-				Self::pivot_build_fingerprints_token()
-			)
-			.token(
-				Self::restart_policy_token(),
-			)
-			.token(
-				Self::qos_build_fingerprints_token()
-			)
-			.token(
-				Self::pcr3_preimage_path_token()
-			)
+			.token(Self::namespace_token())
+			.token(Self::pivot_build_fingerprints_token())
+			.token(Self::restart_policy_token())
+			.token(Self::qos_build_fingerprints_token())
+			.token(Self::pcr3_preimage_path_token())
 			.token(
 				Token::new(
 					ROOT_CERT_PATH,
@@ -684,12 +671,8 @@ impl Command {
 				.takes_value(true)
 				.required(true),
 			)
-			.token(
-				Self::boot_dir_token()
-			)
-			.token(
-				Self::pivot_args_token()
-			)
+			.token(Self::boot_dir_token())
+			.token(Self::pivot_args_token())
 	}
 
 	fn sign_manifest() -> Parser {
@@ -698,6 +681,7 @@ impl Command {
 			.token(Self::personal_dir_token())
 			.token(Self::boot_dir_token())
 			.token(Self::pcr3_preimage_path_token())
+			.token(Self::pivot_build_fingerprints_token())
 	}
 
 	fn boot_standard() -> Parser {
@@ -814,11 +798,6 @@ impl ClientOpts {
 			.expect("Could not parse `--nonce` as u32")
 	}
 
-	fn pivot_hash(&self) -> Vec<u8> {
-		qos_hex::decode(self.parsed.single(PIVOT_HASH).expect("required arg"))
-			.expect("Could not parse `--pivot-hash` to bytes")
-	}
-
 	fn restart_policy(&self) -> boot::RestartPolicy {
 		self.parsed
 			.single(RESTART_POLICY)
@@ -861,6 +840,13 @@ impl ClientOpts {
 		self.parsed
 			.single(QOS_BUILD_FINGERPRINTS)
 			.expect("qos-build-fingerprints is a required arg")
+			.to_string()
+	}
+
+	fn pivot_build_fingerprints(&self) -> String {
+		self.parsed
+			.single(PIVOT_BUILD_FINGERPRINTS)
+			.expect("pivot-build-fingerprints is a required arg")
 			.to_string()
 	}
 
@@ -1132,8 +1118,8 @@ mod handlers {
 			genesis_dir: opts.genesis_dir(),
 			nonce: opts.nonce(),
 			namespace: opts.namespace(),
-			pivot_hash: opts.pivot_hash().try_into().unwrap(),
 			restart_policy: opts.restart_policy(),
+			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			root_cert_path: opts.root_cert_path(),
