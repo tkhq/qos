@@ -20,6 +20,9 @@ pub struct NitroConfig {
 	pub pcr1: Vec<u8>,
 	/// The hash of the application
 	pub pcr2: Vec<u8>,
+	/// The hash of the Amazon resource name (ARN) of the IAM role that's
+	/// associated with the EC2 instance.
+	pub pcr3: Vec<u8>,
 	/// DER encoded X509 AWS root certificate
 	pub aws_root_certificate: Vec<u8>,
 }
@@ -309,8 +312,9 @@ mod test {
 			namespace: Namespace { nonce: 420, name: "vape lord".to_string() },
 			enclave: NitroConfig {
 				pcr0: vec![4; 32],
-				pcr1: vec![2; 32],
-				pcr2: vec![0; 32],
+				pcr1: vec![3; 32],
+				pcr2: vec![2; 32],
+				pcr3: vec![1; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
 			},
 			pivot: PivotConfig {

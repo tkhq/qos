@@ -55,6 +55,7 @@ pub fn verify_attestation_doc_against_user_input(
 	pcr0: &[u8],
 	pcr1: &[u8],
 	pcr2: &[u8],
+	pcr3: &[u8],
 ) {
 	assert_eq!(
 		user_data,
@@ -109,6 +110,20 @@ pub fn verify_attestation_doc_against_user_input(
 				.into_vec()
 		),
 		"pcr2 does not match attestation doc"
+	);
+
+	// pcr3 matches
+	assert_eq!(
+		qos_hex::encode(pcr3),
+		qos_hex::encode(
+			&attestation_doc
+				.pcrs
+				.get(&3)
+				.expect("pcr3 not found")
+				.clone()
+				.into_vec()
+		),
+		"pcr3 does not match attestation doc"
 	);
 }
 
@@ -245,7 +260,8 @@ mod test {
 	use openssl::pkey::{PKey, Private, Public};
 	use qos_core::protocol::attestor::mock::{
 		MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
-		MOCK_SECONDS_SINCE_EPOCH, MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT,
+		MOCK_PCR3, MOCK_SECONDS_SINCE_EPOCH,
+		MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT,
 	};
 
 	use super::*;
@@ -479,6 +495,7 @@ mod test {
 			&qos_hex::decode(MOCK_PCR0).unwrap(),
 			&qos_hex::decode(MOCK_PCR1).unwrap(),
 			&qos_hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_PCR3).unwrap(),
 		);
 	}
 
@@ -495,6 +512,7 @@ mod test {
 			&qos_hex::decode(MOCK_PCR0).unwrap(),
 			&qos_hex::decode(MOCK_PCR1).unwrap(),
 			&qos_hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_PCR3).unwrap(),
 		);
 	}
 
@@ -514,6 +532,7 @@ mod test {
 			&qos_hex::decode(MOCK_PCR0).unwrap(),
 			&qos_hex::decode(MOCK_PCR1).unwrap(),
 			&qos_hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_PCR3).unwrap(),
 		);
 	}
 
@@ -530,6 +549,7 @@ mod test {
 			&[255; 48],
 			&qos_hex::decode(MOCK_PCR1).unwrap(),
 			&qos_hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_PCR3).unwrap(),
 		);
 	}
 
@@ -546,6 +566,7 @@ mod test {
 			&qos_hex::decode(MOCK_PCR0).unwrap(),
 			&[255; 48],
 			&qos_hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_PCR3).unwrap(),
 		);
 	}
 
@@ -561,6 +582,24 @@ mod test {
 			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
 			&qos_hex::decode(MOCK_PCR0).unwrap(),
 			&qos_hex::decode(MOCK_PCR1).unwrap(),
+			&[255; 48],
+			&qos_hex::decode(MOCK_PCR3).unwrap(),
+		);
+	}
+
+	#[test]
+	#[should_panic = "pcr3 does not match attestation doc"]
+	fn verify_attestation_doc_against_user_input_panics_invalid_pcr3() {
+		let attestation_doc =
+			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
+				.unwrap();
+
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&qos_hex::decode(MOCK_PCR0).unwrap(),
+			&qos_hex::decode(MOCK_PCR1).unwrap(),
+			&qos_hex::decode(MOCK_PCR2).unwrap(),
 			&[255; 48],
 		);
 	}

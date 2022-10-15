@@ -141,6 +141,8 @@ async fn genesis_e2e() {
 			&host_port.to_string(),
 			"--qos-build-fingerprints",
 			"./mock/qos-build-fingerprints.txt",
+			"--pcr3-preimage-path",
+			"./mock/pcr3-preimage.txt",
 			"--unsafe-skip-attestation"
 		])
 		.spawn()
@@ -203,6 +205,8 @@ async fn genesis_e2e() {
 				&*genesis_dir,
 				"--qos-build-fingerprints",
 				"./mock/qos-build-fingerprints.txt",
+				"--pcr3-preimage-path",
+				"./mock/pcr3-preimage.txt",
 				"--unsafe-skip-attestation"
 			])
 			.spawn()

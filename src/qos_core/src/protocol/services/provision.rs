@@ -178,8 +178,9 @@ mod test {
 			namespace: Namespace { nonce: 420, name: "vape-space".to_string() },
 			enclave: NitroConfig {
 				pcr0: vec![4; 32],
-				pcr1: vec![2; 32],
-				pcr2: vec![0; 32],
+				pcr1: vec![3; 32],
+				pcr2: vec![2; 32],
+				pcr3: vec![1; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
 			},
 			pivot: PivotConfig {
