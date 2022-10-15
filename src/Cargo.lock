@@ -649,6 +649,7 @@ version = "0.1.0"
 dependencies = [
  "borsh",
  "openssl",
+ "qos_hex",
  "rand",
 ]
 

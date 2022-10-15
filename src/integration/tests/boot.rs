@@ -1,7 +1,7 @@
 use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
-use integration::{LOCAL_HOST, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
+use integration::{LOCAL_HOST, PCR3, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 use qos_core::protocol::{
 	attestor::mock::{
@@ -72,12 +72,10 @@ async fn boot_e2e() {
 			&mock_pivot_hash_hex,
 			"--restart-policy",
 			"never",
-			"--pcr0",
-			MOCK_PCR0,
-			"--pcr1",
-			MOCK_PCR1,
-			"--pcr2",
-			MOCK_PCR2,
+			"--qos-build-fingerprints",
+			"./mock/qos-build-fingerprints.txt",
+			"--pcr3-preimage-path",
+			"./mock/pcr3-preimage.txt",
 			"--root-cert-path",
 			root_cert_path,
 			"--boot-dir",
@@ -139,6 +137,7 @@ async fn boot_e2e() {
 				pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),
 				pcr1: qos_hex::decode(MOCK_PCR1).unwrap(),
 				pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
+				pcr3: qos_hex::decode(PCR3).unwrap(),
 				aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap()
 			},
 		}
@@ -160,6 +159,8 @@ async fn boot_e2e() {
 				&personal_dir(alias),
 				"--boot-dir",
 				&*boot_dir,
+				"--pcr3-preimage-path",
+				"./mock/pcr3-preimage.txt",
 			])
 			.spawn()
 			.unwrap()
@@ -240,6 +241,8 @@ async fn boot_e2e() {
 			&host_port.to_string(),
 			"--host-ip",
 			LOCAL_HOST,
+			"--pcr3-preimage-path",
+			"./mock/pcr3-preimage.txt",
 			"--unsafe-skip-attestation",
 		])
 		.spawn()
@@ -282,6 +285,8 @@ async fn boot_e2e() {
 				qos_hex::encode(&manifest.qos_hash()).as_str(),
 				"--personal-dir",
 				&personal_dir(user),
+				"--pcr3-preimage-path",
+				"./mock/pcr3-preimage.txt",
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
 				&*eph_path,

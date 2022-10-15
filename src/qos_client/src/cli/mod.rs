@@ -357,9 +357,6 @@ const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ALIAS: &str = "alias";
 const NAMESPACE: &str = "namespace";
-const PCR0: &str = "pcr0";
-const PCR1: &str = "pcr1";
-const PCR2: &str = "pcr2";
 const THRESHOLD: &str = "threshold";
 const NONCE: &str = "nonce";
 const PIVOT_HASH: &str = "pivot-hash";
@@ -376,6 +373,7 @@ const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const ATTESTATION_DIR: &str = "attestation-dir";
 const QOS_BUILD_FINGERPRINTS: &str = "qos-build-fingerprints";
+const PCR3_PREIMAGE_PATH: &str = "pcr3-preimage-path";
 
 /// Commands for the Client CLI.
 ///
@@ -520,15 +518,6 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
-	fn pcr0_token() -> Token {
-		Token::new(PCR0, "Hex encoded pcr0.").takes_value(true).required(true)
-	}
-	fn pcr1_token() -> Token {
-		Token::new(PCR1, "Hex encoded pcr0.").takes_value(true).required(true)
-	}
-	fn pcr2_token() -> Token {
-		Token::new(PCR2, "Hex encoded pcr2.").takes_value(true).required(true)
-	}
 	fn namespace_token() -> Token {
 		Token::new(NAMESPACE, "Namespace for the associated manifest.")
 			.takes_value(true)
@@ -582,6 +571,14 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn pcr3_preimage_path_token() -> Token {
+		Token::new(
+			PCR3_PREIMAGE_PATH,
+			"Path to file with pcr3 preimage, the Amazon resource name (ARN) of the instance.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -626,6 +623,9 @@ impl Command {
 				.required(true)
 				.takes_value(true)
 			)
+			.token(
+				Self::pcr3_preimage_path_token()
+			)
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::qos_build_fingerprints_token())
 	}
@@ -635,6 +635,7 @@ impl Command {
 			.token(Self::genesis_dir_token())
 			.token(Self::personal_dir_token())
 			.token(Self::qos_build_fingerprints_token())
+			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 	}
 
@@ -666,13 +667,10 @@ impl Command {
 				Self::restart_policy_token(),
 			)
 			.token(
-				Self::pcr0_token()
+				Self::qos_build_fingerprints_token()
 			)
 			.token(
-				Self::pcr1_token()
-			)
-			.token(
-				Self::pcr2_token()
+				Self::pcr3_preimage_path_token()
 			)
 			.token(
 				Token::new(
@@ -695,12 +693,14 @@ impl Command {
 			.token(Self::manifest_hash_token())
 			.token(Self::personal_dir_token())
 			.token(Self::boot_dir_token())
+			.token(Self::pcr3_preimage_path_token())
 	}
 
 	fn boot_standard() -> Parser {
 		Self::base()
 			.token(Self::pivot_path_token())
 			.token(Self::boot_dir_token())
+			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 	}
 
@@ -713,6 +713,7 @@ impl Command {
 			.token(Self::attestation_dir_token())
 			.token(Self::manifest_hash_token())
 			.token(Self::personal_dir_token())
+			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
 	}
@@ -786,19 +787,11 @@ impl ClientOpts {
 		self.parsed.single(GENESIS_DIR).expect("required arg").to_string()
 	}
 
-	fn pcr0(&self) -> Vec<u8> {
-		qos_hex::decode(self.parsed.single(PCR0).expect("required arg"))
-			.expect("Could not parse `--pcr0` to bytes")
-	}
-
-	fn pcr1(&self) -> Vec<u8> {
-		qos_hex::decode(self.parsed.single(PCR1).expect("required arg"))
-			.expect("Could not parse `--pcr1` to bytes")
-	}
-
-	fn pcr2(&self) -> Vec<u8> {
-		qos_hex::decode(self.parsed.single(PCR2).expect("required arg"))
-			.expect("Could not parse `--pcr2` to bytes")
+	fn pcr3_preimage_path(&self) -> String {
+		self.parsed
+			.single(PCR3_PREIMAGE_PATH)
+			.expect("`--pcr3-preimage-path` is a required arg")
+			.to_string()
 	}
 
 	fn threshold(&self) -> u32 {
@@ -1019,7 +1012,7 @@ mod handlers {
 	pub(super) fn describe_pcr(opts: &ClientOpts) {
 		let path = &opts.path_message();
 
-		for i in 0..3 {
+		for i in 0..4 {
 			println!("PCR index {i}");
 
 			match request::post(
@@ -1114,6 +1107,7 @@ mod handlers {
 			opts.genesis_dir(),
 			opts.threshold(),
 			opts.qos_build_fingerprints(),
+			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
 		);
 	}
@@ -1123,6 +1117,7 @@ mod handlers {
 			opts.genesis_dir(),
 			opts.personal_dir(),
 			opts.qos_build_fingerprints(),
+			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
 		);
 	}
@@ -1135,9 +1130,8 @@ mod handlers {
 			namespace: opts.namespace(),
 			pivot_hash: opts.pivot_hash().try_into().unwrap(),
 			restart_policy: opts.restart_policy(),
-			pcr0: opts.pcr0(),
-			pcr1: opts.pcr1(),
-			pcr2: opts.pcr2(),
+			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
+			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			root_cert_path: opts.root_cert_path(),
 			boot_dir: opts.boot_dir(),
 			pivot_args: opts.pivot_args(),
@@ -1157,6 +1151,7 @@ mod handlers {
 			&opts.path_message(),
 			opts.pivot_path(),
 			opts.boot_dir(),
+			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
 		);
 	}
@@ -1173,6 +1168,7 @@ mod handlers {
 			opts.attestation_dir(),
 			opts.manifest_hash(),
 			opts.personal_dir(),
+			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
 			opts.unsafe_eph_path_override(),
 		);
