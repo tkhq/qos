@@ -291,7 +291,6 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub pivot_build_fingerprints_path: P,
 	pub qos_build_fingerprints_path: P,
 	pub pcr3_preimage_path: P,
-	pub root_cert_path: P,
 	pub share_set_dir: P,
 	pub manifest_set_dir: P,
 	pub namespace_dir: P,
@@ -307,19 +306,12 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		restart_policy,
 		qos_build_fingerprints_path,
 		pcr3_preimage_path,
-		root_cert_path,
 		manifest_set_dir,
 		share_set_dir,
 		namespace_dir,
 		boot_dir,
 		pivot_args,
 	} = args;
-
-	let aws_root_certificate = cert_from_pem(
-		&fs::read(root_cert_path.as_ref())
-			.expect("Failed to read in root cert"),
-	)
-	.expect("AWS root cert: failed to convert PEM to DER");
 
 	let pcr3 = extract_pcr3(pcr3_preimage_path);
 	let QosBuildFingerprints { pcr0, pcr1, pcr2, qos_commit } =
@@ -349,7 +341,13 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		quorum_key: quorum_key.public_key_to_der().unwrap(),
 		manifest_set,
 		share_set,
-		enclave: NitroConfig { pcr0, pcr1, pcr2, pcr3, aws_root_certificate },
+		enclave: NitroConfig {
+			pcr0,
+			pcr1,
+			pcr2,
+			pcr3,
+			aws_root_certificate: AWS_ROOT_CERT_PEM.to_vec(),
+		},
 		qos_commit,
 	};
 
@@ -1144,7 +1142,7 @@ fn extract_qos_build_fingerprints<P: AsRef<Path>>(
 
 fn extract_pcr3<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
 	let file = File::open(file_path)
-		.expect("failed to open qos build fingerprints file");
+		.expect("failed to open pcr3 preimage");
 	let mut lines = std::io::BufReader::new(file)
 		.lines()
 		.collect::<Result<Vec<_>, _>>()

@@ -360,7 +360,6 @@ const NAMESPACE: &str = "namespace";
 const THRESHOLD: &str = "threshold";
 const NONCE: &str = "nonce";
 const RESTART_POLICY: &str = "restart-policy";
-const ROOT_CERT_PATH: &str = "root-cert-path";
 const MANIFEST_HASH: &str = "manifest-hash";
 const PIVOT_PATH: &str = "pivot-path";
 const GENESIS_DIR: &str = "genesis-dir";
@@ -606,6 +605,14 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn namespace_dir_token() -> Token {
+		Token::new(
+			NAMESPACE_DIR,
+			"Directory for the namespace this manifest will belong to.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -681,17 +688,10 @@ impl Command {
 			.token(Self::restart_policy_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
-			.token(
-				Token::new(
-					ROOT_CERT_PATH,
-					"Path to file containing PEM encoded AWS root cert.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
 			.token(Self::boot_dir_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
+			.token(Self::namespace_dir_token())
 			.token(Self::pivot_args_token())
 	}
 
@@ -827,10 +827,6 @@ impl ClientOpts {
 			.to_string()
 			.try_into()
 			.expect("Could not parse `--restart-policy`")
-	}
-
-	fn root_cert_path(&self) -> String {
-		self.parsed.single(ROOT_CERT_PATH).expect("required arg").to_string()
 	}
 
 	fn manifest_hash(&self) -> Hash256 {
@@ -1164,7 +1160,6 @@ mod handlers {
 			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
-			root_cert_path: opts.root_cert_path(),
 			boot_dir: opts.boot_dir(),
 			pivot_args: opts.pivot_args(),
 			share_set_dir: opts.share_set_dir(),
