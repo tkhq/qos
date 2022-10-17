@@ -69,6 +69,8 @@ impl TryFrom<String> for RestartPolicy {
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfig {
+	/// Reference to the commit the pivot was built off of.
+	pub commit: String,
 	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
 	pub hash: Hash256,
 	/// Restart policy for running the pivot binary.
@@ -159,6 +161,8 @@ pub struct Manifest {
 	pub share_set: ShareSet,
 	/// Configuration and verifiable values for the enclave hardware.
 	pub enclave: NitroConfig,
+	/// Reference to the commit QOS was built off of.
+	pub qos_commit: String,
 }
 
 /// An approval by a Quorum Member.
@@ -314,6 +318,7 @@ mod test {
 				aws_root_certificate: b"cert lord".to_vec(),
 			},
 			pivot: PivotConfig {
+				commit: "commit lord".to_string(),
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
@@ -321,6 +326,7 @@ mod test {
 			quorum_key: quorum_pair.public_key_to_der().unwrap(),
 			manifest_set: ManifestSet { threshold: 2, members: quorum_members },
 			share_set: ShareSet { threshold: 2, members: vec![] },
+			qos_commit: "mock qos commit".to_string(),
 		};
 
 		(manifest, member_with_keys, pivot)

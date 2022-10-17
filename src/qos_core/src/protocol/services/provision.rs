@@ -184,6 +184,7 @@ mod test {
 				aws_root_certificate: b"cert lord".to_vec(),
 			},
 			pivot: PivotConfig {
+				commit: "commit lord".to_string(),
 				hash: sha_256(pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
@@ -197,6 +198,7 @@ mod test {
 				threshold: threshold.try_into().unwrap(),
 				members: members.clone().into_iter().map(|(m, _)| m).collect(),
 			},
+			qos_commit: "mock qos commit".to_string(),
 		};
 
 		let approvals: Vec<_> = members
