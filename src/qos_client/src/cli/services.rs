@@ -920,31 +920,6 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 	ManifestSet { members, threshold: find_threshold(dir) }
 }
 
-fn find_genesis_output<P: AsRef<Path>>(genesis_dir: P) -> GenesisOutput {
-	let mut g: Vec<_> = find_file_paths(&genesis_dir)
-		.iter()
-		.filter_map(|path| {
-			let file_name =
-				path.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap();
-			if file_name != GENESIS_OUTPUT_FILE {
-				return None;
-			}
-
-			Some(
-				GenesisOutput::try_from_slice(
-					&fs::read(path)
-						.expect("Failed to read genesis output file"),
-				)
-				.expect("Failed to deserialize genesis output"),
-			)
-		})
-		.collect();
-	// Make sure there is exactly one manifest
-	assert_eq!(g.len(), 1, "Did not find exactly 1 genesis output");
-
-	g.remove(0)
-}
-
 fn find_approvals<P: AsRef<Path>>(
 	boot_dir: P,
 	manifest: &Manifest,
