@@ -32,31 +32,51 @@ impl Drop for ChildWrapper {
 	}
 }
 
+#[derive(Debug)]
+enum Internal<'a> {
+	String(String),
+	Str(&'a str),
+}
+
 /// Wrapper type for [`std::path::Path`] that attempts to remove a file or
 /// directory at the path on drop.
 #[derive(Debug)]
-pub struct PathWrapper(&'static str);
+pub struct PathWrapper<'a>(Internal<'a>);
 
-impl From<&'static str> for PathWrapper {
-	fn from(path: &'static str) -> Self {
-		Self(path)
+impl<'a> From<&'a str> for PathWrapper<'a> {
+	fn from(path: &'a str) -> Self {
+		Self(Internal::Str(path))
 	}
 }
 
-impl Drop for PathWrapper {
+impl<'a> From<String> for PathWrapper<'a> {
+	fn from(path: String) -> Self {
+		Self(Internal::String(path))
+	}
+}
+
+impl<'a> Drop for PathWrapper<'a> {
 	fn drop(&mut self) {
+		let path = match &self.0 {
+			Internal::String(i) => i,
+			Internal::Str(i) => *i,
+		};
+
 		// Try removing it both as a file and as a directory. One of these
 		// will always fail
-		drop(std::fs::remove_dir_all(self.0));
-		drop(std::fs::remove_file(self.0));
+		drop(std::fs::remove_dir_all(path));
+		drop(std::fs::remove_file(path));
 	}
 }
 
-impl Deref for PathWrapper {
-	type Target = &'static str;
+impl<'a> Deref for PathWrapper<'a> {
+	type Target = str;
 
 	fn deref(&self) -> &Self::Target {
-		&self.0
+		match &self.0 {
+			Internal::String(i) => i,
+			Internal::Str(i) => *i,
+		}
 	}
 }
 

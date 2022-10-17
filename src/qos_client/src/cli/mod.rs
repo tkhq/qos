@@ -32,7 +32,7 @@
 //!
 //! ### Quorum Key Generation
 //!
-//! `QuorumOS` requires a Quorum Key. Each member of the Manifest Set holds a
+//! `QuorumOS` requires a Quorum Key. Each member of the Share Set holds a
 //! share of the Quorum Key. (The shares are created using Shamir Secret
 //! Sharing) It is expected that the Quorum Key is only ever fully reconstructed
 //! in an enclave.
@@ -40,31 +40,28 @@
 //! In order to generate a Quorum Key, `QuorumOs` has a special "genesis"
 //! service. The genesis service bypasses the standard boot and pivot flow, and
 //! thus is commonly referred to as boot genesis. Instead it simply generates a
-//! Quorum Key and shards it across quorum members. From a high level, the steps
-//! to create a Quorum Key and Manifest Set with the genesis service are:
+//! Quorum Key and shards it across share set members. From a high level, the
+//! steps to create a Quorum Key and Manifest Set with the genesis service are:
 //!
-//! 1) Every Quorum Member generates a Setup Key.
-//! 2) The genesis service is invoked with N setup keys and a reconstruction
+//! 1) Every Share Set Member generates a Share Key.
+//! 2) The genesis service is invoked with N Share Keys and a reconstruction
 //! threshold, K.
 //! 3) The genesis service then executes the following:
 //!     1) Generates a Quorum Key.
 //!     2) Splits the quorum key into N shares.
-//!     3) Generates N personal keys.
-//!     4) Encrypts each share to a personal key.
-//!     5) Encrypts each personal key to a setup key.
-//!     6) Returns shares, personal keys, quorum key, and an attestation
-//!     document.
-//! 4) Each quorum member verifies the attestation document and then
-//! decrypts their personal key and share.
+//!     3) Encrypts each share to a share key.
+//!     6) Returns encrypted shares, quorum key, and an attestation document.
+//! 4) Each share set member verifies the attestation document and then
+//! verifies they can decrypt the correct share with their setup key.
 //!
-//! #### Generate Setup Keys
+//! #### Generate Share Keys
 //!
-//! For each member of the Manifest Set, the genesis service needs a
-//! corresponding Setup Key as input. To produce a setup key, a member can run
-//! the [`Command::GenerateSetupKey`] on a secure device:
+//! For each member of the Share Set, the genesis service needs a
+//! corresponding Share Key as input. To produce a Share Key, a member can run
+//! the [`Command::GenerateShareKey`] on a secure device:
 //!
 //! ```shell
-//! cargo run --bin qos_client generate-setup-key \
+//! cargo run --bin qos_client generate-share-key \
 //!     --namespace our_namespace \
 //!     --alias alice \
 //!     --personal-dir ~/qos/our_namespace/personal
@@ -74,23 +71,23 @@
 //! like:
 //!
 //! - personal
-//!     - `alice.our_namespace.setup.key`
-//!     - `alice.our_namespace.setup.pub`
+//!     - `alice.our_namespace.share_key.secret`
+//!     - `alice.our_namespace.share_key.pub`
 //!
 //! #### Send Boot Genesis Instruction
 //!
 //! The genesis ceremony leader will need to have a directory that contains the
-//! setup keys of all the quorum members. For example, if Alice was the ceremony
-//! leader and members={Alice, Bob, Eve}, Alice would need to have the
+//! share keys of all the share set members. For example, if Alice was the
+//! ceremony leader and members={Alice, Bob, Eve}, Alice would need to have the
 //! following directory structure:
 //!
 //! - personal
-//!     - `alice.our_namespace.setup.key`
-//!     - `alice.our_namespace.setup.pub`
+//!     - `alice.our_namespace.share_key.secret`
+//!     - `alice.our_namespace.share_key.pub`
 //! - genesis
-//!     - `alice.our_namespace.setup.pub`
-//!     - `bob.our_namespace.setup.pub`
-//!     - `eve.our_namespace.setup.pub`
+//!     - `alice.our_namespace.share_key.pub`
+//!     - `bob.our_namespace.share_key.pub`
+//!     - `eve.our_namespace.share_key.pub`
 //!
 //! Given the above directory structure, Alice can now generate the genesis
 //! outputs by running [`Command::BootGenesis`] (doesn't need to be a
@@ -102,43 +99,50 @@
 //!    --host-port 3000 \
 //!    --threshold 2 \
 //!    --genesis-dir  ~/qos/our_namespace/genesis
+//!    --qos-build-fingerprints ~/qos/our_namespace/qos-build-fingerprints.txt
 //! ```
 //!
 //! On success this will result in the following directory structure:
 //!
 //! - personal
-//!     - `alice.our_namespace.setup.key`
-//!     - `alice.our_namespace.setup.pub`
+//!     - `alice.our_namespace.share_key.key`
+//!     - `alice.our_namespace.share_key.pub`
 //! - genesis
-//!     - `alice.our_namespace.setup.pub`
-//!     - `bob.our_namespace.setup.pub`
-//!     - `eve.our_namespace.setup.pub`
-//!     - `attestation_doc.genesis`
-//!     - `output.genesis`
+//!     - `alice.our_namespace.share_key.pub`
+//!     - `bob.our_namespace.share_key.pub`
+//!     - `eve.our_namespace.share_key.pub`
+//!     - `genesis_attestation_doc`
+//!     - `genesis_output`
 //!
-//! Note that `output.genesis` is an encoded
+//! Note that `genesis_output` is an encoded
 //! [`qos_core::protocol::services::genesis::GenesisOutput`] and
-//! `attestation_doc.genesis` is a COSE Sign1 structure from the Nitro Secure
+//! `genesis_attestation_doc` is a COSE Sign1 structure from the Nitro Secure
 //! Module used to attest to the validity of the QOS image used to run the
 //! genesis service.
 //!
-//! #### Decrypt Personal Keys
+//! #### Attest and verify genesis outputs
+//!
+//! **WARNING:** this command should be run on an airgapped machine as it
+//! decrypts the quorum share.
 //!
 //! Within the [`qos_core::protocol::services::genesis::GenesisOutput`] are the
-//! encrypted Personal Keys and Quorum Shares for each member. Each member's
-//! personal key is encrypted to their setup key, so they will need their setup
-//! key to decrypt the personal key. The quorum share is encrypted to the
-//! personal key.
+//! encrypted Quorum Shares for each member. The quorum share is encrypted to
+//! the Share Key. The genesis output contains a hash of the plaintext share;
+//! the below command unencrypts the share, hashes it, and uses the digest to
+//! check that the local, unencrypted share matches what was created inside of
+//! the enclave. The recovery permutations inside the enclave
+//! references the share by hash, so it helps reinforce the case that recovery
+//! is possible if we can verify the hash.
 //!
 //! Each member will use [`Command::AfterGenesis`] to decrypt the outputs and
 //! verify the attestation document. Prior to running [`Command::AfterGenesis`],
 //! each member will need a directory structure with at minimum:
 //!
 //! - personal
-//!     - `bob.our_namespace.setup.key`
+//!     - `bob.our_namespace.share_key.secret`
 //! - genesis
-//!     - `attestation_doc.genesis`
-//!     - `output.genesis`
+//!     - `genesis_attestation_doc`
+//!     - `genesis_output`
 //!
 //! Given the above directory structure, Bob can run [`Command::AfterGenesis`]:
 //!
@@ -146,22 +150,18 @@
 //! cargo run --bin qos_client after-genesis \
 //!    --genesis-dir  ~/qos/our_namespace/genesis \
 //!    --personal-dir  ~/qos/our_namespace/personal \
-//!    --pcr0 0xf0f0f0f0f0f0f0 \
-//!    --pcr1 0xf0f0f0f0f0f0f0 \
-//!    --pcr2 0xf0f0f0f0f0f0f0 \
+//!    --qos-build-fingerprints ~/qos/our_namespace/qos-build-fingerprints.txt
 //! ```
 //!
-//! [`Command::AfterGenesis`] will extract Bob's personal key and share,
-//! resulting in the following directory structure:
+//! [`Command::AfterGenesis`] will extract Bob's quorum share, resulting in the
+//! following directory structure:
 //!
 //! - personal
-//!     - `bob.our_namespace.setup.key`
 //!     - `bob.our_namespace.share`
-//!     - `bob.our_namespace.personal.pub`
-//!     - `bob.our_namespace.personal.key`
+//!     - `bob.our_namespace.share_key.secret`
 //! - genesis
-//!     - `attestation_doc.genesis`
-//!     - `output.genesis`
+//!     - `genesis_attestation_doc`
+//!     - `genesis_output`
 //!
 //! ### Boot Standard
 //!
@@ -357,12 +357,8 @@ const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ALIAS: &str = "alias";
 const NAMESPACE: &str = "namespace";
-const PCR0: &str = "pcr0";
-const PCR1: &str = "pcr1";
-const PCR2: &str = "pcr2";
 const THRESHOLD: &str = "threshold";
 const NONCE: &str = "nonce";
-const PIVOT_HASH: &str = "pivot-hash";
 const RESTART_POLICY: &str = "restart-policy";
 const ROOT_CERT_PATH: &str = "root-cert-path";
 const MANIFEST_HASH: &str = "manifest-hash";
@@ -375,6 +371,9 @@ const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const ATTESTATION_DIR: &str = "attestation-dir";
+const QOS_BUILD_FINGERPRINTS: &str = "qos-build-fingerprints";
+const PCR3_PREIMAGE_PATH: &str = "pcr3-preimage-path";
+const PIVOT_BUILD_FINGERPRINTS: &str = "pivot-build-fingerprints";
 
 /// Commands for the Client CLI.
 ///
@@ -398,7 +397,7 @@ pub enum Command {
 	/// Query the NSM with `NsmRequest::DescribePcr` for PCR indexes 0..3.
 	DescribePcr,
 	/// Generate a Setup Key for use in the Genesis ceremony.
-	GenerateSetupKey,
+	GenerateShareKey,
 	/// Run the the Boot Genesis logic to generate and shard a Quorum Key
 	/// across the given Setup Keys. Each setup key will correspond to a Quorum
 	/// Set Member, so N will equal the number of Setup Keys.
@@ -470,7 +469,7 @@ impl From<&str> for Command {
 			"enclave-status" => Self::EnclaveStatus,
 			"describe-nsm" => Self::DescribeNsm,
 			"describe-pcr" => Self::DescribePcr,
-			"generate-setup-key" => Self::GenerateSetupKey,
+			"generate-share-key" => Self::GenerateShareKey,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
 			"generate-manifest" => Self::GenerateManifest,
@@ -519,15 +518,6 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
-	fn pcr0_token() -> Token {
-		Token::new(PCR0, "Hex encoded pcr0.").takes_value(true).required(true)
-	}
-	fn pcr1_token() -> Token {
-		Token::new(PCR1, "Hex encoded pcr0.").takes_value(true).required(true)
-	}
-	fn pcr2_token() -> Token {
-		Token::new(PCR2, "Hex encoded pcr2.").takes_value(true).required(true)
-	}
 	fn namespace_token() -> Token {
 		Token::new(NAMESPACE, "Namespace for the associated manifest.")
 			.takes_value(true)
@@ -573,6 +563,30 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn qos_build_fingerprints_token() -> Token {
+		Token::new(
+			QOS_BUILD_FINGERPRINTS,
+			"Path to file with QOS build fingerprints (PCR{1, 2, 3}).",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn pcr3_preimage_path_token() -> Token {
+		Token::new(
+			PCR3_PREIMAGE_PATH,
+			"Path to file with pcr3 preimage, the Amazon resource name (ARN) of the instance.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn pivot_build_fingerprints_token() -> Token {
+		Token::new(
+			PIVOT_BUILD_FINGERPRINTS,
+			"Path to file with Pivot build fingerprints.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -595,7 +609,7 @@ impl Command {
 			)
 	}
 
-	fn generate_setup_key() -> Parser {
+	fn generate_share_key() -> Parser {
 		Parser::new()
 			.token(
 				Token::new(
@@ -617,24 +631,25 @@ impl Command {
 				.required(true)
 				.takes_value(true)
 			)
+			.token(
+				Self::pcr3_preimage_path_token()
+			)
 			.token(Self::unsafe_skip_attestation_token())
+			.token(Self::qos_build_fingerprints_token())
 	}
 
 	fn after_genesis() -> Parser {
 		Parser::new()
 			.token(Self::genesis_dir_token())
 			.token(Self::personal_dir_token())
-			.token(Self::pcr0_token())
-			.token(Self::pcr1_token())
-			.token(Self::pcr2_token())
+			.token(Self::qos_build_fingerprints_token())
+			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 	}
 
 	fn generate_manifest() -> Parser {
 		Parser::new()
-			.token(
-				Self::genesis_dir_token()
-			)
+			.token(Self::genesis_dir_token())
 			.token(
 				Token::new(
 					NONCE,
@@ -643,29 +658,11 @@ impl Command {
 				.takes_value(true)
 				.required(true),
 			)
-			.token(
-				Self::namespace_token()
-			)
-			.token(
-				Token::new(
-					PIVOT_HASH,
-					"Hex encoded SHA-256 hash of the pivot executable encoded as a Vec<u8>.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
-			.token(
-				Self::restart_policy_token(),
-			)
-			.token(
-				Self::pcr0_token()
-			)
-			.token(
-				Self::pcr1_token()
-			)
-			.token(
-				Self::pcr2_token()
-			)
+			.token(Self::namespace_token())
+			.token(Self::pivot_build_fingerprints_token())
+			.token(Self::restart_policy_token())
+			.token(Self::qos_build_fingerprints_token())
+			.token(Self::pcr3_preimage_path_token())
 			.token(
 				Token::new(
 					ROOT_CERT_PATH,
@@ -674,12 +671,8 @@ impl Command {
 				.takes_value(true)
 				.required(true),
 			)
-			.token(
-				Self::boot_dir_token()
-			)
-			.token(
-				Self::pivot_args_token()
-			)
+			.token(Self::boot_dir_token())
+			.token(Self::pivot_args_token())
 	}
 
 	fn sign_manifest() -> Parser {
@@ -687,12 +680,15 @@ impl Command {
 			.token(Self::manifest_hash_token())
 			.token(Self::personal_dir_token())
 			.token(Self::boot_dir_token())
+			.token(Self::pcr3_preimage_path_token())
+			.token(Self::pivot_build_fingerprints_token())
 	}
 
 	fn boot_standard() -> Parser {
 		Self::base()
 			.token(Self::pivot_path_token())
 			.token(Self::boot_dir_token())
+			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 	}
 
@@ -705,6 +701,7 @@ impl Command {
 			.token(Self::attestation_dir_token())
 			.token(Self::manifest_hash_token())
 			.token(Self::personal_dir_token())
+			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
 	}
@@ -731,7 +728,7 @@ impl GetParserForCommand for Command {
 			| Self::AppEcho
 			| Self::AppReadFiles
 			| Self::EnclaveStatus => Self::base(),
-			Self::GenerateSetupKey => Self::generate_setup_key(),
+			Self::GenerateShareKey => Self::generate_share_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
 			Self::GenerateManifest => Self::generate_manifest(),
@@ -778,19 +775,11 @@ impl ClientOpts {
 		self.parsed.single(GENESIS_DIR).expect("required arg").to_string()
 	}
 
-	fn pcr0(&self) -> Vec<u8> {
-		qos_hex::decode(self.parsed.single(PCR0).expect("required arg"))
-			.expect("Could not parse `--pcr0` to bytes")
-	}
-
-	fn pcr1(&self) -> Vec<u8> {
-		qos_hex::decode(self.parsed.single(PCR1).expect("required arg"))
-			.expect("Could not parse `--pcr1` to bytes")
-	}
-
-	fn pcr2(&self) -> Vec<u8> {
-		qos_hex::decode(self.parsed.single(PCR2).expect("required arg"))
-			.expect("Could not parse `--pcr2` to bytes")
+	fn pcr3_preimage_path(&self) -> String {
+		self.parsed
+			.single(PCR3_PREIMAGE_PATH)
+			.expect("`--pcr3-preimage-path` is a required arg")
+			.to_string()
 	}
 
 	fn threshold(&self) -> u32 {
@@ -807,11 +796,6 @@ impl ClientOpts {
 			.expect("required arg")
 			.parse::<u32>()
 			.expect("Could not parse `--nonce` as u32")
-	}
-
-	fn pivot_hash(&self) -> Vec<u8> {
-		qos_hex::decode(self.parsed.single(PIVOT_HASH).expect("required arg"))
-			.expect("Could not parse `--pivot-hash` to bytes")
 	}
 
 	fn restart_policy(&self) -> boot::RestartPolicy {
@@ -850,6 +834,20 @@ impl ClientOpts {
 
 	fn attestation_dir(&self) -> String {
 		self.parsed.single(ATTESTATION_DIR).expect("required arg").to_string()
+	}
+
+	fn qos_build_fingerprints(&self) -> String {
+		self.parsed
+			.single(QOS_BUILD_FINGERPRINTS)
+			.expect("qos-build-fingerprints is a required arg")
+			.to_string()
+	}
+
+	fn pivot_build_fingerprints(&self) -> String {
+		self.parsed
+			.single(PIVOT_BUILD_FINGERPRINTS)
+			.expect("pivot-build-fingerprints is a required arg")
+			.to_string()
 	}
 
 	fn pivot_args(&self) -> Vec<String> {
@@ -912,8 +910,8 @@ impl ClientRunner {
 				Command::DescribePcr => handlers::describe_pcr(&self.opts),
 				Command::AppEcho => handlers::app_echo(&self.opts),
 				Command::AppReadFiles => handlers::app_read_files(&self.opts),
-				Command::GenerateSetupKey => {
-					handlers::generate_setup_key(&self.opts);
+				Command::GenerateShareKey => {
+					handlers::generate_share_key(&self.opts);
 				}
 				Command::BootGenesis => handlers::boot_genesis(&self.opts),
 				Command::AfterGenesis => handlers::after_genesis(&self.opts),
@@ -1004,7 +1002,7 @@ mod handlers {
 	pub(super) fn describe_pcr(opts: &ClientOpts) {
 		let path = &opts.path_message();
 
-		for i in 0..3 {
+		for i in 0..4 {
 			println!("PCR index {i}");
 
 			match request::post(
@@ -1084,21 +1082,22 @@ mod handlers {
 		println!("Note that the files themselves where not verified.");
 	}
 
-	pub(super) fn generate_setup_key(opts: &ClientOpts) {
-		services::generate_setup_key(
+	pub(super) fn generate_share_key(opts: &ClientOpts) {
+		services::generate_share_key(
 			&opts.alias(),
 			&opts.namespace(),
 			opts.personal_dir(),
 		);
 	}
 
-	// TODO: verify AWS_ROOT_CERT_PEM against a checksum
 	// TODO: verify PCRs
 	pub(super) fn boot_genesis(opts: &ClientOpts) {
 		services::boot_genesis(
 			&opts.path_message(),
 			opts.genesis_dir(),
 			opts.threshold(),
+			opts.qos_build_fingerprints(),
+			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
 		);
 	}
@@ -1107,9 +1106,8 @@ mod handlers {
 		services::after_genesis(
 			opts.genesis_dir(),
 			opts.personal_dir(),
-			&opts.pcr0(),
-			&opts.pcr1(),
-			&opts.pcr2(),
+			opts.qos_build_fingerprints(),
+			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
 		);
 	}
@@ -1120,11 +1118,10 @@ mod handlers {
 			genesis_dir: opts.genesis_dir(),
 			nonce: opts.nonce(),
 			namespace: opts.namespace(),
-			pivot_hash: opts.pivot_hash().try_into().unwrap(),
 			restart_policy: opts.restart_policy(),
-			pcr0: opts.pcr0(),
-			pcr1: opts.pcr1(),
-			pcr2: opts.pcr2(),
+			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
+			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
+			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			root_cert_path: opts.root_cert_path(),
 			boot_dir: opts.boot_dir(),
 			pivot_args: opts.pivot_args(),
@@ -1144,6 +1141,7 @@ mod handlers {
 			&opts.path_message(),
 			opts.pivot_path(),
 			opts.boot_dir(),
+			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
 		);
 	}
@@ -1160,6 +1158,7 @@ mod handlers {
 			opts.attestation_dir(),
 			opts.manifest_hash(),
 			opts.personal_dir(),
+			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
 			opts.unsafe_eph_path_override(),
 		);

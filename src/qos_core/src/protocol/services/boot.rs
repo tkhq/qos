@@ -20,6 +20,9 @@ pub struct NitroConfig {
 	pub pcr1: Vec<u8>,
 	/// The hash of the application
 	pub pcr2: Vec<u8>,
+	/// The hash of the Amazon resource name (ARN) of the IAM role that's
+	/// associated with the EC2 instance.
+	pub pcr3: Vec<u8>,
 	/// DER encoded X509 AWS root certificate
 	pub aws_root_certificate: Vec<u8>,
 }
@@ -66,6 +69,8 @@ impl TryFrom<String> for RestartPolicy {
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfig {
+	/// Reference to the commit the pivot was built off of.
+	pub commit: String,
 	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
 	pub hash: Hash256,
 	/// Restart policy for running the pivot binary.
@@ -156,6 +161,8 @@ pub struct Manifest {
 	pub share_set: ShareSet,
 	/// Configuration and verifiable values for the enclave hardware.
 	pub enclave: NitroConfig,
+	/// Reference to the commit QOS was built off of.
+	pub qos_commit: String,
 }
 
 /// An approval by a Quorum Member.
@@ -305,11 +312,13 @@ mod test {
 			namespace: Namespace { nonce: 420, name: "vape lord".to_string() },
 			enclave: NitroConfig {
 				pcr0: vec![4; 32],
-				pcr1: vec![2; 32],
-				pcr2: vec![0; 32],
+				pcr1: vec![3; 32],
+				pcr2: vec![2; 32],
+				pcr3: vec![1; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
 			},
 			pivot: PivotConfig {
+				commit: "commit lord".to_string(),
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
@@ -317,6 +326,7 @@ mod test {
 			quorum_key: quorum_pair.public_key_to_der().unwrap(),
 			manifest_set: ManifestSet { threshold: 2, members: quorum_members },
 			share_set: ShareSet { threshold: 2, members: vec![] },
+			qos_commit: "mock qos commit".to_string(),
 		};
 
 		(manifest, member_with_keys, pivot)

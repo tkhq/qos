@@ -4,7 +4,7 @@ use borsh::de::BorshDeserialize;
 use integration::LOCAL_HOST;
 use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
-use qos_crypto::{shamir::shares_reconstruct, RsaPair, RsaPub};
+use qos_crypto::{sha_256, shamir::shares_reconstruct, RsaPair, RsaPub};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 use rand::{seq::SliceRandom, thread_rng};
 
@@ -12,50 +12,55 @@ use rand::{seq::SliceRandom, thread_rng};
 async fn genesis_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/genesis-e2e".into();
-	fs::create_dir_all(*tmp).unwrap();
+	fs::create_dir_all(&*tmp).unwrap();
+	let tmp_dir =
+		|file: &str| -> PathWrapper { format!("{}/{file}", &*tmp).into() };
 
-	let usock: PathWrapper = "/tmp/genesis-e2e/genesis_e2e.sock".into();
-	let secret_path: PathWrapper = "/tmp/genesis-e2e/genesis_e2e.secret".into();
-	let pivot_path: PathWrapper = "/tmp/genesis-e2e/genesis_e2e.pivot".into();
-	let manifest_path = "/tmp/genesis-e2e/manifest.manifest";
+	let usock = tmp_dir("genesis_e2e.sock");
+	let secret_path = tmp_dir("genesis_e2e.secret");
+	let pivot_path = tmp_dir("genesis_e2e.pivot");
+	let manifest_path = tmp_dir("manifest.manifest");
 
-	let all_personal_dir: PathWrapper = "/tmp/genesis-e2e-personal".into();
-	let genesis_dir: PathWrapper = "/tmp/genesis-e2e-genesis".into();
+	let all_personal_dir = tmp_dir("personal-dir");
+	let genesis_dir = tmp_dir("genesis-dir");
 
 	let namespace = "quit-coding-to-vape";
 	let attestation_doc_path =
-		format!("{}/genesis_attestation_doc", *genesis_dir);
-	let genesis_output_path = format!("{}/genesis_output", *genesis_dir);
+		format!("{}/genesis_attestation_doc", &*genesis_dir);
+	let genesis_output_path = format!("{}/genesis_output", &*genesis_dir);
 
 	let personal_dir =
-		|user: &str| format!("{}/{}-dir", *all_personal_dir, user);
+		|user: &str| format!("{}/{}-dir", &*all_personal_dir, user);
 	let get_key_paths = |user: &str| {
 		(
-			format!("{}.{}.setup.secret", user, namespace),
-			format!("{}.{}.setup.pub", user, namespace),
+			format!("{}.{}.share_key.secret", user, namespace),
+			format!("{}.{}.share_key.pub", user, namespace),
 		)
 	};
 
 	let threshold = 2;
 	let user1 = "user1";
-	let (user1_private_setup, user1_public_setup) = get_key_paths(user1);
+	let (user1_private_share_key, user1_public_share_key) =
+		get_key_paths(user1);
 
 	let user2 = "user2";
-	let (user2_private_setup, user2_public_setup) = get_key_paths(user2);
+	let (user2_private_share_key, user2_public_share_key) =
+		get_key_paths(user2);
 
 	let user3 = "user3";
-	let (user3_private_setup, user3_public_setup) = get_key_paths(user3);
+	let (user3_private_share_key, user3_public_share_key) =
+		get_key_paths(user3);
 
 	// -- CLIENT Create 3 setup keys
 	// Make sure the directory keys are getting written to already exist.
 	for (user, private, public) in [
-		(&user1, &user1_private_setup, &user1_public_setup),
-		(&user2, &user2_private_setup, &user2_public_setup),
-		(&user3, &user3_private_setup, &user3_public_setup),
+		(&user1, &user1_private_share_key, &user1_public_share_key),
+		(&user2, &user2_private_share_key, &user2_public_share_key),
+		(&user3, &user3_private_share_key, &user3_public_share_key),
 	] {
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
-				"generate-setup-key",
+				"generate-share-key",
 				"--personal-dir",
 				&personal_dir(user),
 				"--namespace",
@@ -73,15 +78,15 @@ async fn genesis_e2e() {
 	}
 
 	// Make the genesis dir
-	fs::create_dir_all(*genesis_dir).unwrap();
+	fs::create_dir_all(&*genesis_dir).unwrap();
 	// Move the setup keys to the genesis dir - this will be the Genesis Set
 	for (user, public) in [
-		(&user1, &user1_public_setup),
-		(&user2, &user2_public_setup),
-		(&user3, &user3_public_setup),
+		(&user1, &user1_public_share_key),
+		(&user2, &user2_public_share_key),
+		(&user3, &user3_public_share_key),
 	] {
 		let from = Path::new(&personal_dir(user)).join(public);
-		let to = Path::new(*genesis_dir).join(public);
+		let to = Path::new(&*genesis_dir).join(public);
 		fs::copy(from, to).unwrap();
 	}
 
@@ -90,14 +95,14 @@ async fn genesis_e2e() {
 		Command::new("../target/debug/qos_core")
 			.args([
 				"--usock",
-				*usock,
+				&*usock,
 				"--quorum-file",
-				*secret_path,
+				&*secret_path,
 				"--pivot-file",
-				*pivot_path,
+				&*pivot_path,
 				"--mock",
 				"--manifest-file",
-				manifest_path,
+				&*manifest_path,
 			])
 			.spawn()
 			.unwrap()
@@ -112,7 +117,7 @@ async fn genesis_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				*usock,
+				&*usock,
 			])
 			.spawn()
 			.unwrap()
@@ -129,11 +134,15 @@ async fn genesis_e2e() {
 			"--threshold",
 			"2", // threshold
 			"--genesis-dir",
-			*genesis_dir,
+			&*genesis_dir,
 			"--host-ip",
 			LOCAL_HOST,
 			"--host-port",
 			&host_port.to_string(),
+			"--qos-build-fingerprints",
+			"./mock/qos-build-fingerprints.txt",
+			"--pcr3-preimage-path",
+			"./mock/pcr3-preimage.txt",
 			"--unsafe-skip-attestation"
 		])
 		.spawn()
@@ -144,36 +153,33 @@ async fn genesis_e2e() {
 
 	// -- Check files generated from the genesis boot
 	drop(unsafe_attestation_doc_from_der(
-		&fs::read(attestation_doc_path).unwrap(),
+		&fs::read(&*attestation_doc_path).unwrap(),
 	));
-	let genesis_output =
-		GenesisOutput::try_from_slice(&fs::read(&genesis_output_path).unwrap())
-			.unwrap();
+	let genesis_output = GenesisOutput::try_from_slice(
+		&fs::read(&*genesis_output_path).unwrap(),
+	)
+	.unwrap();
 
 	// -- Recreate the quorum key from the encrypted shares.
 	let mut decrypted_shares: Vec<_> = genesis_output
 		.member_outputs
 		.iter()
 		.map(|member| {
-			let alias = &member.setup_member.alias;
-			let (private_setup, _) = get_key_paths(alias);
-			let setup_pair = RsaPair::from_pem_file(
-				Path::new(&personal_dir(alias)).join(private_setup),
-			)
-			.unwrap();
-
-			// Decrypt the personal key with the setup key
-			let personal_key = RsaPair::from_der(
-				&setup_pair
-					.envelope_decrypt(&member.encrypted_personal_key)
-					.unwrap(),
+			let alias = &member.share_set_member.alias;
+			let (private_share_key, _) = get_key_paths(alias);
+			let share_pair = RsaPair::from_pem_file(
+				Path::new(&personal_dir(alias)).join(private_share_key),
 			)
 			.unwrap();
 
 			// Decrypt the share with the personal key
-			personal_key
+			let plain_text_share = share_pair
 				.envelope_decrypt(&member.encrypted_quorum_key_share)
-				.unwrap()
+				.unwrap();
+
+			assert_eq!(sha_256(&plain_text_share), member.share_hash);
+
+			plain_text_share
 		})
 		.collect();
 
@@ -188,7 +194,7 @@ async fn genesis_e2e() {
 	);
 
 	// -- CLIENT make sure each user can run `after-genesis` against their
-	// member output and setup key
+	// member output and decrypt their share with their share key.
 	for user in [&user1, &user2, &user3] {
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
@@ -196,13 +202,11 @@ async fn genesis_e2e() {
 				"--personal-dir",
 				&personal_dir(user),
 				"--genesis-dir",
-				*genesis_dir,
-				"--pcr0",
-				"0xff",
-				"--pcr1",
-				"0xff",
-				"--pcr2",
-				"0xff",
+				&*genesis_dir,
+				"--qos-build-fingerprints",
+				"./mock/qos-build-fingerprints.txt",
+				"--pcr3-preimage-path",
+				"./mock/pcr3-preimage.txt",
 				"--unsafe-skip-attestation"
 			])
 			.spawn()
@@ -211,22 +215,16 @@ async fn genesis_e2e() {
 			.unwrap()
 			.success());
 
-		let personal_pub = Path::new(&personal_dir(user))
-			.join(format!("{}.{}.personal.pub", user, namespace));
-		let personal_key = Path::new(&personal_dir(user))
-			.join(format!("{}.{}.personal.secret", user, namespace));
+		let share_key_path = Path::new(&personal_dir(user))
+			.join(format!("{}.{}.share_key.secret", user, namespace));
 		let share_path = Path::new(&personal_dir(user))
 			.join(format!("{}.{}.share", user, namespace));
-		// Read in the personal public and private key
-		let public = RsaPub::from_pem_file(personal_pub).unwrap();
-		let private = RsaPair::from_pem_file(personal_key).unwrap();
-		assert_eq!(
-			private.public_key_to_der().unwrap(),
-			public.public_key_to_der().unwrap()
-		);
+		let share_key_pair = RsaPair::from_pem_file(share_key_path).unwrap();
+
 		// Check the share is encrypted to personal key
-		let share =
-			private.envelope_decrypt(&fs::read(share_path).unwrap()).unwrap();
+		let share = share_key_pair
+			.envelope_decrypt(&fs::read(share_path).unwrap())
+			.unwrap();
 		// Cross check that the share belongs `decrypted_shares`, which we
 		// created out of band in this test.
 		assert!(decrypted_shares.contains(&share));

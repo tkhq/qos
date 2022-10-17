@@ -3,11 +3,11 @@
 use std::env;
 
 use crate::{
-	reaper::Reaper,
 	handles::Handles,
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 	protocol::attestor::{Nsm, NsmProvider},
+	reaper::Reaper,
 	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
 };
 

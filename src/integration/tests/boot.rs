@@ -1,7 +1,7 @@
 use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
-use integration::{LOCAL_HOST, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
+use integration::{LOCAL_HOST, PCR3, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 use qos_core::protocol::{
 	attestor::mock::{
@@ -10,20 +10,23 @@ use qos_core::protocol::{
 	services::{
 		boot::{
 			Approval, Manifest, ManifestSet, Namespace, NitroConfig,
-			PivotConfig, QuorumMember, RestartPolicy, ShareSet,
+			PivotConfig, RestartPolicy, ShareSet,
 		},
-		genesis::GenesisOutput,
+		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
 	QosHash,
 };
 use qos_crypto::{sha_256, RsaPair};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
+const PIVOT_BUILD_FINGERPRINTS_PATH: &str =
+	"./mock/pivot-build-fingerprints.txt";
+
 #[tokio::test]
 async fn boot_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/boot-e2e".into();
-	fs::create_dir_all(*tmp).unwrap();
+	fs::create_dir_all(&*tmp).unwrap();
 
 	let usock: PathWrapper = "/tmp/boot-e2e/boot_e2e.sock".into();
 	let secret_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.secret".into();
@@ -32,9 +35,9 @@ async fn boot_e2e() {
 	let eph_path: PathWrapper = "/tmp/boot-e2e/ephemeral_key.secret".into();
 
 	let boot_dir: PathWrapper = "/tmp/boot-e2e/boot-dir".into();
-	fs::create_dir_all(*boot_dir).unwrap();
+	fs::create_dir_all(&*boot_dir).unwrap();
 	let attestation_dir: PathWrapper = "/tmp/boot-e2e/attestation-dir".into();
-	fs::create_dir_all(*attestation_dir).unwrap();
+	fs::create_dir_all(&*attestation_dir).unwrap();
 
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
 	let genesis_dir = "./mock/boot-e2e/genesis-dir";
@@ -42,7 +45,7 @@ async fn boot_e2e() {
 
 	let namespace = "quit-coding-to-vape";
 
-	let attestation_doc_path = format!("{}/boot_attestation_doc", *boot_dir);
+	let attestation_doc_path = format!("{}/boot_attestation_doc", &*boot_dir);
 	let genesis_output_path = format!("{}/genesis_output", genesis_dir);
 
 	let personal_dir =
@@ -52,10 +55,21 @@ async fn boot_e2e() {
 	let user2 = "user2";
 	let user3 = "user3";
 
-	// // -- CLIENT create manifest.
+	// -- Create pivot-build-fingerprints.txt
 	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
-	let mock_pivot_hash_hex = qos_hex::encode(&mock_pivot_hash);
+
+	let build_fingerprints = {
+		let mut build_fingerprints =
+			qos_hex::encode(&mock_pivot_hash).as_bytes().to_vec();
+		build_fingerprints.extend_from_slice(b"\n");
+		build_fingerprints.extend_from_slice(b"mock-pivot-commit");
+		build_fingerprints
+	};
+
+	std::fs::write(PIVOT_BUILD_FINGERPRINTS_PATH, build_fingerprints).unwrap();
+
+	// -- CLIENT create manifest.
 	let msg = "testing420";
 	let pivot_args = format!("[--msg,{}]", msg);
 
@@ -68,20 +82,18 @@ async fn boot_e2e() {
 			"2",
 			"--namespace",
 			namespace,
-			"--pivot-hash",
-			&mock_pivot_hash_hex,
 			"--restart-policy",
 			"never",
-			"--pcr0",
-			MOCK_PCR0,
-			"--pcr1",
-			MOCK_PCR1,
-			"--pcr2",
-			MOCK_PCR2,
+			"--pivot-build-fingerprints",
+			"./mock/pivot-build-fingerprints.txt",
+			"--qos-build-fingerprints",
+			"./mock/qos-build-fingerprints.txt",
+			"--pcr3-preimage-path",
+			"./mock/pcr3-preimage.txt",
 			"--root-cert-path",
 			root_cert_path,
 			"--boot-dir",
-			*boot_dir,
+			&*boot_dir,
 			"--pivot-args",
 			&pivot_args,
 		])
@@ -92,7 +104,7 @@ async fn boot_e2e() {
 		.success());
 
 	// Check the manifest written to file
-	let cli_manifest_path = format!("{}/{}.2.manifest", *boot_dir, namespace);
+	let cli_manifest_path = format!("{}/{}.2.manifest", &*boot_dir, namespace);
 	let manifest =
 		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
 			.unwrap();
@@ -103,11 +115,8 @@ async fn boot_e2e() {
 
 	let mut manifest_set_members: Vec<_> = genesis_output
 		.member_outputs
-		.iter()
-		.map(|m| QuorumMember {
-			alias: m.setup_member.alias.clone(),
-			pub_key: m.public_personal_key.clone(),
-		})
+		.into_iter()
+		.map(|GenesisMemberOutput { share_set_member, .. }| share_set_member)
 		.collect();
 	manifest_set_members.sort();
 
@@ -125,6 +134,7 @@ async fn boot_e2e() {
 		Manifest {
 			namespace: Namespace { name: namespace.to_string(), nonce: 2 },
 			pivot: PivotConfig {
+				commit: "mock-pivot-commit".to_string(),
 				hash: mock_pivot_hash,
 				restart: RestartPolicy::Never,
 				args: vec!["--msg".to_string(), msg.to_string()]
@@ -142,8 +152,10 @@ async fn boot_e2e() {
 				pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),
 				pcr1: qos_hex::decode(MOCK_PCR1).unwrap(),
 				pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
+				pcr3: qos_hex::decode(PCR3).unwrap(),
 				aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap()
 			},
+			qos_commit: "abcdef".to_string(),
 		}
 	);
 
@@ -151,7 +163,7 @@ async fn boot_e2e() {
 	for alias in [user1, user2, user3] {
 		let approval_path = format!(
 			"{}/{}.{}.{}.approval",
-			*boot_dir, alias, namespace, manifest.namespace.nonce,
+			&*boot_dir, alias, namespace, manifest.namespace.nonce,
 		);
 
 		assert!(Command::new("../target/debug/qos_client")
@@ -162,7 +174,11 @@ async fn boot_e2e() {
 				"--personal-dir",
 				&personal_dir(alias),
 				"--boot-dir",
-				*boot_dir,
+				&*boot_dir,
+				"--pcr3-preimage-path",
+				"./mock/pcr3-preimage.txt",
+				"--pivot-build-fingerprints",
+				"./mock/pivot-build-fingerprints.txt",
 			])
 			.spawn()
 			.unwrap()
@@ -175,7 +191,7 @@ async fn boot_e2e() {
 			Approval::try_from_slice(&fs::read(approval_path).unwrap())
 				.unwrap();
 		let personal_pair = RsaPair::from_pem_file(&format!(
-			"{}/{}.{}.personal.secret",
+			"{}/{}.{}.share_key.secret",
 			personal_dir(alias),
 			alias,
 			namespace
@@ -198,16 +214,16 @@ async fn boot_e2e() {
 		Command::new("../target/debug/qos_core")
 			.args([
 				"--usock",
-				*usock,
+				&*usock,
 				"--quorum-file",
-				*secret_path,
+				&*secret_path,
 				"--pivot-file",
-				*pivot_path,
+				&*pivot_path,
 				"--ephemeral-file",
-				*eph_path,
+				&*eph_path,
 				"--mock",
 				"--manifest-file",
-				*manifest_path,
+				&*manifest_path,
 			])
 			.spawn()
 			.unwrap()
@@ -222,7 +238,7 @@ async fn boot_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				*usock,
+				&*usock,
 			])
 			.spawn()
 			.unwrap()
@@ -236,13 +252,15 @@ async fn boot_e2e() {
 		.args([
 			"boot-standard",
 			"--boot-dir",
-			*boot_dir,
+			&*boot_dir,
 			"--pivot-path",
 			PIVOT_OK2_PATH,
 			"--host-port",
 			&host_port.to_string(),
 			"--host-ip",
 			LOCAL_HOST,
+			"--pcr3-preimage-path",
+			"./mock/pcr3-preimage.txt",
 			"--unsafe-skip-attestation",
 		])
 		.spawn()
@@ -267,7 +285,7 @@ async fn boot_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--attestation-dir",
-				*attestation_dir
+				&*attestation_dir
 			])
 			.spawn()
 			.unwrap()
@@ -280,14 +298,16 @@ async fn boot_e2e() {
 			.args([
 				"proxy-re-encrypt-share",
 				"--attestation-dir",
-				*attestation_dir,
+				&*attestation_dir,
 				"--manifest-hash",
 				qos_hex::encode(&manifest.qos_hash()).as_str(),
 				"--personal-dir",
 				&personal_dir(user),
+				"--pcr3-preimage-path",
+				"./mock/pcr3-preimage.txt",
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
-				*eph_path,
+				&*eph_path,
 			])
 			.spawn()
 			.unwrap()
@@ -304,7 +324,7 @@ async fn boot_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--attestation-dir",
-				*attestation_dir
+				&*attestation_dir
 			])
 			.spawn()
 			.unwrap()

@@ -2,10 +2,10 @@ use std::fs;
 
 use integration::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
 use qos_core::{
-	reaper::Reaper,
 	handles::Handles,
 	io::SocketAddress,
 	protocol::{attestor::mock::MockNsm, services::boot::ManifestEnvelope},
+	reaper::Reaper,
 };
 
 #[test]

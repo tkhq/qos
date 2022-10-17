@@ -178,11 +178,13 @@ mod test {
 			namespace: Namespace { nonce: 420, name: "vape-space".to_string() },
 			enclave: NitroConfig {
 				pcr0: vec![4; 32],
-				pcr1: vec![2; 32],
-				pcr2: vec![0; 32],
+				pcr1: vec![3; 32],
+				pcr2: vec![2; 32],
+				pcr3: vec![1; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
 			},
 			pivot: PivotConfig {
+				commit: "commit lord".to_string(),
 				hash: sha_256(pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
@@ -196,6 +198,7 @@ mod test {
 				threshold: threshold.try_into().unwrap(),
 				members: members.clone().into_iter().map(|(m, _)| m).collect(),
 			},
+			qos_commit: "mock qos commit".to_string(),
 		};
 
 		let approvals: Vec<_> = members
@@ -232,7 +235,7 @@ mod test {
 		let manifest_file: PathWrapper = "./provision_works.manifest".into();
 
 		let Setup { quorum_pair, eph_pair, threshold, mut state, approvals } =
-			setup(*eph_file, *quorum_file, *manifest_file);
+			setup(&*eph_file, &*quorum_file, &*manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
 		let quorum_key = quorum_pair.private_key_to_der().unwrap();
@@ -247,7 +250,7 @@ mod test {
 		for (i, share) in encrypted_shares[..threshold - 1].iter().enumerate() {
 			let approval = approvals[i].clone();
 			assert_eq!(provision(share, approval, &mut state), Ok(false));
-			assert!(!Path::new(*quorum_file).exists());
+			assert!(!Path::new(&*quorum_file).exists());
 			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 		}
 
@@ -256,11 +259,11 @@ mod test {
 		let share = &encrypted_shares[threshold];
 		let approval = approvals[threshold].clone();
 		assert_eq!(provision(share, approval, &mut state), Ok(true));
-		let quorum_key = std::fs::read(*quorum_file).unwrap();
+		let quorum_key = std::fs::read(&*quorum_file).unwrap();
 		assert_eq!(quorum_key, quorum_pair.private_key_to_pem().unwrap());
 		assert_eq!(state.phase, ProtocolPhase::QuorumKeyProvisioned);
 		// Make sure the EK is deleted
-		assert!(!Path::new(*eph_file).exists());
+		assert!(!Path::new(&*eph_file).exists());
 
 		// The share set approvals where recorded in the manifest envelope
 		assert_eq!(
@@ -284,7 +287,7 @@ mod test {
 			"./provision_rejects_the_wrong_key.manifest".into();
 
 		let Setup { eph_pair, threshold, mut state, approvals, .. } =
-			setup(*eph_file, *quorum_file, *manifest_file);
+			setup(&*eph_file, &*quorum_file, &*manifest_file);
 
 		// 4) Create shards of a RANDOM KEY and encrypt them to eph key
 		let random_key =
@@ -300,7 +303,7 @@ mod test {
 		for (i, share) in encrypted_shares[..threshold - 1].iter().enumerate() {
 			let approval = approvals[i].clone();
 			assert_eq!(provision(share, approval, &mut state), Ok(false));
-			assert!(!Path::new(*quorum_file).exists());
+			assert!(!Path::new(&*quorum_file).exists());
 			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 		}
 
@@ -311,7 +314,7 @@ mod test {
 			provision(share, approval, &mut state),
 			Err(ProtocolError::ReconstructionError)
 		);
-		assert!(!Path::new(*quorum_file).exists());
+		assert!(!Path::new(&*quorum_file).exists());
 		// Note that the handler should set the state to unrecoverable error
 		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 	}
@@ -325,7 +328,7 @@ mod test {
 		let manifest_file: PathWrapper =
 			"./provision_rejects_if_a_shard_is_invalid.manifest".into();
 		let Setup { quorum_pair, eph_pair, threshold, mut state, approvals } =
-			setup(*eph_file, *quorum_file, *manifest_file);
+			setup(&*eph_file, &*quorum_file, &*manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
 		let quorum_key = quorum_pair.private_key_to_der().unwrap();
@@ -340,7 +343,7 @@ mod test {
 		for (i, share) in encrypted_shares[..threshold - 1].iter().enumerate() {
 			let approval = approvals[i].clone();
 			assert_eq!(provision(share, approval, &mut state), Ok(false));
-			assert!(!Path::new(*quorum_file).exists());
+			assert!(!Path::new(&*quorum_file).exists());
 			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 		}
 
@@ -353,7 +356,7 @@ mod test {
 			provision(&encrypted_bogus_share, approval, &mut state),
 			Err(ProtocolError::InvalidPrivateKey)
 		);
-		assert!(!Path::new(*quorum_file).exists());
+		assert!(!Path::new(&*quorum_file).exists());
 		// Note that the handler should set the state to unrecoverable error
 		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 	}
@@ -373,7 +376,7 @@ mod test {
 			threshold,
 			mut state,
 			mut approvals,
-		} = setup(*eph_file, *quorum_file, *manifest_file);
+		} = setup(&*eph_file, &*quorum_file, &*manifest_file);
 
 		let quorum_key = quorum_pair.private_key_to_der().unwrap();
 		let mut encrypted_shares: Vec<_> =
@@ -390,7 +393,7 @@ mod test {
 			provision(&share, approval, &mut state).unwrap_err(),
 			ProtocolError::CouldNotVerifyApproval
 		);
-		assert!(!Path::new(*quorum_file).exists());
+		assert!(!Path::new(&*quorum_file).exists());
 		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 	}
 
@@ -409,7 +412,7 @@ mod test {
 			threshold,
 			mut state,
 			mut approvals,
-		} = setup(*eph_file, *quorum_file, *manifest_file);
+		} = setup(&*eph_file, &*quorum_file, &*manifest_file);
 
 		let quorum_key = quorum_pair.private_key_to_der().unwrap();
 		let mut encrypted_shares: Vec<_> =
@@ -431,7 +434,7 @@ mod test {
 			provision(&share, approval, &mut state).unwrap_err(),
 			ProtocolError::NotShareSetMember
 		);
-		assert!(!Path::new(*quorum_file).exists());
+		assert!(!Path::new(&*quorum_file).exists());
 		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
 	}
 }

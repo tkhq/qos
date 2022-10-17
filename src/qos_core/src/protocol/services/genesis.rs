@@ -2,34 +2,22 @@
 
 use std::iter::zip;
 
-use qos_crypto::{RsaPair, RsaPub};
+use qos_crypto::{sha_256, RsaPair, RsaPub};
 
 use crate::protocol::{
 	attestor::types::{NsmRequest, NsmResponse},
-	ProtocolError, ProtocolState, QosHash,
+	boot::QuorumMember,
+	Hash256, ProtocolError, ProtocolState, QosHash,
 };
-
-/// Member of the [`GenesisSet`].
-#[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
-)]
-pub struct SetupMember {
-	/// A unique UTF-8 encoded string to help Human participants to identify
-	/// this member.
-	pub alias: String,
-	/// A DER encoded Setup Key that will be used by the Genesis flow to
-	/// encrypt a Personal Key.
-	pub pub_key: Vec<u8>,
-}
 
 /// Configuration for sharding a Quorum Key created in the Genesis flow.
 #[derive(
 	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct GenesisSet {
-	/// Quorum Member's whoms setup key will be used to encrypt Genesis flow
-	/// outputs.
-	pub members: Vec<SetupMember>,
+	/// Share Set Member's who's production key will be used to encrypt Genesis
+	/// flow outputs.
+	pub members: Vec<QuorumMember>,
 	/// Threshold for successful reconstitution of the Quorum Key shards
 	pub threshold: u32,
 }
@@ -40,14 +28,14 @@ pub struct GenesisSet {
 struct MemberShard {
 	// TODO: is this taking up too much unnecessary space?
 	/// Member of the Setup Set.
-	member: SetupMember,
+	member: QuorumMember,
 	/// Shard of the generated Quorum Key, encrypted to the `member`s Setup
 	/// Key.
 	shard: Vec<u8>,
 }
 
-/// A set of member shards used to succesfully recover the quorum key during the
-/// genesis ceremony.
+/// A set of member shards used to successfully recover the quorum key during
+/// the genesis ceremony.
 #[derive(
 	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
@@ -59,13 +47,12 @@ pub struct RecoveredPermutation(Vec<MemberShard>);
 )]
 pub struct GenesisMemberOutput {
 	/// The Quorum Member whom's Setup Key was used.
-	pub setup_member: SetupMember,
+	pub share_set_member: QuorumMember,
 	/// Quorum Key Share encrypted to the `setup_member`'s Personal Key.
 	pub encrypted_quorum_key_share: Vec<u8>,
-	/// Personal Key encrypted to the `setup_member`'s Setup Key.
-	pub encrypted_personal_key: Vec<u8>,
-	/// Public key for Personal Key
-	pub public_personal_key: Vec<u8>,
+	/// Sha256 hash of the plaintext quorum key share. Used by the share set
+	/// member to verify they correctly decrypted the share.
+	pub share_hash: Hash256,
 }
 
 /// Output from running Genesis Boot. Should contain all information relevant to
@@ -104,34 +91,24 @@ pub(in crate::protocol) fn boot_genesis(
 		genesis_set.threshold as usize,
 	);
 
-	let mut member_outputs = Vec::with_capacity(shares.len());
-	let zipped = zip(shares, genesis_set.members.iter().cloned());
-	for (share, setup_member) in zipped.clone() {
-		// 1) generate Personal Key pair
-		let personal_pair = RsaPair::generate()?;
+	let member_outputs: Result<Vec<_>, _> =
+		zip(shares, genesis_set.members.iter().cloned())
+			.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError>{
+				// 1) encrypt the share to quorum key
+				let personal_pub = RsaPub::from_der(&share_set_member.pub_key)?;
+				let encrypted_quorum_key_share =
+					personal_pub.envelope_encrypt(&share)?;
 
-		// 2) encrypt Personal Key to Setup Key
-		let encrypted_personal_key = {
-			let setup_key = RsaPub::from_der(&setup_member.pub_key)?;
-			let personal_der = personal_pair.private_key_to_der()?;
-
-			setup_key.envelope_encrypt(&personal_der)?
-		};
-
-		// 3) encrypt the Quorum Share to the Personal Key
-		let encrypted_quorum_key_share =
-			personal_pair.envelope_encrypt(&share)?;
-
-		member_outputs.push(GenesisMemberOutput {
-			setup_member,
-			encrypted_quorum_key_share,
-			encrypted_personal_key,
-			public_personal_key: personal_pair.public_key_to_der()?,
-		});
-	}
+				Ok(GenesisMemberOutput {
+					share_set_member,
+					encrypted_quorum_key_share,
+					share_hash: sha_256(&share),
+				})
+			})
+			.collect();
 
 	let genesis_output = GenesisOutput {
-		member_outputs,
+		member_outputs: member_outputs?,
 		quorum_key: quorum_pair.public_key_to_der()?,
 		threshold: genesis_set.threshold,
 		// TODO: generate N choose K recovery permutations
@@ -177,15 +154,15 @@ mod test {
 		let member3_pair = RsaPair::generate().unwrap();
 
 		let genesis_members = vec![
-			SetupMember {
+			QuorumMember {
 				alias: "member1".to_string(),
 				pub_key: member1_pair.public_key_to_der().unwrap(),
 			},
-			SetupMember {
+			QuorumMember {
 				alias: "member2".to_string(),
 				pub_key: member2_pair.public_key_to_der().unwrap(),
 			},
-			SetupMember {
+			QuorumMember {
 				alias: "member3".to_string(),
 				pub_key: member3_pair.public_key_to_der().unwrap(),
 			},
@@ -201,15 +178,13 @@ mod test {
 		let zipped = std::iter::zip(output.member_outputs, member_pairs);
 		let shares: Vec<Vec<u8>> = zipped
 			.map(|(output, pair)| {
-				let personal_key = RsaPair::from_der(
-					&pair
-						.envelope_decrypt(&output.encrypted_personal_key)
-						.unwrap(),
-				)
-				.unwrap();
-				personal_key
+				let decrypted_share = &pair
 					.envelope_decrypt(&output.encrypted_quorum_key_share)
-					.unwrap()
+					.unwrap();
+
+				assert_eq!(sha_256(decrypted_share), output.share_hash);
+
+				decrypted_share.clone()
 			})
 			.collect();
 
