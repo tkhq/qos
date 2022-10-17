@@ -1141,8 +1141,7 @@ fn extract_qos_build_fingerprints<P: AsRef<Path>>(
 }
 
 fn extract_pcr3<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
-	let file = File::open(file_path)
-		.expect("failed to open pcr3 preimage");
+	let file = File::open(file_path).expect("failed to open pcr3 preimage");
 	let mut lines = std::io::BufReader::new(file)
 		.lines()
 		.collect::<Result<Vec<_>, _>>()
