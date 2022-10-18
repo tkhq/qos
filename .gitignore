@@ -11,7 +11,6 @@ target/
 *.pivot
 *.secret
 *.configuration
-*.pub
 *.share
 
 # Mock data
@@ -19,6 +18,5 @@ target/
 !src/integration/mock/boot-e2e/all-personal-dir/user2-dir/*
 !src/integration/mock/boot-e2e/all-personal-dir/user3-dir/*
 !src/integration/mock/boot-e2e/genesis-dir/*
-!src/integration/mock/namespaces/quit-coding-to-vape/*
 
 local-enclave/ls
