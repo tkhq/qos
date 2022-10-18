@@ -206,6 +206,7 @@ async fn boot_e2e() {
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
+		// Wait for the command to write the approval and exit
 		assert!(child.wait().unwrap().success());
 
 		// Read in the generated approval to check it was created correctly
