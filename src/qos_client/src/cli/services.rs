@@ -871,7 +871,6 @@ fn find_threshold<P: AsRef<Path>>(dir: P) -> u32 {
 }
 
 fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
-	// Get keys
 	let members: Vec<_> = find_file_paths(&dir)
 		.iter()
 		.filter_map(|path| {
