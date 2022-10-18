@@ -121,7 +121,11 @@ async fn boot_e2e() {
 		.collect();
 	members.sort();
 
-	let namespace_field = Namespace { name: namespace.to_string(), nonce: 2 };
+	let namespace_field = Namespace {
+		name: namespace.to_string(),
+		nonce: 2,
+		quorum_key: genesis_output.quorum_key,
+	};
 	assert_eq!(manifest.namespace, namespace_field);
 	let pivot = PivotConfig {
 		commit: "mock-pivot-commit".to_string(),
@@ -130,8 +134,6 @@ async fn boot_e2e() {
 		args: vec!["--msg".to_string(), msg.to_string()],
 	};
 	assert_eq!(manifest.pivot, pivot);
-	let quorum_key = genesis_output.quorum_key;
-	assert_eq!(manifest.quorum_key, quorum_key);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
 	assert_eq!(manifest.manifest_set, manifest_set);
 	let share_set = ShareSet { threshold: 2, members };
@@ -152,7 +154,6 @@ async fn boot_e2e() {
 		Manifest {
 			namespace: namespace_field,
 			pivot,
-			quorum_key,
 			manifest_set,
 			share_set,
 			enclave,

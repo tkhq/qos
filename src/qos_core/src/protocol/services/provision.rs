@@ -97,7 +97,7 @@ pub(in crate::protocol) fn provision(
 		.map_err(|_| ProtocolError::InvalidPrivateKey)?;
 	let public_key_der = pair.public_key_to_der()?;
 
-	if public_key_der != manifest_envelope.manifest.quorum_key {
+	if public_key_der != manifest_envelope.manifest.namespace.quorum_key {
 		// We did not construct the intended key
 		return Err(ProtocolError::ReconstructionErrorIncorrectPubKey);
 	}
@@ -173,7 +173,11 @@ mod test {
 			.collect();
 
 		let manifest = Manifest {
-			namespace: Namespace { nonce: 420, name: "vape-space".to_string() },
+			namespace: Namespace {
+				nonce: 420,
+				name: "vape-space".to_string(),
+				quorum_key: quorum_pair.public_key_to_der().unwrap(),
+			},
 			enclave: NitroConfig {
 				pcr0: vec![4; 32],
 				pcr1: vec![3; 32],
@@ -187,7 +191,6 @@ mod test {
 				restart: RestartPolicy::Always,
 				args: vec![],
 			},
-			quorum_key: quorum_pair.public_key_to_der().unwrap(),
 			manifest_set: ManifestSet {
 				threshold: threshold.try_into().unwrap(),
 				members: vec![],

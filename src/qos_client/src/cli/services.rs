@@ -330,14 +330,17 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	share_set.members.sort();
 
 	let manifest = Manifest {
-		namespace: Namespace { name: namespace.clone(), nonce },
+		namespace: Namespace {
+			name: namespace.clone(),
+			nonce,
+			quorum_key: quorum_key.public_key_to_der().unwrap(),
+		},
 		pivot: PivotConfig {
 			commit: pivot_commit,
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
 		},
-		quorum_key: quorum_key.public_key_to_der().unwrap(),
 		manifest_set,
 		share_set,
 		enclave: NitroConfig {
@@ -673,6 +676,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		namespace: Namespace {
 			name: DANGEROUS_DEV_BOOT_NAMESPACE.to_string(),
 			nonce: u32::MAX,
+			quorum_key: quorum_public_der,
 		},
 		enclave: NitroConfig {
 			pcr0: mock_pcr.clone(),
@@ -687,7 +691,6 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			restart,
 			args,
 		},
-		quorum_key: quorum_public_der,
 		manifest_set: ManifestSet {
 			threshold: 1,
 			// The only member is the quorum member

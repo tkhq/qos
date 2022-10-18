@@ -141,6 +141,8 @@ pub struct Namespace {
 	/// downgrade attacks - quorum members should only approve a manifest that
 	/// has the highest nonce.
 	pub nonce: u32,
+	/// Quorum Key as a DER encoded RSA public key.
+	pub quorum_key: Vec<u8>,
 }
 
 /// The Manifest for the enclave.
@@ -153,8 +155,6 @@ pub struct Manifest {
 	pub namespace: Namespace,
 	/// Pivot binary configuration and verifiable values.
 	pub pivot: PivotConfig,
-	/// Quorum Key as a DER encoded RSA public key.
-	pub quorum_key: Vec<u8>,
 	/// Manifest Set members and threshold.
 	pub manifest_set: ManifestSet,
 	/// Share Set members and threshold
@@ -309,7 +309,11 @@ mod test {
 		];
 
 		let manifest = Manifest {
-			namespace: Namespace { nonce: 420, name: "vape lord".to_string() },
+			namespace: Namespace {
+				nonce: 420,
+				name: "vape lord".to_string(),
+				quorum_key: quorum_pair.public_key_to_der().unwrap(),
+			},
 			enclave: NitroConfig {
 				pcr0: vec![4; 32],
 				pcr1: vec![3; 32],
@@ -323,7 +327,6 @@ mod test {
 				restart: RestartPolicy::Always,
 				args: vec![],
 			},
-			quorum_key: quorum_pair.public_key_to_der().unwrap(),
 			manifest_set: ManifestSet { threshold: 2, members: quorum_members },
 			share_set: ShareSet { threshold: 2, members: vec![] },
 			qos_commit: "mock qos commit".to_string(),
