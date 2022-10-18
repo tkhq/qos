@@ -40,13 +40,10 @@ async fn boot_e2e() {
 	fs::create_dir_all(&*attestation_dir).unwrap();
 
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
-	let genesis_dir = "./mock/boot-e2e/genesis-dir";
-	let root_cert_path = "./mock/boot-e2e/root-cert.pem";
 
 	let namespace = "quit-coding-to-vape";
 
 	let attestation_doc_path = format!("{}/boot_attestation_doc", &*boot_dir);
-	let genesis_output_path = format!("{}/genesis_output", genesis_dir);
 
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", all_personal_dir, user);
@@ -58,7 +55,6 @@ async fn boot_e2e() {
 	// -- Create pivot-build-fingerprints.txt
 	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
-
 	let build_fingerprints = {
 		let mut build_fingerprints =
 			qos_hex::encode(&mock_pivot_hash).as_bytes().to_vec();
@@ -66,7 +62,6 @@ async fn boot_e2e() {
 		build_fingerprints.extend_from_slice(b"mock-pivot-commit");
 		build_fingerprints
 	};
-
 	std::fs::write(PIVOT_BUILD_FINGERPRINTS_PATH, build_fingerprints).unwrap();
 
 	// -- CLIENT create manifest.
@@ -76,8 +71,6 @@ async fn boot_e2e() {
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
 			"generate-manifest",
-			"--genesis-dir",
-			genesis_dir,
 			"--nonce",
 			"2",
 			"--namespace",
@@ -89,13 +82,17 @@ async fn boot_e2e() {
 			"--qos-build-fingerprints",
 			"./mock/qos-build-fingerprints.txt",
 			"--pcr3-preimage-path",
-			"./mock/pcr3-preimage.txt",
-			"--root-cert-path",
-			root_cert_path,
+			"./mock/namespaces/pcr3-preimage.txt",
 			"--boot-dir",
 			&*boot_dir,
 			"--pivot-args",
 			&pivot_args,
+			"--manifest-set-dir",
+			"./mock/keys/manifest-set",
+			"--share-set-dir",
+			"./mock/keys/share-set",
+			"--namespace-dir",
+			"./mock/namespaces/quit-coding-to-vape"
 		])
 		.spawn()
 		.unwrap()
@@ -109,53 +106,58 @@ async fn boot_e2e() {
 		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
 			.unwrap();
 
-	let genesis_output =
-		GenesisOutput::try_from_slice(&fs::read(&genesis_output_path).unwrap())
-			.unwrap();
-
-	let mut manifest_set_members: Vec<_> = genesis_output
+	let genesis_output = {
+		let contents =
+			fs::read("./mock/boot-e2e/genesis-dir/genesis_output").unwrap();
+		GenesisOutput::try_from_slice(&contents).unwrap()
+	};
+	// For simplicity sake, we use the same keys for the share set and manifest
+	// set.
+	let mut members: Vec<_> = genesis_output
 		.member_outputs
-		.into_iter()
+		.iter()
+		.cloned()
 		.map(|GenesisMemberOutput { share_set_member, .. }| share_set_member)
 		.collect();
-	manifest_set_members.sort();
+	members.sort();
 
-	let share_set_members = manifest_set_members
-		.clone()
-		.into_iter()
-		.map(|mut m| {
-			m.alias = "SHARE_SET_ALIAS".to_string();
-			m
-		})
-		.collect();
+	let namespace_field = Namespace {
+		name: namespace.to_string(),
+		nonce: 2,
+		quorum_key: genesis_output.quorum_key,
+	};
+	assert_eq!(manifest.namespace, namespace_field);
+	let pivot = PivotConfig {
+		commit: "mock-pivot-commit".to_string(),
+		hash: mock_pivot_hash,
+		restart: RestartPolicy::Never,
+		args: vec!["--msg".to_string(), msg.to_string()],
+	};
+	assert_eq!(manifest.pivot, pivot);
+	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
+	assert_eq!(manifest.manifest_set, manifest_set);
+	let share_set = ShareSet { threshold: 2, members };
+	assert_eq!(manifest.share_set, share_set);
+	let qos_commit = "mock-qos-commit".to_string();
+	assert_eq!(manifest.qos_commit, qos_commit);
+	let enclave = NitroConfig {
+		pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),
+		pcr1: qos_hex::decode(MOCK_PCR1).unwrap(),
+		pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
+		pcr3: qos_hex::decode(PCR3).unwrap(),
+		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
+	};
+	assert_eq!(manifest.enclave, enclave);
 
 	assert_eq!(
 		manifest,
 		Manifest {
-			namespace: Namespace { name: namespace.to_string(), nonce: 2 },
-			pivot: PivotConfig {
-				commit: "mock-pivot-commit".to_string(),
-				hash: mock_pivot_hash,
-				restart: RestartPolicy::Never,
-				args: vec!["--msg".to_string(), msg.to_string()]
-			},
-			quorum_key: genesis_output.quorum_key.clone(),
-			manifest_set: ManifestSet {
-				threshold: genesis_output.threshold,
-				members: manifest_set_members
-			},
-			share_set: ShareSet {
-				threshold: genesis_output.threshold,
-				members: share_set_members
-			},
-			enclave: NitroConfig {
-				pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),
-				pcr1: qos_hex::decode(MOCK_PCR1).unwrap(),
-				pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
-				pcr3: qos_hex::decode(PCR3).unwrap(),
-				aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap()
-			},
-			qos_commit: "abcdef".to_string(),
+			namespace: namespace_field,
+			pivot,
+			manifest_set,
+			share_set,
+			enclave,
+			qos_commit,
 		}
 	);
 
@@ -179,6 +181,10 @@ async fn boot_e2e() {
 				"./mock/pcr3-preimage.txt",
 				"--pivot-build-fingerprints",
 				"./mock/pivot-build-fingerprints.txt",
+				"--manifest-set-dir",
+				"./mock/keys/manifest-set",
+				"--share-set-dir",
+				"./mock/keys/share-set",
 			])
 			.spawn()
 			.unwrap()
@@ -305,6 +311,8 @@ async fn boot_e2e() {
 				&personal_dir(user),
 				"--pcr3-preimage-path",
 				"./mock/pcr3-preimage.txt",
+				"--alias",
+				user,
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
 				&*eph_path,

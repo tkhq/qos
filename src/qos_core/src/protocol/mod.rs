@@ -47,7 +47,9 @@ pub enum ProtocolError {
 	/// TODO
 	InvalidShare,
 	/// Failed to reconstruct the quorum key while provisioning.
-	ReconstructionError,
+	ReconstructionErrorEmptySecret,
+	/// Reconstructed the incorrect key while provisioning.
+	ReconstructionErrorIncorrectPubKey,
 	/// Filesystem error
 	IOError,
 	/// Cryptography error

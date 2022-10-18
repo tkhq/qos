@@ -20,7 +20,7 @@ use qos_core::protocol::{
 			Approval, Manifest, ManifestEnvelope, ManifestSet, Namespace,
 			NitroConfig, PivotConfig, QuorumMember, RestartPolicy, ShareSet,
 		},
-		genesis::{GenesisMemberOutput, GenesisOutput, GenesisSet},
+		genesis::{GenesisOutput, GenesisSet},
 	},
 	Hash256, QosHash,
 };
@@ -40,7 +40,9 @@ const APPROVAL_EXT: &str = "approval";
 const STANDARD_ATTESTATION_DOC_FILE: &str = "boot_attestation_doc";
 const EPH_WRAPPED_SHARE_FILE: &str = "ephemeral_key_wrapped.share";
 const ATTESTATION_APPROVAL_FILE: &str = "attestation_approval";
-const SHARE_SET_ALIAS: &str = "SHARE_SET_ALIAS";
+const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
+const QUORUM_KEY: &str = "quorum_key";
+const PUB_EXT: &str = "pub";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -162,7 +164,7 @@ fn create_genesis_set<P: AsRef<Path>>(
 		.filter_map(|path| {
 			let mut n = split_file_name(path);
 
-			if n.last().map_or(true, |s| s.as_str() != "pub")
+			if n.last().map_or(true, |s| s.as_str() != PUB_EXT)
 				|| n.get(n.len() - 2)
 					.map_or(true, |s| s.as_str() != "share_key")
 			{
@@ -282,37 +284,33 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 }
 
 pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
-	pub genesis_dir: P,
 	pub nonce: u32,
 	pub namespace: String,
 	pub restart_policy: RestartPolicy,
 	pub pivot_build_fingerprints_path: P,
 	pub qos_build_fingerprints_path: P,
 	pub pcr3_preimage_path: P,
-	pub root_cert_path: P,
+	pub share_set_dir: P,
+	pub manifest_set_dir: P,
+	pub namespace_dir: P,
 	pub boot_dir: P,
 	pub pivot_args: Vec<String>,
 }
 
 pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	let GenerateManifestArgs {
-		genesis_dir,
 		nonce,
 		namespace,
 		pivot_build_fingerprints_path,
 		restart_policy,
 		qos_build_fingerprints_path,
 		pcr3_preimage_path,
-		root_cert_path,
+		manifest_set_dir,
+		share_set_dir,
+		namespace_dir,
 		boot_dir,
 		pivot_args,
 	} = args;
-
-	let aws_root_certificate = cert_from_pem(
-		&fs::read(root_cert_path.as_ref())
-			.expect("Failed to read in root cert"),
-	)
-	.expect("AWS root cert: failed to convert PEM to DER");
 
 	let pcr3 = extract_pcr3(pcr3_preimage_path);
 	let QosBuildFingerprints { pcr0, pcr1, pcr2, qos_commit } =
@@ -320,45 +318,38 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	let PivotBuildFingerprints { pivot_hash, pivot_commit } =
 		extract_pivot_build_fingerprints(pivot_build_fingerprints_path);
 
-	let genesis_output = find_genesis_output(&genesis_dir);
+	// Get manifest set keys & threshold
+	let mut manifest_set = get_manifest_set(manifest_set_dir);
+	// Get share set keys & threshold
+	let mut share_set = get_share_set(share_set_dir);
+	// Get quorum key from namespaces dir
+	let quorum_key: RsaPub = find_quorum_key(namespace_dir);
 
-	let mut members: Vec<_> = genesis_output
-		.member_outputs
-		.into_iter()
-		.map(|GenesisMemberOutput { share_set_member, .. }| share_set_member)
-		.collect();
 	// We want to try and build the same manifest regardless of the OS.
-	members.sort();
-
-	let share_set_members = members
-		.clone()
-		.into_iter()
-		.map(|mut m| {
-			m.alias = SHARE_SET_ALIAS.to_string();
-			m
-		})
-		.collect();
+	manifest_set.members.sort();
+	share_set.members.sort();
 
 	let manifest = Manifest {
-		namespace: Namespace { name: namespace.clone(), nonce },
+		namespace: Namespace {
+			name: namespace.clone(),
+			nonce,
+			quorum_key: quorum_key.public_key_to_der().unwrap(),
+		},
 		pivot: PivotConfig {
 			commit: pivot_commit,
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
 		},
-		quorum_key: genesis_output.quorum_key,
-		// TODO: the members of the manifest set should not be from the genesis
-		// output, instead should be from some other directory of keys
-		manifest_set: ManifestSet {
-			threshold: genesis_output.threshold,
-			members,
+		manifest_set,
+		share_set,
+		enclave: NitroConfig {
+			pcr0,
+			pcr1,
+			pcr2,
+			pcr3,
+			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
-		share_set: ShareSet {
-			threshold: genesis_output.threshold,
-			members: share_set_members,
-		},
-		enclave: NitroConfig { pcr0, pcr1, pcr2, pcr3, aws_root_certificate },
 		qos_commit,
 	};
 
@@ -538,6 +529,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	manifest_hash: Hash256,
 	personal_dir: P, // TODO: replace this with just using yubikey to sign
 	pcr3_preimage_path: P,
+	alias: String,
 	unsafe_skip_attestation: bool,
 	unsafe_eph_path_override: Option<String>,
 ) {
@@ -611,7 +603,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 			pub_key: personal_pair
 				.public_key_to_der()
 				.expect("Failed to get public key"),
-			alias: SHARE_SET_ALIAS.to_string(),
+			alias,
 		},
 	}
 	.try_to_vec()
@@ -684,6 +676,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		namespace: Namespace {
 			name: DANGEROUS_DEV_BOOT_NAMESPACE.to_string(),
 			nonce: u32::MAX,
+			quorum_key: quorum_public_der,
 		},
 		enclave: NitroConfig {
 			pcr0: mock_pcr.clone(),
@@ -698,7 +691,6 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			restart,
 			args,
 		},
-		quorum_key: quorum_public_der,
 		manifest_set: ManifestSet {
 			threshold: 1,
 			// The only member is the quorum member
@@ -813,29 +805,110 @@ fn find_share_key<P: AsRef<Path>>(personal_dir: P) -> (RsaPair, Vec<String>) {
 	s.remove(0)
 }
 
-fn find_genesis_output<P: AsRef<Path>>(genesis_dir: P) -> GenesisOutput {
-	let mut g: Vec<_> = find_file_paths(&genesis_dir)
+fn find_quorum_key<P: AsRef<Path>>(dir: P) -> RsaPub {
+	let mut s: Vec<_> = find_file_paths(&dir)
 		.iter()
 		.filter_map(|path| {
-			let file_name =
-				path.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap();
-			if file_name != GENESIS_OUTPUT_FILE {
+			let file_name = split_file_name(path);
+			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT)
+				|| file_name.first().map_or(true, |s| s.as_str() != QUORUM_KEY)
+			{
 				return None;
-			}
+			};
 
 			Some(
-				GenesisOutput::try_from_slice(
-					&fs::read(path)
-						.expect("Failed to read genesis output file"),
-				)
-				.expect("Failed to deserialize genesis output"),
+				RsaPub::from_pem_file(path)
+					.expect("Could not read PEM from share_key.key"),
 			)
 		})
 		.collect();
 	// Make sure there is exactly one manifest
-	assert_eq!(g.len(), 1, "Did not find exactly 1 genesis output");
+	assert_eq!(s.len(), 1, "Did not find exactly 1 quorum key.");
 
-	g.remove(0)
+	s.remove(0)
+}
+
+fn find_threshold<P: AsRef<Path>>(dir: P) -> u32 {
+	// We expect the threshold file to be named `quorum_threshold` and contain a
+	// single line with just the a base 10 number. It should live in the
+	// directory containing the keys in the set.
+
+	let mut probably_threshold: Vec<u32> = find_file_paths(&dir)
+		.iter()
+		.filter_map(|path| {
+			let file_name = split_file_name(path);
+			if file_name.len() != 1
+				|| file_name
+					.first()
+					.map_or(true, |s| s.as_str() != QUORUM_THRESHOLD_FILE)
+			{
+				return None;
+			};
+
+			let file =
+				File::open(path).expect("failed to open quorum_threshold file");
+			let threshold: u32 = std::io::BufReader::new(file)
+				.lines()
+				.next() // First line
+				.unwrap()
+				.unwrap()
+				.trim() // Trim any whitespace just to be sure
+				.parse() // Parse into a u32
+				.expect("Could not parse threshold into u32");
+
+			Some(threshold)
+		})
+		.collect();
+
+	assert_eq!(
+		probably_threshold.len(),
+		1,
+		"Did not find exactly 1 threshold."
+	);
+
+	probably_threshold.remove(0)
+}
+
+fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
+	let members: Vec<_> = find_file_paths(&dir)
+		.iter()
+		.filter_map(|path| {
+			let mut file_name = split_file_name(path);
+			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+				return None;
+			};
+
+			let public = RsaPub::from_pem_file(path)
+				.expect("Could not read PEM from share_key.pub");
+			Some(QuorumMember {
+				alias: mem::take(&mut file_name[0]),
+				pub_key: public.public_key_to_der().unwrap(),
+			})
+		})
+		.collect();
+
+	ShareSet { members, threshold: find_threshold(dir) }
+}
+
+fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
+	let members: Vec<_> = find_file_paths(&dir)
+		.iter()
+		.filter_map(|path| {
+			let mut file_name = split_file_name(path);
+			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+				return None;
+			};
+
+			let public = RsaPub::from_pem_file(path)
+				.expect("Could not read PEM from share_key.pub");
+			Some(QuorumMember {
+				alias: mem::take(&mut file_name[0]),
+				pub_key: public.public_key_to_der().unwrap(),
+			})
+		})
+		.collect();
+
+	ManifestSet { members, threshold: find_threshold(dir) }
 }
 
 fn find_approvals<P: AsRef<Path>>(
@@ -1061,8 +1134,7 @@ fn extract_qos_build_fingerprints<P: AsRef<Path>>(
 }
 
 fn extract_pcr3<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
-	let file = File::open(file_path)
-		.expect("failed to open qos build fingerprints file");
+	let file = File::open(file_path).expect("failed to open pcr3 preimage");
 	let mut lines = std::io::BufReader::new(file)
 		.lines()
 		.collect::<Result<Vec<_>, _>>()

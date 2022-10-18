@@ -360,7 +360,6 @@ const NAMESPACE: &str = "namespace";
 const THRESHOLD: &str = "threshold";
 const NONCE: &str = "nonce";
 const RESTART_POLICY: &str = "restart-policy";
-const ROOT_CERT_PATH: &str = "root-cert-path";
 const MANIFEST_HASH: &str = "manifest-hash";
 const PIVOT_PATH: &str = "pivot-path";
 const GENESIS_DIR: &str = "genesis-dir";
@@ -374,6 +373,9 @@ const ATTESTATION_DIR: &str = "attestation-dir";
 const QOS_BUILD_FINGERPRINTS: &str = "qos-build-fingerprints";
 const PCR3_PREIMAGE_PATH: &str = "pcr3-preimage-path";
 const PIVOT_BUILD_FINGERPRINTS: &str = "pivot-build-fingerprints";
+const SHARE_SET_DIR: &str = "share-set-dir";
+const MANIFEST_SET_DIR: &str = "manifest-set-dir";
+const NAMESPACE_DIR: &str = "namespace-dir";
 
 /// Commands for the Client CLI.
 ///
@@ -587,6 +589,35 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn manifest_set_dir_token() -> Token {
+		Token::new(
+			MANIFEST_SET_DIR,
+			"Directory with public keys for members of the manifest set.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn share_set_dir_token() -> Token {
+		Token::new(
+			SHARE_SET_DIR,
+			"Director with public keys for members of the share set.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn namespace_dir_token() -> Token {
+		Token::new(
+			NAMESPACE_DIR,
+			"Directory for the namespace this manifest will belong to.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn alias_token() -> Token {
+		Token::new(ALIAS, "Alias for identifying the key pair")
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -611,14 +642,7 @@ impl Command {
 
 	fn generate_share_key() -> Parser {
 		Parser::new()
-			.token(
-				Token::new(
-					ALIAS,
-					"Alias of the Quorum Member this key will belong too.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
+			.token(Self::alias_token())
 			.token(Self::personal_dir_token())
 			.token(Self::namespace_token())
 	}
@@ -649,7 +673,6 @@ impl Command {
 
 	fn generate_manifest() -> Parser {
 		Parser::new()
-			.token(Self::genesis_dir_token())
 			.token(
 				Token::new(
 					NONCE,
@@ -663,15 +686,10 @@ impl Command {
 			.token(Self::restart_policy_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
-			.token(
-				Token::new(
-					ROOT_CERT_PATH,
-					"Path to file containing PEM encoded AWS root cert.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
 			.token(Self::boot_dir_token())
+			.token(Self::manifest_set_dir_token())
+			.token(Self::share_set_dir_token())
+			.token(Self::namespace_dir_token())
 			.token(Self::pivot_args_token())
 	}
 
@@ -682,6 +700,8 @@ impl Command {
 			.token(Self::boot_dir_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::pivot_build_fingerprints_token())
+			.token(Self::manifest_set_dir_token())
+			.token(Self::share_set_dir_token())
 	}
 
 	fn boot_standard() -> Parser {
@@ -704,6 +724,7 @@ impl Command {
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
+			.token(Self::alias_token())
 	}
 
 	fn post_share() -> Parser {
@@ -807,10 +828,6 @@ impl ClientOpts {
 			.expect("Could not parse `--restart-policy`")
 	}
 
-	fn root_cert_path(&self) -> String {
-		self.parsed.single(ROOT_CERT_PATH).expect("required arg").to_string()
-	}
-
 	fn manifest_hash(&self) -> Hash256 {
 		qos_hex::decode(
 			self.parsed.single(MANIFEST_HASH).expect("required arg"),
@@ -834,6 +851,27 @@ impl ClientOpts {
 
 	fn attestation_dir(&self) -> String {
 		self.parsed.single(ATTESTATION_DIR).expect("required arg").to_string()
+	}
+
+	fn manifest_set_dir(&self) -> String {
+		self.parsed
+			.single(MANIFEST_SET_DIR)
+			.expect("`--manifest-set-dir` is a required arg")
+			.to_string()
+	}
+
+	fn share_set_dir(&self) -> String {
+		self.parsed
+			.single(SHARE_SET_DIR)
+			.expect("`--share-set-dir` is a required arg")
+			.to_string()
+	}
+
+	fn namespace_dir(&self) -> String {
+		self.parsed
+			.single(NAMESPACE_DIR)
+			.expect("`--namespace-dir` is a required arg")
+			.to_string()
 	}
 
 	fn qos_build_fingerprints(&self) -> String {
@@ -1115,16 +1153,17 @@ mod handlers {
 	/// TODO: can we write the manifest in plain english?
 	pub(super) fn generate_manifest(opts: &ClientOpts) {
 		services::generate_manifest(GenerateManifestArgs {
-			genesis_dir: opts.genesis_dir(),
 			nonce: opts.nonce(),
 			namespace: opts.namespace(),
 			restart_policy: opts.restart_policy(),
 			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
-			root_cert_path: opts.root_cert_path(),
 			boot_dir: opts.boot_dir(),
 			pivot_args: opts.pivot_args(),
+			share_set_dir: opts.share_set_dir(),
+			manifest_set_dir: opts.manifest_set_dir(),
+			namespace_dir: opts.namespace_dir(),
 		});
 	}
 
@@ -1159,6 +1198,7 @@ mod handlers {
 			opts.manifest_hash(),
 			opts.personal_dir(),
 			opts.pcr3_preimage_path(),
+			opts.alias(),
 			opts.unsafe_skip_attestation(),
 			opts.unsafe_eph_path_override(),
 		);

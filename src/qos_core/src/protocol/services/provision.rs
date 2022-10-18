@@ -37,7 +37,7 @@ impl SecretBuilder {
 		let secret = qos_crypto::shamir::shares_reconstruct(&self.shares);
 
 		if secret.is_empty() {
-			return Err(ProtocolError::ReconstructionError);
+			return Err(ProtocolError::ReconstructionErrorEmptySecret);
 		}
 
 		Ok(secret)
@@ -91,17 +91,15 @@ pub(in crate::protocol) fn provision(
 	}
 
 	let private_key_der = state.provisioner.build()?;
+	state.provisioner.clear();
 
 	let pair = qos_crypto::RsaPair::from_der(&private_key_der)
 		.map_err(|_| ProtocolError::InvalidPrivateKey)?;
 	let public_key_der = pair.public_key_to_der()?;
 
-	if public_key_der != manifest_envelope.manifest.quorum_key {
+	if public_key_der != manifest_envelope.manifest.namespace.quorum_key {
 		// We did not construct the intended key
-		// Something went wrong, so clear the existing shares just to be
-		// careful.
-		state.provisioner.clear();
-		return Err(ProtocolError::ReconstructionError);
+		return Err(ProtocolError::ReconstructionErrorIncorrectPubKey);
 	}
 
 	state.handles.put_quorum_key(&pair)?;
@@ -175,7 +173,11 @@ mod test {
 			.collect();
 
 		let manifest = Manifest {
-			namespace: Namespace { nonce: 420, name: "vape-space".to_string() },
+			namespace: Namespace {
+				nonce: 420,
+				name: "vape-space".to_string(),
+				quorum_key: quorum_pair.public_key_to_der().unwrap(),
+			},
 			enclave: NitroConfig {
 				pcr0: vec![4; 32],
 				pcr1: vec![3; 32],
@@ -189,7 +191,6 @@ mod test {
 				restart: RestartPolicy::Always,
 				args: vec![],
 			},
-			quorum_key: quorum_pair.public_key_to_der().unwrap(),
 			manifest_set: ManifestSet {
 				threshold: threshold.try_into().unwrap(),
 				members: vec![],
@@ -312,7 +313,7 @@ mod test {
 		let approval = approvals[threshold].clone();
 		assert_eq!(
 			provision(share, approval, &mut state),
-			Err(ProtocolError::ReconstructionError)
+			Err(ProtocolError::ReconstructionErrorIncorrectPubKey)
 		);
 		assert!(!Path::new(&*quorum_file).exists());
 		// Note that the handler should set the state to unrecoverable error
