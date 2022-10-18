@@ -613,6 +613,11 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn alias_token() -> Token {
+		Token::new(ALIAS, "Alias for identifying the key pair")
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -637,14 +642,7 @@ impl Command {
 
 	fn generate_share_key() -> Parser {
 		Parser::new()
-			.token(
-				Token::new(
-					ALIAS,
-					"Alias of the Quorum Member this key will belong too.",
-				)
-				.takes_value(true)
-				.required(true),
-			)
+			.token(Self::alias_token())
 			.token(Self::personal_dir_token())
 			.token(Self::namespace_token())
 	}
@@ -726,6 +724,7 @@ impl Command {
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
+			.token(Self::alias_token())
 	}
 
 	fn post_share() -> Parser {
@@ -1199,6 +1198,7 @@ mod handlers {
 			opts.manifest_hash(),
 			opts.personal_dir(),
 			opts.pcr3_preimage_path(),
+			opts.alias(),
 			opts.unsafe_skip_attestation(),
 			opts.unsafe_eph_path_override(),
 		);

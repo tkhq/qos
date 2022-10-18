@@ -40,7 +40,6 @@ const APPROVAL_EXT: &str = "approval";
 const STANDARD_ATTESTATION_DOC_FILE: &str = "boot_attestation_doc";
 const EPH_WRAPPED_SHARE_FILE: &str = "ephemeral_key_wrapped.share";
 const ATTESTATION_APPROVAL_FILE: &str = "attestation_approval";
-const SHARE_SET_ALIAS: &str = "SHARE_SET_ALIAS";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
 const QUORUM_KEY: &str = "quorum_key";
 const PUB_EXT: &str = "pub";
@@ -527,6 +526,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	manifest_hash: Hash256,
 	personal_dir: P, // TODO: replace this with just using yubikey to sign
 	pcr3_preimage_path: P,
+	alias: String,
 	unsafe_skip_attestation: bool,
 	unsafe_eph_path_override: Option<String>,
 ) {
@@ -600,7 +600,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 			pub_key: personal_pair
 				.public_key_to_der()
 				.expect("Failed to get public key"),
-			alias: SHARE_SET_ALIAS.to_string(),
+			alias,
 		},
 	}
 	.try_to_vec()
@@ -873,11 +873,7 @@ fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
 		.iter()
 		.filter_map(|path| {
 			let mut file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT)
-				|| file_name
-					.get(file_name.len() - 2)
-					.map_or(true, |s| s.as_str() != "share_key")
-			{
+			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
 				return None;
 			};
 
@@ -898,11 +894,7 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 		.iter()
 		.filter_map(|path| {
 			let mut file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT)
-				|| file_name
-					.get(file_name.len() - 2)
-					.map_or(true, |s| s.as_str() != "share_key")
-			{
+			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
 				return None;
 			};
 

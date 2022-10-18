@@ -4,10 +4,7 @@ use borsh::de::BorshDeserialize;
 use integration::{LOCAL_HOST, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 use qos_core::protocol::{
 	attestor::mock::MOCK_NSM_ATTESTATION_DOCUMENT,
-	services::{
-		boot::{Approval, Manifest},
-		genesis::{GenesisMemberOutput, GenesisOutput},
-	},
+	services::boot::{Approval, Manifest},
 	QosHash,
 };
 use qos_crypto::{sha_256, RsaPair};
@@ -34,13 +31,10 @@ async fn boot_e2e() {
 	fs::create_dir_all(&*attestation_dir).unwrap();
 
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
-	let genesis_dir = "./mock/boot-e2e/genesis-dir";
-	let _root_cert_path = "./mock/boot-e2e/root-cert.pem";
 
 	let namespace = "quit-coding-to-vape";
 
 	let attestation_doc_path = format!("{}/boot_attestation_doc", &*boot_dir);
-	let genesis_output_path = format!("{}/genesis_output", genesis_dir);
 
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", all_personal_dir, user);
@@ -52,7 +46,6 @@ async fn boot_e2e() {
 	// -- Create pivot-build-fingerprints.txt
 	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
-
 	let build_fingerprints = {
 		let mut build_fingerprints =
 			qos_hex::encode(&mock_pivot_hash).as_bytes().to_vec();
@@ -60,7 +53,6 @@ async fn boot_e2e() {
 		build_fingerprints.extend_from_slice(b"mock-pivot-commit");
 		build_fingerprints
 	};
-
 	std::fs::write(PIVOT_BUILD_FINGERPRINTS_PATH, build_fingerprints).unwrap();
 
 	// -- CLIENT create manifest.
@@ -104,17 +96,6 @@ async fn boot_e2e() {
 	let manifest =
 		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
 			.unwrap();
-
-	let genesis_output =
-		GenesisOutput::try_from_slice(&fs::read(&genesis_output_path).unwrap())
-			.unwrap();
-
-	let mut manifest_set_members: Vec<_> = genesis_output
-		.member_outputs
-		.into_iter()
-		.map(|GenesisMemberOutput { share_set_member, .. }| share_set_member)
-		.collect();
-	manifest_set_members.sort();
 
 	// let share_set_members = manifest_set_members
 	// 	.clone()
@@ -305,6 +286,8 @@ async fn boot_e2e() {
 				&personal_dir(user),
 				"--pcr3-preimage-path",
 				"./mock/pcr3-preimage.txt",
+				"--alias",
+				user,
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
 				&*eph_path,
