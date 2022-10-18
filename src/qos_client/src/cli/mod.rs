@@ -221,10 +221,11 @@
 //! #### Approve the Manifest
 //!
 //! K of the quorum members need to approve (sign) the manifest with their
-//! personal key. A quorum member can use [`Command::SignManifest`] to do this.
+//! personal key. A quorum member can use [`Command::ApproveManifest`] to do
+//! this.
 //!
-//! [`Command::SignManifest`] expects the following directory structure on Bob's
-//! personal machine:
+//! [`Command::ApproveManifest`] expects the following directory structure on
+//! Bob's personal machine:
 //!
 //! - personal
 //!     - `bob.our_namespace.personal.key`
@@ -376,6 +377,7 @@ const PIVOT_BUILD_FINGERPRINTS: &str = "pivot-build-fingerprints";
 const SHARE_SET_DIR: &str = "share-set-dir";
 const MANIFEST_SET_DIR: &str = "manifest-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
+const MANIFEST_DIR: &str = "manifest-dir";
 
 /// Commands for the Client CLI.
 ///
@@ -424,7 +426,7 @@ pub enum Command {
 	///
 	/// Careful - only ever sign a manifest you have inspected, trust and know
 	/// is the latest one for the namespace.
-	SignManifest,
+	ApproveManifest,
 	/// Start booting an enclave.
 	///
 	/// Given a `Manifest` and K `Approval`s, send the boot standard
@@ -475,7 +477,7 @@ impl From<&str> for Command {
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
 			"generate-manifest" => Self::GenerateManifest,
-			"sign-manifest" => Self::SignManifest,
+			"approve-manifest" => Self::ApproveManifest,
 			"boot-standard" => Self::BootStandard,
 			"get-attestation-doc" => Self::GetAttestationDoc,
 			"proxy-re-encrypt-share" => Self::ProxyReEncryptShare,
@@ -613,6 +615,14 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn manifest_dir_token() -> Token {
+		Token::new(
+			MANIFEST_DIR,
+			"Directory containing manifest and its approvals.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
 	fn alias_token() -> Token {
 		Token::new(ALIAS, "Alias for identifying the key pair")
 			.takes_value(true)
@@ -693,13 +703,15 @@ impl Command {
 			.token(Self::pivot_args_token())
 	}
 
-	fn sign_manifest() -> Parser {
+	fn approve_manifest() -> Parser {
 		Parser::new()
-			.token(Self::manifest_hash_token())
 			.token(Self::personal_dir_token())
-			.token(Self::boot_dir_token())
+			.token(Self::manifest_dir_token())
+			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::pivot_build_fingerprints_token())
+			.token(Self::alias_token())
+			.token(Self::namespace_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
 	}
@@ -753,7 +765,7 @@ impl GetParserForCommand for Command {
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
 			Self::GenerateManifest => Self::generate_manifest(),
-			Self::SignManifest => Self::sign_manifest(),
+			Self::ApproveManifest => Self::approve_manifest(),
 			Self::BootStandard => Self::boot_standard(),
 			Self::GetAttestationDoc => Self::get_attestation_doc(),
 			Self::ProxyReEncryptShare => Self::proxy_re_encrypt_share(),
@@ -956,7 +968,9 @@ impl ClientRunner {
 				Command::GenerateManifest => {
 					handlers::generate_manifest(&self.opts);
 				}
-				Command::SignManifest => handlers::sign_manifest(&self.opts),
+				Command::ApproveManifest => {
+					handlers::approve_manifest(&self.opts);
+				}
 				Command::BootStandard => handlers::boot_standard(&self.opts),
 				Command::GetAttestationDoc => {
 					handlers::get_attestation_doc(&self.opts);
@@ -989,6 +1003,7 @@ impl CLI {
 mod handlers {
 	use qos_core::protocol::attestor::types::{NsmRequest, NsmResponse};
 
+	use super::services::ApproveManifestArgs;
 	use crate::{
 		cli::{
 			services::{self, GenerateManifestArgs},
@@ -1167,12 +1182,18 @@ mod handlers {
 		});
 	}
 
-	pub(super) fn sign_manifest(opts: &ClientOpts) {
-		services::sign_manifest(
-			opts.manifest_hash(),
-			opts.personal_dir(),
-			opts.boot_dir(),
-		);
+	pub(super) fn approve_manifest(opts: &ClientOpts) {
+		services::approve_manifest(ApproveManifestArgs {
+			personal_dir: opts.personal_dir(),
+			manifest_dir: opts.boot_dir(), // TODO
+			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
+			pcr3_preimage_path: opts.pcr3_preimage_path(),
+			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
+			namespace_dir: opts.namespace_dir(),
+			manifest_set_dir: opts.manifest_set_dir(),
+			share_set_dir: opts.share_set_dir(),
+			alias: opts.alias(),
+		});
 	}
 
 	pub(super) fn boot_standard(opts: &ClientOpts) {

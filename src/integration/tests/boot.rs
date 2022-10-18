@@ -138,14 +138,13 @@ async fn boot_e2e() {
 	assert_eq!(manifest.manifest_set, manifest_set);
 	let share_set = ShareSet { threshold: 2, members };
 	assert_eq!(manifest.share_set, share_set);
-	let qos_commit = "mock-qos-commit".to_string();
-	assert_eq!(manifest.qos_commit, qos_commit);
 	let enclave = NitroConfig {
 		pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),
 		pcr1: qos_hex::decode(MOCK_PCR1).unwrap(),
 		pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
 		pcr3: qos_hex::decode(PCR3).unwrap(),
 		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
+		qos_commit: "mock-qos-commit".to_string(),
 	};
 	assert_eq!(manifest.enclave, enclave);
 
@@ -157,11 +156,10 @@ async fn boot_e2e() {
 			manifest_set,
 			share_set,
 			enclave,
-			qos_commit,
 		}
 	);
 
-	// -- CLIENT make sure each user can run `sign-manifest`
+	// -- CLIENT make sure each user can run `approve-manifest`
 	for alias in [user1, user2, user3] {
 		let approval_path = format!(
 			"{}/{}.{}.{}.approval",
@@ -170,7 +168,7 @@ async fn boot_e2e() {
 
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
-				"sign-manifest",
+				"approve-manifest",
 				"--manifest-hash",
 				qos_hex::encode(&manifest.qos_hash()).as_str(),
 				"--personal-dir",

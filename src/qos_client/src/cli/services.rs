@@ -312,22 +312,17 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		pivot_args,
 	} = args;
 
-	let pcr3 = extract_pcr3(pcr3_preimage_path);
-	let QosBuildFingerprints { pcr0, pcr1, pcr2, qos_commit } =
-		extract_qos_build_fingerprints(qos_build_fingerprints_path);
+	let nitro_config =
+		extract_nitro_config(qos_build_fingerprints_path, pcr3_preimage_path);
 	let PivotBuildFingerprints { pivot_hash, pivot_commit } =
 		extract_pivot_build_fingerprints(pivot_build_fingerprints_path);
 
 	// Get manifest set keys & threshold
-	let mut manifest_set = get_manifest_set(manifest_set_dir);
+	let manifest_set = get_manifest_set(manifest_set_dir);
 	// Get share set keys & threshold
-	let mut share_set = get_share_set(share_set_dir);
+	let share_set = get_share_set(share_set_dir);
 	// Get quorum key from namespaces dir
 	let quorum_key: RsaPub = find_quorum_key(namespace_dir);
-
-	// We want to try and build the same manifest regardless of the OS.
-	manifest_set.members.sort();
-	share_set.members.sort();
 
 	let manifest = Manifest {
 		namespace: Namespace {
@@ -343,14 +338,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		},
 		manifest_set,
 		share_set,
-		enclave: NitroConfig {
-			pcr0,
-			pcr1,
-			pcr2,
-			pcr3,
-			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
-		},
-		qos_commit,
+		enclave: nitro_config,
 	};
 
 	fs::create_dir_all(&boot_dir).expect("Failed to created boot dir");
@@ -360,41 +348,66 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");
 }
 
-// TODO for verifing the manifest
-// - verify PCR3 (enter pre-image as arg)
-// - verify that this manifest is in the manifest repo & correct nonce (point to
-//   manifest repo)
-// - verify the manifest namespace (prompt user)
-// - verify the public quorum key (either prompt user or enter as CLI input)
-// - verify the CLI args (prompt user)
-pub(crate) fn sign_manifest<P: AsRef<Path>>(
-	manifest_hash: Hash256,
-	personal_dir: P,
-	boot_dir: P,
-	// TODO
-	// qos_build_fingerprints_path: P,
-	// pcr3_preimage_path: P,
-	// pivot_build_fingerprints_path: P,
-) {
-	let manifest = find_manifest(&boot_dir);
-	let (personal_pair, mut personal_path) = find_share_key(&personal_dir);
-	let alias = mem::take(&mut personal_path[0]);
-	let namespace = mem::take(&mut personal_path[1]);
-	drop(personal_path);
+fn extract_nitro_config<P: AsRef<Path>>(
+	qos_build_fingerprints_path: P,
+	pcr3_preimage_path: P,
+) -> NitroConfig {
+	let pcr3 = extract_pcr3(pcr3_preimage_path);
+	let QosBuildFingerprints { pcr0, pcr1, pcr2, qos_commit } =
+		extract_qos_build_fingerprints(qos_build_fingerprints_path);
 
-	assert_eq!(
-		manifest.qos_hash(),
-		manifest_hash,
-		"Manifest hashes do not match"
-	);
-	assert_eq!(
-		manifest.namespace.name, namespace,
-		"namespace in file name does not match namespace in manifest"
-	);
+	NitroConfig {
+		pcr0,
+		pcr1,
+		pcr2,
+		pcr3,
+		qos_commit,
+		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
+	}
+}
+
+pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
+	pub personal_dir: P,
+	pub manifest_dir: P,
+	pub qos_build_fingerprints_path: P,
+	pub pcr3_preimage_path: P,
+	pub pivot_build_fingerprints_path: P,
+	pub namespace_dir: P,
+	pub manifest_set_dir: P,
+	pub share_set_dir: P,
+	pub alias: String,
+}
+
+pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
+	let ApproveManifestArgs {
+		personal_dir,
+		manifest_dir,
+		qos_build_fingerprints_path,
+		pcr3_preimage_path,
+		pivot_build_fingerprints_path,
+		namespace_dir,
+		manifest_set_dir,
+		share_set_dir,
+		alias,
+	} = args;
+
+	let manifest = find_manifest(&manifest_dir);
+	let (personal_pair, _) = find_share_key(&personal_dir);
+
+	if !approve_manifest_verifications(
+		&manifest,
+		&get_manifest_set(manifest_set_dir),
+		&get_share_set(share_set_dir),
+		&extract_nitro_config(qos_build_fingerprints_path, pcr3_preimage_path),
+		&extract_pivot_build_fingerprints(pivot_build_fingerprints_path),
+		&find_quorum_key(namespace_dir),
+	) {
+		eprintln!("Exiting early without approving manifest.");
+	}
 
 	let approval = Approval {
 		signature: personal_pair
-			.sign_sha256(&manifest_hash)
+			.sign_sha256(&manifest.qos_hash())
 			.expect("Failed to sign"),
 		member: QuorumMember {
 			pub_key: personal_pair
@@ -404,15 +417,101 @@ pub(crate) fn sign_manifest<P: AsRef<Path>>(
 		},
 	};
 
-	let approval_path = boot_dir.as_ref().join(format!(
+	let approval_path = manifest_dir.as_ref().join(format!(
 		"{}.{}.{}.{}",
-		alias, namespace, manifest.namespace.nonce, APPROVAL_EXT
+		alias, manifest.namespace.name, manifest.namespace.nonce, APPROVAL_EXT
 	));
 	write_with_msg(
 		&approval_path,
 		&approval.try_to_vec().expect("Failed to serialize approval"),
 		"Manifest Approval",
 	);
+}
+
+fn approve_manifest_verifications(
+	manifest: &Manifest,
+	manifest_set: &ManifestSet,
+	share_set: &ShareSet,
+	nitro_config: &NitroConfig,
+	pivot_build_fingerprints: &PivotBuildFingerprints,
+	quorum_key: &RsaPub,
+) -> bool {
+	// Verify manifest set composition
+	assert_eq!(manifest.manifest_set, *manifest_set);
+
+	// Verify share set composition
+	assert_eq!(manifest.share_set, *share_set);
+
+	// Verify pcrs 0, 1, 2, 3.
+	assert_eq!(
+		manifest.enclave, *nitro_config,
+		"Nitro configuration does not match"
+	);
+
+	// Verify the pivot could be built deterministically
+	assert_eq!(
+		manifest.pivot.hash.to_vec(),
+		pivot_build_fingerprints.pivot_hash,
+		"Pivot hash does not match"
+	);
+
+	// Verify the pivot was built from the intended commit
+	assert_eq!(
+		manifest.pivot.commit, pivot_build_fingerprints.pivot_commit,
+		"Pivot commit does not match",
+	);
+
+	// Verify the intended Quorum Key is being used
+	assert_eq!(
+		manifest.namespace.quorum_key,
+		quorum_key.public_key_to_der().unwrap()
+	);
+
+	// Check the namespace name
+	{
+		let prompt = format!(
+			"Is this the correct namespace name: {}? (yes/no)",
+			manifest.namespace.name
+		);
+		if !get_yes_no_user_input(&prompt) {
+			return false;
+		}
+	}
+
+	// Check the namespace nonce
+	{
+		let prompt = format!(
+			"Is this the correct namespace nonce: {}? (yes/no)",
+			manifest.namespace.nonce
+		);
+		if !get_yes_no_user_input(&prompt) {
+			return false;
+		}
+	}
+
+	// Check pivot restart policy
+	{
+		let prompt = format!(
+			"Is this the correct pivot restart policy: {:?}? (yes/no)",
+			manifest.pivot.restart
+		);
+		if !get_yes_no_user_input(&prompt) {
+			return false;
+		}
+	}
+
+	// Check pivot arguments
+	{
+		let prompt = format!(
+			"Are these the correct pivot args:\n{:?}?\n(yes/no)",
+			manifest.pivot.args
+		);
+		if !get_yes_no_user_input(&prompt) {
+			return false;
+		}
+	}
+
+	true
 }
 
 pub(crate) fn boot_standard<P: AsRef<Path>>(
@@ -683,6 +782,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			pcr1: mock_pcr.clone(),
 			pcr2: mock_pcr.clone(),
 			pcr3: mock_pcr,
+			qos_commit: "mock-qos-commit-ref".to_string(),
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
 		pivot: PivotConfig {
@@ -701,7 +801,6 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			// The only member is the quorum member
 			members: vec![member.clone()],
 		},
-		qos_commit: "mock-qos-commit-ref".to_string(),
 	};
 
 	// Create and post the boot standard instruction
@@ -870,7 +969,7 @@ fn find_threshold<P: AsRef<Path>>(dir: P) -> u32 {
 }
 
 fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
-	let members: Vec<_> = find_file_paths(&dir)
+	let mut members: Vec<_> = find_file_paths(&dir)
 		.iter()
 		.filter_map(|path| {
 			let mut file_name = split_file_name(path);
@@ -886,12 +985,15 @@ fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
 			})
 		})
 		.collect();
+
+	// We want to try and build the same manifest regardless of the OS.
+	members.sort();
 
 	ShareSet { members, threshold: find_threshold(dir) }
 }
 
 fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
-	let members: Vec<_> = find_file_paths(&dir)
+	let mut members: Vec<_> = find_file_paths(&dir)
 		.iter()
 		.filter_map(|path| {
 			let mut file_name = split_file_name(path);
@@ -907,6 +1009,9 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 			})
 		})
 		.collect();
+
+	// We want to try and build the same manifest regardless of the OS.
+	members.sort();
 
 	ManifestSet { members, threshold: find_threshold(dir) }
 }
@@ -1057,39 +1162,6 @@ fn find_attestation_approval<P: AsRef<Path>>(dir: P) -> Approval {
 	a.remove(0)
 }
 
-// fn find_personal_key<P: AsRef<Path>>(
-// 	personal_dir: P,
-// ) -> (RsaPair, Vec<String>) {
-// 	let mut p: Vec<_> = find_file_paths(&personal_dir)
-// 		.iter()
-// 		.filter_map(|path| {
-// 			let file_name = split_file_name(path);
-// 			// Only look at files with the personal.key extension
-// 			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT)
-// 				|| file_name
-// 					.get(file_name.len() - 2)
-// 					.map_or(true, |s| s.as_str() != "personal")
-// 			{
-// 				return None;
-// 			};
-
-// 			Some((
-// 				RsaPair::from_pem_file(path)
-// 					.expect("Could not read PEM from personal.secret"),
-// 				file_name,
-// 			))
-// 		})
-// 		.collect();
-
-// 	assert_eq!(
-// 		p.len(),
-// 		1,
-// 		"Did not find exactly 1 personal secret in the personal-dir"
-// 	);
-
-// 	p.remove(0)
-// }
-
 fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
 	let mut s: Vec<_> = find_file_paths(&personal_dir)
 		.iter()
@@ -1218,6 +1290,22 @@ fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
 		panic!("Failed writing {} to file", path_str.clone())
 	});
 	println!("{} written to: {}", item_name, path_str);
+}
+
+fn get_user_input(prompt: &str) -> String {
+	println!("{prompt}");
+
+	let stdin = std::io::stdin();
+	stdin
+		.lock()
+		.lines()
+		.next()
+		.expect("Nothing entered to stdin")
+		.expect("Failed to read stdin")
+}
+
+fn get_yes_no_user_input(prompt: &str) -> bool {
+	get_user_input(prompt).to_lowercase() == *"yes"
 }
 
 #[cfg(test)]

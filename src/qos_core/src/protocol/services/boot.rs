@@ -25,6 +25,8 @@ pub struct NitroConfig {
 	pub pcr3: Vec<u8>,
 	/// DER encoded X509 AWS root certificate
 	pub aws_root_certificate: Vec<u8>,
+	/// Reference to the commit QOS was built off of.
+	pub qos_commit: String,
 }
 
 /// Policy for restarting the pivot binary.
@@ -161,8 +163,6 @@ pub struct Manifest {
 	pub share_set: ShareSet,
 	/// Configuration and verifiable values for the enclave hardware.
 	pub enclave: NitroConfig,
-	/// Reference to the commit QOS was built off of.
-	pub qos_commit: String,
 }
 
 /// An approval by a Quorum Member.
@@ -320,6 +320,7 @@ mod test {
 				pcr2: vec![2; 32],
 				pcr3: vec![1; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
+				qos_commit: "mock qos commit".to_string(),
 			},
 			pivot: PivotConfig {
 				commit: "commit lord".to_string(),
@@ -329,7 +330,6 @@ mod test {
 			},
 			manifest_set: ManifestSet { threshold: 2, members: quorum_members },
 			share_set: ShareSet { threshold: 2, members: vec![] },
-			qos_commit: "mock qos commit".to_string(),
 		};
 
 		(manifest, member_with_keys, pivot)
