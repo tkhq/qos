@@ -345,7 +345,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 			pcr1,
 			pcr2,
 			pcr3,
-			aws_root_certificate: AWS_ROOT_CERT_PEM.to_vec(),
+			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
 		qos_commit,
 	};

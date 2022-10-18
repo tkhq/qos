@@ -106,19 +106,20 @@ async fn boot_e2e() {
 		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
 			.unwrap();
 
-			let genesis_output = {
-				let contents =
-				fs::read("./mock/boot-e2e/genesis-dir/genesis_output").unwrap();
-				GenesisOutput::try_from_slice(&contents).unwrap()
-			};
-			// For simplicity sake, we use the same keys for the share set and manifest
-			// set.
-	let members: Vec<_> = genesis_output
+	let genesis_output = {
+		let contents =
+			fs::read("./mock/boot-e2e/genesis-dir/genesis_output").unwrap();
+		GenesisOutput::try_from_slice(&contents).unwrap()
+	};
+	// For simplicity sake, we use the same keys for the share set and manifest
+	// set.
+	let mut members: Vec<_> = genesis_output
 		.member_outputs
 		.iter()
 		.cloned()
 		.map(|GenesisMemberOutput { share_set_member, .. }| share_set_member)
 		.collect();
+	members.sort();
 
 	let namespace_field = Namespace { name: namespace.to_string(), nonce: 2 };
 	assert_eq!(manifest.namespace, namespace_field);
@@ -126,27 +127,24 @@ async fn boot_e2e() {
 		commit: "mock-pivot-commit".to_string(),
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
-		args: vec!["--msg".to_string(), msg.to_string()]
+		args: vec!["--msg".to_string(), msg.to_string()],
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let quorum_key = genesis_output.quorum_key;
 	assert_eq!(manifest.quorum_key, quorum_key);
-	let manifest_set = ManifestSet {
-		threshold: 2,
-		members: members.clone(),
-	};
+	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
 	assert_eq!(manifest.manifest_set, manifest_set);
 	let share_set = ShareSet { threshold: 2, members };
 	assert_eq!(manifest.share_set, share_set);
 	let qos_commit = "mock-qos-commit".to_string();
 	assert_eq!(manifest.qos_commit, qos_commit);
 	let enclave = NitroConfig {
-			pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),
-			pcr1: qos_hex::decode(MOCK_PCR1).unwrap(),
-				pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
-				pcr3: qos_hex::decode(PCR3).unwrap(),
-				aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap()
-			};
+		pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),
+		pcr1: qos_hex::decode(MOCK_PCR1).unwrap(),
+		pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
+		pcr3: qos_hex::decode(PCR3).unwrap(),
+		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
+	};
 	assert_eq!(manifest.enclave, enclave);
 
 	assert_eq!(
