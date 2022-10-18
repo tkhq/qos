@@ -403,6 +403,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 		&find_quorum_key(namespace_dir),
 	) {
 		eprintln!("Exiting early without approving manifest.");
+		std::process::exit(1);
 	}
 
 	let approval = Approval {

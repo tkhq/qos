@@ -1,4 +1,9 @@
-use std::{fs, path::Path, process::Command};
+use std::{
+	fs,
+	io::Write,
+	path::Path,
+	process::{Command, Stdio},
+};
 
 use borsh::de::BorshDeserialize;
 use integration::{LOCAL_HOST, PCR3, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
@@ -166,29 +171,42 @@ async fn boot_e2e() {
 			&*boot_dir, alias, namespace, manifest.namespace.nonce,
 		);
 
-		assert!(Command::new("../target/debug/qos_client")
+		let mut child = Command::new("../target/debug/qos_client")
 			.args([
 				"approve-manifest",
-				"--manifest-hash",
-				qos_hex::encode(&manifest.qos_hash()).as_str(),
 				"--personal-dir",
 				&personal_dir(alias),
-				"--boot-dir",
+				"--manifest-dir",
 				&*boot_dir,
 				"--pcr3-preimage-path",
-				"./mock/pcr3-preimage.txt",
+				"./mock/namespaces/pcr3-preimage.txt",
 				"--pivot-build-fingerprints",
 				"./mock/pivot-build-fingerprints.txt",
+				"--qos-build-fingerprints",
+				"./mock/qos-build-fingerprints.txt",
 				"--manifest-set-dir",
 				"./mock/keys/manifest-set",
 				"--share-set-dir",
 				"./mock/keys/share-set",
+				"--namespace-dir",
+				"./mock/namespaces/quit-coding-to-vape",
+				"--alias",
+				alias,
 			])
+			.stdin(Stdio::piped())
+			// .stdout(Stdio::piped())
 			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
+			.unwrap();
+
+		// For each of the 4 user prompts, write "yes"+enter to confirm we
+		// agree.
+		let mut stdin = child.stdin.take().expect("Failed to open stdin");
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert!(child.wait().unwrap().success());
 
 		// Read in the generated approval to check it was created correctly
 		let approval =

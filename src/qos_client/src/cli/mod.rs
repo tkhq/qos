@@ -711,7 +711,7 @@ impl Command {
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::pivot_build_fingerprints_token())
 			.token(Self::alias_token())
-			.token(Self::namespace_token())
+			.token(Self::namespace_dir_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
 	}
@@ -863,6 +863,10 @@ impl ClientOpts {
 
 	fn attestation_dir(&self) -> String {
 		self.parsed.single(ATTESTATION_DIR).expect("required arg").to_string()
+	}
+
+	fn manifest_dir(&self) -> String {
+		self.parsed.single(MANIFEST_DIR).expect("required arg").to_string()
 	}
 
 	fn manifest_set_dir(&self) -> String {
@@ -1165,7 +1169,6 @@ mod handlers {
 		);
 	}
 
-	/// TODO: can we write the manifest in plain english?
 	pub(super) fn generate_manifest(opts: &ClientOpts) {
 		services::generate_manifest(GenerateManifestArgs {
 			nonce: opts.nonce(),
@@ -1185,7 +1188,7 @@ mod handlers {
 	pub(super) fn approve_manifest(opts: &ClientOpts) {
 		services::approve_manifest(ApproveManifestArgs {
 			personal_dir: opts.personal_dir(),
-			manifest_dir: opts.boot_dir(), // TODO
+			manifest_dir: opts.manifest_dir(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
