@@ -847,7 +847,6 @@ fn find_threshold<P: AsRef<Path>>(dir: P) -> u32 {
 
 			let file =
 				File::open(path).expect("failed to open quorum_threshold file");
-			// Get the fi
 			let threshold: u32 = std::io::BufReader::new(file)
 				.lines()
 				.next() // First line
