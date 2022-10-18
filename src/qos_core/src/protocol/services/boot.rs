@@ -80,7 +80,7 @@ pub struct PivotConfig {
 	pub args: Vec<String>,
 }
 
-/// A quorum member's alias and personal key.
+/// A quorum member's alias and public key.
 #[derive(
 	PartialEq,
 	Debug,
