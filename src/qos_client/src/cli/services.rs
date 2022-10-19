@@ -1,7 +1,8 @@
 use std::{
 	fs,
 	fs::File,
-	io::BufRead,
+	io,
+	io::{BufRead, Write},
 	mem,
 	path::{Path, PathBuf},
 };
@@ -406,10 +407,19 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 		std::process::exit(1);
 	}
 
-	if !approve_manifest_human_verifications(&manifest) {
+	let mut prompter = {
+		let stdin = io::stdin();
+		let input = stdin.lock();
+		let output = io::stdout();
+
+		Prompter { reader: input, writer: output }
+	};
+
+	if !approve_manifest_human_verifications(&manifest, &mut prompter) {
 		eprintln!("Exiting early without approving manifest");
 		std::process::exit(1);
 	}
+	drop(prompter);
 
 	let approval = Approval {
 		signature: personal_pair
@@ -482,14 +492,21 @@ fn approve_manifest_programmatic_verifications(
 	true
 }
 
-fn approve_manifest_human_verifications(manifest: &Manifest) -> bool {
+fn approve_manifest_human_verifications<R, W>(
+	manifest: &Manifest,
+	prompter: &mut Prompter<R, W>,
+) -> bool
+where
+	R: BufRead,
+	W: Write,
+{
 	// Check the namespace name
 	{
 		let prompt = format!(
 			"Is this the correct namespace name: {}? (yes/no)",
 			manifest.namespace.name
 		);
-		if !get_yes_no_user_input(&prompt) {
+		if !prompter.prompt_is_yes(&prompt) {
 			return false;
 		}
 	}
@@ -500,7 +517,7 @@ fn approve_manifest_human_verifications(manifest: &Manifest) -> bool {
 			"Is this the correct namespace nonce: {}? (yes/no)",
 			manifest.namespace.nonce
 		);
-		if !get_yes_no_user_input(&prompt) {
+		if !prompter.prompt_is_yes(&prompt) {
 			return false;
 		}
 	}
@@ -511,7 +528,7 @@ fn approve_manifest_human_verifications(manifest: &Manifest) -> bool {
 			"Is this the correct pivot restart policy: {:?}? (yes/no)",
 			manifest.pivot.restart
 		);
-		if !get_yes_no_user_input(&prompt) {
+		if !prompter.prompt_is_yes(&prompt) {
 			return false;
 		}
 	}
@@ -522,7 +539,7 @@ fn approve_manifest_human_verifications(manifest: &Manifest) -> bool {
 			"Are these the correct pivot args:\n{:?}?\n(yes/no)",
 			manifest.pivot.args
 		);
-		if !get_yes_no_user_input(&prompt) {
+		if !prompter.prompt_is_yes(&prompt) {
 			return false;
 		}
 	}
@@ -1308,20 +1325,26 @@ fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
 	println!("{} written to: {}", item_name, path_str);
 }
 
-fn get_user_input(prompt: &str) -> String {
-	println!("{prompt}");
-
-	let stdin = std::io::stdin();
-	stdin
-		.lock()
-		.lines()
-		.next()
-		.expect("Nothing entered to stdin")
-		.expect("Failed to read stdin")
+struct Prompter<R, W> {
+	reader: R,
+	writer: W,
 }
 
-fn get_yes_no_user_input(prompt: &str) -> bool {
-	get_user_input(prompt).to_lowercase() == *"yes"
+impl<R, W> Prompter<R, W>
+where
+	R: BufRead,
+	W: Write,
+{
+	fn prompt(&mut self, question: &str) -> String {
+		writeln!(&mut self.writer, "{}", question).expect("Unable to write");
+		let mut s = String::new();
+		let _amt = self.reader.read_line(&mut s).expect("Unable to read");
+		s.trim().to_string()
+	}
+
+	fn prompt_is_yes(&mut self, question: &str) -> bool {
+		self.prompt(question) == "yes"
+	}
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use std::{
 	fs,
-	io::Write,
+	io::{BufRead, BufReader, Write},
 	path::Path,
 	process::{Command, Stdio},
 };
@@ -194,16 +194,47 @@ async fn boot_e2e() {
 				alias,
 			])
 			.stdin(Stdio::piped())
-			// .stdout(Stdio::piped())
+			.stdout(Stdio::piped())
 			.spawn()
 			.unwrap();
 
 		// For each of the 4 user prompts, write "yes"+enter to confirm we
 		// agree.
 		let mut stdin = child.stdin.take().expect("Failed to open stdin");
+
+		let mut stdout = {
+			let stdout = child.stdout.as_mut().unwrap();
+			let stdout_reader = BufReader::new(stdout);
+			stdout_reader.lines()
+		};
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct namespace name: quit-coding-to-vape? (yes/no)"
+		);
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct namespace nonce: 2? (yes/no)"
+		);
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct pivot restart policy: Never? (yes/no)"
+		);
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Are these the correct pivot args:"
+		);
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"[\"--msg\", \"testing420\"]?"
+		);
+		assert_eq!(&stdout.next().unwrap().unwrap(), "(yes/no)");
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
 		// Wait for the command to write the approval and exit
