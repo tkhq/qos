@@ -46,8 +46,6 @@ async fn boot_e2e() {
 
 	let namespace = "quit-coding-to-vape";
 
-	let _attestation_doc_path = format!("{}/boot_attestation_doc", &*boot_dir);
-
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", all_personal_dir, user);
 

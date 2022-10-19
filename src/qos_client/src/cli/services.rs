@@ -1466,7 +1466,7 @@ where
 }
 
 #[cfg(test)]
-mod tests_approve_manifest_verifications {
+mod tests {
 	use std::vec;
 
 	use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
@@ -1551,356 +1551,374 @@ mod tests_approve_manifest_verifications {
 			quorum_key,
 		}
 	}
-	#[test]
-	fn works() {
-		let Setup {
-			manifest,
-			manifest_set,
-			share_set,
-			nitro_config,
-			pivot_build_fingerprints,
-			quorum_key,
-		} = setup();
 
-		assert!(approve_manifest_programmatic_verifications(
-			&manifest,
-			&manifest_set,
-			&share_set,
-			&nitro_config,
-			&pivot_build_fingerprints,
-			&quorum_key,
-		));
+	mod approve_manifest_programmatic_verifications {
+		use super::*;
+
+		#[test]
+		fn works() {
+			let Setup {
+				manifest,
+				manifest_set,
+				share_set,
+				nitro_config,
+				pivot_build_fingerprints,
+				quorum_key,
+			} = setup();
+
+			assert!(approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				&nitro_config,
+				&pivot_build_fingerprints,
+				&quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatch_manifest_set() {
+			let Setup {
+				manifest,
+				mut manifest_set,
+				share_set,
+				nitro_config,
+				pivot_build_fingerprints,
+				quorum_key,
+			} = setup();
+
+			manifest_set.members.get_mut(0).unwrap().alias =
+				"vape2live".to_string();
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				&nitro_config,
+				&pivot_build_fingerprints,
+				&quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_share_set() {
+			let Setup {
+				manifest,
+				manifest_set,
+				mut share_set,
+				nitro_config,
+				pivot_build_fingerprints,
+				quorum_key,
+			} = setup();
+
+			share_set.members.get_mut(0).unwrap().alias =
+				"vape2live".to_string();
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				&nitro_config,
+				&pivot_build_fingerprints,
+				&quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_pcr0() {
+			let Setup {
+				manifest,
+				manifest_set,
+				share_set,
+				mut nitro_config,
+				pivot_build_fingerprints,
+				quorum_key,
+			} = setup();
+
+			nitro_config.pcr0 = vec![42; 42];
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				&nitro_config,
+				&pivot_build_fingerprints,
+				&quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_pcr1() {
+			let Setup {
+				manifest,
+				manifest_set,
+				share_set,
+				mut nitro_config,
+				pivot_build_fingerprints,
+				quorum_key,
+			} = setup();
+
+			nitro_config.pcr1 = vec![42; 42];
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				&nitro_config,
+				&pivot_build_fingerprints,
+				&quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_pcr2() {
+			let Setup {
+				manifest,
+				manifest_set,
+				share_set,
+				mut nitro_config,
+				pivot_build_fingerprints,
+				quorum_key,
+			} = setup();
+
+			nitro_config.pcr2 = vec![42; 42];
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				&nitro_config,
+				&pivot_build_fingerprints,
+				&quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_pcr3() {
+			let Setup {
+				manifest,
+				manifest_set,
+				share_set,
+				mut nitro_config,
+				pivot_build_fingerprints,
+				quorum_key,
+			} = setup();
+
+			nitro_config.pcr3 = vec![42; 42];
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				&nitro_config,
+				&pivot_build_fingerprints,
+				&quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_qos_commit() {
+			let Setup {
+				manifest,
+				manifest_set,
+				share_set,
+				mut nitro_config,
+				pivot_build_fingerprints,
+				quorum_key,
+			} = setup();
+
+			nitro_config.qos_commit = "bad qos commit".to_string();
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				&nitro_config,
+				&pivot_build_fingerprints,
+				&quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_pivot_hash() {
+			let Setup {
+				manifest,
+				manifest_set,
+				share_set,
+				nitro_config,
+				mut pivot_build_fingerprints,
+				quorum_key,
+			} = setup();
+
+			pivot_build_fingerprints.pivot_hash = vec![42; 32];
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				&nitro_config,
+				&pivot_build_fingerprints,
+				&quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_pivot_commit() {
+			let Setup {
+				manifest,
+				manifest_set,
+				share_set,
+				nitro_config,
+				mut pivot_build_fingerprints,
+				quorum_key,
+			} = setup();
+
+			pivot_build_fingerprints.pivot_commit =
+				"bad-pivot-commit".to_string();
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				&nitro_config,
+				&pivot_build_fingerprints,
+				&quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_quorum_key() {
+			let Setup {
+				manifest,
+				manifest_set,
+				share_set,
+				nitro_config,
+				pivot_build_fingerprints,
+				..
+			} = setup();
+
+			let quorum_key: RsaPub = RsaPair::generate().unwrap().into();
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				&nitro_config,
+				&pivot_build_fingerprints,
+				&quorum_key,
+			));
+		}
 	}
 
-	#[test]
-	fn rejects_mismatch_manifest_set() {
-		let Setup {
-			manifest,
-			mut manifest_set,
-			share_set,
-			nitro_config,
-			pivot_build_fingerprints,
-			quorum_key,
-		} = setup();
+	mod approve_manifest_human_verifications {
+		use super::*;
+		#[test]
+		fn human_verification_works() {
+			let Setup { manifest, .. } = setup();
 
-		manifest_set.members.get_mut(0).unwrap().alias =
-			"vape2live".to_string();
+			let mut vec_out = Vec::<u8>::new();
+			let vec_in = "yes\nyes\nyes\nyes\n".as_bytes();
 
-		assert!(!approve_manifest_programmatic_verifications(
-			&manifest,
-			&manifest_set,
-			&share_set,
-			&nitro_config,
-			&pivot_build_fingerprints,
-			&quorum_key,
-		));
-	}
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
 
-	#[test]
-	fn rejects_mismatched_share_set() {
-		let Setup {
-			manifest,
-			manifest_set,
-			mut share_set,
-			nitro_config,
-			pivot_build_fingerprints,
-			quorum_key,
-		} = setup();
+			assert!(approve_manifest_human_verifications(
+				&manifest,
+				&mut prompter
+			));
+		}
 
-		share_set.members.get_mut(0).unwrap().alias = "vape2live".to_string();
+		#[test]
+		fn exits_early_with_bad_namespace_name() {
+			let Setup { manifest, .. } = setup();
 
-		assert!(!approve_manifest_programmatic_verifications(
-			&manifest,
-			&manifest_set,
-			&share_set,
-			&nitro_config,
-			&pivot_build_fingerprints,
-			&quorum_key,
-		));
-	}
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "ye\n".as_bytes();
 
-	#[test]
-	fn rejects_mismatched_pcr0() {
-		let Setup {
-			manifest,
-			manifest_set,
-			share_set,
-			mut nitro_config,
-			pivot_build_fingerprints,
-			quorum_key,
-		} = setup();
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
 
-		nitro_config.pcr0 = vec![42; 42];
+			assert!(!super::approve_manifest_human_verifications(
+				&manifest,
+				&mut prompter
+			));
 
-		assert!(!approve_manifest_programmatic_verifications(
-			&manifest,
-			&manifest_set,
-			&share_set,
-			&nitro_config,
-			&pivot_build_fingerprints,
-			&quorum_key,
-		));
-	}
+			let output = String::from_utf8(vec_out).unwrap();
+			assert_eq!(
+				&output,
+				"Is this the correct namespace name: test-namespace? (yes/no)\n"
+			);
+		}
 
-	#[test]
-	fn rejects_mismatched_pcr1() {
-		let Setup {
-			manifest,
-			manifest_set,
-			share_set,
-			mut nitro_config,
-			pivot_build_fingerprints,
-			quorum_key,
-		} = setup();
+		#[test]
+		fn exits_early_with_bad_namespace_nonce() {
+			let Setup { manifest, .. } = setup();
 
-		nitro_config.pcr1 = vec![42; 42];
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nye".as_bytes();
 
-		assert!(!approve_manifest_programmatic_verifications(
-			&manifest,
-			&manifest_set,
-			&share_set,
-			&nitro_config,
-			&pivot_build_fingerprints,
-			&quorum_key,
-		));
-	}
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
 
-	#[test]
-	fn rejects_mismatched_pcr2() {
-		let Setup {
-			manifest,
-			manifest_set,
-			share_set,
-			mut nitro_config,
-			pivot_build_fingerprints,
-			quorum_key,
-		} = setup();
+			assert!(!super::approve_manifest_human_verifications(
+				&manifest,
+				&mut prompter
+			));
 
-		nitro_config.pcr2 = vec![42; 42];
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.split('\n').collect();
 
-		assert!(!approve_manifest_programmatic_verifications(
-			&manifest,
-			&manifest_set,
-			&share_set,
-			&nitro_config,
-			&pivot_build_fingerprints,
-			&quorum_key,
-		));
-	}
+			assert_eq!(
+				output[1],
+				"Is this the correct namespace nonce: 2? (yes/no)"
+			);
+		}
 
-	#[test]
-	fn rejects_mismatched_pcr3() {
-		let Setup {
-			manifest,
-			manifest_set,
-			share_set,
-			mut nitro_config,
-			pivot_build_fingerprints,
-			quorum_key,
-		} = setup();
+		#[test]
+		fn exits_early_with_bad_restart_policy() {
+			let Setup { manifest, .. } = setup();
 
-		nitro_config.pcr3 = vec![42; 42];
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nyes\ny".as_bytes();
 
-		assert!(!approve_manifest_programmatic_verifications(
-			&manifest,
-			&manifest_set,
-			&share_set,
-			&nitro_config,
-			&pivot_build_fingerprints,
-			&quorum_key,
-		));
-	}
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
 
-	#[test]
-	fn rejects_mismatched_qos_commit() {
-		let Setup {
-			manifest,
-			manifest_set,
-			share_set,
-			mut nitro_config,
-			pivot_build_fingerprints,
-			quorum_key,
-		} = setup();
+			assert!(!super::approve_manifest_human_verifications(
+				&manifest,
+				&mut prompter
+			));
 
-		nitro_config.qos_commit = "bad qos commit".to_string();
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.split('\n').collect();
 
-		assert!(!approve_manifest_programmatic_verifications(
-			&manifest,
-			&manifest_set,
-			&share_set,
-			&nitro_config,
-			&pivot_build_fingerprints,
-			&quorum_key,
-		));
-	}
+			assert_eq!(
+				output[2],
+				"Is this the correct pivot restart policy: Never? (yes/no)"
+			);
+		}
 
-	#[test]
-	fn rejects_mismatched_pivot_hash() {
-		let Setup {
-			manifest,
-			manifest_set,
-			share_set,
-			nitro_config,
-			mut pivot_build_fingerprints,
-			quorum_key,
-		} = setup();
+		#[test]
+		fn exits_early_with_bad_pivot_args() {
+			let Setup { manifest, .. } = setup();
 
-		pivot_build_fingerprints.pivot_hash = vec![42; 32];
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nyes\nyes\nno".as_bytes();
 
-		assert!(!approve_manifest_programmatic_verifications(
-			&manifest,
-			&manifest_set,
-			&share_set,
-			&nitro_config,
-			&pivot_build_fingerprints,
-			&quorum_key,
-		));
-	}
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
 
-	#[test]
-	fn rejects_mismatched_pivot_commit() {
-		let Setup {
-			manifest,
-			manifest_set,
-			share_set,
-			nitro_config,
-			mut pivot_build_fingerprints,
-			quorum_key,
-		} = setup();
+			assert!(!super::approve_manifest_human_verifications(
+				&manifest,
+				&mut prompter
+			));
 
-		pivot_build_fingerprints.pivot_commit = "bad-pivot-commit".to_string();
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.split('\n').collect();
 
-		assert!(!approve_manifest_programmatic_verifications(
-			&manifest,
-			&manifest_set,
-			&share_set,
-			&nitro_config,
-			&pivot_build_fingerprints,
-			&quorum_key,
-		));
-	}
-
-	#[test]
-	fn rejects_mismatched_quorum_key() {
-		let Setup {
-			manifest,
-			manifest_set,
-			share_set,
-			nitro_config,
-			pivot_build_fingerprints,
-			..
-		} = setup();
-
-		let quorum_key: RsaPub = RsaPair::generate().unwrap().into();
-
-		assert!(!approve_manifest_programmatic_verifications(
-			&manifest,
-			&manifest_set,
-			&share_set,
-			&nitro_config,
-			&pivot_build_fingerprints,
-			&quorum_key,
-		));
-	}
-
-	#[test]
-	fn human_verification_works() {
-		let Setup { manifest, .. } = setup();
-
-		let mut vec_out = Vec::<u8>::new();
-		let vec_in = "yes\nyes\nyes\nyes\n".as_bytes();
-
-		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
-
-		assert!(approve_manifest_human_verifications(&manifest, &mut prompter));
-	}
-
-	#[test]
-	fn exits_early_with_bad_namespace_name() {
-		let Setup { manifest, .. } = setup();
-
-		let mut vec_out: Vec<u8> = vec![];
-		let vec_in = "ye\n".as_bytes();
-
-		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
-
-		assert!(!super::approve_manifest_human_verifications(
-			&manifest,
-			&mut prompter
-		));
-
-		let output = String::from_utf8(vec_out).unwrap();
-		assert_eq!(
-			&output,
-			"Is this the correct namespace name: test-namespace? (yes/no)\n"
-		);
-	}
-
-	#[test]
-	fn exits_early_with_bad_namespace_nonce() {
-		let Setup { manifest, .. } = setup();
-
-		let mut vec_out: Vec<u8> = vec![];
-		let vec_in = "yes\nye".as_bytes();
-
-		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
-
-		assert!(!super::approve_manifest_human_verifications(
-			&manifest,
-			&mut prompter
-		));
-
-		let output = String::from_utf8(vec_out).unwrap();
-		let output: Vec<_> = output.split('\n').collect();
-
-		assert_eq!(
-			output[1],
-			"Is this the correct namespace nonce: 2? (yes/no)"
-		);
-	}
-
-	#[test]
-	fn exits_early_with_bad_restart_policy() {
-		let Setup { manifest, .. } = setup();
-
-		let mut vec_out: Vec<u8> = vec![];
-		let vec_in = "yes\nyes\ny".as_bytes();
-
-		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
-
-		assert!(!super::approve_manifest_human_verifications(
-			&manifest,
-			&mut prompter
-		));
-
-		let output = String::from_utf8(vec_out).unwrap();
-		let output: Vec<_> = output.split('\n').collect();
-
-		assert_eq!(
-			output[2],
-			"Is this the correct pivot restart policy: Never? (yes/no)"
-		);
-	}
-
-	#[test]
-	fn exits_early_with_bad_pivot_args() {
-		let Setup { manifest, .. } = setup();
-
-		let mut vec_out: Vec<u8> = vec![];
-		let vec_in = "yes\nyes\nyes\nno".as_bytes();
-
-		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
-
-		assert!(!super::approve_manifest_human_verifications(
-			&manifest,
-			&mut prompter
-		));
-
-		let output = String::from_utf8(vec_out).unwrap();
-		let output: Vec<_> = output.split('\n').collect();
-
-		assert_eq!(output[3], "Are these the correct pivot args:");
-		assert_eq!(output[4], "[\"--option1\", \"argument\"]?");
-		assert_eq!(output[5], "(yes/no)");
+			assert_eq!(output[3], "Are these the correct pivot args:");
+			assert_eq!(output[4], "[\"--option1\", \"argument\"]?");
+			assert_eq!(output[5], "(yes/no)");
+		}
 	}
 }
