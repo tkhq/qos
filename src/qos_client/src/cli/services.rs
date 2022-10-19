@@ -669,7 +669,8 @@ pub(crate) struct ProxyReEncryptShareArgs<P: AsRef<Path>> {
 // Verifications in this focus around ensuring
 // - the intended manifest is being used
 // - the manifest set approved the manifest and is the correct set
-//
+// - the enclave belongs to the intended organization (and not an attackers
+//   organization)
 pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	ProxyReEncryptShareArgs {
 		attestation_dir,
@@ -722,21 +723,24 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		.expect("Ephemeral key not valid public key")
 	};
 
-	proxy_re_encrypt_share_programmatic_verifications(
+	if !proxy_re_encrypt_share_programmatic_verifications(
 		&manifest_envelope,
 		&get_manifest_set(manifest_set_dir),
 		&QuorumMember {
 			alias: alias.clone(),
 			pub_key: personal_pair.public_key_to_der().unwrap(),
 		},
-	);
+	) {
+		eprintln!("Exiting early without re-encrypting / approving");
+		std::process::exit(1);
+	}
 
 	let mut prompter = {
-		let stdin = io::stdin();
-		let input = stdin.lock();
-		let output = io::stdout();
+		// let stdin = io::stdin().lock();
+		// let input = stdin.lock();
+		// let output = io::stdout();
 
-		Prompter { reader: input, writer: output }
+		Prompter { reader: io::stdin().lock(), writer: io::stdout() }
 	};
 	if !proxy_re_encrypt_share_human_verifications(
 		&manifest_envelope,
