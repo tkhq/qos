@@ -18,5 +18,6 @@ target/
 !src/integration/mock/boot-e2e/all-personal-dir/user2-dir/*
 !src/integration/mock/boot-e2e/all-personal-dir/user3-dir/*
 !src/integration/mock/boot-e2e/genesis-dir/*
+src/integration/mock/pivot-build-fingerprints.txt
 
 local-enclave/ls

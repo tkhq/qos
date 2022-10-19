@@ -1,7 +1,8 @@
 use std::{
 	fs,
 	fs::File,
-	io::BufRead,
+	io,
+	io::{BufRead, Write},
 	mem,
 	path::{Path, PathBuf},
 };
@@ -312,22 +313,17 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		pivot_args,
 	} = args;
 
-	let pcr3 = extract_pcr3(pcr3_preimage_path);
-	let QosBuildFingerprints { pcr0, pcr1, pcr2, qos_commit } =
-		extract_qos_build_fingerprints(qos_build_fingerprints_path);
+	let nitro_config =
+		extract_nitro_config(qos_build_fingerprints_path, pcr3_preimage_path);
 	let PivotBuildFingerprints { pivot_hash, pivot_commit } =
 		extract_pivot_build_fingerprints(pivot_build_fingerprints_path);
 
 	// Get manifest set keys & threshold
-	let mut manifest_set = get_manifest_set(manifest_set_dir);
+	let manifest_set = get_manifest_set(manifest_set_dir);
 	// Get share set keys & threshold
-	let mut share_set = get_share_set(share_set_dir);
+	let share_set = get_share_set(share_set_dir);
 	// Get quorum key from namespaces dir
 	let quorum_key: RsaPub = find_quorum_key(namespace_dir);
-
-	// We want to try and build the same manifest regardless of the OS.
-	manifest_set.members.sort();
-	share_set.members.sort();
 
 	let manifest = Manifest {
 		namespace: Namespace {
@@ -343,14 +339,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		},
 		manifest_set,
 		share_set,
-		enclave: NitroConfig {
-			pcr0,
-			pcr1,
-			pcr2,
-			pcr3,
-			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
-		},
-		qos_commit,
+		enclave: nitro_config,
 	};
 
 	fs::create_dir_all(&boot_dir).expect("Failed to created boot dir");
@@ -360,41 +349,81 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");
 }
 
-// TODO for verifing the manifest
-// - verify PCR3 (enter pre-image as arg)
-// - verify that this manifest is in the manifest repo & correct nonce (point to
-//   manifest repo)
-// - verify the manifest namespace (prompt user)
-// - verify the public quorum key (either prompt user or enter as CLI input)
-// - verify the CLI args (prompt user)
-pub(crate) fn sign_manifest<P: AsRef<Path>>(
-	manifest_hash: Hash256,
-	personal_dir: P,
-	boot_dir: P,
-	// TODO
-	// qos_build_fingerprints_path: P,
-	// pcr3_preimage_path: P,
-	// pivot_build_fingerprints_path: P,
-) {
-	let manifest = find_manifest(&boot_dir);
-	let (personal_pair, mut personal_path) = find_share_key(&personal_dir);
-	let alias = mem::take(&mut personal_path[0]);
-	let namespace = mem::take(&mut personal_path[1]);
-	drop(personal_path);
+fn extract_nitro_config<P: AsRef<Path>>(
+	qos_build_fingerprints_path: P,
+	pcr3_preimage_path: P,
+) -> NitroConfig {
+	let pcr3 = extract_pcr3(pcr3_preimage_path);
+	let QosBuildFingerprints { pcr0, pcr1, pcr2, qos_commit } =
+		extract_qos_build_fingerprints(qos_build_fingerprints_path);
 
-	assert_eq!(
-		manifest.qos_hash(),
-		manifest_hash,
-		"Manifest hashes do not match"
-	);
-	assert_eq!(
-		manifest.namespace.name, namespace,
-		"namespace in file name does not match namespace in manifest"
-	);
+	NitroConfig {
+		pcr0,
+		pcr1,
+		pcr2,
+		pcr3,
+		qos_commit,
+		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
+	}
+}
+
+pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
+	pub personal_dir: P,
+	pub manifest_dir: P,
+	pub qos_build_fingerprints_path: P,
+	pub pcr3_preimage_path: P,
+	pub pivot_build_fingerprints_path: P,
+	pub namespace_dir: P,
+	pub manifest_set_dir: P,
+	pub share_set_dir: P,
+	pub alias: String,
+}
+
+pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
+	let ApproveManifestArgs {
+		personal_dir,
+		manifest_dir,
+		qos_build_fingerprints_path,
+		pcr3_preimage_path,
+		pivot_build_fingerprints_path,
+		namespace_dir,
+		manifest_set_dir,
+		share_set_dir,
+		alias,
+	} = args;
+
+	let manifest = find_manifest(&manifest_dir);
+	let (personal_pair, _) = find_share_key(&personal_dir);
+
+	if !approve_manifest_programmatic_verifications(
+		&manifest,
+		&get_manifest_set(manifest_set_dir),
+		&get_share_set(share_set_dir),
+		&extract_nitro_config(qos_build_fingerprints_path, pcr3_preimage_path),
+		&extract_pivot_build_fingerprints(pivot_build_fingerprints_path),
+		&find_quorum_key(namespace_dir),
+	) {
+		eprintln!("Exiting early without approving manifest");
+		std::process::exit(1);
+	}
+
+	let mut prompter = {
+		let stdin = io::stdin();
+		let input = stdin.lock();
+		let output = io::stdout();
+
+		Prompter { reader: input, writer: output }
+	};
+
+	if !approve_manifest_human_verifications(&manifest, &mut prompter) {
+		eprintln!("Exiting early without approving manifest");
+		std::process::exit(1);
+	}
+	drop(prompter);
 
 	let approval = Approval {
 		signature: personal_pair
-			.sign_sha256(&manifest_hash)
+			.sign_sha256(&manifest.qos_hash())
 			.expect("Failed to sign"),
 		member: QuorumMember {
 			pub_key: personal_pair
@@ -404,15 +433,118 @@ pub(crate) fn sign_manifest<P: AsRef<Path>>(
 		},
 	};
 
-	let approval_path = boot_dir.as_ref().join(format!(
+	let approval_path = manifest_dir.as_ref().join(format!(
 		"{}.{}.{}.{}",
-		alias, namespace, manifest.namespace.nonce, APPROVAL_EXT
+		alias, manifest.namespace.name, manifest.namespace.nonce, APPROVAL_EXT
 	));
 	write_with_msg(
 		&approval_path,
 		&approval.try_to_vec().expect("Failed to serialize approval"),
 		"Manifest Approval",
 	);
+}
+
+fn approve_manifest_programmatic_verifications(
+	manifest: &Manifest,
+	manifest_set: &ManifestSet,
+	share_set: &ShareSet,
+	nitro_config: &NitroConfig,
+	pivot_build_fingerprints: &PivotBuildFingerprints,
+	quorum_key: &RsaPub,
+) -> bool {
+	// Verify manifest set composition
+	if manifest.manifest_set != *manifest_set {
+		eprintln!("Manifest Set composition does not match");
+		return false;
+	}
+
+	// Verify share set composition
+	if manifest.share_set != *share_set {
+		eprintln!("Share Set composition does not match");
+		return false;
+	}
+
+	// Verify pcrs 0, 1, 2, 3.
+	if manifest.enclave != *nitro_config {
+		eprintln!("Nitro configuration does not match");
+		return false;
+	}
+
+	// Verify the pivot could be built deterministically
+	if manifest.pivot.hash.to_vec() != *pivot_build_fingerprints.pivot_hash {
+		eprintln!("Pivot hash does not match");
+		return false;
+	}
+
+	// Verify the pivot was built from the intended commit
+	if manifest.pivot.commit != pivot_build_fingerprints.pivot_commit {
+		eprintln!("Pivot commit does not match");
+		return false;
+	}
+
+	// Verify the intended Quorum Key is being used
+	if manifest.namespace.quorum_key != quorum_key.public_key_to_der().unwrap()
+	{
+		eprintln!("Pivot commit does not match");
+		return false;
+	}
+
+	true
+}
+
+fn approve_manifest_human_verifications<R, W>(
+	manifest: &Manifest,
+	prompter: &mut Prompter<R, W>,
+) -> bool
+where
+	R: BufRead,
+	W: Write,
+{
+	// Check the namespace name
+	{
+		let prompt = format!(
+			"Is this the correct namespace name: {}? (yes/no)",
+			manifest.namespace.name
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
+
+	// Check the namespace nonce
+	{
+		let prompt = format!(
+			"Is this the correct namespace nonce: {}? (yes/no)",
+			manifest.namespace.nonce
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
+
+	// Check pivot restart policy
+	{
+		let prompt = format!(
+			"Is this the correct pivot restart policy: {:?}? (yes/no)",
+			manifest.pivot.restart
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
+
+	// Check pivot arguments
+	{
+		let prompt = format!(
+			"Are these the correct pivot args:\n{:?}?\n(yes/no)",
+			manifest.pivot.args
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
+
+	true
 }
 
 pub(crate) fn boot_standard<P: AsRef<Path>>(
@@ -683,6 +815,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			pcr1: mock_pcr.clone(),
 			pcr2: mock_pcr.clone(),
 			pcr3: mock_pcr,
+			qos_commit: "mock-qos-commit-ref".to_string(),
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
 		pivot: PivotConfig {
@@ -701,7 +834,6 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			// The only member is the quorum member
 			members: vec![member.clone()],
 		},
-		qos_commit: "mock-qos-commit-ref".to_string(),
 	};
 
 	// Create and post the boot standard instruction
@@ -870,7 +1002,7 @@ fn find_threshold<P: AsRef<Path>>(dir: P) -> u32 {
 }
 
 fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
-	let members: Vec<_> = find_file_paths(&dir)
+	let mut members: Vec<_> = find_file_paths(&dir)
 		.iter()
 		.filter_map(|path| {
 			let mut file_name = split_file_name(path);
@@ -886,12 +1018,15 @@ fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
 			})
 		})
 		.collect();
+
+	// We want to try and build the same manifest regardless of the OS.
+	members.sort();
 
 	ShareSet { members, threshold: find_threshold(dir) }
 }
 
 fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
-	let members: Vec<_> = find_file_paths(&dir)
+	let mut members: Vec<_> = find_file_paths(&dir)
 		.iter()
 		.filter_map(|path| {
 			let mut file_name = split_file_name(path);
@@ -907,6 +1042,9 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 			})
 		})
 		.collect();
+
+	// We want to try and build the same manifest regardless of the OS.
+	members.sort();
 
 	ManifestSet { members, threshold: find_threshold(dir) }
 }
@@ -1057,39 +1195,6 @@ fn find_attestation_approval<P: AsRef<Path>>(dir: P) -> Approval {
 	a.remove(0)
 }
 
-// fn find_personal_key<P: AsRef<Path>>(
-// 	personal_dir: P,
-// ) -> (RsaPair, Vec<String>) {
-// 	let mut p: Vec<_> = find_file_paths(&personal_dir)
-// 		.iter()
-// 		.filter_map(|path| {
-// 			let file_name = split_file_name(path);
-// 			// Only look at files with the personal.key extension
-// 			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT)
-// 				|| file_name
-// 					.get(file_name.len() - 2)
-// 					.map_or(true, |s| s.as_str() != "personal")
-// 			{
-// 				return None;
-// 			};
-
-// 			Some((
-// 				RsaPair::from_pem_file(path)
-// 					.expect("Could not read PEM from personal.secret"),
-// 				file_name,
-// 			))
-// 		})
-// 		.collect();
-
-// 	assert_eq!(
-// 		p.len(),
-// 		1,
-// 		"Did not find exactly 1 personal secret in the personal-dir"
-// 	);
-
-// 	p.remove(0)
-// }
-
 fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
 	let mut s: Vec<_> = find_file_paths(&personal_dir)
 		.iter()
@@ -1220,7 +1325,457 @@ fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
 	println!("{} written to: {}", item_name, path_str);
 }
 
+struct Prompter<R, W> {
+	reader: R,
+	writer: W,
+}
+
+impl<R, W> Prompter<R, W>
+where
+	R: BufRead,
+	W: Write,
+{
+	fn prompt(&mut self, question: &str) -> String {
+		writeln!(&mut self.writer, "{}", question).expect("Unable to write");
+		let mut s = String::new();
+		let _amt = self.reader.read_line(&mut s).expect("Unable to read");
+		s.trim().to_string()
+	}
+
+	fn prompt_is_yes(&mut self, question: &str) -> bool {
+		self.prompt(question) == "yes"
+	}
+}
+
 #[cfg(test)]
-mod test {
-	// TODO
+mod tests_approve_manifest_verifications {
+	use std::vec;
+
+	use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
+	use qos_core::protocol::services::boot::{
+		Manifest, ManifestSet, Namespace, NitroConfig, PivotConfig,
+		QuorumMember, RestartPolicy, ShareSet,
+	};
+	use qos_crypto::{RsaPair, RsaPub};
+
+	use super::{
+		approve_manifest_programmatic_verifications, PivotBuildFingerprints,
+		Prompter, approve_manifest_human_verifications
+	};
+
+	struct Setup {
+		manifest: Manifest,
+		manifest_set: ManifestSet,
+		share_set: ShareSet,
+		nitro_config: NitroConfig,
+		pivot_build_fingerprints: PivotBuildFingerprints,
+		quorum_key: RsaPub,
+	}
+	fn setup() -> Setup {
+		let members: Vec<_> = (0..3)
+			.map(|i| QuorumMember {
+				pub_key: RsaPair::generate()
+					.unwrap()
+					.public_key_to_der()
+					.unwrap(),
+				alias: i.to_string(),
+			})
+			.collect();
+
+		let manifest_set =
+			ManifestSet { members: members.clone(), threshold: 2 };
+		let share_set = ShareSet { members, threshold: 2 };
+		let nitro_config = NitroConfig {
+			pcr0: vec![1; 42],
+			pcr1: vec![2; 42],
+			pcr2: vec![3; 42],
+			pcr3: vec![4; 42],
+			qos_commit: "good-qos-commit".to_string(),
+			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
+		};
+		let pivot_build_fingerprints = PivotBuildFingerprints {
+			pivot_hash: vec![5; 32],
+			pivot_commit: "good-pivot-commit".to_string(),
+		};
+		let quorum_key: RsaPub = RsaPair::generate().unwrap().into();
+
+		let manifest = Manifest {
+			namespace: Namespace {
+				name: "test-namespace".to_string(),
+				nonce: 2,
+				quorum_key: quorum_key.public_key_to_der().unwrap(),
+			},
+			pivot: PivotConfig {
+				hash: pivot_build_fingerprints
+					.pivot_hash
+					.clone()
+					.try_into()
+					.unwrap(),
+				commit: pivot_build_fingerprints.pivot_commit.clone(),
+				restart: RestartPolicy::Never,
+				args: ["--option1", "argument"]
+					.into_iter()
+					.map(String::from)
+					.collect(),
+			},
+			manifest_set: manifest_set.clone(),
+			share_set: share_set.clone(),
+			enclave: nitro_config.clone(),
+		};
+
+		Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		}
+	}
+	#[test]
+	fn works() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		assert!(approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatch_manifest_set() {
+		let Setup {
+			manifest,
+			mut manifest_set,
+			share_set,
+			nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		manifest_set.members.get_mut(0).unwrap().alias =
+			"vape2live".to_string();
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_share_set() {
+		let Setup {
+			manifest,
+			manifest_set,
+			mut share_set,
+			nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		share_set.members.get_mut(0).unwrap().alias = "vape2live".to_string();
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_pcr0() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			mut nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		nitro_config.pcr0 = vec![42; 42];
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_pcr1() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			mut nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		nitro_config.pcr1 = vec![42; 42];
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_pcr2() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			mut nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		nitro_config.pcr2 = vec![42; 42];
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_pcr3() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			mut nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		nitro_config.pcr3 = vec![42; 42];
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_qos_commit() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			mut nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		nitro_config.qos_commit = "bad qos commit".to_string();
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_pivot_hash() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			nitro_config,
+			mut pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		pivot_build_fingerprints.pivot_hash = vec![42; 32];
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_pivot_commit() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			nitro_config,
+			mut pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		pivot_build_fingerprints.pivot_commit = "bad-pivot-commit".to_string();
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_quorum_key() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			nitro_config,
+			pivot_build_fingerprints,
+			..
+		} = setup();
+
+		let quorum_key: RsaPub = RsaPair::generate().unwrap().into();
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn human_verification_works() {
+		let Setup { manifest, .. } = setup();
+
+		let mut vec_out = Vec::<u8>::new();
+		let vec_in = "yes\nyes\nyes\nyes\n".as_bytes();
+
+		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
+
+		assert!(approve_manifest_human_verifications(
+			&manifest,
+			&mut prompter
+		));
+	}
+
+	#[test]
+	fn exits_early_with_bad_namespace_name() {
+		let Setup { manifest, .. } = setup();
+
+		let mut vec_out: Vec<u8> = vec![];
+		let vec_in = "ye\n".as_bytes();
+
+		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
+
+		assert!(!super::approve_manifest_human_verifications(
+			&manifest,
+			&mut prompter
+		));
+
+		let output = String::from_utf8(vec_out).unwrap();
+		assert_eq!(&output, "Is this the correct namespace name: test-namespace? (yes/no)\n")
+	}
+
+	#[test]
+	fn exits_early_with_bad_namespace_nonce() {
+		let Setup { manifest, .. } = setup();
+
+		let mut vec_out: Vec<u8> = vec![];
+		let vec_in = "yes\nye".as_bytes();
+
+		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
+
+		assert!(!super::approve_manifest_human_verifications(
+			&manifest,
+			&mut prompter
+		));
+
+		let output = String::from_utf8(vec_out).unwrap();
+		let output: Vec<_> = output.split("\n").collect();
+
+		assert_eq!(output[1], "Is this the correct namespace nonce: 2? (yes/no)");
+	}
+
+	#[test]
+	fn exits_early_with_bad_restart_policy() {
+		let Setup { manifest, .. } = setup();
+
+		let mut vec_out: Vec<u8> = vec![];
+		let vec_in = "yes\nyes\ny".as_bytes();
+
+		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
+
+		assert!(!super::approve_manifest_human_verifications(
+			&manifest,
+			&mut prompter
+		));
+
+		let output = String::from_utf8(vec_out).unwrap();
+		let output: Vec<_> = output.split("\n").collect();
+
+		assert_eq!(output[2], "Is this the correct pivot restart policy: Never? (yes/no)");
+	}
+
+	#[test]
+	fn exits_early_with_bad_pivot_args() {
+		let Setup { manifest, .. } = setup();
+
+		let mut vec_out: Vec<u8> = vec![];
+		let vec_in = "yes\nyes\nyes\nno".as_bytes();
+
+		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
+
+		assert!(!super::approve_manifest_human_verifications(
+			&manifest,
+			&mut prompter
+		));
+
+		let output = String::from_utf8(vec_out).unwrap();
+		let output: Vec<_> = output.split("\n").collect();
+
+		assert_eq!(output[3], "Are these the correct pivot args:");
+		assert_eq!(output[4], "[\"--option1\", \"argument\"]?");
+		assert_eq!(output[5], "(yes/no)");
+	}
 }

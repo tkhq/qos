@@ -1,4 +1,9 @@
-use std::{fs, path::Path, process::Command};
+use std::{
+	fs,
+	io::{BufRead, BufReader, Write},
+	path::Path,
+	process::{Command, Stdio},
+};
 
 use borsh::de::BorshDeserialize;
 use integration::{LOCAL_HOST, PCR3, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
@@ -138,14 +143,13 @@ async fn boot_e2e() {
 	assert_eq!(manifest.manifest_set, manifest_set);
 	let share_set = ShareSet { threshold: 2, members };
 	assert_eq!(manifest.share_set, share_set);
-	let qos_commit = "mock-qos-commit".to_string();
-	assert_eq!(manifest.qos_commit, qos_commit);
 	let enclave = NitroConfig {
 		pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),
 		pcr1: qos_hex::decode(MOCK_PCR1).unwrap(),
 		pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
 		pcr3: qos_hex::decode(PCR3).unwrap(),
 		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
+		qos_commit: "mock-qos-commit".to_string(),
 	};
 	assert_eq!(manifest.enclave, enclave);
 
@@ -157,40 +161,82 @@ async fn boot_e2e() {
 			manifest_set,
 			share_set,
 			enclave,
-			qos_commit,
 		}
 	);
 
-	// -- CLIENT make sure each user can run `sign-manifest`
+	// -- CLIENT make sure each user can run `approve-manifest`
 	for alias in [user1, user2, user3] {
 		let approval_path = format!(
 			"{}/{}.{}.{}.approval",
 			&*boot_dir, alias, namespace, manifest.namespace.nonce,
 		);
 
-		assert!(Command::new("../target/debug/qos_client")
+		let mut child = Command::new("../target/debug/qos_client")
 			.args([
-				"sign-manifest",
-				"--manifest-hash",
-				qos_hex::encode(&manifest.qos_hash()).as_str(),
+				"approve-manifest",
 				"--personal-dir",
 				&personal_dir(alias),
-				"--boot-dir",
+				"--manifest-dir",
 				&*boot_dir,
 				"--pcr3-preimage-path",
-				"./mock/pcr3-preimage.txt",
+				"./mock/namespaces/pcr3-preimage.txt",
 				"--pivot-build-fingerprints",
 				"./mock/pivot-build-fingerprints.txt",
+				"--qos-build-fingerprints",
+				"./mock/qos-build-fingerprints.txt",
 				"--manifest-set-dir",
 				"./mock/keys/manifest-set",
 				"--share-set-dir",
 				"./mock/keys/share-set",
+				"--namespace-dir",
+				"./mock/namespaces/quit-coding-to-vape",
+				"--alias",
+				alias,
 			])
+			.stdin(Stdio::piped())
+			.stdout(Stdio::piped())
 			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
+			.unwrap();
+
+		let mut stdin = child.stdin.take().expect("Failed to open stdin");
+
+		let mut stdout = {
+			let stdout = child.stdout.as_mut().unwrap();
+			let stdout_reader = BufReader::new(stdout);
+			stdout_reader.lines()
+		};
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct namespace name: quit-coding-to-vape? (yes/no)"
+		);
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct namespace nonce: 2? (yes/no)"
+		);
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct pivot restart policy: Never? (yes/no)"
+		);
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Are these the correct pivot args:"
+		);
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"[\"--msg\", \"testing420\"]?"
+		);
+		assert_eq!(&stdout.next().unwrap().unwrap(), "(yes/no)");
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+
+		// Wait for the command to write the approval and exit
+		assert!(child.wait().unwrap().success());
 
 		// Read in the generated approval to check it was created correctly
 		let approval =
