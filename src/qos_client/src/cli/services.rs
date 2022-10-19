@@ -1310,6 +1310,159 @@ fn get_yes_no_user_input(prompt: &str) -> bool {
 }
 
 #[cfg(test)]
-mod test {
-	// TODO
+mod tests_approve_manifest_verifications {
+	use std::vec;
+
+	use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
+	use qos_core::protocol::services::boot::{
+		Manifest, ManifestSet, Namespace, NitroConfig, PivotConfig,
+		QuorumMember, RestartPolicy, ShareSet,
+	};
+	use qos_crypto::{RsaPair, RsaPub};
+
+	use super::{PivotBuildFingerprints, approve_manifest_verifications};
+
+	struct Setup {
+		manifest: Manifest,
+		manifest_set: ManifestSet,
+		share_set: ShareSet,
+		nitro_config: NitroConfig,
+		pivot_build_fingerprints: PivotBuildFingerprints,
+		quorum_key: RsaPub,
+	}
+	fn setup() -> Setup {
+		let members: Vec<_> = (0..3)
+		.map(|i| {
+			 QuorumMember {
+				pub_key: RsaPair::generate()
+					.unwrap()
+					.public_key_to_der()
+					.unwrap(),
+				alias: i.to_string(),
+			}
+		})
+			.collect();
+
+		dbg!("b");
+
+		let manifest_set =
+			ManifestSet { members: members.clone(), threshold: 2 };
+		let share_set = ShareSet { members, threshold: 2 };
+		let nitro_config = NitroConfig {
+			pcr0: vec![1; 42],
+			pcr1: vec![2; 42],
+			pcr2: vec![3; 42],
+			pcr3: vec![4; 42],
+			qos_commit: "good-qos-commit".to_string(),
+			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
+		};
+		let pivot_build_fingerprints = PivotBuildFingerprints {
+			pivot_hash: vec![5; 32],
+			pivot_commit: "good-pivot-commit".to_string(),
+		};
+		let quorum_key: RsaPub = RsaPair::generate().unwrap().into();
+
+		let manifest = Manifest {
+			namespace: Namespace {
+				name: "test-namespace".to_string(),
+				nonce: 2,
+				quorum_key: quorum_key.public_key_to_der().unwrap(),
+			},
+			pivot: PivotConfig {
+				hash: pivot_build_fingerprints.pivot_hash.clone().try_into().unwrap(),
+				commit: pivot_build_fingerprints.pivot_commit.clone(),
+				restart: RestartPolicy::Never,
+				args: ["--option1", "argument"]
+					.into_iter()
+					.map(String::from)
+					.collect(),
+			},
+			manifest_set: manifest_set.clone(),
+			share_set: share_set.clone(),
+			enclave: nitro_config.clone(),
+		};
+
+		dbg!("c");
+
+
+		Setup {
+			manifest, manifest_set, share_set, nitro_config, pivot_build_fingerprints, quorum_key
+		}
+	}
+	#[test]
+	fn works() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		assert!(approve_manifest_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	// #[test]
+	// fn rejects_mismatch_manifest_set() {
+	// }
+
+	// #[test]
+	// fn rejects_mismatched_share_set() {
+	// }
+
+	// #[test]
+	// fn rejects_mismatched_pcr0() {
+	// }
+
+	// #[test]
+	// fn rejects_mismatched_pcr1() {
+	// }
+
+	// #[test]
+	// fn rejects_mismatched_pcr2() {
+	// }
+
+	// #[test]
+	// fn rejects_mismatched_pcr3() {
+	// }
+
+	// #[test]
+	// fn rejects_mismatched_qos_commit() {
+	// }
+
+	// #[test]
+	// fn rejects_mismatched_pivot_hash() {
+	// }
+
+	// #[test]
+	// fn rejects_mismatched_pivot_commit() {
+	// }
+
+	// #[test]
+	// fn rejects_mismatched_quorum_key() {
+	// }
+
+	// #[test]
+	// fn exits_early_with_bad_namespace_name() {
+	// }
+
+	// #[test]
+	// fn exits_early_with_bad_namespace_nonce() {
+	// }
+
+	// #[test]
+	// fn exits_early_with_bad_restart_policy() {
+	// }
+
+	// #[test]
+	// fn exits_early_with_bad_pivot_args() {
+	// }
 }
