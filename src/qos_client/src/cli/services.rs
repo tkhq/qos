@@ -1360,6 +1360,7 @@ mod tests_approve_manifest_verifications {
 
 	use super::{
 		approve_manifest_programmatic_verifications, PivotBuildFingerprints,
+		Prompter, approve_manifest_human_verifications
 	};
 
 	struct Setup {
@@ -1683,19 +1684,98 @@ mod tests_approve_manifest_verifications {
 		));
 	}
 
-	// #[test]
-	// fn exits_early_with_bad_namespace_name() {
-	// }
+	#[test]
+	fn human_verification_works() {
+		let Setup { manifest, .. } = setup();
 
-	// #[test]
-	// fn exits_early_with_bad_namespace_nonce() {
-	// }
+		let mut vec_out = Vec::<u8>::new();
+		let vec_in = "yes\nyes\nyes\nyes\n".as_bytes();
 
-	// #[test]
-	// fn exits_early_with_bad_restart_policy() {
-	// }
+		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
 
-	// #[test]
-	// fn exits_early_with_bad_pivot_args() {
-	// }
+		assert!(approve_manifest_human_verifications(
+			&manifest,
+			&mut prompter
+		));
+	}
+
+	#[test]
+	fn exits_early_with_bad_namespace_name() {
+		let Setup { manifest, .. } = setup();
+
+		let mut vec_out: Vec<u8> = vec![];
+		let vec_in = "ye\n".as_bytes();
+
+		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
+
+		assert!(!super::approve_manifest_human_verifications(
+			&manifest,
+			&mut prompter
+		));
+
+		let output = String::from_utf8(vec_out).unwrap();
+		assert_eq!(&output, "Is this the correct namespace name: test-namespace? (yes/no)\n")
+	}
+
+	#[test]
+	fn exits_early_with_bad_namespace_nonce() {
+		let Setup { manifest, .. } = setup();
+
+		let mut vec_out: Vec<u8> = vec![];
+		let vec_in = "yes\nye".as_bytes();
+
+		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
+
+		assert!(!super::approve_manifest_human_verifications(
+			&manifest,
+			&mut prompter
+		));
+
+		let output = String::from_utf8(vec_out).unwrap();
+		let output: Vec<_> = output.split("\n").collect();
+
+		assert_eq!(output[1], "Is this the correct namespace nonce: 2? (yes/no)");
+	}
+
+	#[test]
+	fn exits_early_with_bad_restart_policy() {
+		let Setup { manifest, .. } = setup();
+
+		let mut vec_out: Vec<u8> = vec![];
+		let vec_in = "yes\nyes\ny".as_bytes();
+
+		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
+
+		assert!(!super::approve_manifest_human_verifications(
+			&manifest,
+			&mut prompter
+		));
+
+		let output = String::from_utf8(vec_out).unwrap();
+		let output: Vec<_> = output.split("\n").collect();
+
+		assert_eq!(output[2], "Is this the correct pivot restart policy: Never? (yes/no)");
+	}
+
+	#[test]
+	fn exits_early_with_bad_pivot_args() {
+		let Setup { manifest, .. } = setup();
+
+		let mut vec_out: Vec<u8> = vec![];
+		let vec_in = "yes\nyes\nyes\nno".as_bytes();
+
+		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
+
+		assert!(!super::approve_manifest_human_verifications(
+			&manifest,
+			&mut prompter
+		));
+
+		let output = String::from_utf8(vec_out).unwrap();
+		let output: Vec<_> = output.split("\n").collect();
+
+		assert_eq!(output[3], "Are these the correct pivot args:");
+		assert_eq!(output[4], "[\"--option1\", \"argument\"]?");
+		assert_eq!(output[5], "(yes/no)");
+	}
 }

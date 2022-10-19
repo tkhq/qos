@@ -198,8 +198,6 @@ async fn boot_e2e() {
 			.spawn()
 			.unwrap();
 
-		// For each of the 4 user prompts, write "yes"+enter to confirm we
-		// agree.
 		let mut stdin = child.stdin.take().expect("Failed to open stdin");
 
 		let mut stdout = {
