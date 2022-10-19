@@ -394,7 +394,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 	let manifest = find_manifest(&manifest_dir);
 	let (personal_pair, _) = find_share_key(&personal_dir);
 
-	if !approve_manifest_verifications(
+	if !approve_manifest_programmatic_verifications(
 		&manifest,
 		&get_manifest_set(manifest_set_dir),
 		&get_share_set(share_set_dir),
@@ -402,7 +402,14 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 		&extract_pivot_build_fingerprints(pivot_build_fingerprints_path),
 		&find_quorum_key(namespace_dir),
 	) {
-		eprintln!("Exiting early without approving manifest.");
+		eprintln!("Exiting early without approving manifest");
+		std::process::exit(1);
+	}
+
+	if !approve_manifest_human_verifications(
+		&manifest,
+	) {
+		eprintln!("Exiting early without approving manifest");
 		std::process::exit(1);
 	}
 
@@ -429,7 +436,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 	);
 }
 
-fn approve_manifest_verifications(
+fn approve_manifest_programmatic_verifications(
 	manifest: &Manifest,
 	manifest_set: &ManifestSet,
 	share_set: &ShareSet,
@@ -468,6 +475,12 @@ fn approve_manifest_verifications(
 		quorum_key.public_key_to_der().unwrap()
 	);
 
+	true
+}
+
+fn approve_manifest_human_verifications(
+	manifest: &Manifest,
+) -> bool {
 	// Check the namespace name
 	{
 		let prompt = format!(
@@ -1320,7 +1333,7 @@ mod tests_approve_manifest_verifications {
 	};
 	use qos_crypto::{RsaPair, RsaPub};
 
-	use super::{PivotBuildFingerprints, approve_manifest_verifications};
+	use super::{PivotBuildFingerprints, approve_manifest_programmatic_verifications};
 
 	struct Setup {
 		manifest: Manifest,
@@ -1400,7 +1413,7 @@ mod tests_approve_manifest_verifications {
 			quorum_key,
 		} = setup();
 
-		assert!(approve_manifest_verifications(
+		assert!(approve_manifest_programmatic_verifications(
 			&manifest,
 			&manifest_set,
 			&share_set,
