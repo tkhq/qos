@@ -406,9 +406,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 		std::process::exit(1);
 	}
 
-	if !approve_manifest_human_verifications(
-		&manifest,
-	) {
+	if !approve_manifest_human_verifications(&manifest) {
 		eprintln!("Exiting early without approving manifest");
 		std::process::exit(1);
 	}
@@ -445,42 +443,46 @@ fn approve_manifest_programmatic_verifications(
 	quorum_key: &RsaPub,
 ) -> bool {
 	// Verify manifest set composition
-	assert_eq!(manifest.manifest_set, *manifest_set);
+	if manifest.manifest_set != *manifest_set {
+		eprintln!("Manifest Set composition does not match");
+		return false;
+	}
 
 	// Verify share set composition
-	assert_eq!(manifest.share_set, *share_set);
+	if manifest.share_set != *share_set {
+		eprintln!("Share Set composition does not match");
+		return false;
+	}
 
 	// Verify pcrs 0, 1, 2, 3.
-	assert_eq!(
-		manifest.enclave, *nitro_config,
-		"Nitro configuration does not match"
-	);
+	if manifest.enclave != *nitro_config {
+		eprintln!("Nitro configuration does not match");
+		return false;
+	}
 
 	// Verify the pivot could be built deterministically
-	assert_eq!(
-		manifest.pivot.hash.to_vec(),
-		pivot_build_fingerprints.pivot_hash,
-		"Pivot hash does not match"
-	);
+	if manifest.pivot.hash.to_vec() != *pivot_build_fingerprints.pivot_hash {
+		eprintln!("Pivot hash does not match");
+		return false;
+	}
 
 	// Verify the pivot was built from the intended commit
-	assert_eq!(
-		manifest.pivot.commit, pivot_build_fingerprints.pivot_commit,
-		"Pivot commit does not match",
-	);
+	if manifest.pivot.commit != pivot_build_fingerprints.pivot_commit {
+		eprintln!("Pivot commit does not match");
+		return false;
+	}
 
 	// Verify the intended Quorum Key is being used
-	assert_eq!(
-		manifest.namespace.quorum_key,
-		quorum_key.public_key_to_der().unwrap()
-	);
+	if manifest.namespace.quorum_key != quorum_key.public_key_to_der().unwrap()
+	{
+		eprintln!("Pivot commit does not match");
+		return false;
+	}
 
 	true
 }
 
-fn approve_manifest_human_verifications(
-	manifest: &Manifest,
-) -> bool {
+fn approve_manifest_human_verifications(manifest: &Manifest) -> bool {
 	// Check the namespace name
 	{
 		let prompt = format!(
@@ -1333,7 +1335,9 @@ mod tests_approve_manifest_verifications {
 	};
 	use qos_crypto::{RsaPair, RsaPub};
 
-	use super::{PivotBuildFingerprints, approve_manifest_programmatic_verifications};
+	use super::{
+		approve_manifest_programmatic_verifications, PivotBuildFingerprints,
+	};
 
 	struct Setup {
 		manifest: Manifest,
@@ -1345,18 +1349,14 @@ mod tests_approve_manifest_verifications {
 	}
 	fn setup() -> Setup {
 		let members: Vec<_> = (0..3)
-		.map(|i| {
-			 QuorumMember {
+			.map(|i| QuorumMember {
 				pub_key: RsaPair::generate()
 					.unwrap()
 					.public_key_to_der()
 					.unwrap(),
 				alias: i.to_string(),
-			}
-		})
+			})
 			.collect();
-
-		dbg!("b");
 
 		let manifest_set =
 			ManifestSet { members: members.clone(), threshold: 2 };
@@ -1382,7 +1382,11 @@ mod tests_approve_manifest_verifications {
 				quorum_key: quorum_key.public_key_to_der().unwrap(),
 			},
 			pivot: PivotConfig {
-				hash: pivot_build_fingerprints.pivot_hash.clone().try_into().unwrap(),
+				hash: pivot_build_fingerprints
+					.pivot_hash
+					.clone()
+					.try_into()
+					.unwrap(),
 				commit: pivot_build_fingerprints.pivot_commit.clone(),
 				restart: RestartPolicy::Never,
 				args: ["--option1", "argument"]
@@ -1395,11 +1399,13 @@ mod tests_approve_manifest_verifications {
 			enclave: nitro_config.clone(),
 		};
 
-		dbg!("c");
-
-
 		Setup {
-			manifest, manifest_set, share_set, nitro_config, pivot_build_fingerprints, quorum_key
+			manifest,
+			manifest_set,
+			share_set,
+			nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
 		}
 	}
 	#[test]
@@ -1423,45 +1429,236 @@ mod tests_approve_manifest_verifications {
 		));
 	}
 
-	// #[test]
-	// fn rejects_mismatch_manifest_set() {
-	// }
+	#[test]
+	fn rejects_mismatch_manifest_set() {
+		let Setup {
+			manifest,
+			mut manifest_set,
+			share_set,
+			nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
 
-	// #[test]
-	// fn rejects_mismatched_share_set() {
-	// }
+		manifest_set.members.get_mut(0).unwrap().alias =
+			"vape2live".to_string();
 
-	// #[test]
-	// fn rejects_mismatched_pcr0() {
-	// }
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
 
-	// #[test]
-	// fn rejects_mismatched_pcr1() {
-	// }
+	#[test]
+	fn rejects_mismatched_share_set() {
+		let Setup {
+			manifest,
+			manifest_set,
+			mut share_set,
+			nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
 
-	// #[test]
-	// fn rejects_mismatched_pcr2() {
-	// }
+		share_set.members.get_mut(0).unwrap().alias = "vape2live".to_string();
 
-	// #[test]
-	// fn rejects_mismatched_pcr3() {
-	// }
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
 
-	// #[test]
-	// fn rejects_mismatched_qos_commit() {
-	// }
+	#[test]
+	fn rejects_mismatched_pcr0() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			mut nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
 
-	// #[test]
-	// fn rejects_mismatched_pivot_hash() {
-	// }
+		nitro_config.pcr0 = vec![42; 42];
 
-	// #[test]
-	// fn rejects_mismatched_pivot_commit() {
-	// }
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
 
-	// #[test]
-	// fn rejects_mismatched_quorum_key() {
-	// }
+	#[test]
+	fn rejects_mismatched_pcr1() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			mut nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		nitro_config.pcr1 = vec![42; 42];
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_pcr2() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			mut nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		nitro_config.pcr2 = vec![42; 42];
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_pcr3() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			mut nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		nitro_config.pcr3 = vec![42; 42];
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_qos_commit() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			mut nitro_config,
+			pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		nitro_config.qos_commit = "bad qos commit".to_string();
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_pivot_hash() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			nitro_config,
+			mut pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		pivot_build_fingerprints.pivot_hash = vec![42; 32];
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_pivot_commit() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			nitro_config,
+			mut pivot_build_fingerprints,
+			quorum_key,
+		} = setup();
+
+		pivot_build_fingerprints.pivot_hash = vec![42; 32];
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
+
+	#[test]
+	fn rejects_mismatched_quorum_key() {
+		let Setup {
+			manifest,
+			manifest_set,
+			share_set,
+			nitro_config,
+			pivot_build_fingerprints,
+			..
+		} = setup();
+
+		let quorum_key: RsaPub = RsaPair::generate().unwrap().into();
+
+		assert!(!approve_manifest_programmatic_verifications(
+			&manifest,
+			&manifest_set,
+			&share_set,
+			&nitro_config,
+			&pivot_build_fingerprints,
+			&quorum_key,
+		));
+	}
 
 	// #[test]
 	// fn exits_early_with_bad_namespace_name() {
