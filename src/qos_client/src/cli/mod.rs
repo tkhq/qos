@@ -349,7 +349,7 @@ use std::env;
 
 use qos_core::{
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
-	protocol::{msg::ProtocolMsg, services::boot, Hash256},
+	protocol::{msg::ProtocolMsg, services::boot},
 };
 
 mod services;
@@ -361,7 +361,6 @@ const NAMESPACE: &str = "namespace";
 const THRESHOLD: &str = "threshold";
 const NONCE: &str = "nonce";
 const RESTART_POLICY: &str = "restart-policy";
-const MANIFEST_HASH: &str = "manifest-hash";
 const PIVOT_PATH: &str = "pivot-path";
 const GENESIS_DIR: &str = "genesis-dir";
 const BOOT_DIR: &str = "boot-dir";
@@ -506,11 +505,6 @@ impl Command {
 		)
 		.takes_value(true)
 		.required(true)
-	}
-	fn manifest_hash_token() -> Token {
-		Token::new(MANIFEST_HASH, "Hex encoded hash of the expected manifest.")
-			.takes_value(true)
-			.required(true)
 	}
 	fn personal_dir_token() -> Token {
 		Token::new(PERSONAL_DIR, "Directory (eventually) containing personal key, share, and setup key associated with 1 genesis ceremony.")
@@ -731,12 +725,12 @@ impl Command {
 	fn proxy_re_encrypt_share() -> Parser {
 		Parser::new()
 			.token(Self::attestation_dir_token())
-			.token(Self::manifest_hash_token())
 			.token(Self::personal_dir_token())
 			.token(Self::pcr3_preimage_path_token())
+			.token(Self::manifest_set_dir_token())
+			.token(Self::alias_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
-			.token(Self::alias_token())
 	}
 
 	fn post_share() -> Parser {
@@ -838,15 +832,6 @@ impl ClientOpts {
 			.to_string()
 			.try_into()
 			.expect("Could not parse `--restart-policy`")
-	}
-
-	fn manifest_hash(&self) -> Hash256 {
-		qos_hex::decode(
-			self.parsed.single(MANIFEST_HASH).expect("required arg"),
-		)
-		.expect("Could not parse `--manifest-hash` to bytes")
-		.try_into()
-		.expect("Could not convert manifest hash to Hash256")
 	}
 
 	fn pivot_path(&self) -> String {
@@ -1007,7 +992,7 @@ impl CLI {
 mod handlers {
 	use qos_core::protocol::attestor::types::{NsmRequest, NsmResponse};
 
-	use super::services::ApproveManifestArgs;
+	use super::services::{ApproveManifestArgs, ProxyReEncryptShareArgs};
 	use crate::{
 		cli::{
 			services::{self, GenerateManifestArgs},
@@ -1217,15 +1202,15 @@ mod handlers {
 	}
 
 	pub(super) fn proxy_re_encrypt_share(opts: &ClientOpts) {
-		services::proxy_re_encrypt_share(
-			opts.attestation_dir(),
-			opts.manifest_hash(),
-			opts.personal_dir(),
-			opts.pcr3_preimage_path(),
-			opts.alias(),
-			opts.unsafe_skip_attestation(),
-			opts.unsafe_eph_path_override(),
-		);
+		services::proxy_re_encrypt_share(ProxyReEncryptShareArgs {
+			attestation_dir: opts.attestation_dir(),
+			personal_dir: opts.personal_dir(),
+			pcr3_preimage_path: opts.pcr3_preimage_path(),
+			alias: opts.alias(),
+			manifest_set_dir: opts.manifest_set_dir(),
+			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+			unsafe_eph_path_override: opts.unsafe_eph_path_override(),
+		});
 	}
 
 	pub(super) fn post_share(opts: &ClientOpts) {

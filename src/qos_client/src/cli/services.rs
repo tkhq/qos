@@ -23,7 +23,7 @@ use qos_core::protocol::{
 		},
 		genesis::{GenesisOutput, GenesisSet},
 	},
-	Hash256, QosHash,
+	QosHash,
 };
 use qos_crypto::{sha_256, sha_384, RsaPair, RsaPub};
 
@@ -656,39 +656,43 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 	);
 }
 
+pub(crate) struct ProxyReEncryptShareArgs<P: AsRef<Path>> {
+	pub attestation_dir: P,
+	pub personal_dir: P, // TODO: replace this with just using yubikey to sign
+	pub pcr3_preimage_path: P,
+	pub manifest_set_dir: P,
+	pub alias: String,
+	pub unsafe_skip_attestation: bool,
+	pub unsafe_eph_path_override: Option<String>,
+}
+
+// Verifications in this focus around ensuring
+// - the intended manifest is being used
+// - the manifest set approved the manifest and is the correct set
+//
 pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
-	attestation_dir: P,
-	manifest_hash: Hash256,
-	personal_dir: P, // TODO: replace this with just using yubikey to sign
-	pcr3_preimage_path: P,
-	alias: String,
-	unsafe_skip_attestation: bool,
-	unsafe_eph_path_override: Option<String>,
+	ProxyReEncryptShareArgs {
+		attestation_dir,
+		personal_dir,
+		pcr3_preimage_path,
+		manifest_set_dir,
+		alias,
+		unsafe_skip_attestation,
+		unsafe_eph_path_override,
+	}: ProxyReEncryptShareArgs<P>,
 ) {
+	// TODO:
+	// - manifest envelope should come from `namespaces` repo, not what is
+	// output by get attestation document.
+	// - boot standard should output a manifest envelope or we have another
+	// command that generates manifest envelope.
 	let manifest_envelope = find_manifest_envelope(&attestation_dir);
 	let attestation_doc =
 		find_attestation_doc(&attestation_dir, unsafe_skip_attestation);
 	let encrypted_share = find_share(&personal_dir);
 	let (personal_pair, _) = find_share_key(&personal_dir);
 
-	// Check manifest signatures
-	manifest_envelope
-		.check_approvals()
-		.expect("Manifest does not correct manifest set approvals");
-
-	// Make sure given hash matches the manifest hash
-	assert_eq!(
-		manifest_envelope.manifest.qos_hash(),
-		manifest_hash,
-		"Given hash did not match the hash of the manifest"
-	);
-
-	// TODO:
-	// - point the keys directory and print the names of those who signed with
-	//   manifest keys
-	// 	- prompt with name and key of each person who signed
-	//  - prompt with the number of people who signed
-	// - verify PCR3 (enter pre-image as arg)
+	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
 
 	// Verify the attestation doc matches up with the pcrs in the manifest
 	if unsafe_skip_attestation {
@@ -696,7 +700,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	} else {
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
-			&manifest_hash,
+			&manifest_envelope.manifest.qos_hash(),
 			&manifest_envelope.manifest.enclave.pcr0,
 			&manifest_envelope.manifest.enclave.pcr1,
 			&manifest_envelope.manifest.enclave.pcr2,
@@ -717,6 +721,31 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		)
 		.expect("Ephemeral key not valid public key")
 	};
+
+	proxy_re_encrypt_share_programmatic_verifications(
+		&manifest_envelope,
+		&get_manifest_set(manifest_set_dir),
+		&QuorumMember {
+			alias: alias.clone(),
+			pub_key: personal_pair.public_key_to_der().unwrap(),
+		},
+	);
+
+	let mut prompter = {
+		let stdin = io::stdin();
+		let input = stdin.lock();
+		let output = io::stdout();
+
+		Prompter { reader: input, writer: output }
+	};
+	if !proxy_re_encrypt_share_human_verifications(
+		&manifest_envelope,
+		&pcr3_preimage,
+		&mut prompter,
+	) {
+		eprintln!("Exiting early without re-encrypting / approving");
+		std::process::exit(1);
+	}
 
 	let share = {
 		let plaintext_share = &personal_pair
@@ -747,6 +776,92 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 
 	let share_path = attestation_dir.as_ref().join(EPH_WRAPPED_SHARE_FILE);
 	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
+}
+
+// TODO: check that the user is in
+fn proxy_re_encrypt_share_programmatic_verifications(
+	manifest_envelope: &ManifestEnvelope,
+	manifest_set: &ManifestSet,
+	member: &QuorumMember,
+) -> bool {
+	// Check manifest signatures
+	if manifest_envelope.check_approvals().is_err() {
+		eprintln!("Manifest envelope did not have valid approvals");
+		return false;
+	};
+
+	if manifest_envelope.manifest.manifest_set != *manifest_set {
+		eprintln!("Manifest envelope did not have valid approvals");
+		return false;
+	}
+
+	if !manifest_envelope.manifest.share_set.members.contains(member) {
+		eprintln!("The provided share set key and alias are not part of the Share Set");
+		return false;
+	}
+
+	true
+}
+
+fn proxy_re_encrypt_share_human_verifications<R, W>(
+	manifest_envelope: &ManifestEnvelope,
+	pcr3_preimage: &str,
+	prompter: &mut Prompter<R, W>,
+) -> bool
+where
+	R: BufRead,
+	W: Write,
+{
+	// Check the namespace name
+	{
+		let prompt = format!(
+			"Is this the correct namespace name: {}? (yes/no)",
+			manifest_envelope.manifest.namespace.name
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
+
+	// Check the namespace nonce
+	{
+		let prompt = format!(
+			"Is this the correct namespace nonce: {}? (yes/no)",
+			manifest_envelope.manifest.namespace.nonce
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
+
+	// Check that the IAM role is correct
+	{
+		let prompt = format!(
+			"Does this AWS IAM role belong to the intended organization: {}? (yes/no)",
+			pcr3_preimage
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
+
+	{
+		let approvers = manifest_envelope
+			.manifest_set_approvals
+			.iter()
+			.cloned()
+			.map(|m| m.member.alias)
+			.map(|a| format!("\t{a}"))
+			.collect::<Vec<_>>()
+			.join("\n");
+		let prompt = format!("The following manifest set members approved:\n{approvers}\n Is this ok? (yes/no)");
+
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
+
+	true
 }
 
 pub(crate) fn post_share<P: AsRef<Path>>(uri: &str, attestation_dir: P) {
@@ -1238,14 +1353,18 @@ fn extract_qos_build_fingerprints<P: AsRef<Path>>(
 	}
 }
 
-fn extract_pcr3<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
+fn find_pcr3<P: AsRef<Path>>(file_path: P) -> String {
 	let file = File::open(file_path).expect("failed to open pcr3 preimage");
 	let mut lines = std::io::BufReader::new(file)
 		.lines()
 		.collect::<Result<Vec<_>, _>>()
 		.unwrap();
 
-	let role_arn = std::mem::take(&mut lines[0]);
+	lines.remove(0)
+}
+
+fn extract_pcr3<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
+	let role_arn = find_pcr3(file_path);
 
 	let preimage = {
 		// Pad preimage with 48 bytes
@@ -1359,8 +1478,9 @@ mod tests_approve_manifest_verifications {
 	use qos_crypto::{RsaPair, RsaPub};
 
 	use super::{
+		approve_manifest_human_verifications,
 		approve_manifest_programmatic_verifications, PivotBuildFingerprints,
-		Prompter, approve_manifest_human_verifications
+		Prompter,
 	};
 
 	struct Setup {
@@ -1693,10 +1813,7 @@ mod tests_approve_manifest_verifications {
 
 		let mut prompter = Prompter { reader: vec_in, writer: &mut vec_out };
 
-		assert!(approve_manifest_human_verifications(
-			&manifest,
-			&mut prompter
-		));
+		assert!(approve_manifest_human_verifications(&manifest, &mut prompter));
 	}
 
 	#[test]
@@ -1714,7 +1831,10 @@ mod tests_approve_manifest_verifications {
 		));
 
 		let output = String::from_utf8(vec_out).unwrap();
-		assert_eq!(&output, "Is this the correct namespace name: test-namespace? (yes/no)\n")
+		assert_eq!(
+			&output,
+			"Is this the correct namespace name: test-namespace? (yes/no)\n"
+		);
 	}
 
 	#[test]
@@ -1732,9 +1852,12 @@ mod tests_approve_manifest_verifications {
 		));
 
 		let output = String::from_utf8(vec_out).unwrap();
-		let output: Vec<_> = output.split("\n").collect();
+		let output: Vec<_> = output.split('\n').collect();
 
-		assert_eq!(output[1], "Is this the correct namespace nonce: 2? (yes/no)");
+		assert_eq!(
+			output[1],
+			"Is this the correct namespace nonce: 2? (yes/no)"
+		);
 	}
 
 	#[test]
@@ -1752,9 +1875,12 @@ mod tests_approve_manifest_verifications {
 		));
 
 		let output = String::from_utf8(vec_out).unwrap();
-		let output: Vec<_> = output.split("\n").collect();
+		let output: Vec<_> = output.split('\n').collect();
 
-		assert_eq!(output[2], "Is this the correct pivot restart policy: Never? (yes/no)");
+		assert_eq!(
+			output[2],
+			"Is this the correct pivot restart policy: Never? (yes/no)"
+		);
 	}
 
 	#[test]
@@ -1772,7 +1898,7 @@ mod tests_approve_manifest_verifications {
 		));
 
 		let output = String::from_utf8(vec_out).unwrap();
-		let output: Vec<_> = output.split("\n").collect();
+		let output: Vec<_> = output.split('\n').collect();
 
 		assert_eq!(output[3], "Are these the correct pivot args:");
 		assert_eq!(output[4], "[\"--option1\", \"argument\"]?");
