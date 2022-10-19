@@ -742,7 +742,7 @@ impl Command {
 	}
 
 	fn generate_manifest_envelope() -> Parser {
-		Self::base().token(Self::manifest_dir_token())
+		Parser::new().token(Self::manifest_dir_token())
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -983,7 +983,7 @@ impl ClientRunner {
 					handlers::dangerous_dev_boot(&self.opts);
 				}
 				Command::GenerateManifestEnvelope => {
-					handlers::generate_manifest_envelope(&self.opts)
+					handlers::generate_manifest_envelope(&self.opts);
 				}
 			}
 		}

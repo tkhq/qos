@@ -9,9 +9,7 @@ use borsh::de::BorshDeserialize;
 use integration::{LOCAL_HOST, PCR3, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 use qos_core::protocol::{
-	attestor::mock::{
-		MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
-	},
+	attestor::mock::{MOCK_PCR0, MOCK_PCR1, MOCK_PCR2},
 	services::{
 		boot::{
 			Approval, Manifest, ManifestSet, Namespace, NitroConfig,
@@ -48,7 +46,7 @@ async fn boot_e2e() {
 
 	let namespace = "quit-coding-to-vape";
 
-	let attestation_doc_path = format!("{}/boot_attestation_doc", &*boot_dir);
+	let _attestation_doc_path = format!("{}/boot_attestation_doc", &*boot_dir);
 
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", all_personal_dir, user);
@@ -301,9 +299,18 @@ async fn boot_e2e() {
 
 	// -- CLIENT broadcast boot standard instruction
 	assert!(Command::new("../target/debug/qos_client")
+		.args(["generate-manifest-envelope", "--manifest-dir", &*boot_dir,])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
+	// -- CLIENT broadcast boot standard instruction
+	assert!(Command::new("../target/debug/qos_client")
 		.args([
 			"boot-standard",
-			"--boot-dir",
+			"--manifest-dir",
 			&*boot_dir,
 			"--pivot-path",
 			PIVOT_OK2_PATH,
@@ -320,9 +327,6 @@ async fn boot_e2e() {
 		.wait()
 		.unwrap()
 		.success());
-
-	let att_doc = fs::read(&attestation_doc_path).unwrap();
-	assert_eq!(att_doc, MOCK_NSM_ATTESTATION_DOCUMENT);
 
 	// For each user, post a share,
 	// and sanity check the pivot has not yet executed.
