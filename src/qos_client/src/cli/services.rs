@@ -541,35 +541,49 @@ where
 	true
 }
 
+pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(manifest_dir: P) {
+	let manifest = find_manifest(&manifest_dir);
+	let approvals = find_approvals(&manifest_dir, &manifest);
+
+	// Create manifest envelope
+	let manifest_envelope = ManifestEnvelope {
+		manifest,
+		manifest_set_approvals: approvals,
+		share_set_approvals: vec![],
+	};
+
+	if let Err(e) = manifest_envelope.check_approvals() {
+		eprintln!("Error with approvals: {:?}", e);
+		std::process::exit(1);
+	}
+
+	let path = manifest_dir.as_ref().join(MANIFEST_ENVELOPE);
+	write_with_msg(
+		&path,
+		&manifest_envelope.try_to_vec().expect("Failed to serialize approval"),
+		"Manifest Approval",
+	);
+}
+
 pub(crate) fn boot_standard<P: AsRef<Path>>(
 	uri: &str,
 	pivot_path: P,
-	boot_dir: P,
+	manifest_dir: P,
 	pcr3_preimage_path: P,
 	unsafe_skip_attestation: bool,
 ) {
 	// Read in pivot binary
 	let pivot =
 		fs::read(pivot_path.as_ref()).expect("Failed to read pivot binary");
-	// Read in manifest
-	let manifest = find_manifest(&boot_dir);
-	let approvals = find_approvals(&boot_dir, &manifest);
-	let manifest_hash = manifest.qos_hash();
-
-	assert_eq!(
-		sha_256(&pivot),
-		manifest.pivot.hash,
-		"Hash of pivot binary does not match manifest"
-	);
 
 	// Create manifest envelope
-	let manifest_envelope = Box::new(ManifestEnvelope {
-		manifest: manifest.clone(),
-		manifest_set_approvals: approvals,
-		share_set_approvals: vec![],
-	});
+	let manifest_envelope = find_manifest_envelope(manifest_dir);
+	let manifest = manifest_envelope.manifest.clone();
 
-	let req = ProtocolMsg::BootStandardRequest { manifest_envelope, pivot };
+	let req = ProtocolMsg::BootStandardRequest {
+		manifest_envelope: Box::new(manifest_envelope),
+		pivot,
+	};
 	// Broadcast boot standard instruction and extract the attestation doc from
 	// the response.
 	let cose_sign1 = match request::post(uri, &req).unwrap() {
@@ -588,7 +602,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	} else {
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
-			&manifest_hash,
+			&manifest.qos_hash(),
 			&manifest.enclave.pcr0,
 			&manifest.enclave.pcr1,
 			&manifest.enclave.pcr2,
@@ -604,15 +618,6 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 				.expect("No ephemeral key in the attestation doc"),
 		)
 		.expect("Ephemeral key not valid public key"),
-	);
-
-	// write attestation doc
-	let attestation_doc_path =
-		boot_dir.as_ref().join(STANDARD_ATTESTATION_DOC_FILE);
-	write_with_msg(
-		&attestation_doc_path,
-		&cose_sign1,
-		"COSE Sign1 Attestation Doc",
 	);
 }
 

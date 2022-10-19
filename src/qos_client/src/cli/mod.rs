@@ -451,6 +451,9 @@ pub enum Command {
 	ProxyReEncryptShare,
 	/// Submit an encrypted share to an enclave.
 	PostShare,
+	/// Given a directory containing a manifest and threshold approvals for it,
+	/// generate a manifest envelope and write it back to the same directory.
+	GenerateManifestEnvelope,
 	/// ** Never use in production**.
 	///
 	/// Pivot the enclave to the specified binary.
@@ -473,6 +476,7 @@ impl From<&str> for Command {
 			"describe-nsm" => Self::DescribeNsm,
 			"describe-pcr" => Self::DescribePcr,
 			"generate-share-key" => Self::GenerateShareKey,
+			"generate-manifest-envelope" => Self::GenerateManifestEnvelope,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
 			"generate-manifest" => Self::GenerateManifest,
@@ -713,7 +717,7 @@ impl Command {
 	fn boot_standard() -> Parser {
 		Self::base()
 			.token(Self::pivot_path_token())
-			.token(Self::boot_dir_token())
+			.token(Self::manifest_dir_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 	}
@@ -735,6 +739,10 @@ impl Command {
 
 	fn post_share() -> Parser {
 		Self::base().token(Self::attestation_dir_token())
+	}
+
+	fn generate_manifest_envelope() -> Parser {
+		Self::base().token(Self::manifest_dir_token())
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -765,6 +773,9 @@ impl GetParserForCommand for Command {
 			Self::ProxyReEncryptShare => Self::proxy_re_encrypt_share(),
 			Self::PostShare => Self::post_share(),
 			Self::DangerousDevBoot => Self::dangerous_dev_boot(),
+			Self::GenerateManifestEnvelope => {
+				Self::generate_manifest_envelope()
+			}
 		}
 	}
 }
@@ -970,6 +981,9 @@ impl ClientRunner {
 				Command::PostShare => handlers::post_share(&self.opts),
 				Command::DangerousDevBoot => {
 					handlers::dangerous_dev_boot(&self.opts);
+				}
+				Command::GenerateManifestEnvelope => {
+					handlers::generate_manifest_envelope(&self.opts)
 				}
 			}
 		}
@@ -1188,7 +1202,7 @@ mod handlers {
 		services::boot_standard(
 			&opts.path_message(),
 			opts.pivot_path(),
-			opts.boot_dir(),
+			opts.manifest_dir(),
 			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
 		);
@@ -1225,5 +1239,9 @@ mod handlers {
 			opts.pivot_args(),
 			opts.unsafe_eph_path_override(),
 		);
+	}
+
+	pub(super) fn generate_manifest_envelope(opts: &ClientOpts) {
+		services::generate_manifest_envelope(opts.manifest_dir());
 	}
 }
