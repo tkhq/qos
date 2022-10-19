@@ -407,14 +407,8 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 		std::process::exit(1);
 	}
 
-	let mut prompter = {
-		let stdin = io::stdin();
-		let input = stdin.lock();
-		let output = io::stdout();
-
-		Prompter { reader: input, writer: output }
-	};
-
+	let mut prompter =
+		Prompter { reader: io::stdin().lock(), writer: io::stdout() };
 	if !approve_manifest_human_verifications(&manifest, &mut prompter) {
 		eprintln!("Exiting early without approving manifest");
 		std::process::exit(1);
@@ -735,13 +729,8 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		std::process::exit(1);
 	}
 
-	let mut prompter = {
-		// let stdin = io::stdin().lock();
-		// let input = stdin.lock();
-		// let output = io::stdout();
-
-		Prompter { reader: io::stdin().lock(), writer: io::stdout() }
-	};
+	let mut prompter =
+		Prompter { reader: io::stdin().lock(), writer: io::stdout() };
 	if !proxy_re_encrypt_share_human_verifications(
 		&manifest_envelope,
 		&pcr3_preimage,
@@ -750,6 +739,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		eprintln!("Exiting early without re-encrypting / approving");
 		std::process::exit(1);
 	}
+	drop(prompter);
 
 	let share = {
 		let plaintext_share = &personal_pair

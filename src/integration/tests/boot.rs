@@ -368,45 +368,44 @@ async fn boot_e2e() {
 			.spawn()
 			.unwrap();
 
-			let mut stdin = child.stdin.take().expect("Failed to open stdin");
+		let mut stdin = child.stdin.take().expect("Failed to open stdin");
 
-			let mut stdout = {
-				let stdout = child.stdout.as_mut().unwrap();
-				let stdout_reader = BufReader::new(stdout);
-				stdout_reader.lines()
-			};
+		let mut stdout = {
+			let stdout = child.stdout.as_mut().unwrap();
+			let stdout_reader = BufReader::new(stdout);
+			stdout_reader.lines()
+		};
 
-			// Skip over a log message
-			stdout.next();
+		// Skip over a log message
+		stdout.next();
 
-			// Answer prompts with yes
-			assert_eq!(
-				&stdout.next().unwrap().unwrap(),
-				"Is this the correct namespace name: quit-coding-to-vape? (yes/no)"
-			);
-			stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+		// Answer prompts with yes
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct namespace name: quit-coding-to-vape? (yes/no)"
+		);
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
-			assert_eq!(
-				&stdout.next().unwrap().unwrap(),
-				"Is this the correct namespace nonce: 2? (yes/no)"
-			);
-			stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct namespace nonce: 2? (yes/no)"
+		);
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
-			assert_eq!(
+		assert_eq!(
 				&stdout.next().unwrap().unwrap(),
 				"Does this AWS IAM role belong to the intended organization: arn:aws:iam::123456789012:role/Webserver? (yes/no)"
 			);
-			stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
-			assert_eq!(
-				&stdout.next().unwrap().unwrap(),
-				"The following manifest set members approved:"
-			);
-			stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"The following manifest set members approved:"
+		);
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
-			// Check that it finished successfully
-			assert!(child.wait().unwrap().success());
-
+		// Check that it finished successfully
+		assert!(child.wait().unwrap().success());
 
 		// Post the encrypted share
 		assert!(Command::new("../target/debug/qos_client")
