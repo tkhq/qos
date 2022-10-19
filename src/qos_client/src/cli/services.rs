@@ -1649,7 +1649,7 @@ mod tests_approve_manifest_verifications {
 			quorum_key,
 		} = setup();
 
-		pivot_build_fingerprints.pivot_hash = vec![42; 32];
+		pivot_build_fingerprints.pivot_commit = "bad-pivot-commit".to_string();
 
 		assert!(!approve_manifest_programmatic_verifications(
 			&manifest,
