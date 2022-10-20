@@ -349,7 +349,7 @@ use std::env;
 
 use qos_core::{
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
-	protocol::{msg::ProtocolMsg, services::boot, Hash256},
+	protocol::{msg::ProtocolMsg, services::boot},
 };
 
 mod services;
@@ -361,7 +361,6 @@ const NAMESPACE: &str = "namespace";
 const THRESHOLD: &str = "threshold";
 const NONCE: &str = "nonce";
 const RESTART_POLICY: &str = "restart-policy";
-const MANIFEST_HASH: &str = "manifest-hash";
 const PIVOT_PATH: &str = "pivot-path";
 const GENESIS_DIR: &str = "genesis-dir";
 const BOOT_DIR: &str = "boot-dir";
@@ -452,6 +451,9 @@ pub enum Command {
 	ProxyReEncryptShare,
 	/// Submit an encrypted share to an enclave.
 	PostShare,
+	/// Given a directory containing a manifest and threshold approvals for it,
+	/// generate a manifest envelope and write it back to the same directory.
+	GenerateManifestEnvelope,
 	/// ** Never use in production**.
 	///
 	/// Pivot the enclave to the specified binary.
@@ -474,6 +476,7 @@ impl From<&str> for Command {
 			"describe-nsm" => Self::DescribeNsm,
 			"describe-pcr" => Self::DescribePcr,
 			"generate-share-key" => Self::GenerateShareKey,
+			"generate-manifest-envelope" => Self::GenerateManifestEnvelope,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
 			"generate-manifest" => Self::GenerateManifest,
@@ -506,11 +509,6 @@ impl Command {
 		)
 		.takes_value(true)
 		.required(true)
-	}
-	fn manifest_hash_token() -> Token {
-		Token::new(MANIFEST_HASH, "Hex encoded hash of the expected manifest.")
-			.takes_value(true)
-			.required(true)
 	}
 	fn personal_dir_token() -> Token {
 		Token::new(PERSONAL_DIR, "Directory (eventually) containing personal key, share, and setup key associated with 1 genesis ceremony.")
@@ -719,7 +717,7 @@ impl Command {
 	fn boot_standard() -> Parser {
 		Self::base()
 			.token(Self::pivot_path_token())
-			.token(Self::boot_dir_token())
+			.token(Self::manifest_dir_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 	}
@@ -731,16 +729,21 @@ impl Command {
 	fn proxy_re_encrypt_share() -> Parser {
 		Parser::new()
 			.token(Self::attestation_dir_token())
-			.token(Self::manifest_hash_token())
 			.token(Self::personal_dir_token())
 			.token(Self::pcr3_preimage_path_token())
+			.token(Self::manifest_set_dir_token())
+			.token(Self::manifest_dir_token())
+			.token(Self::alias_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
-			.token(Self::alias_token())
 	}
 
 	fn post_share() -> Parser {
 		Self::base().token(Self::attestation_dir_token())
+	}
+
+	fn generate_manifest_envelope() -> Parser {
+		Parser::new().token(Self::manifest_dir_token())
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -771,6 +774,9 @@ impl GetParserForCommand for Command {
 			Self::ProxyReEncryptShare => Self::proxy_re_encrypt_share(),
 			Self::PostShare => Self::post_share(),
 			Self::DangerousDevBoot => Self::dangerous_dev_boot(),
+			Self::GenerateManifestEnvelope => {
+				Self::generate_manifest_envelope()
+			}
 		}
 	}
 }
@@ -838,15 +844,6 @@ impl ClientOpts {
 			.to_string()
 			.try_into()
 			.expect("Could not parse `--restart-policy`")
-	}
-
-	fn manifest_hash(&self) -> Hash256 {
-		qos_hex::decode(
-			self.parsed.single(MANIFEST_HASH).expect("required arg"),
-		)
-		.expect("Could not parse `--manifest-hash` to bytes")
-		.try_into()
-		.expect("Could not convert manifest hash to Hash256")
 	}
 
 	fn pivot_path(&self) -> String {
@@ -986,6 +983,9 @@ impl ClientRunner {
 				Command::DangerousDevBoot => {
 					handlers::dangerous_dev_boot(&self.opts);
 				}
+				Command::GenerateManifestEnvelope => {
+					handlers::generate_manifest_envelope(&self.opts);
+				}
 			}
 		}
 	}
@@ -1007,7 +1007,7 @@ impl CLI {
 mod handlers {
 	use qos_core::protocol::attestor::types::{NsmRequest, NsmResponse};
 
-	use super::services::ApproveManifestArgs;
+	use super::services::{ApproveManifestArgs, ProxyReEncryptShareArgs};
 	use crate::{
 		cli::{
 			services::{self, GenerateManifestArgs},
@@ -1203,7 +1203,7 @@ mod handlers {
 		services::boot_standard(
 			&opts.path_message(),
 			opts.pivot_path(),
-			opts.boot_dir(),
+			opts.manifest_dir(),
 			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
 		);
@@ -1217,15 +1217,16 @@ mod handlers {
 	}
 
 	pub(super) fn proxy_re_encrypt_share(opts: &ClientOpts) {
-		services::proxy_re_encrypt_share(
-			opts.attestation_dir(),
-			opts.manifest_hash(),
-			opts.personal_dir(),
-			opts.pcr3_preimage_path(),
-			opts.alias(),
-			opts.unsafe_skip_attestation(),
-			opts.unsafe_eph_path_override(),
-		);
+		services::proxy_re_encrypt_share(ProxyReEncryptShareArgs {
+			attestation_dir: opts.attestation_dir(),
+			personal_dir: opts.personal_dir(),
+			manifest_dir: opts.manifest_dir(),
+			pcr3_preimage_path: opts.pcr3_preimage_path(),
+			alias: opts.alias(),
+			manifest_set_dir: opts.manifest_set_dir(),
+			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+			unsafe_eph_path_override: opts.unsafe_eph_path_override(),
+		});
 	}
 
 	pub(super) fn post_share(opts: &ClientOpts) {
@@ -1240,5 +1241,9 @@ mod handlers {
 			opts.pivot_args(),
 			opts.unsafe_eph_path_override(),
 		);
+	}
+
+	pub(super) fn generate_manifest_envelope(opts: &ClientOpts) {
+		services::generate_manifest_envelope(opts.manifest_dir());
 	}
 }

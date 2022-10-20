@@ -9,9 +9,7 @@ use borsh::de::BorshDeserialize;
 use integration::{LOCAL_HOST, PCR3, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 use qos_core::protocol::{
-	attestor::mock::{
-		MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
-	},
+	attestor::mock::{MOCK_PCR0, MOCK_PCR1, MOCK_PCR2},
 	services::{
 		boot::{
 			Approval, Manifest, ManifestSet, Namespace, NitroConfig,
@@ -47,8 +45,6 @@ async fn boot_e2e() {
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
 
 	let namespace = "quit-coding-to-vape";
-
-	let attestation_doc_path = format!("{}/boot_attestation_doc", &*boot_dir);
 
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", all_personal_dir, user);
@@ -299,11 +295,20 @@ async fn boot_e2e() {
 	// -- Make sure the enclave and host have time to boot
 	qos_test_primitives::wait_until_port_is_bound(host_port);
 
+	// -- CLIENT generate the manifest envelope
+	assert!(Command::new("../target/debug/qos_client")
+		.args(["generate-manifest-envelope", "--manifest-dir", &*boot_dir,])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
 	// -- CLIENT broadcast boot standard instruction
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
 			"boot-standard",
-			"--boot-dir",
+			"--manifest-dir",
 			&*boot_dir,
 			"--pivot-path",
 			PIVOT_OK2_PATH,
@@ -320,9 +325,6 @@ async fn boot_e2e() {
 		.wait()
 		.unwrap()
 		.success());
-
-	let att_doc = fs::read(&attestation_doc_path).unwrap();
-	assert_eq!(att_doc, MOCK_NSM_ATTESTATION_DOCUMENT);
 
 	// For each user, post a share,
 	// and sanity check the pivot has not yet executed.
@@ -346,28 +348,68 @@ async fn boot_e2e() {
 			.success());
 
 		// Encrypt share to ephemeral key
-		assert!(Command::new("../target/debug/qos_client")
+		let mut child = Command::new("../target/debug/qos_client")
 			.args([
 				"proxy-re-encrypt-share",
 				"--attestation-dir",
 				&*attestation_dir,
-				"--manifest-hash",
-				qos_hex::encode(&manifest.qos_hash()).as_str(),
+				"--manifest-dir",
+				&*boot_dir,
 				"--personal-dir",
 				&personal_dir(user),
 				"--pcr3-preimage-path",
-				"./mock/pcr3-preimage.txt",
+				"./mock/namespaces/pcr3-preimage.txt",
+				"--manifest-set-dir",
+				"./mock/keys/manifest-set",
 				"--alias",
 				user,
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
 				&*eph_path,
 			])
+			.stdin(Stdio::piped())
+			.stdout(Stdio::piped())
 			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
+			.unwrap();
+
+		let mut stdin = child.stdin.take().expect("Failed to open stdin");
+
+		let mut stdout = {
+			let stdout = child.stdout.as_mut().unwrap();
+			let stdout_reader = BufReader::new(stdout);
+			stdout_reader.lines()
+		};
+
+		// Skip over a log message
+		stdout.next();
+
+		// Answer prompts with yes
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct namespace name: quit-coding-to-vape? (yes/no)"
+		);
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct namespace nonce: 2? (yes/no)"
+		);
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+				&stdout.next().unwrap().unwrap(),
+				"Does this AWS IAM role belong to the intended organization: arn:aws:iam::123456789012:role/Webserver? (yes/no)"
+			);
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"The following manifest set members approved:"
+		);
+		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+
+		// Check that it finished successfully
+		assert!(child.wait().unwrap().success());
 
 		// Post the encrypted share
 		assert!(Command::new("../target/debug/qos_client")
