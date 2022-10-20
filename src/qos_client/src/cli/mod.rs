@@ -361,7 +361,6 @@ const NAMESPACE: &str = "namespace";
 const NONCE: &str = "nonce";
 const RESTART_POLICY: &str = "restart-policy";
 const PIVOT_PATH: &str = "pivot-path";
-const GENESIS_DIR: &str = "genesis-dir";
 const BOOT_DIR: &str = "boot-dir";
 const PERSONAL_DIR: &str = "personal-dir";
 const PIVOT_ARGS: &str = "pivot-args";
@@ -511,11 +510,6 @@ impl Command {
 	}
 	fn personal_dir_token() -> Token {
 		Token::new(PERSONAL_DIR, "Directory (eventually) containing personal key, share, and setup key associated with 1 genesis ceremony.")
-			.takes_value(true)
-			.required(true)
-	}
-	fn genesis_dir_token() -> Token {
-		Token::new(GENESIS_DIR, "Directory (eventually) containing genesis output, setup public keys, and attestation doc.")
 			.takes_value(true)
 			.required(true)
 	}
@@ -800,10 +794,6 @@ impl ClientOpts {
 
 	fn namespace(&self) -> String {
 		self.parsed.single(NAMESPACE).expect("required arg").to_string()
-	}
-
-	fn genesis_dir(&self) -> String {
-		self.parsed.single(GENESIS_DIR).expect("required arg").to_string()
 	}
 
 	fn pcr3_preimage_path(&self) -> String {
