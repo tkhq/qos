@@ -652,7 +652,6 @@ impl Command {
 		Parser::new()
 			.token(Self::alias_token())
 			.token(Self::personal_dir_token())
-			.token(Self::namespace_token())
 	}
 
 	fn boot_genesis() -> Parser {
@@ -1142,7 +1141,6 @@ mod handlers {
 	pub(super) fn generate_share_key(opts: &ClientOpts) {
 		services::generate_share_key(
 			&opts.alias(),
-			&opts.namespace(),
 			opts.personal_dir(),
 		);
 	}

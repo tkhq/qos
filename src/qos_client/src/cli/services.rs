@@ -30,11 +30,10 @@ use qos_crypto::{sha_256, sha_384, RsaPair, RsaPub};
 use crate::request;
 
 const SECRET_EXT: &str = "secret";
+const PUB_EXT: &str = "pub";
 const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
 const GENESIS_OUTPUT_FILE: &str = "genesis_output";
 const SHARE_EXT: &str = "share";
-const SHARE_KEY_PUB_EXT: &str = "share_key.pub";
-const SHARE_KEY_PRIV_EXT: &str = "share_key.secret";
 const MANIFEST_EXT: &str = "manifest";
 const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
@@ -43,7 +42,6 @@ const EPH_WRAPPED_SHARE_FILE: &str = "ephemeral_key_wrapped.share";
 const ATTESTATION_APPROVAL_FILE: &str = "attestation_approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
 const QUORUM_KEY: &str = "quorum_key";
-const PUB_EXT: &str = "pub";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -51,7 +49,6 @@ const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 
 pub(crate) fn generate_share_key<P: AsRef<Path>>(
 	alias: &str,
-	namespace: &str,
 	personal_dir: P,
 ) {
 	fs::create_dir_all(personal_dir.as_ref()).unwrap();
@@ -62,7 +59,7 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(
 	// TODO: password encryption
 	let private_path = personal_dir
 		.as_ref()
-		.join(format!("{}.{}.{}", alias, namespace, SHARE_KEY_PRIV_EXT));
+		.join(format!("{}.{}", alias, SECRET_EXT));
 	write_with_msg(
 		&private_path,
 		&share_key_pair
@@ -74,7 +71,7 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(
 	// Write the setup key public key
 	let public_path = personal_dir
 		.as_ref()
-		.join(format!("{}.{}.{}", alias, namespace, SHARE_KEY_PUB_EXT));
+		.join(format!("{}.{}", alias, PUB_EXT));
 	write_with_msg(
 		&public_path,
 		&share_key_pair
@@ -438,6 +435,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 	);
 }
 
+// TODO: bubble up logging as errors in stead of printing in place to make it more clear where logging is happening
 fn approve_manifest_programmatic_verifications(
 	manifest: &Manifest,
 	manifest_set: &ManifestSet,
@@ -776,6 +774,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
 }
 
+// TODO: bubble up logging as errors in stead of printing in place to make it more clear where logging is happening
 fn proxy_re_encrypt_share_programmatic_verifications(
 	manifest_envelope: &ManifestEnvelope,
 	manifest_set: &ManifestSet,
