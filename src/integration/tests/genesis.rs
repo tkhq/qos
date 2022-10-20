@@ -124,9 +124,9 @@ async fn genesis_e2e() {
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
 			"boot-genesis",
-			"--threshold",
-			"2", // threshold
-			"--genesis-dir",
+			"--share-set-dir",
+			"./keys/share-set",
+			"--namespace-dir",
 			&*genesis_dir,
 			"--host-ip",
 			LOCAL_HOST,

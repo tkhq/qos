@@ -358,7 +358,6 @@ const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ALIAS: &str = "alias";
 const NAMESPACE: &str = "namespace";
-const THRESHOLD: &str = "threshold";
 const NONCE: &str = "nonce";
 const RESTART_POLICY: &str = "restart-policy";
 const PIVOT_PATH: &str = "pivot-path";
@@ -656,15 +655,9 @@ impl Command {
 
 	fn boot_genesis() -> Parser {
 		Self::base()
-			.token(Self::genesis_dir_token())
-			.token(
-				Token::new(THRESHOLD, "Threshold, K, for having a quorum. K shares will reconstruct the Quorum key and K signatures are considered a quorum")
-				.required(true)
-				.takes_value(true)
-			)
-			.token(
-				Self::pcr3_preimage_path_token()
-			)
+			.token(Self::namespace_dir_token())
+			.token(Self::share_set_dir_token())
+			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::qos_build_fingerprints_token())
 	}
@@ -818,14 +811,6 @@ impl ClientOpts {
 			.single(PCR3_PREIMAGE_PATH)
 			.expect("`--pcr3-preimage-path` is a required arg")
 			.to_string()
-	}
-
-	fn threshold(&self) -> u32 {
-		self.parsed
-			.single(THRESHOLD)
-			.expect("required arg")
-			.parse::<u32>()
-			.expect("Could not parse `--threshold` as u32")
 	}
 
 	fn nonce(&self) -> u32 {
@@ -1146,8 +1131,8 @@ mod handlers {
 	pub(super) fn boot_genesis(opts: &ClientOpts) {
 		services::boot_genesis(
 			&opts.path_message(),
-			opts.genesis_dir(),
-			opts.threshold(),
+			opts.namespace_dir(),
+			opts.share_set_dir(),
 			opts.qos_build_fingerprints(),
 			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),

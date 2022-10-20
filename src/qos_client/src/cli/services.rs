@@ -79,13 +79,13 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 // TODO: verify PCR3
 pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	uri: &str,
-	genesis_dir: P,
-	threshold: u32,
+	namespace_dir: P,
+	share_set_dir: P,
 	qos_build_fingerprints_path: P,
 	pcr3_preimage_path: P,
 	unsafe_skip_attestation: bool,
 ) {
-	let genesis_set = create_genesis_set(&genesis_dir, threshold);
+	let genesis_set = get_genesis_set(&share_set_dir);
 
 	let req = ProtocolMsg::BootGenesisRequest { set: genesis_set.clone() };
 	let (cose_sign1, genesis_output) = match request::post(uri, &req).unwrap() {
@@ -130,7 +130,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 
 	// Write the attestation doc
 	let attestation_doc_path =
-		genesis_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
+		namespace_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
 	write_with_msg(
 		&attestation_doc_path,
 		&cose_sign1,
@@ -138,46 +138,12 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	);
 
 	// Write the genesis output
-	let genesis_output_path = genesis_dir.as_ref().join(GENESIS_OUTPUT_FILE);
+	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	write_with_msg(
 		&genesis_output_path,
 		&genesis_output.try_to_vec().unwrap(),
 		"`GenesisOutput`",
 	);
-}
-
-fn create_genesis_set<P: AsRef<Path>>(
-	genesis_dir: P,
-	threshold: u32,
-) -> GenesisSet {
-	// Assemble the genesis members from all the public keys in the key
-	// directory
-	let members: Vec<_> = find_file_paths(&genesis_dir)
-		.iter()
-		.filter_map(|path| {
-			let mut n = split_file_name(path);
-
-			if n.last().map_or(true, |s| s.as_str() != PUB_EXT) {
-				return None;
-			}
-
-			let public_key = RsaPub::from_pem_file(&path)
-				.expect("Failed to read in rsa pub key.");
-			Some(QuorumMember {
-				alias: mem::take(&mut n[0]),
-				pub_key: public_key.public_key_to_der().unwrap(),
-			})
-		})
-		.collect();
-
-	println!("Threshold: {}", threshold);
-	println!("N: {}", members.len());
-	println!("Members:");
-	for member in &members {
-		println!("  Alias: {}", member.alias);
-	}
-
-	GenesisSet { members, threshold }
 }
 
 /// TODO: verify pcr3
@@ -1147,6 +1113,31 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 	members.sort();
 
 	ManifestSet { members, threshold: find_threshold(dir) }
+}
+
+fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
+	let mut members: Vec<_> = find_file_paths(&dir)
+		.iter()
+		.filter_map(|path| {
+			let mut file_name = split_file_name(path);
+			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+				return None;
+			};
+
+			let public = RsaPub::from_pem_file(path).unwrap_or_else(|_| {
+				panic!("Could not read PEM from share_key.pub: {:?}.", path)
+			});
+			Some(QuorumMember {
+				alias: mem::take(&mut file_name[0]),
+				pub_key: public.public_key_to_der().unwrap(),
+			})
+		})
+		.collect();
+
+	// We want to try and build the same manifest regardless of the OS.
+	members.sort();
+
+	GenesisSet { members, threshold: find_threshold(dir) }
 }
 
 fn find_approvals<P: AsRef<Path>>(
