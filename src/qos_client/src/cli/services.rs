@@ -847,15 +847,17 @@ where
 	}
 
 	{
-		let approvers = manifest_envelope
+		let mut approvers = manifest_envelope
 			.manifest_set_approvals
 			.iter()
 			.cloned()
 			.map(|m| m.member.alias)
-			.map(|a| format!("\t{a}"))
-			.collect::<Vec<_>>()
-			.join("\n");
-		let prompt = format!("The following manifest set members approved:\n{approvers}\n Is this ok? (yes/no)");
+			.map(|a| format!("\talias: {a}"))
+			.collect::<Vec<_>>();
+		approvers.sort();
+		let approvers = approvers.join("\n");
+
+		let prompt = format!("The following manifest set members approved:\n{approvers}\nIs this ok? (yes/no)");
 
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1484,6 +1486,7 @@ mod tests {
 	use super::{
 		approve_manifest_human_verifications,
 		approve_manifest_programmatic_verifications,
+		proxy_re_encrypt_share_human_verifications,
 		proxy_re_encrypt_share_programmatic_verifications,
 		PivotBuildFingerprints, Prompter,
 	};
@@ -2053,17 +2056,116 @@ mod tests {
 	}
 
 	mod proxy_re_encrypt_share_human_verifications {
+		use super::*;
+		#[test]
+		fn accepts_all_yes_responses() {
+			let Setup { manifest_envelope, .. } = setup();
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nyes\nyes\nyes\n".as_bytes();
+
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(proxy_re_encrypt_share_human_verifications(
+				&manifest_envelope,
+				"pr3",
+				&mut prompter
+			));
+		}
 
 		#[test]
-		fn exits_early_bad_namespace_name() {}
+		fn exits_early_bad_namespace_name() {
+			let Setup { manifest_envelope, .. } = setup();
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "no\n".as_bytes();
+
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(!proxy_re_encrypt_share_human_verifications(
+				&manifest_envelope,
+				"pr3",
+				&mut prompter
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			assert_eq!(&output, "Is this the correct namespace name: test-namespace? (yes/no)\n");
+		}
 
 		#[test]
-		fn exits_early_bad_namespace_nonce() {}
+		fn exits_early_bad_namespace_nonce() {
+			let Setup { manifest_envelope, .. } = setup();
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nno\n".as_bytes();
+
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(!proxy_re_encrypt_share_human_verifications(
+				&manifest_envelope,
+				"pr3",
+				&mut prompter
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.trim().split('\n').collect();
+			assert_eq!(
+				output.last().unwrap(),
+				&"Is this the correct namespace nonce: 2? (yes/no)"
+			);
+		}
 
 		#[test]
-		fn exits_early_bad_iam_role() {}
+		fn exits_early_bad_iam_role() {
+			let Setup { manifest_envelope, .. } = setup();
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nyes\nNO\n".as_bytes();
+
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(!proxy_re_encrypt_share_human_verifications(
+				&manifest_envelope,
+				"pr3",
+				&mut prompter
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.trim().split('\n').collect();
+			assert_eq!(output.last().unwrap(), &"Does this AWS IAM role belong to the intended organization: pr3? (yes/no)");
+		}
 
 		#[test]
-		fn exits_early_bad_manifest_set_members() {}
+		fn exits_early_bad_manifest_set_members() {
+			let Setup { manifest_envelope, .. } = setup();
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nyes\nyes\ny".as_bytes();
+
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(!proxy_re_encrypt_share_human_verifications(
+				&manifest_envelope,
+				"pr3",
+				&mut prompter
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.trim().split('\n').collect();
+
+			assert_eq!(
+				output[3],
+				"The following manifest set members approved:"
+			);
+			assert_eq!(output[4], "\talias: 0");
+			assert_eq!(output[5], "\talias: 1");
+			assert_eq!(output[6], "Is this ok? (yes/no)");
+			assert_eq!(output.len(), 7);
+		}
 	}
 }
