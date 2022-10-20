@@ -24,19 +24,14 @@ async fn genesis_e2e() {
 	let all_personal_dir = tmp_dir("personal-dir");
 	let genesis_dir = tmp_dir("genesis-dir");
 
-	let namespace = "quit-coding-to-vape";
 	let attestation_doc_path =
 		format!("{}/genesis_attestation_doc", &*genesis_dir);
 	let genesis_output_path = format!("{}/genesis_output", &*genesis_dir);
 
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", &*all_personal_dir, user);
-	let get_key_paths = |user: &str| {
-		(
-			format!("{}.{}.share_key.secret", user, namespace),
-			format!("{}.{}.share_key.pub", user, namespace),
-		)
-	};
+	let get_key_paths =
+		|user: &str| (format!("{}.secret", user), format!("{}.pub", user));
 
 	let threshold = 2;
 	let user1 = "user1";
@@ -63,8 +58,6 @@ async fn genesis_e2e() {
 				"generate-share-key",
 				"--personal-dir",
 				&personal_dir(user),
-				"--namespace",
-				namespace,
 				"--alias",
 				user,
 			])
@@ -215,10 +208,10 @@ async fn genesis_e2e() {
 			.unwrap()
 			.success());
 
-		let share_key_path = Path::new(&personal_dir(user))
-			.join(format!("{}.{}.share_key.secret", user, namespace));
-		let share_path = Path::new(&personal_dir(user))
-			.join(format!("{}.{}.share", user, namespace));
+		let share_key_path =
+			Path::new(&personal_dir(user)).join(format!("{}.secret", user));
+		let share_path =
+			Path::new(&personal_dir(user)).join(format!("{}.share", user));
 		let share_key_pair = RsaPair::from_pem_file(share_key_path).unwrap();
 
 		// Check the share is encrypted to personal key

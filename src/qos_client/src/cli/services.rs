@@ -47,19 +47,15 @@ const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 	"DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
 
-pub(crate) fn generate_share_key<P: AsRef<Path>>(
-	alias: &str,
-	personal_dir: P,
-) {
+pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 	fs::create_dir_all(personal_dir.as_ref()).unwrap();
 
 	let share_key_pair =
 		RsaPair::generate().expect("RSA key generation failed");
 	// Write the personal key secret
 	// TODO: password encryption
-	let private_path = personal_dir
-		.as_ref()
-		.join(format!("{}.{}", alias, SECRET_EXT));
+	let private_path =
+		personal_dir.as_ref().join(format!("{}.{}", alias, SECRET_EXT));
 	write_with_msg(
 		&private_path,
 		&share_key_pair
@@ -69,9 +65,8 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(
 	);
 
 	// Write the setup key public key
-	let public_path = personal_dir
-		.as_ref()
-		.join(format!("{}.{}", alias, PUB_EXT));
+	let public_path =
+		personal_dir.as_ref().join(format!("{}.{}", alias, PUB_EXT));
 	write_with_msg(
 		&public_path,
 		&share_key_pair
@@ -162,10 +157,7 @@ fn create_genesis_set<P: AsRef<Path>>(
 		.filter_map(|path| {
 			let mut n = split_file_name(path);
 
-			if n.last().map_or(true, |s| s.as_str() != PUB_EXT)
-				|| n.get(n.len() - 2)
-					.map_or(true, |s| s.as_str() != "share_key")
-			{
+			if n.last().map_or(true, |s| s.as_str() != PUB_EXT) {
 				return None;
 			}
 
@@ -212,11 +204,8 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		qos_build_fingerprints.qos_commit
 	);
 
-	// Get the alias from the setup key file name
 	let alias = mem::take(&mut share_key_file_name[0]);
-	let namespace = mem::take(&mut share_key_file_name[1]);
-	drop(share_key_file_name);
-	println!("Alias: {}, Namespace: {}", alias, namespace);
+	println!("Alias: {}", alias);
 
 	// Read in the attestation doc from the genesis directory
 	let cose_sign1 =
@@ -271,9 +260,8 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	drop(plaintext_share);
 
 	// Store the encrypted share
-	let share_path = personal_dir
-		.as_ref()
-		.join(format!("{}.{}.{}", alias, namespace, SHARE_EXT));
+	let share_path =
+		personal_dir.as_ref().join(format!("{}.{}", alias, SHARE_EXT));
 	write_with_msg(
 		share_path.as_path(),
 		&member_output.encrypted_quorum_key_share,
@@ -435,7 +423,8 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 	);
 }
 
-// TODO: bubble up logging as errors in stead of printing in place to make it more clear where logging is happening
+// TODO: bubble up logging as errors in stead of printing in place to make it
+// more clear where logging is happening
 fn approve_manifest_programmatic_verifications(
 	manifest: &Manifest,
 	manifest_set: &ManifestSet,
@@ -774,7 +763,8 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
 }
 
-// TODO: bubble up logging as errors in stead of printing in place to make it more clear where logging is happening
+// TODO: bubble up logging as errors in stead of printing in place to make it
+// more clear where logging is happening
 fn proxy_re_encrypt_share_programmatic_verifications(
 	manifest_envelope: &ManifestEnvelope,
 	manifest_set: &ManifestSet,
@@ -1030,11 +1020,7 @@ fn find_share_key<P: AsRef<Path>>(personal_dir: P) -> (RsaPair, Vec<String>) {
 		.iter()
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT)
-				|| file_name
-					.get(file_name.len() - 2)
-					.map_or(true, |s| s.as_str() != "share_key")
-			{
+			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT) {
 				return None;
 			};
 

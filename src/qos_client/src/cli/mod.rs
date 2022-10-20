@@ -1139,10 +1139,7 @@ mod handlers {
 	}
 
 	pub(super) fn generate_share_key(opts: &ClientOpts) {
-		services::generate_share_key(
-			&opts.alias(),
-			opts.personal_dir(),
-		);
+		services::generate_share_key(&opts.alias(), opts.personal_dir());
 	}
 
 	// TODO: verify PCRs
