@@ -784,13 +784,15 @@ fn proxy_re_encrypt_share_programmatic_verifications(
 	member: &QuorumMember,
 ) -> bool {
 	// Check manifest signatures
-	if manifest_envelope.check_approvals().is_err() {
-		eprintln!("Manifest envelope did not have valid approvals");
+	if let Err(e) = manifest_envelope.check_approvals() {
+		eprintln!("Manifest envelope did not have valid approvals: {:?}", e);
 		return false;
 	};
 
 	if manifest_envelope.manifest.manifest_set != *manifest_set {
-		eprintln!("Manifest envelope did not have valid approvals");
+		eprintln!(
+			"Manifest's manifest set does not match locally found Manifest Set"
+		);
 		return false;
 	}
 
@@ -1470,16 +1472,20 @@ mod tests {
 	use std::vec;
 
 	use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
-	use qos_core::protocol::services::boot::{
-		Manifest, ManifestSet, Namespace, NitroConfig, PivotConfig,
-		QuorumMember, RestartPolicy, ShareSet,
+	use qos_core::protocol::{
+		services::boot::{
+			Approval, Manifest, ManifestEnvelope, ManifestSet, Namespace,
+			NitroConfig, PivotConfig, QuorumMember, RestartPolicy, ShareSet,
+		},
+		QosHash,
 	};
 	use qos_crypto::{RsaPair, RsaPub};
 
 	use super::{
 		approve_manifest_human_verifications,
-		approve_manifest_programmatic_verifications, PivotBuildFingerprints,
-		Prompter,
+		approve_manifest_programmatic_verifications,
+		proxy_re_encrypt_share_programmatic_verifications,
+		PivotBuildFingerprints, Prompter,
 	};
 
 	struct Setup {
@@ -1489,21 +1495,24 @@ mod tests {
 		nitro_config: NitroConfig,
 		pivot_build_fingerprints: PivotBuildFingerprints,
 		quorum_key: RsaPub,
+		manifest_envelope: ManifestEnvelope,
 	}
 	fn setup() -> Setup {
-		let members: Vec<_> = (0..3)
-			.map(|i| QuorumMember {
-				pub_key: RsaPair::generate()
-					.unwrap()
-					.public_key_to_der()
-					.unwrap(),
+		let pairs: Vec<_> =
+			(0..3).map(|_| RsaPair::generate().unwrap()).collect();
+
+		let members: Vec<_> = pairs
+			.iter()
+			.enumerate()
+			.map(|(i, pair)| QuorumMember {
+				pub_key: pair.public_key_to_der().unwrap(),
 				alias: i.to_string(),
 			})
 			.collect();
 
 		let manifest_set =
 			ManifestSet { members: members.clone(), threshold: 2 };
-		let share_set = ShareSet { members, threshold: 2 };
+		let share_set = ShareSet { members: members.clone(), threshold: 2 };
 		let nitro_config = NitroConfig {
 			pcr0: vec![1; 42],
 			pcr1: vec![2; 42],
@@ -1542,6 +1551,20 @@ mod tests {
 			enclave: nitro_config.clone(),
 		};
 
+		let manifest_envelope = ManifestEnvelope {
+			manifest: manifest.clone(),
+			manifest_set_approvals: std::iter::zip(
+				pairs[..2].iter(),
+				members.iter(),
+			)
+			.map(|(pair, member)| Approval {
+				signature: pair.sign_sha256(&manifest.qos_hash()).unwrap(),
+				member: member.clone(),
+			})
+			.collect(),
+			share_set_approvals: vec![],
+		};
+
 		Setup {
 			manifest,
 			manifest_set,
@@ -1549,6 +1572,7 @@ mod tests {
 			nitro_config,
 			pivot_build_fingerprints,
 			quorum_key,
+			manifest_envelope,
 		}
 	}
 
@@ -1564,6 +1588,7 @@ mod tests {
 				nitro_config,
 				pivot_build_fingerprints,
 				quorum_key,
+				..
 			} = setup();
 
 			assert!(approve_manifest_programmatic_verifications(
@@ -1585,6 +1610,7 @@ mod tests {
 				nitro_config,
 				pivot_build_fingerprints,
 				quorum_key,
+				..
 			} = setup();
 
 			manifest_set.members.get_mut(0).unwrap().alias =
@@ -1609,6 +1635,7 @@ mod tests {
 				nitro_config,
 				pivot_build_fingerprints,
 				quorum_key,
+				..
 			} = setup();
 
 			share_set.members.get_mut(0).unwrap().alias =
@@ -1633,6 +1660,7 @@ mod tests {
 				mut nitro_config,
 				pivot_build_fingerprints,
 				quorum_key,
+				..
 			} = setup();
 
 			nitro_config.pcr0 = vec![42; 42];
@@ -1656,6 +1684,7 @@ mod tests {
 				mut nitro_config,
 				pivot_build_fingerprints,
 				quorum_key,
+				..
 			} = setup();
 
 			nitro_config.pcr1 = vec![42; 42];
@@ -1679,6 +1708,7 @@ mod tests {
 				mut nitro_config,
 				pivot_build_fingerprints,
 				quorum_key,
+				..
 			} = setup();
 
 			nitro_config.pcr2 = vec![42; 42];
@@ -1702,6 +1732,7 @@ mod tests {
 				mut nitro_config,
 				pivot_build_fingerprints,
 				quorum_key,
+				..
 			} = setup();
 
 			nitro_config.pcr3 = vec![42; 42];
@@ -1725,6 +1756,7 @@ mod tests {
 				mut nitro_config,
 				pivot_build_fingerprints,
 				quorum_key,
+				..
 			} = setup();
 
 			nitro_config.qos_commit = "bad qos commit".to_string();
@@ -1748,6 +1780,7 @@ mod tests {
 				nitro_config,
 				mut pivot_build_fingerprints,
 				quorum_key,
+				..
 			} = setup();
 
 			pivot_build_fingerprints.pivot_hash = vec![42; 32];
@@ -1771,6 +1804,7 @@ mod tests {
 				nitro_config,
 				mut pivot_build_fingerprints,
 				quorum_key,
+				..
 			} = setup();
 
 			pivot_build_fingerprints.pivot_commit =
@@ -1920,5 +1954,116 @@ mod tests {
 			assert_eq!(output[4], "[\"--option1\", \"argument\"]?");
 			assert_eq!(output[5], "(yes/no)");
 		}
+	}
+
+	mod proxy_re_encrypt_share_programmatic_verifications {
+		use super::*;
+
+		#[test]
+		fn accepts_valid() {
+			let Setup { manifest_set, share_set, manifest_envelope, .. } =
+				setup();
+
+			let member = share_set.members[0].clone();
+			assert!(proxy_re_encrypt_share_programmatic_verifications(
+				&manifest_envelope,
+				&manifest_set,
+				&member
+			));
+		}
+
+		#[test]
+		fn rejects_invalid_approval() {
+			let Setup {
+				manifest_set, share_set, mut manifest_envelope, ..
+			} = setup();
+
+			manifest_envelope
+				.manifest_set_approvals
+				.get_mut(0)
+				.unwrap()
+				.signature = vec![0; 32];
+
+			let member = share_set.members[0].clone();
+			assert!(!proxy_re_encrypt_share_programmatic_verifications(
+				&manifest_envelope,
+				&manifest_set,
+				&member
+			));
+		}
+
+		#[test]
+		fn rejects_approval_from_member_not_part_of_manifest_set() {
+			let Setup {
+				manifest_set, share_set, mut manifest_envelope, ..
+			} = setup();
+
+			manifest_envelope
+				.manifest_set_approvals
+				.get_mut(0)
+				.unwrap()
+				.member
+				.alias = "yoloswag420blazeit".to_string();
+
+			let member = share_set.members[0].clone();
+			assert!(!proxy_re_encrypt_share_programmatic_verifications(
+				&manifest_envelope,
+				&manifest_set,
+				&member
+			));
+		}
+
+		#[test]
+		fn rejects_if_not_enough_approvals() {
+			let Setup {
+				manifest_set, share_set, mut manifest_envelope, ..
+			} = setup();
+
+			manifest_envelope.manifest_set_approvals.pop().unwrap();
+
+			let member = share_set.members[0].clone();
+			assert!(!proxy_re_encrypt_share_programmatic_verifications(
+				&manifest_envelope,
+				&manifest_set,
+				&member
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_manifest_sets() {
+			let Setup {
+				mut manifest_set, share_set, manifest_envelope, ..
+			} = setup();
+
+			manifest_set.members.push(QuorumMember {
+				alias: "got what plants need".to_string(),
+				pub_key: RsaPair::generate()
+					.unwrap()
+					.public_key_to_der()
+					.unwrap(),
+			});
+
+			let member = share_set.members[0].clone();
+			assert!(!proxy_re_encrypt_share_programmatic_verifications(
+				&manifest_envelope,
+				&manifest_set,
+				&member
+			));
+		}
+	}
+
+	mod proxy_re_encrypt_share_human_verifications {
+
+		#[test]
+		fn exits_early_bad_namespace_name() {}
+
+		#[test]
+		fn exits_early_bad_namespace_nonce() {}
+
+		#[test]
+		fn exits_early_bad_iam_role() {}
+
+		#[test]
+		fn exits_early_bad_manifest_set_members() {}
 	}
 }
