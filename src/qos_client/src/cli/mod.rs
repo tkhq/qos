@@ -732,6 +732,7 @@ impl Command {
 			.token(Self::personal_dir_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::manifest_set_dir_token())
+			.token(Self::manifest_dir_token())
 			.token(Self::alias_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
@@ -1219,6 +1220,7 @@ mod handlers {
 		services::proxy_re_encrypt_share(ProxyReEncryptShareArgs {
 			attestation_dir: opts.attestation_dir(),
 			personal_dir: opts.personal_dir(),
+			manifest_dir: opts.manifest_dir(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			alias: opts.alias(),
 			manifest_set_dir: opts.manifest_set_dir(),

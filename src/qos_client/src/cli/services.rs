@@ -560,7 +560,9 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(manifest_dir: P) {
 	let path = manifest_dir.as_ref().join(MANIFEST_ENVELOPE);
 	write_with_msg(
 		&path,
-		&manifest_envelope.try_to_vec().expect("Failed to serialize approval"),
+		&manifest_envelope
+			.try_to_vec()
+			.expect("Failed to serialize manifest envelope"),
 		"Manifest Approval",
 	);
 }
@@ -659,6 +661,7 @@ pub(crate) struct ProxyReEncryptShareArgs<P: AsRef<Path>> {
 	pub attestation_dir: P,
 	pub personal_dir: P, // TODO: replace this with just using yubikey to sign
 	pub pcr3_preimage_path: P,
+	pub manifest_dir: P,
 	pub manifest_set_dir: P,
 	pub alias: String,
 	pub unsafe_skip_attestation: bool,
@@ -676,17 +679,13 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		personal_dir,
 		pcr3_preimage_path,
 		manifest_set_dir,
+		manifest_dir,
 		alias,
 		unsafe_skip_attestation,
 		unsafe_eph_path_override,
 	}: ProxyReEncryptShareArgs<P>,
 ) {
-	// TODO:
-	// - manifest envelope should come from `namespaces` repo, not what is
-	// output by get attestation document.
-	// - boot standard should output a manifest envelope or we have another
-	// command that generates manifest envelope.
-	let manifest_envelope = find_manifest_envelope(&attestation_dir);
+	let manifest_envelope = find_manifest_envelope(&manifest_dir);
 	let attestation_doc =
 		find_attestation_doc(&attestation_dir, unsafe_skip_attestation);
 	let encrypted_share = find_share(&personal_dir);
@@ -777,13 +776,11 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
 }
 
-// TODO: check that the user is in
 fn proxy_re_encrypt_share_programmatic_verifications(
 	manifest_envelope: &ManifestEnvelope,
 	manifest_set: &ManifestSet,
 	member: &QuorumMember,
 ) -> bool {
-	// Check manifest signatures
 	if let Err(e) = manifest_envelope.check_approvals() {
 		eprintln!("Manifest envelope did not have valid approvals: {:?}", e);
 		return false;

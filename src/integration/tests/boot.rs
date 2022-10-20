@@ -295,7 +295,7 @@ async fn boot_e2e() {
 	// -- Make sure the enclave and host have time to boot
 	qos_test_primitives::wait_until_port_is_bound(host_port);
 
-	// -- CLIENT broadcast boot standard instruction
+	// -- CLIENT generate the manifest envelope
 	assert!(Command::new("../target/debug/qos_client")
 		.args(["generate-manifest-envelope", "--manifest-dir", &*boot_dir,])
 		.spawn()
@@ -353,6 +353,8 @@ async fn boot_e2e() {
 				"proxy-re-encrypt-share",
 				"--attestation-dir",
 				&*attestation_dir,
+				"--manifest-dir",
+				&*boot_dir,
 				"--personal-dir",
 				&personal_dir(user),
 				"--pcr3-preimage-path",
