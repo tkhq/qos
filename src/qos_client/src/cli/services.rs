@@ -52,6 +52,7 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 
 	let share_key_pair =
 		RsaPair::generate().expect("RSA key generation failed");
+
 	// Write the personal key secret
 	// TODO: password encryption
 	let private_path =

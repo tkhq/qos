@@ -82,6 +82,9 @@ async fn genesis_e2e() {
 		let to = Path::new(&*genesis_dir).join(public);
 		fs::copy(from, to).unwrap();
 	}
+	let quorum_threshold_path =
+		Path::new(&*genesis_dir).join("quorum_threshold");
+	fs::write(quorum_threshold_path, b"2\n").unwrap();
 
 	// -- ENCLAVE start enclave
 	let mut _enclave_child_process: ChildWrapper =
@@ -125,7 +128,7 @@ async fn genesis_e2e() {
 		.args([
 			"boot-genesis",
 			"--share-set-dir",
-			"./keys/share-set",
+			&*genesis_dir,
 			"--namespace-dir",
 			&*genesis_dir,
 			"--host-ip",
@@ -160,10 +163,9 @@ async fn genesis_e2e() {
 		.map(|member| {
 			let alias = &member.share_set_member.alias;
 			let (private_share_key, _) = get_key_paths(alias);
-			let share_pair = RsaPair::from_pem_file(
-				Path::new(&personal_dir(alias)).join(private_share_key),
-			)
-			.unwrap();
+			let share_key_path =
+				Path::new(&personal_dir(alias)).join(private_share_key);
+			let share_pair = RsaPair::from_pem_file(share_key_path).unwrap();
 
 			// Decrypt the share with the personal key
 			let plain_text_share = share_pair
