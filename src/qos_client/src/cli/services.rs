@@ -30,11 +30,10 @@ use qos_crypto::{sha_256, sha_384, RsaPair, RsaPub};
 use crate::request;
 
 const SECRET_EXT: &str = "secret";
+const PUB_EXT: &str = "pub";
 const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
 const GENESIS_OUTPUT_FILE: &str = "genesis_output";
 const SHARE_EXT: &str = "share";
-const SHARE_KEY_PUB_EXT: &str = "share_key.pub";
-const SHARE_KEY_PRIV_EXT: &str = "share_key.secret";
 const MANIFEST_EXT: &str = "manifest";
 const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
@@ -43,26 +42,20 @@ const EPH_WRAPPED_SHARE_FILE: &str = "ephemeral_key_wrapped.share";
 const ATTESTATION_APPROVAL_FILE: &str = "attestation_approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
 const QUORUM_KEY: &str = "quorum_key";
-const PUB_EXT: &str = "pub";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 	"DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
 
-pub(crate) fn generate_share_key<P: AsRef<Path>>(
-	alias: &str,
-	namespace: &str,
-	personal_dir: P,
-) {
+pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 	fs::create_dir_all(personal_dir.as_ref()).unwrap();
 
 	let share_key_pair =
 		RsaPair::generate().expect("RSA key generation failed");
 	// Write the personal key secret
 	// TODO: password encryption
-	let private_path = personal_dir
-		.as_ref()
-		.join(format!("{}.{}.{}", alias, namespace, SHARE_KEY_PRIV_EXT));
+	let private_path =
+		personal_dir.as_ref().join(format!("{}.{}", alias, SECRET_EXT));
 	write_with_msg(
 		&private_path,
 		&share_key_pair
@@ -72,9 +65,8 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(
 	);
 
 	// Write the setup key public key
-	let public_path = personal_dir
-		.as_ref()
-		.join(format!("{}.{}.{}", alias, namespace, SHARE_KEY_PUB_EXT));
+	let public_path =
+		personal_dir.as_ref().join(format!("{}.{}", alias, PUB_EXT));
 	write_with_msg(
 		&public_path,
 		&share_key_pair
@@ -165,10 +157,7 @@ fn create_genesis_set<P: AsRef<Path>>(
 		.filter_map(|path| {
 			let mut n = split_file_name(path);
 
-			if n.last().map_or(true, |s| s.as_str() != PUB_EXT)
-				|| n.get(n.len() - 2)
-					.map_or(true, |s| s.as_str() != "share_key")
-			{
+			if n.last().map_or(true, |s| s.as_str() != PUB_EXT) {
 				return None;
 			}
 
@@ -215,11 +204,8 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		qos_build_fingerprints.qos_commit
 	);
 
-	// Get the alias from the setup key file name
 	let alias = mem::take(&mut share_key_file_name[0]);
-	let namespace = mem::take(&mut share_key_file_name[1]);
-	drop(share_key_file_name);
-	println!("Alias: {}, Namespace: {}", alias, namespace);
+	println!("Alias: {}", alias);
 
 	// Read in the attestation doc from the genesis directory
 	let cose_sign1 =
@@ -274,9 +260,8 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	drop(plaintext_share);
 
 	// Store the encrypted share
-	let share_path = personal_dir
-		.as_ref()
-		.join(format!("{}.{}.{}", alias, namespace, SHARE_EXT));
+	let share_path =
+		personal_dir.as_ref().join(format!("{}.{}", alias, SHARE_EXT));
 	write_with_msg(
 		share_path.as_path(),
 		&member_output.encrypted_quorum_key_share,
@@ -438,6 +423,8 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 	);
 }
 
+// TODO: bubble up logging as errors in stead of printing in place to make it
+// more clear where logging is happening
 fn approve_manifest_programmatic_verifications(
 	manifest: &Manifest,
 	manifest_set: &ManifestSet,
@@ -776,6 +763,8 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
 }
 
+// TODO: bubble up logging as errors in stead of printing in place to make it
+// more clear where logging is happening
 fn proxy_re_encrypt_share_programmatic_verifications(
 	manifest_envelope: &ManifestEnvelope,
 	manifest_set: &ManifestSet,
@@ -1031,11 +1020,7 @@ fn find_share_key<P: AsRef<Path>>(personal_dir: P) -> (RsaPair, Vec<String>) {
 		.iter()
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT)
-				|| file_name
-					.get(file_name.len() - 2)
-					.map_or(true, |s| s.as_str() != "share_key")
-			{
+			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT) {
 				return None;
 			};
 
