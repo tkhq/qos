@@ -196,7 +196,7 @@ async fn genesis_e2e() {
 				"after-genesis",
 				"--personal-dir",
 				&personal_dir(user),
-				"--genesis-dir",
+				"--namespace-dir",
 				&*genesis_dir,
 				"--qos-build-fingerprints",
 				"./mock/qos-build-fingerprints.txt",

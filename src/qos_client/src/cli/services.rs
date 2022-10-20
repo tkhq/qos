@@ -96,6 +96,10 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		} => (document, genesis_output),
 		r => panic!("Unexpected response: {:?}", r),
 	};
+	let quorum_key = RsaPub::from_der(&genesis_output.quorum_key)
+		.unwrap()
+		.public_key_to_pem()
+		.unwrap();
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
 
@@ -145,19 +149,23 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		&genesis_output.try_to_vec().unwrap(),
 		"`GenesisOutput`",
 	);
+
+	// Write the quorum public key
+	let quorum_key_path = namespace_dir.as_ref().join("quorum_key.pub");
+	write_with_msg(&quorum_key_path, &quorum_key, "quorum_key.pub");
 }
 
 /// TODO: verify pcr3
 pub(crate) fn after_genesis<P: AsRef<Path>>(
-	genesis_dir: P,
+	namespace_dir: P,
 	personal_dir: P,
 	qos_build_fingerprints_path: P,
 	pcr3_preimage_path: P,
 	unsafe_skip_attestation: bool,
 ) {
 	let attestation_doc_path =
-		genesis_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
-	let genesis_set_path = genesis_dir.as_ref().join(GENESIS_OUTPUT_FILE);
+		namespace_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
+	let genesis_set_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 
 	// Read in the setup key
 	let (share_key_pair, mut share_key_file_name) =

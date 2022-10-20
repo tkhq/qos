@@ -664,7 +664,7 @@ impl Command {
 
 	fn after_genesis() -> Parser {
 		Parser::new()
-			.token(Self::genesis_dir_token())
+			.token(Self::namespace_dir_token())
 			.token(Self::personal_dir_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
@@ -1141,7 +1141,7 @@ mod handlers {
 
 	pub(super) fn after_genesis(opts: &ClientOpts) {
 		services::after_genesis(
-			opts.genesis_dir(),
+			opts.namespace_dir(),
 			opts.personal_dir(),
 			opts.qos_build_fingerprints(),
 			opts.pcr3_preimage_path(),
