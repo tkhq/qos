@@ -155,7 +155,6 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	write_with_msg(&quorum_key_path, &quorum_key, "quorum_key.pub");
 }
 
-/// TODO: verify pcr3
 pub(crate) fn after_genesis<P: AsRef<Path>>(
 	namespace_dir: P,
 	personal_dir: P,
