@@ -52,6 +52,7 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 
 	let share_key_pair =
 		RsaPair::generate().expect("RSA key generation failed");
+
 	// Write the personal key secret
 	// TODO: password encryption
 	let private_path =
@@ -79,13 +80,13 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 // TODO: verify PCR3
 pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	uri: &str,
-	genesis_dir: P,
-	threshold: u32,
+	namespace_dir: P,
+	share_set_dir: P,
 	qos_build_fingerprints_path: P,
 	pcr3_preimage_path: P,
 	unsafe_skip_attestation: bool,
 ) {
-	let genesis_set = create_genesis_set(&genesis_dir, threshold);
+	let genesis_set = get_genesis_set(&share_set_dir);
 
 	let req = ProtocolMsg::BootGenesisRequest { set: genesis_set.clone() };
 	let (cose_sign1, genesis_output) = match request::post(uri, &req).unwrap() {
@@ -95,6 +96,10 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		} => (document, genesis_output),
 		r => panic!("Unexpected response: {:?}", r),
 	};
+	let quorum_key = RsaPub::from_der(&genesis_output.quorum_key)
+		.unwrap()
+		.public_key_to_pem()
+		.unwrap();
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
 
@@ -130,7 +135,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 
 	// Write the attestation doc
 	let attestation_doc_path =
-		genesis_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
+		namespace_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
 	write_with_msg(
 		&attestation_doc_path,
 		&cose_sign1,
@@ -138,59 +143,28 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	);
 
 	// Write the genesis output
-	let genesis_output_path = genesis_dir.as_ref().join(GENESIS_OUTPUT_FILE);
+	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	write_with_msg(
 		&genesis_output_path,
 		&genesis_output.try_to_vec().unwrap(),
 		"`GenesisOutput`",
 	);
+
+	// Write the quorum public key
+	let quorum_key_path = namespace_dir.as_ref().join("quorum_key.pub");
+	write_with_msg(&quorum_key_path, &quorum_key, "quorum_key.pub");
 }
 
-fn create_genesis_set<P: AsRef<Path>>(
-	genesis_dir: P,
-	threshold: u32,
-) -> GenesisSet {
-	// Assemble the genesis members from all the public keys in the key
-	// directory
-	let members: Vec<_> = find_file_paths(&genesis_dir)
-		.iter()
-		.filter_map(|path| {
-			let mut n = split_file_name(path);
-
-			if n.last().map_or(true, |s| s.as_str() != PUB_EXT) {
-				return None;
-			}
-
-			let public_key = RsaPub::from_pem_file(&path)
-				.expect("Failed to read in rsa pub key.");
-			Some(QuorumMember {
-				alias: mem::take(&mut n[0]),
-				pub_key: public_key.public_key_to_der().unwrap(),
-			})
-		})
-		.collect();
-
-	println!("Threshold: {}", threshold);
-	println!("N: {}", members.len());
-	println!("Members:");
-	for member in &members {
-		println!("  Alias: {}", member.alias);
-	}
-
-	GenesisSet { members, threshold }
-}
-
-/// TODO: verify pcr3
 pub(crate) fn after_genesis<P: AsRef<Path>>(
-	genesis_dir: P,
+	namespace_dir: P,
 	personal_dir: P,
 	qos_build_fingerprints_path: P,
 	pcr3_preimage_path: P,
 	unsafe_skip_attestation: bool,
 ) {
 	let attestation_doc_path =
-		genesis_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
-	let genesis_set_path = genesis_dir.as_ref().join(GENESIS_OUTPUT_FILE);
+		namespace_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
+	let genesis_set_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 
 	// Read in the setup key
 	let (share_key_pair, mut share_key_file_name) =
@@ -279,7 +253,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub share_set_dir: P,
 	pub manifest_set_dir: P,
 	pub namespace_dir: P,
-	pub boot_dir: P,
+	pub manifest_dir: P,
 	pub pivot_args: Vec<String>,
 }
 
@@ -294,7 +268,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		manifest_set_dir,
 		share_set_dir,
 		namespace_dir,
-		boot_dir,
+		manifest_dir,
 		pivot_args,
 	} = args;
 
@@ -327,8 +301,9 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		enclave: nitro_config,
 	};
 
-	fs::create_dir_all(&boot_dir).expect("Failed to created boot dir");
-	let manifest_path = boot_dir
+	fs::create_dir_all(&manifest_dir)
+		.expect("Failed to created manifest_dir dir");
+	let manifest_path = manifest_dir
 		.as_ref()
 		.join(format!("{}.{}.{}", namespace, nonce, MANIFEST_EXT));
 	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");
@@ -1147,6 +1122,31 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 	members.sort();
 
 	ManifestSet { members, threshold: find_threshold(dir) }
+}
+
+fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
+	let mut members: Vec<_> = find_file_paths(&dir)
+		.iter()
+		.filter_map(|path| {
+			let mut file_name = split_file_name(path);
+			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+				return None;
+			};
+
+			let public = RsaPub::from_pem_file(path).unwrap_or_else(|_| {
+				panic!("Could not read PEM from share_key.pub: {:?}.", path)
+			});
+			Some(QuorumMember {
+				alias: mem::take(&mut file_name[0]),
+				pub_key: public.public_key_to_der().unwrap(),
+			})
+		})
+		.collect();
+
+	// We want to try and build the same manifest regardless of the OS.
+	members.sort();
+
+	GenesisSet { members, threshold: find_threshold(dir) }
 }
 
 fn find_approvals<P: AsRef<Path>>(

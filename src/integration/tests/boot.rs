@@ -84,7 +84,7 @@ async fn boot_e2e() {
 			"./mock/qos-build-fingerprints.txt",
 			"--pcr3-preimage-path",
 			"./mock/namespaces/pcr3-preimage.txt",
-			"--boot-dir",
+			"--manifest-dir",
 			&*boot_dir,
 			"--pivot-args",
 			&pivot_args,
@@ -239,10 +239,9 @@ async fn boot_e2e() {
 			Approval::try_from_slice(&fs::read(approval_path).unwrap())
 				.unwrap();
 		let personal_pair = RsaPair::from_pem_file(&format!(
-			"{}/{}.{}.share_key.secret",
+			"{}/{}.secret",
 			personal_dir(alias),
 			alias,
-			namespace
 		))
 		.unwrap();
 

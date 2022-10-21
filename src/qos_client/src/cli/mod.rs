@@ -358,12 +358,9 @@ const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ALIAS: &str = "alias";
 const NAMESPACE: &str = "namespace";
-const THRESHOLD: &str = "threshold";
 const NONCE: &str = "nonce";
 const RESTART_POLICY: &str = "restart-policy";
 const PIVOT_PATH: &str = "pivot-path";
-const GENESIS_DIR: &str = "genesis-dir";
-const BOOT_DIR: &str = "boot-dir";
 const PERSONAL_DIR: &str = "personal-dir";
 const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
@@ -502,21 +499,8 @@ impl From<String> for Command {
 }
 
 impl Command {
-	fn boot_dir_token() -> Token {
-		Token::new(
-			BOOT_DIR,
-			"Directory (eventually) containing the manifest, K approvals, and attestation doc.",
-		)
-		.takes_value(true)
-		.required(true)
-	}
 	fn personal_dir_token() -> Token {
 		Token::new(PERSONAL_DIR, "Directory (eventually) containing personal key, share, and setup key associated with 1 genesis ceremony.")
-			.takes_value(true)
-			.required(true)
-	}
-	fn genesis_dir_token() -> Token {
-		Token::new(GENESIS_DIR, "Directory (eventually) containing genesis output, setup public keys, and attestation doc.")
 			.takes_value(true)
 			.required(true)
 	}
@@ -656,22 +640,16 @@ impl Command {
 
 	fn boot_genesis() -> Parser {
 		Self::base()
-			.token(Self::genesis_dir_token())
-			.token(
-				Token::new(THRESHOLD, "Threshold, K, for having a quorum. K shares will reconstruct the Quorum key and K signatures are considered a quorum")
-				.required(true)
-				.takes_value(true)
-			)
-			.token(
-				Self::pcr3_preimage_path_token()
-			)
+			.token(Self::namespace_dir_token())
+			.token(Self::share_set_dir_token())
+			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::qos_build_fingerprints_token())
 	}
 
 	fn after_genesis() -> Parser {
 		Parser::new()
-			.token(Self::genesis_dir_token())
+			.token(Self::namespace_dir_token())
 			.token(Self::personal_dir_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
@@ -693,7 +671,7 @@ impl Command {
 			.token(Self::restart_policy_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
-			.token(Self::boot_dir_token())
+			.token(Self::manifest_dir_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
 			.token(Self::namespace_dir_token())
@@ -809,23 +787,11 @@ impl ClientOpts {
 		self.parsed.single(NAMESPACE).expect("required arg").to_string()
 	}
 
-	fn genesis_dir(&self) -> String {
-		self.parsed.single(GENESIS_DIR).expect("required arg").to_string()
-	}
-
 	fn pcr3_preimage_path(&self) -> String {
 		self.parsed
 			.single(PCR3_PREIMAGE_PATH)
 			.expect("`--pcr3-preimage-path` is a required arg")
 			.to_string()
-	}
-
-	fn threshold(&self) -> u32 {
-		self.parsed
-			.single(THRESHOLD)
-			.expect("required arg")
-			.parse::<u32>()
-			.expect("Could not parse `--threshold` as u32")
 	}
 
 	fn nonce(&self) -> u32 {
@@ -847,10 +813,6 @@ impl ClientOpts {
 
 	fn pivot_path(&self) -> String {
 		self.parsed.single(PIVOT_PATH).expect("required arg").to_string()
-	}
-
-	fn boot_dir(&self) -> String {
-		self.parsed.single(BOOT_DIR).expect("required arg").to_string()
 	}
 
 	fn personal_dir(&self) -> String {
@@ -1146,8 +1108,8 @@ mod handlers {
 	pub(super) fn boot_genesis(opts: &ClientOpts) {
 		services::boot_genesis(
 			&opts.path_message(),
-			opts.genesis_dir(),
-			opts.threshold(),
+			opts.namespace_dir(),
+			opts.share_set_dir(),
 			opts.qos_build_fingerprints(),
 			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
@@ -1156,7 +1118,7 @@ mod handlers {
 
 	pub(super) fn after_genesis(opts: &ClientOpts) {
 		services::after_genesis(
-			opts.genesis_dir(),
+			opts.namespace_dir(),
 			opts.personal_dir(),
 			opts.qos_build_fingerprints(),
 			opts.pcr3_preimage_path(),
@@ -1172,7 +1134,7 @@ mod handlers {
 			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
-			boot_dir: opts.boot_dir(),
+			manifest_dir: opts.manifest_dir(),
 			pivot_args: opts.pivot_args(),
 			share_set_dir: opts.share_set_dir(),
 			manifest_set_dir: opts.manifest_set_dir(),
