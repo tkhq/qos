@@ -254,7 +254,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub share_set_dir: P,
 	pub manifest_set_dir: P,
 	pub namespace_dir: P,
-	pub boot_dir: P,
+	pub manifest_dir: P,
 	pub pivot_args: Vec<String>,
 }
 
@@ -269,7 +269,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		manifest_set_dir,
 		share_set_dir,
 		namespace_dir,
-		boot_dir,
+		manifest_dir,
 		pivot_args,
 	} = args;
 
@@ -302,8 +302,9 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		enclave: nitro_config,
 	};
 
-	fs::create_dir_all(&boot_dir).expect("Failed to created boot dir");
-	let manifest_path = boot_dir
+	fs::create_dir_all(&manifest_dir)
+		.expect("Failed to created manifest_dir dir");
+	let manifest_path = manifest_dir
 		.as_ref()
 		.join(format!("{}.{}.{}", namespace, nonce, MANIFEST_EXT));
 	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");

@@ -361,7 +361,6 @@ const NAMESPACE: &str = "namespace";
 const NONCE: &str = "nonce";
 const RESTART_POLICY: &str = "restart-policy";
 const PIVOT_PATH: &str = "pivot-path";
-const BOOT_DIR: &str = "boot-dir";
 const PERSONAL_DIR: &str = "personal-dir";
 const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
@@ -500,14 +499,6 @@ impl From<String> for Command {
 }
 
 impl Command {
-	fn boot_dir_token() -> Token {
-		Token::new(
-			BOOT_DIR,
-			"Directory (eventually) containing the manifest, K approvals, and attestation doc.",
-		)
-		.takes_value(true)
-		.required(true)
-	}
 	fn personal_dir_token() -> Token {
 		Token::new(PERSONAL_DIR, "Directory (eventually) containing personal key, share, and setup key associated with 1 genesis ceremony.")
 			.takes_value(true)
@@ -680,7 +671,7 @@ impl Command {
 			.token(Self::restart_policy_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
-			.token(Self::boot_dir_token())
+			.token(Self::manifest_dir_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
 			.token(Self::namespace_dir_token())
@@ -822,10 +813,6 @@ impl ClientOpts {
 
 	fn pivot_path(&self) -> String {
 		self.parsed.single(PIVOT_PATH).expect("required arg").to_string()
-	}
-
-	fn boot_dir(&self) -> String {
-		self.parsed.single(BOOT_DIR).expect("required arg").to_string()
 	}
 
 	fn personal_dir(&self) -> String {
@@ -1147,7 +1134,7 @@ mod handlers {
 			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
-			boot_dir: opts.boot_dir(),
+			manifest_dir: opts.manifest_dir(),
 			pivot_args: opts.pivot_args(),
 			share_set_dir: opts.share_set_dir(),
 			manifest_set_dir: opts.manifest_set_dir(),

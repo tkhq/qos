@@ -84,7 +84,7 @@ async fn boot_e2e() {
 			"./mock/qos-build-fingerprints.txt",
 			"--pcr3-preimage-path",
 			"./mock/namespaces/pcr3-preimage.txt",
-			"--boot-dir",
+			"--manifest-dir",
 			&*boot_dir,
 			"--pivot-args",
 			&pivot_args,
