@@ -902,6 +902,7 @@ dependencies = [
  "qos_hex",
  "rand",
  "rand_core",
+ "sha2",
 ]
 
 [[package]]

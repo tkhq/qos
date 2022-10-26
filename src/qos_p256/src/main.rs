@@ -5,6 +5,7 @@ use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use p256::{ecdh::EphemeralSecret, EncodedPoint, PublicKey};
 use rand::prelude::*;
 use rand_core::OsRng;
+use sha2::Digest;
 
 type Aes256Cbc = Cbc<Aes256, Pkcs7>;
 
@@ -30,9 +31,9 @@ fn main() {
 	let bob_shared_secret = bob_private.diffie_hellman(&alice_public);
 
 	// Bob generates a shared AES key from this shared secret with the shared IV
-	let bob_shared_key = bob_shared_secret.raw_secret_bytes();
+	let bob_shared_key = sha2::Sha512::digest(bob_shared_secret.raw_secret_bytes()).to_vec();
 	let bob_shared_cipher =
-		Aes256Cbc::new_from_slices(bob_shared_key, &iv).unwrap();
+		Aes256Cbc::new_from_slices(&bob_shared_key[..32], &iv).unwrap();
 
 	// Bob encrypts a secret to Alice with the shared AES key
 	let message_str = String::from("Secret message");
@@ -47,9 +48,9 @@ fn main() {
 
 	// Alice generates the same AES key as Bob from this shared secret and the
 	// shared IV
-	let alice_shared_key = alice_shared_secret.raw_secret_bytes();
+	let alice_shared_key = sha2::Sha512::digest(alice_shared_secret.raw_secret_bytes()).to_vec();
 	let alice_shared_cipher =
-		Aes256Cbc::new_from_slices(alice_shared_key, &iv).unwrap();
+		Aes256Cbc::new_from_slices(&alice_shared_key[..32], &iv).unwrap();
 
 	// Alice decrypts Bob's message
 	let mut encrypted_message_vec = encrypted_message.to_vec();
