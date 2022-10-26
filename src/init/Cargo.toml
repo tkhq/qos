@@ -4,11 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-qos_core = { path = "../qos_core", features = ["vm"], default-features = false }
-
 libc = "0.2.134"
-nsm_lib = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", branch = "main", package="nsm-lib", optional = false }
-nsm_api = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", branch = "main", package="aws-nitro-enclaves-nsm-api", optional = false }
+aws = { path = "../aws"}
+system = { path = "../system"}
+
 
 [[bin]]
 name = "init"
