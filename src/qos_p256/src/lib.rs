@@ -12,6 +12,7 @@ use sha2::Digest;
 
 const AES256_KEY_LEN: usize = 32;
 
+// Helper function to create the `Aes256Gcm` cypher.
 fn create_cipher(private: &EphemeralSecret, public: &PublicKey) -> Aes256Gcm {
 	let shared_secret = private.diffie_hellman(public);
 	let shared_key = sha2::Sha512::digest(shared_secret.raw_secret_bytes());
@@ -22,10 +23,11 @@ fn create_cipher(private: &EphemeralSecret, public: &PublicKey) -> Aes256Gcm {
 	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, Clone, PartialEq,
 )]
 struct Envelope {
+	/// Nonce
 	nonce: Vec<u8>,
 	/// Public key as sec1 encoded point with no compression
 	ephemeral_public: Vec<u8>,
-	/// The data encrypted to the symmetrical key
+	/// The data encrypted with an AES 256 GCM cipher.
 	encrypted_message: Vec<u8>,
 }
 
@@ -61,6 +63,7 @@ pub struct P256Public {
 
 impl P256Public {
 	// TODO: make this fallible and remove panics.
+	/// Encrypt a message to this public key.
 	pub fn encrypt(&self, message: &[u8]) -> Vec<u8> {
 		let ephemeral_private = EphemeralSecret::random(&mut OsRng);
 		let ephemeral_public = ephemeral_private.public_key();
@@ -80,7 +83,8 @@ impl P256Public {
 			encrypted_message,
 			nonce: nonce.to_vec(),
 			ephemeral_public: ephemeral_public
-				// TODO: Can we do compression? Does it matter?
+				// TODO: Should we do compression? Is there a better way to
+				// serialize the public key.
 				.to_encoded_point(false)
 				.as_ref()
 				.to_vec(),
