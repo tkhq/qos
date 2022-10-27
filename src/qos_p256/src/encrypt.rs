@@ -1,4 +1,5 @@
 //! Abstractions for encryption.
+
 use aes_gcm::{
 	aead::{Aead, KeyInit, Payload},
 	Aes256Gcm, Nonce,

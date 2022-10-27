@@ -6,6 +6,7 @@
 #![allow(clippy::missing_errors_doc)]
 
 pub mod encrypt;
+pub mod sign;
 
 /// Errors for qos P256.
 #[derive(Debug, PartialEq)]
@@ -27,4 +28,11 @@ pub enum P256Error {
 	FailedToCoercePublicKeyToIntendedLength,
 	/// Nonce could not be coerced into the intended length.
 	FailedToCoerceNonceToIntendedLength,
+	/// Signature could not be de-serialized as DER encoded.
+	FailedToDeserializeSignatureAsDer,
+	/// The signature could not be verified against the given message and
+	/// public key.
+	FailedSignatureVerification,
+	/// Could not deserialize a public key as `SEC1` encoded.
+	FailedToDeserializePublicKeyFromSec1,
 }
