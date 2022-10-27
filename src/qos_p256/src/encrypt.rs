@@ -159,6 +159,7 @@ impl P256EncryptPublic {
 	// TODO: from der/sec1 etc
 }
 
+// Types for helper function parameters to help prevent fat finger mistakes.
 struct SenderPublic<'a>(&'a [u8]);
 struct ReceiverPublic<'a>(&'a [u8]);
 
