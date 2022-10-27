@@ -100,19 +100,13 @@ impl P256Public {
 	// TODO: from der/sec1 etc
 }
 
-impl From<&P256Pair> for P256Public {
-	fn from(pair: &P256Pair) -> Self {
-		pair.public_key()
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 	#[test]
 	fn basic_encrypt_decrypt() {
 		let alice_pair = P256Pair::generate();
-		let alice_public = P256Public::from(&alice_pair);
+		let alice_public = alice_pair.public_key();
 
 		let plaintext = b"rust test message";
 
@@ -122,4 +116,6 @@ mod tests {
 
 		assert_eq!(decrypted, plaintext);
 	}
+
+	// What other edge cases should we test for?
 }
