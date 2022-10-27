@@ -61,10 +61,10 @@ toolchain-update:
 # Source anything required from the internet to build
 .PHONY: fetch
 fetch: \
-	keys \
+	$(CACHE_DIR)/$(TARGET) \
 	$(OUT_DIR)/$(TARGET) \
 	$(OUT_DIR)/toolchain.tar \
-	$(CACHE_DIR) \
+	keys \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign \
 	$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2 \
@@ -126,8 +126,8 @@ endef
 $(OUT_DIR)/$(TARGET):
 	mkdir -p $(OUT_DIR)/$(TARGET)
 
-$(CACHE_DIR):
-	mkdir -p $(CACHE_DIR)
+$(CACHE_DIR)/$(TARGET):
+	mkdir -p $(CACHE_DIR)/$(TARGET)
 
 
 $(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD:
@@ -283,12 +283,12 @@ $(OUT_DIR)/$(TARGET)/rootfs.cpio: \
 	$(OUT_DIR)/init \
 	$(OUT_DIR)/aws/nsm.ko \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio
+	mkdir -p $(CACHE_DIR)/$(TARGET)/rootfs
 	cp $(CONFIG_DIR)/$(TARGET)/rootfs.list $(CACHE_DIR)/$(TARGET)/rootfs.list
 	cp $(OUT_DIR)/init $(CACHE_DIR)/$(TARGET)/rootfs/init
 ifeq ($(DEBUG), true)
 	mv $(CACHE_DIR)/$(TARGET)/rootfs/init $(CACHE_DIR)/$(TARGET)/rootfs/real_init
 	cp $(SRC_DIR)/scripts/busybox_init $(CACHE_DIR)/$(TARGET)/rootfs/init
-	mkdir -p $(CACHE_DIR)/$(TARGET)/rootfs/bin
 	cp $(OUT_DIR)/busybox $(CACHE_DIR)/$(TARGET)/rootfs/bin/
 	echo "file /bin/busybox /cache/rootfs/bin/busybox 0755 0 0" \
 		>> $(CACHE_DIR)/$(TARGET)/rootfs.list
@@ -306,7 +306,7 @@ endif
 	")
 
 $(OUT_DIR)/$(TARGET)/bzImage: \
-	$(OUT_DIR)/$(TARGET)/rootfs.cpio
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)
 	$(call toolchain,$(USER)," \
 		cd /cache/linux-$(LINUX_VERSION) && \
 		cp /config/$(TARGET)/linux.config .config && \
@@ -327,6 +327,7 @@ ifeq ($(TARGET), aws)
 endif
 
 $(OUT_DIR)/aws/nsm.ko: \
+	$(OUT_DIR)/$(TARGET)/bzImage \
 	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD
 ifeq ($(TARGET), aws)
 	$(call toolchain,$(USER)," \
