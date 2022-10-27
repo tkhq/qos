@@ -141,8 +141,6 @@ impl P256EncryptPublic {
 		);
 		let payload = Payload { aad: &aad, msg: message };
 
-		// TODO: use nonce||ephemeral_public as authenticated data .. although
-		// doesn't seem strictly necessary
 		let encrypted_message = cipher
 			.encrypt(&nonce, payload)
 			.map_err(|_| P256Error::AesGcm256EncryptError)?;
@@ -156,7 +154,6 @@ impl P256EncryptPublic {
 
 		envelope.try_to_vec().map_err(|_| P256Error::FailedToSerializeEnvelope)
 	}
-	// TODO: from der/sec1 etc
 }
 
 // Types for helper function parameters to help prevent fat finger mistakes.
@@ -328,6 +325,4 @@ mod tests {
 			P256Error::FailedToDeserializeEnvelope
 		);
 	}
-
-	// What other edge cases should we test for?
 }
