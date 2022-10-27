@@ -1,17 +1,18 @@
 //! Abstractions for encryption.
-
 use aes_gcm::{
-	aead::{Aead, KeyInit},
+	aead::{Aead, KeyInit, Payload},
 	Aes256Gcm, Nonce,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use p256::{
-	ecdh::EphemeralSecret, elliptic_curve::sec1::ToEncodedPoint, PublicKey,
+	ecdh::EphemeralSecret,
+	elliptic_curve::{sec1::ToEncodedPoint, zeroize::Zeroize},
+	PublicKey,
 };
-use p256::elliptic_curve::zeroize::Zeroize;
 use rand::Rng;
 use rand_core::OsRng;
 use sha2::Digest;
+
 use crate::P256Error;
 
 const AES256_KEY_LEN: usize = 32;
@@ -24,7 +25,7 @@ struct Envelope {
 	/// Nonce used as an input to the cipher.
 	nonce: [u8; BITS_96_AS_BYTES],
 	/// Public key as sec1 encoded point with no compression
-	ephemeral_public: [u8; PUB_KEY_LEN_UNCOMPRESSED],
+	ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED],
 	/// The data encrypted with an AES 256 GCM cipher.
 	encrypted_message: Vec<u8>,
 }
@@ -46,18 +47,40 @@ impl P256EncryptPair {
 		&self,
 		serialized_envelope: &[u8],
 	) -> Result<Vec<u8>, P256Error> {
-		let Envelope { nonce, ephemeral_public, encrypted_message } =
-			Envelope::try_from_slice(serialized_envelope)
-				.map_err(|_| P256Error::InvalidEnvelope)?;
+		let Envelope {
+			nonce,
+			ephemeral_sender_public: ephemeral_sender_public_bytes,
+			encrypted_message,
+		} = Envelope::try_from_slice(serialized_envelope)
+			.map_err(|_| P256Error::InvalidEnvelope)?;
 
 		let nonce = Nonce::from_slice(&nonce);
-		let ephemeral_public = PublicKey::from_sec1_bytes(&ephemeral_public)
-			.map_err(|_| P256Error::FailedToDeserializePublicKey)?;
+		let ephemeral_sender_public =
+			PublicKey::from_sec1_bytes(&ephemeral_sender_public_bytes)
+				.map_err(|_| P256Error::FailedToDeserializePublicKey)?;
 
-		let cipher = create_cipher(&self.private, &ephemeral_public)?;
+		let sender_public_typed = SenderPublic(&ephemeral_sender_public_bytes);
+		let receiver_encoded_point =
+			self.private.public_key().to_encoded_point(false);
+		let receiver_public_typed =
+			ReceiverPublic(receiver_encoded_point.as_ref());
+
+		let cipher = create_cipher(
+			&self.private,
+			&ephemeral_sender_public,
+			&sender_public_typed,
+			&receiver_public_typed,
+		)?;
+
+		let aad = create_additional_associated_data(
+			&sender_public_typed,
+			&receiver_public_typed,
+			nonce.as_ref(),
+		);
+		let payload = Payload { aad: &aad, msg: &encrypted_message };
 
 		cipher
-			.decrypt(nonce, &*encrypted_message)
+			.decrypt(nonce, payload)
 			.map_err(|_| P256Error::AesGcm256DecryptError)
 	}
 
@@ -70,7 +93,7 @@ impl P256EncryptPair {
 
 impl Drop for P256EncryptPair {
 	fn drop(&mut self) {
-		self.private.zeroize()
+		self.private.zeroize();
 	}
 }
 
@@ -82,10 +105,28 @@ pub struct P256EncryptPublic {
 impl P256EncryptPublic {
 	/// Encrypt a message to this public key.
 	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
-		let ephemeral_private = EphemeralSecret::random(&mut OsRng);
-		let ephemeral_public = ephemeral_private.public_key();
+		let ephemeral_sender_private = EphemeralSecret::random(&mut OsRng);
+		let ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED] =
+			ephemeral_sender_private
+				.public_key()
+				.to_encoded_point(false)
+				.as_ref()
+				.try_into()
+				.map_err(|_| {
+					P256Error::FailedToCoercePublicKeyToIntendedLength
+				})?;
 
-		let cipher = create_cipher(&ephemeral_private, &self.public)?;
+		let sender_public_typed = SenderPublic(&ephemeral_sender_public);
+		let receiver_encoded_point = self.public.to_encoded_point(false);
+		let receiver_public_typed =
+			ReceiverPublic(receiver_encoded_point.as_ref());
+
+		let cipher = create_cipher(
+			&ephemeral_sender_private,
+			&self.public,
+			&sender_public_typed,
+			&receiver_public_typed,
+		)?;
 
 		let nonce = {
 			let random_bytes =
@@ -93,42 +134,70 @@ impl P256EncryptPublic {
 			*Nonce::from_slice(&random_bytes)
 		};
 
+		let aad = create_additional_associated_data(
+			&sender_public_typed,
+			&receiver_public_typed,
+			nonce.as_ref(),
+		);
+		let payload = Payload { aad: &aad, msg: message };
+
 		// TODO: use nonce||ephemeral_public as authenticated data .. although
 		// doesn't seem strictly necessary
 		let encrypted_message = cipher
-			.encrypt(&nonce, message)
+			.encrypt(&nonce, payload)
 			.map_err(|_| P256Error::AesGcm256EncryptError)?;
 
-		let ephemeral_public = ephemeral_public
-				.to_encoded_point(false)
-				.as_ref()
-				.try_into()
-				.map_err(|_| P256Error::FailedToCoercePublicKeyToIntendedLength)?;
-
-		let nonce =  nonce.try_into()
+		let nonce = nonce
+			.try_into()
 			.map_err(|_| P256Error::FailedToCoerceNonceToIntendedLength)?;
 
-		let envelope = Envelope {
-			encrypted_message,
-			nonce,
-			ephemeral_public,
-		};
+		let envelope =
+			Envelope { nonce, ephemeral_sender_public, encrypted_message };
 
 		envelope.try_to_vec().map_err(|_| P256Error::FailedToSerializeEnvelope)
 	}
-
 	// TODO: from der/sec1 etc
 }
+
+struct SenderPublic<'a>(&'a [u8]);
+struct ReceiverPublic<'a>(&'a [u8]);
 
 // Helper function to create the `Aes256Gcm` cypher.
 fn create_cipher(
 	private: &EphemeralSecret,
 	public: &PublicKey,
+	ephemeral_sender_public: &SenderPublic,
+	receiver_public: &ReceiverPublic,
 ) -> Result<Aes256Gcm, P256Error> {
 	let shared_secret = private.diffie_hellman(public);
-	let shared_key = sha2::Sha512::digest(shared_secret.raw_secret_bytes());
+	//  To help with entropy and add domain context, we do
+	// sender_public||receiver_public||shared_secret as the pre-image for the
+	// shared key.
+	let pre_image: Vec<u8> = ephemeral_sender_public
+		.0
+		.iter()
+		.chain(receiver_public.0)
+		.chain(shared_secret.raw_secret_bytes())
+		.copied()
+		.collect();
+
+	let shared_key = sha2::Sha512::digest(&pre_image);
 	Aes256Gcm::new_from_slice(&shared_key[..AES256_KEY_LEN])
 		.map_err(|_| P256Error::FailedToCreateAes256GcmCipher)
+}
+
+fn create_additional_associated_data(
+	ephemeral_sender_public: &SenderPublic,
+	receiver_public: &ReceiverPublic,
+	nonce: &[u8],
+) -> Vec<u8> {
+	ephemeral_sender_public
+		.0
+		.iter()
+		.chain(receiver_public.0)
+		.chain(nonce)
+		.copied()
+		.collect()
 }
 
 #[cfg(test)]
