@@ -294,7 +294,7 @@ mod tests {
 		let mut envelope =
 			Envelope::try_from_slice(&serialized_envelope).unwrap();
 
-		// Alter the first byte of the nonce.
+		// Alter the first byte of the sender's public key.
 		if envelope.ephemeral_sender_public[0] == 0 {
 			envelope.ephemeral_sender_public[0] = 1;
 		} else {
