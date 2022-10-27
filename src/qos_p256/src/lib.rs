@@ -23,7 +23,7 @@ fn create_cipher(private: &EphemeralSecret, public: &PublicKey) -> Aes256Gcm {
 	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, Clone, PartialEq,
 )]
 struct Envelope {
-	/// Nonce
+	/// Nonce used as an input to the cipher.
 	nonce: Vec<u8>,
 	/// Public key as sec1 encoded point with no compression
 	ephemeral_public: Vec<u8>,
@@ -54,6 +54,10 @@ impl P256Pair {
 		let cipher = create_cipher(&self.private, &ephemeral_public);
 
 		cipher.decrypt(nonce, &*encrypted_message).unwrap()
+	}
+
+	pub fn public_key(&self) -> P256Public {
+		P256Public { public_key: self.private.public_key() }
 	}
 }
 
@@ -98,7 +102,7 @@ impl P256Public {
 
 impl From<&P256Pair> for P256Public {
 	fn from(pair: &P256Pair) -> Self {
-		Self { public_key: pair.private.public_key() }
+		pair.public_key()
 	}
 }
 
