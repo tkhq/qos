@@ -13,7 +13,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use p256::{
 	ecdh::EphemeralSecret, elliptic_curve::sec1::ToEncodedPoint, PublicKey,
 };
-use rand::prelude::*;
+use rand::Rng;
 use rand_core::OsRng;
 use sha2::Digest;
 
@@ -39,9 +39,7 @@ pub enum P256Error {
 }
 
 /// Envelope for serializing an encrypted message with it's context.
-#[derive(
-	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, Clone, PartialEq,
-)]
+#[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
 struct Envelope {
 	/// Nonce used as an input to the cipher.
 	nonce: Vec<u8>,
