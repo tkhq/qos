@@ -1,3 +1,10 @@
+//! Abstractions for authentication and encryption with NIST-P256.
+
+#![forbid(unsafe_code)]
+#![deny(clippy::all)]
+#![warn(missing_docs, clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+
 use aes_gcm::{
 	aead::{Aead, KeyInit},
 	Aes256Gcm, Nonce,
@@ -11,14 +18,27 @@ use rand_core::OsRng;
 use sha2::Digest;
 
 const AES256_KEY_LEN: usize = 32;
+const BITS_96_AS_BYTES: usize = 12;
 
-// Helper function to create the `Aes256Gcm` cypher.
-fn create_cipher(private: &EphemeralSecret, public: &PublicKey) -> Aes256Gcm {
-	let shared_secret = private.diffie_hellman(public);
-	let shared_key = sha2::Sha512::digest(shared_secret.raw_secret_bytes());
-	Aes256Gcm::new_from_slice(&shared_key[..AES256_KEY_LEN]).unwrap()
+/// Errors for qos P256.
+#[derive(Debug)]
+pub enum P256Error {
+	/// The encryption envelope should not be serialized. This is likely a bug
+	/// with the code.
+	FailedToSerializeEnvelope,
+	/// The encryption envelope could not be deserialized.
+	InvalidEnvelope,
+	/// An error while decrypting the ciphertext with the `AesGcm256` cipher.
+	AesGcm256DecryptError,
+	/// An error while encrypting the plaintext with the `AesGcm256` cipher.
+	AesGcm256EncryptError,
+	/// Failed to create the `AesGcm256` cipher.
+	FailedToCreateAes256GcmCipher,
+	/// The public key could not be deserialized.
+	FailedToDeserializePublicKey,
 }
 
+/// Envelope for serializing an encrypted message with it's context.
 #[derive(
 	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, Clone, PartialEq,
 )]
@@ -31,57 +51,69 @@ struct Envelope {
 	encrypted_message: Vec<u8>,
 }
 
+/// P256 key pair
 pub struct P256Pair {
 	private: EphemeralSecret,
 }
 
 impl P256Pair {
 	/// Generate a new private key using the OS randomness source.
+	#[must_use]
 	pub fn generate() -> Self {
 		Self { private: EphemeralSecret::random(&mut OsRng) }
 	}
 
 	/// Decrypt a message encoded to this pair's public key.
-	// TODO: make this fallible and remove panics.
-	pub fn decrypt(&self, serialized_envelope: &[u8]) -> Vec<u8> {
+	pub fn decrypt(
+		&self,
+		serialized_envelope: &[u8],
+	) -> Result<Vec<u8>, P256Error> {
 		let Envelope { nonce, ephemeral_public, encrypted_message } =
-			Envelope::try_from_slice(serialized_envelope).unwrap();
+			Envelope::try_from_slice(serialized_envelope)
+				.map_err(|_| P256Error::InvalidEnvelope)?;
 
 		let nonce = Nonce::from_slice(&nonce);
-		let ephemeral_public =
-			PublicKey::from_sec1_bytes(&ephemeral_public).unwrap();
+		let ephemeral_public = PublicKey::from_sec1_bytes(&ephemeral_public)
+			.map_err(|_| P256Error::FailedToDeserializePublicKey)?;
 
-		let cipher = create_cipher(&self.private, &ephemeral_public);
+		let cipher = create_cipher(&self.private, &ephemeral_public)?;
 
-		cipher.decrypt(nonce, &*encrypted_message).unwrap()
+		cipher
+			.decrypt(nonce, &*encrypted_message)
+			.map_err(|_| P256Error::AesGcm256DecryptError)
 	}
 
+	/// Get the public key.
+	#[must_use]
 	pub fn public_key(&self) -> P256Public {
-		P256Public { public_key: self.private.public_key() }
+		P256Public { public: self.private.public_key() }
 	}
 }
 
+/// P256 Public key.
 pub struct P256Public {
-	public_key: PublicKey,
+	public: PublicKey,
 }
 
 impl P256Public {
-	// TODO: make this fallible and remove panics.
 	/// Encrypt a message to this public key.
-	pub fn encrypt(&self, message: &[u8]) -> Vec<u8> {
+	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
 		let ephemeral_private = EphemeralSecret::random(&mut OsRng);
 		let ephemeral_public = ephemeral_private.public_key();
 
-		let cipher = create_cipher(&ephemeral_private, &self.public_key);
+		let cipher = create_cipher(&ephemeral_private, &self.public)?;
 
 		let nonce = {
-			let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
-			*Nonce::from_slice(&random_bytes[..12])
+			let random_bytes =
+				rand::thread_rng().gen::<[u8; BITS_96_AS_BYTES]>();
+			*Nonce::from_slice(&random_bytes)
 		};
 
 		// TODO: use nonce||ephemeral_public as authenticated data .. although
 		// doesn't seem strictly necessary
-		let encrypted_message = cipher.encrypt(&nonce, message).unwrap();
+		let encrypted_message = cipher
+			.encrypt(&nonce, message)
+			.map_err(|_| P256Error::AesGcm256EncryptError)?;
 
 		let envelope = Envelope {
 			encrypted_message,
@@ -94,10 +126,21 @@ impl P256Public {
 				.to_vec(),
 		};
 
-		envelope.try_to_vec().unwrap()
+		envelope.try_to_vec().map_err(|_| P256Error::FailedToSerializeEnvelope)
 	}
 
 	// TODO: from der/sec1 etc
+}
+
+// Helper function to create the `Aes256Gcm` cypher.
+fn create_cipher(
+	private: &EphemeralSecret,
+	public: &PublicKey,
+) -> Result<Aes256Gcm, P256Error> {
+	let shared_secret = private.diffie_hellman(public);
+	let shared_key = sha2::Sha512::digest(shared_secret.raw_secret_bytes());
+	Aes256Gcm::new_from_slice(&shared_key[..AES256_KEY_LEN])
+		.map_err(|_| P256Error::FailedToCreateAes256GcmCipher)
 }
 
 #[cfg(test)]
@@ -110,9 +153,9 @@ mod tests {
 
 		let plaintext = b"rust test message";
 
-		let serialized_envelope = alice_public.encrypt(plaintext);
+		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
 
-		let decrypted = alice_pair.decrypt(&serialized_envelope);
+		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
 
 		assert_eq!(decrypted, plaintext);
 	}
