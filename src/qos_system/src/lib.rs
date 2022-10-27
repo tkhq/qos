@@ -17,12 +17,12 @@ impl fmt::Display for SystemError {
 	}
 }
 
-// Log dmesg formatted log to console
+/// Log dmesg formatted log to console
 pub fn dmesg(message: String) {
 	println!("{} {}", boot_time(), message);
 }
 
-// Dmesg formatted seconds since boot
+/// Dmesg formatted seconds since boot
 pub fn boot_time() -> String {
 	use libc::{clock_gettime, timespec, CLOCK_BOOTTIME};
 	let mut t = timespec { tv_sec: 0, tv_nsec: 0 };
@@ -32,7 +32,7 @@ pub fn boot_time() -> String {
 	format!("[ {: >4}.{}]", t.tv_sec, t.tv_nsec / 1000).to_string()
 }
 
-// Unconditionally reboot the system now
+/// Unconditionally reboot the system now
 pub fn reboot() {
 	use libc::{reboot, RB_AUTOBOOT};
 	unsafe {
@@ -40,7 +40,7 @@ pub fn reboot() {
 	}
 }
 
-// libc::mount casting/error wrapper
+/// libc::mount casting/error wrapper
 pub fn mount(
 	src: &str,
 	target: &str,
@@ -69,7 +69,7 @@ pub fn mount(
 	}
 }
 
-// libc::freopen casting/error wrapper
+/// libc::freopen casting/error wrapper
 pub fn freopen(
 	filename: &str,
 	mode: &str,
@@ -93,7 +93,7 @@ pub fn freopen(
 	}
 }
 
-// Insert kernel module into memory
+/// Insert kernel module into memory
 pub fn insmod(path: &str) -> Result<(), SystemError> {
 	use libc::{syscall, SYS_finit_module};
 	let file = File::open(path).unwrap();
@@ -107,7 +107,7 @@ pub fn insmod(path: &str) -> Result<(), SystemError> {
 	}
 }
 
-// Instantiate a socket
+/// Instantiate a socket
 pub fn socket_connect(
 	family: c_int,
 	port: u32,
@@ -135,19 +135,19 @@ pub fn socket_connect(
 	}
 }
 
-// Seed an entropy sample into the kernel randomness pool.
+/// Seed an entropy sample into the kernel randomness pool.
 pub fn seed_entropy(
 	size: usize,
 	source: fn(usize) -> Result<Vec<u8>, SystemError>,
 ) -> Result<usize, SystemError> {
 	use std::io::Write;
+	use std::fs::OpenOptions;
 
 	let entropy_sample = match source(size) {
 		Ok(sample) => sample,
 		Err(e) => return Err(e),
 	};
 
-	use std::fs::OpenOptions;
 	let mut random_fd =
 		match OpenOptions::new().read(true).write(true).open("/dev/urandom") {
 			Ok(file) => file,

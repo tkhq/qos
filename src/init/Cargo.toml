@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2.134"
-aws = { path = "../aws"}
-system = { path = "../system"}
+qos_aws = { path = "../qos_aws"}
+qos_system = { path = "../qos_system"}
 
 
 [[bin]]

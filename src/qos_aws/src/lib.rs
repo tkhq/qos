@@ -1,9 +1,9 @@
-use system::{dmesg, SystemError};
+use qos_system::{dmesg, SystemError};
 
-// Signal to Nitro hypervisor that booting was successful
+/// Signal to Nitro hypervisor that booting was successful
 fn nitro_heartbeat() {
 	use libc::{close, read, write, AF_VSOCK};
-	use system::socket_connect;
+	use qos_system::socket_connect;
 	let mut buf: [u8; 1] = [0; 1];
 	buf[0] = 0xB7; // AWS Nitro heartbeat value
 	let fd = match socket_connect(AF_VSOCK, 9000, 3) {
@@ -21,7 +21,7 @@ fn nitro_heartbeat() {
 	dmesg(format!("Sent NSM heartbeat"));
 }
 
-// Get entropy sample from Nitro device
+/// Get entropy sample from Nitro device
 pub fn get_entropy(size: usize) -> Result<Vec<u8>, SystemError> {
 	use nsm_api::api::ErrorCode;
 	use nsm_lib::{nsm_get_random, nsm_lib_init};
@@ -53,10 +53,9 @@ pub fn get_entropy(size: usize) -> Result<Vec<u8>, SystemError> {
 	Ok(dest)
 }
 
-// Initialize nitro device
+/// Initialize nitro device
 pub fn init_platform() {
-	use system::insmod;
-	// TODO: error handling
+	use qos_system::insmod;
 	nitro_heartbeat();
 
 	match insmod("/nsm.ko") {

@@ -9,16 +9,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
-name = "aws"
-version = "0.1.0"
-dependencies = [
- "aws-nitro-enclaves-nsm-api",
- "libc",
- "nsm-lib",
- "system",
-]
-
-[[package]]
 name = "aws-nitro-enclaves-nsm-api"
 version = "0.2.1"
 source = "git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?branch=main#16eebf7838fa6f399cfffda0049912b936c3a895"
@@ -108,9 +98,9 @@ dependencies = [
 name = "init"
 version = "0.1.0"
 dependencies = [
- "aws",
  "libc",
- "system",
+ "qos_aws",
+ "qos_system",
 ]
 
 [[package]]
@@ -182,6 +172,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94e2ef8dbfc347b10c094890f778ee2e36ca9bb4262e86dc99cd217e35f3470b"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "qos_aws"
+version = "0.1.0"
+dependencies = [
+ "aws-nitro-enclaves-nsm-api",
+ "libc",
+ "nsm-lib",
+ "qos_system",
+]
+
+[[package]]
+name = "qos_system"
+version = "0.1.0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -276,13 +283,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "system"
-version = "0.1.0"
-dependencies = [
- "libc",
 ]
 
 [[package]]

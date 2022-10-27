@@ -1,5 +1,5 @@
 [package]
-name = "aws"
+name = "qos_aws"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,4 +9,4 @@ edition = "2021"
 libc = "0.2.134"
 nsm_lib = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", branch = "main", package="nsm-lib", optional = false }
 nsm_api = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", branch = "main", package="aws-nitro-enclaves-nsm-api", optional = false }
-system = { path = "../system"}
+qos_system = { path = "../qos_system"}

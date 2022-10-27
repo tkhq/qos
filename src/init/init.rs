@@ -1,6 +1,6 @@
 //TODO: Feature flag
-use aws::{get_entropy, init_platform};
-use system::{dmesg, freopen, mount, reboot, seed_entropy};
+use qos_aws::{get_entropy, init_platform};
+use qos_system::{dmesg, freopen, mount, reboot, seed_entropy};
 
 // Mount common filesystems with conservative permissions
 fn init_rootfs() {
