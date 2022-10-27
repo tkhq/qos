@@ -9,6 +9,7 @@ members = [
   "qos_hex",
   "sample_app",
   "qos_test_primitives",
+  "qos_p256"
 ]
 exclude = ["init"]
 # We need this to avoid issues with the mock feature uinintentionally being
