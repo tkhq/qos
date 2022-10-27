@@ -9,7 +9,8 @@ use p256::{
 	ecdh::EphemeralSecret,
 	elliptic_curve::{sec1::ToEncodedPoint, zeroize::Zeroize},
 	PublicKey,
-	SecretKey
+	SecretKey,
+	ecdh::diffie_hellman
 };
 use rand::Rng;
 use rand_core::OsRng;
@@ -34,14 +35,14 @@ struct Envelope {
 
 /// P256 key pair
 pub struct P256EncryptPair {
-	private: EphemeralSecret,
+	private: SecretKey,
 }
 
 impl P256EncryptPair {
 	/// Generate a new private key using the OS randomness source.
 	#[must_use]
 	pub fn generate() -> Self {
-		Self { private: EphemeralSecret::random(&mut OsRng) }
+		Self { private: SecretKey::random(&mut OsRng) }
 	}
 
 	/// Decrypt a message encoded to this pair's public key.
@@ -93,12 +94,6 @@ impl P256EncryptPair {
 	}
 }
 
-impl Drop for P256EncryptPair {
-	fn drop(&mut self) {
-		self.private.zeroize();
-	}
-}
-
 /// P256 Public key.
 pub struct P256EncryptPublic {
 	public: PublicKey,
@@ -107,7 +102,7 @@ pub struct P256EncryptPublic {
 impl P256EncryptPublic {
 	/// Encrypt a message to this public key.
 	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
-		let ephemeral_sender_private = EphemeralSecret::random(&mut OsRng);
+		let ephemeral_sender_private = SecretKey::random(&mut OsRng);
 		let ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED] =
 			ephemeral_sender_private
 				.public_key()
@@ -164,12 +159,16 @@ struct ReceiverPublic<'a>(&'a [u8]);
 
 // Helper function to create the `Aes256Gcm` cypher.
 fn create_cipher(
-	private: &EphemeralSecret,
+	private: &SecretKey,
 	public: &PublicKey,
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,
 ) -> Result<Aes256Gcm, P256Error> {
-	let shared_secret = private.diffie_hellman(public);
+	// let shared_secret = private.diffie_hellman(public);
+	let shared_secret = diffie_hellman(
+		private.to_nonzero_scalar(),
+		public.as_affine()
+	);
 	// To help with entropy and add domain context, we do
 	// `sender_public||receiver_public||shared_secret` as the pre-image for the
 	// shared key.
