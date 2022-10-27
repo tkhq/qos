@@ -171,7 +171,7 @@ fn create_cipher(
 ) -> Result<Aes256Gcm, P256Error> {
 	let shared_secret = private.diffie_hellman(public);
 	//  To help with entropy and add domain context, we do
-	// sender_public||receiver_public||shared_secret as the pre-image for the
+	// `sender_public||receiver_public||shared_secret` as the pre-image for the
 	// shared key.
 	let pre_image: Vec<u8> = ephemeral_sender_public
 		.0
@@ -186,6 +186,8 @@ fn create_cipher(
 		.map_err(|_| P256Error::FailedToCreateAes256GcmCipher)
 }
 
+// Helper function to create the additional associated data (AAD). The data is
+// of the form `sender_public||receiver_public||nonce`.
 fn create_additional_associated_data(
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,
