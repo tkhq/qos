@@ -8,13 +8,13 @@
 pub mod encrypt;
 
 /// Errors for qos P256.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum P256Error {
 	/// The encryption envelope should not be serialized. This is likely a bug
 	/// with the code.
 	FailedToSerializeEnvelope,
 	/// The encryption envelope could not be deserialized.
-	InvalidEnvelope,
+	FailedToDeserializeEnvelope,
 	/// An error while decrypting the ciphertext with the `AesGcm256` cipher.
 	AesGcm256DecryptError,
 	/// An error while encrypting the plaintext with the `AesGcm256` cipher.

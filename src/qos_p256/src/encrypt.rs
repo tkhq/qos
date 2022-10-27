@@ -52,7 +52,7 @@ impl P256EncryptPair {
 			ephemeral_sender_public: ephemeral_sender_public_bytes,
 			encrypted_message,
 		} = Envelope::try_from_slice(serialized_envelope)
-			.map_err(|_| P256Error::InvalidEnvelope)?;
+			.map_err(|_| P256Error::FailedToDeserializeEnvelope)?;
 
 		let nonce = Nonce::from_slice(&nonce);
 		let ephemeral_sender_public =
@@ -203,8 +203,9 @@ fn create_additional_associated_data(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
 	#[test]
-	fn basic_encrypt_decrypt() {
+	fn basic_encrypt_decrypt_works() {
 		let alice_pair = P256EncryptPair::generate();
 		let alice_public = alice_pair.public_key();
 
@@ -215,6 +216,114 @@ mod tests {
 		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
 
 		assert_eq!(decrypted, plaintext);
+	}
+
+	#[test]
+	fn wrong_receiver_cannot_decrypt() {
+		let alice_pair = P256EncryptPair::generate();
+		let alice_public = alice_pair.public_key();
+
+		let plaintext = b"rust test message";
+
+		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
+
+		let bob_pair = P256EncryptPair::generate();
+
+		assert_eq!(
+			bob_pair.decrypt(&serialized_envelope).unwrap_err(),
+			P256Error::AesGcm256DecryptError
+		);
+	}
+
+	#[test]
+	fn tampered_encrypted_message_fails() {
+		let alice_pair = P256EncryptPair::generate();
+		let alice_public = alice_pair.public_key();
+
+		let plaintext = b"rust test message";
+
+		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
+
+		let mut envelope =
+			Envelope::try_from_slice(&serialized_envelope).unwrap();
+
+		envelope.encrypted_message.push(0);
+		let tampered_envelope = envelope.try_to_vec().unwrap();
+
+		assert_eq!(
+			alice_pair.decrypt(&tampered_envelope).unwrap_err(),
+			P256Error::AesGcm256DecryptError
+		);
+	}
+
+	#[test]
+	fn tampered_nonce_errors() {
+		let alice_pair = P256EncryptPair::generate();
+		let alice_public = alice_pair.public_key();
+
+		let plaintext = b"rust test message";
+
+		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
+
+		let mut envelope =
+			Envelope::try_from_slice(&serialized_envelope).unwrap();
+
+		// Alter the first byte of the nonce.
+		if envelope.nonce[0] == 0 {
+			envelope.nonce[0] = 1;
+		} else {
+			envelope.nonce[0] = 0;
+		};
+		let tampered_envelope = envelope.try_to_vec().unwrap();
+
+		assert_eq!(
+			alice_pair.decrypt(&tampered_envelope).unwrap_err(),
+			P256Error::AesGcm256DecryptError
+		);
+	}
+
+	#[test]
+	fn tampered_ephemeral_sender_key_errors() {
+		let alice_pair = P256EncryptPair::generate();
+		let alice_public = alice_pair.public_key();
+
+		let plaintext = b"rust test message";
+
+		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
+
+		let mut envelope =
+			Envelope::try_from_slice(&serialized_envelope).unwrap();
+
+		// Alter the first byte of the nonce.
+		if envelope.ephemeral_sender_public[0] == 0 {
+			envelope.ephemeral_sender_public[0] = 1;
+		} else {
+			envelope.ephemeral_sender_public[0] = 0;
+		};
+		let tampered_envelope = envelope.try_to_vec().unwrap();
+
+		assert_eq!(
+			alice_pair.decrypt(&tampered_envelope).unwrap_err(),
+			P256Error::FailedToDeserializePublicKey
+		);
+	}
+
+	#[test]
+	fn tampered_envelope_errors() {
+		let alice_pair = P256EncryptPair::generate();
+		let alice_public = alice_pair.public_key();
+
+		let plaintext = b"rust test message";
+
+		let mut serialized_envelope = alice_public.encrypt(plaintext).unwrap();
+		// Given borsh encoding, this should be a byte in the nonce. We insert a
+		// byte and shift everthing after, making the nonce too long.
+		serialized_envelope.insert(BITS_96_AS_BYTES, 0xff);
+
+		assert_eq!(
+			alice_pair.decrypt(&serialized_envelope).unwrap_err(),
+			P256Error::FailedToDeserializeEnvelope
+		);
 	}
 
 	// What other edge cases should we test for?
