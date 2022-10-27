@@ -21,7 +21,8 @@ impl P256SignPair {
 		Self { private: SigningKey::random(&mut OsRng) }
 	}
 
-	/// Sign the message and return the ASN.1 DER
+	/// Sign the message and return the ASN.1 DER. Signs the SHA512 digest of
+	/// the message.
 	pub fn sign(&self, message: &[u8]) -> Result<Box<[u8]>, P256Error> {
 		let digest = sha2::Sha512::digest(message);
 		let signature: Signature = self.private.sign(&digest);
@@ -34,6 +35,20 @@ impl P256SignPair {
 	pub fn public_key(&self) -> P256SignPublic {
 		P256SignPublic { public: VerifyingKey::from(&self.private) }
 	}
+
+	/// Create private key pair from a raw secret.
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+		Ok(Self {
+			private: SigningKey::from_bytes(bytes)
+				.map_err(|_| P256Error::FailedToReadSecret)?,
+		})
+	}
+
+	/// Serialize the raw secret to bytes.
+	#[must_use]
+	pub fn to_bytes(&self) -> Vec<u8> {
+		self.private.to_bytes().to_vec()
+	}
 }
 
 /// Signing public key for verifying signatures.
@@ -42,8 +57,10 @@ pub struct P256SignPublic {
 }
 
 impl P256SignPublic {
-	/// Verify a `signature` and `message` against this private key. Returns Ok
-	/// if the signature is good.
+	/// Verify a `signature` and `message` against this private key. Verifies
+	/// the SHA512 digest of the message.
+	///
+	/// Returns Ok if the signature is good.
 	pub fn verify(
 		&self,
 		message: &[u8],
@@ -114,5 +131,16 @@ mod tests {
 			P256SignPublic::from_sec1_bytes(&serialized_public).unwrap();
 
 		assert!(public.verify(message, &signature).is_ok());
+	}
+
+	#[test]
+	fn private_key_roundtrip_serialization_works() {
+		let pair = P256SignPair::generate();
+		let raw_secret1 = pair.to_bytes();
+
+		let pair2 = P256SignPair::from_bytes(&raw_secret1).unwrap();
+		let raw_secret2 = pair2.to_bytes();
+
+		assert_eq!(raw_secret1, raw_secret2);
 	}
 }

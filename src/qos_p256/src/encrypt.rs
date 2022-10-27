@@ -9,6 +9,7 @@ use p256::{
 	ecdh::EphemeralSecret,
 	elliptic_curve::{sec1::ToEncodedPoint, zeroize::Zeroize},
 	PublicKey,
+	SecretKey
 };
 use rand::Rng;
 use rand_core::OsRng;

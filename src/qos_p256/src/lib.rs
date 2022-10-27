@@ -35,4 +35,6 @@ pub enum P256Error {
 	FailedSignatureVerification,
 	/// Could not deserialize a public key as `SEC1` encoded.
 	FailedToDeserializePublicKeyFromSec1,
+	/// The raw bytes could not be interpreted as a P256 secret.
+	FailedToReadSecret,
 }
