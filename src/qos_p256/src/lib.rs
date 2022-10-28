@@ -5,7 +5,6 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 
-
 pub mod encrypt;
 
 /// Errors for qos P256.
