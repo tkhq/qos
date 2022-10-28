@@ -7,10 +7,11 @@ use p256::{
 	},
 	elliptic_curve::sec1::FromEncodedPoint,
 	pkcs8::{DecodePublicKey, EncodePublicKey},
-	PublicKey,
+	PublicKey, SecretKey,
 };
 use rand_core::OsRng;
 use sha2::Digest;
+use der::zeroize::Zeroizing;
 
 use crate::P256Error;
 
@@ -42,11 +43,16 @@ impl P256SignPair {
 	}
 
 	/// Create private key pair from a raw secret.
-	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
-		Ok(Self {
-			private: SigningKey::from_bytes(bytes)
-				.map_err(|_| P256Error::FailedToReadSecret)?,
-		})
+	pub fn from_der(bytes: &[u8]) -> Result<Self, P256Error> {
+		let secret_key = SecretKey::from_sec1_der(bytes).unwrap();
+		Ok(Self { private: SigningKey::from(&secret_key) })
+	}
+
+	/// Convert to `SEC1` der.
+	pub fn to_der(&self) -> Zeroizing<Vec<u8>> {
+		let scalar = self.private.as_nonzero_scalar();
+		let secret_key = SecretKey::from(scalar);
+		secret_key.to_sec1_der().unwrap()
 	}
 
 	/// Serialize the raw secret to bytes.
@@ -135,20 +141,19 @@ mod tests {
 		let der_public = pair.public_key().to_der();
 		let signature = pair.sign(message).unwrap();
 
-		let public =
-			P256SignPublic::from_der(der_public.as_bytes()).unwrap();
+		let public = P256SignPublic::from_der(der_public.as_bytes()).unwrap();
 
 		assert!(public.verify(message, &signature).is_ok());
 	}
 
-	// #[test]
-	// fn private_key_roundtrip_serialization_works() {
-	// 	let pair = P256SignPair::generate();
-	// 	let raw_secret1 = pair.to_bytes();
+	#[test]
+	fn private_key_roundtrip_serialization_works() {
+		let pair = P256SignPair::generate();
+		let raw_secret1 = pair.to_der().to_bytes();
 
-	// 	let pair2 = P256SignPair::from_bytes(&raw_secret1).unwrap();
-	// 	let raw_secret2 = pair2.to_bytes();
+		let pair2 = P256SignPair::from_bytes(&raw_secret1).unwrap();
+		let raw_secret2 = pair2.to_der().to_bytes();
 
-	// 	assert_eq!(raw_secret1, raw_secret2);
-	// }
+		assert_eq!(raw_secret1, raw_secret2);
+	}
 }
