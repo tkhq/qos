@@ -5,9 +5,12 @@ use aes_gcm::{
 	Aes256Gcm, Nonce,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
+use der::zeroize::Zeroizing;
 use p256::{
-	ecdh::diffie_hellman, elliptic_curve::sec1::ToEncodedPoint, PublicKey,
-	SecretKey,
+	ecdh::diffie_hellman,
+	elliptic_curve::sec1::ToEncodedPoint,
+	pkcs8::{DecodePublicKey, EncodePublicKey},
+	PublicKey, SecretKey,
 };
 use rand::Rng;
 use rand_core::OsRng;
@@ -89,6 +92,19 @@ impl P256EncryptPair {
 	pub fn public_key(&self) -> P256EncryptPublic {
 		P256EncryptPublic { public: self.private.public_key() }
 	}
+
+	/// Create private key from `SEC1` der.
+	pub fn from_der(bytes: &[u8]) -> Result<Self, P256Error> {
+		Ok(Self { private: SecretKey::from_sec1_der(bytes).unwrap() })
+	}
+
+	/// Convert to `SEC1` der.
+	#[must_use]
+	pub fn to_der(&self) -> Zeroizing<Vec<u8>> {
+		let scalar = self.private.to_nonzero_scalar();
+		let secret_key = SecretKey::from(scalar);
+		secret_key.to_sec1_der().unwrap()
+	}
 }
 
 /// P256 Public key.
@@ -147,6 +163,17 @@ impl P256EncryptPublic {
 			Envelope { nonce, ephemeral_sender_public, encrypted_message };
 
 		envelope.try_to_vec().map_err(|_| P256Error::FailedToSerializeEnvelope)
+	}
+
+	/// Initialize from a `SEC1` encoded public key.
+	pub fn from_der(bytes: &[u8]) -> Result<Self, P256Error> {
+		Ok(Self { public: PublicKey::from_public_key_der(bytes).unwrap() })
+	}
+
+	/// Serialize as `SEC1` encoded point.
+	#[must_use]
+	pub fn to_der(&self) -> der::Document {
+		self.public.to_public_key_der().unwrap()
 	}
 }
 
@@ -320,5 +347,34 @@ mod tests {
 			alice_pair.decrypt(&serialized_envelope).unwrap_err(),
 			P256Error::FailedToDeserializeEnvelope
 		);
+	}
+
+	#[test]
+	fn public_key_roundtrip_serialization_works() {
+		let alice_pair = P256EncryptPair::generate();
+		let alice_public = alice_pair.public_key();
+
+		let public_key_der = alice_public.to_der();
+		let alice_public2 =
+			P256EncryptPublic::from_der(public_key_der.as_bytes()).unwrap();
+
+		let plaintext = b"rust test message";
+
+		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
+
+		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
+
+		assert_eq!(decrypted, plaintext);
+	}
+
+	#[test]
+	fn private_key_roundtrip_serialization_works() {
+		let pair = P256EncryptPair::generate();
+		let raw_secret1 = pair.to_der();
+
+		let pair2 = P256EncryptPair::from_der(&raw_secret1).unwrap();
+		let raw_secret2 = pair2.to_der();
+
+		assert_eq!(raw_secret1, raw_secret2);
 	}
 }
