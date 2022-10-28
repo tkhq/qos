@@ -130,6 +130,32 @@ impl P256Public {
 	) -> Result<(), P256Error> {
 		self.sign_public.verify(message, signature)
 	}
+
+	/// Serialize to SEC1 encoded point, not compressed.
+	pub fn to_bytes(&self) -> Vec<u8> {
+		self.encrypt_public.to_bytes()
+			.iter()
+			.chain(self.sign_public.to_bytes().iter())
+			.cloned()
+			.collect()
+	}
+
+	/// Deserialize from a SEC1 encoded point, not compressed.
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED * 2 {
+			return Err(P256Error::EncodedPublicKeyTooLong)
+		}
+		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED * 2 {
+			return Err(P256Error::EncodedPublicKeyTooShort)
+		}
+
+		let (encrypt_bytes, sign_bytes) = bytes.split_at(PUB_KEY_LEN_UNCOMPRESSED);
+
+		Ok(Self {
+			encrypt_public: P256EncryptPublic::from_bytes(encrypt_bytes).map_err(|_| P256Error::FailedToReadPublicKey)?,
+			sign_public: P256SignPublic::from_bytes(sign_bytes).map_err(|_| P256Error::FailedToReadPublicKey)?,
+		})
+	}
 }
 
 #[cfg(test)]
@@ -201,5 +227,21 @@ mod test {
 			bob_pair.decrypt(&serialized_envelope).unwrap_err(),
 			P256Error::AesGcm256DecryptError
 		);
+	}
+
+	#[test]
+	fn public_key_bytes_roundtrip() {
+		let alice_pair = P256Pair::generate();
+		let alice_public = alice_pair.public_key();
+		let alice_public_bytes = alice_public.to_bytes();
+
+		assert_eq!(alice_public_bytes.len(), PUB_KEY_LEN_UNCOMPRESSED * 2);
+
+		let alice_public2 = P256Public::from_bytes(&alice_public_bytes).unwrap();
+
+		let plaintext = b"rust test message";
+		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
+		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
+		assert_eq!(decrypted, plaintext);
 	}
 }
