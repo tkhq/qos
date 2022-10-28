@@ -5,7 +5,7 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 
-use der::{zeroize::Zeroizing, Decode};
+use der::{zeroize::Zeroizing};
 
 use crate::{
 	encrypt::{P256EncryptPair, P256EncryptPublic},
@@ -53,6 +53,8 @@ pub enum P256Error {
 	FailedToDeserializePrivateKeyFromSec1,
 	/// The raw bytes could not be interpreted as a P256 secret.
 	FailedToReadSecret,
+	/// The raw bytes could not be interpreted as SEC1 encoded point uncompressed.
+	FailedToReadPublicKey,
 	/// Failed to convert public key to der.
 	FailedToConvertPublicKeyToDer,
 	/// Failed to convert private key to der.
@@ -110,7 +112,8 @@ impl P256Pair {
 		}
 	}
 
-	/// Serialize private keys to `SEC1` DER, creating a single value of `encrypt_private_der||sign_private_der`
+	/// Serialize private keys to `SEC1` DER, creating a single value of
+	/// `encrypt_private_der||sign_private_der`
 	pub fn to_der(&self) -> Result<Zeroizing<Vec<u8>>, P256Error> {
 		let mut encrypt_der = self.encrypt_private.to_der()?;
 		let sign_der = self.sign_private.to_der()?;
@@ -120,7 +123,8 @@ impl P256Pair {
 		Ok(encrypt_der)
 	}
 
-	/// Deserialize private keys from `SEC1` DER. Assumes the given bytes are encoded as `encrypt_private_der||sign_private_der`.
+	/// Deserialize private keys from `SEC1` DER. Assumes the given bytes are
+	/// encoded as `encrypt_private_der||sign_private_der`.
 	pub fn from_der(bytes: &[u8]) -> Result<Self, P256Error> {
 		if bytes.len() > PRIVATE_KEY_DER_LEN * 2 {
 			return Err(P256Error::EncodedPrivateKeyTooLong);
@@ -207,7 +211,6 @@ impl P256Public {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use qos_test_primitives::PathWrapper;
 
 	#[test]
 	fn signatures_are_deterministic() {
@@ -313,6 +316,5 @@ mod test {
 		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
 		let decrypted = alice_pair2.decrypt(&serialized_envelope).unwrap();
 		assert_eq!(decrypted, plaintext);
-
 	}
 }

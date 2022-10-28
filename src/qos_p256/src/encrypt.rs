@@ -6,6 +6,7 @@ use aes_gcm::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use der::zeroize::Zeroizing;
+use hmac::{Hmac, Mac};
 use p256::{
 	ecdh::diffie_hellman,
 	elliptic_curve::sec1::ToEncodedPoint,
@@ -15,7 +16,6 @@ use p256::{
 use rand::Rng;
 use rand_core::OsRng;
 use sha2::Sha512;
-use hmac::{Hmac, Mac};
 
 use crate::P256Error;
 
@@ -111,6 +111,21 @@ impl P256EncryptPair {
 			.to_sec1_der()
 			.map_err(|_| P256Error::FailedToConvertPrivateKeyToDer)
 	}
+
+	/// Deserialize key from raw scalar byte slice.
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+		Ok(Self {
+			private: SecretKey::from_be_bytes(bytes)
+				.map_err(|_| P256Error::FailedToReadSecret)?,
+		})
+	}
+
+	/// Serialize key to raw scalar byte slice.
+	pub fn to_bytes(&self) -> Zeroizing<Vec<u8>> {
+		let bytes = self.private.to_be_bytes().to_vec();
+
+		Zeroizing::new(bytes)
+	}
 }
 
 /// P256 Public key.
@@ -185,6 +200,19 @@ impl P256EncryptPublic {
 			.to_public_key_der()
 			.map_err(|_| P256Error::FailedToConvertPublicKeyToDer)
 	}
+
+	/// Serialize to SEC1 encoded point, not compressed.
+	pub fn to_bytes(&self) -> Box<[u8]> {
+		let sec1_encoded_point = self.public.to_encoded_point(false);
+		sec1_encoded_point.to_bytes()
+	}
+
+	/// Deserialize from a SEC1 encoded point, not compressed.
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+		Ok(Self {
+			public: PublicKey::from_sec1_bytes(bytes).map_err(|_| P256Error::FailedToReadPublicKey)?
+		})
+	}
 }
 
 // Types for helper function parameters to help prevent fat finger mistakes.
@@ -212,7 +240,8 @@ fn create_cipher(
 		.copied()
 		.collect();
 
-	let mut mac = <HmacSha512 as KeyInit>::new_from_slice(&pre_image[..]).expect("hmac can take a key of any size");
+	let mut mac = <HmacSha512 as KeyInit>::new_from_slice(&pre_image[..])
+		.expect("hmac can take a key of any size");
 	mac.update(&pre_image);
 	let shared_key = mac.finalize().into_bytes();
 
@@ -381,12 +410,41 @@ mod tests {
 	}
 
 	#[test]
+	fn public_key_roundtrip_bytes() {
+		let alice_pair = P256EncryptPair::generate();
+		let alice_public = alice_pair.public_key();
+
+		let public_key_bytes = alice_public.to_bytes();
+		let alice_public2 =
+			P256EncryptPublic::from_bytes(&public_key_bytes).unwrap();
+
+		let plaintext = b"rust test message";
+
+		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
+
+		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
+
+		assert_eq!(decrypted, plaintext);
+	}
+
+	#[test]
 	fn private_key_roundtrip_serialization_works() {
 		let pair = P256EncryptPair::generate();
 		let raw_secret1 = pair.to_der().unwrap();
 
 		let pair2 = P256EncryptPair::from_der(&raw_secret1).unwrap();
 		let raw_secret2 = pair2.to_der().unwrap();
+
+		assert_eq!(raw_secret1, raw_secret2);
+	}
+
+	#[test]
+	fn private_key_roundtrip_bytes() {
+		let pair = P256EncryptPair::generate();
+		let raw_secret1 = pair.to_bytes();
+
+		let pair2 = P256EncryptPair::from_bytes(&raw_secret1).unwrap();
+		let raw_secret2 = pair2.to_bytes();
 
 		assert_eq!(raw_secret1, raw_secret2);
 	}

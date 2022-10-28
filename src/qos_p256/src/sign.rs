@@ -58,17 +58,20 @@ impl P256SignPair {
 			.map_err(|_| P256Error::FailedToConvertPrivateKeyToDer)
 	}
 
-	pub fn to_bytes(&self) -> Result<Zeroizing<Vec<u8>>, P256Error> {
-		let bytes = self.private.to_bytes().to_vec();
-
-		Ok(Zeroizing::new(
-			bytes
-		))
+	/// Deserialize key from raw scalar byte slice.
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+		Ok(Self {
+			private: SigningKey::from_bytes(bytes)
+				.map_err(|_| P256Error::FailedToReadSecret)?,
+		})
 	}
 
-	// pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+	/// Serialize key to raw scalar byte slice.
+	pub fn to_bytes(&self) -> Zeroizing<Vec<u8>> {
+		let bytes = self.private.to_bytes().to_vec();
 
-	// }
+		Zeroizing::new(bytes)
+	}
 }
 
 /// Sign public key for verifying signatures.
@@ -116,6 +119,19 @@ impl P256SignPublic {
 			Err(P256Error::CouldNotCreatePublicKeyInConstantTime)
 		}
 	}
+
+	/// Serialize to SEC1 encoded point, not compressed.
+	pub fn to_bytes(&self) -> Box<[u8]> {
+		let sec1_encoded_point = self.public.to_encoded_point(false);
+		sec1_encoded_point.to_bytes()
+	}
+
+	/// Deserialize from a SEC1 encoded point, not compressed.
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+		Ok(Self {
+			public: VerifyingKey::from_sec1_bytes(bytes).map_err(|_| P256Error::FailedToReadPublicKey)?
+		})
+	}
 }
 
 #[cfg(test)]
@@ -161,12 +177,36 @@ mod tests {
 	}
 
 	#[test]
+	fn public_key_round_trip_bytes_works() {
+		let message = b"a message to authenticate";
+
+		let pair = P256SignPair::generate();
+		let bytes_public = pair.public_key().to_bytes();
+		let signature = pair.sign(message).unwrap();
+
+		let public = P256SignPublic::from_bytes(&bytes_public).unwrap();
+
+		assert!(public.verify(message, &signature).is_ok());
+	}
+
+	#[test]
 	fn private_key_roundtrip_serialization_works() {
 		let pair = P256SignPair::generate();
 		let raw_secret1 = pair.to_der().unwrap();
 
 		let pair2 = P256SignPair::from_der(&raw_secret1).unwrap();
 		let raw_secret2 = pair2.to_der().unwrap();
+
+		assert_eq!(raw_secret1, raw_secret2);
+	}
+
+	#[test]
+	fn private_key_roundtrip_bytes_works() {
+		let pair = P256SignPair::generate();
+		let raw_secret1 = pair.to_bytes();
+
+		let pair2 = P256SignPair::from_bytes(&raw_secret1).unwrap();
+		let raw_secret2 = pair2.to_bytes();
 
 		assert_eq!(raw_secret1, raw_secret2);
 	}
