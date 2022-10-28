@@ -6,11 +6,8 @@ use aes_gcm::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use p256::{
-	ecdh::EphemeralSecret,
-	elliptic_curve::{sec1::ToEncodedPoint, zeroize::Zeroize},
-	PublicKey,
+	ecdh::diffie_hellman, elliptic_curve::sec1::ToEncodedPoint, PublicKey,
 	SecretKey,
-	ecdh::diffie_hellman
 };
 use rand::Rng;
 use rand_core::OsRng;
@@ -165,10 +162,8 @@ fn create_cipher(
 	receiver_public: &ReceiverPublic,
 ) -> Result<Aes256Gcm, P256Error> {
 	// let shared_secret = private.diffie_hellman(public);
-	let shared_secret = diffie_hellman(
-		private.to_nonzero_scalar(),
-		public.as_affine()
-	);
+	let shared_secret =
+		diffie_hellman(private.to_nonzero_scalar(), public.as_affine());
 	// To help with entropy and add domain context, we do
 	// `sender_public||receiver_public||shared_secret` as the pre-image for the
 	// shared key.

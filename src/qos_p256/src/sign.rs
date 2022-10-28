@@ -1,8 +1,13 @@
 //! Abstractions for signing and signature verification
 
-use p256::ecdsa::{
-	signature::{Signer, Verifier},
-	Signature, SigningKey, VerifyingKey,
+use p256::{
+	ecdsa::{
+		signature::{Signer, Verifier},
+		Signature, SigningKey, VerifyingKey,
+	},
+	elliptic_curve::sec1::FromEncodedPoint,
+	pkcs8::{DecodePublicKey, EncodePublicKey},
+	PublicKey,
 };
 use rand_core::OsRng;
 use sha2::Digest;
@@ -76,17 +81,20 @@ impl P256SignPublic {
 	}
 
 	/// Initialize from a sec1 encoded public key.
-	pub fn from_sec1_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
-		Ok(Self {
-			public: VerifyingKey::from_sec1_bytes(bytes)
-				.map_err(|_| P256Error::FailedToDeserializePublicKeyFromSec1)?,
-		})
+	pub fn from_der(bytes: &[u8]) -> Result<Self, P256Error> {
+		let public_key = PublicKey::from_public_key_der(bytes)
+			.map_err(|_| P256Error::FailedToDeserializePublicKeyFromSec1)?;
+		// let encoded_point = public_key.to_encoded_point(false);
+		Ok(Self { public: VerifyingKey::from(&public_key) })
 	}
 
 	/// Serialize as `SEC1` encoded point.
 	#[must_use]
-	pub fn to_sec1_bytes(&self) -> Box<[u8]> {
-		self.public.to_encoded_point(false).to_bytes()
+	pub fn to_der(&self) -> der::Document {
+		let sec1_encoded_point = self.public.to_encoded_point(false);
+		let public_key =
+			PublicKey::from_encoded_point(&sec1_encoded_point).unwrap();
+		public_key.to_public_key_der().unwrap()
 	}
 }
 
@@ -120,27 +128,27 @@ mod tests {
 	}
 
 	#[test]
-	fn public_key_round_trip_serialization_works() {
+	fn public_key_round_trip_der_works() {
 		let message = b"a message to authenticate";
 
 		let pair = P256SignPair::generate();
-		let serialized_public = pair.public_key().to_sec1_bytes();
+		let der_public = pair.public_key().to_der();
 		let signature = pair.sign(message).unwrap();
 
 		let public =
-			P256SignPublic::from_sec1_bytes(&serialized_public).unwrap();
+			P256SignPublic::from_der(der_public.as_bytes()).unwrap();
 
 		assert!(public.verify(message, &signature).is_ok());
 	}
 
-	#[test]
-	fn private_key_roundtrip_serialization_works() {
-		let pair = P256SignPair::generate();
-		let raw_secret1 = pair.to_bytes();
+	// #[test]
+	// fn private_key_roundtrip_serialization_works() {
+	// 	let pair = P256SignPair::generate();
+	// 	let raw_secret1 = pair.to_bytes();
 
-		let pair2 = P256SignPair::from_bytes(&raw_secret1).unwrap();
-		let raw_secret2 = pair2.to_bytes();
+	// 	let pair2 = P256SignPair::from_bytes(&raw_secret1).unwrap();
+	// 	let raw_secret2 = pair2.to_bytes();
 
-		assert_eq!(raw_secret1, raw_secret2);
-	}
+	// 	assert_eq!(raw_secret1, raw_secret2);
+	// }
 }

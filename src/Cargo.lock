@@ -947,6 +947,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "borsh",
+ "der",
  "p256",
  "qos_hex",
  "rand",
