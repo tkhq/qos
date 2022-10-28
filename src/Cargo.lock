@@ -950,6 +950,7 @@ dependencies = [
  "der",
  "p256",
  "qos_hex",
+ "qos_test_primitives",
  "rand",
  "rand_core",
  "sha2",

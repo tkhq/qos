@@ -12,4 +12,7 @@ rand_core = "0.6.3"
 rand = "0.8.5"
 aes-gcm = "0.10.1"
 borsh = { version = "0.9" }
-der = "0.6.0"
+der = { version = "0.6", default-features = false }
+
+[dev-dependencies]
+qos_test_primitives = { path = "../qos_test_primitives" }

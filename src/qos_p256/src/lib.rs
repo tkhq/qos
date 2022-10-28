@@ -5,12 +5,15 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 
-use der::zeroize::Zeroizing;
+use der::{zeroize::Zeroizing, Decode};
 
 use crate::{
 	encrypt::{P256EncryptPair, P256EncryptPublic},
 	sign::{P256SignPair, P256SignPublic},
 };
+
+// TODO
+// feature gate der
 
 const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
 const PUB_KEY_DER_LEN: usize = 91;
@@ -204,6 +207,7 @@ impl P256Public {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use qos_test_primitives::PathWrapper;
 
 	#[test]
 	fn signatures_are_deterministic() {
@@ -273,7 +277,7 @@ mod test {
 	}
 
 	#[test]
-	fn public_key_roundtrip_serialization_works() {
+	fn public_key_roundtrip_der_works() {
 		let message = b"a message to authenticate";
 		let alice_pair = P256Pair::generate();
 		let signature = alice_pair.sign(message).unwrap();
@@ -293,7 +297,7 @@ mod test {
 	}
 
 	#[test]
-	fn private_key_roundtrip_serialization_works() {
+	fn private_key_roundtrip_der_works() {
 		let alice_pair = P256Pair::generate();
 		let alice_public = alice_pair.public_key();
 

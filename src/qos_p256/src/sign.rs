@@ -57,6 +57,18 @@ impl P256SignPair {
 			.to_sec1_der()
 			.map_err(|_| P256Error::FailedToConvertPrivateKeyToDer)
 	}
+
+	pub fn to_bytes(&self) -> Result<Zeroizing<Vec<u8>>, P256Error> {
+		let bytes = self.private.to_bytes().to_vec();
+
+		Ok(Zeroizing::new(
+			bytes
+		))
+	}
+
+	// pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+
+	// }
 }
 
 /// Sign public key for verifying signatures.
