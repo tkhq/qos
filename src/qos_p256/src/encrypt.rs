@@ -192,9 +192,9 @@ fn create_cipher(
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,
 ) -> Result<Aes256Gcm, P256Error> {
-	// let shared_secret = private.diffie_hellman(public);
 	let shared_secret =
 		diffie_hellman(private.to_nonzero_scalar(), public.as_affine());
+
 	// To help with entropy and add domain context, we do
 	// `sender_public||receiver_public||shared_secret` as the pre-image for the
 	// shared key.
