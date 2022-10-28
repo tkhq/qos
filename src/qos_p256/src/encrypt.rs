@@ -95,15 +95,18 @@ impl P256EncryptPair {
 
 	/// Create private key from `SEC1` der.
 	pub fn from_der(bytes: &[u8]) -> Result<Self, P256Error> {
-		Ok(Self { private: SecretKey::from_sec1_der(bytes).unwrap() })
+		let private = SecretKey::from_sec1_der(bytes)
+			.map_err(|_| P256Error::FailedToDeserializePrivateKeyFromSec1)?;
+		Ok(Self { private })
 	}
 
 	/// Convert to `SEC1` der.
-	#[must_use]
-	pub fn to_der(&self) -> Zeroizing<Vec<u8>> {
+	pub fn to_der(&self) -> Result<Zeroizing<Vec<u8>>, P256Error> {
 		let scalar = self.private.to_nonzero_scalar();
 		let secret_key = SecretKey::from(scalar);
-		secret_key.to_sec1_der().unwrap()
+		secret_key
+			.to_sec1_der()
+			.map_err(|_| P256Error::FailedToConvertPrivateKeyToDer)
 	}
 }
 
@@ -167,13 +170,17 @@ impl P256EncryptPublic {
 
 	/// Initialize from a `SEC1` encoded public key.
 	pub fn from_der(bytes: &[u8]) -> Result<Self, P256Error> {
-		Ok(Self { public: PublicKey::from_public_key_der(bytes).unwrap() })
+		Ok(Self {
+			public: PublicKey::from_public_key_der(bytes)
+				.map_err(|_| P256Error::FailedToDeserializePublicKeyFromSec1)?,
+		})
 	}
 
 	/// Serialize as `SEC1` encoded point.
-	#[must_use]
-	pub fn to_der(&self) -> der::Document {
-		self.public.to_public_key_der().unwrap()
+	pub fn to_der(&self) -> Result<der::Document, P256Error> {
+		self.public
+			.to_public_key_der()
+			.map_err(|_| P256Error::FailedToConvertPublicKeyToDer)
 	}
 }
 
@@ -354,7 +361,7 @@ mod tests {
 		let alice_pair = P256EncryptPair::generate();
 		let alice_public = alice_pair.public_key();
 
-		let public_key_der = alice_public.to_der();
+		let public_key_der = alice_public.to_der().unwrap();
 		let alice_public2 =
 			P256EncryptPublic::from_der(public_key_der.as_bytes()).unwrap();
 
@@ -370,10 +377,10 @@ mod tests {
 	#[test]
 	fn private_key_roundtrip_serialization_works() {
 		let pair = P256EncryptPair::generate();
-		let raw_secret1 = pair.to_der();
+		let raw_secret1 = pair.to_der().unwrap();
 
 		let pair2 = P256EncryptPair::from_der(&raw_secret1).unwrap();
-		let raw_secret2 = pair2.to_der();
+		let raw_secret2 = pair2.to_der().unwrap();
 
 		assert_eq!(raw_secret1, raw_secret2);
 	}

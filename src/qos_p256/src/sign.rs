@@ -44,16 +44,18 @@ impl P256SignPair {
 
 	/// Create private key from `SEC1` der.
 	pub fn from_der(bytes: &[u8]) -> Result<Self, P256Error> {
-		let secret_key = SecretKey::from_sec1_der(bytes).unwrap();
+		let secret_key = SecretKey::from_sec1_der(bytes)
+			.map_err(|_| P256Error::FailedToDeserializePrivateKeyFromSec1)?;
 		Ok(Self { private: SigningKey::from(&secret_key) })
 	}
 
 	/// Convert to `SEC1` der.
-	#[must_use]
-	pub fn to_der(&self) -> Zeroizing<Vec<u8>> {
+	pub fn to_der(&self) -> Result<Zeroizing<Vec<u8>>, P256Error> {
 		let scalar = self.private.as_nonzero_scalar();
 		let secret_key = SecretKey::from(scalar);
-		secret_key.to_sec1_der().unwrap()
+		secret_key
+			.to_sec1_der()
+			.map_err(|_| P256Error::FailedToConvertPrivateKeyToDer)
 	}
 }
 
@@ -90,12 +92,17 @@ impl P256SignPublic {
 	}
 
 	/// Serialize as `SEC1` encoded point.
-	#[must_use]
-	pub fn to_der(&self) -> der::Document {
+	pub fn to_der(&self) -> Result<der::Document, P256Error> {
 		let sec1_encoded_point = self.public.to_encoded_point(false);
-		let public_key =
-			PublicKey::from_encoded_point(&sec1_encoded_point).unwrap();
-		public_key.to_public_key_der().unwrap()
+		let maybe_public = PublicKey::from_encoded_point(&sec1_encoded_point);
+		if maybe_public.is_some().unwrap_u8() == 1 {
+			maybe_public
+				.unwrap()
+				.to_public_key_der()
+				.map_err(|_| P256Error::FailedToConvertPublicKeyToDer)
+		} else {
+			Err(P256Error::CouldNotCreatePublicKeyInConstantTime)
+		}
 	}
 }
 
@@ -133,7 +140,7 @@ mod tests {
 		let message = b"a message to authenticate";
 
 		let pair = P256SignPair::generate();
-		let der_public = pair.public_key().to_der();
+		let der_public = pair.public_key().to_der().unwrap();
 		let signature = pair.sign(message).unwrap();
 
 		let public = P256SignPublic::from_der(der_public.as_bytes()).unwrap();
@@ -144,10 +151,10 @@ mod tests {
 	#[test]
 	fn private_key_roundtrip_serialization_works() {
 		let pair = P256SignPair::generate();
-		let raw_secret1 = pair.to_der();
+		let raw_secret1 = pair.to_der().unwrap();
 
 		let pair2 = P256SignPair::from_der(&raw_secret1).unwrap();
-		let raw_secret2 = pair2.to_der();
+		let raw_secret2 = pair2.to_der().unwrap();
 
 		assert_eq!(raw_secret1, raw_secret2);
 	}

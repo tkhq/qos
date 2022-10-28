@@ -35,6 +35,15 @@ pub enum P256Error {
 	FailedSignatureVerification,
 	/// Could not deserialize a public key as `SEC1` encoded.
 	FailedToDeserializePublicKeyFromSec1,
+	/// Could not deserialize a private key as `SEC1` encoded.
+	FailedToDeserializePrivateKeyFromSec1,
 	/// The raw bytes could not be interpreted as a P256 secret.
 	FailedToReadSecret,
+	/// Failed to convert public key to der.
+	FailedToConvertPublicKeyToDer,
+	/// Failed to convert private key to der.
+	FailedToConvertPrivateKeyToDer,
+	/// Failed to create a public key in constant time (or possibly some other
+	/// failures while creating public key).
+	CouldNotCreatePublicKeyInConstantTime,
 }
