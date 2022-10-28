@@ -11,13 +11,16 @@ use p256::{
 };
 use rand::Rng;
 use rand_core::OsRng;
-use sha2::Digest;
+use sha2::Sha512;
+use hmac::{Hmac, Mac};
 
 use crate::P256Error;
 
 const AES256_KEY_LEN: usize = 32;
 const BITS_96_AS_BYTES: usize = 12;
 const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
+
+type HmacSha512 = Hmac<Sha512>;
 
 /// Envelope for serializing an encrypted message with it's context.
 #[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
@@ -179,7 +182,10 @@ fn create_cipher(
 		.copied()
 		.collect();
 
-	let shared_key = sha2::Sha512::digest(&pre_image);
+	let mut mac = <HmacSha512 as KeyInit>::new_from_slice(&pre_image[..]).expect("hmac can take a key of any size");
+	mac.update(&pre_image);
+	let shared_key = mac.finalize().into_bytes();
+
 	Aes256Gcm::new_from_slice(&shared_key[..AES256_KEY_LEN])
 		.map_err(|_| P256Error::FailedToCreateAes256GcmCipher)
 }
