@@ -29,6 +29,7 @@ const PIVOT_BUILD_FINGERPRINTS_PATH: &str =
 async fn boot_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/boot-e2e".into();
+	let _: PathWrapper = PIVOT_OK2_SUCCESS_FILE.into();
 	fs::create_dir_all(&*tmp).unwrap();
 
 	let usock: PathWrapper = "/tmp/boot-e2e/boot_e2e.sock".into();

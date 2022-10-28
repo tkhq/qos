@@ -56,6 +56,8 @@ impl Reaper {
 			std::thread::sleep(std::time::Duration::from_secs(1));
 		}
 
+		println!("Reaper::execute about to spawn pivot");
+
 		let PivotConfig { args, restart, .. } = handles
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")

@@ -4,6 +4,7 @@ use aes_gcm::{
 	Aes256Gcm, Nonce,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
+use hmac::{Hmac, Mac};
 use p256::{
 	ecdh::EphemeralSecret,
 	elliptic_curve::{sec1::ToEncodedPoint, zeroize::Zeroize},
@@ -12,7 +13,6 @@ use p256::{
 use rand::Rng;
 use rand_core::OsRng;
 use sha2::Sha512;
-use hmac::{Hmac, Mac};
 
 use crate::P256Error;
 
@@ -182,7 +182,8 @@ fn create_cipher(
 		.copied()
 		.collect();
 
-	let mut mac = <HmacSha512 as KeyInit>::new_from_slice(&pre_image[..]).expect("hmac can take a key of any size");
+	let mut mac = <HmacSha512 as KeyInit>::new_from_slice(&pre_image[..])
+		.expect("hmac can take a key of any size");
 	mac.update(&pre_image);
 	let shared_key = mac.finalize().into_bytes();
 
