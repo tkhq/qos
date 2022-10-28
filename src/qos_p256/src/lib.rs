@@ -5,19 +5,12 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 
-use der::{zeroize::Zeroizing};
-
 use crate::{
 	encrypt::{P256EncryptPair, P256EncryptPublic},
 	sign::{P256SignPair, P256SignPublic},
 };
 
-// TODO
-// feature gate der
-
 const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
-const PUB_KEY_DER_LEN: usize = 91;
-const PRIVATE_KEY_DER_LEN: usize = 109;
 
 pub mod encrypt;
 pub mod sign;
@@ -99,7 +92,7 @@ impl P256Pair {
 
 	/// Sign the message and return the ASN.1 DER. Signs the SHA512 digest of
 	/// the message.
-	pub fn sign(&self, message: &[u8]) -> Result<Box<[u8]>, P256Error> {
+	pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
 		self.sign_private.sign(message)
 	}
 
@@ -110,37 +103,6 @@ impl P256Pair {
 			encrypt_public: self.encrypt_private.public_key(),
 			sign_public: self.sign_private.public_key(),
 		}
-	}
-
-	/// Serialize private keys to `SEC1` DER, creating a single value of
-	/// `encrypt_private_der||sign_private_der`
-	pub fn to_der(&self) -> Result<Zeroizing<Vec<u8>>, P256Error> {
-		let mut encrypt_der = self.encrypt_private.to_der()?;
-		let sign_der = self.sign_private.to_der()?;
-
-		encrypt_der.extend_from_slice(&*sign_der);
-
-		Ok(encrypt_der)
-	}
-
-	/// Deserialize private keys from `SEC1` DER. Assumes the given bytes are
-	/// encoded as `encrypt_private_der||sign_private_der`.
-	pub fn from_der(bytes: &[u8]) -> Result<Self, P256Error> {
-		if bytes.len() > PRIVATE_KEY_DER_LEN * 2 {
-			return Err(P256Error::EncodedPrivateKeyTooLong);
-		}
-		if bytes.len() < PRIVATE_KEY_DER_LEN * 2 {
-			return Err(P256Error::EncodedPrivateKeyTooShort);
-		}
-
-		// encrypt private is (0, PRIVATE_KEY_DER_LEN].
-		// sign private is (PRIVATE_KEY_DER_LEN, PRIVATE_KEY_DER_LEN*2].
-		let (encrypt_der, sign_der) = bytes.split_at(PRIVATE_KEY_DER_LEN);
-
-		Ok(Self {
-			encrypt_private: P256EncryptPair::from_der(encrypt_der)?,
-			sign_private: P256SignPair::from_der(sign_der)?,
-		})
 	}
 }
 
@@ -167,44 +129,6 @@ impl P256Public {
 		signature: &[u8],
 	) -> Result<(), P256Error> {
 		self.sign_public.verify(message, signature)
-	}
-
-	/// Deserialize the public key from a single DER encoded slice. Assumes the
-	/// keys are serialized as `encrypt_public_der||sign_public_der`.
-	pub fn from_der(bytes: &[u8]) -> Result<Self, P256Error> {
-		// encrypt public is 0..PUB_KEY_DER_LEN.
-		// sign public is PUB_KEY_DER_LEN..(PUB_KEY_DER_LEN*2).
-		if bytes.len() > PUB_KEY_DER_LEN * 2 {
-			return Err(P256Error::EncodedPublicKeyTooLong);
-		}
-		if bytes.len() < PUB_KEY_DER_LEN * 2 {
-			return Err(P256Error::EncodedPublicKeyTooShort);
-		}
-
-		// encrypt public is (0, PUB_KEY_DER_LEN].
-		// sign public is (PUB_KEY_DER_LEN, PUB_KEY_DER_LEN*2].
-		let (encrypt_der, sign_der) = bytes.split_at(PUB_KEY_DER_LEN);
-
-		Ok(Self {
-			encrypt_public: P256EncryptPublic::from_der(encrypt_der)?,
-			sign_public: P256SignPublic::from_der(sign_der)?,
-		})
-	}
-
-	/// Serialize the public keys to a single DER encoded vec. Serialized as
-	/// `encrypt_public_der||sign_public_der`.
-	pub fn to_der(&self) -> Result<Vec<u8>, P256Error> {
-		let encrypt_doc = self.encrypt_public.to_der()?;
-		let sign_doc = self.sign_public.to_der()?;
-
-		let der = encrypt_doc
-			.as_bytes()
-			.iter()
-			.chain(sign_doc.as_bytes())
-			.copied()
-			.collect();
-
-		Ok(der)
 	}
 }
 
@@ -277,44 +201,5 @@ mod test {
 			bob_pair.decrypt(&serialized_envelope).unwrap_err(),
 			P256Error::AesGcm256DecryptError
 		);
-	}
-
-	#[test]
-	fn public_key_roundtrip_der_works() {
-		let message = b"a message to authenticate";
-		let alice_pair = P256Pair::generate();
-		let signature = alice_pair.sign(message).unwrap();
-
-		let alice_public = alice_pair.public_key();
-		let alice_public_der = alice_public.to_der().unwrap();
-
-		assert_eq!(alice_public_der.len(), PUB_KEY_DER_LEN * 2);
-
-		let alice_public2 = P256Public::from_der(&alice_public_der).unwrap();
-		assert!(alice_public2.verify(message, &signature).is_ok());
-
-		let plaintext = b"rust test message";
-		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
-		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
-		assert_eq!(decrypted, plaintext);
-	}
-
-	#[test]
-	fn private_key_roundtrip_der_works() {
-		let alice_pair = P256Pair::generate();
-		let alice_public = alice_pair.public_key();
-
-		let alice_pair_der = alice_pair.to_der().unwrap();
-		assert_eq!(alice_pair_der.len(), PRIVATE_KEY_DER_LEN * 2);
-		let alice_pair2 = P256Pair::from_der(&alice_pair_der).unwrap();
-
-		let message = b"a message to authenticate";
-		let signature = alice_pair2.sign(message).unwrap();
-		assert!(alice_public.verify(message, &signature).is_ok());
-
-		let plaintext = b"rust test message";
-		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
-		let decrypted = alice_pair2.decrypt(&serialized_envelope).unwrap();
-		assert_eq!(decrypted, plaintext);
 	}
 }

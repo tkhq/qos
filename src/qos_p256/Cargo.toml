@@ -7,13 +7,12 @@ edition = "2021"
 qos_hex = { path = "../qos_hex" }
 
 sha2 = "0.10.6"
-p256 = { version = "0.11.1", features = ["ecdh", "ecdsa", "ecdsa-core", "pkcs8"] }
+p256 = { version = "0.11.1", features = ["ecdh", "ecdsa", "ecdsa-core", "std"], default-features = false }
 rand_core = "0.6.3"
 rand = "0.8.5"
 aes-gcm = "0.10.1"
 borsh = { version = "0.9" }
 hmac = { version = "0.12" }
-der = { version = "0.6", default-features = false }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }

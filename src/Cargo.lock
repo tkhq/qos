@@ -348,7 +348,6 @@ dependencies = [
  "generic-array",
  "group",
  "hkdf",
- "pkcs8",
  "rand_core",
  "sec1",
  "subtle",
@@ -947,7 +946,6 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "borsh",
- "der",
  "hmac",
  "p256",
  "qos_hex",
