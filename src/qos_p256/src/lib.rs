@@ -5,12 +5,19 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 
+use hkdf::Hkdf;
+use rand_core::{OsRng, RngCore};
+use sha2::Sha512;
+
 use crate::{
 	encrypt::{P256EncryptPair, P256EncryptPublic},
 	sign::{P256SignPair, P256SignPublic},
 };
 
 const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
+const P256_SECRET_LEN: usize = 32;
+const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
+const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
 
 pub mod encrypt;
 pub mod sign;
@@ -36,33 +43,48 @@ pub enum P256Error {
 	/// Nonce could not be coerced into the intended length.
 	FailedToCoerceNonceToIntendedLength,
 	/// Signature could not be de-serialized as DER encoded.
-	FailedToDeserializeSignatureAsDer,
+	FailedToDeserializeSignature,
 	/// The signature could not be verified against the given message and
 	/// public key.
 	FailedSignatureVerification,
-	/// Could not deserialize a public key as `SEC1` encoded.
-	FailedToDeserializePublicKeyFromSec1,
-	/// Could not deserialize a private key as `SEC1` encoded.
-	FailedToDeserializePrivateKeyFromSec1,
 	/// The raw bytes could not be interpreted as a P256 secret.
 	FailedToReadSecret,
-	/// The raw bytes could not be interpreted as SEC1 encoded point uncompressed.
+	/// The raw bytes could not be interpreted as SEC1 encoded point
+	/// uncompressed.
 	FailedToReadPublicKey,
-	/// Failed to convert public key to der.
-	FailedToConvertPublicKeyToDer,
-	/// Failed to convert private key to der.
-	FailedToConvertPrivateKeyToDer,
-	/// Failed to create a public key in constant time (or possibly some other
-	/// failures while creating public key).
-	CouldNotCreatePublicKeyInConstantTime,
 	/// The DER encoded public key is too long to be valid.
 	EncodedPublicKeyTooLong,
 	/// The DER encoded public key is too short to be valid.
 	EncodedPublicKeyTooShort,
-	/// The DER encoded private key is too long to be valid.
-	EncodedPrivateKeyTooLong,
-	/// The DER encoded private key is too short to be valid.
-	EncodedPrivateKeyTooShort,
+	/// Error'ed while running Hkdf expansion
+	HkdfExpansionFailed,
+}
+
+/// Helper function to derive a secret from a master seed
+fn derive_secret(
+	seed: [u8; 64],
+	derive_path: &[u8],
+) -> Result<[u8; 32], P256Error> {
+	let hk = Hkdf::<Sha512>::new(Some(derive_path), &seed);
+
+	let mut buf = [0u8; P256_SECRET_LEN];
+	hk.expand(&[], &mut buf).map_err(|_| P256Error::HkdfExpansionFailed)?;
+
+	Ok(buf)
+}
+
+/// Helper function to generate a `N` length byte buffer
+fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
+	loop {
+		let mut key = [0u8; N];
+		OsRng.fill_bytes(&mut key);
+
+		if key.iter().all(|bit| *bit == 0) {
+			// try again if we got all zeros
+		} else {
+			return key;
+		}
+	}
 }
 
 /// P256 private key pair for signing and encryption. Internally this uses a
@@ -70,16 +92,23 @@ pub enum P256Error {
 pub struct P256Pair {
 	encrypt_private: P256EncryptPair,
 	sign_private: P256SignPair,
+	master_seed: [u8; 64],
 }
 
 impl P256Pair {
 	/// Generate a new private key using the OS randomness source.
-	#[must_use]
-	pub fn generate() -> Self {
-		Self {
-			encrypt_private: P256EncryptPair::generate(),
-			sign_private: P256SignPair::generate(),
-		}
+	pub fn generate() -> Result<Self, P256Error> {
+		let master_seed = non_zero_bytes_os_rng::<64>();
+
+		let encrypt_secret =
+			derive_secret(master_seed, P256_ENCRYPT_DERIVE_PATH)?;
+		let sign_secret = derive_secret(master_seed, P256_SIGN_DERIVE_PATH)?;
+
+		Ok(Self {
+			encrypt_private: P256EncryptPair::from_bytes(&encrypt_secret)?,
+			sign_private: P256SignPair::from_bytes(&sign_secret)?,
+			master_seed,
+		})
 	}
 
 	/// Decrypt a message encoded to this pair's public key.
@@ -103,6 +132,25 @@ impl P256Pair {
 			encrypt_public: self.encrypt_private.public_key(),
 			sign_public: self.sign_private.public_key(),
 		}
+	}
+
+	/// Create `Self` from a master seed.
+	pub fn from_master_seed(master_seed: [u8; 64]) -> Result<Self, P256Error> {
+		let encrypt_secret =
+			derive_secret(master_seed, P256_ENCRYPT_DERIVE_PATH)?;
+		let sign_secret = derive_secret(master_seed, P256_SIGN_DERIVE_PATH)?;
+
+		Ok(Self {
+			encrypt_private: P256EncryptPair::from_bytes(&encrypt_secret)?,
+			sign_private: P256SignPair::from_bytes(&sign_secret)?,
+			master_seed,
+		})
+	}
+
+	/// Get the master seed used to create this pair.
+	#[must_use]
+	pub fn to_master_seed(&self) -> &[u8; 64] {
+		&self.master_seed
 	}
 }
 
@@ -132,28 +180,33 @@ impl P256Public {
 	}
 
 	/// Serialize to SEC1 encoded point, not compressed.
+	#[must_use]
 	pub fn to_bytes(&self) -> Vec<u8> {
-		self.encrypt_public.to_bytes()
+		self.encrypt_public
+			.to_bytes()
 			.iter()
 			.chain(self.sign_public.to_bytes().iter())
-			.cloned()
+			.copied()
 			.collect()
 	}
 
 	/// Deserialize from a SEC1 encoded point, not compressed.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
 		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED * 2 {
-			return Err(P256Error::EncodedPublicKeyTooLong)
+			return Err(P256Error::EncodedPublicKeyTooLong);
 		}
 		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED * 2 {
-			return Err(P256Error::EncodedPublicKeyTooShort)
+			return Err(P256Error::EncodedPublicKeyTooShort);
 		}
 
-		let (encrypt_bytes, sign_bytes) = bytes.split_at(PUB_KEY_LEN_UNCOMPRESSED);
+		let (encrypt_bytes, sign_bytes) =
+			bytes.split_at(PUB_KEY_LEN_UNCOMPRESSED);
 
 		Ok(Self {
-			encrypt_public: P256EncryptPublic::from_bytes(encrypt_bytes).map_err(|_| P256Error::FailedToReadPublicKey)?,
-			sign_public: P256SignPublic::from_bytes(sign_bytes).map_err(|_| P256Error::FailedToReadPublicKey)?,
+			encrypt_public: P256EncryptPublic::from_bytes(encrypt_bytes)
+				.map_err(|_| P256Error::FailedToReadPublicKey)?,
+			sign_public: P256SignPublic::from_bytes(sign_bytes)
+				.map_err(|_| P256Error::FailedToReadPublicKey)?,
 		})
 	}
 }
@@ -166,9 +219,9 @@ mod test {
 	fn signatures_are_deterministic() {
 		let message = b"a message to authenticate";
 
-		let pair = P256Pair::generate();
+		let pair = P256Pair::generate().unwrap();
 		(0..100)
-			.map(|_| pair.sign(message).unwrap().to_vec())
+			.map(|_| pair.sign(message).unwrap())
 			.collect::<Vec<_>>()
 			.windows(2)
 			.for_each(|slice| assert_eq!(slice[0], slice[1]));
@@ -178,7 +231,7 @@ mod test {
 	fn sign_and_verification_works() {
 		let message = b"a message to authenticate";
 
-		let pair = P256Pair::generate();
+		let pair = P256Pair::generate().unwrap();
 		let signature = pair.sign(message).unwrap();
 
 		assert!(pair.public_key().verify(message, &signature).is_ok());
@@ -188,10 +241,10 @@ mod test {
 	fn verification_rejects_wrong_signature() {
 		let message = b"a message to authenticate";
 
-		let alice_pair = P256Pair::generate();
+		let alice_pair = P256Pair::generate().unwrap();
 		let signature = alice_pair.sign(message).unwrap();
 
-		let bob_public = P256Pair::generate().public_key();
+		let bob_public = P256Pair::generate().unwrap().public_key();
 
 		assert_eq!(
 			bob_public.verify(message, &signature).unwrap_err(),
@@ -201,7 +254,7 @@ mod test {
 
 	#[test]
 	fn basic_encrypt_decrypt_works() {
-		let alice_pair = P256Pair::generate();
+		let alice_pair = P256Pair::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 
 		let plaintext = b"rust test message";
@@ -214,14 +267,14 @@ mod test {
 
 	#[test]
 	fn wrong_receiver_cannot_decrypt() {
-		let alice_pair = P256Pair::generate();
+		let alice_pair = P256Pair::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 
 		let plaintext = b"rust test message";
 
 		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
 
-		let bob_pair = P256Pair::generate();
+		let bob_pair = P256Pair::generate().unwrap();
 
 		assert_eq!(
 			bob_pair.decrypt(&serialized_envelope).unwrap_err(),
@@ -231,17 +284,36 @@ mod test {
 
 	#[test]
 	fn public_key_bytes_roundtrip() {
-		let alice_pair = P256Pair::generate();
+		let alice_pair = P256Pair::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 		let alice_public_bytes = alice_public.to_bytes();
 
 		assert_eq!(alice_public_bytes.len(), PUB_KEY_LEN_UNCOMPRESSED * 2);
 
-		let alice_public2 = P256Public::from_bytes(&alice_public_bytes).unwrap();
+		let alice_public2 =
+			P256Public::from_bytes(&alice_public_bytes).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
 		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
 		assert_eq!(decrypted, plaintext);
+	}
+
+	#[test]
+	fn master_seed_bytes_roundtrip() {
+		let alice_pair = P256Pair::generate().unwrap();
+		let public_key = alice_pair.public_key();
+		let master_seed = alice_pair.to_master_seed();
+
+		let alice_pair2 = P256Pair::from_master_seed(*master_seed).unwrap();
+
+		let plaintext = b"rust test message";
+		let serialized_envelope = public_key.encrypt(plaintext).unwrap();
+		let decrypted = alice_pair2.decrypt(&serialized_envelope).unwrap();
+		assert_eq!(decrypted, plaintext);
+
+		let message = b"a message to authenticate";
+		let signature = alice_pair2.sign(message).unwrap();
+		assert!(public_key.verify(message, &signature).is_ok());
 	}
 }

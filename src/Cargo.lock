@@ -945,11 +945,11 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "borsh",
+ "hkdf",
  "hmac",
  "p256",
  "qos_hex",
  "qos_test_primitives",
- "rand",
  "rand_core",
  "sha2",
 ]

@@ -1,14 +1,11 @@
 //! Abstractions for sign and signature verification
 
-use p256::{
-	ecdsa::{
-		signature::{Signer, Verifier},
-		Signature, SigningKey, VerifyingKey,
-	},
+use p256::ecdsa::{
+	signature::{Signature as _, Signer, Verifier},
+	Signature, SigningKey, VerifyingKey,
 };
 use rand_core::OsRng;
 use sha2::Digest;
-use p256::ecdsa::signature::Signature as _;
 
 use crate::P256Error;
 
@@ -48,10 +45,9 @@ impl P256SignPair {
 	}
 
 	/// Serialize key to raw scalar byte slice.
+	#[must_use]
 	pub fn to_bytes(&self) -> Vec<u8> {
-		let bytes = self.private.to_bytes().to_vec();
-
-		bytes
+		self.private.to_bytes().to_vec()
 	}
 }
 
@@ -72,7 +68,7 @@ impl P256SignPublic {
 	) -> Result<(), P256Error> {
 		let digest = sha2::Sha512::digest(message);
 		let signature = Signature::from_bytes(signature)
-			.map_err(|_| P256Error::FailedToDeserializeSignatureAsDer)?;
+			.map_err(|_| P256Error::FailedToDeserializeSignature)?;
 
 		self.public
 			.verify(&digest, &signature)
@@ -80,6 +76,7 @@ impl P256SignPublic {
 	}
 
 	/// Serialize to SEC1 encoded point, not compressed.
+	#[must_use]
 	pub fn to_bytes(&self) -> Box<[u8]> {
 		let sec1_encoded_point = self.public.to_encoded_point(false);
 		sec1_encoded_point.to_bytes()
@@ -88,7 +85,8 @@ impl P256SignPublic {
 	/// Deserialize from a SEC1 encoded point, not compressed.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
 		Ok(Self {
-			public: VerifyingKey::from_sec1_bytes(bytes).map_err(|_| P256Error::FailedToReadPublicKey)?
+			public: VerifyingKey::from_sec1_bytes(bytes)
+				.map_err(|_| P256Error::FailedToReadPublicKey)?,
 		})
 	}
 }

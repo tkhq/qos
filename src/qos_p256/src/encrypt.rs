@@ -7,11 +7,9 @@ use aes_gcm::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use hmac::{Hmac, Mac};
 use p256::{
-	ecdh::diffie_hellman,
-	elliptic_curve::sec1::ToEncodedPoint,
-	PublicKey, SecretKey,
+	ecdh::diffie_hellman, elliptic_curve::sec1::ToEncodedPoint, PublicKey,
+	SecretKey,
 };
-use rand::Rng;
 use rand_core::OsRng;
 use sha2::Sha512;
 
@@ -103,10 +101,9 @@ impl P256EncryptPair {
 	}
 
 	/// Serialize key to raw scalar byte slice.
+	#[must_use]
 	pub fn to_bytes(&self) -> Vec<u8> {
-		let bytes = self.private.to_be_bytes().to_vec();
-
-		bytes
+		self.private.to_be_bytes().to_vec()
 	}
 }
 
@@ -143,7 +140,7 @@ impl P256EncryptPublic {
 
 		let nonce = {
 			let random_bytes =
-				rand::thread_rng().gen::<[u8; BITS_96_AS_BYTES]>();
+				crate::non_zero_bytes_os_rng::<BITS_96_AS_BYTES>();
 			*Nonce::from_slice(&random_bytes)
 		};
 
@@ -169,6 +166,7 @@ impl P256EncryptPublic {
 	}
 
 	/// Serialize to SEC1 encoded point, not compressed.
+	#[must_use]
 	pub fn to_bytes(&self) -> Box<[u8]> {
 		let sec1_encoded_point = self.public.to_encoded_point(false);
 		sec1_encoded_point.to_bytes()
@@ -177,7 +175,8 @@ impl P256EncryptPublic {
 	/// Deserialize from a SEC1 encoded point, not compressed.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
 		Ok(Self {
-			public: PublicKey::from_sec1_bytes(bytes).map_err(|_| P256Error::FailedToReadPublicKey)?
+			public: PublicKey::from_sec1_bytes(bytes)
+				.map_err(|_| P256Error::FailedToReadPublicKey)?,
 		})
 	}
 }
