@@ -10,6 +10,9 @@ use crate::{
 	sign::{P256SignPair, P256SignPublic},
 };
 
+const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
+const PUB_KEY_DER_LEN: usize = 91;
+
 pub mod encrypt;
 pub mod sign;
 
@@ -51,6 +54,10 @@ pub enum P256Error {
 	/// Failed to create a public key in constant time (or possibly some other
 	/// failures while creating public key).
 	CouldNotCreatePublicKeyInConstantTime,
+	/// The DER encoded public key is too long to be valid.
+	EncodedPublicKeyTooLong,
+	/// The DER encoded public key is too short to be valid.
+	EncodedPublicKeyTooShort,
 }
 
 /// P256 private key pair for signing and encryption. Internally this uses a
@@ -118,12 +125,61 @@ impl P256Public {
 	) -> Result<(), P256Error> {
 		self.sign_public.verify(message, signature)
 	}
-}
 
+	/// Deserialize the public key from a single DER encoded slice. Assumes the
+	/// keys are serialized as `encrypt_public_der||sign_public_der`.
+	pub fn from_der(bytes: &[u8]) -> Result<Self, P256Error> {
+		// encrypt public is 0..PUB_KEY_DER_LEN.
+		// sign public is PUB_KEY_DER_LEN..(PUB_KEY_DER_LEN*2).
+		if bytes.len() > PUB_KEY_DER_LEN * 2 {
+			return Err(P256Error::EncodedPublicKeyTooLong);
+		}
+		if bytes.len() < PUB_KEY_DER_LEN * 2 {
+			return Err(P256Error::EncodedPublicKeyTooShort);
+		}
+
+		// encrypt public is (0, PUB_KEY_DER_LEN].
+		// sign public is (PUB_KEY_DER_LEN, PUB_KEY_DER_LEN*2].
+		let (encrypt_der, sign_der) = bytes.split_at(PUB_KEY_DER_LEN);
+
+		Ok(Self {
+			encrypt_public: P256EncryptPublic::from_der(encrypt_der)?,
+			sign_public: P256SignPublic::from_der(sign_der)?,
+		})
+	}
+
+	/// Serialize the public keys to a single DER encoded vec. Serialized as
+	/// `encrypt_public_der||sign_public_der`.
+	pub fn to_der(&self) -> Result<Vec<u8>, P256Error> {
+		let encrypt_doc = self.encrypt_public.to_der()?;
+		let sign_doc = self.sign_public.to_der()?;
+
+		let der = encrypt_doc
+			.as_bytes()
+			.iter()
+			.chain(sign_doc.as_bytes())
+			.copied()
+			.collect();
+
+		Ok(der)
+	}
+}
 
 #[cfg(test)]
 mod test {
 	use super::*;
+
+	#[test]
+	fn signatures_are_deterministic() {
+		let message = b"a message to authenticate";
+
+		let pair = P256Pair::generate();
+		(0..100)
+			.map(|_| pair.sign(message).unwrap().to_vec())
+			.collect::<Vec<_>>()
+			.windows(2)
+			.for_each(|slice| assert_eq!(slice[0], slice[1]));
+	}
 
 	#[test]
 	fn sign_and_verification_works() {
@@ -179,5 +235,20 @@ mod test {
 			bob_pair.decrypt(&serialized_envelope).unwrap_err(),
 			P256Error::AesGcm256DecryptError
 		);
+	}
+
+	#[test]
+	fn public_key_roundtrip_serialization_works() {
+		let message = b"a message to authenticate";
+		let alice_pair = P256Pair::generate();
+		let signature = alice_pair.sign(message).unwrap();
+
+		let alice_public = alice_pair.public_key();
+		let alice_public_der = alice_public.to_der().unwrap();
+
+		assert_eq!(alice_public_der.len(), PUB_KEY_DER_LEN * 2);
+
+		let alice_public2 = P256Public::from_der(&alice_public_der).unwrap();
+		assert!(alice_public2.verify(message, &signature).is_ok());
 	}
 }

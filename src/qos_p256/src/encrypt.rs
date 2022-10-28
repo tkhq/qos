@@ -20,7 +20,7 @@ use crate::P256Error;
 
 const AES256_KEY_LEN: usize = 32;
 const BITS_96_AS_BYTES: usize = 12;
-const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
+use crate::PUB_KEY_LEN_UNCOMPRESSED;
 
 /// Envelope for serializing an encrypted message with it's context.
 #[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
