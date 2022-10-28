@@ -119,3 +119,65 @@ impl P256Public {
 		self.sign_public.verify(message, signature)
 	}
 }
+
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn sign_and_verification_works() {
+		let message = b"a message to authenticate";
+
+		let pair = P256Pair::generate();
+		let signature = pair.sign(message).unwrap();
+
+		assert!(pair.public_key().verify(message, &signature).is_ok());
+	}
+
+	#[test]
+	fn verification_rejects_wrong_signature() {
+		let message = b"a message to authenticate";
+
+		let alice_pair = P256Pair::generate();
+		let signature = alice_pair.sign(message).unwrap();
+
+		let bob_public = P256Pair::generate().public_key();
+
+		assert_eq!(
+			bob_public.verify(message, &signature).unwrap_err(),
+			P256Error::FailedSignatureVerification
+		);
+	}
+
+	#[test]
+	fn basic_encrypt_decrypt_works() {
+		let alice_pair = P256Pair::generate();
+		let alice_public = alice_pair.public_key();
+
+		let plaintext = b"rust test message";
+
+		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
+
+		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
+
+		assert_eq!(decrypted, plaintext);
+	}
+
+	#[test]
+	fn wrong_receiver_cannot_decrypt() {
+		let alice_pair = P256Pair::generate();
+		let alice_public = alice_pair.public_key();
+
+		let plaintext = b"rust test message";
+
+		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
+
+		let bob_pair = P256Pair::generate();
+
+		assert_eq!(
+			bob_pair.decrypt(&serialized_envelope).unwrap_err(),
+			P256Error::AesGcm256DecryptError
+		);
+	}
+}
