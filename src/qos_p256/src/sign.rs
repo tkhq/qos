@@ -1,4 +1,4 @@
-//! Abstractions for signing and signature verification
+//! Abstractions for sign and signature verification
 
 use der::zeroize::Zeroizing;
 use p256::{
@@ -15,7 +15,7 @@ use sha2::Digest;
 
 use crate::P256Error;
 
-/// Signing private key pair.
+/// Sign private key pair.
 pub struct P256SignPair {
 	private: SigningKey,
 }
@@ -59,7 +59,7 @@ impl P256SignPair {
 	}
 }
 
-/// Signing public key for verifying signatures.
+/// Sign public key for verifying signatures.
 pub struct P256SignPublic {
 	public: VerifyingKey,
 }
@@ -111,7 +111,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn signing_and_verification_works() {
+	fn sign_and_verification_works() {
 		let message = b"a message to authenticate";
 
 		let pair = P256SignPair::generate();

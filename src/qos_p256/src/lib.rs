@@ -5,6 +5,11 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 
+use crate::{
+	encrypt::{P256EncryptPair, P256EncryptPublic},
+	sign::{P256SignPair, P256SignPublic},
+};
+
 pub mod encrypt;
 pub mod sign;
 
@@ -46,4 +51,71 @@ pub enum P256Error {
 	/// Failed to create a public key in constant time (or possibly some other
 	/// failures while creating public key).
 	CouldNotCreatePublicKeyInConstantTime,
+}
+
+/// P256 private key pair for signing and encryption. Internally this uses a
+/// separate secret for signing and encryption.
+pub struct P256Pair {
+	encrypt_private: P256EncryptPair,
+	sign_private: P256SignPair,
+}
+
+impl P256Pair {
+	/// Generate a new private key using the OS randomness source.
+	#[must_use]
+	pub fn generate() -> Self {
+		Self {
+			encrypt_private: P256EncryptPair::generate(),
+			sign_private: P256SignPair::generate(),
+		}
+	}
+
+	/// Decrypt a message encoded to this pair's public key.
+	pub fn decrypt(
+		&self,
+		serialized_envelope: &[u8],
+	) -> Result<Vec<u8>, P256Error> {
+		self.encrypt_private.decrypt(serialized_envelope)
+	}
+
+	/// Sign the message and return the ASN.1 DER. Signs the SHA512 digest of
+	/// the message.
+	pub fn sign(&self, message: &[u8]) -> Result<Box<[u8]>, P256Error> {
+		self.sign_private.sign(message)
+	}
+
+	/// Get the public key.
+	#[must_use]
+	pub fn public_key(&self) -> P256Public {
+		P256Public {
+			encrypt_public: self.encrypt_private.public_key(),
+			sign_public: self.sign_private.public_key(),
+		}
+	}
+}
+
+/// P256 public key for signing and encryption. Internally this uses a
+/// separate public keys for signing and encryption.
+pub struct P256Public {
+	encrypt_public: P256EncryptPublic,
+	sign_public: P256SignPublic,
+}
+
+impl P256Public {
+	/// Encrypt a message to this public key.
+	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
+		self.encrypt_public.encrypt(message)
+	}
+
+	/// Verify a `signature` and `message` against this private key. Verifies
+	/// the SHA512 digest of the message.
+	///
+	/// Returns Ok if the signature is good.
+	pub fn verify(
+		&self,
+		message: &[u8],
+		signature: &[u8],
+	) -> Result<(), P256Error> {
+		self.sign_public.verify(message, signature)
+	}
 }
