@@ -6,13 +6,13 @@ edition = "2021"
 [dependencies]
 qos_hex = { path = "../qos_hex" }
 
-sha2 = "0.10.6"
+borsh = { version = "0.9", default-features = false }
+rand_core = { version = "0.6.3", default-features = false }
+rand = { version = "0.8.5", default-features = false }
+sha2 = { version = "0.10", default-features = false }
 p256 = { version = "0.11.1", features = ["ecdh", "ecdsa", "ecdsa-core", "std"], default-features = false }
-rand_core = "0.6.3"
-rand = "0.8.5"
-aes-gcm = "0.10.1"
-borsh = { version = "0.9" }
-hmac = { version = "0.12" }
+aes-gcm = { version = "0.10.1", features = ["aes", "alloc"], default-features = false }
+hmac = { version = "0.12", default-features = false }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
