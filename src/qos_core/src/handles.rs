@@ -3,7 +3,7 @@
 use std::{fs, os::unix::fs::PermissionsExt, path::Path};
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use qos_crypto::RsaPair;
+use qos_p256::P256Pair;
 
 use crate::protocol::{services::boot::ManifestEnvelope, ProtocolError};
 
@@ -25,8 +25,8 @@ impl QuorumKeyHandle {
 	/// # Errors
 	///
 	/// Errors if the Quorum Key has not been put.
-	pub fn get_quorum_key(&self) -> Result<RsaPair, ProtocolError> {
-		let pair = RsaPair::from_pem_file(&self.quorum)
+	pub fn get_quorum_key(&self) -> Result<P256Pair, ProtocolError> {
+		let pair = P256Pair::from_hex_file(&self.quorum)
 			.map_err(|_| ProtocolError::FailedToGetQuorumKey)?;
 		Ok(pair)
 	}
@@ -76,8 +76,8 @@ impl Handles {
 	/// # Errors
 	///
 	/// Errors if the Ephemeral Key has not been put.
-	pub fn get_ephemeral_key(&self) -> Result<RsaPair, ProtocolError> {
-		let pair = RsaPair::from_pem_file(&self.ephemeral)
+	pub fn get_ephemeral_key(&self) -> Result<P256Pair, ProtocolError> {
+		let pair = P256Pair::from_hex_file(&self.ephemeral)
 			.map_err(|_| ProtocolError::FailedToGetEphemeralKey)?;
 		Ok(pair)
 	}
@@ -89,11 +89,11 @@ impl Handles {
 	/// Errors if the Ephemeral Key has already been put.
 	pub fn put_ephemeral_key(
 		&self,
-		pair: &RsaPair,
+		pair: &P256Pair,
 	) -> Result<(), ProtocolError> {
 		Self::write_as_read_only(
 			&self.ephemeral,
-			&pair.private_key_to_pem()?,
+			&pair.to_master_seed_hex(),
 			ProtocolError::FailedToPutEphemeralKey,
 		)
 	}
@@ -109,7 +109,7 @@ impl Handles {
 	/// # Errors
 	///
 	/// Errors if the Quorum Key has not been put.
-	pub fn get_quorum_key(&self) -> Result<RsaPair, ProtocolError> {
+	pub fn get_quorum_key(&self) -> Result<P256Pair, ProtocolError> {
 		self.quorum.get_quorum_key()
 	}
 
@@ -118,10 +118,10 @@ impl Handles {
 	/// # Errors
 	///
 	/// Errors if the Quorum Key has already been put.
-	pub fn put_quorum_key(&self, pair: &RsaPair) -> Result<(), ProtocolError> {
+	pub fn put_quorum_key(&self, pair: &P256Pair) -> Result<(), ProtocolError> {
 		Self::write_as_read_only(
 			&self.quorum.quorum,
-			&pair.private_key_to_pem()?,
+			&pair.to_master_seed_hex(),
 			ProtocolError::FailedToPutManifestEnvelope,
 		)
 	}

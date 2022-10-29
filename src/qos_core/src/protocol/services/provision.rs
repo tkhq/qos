@@ -78,7 +78,7 @@ pub(in crate::protocol) fn provision(
 	let ephemeral_key = state.handles.get_ephemeral_key()?;
 
 	let share = ephemeral_key
-		.envelope_decrypt(encrypted_share)
+		.decrypt(encrypted_share)
 		.map_err(|_| ProtocolError::DecryptionFailed)?;
 
 	state.provisioner.add_share(share)?;
@@ -90,14 +90,15 @@ pub(in crate::protocol) fn provision(
 		return Ok(false);
 	}
 
-	let private_key_der = state.provisioner.build()?;
+	let master_seed = state.provisioner.build()?;
 	state.provisioner.clear();
 
-	let pair = qos_crypto::RsaPair::from_der(&private_key_der)
+	let master_seed: [u8; qos_p256::MASTER_SEED_LEN] = master_seed.try_into().map_err(|_| ProtocolError::IncorrectSecretLen)?;
+	let pair = qos_p256::P256Pair::from_master_seed(master_seed)
 		.map_err(|_| ProtocolError::InvalidPrivateKey)?;
-	let public_key_der = pair.public_key_to_der()?;
+	let public_key_bytes = pair.public_key().to_bytes();
 
-	if public_key_der != manifest_envelope.manifest.namespace.quorum_key {
+	if public_key_bytes != manifest_envelope.manifest.namespace.quorum_key {
 		// We did not construct the intended key
 		return Err(ProtocolError::ReconstructionErrorIncorrectPubKey);
 	}
@@ -115,7 +116,8 @@ pub(in crate::protocol) fn provision(
 mod test {
 	use std::path::Path;
 
-	use qos_crypto::{sha_256, shamir::shares_generate, RsaPair};
+	use qos_crypto::{sha_256, shamir::shares_generate};
+	use qos_p256::P256Pair;
 	use qos_test_primitives::PathWrapper;
 
 	use crate::{
@@ -137,8 +139,8 @@ mod test {
 	};
 
 	struct Setup {
-		quorum_pair: RsaPair,
-		eph_pair: RsaPair,
+		quorum_pair: P256Pair,
+		eph_pair: P256Pair,
 		threshold: usize,
 		state: ProtocolState,
 		approvals: Vec<Approval>,
@@ -152,20 +154,20 @@ mod test {
 			"pivot".to_string(),
 		);
 		// 1) Create and write eph key
-		let eph_pair = RsaPair::generate().unwrap();
+		let eph_pair = P256Pair::generate().unwrap();
 		handles.put_ephemeral_key(&eph_pair).unwrap();
 		// 2) Create and write manifest with threshold and quorum key
-		let quorum_pair = RsaPair::generate().unwrap();
+		let quorum_pair = P256Pair::generate().unwrap();
 		let threshold = 3usize;
 		let pivot = b"this is a pivot binary";
 
 		let members: Vec<_> = (0..4)
-			.map(|_| RsaPair::generate().unwrap())
+			.map(|_| P256Pair::generate().unwrap())
 			.enumerate()
 			.map(|(i, pair)| {
 				let member = QuorumMember {
 					alias: i.to_string(),
-					pub_key: pair.public_key_to_der().unwrap(),
+					pub_key: pair.public_key().to_bytes(),
 				};
 
 				(member, pair)
@@ -176,7 +178,7 @@ mod test {
 			namespace: Namespace {
 				nonce: 420,
 				name: "vape-space".to_string(),
-				quorum_key: quorum_pair.public_key_to_der().unwrap(),
+				quorum_key: quorum_pair.public_key().to_bytes(),
 			},
 			enclave: NitroConfig {
 				pcr0: vec![4; 32],
@@ -206,7 +208,7 @@ mod test {
 			.into_iter()
 			.map(|(member, pair)| Approval {
 				member,
-				signature: pair.sign_sha256(&manifest.qos_hash()).unwrap(),
+				signature: pair.sign(&manifest.qos_hash()).unwrap(),
 			})
 			.collect();
 
@@ -239,11 +241,11 @@ mod test {
 			setup(&*eph_file, &*quorum_file, &*manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
-		let quorum_key = quorum_pair.private_key_to_der().unwrap();
+		let quorum_key = quorum_pair.to_master_seed();
 		let encrypted_shares: Vec<_> =
-			shares_generate(&quorum_key, 4, threshold as usize)
+			shares_generate(quorum_key, 4, threshold as usize)
 				.iter()
-				.map(|shard| eph_pair.envelope_encrypt(shard).unwrap())
+				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();
 
 		// 5) For K-1 shards call provision, make sure returns false and doesn't
@@ -261,7 +263,7 @@ mod test {
 		let approval = approvals[threshold].clone();
 		assert_eq!(provision(share, approval, &mut state), Ok(true));
 		let quorum_key = std::fs::read(&*quorum_file).unwrap();
-		assert_eq!(quorum_key, quorum_pair.private_key_to_pem().unwrap());
+		assert_eq!(quorum_key, quorum_pair.to_master_seed().to_vec());
 		assert_eq!(state.phase, ProtocolPhase::QuorumKeyProvisioned);
 		// Make sure the EK is deleted
 		assert!(!Path::new(&*eph_file).exists());
@@ -292,11 +294,11 @@ mod test {
 
 		// 4) Create shards of a RANDOM KEY and encrypt them to eph key
 		let random_key =
-			RsaPair::generate().unwrap().private_key_to_der().unwrap();
+			P256Pair::generate().unwrap().to_master_seed().to_vec();
 		let encrypted_shares: Vec<_> =
 			shares_generate(&random_key, 4, threshold as usize)
 				.iter()
-				.map(|shard| eph_pair.envelope_encrypt(shard).unwrap())
+				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();
 
 		// 5) For K-1 shards call provision, make sure returns false and doesn't
@@ -332,11 +334,11 @@ mod test {
 			setup(&*eph_file, &*quorum_file, &*manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
-		let quorum_key = quorum_pair.private_key_to_der().unwrap();
+		let quorum_key = quorum_pair.to_master_seed();
 		let encrypted_shares: Vec<_> =
-			shares_generate(&quorum_key, 4, threshold as usize)
+			shares_generate(quorum_key, 4, threshold as usize)
 				.iter()
-				.map(|shard| eph_pair.envelope_encrypt(shard).unwrap())
+				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();
 
 		// 5) For K-1 shards call provision, make sure returns false and doesn't
@@ -351,7 +353,7 @@ mod test {
 		// 6) Add a bogus shard as the Kth shard
 		let bogus_share = &[69u8; 2349];
 		let encrypted_bogus_share =
-			eph_pair.envelope_encrypt(bogus_share).unwrap();
+			eph_pair.public_key().encrypt(bogus_share).unwrap();
 		let approval = approvals[threshold].clone();
 		assert_eq!(
 			provision(&encrypted_bogus_share, approval, &mut state),
@@ -379,11 +381,11 @@ mod test {
 			mut approvals,
 		} = setup(&*eph_file, &*quorum_file, &*manifest_file);
 
-		let quorum_key = quorum_pair.private_key_to_der().unwrap();
+		let quorum_key = quorum_pair.to_master_seed();
 		let mut encrypted_shares: Vec<_> =
-			shares_generate(&quorum_key, 4, threshold as usize)
+			shares_generate(quorum_key, 4, threshold as usize)
 				.iter()
-				.map(|shard| eph_pair.envelope_encrypt(shard).unwrap())
+				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();
 
 		let share = encrypted_shares.remove(0);
@@ -415,20 +417,20 @@ mod test {
 			mut approvals,
 		} = setup(&*eph_file, &*quorum_file, &*manifest_file);
 
-		let quorum_key = quorum_pair.private_key_to_der().unwrap();
+		let quorum_key = quorum_pair.to_master_seed();
 		let mut encrypted_shares: Vec<_> =
-			shares_generate(&quorum_key, 4, threshold as usize)
+			shares_generate(quorum_key, 4, threshold as usize)
 				.iter()
-				.map(|shard| eph_pair.envelope_encrypt(shard).unwrap())
+				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();
 
 		let manifest = state.handles.get_manifest_envelope().unwrap().manifest;
 		let mut approval = approvals.remove(0);
-		let pair = RsaPair::generate().unwrap();
+		let pair = P256Pair::generate().unwrap();
 
 		// Change the member so that are not recognized as part of the set
-		approval.member.pub_key = pair.public_key_to_der().unwrap();
-		approval.signature = pair.sign_sha256(&manifest.qos_hash()).unwrap();
+		approval.member.pub_key = pair.public_key().to_bytes();
+		approval.signature = pair.sign(&manifest.qos_hash()).unwrap();
 
 		let share = encrypted_shares.remove(0);
 		assert_eq!(

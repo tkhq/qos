@@ -1,7 +1,7 @@
 //! Standard boot logic and types.
 
-use qos_crypto::{sha_256, RsaPair, RsaPub};
-
+use qos_crypto::sha_256;
+use qos_p256::{P256Pair, P256Public};
 use super::attestation;
 use crate::protocol::{
 	attestor::types::NsmResponse, Hash256, ProtocolError, ProtocolPhase,
@@ -180,9 +180,9 @@ pub struct Approval {
 impl Approval {
 	/// Verify that the approval is a valid a signature for the given `msg`.
 	pub(crate) fn verify(&self, msg: &[u8]) -> Result<(), ProtocolError> {
-		let pub_key = RsaPub::from_der(&self.member.pub_key)?;
+		let pub_key = P256Public::from_bytes(&self.member.pub_key)?;
 
-		if pub_key.verify_sha256(&self.signature, msg)? {
+		if pub_key.verify(&self.signature, msg).is_ok() {
 			Ok(())
 		} else {
 			Err(ProtocolError::CouldNotVerifyApproval)
@@ -210,12 +210,11 @@ impl ManifestEnvelope {
 	/// manifest approval set.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
 		for approval in &self.manifest_set_approvals {
-			let pub_key = RsaPub::from_der(&approval.member.pub_key)
+			let pub_key = P256Public::from_bytes(&approval.member.pub_key)
 				.map_err(|_| ProtocolError::CryptoError)?;
 
 			let is_valid_signature = pub_key
-				.verify_sha256(&approval.signature, &self.manifest.qos_hash())
-				.map_err(|_| ProtocolError::CryptoError)?;
+				.verify(&approval.signature, &self.manifest.qos_hash()).is_ok();
 			if !is_valid_signature {
 				return Err(ProtocolError::InvalidManifestApproval(
 					approval.clone(),
@@ -250,7 +249,7 @@ pub(in crate::protocol) fn boot_standard(
 		return Err(ProtocolError::InvalidPivotHash);
 	};
 
-	let ephemeral_key = RsaPair::generate()?;
+	let ephemeral_key = P256Pair::generate()?;
 	state.handles.put_ephemeral_key(&ephemeral_key)?;
 
 	state.handles.put_pivot(pivot)?;
@@ -259,7 +258,7 @@ pub(in crate::protocol) fn boot_standard(
 
 	let nsm_response = attestation::get_post_boot_attestation_doc(
 		&*state.attestor,
-		ephemeral_key.public_key_to_pem()?,
+		ephemeral_key.public_key().to_bytes(),
 		manifest_envelope.manifest.qos_hash().to_vec(),
 	);
 
@@ -279,26 +278,26 @@ mod test {
 		handles::Handles, io::SocketAddress, protocol::attestor::mock::MockNsm,
 	};
 
-	fn get_manifest() -> (Manifest, Vec<(RsaPair, QuorumMember)>, Vec<u8>) {
-		let quorum_pair = RsaPair::generate().unwrap();
-		let member1_pair = RsaPair::generate().unwrap();
-		let member2_pair = RsaPair::generate().unwrap();
-		let member3_pair = RsaPair::generate().unwrap();
+	fn get_manifest() -> (Manifest, Vec<(P256Pair, QuorumMember)>, Vec<u8>) {
+		let quorum_pair = P256Pair::generate().unwrap();
+		let member1_pair = P256Pair::generate().unwrap();
+		let member2_pair = P256Pair::generate().unwrap();
+		let member3_pair = P256Pair::generate().unwrap();
 
 		let pivot = b"this is a pivot binary".to_vec();
 
 		let quorum_members = vec![
 			QuorumMember {
 				alias: "member1".to_string(),
-				pub_key: member1_pair.public_key_to_der().unwrap(),
+				pub_key: member1_pair.public_key().to_bytes(),
 			},
 			QuorumMember {
 				alias: "member2".to_string(),
-				pub_key: member2_pair.public_key_to_der().unwrap(),
+				pub_key: member2_pair.public_key().to_bytes(),
 			},
 			QuorumMember {
 				alias: "member3".to_string(),
-				pub_key: member3_pair.public_key_to_der().unwrap(),
+				pub_key: member3_pair.public_key().to_bytes(),
 			},
 		];
 
@@ -312,7 +311,7 @@ mod test {
 			namespace: Namespace {
 				nonce: 420,
 				name: "vape lord".to_string(),
-				quorum_key: quorum_pair.public_key_to_der().unwrap(),
+				quorum_key: quorum_pair.public_key().to_bytes(),
 			},
 			enclave: NitroConfig {
 				pcr0: vec![4; 32],
@@ -353,7 +352,7 @@ mod test {
 			let approvals = members
 				.into_iter()
 				.map(|(pair, member)| Approval {
-					signature: pair.sign_sha256(&manifest_hash).unwrap(),
+					signature: pair.sign(&manifest_hash).unwrap(),
 					member,
 				})
 				.collect();
@@ -409,7 +408,7 @@ mod test {
 				[0usize..manifest.manifest_set.threshold as usize - 1]
 				.iter()
 				.map(|(pair, member)| Approval {
-					signature: pair.sign_sha256(&manifest_hash).unwrap(),
+					signature: pair.sign(&manifest_hash).unwrap(),
 					member: member.clone(),
 				})
 				.collect();
@@ -507,7 +506,7 @@ mod test {
 			let mut approvals: Vec<_> = members
 				.into_iter()
 				.map(|(pair, member)| Approval {
-					signature: pair.sign_sha256(&manifest_hash).unwrap(),
+					signature: pair.sign(&manifest_hash).unwrap(),
 					member,
 				})
 				.collect();
@@ -563,7 +562,7 @@ mod test {
 			let mut approvals: Vec<_> = members
 				.into_iter()
 				.map(|(pair, member)| Approval {
-					signature: pair.sign_sha256(&manifest_hash).unwrap(),
+					signature: pair.sign(&manifest_hash).unwrap(),
 					member,
 				})
 				.collect();
@@ -571,10 +570,10 @@ mod test {
 			// Change a member so that are not recognized as part of the
 			// manifest set.
 			let mut approval = approvals.get_mut(0).unwrap();
-			let pair = RsaPair::generate().unwrap();
-			approval.member.pub_key = pair.public_key_to_der().unwrap();
+			let pair = P256Pair::generate().unwrap();
+			approval.member.pub_key = pair.public_key().to_bytes();
 			approval.signature =
-				pair.sign_sha256(&manifest.qos_hash()).unwrap();
+				pair.sign(&manifest.qos_hash()).unwrap();
 
 			ManifestEnvelope {
 				manifest,

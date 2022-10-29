@@ -10,7 +10,7 @@ pub(in crate::protocol) fn live_attestation_doc(
 	state: &mut ProtocolState,
 ) -> Result<NsmResponse, ProtocolError> {
 	let ephemeral_public_key =
-		state.handles.get_ephemeral_key()?.public_key_to_pem()?;
+		state.handles.get_ephemeral_key()?.public_key().to_bytes();
 	let manifest_hash =
 		state.handles.get_manifest_envelope()?.manifest.qos_hash().to_vec();
 

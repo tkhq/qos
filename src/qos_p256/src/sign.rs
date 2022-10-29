@@ -10,6 +10,7 @@ use sha2::Digest;
 use crate::P256Error;
 
 /// Sign private key pair.
+#[derive(Clone, PartialEq)]
 pub struct P256SignPair {
 	private: SigningKey,
 }
@@ -52,6 +53,7 @@ impl P256SignPair {
 }
 
 /// Sign public key for verifying signatures.
+#[derive(Clone, PartialEq)]
 pub struct P256SignPublic {
 	public: VerifyingKey,
 }

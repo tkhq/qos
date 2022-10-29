@@ -33,6 +33,7 @@ struct Envelope {
 }
 
 /// P256 key pair
+#[derive(Clone, PartialEq)]
 pub struct P256EncryptPair {
 	private: SecretKey,
 }
@@ -108,6 +109,7 @@ impl P256EncryptPair {
 }
 
 /// P256 Public key.
+#[derive(Clone, PartialEq)]
 pub struct P256EncryptPublic {
 	public: PublicKey,
 }

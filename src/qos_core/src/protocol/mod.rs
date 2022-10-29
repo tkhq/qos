@@ -115,6 +115,10 @@ pub enum ProtocolError {
 	NotShareSetMember,
 	/// Not a member of the [`ManifestSet`].
 	NotManifestSetMember,
+	/// `qos_p256` Error wrapper.
+	P256Error(qos_p256::P256Error),
+	/// The provisioned secret is the incorrect length.
+	IncorrectSecretLen,
 }
 
 impl From<qos_crypto::CryptoError> for ProtocolError {
@@ -140,6 +144,13 @@ impl From<client::ClientError> for ProtocolError {
 		Self::AppClientError
 	}
 }
+
+impl From<qos_p256::P256Error> for ProtocolError {
+	fn from(err: qos_p256::P256Error) -> Self {
+		Self::P256Error(err)
+	}
+}
+
 
 /// Protocol executor state.
 #[derive(

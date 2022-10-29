@@ -18,18 +18,22 @@ use crate::{
 
 const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
 const P256_SECRET_LEN: usize = 32;
-const MASTER_SEED_LEN: usize = 64;
 const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
 const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
+
+/// Length of the master seed.
+pub const MASTER_SEED_LEN: usize = 64;
 
 pub mod encrypt;
 pub mod sign;
 
 /// Errors for qos P256.
-#[derive(Debug, PartialEq)]
+#[derive(
+	Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub enum P256Error {
 	/// Hex encoding error.
-	QosHex(qos_hex::HexError),
+	QosHex(String),
 	/// IO error
 	IOError(String),
 	/// The encryption envelope should not be serialized. This is likely a bug
@@ -73,7 +77,7 @@ pub enum P256Error {
 
 impl From<qos_hex::HexError> for P256Error {
 	fn from(err: qos_hex::HexError) -> Self {
-		Self::QosHex(err)
+		Self::QosHex(format!("{:?}", err))
 	}
 }
 
@@ -106,6 +110,7 @@ fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
 
 /// P256 private key pair for signing and encryption. Internally this uses a
 /// separate secret for signing and encryption.
+#[derive(Clone, PartialEq)]
 pub struct P256Pair {
 	encrypt_private: P256EncryptPair,
 	sign_private: P256SignPair,
@@ -171,6 +176,12 @@ impl P256Pair {
 		&self.master_seed
 	}
 
+	/// Convert to hex bytes.
+	#[must_use] pub fn to_master_seed_hex(&self) -> Vec<u8> {
+		let hex_string = qos_hex::encode(&self.master_seed);
+		hex_string.as_bytes().to_vec()
+	}
+
 	/// Write the raw master seed to file as hex encoded.
 	pub fn to_hex_file<P: AsRef<Path>>(
 		&self,
@@ -203,6 +214,7 @@ impl P256Pair {
 
 /// P256 public key for signing and encryption. Internally this uses
 /// separate public keys for signing and encryption.
+#[derive(Clone, PartialEq)]
 pub struct P256Public {
 	encrypt_public: P256EncryptPublic,
 	sign_public: P256SignPublic,
@@ -257,6 +269,12 @@ impl P256Public {
 			sign_public: P256SignPublic::from_bytes(sign_bytes)
 				.map_err(|_| P256Error::FailedToReadPublicKey)?,
 		})
+	}
+
+	/// Convert to hex bytes.
+	#[must_use] pub fn to_hex_bytes(&self) -> Vec<u8> {
+		let hex_string = qos_hex::encode(&self.to_bytes());
+		hex_string.as_bytes().to_vec()
 	}
 
 	/// Write the public key to a file encoded as a hex string.
