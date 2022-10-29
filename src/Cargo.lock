@@ -896,6 +896,7 @@ dependencies = [
  "qos_core",
  "qos_crypto",
  "qos_hex",
+ "qos_p256",
  "ureq",
 ]
 

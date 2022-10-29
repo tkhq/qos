@@ -8,6 +8,7 @@ qos_core = { path = "../qos_core", default-features = false }
 qos_crypto = { path = "../qos_crypto", default-features = false }
 qos_attest = { path = "../qos_attest", default-features = false }
 qos_hex = { path = "../qos_hex" }
+qos_p256 = { path = "../qos_p256" }
 
 # Third party
 ureq = { version = "2.4", default-features = false }
