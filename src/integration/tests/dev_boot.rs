@@ -7,6 +7,7 @@ use qos_test_primitives::{ChildWrapper, PathWrapper};
 async fn dev_boot_e2e() {
 	let tmp: PathWrapper = "/tmp/dev-boot-e2e-tmp".into();
 	drop(fs::create_dir_all(&*tmp));
+	let _: PathWrapper = PIVOT_OK3_SUCCESS_FILE.into();
 	let usock: PathWrapper = "/tmp/dev-boot-e2e-tmp/sock.sock".into();
 	let secret_path: PathWrapper = "/tmp/dev-boot-e2e-tmp/quorum.secret".into();
 	let pivot_path: PathWrapper = "/tmp/dev-boot-e2e-tmp/pivot.pivot".into();
