@@ -7,7 +7,6 @@ members = [
   "qos_crypto",
   "qos_host",
   "qos_hex",
-  "sample_app",
   "qos_test_primitives",
   "qos_p256"
 ]

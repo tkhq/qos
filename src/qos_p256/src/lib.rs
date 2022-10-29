@@ -177,7 +177,8 @@ impl P256Pair {
 	}
 
 	/// Convert to hex bytes.
-	#[must_use] pub fn to_master_seed_hex(&self) -> Vec<u8> {
+	#[must_use]
+	pub fn to_master_seed_hex(&self) -> Vec<u8> {
 		let hex_string = qos_hex::encode(&self.master_seed);
 		hex_string.as_bytes().to_vec()
 	}
@@ -272,7 +273,8 @@ impl P256Public {
 	}
 
 	/// Convert to hex bytes.
-	#[must_use] pub fn to_hex_bytes(&self) -> Vec<u8> {
+	#[must_use]
+	pub fn to_hex_bytes(&self) -> Vec<u8> {
 		let hex_string = qos_hex::encode(&self.to_bytes());
 		hex_string.as_bytes().to_vec()
 	}

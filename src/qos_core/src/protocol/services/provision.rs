@@ -93,8 +93,10 @@ pub(in crate::protocol) fn provision(
 	let master_seed = state.provisioner.build()?;
 	state.provisioner.clear();
 
-	let master_seed: [u8; qos_p256::MASTER_SEED_LEN] = master_seed.try_into()
-		.map_err(|_| ProtocolError::IncorrectSecretLen)?;
+	let master_seed: [u8; qos_p256::MASTER_SEED_LEN] =
+		master_seed
+			.try_into()
+			.map_err(|_| ProtocolError::IncorrectSecretLen)?;
 	let pair = qos_p256::P256Pair::from_master_seed(master_seed)?;
 	let public_key_bytes = pair.public_key().to_bytes();
 
@@ -117,7 +119,7 @@ mod test {
 	use std::path::Path;
 
 	use qos_crypto::{sha_256, shamir::shares_generate};
-	use qos_p256::{P256Pair};
+	use qos_p256::P256Pair;
 	use qos_test_primitives::PathWrapper;
 
 	use crate::{
@@ -206,16 +208,16 @@ mod test {
 
 		let approvals: Vec<_> = members
 			.into_iter()
-			.map(|(member, pair)|{
+			.map(|(member, pair)| {
 				let approval = Approval {
-					member: member.clone(),
+					member,
 					signature: pair.sign(&manifest.qos_hash()).unwrap(),
 				};
 
 				assert!(approval.verify(&manifest.qos_hash()).is_ok());
 
 				approval
-			} )
+			})
 			.collect();
 
 		let manifest_envelope = ManifestEnvelope {
@@ -270,7 +272,7 @@ mod test {
 		assert_eq!(provision(share, approval, &mut state), Ok(true));
 		let quorum_key = std::fs::read(&*quorum_file).unwrap();
 
-		assert_eq!(quorum_key, quorum_pair.to_master_seed_hex().to_vec());
+		assert_eq!(quorum_key, quorum_pair.to_master_seed_hex());
 		assert_eq!(state.phase, ProtocolPhase::QuorumKeyProvisioned);
 
 		// Make sure the EK is deleted

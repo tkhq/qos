@@ -2,6 +2,7 @@
 
 use qos_crypto::sha_256;
 use qos_p256::{P256Pair, P256Public};
+
 use super::attestation;
 use crate::protocol::{
 	attestor::types::NsmResponse, Hash256, ProtocolError, ProtocolPhase,
@@ -214,7 +215,8 @@ impl ManifestEnvelope {
 				.map_err(|_| ProtocolError::CryptoError)?;
 
 			let is_valid_signature = pub_key
-				.verify(&self.manifest.qos_hash(), &approval.signature).is_ok();
+				.verify(&self.manifest.qos_hash(), &approval.signature)
+				.is_ok();
 			if !is_valid_signature {
 				return Err(ProtocolError::InvalidManifestApproval(
 					approval.clone(),
@@ -572,8 +574,7 @@ mod test {
 			let mut approval = approvals.get_mut(0).unwrap();
 			let pair = P256Pair::generate().unwrap();
 			approval.member.pub_key = pair.public_key().to_bytes();
-			approval.signature =
-				pair.sign(&manifest.qos_hash()).unwrap();
+			approval.signature = pair.sign(&manifest.qos_hash()).unwrap();
 
 			ManifestEnvelope {
 				manifest,

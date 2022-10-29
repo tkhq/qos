@@ -151,7 +151,6 @@ impl From<qos_p256::P256Error> for ProtocolError {
 	}
 }
 
-
 /// Protocol executor state.
 #[derive(
 	Debug, PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,

@@ -2,7 +2,7 @@
 
 use std::iter::zip;
 
-use qos_crypto::{sha_256};
+use qos_crypto::sha_256;
 use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
@@ -179,9 +179,8 @@ mod test {
 		let zipped = std::iter::zip(output.member_outputs, member_pairs);
 		let shares: Vec<Vec<u8>> = zipped
 			.map(|(output, pair)| {
-				let decrypted_share = &pair
-					.decrypt(&output.encrypted_quorum_key_share)
-					.unwrap();
+				let decrypted_share =
+					&pair.decrypt(&output.encrypted_quorum_key_share).unwrap();
 
 				assert_eq!(sha_256(decrypted_share), output.share_hash);
 
@@ -193,10 +192,15 @@ mod test {
 			&shares[0..threshold as usize],
 		);
 		let reconstructed_quorum_key =
-			P256Pair::from_master_seed(reconstructed.try_into().unwrap()).unwrap();
+			P256Pair::from_master_seed(reconstructed.try_into().unwrap())
+				.unwrap();
 
-		let quorum_public_key = P256Public::from_bytes(&output.quorum_key).unwrap();
-		assert_eq!(reconstructed_quorum_key.public_key().to_bytes(), quorum_public_key.to_bytes());
+		let quorum_public_key =
+			P256Public::from_bytes(&output.quorum_key).unwrap();
+		assert_eq!(
+			reconstructed_quorum_key.public_key().to_bytes(),
+			quorum_public_key.to_bytes()
+		);
 
 		// Sanity check
 		assert!(!handles.quorum_key_exists());
