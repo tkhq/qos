@@ -8,9 +8,9 @@
 use std::path::Path;
 
 use hkdf::Hkdf;
-use p256::elliptic_curve::zeroize::ZeroizeOnDrop;
 use rand_core::{OsRng, RngCore};
 use sha2::Sha512;
+use zeroize::ZeroizeOnDrop;
 
 use crate::{
 	encrypt::{P256EncryptPair, P256EncryptPublic},

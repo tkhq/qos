@@ -1,13 +1,11 @@
 //! Abstractions for sign and signature verification
 
-use p256::{
-	ecdsa::{
-		signature::{Signature as _, Signer, Verifier},
-		Signature, SigningKey, VerifyingKey,
-	},
-	elliptic_curve::zeroize::ZeroizeOnDrop,
+use p256::ecdsa::{
+	signature::{Signature as _, Signer, Verifier},
+	Signature, SigningKey, VerifyingKey,
 };
 use rand_core::OsRng;
+use zeroize::ZeroizeOnDrop;
 
 use crate::P256Error;
 
