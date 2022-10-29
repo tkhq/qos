@@ -8,6 +8,7 @@
 use std::path::Path;
 
 use hkdf::Hkdf;
+use p256::elliptic_curve::zeroize::ZeroizeOnDrop;
 use rand_core::{OsRng, RngCore};
 use sha2::Sha512;
 
@@ -106,6 +107,7 @@ fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
 
 /// P256 private key pair for signing and encryption. Internally this uses a
 /// separate secret for signing and encryption.
+#[derive(ZeroizeOnDrop)]
 pub struct P256Pair {
 	encrypt_private: P256EncryptPair,
 	sign_private: P256SignPair,

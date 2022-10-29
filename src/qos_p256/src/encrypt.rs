@@ -7,8 +7,9 @@ use aes_gcm::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use hmac::{Hmac, Mac};
 use p256::{
-	ecdh::diffie_hellman, elliptic_curve::sec1::ToEncodedPoint, PublicKey,
-	SecretKey,
+	ecdh::diffie_hellman,
+	elliptic_curve::{sec1::ToEncodedPoint, zeroize::ZeroizeOnDrop},
+	PublicKey, SecretKey,
 };
 use rand_core::OsRng;
 use sha2::Sha512;
@@ -33,6 +34,7 @@ struct Envelope {
 }
 
 /// P256 key pair
+#[derive(ZeroizeOnDrop)]
 pub struct P256EncryptPair {
 	private: SecretKey,
 }

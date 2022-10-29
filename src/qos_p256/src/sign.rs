@@ -1,14 +1,18 @@
 //! Abstractions for sign and signature verification
 
-use p256::ecdsa::{
-	signature::{Signature as _, Signer, Verifier},
-	Signature, SigningKey, VerifyingKey,
+use p256::{
+	ecdsa::{
+		signature::{Signature as _, Signer, Verifier},
+		Signature, SigningKey, VerifyingKey,
+	},
+	elliptic_curve::zeroize::ZeroizeOnDrop,
 };
 use rand_core::OsRng;
 
 use crate::P256Error;
 
 /// Sign private key pair.
+#[derive(ZeroizeOnDrop)]
 pub struct P256SignPair {
 	private: SigningKey,
 }
