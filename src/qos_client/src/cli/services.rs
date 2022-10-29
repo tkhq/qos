@@ -68,7 +68,7 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 		personal_dir.as_ref().join(format!("{}.{}", alias, PUB_EXT));
 	write_with_msg(
 		&public_path,
-		&share_key_pair.to_master_seed_hex(),
+		&share_key_pair.public_key().to_hex_bytes(),
 		"Share Key Public",
 	);
 }
@@ -1116,9 +1116,11 @@ fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
 				return None;
 			};
 
-			let public = P256Public::from_hex_file(path).unwrap_or_else(|_| {
-				panic!("Could not read PEM from share_key.pub: {:?}.", path)
-			});
+			let public = P256Public::from_hex_file(path)
+				.map_err(|e| panic!("Could not read hex from share_key.pub: {:?}: {:?}", path, e))
+				.unwrap();
+
+			// let public = P256Public::from_hex_file(path).unwrap();
 			Some(QuorumMember {
 				alias: mem::take(&mut file_name[0]),
 				pub_key: public.to_bytes(),

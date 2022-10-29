@@ -4,7 +4,9 @@ use borsh::de::BorshDeserialize;
 use integration::LOCAL_HOST;
 use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
-use qos_crypto::{sha_256, shamir::shares_reconstruct, RsaPair, RsaPub};
+use qos_crypto::{sha_256, shamir::shares_reconstruct};
+use qos_p256::{P256Pair, P256Public};
+
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 use rand::{seq::SliceRandom, thread_rng};
 
@@ -165,11 +167,11 @@ async fn genesis_e2e() {
 			let (private_share_key, _) = get_key_paths(alias);
 			let share_key_path =
 				Path::new(&personal_dir(alias)).join(private_share_key);
-			let share_pair = RsaPair::from_pem_file(share_key_path).unwrap();
+			let share_pair = P256Pair::from_hex_file(share_key_path).unwrap();
 
 			// Decrypt the share with the personal key
 			let plain_text_share = share_pair
-				.envelope_decrypt(&member.encrypted_quorum_key_share)
+				.decrypt(&member.encrypted_quorum_key_share)
 				.unwrap();
 
 			assert_eq!(sha_256(&plain_text_share), member.share_hash);
@@ -180,12 +182,13 @@ async fn genesis_e2e() {
 
 	// Try recovering from a random permutation
 	decrypted_shares.shuffle(&mut thread_rng());
+	let master_secret: [u8; qos_p256::MASTER_SEED_LEN] = shares_reconstruct(&decrypted_shares[0..threshold]).try_into().unwrap();
 	let reconstructed =
-		RsaPair::from_der(&shares_reconstruct(&decrypted_shares[0..threshold]))
+		P256Pair::from_master_seed(master_secret)
 			.unwrap();
-	assert_eq!(
-		*reconstructed.public_key(),
-		RsaPub::from_der(&genesis_output.quorum_key).unwrap()
+	assert!(
+		reconstructed.public_key() ==
+		P256Public::from_bytes(&genesis_output.quorum_key).unwrap()
 	);
 
 	// -- CLIENT make sure each user can run `after-genesis` against their
@@ -214,11 +217,11 @@ async fn genesis_e2e() {
 			Path::new(&personal_dir(user)).join(format!("{}.secret", user));
 		let share_path =
 			Path::new(&personal_dir(user)).join(format!("{}.share", user));
-		let share_key_pair = RsaPair::from_pem_file(share_key_path).unwrap();
+		let share_key_pair = P256Pair::from_hex_file(share_key_path).unwrap();
 
 		// Check the share is encrypted to personal key
 		let share = share_key_pair
-			.envelope_decrypt(&fs::read(share_path).unwrap())
+			.decrypt(&fs::read(share_path).unwrap())
 			.unwrap();
 		// Cross check that the share belongs `decrypted_shares`, which we
 		// created out of band in this test.
