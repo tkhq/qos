@@ -99,7 +99,7 @@ pub struct QuorumMember {
 	/// cryptographically guaranteed and thus should not be trusted without
 	/// verification.
 	pub alias: String,
-	/// DER encoded RSA public key
+	/// P256Public as bytes
 	pub pub_key: Vec<u8>,
 }
 
@@ -182,7 +182,7 @@ impl Approval {
 	pub(crate) fn verify(&self, msg: &[u8]) -> Result<(), ProtocolError> {
 		let pub_key = P256Public::from_bytes(&self.member.pub_key)?;
 
-		if pub_key.verify(&self.signature, msg).is_ok() {
+		if pub_key.verify(msg, &self.signature).is_ok() {
 			Ok(())
 		} else {
 			Err(ProtocolError::CouldNotVerifyApproval)
@@ -214,7 +214,7 @@ impl ManifestEnvelope {
 				.map_err(|_| ProtocolError::CryptoError)?;
 
 			let is_valid_signature = pub_key
-				.verify(&approval.signature, &self.manifest.qos_hash()).is_ok();
+				.verify(&self.manifest.qos_hash(), &approval.signature).is_ok();
 			if !is_valid_signature {
 				return Err(ProtocolError::InvalidManifestApproval(
 					approval.clone(),
