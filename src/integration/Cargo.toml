@@ -11,7 +11,6 @@ qos_client = { path = "../qos_client", default-features = false }
 qos_crypto = { path = "../qos_crypto" }
 qos_attest = { path = "../qos_attest", default-features = false }
 qos_hex = { path = "../qos_hex" }
-sample_app = { path = "../sample_app" }
 qos_test_primitives = { path = "../qos_test_primitives" }
 
 tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }

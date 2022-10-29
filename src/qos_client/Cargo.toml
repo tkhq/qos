@@ -15,9 +15,6 @@ aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 
 borsh = { version = "0.9" }
 
-# TODO: rip out
-sample_app = { path = "../sample_app" }
-
 [dev-dependencies]
 # We need mock enabled to grab things related to the mock NSM.
 qos_core = { path = "../qos_core", features = ["mock"], default-features = false }

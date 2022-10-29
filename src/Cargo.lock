@@ -609,7 +609,6 @@ dependencies = [
  "qos_host",
  "qos_test_primitives",
  "rand",
- "sample_app",
  "tokio",
 ]
 
@@ -897,7 +896,6 @@ dependencies = [
  "qos_core",
  "qos_crypto",
  "qos_hex",
- "sample_app",
  "ureq",
 ]
 
@@ -1025,15 +1023,6 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
-]
-
-[[package]]
-name = "sample_app"
-version = "0.1.0"
-dependencies = [
- "borsh",
- "qos_core",
- "qos_crypto",
 ]
 
 [[package]]
