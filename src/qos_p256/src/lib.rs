@@ -18,6 +18,7 @@ use crate::{
 
 const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
 const P256_SECRET_LEN: usize = 32;
+const MASTER_SEED_LEN: usize = 64;
 const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
 const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
 
@@ -48,7 +49,7 @@ pub enum P256Error {
 	FailedToCoercePublicKeyToIntendedLength,
 	/// Nonce could not be coerced into the intended length.
 	FailedToCoerceNonceToIntendedLength,
-	/// Signature could not be de-serialized as DER encoded.
+	/// Signature could not be de-serialized.
 	FailedToDeserializeSignature,
 	/// The signature could not be verified against the given message and
 	/// public key.
@@ -58,11 +59,11 @@ pub enum P256Error {
 	/// The raw bytes could not be interpreted as SEC1 encoded point
 	/// uncompressed.
 	FailedToReadPublicKey,
-	/// The DER encoded public key is too long to be valid.
+	/// The  public key is too long to be valid.
 	EncodedPublicKeyTooLong,
-	/// The DER encoded public key is too short to be valid.
+	/// The public key is too short to be valid.
 	EncodedPublicKeyTooShort,
-	/// Error'ed while running Hkdf expansion
+	/// Error'ed while running HKDF expansion
 	HkdfExpansionFailed,
 	/// Master seed was not stored as valid utf8 encoding.
 	MasterSeedInvalidUtf8,
@@ -78,7 +79,7 @@ impl From<qos_hex::HexError> for P256Error {
 
 /// Helper function to derive a secret from a master seed
 fn derive_secret(
-	seed: [u8; 64],
+	seed: [u8; MASTER_SEED_LEN],
 	derive_path: &[u8],
 ) -> Result<[u8; 32], P256Error> {
 	let hk = Hkdf::<Sha512>::new(Some(derive_path), &seed);
@@ -108,13 +109,13 @@ fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
 pub struct P256Pair {
 	encrypt_private: P256EncryptPair,
 	sign_private: P256SignPair,
-	master_seed: [u8; 64],
+	master_seed: [u8; MASTER_SEED_LEN],
 }
 
 impl P256Pair {
 	/// Generate a new private key using the OS randomness source.
 	pub fn generate() -> Result<Self, P256Error> {
-		let master_seed = non_zero_bytes_os_rng::<64>();
+		let master_seed = non_zero_bytes_os_rng::<MASTER_SEED_LEN>();
 
 		let encrypt_secret =
 			derive_secret(master_seed, P256_ENCRYPT_DERIVE_PATH)?;
@@ -151,7 +152,7 @@ impl P256Pair {
 	}
 
 	/// Create `Self` from a master seed.
-	pub fn from_master_seed(master_seed: [u8; 64]) -> Result<Self, P256Error> {
+	pub fn from_master_seed(master_seed: [u8; MASTER_SEED_LEN]) -> Result<Self, P256Error> {
 		let encrypt_secret =
 			derive_secret(master_seed, P256_ENCRYPT_DERIVE_PATH)?;
 		let sign_secret = derive_secret(master_seed, P256_SIGN_DERIVE_PATH)?;
@@ -165,7 +166,7 @@ impl P256Pair {
 
 	/// Get the raw master seed used to create this pair.
 	#[must_use]
-	pub fn to_master_seed(&self) -> &[u8; 64] {
+	pub fn to_master_seed(&self) -> &[u8; MASTER_SEED_LEN] {
 		&self.master_seed
 	}
 
@@ -182,7 +183,7 @@ impl P256Pair {
 
 	/// Read the raw, hex encoded master from a file.
 	// TODO: implement utils that go to/from bytes so we can avoid string
-	// serialization.
+	// serialization. https://github.com/tkhq/qos/issues/153.
 	pub fn from_hex_file<P: AsRef<Path>>(path: P) -> Result<Self, P256Error> {
 		let hex_bytes = std::fs::read(path).map_err(|e| {
 			P256Error::IOError(format!("failed to read master seed: {}", e))
@@ -258,7 +259,10 @@ impl P256Public {
 	}
 
 	/// Write the public key to a file encoded as a hex string.
-	pub fn to_hex_file<P: AsRef<Path>>(&self, path: P) -> Result<(), P256Error> {
+	pub fn to_hex_file<P: AsRef<Path>>(
+		&self,
+		path: P,
+	) -> Result<(), P256Error> {
 		let hex_string = qos_hex::encode(&self.to_bytes());
 		std::fs::write(path, hex_string.as_bytes()).map_err(|e| {
 			P256Error::IOError(format!("failed to write master secret {}", e))
@@ -274,16 +278,15 @@ impl P256Public {
 			.map_err(|_| P256Error::MasterSeedInvalidUtf8)?;
 		let public_keys_bytes = qos_hex::decode(&hex_string)?;
 
-		Self::from_bytes(
-			&public_keys_bytes
-		)
+		Self::from_bytes(&public_keys_bytes)
 	}
 }
 
 #[cfg(test)]
 mod test {
-	use super::*;
 	use qos_test_primitives::PathWrapper;
+
+	use super::*;
 
 	#[test]
 	fn signatures_are_deterministic() {
@@ -375,7 +378,8 @@ mod test {
 
 	#[test]
 	fn public_key_to_file_roundtrip() {
-		let path: PathWrapper = "/tmp/public_key_to_file_roundtrip.secret".into();
+		let path: PathWrapper =
+			"/tmp/public_key_to_file_roundtrip.secret".into();
 		let alice_pair = P256Pair::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 
@@ -413,7 +417,8 @@ mod test {
 
 	#[test]
 	fn master_seed_to_file_round_trip() {
-		let path: PathWrapper = "/tmp/master_seed_to_file_round_trip.secret".into();
+		let path: PathWrapper =
+			"/tmp/master_seed_to_file_round_trip.secret".into();
 
 		let alice_pair = P256Pair::generate().unwrap();
 		alice_pair.to_hex_file(&*path).unwrap();
@@ -421,7 +426,8 @@ mod test {
 		let alice_pair2 = P256Pair::from_hex_file(&*path).unwrap();
 
 		let plaintext = b"rust test message";
-		let serialized_envelope = alice_pair.public_key().encrypt(plaintext).unwrap();
+		let serialized_envelope =
+			alice_pair.public_key().encrypt(plaintext).unwrap();
 		let decrypted = alice_pair2.decrypt(&serialized_envelope).unwrap();
 		assert_eq!(decrypted, plaintext);
 
