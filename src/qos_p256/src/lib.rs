@@ -258,7 +258,6 @@ impl P256Public {
 			return Err(P256Error::EncodedPublicKeyTooLong);
 		}
 		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED * 2 {
-			dbg!(bytes.len());
 			return Err(P256Error::EncodedPublicKeyTooShort);
 		}
 
@@ -276,8 +275,6 @@ impl P256Public {
 	/// Convert to hex bytes.
 	#[must_use]
 	pub fn to_hex_bytes(&self) -> Vec<u8> {
-		let bytes = self.to_bytes();
-		dbg!("to hex byte len: {}", bytes.len());
 		let hex_string = qos_hex::encode(&self.to_bytes());
 		hex_string.as_bytes().to_vec()
 	}

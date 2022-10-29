@@ -1108,25 +1108,28 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 }
 
 fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
-	let mut members: Vec<_> = find_file_paths(&dir)
-		.iter()
-		.filter_map(|path| {
-			let mut file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
-				return None;
-			};
+	let mut members: Vec<_> =
+		find_file_paths(&dir)
+			.iter()
+			.filter_map(|path| {
+				let mut file_name = split_file_name(path);
+				if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+					return None;
+				};
 
-			let public = P256Public::from_hex_file(path)
-				.map_err(|e| panic!("Could not read hex from share_key.pub: {:?}: {:?}", path, e))
-				.unwrap();
+				let public =
+					P256Public::from_hex_file(path)
+						.map_err(|e| {
+							panic!("Could not read hex from share_key.pub: {:?}: {:?}", path, e)
+						})
+						.unwrap();
 
-			// let public = P256Public::from_hex_file(path).unwrap();
-			Some(QuorumMember {
-				alias: mem::take(&mut file_name[0]),
-				pub_key: public.to_bytes(),
+				Some(QuorumMember {
+					alias: mem::take(&mut file_name[0]),
+					pub_key: public.to_bytes(),
+				})
 			})
-		})
-		.collect();
+			.collect();
 
 	// We want to try and build the same manifest regardless of the OS.
 	members.sort();
