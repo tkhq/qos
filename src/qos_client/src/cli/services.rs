@@ -93,7 +93,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		r => panic!("Unexpected response: {:?}", r),
 	};
 	let quorum_key =
-		P256Public::from_bytes(&genesis_output.quorum_key).unwrap().to_bytes();
+		P256Public::from_bytes(&genesis_output.quorum_key).unwrap();
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
 
@@ -146,7 +146,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 
 	// Write the quorum public key
 	let quorum_key_path = namespace_dir.as_ref().join("quorum_key.pub");
-	write_with_msg(&quorum_key_path, &quorum_key, "quorum_key.pub");
+	write_with_msg(&quorum_key_path, &quorum_key.to_hex_bytes(), "quorum_key.pub");
 }
 
 pub(crate) fn after_genesis<P: AsRef<Path>>(
@@ -1008,7 +1008,7 @@ fn find_quorum_key<P: AsRef<Path>>(dir: P) -> P256Public {
 
 			Some(
 				P256Public::from_hex_file(path)
-					.expect("Could not read PEM from share_key.key"),
+					.expect(&format!("Could not read hex from {:?}", path)),
 			)
 		})
 		.collect();
