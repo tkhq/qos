@@ -21,7 +21,7 @@ impl P256SignPair {
 		Self { private: SigningKey::random(&mut OsRng) }
 	}
 
-	/// Sign the message and return the ASN.1 DER. Signs the SHA512 digest of
+	/// Sign the message and return the. Signs the SHA512 digest of
 	/// the message.
 	pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
 		let digest = sha2::Sha512::digest(message);
@@ -94,6 +94,18 @@ impl P256SignPublic {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn signatures_are_deterministic() {
+		let message = b"a message to authenticate";
+
+		let pair = P256SignPair::generate();
+		(0..100)
+			.map(|_| pair.sign(message).unwrap())
+			.collect::<Vec<_>>()
+			.windows(2)
+			.for_each(|slice| assert_eq!(slice[0], slice[1]));
+	}
 
 	#[test]
 	fn sign_and_verification_works() {

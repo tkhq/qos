@@ -77,7 +77,7 @@ impl From<qos_hex::HexError> for P256Error {
 	}
 }
 
-/// Helper function to derive a secret from a master seed
+/// Helper function to derive a secret from a master seed.
 fn derive_secret(
 	seed: [u8; MASTER_SEED_LEN],
 	derive_path: &[u8],
@@ -90,7 +90,7 @@ fn derive_secret(
 	Ok(buf)
 }
 
-/// Helper function to generate a `N` length byte buffer
+/// Helper function to generate a `N` length byte buffer.
 fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
 	loop {
 		let mut key = [0u8; N];
@@ -136,8 +136,7 @@ impl P256Pair {
 		self.encrypt_private.decrypt(serialized_envelope)
 	}
 
-	/// Sign the message and return the ASN.1 DER. Signs the SHA512 digest of
-	/// the message.
+	/// Sign the message and return the raw signature.
 	pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
 		self.sign_private.sign(message)
 	}
@@ -152,7 +151,9 @@ impl P256Pair {
 	}
 
 	/// Create `Self` from a master seed.
-	pub fn from_master_seed(master_seed: [u8; MASTER_SEED_LEN]) -> Result<Self, P256Error> {
+	pub fn from_master_seed(
+		master_seed: [u8; MASTER_SEED_LEN],
+	) -> Result<Self, P256Error> {
 		let encrypt_secret =
 			derive_secret(master_seed, P256_ENCRYPT_DERIVE_PATH)?;
 		let sign_secret = derive_secret(master_seed, P256_SIGN_DERIVE_PATH)?;
@@ -200,7 +201,7 @@ impl P256Pair {
 	}
 }
 
-/// P256 public key for signing and encryption. Internally this uses a
+/// P256 public key for signing and encryption. Internally this uses
 /// separate public keys for signing and encryption.
 pub struct P256Public {
 	encrypt_public: P256EncryptPublic,
@@ -225,7 +226,7 @@ impl P256Public {
 		self.sign_public.verify(message, signature)
 	}
 
-	/// Serialize each public key SEC1 encoded point, not compressed.
+	/// Serialize each public key as a SEC1 encoded point, not compressed.
 	/// Encodes as `encrypt_public||sign_public`.
 	#[must_use]
 	pub fn to_bytes(&self) -> Vec<u8> {
@@ -265,7 +266,7 @@ impl P256Public {
 	) -> Result<(), P256Error> {
 		let hex_string = qos_hex::encode(&self.to_bytes());
 		std::fs::write(path, hex_string.as_bytes()).map_err(|e| {
-			P256Error::IOError(format!("failed to write master secret {}", e))
+			P256Error::IOError(format!("failed to write master secret: {}", e))
 		})
 	}
 
