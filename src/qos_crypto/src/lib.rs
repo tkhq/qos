@@ -22,7 +22,7 @@ pub fn sha_256(buf: &[u8]) -> [u8; 32] {
 pub fn sha_384(buf: &[u8]) -> [u8; 48] {
 	let mut harsher = sha2::Sha384::new();
 	harsher.update(buf);
-	harsher.finalize().try_into().expect("sha256 digest is 32 bytes")
+	harsher.finalize().try_into().expect("sha384 digest is 48 bytes")
 }
 
 #[cfg(test)]
