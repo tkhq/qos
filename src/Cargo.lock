@@ -919,8 +919,6 @@ dependencies = [
 name = "qos_crypto"
 version = "0.1.0"
 dependencies = [
- "borsh",
- "openssl",
  "qos_hex",
  "rand",
  "sha2",

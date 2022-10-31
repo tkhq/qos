@@ -8,8 +8,6 @@ edition = "2021"
 [dependencies]
 sha2 = { version = "0.10", default-features = false }
 rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
-openssl = "0.10.40"
-borsh = { version = "0.9" }
 
 [dev-dependencies]
 qos_hex = { path = "../qos_hex" }
