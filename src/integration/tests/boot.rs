@@ -19,8 +19,8 @@ use qos_core::protocol::{
 	},
 	QosHash,
 };
+use qos_crypto::sha_256;
 use qos_p256::P256Pair;
-use qos_crypto::{sha_256, RsaPair};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 const PIVOT_BUILD_FINGERPRINTS_PATH: &str =
@@ -246,8 +246,7 @@ async fn boot_e2e() {
 		))
 		.unwrap();
 
-		let signature =
-			personal_pair.sign(&manifest.qos_hash()).unwrap();
+		let signature = personal_pair.sign(&manifest.qos_hash()).unwrap();
 		assert_eq!(approval.signature, signature);
 
 		assert_eq!(approval.member.alias, alias);

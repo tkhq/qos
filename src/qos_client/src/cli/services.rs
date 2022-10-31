@@ -146,7 +146,11 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 
 	// Write the quorum public key
 	let quorum_key_path = namespace_dir.as_ref().join("quorum_key.pub");
-	write_with_msg(&quorum_key_path, &quorum_key.to_hex_bytes(), "quorum_key.pub");
+	write_with_msg(
+		&quorum_key_path,
+		&quorum_key.to_hex_bytes(),
+		"quorum_key.pub",
+	);
 }
 
 pub(crate) fn after_genesis<P: AsRef<Path>>(
@@ -565,15 +569,13 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 
 		// Sanity check the ephemeral key is valid
 		let eph_pub_bytes = attestation_doc
-					.public_key
-					.expect("No ephemeral key in the attestation doc");
+			.public_key
+			.expect("No ephemeral key in the attestation doc");
 		drop(
 			P256Public::from_bytes(&eph_pub_bytes)
 				.expect("Ephemeral key not valid public key"),
 		);
 	}
-
-
 }
 
 pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
@@ -1007,10 +1009,9 @@ fn find_quorum_key<P: AsRef<Path>>(dir: P) -> P256Public {
 				return None;
 			};
 
-			Some(
-				P256Public::from_hex_file(path)
-					.expect(&format!("Could not read hex from {:?}", path)),
-			)
+			Some(P256Public::from_hex_file(path).unwrap_or_else(|_| {
+				panic!("Could not read hex from {:?}", path)
+			}))
 		})
 		.collect();
 	// Make sure there is exactly one manifest
