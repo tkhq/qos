@@ -6,9 +6,8 @@ use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{sha_256, shamir::shares_reconstruct};
 use qos_p256::{P256Pair, P256Public};
-use qos_test_primitives::ChildWrapper;
+use qos_test_primitives::{ChildWrapper, PathWrapper};
 use rand::{seq::SliceRandom, thread_rng};
-use qos_test_primitives::PathWrapper;
 
 #[tokio::test]
 async fn genesis_e2e() {
@@ -153,9 +152,10 @@ async fn genesis_e2e() {
 	drop(unsafe_attestation_doc_from_der(
 		&fs::read(&*attestation_doc_path).unwrap(),
 	));
-	let genesis_output =
-		GenesisOutput::try_from_slice(&fs::read(&*genesis_output_path).unwrap())
-			.unwrap();
+	let genesis_output = GenesisOutput::try_from_slice(
+		&fs::read(&*genesis_output_path).unwrap(),
+	)
+	.unwrap();
 
 	// -- Recreate the quorum key from the encrypted shares.
 	let mut decrypted_shares: Vec<_> = genesis_output
