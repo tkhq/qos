@@ -1,9 +1,10 @@
 //! Logic for decoding and validating the Nitro Secure Module Attestation
 //! Document.
 
-use aws_nitro_enclaves_cose::CoseSign1;
+use aws_nitro_enclaves_cose::{CoseSign1, header_map::HeaderMap, sign::SigStructure};
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use serde_bytes::ByteBuf;
+use p384::ecdsa::signature::Verifier;
 
 use super::AttestError;
 
@@ -228,12 +229,16 @@ fn verify_certificate_chain(
 	Ok(())
 }
 
+use p384::{PublicKey, ecdsa::VerifyingKey};
+struct P384PubKey(p384::PublicKey);
+
 // Check that cose sign1 structure is signed with the key in the end
 // entity certificate.
 fn verify_cose_sign1_sig(
 	end_entity_certificate: &[u8],
 	cose_sign1: &CoseSign1,
 ) -> Result<(), AttestError> {
+	use p384::pkcs8::DecodePublicKey;
 	let ee_cert = openssl::x509::X509::from_der(end_entity_certificate)?;
 
 	// Expect v3
@@ -241,7 +246,16 @@ fn verify_cose_sign1_sig(
 		return Err(AttestError::InvalidEndEntityCert);
 	}
 
-	let ee_cert_pub_key = ee_cert.public_key()?;
+	let sig_structure = sig_structure(cose_sign1);
+	let signature = cose_sign1.sig
+
+	let pub_key_der = ee_cert.public_key()?.public_key_to_der().unwrap();
+
+	let key = PublicKey::from_public_key_der(&pub_key_der).unwrap();
+
+	let verifying_key = VerifyingKey::from(key);
+	verifying_key.verify(&sig_structure, signature).unwrap();
+
 
 	// Verify the signature against the extracted public key
 	let is_valid_sig = cose_sign1
@@ -252,6 +266,25 @@ fn verify_cose_sign1_sig(
 	} else {
 		Err(AttestError::InvalidCOSESign1Signature)
 	}
+}
+
+use serde_cbor::Error as CborError;
+
+fn sig_structure(cose_sign1: &CoseSign1,) -> Vec<u8> {
+	let (protected_header_map, payload) = cose_sign1.get_protected_and_payload(None).unwrap();
+
+	pub fn map_to_empty_or_serialized(map: &HeaderMap) -> Result<Vec<u8>, CborError> {
+		if map.is_empty() {
+			Ok(vec![])
+		} else {
+			Ok(serde_cbor::to_vec(map)?)
+		}
+	}
+
+	let protected = map_to_empty_or_serialized(&protected_header_map).unwrap();
+
+	let sig_structure = SigStructure::new_sign1(&protected, &payload).unwrap();
+	sig_structure.as_bytes().unwrap()
 }
 
 #[cfg(test)]
