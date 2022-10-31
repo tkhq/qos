@@ -211,8 +211,7 @@ impl ManifestEnvelope {
 	/// manifest approval set.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
 		for approval in &self.manifest_set_approvals {
-			let pub_key = P256Public::from_bytes(&approval.member.pub_key)
-				.map_err(|_| ProtocolError::CryptoError)?;
+			let pub_key = P256Public::from_bytes(&approval.member.pub_key)?;
 
 			let is_valid_signature = pub_key
 				.verify(&self.manifest.qos_hash(), &approval.signature)

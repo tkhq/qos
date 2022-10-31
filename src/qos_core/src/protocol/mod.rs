@@ -53,7 +53,6 @@ pub enum ProtocolError {
 	/// Filesystem error
 	IOError,
 	/// Cryptography error
-	CryptoError,
 	/// Approval was not valid for a manifest.
 	InvalidManifestApproval(boot::Approval),
 	/// [`services::boot::ManifestEnvelope`] did not have approvals
@@ -119,18 +118,6 @@ pub enum ProtocolError {
 	P256Error(qos_p256::P256Error),
 	/// The provisioned secret is the incorrect length.
 	IncorrectSecretLen,
-}
-
-impl From<qos_crypto::CryptoError> for ProtocolError {
-	fn from(_: qos_crypto::CryptoError) -> Self {
-		Self::CryptoError
-	}
-}
-
-impl From<openssl::error::ErrorStack> for ProtocolError {
-	fn from(_err: openssl::error::ErrorStack) -> Self {
-		Self::CryptoError
-	}
 }
 
 impl From<std::io::Error> for ProtocolError {
