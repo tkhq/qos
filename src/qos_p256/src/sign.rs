@@ -5,12 +5,13 @@ use p256::ecdsa::{
 	Signature, SigningKey, VerifyingKey,
 };
 use rand_core::OsRng;
-use sha2::Digest;
+use zeroize::ZeroizeOnDrop;
 
 use crate::P256Error;
 
 /// Sign private key pair.
-#[derive(Clone, PartialEq)]
+#[derive(ZeroizeOnDrop)]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq))]
 pub struct P256SignPair {
 	private: SigningKey,
 }
@@ -25,8 +26,7 @@ impl P256SignPair {
 	/// Sign the message and return the. Signs the SHA512 digest of
 	/// the message.
 	pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
-		let digest = sha2::Sha512::digest(message);
-		let signature: Signature = self.private.sign(&digest);
+		let signature: Signature = self.private.sign(message);
 
 		Ok(signature.to_vec())
 	}
@@ -53,7 +53,7 @@ impl P256SignPair {
 }
 
 /// Sign public key for verifying signatures.
-#[derive(Clone, PartialEq)]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq))]
 pub struct P256SignPublic {
 	public: VerifyingKey,
 }
@@ -68,12 +68,11 @@ impl P256SignPublic {
 		message: &[u8],
 		signature: &[u8],
 	) -> Result<(), P256Error> {
-		let digest = sha2::Sha512::digest(message);
 		let signature = Signature::from_bytes(signature)
 			.map_err(|_| P256Error::FailedToDeserializeSignature)?;
 
 		self.public
-			.verify(&digest, &signature)
+			.verify(message, &signature)
 			.map_err(|_| P256Error::FailedSignatureVerification)
 	}
 

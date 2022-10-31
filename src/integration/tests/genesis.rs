@@ -182,7 +182,7 @@ async fn genesis_e2e() {
 	decrypted_shares.shuffle(&mut thread_rng());
 	let master_secret: [u8; qos_p256::MASTER_SEED_LEN] =
 		shares_reconstruct(&decrypted_shares[0..threshold]).try_into().unwrap();
-	let reconstructed = P256Pair::from_master_seed(master_secret).unwrap();
+	let reconstructed = P256Pair::from_master_seed(&master_secret).unwrap();
 	assert!(
 		reconstructed.public_key()
 			== P256Public::from_bytes(&genesis_output.quorum_key).unwrap()

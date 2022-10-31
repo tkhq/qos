@@ -12,6 +12,7 @@ use p256::{
 };
 use rand_core::OsRng;
 use sha2::Sha512;
+use zeroize::ZeroizeOnDrop;
 
 use crate::P256Error;
 
@@ -33,7 +34,8 @@ struct Envelope {
 }
 
 /// P256 key pair
-#[derive(Clone, PartialEq)]
+#[derive(ZeroizeOnDrop)]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq))]
 pub struct P256EncryptPair {
 	private: SecretKey,
 }
@@ -109,7 +111,7 @@ impl P256EncryptPair {
 }
 
 /// P256 Public key.
-#[derive(Clone, PartialEq)]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq))]
 pub struct P256EncryptPublic {
 	public: PublicKey,
 }

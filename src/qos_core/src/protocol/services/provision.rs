@@ -97,7 +97,7 @@ pub(in crate::protocol) fn provision(
 		master_seed
 			.try_into()
 			.map_err(|_| ProtocolError::IncorrectSecretLen)?;
-	let pair = qos_p256::P256Pair::from_master_seed(master_seed)?;
+	let pair = qos_p256::P256Pair::from_master_seed(&master_seed)?;
 	let public_key_bytes = pair.public_key().to_bytes();
 
 	if public_key_bytes != manifest_envelope.manifest.namespace.quorum_key {

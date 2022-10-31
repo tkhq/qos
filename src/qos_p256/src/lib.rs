@@ -10,6 +10,7 @@ use std::path::Path;
 use hkdf::Hkdf;
 use rand_core::{OsRng, RngCore};
 use sha2::Sha512;
+use zeroize::ZeroizeOnDrop;
 
 use crate::{
 	encrypt::{P256EncryptPair, P256EncryptPublic},
@@ -83,10 +84,10 @@ impl From<qos_hex::HexError> for P256Error {
 
 /// Helper function to derive a secret from a master seed.
 fn derive_secret(
-	seed: [u8; MASTER_SEED_LEN],
+	seed: &[u8; MASTER_SEED_LEN],
 	derive_path: &[u8],
-) -> Result<[u8; 32], P256Error> {
-	let hk = Hkdf::<Sha512>::new(Some(derive_path), &seed);
+) -> Result<[u8; P256_SECRET_LEN], P256Error> {
+	let hk = Hkdf::<Sha512>::new(Some(derive_path), seed);
 
 	let mut buf = [0u8; P256_SECRET_LEN];
 	hk.expand(&[], &mut buf).map_err(|_| P256Error::HkdfExpansionFailed)?;
@@ -110,7 +111,8 @@ fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
 
 /// P256 private key pair for signing and encryption. Internally this uses a
 /// separate secret for signing and encryption.
-#[derive(Clone, PartialEq)]
+#[derive(ZeroizeOnDrop)]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq))]
 pub struct P256Pair {
 	encrypt_private: P256EncryptPair,
 	sign_private: P256SignPair,
@@ -123,8 +125,8 @@ impl P256Pair {
 		let master_seed = non_zero_bytes_os_rng::<MASTER_SEED_LEN>();
 
 		let encrypt_secret =
-			derive_secret(master_seed, P256_ENCRYPT_DERIVE_PATH)?;
-		let sign_secret = derive_secret(master_seed, P256_SIGN_DERIVE_PATH)?;
+			derive_secret(&master_seed, P256_ENCRYPT_DERIVE_PATH)?;
+		let sign_secret = derive_secret(&master_seed, P256_SIGN_DERIVE_PATH)?;
 
 		Ok(Self {
 			encrypt_private: P256EncryptPair::from_bytes(&encrypt_secret)?,
@@ -157,7 +159,7 @@ impl P256Pair {
 
 	/// Create `Self` from a master seed.
 	pub fn from_master_seed(
-		master_seed: [u8; MASTER_SEED_LEN],
+		master_seed: &[u8; MASTER_SEED_LEN],
 	) -> Result<Self, P256Error> {
 		let encrypt_secret =
 			derive_secret(master_seed, P256_ENCRYPT_DERIVE_PATH)?;
@@ -166,7 +168,7 @@ impl P256Pair {
 		Ok(Self {
 			encrypt_private: P256EncryptPair::from_bytes(&encrypt_secret)?,
 			sign_private: P256SignPair::from_bytes(&sign_secret)?,
-			master_seed,
+			master_seed: *master_seed,
 		})
 	}
 
@@ -205,17 +207,16 @@ impl P256Pair {
 		let hex_string = String::from_utf8(hex_bytes)
 			.map_err(|_| P256Error::MasterSeedInvalidUtf8)?;
 		let master_seed = qos_hex::decode(&hex_string)?;
-		Self::from_master_seed(
-			master_seed
-				.try_into()
-				.map_err(|_| P256Error::MasterSeedInvalidLength)?,
-		)
+		let master_seed: [u8; MASTER_SEED_LEN] = master_seed
+			.try_into()
+			.map_err(|_| P256Error::MasterSeedInvalidLength)?;
+		Self::from_master_seed(&master_seed)
 	}
 }
 
 /// P256 public key for signing and encryption. Internally this uses
 /// separate public keys for signing and encryption.
-#[derive(Clone, PartialEq)]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq))]
 pub struct P256Public {
 	encrypt_public: P256EncryptPublic,
 	sign_public: P256SignPublic,
@@ -424,7 +425,7 @@ mod test {
 		let public_key = alice_pair.public_key();
 		let master_seed = alice_pair.to_master_seed();
 
-		let alice_pair2 = P256Pair::from_master_seed(*master_seed).unwrap();
+		let alice_pair2 = P256Pair::from_master_seed(master_seed).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope = public_key.encrypt(plaintext).unwrap();

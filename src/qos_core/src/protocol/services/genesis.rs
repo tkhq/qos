@@ -132,7 +132,9 @@ pub(in crate::protocol) fn boot_genesis(
 
 #[cfg(test)]
 mod test {
-	use super::*;
+	use qos_p256::MASTER_SEED_LEN;
+
+use super::*;
 	use crate::{
 		handles::Handles, io::SocketAddress, protocol::attestor::mock::MockNsm,
 	};
@@ -188,11 +190,11 @@ mod test {
 			})
 			.collect();
 
-		let reconstructed = qos_crypto::shamir::shares_reconstruct(
+		let reconstructed: [u8; MASTER_SEED_LEN] = qos_crypto::shamir::shares_reconstruct(
 			&shares[0..threshold as usize],
-		);
+		).try_into().unwrap();
 		let reconstructed_quorum_key =
-			P256Pair::from_master_seed(reconstructed.try_into().unwrap())
+			P256Pair::from_master_seed(&reconstructed)
 				.unwrap();
 
 		let quorum_public_key =
