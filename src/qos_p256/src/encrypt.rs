@@ -1,4 +1,5 @@
 //! Abstractions for encryption.
+
 use aes_gcm::{
 	aead::{Aead, KeyInit, Payload},
 	Aes256Gcm, Nonce,
@@ -6,19 +7,18 @@ use aes_gcm::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use hmac::{Hmac, Mac};
 use p256::{
-	ecdh::EphemeralSecret,
-	elliptic_curve::{sec1::ToEncodedPoint, zeroize::Zeroize},
-	PublicKey,
+	ecdh::diffie_hellman, elliptic_curve::sec1::ToEncodedPoint, PublicKey,
+	SecretKey,
 };
-use rand::Rng;
 use rand_core::OsRng;
 use sha2::Sha512;
+use zeroize::ZeroizeOnDrop;
 
 use crate::P256Error;
 
 const AES256_KEY_LEN: usize = 32;
 const BITS_96_AS_BYTES: usize = 12;
-const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
+use crate::PUB_KEY_LEN_UNCOMPRESSED;
 
 type HmacSha512 = Hmac<Sha512>;
 
@@ -34,15 +34,16 @@ struct Envelope {
 }
 
 /// P256 key pair
+#[derive(ZeroizeOnDrop)]
 pub struct P256EncryptPair {
-	private: EphemeralSecret,
+	private: SecretKey,
 }
 
 impl P256EncryptPair {
 	/// Generate a new private key using the OS randomness source.
 	#[must_use]
 	pub fn generate() -> Self {
-		Self { private: EphemeralSecret::random(&mut OsRng) }
+		Self { private: SecretKey::random(&mut OsRng) }
 	}
 
 	/// Decrypt a message encoded to this pair's public key.
@@ -92,11 +93,19 @@ impl P256EncryptPair {
 	pub fn public_key(&self) -> P256EncryptPublic {
 		P256EncryptPublic { public: self.private.public_key() }
 	}
-}
 
-impl Drop for P256EncryptPair {
-	fn drop(&mut self) {
-		self.private.zeroize();
+	/// Deserialize key from raw scalar byte slice.
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+		Ok(Self {
+			private: SecretKey::from_be_bytes(bytes)
+				.map_err(|_| P256Error::FailedToReadSecret)?,
+		})
+	}
+
+	/// Serialize key to raw scalar byte slice.
+	#[must_use]
+	pub fn to_bytes(&self) -> Vec<u8> {
+		self.private.to_be_bytes().to_vec()
 	}
 }
 
@@ -108,7 +117,7 @@ pub struct P256EncryptPublic {
 impl P256EncryptPublic {
 	/// Encrypt a message to this public key.
 	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
-		let ephemeral_sender_private = EphemeralSecret::random(&mut OsRng);
+		let ephemeral_sender_private = SecretKey::random(&mut OsRng);
 		let ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED] =
 			ephemeral_sender_private
 				.public_key()
@@ -133,7 +142,7 @@ impl P256EncryptPublic {
 
 		let nonce = {
 			let random_bytes =
-				rand::thread_rng().gen::<[u8; BITS_96_AS_BYTES]>();
+				crate::non_zero_bytes_os_rng::<BITS_96_AS_BYTES>();
 			*Nonce::from_slice(&random_bytes)
 		};
 
@@ -157,6 +166,21 @@ impl P256EncryptPublic {
 
 		envelope.try_to_vec().map_err(|_| P256Error::FailedToSerializeEnvelope)
 	}
+
+	/// Serialize to SEC1 encoded point, not compressed.
+	#[must_use]
+	pub fn to_bytes(&self) -> Box<[u8]> {
+		let sec1_encoded_point = self.public.to_encoded_point(false);
+		sec1_encoded_point.to_bytes()
+	}
+
+	/// Deserialize from a SEC1 encoded point, not compressed.
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+		Ok(Self {
+			public: PublicKey::from_sec1_bytes(bytes)
+				.map_err(|_| P256Error::FailedToReadPublicKey)?,
+		})
+	}
 }
 
 // Types for helper function parameters to help prevent fat finger mistakes.
@@ -165,12 +189,14 @@ struct ReceiverPublic<'a>(&'a [u8]);
 
 // Helper function to create the `Aes256Gcm` cypher.
 fn create_cipher(
-	private: &EphemeralSecret,
+	private: &SecretKey,
 	public: &PublicKey,
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,
 ) -> Result<Aes256Gcm, P256Error> {
-	let shared_secret = private.diffie_hellman(public);
+	let shared_secret =
+		diffie_hellman(private.to_nonzero_scalar(), public.as_affine());
+
 	// To help with entropy and add domain context, we do
 	// `sender_public||receiver_public||shared_secret` as the pre-image for the
 	// shared key.
@@ -331,5 +357,34 @@ mod tests {
 			alice_pair.decrypt(&serialized_envelope).unwrap_err(),
 			P256Error::FailedToDeserializeEnvelope
 		);
+	}
+
+	#[test]
+	fn public_key_roundtrip_bytes() {
+		let alice_pair = P256EncryptPair::generate();
+		let alice_public = alice_pair.public_key();
+
+		let public_key_bytes = alice_public.to_bytes();
+		let alice_public2 =
+			P256EncryptPublic::from_bytes(&public_key_bytes).unwrap();
+
+		let plaintext = b"rust test message";
+
+		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
+
+		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
+
+		assert_eq!(decrypted, plaintext);
+	}
+
+	#[test]
+	fn private_key_roundtrip_bytes() {
+		let pair = P256EncryptPair::generate();
+		let raw_secret1 = pair.to_bytes();
+
+		let pair2 = P256EncryptPair::from_bytes(&raw_secret1).unwrap();
+		let raw_secret2 = pair2.to_bytes();
+
+		assert_eq!(raw_secret1, raw_secret2);
 	}
 }
