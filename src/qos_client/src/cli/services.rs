@@ -562,17 +562,18 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 			&manifest.enclave.pcr2,
 			&extract_pcr3(pcr3_preimage_path),
 		);
+
+		// Sanity check the ephemeral key is valid
+		let eph_pub_bytes = attestation_doc
+					.public_key
+					.expect("No ephemeral key in the attestation doc");
+		drop(
+			P256Public::from_bytes(&eph_pub_bytes)
+				.expect("Ephemeral key not valid public key"),
+		);
 	}
 
-	// Make sure the ephemeral key is valid.
-	drop(
-		P256Public::from_bytes(
-			&attestation_doc
-				.public_key
-				.expect("No ephemeral key in the attestation doc"),
-		)
-		.expect("Ephemeral key not valid public key"),
-	);
+
 }
 
 pub(crate) fn get_attestation_doc<P: AsRef<Path>>(

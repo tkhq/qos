@@ -19,6 +19,7 @@ use qos_core::protocol::{
 	},
 	QosHash,
 };
+use qos_p256::P256Pair;
 use qos_crypto::{sha_256, RsaPair};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
@@ -238,7 +239,7 @@ async fn boot_e2e() {
 		let approval =
 			Approval::try_from_slice(&fs::read(approval_path).unwrap())
 				.unwrap();
-		let personal_pair = RsaPair::from_pem_file(&format!(
+		let personal_pair = P256Pair::from_hex_file(&format!(
 			"{}/{}.secret",
 			personal_dir(alias),
 			alias,
@@ -246,13 +247,13 @@ async fn boot_e2e() {
 		.unwrap();
 
 		let signature =
-			personal_pair.sign_sha256(&manifest.qos_hash()).unwrap();
+			personal_pair.sign(&manifest.qos_hash()).unwrap();
 		assert_eq!(approval.signature, signature);
 
 		assert_eq!(approval.member.alias, alias);
 		assert_eq!(
 			approval.member.pub_key,
-			personal_pair.public_key_to_der().unwrap(),
+			personal_pair.public_key().to_bytes(),
 		);
 	}
 
