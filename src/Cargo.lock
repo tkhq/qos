@@ -600,7 +600,6 @@ version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
- "openssl",
  "qos_attest",
  "qos_client",
  "qos_core",
@@ -924,6 +923,7 @@ dependencies = [
  "openssl",
  "qos_hex",
  "rand",
+ "sha2",
 ]
 
 [[package]]

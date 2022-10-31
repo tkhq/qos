@@ -23,6 +23,7 @@ use openssl::{
 	sign::{Signer, Verifier},
 	symm::{self, Cipher},
 };
+use sha2::Digest;
 
 pub mod shamir;
 
@@ -59,17 +60,17 @@ impl From<openssl::error::ErrorStack> for CryptoError {
 /// Create a SHA256 hash digest of `buf`.
 #[must_use]
 pub fn sha_256(buf: &[u8]) -> [u8; 32] {
-	let mut hasher = openssl::sha::Sha256::new();
-	hasher.update(buf);
-	hasher.finish()
+	let mut harsher = sha2::Sha256::new();
+	harsher.update(buf);
+	harsher.finalize().try_into().expect("sha256 digest is 32 bytes")
 }
 
 /// Create a SHA384 hash digest of `buf`.
 #[must_use]
 pub fn sha_384(buf: &[u8]) -> [u8; 48] {
-	let mut hasher = openssl::sha::Sha384::new();
-	hasher.update(buf);
-	hasher.finish()
+	let mut harsher = sha2::Sha384::new();
+	harsher.update(buf);
+	harsher.finalize().try_into().expect("sha256 digest is 32 bytes")
 }
 
 /// RSA Private key pair.
