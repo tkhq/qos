@@ -16,6 +16,7 @@ serde_bytes = { version = "0.11", default-features = false }
 openssl = "0.10.40"
 p384 = { version = "0.11", features = ["sha384", "ecdsa"], default-features = false }
 serde_cbor = "0.11"
+x509-cert = { version = "0.1" }
 
 [dev-dependencies]
 hex-literal = "*"

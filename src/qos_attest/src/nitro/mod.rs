@@ -17,9 +17,6 @@ use super::AttestError;
 
 mod syntactic_validation;
 
-/// Version 3 for the X509 certificate format (0 corresponds to v1 etc.)
-const X509_V3: i32 = 2;
-
 /// Signing algorithms we expect the certificates to use. Any other
 /// algorithms will be considered invalid. NOTE: this list was deduced just
 /// by trial and error and thus its unclear if it should include more types.
@@ -38,7 +35,10 @@ pub const AWS_ROOT_CERT_PEM: &[u8] =
 /// Extract a DER encoded certificate from bytes representing a PEM encoded
 /// certificate.
 pub fn cert_from_pem(pem: &[u8]) -> Result<Vec<u8>, AttestError> {
-	Ok(openssl::x509::X509::from_pem(pem)?.to_der()?)
+	let (_, doc) =
+		x509_cert::der::Document::from_pem(&String::from_utf8_lossy(pem))
+			.map_err(|_| AttestError::PemDecodingError)?;
+	Ok(doc.to_vec())
 }
 
 /// Verify that `attestation_doc` matches the specified parameters.
@@ -242,17 +242,20 @@ fn verify_cose_sign1_sig(
 	end_entity_certificate: &[u8],
 	cose_sign1: &CoseSign1,
 ) -> Result<(), AttestError> {
-	use p384::pkcs8::DecodePublicKey;
-	let ee_cert = openssl::x509::X509::from_der(end_entity_certificate)?;
+	use x509_cert::der::Decode;
+
+	let ee_cert =
+		x509_cert::certificate::Certificate::from_der(end_entity_certificate)
+			.unwrap();
 
 	// Expect v3
-	if ee_cert.version() != X509_V3 {
+	if ee_cert.tbs_certificate.version != x509_cert::certificate::Version::V3 {
 		return Err(AttestError::InvalidEndEntityCert);
 	}
 
-	let pub_key_der = ee_cert.public_key()?.public_key_to_der().unwrap();
-
-	let key = PublicKey::from_public_key_der(&pub_key_der).unwrap();
+	let pub_key_der =
+		ee_cert.tbs_certificate.subject_public_key_info.subject_public_key;
+	let key = PublicKey::from_sec1_bytes(pub_key_der).unwrap();
 	let key_wrapped = P384PubKey(key);
 
 	// Verify the signature against the extracted public key

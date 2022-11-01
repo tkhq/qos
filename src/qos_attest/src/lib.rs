@@ -42,6 +42,8 @@ pub enum AttestError {
 	InvalidBytes,
 	/// The NSM returned an unexpected response when querried
 	UnexpectedNsmResponse(qos_core::protocol::attestor::types::NsmResponse),
+	/// Error while decoding PEM.
+	PemDecodingError,
 }
 
 impl From<webpki::Error> for AttestError {
