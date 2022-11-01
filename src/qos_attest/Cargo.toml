@@ -9,9 +9,15 @@ qos_hex = { path = "../qos_hex" }
 
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 
-aws-nitro-enclaves-cose = { git = "https://github.com/emostov/aws-nitro-enclaves-cose" }
+aws-nitro-enclaves-cose = { git = "https://github.com/emostov/aws-nitro-enclaves-cose", branch = "zeke-p384-pure-rust-verify" }
+sha2 = { version = "0.10", default-features = false }
 webpki = { version =  "0.22.0", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 openssl = "0.10.40"
-p384 = { version = "0.11", features = ["sha384", "ecdsa"] }
+p384 = { version = "0.11", features = ["sha384", "ecdsa"], default-features = false }
 serde_cbor = "0.11"
+
+[dev-dependencies]
+hex-literal = "*"
+rand = "*"
+qos_core = { path = "../qos_core", features = ["mock"] }

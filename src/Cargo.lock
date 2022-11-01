@@ -68,9 +68,9 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 [[package]]
 name = "aws-nitro-enclaves-cose"
 version = "0.5.0"
-source = "git+https://github.com/emostov/aws-nitro-enclaves-cose#b95205c186e2093dd699d5f6a93ffc4e185e1994"
+source = "git+https://github.com/emostov/aws-nitro-enclaves-cose?branch=zeke-p384-pure-rust-verify#4e47e098b3998460d1d9b0f0db4c6c624bcd0671"
 dependencies = [
- "openssl",
+ "p384",
  "serde",
  "serde_bytes",
  "serde_cbor",
@@ -496,6 +496,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex-literal"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ebdb29d2ea9ed0083cd8cece49bbd968021bd99b0849edb4a9a7ee0fdf6a4e0"
+
+[[package]]
 name = "hkdf"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -902,12 +908,15 @@ version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-cose",
  "aws-nitro-enclaves-nsm-api",
+ "hex-literal",
  "openssl",
  "p384",
  "qos_core",
  "qos_hex",
+ "rand",
  "serde_bytes",
  "serde_cbor",
+ "sha2",
  "webpki",
 ]
 
