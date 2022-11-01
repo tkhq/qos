@@ -844,7 +844,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	unsafe_eph_path_override: Option<String>,
 ) {
 	// Generate a quorum key
-	let quorum_pair = P256Pair::generate().expect("Failed RSA gen");
+	let quorum_pair = P256Pair::generate().expect("Failed P256 key gen");
 	let quorum_public_der = quorum_pair.public_key().to_bytes();
 	let member = QuorumMember {
 		alias: DANGEROUS_DEV_BOOT_MEMBER.to_string(),
