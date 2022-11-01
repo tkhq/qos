@@ -23,7 +23,7 @@ const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
 const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
 
 /// Length of the master seed.
-pub const MASTER_SEED_LEN: usize = 64;
+pub const MASTER_SEED_LEN: usize = 32;
 
 pub mod encrypt;
 pub mod sign;

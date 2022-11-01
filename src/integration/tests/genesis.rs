@@ -163,9 +163,11 @@ async fn genesis_e2e() {
 		.iter()
 		.map(|member| {
 			let alias = &member.share_set_member.alias;
+			dbg!(&alias);
 			let (private_share_key, _) = get_key_paths(alias);
 			let share_key_path =
 				Path::new(&*personal_dir(alias)).join(private_share_key);
+			dbg!(&share_key_path);
 			let share_pair = P256Pair::from_hex_file(share_key_path).unwrap();
 
 			// Decrypt the share with the personal key
