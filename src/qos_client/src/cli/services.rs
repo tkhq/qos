@@ -51,7 +51,8 @@ const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 	fs::create_dir_all(personal_dir.as_ref()).unwrap();
 
-	let share_key_pair = P256Pair::generate().expect("unable to generate P256 keypair");
+	let share_key_pair =
+		P256Pair::generate().expect("unable to generate P256 keypair");
 
 	// Write the personal key secret
 	// TODO: password encryption
