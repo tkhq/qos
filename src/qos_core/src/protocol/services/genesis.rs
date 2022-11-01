@@ -2,7 +2,8 @@
 
 use std::iter::zip;
 
-use qos_crypto::{sha_256, RsaPair, RsaPub};
+use qos_crypto::sha_256;
+use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
 	attestor::types::{NsmRequest, NsmResponse},
@@ -83,10 +84,10 @@ pub(in crate::protocol) fn boot_genesis(
 	genesis_set: &GenesisSet,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
 	// TODO: Entropy!
-	let quorum_pair = RsaPair::generate()?;
+	let quorum_pair = P256Pair::generate()?;
 
 	let shares = qos_crypto::shamir::shares_generate(
-		&quorum_pair.private_key_to_der()?,
+		&quorum_pair.to_master_seed()[..],
 		genesis_set.members.len(),
 		genesis_set.threshold as usize,
 	);
@@ -95,9 +96,9 @@ pub(in crate::protocol) fn boot_genesis(
 		zip(shares, genesis_set.members.iter().cloned())
 			.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError>{
 				// 1) encrypt the share to quorum key
-				let personal_pub = RsaPub::from_der(&share_set_member.pub_key)?;
+				let personal_pub = P256Public::from_bytes(&share_set_member.pub_key)?;
 				let encrypted_quorum_key_share =
-					personal_pub.envelope_encrypt(&share)?;
+					personal_pub.encrypt(&share)?;
 
 				Ok(GenesisMemberOutput {
 					share_set_member,
@@ -109,7 +110,7 @@ pub(in crate::protocol) fn boot_genesis(
 
 	let genesis_output = GenesisOutput {
 		member_outputs: member_outputs?,
-		quorum_key: quorum_pair.public_key_to_der()?,
+		quorum_key: quorum_pair.public_key().to_bytes(),
 		threshold: genesis_set.threshold,
 		// TODO: generate N choose K recovery permutations
 		recovery_permutations: vec![],
@@ -131,6 +132,8 @@ pub(in crate::protocol) fn boot_genesis(
 
 #[cfg(test)]
 mod test {
+	use qos_p256::MASTER_SEED_LEN;
+
 	use super::*;
 	use crate::{
 		handles::Handles, io::SocketAddress, protocol::attestor::mock::MockNsm,
@@ -149,22 +152,22 @@ mod test {
 			handles.clone(),
 			SocketAddress::new_unix("./never.sock"),
 		);
-		let member1_pair = RsaPair::generate().unwrap();
-		let member2_pair = RsaPair::generate().unwrap();
-		let member3_pair = RsaPair::generate().unwrap();
+		let member1_pair = P256Pair::generate().unwrap();
+		let member2_pair = P256Pair::generate().unwrap();
+		let member3_pair = P256Pair::generate().unwrap();
 
 		let genesis_members = vec![
 			QuorumMember {
 				alias: "member1".to_string(),
-				pub_key: member1_pair.public_key_to_der().unwrap(),
+				pub_key: member1_pair.public_key().to_bytes(),
 			},
 			QuorumMember {
 				alias: "member2".to_string(),
-				pub_key: member2_pair.public_key_to_der().unwrap(),
+				pub_key: member2_pair.public_key().to_bytes(),
 			},
 			QuorumMember {
 				alias: "member3".to_string(),
-				pub_key: member3_pair.public_key_to_der().unwrap(),
+				pub_key: member3_pair.public_key().to_bytes(),
 			},
 		];
 
@@ -178,9 +181,8 @@ mod test {
 		let zipped = std::iter::zip(output.member_outputs, member_pairs);
 		let shares: Vec<Vec<u8>> = zipped
 			.map(|(output, pair)| {
-				let decrypted_share = &pair
-					.envelope_decrypt(&output.encrypted_quorum_key_share)
-					.unwrap();
+				let decrypted_share =
+					&pair.decrypt(&output.encrypted_quorum_key_share).unwrap();
 
 				assert_eq!(sha_256(decrypted_share), output.share_hash);
 
@@ -188,14 +190,21 @@ mod test {
 			})
 			.collect();
 
-		let reconstructed = qos_crypto::shamir::shares_reconstruct(
-			&shares[0..threshold as usize],
-		);
+		let reconstructed: [u8; MASTER_SEED_LEN] =
+			qos_crypto::shamir::shares_reconstruct(
+				&shares[0..threshold as usize],
+			)
+			.try_into()
+			.unwrap();
 		let reconstructed_quorum_key =
-			RsaPair::from_der(&reconstructed).unwrap();
+			P256Pair::from_master_seed(&reconstructed).unwrap();
 
-		let quorum_public_key = RsaPub::from_der(&output.quorum_key).unwrap();
-		assert_eq!(reconstructed_quorum_key.public_key(), &quorum_public_key);
+		let quorum_public_key =
+			P256Public::from_bytes(&output.quorum_key).unwrap();
+		assert_eq!(
+			reconstructed_quorum_key.public_key().to_bytes(),
+			quorum_public_key.to_bytes()
+		);
 
 		// Sanity check
 		assert!(!handles.quorum_key_exists());

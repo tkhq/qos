@@ -459,10 +459,6 @@ pub enum Command {
 	/// sharding it (N=1), creating/signing/posting a Manifest, and
 	/// provisioning the quorum key.
 	DangerousDevBoot,
-	/// Send a simple echo request to the sample secure app.
-	AppEcho,
-	/// Send a read QOS files request to the sample secure app.
-	AppReadFiles,
 }
 
 impl From<&str> for Command {
@@ -483,8 +479,6 @@ impl From<&str> for Command {
 			"proxy-re-encrypt-share" => Self::ProxyReEncryptShare,
 			"post-share" => Self::PostShare,
 			"dangerous-dev-boot" => Self::DangerousDevBoot,
-			"app-echo" => Self::AppEcho,
-			"app-read-files" => Self::AppReadFiles,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -738,8 +732,6 @@ impl GetParserForCommand for Command {
 			Self::HostHealth
 			| Self::DescribeNsm
 			| Self::DescribePcr
-			| Self::AppEcho
-			| Self::AppReadFiles
 			| Self::EnclaveStatus => Self::base(),
 			Self::GenerateShareKey => Self::generate_share_key(),
 			Self::BootGenesis => Self::boot_genesis(),
@@ -920,8 +912,6 @@ impl ClientRunner {
 				Command::EnclaveStatus => handlers::enclave_status(&self.opts),
 				Command::DescribeNsm => handlers::describe_nsm(&self.opts),
 				Command::DescribePcr => handlers::describe_pcr(&self.opts),
-				Command::AppEcho => handlers::app_echo(&self.opts),
-				Command::AppReadFiles => handlers::app_read_files(&self.opts),
 				Command::GenerateShareKey => {
 					handlers::generate_share_key(&self.opts);
 				}
@@ -1040,64 +1030,6 @@ mod handlers {
 				other => panic!("Unexpected response {:?}", other),
 			}
 		}
-	}
-
-	pub(super) fn app_echo(opts: &ClientOpts) {
-		use borsh::{BorshDeserialize, BorshSerialize};
-		use sample_app::AppMsg;
-
-		let echo_data = "some data to echo".to_string();
-		let encoded_app_req = AppMsg::EchoReq { data: echo_data.clone() }
-			.try_to_vec()
-			.expect("Failed to serialize app msg");
-		let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
-		let app_msg = match request::post(&opts.path_message(), &req)
-			.map_err(|e| println!("{:?}", e))
-			.expect("App echo request failed")
-		{
-			ProtocolMsg::ProxyResponse { data } => {
-				AppMsg::try_from_slice(&data)
-					.expect("Failed to deserialize app msg in proxy response")
-			}
-			other => panic!("Unexpected protocol response {:?}", other),
-		};
-
-		match app_msg {
-			AppMsg::EchoResp { data } => {
-				assert_eq!(data, echo_data, "Echoed data is not what was sent");
-			}
-			other => panic!("Unexpected app response {:?}", other),
-		}
-
-		println!("App echo s uccessful!");
-	}
-
-	pub(super) fn app_read_files(opts: &ClientOpts) {
-		use borsh::{BorshDeserialize, BorshSerialize};
-		use sample_app::AppMsg;
-
-		let encoded_app_req = AppMsg::ReadQOSFilesReq
-			.try_to_vec()
-			.expect("Failed to serialize app msg");
-		let req = ProtocolMsg::ProxyRequest { data: encoded_app_req };
-		let resp = match request::post(&opts.path_message(), &req)
-			.map_err(|e| println!("{:?}", e))
-			.expect("App read QOS files request failed")
-		{
-			ProtocolMsg::ProxyResponse { data } => {
-				AppMsg::try_from_slice(&data)
-					.expect("Failed to deserialize app msg in proxy response")
-			}
-			other => panic!("Unexpected protocol response {:?}", other),
-		};
-
-		match resp {
-			AppMsg::ReadQOSFilesResp { .. } => {}
-			other => panic!("Unexpected app response {:?}", other),
-		}
-
-		println!("App read files was successful!");
-		println!("Note that the files themselves where not verified.");
 	}
 
 	pub(super) fn generate_share_key(opts: &ClientOpts) {

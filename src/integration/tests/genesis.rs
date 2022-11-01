@@ -4,7 +4,8 @@ use borsh::de::BorshDeserialize;
 use integration::LOCAL_HOST;
 use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
-use qos_crypto::{sha_256, shamir::shares_reconstruct, RsaPair, RsaPub};
+use qos_crypto::{sha_256, shamir::shares_reconstruct};
+use qos_p256::{P256Pair, P256Public};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 use rand::{seq::SliceRandom, thread_rng};
 
@@ -21,7 +22,7 @@ async fn genesis_e2e() {
 	let pivot_path = tmp_dir("genesis_e2e.pivot");
 	let manifest_path = tmp_dir("manifest.manifest");
 
-	let all_personal_dir = tmp_dir("personal-dir");
+	let all_personal_dir = tmp_dir("all-personal-dir");
 	let genesis_dir = tmp_dir("genesis-dir");
 
 	let attestation_doc_path =
@@ -57,7 +58,7 @@ async fn genesis_e2e() {
 			.args([
 				"generate-share-key",
 				"--personal-dir",
-				&personal_dir(user),
+				&*personal_dir(user),
 				"--alias",
 				user,
 			])
@@ -66,8 +67,8 @@ async fn genesis_e2e() {
 			.wait()
 			.unwrap()
 			.success());
-		assert!(Path::new(&personal_dir(user)).join(public).is_file());
-		assert!(Path::new(&personal_dir(user)).join(private).is_file());
+		assert!(Path::new(&*personal_dir(user)).join(public).is_file());
+		assert!(Path::new(&*personal_dir(user)).join(private).is_file());
 	}
 
 	// Make the genesis dir
@@ -78,7 +79,7 @@ async fn genesis_e2e() {
 		(&user2, &user2_public_share_key),
 		(&user3, &user3_public_share_key),
 	] {
-		let from = Path::new(&personal_dir(user)).join(public);
+		let from = Path::new(&*personal_dir(user)).join(public);
 		let to = Path::new(&*genesis_dir).join(public);
 		fs::copy(from, to).unwrap();
 	}
@@ -109,7 +110,7 @@ async fn genesis_e2e() {
 		Command::new("../target/debug/qos_host")
 			.args([
 				"--host-port",
-				&host_port.to_string(),
+				&*host_port.to_string(),
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
@@ -134,7 +135,7 @@ async fn genesis_e2e() {
 			"--host-ip",
 			LOCAL_HOST,
 			"--host-port",
-			&host_port.to_string(),
+			&*host_port.to_string(),
 			"--qos-build-fingerprints",
 			"./mock/qos-build-fingerprints.txt",
 			"--pcr3-preimage-path",
@@ -162,15 +163,16 @@ async fn genesis_e2e() {
 		.iter()
 		.map(|member| {
 			let alias = &member.share_set_member.alias;
+
 			let (private_share_key, _) = get_key_paths(alias);
 			let share_key_path =
-				Path::new(&personal_dir(alias)).join(private_share_key);
-			let share_pair = RsaPair::from_pem_file(share_key_path).unwrap();
+				Path::new(&*personal_dir(alias)).join(private_share_key);
+
+			let share_pair = P256Pair::from_hex_file(share_key_path).unwrap();
 
 			// Decrypt the share with the personal key
-			let plain_text_share = share_pair
-				.envelope_decrypt(&member.encrypted_quorum_key_share)
-				.unwrap();
+			let plain_text_share =
+				share_pair.decrypt(&member.encrypted_quorum_key_share).unwrap();
 
 			assert_eq!(sha_256(&plain_text_share), member.share_hash);
 
@@ -180,12 +182,12 @@ async fn genesis_e2e() {
 
 	// Try recovering from a random permutation
 	decrypted_shares.shuffle(&mut thread_rng());
-	let reconstructed =
-		RsaPair::from_der(&shares_reconstruct(&decrypted_shares[0..threshold]))
-			.unwrap();
-	assert_eq!(
-		*reconstructed.public_key(),
-		RsaPub::from_der(&genesis_output.quorum_key).unwrap()
+	let master_secret: [u8; qos_p256::MASTER_SEED_LEN] =
+		shares_reconstruct(&decrypted_shares[0..threshold]).try_into().unwrap();
+	let reconstructed = P256Pair::from_master_seed(&master_secret).unwrap();
+	assert!(
+		reconstructed.public_key()
+			== P256Public::from_bytes(&genesis_output.quorum_key).unwrap()
 	);
 
 	// -- CLIENT make sure each user can run `after-genesis` against their
@@ -197,7 +199,7 @@ async fn genesis_e2e() {
 				"--personal-dir",
 				&personal_dir(user),
 				"--namespace-dir",
-				&*genesis_dir,
+				&genesis_dir,
 				"--qos-build-fingerprints",
 				"./mock/qos-build-fingerprints.txt",
 				"--pcr3-preimage-path",
@@ -214,12 +216,11 @@ async fn genesis_e2e() {
 			Path::new(&personal_dir(user)).join(format!("{}.secret", user));
 		let share_path =
 			Path::new(&personal_dir(user)).join(format!("{}.share", user));
-		let share_key_pair = RsaPair::from_pem_file(share_key_path).unwrap();
+		let share_key_pair = P256Pair::from_hex_file(share_key_path).unwrap();
 
 		// Check the share is encrypted to personal key
-		let share = share_key_pair
-			.envelope_decrypt(&fs::read(share_path).unwrap())
-			.unwrap();
+		let share =
+			share_key_pair.decrypt(&fs::read(share_path).unwrap()).unwrap();
 		// Cross check that the share belongs `decrypted_shares`, which we
 		// created out of band in this test.
 		assert!(decrypted_shares.contains(&share));

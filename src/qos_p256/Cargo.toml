@@ -17,3 +17,7 @@ zeroize = { version = "1.5", features = ["derive"], default-features = false }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
+
+[features]
+# Things to make writing tests easier
+mock = []

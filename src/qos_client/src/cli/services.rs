@@ -25,7 +25,8 @@ use qos_core::protocol::{
 	},
 	QosHash,
 };
-use qos_crypto::{sha_256, sha_384, RsaPair, RsaPub};
+use qos_crypto::{sha_256, sha_384};
+use qos_p256::{P256Pair, P256Public};
 
 use crate::request;
 
@@ -51,7 +52,7 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 	fs::create_dir_all(personal_dir.as_ref()).unwrap();
 
 	let share_key_pair =
-		RsaPair::generate().expect("RSA key generation failed");
+		P256Pair::generate().expect("unable to generate P256 keypair");
 
 	// Write the personal key secret
 	// TODO: password encryption
@@ -59,9 +60,7 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 		personal_dir.as_ref().join(format!("{}.{}", alias, SECRET_EXT));
 	write_with_msg(
 		&private_path,
-		&share_key_pair
-			.private_key_to_pem()
-			.expect("Private key PEM conversion failed"),
+		&share_key_pair.to_master_seed_hex(),
 		"Share Key Secret",
 	);
 
@@ -70,9 +69,7 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 		personal_dir.as_ref().join(format!("{}.{}", alias, PUB_EXT));
 	write_with_msg(
 		&public_path,
-		&share_key_pair
-			.public_key_to_pem()
-			.expect("Public key PEM conversion failed"),
+		&share_key_pair.public_key().to_hex_bytes(),
 		"Share Key Public",
 	);
 }
@@ -96,10 +93,8 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		} => (document, genesis_output),
 		r => panic!("Unexpected response: {:?}", r),
 	};
-	let quorum_key = RsaPub::from_der(&genesis_output.quorum_key)
-		.unwrap()
-		.public_key_to_pem()
-		.unwrap();
+	let quorum_key =
+		P256Public::from_bytes(&genesis_output.quorum_key).unwrap();
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
 
@@ -152,7 +147,11 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 
 	// Write the quorum public key
 	let quorum_key_path = namespace_dir.as_ref().join("quorum_key.pub");
-	write_with_msg(&quorum_key_path, &quorum_key, "quorum_key.pub");
+	write_with_msg(
+		&quorum_key_path,
+		&quorum_key.to_hex_bytes(),
+		"quorum_key.pub",
+	);
 }
 
 pub(crate) fn after_genesis<P: AsRef<Path>>(
@@ -209,8 +208,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	}
 
 	// Get the members specific output based on alias & setup key
-	let share_key_public =
-		share_key_pair.public_key_to_der().expect("Invalid setup key");
+	let share_key_public = share_key_pair.public_key().to_bytes();
 	let member_output = genesis_output
 		.member_outputs
 		.iter()
@@ -222,7 +220,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 
 	// Make sure we can decrypt the Share with the Personal Key
 	let plaintext_share = share_key_pair
-		.envelope_decrypt(&member_output.encrypted_quorum_key_share)
+		.decrypt(&member_output.encrypted_quorum_key_share)
 		.expect("Share could not be decrypted with personal key");
 
 	assert_eq!(
@@ -282,13 +280,13 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	// Get share set keys & threshold
 	let share_set = get_share_set(share_set_dir);
 	// Get quorum key from namespaces dir
-	let quorum_key: RsaPub = find_quorum_key(namespace_dir);
+	let quorum_key: P256Public = find_quorum_key(namespace_dir);
 
 	let manifest = Manifest {
 		namespace: Namespace {
 			name: namespace.clone(),
 			nonce,
-			quorum_key: quorum_key.public_key_to_der().unwrap(),
+			quorum_key: quorum_key.to_bytes(),
 		},
 		pivot: PivotConfig {
 			commit: pivot_commit,
@@ -377,12 +375,10 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 
 	let approval = Approval {
 		signature: personal_pair
-			.sign_sha256(&manifest.qos_hash())
+			.sign(&manifest.qos_hash())
 			.expect("Failed to sign"),
 		member: QuorumMember {
-			pub_key: personal_pair
-				.public_key_to_der()
-				.expect("Failed to get public key"),
+			pub_key: personal_pair.public_key().to_bytes(),
 			alias: alias.clone(),
 		},
 	};
@@ -406,7 +402,7 @@ fn approve_manifest_programmatic_verifications(
 	share_set: &ShareSet,
 	nitro_config: &NitroConfig,
 	pivot_build_fingerprints: &PivotBuildFingerprints,
-	quorum_key: &RsaPub,
+	quorum_key: &P256Public,
 ) -> bool {
 	// Verify manifest set composition
 	if manifest.manifest_set != *manifest_set {
@@ -439,8 +435,7 @@ fn approve_manifest_programmatic_verifications(
 	}
 
 	// Verify the intended Quorum Key is being used
-	if manifest.namespace.quorum_key != quorum_key.public_key_to_der().unwrap()
-	{
+	if manifest.namespace.quorum_key != quorum_key.to_bytes() {
 		eprintln!("Pivot commit does not match");
 		return false;
 	}
@@ -572,17 +567,16 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 			&manifest.enclave.pcr2,
 			&extract_pcr3(pcr3_preimage_path),
 		);
-	}
 
-	// Make sure the ephemeral key is valid.
-	drop(
-		RsaPub::from_pem(
-			&attestation_doc
-				.public_key
-				.expect("No ephemeral key in the attestation doc"),
-		)
-		.expect("Ephemeral key not valid public key"),
-	);
+		// Sanity check the ephemeral key is valid
+		let eph_pub_bytes = attestation_doc
+			.public_key
+			.expect("No ephemeral key in the attestation doc");
+		drop(
+			P256Public::from_bytes(&eph_pub_bytes)
+				.expect("Ephemeral key not valid public key"),
+		);
+	}
 }
 
 pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
@@ -670,12 +664,12 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	}
 
 	// Pull out the ephemeral key or use the override
-	let eph_pub: RsaPub = if let Some(eph_path) = unsafe_eph_path_override {
-		RsaPair::from_pem_file(&eph_path)
+	let eph_pub: P256Public = if let Some(eph_path) = unsafe_eph_path_override {
+		P256Pair::from_hex_file(&eph_path)
 			.expect("Could not read ephemeral key override")
-			.into()
+			.public_key()
 	} else {
-		RsaPub::from_pem(
+		P256Public::from_bytes(
 			&attestation_doc
 				.public_key
 				.expect("No ephemeral key in the attestation doc"),
@@ -688,7 +682,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		&get_manifest_set(manifest_set_dir),
 		&QuorumMember {
 			alias: alias.clone(),
-			pub_key: personal_pair.public_key_to_der().unwrap(),
+			pub_key: personal_pair.public_key().to_bytes(),
 		},
 	) {
 		eprintln!("Exiting early without re-encrypting / approving");
@@ -709,21 +703,17 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 
 	let share = {
 		let plaintext_share = &personal_pair
-			.envelope_decrypt(&encrypted_share)
+			.decrypt(&encrypted_share)
 			.expect("Failed to decrypt share with personal key.");
-		eph_pub
-			.envelope_encrypt(plaintext_share)
-			.expect("Envelope encryption error")
+		eph_pub.encrypt(plaintext_share).expect("Envelope encryption error")
 	};
 
 	let approval = Approval {
 		signature: personal_pair
-			.sign_sha256(&manifest_envelope.manifest.qos_hash())
+			.sign(&manifest_envelope.manifest.qos_hash())
 			.expect("Failed to sign"),
 		member: QuorumMember {
-			pub_key: personal_pair
-				.public_key_to_der()
-				.expect("Failed to get public key"),
+			pub_key: personal_pair.public_key().to_bytes(),
 			alias,
 		},
 	}
@@ -855,8 +845,8 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	unsafe_eph_path_override: Option<String>,
 ) {
 	// Generate a quorum key
-	let quorum_pair = RsaPair::generate().expect("Failed RSA gen");
-	let quorum_public_der = quorum_pair.public_key_to_der().unwrap();
+	let quorum_pair = P256Pair::generate().expect("Failed P256 key gen");
+	let quorum_public_der = quorum_pair.public_key().to_bytes();
 	let member = QuorumMember {
 		alias: DANGEROUS_DEV_BOOT_MEMBER.to_string(),
 		pub_key: quorum_public_der.clone(),
@@ -865,7 +855,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	// Shard it with N=1, K=1
 	let share = {
 		let mut shares = qos_crypto::shamir::shares_generate(
-			&quorum_pair.private_key_to_der().unwrap(),
+			quorum_pair.to_master_seed(),
 			1,
 			1,
 		);
@@ -917,9 +907,8 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 
 	// Create and post the boot standard instruction
 	let manifest_envelope = {
-		let signature = quorum_pair
-			.sign_sha256(&manifest.qos_hash())
-			.expect("Failed to sign");
+		let signature =
+			quorum_pair.sign(&manifest.qos_hash()).expect("Failed to sign");
 		Box::new(ManifestEnvelope {
 			manifest,
 			manifest_set_approvals: vec![Approval { signature, member }],
@@ -939,12 +928,12 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 
 	// Pull out the ephemeral key or use the override
-	let eph_pub: RsaPub = if let Some(eph_path) = unsafe_eph_path_override {
-		RsaPair::from_pem_file(&eph_path)
+	let eph_pub: P256Public = if let Some(eph_path) = unsafe_eph_path_override {
+		P256Pair::from_hex_file(&eph_path)
 			.expect("Could not read ephemeral key override")
-			.into()
+			.public_key()
 	} else {
-		RsaPub::from_pem(
+		P256Public::from_bytes(
 			&attestation_doc
 				.public_key
 				.expect("No ephemeral key in the attestation doc"),
@@ -955,12 +944,10 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	// Create ShareSet approval
 	let approval = Approval {
 		signature: quorum_pair
-			.sign_sha256(&manifest_envelope.manifest.qos_hash())
+			.sign(&manifest_envelope.manifest.qos_hash())
 			.expect("Failed to sign"),
 		member: QuorumMember {
-			pub_key: quorum_pair
-				.public_key_to_der()
-				.expect("Failed to get public key"),
+			pub_key: quorum_pair.public_key().to_bytes(),
 			alias: DANGEROUS_DEV_BOOT_MEMBER.to_string(),
 		},
 	};
@@ -968,7 +955,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	// Post the share
 	let req = ProtocolMsg::ProvisionRequest {
 		share: eph_pub
-			.envelope_encrypt(&share)
+			.encrypt(&share)
 			.expect("Failed to encrypt share to eph key."),
 		approval,
 	};
@@ -990,7 +977,7 @@ fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
 		.collect()
 }
 
-fn find_share_key<P: AsRef<Path>>(personal_dir: P) -> (RsaPair, Vec<String>) {
+fn find_share_key<P: AsRef<Path>>(personal_dir: P) -> (P256Pair, Vec<String>) {
 	let mut s: Vec<_> = find_file_paths(&personal_dir)
 		.iter()
 		.filter_map(|path| {
@@ -1000,7 +987,7 @@ fn find_share_key<P: AsRef<Path>>(personal_dir: P) -> (RsaPair, Vec<String>) {
 			};
 
 			Some((
-				RsaPair::from_pem_file(path)
+				P256Pair::from_hex_file(path)
 					.expect("Could not read PEM from share_key.key"),
 				file_name,
 			))
@@ -1012,7 +999,7 @@ fn find_share_key<P: AsRef<Path>>(personal_dir: P) -> (RsaPair, Vec<String>) {
 	s.remove(0)
 }
 
-fn find_quorum_key<P: AsRef<Path>>(dir: P) -> RsaPub {
+fn find_quorum_key<P: AsRef<Path>>(dir: P) -> P256Public {
 	let mut s: Vec<_> = find_file_paths(&dir)
 		.iter()
 		.filter_map(|path| {
@@ -1023,10 +1010,9 @@ fn find_quorum_key<P: AsRef<Path>>(dir: P) -> RsaPub {
 				return None;
 			};
 
-			Some(
-				RsaPub::from_pem_file(path)
-					.expect("Could not read PEM from share_key.key"),
-			)
+			Some(P256Public::from_hex_file(path).unwrap_or_else(|_| {
+				panic!("Could not read hex from {:?}", path)
+			}))
 		})
 		.collect();
 	// Make sure there is exactly one manifest
@@ -1085,11 +1071,11 @@ fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
 				return None;
 			};
 
-			let public = RsaPub::from_pem_file(path)
+			let public = P256Public::from_hex_file(path)
 				.expect("Could not read PEM from share_key.pub");
 			Some(QuorumMember {
 				alias: mem::take(&mut file_name[0]),
-				pub_key: public.public_key_to_der().unwrap(),
+				pub_key: public.to_bytes(),
 			})
 		})
 		.collect();
@@ -1109,11 +1095,11 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 				return None;
 			};
 
-			let public = RsaPub::from_pem_file(path)
+			let public = P256Public::from_hex_file(path)
 				.expect("Could not read PEM from share_key.pub");
 			Some(QuorumMember {
 				alias: mem::take(&mut file_name[0]),
-				pub_key: public.public_key_to_der().unwrap(),
+				pub_key: public.to_bytes(),
 			})
 		})
 		.collect();
@@ -1125,23 +1111,28 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 }
 
 fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
-	let mut members: Vec<_> = find_file_paths(&dir)
-		.iter()
-		.filter_map(|path| {
-			let mut file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
-				return None;
-			};
+	let mut members: Vec<_> =
+		find_file_paths(&dir)
+			.iter()
+			.filter_map(|path| {
+				let mut file_name = split_file_name(path);
+				if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+					return None;
+				};
 
-			let public = RsaPub::from_pem_file(path).unwrap_or_else(|_| {
-				panic!("Could not read PEM from share_key.pub: {:?}.", path)
-			});
-			Some(QuorumMember {
-				alias: mem::take(&mut file_name[0]),
-				pub_key: public.public_key_to_der().unwrap(),
+				let public =
+					P256Public::from_hex_file(path)
+						.map_err(|e| {
+							panic!("Could not read hex from share_key.pub: {:?}: {:?}", path, e)
+						})
+						.unwrap();
+
+				Some(QuorumMember {
+					alias: mem::take(&mut file_name[0]),
+					pub_key: public.to_bytes(),
+				})
 			})
-		})
-		.collect();
+			.collect();
 
 	// We want to try and build the same manifest regardless of the OS.
 	members.sort();
@@ -1175,12 +1166,12 @@ fn find_approvals<P: AsRef<Path>>(
 				"Found approval from member ({:?}) not included in the Manifest Set", approval.member.alias
 			);
 
-			let pub_key = RsaPub::from_der(&approval.member.pub_key)
+			let pub_key = P256Public::from_bytes(&approval.member.pub_key)
 				.expect("Failed to interpret pub key");
 			assert!(
 				pub_key
-					.verify_sha256(&approval.signature, &manifest.qos_hash())
-					.unwrap(),
+					.verify(&manifest.qos_hash(), &approval.signature)
+					.is_ok(),
 				"Approval signature could not be verified against manifest"
 			);
 
@@ -1463,7 +1454,7 @@ mod tests {
 		},
 		QosHash,
 	};
-	use qos_crypto::{RsaPair, RsaPub};
+	use qos_p256::{P256Pair, P256Public};
 
 	use super::{
 		approve_manifest_human_verifications,
@@ -1479,18 +1470,18 @@ mod tests {
 		share_set: ShareSet,
 		nitro_config: NitroConfig,
 		pivot_build_fingerprints: PivotBuildFingerprints,
-		quorum_key: RsaPub,
+		quorum_key: P256Public,
 		manifest_envelope: ManifestEnvelope,
 	}
 	fn setup() -> Setup {
 		let pairs: Vec<_> =
-			(0..3).map(|_| RsaPair::generate().unwrap()).collect();
+			(0..3).map(|_| P256Pair::generate().unwrap()).collect();
 
 		let members: Vec<_> = pairs
 			.iter()
 			.enumerate()
 			.map(|(i, pair)| QuorumMember {
-				pub_key: pair.public_key_to_der().unwrap(),
+				pub_key: pair.public_key().to_bytes(),
 				alias: i.to_string(),
 			})
 			.collect();
@@ -1510,13 +1501,13 @@ mod tests {
 			pivot_hash: vec![5; 32],
 			pivot_commit: "good-pivot-commit".to_string(),
 		};
-		let quorum_key: RsaPub = RsaPair::generate().unwrap().into();
+		let quorum_key: P256Public = P256Pair::generate().unwrap().public_key();
 
 		let manifest = Manifest {
 			namespace: Namespace {
 				name: "test-namespace".to_string(),
 				nonce: 2,
-				quorum_key: quorum_key.public_key_to_der().unwrap(),
+				quorum_key: quorum_key.to_bytes(),
 			},
 			pivot: PivotConfig {
 				hash: pivot_build_fingerprints
@@ -1543,7 +1534,7 @@ mod tests {
 				members.iter(),
 			)
 			.map(|(pair, member)| Approval {
-				signature: pair.sign_sha256(&manifest.qos_hash()).unwrap(),
+				signature: pair.sign(&manifest.qos_hash()).unwrap(),
 				member: member.clone(),
 			})
 			.collect(),
@@ -1816,7 +1807,8 @@ mod tests {
 				..
 			} = setup();
 
-			let quorum_key: RsaPub = RsaPair::generate().unwrap().into();
+			let quorum_key: P256Public =
+				P256Pair::generate().unwrap().public_key();
 
 			assert!(!approve_manifest_programmatic_verifications(
 				&manifest,
@@ -2022,10 +2014,7 @@ mod tests {
 
 			manifest_set.members.push(QuorumMember {
 				alias: "got what plants need".to_string(),
-				pub_key: RsaPair::generate()
-					.unwrap()
-					.public_key_to_der()
-					.unwrap(),
+				pub_key: P256Pair::generate().unwrap().public_key().to_bytes(),
 			});
 
 			let member = share_set.members[0].clone();

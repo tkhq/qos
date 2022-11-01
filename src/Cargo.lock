@@ -626,16 +626,15 @@ version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
- "openssl",
  "qos_attest",
  "qos_client",
  "qos_core",
  "qos_crypto",
  "qos_hex",
  "qos_host",
+ "qos_p256",
  "qos_test_primitives",
  "rand",
- "sample_app",
  "tokio",
 ]
 
@@ -971,7 +970,7 @@ dependencies = [
  "qos_core",
  "qos_crypto",
  "qos_hex",
- "sample_app",
+ "qos_p256",
  "ureq",
 ]
 
@@ -985,6 +984,7 @@ dependencies = [
  "openssl",
  "qos_crypto",
  "qos_hex",
+ "qos_p256",
  "qos_test_primitives",
  "serde_bytes",
 ]
@@ -993,10 +993,9 @@ dependencies = [
 name = "qos_crypto"
 version = "0.1.0"
 dependencies = [
- "borsh",
- "openssl",
  "qos_hex",
  "rand",
+ "sha2",
 ]
 
 [[package]]
@@ -1099,15 +1098,6 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
-]
-
-[[package]]
-name = "sample_app"
-version = "0.1.0"
-dependencies = [
- "borsh",
- "qos_core",
- "qos_crypto",
 ]
 
 [[package]]
