@@ -253,9 +253,9 @@ fn verify_cose_sign1_sig(
 		return Err(AttestError::InvalidEndEntityCert);
 	}
 
-	let pub_key_der =
+	let pub_key =
 		ee_cert.tbs_certificate.subject_public_key_info.subject_public_key;
-	let key = PublicKey::from_sec1_bytes(pub_key_der)
+	let key = PublicKey::from_sec1_bytes(pub_key)
 		.map_err(|_| AttestError::FailedDecodeKeyFromCert)?;
 	let key_wrapped = P384PubKey(key);
 
