@@ -15,7 +15,6 @@ pub enum AttestError {
 	/// Invalid certificate chain.
 	InvalidCertChain(webpki::Error),
 	/// `openssl::error::ErrorStack` wrapper.
-	OpenSSLError(openssl::error::ErrorStack),
 	/// `aws_nitro_enclaves_nsm_api::api::Error` wrapper.
 	Nsm(aws_nitro_enclaves_nsm_api::api::Error),
 	/// Invalid end entity certificate. In the case of Nitro this means the
@@ -49,12 +48,6 @@ pub enum AttestError {
 impl From<webpki::Error> for AttestError {
 	fn from(e: webpki::Error) -> Self {
 		Self::WebPki(e)
-	}
-}
-
-impl From<openssl::error::ErrorStack> for AttestError {
-	fn from(_: openssl::error::ErrorStack) -> Self {
-		Self::OpenSSLError(openssl::error::ErrorStack::get())
 	}
 }
 
