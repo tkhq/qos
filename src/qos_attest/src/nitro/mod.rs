@@ -246,7 +246,7 @@ fn verify_cose_sign1_sig(
 
 	let ee_cert =
 		x509_cert::certificate::Certificate::from_der(end_entity_certificate)
-			.unwrap();
+			.map_err(|_| AttestError::FailedToParseCert)?;
 
 	// Expect v3
 	if ee_cert.tbs_certificate.version != x509_cert::certificate::Version::V3 {
@@ -255,7 +255,8 @@ fn verify_cose_sign1_sig(
 
 	let pub_key_der =
 		ee_cert.tbs_certificate.subject_public_key_info.subject_public_key;
-	let key = PublicKey::from_sec1_bytes(pub_key_der).unwrap();
+	let key = PublicKey::from_sec1_bytes(pub_key_der)
+		.map_err(|_| AttestError::FailedDecodeKeyFromCert)?;
 	let key_wrapped = P384PubKey(key);
 
 	// Verify the signature against the extracted public key

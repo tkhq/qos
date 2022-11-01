@@ -43,6 +43,10 @@ pub enum AttestError {
 	UnexpectedNsmResponse(qos_core::protocol::attestor::types::NsmResponse),
 	/// Error while decoding PEM.
 	PemDecodingError,
+	/// Error trying to decode the public key in a cert.
+	FailedDecodeKeyFromCert,
+	/// Error while trying to parse a cert.
+	FailedToParseCert,
 }
 
 impl From<webpki::Error> for AttestError {
