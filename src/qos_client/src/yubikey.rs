@@ -8,7 +8,12 @@ use yubikey::{
 	piv::{self, AlgorithmId, SlotId},
 	MgmKey, PinPolicy, TouchPolicy, YubiKey,
 };
+use zeroize::Zeroizing;
 
+// "Key Agree" refers to ECDH because two parties agree on a shared key.
+// https://docs.yubico.com/yesdk/users-manual/application-piv/key-agreement.html
+// https://docs.yubico.com/yesdk/users-manual/application-piv/apdu/auth-key-agree.html
+const KEY_AGREEMENT_SLOT: SlotId = SlotId::KeyManagement;
 const SIGNING_SLOT: SlotId = SlotId::Signature;
 const ALGO: AlgorithmId = AlgorithmId::EccP256;
 
@@ -34,6 +39,7 @@ pub enum YubiKeyError {
 	SigningFailed(yubikey::Error),
 	/// The signature generate by the yubikey could not be verified.
 	FailedToVerifyYubiKeySignature,
+	KeyAgreementFailed,
 }
 
 /// Generate a signed certificate with a p256 key for the given `slot`.
@@ -126,6 +132,21 @@ pub fn sign_data(
 		.map_err(|_| YubiKeyError::FailedToVerifyYubiKeySignature)?;
 
 	Ok(signature.to_vec())
+}
+
+/// Generate a ECDH shared secret the key on the `KeyManagement` slot and the
+/// `sender_public_key`.
+///
+/// `sender_public_key` is an uncompressed encoded point.
+pub fn key_agreement(
+	yubikey: &mut YubiKey,
+	sender_public_key: &[u8],
+	pin: &[u8],
+) -> Result<Zeroizing<Vec<u8>>, YubiKeyError> {
+	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
+
+	piv::decrypt_data(yubikey, sender_public_key, ALGO, KEY_AGREEMENT_SLOT)
+		.map_err(|_| YubiKeyError::KeyAgreementFailed)
 }
 
 fn extract_encoded_point(

@@ -24,7 +24,7 @@ type HmacSha512 = Hmac<Sha512>;
 
 /// Envelope for serializing an encrypted message with it's context.
 #[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
-struct Envelope {
+pub struct Envelope {
 	/// Nonce used as an input to the cipher.
 	nonce: [u8; BITS_96_AS_BYTES],
 	/// Public key as sec1 encoded point with no compression
@@ -71,8 +71,10 @@ impl P256EncryptPair {
 			ReceiverPublic(receiver_encoded_point.as_ref());
 
 		let cipher = create_cipher(
-			&self.private,
-			&ephemeral_sender_public,
+			PrivPubOrSharedSecret::PrivPub {
+				private: &self.private,
+				public: &ephemeral_sender_public,
+			},
 			&sender_public_typed,
 			&receiver_public_typed,
 		)?;
@@ -136,8 +138,10 @@ impl P256EncryptPublic {
 			ReceiverPublic(receiver_encoded_point.as_ref());
 
 		let cipher = create_cipher(
-			&ephemeral_sender_private,
-			&self.public,
+			PrivPubOrSharedSecret::PrivPub {
+				private: &ephemeral_sender_private,
+				public: &self.public,
+			},
 			&sender_public_typed,
 			&receiver_public_typed,
 		)?;
@@ -169,6 +173,51 @@ impl P256EncryptPublic {
 		envelope.try_to_vec().map_err(|_| P256Error::FailedToSerializeEnvelope)
 	}
 
+	/// Decrypt a message encoded to this pair's public key.
+	///
+	/// This is designed to be used in scenarios where the private key is stored
+	/// in enclave that computes a shared secret. That shared secret is then
+	// used as input to this function.
+	pub fn decrypt_from_shared_secret(
+		&self,
+		serialized_envelope: &[u8],
+		shared_secret: &[u8],
+	) -> Result<Vec<u8>, P256Error> {
+		let Envelope {
+			nonce,
+			ephemeral_sender_public: ephemeral_sender_public_bytes,
+			encrypted_message,
+		} = Envelope::try_from_slice(serialized_envelope)
+			.map_err(|_| P256Error::FailedToDeserializeEnvelope)?;
+
+		let nonce = Nonce::from_slice(&nonce);
+		let _ephemeral_sender_public =
+			PublicKey::from_sec1_bytes(&ephemeral_sender_public_bytes)
+				.map_err(|_| P256Error::FailedToDeserializePublicKey)?;
+
+		let sender_public_typed = SenderPublic(&ephemeral_sender_public_bytes);
+		let receiver_encoded_point = self.public.to_encoded_point(false);
+		let receiver_public_typed =
+			ReceiverPublic(receiver_encoded_point.as_ref());
+
+		let cipher = create_cipher(
+			PrivPubOrSharedSecret::SharedSecret { shared_secret },
+			&sender_public_typed,
+			&receiver_public_typed,
+		)?;
+
+		let aad = create_additional_associated_data(
+			&sender_public_typed,
+			&receiver_public_typed,
+			nonce.as_ref(),
+		);
+		let payload = Payload { aad: &aad, msg: &encrypted_message };
+
+		cipher
+			.decrypt(nonce, payload)
+			.map_err(|_| P256Error::AesGcm256DecryptError)
+	}
+
 	/// Serialize to SEC1 encoded point, not compressed.
 	#[must_use]
 	pub fn to_bytes(&self) -> Box<[u8]> {
@@ -189,15 +238,32 @@ impl P256EncryptPublic {
 struct SenderPublic<'a>(&'a [u8]);
 struct ReceiverPublic<'a>(&'a [u8]);
 
+enum SenderPublicOrSharedSecret<'a> {
+	SenderPublic(&'a [u8]),
+	SharedSecret(&'a [u8]),
+}
+
+enum PrivPubOrSharedSecret<'a> {
+	PrivPub { private: &'a SecretKey, public: &'a PublicKey },
+	SharedSecret { shared_secret: &'a [u8] },
+}
+
 // Helper function to create the `Aes256Gcm` cypher.
 fn create_cipher(
-	private: &SecretKey,
-	public: &PublicKey,
+	shared_secret: PrivPubOrSharedSecret,
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,
 ) -> Result<Aes256Gcm, P256Error> {
-	let shared_secret =
-		diffie_hellman(private.to_nonzero_scalar(), public.as_affine());
+	let shared_secret = match shared_secret {
+		PrivPubOrSharedSecret::PrivPub { private, public } => {
+			diffie_hellman(private.to_nonzero_scalar(), public.as_affine())
+				.raw_secret_bytes()
+				.to_vec()
+		}
+		PrivPubOrSharedSecret::SharedSecret { shared_secret } => {
+			shared_secret.to_vec()
+		}
+	};
 
 	// To help with entropy and add domain context, we do
 	// `sender_public||receiver_public||shared_secret` as the pre-image for the
@@ -206,7 +272,7 @@ fn create_cipher(
 		.0
 		.iter()
 		.chain(receiver_public.0)
-		.chain(shared_secret.raw_secret_bytes())
+		.chain(shared_secret.iter())
 		.copied()
 		.collect();
 

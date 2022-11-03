@@ -15,9 +15,10 @@ ureq = { version = "2.4", default-features = false }
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 borsh = { version = "0.9" }
 x509 = "*"
-yubikey = { version = "*" }
+yubikey = { version = "*", features = ["untested"] }
 p256 = "*"
 rand_core = "*"
+zeroize = { version = "1.5", default-features = false }
 
 [dev-dependencies]
 # We need mock enabled to grab things related to the mock NSM.

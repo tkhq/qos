@@ -1327,6 +1327,7 @@ dependencies = [
  "ureq",
  "x509",
  "yubikey",
+ "zeroize",
 ]
 
 [[package]]
