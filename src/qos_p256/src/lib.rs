@@ -12,7 +12,7 @@ use rand_core::{OsRng, RngCore};
 use sha2::Sha512;
 use zeroize::ZeroizeOnDrop;
 
-use crate::{
+pub use crate::{
 	encrypt::{P256EncryptPair, P256EncryptPublic},
 	sign::{P256SignPair, P256SignPublic},
 };
