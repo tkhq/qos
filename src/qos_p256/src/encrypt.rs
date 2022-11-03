@@ -28,7 +28,7 @@ pub struct Envelope {
 	/// Nonce used as an input to the cipher.
 	nonce: [u8; BITS_96_AS_BYTES],
 	/// Public key as sec1 encoded point with no compression
-	ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED],
+	pub ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED],
 	/// The data encrypted with an AES 256 GCM cipher.
 	encrypted_message: Vec<u8>,
 }

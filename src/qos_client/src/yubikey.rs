@@ -13,11 +13,12 @@ use zeroize::Zeroizing;
 // "Key Agree" refers to ECDH because two parties agree on a shared key.
 // https://docs.yubico.com/yesdk/users-manual/application-piv/key-agreement.html
 // https://docs.yubico.com/yesdk/users-manual/application-piv/apdu/auth-key-agree.html
-const KEY_AGREEMENT_SLOT: SlotId = SlotId::KeyManagement;
+pub const KEY_AGREEMENT_SLOT: SlotId = SlotId::KeyManagement;
 const SIGNING_SLOT: SlotId = SlotId::Signature;
 const ALGO: AlgorithmId = AlgorithmId::EccP256;
 
 /// Errors for yubikey interaction
+#[derive(Debug, PartialEq)]
 pub enum YubiKeyError {
 	/// Failed to generate a key.
 	FailedToGenerateKey,
@@ -137,7 +138,8 @@ pub fn sign_data(
 /// Generate a ECDH shared secret the key on the `KeyManagement` slot and the
 /// `sender_public_key`.
 ///
-/// `sender_public_key` is an uncompressed encoded point.
+/// `sender_public_key` is an uncompressed encoded point of the public key used
+/// by the sender to create the shared secret.
 pub fn key_agreement(
 	yubikey: &mut YubiKey,
 	sender_public_key: &[u8],
