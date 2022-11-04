@@ -1,6 +1,18 @@
+use qos_system::{dmesg, freopen, mount, reboot, seed_entropy};
+use qos_core::{
+    handles::Handles,
+    io::SocketAddress,
+    protocol::attestor::Nsm,
+    reaper::Reaper,
+    EPHEMERAL_KEY_FILE,
+    MANIFEST_FILE,
+    PIVOT_FILE,
+    QUORUM_FILE,
+    SEC_APP_SOCK,
+};
+
 //TODO: Feature flag
 use qos_aws::{get_entropy, init_platform};
-use qos_system::{dmesg, freopen, mount, reboot, seed_entropy};
 
 // Mount common filesystems with conservative permissions
 fn init_rootfs() {
@@ -55,19 +67,19 @@ fn main() {
 	boot();
 	dmesg("QuorumOS Booted".to_string());
 
-	// let handles = Handles::new(
-	//      EPHEMERAL_KEY_FILE.to_string(),
-	//      QUORUM_FILE.to_string(),
-	//      MANIFEST_FILE.to_string(),
-	//      PIVOT_FILE.to_string(),
-	// );
-	// Reaper::execute(
-	//      &handles,
-	//      Box::new(Nsm),
-	//      // TODO port for host<>enclave
-	//      SocketAddress::new_vsock(16, 3),
-	//      SocketAddress::new_unix(SEC_APP_SOCK)
-	// );
+	let handles = Handles::new(
+	     EPHEMERAL_KEY_FILE.to_string(),
+	     QUORUM_FILE.to_string(),
+	     MANIFEST_FILE.to_string(),
+	     PIVOT_FILE.to_string(),
+	);
+	Reaper::execute(
+	     &handles,
+	     Box::new(Nsm),
+	     // TODO port for host<>enclave
+	     SocketAddress::new_vsock(16, 3),
+	     SocketAddress::new_unix(SEC_APP_SOCK)
+	);
 
 	reboot();
 }

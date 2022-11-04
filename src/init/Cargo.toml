@@ -7,8 +7,10 @@ edition = "2021"
 libc = "0.2.134"
 qos_aws = { path = "../qos_aws"}
 qos_system = { path = "../qos_system"}
-
+qos_core = { path = "../qos_core", features = ["vm"] }
 
 [[bin]]
 name = "init"
 path = "init.rs"
+
+
