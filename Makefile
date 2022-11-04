@@ -68,8 +68,7 @@ fetch: \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign \
 	$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2 \
-	$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2.sig \
-	$(CACHE_DIR)/aws-nitro-enclaves-image-format/.git/HEAD
+	$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2.sig
 
 # Build latest image and run in terminal via Qemu
 .PHONY: run
@@ -137,17 +136,6 @@ $(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD:
 		cd aws-nitro-enclaves-sdk-bootstrap; \
 		git checkout $(AWS_NITRO_DRIVER_REF); \
 		git rev-parse --verify HEAD | grep -q $(AWS_NITRO_DRIVER_REF) || { \
-			echo 'Error: Git ref/branch collision.'; exit 1; \
-		}; \
-	")
-
-$(CACHE_DIR)/aws-nitro-enclaves-image-format/.git/HEAD:
-	$(call toolchain,$(USER), " \
-		cd /cache; \
-		git clone https://github.com/aws/aws-nitro-enclaves-image-format.git; \
-		cd aws-nitro-enclaves-image-format; \
-		git checkout $(AWS_EIF_REF); \
-		git rev-parse --verify HEAD | grep -q $(AWS_EIF_REF) || { \
 			echo 'Error: Git ref/branch collision.'; exit 1; \
 		}; \
 	")
@@ -320,9 +308,9 @@ $(OUT_DIR)/$(TARGET)/bzImage: \
 $(OUT_DIR)/aws/eif_build:
 ifeq ($(TARGET), aws)
 	$(call toolchain,$(USER)," \
-		cd /cache/aws-nitro-enclaves-image-format \
-		&& CARGO_HOME=/cache/cargo cargo build --example eif_build \
-		&& cp target/debug/examples/eif_build /out; \
+		cd /src/toolchain/eif_build \
+		&& CARGO_HOME=/cache/cargo cargo build \
+		&& cp target/debug/eif_build /out/aws; \
 	")
 endif
 
@@ -344,12 +332,13 @@ $(OUT_DIR)/aws/nitro.eif: \
 	$(OUT_DIR)/$(TARGET)/rootfs.cpio
 ifeq ($(TARGET), aws)
 	$(call toolchain,$(USER)," \
-		/out/eif_build \
+		/out/aws/eif_build \
 			--kernel /out/$(TARGET)/bzImage \
 			--kernel_config /config/$(TARGET)/linux.config \
 			--cmdline 'reboot=k initrd=0x2000000$(,)3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd' \
 			--ramdisk /out/aws/rootfs.cpio \
-			--output /out/aws/nitro.eif; \
+			--output /out/aws/nitro.eif \
+		> /out/aws/nitro_pcrs.txt; \
 	")
 endif
 
