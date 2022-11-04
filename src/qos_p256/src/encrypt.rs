@@ -238,11 +238,6 @@ impl P256EncryptPublic {
 struct SenderPublic<'a>(&'a [u8]);
 struct ReceiverPublic<'a>(&'a [u8]);
 
-enum SenderPublicOrSharedSecret<'a> {
-	SenderPublic(&'a [u8]),
-	SharedSecret(&'a [u8]),
-}
-
 enum PrivPubOrSharedSecret<'a> {
 	PrivPub { private: &'a SecretKey, public: &'a PublicKey },
 	SharedSecret { shared_secret: &'a [u8] },
