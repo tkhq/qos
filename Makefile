@@ -69,7 +69,8 @@ fetch: \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign \
 	$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2 \
 	$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2.sig \
-	$(CACHE_DIR)/aws-nitro-enclaves-image-format/.git/HEAD
+	$(CACHE_DIR)/aws-nitro-enclaves-image-format/.git/HEAD \
+	$(CACHE_DIR)/rust/.git/HEAD
 
 # Build latest image and run in terminal via Qemu
 .PHONY: run
@@ -129,6 +130,17 @@ $(OUT_DIR)/$(TARGET):
 $(CACHE_DIR)/$(TARGET):
 	mkdir -p $(CACHE_DIR)/$(TARGET)
 
+
+$(CACHE_DIR)/rust/.git/HEAD:
+	$(call toolchain,$(USER), " \
+		cd /cache; \
+		git clone $(RUST_REPO); \
+		cd rust; \
+		git checkout $(RUST_REF); \
+		git rev-parse --verify HEAD | grep -q $(RUST_REF) || { \
+			echo 'Error: Git ref/branch collision.'; exit 1; \
+		}; \
+	")
 
 $(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD:
 	$(call toolchain,$(USER), " \
