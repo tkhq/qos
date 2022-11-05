@@ -374,6 +374,7 @@ const SHARE_SET_DIR: &str = "share-set-dir";
 const MANIFEST_SET_DIR: &str = "manifest-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
 const MANIFEST_DIR: &str = "manifest-dir";
+const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
 
 /// Commands for the Client CLI.
 ///
@@ -604,6 +605,14 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn unsafe_auto_confirm() -> Token {
+		Token::new(
+			UNSAFE_AUTO_CONFIRM,
+			"DO NOT USE IN PRODUCTION. Confirm all interactive prompts.",
+		)
+		.takes_value(true)
+		.required(false)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -683,6 +692,7 @@ impl Command {
 			.token(Self::namespace_dir_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
+			.token(Self::unsafe_auto_confirm())
 	}
 
 	fn boot_standard() -> Parser {
@@ -707,6 +717,7 @@ impl Command {
 			.token(Self::alias_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
+			.token(Self::unsafe_auto_confirm())
 	}
 
 	fn post_share() -> Parser {
@@ -882,6 +893,10 @@ impl ClientOpts {
 
 	fn unsafe_eph_path_override(&self) -> Option<String> {
 		self.parsed.single(UNSAFE_EPH_PATH_OVERRIDE).map(String::from)
+	}
+
+	fn unsafe_auto_confirm(&self) -> bool {
+		self.parsed.flag(UNSAFE_AUTO_CONFIRM).unwrap_or(false)
 	}
 }
 
@@ -1085,6 +1100,7 @@ mod handlers {
 			manifest_set_dir: opts.manifest_set_dir(),
 			share_set_dir: opts.share_set_dir(),
 			alias: opts.alias(),
+			unsafe_auto_confirm: opts.unsafe_auto_confirm(),
 		});
 	}
 
@@ -1115,6 +1131,7 @@ mod handlers {
 			manifest_set_dir: opts.manifest_set_dir(),
 			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
 			unsafe_eph_path_override: opts.unsafe_eph_path_override(),
+			unsafe_auto_confirm: opts.unsafe_auto_confirm(),
 		});
 	}
 
