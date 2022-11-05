@@ -605,7 +605,7 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
-	fn unsafe_auto_confirm() -> Token {
+	fn unsafe_auto_confirm_token() -> Token {
 		Token::new(
 			UNSAFE_AUTO_CONFIRM,
 			"DO NOT USE IN PRODUCTION. Confirm all interactive prompts.",
@@ -692,7 +692,7 @@ impl Command {
 			.token(Self::namespace_dir_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
-			.token(Self::unsafe_auto_confirm())
+			.token(Self::unsafe_auto_confirm_token())
 	}
 
 	fn boot_standard() -> Parser {
@@ -717,7 +717,7 @@ impl Command {
 			.token(Self::alias_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
-			.token(Self::unsafe_auto_confirm())
+			.token(Self::unsafe_auto_confirm_token())
 	}
 
 	fn post_share() -> Parser {
