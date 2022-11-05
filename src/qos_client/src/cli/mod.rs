@@ -610,7 +610,7 @@ impl Command {
 			UNSAFE_AUTO_CONFIRM,
 			"DO NOT USE IN PRODUCTION. Confirm all interactive prompts.",
 		)
-		.takes_value(true)
+		.takes_value(false)
 		.required(false)
 	}
 
