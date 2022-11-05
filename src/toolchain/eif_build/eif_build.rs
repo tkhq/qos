@@ -19,7 +19,6 @@ extern crate clap;
 extern crate sha2;
 extern crate serde_json;
 
-
 use std::path::Path;
 
 use aws_nitro_enclaves_image_format::defs::EifIdentityInfo;
@@ -68,6 +67,14 @@ fn main() {
                 .help("Specify output file path")
                 .value_name("FILE")
                 .required(true)
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("pcrs_output")
+                .long("pcrs_output")
+                .help("Specify PCR json measurements output file path")
+                .value_name("FILE")
+                .required(false)
                 .takes_value(true),
         )
         .arg(
@@ -153,6 +160,8 @@ fn main() {
     let output_path = matches
         .value_of("output")
         .expect("Output file should be provided");
+    
+    let pcrs_path = matches.value_of("pcrs_output");
 
     let signing_certificate = matches.value_of("signing-certificate");
 
@@ -198,6 +207,7 @@ fn main() {
             cmdline,
             ramdisks,
             output_path,
+            pcrs_path,
             sign_info,
             Sha512::new(),
             eif_info,
@@ -208,6 +218,7 @@ fn main() {
             cmdline,
             ramdisks,
             output_path,
+            pcrs_path,
             sign_info,
             Sha256::new(),
             eif_info,
@@ -218,6 +229,7 @@ fn main() {
             cmdline,
             ramdisks,
             output_path,
+            pcrs_path,
             sign_info,
             Sha384::new(),
             eif_info,
@@ -230,6 +242,7 @@ pub fn build_eif<T: Digest + Debug + Write + Clone>(
     cmdline: &str,
     ramdisks: Vec<&str>,
     output_path: &str,
+    pcrs_option: Option<&str>,
     sign_info: Option<SignEnclaveInfo>,
     hasher: T,
     eif_info: EifIdentityInfo,
@@ -267,5 +280,26 @@ pub fn build_eif<T: Digest + Debug + Write + Clone>(
         signed,
     )
     .expect("Failed to get boot measurements.");
+
+    match pcrs_option {
+        Some(ref path) => {
+            let mut file = OpenOptions::new()
+                .read(true)
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(path)
+                .expect("Could not create output file");
+            let pcrs = format!(
+                "{} PCR0\n{} PCR1\n{} PCR2",
+                measurements["PCR0"],
+                measurements["PCR1"],
+                measurements["PCR2"],
+            );
+            file.write(&pcrs.as_bytes()).expect("Unable to write PCRs");
+        }
+        None => (),
+    };
+
     println!("BootMeasurement: {:?}: {:?}", hasher, measurements);
 }

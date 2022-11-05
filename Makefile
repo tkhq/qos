@@ -1,5 +1,6 @@
 DEBUG := false
 OUT_DIR := out
+RELEASE_DIR := release
 KEY_DIR := keys
 SRC_DIR := src
 TARGET := generic
@@ -30,6 +31,16 @@ endif
 default: \
 	fetch \
 	$(OUT_DIR)/$(TARGET)/$(TARGET_NAME)
+
+.PHONY: release
+release: \
+	$(OUT_DIR)/aws/nitro.eif
+	#$(OUT_DIR)/generic/bzImage
+	#mkdir -p $(RELEASE_DIR)/generic
+	#cp $(OUT_DIR)/generic/bzImage $(RELEASE_DIR)/generic/bzImage
+	mkdir -p $(RELEASE_DIR)/aws
+	cp $(OUT_DIR)/aws/nitro.eif $(RELEASE_DIR)/aws/nitro.eif
+	cp $(OUT_DIR)/aws/pcrs.txt $(RELEASE_DIR)/aws/pcrs.txt
 
 # Clean repo back to initial clone state
 .PHONY: clean
@@ -266,7 +277,7 @@ $(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio: \
 		gcc usr/gen_init_cpio.c -o usr/gen_init_cpio \
 	")
 
-$(OUT_DIR)/$(TARGET)/rootfs.cpio: \
+$(OUT_DIR)/aws/rootfs.cpio: \
 	$(OUT_DIR)/busybox \
 	$(OUT_DIR)/init \
 	$(OUT_DIR)/aws/nsm.ko \
@@ -293,52 +304,52 @@ endif
 		sha256sum /out/$(TARGET)/rootfs.cpio; \
 	")
 
-$(OUT_DIR)/$(TARGET)/bzImage: \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION)
+define kernel_build
+	$(MAKE) $(CACHE_DIR)/linux-$(LINUX_VERSION);
 	$(call toolchain,$(USER)," \
-		cd /cache/linux-$(LINUX_VERSION) && \
-		cp /config/$(TARGET)/linux.config .config && \
+		cd /cache/linux-$(1) && \
+		cp /config/$(2)/linux.config .config && \
 		make olddefconfig && \
 		make modules_prepare && \
-		make -j$(CPUS) ARCH=$(ARCH) bzImage && \
-		cp arch/x86_64/boot/bzImage /out/$(TARGET) && \
-		sha256sum /out/$(TARGET)/bzImage; \
+		make -j$(CPUS) ARCH=$(3) bzImage && \
+		cp arch/x86_64/boot/bzImage /out/$(2) && \
+		sha256sum /out/$(2)/bzImage; \
 	")
+endef
+
+$(OUT_DIR)/generic/bzImage: \
+	$(OUT_DIR)/generic/rootfs.cpio
+	$(call kernel_build,$(LINUX_VERSION),$(TARGET),$(ARCH))
+
+$(OUT_DIR)/aws/bzImage:
+	$(call kernel_build,$(LINUX_VERSION),$(TARGET),$(ARCH))
 
 $(OUT_DIR)/aws/eif_build:
-ifeq ($(TARGET), aws)
 	$(call toolchain,$(USER)," \
 		cd /src/toolchain/eif_build \
 		&& CARGO_HOME=/cache/cargo cargo build \
 		&& cp target/debug/eif_build /out/aws; \
 	")
-endif
 
 $(OUT_DIR)/aws/nsm.ko: \
-	$(OUT_DIR)/$(TARGET)/bzImage \
+	$(OUT_DIR)/aws/bzImage \
 	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD
-ifeq ($(TARGET), aws)
 	$(call toolchain,$(USER)," \
 		cd /cache/aws-nitro-enclaves-sdk-bootstrap/ \
 		&& make -C /cache/linux-$(LINUX_VERSION) M=/cache/aws-nitro-enclaves-sdk-bootstrap/nsm-driver \
 		&& cp nsm-driver/nsm.ko /out/aws/nsm.ko; \
 	")
-endif
-
 
 $(OUT_DIR)/aws/nitro.eif: \
 	$(OUT_DIR)/aws/eif_build \
-	$(OUT_DIR)/$(TARGET)/bzImage \
-	$(OUT_DIR)/$(TARGET)/rootfs.cpio
-ifeq ($(TARGET), aws)
+	$(OUT_DIR)/aws/bzImage \
+	$(OUT_DIR)/aws/rootfs.cpio
 	$(call toolchain,$(USER)," \
 		/out/aws/eif_build \
-			--kernel /out/$(TARGET)/bzImage \
-			--kernel_config /config/$(TARGET)/linux.config \
+			--kernel /out/aws/bzImage \
+			--kernel_config /config/aws/linux.config \
 			--cmdline 'reboot=k initrd=0x2000000$(,)3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd' \
 			--ramdisk /out/aws/rootfs.cpio \
 			--output /out/aws/nitro.eif \
-		> /out/aws/nitro_pcrs.txt; \
+			--pcrs_output /out/aws/pcrs.txt; \
 	")
-endif
-
