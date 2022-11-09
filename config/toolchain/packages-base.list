@@ -9,6 +9,7 @@ libelf-dev
 libarchive-tools
 libssl-dev
 fakeroot
+libfaketime
 cpio
 python3
 ninja-build

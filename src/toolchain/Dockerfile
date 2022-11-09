@@ -15,8 +15,5 @@ ADD ${SCRIPTS_DIR} /scripts
 
 RUN packages-install
 
-#ARG RUST_REF
-#RUN build-rust
-
-#ARG CARGO_REF
-#RUN build-cargo
+RUN echo "/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1" \
+    > /etc/ld.so.preload

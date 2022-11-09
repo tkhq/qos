@@ -21,8 +21,5 @@ done;
 
 diff /etc/apt/package-hashes-${ARCH}{,-compare}.txt
 
-echo "made it here"
-sleep 10
-
 apt-get install --allow-downgrades -y $(cat /etc/apt/packages-${ARCH}.list)
 rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/* /tmp/* /var/tmp/*;
