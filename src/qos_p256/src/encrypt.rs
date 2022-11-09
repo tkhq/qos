@@ -71,7 +71,7 @@ impl P256EncryptPair {
 			ReceiverPublic(receiver_encoded_point.as_ref());
 
 		let cipher = create_cipher(
-			PrivPubOrSharedSecret::PrivPub {
+			&PrivPubOrSharedSecret::PrivPub {
 				private: &self.private,
 				public: &ephemeral_sender_public,
 			},
@@ -138,7 +138,7 @@ impl P256EncryptPublic {
 			ReceiverPublic(receiver_encoded_point.as_ref());
 
 		let cipher = create_cipher(
-			PrivPubOrSharedSecret::PrivPub {
+			&PrivPubOrSharedSecret::PrivPub {
 				private: &ephemeral_sender_private,
 				public: &self.public,
 			},
@@ -201,7 +201,7 @@ impl P256EncryptPublic {
 			ReceiverPublic(receiver_encoded_point.as_ref());
 
 		let cipher = create_cipher(
-			PrivPubOrSharedSecret::SharedSecret { shared_secret },
+			&PrivPubOrSharedSecret::SharedSecret { shared_secret },
 			&sender_public_typed,
 			&receiver_public_typed,
 		)?;
@@ -245,7 +245,7 @@ enum PrivPubOrSharedSecret<'a> {
 
 // Helper function to create the `Aes256Gcm` cypher.
 fn create_cipher(
-	shared_secret: PrivPubOrSharedSecret,
+	shared_secret: &PrivPubOrSharedSecret,
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,
 ) -> Result<Aes256Gcm, P256Error> {

@@ -13,8 +13,10 @@ use zeroize::Zeroizing;
 // "Key Agree" refers to ECDH because two parties agree on a shared key.
 // https://docs.yubico.com/yesdk/users-manual/application-piv/key-agreement.html
 // https://docs.yubico.com/yesdk/users-manual/application-piv/apdu/auth-key-agree.html
+/// The slot where the ECDH key is stored.
 pub const KEY_AGREEMENT_SLOT: SlotId = SlotId::KeyManagement;
-const SIGNING_SLOT: SlotId = SlotId::Signature;
+/// The slot we always expect the signing key on.
+pub const SIGNING_SLOT: SlotId = SlotId::Signature;
 const ALGO: AlgorithmId = AlgorithmId::EccP256;
 
 /// Errors for yubikey interaction
@@ -40,6 +42,7 @@ pub enum YubiKeyError {
 	SigningFailed(yubikey::Error),
 	/// The signature generate by the yubikey could not be verified.
 	FailedToVerifyYubiKeySignature,
+	/// The key agreement (ECDH) from the yubikey failed.
 	KeyAgreementFailed,
 }
 
@@ -51,6 +54,7 @@ pub fn generate_signed_certificate(
 	slot: SlotId,
 	pin: &[u8],
 	mgm_key: MgmKey,
+	touch_policy: TouchPolicy,
 ) -> Result<Box<[u8]>, YubiKeyError> {
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
 	yubikey
@@ -68,7 +72,7 @@ pub fn generate_signed_certificate(
 		slot,
 		ALGO,
 		PinPolicy::Always,
-		TouchPolicy::Always,
+		touch_policy,
 	)
 	.map_err(|_| YubiKeyError::FailedToGenerateKey)?;
 	let encoded_point = extract_encoded_point(&public_key_info)?;

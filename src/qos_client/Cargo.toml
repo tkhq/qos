@@ -23,6 +23,7 @@ zeroize = { version = "1.5", default-features = false }
 [dev-dependencies]
 # We need mock enabled to grab things related to the mock NSM.
 qos_core = { path = "../qos_core", features = ["mock"], default-features = false }
+lazy_static = "1.4"
 
 [features]
 default = []
