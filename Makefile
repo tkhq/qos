@@ -9,7 +9,6 @@ CONFIG_DIR := config
 SRC_DIR := src
 USER := $(shell id -g):$(shell id -g)
 ARCH := x86_64
-TARGET_NAME := bzImage
 , := ,
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
@@ -22,25 +21,23 @@ endif
 
 include $(PWD)/config/global.env
 
-ifeq ($(TARGET), aws)
-TARGET_NAME := nitro.eif
-endif
+.DEFAULT_GOAL := release
 
-.DEFAULT_GOAL := default
-.PHONY: default
-default: \
-	fetch \
-	$(OUT_DIR)/$(TARGET)/$(TARGET_NAME)
+#$(OUT_DIR)/generic/bzImage
+#mkdir -p $(RELEASE_DIR)/generic
+#cp $(OUT_DIR)/generic/bzImage $(RELEASE_DIR)/generic/bzImage
 
 .PHONY: release
 release: \
-	$(OUT_DIR)/aws/nitro.eif
-	#$(OUT_DIR)/generic/bzImage
-	#mkdir -p $(RELEASE_DIR)/generic
-	#cp $(OUT_DIR)/generic/bzImage $(RELEASE_DIR)/generic/bzImage
-	mkdir -p $(RELEASE_DIR)/aws
-	cp $(OUT_DIR)/aws/nitro.eif $(RELEASE_DIR)/aws/nitro.eif
+	fetch \
+	$(RELEASE_DIR)/aws/pcrs.txt \
+	$(RELEASE_DIR)/aws/nitro.eif
+
+$(RELEASE_DIR)/aws/pcrs.txt: $(OUT_DIR)/aws/nitro.eif
 	cp $(OUT_DIR)/aws/pcrs.txt $(RELEASE_DIR)/aws/pcrs.txt
+
+$(RELEASE_DIR)/aws/nitro.eif: $(OUT_DIR)/aws/nitro.eif
+	cp $(OUT_DIR)/aws/nitro.eif $(RELEASE_DIR)/aws/nitro.eif
 
 # Clean repo back to initial clone state
 .PHONY: clean
@@ -77,9 +74,7 @@ fetch: \
 	$(OUT_DIR)/toolchain.tar \
 	keys \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign \
-	$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2 \
-	$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2.sig
+	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign
 
 # Build latest image and run in terminal via Qemu
 .PHONY: run
@@ -88,12 +83,6 @@ run: default
 		-m 512M \
 		-nographic \
 		-kernel $(OUT_DIR)/bzImage
-
-# Run ncurses busybox config menu and save output
-.PHONY: busybox-config
-busybox-config:
-	rm $(CONFIG_DIR)/debug/busybox.config
-	make $(CONFIG_DIR)/debug/busybox.config
 
 # Run linux config menu and save output
 .PHONY: linux-config
@@ -112,27 +101,6 @@ $(KEY_DIR)/$(LINUX_KEY).asc:
 $(KEY_DIR)/$(BUSYBOX_KEY).asc:
 	$(call fetch_pgp_key,,$(BUSYBOX_KEY))
 
-define fetch_pgp_key
-	mkdir -p $(KEY_DIR) && \
-	$(call toolchain,$(USER), " \
-		for server in \
-    	    ha.pool.sks-keyservers.net \
-    	    hkp://keyserver.ubuntu.com:80 \
-    	    hkp://p80.pool.sks-keyservers.net:80 \
-    	    pgp.mit.edu \
-    	; do \
-			echo "Trying: $${server}"; \
-    	   	gpg \
-    	   		--recv-key \
-    	   		--keyserver "$${server}" \
-    	   		--keyserver-options timeout=10 \
-    	   		--recv-keys "$(1)" \
-    	   	&& break; \
-    	done; \
-		gpg --export -a $(1) > $(KEY_DIR)/$(1).asc; \
-	")
-endef
-
 $(OUT_DIR)/$(TARGET):
 	mkdir -p $(OUT_DIR)/$(TARGET)
 
@@ -142,6 +110,7 @@ $(CACHE_DIR)/$(TARGET):
 
 $(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD:
 	$(call toolchain,$(USER), " \
+		unset FAKETIME; \
 		cd /cache; \
 		git clone $(AWS_NITRO_DRIVER_REPO); \
 		cd aws-nitro-enclaves-sdk-bootstrap; \
@@ -150,16 +119,6 @@ $(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD:
 			echo 'Error: Git ref/branch collision.'; exit 1; \
 		}; \
 	")
-
-$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2.sig:
-	curl \
-		--url $(BUSYBOX_SERVER)/busybox-$(BUSYBOX_VERSION).tar.bz2.sig \
-		--output $(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2.sig
-
-$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2:
-	curl \
-		--url $(BUSYBOX_SERVER)/busybox-$(BUSYBOX_VERSION).tar.bz2 \
-		--output $(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2
 
 $(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign:
 	curl \
@@ -176,18 +135,11 @@ $(CACHE_DIR)/linux-$(LINUX_VERSION).tar:
 
 $(CACHE_DIR)/linux-$(LINUX_VERSION): $(CACHE_DIR)/linux-$(LINUX_VERSION).tar
 	$(call toolchain,$(USER), " \
+		unset FAKETIME; \
 		cd /cache && \
 		gpg --import /keys/$(LINUX_KEY).asc && \
 		gpg --verify linux-$(LINUX_VERSION).tar.sign && \
 		tar xf linux-$(LINUX_VERSION).tar; \
-	")
-
-$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION):
-	$(call toolchain,$(USER), " \
-		cd /cache && \
-		gpg --import /keys/$(BUSYBOX_KEY).asc && \
-		gpg --verify busybox-$(BUSYBOX_VERSION).tar.bz2.sig && \
-		tar -xf busybox-$(BUSYBOX_VERSION).tar.bz2 \
 	")
 
 $(OUT_DIR)/toolchain.tar:
@@ -203,6 +155,111 @@ $(OUT_DIR)/toolchain.tar:
 		-f $(SRC_DIR)/toolchain/Dockerfile \
 		.
 	docker save "local/$(NAME)-build" -o "$@"
+
+$(CONFIG_DIR)/$(TARGET)/linux.config:
+	$(call toolchain,$(USER)," \
+		cd /cache/linux-$(LINUX_VERSION) && \
+		make menuconfig && \
+		cp .config /config/$(TARGET)/linux.config; \
+	")
+
+$(OUT_DIR)/init:
+	$(call toolchain,$(USER)," \
+		cd /src/init/ && \
+		unset FAKETIME && \
+		cargo fetch --target x86_64-unknown-linux-gnu && \
+		set FAKETIME="$(FAKETIME)" && \
+		set RUSTFLAGS='-C target-feature=+crt-static' && \
+		cargo build \
+			--target x86_64-unknown-linux-gnu \
+			--release && \
+		cp /src/init/target/x86_64-unknown-linux-gnu/release/init /out/init \
+	")
+
+$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio: \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION) \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign
+	$(call toolchain,$(USER)," \
+		cd /cache/linux-$(LINUX_VERSION) && \
+		gcc usr/gen_init_cpio.c -o usr/gen_init_cpio \
+	")
+
+$(OUT_DIR)/aws/rootfs.cpio: \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION) \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio \
+	$(OUT_DIR)/init \
+	$(OUT_DIR)/aws/nsm.ko
+	$(call rootfs_build,aws)
+
+$(OUT_DIR)/generic/rootfs.cpio: \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION) \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio \
+	$(OUT_DIR)/init
+	$(call rootfs_build,generic)
+
+$(OUT_DIR)/generic/bzImage: \
+	$(OUT_DIR)/generic/rootfs.cpio
+	$(call kernel_build,generic,$(ARCH))
+
+$(OUT_DIR)/aws/bzImage:
+	$(call kernel_build,aws,$(ARCH))
+
+$(OUT_DIR)/aws/eif_build:
+	$(call toolchain,$(USER)," \
+		unset FAKETIME; \
+		cd /src/toolchain/eif_build \
+		&& CARGO_HOME=/cache/cargo cargo build \
+		&& mkdir -p /out/aws/ \
+		&& cp target/debug/eif_build /out/aws/; \
+	")
+
+$(OUT_DIR)/aws/nsm.ko: \
+	$(OUT_DIR)/aws/bzImage \
+	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD
+	$(call toolchain,$(USER)," \
+		cd /cache/linux-$(LINUX_VERSION) && \
+		cp /config/aws/linux.config .config && \
+		make modules_prepare && \
+		cd /cache/aws-nitro-enclaves-sdk-bootstrap/ \
+		&& make -C /cache/linux-$(LINUX_VERSION) M=/cache/aws-nitro-enclaves-sdk-bootstrap/nsm-driver \
+		&& cp nsm-driver/nsm.ko /out/aws/nsm.ko; \
+	")
+
+$(OUT_DIR)/aws/nitro.eif: \
+	$(OUT_DIR)/aws/eif_build \
+	$(OUT_DIR)/aws/bzImage \
+	$(OUT_DIR)/aws/rootfs.cpio
+	$(call toolchain,$(USER)," \
+		/out/aws/eif_build \
+			--kernel /out/aws/bzImage \
+			--kernel_config /config/aws/linux.config \
+			--cmdline 'reboot=k initrd=0x2000000$(,)3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd' \
+			--ramdisk /out/aws/rootfs.cpio \
+			--output /out/aws/nitro.eif \
+			--pcrs_output /out/aws/pcrs.txt; \
+	")
+
+define fetch_pgp_key
+	mkdir -p $(KEY_DIR) && \
+	$(call toolchain,$(USER), " \
+		for server in \
+			ha.pool.sks-keyservers.net \
+			hkp://keyserver.ubuntu.com:80 \
+			hkp://p80.pool.sks-keyservers.net:80 \
+			pgp.mit.edu \
+			; do \
+				echo "Trying: $${server}"; \
+				gpg \
+					--recv-key \
+					--keyserver "$${server}" \
+					--keyserver-options timeout=10 \
+					--recv-keys "$(1)" \
+				&& break; \
+			done; \
+		gpg --export -a $(1) > $(KEY_DIR)/$(1).asc; \
+	")
+endef
 
 define toolchain
 	docker load -i $(OUT_DIR)/toolchain.tar
@@ -226,130 +283,37 @@ define toolchain
 		--env KBUILD_BUILD_TIMESTAMP=$(KBUILD_BUILD_TIMESTAMP) \
 		--env KCONFIG_NOTIMESTAMP=$(KCONFIG_NOTIMESTAMP) \
 		--env SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) \
+		--env FAKETIME=$(FAKETIME) \
 		--env CARGO_HOME=/cache/cargo \
 		local/$(NAME)-build \
 		bash -c $(2)
 endef
 
-
-$(CONFIG_DIR)/debug/busybox.config:
-	$(call toolchain,$(USER), " \
-		cd /cache/busybox-$(BUSYBOX_VERSION) && \
-		KCONFIG_NOTIMESTAMP=1 make menuconfig && \
-		cp .config /config/debug/busybox.config; \
-	")
-
-$(CONFIG_DIR)/$(TARGET)/linux.config:
+define rootfs_build
+	mkdir -p $(CACHE_DIR)/$(1)/rootfs
+	cp $(CONFIG_DIR)/$(1)/rootfs.list $(CACHE_DIR)/$(1)/rootfs.list
+	cp $(OUT_DIR)/init $(CACHE_DIR)/$(1)/rootfs/init
 	$(call toolchain,$(USER)," \
-		cd /cache/linux-$(LINUX_VERSION) && \
-		make menuconfig && \
-		cp .config /config/$(TARGET)/linux.config; \
-	")
-
-$(OUT_DIR)/busybox: \
-	$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION) \
-	$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2 \
-	$(CACHE_DIR)/busybox-$(BUSYBOX_VERSION).tar.bz2.sig
-	$(call toolchain,$(USER)," \
-		cd /cache/busybox-$(BUSYBOX_VERSION) && \
-		cp /config/debug/busybox.config .config && \
-		make -j$(CPUS) busybox && \
-		cp busybox /out/; \
-	")
-
-$(OUT_DIR)/init:
-	$(call toolchain,$(USER)," \
-		cd /src/init/ && \
-		RUSTFLAGS='-C target-feature=+crt-static' cargo build \
-			--target x86_64-unknown-linux-gnu \
-			--release && \
-		cp /src/init/target/x86_64-unknown-linux-gnu/release/init /out/init \
-	")
-
-
-$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio: \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION) \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION) \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign
-	$(call toolchain,$(USER)," \
-		cd /cache/linux-$(LINUX_VERSION) && \
-		gcc usr/gen_init_cpio.c -o usr/gen_init_cpio \
-	")
-
-$(OUT_DIR)/aws/rootfs.cpio: \
-	$(OUT_DIR)/busybox \
-	$(OUT_DIR)/init \
-	$(OUT_DIR)/aws/nsm.ko \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio
-	mkdir -p $(CACHE_DIR)/$(TARGET)/rootfs
-	cp $(CONFIG_DIR)/$(TARGET)/rootfs.list $(CACHE_DIR)/$(TARGET)/rootfs.list
-	cp $(OUT_DIR)/init $(CACHE_DIR)/$(TARGET)/rootfs/init
-ifeq ($(DEBUG), true)
-	mv $(CACHE_DIR)/$(TARGET)/rootfs/init $(CACHE_DIR)/$(TARGET)/rootfs/real_init
-	cp $(SRC_DIR)/scripts/busybox_init $(CACHE_DIR)/$(TARGET)/rootfs/init
-	cp $(OUT_DIR)/busybox $(CACHE_DIR)/$(TARGET)/rootfs/bin/
-	echo "file /bin/busybox /cache/rootfs/bin/busybox 0755 0 0" \
-		>> $(CACHE_DIR)/$(TARGET)/rootfs.list
-endif
-	$(call toolchain,$(USER)," \
-		cd /cache/$(TARGET)/rootfs && \
+		cd /cache/$(1)/rootfs && \
 		find . -mindepth 1 -execdir touch -hcd "@0" "{}" + && \
 		find . -mindepth 1 -printf '%P\0' && \
 		cd /cache/linux-$(LINUX_VERSION) && \
 		usr/gen_initramfs.sh \
-			-o /out/$(TARGET)/rootfs.cpio \
-			/cache/$(TARGET)/rootfs.list && \
-		cpio -itv < /out/$(TARGET)/rootfs.cpio && \
-		sha256sum /out/$(TARGET)/rootfs.cpio; \
-	")
-
-define kernel_build
-	$(MAKE) $(CACHE_DIR)/linux-$(LINUX_VERSION);
-	$(call toolchain,$(USER)," \
-		cd /cache/linux-$(1) && \
-		cp /config/$(2)/linux.config .config && \
-		make olddefconfig && \
-		make modules_prepare && \
-		make -j$(CPUS) ARCH=$(3) bzImage && \
-		cp arch/x86_64/boot/bzImage /out/$(2) && \
-		sha256sum /out/$(2)/bzImage; \
+			-o /out/$(1)/rootfs.cpio \
+			/cache/$(1)/rootfs.list && \
+		cpio -itv < /out/$(1)/rootfs.cpio && \
+		sha256sum /out/$(1)/rootfs.cpio; \
 	")
 endef
 
-$(OUT_DIR)/generic/bzImage: \
-	$(OUT_DIR)/generic/rootfs.cpio
-	$(call kernel_build,$(LINUX_VERSION),$(TARGET),$(ARCH))
-
-$(OUT_DIR)/aws/bzImage:
-	$(call kernel_build,$(LINUX_VERSION),$(TARGET),$(ARCH))
-
-$(OUT_DIR)/aws/eif_build:
+define kernel_build
 	$(call toolchain,$(USER)," \
-		cd /src/toolchain/eif_build \
-		&& CARGO_HOME=/cache/cargo cargo build \
-		&& cp target/debug/eif_build /out/aws; \
+		cd /cache/linux-$(LINUX_VERSION) && \
+		rm -rf include/config include/generated arch/x86/include/generated && \
+		cp /config/$(1)/linux.config .config && \
+		make olddefconfig && \
+		make -j$(CPUS) ARCH=$(2) bzImage && \
+		cp arch/x86_64/boot/bzImage /out/$(1)/bzImage && \
+		sha256sum /out/$(1)/bzImage; \
 	")
-
-$(OUT_DIR)/aws/nsm.ko: \
-	$(OUT_DIR)/aws/bzImage \
-	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD
-	$(call toolchain,$(USER)," \
-		cd /cache/aws-nitro-enclaves-sdk-bootstrap/ \
-		&& make -C /cache/linux-$(LINUX_VERSION) M=/cache/aws-nitro-enclaves-sdk-bootstrap/nsm-driver \
-		&& cp nsm-driver/nsm.ko /out/aws/nsm.ko; \
-	")
-
-$(OUT_DIR)/aws/nitro.eif: \
-	$(OUT_DIR)/aws/eif_build \
-	$(OUT_DIR)/aws/bzImage \
-	$(OUT_DIR)/aws/rootfs.cpio
-	$(call toolchain,$(USER)," \
-		/out/aws/eif_build \
-			--kernel /out/aws/bzImage \
-			--kernel_config /config/aws/linux.config \
-			--cmdline 'reboot=k initrd=0x2000000$(,)3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd' \
-			--ramdisk /out/aws/rootfs.cpio \
-			--output /out/aws/nitro.eif \
-			--pcrs_output /out/aws/pcrs.txt; \
-	")
+endef
