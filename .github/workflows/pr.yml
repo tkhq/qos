@@ -14,6 +14,9 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
+      - name: Install packages for pcsc dep
+        run: sudo apt-get install -y libpcsclite-dev gengetopt
+
       - name: Install stable toolchain
         id: toolchain
         uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
@@ -50,6 +53,9 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
+
+      - name: Install packages for pcsc dep
+        run: sudo apt-get install -y libpcsclite-dev gengetopt
 
       - name: Install stable toolchain
         id: toolchain
