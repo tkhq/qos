@@ -17,6 +17,8 @@ use zeroize::Zeroizing;
 pub const KEY_AGREEMENT_SLOT: SlotId = SlotId::KeyManagement;
 /// The slot we always expect the signing key on.
 pub const SIGNING_SLOT: SlotId = SlotId::Signature;
+/// Factory default pin for yubikeys.
+pub const DEFAULT_PIN: &[u8] = b"123456";
 const ALGO: AlgorithmId = AlgorithmId::EccP256;
 
 /// Errors for yubikey interaction

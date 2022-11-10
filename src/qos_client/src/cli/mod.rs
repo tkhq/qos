@@ -58,7 +58,7 @@
 //!
 //! For each member of the Share Set, the genesis service needs a
 //! corresponding Share Key as input. To produce a Share Key, a member can run
-//! the [`Command::GenerateShareKey`] on a secure device:
+//! the [`Command::GenerateFileKey`] on a secure device:
 //!
 //! ```shell
 //! cargo run --bin qos_client generate-share-key \
@@ -375,6 +375,9 @@ const MANIFEST_SET_DIR: &str = "manifest-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
 const MANIFEST_DIR: &str = "manifest-dir";
 const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
+const SIGN_PUB_PATH: &str = "sign-pub-path";
+const ENCRYPT_PUB_PATH: &str = "encrypt-pub-path";
+const PIN: &str = "pin";
 
 /// Commands for the Client CLI.
 ///
@@ -398,7 +401,7 @@ pub enum Command {
 	/// Query the NSM with `NsmRequest::DescribePcr` for PCR indexes 0..3.
 	DescribePcr,
 	/// Generate a Setup Key for use in the Genesis ceremony.
-	GenerateShareKey,
+	GenerateFileKey,
 	/// Run the the Boot Genesis logic to generate and shard a Quorum Key
 	/// across the given Setup Keys. Each setup key will correspond to a Quorum
 	/// Set Member, so N will equal the number of Setup Keys.
@@ -460,6 +463,8 @@ pub enum Command {
 	/// sharding it (N=1), creating/signing/posting a Manifest, and
 	/// provisioning the quorum key.
 	DangerousDevBoot,
+	/// Provision a yubikey with a singing and encryption key.
+	ProvisionYubiKey,
 }
 
 impl From<&str> for Command {
@@ -469,7 +474,7 @@ impl From<&str> for Command {
 			"enclave-status" => Self::EnclaveStatus,
 			"describe-nsm" => Self::DescribeNsm,
 			"describe-pcr" => Self::DescribePcr,
-			"generate-share-key" => Self::GenerateShareKey,
+			"generate-file-key" => Self::GenerateFileKey,
 			"generate-manifest-envelope" => Self::GenerateManifestEnvelope,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
@@ -613,6 +618,28 @@ impl Command {
 		.takes_value(false)
 		.required(false)
 	}
+	fn sign_pub_path_token() -> Token {
+		Token::new(
+			SIGN_PUB_PATH,
+			"Path to the public singing key for a YubiKey",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn encrypt_pub_path_token() -> Token {
+		Token::new(
+			ENCRYPT_PUB_PATH,
+			"Path to the public encryption key for YubiKey",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	// TODO(zeke): hidden pin entry so its not saved in history.
+	fn pin_token() -> Token {
+		Token::new(PIN, "UNSAFE PLAINTEXT: pin for yubikey")
+			.takes_value(true)
+			.required(false)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -635,7 +662,7 @@ impl Command {
 			)
 	}
 
-	fn generate_share_key() -> Parser {
+	fn generate_file_key() -> Parser {
 		Parser::new()
 			.token(Self::alias_token())
 			.token(Self::personal_dir_token())
@@ -735,6 +762,13 @@ impl Command {
 			.token(Self::pivot_args_token())
 			.token(Self::unsafe_eph_path_override_token())
 	}
+
+	fn provision_yubikey() -> Parser {
+		Parser::new()
+			.token(Self::sign_pub_path_token())
+			.token(Self::encrypt_pub_path_token())
+			.token(Self::pin_token())
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -744,7 +778,7 @@ impl GetParserForCommand for Command {
 			| Self::DescribeNsm
 			| Self::DescribePcr
 			| Self::EnclaveStatus => Self::base(),
-			Self::GenerateShareKey => Self::generate_share_key(),
+			Self::GenerateFileKey => Self::generate_file_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
 			Self::GenerateManifest => Self::generate_manifest(),
@@ -757,6 +791,7 @@ impl GetParserForCommand for Command {
 			Self::GenerateManifestEnvelope => {
 				Self::generate_manifest_envelope()
 			}
+			Self::ProvisionYubiKey => Self::provision_yubikey(),
 		}
 	}
 }
@@ -887,6 +922,26 @@ impl ClientOpts {
 		}
 	}
 
+	fn sign_pub_path(&self) -> String {
+		self.parsed
+			.single(SIGN_PUB_PATH)
+			.expect("Missing `--sign-pub-path`")
+			.to_string()
+	}
+
+	fn encrypt_pub_path(&self) -> String {
+		self.parsed
+			.single(ENCRYPT_PUB_PATH)
+			.expect("Missing `--encrypt-pub-path`")
+			.to_string()
+	}
+
+	fn pin(&self) -> Option<Vec<u8>> {
+		self.parsed
+			.single(PIN)
+			.map(|pin_string| pin_string.clone().into_bytes())
+	}
+
 	fn unsafe_skip_attestation(&self) -> bool {
 		self.parsed.flag(UNSAFE_SKIP_ATTESTATION).unwrap_or(false)
 	}
@@ -927,8 +982,11 @@ impl ClientRunner {
 				Command::EnclaveStatus => handlers::enclave_status(&self.opts),
 				Command::DescribeNsm => handlers::describe_nsm(&self.opts),
 				Command::DescribePcr => handlers::describe_pcr(&self.opts),
-				Command::GenerateShareKey => {
-					handlers::generate_share_key(&self.opts);
+				Command::GenerateFileKey => {
+					handlers::generate_file_key(&self.opts);
+				}
+				Command::ProvisionYubiKey => {
+					handlers::provision_yubikey(&self.opts);
 				}
 				Command::BootGenesis => handlers::boot_genesis(&self.opts),
 				Command::AfterGenesis => handlers::after_genesis(&self.opts),
@@ -1047,8 +1105,26 @@ mod handlers {
 		}
 	}
 
-	pub(super) fn generate_share_key(opts: &ClientOpts) {
-		services::generate_share_key(&opts.alias(), opts.personal_dir());
+	pub(super) fn generate_file_key(opts: &ClientOpts) {
+		services::generate_file_key(&opts.alias(), opts.personal_dir());
+	}
+
+	pub(super) fn provision_yubikey(opts: &ClientOpts) {
+		let pin = if let Some(pin) = opts.pin() {
+			pin
+		} else {
+			println!("No `--pin` provided - using default pin.");
+			crate::yubikey::DEFAULT_PIN.to_vec()
+		};
+
+		if let Err(e) = services::provision_yubikey(
+			opts.sign_pub_path(),
+			opts.encrypt_pub_path(),
+			&pin,
+		) {
+			eprintln!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	// TODO: verify PCRs

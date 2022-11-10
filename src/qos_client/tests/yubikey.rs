@@ -2,8 +2,8 @@ use std::sync::Mutex;
 
 use borsh::BorshDeserialize;
 use qos_client::yubikey::{
-	generate_signed_certificate, key_agreement, sign_data, KEY_AGREEMENT_SLOT,
-	SIGNING_SLOT,
+	generate_signed_certificate, key_agreement, sign_data, DEFAULT_PIN,
+	KEY_AGREEMENT_SLOT, SIGNING_SLOT,
 };
 use qos_p256::{
 	encrypt::{Envelope, P256EncryptPublic},
@@ -12,7 +12,6 @@ use qos_p256::{
 use yubikey::{MgmKey, TouchPolicy, YubiKey};
 
 const DATA: &[u8] = b"test data";
-const DEFAULT_PIN: &[u8] = b"123456";
 
 lazy_static::lazy_static! {
 	/// Provide thread-safe access to a YubiKey
