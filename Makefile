@@ -202,7 +202,8 @@ $(OUT_DIR)/generic/bzImage: \
 	$(OUT_DIR)/generic/rootfs.cpio
 	$(call kernel_build,generic,$(ARCH))
 
-$(OUT_DIR)/aws/bzImage:
+$(OUT_DIR)/aws/bzImage: \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)
 	$(call kernel_build,aws,$(ARCH))
 
 $(OUT_DIR)/aws/eif_build:
