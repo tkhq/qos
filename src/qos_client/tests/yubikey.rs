@@ -28,6 +28,7 @@ fn init_yubikey() -> Mutex<YubiKey> {
 }
 
 #[test]
+#[ignore]
 fn key_agreement_works() {
 	let mut yubikey = YUBIKEY.lock().unwrap();
 	reset(&mut yubikey);
@@ -70,6 +71,7 @@ fn key_agreement_works() {
 }
 
 #[test]
+#[ignore]
 fn signing_works() {
 	let mut yubikey = YUBIKEY.lock().unwrap();
 	reset(&mut yubikey);
@@ -93,7 +95,6 @@ fn signing_works() {
 }
 
 fn reset(yubikey: &mut YubiKey) {
-	// 3 wrong pin attempts
 	assert!(yubikey.verify_pin(b"000000").is_err());
 	assert!(yubikey.verify_pin(b"000000").is_err());
 	assert!(yubikey.verify_pin(b"000000").is_err());

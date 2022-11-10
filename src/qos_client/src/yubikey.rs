@@ -13,7 +13,7 @@ use zeroize::Zeroizing;
 // "Key Agree" refers to ECDH because two parties agree on a shared key.
 // https://docs.yubico.com/yesdk/users-manual/application-piv/key-agreement.html
 // https://docs.yubico.com/yesdk/users-manual/application-piv/apdu/auth-key-agree.html
-/// The slot where the ECDH key is stored.
+/// The slot we expect the ECDH key on stored.
 pub const KEY_AGREEMENT_SLOT: SlotId = SlotId::KeyManagement;
 /// The slot we always expect the signing key on.
 pub const SIGNING_SLOT: SlotId = SlotId::Signature;
