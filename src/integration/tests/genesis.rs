@@ -56,7 +56,7 @@ async fn genesis_e2e() {
 	] {
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
-				"generate-share-key",
+				"generate-file-key",
 				"--personal-dir",
 				&*personal_dir(user),
 				"--alias",
