@@ -485,6 +485,7 @@ impl From<&str> for Command {
 			"proxy-re-encrypt-share" => Self::ProxyReEncryptShare,
 			"post-share" => Self::PostShare,
 			"dangerous-dev-boot" => Self::DangerousDevBoot,
+			"provision-yubikey" => Self::ProvisionYubiKey,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),

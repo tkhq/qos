@@ -1324,6 +1324,7 @@ dependencies = [
  "qos_crypto",
  "qos_hex",
  "qos_p256",
+ "qos_test_primitives",
  "rand_core",
  "ureq",
  "x509",
