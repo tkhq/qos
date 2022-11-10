@@ -13,7 +13,7 @@ use zeroize::Zeroizing;
 // "Key Agree" refers to ECDH because two parties agree on a shared key.
 // https://docs.yubico.com/yesdk/users-manual/application-piv/key-agreement.html
 // https://docs.yubico.com/yesdk/users-manual/application-piv/apdu/auth-key-agree.html
-/// The slot we expect the ECDH key on stored.
+/// The slot we expect the ECDH key on.
 pub const KEY_AGREEMENT_SLOT: SlotId = SlotId::KeyManagement;
 /// The slot we always expect the signing key on.
 pub const SIGNING_SLOT: SlotId = SlotId::Signature;
@@ -85,8 +85,6 @@ pub fn generate_signed_certificate(
 	let extensions: &[x509::Extension<'_, &[u64]>] = &[];
 
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
-	// yubikey.authenticate(mgm_key).map_err(|_|
-	// YubiKeyError::FailedToAuthWithMGM)?;
 	Certificate::generate_self_signed(
 		yubikey,
 		slot,
@@ -107,8 +105,6 @@ pub fn sign_data(
 	data: &[u8],
 	pin: &[u8],
 ) -> Result<Vec<u8>, YubiKeyError> {
-	let data_digest = qos_crypto::sha_256(data);
-
 	// Get the public key for signing
 	let signing_slot_cert = Certificate::read(yubikey, SIGNING_SLOT)
 		.map_err(|_| YubiKeyError::CannotFindSigningKey)?;
@@ -123,7 +119,7 @@ pub fn sign_data(
 		yubikey,
 		// Note: yubikey assumes the data is pre-hashed, but p256 verification
 		// hashes for us
-		&data_digest,
+		&qos_crypto::sha_256(data),
 		ALGO,
 		SIGNING_SLOT,
 	)
@@ -139,7 +135,7 @@ pub fn sign_data(
 	Ok(signature.to_vec())
 }
 
-/// Generate a ECDH shared secret the key on the `KeyManagement` slot and the
+/// Generate a ECDH shared secret against the key management slot and the
 /// `sender_public_key`.
 ///
 /// `sender_public_key` is an uncompressed encoded point of the public key used

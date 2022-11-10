@@ -37,7 +37,7 @@ fn key_agreement_works() {
 	let public_bytes = generate_signed_certificate(
 		&mut yubikey,
 		KEY_AGREEMENT_SLOT,
-		b"123456",
+		DEFAULT_PIN,
 		MgmKey::default(),
 		TouchPolicy::Never,
 	)
@@ -76,11 +76,11 @@ fn signing_works() {
 	let mut yubikey = YUBIKEY.lock().unwrap();
 	reset(&mut yubikey);
 
-	// generate encryption key on yubikey
+	// generate signing key on yubikey
 	let public_bytes = generate_signed_certificate(
 		&mut yubikey,
 		SIGNING_SLOT,
-		b"123456",
+		DEFAULT_PIN,
 		MgmKey::default(),
 		TouchPolicy::Never
 	)
@@ -88,20 +88,20 @@ fn signing_works() {
 
 	// get the public signing key
 	let public = P256SignPublic::from_bytes(&public_bytes).unwrap();
+	// use the yubikey to sign
 	let signature = sign_data(&mut yubikey, DATA, DEFAULT_PIN).unwrap();
+	// verify the signature from the yubikey is correct
 	assert!(public.verify(DATA, &signature).is_ok());
 
 	reset(&mut yubikey);
 }
 
 fn reset(yubikey: &mut YubiKey) {
-	assert!(yubikey.verify_pin(b"000000").is_err());
-	assert!(yubikey.verify_pin(b"000000").is_err());
-	assert!(yubikey.verify_pin(b"000000").is_err());
-
-	assert!(yubikey.authenticate(MgmKey::generate()).is_err());
-	assert!(yubikey.authenticate(MgmKey::generate()).is_err());
-	assert!(yubikey.authenticate(MgmKey::generate()).is_err());
+	// Pins need to be blocked before device can be reset
+	for _ in 0..3 {
+		assert!(yubikey.authenticate(MgmKey::generate()).is_err());
+		assert!(yubikey.verify_pin(b"000000").is_err());
+	}
 
 	assert!(yubikey.block_puk().is_ok());
 
