@@ -6,6 +6,7 @@
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
 pub mod cli;
+pub mod yubikey;
 
 /// Host HTTP request helpers.
 pub mod request {
