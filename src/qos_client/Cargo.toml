@@ -13,7 +13,7 @@ qos_p256 = { path = "../qos_p256" }
 # Third party
 ureq = { version = "2.4", default-features = false }
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
-borsh = { version = "0.9" }
+borsh = { version = "0.9", default-features = false }
 x509 = { version = "0.2", default-features = false }
 yubikey = { version = "*", features = ["untested"], default-features = false }
 p256 = { version = "0.11", default-features = false }

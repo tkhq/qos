@@ -191,9 +191,6 @@ impl P256EncryptPublic {
 			.map_err(|_| P256Error::FailedToDeserializeEnvelope)?;
 
 		let nonce = Nonce::from_slice(&nonce);
-		let _ephemeral_sender_public =
-			PublicKey::from_sec1_bytes(&ephemeral_sender_public_bytes)
-				.map_err(|_| P256Error::FailedToDeserializePublicKey)?;
 
 		let sender_public_typed = SenderPublic(&ephemeral_sender_public_bytes);
 		let receiver_encoded_point = self.public.to_encoded_point(false);
