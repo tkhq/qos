@@ -9,7 +9,7 @@ use qos_p256::{
 	encrypt::{Envelope, P256EncryptPublic},
 	sign::P256SignPublic,
 };
-use yubikey::{MgmKey, YubiKey, TouchPolicy};
+use yubikey::{MgmKey, TouchPolicy, YubiKey};
 
 const DATA: &[u8] = b"test data";
 const DEFAULT_PIN: &[u8] = b"123456";
@@ -82,7 +82,7 @@ fn signing_works() {
 		SIGNING_SLOT,
 		DEFAULT_PIN,
 		MgmKey::default(),
-		TouchPolicy::Never
+		TouchPolicy::Never,
 	)
 	.unwrap();
 

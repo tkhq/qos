@@ -67,14 +67,9 @@ pub fn generate_signed_certificate(
 	}
 
 	// Generate a key in the slot
-	let public_key_info = piv::generate(
-		yubikey,
-		slot,
-		ALGO,
-		PinPolicy::Always,
-		touch_policy,
-	)
-	.map_err(|_| YubiKeyError::FailedToGenerateKey)?;
+	let public_key_info =
+		piv::generate(yubikey, slot, ALGO, PinPolicy::Always, touch_policy)
+			.map_err(|_| YubiKeyError::FailedToGenerateKey)?;
 	let encoded_point = extract_encoded_point(&public_key_info)?;
 
 	// Create a random serial number
