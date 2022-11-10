@@ -14,6 +14,8 @@ use yubikey::{MgmKey, TouchPolicy, YubiKey};
 
 const DATA: &[u8] = b"test data";
 
+// TODO: mock yubikey. https://github.com/tkhq/qos/issues/162
+
 // CAREFUL: Only run these tests when a test yubikey is plugged in - this will
 // factory reset the yubikey.
 //
