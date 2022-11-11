@@ -102,7 +102,8 @@ impl PairOrYubi {
 				let pair = P256Pair::from_hex_file(path)?;
 				PairOrYubi::Pair(pair)
 			}
-			(None, None) | (Some(_), Some(_)) => {
+			(None, None) => panic!("Need either pin or secret path"),
+			(Some(_), Some(_)) => {
 				panic!("Cannot have both pin and secret path")
 			}
 		};
