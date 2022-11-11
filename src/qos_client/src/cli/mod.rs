@@ -378,6 +378,7 @@ const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
 const SIGN_PUB_PATH: &str = "sign-pub-path";
 const ENCRYPT_PUB_PATH: &str = "encrypt-pub-path";
 const PIN: &str = "pin";
+const SECRET_PATH: &str = "secret-path";
 
 /// Commands for the Client CLI.
 ///
@@ -640,6 +641,13 @@ impl Command {
 		Token::new(PIN, "UNSAFE PLAINTEXT: pin for yubikey")
 			.takes_value(true)
 			.required(false)
+			.forbids(vec![SECRET_PATH])
+	}
+	fn secret_path_token() -> Token {
+		Token::new(SECRET_PATH, "Path to the secret to use for signing/decryption.")
+			.takes_value(true)
+			.required(false)
+			.forbids(vec![PIN])
 	}
 
 	fn base() -> Parser {
@@ -711,7 +719,8 @@ impl Command {
 
 	fn approve_manifest() -> Parser {
 		Parser::new()
-			.token(Self::personal_dir_token())
+			.token(Self::pin_token())
+			.token(Self::secret_path_token())
 			.token(Self::manifest_dir_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
@@ -935,6 +944,11 @@ impl ClientOpts {
 			.single(ENCRYPT_PUB_PATH)
 			.expect("Missing `--encrypt-pub-path`")
 			.to_string()
+	}
+
+	fn secret_path(&self) -> Option<String> {
+		self.parsed.single(SECRET_PATH)
+		.map(String::clone)
 	}
 
 	fn pin(&self) -> Option<Vec<u8>> {
@@ -1167,8 +1181,9 @@ mod handlers {
 	}
 
 	pub(super) fn approve_manifest(opts: &ClientOpts) {
-		services::approve_manifest(ApproveManifestArgs {
-			personal_dir: opts.personal_dir(),
+		if let Err(e) = services::approve_manifest(ApproveManifestArgs {
+			secret_path: opts.secret_path(),
+			pin: opts.pin(),
 			manifest_dir: opts.manifest_dir(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
@@ -1178,7 +1193,10 @@ mod handlers {
 			share_set_dir: opts.share_set_dir(),
 			alias: opts.alias(),
 			unsafe_auto_confirm: opts.unsafe_auto_confirm(),
-		});
+		}) {
+			println!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn boot_standard(opts: &ClientOpts) {

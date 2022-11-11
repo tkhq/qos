@@ -46,6 +46,8 @@ pub enum YubiKeyError {
 	FailedToVerifyYubiKeySignature,
 	/// The key agreement (ECDH) from the yubikey failed.
 	KeyAgreementFailed,
+	/// Connecting to the yubikey failed. Make sure only 1 key is plugged in and try re-plugging in the device.
+	Connection(yubikey::Error)
 }
 
 /// Generate a signed certificate with a p256 key for the given `slot`.
@@ -146,6 +148,22 @@ pub fn key_agreement(
 
 	piv::decrypt_data(yubikey, sender_public_key, ALGO, KEY_AGREEMENT_SLOT)
 		.map_err(|_| YubiKeyError::KeyAgreementFailed)
+}
+
+/// Sign the given `data` with a connected yubikey. Returns (signature, public_key_bytes).
+pub fn sign_and_get_public(data: &[u8], pin: &[u8]) -> Result<(Vec<u8>, Vec<u8>), YubiKeyError> {
+	let mut yubikey = YubiKey::open().map_err(YubiKeyError::Connection)?;
+
+	let signature = sign_data(&mut yubikey, data, pin)?;
+
+	let signing_slot_cert = Certificate::read(&mut yubikey, SIGNING_SLOT)
+		.map_err(|_| YubiKeyError::CannotFindSigningKey)?;
+	drop(yubikey);
+
+	let public_key_info = signing_slot_cert.subject_pki();
+	let encoded_point = extract_encoded_point(public_key_info)?;
+
+	Ok((signature, encoded_point.to_bytes().to_vec()))
 }
 
 fn extract_encoded_point(

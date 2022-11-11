@@ -63,6 +63,8 @@ pub enum Error {
 	/// Error'ed while tried to generate a key and cert for the encryption
 	/// slot.
 	GenerateEncrypt(crate::yubikey::YubiKeyError),
+	YubiKey(crate::yubikey::YubiKeyError),
+	P256(qos_p256::P256Error),
 }
 
 pub(crate) fn generate_file_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
@@ -387,7 +389,8 @@ fn extract_nitro_config<P: AsRef<Path>>(
 }
 
 pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
-	pub personal_dir: P,
+	pub secret_path: Option<P>,
+	pub pin: Option<Vec<u8>>,
 	pub manifest_dir: P,
 	pub qos_build_fingerprints_path: P,
 	pub pcr3_preimage_path: P,
@@ -399,9 +402,10 @@ pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
 	pub unsafe_auto_confirm: bool,
 }
 
-pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
+pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) -> Result<(), Error> {
 	let ApproveManifestArgs {
-		personal_dir,
+		secret_path,
+		pin,
 		manifest_dir,
 		qos_build_fingerprints_path,
 		pcr3_preimage_path,
@@ -414,7 +418,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 	} = args;
 
 	let manifest = find_manifest(&manifest_dir);
-	let (personal_pair, _) = find_share_key(&personal_dir);
+
 
 	if !approve_manifest_programmatic_verifications(
 		&manifest,
@@ -438,14 +442,26 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 		drop(prompter);
 	}
 
-	let approval = Approval {
-		signature: personal_pair
-			.sign(&manifest.qos_hash())
-			.expect("Failed to sign"),
-		member: QuorumMember {
-			pub_key: personal_pair.public_key().to_bytes(),
-			alias: alias.clone(),
-		},
+	let approval = {
+		let (signature, pub_key) = match (pin, secret_path) {
+			(Some(pin), None) => {
+				crate::yubikey::sign_and_get_public(&manifest.qos_hash(), &pin).map_err(Error::YubiKey)?
+			}
+			(None, Some(path)) => {
+				let pair = P256Pair::from_hex_file(path).map_err(Error::P256)?;
+				let signature = pair.sign(&manifest.qos_hash()).map_err(Error::P256)?;
+				(signature, pair.public_key().to_bytes())
+			}
+			_ => panic!("Not possible to have both pin and secret path")
+		};
+
+		Approval {
+			signature,
+			member: QuorumMember {
+				pub_key,
+				alias: alias.clone(),
+			},
+		}
 	};
 
 	let approval_path = manifest_dir.as_ref().join(format!(
@@ -457,6 +473,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 		&approval.try_to_vec().expect("Failed to serialize approval"),
 		"Manifest Approval",
 	);
+	Ok(())
 }
 
 // TODO: bubble up logging as errors in stead of printing in place to make it
