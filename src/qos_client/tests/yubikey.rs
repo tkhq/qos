@@ -47,6 +47,10 @@ fn yubikey_tests() {
 	drop(yubikey);
 
 	provision_yubikey_works();
+
+	// A final reset
+	let mut yubikey = YubiKey::open().unwrap();
+	reset(&mut yubikey);
 }
 
 fn key_agreement_works(yubikey: &mut YubiKey) {
