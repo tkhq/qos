@@ -8,6 +8,7 @@ use qos_client::yubikey::{
 use qos_p256::{
 	encrypt::{Envelope, P256EncryptPublic},
 	sign::P256SignPublic,
+	P256Public,
 };
 use qos_test_primitives::PathWrapper;
 use yubikey::{MgmKey, TouchPolicy, YubiKey};
@@ -46,6 +47,10 @@ fn yubikey_tests() {
 	drop(yubikey);
 
 	provision_yubikey_works();
+
+	// A final reset
+	let mut yubikey = YubiKey::open().unwrap();
+	reset(&mut yubikey);
 }
 
 fn key_agreement_works(yubikey: &mut YubiKey) {
@@ -105,20 +110,16 @@ fn signing_works(yubikey: &mut YubiKey) {
 
 fn provision_yubikey_works() {
 	let tmp_dir: PathWrapper = "/tmp/provision_yubikey_works".into();
-	let sign_pub_path: PathWrapper =
-		"/tmp/provision_yubikey_works/sign.pub".into();
-	let encrypt_pub_path: PathWrapper =
-		"/tmp/provision_yubikey_works/encrypt.pub".into();
+	let pub_path: PathWrapper =
+		"/tmp/provision_yubikey_works/yubikey.pub".into();
 
 	// Create the temporary directory where we write the yubikey
 	std::fs::create_dir(&*tmp_dir).unwrap();
 
 	assert!(Command::new("../target/debug/qos_client")
 		.arg("provision-yubikey")
-		.arg("--sign-pub-path")
-		.arg(&*sign_pub_path)
-		.arg("--encrypt-pub-path")
-		.arg(&*encrypt_pub_path)
+		.arg("--pub-path")
+		.arg(&*pub_path)
 		.spawn()
 		.unwrap()
 		.wait()
@@ -127,17 +128,10 @@ fn provision_yubikey_works() {
 
 	// Check that public keys where written
 	{
-		let hex_bytes = std::fs::read(&*sign_pub_path).unwrap();
+		let hex_bytes = std::fs::read(&*pub_path).unwrap();
 		let hex = String::from_utf8(hex_bytes).unwrap();
 		let bytes = qos_hex::decode(&hex).unwrap();
-		assert!(P256SignPublic::from_bytes(&bytes).is_ok());
-	}
-
-	{
-		let hex_bytes = std::fs::read(&*encrypt_pub_path).unwrap();
-		let hex = String::from_utf8(hex_bytes).unwrap();
-		let bytes = qos_hex::decode(&hex).unwrap();
-		assert!(P256EncryptPublic::from_bytes(&bytes).is_ok());
+		assert!(P256Public::from_bytes(&bytes).is_ok());
 	}
 }
 

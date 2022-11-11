@@ -354,6 +354,8 @@ use qos_core::{
 
 mod services;
 
+use services::PairOrYubi;
+
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ALIAS: &str = "alias";
@@ -375,9 +377,10 @@ const MANIFEST_SET_DIR: &str = "manifest-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
 const MANIFEST_DIR: &str = "manifest-dir";
 const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
-const SIGN_PUB_PATH: &str = "sign-pub-path";
-const ENCRYPT_PUB_PATH: &str = "encrypt-pub-path";
+const PUB_PATH: &str = "pub-path";
 const PIN: &str = "pin";
+const SECRET_PATH: &str = "secret-path";
+const SHARE_PATH: &str = "share-path";
 
 /// Commands for the Client CLI.
 ///
@@ -619,27 +622,31 @@ impl Command {
 		.takes_value(false)
 		.required(false)
 	}
-	fn sign_pub_path_token() -> Token {
-		Token::new(
-			SIGN_PUB_PATH,
-			"Path to the public singing key for a YubiKey",
-		)
-		.takes_value(true)
-		.required(true)
-	}
-	fn encrypt_pub_path_token() -> Token {
-		Token::new(
-			ENCRYPT_PUB_PATH,
-			"Path to the public encryption key for YubiKey",
-		)
-		.takes_value(true)
-		.required(true)
+	fn pub_path_token() -> Token {
+		Token::new(PUB_PATH, "Path to the public key for a YubiKey")
+			.takes_value(true)
+			.required(true)
 	}
 	// TODO(zeke): hidden pin entry so its not saved in history.
 	fn pin_token() -> Token {
 		Token::new(PIN, "UNSAFE PLAINTEXT: pin for yubikey")
 			.takes_value(true)
 			.required(false)
+			.forbids(vec![SECRET_PATH])
+	}
+	fn secret_path_token() -> Token {
+		Token::new(
+			SECRET_PATH,
+			"Path to the secret to use for signing/decryption.",
+		)
+		.takes_value(true)
+		.required(false)
+		.forbids(vec![PIN])
+	}
+	fn share_path_token() -> Token {
+		Token::new(SHARE_PATH, "Path to the encrypted quorum key share.")
+			.takes_value(true)
+			.required(true)
 	}
 
 	fn base() -> Parser {
@@ -680,8 +687,11 @@ impl Command {
 
 	fn after_genesis() -> Parser {
 		Parser::new()
+			.token(Self::pin_token())
+			.token(Self::secret_path_token())
+			.token(Self::share_path_token())
+			.token(Self::alias_token())
 			.token(Self::namespace_dir_token())
-			.token(Self::personal_dir_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
@@ -711,7 +721,8 @@ impl Command {
 
 	fn approve_manifest() -> Parser {
 		Parser::new()
-			.token(Self::personal_dir_token())
+			.token(Self::pin_token())
+			.token(Self::secret_path_token())
 			.token(Self::manifest_dir_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
@@ -737,8 +748,10 @@ impl Command {
 
 	fn proxy_re_encrypt_share() -> Parser {
 		Parser::new()
+			.token(Self::pin_token())
+			.token(Self::secret_path_token())
 			.token(Self::attestation_dir_token())
-			.token(Self::personal_dir_token())
+			.token(Self::share_path_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::manifest_dir_token())
@@ -765,10 +778,7 @@ impl Command {
 	}
 
 	fn provision_yubikey() -> Parser {
-		Parser::new()
-			.token(Self::sign_pub_path_token())
-			.token(Self::encrypt_pub_path_token())
-			.token(Self::pin_token())
+		Parser::new().token(Self::pub_path_token()).token(Self::pin_token())
 	}
 }
 
@@ -923,17 +933,18 @@ impl ClientOpts {
 		}
 	}
 
-	fn sign_pub_path(&self) -> String {
-		self.parsed
-			.single(SIGN_PUB_PATH)
-			.expect("Missing `--sign-pub-path`")
-			.to_string()
+	fn pub_path(&self) -> String {
+		self.parsed.single(PUB_PATH).expect("Missing `--pub-path`").to_string()
 	}
 
-	fn encrypt_pub_path(&self) -> String {
+	fn secret_path(&self) -> Option<String> {
+		self.parsed.single(SECRET_PATH).map(String::clone)
+	}
+
+	fn share_path(&self) -> String {
 		self.parsed
-			.single(ENCRYPT_PUB_PATH)
-			.expect("Missing `--encrypt-pub-path`")
+			.single(SHARE_PATH)
+			.expect("Missing `--share-path`")
 			.to_string()
 	}
 
@@ -1036,7 +1047,7 @@ mod handlers {
 	use crate::{
 		cli::{
 			services::{self, GenerateManifestArgs},
-			ClientOpts, ProtocolMsg,
+			ClientOpts, PairOrYubi, ProtocolMsg,
 		},
 		request,
 	};
@@ -1118,11 +1129,7 @@ mod handlers {
 			crate::yubikey::DEFAULT_PIN.to_vec()
 		};
 
-		if let Err(e) = services::provision_yubikey(
-			opts.sign_pub_path(),
-			opts.encrypt_pub_path(),
-			&pin,
-		) {
+		if let Err(e) = services::provision_yubikey(opts.pub_path(), &pin) {
 			eprintln!("Error: {:?}", e);
 			std::process::exit(1);
 		}
@@ -1141,13 +1148,27 @@ mod handlers {
 	}
 
 	pub(super) fn after_genesis(opts: &ClientOpts) {
-		services::after_genesis(
+		let pair = match PairOrYubi::from_inputs(opts.pin(), opts.secret_path())
+		{
+			Err(e) => {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+			Ok(p) => p,
+		};
+
+		if let Err(e) = services::after_genesis(
+			pair,
+			opts.share_path(),
+			&opts.alias(),
 			opts.namespace_dir(),
-			opts.personal_dir(),
 			opts.qos_build_fingerprints(),
 			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
-		);
+		) {
+			println!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn generate_manifest(opts: &ClientOpts) {
@@ -1167,8 +1188,17 @@ mod handlers {
 	}
 
 	pub(super) fn approve_manifest(opts: &ClientOpts) {
-		services::approve_manifest(ApproveManifestArgs {
-			personal_dir: opts.personal_dir(),
+		let pair = match PairOrYubi::from_inputs(opts.pin(), opts.secret_path())
+		{
+			Err(e) => {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+			Ok(p) => p,
+		};
+
+		if let Err(e) = services::approve_manifest(ApproveManifestArgs {
+			pair,
 			manifest_dir: opts.manifest_dir(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
@@ -1178,7 +1208,10 @@ mod handlers {
 			share_set_dir: opts.share_set_dir(),
 			alias: opts.alias(),
 			unsafe_auto_confirm: opts.unsafe_auto_confirm(),
-		});
+		}) {
+			println!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn boot_standard(opts: &ClientOpts) {
@@ -1199,17 +1232,31 @@ mod handlers {
 	}
 
 	pub(super) fn proxy_re_encrypt_share(opts: &ClientOpts) {
-		services::proxy_re_encrypt_share(ProxyReEncryptShareArgs {
-			attestation_dir: opts.attestation_dir(),
-			personal_dir: opts.personal_dir(),
-			manifest_dir: opts.manifest_dir(),
-			pcr3_preimage_path: opts.pcr3_preimage_path(),
-			alias: opts.alias(),
-			manifest_set_dir: opts.manifest_set_dir(),
-			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
-			unsafe_eph_path_override: opts.unsafe_eph_path_override(),
-			unsafe_auto_confirm: opts.unsafe_auto_confirm(),
-		});
+		let pair = match PairOrYubi::from_inputs(opts.pin(), opts.secret_path())
+		{
+			Err(e) => {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+			Ok(p) => p,
+		};
+
+		if let Err(e) =
+			services::proxy_re_encrypt_share(ProxyReEncryptShareArgs {
+				pair,
+				share_path: opts.share_path(),
+				attestation_dir: opts.attestation_dir(),
+				manifest_dir: opts.manifest_dir(),
+				pcr3_preimage_path: opts.pcr3_preimage_path(),
+				alias: opts.alias(),
+				manifest_set_dir: opts.manifest_set_dir(),
+				unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+				unsafe_eph_path_override: opts.unsafe_eph_path_override(),
+				unsafe_auto_confirm: opts.unsafe_auto_confirm(),
+			}) {
+			eprintln!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn post_share(opts: &ClientOpts) {
