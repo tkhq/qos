@@ -169,11 +169,13 @@ async fn boot_e2e() {
 			&*boot_dir, alias, namespace, manifest.namespace.nonce,
 		);
 
+		let secret_path = format!("{}/{}.secret", &personal_dir(alias), alias);
+
 		let mut child = Command::new("../target/debug/qos_client")
 			.args([
 				"approve-manifest",
-				"--personal-dir",
-				&personal_dir(alias),
+				"--secret-path",
+				&*secret_path,
 				"--manifest-dir",
 				&*boot_dir,
 				"--pcr3-preimage-path",
