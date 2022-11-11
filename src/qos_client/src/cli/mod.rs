@@ -644,10 +644,13 @@ impl Command {
 			.forbids(vec![SECRET_PATH])
 	}
 	fn secret_path_token() -> Token {
-		Token::new(SECRET_PATH, "Path to the secret to use for signing/decryption.")
-			.takes_value(true)
-			.required(false)
-			.forbids(vec![PIN])
+		Token::new(
+			SECRET_PATH,
+			"Path to the secret to use for signing/decryption.",
+		)
+		.takes_value(true)
+		.required(false)
+		.forbids(vec![PIN])
 	}
 
 	fn base() -> Parser {
@@ -947,8 +950,7 @@ impl ClientOpts {
 	}
 
 	fn secret_path(&self) -> Option<String> {
-		self.parsed.single(SECRET_PATH)
-		.map(String::clone)
+		self.parsed.single(SECRET_PATH).map(String::clone)
 	}
 
 	fn pin(&self) -> Option<Vec<u8>> {

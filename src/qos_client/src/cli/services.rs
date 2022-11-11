@@ -402,7 +402,9 @@ pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
 	pub unsafe_auto_confirm: bool,
 }
 
-pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) -> Result<(), Error> {
+pub(crate) fn approve_manifest<P: AsRef<Path>>(
+	args: ApproveManifestArgs<P>,
+) -> Result<(), Error> {
 	let ApproveManifestArgs {
 		secret_path,
 		pin,
@@ -418,7 +420,6 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) -> 
 	} = args;
 
 	let manifest = find_manifest(&manifest_dir);
-
 
 	if !approve_manifest_programmatic_verifications(
 		&manifest,
@@ -445,22 +446,22 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) -> 
 	let approval = {
 		let (signature, pub_key) = match (pin, secret_path) {
 			(Some(pin), None) => {
-				crate::yubikey::sign_and_get_public(&manifest.qos_hash(), &pin).map_err(Error::YubiKey)?
+				crate::yubikey::sign_and_get_public(&manifest.qos_hash(), &pin)
+					.map_err(Error::YubiKey)?
 			}
 			(None, Some(path)) => {
-				let pair = P256Pair::from_hex_file(path).map_err(Error::P256)?;
-				let signature = pair.sign(&manifest.qos_hash()).map_err(Error::P256)?;
+				let pair =
+					P256Pair::from_hex_file(path).map_err(Error::P256)?;
+				let signature =
+					pair.sign(&manifest.qos_hash()).map_err(Error::P256)?;
 				(signature, pair.public_key().to_bytes())
 			}
-			_ => panic!("Not possible to have both pin and secret path")
+			_ => panic!("Not possible to have both pin and secret path"),
 		};
 
 		Approval {
 			signature,
-			member: QuorumMember {
-				pub_key,
-				alias: alias.clone(),
-			},
+			member: QuorumMember { pub_key, alias: alias.clone() },
 		}
 	};
 

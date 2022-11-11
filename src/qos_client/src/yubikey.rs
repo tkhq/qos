@@ -46,8 +46,9 @@ pub enum YubiKeyError {
 	FailedToVerifyYubiKeySignature,
 	/// The key agreement (ECDH) from the yubikey failed.
 	KeyAgreementFailed,
-	/// Connecting to the yubikey failed. Make sure only 1 key is plugged in and try re-plugging in the device.
-	Connection(yubikey::Error)
+	/// Connecting to the yubikey failed. Make sure only 1 key is plugged in
+	/// and try re-plugging in the device.
+	Connection(yubikey::Error),
 }
 
 /// Generate a signed certificate with a p256 key for the given `slot`.
@@ -150,8 +151,12 @@ pub fn key_agreement(
 		.map_err(|_| YubiKeyError::KeyAgreementFailed)
 }
 
-/// Sign the given `data` with a connected yubikey. Returns (signature, public_key_bytes).
-pub fn sign_and_get_public(data: &[u8], pin: &[u8]) -> Result<(Vec<u8>, Vec<u8>), YubiKeyError> {
+/// Sign the given `data` with a connected yubikey. Returns (signature,
+/// `public_key_bytes`).
+pub fn sign_and_get_public(
+	data: &[u8],
+	pin: &[u8],
+) -> Result<(Vec<u8>, Vec<u8>), YubiKeyError> {
 	let mut yubikey = YubiKey::open().map_err(YubiKeyError::Connection)?;
 
 	let signature = sign_data(&mut yubikey, data, pin)?;
