@@ -173,13 +173,12 @@ pub(crate) fn generate_file_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 }
 
 pub(crate) fn provision_yubikey<P: AsRef<Path>>(
-	sign_pub_path: P,
-	encrypt_pub_path: P,
+	pub_path: P,
 	pin: &[u8],
 ) -> Result<(), Error> {
 	let mut yubikey = YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
 
-	let sign_public_key_bytes = generate_signed_certificate(
+	let _sign_public_key_bytes = generate_signed_certificate(
 		&mut yubikey,
 		SIGNING_SLOT,
 		pin,
@@ -187,9 +186,8 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 		TouchPolicy::Always,
 	)
 	.map_err(Error::GenerateSign)?;
-	let sign_public_key_hex = qos_hex::encode(&sign_public_key_bytes);
 
-	let encrypt_public_key_bytes = generate_signed_certificate(
+	let _encrypt_public_key_bytes = generate_signed_certificate(
 		&mut yubikey,
 		KEY_AGREEMENT_SLOT,
 		pin,
@@ -197,20 +195,17 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 		TouchPolicy::Always,
 	)
 	.map_err(Error::GenerateEncrypt)?;
-	let encrypt_public_key_hex = qos_hex::encode(&encrypt_public_key_bytes);
+
+	let public_key_bytes = crate::yubikey::pair_public_key(&mut yubikey)?;
+	let public_key_hex = qos_hex::encode(&public_key_bytes);
 
 	// Explicitly drop the yubikey to disconnect the PCSC session.
 	drop(yubikey);
 
 	write_with_msg(
-		sign_pub_path.as_ref(),
-		sign_public_key_hex.as_bytes(),
-		"Sign public key",
-	);
-	write_with_msg(
-		encrypt_pub_path.as_ref(),
-		encrypt_public_key_hex.as_bytes(),
-		"Encrypt public key",
+		pub_path.as_ref(),
+		public_key_hex.as_bytes(),
+		"YubiKey encrypt+sign public key",
 	);
 
 	Ok(())

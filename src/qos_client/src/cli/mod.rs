@@ -377,8 +377,7 @@ const MANIFEST_SET_DIR: &str = "manifest-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
 const MANIFEST_DIR: &str = "manifest-dir";
 const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
-const SIGN_PUB_PATH: &str = "sign-pub-path";
-const ENCRYPT_PUB_PATH: &str = "encrypt-pub-path";
+const PUB_PATH: &str = "pub-path";
 const PIN: &str = "pin";
 const SECRET_PATH: &str = "secret-path";
 const SHARE_PATH: &str = "share-path";
@@ -623,21 +622,10 @@ impl Command {
 		.takes_value(false)
 		.required(false)
 	}
-	fn sign_pub_path_token() -> Token {
-		Token::new(
-			SIGN_PUB_PATH,
-			"Path to the public singing key for a YubiKey",
-		)
-		.takes_value(true)
-		.required(true)
-	}
-	fn encrypt_pub_path_token() -> Token {
-		Token::new(
-			ENCRYPT_PUB_PATH,
-			"Path to the public encryption key for YubiKey",
-		)
-		.takes_value(true)
-		.required(true)
+	fn pub_path_token() -> Token {
+		Token::new(PUB_PATH, "Path to the public key for a YubiKey")
+			.takes_value(true)
+			.required(true)
 	}
 	// TODO(zeke): hidden pin entry so its not saved in history.
 	fn pin_token() -> Token {
@@ -790,10 +778,7 @@ impl Command {
 	}
 
 	fn provision_yubikey() -> Parser {
-		Parser::new()
-			.token(Self::sign_pub_path_token())
-			.token(Self::encrypt_pub_path_token())
-			.token(Self::pin_token())
+		Parser::new().token(Self::pub_path_token()).token(Self::pin_token())
 	}
 }
 
@@ -948,18 +933,8 @@ impl ClientOpts {
 		}
 	}
 
-	fn sign_pub_path(&self) -> String {
-		self.parsed
-			.single(SIGN_PUB_PATH)
-			.expect("Missing `--sign-pub-path`")
-			.to_string()
-	}
-
-	fn encrypt_pub_path(&self) -> String {
-		self.parsed
-			.single(ENCRYPT_PUB_PATH)
-			.expect("Missing `--encrypt-pub-path`")
-			.to_string()
+	fn pub_path(&self) -> String {
+		self.parsed.single(PUB_PATH).expect("Missing `--pub-path`").to_string()
 	}
 
 	fn secret_path(&self) -> Option<String> {
@@ -1154,11 +1129,7 @@ mod handlers {
 			crate::yubikey::DEFAULT_PIN.to_vec()
 		};
 
-		if let Err(e) = services::provision_yubikey(
-			opts.sign_pub_path(),
-			opts.encrypt_pub_path(),
-			&pin,
-		) {
+		if let Err(e) = services::provision_yubikey(opts.pub_path(), &pin) {
 			eprintln!("Error: {:?}", e);
 			std::process::exit(1);
 		}
