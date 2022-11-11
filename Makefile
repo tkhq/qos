@@ -74,7 +74,8 @@ fetch: \
 	$(OUT_DIR)/toolchain.tar \
 	keys \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign
+	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign \
+	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD
 
 # Build latest image and run in terminal via Qemu
 .PHONY: run
@@ -167,9 +168,7 @@ $(OUT_DIR)/init:
 	$(call toolchain,$(USER)," \
 		cd /src/init/ && \
 		unset FAKETIME && \
-		cargo fetch --target x86_64-unknown-linux-gnu && \
-		set FAKETIME="$(FAKETIME)" && \
-		set RUSTFLAGS='-C target-feature=+crt-static' && \
+		export RUSTFLAGS='-C target-feature=+crt-static' && \
 		cargo build \
 			--target x86_64-unknown-linux-gnu \
 			--release && \
@@ -284,6 +283,7 @@ define toolchain
 		--env KBUILD_BUILD_TIMESTAMP=$(KBUILD_BUILD_TIMESTAMP) \
 		--env KCONFIG_NOTIMESTAMP=$(KCONFIG_NOTIMESTAMP) \
 		--env SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) \
+		--env FAKETIME_FMT=$(FAKETIME_FMT) \
 		--env FAKETIME=$(FAKETIME) \
 		--env CARGO_HOME=/cache/cargo \
 		local/$(NAME)-build \
@@ -309,6 +309,7 @@ endef
 
 define kernel_build
 	$(call toolchain,$(USER)," \
+		unset FAKETIME && \
 		cd /cache/linux-$(LINUX_VERSION) && \
 		rm -rf include/config include/generated arch/x86/include/generated && \
 		cp /config/$(1)/linux.config .config && \
