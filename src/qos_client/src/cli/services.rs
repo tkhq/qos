@@ -27,8 +27,12 @@ use qos_core::protocol::{
 };
 use qos_crypto::{sha_256, sha_384};
 use qos_p256::{P256Pair, P256Public};
+use yubikey::{MgmKey, TouchPolicy, YubiKey};
 
-use crate::request;
+use crate::{
+	request,
+	yubikey::{generate_signed_certificate, KEY_AGREEMENT_SLOT, SIGNING_SLOT},
+};
 
 const SECRET_EXT: &str = "secret";
 const PUB_EXT: &str = "pub";
@@ -48,7 +52,20 @@ const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 	"DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
 
-pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
+/// Client errors.
+#[derive(Debug)]
+pub enum Error {
+	/// Failed to open a yubikey. Make sure only 1 yubikey is connected to the
+	/// machine. Also try unplugging the yubikey to reset the PCSC session.
+	OpenSingleYubiKey(yubikey::Error),
+	/// Error'ed while tried to generate a key and cert for the signing slot.
+	GenerateSign(crate::yubikey::YubiKeyError),
+	/// Error'ed while tried to generate a key and cert for the encryption
+	/// slot.
+	GenerateEncrypt(crate::yubikey::YubiKeyError),
+}
+
+pub(crate) fn generate_file_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 	fs::create_dir_all(personal_dir.as_ref()).unwrap();
 
 	let share_key_pair =
@@ -61,7 +78,7 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 	write_with_msg(
 		&private_path,
 		&share_key_pair.to_master_seed_hex(),
-		"Share Key Secret",
+		"File Key Secret",
 	);
 
 	// Write the setup key public key
@@ -70,8 +87,52 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 	write_with_msg(
 		&public_path,
 		&share_key_pair.public_key().to_hex_bytes(),
-		"Share Key Public",
+		"File Key Public",
 	);
+}
+
+pub(crate) fn provision_yubikey<P: AsRef<Path>>(
+	sign_pub_path: P,
+	encrypt_pub_path: P,
+	pin: &[u8],
+) -> Result<(), Error> {
+	let mut yubikey = YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
+
+	let sign_public_key_bytes = generate_signed_certificate(
+		&mut yubikey,
+		SIGNING_SLOT,
+		pin,
+		MgmKey::default(),
+		TouchPolicy::Always,
+	)
+	.map_err(Error::GenerateSign)?;
+	let sign_public_key_hex = qos_hex::encode(&sign_public_key_bytes);
+
+	let encrypt_public_key_bytes = generate_signed_certificate(
+		&mut yubikey,
+		KEY_AGREEMENT_SLOT,
+		pin,
+		MgmKey::default(),
+		TouchPolicy::Always,
+	)
+	.map_err(Error::GenerateEncrypt)?;
+	let encrypt_public_key_hex = qos_hex::encode(&encrypt_public_key_bytes);
+
+	// Explicitly drop the yubikey to disconnect the PCSC session.
+	drop(yubikey);
+
+	write_with_msg(
+		sign_pub_path.as_ref(),
+		sign_public_key_hex.as_bytes(),
+		"Sign public key",
+	);
+	write_with_msg(
+		encrypt_pub_path.as_ref(),
+		encrypt_public_key_hex.as_bytes(),
+		"Encrypt public key",
+	);
+
+	Ok(())
 }
 
 // TODO: verify PCR3
