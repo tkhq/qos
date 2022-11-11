@@ -26,12 +26,15 @@ use qos_core::protocol::{
 	QosHash,
 };
 use qos_crypto::{sha_256, sha_384};
-use qos_p256::{P256Pair, P256Public};
+use qos_p256::{encrypt::P256EncryptPublic, P256Error, P256Pair, P256Public};
 use yubikey::{MgmKey, TouchPolicy, YubiKey};
 
 use crate::{
 	request,
-	yubikey::{generate_signed_certificate, KEY_AGREEMENT_SLOT, SIGNING_SLOT},
+	yubikey::{
+		generate_signed_certificate, open_single, YubiKeyError,
+		KEY_AGREEMENT_SLOT, SIGNING_SLOT,
+	},
 };
 
 const SECRET_EXT: &str = "secret";
@@ -65,6 +68,82 @@ pub enum Error {
 	GenerateEncrypt(crate::yubikey::YubiKeyError),
 	YubiKey(crate::yubikey::YubiKeyError),
 	P256(qos_p256::P256Error),
+	/// Failed to read share
+	ReadShare,
+}
+
+impl From<YubiKeyError> for Error {
+	fn from(err: YubiKeyError) -> Self {
+		Error::YubiKey(err)
+	}
+}
+
+impl From<P256Error> for Error {
+	fn from(err: P256Error) -> Self {
+		Error::P256(err)
+	}
+}
+
+pub(crate) enum PairOrYubi {
+	Yubi((YubiKey, Vec<u8>)),
+	Pair(P256Pair),
+}
+
+impl PairOrYubi {
+	pub(crate) fn from_inputs(
+		pin: Option<Vec<u8>>,
+		secret_path: Option<String>,
+	) -> Result<Self, Error> {
+		let result = match (pin, secret_path) {
+			(Some(pin), None) => {
+				let yubi = open_single()?;
+				PairOrYubi::Yubi((yubi, pin))
+			}
+			(None, Some(path)) => {
+				let pair = P256Pair::from_hex_file(path)?;
+				PairOrYubi::Pair(pair)
+			}
+			(None, None) | (Some(_), Some(_)) => {
+				panic!("Cannot have both pin and secret path")
+			}
+		};
+
+		Ok(result)
+	}
+
+	fn sign(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
+		match self {
+			Self::Yubi((ref mut yubi, ref pin)) => {
+				crate::yubikey::sign_data(yubi, data, pin).map_err(Into::into)
+			}
+			Self::Pair(ref pair) => pair.sign(data).map_err(Into::into),
+		}
+	}
+
+	fn decrypt(&mut self, payload: &[u8]) -> Result<Vec<u8>, Error> {
+		match self {
+			Self::Yubi((ref mut yubi, ref pin)) => {
+				let shared_secret =
+					crate::yubikey::shared_secret(yubi, payload, pin)?;
+				let encrypt_pub = crate::yubikey::key_agree_public_key(yubi)?;
+				let public = P256EncryptPublic::from_bytes(&encrypt_pub)?;
+
+				public
+					.decrypt_from_shared_secret(payload, &shared_secret)
+					.map_err(Into::into)
+			}
+			Self::Pair(ref pair) => pair.decrypt(payload).map_err(Into::into),
+		}
+	}
+
+	fn public_key_bytes(&mut self) -> Result<Vec<u8>, Error> {
+		match self {
+			Self::Yubi((ref mut yubi, _)) => {
+				crate::yubikey::pair_public_key(yubi).map_err(Into::into)
+			}
+			Self::Pair(ref pair) => Ok(pair.public_key().to_bytes()),
+		}
+	}
 }
 
 pub(crate) fn generate_file_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
@@ -389,8 +468,7 @@ fn extract_nitro_config<P: AsRef<Path>>(
 }
 
 pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
-	pub secret_path: Option<P>,
-	pub pin: Option<Vec<u8>>,
+	pub pair: PairOrYubi,
 	pub manifest_dir: P,
 	pub qos_build_fingerprints_path: P,
 	pub pcr3_preimage_path: P,
@@ -406,8 +484,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	args: ApproveManifestArgs<P>,
 ) -> Result<(), Error> {
 	let ApproveManifestArgs {
-		secret_path,
-		pin,
+		mut pair,
 		manifest_dir,
 		qos_build_fingerprints_path,
 		pcr3_preimage_path,
@@ -443,26 +520,12 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		drop(prompter);
 	}
 
-	let approval = {
-		let (signature, pub_key) = match (pin, secret_path) {
-			(Some(pin), None) => {
-				crate::yubikey::sign_and_get_public(&manifest.qos_hash(), &pin)
-					.map_err(Error::YubiKey)?
-			}
-			(None, Some(path)) => {
-				let pair =
-					P256Pair::from_hex_file(path).map_err(Error::P256)?;
-				let signature =
-					pair.sign(&manifest.qos_hash()).map_err(Error::P256)?;
-				(signature, pair.public_key().to_bytes())
-			}
-			_ => panic!("Not possible to have both pin and secret path"),
-		};
-
-		Approval {
-			signature,
-			member: QuorumMember { pub_key, alias: alias.clone() },
-		}
+	let approval = Approval {
+		signature: pair.sign(&manifest.qos_hash())?,
+		member: QuorumMember {
+			pub_key: pair.public_key_bytes()?,
+			alias: alias.clone(),
+		},
 	};
 
 	let approval_path = manifest_dir.as_ref().join(format!(
@@ -474,6 +537,9 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		&approval.try_to_vec().expect("Failed to serialize approval"),
 		"Manifest Approval",
 	);
+
+	drop(pair);
+
 	Ok(())
 }
 
@@ -697,8 +763,9 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 }
 
 pub(crate) struct ProxyReEncryptShareArgs<P: AsRef<Path>> {
+	pub pair: PairOrYubi,
+	pub share_path: P,
 	pub attestation_dir: P,
-	pub personal_dir: P, // TODO: replace this with just using yubikey to sign
 	pub pcr3_preimage_path: P,
 	pub manifest_dir: P,
 	pub manifest_set_dir: P,
@@ -715,8 +782,9 @@ pub(crate) struct ProxyReEncryptShareArgs<P: AsRef<Path>> {
 //   organization)
 pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	ProxyReEncryptShareArgs {
+		mut pair,
+		share_path,
 		attestation_dir,
-		personal_dir,
 		pcr3_preimage_path,
 		manifest_set_dir,
 		manifest_dir,
@@ -725,12 +793,14 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		unsafe_eph_path_override,
 		unsafe_auto_confirm,
 	}: ProxyReEncryptShareArgs<P>,
-) {
+) -> Result<(), Error> {
 	let manifest_envelope = find_manifest_envelope(&manifest_dir);
 	let attestation_doc =
 		find_attestation_doc(&attestation_dir, unsafe_skip_attestation);
-	let encrypted_share = find_share(&personal_dir);
-	let (personal_pair, _) = find_share_key(&personal_dir);
+	let encrypted_share = std::fs::read(share_path).map_err(|e| {
+		eprintln!("{:?}", e);
+		Error::ReadShare
+	})?;
 
 	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
 
@@ -762,13 +832,12 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		.expect("Ephemeral key not valid public key")
 	};
 
+	let member = QuorumMember { pub_key: pair.public_key_bytes()?, alias };
+
 	if !proxy_re_encrypt_share_programmatic_verifications(
 		&manifest_envelope,
 		&get_manifest_set(manifest_set_dir),
-		&QuorumMember {
-			alias: alias.clone(),
-			pub_key: personal_pair.public_key().to_bytes(),
-		},
+		&member,
 	) {
 		eprintln!("Exiting early without re-encrypting / approving");
 		std::process::exit(1);
@@ -789,20 +858,17 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	}
 
 	let share = {
-		let plaintext_share = &personal_pair
+		let plaintext_share = &pair
 			.decrypt(&encrypted_share)
 			.expect("Failed to decrypt share with personal key.");
 		eph_pub.encrypt(plaintext_share).expect("Envelope encryption error")
 	};
 
 	let approval = Approval {
-		signature: personal_pair
+		signature: pair
 			.sign(&manifest_envelope.manifest.qos_hash())
 			.expect("Failed to sign"),
-		member: QuorumMember {
-			pub_key: personal_pair.public_key().to_bytes(),
-			alias,
-		},
+		member,
 	}
 	.try_to_vec()
 	.expect("Could not serialize Approval");
@@ -813,6 +879,10 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 
 	let share_path = attestation_dir.as_ref().join(EPH_WRAPPED_SHARE_FILE);
 	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
+
+	drop(pair);
+
+	Ok(())
 }
 
 // TODO: bubble up logging as errors in stead of printing in place to make it

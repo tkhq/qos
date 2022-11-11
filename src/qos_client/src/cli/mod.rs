@@ -354,6 +354,8 @@ use qos_core::{
 
 mod services;
 
+use services::PairOrYubi;
+
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ALIAS: &str = "alias";
@@ -379,6 +381,7 @@ const SIGN_PUB_PATH: &str = "sign-pub-path";
 const ENCRYPT_PUB_PATH: &str = "encrypt-pub-path";
 const PIN: &str = "pin";
 const SECRET_PATH: &str = "secret-path";
+const SHARE_PATH: &str = "share-path";
 
 /// Commands for the Client CLI.
 ///
@@ -652,6 +655,11 @@ impl Command {
 		.required(false)
 		.forbids(vec![PIN])
 	}
+	fn share_path_token() -> Token {
+		Token::new(SHARE_PATH, "Path to the encrypted quorum key share.")
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -749,8 +757,10 @@ impl Command {
 
 	fn proxy_re_encrypt_share() -> Parser {
 		Parser::new()
+			.token(Self::pin_token())
+			.token(Self::secret_path_token())
 			.token(Self::attestation_dir_token())
-			.token(Self::personal_dir_token())
+			.token(Self::share_path_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::manifest_dir_token())
@@ -953,6 +963,13 @@ impl ClientOpts {
 		self.parsed.single(SECRET_PATH).map(String::clone)
 	}
 
+	fn share_path(&self) -> String {
+		self.parsed
+			.single(SHARE_PATH)
+			.expect("Missing `--share-path`")
+			.to_string()
+	}
+
 	fn pin(&self) -> Option<Vec<u8>> {
 		self.parsed
 			.single(PIN)
@@ -1052,7 +1069,7 @@ mod handlers {
 	use crate::{
 		cli::{
 			services::{self, GenerateManifestArgs},
-			ClientOpts, ProtocolMsg,
+			ClientOpts, PairOrYubi, ProtocolMsg,
 		},
 		request,
 	};
@@ -1183,9 +1200,17 @@ mod handlers {
 	}
 
 	pub(super) fn approve_manifest(opts: &ClientOpts) {
+		let pair = match PairOrYubi::from_inputs(opts.pin(), opts.secret_path())
+		{
+			Err(e) => {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+			Ok(p) => p,
+		};
+
 		if let Err(e) = services::approve_manifest(ApproveManifestArgs {
-			secret_path: opts.secret_path(),
-			pin: opts.pin(),
+			pair,
 			manifest_dir: opts.manifest_dir(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
@@ -1219,17 +1244,31 @@ mod handlers {
 	}
 
 	pub(super) fn proxy_re_encrypt_share(opts: &ClientOpts) {
-		services::proxy_re_encrypt_share(ProxyReEncryptShareArgs {
-			attestation_dir: opts.attestation_dir(),
-			personal_dir: opts.personal_dir(),
-			manifest_dir: opts.manifest_dir(),
-			pcr3_preimage_path: opts.pcr3_preimage_path(),
-			alias: opts.alias(),
-			manifest_set_dir: opts.manifest_set_dir(),
-			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
-			unsafe_eph_path_override: opts.unsafe_eph_path_override(),
-			unsafe_auto_confirm: opts.unsafe_auto_confirm(),
-		});
+		let pair = match PairOrYubi::from_inputs(opts.pin(), opts.secret_path())
+		{
+			Err(e) => {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+			Ok(p) => p,
+		};
+
+		if let Err(e) =
+			services::proxy_re_encrypt_share(ProxyReEncryptShareArgs {
+				pair,
+				share_path: opts.share_path(),
+				attestation_dir: opts.attestation_dir(),
+				manifest_dir: opts.manifest_dir(),
+				pcr3_preimage_path: opts.pcr3_preimage_path(),
+				alias: opts.alias(),
+				manifest_set_dir: opts.manifest_set_dir(),
+				unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+				unsafe_eph_path_override: opts.unsafe_eph_path_override(),
+				unsafe_auto_confirm: opts.unsafe_auto_confirm(),
+			}) {
+			eprintln!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn post_share(opts: &ClientOpts) {

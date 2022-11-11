@@ -349,16 +349,24 @@ async fn boot_e2e() {
 			.unwrap()
 			.success());
 
+		let share_path = format!(
+			"{}/{}.share", &personal_dir(user), user
+		);
+		let secret_path = format!(
+			"{}/{}.secret", &personal_dir(user), user
+		);
 		// Encrypt share to ephemeral key
 		let mut child = Command::new("../target/debug/qos_client")
 			.args([
 				"proxy-re-encrypt-share",
+				"--share-path",
+				&share_path,
+				"--secret-path",
+				&secret_path,
 				"--attestation-dir",
 				&*attestation_dir,
 				"--manifest-dir",
 				&*boot_dir,
-				"--personal-dir",
-				&personal_dir(user),
 				"--pcr3-preimage-path",
 				"./mock/namespaces/pcr3-preimage.txt",
 				"--manifest-set-dir",

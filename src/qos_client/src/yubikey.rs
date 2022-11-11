@@ -1,6 +1,8 @@
 //! Yubikey interfaces
 
+use borsh::BorshDeserialize;
 use p256::ecdsa::{signature::Verifier, Signature, VerifyingKey};
+use qos_p256::encrypt::Envelope;
 use rand_core::{OsRng, RngCore};
 use x509::RelativeDistinguishedName;
 use yubikey::{
@@ -36,6 +38,8 @@ pub enum YubiKeyError {
 	WillNotOverwriteSlot,
 	/// Cannot find a key on the signing slot.
 	CannotFindSigningKey,
+	/// Cannot find a key on the key management slot.
+	CannotFindKeyAgree,
 	/// Found a key that was not P256 when one was expected.
 	FoundNonP256Key,
 	/// Could not deserialize a public key.
@@ -49,6 +53,8 @@ pub enum YubiKeyError {
 	/// Connecting to the yubikey failed. Make sure only 1 key is plugged in
 	/// and try re-plugging in the device.
 	Connection(yubikey::Error),
+	/// Failed to deserialize the encryption envelope.
+	EnvelopeDeserialize,
 }
 
 /// Generate a signed certificate with a p256 key for the given `slot`.
@@ -151,24 +157,59 @@ pub fn key_agreement(
 		.map_err(|_| YubiKeyError::KeyAgreementFailed)
 }
 
-/// Sign the given `data` with a connected yubikey. Returns (signature,
-/// `public_key_bytes`).
-pub fn sign_and_get_public(
-	data: &[u8],
-	pin: &[u8],
-) -> Result<(Vec<u8>, Vec<u8>), YubiKeyError> {
-	let mut yubikey = YubiKey::open().map_err(YubiKeyError::Connection)?;
+/// Open the single connected yubikey.
+pub fn open_single() -> Result<YubiKey, YubiKeyError> {
+	YubiKey::open().map_err(YubiKeyError::Connection)
+}
 
-	let signature = sign_data(&mut yubikey, data, pin)?;
-
-	let signing_slot_cert = Certificate::read(&mut yubikey, SIGNING_SLOT)
+/// Get the public key from the yubikey that corresponds to
+/// `P256Public::to_bytes`. This is the key agree public key concatenated with
+/// the signature public key. Encodes as `encrypt_public||sign_public`.
+pub fn pair_public_key(yubikey: &mut YubiKey) -> Result<Vec<u8>, YubiKeyError> {
+	let signing_slot_cert = Certificate::read(yubikey, SIGNING_SLOT)
 		.map_err(|_| YubiKeyError::CannotFindSigningKey)?;
-	drop(yubikey);
+	let signing_public_key_info = signing_slot_cert.subject_pki();
+	let signing_encoded_point = extract_encoded_point(signing_public_key_info)?;
 
-	let public_key_info = signing_slot_cert.subject_pki();
-	let encoded_point = extract_encoded_point(public_key_info)?;
+	let pair_public_key: Vec<_> = key_agree_public_key(yubikey)?
+		.iter()
+		.chain(signing_encoded_point.to_bytes().iter())
+		.copied()
+		.collect();
 
-	Ok((signature, encoded_point.to_bytes().to_vec()))
+	Ok(pair_public_key)
+}
+
+/// Get the public key on the key agree slot.
+pub fn key_agree_public_key(
+	yubikey: &mut YubiKey,
+) -> Result<Vec<u8>, YubiKeyError> {
+	let key_agree_slot_cert = Certificate::read(yubikey, KEY_AGREEMENT_SLOT)
+		.map_err(|_| YubiKeyError::CannotFindKeyAgree)?;
+	let key_agree_key_info = key_agree_slot_cert.subject_pki();
+	let key_agree_key_encoded_point =
+		extract_encoded_point(key_agree_key_info)?;
+
+	Ok(key_agree_key_encoded_point.to_bytes().to_vec())
+}
+
+/// Get the shared secret with a connected yubikey and the public key in the
+/// given `serialized_envelope`.
+///
+/// Returns `(shared_secret, public_key_bytes)`.
+pub fn shared_secret(
+	yubikey: &mut YubiKey,
+	serialized_envelope: &[u8],
+	pin: &[u8],
+) -> Result<Zeroizing<Vec<u8>>, YubiKeyError> {
+	// get the sender eph key from the encryption envelope
+	let sender_pub_bytes = {
+		let decoded = Envelope::try_from_slice(serialized_envelope)
+			.map_err(|_| YubiKeyError::EnvelopeDeserialize)?;
+		decoded.ephemeral_sender_public
+	};
+
+	key_agreement(yubikey, &sender_pub_bytes, pin)
 }
 
 fn extract_encoded_point(
