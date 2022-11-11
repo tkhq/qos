@@ -349,12 +349,8 @@ async fn boot_e2e() {
 			.unwrap()
 			.success());
 
-		let share_path = format!(
-			"{}/{}.share", &personal_dir(user), user
-		);
-		let secret_path = format!(
-			"{}/{}.secret", &personal_dir(user), user
-		);
+		let share_path = format!("{}/{}.share", &personal_dir(user), user);
+		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
 		// Encrypt share to ephemeral key
 		let mut child = Command::new("../target/debug/qos_client")
 			.args([

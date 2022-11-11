@@ -699,8 +699,11 @@ impl Command {
 
 	fn after_genesis() -> Parser {
 		Parser::new()
+			.token(Self::pin_token())
+			.token(Self::secret_path_token())
+			.token(Self::share_path_token())
+			.token(Self::alias_token())
 			.token(Self::namespace_dir_token())
-			.token(Self::personal_dir_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
@@ -1174,13 +1177,27 @@ mod handlers {
 	}
 
 	pub(super) fn after_genesis(opts: &ClientOpts) {
-		services::after_genesis(
+		let pair = match PairOrYubi::from_inputs(opts.pin(), opts.secret_path())
+		{
+			Err(e) => {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+			Ok(p) => p,
+		};
+
+		if let Err(e) = services::after_genesis(
+			pair,
+			opts.share_path(),
+			&opts.alias(),
 			opts.namespace_dir(),
-			opts.personal_dir(),
 			opts.qos_build_fingerprints(),
 			opts.pcr3_preimage_path(),
 			opts.unsafe_skip_attestation(),
-		);
+		) {
+			println!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn generate_manifest(opts: &ClientOpts) {

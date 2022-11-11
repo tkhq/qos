@@ -41,7 +41,6 @@ const SECRET_EXT: &str = "secret";
 const PUB_EXT: &str = "pub";
 const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
 const GENESIS_OUTPUT_FILE: &str = "genesis_output";
-const SHARE_EXT: &str = "share";
 const MANIFEST_EXT: &str = "manifest";
 const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
@@ -297,19 +296,17 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 }
 
 pub(crate) fn after_genesis<P: AsRef<Path>>(
+	mut pair: PairOrYubi,
+	share_path: P,
+	alias: &str,
 	namespace_dir: P,
-	personal_dir: P,
 	qos_build_fingerprints_path: P,
 	pcr3_preimage_path: P,
 	unsafe_skip_attestation: bool,
-) {
+) -> Result<(), Error> {
 	let attestation_doc_path =
 		namespace_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
 	let genesis_set_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
-
-	// Read in the setup key
-	let (share_key_pair, mut share_key_file_name) =
-		find_share_key(&personal_dir);
 
 	// Get the PCRs for QOS so we can verify
 	let qos_build_fingerprints =
@@ -318,9 +315,6 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		"QOS build fingerprints taken from commit: {}",
 		qos_build_fingerprints.qos_commit
 	);
-
-	let alias = mem::take(&mut share_key_file_name[0]);
-	println!("Alias: {}", alias);
 
 	// Read in the attestation doc from the genesis directory
 	let cose_sign1 =
@@ -350,7 +344,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	}
 
 	// Get the members specific output based on alias & setup key
-	let share_key_public = share_key_pair.public_key().to_bytes();
+	let share_key_public = pair.public_key_bytes()?;
 	let member_output = genesis_output
 		.member_outputs
 		.iter()
@@ -361,9 +355,8 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		.expect("Could not find a member output associated with the setup key");
 
 	// Make sure we can decrypt the Share with the Personal Key
-	let plaintext_share = share_key_pair
-		.decrypt(&member_output.encrypted_quorum_key_share)
-		.expect("Share could not be decrypted with personal key");
+	let plaintext_share =
+		pair.decrypt(&member_output.encrypted_quorum_key_share)?;
 
 	assert_eq!(
 		sha_256(&plaintext_share),
@@ -374,13 +367,13 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	drop(plaintext_share);
 
 	// Store the encrypted share
-	let share_path =
-		personal_dir.as_ref().join(format!("{}.{}", alias, SHARE_EXT));
 	write_with_msg(
-		share_path.as_path(),
+		share_path.as_ref(),
 		&member_output.encrypted_quorum_key_share,
 		"Encrypted Quorum Share",
 	);
+
+	Ok(())
 }
 
 pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
@@ -1132,28 +1125,6 @@ fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
 		.expect("Failed to read directory")
 		.map(|p| p.unwrap().path())
 		.collect()
-}
-
-fn find_share_key<P: AsRef<Path>>(personal_dir: P) -> (P256Pair, Vec<String>) {
-	let mut s: Vec<_> = find_file_paths(&personal_dir)
-		.iter()
-		.filter_map(|path| {
-			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT) {
-				return None;
-			};
-
-			Some((
-				P256Pair::from_hex_file(path)
-					.expect("Could not read PEM from share_key.key"),
-				file_name,
-			))
-		})
-		.collect();
-	// Make sure there is exactly one manifest
-	assert_eq!(s.len(), 1, "Did not find exactly 1 setup key.");
-
-	s.remove(0)
 }
 
 fn find_quorum_key<P: AsRef<Path>>(dir: P) -> P256Public {
