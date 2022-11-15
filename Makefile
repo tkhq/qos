@@ -218,6 +218,7 @@ $(OUT_DIR)/aws/nsm.ko: \
 	$(OUT_DIR)/aws/bzImage \
 	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD
 	$(call toolchain,$(USER)," \
+		unset FAKETIME; \
 		cd /cache/linux-$(LINUX_VERSION) && \
 		cp /config/aws/linux.config .config && \
 		make modules_prepare && \
