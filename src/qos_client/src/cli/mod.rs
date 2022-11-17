@@ -381,6 +381,7 @@ const PUB_PATH: &str = "pub-path";
 const PIN: &str = "pin";
 const SECRET_PATH: &str = "secret-path";
 const SHARE_PATH: &str = "share-path";
+const OUTPUT_PATH: &str = "output-path";
 
 /// Commands for the Client CLI.
 ///
@@ -468,6 +469,8 @@ pub enum Command {
 	DangerousDevBoot,
 	/// Provision a yubikey with a singing and encryption key.
 	ProvisionYubiKey,
+	/// Create a dummy pivot build fingerprints with a correct hash
+	PivotBuildFingerprints,
 }
 
 impl From<&str> for Command {
@@ -489,6 +492,7 @@ impl From<&str> for Command {
 			"post-share" => Self::PostShare,
 			"dangerous-dev-boot" => Self::DangerousDevBoot,
 			"provision-yubikey" => Self::ProvisionYubiKey,
+			"pivot-build-fingerprints" => Self::PivotBuildFingerprints,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -648,6 +652,11 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn output_path_token() -> Token {
+		Token::new(OUTPUT_PATH, "The path to create a file at.")
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -668,6 +677,12 @@ impl Command {
 				)
 				.takes_value(true),
 			)
+	}
+
+	fn pivot_build_fingerprints() -> Parser {
+		Parser::new()
+			.token(Self::output_path_token())
+			.token(Self::pivot_path_token())
 	}
 
 	fn generate_file_key() -> Parser {
@@ -803,6 +818,7 @@ impl GetParserForCommand for Command {
 				Self::generate_manifest_envelope()
 			}
 			Self::ProvisionYubiKey => Self::provision_yubikey(),
+			Self::PivotBuildFingerprints => Self::pivot_build_fingerprints(),
 		}
 	}
 }
@@ -948,6 +964,13 @@ impl ClientOpts {
 			.to_string()
 	}
 
+	fn output_path(&self) -> String {
+		self.parsed
+			.single(OUTPUT_PATH)
+			.expect("Missing `--output-path`")
+			.to_string()
+	}
+
 	fn pin(&self) -> Option<Vec<u8>> {
 		self.parsed
 			.single(PIN)
@@ -1022,6 +1045,9 @@ impl ClientRunner {
 				Command::GenerateManifestEnvelope => {
 					handlers::generate_manifest_envelope(&self.opts);
 				}
+				Command::PivotBuildFingerprints => {
+					handlers::pivot_build_fingerprints(&self.opts);
+				}
 			}
 		}
 	}
@@ -1051,6 +1077,19 @@ mod handlers {
 		},
 		request,
 	};
+
+	pub(super) fn pivot_build_fingerprints(opts: &ClientOpts) {
+		let pivot = std::fs::read(&opts.pivot_path())
+			.expect("Failed to read pivot file");
+
+		let hash = qos_crypto::sha_256(&pivot);
+		let hex_hash = qos_hex::encode(&hash);
+
+		let contents = format!("{hex_hash}\ndummy-commit\n");
+
+		std::fs::write(&opts.output_path(), contents.as_bytes())
+			.expect("Failed to write fingerprints to specified path");
+	}
 
 	pub(super) fn host_health(opts: &ClientOpts) {
 		let path = &opts.path("host-health");
