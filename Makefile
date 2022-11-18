@@ -221,6 +221,7 @@ $(OUT_DIR)/aws/nsm.ko: \
 		unset FAKETIME; \
 		cd /cache/linux-$(LINUX_VERSION) && \
 		cp /config/aws/linux.config .config && \
+		make olddefconfig && \
 		make modules_prepare && \
 		cd /cache/aws-nitro-enclaves-sdk-bootstrap/ \
 		&& make -C /cache/linux-$(LINUX_VERSION) M=/cache/aws-nitro-enclaves-sdk-bootstrap/nsm-driver \
