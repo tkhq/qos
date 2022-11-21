@@ -99,12 +99,8 @@ impl PairOrYubi {
 			(true, None) => {
 				let yubi = open_single()?;
 
-				let stdin = io::stdin();
-				let stdin_locked = stdin.lock();
-				let mut prompter =
-					Prompter { reader: stdin_locked, writer: io::stdout() };
-
-				let pin = prompter.prompt_pin()?;
+				let pin = rpassword::prompt_password("Enter your pin: ")
+					.map_err(Error::PinEntryError)?;
 
 				PairOrYubi::Yubi((yubi, pin.as_bytes().to_vec()))
 			}
@@ -187,13 +183,11 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	let mut yubikey = YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
 
-	let stdin = io::stdin();
-	let stdin_locked = stdin.lock();
-	let mut prompter = Prompter { reader: stdin_locked, writer: io::stdout() };
-
 	println!("You need to enter a pin that will be used to authorize signing and encryption requests.");
-	let pin = prompter.prompt_pin()?.as_bytes().to_vec();
-	drop(prompter);
+	let pin = rpassword::prompt_password("Enter your pin: ")
+		.map_err(Error::PinEntryError)?
+		.as_bytes()
+		.to_vec();
 
 	let _sign_public_key_bytes = generate_signed_certificate(
 		&mut yubikey,
@@ -1580,15 +1574,6 @@ where
 
 	fn prompt_is_yes(&mut self, question: &str) -> bool {
 		self.prompt(question) == "yes"
-	}
-
-	fn prompt_pin(&mut self) -> Result<String, Error> {
-		rpassword::prompt_password_from_bufread(
-			&mut self.reader,
-			&mut self.writer,
-			"Enter your pin: ",
-		)
-		.map_err(Error::PinEntryError)
 	}
 }
 
