@@ -380,6 +380,7 @@ const YUBIKEY: &str = "yubikey";
 const SECRET_PATH: &str = "secret-path";
 const SHARE_PATH: &str = "share-path";
 const OUTPUT_PATH: &str = "output-path";
+const QUORUM_KEY_PATH: &str = "quorum-key-path";
 
 /// Commands for the Client CLI.
 ///
@@ -655,6 +656,11 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn quorum_key_path_token() -> Token {
+		Token::new(QUORUM_KEY_PATH, "The path to the quorum public key")
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -728,7 +734,7 @@ impl Command {
 			.token(Self::manifest_dir_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
-			.token(Self::namespace_dir_token())
+			.token(Self::quorum_key_path_token())
 			.token(Self::pivot_args_token())
 	}
 
@@ -741,7 +747,7 @@ impl Command {
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::pivot_build_fingerprints_token())
 			.token(Self::alias_token())
-			.token(Self::namespace_dir_token())
+			.token(Self::quorum_key_path_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
 			.token(Self::unsafe_auto_confirm_token())
@@ -969,6 +975,13 @@ impl ClientOpts {
 			.to_string()
 	}
 
+	fn quorum_key_path(&self) -> String {
+		self.parsed
+			.single(QUORUM_KEY_PATH)
+			.expect("Missing `--quorum-key-path`")
+			.to_string()
+	}
+
 	fn yubikey(&self) -> bool {
 		self.parsed.flag(YUBIKEY).unwrap_or(false)
 	}
@@ -1192,7 +1205,7 @@ mod handlers {
 	}
 
 	pub(super) fn generate_manifest(opts: &ClientOpts) {
-		services::generate_manifest(GenerateManifestArgs {
+		if let Err(e) = services::generate_manifest(GenerateManifestArgs {
 			nonce: opts.nonce(),
 			namespace: opts.namespace(),
 			restart_policy: opts.restart_policy(),
@@ -1203,8 +1216,11 @@ mod handlers {
 			pivot_args: opts.pivot_args(),
 			share_set_dir: opts.share_set_dir(),
 			manifest_set_dir: opts.manifest_set_dir(),
-			namespace_dir: opts.namespace_dir(),
-		});
+			quorum_key_path: opts.quorum_key_path(),
+		}) {
+			println!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn approve_manifest(opts: &ClientOpts) {
@@ -1216,7 +1232,7 @@ mod handlers {
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
-			namespace_dir: opts.namespace_dir(),
+			quorum_key_path: opts.quorum_key_path(),
 			manifest_set_dir: opts.manifest_set_dir(),
 			share_set_dir: opts.share_set_dir(),
 			alias: opts.alias(),

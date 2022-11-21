@@ -48,7 +48,6 @@ const STANDARD_ATTESTATION_DOC_FILE: &str = "boot_attestation_doc";
 const EPH_WRAPPED_SHARE_FILE: &str = "ephemeral_key_wrapped.share";
 const ATTESTATION_APPROVAL_FILE: &str = "attestation_approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
-const QUORUM_KEY: &str = "quorum_key";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -73,6 +72,7 @@ pub enum Error {
 	ReadShare,
 	/// An error trying to read a pin from the terminal
 	PinEntryError(std::io::Error),
+	FailedToReadQuorumPublicKey(qos_p256::P256Error),
 }
 
 impl From<YubiKeyError> for Error {
@@ -397,12 +397,14 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub pcr3_preimage_path: P,
 	pub share_set_dir: P,
 	pub manifest_set_dir: P,
-	pub namespace_dir: P,
+	pub quorum_key_path: P,
 	pub manifest_dir: P,
 	pub pivot_args: Vec<String>,
 }
 
-pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
+pub(crate) fn generate_manifest<P: AsRef<Path>>(
+	args: GenerateManifestArgs<P>,
+) -> Result<(), Error> {
 	let GenerateManifestArgs {
 		nonce,
 		namespace,
@@ -412,7 +414,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		pcr3_preimage_path,
 		manifest_set_dir,
 		share_set_dir,
-		namespace_dir,
+		quorum_key_path,
 		manifest_dir,
 		pivot_args,
 	} = args;
@@ -427,7 +429,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	// Get share set keys & threshold
 	let share_set = get_share_set(share_set_dir);
 	// Get quorum key from namespaces dir
-	let quorum_key: P256Public = find_quorum_key(namespace_dir);
+	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
+		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
 	let manifest = Manifest {
 		namespace: Namespace {
@@ -452,6 +455,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		.as_ref()
 		.join(format!("{}.{}.{}", namespace, nonce, MANIFEST_EXT));
 	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");
+
+	Ok(())
 }
 
 fn extract_nitro_config<P: AsRef<Path>>(
@@ -478,7 +483,7 @@ pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
 	pub qos_build_fingerprints_path: P,
 	pub pcr3_preimage_path: P,
 	pub pivot_build_fingerprints_path: P,
-	pub namespace_dir: P,
+	pub quorum_key_path: P,
 	pub manifest_set_dir: P,
 	pub share_set_dir: P,
 	pub alias: String,
@@ -494,7 +499,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		qos_build_fingerprints_path,
 		pcr3_preimage_path,
 		pivot_build_fingerprints_path,
-		namespace_dir,
+		quorum_key_path,
 		manifest_set_dir,
 		share_set_dir,
 		alias,
@@ -502,6 +507,8 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	} = args;
 
 	let manifest = find_manifest(&manifest_dir);
+	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
+		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
 	if !approve_manifest_programmatic_verifications(
 		&manifest,
@@ -509,7 +516,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		&get_share_set(share_set_dir),
 		&extract_nitro_config(qos_build_fingerprints_path, pcr3_preimage_path),
 		&extract_pivot_build_fingerprints(pivot_build_fingerprints_path),
-		&find_quorum_key(namespace_dir),
+		&quorum_key,
 	) {
 		eprintln!("Exiting early without approving manifest");
 		std::process::exit(1);
@@ -1137,28 +1144,6 @@ fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
 		.expect("Failed to read directory")
 		.map(|p| p.unwrap().path())
 		.collect()
-}
-
-fn find_quorum_key<P: AsRef<Path>>(dir: P) -> P256Public {
-	let mut s: Vec<_> = find_file_paths(&dir)
-		.iter()
-		.filter_map(|path| {
-			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT)
-				|| file_name.first().map_or(true, |s| s.as_str() != QUORUM_KEY)
-			{
-				return None;
-			};
-
-			Some(P256Public::from_hex_file(path).unwrap_or_else(|_| {
-				panic!("Could not read hex from {:?}", path)
-			}))
-		})
-		.collect();
-	// Make sure there is exactly one manifest
-	assert_eq!(s.len(), 1, "Did not find exactly 1 quorum key.");
-
-	s.remove(0)
 }
 
 fn find_threshold<P: AsRef<Path>>(dir: P) -> u32 {
