@@ -66,6 +66,14 @@ sign: $(RELEASE_DIR)/manifest.txt
 	gpg --armor --detach-sig $(RELEASE_DIR)/manifest.txt \
 		> $(RELEASE_DIR)/manifest.$${fingerprint}.asc;
 
+.PHONY: verify
+verify: $(RELEASE_DIR)/manifest.txt
+	set -e; \
+	for file in $(RELEASE_DIR)/manifest.*.asc; do \
+		echo "\nVerifying: $${file}\n"; \
+		gpg --verify $${file} $(RELEASE_DIR)/manifest.txt; \
+	done;
+
 # Clean repo back to initial clone state
 .PHONY: clean
 clean:

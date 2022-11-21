@@ -41,6 +41,50 @@ security applications.
 
 [  kspp]: https://kernsec.org/wiki/index.php/Kernel_Self_Protection_Project
 
+## Usage ##
+
+### Verify ###
+
+This allows you to verify all included signatures by individuals or systems
+that have cryptographically certified that the published binaries in the
+releases folder were produced from this exact source code tree.
+
+```
+make verify
+```
+
+### Attest ###
+
+This allows you to prove that published binaries correspond with the source
+code in this repo.
+
+It is recommended to read the "attest" target in the "Makefile" to ensure you
+understand how it functions.
+
+It will preserve hashes of all binaries in tree, remove them all, build from
+scratch, then verify new hashes match the old ones.
+
+```
+make attest
+```
+
+If this target exits 0, then the attestation was successful.
+
+### Sign ###
+
+This adds a PGP detached signature into the release folder certifying that you
+successfully did a ```make attest``` and trust these binaries correspond to
+published source code.
+
+```
+make sign
+```
+
+Please make a PR to upload attestation signatures so that this trust can be
+preserved for other consumers of these binaries that may lack the resources
+to build for themselves.
+
+
 ## Development ##
 
 ### Requirements ###
@@ -66,7 +110,7 @@ make run
 make toolchain-shell
 ```
 
-### Update toolchain depedendency pins
+### Update toolchain dependency pins
 ```
 make toolchain-update
 ```
