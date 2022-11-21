@@ -11,13 +11,7 @@ USER := $(shell id -g):$(shell id -g)
 ARCH := x86_64
 , := ,
 UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-	TOTAL_CPUS := $(shell sysctl -n hw.logicalcpu)
-	CPUS := $(shell echo "$(TOTAL_CPUS) - 2" | bc)
-endif
-ifeq ($(UNAME_S),Linux)
-	CPUS := $(shell nproc)
-endif
+CPUS := $(shell docker run -it debian nproc)
 
 include $(PWD)/config/global.env
 
@@ -31,18 +25,51 @@ include $(PWD)/config/global.env
 release: \
 	fetch \
 	$(RELEASE_DIR)/aws/pcrs.txt \
-	$(RELEASE_DIR)/aws/nitro.eif
+	$(RELEASE_DIR)/aws/nitro.eif \
+	$(RELEASE_DIR)/manifest.txt
 
-$(RELEASE_DIR)/aws/pcrs.txt: $(OUT_DIR)/aws/nitro.eif
+$(RELEASE_DIR)/aws/pcrs.txt: \
+	$(OUT_DIR)/aws/nitro.eif
+	mkdir -p $(RELEASE_DIR)/aws
 	cp $(OUT_DIR)/aws/pcrs.txt $(RELEASE_DIR)/aws/pcrs.txt
 
-$(RELEASE_DIR)/aws/nitro.eif: $(OUT_DIR)/aws/nitro.eif
+$(RELEASE_DIR)/aws/nitro.eif: \
+	$(OUT_DIR)/aws/nitro.eif
+	mkdir -p $(RELEASE_DIR)/aws
 	cp $(OUT_DIR)/aws/nitro.eif $(RELEASE_DIR)/aws/nitro.eif
+
+$(RELEASE_DIR)/manifest.txt: \
+	$(RELEASE_DIR)/aws/pcrs.txt \
+	$(RELEASE_DIR)/aws/nitro.eif
+	openssl sha256 -r $(RELEASE_DIR)/aws/pcrs.txt \
+		> $(RELEASE_DIR)/manifest.txt;
+	openssl sha256 -r $(RELEASE_DIR)/aws/nitro.eif \
+		>> $(RELEASE_DIR)/nitro.eif;
+
+.PHONY: attest
+attest: $(RELEASE_DIR)/manifest.txt
+	cp $(RELEASE_DIR)/manifest.txt manifest_compare.txt
+	$(MAKE) clean
+	mkdir -p $(CACHE_DIR)
+	mv manifest_compare.txt $(CACHE_DIR)
+	$(MAKE) release
+	diff -q $(CACHE_DIR)/manifest_compare.txt $(RELEASE_DIR)/manifest.txt;
+
+.PHONY: sign
+sign: $(RELEASE_DIR)/manifest.txt
+	set -e; \
+	fingerprint=$$(\
+		gpg --list-secret-keys --with-colons \
+			| grep sec:u \
+			| sed 's/.*\([A-Z0-9]\{16\}\).*/\1/g' \
+	); \
+	gpg --armor --detach-sig $(RELEASE_DIR)/manifest.txt \
+		> $(RELEASE_DIR)/manifest.$${fingerprint}.asc;
 
 # Clean repo back to initial clone state
 .PHONY: clean
 clean:
-	rm -rf cache out
+	rm -rf cache out release/*
 	docker image rm -f local/$(NAME)-build
 
 # Launch a shell inside the toolchain container
@@ -69,11 +96,9 @@ toolchain-update:
 # Source anything required from the internet to build
 .PHONY: fetch
 fetch: \
-	$(CACHE_DIR)/$(TARGET) \
-	$(OUT_DIR)/$(TARGET) \
 	$(OUT_DIR)/toolchain.tar \
 	keys \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign \
 	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD
 
@@ -108,8 +133,8 @@ $(OUT_DIR)/$(TARGET):
 $(CACHE_DIR)/$(TARGET):
 	mkdir -p $(CACHE_DIR)/$(TARGET)
 
-
-$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD:
+$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD: \
+	$(OUT_DIR)/toolchain.tar
 	$(call toolchain,$(USER), " \
 		unset FAKETIME; \
 		cd /cache; \
@@ -126,15 +151,16 @@ $(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign:
 		--url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.sign \
 		--output $(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign
 
-$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz:
+$(CACHE_DIR)/linux-$(LINUX_VERSION).tar:
 	curl \
 		--url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.xz \
 		--output $(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz
-
-$(CACHE_DIR)/linux-$(LINUX_VERSION).tar:
 	xz -d $(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz
 
-$(CACHE_DIR)/linux-$(LINUX_VERSION): $(CACHE_DIR)/linux-$(LINUX_VERSION).tar
+$(CACHE_DIR)/linux-$(LINUX_VERSION): \
+	$(OUT_DIR)/toolchain.tar \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign
 	$(call toolchain,$(USER), " \
 		unset FAKETIME; \
 		cd /cache && \
@@ -143,7 +169,9 @@ $(CACHE_DIR)/linux-$(LINUX_VERSION): $(CACHE_DIR)/linux-$(LINUX_VERSION).tar
 		tar xf linux-$(LINUX_VERSION).tar; \
 	")
 
-$(OUT_DIR)/toolchain.tar:
+$(OUT_DIR)/toolchain.tar: \
+	$(OUT_DIR)/$(TARGET) \
+	$(CACHE_DIR)/$(TARGET)
 	DOCKER_BUILDKIT=1 \
 	docker build \
 		--tag local/$(NAME)-build \
@@ -157,14 +185,16 @@ $(OUT_DIR)/toolchain.tar:
 		.
 	docker save "local/$(NAME)-build" -o "$@"
 
-$(CONFIG_DIR)/$(TARGET)/linux.config:
+$(CONFIG_DIR)/$(TARGET)/linux.config: \
+	$(OUT_DIR)/toolchain.tar
 	$(call toolchain,$(USER)," \
 		cd /cache/linux-$(LINUX_VERSION) && \
 		make menuconfig && \
 		cp .config /config/$(TARGET)/linux.config; \
 	")
 
-$(OUT_DIR)/init:
+$(OUT_DIR)/init: \
+	$(OUT_DIR)/toolchain.tar
 	$(call toolchain,$(USER)," \
 		cd /src/init/ && \
 		unset FAKETIME && \
@@ -176,23 +206,20 @@ $(OUT_DIR)/init:
 	")
 
 $(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio: \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION) \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign
+	$(OUT_DIR)/toolchain.tar \
+	| $(CACHE_DIR)/linux-$(LINUX_VERSION)
 	$(call toolchain,$(USER)," \
 		cd /cache/linux-$(LINUX_VERSION) && \
 		gcc usr/gen_init_cpio.c -o usr/gen_init_cpio \
 	")
 
 $(OUT_DIR)/aws/rootfs.cpio: \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION) \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio \
 	$(OUT_DIR)/init \
 	$(OUT_DIR)/aws/nsm.ko
 	$(call rootfs_build,aws)
 
 $(OUT_DIR)/generic/rootfs.cpio: \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION) \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio \
 	$(OUT_DIR)/init
 	$(call rootfs_build,generic)
@@ -202,10 +229,11 @@ $(OUT_DIR)/generic/bzImage: \
 	$(call kernel_build,generic,$(ARCH))
 
 $(OUT_DIR)/aws/bzImage: \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION)
+	| $(CACHE_DIR)/linux-$(LINUX_VERSION)
 	$(call kernel_build,aws,$(ARCH))
 
-$(OUT_DIR)/aws/eif_build:
+$(OUT_DIR)/aws/eif_build: \
+	$(OUT_DIR)/toolchain.tar
 	$(call toolchain,$(USER)," \
 		unset FAKETIME; \
 		cd /src/toolchain/eif_build \
@@ -215,6 +243,7 @@ $(OUT_DIR)/aws/eif_build:
 	")
 
 $(OUT_DIR)/aws/nsm.ko: \
+	$(OUT_DIR)/toolchain.tar \
 	$(OUT_DIR)/aws/bzImage \
 	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD
 	$(call toolchain,$(USER)," \
@@ -229,15 +258,23 @@ $(OUT_DIR)/aws/nsm.ko: \
 	")
 
 $(OUT_DIR)/aws/nitro.eif: \
+	$(OUT_DIR)/toolchain.tar \
 	$(OUT_DIR)/aws/eif_build \
 	$(OUT_DIR)/aws/bzImage \
 	$(OUT_DIR)/aws/rootfs.cpio
 	$(call toolchain,$(USER)," \
+		mkdir -p /cache/aws/eif && \
+		cp /out/aws/bzImage /cache/aws/eif/ && \
+		cp /out/aws/rootfs.cpio /cache/aws/eif/ && \
+		cp /config/aws/linux.config /cache/aws/eif/ && \
+		cd /cache/aws/eif && \
+		find . -mindepth 1 -execdir touch -hcd "@0" "{}" + && \
+		find . -mindepth 1 -printf '%P\0' && \
 		/out/aws/eif_build \
-			--kernel /out/aws/bzImage \
-			--kernel_config /config/aws/linux.config \
+			--kernel /cache/aws/eif/bzImage \
+			--kernel_config /cache/aws/eif/linux.config \
 			--cmdline 'reboot=k initrd=0x2000000$(,)3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd' \
-			--ramdisk /out/aws/rootfs.cpio \
+			--ramdisk /cache/aws/eif/rootfs.cpio \
 			--output /out/aws/nitro.eif \
 			--pcrs_output /out/aws/pcrs.txt; \
 	")
@@ -307,6 +344,7 @@ define rootfs_build
 		cpio -itv < /out/$(1)/rootfs.cpio && \
 		sha256sum /out/$(1)/rootfs.cpio; \
 	")
+	touch $(OUT_DIR)/$(1)/rootfs.cpio;
 endef
 
 define kernel_build
@@ -320,4 +358,5 @@ define kernel_build
 		cp arch/x86_64/boot/bzImage /out/$(1)/bzImage && \
 		sha256sum /out/$(1)/bzImage; \
 	")
+	touch $(OUT_DIR)/$(1)/bzImage;
 endef
