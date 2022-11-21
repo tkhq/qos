@@ -54,6 +54,8 @@ const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 	"DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
 
+const TAP_MSG: &str = "Tap your YubiKey";
+
 /// Client errors.
 #[derive(Debug)]
 pub enum Error {
@@ -120,6 +122,7 @@ impl PairOrYubi {
 	fn sign(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
 		match self {
 			Self::Yubi((ref mut yubi, ref pin)) => {
+				println!("{TAP_MSG}");
 				crate::yubikey::sign_data(yubi, data, pin).map_err(Into::into)
 			}
 			Self::Pair(ref pair) => pair.sign(data).map_err(Into::into),
@@ -129,6 +132,7 @@ impl PairOrYubi {
 	fn decrypt(&mut self, payload: &[u8]) -> Result<Vec<u8>, Error> {
 		match self {
 			Self::Yubi((ref mut yubi, ref pin)) => {
+				println!("{TAP_MSG}");
 				let shared_secret =
 					crate::yubikey::shared_secret(yubi, payload, pin)?;
 				let encrypt_pub = crate::yubikey::key_agree_public_key(yubi)?;
@@ -198,6 +202,7 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	)
 	.map_err(Error::GenerateSign)?;
 
+	println!("{TAP_MSG}");
 	let _encrypt_public_key_bytes = generate_signed_certificate(
 		&mut yubikey,
 		KEY_AGREEMENT_SLOT,
