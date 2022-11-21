@@ -354,8 +354,6 @@ use qos_core::{
 
 mod services;
 
-use services::PairOrYubi;
-
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ALIAS: &str = "alias";
@@ -378,7 +376,7 @@ const NAMESPACE_DIR: &str = "namespace-dir";
 const MANIFEST_DIR: &str = "manifest-dir";
 const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
 const PUB_PATH: &str = "pub-path";
-const PIN: &str = "pin";
+const YUBIKEY: &str = "yubikey";
 const SECRET_PATH: &str = "secret-path";
 const SHARE_PATH: &str = "share-path";
 const OUTPUT_PATH: &str = "output-path";
@@ -632,9 +630,9 @@ impl Command {
 			.required(true)
 	}
 	// TODO(zeke): hidden pin entry so its not saved in history.
-	fn pin_token() -> Token {
-		Token::new(PIN, "UNSAFE PLAINTEXT: pin for yubikey")
-			.takes_value(true)
+	fn yubikey_token() -> Token {
+		Token::new(YUBIKEY, "Flat to indicate using a yubikey for signing")
+			.takes_value(false)
 			.required(false)
 			.forbids(vec![SECRET_PATH])
 	}
@@ -645,7 +643,7 @@ impl Command {
 		)
 		.takes_value(true)
 		.required(false)
-		.forbids(vec![PIN])
+		.forbids(vec![YUBIKEY])
 	}
 	fn share_path_token() -> Token {
 		Token::new(SHARE_PATH, "Path to the encrypted quorum key share.")
@@ -702,7 +700,7 @@ impl Command {
 
 	fn after_genesis() -> Parser {
 		Parser::new()
-			.token(Self::pin_token())
+			.token(Self::yubikey_token())
 			.token(Self::secret_path_token())
 			.token(Self::share_path_token())
 			.token(Self::alias_token())
@@ -736,7 +734,7 @@ impl Command {
 
 	fn approve_manifest() -> Parser {
 		Parser::new()
-			.token(Self::pin_token())
+			.token(Self::yubikey_token())
 			.token(Self::secret_path_token())
 			.token(Self::manifest_dir_token())
 			.token(Self::qos_build_fingerprints_token())
@@ -763,7 +761,7 @@ impl Command {
 
 	fn proxy_re_encrypt_share() -> Parser {
 		Parser::new()
-			.token(Self::pin_token())
+			.token(Self::yubikey_token())
 			.token(Self::secret_path_token())
 			.token(Self::attestation_dir_token())
 			.token(Self::share_path_token())
@@ -793,7 +791,7 @@ impl Command {
 	}
 
 	fn provision_yubikey() -> Parser {
-		Parser::new().token(Self::pub_path_token()).token(Self::pin_token())
+		Parser::new().token(Self::pub_path_token()).token(Self::yubikey_token())
 	}
 }
 
@@ -971,10 +969,8 @@ impl ClientOpts {
 			.to_string()
 	}
 
-	fn pin(&self) -> Option<Vec<u8>> {
-		self.parsed
-			.single(PIN)
-			.map(|pin_string| pin_string.clone().into_bytes())
+	fn yubikey(&self) -> bool {
+		self.parsed.flag(YUBIKEY).unwrap_or(false)
 	}
 
 	fn unsafe_skip_attestation(&self) -> bool {
@@ -1072,8 +1068,8 @@ mod handlers {
 	use super::services::{ApproveManifestArgs, ProxyReEncryptShareArgs};
 	use crate::{
 		cli::{
-			services::{self, GenerateManifestArgs},
-			ClientOpts, PairOrYubi, ProtocolMsg,
+			services::{self, GenerateManifestArgs, PairOrYubi},
+			ClientOpts, ProtocolMsg,
 		},
 		request,
 	};
@@ -1161,14 +1157,7 @@ mod handlers {
 	}
 
 	pub(super) fn provision_yubikey(opts: &ClientOpts) {
-		let pin = if let Some(pin) = opts.pin() {
-			pin
-		} else {
-			println!("No `--pin` provided - using default pin.");
-			crate::yubikey::DEFAULT_PIN.to_vec()
-		};
-
-		if let Err(e) = services::provision_yubikey(opts.pub_path(), &pin) {
+		if let Err(e) = services::provision_yubikey(opts.pub_path()) {
 			eprintln!("Error: {:?}", e);
 			std::process::exit(1);
 		}
@@ -1187,15 +1176,7 @@ mod handlers {
 	}
 
 	pub(super) fn after_genesis(opts: &ClientOpts) {
-		let pair = match PairOrYubi::from_inputs(opts.pin(), opts.secret_path())
-		{
-			Err(e) => {
-				eprintln!("Error: {:?}", e);
-				std::process::exit(1);
-			}
-			Ok(p) => p,
-		};
-
+		let pair = get_pair_or_yubi(opts);
 		if let Err(e) = services::after_genesis(
 			pair,
 			opts.share_path(),
@@ -1227,14 +1208,7 @@ mod handlers {
 	}
 
 	pub(super) fn approve_manifest(opts: &ClientOpts) {
-		let pair = match PairOrYubi::from_inputs(opts.pin(), opts.secret_path())
-		{
-			Err(e) => {
-				eprintln!("Error: {:?}", e);
-				std::process::exit(1);
-			}
-			Ok(p) => p,
-		};
+		let pair = get_pair_or_yubi(opts);
 
 		if let Err(e) = services::approve_manifest(ApproveManifestArgs {
 			pair,
@@ -1271,14 +1245,7 @@ mod handlers {
 	}
 
 	pub(super) fn proxy_re_encrypt_share(opts: &ClientOpts) {
-		let pair = match PairOrYubi::from_inputs(opts.pin(), opts.secret_path())
-		{
-			Err(e) => {
-				eprintln!("Error: {:?}", e);
-				std::process::exit(1);
-			}
-			Ok(p) => p,
-		};
+		let pair = get_pair_or_yubi(opts);
 
 		if let Err(e) =
 			services::proxy_re_encrypt_share(ProxyReEncryptShareArgs {
@@ -1314,5 +1281,15 @@ mod handlers {
 
 	pub(super) fn generate_manifest_envelope(opts: &ClientOpts) {
 		services::generate_manifest_envelope(opts.manifest_dir());
+	}
+
+	fn get_pair_or_yubi(opts: &ClientOpts) -> PairOrYubi {
+		match PairOrYubi::from_inputs(opts.yubikey(), opts.secret_path()) {
+			Err(e) => {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+			Ok(p) => p,
+		}
 	}
 }

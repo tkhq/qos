@@ -69,6 +69,8 @@ pub enum Error {
 	P256(qos_p256::P256Error),
 	/// Failed to read share
 	ReadShare,
+	/// An error trying to read a pin from the terminal
+	PinEntryError(std::io::Error),
 }
 
 impl From<YubiKeyError> for Error {
@@ -90,21 +92,29 @@ pub(crate) enum PairOrYubi {
 
 impl PairOrYubi {
 	pub(crate) fn from_inputs(
-		pin: Option<Vec<u8>>,
+		yubikey_flag: bool,
 		secret_path: Option<String>,
 	) -> Result<Self, Error> {
-		let result = match (pin, secret_path) {
-			(Some(pin), None) => {
+		let result = match (yubikey_flag, secret_path) {
+			(true, None) => {
 				let yubi = open_single()?;
-				PairOrYubi::Yubi((yubi, pin))
+
+				let stdin = io::stdin();
+				let stdin_locked = stdin.lock();
+				let mut prompter =
+					Prompter { reader: stdin_locked, writer: io::stdout() };
+
+				let pin = prompter.prompt_pin()?;
+
+				PairOrYubi::Yubi((yubi, pin.as_bytes().to_vec()))
 			}
-			(None, Some(path)) => {
+			(false, Some(path)) => {
 				let pair = P256Pair::from_hex_file(path)?;
 				PairOrYubi::Pair(pair)
 			}
-			(None, None) => panic!("Need either pin or secret path"),
-			(Some(_), Some(_)) => {
-				panic!("Cannot have both pin and secret path")
+			(false, None) => panic!("Need either yubikey flag or secret path"),
+			(true, Some(_)) => {
+				panic!("Cannot have both yubikey flag and secret path")
 			}
 		};
 
@@ -174,14 +184,21 @@ pub(crate) fn generate_file_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 
 pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	pub_path: P,
-	pin: &[u8],
 ) -> Result<(), Error> {
 	let mut yubikey = YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
+
+	let stdin = io::stdin();
+	let stdin_locked = stdin.lock();
+	let mut prompter = Prompter { reader: stdin_locked, writer: io::stdout() };
+
+	println!("You need to enter a pin that will be used to authorize signing and encryption requests.");
+	let pin = prompter.prompt_pin()?.as_bytes().to_vec();
+	drop(prompter);
 
 	let _sign_public_key_bytes = generate_signed_certificate(
 		&mut yubikey,
 		SIGNING_SLOT,
-		pin,
+		&pin,
 		MgmKey::default(),
 		TouchPolicy::Always,
 	)
@@ -190,7 +207,7 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	let _encrypt_public_key_bytes = generate_signed_certificate(
 		&mut yubikey,
 		KEY_AGREEMENT_SLOT,
-		pin,
+		&pin,
 		MgmKey::default(),
 		TouchPolicy::Always,
 	)
@@ -1563,6 +1580,15 @@ where
 
 	fn prompt_is_yes(&mut self, question: &str) -> bool {
 		self.prompt(question) == "yes"
+	}
+
+	fn prompt_pin(&mut self) -> Result<String, Error> {
+		rpassword::prompt_password_from_bufread(
+			&mut self.reader,
+			&mut self.writer,
+			"Enter your pin: ",
+		)
+		.map_err(Error::PinEntryError)
 	}
 }
 
