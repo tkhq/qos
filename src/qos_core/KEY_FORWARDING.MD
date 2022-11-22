@@ -1,18 +1,19 @@
 ## Goal
 
-Boot new QOS nodes without manually posting shards. Instead, a new QOS node should be able to provision a quorum key from another, already provisioned node. The new QOS nodes should be in the same namespace as the ones they are requesting the Quorum Key from.
+Boot new QOS nodes without manually posting shards. Instead, a new QOS node should be able to provision a Quorum Key from another, already provisioned node. The new QOS nodes should be in the same namespace as the ones they are requesting the Quorum Key from.
 
 ## New terms
 
-**New Node**: The un-provisioned node, requesting a quorum key.
-**Original Node**: The fully provisioned node that the quorum key is requested from.
-**Client**: An entity that can make arbitrary requests to QOS nodes. For the sake of having a concrete mental model in the below descriptions, we can think of the client as a script that takes as inputs a manifest and the IP address of the new node + old node, and makes the necessary request to complete key forwarding process.
+**New Node**: The un-provisioned node, requesting a Quorum Key.
+**Original Node**: The fully provisioned node that the Quorum Key is requested from.
+**Client**: An entity that can make arbitrary requests to QOS nodes. For the sake of having a concrete mental model in the below descriptions, we can think of the client as a script that takes as inputs a manifest and the IP address of the New Node + Original Node, and makes the necessary request to complete key forwarding process.
 **New Manifest**: The manifest used to boot the New Node.
 **Local Manifest**: The manifest used to boot the Original Node. It is local relative to the Original Node.
 
 ## Other relevant terms
 
 **Nonce**: A strictly monotonically increasing counter used to track the latest manifest of a Namespace. Concretely, anytime a new manifest is created for a Namespace, we expect it to have a Nonce 1 greater then the previous most recent manifest.
+**Pivot App**: The application a Node is intended to run. The application is also commonly referred to as an Enclave Application.
 
 ## Routine
 
@@ -76,5 +77,5 @@ The details for how QOS nodes communicate with each other can vary, but for the 
 6) The New Node processes the request by
     1) Decrypt the encrypted Quorum Key in the request with the Ephemeral Key.
     1) Check that the decrypted Quorum Key public key matches the one specified in the New Manifest.
-    1) Writes the Quorum Key to file system, at which point QOS will automatically pivot to running the Pivot Binary.
+    1) Write the Quorum Key to file system, at which point New Node will automatically pivot to running the Pivot App.
     1) Return `InjectBootKeyForwardResponse { }` , an empty struct signify that it was successful.
