@@ -22,12 +22,11 @@ The details for how QOS nodes communicate with each other can vary, but for the 
     }
     ```
 
-
 2) The New Node processes the request by
     1) Check signatures over the manifest envelope
-    1) Generate an Ephemeral key
-    1) Make an attestation request, placing the manifest hash in the `user_data` field and the ephemeral key in the `public_key` field.
-    1) Return the COSE SIgn1 encoded attestation document
+    1) Generate an Ephemeral Key
+    1) Make an attestation request, placing the manifest hash in the `user_data` field and the Ephemeral Key public key in the `public_key` field.
+    1) Return the COSE Sign1 encoded attestation document
 
         ```rust
         struct PreBootKeyForwardAttestationResponse {
