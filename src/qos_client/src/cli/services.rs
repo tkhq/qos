@@ -227,14 +227,24 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	Ok(())
 }
 
-// TODO: verify PCR3
+pub(crate) struct BootGenesisArgs<'a, P: AsRef<Path>> {
+	pub uri: &'a str,
+	pub namespace_dir: P,
+	pub share_set_dir: P,
+	pub qos_build_fingerprints_path: P,
+	pub pcr3_preimage_path: P,
+	pub unsafe_skip_attestation: bool,
+}
+
 pub(crate) fn boot_genesis<P: AsRef<Path>>(
-	uri: &str,
-	namespace_dir: P,
-	share_set_dir: P,
-	qos_build_fingerprints_path: P,
-	pcr3_preimage_path: P,
-	unsafe_skip_attestation: bool,
+	BootGenesisArgs {
+		uri,
+		namespace_dir,
+		share_set_dir,
+		qos_build_fingerprints_path,
+		pcr3_preimage_path,
+		unsafe_skip_attestation,
+	}: BootGenesisArgs<P>,
 ) {
 	let genesis_set = get_genesis_set(&share_set_dir);
 

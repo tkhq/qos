@@ -1178,14 +1178,14 @@ mod handlers {
 
 	// TODO: verify PCRs
 	pub(super) fn boot_genesis(opts: &ClientOpts) {
-		services::boot_genesis(
-			&opts.path_message(),
-			opts.namespace_dir(),
-			opts.share_set_dir(),
-			opts.qos_build_fingerprints(),
-			opts.pcr3_preimage_path(),
-			opts.unsafe_skip_attestation(),
-		);
+		services::boot_genesis(services::BootGenesisArgs {
+			uri: &opts.path_message(),
+			namespace_dir: opts.namespace_dir(),
+			share_set_dir: opts.share_set_dir(),
+			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
+			pcr3_preimage_path: opts.pcr3_preimage_path(),
+			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+		});
 	}
 
 	pub(super) fn after_genesis(opts: &ClientOpts) {
