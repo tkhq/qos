@@ -1191,13 +1191,15 @@ mod handlers {
 	pub(super) fn after_genesis(opts: &ClientOpts) {
 		let pair = get_pair_or_yubi(opts);
 		if let Err(e) = services::after_genesis(
-			pair,
-			opts.share_path(),
-			&opts.alias(),
-			opts.namespace_dir(),
-			opts.qos_build_fingerprints(),
-			opts.pcr3_preimage_path(),
-			opts.unsafe_skip_attestation(),
+			services::AfterGenesisArgs {
+				pair,
+				share_path: opts.share_path(),
+				alias: opts.alias(),
+				namespace_dir: opts.namespace_dir(),
+				qos_build_fingerprints_path: opts.qos_build_fingerprints(),
+				pcr3_preimage_path: opts.pcr3_preimage_path(),
+				unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+			}
 		) {
 			println!("Error: {:?}", e);
 			std::process::exit(1);

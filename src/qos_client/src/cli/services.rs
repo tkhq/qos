@@ -317,15 +317,25 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	);
 }
 
-pub(crate) fn after_genesis<P: AsRef<Path>>(
-	mut pair: PairOrYubi,
-	share_path: P,
-	alias: &str,
-	namespace_dir: P,
-	qos_build_fingerprints_path: P,
-	pcr3_preimage_path: P,
-	unsafe_skip_attestation: bool,
-) -> Result<(), Error> {
+pub(crate) struct AfterGenesisArgs<P: AsRef<Path>> {
+	pub pair: PairOrYubi,
+	pub share_path: P,
+	pub alias: String,
+	pub namespace_dir: P,
+	pub qos_build_fingerprints_path: P,
+	pub pcr3_preimage_path: P,
+	pub unsafe_skip_attestation: bool,
+}
+
+pub(crate) fn after_genesis<P: AsRef<Path>>(AfterGenesisArgs {
+	mut pair,
+	share_path,
+	alias,
+	namespace_dir,
+	qos_build_fingerprints_path,
+	pcr3_preimage_path,
+	unsafe_skip_attestation,
+}: AfterGenesisArgs<P>) -> Result<(), Error> {
 	let attestation_doc_path =
 		namespace_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
 	let genesis_set_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
