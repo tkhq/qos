@@ -383,6 +383,7 @@ const OUTPUT_PATH: &str = "output-path";
 const QUORUM_KEY_PATH: &str = "quorum-key-path";
 const MANIFEST_APPROVALS_DIR: &str = "manifest-approvals-dir";
 const MANIFEST_PATH: &str = "manifest-path";
+const MANIFEST_ENVELOPE_PATH: &str = "manifest-envelope-path";
 
 /// Commands for the Client CLI.
 ///
@@ -676,6 +677,11 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn manifest_envelope_path_token() -> Token {
+		Token::new(MANIFEST_ENVELOPE_PATH, "Path to a manifest envelope")
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -772,7 +778,7 @@ impl Command {
 	fn boot_standard() -> Parser {
 		Self::base()
 			.token(Self::pivot_path_token())
-			.token(Self::manifest_dir_token())
+			.token(Self::manifest_envelope_path_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 	}
@@ -789,7 +795,7 @@ impl Command {
 			.token(Self::share_path_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::manifest_set_dir_token())
-			.token(Self::manifest_dir_token())
+			.token(Self::manifest_envelope_path_token())
 			.token(Self::alias_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
@@ -1011,6 +1017,13 @@ impl ClientOpts {
 		self.parsed
 			.single(MANIFEST_PATH)
 			.expect("Missing `--manifest-path`")
+			.to_string()
+	}
+
+	fn manifest_envelope_path(&self) -> String {
+		self.parsed
+			.single(MANIFEST_ENVELOPE_PATH)
+			.expect("Missing `--manifest-envelope-path`")
 			.to_string()
 	}
 
@@ -1279,13 +1292,16 @@ mod handlers {
 	}
 
 	pub(super) fn boot_standard(opts: &ClientOpts) {
-		services::boot_standard(
-			&opts.path_message(),
-			opts.pivot_path(),
-			opts.manifest_dir(),
-			opts.pcr3_preimage_path(),
-			opts.unsafe_skip_attestation(),
-		);
+		if let Err(e) = services::boot_standard(services::BootStandardArgs{
+			uri: opts.path_message(),
+			pivot_path: opts.pivot_path(),
+			manifest_envelope_path: opts.manifest_envelope_path(),
+			pcr3_preimage_path: opts.pcr3_preimage_path(),
+			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+		}) {
+			println!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn get_attestation_doc(opts: &ClientOpts) {
@@ -1303,7 +1319,7 @@ mod handlers {
 				pair,
 				share_path: opts.share_path(),
 				attestation_dir: opts.attestation_dir(),
-				manifest_dir: opts.manifest_dir(),
+				manifest_envelope_path: opts.manifest_envelope_path(),
 				pcr3_preimage_path: opts.pcr3_preimage_path(),
 				alias: opts.alias(),
 				manifest_set_dir: opts.manifest_set_dir(),

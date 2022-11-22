@@ -314,12 +314,13 @@ async fn boot_e2e() {
 		.unwrap()
 		.success());
 
-	// -- CLIENT broadcast boot standard instruction
+		// -- CLIENT broadcast boot standard instruction
+	let manifest_envelope_path = format!("{}/manifest_envelope", &*boot_dir, );
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
 			"boot-standard",
-			"--manifest-dir",
-			&*boot_dir,
+			"--manifest-envelope-path",
+			&manifest_envelope_path,
 			"--pivot-path",
 			PIVOT_OK2_PATH,
 			"--host-port",
@@ -369,8 +370,8 @@ async fn boot_e2e() {
 				&secret_path,
 				"--attestation-dir",
 				&*attestation_dir,
-				"--manifest-dir",
-				&*boot_dir,
+				"--manifest-envelope-path",
+				&manifest_envelope_path,
 				"--pcr3-preimage-path",
 				"./mock/namespaces/pcr3-preimage.txt",
 				"--manifest-set-dir",

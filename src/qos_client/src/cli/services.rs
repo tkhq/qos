@@ -74,7 +74,9 @@ pub enum Error {
 	PinEntryError(std::io::Error),
 	FailedToReadQuorumPublicKey(qos_p256::P256Error),
 	FailedToReadManifestFile(std::io::Error),
-	FiledDidNotHaveManifest
+	FileDidNotHaveValidManifest,
+	FailedToReadManifestEnvelopeFile(std::io::Error),
+	FileDidNotHaveValidManifestEnvelope,
 }
 
 impl From<YubiKeyError> for Error {
@@ -709,25 +711,36 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 		&manifest_envelope
 			.try_to_vec()
 			.expect("Failed to serialize manifest envelope"),
-		"Manifest Approval",
+		"Manifest Envelope",
 	);
 
 	Ok(())
 }
 
+
+pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
+	pub uri: String,
+	pub pivot_path: P,
+	pub manifest_envelope_path: P,
+	pub pcr3_preimage_path: P,
+	pub unsafe_skip_attestation: bool,
+}
+
 pub(crate) fn boot_standard<P: AsRef<Path>>(
-	uri: &str,
-	pivot_path: P,
-	manifest_dir: P,
-	pcr3_preimage_path: P,
-	unsafe_skip_attestation: bool,
-) {
+	BootStandardArgs {
+		uri,
+		pivot_path,
+		manifest_envelope_path,
+		pcr3_preimage_path,
+		unsafe_skip_attestation,
+	}: BootStandardArgs<P>
+) -> Result<(), Error> {
 	// Read in pivot binary
 	let pivot =
 		fs::read(pivot_path.as_ref()).expect("Failed to read pivot binary");
 
 	// Create manifest envelope
-	let manifest_envelope = find_manifest_envelope(manifest_dir);
+	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;
 	let manifest = manifest_envelope.manifest.clone();
 
 	let req = ProtocolMsg::BootStandardRequest {
@@ -736,7 +749,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	};
 	// Broadcast boot standard instruction and extract the attestation doc from
 	// the response.
-	let cose_sign1 = match request::post(uri, &req).unwrap() {
+	let cose_sign1 = match request::post(&uri, &req).unwrap() {
 		ProtocolMsg::BootStandardResponse {
 			nsm_response: NsmResponse::Attestation { document },
 		} => document,
@@ -768,6 +781,8 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 				.expect("Ephemeral key not valid public key"),
 		);
 	}
+
+	Ok(())
 }
 
 pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
@@ -809,7 +824,7 @@ pub(crate) struct ProxyReEncryptShareArgs<P: AsRef<Path>> {
 	pub share_path: P,
 	pub attestation_dir: P,
 	pub pcr3_preimage_path: P,
-	pub manifest_dir: P,
+	pub manifest_envelope_path: P,
 	pub manifest_set_dir: P,
 	pub alias: String,
 	pub unsafe_skip_attestation: bool,
@@ -829,16 +844,15 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		attestation_dir,
 		pcr3_preimage_path,
 		manifest_set_dir,
-		manifest_dir,
+		manifest_envelope_path,
 		alias,
 		unsafe_skip_attestation,
 		unsafe_eph_path_override,
 		unsafe_auto_confirm,
 	}: ProxyReEncryptShareArgs<P>,
 ) -> Result<(), Error> {
-	let manifest_envelope = find_manifest_envelope(&manifest_dir);
-	let attestation_doc =
-		find_attestation_doc(&attestation_dir, unsafe_skip_attestation);
+	let manifest_envelope = read_manifest_envelope(&manifest_envelope_path)?;
+	let attestation_doc = find_attestation_doc(&attestation_dir, unsafe_skip_attestation);
 	let encrypted_share = std::fs::read(share_path).map_err(|e| {
 		eprintln!("{:?}", e);
 		Error::ReadShare
@@ -1339,11 +1353,9 @@ fn find_approvals<P: AsRef<Path>>(
 }
 
 fn read_manifest<P: AsRef<Path>>(file: P) -> Result<Manifest, Error> {
-	let buf = fs::read(file
-	
-	).map_err(Error::FailedToReadManifestFile)?;
+	let buf = fs::read(file).map_err(Error::FailedToReadManifestFile)?;
 	Manifest::try_from_slice(&buf)
-		.map_err(|_| Error::FiledDidNotHaveManifest)
+		.map_err(|_| Error::FileDidNotHaveValidManifest)
 }
 
 fn find_attestation_doc<P: AsRef<Path>>(
@@ -1375,30 +1387,10 @@ fn find_attestation_doc<P: AsRef<Path>>(
 	a.remove(0)
 }
 
-fn find_manifest_envelope<P: AsRef<Path>>(dir: P) -> ManifestEnvelope {
-	let mut a: Vec<_> = find_file_paths(&dir)
-		.iter()
-		.map(|p| {
-			(p, p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
-		})
-		.filter_map(|(path, file)| {
-			if file == MANIFEST_ENVELOPE {
-				let manifest_envelope =
-					fs::read(path).expect("Failed to read manifest envelope");
-
-				Some(
-					ManifestEnvelope::try_from_slice(&manifest_envelope)
-						.expect("Could not decode manifest envelope"),
-				)
-			} else {
-				None
-			}
-		})
-		.collect();
-
-	assert_eq!(a.len(), 1, "Not exactly one manifest envelope in directory");
-
-	a.remove(0)
+fn read_manifest_envelope<P: AsRef<Path>>(file: P) -> Result<ManifestEnvelope, Error> {
+	let buf = fs::read(file).map_err(Error::FailedToReadManifestEnvelopeFile)?;
+	ManifestEnvelope::try_from_slice(&buf)
+		.map_err(|_|Error::FileDidNotHaveValidManifestEnvelope)
 }
 
 fn find_attestation_approval<P: AsRef<Path>>(dir: P) -> Approval {
