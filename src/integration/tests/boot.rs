@@ -94,8 +94,8 @@ async fn boot_e2e() {
 			"./mock/keys/manifest-set",
 			"--share-set-dir",
 			"./mock/keys/share-set",
-			"--namespace-dir",
-			"./mock/namespaces/quit-coding-to-vape"
+			"--quorum-key-path",
+			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub"
 		])
 		.spawn()
 		.unwrap()
@@ -188,8 +188,8 @@ async fn boot_e2e() {
 				"./mock/keys/manifest-set",
 				"--share-set-dir",
 				"./mock/keys/share-set",
-				"--namespace-dir",
-				"./mock/namespaces/quit-coding-to-vape",
+				"--quorum-key-path",
+				"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
 				"--alias",
 				alias,
 			])
