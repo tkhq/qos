@@ -77,6 +77,7 @@ pub enum Error {
 	FileDidNotHaveValidManifest,
 	FailedToReadManifestEnvelopeFile(std::io::Error),
 	FileDidNotHaveValidManifestEnvelope,
+	FailedToReadAttestationDoc(std::io::Error),
 }
 
 impl From<YubiKeyError> for Error {
@@ -787,7 +788,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 
 pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 	uri: &str,
-	attestation_dir: P,
+	attestation_doc_path: P,
 ) {
 	let (cose_sign1, manifest_envelope) =
 		match request::post(uri, &ProtocolMsg::LiveAttestationDocRequest) {
@@ -802,27 +803,19 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 			r => panic!("Unexpected response: {:?}", r),
 		};
 
-	let attestation_doc_path =
-		attestation_dir.as_ref().join(STANDARD_ATTESTATION_DOC_FILE);
 	write_with_msg(
 		&attestation_doc_path,
 		&cose_sign1,
 		"COSE Sign1 Attestation Doc",
-	);
-
-	let manifest_envelope_path =
-		attestation_dir.as_ref().join(MANIFEST_ENVELOPE);
-	write_with_msg(
-		&manifest_envelope_path,
-		&manifest_envelope.try_to_vec().expect("borsh works"),
-		"ManifestEnvelope",
 	);
 }
 
 pub(crate) struct ProxyReEncryptShareArgs<P: AsRef<Path>> {
 	pub pair: PairOrYubi,
 	pub share_path: P,
-	pub attestation_dir: P,
+	pub attestation_doc_path: P,
+	pub approval_path: P,
+	pub eph_wrapped_share_path: P,
 	pub pcr3_preimage_path: P,
 	pub manifest_envelope_path: P,
 	pub manifest_set_dir: P,
@@ -841,7 +834,9 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	ProxyReEncryptShareArgs {
 		mut pair,
 		share_path,
-		attestation_dir,
+		attestation_doc_path,
+		approval_path,
+		eph_wrapped_share_path,
 		pcr3_preimage_path,
 		manifest_set_dir,
 		manifest_envelope_path,
@@ -852,7 +847,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	}: ProxyReEncryptShareArgs<P>,
 ) -> Result<(), Error> {
 	let manifest_envelope = read_manifest_envelope(&manifest_envelope_path)?;
-	let attestation_doc = find_attestation_doc(&attestation_dir, unsafe_skip_attestation);
+	let attestation_doc = read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation);
 	let encrypted_share = std::fs::read(share_path).map_err(|e| {
 		eprintln!("{:?}", e);
 		Error::ReadShare
@@ -929,12 +924,9 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	.try_to_vec()
 	.expect("Could not serialize Approval");
 
-	let approval_path =
-		attestation_dir.as_ref().join(ATTESTATION_APPROVAL_FILE);
 	write_with_msg(&approval_path, &approval, "Share Set Approval");
 
-	let share_path = attestation_dir.as_ref().join(EPH_WRAPPED_SHARE_FILE);
-	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
+	write_with_msg(&eph_wrapped_share_path, &share, "Ephemeral key wrapped share");
 
 	drop(pair);
 
@@ -1358,33 +1350,17 @@ fn read_manifest<P: AsRef<Path>>(file: P) -> Result<Manifest, Error> {
 		.map_err(|_| Error::FileDidNotHaveValidManifest)
 }
 
-fn find_attestation_doc<P: AsRef<Path>>(
-	dir: P,
+fn read_attestation_doc<P: AsRef<Path>>(
+	path: P,
 	unsafe_skip_attestation: bool,
 ) -> AttestationDoc {
-	let mut a: Vec<_> = find_file_paths(&dir)
-		.iter()
-		.map(|p| {
-			(p, p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
-		})
-		.filter_map(|(path, file)| {
-			if file == STANDARD_ATTESTATION_DOC_FILE {
-				let cose_sign1_der =
-					fs::read(path).expect("Failed to read attestation doc");
+	let cose_sign1_der =
+		fs::read(path).map_err(Error::FailedToReadAttestationDoc);
 
-				Some(extract_attestation_doc(
-					&cose_sign1_der,
-					unsafe_skip_attestation,
-				))
-			} else {
-				None
-			}
-		})
-		.collect();
-
-	assert_eq!(a.len(), 1, "Not exactly one attestation doc");
-
-	a.remove(0)
+	Ok(extract_attestation_doc(
+		&cose_sign1_der,
+		unsafe_skip_attestation,
+	))
 }
 
 fn read_manifest_envelope<P: AsRef<Path>>(file: P) -> Result<ManifestEnvelope, Error> {
