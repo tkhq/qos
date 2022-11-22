@@ -381,6 +381,8 @@ const SECRET_PATH: &str = "secret-path";
 const SHARE_PATH: &str = "share-path";
 const OUTPUT_PATH: &str = "output-path";
 const QUORUM_KEY_PATH: &str = "quorum-key-path";
+const MANIFEST_APPROVALS_DIR: &str = "manifest-approvals-dir";
+const MANIFEST_PATH: &str = "manifest-path";
 
 /// Commands for the Client CLI.
 ///
@@ -612,6 +614,14 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn manifest_approvals_dir_token() -> Token {
+		Token::new(
+			MANIFEST_APPROVALS_DIR,
+			"Directory where the approvals for the manifest are kept"
+		)
+		.takes_value(true)
+		.required(true)
+	}
 	fn alias_token() -> Token {
 		Token::new(ALIAS, "Alias for identifying the key pair")
 			.takes_value(true)
@@ -658,6 +668,11 @@ impl Command {
 	}
 	fn quorum_key_path_token() -> Token {
 		Token::new(QUORUM_KEY_PATH, "The path to the quorum public key")
+			.takes_value(true)
+			.required(true)
+	}
+	fn manifest_path_token() -> Token {
+		Token::new(MANIFEST_PATH, "The path to the manifest")
 			.takes_value(true)
 			.required(true)
 	}
@@ -742,7 +757,8 @@ impl Command {
 		Parser::new()
 			.token(Self::yubikey_token())
 			.token(Self::secret_path_token())
-			.token(Self::manifest_dir_token())
+			.token(Self::manifest_path_token())
+			.token(Self::manifest_approvals_dir_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::pivot_build_fingerprints_token())
@@ -785,7 +801,9 @@ impl Command {
 	}
 
 	fn generate_manifest_envelope() -> Parser {
-		Parser::new().token(Self::manifest_dir_token())
+		Parser::new()
+			.token(Self::manifest_approvals_dir_token())
+			.token(Self::manifest_path_token())
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -917,6 +935,13 @@ impl ClientOpts {
 			.to_string()
 	}
 
+	fn manifest_approvals_dir(&self) -> String {
+		self.parsed
+			.single(MANIFEST_APPROVALS_DIR)
+			.expect("`--manifest-approval-dir` is a required arg")
+			.to_string()
+	}
+
 	fn qos_build_fingerprints(&self) -> String {
 		self.parsed
 			.single(QOS_BUILD_FINGERPRINTS)
@@ -979,6 +1004,13 @@ impl ClientOpts {
 		self.parsed
 			.single(QUORUM_KEY_PATH)
 			.expect("Missing `--quorum-key-path`")
+			.to_string()
+	}
+
+	fn manifest_path(&self) -> String {
+		self.parsed
+			.single(MANIFEST_PATH)
+			.expect("Missing `--manifest-path`")
 			.to_string()
 	}
 
@@ -1230,7 +1262,8 @@ mod handlers {
 
 		if let Err(e) = services::approve_manifest(ApproveManifestArgs {
 			pair,
-			manifest_dir: opts.manifest_dir(),
+			manifest_path: opts.manifest_path(),
+			manifest_approvals_dir: opts.manifest_approvals_dir(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
@@ -1298,7 +1331,13 @@ mod handlers {
 	}
 
 	pub(super) fn generate_manifest_envelope(opts: &ClientOpts) {
-		services::generate_manifest_envelope(opts.manifest_dir());
+		if let Err(e) = services::generate_manifest_envelope(
+			opts.manifest_approvals_dir(),
+			opts.manifest_path()
+		) {
+			eprintln!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	fn get_pair_or_yubi(opts: &ClientOpts) -> PairOrYubi {

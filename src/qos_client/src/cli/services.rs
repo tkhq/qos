@@ -73,6 +73,8 @@ pub enum Error {
 	/// An error trying to read a pin from the terminal
 	PinEntryError(std::io::Error),
 	FailedToReadQuorumPublicKey(qos_p256::P256Error),
+	FailedToReadManifestFile(std::io::Error),
+	FiledDidNotHaveManifest
 }
 
 impl From<YubiKeyError> for Error {
@@ -499,7 +501,8 @@ fn extract_nitro_config<P: AsRef<Path>>(
 
 pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
 	pub pair: PairOrYubi,
-	pub manifest_dir: P,
+	pub manifest_path: P,
+	pub manifest_approvals_dir: P,
 	pub qos_build_fingerprints_path: P,
 	pub pcr3_preimage_path: P,
 	pub pivot_build_fingerprints_path: P,
@@ -515,7 +518,8 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	let ApproveManifestArgs {
 		mut pair,
-		manifest_dir,
+		manifest_path,
+		manifest_approvals_dir,
 		qos_build_fingerprints_path,
 		pcr3_preimage_path,
 		pivot_build_fingerprints_path,
@@ -526,7 +530,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		unsafe_auto_confirm,
 	} = args;
 
-	let manifest = find_manifest(&manifest_dir);
+	let manifest = read_manifest(&manifest_path)?;
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
@@ -560,7 +564,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		},
 	};
 
-	let approval_path = manifest_dir.as_ref().join(format!(
+	let approval_path = manifest_approvals_dir.as_ref().join(format!(
 		"{}.{}.{}.{}",
 		alias, manifest.namespace.name, manifest.namespace.nonce, APPROVAL_EXT
 	));
@@ -679,9 +683,12 @@ where
 	true
 }
 
-pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(manifest_dir: P) {
-	let manifest = find_manifest(&manifest_dir);
-	let approvals = find_approvals(&manifest_dir, &manifest);
+pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
+	manifest_approvals_dir: P,
+	manifest_path: P
+) -> Result<(), Error> {
+	let manifest = read_manifest(&manifest_path)?;
+	let approvals = find_approvals(&manifest_approvals_dir, &manifest);
 
 	// Create manifest envelope
 	let manifest_envelope = ManifestEnvelope {
@@ -695,7 +702,8 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(manifest_dir: P) {
 		std::process::exit(1);
 	}
 
-	let path = manifest_dir.as_ref().join(MANIFEST_ENVELOPE);
+	let path = manifest_approvals_dir
+		.as_ref().join(MANIFEST_ENVELOPE);
 	write_with_msg(
 		&path,
 		&manifest_envelope
@@ -703,6 +711,8 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(manifest_dir: P) {
 			.expect("Failed to serialize manifest envelope"),
 		"Manifest Approval",
 	);
+
+	Ok(())
 }
 
 pub(crate) fn boot_standard<P: AsRef<Path>>(
@@ -1328,26 +1338,12 @@ fn find_approvals<P: AsRef<Path>>(
 	approvals
 }
 
-fn find_manifest<P: AsRef<Path>>(dir: P) -> Manifest {
-	let mut m: Vec<_> = find_file_paths(&dir)
-		.iter()
-		.filter_map(|path| {
-			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != MANIFEST_EXT) {
-				return None;
-			};
-
-			let buf = fs::read(path).expect("Failed to read manifest");
-			Some(
-				Manifest::try_from_slice(&buf)
-					.expect("Failed to deserialize manifest"),
-			)
-		})
-		.collect();
-	// Make sure there is exactly one manifest
-	assert_eq!(m.len(), 1, "Did not find correct number of manifests");
-
-	m.remove(0)
+fn read_manifest<P: AsRef<Path>>(file: P) -> Result<Manifest, Error> {
+	let buf = fs::read(file
+	
+	).map_err(Error::FailedToReadManifestFile)?;
+	Manifest::try_from_slice(&buf)
+		.map_err(|_| Error::FiledDidNotHaveManifest)
 }
 
 fn find_attestation_doc<P: AsRef<Path>>(

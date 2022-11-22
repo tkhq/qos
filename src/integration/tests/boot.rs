@@ -176,7 +176,9 @@ async fn boot_e2e() {
 				"approve-manifest",
 				"--secret-path",
 				&*secret_path,
-				"--manifest-dir",
+				"--manifest-path",
+				&cli_manifest_path,
+				"--manifest-approvals-dir",
 				&*boot_dir,
 				"--pcr3-preimage-path",
 				"./mock/namespaces/pcr3-preimage.txt",
@@ -299,7 +301,13 @@ async fn boot_e2e() {
 
 	// -- CLIENT generate the manifest envelope
 	assert!(Command::new("../target/debug/qos_client")
-		.args(["generate-manifest-envelope", "--manifest-dir", &*boot_dir,])
+		.args([
+			"generate-manifest-envelope",
+			"--manifest-approvals-dir",
+			&*boot_dir,
+			"--manifest-path",
+			&cli_manifest_path,
+		])
 		.spawn()
 		.unwrap()
 		.wait()
