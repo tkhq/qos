@@ -1,0 +1,43 @@
+#!/bin/bash
+
+[ -f /.dockerenv ] || { echo "please run in supplied container"; exit 1; }
+set -e
+
+snapshot_url="http://snapshot.debian.org/archive/debian"
+snapshot_date=$(date +"%Y%m%dT000000Z")
+cat <<-EOF > /etc/apt/sources.list
+deb http://deb.debian.org/debian bookworm main
+deb http://security.debian.org/debian-security bookworm-security main
+deb http://deb.debian.org/debian bookworm-updates main
+deb [check-valid-until=no] ${snapshot_url}/${snapshot_date} bookworm main
+deb [check-valid-until=no] ${snapshot_url}-security/${snapshot_date} bookworm-security main
+deb [check-valid-until=no] ${snapshot_url}/${snapshot_date} bookworm-updates main
+EOF
+cp /etc/apt/sources.list /config/toolchain/
+
+ARCH=$(uname -m)
+
+apt-get update
+apt-get install -y --download-only --reinstall $( \
+	dpkg-query \
+		-W \
+		-f='${db:Status-Abbrev}\t${binary:Package} - ${binary:Summary}\n' \
+	| awk -F'\t' '/^ii/ {print $2}' \
+	| awk '{print $1}' \
+)
+apt-get install -y --download-only $(cat /config/toolchain/packages-base.list)
+
+( cd /var/cache/apt/archives \
+	&& find . -type f \( -iname \*.deb \) -exec sha256sum {} \; \
+	| sed 's/.\///g' \
+	| LC_ALL=C sort
+) > /config/toolchain/package-hashes-${ARCH}.txt
+
+cp /dev/null /config/toolchain/packages-${ARCH}.list
+for deb in /var/cache/apt/archives/*.deb; do
+	package=$(dpkg-deb -f $deb Package);
+	version=$(dpkg --info ${deb} | grep "^ Version: " | sed 's/^ Version: //g');
+	echo "${package}=${version}" >> /config/toolchain/packages-${ARCH}.list;
+done
+
+chown -R $LOCAL_USER /config/toolchain

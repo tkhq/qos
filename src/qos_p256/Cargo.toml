@@ -1,0 +1,23 @@
+[package]
+name = "qos_p256"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+qos_hex = { path = "../qos_hex" }
+
+borsh = { version = "0.9", default-features = false }
+rand_core = { version = "0.6.3", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+p256 = { version = "0.11.1", features = ["ecdh", "ecdsa", "ecdsa-core", "std"], default-features = false }
+aes-gcm = { version = "0.10.1", features = ["aes", "alloc"], default-features = false }
+hmac = { version = "0.12", default-features = false }
+hkdf = { version = "0.12", default-features = false }
+zeroize = { version = "1.5", features = ["derive"], default-features = false }
+
+[dev-dependencies]
+qos_test_primitives = { path = "../qos_test_primitives" }
+
+[features]
+# Things to make writing tests easier
+mock = []

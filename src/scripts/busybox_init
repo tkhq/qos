@@ -1,0 +1,14 @@
+#!/bin/busybox sh
+
+busybox mount -t devtmpfs none /dev
+busybox mkdir -p /dev/pts
+busybox mount -t devpts none /dev/pts
+busybox mount -t sysfs none /sys
+busybox mount -t proc none /proc
+
+/bin/busybox --install
+
+touch /etc/hosts
+touch /etc/fstab
+
+/bin/busybox sh

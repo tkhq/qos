@@ -1,0 +1,11 @@
+dir  /dev                                               0755 0 0
+nod  /dev/console                                       0600 0 0 c 5 1
+dir  /sys                                               0755 0 0
+dir  /usr                                               0755 0 0
+dir  /etc                                               0755 0 0
+dir  /proc                                              0755 0 0
+dir  /bin                                               0755 0 0
+dir  /sbin                                              0755 0 0
+dir  /usr/bin                                           0755 0 0
+dir  /usr/sbin                                          0755 0 0
+file /init         /cache/generic/rootfs/init           0755 0 0

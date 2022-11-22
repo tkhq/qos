@@ -14,15 +14,20 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
+      - name: Install packages for pcsc dep
+        run: sudo apt-get install -y libpcsclite-dev gengetopt
+
       - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+        id: toolchain
+        uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.61
           override: true
+          components: rustfmt, clippy
 
       - name: Run cargo test
-        run: make test-all
+        run: make -C src test-all
 
   rustfmt:
     name: rustfmt
@@ -31,19 +36,16 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
         with:
           profile: minimal
           toolchain: nightly
           override: true
-          components: rustfmt, clippy
+          components: rustfmt
 
       - name: Run cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: make -C src fmt
 
   clippy:
     name: clippy
@@ -52,16 +54,17 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
+      - name: Install packages for pcsc dep
+        run: sudo apt-get install -y libpcsclite-dev gengetopt
+
       - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+        id: toolchain
+        uses: actions-rs/toolchain@568dc894a7f9e32ffd9bb7d7a6cebb784cdaa2b0 # v1.0.7
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.61
           override: true
-          components: rustfmt, clippy
+          components: clippy
 
       - name: Run cargo clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-targets -- -D warnings
+        run: make -C src clippy

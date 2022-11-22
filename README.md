@@ -1,91 +1,72 @@
-# QuorumOS
+# EnclaveOS #
 
-QuorumOS is a trusted computation layer for hosting secure apps at modern cloud scale.
+<https://github.com/distrust-foundation/enclaveos>
 
-Fundamentally, the OS architecture is based on the first principle that a threshold of members from a set can deem an enclave trustworthy and execute root system calls.
+## About ##
 
-This is a WIP.
+A minimal, immutable, and deterministic Linux unikernel build system targeting
+various Trusted Execution Environments for use cases that require high security
+and accountability.
 
-## Submitting a PR
+This is intended as a reference repository which could serve as a boilerplate
+to build your own hardened and immutable operating system images for high
+security applications.
 
-Before a PR can be merged it must:
+## Platforms ##
 
-Be formatted
+| Platform                   | Target  | Status   | Verified boot Method  |
+|----------------------------|:-------:|:--------:|:---------------------:|
+| Generic/Qemu               | generic | working  | Safeboot or Heads     |
+| AWS Nitro Enclaves         | aws     | building | Nitro attestation API |
+| GCP Confidential Compute   | gcp     | research | vTPM 2.0 attestation  |
+| Azure Confidential VMs     | azure   | research | vTPM 2.0 attestation  |
 
-```bash
-make lint
+## Features ##
+
+ * Immutability
+   * Root filesystem is a CPIO filesystem extracted to a RamFS at boot
+ * Minimalism
+   * < 5MB footprint
+   * Nothing is included but a kernel and your target binary by default
+   * Sample "hello world" included as a default reference
+   * Debug builds include busybox init shim and drop to a shell
+ * Determinism
+   * Multiple people can build artifacts and get identical hashes
+   * Allows one to prove distributed artifacts correspond to published sources
+ * Hardening
+   * No TCP/IP network support
+     * Favor using a virtual socket or physical interface to a gateway system
+   * Most unessesary kernel features are disabled at compile time
+   * Follow [Kernel Self Protection Project](kspp) recommendations
+
+[  kspp]: https://kernsec.org/wiki/index.php/Kernel_Self_Protection_Project
+
+## Development ##
+
+### Requirements ###
+
+ * 10GB+ free RAM
+ * Docker 20+
+ * GNU Make
+
+### Examples ###
+
+### Build given target
+```
+make TARGET=generic
 ```
 
-And pass all tests
-
-```bash
-make test-all
+### Boot generic image in Qemu
+```
+make run
 ```
 
-## View the docs
-
-In the root of this project run
-
-```bash
-cargo doc --open
+### Enter shell in toolchain environment
+```
+make toolchain-shell
 ```
 
-## Commands
-
-Run tests for the full project:
-
-```shell
-cargo test -- --nocapture
+### Update toolchain depedendency pins
 ```
-
-Run a local "enclave":
-
-```shell
-cargo run --bin qos_core \
-  -- \
-  --usock ./dev.sock \
-  --mock
+make toolchain-update
 ```
-
-Run the enclave host:
-
-```shell
-cargo run --bin qos_host \
-  -- \
-  --host-ip 127.0.0.1 \
-  --host-port 3000 \
-  --usock ./dev.sock
-```
-
-Run a command against a running "enclave" and host:
-
-```shell
-cargo run --bin qos_client \
-  --manifest-path ./qos_client/Cargo.toml \
-  describe-nsm \
-  --host-ip 127.0.0.1 \
-  --host-port 3000
-```
-
-## System requirements
-
-- openssl >= 1.1.0
-
-## Key parts
-
-### Enclave
-
-- houses nitro server
-- see `qos_core`
-
-## Host
-
-- EC2 instance where the nitro enclave lives inside
-- has client for talking to nitro enclave
-- has server for incoming request from outside world
-- see `qos_host`
-
-## End user
-
-- anything making request to host
-- see `qos_client`

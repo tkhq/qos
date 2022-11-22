@@ -1,0 +1,14 @@
+[package]
+name = "init"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libc = "0.2.134"
+qos_aws = { path = "../qos_aws"}
+qos_system = { path = "../qos_system"}
+
+
+[[bin]]
+name = "init"
+path = "init.rs"
