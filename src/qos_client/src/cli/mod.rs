@@ -1164,7 +1164,7 @@ mod handlers {
 	pub(super) fn provision_yubikey(opts: &ClientOpts) {
 		#[cfg(not(feature = "smartcard"))]
 		{
-			panic!("{:?}", services::SMARTCARD_FEAT_DISABLED_MSG)
+			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
 		}
 
 		#[cfg(feature = "smartcard")]
