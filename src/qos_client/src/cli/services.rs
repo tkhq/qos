@@ -335,6 +335,7 @@ pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
 	pub manifest_set_dir: P,
 	pub share_set_dir: P,
 	pub alias: String,
+	pub unsafe_auto_confirm: bool,
 }
 
 pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
@@ -348,6 +349,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 		manifest_set_dir,
 		share_set_dir,
 		alias,
+		unsafe_auto_confirm,
 	} = args;
 
 	let manifest = find_manifest(&manifest_dir);
@@ -364,14 +366,17 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 		eprintln!("Exiting early without approving manifest");
 		std::process::exit(1);
 	}
-	let stdin = io::stdin();
-	let stdin_locked = stdin.lock();
-	let mut prompter = Prompter { reader: stdin_locked, writer: io::stdout() };
-	if !approve_manifest_human_verifications(&manifest, &mut prompter) {
-		eprintln!("Exiting early without approving manifest");
-		std::process::exit(1);
+
+	if !unsafe_auto_confirm {
+	    let stdin = io::stdin();
+	    let stdin_locked = stdin.lock();
+	    let mut prompter = Prompter { reader: stdin_locked, writer: io::stdout() };
+		if !approve_manifest_human_verifications(&manifest, &mut prompter) {
+			eprintln!("Exiting early without approving manifest");
+			std::process::exit(1);
+		}
+		drop(prompter);
 	}
-	drop(prompter);
 
 	let approval = Approval {
 		signature: personal_pair
@@ -622,6 +627,7 @@ pub(crate) struct ProxyReEncryptShareArgs<P: AsRef<Path>> {
 	pub alias: String,
 	pub unsafe_skip_attestation: bool,
 	pub unsafe_eph_path_override: Option<String>,
+	pub unsafe_auto_confirm: bool,
 }
 
 // Verifications in this focus around ensuring
@@ -639,6 +645,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		alias,
 		unsafe_skip_attestation,
 		unsafe_eph_path_override,
+		unsafe_auto_confirm,
 	}: ProxyReEncryptShareArgs<P>,
 ) {
 	let manifest_envelope = find_manifest_envelope(&manifest_dir);
@@ -688,6 +695,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		eprintln!("Exiting early without re-encrypting / approving");
 		std::process::exit(1);
 	}
+<<<<<<< HEAD
 	let stdin = io::stdin();
 	let stdin_locked = stdin.lock();
 	let mut prompter = Prompter { reader: stdin_locked, writer: io::stdout() };
@@ -698,8 +706,22 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	) {
 		eprintln!("Exiting early without re-encrypting / approving");
 		std::process::exit(1);
+=======
+
+	if !unsafe_auto_confirm {
+		let mut prompter =
+			Prompter { reader: io::stdin().lock(), writer: io::stdout() };
+		if !proxy_re_encrypt_share_human_verifications(
+			&manifest_envelope,
+			&pcr3_preimage,
+			&mut prompter,
+		) {
+			eprintln!("Exiting early without re-encrypting / approving");
+			std::process::exit(1);
+		}
+		drop(prompter);
+>>>>>>> master
 	}
-	drop(prompter);
 
 	let share = {
 		let plaintext_share = &personal_pair
