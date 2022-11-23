@@ -257,12 +257,12 @@ $(OUT_DIR)/aws/bzImage: \
 $(OUT_DIR)/aws/eif_build: \
 	$(OUT_DIR)/toolchain.tar
 	$(call toolchain,$(USER)," \
-		unset FAKETIME; \
-		cd /src/toolchain/eif_build \
-		export RUSTFLAGS='-C target-feature=+crt-static' && \
-		&& CARGO_HOME=/cache/cargo cargo build \
-		&& mkdir -p /out/aws/ \
-		&& cp target/debug/eif_build /out/aws/; \
+		unset FAKETIME && \
+		cd /src/toolchain/eif_build && \
+		CARGO_HOME=/cache/cargo cargo build \
+			--target x86_64-unknown-linux-gnu && \
+		mkdir -p /out/aws/; \
+		cp target/debug/eif_build /out/aws/; \
 	")
 
 $(OUT_DIR)/qos_host: \
@@ -273,7 +273,8 @@ $(OUT_DIR)/qos_host: \
 		cd /src/qos_host \
 		&& CARGO_HOME=/cache/cargo cargo build \
 			--target x86_64-unknown-linux-gnu \
-		&& cp /src/target/debug/qos_host /out/; \
+			--release \
+		&& cp /src/target/x86_64-unknown-linux-gnu/release/qos_host /out/; \
 	")
 
 $(OUT_DIR)/qos_client: \
@@ -283,7 +284,8 @@ $(OUT_DIR)/qos_client: \
 		cd /src/qos_client \
 		&& CARGO_HOME=/cache/cargo cargo build \
 			--target x86_64-unknown-linux-gnu \
-		&& cp /src/target/debug/qos_client /out/; \
+			--release \
+		&& cp /src/target/x86_64-unknown-linux-gnu/release/qos_client /out/; \
 	")
 
 $(OUT_DIR)/aws/nsm.ko: \
