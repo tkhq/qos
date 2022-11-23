@@ -6,6 +6,7 @@
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
 pub mod cli;
+#[cfg(feature = "smartcard")]
 pub mod yubikey;
 
 /// Host HTTP request helpers.
