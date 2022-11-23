@@ -26,6 +26,8 @@ release: \
 	fetch \
 	$(RELEASE_DIR)/aws/pcrs.txt \
 	$(RELEASE_DIR)/aws/nitro.eif \
+	$(RELEASE_DIR)/qos_client \
+	$(RELEASE_DIR)/qos_host \
 	$(RELEASE_DIR)/manifest.txt
 
 $(RELEASE_DIR)/aws/pcrs.txt: \
@@ -38,13 +40,25 @@ $(RELEASE_DIR)/aws/nitro.eif: \
 	mkdir -p $(RELEASE_DIR)/aws
 	cp $(OUT_DIR)/aws/nitro.eif $(RELEASE_DIR)/aws/nitro.eif
 
+$(RELEASE_DIR)/qos_host: \
+	$(OUT_DIR)/qos_host
+	cp $(OUT_DIR)/qos_host $(RELEASE_DIR)/qos_host
+
+$(RELEASE_DIR)/qos_client: \
+	$(OUT_DIR)/qos_client
+	cp $(OUT_DIR)/qos_client $(RELEASE_DIR)/qos_client
+
 $(RELEASE_DIR)/manifest.txt: \
 	$(RELEASE_DIR)/aws/pcrs.txt \
 	$(RELEASE_DIR)/aws/nitro.eif
 	openssl sha256 -r $(RELEASE_DIR)/aws/pcrs.txt \
 		> $(RELEASE_DIR)/manifest.txt;
 	openssl sha256 -r $(RELEASE_DIR)/aws/nitro.eif \
-		>> $(RELEASE_DIR)/nitro.eif;
+		>> $(RELEASE_DIR)/manifest.txt;
+	openssl sha256 -r $(RELEASE_DIR)/qos_client \
+		>> $(RELEASE_DIR)/manifest.txt;
+	openssl sha256 -r $(RELEASE_DIR)/qos_host \
+		>> $(RELEASE_DIR)/manifest.txt;
 
 .PHONY: attest
 attest: $(RELEASE_DIR)/manifest.txt
@@ -245,9 +259,31 @@ $(OUT_DIR)/aws/eif_build: \
 	$(call toolchain,$(USER)," \
 		unset FAKETIME; \
 		cd /src/toolchain/eif_build \
+		export RUSTFLAGS='-C target-feature=+crt-static' && \
 		&& CARGO_HOME=/cache/cargo cargo build \
 		&& mkdir -p /out/aws/ \
 		&& cp target/debug/eif_build /out/aws/; \
+	")
+
+$(OUT_DIR)/qos_host: \
+	$(OUT_DIR)/toolchain.tar
+	$(call toolchain,$(USER)," \
+		unset FAKETIME; \
+		export RUSTFLAGS='-C target-feature=+crt-static' && \
+		cd /src/qos_host \
+		&& CARGO_HOME=/cache/cargo cargo build \
+			--target x86_64-unknown-linux-gnu \
+		&& cp /src/target/debug/qos_host /out/; \
+	")
+
+$(OUT_DIR)/qos_client: \
+	$(OUT_DIR)/toolchain.tar
+	$(call toolchain,$(USER)," \
+		unset FAKETIME; \
+		cd /src/qos_client \
+		&& CARGO_HOME=/cache/cargo cargo build \
+			--target x86_64-unknown-linux-gnu \
+		&& cp /src/target/debug/qos_client /out/; \
 	")
 
 $(OUT_DIR)/aws/nsm.ko: \
