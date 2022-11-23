@@ -366,7 +366,6 @@ const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
-const ATTESTATION_DIR: &str = "attestation-dir";
 const QOS_BUILD_FINGERPRINTS: &str = "qos-build-fingerprints";
 const PCR3_PREIMAGE_PATH: &str = "pcr3-preimage-path";
 const PIVOT_BUILD_FINGERPRINTS: &str = "pivot-build-fingerprints";
@@ -384,6 +383,9 @@ const QUORUM_KEY_PATH: &str = "quorum-key-path";
 const MANIFEST_APPROVALS_DIR: &str = "manifest-approvals-dir";
 const MANIFEST_PATH: &str = "manifest-path";
 const MANIFEST_ENVELOPE_PATH: &str = "manifest-envelope-path";
+const APPROVAL_PATH: &str = "approval-path";
+const EPH_WRAPPED_SHARE_PATH: &str = "eph-wrapped-share-path";
+const ATTESTATION_DOC_PATH: &str = "attestation-doc-path";
 
 /// Commands for the Client CLI.
 ///
@@ -551,14 +553,6 @@ impl Command {
 		)
 		.takes_value(true)
 	}
-	fn attestation_dir_token() -> Token {
-		Token::new(
-			ATTESTATION_DIR,
-			"Path to dir containing attestation flow artifacts (attestation doc, manifest envelope, EK wrapped share).",
-		)
-		.takes_value(true)
-		.required(true)
-	}
 	fn qos_build_fingerprints_token() -> Token {
 		Token::new(
 			QOS_BUILD_FINGERPRINTS,
@@ -618,7 +612,7 @@ impl Command {
 	fn manifest_approvals_dir_token() -> Token {
 		Token::new(
 			MANIFEST_APPROVALS_DIR,
-			"Directory where the approvals for the manifest are kept"
+			"Directory where the approvals for the manifest are kept",
 		)
 		.takes_value(true)
 		.required(true)
@@ -679,6 +673,24 @@ impl Command {
 	}
 	fn manifest_envelope_path_token() -> Token {
 		Token::new(MANIFEST_ENVELOPE_PATH, "Path to a manifest envelope")
+			.takes_value(true)
+			.required(true)
+	}
+	fn approval_path_token() -> Token {
+		Token::new(APPROVAL_PATH, "Path to a approval of a manifest.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn eph_wrapped_share_path_token() -> Token {
+		Token::new(
+			EPH_WRAPPED_SHARE_PATH,
+			"Path to a Ephemeral Key wrapped share.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn attestation_doc_path_token() -> Token {
+		Token::new(ATTESTATION_DOC_PATH, "Path to an attestation doc.")
 			.takes_value(true)
 			.required(true)
 	}
@@ -784,15 +796,17 @@ impl Command {
 	}
 
 	fn get_attestation_doc() -> Parser {
-		Self::base().token(Self::attestation_dir_token())
+		Self::base().token(Self::attestation_doc_path_token())
 	}
 
 	fn proxy_re_encrypt_share() -> Parser {
 		Parser::new()
 			.token(Self::yubikey_token())
 			.token(Self::secret_path_token())
-			.token(Self::attestation_dir_token())
 			.token(Self::share_path_token())
+			.token(Self::approval_path_token())
+			.token(Self::eph_wrapped_share_path_token())
+			.token(Self::attestation_doc_path_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::manifest_envelope_path_token())
@@ -803,7 +817,9 @@ impl Command {
 	}
 
 	fn post_share() -> Parser {
-		Self::base().token(Self::attestation_dir_token())
+		Self::base()
+			.token(Self::approval_path_token())
+			.token(Self::eph_wrapped_share_path_token())
 	}
 
 	fn generate_manifest_envelope() -> Parser {
@@ -910,10 +926,6 @@ impl ClientOpts {
 
 	fn personal_dir(&self) -> String {
 		self.parsed.single(PERSONAL_DIR).expect("required arg").to_string()
-	}
-
-	fn attestation_dir(&self) -> String {
-		self.parsed.single(ATTESTATION_DIR).expect("required arg").to_string()
 	}
 
 	fn manifest_dir(&self) -> String {
@@ -1024,6 +1036,27 @@ impl ClientOpts {
 		self.parsed
 			.single(MANIFEST_ENVELOPE_PATH)
 			.expect("Missing `--manifest-envelope-path`")
+			.to_string()
+	}
+
+	fn approval_path(&self) -> String {
+		self.parsed
+			.single(APPROVAL_PATH)
+			.expect("Missing `--approval-path`")
+			.to_string()
+	}
+
+	fn eph_wrapped_share_path(&self) -> String {
+		self.parsed
+			.single(EPH_WRAPPED_SHARE_PATH)
+			.expect("Missing `--eph-wrapped-share-path`")
+			.to_string()
+	}
+
+	fn attestation_doc_path(&self) -> String {
+		self.parsed
+			.single(ATTESTATION_DOC_PATH)
+			.expect("Missing `--eph-wrapped-share-path`")
 			.to_string()
 	}
 
@@ -1235,17 +1268,15 @@ mod handlers {
 
 	pub(super) fn after_genesis(opts: &ClientOpts) {
 		let pair = get_pair_or_yubi(opts);
-		if let Err(e) = services::after_genesis(
-			services::AfterGenesisArgs {
-				pair,
-				share_path: opts.share_path(),
-				alias: opts.alias(),
-				namespace_dir: opts.namespace_dir(),
-				qos_build_fingerprints_path: opts.qos_build_fingerprints(),
-				pcr3_preimage_path: opts.pcr3_preimage_path(),
-				unsafe_skip_attestation: opts.unsafe_skip_attestation(),
-			}
-		) {
+		if let Err(e) = services::after_genesis(services::AfterGenesisArgs {
+			pair,
+			share_path: opts.share_path(),
+			alias: opts.alias(),
+			namespace_dir: opts.namespace_dir(),
+			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
+			pcr3_preimage_path: opts.pcr3_preimage_path(),
+			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+		}) {
 			println!("Error: {:?}", e);
 			std::process::exit(1);
 		}
@@ -1292,7 +1323,7 @@ mod handlers {
 	}
 
 	pub(super) fn boot_standard(opts: &ClientOpts) {
-		if let Err(e) = services::boot_standard(services::BootStandardArgs{
+		if let Err(e) = services::boot_standard(services::BootStandardArgs {
 			uri: opts.path_message(),
 			pivot_path: opts.pivot_path(),
 			manifest_envelope_path: opts.manifest_envelope_path(),
@@ -1307,7 +1338,7 @@ mod handlers {
 	pub(super) fn get_attestation_doc(opts: &ClientOpts) {
 		services::get_attestation_doc(
 			&opts.path_message(),
-			opts.attestation_dir(),
+			opts.attestation_doc_path(),
 		);
 	}
 
@@ -1318,8 +1349,10 @@ mod handlers {
 			services::proxy_re_encrypt_share(ProxyReEncryptShareArgs {
 				pair,
 				share_path: opts.share_path(),
-				attestation_dir: opts.attestation_dir(),
 				manifest_envelope_path: opts.manifest_envelope_path(),
+				approval_path: opts.approval_path(),
+				eph_wrapped_share_path: opts.eph_wrapped_share_path(),
+				attestation_doc_path: opts.attestation_doc_path(),
 				pcr3_preimage_path: opts.pcr3_preimage_path(),
 				alias: opts.alias(),
 				manifest_set_dir: opts.manifest_set_dir(),
@@ -1333,7 +1366,14 @@ mod handlers {
 	}
 
 	pub(super) fn post_share(opts: &ClientOpts) {
-		services::post_share(&opts.path_message(), opts.attestation_dir());
+		if let Err(e) = services::post_share(
+			&opts.path_message(),
+			opts.eph_wrapped_share_path(),
+			opts.approval_path(),
+		) {
+			eprintln!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn dangerous_dev_boot(opts: &ClientOpts) {
@@ -1349,7 +1389,7 @@ mod handlers {
 	pub(super) fn generate_manifest_envelope(opts: &ClientOpts) {
 		if let Err(e) = services::generate_manifest_envelope(
 			opts.manifest_approvals_dir(),
-			opts.manifest_path()
+			opts.manifest_path(),
 		) {
 			eprintln!("Error: {:?}", e);
 			std::process::exit(1);

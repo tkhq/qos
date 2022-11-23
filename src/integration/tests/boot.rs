@@ -43,6 +43,7 @@ async fn boot_e2e() {
 	fs::create_dir_all(&*boot_dir).unwrap();
 	let attestation_dir: PathWrapper = "/tmp/boot-e2e/attestation-dir".into();
 	fs::create_dir_all(&*attestation_dir).unwrap();
+	let attestation_doc_path = format!("{}/attestation_doc", &*attestation_dir);
 
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
 
@@ -314,8 +315,8 @@ async fn boot_e2e() {
 		.unwrap()
 		.success());
 
-		// -- CLIENT broadcast boot standard instruction
-	let manifest_envelope_path = format!("{}/manifest_envelope", &*boot_dir, );
+	// -- CLIENT broadcast boot standard instruction
+	let manifest_envelope_path = format!("{}/manifest_envelope", &*boot_dir,);
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
 			"boot-standard",
@@ -349,8 +350,8 @@ async fn boot_e2e() {
 				&host_port.to_string(),
 				"--host-ip",
 				LOCAL_HOST,
-				"--attestation-dir",
-				&*attestation_dir
+				"--attestation-doc-path",
+				&*attestation_doc_path
 			])
 			.spawn()
 			.unwrap()
@@ -360,6 +361,10 @@ async fn boot_e2e() {
 
 		let share_path = format!("{}/{}.share", &personal_dir(user), user);
 		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
+		let eph_wrapped_share_path: PathWrapper =
+			format!("{}/{}.eph_wrapped.share", &*tmp, user).into();
+		let approval_path: PathWrapper =
+			format!("{}/{}.attestation.approval", &*tmp, user).into();
 		// Encrypt share to ephemeral key
 		let mut child = Command::new("../target/debug/qos_client")
 			.args([
@@ -368,8 +373,12 @@ async fn boot_e2e() {
 				&share_path,
 				"--secret-path",
 				&secret_path,
-				"--attestation-dir",
-				&*attestation_dir,
+				"--attestation-doc-path",
+				&*attestation_doc_path,
+				"--eph-wrapped-share-path",
+				&eph_wrapped_share_path,
+				"--approval-path",
+				&approval_path,
 				"--manifest-envelope-path",
 				&manifest_envelope_path,
 				"--pcr3-preimage-path",
@@ -434,8 +443,10 @@ async fn boot_e2e() {
 				&host_port.to_string(),
 				"--host-ip",
 				LOCAL_HOST,
-				"--attestation-dir",
-				&*attestation_dir
+				"--eph-wrapped-share-path",
+				&eph_wrapped_share_path,
+				"--approval-path",
+				&approval_path,
 			])
 			.spawn()
 			.unwrap()

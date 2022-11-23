@@ -44,9 +44,6 @@ const GENESIS_OUTPUT_FILE: &str = "genesis_output";
 const MANIFEST_EXT: &str = "manifest";
 const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
-const STANDARD_ATTESTATION_DOC_FILE: &str = "boot_attestation_doc";
-const EPH_WRAPPED_SHARE_FILE: &str = "ephemeral_key_wrapped.share";
-const ATTESTATION_APPROVAL_FILE: &str = "attestation_approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
@@ -78,6 +75,9 @@ pub enum Error {
 	FailedToReadManifestEnvelopeFile(std::io::Error),
 	FileDidNotHaveValidManifestEnvelope,
 	FailedToReadAttestationDoc(std::io::Error),
+	FailedToReadAttestationApproval(std::io::Error),
+	FileDidNotHaveValidAttestationApproval,
+	FailedToReadEphWrappedShare(std::io::Error),
 }
 
 impl From<YubiKeyError> for Error {
@@ -332,15 +332,17 @@ pub(crate) struct AfterGenesisArgs<P: AsRef<Path>> {
 	pub unsafe_skip_attestation: bool,
 }
 
-pub(crate) fn after_genesis<P: AsRef<Path>>(AfterGenesisArgs {
-	mut pair,
-	share_path,
-	alias,
-	namespace_dir,
-	qos_build_fingerprints_path,
-	pcr3_preimage_path,
-	unsafe_skip_attestation,
-}: AfterGenesisArgs<P>) -> Result<(), Error> {
+pub(crate) fn after_genesis<P: AsRef<Path>>(
+	AfterGenesisArgs {
+		mut pair,
+		share_path,
+		alias,
+		namespace_dir,
+		qos_build_fingerprints_path,
+		pcr3_preimage_path,
+		unsafe_skip_attestation,
+	}: AfterGenesisArgs<P>,
+) -> Result<(), Error> {
 	let attestation_doc_path =
 		namespace_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
 	let genesis_set_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
@@ -688,7 +690,7 @@ where
 
 pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	manifest_approvals_dir: P,
-	manifest_path: P
+	manifest_path: P,
 ) -> Result<(), Error> {
 	let manifest = read_manifest(&manifest_path)?;
 	let approvals = find_approvals(&manifest_approvals_dir, &manifest);
@@ -705,8 +707,7 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 		std::process::exit(1);
 	}
 
-	let path = manifest_approvals_dir
-		.as_ref().join(MANIFEST_ENVELOPE);
+	let path = manifest_approvals_dir.as_ref().join(MANIFEST_ENVELOPE);
 	write_with_msg(
 		&path,
 		&manifest_envelope
@@ -717,7 +718,6 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 
 	Ok(())
 }
-
 
 pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
 	pub uri: String,
@@ -734,7 +734,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		manifest_envelope_path,
 		pcr3_preimage_path,
 		unsafe_skip_attestation,
-	}: BootStandardArgs<P>
+	}: BootStandardArgs<P>,
 ) -> Result<(), Error> {
 	// Read in pivot binary
 	let pivot =
@@ -790,7 +790,7 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 	uri: &str,
 	attestation_doc_path: P,
 ) {
-	let (cose_sign1, manifest_envelope) =
+	let (cose_sign1, _manifest_envelope) =
 		match request::post(uri, &ProtocolMsg::LiveAttestationDocRequest) {
 			Ok(ProtocolMsg::LiveAttestationDocResponse {
 				nsm_response: NsmResponse::Attestation { document },
@@ -804,7 +804,7 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 		};
 
 	write_with_msg(
-		&attestation_doc_path,
+		attestation_doc_path.as_ref(),
 		&cose_sign1,
 		"COSE Sign1 Attestation Doc",
 	);
@@ -847,7 +847,8 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	}: ProxyReEncryptShareArgs<P>,
 ) -> Result<(), Error> {
 	let manifest_envelope = read_manifest_envelope(&manifest_envelope_path)?;
-	let attestation_doc = read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation);
+	let attestation_doc =
+		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
 	let encrypted_share = std::fs::read(share_path).map_err(|e| {
 		eprintln!("{:?}", e);
 		Error::ReadShare
@@ -924,9 +925,13 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	.try_to_vec()
 	.expect("Could not serialize Approval");
 
-	write_with_msg(&approval_path, &approval, "Share Set Approval");
+	write_with_msg(approval_path.as_ref(), &approval, "Share Set Approval");
 
-	write_with_msg(&eph_wrapped_share_path, &share, "Ephemeral key wrapped share");
+	write_with_msg(
+		eph_wrapped_share_path.as_ref(),
+		&share,
+		"Ephemeral key wrapped share",
+	);
 
 	drop(pair);
 
@@ -1023,10 +1028,15 @@ where
 	true
 }
 
-pub(crate) fn post_share<P: AsRef<Path>>(uri: &str, attestation_dir: P) {
+pub(crate) fn post_share<P: AsRef<Path>>(
+	uri: &str,
+	eph_wrapped_share_path: P,
+	approval_path: P,
+) -> Result<(), Error> {
 	// Get the ephemeral key wrapped share
-	let share = find_share(&attestation_dir);
-	let approval = find_attestation_approval(&attestation_dir);
+	let share = fs::read(eph_wrapped_share_path)
+		.map_err(Error::FailedToReadEphWrappedShare)?;
+	let approval = read_attestation_approval(&approval_path)?;
 
 	let req = ProtocolMsg::ProvisionRequest { share, approval };
 	let is_reconstructed = match request::post(uri, &req).unwrap() {
@@ -1038,7 +1048,9 @@ pub(crate) fn post_share<P: AsRef<Path>>(uri: &str, attestation_dir: P) {
 		println!("The quorum key has been reconstructed.");
 	} else {
 		println!("The quorum key has *not* been reconstructed.");
-	}
+	};
+
+	Ok(())
 }
 
 #[allow(clippy::too_many_lines)]
@@ -1353,64 +1365,33 @@ fn read_manifest<P: AsRef<Path>>(file: P) -> Result<Manifest, Error> {
 fn read_attestation_doc<P: AsRef<Path>>(
 	path: P,
 	unsafe_skip_attestation: bool,
-) -> AttestationDoc {
+) -> Result<AttestationDoc, Error> {
 	let cose_sign1_der =
-		fs::read(path).map_err(Error::FailedToReadAttestationDoc);
+		fs::read(path).map_err(Error::FailedToReadAttestationDoc)?;
 
 	Ok(extract_attestation_doc(
-		&cose_sign1_der,
+		cose_sign1_der.as_ref(),
 		unsafe_skip_attestation,
 	))
 }
 
-fn read_manifest_envelope<P: AsRef<Path>>(file: P) -> Result<ManifestEnvelope, Error> {
-	let buf = fs::read(file).map_err(Error::FailedToReadManifestEnvelopeFile)?;
+fn read_manifest_envelope<P: AsRef<Path>>(
+	file: P,
+) -> Result<ManifestEnvelope, Error> {
+	let buf =
+		fs::read(file).map_err(Error::FailedToReadManifestEnvelopeFile)?;
 	ManifestEnvelope::try_from_slice(&buf)
-		.map_err(|_|Error::FileDidNotHaveValidManifestEnvelope)
+		.map_err(|_| Error::FileDidNotHaveValidManifestEnvelope)
 }
 
-fn find_attestation_approval<P: AsRef<Path>>(dir: P) -> Approval {
-	let mut a: Vec<_> = find_file_paths(&dir)
-		.iter()
-		.map(|p| {
-			(p, p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
-		})
-		.filter_map(|(path, file)| {
-			if file == ATTESTATION_APPROVAL_FILE {
-				let manifest_envelope =
-					fs::read(path).expect("Failed to read manifest envelope");
+fn read_attestation_approval<P: AsRef<Path>>(
+	path: P,
+) -> Result<Approval, Error> {
+	let manifest_envelope =
+		fs::read(path).map_err(Error::FailedToReadAttestationApproval)?;
 
-				Some(
-					Approval::try_from_slice(&manifest_envelope)
-						.expect("Could not decode manifest envelope"),
-				)
-			} else {
-				None
-			}
-		})
-		.collect();
-
-	assert_eq!(a.len(), 1, "Not exactly one manifest envelope in directory");
-
-	a.remove(0)
-}
-
-fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
-	let mut s: Vec<_> = find_file_paths(&personal_dir)
-		.iter()
-		.filter_map(|path| {
-			let file_name = split_file_name(path);
-			// Only look at files with the personal.key extension
-			if file_name.last().map_or(true, |s| s.as_str() != "share") {
-				return None;
-			};
-
-			Some(fs::read(path).expect("Failed to read in share"))
-		})
-		.collect();
-	assert_eq!(s.len(), 1, "Did not find exactly 1 share in the directory");
-
-	s.remove(0)
+	Approval::try_from_slice(&manifest_envelope)
+		.map_err(|_| Error::FileDidNotHaveValidAttestationApproval)
 }
 
 struct QosBuildFingerprints {
