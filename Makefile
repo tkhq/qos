@@ -273,6 +273,8 @@ $(OUT_DIR)/qos_host: \
 		cd /src/qos_host \
 		&& CARGO_HOME=/cache/cargo cargo build \
 			--target x86_64-unknown-linux-gnu \
+			--features vm \
+			--no-default-features \
 			--release \
 		&& cp /src/target/x86_64-unknown-linux-gnu/release/qos_host /out/; \
 	")
