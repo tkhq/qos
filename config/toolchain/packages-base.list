@@ -1,7 +1,6 @@
 git
 curl
 build-essential
-diffoscope
 flex
 bison
 libncurses-dev
