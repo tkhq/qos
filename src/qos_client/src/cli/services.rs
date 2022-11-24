@@ -34,7 +34,7 @@ const SECRET_EXT: &str = "secret";
 const PUB_EXT: &str = "pub";
 const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
 const GENESIS_OUTPUT_FILE: &str = "genesis_output";
-const MANIFEST_EXT: &str = "manifest";
+const MANIFEST: &str = "manifest";
 const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
@@ -507,7 +507,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		.expect("Failed to created manifest_dir dir");
 	let manifest_path = manifest_dir
 		.as_ref()
-		.join(format!("{}.{}.{}", namespace, nonce, MANIFEST_EXT));
+		.join(MANIFEST);
 	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");
 
 	Ok(())

@@ -105,7 +105,7 @@ async fn boot_e2e() {
 		.success());
 
 	// Check the manifest written to file
-	let cli_manifest_path = format!("{}/{}.2.manifest", &*boot_dir, namespace);
+	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
 	let manifest =
 		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
 			.unwrap();
