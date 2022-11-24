@@ -372,7 +372,6 @@ const PIVOT_BUILD_FINGERPRINTS: &str = "pivot-build-fingerprints";
 const SHARE_SET_DIR: &str = "share-set-dir";
 const MANIFEST_SET_DIR: &str = "manifest-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
-const MANIFEST_DIR: &str = "manifest-dir";
 const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
 const PUB_PATH: &str = "pub-path";
 const YUBIKEY: &str = "yubikey";
@@ -601,14 +600,6 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
-	fn manifest_dir_token() -> Token {
-		Token::new(
-			MANIFEST_DIR,
-			"Directory containing manifest and its approvals.",
-		)
-		.takes_value(true)
-		.required(true)
-	}
 	fn manifest_approvals_dir_token() -> Token {
 		Token::new(
 			MANIFEST_APPROVALS_DIR,
@@ -764,7 +755,7 @@ impl Command {
 			.token(Self::restart_policy_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
-			.token(Self::manifest_dir_token())
+			.token(Self::manifest_path_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
 			.token(Self::quorum_key_path_token())
@@ -926,10 +917,6 @@ impl ClientOpts {
 
 	fn personal_dir(&self) -> String {
 		self.parsed.single(PERSONAL_DIR).expect("required arg").to_string()
-	}
-
-	fn manifest_dir(&self) -> String {
-		self.parsed.single(MANIFEST_DIR).expect("required arg").to_string()
 	}
 
 	fn manifest_set_dir(&self) -> String {
@@ -1299,7 +1286,7 @@ mod handlers {
 			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
-			manifest_dir: opts.manifest_dir(),
+			manifest_path: opts.manifest_path(),
 			pivot_args: opts.pivot_args(),
 			share_set_dir: opts.share_set_dir(),
 			manifest_set_dir: opts.manifest_set_dir(),

@@ -34,7 +34,6 @@ const SECRET_EXT: &str = "secret";
 const PUB_EXT: &str = "pub";
 const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
 const GENESIS_OUTPUT_FILE: &str = "genesis_output";
-const MANIFEST: &str = "manifest";
 const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
@@ -452,7 +451,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub share_set_dir: P,
 	pub manifest_set_dir: P,
 	pub quorum_key_path: P,
-	pub manifest_dir: P,
+	pub manifest_path: P,
 	pub pivot_args: Vec<String>,
 }
 
@@ -469,7 +468,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		manifest_set_dir,
 		share_set_dir,
 		quorum_key_path,
-		manifest_dir,
+		manifest_path,
 		pivot_args,
 	} = args;
 
@@ -503,12 +502,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		enclave: nitro_config,
 	};
 
-	fs::create_dir_all(&manifest_dir)
-		.expect("Failed to created manifest_dir dir");
-	let manifest_path = manifest_dir
-		.as_ref()
-		.join(MANIFEST);
-	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");
+	write_with_msg(manifest_path.as_ref(), &manifest.try_to_vec().unwrap(), "Manifest");
 
 	Ok(())
 }

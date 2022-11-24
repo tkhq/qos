@@ -71,6 +71,7 @@ async fn boot_e2e() {
 	// -- CLIENT create manifest.
 	let msg = "testing420";
 	let pivot_args = format!("[--msg,{}]", msg);
+	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
 
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
@@ -87,8 +88,8 @@ async fn boot_e2e() {
 			"./mock/qos-build-fingerprints.txt",
 			"--pcr3-preimage-path",
 			"./mock/namespaces/pcr3-preimage.txt",
-			"--manifest-dir",
-			&*boot_dir,
+			"--manifest-path",
+			&cli_manifest_path,
 			"--pivot-args",
 			&pivot_args,
 			"--manifest-set-dir",
@@ -105,7 +106,6 @@ async fn boot_e2e() {
 		.success());
 
 	// Check the manifest written to file
-	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
 	let manifest =
 		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
 			.unwrap();
