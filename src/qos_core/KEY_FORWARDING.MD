@@ -12,7 +12,7 @@ Boot new QOS nodes without manually submitting Quorum Key shares to new nodes. I
 
 ## Other relevant terms
 
-* **Nonce**: A strictly monotonically increasing counter used to track the latest manifest of a Namespace. Concretely, anytime a new manifest is created for a Namespace, we expect it to have a Nonce 1 greater then the previous most recent manifest.
+* **Nonce**: A strictly monotonically increasing counter used to track the latest manifest of a Namespace. Concretely, anytime a new manifest is created for a Namespace, we expect it to have a Nonce 1 greater than the previous most recent manifest.
 * **Pivot App**: The application a Node is intended to run. The application is also commonly referred to as an Enclave Application.
 
 ## Routine
