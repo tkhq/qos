@@ -4,16 +4,16 @@ Boot new QOS nodes without manually submitting Quorum Key shares to new nodes. I
 
 ## New terms
 
-**New Node**: The un-provisioned node, requesting a Quorum Key.
-**Original Node**: The fully provisioned node that the Quorum Key is requested from.
-**Client**: An entity that can make arbitrary requests to QOS nodes. For the sake of having a concrete mental model in the below descriptions, we can think of the client as a script that takes as inputs a manifest and the IP address of the New Node + Original Node, and makes the necessary request to complete key forwarding process.
-**New Manifest**: The manifest used to boot the New Node.
-**Local Manifest**: The manifest used to boot the Original Node. It is local relative to the Original Node.
+* **New Node**: The un-provisioned node, requesting a Quorum Key.
+* **Original Node**: The fully provisioned node that the Quorum Key is requested from.
+* **Client**: An entity that can make arbitrary requests to QOS nodes. For the sake of having a concrete mental model in the below descriptions, we can think of the client as a script that takes as inputs a manifest and the IP address of the New Node + Original Node, and makes the necessary request to complete key forwarding process.
+* **New Manifest**: The manifest used to boot the New Node.
+* **Local Manifest**: The manifest used to boot the Original Node. It is local relative to the Original Node.
 
 ## Other relevant terms
 
-**Nonce**: A strictly monotonically increasing counter used to track the latest manifest of a Namespace. Concretely, anytime a new manifest is created for a Namespace, we expect it to have a Nonce 1 greater then the previous most recent manifest.
-**Pivot App**: The application a Node is intended to run. The application is also commonly referred to as an Enclave Application.
+* **Nonce**: A strictly monotonically increasing counter used to track the latest manifest of a Namespace. Concretely, anytime a new manifest is created for a Namespace, we expect it to have a Nonce 1 greater then the previous most recent manifest.
+* **Pivot App**: The application a Node is intended to run. The application is also commonly referred to as an Enclave Application.
 
 ## Routine
 
