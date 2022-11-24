@@ -996,6 +996,7 @@ impl ClientOpts {
 		}
 	}
 
+	#[cfg(feature = "smartcard")]
 	fn pub_path(&self) -> String {
 		self.parsed.single(PUB_PATH).expect("Missing `--pub-path`").to_string()
 	}
@@ -1248,9 +1249,17 @@ mod handlers {
 	}
 
 	pub(super) fn provision_yubikey(opts: &ClientOpts) {
-		if let Err(e) = services::provision_yubikey(opts.pub_path()) {
-			eprintln!("Error: {:?}", e);
-			std::process::exit(1);
+		#[cfg(not(feature = "smartcard"))]
+		{
+			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
+		}
+
+		#[cfg(feature = "smartcard")]
+		{
+			if let Err(e) = services::provision_yubikey(opts.pub_path()) {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
 		}
 	}
 

@@ -26,16 +26,9 @@ use qos_core::protocol::{
 	QosHash,
 };
 use qos_crypto::{sha_256, sha_384};
-use qos_p256::{encrypt::P256EncryptPublic, P256Error, P256Pair, P256Public};
-use yubikey::{MgmKey, TouchPolicy, YubiKey};
+use qos_p256::{P256Error, P256Pair, P256Public};
 
-use crate::{
-	request,
-	yubikey::{
-		generate_signed_certificate, open_single, YubiKeyError,
-		KEY_AGREEMENT_SLOT, SIGNING_SLOT,
-	},
-};
+use crate::request;
 
 const SECRET_EXT: &str = "secret";
 const PUB_EXT: &str = "pub";
@@ -50,6 +43,10 @@ const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 	"DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
 
+#[allow(dead_code)]
+pub(crate) const SMARTCARD_FEAT_DISABLED_MSG: &str =
+	"The \"smartcard\" feature must be enabled to use YubiKey related functionality.";
+
 const TAP_MSG: &str = "Tap your YubiKey";
 
 /// Client errors.
@@ -57,12 +54,16 @@ const TAP_MSG: &str = "Tap your YubiKey";
 pub enum Error {
 	/// Failed to open a yubikey. Make sure only 1 yubikey is connected to the
 	/// machine. Also try unplugging the yubikey to reset the PCSC session.
+	#[cfg(feature = "smartcard")]
 	OpenSingleYubiKey(yubikey::Error),
 	/// Error'ed while tried to generate a key and cert for the signing slot.
+	#[cfg(feature = "smartcard")]
 	GenerateSign(crate::yubikey::YubiKeyError),
 	/// Error'ed while tried to generate a key and cert for the encryption
 	/// slot.
+	#[cfg(feature = "smartcard")]
 	GenerateEncrypt(crate::yubikey::YubiKeyError),
+	#[cfg(feature = "smartcard")]
 	YubiKey(crate::yubikey::YubiKeyError),
 	P256(qos_p256::P256Error),
 	/// Failed to read share
@@ -80,8 +81,9 @@ pub enum Error {
 	FailedToReadEphWrappedShare(std::io::Error),
 }
 
-impl From<YubiKeyError> for Error {
-	fn from(err: YubiKeyError) -> Self {
+#[cfg(feature = "smartcard")]
+impl From<crate::yubikey::YubiKeyError> for Error {
+	fn from(err: crate::yubikey::YubiKeyError) -> Self {
 		Error::YubiKey(err)
 	}
 }
@@ -93,7 +95,8 @@ impl From<P256Error> for Error {
 }
 
 pub(crate) enum PairOrYubi {
-	Yubi((YubiKey, Vec<u8>)),
+	#[cfg(feature = "smartcard")]
+	Yubi((yubikey::YubiKey, Vec<u8>)),
 	Pair(P256Pair),
 }
 
@@ -104,12 +107,13 @@ impl PairOrYubi {
 	) -> Result<Self, Error> {
 		let result = match (yubikey_flag, secret_path) {
 			(true, None) => {
-				let yubi = open_single()?;
+				#[cfg(feature = "smartcard")] {
+					let yubi = crate::yubikey::open_single()?;
 
-				let pin = rpassword::prompt_password("Enter your pin: ")
-					.map_err(Error::PinEntryError)?;
-
-				PairOrYubi::Yubi((yubi, pin.as_bytes().to_vec()))
+					let pin = rpassword::prompt_password("Enter your pin: ")
+						.map_err(Error::PinEntryError)?;
+					PairOrYubi::Yubi((yubi, pin.as_bytes().to_vec()))
+				}
 			}
 			(false, Some(path)) => {
 				let pair = P256Pair::from_hex_file(path)?;
@@ -126,6 +130,7 @@ impl PairOrYubi {
 
 	fn sign(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
 		match self {
+			#[cfg(feature = "smartcard")]
 			Self::Yubi((ref mut yubi, ref pin)) => {
 				println!("{TAP_MSG}");
 				crate::yubikey::sign_data(yubi, data, pin).map_err(Into::into)
@@ -136,12 +141,15 @@ impl PairOrYubi {
 
 	fn decrypt(&mut self, payload: &[u8]) -> Result<Vec<u8>, Error> {
 		match self {
+			#[cfg(feature = "smartcard")]
 			Self::Yubi((ref mut yubi, ref pin)) => {
 				println!("{TAP_MSG}");
 				let shared_secret =
 					crate::yubikey::shared_secret(yubi, payload, pin)?;
 				let encrypt_pub = crate::yubikey::key_agree_public_key(yubi)?;
-				let public = P256EncryptPublic::from_bytes(&encrypt_pub)?;
+				let public = qos_p256::encrypt::P256EncryptPublic::from_bytes(
+					&encrypt_pub,
+				)?;
 
 				public
 					.decrypt_from_shared_secret(payload, &shared_secret)
@@ -153,6 +161,7 @@ impl PairOrYubi {
 
 	fn public_key_bytes(&mut self) -> Result<Vec<u8>, Error> {
 		match self {
+			#[cfg(feature = "smartcard")]
 			Self::Yubi((ref mut yubi, _)) => {
 				crate::yubikey::pair_public_key(yubi).map_err(Into::into)
 			}
@@ -187,10 +196,12 @@ pub(crate) fn generate_file_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 	);
 }
 
+#[cfg(feature = "smartcard")]
 pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	pub_path: P,
 ) -> Result<(), Error> {
-	let mut yubikey = YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
+	let mut yubikey =
+		yubikey::YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
 
 	println!("You need to enter a pin that will be used to authorize signing and encryption requests.");
 	let pin = rpassword::prompt_password("Enter your pin: ")
@@ -198,22 +209,21 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 		.as_bytes()
 		.to_vec();
 
-	let _sign_public_key_bytes = generate_signed_certificate(
+	let _sign_public_key_bytes = crate::yubikey::generate_signed_certificate(
 		&mut yubikey,
-		SIGNING_SLOT,
+		crate::yubikey::SIGNING_SLOT,
 		&pin,
-		MgmKey::default(),
-		TouchPolicy::Always,
+		yubikey::MgmKey::default(),
+		yubikey::TouchPolicy::Always,
 	)
 	.map_err(Error::GenerateSign)?;
 
-	println!("{TAP_MSG}");
-	let _encrypt_public_key_bytes = generate_signed_certificate(
+	let _encrypt_public_key_bytes = crate::yubikey::generate_signed_certificate(
 		&mut yubikey,
-		KEY_AGREEMENT_SLOT,
+		crate::yubikey::KEY_AGREEMENT_SLOT,
 		&pin,
-		MgmKey::default(),
-		TouchPolicy::Always,
+		yubikey::MgmKey::default(),
+		yubikey::TouchPolicy::Always,
 	)
 	.map_err(Error::GenerateEncrypt)?;
 
