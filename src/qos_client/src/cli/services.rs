@@ -63,21 +63,36 @@ pub enum Error {
 	/// slot.
 	#[cfg(feature = "smartcard")]
 	GenerateEncrypt(crate::yubikey::YubiKeyError),
+	/// General wrapper for yubikey error
 	#[cfg(feature = "smartcard")]
 	YubiKey(crate::yubikey::YubiKeyError),
+	/// Error from qos p256.
 	P256(qos_p256::P256Error),
 	/// Failed to read share
 	ReadShare,
 	/// An error trying to read a pin from the terminal
 	PinEntryError(std::io::Error),
+	/// Error while try to read the quorum public key.
 	FailedToReadQuorumPublicKey(qos_p256::P256Error),
+	/// Error trying to the read a file that is supposed to have a manifest.
 	FailedToReadManifestFile(std::io::Error),
+	/// Error deserializing manifest.
 	FileDidNotHaveValidManifest,
+	/// Error trying to read a file that is supposed to have a manifest
+	/// envelope.
 	FailedToReadManifestEnvelopeFile(std::io::Error),
+	/// Error deserializing manifest envelope.
 	FileDidNotHaveValidManifestEnvelope,
+	/// Error trying to read a file that is supposed to contain attestation
+	/// doc.
 	FailedToReadAttestationDoc(std::io::Error),
+	/// Error trying to the read a file that is supposed to contain attestation
+	/// approval.
 	FailedToReadAttestationApproval(std::io::Error),
+	/// Error deserializing manifest envelope.
 	FileDidNotHaveValidAttestationApproval,
+	/// Failed to read file that was supposed to contain Ephemeral Key wrapped
+	/// share.
 	FailedToReadEphWrappedShare(std::io::Error),
 }
 
@@ -107,7 +122,8 @@ impl PairOrYubi {
 	) -> Result<Self, Error> {
 		let result = match (yubikey_flag, secret_path) {
 			(true, None) => {
-				#[cfg(feature = "smartcard")] {
+				#[cfg(feature = "smartcard")]
+				{
 					let yubi = crate::yubikey::open_single()?;
 
 					let pin = rpassword::prompt_password("Enter your pin: ")
@@ -218,14 +234,15 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	)
 	.map_err(Error::GenerateSign)?;
 
-	let _encrypt_public_key_bytes = crate::yubikey::generate_signed_certificate(
-		&mut yubikey,
-		crate::yubikey::KEY_AGREEMENT_SLOT,
-		&pin,
-		yubikey::MgmKey::default(),
-		yubikey::TouchPolicy::Always,
-	)
-	.map_err(Error::GenerateEncrypt)?;
+	let _encrypt_public_key_bytes =
+		crate::yubikey::generate_signed_certificate(
+			&mut yubikey,
+			crate::yubikey::KEY_AGREEMENT_SLOT,
+			&pin,
+			yubikey::MgmKey::default(),
+			yubikey::TouchPolicy::Always,
+		)
+		.map_err(Error::GenerateEncrypt)?;
 
 	let public_key_bytes = crate::yubikey::pair_public_key(&mut yubikey)?;
 	let public_key_hex = qos_hex::encode(&public_key_bytes);
