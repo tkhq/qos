@@ -637,7 +637,7 @@ impl Command {
 	}
 	// TODO(zeke): hidden pin entry so its not saved in history.
 	fn yubikey_token() -> Token {
-		Token::new(YUBIKEY, "Flat to indicate using a yubikey for signing")
+		Token::new(YUBIKEY, "Flag to indicate using a yubikey for signing")
 			.takes_value(false)
 			.required(false)
 			.forbids(vec![SECRET_PATH])
