@@ -6,7 +6,7 @@ Boot new QOS nodes without manually submitting Quorum Key shares to new nodes. I
 
 * **New Node**: The un-provisioned node, requesting a Quorum Key.
 * **Original Node**: The fully provisioned node that the Quorum Key is requested from.
-* **Client**: An entity that can make arbitrary requests to QOS nodes. For the sake of having a concrete mental model in the below descriptions, we can think of the client as a script that takes as inputs a manifest and the IP address of the New Node + Original Node, and makes the necessary request to complete key forwarding process.
+* **Client**: An entity that can make arbitrary requests to QOS nodes. For the sake of having a concrete mental model in the below descriptions, we can think of the client as a script that takes as inputs a manifest and the IP address of the New Node + Original Node, and makes the necessary requests to complete the key forwarding process.
 * **New Manifest**: The manifest used to boot the New Node.
 * **Local Manifest**: The manifest used to boot the Original Node. It is local relative to the Original Node.
 
@@ -19,7 +19,7 @@ Boot new QOS nodes without manually submitting Quorum Key shares to new nodes. I
 
 The details for how QOS nodes communicate with each other can vary, but for the sake of this example we assume that all requests will be made from a client and nodes do not communicate directly with each other.
 
-1) The New Node gets a `BootKeyForwardingAttestationRequest` from Client.
+1) The New Node gets a `BootKeyForwardingAttestationRequest` from the Client.
 
     ```rust
     struct PreBootKeyForwardAttestationRequest {
@@ -27,7 +27,7 @@ The details for how QOS nodes communicate with each other can vary, but for the 
     }
     ```
 
-2) The New Node processes the request by performing the fallowing steps:
+2) The New Node processes the request by performing the following steps:
     1) Check signatures over the manifest envelope.
     1) Generate an Ephemeral Key.
     1) Make an attestation request, placing the manifest hash in the `user_data` field and the Ephemeral Key public key in the `public_key` field.
@@ -80,5 +80,5 @@ The details for how QOS nodes communicate with each other can vary, but for the 
     1) Verify the signature over the `encrypted_quorum_key` against the Quorum Key specified in the New Manifest.
     1) Decrypt the encrypted Quorum Key in the request with the Ephemeral Key.
     1) Check that the decrypted Quorum Key public key matches the one specified in the New Manifest.
-    1) Write the Quorum Key to file system, at which point New Node will automatically pivot to running the Pivot App.
-    1) Return `InjectBootKeyForwardResponse { }` , an empty struct signify that it was successful.
+    1) Write the Quorum Key to the file system, at which point New Node will automatically pivot to running the Pivot App.
+    1) Return `InjectBootKeyForwardResponse { }` (an empty struct) to signify that it was successful.
