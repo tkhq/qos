@@ -70,6 +70,7 @@ pub enum Error {
 	/// Failed to read share
 	ReadShare,
 	/// An error trying to read a pin from the terminal
+	#[cfg(feature = "smartcard")]
 	PinEntryError(std::io::Error),
 	/// Error while try to read the quorum public key.
 	FailedToReadQuorumPublicKey(qos_p256::P256Error),
@@ -128,6 +129,9 @@ impl PairOrYubi {
 					let pin = rpassword::prompt_password("Enter your pin: ")
 						.map_err(Error::PinEntryError)?;
 					PairOrYubi::Yubi((yubi, pin.as_bytes().to_vec()))
+				}
+				#[cfg(not(feature = "smartcard"))]{
+					panic!("{TAP_MSG}");
 				}
 			}
 			(false, Some(path)) => {
