@@ -354,8 +354,6 @@ use qos_core::{
 
 mod services;
 
-use services::PairOrYubi;
-
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ALIAS: &str = "alias";
@@ -368,20 +366,25 @@ const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
-const ATTESTATION_DIR: &str = "attestation-dir";
 const QOS_BUILD_FINGERPRINTS: &str = "qos-build-fingerprints";
 const PCR3_PREIMAGE_PATH: &str = "pcr3-preimage-path";
 const PIVOT_BUILD_FINGERPRINTS: &str = "pivot-build-fingerprints";
 const SHARE_SET_DIR: &str = "share-set-dir";
 const MANIFEST_SET_DIR: &str = "manifest-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
-const MANIFEST_DIR: &str = "manifest-dir";
 const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
 const PUB_PATH: &str = "pub-path";
-const PIN: &str = "pin";
+const YUBIKEY: &str = "yubikey";
 const SECRET_PATH: &str = "secret-path";
 const SHARE_PATH: &str = "share-path";
 const OUTPUT_PATH: &str = "output-path";
+const QUORUM_KEY_PATH: &str = "quorum-key-path";
+const MANIFEST_APPROVALS_DIR: &str = "manifest-approvals-dir";
+const MANIFEST_PATH: &str = "manifest-path";
+const MANIFEST_ENVELOPE_PATH: &str = "manifest-envelope-path";
+const APPROVAL_PATH: &str = "approval-path";
+const EPH_WRAPPED_SHARE_PATH: &str = "eph-wrapped-share-path";
+const ATTESTATION_DOC_PATH: &str = "attestation-doc-path";
 
 /// Commands for the Client CLI.
 ///
@@ -549,14 +552,6 @@ impl Command {
 		)
 		.takes_value(true)
 	}
-	fn attestation_dir_token() -> Token {
-		Token::new(
-			ATTESTATION_DIR,
-			"Path to dir containing attestation flow artifacts (attestation doc, manifest envelope, EK wrapped share).",
-		)
-		.takes_value(true)
-		.required(true)
-	}
 	fn qos_build_fingerprints_token() -> Token {
 		Token::new(
 			QOS_BUILD_FINGERPRINTS,
@@ -605,10 +600,10 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
-	fn manifest_dir_token() -> Token {
+	fn manifest_approvals_dir_token() -> Token {
 		Token::new(
-			MANIFEST_DIR,
-			"Directory containing manifest and its approvals.",
+			MANIFEST_APPROVALS_DIR,
+			"Directory where the approvals for the manifest are kept",
 		)
 		.takes_value(true)
 		.required(true)
@@ -632,9 +627,9 @@ impl Command {
 			.required(true)
 	}
 	// TODO(zeke): hidden pin entry so its not saved in history.
-	fn pin_token() -> Token {
-		Token::new(PIN, "UNSAFE PLAINTEXT: pin for yubikey")
-			.takes_value(true)
+	fn yubikey_token() -> Token {
+		Token::new(YUBIKEY, "Flag to indicate using a yubikey for signing")
+			.takes_value(false)
 			.required(false)
 			.forbids(vec![SECRET_PATH])
 	}
@@ -645,7 +640,7 @@ impl Command {
 		)
 		.takes_value(true)
 		.required(false)
-		.forbids(vec![PIN])
+		.forbids(vec![YUBIKEY])
 	}
 	fn share_path_token() -> Token {
 		Token::new(SHARE_PATH, "Path to the encrypted quorum key share.")
@@ -654,6 +649,39 @@ impl Command {
 	}
 	fn output_path_token() -> Token {
 		Token::new(OUTPUT_PATH, "The path to create a file at.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn quorum_key_path_token() -> Token {
+		Token::new(QUORUM_KEY_PATH, "The path to the quorum public key")
+			.takes_value(true)
+			.required(true)
+	}
+	fn manifest_path_token() -> Token {
+		Token::new(MANIFEST_PATH, "The path to the manifest")
+			.takes_value(true)
+			.required(true)
+	}
+	fn manifest_envelope_path_token() -> Token {
+		Token::new(MANIFEST_ENVELOPE_PATH, "Path to a manifest envelope")
+			.takes_value(true)
+			.required(true)
+	}
+	fn approval_path_token() -> Token {
+		Token::new(APPROVAL_PATH, "Path to a approval of a manifest.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn eph_wrapped_share_path_token() -> Token {
+		Token::new(
+			EPH_WRAPPED_SHARE_PATH,
+			"Path to a Ephemeral Key wrapped share.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn attestation_doc_path_token() -> Token {
+		Token::new(ATTESTATION_DOC_PATH, "Path to an attestation doc.")
 			.takes_value(true)
 			.required(true)
 	}
@@ -702,7 +730,7 @@ impl Command {
 
 	fn after_genesis() -> Parser {
 		Parser::new()
-			.token(Self::pin_token())
+			.token(Self::yubikey_token())
 			.token(Self::secret_path_token())
 			.token(Self::share_path_token())
 			.token(Self::alias_token())
@@ -727,23 +755,24 @@ impl Command {
 			.token(Self::restart_policy_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
-			.token(Self::manifest_dir_token())
+			.token(Self::manifest_path_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
-			.token(Self::namespace_dir_token())
+			.token(Self::quorum_key_path_token())
 			.token(Self::pivot_args_token())
 	}
 
 	fn approve_manifest() -> Parser {
 		Parser::new()
-			.token(Self::pin_token())
+			.token(Self::yubikey_token())
 			.token(Self::secret_path_token())
-			.token(Self::manifest_dir_token())
+			.token(Self::manifest_path_token())
+			.token(Self::manifest_approvals_dir_token())
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::pivot_build_fingerprints_token())
 			.token(Self::alias_token())
-			.token(Self::namespace_dir_token())
+			.token(Self::quorum_key_path_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
 			.token(Self::unsafe_auto_confirm_token())
@@ -752,24 +781,26 @@ impl Command {
 	fn boot_standard() -> Parser {
 		Self::base()
 			.token(Self::pivot_path_token())
-			.token(Self::manifest_dir_token())
+			.token(Self::manifest_envelope_path_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 	}
 
 	fn get_attestation_doc() -> Parser {
-		Self::base().token(Self::attestation_dir_token())
+		Self::base().token(Self::attestation_doc_path_token())
 	}
 
 	fn proxy_re_encrypt_share() -> Parser {
 		Parser::new()
-			.token(Self::pin_token())
+			.token(Self::yubikey_token())
 			.token(Self::secret_path_token())
-			.token(Self::attestation_dir_token())
 			.token(Self::share_path_token())
+			.token(Self::approval_path_token())
+			.token(Self::eph_wrapped_share_path_token())
+			.token(Self::attestation_doc_path_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::manifest_set_dir_token())
-			.token(Self::manifest_dir_token())
+			.token(Self::manifest_envelope_path_token())
 			.token(Self::alias_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
@@ -777,11 +808,15 @@ impl Command {
 	}
 
 	fn post_share() -> Parser {
-		Self::base().token(Self::attestation_dir_token())
+		Self::base()
+			.token(Self::approval_path_token())
+			.token(Self::eph_wrapped_share_path_token())
 	}
 
 	fn generate_manifest_envelope() -> Parser {
-		Parser::new().token(Self::manifest_dir_token())
+		Parser::new()
+			.token(Self::manifest_approvals_dir_token())
+			.token(Self::manifest_path_token())
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -793,7 +828,7 @@ impl Command {
 	}
 
 	fn provision_yubikey() -> Parser {
-		Parser::new().token(Self::pub_path_token()).token(Self::pin_token())
+		Parser::new().token(Self::pub_path_token()).token(Self::yubikey_token())
 	}
 }
 
@@ -884,14 +919,6 @@ impl ClientOpts {
 		self.parsed.single(PERSONAL_DIR).expect("required arg").to_string()
 	}
 
-	fn attestation_dir(&self) -> String {
-		self.parsed.single(ATTESTATION_DIR).expect("required arg").to_string()
-	}
-
-	fn manifest_dir(&self) -> String {
-		self.parsed.single(MANIFEST_DIR).expect("required arg").to_string()
-	}
-
 	fn manifest_set_dir(&self) -> String {
 		self.parsed
 			.single(MANIFEST_SET_DIR)
@@ -910,6 +937,13 @@ impl ClientOpts {
 		self.parsed
 			.single(NAMESPACE_DIR)
 			.expect("`--namespace-dir` is a required arg")
+			.to_string()
+	}
+
+	fn manifest_approvals_dir(&self) -> String {
+		self.parsed
+			.single(MANIFEST_APPROVALS_DIR)
+			.expect("`--manifest-approval-dir` is a required arg")
 			.to_string()
 	}
 
@@ -972,10 +1006,50 @@ impl ClientOpts {
 			.to_string()
 	}
 
-	fn pin(&self) -> Option<Vec<u8>> {
+	fn quorum_key_path(&self) -> String {
 		self.parsed
-			.single(PIN)
-			.map(|pin_string| pin_string.clone().into_bytes())
+			.single(QUORUM_KEY_PATH)
+			.expect("Missing `--quorum-key-path`")
+			.to_string()
+	}
+
+	fn manifest_path(&self) -> String {
+		self.parsed
+			.single(MANIFEST_PATH)
+			.expect("Missing `--manifest-path`")
+			.to_string()
+	}
+
+	fn manifest_envelope_path(&self) -> String {
+		self.parsed
+			.single(MANIFEST_ENVELOPE_PATH)
+			.expect("Missing `--manifest-envelope-path`")
+			.to_string()
+	}
+
+	fn approval_path(&self) -> String {
+		self.parsed
+			.single(APPROVAL_PATH)
+			.expect("Missing `--approval-path`")
+			.to_string()
+	}
+
+	fn eph_wrapped_share_path(&self) -> String {
+		self.parsed
+			.single(EPH_WRAPPED_SHARE_PATH)
+			.expect("Missing `--eph-wrapped-share-path`")
+			.to_string()
+	}
+
+	fn attestation_doc_path(&self) -> String {
+		self.parsed
+			.single(ATTESTATION_DOC_PATH)
+			.expect("Missing `--eph-wrapped-share-path`")
+			.to_string()
+	}
+
+	fn yubikey(&self) -> bool {
+		self.parsed.flag(YUBIKEY).unwrap_or(false)
 	}
 
 	fn unsafe_skip_attestation(&self) -> bool {
@@ -1073,8 +1147,8 @@ mod handlers {
 	use super::services::{ApproveManifestArgs, ProxyReEncryptShareArgs};
 	use crate::{
 		cli::{
-			services::{self, GenerateManifestArgs},
-			ClientOpts, PairOrYubi, ProtocolMsg,
+			services::{self, GenerateManifestArgs, PairOrYubi},
+			ClientOpts, ProtocolMsg,
 		},
 		request,
 	};
@@ -1169,14 +1243,7 @@ mod handlers {
 
 		#[cfg(feature = "smartcard")]
 		{
-			let pin = if let Some(pin) = opts.pin() {
-				pin
-			} else {
-				println!("No `--pin` provided - using default pin.");
-				crate::yubikey::DEFAULT_PIN.to_vec()
-			};
-
-			if let Err(e) = services::provision_yubikey(opts.pub_path(), &pin) {
+			if let Err(e) = services::provision_yubikey(opts.pub_path()) {
 				eprintln!("Error: {:?}", e);
 				std::process::exit(1);
 			}
@@ -1185,73 +1252,62 @@ mod handlers {
 
 	// TODO: verify PCRs
 	pub(super) fn boot_genesis(opts: &ClientOpts) {
-		services::boot_genesis(
-			&opts.path_message(),
-			opts.namespace_dir(),
-			opts.share_set_dir(),
-			opts.qos_build_fingerprints(),
-			opts.pcr3_preimage_path(),
-			opts.unsafe_skip_attestation(),
-		);
+		services::boot_genesis(services::BootGenesisArgs {
+			uri: &opts.path_message(),
+			namespace_dir: opts.namespace_dir(),
+			share_set_dir: opts.share_set_dir(),
+			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
+			pcr3_preimage_path: opts.pcr3_preimage_path(),
+			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+		});
 	}
 
 	pub(super) fn after_genesis(opts: &ClientOpts) {
-		let pair = match PairOrYubi::from_inputs(opts.pin(), opts.secret_path())
-		{
-			Err(e) => {
-				eprintln!("Error: {:?}", e);
-				std::process::exit(1);
-			}
-			Ok(p) => p,
-		};
-
-		if let Err(e) = services::after_genesis(
+		let pair = get_pair_or_yubi(opts);
+		if let Err(e) = services::after_genesis(services::AfterGenesisArgs {
 			pair,
-			opts.share_path(),
-			&opts.alias(),
-			opts.namespace_dir(),
-			opts.qos_build_fingerprints(),
-			opts.pcr3_preimage_path(),
-			opts.unsafe_skip_attestation(),
-		) {
+			share_path: opts.share_path(),
+			alias: opts.alias(),
+			namespace_dir: opts.namespace_dir(),
+			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
+			pcr3_preimage_path: opts.pcr3_preimage_path(),
+			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+		}) {
 			println!("Error: {:?}", e);
 			std::process::exit(1);
 		}
 	}
 
 	pub(super) fn generate_manifest(opts: &ClientOpts) {
-		services::generate_manifest(GenerateManifestArgs {
+		if let Err(e) = services::generate_manifest(GenerateManifestArgs {
 			nonce: opts.nonce(),
 			namespace: opts.namespace(),
 			restart_policy: opts.restart_policy(),
 			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
-			manifest_dir: opts.manifest_dir(),
+			manifest_path: opts.manifest_path(),
 			pivot_args: opts.pivot_args(),
 			share_set_dir: opts.share_set_dir(),
 			manifest_set_dir: opts.manifest_set_dir(),
-			namespace_dir: opts.namespace_dir(),
-		});
+			quorum_key_path: opts.quorum_key_path(),
+		}) {
+			println!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn approve_manifest(opts: &ClientOpts) {
-		let pair = match PairOrYubi::from_inputs(opts.pin(), opts.secret_path())
-		{
-			Err(e) => {
-				eprintln!("Error: {:?}", e);
-				std::process::exit(1);
-			}
-			Ok(p) => p,
-		};
+		let pair = get_pair_or_yubi(opts);
 
 		if let Err(e) = services::approve_manifest(ApproveManifestArgs {
 			pair,
-			manifest_dir: opts.manifest_dir(),
+			manifest_path: opts.manifest_path(),
+			manifest_approvals_dir: opts.manifest_approvals_dir(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
-			namespace_dir: opts.namespace_dir(),
+			quorum_key_path: opts.quorum_key_path(),
 			manifest_set_dir: opts.manifest_set_dir(),
 			share_set_dir: opts.share_set_dir(),
 			alias: opts.alias(),
@@ -1263,38 +1319,36 @@ mod handlers {
 	}
 
 	pub(super) fn boot_standard(opts: &ClientOpts) {
-		services::boot_standard(
-			&opts.path_message(),
-			opts.pivot_path(),
-			opts.manifest_dir(),
-			opts.pcr3_preimage_path(),
-			opts.unsafe_skip_attestation(),
-		);
+		if let Err(e) = services::boot_standard(services::BootStandardArgs {
+			uri: opts.path_message(),
+			pivot_path: opts.pivot_path(),
+			manifest_envelope_path: opts.manifest_envelope_path(),
+			pcr3_preimage_path: opts.pcr3_preimage_path(),
+			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+		}) {
+			println!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn get_attestation_doc(opts: &ClientOpts) {
 		services::get_attestation_doc(
 			&opts.path_message(),
-			opts.attestation_dir(),
+			opts.attestation_doc_path(),
 		);
 	}
 
 	pub(super) fn proxy_re_encrypt_share(opts: &ClientOpts) {
-		let pair = match PairOrYubi::from_inputs(opts.pin(), opts.secret_path())
-		{
-			Err(e) => {
-				eprintln!("Error: {:?}", e);
-				std::process::exit(1);
-			}
-			Ok(p) => p,
-		};
+		let pair = get_pair_or_yubi(opts);
 
 		if let Err(e) =
 			services::proxy_re_encrypt_share(ProxyReEncryptShareArgs {
 				pair,
 				share_path: opts.share_path(),
-				attestation_dir: opts.attestation_dir(),
-				manifest_dir: opts.manifest_dir(),
+				manifest_envelope_path: opts.manifest_envelope_path(),
+				approval_path: opts.approval_path(),
+				eph_wrapped_share_path: opts.eph_wrapped_share_path(),
+				attestation_doc_path: opts.attestation_doc_path(),
 				pcr3_preimage_path: opts.pcr3_preimage_path(),
 				alias: opts.alias(),
 				manifest_set_dir: opts.manifest_set_dir(),
@@ -1308,7 +1362,14 @@ mod handlers {
 	}
 
 	pub(super) fn post_share(opts: &ClientOpts) {
-		services::post_share(&opts.path_message(), opts.attestation_dir());
+		if let Err(e) = services::post_share(
+			&opts.path_message(),
+			opts.eph_wrapped_share_path(),
+			opts.approval_path(),
+		) {
+			eprintln!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn dangerous_dev_boot(opts: &ClientOpts) {
@@ -1322,6 +1383,22 @@ mod handlers {
 	}
 
 	pub(super) fn generate_manifest_envelope(opts: &ClientOpts) {
-		services::generate_manifest_envelope(opts.manifest_dir());
+		if let Err(e) = services::generate_manifest_envelope(
+			opts.manifest_approvals_dir(),
+			opts.manifest_path(),
+		) {
+			eprintln!("Error: {:?}", e);
+			std::process::exit(1);
+		}
+	}
+
+	fn get_pair_or_yubi(opts: &ClientOpts) -> PairOrYubi {
+		match PairOrYubi::from_inputs(opts.yubikey(), opts.secret_path()) {
+			Err(e) => {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+			Ok(p) => p,
+		}
 	}
 }
