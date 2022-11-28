@@ -56,7 +56,7 @@ async fn genesis_e2e() {
 	] {
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
-				"generate-share-key",
+				"generate-file-key",
 				"--personal-dir",
 				&*personal_dir(user),
 				"--alias",
@@ -193,11 +193,17 @@ async fn genesis_e2e() {
 	// -- CLIENT make sure each user can run `after-genesis` against their
 	// member output and decrypt their share with their share key.
 	for user in [&user1, &user2, &user3] {
+		let share_path = format!("{}/{}.share", &personal_dir(user), user);
+		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
 				"after-genesis",
-				"--personal-dir",
-				&personal_dir(user),
+				"--secret-path",
+				&secret_path,
+				"--share-path",
+				&share_path,
+				"--alias",
+				user,
 				"--namespace-dir",
 				&genesis_dir,
 				"--qos-build-fingerprints",

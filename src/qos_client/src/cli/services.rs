@@ -26,7 +26,7 @@ use qos_core::protocol::{
 	QosHash,
 };
 use qos_crypto::{sha_256, sha_384};
-use qos_p256::{P256Pair, P256Public};
+use qos_p256::{P256Error, P256Pair, P256Public};
 
 use crate::request;
 
@@ -34,21 +34,162 @@ const SECRET_EXT: &str = "secret";
 const PUB_EXT: &str = "pub";
 const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
 const GENESIS_OUTPUT_FILE: &str = "genesis_output";
-const SHARE_EXT: &str = "share";
-const MANIFEST_EXT: &str = "manifest";
 const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
-const STANDARD_ATTESTATION_DOC_FILE: &str = "boot_attestation_doc";
-const EPH_WRAPPED_SHARE_FILE: &str = "ephemeral_key_wrapped.share";
-const ATTESTATION_APPROVAL_FILE: &str = "attestation_approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
-const QUORUM_KEY: &str = "quorum_key";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 	"DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
 
-pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
+#[allow(dead_code)]
+pub(crate) const SMARTCARD_FEAT_DISABLED_MSG: &str =
+	"The \"smartcard\" feature must be enabled to use YubiKey related functionality.";
+
+const TAP_MSG: &str = "Tap your YubiKey";
+
+/// Client errors.
+#[derive(Debug)]
+pub enum Error {
+	/// Failed to open a yubikey. Make sure only 1 yubikey is connected to the
+	/// machine. Also try unplugging the yubikey to reset the PCSC session.
+	#[cfg(feature = "smartcard")]
+	OpenSingleYubiKey(yubikey::Error),
+	/// Error'ed while tried to generate a key and cert for the signing slot.
+	#[cfg(feature = "smartcard")]
+	GenerateSign(crate::yubikey::YubiKeyError),
+	/// Error'ed while tried to generate a key and cert for the encryption
+	/// slot.
+	#[cfg(feature = "smartcard")]
+	GenerateEncrypt(crate::yubikey::YubiKeyError),
+	/// General wrapper for yubikey error
+	#[cfg(feature = "smartcard")]
+	YubiKey(crate::yubikey::YubiKeyError),
+	/// Error from qos p256.
+	P256(qos_p256::P256Error),
+	/// Failed to read share
+	ReadShare,
+	/// An error trying to read a pin from the terminal
+	#[cfg(feature = "smartcard")]
+	PinEntryError(std::io::Error),
+	/// Error while try to read the quorum public key.
+	FailedToReadQuorumPublicKey(qos_p256::P256Error),
+	/// Error trying to the read a file that is supposed to have a manifest.
+	FailedToReadManifestFile(std::io::Error),
+	/// Error deserializing manifest.
+	FileDidNotHaveValidManifest,
+	/// Error trying to read a file that is supposed to have a manifest
+	/// envelope.
+	FailedToReadManifestEnvelopeFile(std::io::Error),
+	/// Error deserializing manifest envelope.
+	FileDidNotHaveValidManifestEnvelope,
+	/// Error trying to read a file that is supposed to contain attestation
+	/// doc.
+	FailedToReadAttestationDoc(std::io::Error),
+	/// Error trying to the read a file that is supposed to contain attestation
+	/// approval.
+	FailedToReadAttestationApproval(std::io::Error),
+	/// Error deserializing manifest envelope.
+	FileDidNotHaveValidAttestationApproval,
+	/// Failed to read file that was supposed to contain Ephemeral Key wrapped
+	/// share.
+	FailedToReadEphWrappedShare(std::io::Error),
+}
+
+#[cfg(feature = "smartcard")]
+impl From<crate::yubikey::YubiKeyError> for Error {
+	fn from(err: crate::yubikey::YubiKeyError) -> Self {
+		Error::YubiKey(err)
+	}
+}
+
+impl From<P256Error> for Error {
+	fn from(err: P256Error) -> Self {
+		Error::P256(err)
+	}
+}
+
+pub(crate) enum PairOrYubi {
+	#[cfg(feature = "smartcard")]
+	Yubi((yubikey::YubiKey, Vec<u8>)),
+	Pair(P256Pair),
+}
+
+impl PairOrYubi {
+	pub(crate) fn from_inputs(
+		yubikey_flag: bool,
+		secret_path: Option<String>,
+	) -> Result<Self, Error> {
+		let result = match (yubikey_flag, secret_path) {
+			(true, None) => {
+				#[cfg(feature = "smartcard")]
+				{
+					let yubi = crate::yubikey::open_single()?;
+
+					let pin = rpassword::prompt_password("Enter your pin: ")
+						.map_err(Error::PinEntryError)?;
+					PairOrYubi::Yubi((yubi, pin.as_bytes().to_vec()))
+				}
+				#[cfg(not(feature = "smartcard"))]{
+					panic!("{TAP_MSG}");
+				}
+			}
+			(false, Some(path)) => {
+				let pair = P256Pair::from_hex_file(path)?;
+				PairOrYubi::Pair(pair)
+			}
+			(false, None) => panic!("Need either yubikey flag or secret path"),
+			(true, Some(_)) => {
+				panic!("Cannot have both yubikey flag and secret path")
+			}
+		};
+
+		Ok(result)
+	}
+
+	fn sign(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
+		match self {
+			#[cfg(feature = "smartcard")]
+			Self::Yubi((ref mut yubi, ref pin)) => {
+				println!("{TAP_MSG}");
+				crate::yubikey::sign_data(yubi, data, pin).map_err(Into::into)
+			}
+			Self::Pair(ref pair) => pair.sign(data).map_err(Into::into),
+		}
+	}
+
+	fn decrypt(&mut self, payload: &[u8]) -> Result<Vec<u8>, Error> {
+		match self {
+			#[cfg(feature = "smartcard")]
+			Self::Yubi((ref mut yubi, ref pin)) => {
+				println!("{TAP_MSG}");
+				let shared_secret =
+					crate::yubikey::shared_secret(yubi, payload, pin)?;
+				let encrypt_pub = crate::yubikey::key_agree_public_key(yubi)?;
+				let public = qos_p256::encrypt::P256EncryptPublic::from_bytes(
+					&encrypt_pub,
+				)?;
+
+				public
+					.decrypt_from_shared_secret(payload, &shared_secret)
+					.map_err(Into::into)
+			}
+			Self::Pair(ref pair) => pair.decrypt(payload).map_err(Into::into),
+		}
+	}
+
+	fn public_key_bytes(&mut self) -> Result<Vec<u8>, Error> {
+		match self {
+			#[cfg(feature = "smartcard")]
+			Self::Yubi((ref mut yubi, _)) => {
+				crate::yubikey::pair_public_key(yubi).map_err(Into::into)
+			}
+			Self::Pair(ref pair) => Ok(pair.public_key().to_bytes()),
+		}
+	}
+}
+
+pub(crate) fn generate_file_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 	fs::create_dir_all(personal_dir.as_ref()).unwrap();
 
 	let share_key_pair =
@@ -61,7 +202,7 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 	write_with_msg(
 		&private_path,
 		&share_key_pair.to_master_seed_hex(),
-		"Share Key Secret",
+		"File Key Secret",
 	);
 
 	// Write the setup key public key
@@ -70,18 +211,75 @@ pub(crate) fn generate_share_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 	write_with_msg(
 		&public_path,
 		&share_key_pair.public_key().to_hex_bytes(),
-		"Share Key Public",
+		"File Key Public",
 	);
 }
 
-// TODO: verify PCR3
+#[cfg(feature = "smartcard")]
+pub(crate) fn provision_yubikey<P: AsRef<Path>>(
+	pub_path: P,
+) -> Result<(), Error> {
+	let mut yubikey =
+		yubikey::YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
+
+	println!("You need to enter a pin that will be used to authorize signing and encryption requests.");
+	let pin = rpassword::prompt_password("Enter your pin: ")
+		.map_err(Error::PinEntryError)?
+		.as_bytes()
+		.to_vec();
+
+	let _sign_public_key_bytes = crate::yubikey::generate_signed_certificate(
+		&mut yubikey,
+		crate::yubikey::SIGNING_SLOT,
+		&pin,
+		yubikey::MgmKey::default(),
+		yubikey::TouchPolicy::Always,
+	)
+	.map_err(Error::GenerateSign)?;
+
+	let _encrypt_public_key_bytes =
+		crate::yubikey::generate_signed_certificate(
+			&mut yubikey,
+			crate::yubikey::KEY_AGREEMENT_SLOT,
+			&pin,
+			yubikey::MgmKey::default(),
+			yubikey::TouchPolicy::Always,
+		)
+		.map_err(Error::GenerateEncrypt)?;
+
+	let public_key_bytes = crate::yubikey::pair_public_key(&mut yubikey)?;
+	let public_key_hex = qos_hex::encode(&public_key_bytes);
+
+	// Explicitly drop the yubikey to disconnect the PCSC session.
+	drop(yubikey);
+
+	write_with_msg(
+		pub_path.as_ref(),
+		public_key_hex.as_bytes(),
+		"YubiKey encrypt+sign public key",
+	);
+
+	Ok(())
+}
+
+pub(crate) struct BootGenesisArgs<'a, P: AsRef<Path>> {
+	pub uri: &'a str,
+	pub namespace_dir: P,
+	pub share_set_dir: P,
+	pub qos_build_fingerprints_path: P,
+	pub pcr3_preimage_path: P,
+	pub unsafe_skip_attestation: bool,
+}
+
 pub(crate) fn boot_genesis<P: AsRef<Path>>(
-	uri: &str,
-	namespace_dir: P,
-	share_set_dir: P,
-	qos_build_fingerprints_path: P,
-	pcr3_preimage_path: P,
-	unsafe_skip_attestation: bool,
+	BootGenesisArgs {
+		uri,
+		namespace_dir,
+		share_set_dir,
+		qos_build_fingerprints_path,
+		pcr3_preimage_path,
+		unsafe_skip_attestation,
+	}: BootGenesisArgs<P>,
 ) {
 	let genesis_set = get_genesis_set(&share_set_dir);
 
@@ -154,20 +352,30 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	);
 }
 
+pub(crate) struct AfterGenesisArgs<P: AsRef<Path>> {
+	pub pair: PairOrYubi,
+	pub share_path: P,
+	pub alias: String,
+	pub namespace_dir: P,
+	pub qos_build_fingerprints_path: P,
+	pub pcr3_preimage_path: P,
+	pub unsafe_skip_attestation: bool,
+}
+
 pub(crate) fn after_genesis<P: AsRef<Path>>(
-	namespace_dir: P,
-	personal_dir: P,
-	qos_build_fingerprints_path: P,
-	pcr3_preimage_path: P,
-	unsafe_skip_attestation: bool,
-) {
+	AfterGenesisArgs {
+		mut pair,
+		share_path,
+		alias,
+		namespace_dir,
+		qos_build_fingerprints_path,
+		pcr3_preimage_path,
+		unsafe_skip_attestation,
+	}: AfterGenesisArgs<P>,
+) -> Result<(), Error> {
 	let attestation_doc_path =
 		namespace_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
 	let genesis_set_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
-
-	// Read in the setup key
-	let (share_key_pair, mut share_key_file_name) =
-		find_share_key(&personal_dir);
 
 	// Get the PCRs for QOS so we can verify
 	let qos_build_fingerprints =
@@ -176,9 +384,6 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		"QOS build fingerprints taken from commit: {}",
 		qos_build_fingerprints.qos_commit
 	);
-
-	let alias = mem::take(&mut share_key_file_name[0]);
-	println!("Alias: {}", alias);
 
 	// Read in the attestation doc from the genesis directory
 	let cose_sign1 =
@@ -208,7 +413,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	}
 
 	// Get the members specific output based on alias & setup key
-	let share_key_public = share_key_pair.public_key().to_bytes();
+	let share_key_public = pair.public_key_bytes()?;
 	let member_output = genesis_output
 		.member_outputs
 		.iter()
@@ -219,9 +424,8 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		.expect("Could not find a member output associated with the setup key");
 
 	// Make sure we can decrypt the Share with the Personal Key
-	let plaintext_share = share_key_pair
-		.decrypt(&member_output.encrypted_quorum_key_share)
-		.expect("Share could not be decrypted with personal key");
+	let plaintext_share =
+		pair.decrypt(&member_output.encrypted_quorum_key_share)?;
 
 	assert_eq!(
 		sha_256(&plaintext_share),
@@ -232,13 +436,13 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	drop(plaintext_share);
 
 	// Store the encrypted share
-	let share_path =
-		personal_dir.as_ref().join(format!("{}.{}", alias, SHARE_EXT));
 	write_with_msg(
-		share_path.as_path(),
+		share_path.as_ref(),
 		&member_output.encrypted_quorum_key_share,
 		"Encrypted Quorum Share",
 	);
+
+	Ok(())
 }
 
 pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
@@ -250,12 +454,14 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub pcr3_preimage_path: P,
 	pub share_set_dir: P,
 	pub manifest_set_dir: P,
-	pub namespace_dir: P,
-	pub manifest_dir: P,
+	pub quorum_key_path: P,
+	pub manifest_path: P,
 	pub pivot_args: Vec<String>,
 }
 
-pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
+pub(crate) fn generate_manifest<P: AsRef<Path>>(
+	args: GenerateManifestArgs<P>,
+) -> Result<(), Error> {
 	let GenerateManifestArgs {
 		nonce,
 		namespace,
@@ -265,8 +471,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		pcr3_preimage_path,
 		manifest_set_dir,
 		share_set_dir,
-		namespace_dir,
-		manifest_dir,
+		quorum_key_path,
+		manifest_path,
 		pivot_args,
 	} = args;
 
@@ -280,7 +486,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 	// Get share set keys & threshold
 	let share_set = get_share_set(share_set_dir);
 	// Get quorum key from namespaces dir
-	let quorum_key: P256Public = find_quorum_key(namespace_dir);
+	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
+		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
 	let manifest = Manifest {
 		namespace: Namespace {
@@ -299,12 +506,9 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(args: GenerateManifestArgs<P>) {
 		enclave: nitro_config,
 	};
 
-	fs::create_dir_all(&manifest_dir)
-		.expect("Failed to created manifest_dir dir");
-	let manifest_path = manifest_dir
-		.as_ref()
-		.join(format!("{}.{}.{}", namespace, nonce, MANIFEST_EXT));
-	write_with_msg(&manifest_path, &manifest.try_to_vec().unwrap(), "Manifest");
+	write_with_msg(manifest_path.as_ref(), &manifest.try_to_vec().unwrap(), "Manifest");
+
+	Ok(())
 }
 
 fn extract_nitro_config<P: AsRef<Path>>(
@@ -326,34 +530,39 @@ fn extract_nitro_config<P: AsRef<Path>>(
 }
 
 pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
-	pub personal_dir: P,
-	pub manifest_dir: P,
+	pub pair: PairOrYubi,
+	pub manifest_path: P,
+	pub manifest_approvals_dir: P,
 	pub qos_build_fingerprints_path: P,
 	pub pcr3_preimage_path: P,
 	pub pivot_build_fingerprints_path: P,
-	pub namespace_dir: P,
+	pub quorum_key_path: P,
 	pub manifest_set_dir: P,
 	pub share_set_dir: P,
 	pub alias: String,
 	pub unsafe_auto_confirm: bool,
 }
 
-pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
+pub(crate) fn approve_manifest<P: AsRef<Path>>(
+	args: ApproveManifestArgs<P>,
+) -> Result<(), Error> {
 	let ApproveManifestArgs {
-		personal_dir,
-		manifest_dir,
+		mut pair,
+		manifest_path,
+		manifest_approvals_dir,
 		qos_build_fingerprints_path,
 		pcr3_preimage_path,
 		pivot_build_fingerprints_path,
-		namespace_dir,
+		quorum_key_path,
 		manifest_set_dir,
 		share_set_dir,
 		alias,
 		unsafe_auto_confirm,
 	} = args;
 
-	let manifest = find_manifest(&manifest_dir);
-	let (personal_pair, _) = find_share_key(&personal_dir);
+	let manifest = read_manifest(&manifest_path)?;
+	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
+		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
 	if !approve_manifest_programmatic_verifications(
 		&manifest,
@@ -361,7 +570,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 		&get_share_set(share_set_dir),
 		&extract_nitro_config(qos_build_fingerprints_path, pcr3_preimage_path),
 		&extract_pivot_build_fingerprints(pivot_build_fingerprints_path),
-		&find_quorum_key(namespace_dir),
+		&quorum_key,
 	) {
 		eprintln!("Exiting early without approving manifest");
 		std::process::exit(1);
@@ -379,16 +588,14 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 	}
 
 	let approval = Approval {
-		signature: personal_pair
-			.sign(&manifest.qos_hash())
-			.expect("Failed to sign"),
+		signature: pair.sign(&manifest.qos_hash())?,
 		member: QuorumMember {
-			pub_key: personal_pair.public_key().to_bytes(),
+			pub_key: pair.public_key_bytes()?,
 			alias: alias.clone(),
 		},
 	};
 
-	let approval_path = manifest_dir.as_ref().join(format!(
+	let approval_path = manifest_approvals_dir.as_ref().join(format!(
 		"{}.{}.{}.{}",
 		alias, manifest.namespace.name, manifest.namespace.nonce, APPROVAL_EXT
 	));
@@ -397,6 +604,10 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(args: ApproveManifestArgs<P>) {
 		&approval.try_to_vec().expect("Failed to serialize approval"),
 		"Manifest Approval",
 	);
+
+	drop(pair);
+
+	Ok(())
 }
 
 // TODO: bubble up logging as errors in stead of printing in place to make it
@@ -503,9 +714,12 @@ where
 	true
 }
 
-pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(manifest_dir: P) {
-	let manifest = find_manifest(&manifest_dir);
-	let approvals = find_approvals(&manifest_dir, &manifest);
+pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
+	manifest_approvals_dir: P,
+	manifest_path: P,
+) -> Result<(), Error> {
+	let manifest = read_manifest(&manifest_path)?;
+	let approvals = find_approvals(&manifest_approvals_dir, &manifest);
 
 	// Create manifest envelope
 	let manifest_envelope = ManifestEnvelope {
@@ -519,29 +733,41 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(manifest_dir: P) {
 		std::process::exit(1);
 	}
 
-	let path = manifest_dir.as_ref().join(MANIFEST_ENVELOPE);
+	let path = manifest_approvals_dir.as_ref().join(MANIFEST_ENVELOPE);
 	write_with_msg(
 		&path,
 		&manifest_envelope
 			.try_to_vec()
 			.expect("Failed to serialize manifest envelope"),
-		"Manifest Approval",
+		"Manifest Envelope",
 	);
+
+	Ok(())
+}
+
+pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
+	pub uri: String,
+	pub pivot_path: P,
+	pub manifest_envelope_path: P,
+	pub pcr3_preimage_path: P,
+	pub unsafe_skip_attestation: bool,
 }
 
 pub(crate) fn boot_standard<P: AsRef<Path>>(
-	uri: &str,
-	pivot_path: P,
-	manifest_dir: P,
-	pcr3_preimage_path: P,
-	unsafe_skip_attestation: bool,
-) {
+	BootStandardArgs {
+		uri,
+		pivot_path,
+		manifest_envelope_path,
+		pcr3_preimage_path,
+		unsafe_skip_attestation,
+	}: BootStandardArgs<P>,
+) -> Result<(), Error> {
 	// Read in pivot binary
 	let pivot =
 		fs::read(pivot_path.as_ref()).expect("Failed to read pivot binary");
 
 	// Create manifest envelope
-	let manifest_envelope = find_manifest_envelope(manifest_dir);
+	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;
 	let manifest = manifest_envelope.manifest.clone();
 
 	let req = ProtocolMsg::BootStandardRequest {
@@ -550,7 +776,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	};
 	// Broadcast boot standard instruction and extract the attestation doc from
 	// the response.
-	let cose_sign1 = match request::post(uri, &req).unwrap() {
+	let cose_sign1 = match request::post(&uri, &req).unwrap() {
 		ProtocolMsg::BootStandardResponse {
 			nsm_response: NsmResponse::Attestation { document },
 		} => document,
@@ -582,13 +808,15 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 				.expect("Ephemeral key not valid public key"),
 		);
 	}
+
+	Ok(())
 }
 
 pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 	uri: &str,
-	attestation_dir: P,
+	attestation_doc_path: P,
 ) {
-	let (cose_sign1, manifest_envelope) =
+	let (cose_sign1, _manifest_envelope) =
 		match request::post(uri, &ProtocolMsg::LiveAttestationDocRequest) {
 			Ok(ProtocolMsg::LiveAttestationDocResponse {
 				nsm_response: NsmResponse::Attestation { document },
@@ -601,28 +829,21 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 			r => panic!("Unexpected response: {:?}", r),
 		};
 
-	let attestation_doc_path =
-		attestation_dir.as_ref().join(STANDARD_ATTESTATION_DOC_FILE);
 	write_with_msg(
-		&attestation_doc_path,
+		attestation_doc_path.as_ref(),
 		&cose_sign1,
 		"COSE Sign1 Attestation Doc",
-	);
-
-	let manifest_envelope_path =
-		attestation_dir.as_ref().join(MANIFEST_ENVELOPE);
-	write_with_msg(
-		&manifest_envelope_path,
-		&manifest_envelope.try_to_vec().expect("borsh works"),
-		"ManifestEnvelope",
 	);
 }
 
 pub(crate) struct ProxyReEncryptShareArgs<P: AsRef<Path>> {
-	pub attestation_dir: P,
-	pub personal_dir: P, // TODO: replace this with just using yubikey to sign
+	pub pair: PairOrYubi,
+	pub share_path: P,
+	pub attestation_doc_path: P,
+	pub approval_path: P,
+	pub eph_wrapped_share_path: P,
 	pub pcr3_preimage_path: P,
-	pub manifest_dir: P,
+	pub manifest_envelope_path: P,
 	pub manifest_set_dir: P,
 	pub alias: String,
 	pub unsafe_skip_attestation: bool,
@@ -637,22 +858,27 @@ pub(crate) struct ProxyReEncryptShareArgs<P: AsRef<Path>> {
 //   organization)
 pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	ProxyReEncryptShareArgs {
-		attestation_dir,
-		personal_dir,
+		mut pair,
+		share_path,
+		attestation_doc_path,
+		approval_path,
+		eph_wrapped_share_path,
 		pcr3_preimage_path,
 		manifest_set_dir,
-		manifest_dir,
+		manifest_envelope_path,
 		alias,
 		unsafe_skip_attestation,
 		unsafe_eph_path_override,
 		unsafe_auto_confirm,
 	}: ProxyReEncryptShareArgs<P>,
-) {
-	let manifest_envelope = find_manifest_envelope(&manifest_dir);
+) -> Result<(), Error> {
+	let manifest_envelope = read_manifest_envelope(&manifest_envelope_path)?;
 	let attestation_doc =
-		find_attestation_doc(&attestation_dir, unsafe_skip_attestation);
-	let encrypted_share = find_share(&personal_dir);
-	let (personal_pair, _) = find_share_key(&personal_dir);
+		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
+	let encrypted_share = std::fs::read(share_path).map_err(|e| {
+		eprintln!("{:?}", e);
+		Error::ReadShare
+	})?;
 
 	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
 
@@ -684,13 +910,12 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		.expect("Ephemeral key not valid public key")
 	};
 
+	let member = QuorumMember { pub_key: pair.public_key_bytes()?, alias };
+
 	if !proxy_re_encrypt_share_programmatic_verifications(
 		&manifest_envelope,
 		&get_manifest_set(manifest_set_dir),
-		&QuorumMember {
-			alias: alias.clone(),
-			pub_key: personal_pair.public_key().to_bytes(),
-		},
+		&member,
 	) {
 		eprintln!("Exiting early without re-encrypting / approving");
 		std::process::exit(1);
@@ -712,30 +937,32 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	}
 
 	let share = {
-		let plaintext_share = &personal_pair
+		let plaintext_share = &pair
 			.decrypt(&encrypted_share)
 			.expect("Failed to decrypt share with personal key.");
 		eph_pub.encrypt(plaintext_share).expect("Envelope encryption error")
 	};
 
 	let approval = Approval {
-		signature: personal_pair
+		signature: pair
 			.sign(&manifest_envelope.manifest.qos_hash())
 			.expect("Failed to sign"),
-		member: QuorumMember {
-			pub_key: personal_pair.public_key().to_bytes(),
-			alias,
-		},
+		member,
 	}
 	.try_to_vec()
 	.expect("Could not serialize Approval");
 
-	let approval_path =
-		attestation_dir.as_ref().join(ATTESTATION_APPROVAL_FILE);
-	write_with_msg(&approval_path, &approval, "Share Set Approval");
+	write_with_msg(approval_path.as_ref(), &approval, "Share Set Approval");
 
-	let share_path = attestation_dir.as_ref().join(EPH_WRAPPED_SHARE_FILE);
-	write_with_msg(&share_path, &share, "Ephemeral key wrapped share");
+	write_with_msg(
+		eph_wrapped_share_path.as_ref(),
+		&share,
+		"Ephemeral key wrapped share",
+	);
+
+	drop(pair);
+
+	Ok(())
 }
 
 // TODO: bubble up logging as errors in stead of printing in place to make it
@@ -828,10 +1055,15 @@ where
 	true
 }
 
-pub(crate) fn post_share<P: AsRef<Path>>(uri: &str, attestation_dir: P) {
+pub(crate) fn post_share<P: AsRef<Path>>(
+	uri: &str,
+	eph_wrapped_share_path: P,
+	approval_path: P,
+) -> Result<(), Error> {
 	// Get the ephemeral key wrapped share
-	let share = find_share(&attestation_dir);
-	let approval = find_attestation_approval(&attestation_dir);
+	let share = fs::read(eph_wrapped_share_path)
+		.map_err(Error::FailedToReadEphWrappedShare)?;
+	let approval = read_attestation_approval(&approval_path)?;
 
 	let req = ProtocolMsg::ProvisionRequest { share, approval };
 	let is_reconstructed = match request::post(uri, &req).unwrap() {
@@ -843,7 +1075,9 @@ pub(crate) fn post_share<P: AsRef<Path>>(uri: &str, attestation_dir: P) {
 		println!("The quorum key has been reconstructed.");
 	} else {
 		println!("The quorum key has *not* been reconstructed.");
-	}
+	};
+
+	Ok(())
 }
 
 #[allow(clippy::too_many_lines)]
@@ -985,50 +1219,6 @@ fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
 		.expect("Failed to read directory")
 		.map(|p| p.unwrap().path())
 		.collect()
-}
-
-fn find_share_key<P: AsRef<Path>>(personal_dir: P) -> (P256Pair, Vec<String>) {
-	let mut s: Vec<_> = find_file_paths(&personal_dir)
-		.iter()
-		.filter_map(|path| {
-			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != SECRET_EXT) {
-				return None;
-			};
-
-			Some((
-				P256Pair::from_hex_file(path)
-					.expect("Could not read PEM from share_key.key"),
-				file_name,
-			))
-		})
-		.collect();
-	// Make sure there is exactly one manifest
-	assert_eq!(s.len(), 1, "Did not find exactly 1 setup key.");
-
-	s.remove(0)
-}
-
-fn find_quorum_key<P: AsRef<Path>>(dir: P) -> P256Public {
-	let mut s: Vec<_> = find_file_paths(&dir)
-		.iter()
-		.filter_map(|path| {
-			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT)
-				|| file_name.first().map_or(true, |s| s.as_str() != QUORUM_KEY)
-			{
-				return None;
-			};
-
-			Some(P256Public::from_hex_file(path).unwrap_or_else(|_| {
-				panic!("Could not read hex from {:?}", path)
-			}))
-		})
-		.collect();
-	// Make sure there is exactly one manifest
-	assert_eq!(s.len(), 1, "Did not find exactly 1 quorum key.");
-
-	s.remove(0)
 }
 
 fn find_threshold<P: AsRef<Path>>(dir: P) -> u32 {
@@ -1193,125 +1383,42 @@ fn find_approvals<P: AsRef<Path>>(
 	approvals
 }
 
-fn find_manifest<P: AsRef<Path>>(dir: P) -> Manifest {
-	let mut m: Vec<_> = find_file_paths(&dir)
-		.iter()
-		.filter_map(|path| {
-			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != MANIFEST_EXT) {
-				return None;
-			};
-
-			let buf = fs::read(path).expect("Failed to read manifest");
-			Some(
-				Manifest::try_from_slice(&buf)
-					.expect("Failed to deserialize manifest"),
-			)
-		})
-		.collect();
-	// Make sure there is exactly one manifest
-	assert_eq!(m.len(), 1, "Did not find correct number of manifests");
-
-	m.remove(0)
+fn read_manifest<P: AsRef<Path>>(file: P) -> Result<Manifest, Error> {
+	let buf = fs::read(file).map_err(Error::FailedToReadManifestFile)?;
+	Manifest::try_from_slice(&buf)
+		.map_err(|_| Error::FileDidNotHaveValidManifest)
 }
 
-fn find_attestation_doc<P: AsRef<Path>>(
-	dir: P,
+fn read_attestation_doc<P: AsRef<Path>>(
+	path: P,
 	unsafe_skip_attestation: bool,
-) -> AttestationDoc {
-	let mut a: Vec<_> = find_file_paths(&dir)
-		.iter()
-		.map(|p| {
-			(p, p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
-		})
-		.filter_map(|(path, file)| {
-			if file == STANDARD_ATTESTATION_DOC_FILE {
-				let cose_sign1_der =
-					fs::read(path).expect("Failed to read attestation doc");
+) -> Result<AttestationDoc, Error> {
+	let cose_sign1_der =
+		fs::read(path).map_err(Error::FailedToReadAttestationDoc)?;
 
-				Some(extract_attestation_doc(
-					&cose_sign1_der,
-					unsafe_skip_attestation,
-				))
-			} else {
-				None
-			}
-		})
-		.collect();
-
-	assert_eq!(a.len(), 1, "Not exactly one attestation doc");
-
-	a.remove(0)
+	Ok(extract_attestation_doc(
+		cose_sign1_der.as_ref(),
+		unsafe_skip_attestation,
+	))
 }
 
-fn find_manifest_envelope<P: AsRef<Path>>(dir: P) -> ManifestEnvelope {
-	let mut a: Vec<_> = find_file_paths(&dir)
-		.iter()
-		.map(|p| {
-			(p, p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
-		})
-		.filter_map(|(path, file)| {
-			if file == MANIFEST_ENVELOPE {
-				let manifest_envelope =
-					fs::read(path).expect("Failed to read manifest envelope");
-
-				Some(
-					ManifestEnvelope::try_from_slice(&manifest_envelope)
-						.expect("Could not decode manifest envelope"),
-				)
-			} else {
-				None
-			}
-		})
-		.collect();
-
-	assert_eq!(a.len(), 1, "Not exactly one manifest envelope in directory");
-
-	a.remove(0)
+fn read_manifest_envelope<P: AsRef<Path>>(
+	file: P,
+) -> Result<ManifestEnvelope, Error> {
+	let buf =
+		fs::read(file).map_err(Error::FailedToReadManifestEnvelopeFile)?;
+	ManifestEnvelope::try_from_slice(&buf)
+		.map_err(|_| Error::FileDidNotHaveValidManifestEnvelope)
 }
 
-fn find_attestation_approval<P: AsRef<Path>>(dir: P) -> Approval {
-	let mut a: Vec<_> = find_file_paths(&dir)
-		.iter()
-		.map(|p| {
-			(p, p.file_name().map(std::ffi::OsStr::to_string_lossy).unwrap())
-		})
-		.filter_map(|(path, file)| {
-			if file == ATTESTATION_APPROVAL_FILE {
-				let manifest_envelope =
-					fs::read(path).expect("Failed to read manifest envelope");
+fn read_attestation_approval<P: AsRef<Path>>(
+	path: P,
+) -> Result<Approval, Error> {
+	let manifest_envelope =
+		fs::read(path).map_err(Error::FailedToReadAttestationApproval)?;
 
-				Some(
-					Approval::try_from_slice(&manifest_envelope)
-						.expect("Could not decode manifest envelope"),
-				)
-			} else {
-				None
-			}
-		})
-		.collect();
-
-	assert_eq!(a.len(), 1, "Not exactly one manifest envelope in directory");
-
-	a.remove(0)
-}
-
-fn find_share<P: AsRef<Path>>(personal_dir: P) -> Vec<u8> {
-	let mut s: Vec<_> = find_file_paths(&personal_dir)
-		.iter()
-		.filter_map(|path| {
-			let file_name = split_file_name(path);
-			// Only look at files with the personal.key extension
-			if file_name.last().map_or(true, |s| s.as_str() != "share") {
-				return None;
-			};
-
-			Some(fs::read(path).expect("Failed to read in share"))
-		})
-		.collect();
-	assert_eq!(s.len(), 1, "Did not find exactly 1 share in the directory");
-
-	s.remove(0)
+	Approval::try_from_slice(&manifest_envelope)
+		.map_err(|_| Error::FileDidNotHaveValidAttestationApproval)
 }
 
 struct QosBuildFingerprints {
