@@ -43,6 +43,7 @@ async fn boot_e2e() {
 	fs::create_dir_all(&*boot_dir).unwrap();
 	let attestation_dir: PathWrapper = "/tmp/boot-e2e/attestation-dir".into();
 	fs::create_dir_all(&*attestation_dir).unwrap();
+	let attestation_doc_path = format!("{}/attestation_doc", &*attestation_dir);
 
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
 
@@ -70,6 +71,7 @@ async fn boot_e2e() {
 	// -- CLIENT create manifest.
 	let msg = "testing420";
 	let pivot_args = format!("[--msg,{}]", msg);
+	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
 
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
@@ -86,16 +88,16 @@ async fn boot_e2e() {
 			"./mock/qos-build-fingerprints.txt",
 			"--pcr3-preimage-path",
 			"./mock/namespaces/pcr3-preimage.txt",
-			"--manifest-dir",
-			&*boot_dir,
+			"--manifest-path",
+			&cli_manifest_path,
 			"--pivot-args",
 			&pivot_args,
 			"--manifest-set-dir",
 			"./mock/keys/manifest-set",
 			"--share-set-dir",
 			"./mock/keys/share-set",
-			"--namespace-dir",
-			"./mock/namespaces/quit-coding-to-vape"
+			"--quorum-key-path",
+			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub"
 		])
 		.spawn()
 		.unwrap()
@@ -104,7 +106,6 @@ async fn boot_e2e() {
 		.success());
 
 	// Check the manifest written to file
-	let cli_manifest_path = format!("{}/{}.2.manifest", &*boot_dir, namespace);
 	let manifest =
 		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
 			.unwrap();
@@ -176,7 +177,9 @@ async fn boot_e2e() {
 				"approve-manifest",
 				"--secret-path",
 				&*secret_path,
-				"--manifest-dir",
+				"--manifest-path",
+				&cli_manifest_path,
+				"--manifest-approvals-dir",
 				&*boot_dir,
 				"--pcr3-preimage-path",
 				"./mock/namespaces/pcr3-preimage.txt",
@@ -188,8 +191,8 @@ async fn boot_e2e() {
 				"./mock/keys/manifest-set",
 				"--share-set-dir",
 				"./mock/keys/share-set",
-				"--namespace-dir",
-				"./mock/namespaces/quit-coding-to-vape",
+				"--quorum-key-path",
+				"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
 				"--alias",
 				alias,
 			])
@@ -299,7 +302,13 @@ async fn boot_e2e() {
 
 	// -- CLIENT generate the manifest envelope
 	assert!(Command::new("../target/debug/qos_client")
-		.args(["generate-manifest-envelope", "--manifest-dir", &*boot_dir,])
+		.args([
+			"generate-manifest-envelope",
+			"--manifest-approvals-dir",
+			&*boot_dir,
+			"--manifest-path",
+			&cli_manifest_path,
+		])
 		.spawn()
 		.unwrap()
 		.wait()
@@ -307,11 +316,12 @@ async fn boot_e2e() {
 		.success());
 
 	// -- CLIENT broadcast boot standard instruction
+	let manifest_envelope_path = format!("{}/manifest_envelope", &*boot_dir,);
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
 			"boot-standard",
-			"--manifest-dir",
-			&*boot_dir,
+			"--manifest-envelope-path",
+			&manifest_envelope_path,
 			"--pivot-path",
 			PIVOT_OK2_PATH,
 			"--host-port",
@@ -340,8 +350,8 @@ async fn boot_e2e() {
 				&host_port.to_string(),
 				"--host-ip",
 				LOCAL_HOST,
-				"--attestation-dir",
-				&*attestation_dir
+				"--attestation-doc-path",
+				&*attestation_doc_path
 			])
 			.spawn()
 			.unwrap()
@@ -351,6 +361,10 @@ async fn boot_e2e() {
 
 		let share_path = format!("{}/{}.share", &personal_dir(user), user);
 		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
+		let eph_wrapped_share_path: PathWrapper =
+			format!("{}/{}.eph_wrapped.share", &*tmp, user).into();
+		let approval_path: PathWrapper =
+			format!("{}/{}.attestation.approval", &*tmp, user).into();
 		// Encrypt share to ephemeral key
 		let mut child = Command::new("../target/debug/qos_client")
 			.args([
@@ -359,10 +373,14 @@ async fn boot_e2e() {
 				&share_path,
 				"--secret-path",
 				&secret_path,
-				"--attestation-dir",
-				&*attestation_dir,
-				"--manifest-dir",
-				&*boot_dir,
+				"--attestation-doc-path",
+				&*attestation_doc_path,
+				"--eph-wrapped-share-path",
+				&eph_wrapped_share_path,
+				"--approval-path",
+				&approval_path,
+				"--manifest-envelope-path",
+				&manifest_envelope_path,
 				"--pcr3-preimage-path",
 				"./mock/namespaces/pcr3-preimage.txt",
 				"--manifest-set-dir",
@@ -425,8 +443,10 @@ async fn boot_e2e() {
 				&host_port.to_string(),
 				"--host-ip",
 				LOCAL_HOST,
-				"--attestation-dir",
-				&*attestation_dir
+				"--eph-wrapped-share-path",
+				&eph_wrapped_share_path,
+				"--approval-path",
+				&approval_path,
 			])
 			.spawn()
 			.unwrap()
