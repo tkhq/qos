@@ -6,6 +6,7 @@ ARCH=$(uname -m)
 cp /config/toolchain/* /etc/apt/
 
 apt-get update
+apt-get install debian-archive-keyring
 
 until apt-get install --download-only --reinstall --allow-downgrades -y $(cat /etc/apt/packages-${ARCH}.list); do
     echo "apt install failed. Likely throttled. Retrying in 10 mins...";
