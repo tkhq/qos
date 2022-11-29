@@ -76,7 +76,7 @@ The details for how QOS nodes communicate with each other can vary, but for the 
       }
     ```
 
-6) The New Node processes the request by performing the following requests:
+6) The New Node processes the request by performing the following steps:
     1) Verify the signature over the `encrypted_quorum_key` against the Quorum Key specified in the New Manifest.
     1) Decrypt the encrypted Quorum Key in the request with the Ephemeral Key.
     1) Check that the decrypted Quorum Key public key matches the one specified in the New Manifest.
