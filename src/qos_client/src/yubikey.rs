@@ -55,6 +55,7 @@ pub enum YubiKeyError {
 	Connection(yubikey::Error),
 	/// Failed to deserialize the encryption envelope.
 	EnvelopeDeserialize,
+	FailedToLoadKey,
 }
 
 /// Generate a signed certificate with a p256 key for the given `slot`.
@@ -104,6 +105,24 @@ pub fn generate_signed_certificate(
 
 	Ok(encoded_point.to_bytes())
 }
+
+pub fn import_p256(
+    yubikey: &mut YubiKey,
+    slot: SlotId,
+    key_data: &[u8],
+	touch_policy: TouchPolicy,
+) -> Result<Box<[u8]>, YubiKeyError> {
+	let public_key_info = piv::import_ecc_key(yubikey, slot, ALGO, key_data, PinPolicy::Always, touch_policy)
+		.map_err(|_| YubiKeyError::FailedToLoadKey)?;
+}
+
+pub fn generate_signed_certificate(
+	yubikey: &mut YubiKey,
+	slot: SlotId,
+	pin: &[u8],
+	mgm_key: MgmKey,
+	touch_policy: TouchPolicy,
+)
 
 /// Sign data with the yubikey and return the signature as a raw bytes.
 pub fn sign_data(

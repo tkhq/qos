@@ -56,6 +56,18 @@ impl Reaper {
 			std::thread::sleep(std::time::Duration::from_secs(1));
 		}
 
+		let pivot_path = handles.pivot_path();
+		let metadata = std::fs::metadata(pivot_path);
+		dbg!(&metadata);
+		dbg!(metadata.unwrap().len());
+
+		let contents_result = std::fs::read(handles.pivot_path());
+		let contents = dbg!(contents_result.unwrap());
+		let hash = qos_crypto::sha_256(&contents);
+		let encoded_hash = qos_hex::encode(&hash);
+		dbg!(encoded_hash);
+
+
 		println!("Reaper::execute about to spawn pivot");
 
 		let PivotConfig { args, restart, .. } = handles
