@@ -2,13 +2,14 @@ use std::process::Command;
 
 use borsh::BorshDeserialize;
 use qos_client::yubikey::{
-	generate_signed_certificate, key_agreement, sign_data, DEFAULT_PIN,
-	KEY_AGREEMENT_SLOT, SIGNING_SLOT,
+	generate_signed_certificate, import_key_and_generate_signed_certificate,
+	key_agreement, sign_data, DEFAULT_PIN, KEY_AGREEMENT_SLOT, SIGNING_SLOT,
 };
 use qos_p256::{
-	encrypt::{Envelope, P256EncryptPublic},
-	sign::P256SignPublic,
-	P256Public,
+	encrypt::{Envelope, P256EncryptPair, P256EncryptPublic},
+	non_zero_bytes_os_rng,
+	sign::{P256SignPair, P256SignPublic},
+	P256Public, P256_SECRET_LEN,
 };
 use qos_test_primitives::PathWrapper;
 use yubikey::{MgmKey, TouchPolicy, YubiKey};
@@ -39,6 +40,12 @@ fn yubikey_tests() {
 	reset(&mut yubikey);
 
 	key_agreement_works(&mut yubikey);
+	reset(&mut yubikey);
+
+	import_signing_works(&mut yubikey);
+	reset(&mut yubikey);
+
+	import_key_agreement_works(&mut yubikey);
 	reset(&mut yubikey);
 
 	// Dropping the yubikey should disconnect the underlying PCSC reader
@@ -106,6 +113,63 @@ fn signing_works(yubikey: &mut YubiKey) {
 	let signature = sign_data(yubikey, DATA, DEFAULT_PIN).unwrap();
 	// verify the signature from the yubikey is correct
 	assert!(public.verify(DATA, &signature).is_ok());
+}
+
+fn import_signing_works(yubikey: &mut YubiKey) {
+	let secret = non_zero_bytes_os_rng::<P256_SECRET_LEN>();
+	let pair = P256SignPair::from_bytes(&secret).unwrap();
+	let public = pair.public_key();
+
+	import_key_and_generate_signed_certificate(
+		yubikey,
+		&secret,
+		SIGNING_SLOT,
+		DEFAULT_PIN,
+		MgmKey::default(),
+		TouchPolicy::Never,
+	)
+	.unwrap();
+
+	let signature = sign_data(yubikey, DATA, DEFAULT_PIN).unwrap();
+	// verify the signature from the yubikey is correct
+	assert!(public.verify(DATA, &signature).is_ok());
+}
+
+fn import_key_agreement_works(yubikey: &mut YubiKey) {
+	let secret = non_zero_bytes_os_rng::<32>();
+	let pair = P256EncryptPair::from_bytes(&secret).unwrap();
+	let public = pair.public_key();
+
+	import_key_and_generate_signed_certificate(
+		yubikey,
+		&secret,
+		KEY_AGREEMENT_SLOT,
+		DEFAULT_PIN,
+		MgmKey::default(),
+		TouchPolicy::Never,
+	)
+	.unwrap();
+
+	// encrypt to that public key
+	let envelope = public.encrypt(DATA).unwrap();
+
+	// get the sender eph key from the encryption envelope
+	let sender_pub_bytes = {
+		let decoded = Envelope::try_from_slice(&envelope).unwrap();
+		decoded.ephemeral_sender_public
+	};
+
+	// use the yubikey to compute shared secret with sender eph key
+	let shared_secret =
+		key_agreement(yubikey, &sender_pub_bytes, DEFAULT_PIN).unwrap();
+
+	// do decryption
+	let decrypted = public
+		.decrypt_from_shared_secret(&envelope, &shared_secret[..])
+		.unwrap();
+
+	// confirm the output is correct
+	assert_eq!(decrypted, DATA);
 }
 
 fn provision_yubikey_works() {

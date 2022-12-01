@@ -18,10 +18,11 @@ use crate::{
 };
 
 const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
-const P256_SECRET_LEN: usize = 32;
 const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
 const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
 
+/// Length of a p256 secret seed.
+pub const P256_SECRET_LEN: usize = 32;
 /// Length of the master seed.
 pub const MASTER_SEED_LEN: usize = 32;
 
@@ -96,7 +97,8 @@ fn derive_secret(
 }
 
 /// Helper function to generate a `N` length byte buffer.
-fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
+#[must_use]
+pub fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
 	loop {
 		let mut key = [0u8; N];
 		OsRng.fill_bytes(&mut key);

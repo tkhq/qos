@@ -130,7 +130,8 @@ impl PairOrYubi {
 						.map_err(Error::PinEntryError)?;
 					PairOrYubi::Yubi((yubi, pin.as_bytes().to_vec()))
 				}
-				#[cfg(not(feature = "smartcard"))]{
+				#[cfg(not(feature = "smartcard"))]
+				{
 					panic!("{TAP_MSG}");
 				}
 			}
@@ -491,7 +492,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 
 	let manifest = Manifest {
 		namespace: Namespace {
-			name: namespace.clone(),
+			name: namespace,
 			nonce,
 			quorum_key: quorum_key.to_bytes(),
 		},
@@ -506,7 +507,11 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		enclave: nitro_config,
 	};
 
-	write_with_msg(manifest_path.as_ref(), &manifest.try_to_vec().unwrap(), "Manifest");
+	write_with_msg(
+		manifest_path.as_ref(),
+		&manifest.try_to_vec().unwrap(),
+		"Manifest",
+	);
 
 	Ok(())
 }

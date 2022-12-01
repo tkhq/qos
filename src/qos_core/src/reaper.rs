@@ -67,7 +67,6 @@ impl Reaper {
 		let encoded_hash = qos_hex::encode(&hash);
 		dbg!(encoded_hash);
 
-
 		println!("Reaper::execute about to spawn pivot");
 
 		let PivotConfig { args, restart, .. } = handles
