@@ -18,9 +18,11 @@ use crate::{
 };
 
 const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
-pub const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
-pub const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
 
+/// Master seed derive path for encryption secret
+pub const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
+/// Master seed derive path for signing secret
+pub const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
 /// Length of a p256 secret seed.
 pub const P256_SECRET_LEN: usize = 32;
 /// Length of the master seed.
