@@ -67,11 +67,15 @@ pub enum Error {
 	YubiKey(crate::yubikey::YubiKeyError),
 	/// Error from qos p256.
 	P256(qos_p256::P256Error),
-	/// Failed to read share
-	ReadShare,
+	/// The public key read from the yubikey for the pair did not match what
+	/// was expected.
+	#[cfg(feature = "smartcard")]
+	WrongPublicKey,
 	/// An error trying to read a pin from the terminal
 	#[cfg(feature = "smartcard")]
 	PinEntryError(std::io::Error),
+	/// Failed to read share
+	ReadShare,
 	/// Error while try to read the quorum public key.
 	FailedToReadQuorumPublicKey(qos_p256::P256Error),
 	/// Error trying to the read a file that is supposed to have a manifest.
@@ -258,6 +262,73 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 		pub_path.as_ref(),
 		public_key_hex.as_bytes(),
 		"YubiKey encrypt+sign public key",
+	);
+
+	Ok(())
+}
+
+#[cfg(feature = "smartcard")]
+pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
+	pub_path: P,
+	master_seed_path: P,
+) -> Result<(), Error> {
+	use qos_p256::P256_SECRET_LEN;
+	let mut yubikey =
+		yubikey::YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
+
+	println!("You need to enter a pin that will be used to authorize signing and encryption requests.");
+	let pin = rpassword::prompt_password("Enter your pin: ")
+		.map_err(Error::PinEntryError)?
+		.as_bytes()
+		.to_vec();
+
+	let master_seed = qos_p256::non_zero_bytes_os_rng::<P256_SECRET_LEN>();
+	let pair = P256Pair::from_master_seed(&master_seed)?;
+	let _encrypt_secret = qos_p256::derive_secret(
+		&master_seed,
+		qos_p256::P256_ENCRYPT_DERIVE_PATH,
+	)?;
+	let sign_secret =
+		qos_p256::derive_secret(&master_seed, qos_p256::P256_SIGN_DERIVE_PATH)?;
+
+	crate::yubikey::import_key_and_generate_signed_certificate(
+		&mut yubikey,
+		&sign_secret,
+		crate::yubikey::SIGNING_SLOT,
+		&pin,
+		yubikey::MgmKey::default(),
+		yubikey::TouchPolicy::Always,
+	)
+	.map_err(Error::GenerateSign)?;
+
+	crate::yubikey::import_key_and_generate_signed_certificate(
+		&mut yubikey,
+		&sign_secret,
+		crate::yubikey::KEY_AGREEMENT_SLOT,
+		&pin,
+		yubikey::MgmKey::default(),
+		yubikey::TouchPolicy::Always,
+	)
+	.map_err(Error::GenerateEncrypt)?;
+
+	let public_key_bytes = crate::yubikey::pair_public_key(&mut yubikey)?;
+	if public_key_bytes != pair.public_key().to_bytes() {
+		return Err(Error::WrongPublicKey);
+	}
+	// Explicitly drop the yubikey to disconnect the PCSC session.
+	drop(yubikey);
+
+	let public_key_hex = qos_hex::encode(&public_key_bytes);
+	write_with_msg(
+		pub_path.as_ref(),
+		public_key_hex.as_bytes(),
+		"YubiKey encrypt+sign Public key",
+	);
+
+	write_with_msg(
+		master_seed_path.as_ref(),
+		&pair.to_master_seed_hex(),
+		"YubiKey encrypt+sign Master Seed",
 	);
 
 	Ok(())

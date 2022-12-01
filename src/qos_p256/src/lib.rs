@@ -18,8 +18,8 @@ use crate::{
 };
 
 const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
-const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
-const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
+pub const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
+pub const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
 
 /// Length of a p256 secret seed.
 pub const P256_SECRET_LEN: usize = 32;
@@ -84,7 +84,7 @@ impl From<qos_hex::HexError> for P256Error {
 }
 
 /// Helper function to derive a secret from a master seed.
-fn derive_secret(
+pub fn derive_secret(
 	seed: &[u8; MASTER_SEED_LEN],
 	derive_path: &[u8],
 ) -> Result<[u8; P256_SECRET_LEN], P256Error> {

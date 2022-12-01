@@ -385,6 +385,7 @@ const MANIFEST_ENVELOPE_PATH: &str = "manifest-envelope-path";
 const APPROVAL_PATH: &str = "approval-path";
 const EPH_WRAPPED_SHARE_PATH: &str = "eph-wrapped-share-path";
 const ATTESTATION_DOC_PATH: &str = "attestation-doc-path";
+const MASTER_SEED_PATH: &str = "master-seed-path";
 
 /// Commands for the Client CLI.
 ///
@@ -682,6 +683,11 @@ impl Command {
 	}
 	fn attestation_doc_path_token() -> Token {
 		Token::new(ATTESTATION_DOC_PATH, "Path to an attestation doc.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn mater_seed_path_token() -> Token {
+		Token::new(MASTER_SEED_PATH, "Path to a master seed.")
 			.takes_value(true)
 			.required(true)
 	}
