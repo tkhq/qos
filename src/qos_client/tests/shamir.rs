@@ -57,4 +57,10 @@ fn shamir_commands_work() {
 		.wait()
 		.unwrap()
 		.success());
+
+	let reconstructed = std::fs::read(reconstructed_secret_path).unwrap();
+	assert_eq!(
+		reconstructed,
+		SECRET
+	);
 }
