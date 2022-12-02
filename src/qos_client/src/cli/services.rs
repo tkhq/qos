@@ -27,6 +27,7 @@ use qos_core::protocol::{
 };
 use qos_crypto::{sha_256, sha_384};
 use qos_p256::{P256Error, P256Pair, P256Public};
+use zeroize::Zeroizing;
 
 use crate::request;
 
@@ -98,6 +99,10 @@ pub enum Error {
 	/// Failed to read file that was supposed to contain Ephemeral Key wrapped
 	/// share.
 	FailedToReadEphWrappedShare(std::io::Error),
+	FailedToRead {
+		path: String,
+		error: String,
+	},
 }
 
 #[cfg(feature = "smartcard")]
@@ -314,7 +319,7 @@ pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
 	let public_key_bytes = crate::yubikey::pair_public_key(&mut yubikey)?;
 	let other = pair.public_key().to_bytes();
 
-	if public_key_bytes !=  other {
+	if public_key_bytes != other {
 		return Err(Error::WrongPublicKey);
 	}
 	// Explicitly drop the yubikey to disconnect the PCSC session.
@@ -1287,6 +1292,50 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 
 	println!("Enclave should be finished booting!");
+}
+
+pub(crate) fn shamir_split(
+	secret_path: String,
+	shares: usize,
+	threshold: usize,
+	output_dir: String,
+) -> Result<(), Error> {
+	let secret = fs::read(&secret_path).map_err(|e| Error::FailedToRead {
+		path: secret_path,
+		error: e.to_string(),
+	})?;
+	let shares =
+		qos_crypto::shamir::shares_generate(&secret, shares, threshold);
+
+	for (i, share) in shares.iter().enumerate() {
+		let file_name = format!("{}.share", i + 1);
+		let file_path = PathBuf::from(&output_dir).join(&file_name);
+		write_with_msg(&file_path, share, &file_name);
+	}
+
+	Ok(())
+}
+
+pub(crate) fn shamir_reconstruct(
+	paths: Vec<String>,
+	output_path: String,
+) -> Result<(), Error> {
+	let shares = paths
+		.into_iter()
+		.map(|p| {
+			fs::read(&p).map_err(|e| Error::FailedToRead {
+				path: p,
+				error: e.to_string(),
+			})
+		})
+		.collect::<Result<Vec<Vec<u8>>, Error>>()?;
+
+	let secret =
+		Zeroizing::new(qos_crypto::shamir::shares_reconstruct(&shares));
+
+	write_with_msg(output_path.as_ref(), &*secret, "Reconstructed secret");
+
+	Ok(())
 }
 
 fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
