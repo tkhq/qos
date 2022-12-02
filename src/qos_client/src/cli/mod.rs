@@ -707,7 +707,7 @@ impl Command {
 			.required(true)
 	}
 	fn share_token() -> Token {
-		Token::new(SHARE, "Paths to a share. This can be specified multiple times for when their are multiple shares.")
+		Token::new(SHARE, "Paths to a share. This can be specified multiple times.")
 			.takes_value(true)
 			.required(true)
 			.allow_multiple(true)
@@ -721,7 +721,7 @@ impl Command {
 		.required(true)
 	}
 	fn output_dir_token() -> Token {
-		Token::new(OUTPUT_DIR, "The directory to write outputs")
+		Token::new(OUTPUT_DIR, "The directory to write outputs.")
 			.takes_value(true)
 			.required(true)
 	}
