@@ -710,6 +710,7 @@ impl Command {
 		Token::new(SHARE, "Paths to a share. This can be specified multiple times for when their are multiple shares.")
 			.takes_value(true)
 			.required(true)
+			.allow_multiple(true)
 	}
 	fn threshold_token() -> Token {
 		Token::new(THRESHOLD, "The threshold to reconstruct a shamir split secret.")
