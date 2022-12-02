@@ -1296,7 +1296,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 
 pub(crate) fn shamir_split(
 	secret_path: String,
-	shares: usize,
+	total_shares: usize,
 	threshold: usize,
 	output_dir: String,
 ) -> Result<(), Error> {
@@ -1305,7 +1305,7 @@ pub(crate) fn shamir_split(
 		error: e.to_string(),
 	})?;
 	let shares =
-		qos_crypto::shamir::shares_generate(&secret, shares, threshold);
+		qos_crypto::shamir::shares_generate(&secret, total_shares, threshold);
 
 	for (i, share) in shares.iter().enumerate() {
 		let file_name = format!("{}.share", i + 1);
@@ -1317,10 +1317,10 @@ pub(crate) fn shamir_split(
 }
 
 pub(crate) fn shamir_reconstruct(
-	paths: Vec<String>,
+	shares: Vec<String>,
 	output_path: String,
 ) -> Result<(), Error> {
-	let shares = paths
+	let shares = shares
 		.into_iter()
 		.map(|p| {
 			fs::read(&p).map_err(|e| Error::FailedToRead {
