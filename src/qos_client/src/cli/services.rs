@@ -1298,7 +1298,7 @@ pub(crate) fn shamir_split(
 	secret_path: String,
 	total_shares: usize,
 	threshold: usize,
-	output_dir: String,
+	output_dir: &str,
 ) -> Result<(), Error> {
 	let secret = fs::read(&secret_path).map_err(|e| Error::FailedToRead {
 		path: secret_path,
@@ -1318,7 +1318,7 @@ pub(crate) fn shamir_split(
 
 pub(crate) fn shamir_reconstruct(
 	shares: Vec<String>,
-	output_path: String,
+	output_path: &str,
 ) -> Result<(), Error> {
 	let shares = shares
 		.into_iter()

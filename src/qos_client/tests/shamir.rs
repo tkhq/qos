@@ -1,5 +1,6 @@
-use qos_test_primitives::PathWrapper;
 use std::process::Command;
+
+use qos_test_primitives::PathWrapper;
 
 const SECRET: &[u8] = b"our little secret :)";
 
@@ -8,7 +9,8 @@ fn shamir_commands_work() {
 	let _tmp: PathWrapper = "/tmp/shamir_commands_works".into();
 	let secret_path: &str = "/tmp/shamir_commands_works/secret";
 	let shares_dir: &str = "/tmp/shamir_commands_works/shares";
-	let reconstructed_secret_path: &str = "/tmp/shamir_commands_works/reconstructed_secret";
+	let reconstructed_secret_path: &str =
+		"/tmp/shamir_commands_works/reconstructed_secret";
 
 	std::fs::create_dir_all(&shares_dir).unwrap();
 	std::fs::write(secret_path, SECRET).unwrap();

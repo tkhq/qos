@@ -713,9 +713,12 @@ impl Command {
 			.allow_multiple(true)
 	}
 	fn threshold_token() -> Token {
-		Token::new(THRESHOLD, "The threshold to reconstruct a shamir split secret.")
-			.takes_value(true)
-			.required(true)
+		Token::new(
+			THRESHOLD,
+			"The threshold to reconstruct a shamir split secret.",
+		)
+		.takes_value(true)
+		.required(true)
 	}
 	fn output_dir_token() -> Token {
 		Token::new(OUTPUT_DIR, "The directory to write outputs")
@@ -723,9 +726,12 @@ impl Command {
 			.required(true)
 	}
 	fn total_shares_token() -> Token {
-		Token::new(TOTAL_SHARES, "Total shares to generate with shamir secret sharing.")
-			.takes_value(true)
-			.required(true)
+		Token::new(
+			TOTAL_SHARES,
+			"Total shares to generate with shamir secret sharing.",
+		)
+		.takes_value(true)
+		.required(true)
 	}
 
 	fn base() -> Parser {
@@ -1125,7 +1131,8 @@ impl ClientOpts {
 	fn output_dir(&self) -> String {
 		self.parsed
 			.single(OUTPUT_DIR)
-			.expect("Missing `--output-dir`").to_string()
+			.expect("Missing `--output-dir`")
+			.to_string()
 	}
 
 	fn shares(&self) -> Vec<String> {
@@ -1133,11 +1140,19 @@ impl ClientOpts {
 	}
 
 	fn total_shares(&self) -> usize {
-		self.parsed.single(TOTAL_SHARES).expect("Missing `--total-shares`").parse().expect("total shares not valid integer.")
+		self.parsed
+			.single(TOTAL_SHARES)
+			.expect("Missing `--total-shares`")
+			.parse()
+			.expect("total shares not valid integer.")
 	}
 
 	fn threshold(&self) -> usize {
-		self.parsed.single(THRESHOLD).expect("Missing `--threshold`").parse().expect("threshold not valid integer.")
+		self.parsed
+			.single(THRESHOLD)
+			.expect("Missing `--threshold`")
+			.parse()
+			.expect("threshold not valid integer.")
 	}
 
 	fn yubikey(&self) -> bool {
@@ -1155,8 +1170,6 @@ impl ClientOpts {
 	fn unsafe_auto_confirm(&self) -> bool {
 		self.parsed.flag(UNSAFE_AUTO_CONFIRM).unwrap_or(false)
 	}
-
-
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -1518,7 +1531,7 @@ mod handlers {
 			opts.secret_path().expect("Missing `--secret-path`"),
 			opts.total_shares(),
 			opts.threshold(),
-			opts.output_dir(),
+			&opts.output_dir(),
 		) {
 			eprintln!("Error: {:?}", e);
 			std::process::exit(1);
@@ -1526,10 +1539,9 @@ mod handlers {
 	}
 
 	pub(super) fn shamir_reconstruct(opts: &ClientOpts) {
-		if let Err(e) = services::shamir_reconstruct(
-			opts.shares(),
-			opts.output_path()
-		){
+		if let Err(e) =
+			services::shamir_reconstruct(opts.shares(), &opts.output_path())
+		{
 			eprintln!("Error: {:?}", e);
 			std::process::exit(1);
 		}
