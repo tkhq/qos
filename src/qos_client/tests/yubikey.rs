@@ -13,6 +13,7 @@ use qos_p256::{
 };
 use qos_test_primitives::PathWrapper;
 use yubikey::{MgmKey, TouchPolicy, YubiKey};
+use qos_p256::P256Pair;
 
 const DATA: &[u8] = b"test data";
 
@@ -33,31 +34,40 @@ const DATA: &[u8] = b"test data";
 #[test]
 #[ignore]
 fn yubikey_tests() {
+	// let mut yubikey = YubiKey::open().unwrap();
+	// reset(&mut yubikey);
+
+	// signing_works(&mut yubikey);
+	// reset(&mut yubikey);
+
+	// key_agreement_works(&mut yubikey);
+	// reset(&mut yubikey);
+
+	// import_signing_works(&mut yubikey);
+	// reset(&mut yubikey);
+
+	// import_key_agreement_works(&mut yubikey);
+	// reset(&mut yubikey);
+
+	// // Dropping the yubikey should disconnect the underlying PCSC reader
+	// // connection. We want to disconnect before using the CLI provision-yubikey
+	// // command because that will try to open up a new connection.
+	// drop(yubikey);
+	// let mut yubikey = YubiKey::open().unwrap();
+	// reset(&mut yubikey);
+	// drop(yubikey);
+
+	// provision_yubikey_works();
+
 	let mut yubikey = YubiKey::open().unwrap();
 	reset(&mut yubikey);
-
-	signing_works(&mut yubikey);
-	reset(&mut yubikey);
-
-	key_agreement_works(&mut yubikey);
-	reset(&mut yubikey);
-
-	import_signing_works(&mut yubikey);
-	reset(&mut yubikey);
-
-	import_key_agreement_works(&mut yubikey);
-	reset(&mut yubikey);
-
-	// Dropping the yubikey should disconnect the underlying PCSC reader
-	// connection. We want to disconnect before using the CLI provision-yubikey
-	// command because that will try to open up a new connection.
 	drop(yubikey);
 
-	provision_yubikey_works();
+	advanced_provision_yubikey_works();
 
-	// A final reset
 	let mut yubikey = YubiKey::open().unwrap();
 	reset(&mut yubikey);
+	drop(yubikey);
 }
 
 fn key_agreement_works(yubikey: &mut YubiKey) {
@@ -196,7 +206,46 @@ fn provision_yubikey_works() {
 		let hex = String::from_utf8(hex_bytes).unwrap();
 		let bytes = qos_hex::decode(&hex).unwrap();
 		assert!(P256Public::from_bytes(&bytes).is_ok());
+		P256Public::from_bytes(&bytes).unwrap();
 	}
+}
+
+fn advanced_provision_yubikey_works() {
+	let tmp_dir: PathWrapper = "/tmp/advanced_provision_yubikey_works".into();
+	let pub_path: PathWrapper =
+		"/tmp/advanced_provision_yubikey_works/yubikey.pub".into();
+	let master_seed_path: PathWrapper =
+		"/tmp/advanced_provision_yubikey_works/yubikey.master.secret".into();
+
+	// Create the temporary directory where we write the yubikey
+	std::fs::create_dir(&*tmp_dir).unwrap();
+
+	assert!(Command::new("../target/debug/qos_client")
+		.arg("advanced-provision-yubikey")
+		.arg("--pub-path")
+		.arg(&*pub_path)
+		.arg("--master-seed-path")
+		.arg(&*master_seed_path)
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
+	// Check that public keys where written
+	let public = {
+		let hex_bytes = std::fs::read(&*pub_path).unwrap();
+		let hex = String::from_utf8(hex_bytes).unwrap();
+		let bytes = qos_hex::decode(&hex).unwrap();
+		P256Public::from_bytes(&bytes).unwrap()
+	};
+
+	let pair = P256Pair::from_hex_file(&*master_seed_path).unwrap();
+
+	assert!(
+		pair.public_key() ==
+		public
+	)
 }
 
 fn reset(yubikey: &mut YubiKey) {

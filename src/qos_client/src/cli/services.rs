@@ -284,7 +284,7 @@ pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
 
 	let master_seed = qos_p256::non_zero_bytes_os_rng::<P256_SECRET_LEN>();
 	let pair = P256Pair::from_master_seed(&master_seed)?;
-	let _encrypt_secret = qos_p256::derive_secret(
+	let encrypt_secret = qos_p256::derive_secret(
 		&master_seed,
 		qos_p256::P256_ENCRYPT_DERIVE_PATH,
 	)?;
@@ -303,7 +303,7 @@ pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
 
 	crate::yubikey::import_key_and_generate_signed_certificate(
 		&mut yubikey,
-		&sign_secret,
+		&encrypt_secret,
 		crate::yubikey::KEY_AGREEMENT_SLOT,
 		&pin,
 		yubikey::MgmKey::default(),
@@ -312,7 +312,9 @@ pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
 	.map_err(Error::GenerateEncrypt)?;
 
 	let public_key_bytes = crate::yubikey::pair_public_key(&mut yubikey)?;
-	if public_key_bytes != pair.public_key().to_bytes() {
+	let other = pair.public_key().to_bytes();
+
+	if public_key_bytes !=  other {
 		return Err(Error::WrongPublicKey);
 	}
 	// Explicitly drop the yubikey to disconnect the PCSC session.
