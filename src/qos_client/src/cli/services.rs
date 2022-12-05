@@ -313,7 +313,7 @@ pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
 	let public_key_bytes = crate::yubikey::pair_public_key(&mut yubikey)?;
 	let other = pair.public_key().to_bytes();
 
-	if public_key_bytes !=  other {
+	if public_key_bytes != other {
 		return Err(Error::WrongPublicKey);
 	}
 	// Explicitly drop the yubikey to disconnect the PCSC session.
