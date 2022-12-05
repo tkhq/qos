@@ -9,11 +9,10 @@ use qos_p256::{
 	encrypt::{Envelope, P256EncryptPair, P256EncryptPublic},
 	non_zero_bytes_os_rng,
 	sign::{P256SignPair, P256SignPublic},
-	P256Public, P256_SECRET_LEN,
+	P256Pair, P256Public, P256_SECRET_LEN,
 };
 use qos_test_primitives::PathWrapper;
 use yubikey::{MgmKey, TouchPolicy, YubiKey};
-use qos_p256::P256Pair;
 
 const DATA: &[u8] = b"test data";
 
@@ -240,10 +239,7 @@ fn advanced_provision_yubikey_works() {
 
 	let pair = P256Pair::from_hex_file(&*master_seed_path).unwrap();
 
-	assert!(
-		pair.public_key() ==
-		public
-	)
+	assert!(pair.public_key() == public)
 }
 
 fn reset(yubikey: &mut YubiKey) {

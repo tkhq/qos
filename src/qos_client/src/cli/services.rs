@@ -201,7 +201,6 @@ pub(crate) fn generate_file_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 		P256Pair::generate().expect("unable to generate P256 keypair");
 
 	// Write the personal key secret
-	// TODO: password encryption
 	let private_path =
 		personal_dir.as_ref().join(format!("{}.{}", alias, SECRET_EXT));
 	write_with_msg(
@@ -314,7 +313,7 @@ pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
 	let public_key_bytes = crate::yubikey::pair_public_key(&mut yubikey)?;
 	let other = pair.public_key().to_bytes();
 
-	if public_key_bytes !=  other {
+	if public_key_bytes != other {
 		return Err(Error::WrongPublicKey);
 	}
 	// Explicitly drop the yubikey to disconnect the PCSC session.
@@ -687,8 +686,8 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	Ok(())
 }
 
-// TODO: bubble up logging as errors in stead of printing in place to make it
-// more clear where logging is happening
+// TODO(zeke): bubble up errors instead of just logging error.
+// https://github.com/tkhq/qos/issues/174
 fn approve_manifest_programmatic_verifications(
 	manifest: &Manifest,
 	manifest_set: &ManifestSet,
@@ -1041,8 +1040,8 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	Ok(())
 }
 
-// TODO: bubble up logging as errors in stead of printing in place to make it
-// more clear where logging is happening
+// TODO(zeke): bubble up errors instead of just logging error.
+// https://github.com/tkhq/qos/issues/174
 fn proxy_re_encrypt_share_programmatic_verifications(
 	manifest_envelope: &ManifestEnvelope,
 	manifest_set: &ManifestSet,
