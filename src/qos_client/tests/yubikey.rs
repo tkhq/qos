@@ -58,7 +58,8 @@ fn yubikey_tests() {
 	// reset the yubikey
 	let mut yubikey = YubiKey::open().unwrap();
 	reset(&mut yubikey);
-	advanced_provision_yubikey_works(&mut yubikey);
+	drop(yubikey);
+	advanced_provision_yubikey_works();
 
 	let mut yubikey = YubiKey::open().unwrap();
 	reset(&mut yubikey);
@@ -205,7 +206,7 @@ fn provision_yubikey_works() {
 	}
 }
 
-fn advanced_provision_yubikey_works(yubikey: &mut YubiKey) {
+fn advanced_provision_yubikey_works() {
 	let tmp_dir: PathWrapper = "/tmp/advanced_provision_yubikey_works".into();
 	let master_seed_path: PathWrapper =
 		"/tmp/advanced_provision_yubikey_works/yubikey.master.secret".into();
@@ -246,12 +247,14 @@ fn advanced_provision_yubikey_works(yubikey: &mut YubiKey) {
 		P256Public::from_bytes(&bytes).unwrap()
 	};
 
-	// let yubi_pub = qos_client::yubikey::pair_public_key(yubikey).unwrap();
+	let mut yubikey = YubiKey::open().unwrap();
+	let yubi_pub = qos_client::yubikey::pair_public_key(&mut yubikey).unwrap();
+	drop(yubikey);
 
-	// assert_eq!(
-	// 	public.to_bytes(),
-	// 	yubi_pub
-	// );
+	assert_eq!(
+		public.to_bytes(),
+		yubi_pub
+	);
 
 	let pair = P256Pair::from_hex_file(&*master_seed_path).unwrap();
 
