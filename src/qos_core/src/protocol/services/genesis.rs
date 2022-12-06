@@ -4,6 +4,7 @@ use std::iter::zip;
 
 use qos_crypto::sha_256;
 use qos_p256::{P256Pair, P256Public};
+use std::fmt;
 
 use crate::protocol::{
 	attestor::types::{NsmRequest, NsmResponse},
@@ -13,7 +14,7 @@ use crate::protocol::{
 
 /// Configuration for sharding a Quorum Key created in the Genesis flow.
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Debug, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct GenesisSet {
 	/// Share Set Member's who's production key will be used to encrypt Genesis
@@ -24,7 +25,7 @@ pub struct GenesisSet {
 }
 
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 struct MemberShard {
 	// TODO: is this taking up too much unnecessary space?
@@ -33,6 +34,15 @@ struct MemberShard {
 	/// Shard of the generated Quorum Key, encrypted to the `member`s Setup
 	/// Key.
 	shard: Vec<u8>,
+}
+
+impl fmt::Debug for MemberShard {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("MemberShard")
+			.field("member", &self.member)
+			.field("shard", &qos_hex::encode(&self.shard))
+			.finish()
+	}
 }
 
 /// A set of member shards used to successfully recover the quorum key during
@@ -44,7 +54,7 @@ pub struct RecoveredPermutation(Vec<MemberShard>);
 
 /// Genesis output per Setup Member.
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct GenesisMemberOutput {
 	/// The Quorum Member whom's Setup Key was used.
@@ -56,10 +66,20 @@ pub struct GenesisMemberOutput {
 	pub share_hash: Hash256,
 }
 
+impl fmt::Debug for GenesisMemberOutput {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("GenesisMemberOutput")
+			.field("share_set_member", &self.share_set_member)
+			.field("encrypted_quorum_key_share", &qos_hex::encode(&self.encrypted_quorum_key_share))
+			.field("share_hash", &qos_hex::encode(&self.share_hash))
+			.finish()
+	}
+}
+
 /// Output from running Genesis Boot. Should contain all information relevant to
 /// how the quorum shares where created.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub struct GenesisOutput {
 	/// Public Quorum Key, DER encoded.
@@ -71,6 +91,17 @@ pub struct GenesisOutput {
 	pub recovery_permutations: Vec<RecoveredPermutation>,
 	/// The threshold, K, used to generate the shards.
 	pub threshold: u32,
+}
+
+impl fmt::Debug for GenesisOutput {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("GenesisOutput")
+			.field("quorum_key", &qos_hex::encode(&self.quorum_key))
+			.field("threshold", &self.threshold)
+			.field("member_outputs", &self.member_outputs)
+			.field("recovery_permutations", &self.recovery_permutations)
+			.finish()
+	}
 }
 
 // TODO: Recovery logic!
