@@ -1,10 +1,9 @@
 //! Genesis boot logic and types.
 
-use std::iter::zip;
+use std::{fmt, iter::zip};
 
 use qos_crypto::sha_256;
 use qos_p256::{P256Pair, P256Public};
-use std::fmt;
 
 use crate::protocol::{
 	attestor::types::{NsmRequest, NsmResponse},
@@ -24,9 +23,7 @@ pub struct GenesisSet {
 	pub threshold: u32,
 }
 
-#[derive(
-	PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
-)]
+#[derive(PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
 struct MemberShard {
 	// TODO: is this taking up too much unnecessary space?
 	/// Member of the Setup Set.
@@ -70,7 +67,10 @@ impl fmt::Debug for GenesisMemberOutput {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("GenesisMemberOutput")
 			.field("share_set_member", &self.share_set_member)
-			.field("encrypted_quorum_key_share", &qos_hex::encode(&self.encrypted_quorum_key_share))
+			.field(
+				"encrypted_quorum_key_share",
+				&qos_hex::encode(&self.encrypted_quorum_key_share),
+			)
 			.field("share_hash", &qos_hex::encode(&self.share_hash))
 			.finish()
 	}
@@ -78,9 +78,7 @@ impl fmt::Debug for GenesisMemberOutput {
 
 /// Output from running Genesis Boot. Should contain all information relevant to
 /// how the quorum shares where created.
-#[derive(
-	PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
-)]
+#[derive(PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct GenesisOutput {
 	/// Public Quorum Key, DER encoded.
 	pub quorum_key: Vec<u8>,

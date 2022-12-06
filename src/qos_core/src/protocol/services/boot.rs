@@ -1,8 +1,9 @@
 //! Standard boot logic and types.
 
+use std::fmt;
+
 use qos_crypto::sha_256;
 use qos_p256::{P256Pair, P256Public};
-use std::fmt;
 
 use super::attestation;
 use crate::protocol::{
@@ -12,7 +13,7 @@ use crate::protocol::{
 
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
-	PartialEq, Eq,  Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct NitroConfig {
@@ -45,12 +46,7 @@ impl fmt::Debug for NitroConfig {
 
 /// Policy for restarting the pivot binary.
 #[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	Copy,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
+	PartialEq, Eq, Clone, Copy, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub enum RestartPolicy {
 	/// Never restart the pivot application
@@ -108,8 +104,7 @@ pub struct PivotConfig {
 impl fmt::Debug for PivotConfig {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("PivotConfig")
-			.field("commit",
-			 &self.commit)
+			.field("commit", &self.commit)
 			.field("hash", &qos_hex::encode(&self.hash))
 			.field("restart", &self.restart)
 			.field("args", &self.args.join(" "))
