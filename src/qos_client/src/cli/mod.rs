@@ -726,8 +726,8 @@ impl Command {
 
 	fn generate_file_key() -> Parser {
 		Parser::new()
-			.token(Self::alias_token())
-			.token(Self::personal_dir_token())
+			.token(Self::master_seed_path_token())
+			.token(Self::pub_path_token())
 	}
 
 	fn boot_genesis() -> Parser {
@@ -843,9 +843,7 @@ impl Command {
 	}
 
 	fn advanced_provision_yubikey() -> Parser {
-		Parser::new()
-			.token(Self::pub_path_token())
-			.token(Self::master_seed_path_token())
+		Parser::new().token(Self::master_seed_path_token())
 	}
 }
 
@@ -1262,7 +1260,7 @@ mod handlers {
 	}
 
 	pub(super) fn generate_file_key(opts: &ClientOpts) {
-		services::generate_file_key(&opts.alias(), opts.personal_dir());
+		services::generate_file_key(&opts.master_seed_path(), &opts.pub_path());
 	}
 
 	pub(super) fn provision_yubikey(opts: &ClientOpts) {
@@ -1288,10 +1286,9 @@ mod handlers {
 
 		#[cfg(feature = "smartcard")]
 		{
-			if let Err(e) = services::advanced_provision_yubikey(
-				opts.pub_path(),
-				opts.master_seed_path(),
-			) {
+			if let Err(e) =
+				services::advanced_provision_yubikey(opts.master_seed_path())
+			{
 				eprintln!("Error: {:?}", e);
 				std::process::exit(1);
 			}

@@ -54,13 +54,16 @@ async fn genesis_e2e() {
 		(&user2, &user2_private_share_key, &user2_public_share_key),
 		(&user3, &user3_private_share_key, &user3_public_share_key),
 	] {
+		fs::create_dir_all(&personal_dir(user)).unwrap();
+		let master_seed_path = format!("{}/{}", personal_dir(user), private);
+		let public_path = format!("{}/{}", personal_dir(user), public);
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
 				"generate-file-key",
-				"--personal-dir",
-				&*personal_dir(user),
-				"--alias",
-				user,
+				"--master-seed-path",
+				&master_seed_path,
+				"--pub-path",
+				&public_path,
 			])
 			.spawn()
 			.unwrap()
