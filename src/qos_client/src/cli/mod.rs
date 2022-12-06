@@ -361,7 +361,6 @@ const NAMESPACE: &str = "namespace";
 const NONCE: &str = "nonce";
 const RESTART_POLICY: &str = "restart-policy";
 const PIVOT_PATH: &str = "pivot-path";
-const PERSONAL_DIR: &str = "personal-dir";
 const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
@@ -516,11 +515,6 @@ impl From<String> for Command {
 }
 
 impl Command {
-	fn personal_dir_token() -> Token {
-		Token::new(PERSONAL_DIR, "Directory (eventually) containing personal key, share, and setup key associated with 1 genesis ceremony.")
-			.takes_value(true)
-			.required(true)
-	}
 	fn namespace_token() -> Token {
 		Token::new(NAMESPACE, "Namespace for the associated manifest.")
 			.takes_value(true)
@@ -933,10 +927,6 @@ impl ClientOpts {
 		self.parsed.single(PIVOT_PATH).expect("required arg").to_string()
 	}
 
-	fn personal_dir(&self) -> String {
-		self.parsed.single(PERSONAL_DIR).expect("required arg").to_string()
-	}
-
 	fn manifest_set_dir(&self) -> String {
 		self.parsed
 			.single(MANIFEST_SET_DIR)
@@ -1001,7 +991,6 @@ impl ClientOpts {
 		}
 	}
 
-	#[cfg(feature = "smartcard")]
 	fn pub_path(&self) -> String {
 		self.parsed.single(PUB_PATH).expect("Missing `--pub-path`").to_string()
 	}

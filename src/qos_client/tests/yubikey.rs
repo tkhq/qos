@@ -33,32 +33,34 @@ const DATA: &[u8] = b"test data";
 #[test]
 #[ignore]
 fn yubikey_tests() {
-	// let mut yubikey = YubiKey::open().unwrap();
-	// reset(&mut yubikey);
+	let mut yubikey = YubiKey::open().unwrap();
+	reset(&mut yubikey);
 
-	// signing_works(&mut yubikey);
-	// reset(&mut yubikey);
+	signing_works(&mut yubikey);
+	reset(&mut yubikey);
 
-	// key_agreement_works(&mut yubikey);
-	// reset(&mut yubikey);
+	key_agreement_works(&mut yubikey);
+	reset(&mut yubikey);
 
-	// import_signing_works(&mut yubikey);
-	// reset(&mut yubikey);
+	import_signing_works(&mut yubikey);
+	reset(&mut yubikey);
 
-	// import_key_agreement_works(&mut yubikey);
-	// reset(&mut yubikey);
+	import_key_agreement_works(&mut yubikey);
+	reset(&mut yubikey);
 
-	// // Dropping the yubikey should disconnect the underlying PCSC reader
-	// // connection. We want to disconnect before using the CLI provision-yubikey
-	// // command because that will try to open up a new connection.
-	// drop(yubikey);
+	// Dropping the yubikey should disconnect the underlying PCSC reader
+	// connection. We want to disconnect before using the CLI
+	// provision-yubikey command because that will try to open up a new
+	// connection.
+	drop(yubikey);
 
-	// provision_yubikey_works();
+	provision_yubikey_works();
 
-	// reset the yubikey
+	// Reset the yubikey from provisioning
 	let mut yubikey = YubiKey::open().unwrap();
 	reset(&mut yubikey);
 	drop(yubikey);
+
 	advanced_provision_yubikey_works();
 
 	let mut yubikey = YubiKey::open().unwrap();
@@ -216,7 +218,6 @@ fn advanced_provision_yubikey_works() {
 	// Create the temporary directory where we write the yubikey
 	std::fs::create_dir(&*tmp_dir).unwrap();
 
-
 	assert!(Command::new("../target/debug/qos_client")
 		.arg("generate-file-key")
 		.arg("--master-seed-path")
@@ -251,10 +252,7 @@ fn advanced_provision_yubikey_works() {
 	let yubi_pub = qos_client::yubikey::pair_public_key(&mut yubikey).unwrap();
 	drop(yubikey);
 
-	assert_eq!(
-		public.to_bytes(),
-		yubi_pub
-	);
+	assert_eq!(public.to_bytes(), yubi_pub);
 
 	let pair = P256Pair::from_hex_file(&*master_seed_path).unwrap();
 

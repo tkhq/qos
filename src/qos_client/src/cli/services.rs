@@ -30,7 +30,6 @@ use qos_p256::{P256Error, P256Pair, P256Public};
 
 use crate::request;
 
-const SECRET_EXT: &str = "secret";
 const PUB_EXT: &str = "pub";
 const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
 const GENESIS_OUTPUT_FILE: &str = "genesis_output";
@@ -98,7 +97,6 @@ pub enum Error {
 	/// Failed to read file that was supposed to contain Ephemeral Key wrapped
 	/// share.
 	FailedToReadEphWrappedShare(std::io::Error),
-	FailedToReadMasterSeed,
 }
 
 #[cfg(feature = "smartcard")]
