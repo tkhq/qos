@@ -67,11 +67,15 @@ pub enum Error {
 	YubiKey(crate::yubikey::YubiKeyError),
 	/// Error from qos p256.
 	P256(qos_p256::P256Error),
-	/// Failed to read share
-	ReadShare,
+	/// The public key read from the yubikey for the pair did not match what
+	/// was expected.
+	#[cfg(feature = "smartcard")]
+	WrongPublicKey,
 	/// An error trying to read a pin from the terminal
 	#[cfg(feature = "smartcard")]
 	PinEntryError(std::io::Error),
+	/// Failed to read share
+	ReadShare,
 	/// Error while try to read the quorum public key.
 	FailedToReadQuorumPublicKey(qos_p256::P256Error),
 	/// Error trying to the read a file that is supposed to have a manifest.
@@ -130,7 +134,8 @@ impl PairOrYubi {
 						.map_err(Error::PinEntryError)?;
 					PairOrYubi::Yubi((yubi, pin.as_bytes().to_vec()))
 				}
-				#[cfg(not(feature = "smartcard"))]{
+				#[cfg(not(feature = "smartcard"))]
+				{
 					panic!("{TAP_MSG}");
 				}
 			}
@@ -196,7 +201,6 @@ pub(crate) fn generate_file_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
 		P256Pair::generate().expect("unable to generate P256 keypair");
 
 	// Write the personal key secret
-	// TODO: password encryption
 	let private_path =
 		personal_dir.as_ref().join(format!("{}.{}", alias, SECRET_EXT));
 	write_with_msg(
@@ -257,6 +261,75 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 		pub_path.as_ref(),
 		public_key_hex.as_bytes(),
 		"YubiKey encrypt+sign public key",
+	);
+
+	Ok(())
+}
+
+#[cfg(feature = "smartcard")]
+pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
+	pub_path: P,
+	master_seed_path: P,
+) -> Result<(), Error> {
+	use qos_p256::P256_SECRET_LEN;
+	let mut yubikey =
+		yubikey::YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
+
+	println!("You need to enter a pin that will be used to authorize signing and encryption requests.");
+	let pin = rpassword::prompt_password("Enter your pin: ")
+		.map_err(Error::PinEntryError)?
+		.as_bytes()
+		.to_vec();
+
+	let master_seed = qos_p256::non_zero_bytes_os_rng::<P256_SECRET_LEN>();
+	let pair = P256Pair::from_master_seed(&master_seed)?;
+	let encrypt_secret = qos_p256::derive_secret(
+		&master_seed,
+		qos_p256::P256_ENCRYPT_DERIVE_PATH,
+	)?;
+	let sign_secret =
+		qos_p256::derive_secret(&master_seed, qos_p256::P256_SIGN_DERIVE_PATH)?;
+
+	crate::yubikey::import_key_and_generate_signed_certificate(
+		&mut yubikey,
+		&sign_secret,
+		crate::yubikey::SIGNING_SLOT,
+		&pin,
+		yubikey::MgmKey::default(),
+		yubikey::TouchPolicy::Always,
+	)
+	.map_err(Error::GenerateSign)?;
+
+	crate::yubikey::import_key_and_generate_signed_certificate(
+		&mut yubikey,
+		&encrypt_secret,
+		crate::yubikey::KEY_AGREEMENT_SLOT,
+		&pin,
+		yubikey::MgmKey::default(),
+		yubikey::TouchPolicy::Always,
+	)
+	.map_err(Error::GenerateEncrypt)?;
+
+	let public_key_bytes = crate::yubikey::pair_public_key(&mut yubikey)?;
+	let other = pair.public_key().to_bytes();
+
+	if public_key_bytes != other {
+		return Err(Error::WrongPublicKey);
+	}
+	// Explicitly drop the yubikey to disconnect the PCSC session.
+	drop(yubikey);
+
+	let public_key_hex = qos_hex::encode(&public_key_bytes);
+	write_with_msg(
+		pub_path.as_ref(),
+		public_key_hex.as_bytes(),
+		"YubiKey encrypt+sign Public key",
+	);
+
+	write_with_msg(
+		master_seed_path.as_ref(),
+		&pair.to_master_seed_hex(),
+		"YubiKey encrypt+sign Master Seed",
 	);
 
 	Ok(())
@@ -491,7 +564,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 
 	let manifest = Manifest {
 		namespace: Namespace {
-			name: namespace.clone(),
+			name: namespace,
 			nonce,
 			quorum_key: quorum_key.to_bytes(),
 		},
@@ -506,7 +579,11 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		enclave: nitro_config,
 	};
 
-	write_with_msg(manifest_path.as_ref(), &manifest.try_to_vec().unwrap(), "Manifest");
+	write_with_msg(
+		manifest_path.as_ref(),
+		&manifest.try_to_vec().unwrap(),
+		"Manifest",
+	);
 
 	Ok(())
 }
@@ -610,8 +687,8 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	Ok(())
 }
 
-// TODO: bubble up logging as errors in stead of printing in place to make it
-// more clear where logging is happening
+// TODO(zeke): bubble up errors instead of just logging error.
+// https://github.com/tkhq/qos/issues/174
 fn approve_manifest_programmatic_verifications(
 	manifest: &Manifest,
 	manifest_set: &ManifestSet,
@@ -965,8 +1042,8 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	Ok(())
 }
 
-// TODO: bubble up logging as errors in stead of printing in place to make it
-// more clear where logging is happening
+// TODO(zeke): bubble up errors instead of just logging error.
+// https://github.com/tkhq/qos/issues/174
 fn proxy_re_encrypt_share_programmatic_verifications(
 	manifest_envelope: &ManifestEnvelope,
 	manifest_set: &ManifestSet,

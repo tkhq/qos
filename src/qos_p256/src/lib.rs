@@ -18,10 +18,13 @@ use crate::{
 };
 
 const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
-const P256_SECRET_LEN: usize = 32;
-const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
-const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
 
+/// Master seed derive path for encryption secret
+pub const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
+/// Master seed derive path for signing secret
+pub const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
+/// Length of a p256 secret seed.
+pub const P256_SECRET_LEN: usize = 32;
 /// Length of the master seed.
 pub const MASTER_SEED_LEN: usize = 32;
 
@@ -83,7 +86,7 @@ impl From<qos_hex::HexError> for P256Error {
 }
 
 /// Helper function to derive a secret from a master seed.
-fn derive_secret(
+pub fn derive_secret(
 	seed: &[u8; MASTER_SEED_LEN],
 	derive_path: &[u8],
 ) -> Result<[u8; P256_SECRET_LEN], P256Error> {
@@ -96,7 +99,8 @@ fn derive_secret(
 }
 
 /// Helper function to generate a `N` length byte buffer.
-fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
+#[must_use]
+pub fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
 	loop {
 		let mut key = [0u8; N];
 		OsRng.fill_bytes(&mut key);
@@ -197,7 +201,7 @@ impl P256Pair {
 	}
 
 	/// Read the raw, hex encoded master from a file.
-	// TODO: implement utils that go to/from bytes so we can avoid string
+	// TODO(zeke): implement utils that go to/from bytes so we can avoid string
 	// serialization. https://github.com/tkhq/qos/issues/153.
 	pub fn from_hex_file<P: AsRef<Path>>(path: P) -> Result<Self, P256Error> {
 		let hex_bytes = std::fs::read(path).map_err(|e| {

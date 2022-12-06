@@ -27,6 +27,7 @@ yubikey = { version = "*", features = ["untested"], default-features = false, op
 qos_core = { path = "../qos_core", features = ["mock"], default-features = false }
 lazy_static = "1.4"
 qos_test_primitives = { path = "../qos_test_primitives" }
+qos_p256 = { path = "../qos_p256", features = ["mock"] }
 
 [features]
 default = ["smartcard"]
