@@ -211,6 +211,7 @@ $(CONFIG_DIR)/$(TARGET)/linux.config: \
 	$(OUT_DIR)/toolchain.tar
 	$(call toolchain,$(USER)," \
 		cd /cache/linux-$(LINUX_VERSION) && \
+		unset FAKETIME && \
 		make menuconfig && \
 		cp .config /config/$(TARGET)/linux.config; \
 	")
