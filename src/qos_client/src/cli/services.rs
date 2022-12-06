@@ -98,6 +98,8 @@ pub enum Error {
 	/// Failed to read file that was supposed to contain Ephemeral Key wrapped
 	/// share.
 	FailedToReadEphWrappedShare(std::io::Error),
+	/// 
+	CouldNotDecodeHex,
 }
 
 #[cfg(feature = "smartcard")]
@@ -1151,6 +1153,20 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	} else {
 		println!("The quorum key has *not* been reconstructed.");
 	};
+
+	Ok(())
+}
+
+#[cfg(feature = "smartcard")]
+pub(crate) fn yubikey_sign(hex_payload: String) -> Result<(), Error> {
+	let bytes = qos_hex::decode(&hex_payload)
+		.map_err(|_| Error::CouldNotDecodeHex)?;
+
+	let mut pair = PairOrYubi::from_inputs(false, None)?;
+	let signature_bytes = pair.sign(&bytes)?;
+	let signature = qos_hex::encode(&signature_bytes);
+
+	println!("{signature}");
 
 	Ok(())
 }

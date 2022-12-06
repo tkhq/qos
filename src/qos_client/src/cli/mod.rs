@@ -386,6 +386,7 @@ const APPROVAL_PATH: &str = "approval-path";
 const EPH_WRAPPED_SHARE_PATH: &str = "eph-wrapped-share-path";
 const ATTESTATION_DOC_PATH: &str = "attestation-doc-path";
 const MASTER_SEED_PATH: &str = "master-seed-path";
+const PAYLOAD: &str = "payload";
 
 /// Commands for the Client CLI.
 ///
@@ -479,6 +480,8 @@ pub enum Command {
 	AdvancedProvisionYubiKey,
 	/// Create a dummy pivot build fingerprints with a correct hash
 	PivotBuildFingerprints,
+	/// Sign a hex encoded payload with the yubikey.
+	YubiKeySign,
 }
 
 impl From<&str> for Command {
@@ -502,6 +505,7 @@ impl From<&str> for Command {
 			"provision-yubikey" => Self::ProvisionYubiKey,
 			"advanced-provision-yubikey" => Self::AdvancedProvisionYubiKey,
 			"pivot-build-fingerprints" => Self::PivotBuildFingerprints,
+			"yubikey-sign" => Self::YubiKeySign,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -696,6 +700,11 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn payload_token() -> Token {
+		Token::new(PAYLOAD, "A hex-encoded payload to sign/encrypt/decrypt.")
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -847,6 +856,11 @@ impl Command {
 			.token(Self::pub_path_token())
 			.token(Self::master_seed_path_token())
 	}
+
+	fn yubikey_sign() -> Parser {
+		Parser::new()
+			.token(Self::payload_token())
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -874,6 +888,7 @@ impl GetParserForCommand for Command {
 				Self::advanced_provision_yubikey()
 			}
 			Self::PivotBuildFingerprints => Self::pivot_build_fingerprints(),
+			Self::YubiKeySign => Self::yubikey_sign(),
 		}
 	}
 }
@@ -1075,6 +1090,13 @@ impl ClientOpts {
 			.to_string()
 	}
 
+	fn payload(&self) -> String {
+		self.parsed
+			.single(PAYLOAD)
+			.expect("Missing `--payload`")
+			.to_string()
+	}
+
 	fn yubikey(&self) -> bool {
 		self.parsed.flag(YUBIKEY).unwrap_or(false)
 	}
@@ -1153,6 +1175,7 @@ impl ClientRunner {
 				Command::PivotBuildFingerprints => {
 					handlers::pivot_build_fingerprints(&self.opts);
 				}
+				Command::YubiKeySign => handlers::yubikey_sign(&self.opts),
 			}
 		}
 	}
@@ -1291,6 +1314,23 @@ mod handlers {
 			if let Err(e) = services::advanced_provision_yubikey(
 				opts.pub_path(),
 				opts.master_seed_path(),
+			) {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+		}
+	}
+
+	pub(super) fn yubikey_sign(opts: &ClientOpts) {
+		#[cfg(not(feature = "smartcard"))]
+		{
+			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
+		}
+
+		#[cfg(feature = "smartcard")]
+		{
+			if let Err(e) = services::yubikey_sign(
+				opts.payload()
 			) {
 				eprintln!("Error: {:?}", e);
 				std::process::exit(1);
