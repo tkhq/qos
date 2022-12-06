@@ -522,6 +522,7 @@ impl From<&str> for Command {
 			"provision-yubikey" => Self::ProvisionYubiKey,
 			"advanced-provision-yubikey" => Self::AdvancedProvisionYubiKey,
 			"pivot-build-fingerprints" => Self::PivotBuildFingerprints,
+			"display" => Self::Display,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
