@@ -482,6 +482,8 @@ pub enum Command {
 	PivotBuildFingerprints,
 	/// Sign a hex encoded payload with the yubikey.
 	YubiKeySign,
+	/// Get the public key of a yubikey
+	YubiKeyPublic,
 }
 
 impl From<&str> for Command {
@@ -506,6 +508,7 @@ impl From<&str> for Command {
 			"advanced-provision-yubikey" => Self::AdvancedProvisionYubiKey,
 			"pivot-build-fingerprints" => Self::PivotBuildFingerprints,
 			"yubikey-sign" => Self::YubiKeySign,
+			"yubikey-public" => Self::YubiKeyPublic,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -861,6 +864,10 @@ impl Command {
 		Parser::new()
 			.token(Self::payload_token())
 	}
+
+	fn yubikey_public() -> Parser {
+		Parser::new()
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -889,6 +896,7 @@ impl GetParserForCommand for Command {
 			}
 			Self::PivotBuildFingerprints => Self::pivot_build_fingerprints(),
 			Self::YubiKeySign => Self::yubikey_sign(),
+			Self::YubiKeyPublic => Self::yubikey_public(),
 		}
 	}
 }
@@ -1176,6 +1184,7 @@ impl ClientRunner {
 					handlers::pivot_build_fingerprints(&self.opts);
 				}
 				Command::YubiKeySign => handlers::yubikey_sign(&self.opts),
+				Command::YubiKeyPublic => handlers::yubikey_public(&self.opts),
 			}
 		}
 	}
@@ -1332,6 +1341,21 @@ mod handlers {
 			if let Err(e) = services::yubikey_sign(
 				opts.payload()
 			) {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+		}
+	}
+
+	pub(super) fn yubikey_public(_opts: &ClientOpts) {
+		#[cfg(not(feature = "smartcard"))]
+		{
+			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
+		}
+
+		#[cfg(feature = "smartcard")]
+		{
+			if let Err(e) = services::yubikey_public() {
 				eprintln!("Error: {:?}", e);
 				std::process::exit(1);
 			}

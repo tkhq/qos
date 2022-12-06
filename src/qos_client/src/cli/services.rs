@@ -1171,6 +1171,17 @@ pub(crate) fn yubikey_sign(hex_payload: String) -> Result<(), Error> {
 	Ok(())
 }
 
+pub(crate) fn yubikey_public() -> Result<(), Error> {
+
+	let mut yubi = crate::yubikey::open_single()?;
+	let public = crate::yubikey::pair_public_key(&mut yubi)?;
+
+	let hex = qos_hex::encode(&public);
+	println!("{hex}");
+
+	Ok(())
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	uri: &str,
