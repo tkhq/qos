@@ -1,7 +1,11 @@
 //! Yubikey interfaces
 
 use borsh::BorshDeserialize;
-use p256::ecdsa::{signature::Verifier, Signature, VerifyingKey};
+use p256::{
+	ecdsa::{signature::Verifier, Signature, VerifyingKey},
+	elliptic_curve::sec1::ToEncodedPoint,
+	SecretKey,
+};
 use qos_p256::encrypt::Envelope;
 use rand_core::{OsRng, RngCore};
 use x509::RelativeDistinguishedName;
@@ -55,6 +59,10 @@ pub enum YubiKeyError {
 	Connection(yubikey::Error),
 	/// Failed to deserialize the encryption envelope.
 	EnvelopeDeserialize,
+	/// Faild to load key data onto yubikey.
+	FailedToLoadKey,
+	/// The secret is invalid.
+	InvalidSecret,
 }
 
 /// Generate a signed certificate with a p256 key for the given `slot`.
@@ -103,6 +111,67 @@ pub fn generate_signed_certificate(
 	.map_err(|_| YubiKeyError::FailedToGenerateSelfSignedCert)?;
 
 	Ok(encoded_point.to_bytes())
+}
+
+/// Import the given `key_data` onto the `yubikey` and create a signed
+/// certificate for the key.
+pub fn import_key_and_generate_signed_certificate(
+	yubikey: &mut YubiKey,
+	key_data: &[u8],
+	slot: SlotId,
+	pin: &[u8],
+	mgm_key: MgmKey,
+	touch_policy: TouchPolicy,
+) -> Result<(), YubiKeyError> {
+	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
+	yubikey
+		.authenticate(mgm_key)
+		.map_err(|_| YubiKeyError::FailedToAuthWithMGM)?;
+
+	// Check that there is no key already in the slot
+	if Certificate::read(yubikey, slot).is_ok() {
+		return Err(YubiKeyError::WillNotOverwriteSlot);
+	}
+
+	let public_key_info = {
+		let encoded_point = SecretKey::from_be_bytes(key_data)
+			.map_err(|_| YubiKeyError::InvalidSecret)?
+			.public_key()
+			.to_encoded_point(false);
+		PublicKeyInfo::EcP256(encoded_point)
+	};
+
+	// Import a key in the slot
+	piv::import_ecc_key(
+		yubikey,
+		slot,
+		ALGO,
+		key_data,
+		touch_policy,
+		PinPolicy::Always,
+	)
+	.map_err(|_| YubiKeyError::FailedToLoadKey)?;
+
+	// Create a random serial number
+	let mut serial = [0u8; 20];
+	OsRng.fill_bytes(&mut serial);
+
+	// Don't add any extensions
+	let extensions: &[x509::Extension<'_, &[u64]>] = &[];
+
+	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
+	Certificate::generate_self_signed(
+		yubikey,
+		slot,
+		serial,
+		None, // not_after is none so this never expires
+		&[RelativeDistinguishedName::organization("Turnkey")],
+		public_key_info,
+		extensions,
+	)
+	.map_err(|_| YubiKeyError::FailedToGenerateSelfSignedCert)?;
+
+	Ok(())
 }
 
 /// Sign data with the yubikey and return the signature as a raw bytes.

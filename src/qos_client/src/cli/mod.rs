@@ -385,6 +385,7 @@ const MANIFEST_ENVELOPE_PATH: &str = "manifest-envelope-path";
 const APPROVAL_PATH: &str = "approval-path";
 const EPH_WRAPPED_SHARE_PATH: &str = "eph-wrapped-share-path";
 const ATTESTATION_DOC_PATH: &str = "attestation-doc-path";
+const MASTER_SEED_PATH: &str = "master-seed-path";
 
 /// Commands for the Client CLI.
 ///
@@ -472,6 +473,10 @@ pub enum Command {
 	DangerousDevBoot,
 	/// Provision a yubikey with a singing and encryption key.
 	ProvisionYubiKey,
+	/// Provision a yubikey by generating a secret and importing it onto the
+	/// key. The generated secret (master seed) is written to disk so it can be
+	/// further backed up.
+	AdvancedProvisionYubiKey,
 	/// Create a dummy pivot build fingerprints with a correct hash
 	PivotBuildFingerprints,
 }
@@ -495,6 +500,7 @@ impl From<&str> for Command {
 			"post-share" => Self::PostShare,
 			"dangerous-dev-boot" => Self::DangerousDevBoot,
 			"provision-yubikey" => Self::ProvisionYubiKey,
+			"advanced-provision-yubikey" => Self::AdvancedProvisionYubiKey,
 			"pivot-build-fingerprints" => Self::PivotBuildFingerprints,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
@@ -685,6 +691,11 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn master_seed_path_token() -> Token {
+		Token::new(MASTER_SEED_PATH, "Path to a master seed.")
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -830,6 +841,12 @@ impl Command {
 	fn provision_yubikey() -> Parser {
 		Parser::new().token(Self::pub_path_token()).token(Self::yubikey_token())
 	}
+
+	fn advanced_provision_yubikey() -> Parser {
+		Parser::new()
+			.token(Self::pub_path_token())
+			.token(Self::master_seed_path_token())
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -853,6 +870,9 @@ impl GetParserForCommand for Command {
 				Self::generate_manifest_envelope()
 			}
 			Self::ProvisionYubiKey => Self::provision_yubikey(),
+			Self::AdvancedProvisionYubiKey => {
+				Self::advanced_provision_yubikey()
+			}
 			Self::PivotBuildFingerprints => Self::pivot_build_fingerprints(),
 		}
 	}
@@ -1044,7 +1064,14 @@ impl ClientOpts {
 	fn attestation_doc_path(&self) -> String {
 		self.parsed
 			.single(ATTESTATION_DOC_PATH)
-			.expect("Missing `--eph-wrapped-share-path`")
+			.expect("Missing `--attestation-doc-path`")
+			.to_string()
+	}
+
+	fn master_seed_path(&self) -> String {
+		self.parsed
+			.single(MASTER_SEED_PATH)
+			.expect("Missing `--master-seed-path`")
 			.to_string()
 	}
 
@@ -1097,6 +1124,9 @@ impl ClientRunner {
 				}
 				Command::ProvisionYubiKey => {
 					handlers::provision_yubikey(&self.opts);
+				}
+				Command::AdvancedProvisionYubiKey => {
+					handlers::advanced_provision_yubikey(&self.opts);
 				}
 				Command::BootGenesis => handlers::boot_genesis(&self.opts),
 				Command::AfterGenesis => handlers::after_genesis(&self.opts),
@@ -1244,6 +1274,24 @@ mod handlers {
 		#[cfg(feature = "smartcard")]
 		{
 			if let Err(e) = services::provision_yubikey(opts.pub_path()) {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+		}
+	}
+
+	pub(super) fn advanced_provision_yubikey(opts: &ClientOpts) {
+		#[cfg(not(feature = "smartcard"))]
+		{
+			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
+		}
+
+		#[cfg(feature = "smartcard")]
+		{
+			if let Err(e) = services::advanced_provision_yubikey(
+				opts.pub_path(),
+				opts.master_seed_path(),
+			) {
 				eprintln!("Error: {:?}", e);
 				std::process::exit(1);
 			}
