@@ -30,7 +30,6 @@ use qos_p256::{P256Error, P256Pair, P256Public};
 
 use crate::request;
 
-const SECRET_EXT: &str = "secret";
 const PUB_EXT: &str = "pub";
 const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
 const GENESIS_OUTPUT_FILE: &str = "genesis_output";
@@ -196,26 +195,23 @@ impl PairOrYubi {
 	}
 }
 
-pub(crate) fn generate_file_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
-	fs::create_dir_all(personal_dir.as_ref()).unwrap();
-
+pub(crate) fn generate_file_key<P: AsRef<Path>>(
+	master_secret_path: P,
+	pub_key_path: P,
+) {
 	let share_key_pair =
 		P256Pair::generate().expect("unable to generate P256 keypair");
 
 	// Write the personal key secret
-	let private_path =
-		personal_dir.as_ref().join(format!("{}.{}", alias, SECRET_EXT));
 	write_with_msg(
-		&private_path,
+		master_secret_path.as_ref(),
 		&share_key_pair.to_master_seed_hex(),
-		"File Key Secret",
+		"Master Seed",
 	);
 
 	// Write the setup key public key
-	let public_path =
-		personal_dir.as_ref().join(format!("{}.{}", alias, PUB_EXT));
 	write_with_msg(
-		&public_path,
+		pub_key_path.as_ref(),
 		&share_key_pair.public_key().to_hex_bytes(),
 		"File Key Public",
 	);
@@ -270,10 +266,8 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 
 #[cfg(feature = "smartcard")]
 pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
-	pub_path: P,
 	master_seed_path: P,
 ) -> Result<(), Error> {
-	use qos_p256::P256_SECRET_LEN;
 	let mut yubikey =
 		yubikey::YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
 
@@ -283,14 +277,15 @@ pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
 		.as_bytes()
 		.to_vec();
 
-	let master_seed = qos_p256::non_zero_bytes_os_rng::<P256_SECRET_LEN>();
-	let pair = P256Pair::from_master_seed(&master_seed)?;
+	let pair = P256Pair::from_hex_file(master_seed_path)?;
+
+	let master_seed = pair.to_master_seed();
 	let encrypt_secret = qos_p256::derive_secret(
-		&master_seed,
+		master_seed,
 		qos_p256::P256_ENCRYPT_DERIVE_PATH,
 	)?;
 	let sign_secret =
-		qos_p256::derive_secret(&master_seed, qos_p256::P256_SIGN_DERIVE_PATH)?;
+		qos_p256::derive_secret(master_seed, qos_p256::P256_SIGN_DERIVE_PATH)?;
 
 	crate::yubikey::import_key_and_generate_signed_certificate(
 		&mut yubikey,
@@ -320,19 +315,6 @@ pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
 	}
 	// Explicitly drop the yubikey to disconnect the PCSC session.
 	drop(yubikey);
-
-	let public_key_hex = qos_hex::encode(&public_key_bytes);
-	write_with_msg(
-		pub_path.as_ref(),
-		public_key_hex.as_bytes(),
-		"YubiKey encrypt+sign Public key",
-	);
-
-	write_with_msg(
-		master_seed_path.as_ref(),
-		&pair.to_master_seed_hex(),
-		"YubiKey encrypt+sign Master Seed",
-	);
 
 	Ok(())
 }

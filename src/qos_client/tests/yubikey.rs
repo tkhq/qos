@@ -49,13 +49,14 @@ fn yubikey_tests() {
 	reset(&mut yubikey);
 
 	// Dropping the yubikey should disconnect the underlying PCSC reader
-	// connection. We want to disconnect before using the CLI provision-yubikey
-	// command because that will try to open up a new connection.
+	// connection. We want to disconnect before using the CLI
+	// provision-yubikey command because that will try to open up a new
+	// connection.
 	drop(yubikey);
 
 	provision_yubikey_works();
 
-	// reset the yubikey
+	// Reset the yubikey from provisioning
 	let mut yubikey = YubiKey::open().unwrap();
 	reset(&mut yubikey);
 	drop(yubikey);
@@ -209,18 +210,28 @@ fn provision_yubikey_works() {
 
 fn advanced_provision_yubikey_works() {
 	let tmp_dir: PathWrapper = "/tmp/advanced_provision_yubikey_works".into();
-	let pub_path: PathWrapper =
-		"/tmp/advanced_provision_yubikey_works/yubikey.pub".into();
 	let master_seed_path: PathWrapper =
 		"/tmp/advanced_provision_yubikey_works/yubikey.master.secret".into();
+	let pub_path: PathWrapper =
+		"/tmp/advanced_provision_yubikey_works/yubikey.pub".into();
 
 	// Create the temporary directory where we write the yubikey
 	std::fs::create_dir(&*tmp_dir).unwrap();
 
 	assert!(Command::new("../target/debug/qos_client")
-		.arg("advanced-provision-yubikey")
+		.arg("generate-file-key")
+		.arg("--master-seed-path")
+		.arg(&*master_seed_path)
 		.arg("--pub-path")
 		.arg(&*pub_path)
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
+	assert!(Command::new("../target/debug/qos_client")
+		.arg("advanced-provision-yubikey")
 		.arg("--master-seed-path")
 		.arg(&*master_seed_path)
 		.spawn()
@@ -236,6 +247,12 @@ fn advanced_provision_yubikey_works() {
 		let bytes = qos_hex::decode(&hex).unwrap();
 		P256Public::from_bytes(&bytes).unwrap()
 	};
+
+	let mut yubikey = YubiKey::open().unwrap();
+	let yubi_pub = qos_client::yubikey::pair_public_key(&mut yubikey).unwrap();
+	drop(yubikey);
+
+	assert_eq!(public.to_bytes(), yubi_pub);
 
 	let pair = P256Pair::from_hex_file(&*master_seed_path).unwrap();
 
