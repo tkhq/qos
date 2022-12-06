@@ -385,6 +385,25 @@ const APPROVAL_PATH: &str = "approval-path";
 const EPH_WRAPPED_SHARE_PATH: &str = "eph-wrapped-share-path";
 const ATTESTATION_DOC_PATH: &str = "attestation-doc-path";
 const MASTER_SEED_PATH: &str = "master-seed-path";
+const FILE_PATH: &str = "file-path";
+const DISPLAY_TYPE: &str = "display-type";
+
+pub(crate) enum DisplayType {
+	Manifest,
+	ManifestEnvelope,
+	GenesisOutput,
+}
+
+impl From<&str> for DisplayType {
+	fn from(ty: &str) -> Self {
+		match ty {
+			"manifest" => Self::Manifest,
+			"manifest-envelope" => Self::ManifestEnvelope,
+			"genesis-output" => Self::GenesisOutput,
+			unknown => panic!("unrecognized display type: {unknown}"),
+		}
+	}
+}
 
 /// Commands for the Client CLI.
 ///
@@ -478,6 +497,8 @@ pub enum Command {
 	AdvancedProvisionYubiKey,
 	/// Create a dummy pivot build fingerprints with a correct hash
 	PivotBuildFingerprints,
+	/// Display some borsh encoded type in an easy to read format.
+	Display,
 }
 
 impl From<&str> for Command {
@@ -690,6 +711,19 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn file_path_token() -> Token {
+		Token::new(FILE_PATH, "Path to a file.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn display_type_token() -> Token {
+		Token::new(
+				DISPLAY_TYPE,
+				"The type contained in the file (manifest, manifest-envelope, genesis-output)."
+			)
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -839,6 +873,12 @@ impl Command {
 	fn advanced_provision_yubikey() -> Parser {
 		Parser::new().token(Self::master_seed_path_token())
 	}
+
+	fn display() -> Parser {
+		Parser::new()
+			.token(Self::file_path_token())
+			.token(Self::display_type_token())
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -866,6 +906,7 @@ impl GetParserForCommand for Command {
 				Self::advanced_provision_yubikey()
 			}
 			Self::PivotBuildFingerprints => Self::pivot_build_fingerprints(),
+			Self::Display => Self::display(),
 		}
 	}
 }
@@ -1062,6 +1103,21 @@ impl ClientOpts {
 			.to_string()
 	}
 
+	fn file_path(&self) -> String {
+		self.parsed
+			.single(FILE_PATH)
+			.expect("Missing `--file-path`")
+			.to_string()
+	}
+
+	fn display_type(&self) -> DisplayType {
+		self.parsed
+			.single(DISPLAY_TYPE)
+			.expect("Missing `--display-type`")
+			.as_str()
+			.into()
+	}
+
 	fn yubikey(&self) -> bool {
 		self.parsed.flag(YUBIKEY).unwrap_or(false)
 	}
@@ -1139,6 +1195,9 @@ impl ClientRunner {
 				}
 				Command::PivotBuildFingerprints => {
 					handlers::pivot_build_fingerprints(&self.opts);
+				}
+				Command::Display => {
+					handlers::display(&self.opts);
 				}
 			}
 		}
@@ -1401,6 +1460,15 @@ mod handlers {
 			opts.eph_wrapped_share_path(),
 			opts.approval_path(),
 		) {
+			eprintln!("Error: {:?}", e);
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn display(opts: &ClientOpts) {
+		if let Err(e) =
+			services::display(&opts.display_type(), opts.file_path())
+		{
 			eprintln!("Error: {:?}", e);
 			std::process::exit(1);
 		}

@@ -160,8 +160,6 @@ async fn genesis_e2e() {
 	)
 	.unwrap();
 
-	println!("{:?}", genesis_output);
-
 	// -- Recreate the quorum key from the encrypted shares.
 	let mut decrypted_shares: Vec<_> = genesis_output
 		.member_outputs
