@@ -361,7 +361,6 @@ const NAMESPACE: &str = "namespace";
 const NONCE: &str = "nonce";
 const RESTART_POLICY: &str = "restart-policy";
 const PIVOT_PATH: &str = "pivot-path";
-const PERSONAL_DIR: &str = "personal-dir";
 const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
@@ -516,11 +515,6 @@ impl From<String> for Command {
 }
 
 impl Command {
-	fn personal_dir_token() -> Token {
-		Token::new(PERSONAL_DIR, "Directory (eventually) containing personal key, share, and setup key associated with 1 genesis ceremony.")
-			.takes_value(true)
-			.required(true)
-	}
 	fn namespace_token() -> Token {
 		Token::new(NAMESPACE, "Namespace for the associated manifest.")
 			.takes_value(true)
@@ -726,8 +720,8 @@ impl Command {
 
 	fn generate_file_key() -> Parser {
 		Parser::new()
-			.token(Self::alias_token())
-			.token(Self::personal_dir_token())
+			.token(Self::master_seed_path_token())
+			.token(Self::pub_path_token())
 	}
 
 	fn boot_genesis() -> Parser {
@@ -843,9 +837,7 @@ impl Command {
 	}
 
 	fn advanced_provision_yubikey() -> Parser {
-		Parser::new()
-			.token(Self::pub_path_token())
-			.token(Self::master_seed_path_token())
+		Parser::new().token(Self::master_seed_path_token())
 	}
 }
 
@@ -935,10 +927,6 @@ impl ClientOpts {
 		self.parsed.single(PIVOT_PATH).expect("required arg").to_string()
 	}
 
-	fn personal_dir(&self) -> String {
-		self.parsed.single(PERSONAL_DIR).expect("required arg").to_string()
-	}
-
 	fn manifest_set_dir(&self) -> String {
 		self.parsed
 			.single(MANIFEST_SET_DIR)
@@ -1003,7 +991,6 @@ impl ClientOpts {
 		}
 	}
 
-	#[cfg(feature = "smartcard")]
 	fn pub_path(&self) -> String {
 		self.parsed.single(PUB_PATH).expect("Missing `--pub-path`").to_string()
 	}
@@ -1262,7 +1249,7 @@ mod handlers {
 	}
 
 	pub(super) fn generate_file_key(opts: &ClientOpts) {
-		services::generate_file_key(&opts.alias(), opts.personal_dir());
+		services::generate_file_key(&opts.master_seed_path(), &opts.pub_path());
 	}
 
 	pub(super) fn provision_yubikey(opts: &ClientOpts) {
@@ -1288,10 +1275,9 @@ mod handlers {
 
 		#[cfg(feature = "smartcard")]
 		{
-			if let Err(e) = services::advanced_provision_yubikey(
-				opts.pub_path(),
-				opts.master_seed_path(),
-			) {
+			if let Err(e) =
+				services::advanced_provision_yubikey(opts.master_seed_path())
+			{
 				eprintln!("Error: {:?}", e);
 				std::process::exit(1);
 			}
