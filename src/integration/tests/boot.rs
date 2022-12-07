@@ -223,7 +223,7 @@ async fn boot_e2e() {
 
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
-			"Is this the correct pivot restart policy: Never? (yes/no)"
+			"Is this the correct pivot restart policy: RestartPolicy::Never? (yes/no)"
 		);
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 

@@ -2209,7 +2209,7 @@ mod tests {
 
 			assert_eq!(
 				output[2],
-				"Is this the correct pivot restart policy: Never? (yes/no)"
+				"Is this the correct pivot restart policy: RestartPolicy::Never? (yes/no)"
 			);
 		}
 
