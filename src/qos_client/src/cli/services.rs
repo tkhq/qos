@@ -29,6 +29,7 @@ use qos_crypto::{sha_256, sha_384};
 use qos_p256::{P256Error, P256Pair, P256Public};
 use zeroize::Zeroizing;
 
+use super::DisplayType;
 use crate::request;
 
 const PUB_EXT: &str = "pub";
@@ -104,6 +105,14 @@ pub enum Error {
 	},
 	/// Failed to decode some hex
 	CouldNotDecodeHex(qos_hex::HexError),
+	/// Failed to deserialize something from borsh.
+	BorshError,
+}
+
+impl From<borsh::maybestd::io::Error> for Error {
+	fn from(_: borsh::maybestd::io::Error) -> Self {
+		Self::BorshError
+	}
 }
 
 #[cfg(feature = "smartcard")]
@@ -1192,6 +1201,28 @@ pub(crate) fn verify<P: AsRef<Path>>(
 	}
 }
 
+pub(crate) fn display<P: AsRef<Path>>(
+	display_type: &DisplayType,
+	file_path: P,
+) -> Result<(), Error> {
+	let bytes = fs::read(file_path).map_err(|_| Error::ReadShare)?;
+	match *display_type {
+		DisplayType::Manifest => {
+			let decoded = Manifest::try_from_slice(&bytes)?;
+			println!("{:#?}", decoded);
+		}
+		DisplayType::ManifestEnvelope => {
+			let decoded = ManifestEnvelope::try_from_slice(&bytes)?;
+			println!("{:#?}", decoded);
+		}
+		DisplayType::GenesisOutput => {
+			let decoded = GenesisOutput::try_from_slice(&bytes)?;
+			println!("{:#?}", decoded);
+		}
+	};
+	Ok(())
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	uri: &str,
@@ -2178,7 +2209,7 @@ mod tests {
 
 			assert_eq!(
 				output[2],
-				"Is this the correct pivot restart policy: Never? (yes/no)"
+				"Is this the correct pivot restart policy: RestartPolicy::Never? (yes/no)"
 			);
 		}
 
