@@ -389,6 +389,8 @@ const SHARE: &str = "share";
 const OUTPUT_DIR: &str = "output-dir";
 const THRESHOLD: &str = "threshold";
 const TOTAL_SHARES: &str = "total-shares";
+const PAYLOAD: &str = "payload";
+const SIGNATURE: &str = "signature";
 
 /// Commands for the Client CLI.
 ///
@@ -486,6 +488,12 @@ pub enum Command {
 	ShamirSplit,
 	/// Reconstruct a secret from Shamir Secret Sharing shares.
 	ShamirReconstruct,
+	/// Sign a hex encoded payload with the yubikey.
+	YubiKeySign,
+	/// Get the public key of a yubikey
+	YubiKeyPublic,
+	/// Verify a signature from qos_p256 pair.
+	Verify,
 }
 
 impl From<&str> for Command {
@@ -511,6 +519,9 @@ impl From<&str> for Command {
 			"pivot-build-fingerprints" => Self::PivotBuildFingerprints,
 			"shamir-split" => Self::ShamirSplit,
 			"shamir-reconstruct" => Self::ShamirReconstruct,
+			"yubikey-sign" => Self::YubiKeySign,
+			"verify" => Self::Verify,
+			"yubikey-public" => Self::YubiKeyPublic,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -727,6 +738,16 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn payload_token() -> Token {
+		Token::new(PAYLOAD, "A hex-encoded payload to sign/encrypt/decrypt.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn signature_token() -> Token {
+		Token::new(SIGNATURE, "A hex encoded signature from qos p256")
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -890,6 +911,21 @@ impl Command {
 			.token(Self::share_token())
 			.token(Self::output_path_token())
 	}
+
+	fn yubikey_sign() -> Parser {
+		Parser::new().token(Self::payload_token())
+	}
+
+	fn yubikey_public() -> Parser {
+		Parser::new()
+	}
+
+	fn verify() -> Parser {
+		Parser::new()
+			.token(Self::payload_token())
+			.token(Self::signature_token())
+			.token(Self::pub_path_token())
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -919,6 +955,9 @@ impl GetParserForCommand for Command {
 			Self::PivotBuildFingerprints => Self::pivot_build_fingerprints(),
 			Self::ShamirSplit => Self::shamir_split(),
 			Self::ShamirReconstruct => Self::shamir_reconstruct(),
+			Self::YubiKeySign => Self::yubikey_sign(),
+			Self::YubiKeyPublic => Self::yubikey_public(),
+			Self::Verify => Self::verify(),
 		}
 	}
 }
@@ -1142,6 +1181,17 @@ impl ClientOpts {
 			.expect("threshold not valid integer.")
 	}
 
+	fn payload(&self) -> String {
+		self.parsed.single(PAYLOAD).expect("Missing `--payload`").to_string()
+	}
+
+	fn signature(&self) -> String {
+		self.parsed
+			.single(SIGNATURE)
+			.expect("Missing `--signature`")
+			.to_string()
+	}
+
 	fn yubikey(&self) -> bool {
 		self.parsed.flag(YUBIKEY).unwrap_or(false)
 	}
@@ -1226,6 +1276,9 @@ impl ClientRunner {
 				Command::ShamirReconstruct => {
 					handlers::shamir_reconstruct(&self.opts);
 				}
+				Command::YubiKeySign => handlers::yubikey_sign(&self.opts),
+				Command::YubiKeyPublic => handlers::yubikey_public(&self.opts),
+				Command::Verify => handlers::verify(&self.opts),
 			}
 		}
 	}
@@ -1367,6 +1420,47 @@ mod handlers {
 				eprintln!("Error: {:?}", e);
 				std::process::exit(1);
 			}
+		}
+	}
+
+	pub(super) fn yubikey_sign(opts: &ClientOpts) {
+		#[cfg(not(feature = "smartcard"))]
+		{
+			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
+		}
+
+		#[cfg(feature = "smartcard")]
+		{
+			if let Err(e) = services::yubikey_sign(&opts.payload()) {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+		}
+	}
+
+	pub(super) fn yubikey_public(_opts: &ClientOpts) {
+		#[cfg(not(feature = "smartcard"))]
+		{
+			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
+		}
+
+		#[cfg(feature = "smartcard")]
+		{
+			if let Err(e) = services::yubikey_public() {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+		}
+	}
+
+	pub(super) fn verify(opts: &ClientOpts) {
+		if let Err(e) = services::verify(
+			&opts.payload(),
+			&opts.signature(),
+			opts.pub_path(),
+		) {
+			eprintln!("Error: {:?}", e);
+			std::process::exit(1);
 		}
 	}
 
