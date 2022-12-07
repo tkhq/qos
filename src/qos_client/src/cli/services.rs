@@ -1149,7 +1149,7 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 pub(crate) fn yubikey_sign(hex_payload: &str) -> Result<(), Error> {
 	let bytes = qos_hex::decode(hex_payload)?;
 
-	let mut pair = PairOrYubi::from_inputs(false, None)?;
+	let mut pair = PairOrYubi::from_inputs(true, None)?;
 	let signature_bytes = pair.sign(&bytes)?;
 	let signature = qos_hex::encode(&signature_bytes);
 
