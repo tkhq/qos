@@ -97,8 +97,8 @@ pub enum Error {
 	/// Failed to read file that was supposed to contain Ephemeral Key wrapped
 	/// share.
 	FailedToReadEphWrappedShare(std::io::Error),
-	/// 
-	CouldNotDecodeHex,
+	/// Failed to decode some hex
+	CouldNotDecodeHex(qos_hex::HexError),
 }
 
 #[cfg(feature = "smartcard")]
@@ -111,6 +111,12 @@ impl From<crate::yubikey::YubiKeyError> for Error {
 impl From<P256Error> for Error {
 	fn from(err: P256Error) -> Self {
 		Error::P256(err)
+	}
+}
+
+impl From<qos_hex::HexError> for Error {
+	fn from(err: qos_hex::HexError) -> Error {
+		Error::CouldNotDecodeHex(err)
 	}
 }
 
@@ -1140,9 +1146,8 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 }
 
 #[cfg(feature = "smartcard")]
-pub(crate) fn yubikey_sign(hex_payload: String) -> Result<(), Error> {
-	let bytes = qos_hex::decode(&hex_payload)
-		.map_err(|_| Error::CouldNotDecodeHex)?;
+pub(crate) fn yubikey_sign(hex_payload: &str) -> Result<(), Error> {
+	let bytes = qos_hex::decode(hex_payload)?;
 
 	let mut pair = PairOrYubi::from_inputs(false, None)?;
 	let signature_bytes = pair.sign(&bytes)?;
@@ -1154,7 +1159,6 @@ pub(crate) fn yubikey_sign(hex_payload: String) -> Result<(), Error> {
 }
 
 pub(crate) fn yubikey_public() -> Result<(), Error> {
-
 	let mut yubi = crate::yubikey::open_single()?;
 	let public = crate::yubikey::pair_public_key(&mut yubi)?;
 
@@ -1162,6 +1166,25 @@ pub(crate) fn yubikey_public() -> Result<(), Error> {
 	println!("{hex}");
 
 	Ok(())
+}
+
+pub(crate) fn verify<P: AsRef<Path>>(
+	payload: &str,
+	signature: &str,
+	pub_path: P,
+) -> Result<(), Error> {
+	let payload_bytes = qos_hex::decode(payload)?;
+	let signature_bytes = qos_hex::decode(signature)?;
+
+	let public = P256Public::from_hex_file(pub_path)?;
+
+	if let Err(e) = public.verify(&payload_bytes, &signature_bytes) {
+		println!("Signature not valid: {:?}", e);
+		Err(e.into())
+	} else {
+		println!("Valid signature!");
+		Ok(())
+	}
 }
 
 #[allow(clippy::too_many_lines)]

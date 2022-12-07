@@ -386,6 +386,7 @@ const EPH_WRAPPED_SHARE_PATH: &str = "eph-wrapped-share-path";
 const ATTESTATION_DOC_PATH: &str = "attestation-doc-path";
 const MASTER_SEED_PATH: &str = "master-seed-path";
 const PAYLOAD: &str = "payload";
+const SIGNATURE: &str = "signature";
 
 /// Commands for the Client CLI.
 ///
@@ -483,6 +484,8 @@ pub enum Command {
 	YubiKeySign,
 	/// Get the public key of a yubikey
 	YubiKeyPublic,
+	/// Verify a signature from qos_p256 pair.
+	Verify,
 }
 
 impl From<&str> for Command {
@@ -507,6 +510,7 @@ impl From<&str> for Command {
 			"advanced-provision-yubikey" => Self::AdvancedProvisionYubiKey,
 			"pivot-build-fingerprints" => Self::PivotBuildFingerprints,
 			"yubikey-sign" => Self::YubiKeySign,
+			"verify" => Self::Verify,
 			"yubikey-public" => Self::YubiKeyPublic,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
@@ -702,6 +706,11 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn signature_token() -> Token {
+		Token::new(SIGNATURE, "A hex encoded signature from qos p256")
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -853,12 +862,18 @@ impl Command {
 	}
 
 	fn yubikey_sign() -> Parser {
-		Parser::new()
-			.token(Self::payload_token())
+		Parser::new().token(Self::payload_token())
 	}
 
 	fn yubikey_public() -> Parser {
 		Parser::new()
+	}
+
+	fn verify() -> Parser {
+		Parser::new()
+			.token(Self::payload_token())
+			.token(Self::signature_token())
+			.token(Self::pub_path_token())
 	}
 }
 
@@ -889,6 +904,7 @@ impl GetParserForCommand for Command {
 			Self::PivotBuildFingerprints => Self::pivot_build_fingerprints(),
 			Self::YubiKeySign => Self::yubikey_sign(),
 			Self::YubiKeyPublic => Self::yubikey_public(),
+			Self::Verify => Self::verify(),
 		}
 	}
 }
@@ -1086,9 +1102,13 @@ impl ClientOpts {
 	}
 
 	fn payload(&self) -> String {
+		self.parsed.single(PAYLOAD).expect("Missing `--payload`").to_string()
+	}
+
+	fn signature(&self) -> String {
 		self.parsed
-			.single(PAYLOAD)
-			.expect("Missing `--payload`")
+			.single(SIGNATURE)
+			.expect("Missing `--signature`")
 			.to_string()
 	}
 
@@ -1172,6 +1192,7 @@ impl ClientRunner {
 				}
 				Command::YubiKeySign => handlers::yubikey_sign(&self.opts),
 				Command::YubiKeyPublic => handlers::yubikey_public(&self.opts),
+				Command::Verify => handlers::verify(&self.opts),
 			}
 		}
 	}
@@ -1324,9 +1345,7 @@ mod handlers {
 
 		#[cfg(feature = "smartcard")]
 		{
-			if let Err(e) = services::yubikey_sign(
-				opts.payload()
-			) {
+			if let Err(e) = services::yubikey_sign(&opts.payload()) {
 				eprintln!("Error: {:?}", e);
 				std::process::exit(1);
 			}
@@ -1345,6 +1364,17 @@ mod handlers {
 				eprintln!("Error: {:?}", e);
 				std::process::exit(1);
 			}
+		}
+	}
+
+	pub(super) fn verify(opts: &ClientOpts) {
+		if let Err(e) = services::verify(
+			&opts.payload(),
+			&opts.signature(),
+			opts.pub_path(),
+		) {
+			eprintln!("Error: {:?}", e);
+			std::process::exit(1);
 		}
 	}
 
