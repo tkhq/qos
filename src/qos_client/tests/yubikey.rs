@@ -36,35 +36,35 @@ const DATA: &[u8] = b"test data";
 #[test]
 #[ignore]
 fn yubikey_tests() {
-	// let mut yubikey = YubiKey::open().unwrap();
-	// reset(&mut yubikey);
+	let mut yubikey = YubiKey::open().unwrap();
+	reset(&mut yubikey);
 
-	// signing_works(&mut yubikey);
-	// reset(&mut yubikey);
+	signing_works(&mut yubikey);
+	reset(&mut yubikey);
 
-	// key_agreement_works(&mut yubikey);
-	// reset(&mut yubikey);
+	key_agreement_works(&mut yubikey);
+	reset(&mut yubikey);
 
-	// import_signing_works(&mut yubikey);
-	// reset(&mut yubikey);
+	import_signing_works(&mut yubikey);
+	reset(&mut yubikey);
 
-	// import_key_agreement_works(&mut yubikey);
-	// reset(&mut yubikey);
+	import_key_agreement_works(&mut yubikey);
+	reset(&mut yubikey);
 
-	// // Dropping the yubikey should disconnect the underlying PCSC reader
-	// // connection. We want to disconnect before using the CLI
-	// // provision-yubikey command because that will try to open up a new
-	// // connection.
-	// drop(yubikey);
+	// Dropping the yubikey should disconnect the underlying PCSC reader
+	// connection. We want to disconnect before using the CLI
+	// provision-yubikey command because that will try to open up a new
+	// connection.
+	drop(yubikey);
 
-	// provision_yubikey_works();
+	provision_yubikey_works();
 
-	// // Reset the yubikey from provisioning
-	// let mut yubikey = YubiKey::open().unwrap();
-	// reset(&mut yubikey);
-	// drop(yubikey);
+	// Reset the yubikey from provisioning
+	let mut yubikey = YubiKey::open().unwrap();
+	reset(&mut yubikey);
+	drop(yubikey);
 
-	// advanced_provision_yubikey_works();
+	advanced_provision_yubikey_works();
 
 	let mut yubikey = YubiKey::open().unwrap();
 	reset(&mut yubikey);
@@ -301,9 +301,8 @@ fn provision_sign_and_verify() {
 		stdout_reader.lines()
 	};
 
+	stdout.next();
 	let signature = stdout.next().unwrap().unwrap();
-
-	assert!(child.wait().unwrap().success());
 
 	assert!(Command::new("../target/debug/qos_client")
 		.arg("verify")
