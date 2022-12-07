@@ -27,6 +27,7 @@ use qos_core::protocol::{
 };
 use qos_crypto::{sha_256, sha_384};
 use qos_p256::{P256Error, P256Pair, P256Public};
+use zeroize::Zeroizing;
 
 use crate::request;
 
@@ -97,6 +98,10 @@ pub enum Error {
 	/// Failed to read file that was supposed to contain Ephemeral Key wrapped
 	/// share.
 	FailedToReadEphWrappedShare(std::io::Error),
+	FailedToRead {
+		path: String,
+		error: String,
+	},
 	/// Failed to decode some hex
 	CouldNotDecodeHex(qos_hex::HexError),
 }
@@ -1318,6 +1323,50 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 
 	println!("Enclave should be finished booting!");
+}
+
+pub(crate) fn shamir_split(
+	secret_path: String,
+	total_shares: usize,
+	threshold: usize,
+	output_dir: &str,
+) -> Result<(), Error> {
+	let secret = fs::read(&secret_path).map_err(|e| Error::FailedToRead {
+		path: secret_path,
+		error: e.to_string(),
+	})?;
+	let shares =
+		qos_crypto::shamir::shares_generate(&secret, total_shares, threshold);
+
+	for (i, share) in shares.iter().enumerate() {
+		let file_name = format!("{}.share", i + 1);
+		let file_path = PathBuf::from(&output_dir).join(&file_name);
+		write_with_msg(&file_path, share, &file_name);
+	}
+
+	Ok(())
+}
+
+pub(crate) fn shamir_reconstruct(
+	shares: Vec<String>,
+	output_path: &str,
+) -> Result<(), Error> {
+	let shares = shares
+		.into_iter()
+		.map(|p| {
+			fs::read(&p).map_err(|e| Error::FailedToRead {
+				path: p,
+				error: e.to_string(),
+			})
+		})
+		.collect::<Result<Vec<Vec<u8>>, Error>>()?;
+
+	let secret =
+		Zeroizing::new(qos_crypto::shamir::shares_reconstruct(&shares));
+
+	write_with_msg(output_path.as_ref(), &*secret, "Reconstructed secret");
+
+	Ok(())
 }
 
 fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {

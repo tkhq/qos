@@ -385,6 +385,10 @@ const APPROVAL_PATH: &str = "approval-path";
 const EPH_WRAPPED_SHARE_PATH: &str = "eph-wrapped-share-path";
 const ATTESTATION_DOC_PATH: &str = "attestation-doc-path";
 const MASTER_SEED_PATH: &str = "master-seed-path";
+const SHARE: &str = "share";
+const OUTPUT_DIR: &str = "output-dir";
+const THRESHOLD: &str = "threshold";
+const TOTAL_SHARES: &str = "total-shares";
 const PAYLOAD: &str = "payload";
 const SIGNATURE: &str = "signature";
 
@@ -480,6 +484,10 @@ pub enum Command {
 	AdvancedProvisionYubiKey,
 	/// Create a dummy pivot build fingerprints with a correct hash
 	PivotBuildFingerprints,
+	/// Split a secret into shares with Shamir Secret Sharing.
+	ShamirSplit,
+	/// Reconstruct a secret from Shamir Secret Sharing shares.
+	ShamirReconstruct,
 	/// Sign a hex encoded payload with the yubikey.
 	YubiKeySign,
 	/// Get the public key of a yubikey
@@ -509,6 +517,8 @@ impl From<&str> for Command {
 			"provision-yubikey" => Self::ProvisionYubiKey,
 			"advanced-provision-yubikey" => Self::AdvancedProvisionYubiKey,
 			"pivot-build-fingerprints" => Self::PivotBuildFingerprints,
+			"shamir-split" => Self::ShamirSplit,
+			"shamir-reconstruct" => Self::ShamirReconstruct,
 			"yubikey-sign" => Self::YubiKeySign,
 			"verify" => Self::Verify,
 			"yubikey-public" => Self::YubiKeyPublic,
@@ -701,6 +711,33 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn share_token() -> Token {
+		Token::new(SHARE, "Paths to a share. This can be specified multiple times.")
+			.takes_value(true)
+			.required(true)
+			.allow_multiple(true)
+	}
+	fn threshold_token() -> Token {
+		Token::new(
+			THRESHOLD,
+			"The threshold to reconstruct a shamir split secret.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn output_dir_token() -> Token {
+		Token::new(OUTPUT_DIR, "The directory to write outputs.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn total_shares_token() -> Token {
+		Token::new(
+			TOTAL_SHARES,
+			"Total shares to generate with shamir secret sharing.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
 	fn payload_token() -> Token {
 		Token::new(PAYLOAD, "A hex-encoded payload to sign/encrypt/decrypt.")
 			.takes_value(true)
@@ -861,6 +898,20 @@ impl Command {
 		Parser::new().token(Self::master_seed_path_token())
 	}
 
+	fn shamir_split() -> Parser {
+		Parser::new()
+			.token(Self::secret_path_token())
+			.token(Self::total_shares_token())
+			.token(Self::threshold_token())
+			.token(Self::output_dir_token())
+	}
+
+	fn shamir_reconstruct() -> Parser {
+		Parser::new()
+			.token(Self::share_token())
+			.token(Self::output_path_token())
+	}
+
 	fn yubikey_sign() -> Parser {
 		Parser::new().token(Self::payload_token())
 	}
@@ -902,6 +953,8 @@ impl GetParserForCommand for Command {
 				Self::advanced_provision_yubikey()
 			}
 			Self::PivotBuildFingerprints => Self::pivot_build_fingerprints(),
+			Self::ShamirSplit => Self::shamir_split(),
+			Self::ShamirReconstruct => Self::shamir_reconstruct(),
 			Self::YubiKeySign => Self::yubikey_sign(),
 			Self::YubiKeyPublic => Self::yubikey_public(),
 			Self::Verify => Self::verify(),
@@ -1101,6 +1154,33 @@ impl ClientOpts {
 			.to_string()
 	}
 
+	fn output_dir(&self) -> String {
+		self.parsed
+			.single(OUTPUT_DIR)
+			.expect("Missing `--output-dir`")
+			.to_string()
+	}
+
+	fn shares(&self) -> Vec<String> {
+		self.parsed.multiple(SHARE).expect("Missing `--share` args").to_vec()
+	}
+
+	fn total_shares(&self) -> usize {
+		self.parsed
+			.single(TOTAL_SHARES)
+			.expect("Missing `--total-shares`")
+			.parse()
+			.expect("total shares not valid integer.")
+	}
+
+	fn threshold(&self) -> usize {
+		self.parsed
+			.single(THRESHOLD)
+			.expect("Missing `--threshold`")
+			.parse()
+			.expect("threshold not valid integer.")
+	}
+
 	fn payload(&self) -> String {
 		self.parsed.single(PAYLOAD).expect("Missing `--payload`").to_string()
 	}
@@ -1189,6 +1269,12 @@ impl ClientRunner {
 				}
 				Command::PivotBuildFingerprints => {
 					handlers::pivot_build_fingerprints(&self.opts);
+				}
+				Command::ShamirSplit => {
+					handlers::shamir_split(&self.opts);
+				}
+				Command::ShamirReconstruct => {
+					handlers::shamir_reconstruct(&self.opts);
 				}
 				Command::YubiKeySign => handlers::yubikey_sign(&self.opts),
 				Command::YubiKeyPublic => handlers::yubikey_public(&self.opts),
@@ -1515,6 +1601,27 @@ mod handlers {
 			opts.manifest_approvals_dir(),
 			opts.manifest_path(),
 		) {
+			eprintln!("Error: {:?}", e);
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn shamir_split(opts: &ClientOpts) {
+		if let Err(e) = services::shamir_split(
+			opts.secret_path().expect("Missing `--secret-path`"),
+			opts.total_shares(),
+			opts.threshold(),
+			&opts.output_dir(),
+		) {
+			eprintln!("Error: {:?}", e);
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn shamir_reconstruct(opts: &ClientOpts) {
+		if let Err(e) =
+			services::shamir_reconstruct(opts.shares(), &opts.output_path())
+		{
 			eprintln!("Error: {:?}", e);
 			std::process::exit(1);
 		}
