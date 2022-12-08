@@ -1,5 +1,7 @@
 //! Standard boot logic and types.
 
+use std::fmt;
+
 use qos_crypto::sha_256;
 use qos_p256::{P256Pair, P256Public};
 
@@ -11,7 +13,7 @@ use crate::protocol::{
 
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct NitroConfig {
@@ -30,21 +32,37 @@ pub struct NitroConfig {
 	pub qos_commit: String,
 }
 
+impl fmt::Debug for NitroConfig {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("NitroConfig")
+			.field("pcr0", &qos_hex::encode(&self.pcr0))
+			.field("pcr1", &qos_hex::encode(&self.pcr1))
+			.field("pcr2", &qos_hex::encode(&self.pcr2))
+			.field("pcr3", &qos_hex::encode(&self.pcr3))
+			.field("qos_commit", &self.qos_commit)
+			.finish_non_exhaustive()
+	}
+}
+
 /// Policy for restarting the pivot binary.
 #[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	Copy,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
+	PartialEq, Eq, Clone, Copy, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub enum RestartPolicy {
 	/// Never restart the pivot application
 	Never,
 	/// Always restart the pivot application
 	Always,
+}
+
+impl fmt::Debug for RestartPolicy {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Self::Never => write!(f, "RestartPolicy::Never")?,
+			Self::Always => write!(f, "RestartPolicy::Always")?,
+		};
+		Ok(())
+	}
 }
 
 #[cfg(any(feature = "mock", test))]
@@ -68,7 +86,7 @@ impl TryFrom<String> for RestartPolicy {
 
 /// Pivot binary configuration
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfig {
@@ -83,10 +101,20 @@ pub struct PivotConfig {
 	pub args: Vec<String>,
 }
 
+impl fmt::Debug for PivotConfig {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("PivotConfig")
+			.field("commit", &self.commit)
+			.field("hash", &qos_hex::encode(&self.hash))
+			.field("restart", &self.restart)
+			.field("args", &self.args.join(" "))
+			.finish()
+	}
+}
+
 /// A quorum member's alias and public key.
 #[derive(
 	PartialEq,
-	Debug,
 	Clone,
 	borsh::BorshSerialize,
 	borsh::BorshDeserialize,
@@ -102,6 +130,15 @@ pub struct QuorumMember {
 	pub alias: String,
 	/// P256Public as bytes
 	pub pub_key: Vec<u8>,
+}
+
+impl fmt::Debug for QuorumMember {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("QuorumMember")
+			.field("alias", &self.alias)
+			.field("pub_key", &qos_hex::encode(&self.pub_key))
+			.finish()
+	}
 }
 
 /// The Manifest Set.
@@ -132,7 +169,7 @@ pub struct ShareSet {
 
 /// A Namespace and its relative nonce.
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Namespace {
@@ -144,8 +181,18 @@ pub struct Namespace {
 	/// downgrade attacks - quorum members should only approve a manifest that
 	/// has the highest nonce.
 	pub nonce: u32,
-	/// Quorum Key as a DER encoded RSA public key.
+	/// Quorum Key as a hex encoded RSA public key.
 	pub quorum_key: Vec<u8>,
+}
+
+impl fmt::Debug for Namespace {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("Namespace")
+			.field("name", &self.name)
+			.field("nonce", &self.nonce)
+			.field("quorum_key", &qos_hex::encode(&self.quorum_key))
+			.finish()
+	}
 }
 
 /// The Manifest for the enclave.
@@ -168,7 +215,7 @@ pub struct Manifest {
 
 /// An approval by a Quorum Member.
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Approval {
@@ -176,6 +223,15 @@ pub struct Approval {
 	pub signature: Vec<u8>,
 	/// Description of the Quorum Member
 	pub member: QuorumMember,
+}
+
+impl fmt::Debug for Approval {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("Approval")
+			.field("signature", &qos_hex::encode(&self.signature))
+			.field("member", &self.member)
+			.finish()
+	}
 }
 
 impl Approval {

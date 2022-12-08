@@ -1,4 +1,7 @@
-use std::process::Command;
+use std::{
+	io::{BufRead, BufReader},
+	process::{Command, Stdio},
+};
 
 use borsh::BorshDeserialize;
 use qos_client::yubikey::{
@@ -49,18 +52,25 @@ fn yubikey_tests() {
 	reset(&mut yubikey);
 
 	// Dropping the yubikey should disconnect the underlying PCSC reader
-	// connection. We want to disconnect before using the CLI provision-yubikey
-	// command because that will try to open up a new connection.
+	// connection. We want to disconnect before using the CLI
+	// provision-yubikey command because that will try to open up a new
+	// connection.
 	drop(yubikey);
 
 	provision_yubikey_works();
 
-	// reset the yubikey
+	// Reset the yubikey from provisioning
 	let mut yubikey = YubiKey::open().unwrap();
 	reset(&mut yubikey);
 	drop(yubikey);
 
 	advanced_provision_yubikey_works();
+
+	let mut yubikey = YubiKey::open().unwrap();
+	reset(&mut yubikey);
+	drop(yubikey);
+
+	provision_sign_and_verify();
 
 	let mut yubikey = YubiKey::open().unwrap();
 	reset(&mut yubikey);
@@ -209,18 +219,28 @@ fn provision_yubikey_works() {
 
 fn advanced_provision_yubikey_works() {
 	let tmp_dir: PathWrapper = "/tmp/advanced_provision_yubikey_works".into();
-	let pub_path: PathWrapper =
-		"/tmp/advanced_provision_yubikey_works/yubikey.pub".into();
 	let master_seed_path: PathWrapper =
 		"/tmp/advanced_provision_yubikey_works/yubikey.master.secret".into();
+	let pub_path: PathWrapper =
+		"/tmp/advanced_provision_yubikey_works/yubikey.pub".into();
 
 	// Create the temporary directory where we write the yubikey
 	std::fs::create_dir(&*tmp_dir).unwrap();
 
 	assert!(Command::new("../target/debug/qos_client")
-		.arg("advanced-provision-yubikey")
+		.arg("generate-file-key")
+		.arg("--master-seed-path")
+		.arg(&*master_seed_path)
 		.arg("--pub-path")
 		.arg(&*pub_path)
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
+	assert!(Command::new("../target/debug/qos_client")
+		.arg("advanced-provision-yubikey")
 		.arg("--master-seed-path")
 		.arg(&*master_seed_path)
 		.spawn()
@@ -237,9 +257,66 @@ fn advanced_provision_yubikey_works() {
 		P256Public::from_bytes(&bytes).unwrap()
 	};
 
+	let mut yubikey = YubiKey::open().unwrap();
+	let yubi_pub = qos_client::yubikey::pair_public_key(&mut yubikey).unwrap();
+	drop(yubikey);
+
+	assert_eq!(public.to_bytes(), yubi_pub);
+
 	let pair = P256Pair::from_hex_file(&*master_seed_path).unwrap();
 
 	assert!(pair.public_key() == public)
+}
+
+fn provision_sign_and_verify() {
+	let tmp_dir: PathWrapper = "/tmp/provision_yubikey_works".into();
+	let pub_path: PathWrapper =
+		"/tmp/provision_yubikey_works/yubikey.pub".into();
+
+	// Create the temporary directory where we write the yubikey
+	std::fs::create_dir(&*tmp_dir).unwrap();
+
+	assert!(Command::new("../target/debug/qos_client")
+		.arg("provision-yubikey")
+		.arg("--pub-path")
+		.arg(&*pub_path)
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
+	let data_hex = qos_hex::encode(DATA);
+	let mut child = Command::new("../target/debug/qos_client")
+		.arg("yubikey-sign")
+		.arg("--payload")
+		.arg(&data_hex)
+		.stdout(Stdio::piped())
+		.spawn()
+		.unwrap();
+
+	let mut stdout = {
+		let stdout = child.stdout.as_mut().unwrap();
+		let stdout_reader = BufReader::new(stdout);
+		stdout_reader.lines()
+	};
+
+	stdout.next();
+	let signature = stdout.next().unwrap().unwrap();
+
+	assert!(Command::new("../target/debug/qos_client")
+		.arg("verify")
+		.arg("--payload")
+		.arg(&data_hex)
+		.arg("--signature")
+		.arg(&signature)
+		.arg("--pub-path")
+		.arg(&*pub_path)
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
 }
 
 fn reset(yubikey: &mut YubiKey) {

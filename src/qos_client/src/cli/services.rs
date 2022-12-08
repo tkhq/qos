@@ -27,10 +27,11 @@ use qos_core::protocol::{
 };
 use qos_crypto::{sha_256, sha_384};
 use qos_p256::{P256Error, P256Pair, P256Public};
+use zeroize::Zeroizing;
 
+use super::DisplayType;
 use crate::request;
 
-const SECRET_EXT: &str = "secret";
 const PUB_EXT: &str = "pub";
 const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
 const GENESIS_OUTPUT_FILE: &str = "genesis_output";
@@ -98,6 +99,20 @@ pub enum Error {
 	/// Failed to read file that was supposed to contain Ephemeral Key wrapped
 	/// share.
 	FailedToReadEphWrappedShare(std::io::Error),
+	FailedToRead {
+		path: String,
+		error: String,
+	},
+	/// Failed to decode some hex
+	CouldNotDecodeHex(qos_hex::HexError),
+	/// Failed to deserialize something from borsh.
+	BorshError,
+}
+
+impl From<borsh::maybestd::io::Error> for Error {
+	fn from(_: borsh::maybestd::io::Error) -> Self {
+		Self::BorshError
+	}
 }
 
 #[cfg(feature = "smartcard")]
@@ -110,6 +125,12 @@ impl From<crate::yubikey::YubiKeyError> for Error {
 impl From<P256Error> for Error {
 	fn from(err: P256Error) -> Self {
 		Error::P256(err)
+	}
+}
+
+impl From<qos_hex::HexError> for Error {
+	fn from(err: qos_hex::HexError) -> Error {
+		Error::CouldNotDecodeHex(err)
 	}
 }
 
@@ -194,26 +215,23 @@ impl PairOrYubi {
 	}
 }
 
-pub(crate) fn generate_file_key<P: AsRef<Path>>(alias: &str, personal_dir: P) {
-	fs::create_dir_all(personal_dir.as_ref()).unwrap();
-
+pub(crate) fn generate_file_key<P: AsRef<Path>>(
+	master_secret_path: P,
+	pub_key_path: P,
+) {
 	let share_key_pair =
 		P256Pair::generate().expect("unable to generate P256 keypair");
 
 	// Write the personal key secret
-	let private_path =
-		personal_dir.as_ref().join(format!("{}.{}", alias, SECRET_EXT));
 	write_with_msg(
-		&private_path,
+		master_secret_path.as_ref(),
 		&share_key_pair.to_master_seed_hex(),
-		"File Key Secret",
+		"Master Seed",
 	);
 
 	// Write the setup key public key
-	let public_path =
-		personal_dir.as_ref().join(format!("{}.{}", alias, PUB_EXT));
 	write_with_msg(
-		&public_path,
+		pub_key_path.as_ref(),
 		&share_key_pair.public_key().to_hex_bytes(),
 		"File Key Public",
 	);
@@ -268,10 +286,8 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 
 #[cfg(feature = "smartcard")]
 pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
-	pub_path: P,
 	master_seed_path: P,
 ) -> Result<(), Error> {
-	use qos_p256::P256_SECRET_LEN;
 	let mut yubikey =
 		yubikey::YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
 
@@ -281,14 +297,15 @@ pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
 		.as_bytes()
 		.to_vec();
 
-	let master_seed = qos_p256::non_zero_bytes_os_rng::<P256_SECRET_LEN>();
-	let pair = P256Pair::from_master_seed(&master_seed)?;
+	let pair = P256Pair::from_hex_file(master_seed_path)?;
+
+	let master_seed = pair.to_master_seed();
 	let encrypt_secret = qos_p256::derive_secret(
-		&master_seed,
+		master_seed,
 		qos_p256::P256_ENCRYPT_DERIVE_PATH,
 	)?;
 	let sign_secret =
-		qos_p256::derive_secret(&master_seed, qos_p256::P256_SIGN_DERIVE_PATH)?;
+		qos_p256::derive_secret(master_seed, qos_p256::P256_SIGN_DERIVE_PATH)?;
 
 	crate::yubikey::import_key_and_generate_signed_certificate(
 		&mut yubikey,
@@ -318,19 +335,6 @@ pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
 	}
 	// Explicitly drop the yubikey to disconnect the PCSC session.
 	drop(yubikey);
-
-	let public_key_hex = qos_hex::encode(&public_key_bytes);
-	write_with_msg(
-		pub_path.as_ref(),
-		public_key_hex.as_bytes(),
-		"YubiKey encrypt+sign Public key",
-	);
-
-	write_with_msg(
-		master_seed_path.as_ref(),
-		&pair.to_master_seed_hex(),
-		"YubiKey encrypt+sign Master Seed",
-	);
 
 	Ok(())
 }
@@ -1157,6 +1161,70 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	Ok(())
 }
 
+#[cfg(feature = "smartcard")]
+pub(crate) fn yubikey_sign(hex_payload: &str) -> Result<(), Error> {
+	let bytes = qos_hex::decode(hex_payload)?;
+
+	let mut pair = PairOrYubi::from_inputs(true, None)?;
+	let signature_bytes = pair.sign(&bytes)?;
+	let signature = qos_hex::encode(&signature_bytes);
+
+	println!("{signature}");
+
+	Ok(())
+}
+
+pub(crate) fn yubikey_public() -> Result<(), Error> {
+	let mut yubi = crate::yubikey::open_single()?;
+	let public = crate::yubikey::pair_public_key(&mut yubi)?;
+
+	let hex = qos_hex::encode(&public);
+	println!("{hex}");
+
+	Ok(())
+}
+
+pub(crate) fn verify<P: AsRef<Path>>(
+	payload: &str,
+	signature: &str,
+	pub_path: P,
+) -> Result<(), Error> {
+	let payload_bytes = qos_hex::decode(payload)?;
+	let signature_bytes = qos_hex::decode(signature)?;
+
+	let public = P256Public::from_hex_file(pub_path)?;
+
+	if let Err(e) = public.verify(&payload_bytes, &signature_bytes) {
+		println!("Signature not valid: {:?}", e);
+		Err(e.into())
+	} else {
+		println!("Valid signature!");
+		Ok(())
+	}
+}
+
+pub(crate) fn display<P: AsRef<Path>>(
+	display_type: &DisplayType,
+	file_path: P,
+) -> Result<(), Error> {
+	let bytes = fs::read(file_path).map_err(|_| Error::ReadShare)?;
+	match *display_type {
+		DisplayType::Manifest => {
+			let decoded = Manifest::try_from_slice(&bytes)?;
+			println!("{:#?}", decoded);
+		}
+		DisplayType::ManifestEnvelope => {
+			let decoded = ManifestEnvelope::try_from_slice(&bytes)?;
+			println!("{:#?}", decoded);
+		}
+		DisplayType::GenesisOutput => {
+			let decoded = GenesisOutput::try_from_slice(&bytes)?;
+			println!("{:#?}", decoded);
+		}
+	};
+	Ok(())
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	uri: &str,
@@ -1288,6 +1356,50 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 
 	println!("Enclave should be finished booting!");
+}
+
+pub(crate) fn shamir_split(
+	secret_path: String,
+	total_shares: usize,
+	threshold: usize,
+	output_dir: &str,
+) -> Result<(), Error> {
+	let secret = fs::read(&secret_path).map_err(|e| Error::FailedToRead {
+		path: secret_path,
+		error: e.to_string(),
+	})?;
+	let shares =
+		qos_crypto::shamir::shares_generate(&secret, total_shares, threshold);
+
+	for (i, share) in shares.iter().enumerate() {
+		let file_name = format!("{}.share", i + 1);
+		let file_path = PathBuf::from(&output_dir).join(&file_name);
+		write_with_msg(&file_path, share, &file_name);
+	}
+
+	Ok(())
+}
+
+pub(crate) fn shamir_reconstruct(
+	shares: Vec<String>,
+	output_path: &str,
+) -> Result<(), Error> {
+	let shares = shares
+		.into_iter()
+		.map(|p| {
+			fs::read(&p).map_err(|e| Error::FailedToRead {
+				path: p,
+				error: e.to_string(),
+			})
+		})
+		.collect::<Result<Vec<Vec<u8>>, Error>>()?;
+
+	let secret =
+		Zeroizing::new(qos_crypto::shamir::shares_reconstruct(&shares));
+
+	write_with_msg(output_path.as_ref(), &*secret, "Reconstructed secret");
+
+	Ok(())
 }
 
 fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
@@ -2099,7 +2211,7 @@ mod tests {
 
 			assert_eq!(
 				output[2],
-				"Is this the correct pivot restart policy: Never? (yes/no)"
+				"Is this the correct pivot restart policy: RestartPolicy::Never? (yes/no)"
 			);
 		}
 
