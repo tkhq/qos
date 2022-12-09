@@ -77,8 +77,10 @@ sign: $(RELEASE_DIR)/manifest.txt
 			| grep sec:u \
 			| sed 's/.*\([A-Z0-9]\{16\}\).*/\1/g' \
 	); \
-	gpg --armor --detach-sig $(RELEASE_DIR)/manifest.txt \
-		> $(RELEASE_DIR)/manifest.$${fingerprint}.asc;
+	gpg --armor \
+		--detach-sig  \
+		--output $(RELEASE_DIR)/manifest.$${fingerprint}.asc \
+		$(RELEASE_DIR)/manifest.txt
 
 .PHONY: verify
 verify: $(RELEASE_DIR)/manifest.txt
