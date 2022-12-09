@@ -263,7 +263,7 @@ $(OUT_DIR)/aws/eif_build: \
 		CARGO_HOME=/cache/cargo cargo build \
 			--target x86_64-unknown-linux-gnu && \
 		mkdir -p /out/aws/; \
-		cp target/debug/eif_build /out/aws/; \
+		cp target/x86_64-unknown-linux-gnu/debug/eif_build /out/aws/; \
 	")
 
 $(OUT_DIR)/qos_host: \
