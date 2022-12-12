@@ -95,8 +95,8 @@ verify: $(RELEASE_DIR)/manifest.txt
 # Clean repo back to initial clone state
 .PHONY: clean
 clean:
-	rm -rf cache out release/*
 	git clean -dfx src/
+	rm -rf cache out release/*
 	docker image rm -f local/$(NAME)-build
 
 # Launch a shell inside the toolchain container
