@@ -71,9 +71,8 @@ attest: $(RELEASE_DIR)/manifest.txt
 	$(MAKE) release
 	diff -q $(CACHE_DIR)/manifest_compare.txt $(RELEASE_DIR)/manifest.txt;
 
-#sign: $(RELEASE_DIR)/manifest.txt
 .PHONY: sign
-sign:
+sign: $(RELEASE_DIR)/manifest.txt
 	set -e; \
 	git config --get user.signingkey 2>&1 >/dev/null || { \
 		echo "Error: git user.signingkey is not defined"; \
