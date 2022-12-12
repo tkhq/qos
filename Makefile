@@ -75,10 +75,14 @@ attest: $(RELEASE_DIR)/manifest.txt
 .PHONY: sign
 sign:
 	set -e; \
-	git config --get user.signingkey || { \
+	git config --get user.signingkey 2>&1 >/dev/null || { \
 		echo "Error: git user.signingkey is not defined"; \
 		exit 1; \
 	}; \
+	fingerprint=$$(\
+		git config --get user.signingkey \
+		| sed 's/.*\([A-Z0-9]\{16\}\).*/\1/g' \
+	); \
 	gpg --armor \
 		--detach-sig  \
 		--output $(RELEASE_DIR)/manifest.$${fingerprint}.asc \
