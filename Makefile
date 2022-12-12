@@ -50,7 +50,9 @@ $(RELEASE_DIR)/qos_client: \
 
 $(RELEASE_DIR)/manifest.txt: \
 	$(RELEASE_DIR)/aws/pcrs.txt \
-	$(RELEASE_DIR)/aws/nitro.eif
+	$(RELEASE_DIR)/aws/nitro.eif \
+	$(RELEASE_DIR)/qos_client \
+	$(RELEASE_DIR)/qos_host
 	openssl sha256 -r $(RELEASE_DIR)/aws/pcrs.txt \
 		> $(RELEASE_DIR)/manifest.txt;
 	openssl sha256 -r $(RELEASE_DIR)/aws/nitro.eif \
