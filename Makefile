@@ -94,6 +94,7 @@ verify: $(RELEASE_DIR)/manifest.txt
 .PHONY: clean
 clean:
 	rm -rf cache out release/*
+	git clean -dfx src/
 	docker image rm -f local/$(NAME)-build
 
 # Launch a shell inside the toolchain container
@@ -286,6 +287,7 @@ $(OUT_DIR)/qos_client: \
 	$(OUT_DIR)/toolchain.tar
 	$(call toolchain,$(USER)," \
 		unset FAKETIME; \
+		export RUSTFLAGS='-C target-feature=+crt-static' && \
 		cd /src/qos_client \
 		&& CARGO_HOME=/cache/cargo cargo build \
 			--target x86_64-unknown-linux-gnu \
