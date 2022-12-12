@@ -71,14 +71,14 @@ attest: $(RELEASE_DIR)/manifest.txt
 	$(MAKE) release
 	diff -q $(CACHE_DIR)/manifest_compare.txt $(RELEASE_DIR)/manifest.txt;
 
+#sign: $(RELEASE_DIR)/manifest.txt
 .PHONY: sign
-sign: $(RELEASE_DIR)/manifest.txt
+sign:
 	set -e; \
-	fingerprint=$$(\
-		gpg --list-secret-keys --with-colons \
-			| grep sec:u \
-			| sed 's/.*\([A-Z0-9]\{16\}\).*/\1/g' \
-	); \
+	git config --get user.signingkey || { \
+		echo "Error: git user.signingkey is not defined"; \
+		exit 1; \
+	}; \
 	gpg --armor \
 		--detach-sig  \
 		--output $(RELEASE_DIR)/manifest.$${fingerprint}.asc \
