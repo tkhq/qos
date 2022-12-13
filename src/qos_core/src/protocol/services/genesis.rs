@@ -89,6 +89,8 @@ pub struct GenesisOutput {
 	pub recovery_permutations: Vec<RecoveredPermutation>,
 	/// The threshold, K, used to generate the shards.
 	pub threshold: u32,
+	/// The quorum key encrypted to the DR key. None if no DR Key was provided
+	pub dr_key_wrapped_quorum_key: Option<Vec<u8>>,
 }
 
 impl fmt::Debug for GenesisOutput {
@@ -111,31 +113,72 @@ impl fmt::Debug for GenesisOutput {
 pub(in crate::protocol) fn boot_genesis(
 	state: &mut ProtocolState,
 	genesis_set: &GenesisSet,
+	dr_key: Option<Vec<u8>>,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
 	// TODO: Entropy!
 	let quorum_pair = P256Pair::generate()?;
+	let master_seed = &quorum_pair.to_master_seed()[..];
 
 	let shares = qos_crypto::shamir::shares_generate(
-		&quorum_pair.to_master_seed()[..],
+		master_seed,
 		genesis_set.members.len(),
 		genesis_set.threshold as usize,
 	);
 
 	let member_outputs: Result<Vec<_>, _> =
-		zip(shares, genesis_set.members.iter().cloned())
-			.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError>{
-				// 1) encrypt the share to quorum key
-				let personal_pub = P256Public::from_bytes(&share_set_member.pub_key)?;
-				let encrypted_quorum_key_share =
-					personal_pub.encrypt(&share)?;
+	zip(shares, genesis_set.members.iter().cloned())
+	.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError>{
+		// 1) encrypt the share to quorum key
+		let personal_pub = P256Public::from_bytes(&share_set_member.pub_key)?;
+		let encrypted_quorum_key_share =
+		personal_pub.encrypt(&share)?;
 
-				Ok(GenesisMemberOutput {
-					share_set_member,
-					encrypted_quorum_key_share,
-					share_hash: sha_256(&share),
-				})
-			})
-			.collect();
+		Ok(GenesisMemberOutput {
+			share_set_member,
+			encrypted_quorum_key_share,
+			share_hash: sha_256(&share),
+		})
+	})
+	.collect();
+
+	let dr_key_wrapped_quorum_key = if let Some(cert_bytes) = dr_key {
+		use std::io::Write;
+
+		use sequoia_openpgp::{
+			parse::Parse,
+			policy::StandardPolicy,
+			serialize::stream::{Encryptor, LiteralWriter, Message},
+			types::KeyFlags,
+			Cert,
+		};
+
+		let p = StandardPolicy::new();
+		let mode = KeyFlags::empty().set_storage_encryption();
+
+		let cert = Cert::from_bytes(&cert_bytes).expect("TODO");
+
+		let recipients = cert
+			.keys()
+			.with_policy(&p, None)
+			.supported()
+			.alive()
+			.revoked(false)
+			.key_flags(&mode);
+
+		let mut sink = vec![];
+		let message = Message::new(&mut sink);
+		let message = Encryptor::for_recipients(message, recipients)
+			.build()
+			.expect("TODO");
+
+		let mut w = LiteralWriter::new(message).build().expect("TODO");
+		w.write_all(master_seed).expect("TODO");
+		w.finalize().expect("TODO");
+
+		Some(sink)
+	} else {
+		None
+	};
 
 	let genesis_output = GenesisOutput {
 		member_outputs: member_outputs?,
@@ -143,6 +186,7 @@ pub(in crate::protocol) fn boot_genesis(
 		threshold: genesis_set.threshold,
 		// TODO: generate N choose K recovery permutations
 		recovery_permutations: vec![],
+		dr_key_wrapped_quorum_key,
 	};
 
 	let nsm_response = {
@@ -206,7 +250,7 @@ mod test {
 		let genesis_set = GenesisSet { members: genesis_members, threshold };
 
 		let (output, _nsm_response) =
-			boot_genesis(&mut protocol_state, &genesis_set).unwrap();
+			boot_genesis(&mut protocol_state, &genesis_set, None).unwrap();
 		let zipped = std::iter::zip(output.member_outputs, member_pairs);
 		let shares: Vec<Vec<u8>> = zipped
 			.map(|(output, pair)| {

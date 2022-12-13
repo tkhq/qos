@@ -370,7 +370,7 @@ mod handlers {
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::BootGenesisRequest { set } = req {
-			match genesis::boot_genesis(state, set) {
+			match genesis::boot_genesis(state, set, None) {
 				Ok((genesis_output, nsm_response)) => {
 					Some(ProtocolMsg::BootGenesisResponse {
 						nsm_response,

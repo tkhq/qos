@@ -117,6 +117,7 @@ mod test {
 				member_outputs: vec![],
 				recovery_permutations: vec![],
 				threshold: 2,
+				dr_key_wrapped_quorum_key: None,
 			},
 		};
 

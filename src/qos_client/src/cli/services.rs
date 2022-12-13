@@ -660,7 +660,8 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	if !unsafe_auto_confirm {
 		let stdin = io::stdin();
 		let stdin_locked = stdin.lock();
-		let mut prompter = Prompter { reader: stdin_locked, writer: io::stdout() };
+		let mut prompter =
+			Prompter { reader: stdin_locked, writer: io::stdout() };
 		if !approve_manifest_human_verifications(&manifest, &mut prompter) {
 			eprintln!("Exiting early without approving manifest");
 			std::process::exit(1);
@@ -1005,7 +1006,8 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	if !unsafe_auto_confirm {
 		let stdin = io::stdin();
 		let stdin_locked = stdin.lock();
-		let mut prompter = Prompter { reader: stdin_locked, writer: io::stdout() };
+		let mut prompter =
+			Prompter { reader: stdin_locked, writer: io::stdout() };
 		if !proxy_re_encrypt_share_human_verifications(
 			&manifest_envelope,
 			&pcr3_preimage,

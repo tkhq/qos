@@ -15,6 +15,10 @@ borsh = { version = "0.9" }
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 
+# Optional
+sequoia-openpgp = { version = "1" }
+
+
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
 qos_p256 = { path = "../qos_p256", features = ["mock"] }
@@ -24,3 +28,4 @@ qos_p256 = { path = "../qos_p256", features = ["mock"] }
 vm = []
 # Never use in production - support for mock NSM
 mock = []
+# pgp = ["sequoia-openpgp"]
