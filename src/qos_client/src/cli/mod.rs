@@ -393,6 +393,7 @@ const PAYLOAD: &str = "payload";
 const SIGNATURE: &str = "signature";
 const FILE_PATH: &str = "file-path";
 const DISPLAY_TYPE: &str = "display-type";
+const DR_KEY_CERT_PATH: &str = "dr-key-cert-path";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -786,6 +787,11 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn dr_key_cert_path_token() -> Token {
+		Token::new(DR_KEY_CERT_PATH, "Path to a DR key certificate")
+			.takes_value(true)
+			.required(false)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -839,6 +845,7 @@ impl Command {
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
+			.token(Self::dr_key_cert_path_token())
 	}
 
 	fn generate_manifest() -> Parser {
@@ -1252,6 +1259,10 @@ impl ClientOpts {
 			.into()
 	}
 
+	fn dr_key_cert_path(&self) -> Option<String> {
+		self.parsed.single(DR_KEY_CERT_PATH).map(Into::into)
+	}
+
 	fn yubikey(&self) -> bool {
 		self.parsed.flag(YUBIKEY).unwrap_or(false)
 	}
@@ -1529,14 +1540,18 @@ mod handlers {
 
 	// TODO: verify PCRs
 	pub(super) fn boot_genesis(opts: &ClientOpts) {
-		services::boot_genesis(services::BootGenesisArgs {
+		if let Err(e) = services::boot_genesis(services::BootGenesisArgs {
 			uri: &opts.path_message(),
 			namespace_dir: opts.namespace_dir(),
 			share_set_dir: opts.share_set_dir(),
 			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
-		});
+			dr_key_cert_path: opts.dr_key_cert_path(),
+		}) {
+			println!("Error: {:?}", e);
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn after_genesis(opts: &ClientOpts) {

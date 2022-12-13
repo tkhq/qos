@@ -107,6 +107,7 @@ pub enum Error {
 	CouldNotDecodeHex(qos_hex::HexError),
 	/// Failed to deserialize something from borsh.
 	BorshError,
+	FailedToReadDrKey(std::io::Error),
 }
 
 impl From<borsh::maybestd::io::Error> for Error {
@@ -345,6 +346,7 @@ pub(crate) struct BootGenesisArgs<'a, P: AsRef<Path>> {
 	pub share_set_dir: P,
 	pub qos_build_fingerprints_path: P,
 	pub pcr3_preimage_path: P,
+	pub dr_key_cert_path: Option<P>,
 	pub unsafe_skip_attestation: bool,
 }
 
@@ -355,12 +357,21 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		share_set_dir,
 		qos_build_fingerprints_path,
 		pcr3_preimage_path,
+		dr_key_cert_path,
 		unsafe_skip_attestation,
 	}: BootGenesisArgs<P>,
-) {
+) -> Result<(), Error> {
 	let genesis_set = get_genesis_set(&share_set_dir);
+	let dr_key_cert = if let Some(p) = dr_key_cert_path {
+		Some(fs::read(p).map_err(Error::FailedToReadDrKey)?)
+	} else {
+		None
+	};
 
-	let req = ProtocolMsg::BootGenesisRequest { set: genesis_set.clone() };
+	let req = ProtocolMsg::BootGenesisRequest {
+		set: genesis_set.clone(),
+		dr_key_cert,
+	};
 	let (cose_sign1, genesis_output) = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::BootGenesisResponse {
 			nsm_response: NsmResponse::Attestation { document },
@@ -427,6 +438,8 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		&quorum_key.to_hex_bytes(),
 		"quorum_key.pub",
 	);
+
+	Ok(())
 }
 
 pub(crate) struct AfterGenesisArgs<P: AsRef<Path>> {

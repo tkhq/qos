@@ -46,8 +46,10 @@ pub enum ProtocolMsg {
 
 	/// Execute Genesis Boot.
 	BootGenesisRequest {
-		/// Parameters for creating a Manifest Set
+		/// Parameters for creating a Manifest Set.
 		set: GenesisSet,
+		/// The DR key PGP certificate.
+		dr_key_cert: Option<Vec<u8>>,
 	},
 	/// Response for Genesis Boot.
 	BootGenesisResponse {
