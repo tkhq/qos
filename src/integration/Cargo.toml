@@ -21,3 +21,4 @@ qos_core = { path = "../qos_core", features = ["mock"], default-features = false
 borsh = { version = "0.9" }
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 rand = "0.8"
+sequoia-openpgp = { version = "1" }

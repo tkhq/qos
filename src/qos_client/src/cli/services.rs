@@ -38,6 +38,7 @@ const GENESIS_OUTPUT_FILE: &str = "genesis_output";
 const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
+const DR_WRAPPED_QUORUM_KEY: &str = "dr_wrapped_quorum_key.asc";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -438,6 +439,18 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		&quorum_key.to_hex_bytes(),
 		"quorum_key.pub",
 	);
+
+	if let Some(dr_wrapped_quorum_key) =
+		genesis_output.dr_key_wrapped_quorum_key
+	{
+		let dr_wrapped_quorum_key_path =
+			namespace_dir.as_ref().join(DR_WRAPPED_QUORUM_KEY);
+		write_with_msg(
+			&dr_wrapped_quorum_key_path,
+			&dr_wrapped_quorum_key,
+			"DR Wrapped Quorum Key",
+		);
+	}
 
 	Ok(())
 }
@@ -1189,6 +1202,7 @@ pub(crate) fn yubikey_sign(hex_payload: &str) -> Result<(), Error> {
 	Ok(())
 }
 
+#[cfg(feature = "smartcard")]
 pub(crate) fn yubikey_public() -> Result<(), Error> {
 	let mut yubi = crate::yubikey::open_single()?;
 	let public = crate::yubikey::pair_public_key(&mut yubi)?;

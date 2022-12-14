@@ -1092,6 +1092,7 @@ dependencies = [
  "qos_p256",
  "qos_test_primitives",
  "rand 0.8.5",
+ "sequoia-openpgp",
  "tokio",
 ]
 

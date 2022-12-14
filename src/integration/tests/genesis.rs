@@ -1,4 +1,4 @@
-use std::{fs, path::Path, process::Command};
+use std::{fs, io::Read, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
 use integration::LOCAL_HOST;
@@ -8,6 +8,23 @@ use qos_crypto::{sha_256, shamir::shares_reconstruct};
 use qos_p256::{P256Pair, P256Public};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 use rand::{seq::SliceRandom, thread_rng};
+use sequoia_openpgp::{
+	crypto::SessionKey,
+	packet::{PKESK, SKESK},
+	parse::{
+		stream::{
+			DecryptionHelper, DecryptorBuilder, MessageStructure,
+			VerificationHelper,
+		},
+		Parse,
+	},
+	policy::{Policy, StandardPolicy},
+	types::SymmetricAlgorithm,
+	Cert, Fingerprint, KeyHandle,
+};
+
+const DR_KEY_PUBLIC_PATH: &str = "./mock/dr/dr_public.pgp";
+const DR_KEY_PRIVATE_PATH: &str = "./mock/dr/dr_private.pgp";
 
 #[tokio::test]
 async fn genesis_e2e() {
@@ -28,6 +45,8 @@ async fn genesis_e2e() {
 	let attestation_doc_path =
 		format!("{}/genesis_attestation_doc", &*genesis_dir);
 	let genesis_output_path = format!("{}/genesis_output", &*genesis_dir);
+	let dr_wrapped_quorum_key_path =
+		format!("{}/dr_wrapped_quorum_key.asc", &*genesis_dir);
 
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", &*all_personal_dir, user);
@@ -143,6 +162,8 @@ async fn genesis_e2e() {
 			"./mock/qos-build-fingerprints.txt",
 			"--pcr3-preimage-path",
 			"./mock/pcr3-preimage.txt",
+			"--dr-key-cert-path",
+			DR_KEY_PUBLIC_PATH,
 			"--unsafe-skip-attestation"
 		])
 		.spawn()
@@ -233,5 +254,80 @@ async fn genesis_e2e() {
 		// Cross check that the share belongs `decrypted_shares`, which we
 		// created out of band in this test.
 		assert!(decrypted_shares.contains(&share));
+	}
+
+	// Check the Encrypted DR Key
+	let p = StandardPolicy::new();
+	let dr_key_cert = Cert::from_file(DR_KEY_PRIVATE_PATH).unwrap();
+	let helper = Helper { secret: &dr_key_cert, policy: &p };
+	let mut decryptor = DecryptorBuilder::from_file(dr_wrapped_quorum_key_path)
+		.unwrap()
+		.with_policy(&p, None, helper)
+		.unwrap();
+
+	let mut quorum_master_seed_buf = Vec::new();
+	decryptor.read_to_end(&mut quorum_master_seed_buf).unwrap();
+	let quorum_master_seed: [u8; 32] =
+		quorum_master_seed_buf.try_into().unwrap();
+	let pair = P256Pair::from_master_seed(&quorum_master_seed).unwrap();
+	assert!(pair == reconstructed);
+}
+
+// Below Helper impl taken from https://gitlab.com/sequoia-pgp/sequoia/-/blob/main/openpgp/examples/generate-encrypt-decrypt.rs
+struct Helper<'a> {
+	secret: &'a Cert,
+	policy: &'a dyn Policy,
+}
+
+impl<'a> VerificationHelper for Helper<'a> {
+	fn get_certs(
+		&mut self,
+		_ids: &[KeyHandle],
+	) -> sequoia_openpgp::Result<Vec<Cert>> {
+		// Return public keys for signature verification here.
+		Ok(Vec::new())
+	}
+
+	fn check(
+		&mut self,
+		_structure: MessageStructure,
+	) -> sequoia_openpgp::Result<()> {
+		// Implement your signature verification policy here.
+		Ok(())
+	}
+}
+
+impl<'a> DecryptionHelper for Helper<'a> {
+	fn decrypt<D>(
+		&mut self,
+		pkesks: &[PKESK],
+		_skesks: &[SKESK],
+		sym_algo: Option<SymmetricAlgorithm>,
+		mut decrypt: D,
+	) -> sequoia_openpgp::Result<Option<Fingerprint>>
+	where
+		D: FnMut(SymmetricAlgorithm, &SessionKey) -> bool,
+	{
+		let key = self
+			.secret
+			.keys()
+			.unencrypted_secret()
+			.with_policy(self.policy, None)
+			.for_storage_encryption()
+			.next()
+			.unwrap()
+			.key()
+			.clone();
+
+		// The secret key is not encrypted.
+		let mut pair = key.into_keypair().unwrap();
+
+		pkesks[0]
+			.decrypt(&mut pair, sym_algo)
+			.map(|(algo, session_key)| decrypt(algo, &session_key));
+
+		// XXX: In production code, return the Fingerprint of the
+		// recipient's Cert here
+		Ok(None)
 	}
 }

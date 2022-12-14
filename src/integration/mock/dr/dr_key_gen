@@ -1,0 +1,61 @@
+#! /bin/bash
+
+# This is a script used to generate a mock DR key. It should be exactly the
+# format of the expected
+
+generate-key() {
+  local KEYID="$1"
+  if [ -z "$KEYID" ]; then
+    echo "Key not found. Exiting..."
+    return
+  fi
+
+  gpg \
+    --batch \
+    --passphrase '' \
+    --quick-generate-key "${KEYID}" "ed25519" cert none
+}
+
+key-fingerprint() {
+  local KEYID="$1"
+  if [ -z "$KEYID" ]; then
+    echo "Key not found. Exiting..."
+    return
+  fi
+
+  # gpg --list-secret-keys --with-colons \
+  #     | grep sec:u \
+  #     | sed 's/.*\([A-Z0-9]\{16\}\).*/\1/g'
+  gpg --fingerprint "$KEYID" | head -n2 | tail -n1 | tr -d '[:blank:]'
+}
+
+add-subkeys() {
+  local KEYID="$1"
+  if [ -z "$KEYID" ]; then
+    echo "Key not found. Exiting..."
+    return
+  fi
+
+  FPR=$(key-fingerprint "${KEYID}")
+
+  gpg \
+    --batch \
+    --passphrase '' \
+    --quick-add-key "$FPR" cv25519 encrypt never
+
+  gpg \
+    --batch \
+    --passphrase '' \
+    --quick-add-key "$FPR" ed25519 sign never
+
+  gpg \
+    --batch \
+    --passphrase '' \
+    --quick-add-key "$FPR" ed25519 auth never
+}
+
+KEYID=genesis-e2e-mock
+generate-key ${KEYID}
+add-subkeys ${KEYID}
+gpg --output ./dr_public.pgp --armor --export ${KEYID}
+gpg --output ./dr_private.pgp --armor --export-secret-key ${KEYID}

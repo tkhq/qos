@@ -833,6 +833,7 @@ impl Command {
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::qos_build_fingerprints_token())
+			.token(Self::dr_key_cert_path_token())
 	}
 
 	fn after_genesis() -> Parser {
@@ -845,7 +846,6 @@ impl Command {
 			.token(Self::qos_build_fingerprints_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
-			.token(Self::dr_key_cert_path_token())
 	}
 
 	fn generate_manifest() -> Parser {
