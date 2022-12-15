@@ -16,16 +16,19 @@ aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 
 # Optional
-sequoia-openpgp = { version = "1" }
-
+sequoia-openpgp = { git = "https://gitlab.com/sequoia-pgp/sequoia.git", features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"], optional = true, default-features = false }
+p256_sequoia_swag = { package = "p256", version = "0.8" }
+p256_qos_swag = { package = "p256", version = "0.11" }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
 qos_p256 = { path = "../qos_p256", features = ["mock"] }
 
 [features]
+default = ["openpgp"]
 # Support for VSOCK
 vm = []
 # Never use in production - support for mock NSM
 mock = []
-# pgp = ["sequoia-openpgp"]
+# Should only be enabled when deploying a node to run the genesis service
+openpgp = ["sequoia-openpgp"]

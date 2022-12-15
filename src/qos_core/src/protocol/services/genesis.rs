@@ -115,7 +115,6 @@ pub(in crate::protocol) fn boot_genesis(
 	genesis_set: &GenesisSet,
 	dr_key: Option<Vec<u8>>,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
-	// TODO: Entropy!
 	let quorum_pair = P256Pair::generate()?;
 	let master_seed = &quorum_pair.to_master_seed()[..];
 
@@ -142,40 +141,52 @@ pub(in crate::protocol) fn boot_genesis(
 	.collect();
 
 	let dr_key_wrapped_quorum_key = if let Some(cert_bytes) = dr_key {
-		use std::io::Write;
+		#[cfg(feature = "openpgp")]
+		{
+			use std::io::Write;
 
-		use sequoia_openpgp::{
-			parse::Parse,
-			policy::StandardPolicy,
-			serialize::stream::{Encryptor, LiteralWriter, Message},
-			types::KeyFlags,
-			Cert,
-		};
+			use sequoia_openpgp::{
+				parse::Parse,
+				policy::StandardPolicy,
+				serialize::stream::{Encryptor, LiteralWriter, Message},
+				types::KeyFlags,
+				Cert,
+			};
 
-		let p = StandardPolicy::new();
-		let mode = KeyFlags::empty().set_storage_encryption();
+			let p = StandardPolicy::new();
+			let mode = KeyFlags::empty().set_storage_encryption();
 
-		let cert = Cert::from_bytes(&cert_bytes).expect("TODO");
+			let cert = Cert::from_bytes(&cert_bytes)
+				.map_err(|_| ProtocolError::InvalidBytesOpenPgpCert)?;
 
-		let recipients = cert
-			.keys()
-			.with_policy(&p, None)
-			.supported()
-			.alive()
-			.revoked(false)
-			.key_flags(&mode);
+			let recipients = cert
+				.keys()
+				.with_policy(&p, None)
+				.supported()
+				.alive()
+				.revoked(false)
+				.key_flags(&mode);
 
-		let mut sink = vec![];
-		let message = Message::new(&mut sink);
-		let message = Encryptor::for_recipients(message, recipients)
-			.build()
-			.expect("TODO");
+			let mut sink = vec![];
+			let message = Message::new(&mut sink);
+			let message = Encryptor::for_recipients(message, recipients)
+				.build()
+				.map_err(|_| ProtocolError::EncryptorBuild)?;
 
-		let mut w = LiteralWriter::new(message).build().expect("TODO");
-		w.write_all(master_seed).expect("TODO");
-		w.finalize().expect("TODO");
+			let mut w = LiteralWriter::new(message)
+				.build()
+				.map_err(|_| ProtocolError::OpenPgpEncryptorWrite)?;
+			w.write_all(master_seed)
+				.map_err(|_| ProtocolError::OpenPgpEncryptorWrite)?;
+			w.finalize().map_err(|_| ProtocolError::OpenPgpEncryptorWrite)?;
 
-		Some(sink)
+			Some(sink)
+		}
+
+		#[cfg(not(feature = "openpgp"))]
+		{
+			return Err(ProtocolError::OpenPgpFeatureNotEnabled);
+		}
 	} else {
 		None
 	};

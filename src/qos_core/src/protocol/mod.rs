@@ -118,6 +118,17 @@ pub enum ProtocolError {
 	P256Error(qos_p256::P256Error),
 	/// The provisioned secret is the incorrect length.
 	IncorrectSecretLen,
+	/// The /"openpgp/" feature was not enabled when the binary was built.
+	OpenPgpFeatureNotEnabled,
+	/// Error while writing to the DR encryptor.
+	#[cfg(feature = "openpgp")]
+	OpenPgpEncryptorWrite,
+	/// The expected certificate type could not be built from the given bytes.
+	#[cfg(feature = "openpgp")]
+	InvalidBytesOpenPgpCert,
+	/// Error'ed while building the `Encryptor`.
+	#[cfg(feature = "openpgp")]
+	EncryptorBuild,
 }
 
 impl From<std::io::Error> for ProtocolError {
