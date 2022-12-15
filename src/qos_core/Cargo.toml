@@ -16,9 +16,7 @@ aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 
 # Optional
-sequoia-openpgp = { git = "https://gitlab.com/sequoia-pgp/sequoia.git", features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"], optional = true, default-features = false }
-p256_sequoia_swag = { package = "p256", version = "0.8" }
-p256_qos_swag = { package = "p256", version = "0.11" }
+sequoia-openpgp = { git = "https://gitlab.com/sequoia-pgp/sequoia.git", optional = true }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }

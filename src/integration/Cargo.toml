@@ -17,8 +17,8 @@ qos_test_primitives = { path = "../qos_test_primitives" }
 tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
 
 [dev-dependencies]
-# qos_core = { path = "../qos_core", features = ["mock", "openpgp"], default-features = false }
+qos_core = { path = "../qos_core", features = ["mock", "openpgp"], default-features = false }
 borsh = { version = "0.9" }
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 rand = "0.8"
-# sequoia-openpgp = { version = "1.12", features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"], default-features = false }
+sequoia-openpgp = { git = "https://gitlab.com/sequoia-pgp/sequoia.git" }

@@ -29,10 +29,12 @@ const DR_KEY_PRIVATE_PATH: &str = "./mock/dr/dr_private.pgp";
 #[tokio::test]
 async fn genesis_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
-	let tmp: PathWrapper = "/tmp/genesis-e2e".into();
-	fs::create_dir_all(&*tmp).unwrap();
+	// let tmp: PathWrapper = "/tmp/genesis-e2e".into();
+	let tmp = "./mock/boot-e2e";
+	// fs::create_dir_all(&*tmp).unwrap();
 	let tmp_dir =
-		|file: &str| -> PathWrapper { format!("{}/{file}", &*tmp).into() };
+		|file: &str| { format!("{}/{file}", &*tmp) };
+		// |file: &str| -> PathWrapper { format!("{}/{file}", &*tmp).into() };
 
 	let usock = tmp_dir("genesis_e2e.sock");
 	let secret_path = tmp_dir("genesis_e2e.secret");
@@ -68,30 +70,30 @@ async fn genesis_e2e() {
 
 	// -- CLIENT Create 3 setup keys
 	// Make sure the directory keys are getting written to already exist.
-	for (user, private, public) in [
-		(&user1, &user1_private_share_key, &user1_public_share_key),
-		(&user2, &user2_private_share_key, &user2_public_share_key),
-		(&user3, &user3_private_share_key, &user3_public_share_key),
-	] {
-		fs::create_dir_all(&personal_dir(user)).unwrap();
-		let master_seed_path = format!("{}/{}", personal_dir(user), private);
-		let public_path = format!("{}/{}", personal_dir(user), public);
-		assert!(Command::new("../target/debug/qos_client")
-			.args([
-				"generate-file-key",
-				"--master-seed-path",
-				&master_seed_path,
-				"--pub-path",
-				&public_path,
-			])
-			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
-		assert!(Path::new(&*personal_dir(user)).join(public).is_file());
-		assert!(Path::new(&*personal_dir(user)).join(private).is_file());
-	}
+	// for (user, private, public) in [
+	// 	(&user1, &user1_private_share_key, &user1_public_share_key),
+	// 	(&user2, &user2_private_share_key, &user2_public_share_key),
+	// 	(&user3, &user3_private_share_key, &user3_public_share_key),
+	// ] {
+	// 	fs::create_dir_all(&personal_dir(user)).unwrap();
+	// 	let master_seed_path = format!("{}/{}", personal_dir(user), private);
+	// 	let public_path = format!("{}/{}", personal_dir(user), public);
+	// 	assert!(Command::new("../target/debug/qos_client")
+	// 		.args([
+	// 			"generate-file-key",
+	// 			"--master-seed-path",
+	// 			&master_seed_path,
+	// 			"--pub-path",
+	// 			&public_path,
+	// 		])
+	// 		.spawn()
+	// 		.unwrap()
+	// 		.wait()
+	// 		.unwrap()
+	// 		.success());
+	// 	assert!(Path::new(&*personal_dir(user)).join(public).is_file());
+	// 	assert!(Path::new(&*personal_dir(user)).join(private).is_file());
+	// }
 
 	// Make the genesis dir
 	fs::create_dir_all(&*genesis_dir).unwrap();
