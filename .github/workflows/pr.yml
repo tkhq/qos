@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install packages for pcsc dep
-        run: sudo apt-get install -y libpcsclite-dev gengetopt nettle
+        run: sudo apt-get install -y libpcsclite-dev gengetopt nettle pkg-config
 
       - name: Install stable toolchain
         id: toolchain
@@ -55,7 +55,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install packages for pcsc dep
-        run: sudo apt-get install -y libpcsclite-dev gengetopt nettle
+        run: sudo apt-get install -y libpcsclite-dev gengetopt nettle pkg-config
 
       - name: Install stable toolchain
         id: toolchain
