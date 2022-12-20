@@ -7,7 +7,6 @@
 //! ```shell
 //! cargo run --bin qos_client <command-name> --help
 //! ```
-//!
 
 use std::env;
 
