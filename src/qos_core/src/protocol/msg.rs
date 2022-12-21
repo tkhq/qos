@@ -46,8 +46,11 @@ pub enum ProtocolMsg {
 
 	/// Execute Genesis Boot.
 	BootGenesisRequest {
-		/// Parameters for creating a Manifest Set
+		/// Parameters for creating a Share Set
 		set: GenesisSet,
+		/// Optionally include a `qos_p256::P256Public` key for encrypting the
+		/// quorum key too. Intended for disaster recovery.
+		dr_key: Option<Vec<u8>>,
 	},
 	/// Response for Genesis Boot.
 	BootGenesisResponse {
@@ -117,6 +120,7 @@ mod test {
 				member_outputs: vec![],
 				recovery_permutations: vec![],
 				threshold: 2,
+				dr_key_wrapped_quorum_key: None,
 			},
 		};
 
