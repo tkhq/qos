@@ -1,6 +1,7 @@
 DEBUG := false
 OUT_DIR := out
-RELEASE_DIR := release
+RELEASE := $(shell TZ=UTC0 git show --quiet --date='format-local:%Y%m%dT%H%M%SZ' --format="%cd")
+RELEASE_DIR := releases/$(RELEASE)
 KEY_DIR := keys
 SRC_DIR := src
 TARGET := generic
