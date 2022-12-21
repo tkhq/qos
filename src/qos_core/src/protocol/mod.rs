@@ -371,8 +371,8 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::BootGenesisRequest { set } = req {
-			match genesis::boot_genesis(state, set, None) {
+		if let ProtocolMsg::BootGenesisRequest { set, dr_key } = req {
+			match genesis::boot_genesis(state, set, dr_key.clone()) {
 				Ok((genesis_output, nsm_response)) => {
 					Some(ProtocolMsg::BootGenesisResponse {
 						nsm_response,

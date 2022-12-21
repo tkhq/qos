@@ -38,6 +38,7 @@ const GENESIS_OUTPUT_FILE: &str = "genesis_output";
 const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
+const DR_WRAPPED_QUORUM_KEY: &str = "dr_wrapped_quorum_key";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -107,6 +108,7 @@ pub enum Error {
 	CouldNotDecodeHex(qos_hex::HexError),
 	/// Failed to deserialize something from borsh.
 	BorshError,
+	FailedToReadDrKey(qos_p256::P256Error),
 }
 
 impl From<borsh::maybestd::io::Error> for Error {
@@ -346,6 +348,7 @@ pub(crate) struct BootGenesisArgs<'a, P: AsRef<Path>> {
 	pub qos_build_fingerprints_path: P,
 	pub pcr3_preimage_path: P,
 	pub unsafe_skip_attestation: bool,
+	pub dr_key_path: Option<P>,
 }
 
 pub(crate) fn boot_genesis<P: AsRef<Path>>(
@@ -356,11 +359,19 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		qos_build_fingerprints_path,
 		pcr3_preimage_path,
 		unsafe_skip_attestation,
+		dr_key_path,
 	}: BootGenesisArgs<P>,
-) {
+) -> Result<(), Error> {
 	let genesis_set = get_genesis_set(&share_set_dir);
+	let dr_key = if let Some(p) = dr_key_path {
+		let public = P256Public::from_hex_file(p).map_err(Error::FailedToReadDrKey)?;
+		Some(public.to_bytes())
+	} else {
+		None
+	};
 
-	let req = ProtocolMsg::BootGenesisRequest { set: genesis_set.clone() };
+	let req =
+		ProtocolMsg::BootGenesisRequest { set: genesis_set.clone(), dr_key };
 	let (cose_sign1, genesis_output) = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::BootGenesisResponse {
 			nsm_response: NsmResponse::Attestation { document },
@@ -427,6 +438,20 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		&quorum_key.to_hex_bytes(),
 		"quorum_key.pub",
 	);
+
+	if let Some(dr_wrapped_quorum_key) =
+		genesis_output.dr_key_wrapped_quorum_key
+	{
+		let dr_wrapped_quorum_key_path =
+			namespace_dir.as_ref().join(DR_WRAPPED_QUORUM_KEY);
+		write_with_msg(
+			&dr_wrapped_quorum_key_path,
+			&dr_wrapped_quorum_key,
+			"DR Wrapped Quorum Key",
+		);
+	}
+
+	Ok(())
 }
 
 pub(crate) struct AfterGenesisArgs<P: AsRef<Path>> {
@@ -1176,6 +1201,7 @@ pub(crate) fn yubikey_sign(hex_payload: &str) -> Result<(), Error> {
 	Ok(())
 }
 
+#[cfg(feature = "smartcard")]
 pub(crate) fn yubikey_public() -> Result<(), Error> {
 	let mut yubi = crate::yubikey::open_single()?;
 	let public = crate::yubikey::pair_public_key(&mut yubi)?;

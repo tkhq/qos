@@ -9,6 +9,9 @@ use qos_p256::{P256Pair, P256Public};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 use rand::{seq::SliceRandom, thread_rng};
 
+const DR_KEY_PUBLIC_PATH: &str = "./mock/mock_p256_dr.pub";
+const DR_KEY_PRIVATE_PATH: &str = "./mock/mock_p256_dr.secret.keep";
+
 #[tokio::test]
 async fn genesis_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
@@ -28,6 +31,8 @@ async fn genesis_e2e() {
 	let attestation_doc_path =
 		format!("{}/genesis_attestation_doc", &*genesis_dir);
 	let genesis_output_path = format!("{}/genesis_output", &*genesis_dir);
+	let dr_wrapped_quorum_key_path =
+		format!("{}/dr_wrapped_quorum_key", &*genesis_dir);
 
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", &*all_personal_dir, user);
@@ -143,6 +148,8 @@ async fn genesis_e2e() {
 			"./mock/qos-build-fingerprints.txt",
 			"--pcr3-preimage-path",
 			"./mock/pcr3-preimage.txt",
+			"--dr-key-path",
+			DR_KEY_PUBLIC_PATH,
 			"--unsafe-skip-attestation"
 		])
 		.spawn()
@@ -234,4 +241,16 @@ async fn genesis_e2e() {
 		// created out of band in this test.
 		assert!(decrypted_shares.contains(&share));
 	}
+
+	// Check that we can use the DR key to decrypt the quorum key
+	let dr_key_pair = P256Pair::from_hex_file(DR_KEY_PRIVATE_PATH).unwrap();
+
+	let dr_wrapped_quorum_key = fs::read(dr_wrapped_quorum_key_path).unwrap();
+	let master_seed: [u8; 32] = dr_key_pair
+		.decrypt(&dr_wrapped_quorum_key)
+		.unwrap()
+		.try_into()
+		.unwrap();
+	let pair = P256Pair::from_master_seed(&master_seed).unwrap();
+	assert!(pair == reconstructed);
 }
