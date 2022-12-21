@@ -397,10 +397,13 @@ impl Command {
 			.required(true)
 	}
 	fn share_token() -> Token {
-		Token::new(SHARE, "Paths to a share. This can be specified multiple times.")
-			.takes_value(true)
-			.required(true)
-			.allow_multiple(true)
+		Token::new(
+			SHARE,
+			"Paths to a share. This can be specified multiple times.",
+		)
+		.takes_value(true)
+		.required(true)
+		.allow_multiple(true)
 	}
 	fn threshold_token() -> Token {
 		Token::new(

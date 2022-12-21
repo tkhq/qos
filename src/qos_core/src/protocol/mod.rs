@@ -116,6 +116,8 @@ pub enum ProtocolError {
 	NotManifestSetMember,
 	/// `qos_p256` Error wrapper.
 	P256Error(qos_p256::P256Error),
+	/// Error with trying to read p256 DR public key.
+	InvalidP256DRKey(qos_p256::P256Error),
 	/// The provisioned secret is the incorrect length.
 	IncorrectSecretLen,
 }
@@ -370,7 +372,7 @@ mod handlers {
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::BootGenesisRequest { set } = req {
-			match genesis::boot_genesis(state, set) {
+			match genesis::boot_genesis(state, set, None) {
 				Ok((genesis_output, nsm_response)) => {
 					Some(ProtocolMsg::BootGenesisResponse {
 						nsm_response,

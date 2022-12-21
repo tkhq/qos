@@ -89,6 +89,8 @@ pub struct GenesisOutput {
 	pub recovery_permutations: Vec<RecoveredPermutation>,
 	/// The threshold, K, used to generate the shards.
 	pub threshold: u32,
+	/// The quorum key encrypted to the DR key. None if no DR Key was provided
+	pub dr_key_wrapped_quorum_key: Option<Vec<u8>>,
 }
 
 impl fmt::Debug for GenesisOutput {
@@ -111,12 +113,13 @@ impl fmt::Debug for GenesisOutput {
 pub(in crate::protocol) fn boot_genesis(
 	state: &mut ProtocolState,
 	genesis_set: &GenesisSet,
+	maybe_dr_key: Option<Vec<u8>>,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
-	// TODO: Entropy!
 	let quorum_pair = P256Pair::generate()?;
+	let master_seed = &quorum_pair.to_master_seed()[..];
 
 	let shares = qos_crypto::shamir::shares_generate(
-		&quorum_pair.to_master_seed()[..],
+		master_seed,
 		genesis_set.members.len(),
 		genesis_set.threshold as usize,
 	);
@@ -137,12 +140,21 @@ pub(in crate::protocol) fn boot_genesis(
 			})
 			.collect();
 
+	let dr_key_wrapped_quorum_key = if let Some(dr_key) = maybe_dr_key {
+		let dr_public = P256Public::from_bytes(&dr_key)
+			.map_err(ProtocolError::InvalidP256DRKey)?;
+		Some(dr_public.encrypt(master_seed)?)
+	} else {
+		None
+	};
+
 	let genesis_output = GenesisOutput {
 		member_outputs: member_outputs?,
 		quorum_key: quorum_pair.public_key().to_bytes(),
 		threshold: genesis_set.threshold,
 		// TODO: generate N choose K recovery permutations
 		recovery_permutations: vec![],
+		dr_key_wrapped_quorum_key,
 	};
 
 	let nsm_response = {
@@ -206,7 +218,7 @@ mod test {
 		let genesis_set = GenesisSet { members: genesis_members, threshold };
 
 		let (output, _nsm_response) =
-			boot_genesis(&mut protocol_state, &genesis_set).unwrap();
+			boot_genesis(&mut protocol_state, &genesis_set, None).unwrap();
 		let zipped = std::iter::zip(output.member_outputs, member_pairs);
 		let shares: Vec<Vec<u8>> = zipped
 			.map(|(output, pair)| {
