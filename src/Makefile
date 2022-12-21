@@ -159,3 +159,4 @@ test-all:
 	cargo build --all
 	@# Run tests
 	cargo test
+	
