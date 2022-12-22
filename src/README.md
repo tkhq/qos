@@ -124,4 +124,3 @@ Continued reading for attesting with nitro enclaves:
 - <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html>
 - <https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html>
 - <https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html>
-- 
