@@ -85,7 +85,7 @@ A key that is part of the manifest set. This key is used to approve (sign) manif
 
 #### Share Key
 
-A key that is part of the Share Set. This is the key that the genesis service encrypts the a share to.
+A key that is part of the Share Set. This is a key that the genesis service encrypts a share too.
 
 #### Ephemeral Key
 
