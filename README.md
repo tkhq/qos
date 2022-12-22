@@ -2,6 +2,8 @@
 
 <https://github.com/distrust-foundation/enclaveos>
 
+Click [here](./src/README.md) for the Rust code README.
+
 ## About ##
 
 A minimal, immutable, and deterministic Linux unikernel build system targeting

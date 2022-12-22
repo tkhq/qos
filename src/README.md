@@ -8,9 +8,6 @@ The consensus on environment configuration is coordinated through the Manifest d
 
 The Quorum Key itself can be used by QuorumOS and enclave apps to encrypt and authenticate data.
 
-## System requirements
-
-- openssl >= 1.1.0
 
 ## Development
 
@@ -82,13 +79,13 @@ The collection of members whom can approve a manifest. In the typical instance p
 
 The collection of members whom each hold shares of the Quorum Key and thus provision an enclave by attesting and then posting their shares. When posting shares, these members will also provide a signature of the manifest. The signature is recorded in manifest envelope in order to leave an audit trail. This way, third parties can check which share set members actually participated in provisioning the quorum key
 
-#### Personal Key
+#### Manifest Key
 
-A key held by a Quorum Member that can be used to encrypt/decrypt their share of the Quorum Key.
+A key that is part of the manifest set. This key is used to approve (sign) manifests.
 
-#### Personal Setup Key
+#### Share Key
 
-A key held by a Quorum Member that can be used to encrypt secret data before a QuorumOS instance has been fully bootstrapped.
+A key that is part of the Share Set. This is a key that the genesis service encrypts a share too.
 
 #### Ephemeral Key
 
@@ -121,3 +118,9 @@ Upon successful verification of the attestation outputs, each member will encryp
 The purpose of remote attestation is to prove that an environment is running a particular piece of software. In the case of AWS Nitro Enclaves, an enclave can uniquely asks the Nitro Security Module (NSM) for an attestation document containing details of the enclave. This document is signed by the Nitro Attestation PKI and is tied back to the AWS Nitro Attestation PKI Root.
 As defined in the [AWS documentation](https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html) the instance can request the Nitro Security Module (NSM) to produce an attestation document on its behalf. Additionally, the attestation document contains two fields that can be modified by the enclave itself. The attestation document request contains the Ephemeral Key and the hash of manifest so Share Set members can verify the data is correct.
 Before provisioning a namespace with the Quorum Key, a Share Set will use the output of the attestation process against the enclave to verify that the enclave is running the expected version of QuorumOS and that that instance is configured in the expected manner as to warrant being provisioned with that Quorum Key.
+
+Continued reading for attesting with nitro enclaves:
+
+- <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html>
+- <https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html>
+- <https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html>
