@@ -21,10 +21,11 @@ use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
 	body::Bytes,
+	extract::{DefaultBodyLimit, State},
 	http::StatusCode,
 	response::{Html, IntoResponse},
 	routing::{get, post},
-	Extension, Router,
+	Router,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
@@ -40,7 +41,7 @@ const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
 
 /// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]
-struct State {
+struct QosHostState {
 	enclave_client: Client,
 }
 
@@ -82,7 +83,7 @@ impl HostServer {
 	/// Panics if there is an issue starting the server.
 	// pub async fn serve(&self) -> Result<(), String> {
 	pub async fn serve(&self) {
-		let state = Arc::new(State {
+		let state = Arc::new(QosHostState {
 			enclave_client: Client::new(self.enclave_addr.clone()),
 		});
 
@@ -90,7 +91,8 @@ impl HostServer {
 			.route(&self.path(HOST_HEALTH), get(Self::host_health))
 			.route(&self.path(ENCLAVE_HEALTH), get(Self::enclave_health))
 			.route(&self.path(MESSAGE), post(Self::message))
-			.layer(Extension(state));
+			.layer(DefaultBodyLimit::disable())
+			.with_state(state);
 
 		println!("HostServer listening on {}", self.addr);
 
@@ -101,16 +103,14 @@ impl HostServer {
 	}
 
 	/// Health route handler.
-	async fn host_health(
-		Extension(_state): Extension<Arc<State>>,
-	) -> impl IntoResponse {
+	async fn host_health(_: State<Arc<QosHostState>>) -> impl IntoResponse {
 		println!("Host health...");
 		Html("Ok!")
 	}
 
 	/// Health route handler.
 	async fn enclave_health(
-		Extension(state): Extension<Arc<State>>,
+		State(state): State<Arc<QosHostState>>,
 	) -> impl IntoResponse {
 		println!("Enclave health...");
 
@@ -163,8 +163,8 @@ impl HostServer {
 
 	/// Message route handler.
 	async fn message(
+		State(state): State<Arc<QosHostState>>,
 		encoded_request: Bytes,
-		Extension(state): Extension<Arc<State>>,
 	) -> impl IntoResponse {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
 			return (

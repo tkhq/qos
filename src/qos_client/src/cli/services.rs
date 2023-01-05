@@ -364,7 +364,8 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	let genesis_set = get_genesis_set(&share_set_dir);
 	let dr_key = if let Some(p) = dr_key_path {
-		let public = P256Public::from_hex_file(p).map_err(Error::FailedToReadDrKey)?;
+		let public =
+			P256Public::from_hex_file(p).map_err(Error::FailedToReadDrKey)?;
 		Some(public.to_bytes())
 	} else {
 		None
