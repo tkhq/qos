@@ -20,7 +20,7 @@ use services::boot;
 use crate::handles::Handles;
 
 const MEGABYTE: usize = 1024 * 1024;
-const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
+const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
 
 type ProtocolHandler =
 	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
