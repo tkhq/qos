@@ -179,6 +179,8 @@ pub enum Command {
 	Verify,
 	/// Display some borsh encoded type in an easy to read format.
 	Display,
+	/// Reset the PIV pins. Use with caution!
+	YubiKeyPivReset,
 }
 
 impl From<&str> for Command {
@@ -207,6 +209,7 @@ impl From<&str> for Command {
 			"yubikey-sign" => Self::YubiKeySign,
 			"verify" => Self::Verify,
 			"yubikey-public" => Self::YubiKeyPublic,
+			"yubikey-piv-rest" => Self::YubiKeyPivReset,
 			"display" => Self::Display,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
@@ -672,6 +675,7 @@ impl GetParserForCommand for Command {
 			Self::YubiKeySign => Self::yubikey_sign(),
 			Self::YubiKeyPublic => Self::yubikey_public(),
 			Self::Verify => Self::verify(),
+			Self::YubiKeyPivReset => Parser::new(),
 			Self::Display => Self::display(),
 		}
 	}
@@ -1013,6 +1017,7 @@ impl ClientRunner {
 				Command::YubiKeySign => handlers::yubikey_sign(&self.opts),
 				Command::YubiKeyPublic => handlers::yubikey_public(&self.opts),
 				Command::Verify => handlers::verify(&self.opts),
+				Command::YubiKeyPivReset => handlers::yubikey_piv_reset(),
 				Command::Display => {
 					handlers::display(&self.opts);
 				}
@@ -1184,6 +1189,21 @@ mod handlers {
 		#[cfg(feature = "smartcard")]
 		{
 			if let Err(e) = services::yubikey_public() {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+		}
+	}
+
+	pub(super) fn yubikey_piv_reset() {
+		#[cfg(not(feature = "smartcard"))]
+		{
+			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
+		}
+
+		#[cfg(feature = "smartcard")]
+		{
+			if let Err(e) = services::yubikey_piv_reset() {
 				eprintln!("Error: {:?}", e);
 				std::process::exit(1);
 			}

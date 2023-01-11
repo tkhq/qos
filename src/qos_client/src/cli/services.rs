@@ -1215,6 +1215,19 @@ pub(crate) fn yubikey_public() -> Result<(), Error> {
 	Ok(())
 }
 
+#[cfg(feature = "smartcard")]
+pub(crate) fn yubikey_piv_reset() -> Result<(), Error> {
+	let mut yubikey = crate::yubikey::open_single()?;
+	// Pins need to be blocked before device can be reset
+	for _ in 0..3 {
+		let _ = yubikey.authenticate(yubikey::MgmKey::generate());
+		let _ = yubikey.verify_pin(b"000000");
+	}
+	let _ = yubikey.block_puk();
+	let _ = yubikey.reset_device();
+	Ok(())
+}
+
 pub(crate) fn verify<P: AsRef<Path>>(
 	payload: &str,
 	signature: &str,
