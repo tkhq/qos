@@ -2,7 +2,7 @@ use std::{
 	fs,
 	fs::File,
 	io,
-	io::{BufRead, Write},
+	io::{BufRead, BufReader, Write},
 	mem,
 	path::{Path, PathBuf},
 };
@@ -48,6 +48,7 @@ const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 pub(crate) const SMARTCARD_FEAT_DISABLED_MSG: &str =
 	"The \"smartcard\" feature must be enabled to use YubiKey related functionality.";
 
+const ENTER_PIN_PROMPT: &str = "Enter your pin: ";
 const TAP_MSG: &str = "Tap your YubiKey";
 
 /// Client errors.
@@ -153,7 +154,7 @@ impl PairOrYubi {
 				{
 					let yubi = crate::yubikey::open_single()?;
 
-					let pin = rpassword::prompt_password("Enter your pin: ")
+					let pin = rpassword::prompt_password(ENTER_PIN_PROMPT)
 						.map_err(Error::PinEntryError)?;
 					PairOrYubi::Yubi((yubi, pin.as_bytes().to_vec()))
 				}
@@ -246,8 +247,7 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	let mut yubikey =
 		yubikey::YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
 
-	println!("You need to enter a pin that will be used to authorize signing and encryption requests.");
-	let pin = rpassword::prompt_password("Enter your pin: ")
+	let pin = rpassword::prompt_password(ENTER_PIN_PROMPT)
 		.map_err(Error::PinEntryError)?
 		.as_bytes()
 		.to_vec();
@@ -286,18 +286,33 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	Ok(())
 }
 
+pub(crate) fn pin_from_path<P: AsRef<Path>>(path: P) -> Vec<u8> {
+	let file = File::open(path).expect("Failed to open current pin path");
+	BufReader::new(file)
+		.lines()
+		.next()
+		.expect("First line missing from current pin file")
+		.expect("Error reading first line")
+		.as_bytes()
+		.to_vec()
+}
+
 #[cfg(feature = "smartcard")]
 pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
 	master_seed_path: P,
+	maybe_pin_path: Option<String>,
 ) -> Result<(), Error> {
 	let mut yubikey =
 		yubikey::YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
 
-	println!("You need to enter a pin that will be used to authorize signing and encryption requests.");
-	let pin = rpassword::prompt_password("Enter your pin: ")
-		.map_err(Error::PinEntryError)?
-		.as_bytes()
-		.to_vec();
+	let pin = if let Some(pin_path) = maybe_pin_path {
+		pin_from_path(pin_path)
+	} else {
+		rpassword::prompt_password(ENTER_PIN_PROMPT)
+			.map_err(Error::PinEntryError)?
+			.as_bytes()
+			.to_vec()
+	};
 
 	let pair = P256Pair::from_hex_file(master_seed_path)?;
 
