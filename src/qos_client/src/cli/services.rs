@@ -48,8 +48,6 @@ const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 pub(crate) const SMARTCARD_FEAT_DISABLED_MSG: &str =
 	"The \"smartcard\" feature must be enabled to use YubiKey related functionality.";
 
-const PIN_SET_PROMPT: &str =
-	"You need to set a PIN for the yubikey PIV app (8 char max).";
 const ENTER_PIN_PROMPT: &str = "Enter your pin: ";
 const TAP_MSG: &str = "Tap your YubiKey";
 
@@ -249,7 +247,6 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	let mut yubikey =
 		yubikey::YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
 
-	println!("{PIN_SET_PROMPT}");
 	let pin = rpassword::prompt_password(ENTER_PIN_PROMPT)
 		.map_err(Error::PinEntryError)?
 		.as_bytes()
