@@ -63,6 +63,8 @@ pub enum YubiKeyError {
 	FailedToLoadKey,
 	/// The secret is invalid.
 	InvalidSecret,
+	/// The pin could not be changed.
+	FailedToChangePin,
 }
 
 /// Generate a signed certificate with a p256 key for the given `slot`.
@@ -279,6 +281,33 @@ pub fn shared_secret(
 	};
 
 	key_agreement(yubikey, &sender_pub_bytes, pin)
+}
+
+/// Change the PIV authorization PIN on the yubikey.
+pub fn yubikey_change_pin(
+	current_pin: &[u8],
+	new_pin: &[u8],
+) -> Result<(), YubiKeyError> {
+	let mut yubikey = open_single()?;
+	yubikey
+		.change_pin(current_pin, new_pin)
+		.map_err(|_| YubiKeyError::FailedToChangePin)?;
+	Ok(())
+}
+
+/// Reset the PIV app on the attached yubikey.
+///
+/// **WARNING:** This will delete all private keys on the PIV app.
+pub fn yubikey_piv_reset() -> Result<(), YubiKeyError> {
+	let mut yubikey = open_single()?;
+	// Pins need to be blocked before device can be reset
+	for _ in 0..3 {
+		let _ = yubikey.authenticate(yubikey::MgmKey::generate());
+		let _ = yubikey.verify_pin(b"000000");
+	}
+	let _ = yubikey.block_puk();
+	let _ = yubikey.reset_device();
+	Ok(())
 }
 
 fn extract_encoded_point(

@@ -57,6 +57,8 @@ const SIGNATURE: &str = "signature";
 const FILE_PATH: &str = "file-path";
 const DISPLAY_TYPE: &str = "display-type";
 const DR_KEY_PATH: &str = "dr-key-path";
+const CURRENT_PIN_PATH: &str = "current-pin-path";
+const NEW_PIN_PATH: &str = "new-pin-path";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -179,8 +181,11 @@ pub enum Command {
 	Verify,
 	/// Display some borsh encoded type in an easy to read format.
 	Display,
-	/// Reset the PIV pins. Use with caution!
+	/// Reset the PIV app. WARNING: this is a destructive operation that will
+	/// destroy all PIV keys!
 	YubiKeyPivReset,
+	/// Change the pin of the PIV app on the yubikey.
+	YubiKeyChangePin,
 }
 
 impl From<&str> for Command {
@@ -209,7 +214,8 @@ impl From<&str> for Command {
 			"yubikey-sign" => Self::YubiKeySign,
 			"verify" => Self::Verify,
 			"yubikey-public" => Self::YubiKeyPublic,
-			"yubikey-piv-rest" => Self::YubiKeyPivReset,
+			"yubikey-piv-reset" => Self::YubiKeyPivReset,
+			"yubikey-change-pin" => Self::YubiKeyChangePin,
 			"display" => Self::Display,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
@@ -459,6 +465,21 @@ impl Command {
 			.required(false)
 	}
 
+	fn current_pin_path_token() -> Token {
+		Token::new(
+			CURRENT_PIN_PATH,
+			"Path to file descriptor with current pin.",
+		)
+		.takes_value(true)
+		.required(false)
+	}
+
+	fn new_pin_path_token() -> Token {
+		Token::new(NEW_PIN_PATH, "Path to file descriptor with new pin.")
+			.takes_value(true)
+			.required(true)
+	}
+
 	fn base() -> Parser {
 		Parser::new()
 			.token(
@@ -606,7 +627,9 @@ impl Command {
 	}
 
 	fn advanced_provision_yubikey() -> Parser {
-		Parser::new().token(Self::master_seed_path_token())
+		Parser::new()
+			.token(Self::master_seed_path_token())
+			.token(Self::current_pin_path_token())
 	}
 
 	fn shamir_split() -> Parser {
@@ -636,6 +659,12 @@ impl Command {
 			.token(Self::payload_token())
 			.token(Self::signature_token())
 			.token(Self::pub_path_token())
+	}
+
+	fn yubikey_change_pin() -> Parser {
+		Parser::new()
+			.token(Self::current_pin_path_token())
+			.token(Self::new_pin_path_token())
 	}
 
 	fn display() -> Parser {
@@ -676,6 +705,7 @@ impl GetParserForCommand for Command {
 			Self::YubiKeyPublic => Self::yubikey_public(),
 			Self::Verify => Self::verify(),
 			Self::YubiKeyPivReset => Parser::new(),
+			Self::YubiKeyChangePin => Self::yubikey_change_pin(),
 			Self::Display => Self::display(),
 		}
 	}
@@ -930,6 +960,17 @@ impl ClientOpts {
 		self.parsed.single(DR_KEY_PATH).map(Into::into)
 	}
 
+	fn new_pin_path(&self) -> String {
+		self.parsed
+			.single(NEW_PIN_PATH)
+			.expect("Missing `--new-pin-path`")
+			.to_string()
+	}
+
+	fn current_pin_path(&self) -> Option<String> {
+		self.parsed.single(CURRENT_PIN_PATH).map(Into::into)
+	}
+
 	fn yubikey(&self) -> bool {
 		self.parsed.flag(YUBIKEY).unwrap_or(false)
 	}
@@ -1018,6 +1059,9 @@ impl ClientRunner {
 				Command::YubiKeyPublic => handlers::yubikey_public(&self.opts),
 				Command::Verify => handlers::verify(&self.opts),
 				Command::YubiKeyPivReset => handlers::yubikey_piv_reset(),
+				Command::YubiKeyChangePin => {
+					handlers::yubikey_change_pin(&self.opts);
+				}
 				Command::Display => {
 					handlers::display(&self.opts);
 				}
@@ -1156,9 +1200,10 @@ mod handlers {
 
 		#[cfg(feature = "smartcard")]
 		{
-			if let Err(e) =
-				services::advanced_provision_yubikey(opts.master_seed_path())
-			{
+			if let Err(e) = services::advanced_provision_yubikey(
+				opts.master_seed_path(),
+				opts.current_pin_path(),
+			) {
 				eprintln!("Error: {:?}", e);
 				std::process::exit(1);
 			}
@@ -1203,7 +1248,31 @@ mod handlers {
 
 		#[cfg(feature = "smartcard")]
 		{
-			if let Err(e) = services::yubikey_piv_reset() {
+			if let Err(e) = crate::yubikey::yubikey_piv_reset() {
+				eprintln!("Error: {:?}", e);
+				std::process::exit(1);
+			}
+		}
+	}
+
+	pub(super) fn yubikey_change_pin(opts: &ClientOpts) {
+		#[cfg(not(feature = "smartcard"))]
+		{
+			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
+		}
+
+		#[cfg(feature = "smartcard")]
+		{
+			let current_pin = services::pin_from_path(
+				opts.current_pin_path()
+					.expect("Missing `--current-pin-path` arg"),
+			);
+			let new_pin = services::pin_from_path(opts.new_pin_path());
+
+			if let Err(e) = crate::yubikey::yubikey_change_pin(
+				&current_pin[..],
+				&new_pin[..],
+			) {
 				eprintln!("Error: {:?}", e);
 				std::process::exit(1);
 			}
