@@ -48,18 +48,16 @@ impl From<ParseIntError> for HexError {
 /// - if a character is invalid hex
 /// - if the input is too long.
 pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
-	let sanitized_s = {
-		let raw_s_byte_len = raw_s.len();
-		if raw_s_byte_len == 0 {
-			// We can do an explicit exit early
-			return Ok(Vec::new());
-		} else if raw_s_byte_len == 1 {
-			return Err(HexError::LengthOne);
-		} else if &raw_s[..2] == "0x" {
-			// we know the s is at least len 2
-			&raw_s[2..]
-		} else {
-			raw_s
+	let sanitized_s = match raw_s.len() {
+		0 => return Ok(Vec::new()),
+		1 => return Err(HexError::LengthOne),
+		_ => {
+			// we know that s is at least len 2
+			if &raw_s[..2] == "0x" {
+				&raw_s[2..]
+			} else {
+				raw_s
+			}
 		}
 	};
 
