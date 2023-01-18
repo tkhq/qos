@@ -1,7 +1,7 @@
 //! Utilities for encoding and decoding hex strings.
 // Inspired by https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=e241493d100ecaadac3c99f37d0f766f
 
-use std::num::ParseIntError;
+use std::{convert::Into, num::ParseIntError};
 
 const MEGABYTE: usize = 1024 * 1024;
 const STR_MAX_LENGTH: usize = 256 * MEGABYTE;
@@ -24,18 +24,29 @@ pub enum HexError {
 	LengthOne,
 	/// Could not decode the input because it was an odd length.
 	OddLength,
+	// There was a char that was not valid hex i.e not in 0..=9,a..=f.
+	NotHexChar,
 	/// Error trying to parse hex characters to a u8.
 	ParseInt(ParseIntError),
 	/// The input could not be decoded because it exceeds the max allowed
 	/// length.
 	// See `STR_MAX_LENGTH` for the max length.
 	ExceedsMaxLength,
+	/// A non ascii char was used as input
+	NonAsciiChar,
 }
 
 impl From<ParseIntError> for HexError {
 	fn from(e: ParseIntError) -> Self {
 		HexError::ParseInt(e)
 	}
+}
+
+fn verify_ascii(byte: &u8) -> Result<(), HexError> {
+	if byte >= &128 {
+		return Err(HexError::NonAsciiChar);
+	}
+	Ok(())
 }
 
 /// Decode bytes from a hex encoded string.
@@ -52,8 +63,7 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 		0 => return Ok(Vec::new()),
 		1 => return Err(HexError::LengthOne),
 		_ => {
-			// we know that s is at least len 2
-			if &raw_s[..2] == "0x" {
+			if &raw_s.as_bytes()[0..2] == b"0x" {
 				&raw_s[2..]
 			} else {
 				raw_s
@@ -65,13 +75,21 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 	let is_even_len = sanitized_s_byte_len % 2 == 0;
 	let is_lt_max_len = sanitized_s_byte_len < STR_MAX_LENGTH;
 	match (is_even_len, is_lt_max_len) {
-		(true, true) => (0..sanitized_s_byte_len)
-			.step_by(2)
-			.map(|i| {
-				u8::from_str_radix(&sanitized_s[i..i + 2], 16)
-					.map_err(std::convert::Into::into)
-			})
-			.collect(),
+		(true, true) => {
+			let sanitized_s_bytes = sanitized_s.as_bytes();
+			(0..sanitized_s_byte_len)
+				.step_by(2)
+				.map(|i| {
+					// check that both bytes represent ascii chars
+					verify_ascii(&sanitized_s_bytes[i])?;
+					verify_ascii(&sanitized_s_bytes[i + 1])?;
+
+					let s = std::str::from_utf8(&sanitized_s_bytes[i..i+2])
+						.expect("We ensure that input slice represents ASCII above. qed.");
+					u8::from_str_radix(s, 16).map_err(Into::into)
+				})
+				.collect()
+		}
 		(true, false) | (false, false) => Err(HexError::ExceedsMaxLength),
 		(false, true) => Err(HexError::OddLength),
 	}
@@ -114,6 +132,29 @@ mod test {
 	}
 
 	#[test]
+	fn decode_correctly_errors_with_non_ascii() {
+		// minimal example
+		let encoded = "0fÓ";
+		let res = decode(encoded);
+		assert_eq!(res, Err(HexError::NonAsciiChar));
+
+		let encoded = "0x0fÓ";
+		let res = decode(encoded);
+		assert_eq!(res, Err(HexError::NonAsciiChar));
+
+		// when its the first char
+		let encoded = "Óff";
+		let res = decode(encoded);
+		assert_eq!(res, Err(HexError::NonAsciiChar));
+
+		// example taken from fuzzing
+		let encoded = "C6ff584301800c5f60000000000000000000000000Óf8$6800;033333333333333333333333344444444333";
+		let res = decode(encoded);
+		assert_eq!(res, Err(HexError::NonAsciiChar));
+
+	}
+
+	#[test]
 	fn encode_and_decode_work() {
 		let decoded = vec![0, 0, 0, 0];
 		let encoded = "00000000";
@@ -132,7 +173,7 @@ mod test {
 	}
 
 	#[test]
-	fn encode_and_decode_work_with_all_hex_bytes() {
+	fn encode_and_decode_with_all_hex_chars() {
 		let decoded: Vec<_> = (0..=255u8).collect();
 		let encoded = HEX_BYTES;
 		assert_eq!(encode(&decoded), encoded);
