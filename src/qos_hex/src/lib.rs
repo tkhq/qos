@@ -20,6 +20,8 @@ const HEX_BYTES: &str = "000102030405060708090a0b0c0d0e0f101112131415161718191a1
 /// Error type for decoding hex strings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HexError {
+	/// Input was of length 1, which is an odd length.
+	LengthOne,
 	/// Could not decode the input because it was an odd length.
 	OddLength,
 	/// Error trying to parse hex characters to a u8.
@@ -45,17 +47,30 @@ impl From<ParseIntError> for HexError {
 /// - if the input is an odd length
 /// - if a character is invalid hex
 /// - if the input is too long.
-pub fn decode(s: &str) -> Result<Vec<u8>, HexError> {
-	let s = if &s[..2] == "0x" { &s[2..] } else { s };
-	let str_byte_len = s.len();
+pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
+	let sanitized_s = {
+		let raw_s_byte_len = raw_s.len();
+		if raw_s_byte_len == 0 {
+			// We can do an explicit exit early
+			return Ok(Vec::new());
+		} else if raw_s_byte_len == 1 {
+			return Err(HexError::LengthOne);
+		} else if &raw_s[..2] == "0x" {
+			// we know the s is at least len 2
+			&raw_s[2..]
+		} else {
+			raw_s
+		}
+	};
 
-	let is_even_len = str_byte_len % 2 == 0;
-	let is_lt_max_len = str_byte_len < STR_MAX_LENGTH;
+	let sanitized_s_byte_len = sanitized_s.len();
+	let is_even_len = sanitized_s_byte_len % 2 == 0;
+	let is_lt_max_len = sanitized_s_byte_len < STR_MAX_LENGTH;
 	match (is_even_len, is_lt_max_len) {
-		(true, true) => (0..str_byte_len)
+		(true, true) => (0..sanitized_s_byte_len)
 			.step_by(2)
 			.map(|i| {
-				u8::from_str_radix(&s[i..i + 2], 16)
+				u8::from_str_radix(&sanitized_s[i..i + 2], 16)
 					.map_err(std::convert::Into::into)
 			})
 			.collect(),
@@ -83,6 +98,24 @@ mod test {
 	use super::*;
 
 	#[test]
+	fn decode_works_with_len_zero() {
+		let encoded = "";
+		let res = decode(encoded);
+		assert_eq!(res, Ok(Vec::new()));
+	}
+
+	#[test]
+	fn decode_correctly_errors_with_len_one() {
+		let encoded = "a";
+		let res = decode(encoded);
+		assert_eq!(res, Err(HexError::LengthOne));
+
+		let encoded = " ";
+		let res = decode(encoded);
+		assert_eq!(res, Err(HexError::LengthOne));
+	}
+
+	#[test]
 	fn encode_and_decode_work() {
 		let decoded = vec![0, 0, 0, 0];
 		let encoded = "00000000";
@@ -94,16 +127,22 @@ mod test {
 		assert_eq!(encode(&decoded), encoded);
 		assert_eq!(decode(encoded).unwrap(), decoded);
 
-		let decoded: Vec<_> = (0..=255u8).collect();
-		let encoded = HEX_BYTES;
-		assert_eq!(encode(&decoded), encoded);
-		assert_eq!(decode(encoded).unwrap(), decoded);
-
 		let decoded = vec![31, 52, 228, 109, 140, 170, 124, 94];
 		let encoded = "1f34e46d8caa7c5e";
 		assert_eq!(encode(&decoded), encoded);
 		assert_eq!(decode(encoded).unwrap(), decoded);
+	}
 
+	#[test]
+	fn encode_and_decode_work_with_all_hex_bytes() {
+		let decoded: Vec<_> = (0..=255u8).collect();
+		let encoded = HEX_BYTES;
+		assert_eq!(encode(&decoded), encoded);
+		assert_eq!(decode(encoded).unwrap(), decoded);
+	}
+
+	#[test]
+	fn encode_and_decode_handles_0x_prefix_and_mixed_casing() {
 		// Handles `0x` prefix and mixed casing
 		let decoded = vec![
 			0, 0, 0, 0, 33, 154, 181, 64, 53, 108, 187, 131, 156, 190, 5, 48,
@@ -114,7 +153,10 @@ mod test {
 		encoded.make_ascii_lowercase();
 		assert_eq!(encode(&decoded), &encoded[..]);
 		assert_eq!(decode(address).unwrap(), decoded);
+	}
 
+	#[test]
+	fn decode_rejects_invalid_hex() {
 		// Rejects invalid hex characters
 		let invalid = "a1b2fh";
 		let is_err = matches!(
