@@ -39,6 +39,7 @@ const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
 const DR_WRAPPED_QUORUM_KEY: &str = "dr_wrapped_quorum_key";
+const PCRS_PATH: &str = "aws/pcrs.txt";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -360,7 +361,7 @@ pub(crate) struct BootGenesisArgs<'a, P: AsRef<Path>> {
 	pub uri: &'a str,
 	pub namespace_dir: P,
 	pub share_set_dir: P,
-	pub qos_build_fingerprints_path: P,
+	pub qos_release_dir_path: P,
 	pub pcr3_preimage_path: P,
 	pub unsafe_skip_attestation: bool,
 	pub dr_key_path: Option<P>,
@@ -371,7 +372,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		uri,
 		namespace_dir,
 		share_set_dir,
-		qos_build_fingerprints_path,
+		qos_release_dir_path,
 		pcr3_preimage_path,
 		unsafe_skip_attestation,
 		dr_key_path,
@@ -400,8 +401,10 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
 
+	let pcr_path = PathBuf::from(qos_release_dir_path.as_ref())
+		.join(PCRS_PATH);
 	let qos_build_fingerprints =
-		extract_qos_build_fingerprints(qos_build_fingerprints_path);
+		extract_qos_pcrs(pcr_path);
 
 	// Sanity check the genesis output
 	assert!(
@@ -475,7 +478,7 @@ pub(crate) struct AfterGenesisArgs<P: AsRef<Path>> {
 	pub share_path: P,
 	pub alias: String,
 	pub namespace_dir: P,
-	pub qos_build_fingerprints_path: P,
+	pub qos_release_dir_path: P,
 	pub pcr3_preimage_path: P,
 	pub unsafe_skip_attestation: bool,
 }
@@ -486,7 +489,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		share_path,
 		alias,
 		namespace_dir,
-		qos_build_fingerprints_path,
+		qos_release_dir_path,
 		pcr3_preimage_path,
 		unsafe_skip_attestation,
 	}: AfterGenesisArgs<P>,
@@ -496,12 +499,15 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	let genesis_set_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 
 	// Get the PCRs for QOS so we can verify
+	let pcr_path = PathBuf::from(qos_release_dir_path.as_ref())
+		.join(PCRS_PATH);
 	let qos_build_fingerprints =
-		extract_qos_build_fingerprints(qos_build_fingerprints_path);
-	println!(
-		"QOS build fingerprints taken from commit: {}",
-		qos_build_fingerprints.qos_commit
-	);
+		extract_qos_pcrs(pcr_path);
+	// TODO:
+	// println!(
+	// 	"QOS build fingerprints taken from commit: {}",
+	// 	qos_build_fingerprints.qos_commit
+	// );
 
 	// Read in the attestation doc from the genesis directory
 	let cose_sign1 =
@@ -568,7 +574,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub namespace: String,
 	pub restart_policy: RestartPolicy,
 	pub pivot_build_fingerprints_path: P,
-	pub qos_build_fingerprints_path: P,
+	pub qos_release_dir_path: P,
 	pub pcr3_preimage_path: P,
 	pub share_set_dir: P,
 	pub manifest_set_dir: P,
@@ -585,7 +591,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		namespace,
 		pivot_build_fingerprints_path,
 		restart_policy,
-		qos_build_fingerprints_path,
+		qos_release_dir_path,
 		pcr3_preimage_path,
 		manifest_set_dir,
 		share_set_dir,
@@ -595,7 +601,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 	} = args;
 
 	let nitro_config =
-		extract_nitro_config(qos_build_fingerprints_path, pcr3_preimage_path);
+		extract_nitro_config(qos_release_dir_path, pcr3_preimage_path);
 	let PivotBuildFingerprints { pivot_hash, pivot_commit } =
 		extract_pivot_build_fingerprints(pivot_build_fingerprints_path);
 
@@ -634,19 +640,21 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 }
 
 fn extract_nitro_config<P: AsRef<Path>>(
-	qos_build_fingerprints_path: P,
+	qos_release_dir_path: P,
 	pcr3_preimage_path: P,
 ) -> NitroConfig {
 	let pcr3 = extract_pcr3(pcr3_preimage_path);
-	let QosBuildFingerprints { pcr0, pcr1, pcr2, qos_commit } =
-		extract_qos_build_fingerprints(qos_build_fingerprints_path);
+	let pcr_path = PathBuf::from(qos_release_dir_path.as_ref())
+		.join(PCRS_PATH);
+	let QosPcrs { pcr0, pcr1, pcr2 } =
+		extract_qos_pcrs(pcr_path);
 
 	NitroConfig {
 		pcr0,
 		pcr1,
 		pcr2,
 		pcr3,
-		qos_commit,
+		qos_commit: "TODO: put commit in build artifacts".to_string(),
 		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 	}
 }
@@ -655,7 +663,7 @@ pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
 	pub pair: PairOrYubi,
 	pub manifest_path: P,
 	pub manifest_approvals_dir: P,
-	pub qos_build_fingerprints_path: P,
+	pub qos_release_dir_path: P,
 	pub pcr3_preimage_path: P,
 	pub pivot_build_fingerprints_path: P,
 	pub quorum_key_path: P,
@@ -672,7 +680,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		mut pair,
 		manifest_path,
 		manifest_approvals_dir,
-		qos_build_fingerprints_path,
+		qos_release_dir_path,
 		pcr3_preimage_path,
 		pivot_build_fingerprints_path,
 		quorum_key_path,
@@ -690,7 +698,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		&manifest,
 		&get_manifest_set(manifest_set_dir),
 		&get_share_set(share_set_dir),
-		&extract_nitro_config(qos_build_fingerprints_path, pcr3_preimage_path),
+		&extract_nitro_config(qos_release_dir_path, pcr3_preimage_path),
 		&extract_pivot_build_fingerprints(pivot_build_fingerprints_path),
 		&quorum_key,
 	) {
@@ -1654,30 +1662,69 @@ fn read_attestation_approval<P: AsRef<Path>>(
 		.map_err(|_| Error::FileDidNotHaveValidAttestationApproval)
 }
 
-struct QosBuildFingerprints {
+fn lines_to_entries<P: AsRef<Path>>(path: P) -> Vec<[String; 2]> {
+	let file = File::open(path)
+		.expect("failed to open a file");
+
+	let lines = std::io::BufReader::new(file)
+		.lines()
+		.collect::<Result<Vec<String>, _>>()
+		.unwrap();
+
+	lines
+		.into_iter()
+		.map(|line| {
+			let entry: Vec<_> = line
+				.split(" ")
+				.map(String::from)
+				.collect();
+			entry.try_into().expect("Not exactly 2 words in line of file")
+		})
+		.collect()
+}
+
+struct QosPcrs {
 	pcr0: Vec<u8>,
 	pcr1: Vec<u8>,
 	pcr2: Vec<u8>,
-	qos_commit: String,
 }
 
-fn extract_qos_build_fingerprints<P: AsRef<Path>>(
-	file_path: P,
-) -> QosBuildFingerprints {
-	let file = File::open(file_path)
-		.expect("failed to open qos build fingerprints file");
-	let mut lines = std::io::BufReader::new(file)
-		.lines()
-		.collect::<Result<Vec<_>, _>>()
-		.unwrap();
+fn extract_qos_pcrs<P: AsRef<Path>>(file_path: P) -> QosPcrs {
+	let entries = lines_to_entries(file_path);
 
-	QosBuildFingerprints {
-		pcr0: qos_hex::decode(&lines[0]).expect("Invalid hex for pcr0"),
-		pcr1: qos_hex::decode(&lines[1]).expect("Invalid hex for pcr1"),
-		pcr2: qos_hex::decode(&lines[2]).expect("Invalid hex for pcr2"),
-		qos_commit: mem::take(&mut lines[3]),
+	let check_pcr = |number: usize, expected_label: &str| {
+		let [pcr, label] = &entries[number];
+		assert_eq!(label, expected_label);
+		qos_hex::decode(&pcr[..])
+			.expect(
+				&format!("Invalid hex for {expected_label}")
+			)
+	};
+
+	QosPcrs {
+		pcr0: check_pcr(0, "PCR0"),
+		pcr1: check_pcr(1, "PCR1"),
+		pcr2: check_pcr(2, "PCR2"),
 	}
 }
+
+// fn extract_qos_build_fingerprints<P: AsRef<Path>>(
+// 	file_path: P,
+// ) -> QosBuildFingerprints {
+// 	let file = File::open(file_path)
+// 		.expect("failed to open qos build fingerprints file");
+// 	let mut lines = std::io::BufReader::new(file)
+// 		.lines()
+// 		.collect::<Result<Vec<_>, _>>()
+// 		.unwrap();
+
+// 	QosBuildFingerprints {
+// 		pcr0: qos_hex::decode(&lines[0]).expect("Invalid hex for pcr0"),
+// 		pcr1: qos_hex::decode(&lines[1]).expect("Invalid hex for pcr1"),
+// 		pcr2: qos_hex::decode(&lines[2]).expect("Invalid hex for pcr2"),
+// 		qos_commit: mem::take(&mut lines[3]),
+// 	}
+// }
 
 fn find_pcr3<P: AsRef<Path>>(file_path: P) -> String {
 	let file = File::open(file_path).expect("failed to open pcr3 preimage");

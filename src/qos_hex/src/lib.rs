@@ -151,7 +151,6 @@ mod test {
 		let encoded = "C6ff584301800c5f60000000000000000000000000Óf8$6800;033333333333333333333333344444444333";
 		let res = decode(encoded);
 		assert_eq!(res, Err(HexError::NonAsciiChar));
-
 	}
 
 	#[test]
