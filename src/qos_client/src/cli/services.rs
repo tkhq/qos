@@ -502,6 +502,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	// Get the PCRs for QOS so we can verify
 	let qos_build_fingerprints = extract_qos_pcrs(qos_release_dir_path)?;
 	// TODO:
+	// https://linear.app/turnkey/issue/ENG-282/add-qos-commit-to-release-manifest
 	// println!(
 	// 	"QOS build fingerprints taken from commit: {}",
 	// 	qos_build_fingerprints.qos_commit
