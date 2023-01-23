@@ -1681,6 +1681,17 @@ struct QosPcrs {
 	pcr2: Vec<u8>,
 }
 
+fn get_entry(
+	entries: &[[String; 2]],
+	index: usize,
+	expected_label: &str,
+) -> Vec<u8> {
+	let [value, label] = &entries[index];
+	assert_eq!(label, expected_label, "Label of entry does not match");
+	qos_hex::decode(&value[..])
+		.unwrap_or_else(|_| panic!("Invalid hex for {expected_label}"))
+}
+
 fn extract_qos_pcrs<P: AsRef<Path>>(
 	qos_release_dir_path: P,
 ) -> Result<QosPcrs, Error> {
@@ -1699,17 +1710,10 @@ fn extract_qos_pcrs<P: AsRef<Path>>(
 
 	let entries = lines_to_entries(&pcr_path);
 
-	let check_pcr = |index: usize, expected_label: &str| {
-		let [pcr, label] = &entries[index];
-		assert_eq!(label, expected_label);
-		qos_hex::decode(&pcr[..])
-			.unwrap_or_else(|_| panic!("Invalid hex for {expected_label}"))
-	};
-
 	Ok(QosPcrs {
-		pcr0: check_pcr(0, "PCR0"),
-		pcr1: check_pcr(1, "PCR1"),
-		pcr2: check_pcr(2, "PCR2"),
+		pcr0: get_entry(&entries, 0, "PCR0"),
+		pcr1: get_entry(&entries, 1, "PCR1"),
+		pcr2: get_entry(&entries, 2, "PCR2"),
 	})
 }
 
@@ -1725,20 +1729,14 @@ fn extract_qos_release_manifest<P: AsRef<Path>>(
 ) -> QosReleaseManifest {
 	let manifest_path = PathBuf::from(qos_release_dir_path.as_ref())
 		.join(QOS_RELEASE_MANIFEST_PATH);
+
 	let entries = lines_to_entries(manifest_path);
 
-	let get_value = |index: usize, expected_label: &str| {
-		let [value, label] = &entries[index];
-		assert_eq!(label, expected_label);
-		qos_hex::decode(&value[..])
-			.unwrap_or_else(|_| panic!("Invalid hex for {expected_label}"))
-	};
-
 	QosReleaseManifest {
-		pcrs_hash: get_value(0, "*release/aws/pcrs.txt"),
-		_nitro_eif_hash: get_value(1, "*release/aws/nitro.eif"),
-		_qos_client_hash: get_value(2, "*release/qos_client"),
-		_qos_host_hash: get_value(3, "*release/qos_host"),
+		pcrs_hash: get_entry(&entries, 0, "*release/aws/pcrs.txt"),
+		_nitro_eif_hash: get_entry(&entries, 1, "*release/aws/nitro.eif"),
+		_qos_client_hash: get_entry(&entries, 2, "*release/qos_client"),
+		_qos_host_hash: get_entry(&entries, 3, "*release/qos_host"),
 	}
 }
 
