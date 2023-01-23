@@ -6,7 +6,10 @@ use std::{
 };
 
 use borsh::de::BorshDeserialize;
-use integration::{LOCAL_HOST, PCR3, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
+use integration::{
+	LOCAL_HOST, MOCK_QOS_RELEASE_DIR, PCR3, PIVOT_OK2_PATH,
+	PIVOT_OK2_SUCCESS_FILE,
+};
 use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 use qos_core::protocol::{
 	services::{
@@ -75,7 +78,6 @@ async fn standard_boot_e2e() {
 	let msg = "testing420";
 	let pivot_args = format!("[--msg,{}]", msg);
 	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
-	let qos_release_dir = "./mock/boot-e2e/releases/20221209T174513Z";
 
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
@@ -89,7 +91,7 @@ async fn standard_boot_e2e() {
 			"--pivot-build-fingerprints",
 			"./mock/pivot-build-fingerprints.txt",
 			"--qos-release-dir",
-			qos_release_dir,
+			MOCK_QOS_RELEASE_DIR,
 			"--pcr3-preimage-path",
 			"./mock/namespaces/pcr3-preimage.txt",
 			"--manifest-path",
@@ -190,7 +192,7 @@ async fn standard_boot_e2e() {
 				"--pivot-build-fingerprints",
 				"./mock/pivot-build-fingerprints.txt",
 				"--qos-release-dir",
-				qos_release_dir,
+				MOCK_QOS_RELEASE_DIR,
 				"--manifest-set-dir",
 				"./mock/keys/manifest-set",
 				"--share-set-dir",

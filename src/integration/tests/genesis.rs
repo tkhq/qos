@@ -1,7 +1,7 @@
 use std::{fs, path::Path, process::Command};
 
 use borsh::de::BorshDeserialize;
-use integration::LOCAL_HOST;
+use integration::{LOCAL_HOST, MOCK_QOS_RELEASE_DIR};
 use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{sha_256, shamir::shares_reconstruct};
@@ -144,8 +144,8 @@ async fn genesis_e2e() {
 			LOCAL_HOST,
 			"--host-port",
 			&*host_port.to_string(),
-			"--qos-build-fingerprints",
-			"./mock/qos-build-fingerprints.txt",
+			"--qos-release-dir",
+			MOCK_QOS_RELEASE_DIR,
 			"--pcr3-preimage-path",
 			"./mock/pcr3-preimage.txt",
 			"--dr-key-path",
@@ -216,8 +216,8 @@ async fn genesis_e2e() {
 				user,
 				"--namespace-dir",
 				&genesis_dir,
-				"--qos-build-fingerprints",
-				"./mock/qos-build-fingerprints.txt",
+				"--qos-release-dir",
+				MOCK_QOS_RELEASE_DIR,
 				"--pcr3-preimage-path",
 				"./mock/pcr3-preimage.txt",
 				"--unsafe-skip-attestation"
