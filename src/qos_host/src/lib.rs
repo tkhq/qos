@@ -21,7 +21,6 @@ use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
 	body::Bytes,
-	extract::{DefaultBodyLimit},
 	http::StatusCode,
 	response::{Html, IntoResponse},
 	routing::{get, post},
@@ -92,7 +91,6 @@ impl HostServer {
 			.route(&self.path(HOST_HEALTH), get(Self::host_health))
 			.route(&self.path(ENCLAVE_HEALTH), get(Self::enclave_health))
 			.route(&self.path(MESSAGE), post(Self::message))
-			.layer(DefaultBodyLimit::disable())
 			.layer(Extension(state));
 
 		println!("HostServer listening on {}", self.addr);
