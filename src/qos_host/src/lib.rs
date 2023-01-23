@@ -21,12 +21,12 @@ use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
 	body::Bytes,
-	extract::{DefaultBodyLimit, State},
 	http::StatusCode,
 	response::{Html, IntoResponse},
 	routing::{get, post},
 	Router,
 };
+use axum::Extension;
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::Client,
@@ -91,8 +91,7 @@ impl HostServer {
 			.route(&self.path(HOST_HEALTH), get(Self::host_health))
 			.route(&self.path(ENCLAVE_HEALTH), get(Self::enclave_health))
 			.route(&self.path(MESSAGE), post(Self::message))
-			.layer(DefaultBodyLimit::disable())
-			.with_state(state);
+			.layer(Extension(state));
 
 		println!("HostServer listening on {}", self.addr);
 
@@ -103,14 +102,14 @@ impl HostServer {
 	}
 
 	/// Health route handler.
-	async fn host_health(_: State<Arc<QosHostState>>) -> impl IntoResponse {
+	async fn host_health(_: Extension<Arc<QosHostState>>) -> impl IntoResponse {
 		println!("Host health...");
 		Html("Ok!")
 	}
 
 	/// Health route handler.
 	async fn enclave_health(
-		State(state): State<Arc<QosHostState>>,
+		Extension(state): Extension<Arc<QosHostState>>,
 	) -> impl IntoResponse {
 		println!("Enclave health...");
 
@@ -163,7 +162,7 @@ impl HostServer {
 
 	/// Message route handler.
 	async fn message(
-		State(state): State<Arc<QosHostState>>,
+		Extension(state): Extension<Arc<QosHostState>>,
 		encoded_request: Bytes,
 	) -> impl IntoResponse {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
