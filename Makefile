@@ -304,6 +304,7 @@ $(OUT_DIR)/qos_client: \
 		cd /src/qos_client \
 		&& CARGO_HOME=/cache/cargo cargo build \
 			--target x86_64-unknown-linux-gnu \
+			--no-default-features \
 			--release \
 		&& cp /src/target/x86_64-unknown-linux-gnu/release/qos_client /out/; \
 	")
