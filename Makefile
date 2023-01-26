@@ -233,10 +233,15 @@ $(OUT_DIR):
 	mkdir -p $(OUT_DIR)
 
 $(OUT_DIR)/release.env: $(OUT_DIR)
+	test $(VERSION)
 	echo 'VERSION=$(VERSION)'            > $(OUT_DIR)/release.env
+	test $(GIT_REF)
 	echo 'GIT_REF=$(GIT_REF)'           >> $(OUT_DIR)/release.env
+	test $(GIT_AUTHOR)
 	echo 'GIT_AUTHOR=$(GIT_AUTHOR)'     >> $(OUT_DIR)/release.env
+	test $(GIT_KEY)
 	echo 'GIT_KEY=$(GIT_KEY)'           >> $(OUT_DIR)/release.env
+	test $(GIT_DATETIME)
 	echo 'GIT_DATETIME=$(GIT_DATETIME)' >> $(OUT_DIR)/release.env
 
 $(OUT_DIR)/init: \
