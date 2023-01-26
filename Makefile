@@ -34,17 +34,21 @@ endif
 #mkdir -p $(RELEASE_DIR)/generic
 #cp $(OUT_DIR)/generic/bzImage $(RELEASE_DIR)/generic/bzImage
 
+$(RELEASE_DIR):
+	mkdir -p $(RELEASE_DIR)
+
 .PHONY: release
 release: | \
+	$(RELEASE_DIR) \
 	$(OUT_DIR)/release.env \
-	$(OUT_DIR)/aws/nitro.eif \
-	$(OUT_DIR)/aws/pcrs.txt \
+	$(OUT_DIR)/aws-nitro.eif \
+	$(OUT_DIR)/aws-pcrs.txt \
 	$(OUT_DIR)/qos_client \
 	$(OUT_DIR)/qos_host \
 	$(OUT_DIR)/manifest.txt
 	cp $(OUT_DIR)/release.env $(RELEASE_DIR)/release.env
-	cp $(OUT_DIR)/aws/pcrs.txt $(RELEASE_DIR)/aws/pcrs.txt
-	cp $(OUT_DIR)/aws/nitro.eif $(RELEASE_DIR)/aws/nitro.eif
+	cp $(OUT_DIR)/aws-pcrs.txt $(RELEASE_DIR)/aws-pcrs.txt
+	cp $(OUT_DIR)/aws-nitro.eif $(RELEASE_DIR)/aws-nitro.eif
 	cp $(OUT_DIR)/qos_host $(RELEASE_DIR)/qos_host
 	cp $(OUT_DIR)/qos_client $(RELEASE_DIR)/qos_client
 	cp $(OUT_DIR)/manifest.txt $(RELEASE_DIR)/manifest.txt
@@ -184,16 +188,16 @@ $(CACHE_DIR)/linux-$(LINUX_VERSION): \
 	")
 
 $(OUT_DIR)/manifest.txt: \
-	$(OUT_DIR)/aws/pcrs.txt \
-	$(OUT_DIR)/aws/nitro.eif \
+	$(OUT_DIR)/aws-pcrs.txt \
+	$(OUT_DIR)/aws-nitro.eif \
 	$(OUT_DIR)/qos_client \
 	$(OUT_DIR)/qos_host \
-	$(OUT_DIR)/release.env \
+	$(OUT_DIR)/release.env
 	openssl sha256 -r $(OUT_DIR)/release.env \
 		>> $(OUT_DIR)/manifest.txt;
-	openssl sha256 -r $(OUT_DIR)/aws/pcrs.txt \
+	openssl sha256 -r $(OUT_DIR)/aws-pcrs.txt \
 		> $(OUT_DIR)/manifest.txt;
-	openssl sha256 -r $(OUT_DIR)/aws/nitro.eif \
+	openssl sha256 -r $(OUT_DIR)/aws-nitro.eif \
 		>> $(OUT_DIR)/manifest.txt;
 	openssl sha256 -r $(OUT_DIR)/qos_client \
 		>> $(OUT_DIR)/manifest.txt;
@@ -224,6 +228,9 @@ $(CONFIG_DIR)/$(TARGET)/linux.config: \
 		make menuconfig && \
 		cp .config /config/$(TARGET)/linux.config; \
 	")
+
+$(OUT_DIR):
+	mkdir -p $(OUT_DIR)
 
 $(OUT_DIR)/release.env: $(OUT_DIR)
 	echo 'VERSION=$(VERSION)'            > $(OUT_DIR)/release.env
@@ -324,7 +331,7 @@ $(OUT_DIR)/aws/nsm.ko: \
 		&& cp nsm-driver/nsm.ko /out/aws/nsm.ko; \
 	")
 
-$(OUT_DIR)/aws/nitro.eif: \
+$(OUT_DIR)/aws-nitro.eif $(OUT_DIR)/aws-pcrs.txt: \
 	$(CACHE_DIR)/toolchain.tar \
 	$(OUT_DIR)/aws/eif_build \
 	$(OUT_DIR)/aws/bzImage \
@@ -342,8 +349,8 @@ $(OUT_DIR)/aws/nitro.eif: \
 			--kernel_config /cache/aws/eif/linux.config \
 			--cmdline 'reboot=k initrd=0x2000000$(,)3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd' \
 			--ramdisk /cache/aws/eif/rootfs.cpio \
-			--output /out/aws/nitro.eif \
-			--pcrs_output /out/aws/pcrs.txt; \
+			--output /out/aws-nitro.eif \
+			--pcrs_output /out/aws-pcrs.txt; \
 	")
 
 define fetch_pgp_key
