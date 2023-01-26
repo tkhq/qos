@@ -28,7 +28,7 @@ const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
-const QOS_BUILD_FINGERPRINTS: &str = "qos-build-fingerprints";
+const QOS_REALEASE_DIR: &str = "qos-release-dir";
 const PCR3_PREIMAGE_PATH: &str = "pcr3-preimage-path";
 const PIVOT_BUILD_FINGERPRINTS: &str = "pivot-build-fingerprints";
 const SHARE_SET_DIR: &str = "share-set-dir";
@@ -268,9 +268,9 @@ impl Command {
 		)
 		.takes_value(true)
 	}
-	fn qos_build_fingerprints_token() -> Token {
+	fn qos_release_dir_token() -> Token {
 		Token::new(
-			QOS_BUILD_FINGERPRINTS,
+			QOS_REALEASE_DIR,
 			"Path to file with QOS build fingerprints (PCR{1, 2, 3}).",
 		)
 		.takes_value(true)
@@ -464,7 +464,6 @@ impl Command {
 			.takes_value(true)
 			.required(false)
 	}
-
 	fn current_pin_path_token() -> Token {
 		Token::new(
 			CURRENT_PIN_PATH,
@@ -473,7 +472,6 @@ impl Command {
 		.takes_value(true)
 		.required(false)
 	}
-
 	fn new_pin_path_token() -> Token {
 		Token::new(NEW_PIN_PATH, "Path to file descriptor with new pin.")
 			.takes_value(true)
@@ -519,7 +517,7 @@ impl Command {
 			.token(Self::share_set_dir_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
-			.token(Self::qos_build_fingerprints_token())
+			.token(Self::qos_release_dir_token())
 			.token(Self::dr_key_path_token())
 	}
 
@@ -530,7 +528,7 @@ impl Command {
 			.token(Self::share_path_token())
 			.token(Self::alias_token())
 			.token(Self::namespace_dir_token())
-			.token(Self::qos_build_fingerprints_token())
+			.token(Self::qos_release_dir_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 	}
@@ -548,7 +546,7 @@ impl Command {
 			.token(Self::namespace_token())
 			.token(Self::pivot_build_fingerprints_token())
 			.token(Self::restart_policy_token())
-			.token(Self::qos_build_fingerprints_token())
+			.token(Self::qos_release_dir_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::manifest_path_token())
 			.token(Self::manifest_set_dir_token())
@@ -563,7 +561,7 @@ impl Command {
 			.token(Self::secret_path_token())
 			.token(Self::manifest_path_token())
 			.token(Self::manifest_approvals_dir_token())
-			.token(Self::qos_build_fingerprints_token())
+			.token(Self::qos_release_dir_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::pivot_build_fingerprints_token())
 			.token(Self::alias_token())
@@ -796,10 +794,10 @@ impl ClientOpts {
 			.to_string()
 	}
 
-	fn qos_build_fingerprints(&self) -> String {
+	fn qos_release_dir(&self) -> String {
 		self.parsed
-			.single(QOS_BUILD_FINGERPRINTS)
-			.expect("qos-build-fingerprints is a required arg")
+			.single(QOS_REALEASE_DIR)
+			.expect("qos-release-dir is a required arg")
 			.to_string()
 	}
 
@@ -1295,7 +1293,7 @@ mod handlers {
 			uri: &opts.path_message(),
 			namespace_dir: opts.namespace_dir(),
 			share_set_dir: opts.share_set_dir(),
-			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
+			qos_release_dir_path: opts.qos_release_dir(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			dr_key_path: opts.dr_key_path(),
 			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
@@ -1312,7 +1310,7 @@ mod handlers {
 			share_path: opts.share_path(),
 			alias: opts.alias(),
 			namespace_dir: opts.namespace_dir(),
-			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
+			qos_release_dir_path: opts.qos_release_dir(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
 		}) {
@@ -1327,7 +1325,7 @@ mod handlers {
 			namespace: opts.namespace(),
 			restart_policy: opts.restart_policy(),
 			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
-			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
+			qos_release_dir_path: opts.qos_release_dir(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			manifest_path: opts.manifest_path(),
 			pivot_args: opts.pivot_args(),
@@ -1347,7 +1345,7 @@ mod handlers {
 			pair,
 			manifest_path: opts.manifest_path(),
 			manifest_approvals_dir: opts.manifest_approvals_dir(),
-			qos_build_fingerprints_path: opts.qos_build_fingerprints(),
+			qos_release_dir_path: opts.qos_release_dir(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
 			quorum_key_path: opts.quorum_key_path(),
