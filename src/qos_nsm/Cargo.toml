@@ -1,0 +1,15 @@
+[package]
+name = "qos_nsm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+borsh = { version = "0.9" }
+
+# For AWS Nitro
+aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
+serde_bytes = { version = "0.11", default-features = false }
+
+[features]
+# Never use in production - support for mock NSM
+mock = []

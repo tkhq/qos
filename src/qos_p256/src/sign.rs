@@ -11,7 +11,7 @@ use crate::P256Error;
 
 /// Sign private key pair.
 #[derive(ZeroizeOnDrop)]
-#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq))]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct P256SignPair {
 	private: SigningKey,
 }
@@ -53,7 +53,7 @@ impl P256SignPair {
 }
 
 /// Sign public key for verifying signatures.
-#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq))]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct P256SignPublic {
 	public: VerifyingKey,
 }

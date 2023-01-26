@@ -1082,7 +1082,7 @@ impl CLI {
 }
 
 mod handlers {
-	use qos_core::protocol::attestor::types::{NsmRequest, NsmResponse};
+	use qos_nsm::types::{NsmRequest, NsmResponse};
 
 	use super::services::{ApproveManifestArgs, ProxyReEncryptShareArgs};
 	use crate::{
@@ -1094,7 +1094,7 @@ mod handlers {
 	};
 
 	pub(super) fn pivot_build_fingerprints(opts: &ClientOpts) {
-		let pivot = std::fs::read(&opts.pivot_path())
+		let pivot = std::fs::read(opts.pivot_path())
 			.expect("Failed to read pivot file");
 
 		let hash = qos_crypto::sha_256(&pivot);
@@ -1102,14 +1102,14 @@ mod handlers {
 
 		let contents = format!("{hex_hash}\ndummy-commit\n");
 
-		std::fs::write(&opts.output_path(), contents.as_bytes())
+		std::fs::write(opts.output_path(), contents.as_bytes())
 			.expect("Failed to write fingerprints to specified path");
 	}
 
 	pub(super) fn host_health(opts: &ClientOpts) {
 		let path = &opts.path("host-health");
 		if let Ok(response) = request::get(path) {
-			println!("{}", response);
+			println!("{response}");
 		} else {
 			panic!("Error...")
 		}
@@ -1119,14 +1119,14 @@ mod handlers {
 		let path = &opts.path_message();
 
 		let response = request::post(path, &ProtocolMsg::StatusRequest)
-			.map_err(|e| println!("{:?}", e))
+			.map_err(|e| println!("{e:?}"))
 			.expect("Enclave request failed");
 
 		match response {
 			ProtocolMsg::StatusResponse(phase) => {
-				println!("Enclave phase: {:?}", phase);
+				println!("Enclave phase: {phase:?}");
 			}
-			other => panic!("Unexpected response {:?}", other),
+			other => panic!("Unexpected response {other:?}"),
 		}
 	}
 
@@ -1136,13 +1136,13 @@ mod handlers {
 			path,
 			&ProtocolMsg::NsmRequest { nsm_request: NsmRequest::DescribeNSM },
 		)
-		.map_err(|e| println!("{:?}", e))
+		.map_err(|e| println!("{e:?}"))
 		.expect("Attestation request failed")
 		{
 			ProtocolMsg::NsmResponse { nsm_response } => {
-				println!("{:#?}", nsm_response);
+				println!("{nsm_response:#?}");
 			}
-			other => panic!("Unexpected response {:?}", other),
+			other => panic!("Unexpected response {other:?}"),
 		}
 	}
 
@@ -1158,7 +1158,7 @@ mod handlers {
 					nsm_request: NsmRequest::DescribePCR { index: i },
 				},
 			)
-			.map_err(|e| println!("{:?}", e))
+			.map_err(|e| println!("{e:?}"))
 			.expect("Attestation request failed")
 			{
 				ProtocolMsg::NsmResponse {
@@ -1166,7 +1166,7 @@ mod handlers {
 				} => {
 					println!("{:#?}", qos_hex::encode(&data));
 				}
-				other => panic!("Unexpected response {:?}", other),
+				other => panic!("Unexpected response {other:?}"),
 			}
 		}
 	}
@@ -1184,7 +1184,7 @@ mod handlers {
 		#[cfg(feature = "smartcard")]
 		{
 			if let Err(e) = services::provision_yubikey(opts.pub_path()) {
-				eprintln!("Error: {:?}", e);
+				eprintln!("Error: {e:?}");
 				std::process::exit(1);
 			}
 		}
@@ -1202,7 +1202,7 @@ mod handlers {
 				opts.master_seed_path(),
 				opts.current_pin_path(),
 			) {
-				eprintln!("Error: {:?}", e);
+				eprintln!("Error: {e:?}");
 				std::process::exit(1);
 			}
 		}
@@ -1217,7 +1217,7 @@ mod handlers {
 		#[cfg(feature = "smartcard")]
 		{
 			if let Err(e) = services::yubikey_sign(&opts.payload()) {
-				eprintln!("Error: {:?}", e);
+				eprintln!("Error: {e:?}");
 				std::process::exit(1);
 			}
 		}
@@ -1232,7 +1232,7 @@ mod handlers {
 		#[cfg(feature = "smartcard")]
 		{
 			if let Err(e) = services::yubikey_public() {
-				eprintln!("Error: {:?}", e);
+				eprintln!("Error: {e:?}");
 				std::process::exit(1);
 			}
 		}
@@ -1247,7 +1247,7 @@ mod handlers {
 		#[cfg(feature = "smartcard")]
 		{
 			if let Err(e) = crate::yubikey::yubikey_piv_reset() {
-				eprintln!("Error: {:?}", e);
+				eprintln!("Error: {e:?}");
 				std::process::exit(1);
 			}
 		}
@@ -1271,7 +1271,7 @@ mod handlers {
 				&current_pin[..],
 				&new_pin[..],
 			) {
-				eprintln!("Error: {:?}", e);
+				eprintln!("Error: {e:?}");
 				std::process::exit(1);
 			}
 		}
@@ -1283,7 +1283,7 @@ mod handlers {
 			&opts.signature(),
 			opts.pub_path(),
 		) {
-			eprintln!("Error: {:?}", e);
+			eprintln!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
@@ -1298,7 +1298,7 @@ mod handlers {
 			dr_key_path: opts.dr_key_path(),
 			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
 		}) {
-			println!("Error: {:?}", e);
+			println!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
@@ -1314,7 +1314,7 @@ mod handlers {
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
 		}) {
-			println!("Error: {:?}", e);
+			println!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
@@ -1333,7 +1333,7 @@ mod handlers {
 			manifest_set_dir: opts.manifest_set_dir(),
 			quorum_key_path: opts.quorum_key_path(),
 		}) {
-			println!("Error: {:?}", e);
+			println!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
@@ -1354,7 +1354,7 @@ mod handlers {
 			alias: opts.alias(),
 			unsafe_auto_confirm: opts.unsafe_auto_confirm(),
 		}) {
-			println!("Error: {:?}", e);
+			println!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
@@ -1367,7 +1367,7 @@ mod handlers {
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
 		}) {
-			println!("Error: {:?}", e);
+			println!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
@@ -1397,7 +1397,7 @@ mod handlers {
 				unsafe_eph_path_override: opts.unsafe_eph_path_override(),
 				unsafe_auto_confirm: opts.unsafe_auto_confirm(),
 			}) {
-			eprintln!("Error: {:?}", e);
+			eprintln!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
@@ -1408,7 +1408,7 @@ mod handlers {
 			opts.eph_wrapped_share_path(),
 			opts.approval_path(),
 		) {
-			eprintln!("Error: {:?}", e);
+			eprintln!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
@@ -1417,7 +1417,7 @@ mod handlers {
 		if let Err(e) =
 			services::display(&opts.display_type(), opts.file_path())
 		{
-			eprintln!("Error: {:?}", e);
+			eprintln!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
@@ -1437,7 +1437,7 @@ mod handlers {
 			opts.manifest_approvals_dir(),
 			opts.manifest_path(),
 		) {
-			eprintln!("Error: {:?}", e);
+			eprintln!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
@@ -1449,7 +1449,7 @@ mod handlers {
 			opts.threshold(),
 			&opts.output_dir(),
 		) {
-			eprintln!("Error: {:?}", e);
+			eprintln!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
@@ -1458,7 +1458,7 @@ mod handlers {
 		if let Err(e) =
 			services::shamir_reconstruct(opts.shares(), &opts.output_path())
 		{
-			eprintln!("Error: {:?}", e);
+			eprintln!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
@@ -1466,7 +1466,7 @@ mod handlers {
 	fn get_pair_or_yubi(opts: &ClientOpts) -> PairOrYubi {
 		match PairOrYubi::from_inputs(opts.yubikey(), opts.secret_path()) {
 			Err(e) => {
-				eprintln!("Error: {:?}", e);
+				eprintln!("Error: {e:?}");
 				std::process::exit(1);
 			}
 			Ok(p) => p,

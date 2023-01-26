@@ -26,11 +26,11 @@ pub enum ParserError {
 impl fmt::Display for ParserError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Self::UnexpectedInput(u) => write!(f, "found {}, which was not an expected argument", u),
-			Self::DuplicateInput(i) => write!(f, "found argument {} more then once, but only one instance was expected", i),
-			Self::MutuallyExclusiveInput(y, z) => write!(f, "arguments {} and {} are mutually exclusive and cannot be used at the same time", y, z),
-			Self::MissingValue(i) => write!(f, "found argument {}, which requires a value, but no value was given", i),
-			Self::MissingInput(i) => write!(f, "argument {} is required but was not found", i),
+			Self::UnexpectedInput(u) => write!(f, "found {u}, which was not an expected argument"),
+			Self::DuplicateInput(i) => write!(f, "found argument {i} more then once, but only one instance was expected"),
+			Self::MutuallyExclusiveInput(y, z) => write!(f, "arguments {y} and {z} are mutually exclusive and cannot be used at the same time"),
+			Self::MissingValue(i) => write!(f, "found argument {i}, which requires a value, but no value was given"),
+			Self::MissingInput(i) => write!(f, "argument {i} is required but was not found"),
 		}
 	}
 }
@@ -198,7 +198,7 @@ impl Parser {
 		}
 
 		// Newline
-		info.push("".to_string());
+		info.push(String::new());
 
 		let optional = self.tokens_info(false);
 		if !optional.is_empty() {
@@ -306,13 +306,11 @@ impl Token {
 	}
 
 	fn info(&self, width: usize) -> String {
-		let mut info = vec![
-			format!("{:<width$}", self.name(), width = width),
-			self.help.clone(),
-		];
+		let mut info =
+			vec![format!("{:<width$}", self.name()), self.help.clone()];
 
 		if let Some(v) = &self.default_value {
-			info.push(format!("[default: {}]", v));
+			info.push(format!("[default: {v}]"));
 		}
 
 		info.join(" ")
@@ -364,8 +362,8 @@ impl fmt::Display for TokenType {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Flag => write!(f, "true"),
-			Self::Single(s) => write!(f, "{}", s),
-			Self::Multiple(v) => write!(f, "{:?}", v),
+			Self::Single(s) => write!(f, "{s}"),
+			Self::Multiple(v) => write!(f, "{v:?}"),
 		}
 	}
 }
@@ -495,7 +493,7 @@ impl TokenMap {
 			if token.user_value.is_some() {
 				// Check if this token requires the presence of another token
 				if let Some(ref other_name) = token.requires {
-					if !inputs.contains(&(format!("--{}", other_name))) {
+					if !inputs.contains(&(format!("--{other_name}"))) {
 						return Err(ParserError::MissingInput(
 							other_name.to_string(),
 						));
@@ -505,7 +503,7 @@ impl TokenMap {
 				// Check if there already exists a token that is mutually
 				// exclusive of this token.
 				for other_name in &token.forbids {
-					if inputs.contains(&(format!("--{}", other_name))) {
+					if inputs.contains(&(format!("--{other_name}"))) {
 						Err(ParserError::MutuallyExclusiveInput(
 							token.name.to_string(),
 							other_name.to_string(),

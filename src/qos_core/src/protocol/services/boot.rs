@@ -3,11 +3,11 @@
 use std::fmt;
 
 use qos_crypto::sha_256;
+use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Pair, P256Public};
 
-use super::attestation;
 use crate::protocol::{
-	attestor::types::NsmResponse, Hash256, ProtocolError, ProtocolPhase,
+	services::attestation, Hash256, ProtocolError, ProtocolPhase,
 	ProtocolState, QosHash,
 };
 
@@ -181,7 +181,7 @@ pub struct Namespace {
 	/// downgrade attacks - quorum members should only approve a manifest that
 	/// has the highest nonce.
 	pub nonce: u32,
-	/// Quorum Key as a hex encoded RSA public key.
+	/// Quorum Key
 	pub quorum_key: Vec<u8>,
 }
 
@@ -293,7 +293,7 @@ impl ManifestEnvelope {
 	}
 }
 
-pub(in crate::protocol) fn boot_standard(
+pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	state: &mut ProtocolState,
 	manifest_envelope: &ManifestEnvelope,
 	pivot: &[u8],
@@ -319,6 +319,16 @@ pub(in crate::protocol) fn boot_standard(
 		manifest_envelope.manifest.qos_hash().to_vec(),
 	);
 
+	Ok(nsm_response)
+}
+
+pub(in crate::protocol) fn boot_standard(
+	state: &mut ProtocolState,
+	manifest_envelope: &ManifestEnvelope,
+	pivot: &[u8],
+) -> Result<NsmResponse, ProtocolError> {
+	let nsm_response = put_manifest_and_pivot(state, manifest_envelope, pivot)?;
+
 	state.phase = ProtocolPhase::WaitingForQuorumShards;
 
 	Ok(nsm_response)
@@ -328,12 +338,11 @@ pub(in crate::protocol) fn boot_standard(
 mod test {
 	use std::{ops::Deref, path::Path};
 
+	use qos_nsm::mock::MockNsm;
 	use qos_test_primitives::PathWrapper;
 
 	use super::*;
-	use crate::{
-		handles::Handles, io::SocketAddress, protocol::attestor::mock::MockNsm,
-	};
+	use crate::{handles::Handles, io::SocketAddress};
 
 	fn get_manifest() -> (Manifest, Vec<(P256Pair, QuorumMember)>, Vec<u8>) {
 		let quorum_pair = P256Pair::generate().unwrap();

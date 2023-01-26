@@ -144,18 +144,19 @@ impl HostServer {
 
 		match decoded_response {
 			ProtocolMsg::StatusResponse(phase) => {
-				let inner = format!("{:?}", phase);
+				let inner = format!("{phase:?}");
 				let status = match phase {
 					ProtocolPhase::UnrecoverableError
 					| ProtocolPhase::WaitingForBootInstruction
-					| ProtocolPhase::WaitingForQuorumShards => StatusCode::SERVICE_UNAVAILABLE,
+					| ProtocolPhase::WaitingForQuorumShards
+					| ProtocolPhase::WaitingForForwardedKey => StatusCode::SERVICE_UNAVAILABLE,
 					ProtocolPhase::QuorumKeyProvisioned => StatusCode::OK,
 				};
 
 				(status, Html(inner))
 			}
 			other => {
-				let inner = format!("Unexpected response: {:?}", other);
+				let inner = format!("Unexpected response: {other:?}");
 				(StatusCode::INTERNAL_SERVER_ERROR, Html(inner))
 			}
 		}

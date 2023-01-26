@@ -25,17 +25,12 @@ async fn main() {
 		use std::{fs, path::Path};
 
 		use qos_client::request;
-		use qos_core::{
-			hex,
-			protocol::{
-				attestor::{
-					mock::MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT,
-					types::{NsmRequest, NsmResponse},
-				},
-				msg::ProtocolMsg,
-			},
-		};
+		use qos_core::{hex, protocol::msg::ProtocolMsg};
 		use qos_crypto::RsaPair;
+		use qos_nsm::{
+			mock::MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT,
+			types::{NsmRequest, NsmResponse},
+		};
 
 		const EPHEMERAL_KEY_RELATIVE_PATH: &str =
 			"./qos_core/src/protocol/attestor/static/boot_e2e_mock_eph.secret";

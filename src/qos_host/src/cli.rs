@@ -84,7 +84,7 @@ impl HostOptions {
 	#[must_use]
 	pub fn path(&self, path: &str) -> String {
 		let url = self.url();
-		format!("{}/{}", url, path)
+		format!("{url}/{path}")
 	}
 
 	/// Address the host server should listen on.

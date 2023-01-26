@@ -1,10 +1,9 @@
-use crate::protocol::{
-	attestor::{
-		types::{NsmRequest, NsmResponse},
-		NsmProvider,
-	},
-	ProtocolError, ProtocolState, QosHash,
+use qos_nsm::{
+	types::{NsmRequest, NsmResponse},
+	NsmProvider,
 };
+
+use crate::protocol::{ProtocolError, ProtocolState, QosHash};
 
 pub(in crate::protocol) fn live_attestation_doc(
 	state: &mut ProtocolState,

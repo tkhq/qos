@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-qos_core = { path = "../qos_core", default-features = false }
+qos_nsm = { path = "../qos_nsm", default-features = false }
 qos_hex = { path = "../qos_hex" }
 
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
