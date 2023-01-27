@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 qos_hex = { path = "../qos_hex" }
 
-borsh = { version = "0.9", default-features = false }
+borsh = { version = "0.10", default-features = false }
 rand_core = { version = "0.6.3", default-features = false }
 sha2 = { version = "0.10", default-features = false }
 p256 = { version = "0.11.1", features = ["ecdh", "ecdsa", "ecdsa-core", "std"], default-features = false }
