@@ -14,7 +14,7 @@ qos_p256 = { path = "../qos_p256" }
 ureq = { version = "2.4", default-features = false }
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
 borsh = { version = "0.10", default-features = false }
-p256 = { version = "0.11", default-features = false }
+p256 = { version = "0.12", default-features = false }
 rand_core = { version = "0.6", default-features = false }
 zeroize = { version = "1.5", default-features = false }
 rpassword = { version = "6", default-features = false }
