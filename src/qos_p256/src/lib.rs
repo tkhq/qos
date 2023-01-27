@@ -81,7 +81,7 @@ pub enum P256Error {
 
 impl From<qos_hex::HexError> for P256Error {
 	fn from(err: qos_hex::HexError) -> Self {
-		Self::QosHex(format!("{:?}", err))
+		Self::QosHex(format!("{err:?}"))
 	}
 }
 
@@ -116,7 +116,7 @@ pub fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
 /// P256 private key pair for signing and encryption. Internally this uses a
 /// separate secret for signing and encryption.
 #[derive(ZeroizeOnDrop)]
-#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq))]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct P256Pair {
 	encrypt_private: P256EncryptPair,
 	sign_private: P256SignPair,
@@ -196,7 +196,7 @@ impl P256Pair {
 	) -> Result<(), P256Error> {
 		let hex_string = qos_hex::encode(&self.master_seed);
 		std::fs::write(path, hex_string.as_bytes()).map_err(|e| {
-			P256Error::IOError(format!("failed to write master secret {}", e))
+			P256Error::IOError(format!("failed to write master secret {e}"))
 		})
 	}
 
@@ -205,7 +205,7 @@ impl P256Pair {
 	// serialization. https://github.com/tkhq/qos/issues/153.
 	pub fn from_hex_file<P: AsRef<Path>>(path: P) -> Result<Self, P256Error> {
 		let hex_bytes = std::fs::read(path).map_err(|e| {
-			P256Error::IOError(format!("failed to read master seed: {}", e))
+			P256Error::IOError(format!("failed to read master seed: {e}"))
 		})?;
 
 		let hex_string = String::from_utf8(hex_bytes)
@@ -220,7 +220,7 @@ impl P256Pair {
 
 /// P256 public key for signing and encryption. Internally this uses
 /// separate public keys for signing and encryption.
-#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq))]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct P256Public {
 	encrypt_public: P256EncryptPublic,
 	sign_public: P256SignPublic,
@@ -291,14 +291,14 @@ impl P256Public {
 	) -> Result<(), P256Error> {
 		let hex_string = qos_hex::encode(&self.to_bytes());
 		std::fs::write(path, hex_string.as_bytes()).map_err(|e| {
-			P256Error::IOError(format!("failed to write master secret: {}", e))
+			P256Error::IOError(format!("failed to write master secret: {e}"))
 		})
 	}
 
 	/// Read the hex encoded public keys from a file.
 	pub fn from_hex_file<P: AsRef<Path>>(path: P) -> Result<Self, P256Error> {
 		let hex_bytes = std::fs::read(path).map_err(|e| {
-			P256Error::IOError(format!("failed to read master seed: {}", e))
+			P256Error::IOError(format!("failed to read master seed: {e}"))
 		})?;
 		let hex_string = String::from_utf8(hex_bytes)
 			.map_err(|_| P256Error::MasterSeedInvalidUtf8)?;

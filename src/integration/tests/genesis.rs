@@ -37,7 +37,7 @@ async fn genesis_e2e() {
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", &*all_personal_dir, user);
 	let get_key_paths =
-		|user: &str| (format!("{}.secret", user), format!("{}.pub", user));
+		|user: &str| (format!("{user}.secret"), format!("{user}.pub"));
 
 	let threshold = 2;
 	let user1 = "user1";
@@ -229,9 +229,9 @@ async fn genesis_e2e() {
 			.success());
 
 		let share_key_path =
-			Path::new(&personal_dir(user)).join(format!("{}.secret", user));
+			Path::new(&personal_dir(user)).join(format!("{user}.secret"));
 		let share_path =
-			Path::new(&personal_dir(user)).join(format!("{}.share", user));
+			Path::new(&personal_dir(user)).join(format!("{user}.share"));
 		let share_key_pair = P256Pair::from_hex_file(share_key_path).unwrap();
 
 		// Check the share is encrypted to personal key

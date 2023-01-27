@@ -75,7 +75,7 @@ impl<'a> Deref for PathWrapper<'a> {
 	fn deref(&self) -> &Self::Target {
 		match &self.0 {
 			Internal::String(i) => i,
-			Internal::Str(i) => *i,
+			Internal::Str(i) => i,
 		}
 	}
 }

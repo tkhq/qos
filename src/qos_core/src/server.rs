@@ -39,7 +39,7 @@ impl<R: RequestProcessor> SocketServer<R> {
 		addr: SocketAddress,
 		mut processor: R,
 	) -> Result<(), SocketServerError> {
-		println!("`SocketServer` listening on {:?}", addr);
+		println!("`SocketServer` listening on {addr:?}");
 
 		let listener = Listener::listen(addr)?;
 
@@ -49,7 +49,7 @@ impl<R: RequestProcessor> SocketServer<R> {
 					let response = processor.process(payload);
 					let _ = stream.send(&response);
 				}
-				Err(err) => eprintln!("Server::listen error: {:?}", err),
+				Err(err) => eprintln!("Server::listen error: {err:?}"),
 			}
 		}
 

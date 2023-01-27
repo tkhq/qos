@@ -27,7 +27,7 @@ pub mod request {
 				&msg.try_to_vec()
 					.expect("ProtocolMsg can always be serialized. qed."),
 			)
-			.map_err(|e| format!("post err: {:?}", e))?;
+			.map_err(|e| format!("post err: {e:?}"))?;
 
 		response.into_reader().take(MAX_SIZE).read_to_end(&mut buf).map_err(
 			|_| {
@@ -54,6 +54,6 @@ pub mod request {
 			.call()
 			.unwrap()
 			.into_string()
-			.map_err(|_| format!("GET `{:?}` failed", url))
+			.map_err(|_| format!("GET `{url:?}` failed"))
 	}
 }
