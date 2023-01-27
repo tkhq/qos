@@ -7,7 +7,7 @@ edition = "2021"
 qos_core = { path = "../qos_core", default-features = false }
 
 # Third party
-axum = { version = "0.6.1", features = ["http1", "tokio"], default-features = false }
+axum = { version = "0.6.4", features = ["http1", "tokio"], default-features = false }
 tokio = { version = "1.23", features = ["macros", "rt-multi-thread"], default-features = false }
 borsh = { version = "0.9" }
 
