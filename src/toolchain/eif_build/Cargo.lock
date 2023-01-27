@@ -39,20 +39,6 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "aws-nitro-enclaves-cose"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e2fe3e862758ef5bb5d89868141ab28781d96347522b60eb6abeaf7f9acd4bc"
-dependencies = [
- "openssl",
- "serde",
- "serde_bytes",
- "serde_cbor",
- "serde_repr",
- "serde_with",
-]
-
-[[package]]
-name = "aws-nitro-enclaves-cose"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0705f682b7df79a5841e815364181f35efe0ef953a1363cf8e773d5bd23846a5"
@@ -71,7 +57,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c24e2101441ce8f8dd0799ce7e36c68571ecf5e3731190b277c63765aaed8c1c"
 dependencies = [
- "aws-nitro-enclaves-cose 0.5.0",
+ "aws-nitro-enclaves-cose",
  "byteorder",
  "chrono",
  "clap 3.2.23",
@@ -276,7 +262,7 @@ dependencies = [
 name = "eif_build"
 version = "0.1.0"
 dependencies = [
- "aws-nitro-enclaves-cose 0.4.0",
+ "aws-nitro-enclaves-cose",
  "aws-nitro-enclaves-image-format",
  "byteorder",
  "chrono",
