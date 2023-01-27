@@ -14,7 +14,7 @@ qos_hex = { path = "../qos_hex" }
 qos_p256 = { path = "../qos_p256", features = ["mock"] }
 qos_test_primitives = { path = "../qos_test_primitives" }
 
-tokio = { version = "1.18", features = ["macros", "rt-multi-thread"], default-features = false }
+tokio = { version = "1.24", features = ["macros", "rt-multi-thread"], default-features = false }
 
 [dev-dependencies]
 qos_core = { path = "../qos_core", features = ["mock"], default-features = false }
