@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-borsh = { version = "0.9" }
+borsh = { version = "0.10" }
 
 # For AWS Nitro
 aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }

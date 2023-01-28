@@ -1288,7 +1288,7 @@ version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
- "nix 0.24.2",
+ "nix 0.26.2",
  "qos_attest",
  "qos_crypto",
  "qos_hex",

@@ -123,7 +123,7 @@ pub enum ProtocolMsg {
 	},
 	/// Response to [`Self::RequestKeyRequest`]
 	RequestKeyResponse {
-		/// Quorum key encrypted to the Ephemeral key from the submitted
+		/// Quorum key encrypted to the Ephemeral Key from the submitted
 		/// attestation document.
 		encrypted_quorum_key: Vec<u8>,
 		/// Signature over the encrypted quorum key.

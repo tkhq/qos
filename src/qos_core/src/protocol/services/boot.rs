@@ -308,9 +308,7 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 
 	let ephemeral_key = P256Pair::generate()?;
 	state.handles.put_ephemeral_key(&ephemeral_key)?;
-
 	state.handles.put_pivot(pivot)?;
-
 	state.handles.put_manifest_envelope(manifest_envelope)?;
 
 	let nsm_response = attestation::get_post_boot_attestation_doc(
