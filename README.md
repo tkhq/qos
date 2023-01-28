@@ -86,6 +86,13 @@ Please make a PR to upload attestation signatures so that this trust can be
 preserved for other consumers of these binaries that may lack the resources
 to build for themselves.
 
+### Release ###
+
+Cut a new release to be attested/signed by others.
+
+```
+make VERSION=1.0.0 release
+```
 
 ## Development ##
 

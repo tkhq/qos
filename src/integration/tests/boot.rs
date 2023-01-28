@@ -55,8 +55,7 @@ async fn standard_boot_e2e() {
 
 	let namespace = "quit-coding-to-vape";
 
-	let personal_dir =
-		|user: &str| format!("{}/{}-dir", all_personal_dir, user);
+	let personal_dir = |user: &str| format!("{all_personal_dir}/{user}-dir");
 
 	let user1 = "user1";
 	let user2 = "user2";
@@ -76,7 +75,7 @@ async fn standard_boot_e2e() {
 
 	// -- CLIENT create manifest.
 	let msg = "testing420";
-	let pivot_args = format!("[--msg,{}]", msg);
+	let pivot_args = format!("[--msg,{msg}]");
 	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
 
 	assert!(Command::new("../target/debug/qos_client")

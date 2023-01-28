@@ -938,10 +938,8 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		let eph_pub_bytes = attestation_doc
 			.public_key
 			.expect("No ephemeral key in the attestation doc");
-		drop(
-			P256Public::from_bytes(&eph_pub_bytes)
-				.expect("Ephemeral key not valid public key"),
-		);
+		P256Public::from_bytes(&eph_pub_bytes)
+			.expect("Ephemeral key not valid public key");
 	}
 
 	Ok(())
@@ -1162,8 +1160,7 @@ where
 	// Check that the IAM role is correct
 	{
 		let prompt = format!(
-			"Does this AWS IAM role belong to the intended organization: {}? (yes/no)",
-			pcr3_preimage
+			"Does this AWS IAM role belong to the intended organization: {pcr3_preimage}? (yes/no)"
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
