@@ -12,7 +12,7 @@ fn shamir_commands_work() {
 	let reconstructed_secret_path: &str =
 		"/tmp/shamir_commands_works/reconstructed_secret";
 
-	std::fs::create_dir_all(&shares_dir).unwrap();
+	std::fs::create_dir_all(shares_dir).unwrap();
 	std::fs::write(secret_path, SECRET).unwrap();
 
 	assert!(Command::new("../target/debug/qos_client")

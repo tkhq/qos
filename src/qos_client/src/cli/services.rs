@@ -398,7 +398,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 			nsm_response: NsmResponse::Attestation { document },
 			genesis_output,
 		} => (document, genesis_output),
-		r => panic!("Unexpected response: {:?}", r),
+		r => panic!("Unexpected response: {r:?}"),
 	};
 	let quorum_key =
 		P256Public::from_bytes(&genesis_output.quorum_key).unwrap();
@@ -856,7 +856,7 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	};
 
 	if let Err(e) = manifest_envelope.check_approvals() {
-		eprintln!("Error with approvals: {:?}", e);
+		eprintln!("Error with approvals: {e:?}");
 		std::process::exit(1);
 	}
 
@@ -907,7 +907,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		ProtocolMsg::BootStandardResponse {
 			nsm_response: NsmResponse::Attestation { document },
 		} => document,
-		r => panic!("Unexpected response: {:?}", r),
+		r => panic!("Unexpected response: {r:?}"),
 	};
 
 	let attestation_doc =
@@ -930,10 +930,8 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		let eph_pub_bytes = attestation_doc
 			.public_key
 			.expect("No ephemeral key in the attestation doc");
-		drop(
-			P256Public::from_bytes(&eph_pub_bytes)
-				.expect("Ephemeral key not valid public key"),
-		);
+		P256Public::from_bytes(&eph_pub_bytes)
+			.expect("Ephemeral key not valid public key");
 	}
 
 	Ok(())
@@ -953,7 +951,7 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 				nsm_response: _,
 				manifest_envelope: None
 			}) => panic!("ManifestEnvelope does not exist in enclave - likely waiting for boot instruction"),
-			r => panic!("Unexpected response: {:?}", r),
+			r => panic!("Unexpected response: {r:?}"),
 		};
 
 	write_with_msg(
@@ -1003,7 +1001,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	let attestation_doc =
 		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
 	let encrypted_share = std::fs::read(share_path).map_err(|e| {
-		eprintln!("{:?}", e);
+		eprintln!("{e:?}");
 		Error::ReadShare
 	})?;
 
@@ -1025,7 +1023,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 
 	// Pull out the ephemeral key or use the override
 	let eph_pub: P256Public = if let Some(eph_path) = unsafe_eph_path_override {
-		P256Pair::from_hex_file(&eph_path)
+		P256Pair::from_hex_file(eph_path)
 			.expect("Could not read ephemeral key override")
 			.public_key()
 	} else {
@@ -1101,7 +1099,7 @@ fn proxy_re_encrypt_share_programmatic_verifications(
 	member: &QuorumMember,
 ) -> bool {
 	if let Err(e) = manifest_envelope.check_approvals() {
-		eprintln!("Manifest envelope did not have valid approvals: {:?}", e);
+		eprintln!("Manifest envelope did not have valid approvals: {e:?}");
 		return false;
 	};
 
@@ -1154,8 +1152,7 @@ where
 	// Check that the IAM role is correct
 	{
 		let prompt = format!(
-			"Does this AWS IAM role belong to the intended organization: {}? (yes/no)",
-			pcr3_preimage
+			"Does this AWS IAM role belong to the intended organization: {pcr3_preimage}? (yes/no)"
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1196,7 +1193,7 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	let req = ProtocolMsg::ProvisionRequest { share, approval };
 	let is_reconstructed = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::ProvisionResponse { reconstructed } => reconstructed,
-		r => panic!("Unexpected response: {:?}", r),
+		r => panic!("Unexpected response: {r:?}"),
 	};
 
 	if is_reconstructed {
@@ -1243,7 +1240,7 @@ pub(crate) fn verify<P: AsRef<Path>>(
 	let public = P256Public::from_hex_file(pub_path)?;
 
 	if let Err(e) = public.verify(&payload_bytes, &signature_bytes) {
-		println!("Signature not valid: {:?}", e);
+		println!("Signature not valid: {e:?}");
 		Err(e.into())
 	} else {
 		println!("Valid signature!");
@@ -1259,15 +1256,15 @@ pub(crate) fn display<P: AsRef<Path>>(
 	match *display_type {
 		DisplayType::Manifest => {
 			let decoded = Manifest::try_from_slice(&bytes)?;
-			println!("{:#?}", decoded);
+			println!("{decoded:#?}");
 		}
 		DisplayType::ManifestEnvelope => {
 			let decoded = ManifestEnvelope::try_from_slice(&bytes)?;
-			println!("{:#?}", decoded);
+			println!("{decoded:#?}");
 		}
 		DisplayType::GenesisOutput => {
 			let decoded = GenesisOutput::try_from_slice(&bytes)?;
-			println!("{:#?}", decoded);
+			println!("{decoded:#?}");
 		}
 	};
 	Ok(())
@@ -1361,12 +1358,12 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		ProtocolMsg::BootStandardResponse {
 			nsm_response: NsmResponse::Attestation { document },
 		} => extract_attestation_doc(&document, true),
-		r => panic!("Unexpected response: {:?}", r),
+		r => panic!("Unexpected response: {r:?}"),
 	};
 
 	// Pull out the ephemeral key or use the override
 	let eph_pub: P256Public = if let Some(eph_path) = unsafe_eph_path_override {
-		P256Pair::from_hex_file(&eph_path)
+		P256Pair::from_hex_file(eph_path)
 			.expect("Could not read ephemeral key override")
 			.public_key()
 	} else {
@@ -1400,7 +1397,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		ProtocolMsg::ProvisionResponse { reconstructed } => {
 			assert!(reconstructed, "Quorum Key was not reconstructed");
 		}
-		r => panic!("Unexpected response: {:?}", r),
+		r => panic!("Unexpected response: {r:?}"),
 	};
 
 	println!("Enclave should be finished booting!");
@@ -1445,7 +1442,7 @@ pub(crate) fn shamir_reconstruct(
 	let secret =
 		Zeroizing::new(qos_crypto::shamir::shares_reconstruct(&shares));
 
-	write_with_msg(output_path.as_ref(), &*secret, "Reconstructed secret");
+	write_with_msg(output_path.as_ref(), &secret, "Reconstructed secret");
 
 	Ok(())
 }
@@ -1548,28 +1545,26 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 }
 
 fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
-	let mut members: Vec<_> =
-		find_file_paths(&dir)
-			.iter()
-			.filter_map(|path| {
-				let mut file_name = split_file_name(path);
-				if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
-					return None;
-				};
+	let mut members: Vec<_> = find_file_paths(&dir)
+		.iter()
+		.filter_map(|path| {
+			let mut file_name = split_file_name(path);
+			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+				return None;
+			};
 
-				let public =
-					P256Public::from_hex_file(path)
-						.map_err(|e| {
-							panic!("Could not read hex from share_key.pub: {:?}: {:?}", path, e)
-						})
-						.unwrap();
-
-				Some(QuorumMember {
-					alias: mem::take(&mut file_name[0]),
-					pub_key: public.to_bytes(),
+			let public = P256Public::from_hex_file(path)
+				.map_err(|e| {
+					panic!("Could not read hex from share_key.pub: {path:?}: {e:?}")
 				})
+				.unwrap();
+
+			Some(QuorumMember {
+				alias: mem::take(&mut file_name[0]),
+				pub_key: public.to_bytes(),
 			})
-			.collect();
+		})
+		.collect();
 
 	// We want to try and build the same manifest regardless of the OS.
 	members.sort();
@@ -1828,7 +1823,7 @@ fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
 	fs::write(path, buf).unwrap_or_else(|_| {
 		panic!("Failed writing {} to file", path_str.clone())
 	});
-	println!("{} written to: {}", item_name, path_str);
+	println!("{item_name} written to: {path_str}");
 }
 
 struct Prompter<R, W> {
@@ -1842,7 +1837,7 @@ where
 	W: Write,
 {
 	fn prompt(&mut self, question: &str) -> String {
-		writeln!(&mut self.writer, "{}", question).expect("Unable to write");
+		writeln!(&mut self.writer, "{question}").expect("Unable to write");
 		let mut s = String::new();
 		let _amt = self.reader.read_line(&mut s).expect("Unable to read");
 		s.trim().to_string()

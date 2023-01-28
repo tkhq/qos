@@ -449,7 +449,7 @@ mod test {
 
 		match err_result {
 			Err(AttestError::InvalidCertChain(webpki::Error::CertExpired)) => {}
-			_ => panic!("{:?}", err_result),
+			_ => panic!("{err_result:?}"),
 		};
 	}
 
@@ -467,7 +467,7 @@ mod test {
 			Err(AttestError::InvalidCertChain(
 				webpki::Error::CertNotValidYet,
 			)) => {}
-			_ => panic!("{:?}", err_result),
+			_ => panic!("{err_result:?}"),
 		};
 	}
 
@@ -505,7 +505,7 @@ mod test {
 				Err(AttestError::InvalidCertChain(
 					webpki::Error::UnknownIssuer,
 				)) => {}
-				_ => panic!("{:?}", err_result),
+				_ => panic!("{err_result:?}"),
 			};
 		}
 
@@ -533,7 +533,7 @@ mod test {
 				Err(AttestError::InvalidCertChain(
 					webpki::Error::UnknownIssuer,
 				)) => {}
-				_ => panic!("{:?}", err_result),
+				_ => panic!("{err_result:?}"),
 			};
 		}
 
@@ -558,7 +558,7 @@ mod test {
 
 			match err_result {
 				Err(AttestError::InvalidCOSESign1Signature) => {}
-				_ => panic!("{:?}", err_result),
+				_ => panic!("{err_result:?}"),
 			};
 		}
 	}
@@ -596,7 +596,7 @@ mod test {
 			Err(AttestError::InvalidCertChain(
 				webpki::Error::UnknownIssuer,
 			)) => {}
-			_ => panic!("{:?}", err_result),
+			_ => panic!("{err_result:?}"),
 		};
 	}
 
@@ -624,7 +624,7 @@ mod test {
 
 		match err_result {
 			Err(AttestError::InvalidCOSESign1Signature) => {}
-			_ => panic!("{:?}", err_result),
+			_ => panic!("{err_result:?}"),
 		}
 	}
 

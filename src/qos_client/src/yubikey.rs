@@ -28,7 +28,7 @@ pub const DEFAULT_PIN: &[u8] = b"123456";
 const ALGO: AlgorithmId = AlgorithmId::EccP256;
 
 /// Errors for yubikey interaction
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum YubiKeyError {
 	/// Failed to generate a key.
 	FailedToGenerateKey,

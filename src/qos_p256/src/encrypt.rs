@@ -35,7 +35,7 @@ pub struct Envelope {
 
 /// P256 key pair
 #[derive(ZeroizeOnDrop)]
-#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq))]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct P256EncryptPair {
 	private: SecretKey,
 }
@@ -113,7 +113,7 @@ impl P256EncryptPair {
 }
 
 /// P256 Public key.
-#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq))]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct P256EncryptPublic {
 	public: PublicKey,
 }

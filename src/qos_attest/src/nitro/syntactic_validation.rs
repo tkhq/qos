@@ -93,7 +93,9 @@ pub(super) fn nonce(n: &Option<ByteBuf>) -> Result<(), AttestError> {
 
 fn bytes_512(val: &Option<ByteBuf>) -> Result<(), AttestError> {
 	if let Some(val) = val {
-		(val.len() <= 512).then(|| ()).ok_or(AttestError::InvalidBytes)?;
+		if val.len() > 512 {
+			return Err(AttestError::InvalidBytes);
+		}
 	}
 
 	Ok(())

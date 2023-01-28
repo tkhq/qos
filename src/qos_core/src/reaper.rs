@@ -74,7 +74,7 @@ impl Reaper {
 					.wait()
 					.expect("Pivot executable never started...");
 
-				println!("Pivot exited with status: {}", status);
+				println!("Pivot exited with status: {status}");
 				println!("Restarting pivot ...");
 				std::thread::sleep(std::time::Duration::from_secs(
 					BINARY_EXIT_RESTART_DELAY,
@@ -86,7 +86,7 @@ impl Reaper {
 					.expect("Failed to spawn")
 					.wait()
 					.expect("Pivot executable never started...");
-				println!("Pivot exited with status: {}", status);
+				println!("Pivot exited with status: {status}");
 			}
 		}
 
