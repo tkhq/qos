@@ -1,7 +1,7 @@
 DEBUG := false
 OUT_DIR := out
-RELEASE := $(shell TZ=UTC0 git show --quiet --date='format-local:%Y%m%dT%H%M%SZ' --format="%cd")
-RELEASE_DIR := releases/$(RELEASE)
+VERSION := $(shell TZ=UTC0 git show --quiet --date='format-local:%Y%m%dT%H%M%SZ' --format="%cd")
+RELEASE_DIR := releases/$(VERSION)
 KEY_DIR := keys
 SRC_DIR := src
 TARGET := generic
@@ -13,8 +13,20 @@ ARCH := x86_64
 , := ,
 UNAME_S := $(shell uname -s)
 CPUS := $(shell docker run -it debian nproc)
+GIT_REF := $(shell git log -1 --format=%H config)
+GIT_AUTHOR := $(shell git log -1 --format=%an config)
+GIT_KEY := $(shell git log -1 --format=%GP config)
+GIT_EPOCH := $(shell git log -1 --format=%at config)
+GIT_DATETIME := \
+	$(shell git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M:%S' config)
 
 include $(PWD)/config/global.env
+
+## Use env vars from existing release if present
+ifneq (,$(wildcard $(RELEASE_DIR)/release.env))
+    include $(RELEASE_DIR)/release.env
+    export
+endif
 
 .DEFAULT_GOAL := release
 
@@ -22,55 +34,30 @@ include $(PWD)/config/global.env
 #mkdir -p $(RELEASE_DIR)/generic
 #cp $(OUT_DIR)/generic/bzImage $(RELEASE_DIR)/generic/bzImage
 
+$(RELEASE_DIR):
+	mkdir -p $(RELEASE_DIR)
+
 .PHONY: release
-release: \
-	fetch \
-	$(RELEASE_DIR)/aws/pcrs.txt \
-	$(RELEASE_DIR)/aws/nitro.eif \
-	$(RELEASE_DIR)/qos_client \
-	$(RELEASE_DIR)/qos_host \
-	$(RELEASE_DIR)/manifest.txt
-
-$(RELEASE_DIR)/aws/pcrs.txt: \
-	$(OUT_DIR)/aws/nitro.eif
-	mkdir -p $(RELEASE_DIR)/aws
-	cp $(OUT_DIR)/aws/pcrs.txt $(RELEASE_DIR)/aws/pcrs.txt
-
-$(RELEASE_DIR)/aws/nitro.eif: \
-	$(OUT_DIR)/aws/nitro.eif
-	mkdir -p $(RELEASE_DIR)/aws
-	cp $(OUT_DIR)/aws/nitro.eif $(RELEASE_DIR)/aws/nitro.eif
-
-$(RELEASE_DIR)/qos_host: \
-	$(OUT_DIR)/qos_host
+release: | \
+	$(RELEASE_DIR) \
+	$(OUT_DIR)/release.env \
+	$(OUT_DIR)/aws-nitro.eif \
+	$(OUT_DIR)/aws-pcrs.txt \
+	$(OUT_DIR)/qos_client \
+	$(OUT_DIR)/qos_host \
+	$(OUT_DIR)/manifest.txt
+	cp $(OUT_DIR)/release.env $(RELEASE_DIR)/release.env
+	cp $(OUT_DIR)/aws-pcrs.txt $(RELEASE_DIR)/aws-pcrs.txt
+	cp $(OUT_DIR)/aws-nitro.eif $(RELEASE_DIR)/aws-nitro.eif
 	cp $(OUT_DIR)/qos_host $(RELEASE_DIR)/qos_host
-
-$(RELEASE_DIR)/qos_client: \
-	$(OUT_DIR)/qos_client
 	cp $(OUT_DIR)/qos_client $(RELEASE_DIR)/qos_client
-
-$(RELEASE_DIR)/manifest.txt: \
-	$(RELEASE_DIR)/aws/pcrs.txt \
-	$(RELEASE_DIR)/aws/nitro.eif \
-	$(RELEASE_DIR)/qos_client \
-	$(RELEASE_DIR)/qos_host
-	openssl sha256 -r $(RELEASE_DIR)/aws/pcrs.txt \
-		> $(RELEASE_DIR)/manifest.txt;
-	openssl sha256 -r $(RELEASE_DIR)/aws/nitro.eif \
-		>> $(RELEASE_DIR)/manifest.txt;
-	openssl sha256 -r $(RELEASE_DIR)/qos_client \
-		>> $(RELEASE_DIR)/manifest.txt;
-	openssl sha256 -r $(RELEASE_DIR)/qos_host \
-		>> $(RELEASE_DIR)/manifest.txt;
+	cp $(OUT_DIR)/manifest.txt $(RELEASE_DIR)/manifest.txt
 
 .PHONY: attest
 attest: $(RELEASE_DIR)/manifest.txt
-	cp $(RELEASE_DIR)/manifest.txt manifest_compare.txt
-	$(MAKE) clean
-	mkdir -p $(CACHE_DIR)
-	mv manifest_compare.txt $(CACHE_DIR)
-	$(MAKE) release
-	diff -q $(CACHE_DIR)/manifest_compare.txt $(RELEASE_DIR)/manifest.txt;
+	rm -rf $(CACHE_DIR) $(OUT_DIR)
+	$(MAKE) $(OUT_DIR)/manifest.txt
+	diff -q $(OUT_DIR)/manifest.txt $(RELEASE_DIR)/manifest.txt;
 
 .PHONY: sign
 sign: $(RELEASE_DIR)/manifest.txt
@@ -105,7 +92,7 @@ clean:
 
 # Launch a shell inside the toolchain container
 .PHONY: toolchain-shell
-toolchain-shell: $(OUT_DIR)/toolchain.tar
+toolchain-shell: $(CACHE_DIR)/toolchain.tar
 	$(call toolchain,root,bash)
 
 # Pin all packages in toolchain container to latest versions
@@ -127,7 +114,7 @@ toolchain-update:
 # Source anything required from the internet to build
 .PHONY: fetch
 fetch: \
-	$(OUT_DIR)/toolchain.tar \
+	$(CACHE_DIR)/toolchain.tar \
 	keys \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign \
@@ -165,7 +152,7 @@ $(CACHE_DIR)/$(TARGET):
 	mkdir -p $(CACHE_DIR)/$(TARGET)
 
 $(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD: \
-	$(OUT_DIR)/toolchain.tar
+	$(CACHE_DIR)/toolchain.tar
 	$(call toolchain,$(USER), " \
 		unset FAKETIME; \
 		cd /cache; \
@@ -189,7 +176,7 @@ $(CACHE_DIR)/linux-$(LINUX_VERSION).tar:
 	xz -d $(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz
 
 $(CACHE_DIR)/linux-$(LINUX_VERSION): \
-	$(OUT_DIR)/toolchain.tar \
+	$(CACHE_DIR)/toolchain.tar \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
 	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign
 	$(call toolchain,$(USER), " \
@@ -200,7 +187,24 @@ $(CACHE_DIR)/linux-$(LINUX_VERSION): \
 		tar xf linux-$(LINUX_VERSION).tar; \
 	")
 
-$(OUT_DIR)/toolchain.tar: \
+$(OUT_DIR)/manifest.txt: \
+	$(OUT_DIR)/aws-pcrs.txt \
+	$(OUT_DIR)/aws-nitro.eif \
+	$(OUT_DIR)/qos_client \
+	$(OUT_DIR)/qos_host \
+	$(OUT_DIR)/release.env
+	openssl sha256 -r $(OUT_DIR)/release.env \
+		>> $(OUT_DIR)/manifest.txt;
+	openssl sha256 -r $(OUT_DIR)/aws-pcrs.txt \
+		> $(OUT_DIR)/manifest.txt;
+	openssl sha256 -r $(OUT_DIR)/aws-nitro.eif \
+		>> $(OUT_DIR)/manifest.txt;
+	openssl sha256 -r $(OUT_DIR)/qos_client \
+		>> $(OUT_DIR)/manifest.txt;
+	openssl sha256 -r $(OUT_DIR)/qos_host \
+		>> $(OUT_DIR)/manifest.txt;
+
+$(CACHE_DIR)/toolchain.tar: \
 	$(OUT_DIR)/$(TARGET) \
 	$(CACHE_DIR)/$(TARGET)
 	DOCKER_BUILDKIT=1 \
@@ -217,7 +221,7 @@ $(OUT_DIR)/toolchain.tar: \
 	docker save "local/$(NAME)-build" -o "$@"
 
 $(CONFIG_DIR)/$(TARGET)/linux.config: \
-	$(OUT_DIR)/toolchain.tar
+	$(CACHE_DIR)/toolchain.tar
 	$(call toolchain,$(USER)," \
 		unset FAKETIME && \
 		cd /cache/linux-$(LINUX_VERSION) && \
@@ -225,8 +229,23 @@ $(CONFIG_DIR)/$(TARGET)/linux.config: \
 		cp .config /config/$(TARGET)/linux.config; \
 	")
 
+$(OUT_DIR):
+	mkdir -p $(OUT_DIR)
+
+$(OUT_DIR)/release.env: $(OUT_DIR)
+	test "$(VERSION)"
+	echo 'VERSION=$(VERSION)'            > $(OUT_DIR)/release.env
+	test "$(GIT_REF)"
+	echo 'GIT_REF=$(GIT_REF)'           >> $(OUT_DIR)/release.env
+	test "$(GIT_AUTHOR)"
+	echo 'GIT_AUTHOR=$(GIT_AUTHOR)'     >> $(OUT_DIR)/release.env
+	test "$(GIT_KEY)"
+	echo 'GIT_KEY=$(GIT_KEY)'           >> $(OUT_DIR)/release.env
+	test "$(GIT_DATETIME)"
+	echo 'GIT_DATETIME=$(GIT_DATETIME)' >> $(OUT_DIR)/release.env
+
 $(OUT_DIR)/init: \
-	$(OUT_DIR)/toolchain.tar
+	$(CACHE_DIR)/toolchain.tar
 	$(call toolchain,$(USER)," \
 		cd /src/init/ && \
 		unset FAKETIME && \
@@ -238,7 +257,7 @@ $(OUT_DIR)/init: \
 	")
 
 $(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio: \
-	$(OUT_DIR)/toolchain.tar \
+	$(CACHE_DIR)/toolchain.tar \
 	| $(CACHE_DIR)/linux-$(LINUX_VERSION)
 	$(call toolchain,$(USER)," \
 		cd /cache/linux-$(LINUX_VERSION) && \
@@ -265,7 +284,7 @@ $(OUT_DIR)/aws/bzImage: \
 	$(call kernel_build,aws,$(ARCH))
 
 $(OUT_DIR)/aws/eif_build: \
-	$(OUT_DIR)/toolchain.tar
+	$(CACHE_DIR)/toolchain.tar
 	$(call toolchain,$(USER)," \
 		unset FAKETIME && \
 		cd /src/toolchain/eif_build && \
@@ -276,7 +295,7 @@ $(OUT_DIR)/aws/eif_build: \
 	")
 
 $(OUT_DIR)/qos_host: \
-	$(OUT_DIR)/toolchain.tar
+	$(CACHE_DIR)/toolchain.tar
 	$(call toolchain,$(USER)," \
 		unset FAKETIME; \
 		export RUSTFLAGS='-C target-feature=+crt-static' && \
@@ -290,19 +309,20 @@ $(OUT_DIR)/qos_host: \
 	")
 
 $(OUT_DIR)/qos_client: \
-	$(OUT_DIR)/toolchain.tar
+	$(CACHE_DIR)/toolchain.tar
 	$(call toolchain,$(USER)," \
 		unset FAKETIME; \
 		export RUSTFLAGS='-C target-feature=+crt-static' && \
 		cd /src/qos_client \
 		&& CARGO_HOME=/cache/cargo cargo build \
 			--target x86_64-unknown-linux-gnu \
+			--no-default-features \
 			--release \
 		&& cp /src/target/x86_64-unknown-linux-gnu/release/qos_client /out/; \
 	")
 
 $(OUT_DIR)/aws/nsm.ko: \
-	$(OUT_DIR)/toolchain.tar \
+	$(CACHE_DIR)/toolchain.tar \
 	$(OUT_DIR)/aws/bzImage \
 	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD
 	$(call toolchain,$(USER)," \
@@ -316,8 +336,8 @@ $(OUT_DIR)/aws/nsm.ko: \
 		&& cp nsm-driver/nsm.ko /out/aws/nsm.ko; \
 	")
 
-$(OUT_DIR)/aws/nitro.eif: \
-	$(OUT_DIR)/toolchain.tar \
+$(OUT_DIR)/aws-nitro.eif $(OUT_DIR)/aws-pcrs.txt: \
+	$(CACHE_DIR)/toolchain.tar \
 	$(OUT_DIR)/aws/eif_build \
 	$(OUT_DIR)/aws/bzImage \
 	$(OUT_DIR)/aws/rootfs.cpio
@@ -334,8 +354,8 @@ $(OUT_DIR)/aws/nitro.eif: \
 			--kernel_config /cache/aws/eif/linux.config \
 			--cmdline 'reboot=k initrd=0x2000000$(,)3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd' \
 			--ramdisk /cache/aws/eif/rootfs.cpio \
-			--output /out/aws/nitro.eif \
-			--pcrs_output /out/aws/pcrs.txt; \
+			--output /out/aws-nitro.eif \
+			--pcrs_output /out/aws-pcrs.txt; \
 	")
 
 define fetch_pgp_key
@@ -360,7 +380,7 @@ define fetch_pgp_key
 endef
 
 define toolchain
-	docker load -i $(OUT_DIR)/toolchain.tar
+	docker load -i $(CACHE_DIR)/toolchain.tar
 	docker run \
 		--rm \
 		--tty \
