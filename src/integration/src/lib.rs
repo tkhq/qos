@@ -27,8 +27,7 @@ pub const LOCAL_HOST: &str = "127.0.0.1";
 /// PCR3 image associated with the preimage in `./mock/pcr3-preimage.txt`.
 pub const PCR3: &str = "78fce75db17cd4e0a3fb8dad3ad128ca5e77edbb2b2c7f75329dccd99aa5f6ef4fc1f1a452e315b9e98f9e312e6921e6";
 /// Directory with mock QOS release artifacts.
-pub const MOCK_QOS_RELEASE_DIR: &str =
-	"./mock/boot-e2e/releases/20221209T174513Z";
+pub const MOCK_QOS_RELEASE_DIR: &str = "./mock/boot-e2e/releases/0.1rc1";
 
 const MSG: &str = "msg";
 
