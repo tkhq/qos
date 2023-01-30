@@ -1727,10 +1727,10 @@ fn extract_qos_release_manifest<P: AsRef<Path>>(
 	let entries = lines_to_entries(manifest_path);
 
 	QosReleaseManifest {
-		pcrs_hash: get_entry(&entries, 0, "*release/aws-pcrs.txt"),
-		_nitro_eif_hash: get_entry(&entries, 1, "*release/aws-nitro.eif"),
-		_qos_client_hash: get_entry(&entries, 2, "*release/qos_client"),
-		_qos_host_hash: get_entry(&entries, 3, "*release/qos_host"),
+		pcrs_hash: get_entry(&entries, 0, "*out/aws-pcrs.txt"),
+		_nitro_eif_hash: get_entry(&entries, 1, "*out/aws-nitro.eif"),
+		_qos_client_hash: get_entry(&entries, 2, "*out/qos_client"),
+		_qos_host_hash: get_entry(&entries, 3, "*out/qos_host"),
 	}
 }
 
