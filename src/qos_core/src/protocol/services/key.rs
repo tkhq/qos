@@ -38,7 +38,7 @@ pub(in crate::protocol) fn request_key(
 	request_key_internal(state, new_manifest_envelope, &attestation_doc)
 }
 
-// Primary of `request_key` pulled out to make testing easier.
+// Primary logic of `request_key` pulled out so it can be unit tested.
 fn request_key_internal(
 	state: &mut ProtocolState,
 	new_manifest_envelope: &ManifestEnvelope,
