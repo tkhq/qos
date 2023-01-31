@@ -380,7 +380,7 @@ mod test {
 				SocketAddress::new_unix("./never.sock"),
 			);
 
-			// Remove an approval
+			// Use a different pivot then what is referenced in the manifest
 			let other_pivot = b"other pivot".to_vec();
 			let err =
 				boot_key_forward(&mut state, &manifest_envelope, &other_pivot);
@@ -413,11 +413,11 @@ mod test {
 				SocketAddress::new_unix("./never.sock"),
 			);
 
+			// Change the signature to something invalid
 			manifest_envelope.manifest_set_approvals[0].signature = vec![1; 32];
 			let bad_approval =
 				manifest_envelope.manifest_set_approvals[0].clone();
 
-			// Remove an approval
 			let err = boot_key_forward(&mut state, &manifest_envelope, &pivot);
 			assert_eq!(
 				Err(ProtocolError::InvalidManifestApproval(bad_approval)),
@@ -462,9 +462,10 @@ mod test {
 				handles.clone(),
 				SocketAddress::new_unix("./never.sock"),
 			);
+
+			// Add an approval from a random key
 			manifest_envelope.manifest_set_approvals.push(non_member_approval);
 
-			// Remove an approval
 			let err = boot_key_forward(&mut state, &manifest_envelope, &pivot);
 			assert_eq!(Err(ProtocolError::NotManifestSetMember), err,);
 
@@ -573,13 +574,12 @@ mod test {
 				.manifest
 				.manifest_set
 				.members
-				.pop()
-				.unwrap();
+				.remove(2);
 			old_manifest_envelope
 				.manifest
 				.manifest_set
 				.members
-				.push(last_member);
+				.insert(0, last_member);
 
 			assert!(validate_manifest(
 				&manifest_envelope,
@@ -812,7 +812,6 @@ mod test {
 			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
 
-			// Don't update the manifest hash in the attestation doc
 			new_manifest_envelope.manifest_set_approvals.pop().unwrap();
 			assert_eq!(
 				validate_manifest(
@@ -829,7 +828,6 @@ mod test {
 			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
 
-			// Don't update the manifest hash in the attestation doc
 			new_manifest_envelope.manifest_set_approvals[0].signature =
 				vec![1; 32];
 			let bad_approval =
@@ -861,6 +859,7 @@ mod test {
 					.unwrap(),
 				member: non_member,
 			};
+			// Add approval from random key
 			new_manifest_envelope
 				.manifest_set_approvals
 				.push(non_member_approval);

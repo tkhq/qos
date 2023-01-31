@@ -153,7 +153,7 @@ async fn standard_boot_e2e() {
 		pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
 		pcr3: qos_hex::decode(PCR3).unwrap(),
 		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
-		qos_commit: "TODO: put commit in build artifacts".to_string(),
+		qos_commit: "1adfc4213c1b0ccba696b392bc6a2ee792487017".to_string(),
 	};
 	assert_eq!(manifest.enclave, enclave);
 
