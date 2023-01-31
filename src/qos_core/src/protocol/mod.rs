@@ -142,6 +142,14 @@ pub enum ProtocolError {
 	MissingEphemeralKey,
 	/// Ephemeral key cannot be decoded.
 	InvalidEphemeralKey,
+	/// Invalid signature over the encrypted quorum key.
+	InvalidEncryptedQuorumKeySignature,
+	/// Incorrect length for encrypted quorum key
+	EncryptedQuorumKeyIncorrectLen,
+	/// The quorum secret was invalid.
+	InvalidQuorumSecret,
+	/// The injected quorum key was not the expected key.
+	WrongQuorumKey,
 }
 
 impl From<std::io::Error> for ProtocolError {
@@ -237,39 +245,43 @@ impl Executor {
 				vec![Box::new(handlers::status)]
 			}
 			ProtocolPhase::WaitingForBootInstruction => vec![
+				// baseline routes
 				Box::new(handlers::status),
+				Box::new(handlers::nsm_request),
+				// phase specific routes
 				Box::new(handlers::boot_genesis),
 				Box::new(handlers::boot_standard),
 				Box::new(handlers::boot_key_forward),
-				// Below are here just for development convenience
-				Box::new(handlers::nsm_request),
 			],
 			ProtocolPhase::WaitingForQuorumShards => {
 				vec![
+					// baseline routes
 					Box::new(handlers::status),
 					Box::new(handlers::nsm_request),
 					Box::new(handlers::live_attestation_doc),
-					//
+					// phase specific routes
 					Box::new(handlers::provision),
 				]
 			}
 			ProtocolPhase::QuorumKeyProvisioned => {
 				vec![
+					// baseline routes
 					Box::new(handlers::status),
 					Box::new(handlers::nsm_request),
 					Box::new(handlers::live_attestation_doc),
-					//
+					// phase specific routes
 					Box::new(handlers::proxy),
 					Box::new(handlers::request_key),
 				]
 			}
 			ProtocolPhase::WaitingForForwardedKey => {
 				vec![
+					// baseline routes
 					Box::new(handlers::status),
 					Box::new(handlers::nsm_request),
 					Box::new(handlers::live_attestation_doc),
-					//
-					// Box::new(handlers::inject_key)
+					// phase specific routes
+					Box::new(handlers::inject_key),
 				]
 			}
 		}
@@ -316,7 +328,7 @@ impl server::RequestProcessor for Executor {
 }
 
 mod handlers {
-	use super::services::attestation;
+	use super::services::{attestation, key::EncryptedQuorumKey};
 	use crate::protocol::{
 		msg::ProtocolMsg,
 		services::{boot, genesis, key, provision},
@@ -486,20 +498,47 @@ mod handlers {
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::RequestKeyRequest {
 			manifest_envelope,
-			cose_sign1_attestation_document,
+			cose_sign1_attestation_doc,
 		} = req
 		{
 			match key::request_key(
 				state,
 				manifest_envelope,
-				cose_sign1_attestation_document,
+				cose_sign1_attestation_doc,
 			) {
-				Ok((encrypted_quorum_key, signature)) => {
+				Ok(EncryptedQuorumKey { encrypted_quorum_key, signature }) => {
 					Some(ProtocolMsg::RequestKeyResponse {
 						encrypted_quorum_key,
 						signature,
 					})
 				}
+				Err(e) => {
+					state.phase = ProtocolPhase::UnrecoverableError;
+					Some(ProtocolMsg::ProtocolErrorResponse(e))
+				}
+			}
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn inject_key(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> Option<ProtocolMsg> {
+		if let ProtocolMsg::InjectKeyRequest {
+			encrypted_quorum_key,
+			signature,
+		} = req
+		{
+			match key::inject_key(
+				state,
+				EncryptedQuorumKey {
+					encrypted_quorum_key: encrypted_quorum_key.clone(),
+					signature: signature.clone(),
+				},
+			) {
+				Ok(()) => Some(ProtocolMsg::InjectKeyResponse),
 				Err(e) => {
 					state.phase = ProtocolPhase::UnrecoverableError;
 					Some(ProtocolMsg::ProtocolErrorResponse(e))

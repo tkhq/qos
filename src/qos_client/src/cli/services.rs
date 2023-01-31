@@ -21,6 +21,7 @@ use qos_core::protocol::{
 			NitroConfig, PivotConfig, QuorumMember, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisOutput, GenesisSet},
+		key::EncryptedQuorumKey,
 	},
 	QosHash,
 };
@@ -117,6 +118,11 @@ pub enum Error {
 	/// corresponding release manifest.
 	PcrTxtHashDoesNotMatchReleaseManifest,
 	QosAttest(String),
+	/// Pivot file
+	FailedToReadPivot(std::io::Error),
+	UnexpectedProtocolMsgResponse(String),
+	FailedToReadEncryptedQuorumKey,
+	InvalidEncryptedQuorumKey,
 }
 
 impl From<borsh::maybestd::io::Error> for Error {
@@ -879,6 +885,97 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	Ok(())
 }
 
+pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
+	uri: &str,
+	manifest_envelope_path: P,
+	pivot_path: P,
+	attestation_doc_path: P,
+) -> Result<(), Error> {
+	let pivot =
+		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
+	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;
+
+	let req = ProtocolMsg::BootKeyForwardRequest {
+		manifest_envelope: Box::new(manifest_envelope),
+		pivot,
+	};
+	let cose_sign1 = match request::post(uri, &req).unwrap() {
+		ProtocolMsg::BootKeyForwardResponse {
+			nsm_response: NsmResponse::Attestation { document },
+		} => document,
+		r => {
+			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")))
+		}
+	};
+
+	write_with_msg(
+		attestation_doc_path.as_ref(),
+		&cose_sign1,
+		"COSE Sign1 Attestation Doc",
+	);
+
+	Ok(())
+}
+
+pub(crate) fn request_key<P: AsRef<Path>>(
+	uri: &str,
+	manifest_envelope_path: P,
+	attestation_doc_path: P,
+	encrypted_quorum_key_path: P,
+) -> Result<(), Error> {
+	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;
+	let cose_sign1_attestation_doc = fs::read(attestation_doc_path.as_ref())
+		.map_err(Error::FailedToReadAttestationDoc)?;
+
+	let req = ProtocolMsg::RequestKeyRequest {
+		manifest_envelope: Box::new(manifest_envelope),
+		cose_sign1_attestation_doc,
+	};
+
+	let encrypted_quorum_key = match request::post(uri, &req).unwrap() {
+		ProtocolMsg::RequestKeyResponse { encrypted_quorum_key, signature } => {
+			EncryptedQuorumKey { encrypted_quorum_key, signature }
+		}
+		r => {
+			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")))
+		}
+	};
+
+	write_with_msg(
+		encrypted_quorum_key_path.as_ref(),
+		&encrypted_quorum_key.try_to_vec().expect("valid borsh. qed."),
+		"Encrypted Quorum Key",
+	);
+
+	Ok(())
+}
+
+pub(crate) fn inject_key<P: AsRef<Path>>(
+	uri: &str,
+	encrypted_quorum_key_path: P,
+) -> Result<(), Error> {
+	let encrypted_quorum_key = {
+		let bytes = std::fs::read(encrypted_quorum_key_path)
+			.map_err(|_| Error::FailedToReadEncryptedQuorumKey)?;
+		EncryptedQuorumKey::try_from_slice(&bytes)
+			.map_err(|_| Error::InvalidEncryptedQuorumKey)?
+	};
+
+	let req = ProtocolMsg::InjectKeyRequest {
+		encrypted_quorum_key: encrypted_quorum_key.encrypted_quorum_key,
+		signature: encrypted_quorum_key.signature,
+	};
+
+	match request::post(uri, &req).unwrap() {
+		ProtocolMsg::InjectKeyResponse => println!("Successful key injection!"),
+		r => {
+			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")))
+		}
+	};
+
+	Ok(())
+}
+
 pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
 	pub uri: String,
 	pub pivot_path: P,
@@ -898,7 +995,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	// Read in pivot binary
 	let pivot =
-		fs::read(pivot_path.as_ref()).expect("Failed to read pivot binary");
+		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
 
 	// Create manifest envelope
 	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;

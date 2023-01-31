@@ -18,6 +18,8 @@ pub const PIVOT_OK_PATH: &str = "../target/debug/pivot_ok";
 pub const PIVOT_OK2_PATH: &str = "../target/debug/pivot_ok2";
 /// Path to pivot_ok3 bin for tests.
 pub const PIVOT_OK3_PATH: &str = "../target/debug/pivot_ok3";
+/// Path to pivot_ok4 bin for tests.
+pub const PIVOT_LOOP_PATH: &str = "../target/debug/pivot_loop";
 /// Path to pivot_abort bin for tests.
 pub const PIVOT_ABORT_PATH: &str = "../target/debug/pivot_abort";
 /// Path to pivot panic for tests.

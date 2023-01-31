@@ -59,6 +59,7 @@ const DISPLAY_TYPE: &str = "display-type";
 const DR_KEY_PATH: &str = "dr-key-path";
 const CURRENT_PIN_PATH: &str = "current-pin-path";
 const NEW_PIN_PATH: &str = "new-pin-path";
+const ENCRYPTED_QUORUM_KEY_PATH: &str = "encrypted-quorum-key-path";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -186,6 +187,14 @@ pub enum Command {
 	YubiKeyPivReset,
 	/// Change the pin of the PIV app on the yubikey.
 	YubiKeyChangePin,
+	/// Send the boot instruction for the enclave to start the key forwarding
+	/// process.
+	BootKeyFwd,
+	/// Request a quorum key from a fully provisioned enclave as part of the
+	/// key forwarding flow.
+	RequestKey,
+	/// Inject a quorum key into a non-fully provisioned enclave
+	InjectKey,
 }
 
 impl From<&str> for Command {
@@ -217,6 +226,9 @@ impl From<&str> for Command {
 			"yubikey-piv-reset" => Self::YubiKeyPivReset,
 			"yubikey-change-pin" => Self::YubiKeyChangePin,
 			"display" => Self::Display,
+			"boot-key-fwd" => Self::BootKeyFwd,
+			"request-key" => Self::RequestKey,
+			"inject-key" => Self::InjectKey,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -477,6 +489,11 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn encrypted_quorum_key_path_token() -> Token {
+		Token::new(ENCRYPTED_QUORUM_KEY_PATH, "Path to encrypted quorum key.")
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -670,6 +687,24 @@ impl Command {
 			.token(Self::file_path_token())
 			.token(Self::display_type_token())
 	}
+
+	fn boot_key_fwd() -> Parser {
+		Self::base()
+			.token(Self::manifest_envelope_path_token())
+			.token(Self::pivot_path_token())
+			.token(Self::attestation_doc_path_token())
+	}
+
+	fn request_key() -> Parser {
+		Self::base()
+			.token(Self::manifest_envelope_path_token())
+			.token(Self::attestation_doc_path_token())
+			.token(Self::encrypted_quorum_key_path_token())
+	}
+
+	fn inject_key() -> Parser {
+		Self::base().token(Self::encrypted_quorum_key_path_token())
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -705,6 +740,9 @@ impl GetParserForCommand for Command {
 			Self::YubiKeyPivReset => Parser::new(),
 			Self::YubiKeyChangePin => Self::yubikey_change_pin(),
 			Self::Display => Self::display(),
+			Self::BootKeyFwd => Self::boot_key_fwd(),
+			Self::RequestKey => Self::request_key(),
+			Self::InjectKey => Self::inject_key(),
 		}
 	}
 }
@@ -969,6 +1007,13 @@ impl ClientOpts {
 		self.parsed.single(CURRENT_PIN_PATH).map(Into::into)
 	}
 
+	fn encrypted_quorum_key_path(&self) -> String {
+		self.parsed
+			.single(ENCRYPTED_QUORUM_KEY_PATH)
+			.expect("Missing `--encrypted-quorum-key-path`")
+			.to_string()
+	}
+
 	fn yubikey(&self) -> bool {
 		self.parsed.flag(YUBIKEY).unwrap_or(false)
 	}
@@ -1063,6 +1108,9 @@ impl ClientRunner {
 				Command::Display => {
 					handlers::display(&self.opts);
 				}
+				Command::BootKeyFwd => handlers::boot_key_fwd(&self.opts),
+				Command::RequestKey => handlers::request_key(&self.opts),
+				Command::InjectKey => handlers::inject_key(&self.opts),
 			}
 		}
 	}
@@ -1470,6 +1518,40 @@ mod handlers {
 				std::process::exit(1);
 			}
 			Ok(p) => p,
+		}
+	}
+
+	pub(super) fn boot_key_fwd(opts: &ClientOpts) {
+		if let Err(e) = services::boot_key_fwd(
+			&opts.path_message(),
+			opts.manifest_envelope_path(),
+			opts.pivot_path(),
+			opts.attestation_doc_path(),
+		) {
+			println!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn request_key(opts: &ClientOpts) {
+		if let Err(e) = services::request_key(
+			&opts.path_message(),
+			opts.manifest_envelope_path(),
+			opts.attestation_doc_path(),
+			opts.encrypted_quorum_key_path(),
+		) {
+			println!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn inject_key(opts: &ClientOpts) {
+		if let Err(e) = services::inject_key(
+			&opts.path_message(),
+			opts.encrypted_quorum_key_path(),
+		) {
+			println!("Error: {e:?}");
+			std::process::exit(1);
 		}
 	}
 }
