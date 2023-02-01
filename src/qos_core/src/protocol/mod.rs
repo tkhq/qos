@@ -268,7 +268,7 @@ impl Executor {
 					Box::new(handlers::status),
 					Box::new(handlers::nsm_request),
 					Box::new(handlers::live_attestation_doc),
-					//
+					// TODO(zeke): Add inject key route
 					// Box::new(handlers::inject_key)
 				]
 			}

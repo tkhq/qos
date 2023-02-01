@@ -19,9 +19,7 @@ pub(in crate::protocol) fn boot_key_forward(
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	let nsm_response = put_manifest_and_pivot(state, manifest_envelope, pivot)?;
-
 	state.phase = ProtocolPhase::WaitingForForwardedKey;
-
 	Ok(nsm_response)
 }
 
