@@ -124,3 +124,18 @@ Continued reading for attesting with nitro enclaves:
 - <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html>
 - <https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html>
 - <https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html>
+
+### Enclave Data Flow
+
+Nitro enclaves have a single socket for communicating to its EC2 instance. When QuorumOS initially starts up, it starts listening on a [socket server](./qos_core/src/server.rs) for [`ProtocolMsg`s](./qos_core/src/protocol/msg.rs) (the routing logic for the enclave server is [here](src/qos_core/src/protocol/mod.rs)) that are sent over a single VSOCK connection with the EC2 instance. The enclave server only supports simple request/response communication with a client on the EC2 instance end of the VSOCK connection.
+
+For communicating just with the QuorumOS enclave server, we have [`qos_host`](./qos_host/src/lib.rs), a simple HTTP service that allows for `GET`ing health checks and `POST`ing `ProtocolMsg`s.
+
+We expect that Enclave Apps will have their own host (app host) that will talk to the enclave server over the same socket. A Enclave App is expected to use a simple request/response pattern and arbitrary message serialization. Communication to an app is proxied by the QuorumOS enclave server; so for a app host to communicate with the app it must send a `ProtocolMsg::ProxyRequest { data: Vec<u8> }` to the QuorumOS enclave server, and then the enclave server will send just the `data` to the application over a unix socket. The app will respond to the enclave server with raw data and then the enclave server will respond to the app host with `ProtocolMsg::ProxyResponse { data: Vec<u8> }`.
+
+We expect an EC2 instance to have both a QuorumOS host for booting the enclave and doing health checks and an app host for app specific communication.
+
+Below is a diagram showing the aforementioned app data flow. The diagram mentions gRPC just as an arbitrary example for a protocol that an app caller would use to communicate with the app host.
+
+![Enclave App Data Flow Diagram](./static/enclave-app-data-flow.png)
+[Excalidraw link](https://app.excalidraw.com/s/6bemxcXUAIE/251cQGJS1by)
