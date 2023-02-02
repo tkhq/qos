@@ -2,7 +2,6 @@ use qos_system::{dmesg, freopen, mount, reboot, seed_entropy};
 use qos_core::{
     handles::Handles,
     io::SocketAddress,
-    protocol::attestor::Nsm,
     reaper::Reaper,
     EPHEMERAL_KEY_FILE,
     MANIFEST_FILE,
@@ -10,6 +9,7 @@ use qos_core::{
     QUORUM_FILE,
     SEC_APP_SOCK,
 };
+qos_nsm::Nsm,
 
 //TODO: Feature flag
 use qos_aws::{get_entropy, init_platform};

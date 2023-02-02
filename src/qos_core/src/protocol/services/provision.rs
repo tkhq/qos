@@ -119,6 +119,7 @@ mod test {
 	use std::path::Path;
 
 	use qos_crypto::{sha_256, shamir::shares_generate};
+	use qos_nsm::mock::MockNsm;
 	use qos_p256::P256Pair;
 	use qos_test_primitives::PathWrapper;
 
@@ -127,7 +128,6 @@ mod test {
 		handles::Handles,
 		io::SocketAddress,
 		protocol::{
-			attestor::mock::MockNsm,
 			services::{
 				boot::{
 					Approval, Manifest, ManifestEnvelope, ManifestSet,

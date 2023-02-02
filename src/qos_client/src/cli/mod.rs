@@ -1082,7 +1082,7 @@ impl CLI {
 }
 
 mod handlers {
-	use qos_core::protocol::attestor::types::{NsmRequest, NsmResponse};
+	use qos_nsm::types::{NsmRequest, NsmResponse};
 
 	use super::services::{ApproveManifestArgs, ProxyReEncryptShareArgs};
 	use crate::{

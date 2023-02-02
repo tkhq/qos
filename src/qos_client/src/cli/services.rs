@@ -14,7 +14,6 @@ use qos_attest::nitro::{
 	verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
 };
 use qos_core::protocol::{
-	attestor::types::NsmResponse,
 	msg::ProtocolMsg,
 	services::{
 		boot::{
@@ -26,6 +25,7 @@ use qos_core::protocol::{
 	QosHash,
 };
 use qos_crypto::{sha_256, sha_384};
+use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Error, P256Pair, P256Public};
 use zeroize::Zeroizing;
 
@@ -116,6 +116,7 @@ pub enum Error {
 	/// The hash of prcs.txt does not match the hash stored in the
 	/// corresponding release manifest.
 	PcrTxtHashDoesNotMatchReleaseManifest,
+	QosAttest(String),
 }
 
 impl From<borsh::maybestd::io::Error> for Error {
@@ -140,6 +141,13 @@ impl From<P256Error> for Error {
 impl From<qos_hex::HexError> for Error {
 	fn from(err: qos_hex::HexError) -> Error {
 		Error::CouldNotDecodeHex(err)
+	}
+}
+
+impl From<qos_attest::AttestError> for Error {
+	fn from(err: qos_attest::AttestError) -> Error {
+		let msg = format!("{:?}", err);
+		Error::QosAttest(msg)
 	}
 }
 
@@ -432,7 +440,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 			&qos_build_fingerprints.pcr1,
 			&qos_build_fingerprints.pcr2,
 			&extract_pcr3(pcr3_preimage_path),
-		);
+		)?;
 	}
 
 	// Write the attestation doc
@@ -530,7 +538,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 			&qos_build_fingerprints.pcr1,
 			&qos_build_fingerprints.pcr2,
 			&extract_pcr3(pcr3_preimage_path),
-		);
+		)?;
 	}
 
 	// Get the members specific output based on alias & setup key
@@ -923,7 +931,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 			&manifest.enclave.pcr1,
 			&manifest.enclave.pcr2,
 			&extract_pcr3(pcr3_preimage_path),
-		);
+		)?;
 
 		// Sanity check the ephemeral key is valid
 		let eph_pub_bytes = attestation_doc
@@ -1017,7 +1025,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 			&manifest_envelope.manifest.enclave.pcr1,
 			&manifest_envelope.manifest.enclave.pcr2,
 			&extract_pcr3(pcr3_preimage_path),
-		);
+		)?;
 	}
 
 	// Pull out the ephemeral key or use the override
@@ -1834,6 +1842,7 @@ fn extract_pivot_build_fingerprints<P: AsRef<Path>>(
 /// # Panics
 ///
 /// Panics if extraction or validation fails.
+// TODO: [now] bubble up errors
 pub(crate) fn extract_attestation_doc(
 	cose_sign1_der: &[u8],
 	unsafe_skip_attestation: bool,

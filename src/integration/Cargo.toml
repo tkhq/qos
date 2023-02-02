@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 qos_core = { path = "../qos_core", features = ["mock"], default-features = false }
+qos_nsm = { path = "../qos_nsm", features = ["mock"], default-features = false }
 qos_host = { path = "../qos_host", default-features = false }
 qos_client = { path = "../qos_client", default-features = false }
 qos_crypto = { path = "../qos_crypto" }

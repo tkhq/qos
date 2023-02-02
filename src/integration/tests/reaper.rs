@@ -2,11 +2,10 @@ use std::fs;
 
 use integration::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
 use qos_core::{
-	handles::Handles,
-	io::SocketAddress,
-	protocol::{attestor::mock::MockNsm, services::boot::ManifestEnvelope},
-	reaper::Reaper,
+	handles::Handles, io::SocketAddress,
+	protocol::services::boot::ManifestEnvelope, reaper::Reaper,
 };
+use qos_nsm::mock::MockNsm;
 
 #[test]
 fn coordinator_works() {

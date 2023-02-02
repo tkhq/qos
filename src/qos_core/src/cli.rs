@@ -2,11 +2,12 @@
 
 use std::env;
 
+use qos_nsm::{Nsm, NsmProvider};
+
 use crate::{
 	handles::Handles,
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
-	protocol::attestor::{Nsm, NsmProvider},
 	reaper::Reaper,
 	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
 };
@@ -77,7 +78,7 @@ impl EnclaveOpts {
 		if self.parsed.flag(MOCK).unwrap_or(false) {
 			#[cfg(feature = "mock")]
 			{
-				Box::new(crate::protocol::attestor::mock::MockNsm)
+				Box::new(qos_nsm::mock::MockNsm)
 			}
 			#[cfg(not(feature = "mock"))]
 			{
