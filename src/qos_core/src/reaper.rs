@@ -90,6 +90,8 @@ impl Reaper {
 				println!("Pivot exited with status: {status}");
 			}
 		}
+
+		println!("Reaper exiting ...");
 	}
 }
 

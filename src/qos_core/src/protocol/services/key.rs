@@ -44,7 +44,7 @@ pub(in crate::protocol) fn inject_key(
 		let bytes = ephemeral_pair.decrypt(&encrypted_quorum_key)?;
 		bytes
 			.try_into()
-			.map_err(|_| ProtocolError::EncryptedQuorumKeyIncorrectLen)?
+			.map_err(|_| ProtocolError::EncryptedQuorumKeyInvalidLen)?
 	};
 	let decrypted_quorum_pair = P256Pair::from_master_seed(&quorum_master_seed)
 		.map_err(|_| ProtocolError::InvalidQuorumSecret)?;
@@ -1043,7 +1043,6 @@ mod test {
 				SocketAddress::new_unix("./never.sock"),
 			);
 
-			// correctly changes phase
 			assert_eq!(
 				inject_key(
 					&mut protocol_state,
@@ -1098,7 +1097,6 @@ mod test {
 				SocketAddress::new_unix("./never.sock"),
 			);
 
-			// does not change phase
 			assert_eq!(
 				inject_key(
 					&mut protocol_state,
@@ -1153,7 +1151,6 @@ mod test {
 				SocketAddress::new_unix("./never.sock"),
 			);
 
-			// does not change phase
 			assert_eq!(
 				inject_key(
 					&mut protocol_state,
@@ -1208,7 +1205,6 @@ mod test {
 				SocketAddress::new_unix("./never.sock"),
 			);
 
-			// does not change phase
 			assert_eq!(
 				inject_key(
 					&mut protocol_state,
@@ -1217,7 +1213,7 @@ mod test {
 						signature
 					}
 				),
-				Err(ProtocolError::EncryptedQuorumKeyIncorrectLen)
+				Err(ProtocolError::EncryptedQuorumKeyInvalidLen)
 			);
 
 			// does not write the quorum key

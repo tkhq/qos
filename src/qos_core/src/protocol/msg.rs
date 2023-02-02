@@ -138,7 +138,7 @@ pub enum ProtocolMsg {
 		/// Signature over the encrypted quorum key.
 		signature: Vec<u8>,
 	},
-	/// Successful response to `InjectKeyRequest`.
+	/// Successful response to [`Self::InjectKeyRequest`].
 	InjectKeyResponse,
 }
 

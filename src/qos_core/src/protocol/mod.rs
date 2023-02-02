@@ -144,8 +144,8 @@ pub enum ProtocolError {
 	InvalidEphemeralKey,
 	/// Invalid signature over the encrypted quorum key.
 	InvalidEncryptedQuorumKeySignature,
-	/// Incorrect length for encrypted quorum key
-	EncryptedQuorumKeyIncorrectLen,
+	/// Invalid length for encrypted quorum key secret.
+	EncryptedQuorumKeyInvalidLen,
 	/// The quorum secret was invalid.
 	InvalidQuorumSecret,
 	/// The injected quorum key was not the expected key.

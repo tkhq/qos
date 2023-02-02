@@ -120,8 +120,11 @@ pub enum Error {
 	QosAttest(String),
 	/// Pivot file
 	FailedToReadPivot(std::io::Error),
+	/// Unexpected response from a request to the enclave - likely an error.
 	UnexpectedProtocolMsgResponse(String),
+	/// Could not read the file that should contain the encrypted quorum key.
 	FailedToReadEncryptedQuorumKey,
+	/// The contents of the file are not a valid encrypted quorum key struct.
 	InvalidEncryptedQuorumKey,
 }
 

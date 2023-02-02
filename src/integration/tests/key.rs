@@ -27,7 +27,7 @@ async fn key_fwd_e2e() {
 	let _: PathWrapper = TMP_DIR.into();
 	fs::create_dir_all(BOOT_DIR).unwrap();
 	let old_host_port = qos_test_primitives::find_free_port().unwrap();
-	let _new_host_port = qos_test_primitives::find_free_port().unwrap();
+	let new_host_port = qos_test_primitives::find_free_port().unwrap();
 
 	build_pivot_fingerprints();
 	generate_manifest_envelope();
@@ -35,7 +35,6 @@ async fn key_fwd_e2e() {
 		boot_old_enclave(old_host_port);
 
 	// start up new enclave
-	let new_host_port = qos_test_primitives::find_free_port().unwrap();
 	let new_secret_path = "/tmp/key-fwd-e2e/new_secret.secret";
 	let new_pivot_path = "/tmp/key-fwd-e2e/new_pivot.pivot";
 	let new_manifest_path = "/tmp/key-fwd-e2e/new_manifest.manifest";
@@ -53,7 +52,7 @@ async fn key_fwd_e2e() {
 				new_pivot_path,
 				"--ephemeral-file",
 				SHARED_EPH_PATH, /* this is shared so the old enclave can
-				                  * encrypt to this key */
+				                  * encrypt to this key. See `extract_key` logic */
 				"--mock",
 				"--manifest-file",
 				new_manifest_path,
@@ -62,7 +61,7 @@ async fn key_fwd_e2e() {
 			.unwrap()
 			.into();
 
-	// -- HOST start old host
+	// -- HOST start new host
 	let mut _host_child_process: ChildWrapper =
 		Command::new("../target/debug/qos_host")
 			.args([
@@ -77,7 +76,7 @@ async fn key_fwd_e2e() {
 			.unwrap()
 			.into();
 
-	// -- Make sure the old enclave and host have time to boot
+	// -- Make sure the new enclave and host have time to boot
 	qos_test_primitives::wait_until_port_is_bound(new_host_port);
 
 	// -- CLIENT broadcast boot key fwd instruction
@@ -139,6 +138,7 @@ async fn key_fwd_e2e() {
 		.unwrap()
 		.success());
 
+	// Check that the quorum key got written
 	let quorum_pair = P256Pair::from_hex_file(new_secret_path).unwrap();
 	let quorum_pub = P256Public::from_hex_file(
 		"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
@@ -373,6 +373,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 			.success());
 	}
 
+	// Check that the enclave wrote its quorum key
 	let quorum_pair = P256Pair::from_hex_file(old_secret_path).unwrap();
 	let quorum_pub = P256Public::from_hex_file(
 		"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
