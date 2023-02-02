@@ -64,9 +64,7 @@ pub(in crate::protocol) fn boot_key_forward(
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	let nsm_response = put_manifest_and_pivot(state, manifest_envelope, pivot)?;
-
 	state.phase = ProtocolPhase::WaitingForForwardedKey;
-
 	Ok(nsm_response)
 }
 
@@ -83,7 +81,7 @@ pub(in crate::protocol) fn export_key(
 	export_key_internal(state, new_manifest_envelope, &attestation_doc)
 }
 
-// Primary of `export_key` pulled out to make testing easier.
+// Primary logic of `export_key` pulled out so it can be unit tested.
 fn export_key_internal(
 	state: &mut ProtocolState,
 	new_manifest_envelope: &ManifestEnvelope,

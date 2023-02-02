@@ -8,7 +8,6 @@ The consensus on environment configuration is coordinated through the Manifest d
 
 The Quorum Key itself can be used by QuorumOS and enclave apps to encrypt and authenticate data.
 
-
 ## Development
 
 ### Submitting a PR
