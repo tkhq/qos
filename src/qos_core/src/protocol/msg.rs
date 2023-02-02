@@ -113,7 +113,7 @@ pub enum ProtocolMsg {
 	},
 
 	/// Request a quorum key as part of the "key forwarding" flow.
-	RequestKeyRequest {
+	ExportKeyRequest {
 		/// Manifest of the enclave requesting the quorum key.
 		manifest_envelope: Box<ManifestEnvelope>,
 		/// Attestation document from the enclave requesting the quorum key. We
@@ -121,8 +121,8 @@ pub enum ProtocolMsg {
 		/// manifest in the user data field.
 		cose_sign1_attestation_doc: Vec<u8>,
 	},
-	/// Response to [`Self::RequestKeyRequest`]
-	RequestKeyResponse {
+	/// Response to [`Self::ExportKeyRequest`]
+	ExportKeyResponse {
 		/// Quorum key encrypted to the Ephemeral Key from the submitted
 		/// attestation document.
 		encrypted_quorum_key: Vec<u8>,

@@ -104,7 +104,7 @@ async fn key_fwd_e2e() {
 	// -- CLIENT broadcast key request to the old enclave
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
-			"request-key",
+			"export-key",
 			"--manifest-envelope-path",
 			MANIFEST_ENVELOPE_PATH,
 			"--attestation-doc-path",

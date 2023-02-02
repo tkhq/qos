@@ -917,7 +917,7 @@ pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
 	Ok(())
 }
 
-pub(crate) fn request_key<P: AsRef<Path>>(
+pub(crate) fn export_key<P: AsRef<Path>>(
 	uri: &str,
 	manifest_envelope_path: P,
 	attestation_doc_path: P,
@@ -927,13 +927,13 @@ pub(crate) fn request_key<P: AsRef<Path>>(
 	let cose_sign1_attestation_doc = fs::read(attestation_doc_path.as_ref())
 		.map_err(Error::FailedToReadAttestationDoc)?;
 
-	let req = ProtocolMsg::RequestKeyRequest {
+	let req = ProtocolMsg::ExportKeyRequest {
 		manifest_envelope: Box::new(manifest_envelope),
 		cose_sign1_attestation_doc,
 	};
 
 	let encrypted_quorum_key = match request::post(uri, &req).unwrap() {
-		ProtocolMsg::RequestKeyResponse { encrypted_quorum_key, signature } => {
+		ProtocolMsg::ExportKeyResponse { encrypted_quorum_key, signature } => {
 			EncryptedQuorumKey { encrypted_quorum_key, signature }
 		}
 		r => {

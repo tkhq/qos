@@ -70,7 +70,7 @@ pub(in crate::protocol) fn boot_key_forward(
 	Ok(nsm_response)
 }
 
-pub(in crate::protocol) fn request_key(
+pub(in crate::protocol) fn export_key(
 	state: &mut ProtocolState,
 	new_manifest_envelope: &ManifestEnvelope,
 	cose_sign1_attestation_document: &[u8],
@@ -80,11 +80,11 @@ pub(in crate::protocol) fn request_key(
 		&*state.attestor,
 	)?;
 
-	request_key_internal(state, new_manifest_envelope, &attestation_doc)
+	export_key_internal(state, new_manifest_envelope, &attestation_doc)
 }
 
-// Primary of `request_key` pulled out to make testing easier.
-fn request_key_internal(
+// Primary of `export_key` pulled out to make testing easier.
+fn export_key_internal(
 	state: &mut ProtocolState,
 	new_manifest_envelope: &ManifestEnvelope,
 	attestation_doc: &AttestationDoc,
@@ -207,7 +207,7 @@ mod test {
 	use qos_test_primitives::PathWrapper;
 	use serde_bytes::ByteBuf;
 
-	use super::{boot_key_forward, request_key_internal, validate_manifest};
+	use super::{boot_key_forward, export_key_internal, validate_manifest};
 	use crate::{
 		io::SocketAddress,
 		protocol::{
@@ -938,7 +938,7 @@ mod test {
 		// 	);
 		// }
 	}
-	mod request_key_inner {
+	mod export_key_inner {
 		use super::*;
 		use crate::protocol::services::key::EncryptedQuorumKey;
 
@@ -953,14 +953,14 @@ mod test {
 			} = get_test_args();
 
 			let ephemeral_file: PathWrapper =
-				"request_key_inner_works.eph.secret".into();
+				"export_key_inner_works.eph.secret".into();
 			eph_pair.to_hex_file(&*ephemeral_file).unwrap();
 
 			let manifest_file: PathWrapper =
-				"request_key_inner_works.manifest".into();
+				"export_key_inner_works.manifest".into();
 
 			let quorum_file: PathWrapper =
-				"request_key_inner_works.quorum.secret".into();
+				"export_key_inner_works.quorum.secret".into();
 			quorum_pair.to_hex_file(&*quorum_file).unwrap();
 
 			std::fs::write(
@@ -981,7 +981,7 @@ mod test {
 				SocketAddress::new_unix("./never.sock"),
 			);
 			let EncryptedQuorumKey { encrypted_quorum_key, signature } =
-				request_key_internal(
+				export_key_internal(
 					&mut protocol_state,
 					&manifest_envelope,
 					&att_doc,

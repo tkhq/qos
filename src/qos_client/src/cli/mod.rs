@@ -192,7 +192,7 @@ pub enum Command {
 	BootKeyFwd,
 	/// Request a quorum key from a fully provisioned enclave as part of the
 	/// key forwarding flow.
-	RequestKey,
+	ExportKey,
 	/// Inject a quorum key into a non-fully provisioned enclave
 	InjectKey,
 }
@@ -227,7 +227,7 @@ impl From<&str> for Command {
 			"yubikey-change-pin" => Self::YubiKeyChangePin,
 			"display" => Self::Display,
 			"boot-key-fwd" => Self::BootKeyFwd,
-			"request-key" => Self::RequestKey,
+			"export-key" => Self::ExportKey,
 			"inject-key" => Self::InjectKey,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
@@ -695,7 +695,7 @@ impl Command {
 			.token(Self::attestation_doc_path_token())
 	}
 
-	fn request_key() -> Parser {
+	fn export_key() -> Parser {
 		Self::base()
 			.token(Self::manifest_envelope_path_token())
 			.token(Self::attestation_doc_path_token())
@@ -741,7 +741,7 @@ impl GetParserForCommand for Command {
 			Self::YubiKeyChangePin => Self::yubikey_change_pin(),
 			Self::Display => Self::display(),
 			Self::BootKeyFwd => Self::boot_key_fwd(),
-			Self::RequestKey => Self::request_key(),
+			Self::ExportKey => Self::export_key(),
 			Self::InjectKey => Self::inject_key(),
 		}
 	}
@@ -1109,7 +1109,7 @@ impl ClientRunner {
 					handlers::display(&self.opts);
 				}
 				Command::BootKeyFwd => handlers::boot_key_fwd(&self.opts),
-				Command::RequestKey => handlers::request_key(&self.opts),
+				Command::ExportKey => handlers::export_key(&self.opts),
 				Command::InjectKey => handlers::inject_key(&self.opts),
 			}
 		}
@@ -1533,8 +1533,8 @@ mod handlers {
 		}
 	}
 
-	pub(super) fn request_key(opts: &ClientOpts) {
-		if let Err(e) = services::request_key(
+	pub(super) fn export_key(opts: &ClientOpts) {
+		if let Err(e) = services::export_key(
 			&opts.path_message(),
 			opts.manifest_envelope_path(),
 			opts.attestation_doc_path(),

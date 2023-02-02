@@ -271,7 +271,7 @@ impl Executor {
 					Box::new(handlers::live_attestation_doc),
 					// phase specific routes
 					Box::new(handlers::proxy),
-					Box::new(handlers::request_key),
+					Box::new(handlers::export_key),
 				]
 			}
 			ProtocolPhase::WaitingForForwardedKey => {
@@ -492,22 +492,22 @@ mod handlers {
 		}
 	}
 
-	pub(super) fn request_key(
+	pub(super) fn export_key(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
-		if let ProtocolMsg::RequestKeyRequest {
+		if let ProtocolMsg::ExportKeyRequest {
 			manifest_envelope,
 			cose_sign1_attestation_doc,
 		} = req
 		{
-			match key::request_key(
+			match key::export_key(
 				state,
 				manifest_envelope,
 				cose_sign1_attestation_doc,
 			) {
 				Ok(EncryptedQuorumKey { encrypted_quorum_key, signature }) => {
-					Some(ProtocolMsg::RequestKeyResponse {
+					Some(ProtocolMsg::ExportKeyResponse {
 						encrypted_quorum_key,
 						signature,
 					})
