@@ -20,6 +20,7 @@ const TEST_MSG: &str = "test-msg";
 const NEW_ATTESTATION_DOC_PATH: &str = "/tmp/key-fwd-e2e/new_attestation_doc";
 const ENCRYPTED_QUORUM_KEY_PATH: &str = "/tmp/key-fwd-e2e/encrypted_quorum_key";
 const SHARED_EPH_PATH: &str = "/tmp/key-fwd-e2e/shared_eph.secret";
+const QUORUM_KEY_PUB_PATH: &str = "./mock/namespaces/quit-coding-to-vape/quorum_key.pub";
 
 #[tokio::test]
 async fn key_fwd_e2e() {
@@ -141,7 +142,7 @@ async fn key_fwd_e2e() {
 	// Check that the quorum key got written
 	let quorum_pair = P256Pair::from_hex_file(new_secret_path).unwrap();
 	let quorum_pub = P256Public::from_hex_file(
-		"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
+		QUORUM_KEY_PUB_PATH,
 	)
 	.unwrap();
 	assert!(quorum_pair.public_key() == quorum_pub);
@@ -173,7 +174,7 @@ fn generate_manifest_envelope() {
 			"--share-set-dir",
 			"./mock/keys/share-set",
 			"--quorum-key-path",
-			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub"
+			QUORUM_KEY_PUB_PATH
 		])
 		.spawn()
 		.unwrap()
@@ -205,7 +206,7 @@ fn generate_manifest_envelope() {
 				"--share-set-dir",
 				"./mock/keys/share-set",
 				"--quorum-key-path",
-				"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
+				QUORUM_KEY_PUB_PATH,
 				"--alias",
 				alias,
 				"--unsafe-auto-confirm",
@@ -375,9 +376,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 
 	// Check that the enclave wrote its quorum key
 	let quorum_pair = P256Pair::from_hex_file(old_secret_path).unwrap();
-	let quorum_pub = P256Public::from_hex_file(
-		"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
-	)
+	let quorum_pub = P256Public::from_hex_file(QUORUM_KEY_PUB_PATH)
 	.unwrap();
 	assert!(quorum_pair.public_key() == quorum_pub);
 
