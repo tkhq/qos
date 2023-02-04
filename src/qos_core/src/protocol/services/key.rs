@@ -223,7 +223,7 @@ mod test {
 
 	struct TestArgs {
 		manifest_envelope: ManifestEnvelope,
-		_members_with_keys: Vec<(P256Pair, QuorumMember)>,
+		members_with_keys: Vec<(P256Pair, QuorumMember)>,
 		att_doc: AttestationDoc,
 		eph_pair: P256Pair,
 		quorum_pair: P256Pair,
@@ -326,7 +326,7 @@ mod test {
 
 		TestArgs {
 			manifest_envelope,
-			_members_with_keys: members_with_keys,
+			members_with_keys,
 			att_doc,
 			eph_pair,
 			quorum_pair,
@@ -750,191 +750,193 @@ mod test {
 		}
 	}
 
+	#[cfg(not(feature = "mock"))]
 	mod validate_manifest_mock_disabled_tests {
-		// #[test]
-		// fn errors_if_pcr0_does_match_attesation_doc() {
-		// 	let TestArgs {
-		// 		manifest_envelope,
-		// 		mut att_doc,
-		// 		members_with_keys,
-		// 		..
-		// 	} = get_test_args();
-		// 	let mut new_manifest_envelope = manifest_envelope.clone();
-		// 	new_manifest_envelope.manifest.enclave.pcr0 = vec![128; 32];
+		use super::*;
+		#[test]
+		fn errors_if_pcr0_does_match_attestation_doc() {
+			let TestArgs {
+				manifest_envelope,
+				mut att_doc,
+				members_with_keys,
+				..
+			} = get_test_args();
+			let mut new_manifest_envelope = manifest_envelope.clone();
+			new_manifest_envelope.manifest.enclave.pcr0 = vec![128; 32];
 
-		// 	let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
-		// 	att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));
+			let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
+			att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));
 
-		// 	let manifest_set_approvals = (0..2)
-		// 		.map(|i| {
-		// 			let (pair, member) = &members_with_keys[i];
-		// 			Approval {
-		// 				signature: pair.sign(&new_manifest_hash).unwrap(),
-		// 				member: member.clone(),
-		// 			}
-		// 		})
-		// 		.collect();
-		// 	new_manifest_envelope.manifest_set_approvals =
-		// 		manifest_set_approvals;
+			let manifest_set_approvals = (0..2)
+				.map(|i| {
+					let (pair, member) = &members_with_keys[i];
+					Approval {
+						signature: pair.sign(&new_manifest_hash).unwrap(),
+						member: member.clone(),
+					}
+				})
+				.collect();
+			new_manifest_envelope.manifest_set_approvals =
+				manifest_set_approvals;
 
-		// 	assert_eq!(
-		// 		validate_manifest(
-		// 			&new_manifest_envelope,
-		// 			&manifest_envelope,
-		// 			&att_doc
-		// 		),
-		// 		Err(ProtocolError::QosAttestError("DifferentPcr0".to_string()))
-		// 	);
-		// }
+			assert_eq!(
+				validate_manifest(
+					&new_manifest_envelope,
+					&manifest_envelope,
+					&att_doc
+				),
+				Err(ProtocolError::QosAttestError("DifferentPcr0".to_string()))
+			);
+		}
 
-		// #[test]
-		// fn errors_if_pcr1_does_match_attesation_doc() {
-		// 	let TestArgs {
-		// 		manifest_envelope,
-		// 		mut att_doc,
-		// 		members_with_keys,
-		// 		..
-		// 	} = get_test_args();
-		// 	let mut new_manifest_envelope = manifest_envelope.clone();
-		// 	new_manifest_envelope.manifest.enclave.pcr1 = vec![128; 32];
+		#[test]
+		fn errors_if_pcr1_does_match_attestation_doc() {
+			let TestArgs {
+				manifest_envelope,
+				mut att_doc,
+				members_with_keys,
+				..
+			} = get_test_args();
+			let mut new_manifest_envelope = manifest_envelope.clone();
+			new_manifest_envelope.manifest.enclave.pcr1 = vec![128; 32];
 
-		// 	let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
-		// 	att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));
+			let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
+			att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));
 
-		// 	let manifest_set_approvals = (0..2)
-		// 		.map(|i| {
-		// 			let (pair, member) = &members_with_keys[i];
-		// 			Approval {
-		// 				signature: pair.sign(&new_manifest_hash).unwrap(),
-		// 				member: member.clone(),
-		// 			}
-		// 		})
-		// 		.collect();
-		// 	new_manifest_envelope.manifest_set_approvals =
-		// 		manifest_set_approvals;
+			let manifest_set_approvals = (0..2)
+				.map(|i| {
+					let (pair, member) = &members_with_keys[i];
+					Approval {
+						signature: pair.sign(&new_manifest_hash).unwrap(),
+						member: member.clone(),
+					}
+				})
+				.collect();
+			new_manifest_envelope.manifest_set_approvals =
+				manifest_set_approvals;
 
-		// 	assert_eq!(
-		// 		validate_manifest(
-		// 			&new_manifest_envelope,
-		// 			&manifest_envelope,
-		// 			&att_doc
-		// 		),
-		// 		Err(ProtocolError::QosAttestError("DifferentPcr1".to_string()))
-		// 	);
-		// }
+			assert_eq!(
+				validate_manifest(
+					&new_manifest_envelope,
+					&manifest_envelope,
+					&att_doc
+				),
+				Err(ProtocolError::QosAttestError("DifferentPcr1".to_string()))
+			);
+		}
 
-		// #[test]
-		// fn errors_if_pcr2_does_match_attesation_doc() {
-		// 	let TestArgs {
-		// 		manifest_envelope,
-		// 		mut att_doc,
-		// 		members_with_keys,
-		// 		..
-		// 	} = get_test_args();
-		// 	let mut new_manifest_envelope = manifest_envelope.clone();
-		// 	new_manifest_envelope.manifest.enclave.pcr2 = vec![128; 32];
+		#[test]
+		fn errors_if_pcr2_does_match_attesation_doc() {
+			let TestArgs {
+				manifest_envelope,
+				mut att_doc,
+				members_with_keys,
+				..
+			} = get_test_args();
+			let mut new_manifest_envelope = manifest_envelope.clone();
+			new_manifest_envelope.manifest.enclave.pcr2 = vec![128; 32];
 
-		// 	let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
-		// 	att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));
+			let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
+			att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));
 
-		// 	let manifest_set_approvals = (0..2)
-		// 		.map(|i| {
-		// 			let (pair, member) = &members_with_keys[i];
-		// 			Approval {
-		// 				signature: pair.sign(&new_manifest_hash).unwrap(),
-		// 				member: member.clone(),
-		// 			}
-		// 		})
-		// 		.collect();
-		// 	new_manifest_envelope.manifest_set_approvals =
-		// 		manifest_set_approvals;
+			let manifest_set_approvals = (0..2)
+				.map(|i| {
+					let (pair, member) = &members_with_keys[i];
+					Approval {
+						signature: pair.sign(&new_manifest_hash).unwrap(),
+						member: member.clone(),
+					}
+				})
+				.collect();
+			new_manifest_envelope.manifest_set_approvals =
+				manifest_set_approvals;
 
-		// 	assert_eq!(
-		// 		validate_manifest(
-		// 			&new_manifest_envelope,
-		// 			&manifest_envelope,
-		// 			&att_doc
-		// 		),
-		// 		Err(ProtocolError::QosAttestError("DifferentPcr2".to_string()))
-		// 	);
-		// }
+			assert_eq!(
+				validate_manifest(
+					&new_manifest_envelope,
+					&manifest_envelope,
+					&att_doc
+				),
+				Err(ProtocolError::QosAttestError("DifferentPcr2".to_string()))
+			);
+		}
 
-		// #[test]
-		// fn errors_if_pcr3_does_match_attestation_doc() {
-		// 	let TestArgs {
-		// 		manifest_envelope,
-		// 		mut att_doc,
-		// 		members_with_keys,
-		// 		..
-		// 	} = get_test_args();
-		// 	let mut new_manifest_envelope = manifest_envelope.clone();
-		// 	new_manifest_envelope.manifest.enclave.pcr3 = vec![128; 32];
+		#[test]
+		fn errors_if_pcr3_does_match_attestation_doc() {
+			let TestArgs {
+				manifest_envelope,
+				mut att_doc,
+				members_with_keys,
+				..
+			} = get_test_args();
+			let mut new_manifest_envelope = manifest_envelope.clone();
+			new_manifest_envelope.manifest.enclave.pcr3 = vec![128; 32];
 
-		// 	// Also update the old manifest to have the same pcr3 so the issue
-		// 	// is isolated to mismatching the attestation doc.
-		// 	let mut old_manifest_envelope = manifest_envelope.clone();
-		// 	old_manifest_envelope.manifest.enclave.pcr3 = vec![128; 32];
+			// Also update the old manifest to have the same pcr3 so the issue
+			// is isolated to mismatching the attestation doc.
+			let mut old_manifest_envelope = manifest_envelope.clone();
+			old_manifest_envelope.manifest.enclave.pcr3 = vec![128; 32];
 
-		// 	let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
-		// 	att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));
+			let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
+			att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));
 
-		// 	let manifest_set_approvals = (0..2)
-		// 		.map(|i| {
-		// 			let (pair, member) = &members_with_keys[i];
-		// 			Approval {
-		// 				signature: pair.sign(&new_manifest_hash).unwrap(),
-		// 				member: member.clone(),
-		// 			}
-		// 		})
-		// 		.collect();
-		// 	new_manifest_envelope.manifest_set_approvals =
-		// 		manifest_set_approvals;
+			let manifest_set_approvals = (0..2)
+				.map(|i| {
+					let (pair, member) = &members_with_keys[i];
+					Approval {
+						signature: pair.sign(&new_manifest_hash).unwrap(),
+						member: member.clone(),
+					}
+				})
+				.collect();
+			new_manifest_envelope.manifest_set_approvals =
+				manifest_set_approvals;
 
-		// 	assert_eq!(
-		// 		validate_manifest(
-		// 			&new_manifest_envelope,
-		// 			&manifest_envelope,
-		// 			&att_doc
-		// 		),
-		// 		Err(ProtocolError::QosAttestError("DifferentPcr3".to_string()))
-		// 	);
-		// }
+			assert_eq!(
+				validate_manifest(
+					&new_manifest_envelope,
+					&manifest_envelope,
+					&att_doc
+				),
+				Err(ProtocolError::QosAttestError("DifferentPcr3".to_string()))
+			);
+		}
 
-		// #[test]
-		// fn errors_if_manifest_hash_does_not_match_attestation_doc() {
-		// 	let TestArgs {
-		// 		manifest_envelope, att_doc, members_with_keys, ..
-		// 	} = get_test_args();
-		// 	let mut new_manifest_envelope = manifest_envelope.clone();
-		// 	new_manifest_envelope.manifest.namespace.nonce += 1;
+		#[test]
+		fn errors_if_manifest_hash_does_not_match_attestation_doc() {
+			let TestArgs {
+				manifest_envelope, att_doc, members_with_keys, ..
+			} = get_test_args();
+			let mut new_manifest_envelope = manifest_envelope.clone();
+			new_manifest_envelope.manifest.namespace.nonce += 1;
 
-		// 	let manifest_set_approvals = (0..2)
-		// 		.map(|i| {
-		// 			let (pair, member) = &members_with_keys[i];
-		// 			Approval {
-		// 				signature: pair
-		// 					.sign(&new_manifest_envelope.manifest.qos_hash())
-		// 					.unwrap(),
-		// 				member: member.clone(),
-		// 			}
-		// 		})
-		// 		.collect();
-		// 	new_manifest_envelope.manifest_set_approvals =
-		// 		manifest_set_approvals;
+			let manifest_set_approvals = (0..2)
+				.map(|i| {
+					let (pair, member) = &members_with_keys[i];
+					Approval {
+						signature: pair
+							.sign(&new_manifest_envelope.manifest.qos_hash())
+							.unwrap(),
+						member: member.clone(),
+					}
+				})
+				.collect();
+			new_manifest_envelope.manifest_set_approvals =
+				manifest_set_approvals;
 
-		// 	// Don't update the manifest hash in the attestation doc
+			// Don't update the manifest hash in the attestation doc
 
-		// 	assert_eq!(
-		// 		validate_manifest(
-		// 			&new_manifest_envelope,
-		// 			&manifest_envelope,
-		// 			&att_doc
-		// 		),
-		// 		Err(ProtocolError::QosAttestError(
-		// 			"DifferentUserData".to_string()
-		// 		))
-		// 	);
-		// }
+			assert_eq!(
+				validate_manifest(
+					&new_manifest_envelope,
+					&manifest_envelope,
+					&att_doc
+				),
+				Err(ProtocolError::QosAttestError(
+					"DifferentUserData".to_string()
+				))
+			);
+		}
 	}
 	mod export_key_inner {
 		use super::*;

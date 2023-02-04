@@ -20,7 +20,8 @@ const TEST_MSG: &str = "test-msg";
 const NEW_ATTESTATION_DOC_PATH: &str = "/tmp/key-fwd-e2e/new_attestation_doc";
 const ENCRYPTED_QUORUM_KEY_PATH: &str = "/tmp/key-fwd-e2e/encrypted_quorum_key";
 const SHARED_EPH_PATH: &str = "/tmp/key-fwd-e2e/shared_eph.secret";
-const QUORUM_KEY_PUB_PATH: &str = "./mock/namespaces/quit-coding-to-vape/quorum_key.pub";
+const QUORUM_KEY_PUB_PATH: &str =
+	"./mock/namespaces/quit-coding-to-vape/quorum_key.pub";
 
 #[tokio::test]
 async fn key_fwd_e2e() {
@@ -53,7 +54,8 @@ async fn key_fwd_e2e() {
 				new_pivot_path,
 				"--ephemeral-file",
 				SHARED_EPH_PATH, /* this is shared so the old enclave can
-				                  * encrypt to this key. See `extract_key` logic */
+				                  * encrypt to this key. See `extract_key`
+				                  * logic */
 				"--mock",
 				"--manifest-file",
 				new_manifest_path,
@@ -141,10 +143,7 @@ async fn key_fwd_e2e() {
 
 	// Check that the quorum key got written
 	let quorum_pair = P256Pair::from_hex_file(new_secret_path).unwrap();
-	let quorum_pub = P256Public::from_hex_file(
-		QUORUM_KEY_PUB_PATH,
-	)
-	.unwrap();
+	let quorum_pub = P256Public::from_hex_file(QUORUM_KEY_PUB_PATH).unwrap();
 	assert!(quorum_pair.public_key() == quorum_pub);
 }
 
@@ -376,8 +375,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 
 	// Check that the enclave wrote its quorum key
 	let quorum_pair = P256Pair::from_hex_file(old_secret_path).unwrap();
-	let quorum_pub = P256Public::from_hex_file(QUORUM_KEY_PUB_PATH)
-	.unwrap();
+	let quorum_pub = P256Public::from_hex_file(QUORUM_KEY_PUB_PATH).unwrap();
 	assert!(quorum_pair.public_key() == quorum_pub);
 
 	(enclave_child_process, host_child_process)
