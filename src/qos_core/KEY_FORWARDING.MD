@@ -40,10 +40,10 @@ The details for how QOS nodes communicate with each other can vary, but for the 
         }
         ```
 
-3) The Original Node gets a `RequestKeyRequest` from the the Client.
+3) The Original Node gets a `ExportKeyRequest` from the the Client.
 
     ```rust
-    struct RequestKeyRequest {
+    struct ExportKeyRequest {
       manifest_envelope: ManifestEnvelope,
       cose_sign1_attestation_document: Vec<u8>
     }
@@ -63,7 +63,7 @@ The details for how QOS nodes communicate with each other can vary, but for the 
     1) Return the Quorum Key encrypted to the New Node's Ephemeral Key extracted from the attestation document and a signature over the encrypted payload. The Original Node uses its Quorum Key to create the signature.
 
         ```rust
-          struct RequestKeyResponse {
+          struct ExportKeyResponse {
             encrypted_quorum_key: Vec<u8>,
             signature: Vec<u8>
           }

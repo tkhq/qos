@@ -159,3 +159,7 @@ test-all:
 	cargo build --all
 	@# Run tests
 	cargo test
+	@# When we build the workspace it resolves with the qos_core mock feature
+	@# enabled. However some tests require it disable, so we test just qos_core
+	@# by itself.
+	cargo test -p qos_core

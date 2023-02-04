@@ -198,7 +198,6 @@ pub fn attestation_doc_from_der(
 		validation_time,
 	)?;
 	verify_cose_sign1_sig(&attestation_doc.certificate, &cose_sign1)?;
-
 	Ok(attestation_doc)
 }
 
