@@ -48,7 +48,7 @@ pub(in crate::protocol) fn inject_key(
 	};
 	let decrypted_quorum_pair = P256Pair::from_master_seed(&quorum_master_seed)
 		.map_err(|_| ProtocolError::InvalidQuorumSecret)?;
-	if decrypted_quorum_pair.public_key() != quorum_public {
+	if decrypted_quorum_pair.public_key().to_bytes() != quorum_public.to_bytes() {
 		return Err(ProtocolError::WrongQuorumKey);
 	}
 	state.handles.put_quorum_key(&decrypted_quorum_pair)?;
