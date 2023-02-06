@@ -84,7 +84,7 @@ dependencies = [
 [[package]]
 name = "aws-nitro-enclaves-nsm-api"
 version = "0.2.1"
-source = "git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?branch=main#16eebf7838fa6f399cfffda0049912b936c3a895"
+source = "git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?rev=cfcf7a29587f5bc9338a2535221af84492f949c5#cfcf7a29587f5bc9338a2535221af84492f949c5"
 dependencies = [
  "libc",
  "log",
@@ -449,6 +449,7 @@ dependencies = [
  "libc",
  "qos_aws",
  "qos_core",
+ "qos_nsm",
  "qos_system",
 ]
 
@@ -537,9 +538,9 @@ dependencies = [
 [[package]]
 name = "nsm-lib"
 version = "0.2.1"
-source = "git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?branch=main#16eebf7838fa6f399cfffda0049912b936c3a895"
+source = "git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?rev=cfcf7a29587f5bc9338a2535221af84492f949c5#cfcf7a29587f5bc9338a2535221af84492f949c5"
 dependencies = [
- "aws-nitro-enclaves-nsm-api 0.2.1 (git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?branch=main)",
+ "aws-nitro-enclaves-nsm-api 0.2.1 (git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?rev=cfcf7a29587f5bc9338a2535221af84492f949c5)",
  "cbindgen",
  "serde_bytes",
 ]
@@ -676,7 +677,7 @@ dependencies = [
 name = "qos_aws"
 version = "0.1.0"
 dependencies = [
- "aws-nitro-enclaves-nsm-api 0.2.1 (git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?branch=main)",
+ "aws-nitro-enclaves-nsm-api 0.2.1 (git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?rev=cfcf7a29587f5bc9338a2535221af84492f949c5)",
  "libc",
  "nsm-lib",
  "qos_system",
@@ -1146,9 +1147,9 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "x509-cert"
-version = "0.1.1"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99d224a125dec5adda27d0346b9cae9794830279c4f9c27e4ab0b6c408d54012"
+checksum = "6bd27a832a85efcf56cad058e4e3256d1781b927e113a9e37d96916d639e4af7"
 dependencies = [
  "const-oid",
  "der",
