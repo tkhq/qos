@@ -815,6 +815,7 @@ dependencies = [
  "qos_crypto",
  "qos_hex",
  "qos_host",
+ "qos_nsm",
  "qos_p256",
  "qos_test_primitives",
  "rand",
@@ -1249,6 +1250,7 @@ dependencies = [
  "p384",
  "qos_core",
  "qos_hex",
+ "qos_nsm",
  "rand",
  "serde_bytes",
  "sha2",
@@ -1268,6 +1270,7 @@ dependencies = [
  "qos_core",
  "qos_crypto",
  "qos_hex",
+ "qos_nsm",
  "qos_p256",
  "qos_test_primitives",
  "rand_core",
@@ -1285,8 +1288,10 @@ dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "nix 0.24.3",
+ "qos_attest",
  "qos_crypto",
  "qos_hex",
+ "qos_nsm",
  "qos_p256",
  "qos_test_primitives",
  "serde_bytes",
@@ -1313,6 +1318,15 @@ dependencies = [
  "borsh",
  "qos_core",
  "tokio",
+]
+
+[[package]]
+name = "qos_nsm"
+version = "0.1.0"
+dependencies = [
+ "aws-nitro-enclaves-nsm-api",
+ "borsh",
+ "serde_bytes",
 ]
 
 [[package]]

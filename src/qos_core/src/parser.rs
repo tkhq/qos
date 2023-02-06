@@ -306,10 +306,8 @@ impl Token {
 	}
 
 	fn info(&self, width: usize) -> String {
-		let mut info = vec![
-			format!("{:<width$}", self.name(), width = width),
-			self.help.clone(),
-		];
+		let mut info =
+			vec![format!("{:<width$}", self.name()), self.help.clone()];
 
 		if let Some(v) = &self.default_value {
 			info.push(format!("[default: {v}]"));

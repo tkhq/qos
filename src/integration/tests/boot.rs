@@ -250,7 +250,7 @@ async fn standard_boot_e2e() {
 		let approval =
 			Approval::try_from_slice(&fs::read(approval_path).unwrap())
 				.unwrap();
-		let personal_pair = P256Pair::from_hex_file(&format!(
+		let personal_pair = P256Pair::from_hex_file(format!(
 			"{}/{}.secret",
 			personal_dir(alias),
 			alias,

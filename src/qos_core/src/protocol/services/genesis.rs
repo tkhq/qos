@@ -3,12 +3,11 @@
 use std::{fmt, iter::zip};
 
 use qos_crypto::sha_256;
+use qos_nsm::types::{NsmRequest, NsmResponse};
 use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
-	attestor::types::{NsmRequest, NsmResponse},
-	boot::QuorumMember,
-	Hash256, ProtocolError, ProtocolState, QosHash,
+	boot::QuorumMember, Hash256, ProtocolError, ProtocolState, QosHash,
 };
 
 /// Configuration for sharding a Quorum Key created in the Genesis flow.
@@ -173,12 +172,11 @@ pub(in crate::protocol) fn boot_genesis(
 
 #[cfg(test)]
 mod test {
+	use qos_nsm::mock::MockNsm;
 	use qos_p256::MASTER_SEED_LEN;
 
 	use super::*;
-	use crate::{
-		handles::Handles, io::SocketAddress, protocol::attestor::mock::MockNsm,
-	};
+	use crate::{handles::Handles, io::SocketAddress};
 
 	#[test]
 	fn boot_genesis_works() {

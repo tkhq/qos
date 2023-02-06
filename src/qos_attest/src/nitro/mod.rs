@@ -64,75 +64,70 @@ pub fn verify_attestation_doc_against_user_input(
 	pcr1: &[u8],
 	pcr2: &[u8],
 	pcr3: &[u8],
-) {
-	assert_eq!(
-		user_data,
-		attestation_doc.user_data.as_ref().unwrap().to_vec(),
-		"Attestation doc does not have anticipated user data."
-	);
+) -> Result<(), AttestError> {
+	if user_data
+		!= attestation_doc
+			.user_data
+			.as_ref()
+			.ok_or(AttestError::MissingUserData)?
+			.to_vec()
+	{
+		return Err(AttestError::DifferentUserData);
+	}
 
 	// nonce is none
-	assert_eq!(
-		attestation_doc.nonce, None,
-		"Attestation doc has a nonce when none was expected."
-	);
+	if attestation_doc.nonce != None {
+		return Err(AttestError::UnexpectedAttestationDocNonce);
+	}
 
-	// pcr0 matches
-	assert_eq!(
-		// Hex encode, so panics are easier to debug
-		qos_hex::encode(pcr0),
-		qos_hex::encode(
-			&attestation_doc
-				.pcrs
-				.get(&0)
-				.expect("pcr0 not found")
-				.clone()
-				.into_vec()
-		),
-		"pcr0 does not match attestation doc"
-	);
+	if pcr0
+		!= attestation_doc
+			.pcrs
+			.get(&0)
+			.ok_or(AttestError::MissingPcr0)?
+			.clone()
+			.into_vec()
+	{
+		return Err(AttestError::DifferentPcr0);
+	}
 
 	// pcr1 matches
-	assert_eq!(
-		qos_hex::encode(pcr1),
-		qos_hex::encode(
-			&attestation_doc
-				.pcrs
-				.get(&1)
-				.expect("pcr1 not found")
-				.clone()
-				.into_vec()
-		),
-		"pcr1 does not match attestation doc"
-	);
+	if pcr1
+		!= attestation_doc
+			.pcrs
+			.get(&1)
+			.ok_or(AttestError::MissingPcr1)?
+			.clone()
+			.into_vec()
+	{
+		return Err(AttestError::DifferentPcr1);
+	}
 
 	// pcr2 matches
-	assert_eq!(
-		qos_hex::encode(pcr2),
-		qos_hex::encode(
-			&attestation_doc
-				.pcrs
-				.get(&2)
-				.expect("pcr2 not found")
-				.clone()
-				.into_vec()
-		),
-		"pcr2 does not match attestation doc"
-	);
+	if pcr2
+		!= attestation_doc
+			.pcrs
+			.get(&2)
+			.ok_or(AttestError::MissingPcr2)?
+			.clone()
+			.into_vec()
+	{
+		return Err(AttestError::DifferentPcr2);
+	}
 
 	// pcr3 matches
-	assert_eq!(
-		qos_hex::encode(pcr3),
-		qos_hex::encode(
-			&attestation_doc
-				.pcrs
-				.get(&3)
-				.expect("pcr3 not found")
-				.clone()
-				.into_vec()
-		),
-		"pcr3 does not match attestation doc"
-	);
+	if pcr3
+		!= attestation_doc
+			.pcrs
+			.get(&3)
+			.ok_or(AttestError::MissingPcr3)?
+			.clone()
+			.into_vec()
+	{
+		return Err(AttestError::DifferentPcr3);
+	}
+
+	Ok(())
 }
 
 /// Extract the DER encoded `AttestationDoc` from the nitro secure module
@@ -203,7 +198,6 @@ pub fn attestation_doc_from_der(
 		validation_time,
 	)?;
 	verify_cose_sign1_sig(&attestation_doc.certificate, &cose_sign1)?;
-
 	Ok(attestation_doc)
 }
 
@@ -312,7 +306,7 @@ mod test {
 		crypto::SigningPrivateKey, header_map::HeaderMap,
 	};
 	use p384::{ecdsa::SigningKey, SecretKey};
-	use qos_core::protocol::attestor::mock::{
+	use qos_nsm::mock::{
 		MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
 		MOCK_PCR3, MOCK_SECONDS_SINCE_EPOCH,
 		MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT,
@@ -634,35 +628,40 @@ mod test {
 			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
 				.unwrap();
 		// Accepts valid inputs
-		verify_attestation_doc_against_user_input(
+		assert!(verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
 			&qos_hex::decode(MOCK_PCR0).unwrap(),
 			&qos_hex::decode(MOCK_PCR1).unwrap(),
 			&qos_hex::decode(MOCK_PCR2).unwrap(),
 			&qos_hex::decode(MOCK_PCR3).unwrap(),
-		);
+		)
+		.is_ok());
 	}
 
 	#[test]
-	#[should_panic = "Attestation doc does not have anticipated user data"]
 	fn verify_attestation_doc_against_user_input_panics_invalid_user_data() {
 		let attestation_doc =
 			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
 				.unwrap();
 
-		verify_attestation_doc_against_user_input(
+		let err = verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			&[255; 32],
 			&qos_hex::decode(MOCK_PCR0).unwrap(),
 			&qos_hex::decode(MOCK_PCR1).unwrap(),
 			&qos_hex::decode(MOCK_PCR2).unwrap(),
 			&qos_hex::decode(MOCK_PCR3).unwrap(),
-		);
+		)
+		.unwrap_err();
+
+		match err {
+			AttestError::DifferentUserData => (),
+			_ => panic!(),
+		}
 	}
 
 	#[test]
-	#[should_panic = "Attestation doc has a nonce when none was expected."]
 	fn verify_attestation_doc_against_user_input_panics_some_nonce() {
 		let mut attestation_doc =
 			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
@@ -671,82 +670,108 @@ mod test {
 		// Set the nonce to Some
 		attestation_doc.nonce = Some(ByteBuf::default());
 
-		verify_attestation_doc_against_user_input(
+		let err = verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
 			&qos_hex::decode(MOCK_PCR0).unwrap(),
 			&qos_hex::decode(MOCK_PCR1).unwrap(),
 			&qos_hex::decode(MOCK_PCR2).unwrap(),
 			&qos_hex::decode(MOCK_PCR3).unwrap(),
-		);
+		)
+		.unwrap_err();
+
+		match err {
+			AttestError::UnexpectedAttestationDocNonce => (),
+			_ => panic!(),
+		}
 	}
 
 	#[test]
-	#[should_panic = "pcr0 does not match attestation doc"]
 	fn verify_attestation_doc_against_user_input_panics_invalid_pcr0() {
 		let attestation_doc =
 			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
 				.unwrap();
 
-		verify_attestation_doc_against_user_input(
+		let err = verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
 			&[255; 48],
 			&qos_hex::decode(MOCK_PCR1).unwrap(),
 			&qos_hex::decode(MOCK_PCR2).unwrap(),
 			&qos_hex::decode(MOCK_PCR3).unwrap(),
-		);
+		)
+		.unwrap_err();
+
+		match err {
+			AttestError::DifferentPcr0 => (),
+			_ => panic!(),
+		}
 	}
 
 	#[test]
-	#[should_panic = "pcr1 does not match attestation doc"]
 	fn verify_attestation_doc_against_user_input_panics_invalid_pcr1() {
 		let attestation_doc =
 			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
 				.unwrap();
 
-		verify_attestation_doc_against_user_input(
+		let err = verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
 			&qos_hex::decode(MOCK_PCR0).unwrap(),
 			&[255; 48],
 			&qos_hex::decode(MOCK_PCR2).unwrap(),
 			&qos_hex::decode(MOCK_PCR3).unwrap(),
-		);
+		)
+		.unwrap_err();
+
+		match err {
+			AttestError::DifferentPcr1 => (),
+			_ => panic!(),
+		}
 	}
 
 	#[test]
-	#[should_panic = "pcr2 does not match attestation doc"]
 	fn verify_attestation_doc_against_user_input_panics_invalid_pcr2() {
 		let attestation_doc =
 			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
 				.unwrap();
 
-		verify_attestation_doc_against_user_input(
+		let err = verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
 			&qos_hex::decode(MOCK_PCR0).unwrap(),
 			&qos_hex::decode(MOCK_PCR1).unwrap(),
 			&[255; 48],
 			&qos_hex::decode(MOCK_PCR3).unwrap(),
-		);
+		)
+		.unwrap_err();
+
+		match err {
+			AttestError::DifferentPcr2 => (),
+			_ => panic!(),
+		}
 	}
 
 	#[test]
-	#[should_panic = "pcr3 does not match attestation doc"]
 	fn verify_attestation_doc_against_user_input_panics_invalid_pcr3() {
 		let attestation_doc =
 			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
 				.unwrap();
 
-		verify_attestation_doc_against_user_input(
+		let err = verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
 			&qos_hex::decode(MOCK_PCR0).unwrap(),
 			&qos_hex::decode(MOCK_PCR1).unwrap(),
 			&qos_hex::decode(MOCK_PCR2).unwrap(),
 			&[255; 48],
-		);
+		)
+		.unwrap_err();
+
+		match err {
+			AttestError::DifferentPcr3 => (),
+			_ => panic!(),
+		}
 	}
 
 	// #[test]

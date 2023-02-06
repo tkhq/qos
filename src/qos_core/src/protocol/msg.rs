@@ -1,7 +1,8 @@
 //! Enclave executor message types.
 
+use qos_nsm::types::{NsmRequest, NsmResponse};
+
 use crate::protocol::{
-	attestor::types::{NsmRequest, NsmResponse},
 	services::{
 		boot::{Approval, ManifestEnvelope},
 		genesis::{GenesisOutput, GenesisSet},
@@ -97,6 +98,48 @@ pub enum ProtocolMsg {
 		/// Manifest Envelope, if it exists, otherwise None.
 		manifest_envelope: Option<Box<ManifestEnvelope>>,
 	},
+
+	/// Execute a key forward attestation request
+	BootKeyForwardRequest {
+		/// Manifest with approvals
+		manifest_envelope: Box<ManifestEnvelope>,
+		/// Pivot binary
+		pivot: Vec<u8>,
+	},
+	/// Response to a key forward attestation request
+	BootKeyForwardResponse {
+		/// Should be `[NsmResponse::Attestation`]
+		nsm_response: NsmResponse,
+	},
+
+	/// Request a quorum key as part of the "key forwarding" flow.
+	ExportKeyRequest {
+		/// Manifest of the enclave requesting the quorum key.
+		manifest_envelope: Box<ManifestEnvelope>,
+		/// Attestation document from the enclave requesting the quorum key. We
+		/// assume this attestation document contains a hash of the given
+		/// manifest in the user data field.
+		cose_sign1_attestation_doc: Vec<u8>,
+	},
+	/// Response to [`Self::ExportKeyRequest`]
+	ExportKeyResponse {
+		/// Quorum key encrypted to the Ephemeral Key from the submitted
+		/// attestation document.
+		encrypted_quorum_key: Vec<u8>,
+		/// Signature over the encrypted quorum key.
+		signature: Vec<u8>,
+	},
+
+	/// Inject a key into an enclave
+	InjectKeyRequest {
+		/// Quorum key encrypted to the Ephemeral Key of the enclave this
+		/// request is being sent to.
+		encrypted_quorum_key: Vec<u8>,
+		/// Signature over the encrypted quorum key.
+		signature: Vec<u8>,
+	},
+	/// Successful response to [`Self::InjectKeyRequest`].
+	InjectKeyResponse,
 }
 
 #[cfg(test)]

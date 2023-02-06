@@ -14,7 +14,6 @@ use qos_attest::nitro::{
 	verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
 };
 use qos_core::protocol::{
-	attestor::types::NsmResponse,
 	msg::ProtocolMsg,
 	services::{
 		boot::{
@@ -22,10 +21,12 @@ use qos_core::protocol::{
 			NitroConfig, PivotConfig, QuorumMember, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisOutput, GenesisSet},
+		key::EncryptedQuorumKey,
 	},
 	QosHash,
 };
 use qos_crypto::{sha_256, sha_384};
+use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Error, P256Pair, P256Public};
 use zeroize::Zeroizing;
 
@@ -116,6 +117,15 @@ pub enum Error {
 	/// The hash of prcs.txt does not match the hash stored in the
 	/// corresponding release manifest.
 	PcrTxtHashDoesNotMatchReleaseManifest,
+	QosAttest(String),
+	/// Pivot file
+	FailedToReadPivot(std::io::Error),
+	/// Unexpected response from a request to the enclave - likely an error.
+	UnexpectedProtocolMsgResponse(String),
+	/// Could not read the file that should contain the encrypted quorum key.
+	FailedToReadEncryptedQuorumKey,
+	/// The contents of the file are not a valid encrypted quorum key struct.
+	InvalidEncryptedQuorumKey,
 }
 
 impl From<borsh::maybestd::io::Error> for Error {
@@ -140,6 +150,13 @@ impl From<P256Error> for Error {
 impl From<qos_hex::HexError> for Error {
 	fn from(err: qos_hex::HexError) -> Error {
 		Error::CouldNotDecodeHex(err)
+	}
+}
+
+impl From<qos_attest::AttestError> for Error {
+	fn from(err: qos_attest::AttestError) -> Error {
+		let msg = format!("{:?}", err);
+		Error::QosAttest(msg)
 	}
 }
 
@@ -432,7 +449,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 			&qos_build_fingerprints.pcr1,
 			&qos_build_fingerprints.pcr2,
 			&extract_pcr3(pcr3_preimage_path),
-		);
+		)?;
 	}
 
 	// Write the attestation doc
@@ -530,7 +547,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 			&qos_build_fingerprints.pcr1,
 			&qos_build_fingerprints.pcr2,
 			&extract_pcr3(pcr3_preimage_path),
-		);
+		)?;
 	}
 
 	// Get the members specific output based on alias & setup key
@@ -871,6 +888,97 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	Ok(())
 }
 
+pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
+	uri: &str,
+	manifest_envelope_path: P,
+	pivot_path: P,
+	attestation_doc_path: P,
+) -> Result<(), Error> {
+	let pivot =
+		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
+	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;
+
+	let req = ProtocolMsg::BootKeyForwardRequest {
+		manifest_envelope: Box::new(manifest_envelope),
+		pivot,
+	};
+	let cose_sign1 = match request::post(uri, &req).unwrap() {
+		ProtocolMsg::BootKeyForwardResponse {
+			nsm_response: NsmResponse::Attestation { document },
+		} => document,
+		r => {
+			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")))
+		}
+	};
+
+	write_with_msg(
+		attestation_doc_path.as_ref(),
+		&cose_sign1,
+		"COSE Sign1 Attestation Doc",
+	);
+
+	Ok(())
+}
+
+pub(crate) fn export_key<P: AsRef<Path>>(
+	uri: &str,
+	manifest_envelope_path: P,
+	attestation_doc_path: P,
+	encrypted_quorum_key_path: P,
+) -> Result<(), Error> {
+	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;
+	let cose_sign1_attestation_doc = fs::read(attestation_doc_path.as_ref())
+		.map_err(Error::FailedToReadAttestationDoc)?;
+
+	let req = ProtocolMsg::ExportKeyRequest {
+		manifest_envelope: Box::new(manifest_envelope),
+		cose_sign1_attestation_doc,
+	};
+
+	let encrypted_quorum_key = match request::post(uri, &req).unwrap() {
+		ProtocolMsg::ExportKeyResponse { encrypted_quorum_key, signature } => {
+			EncryptedQuorumKey { encrypted_quorum_key, signature }
+		}
+		r => {
+			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")))
+		}
+	};
+
+	write_with_msg(
+		encrypted_quorum_key_path.as_ref(),
+		&encrypted_quorum_key.try_to_vec().expect("valid borsh. qed."),
+		"Encrypted Quorum Key",
+	);
+
+	Ok(())
+}
+
+pub(crate) fn inject_key<P: AsRef<Path>>(
+	uri: &str,
+	encrypted_quorum_key_path: P,
+) -> Result<(), Error> {
+	let encrypted_quorum_key = {
+		let bytes = std::fs::read(encrypted_quorum_key_path)
+			.map_err(|_| Error::FailedToReadEncryptedQuorumKey)?;
+		EncryptedQuorumKey::try_from_slice(&bytes)
+			.map_err(|_| Error::InvalidEncryptedQuorumKey)?
+	};
+
+	let req = ProtocolMsg::InjectKeyRequest {
+		encrypted_quorum_key: encrypted_quorum_key.encrypted_quorum_key,
+		signature: encrypted_quorum_key.signature,
+	};
+
+	match request::post(uri, &req).unwrap() {
+		ProtocolMsg::InjectKeyResponse => println!("Successful key injection!"),
+		r => {
+			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")))
+		}
+	};
+
+	Ok(())
+}
+
 pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
 	pub uri: String,
 	pub pivot_path: P,
@@ -890,7 +998,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	// Read in pivot binary
 	let pivot =
-		fs::read(pivot_path.as_ref()).expect("Failed to read pivot binary");
+		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
 
 	// Create manifest envelope
 	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;
@@ -923,7 +1031,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 			&manifest.enclave.pcr1,
 			&manifest.enclave.pcr2,
 			&extract_pcr3(pcr3_preimage_path),
-		);
+		)?;
 
 		// Sanity check the ephemeral key is valid
 		let eph_pub_bytes = attestation_doc
@@ -1017,7 +1125,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 			&manifest_envelope.manifest.enclave.pcr1,
 			&manifest_envelope.manifest.enclave.pcr2,
 			&extract_pcr3(pcr3_preimage_path),
-		);
+		)?;
 	}
 
 	// Pull out the ephemeral key or use the override
@@ -1834,6 +1942,7 @@ fn extract_pivot_build_fingerprints<P: AsRef<Path>>(
 /// # Panics
 ///
 /// Panics if extraction or validation fails.
+// TODO: [now] bubble up errors
 pub(crate) fn extract_attestation_doc(
 	cose_sign1_der: &[u8],
 	unsafe_skip_attestation: bool,

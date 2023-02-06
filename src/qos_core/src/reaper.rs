@@ -6,11 +6,12 @@
 //! applications.
 use std::process::Command;
 
+use qos_nsm::NsmProvider;
+
 use crate::{
 	handles::Handles,
 	io::SocketAddress,
 	protocol::{
-		attestor::NsmProvider,
 		services::boot::{PivotConfig, RestartPolicy},
 		Executor,
 	},

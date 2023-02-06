@@ -148,7 +148,8 @@ impl HostServer {
 				let status = match phase {
 					ProtocolPhase::UnrecoverableError
 					| ProtocolPhase::WaitingForBootInstruction
-					| ProtocolPhase::WaitingForQuorumShards => StatusCode::SERVICE_UNAVAILABLE,
+					| ProtocolPhase::WaitingForQuorumShards
+					| ProtocolPhase::WaitingForForwardedKey => StatusCode::SERVICE_UNAVAILABLE,
 					ProtocolPhase::QuorumKeyProvisioned => StatusCode::OK,
 				};
 
