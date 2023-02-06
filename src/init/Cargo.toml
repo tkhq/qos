@@ -8,7 +8,7 @@ libc = "0.2.134"
 qos_aws = { path = "../qos_aws"}
 qos_system = { path = "../qos_system"}
 qos_core = { path = "../qos_core", features = ["vm"], default-features = false }
-qos_nsm = { path = "../qos_nsm", features = ["vm"], default-features = false }
+qos_nsm = { path = "../qos_nsm", default-features = false }
 
 [[bin]]
 name = "init"
