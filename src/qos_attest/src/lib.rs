@@ -82,7 +82,7 @@ impl From<aws_nitro_enclaves_nsm_api::api::Error> for AttestError {
 	}
 }
 
-/// Get the current time based on the NSM attestation document.
+/// Get the current time in milliseconds based on the NSM attestation document.
 pub fn current_time(
 	nsm: &dyn qos_nsm::NsmProvider,
 ) -> Result<u64, AttestError> {
