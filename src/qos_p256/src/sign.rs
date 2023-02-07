@@ -1,8 +1,9 @@
 //! Abstractions for sign and signature verification
 
+use p256::ecdsa::Signature;
 use p256::ecdsa::{
-	signature::{Signature as _, Signer, Verifier},
-	Signature, SigningKey, VerifyingKey,
+	signature::{Signer, Verifier},
+	SigningKey, VerifyingKey,
 };
 use rand_core::OsRng;
 use zeroize::ZeroizeOnDrop;
@@ -68,7 +69,7 @@ impl P256SignPublic {
 		message: &[u8],
 		signature: &[u8],
 	) -> Result<(), P256Error> {
-		let signature = Signature::from_bytes(signature)
+		let signature = Signature::try_from(signature)
 			.map_err(|_| P256Error::FailedToDeserializeSignature)?;
 
 		self.public
