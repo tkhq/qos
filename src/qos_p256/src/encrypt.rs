@@ -14,11 +14,12 @@ use rand_core::OsRng;
 use sha2::Sha512;
 use zeroize::ZeroizeOnDrop;
 
-use crate::P256Error;
+use crate::{non_zero_bytes_os_rng, P256Error, PUB_KEY_LEN_UNCOMPRESSED};
 
 const AES256_KEY_LEN: usize = 32;
-const BITS_96_AS_BYTES: usize = 12;
-use crate::PUB_KEY_LEN_UNCOMPRESSED;
+const BITS_96_AS_BYTES: u8 = 12;
+const AES_GCM_256_HMAC_SHA512_TAG: &[u8] = b"qos_aes_gcm_256_hmac_sha52";
+const ENCRYPTION_HMAC_MESSAGE: &[u8] = b"encryption_hmac_message";
 
 type HmacSha512 = Hmac<Sha512>;
 
@@ -26,14 +27,14 @@ type HmacSha512 = Hmac<Sha512>;
 #[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Envelope {
 	/// Nonce used as an input to the cipher.
-	nonce: [u8; BITS_96_AS_BYTES],
+	nonce: [u8; BITS_96_AS_BYTES as usize],
 	/// Public key as sec1 encoded point with no compression
-	pub ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED],
+	pub ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED as usize],
 	/// The data encrypted with an AES 256 GCM cipher.
 	encrypted_message: Vec<u8>,
 }
 
-/// P256 key pair
+/// P256 key pair.
 #[derive(ZeroizeOnDrop)]
 #[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct P256EncryptPair {
@@ -122,7 +123,7 @@ impl P256EncryptPublic {
 	/// Encrypt a message to this public key.
 	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
 		let ephemeral_sender_private = SecretKey::random(&mut OsRng);
-		let ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED] =
+		let ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED as usize] =
 			ephemeral_sender_private
 				.public_key()
 				.to_encoded_point(false)
@@ -148,7 +149,7 @@ impl P256EncryptPublic {
 
 		let nonce = {
 			let random_bytes =
-				crate::non_zero_bytes_os_rng::<BITS_96_AS_BYTES>();
+				crate::non_zero_bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
 			*Nonce::from_slice(&random_bytes)
 		};
 
@@ -270,7 +271,7 @@ fn create_cipher(
 
 	let mut mac = <HmacSha512 as KeyInit>::new_from_slice(&pre_image[..])
 		.expect("hmac can take a key of any size");
-	mac.update(&pre_image);
+	mac.update(ENCRYPTION_HMAC_MESSAGE);
 	let shared_key = mac.finalize().into_bytes();
 
 	Aes256Gcm::new_from_slice(&shared_key[..AES256_KEY_LEN])
@@ -278,23 +279,117 @@ fn create_cipher(
 }
 
 // Helper function to create the additional associated data (AAD). The data is
-// of the form `sender_public||receiver_public||nonce`.
+// of the form
+/// `sender_public||sender_public_len||receiver_public||receiver_public_len||nonce||nonce_len`.
+///
+/// Note that we append the length to each field as per NIST specs here: <https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-56Ar3.pdf. See section 5.8.2/>.
 fn create_additional_associated_data(
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,
 	nonce: &[u8],
 ) -> Vec<u8> {
+	let ephemeral_sender_len = &[PUB_KEY_LEN_UNCOMPRESSED];
+	let receiver_public_len = ephemeral_sender_len;
+	let nonce_len = &[BITS_96_AS_BYTES];
+
 	ephemeral_sender_public
 		.0
 		.iter()
+		.chain(ephemeral_sender_len)
 		.chain(receiver_public.0)
+		.chain(receiver_public_len)
 		.chain(nonce)
+		.chain(nonce_len)
 		.copied()
 		.collect()
 }
 
+/// Envelope for holding an encrypted message and some metadata needed to
+/// perform decryption.
+#[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct SymmetricEnvelope {
+	/// Nonce used by the cipher.
+	pub nonce: [u8; BITS_96_AS_BYTES as usize],
+	/// The ciphertext.
+	pub encrypted_message: Vec<u8>,
+}
+
+/// Secret for performing encryption and decryption using a AES GCM 256 Cipher.
+#[derive(ZeroizeOnDrop)]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
+pub struct AesGcm256Secret {
+	secret: [u8; AES256_KEY_LEN],
+}
+
+impl AesGcm256Secret {
+	/// Generate a secret
+	#[must_use]
+	pub fn generate() -> Self {
+		Self { secret: non_zero_bytes_os_rng::<AES256_KEY_LEN>() }
+	}
+
+	/// The secret as bytes.
+	#[must_use]
+	pub fn to_bytes(&self) -> &[u8; AES256_KEY_LEN] {
+		&self.secret
+	}
+
+	/// Create [`Self`] from bytes.
+	pub fn from_bytes(bytes: [u8; AES256_KEY_LEN]) -> Result<Self, P256Error> {
+		Ok(Self { secret: bytes })
+	}
+
+	/// Encrypt the given `msg`.
+	///
+	/// Returns a serialized [`SymmetricEnvelope`].
+	pub fn encrypt(&self, msg: &[u8]) -> Result<Vec<u8>, P256Error> {
+		let nonce = {
+			let random_bytes =
+				non_zero_bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
+			*Nonce::from_slice(&random_bytes)
+		};
+		let payload = Payload { aad: AES_GCM_256_HMAC_SHA512_TAG, msg };
+
+		let cipher = Aes256Gcm::new_from_slice(&self.secret)
+			.expect("secret is a valid aes256 key len. qed.");
+		let encrypted_message = cipher
+			.encrypt(&nonce, payload)
+			.map_err(|_| P256Error::AesGcm256EncryptError)?;
+
+		let nonce = nonce
+			.try_into()
+			.map_err(|_| P256Error::FailedToCoerceNonceToIntendedLength)?;
+		let envelope = SymmetricEnvelope { nonce, encrypted_message };
+		envelope.try_to_vec().map_err(|_| P256Error::FailedToSerializeEnvelope)
+	}
+
+	/// Decrypt the given serialized [`SymmetricEnvelope`].
+	///
+	/// Returns the plaintext.
+	pub fn decrypt(
+		&self,
+		serialized_envelope: &[u8],
+	) -> Result<Vec<u8>, P256Error> {
+		let SymmetricEnvelope { nonce, encrypted_message } =
+			SymmetricEnvelope::try_from_slice(serialized_envelope)
+				.map_err(|_| P256Error::FailedToDeserializeEnvelope)?;
+
+		let nonce = Nonce::from_slice(&nonce);
+		let payload = Payload {
+			aad: AES_GCM_256_HMAC_SHA512_TAG,
+			msg: &encrypted_message,
+		};
+
+		let cipher = Aes256Gcm::new_from_slice(&self.secret)
+			.expect("secret is a valid aes256 key len. qed.");
+		cipher
+			.decrypt(nonce, payload)
+			.map_err(|_| P256Error::AesGcm256DecryptError)
+	}
+}
+
 #[cfg(test)]
-mod tests {
+mod test_asymmetric {
 	use super::*;
 
 	#[test]
@@ -410,8 +505,8 @@ mod tests {
 
 		let mut serialized_envelope = alice_public.encrypt(plaintext).unwrap();
 		// Given borsh encoding, this should be a byte in the nonce. We insert a
-		// byte and shift everthing after, making the nonce too long.
-		serialized_envelope.insert(BITS_96_AS_BYTES, 0xff);
+		// byte and shift everything after, making the nonce too long.
+		serialized_envelope.insert(BITS_96_AS_BYTES as usize, 0xff);
 
 		assert_eq!(
 			alice_pair.decrypt(&serialized_envelope).unwrap_err(),
@@ -446,5 +541,88 @@ mod tests {
 		let raw_secret2 = pair2.to_bytes();
 
 		assert_eq!(raw_secret1, raw_secret2);
+	}
+}
+
+#[cfg(test)]
+mod test_symmetric {
+	use super::*;
+
+	#[test]
+	fn encrypt_decrypt_round_trip() {
+		let plaintext = b"rust test message";
+
+		let key = AesGcm256Secret::generate();
+
+		let envelope = key.encrypt(plaintext).unwrap();
+		let result = key.decrypt(&envelope).unwrap();
+
+		assert_eq!(result, plaintext);
+	}
+
+	#[test]
+	fn secret_roundtrip_bytes() {
+		let key_original = AesGcm256Secret::generate();
+		let bytes_original = key_original.to_bytes();
+
+		let key_reconstructed =
+			AesGcm256Secret::from_bytes(*bytes_original).unwrap();
+		let bytes_reconstructed = key_reconstructed.to_bytes();
+
+		assert!(key_original == key_reconstructed);
+		assert_eq!(bytes_original, bytes_reconstructed);
+	}
+
+	#[test]
+	fn tampered_nonce_errors() {
+		let plaintext = b"rust test message";
+		let key = AesGcm256Secret::generate();
+
+		let envelope_bytes = key.encrypt(plaintext).unwrap();
+
+		let mut envelope =
+			SymmetricEnvelope::try_from_slice(&envelope_bytes).unwrap();
+		if envelope.nonce[0] == u8::MAX {
+			envelope.nonce[0] -= 1;
+		} else {
+			envelope.nonce[0] += 1;
+		}
+		let serialized_envelope = envelope.try_to_vec().unwrap();
+
+		let err = key.decrypt(&serialized_envelope).unwrap_err();
+		assert_eq!(err, P256Error::AesGcm256DecryptError,);
+	}
+
+	#[test]
+	fn tampered_encrypted_payload_errors() {
+		let plaintext = b"rust test message";
+		let key = AesGcm256Secret::generate();
+
+		let envelope_bytes = key.encrypt(plaintext).unwrap();
+
+		let mut envelope =
+			SymmetricEnvelope::try_from_slice(&envelope_bytes).unwrap();
+
+		if envelope.encrypted_message[0] == u8::MAX {
+			envelope.encrypted_message[0] -= 1;
+		} else {
+			envelope.encrypted_message[0] += 1;
+		};
+		let serialized_envelope = envelope.try_to_vec().unwrap();
+
+		let err = key.decrypt(&serialized_envelope).unwrap_err();
+		assert_eq!(err, P256Error::AesGcm256DecryptError,);
+	}
+
+	#[test]
+	fn different_key_cannot_decrypt() {
+		let plaintext = b"rust test message";
+		let key = AesGcm256Secret::generate();
+		let other_key = AesGcm256Secret::generate();
+
+		let serialized_envelope = key.encrypt(plaintext).unwrap();
+
+		let err = other_key.decrypt(&serialized_envelope).unwrap_err();
+		assert_eq!(err, P256Error::AesGcm256DecryptError,);
 	}
 }

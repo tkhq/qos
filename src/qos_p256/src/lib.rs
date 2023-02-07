@@ -7,6 +7,7 @@
 
 use std::path::Path;
 
+use encrypt::AesGcm256Secret;
 use hkdf::Hkdf;
 use rand_core::{OsRng, RngCore};
 use sha2::Sha512;
@@ -17,12 +18,14 @@ use crate::{
 	sign::{P256SignPair, P256SignPublic},
 };
 
-const PUB_KEY_LEN_UNCOMPRESSED: usize = 65;
+const PUB_KEY_LEN_UNCOMPRESSED: u8 = 65;
 
 /// Master seed derive path for encryption secret
 pub const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
 /// Master seed derive path for signing secret
 pub const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
+/// Master seed derive path for aes gcm
+pub const AES_GCM_256_PATH: &[u8] = b"qos_aes_gcm_encrypt";
 /// Length of a p256 secret seed.
 pub const P256_SECRET_LEN: usize = 32;
 /// Length of the master seed.
@@ -118,9 +121,10 @@ pub fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
 #[derive(ZeroizeOnDrop)]
 #[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct P256Pair {
-	encrypt_private: P256EncryptPair,
+	p256_encrypt_private: P256EncryptPair,
 	sign_private: P256SignPair,
 	master_seed: [u8; MASTER_SEED_LEN],
+	aes_gcm_256_secret: AesGcm256Secret,
 }
 
 impl P256Pair {
@@ -128,15 +132,33 @@ impl P256Pair {
 	pub fn generate() -> Result<Self, P256Error> {
 		let master_seed = non_zero_bytes_os_rng::<MASTER_SEED_LEN>();
 
-		let encrypt_secret =
+		let p256_encrypt_secret =
 			derive_secret(&master_seed, P256_ENCRYPT_DERIVE_PATH)?;
-		let sign_secret = derive_secret(&master_seed, P256_SIGN_DERIVE_PATH)?;
+		let p256_sign_secret =
+			derive_secret(&master_seed, P256_SIGN_DERIVE_PATH)?;
+		let aes_gcm_secret = derive_secret(&master_seed, AES_GCM_256_PATH)?;
 
 		Ok(Self {
-			encrypt_private: P256EncryptPair::from_bytes(&encrypt_secret)?,
-			sign_private: P256SignPair::from_bytes(&sign_secret)?,
+			p256_encrypt_private: P256EncryptPair::from_bytes(
+				&p256_encrypt_secret,
+			)?,
+			sign_private: P256SignPair::from_bytes(&p256_sign_secret)?,
 			master_seed,
+			aes_gcm_256_secret: AesGcm256Secret::from_bytes(aes_gcm_secret)?,
 		})
+	}
+
+	/// Encrypt the given `msg` with the symmetric encryption secret.
+	pub fn aes_gcm_256_encrypt(&self, msg: &[u8]) -> Result<Vec<u8>, P256Error> {
+		self.aes_gcm_256_secret.encrypt(msg)
+	}
+
+	/// Decrypt a message with the symmetric encryption secret.
+	pub fn aes_gcm_256_decrypt(
+		&self,
+		serialized_envelope: &[u8],
+	) -> Result<Vec<u8>, P256Error> {
+		self.aes_gcm_256_secret.decrypt(serialized_envelope)
 	}
 
 	/// Decrypt a message encoded to this pair's public key.
@@ -144,7 +166,7 @@ impl P256Pair {
 		&self,
 		serialized_envelope: &[u8],
 	) -> Result<Vec<u8>, P256Error> {
-		self.encrypt_private.decrypt(serialized_envelope)
+		self.p256_encrypt_private.decrypt(serialized_envelope)
 	}
 
 	/// Sign the message and return the raw signature.
@@ -156,7 +178,7 @@ impl P256Pair {
 	#[must_use]
 	pub fn public_key(&self) -> P256Public {
 		P256Public {
-			encrypt_public: self.encrypt_private.public_key(),
+			encrypt_public: self.p256_encrypt_private.public_key(),
 			sign_public: self.sign_private.public_key(),
 		}
 	}
@@ -168,11 +190,15 @@ impl P256Pair {
 		let encrypt_secret =
 			derive_secret(master_seed, P256_ENCRYPT_DERIVE_PATH)?;
 		let sign_secret = derive_secret(master_seed, P256_SIGN_DERIVE_PATH)?;
+		let aes_gcm_256_encrypt = derive_secret(master_seed, AES_GCM_256_PATH)?;
 
 		Ok(Self {
-			encrypt_private: P256EncryptPair::from_bytes(&encrypt_secret)?,
+			p256_encrypt_private: P256EncryptPair::from_bytes(
+				&encrypt_secret,
+			)?,
 			sign_private: P256SignPair::from_bytes(&sign_secret)?,
 			master_seed: *master_seed,
+			aes_gcm_256_secret: AesGcm256Secret::from_bytes(aes_gcm_256_encrypt)?,
 		})
 	}
 
@@ -259,15 +285,15 @@ impl P256Public {
 	/// Deserialize each public key from a SEC1 encoded point, not compressed.
 	/// Expects encoding as `encrypt_public||sign_public`.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
-		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED * 2 {
+		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize * 2 {
 			return Err(P256Error::EncodedPublicKeyTooLong);
 		}
-		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED * 2 {
+		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED as usize * 2 {
 			return Err(P256Error::EncodedPublicKeyTooShort);
 		}
 
 		let (encrypt_bytes, sign_bytes) =
-			bytes.split_at(PUB_KEY_LEN_UNCOMPRESSED);
+			bytes.split_at(PUB_KEY_LEN_UNCOMPRESSED as usize);
 
 		Ok(Self {
 			encrypt_public: P256EncryptPublic::from_bytes(encrypt_bytes)
@@ -387,7 +413,10 @@ mod test {
 		let alice_public = alice_pair.public_key();
 		let alice_public_bytes = alice_public.to_bytes();
 
-		assert_eq!(alice_public_bytes.len(), PUB_KEY_LEN_UNCOMPRESSED * 2);
+		assert_eq!(
+			alice_public_bytes.len(),
+			PUB_KEY_LEN_UNCOMPRESSED as usize * 2
+		);
 
 		let alice_public2 =
 			P256Public::from_bytes(&alice_public_bytes).unwrap();
@@ -460,5 +489,33 @@ mod test {
 		let message = b"a message to authenticate";
 		let signature = alice_pair2.sign(message).unwrap();
 		assert!(alice_pair.public_key().verify(message, &signature).is_ok());
+	}
+
+	mod aes_gcm_256 {
+		use super::*;
+
+		#[test]
+		fn encrypt_decrypt_round_trip() {
+			let plaintext = b"rust test message";
+
+			let key = P256Pair::generate().unwrap();
+
+			let envelope = key.aes_gcm_256_encrypt(plaintext).unwrap();
+			let result = key.aes_gcm_256_decrypt(&envelope).unwrap();
+
+			assert_eq!(result, plaintext);
+		}
+
+		#[test]
+		fn different_key_cannot_decrypt() {
+		let plaintext = b"rust test message";
+		let key = P256Pair::generate().unwrap();
+		let other_key = P256Pair::generate().unwrap();
+
+		let serialized_envelope = key.aes_gcm_256_encrypt(plaintext).unwrap();
+
+		let err = other_key.aes_gcm_256_decrypt(&serialized_envelope).unwrap_err();
+		assert_eq!(err, P256Error::AesGcm256DecryptError,);
+		}
 	}
 }
