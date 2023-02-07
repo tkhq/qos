@@ -80,7 +80,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 			--kernel_config $(CACHE_DIR)/eif/linux.config \
 			--cmdline 'reboot=k initrd=0x2000000$(,)3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd' \
 			--ramdisk $(CACHE_DIR)/eif/rootfs.cpio \
-			--pcrs_output $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs
+			--pcrs_output $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs \
 			--output $(OUT_DIR)/$(TARGET)-$(ARCH).eif; \
 	")
 
