@@ -739,8 +739,11 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	};
 
 	let approval_path = manifest_approvals_dir.as_ref().join(format!(
-		"{}.{}.{}.{}",
-		alias, manifest.namespace.name, manifest.namespace.nonce, APPROVAL_EXT
+		"{}-{}-{}.{}",
+		alias,
+		manifest.namespace.name.replace("/", "-"),
+		manifest.namespace.nonce,
+		APPROVAL_EXT
 	));
 	write_with_msg(
 		&approval_path,
