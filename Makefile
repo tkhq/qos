@@ -6,18 +6,20 @@ DEFAULT_GOAL := $(OUT_DIR)/$(TARGET)-$(ARCH).eif
 else ifeq ($(TARGET), generic)
 DEFAULT_GOAL := $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
 endif
-.DEFAULT_GOAL :=
-default: toolchain $(DEFAULT_GOAL)
 
-.PHONY: release
-release: | \
-	$(OUT_DIR)/$(TARGET)-$(ARCH).eif \
-	$(OUT_DIR)/$(TARGET)-$(ARCH).pcrs \
+.DEFAULT_GOAL :=
+.PHONY: default
+default: \
+	toolchain \
+	$(DEFAULT_GOAL) \
 	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/release.env \
 	$(OUT_DIR)/manifest.txt
-	cp -R $(OUT_DIR) $(RELEASE_DIR)
+
+.PHONY: release
+release: default
+	cp -R $(OUT_DIR)/* $(RELEASE_DIR)/
 
 .PHONY: sign
 sign: $(RELEASE_DIR)/manifest.txt
@@ -71,6 +73,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	$(CACHE_DIR)/linux.config
 	mkdir -p $(CACHE_DIR)/eif
 	$(call toolchain,$(USER)," \
+		export FAKETIME=1 && \
 		cp $(CACHE_DIR)/bzImage $(CACHE_DIR)/eif/ && \
 		cp $(CACHE_DIR)/rootfs.cpio $(CACHE_DIR)/eif/ && \
 		cp $(CONFIG_DIR)/$(TARGET)/linux.config $(CACHE_DIR)/eif/ && \
@@ -92,9 +95,10 @@ $(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH):
 			--target x86_64-unknown-linux-gnu \
 			--features vm \
 			--no-default-features \
+			--locked \
 			--release \
 		&& cp \
-			target/x86_64-unknown-linux-gnu/release/qos_host \
+			../target/x86_64-unknown-linux-gnu/release/qos_host \
 			/home/build/$@; \
 	")
 
@@ -105,9 +109,10 @@ $(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH):
 		&& CARGO_HOME=$(CACHE_DIR)/cargo cargo build \
 			--target x86_64-unknown-linux-gnu \
 			--no-default-features \
+			--locked \
 			--release \
 		&& cp \
-			target/x86_64-unknown-linux-gnu/release/qos_client \
+			../target/x86_64-unknown-linux-gnu/release/qos_client \
 			/home/build/$@; \
 	")
 
@@ -181,6 +186,7 @@ $(CACHE_DIR)/rootfs.cpio: \
 	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
 	$(BIN_DIR)/gen_init_cpio \
 	$(BIN_DIR)/gen_initramfs.sh
+	mkdir -p $(CACHE_DIR)/rootfs
 ifeq ($(TARGET), aws)
 	$(MAKE) TARGET=$(TARGET) $(CACHE_DIR)/nsm.ko
 	cp $(CACHE_DIR)/nsm.ko $(CACHE_DIR)/rootfs/

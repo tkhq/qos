@@ -2,6 +2,7 @@ out/*
 cache/*
 .*
 src/init/target
+src/*/cache
 .DS_Store
 .vscode
 target/
