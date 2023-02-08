@@ -1,10 +1,2 @@
-release/aws/nitro.eif filter=lfs diff=lfs merge=lfs -text
-release/qos_client filter=lfs diff=lfs merge=lfs -text
-release/qos_host filter=lfs diff=lfs merge=lfs -text
-releases/0.1rc1/aws-nitro.eif filter=lfs diff=lfs merge=lfs -text
-releases/0.1rc1/qos_client filter=lfs diff=lfs merge=lfs -text
-releases/0.1rc1/qos_host filter=lfs diff=lfs merge=lfs -text
-release/0.1rc1/aws-nitro.eif filter=lfs diff=lfs merge=lfs -text
-release/0.1rc2/aws-x86_64.eif filter=lfs diff=lfs merge=lfs -text
-release/0.1rc2/qos_client.linux.x86_64 filter=lfs diff=lfs merge=lfs -text
-release/0.1rc2/qos_host.linux.x86_64 filter=lfs diff=lfs merge=lfs -text
+Release/*/*.eif filter=lfs diff=lfs merge=lfs -text
+release/*/*.x86_64 filter=lfs diff=lfs merge=lfs -text
