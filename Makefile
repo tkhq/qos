@@ -218,7 +218,9 @@ $(CACHE_DIR)/bzImage: \
 $(BIN_DIR)/eif_build:
 	$(call toolchain,$(USER)," \
 		cd $(SRC_DIR)/eif_build && \
-		CARGO_HOME=$(CACHE_DIR)/cargo cargo build \
+		export CARGO_HOME=$(CACHE_DIR)/cargo && \
+		cargo build \
+			--locked \
 			--target x86_64-unknown-linux-gnu && \
 		cp target/x86_64-unknown-linux-gnu/debug/eif_build /home/build/$@; \
 	")
