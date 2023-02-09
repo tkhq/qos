@@ -1,2 +1,2 @@
-release/*/*.eif filter=lfs diff=lfs merge=lfs -text
-release/*/*.x86_64 filter=lfs diff=lfs merge=lfs -text
+dist/*.eif filter=lfs diff=lfs merge=lfs -text
+dist/*.x86_64 filter=lfs diff=lfs merge=lfs -text
