@@ -1,4 +1,4 @@
-TARGET := generic
+TARGET := aws
 include $(PWD)/src/toolchain/Makefile
 
 ifeq ($(TARGET), aws)
