@@ -60,6 +60,8 @@ const DR_KEY_PATH: &str = "dr-key-path";
 const CURRENT_PIN_PATH: &str = "current-pin-path";
 const NEW_PIN_PATH: &str = "new-pin-path";
 const ENCRYPTED_QUORUM_KEY_PATH: &str = "encrypted-quorum-key-path";
+const CIPHERTEXT_PATH: &str = "ciphertext-path";
+const PLAINTEXT_PATH: &str = "plaintext-path";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -178,8 +180,6 @@ pub enum Command {
 	YubiKeySign,
 	/// Get the public key of a yubikey
 	YubiKeyPublic,
-	/// Verify a signature from qos_p256 pair.
-	Verify,
 	/// Display some borsh encoded type in an easy to read format.
 	Display,
 	/// Reset the PIV app. WARNING: this is a destructive operation that will
@@ -195,6 +195,14 @@ pub enum Command {
 	ExportKey,
 	/// Inject a quorum key into a non-fully provisioned enclave
 	InjectKey,
+	/// Verify a signature from qos_p256 pair.
+	P256Verify,
+	/// Sign with a p256 signature
+	P256Sign,
+	///
+	P256AsymmetricEncrypt,
+	///
+	P256AsymmetricDecrypt,
 }
 
 impl From<&str> for Command {
@@ -221,7 +229,6 @@ impl From<&str> for Command {
 			"shamir-split" => Self::ShamirSplit,
 			"shamir-reconstruct" => Self::ShamirReconstruct,
 			"yubikey-sign" => Self::YubiKeySign,
-			"verify" => Self::Verify,
 			"yubikey-public" => Self::YubiKeyPublic,
 			"yubikey-piv-reset" => Self::YubiKeyPivReset,
 			"yubikey-change-pin" => Self::YubiKeyChangePin,
@@ -229,6 +236,10 @@ impl From<&str> for Command {
 			"boot-key-fwd" => Self::BootKeyFwd,
 			"export-key" => Self::ExportKey,
 			"inject-key" => Self::InjectKey,
+			"p256-verify" => Self::P256Verify,
+			"p256-sign" => Self::P256Sign,
+			"p256-asymmetric-encrypt" => Self::P256AsymmetricEncrypt,
+			"p256-asymmetric-decrypt" => Self::P256AsymmetricDecrypt,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -494,6 +505,16 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn plaintext_path_token() -> Token {
+		Token::new(PLAINTEXT_PATH, "Path to a file with contents to encrypt")
+			.takes_value(true)
+			.required(true)
+	}
+	fn ciphertext_path_token() -> Token {
+		Token::new(CIPHERTEXT_PATH, "Path to a file with encrypted data")
+			.takes_value(true)
+			.required(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -669,13 +690,6 @@ impl Command {
 		Parser::new()
 	}
 
-	fn verify() -> Parser {
-		Parser::new()
-			.token(Self::payload_token())
-			.token(Self::signature_token())
-			.token(Self::pub_path_token())
-	}
-
 	fn yubikey_change_pin() -> Parser {
 		Parser::new()
 			.token(Self::current_pin_path_token())
@@ -704,6 +718,33 @@ impl Command {
 
 	fn inject_key() -> Parser {
 		Self::base().token(Self::encrypted_quorum_key_path_token())
+	}
+
+	fn p256_verify() -> Parser {
+		Parser::new()
+			.token(Self::payload_token())
+			.token(Self::signature_token())
+			.token(Self::pub_path_token())
+	}
+
+	fn p256_sign() -> Parser {
+		Parser::new()
+			.token(Self::payload_token())
+			.token(Self::master_seed_path_token())
+	}
+
+	fn p256_asymmetric_encrypt() -> Parser {
+		Parser::new()
+			.token(Self::plaintext_path_token())
+			.token(Self::ciphertext_path_token())
+			.token(Self::pub_path_token())
+	}
+
+	fn p256_asymmetric_decrypt() -> Parser {
+		Parser::new()
+			.token(Self::plaintext_path_token())
+			.token(Self::ciphertext_path_token())
+			.token(Self::master_seed_path_token())
 	}
 }
 
@@ -736,13 +777,16 @@ impl GetParserForCommand for Command {
 			Self::ShamirReconstruct => Self::shamir_reconstruct(),
 			Self::YubiKeySign => Self::yubikey_sign(),
 			Self::YubiKeyPublic => Self::yubikey_public(),
-			Self::Verify => Self::verify(),
 			Self::YubiKeyPivReset => Parser::new(),
 			Self::YubiKeyChangePin => Self::yubikey_change_pin(),
 			Self::Display => Self::display(),
 			Self::BootKeyFwd => Self::boot_key_fwd(),
 			Self::ExportKey => Self::export_key(),
 			Self::InjectKey => Self::inject_key(),
+			Self::P256Verify => Self::p256_verify(),
+			Self::P256Sign => Self::p256_sign(),
+			Self::P256AsymmetricEncrypt => Self::p256_asymmetric_encrypt(),
+			Self::P256AsymmetricDecrypt => Self::p256_asymmetric_decrypt(),
 		}
 	}
 }
@@ -1014,6 +1058,20 @@ impl ClientOpts {
 			.to_string()
 	}
 
+	fn plaintext_path(&self) -> String {
+		self.parsed
+			.single(PLAINTEXT_PATH)
+			.expect("Missing `--plaintext-path`")
+			.to_string()
+	}
+
+	fn ciphertext_path(&self) -> String {
+		self.parsed
+			.single(CIPHERTEXT_PATH)
+			.expect("Missing `--ciphertext-path`")
+			.to_string()
+	}
+
 	fn yubikey(&self) -> bool {
 		self.parsed.flag(YUBIKEY).unwrap_or(false)
 	}
@@ -1100,7 +1158,6 @@ impl ClientRunner {
 				}
 				Command::YubiKeySign => handlers::yubikey_sign(&self.opts),
 				Command::YubiKeyPublic => handlers::yubikey_public(&self.opts),
-				Command::Verify => handlers::verify(&self.opts),
 				Command::YubiKeyPivReset => handlers::yubikey_piv_reset(),
 				Command::YubiKeyChangePin => {
 					handlers::yubikey_change_pin(&self.opts);
@@ -1111,6 +1168,14 @@ impl ClientRunner {
 				Command::BootKeyFwd => handlers::boot_key_fwd(&self.opts),
 				Command::ExportKey => handlers::export_key(&self.opts),
 				Command::InjectKey => handlers::inject_key(&self.opts),
+				Command::P256Verify => handlers::p256_verify(&self.opts),
+				Command::P256Sign => handlers::p256_sign(&self.opts),
+				Command::P256AsymmetricEncrypt => {
+					handlers::p256_asymmetric_encrypt(&self.opts);
+				}
+				Command::P256AsymmetricDecrypt => {
+					handlers::p256_asymmetric_decrypt(&self.opts);
+				}
 			}
 		}
 	}
@@ -1322,17 +1387,6 @@ mod handlers {
 				eprintln!("Error: {e:?}");
 				std::process::exit(1);
 			}
-		}
-	}
-
-	pub(super) fn verify(opts: &ClientOpts) {
-		if let Err(e) = services::verify(
-			&opts.payload(),
-			&opts.signature(),
-			opts.pub_path(),
-		) {
-			eprintln!("Error: {e:?}");
-			std::process::exit(1);
 		}
 	}
 
@@ -1551,6 +1605,48 @@ mod handlers {
 			opts.encrypted_quorum_key_path(),
 		) {
 			println!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn p256_verify(opts: &ClientOpts) {
+		if let Err(e) = services::p256_verify(
+			&opts.payload(),
+			&opts.signature(),
+			opts.pub_path(),
+		) {
+			eprintln!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn p256_sign(opts: &ClientOpts) {
+		if let Err(e) =
+			services::p256_sign(&opts.payload(), opts.master_seed_path())
+		{
+			eprintln!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn p256_asymmetric_encrypt(opts: &ClientOpts) {
+		if let Err(e) = services::p256_asymmetric_encrypt(
+			opts.plaintext_path(),
+			opts.ciphertext_path(),
+			opts.pub_path(),
+		) {
+			eprintln!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn p256_asymmetric_decrypt(opts: &ClientOpts) {
+		if let Err(e) = services::p256_asymmetric_decrypt(
+			opts.plaintext_path(),
+			opts.ciphertext_path(),
+			opts.master_seed_path(),
+		) {
+			eprintln!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
