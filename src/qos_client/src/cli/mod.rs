@@ -197,11 +197,11 @@ pub enum Command {
 	InjectKey,
 	/// Verify a signature from qos_p256 pair.
 	P256Verify,
-	/// Sign with a p256 signature
+	/// Sign with a p256 signature.
 	P256Sign,
-	///
+	/// Encrypt to a qos_p256 public key.
 	P256AsymmetricEncrypt,
-	///
+	/// Decrypt a payload encrypted to a qos_p256 public key.
 	P256AsymmetricDecrypt,
 }
 

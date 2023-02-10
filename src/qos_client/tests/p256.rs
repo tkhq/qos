@@ -7,7 +7,7 @@ use std::{
 use qos_test_primitives::PathWrapper;
 
 const DATA: &str = "test data";
-const MOCK_PRIMARY_SEED_PATH: &str = "./tests/mock/primary.secret";
+const MOCK_PRIMARY_SEED_PATH: &str = "./tests/mock/primary.secret.keep";
 const MOCK_PRIMARY_PUB_PATH: &str = "./tests/mock/primary.pub";
 // If this is updated there is a breaking change to our crypto
 const EXPECTED_SIGNATURE: &str = "36c7f22c3831a32b8c8a9e823641e7df591c6e92848e7baa54f66d65963d15eaf02abbf5f01f99a8dddfe7a35453a4df486a708ffa3ef2d8159d4d0763f5ee89";
