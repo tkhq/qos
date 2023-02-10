@@ -741,7 +741,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	let approval_path = manifest_approvals_dir.as_ref().join(format!(
 		"{}-{}-{}.{}",
 		alias,
-		manifest.namespace.name.replace("/", "-"),
+		manifest.namespace.name.replace('/', "-"),
 		manifest.namespace.nonce,
 		APPROVAL_EXT
 	));
@@ -1339,23 +1339,78 @@ pub(crate) fn yubikey_public() -> Result<(), Error> {
 	Ok(())
 }
 
-pub(crate) fn verify<P: AsRef<Path>>(
-	payload: &str,
-	signature: &str,
+pub(crate) fn p256_verify<P: AsRef<Path>>(
+	payload_path: P,
+	signature_path: P,
 	pub_path: P,
 ) -> Result<(), Error> {
-	let payload_bytes = qos_hex::decode(payload)?;
-	let signature_bytes = qos_hex::decode(signature)?;
-
+	let payload = fs::read(payload_path)?;
 	let public = P256Public::from_hex_file(pub_path)?;
+	let signature_bytes = {
+		let signature_hex = fs::read_to_string(signature_path)?;
 
-	if let Err(e) = public.verify(&payload_bytes, &signature_bytes) {
+		let signature_hex = signature_hex.trim();
+		qos_hex::decode(signature_hex)?
+	};
+
+	if let Err(e) = public.verify(&payload, &signature_bytes) {
 		println!("Signature not valid: {e:?}");
 		Err(e.into())
 	} else {
 		println!("Valid signature!");
 		Ok(())
 	}
+}
+
+pub(crate) fn p256_sign<P: AsRef<Path>>(
+	payload_path: &str,
+	signature_path: P,
+	master_seed_path: P,
+) -> Result<(), Error> {
+	let payload = fs::read(payload_path)?;
+	let pair = P256Pair::from_hex_file(master_seed_path)?;
+
+	let signature = {
+		let signature = pair.sign(&payload)?;
+		qos_hex::encode(&signature)
+	};
+	write_with_msg(
+		signature_path.as_ref(),
+		signature.as_bytes(),
+		"p256 signature",
+	);
+
+	Ok(())
+}
+
+pub(crate) fn p256_asymmetric_encrypt<P: AsRef<Path>>(
+	plaintext_path: P,
+	ciphertext_path: P,
+	pub_path: P,
+) -> Result<(), Error> {
+	let public = P256Public::from_hex_file(pub_path)?;
+	let plaintext = std::fs::read(plaintext_path.as_ref())?;
+
+	let ciphertext = public.encrypt(&plaintext)?;
+
+	write_with_msg(ciphertext_path.as_ref(), &ciphertext, "Ciphertext");
+
+	Ok(())
+}
+
+pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
+	plaintext_path: P,
+	ciphertext_path: P,
+	master_seed_path: P,
+) -> Result<(), Error> {
+	let pair = P256Pair::from_hex_file(master_seed_path)?;
+	let ciphertext = std::fs::read(ciphertext_path.as_ref())?;
+
+	let plaintext = pair.decrypt(&ciphertext)?;
+
+	write_with_msg(plaintext_path.as_ref(), &plaintext, "Plaintext");
+
+	Ok(())
 }
 
 pub(crate) fn display<P: AsRef<Path>>(
