@@ -1340,15 +1340,20 @@ pub(crate) fn yubikey_public() -> Result<(), Error> {
 }
 
 pub(crate) fn p256_verify<P: AsRef<Path>>(
-	payload: &str,
-	signature: &str,
+	payload_path: P,
+	signature_path: P,
 	pub_path: P,
 ) -> Result<(), Error> {
-	let signature_bytes = qos_hex::decode(signature)?;
-
+	let payload = fs::read(payload_path)?;
 	let public = P256Public::from_hex_file(pub_path)?;
+	let signature_bytes = {
+		let signature_hex = fs::read_to_string(signature_path)?;
 
-	if let Err(e) = public.verify(payload.as_bytes(), &signature_bytes) {
+		let signature_hex = signature_hex.trim();
+		qos_hex::decode(signature_hex)?
+	};
+
+	if let Err(e) = public.verify(&payload, &signature_bytes) {
 		println!("Signature not valid: {e:?}");
 		Err(e.into())
 	} else {
@@ -1358,16 +1363,22 @@ pub(crate) fn p256_verify<P: AsRef<Path>>(
 }
 
 pub(crate) fn p256_sign<P: AsRef<Path>>(
-	payload: &str,
+	payload_path: &str,
+	signature_path: P,
 	master_seed_path: P,
 ) -> Result<(), Error> {
+	let payload = fs::read(payload_path)?;
 	let pair = P256Pair::from_hex_file(master_seed_path)?;
 
 	let signature = {
-		let signature = pair.sign(payload.as_bytes())?;
+		let signature = pair.sign(&payload)?;
 		qos_hex::encode(&signature)
 	};
-	println!("{signature}");
+	write_with_msg(
+		signature_path.as_ref(),
+		signature.as_bytes(),
+		"p256 signature",
+	);
 
 	Ok(())
 }

@@ -52,14 +52,15 @@ const SHARE: &str = "share";
 const OUTPUT_DIR: &str = "output-dir";
 const THRESHOLD: &str = "threshold";
 const TOTAL_SHARES: &str = "total-shares";
-const PAYLOAD: &str = "payload";
-const SIGNATURE: &str = "signature";
 const FILE_PATH: &str = "file-path";
 const DISPLAY_TYPE: &str = "display-type";
 const DR_KEY_PATH: &str = "dr-key-path";
 const CURRENT_PIN_PATH: &str = "current-pin-path";
 const NEW_PIN_PATH: &str = "new-pin-path";
 const ENCRYPTED_QUORUM_KEY_PATH: &str = "encrypted-quorum-key-path";
+const PAYLOAD: &str = "payload";
+const PAYLOAD_PATH: &str = "payload-path";
+const SIGNATURE_PATH: &str = "signature-path";
 const CIPHERTEXT_PATH: &str = "ciphertext-path";
 const PLAINTEXT_PATH: &str = "plaintext-path";
 
@@ -460,12 +461,20 @@ impl Command {
 		.required(true)
 	}
 	fn payload_token() -> Token {
-		Token::new(PAYLOAD, "A hex-encoded payload to sign/encrypt/decrypt.")
+		Token::new(PAYLOAD, "A hex encoded payload to sign / verify.")
 			.takes_value(true)
 			.required(true)
 	}
-	fn signature_token() -> Token {
-		Token::new(SIGNATURE, "A hex encoded signature from qos p256")
+	fn payload_path_token() -> Token {
+		Token::new(
+			PAYLOAD_PATH,
+			"A path to a payload to sign / verify a signature against.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn signature_path_token() -> Token {
+		Token::new(SIGNATURE_PATH, "Path to a file with raw signature")
 			.takes_value(true)
 			.required(true)
 	}
@@ -722,14 +731,15 @@ impl Command {
 
 	fn p256_verify() -> Parser {
 		Parser::new()
-			.token(Self::payload_token())
-			.token(Self::signature_token())
+			.token(Self::payload_path_token())
+			.token(Self::signature_path_token())
 			.token(Self::pub_path_token())
 	}
 
 	fn p256_sign() -> Parser {
 		Parser::new()
-			.token(Self::payload_token())
+			.token(Self::payload_path_token())
+			.token(Self::signature_path_token())
 			.token(Self::master_seed_path_token())
 	}
 
@@ -1014,10 +1024,17 @@ impl ClientOpts {
 		self.parsed.single(PAYLOAD).expect("Missing `--payload`").to_string()
 	}
 
-	fn signature(&self) -> String {
+	fn payload_path(&self) -> String {
 		self.parsed
-			.single(SIGNATURE)
-			.expect("Missing `--signature`")
+			.single(PAYLOAD_PATH)
+			.expect("Missing `--payload-path`")
+			.to_string()
+	}
+
+	fn signature_path(&self) -> String {
+		self.parsed
+			.single(SIGNATURE_PATH)
+			.expect("Missing `--signature-path`")
 			.to_string()
 	}
 
@@ -1611,8 +1628,8 @@ mod handlers {
 
 	pub(super) fn p256_verify(opts: &ClientOpts) {
 		if let Err(e) = services::p256_verify(
-			&opts.payload(),
-			&opts.signature(),
+			opts.payload_path(),
+			opts.signature_path(),
 			opts.pub_path(),
 		) {
 			eprintln!("Error: {e:?}");
@@ -1621,9 +1638,11 @@ mod handlers {
 	}
 
 	pub(super) fn p256_sign(opts: &ClientOpts) {
-		if let Err(e) =
-			services::p256_sign(&opts.payload(), opts.master_seed_path())
-		{
+		if let Err(e) = services::p256_sign(
+			&opts.payload_path(),
+			opts.signature_path(),
+			opts.master_seed_path(),
+		) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);
 		}

@@ -1,4 +1,5 @@
 use std::{
+	fs::create_dir_all,
 	io::{BufRead, BufReader},
 	process::{Command, Stdio},
 };
@@ -269,12 +270,12 @@ fn advanced_provision_yubikey_works() {
 }
 
 fn provision_sign_and_verify() {
-	let tmp_dir: PathWrapper = "/tmp/provision_yubikey_works".into();
+	let tmp_dir: PathWrapper = "/tmp/provision_sign_and_verify".into();
+	create_dir_all(&*tmp_dir).unwrap();
 	let pub_path: PathWrapper =
-		"/tmp/provision_yubikey_works/yubikey.pub".into();
-
-	// Create the temporary directory where we write the yubikey
-	std::fs::create_dir(&*tmp_dir).unwrap();
+		"/tmp/provision_sign_and_verify/yubikey.pub".into();
+	let signature_path = "/tmp/provision_sign_and_verify/signature";
+	let payload_path = "/tmp/provision_sign_and_verify/payload";
 
 	assert!(Command::new("../target/debug/qos_client")
 		.arg("provision-yubikey")
@@ -304,12 +305,15 @@ fn provision_sign_and_verify() {
 	stdout.next();
 	let signature = stdout.next().unwrap().unwrap();
 
+	std::fs::write(payload_path, DATA).unwrap();
+	std::fs::write(signature_path, signature).unwrap();
+
 	assert!(Command::new("../target/debug/qos_client")
-		.arg("verify")
-		.arg("--payload")
-		.arg(&data_hex)
-		.arg("--signature")
-		.arg(&signature)
+		.arg("p256-verify")
+		.arg("--payload-path")
+		.arg(&payload_path)
+		.arg("--signature-path")
+		.arg(&signature_path)
 		.arg("--pub-path")
 		.arg(&*pub_path)
 		.spawn()
