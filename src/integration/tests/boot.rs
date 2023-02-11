@@ -171,7 +171,7 @@ async fn standard_boot_e2e() {
 	// -- CLIENT make sure each user can run `approve-manifest`
 	for alias in [user1, user2, user3] {
 		let approval_path = format!(
-			"{}/{}.{}.{}.approval",
+			"{}/{}-{}-{}.approval",
 			&*boot_dir, alias, namespace, manifest.namespace.nonce,
 		);
 
