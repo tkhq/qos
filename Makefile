@@ -19,10 +19,10 @@ default: \
 
 .PHONY: release
 release: default
-	cp -R $(OUT_DIR)/* $(RELEASE_DIR)/
+	cp -R $(OUT_DIR)/* $(DIST_DIR)/
 
 .PHONY: sign
-sign: $(RELEASE_DIR)/manifest.txt
+sign: $(DIST_DIR)/manifest.txt
 	set -e; \
 	git config --get user.signingkey 2>&1 >/dev/null || { \
 		echo "Error: git user.signingkey is not defined"; \
@@ -34,15 +34,15 @@ sign: $(RELEASE_DIR)/manifest.txt
 	); \
 	gpg --armor \
 		--detach-sig  \
-		--output $(RELEASE_DIR)/manifest.$${fingerprint}.asc \
-		$(RELEASE_DIR)/manifest.txt
+		--output $(DIST_DIR)/manifest.$${fingerprint}.asc \
+		$(DIST_DIR)/manifest.txt
 
 .PHONY: verify
-verify: $(RELEASE_DIR)/manifest.txt
+verify: $(DIST_DIR)/manifest.txt
 	set -e; \
-	for file in $(RELEASE_DIR)/manifest.*.asc; do \
+	for file in $(DIST_DIR)/manifest.*.asc; do \
 		echo "\nVerifying: $${file}\n"; \
-		gpg --verify $${file} $(RELEASE_DIR)/manifest.txt; \
+		gpg --verify $${file} $(DIST_DIR)/manifest.txt; \
 	done;
 
 # Clean repo back to initial clone state
