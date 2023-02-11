@@ -282,7 +282,7 @@ fn create_cipher(
 // of the form
 /// `sender_public||sender_public_len||receiver_public||receiver_public_len||nonce||nonce_len`.
 ///
-/// Note that we append the length to each field as per NIST specs here: <https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-56Ar3.pdf. See section 5.8.2/>.
+/// Note that we append the length to each field as per NIST specs here: <https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-56Ar3.pdf/>. See section 5.8.2.
 fn create_additional_associated_data(
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,

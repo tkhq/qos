@@ -149,7 +149,10 @@ impl P256Pair {
 	}
 
 	/// Encrypt the given `msg` with the symmetric encryption secret.
-	pub fn aes_gcm_256_encrypt(&self, msg: &[u8]) -> Result<Vec<u8>, P256Error> {
+	pub fn aes_gcm_256_encrypt(
+		&self,
+		msg: &[u8],
+	) -> Result<Vec<u8>, P256Error> {
 		self.aes_gcm_256_secret.encrypt(msg)
 	}
 
@@ -193,12 +196,12 @@ impl P256Pair {
 		let aes_gcm_256_encrypt = derive_secret(master_seed, AES_GCM_256_PATH)?;
 
 		Ok(Self {
-			p256_encrypt_private: P256EncryptPair::from_bytes(
-				&encrypt_secret,
-			)?,
+			p256_encrypt_private: P256EncryptPair::from_bytes(&encrypt_secret)?,
 			sign_private: P256SignPair::from_bytes(&sign_secret)?,
 			master_seed: *master_seed,
-			aes_gcm_256_secret: AesGcm256Secret::from_bytes(aes_gcm_256_encrypt)?,
+			aes_gcm_256_secret: AesGcm256Secret::from_bytes(
+				aes_gcm_256_encrypt,
+			)?,
 		})
 	}
 
@@ -236,7 +239,9 @@ impl P256Pair {
 
 		let hex_string = String::from_utf8(hex_bytes)
 			.map_err(|_| P256Error::MasterSeedInvalidUtf8)?;
-		let master_seed = qos_hex::decode(&hex_string)?;
+		let hex_string = hex_string.trim();
+
+		let master_seed = qos_hex::decode(hex_string)?;
 		let master_seed: [u8; MASTER_SEED_LEN] = master_seed
 			.try_into()
 			.map_err(|_| P256Error::MasterSeedInvalidLength)?;
@@ -326,9 +331,12 @@ impl P256Public {
 		let hex_bytes = std::fs::read(path).map_err(|e| {
 			P256Error::IOError(format!("failed to read master seed: {e}"))
 		})?;
+
 		let hex_string = String::from_utf8(hex_bytes)
 			.map_err(|_| P256Error::MasterSeedInvalidUtf8)?;
-		let public_keys_bytes = qos_hex::decode(&hex_string)?;
+		let hex_string = hex_string.trim();
+
+		let public_keys_bytes = qos_hex::decode(hex_string)?;
 
 		Self::from_bytes(&public_keys_bytes)
 	}
@@ -508,14 +516,17 @@ mod test {
 
 		#[test]
 		fn different_key_cannot_decrypt() {
-		let plaintext = b"rust test message";
-		let key = P256Pair::generate().unwrap();
-		let other_key = P256Pair::generate().unwrap();
+			let plaintext = b"rust test message";
+			let key = P256Pair::generate().unwrap();
+			let other_key = P256Pair::generate().unwrap();
 
-		let serialized_envelope = key.aes_gcm_256_encrypt(plaintext).unwrap();
+			let serialized_envelope =
+				key.aes_gcm_256_encrypt(plaintext).unwrap();
 
-		let err = other_key.aes_gcm_256_decrypt(&serialized_envelope).unwrap_err();
-		assert_eq!(err, P256Error::AesGcm256DecryptError,);
+			let err = other_key
+				.aes_gcm_256_decrypt(&serialized_envelope)
+				.unwrap_err();
+			assert_eq!(err, P256Error::AesGcm256DecryptError,);
 		}
 	}
 }
