@@ -113,7 +113,7 @@ impl P256EncryptPair {
 }
 
 /// P256 Public key.
-#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
+#[derive(Clone, PartialEq, Eq)]
 pub struct P256EncryptPublic {
 	public: PublicKey,
 }

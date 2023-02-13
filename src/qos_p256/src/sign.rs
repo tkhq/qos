@@ -53,7 +53,7 @@ impl P256SignPair {
 }
 
 /// Sign public key for verifying signatures.
-#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
+#[derive(Clone, PartialEq, Eq)]
 pub struct P256SignPublic {
 	public: VerifyingKey,
 }
