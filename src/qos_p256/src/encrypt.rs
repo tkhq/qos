@@ -277,7 +277,7 @@ fn create_cipher(
 
 // Helper function to create the additional associated data (AAD). The data is
 // of the form
-/// `sender_public||sender_public_len||receiver_public||receiver_public_len||nonce||nonce_len`.
+/// `sender_public||sender_public_len||receiver_public||receiver_public_len`.
 ///
 /// Note that we append the length to each field as per NIST specs here: <https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-56Ar3.pdf/>. See section 5.8.2.
 fn create_additional_associated_data(
