@@ -80,6 +80,9 @@ pub enum P256Error {
 	MasterSeedInvalidUtf8,
 	/// Master seed was not the correct length.
 	MasterSeedInvalidLength,
+	/// Failed to convert a len (usize) to a u8. This is an internal error and
+	/// the code has a bug.
+	CannotCoerceLenToU8,
 }
 
 impl From<qos_hex::HexError> for P256Error {
