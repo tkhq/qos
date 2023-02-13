@@ -164,6 +164,9 @@ mod test {
 				recovery_permutations: vec![],
 				threshold: 2,
 				dr_key_wrapped_quorum_key: None,
+				quorum_key_hash: [22; 32],
+				test_message_ciphertext: vec![],
+				test_message_signature: vec![],
 			},
 		};
 

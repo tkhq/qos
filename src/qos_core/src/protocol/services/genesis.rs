@@ -10,6 +10,8 @@ use crate::protocol::{
 	boot::QuorumMember, Hash256, ProtocolError, ProtocolState, QosHash,
 };
 
+const QOS_TEST_MESSAGE: &[u8] = b"qos-test-message";
+
 /// Configuration for sharding a Quorum Key created in the Genesis flow.
 #[derive(
 	PartialEq, Debug, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
@@ -90,6 +92,12 @@ pub struct GenesisOutput {
 	pub threshold: u32,
 	/// The quorum key encrypted to the DR key. None if no DR Key was provided
 	pub dr_key_wrapped_quorum_key: Option<Vec<u8>>,
+	/// Hash of the quorum key secret
+	pub quorum_key_hash: Hash256,
+	/// Test message encrypted to the quorum public key.
+	pub test_message_ciphertext: Vec<u8>,
+	/// Signature over the test message by the quorum key.
+	pub test_message_signature: Vec<u8>,
 }
 
 impl fmt::Debug for GenesisOutput {
@@ -147,6 +155,7 @@ pub(in crate::protocol) fn boot_genesis(
 		None
 	};
 
+	let hex_master_seed = qos_hex::encode(master_seed);
 	let genesis_output = GenesisOutput {
 		member_outputs: member_outputs?,
 		quorum_key: quorum_pair.public_key().to_bytes(),
@@ -154,6 +163,11 @@ pub(in crate::protocol) fn boot_genesis(
 		// TODO: generate N choose K recovery permutations
 		recovery_permutations: vec![],
 		dr_key_wrapped_quorum_key,
+		quorum_key_hash: sha_256(hex_master_seed.as_bytes()),
+		test_message_ciphertext: quorum_pair
+			.public_key()
+			.encrypt(QOS_TEST_MESSAGE)?,
+		test_message_signature: quorum_pair.sign(QOS_TEST_MESSAGE)?,
 	};
 
 	let nsm_response = {
@@ -249,5 +263,17 @@ mod test {
 		assert!(!handles.quorum_key_exists());
 		assert!(!handles.manifest_envelope_exists());
 		assert!(!handles.pivot_exists());
+
+		let test_message_plaintext = reconstructed_quorum_key
+			.decrypt(&output.test_message_ciphertext)
+			.unwrap();
+		assert_eq!(test_message_plaintext, QOS_TEST_MESSAGE);
+		quorum_public_key
+			.verify(QOS_TEST_MESSAGE, &output.test_message_signature)
+			.unwrap();
+
+		let quorum_key_hash =
+			sha_256(qos_hex::encode(&reconstructed).as_bytes());
+		assert_eq!(quorum_key_hash, output.quorum_key_hash);
 	}
 }
