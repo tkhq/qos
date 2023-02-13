@@ -83,7 +83,6 @@ impl P256EncryptPair {
 		let aad = create_additional_associated_data(
 			&sender_public_typed,
 			&receiver_public_typed,
-			nonce.as_ref(),
 		)?;
 		let payload = Payload { aad: &aad, msg: &encrypted_message };
 
@@ -156,7 +155,6 @@ impl P256EncryptPublic {
 		let aad = create_additional_associated_data(
 			&sender_public_typed,
 			&receiver_public_typed,
-			nonce.as_ref(),
 		)?;
 		let payload = Payload { aad: &aad, msg: message };
 
@@ -207,7 +205,6 @@ impl P256EncryptPublic {
 		let aad = create_additional_associated_data(
 			&sender_public_typed,
 			&receiver_public_typed,
-			nonce.as_ref(),
 		)?;
 		let payload = Payload { aad: &aad, msg: &encrypted_message };
 
@@ -286,7 +283,6 @@ fn create_cipher(
 fn create_additional_associated_data(
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,
-	nonce: &[u8],
 ) -> Result<Vec<u8>, P256Error> {
 	let ephemeral_sender_len_int: u8 = ephemeral_sender_public
 		.0
@@ -298,12 +294,9 @@ fn create_additional_associated_data(
 		.len()
 		.try_into()
 		.map_err(|_| P256Error::CannotCoerceLenToU8)?;
-	let nonce_len_int =
-		nonce.len().try_into().map_err(|_| P256Error::CannotCoerceLenToU8)?;
 
 	let ephemeral_sender_len = &[ephemeral_sender_len_int];
 	let receiver_public_len = &[receiver_len_int];
-	let nonce_len = &[nonce_len_int];
 
 	let aad = ephemeral_sender_public
 		.0
@@ -311,8 +304,6 @@ fn create_additional_associated_data(
 		.chain(ephemeral_sender_len)
 		.chain(receiver_public.0)
 		.chain(receiver_public_len)
-		.chain(nonce)
-		.chain(nonce_len)
 		.copied()
 		.collect();
 
