@@ -19,7 +19,7 @@ use crate::{non_zero_bytes_os_rng, P256Error, PUB_KEY_LEN_UNCOMPRESSED};
 const AES256_KEY_LEN: usize = 32;
 const BITS_96_AS_BYTES: u8 = 12;
 const AES_GCM_256_HMAC_SHA512_TAG: &[u8] = b"qos_aes_gcm_256_hmac_sha512";
-const ENCRYPTION_HMAC_MESSAGE: &[u8] = b"encryption_hmac_message";
+const QOS_ENCRYPTION_HMAC_MESSAGE: &[u8] = b"qos_encryption_hmac_message";
 
 type HmacSha512 = Hmac<Sha512>;
 
@@ -268,7 +268,7 @@ fn create_cipher(
 
 	let mut mac = <HmacSha512 as KeyInit>::new_from_slice(&pre_image[..])
 		.expect("hmac can take a key of any size");
-	mac.update(ENCRYPTION_HMAC_MESSAGE);
+	mac.update(QOS_ENCRYPTION_HMAC_MESSAGE);
 	let shared_key = mac.finalize().into_bytes();
 
 	Aes256Gcm::new_from_slice(&shared_key[..AES256_KEY_LEN])
