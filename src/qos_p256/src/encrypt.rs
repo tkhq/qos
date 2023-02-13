@@ -18,7 +18,7 @@ use crate::{non_zero_bytes_os_rng, P256Error, PUB_KEY_LEN_UNCOMPRESSED};
 
 const AES256_KEY_LEN: usize = 32;
 const BITS_96_AS_BYTES: u8 = 12;
-const AES_GCM_256_HMAC_SHA512_TAG: &[u8] = b"qos_aes_gcm_256_hmac_sha52";
+const AES_GCM_256_HMAC_SHA512_TAG: &[u8] = b"qos_aes_gcm_256_hmac_sha512";
 const ENCRYPTION_HMAC_MESSAGE: &[u8] = b"encryption_hmac_message";
 
 type HmacSha512 = Hmac<Sha512>;
