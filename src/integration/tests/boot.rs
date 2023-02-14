@@ -29,13 +29,14 @@ const MOCK_PCR1: &str = "31c1fa5bffb0439559918891c4b65437bf1f543791ebdecbd3e282b
 const MOCK_PCR2: &str = "21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a";
 
 const PIVOT_BUILD_FINGERPRINTS_PATH: &str =
-	"./mock/pivot-build-fingerprints.txt";
+	"/tmp/standard_boot_e2e-pivot-build-fingerprints.txt";
 
 #[tokio::test]
 async fn standard_boot_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/boot-e2e".into();
 	let _: PathWrapper = PIVOT_OK2_SUCCESS_FILE.into();
+	let _: PathWrapper = PIVOT_BUILD_FINGERPRINTS_PATH.into();
 	fs::create_dir_all(&*tmp).unwrap();
 
 	let usock: PathWrapper = "/tmp/boot-e2e/boot_e2e.sock".into();
@@ -87,7 +88,7 @@ async fn standard_boot_e2e() {
 			"--restart-policy",
 			"never",
 			"--pivot-build-fingerprints",
-			"./mock/pivot-build-fingerprints.txt",
+			PIVOT_BUILD_FINGERPRINTS_PATH,
 			"--qos-release-dir",
 			MOCK_QOS_DIST_DIR,
 			"--pcr3-preimage-path",
@@ -188,7 +189,7 @@ async fn standard_boot_e2e() {
 				"--pcr3-preimage-path",
 				"./mock/namespaces/pcr3-preimage.txt",
 				"--pivot-build-fingerprints",
-				"./mock/pivot-build-fingerprints.txt",
+				PIVOT_BUILD_FINGERPRINTS_PATH,
 				"--qos-release-dir",
 				MOCK_QOS_DIST_DIR,
 				"--manifest-set-dir",
