@@ -40,7 +40,7 @@ const MANIFEST_ENVELOPE: &str = "manifest_envelope";
 const APPROVAL_EXT: &str = "approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
 const DR_WRAPPED_QUORUM_KEY: &str = "dr_wrapped_quorum_key";
-const PCRS_PATH: &str = "aws-pcrs.txt";
+const PCRS_PATH: &str = "aws-x86_64.pcrs";
 const QOS_RELEASE_MANIFEST_FILE: &str = "manifest.txt";
 const QOS_RELEASE_ENV_FILE: &str = "release.env";
 
@@ -1862,14 +1862,15 @@ fn extract_qos_pcrs<P: AsRef<Path>>(
 
 	// We need to verify that the PCRs match those referred to in the release
 	// manifest. The release manifest is what actually gets signed.
-	let pcr_txt_bytes = std::fs::read(&pcr_path)?;
+	let pcr_txt_bytes =
+		std::fs::read(&pcr_path).expect("failed to read pcr path");
+
 	let pcr_txt_hash = sha_256(&pcr_txt_bytes);
 	if pcr_txt_hash.to_vec() != qos_release_manifest.pcrs_hash {
 		return Err(Error::PcrTxtHashDoesNotMatchReleaseManifest);
 	}
 
 	let entries = lines_to_entries(&pcr_path);
-
 	Ok(QosPcrs {
 		pcr0: get_entry(&entries, 0, "PCR0"),
 		pcr1: get_entry(&entries, 1, "PCR1"),
@@ -1882,6 +1883,7 @@ struct QosReleaseManifest {
 	_nitro_eif_hash: Vec<u8>,
 	_qos_client_hash: Vec<u8>,
 	_qos_host_hash: Vec<u8>,
+	_release_env: Vec<u8>,
 }
 
 fn extract_qos_release_manifest<P: AsRef<Path>>(
@@ -1893,10 +1895,11 @@ fn extract_qos_release_manifest<P: AsRef<Path>>(
 	let entries = lines_to_entries(manifest_path);
 
 	QosReleaseManifest {
-		pcrs_hash: get_entry(&entries, 0, "*out/aws-pcrs.txt"),
-		_nitro_eif_hash: get_entry(&entries, 1, "*out/aws-nitro.eif"),
-		_qos_client_hash: get_entry(&entries, 2, "*out/qos_client"),
-		_qos_host_hash: get_entry(&entries, 3, "*out/qos_host"),
+		_nitro_eif_hash: get_entry(&entries, 0, "out/aws-x86_64.eif"),
+		pcrs_hash: get_entry(&entries, 1, "out/aws-x86_64.pcrs"),
+		_qos_client_hash: get_entry(&entries, 2, "out/qos_client.linux.x86_64"),
+		_qos_host_hash: get_entry(&entries, 3, "out/qos_host.linux.x86_64"),
+		_release_env: get_entry(&entries, 4, "out/release.env"),
 	}
 }
 
