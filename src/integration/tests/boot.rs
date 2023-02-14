@@ -7,8 +7,7 @@ use std::{
 
 use borsh::de::BorshDeserialize;
 use integration::{
-	LOCAL_HOST, MOCK_QOS_RELEASE_DIR, PCR3, PIVOT_OK2_PATH,
-	PIVOT_OK2_SUCCESS_FILE,
+	LOCAL_HOST, MOCK_QOS_DIST_DIR, PCR3, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE,
 };
 use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 use qos_core::protocol::{
@@ -25,18 +24,19 @@ use qos_crypto::sha_256;
 use qos_p256::P256Pair;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
-const MOCK_PCR0: &str = "bb8e28fca825624542085d2181932412546d155e797ef983d9b9848f29e0d87ff583e9bc55bc669349b6c279dab78a9b";
-const MOCK_PCR1: &str = "bb8e28fca825624542085d2181932412546d155e797ef983d9b9848f29e0d87ff583e9bc55bc669349b6c279dab78a9b";
+const MOCK_PCR0: &str = "31c1fa5bffb0439559918891c4b65437bf1f543791ebdecbd3e282b63e26452793afcb89d4632f6497abc2a24d8203c6";
+const MOCK_PCR1: &str = "31c1fa5bffb0439559918891c4b65437bf1f543791ebdecbd3e282b63e26452793afcb89d4632f6497abc2a24d8203c6";
 const MOCK_PCR2: &str = "21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a";
 
 const PIVOT_BUILD_FINGERPRINTS_PATH: &str =
-	"./mock/pivot-build-fingerprints.txt";
+	"/tmp/standard_boot_e2e-pivot-build-fingerprints.txt";
 
 #[tokio::test]
 async fn standard_boot_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/boot-e2e".into();
 	let _: PathWrapper = PIVOT_OK2_SUCCESS_FILE.into();
+	let _: PathWrapper = PIVOT_BUILD_FINGERPRINTS_PATH.into();
 	fs::create_dir_all(&*tmp).unwrap();
 
 	let usock: PathWrapper = "/tmp/boot-e2e/boot_e2e.sock".into();
@@ -88,9 +88,9 @@ async fn standard_boot_e2e() {
 			"--restart-policy",
 			"never",
 			"--pivot-build-fingerprints",
-			"./mock/pivot-build-fingerprints.txt",
+			PIVOT_BUILD_FINGERPRINTS_PATH,
 			"--qos-release-dir",
-			MOCK_QOS_RELEASE_DIR,
+			MOCK_QOS_DIST_DIR,
 			"--pcr3-preimage-path",
 			"./mock/namespaces/pcr3-preimage.txt",
 			"--manifest-path",
@@ -153,7 +153,7 @@ async fn standard_boot_e2e() {
 		pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
 		pcr3: qos_hex::decode(PCR3).unwrap(),
 		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
-		qos_commit: "1adfc4213c1b0ccba696b392bc6a2ee792487017".to_string(),
+		qos_commit: "14dbf74fbba901f1191987e3346082b9135386e6".to_string(),
 	};
 	assert_eq!(manifest.enclave, enclave);
 
@@ -189,9 +189,9 @@ async fn standard_boot_e2e() {
 				"--pcr3-preimage-path",
 				"./mock/namespaces/pcr3-preimage.txt",
 				"--pivot-build-fingerprints",
-				"./mock/pivot-build-fingerprints.txt",
+				PIVOT_BUILD_FINGERPRINTS_PATH,
 				"--qos-release-dir",
-				MOCK_QOS_RELEASE_DIR,
+				MOCK_QOS_DIST_DIR,
 				"--manifest-set-dir",
 				"./mock/keys/manifest-set",
 				"--share-set-dir",
