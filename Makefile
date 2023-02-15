@@ -1,66 +1,28 @@
-DEBUG := false
-OUT_DIR := out
-VERSION := $(shell TZ=UTC0 git show --quiet --date='format-local:%Y%m%dT%H%M%SZ' --format="%cd")
-RELEASE_DIR := releases/$(VERSION)
-KEY_DIR := keys
-SRC_DIR := src
-TARGET := generic
-CACHE_DIR := cache
-CONFIG_DIR := config
-SRC_DIR := src
-USER := $(shell id -g):$(shell id -g)
-ARCH := x86_64
-, := ,
-UNAME_S := $(shell uname -s)
-CPUS := $(shell docker run -it debian nproc)
-GIT_REF := $(shell git log -1 --format=%H config)
-GIT_AUTHOR := $(shell git log -1 --format=%an config)
-GIT_KEY := $(shell git log -1 --format=%GP config)
-GIT_EPOCH := $(shell git log -1 --format=%at config)
-GIT_DATETIME := \
-	$(shell git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M:%S' config)
+TARGET := aws
+include $(PWD)/src/toolchain/Makefile
 
-include $(PWD)/config/global.env
-
-## Use env vars from existing release if present
-ifneq (,$(wildcard $(RELEASE_DIR)/release.env))
-    include $(RELEASE_DIR)/release.env
-    export
+ifeq ($(TARGET), aws)
+DEFAULT_GOAL := $(OUT_DIR)/$(TARGET)-$(ARCH).eif
+else ifeq ($(TARGET), generic)
+DEFAULT_GOAL := $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
 endif
 
-.DEFAULT_GOAL := release
-
-#$(OUT_DIR)/generic/bzImage
-#mkdir -p $(RELEASE_DIR)/generic
-#cp $(OUT_DIR)/generic/bzImage $(RELEASE_DIR)/generic/bzImage
-
-$(RELEASE_DIR):
-	mkdir -p $(RELEASE_DIR)
+.DEFAULT_GOAL :=
+.PHONY: default
+default: \
+	toolchain \
+	$(DEFAULT_GOAL) \
+	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH) \
+	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH) \
+	$(OUT_DIR)/release.env \
+	$(OUT_DIR)/manifest.txt
 
 .PHONY: release
-release: | \
-	$(RELEASE_DIR) \
-	$(OUT_DIR)/release.env \
-	$(OUT_DIR)/aws-nitro.eif \
-	$(OUT_DIR)/aws-pcrs.txt \
-	$(OUT_DIR)/qos_client \
-	$(OUT_DIR)/qos_host \
-	$(OUT_DIR)/manifest.txt
-	cp $(OUT_DIR)/release.env $(RELEASE_DIR)/release.env
-	cp $(OUT_DIR)/aws-pcrs.txt $(RELEASE_DIR)/aws-pcrs.txt
-	cp $(OUT_DIR)/aws-nitro.eif $(RELEASE_DIR)/aws-nitro.eif
-	cp $(OUT_DIR)/qos_host $(RELEASE_DIR)/qos_host
-	cp $(OUT_DIR)/qos_client $(RELEASE_DIR)/qos_client
-	cp $(OUT_DIR)/manifest.txt $(RELEASE_DIR)/manifest.txt
-
-.PHONY: attest
-attest: $(RELEASE_DIR)/manifest.txt
-	rm -rf $(CACHE_DIR) $(OUT_DIR)
-	$(MAKE) $(OUT_DIR)/manifest.txt
-	diff -q $(OUT_DIR)/manifest.txt $(RELEASE_DIR)/manifest.txt;
+release: default
+	cp -R $(OUT_DIR)/* $(DIST_DIR)/
 
 .PHONY: sign
-sign: $(RELEASE_DIR)/manifest.txt
+sign: $(DIST_DIR)/manifest.txt
 	set -e; \
 	git config --get user.signingkey 2>&1 >/dev/null || { \
 		echo "Error: git user.signingkey is not defined"; \
@@ -72,156 +34,89 @@ sign: $(RELEASE_DIR)/manifest.txt
 	); \
 	gpg --armor \
 		--detach-sig  \
-		--output $(RELEASE_DIR)/manifest.$${fingerprint}.asc \
-		$(RELEASE_DIR)/manifest.txt
+		--output $(DIST_DIR)/manifest.$${fingerprint}.asc \
+		$(DIST_DIR)/manifest.txt
 
 .PHONY: verify
-verify: $(RELEASE_DIR)/manifest.txt
+verify: $(DIST_DIR)/manifest.txt
 	set -e; \
-	for file in $(RELEASE_DIR)/manifest.*.asc; do \
+	for file in $(DIST_DIR)/manifest.*.asc; do \
 		echo "\nVerifying: $${file}\n"; \
-		gpg --verify $${file} $(RELEASE_DIR)/manifest.txt; \
+		gpg --verify $${file} $(DIST_DIR)/manifest.txt; \
 	done;
 
 # Clean repo back to initial clone state
 .PHONY: clean
-clean:
-	git clean -dfx src/
-	rm -rf cache out release/*
-	docker image rm -f local/$(NAME)-build
+clean: toolchain-clean
+	git clean -dfx $(SRC_DIR)
 
-# Launch a shell inside the toolchain container
-.PHONY: toolchain-shell
-toolchain-shell: $(CACHE_DIR)/toolchain.tar
-	$(call toolchain,root,bash)
-
-# Pin all packages in toolchain container to latest versions
-.PHONY: toolchain-update
-toolchain-update:
-	docker run \
-		--rm \
-		--env LOCAL_USER=$(USER) \
-		--platform=linux/$(ARCH) \
-		--volume $(PWD)/$(CONFIG_DIR):/config \
-		--volume $(PWD)/$(SRC_DIR)/toolchain/scripts:/usr/local/bin \
-		--env GNUPGHOME=/cache/.gnupg \
-		--env ARCH=$(ARCH) \
-		--interactive \
-		--tty \
-		debian@sha256:$(DEBIAN_HASH) \
-		bash -c /usr/local/bin/packages-update
-
-# Source anything required from the internet to build
-.PHONY: fetch
-fetch: \
-	$(CACHE_DIR)/toolchain.tar \
-	keys \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign \
-	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD
-
-# Build latest image and run in terminal via Qemu
 .PHONY: run
-run: default
+run: $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
 	qemu-system-x86_64 \
 		-m 512M \
 		-nographic \
-		-kernel $(OUT_DIR)/bzImage
+		-kernel $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
 
 # Run linux config menu and save output
 .PHONY: linux-config
 linux-config:
 	rm $(CONFIG_DIR)/$(TARGET)/linux.config
-	make $(CONFIG_DIR)/$(TARGET)/linux.config
+	make TARGET=$(TARGET) $(CONFIG_DIR)/$(TARGET)/linux.config
 
-.PHONY: keys
-keys: \
-	$(KEY_DIR)/$(LINUX_KEY).asc \
-	$(KEY_DIR)/$(BUSYBOX_KEY).asc
+$(OUT_DIR)/$(TARGET)-$(ARCH).bzImage: $(CACHE_DIR)/bzImage
+	cp $(CACHE_DIR)/bzImage $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
 
-$(KEY_DIR)/$(LINUX_KEY).asc:
-	$(call fetch_pgp_key,$(LINUX_KEY))
-
-$(KEY_DIR)/$(BUSYBOX_KEY).asc:
-	$(call fetch_pgp_key,,$(BUSYBOX_KEY))
-
-$(OUT_DIR)/$(TARGET):
-	mkdir -p $(OUT_DIR)/$(TARGET)
-
-$(CACHE_DIR)/$(TARGET):
-	mkdir -p $(CACHE_DIR)/$(TARGET)
-
-$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD: \
-	$(CACHE_DIR)/toolchain.tar
-	$(call toolchain,$(USER), " \
-		unset FAKETIME; \
-		cd /cache; \
-		git clone $(AWS_NITRO_DRIVER_REPO); \
-		cd aws-nitro-enclaves-sdk-bootstrap; \
-		git checkout $(AWS_NITRO_DRIVER_REF); \
-		git rev-parse --verify HEAD | grep -q $(AWS_NITRO_DRIVER_REF) || { \
-			echo 'Error: Git ref/branch collision.'; exit 1; \
-		}; \
+$(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
+	$(BIN_DIR)/eif_build \
+	$(CACHE_DIR)/bzImage \
+	$(CACHE_DIR)/rootfs.cpio \
+	$(CACHE_DIR)/linux.config
+	mkdir -p $(CACHE_DIR)/eif
+	$(call toolchain,$(USER)," \
+		export FAKETIME=1 && \
+		cp $(CACHE_DIR)/bzImage $(CACHE_DIR)/eif/ && \
+		cp $(CACHE_DIR)/rootfs.cpio $(CACHE_DIR)/eif/ && \
+		cp $(CONFIG_DIR)/$(TARGET)/linux.config $(CACHE_DIR)/eif/ && \
+		find $(CACHE_DIR)/eif -mindepth 1 -execdir touch -hcd "@0" "{}" + && \
+		$(BIN_DIR)/eif_build \
+			--kernel $(CACHE_DIR)/eif/bzImage \
+			--kernel_config $(CACHE_DIR)/eif/linux.config \
+			--cmdline 'reboot=k initrd=0x2000000$(,)3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd' \
+			--ramdisk $(CACHE_DIR)/eif/rootfs.cpio \
+			--pcrs_output $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs \
+			--output $(OUT_DIR)/$(TARGET)-$(ARCH).eif; \
 	")
 
-$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign:
-	curl \
-		--url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.sign \
-		--output $(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign
-
-$(CACHE_DIR)/linux-$(LINUX_VERSION).tar:
-	curl \
-		--url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.xz \
-		--output $(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz
-	xz -d $(CACHE_DIR)/linux-$(LINUX_VERSION).tar.xz
-
-$(CACHE_DIR)/linux-$(LINUX_VERSION): \
-	$(CACHE_DIR)/toolchain.tar \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION).tar.sign
-	$(call toolchain,$(USER), " \
-		unset FAKETIME; \
-		cd /cache && \
-		gpg --import /keys/$(LINUX_KEY).asc && \
-		gpg --verify linux-$(LINUX_VERSION).tar.sign && \
-		tar xf linux-$(LINUX_VERSION).tar; \
+$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH):
+	$(call toolchain,$(USER)," \
+		export RUSTFLAGS='-C target-feature=+crt-static' && \
+		cd $(SRC_DIR)/qos_host \
+		&& CARGO_HOME=$(CACHE_DIR)/cargo cargo build \
+			--target x86_64-unknown-linux-gnu \
+			--features vm \
+			--no-default-features \
+			--locked \
+			--release \
+		&& cp \
+			../target/x86_64-unknown-linux-gnu/release/qos_host \
+			/home/build/$@; \
 	")
 
-$(OUT_DIR)/manifest.txt: \
-	$(OUT_DIR)/aws-pcrs.txt \
-	$(OUT_DIR)/aws-nitro.eif \
-	$(OUT_DIR)/qos_client \
-	$(OUT_DIR)/qos_host \
-	$(OUT_DIR)/release.env
-	openssl sha256 -r $(OUT_DIR)/release.env \
-		>> $(OUT_DIR)/manifest.txt;
-	openssl sha256 -r $(OUT_DIR)/aws-pcrs.txt \
-		> $(OUT_DIR)/manifest.txt;
-	openssl sha256 -r $(OUT_DIR)/aws-nitro.eif \
-		>> $(OUT_DIR)/manifest.txt;
-	openssl sha256 -r $(OUT_DIR)/qos_client \
-		>> $(OUT_DIR)/manifest.txt;
-	openssl sha256 -r $(OUT_DIR)/qos_host \
-		>> $(OUT_DIR)/manifest.txt;
+$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH):
+	$(call toolchain,$(USER)," \
+		export RUSTFLAGS='-C target-feature=+crt-static' && \
+		cd $(SRC_DIR)/qos_client \
+		&& CARGO_HOME=$(CACHE_DIR)/cargo cargo build \
+			--target x86_64-unknown-linux-gnu \
+			--no-default-features \
+			--locked \
+			--release \
+		&& cp \
+			../target/x86_64-unknown-linux-gnu/release/qos_client \
+			/home/build/$@; \
+	")
 
-$(CACHE_DIR)/toolchain.tar: \
-	$(OUT_DIR)/$(TARGET) \
-	$(CACHE_DIR)/$(TARGET)
-	DOCKER_BUILDKIT=1 \
-	docker build \
-		--tag local/$(NAME)-build \
-		--build-arg DEBIAN_HASH=$(DEBIAN_HASH) \
-		--build-arg RUST_REF=$(RUST_REF) \
-		--build-arg CARGO_REF=$(CARGO_REF) \
-		--build-arg CONFIG_DIR=$(CONFIG_DIR) \
-		--build-arg SCRIPTS_DIR=$(SRC_DIR)/toolchain/scripts \
-		--platform=linux/$(ARCH) \
-		-f $(SRC_DIR)/toolchain/Dockerfile \
-		.
-	docker save "local/$(NAME)-build" -o "$@"
-
-$(CONFIG_DIR)/$(TARGET)/linux.config: \
-	$(CACHE_DIR)/toolchain.tar
+$(CONFIG_DIR)/$(TARGET)/linux.config:
 	$(call toolchain,$(USER)," \
 		unset FAKETIME && \
 		cd /cache/linux-$(LINUX_VERSION) && \
@@ -229,213 +124,119 @@ $(CONFIG_DIR)/$(TARGET)/linux.config: \
 		cp .config /config/$(TARGET)/linux.config; \
 	")
 
-$(OUT_DIR):
-	mkdir -p $(OUT_DIR)
+$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap:
+	$(call git_clone,$@,$(AWS_NITRO_DRIVER_REPO),$(AWS_NITRO_DRIVER_REF))
 
-$(OUT_DIR)/release.env: $(OUT_DIR)
-	test "$(VERSION)"
-	echo 'VERSION=$(VERSION)'            > $(OUT_DIR)/release.env
-	test "$(GIT_REF)"
-	echo 'GIT_REF=$(GIT_REF)'           >> $(OUT_DIR)/release.env
-	test "$(GIT_AUTHOR)"
-	echo 'GIT_AUTHOR=$(GIT_AUTHOR)'     >> $(OUT_DIR)/release.env
-	test "$(GIT_KEY)"
-	echo 'GIT_KEY=$(GIT_KEY)'           >> $(OUT_DIR)/release.env
-	test "$(GIT_DATETIME)"
-	echo 'GIT_DATETIME=$(GIT_DATETIME)' >> $(OUT_DIR)/release.env
+$(KEY_DIR)/$(LINUX_KEY).asc:
+	$(call fetch_pgp_key,$(LINUX_KEY))
 
-$(OUT_DIR)/init: \
-	$(CACHE_DIR)/toolchain.tar
+$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign:
+	curl --url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.sign --output $@
+
+$(FETCH_DIR)/linux-$(LINUX_VERSION).tar:
+	curl --url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.xz --output $@.xz
+	xz -d $@.xz
+
+$(FETCH_DIR)/linux-$(LINUX_VERSION): \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
+	$(KEY_DIR)/$(LINUX_KEY).asc
+	$(call toolchain,$(USER), " \
+		gpg --import $(KEY_DIR)/$(LINUX_KEY).asc && \
+		gpg --verify $@.tar.sign $@.tar && \
+		cd $(FETCH_DIR) && \
+		tar -mxf linux-$(LINUX_VERSION).tar; \
+	")
+
+$(CACHE_DIR)/linux.config:
+	cp $(CONFIG_DIR)/$(TARGET)/linux.config $@
+
+$(CACHE_DIR)/init:
 	$(call toolchain,$(USER)," \
-		cd /src/init/ && \
-		unset FAKETIME && \
+		cd $(SRC_DIR)/init && \
 		export RUSTFLAGS='-C target-feature=+crt-static' && \
 		cargo build \
 			--target x86_64-unknown-linux-gnu \
+			--locked \
 			--release && \
-		cp /src/init/target/x86_64-unknown-linux-gnu/release/init /out/init \
+		cp target/x86_64-unknown-linux-gnu/release/init /home/build/$@ \
 	")
 
-$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio: \
-	$(CACHE_DIR)/toolchain.tar \
-	| $(CACHE_DIR)/linux-$(LINUX_VERSION)
+$(BIN_DIR)/gen_init_cpio: \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION)
 	$(call toolchain,$(USER)," \
-		cd /cache/linux-$(LINUX_VERSION) && \
-		gcc usr/gen_init_cpio.c -o usr/gen_init_cpio \
+		cd $(FETCH_DIR)/linux-$(LINUX_VERSION) && \
+		gcc usr/gen_init_cpio.c -o /home/build/$@ \
 	")
 
-$(OUT_DIR)/aws/rootfs.cpio: \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio \
-	$(OUT_DIR)/init \
-	$(OUT_DIR)/aws/nsm.ko
-	$(call rootfs_build,aws)
+$(BIN_DIR)/gen_initramfs.sh: \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh
+	cat $(FETCH_DIR)/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh \
+	| sed 's:usr/gen_init_cpio:gen_init_cpio:g' \
+	> $@
+	chmod +x $@
 
-$(OUT_DIR)/generic/rootfs.cpio: \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_init_cpio \
-	$(OUT_DIR)/init
-	$(call rootfs_build,generic)
+$(CACHE_DIR)/rootfs.list: \
+	$(CONFIG_DIR)/$(TARGET)/rootfs.list
+	cp $(CONFIG_DIR)/$(TARGET)/rootfs.list $(CACHE_DIR)/rootfs.list
 
-$(OUT_DIR)/generic/bzImage: \
-	$(OUT_DIR)/generic/rootfs.cpio
-	$(call kernel_build,generic,$(ARCH))
-
-$(OUT_DIR)/aws/bzImage: \
-	| $(CACHE_DIR)/linux-$(LINUX_VERSION)
-	$(call kernel_build,aws,$(ARCH))
-
-$(OUT_DIR)/aws/eif_build: \
-	$(CACHE_DIR)/toolchain.tar
+$(CACHE_DIR)/rootfs.cpio: \
+	$(CACHE_DIR)/rootfs.list \
+	$(CACHE_DIR)/init \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+	$(BIN_DIR)/gen_init_cpio \
+	$(BIN_DIR)/gen_initramfs.sh
+	mkdir -p $(CACHE_DIR)/rootfs
+ifeq ($(TARGET), aws)
+	$(MAKE) TARGET=$(TARGET) $(CACHE_DIR)/nsm.ko
+	cp $(CACHE_DIR)/nsm.ko $(CACHE_DIR)/rootfs/
+endif
+	cp $(CACHE_DIR)/init $(CACHE_DIR)/rootfs/
 	$(call toolchain,$(USER)," \
-		unset FAKETIME && \
-		cd /src/toolchain/eif_build && \
-		CARGO_HOME=/cache/cargo cargo build \
+		find $(CACHE_DIR)/rootfs \
+			-mindepth 1 \
+			-execdir touch -hcd "@0" "{}" + && \
+		gen_initramfs.sh -o $@ $(CACHE_DIR)/rootfs.list && \
+		cpio -itv < $@ && \
+		sha256sum $@; \
+	")
+
+$(CACHE_DIR)/bzImage: \
+	$(CACHE_DIR)/linux.config \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+	$(CACHE_DIR)/rootfs.cpio
+	$(call toolchain,$(USER)," \
+		cd $(FETCH_DIR)/linux-$(LINUX_VERSION) && \
+		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
+		make olddefconfig && \
+		make -j$(CPUS) ARCH=$(ARCH) bzImage && \
+		cp arch/$(ARCH)/boot/bzImage /home/build/$@ && \
+		sha256sum /home/build/$@; \
+	")
+
+$(BIN_DIR)/eif_build:
+	$(call toolchain,$(USER)," \
+		cd $(SRC_DIR)/eif_build && \
+		export CARGO_HOME=$(CACHE_DIR)/cargo && \
+		cargo build \
+			--locked \
 			--target x86_64-unknown-linux-gnu && \
-		mkdir -p /out/aws/; \
-		cp target/x86_64-unknown-linux-gnu/debug/eif_build /out/aws/; \
+		cp target/x86_64-unknown-linux-gnu/debug/eif_build /home/build/$@; \
 	")
 
-$(OUT_DIR)/qos_host: \
-	$(CACHE_DIR)/toolchain.tar
+$(CACHE_DIR)/nsm.ko: \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+	$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap
 	$(call toolchain,$(USER)," \
-		unset FAKETIME; \
-		export RUSTFLAGS='-C target-feature=+crt-static' && \
-		cd /src/qos_host \
-		&& CARGO_HOME=/cache/cargo cargo build \
-			--target x86_64-unknown-linux-gnu \
-			--features vm \
-			--no-default-features \
-			--release \
-		&& cp /src/target/x86_64-unknown-linux-gnu/release/qos_host /out/; \
-	")
-
-$(OUT_DIR)/qos_client: \
-	$(CACHE_DIR)/toolchain.tar
-	$(call toolchain,$(USER)," \
-		unset FAKETIME; \
-		export RUSTFLAGS='-C target-feature=+crt-static' && \
-		cd /src/qos_client \
-		&& CARGO_HOME=/cache/cargo cargo build \
-			--target x86_64-unknown-linux-gnu \
-			--no-default-features \
-			--release \
-		&& cp /src/target/x86_64-unknown-linux-gnu/release/qos_client /out/; \
-	")
-
-$(OUT_DIR)/aws/nsm.ko: \
-	$(CACHE_DIR)/toolchain.tar \
-	$(OUT_DIR)/aws/bzImage \
-	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/.git/HEAD
-	$(call toolchain,$(USER)," \
-		unset FAKETIME; \
-		cd /cache/linux-$(LINUX_VERSION) && \
-		cp /config/aws/linux.config .config && \
+		cd $(FETCH_DIR)/linux-$(LINUX_VERSION) && \
+		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
 		make olddefconfig && \
-		make modules_prepare && \
-		cd /cache/aws-nitro-enclaves-sdk-bootstrap/ \
-		&& make -C /cache/linux-$(LINUX_VERSION) M=/cache/aws-nitro-enclaves-sdk-bootstrap/nsm-driver \
-		&& cp nsm-driver/nsm.ko /out/aws/nsm.ko; \
+		make -j$(CPUS) ARCH=$(ARCH) bzImage && \
+		make -j$(CPUS) ARCH=$(ARCH) modules_prepare && \
+		cd /home/build/$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap/ && \
+		make \
+			-C /home/build/$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+		    M=/home/build/$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap/nsm-driver && \
+		cp nsm-driver/nsm.ko /home/build/$@ \
 	")
-
-$(OUT_DIR)/aws-nitro.eif $(OUT_DIR)/aws-pcrs.txt: \
-	$(CACHE_DIR)/toolchain.tar \
-	$(OUT_DIR)/aws/eif_build \
-	$(OUT_DIR)/aws/bzImage \
-	$(OUT_DIR)/aws/rootfs.cpio
-	$(call toolchain,$(USER)," \
-		mkdir -p /cache/aws/eif && \
-		cp /out/aws/bzImage /cache/aws/eif/ && \
-		cp /out/aws/rootfs.cpio /cache/aws/eif/ && \
-		cp /config/aws/linux.config /cache/aws/eif/ && \
-		cd /cache/aws/eif && \
-		find . -mindepth 1 -execdir touch -hcd "@0" "{}" + && \
-		find . -mindepth 1 -printf '%P\0' && \
-		/out/aws/eif_build \
-			--kernel /cache/aws/eif/bzImage \
-			--kernel_config /cache/aws/eif/linux.config \
-			--cmdline 'reboot=k initrd=0x2000000$(,)3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd' \
-			--ramdisk /cache/aws/eif/rootfs.cpio \
-			--output /out/aws-nitro.eif \
-			--pcrs_output /out/aws-pcrs.txt; \
-	")
-
-define fetch_pgp_key
-	mkdir -p $(KEY_DIR) && \
-	$(call toolchain,$(USER), " \
-		for server in \
-			ha.pool.sks-keyservers.net \
-			hkp://keyserver.ubuntu.com:80 \
-			hkp://p80.pool.sks-keyservers.net:80 \
-			pgp.mit.edu \
-			; do \
-				echo "Trying: $${server}"; \
-				gpg \
-					--recv-key \
-					--keyserver "$${server}" \
-					--keyserver-options timeout=10 \
-					--recv-keys "$(1)" \
-				&& break; \
-			done; \
-		gpg --export -a $(1) > $(KEY_DIR)/$(1).asc; \
-	")
-endef
-
-define toolchain
-	docker load -i $(CACHE_DIR)/toolchain.tar
-	docker run \
-		--rm \
-		--tty \
-		--interactive \
-		--user=$(1) \
-		--platform=linux/$(ARCH) \
-		--volume $(PWD)/$(CONFIG_DIR):/config \
-		--volume $(PWD)/$(CACHE_DIR):/cache \
-		--volume $(PWD)/$(KEY_DIR):/keys \
-		--volume $(PWD)/$(OUT_DIR):/out \
-		--volume $(PWD)/$(SRC_DIR):/src \
-		--cpus $(CPUS) \
-		--env GNUPGHOME=/cache/.gnupg \
-		--env ARCH=$(ARCH) \
-		--env KBUILD_BUILD_USER=$(KBUILD_BUILD_USER) \
-		--env KBUILD_BUILD_HOST=$(KBUILD_BUILD_HOST) \
-		--env KBUILD_BUILD_VERSION=$(KBUILD_BUILD_VERSION) \
-		--env KBUILD_BUILD_TIMESTAMP=$(KBUILD_BUILD_TIMESTAMP) \
-		--env KCONFIG_NOTIMESTAMP=$(KCONFIG_NOTIMESTAMP) \
-		--env SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) \
-		--env FAKETIME_FMT=$(FAKETIME_FMT) \
-		--env FAKETIME=$(FAKETIME) \
-		--env CARGO_HOME=/cache/cargo \
-		local/$(NAME)-build \
-		bash -c $(2)
-endef
-
-define rootfs_build
-	mkdir -p $(CACHE_DIR)/$(1)/rootfs
-	cp $(CONFIG_DIR)/$(1)/rootfs.list $(CACHE_DIR)/$(1)/rootfs.list
-	cp $(OUT_DIR)/init $(CACHE_DIR)/$(1)/rootfs/init
-	$(call toolchain,$(USER)," \
-		cd /cache/$(1)/rootfs && \
-		find . -mindepth 1 -execdir touch -hcd "@0" "{}" + && \
-		find . -mindepth 1 -printf '%P\0' && \
-		cd /cache/linux-$(LINUX_VERSION) && \
-		usr/gen_initramfs.sh \
-			-o /out/$(1)/rootfs.cpio \
-			/cache/$(1)/rootfs.list && \
-		cpio -itv < /out/$(1)/rootfs.cpio && \
-		sha256sum /out/$(1)/rootfs.cpio; \
-	")
-	touch $(OUT_DIR)/$(1)/rootfs.cpio;
-endef
-
-define kernel_build
-	$(call toolchain,$(USER)," \
-		unset FAKETIME && \
-		cd /cache/linux-$(LINUX_VERSION) && \
-		rm -rf include/config include/generated arch/x86/include/generated && \
-		cp /config/$(1)/linux.config .config && \
-		make olddefconfig && \
-		make -j$(CPUS) ARCH=$(2) bzImage && \
-		cp arch/x86_64/boot/bzImage /out/$(1)/bzImage && \
-		sha256sum /out/$(1)/bzImage; \
-	")
-	touch $(OUT_DIR)/$(1)/bzImage;
-endef
