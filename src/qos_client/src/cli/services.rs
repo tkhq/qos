@@ -474,7 +474,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	.map(|(k, v)| format!("{k} {}", qos_hex::encode(v)))
 	.join("\n");
 
-	// Write the dr artifacts
+	// Write the dr artifacts.
 	let dr_artifacts_path = namespace_dir.as_ref().join(GENESIS_DR_ARTIFACTS);
 	write_with_msg(
 		&dr_artifacts_path,

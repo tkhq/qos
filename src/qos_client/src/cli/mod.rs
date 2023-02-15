@@ -121,7 +121,7 @@ pub enum Command {
 	/// Key.
 	AfterGenesis,
 	/// Verify the Disaster Recovery artifacts against the corresponding master
-	/// seed
+	/// seed.
 	///
 	/// This takes a path to a file with the hex encoded master seed and the
 	/// directory with the genesis output.

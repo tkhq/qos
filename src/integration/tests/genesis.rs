@@ -263,7 +263,7 @@ async fn genesis_e2e() {
 	let dr_artifacts_contents = fs::File::open(&dr_artifacts_path).unwrap();
 	assert_eq!(io::BufReader::new(dr_artifacts_contents).lines().count(), 4);
 
-	// Check that we can verify the dr artifacts
+	// Check that we can verify the dr artifacts.
 	let reconstructed_path = tmp_dir("reconstructed_quorum_master_seed_hex");
 	reconstructed.to_hex_file(&*reconstructed_path).unwrap();
 	assert!(Command::new("../target/debug/qos_client")
