@@ -58,7 +58,7 @@ pub enum ProtocolMsg {
 		/// COSE SIGN1 structure with Attestation Doc
 		nsm_response: NsmResponse,
 		/// Output from the Genesis flow.
-		genesis_output: GenesisOutput,
+		genesis_output: Box<GenesisOutput>,
 	},
 
 	/// Post a quorum key shard
@@ -158,16 +158,17 @@ mod test {
 
 		let genesis_response = ProtocolMsg::BootGenesisResponse {
 			nsm_response,
-			genesis_output: GenesisOutput {
+			genesis_output: Box::new(GenesisOutput {
 				quorum_key: vec![3, 2, 1],
 				member_outputs: vec![],
 				recovery_permutations: vec![],
 				threshold: 2,
 				dr_key_wrapped_quorum_key: None,
-				quorum_key_hash: [22; 32],
+				quorum_key_hash: [22; 64],
 				test_message_ciphertext: vec![],
 				test_message_signature: vec![],
-			},
+				test_message: vec![],
+			}),
 		};
 
 		let vec = genesis_response.try_to_vec().unwrap();

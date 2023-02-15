@@ -2,12 +2,12 @@
 
 use std::{fmt, iter::zip};
 
-use qos_crypto::sha_256;
+use qos_crypto::sha_512;
 use qos_nsm::types::{NsmRequest, NsmResponse};
 use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
-	boot::QuorumMember, Hash256, ProtocolError, ProtocolState, QosHash,
+	boot::QuorumMember, ProtocolError, ProtocolState, QosHash,
 };
 
 const QOS_TEST_MESSAGE: &[u8] = b"qos-test-message";
@@ -59,9 +59,9 @@ pub struct GenesisMemberOutput {
 	pub share_set_member: QuorumMember,
 	/// Quorum Key Share encrypted to the `setup_member`'s Personal Key.
 	pub encrypted_quorum_key_share: Vec<u8>,
-	/// Sha256 hash of the plaintext quorum key share. Used by the share set
+	/// Sha512 hash of the plaintext quorum key share. Used by the share set
 	/// member to verify they correctly decrypted the share.
-	pub share_hash: Hash256,
+	pub share_hash: [u8; 64],
 }
 
 impl fmt::Debug for GenesisMemberOutput {
@@ -93,11 +93,14 @@ pub struct GenesisOutput {
 	/// The quorum key encrypted to the DR key. None if no DR Key was provided
 	pub dr_key_wrapped_quorum_key: Option<Vec<u8>>,
 	/// Hash of the quorum key secret
-	pub quorum_key_hash: Hash256,
+	pub quorum_key_hash: [u8; 64],
 	/// Test message encrypted to the quorum public key.
 	pub test_message_ciphertext: Vec<u8>,
 	/// Signature over the test message by the quorum key.
 	pub test_message_signature: Vec<u8>,
+	/// The message that was used to generate [`Self::test_message_signature`]
+	/// and [`Self::test_message_ciphertext`]
+	pub test_message: Vec<u8>,
 }
 
 impl fmt::Debug for GenesisOutput {
@@ -142,7 +145,7 @@ pub(in crate::protocol) fn boot_genesis(
 				Ok(GenesisMemberOutput {
 					share_set_member,
 					encrypted_quorum_key_share,
-					share_hash: sha_256(&share),
+					share_hash: sha_512(&share),
 				})
 			})
 			.collect();
@@ -163,11 +166,12 @@ pub(in crate::protocol) fn boot_genesis(
 		// TODO: generate N choose K recovery permutations
 		recovery_permutations: vec![],
 		dr_key_wrapped_quorum_key,
-		quorum_key_hash: sha_256(hex_master_seed.as_bytes()),
+		quorum_key_hash: sha_512(hex_master_seed.as_bytes()),
 		test_message_ciphertext: quorum_pair
 			.public_key()
 			.encrypt(QOS_TEST_MESSAGE)?,
 		test_message_signature: quorum_pair.sign(QOS_TEST_MESSAGE)?,
+		test_message: QOS_TEST_MESSAGE.to_vec(),
 	};
 
 	let nsm_response = {
@@ -237,7 +241,7 @@ mod test {
 				let decrypted_share =
 					&pair.decrypt(&output.encrypted_quorum_key_share).unwrap();
 
-				assert_eq!(sha_256(decrypted_share), output.share_hash);
+				assert_eq!(sha_512(decrypted_share), output.share_hash);
 
 				decrypted_share.clone()
 			})
@@ -273,7 +277,7 @@ mod test {
 			.unwrap();
 
 		let quorum_key_hash =
-			sha_256(qos_hex::encode(&reconstructed).as_bytes());
+			sha_512(qos_hex::encode(&reconstructed).as_bytes());
 		assert_eq!(quorum_key_hash, output.quorum_key_hash);
 	}
 }

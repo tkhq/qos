@@ -432,7 +432,7 @@ mod handlers {
 				Ok((genesis_output, nsm_response)) => {
 					Some(ProtocolMsg::BootGenesisResponse {
 						nsm_response,
-						genesis_output,
+						genesis_output: Box::new(genesis_output),
 					})
 				}
 				Err(e) => {

@@ -1,10 +1,15 @@
-use std::{fs, path::Path, process::Command};
+use std::{
+	fs,
+	io::{self, BufRead},
+	path::Path,
+	process::Command,
+};
 
 use borsh::de::BorshDeserialize;
 use integration::{LOCAL_HOST, MOCK_QOS_DIST_DIR};
 use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
-use qos_crypto::{sha_256, shamir::shares_reconstruct};
+use qos_crypto::{sha_512, shamir::shares_reconstruct};
 use qos_p256::{P256Pair, P256Public};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 use rand::{seq::SliceRandom, thread_rng};
@@ -33,6 +38,7 @@ async fn genesis_e2e() {
 	let genesis_output_path = format!("{}/genesis_output", &*genesis_dir);
 	let dr_wrapped_quorum_key_path =
 		format!("{}/dr_wrapped_quorum_key", &*genesis_dir);
+	let dr_artifacts_path = format!("{}/genesis_dr_artifacts", &*genesis_dir);
 
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", &*all_personal_dir, user);
@@ -184,7 +190,7 @@ async fn genesis_e2e() {
 			let plain_text_share =
 				share_pair.decrypt(&member.encrypted_quorum_key_share).unwrap();
 
-			assert_eq!(sha_256(&plain_text_share), member.share_hash);
+			assert_eq!(sha_512(&plain_text_share), member.share_hash);
 
 			plain_text_share
 		})
@@ -253,4 +259,22 @@ async fn genesis_e2e() {
 		.unwrap();
 	let pair = P256Pair::from_master_seed(&master_seed).unwrap();
 	assert!(pair == reconstructed);
+
+	let dr_artifacts_contents = fs::File::open(&dr_artifacts_path).unwrap();
+	assert_eq!(io::BufReader::new(dr_artifacts_contents).lines().count(), 4);
+
+	// Check that we can verify the dr artifacts
+	let reconstructed_path = tmp_dir("reconstructed_quorum_master_seed_hex");
+	reconstructed.to_hex_file(&*reconstructed_path).unwrap();
+	assert!(Command::new("../target/debug/qos_client")
+		.arg("genesis-dr-verify")
+		.arg("--namespace-dir")
+		.arg(&*genesis_dir)
+		.arg("--master-seed-path")
+		.arg(&*reconstructed_path)
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
 }
