@@ -207,6 +207,7 @@ mod test {
 
 	use super::{boot_key_forward, export_key_internal, validate_manifest};
 	use crate::{
+		handles::Handles,
 		io::SocketAddress,
 		protocol::{
 			services::{
@@ -217,7 +218,7 @@ mod test {
 				},
 				key::{inject_key, EncryptedQuorumKey},
 			},
-			Handles, ProtocolError, ProtocolPhase, ProtocolState, QosHash,
+			ProtocolError, ProtocolPhase, ProtocolState, QosHash,
 		},
 	};
 

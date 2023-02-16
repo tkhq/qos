@@ -168,7 +168,7 @@ impl From<qos_hex::HexError> for Error {
 
 impl From<qos_attest::AttestError> for Error {
 	fn from(err: qos_attest::AttestError) -> Error {
-		let msg = format!("{:?}", err);
+		let msg = format!("{err:?}");
 		Error::QosAttest(msg)
 	}
 }
