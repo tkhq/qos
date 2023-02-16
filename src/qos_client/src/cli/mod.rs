@@ -120,6 +120,12 @@ pub enum Command {
 	/// This will output the decrypted Personal Key associated with your Setup
 	/// Key.
 	AfterGenesis,
+	/// Verify the Disaster Recovery artifacts against the corresponding master
+	/// seed.
+	///
+	/// This takes a path to a file with the hex encoded master seed and the
+	/// directory with the genesis output.
+	VerifyGenesis,
 	/// Using the given Personal Keys as the Manifest Set, generate a manifest.
 	GenerateManifest,
 	/// Sign a trusted Manifest.
@@ -217,6 +223,7 @@ impl From<&str> for Command {
 			"generate-manifest-envelope" => Self::GenerateManifestEnvelope,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
+			"verify-genesis" => Self::VerifyGenesis,
 			"generate-manifest" => Self::GenerateManifest,
 			"approve-manifest" => Self::ApproveManifest,
 			"boot-standard" => Self::BootStandard,
@@ -580,6 +587,12 @@ impl Command {
 			.token(Self::unsafe_skip_attestation_token())
 	}
 
+	fn verify_genesis() -> Parser {
+		Parser::new()
+			.token(Self::namespace_dir_token())
+			.token(Self::master_seed_path_token())
+	}
+
 	fn generate_manifest() -> Parser {
 		Parser::new()
 			.token(
@@ -768,6 +781,7 @@ impl GetParserForCommand for Command {
 			Self::GenerateFileKey => Self::generate_file_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
+			Self::VerifyGenesis => Self::verify_genesis(),
 			Self::GenerateManifest => Self::generate_manifest(),
 			Self::ApproveManifest => Self::approve_manifest(),
 			Self::BootStandard => Self::boot_standard(),
@@ -1144,6 +1158,9 @@ impl ClientRunner {
 				}
 				Command::BootGenesis => handlers::boot_genesis(&self.opts),
 				Command::AfterGenesis => handlers::after_genesis(&self.opts),
+				Command::VerifyGenesis => {
+					handlers::verify_genesis(&self.opts);
+				}
 				Command::GenerateManifest => {
 					handlers::generate_manifest(&self.opts);
 				}
@@ -1433,6 +1450,16 @@ mod handlers {
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
 		}) {
+			println!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn verify_genesis(opts: &ClientOpts) {
+		if let Err(e) = services::verify_genesis(
+			opts.namespace_dir(),
+			opts.master_seed_path(),
+		) {
 			println!("Error: {e:?}");
 			std::process::exit(1);
 		}

@@ -25,7 +25,7 @@ use qos_core::protocol::{
 	},
 	QosHash,
 };
-use qos_crypto::{sha_256, sha_384};
+use qos_crypto::{sha_256, sha_384, sha_512};
 use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Error, P256Pair, P256Public};
 use zeroize::Zeroizing;
@@ -43,6 +43,7 @@ const DR_WRAPPED_QUORUM_KEY: &str = "dr_wrapped_quorum_key";
 const PCRS_PATH: &str = "aws-x86_64.pcrs";
 const QOS_RELEASE_MANIFEST_FILE: &str = "manifest.txt";
 const QOS_RELEASE_ENV_FILE: &str = "release.env";
+const GENESIS_DR_ARTIFACTS: &str = "genesis_dr_artifacts";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -126,6 +127,18 @@ pub enum Error {
 	FailedToReadEncryptedQuorumKey,
 	/// The contents of the file are not a valid encrypted quorum key struct.
 	InvalidEncryptedQuorumKey,
+	/// Signature could not be verified.
+	InvalidSignature,
+	/// Could not deterministically reproduce a signature.
+	CouldNotReproduceSignature,
+	/// Decryption did not result in the expected palintext.
+	BadDecryption,
+	/// The seed was read two different ways and the results did not match -
+	/// most likely a bug with the code.
+	ErrorReadingSeed,
+	/// Given quorum key seed does not match the hash of the expected quorum
+	/// key seed.
+	SecretDoesNotMatch,
 }
 
 impl From<borsh::maybestd::io::Error> for Error {
@@ -452,6 +465,23 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		)?;
 	}
 
+	let dr_artifacts = [
+		("quorum_key_hash", &genesis_output.quorum_key_hash[..]),
+		("test_message_ciphertext", &genesis_output.test_message_ciphertext),
+		("test_message_signature", &genesis_output.test_message_signature),
+		("test_message", &genesis_output.test_message),
+	]
+	.map(|(k, v)| format!("{k} {}", qos_hex::encode(v)))
+	.join("\n");
+
+	// Write the dr artifacts.
+	let dr_artifacts_path = namespace_dir.as_ref().join(GENESIS_DR_ARTIFACTS);
+	write_with_msg(
+		&dr_artifacts_path,
+		dr_artifacts.as_bytes(),
+		"Genesis DR Artifacts",
+	);
+
 	// Write the attestation doc
 	let attestation_doc_path =
 		namespace_dir.as_ref().join(GENESIS_ATTESTATION_DOC_FILE);
@@ -487,6 +517,49 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 			&dr_wrapped_quorum_key,
 			"DR Wrapped Quorum Key",
 		);
+	}
+
+	Ok(())
+}
+
+pub(crate) fn verify_genesis<P: AsRef<Path>>(
+	namespace_dir: P,
+	master_seed_path: P,
+) -> Result<(), Error> {
+	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
+	let genesis_output = GenesisOutput::try_from_slice(
+		&fs::read(genesis_output_path).expect("Failed to read genesis set"),
+	)?;
+
+	let master_seed_hex = fs::read_to_string(&master_seed_path)?;
+	let pair = P256Pair::from_hex_file(master_seed_path)?;
+
+	// sanity check our logic to read in master seed
+	if pair.to_master_seed_hex() != master_seed_hex.as_bytes() {
+		return Err(Error::ErrorReadingSeed);
+	}
+
+	// check quorum_key_hash
+	if sha_512(master_seed_hex.as_bytes()) != genesis_output.quorum_key_hash {
+		return Err(Error::SecretDoesNotMatch);
+	}
+
+	// check test_message_signature
+	if let Err(_e) = pair.public_key().verify(
+		&genesis_output.test_message,
+		&genesis_output.test_message_signature,
+	) {
+		return Err(Error::InvalidSignature);
+	}
+	let expected_signature = pair.sign(&genesis_output.test_message)?;
+	if expected_signature != genesis_output.test_message_signature {
+		return Err(Error::CouldNotReproduceSignature);
+	}
+
+	// check test_message_ciphertext
+	let plaintext = pair.decrypt(&genesis_output.test_message_ciphertext)?;
+	if plaintext != genesis_output.test_message {
+		return Err(Error::BadDecryption);
 	}
 
 	Ok(())
@@ -566,7 +639,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		pair.decrypt(&member_output.encrypted_quorum_key_share)?;
 
 	assert_eq!(
-		sha_256(&plaintext_share),
+		sha_512(&plaintext_share),
 		member_output.share_hash,
 		"Expected share hash do not match the actual share hash"
 	);
