@@ -110,7 +110,7 @@ pub(in crate::protocol) fn provision(
 	// provisioned before we can externally seed the entropy pool.
 	state.handles.delete_ephemeral_key();
 
-	state.phase = ProtocolPhase::QuorumKeyProvisioned;
+	state.transition(ProtocolPhase::QuorumKeyProvisioned);
 	Ok(true)
 }
 
@@ -124,7 +124,6 @@ mod test {
 	use qos_test_primitives::PathWrapper;
 
 	use crate::{
-		client::Client,
 		handles::Handles,
 		io::SocketAddress,
 		protocol::{
@@ -134,7 +133,7 @@ mod test {
 					Namespace, NitroConfig, PivotConfig, QuorumMember,
 					RestartPolicy, ShareSet,
 				},
-				provision::{self, provision},
+				provision::provision,
 			},
 			ProtocolError, ProtocolPhase, ProtocolState, QosHash,
 		},
@@ -228,13 +227,12 @@ mod test {
 		handles.put_manifest_envelope(&manifest_envelope).unwrap();
 
 		// 3) Create state with eph key and manifest
-		let state = ProtocolState {
-			provisioner: provision::SecretBuilder::new(),
-			attestor: Box::new(MockNsm),
-			phase: ProtocolPhase::WaitingForQuorumShards,
+		let mut state = ProtocolState::new(
+			Box::new(MockNsm),
 			handles,
-			app_client: Client::new(SocketAddress::new_unix("./never.sock")),
-		};
+			SocketAddress::new_unix("./never.sock"),
+		);
+		state.transition(ProtocolPhase::WaitingForQuorumShards);
 
 		Setup { quorum_pair, eph_pair, threshold, state, approvals }
 	}
@@ -262,7 +260,10 @@ mod test {
 			let approval = approvals[i].clone();
 			assert_eq!(provision(share, approval, &mut state), Ok(false));
 			assert!(!Path::new(&*quorum_file).exists());
-			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+			assert_eq!(
+				state.get_phase(),
+				ProtocolPhase::WaitingForQuorumShards
+			);
 		}
 
 		// 6) For shard K, call provision, make sure returns true and writes
@@ -273,7 +274,7 @@ mod test {
 		let quorum_key = std::fs::read(&*quorum_file).unwrap();
 
 		assert_eq!(quorum_key, quorum_pair.to_master_seed_hex());
-		assert_eq!(state.phase, ProtocolPhase::QuorumKeyProvisioned);
+		assert_eq!(state.get_phase(), ProtocolPhase::QuorumKeyProvisioned);
 
 		// Make sure the EK is deleted
 		assert!(!Path::new(&*eph_file).exists());
@@ -317,7 +318,10 @@ mod test {
 			let approval = approvals[i].clone();
 			assert_eq!(provision(share, approval, &mut state), Ok(false));
 			assert!(!Path::new(&*quorum_file).exists());
-			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+			assert_eq!(
+				state.get_phase(),
+				ProtocolPhase::WaitingForQuorumShards
+			);
 		}
 
 		// 6) Add Kth shard of the random key
@@ -329,7 +333,7 @@ mod test {
 		);
 		assert!(!Path::new(&*quorum_file).exists());
 		// Note that the handler should set the state to unrecoverable error
-		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+		assert_eq!(state.get_phase(), ProtocolPhase::WaitingForQuorumShards);
 	}
 
 	#[test]
@@ -358,7 +362,10 @@ mod test {
 			let approval = approvals[i].clone();
 			assert_eq!(provision(share, approval, &mut state), Ok(false));
 			assert!(!Path::new(&*quorum_file).exists());
-			assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+			assert_eq!(
+				state.get_phase(),
+				ProtocolPhase::WaitingForQuorumShards
+			);
 		}
 
 		// 6) Add a bogus shard as the Kth shard
@@ -372,7 +379,7 @@ mod test {
 		);
 		assert!(!Path::new(&*quorum_file).exists());
 		// Note that the handler should set the state to unrecoverable error
-		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+		assert_eq!(state.get_phase(), ProtocolPhase::WaitingForQuorumShards);
 	}
 
 	#[test]
@@ -408,7 +415,7 @@ mod test {
 			ProtocolError::CouldNotVerifyApproval
 		);
 		assert!(!Path::new(&*quorum_file).exists());
-		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+		assert_eq!(state.get_phase(), ProtocolPhase::WaitingForQuorumShards);
 	}
 
 	#[test]
@@ -449,6 +456,6 @@ mod test {
 			ProtocolError::NotShareSetMember
 		);
 		assert!(!Path::new(&*quorum_file).exists());
-		assert_eq!(state.phase, ProtocolPhase::WaitingForQuorumShards);
+		assert_eq!(state.get_phase(), ProtocolPhase::WaitingForQuorumShards);
 	}
 }

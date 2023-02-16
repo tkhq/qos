@@ -53,7 +53,7 @@ pub(in crate::protocol) fn inject_key(
 	}
 	state.handles.put_quorum_key(&decrypted_quorum_pair)?;
 
-	state.phase = ProtocolPhase::QuorumKeyProvisioned;
+	state.transition(ProtocolPhase::QuorumKeyProvisioned);
 
 	Ok(())
 }
@@ -64,7 +64,7 @@ pub(in crate::protocol) fn boot_key_forward(
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	let nsm_response = put_manifest_and_pivot(state, manifest_envelope, pivot)?;
-	state.phase = ProtocolPhase::WaitingForForwardedKey;
+	state.transition(ProtocolPhase::WaitingForForwardedKey);
 	Ok(nsm_response)
 }
 
@@ -379,7 +379,10 @@ mod test {
 
 			handles.get_ephemeral_key().unwrap();
 
-			assert_eq!(state.phase, ProtocolPhase::WaitingForForwardedKey);
+			assert_eq!(
+				state.get_phase(),
+				ProtocolPhase::WaitingForForwardedKey
+			);
 		}
 
 		#[test]
@@ -415,7 +418,10 @@ mod test {
 			assert!(!handles.pivot_exists());
 			assert!(!handles.manifest_envelope_exists());
 			// phase hasn't changed
-			assert_eq!(state.phase, ProtocolPhase::WaitingForBootInstruction);
+			assert_eq!(
+				state.get_phase(),
+				ProtocolPhase::WaitingForBootInstruction
+			);
 		}
 
 		#[test]
@@ -454,7 +460,10 @@ mod test {
 			assert!(!handles.pivot_exists());
 			assert!(!handles.manifest_envelope_exists());
 			// phase hasn't changed
-			assert_eq!(state.phase, ProtocolPhase::WaitingForBootInstruction);
+			assert_eq!(
+				state.get_phase(),
+				ProtocolPhase::WaitingForBootInstruction
+			);
 		}
 
 		#[test]
@@ -492,7 +501,10 @@ mod test {
 			assert!(!handles.pivot_exists());
 			assert!(!handles.manifest_envelope_exists());
 			// phase hasn't changed
-			assert_eq!(state.phase, ProtocolPhase::WaitingForBootInstruction);
+			assert_eq!(
+				state.get_phase(),
+				ProtocolPhase::WaitingForBootInstruction
+			);
 		}
 
 		#[test]
@@ -537,7 +549,10 @@ mod test {
 			assert!(!handles.pivot_exists());
 			assert!(!handles.manifest_envelope_exists());
 			// phase hasn't changed
-			assert_eq!(state.phase, ProtocolPhase::WaitingForBootInstruction);
+			assert_eq!(
+				state.get_phase(),
+				ProtocolPhase::WaitingForBootInstruction
+			);
 		}
 	}
 
@@ -1043,6 +1058,7 @@ mod test {
 				handles,
 				SocketAddress::new_unix("./never.sock"),
 			);
+			protocol_state.transition(ProtocolPhase::WaitingForForwardedKey);
 
 			assert_eq!(
 				inject_key(
@@ -1056,7 +1072,7 @@ mod test {
 			assert!(protocol_state.handles.quorum_key_exists());
 			// correctly changes the phase
 			assert_eq!(
-				protocol_state.phase,
+				protocol_state.get_phase(),
 				ProtocolPhase::QuorumKeyProvisioned
 			);
 		}
@@ -1110,7 +1126,7 @@ mod test {
 			assert!(!protocol_state.handles.quorum_key_exists());
 			// does not change phase
 			assert_eq!(
-				protocol_state.phase,
+				protocol_state.get_phase(),
 				ProtocolPhase::WaitingForBootInstruction
 			);
 		}
@@ -1164,7 +1180,7 @@ mod test {
 			assert!(!protocol_state.handles.quorum_key_exists());
 			// does not change phase
 			assert_eq!(
-				protocol_state.phase,
+				protocol_state.get_phase(),
 				ProtocolPhase::WaitingForBootInstruction
 			);
 		}
@@ -1221,7 +1237,7 @@ mod test {
 			assert!(!protocol_state.handles.quorum_key_exists());
 			// does not change phase
 			assert_eq!(
-				protocol_state.phase,
+				protocol_state.get_phase(),
 				ProtocolPhase::WaitingForBootInstruction
 			);
 		}

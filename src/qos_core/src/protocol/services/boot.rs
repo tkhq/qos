@@ -326,9 +326,7 @@ pub(in crate::protocol) fn boot_standard(
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	let nsm_response = put_manifest_and_pivot(state, manifest_envelope, pivot)?;
-
-	state.phase = ProtocolPhase::WaitingForQuorumShards;
-
+	state.transition(ProtocolPhase::WaitingForQuorumShards);
 	Ok(nsm_response)
 }
 
@@ -459,7 +457,10 @@ mod test {
 		std::fs::remove_file(ephemeral_file).unwrap();
 		std::fs::remove_file(manifest_file).unwrap();
 
-		assert_eq!(protocol_state.phase, ProtocolPhase::WaitingForQuorumShards);
+		assert_eq!(
+			protocol_state.get_phase(),
+			ProtocolPhase::WaitingForQuorumShards
+		);
 	}
 
 	#[test]
@@ -612,7 +613,7 @@ mod test {
 		assert!(!Path::new(&*manifest_file).exists());
 
 		assert_eq!(
-			protocol_state.phase,
+			protocol_state.get_phase(),
 			ProtocolPhase::WaitingForBootInstruction
 		);
 	}
@@ -676,7 +677,7 @@ mod test {
 		assert!(!Path::new(&*manifest_file).exists());
 
 		assert_eq!(
-			protocol_state.phase,
+			protocol_state.get_phase(),
 			ProtocolPhase::WaitingForBootInstruction
 		);
 	}
