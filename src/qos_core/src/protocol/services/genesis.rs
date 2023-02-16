@@ -7,7 +7,7 @@ use qos_nsm::types::{NsmRequest, NsmResponse};
 use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
-	boot::QuorumMember, ProtocolError, ProtocolState, QosHash,
+	services::boot::QuorumMember, ProtocolError, ProtocolState, QosHash,
 };
 
 const QOS_TEST_MESSAGE: &[u8] = b"qos-test-message";

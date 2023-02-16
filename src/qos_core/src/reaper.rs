@@ -13,7 +13,7 @@ use crate::{
 	io::SocketAddress,
 	protocol::{
 		services::boot::{PivotConfig, RestartPolicy},
-		Executor,
+		Processor,
 	},
 	server::SocketServer,
 };
@@ -40,8 +40,8 @@ impl Reaper {
 
 		let handles2 = handles.clone();
 		std::thread::spawn(move || {
-			let executor = Executor::new(nsm, handles2, app_addr);
-			SocketServer::listen(addr, executor).unwrap();
+			let processor = Processor::new(nsm, handles2, app_addr);
+			SocketServer::listen(addr, processor).unwrap();
 		});
 
 		loop {

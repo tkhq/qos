@@ -76,7 +76,7 @@ pub fn verify_attestation_doc_against_user_input(
 	}
 
 	// nonce is none
-	if attestation_doc.nonce != None {
+	if attestation_doc.nonce.is_some() {
 		return Err(AttestError::UnexpectedAttestationDocNonce);
 	}
 
