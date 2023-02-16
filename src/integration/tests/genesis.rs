@@ -267,7 +267,7 @@ async fn genesis_e2e() {
 	let reconstructed_path = tmp_dir("reconstructed_quorum_master_seed_hex");
 	reconstructed.to_hex_file(&*reconstructed_path).unwrap();
 	assert!(Command::new("../target/debug/qos_client")
-		.arg("genesis-dr-verify")
+		.arg("verify-genesis")
 		.arg("--namespace-dir")
 		.arg(&*genesis_dir)
 		.arg("--master-seed-path")

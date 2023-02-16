@@ -125,7 +125,7 @@ pub enum Command {
 	///
 	/// This takes a path to a file with the hex encoded master seed and the
 	/// directory with the genesis output.
-	GenesisDrVerify,
+	VerifyGenesis,
 	/// Using the given Personal Keys as the Manifest Set, generate a manifest.
 	GenerateManifest,
 	/// Sign a trusted Manifest.
@@ -223,7 +223,7 @@ impl From<&str> for Command {
 			"generate-manifest-envelope" => Self::GenerateManifestEnvelope,
 			"boot-genesis" => Self::BootGenesis,
 			"after-genesis" => Self::AfterGenesis,
-			"genesis-dr-verify" => Self::GenesisDrVerify,
+			"verify-genesis" => Self::VerifyGenesis,
 			"generate-manifest" => Self::GenerateManifest,
 			"approve-manifest" => Self::ApproveManifest,
 			"boot-standard" => Self::BootStandard,
@@ -587,7 +587,7 @@ impl Command {
 			.token(Self::unsafe_skip_attestation_token())
 	}
 
-	fn genesis_dr_verify() -> Parser {
+	fn verify_genesis() -> Parser {
 		Parser::new()
 			.token(Self::namespace_dir_token())
 			.token(Self::master_seed_path_token())
@@ -781,7 +781,7 @@ impl GetParserForCommand for Command {
 			Self::GenerateFileKey => Self::generate_file_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
-			Self::GenesisDrVerify => Self::genesis_dr_verify(),
+			Self::VerifyGenesis => Self::verify_genesis(),
 			Self::GenerateManifest => Self::generate_manifest(),
 			Self::ApproveManifest => Self::approve_manifest(),
 			Self::BootStandard => Self::boot_standard(),
@@ -1158,8 +1158,8 @@ impl ClientRunner {
 				}
 				Command::BootGenesis => handlers::boot_genesis(&self.opts),
 				Command::AfterGenesis => handlers::after_genesis(&self.opts),
-				Command::GenesisDrVerify => {
-					handlers::genesis_dr_verify(&self.opts);
+				Command::VerifyGenesis => {
+					handlers::verify_genesis(&self.opts);
 				}
 				Command::GenerateManifest => {
 					handlers::generate_manifest(&self.opts);
@@ -1455,8 +1455,8 @@ mod handlers {
 		}
 	}
 
-	pub(super) fn genesis_dr_verify(opts: &ClientOpts) {
-		if let Err(e) = services::genesis_dr_verify(
+	pub(super) fn verify_genesis(opts: &ClientOpts) {
+		if let Err(e) = services::verify_genesis(
 			opts.namespace_dir(),
 			opts.master_seed_path(),
 		) {

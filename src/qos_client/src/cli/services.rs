@@ -522,7 +522,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	Ok(())
 }
 
-pub(crate) fn genesis_dr_verify<P: AsRef<Path>>(
+pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	namespace_dir: P,
 	master_seed_path: P,
 ) -> Result<(), Error> {
