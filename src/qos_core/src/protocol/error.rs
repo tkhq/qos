@@ -1,6 +1,8 @@
-use super::services::boot;
-use super::state::ProtocolPhase;
-use crate::client;
+//! Quorum protocol error
+use crate::{
+	client,
+	protocol::{services::boot, ProtocolPhase},
+};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 /// A error from protocol execution.

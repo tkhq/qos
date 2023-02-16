@@ -11,7 +11,6 @@ mod state;
 
 pub use error::ProtocolError;
 pub use processor::Processor;
-use services::boot;
 pub use state::ProtocolPhase;
 use state::ProtocolState;
 

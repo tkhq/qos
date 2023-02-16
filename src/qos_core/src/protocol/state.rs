@@ -9,7 +9,7 @@ use qos_nsm::NsmProvider;
 type ProtocolHandler =
 	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
 
-/// Protocol executor state.
+/// Enclave phase
 #[derive(
 	Debug, PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
@@ -26,8 +26,7 @@ pub enum ProtocolPhase {
 	WaitingForForwardedKey,
 }
 
-/// Enclave executor state
-// TODO only include mutables in here, all else should be written to file as read only
+/// Enclave state
 pub(crate) struct ProtocolState {
 	pub provisioner: SecretBuilder,
 	pub attestor: Box<dyn NsmProvider>,
