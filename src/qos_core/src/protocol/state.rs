@@ -43,14 +43,6 @@ struct ProtocolRoute {
 }
 
 impl ProtocolRoute {
-	pub fn new(
-		handler: Box<ProtocolRouteHandler>,
-		ok_phase: ProtocolPhase,
-		err_phase: ProtocolPhase,
-	) -> Self {
-		ProtocolRoute { handler, ok_phase, err_phase }
-	}
-
 	pub fn try_msg(
 		&self,
 		msg: &ProtocolMsg,
@@ -85,6 +77,94 @@ impl ProtocolRoute {
 		};
 
 		resp
+	}
+
+	pub fn status(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::status),
+			current_phase,
+			current_phase,
+		)
+	}
+
+	pub fn nsm_request(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::nsm_request),
+			current_phase,
+			current_phase,
+		)
+	}
+
+	pub fn live_attestation_doc(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::live_attestation_doc),
+			current_phase,
+			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
+	pub fn boot_genesis(_current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::boot_genesis),
+			ProtocolPhase::GenesisBooted,
+			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
+	pub fn boot_standard(_current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::boot_standard),
+			ProtocolPhase::WaitingForQuorumShards,
+			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
+	pub fn boot_key_forward(_current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::boot_key_forward),
+			ProtocolPhase::WaitingForForwardedKey,
+			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
+	pub fn provision(_current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::provision),
+			ProtocolPhase::QuorumKeyProvisioned,
+			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
+	pub fn proxy(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::proxy),
+			current_phase,
+			current_phase,
+		)
+	}
+
+	pub fn export_key(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::export_key),
+			current_phase,
+			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
+	pub fn inject_key(_current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::inject_key),
+			ProtocolPhase::QuorumKeyProvisioned,
+			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
+	fn new(
+		handler: Box<ProtocolRouteHandler>,
+		ok_phase: ProtocolPhase,
+		err_phase: ProtocolPhase,
+	) -> Self {
+		ProtocolRoute { handler, ok_phase, err_phase }
 	}
 }
 
@@ -144,133 +224,52 @@ impl ProtocolState {
 
 	#[allow(clippy::too_many_lines)]
 	fn routes(&self) -> Vec<ProtocolRoute> {
-		// TODO(tim): dry up these routes
 		#[allow(clippy::match_same_arms)]
 		match self.phase {
 			ProtocolPhase::UnrecoverableError => {
-				vec![ProtocolRoute::new(
-					Box::new(handlers::status),
-					self.phase,
-					self.phase,
-				)]
+				vec![ProtocolRoute::status(self.phase)]
 			}
 			ProtocolPhase::GenesisBooted => {
-				vec![ProtocolRoute::new(
-					Box::new(handlers::status),
-					self.phase,
-					self.phase,
-				)]
+				vec![ProtocolRoute::status(self.phase)]
 			}
 			ProtocolPhase::WaitingForBootInstruction => vec![
 				// baseline routes
-				ProtocolRoute::new(
-					Box::new(handlers::status),
-					self.phase,
-					self.phase,
-				),
-				ProtocolRoute::new(
-					Box::new(handlers::nsm_request),
-					self.phase,
-					self.phase,
-				),
+				ProtocolRoute::status(self.phase),
+				ProtocolRoute::nsm_request(self.phase),
 				// phase specific routes
-				ProtocolRoute::new(
-					Box::new(handlers::boot_genesis),
-					ProtocolPhase::GenesisBooted,
-					ProtocolPhase::UnrecoverableError,
-				),
-				ProtocolRoute::new(
-					Box::new(handlers::boot_standard),
-					ProtocolPhase::WaitingForQuorumShards,
-					ProtocolPhase::UnrecoverableError,
-				),
-				ProtocolRoute::new(
-					Box::new(handlers::boot_key_forward),
-					ProtocolPhase::WaitingForForwardedKey,
-					ProtocolPhase::UnrecoverableError,
-				),
+				ProtocolRoute::boot_genesis(self.phase),
+				ProtocolRoute::boot_standard(self.phase),
+				ProtocolRoute::boot_key_forward(self.phase),
 			],
 			ProtocolPhase::WaitingForQuorumShards => {
 				vec![
 					// baseline routes
-					ProtocolRoute::new(
-						Box::new(handlers::status),
-						self.phase,
-						self.phase,
-					),
-					ProtocolRoute::new(
-						Box::new(handlers::nsm_request),
-						self.phase,
-						self.phase,
-					),
-					ProtocolRoute::new(
-						Box::new(handlers::live_attestation_doc),
-						self.phase,
-						ProtocolPhase::UnrecoverableError,
-					),
+					ProtocolRoute::status(self.phase),
+					ProtocolRoute::nsm_request(self.phase),
+					ProtocolRoute::live_attestation_doc(self.phase),
 					// phase specific routes
-					ProtocolRoute::new(
-						Box::new(handlers::provision),
-						ProtocolPhase::QuorumKeyProvisioned,
-						ProtocolPhase::UnrecoverableError,
-					),
+					ProtocolRoute::provision(self.phase),
 				]
 			}
 			ProtocolPhase::QuorumKeyProvisioned => {
 				vec![
 					// baseline routes
-					ProtocolRoute::new(
-						Box::new(handlers::status),
-						self.phase,
-						self.phase,
-					),
-					ProtocolRoute::new(
-						Box::new(handlers::nsm_request),
-						self.phase,
-						self.phase,
-					),
-					ProtocolRoute::new(
-						Box::new(handlers::live_attestation_doc),
-						self.phase,
-						ProtocolPhase::UnrecoverableError,
-					),
+					ProtocolRoute::status(self.phase),
+					ProtocolRoute::nsm_request(self.phase),
+					ProtocolRoute::live_attestation_doc(self.phase),
 					// phase specific routes
-					ProtocolRoute::new(
-						Box::new(handlers::proxy),
-						self.phase,
-						self.phase,
-					),
-					ProtocolRoute::new(
-						Box::new(handlers::export_key),
-						self.phase,
-						ProtocolPhase::UnrecoverableError,
-					),
+					ProtocolRoute::proxy(self.phase),
+					ProtocolRoute::export_key(self.phase),
 				]
 			}
 			ProtocolPhase::WaitingForForwardedKey => {
 				vec![
 					// baseline routes
-					ProtocolRoute::new(
-						Box::new(handlers::status),
-						self.phase,
-						self.phase,
-					),
-					ProtocolRoute::new(
-						Box::new(handlers::nsm_request),
-						self.phase,
-						self.phase,
-					),
-					ProtocolRoute::new(
-						Box::new(handlers::live_attestation_doc),
-						self.phase,
-						ProtocolPhase::UnrecoverableError,
-					),
+					ProtocolRoute::status(self.phase),
+					ProtocolRoute::nsm_request(self.phase),
+					ProtocolRoute::live_attestation_doc(self.phase),
 					// phase specific routes
-					ProtocolRoute::new(
-						Box::new(handlers::inject_key),
-						ProtocolPhase::QuorumKeyProvisioned,
-						ProtocolPhase::UnrecoverableError,
-					),
+					ProtocolRoute::inject_key(self.phase),
 				]
 			}
 		}
