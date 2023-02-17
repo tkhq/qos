@@ -260,7 +260,7 @@ async fn genesis_e2e() {
 	let pair = P256Pair::from_master_seed(&master_seed).unwrap();
 	assert!(pair == reconstructed);
 
-	let dr_artifacts_contents = fs::File::open(&dr_artifacts_path).unwrap();
+	let dr_artifacts_contents = fs::File::open(dr_artifacts_path).unwrap();
 	assert_eq!(io::BufReader::new(dr_artifacts_contents).lines().count(), 4);
 
 	// Check that we can verify the dr artifacts.
