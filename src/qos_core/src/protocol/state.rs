@@ -125,6 +125,7 @@ impl ProtocolState {
 	}
 
 	pub fn transition(&mut self, phase: ProtocolPhase) {
+		#[allow(clippy::match_same_arms)]
 		let transitions = match self.phase {
 			ProtocolPhase::UnrecoverableError => vec![],
 			ProtocolPhase::WaitingForBootInstruction => vec![
@@ -143,13 +144,13 @@ impl ProtocolState {
 		};
 
 		if transitions.contains(&phase) {
-			self.phase = phase
+			self.phase = phase;
 		} else {
 			println!(
 				"[ERROR] Invalid state transition: {:?} => {phase:?}",
 				self.phase
 			);
-			self.phase = ProtocolPhase::UnrecoverableError
+			self.phase = ProtocolPhase::UnrecoverableError;
 		}
 	}
 }
