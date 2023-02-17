@@ -150,7 +150,8 @@ impl HostServer {
 					| ProtocolPhase::WaitingForBootInstruction
 					| ProtocolPhase::WaitingForQuorumShards
 					| ProtocolPhase::WaitingForForwardedKey => StatusCode::SERVICE_UNAVAILABLE,
-					ProtocolPhase::QuorumKeyProvisioned => StatusCode::OK,
+					ProtocolPhase::QuorumKeyProvisioned
+					| ProtocolPhase::GenesisBooted => StatusCode::OK,
 				};
 
 				(status, Html(inner))

@@ -11,13 +11,15 @@ type ProtocolHandler =
 
 /// Enclave phase
 #[derive(
-	Debug, PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	Debug, Copy, PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub enum ProtocolPhase {
 	/// The state machine cannot recover. The enclave must be rebooted.
 	UnrecoverableError,
 	/// Waiting to receive a boot instruction.
 	WaitingForBootInstruction,
+	/// Genesis service has been booted. No further actions.
+	GenesisBooted,
 	/// Waiting to receive K quorum shards
 	WaitingForQuorumShards,
 	/// The enclave has successfully provisioned its quorum key.
@@ -30,9 +32,9 @@ pub enum ProtocolPhase {
 pub(crate) struct ProtocolState {
 	pub provisioner: SecretBuilder,
 	pub attestor: Box<dyn NsmProvider>,
-	pub phase: ProtocolPhase,
 	pub app_client: Client,
 	pub handles: Handles,
+	phase: ProtocolPhase,
 }
 
 impl ProtocolState {
@@ -49,6 +51,10 @@ impl ProtocolState {
 			handles,
 			app_client: Client::new(app_addr),
 		}
+	}
+
+	pub fn get_phase(&self) -> ProtocolPhase {
+		self.phase
 	}
 
 	pub fn handle_msg(&mut self, msg_req: &ProtocolMsg) -> Vec<u8> {
@@ -71,7 +77,8 @@ impl ProtocolState {
 
 	fn routes(&self) -> Vec<Box<ProtocolHandler>> {
 		match self.phase {
-			ProtocolPhase::UnrecoverableError => {
+			ProtocolPhase::UnrecoverableError
+			| ProtocolPhase::GenesisBooted => {
 				vec![Box::new(handlers::status)]
 			}
 			ProtocolPhase::WaitingForBootInstruction => vec![
@@ -116,6 +123,36 @@ impl ProtocolState {
 			}
 		}
 	}
+
+	pub fn transition(&mut self, phase: ProtocolPhase) {
+		#[allow(clippy::match_same_arms)]
+		let transitions = match self.phase {
+			ProtocolPhase::UnrecoverableError => vec![],
+			ProtocolPhase::WaitingForBootInstruction => vec![
+				ProtocolPhase::GenesisBooted,
+				ProtocolPhase::WaitingForQuorumShards,
+				ProtocolPhase::WaitingForForwardedKey,
+			],
+			ProtocolPhase::GenesisBooted => vec![],
+			ProtocolPhase::WaitingForQuorumShards => {
+				vec![ProtocolPhase::QuorumKeyProvisioned]
+			}
+			ProtocolPhase::QuorumKeyProvisioned => vec![],
+			ProtocolPhase::WaitingForForwardedKey => {
+				vec![ProtocolPhase::QuorumKeyProvisioned]
+			}
+		};
+
+		if transitions.contains(&phase) {
+			self.phase = phase;
+		} else {
+			println!(
+				"[ERROR] Invalid state transition: {:?} => {phase:?}",
+				self.phase
+			);
+			self.phase = ProtocolPhase::UnrecoverableError;
+		}
+	}
 }
 
 mod handlers {
@@ -134,7 +171,7 @@ mod handlers {
 		state: &mut ProtocolState,
 	) -> Option<ProtocolMsg> {
 		if let ProtocolMsg::StatusRequest = req {
-			Some(ProtocolMsg::StatusResponse(state.phase.clone()))
+			Some(ProtocolMsg::StatusResponse(state.get_phase()))
 		} else {
 			None
 		}
@@ -184,7 +221,7 @@ mod handlers {
 					Some(ProtocolMsg::ProvisionResponse { reconstructed })
 				}
 				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
+					state.transition(ProtocolPhase::UnrecoverableError);
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
@@ -206,7 +243,7 @@ mod handlers {
 					Some(ProtocolMsg::BootStandardResponse { nsm_response })
 				}
 				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
+					state.transition(ProtocolPhase::UnrecoverableError);
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
@@ -228,7 +265,7 @@ mod handlers {
 					})
 				}
 				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
+					state.transition(ProtocolPhase::UnrecoverableError);
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
@@ -254,7 +291,7 @@ mod handlers {
 					})
 				}
 				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
+					state.transition(ProtocolPhase::UnrecoverableError);
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
@@ -275,7 +312,7 @@ mod handlers {
 					Some(ProtocolMsg::BootKeyForwardResponse { nsm_response })
 				}
 				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
+					state.transition(ProtocolPhase::UnrecoverableError);
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
@@ -305,7 +342,7 @@ mod handlers {
 					})
 				}
 				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
+					state.transition(ProtocolPhase::UnrecoverableError);
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
@@ -332,7 +369,7 @@ mod handlers {
 			) {
 				Ok(()) => Some(ProtocolMsg::InjectKeyResponse),
 				Err(e) => {
-					state.phase = ProtocolPhase::UnrecoverableError;
+					state.transition(ProtocolPhase::UnrecoverableError);
 					Some(ProtocolMsg::ProtocolErrorResponse(e))
 				}
 			}
