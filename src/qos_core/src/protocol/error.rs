@@ -115,6 +115,8 @@ pub enum ProtocolError {
 	InvalidQuorumSecret,
 	/// The injected quorum key was not the expected key.
 	WrongQuorumKey,
+	/// State machine transitioned unexpectedly
+	InvalidStateTransition(ProtocolPhase, ProtocolPhase),
 }
 
 impl From<std::io::Error> for ProtocolError {

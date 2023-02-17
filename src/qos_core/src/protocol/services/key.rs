@@ -11,7 +11,7 @@ use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
 	services::boot::{put_manifest_and_pivot, ManifestEnvelope},
-	ProtocolError, ProtocolPhase, ProtocolState,
+	ProtocolError, ProtocolState,
 };
 
 /// An encrypted quorum key along with a signature over the encrypted payload
@@ -52,9 +52,6 @@ pub(in crate::protocol) fn inject_key(
 		return Err(ProtocolError::WrongQuorumKey);
 	}
 	state.handles.put_quorum_key(&decrypted_quorum_pair)?;
-
-	state.transition(ProtocolPhase::QuorumKeyProvisioned);
-
 	Ok(())
 }
 
@@ -64,7 +61,6 @@ pub(in crate::protocol) fn boot_key_forward(
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	let nsm_response = put_manifest_and_pivot(state, manifest_envelope, pivot)?;
-	state.transition(ProtocolPhase::WaitingForForwardedKey);
 	Ok(nsm_response)
 }
 
@@ -378,11 +374,6 @@ mod test {
 			);
 
 			handles.get_ephemeral_key().unwrap();
-
-			assert_eq!(
-				state.get_phase(),
-				ProtocolPhase::WaitingForForwardedKey
-			);
 		}
 
 		#[test]
@@ -1058,7 +1049,9 @@ mod test {
 				handles,
 				SocketAddress::new_unix("./never.sock"),
 			);
-			protocol_state.transition(ProtocolPhase::WaitingForForwardedKey);
+			protocol_state
+				.transition(ProtocolPhase::WaitingForForwardedKey)
+				.unwrap();
 
 			assert_eq!(
 				inject_key(
@@ -1070,11 +1063,6 @@ mod test {
 
 			// writes the quorum key
 			assert!(protocol_state.handles.quorum_key_exists());
-			// correctly changes the phase
-			assert_eq!(
-				protocol_state.get_phase(),
-				ProtocolPhase::QuorumKeyProvisioned
-			);
 		}
 
 		#[test]

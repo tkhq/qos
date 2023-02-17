@@ -6,12 +6,15 @@ use crate::{client::Client, handles::Handles, io::SocketAddress};
 use borsh::BorshSerialize;
 use qos_nsm::NsmProvider;
 
-type ProtocolHandler =
-	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> Option<ProtocolMsg>;
-
 /// Enclave phase
 #[derive(
-	Debug, Copy, PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	Debug,
+	Copy,
+	PartialEq,
+	Eq,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
 )]
 pub enum ProtocolPhase {
 	/// The state machine cannot recover. The enclave must be rebooted.
@@ -26,6 +29,63 @@ pub enum ProtocolPhase {
 	QuorumKeyProvisioned,
 	/// Waiting for a forwarded key to be injected
 	WaitingForForwardedKey,
+}
+
+/// Enclave routes
+type ProtocolRouteResponse = Option<Result<ProtocolMsg, ProtocolMsg>>;
+type ProtocolRouteHandler =
+	dyn Fn(&ProtocolMsg, &mut ProtocolState) -> ProtocolRouteResponse;
+
+struct ProtocolRoute {
+	handler: Box<ProtocolRouteHandler>,
+	ok_phase: ProtocolPhase,
+	err_phase: ProtocolPhase,
+}
+
+impl ProtocolRoute {
+	pub fn new(
+		handler: Box<ProtocolRouteHandler>,
+		ok_phase: ProtocolPhase,
+		err_phase: ProtocolPhase,
+	) -> Self {
+		ProtocolRoute { handler, ok_phase, err_phase }
+	}
+
+	pub fn try_msg(
+		&self,
+		msg: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		let resp = (self.handler)(msg, state);
+
+		// ignore transitions in special cases
+		if let Some(ref msg_resp) = resp {
+			if let Ok(ProtocolMsg::ProvisionResponse { reconstructed }) =
+				msg_resp
+			{
+				if !reconstructed {
+					return resp;
+				}
+			}
+		}
+
+		// handle state transitions
+		let transition = match resp {
+			None => None,
+			Some(ref result) => match result {
+				Ok(_) => Some(self.ok_phase),
+				Err(_) => Some(self.err_phase),
+			},
+		};
+
+		if let Some(phase) = transition {
+			if let Err(e) = state.transition(phase) {
+				return Some(Err(ProtocolMsg::ProtocolErrorResponse(e)));
+			}
+		};
+
+		resp
+	}
 }
 
 /// Enclave state
@@ -58,73 +118,172 @@ impl ProtocolState {
 	}
 
 	pub fn handle_msg(&mut self, msg_req: &ProtocolMsg) -> Vec<u8> {
-		for handler in &self.routes() {
-			match handler(msg_req, self) {
-				Some(msg_resp) => {
-					return msg_resp
-						.try_to_vec()
-						.expect("ProtocolMsg can always be serialized. qed.")
-				}
+		for route in &self.routes() {
+			match route.try_msg(msg_req, self) {
 				None => continue,
+				Some(result) => match result {
+					Ok(msg_resp) => {
+						return msg_resp.try_to_vec().expect(
+							"ProtocolMsg can always be serialized. qed.",
+						)
+					}
+					Err(msg_resp) => {
+						return msg_resp.try_to_vec().expect(
+							"ProtocolMsg can always be serialized. qed.",
+						)
+					}
+				},
 			}
 		}
 
-		let err = ProtocolError::NoMatchingRoute(self.phase.clone());
+		let err = ProtocolError::NoMatchingRoute(self.phase);
 		ProtocolMsg::ProtocolErrorResponse(err)
 			.try_to_vec()
 			.expect("ProtocolMsg can always be serialized. qed.")
 	}
 
-	fn routes(&self) -> Vec<Box<ProtocolHandler>> {
+	#[allow(clippy::too_many_lines)]
+	fn routes(&self) -> Vec<ProtocolRoute> {
+		// TODO(tim): dry up these routes
+		#[allow(clippy::match_same_arms)]
 		match self.phase {
-			ProtocolPhase::UnrecoverableError
-			| ProtocolPhase::GenesisBooted => {
-				vec![Box::new(handlers::status)]
+			ProtocolPhase::UnrecoverableError => {
+				vec![ProtocolRoute::new(
+					Box::new(handlers::status),
+					self.phase,
+					self.phase,
+				)]
+			}
+			ProtocolPhase::GenesisBooted => {
+				vec![ProtocolRoute::new(
+					Box::new(handlers::status),
+					self.phase,
+					self.phase,
+				)]
 			}
 			ProtocolPhase::WaitingForBootInstruction => vec![
 				// baseline routes
-				Box::new(handlers::status),
-				Box::new(handlers::nsm_request),
+				ProtocolRoute::new(
+					Box::new(handlers::status),
+					self.phase,
+					self.phase,
+				),
+				ProtocolRoute::new(
+					Box::new(handlers::nsm_request),
+					self.phase,
+					self.phase,
+				),
 				// phase specific routes
-				Box::new(handlers::boot_genesis),
-				Box::new(handlers::boot_standard),
-				Box::new(handlers::boot_key_forward),
+				ProtocolRoute::new(
+					Box::new(handlers::boot_genesis),
+					ProtocolPhase::GenesisBooted,
+					ProtocolPhase::UnrecoverableError,
+				),
+				ProtocolRoute::new(
+					Box::new(handlers::boot_standard),
+					ProtocolPhase::WaitingForQuorumShards,
+					ProtocolPhase::UnrecoverableError,
+				),
+				ProtocolRoute::new(
+					Box::new(handlers::boot_key_forward),
+					ProtocolPhase::WaitingForForwardedKey,
+					ProtocolPhase::UnrecoverableError,
+				),
 			],
 			ProtocolPhase::WaitingForQuorumShards => {
 				vec![
 					// baseline routes
-					Box::new(handlers::status),
-					Box::new(handlers::nsm_request),
-					Box::new(handlers::live_attestation_doc),
+					ProtocolRoute::new(
+						Box::new(handlers::status),
+						self.phase,
+						self.phase,
+					),
+					ProtocolRoute::new(
+						Box::new(handlers::nsm_request),
+						self.phase,
+						self.phase,
+					),
+					ProtocolRoute::new(
+						Box::new(handlers::live_attestation_doc),
+						self.phase,
+						ProtocolPhase::UnrecoverableError,
+					),
 					// phase specific routes
-					Box::new(handlers::provision),
+					ProtocolRoute::new(
+						Box::new(handlers::provision),
+						ProtocolPhase::QuorumKeyProvisioned,
+						ProtocolPhase::UnrecoverableError,
+					),
 				]
 			}
 			ProtocolPhase::QuorumKeyProvisioned => {
 				vec![
 					// baseline routes
-					Box::new(handlers::status),
-					Box::new(handlers::nsm_request),
-					Box::new(handlers::live_attestation_doc),
+					ProtocolRoute::new(
+						Box::new(handlers::status),
+						self.phase,
+						self.phase,
+					),
+					ProtocolRoute::new(
+						Box::new(handlers::nsm_request),
+						self.phase,
+						self.phase,
+					),
+					ProtocolRoute::new(
+						Box::new(handlers::live_attestation_doc),
+						self.phase,
+						ProtocolPhase::UnrecoverableError,
+					),
 					// phase specific routes
-					Box::new(handlers::proxy),
-					Box::new(handlers::export_key),
+					ProtocolRoute::new(
+						Box::new(handlers::proxy),
+						self.phase,
+						self.phase,
+					),
+					ProtocolRoute::new(
+						Box::new(handlers::export_key),
+						self.phase,
+						ProtocolPhase::UnrecoverableError,
+					),
 				]
 			}
 			ProtocolPhase::WaitingForForwardedKey => {
 				vec![
 					// baseline routes
-					Box::new(handlers::status),
-					Box::new(handlers::nsm_request),
-					Box::new(handlers::live_attestation_doc),
+					ProtocolRoute::new(
+						Box::new(handlers::status),
+						self.phase,
+						self.phase,
+					),
+					ProtocolRoute::new(
+						Box::new(handlers::nsm_request),
+						self.phase,
+						self.phase,
+					),
+					ProtocolRoute::new(
+						Box::new(handlers::live_attestation_doc),
+						self.phase,
+						ProtocolPhase::UnrecoverableError,
+					),
 					// phase specific routes
-					Box::new(handlers::inject_key),
+					ProtocolRoute::new(
+						Box::new(handlers::inject_key),
+						ProtocolPhase::QuorumKeyProvisioned,
+						ProtocolPhase::UnrecoverableError,
+					),
 				]
 			}
 		}
 	}
 
-	pub fn transition(&mut self, phase: ProtocolPhase) {
+	pub fn transition(
+		&mut self,
+		next: ProtocolPhase,
+	) -> Result<(), ProtocolError> {
+		if self.phase == next {
+			return Ok(());
+		}
+
 		#[allow(clippy::match_same_arms)]
 		let transitions = match self.phase {
 			ProtocolPhase::UnrecoverableError => vec![],
@@ -143,25 +302,25 @@ impl ProtocolState {
 			}
 		};
 
-		if transitions.contains(&phase) {
-			self.phase = phase;
-		} else {
-			println!(
-				"[ERROR] Invalid state transition: {:?} => {phase:?}",
-				self.phase
-			);
+		if !transitions.contains(&next) {
+			let prev = self.phase;
 			self.phase = ProtocolPhase::UnrecoverableError;
+			return Err(ProtocolError::InvalidStateTransition(prev, next));
 		}
+
+		self.phase = next;
+		Ok(())
 	}
 }
 
 mod handlers {
+	use super::ProtocolRouteResponse;
 	use crate::protocol::{
 		msg::ProtocolMsg,
 		services::{
 			attestation, boot, genesis, key, key::EncryptedQuorumKey, provision,
 		},
-		ProtocolPhase, ProtocolState,
+		ProtocolState,
 	};
 
 	// TODO: Add tests for this in the middle of some integration tests
@@ -169,9 +328,9 @@ mod handlers {
 	pub(super) fn status(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
+	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::StatusRequest = req {
-			Some(ProtocolMsg::StatusResponse(state.get_phase()))
+			Some(Ok(ProtocolMsg::StatusResponse(state.get_phase())))
 		} else {
 			None
 		}
@@ -180,16 +339,15 @@ mod handlers {
 	pub(super) fn proxy(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
+	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::ProxyRequest { data: req_data } = req {
-			let resp_data = match state.app_client.send(req_data) {
-				Ok(resp_data) => resp_data,
-				Err(e) => {
-					return Some(ProtocolMsg::ProtocolErrorResponse(e.into()))
-				}
-			};
+			let result = state
+				.app_client
+				.send(req_data)
+				.map(|data| ProtocolMsg::ProxyResponse { data })
+				.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into()));
 
-			Some(ProtocolMsg::ProxyResponse { data: resp_data })
+			Some(result)
 		} else {
 			None
 		}
@@ -198,14 +356,14 @@ mod handlers {
 	pub(super) fn nsm_request(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
+	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::NsmRequest { nsm_request } = req {
 			let nsm_response = {
 				let fd = state.attestor.nsm_init();
 				state.attestor.nsm_process_request(fd, nsm_request.clone())
 			};
-
-			Some(ProtocolMsg::NsmResponse { nsm_response })
+			let result = Ok(ProtocolMsg::NsmResponse { nsm_response });
+			Some(result)
 		} else {
 			None
 		}
@@ -214,17 +372,15 @@ mod handlers {
 	pub(super) fn provision(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
+	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::ProvisionRequest { share, approval } = req {
-			match provision::provision(share, approval.clone(), state) {
-				Ok(reconstructed) => {
-					Some(ProtocolMsg::ProvisionResponse { reconstructed })
-				}
-				Err(e) => {
-					state.transition(ProtocolPhase::UnrecoverableError);
-					Some(ProtocolMsg::ProtocolErrorResponse(e))
-				}
-			}
+			let result = provision::provision(share, approval.clone(), state)
+				.map(|reconstructed| ProtocolMsg::ProvisionResponse {
+					reconstructed,
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
 		} else {
 			None
 		}
@@ -234,19 +390,17 @@ mod handlers {
 	pub(super) fn boot_standard(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
+	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::BootStandardRequest { manifest_envelope, pivot } =
 			req
 		{
-			match boot::boot_standard(state, manifest_envelope, pivot) {
-				Ok(nsm_response) => {
-					Some(ProtocolMsg::BootStandardResponse { nsm_response })
-				}
-				Err(e) => {
-					state.transition(ProtocolPhase::UnrecoverableError);
-					Some(ProtocolMsg::ProtocolErrorResponse(e))
-				}
-			}
+			let result = boot::boot_standard(state, manifest_envelope, pivot)
+				.map(|nsm_response| ProtocolMsg::BootStandardResponse {
+					nsm_response,
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
 		} else {
 			None
 		}
@@ -255,20 +409,18 @@ mod handlers {
 	pub(super) fn boot_genesis(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
+	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::BootGenesisRequest { set, dr_key } = req {
-			match genesis::boot_genesis(state, set, dr_key.clone()) {
-				Ok((genesis_output, nsm_response)) => {
-					Some(ProtocolMsg::BootGenesisResponse {
+			let result = genesis::boot_genesis(state, set, dr_key.clone())
+				.map(|(genesis_output, nsm_response)| {
+					ProtocolMsg::BootGenesisResponse {
 						nsm_response,
 						genesis_output: Box::new(genesis_output),
-					})
-				}
-				Err(e) => {
-					state.transition(ProtocolPhase::UnrecoverableError);
-					Some(ProtocolMsg::ProtocolErrorResponse(e))
-				}
-			}
+					}
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
 		} else {
 			None
 		}
@@ -277,24 +429,20 @@ mod handlers {
 	pub(super) fn live_attestation_doc(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
+	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::LiveAttestationDocRequest = req {
-			match attestation::live_attestation_doc(state) {
-				Ok(nsm_response) => {
-					Some(ProtocolMsg::LiveAttestationDocResponse {
-						nsm_response,
-						manifest_envelope: state
-							.handles
-							.get_manifest_envelope()
-							.ok()
-							.map(Box::new),
-					})
-				}
-				Err(e) => {
-					state.transition(ProtocolPhase::UnrecoverableError);
-					Some(ProtocolMsg::ProtocolErrorResponse(e))
-				}
-			}
+			let result = attestation::live_attestation_doc(state)
+				.map(|nsm_response| ProtocolMsg::LiveAttestationDocResponse {
+					nsm_response,
+					manifest_envelope: state
+						.handles
+						.get_manifest_envelope()
+						.ok()
+						.map(Box::new),
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
 		} else {
 			None
 		}
@@ -303,19 +451,17 @@ mod handlers {
 	pub(super) fn boot_key_forward(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
+	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::BootKeyForwardRequest { manifest_envelope, pivot } =
 			req
 		{
-			match key::boot_key_forward(state, manifest_envelope, pivot) {
-				Ok(nsm_response) => {
-					Some(ProtocolMsg::BootKeyForwardResponse { nsm_response })
-				}
-				Err(e) => {
-					state.transition(ProtocolPhase::UnrecoverableError);
-					Some(ProtocolMsg::ProtocolErrorResponse(e))
-				}
-			}
+			let result = key::boot_key_forward(state, manifest_envelope, pivot)
+				.map(|nsm_response| ProtocolMsg::BootKeyForwardResponse {
+					nsm_response,
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
 		} else {
 			None
 		}
@@ -324,28 +470,28 @@ mod handlers {
 	pub(super) fn export_key(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
+	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::ExportKeyRequest {
 			manifest_envelope,
 			cose_sign1_attestation_doc,
 		} = req
 		{
-			match key::export_key(
+			let result = key::export_key(
 				state,
 				manifest_envelope,
 				cose_sign1_attestation_doc,
-			) {
-				Ok(EncryptedQuorumKey { encrypted_quorum_key, signature }) => {
-					Some(ProtocolMsg::ExportKeyResponse {
-						encrypted_quorum_key,
-						signature,
-					})
+			)
+			.map(|key| {
+				let EncryptedQuorumKey { encrypted_quorum_key, signature } =
+					key;
+				ProtocolMsg::ExportKeyResponse {
+					encrypted_quorum_key,
+					signature,
 				}
-				Err(e) => {
-					state.transition(ProtocolPhase::UnrecoverableError);
-					Some(ProtocolMsg::ProtocolErrorResponse(e))
-				}
-			}
+			})
+			.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
 		} else {
 			None
 		}
@@ -354,25 +500,23 @@ mod handlers {
 	pub(super) fn inject_key(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
-	) -> Option<ProtocolMsg> {
+	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::InjectKeyRequest {
 			encrypted_quorum_key,
 			signature,
 		} = req
 		{
-			match key::inject_key(
+			let result = key::inject_key(
 				state,
 				EncryptedQuorumKey {
 					encrypted_quorum_key: encrypted_quorum_key.clone(),
 					signature: signature.clone(),
 				},
-			) {
-				Ok(()) => Some(ProtocolMsg::InjectKeyResponse),
-				Err(e) => {
-					state.transition(ProtocolPhase::UnrecoverableError);
-					Some(ProtocolMsg::ProtocolErrorResponse(e))
-				}
-			}
+			)
+			.map(|_| ProtocolMsg::InjectKeyResponse)
+			.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
 		} else {
 			None
 		}

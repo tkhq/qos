@@ -7,8 +7,7 @@ use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
-	services::attestation, Hash256, ProtocolError, ProtocolPhase,
-	ProtocolState, QosHash,
+	services::attestation, Hash256, ProtocolError, ProtocolState, QosHash,
 };
 
 /// Enclave configuration specific to AWS Nitro.
@@ -326,7 +325,6 @@ pub(in crate::protocol) fn boot_standard(
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	let nsm_response = put_manifest_and_pivot(state, manifest_envelope, pivot)?;
-	state.transition(ProtocolPhase::WaitingForQuorumShards);
 	Ok(nsm_response)
 }
 
@@ -456,11 +454,6 @@ mod test {
 		std::fs::remove_file(pivot_file).unwrap();
 		std::fs::remove_file(ephemeral_file).unwrap();
 		std::fs::remove_file(manifest_file).unwrap();
-
-		assert_eq!(
-			protocol_state.get_phase(),
-			ProtocolPhase::WaitingForQuorumShards
-		);
 	}
 
 	#[test]
@@ -611,11 +604,6 @@ mod test {
 		assert!(!Path::new(&*pivot_file).exists());
 		assert!(!Path::new(&*ephemeral_file).exists());
 		assert!(!Path::new(&*manifest_file).exists());
-
-		assert_eq!(
-			protocol_state.get_phase(),
-			ProtocolPhase::WaitingForBootInstruction
-		);
 	}
 
 	#[test]
@@ -675,10 +663,5 @@ mod test {
 		assert!(!Path::new(&*pivot_file).exists());
 		assert!(!Path::new(&*ephemeral_file).exists());
 		assert!(!Path::new(&*manifest_file).exists());
-
-		assert_eq!(
-			protocol_state.get_phase(),
-			ProtocolPhase::WaitingForBootInstruction
-		);
 	}
 }
