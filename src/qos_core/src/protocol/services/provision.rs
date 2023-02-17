@@ -1,7 +1,6 @@
 //! Quorum Key provisioning logic and types.
 use crate::protocol::{
-	services::boot::Approval, ProtocolError, ProtocolPhase, ProtocolState,
-	QosHash,
+	services::boot::Approval, ProtocolError, ProtocolState, QosHash,
 };
 
 type Secret = Vec<u8>;
@@ -110,7 +109,6 @@ pub(in crate::protocol) fn provision(
 	// provisioned before we can externally seed the entropy pool.
 	state.handles.delete_ephemeral_key();
 
-	state.transition(ProtocolPhase::QuorumKeyProvisioned);
 	Ok(true)
 }
 
@@ -232,7 +230,7 @@ mod test {
 			handles,
 			SocketAddress::new_unix("./never.sock"),
 		);
-		state.transition(ProtocolPhase::WaitingForQuorumShards);
+		state.transition(ProtocolPhase::WaitingForQuorumShards).unwrap();
 
 		Setup { quorum_pair, eph_pair, threshold, state, approvals }
 	}
@@ -274,7 +272,6 @@ mod test {
 		let quorum_key = std::fs::read(&*quorum_file).unwrap();
 
 		assert_eq!(quorum_key, quorum_pair.to_master_seed_hex());
-		assert_eq!(state.get_phase(), ProtocolPhase::QuorumKeyProvisioned);
 
 		// Make sure the EK is deleted
 		assert!(!Path::new(&*eph_file).exists());

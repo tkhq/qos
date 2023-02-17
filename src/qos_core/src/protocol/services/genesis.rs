@@ -7,8 +7,7 @@ use qos_nsm::types::{NsmRequest, NsmResponse};
 use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
-	services::boot::QuorumMember, ProtocolError, ProtocolPhase, ProtocolState,
-	QosHash,
+	services::boot::QuorumMember, ProtocolError, ProtocolState, QosHash,
 };
 
 const QOS_TEST_MESSAGE: &[u8] = b"qos-test-message";
@@ -186,7 +185,6 @@ pub(in crate::protocol) fn boot_genesis(
 		state.attestor.nsm_process_request(fd, request)
 	};
 
-	state.transition(ProtocolPhase::GenesisBooted);
 	Ok((genesis_output, nsm_response))
 }
 
@@ -281,7 +279,5 @@ mod test {
 		let quorum_key_hash =
 			sha_512(qos_hex::encode(&reconstructed).as_bytes());
 		assert_eq!(quorum_key_hash, output.quorum_key_hash);
-
-		assert_eq!(protocol_state.get_phase(), ProtocolPhase::GenesisBooted);
 	}
 }
