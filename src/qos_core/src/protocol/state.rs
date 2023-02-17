@@ -38,8 +38,8 @@ type ProtocolRouteHandler =
 
 struct ProtocolRoute {
 	handler: Box<ProtocolRouteHandler>,
-	ok_phase: ProtocolPhase,
-	err_phase: ProtocolPhase,
+	ok_phase: ProtocolPhase, // the next phase if handler() == Ok
+	err_phase: ProtocolPhase, // the next phase if handler() == Err
 }
 
 impl ProtocolRoute {
