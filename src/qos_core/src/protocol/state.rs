@@ -58,6 +58,17 @@ impl ProtocolRoute {
 	) -> ProtocolRouteResponse {
 		let resp = (self.handler)(msg, state);
 
+		// ignore transitions in special cases
+		if let Some(ref msg_resp) = resp {
+			if let Ok(ProtocolMsg::ProvisionResponse { reconstructed }) =
+				msg_resp
+			{
+				if !reconstructed {
+					return resp;
+				}
+			}
+		}
+
 		// handle state transitions
 		let transition = match resp {
 			None => None,
@@ -66,6 +77,7 @@ impl ProtocolRoute {
 				Err(_) => Some(self.err_phase),
 			},
 		};
+
 		if let Some(phase) = transition {
 			if let Err(e) = state.transition(phase) {
 				return Some(Err(ProtocolMsg::ProtocolErrorResponse(e)));
