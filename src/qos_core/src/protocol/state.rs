@@ -11,7 +11,7 @@ type ProtocolHandler =
 
 /// Enclave phase
 #[derive(
-	Debug, PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	Debug, Copy, PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
 pub enum ProtocolPhase {
 	/// The state machine cannot recover. The enclave must be rebooted.
@@ -54,7 +54,7 @@ impl ProtocolState {
 	}
 
 	pub fn get_phase(&self) -> ProtocolPhase {
-		self.phase.clone()
+		self.phase
 	}
 
 	pub fn handle_msg(&mut self, msg_req: &ProtocolMsg) -> Vec<u8> {
