@@ -1,6 +1,6 @@
 use std::{fs, process::Command};
 
-use integration::{LOCAL_HOST, MOCK_QOS_DIST_DIR, PIVOT_LOOP_PATH};
+use integration::{LOCAL_HOST, PIVOT_LOOP_PATH, QOS_DIST_DIR};
 use qos_crypto::sha_256;
 use qos_p256::{P256Pair, P256Public};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
@@ -163,7 +163,7 @@ fn generate_manifest_envelope() {
 			"--pivot-build-fingerprints",
 			PIVOT_BUILD_FINGERPRINTS_PATH,
 			"--qos-release-dir",
-			MOCK_QOS_DIST_DIR,
+			QOS_DIST_DIR,
 			"--manifest-path",
 			CLI_MANIFEST_PATH,
 			"--pivot-args",
@@ -199,7 +199,7 @@ fn generate_manifest_envelope() {
 				"--pivot-build-fingerprints",
 				PIVOT_BUILD_FINGERPRINTS_PATH,
 				"--qos-release-dir",
-				MOCK_QOS_DIST_DIR,
+				QOS_DIST_DIR,
 				"--manifest-set-dir",
 				"./mock/keys/manifest-set",
 				"--share-set-dir",

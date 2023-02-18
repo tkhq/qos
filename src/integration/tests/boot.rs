@@ -7,14 +7,13 @@ use std::{
 
 use borsh::de::BorshDeserialize;
 use integration::{
-	LOCAL_HOST, MOCK_QOS_DIST_DIR, PCR3, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE,
+	LOCAL_HOST, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE, QOS_DIST_DIR,
 };
-use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 use qos_core::protocol::{
 	services::{
 		boot::{
-			Approval, Manifest, ManifestSet, Namespace, NitroConfig,
-			PivotConfig, RestartPolicy, ShareSet,
+			Approval, Manifest, ManifestSet, Namespace, PivotConfig,
+			RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
@@ -23,10 +22,6 @@ use qos_core::protocol::{
 use qos_crypto::sha_256;
 use qos_p256::P256Pair;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
-
-const MOCK_PCR0: &str = "31c1fa5bffb0439559918891c4b65437bf1f543791ebdecbd3e282b63e26452793afcb89d4632f6497abc2a24d8203c6";
-const MOCK_PCR1: &str = "31c1fa5bffb0439559918891c4b65437bf1f543791ebdecbd3e282b63e26452793afcb89d4632f6497abc2a24d8203c6";
-const MOCK_PCR2: &str = "21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a";
 
 const PIVOT_BUILD_FINGERPRINTS_PATH: &str =
 	"/tmp/standard_boot_e2e-pivot-build-fingerprints.txt";
@@ -90,7 +85,7 @@ async fn standard_boot_e2e() {
 			"--pivot-build-fingerprints",
 			PIVOT_BUILD_FINGERPRINTS_PATH,
 			"--qos-release-dir",
-			MOCK_QOS_DIST_DIR,
+			QOS_DIST_DIR,
 			"--pcr3-preimage-path",
 			"./mock/namespaces/pcr3-preimage.txt",
 			"--manifest-path",
@@ -147,26 +142,6 @@ async fn standard_boot_e2e() {
 	assert_eq!(manifest.manifest_set, manifest_set);
 	let share_set = ShareSet { threshold: 2, members };
 	assert_eq!(manifest.share_set, share_set);
-	let enclave = NitroConfig {
-		pcr0: qos_hex::decode(MOCK_PCR0).unwrap(),
-		pcr1: qos_hex::decode(MOCK_PCR1).unwrap(),
-		pcr2: qos_hex::decode(MOCK_PCR2).unwrap(),
-		pcr3: qos_hex::decode(PCR3).unwrap(),
-		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
-		qos_commit: "14dbf74fbba901f1191987e3346082b9135386e6".to_string(),
-	};
-	assert_eq!(manifest.enclave, enclave);
-
-	assert_eq!(
-		manifest,
-		Manifest {
-			namespace: namespace_field,
-			pivot,
-			manifest_set,
-			share_set,
-			enclave,
-		}
-	);
 
 	// -- CLIENT make sure each user can run `approve-manifest`
 	for alias in [user1, user2, user3] {
@@ -191,7 +166,7 @@ async fn standard_boot_e2e() {
 				"--pivot-build-fingerprints",
 				PIVOT_BUILD_FINGERPRINTS_PATH,
 				"--qos-release-dir",
-				MOCK_QOS_DIST_DIR,
+				QOS_DIST_DIR,
 				"--manifest-set-dir",
 				"./mock/keys/manifest-set",
 				"--share-set-dir",

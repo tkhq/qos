@@ -1,8 +1,9 @@
 //! Quorum protocol processor
-use super::{error::ProtocolError, msg::ProtocolMsg, state::ProtocolState};
-use crate::{handles::Handles, io::SocketAddress, server};
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_nsm::NsmProvider;
+
+use super::{error::ProtocolError, msg::ProtocolMsg, state::ProtocolState};
+use crate::{handles::Handles, io::SocketAddress, server};
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;

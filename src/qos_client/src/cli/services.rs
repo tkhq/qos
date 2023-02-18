@@ -1981,7 +1981,7 @@ struct QosReleaseEnv {
 	git_ref: String,
 	_git_author: String,
 	_git_key: String,
-	_git_datetime: String,
+	_git_timestamp: String,
 }
 
 fn get_env_entry(
@@ -2021,7 +2021,7 @@ fn extract_qos_release_env<P: AsRef<Path>>(
 		git_ref: get_env_entry(&entries, 1, "GIT_REF"),
 		_git_author: get_env_entry(&entries, 2, "GIT_AUTHOR"),
 		_git_key: get_env_entry(&entries, 3, "GIT_KEY"),
-		_git_datetime: get_env_entry(&entries, 4, "GIT_DATETIME"),
+		_git_timestamp: get_env_entry(&entries, 4, "GIT_TIMESTAMP"),
 	}
 }
 

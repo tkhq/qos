@@ -1,9 +1,10 @@
 //! Quorum protocol error
+use borsh::{BorshDeserialize, BorshSerialize};
+
 use crate::{
 	client,
 	protocol::{services::boot, ProtocolPhase},
 };
-use borsh::{BorshDeserialize, BorshSerialize};
 
 /// A error from protocol execution.
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]

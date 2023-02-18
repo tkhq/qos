@@ -1,10 +1,11 @@
 //! Quorum protocol state machine
+use borsh::BorshSerialize;
+use qos_nsm::NsmProvider;
+
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
 };
 use crate::{client::Client, handles::Handles, io::SocketAddress};
-use borsh::BorshSerialize;
-use qos_nsm::NsmProvider;
 
 /// Enclave phase
 #[derive(
