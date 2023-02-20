@@ -163,3 +163,9 @@ test-all:
 	@# enabled. However some tests require it disable, so we test just qos_core
 	@# by itself.
 	cargo test -p qos_core
+
+.PHONY: build-linux-only
+build-linux-only:
+	cargo build --manifest-path ./qos_system/Cargo.toml
+	cargo build --manifest-path ./qos_aws/Cargo.toml
+	cargo build --manifest-path ./init/Cargo.toml
