@@ -97,11 +97,6 @@ pub enum Command {
 	HostHealth,
 	/// Query the status of the enclave.
 	EnclaveStatus,
-	/// Query the NSM with `NsmRequest::DescribeNsm`. Normally only useful for
-	/// development.
-	DescribeNsm,
-	/// Query the NSM with `NsmRequest::DescribePcr` for PCR indexes 0..3.
-	DescribePcr,
 	/// Generate a Setup Key for use in the Genesis ceremony.
 	GenerateFileKey,
 	/// Run the the Boot Genesis logic to generate and shard a Quorum Key
@@ -217,8 +212,6 @@ impl From<&str> for Command {
 		match s {
 			"host-health" => Self::HostHealth,
 			"enclave-status" => Self::EnclaveStatus,
-			"describe-nsm" => Self::DescribeNsm,
-			"describe-pcr" => Self::DescribePcr,
 			"generate-file-key" => Self::GenerateFileKey,
 			"generate-manifest-envelope" => Self::GenerateManifestEnvelope,
 			"boot-genesis" => Self::BootGenesis,
@@ -775,8 +768,6 @@ impl GetParserForCommand for Command {
 	fn parser(&self) -> Parser {
 		match self {
 			Self::HostHealth
-			| Self::DescribeNsm
-			| Self::DescribePcr
 			| Self::EnclaveStatus => Self::base(),
 			Self::GenerateFileKey => Self::generate_file_key(),
 			Self::BootGenesis => Self::boot_genesis(),
@@ -1145,8 +1136,6 @@ impl ClientRunner {
 			match self.cmd {
 				Command::HostHealth => handlers::host_health(&self.opts),
 				Command::EnclaveStatus => handlers::enclave_status(&self.opts),
-				Command::DescribeNsm => handlers::describe_nsm(&self.opts),
-				Command::DescribePcr => handlers::describe_pcr(&self.opts),
 				Command::GenerateFileKey => {
 					handlers::generate_file_key(&self.opts);
 				}
@@ -1229,8 +1218,6 @@ impl CLI {
 }
 
 mod handlers {
-	use qos_nsm::types::{NsmRequest, NsmResponse};
-
 	use super::services::{ApproveManifestArgs, ProxyReEncryptShareArgs};
 	use crate::{
 		cli::{
@@ -1274,47 +1261,6 @@ mod handlers {
 				println!("Enclave phase: {phase:?}");
 			}
 			other => panic!("Unexpected response {other:?}"),
-		}
-	}
-
-	pub(super) fn describe_nsm(opts: &ClientOpts) {
-		let path = &opts.path_message();
-		match request::post(
-			path,
-			&ProtocolMsg::NsmRequest { nsm_request: NsmRequest::DescribeNSM },
-		)
-		.map_err(|e| println!("{e:?}"))
-		.expect("Attestation request failed")
-		{
-			ProtocolMsg::NsmResponse { nsm_response } => {
-				println!("{nsm_response:#?}");
-			}
-			other => panic!("Unexpected response {other:?}"),
-		}
-	}
-
-	pub(super) fn describe_pcr(opts: &ClientOpts) {
-		let path = &opts.path_message();
-
-		for i in 0..4 {
-			println!("PCR index {i}");
-
-			match request::post(
-				path,
-				&ProtocolMsg::NsmRequest {
-					nsm_request: NsmRequest::DescribePCR { index: i },
-				},
-			)
-			.map_err(|e| println!("{e:?}"))
-			.expect("Attestation request failed")
-			{
-				ProtocolMsg::NsmResponse {
-					nsm_response: NsmResponse::DescribePCR { lock: _, data },
-				} => {
-					println!("{:#?}", qos_hex::encode(&data));
-				}
-				other => panic!("Unexpected response {other:?}"),
-			}
 		}
 	}
 

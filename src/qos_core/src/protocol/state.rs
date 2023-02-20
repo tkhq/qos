@@ -88,14 +88,6 @@ impl ProtocolRoute {
 		)
 	}
 
-	pub fn nsm_request(current_phase: ProtocolPhase) -> Self {
-		ProtocolRoute::new(
-			Box::new(handlers::nsm_request),
-			current_phase,
-			current_phase,
-		)
-	}
-
 	pub fn live_attestation_doc(current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::live_attestation_doc),
@@ -236,7 +228,6 @@ impl ProtocolState {
 			ProtocolPhase::WaitingForBootInstruction => vec![
 				// baseline routes
 				ProtocolRoute::status(self.phase),
-				ProtocolRoute::nsm_request(self.phase),
 				// phase specific routes
 				ProtocolRoute::boot_genesis(self.phase),
 				ProtocolRoute::boot_standard(self.phase),
@@ -246,7 +237,6 @@ impl ProtocolState {
 				vec![
 					// baseline routes
 					ProtocolRoute::status(self.phase),
-					ProtocolRoute::nsm_request(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
 					// phase specific routes
 					ProtocolRoute::provision(self.phase),
@@ -256,7 +246,6 @@ impl ProtocolState {
 				vec![
 					// baseline routes
 					ProtocolRoute::status(self.phase),
-					ProtocolRoute::nsm_request(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
 					// phase specific routes
 					ProtocolRoute::proxy(self.phase),
@@ -267,7 +256,6 @@ impl ProtocolState {
 				vec![
 					// baseline routes
 					ProtocolRoute::status(self.phase),
-					ProtocolRoute::nsm_request(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
 					// phase specific routes
 					ProtocolRoute::inject_key(self.phase),
@@ -347,22 +335,6 @@ mod handlers {
 				.map(|data| ProtocolMsg::ProxyResponse { data })
 				.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into()));
 
-			Some(result)
-		} else {
-			None
-		}
-	}
-
-	pub(super) fn nsm_request(
-		req: &ProtocolMsg,
-		state: &mut ProtocolState,
-	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::NsmRequest { nsm_request } = req {
-			let nsm_response = {
-				let fd = state.attestor.nsm_init();
-				state.attestor.nsm_process_request(fd, nsm_request.clone())
-			};
-			let result = Ok(ProtocolMsg::NsmResponse { nsm_response });
 			Some(result)
 		} else {
 			None
