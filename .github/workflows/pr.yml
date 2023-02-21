@@ -25,7 +25,7 @@ jobs:
         uses: dtolnay/rust-toolchain@0a1713a447f74360b294fd86bc56dc23af3a9d3e
         with:
           profile: minimal
-          toolchain: $RUST_TOOLCHAIN
+          toolchain: "$RUST_TOOLCHAIN"
           override: true
           components: rustfmt, clippy
 
@@ -43,7 +43,7 @@ jobs:
         uses: dtolnay/rust-toolchain@0a1713a447f74360b294fd86bc56dc23af3a9d3e
         with:
           profile: minimal
-          toolchain: $RUST_TOOLCHAIN
+          toolchain: "$RUST_TOOLCHAIN"
           override: true
           components: rustfmt
 
@@ -65,7 +65,7 @@ jobs:
         uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
         with:
           profile: minimal
-          toolchain: $RUST_TOOLCHAIN
+          toolchain: "$RUST_TOOLCHAIN"
           override: true
           components: clippy
 
@@ -87,7 +87,7 @@ jobs:
         uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
         with:
           profile: minimal
-          toolchain: $RUST_TOOLCHAIN
+          toolchain: "$RUST_TOOLCHAIN"
           override: true
 
       - name: Build qos_system
