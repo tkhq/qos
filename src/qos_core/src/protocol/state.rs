@@ -52,9 +52,8 @@ impl ProtocolRoute {
 		let resp = (self.handler)(msg, state);
 
 		// ignore transitions in special cases
-		if let Some(ref msg_resp) = resp {
-			if let Ok(ProtocolMsg::ProvisionResponse { reconstructed }) =
-				msg_resp
+		if let Some(Ok(ProtocolMsg::ProvisionResponse { reconstructed })) = resp
+		{
 			{
 				if !reconstructed {
 					return resp;
@@ -203,12 +202,7 @@ impl ProtocolState {
 			match route.try_msg(msg_req, self) {
 				None => continue,
 				Some(result) => match result {
-					Ok(msg_resp) => {
-						return msg_resp.try_to_vec().expect(
-							"ProtocolMsg can always be serialized. qed.",
-						)
-					}
-					Err(msg_resp) => {
+					Ok(msg_resp) | Err(msg_resp) => {
 						return msg_resp.try_to_vec().expect(
 							"ProtocolMsg can always be serialized. qed.",
 						)

@@ -3,6 +3,9 @@
 
 on: [pull_request]
 
+env:
+  RUST_TOOLCHAIN: 1.67
+
 name: PR
 
 jobs:
@@ -22,7 +25,7 @@ jobs:
         uses: dtolnay/rust-toolchain@0a1713a447f74360b294fd86bc56dc23af3a9d3e
         with:
           profile: minimal
-          toolchain: 1.63
+          toolchain: $RUST_TOOLCHAIN
           override: true
           components: rustfmt, clippy
 
@@ -36,11 +39,11 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
 
-      - name: Install nightly toolchain
+      - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@0a1713a447f74360b294fd86bc56dc23af3a9d3e
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: $RUST_TOOLCHAIN
           override: true
           components: rustfmt
 
@@ -62,12 +65,12 @@ jobs:
         uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
         with:
           profile: minimal
-          toolchain: 1.63
+          toolchain: $RUST_TOOLCHAIN
           override: true
           components: clippy
 
-      - name: Run cargo clippy
-        run: make -C src clippy
+      - name: Run cargo lint
+        run: make -C src lint
 
   build-linux-only-crates:
     name: build-linux-only-crates
@@ -84,7 +87,7 @@ jobs:
         uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
         with:
           profile: minimal
-          toolchain: 1.63
+          toolchain: $RUST_TOOLCHAIN
           override: true
 
       - name: Build qos_system

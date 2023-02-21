@@ -139,18 +139,13 @@ push-sample-app:
 	aws s3 cp ./pivot.executable s3://$${BUCKET}/$${PIVOT_HASH}/pivot.executable
 
 .PHONY: lint
-lint:
-	make clippy
-	make fmt
-
-.PHONY: clippy
-clippy:
+lint: fmt
 	cargo clippy --fix --allow-dirty
 
 .PHONY: fmt
 fmt:
-	cargo +nightly version
-	cargo +nightly fmt
+	cargo version
+	cargo fmt
 
 .PHONY: test-all
 test-all:
