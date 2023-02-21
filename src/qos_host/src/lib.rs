@@ -17,7 +17,7 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
 	body::Bytes,
@@ -38,6 +38,7 @@ pub mod cli;
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
+const QOS_SOCKET_CLIENT_TIMEOUT_SECS: u64 = 15;
 
 /// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]
@@ -84,7 +85,10 @@ impl HostServer {
 	// pub async fn serve(&self) -> Result<(), String> {
 	pub async fn serve(&self) {
 		let state = Arc::new(QosHostState {
-			enclave_client: Client::new(self.enclave_addr.clone()),
+			enclave_client: Client::new(
+				self.enclave_addr.clone(),
+				Duration::from_secs(QOS_SOCKET_CLIENT_TIMEOUT_SECS),
+			),
 		});
 
 		let app = Router::new()
@@ -117,7 +121,8 @@ impl HostServer {
 		let encoded_request = ProtocolMsg::StatusRequest
 			.try_to_vec()
 			.expect("ProtocolMsg can always serialize. qed.");
-		let encoded_response = state.enclave_client.send(&encoded_request);
+		let encoded_response =
+			state.enclave_client.send_timeout(&encoded_request);
 
 		let decoded_response = match encoded_response {
 			Ok(encoded_response) => {
@@ -177,7 +182,7 @@ impl HostServer {
 			);
 		}
 
-		match state.enclave_client.send(&encoded_request) {
+		match state.enclave_client.send_timeout(&encoded_request) {
 			Ok(encoded_response) => (StatusCode::OK, encoded_response),
 			Err(_) => (
 				StatusCode::INTERNAL_SERVER_ERROR,

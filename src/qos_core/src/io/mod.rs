@@ -17,6 +17,10 @@ pub enum IOError {
 	ArithmeticSaturation,
 	/// Unknown error.
 	UnknownError,
+	/// Timed out while waiting for a response.
+	Timeout,
+	/// An internal channel disconnected - this is a bug.
+	InternalChannelDisconnect,
 }
 
 impl From<nix::Error> for IOError {

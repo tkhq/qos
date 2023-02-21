@@ -1,4 +1,6 @@
 //! Quorum protocol state machine
+use std::time::Duration;
+
 use borsh::BorshSerialize;
 use qos_nsm::NsmProvider;
 
@@ -6,6 +8,8 @@ use super::{
 	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
 };
 use crate::{client::Client, handles::Handles, io::SocketAddress};
+
+const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: u64 = 10;
 
 /// Enclave phase
 #[derive(
@@ -190,7 +194,10 @@ impl ProtocolState {
 			provisioner,
 			phase: ProtocolPhase::WaitingForBootInstruction,
 			handles,
-			app_client: Client::new(app_addr),
+			app_client: Client::new(
+				app_addr,
+				Duration::from_secs(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
+			),
 		}
 	}
 
@@ -343,7 +350,7 @@ mod handlers {
 		if let ProtocolMsg::ProxyRequest { data: req_data } = req {
 			let result = state
 				.app_client
-				.send(req_data)
+				.send_timeout(req_data)
 				.map(|data| ProtocolMsg::ProxyResponse { data })
 				.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into()));
 

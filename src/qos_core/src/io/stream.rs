@@ -1,6 +1,12 @@
 //! Abstractions to handle connection based socket streams.
 
-use std::{mem::size_of, os::unix::io::RawFd};
+use std::{
+	mem::size_of,
+	os::unix::io::RawFd,
+	sync::mpsc::{self, RecvTimeoutError},
+	thread,
+	time::Duration,
+};
 
 #[cfg(feature = "vm")]
 use nix::sys::socket::VsockAddr;
@@ -185,6 +191,27 @@ impl Stream {
 		}
 
 		Ok(buf)
+	}
+
+	/// Be mindful that this spawns a short lived thread every call. The thread
+	/// is cleaned up by time this function returns.
+	pub fn recv_timeout(self, timeout: Duration) -> Result<Vec<u8>, IOError> {
+		let (tx, rx) = mpsc::channel();
+		let _ = thread::spawn(move || {
+			let result = self.recv();
+			match tx.send(result) {
+				Ok(()) => {} // everything good
+				Err(_) => {} // we have been released, don't panic
+			}
+		});
+
+		match rx.recv_timeout(timeout) {
+			Ok(result) => result.map_err(Into::into),
+			Err(RecvTimeoutError::Timeout) => Err(IOError::Timeout),
+			Err(RecvTimeoutError::Disconnected) => {
+				Err(IOError::InternalChannelDisconnect)
+			}
+		}
 	}
 }
 
