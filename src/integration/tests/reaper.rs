@@ -40,6 +40,7 @@ fn coordinator_works() {
 			Box::new(MockNsm),
 			SocketAddress::new_unix(usock),
 			SocketAddress::new_unix("./never.sock"),
+			None,
 		)
 	});
 
@@ -93,6 +94,7 @@ fn coordinator_handles_non_zero_exits() {
 			Box::new(MockNsm),
 			SocketAddress::new_unix(usock),
 			SocketAddress::new_unix("./never.sock"),
+			None,
 		)
 	});
 
@@ -146,6 +148,7 @@ fn coordinator_handles_panic() {
 			Box::new(MockNsm),
 			SocketAddress::new_unix(usock),
 			SocketAddress::new_unix("./never.sock"),
+			None,
 		)
 	});
 

@@ -3,7 +3,10 @@
 
 use std::marker::PhantomData;
 
+use nix::sys::time::{TimeVal, TimeValLike};
+
 use crate::io::{self, Listener, SocketAddress};
+
 
 /// Error variants for [`SocketServer`]
 #[derive(Debug)]
@@ -40,11 +43,9 @@ impl<R: RequestProcessor> SocketServer<R> {
 		mut processor: R,
 	) -> Result<(), SocketServerError> {
 		println!("`SocketServer` listening on {addr:?}");
-
 		let listener = Listener::listen(addr)?;
-
 		for stream in listener {
-			match stream.recv() {
+			match stream.recv(TimeVal::seconds(120)) {
 				Ok(payload) => {
 					let response = processor.process(payload);
 					let _ = stream.send(&response);

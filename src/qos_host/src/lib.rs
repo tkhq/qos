@@ -30,14 +30,19 @@ use axum::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::Client,
-	io::SocketAddress,
-	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase},
+	io::{SocketAddress, TimeVal, TimeValLike},
+	protocol::{
+		msg::ProtocolMsg, ProtocolError, ProtocolPhase,
+		ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
+	},
 };
 
 pub mod cli;
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
+const QOS_SOCKET_CLIENT_TIMEOUT_SECS: i64 =
+	ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 2;
 
 /// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]
@@ -84,7 +89,10 @@ impl HostServer {
 	// pub async fn serve(&self) -> Result<(), String> {
 	pub async fn serve(&self) {
 		let state = Arc::new(QosHostState {
-			enclave_client: Client::new(self.enclave_addr.clone()),
+			enclave_client: Client::new(
+				self.enclave_addr.clone(),
+				TimeVal::seconds(QOS_SOCKET_CLIENT_TIMEOUT_SECS),
+			),
 		});
 
 		let app = Router::new()

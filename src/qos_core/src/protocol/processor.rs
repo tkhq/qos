@@ -2,7 +2,9 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_nsm::NsmProvider;
 
-use super::{error::ProtocolError, msg::ProtocolMsg, state::ProtocolState};
+use super::{
+	error::ProtocolError, msg::ProtocolMsg, state::ProtocolState, ProtocolPhase,
+};
 use crate::{handles::Handles, io::SocketAddress, server};
 
 const MEGABYTE: usize = 1024 * 1024;
@@ -20,8 +22,16 @@ impl Processor {
 		attestor: Box<dyn NsmProvider>,
 		handles: Handles,
 		app_addr: SocketAddress,
+		test_only_init_phase_override: Option<ProtocolPhase>,
 	) -> Self {
-		Self { state: ProtocolState::new(attestor, handles, app_addr) }
+		Self {
+			state: ProtocolState::new(
+				attestor,
+				handles,
+				app_addr,
+				test_only_init_phase_override,
+			),
+		}
 	}
 }
 

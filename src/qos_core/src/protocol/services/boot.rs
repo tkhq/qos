@@ -440,6 +440,7 @@ mod test {
 			Box::new(MockNsm),
 			handles.clone(),
 			SocketAddress::new_unix("./never.sock"),
+			None,
 		);
 
 		let _nsm_resposne =
@@ -497,6 +498,7 @@ mod test {
 			Box::new(MockNsm),
 			handles.clone(),
 			SocketAddress::new_unix("./never.sock"),
+			None,
 		);
 
 		let nsm_resposne =
@@ -544,6 +546,7 @@ mod test {
 			Box::new(MockNsm),
 			handles.clone(),
 			SocketAddress::new_unix("./never.sock"),
+			None,
 		);
 
 		let nsm_resposne =
@@ -593,6 +596,7 @@ mod test {
 			Box::new(MockNsm),
 			handles,
 			SocketAddress::new_unix("./never.sock"),
+			None,
 		);
 
 		let error =
@@ -652,6 +656,7 @@ mod test {
 			Box::new(MockNsm),
 			handles,
 			SocketAddress::new_unix("./never.sock"),
+			None,
 		);
 
 		let error =

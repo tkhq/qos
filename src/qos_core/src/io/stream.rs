@@ -1,14 +1,15 @@
 //! Abstractions to handle connection based socket streams.
 
-use std::{mem::size_of, os::unix::io::RawFd};
+use std::{mem::size_of, os::unix::io::RawFd, time::Instant};
 
 #[cfg(feature = "vm")]
 use nix::sys::socket::VsockAddr;
+pub use nix::sys::time::{TimeVal, TimeValLike};
 use nix::{
 	sys::socket::{
-		accept, bind, connect, listen, recv, send, shutdown, socket,
-		AddressFamily, MsgFlags, Shutdown, SockFlag, SockType, SockaddrLike,
-		UnixAddr,
+		accept, bind, connect, listen, recv, send, shutdown, socket, sockopt,
+		AddressFamily, MsgFlags, SetSockOpt, Shutdown, SockFlag, SockType,
+		SockaddrLike, UnixAddr,
 	},
 	unistd::close,
 };
@@ -67,25 +68,29 @@ impl SocketAddress {
 }
 
 /// Handle on a stream
+// #[derive(Clone)]
 pub(crate) struct Stream {
 	fd: RawFd,
 }
 
 impl Stream {
-	pub(crate) fn connect(addr: &SocketAddress) -> Result<Self, IOError> {
+	pub(crate) fn connect(
+		addr: &SocketAddress,
+		timeout: TimeVal,
+	) -> Result<Self, IOError> {
 		let mut err = IOError::UnknownError;
 
 		for i in 0..MAX_RETRY {
 			let fd = socket_fd(addr)?;
 			let stream = Self { fd };
 
-			// TODO: Revisit these options
-			// setsockopt(fd, sockopt::ReuseAddr, &true)?;
-			// setsockopt(fd, sockopt::ReusePort, &true)?;
+			// set `SO_RCVTIMEO`
+			let receive_timeout = sockopt::ReceiveTimeout;
+			receive_timeout.set(fd, &timeout)?;
 
 			match connect(stream.fd, &*addr.addr()) {
 				Ok(_) => return Ok(stream),
-				Err(e) => err = IOError::NixError(e),
+				Err(e) => err = IOError::SendNixError(e),
 			}
 
 			// Exponentially back off before reattempting connection
@@ -111,8 +116,7 @@ impl Stream {
 					MsgFlags::empty(),
 				) {
 					Ok(size) => size,
-					// Err(nix::Error::EINTR) => 0,
-					Err(err) => return Err(IOError::NixError(err)),
+					Err(err) => return Err(IOError::SendNixError(err)),
 				};
 			}
 		}
@@ -127,7 +131,6 @@ impl Stream {
 					MsgFlags::empty(),
 				) {
 					Ok(size) => size,
-					Err(nix::Error::EINTR) => 0,
 					Err(err) => return Err(IOError::NixError(err)),
 				}
 			}
@@ -136,8 +139,41 @@ impl Stream {
 		Ok(())
 	}
 
-	pub(crate) fn recv(&self) -> Result<Vec<u8>, IOError> {
-		// First, read the length
+	pub(crate) fn recv(&self, timeout: TimeVal) -> Result<Vec<u8>, IOError> {
+		// Since we use the "MSG_DONTWAIT" flag, the call to recv is non blocking
+		// and will return `EAGAIN` whenever it does not read anything; so we need to manually check for a timeout.
+		let start = Instant::now();
+
+		// First, check if the connection is open by using MSG_PEEK and making sure read length
+		// is at least 1
+		{
+			let mut buf = [0u8; 1];
+			loop {
+				match recv(
+				self.fd,
+					&mut buf[..],
+					MsgFlags::MSG_DONTWAIT | MsgFlags::MSG_PEEK,
+				) {
+					Ok(read) => {
+						if read == 0 {
+							return Err(IOError::RecvConnectionClosed);
+						};
+						break
+					}
+					Err(nix::Error::EAGAIN) => {
+						if start.elapsed().as_millis() >= timeout.num_milliseconds() as u128 {
+							return Err(IOError::RecvTimeout);
+						};
+					}
+					Err(err) => {
+						return Err(IOError::RecvNixError(err));
+					}
+				}
+			}
+		}
+
+		// Second, read the length. Note we omit the MSG_PEEK flag so the cursor now moves forward
+		// each read.
 		let length: usize = {
 			{
 				let mut buf = [0u8; size_of::<u64>()];
@@ -149,14 +185,21 @@ impl Stream {
 					received_bytes += match recv(
 						self.fd,
 						&mut buf[received_bytes..len],
-						MsgFlags::empty(),
+						MsgFlags::MSG_DONTWAIT,
 					) {
 						Ok(size) => size,
-						// https://stackoverflow.com/questions/1674162/how-to-handle-eintr-interrupted-system-call#1674348
-						// Not necessarily actually an error, just the syscall
-						// was interrupted while in progress.
-						Err(nix::Error::EINTR) => 0,
-						Err(err) => return Err(IOError::NixError(err)),
+						Err(nix::Error::EINTR) => {
+							return Err(IOError::RecvInterrupted);
+						}
+						Err(nix::Error::EAGAIN) => {
+							if start.elapsed().as_millis() >= timeout.num_milliseconds() as u128 {
+								return Err(IOError::RecvTimeout);
+							};
+							0
+						}
+						Err(err) => {
+							return Err(IOError::RecvNixError(err));
+						}
 					};
 				}
 
@@ -167,23 +210,35 @@ impl Stream {
 			}
 		};
 
-		// Then, read the buffer
+		// Third, read the buffer
 		let mut buf = vec![0; length];
 		{
 			let mut received_bytes = 0;
 			while received_bytes < length {
-				received_bytes += match recv(
+				let size = match recv(
 					self.fd,
 					&mut buf[received_bytes..length],
-					MsgFlags::empty(),
+					MsgFlags::MSG_DONTWAIT,
 				) {
-					Ok(size) => size,
-					Err(nix::Error::EINTR) => 0,
-					Err(err) => return Err(IOError::NixError(err)),
-				}
+					Ok(size) => {
+						size
+					}
+					Err(nix::Error::EINTR) => {
+						return Err(IOError::RecvInterrupted);
+					}
+					Err(nix::Error::EAGAIN) => {
+						if start.elapsed().as_millis() >= timeout.num_microseconds() as u128 {
+							return Err(IOError::RecvTimeout);
+						};
+						0
+					}
+					Err(err) => {
+						return Err(IOError::NixError(err));
+					}
+				};
+				received_bytes += size;
 			}
 		}
-
 		Ok(buf)
 	}
 }
@@ -210,6 +265,7 @@ impl Listener {
 		Self::clean(&addr);
 
 		let fd = socket_fd(&addr)?;
+
 		bind(fd, &*addr.addr())?;
 		listen(fd, BACKLOG)?;
 
@@ -270,7 +326,12 @@ fn socket_fd(addr: &SocketAddress) -> Result<RawFd, IOError> {
 
 #[cfg(test)]
 mod test {
+
 	use super::*;
+
+	fn timeval() -> TimeVal {
+		TimeVal::seconds(1)
+	}
 
 	#[test]
 	fn stream_integration_test() {
@@ -281,13 +342,13 @@ mod test {
 				.unwrap();
 		let addr = SocketAddress::Unix(unix_addr);
 		let listener = Listener::listen(addr.clone()).unwrap();
-		let client = Stream::connect(&addr).unwrap();
+		let client = Stream::connect(&addr, timeval()).unwrap();
 		let server = listener.accept().unwrap();
 
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
 		client.send(&data).unwrap();
 
-		let resp = server.recv().unwrap();
+		let resp = server.recv(timeval()).unwrap();
 
 		assert_eq!(data, resp);
 	}
@@ -305,16 +366,16 @@ mod test {
 
 		let handler = std::thread::spawn(move || {
 			if let Some(stream) = listener.next() {
-				let req = stream.recv().unwrap();
+				let req = stream.recv(timeval()).unwrap();
 				stream.send(&req).unwrap();
 			}
 		});
 
-		let client = Stream::connect(&addr).unwrap();
+		let client = Stream::connect(&addr, timeval()).unwrap();
 
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
 		client.send(&data).unwrap();
-		let resp = client.recv().unwrap();
+		let resp = client.recv(timeval()).unwrap();
 		assert_eq!(data, resp);
 
 		handler.join().unwrap();
