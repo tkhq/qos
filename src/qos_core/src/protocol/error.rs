@@ -1,5 +1,6 @@
 //! Quorum protocol error
 use borsh::{BorshDeserialize, BorshSerialize};
+use qos_p256::P256Error;
 
 use crate::{
 	client,
@@ -48,12 +49,12 @@ pub enum ProtocolError {
 	CannotModifyPostPivotStatic,
 	/// For some reason the Ephemeral could not be read from the file
 	/// system.
-	FailedToGetEphemeralKey,
+	FailedToGetEphemeralKey(P256Error),
 	/// Failed to write the Ephemeral key to the file system.
 	FailedToPutEphemeralKey,
 	/// For some reason the Quorum Key could not be read from the file
 	/// system.
-	FailedToGetQuorumKey,
+	FailedToGetQuorumKey(P256Error),
 	/// Failed to put the quorum key into the file system
 	FailedToPutQuorumKey,
 	/// For some reason the manifest envelope could not be read from the file

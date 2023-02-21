@@ -27,7 +27,7 @@ impl QuorumKeyHandle {
 	/// Errors if the Quorum Key has not been put.
 	pub fn get_quorum_key(&self) -> Result<P256Pair, ProtocolError> {
 		let pair = P256Pair::from_hex_file(&self.quorum)
-			.map_err(|_| ProtocolError::FailedToGetQuorumKey)?;
+			.map_err(|e| ProtocolError::FailedToGetQuorumKey(e))?;
 		Ok(pair)
 	}
 }
@@ -78,7 +78,7 @@ impl Handles {
 	/// Errors if the Ephemeral Key has not been put.
 	pub fn get_ephemeral_key(&self) -> Result<P256Pair, ProtocolError> {
 		let pair = P256Pair::from_hex_file(&self.ephemeral)
-			.map_err(|_| ProtocolError::FailedToGetEphemeralKey)?;
+			.map_err(|e| ProtocolError::FailedToGetEphemeralKey(e))?;
 		Ok(pair)
 	}
 
