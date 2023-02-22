@@ -6,6 +6,7 @@ use std::{
 	mem,
 	path::{Path, PathBuf},
 };
+use std::ops::Deref;
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -495,7 +496,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	write_with_msg(
 		&genesis_output_path,
-		&genesis_output.try_to_vec().unwrap(),
+		&genesis_output.deref().try_to_vec().unwrap(),
 		"`GenesisOutput`",
 	);
 
@@ -528,11 +529,12 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	let genesis_output = GenesisOutput::try_from_slice(
-		&fs::read(genesis_output_path).expect("Failed to read genesis set"),
-	)?;
+		&fs::read(genesis_output_path).expect("Failed to read genesis output file"),
+	).expect("Failed to deserialize genesis output - check that qos_client and qos_core version line up");
 
-	let master_seed_hex = fs::read_to_string(&master_seed_path)?;
-	let pair = P256Pair::from_hex_file(master_seed_path)?;
+	let master_seed_hex = fs::read_to_string(&master_seed_path).expect("Failed to read master seed to string");
+	let pair = P256Pair::from_hex_file(master_seed_path)
+		.expect("Failed to use master seed to create p256 pair: {e:?}");
 
 	// sanity check our logic to read in master seed
 	if pair.to_master_seed_hex() != master_seed_hex.as_bytes() {
