@@ -6,6 +6,7 @@ use std::{
 	mem,
 	path::{Path, PathBuf},
 };
+use std::ops::Deref;
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -495,7 +496,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	write_with_msg(
 		&genesis_output_path,
-		&genesis_output.try_to_vec().unwrap(),
+		&genesis_output.deref().try_to_vec().unwrap(),
 		"`GenesisOutput`",
 	);
 
