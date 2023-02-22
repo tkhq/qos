@@ -41,8 +41,8 @@ impl Client {
 
 	/// Send raw bytes and wait for a response.
 	///
-	/// Also see [`Self::send_timeout`] for use cases were you don't want to
-	/// potential to indefinitely hang.
+	/// If the server may take a long time to respond (or never respond),
+	/// consider using [`Self::send_timeout`].
 	pub fn send(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
 

@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{client::Client, handles::Handles, io::SocketAddress};
 
-const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: u64 = 10;
+pub const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: u64 = 5;
 
 /// Enclave phase
 #[derive(
@@ -187,12 +187,18 @@ impl ProtocolState {
 		attestor: Box<dyn NsmProvider>,
 		handles: Handles,
 		app_addr: SocketAddress,
+		init_phase_override: Option<ProtocolPhase>,
 	) -> Self {
 		let provisioner = SecretBuilder::new();
+		let init_phase = if let Some(phase) = init_phase_override {
+			phase
+		} else {
+			ProtocolPhase::WaitingForBootInstruction
+		};
 		Self {
 			attestor,
 			provisioner,
-			phase: ProtocolPhase::WaitingForBootInstruction,
+			phase: init_phase,
 			handles,
 			app_client: Client::new(
 				app_addr,

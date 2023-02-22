@@ -229,6 +229,7 @@ mod test {
 			Box::new(MockNsm),
 			handles,
 			SocketAddress::new_unix("./never.sock"),
+			None,
 		);
 		state.transition(ProtocolPhase::WaitingForQuorumShards).unwrap();
 

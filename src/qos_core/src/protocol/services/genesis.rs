@@ -208,6 +208,7 @@ mod test {
 			Box::new(MockNsm),
 			handles.clone(),
 			SocketAddress::new_unix("./never.sock"),
+			None,
 		);
 		let member1_pair = P256Pair::generate().unwrap();
 		let member2_pair = P256Pair::generate().unwrap();

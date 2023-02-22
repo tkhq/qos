@@ -2,7 +2,8 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
-	client,
+	client::{self, ClientError},
+	io::IOError,
 	protocol::{services::boot, ProtocolPhase},
 };
 
@@ -64,7 +65,8 @@ pub enum ProtocolError {
 	/// Failed to put the pivot executable.
 	FailedToPutPivot,
 	/// An error occurred with the app client.
-	AppClientError,
+	AppClientTimeoutError,
+	AppClientError(String),
 	/// Payload is too big. See `MAX_ENCODED_MSG_LEN` for the upper bound on
 	/// message size.
 	OversizedPayload,
@@ -127,8 +129,13 @@ impl From<std::io::Error> for ProtocolError {
 }
 
 impl From<client::ClientError> for ProtocolError {
-	fn from(_: client::ClientError) -> Self {
-		Self::AppClientError
+	fn from(err: client::ClientError) -> Self {
+		match err {
+			ClientError::IOError(IOError::Timeout) => {
+				ProtocolError::AppClientTimeoutError
+			}
+			e => ProtocolError::AppClientError(format!("{e:?}")),
+		}
 	}
 }
 
