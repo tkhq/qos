@@ -22,14 +22,14 @@ impl Processor {
 		attestor: Box<dyn NsmProvider>,
 		handles: Handles,
 		app_addr: SocketAddress,
-		init_phase_override: Option<ProtocolPhase>,
+		test_only_init_phase_override: Option<ProtocolPhase>,
 	) -> Self {
 		Self {
 			state: ProtocolState::new(
 				attestor,
 				handles,
 				app_addr,
-				init_phase_override,
+				test_only_init_phase_override,
 			),
 		}
 	}

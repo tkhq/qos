@@ -35,12 +35,12 @@ impl Reaper {
 		nsm: Box<dyn NsmProvider + Send>,
 		addr: SocketAddress,
 		app_addr: SocketAddress,
-		init_phase_override: Option<ProtocolPhase>,
+		test_only_init_phase_override: Option<ProtocolPhase>,
 	) {
 		let handles2 = handles.clone();
 		std::thread::spawn(move || {
 			let processor =
-				Processor::new(nsm, handles2, app_addr, init_phase_override);
+				Processor::new(nsm, handles2, app_addr, test_only_init_phase_override);
 			SocketServer::listen(addr, processor).unwrap();
 		});
 

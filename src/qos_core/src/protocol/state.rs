@@ -188,14 +188,19 @@ impl ProtocolState {
 		attestor: Box<dyn NsmProvider>,
 		handles: Handles,
 		app_addr: SocketAddress,
-		init_phase_override: Option<ProtocolPhase>,
+		test_only_init_phase_override: Option<ProtocolPhase>,
 	) -> Self {
 		let provisioner = SecretBuilder::new();
-		let init_phase = if let Some(phase) = init_phase_override {
+
+		#[cfg(any(feature = "mock", test))]
+		let init_phase = if let Some(phase) = test_only_init_phase_override {
 			phase
 		} else {
 			ProtocolPhase::WaitingForBootInstruction
 		};
+		#[cfg(not(any(feature = "mock", test)))]
+		let init_phase = ProtocolPhase::WaitingForBootInstruction;
+
 		Self {
 			attestor,
 			provisioner,
