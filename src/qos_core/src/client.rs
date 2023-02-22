@@ -42,26 +42,18 @@ impl Client {
 
 	/// Send raw bytes and wait for a response.
 	pub fn send(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
-		let stream = Stream::connect(&self.addr)?;
-
-		// Wait for this invocation to get its shot at creating vsock
 		while self.lock.load(Ordering::SeqCst) {
 			hint::spin_loop();
 		}
-
-		// Take lock while sending
 		self.lock.store(true, Ordering::SeqCst);
+		let res = self.do_send(request);
+		self.lock.store(false, Ordering::SeqCst);
+		res
+	}
 
-		match stream.send(request) {
-			Ok(_) => {
-				let res = stream.recv().map_err(Into::into);
-				self.lock.store(false, Ordering::SeqCst);
-				res
-			},
-			Err(err) => {
-				self.lock.store(false, Ordering::SeqCst);
-				Err(ClientError::IOError(err))
-			}
-		}
+	fn do_send(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
+		let stream = Stream::connect(&self.addr)?;
+		stream.send(request)?;
+		stream.recv().map_err(Into::into)
 	}
 }
