@@ -81,7 +81,8 @@ fn enclave_app_client_timeout() {
 			Box::new(MockNsm),
 			SocketAddress::new_unix(ENCLAVE_SOCK),
 			SocketAddress::new_unix(PIVOT_MAYBE_PANIC_SOCK),
-			// Force the phase to quorum key provisioned so message proxy-ing works
+			// Force the phase to quorum key provisioned so message proxy-ing
+			// works
 			Some(ProtocolPhase::QuorumKeyProvisioned),
 		)
 	});
@@ -95,7 +96,7 @@ fn enclave_app_client_timeout() {
 	let request =
 		ProtocolMsg::ProxyRequest { data: app_request }.try_to_vec().unwrap();
 
-	let raw_response = enclave_client.send_timeout(&request).unwrap();
+	let raw_response = enclave_client.send(&request).unwrap();
 	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
 	assert_eq!(
 		response,
@@ -108,7 +109,7 @@ fn enclave_app_client_timeout() {
 	let app_request = PivotMaybePanicMsg::OkRequest.try_to_vec().unwrap();
 	let request =
 		ProtocolMsg::ProxyRequest { data: app_request }.try_to_vec().unwrap();
-	let raw_response = enclave_client.send_timeout(&request).unwrap();
+	let raw_response = enclave_client.send(&request).unwrap();
 	let response = {
 		let msg = ProtocolMsg::try_from_slice(&raw_response).unwrap();
 		let data = match msg {

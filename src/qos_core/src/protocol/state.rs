@@ -362,7 +362,7 @@ mod handlers {
 		if let ProtocolMsg::ProxyRequest { data: req_data } = req {
 			let result = state
 				.app_client
-				.send_timeout(req_data)
+				.send(req_data)
 				.map(|data| ProtocolMsg::ProxyResponse { data })
 				.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into()));
 

@@ -64,8 +64,11 @@ pub enum ProtocolError {
 	FailedToPutManifestEnvelope,
 	/// Failed to put the pivot executable.
 	FailedToPutPivot,
-	/// An error occurred with the app client.
+	/// The socket client timed out while waiting to receive a response from
+	/// the enclave app.
 	AppClientTimeoutError,
+	/// The socket client encountered an error when trying to execute a request
+	/// to the enclave app.
 	AppClientError(String),
 	/// Payload is too big. See `MAX_ENCODED_MSG_LEN` for the upper bound on
 	/// message size.

@@ -39,8 +39,12 @@ impl Reaper {
 	) {
 		let handles2 = handles.clone();
 		std::thread::spawn(move || {
-			let processor =
-				Processor::new(nsm, handles2, app_addr, test_only_init_phase_override);
+			let processor = Processor::new(
+				nsm,
+				handles2,
+				app_addr,
+				test_only_init_phase_override,
+			);
 			SocketServer::listen(addr, processor).unwrap();
 		});
 

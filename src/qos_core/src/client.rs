@@ -39,23 +39,12 @@ impl Client {
 		Self { addr, timeout }
 	}
 
-	/// Send raw bytes and wait for a response.
-	///
-	/// If the server may take a long time to respond (or never respond),
-	/// consider using [`Self::send_timeout`].
-	pub fn send(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
-		let stream = Stream::connect(&self.addr)?;
-
-		stream.send(request)?;
-		stream.recv().map_err(Into::into)
-	}
-
 	/// Send raw bytes and wait for a response until the clients configured
 	/// timeout.
 	///
 	/// Be mindful that this spawns a short lived thread every call. The thread
 	/// is cleaned up by time this function returns.
-	pub fn send_timeout(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
+	pub fn send(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
 
 		stream.send(request)?;

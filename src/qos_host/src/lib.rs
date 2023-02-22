@@ -31,14 +31,18 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::Client,
 	io::SocketAddress,
-	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS},
+	protocol::{
+		msg::ProtocolMsg, ProtocolError, ProtocolPhase,
+		ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
+	},
 };
 
 pub mod cli;
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
-const QOS_SOCKET_CLIENT_TIMEOUT_SECS: u64 = ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 2;
+const QOS_SOCKET_CLIENT_TIMEOUT_SECS: u64 =
+	ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 2;
 
 /// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]
@@ -121,8 +125,7 @@ impl HostServer {
 		let encoded_request = ProtocolMsg::StatusRequest
 			.try_to_vec()
 			.expect("ProtocolMsg can always serialize. qed.");
-		let encoded_response =
-			state.enclave_client.send_timeout(&encoded_request);
+		let encoded_response = state.enclave_client.send(&encoded_request);
 
 		let decoded_response = match encoded_response {
 			Ok(encoded_response) => {
@@ -182,7 +185,7 @@ impl HostServer {
 			);
 		}
 
-		match state.enclave_client.send_timeout(&encoded_request) {
+		match state.enclave_client.send(&encoded_request) {
 			Ok(encoded_response) => (StatusCode::OK, encoded_response),
 			Err(_) => (
 				StatusCode::INTERNAL_SERVER_ERROR,
