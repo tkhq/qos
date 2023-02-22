@@ -4,8 +4,6 @@ use crate::io::{self, SocketAddress, Stream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{hint};
 
-static GLOBAL_LOCK: AtomicBool = AtomicBool::new(false);
-
 /// Enclave client error.
 #[derive(Debug)]
 pub enum ClientError {
@@ -31,13 +29,15 @@ impl From<borsh::maybestd::io::Error> for ClientError {
 #[derive(Debug)]
 pub struct Client {
 	addr: SocketAddress,
+	lock: AtomicBool
 }
 
 impl Client {
 	/// Create a new client.
 	#[must_use]
 	pub fn new(addr: SocketAddress) -> Self {
-		Self { addr }
+		let lock = AtomicBool::new(false);
+		Self { addr, lock }
 	}
 
 	/// Send raw bytes and wait for a response.
@@ -45,20 +45,23 @@ impl Client {
 		let stream = Stream::connect(&self.addr)?;
 
 		// Wait for this invocation to get its shot at creating vsock
-		while GLOBAL_LOCK.load(Ordering::SeqCst) {
+		while self.lock.load(Ordering::SeqCst) {
 			hint::spin_loop();
 		}
 
 		// Take lock while sending
-		GLOBAL_LOCK.store(true, Ordering::SeqCst);
+		self.lock.store(true, Ordering::SeqCst);
 
-		let maybe_err = stream.send(request);
-
-		// Return the slot after doing work
-		GLOBAL_LOCK.store(false, Ordering::SeqCst);
-
-		maybe_err?;
-
-		stream.recv().map_err(Into::into)
+		match stream.send(request) {
+			Ok(_) => {
+				let res = stream.recv().map_err(Into::into);
+				self.lock.store(false, Ordering::SeqCst);
+				res
+			},
+			Err(err) => {
+				self.lock.store(false, Ordering::SeqCst);
+				Err(ClientError::IOError(err))
+			}
+		}
 	}
 }
