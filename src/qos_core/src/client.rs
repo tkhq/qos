@@ -1,6 +1,10 @@
 //! Streaming socket based client to connect with
 //! [`crate::server::SocketServer`].
 use crate::io::{self, SocketAddress, Stream};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::{hint};
+
+static GLOBAL_LOCK: AtomicBool = AtomicBool::new(false);
 
 /// Enclave client error.
 #[derive(Debug)]
@@ -40,7 +44,21 @@ impl Client {
 	pub fn send(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
 		let stream = Stream::connect(&self.addr)?;
 
-		stream.send(request)?;
+		// Wait for this invocation to get its shot at creating vsock
+		while GLOBAL_LOCK.load(Ordering::SeqCst) {
+			hint::spin_loop();
+		}
+
+		// Take lock while sending
+		GLOBAL_LOCK.store(true, Ordering::SeqCst);
+
+		let maybe_err = stream.send(request);
+
+		// Return the slot after doing work
+		GLOBAL_LOCK.store(false, Ordering::SeqCst);
+
+		maybe_err?;
+
 		stream.recv().map_err(Into::into)
 	}
 }
