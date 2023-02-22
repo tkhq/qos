@@ -81,6 +81,7 @@ fn enclave_app_client_timeout() {
 			Box::new(MockNsm),
 			SocketAddress::new_unix(ENCLAVE_SOCK),
 			SocketAddress::new_unix(PIVOT_MAYBE_PANIC_SOCK),
+			// Force the phase to quorum key provisioned so message proxy-ing works
 			Some(ProtocolPhase::QuorumKeyProvisioned),
 		)
 	});

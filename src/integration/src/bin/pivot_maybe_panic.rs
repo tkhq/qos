@@ -18,7 +18,7 @@ impl RequestProcessor for Processor {
 				.try_to_vec()
 				.expect("OkResponse is valid borsh"),
 			PivotMaybePanicMsg::PanicRequest => {
-				panic!("PivotMaybePanicMsg has received a panic request")
+				panic!("\"maybe panic\" pivot app has received a PanicRequest")
 			}
 			PivotMaybePanicMsg::OkResponse => {
 				panic!("Unexpected ok response - test is broken")

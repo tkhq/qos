@@ -9,6 +9,7 @@ use super::{
 };
 use crate::{client::Client, handles::Handles, io::SocketAddress};
 
+/// The timeout for the qos core when making requests to an enclave app.
 pub const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: u64 = 5;
 
 /// Enclave phase

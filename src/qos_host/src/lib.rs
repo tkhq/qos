@@ -31,14 +31,14 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::Client,
 	io::SocketAddress,
-	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase},
+	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS},
 };
 
 pub mod cli;
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
-const QOS_SOCKET_CLIENT_TIMEOUT_SECS: u64 = 15;
+const QOS_SOCKET_CLIENT_TIMEOUT_SECS: u64 = ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 2;
 
 /// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]
