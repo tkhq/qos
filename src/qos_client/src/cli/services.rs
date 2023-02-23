@@ -4,9 +4,9 @@ use std::{
 	io,
 	io::{BufRead, BufReader, Write},
 	mem,
+	ops::Deref,
 	path::{Path, PathBuf},
 };
-use std::ops::Deref;
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -532,7 +532,8 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 		&fs::read(genesis_output_path).expect("Failed to read genesis output file"),
 	).expect("Failed to deserialize genesis output - check that qos_client and qos_core version line up");
 
-	let master_seed_hex = fs::read_to_string(&master_seed_path).expect("Failed to read master seed to string");
+	let master_seed_hex = fs::read_to_string(&master_seed_path)
+		.expect("Failed to read master seed to string");
 	let pair = P256Pair::from_hex_file(master_seed_path)
 		.expect("Failed to use master seed to create p256 pair: {e:?}");
 
@@ -1477,13 +1478,19 @@ pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 	plaintext_path: P,
 	ciphertext_path: P,
 	master_seed_path: P,
+	output_hex: bool,
 ) -> Result<(), Error> {
 	let pair = P256Pair::from_hex_file(master_seed_path)?;
 	let ciphertext = std::fs::read(ciphertext_path.as_ref())?;
 
 	let plaintext = pair.decrypt(&ciphertext)?;
+	let file_contents = if output_hex {
+		qos_hex::encode(&plaintext).as_bytes().to_vec()
+	} else {
+		plaintext
+	};
 
-	write_with_msg(plaintext_path.as_ref(), &plaintext, "Plaintext");
+	write_with_msg(plaintext_path.as_ref(), &file_contents, "Plaintext");
 
 	Ok(())
 }
