@@ -5,8 +5,8 @@
 
 mod stream;
 
-pub use stream::SocketAddress;
 pub(crate) use stream::{Listener, Stream};
+pub use stream::{SocketAddress, TimeVal, TimeValLike};
 
 /// QOS I/O error
 #[derive(Debug)]
@@ -17,10 +17,16 @@ pub enum IOError {
 	ArithmeticSaturation,
 	/// Unknown error.
 	UnknownError,
-	/// Timed out while waiting for a response.
-	Timeout,
-	/// An internal channel disconnected - this is a bug.
-	InternalChannelDisconnect,
+	/// Timed out while calling `recv` over a socket.
+	RecvTimeout,
+	/// The `recv` system call was interrupted while receiving over a socket.
+	RecvInterrupted,
+	/// Receive was called on a closed connection.
+	RecvConnectionClosed,
+	/// A nix error encountered while calling `send`.
+	SendNixError(nix::Error),
+	/// A nix error encountered while calling `recv`.
+	RecvNixError(nix::Error),
 }
 
 impl From<nix::Error> for IOError {

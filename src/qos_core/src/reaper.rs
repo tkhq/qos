@@ -15,7 +15,7 @@ use crate::{
 		services::boot::{PivotConfig, RestartPolicy},
 		Processor, ProtocolPhase,
 	},
-	server::SocketServer,
+	server::{SocketServer},
 };
 
 const BINARY_EXIT_RESTART_DELAY: u64 = 3;

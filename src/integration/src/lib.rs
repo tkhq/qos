@@ -25,8 +25,10 @@ pub const PIVOT_LOOP_PATH: &str = "../target/debug/pivot_loop";
 pub const PIVOT_ABORT_PATH: &str = "../target/debug/pivot_abort";
 /// Path to pivot panic for tests.
 pub const PIVOT_PANIC_PATH: &str = "../target/debug/pivot_panic";
-/// Path to the "maybe panic" pivot app.
-pub const PIVOT_MAYBE_PANIC_PATH: &str = "../target/debug/pivot_maybe_panic";
+/// Path to an enclave app that has routes to stress our socket code in various
+/// ways.
+pub const PIVOT_SOCKET_STRESS_PATH: &str =
+	"../target/debug/pivot_socket_stress";
 /// Local host IP address.
 pub const LOCAL_HOST: &str = "127.0.0.1";
 /// PCR3 image associated with the preimage in `./mock/pcr3-preimage.txt`.
@@ -34,20 +36,25 @@ pub const PCR3: &str = "78fce75db17cd4e0a3fb8dad3ad128ca5e77edbb2b2c7f75329dccd9
 /// QOS dist directory.
 pub const QOS_DIST_DIR: &str = "../../dist";
 /// Socket that the "maybe panic" app is hardcoded to listen on.
-pub const PIVOT_MAYBE_PANIC_SOCK: &str =
-	"/tmp/enclave_app_client_timeout/pivot_maybe_panic.sock";
+pub const PIVOT_SOCKET_STRESS_SOCK: &str =
+	"/tmp/enclave_app_client_socket_stress/pivot_socket_stress.sock";
 
 const MSG: &str = "msg";
 
 /// Request/Response messages for "maybe panic" pivot app.
 #[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
-pub enum PivotMaybePanicMsg {
+pub enum PivotSocketStressMsg {
 	/// Request an ok response.
 	OkRequest,
 	/// An ok response.
 	OkResponse,
 	/// Request the app to panic
 	PanicRequest,
+	/// Request a response that will be slower then
+	/// `ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS`.
+	SlowRequest,
+	/// Response to [`Self::SlowRequest`].
+	SlowResponse,
 }
 
 struct PivotParser;

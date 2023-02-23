@@ -17,7 +17,7 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
 	body::Bytes,
@@ -30,7 +30,7 @@ use axum::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::Client,
-	io::SocketAddress,
+	io::{SocketAddress, TimeVal, TimeValLike},
 	protocol::{
 		msg::ProtocolMsg, ProtocolError, ProtocolPhase,
 		ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
@@ -41,7 +41,7 @@ pub mod cli;
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
-const QOS_SOCKET_CLIENT_TIMEOUT_SECS: u64 =
+const QOS_SOCKET_CLIENT_TIMEOUT_SECS: i64 =
 	ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 2;
 
 /// Resource shared across tasks in the [`HostServer`].
@@ -91,7 +91,7 @@ impl HostServer {
 		let state = Arc::new(QosHostState {
 			enclave_client: Client::new(
 				self.enclave_addr.clone(),
-				Duration::from_secs(QOS_SOCKET_CLIENT_TIMEOUT_SECS),
+				TimeVal::seconds(QOS_SOCKET_CLIENT_TIMEOUT_SECS),
 			),
 		});
 

@@ -1,7 +1,6 @@
 //! Quorum protocol state machine
-use std::time::Duration;
-
 use borsh::BorshSerialize;
+use nix::sys::time::{TimeVal, TimeValLike};
 use qos_nsm::NsmProvider;
 
 use super::{
@@ -10,7 +9,7 @@ use super::{
 use crate::{client::Client, handles::Handles, io::SocketAddress};
 
 /// The timeout for the qos core when making requests to an enclave app.
-pub const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: u64 = 5;
+pub const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: i64 = 5;
 
 /// Enclave phase
 #[derive(
@@ -208,7 +207,7 @@ impl ProtocolState {
 			handles,
 			app_client: Client::new(
 				app_addr,
-				Duration::from_secs(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
+				TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 			),
 		}
 	}
@@ -360,11 +359,15 @@ mod handlers {
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::ProxyRequest { data: req_data } = req {
+			dbg!("about to send proxy");
 			let result = state
 				.app_client
 				.send(req_data)
 				.map(|data| ProtocolMsg::ProxyResponse { data })
 				.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into()));
+
+			dbg!("got proxy");
+			dbg!(&result);
 
 			Some(result)
 		} else {

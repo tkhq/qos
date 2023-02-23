@@ -66,7 +66,12 @@ pub enum ProtocolError {
 	FailedToPutPivot,
 	/// The socket client timed out while waiting to receive a response from
 	/// the enclave app.
-	AppClientTimeoutError,
+	AppClientRecvTimeout,
+	/// The socket client was interrupted while trying to receive a response
+	/// from the enclave app.
+	AppClientRecvInterrupted,
+	/// The socket client tried to call receive on a closed connection. Likely the enclave app panicked and closed the connection.
+	AppClientRecvConnectionClosed,
 	/// The socket client encountered an error when trying to execute a request
 	/// to the enclave app.
 	AppClientError(String),
@@ -134,8 +139,14 @@ impl From<std::io::Error> for ProtocolError {
 impl From<client::ClientError> for ProtocolError {
 	fn from(err: client::ClientError) -> Self {
 		match err {
-			ClientError::IOError(IOError::Timeout) => {
-				ProtocolError::AppClientTimeoutError
+			ClientError::IOError(IOError::RecvTimeout) => {
+				ProtocolError::AppClientRecvTimeout
+			}
+			ClientError::IOError(IOError::RecvInterrupted) => {
+				ProtocolError::AppClientRecvInterrupted
+			}
+			ClientError::IOError(IOError::RecvConnectionClosed) => {
+				ProtocolError::AppClientRecvConnectionClosed
 			}
 			e => ProtocolError::AppClientError(format!("{e:?}")),
 		}

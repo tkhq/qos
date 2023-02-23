@@ -1,13 +1,11 @@
-use std::time::Duration;
-
 use borsh::{ser::BorshSerialize, BorshDeserialize};
 use integration::{
-	PivotMaybePanicMsg, PIVOT_MAYBE_PANIC_PATH, PIVOT_MAYBE_PANIC_SOCK,
+	PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH, PIVOT_SOCKET_STRESS_SOCK,
 };
 use qos_core::{
 	client::Client,
 	handles::Handles,
-	io::SocketAddress,
+	io::{SocketAddress, TimeVal, TimeValLike},
 	protocol::{
 		msg::ProtocolMsg,
 		services::boot::{
@@ -22,11 +20,11 @@ use qos_nsm::mock::MockNsm;
 use qos_p256::P256Pair;
 use qos_test_primitives::PathWrapper;
 
-const TEST_TMP: &str = "/tmp/enclave_app_client_timeout";
-const ENCLAVE_SOCK: &str = "/tmp/enclave_app_client_timeout/enclave.sock";
+const TEST_TMP: &str = "/tmp/enclave_app_client_socket_stress";
+const ENCLAVE_SOCK: &str = "/tmp/enclave_app_client_socket_stress/enclave.sock";
 
 #[test]
-fn enclave_app_client_timeout() {
+fn enclave_app_client_socket_stress() {
 	let _: PathWrapper = TEST_TMP.into();
 	std::fs::create_dir_all(TEST_TMP).unwrap();
 
@@ -40,7 +38,7 @@ fn enclave_app_client_timeout() {
 			commit: String::default(),
 			hash: [1; 32],
 			restart: RestartPolicy::Always,
-			args: vec![],
+			args: vec![PIVOT_SOCKET_STRESS_SOCK.to_string()],
 		},
 		manifest_set: ManifestSet { threshold: 0, members: vec![] },
 		share_set: ShareSet { threshold: 0, members: vec![] },
@@ -59,14 +57,15 @@ fn enclave_app_client_timeout() {
 		manifest_set_approvals: vec![],
 		share_set_approvals: vec![],
 	};
-	let manifest_path = "/tmp/enclave_app_client_timeout/manifest";
-	let quorum_key_path = "/tmp/enclave_app_client_timeout/quorum_key.secret";
+	let manifest_path = "/tmp/enclave_app_client_socket_stress/manifest";
+	let quorum_key_path =
+		"/tmp/enclave_app_client_socket_stress/quorum_key.secret";
 
 	let handles = Handles::new(
 		"secret_path_never".to_string(),
 		quorum_key_path.to_string(),
 		manifest_path.to_string(),
-		PIVOT_MAYBE_PANIC_PATH.to_string(),
+		PIVOT_SOCKET_STRESS_PATH.to_string(),
 	);
 
 	let p256_pair = P256Pair::generate().unwrap();
@@ -80,19 +79,21 @@ fn enclave_app_client_timeout() {
 			&handles,
 			Box::new(MockNsm),
 			SocketAddress::new_unix(ENCLAVE_SOCK),
-			SocketAddress::new_unix(PIVOT_MAYBE_PANIC_SOCK),
+			SocketAddress::new_unix(PIVOT_SOCKET_STRESS_SOCK),
 			// Force the phase to quorum key provisioned so message proxy-ing
 			// works
 			Some(ProtocolPhase::QuorumKeyProvisioned),
 		)
 	});
 
+	std::thread::sleep(std::time::Duration::from_secs(1));
+
 	let enclave_client = Client::new(
 		SocketAddress::new_unix(ENCLAVE_SOCK),
-		Duration::from_secs(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 1),
+		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 1),
 	);
 
-	let app_request = PivotMaybePanicMsg::PanicRequest.try_to_vec().unwrap();
+	let app_request = PivotSocketStressMsg::PanicRequest.try_to_vec().unwrap();
 	let request =
 		ProtocolMsg::ProxyRequest { data: app_request }.try_to_vec().unwrap();
 
@@ -101,22 +102,34 @@ fn enclave_app_client_timeout() {
 	assert_eq!(
 		response,
 		ProtocolMsg::ProtocolErrorResponse(
-			ProtocolError::AppClientTimeoutError
+			ProtocolError::AppClientRecvConnectionClosed
 		)
 	);
 
 	// The pivot panicked and should have been restarted.
-	let app_request = PivotMaybePanicMsg::OkRequest.try_to_vec().unwrap();
+	let app_request = PivotSocketStressMsg::OkRequest.try_to_vec().unwrap();
 	let request =
 		ProtocolMsg::ProxyRequest { data: app_request }.try_to_vec().unwrap();
 	let raw_response = enclave_client.send(&request).unwrap();
+
 	let response = {
 		let msg = ProtocolMsg::try_from_slice(&raw_response).unwrap();
 		let data = match msg {
 			ProtocolMsg::ProxyResponse { data } => data,
 			x => panic!("Expected proxy response, got {x:?}"),
 		};
-		PivotMaybePanicMsg::try_from_slice(&data).unwrap()
+		PivotSocketStressMsg::try_from_slice(&data).unwrap()
 	};
-	assert_eq!(response, PivotMaybePanicMsg::OkResponse);
+	assert_eq!(response, PivotSocketStressMsg::OkResponse);
+
+		// Send a request that the app will take too long to respond to
+		let app_request =
+	PivotSocketStressMsg::SlowRequest.try_to_vec().unwrap(); 	let request =
+			ProtocolMsg::ProxyRequest { data: app_request }.try_to_vec().unwrap();
+		let raw_response = enclave_client.send(&request).unwrap();
+		let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
+		assert_eq!(
+			response,
+			ProtocolMsg::ProtocolErrorResponse(ProtocolError::AppClientRecvTimeout)
+		);
 }
