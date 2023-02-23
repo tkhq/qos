@@ -10,7 +10,6 @@ qos_nsm = { path = "../qos_nsm", features = ["mock"], default-features = false }
 qos_host = { path = "../qos_host", default-features = false }
 qos_client = { path = "../qos_client", default-features = false }
 qos_crypto = { path = "../qos_crypto" }
-qos_attest = { path = "../qos_attest", default-features = false }
 qos_hex = { path = "../qos_hex" }
 qos_p256 = { path = "../qos_p256", features = ["mock"] }
 qos_test_primitives = { path = "../qos_test_primitives" }

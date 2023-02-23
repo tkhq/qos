@@ -1,7 +1,6 @@
 [workspace]
 members = [
   "integration",
-  "qos_attest",
   "qos_client",
   "qos_core",
   "qos_crypto",

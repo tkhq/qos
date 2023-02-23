@@ -13,9 +13,12 @@ use p384::{
 };
 use serde_bytes::ByteBuf;
 
-use super::AttestError;
-
+mod error;
 mod syntactic_validation;
+
+pub use error::AttestError;
+
+pub use crate::types;
 
 /// Signing algorithms we expect the certificates to use. Any other
 /// algorithms will be considered invalid. NOTE: this list was deduced just
@@ -306,13 +309,13 @@ mod test {
 		crypto::SigningPrivateKey, header_map::HeaderMap,
 	};
 	use p384::{ecdsa::SigningKey, SecretKey};
-	use qos_nsm::mock::{
+
+	use super::*;
+	use crate::mock::{
 		MOCK_NSM_ATTESTATION_DOCUMENT, MOCK_PCR0, MOCK_PCR1, MOCK_PCR2,
 		MOCK_PCR3, MOCK_SECONDS_SINCE_EPOCH,
 		MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT,
 	};
-
-	use super::*;
 
 	// Public domain work: Pride and Prejudice by Jane Austen, taken from https://www.gutenberg.org/files/1342/1342.txt
 	const TEXT: &[u8] = b"It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.";
