@@ -98,7 +98,31 @@ fn p256_asymmetric_encrypt_decrypt_roundtrip() {
 		.unwrap()
 		.success());
 
-	let decrypted = std::fs::read(plaintext_output_path).unwrap();
+	let decrypted_bytes = std::fs::read(plaintext_output_path).unwrap();
+	assert_eq!(decrypted_bytes, DATA.as_bytes());
 
-	assert_eq!(decrypted, DATA.as_bytes());
+	let hex_plaintext_output_path =
+		"/tmp/p256_asymmetric_encrypt_decrypt_roundtrip/plaintext_output";
+	assert!(Command::new("../target/debug/qos_client")
+		.arg("p256-asymmetric-decrypt")
+		.arg("--plaintext-path")
+		.arg(hex_plaintext_output_path)
+		.arg("--ciphertext-path")
+		.arg(ciphertext_path)
+		.arg("--master-seed-path")
+		.arg(MOCK_PRIMARY_SEED_PATH)
+		.arg("--output-hex")
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
+	let hex_plaintext = std::fs::read_to_string(plaintext_output_path)
+		.unwrap();
+
+	assert_eq!(
+		qos_hex::decode(&hex_plaintext).unwrap(),
+		decrypted_bytes
+	);
 }
