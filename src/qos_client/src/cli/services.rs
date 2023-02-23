@@ -545,6 +545,7 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	if sha_512(master_seed_hex.as_bytes()) != genesis_output.quorum_key_hash {
 		return Err(Error::SecretDoesNotMatch);
 	}
+	println!("Quorum key hash is correct");
 
 	// check test_message_signature
 	if let Err(_e) = pair.public_key().verify(
@@ -553,16 +554,21 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	) {
 		return Err(Error::InvalidSignature);
 	}
+	println!("Quorum key signature over test message successfully verifies");
 	let expected_signature = pair.sign(&genesis_output.test_message)?;
 	if expected_signature != genesis_output.test_message_signature {
 		return Err(Error::CouldNotReproduceSignature);
 	}
+	println!("Quorum key signature over test message was deterministically reproduced");
 
 	// check test_message_ciphertext
 	let plaintext = pair.decrypt(&genesis_output.test_message_ciphertext)?;
 	if plaintext != genesis_output.test_message {
 		return Err(Error::BadDecryption);
 	}
+	println!("Successfully decrypted test message ciphertext");
+
+	println!("verify-genesis successful");
 
 	Ok(())
 }
