@@ -2,9 +2,10 @@
 
 use std::collections::BTreeSet;
 
-use super::{
+use crate::{
+	nitro,
+	nsm::NsmProvider,
 	types::{NsmDigest, NsmRequest, NsmResponse},
-	NsmProvider,
 };
 
 /// DO NOT USE IN PRODUCTION - ONLY FOR TESTS.
@@ -83,5 +84,21 @@ impl NsmProvider for MockNsm {
 		// Should be hardcoded to value returned by nsm_init
 		assert_eq!(fd, 33);
 		println!("nsm_exit");
+	}
+
+	fn timestamp_ms(&self) -> Result<u64, nitro::AttestError> {
+		Ok(MOCK_ATTESTATION_DOC_TIMESTAMP)
+		/*
+		TODO(tim): figure out cert issue
+		use std::time::{SystemTime, UNIX_EPOCH};
+		SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.map(|time| {
+			let ms = time.as_millis();
+			u64::try_from(ms)
+			.map_err(|_| nitro::AttestError::InvalidTimeStamp )
+		 })
+		.map_err(|_| nitro::AttestError::InvalidTimeStamp )?
+		*/
 	}
 }

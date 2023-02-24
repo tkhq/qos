@@ -288,17 +288,28 @@ impl ProtocolState {
 		let transitions = match self.phase {
 			ProtocolPhase::UnrecoverableError => vec![],
 			ProtocolPhase::WaitingForBootInstruction => vec![
+				ProtocolPhase::UnrecoverableError,
 				ProtocolPhase::GenesisBooted,
 				ProtocolPhase::WaitingForQuorumShards,
 				ProtocolPhase::WaitingForForwardedKey,
 			],
-			ProtocolPhase::GenesisBooted => vec![],
-			ProtocolPhase::WaitingForQuorumShards => {
-				vec![ProtocolPhase::QuorumKeyProvisioned]
+			ProtocolPhase::GenesisBooted => {
+				vec![ProtocolPhase::UnrecoverableError]
 			}
-			ProtocolPhase::QuorumKeyProvisioned => vec![],
+			ProtocolPhase::WaitingForQuorumShards => {
+				vec![
+					ProtocolPhase::UnrecoverableError,
+					ProtocolPhase::QuorumKeyProvisioned,
+				]
+			}
+			ProtocolPhase::QuorumKeyProvisioned => {
+				vec![ProtocolPhase::UnrecoverableError]
+			}
 			ProtocolPhase::WaitingForForwardedKey => {
-				vec![ProtocolPhase::QuorumKeyProvisioned]
+				vec![
+					ProtocolPhase::UnrecoverableError,
+					ProtocolPhase::QuorumKeyProvisioned,
+				]
 			}
 		};
 

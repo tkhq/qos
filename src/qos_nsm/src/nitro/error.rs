@@ -5,7 +5,7 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
-pub mod nitro;
+use crate::types;
 
 /// Attestation error.
 #[derive(Debug)]
@@ -39,7 +39,7 @@ pub enum AttestError {
 	/// Invalid bytes.
 	InvalidBytes,
 	/// The NSM returned an unexpected response when querried
-	UnexpectedNsmResponse(qos_nsm::types::NsmResponse),
+	UnexpectedNsmResponse(types::NsmResponse),
 	/// Error while decoding PEM.
 	PemDecodingError,
 	/// Error trying to decode the public key in a cert.
@@ -80,25 +80,4 @@ impl From<aws_nitro_enclaves_nsm_api::api::Error> for AttestError {
 	fn from(e: aws_nitro_enclaves_nsm_api::api::Error) -> Self {
 		Self::Nsm(e)
 	}
-}
-
-/// Get the current time in milliseconds based on the NSM attestation document.
-pub fn current_time(
-	nsm: &dyn qos_nsm::NsmProvider,
-) -> Result<u64, AttestError> {
-	let nsm_request = qos_nsm::types::NsmRequest::Attestation {
-		user_data: None,
-		nonce: None,
-		public_key: None,
-	};
-	let fd = nsm.nsm_init();
-	let nsm_response = nsm.nsm_process_request(fd, nsm_request);
-	let nsm_response = match nsm_response {
-		qos_nsm::types::NsmResponse::Attestation { document } => document,
-		resp => return Err(AttestError::UnexpectedNsmResponse(resp)),
-	};
-	let attestation_document =
-		nitro::unsafe_attestation_doc_from_der(&nsm_response)?;
-
-	Ok(attestation_document.timestamp)
 }

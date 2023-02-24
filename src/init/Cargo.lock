@@ -681,21 +681,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "qos_attest"
-version = "0.1.0"
-dependencies = [
- "aws-nitro-enclaves-cose",
- "aws-nitro-enclaves-nsm-api 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "p384",
- "qos_hex",
- "qos_nsm",
- "serde_bytes",
- "sha2",
- "webpki",
- "x509-cert",
-]
-
-[[package]]
 name = "qos_aws"
 version = "0.1.0"
 dependencies = [
@@ -712,7 +697,6 @@ dependencies = [
  "aws-nitro-enclaves-nsm-api 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "borsh",
  "nix 0.24.3",
- "qos_attest",
  "qos_crypto",
  "qos_hex",
  "qos_nsm",
@@ -736,9 +720,15 @@ version = "0.1.0"
 name = "qos_nsm"
 version = "0.1.0"
 dependencies = [
+ "aws-nitro-enclaves-cose",
  "aws-nitro-enclaves-nsm-api 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "borsh",
+ "p384",
+ "qos_hex",
  "serde_bytes",
+ "sha2",
+ "webpki",
+ "x509-cert",
 ]
 
 [[package]]

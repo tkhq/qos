@@ -7,9 +7,9 @@ use std::{
 
 use borsh::de::BorshDeserialize;
 use integration::{LOCAL_HOST, QOS_DIST_DIR};
-use qos_attest::nitro::unsafe_attestation_doc_from_der;
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{sha_512, shamir::shares_reconstruct};
+use qos_nsm::nitro::unsafe_attestation_doc_from_der;
 use qos_p256::{P256Pair, P256Public};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 use rand::{seq::SliceRandom, thread_rng};

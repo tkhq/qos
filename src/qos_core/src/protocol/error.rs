@@ -139,8 +139,8 @@ impl From<qos_p256::P256Error> for ProtocolError {
 	}
 }
 
-impl From<qos_attest::AttestError> for ProtocolError {
-	fn from(err: qos_attest::AttestError) -> Self {
+impl From<qos_nsm::nitro::AttestError> for ProtocolError {
+	fn from(err: qos_nsm::nitro::AttestError) -> Self {
 		let msg = format!("{err:?}");
 		Self::QosAttestError(msg)
 	}

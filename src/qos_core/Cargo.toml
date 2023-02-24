@@ -7,7 +7,6 @@ edition = "2021"
 qos_crypto = { path = "../qos_crypto" }
 qos_hex = { path = "../qos_hex" }
 qos_p256 = { path = "../qos_p256" }
-qos_attest = { path = "../qos_attest", default-features = false }
 qos_nsm = { path = "../qos_nsm", default-features = false }
 
 nix = { version = "0.24.2", features = ["socket"], default-features = false }
