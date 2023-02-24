@@ -27,7 +27,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Run cargo test
-        run: make -C src test-all
+        run: make -C src test
 
   rustfmt:
     name: rustfmt

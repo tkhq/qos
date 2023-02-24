@@ -1,3 +1,6 @@
+ROOT := $(shell git rev-parse --show-toplevel)
+include $(ROOT)/tools.mk
+
 REGISTRY := 339735964233.dkr.ecr.us-east-1.amazonaws.com
 BUCKET := tkhq-development-qos_resources
 
@@ -59,9 +62,6 @@ vm-host:
 		--host-port 3000 \
 		--cid 16 \
 		--port 6969
-
-.DEFAULT_GOAL := all
-default: all
 
 .PHONY: all
 all: host client core
@@ -152,8 +152,8 @@ fmt:
 	cargo +nightly version
 	cargo +nightly fmt
 
-.PHONY: test-all
-test-all:
+.PHONY: test
+test:
 	@# The integration tests rely on binaries from other crates being built, so
 	@# we build all the workspace targets.
 	cargo build --all
