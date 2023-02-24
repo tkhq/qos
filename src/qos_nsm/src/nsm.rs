@@ -30,8 +30,8 @@ pub trait NsmProvider {
 	/// obtained from `nsm_init()`.
 	fn nsm_exit(&self, fd: i32);
 
-	// requests an attestation document and returns its timestamp in
-	// milliseconds
+	/// requests an attestation document and returns its timestamp in
+	/// milliseconds
 	fn timestamp_ms(&self) -> Result<u64, nitro::AttestError>;
 }
 
