@@ -1,6 +1,6 @@
 //! Abstractions to handle connection based socket streams.
 
-use std::{mem::size_of, os::unix::io::RawFd, time::Instant};
+use std::{mem::size_of, os::unix::io::RawFd};
 
 #[cfg(feature = "vm")]
 use nix::sys::socket::VsockAddr;
@@ -141,45 +141,10 @@ impl Stream {
 
 	/// # Args
 	///
-	/// * `timeout` - time to wait until the first byte is received over the socket.
-	pub(crate) fn recv(&self, timeout: TimeVal) -> Result<Vec<u8>, IOError> {
-		let start = Instant::now();
-
-		// First, check if the connection is open by using MSG_PEEK and making
-		// sure read length is at least 1
-		{
-			let mut buf = [0u8; 1];
-			loop {
-				match recv(
-					self.fd,
-					&mut buf[..],
-					MsgFlags::MSG_DONTWAIT | MsgFlags::MSG_PEEK,
-				) {
-					Ok(read) => {
-						if read == 0 {
-							return Err(IOError::RecvConnectionClosed);
-						};
-						break;
-					}
-					Err(nix::Error::EAGAIN) => {
-						// The `MSG_DONTWAIT` flag causes the recv call to be
-						// non blocking and return `EAGAIN` whenever it does not
-						// read anything; so we need to manually check for a
-						// timeout.
-						if start.elapsed().as_millis()
-							>= timeout.num_milliseconds() as u128
-						{
-							return Err(IOError::RecvTimeout);
-						};
-					}
-					Err(err) => {
-						return Err(IOError::RecvNixError(err));
-					}
-				}
-			}
-		}
-
-		// Second, read the length. Note we omit the MSG_PEEK flag so the cursor
+	/// * `timeout` - time to wait until the first byte is received over the
+	///   socket.
+	pub(crate) fn recv(&self, _timeout: TimeVal) -> Result<Vec<u8>, IOError> {
+		// Read the length. Note we omit the MSG_PEEK flag so the cursor
 		// now moves forward each read.
 		let length: usize = {
 			{
@@ -194,6 +159,9 @@ impl Stream {
 						&mut buf[received_bytes..len],
 						MsgFlags::empty(),
 					) {
+						Ok(size) if size == 0 => {
+							return Err(IOError::RecvConnectionClosed);
+						}
 						Ok(size) => size,
 						Err(nix::Error::EINTR) => {
 							return Err(IOError::RecvInterrupted);
@@ -214,7 +182,7 @@ impl Stream {
 			}
 		};
 
-		// Third, read the buffer
+		// Read the buffer
 		let mut buf = vec![0; length];
 		{
 			let mut received_bytes = 0;
@@ -224,6 +192,9 @@ impl Stream {
 					&mut buf[received_bytes..length],
 					MsgFlags::empty(),
 				) {
+					Ok(size) if size == 0 => {
+						return Err(IOError::RecvConnectionClosed);
+					}
 					Ok(size) => size,
 					Err(nix::Error::EINTR) => {
 						return Err(IOError::RecvInterrupted);
