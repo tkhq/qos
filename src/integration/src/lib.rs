@@ -25,8 +25,7 @@ pub const PIVOT_LOOP_PATH: &str = "../target/debug/pivot_loop";
 pub const PIVOT_ABORT_PATH: &str = "../target/debug/pivot_abort";
 /// Path to pivot panic for tests.
 pub const PIVOT_PANIC_PATH: &str = "../target/debug/pivot_panic";
-/// Path to an enclave app that has routes to stress our socket code in various
-/// ways.
+/// Path to an enclave app that has routes to stress our socket.
 pub const PIVOT_SOCKET_STRESS_PATH: &str =
 	"../target/debug/pivot_socket_stress";
 /// Local host IP address.
@@ -38,10 +37,10 @@ pub const QOS_DIST_DIR: &str = "../../dist";
 
 const MSG: &str = "msg";
 
-/// Request/Response messages for "maybe panic" pivot app.
+/// Request/Response messages for "socket stress" pivot app.
 #[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
 pub enum PivotSocketStressMsg {
-	/// Request a [`OkResponse`].
+	/// Request a [`Self::OkResponse`].
 	OkRequest,
 	/// A successful response to [`Self::OkRequest`].
 	OkResponse,

@@ -21,7 +21,7 @@ fn simple_socket_stress() {
 
 	let enclave_client = Client::new(
 		SocketAddress::new_unix(SOCKET_STRESS_SOCK),
-		// The timeout of slow response is relative to
+		// The timeout of `PivotSocketStressMsg::SlowResponse` is relative to
 		// `ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS`.
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 	);

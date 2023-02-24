@@ -44,6 +44,7 @@ impl RequestProcessor for Processor {
 		}
 	}
 }
+
 fn main() {
 	let args: Vec<String> = std::env::args().collect();
 	let socket_path = &args[1];

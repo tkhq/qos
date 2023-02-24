@@ -131,7 +131,7 @@ impl Stream {
 					MsgFlags::empty(),
 				) {
 					Ok(size) => size,
-					Err(err) => return Err(IOError::NixError(err)),
+					Err(err) => return Err(IOError::SendNixError(err)),
 				}
 			}
 		}
@@ -139,6 +139,9 @@ impl Stream {
 		Ok(())
 	}
 
+	/// # Args
+	///
+	/// * `timeout` - time to wait until the first byte is received over the socket.
 	pub(crate) fn recv(&self, timeout: TimeVal) -> Result<Vec<u8>, IOError> {
 		let start = Instant::now();
 
@@ -216,7 +219,7 @@ impl Stream {
 		{
 			let mut received_bytes = 0;
 			while received_bytes < length {
-				let size = match recv(
+				received_bytes += match recv(
 					self.fd,
 					&mut buf[received_bytes..length],
 					MsgFlags::empty(),
@@ -232,7 +235,6 @@ impl Stream {
 						return Err(IOError::NixError(err));
 					}
 				};
-				received_bytes += size;
 			}
 		}
 		Ok(buf)
@@ -261,7 +263,6 @@ impl Listener {
 		Self::clean(&addr);
 
 		let fd = socket_fd(&addr)?;
-
 		bind(fd, &*addr.addr())?;
 		listen(fd, BACKLOG)?;
 

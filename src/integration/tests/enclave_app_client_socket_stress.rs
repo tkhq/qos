@@ -85,6 +85,7 @@ fn enclave_app_client_socket_stress() {
 		)
 	});
 
+	// Make sure the pivot has some time to start up
 	std::thread::sleep(std::time::Duration::from_secs(1));
 
 	let enclave_client = Client::new(
@@ -95,7 +96,6 @@ fn enclave_app_client_socket_stress() {
 	let app_request = PivotSocketStressMsg::PanicRequest.try_to_vec().unwrap();
 	let request =
 		ProtocolMsg::ProxyRequest { data: app_request }.try_to_vec().unwrap();
-
 	let raw_response = enclave_client.send(&request).unwrap();
 	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
 	assert_eq!(
@@ -112,7 +112,6 @@ fn enclave_app_client_socket_stress() {
 	let request =
 		ProtocolMsg::ProxyRequest { data: app_request }.try_to_vec().unwrap();
 	let raw_response = enclave_client.send(&request).unwrap();
-
 	let response = {
 		let msg = ProtocolMsg::try_from_slice(&raw_response).unwrap();
 		let data = match msg {
