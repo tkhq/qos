@@ -1,8 +1,6 @@
 //! Mocks for external attest endpoints. Only for testing.
 
 use std::collections::BTreeSet;
-#[cfg(feature = "mock_realtime")]
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
 	nitro,
@@ -96,8 +94,8 @@ impl NsmProvider for MockNsm {
 			}
 			#[cfg(feature = "mock_realtime")]
 			{
-				SystemTime::now()
-					.duration_since(UNIX_EPOCH)
+				std::time::SystemTime::now()
+					.duration_since(std::time::UNIX_EPOCH)
 					.map(|time| {
 						let ms = time.as_millis();
 						u64::try_from(ms)
