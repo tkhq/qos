@@ -43,6 +43,6 @@ impl Client {
 	pub fn send(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
 		let stream = Stream::connect(&self.addr, self.timeout)?;
 		stream.send(request)?;
-		stream.recv(self.timeout).map_err(Into::into)
+		stream.recv().map_err(Into::into)
 	}
 }

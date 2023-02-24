@@ -3,12 +3,7 @@
 
 use std::marker::PhantomData;
 
-use nix::sys::time::{TimeVal, TimeValLike};
-
 use crate::io::{self, Listener, SocketAddress};
-
-const MINUTE_AS_SECS: i64 = 60;
-const SERVER_RECV_TIMEOUT: i64 = MINUTE_AS_SECS;
 
 /// Error variants for [`SocketServer`]
 #[derive(Debug)]
@@ -49,7 +44,7 @@ impl<R: RequestProcessor> SocketServer<R> {
 		let listener = Listener::listen(addr)?;
 
 		for stream in listener {
-			match stream.recv(TimeVal::seconds(SERVER_RECV_TIMEOUT)) {
+			match stream.recv() {
 				Ok(payload) => {
 					let response = processor.process(payload);
 					let _ = stream.send(&response);

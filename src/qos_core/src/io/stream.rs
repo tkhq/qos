@@ -68,7 +68,6 @@ impl SocketAddress {
 }
 
 /// Handle on a stream
-// #[derive(Clone)]
 pub(crate) struct Stream {
 	fd: RawFd,
 }
@@ -139,13 +138,7 @@ impl Stream {
 		Ok(())
 	}
 
-	/// # Args
-	///
-	/// * `timeout` - time to wait until the first byte is received over the
-	///   socket.
-	pub(crate) fn recv(&self, _timeout: TimeVal) -> Result<Vec<u8>, IOError> {
-		// Read the length. Note we omit the MSG_PEEK flag so the cursor
-		// now moves forward each read.
+	pub(crate) fn recv(&self) -> Result<Vec<u8>, IOError> {
 		let length: usize = {
 			{
 				let mut buf = [0u8; size_of::<u64>()];
@@ -316,7 +309,7 @@ mod test {
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
 		client.send(&data).unwrap();
 
-		let resp = server.recv(timeval()).unwrap();
+		let resp = server.recv().unwrap();
 
 		assert_eq!(data, resp);
 	}
@@ -334,7 +327,7 @@ mod test {
 
 		let handler = std::thread::spawn(move || {
 			if let Some(stream) = listener.next() {
-				let req = stream.recv(timeval()).unwrap();
+				let req = stream.recv().unwrap();
 				stream.send(&req).unwrap();
 			}
 		});
@@ -343,7 +336,7 @@ mod test {
 
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
 		client.send(&data).unwrap();
-		let resp = client.recv(timeval()).unwrap();
+		let resp = client.recv().unwrap();
 		assert_eq!(data, resp);
 
 		handler.join().unwrap();
