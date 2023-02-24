@@ -70,7 +70,8 @@ pub enum ProtocolError {
 	/// The socket client was interrupted while trying to receive a response
 	/// from the enclave app.
 	AppClientRecvInterrupted,
-	/// The socket client tried to call receive on a closed connection. Likely the enclave app panicked and closed the connection.
+	/// The socket client tried to call receive on a closed connection. Likely
+	/// the enclave app panicked and closed the connection.
 	AppClientRecvConnectionClosed,
 	/// The socket client encountered an error when trying to execute a request
 	/// to the enclave app.

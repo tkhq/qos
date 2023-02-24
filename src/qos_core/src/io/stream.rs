@@ -140,17 +140,15 @@ impl Stream {
 	}
 
 	pub(crate) fn recv(&self, timeout: TimeVal) -> Result<Vec<u8>, IOError> {
-		// Since we use the "MSG_DONTWAIT" flag, the call to recv is non blocking
-		// and will return `EAGAIN` whenever it does not read anything; so we need to manually check for a timeout.
 		let start = Instant::now();
 
-		// First, check if the connection is open by using MSG_PEEK and making sure read length
-		// is at least 1
+		// First, check if the connection is open by using MSG_PEEK and making
+		// sure read length is at least 1
 		{
 			let mut buf = [0u8; 1];
 			loop {
 				match recv(
-				self.fd,
+					self.fd,
 					&mut buf[..],
 					MsgFlags::MSG_DONTWAIT | MsgFlags::MSG_PEEK,
 				) {
@@ -158,10 +156,16 @@ impl Stream {
 						if read == 0 {
 							return Err(IOError::RecvConnectionClosed);
 						};
-						break
+						break;
 					}
 					Err(nix::Error::EAGAIN) => {
-						if start.elapsed().as_millis() >= timeout.num_milliseconds() as u128 {
+						// The `MSG_DONTWAIT` flag causes the recv call to be
+						// non blocking and return `EAGAIN` whenever it does not
+						// read anything; so we need to manually check for a
+						// timeout.
+						if start.elapsed().as_millis()
+							>= timeout.num_milliseconds() as u128
+						{
 							return Err(IOError::RecvTimeout);
 						};
 					}
@@ -172,8 +176,8 @@ impl Stream {
 			}
 		}
 
-		// Second, read the length. Note we omit the MSG_PEEK flag so the cursor now moves forward
-		// each read.
+		// Second, read the length. Note we omit the MSG_PEEK flag so the cursor
+		// now moves forward each read.
 		let length: usize = {
 			{
 				let mut buf = [0u8; size_of::<u64>()];
@@ -185,17 +189,14 @@ impl Stream {
 					received_bytes += match recv(
 						self.fd,
 						&mut buf[received_bytes..len],
-						MsgFlags::MSG_DONTWAIT,
+						MsgFlags::empty(),
 					) {
 						Ok(size) => size,
 						Err(nix::Error::EINTR) => {
 							return Err(IOError::RecvInterrupted);
 						}
 						Err(nix::Error::EAGAIN) => {
-							if start.elapsed().as_millis() >= timeout.num_milliseconds() as u128 {
-								return Err(IOError::RecvTimeout);
-							};
-							0
+							return Err(IOError::RecvTimeout);
 						}
 						Err(err) => {
 							return Err(IOError::RecvNixError(err));
@@ -218,19 +219,14 @@ impl Stream {
 				let size = match recv(
 					self.fd,
 					&mut buf[received_bytes..length],
-					MsgFlags::MSG_DONTWAIT,
+					MsgFlags::empty(),
 				) {
-					Ok(size) => {
-						size
-					}
+					Ok(size) => size,
 					Err(nix::Error::EINTR) => {
 						return Err(IOError::RecvInterrupted);
 					}
 					Err(nix::Error::EAGAIN) => {
-						if start.elapsed().as_millis() >= timeout.num_microseconds() as u128 {
-							return Err(IOError::RecvTimeout);
-						};
-						0
+						return Err(IOError::RecvTimeout);
 					}
 					Err(err) => {
 						return Err(IOError::NixError(err));

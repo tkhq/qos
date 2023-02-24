@@ -1,7 +1,5 @@
 use borsh::{ser::BorshSerialize, BorshDeserialize};
-use integration::{
-	PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH,
-};
+use integration::{PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH};
 use qos_core::{
 	client::Client,
 	handles::Handles,
@@ -125,14 +123,14 @@ fn enclave_app_client_socket_stress() {
 	};
 	assert_eq!(response, PivotSocketStressMsg::OkResponse);
 
-		// Send a request that the app will take too long to respond to
-		let app_request =
-	PivotSocketStressMsg::SlowRequest.try_to_vec().unwrap(); 	let request =
-			ProtocolMsg::ProxyRequest { data: app_request }.try_to_vec().unwrap();
-		let raw_response = enclave_client.send(&request).unwrap();
-		let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
-		assert_eq!(
-			response,
-			ProtocolMsg::ProtocolErrorResponse(ProtocolError::AppClientRecvTimeout)
-		);
+	// Send a request that the app will take too long to respond to
+	let app_request = PivotSocketStressMsg::SlowRequest.try_to_vec().unwrap();
+	let request =
+		ProtocolMsg::ProxyRequest { data: app_request }.try_to_vec().unwrap();
+	let raw_response = enclave_client.send(&request).unwrap();
+	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
+	assert_eq!(
+		response,
+		ProtocolMsg::ProtocolErrorResponse(ProtocolError::AppClientRecvTimeout)
+	);
 }

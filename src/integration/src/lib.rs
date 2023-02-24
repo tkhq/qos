@@ -41,11 +41,11 @@ const MSG: &str = "msg";
 /// Request/Response messages for "maybe panic" pivot app.
 #[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
 pub enum PivotSocketStressMsg {
-	/// Request an ok response.
+	/// Request a [`OkResponse`].
 	OkRequest,
-	/// An ok response.
+	/// A successful response to [`Self::OkRequest`].
 	OkResponse,
-	/// Request the app to panic
+	/// Request the app to panic. Does not have a response.
 	PanicRequest,
 	/// Request a response that will be slower then
 	/// `ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS`.

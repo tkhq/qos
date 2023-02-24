@@ -359,15 +359,11 @@ mod handlers {
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::ProxyRequest { data: req_data } = req {
-			dbg!("about to send proxy");
 			let result = state
 				.app_client
 				.send(req_data)
 				.map(|data| ProtocolMsg::ProxyResponse { data })
 				.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into()));
-
-			dbg!("got proxy");
-			dbg!(&result);
 
 			Some(result)
 		} else {

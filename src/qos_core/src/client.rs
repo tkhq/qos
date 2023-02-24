@@ -1,7 +1,6 @@
 //! Streaming socket based client to connect with
 //! [`crate::server::SocketServer`].
 
-
 use crate::io::{self, SocketAddress, Stream, TimeVal};
 
 /// Enclave client error.
@@ -36,10 +35,7 @@ impl Client {
 	/// Create a new client.
 	#[must_use]
 	pub fn new(addr: SocketAddress, timeout: TimeVal) -> Self {
-		Self {
-			addr,
-			timeout,
-		}
+		Self { addr, timeout }
 	}
 
 	/// Send raw bytes and wait for a response until the clients configured
