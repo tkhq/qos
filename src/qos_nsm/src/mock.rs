@@ -87,18 +87,22 @@ impl NsmProvider for MockNsm {
 	}
 
 	fn timestamp_ms(&self) -> Result<u64, nitro::AttestError> {
-		Ok(MOCK_ATTESTATION_DOC_TIMESTAMP)
-		/*
-		TODO(tim): figure out cert issue
-		use std::time::{SystemTime, UNIX_EPOCH};
-		SystemTime::now()
-		.duration_since(UNIX_EPOCH)
-		.map(|time| {
-			let ms = time.as_millis();
-			u64::try_from(ms)
-			.map_err(|_| nitro::AttestError::InvalidTimeStamp )
-		 })
-		.map_err(|_| nitro::AttestError::InvalidTimeStamp )?
-		*/
+		{
+			#[cfg(not(feature = "mock_realtime"))]
+			{
+				Ok(MOCK_ATTESTATION_DOC_TIMESTAMP)
+			}
+			#[cfg(feature = "mock_realtime")]
+			{
+				std::time::SystemTime::now()
+					.duration_since(std::time::UNIX_EPOCH)
+					.map(|time| {
+						let ms = time.as_millis();
+						u64::try_from(ms)
+							.map_err(|_| nitro::AttestError::InvalidTimeStamp)
+					})
+					.map_err(|_| nitro::AttestError::InvalidTimeStamp)?
+			}
+		}
 	}
 }

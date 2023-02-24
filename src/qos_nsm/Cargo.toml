@@ -22,3 +22,4 @@ qos_core = { path = "../qos_core", features = ["mock"] }
 [features]
 # Never use in production - support for mock NSM
 mock = []
+mock_realtime = []
