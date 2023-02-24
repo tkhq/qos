@@ -35,9 +35,6 @@ pub const LOCAL_HOST: &str = "127.0.0.1";
 pub const PCR3: &str = "78fce75db17cd4e0a3fb8dad3ad128ca5e77edbb2b2c7f75329dccd99aa5f6ef4fc1f1a452e315b9e98f9e312e6921e6";
 /// QOS dist directory.
 pub const QOS_DIST_DIR: &str = "../../dist";
-/// Socket that the "maybe panic" app is hardcoded to listen on.
-pub const PIVOT_SOCKET_STRESS_SOCK: &str =
-	"/tmp/enclave_app_client_socket_stress/pivot_socket_stress.sock";
 
 const MSG: &str = "msg";
 

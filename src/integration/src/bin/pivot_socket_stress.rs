@@ -1,7 +1,7 @@
 use core::panic;
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use integration::{PivotSocketStressMsg, PIVOT_SOCKET_STRESS_SOCK};
+use integration::{PivotSocketStressMsg};
 use qos_core::{
 	io::SocketAddress,
 	protocol::ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,

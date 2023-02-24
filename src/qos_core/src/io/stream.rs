@@ -140,6 +140,8 @@ impl Stream {
 	}
 
 	pub(crate) fn recv(&self, timeout: TimeVal) -> Result<Vec<u8>, IOError> {
+		// Since we use the "MSG_DONTWAIT" flag, the call to recv is non blocking
+		// and will return `EAGAIN` whenever it does not read anything; so we need to manually check for a timeout.
 		let start = Instant::now();
 
 		// First, check if the connection is open by using MSG_PEEK and making sure read length
@@ -159,14 +161,9 @@ impl Stream {
 						break
 					}
 					Err(nix::Error::EAGAIN) => {
-						// Since we use the "MSG_DONTWAIT" flag, the call to recv is non blocking
-						// and we need to manually check for a timeout
 						if start.elapsed().as_millis() >= timeout.num_milliseconds() as u128 {
 							return Err(IOError::RecvTimeout);
 						};
-					}
-					Err(nix::Error::EBADF) => {
-						return Err(IOError::RecvConnectionClosed);
 					}
 					Err(err) => {
 						return Err(IOError::RecvNixError(err));
@@ -195,15 +192,10 @@ impl Stream {
 							return Err(IOError::RecvInterrupted);
 						}
 						Err(nix::Error::EAGAIN) => {
-							// Since we use the "MSG_DONTWAIT" flag, the call to recv is non blocking
-							// and we need to manually check for a timeout
 							if start.elapsed().as_millis() >= timeout.num_milliseconds() as u128 {
 								return Err(IOError::RecvTimeout);
 							};
 							0
-						}
-						Err(nix::Error::EBADF) => {
-							return Err(IOError::RecvConnectionClosed);
 						}
 						Err(err) => {
 							return Err(IOError::RecvNixError(err));
@@ -239,9 +231,6 @@ impl Stream {
 							return Err(IOError::RecvTimeout);
 						};
 						0
-					}
-					Err(nix::Error::EBADF) => {
-						return Err(IOError::RecvConnectionClosed);
 					}
 					Err(err) => {
 						return Err(IOError::NixError(err));
@@ -359,7 +348,7 @@ mod test {
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
 		client.send(&data).unwrap();
 
-		let resp = server.recv().unwrap();
+		let resp = server.recv(timeval()).unwrap();
 
 		assert_eq!(data, resp);
 	}
@@ -377,7 +366,7 @@ mod test {
 
 		let handler = std::thread::spawn(move || {
 			if let Some(stream) = listener.next() {
-				let req = stream.recv().unwrap();
+				let req = stream.recv(timeval()).unwrap();
 				stream.send(&req).unwrap();
 			}
 		});
@@ -386,7 +375,7 @@ mod test {
 
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
 		client.send(&data).unwrap();
-		let resp = client.recv().unwrap();
+		let resp = client.recv(timeval()).unwrap();
 		assert_eq!(data, resp);
 
 		handler.join().unwrap();

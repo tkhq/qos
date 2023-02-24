@@ -1,6 +1,6 @@
 use borsh::{ser::BorshSerialize, BorshDeserialize};
 use integration::{
-	PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH, PIVOT_SOCKET_STRESS_SOCK,
+	PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH,
 };
 use qos_core::{
 	client::Client,
@@ -22,6 +22,7 @@ use qos_test_primitives::PathWrapper;
 
 const TEST_TMP: &str = "/tmp/enclave_app_client_socket_stress";
 const ENCLAVE_SOCK: &str = "/tmp/enclave_app_client_socket_stress/enclave.sock";
+const APP_SOCK: &str = "/tmp/enclave_app_client_socket_stress/app.sock";
 
 #[test]
 fn enclave_app_client_socket_stress() {
@@ -38,7 +39,7 @@ fn enclave_app_client_socket_stress() {
 			commit: String::default(),
 			hash: [1; 32],
 			restart: RestartPolicy::Always,
-			args: vec![PIVOT_SOCKET_STRESS_SOCK.to_string()],
+			args: vec![APP_SOCK.to_string()],
 		},
 		manifest_set: ManifestSet { threshold: 0, members: vec![] },
 		share_set: ShareSet { threshold: 0, members: vec![] },
@@ -79,7 +80,7 @@ fn enclave_app_client_socket_stress() {
 			&handles,
 			Box::new(MockNsm),
 			SocketAddress::new_unix(ENCLAVE_SOCK),
-			SocketAddress::new_unix(PIVOT_SOCKET_STRESS_SOCK),
+			SocketAddress::new_unix(APP_SOCK),
 			// Force the phase to quorum key provisioned so message proxy-ing
 			// works
 			Some(ProtocolPhase::QuorumKeyProvisioned),
@@ -105,6 +106,8 @@ fn enclave_app_client_socket_stress() {
 			ProtocolError::AppClientRecvConnectionClosed
 		)
 	);
+
+	std::thread::sleep(std::time::Duration::from_secs(1));
 
 	// The pivot panicked and should have been restarted.
 	let app_request = PivotSocketStressMsg::OkRequest.try_to_vec().unwrap();
