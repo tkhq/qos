@@ -1487,13 +1487,19 @@ pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 	plaintext_path: P,
 	ciphertext_path: P,
 	master_seed_path: P,
+	output_hex: bool,
 ) -> Result<(), Error> {
 	let pair = P256Pair::from_hex_file(master_seed_path)?;
 	let ciphertext = std::fs::read(ciphertext_path.as_ref())?;
 
 	let plaintext = pair.decrypt(&ciphertext)?;
+	let file_contents = if output_hex {
+		qos_hex::encode(&plaintext).as_bytes().to_vec()
+	} else {
+		plaintext
+	};
 
-	write_with_msg(plaintext_path.as_ref(), &plaintext, "Plaintext");
+	write_with_msg(plaintext_path.as_ref(), &file_contents, "Plaintext");
 
 	Ok(())
 }
