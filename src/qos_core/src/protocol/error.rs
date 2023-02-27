@@ -76,7 +76,9 @@ pub enum ProtocolError {
 	AppClientRecvConnectionClosed,
 	/// App client could not make a connection to a socket when trying to send. Likely the enclave
 	/// app panic'ed and the apps server did not create the socket again.
-	AppClientConnectionFailed(String),
+	AppClientConnectError(String),
+	/// App client encountered an error when calling the `send` system call.
+	AppClientSendError(String),
 	/// The socket client encountered an error when trying to execute a request
 	/// to the enclave app.
 	AppClientError(String),
@@ -153,8 +155,11 @@ impl From<client::ClientError> for ProtocolError {
 			ClientError::IOError(IOError::RecvConnectionClosed) => {
 				ProtocolError::AppClientRecvConnectionClosed
 			}
-			ClientError::IOError(IOError::ConnectNixError(err)) => {
-				ProtocolError::AppClientConnectionFailed(format!("{err:?}"))
+			ClientError::IOError(IOError::ConnectNixError(e)) => {
+				ProtocolError::AppClientConnectError(format!("{e:?}"))
+			}
+			ClientError::IOError(IOError::SendNixError(e)) => {
+				ProtocolError::AppClientSendError(format!("{e:?}"))
 			}
 			e => ProtocolError::AppClientError(format!("{e:?}")),
 		}
