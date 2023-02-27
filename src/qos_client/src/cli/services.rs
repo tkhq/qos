@@ -4,15 +4,12 @@ use std::{
 	io,
 	io::{BufRead, BufReader, Write},
 	mem,
+	ops::Deref,
 	path::{Path, PathBuf},
 };
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
-use qos_attest::nitro::{
-	attestation_doc_from_der, cert_from_pem, unsafe_attestation_doc_from_der,
-	verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
-};
 use qos_core::protocol::{
 	msg::ProtocolMsg,
 	services::{
@@ -26,7 +23,14 @@ use qos_core::protocol::{
 	QosHash,
 };
 use qos_crypto::{sha_256, sha_384, sha_512};
-use qos_nsm::types::NsmResponse;
+use qos_nsm::{
+	nitro::{
+		attestation_doc_from_der, cert_from_pem,
+		unsafe_attestation_doc_from_der,
+		verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
+	},
+	types::NsmResponse,
+};
 use qos_p256::{P256Error, P256Pair, P256Public};
 use zeroize::Zeroizing;
 
@@ -166,8 +170,8 @@ impl From<qos_hex::HexError> for Error {
 	}
 }
 
-impl From<qos_attest::AttestError> for Error {
-	fn from(err: qos_attest::AttestError) -> Error {
+impl From<qos_nsm::nitro::AttestError> for Error {
+	fn from(err: qos_nsm::nitro::AttestError) -> Error {
 		let msg = format!("{err:?}");
 		Error::QosAttest(msg)
 	}
@@ -495,7 +499,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	write_with_msg(
 		&genesis_output_path,
-		&genesis_output.try_to_vec().unwrap(),
+		&genesis_output.deref().try_to_vec().unwrap(),
 		"`GenesisOutput`",
 	);
 
@@ -528,11 +532,13 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	let genesis_output = GenesisOutput::try_from_slice(
-		&fs::read(genesis_output_path).expect("Failed to read genesis set"),
-	)?;
+		&fs::read(genesis_output_path).expect("Failed to read genesis output file"),
+	).expect("Failed to deserialize genesis output - check that qos_client and qos_core version line up");
 
-	let master_seed_hex = fs::read_to_string(&master_seed_path)?;
-	let pair = P256Pair::from_hex_file(master_seed_path)?;
+	let master_seed_hex = fs::read_to_string(&master_seed_path)
+		.expect("Failed to read master seed to string");
+	let pair = P256Pair::from_hex_file(master_seed_path)
+		.expect("Failed to use master seed to create p256 pair: {e:?}");
 
 	// sanity check our logic to read in master seed
 	if pair.to_master_seed_hex() != master_seed_hex.as_bytes() {
@@ -543,6 +549,7 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	if sha_512(master_seed_hex.as_bytes()) != genesis_output.quorum_key_hash {
 		return Err(Error::SecretDoesNotMatch);
 	}
+	println!("Quorum key hash is correct");
 
 	// check test_message_signature
 	if let Err(_e) = pair.public_key().verify(
@@ -551,16 +558,21 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	) {
 		return Err(Error::InvalidSignature);
 	}
+	println!("Quorum key signature over test message successfully verifies");
 	let expected_signature = pair.sign(&genesis_output.test_message)?;
 	if expected_signature != genesis_output.test_message_signature {
 		return Err(Error::CouldNotReproduceSignature);
 	}
+	println!("Quorum key signature over test message was deterministically reproduced");
 
 	// check test_message_ciphertext
 	let plaintext = pair.decrypt(&genesis_output.test_message_ciphertext)?;
 	if plaintext != genesis_output.test_message {
 		return Err(Error::BadDecryption);
 	}
+	println!("Successfully decrypted test message ciphertext");
+
+	println!("verify-genesis successful");
 
 	Ok(())
 }
@@ -1475,13 +1487,19 @@ pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 	plaintext_path: P,
 	ciphertext_path: P,
 	master_seed_path: P,
+	output_hex: bool,
 ) -> Result<(), Error> {
 	let pair = P256Pair::from_hex_file(master_seed_path)?;
 	let ciphertext = std::fs::read(ciphertext_path.as_ref())?;
 
 	let plaintext = pair.decrypt(&ciphertext)?;
+	let file_contents = if output_hex {
+		qos_hex::encode(&plaintext).as_bytes().to_vec()
+	} else {
+		plaintext
+	};
 
-	write_with_msg(plaintext_path.as_ref(), &plaintext, "Plaintext");
+	write_with_msg(plaintext_path.as_ref(), &file_contents, "Plaintext");
 
 	Ok(())
 }
@@ -2143,7 +2161,6 @@ where
 mod tests {
 	use std::vec;
 
-	use qos_attest::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 	use qos_core::protocol::{
 		services::boot::{
 			Approval, Manifest, ManifestEnvelope, ManifestSet, Namespace,
@@ -2151,6 +2168,7 @@ mod tests {
 		},
 		QosHash,
 	};
+	use qos_nsm::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 	use qos_p256::{P256Pair, P256Public};
 
 	use super::{

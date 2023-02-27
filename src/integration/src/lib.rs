@@ -4,6 +4,7 @@
 #![deny(clippy::all)]
 #![warn(missing_docs)]
 
+use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::parser::{GetParserForOptions, OptionsParser, Parser, Token};
 
 /// Path to the file `pivot_ok` writes on success for tests.
@@ -24,14 +25,33 @@ pub const PIVOT_LOOP_PATH: &str = "../target/debug/pivot_loop";
 pub const PIVOT_ABORT_PATH: &str = "../target/debug/pivot_abort";
 /// Path to pivot panic for tests.
 pub const PIVOT_PANIC_PATH: &str = "../target/debug/pivot_panic";
+/// Path to an enclave app that has routes to stress our socket.
+pub const PIVOT_SOCKET_STRESS_PATH: &str =
+	"../target/debug/pivot_socket_stress";
 /// Local host IP address.
 pub const LOCAL_HOST: &str = "127.0.0.1";
 /// PCR3 image associated with the preimage in `./mock/pcr3-preimage.txt`.
 pub const PCR3: &str = "78fce75db17cd4e0a3fb8dad3ad128ca5e77edbb2b2c7f75329dccd99aa5f6ef4fc1f1a452e315b9e98f9e312e6921e6";
-/// QOS dist directory
+/// QOS dist directory.
 pub const QOS_DIST_DIR: &str = "../../dist";
 
 const MSG: &str = "msg";
+
+/// Request/Response messages for "socket stress" pivot app.
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
+pub enum PivotSocketStressMsg {
+	/// Request a [`Self::OkResponse`].
+	OkRequest,
+	/// A successful response to [`Self::OkRequest`].
+	OkResponse,
+	/// Request the app to panic. Does not have a response.
+	PanicRequest,
+	/// Request a response that will be slower then
+	/// `ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS`.
+	SlowRequest,
+	/// Response to [`Self::SlowRequest`].
+	SlowResponse,
+}
 
 struct PivotParser;
 impl GetParserForOptions for PivotParser {

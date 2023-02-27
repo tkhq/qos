@@ -63,6 +63,7 @@ const PAYLOAD_PATH: &str = "payload-path";
 const SIGNATURE_PATH: &str = "signature-path";
 const CIPHERTEXT_PATH: &str = "ciphertext-path";
 const PLAINTEXT_PATH: &str = "plaintext-path";
+const OUTPUT_HEX: &str = "output-hex";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -524,6 +525,11 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn output_hex_token() -> Token {
+		Token::new(OUTPUT_HEX, "Flag to specify that the output should be hex")
+			.required(false)
+			.takes_value(false)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -761,6 +767,7 @@ impl Command {
 			.token(Self::plaintext_path_token())
 			.token(Self::ciphertext_path_token())
 			.token(Self::master_seed_path_token())
+			.token(Self::output_hex_token())
 	}
 }
 
@@ -1108,6 +1115,10 @@ impl ClientOpts {
 
 	fn unsafe_auto_confirm(&self) -> bool {
 		self.parsed.flag(UNSAFE_AUTO_CONFIRM).unwrap_or(false)
+	}
+
+	fn output_hex(&self) -> bool {
+		self.parsed.flag(OUTPUT_HEX).unwrap_or(false)
 	}
 }
 
@@ -1637,6 +1648,7 @@ mod handlers {
 			opts.plaintext_path(),
 			opts.ciphertext_path(),
 			opts.master_seed_path(),
+			opts.output_hex(),
 		) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);

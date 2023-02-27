@@ -821,7 +821,6 @@ version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
- "qos_attest",
  "qos_client",
  "qos_core",
  "qos_crypto",
@@ -1274,24 +1273,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "qos_attest"
-version = "0.1.0"
-dependencies = [
- "aws-nitro-enclaves-cose",
- "aws-nitro-enclaves-nsm-api",
- "hex-literal",
- "p384",
- "qos_core",
- "qos_hex",
- "qos_nsm",
- "rand",
- "serde_bytes",
- "sha2",
- "webpki",
- "x509-cert",
-]
-
-[[package]]
 name = "qos_client"
 version = "0.1.0"
 dependencies = [
@@ -1299,7 +1280,6 @@ dependencies = [
  "borsh",
  "lazy_static",
  "p256 0.12.0",
- "qos_attest",
  "qos_core",
  "qos_crypto",
  "qos_hex",
@@ -1321,7 +1301,6 @@ dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "nix 0.24.3",
- "qos_attest",
  "qos_crypto",
  "qos_hex",
  "qos_nsm",
@@ -1357,9 +1336,18 @@ dependencies = [
 name = "qos_nsm"
 version = "0.1.0"
 dependencies = [
+ "aws-nitro-enclaves-cose",
  "aws-nitro-enclaves-nsm-api",
  "borsh",
+ "hex-literal",
+ "p384",
+ "qos_core",
+ "qos_hex",
+ "rand",
  "serde_bytes",
+ "sha2",
+ "webpki",
+ "x509-cert",
 ]
 
 [[package]]

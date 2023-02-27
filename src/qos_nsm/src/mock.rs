@@ -2,9 +2,10 @@
 
 use std::collections::BTreeSet;
 
-use super::{
+use crate::{
+	nitro,
+	nsm::NsmProvider,
 	types::{NsmDigest, NsmRequest, NsmResponse},
-	NsmProvider,
 };
 
 /// DO NOT USE IN PRODUCTION - ONLY FOR TESTS.
@@ -39,11 +40,7 @@ pub const MOCK_NSM_ATTESTATION_DOCUMENT: &[u8] =
 /// Mock Nitro Secure Module endpoint that should only ever be used for testing.
 pub struct MockNsm;
 impl NsmProvider for MockNsm {
-	fn nsm_process_request(
-		&self,
-		_fd: i32,
-		request: NsmRequest,
-	) -> NsmResponse {
+	fn nsm_process_request(&self, request: NsmRequest) -> NsmResponse {
 		match request {
 			NsmRequest::Attestation {
 				user_data: _,
@@ -75,13 +72,23 @@ impl NsmProvider for MockNsm {
 		}
 	}
 
-	fn nsm_init(&self) -> i32 {
-		33
-	}
-
-	fn nsm_exit(&self, fd: i32) {
-		// Should be hardcoded to value returned by nsm_init
-		assert_eq!(fd, 33);
-		println!("nsm_exit");
+	fn timestamp_ms(&self) -> Result<u64, nitro::AttestError> {
+		{
+			#[cfg(not(feature = "mock_realtime"))]
+			{
+				Ok(MOCK_ATTESTATION_DOC_TIMESTAMP)
+			}
+			#[cfg(feature = "mock_realtime")]
+			{
+				std::time::SystemTime::now()
+					.duration_since(std::time::UNIX_EPOCH)
+					.map(|time| {
+						let ms = time.as_millis();
+						u64::try_from(ms)
+							.map_err(|_| nitro::AttestError::InvalidTimeStamp)
+					})
+					.map_err(|_| nitro::AttestError::InvalidTimeStamp)?
+			}
+		}
 	}
 }

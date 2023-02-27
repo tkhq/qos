@@ -180,9 +180,7 @@ pub(in crate::protocol) fn boot_genesis(
 			nonce: None,
 			public_key: None,
 		};
-		let fd = state.attestor.nsm_init();
-
-		state.attestor.nsm_process_request(fd, request)
+		state.attestor.nsm_process_request(request)
 	};
 
 	Ok((genesis_output, nsm_response))
@@ -208,6 +206,7 @@ mod test {
 			Box::new(MockNsm),
 			handles.clone(),
 			SocketAddress::new_unix("./never.sock"),
+			None,
 		);
 		let member1_pair = P256Pair::generate().unwrap();
 		let member2_pair = P256Pair::generate().unwrap();

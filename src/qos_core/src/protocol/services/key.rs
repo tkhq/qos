@@ -2,11 +2,10 @@
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
-use qos_attest::{
-	current_time,
+use qos_nsm::{
 	nitro::{attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM},
+	types::NsmResponse,
 };
-use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
@@ -158,7 +157,7 @@ fn validate_manifest(
 	#[cfg(not(feature = "mock"))]
 	{
 		use crate::protocol::QosHash;
-		qos_attest::nitro::verify_attestation_doc_against_user_input(
+		qos_nsm::nitro::verify_attestation_doc_against_user_input(
 			_attestation_doc,
 			&new_manifest_envelope.manifest.qos_hash(),
 			&new_manifest_envelope.manifest.enclave.pcr0,
@@ -181,7 +180,7 @@ fn verify_and_extract_attestation_doc_from_der(
 	cose_sign1_der: &[u8],
 	nsm: &dyn qos_nsm::NsmProvider,
 ) -> Result<AttestationDoc, ProtocolError> {
-	let current_time_milliseconds = current_time(nsm)?;
+	let current_time_milliseconds = nsm.timestamp_ms()?;
 	let current_time_seconds = current_time_milliseconds / 1_000;
 	let der_cert = cert_from_pem(AWS_ROOT_CERT_PEM)
 		.expect("hardcoded cert is valid. qed.");
@@ -355,6 +354,7 @@ mod test {
 				Box::new(MockNsm),
 				handles.clone(),
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			let response =
@@ -398,6 +398,7 @@ mod test {
 				Box::new(MockNsm),
 				handles.clone(),
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			// Remove an approval
@@ -439,6 +440,7 @@ mod test {
 				Box::new(MockNsm),
 				handles.clone(),
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			// Use a different pivot then what is referenced in the manifest
@@ -475,6 +477,7 @@ mod test {
 				Box::new(MockNsm),
 				handles.clone(),
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			// Change the signature to something invalid
@@ -528,6 +531,7 @@ mod test {
 				Box::new(MockNsm),
 				handles.clone(),
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			// Add an approval from a random key
@@ -986,6 +990,7 @@ mod test {
 				Box::new(MockNsm),
 				handles,
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 			let EncryptedQuorumKey { encrypted_quorum_key, signature } =
 				export_key_internal(
@@ -1048,6 +1053,7 @@ mod test {
 				Box::new(MockNsm),
 				handles,
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 			protocol_state
 				.transition(ProtocolPhase::WaitingForForwardedKey)
@@ -1100,6 +1106,7 @@ mod test {
 				Box::new(MockNsm),
 				handles,
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			assert_eq!(
@@ -1154,6 +1161,7 @@ mod test {
 				Box::new(MockNsm),
 				handles,
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			assert_eq!(
@@ -1208,6 +1216,7 @@ mod test {
 				Box::new(MockNsm),
 				handles,
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			assert_eq!(

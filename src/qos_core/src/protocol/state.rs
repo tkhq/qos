@@ -1,11 +1,15 @@
 //! Quorum protocol state machine
 use borsh::BorshSerialize;
+use nix::sys::time::{TimeVal, TimeValLike};
 use qos_nsm::NsmProvider;
 
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
 };
 use crate::{client::Client, handles::Handles, io::SocketAddress};
+
+/// The timeout for the qos core when making requests to an enclave app.
+pub const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: i64 = 5;
 
 /// Enclave phase
 #[derive(
@@ -175,14 +179,28 @@ impl ProtocolState {
 		attestor: Box<dyn NsmProvider>,
 		handles: Handles,
 		app_addr: SocketAddress,
+		test_only_init_phase_override: Option<ProtocolPhase>,
 	) -> Self {
 		let provisioner = SecretBuilder::new();
+
+		#[cfg(any(feature = "mock", test))]
+		let init_phase = if let Some(phase) = test_only_init_phase_override {
+			phase
+		} else {
+			ProtocolPhase::WaitingForBootInstruction
+		};
+		#[cfg(not(any(feature = "mock", test)))]
+		let init_phase = ProtocolPhase::WaitingForBootInstruction;
+
 		Self {
 			attestor,
 			provisioner,
-			phase: ProtocolPhase::WaitingForBootInstruction,
+			phase: init_phase,
 			handles,
-			app_client: Client::new(app_addr),
+			app_client: Client::new(
+				app_addr,
+				TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
+			),
 		}
 	}
 
@@ -276,17 +294,28 @@ impl ProtocolState {
 		let transitions = match self.phase {
 			ProtocolPhase::UnrecoverableError => vec![],
 			ProtocolPhase::WaitingForBootInstruction => vec![
+				ProtocolPhase::UnrecoverableError,
 				ProtocolPhase::GenesisBooted,
 				ProtocolPhase::WaitingForQuorumShards,
 				ProtocolPhase::WaitingForForwardedKey,
 			],
-			ProtocolPhase::GenesisBooted => vec![],
-			ProtocolPhase::WaitingForQuorumShards => {
-				vec![ProtocolPhase::QuorumKeyProvisioned]
+			ProtocolPhase::GenesisBooted => {
+				vec![ProtocolPhase::UnrecoverableError]
 			}
-			ProtocolPhase::QuorumKeyProvisioned => vec![],
+			ProtocolPhase::WaitingForQuorumShards => {
+				vec![
+					ProtocolPhase::UnrecoverableError,
+					ProtocolPhase::QuorumKeyProvisioned,
+				]
+			}
+			ProtocolPhase::QuorumKeyProvisioned => {
+				vec![ProtocolPhase::UnrecoverableError]
+			}
 			ProtocolPhase::WaitingForForwardedKey => {
-				vec![ProtocolPhase::QuorumKeyProvisioned]
+				vec![
+					ProtocolPhase::UnrecoverableError,
+					ProtocolPhase::QuorumKeyProvisioned,
+				]
 			}
 		};
 

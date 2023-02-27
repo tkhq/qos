@@ -31,6 +31,5 @@ pub(super) fn get_post_boot_attestation_doc(
 		public_key: Some(ephemeral_public_key),
 	};
 
-	let fd = attestor.nsm_init();
-	attestor.nsm_process_request(fd, request)
+	attestor.nsm_process_request(request)
 }
