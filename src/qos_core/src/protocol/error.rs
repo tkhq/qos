@@ -3,7 +3,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use qos_p256::P256Error;
 
 use crate::{
-	client,
+	client::{self, ClientError},
+	io::IOError,
 	protocol::{services::boot, ProtocolPhase},
 };
 
@@ -64,8 +65,18 @@ pub enum ProtocolError {
 	FailedToPutManifestEnvelope,
 	/// Failed to put the pivot executable.
 	FailedToPutPivot,
-	/// An error occurred with the app client.
-	AppClientError,
+	/// The socket client timed out while waiting to receive a response from
+	/// the enclave app.
+	AppClientRecvTimeout,
+	/// The socket client was interrupted while trying to receive a response
+	/// from the enclave app.
+	AppClientRecvInterrupted,
+	/// The socket client tried to call receive on a closed connection. Likely
+	/// the enclave app panicked and closed the connection.
+	AppClientRecvConnectionClosed,
+	/// The socket client encountered an error when trying to execute a request
+	/// to the enclave app.
+	AppClientError(String),
 	/// Payload is too big. See `MAX_ENCODED_MSG_LEN` for the upper bound on
 	/// message size.
 	OversizedPayload,
@@ -128,8 +139,19 @@ impl From<std::io::Error> for ProtocolError {
 }
 
 impl From<client::ClientError> for ProtocolError {
-	fn from(_: client::ClientError) -> Self {
-		Self::AppClientError
+	fn from(err: client::ClientError) -> Self {
+		match err {
+			ClientError::IOError(IOError::RecvTimeout) => {
+				ProtocolError::AppClientRecvTimeout
+			}
+			ClientError::IOError(IOError::RecvInterrupted) => {
+				ProtocolError::AppClientRecvInterrupted
+			}
+			ClientError::IOError(IOError::RecvConnectionClosed) => {
+				ProtocolError::AppClientRecvConnectionClosed
+			}
+			e => ProtocolError::AppClientError(format!("{e:?}")),
+		}
 	}
 }
 

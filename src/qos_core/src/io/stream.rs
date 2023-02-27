@@ -4,11 +4,12 @@ use std::{mem::size_of, os::unix::io::RawFd};
 
 #[cfg(feature = "vm")]
 use nix::sys::socket::VsockAddr;
+pub use nix::sys::time::{TimeVal, TimeValLike};
 use nix::{
 	sys::socket::{
-		accept, bind, connect, listen, recv, send, shutdown, socket,
-		AddressFamily, MsgFlags, Shutdown, SockFlag, SockType, SockaddrLike,
-		UnixAddr,
+		accept, bind, connect, listen, recv, send, shutdown, socket, sockopt,
+		AddressFamily, MsgFlags, SetSockOpt, Shutdown, SockFlag, SockType,
+		SockaddrLike, UnixAddr,
 	},
 	unistd::close,
 };
@@ -72,20 +73,23 @@ pub(crate) struct Stream {
 }
 
 impl Stream {
-	pub(crate) fn connect(addr: &SocketAddress) -> Result<Self, IOError> {
+	pub(crate) fn connect(
+		addr: &SocketAddress,
+		timeout: TimeVal,
+	) -> Result<Self, IOError> {
 		let mut err = IOError::UnknownError;
 
 		for i in 0..MAX_RETRY {
 			let fd = socket_fd(addr)?;
 			let stream = Self { fd };
 
-			// TODO: Revisit these options
-			// setsockopt(fd, sockopt::ReuseAddr, &true)?;
-			// setsockopt(fd, sockopt::ReusePort, &true)?;
+			// set `SO_RCVTIMEO`
+			let receive_timeout = sockopt::ReceiveTimeout;
+			receive_timeout.set(fd, &timeout)?;
 
 			match connect(stream.fd, &*addr.addr()) {
 				Ok(_) => return Ok(stream),
-				Err(e) => err = IOError::NixError(e),
+				Err(e) => err = IOError::SendNixError(e),
 			}
 
 			// Exponentially back off before reattempting connection
@@ -111,8 +115,7 @@ impl Stream {
 					MsgFlags::empty(),
 				) {
 					Ok(size) => size,
-					// Err(nix::Error::EINTR) => 0,
-					Err(err) => return Err(IOError::NixError(err)),
+					Err(err) => return Err(IOError::SendNixError(err)),
 				};
 			}
 		}
@@ -127,8 +130,7 @@ impl Stream {
 					MsgFlags::empty(),
 				) {
 					Ok(size) => size,
-					Err(nix::Error::EINTR) => 0,
-					Err(err) => return Err(IOError::NixError(err)),
+					Err(err) => return Err(IOError::SendNixError(err)),
 				}
 			}
 		}
@@ -137,7 +139,6 @@ impl Stream {
 	}
 
 	pub(crate) fn recv(&self) -> Result<Vec<u8>, IOError> {
-		// First, read the length
 		let length: usize = {
 			{
 				let mut buf = [0u8; size_of::<u64>()];
@@ -151,12 +152,19 @@ impl Stream {
 						&mut buf[received_bytes..len],
 						MsgFlags::empty(),
 					) {
+						Ok(size) if size == 0 => {
+							return Err(IOError::RecvConnectionClosed);
+						}
 						Ok(size) => size,
-						// https://stackoverflow.com/questions/1674162/how-to-handle-eintr-interrupted-system-call#1674348
-						// Not necessarily actually an error, just the syscall
-						// was interrupted while in progress.
-						Err(nix::Error::EINTR) => 0,
-						Err(err) => return Err(IOError::NixError(err)),
+						Err(nix::Error::EINTR) => {
+							return Err(IOError::RecvInterrupted);
+						}
+						Err(nix::Error::EAGAIN) => {
+							return Err(IOError::RecvTimeout);
+						}
+						Err(err) => {
+							return Err(IOError::RecvNixError(err));
+						}
 					};
 				}
 
@@ -167,7 +175,7 @@ impl Stream {
 			}
 		};
 
-		// Then, read the buffer
+		// Read the buffer
 		let mut buf = vec![0; length];
 		{
 			let mut received_bytes = 0;
@@ -177,13 +185,22 @@ impl Stream {
 					&mut buf[received_bytes..length],
 					MsgFlags::empty(),
 				) {
+					Ok(size) if size == 0 => {
+						return Err(IOError::RecvConnectionClosed);
+					}
 					Ok(size) => size,
-					Err(nix::Error::EINTR) => 0,
-					Err(err) => return Err(IOError::NixError(err)),
-				}
+					Err(nix::Error::EINTR) => {
+						return Err(IOError::RecvInterrupted);
+					}
+					Err(nix::Error::EAGAIN) => {
+						return Err(IOError::RecvTimeout);
+					}
+					Err(err) => {
+						return Err(IOError::NixError(err));
+					}
+				};
 			}
 		}
-
 		Ok(buf)
 	}
 }
@@ -270,7 +287,12 @@ fn socket_fd(addr: &SocketAddress) -> Result<RawFd, IOError> {
 
 #[cfg(test)]
 mod test {
+
 	use super::*;
+
+	fn timeval() -> TimeVal {
+		TimeVal::seconds(1)
+	}
 
 	#[test]
 	fn stream_integration_test() {
@@ -281,7 +303,7 @@ mod test {
 				.unwrap();
 		let addr = SocketAddress::Unix(unix_addr);
 		let listener = Listener::listen(addr.clone()).unwrap();
-		let client = Stream::connect(&addr).unwrap();
+		let client = Stream::connect(&addr, timeval()).unwrap();
 		let server = listener.accept().unwrap();
 
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
@@ -310,7 +332,7 @@ mod test {
 			}
 		});
 
-		let client = Stream::connect(&addr).unwrap();
+		let client = Stream::connect(&addr, timeval()).unwrap();
 
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
 		client.send(&data).unwrap();

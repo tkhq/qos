@@ -354,6 +354,7 @@ mod test {
 				Box::new(MockNsm),
 				handles.clone(),
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			let response =
@@ -397,6 +398,7 @@ mod test {
 				Box::new(MockNsm),
 				handles.clone(),
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			// Remove an approval
@@ -438,6 +440,7 @@ mod test {
 				Box::new(MockNsm),
 				handles.clone(),
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			// Use a different pivot then what is referenced in the manifest
@@ -474,6 +477,7 @@ mod test {
 				Box::new(MockNsm),
 				handles.clone(),
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			// Change the signature to something invalid
@@ -527,6 +531,7 @@ mod test {
 				Box::new(MockNsm),
 				handles.clone(),
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			// Add an approval from a random key
@@ -985,6 +990,7 @@ mod test {
 				Box::new(MockNsm),
 				handles,
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 			let EncryptedQuorumKey { encrypted_quorum_key, signature } =
 				export_key_internal(
@@ -1047,6 +1053,7 @@ mod test {
 				Box::new(MockNsm),
 				handles,
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 			protocol_state
 				.transition(ProtocolPhase::WaitingForForwardedKey)
@@ -1099,6 +1106,7 @@ mod test {
 				Box::new(MockNsm),
 				handles,
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			assert_eq!(
@@ -1153,6 +1161,7 @@ mod test {
 				Box::new(MockNsm),
 				handles,
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			assert_eq!(
@@ -1207,6 +1216,7 @@ mod test {
 				Box::new(MockNsm),
 				handles,
 				SocketAddress::new_unix("./never.sock"),
+				None,
 			);
 
 			assert_eq!(

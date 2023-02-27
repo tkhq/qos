@@ -11,8 +11,8 @@ mod state;
 
 pub use error::ProtocolError;
 pub use processor::Processor;
-pub use state::ProtocolPhase;
 use state::ProtocolState;
+pub use state::{ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS};
 
 /// 256bit hash
 pub type Hash256 = [u8; 32];
