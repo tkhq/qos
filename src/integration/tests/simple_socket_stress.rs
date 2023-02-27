@@ -39,4 +39,12 @@ fn simple_socket_stress() {
 		ClientError::IOError(qos_core::io::IOError::RecvConnectionClosed) => (),
 		e => panic!("did not get expected err {:?}", e),
 	};
+
+	// The app has panic'ed and exited - so any proceeding request should fail.
+	let app_request = PivotSocketStressMsg::OkRequest.try_to_vec().unwrap();
+	let err = enclave_client.send(&app_request).unwrap_err();
+	match err {
+		ClientError::IOError(qos_core::io::IOError::ConnectNixError(nix::Error::ENOENT)) => (),
+		e => panic!("did not get expected err {:?}", e),
+	};
 }
