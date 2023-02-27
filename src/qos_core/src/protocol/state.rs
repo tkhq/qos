@@ -369,10 +369,8 @@ mod handlers {
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::NsmRequest { nsm_request } = req {
-			let nsm_response = {
-				let fd = state.attestor.nsm_init();
-				state.attestor.nsm_process_request(fd, nsm_request.clone())
-			};
+			let nsm_response =
+				state.attestor.nsm_process_request(nsm_request.clone());
 			let result = Ok(ProtocolMsg::NsmResponse { nsm_response });
 			Some(result)
 		} else {
