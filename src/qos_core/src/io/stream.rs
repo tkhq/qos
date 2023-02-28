@@ -16,7 +16,9 @@ use nix::{
 
 use super::IOError;
 
-const MAX_RETRY: usize = 8;
+// 25(retries) x 10(milliseconds) = 1/4 a second of retrying
+const MAX_RETRY: usize = 25;
+const BACKOFF_MILLISECONDS: u64 = 10;
 const BACKLOG: usize = 128;
 
 /// Socket address.
@@ -79,7 +81,7 @@ impl Stream {
 	) -> Result<Self, IOError> {
 		let mut err = IOError::UnknownError;
 
-		for i in 0..MAX_RETRY {
+		for _ in 0..MAX_RETRY {
 			let fd = socket_fd(addr)?;
 			let stream = Self { fd };
 
@@ -87,13 +89,17 @@ impl Stream {
 			let receive_timeout = sockopt::ReceiveTimeout;
 			receive_timeout.set(fd, &timeout)?;
 
+			let send_timeout = sockopt::SendTimeout;
+			send_timeout.set(fd, &timeout)?;
+
 			match connect(stream.fd, &*addr.addr()) {
 				Ok(_) => return Ok(stream),
-				Err(e) => err = IOError::SendNixError(e),
+				Err(e) => err = IOError::ConnectNixError(e),
 			}
 
-			// Exponentially back off before reattempting connection
-			std::thread::sleep(std::time::Duration::from_secs(1 << i));
+			std::thread::sleep(std::time::Duration::from_millis(
+				BACKOFF_MILLISECONDS,
+			));
 		}
 
 		Err(err)
@@ -101,7 +107,6 @@ impl Stream {
 
 	pub(crate) fn send(&self, buf: &[u8]) -> Result<(), IOError> {
 		let len = buf.len();
-
 		// First, send the length of the buffer
 		{
 			let len_buf: [u8; size_of::<u64>()] = (len as u64).to_le_bytes();

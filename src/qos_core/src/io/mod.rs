@@ -23,6 +23,8 @@ pub enum IOError {
 	RecvInterrupted,
 	/// Receive was called on a closed connection.
 	RecvConnectionClosed,
+	/// Client could not connect at the given socket address.
+	ConnectNixError(nix::Error),
 	/// A nix error encountered while calling `send`.
 	SendNixError(nix::Error),
 	/// A nix error encountered while calling `recv`.
