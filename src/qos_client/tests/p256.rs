@@ -118,11 +118,7 @@ fn p256_asymmetric_encrypt_decrypt_roundtrip() {
 		.unwrap()
 		.success());
 
-	let hex_plaintext = std::fs::read_to_string(plaintext_output_path)
-		.unwrap();
+	let hex_plaintext = std::fs::read_to_string(plaintext_output_path).unwrap();
 
-	assert_eq!(
-		qos_hex::decode(&hex_plaintext).unwrap(),
-		decrypted_bytes
-	);
+	assert_eq!(qos_hex::decode(&hex_plaintext).unwrap(), decrypted_bytes);
 }

@@ -67,7 +67,7 @@ jobs:
           components: clippy
 
       - name: Run cargo clippy
-        run: make -C src clippy
+        run: (cd src && cargo clippy -- -D warnings)
 
   build-linux-only-crates:
     name: build-linux-only-crates
