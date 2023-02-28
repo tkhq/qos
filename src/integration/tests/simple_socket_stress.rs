@@ -44,7 +44,9 @@ fn simple_socket_stress() {
 	let app_request = PivotSocketStressMsg::OkRequest.try_to_vec().unwrap();
 	let err = enclave_client.send(&app_request).unwrap_err();
 	match err {
-		ClientError::IOError(qos_core::io::IOError::ConnectNixError(nix::Error::ENOENT)) => (),
+		ClientError::IOError(qos_core::io::IOError::ConnectNixError(
+			nix::Error::ENOENT,
+		)) => (),
 		e => panic!("did not get expected err {:?}", e),
 	};
 }

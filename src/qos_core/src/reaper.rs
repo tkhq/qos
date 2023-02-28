@@ -18,8 +18,6 @@ use crate::{
 	server::SocketServer,
 };
 
-const BINARY_EXIT_RESTART_DELAY_MICROSECONDS: u64 = 1;
-
 /// Primary entry point for running the enclave. Coordinates spawning the server
 /// and pivot binary.
 pub struct Reaper;
@@ -81,9 +79,6 @@ impl Reaper {
 
 				println!("Pivot exited with status: {status}");
 				println!("Restarting pivot ...");
-				std::thread::sleep(std::time::Duration::from_micros(
-					BINARY_EXIT_RESTART_DELAY_MICROSECONDS,
-				));
 			},
 			RestartPolicy::Never => {
 				let status = pivot

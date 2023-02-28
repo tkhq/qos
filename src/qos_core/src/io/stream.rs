@@ -97,8 +97,9 @@ impl Stream {
 				Err(e) => err = IOError::ConnectNixError(e),
 			}
 
-			// Exponentially back off before reattempting connection
-			std::thread::sleep(std::time::Duration::from_millis(BACKOFF_MILLISECONDS));
+			std::thread::sleep(std::time::Duration::from_millis(
+				BACKOFF_MILLISECONDS,
+			));
 		}
 
 		Err(err)

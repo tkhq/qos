@@ -74,8 +74,9 @@ pub enum ProtocolError {
 	/// The socket client tried to call receive on a closed connection. Likely
 	/// the enclave app panicked and closed the connection.
 	AppClientRecvConnectionClosed,
-	/// App client could not make a connection to a socket when trying to send. Likely the enclave
-	/// app panic'ed and the apps server did not create the socket again.
+	/// App client could not make a connection to a socket when trying to send.
+	/// Likely the enclave app panic'ed and the apps server did not create the
+	/// socket again.
 	AppClientConnectError(String),
 	/// App client encountered an error when calling the `send` system call.
 	AppClientSendError(String),

@@ -774,8 +774,7 @@ impl Command {
 impl GetParserForCommand for Command {
 	fn parser(&self) -> Parser {
 		match self {
-			Self::HostHealth
-			| Self::EnclaveStatus => Self::base(),
+			Self::HostHealth | Self::EnclaveStatus => Self::base(),
 			Self::GenerateFileKey => Self::generate_file_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
