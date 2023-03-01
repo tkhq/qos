@@ -16,8 +16,8 @@ use nix::{
 
 use super::IOError;
 
-// 25(retries) x 10(milliseconds) = 1/4 a second of retrying
-const MAX_RETRY: usize = 25;
+// 50(retries) x 10(milliseconds) = 1/2 a second of retrying
+const MAX_RETRY: usize = 50;
 const BACKOFF_MILLISECONDS: u64 = 10;
 const BACKLOG: usize = 128;
 
