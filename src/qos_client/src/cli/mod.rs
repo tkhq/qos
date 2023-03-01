@@ -30,7 +30,7 @@ const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const QOS_REALEASE_DIR: &str = "qos-release-dir";
 const PCR3_PREIMAGE_PATH: &str = "pcr3-preimage-path";
-const PIVOT_BUILD_FINGERPRINTS: &str = "pivot-build-fingerprints";
+const PIVOT_HASH_PATH: &str = "pivot-hash-path";
 const SHARE_SET_DIR: &str = "share-set-dir";
 const MANIFEST_SET_DIR: &str = "manifest-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
@@ -174,7 +174,7 @@ pub enum Command {
 	/// further backed up.
 	AdvancedProvisionYubiKey,
 	/// Create a dummy pivot build fingerprints with a correct hash
-	PivotBuildFingerprints,
+	PivotHash,
 	/// Split a secret into shares with Shamir Secret Sharing.
 	ShamirSplit,
 	/// Reconstruct a secret from Shamir Secret Sharing shares.
@@ -227,7 +227,7 @@ impl From<&str> for Command {
 			"dangerous-dev-boot" => Self::DangerousDevBoot,
 			"provision-yubikey" => Self::ProvisionYubiKey,
 			"advanced-provision-yubikey" => Self::AdvancedProvisionYubiKey,
-			"pivot-build-fingerprints" => Self::PivotBuildFingerprints,
+			"pivot-hash" => Self::PivotHash,
 			"shamir-split" => Self::ShamirSplit,
 			"shamir-reconstruct" => Self::ShamirReconstruct,
 			"yubikey-sign" => Self::YubiKeySign,
@@ -309,9 +309,9 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
-	fn pivot_build_fingerprints_token() -> Token {
+	fn pivot_hash_path_token() -> Token {
 		Token::new(
-			PIVOT_BUILD_FINGERPRINTS,
+			PIVOT_HASH_PATH,
 			"Path to file with Pivot build fingerprints.",
 		)
 		.takes_value(true)
@@ -603,7 +603,7 @@ impl Command {
 				.required(true),
 			)
 			.token(Self::namespace_token())
-			.token(Self::pivot_build_fingerprints_token())
+			.token(Self::pivot_hash_path_token())
 			.token(Self::restart_policy_token())
 			.token(Self::qos_release_dir_token())
 			.token(Self::pcr3_preimage_path_token())
@@ -622,7 +622,7 @@ impl Command {
 			.token(Self::manifest_approvals_dir_token())
 			.token(Self::qos_release_dir_token())
 			.token(Self::pcr3_preimage_path_token())
-			.token(Self::pivot_build_fingerprints_token())
+			.token(Self::pivot_hash_path_token())
 			.token(Self::alias_token())
 			.token(Self::quorum_key_path_token())
 			.token(Self::manifest_set_dir_token())
@@ -793,7 +793,7 @@ impl GetParserForCommand for Command {
 			Self::AdvancedProvisionYubiKey => {
 				Self::advanced_provision_yubikey()
 			}
-			Self::PivotBuildFingerprints => Self::pivot_build_fingerprints(),
+			Self::PivotHash => Self::pivot_build_fingerprints(),
 			Self::ShamirSplit => Self::shamir_split(),
 			Self::ShamirReconstruct => Self::shamir_reconstruct(),
 			Self::YubiKeySign => Self::yubikey_sign(),
@@ -904,10 +904,10 @@ impl ClientOpts {
 			.to_string()
 	}
 
-	fn pivot_build_fingerprints(&self) -> String {
+	fn pivot_hash_path(&self) -> String {
 		self.parsed
-			.single(PIVOT_BUILD_FINGERPRINTS)
-			.expect("pivot-build-fingerprints is a required arg")
+			.single(PIVOT_HASH_PATH)
+			.expect("pivot-hash is a required arg")
 			.to_string()
 	}
 
@@ -1180,8 +1180,8 @@ impl ClientRunner {
 				Command::GenerateManifestEnvelope => {
 					handlers::generate_manifest_envelope(&self.opts);
 				}
-				Command::PivotBuildFingerprints => {
-					handlers::pivot_build_fingerprints(&self.opts);
+				Command::PivotHash => {
+					handlers::pivot_hash(&self.opts);
 				}
 				Command::ShamirSplit => {
 					handlers::shamir_split(&self.opts);
@@ -1237,17 +1237,15 @@ mod handlers {
 		request,
 	};
 
-	pub(super) fn pivot_build_fingerprints(opts: &ClientOpts) {
+	pub(super) fn pivot_hash(opts: &ClientOpts) {
 		let pivot = std::fs::read(opts.pivot_path())
 			.expect("Failed to read pivot file");
 
 		let hash = qos_crypto::sha_256(&pivot);
 		let hex_hash = qos_hex::encode(&hash);
 
-		let contents = format!("{hex_hash}\ndummy-commit\n");
-
-		std::fs::write(opts.output_path(), contents.as_bytes())
-			.expect("Failed to write fingerprints to specified path");
+		std::fs::write(opts.output_path(), hex_hash.as_bytes())
+			.expect("Failed to write pivot hash to specified path");
 	}
 
 	pub(super) fn host_health(opts: &ClientOpts) {
@@ -1426,7 +1424,7 @@ mod handlers {
 			nonce: opts.nonce(),
 			namespace: opts.namespace(),
 			restart_policy: opts.restart_policy(),
-			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
+			pivot_hash_path: opts.pivot_hash_path(),
 			qos_release_dir_path: opts.qos_release_dir(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			manifest_path: opts.manifest_path(),
@@ -1449,7 +1447,7 @@ mod handlers {
 			manifest_approvals_dir: opts.manifest_approvals_dir(),
 			qos_release_dir_path: opts.qos_release_dir(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
-			pivot_build_fingerprints_path: opts.pivot_build_fingerprints(),
+			pivot_hash_path: opts.pivot_hash_path(),
 			quorum_key_path: opts.quorum_key_path(),
 			manifest_set_dir: opts.manifest_set_dir(),
 			share_set_dir: opts.share_set_dir(),

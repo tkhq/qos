@@ -13,8 +13,7 @@ const ALL_PERSONAL_DIR: &str = "./mock/boot-e2e/all-personal-dir";
 const BOOT_DIR: &str = "/tmp/key-fwd-e2e/boot-dir";
 const TMP_DIR: &str = "/tmp/key-fwd-e2e";
 const ATTESTATION_DOC_PATH: &str = "/tmp/key-fwd-e2e/attestation_doc";
-const PIVOT_BUILD_FINGERPRINTS_PATH: &str =
-	"/tmp/key-fwd-e2e/pivot-build-fingerprints.txt";
+const PIVOT_HASH_PATH: &str = "/tmp/key-fwd-e2e/pivot-hash-path.txt";
 const USERS: &[&str] = &["user1", "user2", "user3"];
 const TEST_MSG: &str = "test-msg";
 const NEW_ATTESTATION_DOC_PATH: &str = "/tmp/key-fwd-e2e/new_attestation_doc";
@@ -160,8 +159,8 @@ fn generate_manifest_envelope() {
 			"always",
 			"--pcr3-preimage-path",
 			"./mock/namespaces/pcr3-preimage.txt",
-			"--pivot-build-fingerprints",
-			PIVOT_BUILD_FINGERPRINTS_PATH,
+			"--pivot-hash-path",
+			PIVOT_HASH_PATH,
 			"--qos-release-dir",
 			QOS_DIST_DIR,
 			"--manifest-path",
@@ -196,8 +195,8 @@ fn generate_manifest_envelope() {
 				BOOT_DIR,
 				"--pcr3-preimage-path",
 				"./mock/namespaces/pcr3-preimage.txt",
-				"--pivot-build-fingerprints",
-				PIVOT_BUILD_FINGERPRINTS_PATH,
+				"--pivot-hash-path",
+				PIVOT_HASH_PATH,
 				"--qos-release-dir",
 				QOS_DIST_DIR,
 				"--manifest-set-dir",
@@ -388,12 +387,6 @@ fn personal_dir(user: &str) -> String {
 fn build_pivot_fingerprints() {
 	let pivot = fs::read(PIVOT_LOOP_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
-	let build_fingerprints = {
-		let mut build_fingerprints =
-			qos_hex::encode(&mock_pivot_hash).as_bytes().to_vec();
-		build_fingerprints.extend_from_slice(b"\n");
-		build_fingerprints.extend_from_slice(b"mock-pivot-commit");
-		build_fingerprints
-	};
-	std::fs::write(PIVOT_BUILD_FINGERPRINTS_PATH, build_fingerprints).unwrap();
+	let mock_pivot_hash_hex = qos_hex::encode(&mock_pivot_hash);
+	std::fs::write(PIVOT_HASH_PATH, mock_pivot_hash_hex).unwrap();
 }

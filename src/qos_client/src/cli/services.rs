@@ -440,7 +440,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
 
-	let qos_build_fingerprints = extract_qos_pcrs(qos_release_dir_path)?;
+	let qos_pcrs = extract_qos_pcrs(qos_release_dir_path)?;
 
 	// Sanity check the genesis output
 	assert!(
@@ -462,9 +462,9 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			user_data,
-			&qos_build_fingerprints.pcr0,
-			&qos_build_fingerprints.pcr1,
-			&qos_build_fingerprints.pcr2,
+			&qos_pcrs.pcr0,
+			&qos_pcrs.pcr1,
+			&qos_pcrs.pcr2,
 			&extract_pcr3(pcr3_preimage_path),
 		)?;
 	}
@@ -603,7 +603,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	let genesis_set_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 
 	// Get the PCRs for QOS so we can verify
-	let qos_build_fingerprints = extract_qos_pcrs(&qos_release_dir_path)?;
+	let qos_pcrs = extract_qos_pcrs(&qos_release_dir_path)?;
 	let release_env = extract_qos_release_env(&qos_release_dir_path);
 	println!("QOS release ref: {}", release_env.git_ref);
 	println!("QOS version: {}", release_env.version);
@@ -628,9 +628,9 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			user_data,
-			&qos_build_fingerprints.pcr0,
-			&qos_build_fingerprints.pcr1,
-			&qos_build_fingerprints.pcr2,
+			&qos_pcrs.pcr0,
+			&qos_pcrs.pcr1,
+			&qos_pcrs.pcr2,
 			&extract_pcr3(pcr3_preimage_path),
 		)?;
 	}
@@ -672,7 +672,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub nonce: u32,
 	pub namespace: String,
 	pub restart_policy: RestartPolicy,
-	pub pivot_build_fingerprints_path: P,
+	pub pivot_hash_path: P,
 	pub qos_release_dir_path: P,
 	pub pcr3_preimage_path: P,
 	pub share_set_dir: P,
@@ -688,7 +688,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 	let GenerateManifestArgs {
 		nonce,
 		namespace,
-		pivot_build_fingerprints_path,
+		pivot_hash_path,
 		restart_policy,
 		qos_release_dir_path,
 		pcr3_preimage_path,
@@ -701,8 +701,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 
 	let nitro_config =
 		extract_nitro_config(qos_release_dir_path, pcr3_preimage_path)?;
-	let PivotBuildFingerprints { pivot_hash, pivot_commit } =
-		extract_pivot_build_fingerprints(pivot_build_fingerprints_path);
+	let pivot_hash = extract_pivot_hash(pivot_hash_path);
 
 	// Get manifest set keys & threshold
 	let manifest_set = get_manifest_set(manifest_set_dir);
@@ -719,7 +718,6 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 			quorum_key: quorum_key.to_bytes(),
 		},
 		pivot: PivotConfig {
-			commit: pivot_commit,
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
@@ -762,7 +760,7 @@ pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
 	pub manifest_approvals_dir: P,
 	pub qos_release_dir_path: P,
 	pub pcr3_preimage_path: P,
-	pub pivot_build_fingerprints_path: P,
+	pub pivot_hash_path: P,
 	pub quorum_key_path: P,
 	pub manifest_set_dir: P,
 	pub share_set_dir: P,
@@ -779,7 +777,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		manifest_approvals_dir,
 		qos_release_dir_path,
 		pcr3_preimage_path,
-		pivot_build_fingerprints_path,
+		pivot_hash_path,
 		quorum_key_path,
 		manifest_set_dir,
 		share_set_dir,
@@ -796,7 +794,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		&get_manifest_set(manifest_set_dir),
 		&get_share_set(share_set_dir),
 		&extract_nitro_config(qos_release_dir_path, pcr3_preimage_path)?,
-		&extract_pivot_build_fingerprints(pivot_build_fingerprints_path),
+		&extract_pivot_hash(pivot_hash_path),
 		&quorum_key,
 	) {
 		eprintln!("Exiting early without approving manifest");
@@ -848,7 +846,7 @@ fn approve_manifest_programmatic_verifications(
 	manifest_set: &ManifestSet,
 	share_set: &ShareSet,
 	nitro_config: &NitroConfig,
-	pivot_build_fingerprints: &PivotBuildFingerprints,
+	pivot_hash: &[u8],
 	quorum_key: &P256Public,
 ) -> bool {
 	// Verify manifest set composition
@@ -870,14 +868,8 @@ fn approve_manifest_programmatic_verifications(
 	}
 
 	// Verify the pivot could be built deterministically
-	if manifest.pivot.hash.to_vec() != *pivot_build_fingerprints.pivot_hash {
+	if manifest.pivot.hash != pivot_hash {
 		eprintln!("Pivot hash does not match");
-		return false;
-	}
-
-	// Verify the pivot was built from the intended commit
-	if manifest.pivot.commit != pivot_build_fingerprints.pivot_commit {
-		eprintln!("Pivot commit does not match");
 		return false;
 	}
 
@@ -1577,12 +1569,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			qos_commit: "mock-qos-commit-ref".to_string(),
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
-		pivot: PivotConfig {
-			commit: "mock-commit-ref".to_string(),
-			hash: sha_256(&pivot),
-			restart,
-			args,
-		},
+		pivot: PivotConfig { hash: sha_256(&pivot), restart, args },
 		manifest_set: ManifestSet {
 			threshold: 1,
 			// The only member is the quorum member
@@ -2066,26 +2053,15 @@ fn extract_pcr3<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
 	sha_384(&preimage).to_vec()
 }
 
-struct PivotBuildFingerprints {
-	pivot_hash: Vec<u8>,
-	pivot_commit: String,
-}
-
-fn extract_pivot_build_fingerprints<P: AsRef<Path>>(
-	file_path: P,
-) -> PivotBuildFingerprints {
+fn extract_pivot_hash<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
 	let file = File::open(file_path)
 		.expect("failed to open qos build fingerprints file");
-	let mut lines = std::io::BufReader::new(file)
+	let lines = std::io::BufReader::new(file)
 		.lines()
 		.collect::<Result<Vec<_>, _>>()
 		.unwrap();
 
-	PivotBuildFingerprints {
-		pivot_hash: qos_hex::decode(&lines[0])
-			.expect("Invalid hex for pivot hash"),
-		pivot_commit: mem::take(&mut lines[1]),
-	}
+	qos_hex::decode(&lines[0]).expect("Failed to decode pivot hash as hex")
 }
 
 /// Extract the attestation doc from a COSE Sign1 structure. Validates the cert
@@ -2175,8 +2151,7 @@ mod tests {
 		approve_manifest_human_verifications,
 		approve_manifest_programmatic_verifications,
 		proxy_re_encrypt_share_human_verifications,
-		proxy_re_encrypt_share_programmatic_verifications,
-		PivotBuildFingerprints, Prompter,
+		proxy_re_encrypt_share_programmatic_verifications, Prompter,
 	};
 
 	struct Setup {
@@ -2184,7 +2159,7 @@ mod tests {
 		manifest_set: ManifestSet,
 		share_set: ShareSet,
 		nitro_config: NitroConfig,
-		pivot_build_fingerprints: PivotBuildFingerprints,
+		pivot_hash: Vec<u8>,
 		quorum_key: P256Public,
 		manifest_envelope: ManifestEnvelope,
 	}
@@ -2212,10 +2187,7 @@ mod tests {
 			qos_commit: "good-qos-commit".to_string(),
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		};
-		let pivot_build_fingerprints = PivotBuildFingerprints {
-			pivot_hash: vec![5; 32],
-			pivot_commit: "good-pivot-commit".to_string(),
-		};
+		let pivot_hash = vec![5; 32];
 		let quorum_key: P256Public = P256Pair::generate().unwrap().public_key();
 
 		let manifest = Manifest {
@@ -2225,12 +2197,7 @@ mod tests {
 				quorum_key: quorum_key.to_bytes(),
 			},
 			pivot: PivotConfig {
-				hash: pivot_build_fingerprints
-					.pivot_hash
-					.clone()
-					.try_into()
-					.unwrap(),
-				commit: pivot_build_fingerprints.pivot_commit.clone(),
+				hash: pivot_hash.clone().try_into().unwrap(),
 				restart: RestartPolicy::Never,
 				args: ["--option1", "argument"]
 					.into_iter()
@@ -2261,7 +2228,7 @@ mod tests {
 			manifest_set,
 			share_set,
 			nitro_config,
-			pivot_build_fingerprints,
+			pivot_hash,
 			quorum_key,
 			manifest_envelope,
 		}
@@ -2277,7 +2244,7 @@ mod tests {
 				manifest_set,
 				share_set,
 				nitro_config,
-				pivot_build_fingerprints,
+				pivot_hash,
 				quorum_key,
 				..
 			} = setup();
@@ -2287,7 +2254,7 @@ mod tests {
 				&manifest_set,
 				&share_set,
 				&nitro_config,
-				&pivot_build_fingerprints,
+				&pivot_hash,
 				&quorum_key,
 			));
 		}
@@ -2299,7 +2266,7 @@ mod tests {
 				mut manifest_set,
 				share_set,
 				nitro_config,
-				pivot_build_fingerprints,
+				pivot_hash,
 				quorum_key,
 				..
 			} = setup();
@@ -2312,7 +2279,7 @@ mod tests {
 				&manifest_set,
 				&share_set,
 				&nitro_config,
-				&pivot_build_fingerprints,
+				&pivot_hash,
 				&quorum_key,
 			));
 		}
@@ -2324,7 +2291,7 @@ mod tests {
 				manifest_set,
 				mut share_set,
 				nitro_config,
-				pivot_build_fingerprints,
+				pivot_hash,
 				quorum_key,
 				..
 			} = setup();
@@ -2337,7 +2304,7 @@ mod tests {
 				&manifest_set,
 				&share_set,
 				&nitro_config,
-				&pivot_build_fingerprints,
+				&pivot_hash,
 				&quorum_key,
 			));
 		}
@@ -2349,7 +2316,7 @@ mod tests {
 				manifest_set,
 				share_set,
 				mut nitro_config,
-				pivot_build_fingerprints,
+				pivot_hash,
 				quorum_key,
 				..
 			} = setup();
@@ -2361,7 +2328,7 @@ mod tests {
 				&manifest_set,
 				&share_set,
 				&nitro_config,
-				&pivot_build_fingerprints,
+				&pivot_hash,
 				&quorum_key,
 			));
 		}
@@ -2373,7 +2340,7 @@ mod tests {
 				manifest_set,
 				share_set,
 				mut nitro_config,
-				pivot_build_fingerprints,
+				pivot_hash,
 				quorum_key,
 				..
 			} = setup();
@@ -2385,7 +2352,7 @@ mod tests {
 				&manifest_set,
 				&share_set,
 				&nitro_config,
-				&pivot_build_fingerprints,
+				&pivot_hash,
 				&quorum_key,
 			));
 		}
@@ -2397,7 +2364,7 @@ mod tests {
 				manifest_set,
 				share_set,
 				mut nitro_config,
-				pivot_build_fingerprints,
+				pivot_hash,
 				quorum_key,
 				..
 			} = setup();
@@ -2409,7 +2376,7 @@ mod tests {
 				&manifest_set,
 				&share_set,
 				&nitro_config,
-				&pivot_build_fingerprints,
+				&pivot_hash,
 				&quorum_key,
 			));
 		}
@@ -2421,7 +2388,7 @@ mod tests {
 				manifest_set,
 				share_set,
 				mut nitro_config,
-				pivot_build_fingerprints,
+				pivot_hash,
 				quorum_key,
 				..
 			} = setup();
@@ -2433,7 +2400,7 @@ mod tests {
 				&manifest_set,
 				&share_set,
 				&nitro_config,
-				&pivot_build_fingerprints,
+				&pivot_hash,
 				&quorum_key,
 			));
 		}
@@ -2445,7 +2412,7 @@ mod tests {
 				manifest_set,
 				share_set,
 				mut nitro_config,
-				pivot_build_fingerprints,
+				pivot_hash,
 				quorum_key,
 				..
 			} = setup();
@@ -2457,7 +2424,7 @@ mod tests {
 				&manifest_set,
 				&share_set,
 				&nitro_config,
-				&pivot_build_fingerprints,
+				&pivot_hash,
 				&quorum_key,
 			));
 		}
@@ -2469,44 +2436,19 @@ mod tests {
 				manifest_set,
 				share_set,
 				nitro_config,
-				mut pivot_build_fingerprints,
+				pivot_hash: _,
 				quorum_key,
 				..
 			} = setup();
 
-			pivot_build_fingerprints.pivot_hash = vec![42; 32];
+			let pivot_hash = vec![42; 32];
 
 			assert!(!approve_manifest_programmatic_verifications(
 				&manifest,
 				&manifest_set,
 				&share_set,
 				&nitro_config,
-				&pivot_build_fingerprints,
-				&quorum_key,
-			));
-		}
-
-		#[test]
-		fn rejects_mismatched_pivot_commit() {
-			let Setup {
-				manifest,
-				manifest_set,
-				share_set,
-				nitro_config,
-				mut pivot_build_fingerprints,
-				quorum_key,
-				..
-			} = setup();
-
-			pivot_build_fingerprints.pivot_commit =
-				"bad-pivot-commit".to_string();
-
-			assert!(!approve_manifest_programmatic_verifications(
-				&manifest,
-				&manifest_set,
-				&share_set,
-				&nitro_config,
-				&pivot_build_fingerprints,
+				&pivot_hash,
 				&quorum_key,
 			));
 		}
@@ -2518,7 +2460,7 @@ mod tests {
 				manifest_set,
 				share_set,
 				nitro_config,
-				pivot_build_fingerprints,
+				pivot_hash,
 				..
 			} = setup();
 
@@ -2530,7 +2472,7 @@ mod tests {
 				&manifest_set,
 				&share_set,
 				&nitro_config,
-				&pivot_build_fingerprints,
+				&pivot_hash,
 				&quorum_key,
 			));
 		}

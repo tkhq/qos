@@ -34,7 +34,6 @@ fn enclave_app_client_socket_stress() {
 			quorum_key: vec![],
 		},
 		pivot: PivotConfig {
-			commit: String::default(),
 			hash: [1; 32],
 			restart: RestartPolicy::Always,
 			args: vec![APP_SOCK.to_string()],

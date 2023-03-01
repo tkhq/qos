@@ -89,8 +89,6 @@ impl TryFrom<String> for RestartPolicy {
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfig {
-	/// Reference to the commit the pivot was built off of.
-	pub commit: String,
 	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
 	pub hash: Hash256,
 	/// Restart policy for running the pivot binary.
@@ -103,7 +101,6 @@ pub struct PivotConfig {
 impl fmt::Debug for PivotConfig {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("PivotConfig")
-			.field("commit", &self.commit)
 			.field("hash", &qos_hex::encode(&self.hash))
 			.field("restart", &self.restart)
 			.field("args", &self.args.join(" "))
@@ -382,7 +379,6 @@ mod test {
 				qos_commit: "mock qos commit".to_string(),
 			},
 			pivot: PivotConfig {
-				commit: "commit lord".to_string(),
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
