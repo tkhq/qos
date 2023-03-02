@@ -91,7 +91,7 @@ to build for themselves.
 Cut a new release to be attested/signed by others.
 
 ```
-make VERSION=1.0.0 release
+make VERSION=1.0.0 dist
 ```
 
 ## Development ##

@@ -21,10 +21,6 @@ default: \
 	$(OUT_DIR)/release.env \
 	$(OUT_DIR)/manifest.txt
 
-.PHONY: release
-release: default
-	cp -R $(OUT_DIR)/* $(DIST_DIR)/
-
 .PHONY: sign
 sign: $(DIST_DIR)/manifest.txt
 	set -e; \
