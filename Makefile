@@ -7,6 +7,10 @@ else ifeq ($(TARGET), generic)
 DEFAULT_GOAL := $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
 endif
 
+ifneq ("$(wildcard $(ROOT)/src/toolchain)","")
+	clone := $(shell git submodule update --init --recursive)
+endif
+
 .DEFAULT_GOAL :=
 .PHONY: default
 default: \
