@@ -7,6 +7,10 @@ else ifeq ($(TARGET), generic)
 DEFAULT_GOAL := $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
 endif
 
+ifneq ("$(wildcard $(ROOT)/src/toolchain)","")
+	clone := $(shell git submodule update --init --recursive)
+endif
+
 .DEFAULT_GOAL :=
 .PHONY: default
 default: \
@@ -16,10 +20,6 @@ default: \
 	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/release.env \
 	$(OUT_DIR)/manifest.txt
-
-.PHONY: release
-release: default
-	cp -R $(OUT_DIR)/* $(DIST_DIR)/
 
 .PHONY: sign
 sign: $(DIST_DIR)/manifest.txt
