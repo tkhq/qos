@@ -1973,11 +1973,11 @@ fn extract_qos_release_manifest<P: AsRef<Path>>(
 	let entries = lines_to_entries(manifest_path);
 
 	QosReleaseManifest {
-		_nitro_eif_hash: get_entry(&entries, 0, "out/aws-x86_64.eif"),
-		pcrs_hash: get_entry(&entries, 1, "out/aws-x86_64.pcrs"),
-		_qos_client_hash: get_entry(&entries, 2, "out/qos_client.linux.x86_64"),
-		_qos_host_hash: get_entry(&entries, 3, "out/qos_host.linux.x86_64"),
-		_release_env: get_entry(&entries, 4, "out/release.env"),
+		_nitro_eif_hash: get_entry(&entries, 0, "aws-x86_64.eif"),
+		pcrs_hash: get_entry(&entries, 1, "aws-x86_64.pcrs"),
+		_qos_client_hash: get_entry(&entries, 2, "qos_client.linux.x86_64"),
+		_qos_host_hash: get_entry(&entries, 3, "qos_host.linux.x86_64"),
+		_release_env: get_entry(&entries, 4, "release.env"),
 	}
 }
 
