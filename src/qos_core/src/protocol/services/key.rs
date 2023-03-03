@@ -274,7 +274,6 @@ mod test {
 				qos_commit: "mock qos commit".to_string(),
 			},
 			pivot: PivotConfig {
-				commit: "mock commit".to_string(),
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],

@@ -23,15 +23,14 @@ use qos_crypto::sha_256;
 use qos_p256::P256Pair;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
-const PIVOT_BUILD_FINGERPRINTS_PATH: &str =
-	"/tmp/standard_boot_e2e-pivot-build-fingerprints.txt";
+const PIVOT_HASH_PATH: &str = "/tmp/standard_boot_e2e-pivot-hash.txt";
 
 #[tokio::test]
 async fn standard_boot_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/boot-e2e".into();
 	let _: PathWrapper = PIVOT_OK2_SUCCESS_FILE.into();
-	let _: PathWrapper = PIVOT_BUILD_FINGERPRINTS_PATH.into();
+	let _: PathWrapper = PIVOT_HASH_PATH.into();
 	fs::create_dir_all(&*tmp).unwrap();
 
 	let usock: PathWrapper = "/tmp/boot-e2e/boot_e2e.sock".into();
@@ -59,14 +58,8 @@ async fn standard_boot_e2e() {
 	// -- Create pivot-build-fingerprints.txt
 	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
-	let build_fingerprints = {
-		let mut build_fingerprints =
-			qos_hex::encode(&mock_pivot_hash).as_bytes().to_vec();
-		build_fingerprints.extend_from_slice(b"\n");
-		build_fingerprints.extend_from_slice(b"mock-pivot-commit");
-		build_fingerprints
-	};
-	std::fs::write(PIVOT_BUILD_FINGERPRINTS_PATH, build_fingerprints).unwrap();
+	let pivot_hash = qos_hex::encode(&mock_pivot_hash).as_bytes().to_vec();
+	std::fs::write(PIVOT_HASH_PATH, pivot_hash).unwrap();
 
 	// -- CLIENT create manifest.
 	let msg = "testing420";
@@ -82,8 +75,8 @@ async fn standard_boot_e2e() {
 			namespace,
 			"--restart-policy",
 			"never",
-			"--pivot-build-fingerprints",
-			PIVOT_BUILD_FINGERPRINTS_PATH,
+			"--pivot-hash-path",
+			PIVOT_HASH_PATH,
 			"--qos-release-dir",
 			QOS_DIST_DIR,
 			"--pcr3-preimage-path",
@@ -132,7 +125,6 @@ async fn standard_boot_e2e() {
 	};
 	assert_eq!(manifest.namespace, namespace_field);
 	let pivot = PivotConfig {
-		commit: "mock-pivot-commit".to_string(),
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
 		args: vec!["--msg".to_string(), msg.to_string()],
@@ -163,8 +155,8 @@ async fn standard_boot_e2e() {
 				&*boot_dir,
 				"--pcr3-preimage-path",
 				"./mock/namespaces/pcr3-preimage.txt",
-				"--pivot-build-fingerprints",
-				PIVOT_BUILD_FINGERPRINTS_PATH,
+				"--pivot-hash-path",
+				PIVOT_HASH_PATH,
 				"--qos-release-dir",
 				QOS_DIST_DIR,
 				"--manifest-set-dir",
