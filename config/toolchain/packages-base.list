@@ -19,3 +19,4 @@ musl-tools
 cargo
 pkg-config
 libpcsclite-dev
+buildah

@@ -18,7 +18,9 @@ default: \
 	$(DEFAULT_GOAL) \
 	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/qos_client_sc.$(PLATFORM).$(ARCH) \
+	$(OUT_DIR)/qos_client.oci.$(ARCH) \
 	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH) \
+	$(OUT_DIR)/qos_host.oci.$(ARCH) \
 	$(OUT_DIR)/release.env \
 	$(OUT_DIR)/manifest.txt
 
@@ -103,6 +105,19 @@ $(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH):
 			/home/build/$@; \
 	")
 
+$(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
+	$(SRC_DIR)/images/host/Dockerfile \
+	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH)
+	$(call toolchain," \
+		env -C $(OUT_DIR) \
+		buildah build \
+		-f ../$< \
+		-t qos/host \
+		--timestamp 1 \
+		--build-arg BIN=$> \
+		-o type=tar$(,)dest=../$@; \
+	")
+
 $(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH):
 	$(call toolchain," \
 		export RUSTFLAGS='-C target-feature=+crt-static' && \
@@ -132,6 +147,18 @@ $(OUT_DIR)/qos_client_sc.$(PLATFORM).$(ARCH):
 	")
 
 
+
+$(OUT_DIR)/qos_client.oci.$(ARCH).tar: \
+	$(SRC_DIR)/images/client/Dockerfile \
+	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH)
+	$(call toolchain," \
+		env -C $(OUT_DIR) buildah build \
+		-f ../$< \
+		-t qos/client \
+		--timestamp 1 \
+		--build-arg BIN=$> \
+		-o type=tar$(,)dest=../$@; \
+	")
 
 $(CONFIG_DIR)/$(TARGET)/linux.config:
 	$(call toolchain," \
