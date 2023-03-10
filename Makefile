@@ -18,9 +18,9 @@ default: \
 	$(DEFAULT_GOAL) \
 	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/qos_client_sc.$(PLATFORM).$(ARCH) \
-	$(OUT_DIR)/qos_client.oci.$(ARCH) \
+	$(OUT_DIR)/qos_client.oci.$(ARCH).tar \
 	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH) \
-	$(OUT_DIR)/qos_host.oci.$(ARCH) \
+	$(OUT_DIR)/qos_host.oci.$(ARCH).tar \
 	$(OUT_DIR)/release.env \
 	$(OUT_DIR)/manifest.txt
 
@@ -145,8 +145,6 @@ $(OUT_DIR)/qos_client_sc.$(PLATFORM).$(ARCH):
 			../target/x86_64-unknown-linux-gnu/release/qos_client \
 			/home/build/$@; \
 	")
-
-
 
 $(OUT_DIR)/qos_client.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/client/Dockerfile \
