@@ -17,6 +17,7 @@ default: \
 	toolchain \
 	$(DEFAULT_GOAL) \
 	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH) \
+	$(OUT_DIR)/qos_client_sc.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/release.env \
 	$(OUT_DIR)/manifest.txt
@@ -72,7 +73,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	$(CACHE_DIR)/rootfs.cpio \
 	$(CACHE_DIR)/linux.config
 	mkdir -p $(CACHE_DIR)/eif
-	$(call toolchain,$(USER)," \
+	$(call toolchain," \
 		export FAKETIME=1 && \
 		cp $(CACHE_DIR)/bzImage $(CACHE_DIR)/eif/ && \
 		cp $(CACHE_DIR)/rootfs.cpio $(CACHE_DIR)/eif/ && \
@@ -88,7 +89,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	")
 
 $(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH):
-	$(call toolchain,$(USER)," \
+	$(call toolchain," \
 		export RUSTFLAGS='-C target-feature=+crt-static' && \
 		cd $(SRC_DIR)/qos_host \
 		&& CARGO_HOME=$(CACHE_DIR)/cargo cargo build \
@@ -103,7 +104,7 @@ $(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH):
 	")
 
 $(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH):
-	$(call toolchain,$(USER)," \
+	$(call toolchain," \
 		export RUSTFLAGS='-C target-feature=+crt-static' && \
 		cd $(SRC_DIR)/qos_client \
 		&& CARGO_HOME=$(CACHE_DIR)/cargo cargo build \
@@ -116,8 +117,24 @@ $(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH):
 			/home/build/$@; \
 	")
 
+$(OUT_DIR)/qos_client_sc.$(PLATFORM).$(ARCH):
+	$(call toolchain," \
+		cd $(SRC_DIR)/qos_client \
+		&& CARGO_HOME=$(CACHE_DIR)/cargo cargo build \
+			--target x86_64-unknown-linux-gnu \
+			--no-default-features \
+			--features smartcard \
+			--locked \
+			--release \
+		&& cp \
+			../target/x86_64-unknown-linux-gnu/release/qos_client \
+			/home/build/$@; \
+	")
+
+
+
 $(CONFIG_DIR)/$(TARGET)/linux.config:
-	$(call toolchain,$(USER)," \
+	$(call toolchain," \
 		unset FAKETIME && \
 		cd /cache/linux-$(LINUX_VERSION) && \
 		make menuconfig && \
@@ -141,7 +158,7 @@ $(FETCH_DIR)/linux-$(LINUX_VERSION): \
 	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
 	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
 	$(KEY_DIR)/$(LINUX_KEY).asc
-	$(call toolchain,$(USER), " \
+	$(call toolchain," \
 		gpg --import $(KEY_DIR)/$(LINUX_KEY).asc && \
 		gpg --verify $@.tar.sign $@.tar && \
 		cd $(FETCH_DIR) && \
@@ -152,7 +169,7 @@ $(CACHE_DIR)/linux.config:
 	cp $(CONFIG_DIR)/$(TARGET)/linux.config $@
 
 $(CACHE_DIR)/init:
-	$(call toolchain,$(USER)," \
+	$(call toolchain," \
 		cd $(SRC_DIR)/init && \
 		export RUSTFLAGS='-C target-feature=+crt-static' && \
 		cargo build \
@@ -164,7 +181,7 @@ $(CACHE_DIR)/init:
 
 $(BIN_DIR)/gen_init_cpio: \
 	$(FETCH_DIR)/linux-$(LINUX_VERSION)
-	$(call toolchain,$(USER)," \
+	$(call toolchain," \
 		cd $(FETCH_DIR)/linux-$(LINUX_VERSION) && \
 		gcc usr/gen_init_cpio.c -o /home/build/$@ \
 	")
@@ -193,7 +210,7 @@ ifeq ($(TARGET), aws)
 	cp $(CACHE_DIR)/nsm.ko $(CACHE_DIR)/rootfs/
 endif
 	cp $(CACHE_DIR)/init $(CACHE_DIR)/rootfs/
-	$(call toolchain,$(USER)," \
+	$(call toolchain," \
 		find $(CACHE_DIR)/rootfs \
 			-mindepth 1 \
 			-execdir touch -hcd "@0" "{}" + && \
@@ -206,7 +223,7 @@ $(CACHE_DIR)/bzImage: \
 	$(CACHE_DIR)/linux.config \
 	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
 	$(CACHE_DIR)/rootfs.cpio
-	$(call toolchain,$(USER)," \
+	$(call toolchain," \
 		cd $(FETCH_DIR)/linux-$(LINUX_VERSION) && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
 		make olddefconfig && \
@@ -216,7 +233,7 @@ $(CACHE_DIR)/bzImage: \
 	")
 
 $(BIN_DIR)/eif_build:
-	$(call toolchain,$(USER)," \
+	$(call toolchain," \
 		cd $(SRC_DIR)/eif_build && \
 		export CARGO_HOME=$(CACHE_DIR)/cargo && \
 		cargo build \
@@ -228,7 +245,7 @@ $(BIN_DIR)/eif_build:
 $(CACHE_DIR)/nsm.ko: \
 	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
 	$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap
-	$(call toolchain,$(USER)," \
+	$(call toolchain," \
 		cd $(FETCH_DIR)/linux-$(LINUX_VERSION) && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
 		make olddefconfig && \
