@@ -76,6 +76,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	$(CACHE_DIR)/linux.config
 	mkdir -p $(CACHE_DIR)/eif
 	$(call toolchain," \
+		export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1 \
 		export FAKETIME=1 && \
 		cp $(CACHE_DIR)/bzImage $(CACHE_DIR)/eif/ && \
 		cp $(CACHE_DIR)/rootfs.cpio $(CACHE_DIR)/eif/ && \
