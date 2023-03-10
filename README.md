@@ -1,4 +1,4 @@
-# EnclaveOS #
+# QuorumOS #
 
 <https://github.com/distrust-foundation/enclaveos>
 
