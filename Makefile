@@ -115,7 +115,7 @@ $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 		-f ../$< \
 		-t qos/host \
 		--timestamp 1 \
-		--build-arg BIN=$> \
+		--build-arg BIN=../$(word 2,$^) \
 		-o type=tar$(,)dest=../$@; \
 	")
 
@@ -155,7 +155,7 @@ $(OUT_DIR)/qos_client.oci.$(ARCH).tar: \
 		-f ../$< \
 		-t qos/client \
 		--timestamp 1 \
-		--build-arg BIN=$> \
+		--build-arg BIN=../$(word 2,$^) \
 		-o type=tar$(,)dest=../$@; \
 	")
 
