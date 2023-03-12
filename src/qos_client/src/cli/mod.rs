@@ -1565,7 +1565,11 @@ mod handlers {
 	}
 
 	fn get_pair_or_yubi(opts: &ClientOpts) -> PairOrYubi {
-		match PairOrYubi::from_inputs(opts.yubikey(), opts.secret_path(), opts.current_pin_path()) {
+		match PairOrYubi::from_inputs(
+			opts.yubikey(),
+			opts.secret_path(),
+			opts.current_pin_path(),
+		) {
 			Err(e) => {
 				eprintln!("Error: {e:?}");
 				std::process::exit(1);

@@ -187,7 +187,7 @@ impl PairOrYubi {
 	pub(crate) fn from_inputs(
 		yubikey_flag: bool,
 		secret_path: Option<String>,
-		maybe_pin_path: Option<String>
+		maybe_pin_path: Option<String>,
 	) -> Result<Self, Error> {
 		let result = match (yubikey_flag, secret_path) {
 			(true, None) => {
@@ -1987,8 +1987,16 @@ fn extract_qos_release_manifest<P: AsRef<Path>>(
 		_nitro_eif_hash: get_entry(&entries, 0, "aws-x86_64.eif"),
 		pcrs_hash: get_entry(&entries, 1, "aws-x86_64.pcrs"),
 		_qos_client_hash: get_entry(&entries, 2, "qos_client.linux.x86_64"),
-		_qos_client_oci_hash: get_entry(&entries, 3, "qos_client.oci.x86_64.tar"),
-		_qos_client_sc_hash: get_entry(&entries, 4, "qos_client_sc.linux.x86_64"),
+		_qos_client_oci_hash: get_entry(
+			&entries,
+			3,
+			"qos_client.oci.x86_64.tar",
+		),
+		_qos_client_sc_hash: get_entry(
+			&entries,
+			4,
+			"qos_client_sc.linux.x86_64",
+		),
 		_qos_host_hash: get_entry(&entries, 5, "qos_host.linux.x86_64"),
 		_qos_host_oci_hash: get_entry(&entries, 6, "qos_host.oci.x86_64.tar"),
 		_release_env: get_entry(&entries, 7, "release.env"),
