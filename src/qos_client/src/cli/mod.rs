@@ -584,6 +584,7 @@ impl Command {
 			.token(Self::qos_release_dir_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
+			.token(Self::current_pin_path_token())
 	}
 
 	fn verify_genesis() -> Parser {
@@ -1564,7 +1565,11 @@ mod handlers {
 	}
 
 	fn get_pair_or_yubi(opts: &ClientOpts) -> PairOrYubi {
-		match PairOrYubi::from_inputs(opts.yubikey(), opts.secret_path()) {
+		match PairOrYubi::from_inputs(
+			opts.yubikey(),
+			opts.secret_path(),
+			opts.current_pin_path(),
+		) {
 			Err(e) => {
 				eprintln!("Error: {e:?}");
 				std::process::exit(1);
