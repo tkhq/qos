@@ -1135,8 +1135,9 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 	uri: &str,
 	attestation_doc_path: P,
+	manifest_envelope_path: P,
 ) {
-	let (cose_sign1, _manifest_envelope) =
+	let (cose_sign1, manifest_envelope) =
 		match request::post(uri, &ProtocolMsg::LiveAttestationDocRequest) {
 			Ok(ProtocolMsg::LiveAttestationDocResponse {
 				nsm_response: NsmResponse::Attestation { document },
@@ -1153,6 +1154,13 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 		attestation_doc_path.as_ref(),
 		&cose_sign1,
 		"COSE Sign1 Attestation Doc",
+	);
+	write_with_msg(
+		manifest_envelope_path.as_ref(),
+		&manifest_envelope
+			.try_to_vec()
+			.expect("manifest enevelope is valid borsh"),
+		"Manifest envelope",
 	);
 }
 

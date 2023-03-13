@@ -306,7 +306,9 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 			"--host-ip",
 			LOCAL_HOST,
 			"--attestation-doc-path",
-			ATTESTATION_DOC_PATH
+			ATTESTATION_DOC_PATH,
+			"--manifest-envelope-path",
+			"/tmp/dont_care"
 		])
 		.spawn()
 		.unwrap()
