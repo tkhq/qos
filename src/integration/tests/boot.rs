@@ -323,7 +323,9 @@ async fn standard_boot_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--attestation-doc-path",
-				&*attestation_doc_path
+				&*attestation_doc_path,
+				"--manifest-envelope-path",
+				"/tmp/dont_care"
 			])
 			.spawn()
 			.unwrap()

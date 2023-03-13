@@ -640,7 +640,9 @@ impl Command {
 	}
 
 	fn get_attestation_doc() -> Parser {
-		Self::base().token(Self::attestation_doc_path_token())
+		Self::base()
+			.token(Self::attestation_doc_path_token())
+			.token(Self::manifest_envelope_path_token())
 	}
 
 	fn proxy_re_encrypt_share() -> Parser {
@@ -1477,6 +1479,7 @@ mod handlers {
 		services::get_attestation_doc(
 			&opts.path_message(),
 			opts.attestation_doc_path(),
+			opts.manifest_envelope_path(),
 		);
 	}
 

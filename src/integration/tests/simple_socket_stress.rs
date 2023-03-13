@@ -40,6 +40,8 @@ fn simple_socket_stress() {
 		e => panic!("did not get expected err {:?}", e),
 	};
 
+	std::thread::sleep(std::time::Duration::from_secs(1));
+
 	// The app has panic'ed and exited - so any proceeding request should fail.
 	let app_request = PivotSocketStressMsg::OkRequest.try_to_vec().unwrap();
 	let err = enclave_client.send(&app_request).unwrap_err();
