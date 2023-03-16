@@ -446,7 +446,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	let quorum_key =
 		P256Public::from_bytes(&genesis_output.quorum_key).unwrap();
 	let attestation_doc =
-		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
+		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation, None);
 
 	let qos_pcrs = extract_qos_pcrs(qos_release_dir_path)?;
 
@@ -593,6 +593,7 @@ pub(crate) struct AfterGenesisArgs<P: AsRef<Path>> {
 	pub qos_release_dir_path: P,
 	pub pcr3_preimage_path: P,
 	pub unsafe_skip_attestation: bool,
+	pub validation_time_override: Option<u64>,
 }
 
 pub(crate) fn after_genesis<P: AsRef<Path>>(
@@ -604,6 +605,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		qos_release_dir_path,
 		pcr3_preimage_path,
 		unsafe_skip_attestation,
+		validation_time_override,
 	}: AfterGenesisArgs<P>,
 ) -> Result<(), Error> {
 	let attestation_doc_path =
@@ -619,8 +621,11 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	// Read in the attestation doc from the genesis directory
 	let cose_sign1 =
 		fs::read(attestation_doc_path).expect("Could not read attestation_doc");
-	let attestation_doc =
-		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
+	let attestation_doc = extract_attestation_doc(
+		&cose_sign1,
+		unsafe_skip_attestation,
+		validation_time_override,
+	);
 
 	// Read in the genesis output from the genesis directory
 	let genesis_output = GenesisOutput::try_from_slice(
@@ -1106,7 +1111,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	};
 
 	let attestation_doc =
-		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation);
+		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation, None);
 
 	// Verify attestation document
 	if unsafe_skip_attestation {
@@ -1616,7 +1621,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	let attestation_doc = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::BootStandardResponse {
 			nsm_response: NsmResponse::Attestation { document },
-		} => extract_attestation_doc(&document, true),
+		} => extract_attestation_doc(&document, true, None),
 		r => panic!("Unexpected response: {r:?}"),
 	};
 
@@ -1890,6 +1895,7 @@ fn read_attestation_doc<P: AsRef<Path>>(
 	Ok(extract_attestation_doc(
 		cose_sign1_der.as_ref(),
 		unsafe_skip_attestation,
+		None,
 	))
 }
 
@@ -2104,15 +2110,21 @@ fn extract_pivot_hash<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
 pub(crate) fn extract_attestation_doc(
 	cose_sign1_der: &[u8],
 	unsafe_skip_attestation: bool,
+	// in seconds since unix epoch
+	validation_time_override: Option<u64>,
 ) -> AttestationDoc {
 	if unsafe_skip_attestation {
 		unsafe_attestation_doc_from_der(cose_sign1_der)
 			.expect("Failed to extract attestation doc")
 	} else {
-		let validation_time = std::time::SystemTime::now()
-			.duration_since(std::time::UNIX_EPOCH)
-			.unwrap()
-			.as_secs();
+		let validation_time = if let Some(t) = validation_time_override {
+			t
+		} else {
+			std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.unwrap()
+				.as_secs()
+		};
 
 		attestation_doc_from_der(
 			cose_sign1_der,
