@@ -64,6 +64,7 @@ const SIGNATURE_PATH: &str = "signature-path";
 const CIPHERTEXT_PATH: &str = "ciphertext-path";
 const PLAINTEXT_PATH: &str = "plaintext-path";
 const OUTPUT_HEX: &str = "output-hex";
+const VALIDATION_TIME_OVERRIDE: &str = "validation-time-override";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -530,6 +531,14 @@ impl Command {
 			.required(false)
 			.takes_value(false)
 	}
+	fn validation_time_override_token() -> Token {
+		Token::new(
+			VALIDATION_TIME_OVERRIDE,
+			"Valid time for attestation doc cert chain",
+		)
+		.required(false)
+		.takes_value(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -585,6 +594,7 @@ impl Command {
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::current_pin_path_token())
+			.token(Self::validation_time_override_token())
 	}
 
 	fn verify_genesis() -> Parser {
@@ -1082,6 +1092,12 @@ impl ClientOpts {
 		self.parsed.single(CURRENT_PIN_PATH).map(Into::into)
 	}
 
+	fn validation_time_override(&self) -> Option<u64> {
+		self.parsed.single(VALIDATION_TIME_OVERRIDE).map(|t| {
+			t.parse().expect("invalid u64 for `--validation-time-override`")
+		})
+	}
+
 	fn encrypted_quorum_key_path(&self) -> String {
 		self.parsed
 			.single(ENCRYPTED_QUORUM_KEY_PATH)
@@ -1406,6 +1422,7 @@ mod handlers {
 			qos_release_dir_path: opts.qos_release_dir(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+			validation_time_override: opts.validation_time_override(),
 		}) {
 			println!("Error: {e:?}");
 			std::process::exit(1);
