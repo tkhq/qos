@@ -22,7 +22,7 @@ pub enum ProtocolError {
 	/// Cryptography error
 	/// Approval was not valid for a manifest.
 	InvalidManifestApproval(boot::Approval),
-	/// [`services::boot::ManifestEnvelope`] did not have approvals
+	/// [boot::ManifestEnvelope] did not have approvals
 	NotEnoughApprovals,
 	/// Protocol Message could not be matched against an available route.
 	/// Ensure the executor is in the correct phase.
@@ -93,9 +93,9 @@ pub enum ProtocolError {
 	BadShareSetApprovals,
 	/// Could not verify a message against an approval
 	CouldNotVerifyApproval,
-	/// Not a member of the [`ShareSet`].
+	/// Not a member of the [boot::ShareSet].
 	NotShareSetMember,
-	/// Not a member of the [`ManifestSet`].
+	/// Not a member of the [boot::ManifestSet].
 	NotManifestSetMember,
 	/// `qos_p256` Error wrapper.
 	P256Error(qos_p256::P256Error),
