@@ -104,6 +104,7 @@ fn enclave_app_client_socket_stress() {
 		)
 	);
 
+	std::thread::sleep(std::time::Duration::from_secs(1));
 	// The pivot panicked and should have been restarted.
 	let app_request = PivotSocketStressMsg::OkRequest.try_to_vec().unwrap();
 	let request =

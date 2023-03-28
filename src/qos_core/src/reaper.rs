@@ -78,6 +78,11 @@ impl Reaper {
 					.expect("Pivot executable never started...");
 
 				println!("Pivot exited with status: {status}");
+
+				// pause to ensure OS has enough time to clean up resources
+				// before restarting
+				std::thread::sleep(std::time::Duration::from_secs(1));
+
 				println!("Restarting pivot ...");
 			},
 			RestartPolicy::Never => {

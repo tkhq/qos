@@ -279,7 +279,7 @@ fn socket_fd(addr: &SocketAddress) -> Result<RawFd, IOError> {
 	socket(
 		addr.family(),
 		// Type - sequenced, two way byte stream. (full duplexed).
-		// Stream must be in a connected state before send/recieve.
+		// Stream must be in a connected state before send/receive.
 		SockType::Stream,
 		// Flags
 		SockFlag::empty(),
