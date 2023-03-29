@@ -1,6 +1,6 @@
 # QuorumOS #
 
-<https://github.com/distrust-foundation/enclaveos>
+<https://github.com/tkhq/qos>
 
 Click [here](./src/README.md) for the Rust code README.
 
@@ -41,19 +41,18 @@ security applications.
    * Most unessesary kernel features are disabled at compile time
    * Follow [Kernel Self Protection Project](kspp) recommendations
 
-[  kspp]: https://kernsec.org/wiki/index.php/Kernel_Self_Protection_Project
+[kspp]: https://kernsec.org/wiki/index.php/Kernel_Self_Protection_Project
 
-## Usage ##
+## Trust ##
 
-### Verify ###
+The main branch of this repo, which contains all binaries in the dist
+directory, should always be signed by multiple people who have confirmed the
+source code is what they expect, and results in the expected binaries via
+reproducible builds.
 
-This allows you to verify all included signatures by individuals or systems
-that have cryptographically certified that the published binaries in the
-releases folder were produced from this exact source code tree.
+We use [git-sig][gs] for this.
 
-```
-make verify
-```
+Please install it in order to follow our signing and verification steps.
 
 ### Attest ###
 
@@ -72,14 +71,43 @@ make attest
 
 If this target exits 0, then the attestation was successful.
 
-### Sign ###
+### Verify ###
 
-This adds a PGP detached signature into the release folder certifying that you
-successfully did a ```make attest``` and trust these binaries correspond to
-published source code.
+#### Signers
+
+Please review that keys are authentic and from individuals you expect.
+
+| Name             | PGP Fingerprint                                                                          |
+|------------------|------------------------------------------------------------------------------------------|
+| Jack Kearney     |[CADF 760B CCE7 8999 CEC1 372B 1784 24A6 721E E568](https://keyoxide.org/178424A6721EE568)|
+| Lance Vick       |[6B61 ECD7 6088 748C 7059 0D55 E90A 4013 36C8 AAA9](https://keyoxide.org/E90A401336C8AAA9)|
+| Zeke Mostov      |[D96C 422E 04DE 5D2E E0F7 E9E7 DBB0 DCA3 8D40 5491](https://keyoxide.org/DBB0DCA38D405491)|
+
+
+You can import the keys of all signers with:
 
 ```
-make sign
+gpg --import keys/*
+```
+
+#### Signatures
+
+Once you have public keys you trust locally pinned, you are able verify that
+the artifacts and code we publish are validly signed.
+
+We require a minimum of 2 signatures so you can use [git-sig][gs] as follows:
+
+```
+git sig verify --threshold 2
+```
+
+### Sign ###
+
+We use git-sig for signing the repo and dist artifacts after you have completed
+any code review and reproduced your own set of artifacts.
+
+```
+git sig add
 ```
 
 Please make a PR to upload attestation signatures so that this trust can be
@@ -104,22 +132,24 @@ make VERSION=1.0.0 dist
 
 ### Examples ###
 
-### Build given target
+#### Build given target
 ```
 make TARGET=generic
 ```
 
-### Boot generic image in Qemu
+#### Boot generic image in Qemu
 ```
 make run
 ```
 
-### Enter shell in toolchain environment
+#### Enter shell in toolchain environment
 ```
 make toolchain-shell
 ```
 
-### Update toolchain dependency pins
+#### Update toolchain dependency pins
 ```
 make toolchain-update
 ```
+
+[gs]: https://codeberg.org/distrust/git-sig
