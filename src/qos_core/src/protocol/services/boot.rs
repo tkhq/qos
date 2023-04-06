@@ -1,6 +1,6 @@
 //! Standard boot logic and types.
 
-use std::fmt;
+use std::{collections::HashSet, fmt};
 
 use qos_crypto::sha_256;
 use qos_nsm::types::NsmResponse;
@@ -262,6 +262,7 @@ impl ManifestEnvelope {
 	/// Check if the encapsulated manifest has K valid approvals from the
 	/// manifest approval set.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
+		let mut uniq_approvals = HashSet::new();
 		for approval in &self.manifest_set_approvals {
 			let pub_key = P256Public::from_bytes(&approval.member.pub_key)?;
 
@@ -277,10 +278,13 @@ impl ManifestEnvelope {
 			if !self.manifest.manifest_set.members.contains(&approval.member) {
 				return Err(ProtocolError::NotManifestSetMember);
 			}
+
+			if !uniq_approvals.insert(approval.qos_hash()) {
+				return Err(ProtocolError::DuplicateApproval);
+			}
 		}
 
-		if self.manifest_set_approvals.len()
-			< self.manifest.manifest_set.threshold as usize
+		if uniq_approvals.len() < self.manifest.manifest_set.threshold as usize
 		{
 			return Err(ProtocolError::NotEnoughApprovals);
 		}
@@ -664,5 +668,36 @@ mod test {
 		assert!(!Path::new(&*pivot_file).exists());
 		assert!(!Path::new(&*ephemeral_file).exists());
 		assert!(!Path::new(&*manifest_file).exists());
+	}
+
+	#[test]
+	fn check_approvals_rejects_duplicates() {
+		let (manifest, members, ..) = get_manifest();
+
+		let manifest_envelope = {
+			let manifest_hash = manifest.qos_hash();
+			// Just make 1 approval
+			let mut approvals: Vec<_> = members[..1]
+				.iter()
+				.cloned()
+				.map(|(pair, member)| Approval {
+					signature: pair.sign(&manifest_hash).unwrap(),
+					member,
+				})
+				.collect();
+
+			// Duplicate the approval and add it
+			let duplicate_approval = approvals[0].clone();
+			approvals.push(duplicate_approval);
+
+			ManifestEnvelope {
+				manifest,
+				manifest_set_approvals: approvals.clone(),
+				share_set_approvals: vec![],
+			}
+		};
+
+		let err = manifest_envelope.check_approvals().unwrap_err();
+		assert_eq!(err, ProtocolError::DuplicateApproval);
 	}
 }

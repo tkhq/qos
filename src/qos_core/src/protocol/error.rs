@@ -136,6 +136,8 @@ pub enum ProtocolError {
 	WrongQuorumKey,
 	/// State machine transitioned unexpectedly
 	InvalidStateTransition(ProtocolPhase, ProtocolPhase),
+	/// The manifest envelope has duplicate approvals.
+	DuplicateApproval,
 }
 
 impl From<std::io::Error> for ProtocolError {
