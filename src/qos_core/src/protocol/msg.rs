@@ -1,6 +1,6 @@
 //! Enclave executor message types.
 
-use qos_nsm::types::{NsmResponse};
+use qos_nsm::types::NsmResponse;
 
 use crate::protocol::{
 	services::{
