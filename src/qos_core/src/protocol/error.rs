@@ -11,7 +11,7 @@ use crate::{
 /// A error from protocol execution.
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum ProtocolError {
-	/// TODO
+	/// A encrypted quorum key share sent to the enclave was invalid.
 	InvalidShare,
 	/// Failed to reconstruct the quorum key while provisioning.
 	ReconstructionErrorEmptySecret,
