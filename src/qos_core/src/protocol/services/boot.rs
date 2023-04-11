@@ -262,11 +262,13 @@ impl ManifestEnvelope {
 	/// Check if the encapsulated manifest has K valid approvals from the
 	/// manifest approval set.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
-		let mut uniq_approvals = HashSet::new();
+		let mut uniq_members = HashSet::new();
 		for approval in &self.manifest_set_approvals {
-			let pub_key = P256Public::from_bytes(&approval.member.pub_key)?;
+			let member_pub_key =
+				P256Public::from_bytes(&approval.member.pub_key)?;
 
-			let is_valid_signature = pub_key
+			// Ensure that this is a valid signature from the member
+			let is_valid_signature = member_pub_key
 				.verify(&self.manifest.qos_hash(), &approval.signature)
 				.is_ok();
 			if !is_valid_signature {
@@ -275,17 +277,22 @@ impl ManifestEnvelope {
 				));
 			}
 
+			// Ensure that this member belongs to the manifest set
 			if !self.manifest.manifest_set.members.contains(&approval.member) {
 				return Err(ProtocolError::NotManifestSetMember);
 			}
 
-			if !uniq_approvals.insert(approval.qos_hash()) {
+			// Ensure that the member only has 1 approval. Note that we don't
+			// include the signature in this check because the signature is
+			// malleable. i.e. there could be two different signatures per
+			// member.
+			if !uniq_members.insert(approval.member.qos_hash()) {
 				return Err(ProtocolError::DuplicateApproval);
 			}
 		}
 
-		if uniq_approvals.len() < self.manifest.manifest_set.threshold as usize
-		{
+		// Ensure that there are at least threshold unique members who approved
+		if uniq_members.len() < self.manifest.manifest_set.threshold as usize {
 			return Err(ProtocolError::NotEnoughApprovals);
 		}
 
