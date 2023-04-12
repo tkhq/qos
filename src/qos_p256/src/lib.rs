@@ -233,8 +233,6 @@ impl P256Pair {
 	}
 
 	/// Read the raw, hex encoded master from a file.
-	// TODO(zeke): implement utils that go to/from bytes so we can avoid string
-	// serialization. https://github.com/tkhq/qos/issues/153.
 	pub fn from_hex_file<P: AsRef<Path>>(path: P) -> Result<Self, P256Error> {
 		let hex_bytes = std::fs::read(path).map_err(|e| {
 			P256Error::IOError(format!("failed to read master seed: {e}"))

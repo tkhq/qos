@@ -1,6 +1,6 @@
 //! Enclave executor message types.
 
-use qos_nsm::types::{NsmRequest, NsmResponse};
+use qos_nsm::types::NsmResponse;
 
 use crate::protocol::{
 	services::{
@@ -15,17 +15,6 @@ use crate::protocol::{
 pub enum ProtocolMsg {
 	/// A error from executing the protocol.
 	ProtocolErrorResponse(ProtocolError),
-
-	/// TODO: remove
-	NsmRequest {
-		/// A [`NsmRequest`]
-		nsm_request: NsmRequest,
-	},
-	/// TODO: remove
-	NsmResponse {
-		/// A [`NsmResponse`]
-		nsm_response: NsmResponse,
-	},
 
 	/// Request the status of the enclave.
 	StatusRequest,

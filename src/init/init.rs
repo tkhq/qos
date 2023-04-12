@@ -75,7 +75,6 @@ fn main() {
 	Reaper::execute(
 	     &handles,
 	     Box::new(Nsm),
-	     // TODO port for host<>enclave
 	     SocketAddress::new_vsock(16, 3),
 	     SocketAddress::new_unix(SEC_APP_SOCK),
 	     None,

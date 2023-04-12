@@ -26,7 +26,6 @@ pub struct GenesisSet {
 
 #[derive(PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
 struct MemberShard {
-	// TODO: is this taking up too much unnecessary space?
 	/// Member of the Setup Set.
 	member: QuorumMember,
 	/// Shard of the generated Quorum Key, encrypted to the `member`s Setup
@@ -114,12 +113,8 @@ impl fmt::Debug for GenesisOutput {
 	}
 }
 
-// TODO: Recovery logic!
 // How many permutations of `threshold` keys should we use
 // to reconstruct the original Quorum Key?
-//
-// TODO: Disaster recovery logic!
-// Maybe we can just accept 2 set configs, and one is the recovery set?``
 pub(in crate::protocol) fn boot_genesis(
 	state: &mut ProtocolState,
 	genesis_set: &GenesisSet,

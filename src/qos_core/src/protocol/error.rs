@@ -11,7 +11,7 @@ use crate::{
 /// A error from protocol execution.
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum ProtocolError {
-	/// TODO
+	/// A encrypted quorum key share sent to the enclave was invalid.
 	InvalidShare,
 	/// Failed to reconstruct the quorum key while provisioning.
 	ReconstructionErrorEmptySecret,
@@ -136,6 +136,8 @@ pub enum ProtocolError {
 	WrongQuorumKey,
 	/// State machine transitioned unexpectedly
 	InvalidStateTransition(ProtocolPhase, ProtocolPhase),
+	/// The manifest envelope has duplicate approvals.
+	DuplicateApproval,
 }
 
 impl From<std::io::Error> for ProtocolError {

@@ -258,5 +258,3 @@ impl Handles {
 		Ok(())
 	}
 }
-
-// TODO: unit tests <https://github.com/tkhq/qos/issues/78/>

@@ -192,8 +192,6 @@ pub fn attestation_doc_from_der(
 	syntactic_validation::user_data(&attestation_doc.user_data)?;
 	syntactic_validation::nonce(&attestation_doc.nonce)?;
 
-	// TODO: Ensure verification conforms exactly to section 3.2.3.*
-	// https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md#32-syntactical-validation
 	verify_certificate_chain(
 		&attestation_doc.cabundle,
 		root_cert,
@@ -425,7 +423,6 @@ mod test {
 	#[test]
 	fn attestation_doc_from_der_works_with_valid_payload() {
 		let root_cert = cert_from_pem(AWS_ROOT_CERT_PEM).unwrap();
-		// TODO: verify each field on doc is as expected
 		assert!(attestation_doc_from_der(
 			MOCK_NSM_ATTESTATION_DOCUMENT,
 			&root_cert[..],
