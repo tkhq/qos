@@ -59,7 +59,6 @@ The details for how QOS nodes communicate with each other can vary, but for the 
     1) Check that the hash of the new manifest is in the `user_data` field of the attestation doc.
     1) Check that PCR0, PCR1, PCR2, and PCR3 in the New Manifest match the PCRs in the attestation document. This ensures the New Manifest was used against a Nitro enclave booted with the intended version of QOS. Note that we assume the values for PCR{0, 1 , 2} correspond to a desired version of QOS because the Manifest Set Members had K approvals.
     1) Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is the IAM role assigned to the EC2 host of the enclave. An IAM role contains an AWS organization's unique ID. By only using approved PCR3 values we ensure that we only ever send the Quorum Key to an enclave that is controlled by the operator, not an enclave that some malicious entity runs that otherwise configured identically to one of the operator's enclaves.
-    1) Check that the PCR3 allowlist in the New Manifest is a sub set of the PCR3 allowlist in the Local Manifest. This is not strictly necessary, but since adding a value for PCR3 could lead to a non-operator controlled entity gaining access to a Quorum Key, we want to force human intervention (with standard boot) to add a new value to the allowlist.
     1) Return the Quorum Key encrypted to the New Node's Ephemeral Key extracted from the attestation document and a signature over the encrypted payload. The Original Node uses its Quorum Key to create the signature.
 
         ```rust

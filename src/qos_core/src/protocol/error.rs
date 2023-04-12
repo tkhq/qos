@@ -138,6 +138,9 @@ pub enum ProtocolError {
 	InvalidStateTransition(ProtocolPhase, ProtocolPhase),
 	/// The manifest envelope has duplicate approvals.
 	DuplicateApproval,
+	/// The new manifest was different then the old manifest when we expected
+	/// them to be the same because they have the same nonce
+	DifferentManifest,
 }
 
 impl From<std::io::Error> for ProtocolError {
