@@ -60,13 +60,14 @@ pub(in crate::protocol) fn provision(
 	let manifest_envelope = state.handles.get_manifest_envelope()?;
 
 	// Check that the approval is valid
-	// 1) the approver belongs to the share set
+	// 1) the signature is valid. Note that we want to check signature before
+	// interacting with data
+	approval.verify(&manifest_envelope.manifest.qos_hash())?;
+	// 2) the approver belongs to the share set
 	if !manifest_envelope.manifest.share_set.members.contains(&approval.member)
 	{
 		return Err(ProtocolError::NotShareSetMember);
 	}
-	// 2) the signature is valid
-	approval.verify(&manifest_envelope.manifest.qos_hash())?;
 
 	// Record the share set approval
 	state.handles.mutate_manifest_envelope(|mut envelope| {
