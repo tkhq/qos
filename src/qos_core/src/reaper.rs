@@ -18,7 +18,8 @@ use crate::{
 	server::SocketServer,
 };
 
-const REAPER_RESTART_DELAY_IN_SECONDS : u64 = 1;
+/// Delay for restarting the pivot app if the process exits.
+pub const REAPER_RESTART_DELAY_IN_SECONDS: u64 = 1;
 
 /// Primary entry point for running the enclave. Coordinates spawning the server
 /// and pivot binary.
@@ -83,7 +84,9 @@ impl Reaper {
 
 				// pause to ensure OS has enough time to clean up resources
 				// before restarting
-				std::thread::sleep(std::time::Duration::from_secs(REAPER_RESTART_DELAY_IN_SECONDS));
+				std::thread::sleep(std::time::Duration::from_secs(
+					REAPER_RESTART_DELAY_IN_SECONDS,
+				));
 
 				println!("Restarting pivot ...");
 			},
