@@ -219,7 +219,7 @@ mod test {
 
 	struct TestArgs {
 		manifest_envelope: ManifestEnvelope,
-		_members_with_keys: Vec<(P256Pair, QuorumMember)>,
+		members_with_keys: Vec<(P256Pair, QuorumMember)>,
 		att_doc: AttestationDoc,
 		eph_pair: P256Pair,
 		quorum_pair: P256Pair,
@@ -249,7 +249,7 @@ mod test {
 			},
 		];
 
-		let _members_with_keys = vec![
+		let members_with_keys = vec![
 			(member1_pair, quorum_members.get(0).unwrap().clone()),
 			(member2_pair, quorum_members.get(1).unwrap().clone()),
 			(member3_pair, quorum_members.get(2).unwrap().clone()),
@@ -284,7 +284,7 @@ mod test {
 
 		let manifest_set_approvals = (0..2)
 			.map(|i| {
-				let (pair, member) = &_members_with_keys[i];
+				let (pair, member) = &members_with_keys[i];
 				Approval {
 					signature: pair.sign(&manifest.qos_hash()).unwrap(),
 					member: member.clone(),
@@ -321,7 +321,7 @@ mod test {
 
 		TestArgs {
 			manifest_envelope,
-			_members_with_keys,
+			members_with_keys,
 			att_doc,
 			eph_pair,
 			quorum_pair,
@@ -768,7 +768,7 @@ mod test {
 			let TestArgs {
 				manifest_envelope,
 				mut att_doc,
-				_members_with_keys,
+				members_with_keys,
 				..
 			} = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
@@ -779,7 +779,7 @@ mod test {
 
 			let manifest_set_approvals = (0..2)
 				.map(|i| {
-					let (pair, member) = &_members_with_keys[i];
+					let (pair, member) = &members_with_keys[i];
 					Approval {
 						signature: pair.sign(&new_manifest_hash).unwrap(),
 						member: member.clone(),
@@ -804,7 +804,7 @@ mod test {
 			let TestArgs {
 				manifest_envelope,
 				mut att_doc,
-				_members_with_keys,
+				members_with_keys,
 				..
 			} = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
@@ -815,7 +815,7 @@ mod test {
 
 			let manifest_set_approvals = (0..2)
 				.map(|i| {
-					let (pair, member) = &_members_with_keys[i];
+					let (pair, member) = &members_with_keys[i];
 					Approval {
 						signature: pair.sign(&new_manifest_hash).unwrap(),
 						member: member.clone(),
@@ -840,7 +840,7 @@ mod test {
 			let TestArgs {
 				manifest_envelope,
 				mut att_doc,
-				_members_with_keys,
+				members_with_keys,
 				..
 			} = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
@@ -851,7 +851,7 @@ mod test {
 
 			let manifest_set_approvals = (0..2)
 				.map(|i| {
-					let (pair, member) = &_members_with_keys[i];
+					let (pair, member) = &members_with_keys[i];
 					Approval {
 						signature: pair.sign(&new_manifest_hash).unwrap(),
 						member: member.clone(),
@@ -876,7 +876,7 @@ mod test {
 			let TestArgs {
 				manifest_envelope,
 				mut att_doc,
-				_members_with_keys,
+				members_with_keys,
 				..
 			} = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
@@ -892,7 +892,7 @@ mod test {
 
 			let manifest_set_approvals = (0..2)
 				.map(|i| {
-					let (pair, member) = &_members_with_keys[i];
+					let (pair, member) = &members_with_keys[i];
 					Approval {
 						signature: pair.sign(&new_manifest_hash).unwrap(),
 						member: member.clone(),
@@ -915,14 +915,14 @@ mod test {
 		#[test]
 		fn errors_if_manifest_hash_does_not_match_attestation_doc() {
 			let TestArgs {
-				manifest_envelope, att_doc, _members_with_keys, ..
+				manifest_envelope, att_doc, members_with_keys, ..
 			} = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
 			new_manifest_envelope.manifest.namespace.nonce += 1;
 
 			let manifest_set_approvals = (0..2)
 				.map(|i| {
-					let (pair, member) = &_members_with_keys[i];
+					let (pair, member) = &members_with_keys[i];
 					Approval {
 						signature: pair
 							.sign(&new_manifest_envelope.manifest.qos_hash())
