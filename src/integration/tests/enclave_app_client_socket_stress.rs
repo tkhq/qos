@@ -12,7 +12,7 @@ use qos_core::{
 		},
 		ProtocolError, ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
 	},
-	reaper::Reaper,
+	reaper::{Reaper, REAPER_RESTART_DELAY_IN_SECONDS},
 };
 use qos_nsm::mock::MockNsm;
 use qos_p256::P256Pair;
@@ -104,6 +104,9 @@ fn enclave_app_client_socket_stress() {
 		)
 	);
 
+	std::thread::sleep(std::time::Duration::from_secs(
+		REAPER_RESTART_DELAY_IN_SECONDS + 1,
+	));
 	// The pivot panicked and should have been restarted.
 	let app_request = PivotSocketStressMsg::OkRequest.try_to_vec().unwrap();
 	let request =
