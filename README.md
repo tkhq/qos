@@ -54,19 +54,19 @@ We use [git-sig][gs] for this.
 
 Please install it in order to follow our signing and verification steps.
 
-### Attest ###
+### Reproduce ###
 
 This allows you to prove that published binaries correspond with the source
 code in this repo.
 
-It is recommended to read the "attest" target in the "Makefile" to ensure you
-understand how it functions.
+It is recommended to read the "reproduce" target in "src/toolchain/Makefile" to
+ensure you understand how it functions.
 
 It will preserve hashes of all binaries in tree, remove them all, build from
 scratch, then verify new hashes match the old ones.
 
 ```
-make attest
+make reproduce
 ```
 
 If this target exits 0, then the attestation was successful.
