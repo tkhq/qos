@@ -17,7 +17,6 @@ default: \
 	toolchain \
 	$(DEFAULT_GOAL) \
 	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH) \
-	$(OUT_DIR)/qos_client_sc.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/qos_client.oci.$(ARCH).tar \
 	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/qos_host.oci.$(ARCH).tar \
@@ -76,13 +75,14 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	$(CACHE_DIR)/linux.config
 	mkdir -p $(CACHE_DIR)/eif
 	$(call toolchain," \
-		export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1 \
-		export FAKETIME=1 && \
-		cp $(CACHE_DIR)/bzImage $(CACHE_DIR)/eif/ && \
-		cp $(CACHE_DIR)/rootfs.cpio $(CACHE_DIR)/eif/ && \
-		cp $(CONFIG_DIR)/$(TARGET)/linux.config $(CACHE_DIR)/eif/ && \
-		find $(CACHE_DIR)/eif -mindepth 1 -execdir touch -hcd "@0" "{}" + && \
-		$(BIN_DIR)/eif_build \
+		export \
+			LD_PRELOAD=/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1 \
+			FAKETIME=1 \
+		&& cp $(CACHE_DIR)/bzImage $(CACHE_DIR)/eif/ \
+		&& cp $(CACHE_DIR)/rootfs.cpio $(CACHE_DIR)/eif/ \
+		&& cp $(CONFIG_DIR)/$(TARGET)/linux.config $(CACHE_DIR)/eif/ \
+		&& find $(CACHE_DIR)/eif -mindepth 1 -execdir touch -hcd "@0" "{}" + \
+		&& $(BIN_DIR)/eif_build \
 			--kernel $(CACHE_DIR)/eif/bzImage \
 			--kernel_config $(CACHE_DIR)/eif/linux.config \
 			--cmdline 'reboot=k initrd=0x2000000$(,)3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd' \
@@ -91,18 +91,26 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 			--output $(OUT_DIR)/$(TARGET)-$(ARCH).eif; \
 	")
 
-$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH):
+$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH): \
+	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 	$(call toolchain," \
-		export RUSTFLAGS='-C target-feature=+crt-static' && \
-		cd $(SRC_DIR)/qos_host \
-		&& CARGO_HOME=$(CACHE_DIR)/cargo cargo build \
-			--target x86_64-unknown-linux-gnu \
+		export \
+			CARGO_HOME=$(CACHE_DIR) \
+			RUSTFLAGS=' \
+				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /usr/lib/x86_64-linux-musl \
+				-C target-feature=+crt-static \
+			' \
+		&& cd $(SRC_DIR)/qos_host \
+		&& cargo build \
+			--target x86_64-unknown-linux-musl \
 			--features vm \
 			--no-default-features \
 			--locked \
 			--release \
 		&& cp \
-			../target/x86_64-unknown-linux-gnu/release/qos_host \
+			../target/x86_64-unknown-linux-musl/release/qos_host \
 			/home/build/$@; \
 	")
 
@@ -110,40 +118,38 @@ $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/host/Dockerfile \
 	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH)
 	$(call toolchain," \
-		cp $(word 2,$^) $(CACHE_DIR)/ && \
-		touch -hcd "@0" $(CACHE_DIR)/$(notdir $(word 2,$^)) && \
-		buildah build \
+		cp $(word 2,$^) $(CACHE_DIR)/ \
+		&& touch -hcd "@0" $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& buildah build \
 		-f $< \
 		--timestamp 1 \
 		--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
 		-o type=tar$(,)dest=$@; \
 	")
 
-$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH):
-	$(call toolchain," \
-		export RUSTFLAGS='-C target-feature=+crt-static' && \
-		cd $(SRC_DIR)/qos_client \
-		&& CARGO_HOME=$(CACHE_DIR)/cargo cargo build \
-			--target x86_64-unknown-linux-gnu \
-			--no-default-features \
-			--locked \
-			--release \
-		&& cp \
-			../target/x86_64-unknown-linux-gnu/release/qos_client \
-			/home/build/$@; \
-	")
-
-$(OUT_DIR)/qos_client_sc.$(PLATFORM).$(ARCH):
+$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH): \
+	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
+	$(CACHE_DIR)/lib/libpcsclite.a
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_client \
+		&& export \
+			CARGO_HOME=$(CACHE_DIR) \
+			RUSTFLAGS=' \
+				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /usr/lib/x86_64-linux-musl \
+				-C target-feature=+crt-static \
+			' \
+		&& export PCSC_LIB_DIR='/home/build/$(CACHE_DIR)/lib' \
+		&& export PCSC_LIB_NAME='static=pcsclite' \
 		&& CARGO_HOME=$(CACHE_DIR)/cargo cargo build \
-			--target x86_64-unknown-linux-gnu \
+			--target x86_64-unknown-linux-musl \
 			--no-default-features \
 			--features smartcard \
 			--locked \
 			--release \
 		&& cp \
-			../target/x86_64-unknown-linux-gnu/release/qos_client \
+			../target/x86_64-unknown-linux-musl/release/qos_client \
 			/home/build/$@; \
 	")
 
@@ -151,22 +157,22 @@ $(OUT_DIR)/qos_client.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/client/Dockerfile \
 	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH)
 	$(call toolchain," \
-		cp $(word 2,$^) $(CACHE_DIR)/ && \
-		touch -hcd "@0" $(CACHE_DIR)/$(notdir $(word 2,$^)) && \
-		buildah build \
-		-f $< \
-		-t qos/$(notdir $(word 2,$^)) \
-		--timestamp 1 \
-		--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
-		-o type=tar$(,)dest=$@; \
+		cp $(word 2,$^) $(CACHE_DIR)/ \
+		&& touch -hcd "@0" $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& buildah build \
+			-f $< \
+			-t qos/$(notdir $(word 2,$^)) \
+			--timestamp 1 \
+			--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+			-o type=tar$(,)dest=$@; \
 	")
 
 $(CONFIG_DIR)/$(TARGET)/linux.config:
 	$(call toolchain," \
-		unset FAKETIME && \
-		cd /cache/linux-$(LINUX_VERSION) && \
-		make menuconfig && \
-		cp .config /config/$(TARGET)/linux.config; \
+		unset FAKETIME \
+		&& cd /cache/linux-$(LINUX_VERSION) \
+		&& make menuconfig \
+		&& cp .config /config/$(TARGET)/linux.config; \
 	")
 
 $(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap:
@@ -182,29 +188,80 @@ $(FETCH_DIR)/linux-$(LINUX_VERSION).tar:
 	curl --url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.xz --output $@.xz
 	xz -d $@.xz
 
+$(FETCH_DIR)/pcsc:
+	$(call git_clone,$@,$(PCSC_REPO),$(PCSC_REF))
+
+$(FETCH_DIR)/rust:
+	$(call git_clone,$@,$(RUST_REPO),$(RUST_REF))
+
+$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot: \
+	$(FETCH_DIR)/rust
+	$(call toolchain," \
+		cd $(FETCH_DIR)/rust \
+		&& git submodule update --init \
+		&& ./configure \
+			--set="build.rustc=/usr/bin/rustc" \
+			--set="build.cargo=/usr/bin/cargo" \
+			--set="target.x86_64-unknown-linux-musl.llvm-config=/usr/bin/llvm-config" \
+			--set="target.x86_64-unknown-linux-musl.musl-libdir=/usr/lib/x86_64-linux-musl" \
+		&& python3 x.py build \
+			--stage 0 \
+			--target x86_64-unknown-linux-musl \
+			library \
+	")
+
+$(CACHE_DIR)/lib/libpcsclite.a: \
+	$(FETCH_DIR)/pcsc
+	$(call toolchain," \
+		cd $(FETCH_DIR)/pcsc \
+		&& export CC=musl-gcc \
+		&& export CXX=musl-g++ \
+		&& export CFLAGS=-static \
+		&& export CXXFLAGS=-static \
+		&& ./bootstrap \
+		&& ./configure \
+			--enable-static \
+			--disable-polkit \
+			--disable-strict \
+			--disable-libsystemd \
+			--disable-libudev \
+			--disable-libusb \
+		&& make \
+		&& mkdir -p /home/build/$(CACHE_DIR)/lib \
+		&& cp src/.libs/libpcsclite.a /home/build/$@ \
+	")
+
 $(FETCH_DIR)/linux-$(LINUX_VERSION): \
 	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
 	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
 	$(KEY_DIR)/$(LINUX_KEY).asc
 	$(call toolchain," \
-		gpg --import $(KEY_DIR)/$(LINUX_KEY).asc && \
-		gpg --verify $@.tar.sign $@.tar && \
-		cd $(FETCH_DIR) && \
-		tar -mxf linux-$(LINUX_VERSION).tar; \
+		gpg --import $(KEY_DIR)/$(LINUX_KEY).asc \
+		&& gpg --verify $@.tar.sign $@.tar \
+		&& cd $(FETCH_DIR) \
+		&& tar -mxf linux-$(LINUX_VERSION).tar; \
 	")
 
 $(CACHE_DIR)/linux.config:
 	cp $(CONFIG_DIR)/$(TARGET)/linux.config $@
 
-$(CACHE_DIR)/init:
+$(CACHE_DIR)/init: \
+	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 	$(call toolchain," \
-		cd $(SRC_DIR)/init && \
-		export RUSTFLAGS='-C target-feature=+crt-static' && \
-		cargo build \
-			--target x86_64-unknown-linux-gnu \
+		export \
+			CARGO_HOME=$(CACHE_DIR) \
+			RUSTFLAGS=' \
+				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /usr/lib/x86_64-linux-musl \
+				-C target-feature=+crt-static \
+			' \
+		&& cd $(SRC_DIR)/init \
+		&& cargo build \
+			--target x86_64-unknown-linux-musl \
 			--locked \
-			--release && \
-		cp target/x86_64-unknown-linux-gnu/release/init /home/build/$@ \
+			--release \
+		&& cp target/x86_64-unknown-linux-musl/release/init /home/build/$@ \
 	")
 
 $(BIN_DIR)/gen_init_cpio: \
