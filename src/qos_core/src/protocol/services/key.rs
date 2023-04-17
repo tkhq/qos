@@ -180,7 +180,7 @@ fn validate_manifest(
 		return Err(ProtocolError::DifferentNamespaceName);
 	}
 
-	// 6. Check that the nonce of the New Manifest is greater then or equal to
+	// 6. Check that the nonce of the New Manifest is greater than or equal to
 	// the nonce of the Local Manifest. If they have the same nonce, we check
 	// that the Local Manifest has the same hash as an extra measure. Note that
 	// while the nonce is verified programmatically in this routine, its
@@ -204,7 +204,7 @@ fn validate_manifest(
 	// 7. Check that the hash of the new manifest is in the `user_data` field of
 	// the attestation doc.
 	//
-	//8. Check that PCR0, PCR1, PCR2, and PCR3 in the New
+	// 8. Check that PCR0, PCR1, PCR2, and PCR3 in the New
 	// Manifest match the PCRs in the attestation document. This ensures the New
 	// Manifest was used against a Nitro enclave booted with the intended
 	// version of QOS. Note that we assume the values for PCR{0, 1 , 2}
@@ -223,13 +223,7 @@ fn validate_manifest(
 		)?;
 	}
 
-	// 9. Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is
-	// the IAM role assigned to the EC2 host of the enclave. An IAM role
-	// contains an AWS organization's unique ID. By only using approved PCR3
-	// values we ensure that we only ever send the Quorum Key to an enclave that
-	// is controlled by the operator, not an enclave that some malicious entity
-	// runs that otherwise configured identically to one of the operator's
-	// enclaves.
+	// 9. Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is the IAM role assigned to the EC2 host of the enclave. An IAM role contains an AWS organization's unique ID. By only using the approved PCR3 value we ensure that we only ever send the Quorum Key to an enclave that is controlled by the operator, not an enclave that some malicious entity runs that otherwise configured identically to one of the operator's enclaves.
 	if old_manifest_envelope.manifest.enclave.pcr3
 		!= new_manifest_envelope.manifest.enclave.pcr3
 	{

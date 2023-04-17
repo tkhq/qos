@@ -138,7 +138,7 @@ pub enum ProtocolError {
 	InvalidStateTransition(ProtocolPhase, ProtocolPhase),
 	/// The manifest envelope has duplicate approvals.
 	DuplicateApproval,
-	/// The new manifest was different then the old manifest when we expected
+	/// The new manifest was different from the old manifest when we expected
 	/// them to be the same because they have the same nonce
 	DifferentManifest,
 }
