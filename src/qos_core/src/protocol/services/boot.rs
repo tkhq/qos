@@ -305,6 +305,7 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	manifest_envelope: &ManifestEnvelope,
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
+	// 1. Check signatures over the manifest envelope.
 	manifest_envelope.check_approvals()?;
 	if !manifest_envelope.share_set_approvals.is_empty() {
 		return Err(ProtocolError::BadShareSetApprovals);
@@ -313,17 +314,23 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 		return Err(ProtocolError::InvalidPivotHash);
 	};
 
+	// 2. Generate an Ephemeral Key.
 	let ephemeral_key = P256Pair::generate()?;
 	state.handles.put_ephemeral_key(&ephemeral_key)?;
 	state.handles.put_pivot(pivot)?;
 	state.handles.put_manifest_envelope(manifest_envelope)?;
 
+	// 3. Make an attestation request, placing the manifest hash in the
+	// `user_data` field and the Ephemeral Key public key in the `public_key`
+	// field.
 	let nsm_response = attestation::get_post_boot_attestation_doc(
 		&*state.attestor,
 		ephemeral_key.public_key().to_bytes(),
 		manifest_envelope.manifest.qos_hash().to_vec(),
 	);
 
+	// 4. Return the NSM Response containing COSE Sign1 encoded attestation
+	// document.
 	Ok(nsm_response)
 }
 
