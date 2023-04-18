@@ -1,6 +1,12 @@
 TARGET := aws
 include $(PWD)/src/toolchain/Makefile
 
+KEYS := \
+	449E6BFA40E1119328688F981929C2481BEAC51B \
+	6B61ECD76088748C70590D55E90A401336C8AAA9 \
+	D96C422E04DE5D2EE0F7E9E7DBB0DCA38D405491 \
+	647F28654894E3BD457199BE38DBBDC86092693E
+
 ifeq ($(TARGET), aws)
 DEFAULT_GOAL := $(OUT_DIR)/$(TARGET)-$(ARCH).eif
 else ifeq ($(TARGET), generic)
@@ -15,37 +21,13 @@ endif
 .PHONY: default
 default: \
 	toolchain \
+	$(patsubst %,$(KEY_DIR)/%.asc,$(KEYS)) \
 	$(DEFAULT_GOAL) \
 	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/qos_client.oci.$(ARCH).tar \
 	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/qos_host.oci.$(ARCH).tar \
-	$(OUT_DIR)/release.env \
-	$(OUT_DIR)/manifest.txt
-
-.PHONY: sign
-sign: $(DIST_DIR)/manifest.txt
-	set -e; \
-	git config --get user.signingkey 2>&1 >/dev/null || { \
-		echo "Error: git user.signingkey is not defined"; \
-		exit 1; \
-	}; \
-	fingerprint=$$(\
-		git config --get user.signingkey \
-		| sed 's/.*\([A-Z0-9]\{16\}\).*/\1/g' \
-	); \
-	gpg --armor \
-		--detach-sig  \
-		--output $(DIST_DIR)/manifest.$${fingerprint}.asc \
-		$(DIST_DIR)/manifest.txt
-
-.PHONY: verify
-verify: $(DIST_DIR)/manifest.txt
-	set -e; \
-	for file in $(DIST_DIR)/manifest.*.asc; do \
-		echo "\nVerifying: $${file}\n"; \
-		gpg --verify $${file} $(DIST_DIR)/manifest.txt; \
-	done;
+	$(OUT_DIR)/release.env
 
 # Clean repo back to initial clone state
 .PHONY: clean
@@ -64,6 +46,9 @@ run: $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
 linux-config:
 	rm $(CONFIG_DIR)/$(TARGET)/linux.config
 	make TARGET=$(TARGET) $(CONFIG_DIR)/$(TARGET)/linux.config
+
+$(KEY_DIR)/%.asc:
+	$(call fetch_pgp_key,$(basename $(notdir $@)))
 
 $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage: $(CACHE_DIR)/bzImage
 	cp $(CACHE_DIR)/bzImage $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
@@ -177,9 +162,6 @@ $(CONFIG_DIR)/$(TARGET)/linux.config:
 
 $(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap:
 	$(call git_clone,$@,$(AWS_NITRO_DRIVER_REPO),$(AWS_NITRO_DRIVER_REF))
-
-$(KEY_DIR)/$(LINUX_KEY).asc:
-	$(call fetch_pgp_key,$(LINUX_KEY))
 
 $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign:
 	curl --url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.sign --output $@
