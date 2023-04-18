@@ -60,13 +60,14 @@ pub(in crate::protocol) fn provision(
 	let manifest_envelope = state.handles.get_manifest_envelope()?;
 
 	// Check that the approval is valid
-	// 1) the approver belongs to the share set
+	// 1) the signature is valid. Note that we want to check signature before
+	// interacting with data
+	approval.verify(&manifest_envelope.manifest.qos_hash())?;
+	// 2) the approver belongs to the share set
 	if !manifest_envelope.manifest.share_set.members.contains(&approval.member)
 	{
 		return Err(ProtocolError::NotShareSetMember);
 	}
-	// 2) the signature is valid
-	approval.verify(&manifest_envelope.manifest.qos_hash())?;
 
 	// Record the share set approval
 	state.handles.mutate_manifest_envelope(|mut envelope| {
@@ -451,6 +452,47 @@ mod test {
 		assert_eq!(
 			provision(&share, approval, &mut state).unwrap_err(),
 			ProtocolError::NotShareSetMember
+		);
+		assert!(!Path::new(&*quorum_file).exists());
+		assert_eq!(state.get_phase(), ProtocolPhase::WaitingForQuorumShards);
+	}
+
+		#[test]
+	fn provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature() {
+		let eph_file: PathWrapper =
+			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.eph.key".into();
+		let quorum_file: PathWrapper =
+			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.quorum.key".into();
+		let manifest_file: PathWrapper =
+			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.manifest".into();
+
+		let Setup {
+			quorum_pair,
+			eph_pair,
+			threshold,
+			mut state,
+			mut approvals,
+		} = setup(&eph_file, &quorum_file, &manifest_file);
+
+		let quorum_key = quorum_pair.to_master_seed();
+		let mut encrypted_shares: Vec<_> =
+			shares_generate(quorum_key, 4, threshold)
+				.iter()
+				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
+				.collect();
+
+		let mut approval = approvals.remove(0);
+		let pair = P256Pair::generate().unwrap();
+
+		// Change the member so that are not recognized as part of the set
+		approval.member.pub_key = pair.public_key().to_bytes();
+		// DO NOT update the approval signature, so it doesn't match the pub key
+
+		let share = encrypted_shares.remove(0);
+		// we get an invalid signature error (not an error that they are not part of the set)
+		assert_eq!(
+			provision(&share, approval, &mut state).unwrap_err(),
+			ProtocolError::CouldNotVerifyApproval
 		);
 		assert!(!Path::new(&*quorum_file).exists());
 		assert_eq!(state.get_phase(), ProtocolPhase::WaitingForQuorumShards);

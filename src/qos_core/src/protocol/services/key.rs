@@ -10,7 +10,7 @@ use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
 	services::boot::{put_manifest_and_pivot, ManifestEnvelope},
-	ProtocolError, ProtocolState,
+	ProtocolError, ProtocolState, QosHash,
 };
 
 /// An encrypted quorum key along with a signature over the encrypted payload
@@ -29,7 +29,8 @@ pub(in crate::protocol) fn inject_key(
 ) -> Result<(), ProtocolError> {
 	let manifest_envelope = state.handles.get_manifest_envelope()?;
 
-	// verify signature
+	// 1. Verify the signature over the `encrypted_quorum_key` against the
+	// Quorum Key specified in the New Manifest.
 	let quorum_public = P256Public::from_bytes(
 		&manifest_envelope.manifest.namespace.quorum_key,
 	)?;
@@ -37,7 +38,8 @@ pub(in crate::protocol) fn inject_key(
 		.verify(&encrypted_quorum_key, &signature)
 		.map_err(|_| ProtocolError::InvalidEncryptedQuorumKeySignature)?;
 
-	// get the decrypted quorum pair
+	// 2. Decrypt the encrypted Quorum Key in the request with the Ephemeral
+	// Key.
 	let quorum_master_seed = {
 		let ephemeral_pair = state.handles.get_ephemeral_key()?;
 		let bytes = ephemeral_pair.decrypt(&encrypted_quorum_key)?;
@@ -45,11 +47,17 @@ pub(in crate::protocol) fn inject_key(
 			.try_into()
 			.map_err(|_| ProtocolError::EncryptedQuorumKeyInvalidLen)?
 	};
+
+	// 3. Check that the decrypted Quorum Key public key matches the one
+	// specified in the New Manifest.
 	let decrypted_quorum_pair = P256Pair::from_master_seed(&quorum_master_seed)
 		.map_err(|_| ProtocolError::InvalidQuorumSecret)?;
 	if decrypted_quorum_pair.public_key() != quorum_public {
 		return Err(ProtocolError::WrongQuorumKey);
 	}
+
+	// 4. Write the Quorum Key to the file system, at which point New Node will
+	// automatically pivot to running the Pivot App.
 	state.handles.put_quorum_key(&decrypted_quorum_pair)?;
 	Ok(())
 }
@@ -68,6 +76,9 @@ pub(in crate::protocol) fn export_key(
 	new_manifest_envelope: &ManifestEnvelope,
 	cose_sign1_attestation_document: &[u8],
 ) -> Result<EncryptedQuorumKey, ProtocolError> {
+	// 1. Check the basic validity of the attestation doc (cert chain etc).
+	// Ensures that the attestation document is actually from an AWS controlled
+	// NSM module and the document's timestamp was recent.
 	let attestation_doc = verify_and_extract_attestation_doc_from_der(
 		cose_sign1_attestation_document,
 		&*state.attestor,
@@ -83,6 +94,7 @@ fn export_key_internal(
 	attestation_doc: &AttestationDoc,
 ) -> Result<EncryptedQuorumKey, ProtocolError> {
 	let old_manifest_envelope = state.handles.get_manifest_envelope()?;
+	// steps 2 through 9
 	validate_manifest(
 		new_manifest_envelope,
 		&old_manifest_envelope,
@@ -108,6 +120,10 @@ fn export_key_internal(
 	};
 
 	let quorum_key = state.handles.get_quorum_key()?;
+	// 10. Return the Quorum Key encrypted to the New Node's Ephemeral Key
+	// extracted from the attestation document and a signature over the
+	// encrypted payload. The Original Node uses its Quorum Key to create the
+	// signature.
 	let encrypted_quorum_key = eph_key.encrypt(quorum_key.to_master_seed())?;
 	let signature = quorum_key.sign(&encrypted_quorum_key)?;
 
@@ -120,18 +136,30 @@ fn validate_manifest(
 	old_manifest_envelope: &ManifestEnvelope,
 	_attestation_doc: &AttestationDoc,
 ) -> Result<(), ProtocolError> {
+	// 2. Check the signatures over the New Manifest. Ensures that K Manifest
+	// Set Members approved the New Manifest.
 	new_manifest_envelope.check_approvals()?;
 
 	if !new_manifest_envelope.share_set_approvals.is_empty() {
 		return Err(ProtocolError::BadShareSetApprovals);
 	}
 
+	// 3. Check that the Quorum Key of the Local Manifest matches the Quorum Key
+	// of the New Manifest. This ensures the request is for the correct Quorum
+	// Key.
 	if old_manifest_envelope.manifest.namespace.quorum_key
 		!= new_manifest_envelope.manifest.namespace.quorum_key
 	{
 		return Err(ProtocolError::DifferentQuorumKey);
 	}
 
+	// 4. Check that the Manifest Set of the New Manifest matches the Manifest
+	// Set of the Local Manifest. Ensures that the signatures are from a trusted
+	// Manifest Set. Note that there is still a vulnerability here if we have
+	// try to retire a Manifest Set because a critical threshold of it was
+	// compromised - that malicious Manifest Set could boot off of an Original
+	// Node - thus it's important to retire all Original Nodes ASAP that use
+	// compromised Manifest Sets.
 	{
 		let mut new_manifest = new_manifest_envelope.manifest.clone();
 		let mut old_manifest = old_manifest_envelope.manifest.clone();
@@ -142,18 +170,46 @@ fn validate_manifest(
 		}
 	}
 
+	// 5. Check that the Namespace of the Local Manifest matches the namespace
+	// of the New Manifest. Namespaces are a social construct, but we only want
+	// to allow forwarding a Quorum Key to Nodes in the same Namespace to help
+	// ensure that the nonce is not abused.
 	if old_manifest_envelope.manifest.namespace.name
 		!= new_manifest_envelope.manifest.namespace.name
 	{
 		return Err(ProtocolError::DifferentNamespaceName);
 	}
 
+	// 6. Check that the nonce of the New Manifest is greater than or equal to
+	// the nonce of the Local Manifest. If they have the same nonce, we check
+	// that the Local Manifest has the same hash as an extra measure. Note that
+	// while the nonce is verified programmatically in this routine, its
+	// maintenance relative to other manifests in the namespace is a social
+	// coordination problem and is meant to be solved by the Manifest Set
+	// Members approving the manifest. In other words, we rely on the Manifest
+	// Set Members to correctly increment the nonce when any change is made to
+	// the latest manifest for a namespace.
 	if old_manifest_envelope.manifest.namespace.nonce
 		> new_manifest_envelope.manifest.namespace.nonce
 	{
 		return Err(ProtocolError::LowNonce);
+	} else if old_manifest_envelope.manifest.namespace.nonce
+		== new_manifest_envelope.manifest.namespace.nonce
+		&& old_manifest_envelope.manifest.qos_hash()
+			!= new_manifest_envelope.manifest.qos_hash()
+	{
+		return Err(ProtocolError::DifferentManifest);
 	}
 
+	// 7. Check that the hash of the new manifest is in the `user_data` field of
+	// the attestation doc.
+	//
+	// 8. Check that PCR0, PCR1, PCR2, and PCR3 in the New
+	// Manifest match the PCRs in the attestation document. This ensures the New
+	// Manifest was used against a Nitro enclave booted with the intended
+	// version of QOS. Note that we assume the values for PCR{0, 1 , 2}
+	// correspond to a desired version of QOS because the Manifest Set Members
+	// had K approvals.
 	#[cfg(not(feature = "mock"))]
 	{
 		use crate::protocol::QosHash;
@@ -167,6 +223,7 @@ fn validate_manifest(
 		)?;
 	}
 
+	// 9. Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is the IAM role assigned to the EC2 host of the enclave. An IAM role contains an AWS organization's unique ID. By only using the approved PCR3 value we ensure that we only ever send the Quorum Key to an enclave that is controlled by the operator, not an enclave that some malicious entity runs that otherwise configured identically to one of the operator's enclaves.
 	if old_manifest_envelope.manifest.enclave.pcr3
 		!= new_manifest_envelope.manifest.enclave.pcr3
 	{
@@ -594,6 +651,22 @@ mod test {
 		}
 
 		#[test]
+		fn rejects_manifest_with_matching_nonce_different_hash() {
+			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let mut old_manifest_envelope = manifest_envelope.clone();
+			old_manifest_envelope.manifest.enclave.pcr0 = vec![128; 32];
+
+			assert_eq!(
+				validate_manifest(
+					&manifest_envelope,
+					&old_manifest_envelope,
+					&att_doc
+				),
+				Err(ProtocolError::DifferentManifest)
+			);
+		}
+
+		#[test]
 		fn rejects_manifest_with_different_quorum_key() {
 			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
 			let mut old_manifest_envelope = manifest_envelope.clone();
@@ -613,10 +686,11 @@ mod test {
 		}
 
 		#[test]
-		fn rejects_manifest_with_different_manifest_set() {
+		fn does_not_accept_manifest_with_different_manifest_set() {
 			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.manifest_set.members.pop();
+			old_manifest_envelope.manifest.namespace.nonce -= 1;
 
 			assert_eq!(
 				validate_manifest(
@@ -651,12 +725,14 @@ mod test {
 				.members
 				.insert(0, last_member);
 
+			old_manifest_envelope.manifest.namespace.nonce -= 1;
+
 			assert!(validate_manifest(
 				&manifest_envelope,
 				&old_manifest_envelope,
 				&att_doc
 			)
-			.is_ok());
+			.is_ok(),);
 		}
 
 		#[test]
@@ -681,6 +757,7 @@ mod test {
 			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.enclave.pcr3 = vec![128; 32];
+			old_manifest_envelope.manifest.namespace.nonce -= 1;
 
 			assert_eq!(
 				validate_manifest(
@@ -772,6 +849,7 @@ mod test {
 				..
 			} = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
+			new_manifest_envelope.manifest.namespace.nonce += 1;
 			new_manifest_envelope.manifest.enclave.pcr0 = vec![128; 32];
 
 			let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
@@ -808,6 +886,7 @@ mod test {
 				..
 			} = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
+			new_manifest_envelope.manifest.namespace.nonce += 1;
 			new_manifest_envelope.manifest.enclave.pcr1 = vec![128; 32];
 
 			let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
@@ -844,6 +923,7 @@ mod test {
 				..
 			} = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
+			new_manifest_envelope.manifest.namespace.nonce += 1;
 			new_manifest_envelope.manifest.enclave.pcr2 = vec![128; 32];
 
 			let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
@@ -880,6 +960,7 @@ mod test {
 				..
 			} = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
+			new_manifest_envelope.manifest.namespace.nonce += 1;
 			new_manifest_envelope.manifest.enclave.pcr3 = vec![128; 32];
 
 			// Also update the old manifest to have the same pcr3 so the issue

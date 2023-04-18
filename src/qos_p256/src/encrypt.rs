@@ -14,7 +14,7 @@ use rand_core::OsRng;
 use sha2::Sha512;
 use zeroize::ZeroizeOnDrop;
 
-use crate::{non_zero_bytes_os_rng, P256Error, PUB_KEY_LEN_UNCOMPRESSED};
+use crate::{bytes_os_rng, P256Error, PUB_KEY_LEN_UNCOMPRESSED};
 
 const AES256_KEY_LEN: usize = 32;
 const BITS_96_AS_BYTES: u8 = 12;
@@ -148,7 +148,7 @@ impl P256EncryptPublic {
 
 		let nonce = {
 			let random_bytes =
-				crate::non_zero_bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
+				crate::bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
 			*Nonce::from_slice(&random_bytes)
 		};
 
@@ -331,7 +331,7 @@ impl AesGcm256Secret {
 	/// Generate a secret
 	#[must_use]
 	pub fn generate() -> Self {
-		Self { secret: non_zero_bytes_os_rng::<AES256_KEY_LEN>() }
+		Self { secret: bytes_os_rng::<AES256_KEY_LEN>() }
 	}
 
 	/// The secret as bytes.
@@ -351,7 +351,7 @@ impl AesGcm256Secret {
 	pub fn encrypt(&self, msg: &[u8]) -> Result<Vec<u8>, P256Error> {
 		let nonce = {
 			let random_bytes =
-				non_zero_bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
+				bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
 			*Nonce::from_slice(&random_bytes)
 		};
 		let payload = Payload { aad: AES_GCM_256_HMAC_SHA512_TAG, msg };

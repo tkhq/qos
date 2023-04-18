@@ -106,17 +106,11 @@ pub fn derive_secret(
 
 /// Helper function to generate a `N` length byte buffer.
 #[must_use]
-pub fn non_zero_bytes_os_rng<const N: usize>() -> [u8; N] {
-	loop {
-		let mut key = [0u8; N];
-		OsRng.fill_bytes(&mut key);
+pub fn bytes_os_rng<const N: usize>() -> [u8; N] {
+	let mut key = [0u8; N];
+	OsRng.fill_bytes(&mut key);
 
-		if key.iter().all(|bit| *bit == 0) {
-			// try again if we got all zeros
-		} else {
-			return key;
-		}
-	}
+	key
 }
 
 /// P256 private key pair for signing and encryption. Internally this uses a
@@ -133,7 +127,7 @@ pub struct P256Pair {
 impl P256Pair {
 	/// Generate a new private key using the OS randomness source.
 	pub fn generate() -> Result<Self, P256Error> {
-		let master_seed = non_zero_bytes_os_rng::<MASTER_SEED_LEN>();
+		let master_seed = bytes_os_rng::<MASTER_SEED_LEN>();
 
 		let p256_encrypt_secret =
 			derive_secret(&master_seed, P256_ENCRYPT_DERIVE_PATH)?;
@@ -233,8 +227,6 @@ impl P256Pair {
 	}
 
 	/// Read the raw, hex encoded master from a file.
-	// TODO(zeke): implement utils that go to/from bytes so we can avoid string
-	// serialization. https://github.com/tkhq/qos/issues/153.
 	pub fn from_hex_file<P: AsRef<Path>>(path: P) -> Result<Self, P256Error> {
 		let hex_bytes = std::fs::read(path).map_err(|e| {
 			P256Error::IOError(format!("failed to read master seed: {e}"))

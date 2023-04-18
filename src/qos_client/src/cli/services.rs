@@ -852,8 +852,6 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	Ok(())
 }
 
-// TODO(zeke): bubble up errors instead of just logging error.
-// https://github.com/tkhq/qos/issues/174
 fn approve_manifest_programmatic_verifications(
 	manifest: &Manifest,
 	manifest_set: &ManifestSet,
@@ -1299,8 +1297,6 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	Ok(())
 }
 
-// TODO(zeke): bubble up errors instead of just logging error.
-// https://github.com/tkhq/qos/issues/174
 fn proxy_re_encrypt_share_programmatic_verifications(
 	manifest_envelope: &ManifestEnvelope,
 	manifest_set: &ManifestSet,
@@ -2106,7 +2102,6 @@ fn extract_pivot_hash<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
 /// # Panics
 ///
 /// Panics if extraction or validation fails.
-// TODO: [now] bubble up errors
 pub(crate) fn extract_attestation_doc(
 	cose_sign1_der: &[u8],
 	unsafe_skip_attestation: bool,

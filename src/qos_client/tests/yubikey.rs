@@ -11,7 +11,7 @@ use qos_client::yubikey::{
 };
 use qos_p256::{
 	encrypt::{Envelope, P256EncryptPair, P256EncryptPublic},
-	non_zero_bytes_os_rng,
+	bytes_os_rng,
 	sign::{P256SignPair, P256SignPublic},
 	P256Pair, P256Public, P256_SECRET_LEN,
 };
@@ -19,8 +19,6 @@ use qos_test_primitives::PathWrapper;
 use yubikey::{MgmKey, TouchPolicy, YubiKey};
 
 const DATA: &[u8] = b"test data";
-
-// TODO: mock yubikey. https://github.com/tkhq/qos/issues/162
 
 // CAREFUL: Only run these tests when a test yubikey is plugged in - this will
 // factory reset the yubikey.
@@ -134,7 +132,7 @@ fn signing_works(yubikey: &mut YubiKey) {
 }
 
 fn import_signing_works(yubikey: &mut YubiKey) {
-	let secret = non_zero_bytes_os_rng::<P256_SECRET_LEN>();
+	let secret = bytes_os_rng::<P256_SECRET_LEN>();
 	let pair = P256SignPair::from_bytes(&secret).unwrap();
 	let public = pair.public_key();
 
@@ -154,7 +152,7 @@ fn import_signing_works(yubikey: &mut YubiKey) {
 }
 
 fn import_key_agreement_works(yubikey: &mut YubiKey) {
-	let secret = non_zero_bytes_os_rng::<32>();
+	let secret = bytes_os_rng::<32>();
 	let pair = P256EncryptPair::from_bytes(&secret).unwrap();
 	let public = pair.public_key();
 
