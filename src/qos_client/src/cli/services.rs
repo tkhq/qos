@@ -1951,20 +1951,7 @@ fn get_entry(
 fn extract_qos_pcrs<P: AsRef<Path>>(
 	qos_release_dir_path: P,
 ) -> Result<QosPcrs, Error> {
-	let qos_release_manifest =
-		extract_qos_release_manifest(&qos_release_dir_path);
-
 	let pcr_path = PathBuf::from(qos_release_dir_path.as_ref()).join(PCRS_PATH);
-
-	// We need to verify that the PCRs match those referred to in the release
-	// manifest. The release manifest is what actually gets signed.
-	let pcr_txt_bytes =
-		std::fs::read(&pcr_path).expect("failed to read pcr path");
-
-	let pcr_txt_hash = sha_256(&pcr_txt_bytes);
-	if pcr_txt_hash.to_vec() != qos_release_manifest.pcrs_hash {
-		return Err(Error::PcrTxtHashDoesNotMatchReleaseManifest);
-	}
 
 	let entries = lines_to_entries(&pcr_path);
 	Ok(QosPcrs {
@@ -1972,45 +1959,6 @@ fn extract_qos_pcrs<P: AsRef<Path>>(
 		pcr1: get_entry(&entries, 1, "PCR1"),
 		pcr2: get_entry(&entries, 2, "PCR2"),
 	})
-}
-
-struct QosReleaseManifest {
-	pcrs_hash: Vec<u8>,
-	_nitro_eif_hash: Vec<u8>,
-	_qos_client_hash: Vec<u8>,
-	_qos_client_oci_hash: Vec<u8>,
-	_qos_client_sc_hash: Vec<u8>,
-	_qos_host_hash: Vec<u8>,
-	_qos_host_oci_hash: Vec<u8>,
-	_release_env: Vec<u8>,
-}
-
-fn extract_qos_release_manifest<P: AsRef<Path>>(
-	qos_release_dir_path: P,
-) -> QosReleaseManifest {
-	let manifest_path = PathBuf::from(qos_release_dir_path.as_ref())
-		.join(QOS_RELEASE_MANIFEST_FILE);
-
-	let entries = lines_to_entries(manifest_path);
-
-	QosReleaseManifest {
-		_nitro_eif_hash: get_entry(&entries, 0, "aws-x86_64.eif"),
-		pcrs_hash: get_entry(&entries, 1, "aws-x86_64.pcrs"),
-		_qos_client_hash: get_entry(&entries, 2, "qos_client.linux.x86_64"),
-		_qos_client_oci_hash: get_entry(
-			&entries,
-			3,
-			"qos_client.oci.x86_64.tar",
-		),
-		_qos_client_sc_hash: get_entry(
-			&entries,
-			4,
-			"qos_client_sc.linux.x86_64",
-		),
-		_qos_host_hash: get_entry(&entries, 5, "qos_host.linux.x86_64"),
-		_qos_host_oci_hash: get_entry(&entries, 6, "qos_host.oci.x86_64.tar"),
-		_release_env: get_entry(&entries, 7, "release.env"),
-	}
 }
 
 struct QosReleaseEnv {
