@@ -457,8 +457,9 @@ mod test {
 		assert_eq!(state.get_phase(), ProtocolPhase::WaitingForQuorumShards);
 	}
 
-		#[test]
-	fn provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature() {
+	#[test]
+	fn provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature(
+	) {
 		let eph_file: PathWrapper =
 			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.eph.key".into();
 		let quorum_file: PathWrapper =
@@ -489,7 +490,8 @@ mod test {
 		// DO NOT update the approval signature, so it doesn't match the pub key
 
 		let share = encrypted_shares.remove(0);
-		// we get an invalid signature error (not an error that they are not part of the set)
+		// we get an invalid signature error (not an error that they are not
+		// part of the set)
 		assert_eq!(
 			provision(&share, approval, &mut state).unwrap_err(),
 			ProtocolError::CouldNotVerifyApproval
