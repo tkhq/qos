@@ -40,6 +40,14 @@ pub fn reboot() {
 	}
 }
 
+/// Unconditionally halt the system now
+pub fn poweroff() {
+	use libc::{reboot, RB_POWER_OFF};
+	unsafe {
+		reboot(RB_POWER_OFF);
+	}
+}
+
 /// libc::mount casting/error wrapper
 pub fn mount(
 	src: &str,
@@ -135,39 +143,22 @@ pub fn socket_connect(
 	}
 }
 
-/// Seed an entropy sample into the kernel randomness pool.
-pub fn seed_entropy(
-	size: usize,
-	source: fn(usize) -> Result<Vec<u8>, SystemError>,
-) -> Result<usize, SystemError> {
-	use std::io::Write;
-	use std::fs::OpenOptions;
-
-	let entropy_sample = match source(size) {
-		Ok(sample) => sample,
-		Err(e) => return Err(e),
+/// Verify expected hwrng is loaded
+pub fn check_hwrng(rng_expected: &str) -> Result<(), SystemError> {
+	use std::fs::read_to_string;
+	let filename: &str = "/sys/class/misc/hw_random/rng_current";
+	let rng_current_raw = read_to_string(filename)
+		.map_err(|_| SystemError {
+			message: format!("Failed to read {}", &filename),
+		})?;
+	let rng_current = rng_current_raw.trim();
+	if rng_expected != rng_current {
+		return Err(SystemError {
+			message: format!(
+				"Entropy source was {} instead of {}",
+				rng_current, rng_expected
+			),
+		})
 	};
-
-	let mut random_fd =
-		match OpenOptions::new().read(true).write(true).open("/dev/urandom") {
-			Ok(file) => file,
-			Err(_) => {
-				return Err(SystemError {
-					message: String::from("Failed to open /dev/urandom"),
-				});
-			}
-		};
-
-	// 5.10+ kernel entropy pools are made of BLAKE2 hashes fixed at 256 bit
-	// The RNDADDENTROPY crediting system is now complexity with no gain.
-	// We just simply write samples to /dev/urandom now.
-	// See: https://cdn.kernel.org/pub/linux/kernel/v5.x/ChangeLog-5.10.119
-	match random_fd.write_all(&entropy_sample) {
-		Ok(()) => Ok(entropy_sample.len()),
-		Err(_) => {
-			return Err(SystemError {
-				message: String::from("Failed to write to /dev/urandom"),
-			});
-		}
-	}
+	Ok(())
 }
