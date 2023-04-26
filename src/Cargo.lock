@@ -903,6 +903,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "memoffset"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -936,7 +945,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "libc",
- "memoffset",
+ "memoffset 0.6.5",
 ]
 
 [[package]]
@@ -948,7 +957,20 @@ dependencies = [
  "bitflags",
  "cfg-if",
  "libc",
- "memoffset",
+ "memoffset 0.6.5",
+]
+
+[[package]]
+name = "nix"
+version = "0.26.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfdda3d196821d6af13126e40375cdf7da646a96114af134d5f417a9a1dc8e1a"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "libc",
+ "memoffset 0.7.1",
+ "static_assertions",
 ]
 
 [[package]]
@@ -1083,6 +1105,18 @@ checksum = "dfc8c5bf642dde52bb9e87c0ecd8ca5a76faac2eeed98dedb7c717997e1080aa"
 dependencies = [
  "ecdsa 0.14.8",
  "elliptic-curve",
+ "sha2",
+]
+
+[[package]]
+name = "p384"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "630a4a9b2618348ececfae61a4905f564b817063bf2d66cdfc2ced523fe1d2d4"
+dependencies = [
+ "ecdsa 0.15.1",
+ "elliptic-curve",
+ "primeorder",
  "sha2",
 ]
 
@@ -1286,7 +1320,7 @@ version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
- "nix 0.24.3",
+ "nix 0.26.2",
  "qos_crypto",
  "qos_hex",
  "qos_nsm",
@@ -1326,7 +1360,7 @@ dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "hex-literal",
- "p384",
+ "p384 0.12.0",
  "qos_core",
  "qos_hex",
  "rand",
@@ -1642,6 +1676,12 @@ dependencies = [
  "base64ct",
  "der",
 ]
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "subtle"
@@ -2279,7 +2319,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "p256 0.11.1",
- "p384",
+ "p384 0.11.2",
  "pbkdf2",
  "pcsc",
  "rand_core",
