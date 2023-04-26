@@ -326,7 +326,7 @@ mod test {
 
 			signer
 				.sign_prehash(digest)
-				.map(|sig| sig.to_vec())
+				.map(|sig: Signature| sig.to_vec())
 				.map_err(|e| CoseError::SignatureError(Box::new(e)))
 		}
 	}
