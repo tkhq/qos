@@ -5,6 +5,7 @@ members = [
   "qos_core",
   "qos_crypto",
   "qos_host",
+  "qos_enclave",
   "qos_hex",
   "qos_test_primitives",
   "qos_p256",

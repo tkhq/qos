@@ -28,6 +28,7 @@ default: \
 	$(OUT_DIR)/qos_client.oci.$(ARCH).tar \
 	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/qos_host.oci.$(ARCH).tar \
+	$(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/release.env
 
 # Clean repo back to initial clone state
@@ -94,6 +95,32 @@ $(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH):
 $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/host/Dockerfile \
 	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH)
+	$(call toolchain," \
+		cp $(word 2,$^) $(CACHE_DIR)/ && \
+		touch -hcd "@0" $(CACHE_DIR)/$(notdir $(word 2,$^)) && \
+		buildah build \
+		-f $< \
+		--timestamp 1 \
+		--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		-o type=tar$(,)dest=$@; \
+	")
+
+$(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH):
+	$(call toolchain," \
+		export RUSTFLAGS='-C target-feature=+crt-static' && \
+		cd $(SRC_DIR)/qos_enclave \
+		&& CARGO_HOME=$(CACHE_DIR)/cargo cargo build \
+			--target x86_64-unknown-linux-gnu \
+			--no-default-features \
+			--release \
+		&& cp \
+			../target/x86_64-unknown-linux-gnu/release/qos_enclave \
+			/home/build/$@; \
+	")
+
+$(OUT_DIR)/qos_enclave.oci.$(ARCH).tar: \
+	$(SRC_DIR)/images/enclave/Dockerfile \
+	$(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH)
 	$(call toolchain," \
 		cp $(word 2,$^) $(CACHE_DIR)/ && \
 		touch -hcd "@0" $(CACHE_DIR)/$(notdir $(word 2,$^)) && \
