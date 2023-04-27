@@ -1,4 +1,4 @@
-use qos_system::{dmesg, freopen, mount, reboot, seed_entropy};
+use qos_system::{dmesg, freopen, mount, reboot};
 use qos_core::{
     handles::Handles,
     io::SocketAddress,
@@ -12,7 +12,7 @@ use qos_core::{
 use qos_nsm::Nsm;
 
 //TODO: Feature flag
-use qos_aws::{get_entropy, init_platform};
+use qos_aws::{init_platform};
 
 // Mount common filesystems with conservative permissions
 fn init_rootfs() {
@@ -56,10 +56,6 @@ fn boot() {
 	init_rootfs();
 	init_console();
 	init_platform();
-	match seed_entropy(4096, get_entropy) {
-		Ok(size) => dmesg(format!("Seeded kernel with entropy: {}", size)),
-		Err(e) => eprintln!("{}", e),
-	};
 }
 
 fn main() {
