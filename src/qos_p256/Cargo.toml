@@ -10,7 +10,7 @@ borsh = { version = "0.10", default-features = false }
 rand_core = { version = "0.6.4", default-features = false }
 
 sha2 = { version = "0.10", default-features = false }
-p256 = { version = "0.12.0", features = ["ecdh", "ecdsa", "ecdsa-core", "std"], default-features = false }
+p256 = { version = "0.13.2", features = ["ecdh", "ecdsa", "ecdsa-core", "std"], default-features = false }
 aes-gcm = { version = "0.10.1", features = ["aes", "alloc"], default-features = false }
 hmac = { version = "0.12", default-features = false }
 hkdf = { version = "0.12", default-features = false }
