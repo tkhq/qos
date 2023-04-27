@@ -15,7 +15,7 @@ p384 = { version = "0.12", features = ["sha384", "ecdsa", "ecdsa-core", "std"], 
 x509-cert = { version = "=0.1.0", features = ["pem"], default-features = false }
 
 [dev-dependencies]
-hex-literal = "0.3"
+hex-literal = "0.4"
 rand = "0.8"
 qos_core = { path = "../qos_core", features = ["mock"] }
 
