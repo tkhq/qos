@@ -113,16 +113,31 @@ $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 		-o type=tar$(,)dest=$@; \
 	")
 
-$(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH):
+$(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH): \
+	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
+	$(CACHE_DIR)/lib64/libssl.a
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_enclave \
 		&& export \
 			CARGO_HOME=$(CACHE_DIR) \
+			PKG_CONFIG_ALLOW_CROSS=1 \
+			OPENSSL_STATIC=true \
+			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_DIR=/home/build/$(CACHE_DIR)/lib64 \
+			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_LIB_DIR=/home/build/$(CACHE_DIR)/lib64 \
+			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_INCLUDE_DIR=/home/build/$(CACHE_DIR)/include \
+			RUSTFLAGS=' \
+				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /usr/lib/x86_64-linux-musl \
+				-C target-feature=+crt-static \
+			' \
 		&& cargo build \
-			--target x86_64-unknown-linux-gnu \
+			--target x86_64-unknown-linux-musl \
+			--no-default-features \
+			--locked \
 			--release \
 		&& cp \
-			target/x86_64-unknown-linux-gnu/release/qos_enclave \
+			target/x86_64-unknown-linux-musl/release/qos_enclave \
 			/home/build/$@; \
 	")
 
@@ -200,6 +215,9 @@ $(FETCH_DIR)/linux-$(LINUX_VERSION).tar:
 $(FETCH_DIR)/pcsc:
 	$(call git_clone,$@,$(PCSC_REPO),$(PCSC_REF))
 
+$(FETCH_DIR)/openssl:
+	$(call git_clone,$@,$(OPENSSL_REPO),$(OPENSSL_REF))
+
 $(FETCH_DIR)/rust:
 	$(call git_clone,$@,$(RUST_REPO),$(RUST_REF))
 
@@ -238,6 +256,24 @@ $(CACHE_DIR)/lib/libpcsclite.a: \
 		&& make \
 		&& mkdir -p /home/build/$(CACHE_DIR)/lib \
 		&& cp src/.libs/libpcsclite.a /home/build/$@ \
+	")
+
+$(CACHE_DIR)/lib64/libssl.a: \
+	$(FETCH_DIR)/openssl
+	$(call toolchain," \
+		cd $(FETCH_DIR)/openssl \
+		&& export CC='musl-gcc -fPIE -pie -static' \
+		&& sudo ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/x86_64-linux-musl/asm \
+		&& sudo ln -s /usr/include/asm-generic /usr/include/x86_64-linux-musl/asm-generic \
+		&& sudo ln -s /usr/include/linux /usr/include/x86_64-linux-musl/linux \
+		&& ./Configure \
+			no-shared \
+			no-async \
+			--prefix=/home/build/$(CACHE_DIR) \
+			linux-x86_64 \
+		&& make depend \
+		&& make \
+		&& make install \
 	")
 
 $(FETCH_DIR)/linux-$(LINUX_VERSION): \
