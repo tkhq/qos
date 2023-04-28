@@ -118,18 +118,11 @@ $(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH):
 		cd $(SRC_DIR)/qos_enclave \
 		&& export \
 			CARGO_HOME=$(CACHE_DIR) \
-			RUSTFLAGS=' \
-				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
-				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
-				-L /usr/lib/x86_64-linux-musl \
-				-C target-feature=+crt-static \
-			' \
 		&& cargo build \
-			--target x86_64-unknown-linux-musl \
-			--no-default-features \
+			--target x86_64-unknown-linux-gnu \
 			--release \
 		&& cp \
-			../target/x86_64-unknown-linux-musl/release/qos_enclave \
+			target/x86_64-unknown-linux-gnu/release/qos_enclave \
 			/home/build/$@; \
 	")
 
