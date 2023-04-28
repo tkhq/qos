@@ -350,8 +350,7 @@ impl AesGcm256Secret {
 	/// Returns a serialized [`SymmetricEnvelope`].
 	pub fn encrypt(&self, msg: &[u8]) -> Result<Vec<u8>, P256Error> {
 		let nonce = {
-			let random_bytes =
-				bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
+			let random_bytes = bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
 			*Nonce::from_slice(&random_bytes)
 		};
 		let payload = Payload { aad: AES_GCM_256_HMAC_SHA512_TAG, msg };

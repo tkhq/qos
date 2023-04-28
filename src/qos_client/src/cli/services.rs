@@ -45,7 +45,6 @@ const APPROVAL_EXT: &str = "approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
 const DR_WRAPPED_QUORUM_KEY: &str = "dr_wrapped_quorum_key";
 const PCRS_PATH: &str = "aws-x86_64.pcrs";
-const QOS_RELEASE_MANIFEST_FILE: &str = "manifest.txt";
 const QOS_RELEASE_ENV_FILE: &str = "release.env";
 const GENESIS_DR_ARTIFACTS: &str = "genesis_dr_artifacts";
 
@@ -119,9 +118,6 @@ pub enum Error {
 	/// Failed to deserialize something from borsh.
 	BorshError,
 	FailedToReadDrKey(qos_p256::P256Error),
-	/// The hash of prcs.txt does not match the hash stored in the
-	/// corresponding release manifest.
-	PcrTxtHashDoesNotMatchReleaseManifest,
 	QosAttest(String),
 	/// Pivot file
 	FailedToReadPivot(std::io::Error),
@@ -448,7 +444,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation, None);
 
-	let qos_pcrs = extract_qos_pcrs(qos_release_dir_path)?;
+	let qos_pcrs = extract_qos_pcrs(qos_release_dir_path);
 
 	// Sanity check the genesis output
 	assert!(
@@ -613,7 +609,7 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	let genesis_set_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 
 	// Get the PCRs for QOS so we can verify
-	let qos_pcrs = extract_qos_pcrs(&qos_release_dir_path)?;
+	let qos_pcrs = extract_qos_pcrs(&qos_release_dir_path);
 	let release_env = extract_qos_release_env(&qos_release_dir_path);
 	println!("QOS release ref: {}", release_env.git_ref);
 	println!("QOS version: {}", release_env.version);
@@ -713,7 +709,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 	} = args;
 
 	let nitro_config =
-		extract_nitro_config(qos_release_dir_path, pcr3_preimage_path)?;
+		extract_nitro_config(qos_release_dir_path, pcr3_preimage_path);
 	let pivot_hash = extract_pivot_hash(pivot_hash_path);
 
 	// Get manifest set keys & threshold
@@ -752,19 +748,19 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 fn extract_nitro_config<P: AsRef<Path>>(
 	qos_release_dir_path: P,
 	pcr3_preimage_path: P,
-) -> Result<NitroConfig, Error> {
+) -> NitroConfig {
 	let pcr3 = extract_pcr3(pcr3_preimage_path);
-	let QosPcrs { pcr0, pcr1, pcr2 } = extract_qos_pcrs(&qos_release_dir_path)?;
+	let QosPcrs { pcr0, pcr1, pcr2 } = extract_qos_pcrs(&qos_release_dir_path);
 	let release_env = extract_qos_release_env(qos_release_dir_path);
 
-	Ok(NitroConfig {
+	NitroConfig {
 		pcr0,
 		pcr1,
 		pcr2,
 		pcr3,
 		qos_commit: release_env.git_ref,
 		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
-	})
+	}
 }
 
 pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
@@ -806,7 +802,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		&manifest,
 		&get_manifest_set(manifest_set_dir),
 		&get_share_set(share_set_dir),
-		&extract_nitro_config(qos_release_dir_path, pcr3_preimage_path)?,
+		&extract_nitro_config(qos_release_dir_path, pcr3_preimage_path),
 		&extract_pivot_hash(pivot_hash_path),
 		&quorum_key,
 	) {
@@ -1948,68 +1944,14 @@ fn get_entry(
 		.unwrap_or_else(|_| panic!("Invalid hex for {expected_label}"))
 }
 
-fn extract_qos_pcrs<P: AsRef<Path>>(
-	qos_release_dir_path: P,
-) -> Result<QosPcrs, Error> {
-	let qos_release_manifest =
-		extract_qos_release_manifest(&qos_release_dir_path);
-
+fn extract_qos_pcrs<P: AsRef<Path>>(qos_release_dir_path: P) -> QosPcrs {
 	let pcr_path = PathBuf::from(qos_release_dir_path.as_ref()).join(PCRS_PATH);
 
-	// We need to verify that the PCRs match those referred to in the release
-	// manifest. The release manifest is what actually gets signed.
-	let pcr_txt_bytes =
-		std::fs::read(&pcr_path).expect("failed to read pcr path");
-
-	let pcr_txt_hash = sha_256(&pcr_txt_bytes);
-	if pcr_txt_hash.to_vec() != qos_release_manifest.pcrs_hash {
-		return Err(Error::PcrTxtHashDoesNotMatchReleaseManifest);
-	}
-
-	let entries = lines_to_entries(&pcr_path);
-	Ok(QosPcrs {
+	let entries = lines_to_entries(pcr_path);
+	QosPcrs {
 		pcr0: get_entry(&entries, 0, "PCR0"),
 		pcr1: get_entry(&entries, 1, "PCR1"),
 		pcr2: get_entry(&entries, 2, "PCR2"),
-	})
-}
-
-struct QosReleaseManifest {
-	pcrs_hash: Vec<u8>,
-	_nitro_eif_hash: Vec<u8>,
-	_qos_client_hash: Vec<u8>,
-	_qos_client_oci_hash: Vec<u8>,
-	_qos_client_sc_hash: Vec<u8>,
-	_qos_host_hash: Vec<u8>,
-	_qos_host_oci_hash: Vec<u8>,
-	_release_env: Vec<u8>,
-}
-
-fn extract_qos_release_manifest<P: AsRef<Path>>(
-	qos_release_dir_path: P,
-) -> QosReleaseManifest {
-	let manifest_path = PathBuf::from(qos_release_dir_path.as_ref())
-		.join(QOS_RELEASE_MANIFEST_FILE);
-
-	let entries = lines_to_entries(manifest_path);
-
-	QosReleaseManifest {
-		_nitro_eif_hash: get_entry(&entries, 0, "aws-x86_64.eif"),
-		pcrs_hash: get_entry(&entries, 1, "aws-x86_64.pcrs"),
-		_qos_client_hash: get_entry(&entries, 2, "qos_client.linux.x86_64"),
-		_qos_client_oci_hash: get_entry(
-			&entries,
-			3,
-			"qos_client.oci.x86_64.tar",
-		),
-		_qos_client_sc_hash: get_entry(
-			&entries,
-			4,
-			"qos_client_sc.linux.x86_64",
-		),
-		_qos_host_hash: get_entry(&entries, 5, "qos_host.linux.x86_64"),
-		_qos_host_oci_hash: get_entry(&entries, 6, "qos_host.oci.x86_64.tar"),
-		_release_env: get_entry(&entries, 7, "release.env"),
 	}
 }
 
