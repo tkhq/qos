@@ -13,7 +13,7 @@ nix = { version = "0.26", features = ["socket"], default-features = false }
 borsh = { version = "0.10" }
 
 # For AWS Nitro
-aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
+aws-nitro-enclaves-nsm-api = { version = "0.3.0", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 
 [dev-dependencies]
