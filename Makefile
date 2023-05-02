@@ -28,6 +28,7 @@ default: \
 	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH) \
 	$(OUT_DIR)/qos_host.oci.$(ARCH).tar \
 	$(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH) \
+	$(OUT_DIR)/qos_enclave.oci.$(ARCH).tar \
 	$(OUT_DIR)/release.env
 
 # Clean repo back to initial clone state
