@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2.142"
-nsm_lib = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", package="nsm-lib", rev = "cfcf7a29587f5bc9338a2535221af84492f949c5" }
-nsm_api = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", package="aws-nitro-enclaves-nsm-api", rev = "cfcf7a29587f5bc9338a2535221af84492f949c5" }
+nsm_lib = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", package="nsm-lib", rev = "f9422662d02ad089b5132cfcdbe3496365ab4818" }
+nsm_api = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", package="aws-nitro-enclaves-nsm-api", rev = "f9422662d02ad089b5132cfcdbe3496365ab4818" }
 qos_system = { path = "../qos_system"}

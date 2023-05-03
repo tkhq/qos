@@ -21,5 +21,5 @@ nix = { version = "0.26", features = ["socket"], default-features = false }
 [dev-dependencies]
 qos_core = { path = "../qos_core", features = ["mock"], default-features = false }
 borsh = { version = "0.10" }
-aws-nitro-enclaves-nsm-api = { version = "0.2.1", default-features = false }
+aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
 rand = "0.8"

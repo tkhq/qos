@@ -10,8 +10,8 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "aws-nitro-enclaves-nsm-api"
-version = "0.2.1"
-source = "git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?rev=cfcf7a29587f5bc9338a2535221af84492f949c5#cfcf7a29587f5bc9338a2535221af84492f949c5"
+version = "0.3.0"
+source = "git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?rev=f9422662d02ad089b5132cfcdbe3496365ab4818#f9422662d02ad089b5132cfcdbe3496365ab4818"
 dependencies = [
  "libc",
  "log",
@@ -29,9 +29,9 @@ checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 
 [[package]]
 name = "cbindgen"
-version = "0.21.0"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "485ede05a56152367a6ec586a7425b475d6c3d3838581ff651d2a6e3730a62ef"
+checksum = "a6358dedf60f4d9b8db43ad187391afe959746101346fe51bb978126bec61dfb"
 dependencies = [
  "heck",
  "indexmap",
@@ -44,12 +44,6 @@ dependencies = [
  "tempfile",
  "toml",
 ]
-
-[[package]]
-name = "cc"
-version = "1.0.79"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50d30906286121d95be3d479533b458f87493b30a4b5f79a607db8f5d11aa91f"
 
 [[package]]
 name = "cfg-if"
@@ -126,35 +120,42 @@ dependencies = [
 
 [[package]]
 name = "memoffset"
-version = "0.6.5"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
+checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
 dependencies = [
  "autocfg",
 ]
 
 [[package]]
 name = "nix"
-version = "0.20.2"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5e06129fb611568ef4e868c14b326274959aa70ff7776e9d55323531c374945"
+checksum = "bfdda3d196821d6af13126e40375cdf7da646a96114af134d5f417a9a1dc8e1a"
 dependencies = [
  "bitflags",
- "cc",
  "cfg-if",
  "libc",
  "memoffset",
+ "pin-utils",
+ "static_assertions",
 ]
 
 [[package]]
 name = "nsm-lib"
-version = "0.2.1"
-source = "git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?rev=cfcf7a29587f5bc9338a2535221af84492f949c5#cfcf7a29587f5bc9338a2535221af84492f949c5"
+version = "0.3.0"
+source = "git+https://github.com/aws/aws-nitro-enclaves-nsm-api.git/?rev=f9422662d02ad089b5132cfcdbe3496365ab4818#f9422662d02ad089b5132cfcdbe3496365ab4818"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "cbindgen",
  "serde_bytes",
 ]
+
+[[package]]
+name = "pin-utils"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "proc-macro2"
@@ -264,6 +265,12 @@ dependencies = [
  "ryu",
  "serde",
 ]
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "syn"
