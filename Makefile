@@ -144,14 +144,18 @@ $(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH): \
 
 $(OUT_DIR)/qos_enclave.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/enclave/Dockerfile \
-	$(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH)
+	$(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH) \
+	$(OUT_DIR)/$(TARGET)-$(ARCH).eif
 	$(call toolchain," \
 		cp $(word 2,$^) $(CACHE_DIR)/ && \
+		cp $(word 3,$^) $(CACHE_DIR)/ && \
 		touch -hcd "@0" $(CACHE_DIR)/$(notdir $(word 2,$^)) && \
+		touch -hcd "@0" $(CACHE_DIR)/$(notdir $(word 3,$^)) && \
 		buildah build \
 		-f $< \
 		--timestamp 1 \
 		--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		--build-arg EIF=$(CACHE_DIR)/$(notdir $(word 3,$^)) \
 		-o type=tar$(,)dest=$@; \
 	")
 
