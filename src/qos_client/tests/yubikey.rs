@@ -10,8 +10,8 @@ use qos_client::yubikey::{
 	key_agreement, sign_data, DEFAULT_PIN, KEY_AGREEMENT_SLOT, SIGNING_SLOT,
 };
 use qos_p256::{
-	encrypt::{Envelope, P256EncryptPair, P256EncryptPublic},
 	bytes_os_rng,
+	encrypt::{Envelope, P256EncryptPair, P256EncryptPublic},
 	sign::{P256SignPair, P256SignPublic},
 	P256Pair, P256Public, P256_SECRET_LEN,
 };

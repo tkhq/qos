@@ -223,7 +223,13 @@ fn validate_manifest(
 		)?;
 	}
 
-	// 9. Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is the IAM role assigned to the EC2 host of the enclave. An IAM role contains an AWS organization's unique ID. By only using the approved PCR3 value we ensure that we only ever send the Quorum Key to an enclave that is controlled by the operator, not an enclave that some malicious entity runs that otherwise configured identically to one of the operator's enclaves.
+	// 9. Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is
+	// the IAM role assigned to the EC2 host of the enclave. An IAM role
+	// contains an AWS organization's unique ID. By only using the approved PCR3
+	// value we ensure that we only ever send the Quorum Key to an enclave that
+	// is controlled by the operator, not an enclave that some malicious entity
+	// runs that otherwise configured identically to one of the operator's
+	// enclaves.
 	if old_manifest_envelope.manifest.enclave.pcr3
 		!= new_manifest_envelope.manifest.enclave.pcr3
 	{
