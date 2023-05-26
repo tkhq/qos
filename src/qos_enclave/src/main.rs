@@ -77,7 +77,7 @@ fn boot(){
     // libs properly, or re-implement some of their functions
     // fn boot(const allow_skip: bool){
 
-    let eif_path = std::env::var("EIF_PATH").unwrap_or("/nitro.eif".to_string());
+    let eif_path = std::env::var("EIF_PATH").unwrap_or("/aws-x86_64.eif".to_string());
     let enclave_cid = std::env::var("ENCLAVE_CID").unwrap_or("16".to_string());
     let memory_mib = std::env::var("MEMORY_MIB").unwrap_or("1024".to_string());
     let cpu_count = std::env::var("CPU_COUNT").unwrap_or("2".to_string());
