@@ -1264,6 +1264,7 @@ dependencies = [
 name = "qos_enclave"
 version = "1.2.0"
 dependencies = [
+ "libc",
  "nitro-cli",
 ]
 

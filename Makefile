@@ -279,6 +279,7 @@ $(CACHE_DIR)/lib64/libssl.a: \
 		&& make depend \
 		&& make \
 		&& make install \
+		&& touch /home/build/$@ \
 	")
 
 $(FETCH_DIR)/linux-$(LINUX_VERSION): \
