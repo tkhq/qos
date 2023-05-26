@@ -159,7 +159,7 @@ fn shutdown() {
 
 fn health_service() {
     println!("Starting health service");
-    let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
+    let listener = TcpListener::bind("0.0.0.0:8080").unwrap();
     for stream in listener.incoming() {
         thread::spawn(move || {
             let mut stream = stream.unwrap();
