@@ -104,12 +104,19 @@ $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH)
 	$(call toolchain," \
 		cp $(word 2,$^) $(CACHE_DIR)/ \
-		&& touch -hcd "@0" $(CACHE_DIR)/$(notdir $(word 2,$^)) \
 		&& buildah build \
-		-f $< \
-		--timestamp 1 \
-		--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
-		-o type=tar$(,)dest=$@; \
+			-f $< \
+			-t qos/$(notdir $(word 2,$^)) \
+			--timestamp 1 \
+			--format oci \
+			--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& buildah push \
+			qos/$(notdir $(word 2,$^)) \
+			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
+		&& find $(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
+			-mindepth 1 \
+			-execdir touch -hcd "@0" "{}" + \
+		&& tar -cvf $@ -C $(CACHE_DIR)/$(notdir $(word 2,$^))-oci . \
 	")
 
 $(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH): \
@@ -143,13 +150,19 @@ $(OUT_DIR)/qos_client.oci.$(ARCH).tar: \
 	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH)
 	$(call toolchain," \
 		cp $(word 2,$^) $(CACHE_DIR)/ \
-		&& touch -hcd "@0" $(CACHE_DIR)/$(notdir $(word 2,$^)) \
 		&& buildah build \
 			-f $< \
 			-t qos/$(notdir $(word 2,$^)) \
 			--timestamp 1 \
+			--format oci \
 			--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
-			-o type=tar$(,)dest=$@; \
+		&& buildah push \
+			qos/$(notdir $(word 2,$^)) \
+			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
+		&& find $(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
+			-mindepth 1 \
+			-execdir touch -hcd "@0" "{}" + \
+		&& tar -cvf $@ -C $(CACHE_DIR)/$(notdir $(word 2,$^))-oci . \
 	")
 
 $(CONFIG_DIR)/$(TARGET)/linux.config:
