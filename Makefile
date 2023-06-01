@@ -113,10 +113,15 @@ $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 		&& buildah push \
 			qos/$(notdir $(word 2,$^)) \
 			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
-		&& find $(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
-			-mindepth 1 \
-			-execdir touch -hcd "@0" "{}" + \
-		&& tar -cvf $@ -C $(CACHE_DIR)/$(notdir $(word 2,$^))-oci . \
+		&& tar \
+				-C $(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
+				--sort=name \
+				--mtime='@0' \
+				--owner=0 \
+				--group=0 \
+				--numeric-owner \
+				-cf /home/build/$@ \
+				. \
 	")
 
 $(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH): \
@@ -159,10 +164,15 @@ $(OUT_DIR)/qos_client.oci.$(ARCH).tar: \
 		&& buildah push \
 			qos/$(notdir $(word 2,$^)) \
 			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
-		&& find $(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
-			-mindepth 1 \
-			-execdir touch -hcd "@0" "{}" + \
-		&& tar -cvf $@ -C $(CACHE_DIR)/$(notdir $(word 2,$^))-oci . \
+		&& tar \
+				-C $(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
+				--sort=name \
+				--mtime='@0' \
+				--owner=0 \
+				--group=0 \
+				--numeric-owner \
+				-cf /home/build/$@ \
+				. \
 	")
 
 $(CONFIG_DIR)/$(TARGET)/linux.config:
