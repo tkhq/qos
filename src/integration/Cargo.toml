@@ -15,11 +15,11 @@ qos_p256 = { path = "../qos_p256", features = ["mock"] }
 qos_test_primitives = { path = "../qos_test_primitives" }
 
 tokio = { version = "1.28", features = ["macros", "rt-multi-thread"], default-features = false }
-borsh = { version = "0.10" }
+borsh = { version = "0.11" }
 nix = { version = "0.26", features = ["socket"], default-features = false }
 
 [dev-dependencies]
 qos_core = { path = "../qos_core", features = ["mock"], default-features = false }
-borsh = { version = "0.10" }
+borsh = { version = "0.11" }
 aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
 rand = "0.8"
