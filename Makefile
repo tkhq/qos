@@ -16,13 +16,13 @@ KEYS := \
 default: \
 	toolchain \
 	$(patsubst %,$(KEY_DIR)/%.asc,$(KEYS)) \
-	$(DEFAULT_GOAL) \
-	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH) \
-	$(OUT_DIR)/qos_client.oci.$(ARCH).tar \
-	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH) \
-	$(OUT_DIR)/qos_host.oci.$(ARCH).tar \
-	$(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH) \
-	$(OUT_DIR)/qos_enclave.oci.$(ARCH).tar \
+	$(OUT_DIR)/aws-x86_64.eif \
+	$(OUT_DIR)/qos_client.linux-x86_64 \
+	$(OUT_DIR)/qos_client.oci.x86_64.tar \
+	$(OUT_DIR)/qos_host.linux-x86_64 \
+	$(OUT_DIR)/qos_host.oci.x86_64.tar \
+	$(OUT_DIR)/qos_enclave.linux-x86_64 \
+	$(OUT_DIR)/qos_enclave.oci.x86_64.tar \
 	$(OUT_DIR)/release.env
 
 # Clean repo back to initial clone state
@@ -72,7 +72,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 			--output $(OUT_DIR)/$(TARGET)-$(ARCH).eif; \
 	")
 
-$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH): \
+$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 	$(call toolchain," \
 		export \
@@ -93,7 +93,7 @@ $(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH): \
 
 $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/host/Dockerfile \
-	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH)
+	$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH)
 	$(call toolchain," \
 		cp $(word 2,$^) $(CACHE_DIR)/ \
 		&& buildah build \
@@ -116,12 +116,13 @@ $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 				. \
 	")
 
-$(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH): \
+$(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
 	$(CACHE_DIR)/lib64/libssl.a
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_enclave \
 		&& export \
+			OPENSSL_STATIC=true \
 			RUSTFLAGS=' \
 				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
 				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
@@ -136,8 +137,9 @@ $(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH): \
 	")
 
 $(OUT_DIR)/qos_enclave.oci.$(ARCH).tar: \
-	$(SRC_DIR)/images/host/Dockerfile \
-	$(OUT_DIR)/qos_enclave.$(PLATFORM).$(ARCH)
+	$(SRC_DIR)/images/enclave/Dockerfile \
+	$(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH) \
+	$(OUT_DIR)/aws-x86_64.eif
 	$(call toolchain," \
 		cp $(word 2,$^) $(CACHE_DIR)/ \
 		&& buildah build \
@@ -146,6 +148,7 @@ $(OUT_DIR)/qos_enclave.oci.$(ARCH).tar: \
 			--timestamp 1 \
 			--format oci \
 			--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+			--build-arg EIF=$(CACHE_DIR)/$(notdir $(word 3,$^)) \
 		&& buildah push \
 			qos/$(notdir $(word 2,$^)) \
 			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
@@ -370,7 +373,7 @@ $(CACHE_DIR)/bzImage: \
 $(BIN_DIR)/eif_build:
 	$(call toolchain," \
 		cd $(SRC_DIR)/eif_build && \
-		export CARGO_HOME=$(CACHE_DIR)/cargo && \
+		export CC=gcc && \
 		cargo build \
 			--locked \
 			--target x86_64-unknown-linux-gnu && \
