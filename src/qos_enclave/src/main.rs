@@ -1,12 +1,16 @@
 use std::{
 	io::Write,
+	mem::MaybeUninit,
 	net::{Shutdown, TcpListener},
 	os::unix::net::UnixStream,
 	process::exit,
-	thread,
+	ptr, thread,
 };
 
-use libc::{SIGINT, SIGTERM};
+use libc::{
+	c_int, sigaddset, sigemptyset, sigprocmask, sigset_t, sigwaitinfo, SIGINT,
+	SIGTERM, SIG_BLOCK,
+};
 use nitro_cli::{
 	common::{
 		commands_parser::{DescribeEnclavesArgs, EmptyArgs, RunEnclavesArgs},
@@ -55,7 +59,7 @@ fn healthy() -> Result<(), Box<dyn std::error::Error>> {
 	}
 }
 
-fn boot() {
+fn boot() -> String {
 	//TODO: allow_skip: do not bail if boot fails
 	// currently ignored until we figure out how to hook into the nitro CLI
 	// libs properly, or re-implement some of their functions
@@ -76,7 +80,7 @@ fn boot() {
 		debug_mode: false,
 		attach_console: false,
 		cpu_count: Some(cpu_count.parse::<u32>().unwrap()),
-		enclave_name: Some(enclave_name),
+		enclave_name: Some(enclave_name.clone()),
 	};
 	println!("{:?}", run_args);
 
@@ -123,15 +127,15 @@ fn boot() {
 		.set_action(RUN_ENCLAVE_STR.to_string())
 	})
 	.ok_or_exit_with_errno(None);
-}
 
-fn shutdown() {
-	println!("Shutting down Enclave");
-	let enclave_name =
-		std::env::var("ENCLAVE_NAME").unwrap_or("nitro".to_string());
-	let enclave_id = get_id_by_name(enclave_name)
+	return get_id_by_name(enclave_name)
 		.or_else(|_| Err("Failed to parse enclave name"))
 		.unwrap();
+}
+
+fn shutdown(enclave_id: String, sig_num: i32) {
+	println!("Got signal: {}", sig_num);
+	println!("Shutting down Enclave");
 	let mut comm = enclave_proc_connect_to_single(&enclave_id)
 		.or_else(|_| Err("Failed to send command to Enclave"))
 		.unwrap();
@@ -143,6 +147,8 @@ fn shutdown() {
 		&mut comm,
 	)
 	.or_else(|_| Err("Unable to terminate Enclave"));
+
+	exit(0);
 }
 
 fn health_service() {
@@ -166,28 +172,21 @@ fn health_service() {
 	}
 }
 
-fn register_signal_handlers() {
-	unsafe {
-		libc::signal(SIGINT, handle_sigint as usize);
-		libc::signal(SIGTERM, handle_sigterm as usize);
-	}
-}
-
-fn handle_sigint(_signal: i32) {
-	register_signal_handlers();
-	shutdown();
-	exit(130);
-}
-
-fn handle_sigterm(_signal: i32) {
-	register_signal_handlers();
-	shutdown();
-	exit(143);
+fn handle_signals() -> c_int {
+	let mut mask: sigset_t = unsafe {
+		let mut masku = MaybeUninit::<sigset_t>::uninit();
+		sigemptyset(masku.as_mut_ptr());
+		masku.assume_init()
+	};
+	unsafe { sigaddset(&mut mask, SIGINT) };
+	unsafe { sigaddset(&mut mask, SIGTERM) };
+	unsafe { sigprocmask(SIG_BLOCK, &mask, ptr::null_mut()) };
+	let signal = unsafe { sigwaitinfo(&mask, ptr::null_mut()) } as i32;
+	return signal;
 }
 
 fn main() {
 	println!("Booting Nitro Enclave:");
-	register_signal_handlers();
 
 	//TODO: Implement ability to allow skipping boot
 	//let allow_skip: _ = std::env::var("ALLOW_SKIP_BOOT")
@@ -195,12 +194,19 @@ fn main() {
 	//    .trim().parse::<F>().unwrap();
 	//boot(allow_skip);
 
-	boot();
+	let enclave_id = boot();
 
 	match healthy() {
 		Ok(_) => eprintln!("{}", "Enclave is healthy"),
 		Err(e) => eprintln!("Enclave is sad: {}", e),
 	};
 
-	health_service();
+	// TODO: return listener so shutdown() can clean it up properly
+	thread::spawn(|| {
+		health_service();
+	});
+
+	let sig_num = handle_signals();
+
+	shutdown(enclave_id.clone(), sig_num);
 }
