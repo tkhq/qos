@@ -157,8 +157,8 @@ fn health_service() {
 	for stream in listener.incoming() {
 		thread::spawn(move || {
 			let mut stream = stream.unwrap();
-			let healthy_resp = b"HTTP/1.1 200 OK\r\r\n\r";
-			let unhealthy_resp = b"HTTP/1.1 503 Service Unavailable\r\r\n\r";
+			let healthy_resp = b"HTTP/1.1 200 OK\r\n\r\n";
+			let unhealthy_resp = b"HTTP/1.1 503 Service Unavailable\r\n\r\n";
 			let response = match healthy() {
 				Ok(_) => &healthy_resp[..],
 				_ => &unhealthy_resp[..],
