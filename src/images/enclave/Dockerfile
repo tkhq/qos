@@ -1,0 +1,6 @@
+FROM scratch
+ARG BIN
+ARG EIF
+COPY ${BIN} /
+COPY ${EIF} /
+CMD ${BIN}
