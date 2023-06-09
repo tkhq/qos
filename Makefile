@@ -95,13 +95,16 @@ $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/host/Dockerfile \
 	$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH)
 	$(call toolchain," \
-		cp $(word 2,$^) $(CACHE_DIR)/ \
-		&& buildah build \
-			-f $< \
-			-t qos/$(notdir $(word 2,$^)) \
-			--timestamp 1 \
-			--format oci \
-			--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& cp $(word 1,$^) $(word 2,$^) \
+			$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& env -C $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+			buildah build \
+				-f Dockerfile \
+				-t qos/$(notdir $(word 2,$^)) \
+				--timestamp 1 \
+				--format oci \
+				--build-arg BIN=$(notdir $(word 2,$^)) \
 		&& buildah push \
 			qos/$(notdir $(word 2,$^)) \
 			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
@@ -141,14 +144,17 @@ $(OUT_DIR)/qos_enclave.oci.$(ARCH).tar: \
 	$(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH) \
 	$(OUT_DIR)/aws-x86_64.eif
 	$(call toolchain," \
-		cp $(word 2,$^) $(CACHE_DIR)/ \
-		&& buildah build \
-			-f $< \
-			-t qos/$(notdir $(word 2,$^)) \
-			--timestamp 1 \
-			--format oci \
-			--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
-			--build-arg EIF=$(CACHE_DIR)/$(notdir $(word 3,$^)) \
+		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& cp $(word 1,$^) $(word 2,$^) $(word 3,$^) \
+			$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& env -C $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+			buildah build \
+				-f Dockerfile \
+				-t qos/$(notdir $(word 2,$^)) \
+				--timestamp 1 \
+				--format oci \
+				--build-arg BIN=$(notdir $(word 2,$^)) \
+				--build-arg EIF=$(notdir $(word 3,$^)) \
 		&& buildah push \
 			qos/$(notdir $(word 2,$^)) \
 			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
@@ -163,7 +169,7 @@ $(OUT_DIR)/qos_enclave.oci.$(ARCH).tar: \
 				. \
 	")
 
-$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH): \
+$(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
 	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
 	$(CACHE_DIR)/lib/libpcsclite.a
 	$(call toolchain," \
@@ -185,15 +191,18 @@ $(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH): \
 
 $(OUT_DIR)/qos_client.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/client/Dockerfile \
-	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH)
+	$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH)
 	$(call toolchain," \
-		cp $(word 2,$^) $(CACHE_DIR)/ \
-		&& buildah build \
-			-f $< \
-			-t qos/$(notdir $(word 2,$^)) \
-			--timestamp 1 \
-			--format oci \
-			--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& cp $(word 1,$^) $(word 2,$^) \
+			$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& env -C $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+			buildah build \
+				-f Dockerfile \
+				-t qos/$(notdir $(word 2,$^)) \
+				--timestamp 1 \
+				--format oci \
+				--build-arg BIN=$(notdir $(word 2,$^)) \
 		&& buildah push \
 			qos/$(notdir $(word 2,$^)) \
 			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
@@ -287,17 +296,6 @@ $(CACHE_DIR)/lib64/libssl.a: \
 		&& touch /home/build/$@ \
 	")
 
-$(FETCH_DIR)/linux-$(LINUX_VERSION): \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
-	$(KEY_DIR)/$(LINUX_KEY).asc
-	$(call toolchain," \
-		gpg --import $(KEY_DIR)/$(LINUX_KEY).asc \
-		&& gpg --verify $@.tar.sign $@.tar \
-		&& cd $(FETCH_DIR) \
-		&& tar -mxf linux-$(LINUX_VERSION).tar; \
-	")
-
 $(CACHE_DIR)/linux.config:
 	cp $(CONFIG_DIR)/$(TARGET)/linux.config $@
 
@@ -318,16 +316,16 @@ $(CACHE_DIR)/init: \
 	")
 
 $(BIN_DIR)/gen_init_cpio: \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION)
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile
 	$(call toolchain," \
-		cd $(FETCH_DIR)/linux-$(LINUX_VERSION) && \
+		cd $(CACHE_DIR)/linux-$(LINUX_VERSION) && \
 		gcc usr/gen_init_cpio.c -o /home/build/$@ \
 	")
 
 $(BIN_DIR)/gen_initramfs.sh: \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh
-	cat $(FETCH_DIR)/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh
+	cat $(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh \
 	| sed 's:usr/gen_init_cpio:gen_init_cpio:g' \
 	> $@
 	chmod +x $@
@@ -339,14 +337,11 @@ $(CACHE_DIR)/rootfs.list: \
 $(CACHE_DIR)/rootfs.cpio: \
 	$(CACHE_DIR)/rootfs.list \
 	$(CACHE_DIR)/init \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+	$(CACHE_DIR)/nsm.ko \
 	$(BIN_DIR)/gen_init_cpio \
 	$(BIN_DIR)/gen_initramfs.sh
 	mkdir -p $(CACHE_DIR)/rootfs
-ifeq ($(TARGET), aws)
-	$(MAKE) TARGET=$(TARGET) $(CACHE_DIR)/nsm.ko
 	cp $(CACHE_DIR)/nsm.ko $(CACHE_DIR)/rootfs/
-endif
 	cp $(CACHE_DIR)/init $(CACHE_DIR)/rootfs/
 	$(call toolchain," \
 		find $(CACHE_DIR)/rootfs \
@@ -357,12 +352,27 @@ endif
 		sha256sum $@; \
 	")
 
+$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile: \
+	$(CACHE_DIR)/linux.config \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
+	$(KEY_DIR)/$(LINUX_KEY).asc
+	$(call toolchain," \
+		gpg --import $(KEY_DIR)/$(LINUX_KEY).asc \
+		&& gpg --verify \
+			$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
+			$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
+		&& tar \
+			-C $(CACHE_DIR) \
+			-mxf /home/build/$(FETCH_DIR)/linux-$(LINUX_VERSION).tar; \
+	")
+
 $(CACHE_DIR)/bzImage: \
 	$(CACHE_DIR)/linux.config \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile \
 	$(CACHE_DIR)/rootfs.cpio
 	$(call toolchain," \
-		cd $(FETCH_DIR)/linux-$(LINUX_VERSION) && \
+		cd $(CACHE_DIR)/linux-$(LINUX_VERSION) && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
 		make olddefconfig && \
 		make -j$(CPUS) ARCH=$(ARCH) bzImage && \
@@ -381,17 +391,17 @@ $(BIN_DIR)/eif_build:
 	")
 
 $(CACHE_DIR)/nsm.ko: \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile \
 	$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap
 	$(call toolchain," \
-		cd $(FETCH_DIR)/linux-$(LINUX_VERSION) && \
+		cd $(CACHE_DIR)/linux-$(LINUX_VERSION) && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
 		make olddefconfig && \
 		make -j$(CPUS) ARCH=$(ARCH) bzImage && \
 		make -j$(CPUS) ARCH=$(ARCH) modules_prepare && \
 		cd /home/build/$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap/ && \
 		make \
-			-C /home/build/$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+			-C /home/build/$(CACHE_DIR)/linux-$(LINUX_VERSION) \
 		    M=/home/build/$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap/nsm-driver && \
 		cp nsm-driver/nsm.ko /home/build/$@ \
 	")
