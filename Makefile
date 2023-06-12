@@ -1,3 +1,7 @@
+ifeq ("$(wildcard ./src/toolchain)","")
+	gsu := $(shell git submodule update --init --recursive)
+endif
+
 TARGET := aws
 include $(PWD)/src/toolchain/Makefile
 
@@ -7,26 +11,18 @@ KEYS := \
 	D96C422E04DE5D2EE0F7E9E7DBB0DCA38D405491 \
 	647F28654894E3BD457199BE38DBBDC86092693E
 
-ifeq ($(TARGET), aws)
-DEFAULT_GOAL := $(OUT_DIR)/$(TARGET)-$(ARCH).eif
-else ifeq ($(TARGET), generic)
-DEFAULT_GOAL := $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
-endif
-
-ifneq ("$(wildcard $(ROOT)/src/toolchain)","")
-	clone := $(shell git submodule update --init --recursive)
-endif
-
 .DEFAULT_GOAL :=
 .PHONY: default
 default: \
 	toolchain \
 	$(patsubst %,$(KEY_DIR)/%.asc,$(KEYS)) \
-	$(DEFAULT_GOAL) \
-	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH) \
-	$(OUT_DIR)/qos_client.oci.$(ARCH).tar \
-	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH) \
-	$(OUT_DIR)/qos_host.oci.$(ARCH).tar \
+	$(OUT_DIR)/aws-x86_64.eif \
+	$(OUT_DIR)/qos_client.linux-x86_64 \
+	$(OUT_DIR)/qos_client.oci.x86_64.tar \
+	$(OUT_DIR)/qos_host.linux-x86_64 \
+	$(OUT_DIR)/qos_host.oci.x86_64.tar \
+	$(OUT_DIR)/qos_enclave.linux-x86_64 \
+	$(OUT_DIR)/qos_enclave.oci.x86_64.tar \
 	$(OUT_DIR)/release.env
 
 # Clean repo back to initial clone state
@@ -76,11 +72,10 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 			--output $(OUT_DIR)/$(TARGET)-$(ARCH).eif; \
 	")
 
-$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH): \
+$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 	$(call toolchain," \
 		export \
-			CARGO_HOME=$(CACHE_DIR) \
 			RUSTFLAGS=' \
 				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
 				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
@@ -89,11 +84,8 @@ $(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH): \
 			' \
 		&& cd $(SRC_DIR)/qos_host \
 		&& cargo build \
-			--target x86_64-unknown-linux-musl \
 			--features vm \
-			--no-default-features \
-			--locked \
-			--release \
+			$(CARGO_FLAGS) \
 		&& cp \
 			../target/x86_64-unknown-linux-musl/release/qos_host \
 			/home/build/$@; \
@@ -101,15 +93,18 @@ $(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH): \
 
 $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/host/Dockerfile \
-	$(OUT_DIR)/qos_host.$(PLATFORM).$(ARCH)
+	$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH)
 	$(call toolchain," \
-		cp $(word 2,$^) $(CACHE_DIR)/ \
-		&& buildah build \
-			-f $< \
-			-t qos/$(notdir $(word 2,$^)) \
-			--timestamp 1 \
-			--format oci \
-			--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& cp $(word 1,$^) $(word 2,$^) \
+			$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& env -C $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+			buildah build \
+				-f Dockerfile \
+				-t qos/$(notdir $(word 2,$^)) \
+				--timestamp 1 \
+				--format oci \
+				--build-arg BIN=$(notdir $(word 2,$^)) \
 		&& buildah push \
 			qos/$(notdir $(word 2,$^)) \
 			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
@@ -124,27 +119,71 @@ $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 				. \
 	")
 
-$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH): \
+$(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
-	$(CACHE_DIR)/lib/libpcsclite.a
+	$(CACHE_DIR)/lib64/libssl.a
 	$(call toolchain," \
-		cd $(SRC_DIR)/qos_client \
+		cd $(SRC_DIR)/qos_enclave \
 		&& export \
-			CARGO_HOME=$(CACHE_DIR) \
+			OPENSSL_STATIC=true \
 			RUSTFLAGS=' \
 				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
 				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
-		&& export PCSC_LIB_DIR='/home/build/$(CACHE_DIR)/lib' \
-		&& export PCSC_LIB_NAME='static=pcsclite' \
-		&& CARGO_HOME=$(CACHE_DIR)/cargo cargo build \
-			--target x86_64-unknown-linux-musl \
-			--no-default-features \
+		&& cargo build \
+			$(CARGO_FLAGS) \
+		&& cp \
+			target/x86_64-unknown-linux-musl/release/qos_enclave \
+			/home/build/$@; \
+	")
+
+$(OUT_DIR)/qos_enclave.oci.$(ARCH).tar: \
+	$(SRC_DIR)/images/enclave/Dockerfile \
+	$(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH) \
+	$(OUT_DIR)/aws-x86_64.eif
+	$(call toolchain," \
+		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& cp $(word 1,$^) $(word 2,$^) $(word 3,$^) \
+			$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& env -C $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+			buildah build \
+				-f Dockerfile \
+				-t qos/$(notdir $(word 2,$^)) \
+				--timestamp 1 \
+				--format oci \
+				--build-arg BIN=$(notdir $(word 2,$^)) \
+				--build-arg EIF=$(notdir $(word 3,$^)) \
+		&& buildah push \
+			qos/$(notdir $(word 2,$^)) \
+			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
+		&& tar \
+				-C $(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
+				--sort=name \
+				--mtime='@0' \
+				--owner=0 \
+				--group=0 \
+				--numeric-owner \
+				-cf /home/build/$@ \
+				. \
+	")
+
+$(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
+	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
+	$(CACHE_DIR)/lib/libpcsclite.a
+	$(call toolchain," \
+		cd $(SRC_DIR)/qos_client \
+		&& export \
+			RUSTFLAGS=' \
+				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /usr/lib/x86_64-linux-musl \
+				-C target-feature=+crt-static \
+			' \
+		&& cargo build \
 			--features smartcard \
-			--locked \
-			--release \
+			$(CARGO_FLAGS) \
 		&& cp \
 			../target/x86_64-unknown-linux-musl/release/qos_client \
 			/home/build/$@; \
@@ -152,15 +191,18 @@ $(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH): \
 
 $(OUT_DIR)/qos_client.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/client/Dockerfile \
-	$(OUT_DIR)/qos_client.$(PLATFORM).$(ARCH)
+	$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH)
 	$(call toolchain," \
-		cp $(word 2,$^) $(CACHE_DIR)/ \
-		&& buildah build \
-			-f $< \
-			-t qos/$(notdir $(word 2,$^)) \
-			--timestamp 1 \
-			--format oci \
-			--build-arg BIN=$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& cp $(word 1,$^) $(word 2,$^) \
+			$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& env -C $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+			buildah build \
+				-f Dockerfile \
+				-t qos/$(notdir $(word 2,$^)) \
+				--timestamp 1 \
+				--format oci \
+				--build-arg BIN=$(notdir $(word 2,$^)) \
 		&& buildah push \
 			qos/$(notdir $(word 2,$^)) \
 			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
@@ -196,6 +238,9 @@ $(FETCH_DIR)/linux-$(LINUX_VERSION).tar:
 $(FETCH_DIR)/pcsc:
 	$(call git_clone,$@,$(PCSC_REPO),$(PCSC_REF))
 
+$(FETCH_DIR)/openssl:
+	$(call git_clone,$@,$(OPENSSL_REPO),$(OPENSSL_REF))
+
 $(FETCH_DIR)/rust:
 	$(call git_clone,$@,$(RUST_REPO),$(RUST_REF))
 
@@ -219,10 +264,6 @@ $(CACHE_DIR)/lib/libpcsclite.a: \
 	$(FETCH_DIR)/pcsc
 	$(call toolchain," \
 		cd $(FETCH_DIR)/pcsc \
-		&& export CC=musl-gcc \
-		&& export CXX=musl-g++ \
-		&& export CFLAGS=-static \
-		&& export CXXFLAGS=-static \
 		&& ./bootstrap \
 		&& ./configure \
 			--enable-static \
@@ -236,15 +277,23 @@ $(CACHE_DIR)/lib/libpcsclite.a: \
 		&& cp src/.libs/libpcsclite.a /home/build/$@ \
 	")
 
-$(FETCH_DIR)/linux-$(LINUX_VERSION): \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
-	$(KEY_DIR)/$(LINUX_KEY).asc
+$(CACHE_DIR)/lib64/libssl.a: \
+	$(FETCH_DIR)/openssl
 	$(call toolchain," \
-		gpg --import $(KEY_DIR)/$(LINUX_KEY).asc \
-		&& gpg --verify $@.tar.sign $@.tar \
-		&& cd $(FETCH_DIR) \
-		&& tar -mxf linux-$(LINUX_VERSION).tar; \
+		cd $(FETCH_DIR)/openssl \
+		&& export CC='musl-gcc -fPIE -pie -static' \
+		&& sudo ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/x86_64-linux-musl/asm \
+		&& sudo ln -s /usr/include/asm-generic /usr/include/x86_64-linux-musl/asm-generic \
+		&& sudo ln -s /usr/include/linux /usr/include/x86_64-linux-musl/linux \
+		&& ./Configure \
+			no-shared \
+			no-async \
+			--prefix=/home/build/$(CACHE_DIR) \
+			linux-x86_64 \
+		&& make depend \
+		&& make \
+		&& make install \
+		&& touch /home/build/$@ \
 	")
 
 $(CACHE_DIR)/linux.config:
@@ -254,7 +303,6 @@ $(CACHE_DIR)/init: \
 	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 	$(call toolchain," \
 		export \
-			CARGO_HOME=$(CACHE_DIR) \
 			RUSTFLAGS=' \
 				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
 				-L /home/build/$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
@@ -263,23 +311,21 @@ $(CACHE_DIR)/init: \
 			' \
 		&& cd $(SRC_DIR)/init \
 		&& cargo build \
-			--target x86_64-unknown-linux-musl \
-			--locked \
-			--release \
+			$(CARGO_FLAGS) \
 		&& cp target/x86_64-unknown-linux-musl/release/init /home/build/$@ \
 	")
 
 $(BIN_DIR)/gen_init_cpio: \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION)
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile
 	$(call toolchain," \
-		cd $(FETCH_DIR)/linux-$(LINUX_VERSION) && \
+		cd $(CACHE_DIR)/linux-$(LINUX_VERSION) && \
 		gcc usr/gen_init_cpio.c -o /home/build/$@ \
 	")
 
 $(BIN_DIR)/gen_initramfs.sh: \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh
-	cat $(FETCH_DIR)/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh
+	cat $(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh \
 	| sed 's:usr/gen_init_cpio:gen_init_cpio:g' \
 	> $@
 	chmod +x $@
@@ -291,14 +337,11 @@ $(CACHE_DIR)/rootfs.list: \
 $(CACHE_DIR)/rootfs.cpio: \
 	$(CACHE_DIR)/rootfs.list \
 	$(CACHE_DIR)/init \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+	$(CACHE_DIR)/nsm.ko \
 	$(BIN_DIR)/gen_init_cpio \
 	$(BIN_DIR)/gen_initramfs.sh
 	mkdir -p $(CACHE_DIR)/rootfs
-ifeq ($(TARGET), aws)
-	$(MAKE) TARGET=$(TARGET) $(CACHE_DIR)/nsm.ko
 	cp $(CACHE_DIR)/nsm.ko $(CACHE_DIR)/rootfs/
-endif
 	cp $(CACHE_DIR)/init $(CACHE_DIR)/rootfs/
 	$(call toolchain," \
 		find $(CACHE_DIR)/rootfs \
@@ -309,12 +352,27 @@ endif
 		sha256sum $@; \
 	")
 
+$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile: \
+	$(CACHE_DIR)/linux.config \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
+	$(KEY_DIR)/$(LINUX_KEY).asc
+	$(call toolchain," \
+		gpg --import $(KEY_DIR)/$(LINUX_KEY).asc \
+		&& gpg --verify \
+			$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
+			$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
+		&& tar \
+			-C $(CACHE_DIR) \
+			-mxf /home/build/$(FETCH_DIR)/linux-$(LINUX_VERSION).tar; \
+	")
+
 $(CACHE_DIR)/bzImage: \
 	$(CACHE_DIR)/linux.config \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile \
 	$(CACHE_DIR)/rootfs.cpio
 	$(call toolchain," \
-		cd $(FETCH_DIR)/linux-$(LINUX_VERSION) && \
+		cd $(CACHE_DIR)/linux-$(LINUX_VERSION) && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
 		make olddefconfig && \
 		make -j$(CPUS) ARCH=$(ARCH) bzImage && \
@@ -325,7 +383,7 @@ $(CACHE_DIR)/bzImage: \
 $(BIN_DIR)/eif_build:
 	$(call toolchain," \
 		cd $(SRC_DIR)/eif_build && \
-		export CARGO_HOME=$(CACHE_DIR)/cargo && \
+		export CC=gcc && \
 		cargo build \
 			--locked \
 			--target x86_64-unknown-linux-gnu && \
@@ -333,17 +391,17 @@ $(BIN_DIR)/eif_build:
 	")
 
 $(CACHE_DIR)/nsm.ko: \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+	$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile \
 	$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap
 	$(call toolchain," \
-		cd $(FETCH_DIR)/linux-$(LINUX_VERSION) && \
+		cd $(CACHE_DIR)/linux-$(LINUX_VERSION) && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
 		make olddefconfig && \
 		make -j$(CPUS) ARCH=$(ARCH) bzImage && \
 		make -j$(CPUS) ARCH=$(ARCH) modules_prepare && \
 		cd /home/build/$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap/ && \
 		make \
-			-C /home/build/$(FETCH_DIR)/linux-$(LINUX_VERSION) \
+			-C /home/build/$(CACHE_DIR)/linux-$(LINUX_VERSION) \
 		    M=/home/build/$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap/nsm-driver && \
 		cp nsm-driver/nsm.ko /home/build/$@ \
 	")
