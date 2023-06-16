@@ -43,6 +43,49 @@ linux-config:
 	rm $(CONFIG_DIR)/$(TARGET)/linux.config
 	make TARGET=$(TARGET) $(CONFIG_DIR)/$(TARGET)/linux.config
 
+define oci-build
+	$(call toolchain," \
+		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& cp $(word 1,$^) $(word 2,$^) \
+			$(CACHE_DIR)/$(notdir $(word 2,$^)) \
+		&& env -C $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+			buildah build \
+				-f Dockerfile \
+				-t qos/$(notdir $(word 2,$^)) \
+				--timestamp 1 \
+				--format oci \
+				--build-arg BIN=$(notdir $(word 2,$^)) \
+		&& buildah push \
+			qos/$(notdir $(word 2,$^)) \
+			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
+		&& tar \
+				-C $(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
+				--sort=name \
+				--mtime='@0' \
+				--owner=0 \
+				--group=0 \
+				--numeric-owner \
+				-cf /home/build/$@ \
+				. \
+	")
+endef
+
+define tar-build
+	$(call toolchain," \
+		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^))-tar \
+		&& cp $(word 2,$^) $(CACHE_DIR)/$(notdir $(word 2,$^))-tar \
+		&& tar \
+				-C $(CACHE_DIR)/$(notdir $(word 2,$^))-tar \
+				--sort=name \
+				--mtime='@0' \
+				--owner=0 \
+				--group=0 \
+				--numeric-owner \
+				-cf /home/build/$@ \
+				. \
+	")
+endef
+
 $(KEY_DIR)/%.asc:
 	$(call fetch_pgp_key,$(basename $(notdir $@)))
 
@@ -94,30 +137,12 @@ $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/host/Dockerfile \
 	$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH)
-	$(call toolchain," \
-		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
-		&& cp $(word 1,$^) $(word 2,$^) \
-			$(CACHE_DIR)/$(notdir $(word 2,$^)) \
-		&& env -C $(CACHE_DIR)/$(notdir $(word 2,$^)) \
-			buildah build \
-				-f Dockerfile \
-				-t qos/$(notdir $(word 2,$^)) \
-				--timestamp 1 \
-				--format oci \
-				--build-arg BIN=$(notdir $(word 2,$^)) \
-		&& buildah push \
-			qos/$(notdir $(word 2,$^)) \
-			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
-		&& tar \
-				-C $(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
-				--sort=name \
-				--mtime='@0' \
-				--owner=0 \
-				--group=0 \
-				--numeric-owner \
-				-cf /home/build/$@ \
-				. \
-	")
+	$(call oci-build)
+
+$(OUT_DIR)/qos_host.$(ARCH).tar: \
+	$(SRC_DIR)/images/host/Dockerfile \
+	$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH)
+	$(call tar-build)
 
 $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
@@ -143,31 +168,13 @@ $(OUT_DIR)/qos_enclave.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/enclave/Dockerfile \
 	$(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH) \
 	$(OUT_DIR)/aws-x86_64.eif
-	$(call toolchain," \
-		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
-		&& cp $(word 1,$^) $(word 2,$^) $(word 3,$^) \
-			$(CACHE_DIR)/$(notdir $(word 2,$^)) \
-		&& env -C $(CACHE_DIR)/$(notdir $(word 2,$^)) \
-			buildah build \
-				-f Dockerfile \
-				-t qos/$(notdir $(word 2,$^)) \
-				--timestamp 1 \
-				--format oci \
-				--build-arg BIN=$(notdir $(word 2,$^)) \
-				--build-arg EIF=$(notdir $(word 3,$^)) \
-		&& buildah push \
-			qos/$(notdir $(word 2,$^)) \
-			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
-		&& tar \
-				-C $(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
-				--sort=name \
-				--mtime='@0' \
-				--owner=0 \
-				--group=0 \
-				--numeric-owner \
-				-cf /home/build/$@ \
-				. \
-	")
+	$(call oci-build)
+
+$(OUT_DIR)/qos_enclave.$(ARCH).tar: \
+	$(SRC_DIR)/images/enclave/Dockerfile \
+	$(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH) \
+	$(OUT_DIR)/aws-x86_64.eif
+	$(call tar-build)
 
 $(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
 	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
@@ -192,30 +199,12 @@ $(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
 $(OUT_DIR)/qos_client.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/client/Dockerfile \
 	$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH)
-	$(call toolchain," \
-		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
-		&& cp $(word 1,$^) $(word 2,$^) \
-			$(CACHE_DIR)/$(notdir $(word 2,$^)) \
-		&& env -C $(CACHE_DIR)/$(notdir $(word 2,$^)) \
-			buildah build \
-				-f Dockerfile \
-				-t qos/$(notdir $(word 2,$^)) \
-				--timestamp 1 \
-				--format oci \
-				--build-arg BIN=$(notdir $(word 2,$^)) \
-		&& buildah push \
-			qos/$(notdir $(word 2,$^)) \
-			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
-		&& tar \
-				-C $(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
-				--sort=name \
-				--mtime='@0' \
-				--owner=0 \
-				--group=0 \
-				--numeric-owner \
-				-cf /home/build/$@ \
-				. \
-	")
+	$(call oci-build)
+
+$(OUT_DIR)/qos_client.$(ARCH).tar: \
+	$(SRC_DIR)/images/client/Dockerfile \
+	$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH)
+	$(call tar-build)
 
 $(CONFIG_DIR)/$(TARGET)/linux.config:
 	$(call toolchain," \
