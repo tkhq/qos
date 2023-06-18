@@ -257,10 +257,11 @@ $(CACHE_DIR)/lib/libpcsclite.a: \
 	$(FETCH_DIR)/pcsc
 	$(call toolchain," \
 		cd $(FETCH_DIR)/pcsc \
-		&& export CC=musl-gcc \
-		&& export CXX=musl-g++ \
-		&& export CFLAGS=-static \
-		&& export CXXFLAGS=-static
+		&& export \
+			CC=musl-gcc \
+			CXX=musl-g++ \
+			CFLAGS=-static \
+			CXXFLAGS=-static \
 		&& ./bootstrap \
 		&& ./configure \
 			--enable-static \
