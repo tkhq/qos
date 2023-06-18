@@ -25,3 +25,8 @@ src/integration/pivot_ok_works
 src/integration/pivot_ok3_works
 
 local-enclave/ls
+
+fetch/aws-nitro-enclaves-sdk-bootstrap/
+fetch/openssl/
+fetch/pcsc/
+fetch/rust/

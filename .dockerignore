@@ -1,1 +1,4 @@
-out
+**
+!fetch/apt/**
+!config/**
+!src/toolchain/scripts/**
