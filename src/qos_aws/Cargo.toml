@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libc = "0.2.145"
+libc = "0.2.144"
 nsm_lib = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", package="nsm-lib", rev = "f9422662d02ad089b5132cfcdbe3496365ab4818" }
 nsm_api = { git = "https://github.com/aws/aws-nitro-enclaves-nsm-api.git/", package="aws-nitro-enclaves-nsm-api", rev = "f9422662d02ad089b5132cfcdbe3496365ab4818" }
 qos_system = { path = "../qos_system"}
