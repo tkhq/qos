@@ -205,12 +205,12 @@ $(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
 
 $(OUT_DIR)/qos_client.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/client/Dockerfile \
-	$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH)
+	$(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH)
 	$(call oci-build)
 
 $(OUT_DIR)/qos_client.$(ARCH).tar: \
 	$(SRC_DIR)/images/client/Dockerfile \
-	$(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH)
+	$(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH)
 	$(call tar-build)
 
 $(CONFIG_DIR)/$(TARGET)/linux.config:
