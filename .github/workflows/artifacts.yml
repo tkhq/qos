@@ -4,17 +4,7 @@ on:
   push:
     branches:
       - main
-    paths:
-      # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#patterns-to-match-file-paths
-      - "src/rust/**"
-      - "proto/**"
-      - ".github/**/toolchain.yml"
   pull_request:
-    paths:
-      - "src/rust/**"
-      - "proto/**"
-      - ".github/**/rust-**"
-      - ".github/**/toolchain.yml"
   workflow_dispatch: # Allows manual invocation
 
 jobs:
