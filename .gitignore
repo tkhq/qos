@@ -30,3 +30,5 @@ fetch/aws-nitro-enclaves-sdk-bootstrap/
 fetch/openssl/
 fetch/pcsc/
 fetch/rust/
+
+!.github

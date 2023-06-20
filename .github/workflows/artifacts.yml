@@ -1,0 +1,35 @@
+name: artifacts-build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#patterns-to-match-file-paths
+      - "src/rust/**"
+      - "proto/**"
+      - ".github/**/toolchain.yml"
+  pull_request:
+    paths:
+      - "src/rust/**"
+      - "proto/**"
+      - ".github/**/rust-**"
+      - ".github/**/toolchain.yml"
+  workflow_dispatch: # Allows manual invocation
+
+jobs:
+  build:
+    name: Build Toolchain Artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+
+      - name: Download submodules
+        run: git submodule update --init --recursive
+        shell: bash
+
+      - name: Run `make dist`
+        shell: 'script -q -e -c "bash {0}"'
+        run: make PRESERVE_CACHE=true dist
