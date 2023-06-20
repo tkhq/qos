@@ -24,6 +24,10 @@ jobs:
         run: git submodule update --init --recursive
         shell: bash
 
+      - name: Pull lfs artifacts
+        run: git lfs pull
+        shell: bash
+
       - name: Run `make dist`
         shell: 'script -q -e -c "bash {0}"'
         run: make PRESERVE_CACHE=true dist
