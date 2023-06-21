@@ -19,10 +19,13 @@ default: \
 	$(OUT_DIR)/aws-x86_64.eif \
 	$(OUT_DIR)/qos_client.linux-x86_64 \
 	$(OUT_DIR)/qos_client.oci.x86_64.tar \
+	$(OUT_DIR)/qos_client.$(ARCH).tar \
 	$(OUT_DIR)/qos_host.linux-x86_64 \
 	$(OUT_DIR)/qos_host.oci.x86_64.tar \
+	$(OUT_DIR)/qos_host.$(ARCH).tar \
 	$(OUT_DIR)/qos_enclave.linux-x86_64 \
 	$(OUT_DIR)/qos_enclave.oci.x86_64.tar \
+	$(OUT_DIR)/qos_enclave.$(ARCH).tar \
 	$(OUT_DIR)/release.env
 
 # Clean repo back to initial clone state
