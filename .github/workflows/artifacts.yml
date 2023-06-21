@@ -11,7 +11,7 @@ jobs:
   build:
     name: Build Toolchain Artifacts
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - name: Install git lfs
         run: sudo apt-get install -y git-lfs
