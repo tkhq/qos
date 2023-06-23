@@ -8,7 +8,8 @@ spec:
       containers:
         - name: qos-host
           image: qos/host
-          command: /qos_host.linux.x86_64
+          command:
+            - /qos_host.linux.x86_64
           args:
             - --host-ip 0.0.0.0
             - --host-port $(QOS_PORT)
