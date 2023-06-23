@@ -30,4 +30,4 @@ jobs:
 
       - name: Run `make dist`
         shell: 'script -q -e -c "bash {0}"'
-        run: make out/qos_client.oci.x86_64.tar
+        run: make dist
