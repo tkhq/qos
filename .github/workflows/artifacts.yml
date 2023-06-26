@@ -37,3 +37,31 @@ jobs:
           name: dist
           path: dist/
           retention-days: 1
+
+  upload_to_ghcr:
+    name: Upload toolchain artifacts to GHCR
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
+        with:
+          name: dist
+
+      - name: Upload images to ECR
+        env:
+          images: >-
+            qos_client
+            qos_enclave
+            qos_host
+        run: |
+          for image in ${images}; do
+            skopeo copy --all \
+              "oci-archive:${image}.oci.x86_64.tar" \
+              --dest-creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" \
+              "docker://ghcr.io/tkhq/${image}:sha-${GITHUB_SHA}"
+          done
