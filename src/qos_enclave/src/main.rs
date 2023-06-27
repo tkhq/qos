@@ -1,11 +1,11 @@
 use std::{
+	fs::create_dir_all,
 	io::Write,
 	mem::MaybeUninit,
 	net::{Shutdown, TcpListener},
 	os::unix::net::UnixStream,
 	process::exit,
 	ptr, thread,
-    fs::create_dir_all,
 };
 
 use libc::{
@@ -85,7 +85,7 @@ fn boot() -> String {
 	};
 	println!("{:?}", run_args);
 
-    create_dir_all("/run/nitro_enclaves")?;
+	create_dir_all("/run/nitro_enclaves")?;
 
 	let logger = init_logger()
 		.map_err(|e| e.set_action("Logger initialization".to_string()))
