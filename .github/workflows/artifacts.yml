@@ -31,3 +31,75 @@ jobs:
       - name: Run `make dist`
         shell: 'script -q -e -c "bash {0}"'
         run: make dist
+
+      - uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  upload_to_ecr:
+    name: Upload toolchain artifacts to ECR
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@5fd3084fc36e372ff1fff382a39b10d03659f355 # v2.2.0
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::799078726966:role/github-qos
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@e407df249e6c155d03c0e4375f34bc2385f52d65 # v1.6.1
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
+        with:
+          name: dist
+
+      - name: Upload images to ECR
+        env:
+          images: >-
+            qos_client
+            qos_enclave
+            qos_host
+        run: |
+          for image in ${images}; do
+            skopeo copy --all \
+              "oci-archive:${image}.oci.x86_64.tar" \
+              --dest-creds "${{ steps.login-ecr.outputs.docker_username_799078726966_dkr_ecr_us_east_1_amazonaws_com }}:${{ steps.login-ecr.outputs.docker_password_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
+              "docker://${{ steps.login-ecr.outputs.registry }}/tkhq/${image}:sha-${GITHUB_SHA}"
+          done
+
+  upload_to_ghcr:
+    name: Upload toolchain artifacts to GHCR
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
+        with:
+          name: dist
+
+      - name: Upload images to ECR
+        env:
+          images: >-
+            qos_client
+            qos_enclave
+            qos_host
+        run: |
+          for image in ${images}; do
+            skopeo copy --all \
+              "oci-archive:${image}.oci.x86_64.tar" \
+              --dest-creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" \
+              "docker://ghcr.io/tkhq/${image}:sha-${GITHUB_SHA}"
+          done
