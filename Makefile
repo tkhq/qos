@@ -175,7 +175,9 @@ $(OUT_DIR)/qos_enclave.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/enclave/Dockerfile \
 	$(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH) \
 	$(OUT_DIR)/aws-x86_64.eif
-	$(call oci-build)
+	mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+	&& cp $(word 3,$^) $(CACHE_DIR)/$(notdir $(word 2,$^)) \
+	&& $(call oci-build)
 
 $(OUT_DIR)/qos_enclave.$(ARCH).tar: \
 	$(SRC_DIR)/images/enclave/Dockerfile \
