@@ -58,6 +58,7 @@ define oci-build
 				--timestamp 1 \
 				--format oci \
 				--build-arg BIN=$(notdir $(word 2,$^)) \
+				--build-arg EIF=$(notdir $(word 3,$^)) \
 		&& buildah push \
 			qos/$(notdir $(word 2,$^)) \
 			oci:$(CACHE_DIR)/$(notdir $(word 2,$^))-oci \
