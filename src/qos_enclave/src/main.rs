@@ -5,6 +5,7 @@ use std::{
 	os::unix::net::UnixStream,
 	process::exit,
 	ptr, thread,
+    fs::create_dir_all,
 };
 
 use libc::{
@@ -83,6 +84,8 @@ fn boot() -> String {
 		enclave_name: Some(enclave_name.clone()),
 	};
 	println!("{:?}", run_args);
+
+    create_dir_all("/run/nitro_enclaves")?;
 
 	let logger = init_logger()
 		.map_err(|e| e.set_action("Logger initialization".to_string()))
