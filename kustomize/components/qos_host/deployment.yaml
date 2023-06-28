@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example
+spec:
+  template:
+    spec:
+      containers:
+        - name: qos-host
+          image: qos/host
+          command:
+            - /qos_host.linux.x86_64
+          args:
+            - --host-ip 0.0.0.0
+            - --host-port $(QOS_PORT)
+            - --port $(ENCLAVE_PORT)
+            - --cid $(ENCLAVE_CID)
+          env:
+            - name: QOS_PORT
+              value: "3001"
+            - name: ENCLAVE_PORT
+              value: "3"
+            - name: ENCLAVE_CID
+              value: "16"
+          ports:
+            - name: qos-host-http
+              containerPort: 3001
+          livenessProbe:
+            httpGet:
+              path: /qos/host-health
+              port: qos-host-http
+          readinessProbe:
+            httpGet:
+              path: /qos/enclave-health
+              port: qos-host-http
+          startupProbe:
+            httpGet:
+              path: /qos/enclave-health
+              port: qos-host-http
+            # allow an hour to start up
+            failureThreshold: 360
+            periodSeconds: 10
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 65532
+            runAsNonRoot: true
+            runAsUser: 65532
