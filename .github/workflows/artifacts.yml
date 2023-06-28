@@ -73,7 +73,7 @@ jobs:
             skopeo copy --all \
               "oci-archive:${image}.oci.x86_64.tar" \
               --dest-creds "${{ steps.login-ecr.outputs.docker_username_799078726966_dkr_ecr_us_east_1_amazonaws_com }}:${{ steps.login-ecr.outputs.docker_password_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
-              "docker://${{ steps.login-ecr.outputs.registry }}/tkhq/${image}:sha-${GITHUB_SHA}"
+              "docker://${{ steps.login-ecr.outputs.registry }}/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
           done
 
   upload_to_ghcr:
@@ -101,5 +101,5 @@ jobs:
             skopeo copy --all \
               "oci-archive:${image}.oci.x86_64.tar" \
               --dest-creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" \
-              "docker://ghcr.io/tkhq/${image}:sha-${GITHUB_SHA}"
+              "docker://ghcr.io/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
           done
