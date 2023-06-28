@@ -90,7 +90,7 @@ jobs:
         with:
           name: dist
 
-      - name: Upload images to ECR
+      - name: Upload images to GHCR
         env:
           images: >-
             qos_client
