@@ -69,10 +69,13 @@ jobs:
             qos_enclave
             qos_host
         run: |
+          skopeo login \
+            --username "${{ steps.login-ecr.outputs.docker_username_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
+            --password "${{ steps.login-ecr.outputs.docker_password_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
+            ${{ steps.login-ecr.outputs.registry }}
           for image in ${images}; do
             skopeo copy --all \
               "oci-archive:${image}.oci.x86_64.tar" \
-              --dest-creds "${{ steps.login-ecr.outputs.docker_username_799078726966_dkr_ecr_us_east_1_amazonaws_com }}:${{ steps.login-ecr.outputs.docker_password_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
               "docker://${{ steps.login-ecr.outputs.registry }}/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
           done
 
@@ -97,9 +100,12 @@ jobs:
             qos_enclave
             qos_host
         run: |
+          skopeo login \
+            --username "${{ github.actor }}" \
+            --password "${{ secrets.GITHUB_TOKEN }}" \
+            ghcr.io
           for image in ${images}; do
             skopeo copy --all \
               "oci-archive:${image}.oci.x86_64.tar" \
-              --dest-creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" \
               "docker://ghcr.io/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
           done
