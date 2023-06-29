@@ -145,10 +145,7 @@ impl HostServer {
 			Err(e) => {
 				let msg = format!("Enclave request failed {e:?}");
 				println!("{msg}");
-				return (
-					StatusCode::INTERNAL_SERVER_ERROR,
-					Html(msg),
-				)
+				return (StatusCode::INTERNAL_SERVER_ERROR, Html(msg));
 			}
 		};
 
