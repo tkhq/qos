@@ -17,7 +17,7 @@ use crate::HostServer;
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
-const VSOCK_TO_HOST: &str = "vsock-to-host";
+const NO_VSOCK_TO_HOST: &str = "no-vsock-to-host";
 
 struct HostParser;
 impl GetParserForOptions for HostParser {
@@ -55,7 +55,7 @@ impl GetParserForOptions for HostParser {
 					.takes_value(true)
 			)
 			.token(
-				Token::new(VSOCK_TO_HOST, "add the to-host svm flag to the enclave vsock connection")
+				Token::new(NO_VSOCK_TO_HOST, "omit the to-host svm flag to the enclave vsock connection")
 					.takes_value(false)
 					.forbids(vec![USOCK])
 			)
@@ -140,10 +140,10 @@ impl HostOptions {
 
 	#[cfg(feature = "vm")]
 	fn to_host_flag(&self) -> Option<u16> {
-		if self.parsed.flag(VSOCK_TO_HOST).unwrap_or(false) {
-			Some(qos_core::io::VMADDR_FLAG_TO_HOST)
-		} else {
+		if self.parsed.flag(NO_VSOCK_TO_HOST).unwrap_or(false) {
 			None
+		} else {
+			Some(qos_core::io::VMADDR_FLAG_TO_HOST)
 		}
 	}
 }
@@ -185,11 +185,32 @@ mod test {
 			"6",
 			"--port",
 			"3999",
-			"--vsock-to-host",
 			"--host-ip",
 			"0.0.0.0",
 			"--host-port",
 			"3000",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+		let opts = HostOptions::new(&mut args);
+
+		assert_eq!(
+			opts.enclave_addr(),
+			qos_core::io::SocketAddress::new_vsock(6, 3999, Some(1))
+		);
+
+		let mut args: Vec<_> = vec![
+			"binary",
+			"--cid",
+			"6",
+			"--port",
+			"3999",
+			"--host-ip",
+			"0.0.0.0",
+			"--host-port",
+			"3000",
+			"--no-to-vsock-to-host"
 		]
 		.into_iter()
 		.map(String::from)
