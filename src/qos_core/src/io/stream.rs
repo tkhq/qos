@@ -31,6 +31,12 @@ pub enum SocketAddress {
 	Unix(UnixAddr),
 }
 
+/// VSOCK flag for talking to host.
+///
+/// This applies to the `svm_reserved1` / `svm_flags` field on
+/// `libc::sockaddr_vm`.
+pub const VMADDR_FLAG_TO_HOST: u16 = 0x01;
+
 impl SocketAddress {
 	/// Create a new Unix socket.
 	///
@@ -44,10 +50,27 @@ impl SocketAddress {
 	}
 
 	/// Create a new Vsock socket.
+	/// For flags see vsock: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>)
 	#[cfg(feature = "vm")]
-	pub fn new_vsock(cid: u32, port: u32) -> Self {
+	pub fn new_vsock(cid: u32, port: u32, flags: Option<u16>) -> Self {
 		let addr = VsockAddr::new(cid, port);
-		Self::Vsock(addr)
+		// we get the inner value of `addr`, which is a `libc::sockaddr_vm`, in
+		// order to set the flags.
+		let mut addr_c_representation = addr.deref().clone();
+		if let Some(flags) = flags {
+			// `svm_reserved1` is an older name for `svm_flags`. `nix` bases its
+			// implementation on linux(7), which refers to the field
+			// as `svm_reserved1`.
+			addr_c_representation.svm_reserved1 = flags;
+		}
+
+		#[allow(unsafe_code)]
+		unsafe {
+			VsockAddr::from_raw(
+				addr_c_representation as *const libc::sockaddr,
+				Some(size_of::<libc::sockaddr_vm>()),
+			)
+		}
 	}
 
 	/// Get the `AddressFamily` of the socket.

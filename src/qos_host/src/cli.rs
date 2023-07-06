@@ -17,6 +17,7 @@ use crate::HostServer;
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
+const VSOCK_TO_HOST: &str = "vsock-to-host";
 
 struct HostParser;
 impl GetParserForOptions for HostParser {
@@ -52,6 +53,11 @@ impl GetParserForOptions for HostParser {
 			.token(
 				Token::new(ENDPOINT_BASE_PATH, "base path for all endpoints. e.g. <BASE>/enclave-health")
 					.takes_value(true)
+			)
+			.token(
+				Token::new(VSOCK_TO_HOST, "add the to-host svm flag to the enclave vsock connection")
+					.takes_value(false)
+					.forbids(vec![USOCK])
 			)
 	}
 }
@@ -113,6 +119,7 @@ impl HostOptions {
 			(Some(c), Some(p), None) => SocketAddress::new_vsock(
 				c.parse::<u32>().unwrap(),
 				p.parse::<u32>().unwrap(),
+				self.to_host_flag(),
 			),
 			(None, None, Some(u)) => SocketAddress::new_unix(u),
 			_ => panic!("Invalid socket options"),
@@ -129,6 +136,15 @@ impl HostOptions {
 
 	fn base_path(&self) -> Option<String> {
 		self.parsed.single(ENDPOINT_BASE_PATH).map(Clone::clone)
+	}
+
+	#[cfg(feature = "vm")]
+	fn to_host_flag(&self) -> Option<u16> {
+		if self.parsed.flag(VSOCK_TO_HOST).unwrap_or(false) {
+			Some(qos_core::io::VMADDR_FLAG_TO_HOST)
+		} else {
+			None
+		}
 	}
 }
 

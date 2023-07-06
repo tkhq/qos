@@ -8,7 +8,7 @@
 //! supply chain attack vectors and audit burden
 
 #![forbid(unsafe_code)]
-#![deny(clippy::all)]
+#![deny(clippy::all, unsafe_code)]
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 

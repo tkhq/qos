@@ -71,7 +71,7 @@ fn main() {
 	Reaper::execute(
 	     &handles,
 	     Box::new(Nsm),
-	     SocketAddress::new_vsock(16, 3),
+	     SocketAddress::new_vsock(16, 3, None),
 	     SocketAddress::new_unix(SEC_APP_SOCK),
 	     None,
 	);
