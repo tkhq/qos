@@ -112,32 +112,6 @@ build-core:
 push-core:
 	docker push $(REGISTRY)/qos/core
 
-.PHONY: sample-app
-sample-app: clean clean-sample-app build-sample-app push-sample-app
-
-.PHONY: clean-sample-app
-clean-sample-app:
-	rm -f ./pivot.executable
-
-.PHONY: build-sample-app
-build-sample-app:
-	docker build \
-		--file images/sample-app/Dockerfile \
-		--tag $(REGISTRY)/qos/sample-app \
-		$(PWD); \
-	docker rm -f qos_sample-app; \
-	docker create \
-		--name qos_sample-app \
-		$(REGISTRY)/qos/sample-app; \
-	docker cp qos_sample-app:/usr/local/bin/sample-app ./pivot.executable
-
-.PHONY: push-sample-app
-push-sample-app:
-	PIVOT_HASH=0x$(shell shasum -a256 "./pivot.executable" | cut -d ' ' -f1); \
-	BUCKET="tkhq-development-qos_resources" ; \
-	echo $$PIVOT_HASH; \
-	aws s3 cp ./pivot.executable s3://$${BUCKET}/$${PIVOT_HASH}/pivot.executable
-
 .PHONY: lint
 lint:
 	make clippy
@@ -163,6 +137,9 @@ test:
 	@# enabled. However some tests require it disable, so we test just qos_core
 	@# by itself.
 	cargo test -p qos_core
+
+.PHONY: test-vm
+	cargo test -p qos_core --features vm --no-default-features
 
 .PHONY: build-linux-only
 build-linux-only:
