@@ -153,6 +153,7 @@ pub struct CLI;
 impl CLI {
 	/// Execute the command line interface.
 	pub async fn execute() {
+		use sysinfo::{System, SystemExt};
 		let mut args: Vec<String> = env::args().collect();
 		let options = HostOptions::new(&mut args);
 
@@ -161,6 +162,9 @@ impl CLI {
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
 		} else {
+			let sys = System::new_all();
+			println!("System kernel version:   {:?}", sys.kernel_version());
+			println!("System OS version:       {:?}", sys.os_version());
 			HostServer::new(
 				options.enclave_addr(),
 				options.host_addr(),
