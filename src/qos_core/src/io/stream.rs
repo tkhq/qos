@@ -32,9 +32,6 @@ pub enum SocketAddress {
 }
 
 /// VSOCK flag for talking to host.
-///
-/// This applies to the `svm_reserved1` / `svm_flags` field on
-/// `libc::sockaddr_vm`.
 pub const VMADDR_FLAG_TO_HOST: u8 = 0x01;
 
 impl SocketAddress {
@@ -50,6 +47,7 @@ impl SocketAddress {
 	}
 
 	/// Create a new Vsock socket.
+	///
 	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>) 
 	/// and the [linux commit](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6)
 	#[cfg(feature = "vm")]
