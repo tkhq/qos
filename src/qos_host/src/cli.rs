@@ -139,7 +139,7 @@ impl HostOptions {
 	}
 
 	#[cfg(feature = "vm")]
-	fn to_host_flag(&self) -> Option<u16> {
+	fn to_host_flag(&self) -> Option<u8> {
 		if self.parsed.flag(NO_VSOCK_TO_HOST).unwrap_or(false) {
 			None
 		} else {
