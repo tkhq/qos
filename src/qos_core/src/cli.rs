@@ -59,6 +59,7 @@ impl EnclaveOpts {
 			(Some(c), Some(p), None) => SocketAddress::new_vsock(
 				c.parse::<u32>().unwrap(),
 				p.parse::<u32>().unwrap(),
+				None,
 			),
 			(None, None, Some(u)) => SocketAddress::new_unix(u),
 			_ => panic!("Invalid socket opts"),
@@ -317,19 +318,6 @@ mod test {
 		let opts = EnclaveOpts::new(&mut args);
 
 		assert_eq!(opts.addr(), SocketAddress::new_vsock(6, 3999, None));
-	}
-
-
-	#[test]
-	#[cfg(feature = "vm")]
-	fn build_vsock() {
-		let mut args: Vec<_> = vec!["binary", "--cid", "6", "--port", "3999", "--vsock-to-host"]
-			.into_iter()
-			.map(String::from)
-			.collect();
-		let opts = EnclaveOpts::new(&mut args);
-
-		assert_eq!(opts.addr(), SocketAddress::new_vsock(6, 3999, Some(1)));
 	}
 
 	#[test]

@@ -171,3 +171,34 @@ impl CLI {
 		}
 	}
 }
+
+#[cfg(test)]
+#[cfg(feature = "vm")]
+mod test {
+	use super::*;
+
+	#[test]
+	fn build_vsock() {
+		let mut args: Vec<_> = vec![
+			"binary",
+			"--cid",
+			"6",
+			"--port",
+			"3999",
+			"--vsock-to-host",
+			"--host-ip",
+			"0.0.0.0",
+			"--host-port",
+			"3000",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+		let opts = HostOptions::new(&mut args);
+
+		assert_eq!(
+			opts.enclave_addr(),
+			qos_core::io::SocketAddress::new_vsock(6, 3999, Some(1))
+		);
+	}
+}

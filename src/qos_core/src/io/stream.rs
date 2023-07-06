@@ -35,7 +35,7 @@ pub enum SocketAddress {
 ///
 /// This applies to the `svm_reserved1` / `svm_flags` field on
 /// `libc::sockaddr_vm`.
-pub const VMADDR_FLAG_TO_HOST: u16 = 0x01;
+pub const VMADDR_FLAG_TO_HOST: u16 = 0x0001;
 
 impl SocketAddress {
 	/// Create a new Unix socket.
@@ -50,27 +50,32 @@ impl SocketAddress {
 	}
 
 	/// Create a new Vsock socket.
-	/// For flags see vsock: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>)
+	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>)
 	#[cfg(feature = "vm")]
+	#[allow(unsafe_code)]
 	pub fn new_vsock(cid: u32, port: u32, flags: Option<u16>) -> Self {
-		let addr = VsockAddr::new(cid, port);
-		// we get the inner value of `addr`, which is a `libc::sockaddr_vm`, in
-		// order to set the flags.
-		let mut addr_c_representation = addr.deref().clone();
+		let mut vsock_addr: libc::sockaddr_vm = unsafe { std::mem::zeroed() };
+		vsock_addr.svm_family = AddressFamily::Vsock as libc::sa_family_t;
+		vsock_addr.svm_cid = cid;
+		vsock_addr.svm_port = port;
+
 		if let Some(flags) = flags {
 			// `svm_reserved1` is an older name for `svm_flags`. `nix` bases its
 			// implementation on linux(7), which refers to the field
 			// as `svm_reserved1`.
-			addr_c_representation.svm_reserved1 = flags;
+			vsock_addr.svm_reserved1 = flags;
 		}
 
-		#[allow(unsafe_code)]
-		unsafe {
+		let vsock_addr_len = size_of::<libc::sockaddr_vm>() as libc::socklen_t;
+		let addr = unsafe {
 			VsockAddr::from_raw(
-				addr_c_representation as *const libc::sockaddr,
-				Some(size_of::<libc::sockaddr_vm>()),
+				&vsock_addr as *const libc::sockaddr_vm
+					as *const libc::sockaddr,
+				Some(vsock_addr_len),
 			)
-		}
+			.unwrap()
+		};
+		Self::Vsock(addr)
 	}
 
 	/// Get the `AddressFamily` of the socket.
