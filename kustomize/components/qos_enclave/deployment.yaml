@@ -9,12 +9,7 @@ spec:
         - name: qos-enclave
           image: qos/enclave
           command:
-            - /qos_host.linux.x86_64
-          args:
-            - --host-ip 0.0.0.0
-            - --host-port $(QOS_PORT)
-            - --port $(ENCLAVE_PORT)
-            - --cid $(ENCLAVE_CID)
+            - /qos_enclave.linux.x86_64
           resources:
             requests:
               memory: 1256Mi
