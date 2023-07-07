@@ -21,6 +21,19 @@ const MAX_RETRY: usize = 25;
 const BACKOFF_MILLISECONDS: u64 = 10;
 const BACKLOG: usize = 128;
 
+
+#[repr(C)]
+struct sockaddr_vm {
+    svm_family: libc::sa_family_t,
+    svm_reserved1: libc::c_ushort,
+    svm_port: libc::c_uint,
+    svm_cid: libc::c_uint,
+	// Field added [here](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6) 
+	// but not yet in a version of libc we can use.
+    svm_flags: u8,
+    svm_zero: [u8; 3]
+}
+
 /// Socket address.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SocketAddress {
@@ -48,25 +61,23 @@ impl SocketAddress {
 
 	/// Create a new Vsock socket.
 	///
-	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>) 
-	/// and the [linux commit](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6)
+	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>).
 	#[cfg(feature = "vm")]
 	#[allow(unsafe_code)]
 	pub fn new_vsock(cid: u32, port: u32, flags: Option<u8>) -> Self {
-		let mut vsock_addr: libc::sockaddr_vm = unsafe { std::mem::zeroed() };
+		let mut vsock_addr: sockaddr_vm = unsafe { std::mem::zeroed() };
 		vsock_addr.svm_family = AddressFamily::Vsock as libc::sa_family_t;
 		vsock_addr.svm_cid = cid;
 		vsock_addr.svm_port = port;
 
 		if let Some(flags) = flags {
-			// `svm_flags` was added as the second to last field on sockaddr_vm.
-			vsock_addr.svm_zero[0] = flags;
+			vsock_addr.svm_flags = flags;
 		}
 
-		let vsock_addr_len = size_of::<libc::sockaddr_vm>() as libc::socklen_t;
+		let vsock_addr_len = size_of::<sockaddr_vm>() as libc::socklen_t;
 		let addr = unsafe {
 			VsockAddr::from_raw(
-				&vsock_addr as *const libc::sockaddr_vm
+				&vsock_addr as *const sockaddr_vm
 					as *const libc::sockaddr,
 				Some(vsock_addr_len),
 			)
