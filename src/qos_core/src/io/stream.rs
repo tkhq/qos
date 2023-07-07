@@ -24,14 +24,14 @@ const BACKLOG: usize = 128;
 
 #[repr(C)]
 struct sockaddr_vm {
-    svm_family: libc::sa_family_t,
-    svm_reserved1: libc::c_ushort,
-    svm_port: libc::c_uint,
-    svm_cid: libc::c_uint,
+	svm_family: libc::sa_family_t,
+	svm_reserved1: libc::c_ushort,
+	svm_port: libc::c_uint,
+	svm_cid: libc::c_uint,
 	// Field added [here](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6) 
 	// but not yet in a version of libc we can use.
-    svm_flags: u8,
-    svm_zero: [u8; 3]
+	svm_flags: u8,
+	svm_zero: [u8; 3]
 }
 
 /// Socket address.
