@@ -33,6 +33,8 @@ pub enum SocketAddress {
 
 /// VSOCK flag for talking to host.
 pub const VMADDR_FLAG_TO_HOST: u8 = 0x01;
+/// Don't specify any flags for a VSOCK.
+pub const VMADDR_NO_FLAGS: u8 = 0x00;
 
 impl SocketAddress {
 	/// Create a new Unix socket.
@@ -51,7 +53,7 @@ impl SocketAddress {
 	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>).
 	#[cfg(feature = "vm")]
 	#[allow(unsafe_code)]
-	pub fn new_vsock(cid: u32, port: u32, flags: Option<u8>) -> Self {
+	pub fn new_vsock(cid: u32, port: u32, flags: u8) -> Self {
 		#[repr(C)]
 		struct sockaddr_vm {
 			svm_family: libc::sa_family_t,
@@ -64,15 +66,14 @@ impl SocketAddress {
 			svm_zero: [u8; 3]
 		}
 
-		let mut vsock_addr: sockaddr_vm = unsafe { std::mem::zeroed() };
-		vsock_addr.svm_family = AddressFamily::Vsock as libc::sa_family_t;
-		vsock_addr.svm_cid = cid;
-		vsock_addr.svm_port = port;
-
-		if let Some(flags) = flags {
-			vsock_addr.svm_flags = flags;
-		}
-
+		let vsock_addr = sockaddr_vm {
+			svm_family: AddressFamily::Vsock as libc::sa_family_t,
+			svm_reserved1: 0,
+			svm_cid: cid,
+			svm_port: port,
+			svm_flags: flags,
+			svm_zero: [0; 3],
+		};
 		let vsock_addr_len = size_of::<sockaddr_vm>() as libc::socklen_t;
 		let addr = unsafe {
 			VsockAddr::from_raw(

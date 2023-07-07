@@ -165,7 +165,8 @@ test:
 	cargo test -p qos_core
 
 .PHONY: test-vm
-	cargo test -p qos_core --features vm --no-default-features
+test-vm:
+	cargo test -p qos_core -p qos_host --features vm --no-default-features
 
 .PHONY: build-linux-only
 build-linux-only:

@@ -6,7 +6,7 @@ use qos_nsm::{Nsm, NsmProvider};
 
 use crate::{
 	handles::Handles,
-	io::SocketAddress,
+    io::{SocketAddress, VMADDR_NO_FLAGS},
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 	reaper::Reaper,
 	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
@@ -59,7 +59,7 @@ impl EnclaveOpts {
 			(Some(c), Some(p), None) => SocketAddress::new_vsock(
 				c.parse::<u32>().unwrap(),
 				p.parse::<u32>().unwrap(),
-				None,
+				VMADDR_NO_FLAGS,
 			),
 			(None, None, Some(u)) => SocketAddress::new_unix(u),
 			_ => panic!("Invalid socket opts"),
@@ -317,7 +317,7 @@ mod test {
 			.collect();
 		let opts = EnclaveOpts::new(&mut args);
 
-		assert_eq!(opts.addr(), SocketAddress::new_vsock(6, 3999, None));
+		assert_eq!(opts.addr(), SocketAddress::new_vsock(6, 3999, VMADDR_NO_FLAGS));
 	}
 
 	#[test]
