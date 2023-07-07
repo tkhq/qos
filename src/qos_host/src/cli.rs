@@ -55,8 +55,8 @@ impl GetParserForOptions for HostParser {
 					.takes_value(true)
 			)
 			.token(
-				Token::new(VSOCK_TO_HOST, "add the to-host svm flag to the enclave vsock connection")
-					.takes_value(false)
+				Token::new(VSOCK_TO_HOST, "wether to add the to-host svm flag to the enclave vsock connection. Valid options are `true` or `false`")
+					.takes_value(true)
 					.forbids(vec![USOCK])
 			)
 	}
@@ -138,26 +138,19 @@ impl HostOptions {
 		self.parsed.single(ENDPOINT_BASE_PATH).map(Clone::clone)
 	}
 
+	fn include_vsock_to_host(&self) -> Option<bool> {
+		self.parsed.single(VSOCK_TO_HOST).as_ref().map(|s| s.parse()).map(|r| {
+			r.expect("could not parse `--vsock-to-host`. Valid args are true or false")
+		})
+	}
+
 	#[cfg(feature = "vm")]
 	fn to_host_flag(&self) -> u8 {
-		let include_flag = self.parsed.flag(VSOCK_TO_HOST).unwrap_or(false)
-			|| Self::kernal_version_requires_to_host();
-		if include_flag {
-			println!("Configuring vsock with VMADDR_FLAG_TO_HOST.");
-			qos_core::io::VMADDR_FLAG_TO_HOST
-		} else {
-			println!("Configuring vsock with VMADDR_NO_FLAGS.");
-			qos_core::io::VMADDR_NO_FLAGS
-		}
-	}
-	#[cfg(feature = "vm")]
-	fn kernal_version_requires_to_host() -> bool {
 		use sysinfo::{System, SystemExt};
 
 		let sys = System::new_all();
 		let kernal_version =
 			sys.kernel_version().expect("The kernal version exists");
-
 		println!(
 			"System name:             {:?}",
 			sys.name().expect("sys name exists")
@@ -169,6 +162,23 @@ impl HostOptions {
 		);
 		println!("System host name:        {:?}", sys.host_name());
 
+		let include = if let Some(include) = self.include_vsock_to_host() {
+			include
+		} else {
+			Self::kernal_version_requires_to_host(kernal_version)
+		};
+
+		if include {
+			println!("Configuring vsock with VMADDR_FLAG_TO_HOST.");
+			qos_core::io::VMADDR_FLAG_TO_HOST
+		} else {
+			println!("Configuring vsock with VMADDR_NO_FLAGS.");
+			qos_core::io::VMADDR_NO_FLAGS
+		}
+	}
+
+	#[cfg(feature = "vm")]
+	fn kernal_version_requires_to_host(kernal_version: String) -> bool {
 		// we expect something of the form 6.1.37-nitro
 		let parts: Vec<_> = kernal_version.split('.').collect();
 		let major = parts[0]
@@ -224,6 +234,30 @@ mod test {
 			"--host-port",
 			"3000",
 			"--vsock-to-host",
+			"false",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+		let opts = HostOptions::new(&mut args);
+
+		assert_eq!(
+			opts.enclave_addr(),
+			qos_core::io::SocketAddress::new_vsock(6, 3999, 0)
+		);
+
+		let mut args: Vec<_> = vec![
+			"binary",
+			"--cid",
+			"6",
+			"--port",
+			"3999",
+			"--host-ip",
+			"0.0.0.0",
+			"--host-port",
+			"3000",
+			"--vsock-to-host",
+			"true",
 		]
 		.into_iter()
 		.map(String::from)
