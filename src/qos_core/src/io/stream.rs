@@ -63,7 +63,7 @@ impl SocketAddress {
 			// Field added [here](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6)
 			// but not yet in a version of libc we can use.
 			svm_flags: u8,
-			svm_zero: [u8; 3]
+			svm_zero: [u8; 3],
 		}
 
 		let vsock_addr = sockaddr_vm {
@@ -77,8 +77,7 @@ impl SocketAddress {
 		let vsock_addr_len = size_of::<sockaddr_vm>() as libc::socklen_t;
 		let addr = unsafe {
 			VsockAddr::from_raw(
-				&vsock_addr as *const sockaddr_vm
-					as *const libc::sockaddr,
+				&vsock_addr as *const sockaddr_vm as *const libc::sockaddr,
 				Some(vsock_addr_len),
 			)
 			.unwrap()

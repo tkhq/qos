@@ -140,11 +140,45 @@ impl HostOptions {
 
 	#[cfg(feature = "vm")]
 	fn to_host_flag(&self) -> u8 {
-		if self.parsed.flag(VSOCK_TO_HOST).unwrap_or(false) {
+		let include_flag = self.parsed.flag(VSOCK_TO_HOST).unwrap_or(false)
+			|| Self::kernal_version_requires_to_host();
+		if include_flag {
+			println!("Configuring vsock with VMADDR_FLAG_TO_HOST.");
 			qos_core::io::VMADDR_FLAG_TO_HOST
 		} else {
+			println!("Configuring vsock with VMADDR_NO_FLAGS.");
 			qos_core::io::VMADDR_NO_FLAGS
 		}
+	}
+	#[cfg(feature = "vm")]
+	fn kernal_version_requires_to_host() -> bool {
+		use sysinfo::{System, SystemExt};
+
+		let sys = System::new_all();
+		let kernal_version =
+			sys.kernel_version().expect("The kernal version exists");
+
+		println!(
+			"System name:             {:?}",
+			sys.name().expect("sys name exists")
+		);
+		println!("System kernel version:   {:?}", kernal_version);
+		println!(
+			"System OS version:       {:?}",
+			sys.os_version().expect("os version exists")
+		);
+		println!("System host name:        {:?}", sys.host_name());
+
+		// we expect something of the form 6.1.37-nitro
+		let parts: Vec<_> = kernal_version.split('.').collect();
+		let major = parts[0]
+			.parse::<u32>()
+			.expect("failed to parse kernal major version");
+		let minor = parts[1]
+			.parse::<u32>()
+			.expect("failed to parse kernal minor version");
+
+		(minor >= 1 && major == 6) || major > 6
 	}
 }
 
@@ -153,7 +187,6 @@ pub struct CLI;
 impl CLI {
 	/// Execute the command line interface.
 	pub async fn execute() {
-		use sysinfo::{System, SystemExt};
 		let mut args: Vec<String> = env::args().collect();
 		let options = HostOptions::new(&mut args);
 
@@ -162,9 +195,6 @@ impl CLI {
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
 		} else {
-			let sys = System::new_all();
-			println!("System kernel version:   {:?}", sys.kernel_version());
-			println!("System OS version:       {:?}", sys.os_version());
 			HostServer::new(
 				options.enclave_addr(),
 				options.host_addr(),
@@ -193,7 +223,7 @@ mod test {
 			"0.0.0.0",
 			"--host-port",
 			"3000",
-			"--vsock-to-host"
+			"--vsock-to-host",
 		]
 		.into_iter()
 		.map(String::from)
@@ -203,27 +233,6 @@ mod test {
 		assert_eq!(
 			opts.enclave_addr(),
 			qos_core::io::SocketAddress::new_vsock(6, 3999, 1)
-		);
-
-		let mut args: Vec<_> = vec![
-			"binary",
-			"--cid",
-			"6",
-			"--port",
-			"3999",
-			"--host-ip",
-			"0.0.0.0",
-			"--host-port",
-			"3000",
-		]
-		.into_iter()
-		.map(String::from)
-		.collect();
-		let opts = HostOptions::new(&mut args);
-
-		assert_eq!(
-			opts.enclave_addr(),
-			qos_core::io::SocketAddress::new_vsock(6, 3999, 0)
 		);
 	}
 }
