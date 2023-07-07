@@ -138,6 +138,7 @@ impl HostOptions {
 		self.parsed.single(ENDPOINT_BASE_PATH).map(Clone::clone)
 	}
 
+	#[cfg(feature = "vm")]
 	fn include_vsock_to_host(&self) -> Option<bool> {
 		self.parsed.single(VSOCK_TO_HOST).as_ref().map(|s| s.parse()).map(|r| {
 			r.expect("could not parse `--vsock-to-host`. Valid args are true or false")
