@@ -9,12 +9,16 @@ spec:
         - name: qos-host
           image: qos/host
           command:
-            - /qos_host.linux.x86_64
+            - /qos_host
           args:
-            - --host-ip 0.0.0.0
-            - --host-port $(QOS_PORT)
-            - --port $(ENCLAVE_PORT)
-            - --cid $(ENCLAVE_CID)
+            - --host-ip
+            - 0.0.0.0
+            - --host-port
+            - $(QOS_PORT)
+            - --port
+            - $(ENCLAVE_PORT)
+            - --cid
+            - $(ENCLAVE_CID)
           env:
             - name: QOS_PORT
               value: "3001"

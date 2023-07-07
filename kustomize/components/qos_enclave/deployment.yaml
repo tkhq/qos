@@ -9,14 +9,14 @@ spec:
         - name: qos-enclave
           image: qos/enclave
           command:
-            - /qos_enclave.linux.x86_64
+            - /qos_enclave
           resources:
             requests:
-              memory: 1256Mi
-              hugepages-2Mi: 1024Mi
+              memory: 600Mi
+              hugepages-2Mi: 512Mi
               smarter-devices/nitro_enclaves: "1"
             limits:
-              hugepages-2Mi: 1024Mi
+              hugepages-2Mi: 512Mi
               smarter-devices/nitro_enclaves: "1"
           env:
             - name: POD_NAMESPACE
@@ -35,7 +35,7 @@ spec:
             - name: ENCLAVE_NAME
               value: $(POD_NAMESPACE)/$(POD_NAME)
             - name: EIF_PATH
-              value: "/aws-x86_64.eif"
+              value: "/nitro.eif"
             - name: ENCLAVE_CID
               value: "16"
             - name: CPU_COUNT
@@ -56,6 +56,15 @@ spec:
               drop:
                 - ALL
             readOnlyRootFilesystem: true
-            runAsGroup: 65532
-            runAsNonRoot: true
-            runAsUser: 65532
+            runAsGroup: 0
+            runAsUser: 0
+          volumeMounts:
+            - name: run-enclave
+              mountPath: /run/nitro_enclaves
+            - name: log-enclave
+              mountPath: /var/log/nitro_enclaves
+      volumes:
+        - name: run-enclave
+          emptyDir: {}
+        - name: log-enclave
+          emptyDir: {}
