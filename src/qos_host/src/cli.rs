@@ -149,13 +149,13 @@ impl HostOptions {
 		use sysinfo::{System, SystemExt};
 
 		let sys = System::new_all();
-		let kernal_version =
-			sys.kernel_version().expect("The kernal version exists");
+		let kernel_version =
+			sys.kernel_version().expect("The kernel version exists");
 		println!(
 			"System name:             {:?}",
 			sys.name().expect("sys name exists")
 		);
-		println!("System kernel version:   {:?}", kernal_version);
+		println!("System kernel version:   {:?}", kernel_version);
 		println!(
 			"System OS version:       {:?}",
 			sys.os_version().expect("os version exists")
@@ -165,7 +165,7 @@ impl HostOptions {
 		let include = if let Some(include) = self.include_vsock_to_host() {
 			include
 		} else {
-			Self::kernal_version_requires_to_host(kernal_version)
+			Self::kernel_version_requires_to_host(kernel_version)
 		};
 
 		if include {
@@ -178,15 +178,15 @@ impl HostOptions {
 	}
 
 	#[cfg(feature = "vm")]
-	fn kernal_version_requires_to_host(kernal_version: String) -> bool {
+	fn kernel_version_requires_to_host(kernel_version: String) -> bool {
 		// we expect something of the form 6.1.37-nitro
-		let parts: Vec<_> = kernal_version.split('.').collect();
+		let parts: Vec<_> = kernel_version.split('.').collect();
 		let major = parts[0]
 			.parse::<u32>()
-			.expect("failed to parse kernal major version");
+			.expect("failed to parse kernel major version");
 		let minor = parts[1]
 			.parse::<u32>()
-			.expect("failed to parse kernal minor version");
+			.expect("failed to parse kernel minor version");
 
 		(minor >= 1 && major == 6) || major > 6
 	}
