@@ -1,9 +1,14 @@
 ## Setup nitro dev box
 
-1. launch latest debian AMI
-2. Configure custom nitro kernel
+1. Launch latest Debian AMI
+2. Connect to instance
     ```
-    ssh -A admin@<IP_HERE>
+    while sleep 1; do ssh admin@<IP_HERE>; done
+    ```
+3. Configure custom nitro kernel
+
+    Assumes kernel "6.1" is latest. Adjust accordingly.
+    ```
     sudo -s
     apt install -y tmux dpkg-dev pahole inotify-tools neovim build-essential linux-source-6.1.0
     cd /usr/src
@@ -17,7 +22,7 @@
     dpkg -i ../linux-image-6.1.37-nitro_6.1.37-1_amd64.deb
     reboot
     ```
-3. Setup latest docker
+4. Setup latest docker
     ```
     sudo install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -29,9 +34,8 @@
     sudo apt update
     sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     ```
-4. Configure Nitro Enclave tooling
+5. Configure Nitro Enclave tooling
     ```
-    ssh -A admin@<IP_HERE>
     git clone https://github.com/aws/aws-nitro-enclaves-cli.git
     cd aws-nitro-enclaves-cli
     make
