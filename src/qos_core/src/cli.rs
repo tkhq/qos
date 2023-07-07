@@ -59,7 +59,7 @@ impl EnclaveOpts {
 			(Some(c), Some(p), None) => SocketAddress::new_vsock(
 				c.parse::<u32>().unwrap(),
 				p.parse::<u32>().unwrap(),
-				VMADDR_NO_FLAGS,
+				crate::io::VMADDR_NO_FLAGS,
 			),
 			(None, None, Some(u)) => SocketAddress::new_unix(u),
 			_ => panic!("Invalid socket opts"),
