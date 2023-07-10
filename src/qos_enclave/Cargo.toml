@@ -7,7 +7,7 @@ rust-version = "1.61"
 
 [dependencies]
 nitro-cli = { git = "https://github.com/aws/aws-nitro-enclaves-cli", version = "1.2.2" }
-libc = "0.2.142"
+libc = "0.2.147"
 
 [features]
 default = []
