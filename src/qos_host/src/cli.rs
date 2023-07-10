@@ -57,6 +57,7 @@ impl GetParserForOptions for HostParser {
 			.token(
 				Token::new(VSOCK_TO_HOST, "wether to add the to-host svm flag to the enclave vsock connection. Valid options are `true` or `false`")
 					.takes_value(true)
+					.required(false)
 					.forbids(vec![USOCK])
 			)
 	}
@@ -139,35 +140,16 @@ impl HostOptions {
 	}
 
 	#[cfg(feature = "vm")]
-	fn include_vsock_to_host(&self) -> Option<bool> {
-		self.parsed.single(VSOCK_TO_HOST).as_ref().map(|s| s.parse()).map(|r| {
-			r.expect("could not parse `--vsock-to-host`. Valid args are true or false")
-		})
-	}
-
-	#[cfg(feature = "vm")]
 	fn to_host_flag(&self) -> u8 {
-		use sysinfo::{System, SystemExt};
-
-		let sys = System::new_all();
-		let kernel_version =
-			sys.kernel_version().expect("The kernel version exists");
-		println!(
-			"System name:             {:?}",
-			sys.name().expect("sys name exists")
-		);
-		println!("System kernel version:   {:?}", kernel_version);
-		println!(
-			"System OS version:       {:?}",
-			sys.os_version().expect("os version exists")
-		);
-		println!("System host name:        {:?}", sys.host_name());
-
-		let include = if let Some(include) = self.include_vsock_to_host() {
-			include
-		} else {
-			Self::kernel_version_requires_to_host(kernel_version)
-		};
+		let include = self
+			.parsed
+			.single(VSOCK_TO_HOST)
+			.as_ref()
+			.map(|s| s.parse())
+			.map(|r| {
+				r.expect("could not parse `--vsock-to-host`. Valid args are true or false")
+			})
+			.unwrap_or(false);
 
 		if include {
 			println!("Configuring vsock with VMADDR_FLAG_TO_HOST.");
@@ -176,20 +158,6 @@ impl HostOptions {
 			println!("Configuring vsock with VMADDR_NO_FLAGS.");
 			qos_core::io::VMADDR_NO_FLAGS
 		}
-	}
-
-	#[cfg(feature = "vm")]
-	fn kernel_version_requires_to_host(kernel_version: String) -> bool {
-		// we expect something of the form 6.1.37-nitro
-		let parts: Vec<_> = kernel_version.split('.').collect();
-		let major = parts[0]
-			.parse::<u32>()
-			.expect("failed to parse kernel major version");
-		let minor = parts[1]
-			.parse::<u32>()
-			.expect("failed to parse kernel minor version");
-
-		(minor >= 1 && major == 6) || major > 6
 	}
 }
 
