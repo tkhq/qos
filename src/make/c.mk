@@ -20,9 +20,9 @@ $(CACHE_DIR)/openssl/Makefile: \
 	mv $(CACHE_DIR)/openssl-openssl-* $(dir $@)
 
 $(CACHE_DIR)/lib/libpcsclite.a: \
-	$(CACHE_DIR)/pcsc
+	$(CACHE_DIR)/pcsc/Makefile
 	$(call toolchain," \
-		cd $(FETCH_DIR)/pcsc \
+		cd $(CACHE_DIR)/pcsc \
 		&& export \
 			CC=musl-gcc \
 			CXX=musl-g++ \
@@ -44,7 +44,7 @@ $(CACHE_DIR)/lib/libpcsclite.a: \
 $(CACHE_DIR)/lib64/libssl.a: \
 	$(CACHE_DIR)/openssl/Makefile
 	$(call toolchain," \
-		cd $(FETCH_DIR)/openssl \
+		cd $(CACHE_DIR)/openssl \
 		&& export CC='musl-gcc -fPIE -pie -static' \
 		&& sudo ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/x86_64-linux-musl/asm \
 		&& sudo ln -s /usr/include/asm-generic /usr/include/x86_64-linux-musl/asm-generic \

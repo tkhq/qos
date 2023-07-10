@@ -8,8 +8,14 @@ rust-deps: \
 $(FETCH_DIR)/rust.tar.gz:
 	$(call git_archive,$(RUST_REPO),$(RUST_REF))
 
+$(CACHE_DIR)/rust/x.py: \
+	$(FETCH_DIR)/rust.tar.gz
+	mkdir -p $(CACHE_DIR)/rust
+	tar -xzf $< -C $(CACHE_DIR)/rust
+	touch $@
+
 $(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot: \
-	$(CACHE_DIR)/rust
+	$(CACHE_DIR)/rust/x.py
 	$(call toolchain," \
 		cd $(CACHE_DIR)/rust \
 		&& touch .git \

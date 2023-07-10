@@ -15,7 +15,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	$(BIN_DIR)/eif_build \
 	$(CACHE_DIR)/bzImage \
 	$(CACHE_DIR)/rootfs.cpio \
-	$(CACHE_DIR)/linux.config
+	$(CONFIG_DIR)/$(TARGET)/linux.config
 	mkdir -p $(CACHE_DIR)/eif
 	$(call toolchain," \
 		export \
@@ -46,16 +46,16 @@ $(BIN_DIR)/eif_build:
 $(CACHE_DIR)/nsm.ko: \
 	$(CACHE_DIR)/linux/Makefile \
 	$(CONFIG_DIR)/$(TARGET)/linux.config \
-	$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap
+	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/Makefile
 	$(call toolchain," \
 		cd $(CACHE_DIR)/linux && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
 		make olddefconfig && \
 		make -j$(CPUS) ARCH=$(ARCH) bzImage && \
 		make -j$(CPUS) ARCH=$(ARCH) modules_prepare && \
-		cd /home/build/$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap/ && \
+		cd /home/build/$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/ && \
 		make \
 			-C /home/build/$(CACHE_DIR)/linux \
-		    M=/home/build/$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap/nsm-driver && \
+		    M=/home/build/$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/nsm-driver && \
 		cp nsm-driver/nsm.ko /home/build/$@ \
 	")

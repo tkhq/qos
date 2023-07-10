@@ -53,7 +53,6 @@ $(BIN_DIR)/gen_initramfs.sh: \
 
 $(CACHE_DIR)/linux/Makefile: \
 	$(KEY_DIR)/linux.asc \
-	$(CACHE_DIR)/linux.config \
 	$(FETCH_DIR)/linux.tar.sign \
 	$(CACHE_DIR)/linux.tar
 	$(call toolchain," \
@@ -68,7 +67,7 @@ $(CACHE_DIR)/linux/Makefile: \
 	")
 
 $(CACHE_DIR)/bzImage: \
-	$(CACHE_DIR)/linux.config \
+	$(CONFIG_DIR)/$(TARGET)/linux.config \
 	$(CACHE_DIR)/linux/Makefile \
 	$(CACHE_DIR)/rootfs.cpio
 	$(call toolchain," \
