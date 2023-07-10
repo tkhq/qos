@@ -164,6 +164,10 @@ test:
 	@# by itself.
 	cargo test -p qos_core
 
+.PHONY: test-vm
+test-vm:
+	cargo test -p qos_core -p qos_host --features vm --no-default-features
+
 .PHONY: build-linux-only
 build-linux-only:
 	cargo build --manifest-path ./qos_system/Cargo.toml

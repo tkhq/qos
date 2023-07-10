@@ -1,7 +1,7 @@
 use qos_system::{dmesg, freopen, mount, reboot};
 use qos_core::{
     handles::Handles,
-    io::SocketAddress,
+    io::{SocketAddress, VMADDR_NO_FLAGS},
     reaper::Reaper,
     EPHEMERAL_KEY_FILE,
     MANIFEST_FILE,
@@ -71,7 +71,7 @@ fn main() {
 	Reaper::execute(
 	     &handles,
 	     Box::new(Nsm),
-	     SocketAddress::new_vsock(16, 3),
+	     SocketAddress::new_vsock(16, 3, VMADDR_NO_FLAGS),
 	     SocketAddress::new_unix(SEC_APP_SOCK),
 	     None,
 	);

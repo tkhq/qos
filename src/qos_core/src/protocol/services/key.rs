@@ -212,7 +212,6 @@ fn validate_manifest(
 	// had K approvals.
 	#[cfg(not(feature = "mock"))]
 	{
-		use crate::protocol::QosHash;
 		qos_nsm::nitro::verify_attestation_doc_against_user_input(
 			_attestation_doc,
 			&new_manifest_envelope.manifest.qos_hash(),

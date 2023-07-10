@@ -59,6 +59,7 @@ impl EnclaveOpts {
 			(Some(c), Some(p), None) => SocketAddress::new_vsock(
 				c.parse::<u32>().unwrap(),
 				p.parse::<u32>().unwrap(),
+				crate::io::VMADDR_NO_FLAGS,
 			),
 			(None, None, Some(u)) => SocketAddress::new_unix(u),
 			_ => panic!("Invalid socket opts"),
@@ -316,7 +317,10 @@ mod test {
 			.collect();
 		let opts = EnclaveOpts::new(&mut args);
 
-		assert_eq!(opts.addr(), SocketAddress::new_vsock(6, 3999));
+		assert_eq!(
+			opts.addr(),
+			SocketAddress::new_vsock(6, 3999, crate::io::VMADDR_NO_FLAGS)
+		);
 	}
 
 	#[test]
