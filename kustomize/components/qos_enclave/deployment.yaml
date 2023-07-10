@@ -12,11 +12,11 @@ spec:
             - /qos_enclave
           resources:
             requests:
-              memory: 600Mi
-              hugepages-2Mi: 512Mi
+              memory: 1054Mi
+              hugepages-2Mi: 1Gi
               smarter-devices/nitro_enclaves: "1"
             limits:
-              hugepages-2Mi: 512Mi
+              hugepages-2Mi: 1Gi
               smarter-devices/nitro_enclaves: "1"
           env:
             - name: POD_NAMESPACE
