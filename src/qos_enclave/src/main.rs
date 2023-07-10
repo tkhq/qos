@@ -1,8 +1,10 @@
 use std::{
+	fs::create_dir_all,
 	io::Write,
 	mem::MaybeUninit,
 	net::{Shutdown, TcpListener},
 	os::unix::net::UnixStream,
+	path::Path,
 	process::exit,
 	ptr, thread,
 };
@@ -83,6 +85,12 @@ fn boot() -> String {
 		enclave_name: Some(enclave_name.clone()),
 	};
 	println!("{:?}", run_args);
+
+	// Socket directory must exist or Nitro SDK crashes with generic error
+	if !Path::new("/run/nitro_enclaves").is_dir() {
+		create_dir_all("/run/nitro_enclaves")
+			.expect("Failed to create /run/nitro_enclaves");
+	}
 
 	let logger = init_logger()
 		.map_err(|e| e.set_action("Logger initialization".to_string()))

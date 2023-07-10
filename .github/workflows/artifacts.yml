@@ -1,0 +1,127 @@
+name: artifacts-build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch: # Allows manual invocation
+
+jobs:
+  build:
+    name: Build Toolchain Artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Install git lfs
+        run: sudo apt-get install -y git-lfs
+        shell: bash
+
+      - name: Checkout sources
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+
+      - name: Download submodules
+        run: git submodule update --init --recursive
+        shell: bash
+
+      - name: Pull lfs artifacts
+        run: git lfs pull
+        shell: bash
+
+      - name: Run `make dist`
+        shell: 'script -q -e -c "bash {0}"'
+        run: make dist
+
+      - uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  upload_to_ecr:
+    name: Upload toolchain artifacts to ECR
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@5fd3084fc36e372ff1fff382a39b10d03659f355 # v2.2.0
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::799078726966:role/github-qos
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@e407df249e6c155d03c0e4375f34bc2385f52d65 # v1.6.1
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
+        with:
+          name: dist
+
+      - name: Upload images to ECR
+        env:
+          images: >-
+            qos_client
+            qos_enclave
+            qos_host
+          tags: >-
+            ${{ github.ref == format('refs/heads/{0}', 'main') && 'latest' || '' }}
+            ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || '' }}
+        run: |
+          skopeo login \
+            --username "${{ steps.login-ecr.outputs.docker_username_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
+            --password "${{ steps.login-ecr.outputs.docker_password_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
+            ${{ steps.login-ecr.outputs.registry }}
+          for image in ${images}; do
+            skopeo copy --all \
+              "oci-archive:${image}.oci.x86_64.tar" \
+              "docker://${{ steps.login-ecr.outputs.registry }}/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+            for tag in ${tags}; do
+              skopeo copy --all \
+                "docker://${{ steps.login-ecr.outputs.registry }}/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}" \
+                "docker://${{ steps.login-ecr.outputs.registry }}/tkhq/${image}:${tag}"
+            done
+          done
+
+  upload_to_ghcr:
+    name: Upload toolchain artifacts to GHCR
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
+        with:
+          name: dist
+
+      - name: Upload images to GHCR
+        env:
+          images: >-
+            qos_client
+            qos_enclave
+            qos_host
+          tags: >-
+            ${{ github.ref == format('refs/heads/{0}', 'main') && 'latest' || '' }}
+            ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || '' }}
+        run: |
+          skopeo login \
+            --username "${{ github.actor }}" \
+            --password "${{ secrets.GITHUB_TOKEN }}" \
+            ghcr.io
+          for image in ${images}; do
+            skopeo copy --all \
+              "oci-archive:${image}.oci.x86_64.tar" \
+              "docker://ghcr.io/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+            for tag in ${tags}; do
+              skopeo copy --all \
+                "docker://ghcr.io/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}" \
+                "docker://ghcr.io/tkhq/${image}:${tag}"
+            done
+          done

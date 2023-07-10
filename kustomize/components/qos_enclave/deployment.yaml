@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example
+spec:
+  template:
+    spec:
+      containers:
+        - name: qos-enclave
+          image: qos/enclave
+          command:
+            - /qos_host.linux.x86_64
+          args:
+            - --host-ip 0.0.0.0
+            - --host-port $(QOS_PORT)
+            - --port $(ENCLAVE_PORT)
+            - --cid $(ENCLAVE_CID)
+          resources:
+            requests:
+              memory: 1256Mi
+              hugepages-2Mi: 1024Mi
+              smarter-devices/nitro_enclaves: "1"
+            limits:
+              hugepages-2Mi: 1024Mi
+              smarter-devices/nitro_enclaves: "1"
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MEMORY_MIB
+              valueFrom:
+                resourceFieldRef:
+                  resource: requests.hugepages-2Mi
+                  divisor: 1Mi
+            - name: ENCLAVE_NAME
+              value: $(POD_NAMESPACE)/$(POD_NAME)
+            - name: EIF_PATH
+              value: "/aws-x86_64.eif"
+            - name: ENCLAVE_CID
+              value: "16"
+            - name: CPU_COUNT
+              value: "2"
+          ports:
+            - name: nitro-health
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /
+              port: nitro-health
+          readinessProbe:
+            httpGet:
+              path: /
+              port: nitro-health
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 65532
+            runAsNonRoot: true
+            runAsUser: 65532

@@ -212,7 +212,6 @@ fn validate_manifest(
 	// had K approvals.
 	#[cfg(not(feature = "mock"))]
 	{
-		use crate::protocol::QosHash;
 		qos_nsm::nitro::verify_attestation_doc_against_user_input(
 			_attestation_doc,
 			&new_manifest_envelope.manifest.qos_hash(),
@@ -968,11 +967,6 @@ mod test {
 			let mut new_manifest_envelope = manifest_envelope.clone();
 			new_manifest_envelope.manifest.namespace.nonce += 1;
 			new_manifest_envelope.manifest.enclave.pcr3 = vec![128; 32];
-
-			// Also update the old manifest to have the same pcr3 so the issue
-			// is isolated to mismatching the attestation doc.
-			let mut old_manifest_envelope = manifest_envelope.clone();
-			old_manifest_envelope.manifest.enclave.pcr3 = vec![128; 32];
 
 			let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
 			att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));

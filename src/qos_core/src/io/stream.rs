@@ -31,6 +31,11 @@ pub enum SocketAddress {
 	Unix(UnixAddr),
 }
 
+/// VSOCK flag for talking to host.
+pub const VMADDR_FLAG_TO_HOST: u8 = 0x01;
+/// Don't specify any flags for a VSOCK.
+pub const VMADDR_NO_FLAGS: u8 = 0x00;
+
 impl SocketAddress {
 	/// Create a new Unix socket.
 	///
@@ -44,9 +49,39 @@ impl SocketAddress {
 	}
 
 	/// Create a new Vsock socket.
+	///
+	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>).
 	#[cfg(feature = "vm")]
-	pub fn new_vsock(cid: u32, port: u32) -> Self {
-		let addr = VsockAddr::new(cid, port);
+	#[allow(unsafe_code)]
+	pub fn new_vsock(cid: u32, port: u32, flags: u8) -> Self {
+		#[repr(C)]
+		struct sockaddr_vm {
+			svm_family: libc::sa_family_t,
+			svm_reserved1: libc::c_ushort,
+			svm_port: libc::c_uint,
+			svm_cid: libc::c_uint,
+			// Field added [here](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6)
+			// but not yet in a version of libc we can use.
+			svm_flags: u8,
+			svm_zero: [u8; 3],
+		}
+
+		let vsock_addr = sockaddr_vm {
+			svm_family: AddressFamily::Vsock as libc::sa_family_t,
+			svm_reserved1: 0,
+			svm_cid: cid,
+			svm_port: port,
+			svm_flags: flags,
+			svm_zero: [0; 3],
+		};
+		let vsock_addr_len = size_of::<sockaddr_vm>() as libc::socklen_t;
+		let addr = unsafe {
+			VsockAddr::from_raw(
+				&vsock_addr as *const sockaddr_vm as *const libc::sockaddr,
+				Some(vsock_addr_len),
+			)
+			.unwrap()
+		};
 		Self::Vsock(addr)
 	}
 
