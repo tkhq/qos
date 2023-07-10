@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
         - name: qos-host
-          image: qos/host
+          image: ghrc.io/tkhq/qos_host
           command:
             - /qos_host
           args:

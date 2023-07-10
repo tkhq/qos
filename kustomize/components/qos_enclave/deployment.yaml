@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
         - name: qos-enclave
-          image: qos/enclave
+          image: ghcr.io/tkhq/qos_enclave
           command:
             - /qos_enclave
           resources:
