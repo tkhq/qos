@@ -28,14 +28,14 @@ jobs:
         run: git lfs pull
         shell: bash
 
-      - name: Run `make dist`
+      - name: Run `make`
         shell: 'script -q -e -c "bash {0}"'
-        run: make dist
+        run: make
 
       - uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
         with:
-          name: dist
-          path: dist/
+          name: out
+          path: out/
           retention-days: 1
 
   upload_to_ecr:
@@ -60,7 +60,7 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
         with:
-          name: dist
+          name: out
 
       - name: Upload images to ECR
         env:
@@ -99,7 +99,7 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
         with:
-          name: dist
+          name: out
 
       - name: Upload images to GHCR
         env:
