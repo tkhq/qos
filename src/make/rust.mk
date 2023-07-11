@@ -98,7 +98,7 @@ $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 			OPENSSL_STATIC=true \
 			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_DIR=/home/build/${CACHE_DIR}/lib64 \
 			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_LIB_DIR=/home/build/${CACHE_DIR}/lib64 \
-			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_INCLUDE_DIR=/home/build/${CACHE_DIR}/include \
+			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_INCLUDE_DIR=/home/build/${CACHE_DIR}/lib64 \
 			RUSTFLAGS=' \
 				-L /home/build/$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
 				-L /home/build/$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
