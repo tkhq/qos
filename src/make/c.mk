@@ -19,7 +19,7 @@ $(CACHE_DIR)/openssl/Makefile: \
 	tar -xzf $< -C $(CACHE_DIR)/
 	mv $(CACHE_DIR)/openssl-openssl-* $(dir $@)
 
-$(CACHE_DIR)/lib/libpcsclite.a: \
+$(CACHE_DIR)/lib/libpcsclite.a: | \
 	$(CACHE_DIR)/pcsc/Makefile
 	$(call toolchain," \
 		cd $(CACHE_DIR)/pcsc \
@@ -41,7 +41,7 @@ $(CACHE_DIR)/lib/libpcsclite.a: \
 		&& cp src/.libs/libpcsclite.a /home/build/$@ \
 	")
 
-$(CACHE_DIR)/lib64/libssl.a: \
+$(CACHE_DIR)/lib64/libssl.a: | \
 	$(CACHE_DIR)/openssl/Makefile
 	$(call toolchain," \
 		cd $(CACHE_DIR)/openssl \

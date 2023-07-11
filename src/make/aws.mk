@@ -9,7 +9,6 @@ $(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/Makefile: \
 	$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap.tar
 	tar -xzf $< -C $(CACHE_DIR)/
 	mv $(CACHE_DIR)/aws-aws-nitro-enclaves-sdk-bootstrap* $(dir $@)
-	touch $@
 
 $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	$(BIN_DIR)/eif_build \
@@ -43,7 +42,7 @@ $(BIN_DIR)/eif_build:
 		cp target/x86_64-unknown-linux-gnu/debug/eif_build /home/build/$@; \
 	")
 
-$(CACHE_DIR)/nsm.ko: \
+$(CACHE_DIR)/nsm.ko: | \
 	$(CACHE_DIR)/linux/Makefile \
 	$(CONFIG_DIR)/$(TARGET)/linux.config \
 	$(CACHE_DIR)/aws-nitro-enclaves-sdk-bootstrap/Makefile

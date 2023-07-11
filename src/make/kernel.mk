@@ -68,8 +68,7 @@ $(CACHE_DIR)/linux/Makefile: \
 
 $(CACHE_DIR)/bzImage: \
 	$(CONFIG_DIR)/$(TARGET)/linux.config \
-	$(CACHE_DIR)/linux/Makefile \
-	$(CACHE_DIR)/rootfs.cpio
+	| $(CACHE_DIR)/linux/Makefile
 	$(call toolchain," \
 		cd $(CACHE_DIR)/linux && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
