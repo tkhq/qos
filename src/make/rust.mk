@@ -90,15 +90,17 @@ $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 
 $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 	$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
-	$(CACHE_DIR)/lib64/libssl.a
+	$(FETCH_DIR)/openssl-static-musl.tar.gz
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_enclave \
+		&& mkdir -p /home/build/${CACHE_DIR}/openssl-static \
+		&& tar -C /home/build/${CACHE_DIR}/openssl-static -xf /home/build/$(FETCH_DIR)/openssl-static-musl.tar.gz \
 		&& export \
 			PKG_CONFIG_ALLOW_CROSS=1 \
 			OPENSSL_STATIC=true \
-			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_DIR=/home/build/${CACHE_DIR}/lib64 \
-			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_LIB_DIR=/home/build/${CACHE_DIR}/lib64 \
-			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_INCLUDE_DIR=/home/build/${CACHE_DIR}/lib64 \
+			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_DIR=/home/build/${CACHE_DIR}/openssl-static/lib64 \
+			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_LIB_DIR=/home/build/${CACHE_DIR}/openssl-static/lib64 \
+			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_INCLUDE_DIR=/home/build/${CACHE_DIR}/openssl-static/include \
 			RUSTFLAGS=' \
 				-L /home/build/$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
 				-L /home/build/$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
@@ -110,5 +112,3 @@ $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 			target/x86_64-unknown-linux-musl/release/qos_enclave \
 			/home/build/$@; \
 	")
-
-

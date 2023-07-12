@@ -41,23 +41,33 @@ $(CACHE_DIR)/lib/libpcsclite.a: | \
 		&& cp src/.libs/libpcsclite.a /home/build/$@ \
 	")
 
-$(CACHE_DIR)/lib64/libssl.a: | \
+$(FETCH_DIR)/openssl-static-musl.tar.gz: \
 	$(CACHE_DIR)/openssl/Makefile
 	$(call toolchain," \
-		cd $(CACHE_DIR)/openssl \
+		mkdir -p $(CACHE_DIR)/$(notdir $@)-staging \
 		&& export CC='musl-gcc -fPIE -pie -static' \
 		&& sudo ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/x86_64-linux-musl/asm \
 		&& sudo ln -s /usr/include/asm-generic /usr/include/x86_64-linux-musl/asm-generic \
 		&& sudo ln -s /usr/include/linux /usr/include/x86_64-linux-musl/linux \
+		&& cd $(CACHE_DIR)/openssl \
 		&& ./Configure \
 			no-shared \
 			no-async \
-			--prefix=/home/build/$(CACHE_DIR) \
+			--prefix=/home/build/$(CACHE_DIR)/$(notdir $@)-staging \
 			linux-x86_64 \
 		&& make depend \
 		&& make \
 		&& make install \
-		&& touch /home/build/$@ \
+		&& tar \
+			-C /home/build/$(CACHE_DIR)/$(notdir $@)-staging \
+			--sort=name \
+			--mtime='@0' \
+			--owner=0 \
+			--group=0 \
+			--numeric-owner \
+			-cvf - \
+			. \
+		| gzip -n > /home/build/$@ \
 	")
 
 $(BIN_DIR)/gen_init_cpio: \
