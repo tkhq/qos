@@ -14,7 +14,13 @@ $(CACHE_DIR)/rust/x.py: \
 	tar -xzf $< -C $(CACHE_DIR)/rust
 	touch $@
 
-$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot: \
+$(CACHE_DIR)/rust-libstd-musl: \
+	$(FETCH_DIR)/rust-libstd-musl.tar.gz
+	mkdir -p $(CACHE_DIR)/rust-libstd-musl
+	tar -xzf $< -C $(CACHE_DIR)/rust-libstd-musl
+	touch $@
+
+$(FETCH_DIR)/rust-libstd-musl.tar.gz: \
 	$(CACHE_DIR)/rust/x.py
 	$(call toolchain," \
 		cd $(CACHE_DIR)/rust \
@@ -29,15 +35,25 @@ $(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot: \
 			--stage 0 \
 			--target x86_64-unknown-linux-musl \
 			library \
+		&& tar \
+			-C build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl \
+			--sort=name \
+			--mtime='@0' \
+			--owner=0 \
+			--group=0 \
+			--numeric-owner \
+			-cvf - \
+			. \
+		| gzip -n > /home/build/$@ \
 	")
 
 $(CACHE_DIR)/init: \
-	$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	$(CACHE_DIR)/rust-libstd-musl
 	$(call toolchain," \
 		export \
 			RUSTFLAGS=' \
-				-L /home/build/$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
-				-L /home/build/$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /home/build/$(CACHE_DIR)/rust-libstd-musl/lib \
+				-L /home/build/$(CACHE_DIR)/rust-libstd-musl/lib/self-contained \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
@@ -47,14 +63,14 @@ $(CACHE_DIR)/init: \
 	")
 
 $(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
-	$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
+	$(CACHE_DIR)/rust-libstd-musl \
 	$(CACHE_DIR)/lib/libpcsclite.a
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_client \
 		&& export \
 			RUSTFLAGS=' \
-				-L /home/build/$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
-				-L /home/build/$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /home/build/$(CACHE_DIR)/rust-libstd-musl/lib/ \
+				-L /home/build/$(CACHE_DIR)/rust-libstd-musl/lib/self-contained/ \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
@@ -68,12 +84,12 @@ $(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
 	")
 
 $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
-	$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	$(CACHE_DIR)/rust-libstd-musl
 	$(call toolchain," \
 		export \
 			RUSTFLAGS=' \
-				-L /home/build/$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
-				-L /home/build/$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /home/build/$(CACHE_DIR)/rust-libstd-musl/lib/ \
+				-L /home/build/$(CACHE_DIR)/rust-libstd-musl/lib/self-contained/ \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
@@ -89,7 +105,7 @@ $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 
 
 $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
-	$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
+	$(CACHE_DIR)/rust-libstd-musl \
 	$(FETCH_DIR)/openssl-static-musl.tar.gz
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_enclave \
@@ -102,8 +118,8 @@ $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_LIB_DIR=/home/build/${CACHE_DIR}/openssl-static/lib64 \
 			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_INCLUDE_DIR=/home/build/${CACHE_DIR}/openssl-static/include \
 			RUSTFLAGS=' \
-				-L /home/build/$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
-				-L /home/build/$(CACHE_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /home/build/$(CACHE_DIR)/rust-libstd-musl/lib/ \
+				-L /home/build/$(CACHE_DIR)/rust-libstd-musl/lib/self-contained/ \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
