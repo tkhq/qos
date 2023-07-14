@@ -1,0 +1,43 @@
+name: "Clear disk space"
+description: "Clear space on disk by removing useless default OS packages and folders"
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Running apt-get upgrade
+      run: sudo apt-get update
+      shell: bash
+    - name: Starting Disk space
+      run: df -h
+      shell: bash
+    - name: Top 50 packages by size
+      run: dpkg-query -Wf '${Installed-Size}\t${Package}\n' | sort -n | tail -n 50
+      shell: bash
+    - name: Removing Dotnet pkg
+      run: sudo apt-get remove -y '^dotnet-.*'
+      shell: bash
+    - name: Removing LLVM pkg
+      run: sudo apt-get remove -y '^llvm-.*'
+      shell: bash
+    - name: Removing PHP pkg
+      run: sudo apt-get remove -y 'php.*'
+      shell: bash
+    - name: Removing Azure/Google cloud pkgs
+      run: sudo apt-get remove -y azure-cli google-cloud-sdk
+      shell: bash
+    - name: Removing browsers
+      run: sudo apt-get remove -y google-chrome-stable firefox
+      shell: bash
+    - name: Removing big fonts
+      run: sudo apt-get remove -y powershell mono-devel
+      shell: bash
+    - name: Removing big directories
+      run: rm -rf /usr/share/dotnet/
+      shell: bash
+    - name: Cleaning up
+      run: sudo apt-get autoremove -y && sudo apt-get clean
+      shell: bash
+    - name: Ending Disk space
+      run: df -h
+      shell: bash

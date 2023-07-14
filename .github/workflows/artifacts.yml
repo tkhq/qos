@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
+      - name: Clear disk space
+        uses: ./.github/actions/clear-disk-space
+
       - name: Install git lfs
         run: sudo apt-get install -y git-lfs
         shell: bash
