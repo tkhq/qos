@@ -42,7 +42,7 @@ $(CACHE_DIR)/lib/libpcsclite.a: | \
 	")
 
 $(FETCH_DIR)/openssl-static-musl.tar.gz: \
-	$(CACHE_DIR)/openssl/Makefile
+	| $(CACHE_DIR)/openssl/Makefile
 	$(call toolchain," \
 		mkdir -p $(CACHE_DIR)/$(notdir $@)-staging \
 		&& export CC='musl-gcc -fPIE -pie -static' \
