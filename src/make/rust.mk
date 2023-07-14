@@ -21,7 +21,7 @@ $(CACHE_DIR)/rust-libstd-musl: \
 	touch $@
 
 $(FETCH_DIR)/rust-libstd-musl.tar.gz: \
-	$(CACHE_DIR)/rust/x.py
+	| $(CACHE_DIR)/rust/x.py
 	$(call toolchain," \
 		cd $(CACHE_DIR)/rust \
 		&& touch .git \
