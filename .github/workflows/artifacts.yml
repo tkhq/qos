@@ -13,15 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - name: Clear disk space
-        uses: ./.github/actions/clear-disk-space
-
       - name: Install git lfs
         run: sudo apt-get install -y git-lfs
         shell: bash
 
       - name: Checkout sources
         uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+      
+      - name: Clear disk space
+        uses: ./.github/actions/clear-disk-space
 
       - name: Download submodules
         run: git submodule update --init --recursive
