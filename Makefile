@@ -12,6 +12,7 @@ include src/make/images.mk
 .PHONY: default
 default: \
 	fetch \
+	dist-cache \
 	$(OUT_DIR)/aws-x86_64.eif \
 	$(OUT_DIR)/qos_client.linux-x86_64 \
 	$(OUT_DIR)/qos_client.oci.x86_64.tar \
@@ -36,3 +37,7 @@ fetch: \
 .PHONY: clean
 clean: toolchain-clean
 	git clean -dfx $(SRC_DIR)
+
+.PHONY: dist-cache
+dist-cache:
+	cp -p $(DIST_DIR)/* $(OUT_DIR)/
