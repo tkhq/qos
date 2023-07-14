@@ -40,4 +40,4 @@ clean: toolchain-clean
 
 .PHONY: dist-cache
 dist-cache:
-	cp -p $(DIST_DIR)/* $(OUT_DIR)/
+	cp -np $(DIST_DIR)/* $(OUT_DIR)/
