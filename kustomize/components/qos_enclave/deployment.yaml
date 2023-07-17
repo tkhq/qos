@@ -7,21 +7,16 @@ spec:
     spec:
       containers:
         - name: qos-enclave
-          image: qos/enclave
+          image: ghcr.io/tkhq/qos_enclave
           command:
-            - /qos_host.linux.x86_64
-          args:
-            - --host-ip 0.0.0.0
-            - --host-port $(QOS_PORT)
-            - --port $(ENCLAVE_PORT)
-            - --cid $(ENCLAVE_CID)
+            - /qos_enclave
           resources:
             requests:
-              memory: 1256Mi
-              hugepages-2Mi: 1024Mi
+              memory: 1054Mi
+              hugepages-2Mi: 1Gi
               smarter-devices/nitro_enclaves: "1"
             limits:
-              hugepages-2Mi: 1024Mi
+              hugepages-2Mi: 1Gi
               smarter-devices/nitro_enclaves: "1"
           env:
             - name: POD_NAMESPACE
@@ -40,7 +35,7 @@ spec:
             - name: ENCLAVE_NAME
               value: $(POD_NAMESPACE)/$(POD_NAME)
             - name: EIF_PATH
-              value: "/aws-x86_64.eif"
+              value: "/nitro.eif"
             - name: ENCLAVE_CID
               value: "16"
             - name: CPU_COUNT
@@ -61,6 +56,15 @@ spec:
               drop:
                 - ALL
             readOnlyRootFilesystem: true
-            runAsGroup: 65532
-            runAsNonRoot: true
-            runAsUser: 65532
+            runAsGroup: 0
+            runAsUser: 0
+          volumeMounts:
+            - name: run-enclave
+              mountPath: /run/nitro_enclaves
+            - name: log-enclave
+              mountPath: /var/log/nitro_enclaves
+      volumes:
+        - name: run-enclave
+          emptyDir: {}
+        - name: log-enclave
+          emptyDir: {}
