@@ -27,8 +27,8 @@ default: \
 
 .PHONY: fetch
 fetch: \
-	keys \
 	toolchain \
+	keys \
 	aws-deps \
 	kernel-deps \
 	rust-deps \
