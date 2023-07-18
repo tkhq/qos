@@ -102,8 +102,6 @@ $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 			/home/build/$@; \
 	")
 
-
-
 $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 	$(CACHE_DIR)/rust-libstd-musl \
 	$(FETCH_DIR)/openssl-static-musl.tar.gz
