@@ -122,7 +122,7 @@ impl Handles {
 		Self::write_as_read_only(
 			&self.quorum.quorum,
 			&pair.to_master_seed_hex(),
-			ProtocolError::FailedToPutManifestEnvelope,
+			ProtocolError::FailedToPutQuorumKey,
 		)
 	}
 
@@ -256,5 +256,165 @@ impl Handles {
 			.map_err(|_| err)?;
 
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod test {
+
+	use std::ops::Deref;
+
+	use qos_crypto::sha_256;
+	use qos_test_primitives::PathWrapper;
+
+	use super::*;
+	use crate::protocol::services::boot::{
+		Manifest, ManifestSet, Namespace, NitroConfig, PivotConfig,
+		RestartPolicy, ShareSet,
+	};
+
+	#[test]
+	fn put_ephemeral_key_is_read_only_write() {
+		let pivot_file: PathWrapper =
+			"put_ephemeral_key_is_read_only_write.pivot".into();
+		let ephemeral_file: PathWrapper =
+			"put_ephemeral_key_is_read_only_write_eph.secret".into();
+		let quorum_file: PathWrapper =
+			"put_ephemeral_key_is_read_only_write_quor.secret".into();
+		let manifest_file: PathWrapper =
+			"put_ephemeral_key_is_read_only_write.manifest".into();
+
+		let handles = Handles::new(
+			(*ephemeral_file.deref()).to_string(),
+			(*quorum_file.deref()).to_string(),
+			(*manifest_file.deref()).to_string(),
+			(*pivot_file.deref()).to_string(),
+		);
+
+		let ephemeral_key = P256Pair::generate().unwrap();
+		let result = handles.put_ephemeral_key(&ephemeral_key);
+		let error = handles.put_ephemeral_key(&ephemeral_key).unwrap_err();
+
+		assert!(result.is_ok());
+		assert_eq!(error, ProtocolError::CannotModifyPostPivotStatic);
+		assert!(handles.get_ephemeral_key().is_ok());
+	}
+
+	#[test]
+	fn put_quorum_key_is_read_only_write() {
+		let pivot_file: PathWrapper =
+			"put_quorum_key_is_read_only_write.pivot".into();
+		let ephemeral_file: PathWrapper =
+			"put_quorum_key_is_read_only_write_eph.secret".into();
+		let quorum_file: PathWrapper =
+			"put_pivot_is_read_only_write_quor.secret".into();
+		let manifest_file: PathWrapper =
+			"put_quorum_key_is_read_only_write.manifest".into();
+
+		let handles = Handles::new(
+			(*ephemeral_file.deref()).to_string(),
+			(*quorum_file.deref()).to_string(),
+			(*manifest_file.deref()).to_string(),
+			(*pivot_file.deref()).to_string(),
+		);
+
+		let quorum_key = P256Pair::generate().unwrap();
+		let result = handles.put_quorum_key(&quorum_key);
+		let error = handles.put_quorum_key(&quorum_key).unwrap_err();
+
+		assert!(result.is_ok());
+		assert_eq!(error, ProtocolError::CannotModifyPostPivotStatic);
+		assert!(handles.quorum_key_exists());
+		assert!(handles.get_quorum_key().is_ok());
+	}
+
+	#[test]
+	fn put_pivot_is_read_only_write() {
+		let pivot_file: PathWrapper =
+			"put_pivot_is_read_only_write.pivot".into();
+		let ephemeral_file: PathWrapper =
+			"put_pivot_is_read_only_write_eph.secret".into();
+		let quorum_file: PathWrapper =
+			"put_pivot_is_read_only_write_quor.secret".into();
+
+		let manifest_file: PathWrapper =
+			"put_pivot_is_read_only_write.manifest".into();
+
+		let handles = Handles::new(
+			(*ephemeral_file.deref()).to_string(),
+			(*quorum_file.deref()).to_string(),
+			(*manifest_file.deref()).to_string(),
+			(*pivot_file.deref()).to_string(),
+		);
+
+		let pivot = b"this is a pivot binary".to_vec();
+		let result = handles.put_pivot(&pivot);
+		let error = handles.put_pivot(&pivot).unwrap_err();
+
+		assert!(result.is_ok());
+		assert_eq!(error, ProtocolError::CannotModifyPostPivotStatic);
+		assert!(handles.pivot_exists());
+	}
+
+	#[test]
+	fn put_manifest_is_read_only_write() {
+		let pivot_file: PathWrapper =
+			"put_manifest_is_read_only_write.pivot".into();
+		let ephemeral_file: PathWrapper =
+			"put_manifest_is_read_only_write_eph.secret".into();
+		let quorum_file: PathWrapper =
+			"put_manifest_is_read_only_write_quor.secret".into();
+		let manifest_file: PathWrapper =
+			"put_manifest_is_read_only_write.manifest".into();
+
+		let handles = Handles::new(
+			(*ephemeral_file.deref()).to_string(),
+			(*quorum_file.deref()).to_string(),
+			(*manifest_file.deref()).to_string(),
+			(*pivot_file.deref()).to_string(),
+		);
+
+		let pivot = b"this is a pivot binary".to_vec();
+
+		let manifest = Manifest {
+			namespace: Namespace {
+				nonce: 420,
+				name: "vape lord".to_string(),
+				quorum_key: P256Pair::generate()
+					.unwrap()
+					.public_key()
+					.to_bytes(),
+			},
+			enclave: NitroConfig {
+				pcr0: vec![4; 32],
+				pcr1: vec![3; 32],
+				pcr2: vec![2; 32],
+				pcr3: vec![1; 32],
+				aws_root_certificate: b"cert lord".to_vec(),
+				qos_commit: "mock qos commit".to_string(),
+			},
+			pivot: PivotConfig {
+				hash: sha_256(&pivot),
+				restart: RestartPolicy::Always,
+				args: vec![],
+			},
+			manifest_set: ManifestSet { threshold: 2, members: vec![] },
+			share_set: ShareSet { threshold: 2, members: vec![] },
+		};
+
+		let manifest_envelope = ManifestEnvelope {
+			manifest,
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		};
+
+		let result = handles.put_manifest_envelope(&manifest_envelope);
+		let error =
+			handles.put_manifest_envelope(&manifest_envelope).unwrap_err();
+
+		assert!(result.is_ok());
+		assert_eq!(error, ProtocolError::CannotModifyPostPivotStatic);
+		assert!(handles.manifest_envelope_exists());
+		assert!(handles.get_manifest_envelope().is_ok());
 	}
 }
