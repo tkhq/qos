@@ -109,6 +109,12 @@ pub fn encode(bytes: &[u8]) -> String {
 		.collect()
 }
 
+/// Encode a byte slice to a hex-encoded byte slice.
+#[must_use]
+pub fn encode_to_vec(bytes: &[u8]) -> Vec<u8> {
+	encode(bytes).into_bytes()
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;

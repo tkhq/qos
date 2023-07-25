@@ -211,8 +211,7 @@ impl P256Pair {
 	/// Convert to hex bytes.
 	#[must_use]
 	pub fn to_master_seed_hex(&self) -> Vec<u8> {
-		let hex_string = qos_hex::encode(&self.master_seed);
-		hex_string.as_bytes().to_vec()
+		qos_hex::encode_to_vec(&self.master_seed)
 	}
 
 	/// Write the raw master seed to file as hex encoded.
@@ -306,8 +305,7 @@ impl P256Public {
 	/// Convert to hex bytes.
 	#[must_use]
 	pub fn to_hex_bytes(&self) -> Vec<u8> {
-		let hex_string = qos_hex::encode(&self.to_bytes());
-		hex_string.as_bytes().to_vec()
+		qos_hex::encode_to_vec(&self.to_bytes())
 	}
 
 	/// Write the public key to a file encoded as a hex string.

@@ -1498,11 +1498,8 @@ pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 	let ciphertext = std::fs::read(ciphertext_path.as_ref())?;
 
 	let plaintext = pair.decrypt(&ciphertext)?;
-	let file_contents = if output_hex {
-		qos_hex::encode(&plaintext).as_bytes().to_vec()
-	} else {
-		plaintext
-	};
+	let file_contents =
+		if output_hex { qos_hex::encode_to_vec(&plaintext) } else { plaintext };
 
 	write_with_msg(plaintext_path.as_ref(), &file_contents, "Plaintext");
 
