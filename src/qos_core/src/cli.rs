@@ -344,10 +344,10 @@ mod test {
 	}
 
 	#[test]
-	#[should_panic = "Entered invalid CLI args: UnexpectedInput(\"durp\")"]
+	#[should_panic = "Entered invalid CLI args: UnexpectedInput(\"--durp\")"]
 	fn panic_when_mistyped_cid() {
 		let mut args: Vec<_> =
-			vec!["--usock", "durp"].into_iter().map(String::from).collect();
+			vec!["--durp"].into_iter().map(String::from).collect();
 		let _opts = EnclaveOpts::new(&mut args);
 	}
 }

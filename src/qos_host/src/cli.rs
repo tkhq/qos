@@ -257,6 +257,14 @@ mod test {
 	}
 
 	#[test]
+	#[should_panic = "Entered invalid CLI args: UnexpectedInput(\"--durp\")"]
+	fn panic_when_mistyped_cid() {
+		let mut args: Vec<_> =
+			vec!["--durp"].into_iter().map(String::from).collect();
+		let _opts = HostOptions::new(&mut args);
+	}
+
+	#[test]
 	fn build_vsock() {
 		let mut args: Vec<_> = vec![
 			"binary",
