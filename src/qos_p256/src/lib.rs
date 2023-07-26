@@ -232,9 +232,9 @@ impl P256Pair {
 			P256Error::IOError(format!("failed to read master seed: {e}"))
 		})?;
 
-		let master_seed = qos_hex::decode_from_vec(hex_bytes).map_err(|err| match err {
-			HexError::InvalidUtf8 => P256Error::MasterSeedInvalidUtf8,
-			_ => err.into(),
+		let master_seed = qos_hex::decode_from_vec(hex_bytes).map_err(|e| match e {
+			HexError::InvalidUtf8(_) => P256Error::MasterSeedInvalidUtf8,
+			_ => e.into(),
 		})?;
 		let master_seed: [u8; MASTER_SEED_LEN] = master_seed
 			.try_into()
@@ -325,9 +325,9 @@ impl P256Public {
 			P256Error::IOError(format!("failed to read master seed: {e}"))
 		})?;
 
-		let public_keys_bytes = qos_hex::decode_from_vec(hex_bytes).map_err(|err| match err {
-			HexError::InvalidUtf8 => P256Error::MasterSeedInvalidUtf8,
-			_ => err.into(),
+		let public_keys_bytes = qos_hex::decode_from_vec(hex_bytes).map_err(|e| match e {
+			HexError::InvalidUtf8(_) => P256Error::MasterSeedInvalidUtf8,
+			_ => e.into(),
 		})?;
 
 		Self::from_bytes(&public_keys_bytes)
