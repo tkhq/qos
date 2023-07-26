@@ -294,10 +294,12 @@ mod test {
 		let ephemeral_key = P256Pair::generate().unwrap();
 		let result = handles.put_ephemeral_key(&ephemeral_key);
 		let error = handles.put_ephemeral_key(&ephemeral_key).unwrap_err();
+		let get_result = handles.get_ephemeral_key();
 
 		assert!(result.is_ok());
 		assert_eq!(error, ProtocolError::CannotModifyPostPivotStatic);
-		assert!(handles.get_ephemeral_key().is_ok());
+		assert!(get_result.is_ok());
+		assert!(get_result.unwrap() == ephemeral_key)
 	}
 
 	#[test]
@@ -321,11 +323,13 @@ mod test {
 		let quorum_key = P256Pair::generate().unwrap();
 		let result = handles.put_quorum_key(&quorum_key);
 		let error = handles.put_quorum_key(&quorum_key).unwrap_err();
+		let get_result = handles.get_quorum_key();
 
 		assert!(result.is_ok());
 		assert_eq!(error, ProtocolError::CannotModifyPostPivotStatic);
 		assert!(handles.quorum_key_exists());
-		assert!(handles.get_quorum_key().is_ok());
+		assert!(get_result.is_ok());
+		assert!(get_result.unwrap() == quorum_key)
 	}
 
 	#[test]
@@ -411,10 +415,12 @@ mod test {
 		let result = handles.put_manifest_envelope(&manifest_envelope);
 		let error =
 			handles.put_manifest_envelope(&manifest_envelope).unwrap_err();
+		let get_result = handles.get_manifest_envelope();
 
 		assert!(result.is_ok());
 		assert_eq!(error, ProtocolError::CannotModifyPostPivotStatic);
 		assert!(handles.manifest_envelope_exists());
-		assert!(handles.get_manifest_envelope().is_ok());
+		assert!(get_result.is_ok());
+		assert!(get_result.unwrap() == manifest_envelope)
 	}
 }
