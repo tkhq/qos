@@ -105,7 +105,8 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 
 #[must_use]
 pub fn decode_from_vec(vec: Vec<u8>) -> Result<Vec<u8>, HexError> {
-	let hex_string = String::from_utf8(vec).map_err(|e| HexError::from(e))?;
+	let hex_string = String::from_utf8(vec).map_err(HexError::from)?;
+	let hex_string = hex_string.trim();
 	decode(&hex_string)
 }
 
@@ -248,7 +249,6 @@ mod test {
 		let encoded = vec![];
 		assert_eq!(encode_to_vec(&decoded), encoded);
 		assert_eq!(decode_from_vec(encoded).unwrap(), decoded);
-		assert_eq!(String::from_utf8(encode_to_vec(&decoded)).unwrap(), "");
 	}
 
 	#[test]
@@ -257,11 +257,24 @@ mod test {
 		let encoded = vec![0x61];
 		let res = decode_from_vec(encoded);
 		assert_eq!(res, Err(HexError::LengthOne));
+	}
 
+	#[test]
+	fn decode_from_vec_trims_string() {
 		// " " hexadecimal string
-		let encoded =  vec![0x20];
+		let encoded = vec![0x20];
+		let decoded = vec![];
+		assert_eq!(decode_from_vec(encoded).unwrap(), decoded);
+
+		// "a " hexadecimal string
+		let encoded = vec![0x61, 0x20];
 		let res = decode_from_vec(encoded);
 		assert_eq!(res, Err(HexError::LengthOne));
+
+		// "aa " hexadecimal string
+		let encoded = vec![0x61, 0x61, 0x20];
+		let decoded = vec![170];
+		assert_eq!(decode_from_vec(encoded).unwrap(), decoded);
 	}
 
 	#[test]
@@ -280,7 +293,9 @@ mod test {
 
 		// "1f34e46d8caa7c5e" hexadecimal string
 		let decoded = vec![31, 52, 228, 109, 140, 170, 124, 94];
-		let encoded = vec![49, 102, 51, 52, 101, 52, 54, 100, 56, 99, 97, 97, 55, 99, 53, 101];
+		let encoded = vec![
+			49, 102, 51, 52, 101, 52, 54, 100, 56, 99, 97, 97, 55, 99, 53, 101,
+		];
 		assert_eq!(encode_to_vec(&decoded), encoded);
 		assert_eq!(decode_from_vec(encoded).unwrap(), decoded);
 	}

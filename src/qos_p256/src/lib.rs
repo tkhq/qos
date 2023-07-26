@@ -9,7 +9,6 @@ use std::path::Path;
 
 use encrypt::AesGcm256Secret;
 use hkdf::Hkdf;
-use qos_hex::HexError;
 use rand_core::{OsRng, RngCore};
 use sha2::Sha512;
 use zeroize::ZeroizeOnDrop;
@@ -88,7 +87,12 @@ pub enum P256Error {
 
 impl From<qos_hex::HexError> for P256Error {
 	fn from(err: qos_hex::HexError) -> Self {
-		Self::QosHex(format!("{err:?}"))
+		match err {
+			qos_hex::HexError::InvalidUtf8(_) => {
+				P256Error::MasterSeedInvalidUtf8
+			}
+			_ => Self::QosHex(format!("{err:?}")),
+		}
 	}
 }
 
@@ -232,10 +236,8 @@ impl P256Pair {
 			P256Error::IOError(format!("failed to read master seed: {e}"))
 		})?;
 
-		let master_seed = qos_hex::decode_from_vec(hex_bytes).map_err(|e| match e {
-			HexError::InvalidUtf8(_) => P256Error::MasterSeedInvalidUtf8,
-			_ => e.into(),
-		})?;
+		let master_seed =
+			qos_hex::decode_from_vec(hex_bytes).map_err(P256Error::from)?;
 		let master_seed: [u8; MASTER_SEED_LEN] = master_seed
 			.try_into()
 			.map_err(|_| P256Error::MasterSeedInvalidLength)?;
@@ -325,10 +327,8 @@ impl P256Public {
 			P256Error::IOError(format!("failed to read master seed: {e}"))
 		})?;
 
-		let public_keys_bytes = qos_hex::decode_from_vec(hex_bytes).map_err(|e| match e {
-			HexError::InvalidUtf8(_) => P256Error::MasterSeedInvalidUtf8,
-			_ => e.into(),
-		})?;
+		let public_keys_bytes =
+			qos_hex::decode_from_vec(hex_bytes).map_err(P256Error::from)?;
 
 		Self::from_bytes(&public_keys_bytes)
 	}
