@@ -9,6 +9,7 @@ use std::path::Path;
 
 use encrypt::AesGcm256Secret;
 use hkdf::Hkdf;
+use qos_hex::HexError;
 use rand_core::{OsRng, RngCore};
 use sha2::Sha512;
 use zeroize::ZeroizeOnDrop;
@@ -231,11 +232,10 @@ impl P256Pair {
 			P256Error::IOError(format!("failed to read master seed: {e}"))
 		})?;
 
-		let hex_string = String::from_utf8(hex_bytes)
-			.map_err(|_| P256Error::MasterSeedInvalidUtf8)?;
-		let hex_string = hex_string.trim();
-
-		let master_seed = qos_hex::decode(hex_string)?;
+		let master_seed = qos_hex::decode_from_vec(hex_bytes).map_err(|err| match err {
+			HexError::InvalidUtf8 => P256Error::MasterSeedInvalidUtf8,
+			_ => err.into(),
+		})?;
 		let master_seed: [u8; MASTER_SEED_LEN] = master_seed
 			.try_into()
 			.map_err(|_| P256Error::MasterSeedInvalidLength)?;
@@ -325,11 +325,10 @@ impl P256Public {
 			P256Error::IOError(format!("failed to read master seed: {e}"))
 		})?;
 
-		let hex_string = String::from_utf8(hex_bytes)
-			.map_err(|_| P256Error::MasterSeedInvalidUtf8)?;
-		let hex_string = hex_string.trim();
-
-		let public_keys_bytes = qos_hex::decode(hex_string)?;
+		let public_keys_bytes = qos_hex::decode_from_vec(hex_bytes).map_err(|err| match err {
+			HexError::InvalidUtf8 => P256Error::MasterSeedInvalidUtf8,
+			_ => err.into(),
+		})?;
 
 		Self::from_bytes(&public_keys_bytes)
 	}

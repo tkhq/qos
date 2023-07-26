@@ -34,6 +34,8 @@ pub enum HexError {
 	ExceedsMaxLength,
 	/// A non ascii char was used as input
 	NonAsciiChar,
+	/// Invalid UTF-8 byte vector when converting to String
+	InvalidUtf8,
 }
 
 impl From<ParseIntError> for HexError {
@@ -93,6 +95,13 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 		(true, false) | (false, false) => Err(HexError::ExceedsMaxLength),
 		(false, true) => Err(HexError::OddLength),
 	}
+}
+
+#[must_use]
+pub fn decode_from_vec(vec: Vec<u8>) -> Result<Vec<u8>, HexError> {
+	let hex_string = String::from_utf8(vec).map_err(|_| HexError::InvalidUtf8)?;
+	let hex_string = hex_string.trim();
+	decode(hex_string)
 }
 
 /// Encode a byte slice to hex string. Always encodes with lowercase characters.
@@ -195,6 +204,7 @@ mod test {
 		let address = "0x00000000219ab540356cBB839Cbe05303d7705Fa";
 		let mut encoded = address[2..].to_string();
 		encoded.make_ascii_lowercase();
+
 		assert_eq!(encode(&decoded), &encoded[..]);
 		assert_eq!(decode(address).unwrap(), decoded);
 	}
