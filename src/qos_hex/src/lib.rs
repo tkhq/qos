@@ -103,11 +103,11 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 	}
 }
 
-#[must_use]
+/// Decode bytes from a hex byte slice
 pub fn decode_from_vec(vec: Vec<u8>) -> Result<Vec<u8>, HexError> {
 	let hex_string = String::from_utf8(vec).map_err(HexError::from)?;
 	let hex_string = hex_string.trim();
-	decode(&hex_string)
+	decode(hex_string)
 }
 
 /// Encode a byte slice to hex string. Always encodes with lowercase characters.
