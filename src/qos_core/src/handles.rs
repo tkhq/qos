@@ -262,8 +262,6 @@ impl Handles {
 #[cfg(test)]
 mod test {
 
-	use std::ops::Deref;
-
 	use qos_crypto::sha_256;
 	use qos_test_primitives::PathWrapper;
 
@@ -285,21 +283,19 @@ mod test {
 			"put_ephemeral_key_is_read_only_write.manifest".into();
 
 		let handles = Handles::new(
-			(*ephemeral_file.deref()).to_string(),
-			(*quorum_file.deref()).to_string(),
-			(*manifest_file.deref()).to_string(),
-			(*pivot_file.deref()).to_string(),
+			(*ephemeral_file).to_string(),
+			(*quorum_file).to_string(),
+			(*manifest_file).to_string(),
+			(*pivot_file).to_string(),
 		);
 
 		let ephemeral_key = P256Pair::generate().unwrap();
 		let result = handles.put_ephemeral_key(&ephemeral_key);
 		let error = handles.put_ephemeral_key(&ephemeral_key).unwrap_err();
-		let get_result = handles.get_ephemeral_key();
 
 		assert!(result.is_ok());
 		assert_eq!(error, ProtocolError::CannotModifyPostPivotStatic);
-		assert!(get_result.is_ok());
-		assert!(get_result.unwrap() == ephemeral_key)
+		assert!(handles.get_ephemeral_key().unwrap() == ephemeral_key);
 	}
 
 	#[test]
@@ -314,22 +310,20 @@ mod test {
 			"put_quorum_key_is_read_only_write.manifest".into();
 
 		let handles = Handles::new(
-			(*ephemeral_file.deref()).to_string(),
-			(*quorum_file.deref()).to_string(),
-			(*manifest_file.deref()).to_string(),
-			(*pivot_file.deref()).to_string(),
+			(*ephemeral_file).to_string(),
+			(*quorum_file).to_string(),
+			(*manifest_file).to_string(),
+			(*pivot_file).to_string(),
 		);
 
 		let quorum_key = P256Pair::generate().unwrap();
 		let result = handles.put_quorum_key(&quorum_key);
 		let error = handles.put_quorum_key(&quorum_key).unwrap_err();
-		let get_result = handles.get_quorum_key();
 
 		assert!(result.is_ok());
 		assert_eq!(error, ProtocolError::CannotModifyPostPivotStatic);
 		assert!(handles.quorum_key_exists());
-		assert!(get_result.is_ok());
-		assert!(get_result.unwrap() == quorum_key)
+		assert!(handles.get_quorum_key().unwrap() == quorum_key);
 	}
 
 	#[test]
@@ -345,10 +339,10 @@ mod test {
 			"put_pivot_is_read_only_write.manifest".into();
 
 		let handles = Handles::new(
-			(*ephemeral_file.deref()).to_string(),
-			(*quorum_file.deref()).to_string(),
-			(*manifest_file.deref()).to_string(),
-			(*pivot_file.deref()).to_string(),
+			(*ephemeral_file).to_string(),
+			(*quorum_file).to_string(),
+			(*manifest_file).to_string(),
+			(*pivot_file).to_string(),
 		);
 
 		let pivot = b"this is a pivot binary".to_vec();
@@ -372,10 +366,10 @@ mod test {
 			"put_manifest_is_read_only_write.manifest".into();
 
 		let handles = Handles::new(
-			(*ephemeral_file.deref()).to_string(),
-			(*quorum_file.deref()).to_string(),
-			(*manifest_file.deref()).to_string(),
-			(*pivot_file.deref()).to_string(),
+			(*ephemeral_file).to_string(),
+			(*quorum_file).to_string(),
+			(*manifest_file).to_string(),
+			(*pivot_file).to_string(),
 		);
 
 		let pivot = b"this is a pivot binary".to_vec();
@@ -415,12 +409,10 @@ mod test {
 		let result = handles.put_manifest_envelope(&manifest_envelope);
 		let error =
 			handles.put_manifest_envelope(&manifest_envelope).unwrap_err();
-		let get_result = handles.get_manifest_envelope();
 
 		assert!(result.is_ok());
 		assert_eq!(error, ProtocolError::CannotModifyPostPivotStatic);
 		assert!(handles.manifest_envelope_exists());
-		assert!(get_result.is_ok());
-		assert!(get_result.unwrap() == manifest_envelope)
+		assert!(handles.get_manifest_envelope().unwrap() == manifest_envelope);
 	}
 }
