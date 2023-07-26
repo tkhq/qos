@@ -209,6 +209,26 @@ mod test {
 	use super::*;
 
 	#[test]
+	fn parse_is_idempotent() {
+		let mut args: Vec<_> = vec!["binary", "--cid", "6", "--port", "3999"]
+			.into_iter()
+			.map(String::from)
+			.collect();
+		let opts = EnclaveOpts::new(&mut args);
+		let opts2 = EnclaveOpts::new(&mut args);
+		let parsed_args: Vec<_> = vec!["--cid", "6", "--port", "3999"]
+			.into_iter()
+			.map(String::from)
+			.collect();
+
+		assert_eq!(args, parsed_args);
+		assert_eq!(*opts.parsed.single(CID).unwrap(), "6".to_string());
+		assert_eq!(*opts.parsed.single(PORT).unwrap(), "3999".to_string());
+		assert_eq!(*opts2.parsed.single(CID).unwrap(), "6".to_string());
+		assert_eq!(*opts2.parsed.single(PORT).unwrap(), "3999".to_string());
+	}
+
+	#[test]
 	fn parse_cid_and_port() {
 		let mut args: Vec<_> = vec!["binary", "--cid", "6", "--port", "3999"]
 			.into_iter()

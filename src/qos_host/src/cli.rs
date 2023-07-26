@@ -191,6 +191,72 @@ mod test {
 	use super::*;
 
 	#[test]
+	fn parse_is_idempotent() {
+		let mut args: Vec<_> = vec![
+			"binary",
+			"--cid",
+			"6",
+			"--port",
+			"3999",
+			"--host-ip",
+			"0.0.0.0",
+			"--host-port",
+			"3000",
+			"--vsock-to-host",
+			"false",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+		let opts = HostOptions::new(&mut args);
+		let opts2 = HostOptions::new(&mut args);
+
+		let parsed_args: Vec<_> = vec![
+			"--cid",
+			"6",
+			"--port",
+			"3999",
+			"--host-ip",
+			"0.0.0.0",
+			"--host-port",
+			"3000",
+			"--vsock-to-host",
+			"false",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+
+		assert_eq!(args, parsed_args);
+		assert_eq!(*opts.parsed.single(CID).unwrap(), "6".to_string());
+		assert_eq!(*opts.parsed.single(PORT).unwrap(), "3999".to_string());
+		assert_eq!(
+			*opts.parsed.single(HOST_IP).unwrap(),
+			"0.0.0.0".to_string()
+		);
+		assert_eq!(*opts.parsed.single(HOST_PORT).unwrap(), "3000".to_string());
+		assert_eq!(
+			*opts.parsed.single(VSOCK_TO_HOST).unwrap(),
+			"false".to_string()
+		);
+
+		assert_eq!(*opts2.parsed.single(CID).unwrap(), "6".to_string());
+		assert_eq!(*opts2.parsed.single(PORT).unwrap(), "3999".to_string());
+		assert_eq!(
+			*opts2.parsed.single(HOST_IP).unwrap(),
+			"0.0.0.0".to_string()
+		);
+		assert_eq!(
+			*opts2.parsed.single(HOST_PORT).unwrap(),
+			"3000".to_string()
+		);
+		assert_eq!(
+			*opts2.parsed.single(VSOCK_TO_HOST).unwrap(),
+			"false".to_string()
+		);
+	}
+
+	#[test]
 	fn build_vsock() {
 		let mut args: Vec<_> = vec![
 			"binary",
