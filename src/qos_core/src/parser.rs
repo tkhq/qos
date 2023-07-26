@@ -54,8 +54,11 @@ pub struct OptionsParser<T: GetParserForOptions> {
 impl<T: GetParserForOptions> OptionsParser<T> {
 	/// Parse inputs for `C`.
 	pub fn parse(inputs: &mut Vec<String>) -> Result<Parser, ParserError> {
-		// Remove the binary name
-		inputs.remove(0);
+		// Check if the first element is "binary" before removing it
+		if !inputs.is_empty() && inputs[0] == "binary" {
+			inputs.remove(0);
+		}
+
 		let mut parser = T::parser();
 		parser.parse(inputs)?;
 
