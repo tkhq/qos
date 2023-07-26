@@ -62,7 +62,7 @@ impl GetParserForOptions for PivotParser {
 	}
 }
 
-/// CLI options for starting a host server.
+/// CLI options for pivot
 #[derive(Clone, Debug, PartialEq)]
 pub struct PivotOptions {
 	parsed: Parser,
