@@ -62,21 +62,6 @@ impl GetParserForOptions for PivotParser {
 	}
 }
 
-/// CLI options for pivot
-#[derive(Clone, Debug, PartialEq)]
-pub struct PivotOptions {
-	parsed: Parser,
-}
-
-impl PivotOptions {
-	fn new(args: &mut Vec<String>) -> Self {
-		let parsed = OptionsParser::<PivotParser>::parse(args)
-			.expect("Entered invalid CLI args");
-
-		Self { parsed }
-	}
-}
-
 /// Simple pivot CLI.
 pub struct Cli;
 impl Cli {
@@ -87,31 +72,11 @@ impl Cli {
 		}
 
 		let mut args: Vec<String> = std::env::args().collect();
-		let opts = PivotOptions::new(&mut args);
+		let opts = OptionsParser::<PivotParser>::parse(&mut args)
+			.expect("Entered invalid CLI args");
 
-		let msg = opts.parsed.single(MSG).expect("required argument.");
+		let msg = opts.single(MSG).expect("required argument.");
 
 		std::fs::write(path, msg).expect("Failed to write to pivot success");
-	}
-}
-
-#[cfg(test)]
-mod test {
-	use super::*;
-
-	#[test]
-	fn parse_is_idempotent() {
-		let mut args: Vec<_> = vec!["binary", "--msg", "vape time"]
-			.into_iter()
-			.map(String::from)
-			.collect();
-		let opts = PivotOptions::new(&mut args);
-		let opts2 = PivotOptions::new(&mut args);
-		let parsed_args: Vec<_> =
-			vec!["--msg", "vape time"].into_iter().map(String::from).collect();
-
-		assert_eq!(args, parsed_args);
-		assert_eq!(*opts.parsed.single(MSG).unwrap(), "vape time".to_string());
-		assert_eq!(*opts2.parsed.single(MSG).unwrap(), "vape time".to_string());
 	}
 }
