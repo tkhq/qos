@@ -1,7 +1,7 @@
 //! Utilities for encoding and decoding hex strings.
 // Inspired by https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=e241493d100ecaadac3c99f37d0f766f
 
-use std::{convert::Into, num::ParseIntError};
+use std::{convert::Into, num::ParseIntError, string::FromUtf8Error};
 
 const MEGABYTE: usize = 1024 * 1024;
 const STR_MAX_LENGTH: usize = 256 * MEGABYTE;
@@ -34,11 +34,19 @@ pub enum HexError {
 	ExceedsMaxLength,
 	/// A non ascii char was used as input
 	NonAsciiChar,
+	/// Invalid UTF-8 byte vector when converting to String
+	InvalidUtf8(FromUtf8Error),
 }
 
 impl From<ParseIntError> for HexError {
 	fn from(e: ParseIntError) -> Self {
 		HexError::ParseInt(e)
+	}
+}
+
+impl From<FromUtf8Error> for HexError {
+	fn from(e: FromUtf8Error) -> Self {
+		HexError::InvalidUtf8(e)
 	}
 }
 
@@ -95,6 +103,13 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 	}
 }
 
+/// Decode bytes from a hex byte slice
+pub fn decode_from_vec(vec: Vec<u8>) -> Result<Vec<u8>, HexError> {
+	let hex_string = String::from_utf8(vec).map_err(HexError::from)?;
+	let hex_string = hex_string.trim();
+	decode(hex_string)
+}
+
 /// Encode a byte slice to hex string. Always encodes with lowercase characters.
 #[must_use]
 pub fn encode(bytes: &[u8]) -> String {
@@ -107,6 +122,12 @@ pub fn encode(bytes: &[u8]) -> String {
 			)
 		})
 		.collect()
+}
+
+/// Encode a byte slice to a hex-encoded byte slice.
+#[must_use]
+pub fn encode_to_vec(bytes: &[u8]) -> Vec<u8> {
+	encode(bytes).into_bytes()
 }
 
 #[cfg(test)]
@@ -189,6 +210,7 @@ mod test {
 		let address = "0x00000000219ab540356cBB839Cbe05303d7705Fa";
 		let mut encoded = address[2..].to_string();
 		encoded.make_ascii_lowercase();
+
 		assert_eq!(encode(&decoded), &encoded[..]);
 		assert_eq!(decode(address).unwrap(), decoded);
 	}
@@ -219,5 +241,73 @@ mod test {
 		// Rejects a string that is over length by just 1 char.
 		let invalid = format!("{valid}ff");
 		assert_eq!(decode(&invalid), Err(HexError::ExceedsMaxLength));
+	}
+
+	#[test]
+	fn encode_to_vec_and_decode_from_vec_with_len_zero() {
+		let decoded = vec![];
+		let encoded = vec![];
+		assert_eq!(encode_to_vec(&decoded), encoded);
+		assert_eq!(decode_from_vec(encoded).unwrap(), decoded);
+	}
+
+	#[test]
+	fn decode_from_vec_correctly_errors_with_len_one() {
+		// "a" hexadecimal string
+		let encoded = vec![0x61];
+		let res = decode_from_vec(encoded);
+		assert_eq!(res, Err(HexError::LengthOne));
+	}
+
+	#[test]
+	fn decode_from_vec_trims_string() {
+		// " " hexadecimal string
+		let encoded = vec![0x20];
+		let decoded = vec![];
+		assert_eq!(decode_from_vec(encoded).unwrap(), decoded);
+
+		// "a " hexadecimal string
+		let encoded = vec![0x61, 0x20];
+		let res = decode_from_vec(encoded);
+		assert_eq!(res, Err(HexError::LengthOne));
+
+		// "aa " hexadecimal string
+		let encoded = vec![0x61, 0x61, 0x20];
+		let decoded = vec![170];
+		assert_eq!(decode_from_vec(encoded).unwrap(), decoded);
+	}
+
+	#[test]
+	fn encode_to_vec_and_decode_from_vec_work() {
+		// "00000000" hexadecimal string
+		let decoded = vec![0, 0, 0, 0];
+		let encoded = vec![48, 48, 48, 48, 48, 48, 48, 48];
+		assert_eq!(encode_to_vec(&decoded), encoded);
+		assert_eq!(decode_from_vec(encoded).unwrap(), decoded);
+
+		// "ff00ff" hexadecimal string
+		let decoded = vec![0xff, 0x00, 0xff];
+		let encoded = vec![102, 102, 48, 48, 102, 102];
+		assert_eq!(encode_to_vec(&decoded), encoded);
+		assert_eq!(decode_from_vec(encoded).unwrap(), decoded);
+
+		// "1f34e46d8caa7c5e" hexadecimal string
+		let decoded = vec![31, 52, 228, 109, 140, 170, 124, 94];
+		let encoded = vec![
+			49, 102, 51, 52, 101, 52, 54, 100, 56, 99, 97, 97, 55, 99, 53, 101,
+		];
+		assert_eq!(encode_to_vec(&decoded), encoded);
+		assert_eq!(decode_from_vec(encoded).unwrap(), decoded);
+	}
+
+	#[test]
+	fn decode_from_vec_rejects_invalid_hex() {
+		// Rejects invalid UTF-8 byte sequence
+		let invalid = vec![240, 159, 144];
+		let is_err = matches!(
+			decode_from_vec(invalid),
+			Err(HexError::InvalidUtf8(FromUtf8Error { .. }))
+		);
+		assert!(is_err);
 	}
 }

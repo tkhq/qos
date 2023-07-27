@@ -209,8 +209,7 @@ fn provision_yubikey_works() {
 	// Check that public keys where written
 	{
 		let hex_bytes = std::fs::read(&*pub_path).unwrap();
-		let hex = String::from_utf8(hex_bytes).unwrap();
-		let bytes = qos_hex::decode(&hex).unwrap();
+		let bytes = qos_hex::decode_from_vec(hex_bytes).unwrap();
 		assert!(P256Public::from_bytes(&bytes).is_ok());
 		P256Public::from_bytes(&bytes).unwrap();
 	}
@@ -251,8 +250,7 @@ fn advanced_provision_yubikey_works() {
 	// Check that public keys where written
 	let public = {
 		let hex_bytes = std::fs::read(&*pub_path).unwrap();
-		let hex = String::from_utf8(hex_bytes).unwrap();
-		let bytes = qos_hex::decode(&hex).unwrap();
+		let bytes = qos_hex::decode_from_vec(hex_bytes).unwrap();
 		P256Public::from_bytes(&bytes).unwrap()
 	};
 

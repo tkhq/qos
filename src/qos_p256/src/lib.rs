@@ -87,7 +87,12 @@ pub enum P256Error {
 
 impl From<qos_hex::HexError> for P256Error {
 	fn from(err: qos_hex::HexError) -> Self {
-		Self::QosHex(format!("{err:?}"))
+		match err {
+			qos_hex::HexError::InvalidUtf8(_) => {
+				P256Error::MasterSeedInvalidUtf8
+			}
+			_ => Self::QosHex(format!("{err:?}")),
+		}
 	}
 }
 
@@ -211,8 +216,7 @@ impl P256Pair {
 	/// Convert to hex bytes.
 	#[must_use]
 	pub fn to_master_seed_hex(&self) -> Vec<u8> {
-		let hex_string = qos_hex::encode(&self.master_seed);
-		hex_string.as_bytes().to_vec()
+		qos_hex::encode_to_vec(&self.master_seed)
 	}
 
 	/// Write the raw master seed to file as hex encoded.
@@ -232,11 +236,8 @@ impl P256Pair {
 			P256Error::IOError(format!("failed to read master seed: {e}"))
 		})?;
 
-		let hex_string = String::from_utf8(hex_bytes)
-			.map_err(|_| P256Error::MasterSeedInvalidUtf8)?;
-		let hex_string = hex_string.trim();
-
-		let master_seed = qos_hex::decode(hex_string)?;
+		let master_seed =
+			qos_hex::decode_from_vec(hex_bytes).map_err(P256Error::from)?;
 		let master_seed: [u8; MASTER_SEED_LEN] = master_seed
 			.try_into()
 			.map_err(|_| P256Error::MasterSeedInvalidLength)?;
@@ -306,8 +307,7 @@ impl P256Public {
 	/// Convert to hex bytes.
 	#[must_use]
 	pub fn to_hex_bytes(&self) -> Vec<u8> {
-		let hex_string = qos_hex::encode(&self.to_bytes());
-		hex_string.as_bytes().to_vec()
+		qos_hex::encode_to_vec(&self.to_bytes())
 	}
 
 	/// Write the public key to a file encoded as a hex string.
@@ -327,11 +327,8 @@ impl P256Public {
 			P256Error::IOError(format!("failed to read master seed: {e}"))
 		})?;
 
-		let hex_string = String::from_utf8(hex_bytes)
-			.map_err(|_| P256Error::MasterSeedInvalidUtf8)?;
-		let hex_string = hex_string.trim();
-
-		let public_keys_bytes = qos_hex::decode(hex_string)?;
+		let public_keys_bytes =
+			qos_hex::decode_from_vec(hex_bytes).map_err(P256Error::from)?;
 
 		Self::from_bytes(&public_keys_bytes)
 	}

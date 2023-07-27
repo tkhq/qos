@@ -58,7 +58,7 @@ async fn standard_boot_e2e() {
 	// -- Create pivot-build-fingerprints.txt
 	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
-	let pivot_hash = qos_hex::encode(&mock_pivot_hash).as_bytes().to_vec();
+	let pivot_hash = qos_hex::encode_to_vec(&mock_pivot_hash);
 	std::fs::write(PIVOT_HASH_PATH, pivot_hash).unwrap();
 
 	// -- CLIENT create manifest.
