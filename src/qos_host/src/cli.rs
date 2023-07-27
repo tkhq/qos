@@ -65,11 +65,11 @@ impl GetParserForOptions for HostParser {
 
 /// CLI options for starting a host server.
 #[derive(Clone, Debug, PartialEq)]
-pub struct HostOptions {
+pub struct HostOpts {
 	parsed: Parser,
 }
 
-impl HostOptions {
+impl HostOpts {
 	fn new(args: &mut Vec<String>) -> Self {
 		let parsed = OptionsParser::<HostParser>::parse(args)
 			.expect("Entered invalid CLI args");
@@ -167,7 +167,7 @@ impl CLI {
 	/// Execute the command line interface.
 	pub async fn execute() {
 		let mut args: Vec<String> = env::args().collect();
-		let options = HostOptions::new(&mut args);
+		let options = HostOpts::new(&mut args);
 
 		if options.parsed.version() {
 			println!("version: {}", env!("CARGO_PKG_VERSION"));
@@ -191,6 +191,80 @@ mod test {
 	use super::*;
 
 	#[test]
+	fn parse_is_idempotent() {
+		let mut args: Vec<_> = vec![
+			"binary",
+			"--cid",
+			"6",
+			"--port",
+			"3999",
+			"--host-ip",
+			"0.0.0.0",
+			"--host-port",
+			"3000",
+			"--vsock-to-host",
+			"false",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+		let opts = HostOpts::new(&mut args);
+		let opts2 = HostOpts::new(&mut args);
+
+		let parsed_args: Vec<_> = vec![
+			"--cid",
+			"6",
+			"--port",
+			"3999",
+			"--host-ip",
+			"0.0.0.0",
+			"--host-port",
+			"3000",
+			"--vsock-to-host",
+			"false",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+
+		assert_eq!(args, parsed_args);
+		assert_eq!(*opts.parsed.single(CID).unwrap(), "6".to_string());
+		assert_eq!(*opts.parsed.single(PORT).unwrap(), "3999".to_string());
+		assert_eq!(
+			*opts.parsed.single(HOST_IP).unwrap(),
+			"0.0.0.0".to_string()
+		);
+		assert_eq!(*opts.parsed.single(HOST_PORT).unwrap(), "3000".to_string());
+		assert_eq!(
+			*opts.parsed.single(VSOCK_TO_HOST).unwrap(),
+			"false".to_string()
+		);
+
+		assert_eq!(*opts2.parsed.single(CID).unwrap(), "6".to_string());
+		assert_eq!(*opts2.parsed.single(PORT).unwrap(), "3999".to_string());
+		assert_eq!(
+			*opts2.parsed.single(HOST_IP).unwrap(),
+			"0.0.0.0".to_string()
+		);
+		assert_eq!(
+			*opts2.parsed.single(HOST_PORT).unwrap(),
+			"3000".to_string()
+		);
+		assert_eq!(
+			*opts2.parsed.single(VSOCK_TO_HOST).unwrap(),
+			"false".to_string()
+		);
+	}
+
+	#[test]
+	#[should_panic = "Entered invalid CLI args: UnexpectedInput(\"--durp\")"]
+	fn panic_when_mistyped_cid() {
+		let mut args: Vec<_> =
+			vec!["--durp"].into_iter().map(String::from).collect();
+		let _opts = HostOpts::new(&mut args);
+	}
+
+	#[test]
 	fn build_vsock() {
 		let mut args: Vec<_> = vec![
 			"binary",
@@ -208,7 +282,7 @@ mod test {
 		.into_iter()
 		.map(String::from)
 		.collect();
-		let opts = HostOptions::new(&mut args);
+		let opts = HostOpts::new(&mut args);
 
 		assert_eq!(
 			opts.enclave_addr(),
@@ -231,7 +305,7 @@ mod test {
 		.into_iter()
 		.map(String::from)
 		.collect();
-		let opts = HostOptions::new(&mut args);
+		let opts = HostOpts::new(&mut args);
 
 		assert_eq!(
 			opts.enclave_addr(),
