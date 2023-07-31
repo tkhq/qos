@@ -141,7 +141,7 @@ impl ProtocolRoute {
 		ProtocolRoute::new(
 			Box::new(handlers::export_key),
 			current_phase,
-			ProtocolPhase::UnrecoverableError,
+			current_phase,
 		)
 	}
 
