@@ -17,6 +17,7 @@ default: \
 	toolchain \
 	$(patsubst %,$(KEY_DIR)/%.asc,$(KEYS)) \
 	$(OUT_DIR)/aws-x86_64.eif \
+	$(OUT_DIR)/aws-x86_64.pcrs \
 	$(OUT_DIR)/qos_client.linux-x86_64 \
 	$(OUT_DIR)/qos_client.oci.x86_64.tar \
 	$(OUT_DIR)/qos_client.$(ARCH).tar \
