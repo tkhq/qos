@@ -92,12 +92,15 @@ impl From<P256Error> for YubiKeyError {
 /// Use a P256 key pair or Yubikey for signing operations.
 pub enum PairOrYubi {
 	#[cfg(feature = "smartcard")]
+	/// Yubikey
 	Yubi((yubikey::YubiKey, Vec<u8>)),
+	/// P256 key pair
 	Pair(P256Pair),
 }
 
 impl PairOrYubi {
-	pub(crate) fn from_inputs(
+	/// Create a P256 key pair or yubikey from the given inputs
+	pub fn from_inputs(
 		yubikey_flag: bool,
 		secret_path: Option<String>,
 		maybe_pin_path: Option<String>,
@@ -137,6 +140,7 @@ impl PairOrYubi {
 		Ok(result)
 	}
 
+	/// Sign the payload
 	pub fn sign(&mut self, data: &[u8]) -> Result<Vec<u8>, YubiKeyError> {
 		match self {
 			#[cfg(feature = "smartcard")]
@@ -148,6 +152,7 @@ impl PairOrYubi {
 		}
 	}
 
+	/// Decrypt the payload
 	pub fn decrypt(&mut self, payload: &[u8]) -> Result<Vec<u8>, YubiKeyError> {
 		match self {
 			#[cfg(feature = "smartcard")]
@@ -168,6 +173,7 @@ impl PairOrYubi {
 		}
 	}
 
+	/// Get the public key in bytes
 	pub fn public_key_bytes(&mut self) -> Result<Vec<u8>, YubiKeyError> {
 		match self {
 			#[cfg(feature = "smartcard")]
