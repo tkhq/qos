@@ -1250,9 +1250,10 @@ mod handlers {
 	use super::services::{ApproveManifestArgs, ProxyReEncryptShareArgs};
 	use crate::{
 		cli::{
-			services::{self, GenerateManifestArgs, PairOrYubi},
+			services::{self, GenerateManifestArgs},
 			ClientOpts, ProtocolMsg,
 		},
+		yubikey::{PairOrYubi, pin_from_path},
 		request,
 	};
 
@@ -1381,11 +1382,11 @@ mod handlers {
 
 		#[cfg(feature = "smartcard")]
 		{
-			let current_pin = services::pin_from_path(
+			let current_pin = pin_from_path(
 				opts.current_pin_path()
 					.expect("Missing `--current-pin-path` arg"),
 			);
-			let new_pin = services::pin_from_path(opts.new_pin_path());
+			let new_pin = pin_from_path(opts.new_pin_path());
 
 			if let Err(e) = crate::yubikey::yubikey_change_pin(
 				&current_pin[..],
