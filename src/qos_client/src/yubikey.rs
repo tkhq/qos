@@ -89,7 +89,8 @@ impl From<P256Error> for YubiKeyError {
 	}
 }
 
-pub(crate) enum PairOrYubi {
+/// Use a P256 key pair or Yubikey for signing operations.
+pub enum PairOrYubi {
 	#[cfg(feature = "smartcard")]
 	Yubi((yubikey::YubiKey, Vec<u8>)),
 	Pair(P256Pair),
