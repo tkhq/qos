@@ -84,6 +84,7 @@ pub enum PairOrYubi {
 
 impl PairOrYubi {
 	/// Create a P256 key pair or yubikey from the given inputs
+	#[allow(clippy::missing_panics_doc)]
 	pub fn from_inputs(
 		yubikey_flag: bool,
 		secret_path: Option<String>,
