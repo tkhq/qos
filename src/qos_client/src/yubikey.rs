@@ -1,18 +1,12 @@
 //! Yubikey interfaces
 
-use std::{
-	fs::File,
-	io::{BufRead, BufReader},
-	path::Path,
-};
-
 use borsh::BorshDeserialize;
 use p256::{
 	ecdsa::{signature::Verifier, Signature, VerifyingKey},
 	elliptic_curve::sec1::ToEncodedPoint,
 	SecretKey,
 };
-use qos_p256::{encrypt::Envelope, P256Error, P256Pair};
+use qos_p256::encrypt::Envelope;
 use rand_core::{OsRng, RngCore};
 use x509::RelativeDistinguishedName;
 use yubikey::{
@@ -31,12 +25,7 @@ pub const KEY_AGREEMENT_SLOT: SlotId = SlotId::KeyManagement;
 pub const SIGNING_SLOT: SlotId = SlotId::Signature;
 /// Factory default pin for yubikeys.
 pub const DEFAULT_PIN: &[u8] = b"123456";
-/// Yubikey pin prompt
-pub const ENTER_PIN_PROMPT: &str = "Enter your pin: ";
-/// Yubikey tap message
-pub const TAP_MSG: &str = "Tap your YubiKey";
 const ALGO: AlgorithmId = AlgorithmId::EccP256;
-
 
 /// Errors for yubikey interaction
 #[derive(Debug, PartialEq, Eq)]
@@ -81,120 +70,6 @@ pub enum YubiKeyError {
 	InvalidSecret,
 	/// The pin could not be changed.
 	FailedToChangePin,
-}
-
-impl From<P256Error> for YubiKeyError {
-	fn from(err: P256Error) -> Self {
-		YubiKeyError::P256(err)
-	}
-}
-
-/// Use a P256 key pair or Yubikey for signing operations.
-pub enum PairOrYubi {
-	#[cfg(feature = "smartcard")]
-	/// Yubikey
-	Yubi((yubikey::YubiKey, Vec<u8>)),
-	/// P256 key pair
-	Pair(P256Pair),
-}
-
-impl PairOrYubi {
-	/// Create a P256 key pair or yubikey from the given inputs
-	pub fn from_inputs(
-		yubikey_flag: bool,
-		secret_path: Option<String>,
-		maybe_pin_path: Option<String>,
-	) -> Result<Self, YubiKeyError> {
-		let result = match (yubikey_flag, secret_path) {
-			(true, None) => {
-				#[cfg(feature = "smartcard")]
-				{
-					let yubi = crate::yubikey::open_single()?;
-
-					let pin = if let Some(pin_path) = maybe_pin_path {
-						pin_from_path(pin_path)
-					} else {
-						rpassword::prompt_password(ENTER_PIN_PROMPT)
-							.map_err(|_| YubiKeyError::PinEntryError)?
-							.as_bytes()
-							.to_vec()
-					};
-
-					PairOrYubi::Yubi((yubi, pin))
-				}
-				#[cfg(not(feature = "smartcard"))]
-				{
-					panic!("{TAP_MSG}");
-				}
-			}
-			(false, Some(path)) => {
-				let pair = P256Pair::from_hex_file(path)?;
-				PairOrYubi::Pair(pair)
-			}
-			(false, None) => panic!("Need either yubikey flag or secret path"),
-			(true, Some(_)) => {
-				panic!("Cannot have both yubikey flag and secret path")
-			}
-		};
-
-		Ok(result)
-	}
-
-	/// Sign the payload
-	pub fn sign(&mut self, data: &[u8]) -> Result<Vec<u8>, YubiKeyError> {
-		match self {
-			#[cfg(feature = "smartcard")]
-			Self::Yubi((ref mut yubi, ref pin)) => {
-				println!("{TAP_MSG}");
-				crate::yubikey::sign_data(yubi, data, pin).map_err(Into::into)
-			}
-			Self::Pair(ref pair) => pair.sign(data).map_err(Into::into),
-		}
-	}
-
-	/// Decrypt the payload
-	pub fn decrypt(&mut self, payload: &[u8]) -> Result<Vec<u8>, YubiKeyError> {
-		match self {
-			#[cfg(feature = "smartcard")]
-			Self::Yubi((ref mut yubi, ref pin)) => {
-				println!("{TAP_MSG}");
-				let shared_secret =
-					crate::yubikey::shared_secret(yubi, payload, pin)?;
-				let encrypt_pub = crate::yubikey::key_agree_public_key(yubi)?;
-				let public = qos_p256::encrypt::P256EncryptPublic::from_bytes(
-					&encrypt_pub,
-				)?;
-
-				public
-					.decrypt_from_shared_secret(payload, &shared_secret)
-					.map_err(Into::into)
-			}
-			Self::Pair(ref pair) => pair.decrypt(payload).map_err(Into::into),
-		}
-	}
-
-	/// Get the public key in bytes
-	pub fn public_key_bytes(&mut self) -> Result<Vec<u8>, YubiKeyError> {
-		match self {
-			#[cfg(feature = "smartcard")]
-			Self::Yubi((ref mut yubi, _)) => {
-				crate::yubikey::pair_public_key(yubi).map_err(Into::into)
-			}
-			Self::Pair(ref pair) => Ok(pair.public_key().to_bytes()),
-		}
-	}
-}
-
-
-pub(crate) fn pin_from_path<P: AsRef<Path>>(path: P) -> Vec<u8> {
-	let file = File::open(path).expect("Failed to open current pin path");
-	BufReader::new(file)
-		.lines()
-		.next()
-		.expect("First line missing from current pin file")
-		.expect("Error reading first line")
-		.as_bytes()
-		.to_vec()
 }
 
 /// Generate a signed certificate with a p256 key for the given `slot`.

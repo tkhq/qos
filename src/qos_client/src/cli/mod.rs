@@ -16,6 +16,7 @@ use qos_core::{
 };
 
 mod services;
+pub(crate) use services::Error;
 
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
@@ -1253,8 +1254,7 @@ mod handlers {
 			services::{self, GenerateManifestArgs},
 			ClientOpts, ProtocolMsg,
 		},
-		yubikey::{PairOrYubi, pin_from_path},
-		request,
+		pin_from_path, request, PairOrYubi,
 	};
 
 	pub(super) fn pivot_hash(opts: &ClientOpts) {

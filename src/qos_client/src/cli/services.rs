@@ -1,8 +1,6 @@
 use std::{
-	fs,
-	fs::File,
-	io,
-	io::{BufRead, Write},
+	fs::{self, File},
+	io::{self, BufRead, Write},
 	mem,
 	ops::Deref,
 	path::{Path, PathBuf},
@@ -35,7 +33,7 @@ use qos_p256::{P256Error, P256Pair, P256Public};
 use zeroize::Zeroizing;
 
 use super::DisplayType;
-use crate::{request, yubikey::{PairOrYubi, pin_from_path, ENTER_PIN_PROMPT}};
+use crate::{pin_from_path, request, PairOrYubi, ENTER_PIN_PROMPT};
 
 const PUB_EXT: &str = "pub";
 const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
@@ -55,7 +53,6 @@ const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 #[allow(dead_code)]
 pub(crate) const SMARTCARD_FEAT_DISABLED_MSG: &str =
 	"The \"smartcard\" feature must be enabled to use YubiKey related functionality.";
-
 
 /// Client errors.
 #[derive(Debug)]
