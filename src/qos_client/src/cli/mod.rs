@@ -17,6 +17,8 @@ use qos_core::{
 
 mod services;
 
+pub use services::PairOrYubi;
+
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ALIAS: &str = "alias";
