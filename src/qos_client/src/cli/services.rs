@@ -173,14 +173,19 @@ impl From<qos_nsm::nitro::AttestError> for Error {
 	}
 }
 
-pub(crate) enum PairOrYubi {
+/// Use a P256 key pair or Yubikey for signing operations.
+pub enum PairOrYubi {
+	/// Yubikey
 	#[cfg(feature = "smartcard")]
 	Yubi((yubikey::YubiKey, Vec<u8>)),
+	/// P256 keypair
 	Pair(P256Pair),
 }
 
 impl PairOrYubi {
-	pub(crate) fn from_inputs(
+	/// Create a P256 key pair or yubikey from the given inputs
+	#[allow(clippy::missing_panics_doc)]
+	pub fn from_inputs(
 		yubikey_flag: bool,
 		secret_path: Option<String>,
 		maybe_pin_path: Option<String>,
@@ -220,7 +225,8 @@ impl PairOrYubi {
 		Ok(result)
 	}
 
-	fn sign(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
+	/// Sign the payload
+	pub fn sign(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
 			Self::Yubi((ref mut yubi, ref pin)) => {
@@ -231,7 +237,8 @@ impl PairOrYubi {
 		}
 	}
 
-	fn decrypt(&mut self, payload: &[u8]) -> Result<Vec<u8>, Error> {
+	/// Decrypt the payload
+	pub fn decrypt(&mut self, payload: &[u8]) -> Result<Vec<u8>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
 			Self::Yubi((ref mut yubi, ref pin)) => {
@@ -251,7 +258,8 @@ impl PairOrYubi {
 		}
 	}
 
-	fn public_key_bytes(&mut self) -> Result<Vec<u8>, Error> {
+	/// Get the public key in bytes
+	pub fn public_key_bytes(&mut self) -> Result<Vec<u8>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
 			Self::Yubi((ref mut yubi, _)) => {
