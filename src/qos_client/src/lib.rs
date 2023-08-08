@@ -93,7 +93,7 @@ impl PairOrYubi {
 			(true, None) => {
 				#[cfg(feature = "smartcard")]
 				{
-					let yubi = crate::yubikey::open_single()?;
+					let yubi = yubikey::open_single()?;
 
 					let pin = if let Some(pin_path) = maybe_pin_path {
 						pin_from_path(pin_path)
@@ -130,7 +130,7 @@ impl PairOrYubi {
 			#[cfg(feature = "smartcard")]
 			Self::Yubi((ref mut yubi, ref pin)) => {
 				println!("{TAP_MSG}");
-				crate::yubikey::sign_data(yubi, data, pin).map_err(Into::into)
+				yubikey::sign_data(yubi, data, pin).map_err(Into::into)
 			}
 			Self::Pair(ref pair) => pair.sign(data).map_err(Into::into),
 		}
@@ -143,8 +143,8 @@ impl PairOrYubi {
 			Self::Yubi((ref mut yubi, ref pin)) => {
 				println!("{TAP_MSG}");
 				let shared_secret =
-					crate::yubikey::shared_secret(yubi, payload, pin)?;
-				let encrypt_pub = crate::yubikey::key_agree_public_key(yubi)?;
+					yubikey::shared_secret(yubi, payload, pin)?;
+				let encrypt_pub = yubikey::key_agree_public_key(yubi)?;
 				let public = qos_p256::encrypt::P256EncryptPublic::from_bytes(
 					&encrypt_pub,
 				)?;
@@ -162,7 +162,7 @@ impl PairOrYubi {
 		match self {
 			#[cfg(feature = "smartcard")]
 			Self::Yubi((ref mut yubi, _)) => {
-				crate::yubikey::pair_public_key(yubi).map_err(Into::into)
+				yubikey::pair_public_key(yubi).map_err(Into::into)
 			}
 			Self::Pair(ref pair) => Ok(pair.public_key().to_bytes()),
 		}
