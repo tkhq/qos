@@ -143,7 +143,7 @@ impl fmt::Debug for QuorumMember {
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestSet {
-	/// The threshold, K, of signatures necessary to have  quorum.
+	/// The threshold, K, of signatures necessary to have quorum.
 	pub threshold: u32,
 	/// Members composing the set. The length of this, N, must be gte to the
 	/// `threshold`, K.
@@ -156,11 +156,47 @@ pub struct ManifestSet {
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ShareSet {
-	/// The threshold, K, of signatures necessary to have  quorum.
+	/// The threshold, K, of signatures necessary to have quorum.
 	pub threshold: u32,
 	/// Members composing the set. The length of this, N, must be gte to the
 	/// `threshold`, K.
 	pub members: Vec<QuorumMember>,
+}
+
+/// A member of a quorum set identified solely by their public key.
+#[derive(
+	PartialEq,
+	PartialOrd,
+	Ord,
+	Eq,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+)]
+pub struct MemberPubKey {
+	/// Public key of the member
+	pub pub_key: Vec<u8>,
+}
+
+impl fmt::Debug for MemberPubKey {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("MemberPubKey")
+			.field("pub_key", &qos_hex::encode(&self.pub_key))
+			.finish()
+	}
+}
+
+/// The set of share keys that can post shares.
+#[derive(
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
+pub struct PatchSet {
+	/// The threshold, K, of signatures necessary to have quorum.
+	pub threshold: u32,
+	/// Public keys of members composing the set. The length of this, N, must
+	/// be gte to the `threshold`, K.
+	pub members: Vec<MemberPubKey>,
 }
 
 /// A Namespace and its relative nonce.
@@ -207,6 +243,8 @@ pub struct Manifest {
 	pub share_set: ShareSet,
 	/// Configuration and verifiable values for the enclave hardware.
 	pub enclave: NitroConfig,
+	/// Patch set members and threshold
+	pub patch_set: PatchSet,
 }
 
 /// An approval by a Quorum Member.
@@ -403,6 +441,7 @@ mod test {
 			},
 			manifest_set: ManifestSet { threshold: 2, members: quorum_members },
 			share_set: ShareSet { threshold: 2, members: vec![] },
+			..Default::default()
 		};
 
 		(manifest, member_with_keys, pivot)

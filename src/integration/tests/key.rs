@@ -171,6 +171,8 @@ fn generate_manifest_envelope() {
 			"./mock/keys/manifest-set",
 			"--share-set-dir",
 			"./mock/keys/share-set",
+			"--patch-set-dir",
+			"./mock/keys/manifest-set",
 			"--quorum-key-path",
 			QUORUM_KEY_PUB_PATH
 		])
@@ -203,6 +205,8 @@ fn generate_manifest_envelope() {
 				"./mock/keys/manifest-set",
 				"--share-set-dir",
 				"./mock/keys/share-set",
+				"--patch-set-dir",
+				"./mock/keys/manifest-set",
 				"--quorum-key-path",
 				QUORUM_KEY_PUB_PATH,
 				"--alias",

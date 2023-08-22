@@ -35,6 +35,7 @@ const PCR3_PREIMAGE_PATH: &str = "pcr3-preimage-path";
 const PIVOT_HASH_PATH: &str = "pivot-hash-path";
 const SHARE_SET_DIR: &str = "share-set-dir";
 const MANIFEST_SET_DIR: &str = "manifest-set-dir";
+const PATCH_SET_DIR: &str = "patch-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
 const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
 const PUB_PATH: &str = "pub-path";
@@ -336,6 +337,14 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn patch_set_dir_token() -> Token {
+		Token::new(
+			PATCH_SET_DIR,
+			"Director with public keys for members of the patch set.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
 	fn namespace_dir_token() -> Token {
 		Token::new(
 			NAMESPACE_DIR,
@@ -623,6 +632,7 @@ impl Command {
 			.token(Self::manifest_path_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
+			.token(Self::patch_set_dir_token())
 			.token(Self::quorum_key_path_token())
 			.token(Self::pivot_args_token())
 	}
@@ -640,6 +650,7 @@ impl Command {
 			.token(Self::quorum_key_path_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
+			.token(Self::patch_set_dir_token())
 			.token(Self::unsafe_auto_confirm_token())
 	}
 
@@ -895,6 +906,13 @@ impl ClientOpts {
 		self.parsed
 			.single(SHARE_SET_DIR)
 			.expect("`--share-set-dir` is a required arg")
+			.to_string()
+	}
+
+	fn patch_set_dir(&self) -> String {
+		self.parsed
+			.single(PATCH_SET_DIR)
+			.expect("`--patch-set-dir` is a required arg")
 			.to_string()
 	}
 
@@ -1453,6 +1471,7 @@ mod handlers {
 			pivot_args: opts.pivot_args(),
 			share_set_dir: opts.share_set_dir(),
 			manifest_set_dir: opts.manifest_set_dir(),
+			patch_set_dir: opts.patch_set_dir(),
 			quorum_key_path: opts.quorum_key_path(),
 		}) {
 			println!("Error: {e:?}");
@@ -1473,6 +1492,7 @@ mod handlers {
 			quorum_key_path: opts.quorum_key_path(),
 			manifest_set_dir: opts.manifest_set_dir(),
 			share_set_dir: opts.share_set_dir(),
+			patch_set_dir: opts.patch_set_dir(),
 			alias: opts.alias(),
 			unsafe_auto_confirm: opts.unsafe_auto_confirm(),
 		}) {

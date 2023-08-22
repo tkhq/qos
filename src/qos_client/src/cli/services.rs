@@ -14,8 +14,9 @@ use qos_core::protocol::{
 	msg::ProtocolMsg,
 	services::{
 		boot::{
-			Approval, Manifest, ManifestEnvelope, ManifestSet, Namespace,
-			NitroConfig, PivotConfig, QuorumMember, RestartPolicy, ShareSet,
+			Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
+			Namespace, NitroConfig, PatchSet, PivotConfig, QuorumMember,
+			RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
@@ -694,6 +695,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub pcr3_preimage_path: P,
 	pub share_set_dir: P,
 	pub manifest_set_dir: P,
+	pub patch_set_dir: P,
 	pub quorum_key_path: P,
 	pub manifest_path: P,
 	pub pivot_args: Vec<String>,
@@ -711,6 +713,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		pcr3_preimage_path,
 		manifest_set_dir,
 		share_set_dir,
+		patch_set_dir,
 		quorum_key_path,
 		manifest_path,
 		pivot_args,
@@ -724,6 +727,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 	let manifest_set = get_manifest_set(manifest_set_dir);
 	// Get share set keys & threshold
 	let share_set = get_share_set(share_set_dir);
+	let patch_set = get_patch_set(patch_set_dir);
 	// Get quorum key from namespaces dir
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
@@ -741,6 +745,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		},
 		manifest_set,
 		share_set,
+		patch_set,
 		enclave: nitro_config,
 	};
 
@@ -781,6 +786,7 @@ pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
 	pub quorum_key_path: P,
 	pub manifest_set_dir: P,
 	pub share_set_dir: P,
+	pub patch_set_dir: P,
 	pub alias: String,
 	pub unsafe_auto_confirm: bool,
 }
@@ -798,6 +804,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		quorum_key_path,
 		manifest_set_dir,
 		share_set_dir,
+		patch_set_dir,
 		alias,
 		unsafe_auto_confirm,
 	} = args;
@@ -810,6 +817,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		&manifest,
 		&get_manifest_set(manifest_set_dir),
 		&get_share_set(share_set_dir),
+		&get_patch_set(patch_set_dir),
 		&extract_nitro_config(qos_release_dir_path, pcr3_preimage_path),
 		&extract_pivot_hash(pivot_hash_path),
 		&quorum_key,
@@ -860,6 +868,7 @@ fn approve_manifest_programmatic_verifications(
 	manifest: &Manifest,
 	manifest_set: &ManifestSet,
 	share_set: &ShareSet,
+	patch_set: &PatchSet,
 	nitro_config: &NitroConfig,
 	pivot_hash: &[u8],
 	quorum_key: &P256Public,
@@ -872,6 +881,12 @@ fn approve_manifest_programmatic_verifications(
 
 	// Verify share set composition
 	if manifest.share_set != *share_set {
+		eprintln!("Share Set composition does not match");
+		return false;
+	}
+
+	// Verify share set composition
+	if manifest.patch_set != *patch_set {
 		eprintln!("Share Set composition does not match");
 		return false;
 	}
@@ -1598,6 +1613,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			// The only member is the quorum member
 			members: vec![member.clone()],
 		},
+		patch_set: PatchSet::default(),
 	};
 
 	// Create and post the boot standard instruction
@@ -1803,6 +1819,27 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 	members.sort();
 
 	ManifestSet { members, threshold: find_threshold(dir) }
+}
+
+fn get_patch_set<P: AsRef<Path>>(dir: P) -> PatchSet {
+	let mut members: Vec<_> = find_file_paths(&dir)
+		.iter()
+		.filter_map(|path| {
+			let file_name = split_file_name(path);
+			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+				return None;
+			};
+
+			let public = P256Public::from_hex_file(path)
+				.expect("Could not read public key.");
+			Some(MemberPubKey { pub_key: public.to_bytes() })
+		})
+		.collect();
+
+	// We want to try and build the same manifest regardless of the OS.
+	members.sort();
+
+	PatchSet { members, threshold: find_threshold(dir) }
 }
 
 fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
@@ -2123,8 +2160,9 @@ mod tests {
 
 	use qos_core::protocol::{
 		services::boot::{
-			Approval, Manifest, ManifestEnvelope, ManifestSet, Namespace,
-			NitroConfig, PivotConfig, QuorumMember, RestartPolicy, ShareSet,
+			Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
+			Namespace, NitroConfig, PatchSet, PivotConfig, QuorumMember,
+			RestartPolicy, ShareSet,
 		},
 		QosHash,
 	};
@@ -2146,6 +2184,7 @@ mod tests {
 		pivot_hash: Vec<u8>,
 		quorum_key: P256Public,
 		manifest_envelope: ManifestEnvelope,
+		patch_set: PatchSet,
 	}
 	fn setup() -> Setup {
 		let pairs: Vec<_> =
@@ -2159,10 +2198,16 @@ mod tests {
 				alias: i.to_string(),
 			})
 			.collect();
+		let patch_members = members
+			.iter()
+			.cloned()
+			.map(|m| MemberPubKey { pub_key: m.pub_key })
+			.collect();
 
 		let manifest_set =
 			ManifestSet { members: members.clone(), threshold: 2 };
 		let share_set = ShareSet { members: members.clone(), threshold: 2 };
+		let patch_set = PatchSet { members: patch_members, threshold: 2 };
 		let nitro_config = NitroConfig {
 			pcr0: vec![1; 42],
 			pcr1: vec![2; 42],
@@ -2190,6 +2235,7 @@ mod tests {
 			},
 			manifest_set: manifest_set.clone(),
 			share_set: share_set.clone(),
+			patch_set: patch_set.clone(),
 			enclave: nitro_config.clone(),
 		};
 
@@ -2215,6 +2261,7 @@ mod tests {
 			pivot_hash,
 			quorum_key,
 			manifest_envelope,
+			patch_set,
 		}
 	}
 
@@ -2230,6 +2277,7 @@ mod tests {
 				nitro_config,
 				pivot_hash,
 				quorum_key,
+				patch_set,
 				..
 			} = setup();
 
@@ -2237,6 +2285,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
+				&patch_set,
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2252,6 +2301,7 @@ mod tests {
 				nitro_config,
 				pivot_hash,
 				quorum_key,
+				patch_set,
 				..
 			} = setup();
 
@@ -2262,6 +2312,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
+				&patch_set,
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2274,6 +2325,7 @@ mod tests {
 				manifest,
 				manifest_set,
 				mut share_set,
+				patch_set,
 				nitro_config,
 				pivot_hash,
 				quorum_key,
@@ -2287,6 +2339,33 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
+				&patch_set,
+				&nitro_config,
+				&pivot_hash,
+				&quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_patch_set() {
+			let Setup {
+				manifest,
+				manifest_set,
+				share_set,
+				mut patch_set,
+				nitro_config,
+				pivot_hash,
+				quorum_key,
+				..
+			} = setup();
+
+			patch_set.members.get_mut(0).unwrap().pub_key = vec![1; 65];
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				&patch_set,
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2302,6 +2381,7 @@ mod tests {
 				mut nitro_config,
 				pivot_hash,
 				quorum_key,
+				patch_set,
 				..
 			} = setup();
 
@@ -2311,6 +2391,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
+				&patch_set,
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2323,6 +2404,7 @@ mod tests {
 				manifest,
 				manifest_set,
 				share_set,
+				patch_set,
 				mut nitro_config,
 				pivot_hash,
 				quorum_key,
@@ -2335,6 +2417,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
+				&patch_set,
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2350,6 +2433,7 @@ mod tests {
 				mut nitro_config,
 				pivot_hash,
 				quorum_key,
+				patch_set,
 				..
 			} = setup();
 
@@ -2359,6 +2443,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
+				&patch_set,
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2374,6 +2459,7 @@ mod tests {
 				mut nitro_config,
 				pivot_hash,
 				quorum_key,
+				patch_set,
 				..
 			} = setup();
 
@@ -2383,6 +2469,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
+				&patch_set,
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2395,6 +2482,7 @@ mod tests {
 				manifest,
 				manifest_set,
 				share_set,
+				patch_set,
 				mut nitro_config,
 				pivot_hash,
 				quorum_key,
@@ -2407,6 +2495,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
+				&patch_set,
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2419,6 +2508,7 @@ mod tests {
 				manifest,
 				manifest_set,
 				share_set,
+				patch_set,
 				nitro_config,
 				pivot_hash: _,
 				quorum_key,
@@ -2431,6 +2521,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
+				&patch_set,
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2443,6 +2534,7 @@ mod tests {
 				manifest,
 				manifest_set,
 				share_set,
+				patch_set,
 				nitro_config,
 				pivot_hash,
 				..
@@ -2455,6 +2547,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
+				&patch_set,
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,

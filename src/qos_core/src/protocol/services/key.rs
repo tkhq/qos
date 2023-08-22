@@ -342,6 +342,7 @@ mod test {
 			},
 			manifest_set: ManifestSet { threshold: 2, members: quorum_members },
 			share_set: ShareSet { threshold: 2, members: vec![] },
+			..Default::default()
 		};
 
 		let manifest_set_approvals = (0..2)

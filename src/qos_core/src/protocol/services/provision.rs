@@ -129,8 +129,8 @@ mod test {
 			services::{
 				boot::{
 					Approval, Manifest, ManifestEnvelope, ManifestSet,
-					Namespace, NitroConfig, PivotConfig, QuorumMember,
-					RestartPolicy, ShareSet,
+					Namespace, NitroConfig, PatchSet, PivotConfig,
+					QuorumMember, RestartPolicy, ShareSet,
 				},
 				provision::provision,
 			},
@@ -201,6 +201,7 @@ mod test {
 				threshold: threshold.try_into().unwrap(),
 				members: members.clone().into_iter().map(|(m, _)| m).collect(),
 			},
+			patch_set: PatchSet::default(),
 		};
 
 		let approvals: Vec<_> = members
