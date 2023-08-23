@@ -1613,7 +1613,11 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			// The only member is the quorum member
 			members: vec![member.clone()],
 		},
-		patch_set: PatchSet::default(),
+		patch_set: PatchSet {
+			threshold: 0,
+			// The only member is the quorum member
+			members: vec![],
+		},
 	};
 
 	// Create and post the boot standard instruction
