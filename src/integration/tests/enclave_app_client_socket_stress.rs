@@ -48,6 +48,7 @@ fn enclave_app_client_socket_stress() {
 			aws_root_certificate: vec![],
 			qos_commit: String::default(),
 		},
+		..Default::default()
 	};
 
 	let manifest_envelope = ManifestEnvelope {
