@@ -267,7 +267,7 @@ mod test {
 
 	use super::*;
 	use crate::protocol::services::boot::{
-		Manifest, ManifestSet, Namespace, NitroConfig, PivotConfig,
+		Manifest, ManifestSet, Namespace, NitroConfig, PatchSet, PivotConfig,
 		RestartPolicy, ShareSet,
 	};
 
@@ -398,7 +398,7 @@ mod test {
 			},
 			manifest_set: ManifestSet { threshold: 2, members: vec![] },
 			share_set: ShareSet { threshold: 2, members: vec![] },
-			..Default::default()
+			patch_set: PatchSet::default(),
 		};
 
 		let manifest_envelope = ManifestEnvelope {
