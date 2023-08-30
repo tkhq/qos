@@ -1725,9 +1725,16 @@ pub(crate) fn shamir_reconstruct(
 }
 
 fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
-	assert!(dir.as_ref().is_dir(), "Provided path is not a valid directory");
+	assert!(
+		dir.as_ref().is_dir(),
+		"Not a valid directory: {}",
+		dir.as_ref().display()
+	);
+
 	fs::read_dir(dir.as_ref())
-		.expect("Failed to read directory")
+		.unwrap_or_else(|_| {
+			panic!("Failed to read dir {}", dir.as_ref().display())
+		})
 		.map(|p| p.unwrap().path())
 		.collect()
 }
