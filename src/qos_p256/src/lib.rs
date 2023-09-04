@@ -336,7 +336,9 @@ impl P256Public {
 
 #[cfg(test)]
 mod test {
-	use qos_test_primitives::PathWrapper;
+	use aes_gcm::{Aes256Gcm, KeyInit, aead::Aead, Nonce};
+use p256::{PublicKey, elliptic_curve::{sec1::ToEncodedPoint, self, SecretKey}, NistP256};
+use qos_test_primitives::PathWrapper;
 
 	use super::*;
 
@@ -450,6 +452,47 @@ mod test {
 		let message = b"a message to authenticate";
 		let signature = alice_pair.sign(message).unwrap();
 		assert!(alice_public2.verify(message, &signature).is_ok());
+	}
+
+	#[test]
+	fn process_create_recovery() {
+		// This hardcodes the seed so we get a deterministic quorum public key when running this test
+		let bytes = qos_hex::decode("2f4c2915e0cc1d8f7a020eef022ebf925df69aaf7c419fe30820387547b31320").unwrap();
+		let seed: [u8; MASTER_SEED_LEN] = bytes.try_into().unwrap();
+		
+		let enclave_key_pair: P256Pair = P256Pair::from_master_seed(&seed).unwrap();
+		let pubkeys = enclave_key_pair.public_key();
+		let ecdh_public_key = PublicKey::from_sec1_bytes(&pubkeys.encrypt_public.to_bytes()).unwrap();
+		// This is supposed to log "0236b2ef931a40dd06d2e103718d6b82b1b87df9fc7e19f22fb4bd204ccb0a1b63"
+		println!("Enclave public key for ECDH: {}", qos_hex::encode(ecdh_public_key.to_encoded_point(true).as_bytes()));
+		
+		
+		// This part will change: put whatever embedded key you have in your iframe/html!
+		let embedded_public_key = PublicKey::from_sec1_bytes(&qos_hex::decode("03060adb7cbc52d37f80da7c2f4d64220885e49f0901253957fd6a2c07ce6305c4").unwrap()).unwrap();
+		let enclave_private_key: SecretKey<NistP256> = SecretKey::from_be_bytes(&enclave_key_pair.p256_encrypt_private.to_bytes()).unwrap();
+		
+		// This does ECDH between the embedded public key and the enclave private key
+		let shared_secret = elliptic_curve::ecdh::diffie_hellman(
+			enclave_private_key.to_nonzero_scalar(),
+			embedded_public_key.as_affine(),
+		);
+		
+		// Now encrypt a message with the derived AES key
+		// Obviously this isn't a true message: in real recovery cases this will be P256 private key bytes.
+		// But the bytes 0xcoffee are easier to check once decrypted!
+		let message: Vec<u8> = vec![0xc0, 0xff, 0xee];
+		let cipher = Aes256Gcm::new_from_slice(shared_secret.raw_secret_bytes()).unwrap();
+		let nonce = {
+			let random_bytes = bytes_os_rng::<12>();
+			*Nonce::from_slice(&random_bytes)
+		};
+		let encrypted_message = cipher
+			.encrypt(&nonce, &*message).unwrap();
+
+		println!("Encrypted recovery key: {}", qos_hex::encode(&encrypted_message));
+		println!("Nonce (aka IV): {}", qos_hex::encode(&nonce));
+
+		// Now go plug encrypted key and IV in your iframe or page!
 	}
 
 	#[test]
