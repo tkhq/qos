@@ -25,8 +25,10 @@ jobs:
         shell: bash
 
       - name: Pull lfs artifacts
-        run: git lfs pull
         shell: bash
+        run: |
+          git lfs fetch
+          git lfs pull
 
       - name: Run `make dist`
         shell: 'script -q -e -c "bash {0}"'
