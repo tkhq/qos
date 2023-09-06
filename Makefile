@@ -18,15 +18,19 @@ default: \
 	$(patsubst %,$(KEY_DIR)/%.asc,$(KEYS)) \
 	$(OUT_DIR)/aws-x86_64.eif \
 	$(OUT_DIR)/qos_client.linux-x86_64 \
-	$(OUT_DIR)/qos_client.oci.x86_64.tar \
-	$(OUT_DIR)/qos_client.$(ARCH).tar \
 	$(OUT_DIR)/qos_host.linux-x86_64 \
+	$(OUT_DIR)/qos_enclave.linux-x86_64 \
+	images \
+	$(OUT_DIR)/release.env
+
+.PHONY: images
+images:
 	$(OUT_DIR)/qos_host.oci.x86_64.tar \
 	$(OUT_DIR)/qos_host.$(ARCH).tar \
-	$(OUT_DIR)/qos_enclave.linux-x86_64 \
 	$(OUT_DIR)/qos_enclave.oci.x86_64.tar \
 	$(OUT_DIR)/qos_enclave.$(ARCH).tar \
-	$(OUT_DIR)/release.env
+	$(OUT_DIR)/qos_client.oci.x86_64.tar \
+	$(OUT_DIR)/qos_client.$(ARCH).tar
 
 # Clean repo back to initial clone state
 .PHONY: clean
