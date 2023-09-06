@@ -24,7 +24,7 @@ default: \
 	$(OUT_DIR)/release.env
 
 .PHONY: images
-images:
+images: \
 	$(OUT_DIR)/qos_host.oci.x86_64.tar \
 	$(OUT_DIR)/qos_host.$(ARCH).tar \
 	$(OUT_DIR)/qos_enclave.oci.x86_64.tar \
