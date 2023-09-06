@@ -30,7 +30,10 @@ jobs:
 
       - name: Run `make images`
         shell: 'script -q -e -c "bash {0}"'
-        run: make images
+        run: |
+            make toolchain
+            rm -rf fetch/apt
+            make images
 
       - uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
         with:
