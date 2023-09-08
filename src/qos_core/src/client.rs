@@ -44,7 +44,8 @@ impl Client {
 	/// timeout.
 	pub fn send(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
 		println!("[qos io: socket Client::send] start");
-		if let Err(e) = ProtocolMsg::deserialize(&mut request) {
+		let mut r = request.clone();
+		if let Err(e) = ProtocolMsg::deserialize(&mut r) {
 			println!("[qos io: socket Client::send] error deserilizing request {e}");
 		}
 
