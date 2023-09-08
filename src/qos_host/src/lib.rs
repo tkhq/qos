@@ -182,7 +182,7 @@ impl HostServer {
 
 		let req = encoded_request.clone().to_vec();
 		match ProtocolMsg::deserialize(&mut &req[..]) {
-			Ok(m) => println!("[qos host: /message] sending valid protocol msg: {m}"),
+			Ok(m) => println!("[qos host: /message] sending valid protocol msg: {m:?}"),
 			Err(e) =>println!("[qos host: /message] sending BAD protocol msg with err: {e}"),
 
 		};
