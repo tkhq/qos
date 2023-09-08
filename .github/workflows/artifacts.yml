@@ -46,16 +46,18 @@ jobs:
       - toolchain-cache
     timeout-minutes: 120
     steps:
-      - name: Install git lfs
-        run: sudo apt-get install -y git-lfs
-        shell: bash
-
       - name: Checkout sources
         uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
         with:
           fetch-depth: 0
-          lfs: true
           submodules: true
+
+      - name: Setup Checkout
+        run: |
+          sudo apt-get install -y git-lfs
+          git lfs fetch --include "fetch" --exclude "fetch/apt,dist"
+          git lfs fetch --include "fetch/apt/Packages.bz2"
+          git lfs checkout
 
       # make (and hence toolchain) rely on file timestamps
       - name: git-restore-mtime
@@ -78,7 +80,6 @@ jobs:
       - name: Run `make images`
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          rm -rf fetch/apt
           make images
 
       - uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
