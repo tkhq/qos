@@ -1,7 +1,9 @@
 //! Streaming socket based client to connect with
 //! [`crate::server::SocketServer`].
 
-use crate::io::{self, SocketAddress, Stream, TimeVal};
+use borsh::BorshDeserialize;
+
+use crate::{io::{self, SocketAddress, Stream, TimeVal}, protocol::msg::ProtocolMsg};
 
 /// Enclave client error.
 #[derive(Debug)]
@@ -41,8 +43,21 @@ impl Client {
 	/// Send raw bytes and wait for a response until the clients configured
 	/// timeout.
 	pub fn send(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
+		println!("[qos io: socket Client::send] start");
+		if let Err(e) = ProtocolMsg::deserialize(&mut request) {
+			println!("[qos io: socket Client::send] error deserilizing request {e}");
+		}
+
+		println!("[qos io: socket Client::send] about to connect");
 		let stream = Stream::connect(&self.addr, self.timeout)?;
-		stream.send(request)?;
-		stream.recv().map_err(Into::into)
+		println!("[qos io: socket Client::send] got stream={}", stream.fd);
+
+		let send_res = stream.send(request);
+		println!("[qos io: socket Client::send] send_res={:?}", send_res);
+		send_res?;
+
+		let recv_res = stream.recv().map_err(Into::into);
+		println!("[qos io: socket Client::send] recv_res={:?}", recv_res);
+		recv_res
 	}
 }

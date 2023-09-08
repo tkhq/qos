@@ -37,6 +37,8 @@ impl Processor {
 
 impl server::RequestProcessor for Processor {
 	fn process(&mut self, req_bytes: Vec<u8>) -> Vec<u8> {
+		println!("[qos io: qos_core::Processor::process] start");
+
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
 			return ProtocolMsg::ProtocolErrorResponse(
 				ProtocolError::OversizedPayload,
@@ -45,9 +47,11 @@ impl server::RequestProcessor for Processor {
 			.expect("ProtocolMsg can always be serialized. qed.");
 		}
 
+		println!("[qos io: qos_core::Processor::process] attempting to deserialize");
 		let msg_req = match ProtocolMsg::try_from_slice(&req_bytes) {
 			Ok(req) => req,
-			Err(_) => {
+			Err(e) => {
+				println!("[qos io: qos_core::Processor::process] failed to deserialize req_byes: {e:?}");
 				return ProtocolMsg::ProtocolErrorResponse(
 					ProtocolError::ProtocolMsgDeserialization,
 				)
@@ -56,6 +60,7 @@ impl server::RequestProcessor for Processor {
 			}
 		};
 
+		println!("[qos io: qos_core::Processor::process] calling handle_msg( {msg_req:?} )");
 		self.state.handle_msg(&msg_req)
 	}
 }

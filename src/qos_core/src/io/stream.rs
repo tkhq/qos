@@ -106,7 +106,7 @@ impl SocketAddress {
 
 /// Handle on a stream
 pub(crate) struct Stream {
-	fd: RawFd,
+	pub(crate) fd: RawFd,
 }
 
 impl Stream {
@@ -118,6 +118,8 @@ impl Stream {
 
 		for _ in 0..MAX_RETRY {
 			let fd = socket_fd(addr)?;
+			println!("[qos io: Stream::connect] fd={fd}");
+
 			let stream = Self { fd };
 
 			// set `SO_RCVTIMEO`
@@ -131,6 +133,7 @@ impl Stream {
 				Ok(_) => return Ok(stream),
 				Err(e) => err = IOError::ConnectNixError(e),
 			}
+			println!("[qos io: Stream::connect] failed to connect: err={err:?}");
 
 			std::thread::sleep(std::time::Duration::from_millis(
 				BACKOFF_MILLISECONDS,
@@ -141,6 +144,7 @@ impl Stream {
 	}
 
 	pub(crate) fn send(&self, buf: &[u8]) -> Result<(), IOError> {
+		println!("[qos io: Stream::send] start");
 		let len = buf.len();
 		// First, send the length of the buffer
 		{
@@ -179,6 +183,7 @@ impl Stream {
 	}
 
 	pub(crate) fn recv(&self) -> Result<Vec<u8>, IOError> {
+		println!("[qos io: Stream::recv] start");
 		let length: usize = {
 			{
 				let mut buf = [0u8; size_of::<u64>()];
@@ -269,6 +274,8 @@ impl Listener {
 		let fd = socket_fd(&addr)?;
 		bind(fd, &*addr.addr())?;
 		listen(fd, BACKLOG)?;
+
+		println!("[qos io: Listener::listen] fd={fd:?}");
 
 		Ok(Self { fd, addr })
 	}

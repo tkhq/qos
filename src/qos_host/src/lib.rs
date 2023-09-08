@@ -180,11 +180,17 @@ impl HostServer {
 			);
 		}
 
+		let req = encoded_request.clone().to_vec();
+		match ProtocolMsg::deserialize(&mut &req[..]) {
+			Ok(m) => println!("[qos host: /message] sending valid protocol msg: {m}"),
+			Err(e) =>println!("[qos host: /message] sending BAD protocol msg with err: {e}"),
+
+		};
 		match state.enclave_client.send(&encoded_request) {
 			Ok(encoded_response) => (StatusCode::OK, encoded_response),
 			Err(e) => {
-				let msg = format!("Error while trying to send request over socket to enclave: {e:?}");
-				eprint!("{msg}");
+				let msg = format!("[qos host: /message] Error while trying to send request over socket to enclave: {e:?}");
+				eprintln!("{msg}");
 
 				(
 					StatusCode::INTERNAL_SERVER_ERROR,
