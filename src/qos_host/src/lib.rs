@@ -125,31 +125,26 @@ impl HostServer {
 		let encoded_request = ProtocolMsg::StatusRequest
 			.try_to_vec()
 			.expect("ProtocolMsg can always serialize. qed.");
-		let encoded_response = state.enclave_client.send(&encoded_request);
-
-		let decoded_response = match encoded_response {
-			Ok(encoded_response) => {
-				match ProtocolMsg::try_from_slice(&encoded_response) {
-					Ok(resp) => resp,
-					Err(_) => {
-						return (
-							StatusCode::INTERNAL_SERVER_ERROR,
-							Html(
-								"Error decoding response from enclave"
-									.to_string(),
-							),
-						)
-					}
-				}
-			}
+		let encoded_response = match state.enclave_client.send(&encoded_request)
+		{
+			Ok(encoded_response) => encoded_response,
 			Err(e) => {
-				let msg = format!("Enclave request failed {e:?}");
-				println!("{msg}");
+				let msg = format!("Error while trying to send socket request to enclave: {e:?}");
+				eprintln!("{msg}");
 				return (StatusCode::INTERNAL_SERVER_ERROR, Html(msg));
 			}
 		};
 
-		match decoded_response {
+		let response = match ProtocolMsg::try_from_slice(&encoded_response) {
+			Ok(r) => r,
+			Err(e) => {
+				let msg = format!("Error deserializing response from enclave, make sure qos_host version match qos_core: {e}");
+				eprintln!("{msg}");
+				return (StatusCode::INTERNAL_SERVER_ERROR, Html(msg));
+			}
+		};
+
+		match response {
 			ProtocolMsg::StatusResponse(phase) => {
 				let inner = format!("{phase:?}");
 				let status = match phase {
@@ -164,8 +159,9 @@ impl HostServer {
 				(status, Html(inner))
 			}
 			other => {
-				let inner = format!("Unexpected response: {other:?}");
-				(StatusCode::INTERNAL_SERVER_ERROR, Html(inner))
+				let msg = format!("Unexpected response: Expected a ProtocolMsg::StatusResponse, but got: {other:?}");
+				eprintln!("{msg}");
+				(StatusCode::INTERNAL_SERVER_ERROR, Html(msg))
 			}
 		}
 	}
@@ -184,16 +180,27 @@ impl HostServer {
 			);
 		}
 
+		let req = encoded_request.clone().to_vec();
+		match ProtocolMsg::deserialize(&mut &req[..]) {
+			Ok(m) => println!("[qos host: /message] sending valid protocol msg: {m}"),
+			Err(e) =>println!("[qos host: /message] sending BAD protocol msg with err: {e}"),
+
+		};
 		match state.enclave_client.send(&encoded_request) {
 			Ok(encoded_response) => (StatusCode::OK, encoded_response),
-			Err(_) => (
-				StatusCode::INTERNAL_SERVER_ERROR,
-				ProtocolMsg::ProtocolErrorResponse(
-					ProtocolError::EnclaveClient,
+			Err(e) => {
+				let msg = format!("[qos host: /message] Error while trying to send request over socket to enclave: {e:?}");
+				eprintln!("{msg}");
+
+				(
+					StatusCode::INTERNAL_SERVER_ERROR,
+					ProtocolMsg::ProtocolErrorResponse(
+						ProtocolError::EnclaveClient,
+					)
+					.try_to_vec()
+					.expect("ProtocolMsg can always serialize. qed."),
 				)
-				.try_to_vec()
-				.expect("ProtocolMsg can always serialize. qed."),
-			),
+			}
 		}
 	}
 }

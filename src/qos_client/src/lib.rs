@@ -27,18 +27,27 @@ pub mod request {
 				&msg.try_to_vec()
 					.expect("ProtocolMsg can always be serialized. qed."),
 			)
-			.map_err(|e| format!("post err: {e:?}"))?;
+			.map_err(|e| match e {
+				ureq::Error::Status(code, r) => {
+					let body = r.into_string();
+					format!("http_post error: [url: {url}, status: {code}, body: {body:?}]")
+				}
+				ureq::Error::Transport(e) => {
+					format!("http_post error: transport error: {}", e)
+				}
+			})?;
 
 		response.into_reader().take(MAX_SIZE).read_to_end(&mut buf).map_err(
-			|_| {
-				"qos_client::request::post: reading response bytes error"
-					.to_string()
+			|e| {
+				format!(
+					"http_post error: failed to read response to buffer {e:?}"
+				)
 			},
 		)?;
 
 		let decoded_response =
-			ProtocolMsg::try_from_slice(&buf).map_err(|_| {
-				"qos_client::request::post: deserialization error".to_string()
+			ProtocolMsg::try_from_slice(&buf).map_err(|e| {
+				format!("http_post error: deserialization error: {e:?}")
 			})?;
 
 		Ok(decoded_response)

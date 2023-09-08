@@ -44,10 +44,13 @@ impl<R: RequestProcessor> SocketServer<R> {
 		let listener = Listener::listen(addr)?;
 
 		for stream in listener {
+			println!("[qos io: SocketServer::listen] got stream={}", stream.fd);
 			match stream.recv() {
 				Ok(payload) => {
+					println!("[qos io: SocketServer::listen] got payload");
 					let response = processor.process(payload);
-					let _ = stream.send(&response);
+					let send_res = stream.send(&response);
+					println!("[qos io: SocketServer::listen] send_res={send_res:?}");
 				}
 				Err(err) => eprintln!("Server::listen error: {err:?}"),
 			}
