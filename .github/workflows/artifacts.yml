@@ -39,18 +39,73 @@ jobs:
         run: |
           make cache/toolchain.tar
 
+  # This job pre-warms the cache for rust
+  rust-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Cache
+        id: cache
+        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        with:
+          lookup-only: true
+          key: toolchain-rust-${{ hashFiles('Makefile,config/make.env') }}
+          path: fetch/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+
+      - name: Setup Checkout
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y git-lfs
+          git lfs fetch --include "fetch" --exclude "fetch/apt,dist"
+          git lfs fetch --include "fetch/apt/Packages.bz2"
+          git lfs checkout
+
+      # make (and hence toolchain) rely on file timestamps
+      - name: git-restore-mtime
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -qq -y git-restore-mtime
+          git restore-mtime
+          git submodule foreach 'git restore-mtime'
+
+      - name: Pull toolchain from cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        with:
+          fail-on-cache-miss: true
+          key: toolchain-${{ hashFiles('config/apt-hashes-x86_64.list') }}
+          path: cache/toolchain.tar
+
+      - name: Complete the setup of toolchain
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          make toolchain
+
+      - name: Run `make fetch/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot`
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: 'script -q -e -c "bash {0}"'
+        run: |
+          make fetch/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+
   build:
     name: Build Toolchain Artifacts
     runs-on: ubuntu-latest
     needs:
       - toolchain-cache
+      - rust-cache
     strategy:
       matrix:
         include:
           - target: qos_host.oci.x86_64.tar
           - target: qos_enclave.oci.x86_64.tar
           - target: qos_client.oci.x86_64.tar
-    timeout-minutes: 70
+    timeout-minutes: 50
     steps:
       - name: Checkout sources
         uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
@@ -82,6 +137,13 @@ jobs:
       - name: Complete the setup of toolchain
         run: |
           make toolchain
+
+      - name: Pull rust from cache
+        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        with:
+          fail-on-cache-miss: true
+          key: toolchain-rust-${{ hashFiles('Makefile,config/make.env') }}
+          path: fetch/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 
       - name: Run `make out/${{ matrix.target }}`
         shell: 'script -q -e -c "bash {0}"'
