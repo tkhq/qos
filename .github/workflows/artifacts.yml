@@ -19,14 +19,9 @@ jobs:
 
       - name: Checkout sources
         uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
-
-      - name: Download submodules
-        run: git submodule update --init --recursive
-        shell: bash
-
-      - name: Pull lfs artifacts
-        run: git lfs pull
-        shell: bash
+        with:
+          lfs: true
+          submodules: true
 
       - name: Run `make images`
         shell: 'script -q -e -c "bash {0}"'
