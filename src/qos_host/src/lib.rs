@@ -88,6 +88,7 @@ impl HostServer {
 	/// Panics if there is an issue starting the server.
 	// pub async fn serve(&self) -> Result<(), String> {
 	pub async fn serve(&self) {
+		dbg!(&self.enclave_addr);
 		let state = Arc::new(QosHostState {
 			enclave_client: Client::new(
 				self.enclave_addr.clone(),

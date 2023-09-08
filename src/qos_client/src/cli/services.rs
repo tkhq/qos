@@ -1004,6 +1004,7 @@ pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
 	pivot_path: P,
 	attestation_doc_path: P,
 ) -> Result<(), Error> {
+	println!("calling boot key fwd");
 	let pivot =
 		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
 	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;
@@ -1036,6 +1037,7 @@ pub(crate) fn export_key<P: AsRef<Path>>(
 	attestation_doc_path: P,
 	encrypted_quorum_key_path: P,
 ) -> Result<(), Error> {
+	println!("CAlling export key");
 	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;
 	let cose_sign1_attestation_doc = fs::read(attestation_doc_path.as_ref())
 		.map_err(Error::FailedToReadAttestationDoc)?;

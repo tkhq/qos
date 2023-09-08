@@ -48,6 +48,7 @@ impl server::RequestProcessor for Processor {
 		let msg_req = match ProtocolMsg::try_from_slice(&req_bytes) {
 			Ok(req) => req,
 			Err(_) => {
+				dbg!("error deserilaizing!");
 				return ProtocolMsg::ProtocolErrorResponse(
 					ProtocolError::ProtocolMsgDeserialization,
 				)

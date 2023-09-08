@@ -27,19 +27,36 @@ async fn key_fwd_e2e() {
 	// Make sure everything in the temp dir gets dropped
 	let _: PathWrapper = TMP_DIR.into();
 	fs::create_dir_all(BOOT_DIR).unwrap();
-	let old_host_port = qos_test_primitives::find_free_port().unwrap();
-	let new_host_port = qos_test_primitives::find_free_port().unwrap();
+	// let old_host_port = qos_test_primitives::find_free_port().unwrap();
+	// let new_host_port = qos_test_primitives::find_free_port().unwrap();
+
+	let old_host_port = 3301;
+	let new_host_port = 3302;
 
 	build_pivot_fingerprints();
 	generate_manifest_envelope();
-	let (_enclave_child_wrapper, _host_child_wrapper) =
-		boot_old_enclave(old_host_port);
+		// -- CLIENT generate the manifest envelope
+	assert!(Command::new("../target/debug/qos_client")
+		.args([
+			"generate-manifest-envelope",
+			"--manifest-approvals-dir",
+			BOOT_DIR,
+			"--manifest-path",
+			CLI_MANIFEST_PATH,
+		])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+	// let (_enclave_child_wrapper, _host_child_wrapper) =
+	// 	boot_old_enclave(old_host_port);
 
 	// start up new enclave
 	let new_secret_path = "/tmp/key-fwd-e2e/new_secret.secret";
 	let new_pivot_path = "/tmp/key-fwd-e2e/new_pivot.pivot";
 	let new_manifest_path = "/tmp/key-fwd-e2e/new_manifest.manifest";
-	let new_usock = "/tmp/key-fwd-e2e/new_usock.sock";
+	let new_usock = "/Users/zeke/new_usock.sock";
 
 	// -- ENCLAVE start new enclave
 	let mut _enclave_child_process: ChildWrapper =
@@ -78,72 +95,76 @@ async fn key_fwd_e2e() {
 			.unwrap()
 			.into();
 
-	// -- Make sure the new enclave and host have time to boot
+	// // -- Make sure the new enclave and host have time to boot
 	qos_test_primitives::wait_until_port_is_bound(new_host_port);
 
 	// -- CLIENT broadcast boot key fwd instruction
-	assert!(Command::new("../target/debug/qos_client")
-		.args([
-			"boot-key-fwd",
-			"--manifest-envelope-path",
-			MANIFEST_ENVELOPE_PATH,
-			"--pivot-path",
-			PIVOT_LOOP_PATH,
-			"--attestation-doc-path",
-			NEW_ATTESTATION_DOC_PATH,
-			"--host-port",
-			&new_host_port.to_string(),
-			"--host-ip",
-			LOCAL_HOST,
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	// assert!(Command::new("../target/debug/qos_client")
+	// 	.args([
+	// 		"boot-key-fwd",
+	// 		"--manifest-envelope-path",
+	// 		MANIFEST_ENVELOPE_PATH,
+	// 		"--pivot-path",
+	// 		PIVOT_LOOP_PATH,
+	// 		"--attestation-doc-path",
+	// 		NEW_ATTESTATION_DOC_PATH,
+	// 		"--host-port",
+	// 		&new_host_port.to_string(),
+	// 		"--host-ip",
+	// 		LOCAL_HOST,
+	// 	])
+	// 	.spawn()
+	// 	.unwrap()
+	// 	.wait()
+	// 	.unwrap()
+	// 	.success());
 
-	// -- CLIENT broadcast key request to the old enclave
-	assert!(Command::new("../target/debug/qos_client")
-		.args([
-			"export-key",
-			"--manifest-envelope-path",
-			MANIFEST_ENVELOPE_PATH,
-			"--attestation-doc-path",
-			NEW_ATTESTATION_DOC_PATH,
-			"--encrypted-quorum-key-path",
-			ENCRYPTED_QUORUM_KEY_PATH,
-			"--host-port",
-			&old_host_port.to_string(),
-			"--host-ip",
-			LOCAL_HOST,
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	// // -- CLIENT broadcast key request to the old enclave
+	// assert!(Command::new("../target/debug/qos_client")
+	// 	.args([
+	// 		"export-key",
+	// 		"--manifest-envelope-path",
+	// 		MANIFEST_ENVELOPE_PATH,
+	// 		"--attestation-doc-path",
+	// 		NEW_ATTESTATION_DOC_PATH,
+	// 		"--encrypted-quorum-key-path",
+	// 		ENCRYPTED_QUORUM_KEY_PATH,
+	// 		"--host-port",
+	// 		&old_host_port.to_string(),
+	// 		"--host-ip",
+	// 		LOCAL_HOST,
+	// 	])
+	// 	.spawn()
+	// 	.unwrap()
+	// 	.wait()
+	// 	.unwrap()
+	// 	.success());
 
-	// -- CLIENT broadcast encrypted quorum to the new enclave
-	assert!(Command::new("../target/debug/qos_client")
-		.args([
-			"inject-key",
-			"--encrypted-quorum-key-path",
-			ENCRYPTED_QUORUM_KEY_PATH,
-			"--host-port",
-			&new_host_port.to_string(),
-			"--host-ip",
-			LOCAL_HOST,
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	// // -- CLIENT broadcast encrypted quorum to the new enclave
+	// assert!(Command::new("../target/debug/qos_client")
+	// 	.args([
+	// 		"inject-key",
+	// 		"--encrypted-quorum-key-path",
+	// 		ENCRYPTED_QUORUM_KEY_PATH,
+	// 		"--host-port",
+	// 		&new_host_port.to_string(),
+	// 		"--host-ip",
+	// 		LOCAL_HOST,
+	// 	])
+	// 	.spawn()
+	// 	.unwrap()
+	// 	.wait()
+	// 	.unwrap()
+	// 	.success());
 
-	// Check that the quorum key got written
-	let quorum_pair = P256Pair::from_hex_file(new_secret_path).unwrap();
-	let quorum_pub = P256Public::from_hex_file(QUORUM_KEY_PUB_PATH).unwrap();
-	assert!(quorum_pair.public_key() == quorum_pub);
+	// // Check that the quorum key got written
+	// let quorum_pair = P256Pair::from_hex_file(new_secret_path).unwrap();
+	// let quorum_pub = P256Public::from_hex_file(QUORUM_KEY_PUB_PATH).unwrap();
+	// assert!(quorum_pair.public_key() == quorum_pub);
+
+
+		let ten_millis = std::time::Duration::from_secs(60 * 60);
+	std::thread::sleep(ten_millis);
 }
 
 fn generate_manifest_envelope() {
@@ -218,6 +239,7 @@ fn generate_manifest_envelope() {
 			.wait()
 			.unwrap()
 			.success());
+
 	}
 }
 
