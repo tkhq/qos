@@ -640,7 +640,7 @@ mod test {
 
 			// Change a member so that are not recognized as part of the
 			// manifest set.
-			let mut approval = approvals.get_mut(0).unwrap();
+			let approval = approvals.get_mut(0).unwrap();
 			let pair = P256Pair::generate().unwrap();
 			approval.member.pub_key = pair.public_key().to_bytes();
 			approval.signature = pair.sign(&manifest.qos_hash()).unwrap();
