@@ -42,7 +42,6 @@ restore-mtime:
 
 .PHONY: dist-cache
 dist-cache:
-	rm -rf out/*
 	cp -Rp dist/* out/
 
 # Clean repo back to initial clone state
