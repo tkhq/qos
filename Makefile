@@ -14,7 +14,8 @@ KEYS := \
 .DEFAULT_GOAL :=
 .PHONY: default
 default: \
-	toolchain \
+	restore-mtime \
+	dist-cache \
 	$(patsubst %,$(KEY_DIR)/%.asc,$(KEYS)) \
 	$(OUT_DIR)/aws-x86_64.eif \
 	$(OUT_DIR)/qos_client.linux-x86_64 \
@@ -31,6 +32,18 @@ images: \
 	$(OUT_DIR)/qos_enclave.$(ARCH).tar \
 	$(OUT_DIR)/qos_client.oci.x86_64.tar \
 	$(OUT_DIR)/qos_client.$(ARCH).tar
+
+.PHONY: restore-mtime
+restore-mtime:
+	$(call toolchain," \
+		git restore-mtime \
+		&& echo "Git mtime restored" \
+	")
+
+.PHONY: dist-cache
+dist-cache:
+	rm -rf out/*
+	cp -Rp dist/* out/
 
 # Clean repo back to initial clone state
 .PHONY: clean
@@ -101,10 +114,11 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage: $(CACHE_DIR)/bzImage
 	cp $(CACHE_DIR)/bzImage $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
 
 $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
-	$(BIN_DIR)/eif_build \
-	$(CACHE_DIR)/bzImage \
-	$(CACHE_DIR)/rootfs.cpio \
-	$(CACHE_DIR)/linux.config
+	$(shell git ls-files src config)
+	$(MAKE) $(CACHE_DIR)/linux.config
+	$(MAKE) $(CACHE_DIR)/rootfs.cpio
+	$(MAKE) $(CACHE_DIR)/bzImage
+	$(MAKE) $(BIN_DIR)/eif_build
 	mkdir -p $(CACHE_DIR)/eif
 	$(call toolchain," \
 		export \
@@ -124,7 +138,8 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	")
 
 $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
-	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	$(shell git ls-files src config)
+	$(MAKE) $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 	$(call toolchain," \
 		export \
 			RUSTFLAGS=' \
@@ -153,8 +168,9 @@ $(OUT_DIR)/qos_host.$(ARCH).tar: \
 	$(call tar-build)
 
 $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
-	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
-	$(CACHE_DIR)/lib64/libssl.a
+	$(shell git ls-files src/qos_enclave config)
+	$(MAKE) $(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	$(MAKE) $(CACHE_DIR)/lib64/libssl.a
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_enclave \
 		&& export \
@@ -176,9 +192,9 @@ $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 	")
 
 $(OUT_DIR)/qos_enclave.oci.$(ARCH).tar: \
-	$(SRC_DIR)/images/enclave/Dockerfile \
-	$(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH) \
-	$(OUT_DIR)/aws-x86_64.eif
+	$(SRC_DIR)/images/enclave/Dockerfile
+	$(MAKE) $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH)
+	$(MAKE) $(OUT_DIR)/aws-x86_64.eif
 	mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
 	&& cp $(word 3,$^) $(CACHE_DIR)/$(notdir $(word 2,$^)) \
 	&& $(call oci-build)
@@ -190,8 +206,9 @@ $(OUT_DIR)/qos_enclave.$(ARCH).tar: \
 	$(call tar-build)
 
 $(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
-	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot \
-	$(CACHE_DIR)/lib/libpcsclite.a
+	$(shell git ls-files src config)
+	$(MAKE) $(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	$(MAKE) $(CACHE_DIR)/lib/libpcsclite.a
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_client \
 		&& export \
@@ -308,7 +325,7 @@ $(CACHE_DIR)/linux.config:
 	cp $(CONFIG_DIR)/$(TARGET)/linux.config $@
 
 $(CACHE_DIR)/init: \
-	$(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	| $(FETCH_DIR)/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 	$(call toolchain," \
 		export \
 			RUSTFLAGS=' \
@@ -359,11 +376,11 @@ $(CACHE_DIR)/rootfs.cpio: \
 		sha256sum $@; \
 	")
 
-$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile: \
-	$(CACHE_DIR)/linux.config \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
-	$(KEY_DIR)/$(LINUX_KEY).asc
+$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile: \
+	  $(KEY_DIR)/$(LINUX_KEY).asc
+	  | $(CACHE_DIR)/linux.config \
+	    $(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
+	    $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign
 	$(call toolchain," \
 		gpg --import $(KEY_DIR)/$(LINUX_KEY).asc \
 		&& gpg --verify \
@@ -376,8 +393,8 @@ $(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile: \
 
 $(CACHE_DIR)/bzImage: \
 	$(CACHE_DIR)/linux.config \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile \
-	$(CACHE_DIR)/rootfs.cpio
+	| $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile \
+	  $(CACHE_DIR)/rootfs.cpio
 	$(call toolchain," \
 		cd $(CACHE_DIR)/linux-$(LINUX_VERSION) && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
@@ -397,8 +414,8 @@ $(BIN_DIR)/eif_build:
 	")
 
 $(CACHE_DIR)/nsm.ko: \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile \
-	$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap
+	| $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile \
+	  $(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap
 	$(call toolchain," \
 		cd $(CACHE_DIR)/linux-$(LINUX_VERSION) && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
