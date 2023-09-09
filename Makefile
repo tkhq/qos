@@ -376,7 +376,7 @@ $(CACHE_DIR)/rootfs.cpio: \
 	")
 
 $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile: \
-	  $(KEY_DIR)/$(LINUX_KEY).asc
+	  $(KEY_DIR)/$(LINUX_KEY).asc \
 	  | $(CACHE_DIR)/linux.config \
 	    $(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
 	    $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign
