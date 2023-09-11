@@ -58,7 +58,7 @@ impl Client {
 		send_res?;
 
 		let recv_res = stream.recv().map_err(Into::into);
-		println!("[qos io: socket Client::send] recv_res={:?}", recv_res);
+		println!("[qos io: socket Client::send] recv_res.is_ok()={}", recv_res.is_ok());
 		recv_res
 	}
 }

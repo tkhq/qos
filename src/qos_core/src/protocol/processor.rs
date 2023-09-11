@@ -60,7 +60,7 @@ impl server::RequestProcessor for Processor {
 			}
 		};
 
-		println!("[qos io: qos_core::Processor::process] calling handle_msg( {msg_req:?} )");
+		println!("[qos io: qos_core::Processor::process] calling handle_msg( .. )");
 		self.state.handle_msg(&msg_req)
 	}
 }
