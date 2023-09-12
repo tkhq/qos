@@ -349,6 +349,7 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
+		println!("handlers::proxy");
 		if let ProtocolMsg::ProxyRequest { data: req_data } = req {
 			let result = state
 				.app_client
@@ -366,6 +367,7 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
+		println!("handlers::provision");
 		if let ProtocolMsg::ProvisionRequest { share, approval } = req {
 			let result = provision::provision(share, approval.clone(), state)
 				.map(|reconstructed| ProtocolMsg::ProvisionResponse {
@@ -384,6 +386,7 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
+		println!("handlers::boot_standard");
 		if let ProtocolMsg::BootStandardRequest { manifest_envelope, pivot } =
 			req
 		{
@@ -403,6 +406,7 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
+		println!("handlers::boot_genesis");
 		if let ProtocolMsg::BootGenesisRequest { set, dr_key } = req {
 			let result = genesis::boot_genesis(state, set, dr_key.clone())
 				.map(|(genesis_output, nsm_response)| {
@@ -423,6 +427,7 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
+		println!("handlers::live_attestation_doc");
 		if let ProtocolMsg::LiveAttestationDocRequest = req {
 			let result = attestation::live_attestation_doc(state)
 				.map(|nsm_response| ProtocolMsg::LiveAttestationDocResponse {
@@ -445,6 +450,7 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
+		println!("handlers::boot_key_fwd");
 		if let ProtocolMsg::BootKeyForwardRequest { manifest_envelope, pivot } =
 			req
 		{
@@ -464,6 +470,7 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
+		println!("handlers::export_key");
 		if let ProtocolMsg::ExportKeyRequest {
 			manifest_envelope,
 			cose_sign1_attestation_doc,
@@ -494,6 +501,7 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
+		println!("handlers::inject_key");
 		if let ProtocolMsg::InjectKeyRequest {
 			encrypted_quorum_key,
 			signature,
