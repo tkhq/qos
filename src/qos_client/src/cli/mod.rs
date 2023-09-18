@@ -418,7 +418,7 @@ impl Command {
 	fn manifest_envelope_path_token() -> Token {
 		Token::new(MANIFEST_ENVELOPE_PATH, "Path to a manifest envelope")
 			.takes_value(true)
-			.required(true)
+			.required(false)
 	}
 	fn approval_path_token() -> Token {
 		Token::new(APPROVAL_PATH, "Path to a approval of a manifest.")
@@ -695,6 +695,7 @@ impl Command {
 		Parser::new()
 			.token(Self::manifest_approvals_dir_token())
 			.token(Self::manifest_path_token())
+			.token(Self::manifest_envelope_path_token())
 	}
 
 	fn dangerous_dev_boot() -> Parser {
@@ -1007,6 +1008,10 @@ impl ClientOpts {
 			.single(MANIFEST_ENVELOPE_PATH)
 			.expect("Missing `--manifest-envelope-path`")
 			.to_string()
+	}
+
+	fn maybe_manifest_envelope_path(&self) -> Option<String> {
+		self.parsed.single(MANIFEST_ENVELOPE_PATH).map(String::to_owned)
 	}
 
 	fn approval_path(&self) -> String {
@@ -1579,6 +1584,7 @@ mod handlers {
 		if let Err(e) = services::generate_manifest_envelope(
 			opts.manifest_approvals_dir(),
 			opts.manifest_path(),
+			opts.maybe_manifest_envelope_path(),
 		) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);

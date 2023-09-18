@@ -970,6 +970,7 @@ where
 pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	manifest_approvals_dir: P,
 	manifest_path: P,
+	maybe_manifest_envelope_path: Option<String>,
 ) -> Result<(), Error> {
 	let manifest = read_manifest(&manifest_path)?;
 	let approvals = find_approvals(&manifest_approvals_dir, &manifest);
@@ -986,7 +987,10 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 		std::process::exit(1);
 	}
 
-	let path = manifest_approvals_dir.as_ref().join(MANIFEST_ENVELOPE);
+	let path = maybe_manifest_envelope_path.map_or_else(
+		|| manifest_approvals_dir.as_ref().join(MANIFEST_ENVELOPE),
+		PathBuf::from,
+	);
 	write_with_msg(
 		&path,
 		&manifest_envelope
