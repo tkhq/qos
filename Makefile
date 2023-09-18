@@ -341,7 +341,7 @@ $(CACHE_DIR)/init: \
 $(BIN_DIR)/gen_init_cpio: \
 	$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile
 	$(call toolchain," \
-		cd $(CACHE_DIR)/linux-$(LINUX_VERSION) && \
+		cd $(CACHE_DIR)/src/linux-$(LINUX_VERSION) && \
 		gcc usr/gen_init_cpio.c -o /home/build/$@ \
 	")
 
