@@ -244,7 +244,7 @@ $(CONFIG_DIR)/$(TARGET)/linux.config:
 		&& cp .config /config/$(TARGET)/linux.config; \
 	")
 
-$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap:
+$(CACHE_DIR)/src/aws-nitro-enclaves-sdk-bootstrap:
 	$(call git_clone,$@,$(AWS_NITRO_DRIVER_REPO),$(AWS_NITRO_DRIVER_REF))
 
 $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign:
@@ -254,19 +254,19 @@ $(FETCH_DIR)/linux-$(LINUX_VERSION).tar:
 	curl --url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.xz --output $@.xz
 	xz -d $@.xz
 
-$(FETCH_DIR)/pcsc:
+$(CACHE_DIR)/src/pcsc:
 	$(call git_clone,$@,$(PCSC_REPO),$(PCSC_REF))
 
-$(FETCH_DIR)/openssl:
+$(CACHE_DIR)/src/openssl:
 	$(call git_clone,$@,$(OPENSSL_REPO),$(OPENSSL_REF))
 
-$(FETCH_DIR)/rust:
+$(CACHE_DIR)/src/rust:
 	$(call git_clone,$@,$(RUST_REPO),$(RUST_REF))
 
 $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot: \
-	$(FETCH_DIR)/rust
+	$(CACHE_DIR)/src/rust
 	$(call toolchain," \
-		cd $(FETCH_DIR)/rust \
+		cd $(CACHE_DIR)/src/rust \
 		&& git submodule update --init \
 		&& ./configure \
 			--set="build.rustc=/usr/bin/rustc" \
@@ -280,9 +280,9 @@ $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot: \
 	")
 
 $(CACHE_DIR)/lib/libpcsclite.a: \
-	$(FETCH_DIR)/pcsc
+	$(CACHE_DIR)/src/pcsc
 	$(call toolchain," \
-		cd $(FETCH_DIR)/pcsc \
+		cd $(CACHE_DIR)/src/pcsc \
 		&& export \
 			CC=musl-gcc \
 			CXX=musl-g++ \
@@ -302,9 +302,9 @@ $(CACHE_DIR)/lib/libpcsclite.a: \
 	")
 
 $(CACHE_DIR)/lib64/libssl.a: \
-	$(FETCH_DIR)/openssl
+	$(CACHE_DIR)/src/openssl
 	$(call toolchain," \
-		cd $(FETCH_DIR)/openssl \
+		cd $(CACHE_DIR)/src/openssl \
 		&& export CC='musl-gcc -fPIE -pie -static' \
 		&& sudo ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/x86_64-linux-musl/asm \
 		&& sudo ln -s /usr/include/asm-generic /usr/include/x86_64-linux-musl/asm-generic \
@@ -339,16 +339,16 @@ $(CACHE_DIR)/init: \
 	")
 
 $(BIN_DIR)/gen_init_cpio: \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile
+	$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile
 	$(call toolchain," \
 		cd $(CACHE_DIR)/linux-$(LINUX_VERSION) && \
 		gcc usr/gen_init_cpio.c -o /home/build/$@ \
 	")
 
 $(BIN_DIR)/gen_initramfs.sh: \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION)/Makefile \
-	$(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh
-	cat $(CACHE_DIR)/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh \
+	$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile \
+	$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh
+	cat $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh \
 	| sed 's:usr/gen_init_cpio:gen_init_cpio:g' \
 	> $@
 	chmod +x $@
@@ -386,7 +386,7 @@ $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile: \
 			$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
 			$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
 		&& tar \
-			-C $(CACHE_DIR) \
+			-C $(CACHE_DIR)/src \
 			-mxf /home/build/$(FETCH_DIR)/linux-$(LINUX_VERSION).tar; \
 	")
 
@@ -395,7 +395,7 @@ $(CACHE_DIR)/bzImage: \
 	| $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile \
 	  $(CACHE_DIR)/rootfs.cpio
 	$(call toolchain," \
-		cd $(CACHE_DIR)/linux-$(LINUX_VERSION) && \
+		cd $(CACHE_DIR)/src/linux-$(LINUX_VERSION) && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
 		make olddefconfig && \
 		make -j$(CPUS) ARCH=$(ARCH) bzImage && \
@@ -414,16 +414,16 @@ $(BIN_DIR)/eif_build:
 
 $(CACHE_DIR)/nsm.ko: \
 	| $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile \
-	  $(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap
+	  $(CACHE_DIR)/src/aws-nitro-enclaves-sdk-bootstrap
 	$(call toolchain," \
-		cd $(CACHE_DIR)/linux-$(LINUX_VERSION) && \
+		cd $(CACHE_DIR)/src/linux-$(LINUX_VERSION) && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
 		make olddefconfig && \
 		make -j$(CPUS) ARCH=$(ARCH) bzImage && \
 		make -j$(CPUS) ARCH=$(ARCH) modules_prepare && \
-		cd /home/build/$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap/ && \
+		cd /home/build/$(CACHE_DIR)/src/aws-nitro-enclaves-sdk-bootstrap/ && \
 		make \
-			-C /home/build/$(CACHE_DIR)/linux-$(LINUX_VERSION) \
-		    M=/home/build/$(FETCH_DIR)/aws-nitro-enclaves-sdk-bootstrap/nsm-driver && \
+			-C /home/build/$(CACHE_DIR)/src/linux-$(LINUX_VERSION) \
+		    M=/home/build/$(CACHE_DIR)/src/aws-nitro-enclaves-sdk-bootstrap/nsm-driver && \
 		cp nsm-driver/nsm.ko /home/build/$@ \
 	")
