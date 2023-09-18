@@ -68,6 +68,7 @@ const CIPHERTEXT_PATH: &str = "ciphertext-path";
 const PLAINTEXT_PATH: &str = "plaintext-path";
 const OUTPUT_HEX: &str = "output-hex";
 const VALIDATION_TIME_OVERRIDE: &str = "validation-time-override";
+const JSON: &str = "json";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -550,6 +551,11 @@ impl Command {
 		.required(false)
 		.takes_value(true)
 	}
+	fn json_token() -> Token {
+		Token::new(JSON, "Include to format the output in json")
+			.required(false)
+			.takes_value(false)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -748,6 +754,7 @@ impl Command {
 		Parser::new()
 			.token(Self::file_path_token())
 			.token(Self::display_type_token())
+			.token(Self::json_token())
 	}
 
 	fn boot_key_fwd() -> Parser {
@@ -1163,6 +1170,10 @@ impl ClientOpts {
 	fn output_hex(&self) -> bool {
 		self.parsed.flag(OUTPUT_HEX).unwrap_or(false)
 	}
+
+	fn json(&self) -> bool {
+		self.parsed.flag(JSON).unwrap_or(false)
+	}
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -1562,9 +1573,11 @@ mod handlers {
 	}
 
 	pub(super) fn display(opts: &ClientOpts) {
-		if let Err(e) =
-			services::display(&opts.display_type(), opts.file_path())
-		{
+		if let Err(e) = services::display(
+			&opts.display_type(),
+			opts.file_path(),
+			opts.json(),
+		) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);
 		}

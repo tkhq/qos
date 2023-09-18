@@ -17,6 +17,8 @@ borsh = { version = "0.10" }
 aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 
+serde = {version = "1", default-features = false }
+
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
 qos_p256 = { path = "../qos_p256", features = ["mock"] }

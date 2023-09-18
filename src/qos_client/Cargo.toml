@@ -18,6 +18,7 @@ p256 = { version = "0.12.0", default-features = false }
 rand_core = { version = "0.6", default-features = false }
 zeroize = { version = "1.6", default-features = false }
 rpassword = { version = "7", default-features = false }
+serde_json = { version = "1" }
 
 x509 = { version = "0.2", default-features = false, optional = true }
 yubikey = { version = "*", features = ["untested"], default-features = false, optional = true }
