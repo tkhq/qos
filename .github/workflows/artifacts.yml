@@ -8,30 +8,152 @@ on:
   workflow_dispatch: # Allows manual invocation
 
 jobs:
+  # This job pre-warms the cache with toolchain
+  toolchain-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
+        with:
+          submodules: true
+
+      - name: Cache
+        id: cache
+        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        with:
+          lookup-only: true
+          key: toolchain-${{ hashFiles('config/apt-hashes-x86_64.list') }}
+          path: cache/toolchain.tar
+
+      - name: Setup Checkout
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y git-lfs
+          git lfs fetch --include "fetch/apt/*"
+          git lfs checkout
+
+      - name: Run `make toolchain`
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: 'script -q -e -c "bash {0}"'
+        run: |
+          make cache/toolchain.tar
+
+  # This job pre-warms the cache for rust
+  rust-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Cache
+        id: cache
+        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        with:
+          lookup-only: true
+          key: toolchain-rust-${{ hashFiles('Makefile,config/make.env') }}
+          path: fetch/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+
+      - name: Setup Checkout
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y git-lfs
+          git lfs fetch --include "fetch" --exclude "fetch/apt,dist"
+          git lfs fetch --include "fetch/apt/Packages.bz2"
+          git lfs checkout
+
+      # make (and hence toolchain) rely on file timestamps
+      - name: git-restore-mtime
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -qq -y git-restore-mtime
+          git restore-mtime
+          git submodule foreach 'git restore-mtime'
+
+      - name: Pull toolchain from cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        with:
+          fail-on-cache-miss: true
+          key: toolchain-${{ hashFiles('config/apt-hashes-x86_64.list') }}
+          path: cache/toolchain.tar
+
+      - name: Complete the setup of toolchain
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          make toolchain
+
+      - name: Run `make fetch/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot`
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: 'script -q -e -c "bash {0}"'
+        run: |
+          make fetch/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+
   build:
     name: Build Toolchain Artifacts
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    needs:
+      - toolchain-cache
+      - rust-cache
+    strategy:
+      matrix:
+        include:
+          - target: qos_host.oci.x86_64.tar
+          - target: qos_enclave.oci.x86_64.tar
+          - target: qos_client.oci.x86_64.tar
+    timeout-minutes: 50
     steps:
-      - name: Install git lfs
-        run: sudo apt-get install -y git-lfs
-        shell: bash
-
       - name: Checkout sources
         uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+        with:
+          fetch-depth: 0
+          submodules: true
 
-      - name: Download submodules
-        run: git submodule update --init --recursive
-        shell: bash
+      - name: Setup Checkout
+        run: |
+          sudo apt-get install -y git-lfs
+          git lfs fetch --include "fetch" --exclude "fetch/apt,dist"
+          git lfs fetch --include "fetch/apt/Packages.bz2"
+          git lfs checkout
 
-      - name: Pull lfs artifacts
-        run: git lfs pull
-        shell: bash
+      # make (and hence toolchain) rely on file timestamps
+      - name: git-restore-mtime
+        run: |
+          sudo apt-get install -qq -y git-restore-mtime
+          git restore-mtime
+          git submodule foreach 'git restore-mtime'
+
+      - name: Pull toolchain from cache
+        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        with:
+          fail-on-cache-miss: true
+          key: toolchain-${{ hashFiles('config/apt-hashes-x86_64.list') }}
+          path: cache/toolchain.tar
+
+      - name: Complete the setup of toolchain
+        run: |
+          make toolchain
+
+      - name: Pull rust from cache
+        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        with:
+          fail-on-cache-miss: true
+          key: toolchain-rust-${{ hashFiles('Makefile,config/make.env') }}
+          path: fetch/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+
+      - name: Run `make out/${{ matrix.target }}`
+        shell: 'script -q -e -c "bash {0}"'
+        run: |
+          make --assume-old=fetch/rust out/${{ matrix.target }}
 
       - uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
         with:
-          name: dist
-          path: dist/
+          name: ${{ matrix.target }}
+          path: out/${{ matrix.target }}
           retention-days: 1
 
   upload_to_ecr:
@@ -55,8 +177,6 @@ jobs:
 
       - name: Download Artifacts
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
-        with:
-          name: dist
 
       - name: Upload images to ECR
         env:
@@ -74,7 +194,7 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}
           for image in ${images}; do
             skopeo copy --all \
-              "oci-archive:${image}.oci.x86_64.tar" \
+              "oci-archive:./${image}.oci.x86_64.tar/${image}.oci.x86_64.tar" \
               "docker://${{ steps.login-ecr.outputs.registry }}/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
             for tag in ${tags}; do
               skopeo copy --all \
@@ -94,9 +214,6 @@ jobs:
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
-        with:
-          name: dist
-
       - name: Upload images to GHCR
         env:
           images: >-
@@ -113,7 +230,7 @@ jobs:
             ghcr.io
           for image in ${images}; do
             skopeo copy --all \
-              "oci-archive:${image}.oci.x86_64.tar" \
+              "oci-archive:./${image}.oci.x86_64.tar/${image}.oci.x86_64.tar" \
               "docker://ghcr.io/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
             for tag in ${tags}; do
               skopeo copy --all \
