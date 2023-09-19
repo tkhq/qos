@@ -148,7 +148,7 @@ jobs:
       - name: Run `make out/${{ matrix.target }}`
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          make --assume-old=cache/aws/x86_64/src/rust out/${{ matrix.target }}
+          make -d --assume-old=cache/aws/x86_64/src/rust out/${{ matrix.target }}
 
       - uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
         with:
