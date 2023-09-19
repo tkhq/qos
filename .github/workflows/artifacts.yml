@@ -56,7 +56,7 @@ jobs:
         with:
           lookup-only: true
           key: toolchain-rust-${{ hashFiles('Makefile,config/make.env') }}
-          path: fetch/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+          path: cache/aws/x86_64/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 
       - name: Setup Checkout
         if: steps.cache.outputs.cache-hit != 'true'
@@ -87,11 +87,11 @@ jobs:
         run: |
           make toolchain
 
-      - name: Run `make fetch/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot`
+      - name: Run `make cache/aws/x86_64/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot`
         if: steps.cache.outputs.cache-hit != 'true'
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          make fetch/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+          make cache/aws/x86_64/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 
   build:
     name: Build Toolchain Artifacts
@@ -143,7 +143,7 @@ jobs:
         with:
           fail-on-cache-miss: true
           key: toolchain-rust-${{ hashFiles('Makefile,config/make.env') }}
-          path: fetch/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+          path: cache/aws/x86_64/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 
       - name: Run `make out/${{ matrix.target }}`
         shell: 'script -q -e -c "bash {0}"'
