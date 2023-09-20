@@ -191,9 +191,9 @@ $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 	")
 
 $(OUT_DIR)/qos_enclave.oci.$(ARCH).tar: \
-	$(SRC_DIR)/images/enclave/Dockerfile
-	$(MAKE) $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH)
-	$(MAKE) $(OUT_DIR)/aws-x86_64.eif
+	$(SRC_DIR)/images/enclave/Dockerfile \
+	$(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH) \
+	$(OUT_DIR)/aws-x86_64.eif
 	mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
 	&& cp $(word 3,$^) $(CACHE_DIR)/$(notdir $(word 2,$^)) \
 	&& $(call oci-build)
