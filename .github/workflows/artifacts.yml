@@ -145,6 +145,11 @@ jobs:
           key: toolchain-rust-${{ hashFiles('Makefile,config/make.env') }}
           path: cache/aws/x86_64/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 
+      - name: Ensure rust cache is ignored by make
+        run: |
+          touch --date=@0 cache/aws/x86_64/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+          touch --date=@0 cache/aws/x86_64/src/rust
+
       - name: Run `make out/${{ matrix.target }}`
         shell: 'script -q -e -c "bash {0}"'
         run: |
