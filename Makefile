@@ -14,10 +14,7 @@ KEYS := \
 .DEFAULT_GOAL :=
 .PHONY: default
 default: \
-	restore-mtime \
-	dist-cache \
 	$(patsubst %,$(KEY_DIR)/%.asc,$(KEYS)) \
-	.WAIT \
 	$(OUT_DIR)/aws-x86_64.eif \
 	$(OUT_DIR)/qos_client.linux-x86_64 \
 	$(OUT_DIR)/qos_host.linux-x86_64 \
@@ -34,21 +31,16 @@ images: \
 	$(OUT_DIR)/qos_client.oci.x86_64.tar \
 	$(OUT_DIR)/qos_client.$(ARCH).tar
 
-.PHONY: restore-mtime
-restore-mtime:
-	$(call toolchain," \
-		git restore-mtime \
-		&& echo "Git mtime restored" \
-	")
-
-.PHONY: dist-cache
-dist-cache:
-	cp -Rp dist/* out/
-
 # Clean repo back to initial clone state
 .PHONY: clean
 clean: toolchain-clean
 	git clean -dfx $(SRC_DIR)
+
+.PHONY: dist
+dist: toolchain-dist
+
+.PHONY: reproduce
+reproduce: toolchain-reproduce
 
 .PHONY: run
 run: $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
