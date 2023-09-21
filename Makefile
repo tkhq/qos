@@ -17,6 +17,7 @@ default: \
 	restore-mtime \
 	dist-cache \
 	$(patsubst %,$(KEY_DIR)/%.asc,$(KEYS)) \
+	.WAIT \
 	$(OUT_DIR)/aws-x86_64.eif \
 	$(OUT_DIR)/qos_client.linux-x86_64 \
 	$(OUT_DIR)/qos_host.linux-x86_64 \
