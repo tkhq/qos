@@ -342,12 +342,8 @@ $(BIN_DIR)/gen_initramfs.sh: \
 	> $@
 	chmod +x $@
 
-$(CACHE_DIR)/rootfs.list: \
-	$(CONFIG_DIR)/$(TARGET)/rootfs.list
-	cp $(CONFIG_DIR)/$(TARGET)/rootfs.list $(CACHE_DIR)/rootfs.list
-
 $(CACHE_DIR)/rootfs.cpio: \
-	$(CACHE_DIR)/rootfs.list \
+	$(CONFIG_DIR)/$(TARGET)/rootfs.list \
 	$(CACHE_DIR)/init \
 	$(CACHE_DIR)/nsm.ko \
 	$(BIN_DIR)/gen_init_cpio \
@@ -359,7 +355,7 @@ $(CACHE_DIR)/rootfs.cpio: \
 		find $(CACHE_DIR)/rootfs \
 			-mindepth 1 \
 			-execdir touch -hcd "@0" "{}" + && \
-		gen_initramfs.sh -o $@ $(CACHE_DIR)/rootfs.list && \
+		gen_initramfs.sh -o $@ $(CONFIG_DIR)/$(TARGET)/rootfs.list && \
 		cpio -itv < $@ && \
 		sha256sum $@; \
 	")
