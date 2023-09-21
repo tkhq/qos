@@ -107,7 +107,6 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage: $(CACHE_DIR)/bzImage
 
 $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	$(shell git ls-files src config)
-	$(MAKE) $(CACHE_DIR)/linux.config
 	$(MAKE) $(CACHE_DIR)/rootfs.cpio
 	$(MAKE) $(CACHE_DIR)/bzImage
 	$(MAKE) $(BIN_DIR)/eif_build
@@ -313,9 +312,6 @@ $(CACHE_DIR)/lib64/libssl.a: \
 		&& touch /home/build/$@ \
 	")
 
-$(CACHE_DIR)/linux.config:
-	cp $(CONFIG_DIR)/$(TARGET)/linux.config $@
-
 $(CACHE_DIR)/init: \
 	| $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 	$(call toolchain," \
@@ -370,8 +366,8 @@ $(CACHE_DIR)/rootfs.cpio: \
 
 $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile: \
 	  $(KEY_DIR)/$(LINUX_KEY).asc \
-	  | $(CACHE_DIR)/linux.config \
-	    $(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
+	  $(CONFIG_DIR)/$(TARGET)/linux.config \
+	  | $(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
 	    $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign
 	$(call toolchain," \
 		gpg --import $(KEY_DIR)/$(LINUX_KEY).asc \
@@ -384,7 +380,7 @@ $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile: \
 	")
 
 $(CACHE_DIR)/bzImage: \
-	$(CACHE_DIR)/linux.config \
+	$(CONFIG_DIR)/$(TARGET)/linux.config \
 	| $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile \
 	  $(CACHE_DIR)/rootfs.cpio
 	$(call toolchain," \
@@ -406,6 +402,7 @@ $(BIN_DIR)/eif_build:
 	")
 
 $(CACHE_DIR)/nsm.ko: \
+	$(CONFIG_DIR)/$(TARGET)/linux.config \
 	| $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile \
 	  $(CACHE_DIR)/src/aws-nitro-enclaves-sdk-bootstrap
 	$(call toolchain," \
