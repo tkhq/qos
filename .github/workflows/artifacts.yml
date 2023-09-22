@@ -2,6 +2,8 @@ name: artifacts-build
 
 on:
   push:
+    tags:
+      - v*.*.*
     branches:
       - main
   pull_request:
@@ -187,6 +189,7 @@ jobs:
           tags: >-
             ${{ github.ref == format('refs/heads/{0}', 'main') && 'latest' || '' }}
             ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || '' }}
+            ${{ github.event_name == 'push' && github.ref_name || '' }}
         run: |
           skopeo login \
             --username "${{ steps.login-ecr.outputs.docker_username_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
@@ -223,6 +226,7 @@ jobs:
           tags: >-
             ${{ github.ref == format('refs/heads/{0}', 'main') && 'latest' || '' }}
             ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || '' }}
+            ${{ github.event_name == 'push' && github.ref_name || '' }}
         run: |
           skopeo login \
             --username "${{ github.actor }}" \
