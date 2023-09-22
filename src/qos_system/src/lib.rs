@@ -8,6 +8,7 @@ use std::{
 
 use libc::{c_int, c_ulong, c_void};
 
+#[derive(Debug)]
 pub struct SystemError {
 	pub message: String,
 }

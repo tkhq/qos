@@ -62,10 +62,7 @@ fn main() {
 	boot();
 	dmesg("QuorumOS Booted".to_string());
 
-	let cid = match get_local_cid() {
-		Ok(cid) => cid,
-		Err(e) => panic!(),
-	};
+	let cid = get_local_cid().unwrap();
 	dmesg(format!("CID is {}", cid));
 
 	let handles = Handles::new(
