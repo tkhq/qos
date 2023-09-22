@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 8
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install packages for pcsc dep
         run: sudo apt-get install -y libpcsclite-dev gengetopt
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@f361669954a8ecfc00a3443f35f9ac8e610ffc06
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install packages for pcsc dep
         run: sudo apt-get install -y libpcsclite-dev gengetopt
@@ -76,7 +76,7 @@ jobs:
       RUSTDOCFLAGS: -D warnings
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install packages for pcsc dep
         run: sudo apt-get install -y libpcsclite-dev gengetopt
@@ -97,7 +97,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install packages for pcsc dep
         run: sudo apt-get install -y libpcsclite-dev gengetopt
