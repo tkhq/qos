@@ -1536,16 +1536,25 @@ pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 pub(crate) fn display<P: AsRef<Path>>(
 	display_type: &DisplayType,
 	file_path: P,
+	json: bool,
 ) -> Result<(), Error> {
 	let bytes = fs::read(file_path).map_err(|_| Error::ReadShare)?;
 	match *display_type {
 		DisplayType::Manifest => {
 			let decoded = Manifest::try_from_slice(&bytes)?;
-			println!("{decoded:#?}");
+			if json {
+				println!("{}", serde_json::to_string(&decoded).unwrap());
+			} else {
+				println!("{decoded:#?}");
+			}
 		}
 		DisplayType::ManifestEnvelope => {
 			let decoded = ManifestEnvelope::try_from_slice(&bytes)?;
-			println!("{decoded:#?}");
+			if json {
+				println!("{}", serde_json::to_string(&decoded).unwrap());
+			} else {
+				println!("{decoded:#?}");
+			}
 		}
 		DisplayType::GenesisOutput => {
 			let decoded = GenesisOutput::try_from_slice(&bytes)?;

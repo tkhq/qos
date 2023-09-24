@@ -12,7 +12,13 @@ use crate::protocol::{
 
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
-	PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Eq,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct NitroConfig {
@@ -45,7 +51,14 @@ impl fmt::Debug for NitroConfig {
 
 /// Policy for restarting the pivot binary.
 #[derive(
-	PartialEq, Eq, Clone, Copy, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Eq,
+	Clone,
+	Copy,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 pub enum RestartPolicy {
 	/// Never restart the pivot application
@@ -85,7 +98,13 @@ impl TryFrom<String> for RestartPolicy {
 
 /// Pivot binary configuration
 #[derive(
-	PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Eq,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfig {
@@ -117,6 +136,8 @@ impl fmt::Debug for PivotConfig {
 	Eq,
 	PartialOrd,
 	Ord,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct QuorumMember {
@@ -139,7 +160,14 @@ impl fmt::Debug for QuorumMember {
 
 /// The Manifest Set.
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Eq,
+	Debug,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestSet {
@@ -152,7 +180,14 @@ pub struct ManifestSet {
 
 /// The set of share keys that can post shares.
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Eq,
+	Debug,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ShareSet {
@@ -172,6 +207,8 @@ pub struct ShareSet {
 	Clone,
 	borsh::BorshSerialize,
 	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 pub struct MemberPubKey {
 	/// Public key of the member
@@ -188,7 +225,14 @@ impl fmt::Debug for MemberPubKey {
 
 /// The set of share keys that can post shares.
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Eq,
+	Debug,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PatchSet {
@@ -201,7 +245,13 @@ pub struct PatchSet {
 
 /// A Namespace and its relative nonce.
 #[derive(
-	PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Eq,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Namespace {
@@ -229,7 +279,14 @@ impl fmt::Debug for Namespace {
 
 /// The Manifest for the enclave.
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Eq,
+	Debug,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Manifest {
@@ -249,7 +306,13 @@ pub struct Manifest {
 
 /// An approval by a Quorum Member.
 #[derive(
-	PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Eq,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Approval {
@@ -283,7 +346,14 @@ impl Approval {
 
 /// [`Manifest`] with accompanying [`Approval`]s.
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Eq,
+	Debug,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestEnvelope {

@@ -177,7 +177,7 @@ jobs:
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@e407df249e6c155d03c0e4375f34bc2385f52d65 # v1.6.1
+        uses: aws-actions/amazon-ecr-login@2fc7aceee09e9e4a7105c0d060c656fad0b4f63d # v1.7.0
 
       - name: Download Artifacts
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
