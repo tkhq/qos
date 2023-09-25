@@ -129,7 +129,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	")
 
 $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
-	$(shell git ls-files src config)
+	$(shell git ls-files src/qos_host src/qos_core config)
 	$(MAKE) $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 	$(call toolchain," \
 		export \
@@ -197,7 +197,15 @@ $(OUT_DIR)/qos_enclave.$(ARCH).tar: \
 	$(call tar-build)
 
 $(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
-	$(shell git ls-files src config)
+	$(shell git ls-files \
+		src/qos_client \
+		src/qos_p256 \
+		src/qos_nsm \
+		src/qos_hex \
+		src/qos_crypto \
+		src/qos_core \
+		config \
+	)
 	$(MAKE) $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 	$(MAKE) $(CACHE_DIR)/lib/libpcsclite.a
 	$(call toolchain," \
@@ -313,6 +321,14 @@ $(CACHE_DIR)/lib64/libssl.a: \
 	")
 
 $(CACHE_DIR)/init: \
+	$(shell git ls-files \
+		src/init \
+		src/qos_aws \
+		src/qos_system \
+		src/qos_core \
+		src/qos_nsm \
+		config \
+	) \
 	| $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
 	$(call toolchain," \
 		export \
