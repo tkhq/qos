@@ -14,13 +14,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout sources
-        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
         with:
           submodules: true
 
       - name: Cache
         id: cache
-        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
         with:
           lookup-only: true
           key: toolchain-${{ hashFiles('config/apt-hashes-x86_64.list') }}
@@ -45,14 +45,14 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout sources
-        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
         with:
           fetch-depth: 0
           submodules: true
 
       - name: Cache
         id: cache
-        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
         with:
           lookup-only: true
           key: toolchain-rust-${{ hashFiles('Makefile','config/make.env') }}
@@ -76,7 +76,7 @@ jobs:
 
       - name: Pull toolchain from cache
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
         with:
           fail-on-cache-miss: true
           key: toolchain-${{ hashFiles('config/apt-hashes-x86_64.list') }}
@@ -108,7 +108,7 @@ jobs:
     timeout-minutes: 50
     steps:
       - name: Checkout sources
-        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
         with:
           fetch-depth: 0
           submodules: true
@@ -128,7 +128,7 @@ jobs:
           git submodule foreach 'git restore-mtime'
 
       - name: Pull toolchain from cache
-        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
         with:
           fail-on-cache-miss: true
           key: toolchain-${{ hashFiles('config/apt-hashes-x86_64.list') }}
@@ -139,7 +139,7 @@ jobs:
           make toolchain
 
       - name: Pull rust from cache
-        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
         with:
           fail-on-cache-miss: true
           key: toolchain-rust-${{ hashFiles('Makefile','config/make.env') }}
@@ -154,7 +154,7 @@ jobs:
         run: |
           make -d --assume-old=cache/aws/x86_64/src/rust out/${{ matrix.target }}
 
-      - uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+      - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
         with:
           name: ${{ matrix.target }}
           path: out/${{ matrix.target }}
@@ -170,7 +170,7 @@ jobs:
       contents: read
     steps:
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@5fd3084fc36e372ff1fff382a39b10d03659f355 # v2.2.0
+        uses: aws-actions/configure-aws-credentials@8c3f20df09ac63af7b3ae3d7c91f105f857d8497 # v4.0.0
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::799078726966:role/github-qos

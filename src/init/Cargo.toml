@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-libc = "0.2.144"
+libc = "0.2.148"
 qos_aws = { path = "../qos_aws"}
 qos_system = { path = "../qos_system"}
 qos_core = { path = "../qos_core", features = ["vm"], default-features = false }
