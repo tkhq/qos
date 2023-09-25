@@ -106,7 +106,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage: $(CACHE_DIR)/bzImage
 	cp $(CACHE_DIR)/bzImage $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
 
 $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
-	$(shell git ls-files src config)
+	$(shell git ls-files src/init src/qos_core src/qos_aws src/qos_system config)
 	$(MAKE) $(CACHE_DIR)/rootfs.cpio
 	$(MAKE) $(CACHE_DIR)/bzImage
 	$(MAKE) $(BIN_DIR)/eif_build
