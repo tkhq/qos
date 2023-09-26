@@ -1,4 +1,4 @@
-use qos_system::{dmesg, freopen, mount, reboot};
+use qos_system::{dmesg, get_local_cid, freopen, mount, reboot};
 use qos_core::{
     handles::Handles,
     io::{SocketAddress, VMADDR_NO_FLAGS},
@@ -62,6 +62,9 @@ fn main() {
 	boot();
 	dmesg("QuorumOS Booted".to_string());
 
+	let cid = get_local_cid().unwrap();
+	dmesg(format!("CID is {}", cid));
+
 	let handles = Handles::new(
 	     EPHEMERAL_KEY_FILE.to_string(),
 	     QUORUM_FILE.to_string(),
@@ -71,7 +74,7 @@ fn main() {
 	Reaper::execute(
 	     &handles,
 	     Box::new(Nsm),
-	     SocketAddress::new_vsock(16, 3, VMADDR_NO_FLAGS),
+	     SocketAddress::new_vsock(cid, 3, VMADDR_NO_FLAGS),
 	     SocketAddress::new_unix(SEC_APP_SOCK),
 	     None,
 	);
