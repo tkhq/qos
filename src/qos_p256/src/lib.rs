@@ -124,7 +124,8 @@ pub fn bytes_os_rng<const N: usize>() -> [u8; N] {
 #[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct P256Pair {
 	p256_encrypt_private: P256EncryptPair,
-	sign_private: P256SignPair,
+	/// The key pair for signing 
+	pub sign_private: P256SignPair,
 	master_seed: [u8; MASTER_SEED_LEN],
 	aes_gcm_256_secret: AesGcm256Secret,
 }

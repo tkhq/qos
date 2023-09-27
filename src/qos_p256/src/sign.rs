@@ -13,7 +13,8 @@ use crate::P256Error;
 #[derive(ZeroizeOnDrop)]
 #[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct P256SignPair {
-	private: SigningKey,
+	/// The key used for signing 
+	pub private: SigningKey,
 }
 
 impl P256SignPair {
