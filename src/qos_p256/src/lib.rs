@@ -244,7 +244,7 @@ impl P256Pair {
 		Self::from_master_seed(&master_seed)
 	}
 
-	/// Get a refference to the underlying signing key. Useful for interoperation with other crypto abstractions.
+	/// Get a reference to the underlying signing key. Useful for interoperation with other crypto abstractions.
 	pub fn signing_key(&self) -> &p256::ecdsa::SigningKey {
 		&self.sign_private.private
 	}
