@@ -1,4 +1,4 @@
-ifeq ("$(wildcard ./src/toolchain)","")
+ifeq ("$(wildcard ./src/toolchain/Makefile)","")
 	gsu := $(shell git submodule update --init --recursive)
 endif
 
@@ -14,6 +14,7 @@ KEYS := \
 .DEFAULT_GOAL :=
 .PHONY: default
 default: \
+	cache \
 	$(patsubst %,$(KEY_DIR)/%.asc,$(KEYS)) \
 	$(OUT_DIR)/aws-x86_64.eif \
 	$(OUT_DIR)/qos_client.linux-x86_64 \
@@ -41,6 +42,15 @@ dist: toolchain-dist
 
 .PHONY: reproduce
 reproduce: toolchain-reproduce
+
+.PHONY: cache
+cache:
+ifneq ($(TOOLCHAIN_REPRODUCE),true)
+	git lfs pull --include=cache/toolchain.tgz
+	git lfs pull --include=dist
+	$(MAKE) toolchain-dist-cache toolchain-restore-mtime
+	touch cache/toolchain.tgz
+endif
 
 .PHONY: run
 run: $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
