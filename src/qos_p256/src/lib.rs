@@ -243,6 +243,11 @@ impl P256Pair {
 			.map_err(|_| P256Error::MasterSeedInvalidLength)?;
 		Self::from_master_seed(&master_seed)
 	}
+
+	/// Get a reference to the underlying signing key. Useful for interoperation with other crypto abstractions.
+	pub fn signing_key(&self) -> &p256::ecdsa::SigningKey {
+		&self.sign_private.private
+	}
 }
 
 /// P256 public key for signing and encryption. Internally this uses
