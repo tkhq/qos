@@ -245,6 +245,7 @@ impl P256Pair {
 	}
 
 	/// Get a reference to the underlying signing key. Useful for interoperation with other crypto abstractions.
+	#[must_use]
 	pub fn signing_key(&self) -> &p256::ecdsa::SigningKey {
 		&self.sign_private.private
 	}
@@ -339,6 +340,7 @@ impl P256Public {
 	}
 
 	/// Get a reference to the signing public key. Useful for interoperation with other crypto abstractions.
+	#[must_use]
 	pub fn signing_key(&self) -> &p256::ecdsa::VerifyingKey {
 		&self.sign_public.public
 	}
