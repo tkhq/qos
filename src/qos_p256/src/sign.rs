@@ -56,7 +56,7 @@ impl P256SignPair {
 /// Sign public key for verifying signatures.
 #[derive(Clone, PartialEq, Eq)]
 pub struct P256SignPublic {
-	public: VerifyingKey,
+	pub(crate) public: VerifyingKey,
 }
 
 impl P256SignPublic {
