@@ -333,6 +333,7 @@ $(CACHE_DIR)/lib64/libssl.a: \
 $(CACHE_DIR)/init: \
 	$(shell git ls-files \
 		src/init \
+		src/qos_p256 \
 		src/qos_aws \
 		src/qos_system \
 		src/qos_core \
