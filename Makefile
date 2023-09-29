@@ -46,18 +46,19 @@ reproduce: toolchain-reproduce
 .PHONY: cache
 cache:
 ifneq ($(TOOLCHAIN_REPRODUCE),true)
-	git lfs pull --include=cache/toolchain.tgz
-	git lfs pull --include=dist
+	git lfs pull --include=$(CACHE_DIR_ROOT)/toolchain.tgz
+	git lfs pull --include=$(CACHE_DIR)/bzImage
+	git lfs pull --include=$(DIST_DIR)
 	$(MAKE) toolchain-dist-cache toolchain-restore-mtime
 	touch cache/toolchain.tgz
 endif
 
 .PHONY: run
-run: $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
+run: $(CACHE_DIR)/bzImage
 	qemu-system-x86_64 \
 		-m 512M \
 		-nographic \
-		-kernel $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
+		-kernel $(CACHE_DIR)/bzImage
 
 # Run linux config menu and save output
 .PHONY: linux-config
@@ -111,9 +112,6 @@ endef
 
 $(KEY_DIR)/%.asc:
 	$(call fetch_pgp_key,$(basename $(notdir $@)))
-
-$(OUT_DIR)/$(TARGET)-$(ARCH).bzImage: $(CACHE_DIR)/bzImage
-	cp $(CACHE_DIR)/bzImage $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
 
 $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	$(shell git ls-files src/init src/qos_core src/qos_aws src/qos_system config)
