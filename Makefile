@@ -268,11 +268,9 @@ $(CACHE_DIR)/src/pcsc:
 $(CACHE_DIR)/src/openssl:
 	$(call git_clone,$@,$(OPENSSL_REPO),$(OPENSSL_REF))
 
-$(CACHE_DIR)/src/rust:
-	$(call git_clone,$@,$(RUST_REPO),$(RUST_REF))
 
-$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot: \
-	$(CACHE_DIR)/src/rust
+$(CACHE_DIR)/rust-libstd-musl.tgz:
+	$(call git_clone,$(CACHE_DIR)/src/rust,$(RUST_REPO),$(RUST_REF))
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/rust \
 		&& git submodule update --init \
@@ -285,6 +283,9 @@ $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot: \
 			--stage 0 \
 			--target x86_64-unknown-linux-musl \
 			library \
+		&& tar -cvf \
+			/home/build/$@ \
+			/home/build/$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib \
 	")
 
 $(CACHE_DIR)/lib/libpcsclite.a: \
