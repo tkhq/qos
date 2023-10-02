@@ -53,6 +53,7 @@ ifneq ($(TOOLCHAIN_REPRODUCE),true)
 	git lfs pull --include=$(CACHE_DIR)/lib/libpcsclite.a
 	git lfs pull --include=$(CACHE_DIR)/lib64/libssl.a
 	git lfs pull --include=$(CACHE_DIR_ROOT)/bin/gen_init_cpio
+	chmod +x $(BIN_DIR)/gen_init_cpio
 	git lfs pull --include=$(DIST_DIR)
 	$(MAKE) toolchain-dist-cache toolchain-restore-mtime
 	touch cache/toolchain.tgz
@@ -378,6 +379,7 @@ $(BIN_DIR)/gen_init_cpio: \
 	")
 
 $(BIN_DIR)/gen_initramfs.sh: \
+	$(BIN_DIR)/gen_init_cpio \
 	$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile \
 	$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh
 	cat $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh \
