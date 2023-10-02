@@ -139,7 +139,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 
 $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 	$(shell git ls-files src/qos_host src/qos_core config)
-	$(MAKE) $(CACHE_DIR)/lib/rust/lib
+	$(MAKE) $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
 	$(call toolchain," \
 		export \
 			RUSTFLAGS=' \
@@ -169,7 +169,7 @@ $(OUT_DIR)/qos_host.$(ARCH).tar: \
 
 $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 	$(shell git ls-files src/qos_enclave config)
-	$(MAKE) $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	$(MAKE) $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
 	$(MAKE) $(CACHE_DIR)/lib64/libssl.a
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_enclave \
@@ -215,7 +215,7 @@ $(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
 		src/qos_core \
 		config \
 	)
-	$(MAKE) $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	$(MAKE) $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
 	$(MAKE) $(CACHE_DIR)/lib/libpcsclite.a
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_client \
@@ -405,7 +405,8 @@ $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile: \
 	  | $(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
 	    $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign
 	$(call toolchain," \
-		gpg --import $(KEY_DIR)/$(LINUX_KEY).asc \
+		mkdir -p $(CACHE_DIR)/src \
+		&& gpg --import $(KEY_DIR)/$(LINUX_KEY).asc \
 		&& gpg --verify \
 			$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
 			$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
