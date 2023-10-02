@@ -281,7 +281,7 @@ $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a: \
 	find $(CACHE_DIR)/lib/rustlib -type f -exec touch {} +
 
 $(CACHE_DIR)/rust-libstd-musl.tgz:
-	#$(call git_clone,$(CACHE_DIR)/src/rust,$(RUST_REPO),$(RUST_REF))
+	$(call git_clone,$(CACHE_DIR)/src/rust,$(RUST_REPO),$(RUST_REF))
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/rust \
 		&& git submodule update --init \
@@ -305,8 +305,8 @@ $(CACHE_DIR)/rust-libstd-musl.tgz:
 			. \
 	")
 
-$(CACHE_DIR)/lib/libpcsclite.a: \
-	| $(CACHE_DIR)/src/pcsc
+$(CACHE_DIR)/lib/libpcsclite.a:
+	$(MAKE) $(CACHE_DIR)/src/pcsc
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/pcsc \
 		&& export \
@@ -327,8 +327,8 @@ $(CACHE_DIR)/lib/libpcsclite.a: \
 		&& cp src/.libs/libpcsclite.a /home/build/$@ \
 	")
 
-$(CACHE_DIR)/lib64/libssl.a: \
-	| $(CACHE_DIR)/src/openssl
+$(CACHE_DIR)/lib64/libssl.a:
+	$(MAKE) $(CACHE_DIR)/src/openssl
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/openssl \
 		&& export CC='musl-gcc -fPIE -pie -static' \
@@ -371,8 +371,8 @@ $(CACHE_DIR)/init: \
 		&& cp target/x86_64-unknown-linux-musl/release/init /home/build/$@ \
 	")
 
-$(BIN_DIR)/gen_init_cpio: \
-	| $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile
+$(BIN_DIR)/gen_init_cpio:
+	$(MAKE) $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/linux-$(LINUX_VERSION) && \
 		gcc usr/gen_init_cpio.c -o /home/build/$@ \
