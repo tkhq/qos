@@ -305,7 +305,7 @@ $(CACHE_DIR)/rust-libstd-musl.tgz:
 	")
 
 $(CACHE_DIR)/lib/libpcsclite.a: \
-	$(CACHE_DIR)/src/pcsc
+	| $(CACHE_DIR)/src/pcsc
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/pcsc \
 		&& export \
@@ -327,7 +327,7 @@ $(CACHE_DIR)/lib/libpcsclite.a: \
 	")
 
 $(CACHE_DIR)/lib64/libssl.a: \
-	$(CACHE_DIR)/src/openssl
+	| $(CACHE_DIR)/src/openssl
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/openssl \
 		&& export CC='musl-gcc -fPIE -pie -static' \
@@ -371,7 +371,7 @@ $(CACHE_DIR)/init: \
 	")
 
 $(BIN_DIR)/gen_init_cpio: \
-	$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile
+	| $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/linux-$(LINUX_VERSION) && \
 		gcc usr/gen_init_cpio.c -o /home/build/$@ \
