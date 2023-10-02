@@ -142,8 +142,8 @@ $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 	$(call toolchain," \
 		export \
 			RUSTFLAGS=' \
-				-L /home/build/$(CACHE_DIR)/rust/lib/ \
-				-L /home/build/$(CACHE_DIR)/rust/lib/self-contained/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
@@ -179,8 +179,8 @@ $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_LIB_DIR=/home/build/${CACHE_DIR}/lib64 \
 			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_INCLUDE_DIR=/home/build/${CACHE_DIR}/include \
 			RUSTFLAGS=' \
-				-L /home/build/$(CACHE_DIR)/rust/lib/ \
-				-L /home/build/$(CACHE_DIR)/rust/lib/self-contained/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
@@ -220,8 +220,8 @@ $(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
 		cd $(SRC_DIR)/qos_client \
 		&& export \
 			RUSTFLAGS=' \
-				-L /home/build/$(CACHE_DIR)/rust/lib/ \
-				-L /home/build/$(CACHE_DIR)/rust/lib/self-contained/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
@@ -268,11 +268,11 @@ $(CACHE_DIR)/src/pcsc:
 $(CACHE_DIR)/src/openssl:
 	$(call git_clone,$@,$(OPENSSL_REPO),$(OPENSSL_REF))
 
-$(CACHE_DIR)/lib/rust/self-contained/libc.a: \
+$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a: \
 	$(CACHE_DIR)/rust-libstd-musl.tgz
-	mkdir -p $(CACHE_DIR)/lib/rust
-	tar -xzf $(CACHE_DIR)/rust-libstd-musl.tgz -C $(CACHE_DIR)/lib/rust
-	find $(CACHE_DIR)/lib/rust -type f -exec touch {} +
+	mkdir -p $(CACHE_DIR)/lib/rustlib
+	tar -xzf $(CACHE_DIR)/rust-libstd-musl.tgz -C $(CACHE_DIR)/lib/rustlib
+	find $(CACHE_DIR)/lib/rustlib -type f -exec touch {} +
 
 $(CACHE_DIR)/rust-libstd-musl.tgz:
 	#$(call git_clone,$(CACHE_DIR)/src/rust,$(RUST_REPO),$(RUST_REF))
@@ -289,7 +289,7 @@ $(CACHE_DIR)/rust-libstd-musl.tgz:
 			--target x86_64-unknown-linux-musl \
 			library \
 		&& tar \
-			-C /home/build/$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib \
+			-C /home/build/$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/ \
 			--sort=name \
 			--mtime='@0' \
 			--owner=0 \
@@ -350,12 +350,13 @@ $(CACHE_DIR)/init: \
 		src/qos_nsm \
 		config \
 	) \
-	| $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	| $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
+
 	$(call toolchain," \
 		export \
 			RUSTFLAGS=' \
-				-L /home/build/$(CACHE_DIR)/rust/lib/ \
-				-L /home/build/$(CACHE_DIR)/rust/lib/self-contained/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
