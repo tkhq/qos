@@ -50,6 +50,7 @@ ifneq ($(TOOLCHAIN_REPRODUCE),true)
 	git lfs pull --include=$(CACHE_DIR)/bzImage
 	git lfs pull --include=$(CACHE_DIR)/rust-libstd-musl.tgz
 	git lfs pull --include=$(CACHE_DIR)/nsm.ko
+	git lfs pull --include=$(CACHE_DIR)/lib/libpcsclite.a
 	git lfs pull --include=$(DIST_DIR)
 	$(MAKE) toolchain-dist-cache toolchain-restore-mtime
 	touch cache/toolchain.tgz
