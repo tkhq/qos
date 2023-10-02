@@ -48,6 +48,7 @@ cache:
 ifneq ($(TOOLCHAIN_REPRODUCE),true)
 	git lfs pull --include=$(CACHE_DIR_ROOT)/toolchain.tgz
 	git lfs pull --include=$(CACHE_DIR)/bzImage
+	git lfs pull --include=$(CACHE_DIR)/rust-libstd-musl.tgz
 	git lfs pull --include=$(DIST_DIR)
 	$(MAKE) toolchain-dist-cache toolchain-restore-mtime
 	touch cache/toolchain.tgz
