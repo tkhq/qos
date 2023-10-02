@@ -52,6 +52,7 @@ ifneq ($(TOOLCHAIN_REPRODUCE),true)
 	git lfs pull --include=$(CACHE_DIR)/nsm.ko
 	git lfs pull --include=$(CACHE_DIR)/lib/libpcsclite.a
 	git lfs pull --include=$(CACHE_DIR)/lib64/libssl.a
+	git lfs pull --include=$(CACHE_DIR_ROOT)/bin/gen_init_cpio
 	git lfs pull --include=$(DIST_DIR)
 	$(MAKE) toolchain-dist-cache toolchain-restore-mtime
 	touch cache/toolchain.tgz
