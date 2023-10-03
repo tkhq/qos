@@ -62,8 +62,8 @@ cache:
 ifneq ($(TOOLCHAIN_REPRODUCE),true)
 	git lfs pull --include=$(subst $(space),$(,),$(CACHE_FILENAMES))
 	chmod +x $(BIN_DIR)/gen_init_cpio
-	$(MAKE) toolchain-restore-mtime
 	touch cache/toolchain.tgz
+	$(MAKE) toolchain-restore-mtime
 endif
 
 .PHONY: dist-cache
