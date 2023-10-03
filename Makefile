@@ -24,6 +24,7 @@ CACHE_FILENAMES := \
 .PHONY: default
 default: \
 	cache \
+	dist-cache \
 	$(patsubst %,$(KEY_DIR)/%.asc,$(KEYS)) \
 	$(OUT_DIR)/aws-x86_64.eif \
 	$(OUT_DIR)/qos_client.linux-x86_64 \
@@ -54,17 +55,21 @@ reproduce: toolchain-reproduce
 
 .PHONY: cache-filenames
 cache-filenames:
-	echo $(CACHE_FILENAMES)
+	@echo $(CACHE_FILENAMES)
 
 .PHONY: cache
 cache:
 ifneq ($(TOOLCHAIN_REPRODUCE),true)
 	git lfs pull --include=$(subst $(space),$(,),$(CACHE_FILENAMES))
 	chmod +x $(BIN_DIR)/gen_init_cpio
-	git lfs pull --include=$(DIST_DIR)
-	$(MAKE) toolchain-dist-cache toolchain-restore-mtime
+	$(MAKE) toolchain-restore-mtime
 	touch cache/toolchain.tgz
 endif
+
+.PHONY: dist-cache
+dist-cache:
+	git lfs pull --include=$(DIST_DIR)
+	$(MAKE) toolchain-dist-cache toolchain-restore-mtime
 
 .PHONY: run
 run: $(CACHE_DIR)/bzImage
