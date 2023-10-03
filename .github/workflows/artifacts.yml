@@ -77,6 +77,7 @@ jobs:
       - name: Run `make out/${{ matrix.target }}`
         shell: 'script -q -e -c "bash {0}"'
         run: |
+          touch cache/toolchain.tgz
           ls -Rlah cache
           make -d toolchain-restore-mtime out/${{ matrix.target }}
 
