@@ -11,6 +11,15 @@ KEYS := \
 	D96C422E04DE5D2EE0F7E9E7DBB0DCA38D405491 \
 	647F28654894E3BD457199BE38DBBDC86092693E
 
+CACHE_FILENAMES := \
+	$(CACHE_DIR_ROOT)/toolchain.tgz \
+	$(CACHE_DIR)/bzImage \
+	$(CACHE_DIR)/rust-libstd-musl.tgz \
+	$(CACHE_DIR)/nsm.ko \
+	$(CACHE_DIR)/lib/libpcsclite.a \
+	$(CACHE_DIR)/lib64/libssl.a \
+	$(CACHE_DIR_ROOT)/bin/gen_init_cpio
+
 .DEFAULT_GOAL :=
 .PHONY: default
 default: \
@@ -43,16 +52,14 @@ dist: toolchain-dist
 .PHONY: reproduce
 reproduce: toolchain-reproduce
 
+.PHONY: cache-filenames
+cache-filenames:
+	echo $(CACHE_FILENAMES)
+
 .PHONY: cache
 cache:
 ifneq ($(TOOLCHAIN_REPRODUCE),true)
-	git lfs pull --include=$(CACHE_DIR_ROOT)/toolchain.tgz
-	git lfs pull --include=$(CACHE_DIR)/bzImage
-	git lfs pull --include=$(CACHE_DIR)/rust-libstd-musl.tgz
-	git lfs pull --include=$(CACHE_DIR)/nsm.ko
-	git lfs pull --include=$(CACHE_DIR)/lib/libpcsclite.a
-	git lfs pull --include=$(CACHE_DIR)/lib64/libssl.a
-	git lfs pull --include=$(CACHE_DIR_ROOT)/bin/gen_init_cpio
+	git lfs pull --include=$(subst $(space),$(,),$(CACHE_FILENAMES))
 	chmod +x $(BIN_DIR)/gen_init_cpio
 	git lfs pull --include=$(DIST_DIR)
 	$(MAKE) toolchain-dist-cache toolchain-restore-mtime
