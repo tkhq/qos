@@ -17,7 +17,7 @@ CACHE_FILENAMES := \
 	$(CACHE_DIR)/rust-libstd-musl.tgz \
 	$(CACHE_DIR)/nsm.ko \
 	$(CACHE_DIR)/lib/libpcsclite.a \
-	$(CACHE_DIR)/lib64/libssl.a \
+	$(CACHE_DIR)/libssl-static.tgz \
 	$(CACHE_DIR_ROOT)/bin/gen_init_cpio
 
 .DEFAULT_GOAL :=
@@ -339,7 +339,7 @@ $(CACHE_DIR)/lib/libpcsclite.a:
 		&& cp src/.libs/libpcsclite.a /home/build/$@ \
 	")
 
-$(CACHE_DIR)/lib64/libssl.a:
+$(CACHE_DIR)/libssl-static.tgz:
 	$(MAKE) $(CACHE_DIR)/src/openssl
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/openssl \
@@ -350,13 +350,27 @@ $(CACHE_DIR)/lib64/libssl.a:
 		&& ./Configure \
 			no-shared \
 			no-async \
-			--prefix=/home/build/$(CACHE_DIR) \
+			--prefix=/ \
 			linux-x86_64 \
 		&& make depend \
 		&& make \
-		&& make install \
+		&& make install DESTDIR=$(@).tmp \
 		&& touch /home/build/$@ \
+		&& tar \
+			-C $(@).tmp \
+			--sort=name \
+			--mtime='@0' \
+			--owner=0 \
+			--group=0 \
+			--numeric-owner \
+			-czvf /home/build/$@ \
+			. \
 	")
+
+$(CACHE_DIR)/lib64/libssl.a: \
+	$(CACHE_DIR)/libssl-static.tgz
+	tar -xzf $(CACHE_DIR)/libssl-static.tgz -C $(CACHE_DIR)/
+	touch $(CACHE_DIR)/lib64/libssl.a
 
 $(CACHE_DIR)/init: \
 	$(shell git ls-files \
