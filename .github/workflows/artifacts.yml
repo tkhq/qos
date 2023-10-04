@@ -38,7 +38,6 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           make cache
-          ls -Rlah cache
 
   build:
     name: Build Toolchain Artifacts
@@ -78,7 +77,6 @@ jobs:
         shell: 'script -q -e -c "bash {0}"'
         run: |
           touch cache/toolchain.tgz
-          ls -Rlah cache
           make -d toolchain-restore-mtime out/${{ matrix.target }}
 
       - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
