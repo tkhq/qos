@@ -1,4 +1,4 @@
-ifeq ("$(wildcard ./src/toolchain)","")
+ifeq ("$(wildcard ./src/toolchain/Makefile)","")
 	gsu := $(shell git submodule update --init --recursive)
 endif
 
@@ -11,9 +11,21 @@ KEYS := \
 	D96C422E04DE5D2EE0F7E9E7DBB0DCA38D405491 \
 	647F28654894E3BD457199BE38DBBDC86092693E
 
+CACHE_FILENAMES := \
+	$(CACHE_DIR_ROOT)/toolchain.tgz \
+	$(CACHE_DIR)/bzImage \
+	$(CACHE_DIR)/rust-libstd-musl.tgz \
+	$(CACHE_DIR)/nsm.ko \
+	$(CACHE_DIR)/lib/libpcsclite.a \
+	$(CACHE_DIR)/libssl-static.tgz \
+	$(CACHE_DIR_ROOT)/bin/gen_init_cpio \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar
+
 .DEFAULT_GOAL :=
 .PHONY: default
 default: \
+	cache \
+	dist-cache \
 	$(patsubst %,$(KEY_DIR)/%.asc,$(KEYS)) \
 	$(OUT_DIR)/aws-x86_64.eif \
 	$(OUT_DIR)/qos_client.linux-x86_64 \
@@ -42,12 +54,30 @@ dist: toolchain-dist
 .PHONY: reproduce
 reproduce: toolchain-reproduce
 
+.PHONY: cache-filenames
+cache-filenames:
+	@echo $(CACHE_FILENAMES)
+
+.PHONY: cache
+cache:
+ifneq ($(TOOLCHAIN_REPRODUCE),true)
+	git lfs pull --include=$(subst $(space),$(,),$(CACHE_FILENAMES))
+	chmod +x $(BIN_DIR)/gen_init_cpio
+	touch cache/toolchain.tgz
+	$(MAKE) toolchain-restore-mtime
+endif
+
+.PHONY: dist-cache
+dist-cache:
+	git lfs pull --include=$(DIST_DIR)
+	$(MAKE) toolchain-dist-cache toolchain-restore-mtime
+
 .PHONY: run
-run: $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
+run: $(CACHE_DIR)/bzImage
 	qemu-system-x86_64 \
 		-m 512M \
 		-nographic \
-		-kernel $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
+		-kernel $(CACHE_DIR)/bzImage
 
 # Run linux config menu and save output
 .PHONY: linux-config
@@ -102,9 +132,6 @@ endef
 $(KEY_DIR)/%.asc:
 	$(call fetch_pgp_key,$(basename $(notdir $@)))
 
-$(OUT_DIR)/$(TARGET)-$(ARCH).bzImage: $(CACHE_DIR)/bzImage
-	cp $(CACHE_DIR)/bzImage $(OUT_DIR)/$(TARGET)-$(ARCH).bzImage
-
 $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	$(shell git ls-files src/init src/qos_core src/qos_aws src/qos_system config)
 	$(MAKE) $(CACHE_DIR)/rootfs.cpio
@@ -130,12 +157,12 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 
 $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 	$(shell git ls-files src/qos_host src/qos_core config)
-	$(MAKE) $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	$(MAKE) $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
 	$(call toolchain," \
 		export \
 			RUSTFLAGS=' \
-				-L /home/build/$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
-				-L /home/build/$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
@@ -160,7 +187,7 @@ $(OUT_DIR)/qos_host.$(ARCH).tar: \
 
 $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 	$(shell git ls-files src/qos_enclave config)
-	$(MAKE) $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	$(MAKE) $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
 	$(MAKE) $(CACHE_DIR)/lib64/libssl.a
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_enclave \
@@ -171,8 +198,8 @@ $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_LIB_DIR=/home/build/${CACHE_DIR}/lib64 \
 			X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_INCLUDE_DIR=/home/build/${CACHE_DIR}/include \
 			RUSTFLAGS=' \
-				-L /home/build/$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
-				-L /home/build/$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
@@ -206,14 +233,14 @@ $(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
 		src/qos_core \
 		config \
 	)
-	$(MAKE) $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	$(MAKE) $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
 	$(MAKE) $(CACHE_DIR)/lib/libpcsclite.a
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_client \
 		&& export \
 			RUSTFLAGS=' \
-				-L /home/build/$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
-				-L /home/build/$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
@@ -260,11 +287,14 @@ $(CACHE_DIR)/src/pcsc:
 $(CACHE_DIR)/src/openssl:
 	$(call git_clone,$@,$(OPENSSL_REPO),$(OPENSSL_REF))
 
-$(CACHE_DIR)/src/rust:
-	$(call git_clone,$@,$(RUST_REPO),$(RUST_REF))
+$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a: \
+	$(CACHE_DIR)/rust-libstd-musl.tgz
+	mkdir -p $(CACHE_DIR)/lib/rustlib
+	tar -xzf $(CACHE_DIR)/rust-libstd-musl.tgz -C $(CACHE_DIR)/lib/rustlib
+	find $(CACHE_DIR)/lib/rustlib -type f -exec touch {} +
 
-$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot: \
-	$(CACHE_DIR)/src/rust
+$(CACHE_DIR)/rust-libstd-musl.tgz:
+	$(call git_clone,$(CACHE_DIR)/src/rust,$(RUST_REPO),$(RUST_REF))
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/rust \
 		&& git submodule update --init \
@@ -277,10 +307,19 @@ $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot: \
 			--stage 0 \
 			--target x86_64-unknown-linux-musl \
 			library \
+		&& tar \
+			-C /home/build/$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/ \
+			--sort=name \
+			--mtime='@0' \
+			--owner=0 \
+			--group=0 \
+			--numeric-owner \
+			-czvf /home/build/$@ \
+			. \
 	")
 
-$(CACHE_DIR)/lib/libpcsclite.a: \
-	$(CACHE_DIR)/src/pcsc
+$(CACHE_DIR)/lib/libpcsclite.a:
+	$(MAKE) $(CACHE_DIR)/src/pcsc
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/pcsc \
 		&& export \
@@ -301,8 +340,8 @@ $(CACHE_DIR)/lib/libpcsclite.a: \
 		&& cp src/.libs/libpcsclite.a /home/build/$@ \
 	")
 
-$(CACHE_DIR)/lib64/libssl.a: \
-	$(CACHE_DIR)/src/openssl
+$(CACHE_DIR)/libssl-static.tgz:
+	$(MAKE) $(CACHE_DIR)/src/openssl
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/openssl \
 		&& export CC='musl-gcc -fPIE -pie -static' \
@@ -312,29 +351,45 @@ $(CACHE_DIR)/lib64/libssl.a: \
 		&& ./Configure \
 			no-shared \
 			no-async \
-			--prefix=/home/build/$(CACHE_DIR) \
+			--prefix=/ \
 			linux-x86_64 \
 		&& make depend \
 		&& make \
-		&& make install \
+		&& make install DESTDIR=$(@).tmp \
 		&& touch /home/build/$@ \
+		&& tar \
+			-C $(@).tmp \
+			--sort=name \
+			--mtime='@0' \
+			--owner=0 \
+			--group=0 \
+			--numeric-owner \
+			-czvf /home/build/$@ \
+			. \
 	")
+
+$(CACHE_DIR)/lib64/libssl.a: \
+	$(CACHE_DIR)/libssl-static.tgz
+	tar -xzf $(CACHE_DIR)/libssl-static.tgz -C $(CACHE_DIR)/
+	touch $(CACHE_DIR)/lib64/libssl.a
 
 $(CACHE_DIR)/init: \
 	$(shell git ls-files \
 		src/init \
+		src/qos_p256 \
 		src/qos_aws \
 		src/qos_system \
 		src/qos_core \
 		src/qos_nsm \
 		config \
 	) \
-	| $(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+	| $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
+
 	$(call toolchain," \
 		export \
 			RUSTFLAGS=' \
-				-L /home/build/$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
-				-L /home/build/$(CACHE_DIR)/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/ \
+				-L /home/build/$(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/ \
 				-L /usr/lib/x86_64-linux-musl \
 				-C target-feature=+crt-static \
 			' \
@@ -343,14 +398,15 @@ $(CACHE_DIR)/init: \
 		&& cp target/x86_64-unknown-linux-musl/release/init /home/build/$@ \
 	")
 
-$(BIN_DIR)/gen_init_cpio: \
-	$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile
+$(BIN_DIR)/gen_init_cpio:
+	$(MAKE) $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/linux-$(LINUX_VERSION) && \
 		gcc usr/gen_init_cpio.c -o /home/build/$@ \
 	")
 
 $(BIN_DIR)/gen_initramfs.sh: \
+	$(BIN_DIR)/gen_init_cpio \
 	$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile \
 	$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh
 	cat $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh \
@@ -382,7 +438,8 @@ $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile: \
 	  | $(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
 	    $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign
 	$(call toolchain," \
-		gpg --import $(KEY_DIR)/$(LINUX_KEY).asc \
+		mkdir -p $(CACHE_DIR)/src \
+		&& gpg --import $(KEY_DIR)/$(LINUX_KEY).asc \
 		&& gpg --verify \
 			$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
 			$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
