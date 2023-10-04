@@ -5,6 +5,13 @@ endif
 TARGET := aws
 include $(PWD)/src/toolchain/Makefile
 
+mkc := $(shell mkdir -p $(CACHE_DIR))
+rmp := $(shell rm $(CACHE_DIR)/profile.txt||:)
+.PHONY: FORCE
+FORCE:
+% : FORCE
+	@echo "$(shell date --rfc-3339=ns) $@" >> $(CACHE_DIR)/profile.txt
+
 KEYS := \
 	449E6BFA40E1119328688F981929C2481BEAC51B \
 	6B61ECD76088748C70590D55E90A401336C8AAA9 \
