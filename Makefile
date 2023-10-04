@@ -19,7 +19,7 @@ CACHE_FILENAMES := \
 	$(CACHE_DIR)/lib/libpcsclite.a \
 	$(CACHE_DIR)/libssl-static.tgz \
 	$(CACHE_DIR_ROOT)/bin/gen_init_cpio \
-	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar
+	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.xz
 
 .DEFAULT_GOAL :=
 .PHONY: default
@@ -277,9 +277,8 @@ $(CACHE_DIR)/src/aws-nitro-enclaves-sdk-bootstrap:
 $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign:
 	curl --url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.sign --output $@
 
-$(FETCH_DIR)/linux-$(LINUX_VERSION).tar:
-	curl --url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.xz --output $@.xz
-	xz -d $@.xz
+$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.xz:
+	curl --url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.xz --output $@
 
 $(CACHE_DIR)/src/pcsc:
 	$(call git_clone,$@,$(PCSC_REPO),$(PCSC_REF))
@@ -435,17 +434,19 @@ $(CACHE_DIR)/rootfs.cpio: \
 $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile: \
 	  $(KEY_DIR)/$(LINUX_KEY).asc \
 	  $(CONFIG_DIR)/$(TARGET)/linux.config \
-	  | $(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
+	  | $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.xz \
 	    $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign
 	$(call toolchain," \
 		mkdir -p $(CACHE_DIR)/src \
+		&& xz -d --stdout $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.xz > $(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
 		&& gpg --import $(KEY_DIR)/$(LINUX_KEY).asc \
 		&& gpg --verify \
 			$(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign \
-			$(FETCH_DIR)/linux-$(LINUX_VERSION).tar \
+			$(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
 		&& tar \
 			-C $(CACHE_DIR)/src \
-			-mxf /home/build/$(FETCH_DIR)/linux-$(LINUX_VERSION).tar; \
+			-mxf /home/build/$(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
+		&& rm $(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
 	")
 
 $(CACHE_DIR)/bzImage: \
