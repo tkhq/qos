@@ -18,7 +18,8 @@ CACHE_FILENAMES := \
 	$(CACHE_DIR)/nsm.ko \
 	$(CACHE_DIR)/lib/libpcsclite.a \
 	$(CACHE_DIR)/libssl-static.tgz \
-	$(CACHE_DIR_ROOT)/bin/gen_init_cpio
+	$(CACHE_DIR_ROOT)/bin/gen_init_cpio \
+	$(FETCH_DIR)/linux-$(LINUX_VERSION).tar
 
 .DEFAULT_GOAL :=
 .PHONY: default
