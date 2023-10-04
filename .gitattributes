@@ -12,3 +12,4 @@ cache/aws/x86_64/lib/libpcsclite.a filter=lfs diff=lfs merge=lfs -text
 cache/aws/x86_64/lib64/libssl.a filter=lfs diff=lfs merge=lfs -text
 cache/bin/gen_init_cpio filter=lfs diff=lfs merge=lfs -text
 cache/aws/x86_64/libssl-static.tgz filter=lfs diff=lfs merge=lfs -text
+fetch/linux-5.19.6.tar.xz filter=lfs diff=lfs merge=lfs -text
