@@ -5,12 +5,49 @@ endif
 TARGET := aws
 include $(PWD)/src/toolchain/Makefile
 
-mkc := $(shell mkdir -p $(CACHE_DIR))
-rmp := $(shell rm $(CACHE_DIR)/profile.txt||:)
-.PHONY: FORCE
-FORCE:
-% : FORCE
-	@echo "$(shell date --rfc-3339=ns) $@" >> $(CACHE_DIR)/profile.txt
+ifneq ($(TOOLCHAIN_PROFILE),false)
+mkc := $(shell mkdir -p $(CACHE_DIR_ROOT))
+ifndef TOOLCHAIN_PROFILE_RUNNING
+rmp := $(shell rm -f $(CACHE_DIR_ROOT)/toolchain-profile.csv)
+TOOLCHAIN_PROFILE_START := 0
+TOOLCHAIN_PROFILE_TIME := 0
+TOOLCHAIN_PROFILE_RUNNING := true
+export TOOLCHAIN_PROFILE_RUNNING TOOLCHAIN_PROFILE_START TOOLCHAIN_PROFILE_TIME
+endif
+endif
+
+define toolchain_profile_start
+	$(eval TOOLCHAIN_PROFILE_START=$(shell date +%s))
+	echo START=$(TOOLCHAIN_PROFILE_START)
+	@printf "%s," "$@" >> $(CACHE_DIR_ROOT)/toolchain-profile.csv
+endef
+
+define toolchain_profile_end
+	echo START=$(TOOLCHAIN_PROFILE_START)
+	echo STOP=$(shell date +%s)
+	$(eval TOOLCHAIN_PROFILE_TIME=$(shell printf $$(($(shell date +%s)-$(TOOLCHAIN_PROFILE_START)))))
+	$(eval TOOLCHAIN_PROFILE_TIME=$(shell printf $$(($(shell date +%s)-$(TOOLCHAIN_PROFILE_START)))))
+	@echo TIME=$(TOOLCHAIN_PROFILE_TIME)
+	@printf "%s\n" "$(shell date -d@$(TOOLCHAIN_PROFILE_TIME) -u +%H:%M:%S)" >> $(CACHE_DIR_ROOT)/toolchain-profile.csv
+endef
+
+.PHONY: toolchain-profile
+toolchain-profile:
+	@echo Target build times:
+	@column -s, -t < $(CACHE_DIR_ROOT)/toolchain-profile.csv
+
+.PHONY: dummy
+dummy:
+	$(call toolchain_profile_start)
+	sleep 2
+	$(call toolchain_profile_end)
+
+.PHONY: dummy2
+dummy2:
+	$(call toolchain_profile_start)
+	sleep 3
+	$(call toolchain_profile_end)
+
 
 KEYS := \
 	449E6BFA40E1119328688F981929C2481BEAC51B \
@@ -93,6 +130,7 @@ linux-config:
 	make TARGET=$(TARGET) $(CONFIG_DIR)/$(TARGET)/linux.config
 
 define oci-build
+	$(call toolchain_profile_start)
 	$(call toolchain," \
 		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
 		&& cp $(word 1,$^) $(word 2,$^) \
@@ -118,9 +156,11 @@ define oci-build
 				-cf /home/build/$@ \
 				. \
 	")
+	$(call toolchain_profile_end)
 endef
 
 define tar-build
+	$(call toolchain_profile_start)
 	$(call toolchain," \
 		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^))-tar \
 		&& cp $(word 2,$^) $(CACHE_DIR)/$(notdir $(word 2,$^))-tar \
@@ -134,6 +174,7 @@ define tar-build
 				-cf /home/build/$@ \
 				. \
 	")
+	$(call toolchain_profile_end)
 endef
 
 $(KEY_DIR)/%.asc:
@@ -144,6 +185,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	$(MAKE) $(CACHE_DIR)/rootfs.cpio
 	$(MAKE) $(CACHE_DIR)/bzImage
 	$(MAKE) $(BIN_DIR)/eif_build
+	$(call toolchain_profile_start)
 	mkdir -p $(CACHE_DIR)/eif
 	$(call toolchain," \
 		export \
@@ -161,6 +203,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 			--pcrs_output $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs \
 			--output $(OUT_DIR)/$(TARGET)-$(ARCH).eif; \
 	")
+	$(call toolchain_profile_end)
 
 $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 	$(shell git ls-files src/qos_host src/qos_core config)
