@@ -14,7 +14,7 @@ libc = "=0.2.148"
 borsh = { version = "0.10" }
 
 # For AWS Nitro
-aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
+aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 
 serde = {version = "1", default-features = false }
