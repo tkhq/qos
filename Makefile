@@ -5,50 +5,6 @@ endif
 TARGET := aws
 include $(PWD)/src/toolchain/Makefile
 
-ifneq ($(TOOLCHAIN_PROFILE),false)
-mkc := $(shell mkdir -p $(CACHE_DIR_ROOT))
-ifndef TOOLCHAIN_PROFILE_RUNNING
-rmp := $(shell rm -f $(CACHE_DIR_ROOT)/toolchain-profile.csv)
-TOOLCHAIN_PROFILE_START := 0
-TOOLCHAIN_PROFILE_TIME := 0
-TOOLCHAIN_PROFILE_RUNNING := true
-export TOOLCHAIN_PROFILE_RUNNING TOOLCHAIN_PROFILE_START TOOLCHAIN_PROFILE_TIME
-endif
-endif
-
-define toolchain_profile_start
-	$(eval TOOLCHAIN_PROFILE_START=$(shell date +%s))
-	echo START=$(TOOLCHAIN_PROFILE_START)
-	@printf "%s," "$@" >> $(CACHE_DIR_ROOT)/toolchain-profile.csv
-endef
-
-define toolchain_profile_end
-	echo START=$(TOOLCHAIN_PROFILE_START)
-	echo STOP=$(shell date +%s)
-	$(eval TOOLCHAIN_PROFILE_TIME=$(shell printf $$(($(shell date +%s)-$(TOOLCHAIN_PROFILE_START)))))
-	$(eval TOOLCHAIN_PROFILE_TIME=$(shell printf $$(($(shell date +%s)-$(TOOLCHAIN_PROFILE_START)))))
-	@echo TIME=$(TOOLCHAIN_PROFILE_TIME)
-	@printf "%s\n" "$(shell date -d@$(TOOLCHAIN_PROFILE_TIME) -u +%H:%M:%S)" >> $(CACHE_DIR_ROOT)/toolchain-profile.csv
-endef
-
-.PHONY: toolchain-profile
-toolchain-profile:
-	@echo Target build times:
-	@column -s, -t < $(CACHE_DIR_ROOT)/toolchain-profile.csv
-
-.PHONY: dummy
-dummy:
-	$(call toolchain_profile_start)
-	sleep 2
-	$(call toolchain_profile_end)
-
-.PHONY: dummy2
-dummy2:
-	$(call toolchain_profile_start)
-	sleep 3
-	$(call toolchain_profile_end)
-
-
 KEYS := \
 	449E6BFA40E1119328688F981929C2481BEAC51B \
 	6B61ECD76088748C70590D55E90A401336C8AAA9 \
