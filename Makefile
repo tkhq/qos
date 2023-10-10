@@ -32,7 +32,8 @@ default: \
 	$(OUT_DIR)/qos_host.linux-x86_64 \
 	$(OUT_DIR)/qos_enclave.linux-x86_64 \
 	images \
-	$(OUT_DIR)/release.env
+	$(OUT_DIR)/release.env \
+	toolchain-profile
 
 .PHONY: images
 images: \
@@ -86,7 +87,7 @@ linux-config:
 	make TARGET=$(TARGET) $(CONFIG_DIR)/$(TARGET)/linux.config
 
 define oci-build
-	$(call toolchain_profile_start)
+	$(call toolchain-profile-start);
 	$(call toolchain," \
 		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
 		&& cp $(word 1,$^) $(word 2,$^) \
@@ -111,12 +112,12 @@ define oci-build
 				--numeric-owner \
 				-cf /home/build/$@ \
 				. \
-	")
-	$(call toolchain_profile_end)
+	");
+	$(call toolchain-profile-stop)
 endef
 
 define tar-build
-	$(call toolchain_profile_start)
+	$(call toolchain-profile-start);
 	$(call toolchain," \
 		mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^))-tar \
 		&& cp $(word 2,$^) $(CACHE_DIR)/$(notdir $(word 2,$^))-tar \
@@ -129,8 +130,8 @@ define tar-build
 				--numeric-owner \
 				-cf /home/build/$@ \
 				. \
-	")
-	$(call toolchain_profile_end)
+	");
+	$(call toolchain-profile-stop)
 endef
 
 $(KEY_DIR)/%.asc:
@@ -141,7 +142,7 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 	$(MAKE) $(CACHE_DIR)/rootfs.cpio
 	$(MAKE) $(CACHE_DIR)/bzImage
 	$(MAKE) $(BIN_DIR)/eif_build
-	$(call toolchain_profile_start)
+	$(call toolchain-profile-start)
 	mkdir -p $(CACHE_DIR)/eif
 	$(call toolchain," \
 		export \
@@ -159,11 +160,12 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 			--pcrs_output $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs \
 			--output $(OUT_DIR)/$(TARGET)-$(ARCH).eif; \
 	")
-	$(call toolchain_profile_end)
+	$(call toolchain-profile-stop)
 
 $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 	$(shell git ls-files src/qos_host src/qos_core config)
 	$(MAKE) $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
+	$(call toolchain-profile-start)
 	$(call toolchain," \
 		export \
 			RUSTFLAGS=' \
@@ -180,6 +182,7 @@ $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 			../target/x86_64-unknown-linux-musl/release/qos_host \
 			/home/build/$@; \
 	")
+	$(call toolchain-profile-stop)
 
 $(OUT_DIR)/qos_host.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/host/Dockerfile \
@@ -195,6 +198,7 @@ $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 	$(shell git ls-files src/qos_enclave config)
 	$(MAKE) $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
 	$(MAKE) $(CACHE_DIR)/lib64/libssl.a
+	$(call toolchain-profile-start)
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_enclave \
 		&& export \
@@ -214,14 +218,15 @@ $(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH): \
 			target/x86_64-unknown-linux-musl/release/qos_enclave \
 			/home/build/$@; \
 	")
+	$(call toolchain-profile-stop)
 
 $(OUT_DIR)/qos_enclave.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/enclave/Dockerfile \
 	$(OUT_DIR)/qos_enclave.$(PLATFORM)-$(ARCH) \
 	$(OUT_DIR)/aws-x86_64.eif
-	mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^)) \
-	&& cp $(word 3,$^) $(CACHE_DIR)/$(notdir $(word 2,$^)) \
-	&& $(call oci-build)
+	mkdir -p $(CACHE_DIR)/$(notdir $(word 2,$^))
+	cp $(word 3,$^) $(CACHE_DIR)/$(notdir $(word 2,$^))
+	$(call oci-build)
 
 $(OUT_DIR)/qos_enclave.$(ARCH).tar: \
 	$(SRC_DIR)/images/enclave/Dockerfile \
@@ -241,6 +246,7 @@ $(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
 	)
 	$(MAKE) $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
 	$(MAKE) $(CACHE_DIR)/lib/libpcsclite.a
+	$(call toolchain-profile-start)
 	$(call toolchain," \
 		cd $(SRC_DIR)/qos_client \
 		&& export \
@@ -258,6 +264,7 @@ $(OUT_DIR)/qos_client.$(PLATFORM)-$(ARCH): \
 			../target/x86_64-unknown-linux-musl/release/qos_client \
 			/home/build/$@; \
 	")
+	$(call toolchain-profile-stop)
 
 $(OUT_DIR)/qos_client.oci.$(ARCH).tar: \
 	$(SRC_DIR)/images/client/Dockerfile \
@@ -270,35 +277,50 @@ $(OUT_DIR)/qos_client.$(ARCH).tar: \
 	$(call tar-build)
 
 $(CONFIG_DIR)/$(TARGET)/linux.config:
+	$(call toolchain-profile-start)
 	$(call toolchain," \
 		unset FAKETIME \
 		&& cd /cache/linux-$(LINUX_VERSION) \
 		&& make menuconfig \
 		&& cp .config /config/$(TARGET)/linux.config; \
 	")
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/src/aws-nitro-enclaves-sdk-bootstrap:
+	$(call toolchain-profile-start)
 	$(call git_clone,$@,$(AWS_NITRO_DRIVER_REPO),$(AWS_NITRO_DRIVER_REF))
+	$(call toolchain-profile-stop)
 
 $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign:
+	$(call toolchain-profile-start)
 	curl --url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.sign --output $@
+	$(call toolchain-profile-stop)
 
 $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.xz:
+	$(call toolchain-profile-start)
 	curl --url $(LINUX_SERVER)/linux-$(LINUX_VERSION).tar.xz --output $@
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/src/pcsc:
+	$(call toolchain-profile-start)
 	$(call git_clone,$@,$(PCSC_REPO),$(PCSC_REF))
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/src/openssl:
+	$(call toolchain-profile-start)
 	$(call git_clone,$@,$(OPENSSL_REPO),$(OPENSSL_REF))
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a: \
 	$(CACHE_DIR)/rust-libstd-musl.tgz
+	$(call toolchain-profile-start)
 	mkdir -p $(CACHE_DIR)/lib/rustlib
 	tar -xzf $(CACHE_DIR)/rust-libstd-musl.tgz -C $(CACHE_DIR)/lib/rustlib
 	find $(CACHE_DIR)/lib/rustlib -type f -exec touch {} +
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/rust-libstd-musl.tgz:
+	$(call toolchain-profile-start)
 	$(call git_clone,$(CACHE_DIR)/src/rust,$(RUST_REPO),$(RUST_REF))
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/rust \
@@ -322,9 +344,11 @@ $(CACHE_DIR)/rust-libstd-musl.tgz:
 			-czvf /home/build/$@ \
 			. \
 	")
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/lib/libpcsclite.a:
 	$(MAKE) $(CACHE_DIR)/src/pcsc
+	$(call toolchain-profile-start)
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/pcsc \
 		&& export \
@@ -344,9 +368,11 @@ $(CACHE_DIR)/lib/libpcsclite.a:
 		&& mkdir -p /home/build/$(CACHE_DIR)/lib \
 		&& cp src/.libs/libpcsclite.a /home/build/$@ \
 	")
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/libssl-static.tgz:
 	$(MAKE) $(CACHE_DIR)/src/openssl
+	$(call toolchain-profile-start)
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/openssl \
 		&& export CC='musl-gcc -fPIE -pie -static' \
@@ -372,11 +398,14 @@ $(CACHE_DIR)/libssl-static.tgz:
 			-czvf /home/build/$@ \
 			. \
 	")
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/lib64/libssl.a: \
 	$(CACHE_DIR)/libssl-static.tgz
+	$(call toolchain-profile-start)
 	tar -xzf $(CACHE_DIR)/libssl-static.tgz -C $(CACHE_DIR)/
 	touch $(CACHE_DIR)/lib64/libssl.a
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/init: \
 	$(shell git ls-files \
@@ -390,6 +419,7 @@ $(CACHE_DIR)/init: \
 	) \
 	| $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
 
+	$(call toolchain-profile-start)
 	$(call toolchain," \
 		export \
 			RUSTFLAGS=' \
@@ -402,22 +432,27 @@ $(CACHE_DIR)/init: \
 		&& cargo build $(CARGO_FLAGS) \
 		&& cp target/x86_64-unknown-linux-musl/release/init /home/build/$@ \
 	")
+	$(call toolchain-profile-stop)
 
 $(BIN_DIR)/gen_init_cpio:
 	$(MAKE) $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile
+	$(call toolchain-profile-start)
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/linux-$(LINUX_VERSION) && \
 		gcc usr/gen_init_cpio.c -o /home/build/$@ \
 	")
+	$(call toolchain-profile-stop)
 
 $(BIN_DIR)/gen_initramfs.sh: \
 	$(BIN_DIR)/gen_init_cpio \
 	$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile \
 	$(CACHE_DIR)/src/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh
+	$(call toolchain-profile-start)
 	cat $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/usr/gen_initramfs.sh \
 	| sed 's:usr/gen_init_cpio:gen_init_cpio:g' \
 	> $@
 	chmod +x $@
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/rootfs.cpio: \
 	$(CONFIG_DIR)/$(TARGET)/rootfs.list \
@@ -425,6 +460,7 @@ $(CACHE_DIR)/rootfs.cpio: \
 	$(CACHE_DIR)/nsm.ko \
 	$(BIN_DIR)/gen_init_cpio \
 	$(BIN_DIR)/gen_initramfs.sh
+	$(call toolchain-profile-start)
 	mkdir -p $(CACHE_DIR)/rootfs
 	cp $(CACHE_DIR)/nsm.ko $(CACHE_DIR)/rootfs/
 	cp $(CACHE_DIR)/init $(CACHE_DIR)/rootfs/
@@ -436,12 +472,14 @@ $(CACHE_DIR)/rootfs.cpio: \
 		cpio -itv < $@ && \
 		sha256sum $@; \
 	")
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile: \
 	  $(KEY_DIR)/$(LINUX_KEY).asc \
 	  $(CONFIG_DIR)/$(TARGET)/linux.config \
 	  | $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.xz \
 	    $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.sign
+	$(call toolchain-profile-start)
 	$(call toolchain," \
 		mkdir -p $(CACHE_DIR)/src \
 		&& xz -d --stdout $(FETCH_DIR)/linux-$(LINUX_VERSION).tar.xz > $(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
@@ -454,11 +492,13 @@ $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile: \
 			-mxf /home/build/$(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
 		&& rm $(CACHE_DIR)/linux-$(LINUX_VERSION).tar \
 	")
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/bzImage: \
 	$(CONFIG_DIR)/$(TARGET)/linux.config \
 	| $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile \
 	  $(CACHE_DIR)/rootfs.cpio
+	$(call toolchain-profile-start)
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/linux-$(LINUX_VERSION) && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
@@ -467,8 +507,10 @@ $(CACHE_DIR)/bzImage: \
 		cp arch/$(ARCH)/boot/bzImage /home/build/$@ && \
 		sha256sum /home/build/$@; \
 	")
+	$(call toolchain-profile-stop)
 
 $(BIN_DIR)/eif_build:
+	$(call toolchain-profile-start)
 	$(call toolchain," \
 		cd $(SRC_DIR)/eif_build && \
 		cargo build \
@@ -476,11 +518,13 @@ $(BIN_DIR)/eif_build:
 			--target x86_64-unknown-linux-gnu && \
 		cp target/x86_64-unknown-linux-gnu/debug/eif_build /home/build/$@; \
 	")
+	$(call toolchain-profile-stop)
 
 $(CACHE_DIR)/nsm.ko: \
 	$(CONFIG_DIR)/$(TARGET)/linux.config \
 	| $(CACHE_DIR)/src/linux-$(LINUX_VERSION)/Makefile \
 	  $(CACHE_DIR)/src/aws-nitro-enclaves-sdk-bootstrap
+	$(call toolchain-profile-start)
 	$(call toolchain," \
 		cd $(CACHE_DIR)/src/linux-$(LINUX_VERSION) && \
 		cp /home/build/$(CONFIG_DIR)/$(TARGET)/linux.config .config && \
@@ -493,3 +537,4 @@ $(CACHE_DIR)/nsm.ko: \
 		    M=/home/build/$(CACHE_DIR)/src/aws-nitro-enclaves-sdk-bootstrap/nsm-driver && \
 		cp nsm-driver/nsm.ko /home/build/$@ \
 	")
+	$(call toolchain-profile-stop)
