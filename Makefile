@@ -1,6 +1,6 @@
-#ifeq ("$(wildcard ./src/toolchain/Makefile)","")
-#	gsu := $(shell git submodule update --init --recursive)
-#endif
+ifeq ("$(wildcard ./src/toolchain/Makefile)","")
+	gsu := $(shell git submodule update --init --recursive)
+endif
 
 TARGET := aws
 include $(PWD)/src/toolchain/Makefile
@@ -168,7 +168,6 @@ $(OUT_DIR)/$(TARGET)-$(ARCH).eif $(OUT_DIR)/$(TARGET)-$(ARCH).pcrs: \
 $(OUT_DIR)/qos_host.$(PLATFORM)-$(ARCH): \
 	$(shell git ls-files src/qos_host src/qos_core config)
 	$(MAKE) $(CACHE_DIR)/lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libc.a
-	echo "I am getting called"
 	$(call toolchain-profile-start)
 	$(call toolchain," \
 		export \
