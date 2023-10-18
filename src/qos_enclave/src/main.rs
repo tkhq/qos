@@ -72,6 +72,7 @@ fn boot() -> String {
 	let enclave_cid = std::env::var("ENCLAVE_CID").unwrap_or("16".to_string());
 	let memory_mib = std::env::var("MEMORY_MIB").unwrap_or("1024".to_string());
 	let cpu_count = std::env::var("CPU_COUNT").unwrap_or("2".to_string());
+	let debug_mode = std::env::var("DEBUG").unwrap_or("false".to_string());
 	let enclave_name =
 		std::env::var("ENCLAVE_NAME").unwrap_or("nitro".to_string());
 	let run_args = RunEnclavesArgs {
@@ -79,7 +80,7 @@ fn boot() -> String {
 		enclave_cid: Some(enclave_cid.parse::<u64>().unwrap()),
 		memory_mib: memory_mib.parse::<u64>().unwrap(),
 		cpu_ids: None,
-		debug_mode: false,
+		debug_mode: debug_mode.parse::<bool>().unwrap(),
 		attach_console: false,
 		cpu_count: Some(cpu_count.parse::<u32>().unwrap()),
 		enclave_name: Some(enclave_name.clone()),
