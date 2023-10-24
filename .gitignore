@@ -13,6 +13,7 @@ target/
 *.secret
 *.configuration
 *.share
+.toolchain
 
 # Mock data
 !src/integration/mock/boot-e2e/all-personal-dir/user1-dir/*

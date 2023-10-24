@@ -10,41 +10,8 @@ on:
   workflow_dispatch: # Allows manual invocation
 
 jobs:
-  # This job pre-warms the cache with toolchain
-  toolchain-cache:
+  lfs-to-github-cache:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
-        with:
-          submodules: true
-
-      - name: Cache
-        id: cache
-        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
-        with:
-          lookup-only: true
-          key: toolchain-${{ hashFiles('config/apt-hashes-x86_64.list') }}
-          path: cache/toolchain.tar
-
-      - name: Setup Checkout
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: |
-          sudo apt-get install -y git-lfs
-          git lfs fetch --include "fetch/apt/*"
-          git lfs checkout
-
-      - name: Run `make toolchain`
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: 'script -q -e -c "bash {0}"'
-        run: |
-          make cache/toolchain.tar
-
-  # This job pre-warms the cache for rust
-  rust-cache:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
       - name: Checkout sources
         uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
@@ -52,55 +19,31 @@ jobs:
           fetch-depth: 0
           submodules: true
 
+      - name: Generate Cache Key
+        id: cache-key
+        run: |
+          cache_filenames=$(make cache-filenames)
+          openssl sha256 $cache_filenames | openssl sha256 | awk '{ print "key="$2 }' >> $GITHUB_OUTPUT
+          printf "filenames<<EOF\n%s\nEOF\n" "$(printf "%s" "$cache_filenames" | tr ' ' '\n')" >> $GITHUB_OUTPUT
+
       - name: Cache
         id: cache
         uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
         with:
           lookup-only: true
-          key: toolchain-rust-${{ hashFiles('Makefile','config/make.env') }}
-          path: cache/aws/x86_64/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+          key: lfs-${{steps.cache-key.outputs.key}}
+          path: ${{steps.cache-key.outputs.filenames}}
 
       - name: Setup Checkout
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get install -y git-lfs
-          git lfs fetch --include "fetch" --exclude "fetch/apt,dist"
-          git lfs fetch --include "fetch/apt/Packages.bz2"
-          git lfs checkout
-
-      # make (and hence toolchain) rely on file timestamps
-      - name: git-restore-mtime
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: |
-          sudo apt-get install -qq -y git-restore-mtime
-          git restore-mtime
-          git submodule foreach 'git restore-mtime'
-
-      - name: Pull toolchain from cache
-        if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
-        with:
-          fail-on-cache-miss: true
-          key: toolchain-${{ hashFiles('config/apt-hashes-x86_64.list') }}
-          path: cache/toolchain.tar
-
-      - name: Complete the setup of toolchain
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: |
-          make toolchain
-
-      - name: Run `make cache/aws/x86_64/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot`
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: 'script -q -e -c "bash {0}"'
-        run: |
-          make cache/aws/x86_64/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
+          make cache
 
   build:
     name: Build Toolchain Artifacts
     runs-on: ubuntu-latest
     needs:
-      - toolchain-cache
-      - rust-cache
+      - lfs-to-github-cache
     strategy:
       matrix:
         include:
@@ -115,46 +58,26 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Setup Checkout
+      - name: Generate Cache Key
+        id: cache-key
         run: |
-          sudo apt-get install -y git-lfs
-          git lfs fetch --include "fetch" --exclude "fetch/apt,dist"
-          git lfs fetch --include "fetch/apt/Packages.bz2"
-          git lfs checkout
+          cache_filenames=$(make cache-filenames)
+          openssl sha256 $cache_filenames | openssl sha256 | awk '{ print "key="$2 }' >> $GITHUB_OUTPUT
+          printf "filenames<<EOF\n%s\nEOF\n" "$(printf "%s" "$cache_filenames" | tr ' ' '\n')" >> $GITHUB_OUTPUT
 
-      # make (and hence toolchain) rely on file timestamps
-      - name: git-restore-mtime
-        run: |
-          sudo apt-get install -qq -y git-restore-mtime
-          git restore-mtime
-          git submodule foreach 'git restore-mtime'
-
-      - name: Pull toolchain from cache
+      - name: Cache
+        id: cache
         uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
         with:
           fail-on-cache-miss: true
-          key: toolchain-${{ hashFiles('config/apt-hashes-x86_64.list') }}
-          path: cache/toolchain.tar
-
-      - name: Complete the setup of toolchain
-        run: |
-          make toolchain
-
-      - name: Pull rust from cache
-        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
-        with:
-          fail-on-cache-miss: true
-          key: toolchain-rust-${{ hashFiles('Makefile','config/make.env') }}
-          path: cache/aws/x86_64/src/rust/build/x86_64-unknown-linux-gnu/stage0-sysroot
-
-      - name: Ensure rust cache is ignored by make
-        run: |
-          touch --date=@0 cache/aws/x86_64/src/rust
+          key: lfs-${{steps.cache-key.outputs.key}}
+          path: ${{steps.cache-key.outputs.filenames}}
 
       - name: Run `make out/${{ matrix.target }}`
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          make -d --assume-old=cache/aws/x86_64/src/rust out/${{ matrix.target }}
+          touch cache/toolchain.tgz
+          make -d toolchain-restore-mtime toolchain out/${{ matrix.target }}
 
       - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
         with:
