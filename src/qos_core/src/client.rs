@@ -25,7 +25,7 @@ impl From<borsh::maybestd::io::Error> for ClientError {
 }
 
 /// Client for communicating with the enclave [`crate::server::SocketServer`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Client {
 	addr: SocketAddress,
 	timeout: TimeVal,
