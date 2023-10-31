@@ -7,6 +7,8 @@ use super::{
 	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
 };
 use crate::{client::Client, handles::Handles, io::SocketAddress};
+use crate::protocol::services::shard::ShardOutput;
+use crate::protocol::services::shard::ShardConfig;
 
 /// The timeout for the qos core when making requests to an enclave app.
 pub const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: i64 = 5;
@@ -169,6 +171,8 @@ pub(crate) struct ProtocolState {
 	pub app_client: Client,
 	pub handles: Handles,
 	phase: ProtocolPhase,
+	pub shard_output: Option<ShardOutput>,
+	pub shard_config: Option<ShardConfig>,
 }
 
 impl ProtocolState {
