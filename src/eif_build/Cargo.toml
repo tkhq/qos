@@ -3,7 +3,7 @@ name = "eif_build"
 version = "0.1.0"
 
 [dependencies]
-sha2 = "0.9.5"
+sha2 = "0.10.8"
 serde_json = "1.0"
 clap = "3"
 aws-nitro-enclaves-cose = "0.5"
