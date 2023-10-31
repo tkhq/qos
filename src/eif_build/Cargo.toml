@@ -5,7 +5,7 @@ version = "0.1.0"
 [dependencies]
 sha2 = "0.9.5"
 serde_json = "1.0"
-clap = "3"
+clap = "4"
 aws-nitro-enclaves-cose = "0.5"
 aws-nitro-enclaves-image-format = "0.2.0"
 
