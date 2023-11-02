@@ -37,5 +37,14 @@ pub(super) fn get_post_boot_attestation_doc(
 pub(in crate::protocol) fn shard_attestation_doc(
 	state: &mut ProtocolState,
 ) -> Result<NsmResponse, ProtocolError> {
-	let shard_config = state.shard_config.ok_or(ProtocolError::)
+	let shard_config_hash = state
+		.shard_config
+		.ok_or(ProtocolError::NotShardBooted)?
+		.qos_hash()
+		.to_vec();
+
+	let ephemeral_public_key =
+		state.handles.get_ephemeral_key()?.public_key().to_bytes();
+
+	Ok(attestor.nsm_process_request(request))
 }

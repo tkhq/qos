@@ -143,6 +143,30 @@ pub enum ProtocolMsg {
 		/// Should be `[NsmResponse::Attestation`]
 		nsm_response: NsmResponse,
 	 },
+
+	/// Post a quorum key shard for the shard service
+	BootShardProvisionRequest {
+		/// Quorum Key share encrypted to the Ephemeral Key.
+		share: Vec<u8>,
+	},
+	/// Successful response to [`Self::BootShardProvisionRequest`]
+	BootShardProvisionResponse {
+		/// If the Quorum key was reconstructed. False indicates still waiting
+		/// for the Kth share.
+		reconstructed: bool,
+	},
+
+	/// Request an attestation document that includes references to the
+	/// shard config (in `user_data`) and the ephemeral key ( in `public_key`).
+	ShardAttestationDocRequest,
+	/// Response to [`ProtocolMsg::ShardAttestationDocResponse`].
+	ShardAttestationDocResponse {
+		/// COSE SIGN1 structure with Attestation Doc
+		nsm_response: NsmResponse,
+		/// Manifest Envelope, if it exists, otherwise None.
+		manifest_envelope: Option<Box<ManifestEnvelope>>,
+	},
+
 }
 
 #[cfg(test)]

@@ -72,6 +72,10 @@ impl ProtocolRoute {
 				return resp;
 			}
 		}
+		match resp {
+			 Some(Ok(ProtocolMsg::ProvisionResponse { reconstructed }))
+			 |  Some(Ok(ProtocolMsg::ShardBootProvisionResponse { reconstructed }))
+		}
 
 		// handle state transitions
 		let transition = match resp {
@@ -159,6 +163,14 @@ impl ProtocolRoute {
 		ProtocolRoute::new(
 			Box::new(handlers::inject_key),
 			ProtocolPhase::QuorumKeyProvisioned,
+			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
+	pub fn shard_attestation_doc(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::shard_attestation_doc),
+			current_phase,
 			ProtocolPhase::UnrecoverableError,
 		)
 	}
@@ -289,7 +301,7 @@ impl ProtocolState {
 				vec![
 					// baseline routes
 					ProtocolRoute::status(self.phase),
-					ProtocolRoute::live_attestation_doc(self.phase),
+					ProtocolRoute::shard_attestation_doc(self.phase),
 					// phase specific routes
 					ProtocolRoute::provision(self.phase),
 				]
@@ -545,6 +557,28 @@ mod handlers {
 		if let ProtocolMsg::BootShard { shard_set, quorum_key } = req {
 			let result = key::boot_shard(state, shard_set, quorum_key)
 				.map(|_| ProtocolMsg::BootShard)
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn shard_attestation_doc(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::ShardAttestationDocRequest = req {
+			let result = attestation::shard_attestation_doc(state)
+				.map(|nsm_response| ProtocolMsg::LiveAttestationDocResponse {
+					nsm_response,
+					manifest_envelope: state
+						.handles
+						.get_manifest_envelope()
+						.ok()
+						.map(Box::new),
+				})
 				.map_err(ProtocolMsg::ProtocolErrorResponse);
 
 			Some(result)
