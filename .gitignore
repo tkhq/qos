@@ -33,3 +33,4 @@ fetch/pcsc/
 fetch/rust/
 
 !.github
+!.lfsconfig

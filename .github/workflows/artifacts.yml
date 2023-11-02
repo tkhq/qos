@@ -12,12 +12,33 @@ on:
 jobs:
   lfs-to-github-cache:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a # v4.0.1
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::799078726966:role/github-qos
       - name: Checkout sources
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0
           submodules: true
+
+      - name: Clear disk space
+        uses: ./.github/actions/clear-disk-space
+
+      - name: Setup LFS
+        uses: ./.github/actions/lfs-setup
+        with:
+          monoSshKey: ${{ secrets.MONO_SSH_KEY }}
+          pullLFSObjects: true
+
+      - name: Download submodules
+        run: GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive
+        shell: bash
 
       - name: Generate Cache Key
         id: cache-key

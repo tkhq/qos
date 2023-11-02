@@ -1,0 +1,22 @@
+name: "Clear disk space"
+description: "Clear space on disk by removing useless default OS packages and folders"
+
+runs:
+  using: "composite"
+
+  steps:
+    - name: Starting Disk space
+      run: df -h
+      shell: bash
+    - name: Removing unused tools from cache
+      run: sudo rm -Rf /opt/hostedtoolcache/CodeQL /opt/hostedtoolcache/Python /opt/hostedtoolcache/PyPy /opt/hostedtoolcache/Ruby /opt/hostedtoolcache/go/1.18.*
+      shell: bash
+    - name: Removing unused items from usr-local
+      run: sudo rm -Rf /usr/local/julia* /usr/local/share/powershell /usr/local/lib/android /usr/local/lib/heroku
+      shell: bash
+    - name: Removing unused items from usr-share
+      run: sudo rm -Rf /usr/share/swift /usr/share/dotnet
+      shell: bash
+    - name: Ending Disk space
+      run: df -h
+      shell: bash
