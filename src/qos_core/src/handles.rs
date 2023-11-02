@@ -6,7 +6,6 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use qos_p256::P256Pair;
 
 use crate::protocol::{services::boot::ManifestEnvelope, ProtocolError};
-use crate::protocol::services::shard::{ShardOutput, ShardConfig};
 
 /// Handle for accessing the quorum key.
 #[derive(Debug, Clone)]

@@ -141,6 +141,9 @@ pub enum ProtocolError {
 	/// The new manifest was different from the old manifest when we expected
 	/// them to be the same because they have the same nonce
 	DifferentManifest,
+	/// An operation could not be performed because the enclave was not booted
+	/// for sharding a quorum key.
+	NotShardBooted,
 }
 
 impl From<std::io::Error> for ProtocolError {

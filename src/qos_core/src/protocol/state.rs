@@ -6,9 +6,12 @@ use qos_nsm::NsmProvider;
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
 };
-use crate::{client::Client, handles::Handles, io::SocketAddress};
-use crate::protocol::services::shard::ShardOutput;
-use crate::protocol::services::shard::ShardConfig;
+use crate::{
+	client::Client,
+	handles::Handles,
+	io::SocketAddress,
+	protocol::services::shard::{ShardConfig, ShardOutput},
+};
 
 /// The timeout for the qos core when making requests to an enclave app.
 pub const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: i64 = 5;
@@ -36,6 +39,11 @@ pub enum ProtocolPhase {
 	QuorumKeyProvisioned,
 	/// Waiting for a forwarded key to be injected
 	WaitingForForwardedKey,
+	/// Waiting to receive k quorum shards in order to reshard the key.
+	ShardBootWaitingForQuorumShards,
+	/// Enclave has been shard booted and the quorum key has been resharded.
+	/// No further actions.
+	ShardBooted,
 }
 
 /// Enclave routes
@@ -171,8 +179,8 @@ pub(crate) struct ProtocolState {
 	pub app_client: Client,
 	pub handles: Handles,
 	phase: ProtocolPhase,
-	pub shard_output: Option<ShardOutput>,
 	pub shard_config: Option<ShardConfig>,
+	pub shard_output: Option<ShardOutput>,
 }
 
 impl ProtocolState {
@@ -202,6 +210,8 @@ impl ProtocolState {
 				app_addr,
 				TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 			),
+			shard_config: None,
+			shard_output: None,
 		}
 	}
 
@@ -273,6 +283,15 @@ impl ProtocolState {
 					ProtocolRoute::live_attestation_doc(self.phase),
 					// phase specific routes
 					ProtocolRoute::inject_key(self.phase),
+				]
+			}
+			ProtocolPhase::ShardBootWaitingForQuorumShards => {
+				vec![
+					// baseline routes
+					ProtocolRoute::status(self.phase),
+					ProtocolRoute::live_attestation_doc(self.phase),
+					// phase specific routes
+					ProtocolRoute::provision(self.phase),
 				]
 			}
 		}
@@ -512,6 +531,21 @@ mod handlers {
 			)
 			.map(|_| ProtocolMsg::InjectKeyResponse)
 			.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn boot_shard(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::BootShard { shard_set, quorum_key } = req {
+			let result = key::boot_shard(state, shard_set, quorum_key)
+				.map(|_| ProtocolMsg::BootShard)
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
 
 			Some(result)
 		} else {

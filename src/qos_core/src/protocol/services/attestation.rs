@@ -23,13 +23,19 @@ pub(in crate::protocol) fn live_attestation_doc(
 pub(super) fn get_post_boot_attestation_doc(
 	attestor: &dyn NsmProvider,
 	ephemeral_public_key: Vec<u8>,
-	manifest_hash: Vec<u8>,
+	user_data: Vec<u8>,
 ) -> NsmResponse {
 	let request = NsmRequest::Attestation {
-		user_data: Some(manifest_hash),
+		user_data: Some(user_data),
 		nonce: None,
 		public_key: Some(ephemeral_public_key),
 	};
 
 	attestor.nsm_process_request(request)
+}
+
+pub(in crate::protocol) fn shard_attestation_doc(
+	state: &mut ProtocolState,
+) -> Result<NsmResponse, ProtocolError> {
+	let shard_config = state.shard_config.ok_or(ProtocolError::)
 }

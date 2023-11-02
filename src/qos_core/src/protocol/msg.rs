@@ -129,6 +129,20 @@ pub enum ProtocolMsg {
 	},
 	/// Successful response to [`Self::InjectKeyRequest`].
 	InjectKeyResponse,
+
+	/// Shard a quorum key to the specified [`ShardSet`].
+	BootShardRequest {
+		/// Set of public keys and threshold to shard the quorum key too.
+		shard_set: ShardSet,
+		/// Public quorum key to shard; used to confirm the correct secret is
+		/// operated on.
+		quorum_key: Vec<u8>,
+	},
+	/// Successful response to [`Self::BootShardResponse`]
+	BootShardResponse {
+		/// Should be `[NsmResponse::Attestation`]
+		nsm_response: NsmResponse,
+	 },
 }
 
 #[cfg(test)]
