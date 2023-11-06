@@ -12,7 +12,7 @@ qos_nsm = { path = "../qos_nsm", default-features = false }
 
 # Third party
 ureq = { version = "2.8", default-features = false }
-aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
+aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
 borsh = { version = "0.10", default-features = false }
 p256 = { version = "0.12.0", default-features = false }
 rand_core = { version = "0.6", default-features = false }
