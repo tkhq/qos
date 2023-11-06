@@ -11,7 +11,7 @@ qos_nsm = { path = "../qos_nsm", default-features = false }
 
 nix = { version = "0.26", features = ["socket"], default-features = false }
 libc = "=0.2.148"
-borsh = { version = "0.10" }
+borsh = { version = "1.1" }
 
 # For AWS Nitro
 aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
