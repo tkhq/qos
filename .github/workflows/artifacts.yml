@@ -10,27 +10,6 @@ on:
   workflow_dispatch: # Allows manual invocation
 
 jobs:
-  setup-lfs:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout sources
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-      with:
-        fetch-depth: 0
-        submodules: true
-    - name: Clear disk space
-      uses: ./.github/actions/clear-disk-space
-
-    - name: Setup LFS
-      if: ${{ inputs.setupLFS == 'true' }}
-      uses: ./.github/actions/lfs-setup
-      with:
-        pullLFSObjects: ${{ inputs.pullLFSObjects }}
-
-    - name: Download submodules
-      run: GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive
-      shell: bash
-
   lfs-to-github-cache:
     runs-on: ubuntu-latest
     steps:
@@ -39,6 +18,19 @@ jobs:
         with:
           fetch-depth: 0
           submodules: true
+
+      - name: Clear disk space
+        uses: ./.github/actions/clear-disk-space
+
+      - name: Setup LFS
+        if: ${{ inputs.setupLFS == 'true' }}
+        uses: ./.github/actions/lfs-setup
+        with:
+          pullLFSObjects: ${{ inputs.pullLFSObjects }}
+
+      - name: Download submodules
+        run: GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --recursive
+        shell: bash
 
       - name: Generate Cache Key
         id: cache-key
