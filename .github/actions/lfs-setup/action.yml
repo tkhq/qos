@@ -58,9 +58,3 @@ runs:
         git config lfs.customtransfer.tks3.path tkinfra
         git config lfs.customtransfer.tks3.args "lfs --default-credentials"
         git config lfs.standalonetransferagent tks3
-
-    - name: Pull lfs artifacts
-      if: ${{ inputs.pullLFSObjects == 'true' }}
-      run: |
-        git lfs pull
-      shell: bash
