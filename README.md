@@ -180,7 +180,7 @@ Additionally, we use a custom agent to store our LFS objects in S3 (rather than 
 In order to setup our s3 based lfs:
 
 1) Install [tkinfra](https://github.com/tkhq/mono/tree/main/src/go/tkinfra)
-2) Run `./setup-lfs.sh`
+2) Run `./scripts/setup-lfs.sh`
 
 #### Troubleshooting
 
