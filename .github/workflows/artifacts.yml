@@ -27,9 +27,6 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Clear disk space
-        uses: ./.github/actions/clear-disk-space
-
       - name: Setup LFS
         uses: ./.github/actions/lfs-setup
         with:
