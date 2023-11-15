@@ -129,6 +129,15 @@ pub enum ProtocolMsg {
 	},
 	/// Successful response to [`Self::InjectKeyRequest`].
 	InjectKeyResponse,
+
+	/// Fetch the manifest envelope, if it exits.
+	ManifestEnvelopeRequest,
+	/// Successful response to [`Self::ManifestEnvelopeResponse`].
+	ManifestEnvelopeResponse {
+		/// The manifest envelope used to boot the enclave. This will be `None`
+		/// if the manifest envelope does not exist.
+		manifest_envelope: Box<Option<ManifestEnvelope>>,
+	},
 }
 
 #[cfg(test)]

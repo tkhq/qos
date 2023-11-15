@@ -20,6 +20,7 @@ use crate::protocol::{
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct NitroConfig {
 	/// The hash of the enclave image file
@@ -106,6 +107,7 @@ impl TryFrom<String> for RestartPolicy {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfig {
 	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
@@ -139,6 +141,7 @@ impl fmt::Debug for PivotConfig {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct QuorumMember {
 	/// A human readable alias to identify the member. The alias is not
@@ -169,6 +172,7 @@ impl fmt::Debug for QuorumMember {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestSet {
 	/// The threshold, K, of signatures necessary to have quorum.
@@ -189,6 +193,7 @@ pub struct ManifestSet {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ShareSet {
 	/// The threshold, K, of signatures necessary to have quorum.
@@ -210,6 +215,7 @@ pub struct ShareSet {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct MemberPubKey {
 	/// Public key of the member
 	pub pub_key: Vec<u8>,
@@ -234,6 +240,7 @@ impl fmt::Debug for MemberPubKey {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PatchSet {
 	/// The threshold, K, of signatures necessary to have quorum.
@@ -253,6 +260,7 @@ pub struct PatchSet {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Namespace {
 	/// The namespace. This should be unique relative to other namespaces the
@@ -288,6 +296,7 @@ impl fmt::Debug for Namespace {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Manifest {
 	/// Namespace this manifest belongs too.
@@ -314,6 +323,7 @@ pub struct Manifest {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Approval {
 	/// Quorum Member's signature.
@@ -355,6 +365,7 @@ impl Approval {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestEnvelope {
 	/// Encapsulated manifest.
