@@ -439,5 +439,19 @@ async fn standard_boot_e2e() {
 	// Check that the pivot executed
 	let contents = std::fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
 	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
+
+
+	let enclave_info_url = format!("http://{LOCAL_HOST}:{}/qos/enclave-info", host_port.to_string());
+	let enclave_info = ureq::get(&enclave_info_url)
+		.call().unwrap()
+        .into_string().unwrap();
+
+	assert_eq!(
+		&enclave_info,
+		EXPECTED_ENCLAVE_INFO,
+	);
+
 	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
 }
+
+const EXPECTED_ENCLAVE_INFO: &str = "test";

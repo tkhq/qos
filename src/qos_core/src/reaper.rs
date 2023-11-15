@@ -100,7 +100,12 @@ impl Reaper {
 			}
 		}
 
-		println!("Reaper exiting ...");
+		loop {
+				std::thread::sleep(std::time::Duration::from_secs(
+					10 * REAPER_RESTART_DELAY_IN_SECONDS,
+				));
+				println!("Pivot exited with now restart configured. Now in infinite loop until shutdown.");
+		}
 	}
 }
 

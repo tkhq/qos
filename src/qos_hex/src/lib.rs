@@ -1,5 +1,23 @@
 //! Utilities for encoding and decoding hex strings.
-// Inspired by https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=e241493d100ecaadac3c99f37d0f766f
+//! Inspired by https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=e241493d100ecaadac3c99f37d0f766f
+//!
+//! To encode a `&[u8]` you can use:
+//!
+//! - [`encode`]
+//! - [`encode_to_vec`]
+//!
+//! To decode you can use:
+//!
+//! - [`decode`] for `&str`
+//! - [`decode_from_vec`] for `Vec<u8>`
+//! - [`FromHex::from_hex`] for `Vec<u8>` and some `u8` array sizes.
+//!
+//! # Features
+//!
+//! ## `serde`
+//!
+//! With the serde feature enabled you can use [`crate::serde`] to serialize any `u8` array or `Vec<u8>`
+//! to hex and deserialize hex string to a `Vec<u8>` and a fixed selection of `u8` arrays.
 
 use std::{convert::Into, num::ParseIntError, string::FromUtf8Error};
 
@@ -36,6 +54,8 @@ pub enum HexError {
 	NonAsciiChar,
 	/// Invalid UTF-8 byte vector when converting to String
 	InvalidUtf8(FromUtf8Error),
+	/// The length of the input string hex does not match the length of the given buffer.
+	StringDoesNotMatchBufferLength
 }
 
 impl From<ParseIntError> for HexError {
@@ -103,6 +123,43 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 	}
 }
 
+/// `Decode `raw_s` into a mutable buffer slice. Length of `buf` must exactly match the length
+/// of the bytes represented by `raw_s`.
+pub fn decode_to_buf(raw_s: &str, buf: &mut [u8]) -> Result<(), HexError> {
+	let sanitized_s_bytes = match raw_s.len() {
+		0 => if buf.len() != 0 { return Err(HexError::StringDoesNotMatchBufferLength) } else { return Ok(())},
+		1 => return Err(HexError::LengthOne),
+		_ => {
+			if &raw_s.as_bytes()[0..2] == b"0x" {
+				&raw_s[2..].as_bytes()
+			} else {
+				raw_s.as_bytes()
+			}
+		}
+	};
+
+	if sanitized_s_bytes.len() % 2 == 0 {
+		return Err(HexError::OddLength)
+	}
+	if sanitized_s_bytes.len() / 2 != buf.len() {
+		return Err(HexError::StringDoesNotMatchBufferLength);
+	}
+
+	for (i, b) in buf.iter_mut().enumerate() {
+		let str_idx = i * 2;
+
+		verify_ascii(&sanitized_s_bytes[str_idx])?;
+		verify_ascii(&sanitized_s_bytes[str_idx + 1])?;
+
+		let s = std::str::from_utf8(&sanitized_s_bytes[str_idx..str_idx+2])
+			.expect("We ensure that input slice represents ASCII above. qed.");
+
+		*b = u8::from_str_radix(s, 16)?;
+	}
+
+	Ok(())
+}
+
 /// Decode bytes from a hex byte slice
 pub fn decode_from_vec(vec: Vec<u8>) -> Result<Vec<u8>, HexError> {
 	let hex_string = String::from_utf8(vec).map_err(HexError::from)?;
@@ -128,6 +185,90 @@ pub fn encode(bytes: &[u8]) -> String {
 #[must_use]
 pub fn encode_to_vec(bytes: &[u8]) -> Vec<u8> {
 	encode(bytes).into_bytes()
+}
+
+/// Types that can be decoded from a hex string.
+///
+/// Implemented for some `u8` arrays and `Vec<u8>`.
+pub trait FromHex: Sized {
+    /// Creates an instance of `Self` from a hex string.
+    fn from_hex(raw_s: &str) -> Result<Self, HexError>;
+}
+
+
+impl FromHex for Vec<u8> {
+	fn from_hex(raw_s: &str) -> Result<Self, HexError> {
+		decode(raw_s)
+	}
+}
+
+macro_rules! from_hex_array_impl {
+    ($($len:expr)+) => {$(
+        impl FromHex for [u8; $len] {
+            fn from_hex(raw_s: &str) -> Result<Self, HexError> {
+                let mut out = [0_u8; $len];
+                decode_to_buf(raw_s, &mut out)?;
+                Ok(out)
+            }
+        }
+    )+}
+}
+
+from_hex_array_impl! {
+    1 2 6 8 10 12 14 16
+	32 64 128 256
+	384
+	512 768 1024 2048 4096 8192 16384 32768
+}
+
+#[cfg(feature = "serde")]
+mod serde {
+    use serde::{de::Visitor, Deserializer, Serializer};
+
+    pub fn ser<T, S>(bytes: T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        T: AsRef<[u8]>,
+        S: Serializer,
+    {
+        let hex = qos_hex::encode(bytes.as_ref());
+        serializer.serialize_str(&hex)
+    }
+
+	pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, HexError>
+	where
+		D: Deserializer<'de>,
+		T: FromHex,
+	{
+		struct HexVisitor<T>(PhantomData<T>);
+
+		impl<'de, T> Visitor<'de> for HexVisitor<T>
+		where
+			T: FromHex,
+			<T as FromHex>::Error: fmt::Display,
+		{
+			type Value = T;
+
+			fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+				write!(f, "a hex encoded string")
+			}
+
+			fn visit_str<E>(self, data: &str) -> Result<Self::Value, E>
+			where
+				E: serde::de::Error,
+			{
+				FromHex::from_hex(data).map_err(|e| serde::de::Error::custom(format!("{e:?}")))
+			}
+
+			fn visit_borrowed_str<E>(self, data: &'de str) -> Result<Self::Value, E>
+			where
+				E: serde::de::Error,
+			{
+				FromHex::from_hex(data).map_err(|e| serde::de::Error::custom(format!("{e:?}")))
+			}
+		}
+
+		deserializer.deserialize_str(HexVisitor(PhantomData))
+	}
 }
 
 #[cfg(test)]
