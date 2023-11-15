@@ -11,13 +11,16 @@
 //! - [`decode`] for `&str`
 //! - [`decode_from_vec`] for `Vec<u8>`
 //! - [`FromHex::from_hex`] for `Vec<u8>` and some `u8` array sizes.
+//! - [`decode_to_buf`] for decoding a `&str` into a `&mut [u8]` with the exact
+//!   size.
 //!
 //! # Features
 //!
 //! ## `serde`
 //!
-//! With the serde feature enabled you can use [`crate::serde`] to serialize any `u8` array or `Vec<u8>`
-//! to hex and deserialize hex string to a `Vec<u8>` and a fixed selection of `u8` arrays.
+//! With the serde feature enabled you can use [`crate::serde`] to serialize any
+//! `u8` array or `Vec<u8>` to hex and deserialize hex string to a `Vec<u8>` and
+//! a fixed selection of `u8` arrays.
 
 use std::{convert::Into, num::ParseIntError, string::FromUtf8Error};
 
@@ -54,8 +57,9 @@ pub enum HexError {
 	NonAsciiChar,
 	/// Invalid UTF-8 byte vector when converting to String
 	InvalidUtf8(FromUtf8Error),
-	/// The length of the input string hex does not match the length of the given buffer.
-	StringDoesNotMatchBufferLength
+	/// The length of the bytes represented by the hex input string does not
+	/// match the length of the given buffer.
+	StringDoesNotMatchBufferLength,
 }
 
 impl From<ParseIntError> for HexError {
@@ -123,23 +127,29 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 	}
 }
 
-/// `Decode `raw_s` into a mutable buffer slice. Length of `buf` must exactly match the length
-/// of the bytes represented by `raw_s`.
+/// Decode `raw_s` into a mutable buffer slice. Length of `buf` must exactly
+/// match the length of the bytes represented by `raw_s`.
 pub fn decode_to_buf(raw_s: &str, buf: &mut [u8]) -> Result<(), HexError> {
 	let sanitized_s_bytes = match raw_s.len() {
-		0 => if buf.len() != 0 { return Err(HexError::StringDoesNotMatchBufferLength) } else { return Ok(())},
+		0 => {
+			if !buf.is_empty() {
+				return Err(HexError::StringDoesNotMatchBufferLength);
+			} else {
+				return Ok(());
+			}
+		}
 		1 => return Err(HexError::LengthOne),
 		_ => {
 			if &raw_s.as_bytes()[0..2] == b"0x" {
-				&raw_s[2..].as_bytes()
+				raw_s[2..].as_bytes()
 			} else {
 				raw_s.as_bytes()
 			}
 		}
 	};
 
-	if sanitized_s_bytes.len() % 2 == 0 {
-		return Err(HexError::OddLength)
+	if sanitized_s_bytes.len() % 2 != 0 {
+		return Err(HexError::OddLength);
 	}
 	if sanitized_s_bytes.len() / 2 != buf.len() {
 		return Err(HexError::StringDoesNotMatchBufferLength);
@@ -151,7 +161,7 @@ pub fn decode_to_buf(raw_s: &str, buf: &mut [u8]) -> Result<(), HexError> {
 		verify_ascii(&sanitized_s_bytes[str_idx])?;
 		verify_ascii(&sanitized_s_bytes[str_idx + 1])?;
 
-		let s = std::str::from_utf8(&sanitized_s_bytes[str_idx..str_idx+2])
+		let s = std::str::from_utf8(&sanitized_s_bytes[str_idx..str_idx + 2])
 			.expect("We ensure that input slice represents ASCII above. qed.");
 
 		*b = u8::from_str_radix(s, 16)?;
@@ -191,10 +201,9 @@ pub fn encode_to_vec(bytes: &[u8]) -> Vec<u8> {
 ///
 /// Implemented for some `u8` arrays and `Vec<u8>`.
 pub trait FromHex: Sized {
-    /// Creates an instance of `Self` from a hex string.
-    fn from_hex(raw_s: &str) -> Result<Self, HexError>;
+	/// Creates an instance of `Self` from a hex string.
+	fn from_hex(raw_s: &str) -> Result<Self, HexError>;
 }
-
 
 impl FromHex for Vec<u8> {
 	fn from_hex(raw_s: &str) -> Result<Self, HexError> {
@@ -215,36 +224,39 @@ macro_rules! from_hex_array_impl {
 }
 
 from_hex_array_impl! {
-    1 2 6 8 10 12 14 16
+	1 2 6 8 10 12 14 16
 	32 64 128 256
 	384
 	512 768 1024 2048 4096 8192 16384 32768
 }
 
 #[cfg(feature = "serde")]
-mod serde {
-    use serde::{de::Visitor, Deserializer, Serializer};
+pub mod serde {
+	use core::{fmt, marker::PhantomData};
 
-    pub fn ser<T, S>(bytes: T, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        T: AsRef<[u8]>,
-        S: Serializer,
-    {
-        let hex = qos_hex::encode(bytes.as_ref());
-        serializer.serialize_str(&hex)
-    }
+	use serde::{de::Visitor, Deserializer, Serializer};
 
-	pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, HexError>
+	use super::{encode, FromHex};
+
+	pub fn serialize<T, S>(bytes: T, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		T: AsRef<[u8]>,
+		S: Serializer,
+	{
+		let hex = encode(bytes.as_ref());
+		serializer.serialize_str(&hex)
+	}
+
+	pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 	where
 		D: Deserializer<'de>,
 		T: FromHex,
 	{
-		struct HexVisitor<T>(PhantomData<T>);
+		struct StrVisitor<T>(PhantomData<T>);
 
-		impl<'de, T> Visitor<'de> for HexVisitor<T>
+		impl<'de, T> Visitor<'de> for StrVisitor<T>
 		where
 			T: FromHex,
-			<T as FromHex>::Error: fmt::Display,
 		{
 			type Value = T;
 
@@ -256,18 +268,23 @@ mod serde {
 			where
 				E: serde::de::Error,
 			{
-				FromHex::from_hex(data).map_err(|e| serde::de::Error::custom(format!("{e:?}")))
+				FromHex::from_hex(data)
+					.map_err(|e| serde::de::Error::custom(format!("{e:?}")))
 			}
 
-			fn visit_borrowed_str<E>(self, data: &'de str) -> Result<Self::Value, E>
+			fn visit_borrowed_str<E>(
+				self,
+				data: &'de str,
+			) -> Result<Self::Value, E>
 			where
 				E: serde::de::Error,
 			{
-				FromHex::from_hex(data).map_err(|e| serde::de::Error::custom(format!("{e:?}")))
+				FromHex::from_hex(data)
+					.map_err(|e| serde::de::Error::custom(format!("{e:?}")))
 			}
 		}
 
-		deserializer.deserialize_str(HexVisitor(PhantomData))
+		deserializer.deserialize_str(StrVisitor(PhantomData))
 	}
 }
 
@@ -280,6 +297,9 @@ mod test {
 		let encoded = "";
 		let res = decode(encoded);
 		assert_eq!(res, Ok(Vec::new()));
+
+		let mut buf = [0u8; 0];
+		assert!(decode_to_buf(encoded, &mut buf).is_ok());
 	}
 
 	#[test]
@@ -291,6 +311,9 @@ mod test {
 		let encoded = " ";
 		let res = decode(encoded);
 		assert_eq!(res, Err(HexError::LengthOne));
+
+		let mut buf = [0u8; 2];
+		assert_eq!(decode_to_buf(encoded, &mut buf), Err(HexError::LengthOne));
 	}
 
 	#[test]
@@ -299,20 +322,40 @@ mod test {
 		let encoded = "0fÓ";
 		let res = decode(encoded);
 		assert_eq!(res, Err(HexError::NonAsciiChar));
+		let mut buf = vec![0u8; encoded.len() / 2];
+		assert_eq!(
+			decode_to_buf(encoded, &mut buf),
+			Err(HexError::NonAsciiChar)
+		);
 
 		let encoded = "0x0fÓ";
 		let res = decode(encoded);
 		assert_eq!(res, Err(HexError::NonAsciiChar));
+		let mut buf = vec![0u8; (encoded.len() - 2) / 2];
+		assert_eq!(
+			decode_to_buf(encoded, &mut buf),
+			Err(HexError::NonAsciiChar)
+		);
 
 		// when its the first char
 		let encoded = "Óff";
 		let res = decode(encoded);
 		assert_eq!(res, Err(HexError::NonAsciiChar));
+		let mut buf = vec![0u8; encoded.len() / 2];
+		assert_eq!(
+			decode_to_buf(encoded, &mut buf),
+			Err(HexError::NonAsciiChar)
+		);
 
 		// example taken from fuzzing
 		let encoded = "C6ff584301800c5f60000000000000000000000000Óf8$6800;033333333333333333333333344444444333";
 		let res = decode(encoded);
 		assert_eq!(res, Err(HexError::NonAsciiChar));
+		let mut buf = vec![0u8; encoded.len() / 2];
+		assert_eq!(
+			decode_to_buf(encoded, &mut buf),
+			Err(HexError::NonAsciiChar)
+		);
 	}
 
 	#[test]
@@ -321,6 +364,9 @@ mod test {
 		let encoded = "00000000";
 		assert_eq!(encode(&decoded), encoded);
 		assert_eq!(decode(encoded).unwrap(), decoded);
+		let mut buf = [0u8; 4];
+		assert!(decode_to_buf(encoded, &mut buf).is_ok());
+		assert_eq!(buf.to_vec(), decoded);
 
 		let decoded = vec![255, 0, 255];
 		let encoded = "ff00ff";
@@ -339,6 +385,10 @@ mod test {
 		let encoded = HEX_BYTES;
 		assert_eq!(encode(&decoded), encoded);
 		assert_eq!(decode(encoded).unwrap(), decoded);
+
+		let mut buf = vec![0u8; encoded.len() / 2];
+		assert!(decode_to_buf(encoded, &mut buf).is_ok());
+		assert_eq!(buf.to_vec(), decoded);
 	}
 
 	#[test]
@@ -354,6 +404,10 @@ mod test {
 
 		assert_eq!(encode(&decoded), &encoded[..]);
 		assert_eq!(decode(address).unwrap(), decoded);
+
+		let mut buf = vec![0u8; (address.len() - 2) / 2];
+		assert!(decode_to_buf(address, &mut buf).is_ok());
+		assert_eq!(buf.to_vec(), decoded);
 	}
 
 	#[test]
@@ -365,10 +419,18 @@ mod test {
 			Err(HexError::ParseInt(ParseIntError { .. }))
 		);
 		assert!(is_err);
+		let mut buf = vec![0u8; invalid.len() / 2];
+		let is_err = matches!(
+			decode_to_buf(invalid, &mut buf),
+			Err(HexError::ParseInt(ParseIntError { .. }))
+		);
+		assert!(is_err);
 
 		// Reject odd length string
 		let invalid = "fff";
 		assert_eq!(decode(invalid), Err(HexError::OddLength));
+		let mut buf = vec![0u8; invalid.len() / 2];
+		assert_eq!(decode_to_buf(invalid, &mut buf), Err(HexError::OddLength));
 	}
 
 	#[test]

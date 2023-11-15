@@ -20,6 +20,8 @@ use crate::{
 
 /// Delay for restarting the pivot app if the process exits.
 pub const REAPER_RESTART_DELAY_IN_SECONDS: u64 = 1;
+/// Delay until the reaper exits after pivot app with a Never restart policy exits.
+pub const REAPER_EXIT_DELAY_IN_SECONDS: u64 = 3;
 
 /// Primary entry point for running the enclave. Coordinates spawning the server
 /// and pivot binary.
@@ -100,12 +102,11 @@ impl Reaper {
 			}
 		}
 
-		loop {
-				std::thread::sleep(std::time::Duration::from_secs(
-					10 * REAPER_RESTART_DELAY_IN_SECONDS,
-				));
-				println!("Pivot exited with now restart configured. Now in infinite loop until shutdown.");
-		}
+
+		std::thread::sleep(std::time::Duration::from_secs(
+			REAPER_EXIT_DELAY_IN_SECONDS,
+		));
+		println!("Reaper exiting ... ")
 	}
 }
 

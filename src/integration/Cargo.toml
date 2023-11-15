@@ -23,4 +23,5 @@ qos_core = { path = "../qos_core", features = ["mock"], default-features = false
 borsh = { version = "0.10" }
 aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
 rand = "0.8"
-ureq = { version = "2.8" }
+ureq = { version = "2.8", features = ["json"], default-features = false }
+serde = { version = "1", features = ["derive"] }

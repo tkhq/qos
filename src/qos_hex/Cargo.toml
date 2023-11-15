@@ -3,7 +3,8 @@ name = "qos_hex"
 version = "0.1.0"
 edition = "2021"
 
+[dependencies]
 serde = {version = "1", optional = true, default-features = false }
 
-# [features]
-# serde_derive = ["serde"]
+[features]
+serde =["dep:serde"]

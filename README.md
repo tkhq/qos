@@ -155,6 +155,7 @@ make toolchain-update
 
 ### Release Process
 
+ 0. Determine the release semver version by consulting the [changelog](./CHANGELOG.MD).
  1. Create a branch for your release e.g.
     `git checkout -b release/v1.0.0`
  2. Run `make dist` as described in ["Release" section](#release)

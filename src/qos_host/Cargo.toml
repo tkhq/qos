@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 qos_core = { path = "../qos_core", default-features = false }
+qos_hex = { path = "../qos_hex", features = ["serde"], default-features = false }
 
 # Third party
 axum = { version = "0.6.20", features = ["http1", "tokio", "json"], default-features = false }

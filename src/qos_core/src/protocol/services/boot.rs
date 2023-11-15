@@ -24,15 +24,20 @@ use crate::protocol::{
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct NitroConfig {
 	/// The hash of the enclave image file
+	#[serde(with = "qos_hex::serde")]
 	pub pcr0: Vec<u8>,
 	/// The hash of the Linux kernel and bootstrap
+	#[serde(with = "qos_hex::serde")]
 	pub pcr1: Vec<u8>,
 	/// The hash of the application
+	#[serde(with = "qos_hex::serde")]
 	pub pcr2: Vec<u8>,
 	/// The hash of the Amazon resource name (ARN) of the IAM role that's
 	/// associated with the EC2 instance.
+	#[serde(with = "qos_hex::serde")]
 	pub pcr3: Vec<u8>,
 	/// DER encoded X509 AWS root certificate
+	#[serde(with = "qos_hex::serde")]
 	pub aws_root_certificate: Vec<u8>,
 	/// Reference to the commit QOS was built off of.
 	pub qos_commit: String,
@@ -111,6 +116,7 @@ impl TryFrom<String> for RestartPolicy {
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfig {
 	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
+	#[serde(with = "qos_hex::serde")]
 	pub hash: Hash256,
 	/// Restart policy for running the pivot binary.
 	pub restart: RestartPolicy,
@@ -149,6 +155,7 @@ pub struct QuorumMember {
 	/// verification.
 	pub alias: String,
 	/// P256Public as bytes
+	#[serde(with = "qos_hex::serde")]
 	pub pub_key: Vec<u8>,
 }
 
@@ -218,6 +225,7 @@ pub struct ShareSet {
 #[serde(rename_all = "camelCase")]
 pub struct MemberPubKey {
 	/// Public key of the member
+	#[serde(with = "qos_hex::serde")]
 	pub pub_key: Vec<u8>,
 }
 
@@ -272,6 +280,7 @@ pub struct Namespace {
 	/// has the highest nonce.
 	pub nonce: u32,
 	/// Quorum Key
+	#[serde(with = "qos_hex::serde")]
 	pub quorum_key: Vec<u8>,
 }
 
@@ -327,6 +336,7 @@ pub struct Manifest {
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Approval {
 	/// Quorum Member's signature.
+	#[serde(with = "qos_hex::serde")]
 	pub signature: Vec<u8>,
 	/// Description of the Quorum Member
 	pub member: QuorumMember,

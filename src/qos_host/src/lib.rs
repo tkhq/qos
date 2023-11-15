@@ -32,8 +32,8 @@ use qos_core::{
 	client::Client,
 	io::{SocketAddress, TimeVal, TimeValLike},
 	protocol::{
-		msg::ProtocolMsg, services::boot::ManifestEnvelope, ProtocolError,
-		ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
+		msg::ProtocolMsg, services::boot::ManifestEnvelope, Hash256,
+		ProtocolError, ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
 	},
 };
 
@@ -52,7 +52,7 @@ struct Error(String);
 impl IntoResponse for Error {
 	fn into_response(self) -> Response {
 		let body = JsonError { error: self.0 };
-		println!("qos_host error: {body:?}");
+		eprintln!("qos_host error: {body:?}");
 
 		// In the future we may want to change `Error` into an enum
 		// indicating what status code to use. For now it will always be
@@ -79,16 +79,36 @@ const ENCLAVE_HEALTH: &str = "/enclave-health";
 const MESSAGE: &str = "/message";
 const ENCLAVE_INFO: &str = "/enclave-info";
 
-#[derive(serde::Serialize)]
+/// Response body to the `/enclave-info` endpoint.
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct EnclaveInfo {
-	phase: ProtocolPhase,
-	manifest_envelope: Option<ManifestEnvelope>,
+pub struct EnclaveInfo {
+	/// Current phase of the enclave.
+	pub phase: ProtocolPhase,
+	/// Manifest envelope in the enclave.
+	pub manifest_envelope: Option<ManifestEnvelope>,
 }
 
-#[derive(serde::Serialize, Debug)]
-struct JsonError {
-	error: String,
+/// Vitals we just use for logging right now to avoid logging the entire
+/// manifest.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnclaveVitalStats {
+	phase: ProtocolPhase,
+	namespace: String,
+	nonce: u32,
+	#[serde(with = "qos_hex::serde")]
+	pivot_hash: Hash256,
+	#[serde(with = "qos_hex::serde")]
+	pcr0: Vec<u8>,
+	pivot_args: Vec<String>,
+}
+
+/// Body of a 4xx or 5xx response
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct JsonError {
+	/// Error message.
+	pub error: String,
 }
 
 impl HostServer {
@@ -251,11 +271,22 @@ impl HostServer {
 			}
 		};
 
+		let vitals_log = if let Some(m) = manifest_envelope.as_ref() {
+			serde_json::to_string(&EnclaveVitalStats {
+				phase,
+				namespace: m.manifest.namespace.name.clone(),
+				nonce: m.manifest.namespace.nonce,
+				pivot_hash: m.manifest.pivot.hash,
+				pcr0: m.manifest.enclave.pcr0.clone(),
+				pivot_args: m.manifest.pivot.args.clone(),
+			})
+			.expect("always valid json. qed.")
+		} else {
+			serde_json::to_string(&phase).expect("always valid json. qed.")
+		};
+		println!("{vitals_log}");
+
 		let info = EnclaveInfo { phase, manifest_envelope };
-		println!(
-			"enclave info: {}",
-			serde_json::to_string(&info).expect("valid json. qed")
-		);
 
 		Ok(Json(info))
 	}

@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 qos_crypto = { path = "../qos_crypto" }
-qos_hex = { path = "../qos_hex" }
+qos_hex = { path = "../qos_hex", features = ["serde"] }
 qos_p256 = { path = "../qos_p256" }
 qos_nsm = { path = "../qos_nsm", default-features = false }
 
@@ -17,7 +17,7 @@ borsh = { version = "0.10" }
 aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 
-serde = {version = "1", default-features = false }
+serde = { version = "1", features = ["derive"], default-features = false }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
