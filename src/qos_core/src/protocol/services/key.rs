@@ -279,6 +279,7 @@ mod test {
 		},
 	};
 
+	#[allow(dead_code)]
 	struct TestArgs {
 		manifest_envelope: ManifestEnvelope,
 		members_with_keys: Vec<(P256Pair, QuorumMember)>,

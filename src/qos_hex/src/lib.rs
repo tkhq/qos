@@ -1,5 +1,4 @@
 //! Utilities for encoding and decoding hex strings.
-//! Inspired by https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=e241493d100ecaadac3c99f37d0f766f
 //!
 //! To encode a `&[u8]` you can use:
 //!

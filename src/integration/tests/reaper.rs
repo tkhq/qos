@@ -2,9 +2,10 @@ use std::fs;
 
 use integration::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
 use qos_core::{
-	handles::Handles, io::SocketAddress,
+	handles::Handles,
+	io::SocketAddress,
 	protocol::services::boot::ManifestEnvelope,
-	reaper::{REAPER_EXIT_DELAY_IN_SECONDS, Reaper},
+	reaper::{Reaper, REAPER_EXIT_DELAY_IN_SECONDS},
 };
 use qos_nsm::mock::MockNsm;
 use qos_test_primitives::PathWrapper;
@@ -13,7 +14,8 @@ use qos_test_primitives::PathWrapper;
 fn reaper_works() {
 	let secret_path: PathWrapper = "./coordinator_works.secret".into();
 	// let eph_path = "coordinator_works.eph.key";
-	let usock: PathWrapper = "./coordinator_works/coordinator_works.sock".into();
+	let usock: PathWrapper =
+		"./coordinator_works/coordinator_works.sock".into();
 	let manifest_path: PathWrapper = "coordinator_works.manifest".into();
 	let msg = "durp-a-durp";
 
@@ -66,9 +68,11 @@ fn reaper_works() {
 
 #[test]
 fn reaper_handles_non_zero_exits() {
-	let secret_path: PathWrapper = "./coordinator_handles_non_zero_exits.secret".into();
+	let secret_path: PathWrapper =
+		"./coordinator_handles_non_zero_exits.secret".into();
 	let usock: PathWrapper = "./coordinator_handles_non_zero_exits.sock".into();
-	let manifest_path: PathWrapper = "./coordinator_handles_non_zero_exits.manifest".into();
+	let manifest_path: PathWrapper =
+		"./coordinator_handles_non_zero_exits.manifest".into();
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(fs::remove_file(&*secret_path));
@@ -108,7 +112,9 @@ fn reaper_handles_non_zero_exits() {
 
 	// Ensure the coordinator has enough time to detect the secret, launch the
 	// pivot, and let the pivot exit.
-	std::thread::sleep(std::time::Duration::from_secs(REAPER_EXIT_DELAY_IN_SECONDS * 2));
+	std::thread::sleep(std::time::Duration::from_secs(
+		REAPER_EXIT_DELAY_IN_SECONDS * 2,
+	));
 
 	assert!(coordinator_handle.is_finished());
 }
@@ -117,7 +123,8 @@ fn reaper_handles_non_zero_exits() {
 fn reaper_handles_panic() {
 	let secret_path: PathWrapper = "./coordinator_handles_panics.secret".into();
 	let usock: PathWrapper = "./coordinator_handles_panics.sock".into();
-	let manifest_path: PathWrapper = "./coordinator_handles_panics.manifest".into();
+	let manifest_path: PathWrapper =
+		"./coordinator_handles_panics.manifest".into();
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(fs::remove_file(&*secret_path));
@@ -157,7 +164,9 @@ fn reaper_handles_panic() {
 
 	// Ensure the coordinator has enough time to detect the secret, launch the
 	// pivot, and let the pivot exit.
-	std::thread::sleep(std::time::Duration::from_secs(REAPER_EXIT_DELAY_IN_SECONDS * 2));
+	std::thread::sleep(std::time::Duration::from_secs(
+		REAPER_EXIT_DELAY_IN_SECONDS * 2,
+	));
 
 	assert!(coordinator_handle.is_finished());
 }
