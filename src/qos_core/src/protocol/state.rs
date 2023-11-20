@@ -241,7 +241,7 @@ impl ProtocolState {
 		match self.phase {
 			ProtocolPhase::UnrecoverableError => {
 				vec![
-					ProtocolRoute::manifest_envelope(self.phase),
+					ProtocolRoute::status(self.phase),
 					ProtocolRoute::manifest_envelope(self.phase),
 				]
 			}
