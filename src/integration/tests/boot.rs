@@ -17,9 +17,10 @@ use qos_core::protocol::{
 		},
 		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
-	QosHash,
+	ProtocolPhase, QosHash,
 };
 use qos_crypto::sha_256;
+use qos_host::EnclaveInfo;
 use qos_p256::P256Pair;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
@@ -439,5 +440,12 @@ async fn standard_boot_e2e() {
 	// Check that the pivot executed
 	let contents = std::fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
 	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
+
+	let enclave_info_url =
+		format!("http://{LOCAL_HOST}:{}/qos/enclave-info", host_port);
+	let enclave_info: EnclaveInfo =
+		ureq::get(&enclave_info_url).call().unwrap().into_json().unwrap();
+	assert_eq!(enclave_info.phase, ProtocolPhase::QuorumKeyProvisioned);
+
 	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
 }

@@ -20,6 +20,9 @@ use crate::{
 
 /// Delay for restarting the pivot app if the process exits.
 pub const REAPER_RESTART_DELAY_IN_SECONDS: u64 = 1;
+/// Delay until the reaper exits after pivot app with a Never restart policy
+/// exits.
+pub const REAPER_EXIT_DELAY_IN_SECONDS: u64 = 3;
 
 /// Primary entry point for running the enclave. Coordinates spawning the server
 /// and pivot binary.
@@ -31,6 +34,7 @@ impl Reaper {
 	///
 	/// - If spawning the pivot errors.
 	/// - If waiting for the pivot errors.
+	#[allow(dead_code)]
 	pub fn execute(
 		handles: &Handles,
 		nsm: Box<dyn NsmProvider + Send>,
@@ -100,7 +104,10 @@ impl Reaper {
 			}
 		}
 
-		println!("Reaper exiting ...");
+		std::thread::sleep(std::time::Duration::from_secs(
+			REAPER_EXIT_DELAY_IN_SECONDS,
+		));
+		println!("Reaper exiting ... ");
 	}
 }
 

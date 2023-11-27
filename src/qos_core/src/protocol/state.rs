@@ -20,6 +20,8 @@ pub const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: i64 = 5;
 	Clone,
 	borsh::BorshSerialize,
 	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 pub enum ProtocolPhase {
 	/// The state machine cannot recover. The enclave must be rebooted.
@@ -84,6 +86,14 @@ impl ProtocolRoute {
 	pub fn status(current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::status),
+			current_phase,
+			current_phase,
+		)
+	}
+
+	pub fn manifest_envelope(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::manifest_envelope),
 			current_phase,
 			current_phase,
 		)
@@ -230,7 +240,10 @@ impl ProtocolState {
 		#[allow(clippy::match_same_arms)]
 		match self.phase {
 			ProtocolPhase::UnrecoverableError => {
-				vec![ProtocolRoute::status(self.phase)]
+				vec![
+					ProtocolRoute::status(self.phase),
+					ProtocolRoute::manifest_envelope(self.phase),
+				]
 			}
 			ProtocolPhase::GenesisBooted => {
 				vec![ProtocolRoute::status(self.phase)]
@@ -238,6 +251,7 @@ impl ProtocolState {
 			ProtocolPhase::WaitingForBootInstruction => vec![
 				// baseline routes
 				ProtocolRoute::status(self.phase),
+				ProtocolRoute::manifest_envelope(self.phase),
 				// phase specific routes
 				ProtocolRoute::boot_genesis(self.phase),
 				ProtocolRoute::boot_standard(self.phase),
@@ -248,6 +262,7 @@ impl ProtocolState {
 					// baseline routes
 					ProtocolRoute::status(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
+					ProtocolRoute::manifest_envelope(self.phase),
 					// phase specific routes
 					ProtocolRoute::provision(self.phase),
 				]
@@ -257,6 +272,7 @@ impl ProtocolState {
 					// baseline routes
 					ProtocolRoute::status(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
+					ProtocolRoute::manifest_envelope(self.phase),
 					// phase specific routes
 					ProtocolRoute::proxy(self.phase),
 					ProtocolRoute::export_key(self.phase),
@@ -267,6 +283,7 @@ impl ProtocolState {
 					// baseline routes
 					ProtocolRoute::status(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
+					ProtocolRoute::manifest_envelope(self.phase),
 					// phase specific routes
 					ProtocolRoute::inject_key(self.phase),
 				]
@@ -340,6 +357,21 @@ mod handlers {
 	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::StatusRequest = req {
 			Some(Ok(ProtocolMsg::StatusResponse(state.get_phase())))
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn manifest_envelope(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::ManifestEnvelopeRequest = req {
+			Some(Ok(ProtocolMsg::ManifestEnvelopeResponse {
+				manifest_envelope: Box::new(
+					state.handles.get_manifest_envelope().ok(),
+				),
+			}))
 		} else {
 			None
 		}

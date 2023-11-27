@@ -20,18 +20,24 @@ use crate::protocol::{
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct NitroConfig {
 	/// The hash of the enclave image file
+	#[serde(with = "qos_hex::serde")]
 	pub pcr0: Vec<u8>,
 	/// The hash of the Linux kernel and bootstrap
+	#[serde(with = "qos_hex::serde")]
 	pub pcr1: Vec<u8>,
 	/// The hash of the application
+	#[serde(with = "qos_hex::serde")]
 	pub pcr2: Vec<u8>,
 	/// The hash of the Amazon resource name (ARN) of the IAM role that's
 	/// associated with the EC2 instance.
+	#[serde(with = "qos_hex::serde")]
 	pub pcr3: Vec<u8>,
 	/// DER encoded X509 AWS root certificate
+	#[serde(with = "qos_hex::serde")]
 	pub aws_root_certificate: Vec<u8>,
 	/// Reference to the commit QOS was built off of.
 	pub qos_commit: String,
@@ -106,9 +112,11 @@ impl TryFrom<String> for RestartPolicy {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfig {
 	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
+	#[serde(with = "qos_hex::serde")]
 	pub hash: Hash256,
 	/// Restart policy for running the pivot binary.
 	pub restart: RestartPolicy,
@@ -139,6 +147,7 @@ impl fmt::Debug for PivotConfig {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct QuorumMember {
 	/// A human readable alias to identify the member. The alias is not
@@ -146,6 +155,7 @@ pub struct QuorumMember {
 	/// verification.
 	pub alias: String,
 	/// P256Public as bytes
+	#[serde(with = "qos_hex::serde")]
 	pub pub_key: Vec<u8>,
 }
 
@@ -169,6 +179,7 @@ impl fmt::Debug for QuorumMember {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestSet {
 	/// The threshold, K, of signatures necessary to have quorum.
@@ -189,6 +200,7 @@ pub struct ManifestSet {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ShareSet {
 	/// The threshold, K, of signatures necessary to have quorum.
@@ -210,8 +222,10 @@ pub struct ShareSet {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct MemberPubKey {
 	/// Public key of the member
+	#[serde(with = "qos_hex::serde")]
 	pub pub_key: Vec<u8>,
 }
 
@@ -234,6 +248,7 @@ impl fmt::Debug for MemberPubKey {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PatchSet {
 	/// The threshold, K, of signatures necessary to have quorum.
@@ -253,6 +268,7 @@ pub struct PatchSet {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Namespace {
 	/// The namespace. This should be unique relative to other namespaces the
@@ -264,6 +280,7 @@ pub struct Namespace {
 	/// has the highest nonce.
 	pub nonce: u32,
 	/// Quorum Key
+	#[serde(with = "qos_hex::serde")]
 	pub quorum_key: Vec<u8>,
 }
 
@@ -288,6 +305,7 @@ impl fmt::Debug for Namespace {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Manifest {
 	/// Namespace this manifest belongs too.
@@ -314,9 +332,11 @@ pub struct Manifest {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Approval {
 	/// Quorum Member's signature.
+	#[serde(with = "qos_hex::serde")]
 	pub signature: Vec<u8>,
 	/// Description of the Quorum Member
 	pub member: QuorumMember,
@@ -355,6 +375,7 @@ impl Approval {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestEnvelope {
 	/// Encapsulated manifest.
