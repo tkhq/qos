@@ -103,7 +103,7 @@ impl ProtocolRoute {
 		ProtocolRoute::new(
 			Box::new(handlers::live_attestation_doc),
 			current_phase,
-			ProtocolPhase::UnrecoverableError,
+			current_phase,
 		)
 	}
 
@@ -115,19 +115,19 @@ impl ProtocolRoute {
 		)
 	}
 
-	pub fn boot_standard(_current_phase: ProtocolPhase) -> Self {
+	pub fn boot_standard(current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::boot_standard),
 			ProtocolPhase::WaitingForQuorumShards,
-			ProtocolPhase::UnrecoverableError,
+			current_phase,
 		)
 	}
 
-	pub fn boot_key_forward(_current_phase: ProtocolPhase) -> Self {
+	pub fn boot_key_forward(current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::boot_key_forward),
 			ProtocolPhase::WaitingForForwardedKey,
-			ProtocolPhase::UnrecoverableError,
+			current_phase,
 		)
 	}
 
@@ -155,11 +155,11 @@ impl ProtocolRoute {
 		)
 	}
 
-	pub fn inject_key(_current_phase: ProtocolPhase) -> Self {
+	pub fn inject_key(current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::inject_key),
 			ProtocolPhase::QuorumKeyProvisioned,
-			ProtocolPhase::UnrecoverableError,
+			current_phase,
 		)
 	}
 
@@ -243,6 +243,7 @@ impl ProtocolState {
 				vec![
 					ProtocolRoute::status(self.phase),
 					ProtocolRoute::manifest_envelope(self.phase),
+					ProtocolRoute::live_attestation_doc(self.phase),
 				]
 			}
 			ProtocolPhase::GenesisBooted => {

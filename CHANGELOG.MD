@@ -16,6 +16,13 @@ Security: in case of vulnerabilities.
 
 ## [Unreleased]
 
+### Changed
+
+- qos_core: do not go in unrecoverable phase if live_attestation_doc fails.
+- qos_core: do not go into unrecoverable phase if inject_key fails.
+- qos_core: do not go into unrecoverable phase if boot_key_forward fails.
+- qos_core: do not go into unrecoverable phase if boot_standard fails.
+
 ## [1.0.0] 2023.11.27
 
 ### Added
