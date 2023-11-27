@@ -16,6 +16,8 @@ Security: in case of vulnerabilities.
 
 ## [Unreleased]
 
+## [1.0.0] 2023.11.27
+
 ### Added
 
 - qos_host: `/qos/enclave-info` endpoint that returns json payload with phase and manifest envelope, if it exists. (#407)
