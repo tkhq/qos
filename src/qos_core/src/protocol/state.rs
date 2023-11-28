@@ -115,19 +115,19 @@ impl ProtocolRoute {
 		)
 	}
 
-	pub fn boot_standard(current_phase: ProtocolPhase) -> Self {
+	pub fn boot_standard(_current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::boot_standard),
 			ProtocolPhase::WaitingForQuorumShards,
-			current_phase,
+			ProtocolPhase::UnrecoverableError,
 		)
 	}
 
-	pub fn boot_key_forward(current_phase: ProtocolPhase) -> Self {
+	pub fn boot_key_forward(_current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::boot_key_forward),
 			ProtocolPhase::WaitingForForwardedKey,
-			current_phase,
+			ProtocolPhase::UnrecoverableError,
 		)
 	}
 
@@ -155,11 +155,11 @@ impl ProtocolRoute {
 		)
 	}
 
-	pub fn inject_key(current_phase: ProtocolPhase) -> Self {
+	pub fn inject_key(_current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::inject_key),
 			ProtocolPhase::QuorumKeyProvisioned,
-			current_phase,
+			ProtocolPhase::UnrecoverableError,
 		)
 	}
 
