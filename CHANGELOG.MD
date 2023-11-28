@@ -14,16 +14,14 @@ Removed: for now removed features.
 Fixed: for any bug fixes.
 Security: in case of vulnerabilities.
 
-## [Unreleased]
+## [0.3.0] 2023.11.27
 
 ### Changed
 
-- qos_core: do not go in unrecoverable phase if live_attestation_doc fails.
-- qos_core: do not go into unrecoverable phase if inject_key fails.
-- qos_core: do not go into unrecoverable phase if boot_key_forward fails.
-- qos_core: do not go into unrecoverable phase if boot_standard fails.
-
-## [1.0.0] 2023.11.27
+- qos_core: do not go in unrecoverable phase if live_attestation_doc fails. (#412)
+- qos_core: do not go into unrecoverable phase if inject_key fails. (#412)
+- qos_core: do not go into unrecoverable phase if boot_key_forward fails. (#412)
+- qos_core: do not go into unrecoverable phase if boot_standard fails. (#412)
 
 ### Added
 
