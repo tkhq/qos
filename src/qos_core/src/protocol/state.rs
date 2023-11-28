@@ -103,7 +103,7 @@ impl ProtocolRoute {
 		ProtocolRoute::new(
 			Box::new(handlers::live_attestation_doc),
 			current_phase,
-			ProtocolPhase::UnrecoverableError,
+			current_phase,
 		)
 	}
 
@@ -243,6 +243,7 @@ impl ProtocolState {
 				vec![
 					ProtocolRoute::status(self.phase),
 					ProtocolRoute::manifest_envelope(self.phase),
+					ProtocolRoute::live_attestation_doc(self.phase),
 				]
 			}
 			ProtocolPhase::GenesisBooted => {

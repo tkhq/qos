@@ -14,9 +14,11 @@ Removed: for now removed features.
 Fixed: for any bug fixes.
 Security: in case of vulnerabilities.
 
-## [Unreleased]
+## [0.3.0] 2023.11.27
 
-## [1.0.0] 2023.11.27
+### Changed
+
+- qos_core: do not go in unrecoverable phase if live_attestation_doc fails. (#412)
 
 ### Added
 
