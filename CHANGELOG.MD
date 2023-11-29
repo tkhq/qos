@@ -14,6 +14,13 @@ Removed: for now removed features.
 Fixed: for any bug fixes.
 Security: in case of vulnerabilities.
 
+## [Unreleased]
+
+### Added
+
+- qos_hex: support more array sizes for serde deserialize
+
+
 ## [0.3.0] 2023.11.27
 
 ### Changed
