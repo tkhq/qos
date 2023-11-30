@@ -4,6 +4,7 @@ version = "1.2.0"
 authors = [""]
 edition = "2018"
 rust-version = "1.61"
+publish = false
 
 [dependencies]
 nitro-cli = { git = "https://github.com/aws/aws-nitro-enclaves-cli", version = "1.2.2" }
