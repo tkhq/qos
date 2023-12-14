@@ -5,6 +5,7 @@ use qos_nsm::{
 
 use crate::protocol::{ProtocolError, ProtocolState, QosHash};
 
+/// manifest hash in user data
 pub(in crate::protocol) fn live_attestation_doc(
 	state: &mut ProtocolState,
 ) -> Result<NsmResponse, ProtocolError> {
@@ -20,13 +21,31 @@ pub(in crate::protocol) fn live_attestation_doc(
 	))
 }
 
+/// reshard input hash in user data
+pub(in crate::protocol) fn reshard_attestation_doc(
+	state: &mut ProtocolState,
+) -> Result<NsmResponse, ProtocolError> {
+	let ephemeral_public_key =
+		state.handles.get_ephemeral_key()?.public_key().to_bytes();
+	let reshard_input = state
+		.reshard_input
+		.clone()
+		.ok_or(ProtocolError::MissingReshardInput)?;
+
+	Ok(get_post_boot_attestation_doc(
+		&*state.attestor,
+		ephemeral_public_key,
+		reshard_input.qos_hash().to_vec(),
+	))
+}
+
 pub(super) fn get_post_boot_attestation_doc(
 	attestor: &dyn NsmProvider,
 	ephemeral_public_key: Vec<u8>,
-	manifest_hash: Vec<u8>,
+	user_data: Vec<u8>,
 ) -> NsmResponse {
 	let request = NsmRequest::Attestation {
-		user_data: Some(manifest_hash),
+		user_data: Some(user_data),
 		nonce: None,
 		public_key: Some(ephemeral_public_key),
 	};

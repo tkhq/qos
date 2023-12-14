@@ -7,6 +7,7 @@
 
 use sha2::Digest;
 
+pub mod n_choose_k;
 pub mod shamir;
 
 /// Create a SHA256 hash digest of `buf`.

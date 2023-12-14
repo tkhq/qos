@@ -47,7 +47,7 @@ impl SecretBuilder {
 		self.shares.len()
 	}
 
-	fn clear(&mut self) {
+	pub(crate) fn clear(&mut self) {
 		self.shares = vec![];
 	}
 }
