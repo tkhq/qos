@@ -240,5 +240,10 @@ mod test {
 		shares.shuffle(&mut rand::thread_rng());
 		let reconstructed = shares_reconstruct(&shares);
 		assert_eq!(secret.to_vec(), reconstructed);
+
+		for combo in crate::n_choose_k::combinations(&all_shares, k) {
+			let reconstructed = shares_reconstruct(&combo);
+			assert_eq!(secret.to_vec(), reconstructed);
+		}
 	}
 }
