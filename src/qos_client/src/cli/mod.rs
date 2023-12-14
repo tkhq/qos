@@ -34,6 +34,8 @@ const QOS_REALEASE_DIR: &str = "qos-release-dir";
 const PCR3_PREIMAGE_PATH: &str = "pcr3-preimage-path";
 const PIVOT_HASH_PATH: &str = "pivot-hash-path";
 const SHARE_SET_DIR: &str = "share-set-dir";
+const NEW_SHARE_SET_DIR: &str = "new-share-set-dir";
+const OLD_SHARE_SET_DIR: &str = "old-share-set-dir";
 const MANIFEST_SET_DIR: &str = "manifest-set-dir";
 const PATCH_SET_DIR: &str = "patch-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
@@ -51,6 +53,7 @@ const APPROVAL_PATH: &str = "approval-path";
 const EPH_WRAPPED_SHARE_PATH: &str = "eph-wrapped-share-path";
 const ATTESTATION_DOC_PATH: &str = "attestation-doc-path";
 const MASTER_SEED_PATH: &str = "master-seed-path";
+const RESHARD_OUTPUT_PATH: &str = "reshard-output-path";
 const SHARE: &str = "share";
 const OUTPUT_DIR: &str = "output-dir";
 const THRESHOLD: &str = "threshold";
@@ -69,6 +72,11 @@ const PLAINTEXT_PATH: &str = "plaintext-path";
 const OUTPUT_HEX: &str = "output-hex";
 const VALIDATION_TIME_OVERRIDE: &str = "validation-time-override";
 const JSON: &str = "json";
+const RESHARD_INPUT_PATH: &str = "reshard-input-path";
+const QUORUM_KEY_PATH_MULTIPLE: &str = "quorum-key-path-multiple";
+const QUORUM_SHARE_DIR_MULTIPLE: &str = "quorum-share-dir-multiple";
+const SHARE_DIR: &str = "share-dir";
+const PROVISION_INPUT_PATH: &str = "provision-input-path";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -211,6 +219,24 @@ pub enum Command {
 	P256AsymmetricEncrypt,
 	/// Decrypt a payload encrypted to a qos_p256 public key.
 	P256AsymmetricDecrypt,
+	/// Generate the input for the reshard ceremony.
+	GenerateReshardInput,
+	/// Broadcast the boot reshard instruction.
+	BootReshard,
+	/// Get the attestation doc with the reshard input hash as the user
+	/// data and the ephemeral key as the public key.
+	GetReshardAttestationDoc,
+	/// Reencrypt a quorum key share to the ephemeral key of an enclave booted
+	/// for resharding.
+	ReshardReEncryptShare,
+	/// Submit an encrypted share along with the associated approval to an
+	/// enclave booted for resharding.
+	ReshardPostShare,
+	/// Fetch the reshard output after the quorum key has been provisioned for
+	/// resharding.
+	GetReshardOutput,
+	/// Verify the reshard output
+	VerifyReshardOutput,
 }
 
 impl From<&str> for Command {
@@ -247,6 +273,13 @@ impl From<&str> for Command {
 			"p256-sign" => Self::P256Sign,
 			"p256-asymmetric-encrypt" => Self::P256AsymmetricEncrypt,
 			"p256-asymmetric-decrypt" => Self::P256AsymmetricDecrypt,
+			"generate-reshard-input" => Self::GenerateReshardInput,
+			"boot-reshard" => Self::BootReshard,
+			"get-reshard-attestation-doc" => Self::GetReshardAttestationDoc,
+			"reshard-re-encrypt-share" => Self::ReshardReEncryptShare,
+			"reshard-post-share" => Self::ReshardPostShare,
+			"get-reshard-output" => Self::GetReshardOutput,
+			"verify-reshard-output" => Self::VerifyReshardOutput,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -333,7 +366,39 @@ impl Command {
 	fn share_set_dir_token() -> Token {
 		Token::new(
 			SHARE_SET_DIR,
-			"Director with public keys for members of the share set.",
+			"Directory with public keys for members of the share set.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn old_share_set_dir_token() -> Token {
+		Token::new(
+			OLD_SHARE_SET_DIR,
+			"Directory with public keys for members of the OLD share set.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn new_share_set_dir_token() -> Token {
+		Token::new(
+			NEW_SHARE_SET_DIR,
+			"Directory with public keys for members of the NEW share set.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn reshard_input_path_token() -> Token {
+		Token::new(
+			RESHARD_INPUT_PATH,
+			"Path to the file to read/write the reshard input.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn reshard_output_path_token() -> Token {
+		Token::new(
+			RESHARD_OUTPUT_PATH,
+			"Path to the file to read/write the reshard output.",
 		)
 		.takes_value(true)
 		.required(true)
@@ -362,6 +427,14 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn share_dir_token() -> Token {
+		Token::new(
+			SHARE_DIR,
+			"directory to read/write subdirectories that contain quorum key and your associated share.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
 	fn alias_token() -> Token {
 		Token::new(ALIAS, "Alias for identifying the key pair")
 			.takes_value(true)
@@ -380,7 +453,6 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
-
 	fn yubikey_token() -> Token {
 		Token::new(YUBIKEY, "Flag to indicate using a yubikey for signing")
 			.takes_value(false)
@@ -556,6 +628,32 @@ impl Command {
 			.required(false)
 			.takes_value(false)
 	}
+	fn quorum_key_path_multiple_token() -> Token {
+		Token::new(
+			QUORUM_KEY_PATH_MULTIPLE,
+			"use multiple times to specify multiple quorum public key files.",
+		)
+		.required(true)
+		.takes_value(true)
+		.allow_multiple(true)
+	}
+	fn quorum_share_dir_multiple_token() -> Token {
+		Token::new(
+			QUORUM_SHARE_DIR_MULTIPLE,
+			"path to directory with just your share and the associated quorum key."
+		)
+			.required(true)
+			.takes_value(true)
+			.allow_multiple(true)
+	}
+	fn provision_input_path_token() -> Token {
+		Token::new(
+			PROVISION_INPUT_PATH,
+			"path to file to read/write ReshardProvisionInput.",
+		)
+		.required(true)
+		.takes_value(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -643,6 +741,16 @@ impl Command {
 			.token(Self::pivot_args_token())
 	}
 
+	fn generate_reshard_input() -> Parser {
+		Parser::new()
+			.token(Self::qos_release_dir_token())
+			.token(Self::quorum_key_path_multiple_token())
+			.token(Self::pcr3_preimage_path_token())
+			.token(Self::old_share_set_dir_token())
+			.token(Self::new_share_set_dir_token())
+			.token(Self::reshard_input_path_token())
+	}
+
 	fn approve_manifest() -> Parser {
 		Parser::new()
 			.token(Self::yubikey_token())
@@ -668,10 +776,18 @@ impl Command {
 			.token(Self::unsafe_skip_attestation_token())
 	}
 
+	fn boot_reshard() -> Parser {
+		Self::base().token(Self::reshard_input_path_token())
+	}
+
 	fn get_attestation_doc() -> Parser {
 		Self::base()
 			.token(Self::attestation_doc_path_token())
 			.token(Self::manifest_envelope_path_token())
+	}
+
+	fn get_reshard_attestation_doc() -> Parser {
+		Self::base().token(Self::attestation_doc_path_token())
 	}
 
 	fn proxy_re_encrypt_share() -> Parser {
@@ -685,6 +801,24 @@ impl Command {
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::manifest_envelope_path_token())
+			.token(Self::alias_token())
+			.token(Self::unsafe_skip_attestation_token())
+			.token(Self::unsafe_eph_path_override_token())
+			.token(Self::unsafe_auto_confirm_token())
+	}
+
+	fn reshard_re_encrypt_share() -> Parser {
+		Parser::new()
+			.token(Self::yubikey_token())
+			.token(Self::secret_path_token())
+			.token(Self::attestation_doc_path_token())
+			.token(Self::provision_input_path_token())
+			.token(Self::quorum_share_dir_multiple_token())
+			.token(Self::reshard_input_path_token())
+			.token(Self::qos_release_dir_token())
+			.token(Self::pcr3_preimage_path_token())
+			.token(Self::new_share_set_dir_token())
+			.token(Self::old_share_set_dir_token())
 			.token(Self::alias_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
@@ -803,6 +937,22 @@ impl Command {
 			.token(Self::master_seed_path_token())
 			.token(Self::output_hex_token())
 	}
+
+	fn get_reshard_output() -> Parser {
+		Self::base().token(Self::reshard_output_path_token())
+	}
+
+	fn verify_reshard_output() -> Parser {
+		Parser::new()
+			.token(Self::yubikey_token())
+			.token(Self::secret_path_token())
+			.token(Self::reshard_output_path_token())
+			.token(Self::share_dir_token())
+	}
+
+	fn reshard_post_share() -> Parser {
+		Self::base().token(Self::provision_input_path_token())
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -842,6 +992,15 @@ impl GetParserForCommand for Command {
 			Self::P256Sign => Self::p256_sign(),
 			Self::P256AsymmetricEncrypt => Self::p256_asymmetric_encrypt(),
 			Self::P256AsymmetricDecrypt => Self::p256_asymmetric_decrypt(),
+			Self::GenerateReshardInput => Self::generate_reshard_input(),
+			Self::BootReshard => Self::boot_reshard(),
+			Self::GetReshardAttestationDoc => {
+				Self::get_reshard_attestation_doc()
+			}
+			Self::ReshardReEncryptShare => Self::reshard_re_encrypt_share(),
+			Self::ReshardPostShare => Self::reshard_post_share(),
+			Self::GetReshardOutput => Self::get_reshard_output(),
+			Self::VerifyReshardOutput => Self::verify_reshard_output(),
 		}
 	}
 }
@@ -1049,6 +1208,27 @@ impl ClientOpts {
 			.to_string()
 	}
 
+	fn reshard_input_path(&self) -> String {
+		self.parsed
+			.single(RESHARD_INPUT_PATH)
+			.expect("Missing `--reshard-input-path`")
+			.to_string()
+	}
+
+	fn new_share_set_dir(&self) -> String {
+		self.parsed
+			.single(NEW_SHARE_SET_DIR)
+			.expect("Missing `--new-share-set-dir`")
+			.to_string()
+	}
+
+	fn old_share_set_dir(&self) -> String {
+		self.parsed
+			.single(OLD_SHARE_SET_DIR)
+			.expect("Missing `--old-share-set-dir`")
+			.to_string()
+	}
+
 	fn output_dir(&self) -> String {
 		self.parsed
 			.single(OUTPUT_DIR)
@@ -1144,10 +1324,31 @@ impl ClientOpts {
 			.to_string()
 	}
 
+	fn reshard_output_path(&self) -> String {
+		self.parsed
+			.single(RESHARD_OUTPUT_PATH)
+			.expect("Missing `--reshard-output-path`")
+			.to_string()
+	}
+
 	fn ciphertext_path(&self) -> String {
 		self.parsed
 			.single(CIPHERTEXT_PATH)
 			.expect("Missing `--ciphertext-path`")
+			.to_string()
+	}
+
+	fn provision_input_path(&self) -> String {
+		self.parsed
+			.single(PROVISION_INPUT_PATH)
+			.expect("Missing `--provision-input-path`")
+			.to_string()
+	}
+
+	fn share_dir(&self) -> String {
+		self.parsed
+			.single(SHARE_DIR)
+			.expect("Missing `--share-dir`")
 			.to_string()
 	}
 
@@ -1173,6 +1374,20 @@ impl ClientOpts {
 
 	fn json(&self) -> bool {
 		self.parsed.flag(JSON).unwrap_or(false)
+	}
+
+	fn quorum_key_path_multiple(&self) -> Vec<String> {
+		self.parsed
+			.multiple(QUORUM_KEY_PATH_MULTIPLE)
+			.expect("Missing `--quorum-key-path-multiple`")
+			.to_vec()
+	}
+
+	fn quorum_share_dir_multiple(&self) -> Vec<String> {
+		self.parsed
+			.multiple(QUORUM_SHARE_DIR_MULTIPLE)
+			.expect("Missing `--quorum-share-dir-multiple`")
+			.to_vec()
 	}
 }
 
@@ -1264,6 +1479,25 @@ impl ClientRunner {
 				Command::P256AsymmetricDecrypt => {
 					handlers::p256_asymmetric_decrypt(&self.opts);
 				}
+				Command::GenerateReshardInput => {
+					handlers::generate_reshard_input(&self.opts);
+				}
+				Command::BootReshard => handlers::boot_reshard(&self.opts),
+				Command::GetReshardAttestationDoc => {
+					handlers::get_reshard_attestation_doc(&self.opts);
+				}
+				Command::ReshardReEncryptShare => {
+					handlers::reshard_re_encrypt_share(&self.opts);
+				}
+				Command::ReshardPostShare => {
+					handlers::reshard_post_share(&self.opts);
+				}
+				Command::GetReshardOutput => {
+					handlers::get_reshard_output(&self.opts);
+				}
+				Command::VerifyReshardOutput => {
+					handlers::verify_reshard_output(&self.opts);
+				}
 			}
 		}
 	}
@@ -1283,10 +1517,15 @@ impl CLI {
 }
 
 mod handlers {
-	use super::services::{ApproveManifestArgs, ProxyReEncryptShareArgs};
+	use super::services::{
+		ApproveManifestArgs, ProxyReEncryptShareArgs, ReshardReEncryptShareArgs,
+	};
 	use crate::{
 		cli::{
-			services::{self, GenerateManifestArgs, PairOrYubi},
+			services::{
+				self, GenerateManifestArgs, GenerateReshardInputArgs,
+				PairOrYubi,
+			},
 			ClientOpts, ProtocolMsg,
 		},
 		request,
@@ -1495,6 +1734,21 @@ mod handlers {
 		}
 	}
 
+	pub(super) fn generate_reshard_input(opts: &ClientOpts) {
+		if let Err(e) =
+			services::generate_reshard_input(GenerateReshardInputArgs {
+				qos_release_dir: opts.qos_release_dir(),
+				quorum_key_paths: opts.quorum_key_path_multiple(),
+				pcr3_preimage_path: opts.pcr3_preimage_path(),
+				new_share_set_dir: opts.new_share_set_dir(),
+				old_share_set_dir: opts.old_share_set_dir(),
+				reshard_input_path: opts.reshard_input_path(),
+			}) {
+			println!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
 	pub(super) fn approve_manifest(opts: &ClientOpts) {
 		let pair = get_pair_or_yubi(opts);
 
@@ -1530,11 +1784,28 @@ mod handlers {
 		}
 	}
 
+	pub(super) fn boot_reshard(opts: &ClientOpts) {
+		if let Err(e) = services::boot_reshard(
+			&opts.path_message(),
+			opts.reshard_input_path(),
+		) {
+			println!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
 	pub(super) fn get_attestation_doc(opts: &ClientOpts) {
 		services::get_attestation_doc(
 			&opts.path_message(),
 			opts.attestation_doc_path(),
 			opts.manifest_envelope_path(),
+		);
+	}
+
+	pub(super) fn get_reshard_attestation_doc(opts: &ClientOpts) {
+		services::get_reshard_attestation_doc(
+			&opts.path_message(),
+			opts.attestation_doc_path(),
 		);
 	}
 
@@ -1561,11 +1832,67 @@ mod handlers {
 		}
 	}
 
+	pub(super) fn reshard_re_encrypt_share(opts: &ClientOpts) {
+		let pair = get_pair_or_yubi(opts);
+
+		if let Err(e) =
+			services::reshard_re_encrypt_share(ReshardReEncryptShareArgs {
+				pair,
+				quorum_share_dirs: opts.quorum_share_dir_multiple(),
+				attestation_doc_path: opts.attestation_doc_path(),
+				provision_input_path: opts.provision_input_path(),
+
+				reshard_input_path: opts.reshard_input_path(),
+				qos_release_dir: opts.qos_release_dir(),
+				pcr3_preimage_path: opts.pcr3_preimage_path(),
+				new_share_set_dir: opts.new_share_set_dir(),
+				old_share_set_dir: opts.old_share_set_dir(),
+
+				alias: opts.alias(),
+				unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+				unsafe_eph_path_override: opts.unsafe_eph_path_override(),
+				unsafe_auto_confirm: opts.unsafe_auto_confirm(),
+			}) {
+			eprintln!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
 	pub(super) fn post_share(opts: &ClientOpts) {
 		if let Err(e) = services::post_share(
 			&opts.path_message(),
 			opts.eph_wrapped_share_path(),
 			opts.approval_path(),
+		) {
+			eprintln!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn reshard_post_share(opts: &ClientOpts) {
+		if let Err(e) = services::reshard_post_share(
+			&opts.path_message(),
+			opts.provision_input_path(),
+		) {
+			eprintln!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn get_reshard_output(opts: &ClientOpts) {
+		services::get_reshard_output(
+			&opts.path_message(),
+			&opts.reshard_output_path(),
+		);
+	}
+
+	pub(super) fn verify_reshard_output(opts: &ClientOpts) {
+		let pair = get_pair_or_yubi(opts);
+
+		if let Err(e) = services::verify_reshard_output(
+			opts.reshard_output_path(),
+			pair,
+			&opts.share_dir(),
 		) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);

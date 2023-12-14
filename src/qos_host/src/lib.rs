@@ -202,9 +202,14 @@ impl HostServer {
 					ProtocolPhase::UnrecoverableError
 					| ProtocolPhase::WaitingForBootInstruction
 					| ProtocolPhase::WaitingForQuorumShards
-					| ProtocolPhase::WaitingForForwardedKey => StatusCode::SERVICE_UNAVAILABLE,
+					| ProtocolPhase::WaitingForForwardedKey
+					| ProtocolPhase::ReshardWaitingForQuorumShards
+					| ProtocolPhase::UnrecoverableReshardFailedBadShares => {
+						StatusCode::SERVICE_UNAVAILABLE
+					}
 					ProtocolPhase::QuorumKeyProvisioned
-					| ProtocolPhase::GenesisBooted => StatusCode::OK,
+					| ProtocolPhase::GenesisBooted
+					| ProtocolPhase::ReshardBooted => StatusCode::OK,
 				};
 
 				(status, Html(inner))

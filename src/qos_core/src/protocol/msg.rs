@@ -2,10 +2,12 @@
 
 use qos_nsm::types::NsmResponse;
 
+use super::services::reshard::ReshardProvisionInput;
 use crate::protocol::{
 	services::{
 		boot::{Approval, ManifestEnvelope},
 		genesis::{GenesisOutput, GenesisSet},
+		reshard::{ReshardInput, ReshardOutput},
 	},
 	ProtocolError,
 };
@@ -137,6 +139,49 @@ pub enum ProtocolMsg {
 		/// The manifest envelope used to boot the enclave. This will be `None`
 		/// if the manifest envelope does not exist.
 		manifest_envelope: Box<Option<ManifestEnvelope>>,
+	},
+
+	/// Reshard a quorum key to the `new_share_set` in the [`ReshardInput`]
+	BootReshardRequest {
+		/// The parameters for resharding
+		reshard_input: ReshardInput,
+	},
+	/// Response to [`Self::BootReshardRequest`].
+	BootReshardResponse {
+		/// Should be `[NsmResponse::Attestation`]. `user_data` is the the
+		/// reshard_input
+		nsm_response: NsmResponse,
+	},
+
+	/// Request an attestation doc with the `ReshardInput` as the user data/
+	ReshardAttestationDocRequest,
+	/// Response to [`Self::ReshardAttestationDocRequest`]
+	ReshardAttestationDocResponse {
+		/// Should be `[NsmResponse::Attestation`]. `user_data` is the the
+		/// reshard_input
+		nsm_response: NsmResponse,
+		/// The reshard parameters this enclave is setup for.
+		reshard_input: ReshardInput,
+	},
+
+	/// Post a quorum key shard so it can be provisioned and resharded.
+	ReshardProvisionRequest {
+		/// Approval and shares for each quorum key
+		input: ReshardProvisionInput,
+	},
+	/// Response to a `Self::ReshardProvisionRequest`
+	ReshardProvisionResponse {
+		/// If the Quorum key was reconstructed. False indicates still waiting
+		/// for the Kth share.
+		reconstructed: bool,
+	},
+
+	/// Request the reshard service's output.
+	ReshardOutputRequest,
+	/// Response to [Self::ReshardOutputRequest].
+	ReshardOutputResponse {
+		/// The output of the reshard services.
+		reshard_output: ReshardOutput,
 	},
 }
 
