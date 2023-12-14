@@ -1,8 +1,15 @@
 //! Quorum Key Resharding logic and types.
 
-use crate::protocol::services::{
-	boot::{NitroConfig, ShareSet},
-	genesis::GenesisMemberOutput,
+use qos_nsm::types::NsmResponse;
+use qos_p256::P256Pair;
+
+use crate::protocol::{
+	services::{
+		attestation,
+		boot::{NitroConfig, ShareSet},
+		genesis::GenesisMemberOutput,
+	},
+	ProtocolError, ProtocolState,
 };
 
 /// The parameters for setting up the reshard service.
@@ -57,4 +64,18 @@ pub struct ReshardOutput {
 	/// `Self::quorum_key` signature over [`Self::test_message`].
 	#[serde(with = "qos_hex::serde")]
 	pub test_message_signature: Vec<u8>,
+}
+
+pub(in crate::protocol) fn boot_reshard(
+	state: &mut ProtocolState,
+	reshard_input: ReshardInput,
+) -> Result<NsmResponse, ProtocolError> {
+	// 1. Store reshard input in state
+	state.reshard_input = Some(reshard_input);
+
+	// 2. Generate an Ephemeral Key.
+	let ephemeral_key = P256Pair::generate()?;
+	state.handles.put_ephemeral_key(&ephemeral_key)?;
+
+	Ok(attestation::reshard_attestation_doc(state)?)
 }

@@ -4,7 +4,9 @@ use nix::sys::time::{TimeVal, TimeValLike};
 use qos_nsm::NsmProvider;
 
 use super::{
-	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
+	error::ProtocolError,
+	msg::ProtocolMsg,
+	services::{provision::SecretBuilder, reshard::ReshardInput},
 };
 use crate::{client::Client, handles::Handles, io::SocketAddress};
 
@@ -179,6 +181,7 @@ pub(crate) struct ProtocolState {
 	pub app_client: Client,
 	pub handles: Handles,
 	phase: ProtocolPhase,
+	pub reshard_input: Option<ReshardInput>,
 }
 
 impl ProtocolState {
@@ -208,6 +211,7 @@ impl ProtocolState {
 				app_addr,
 				TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 			),
+			reshard_input: None,
 		}
 	}
 
