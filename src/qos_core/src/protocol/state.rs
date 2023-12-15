@@ -38,8 +38,13 @@ pub enum ProtocolPhase {
 	QuorumKeyProvisioned,
 	/// Waiting for a forwarded key to be injected
 	WaitingForForwardedKey,
-	/// Waiting for quorum key shards to be posted so the reshard service can be executed.
-	ReshardWaitingForQuorumShards
+	/// Waiting for quorum key shards to be posted so the reshard service can
+	/// be executed.
+	ReshardWaitingForQuorumShards,
+	/// Reshard service has completed
+	ReshardBooted,
+	/// Reshard failed to reconstruct the quorum key
+	UnrecoverableReshardFailedBadShares,
 }
 
 /// Enclave routes
@@ -313,11 +318,22 @@ impl ProtocolState {
 			}
 			ProtocolPhase::ReshardWaitingForQuorumShards => {
 				vec![
-					// baseline routes
 					ProtocolRoute::status(self.phase),
 					ProtocolRoute::reshard_attestation_doc(self.phase),
-					// phase specific routes
-					ProtocolRoute::inject_key(self.phase),
+					// TODO(zeke): add post
+				]
+			}
+			ProtocolPhase::UnrecoverableReshardFailedBadShares => {
+				vec![
+					// baseline routes
+					ProtocolRoute::status(self.phase),
+				]
+			}
+			ProtocolPhase::ReshardBooted => {
+				vec![
+					// baseline routes
+					ProtocolRoute::status(self.phase), /* TODO(zeke): route
+					                                    * to add */
 				]
 			}
 		}
@@ -358,6 +374,18 @@ impl ProtocolState {
 					ProtocolPhase::QuorumKeyProvisioned,
 				]
 			}
+			ProtocolPhase::ReshardWaitingForQuorumShards => {
+				vec![
+					ProtocolPhase::UnrecoverableReshardFailedBadShares,
+					ProtocolPhase::ReshardBooted,
+				]
+			}
+			ProtocolPhase::ReshardBooted => {
+				vec![ProtocolPhase::UnrecoverableError]
+			}
+			ProtocolPhase::UnrecoverableReshardFailedBadShares => {
+				vec![ProtocolPhase::UnrecoverableError]
+			}
 		};
 
 		if !transitions.contains(&next) {
@@ -374,6 +402,7 @@ impl ProtocolState {
 mod handlers {
 	use super::ProtocolRouteResponse;
 	use crate::protocol::{
+		error::ProtocolError,
 		msg::ProtocolMsg,
 		services::{
 			attestation, boot, genesis, key, key::EncryptedQuorumKey,
@@ -381,7 +410,6 @@ mod handlers {
 		},
 		ProtocolState,
 	};
-	use crate::error::ProtocolError; 
 
 	// TODO: Add tests for this in the middle of some integration tests
 	/// Status of the enclave.
@@ -531,15 +559,21 @@ mod handlers {
 		if let ProtocolMsg::ReshardAttestationDocRequest = req {
 			let reshard_input = match state
 				.reshard_input
-				.ok_or(ProtocolError::MissingReshardInput) {
-					Ok(r) => r,
-					Err(e) => return ProtocolMsg::ProtocolErrorResponse(e)
-				};
+				.as_ref()
+				.ok_or(ProtocolError::MissingReshardInput)
+			{
+				Ok(r) => r.clone(),
+				Err(e) => {
+					return Some(Ok(ProtocolMsg::ProtocolErrorResponse(e)))
+				}
+			};
 
 			let result = attestation::reshard_attestation_doc(state)
-				.map(|nsm_response| ProtocolMsg::ReshardAttestationDocResponse {
-					nsm_response,
-					reshard_input,
+				.map(|nsm_response| {
+					ProtocolMsg::ReshardAttestationDocResponse {
+						nsm_response,
+						reshard_input,
+					}
 				})
 				.map_err(ProtocolMsg::ProtocolErrorResponse);
 

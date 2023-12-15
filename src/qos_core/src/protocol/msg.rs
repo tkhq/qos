@@ -155,7 +155,7 @@ pub enum ProtocolMsg {
 		/// Should be `[NsmResponse::Attestation`]
 		nsm_response: NsmResponse,
 		reshard_input: ReshardInput,
-	}
+	},
 }
 
 #[cfg(test)]
