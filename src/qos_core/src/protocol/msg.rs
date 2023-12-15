@@ -6,6 +6,7 @@ use crate::protocol::{
 	services::{
 		boot::{Approval, ManifestEnvelope},
 		genesis::{GenesisOutput, GenesisSet},
+		reshard::ReshardInput,
 	},
 	ProtocolError,
 };
@@ -138,6 +139,23 @@ pub enum ProtocolMsg {
 		/// if the manifest envelope does not exist.
 		manifest_envelope: Box<Option<ManifestEnvelope>>,
 	},
+
+	/// Execute Standard Boot.
+	BootReshardRequest {
+		/// Manifest with approvals
+		reshard_input: ReshardInput,
+	},
+	BootReshardResponse {
+		/// Should be `[NsmResponse::Attestation`]
+		nsm_response: NsmResponse,
+	},
+
+	ReshardAttestationDocRequest,
+	ReshardAttestationDocResponse {
+		/// Should be `[NsmResponse::Attestation`]
+		nsm_response: NsmResponse,
+		reshard_input: ReshardInput,
+	}
 }
 
 #[cfg(test)]

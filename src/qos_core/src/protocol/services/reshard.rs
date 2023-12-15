@@ -14,6 +14,7 @@ use crate::protocol::{
 
 /// The parameters for setting up the reshard service.
 #[derive(
+	Debug,
 	PartialEq,
 	Eq,
 	Clone,
@@ -39,6 +40,7 @@ pub struct ReshardInput {
 
 /// The output of performing a quorum key reshard.
 #[derive(
+	Debug,
 	PartialEq,
 	Eq,
 	Clone,
@@ -77,5 +79,5 @@ pub(in crate::protocol) fn boot_reshard(
 	let ephemeral_key = P256Pair::generate()?;
 	state.handles.put_ephemeral_key(&ephemeral_key)?;
 
-	Ok(attestation::reshard_attestation_doc(state)?)
+	attestation::reshard_attestation_doc(state)
 }

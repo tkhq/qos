@@ -38,6 +38,8 @@ pub enum ProtocolPhase {
 	QuorumKeyProvisioned,
 	/// Waiting for a forwarded key to be injected
 	WaitingForForwardedKey,
+	/// Waiting for quorum key shards to be posted so the reshard service can be executed.
+	ReshardWaitingForQuorumShards
 }
 
 /// Enclave routes
@@ -109,6 +111,14 @@ impl ProtocolRoute {
 		)
 	}
 
+	pub fn reshard_attestation_doc(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::reshard_attestation_doc),
+			current_phase,
+			current_phase,
+		)
+	}
+
 	pub fn boot_genesis(_current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::boot_genesis),
@@ -121,6 +131,14 @@ impl ProtocolRoute {
 		ProtocolRoute::new(
 			Box::new(handlers::boot_standard),
 			ProtocolPhase::WaitingForQuorumShards,
+			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
+	pub fn boot_reshard(_current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::boot_reshard),
+			ProtocolPhase::ReshardWaitingForQuorumShards,
 			ProtocolPhase::UnrecoverableError,
 		)
 	}
@@ -293,6 +311,15 @@ impl ProtocolState {
 					ProtocolRoute::inject_key(self.phase),
 				]
 			}
+			ProtocolPhase::ReshardWaitingForQuorumShards => {
+				vec![
+					// baseline routes
+					ProtocolRoute::status(self.phase),
+					ProtocolRoute::reshard_attestation_doc(self.phase),
+					// phase specific routes
+					ProtocolRoute::inject_key(self.phase),
+				]
+			}
 		}
 	}
 
@@ -349,10 +376,12 @@ mod handlers {
 	use crate::protocol::{
 		msg::ProtocolMsg,
 		services::{
-			attestation, boot, genesis, key, key::EncryptedQuorumKey, provision,
+			attestation, boot, genesis, key, key::EncryptedQuorumKey,
+			provision, reshard,
 		},
 		ProtocolState,
 	};
+	use crate::error::ProtocolError; 
 
 	// TODO: Add tests for this in the middle of some integration tests
 	/// Status of the enclave.
@@ -456,6 +485,23 @@ mod handlers {
 		}
 	}
 
+	pub(super) fn boot_reshard(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::BootReshardRequest { reshard_input } = req {
+			let result = reshard::boot_reshard(state, reshard_input.clone())
+				.map(|nsm_response| ProtocolMsg::BootReshardResponse {
+					nsm_response,
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
+		} else {
+			None
+		}
+	}
+
 	pub(super) fn live_attestation_doc(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
@@ -469,6 +515,31 @@ mod handlers {
 						.get_manifest_envelope()
 						.ok()
 						.map(Box::new),
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn reshard_attestation_doc(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::ReshardAttestationDocRequest = req {
+			let reshard_input = match state
+				.reshard_input
+				.ok_or(ProtocolError::MissingReshardInput) {
+					Ok(r) => r,
+					Err(e) => return ProtocolMsg::ProtocolErrorResponse(e)
+				};
+
+			let result = attestation::reshard_attestation_doc(state)
+				.map(|nsm_response| ProtocolMsg::ReshardAttestationDocResponse {
+					nsm_response,
+					reshard_input,
 				})
 				.map_err(ProtocolMsg::ProtocolErrorResponse);
 
