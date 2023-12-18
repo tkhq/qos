@@ -8,7 +8,10 @@ use super::{
 	msg::ProtocolMsg,
 	services::{provision::SecretBuilder, reshard::ReshardInput},
 };
-use crate::{client::Client, handles::Handles, io::SocketAddress};
+use crate::{
+	client::Client, handles::Handles, io::SocketAddress,
+	protocol::services::reshard::ReshardOutput,
+};
 
 /// The timeout for the qos core when making requests to an enclave app.
 pub const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: i64 = 5;
@@ -164,6 +167,14 @@ impl ProtocolRoute {
 		)
 	}
 
+	pub fn reshard_provision(_current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::reshard_provision),
+			ProtocolPhase::QuorumKeyProvisioned,
+			ProtocolPhase::UnrecoverableReshardFailedBadShares,
+		)
+	}
+
 	pub fn proxy(current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::proxy),
@@ -205,6 +216,7 @@ pub(crate) struct ProtocolState {
 	pub handles: Handles,
 	phase: ProtocolPhase,
 	pub reshard_input: Option<ReshardInput>,
+	pub reshard_output: Option<ReshardOutput>,
 }
 
 impl ProtocolState {
@@ -235,6 +247,7 @@ impl ProtocolState {
 				TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 			),
 			reshard_input: None,
+			reshard_output: None,
 		}
 	}
 
@@ -318,9 +331,11 @@ impl ProtocolState {
 			}
 			ProtocolPhase::ReshardWaitingForQuorumShards => {
 				vec![
+					// baseline routes
 					ProtocolRoute::status(self.phase),
 					ProtocolRoute::reshard_attestation_doc(self.phase),
-					// TODO(zeke): add post
+					// phase specific routes
+					ProtocolRoute::reshard_provision(self.phase),
 				]
 			}
 			ProtocolPhase::UnrecoverableReshardFailedBadShares => {
@@ -332,8 +347,7 @@ impl ProtocolState {
 			ProtocolPhase::ReshardBooted => {
 				vec![
 					// baseline routes
-					ProtocolRoute::status(self.phase), /* TODO(zeke): route
-					                                    * to add */
+					ProtocolRoute::status(self.phase),
 				]
 			}
 		}
@@ -354,6 +368,7 @@ impl ProtocolState {
 				ProtocolPhase::UnrecoverableError,
 				ProtocolPhase::GenesisBooted,
 				ProtocolPhase::WaitingForQuorumShards,
+				ProtocolPhase::ReshardWaitingForQuorumShards,
 				ProtocolPhase::WaitingForForwardedKey,
 			],
 			ProtocolPhase::GenesisBooted => {
@@ -463,6 +478,23 @@ mod handlers {
 		if let ProtocolMsg::ProvisionRequest { share, approval } = req {
 			let result = provision::provision(share, approval.clone(), state)
 				.map(|reconstructed| ProtocolMsg::ProvisionResponse {
+					reconstructed,
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn reshard_provision(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::ReshardProvisionRequest { share, approval } = req {
+			let result = provision::provision(share, approval.clone(), state)
+				.map(|reconstructed| ProtocolMsg::ReshardProvisionResponse {
 					reconstructed,
 				})
 				.map_err(ProtocolMsg::ProtocolErrorResponse);

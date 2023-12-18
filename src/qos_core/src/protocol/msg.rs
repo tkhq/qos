@@ -150,11 +150,27 @@ pub enum ProtocolMsg {
 		nsm_response: NsmResponse,
 	},
 
+	/// Request an attestation doc with the `ReshardInput` as the user data/
 	ReshardAttestationDocRequest,
+	/// Succesful response to [`Self::ReshardAttestationDocRequest`]
 	ReshardAttestationDocResponse {
 		/// Should be `[NsmResponse::Attestation`]
 		nsm_response: NsmResponse,
 		reshard_input: ReshardInput,
+	},
+
+	/// Post a quorum key shard so it can be provisioned and resharded.
+	ReshardProvisionRequest {
+		/// Quorum Key share encrypted to the Ephemeral Key.
+		share: Vec<u8>,
+		/// Approval of the `ReshardInput` from a member of the share set.
+		approval: Approval,
+	},
+	/// Response to a `Self::ReshardProvisionRequest`
+	ReshardProvisionResponse {
+		/// If the Quorum key was reconstructed. False indicates still waiting
+		/// for the Kth share.
+		reconstructed: bool,
 	},
 }
 
