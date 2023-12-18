@@ -297,6 +297,7 @@ impl ProtocolState {
 				ProtocolRoute::boot_genesis(self.phase),
 				ProtocolRoute::boot_standard(self.phase),
 				ProtocolRoute::boot_key_forward(self.phase),
+				ProtocolRoute::boot_reshard(self.phase),
 			],
 			ProtocolPhase::WaitingForQuorumShards => {
 				vec![
@@ -493,7 +494,7 @@ mod handlers {
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::ReshardProvisionRequest { share, approval } = req {
-			let result = provision::provision(share, approval.clone(), state)
+			let result = reshard::reshard_provision(share, approval, state)
 				.map(|reconstructed| ProtocolMsg::ReshardProvisionResponse {
 					reconstructed,
 				})

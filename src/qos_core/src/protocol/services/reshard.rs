@@ -190,7 +190,6 @@ mod tests {
 		handles.put_ephemeral_key(&eph_pair).unwrap();
 
 		let quorum_pair = P256Pair::generate().unwrap();
-		let _threshold = 3usize;
 
 		let old_members: Vec<_> = (0..4)
 			.map(|_| P256Pair::generate().unwrap())
@@ -233,7 +232,7 @@ mod tests {
 				pcr1: vec![3; 32],
 				pcr2: vec![2; 32],
 				pcr3: vec![1; 32],
-				aws_root_certificate: b"bezos daddy of certs".to_vec(),
+				aws_root_certificate: b"bezo's son, a dad of certs".to_vec(),
 				qos_commit: "super chill commit ref you can bro down with"
 					.to_string(),
 			},
@@ -332,12 +331,12 @@ mod tests {
 			assert_eq!(&member_out.share_hash, &qos_crypto::sha_512(&share),);
 			assert_eq!(member_out.share_set_member, member);
 
-			decrypted_shares.push(share)
+			decrypted_shares.push(share);
 		}
 
 		// Now make sure all combos of shares work
 		for combo in n_choose_k::combinations(
-			decrypted_shares,
+			&decrypted_shares,
 			reshard_output.new_share_set.threshold as usize,
 		) {
 			let secret = qos_crypto::shamir::shares_reconstruct(&combo);

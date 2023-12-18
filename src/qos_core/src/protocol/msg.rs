@@ -140,22 +140,26 @@ pub enum ProtocolMsg {
 		manifest_envelope: Box<Option<ManifestEnvelope>>,
 	},
 
-	/// Execute Standard Boot.
+	/// Reshard a quorum key to the `new_share_set` in the [`ReshardInput`]
 	BootReshardRequest {
-		/// Manifest with approvals
+		/// The parameters for resharding
 		reshard_input: ReshardInput,
 	},
+	/// Response to [`Self::BootReshardRequest`].
 	BootReshardResponse {
-		/// Should be `[NsmResponse::Attestation`]
+		/// Should be `[NsmResponse::Attestation`]. `user_data` is the the
+		/// reshard_input
 		nsm_response: NsmResponse,
 	},
 
 	/// Request an attestation doc with the `ReshardInput` as the user data/
 	ReshardAttestationDocRequest,
-	/// Succesful response to [`Self::ReshardAttestationDocRequest`]
+	/// Response to [`Self::ReshardAttestationDocRequest`]
 	ReshardAttestationDocResponse {
-		/// Should be `[NsmResponse::Attestation`]
+		/// Should be `[NsmResponse::Attestation`]. `user_data` is the the
+		/// reshard_input
 		nsm_response: NsmResponse,
+		/// The reshard parameters this enclave is setup for.
 		reshard_input: ReshardInput,
 	},
 

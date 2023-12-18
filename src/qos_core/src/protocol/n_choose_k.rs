@@ -10,7 +10,7 @@
 /// For example, if n = 5 and k = 3, the function would generate all possible
 /// combinations of 3 elements from a set of 5 elements.
 #[must_use]
-pub fn combinations<T: Clone>(input: Vec<T>, k: usize) -> Vec<Vec<T>> {
+pub fn combinations<T: Clone>(input: &[T], k: usize) -> Vec<Vec<T>> {
 	let n = input.len();
 
 	// Check for invalid input: k should not be greater than the length of the
@@ -72,7 +72,7 @@ mod tests {
 		// n = 4, k = 2
 		let byte_input = vec![b'a', b'b', b'c', b'd'];
 		let k1 = 2;
-		let byte_result = combinations(byte_input.clone(), k1);
+		let byte_result = combinations(&byte_input, k1);
 		assert_eq!(
 			byte_result.len(),
 			expected_combinations_count(byte_input.len(), k1)
@@ -87,7 +87,7 @@ mod tests {
 		// n = 3, k = 3
 		let char3_input = vec!['x', 'y', 'z'];
 		let k2 = 3;
-		let char3_result = combinations(char3_input.clone(), k2);
+		let char3_result = combinations(&char3_input, k2);
 		assert_eq!(
 			char3_result.len(),
 			expected_combinations_count(char3_input.len(), k2)
@@ -97,7 +97,7 @@ mod tests {
 		// n = 2, k = 1
 		let char2_input = vec!['p', 'q'];
 		let k3 = 1;
-		let char2_result = combinations(char2_input.clone(), k3);
+		let char2_result = combinations(&char2_input, k3);
 		assert_eq!(
 			char2_result.len(),
 			expected_combinations_count(char2_input.len(), k3)
@@ -109,14 +109,14 @@ mod tests {
 	fn edge_cases() {
 		// empty input
 		let empty_input: Vec<usize> = Vec::new();
-		let empty_result = combinations(empty_input, 0);
+		let empty_result = combinations(&empty_input, 0);
 		assert_eq!(empty_result.len(), 1);
 		assert_eq!(empty_result, vec![vec![]]);
 
 		// k = 0
 		let input = vec![1, 2, 3, 4, 5];
 		let k = 0;
-		let result = combinations(input, k);
+		let result = combinations(&input, k);
 		assert_eq!(result.len(), 1);
 		assert_eq!(result, vec![vec![]]);
 	}
