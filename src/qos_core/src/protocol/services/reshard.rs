@@ -339,13 +339,8 @@ mod tests {
 			"/tmp/reshard_provision_rejects_wrong_reconstructed_key.eph.key"
 				.into();
 
-		let ReshardSetup {
-			quorum_pair: _,
-			eph_pair,
-			mut state,
-			approvals,
-			new_members: _,
-		} = reshard_setup(&eph_file);
+		let ReshardSetup { eph_pair, mut state, approvals, .. } =
+			reshard_setup(&eph_file);
 
 		let reshard_input = state.reshard_input.clone().unwrap();
 		let random_pair = P256Pair::generate().unwrap();
@@ -386,11 +381,11 @@ mod tests {
 				.into();
 
 		let ReshardSetup {
-			quorum_pair: _,
 			eph_pair,
 			mut state,
 			mut approvals,
 			new_members,
+			..
 		} = reshard_setup(&eph_file);
 
 		let reshard_input = state.reshard_input.clone().unwrap();
@@ -435,11 +430,11 @@ mod tests {
 				.into();
 
 		let ReshardSetup {
-			quorum_pair: _,
 			eph_pair,
 			mut state,
 			mut approvals,
 			new_members,
+			..
 		} = reshard_setup(&eph_file);
 
 		let reshard_input = state.reshard_input.clone().unwrap();
@@ -479,5 +474,44 @@ mod tests {
 			reshard_provision(&encrypted_shares[2], &approvals[2], &mut state),
 			Err(ProtocolError::NotShareSetMember)
 		);
+	}
+
+	#[test]
+	fn boot_reshard_works() {
+		let eph_file: PathWrapper = "/tmp/boot_reshard_works.eph.key".into();
+
+		let handles = Handles::new(
+			eph_file.to_string(),
+			"/tmp/qos-quorum".to_string(),
+			"/tmp/qos-manifest".to_string(),
+			"/tmp/qos-pivot".to_string(),
+		);
+		let mut state = ProtocolState::new(
+			Box::new(MockNsm),
+			handles,
+			SocketAddress::new_unix("./never.sock"),
+			None,
+		);
+
+		let reshard_input = ReshardInput {
+			quorum_key: vec![1; 65],
+			new_share_set: ShareSet { threshold: 2, members: vec![] },
+			old_share_set: ShareSet { threshold: 3, members: vec![] },
+			enclave: NitroConfig {
+				pcr0: vec![4; 32],
+				pcr1: vec![3; 32],
+				pcr2: vec![2; 32],
+				pcr3: vec![1; 32],
+				aws_root_certificate:
+					b"super swag root cert your friends told you about".to_vec(),
+				qos_commit: "a commit ref".to_string(),
+			},
+		};
+
+		assert!(boot_reshard(&mut state, reshard_input.clone(),).is_ok());
+
+		assert_eq!(state.reshard_input, Some(reshard_input));
+		assert_eq!(state.reshard_output, None);
+		assert!(state.handles.get_ephemeral_key().is_ok());
 	}
 }
