@@ -34,6 +34,8 @@ const QOS_REALEASE_DIR: &str = "qos-release-dir";
 const PCR3_PREIMAGE_PATH: &str = "pcr3-preimage-path";
 const PIVOT_HASH_PATH: &str = "pivot-hash-path";
 const SHARE_SET_DIR: &str = "share-set-dir";
+const NEW_SHARE_SET_DIR: &str = "new-share-set-dir";
+const OLD_SHARE_SET_DIR: &str = "old-share-set-dir";
 const MANIFEST_SET_DIR: &str = "manifest-set-dir";
 const PATCH_SET_DIR: &str = "patch-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
@@ -69,6 +71,7 @@ const PLAINTEXT_PATH: &str = "plaintext-path";
 const OUTPUT_HEX: &str = "output-hex";
 const VALIDATION_TIME_OVERRIDE: &str = "validation-time-override";
 const JSON: &str = "json";
+const RESHARD_INPUT_PATH: &str = "reshard-input-path";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -211,6 +214,8 @@ pub enum Command {
 	P256AsymmetricEncrypt,
 	/// Decrypt a payload encrypted to a qos_p256 public key.
 	P256AsymmetricDecrypt,
+	/// Generate the reshard input
+	GenerateReshardInput,
 }
 
 impl From<&str> for Command {
@@ -247,6 +252,7 @@ impl From<&str> for Command {
 			"p256-sign" => Self::P256Sign,
 			"p256-asymmetric-encrypt" => Self::P256AsymmetricEncrypt,
 			"p256-asymmetric-decrypt" => Self::P256AsymmetricDecrypt,
+			"generate-reshard-input" => Self::GenerateReshardInput,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -333,7 +339,31 @@ impl Command {
 	fn share_set_dir_token() -> Token {
 		Token::new(
 			SHARE_SET_DIR,
-			"Director with public keys for members of the share set.",
+			"Directory with public keys for members of the share set.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn old_share_set_dir_token() -> Token {
+		Token::new(
+			OLD_SHARE_SET_DIR,
+			"Directory with public keys for members of the OLD share set.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn new_share_set_dir_token() -> Token {
+		Token::new(
+			NEW_SHARE_SET_DIR,
+			"Directory with public keys for members of the NEW share set.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn reshard_input_path_token() -> Token {
+		Token::new(
+			RESHARD_INPUT_PATH,
+			"Path to the file to write/read the reshard input.",
 		)
 		.takes_value(true)
 		.required(true)
@@ -641,6 +671,16 @@ impl Command {
 			.token(Self::patch_set_dir_token())
 			.token(Self::quorum_key_path_token())
 			.token(Self::pivot_args_token())
+	}
+
+	fn generate_reshard_input() -> Parser {
+		Parser::new()
+			.token(Self::qos_release_dir_token())
+			.token(Self::quorum_key_path_token())
+			.token(Self::pcr3_preimage_path_token())
+			.token(Self::new_share_set_dir_token())
+			.token(Self::old_share_set_dir_token())
+			.token(Self::reshard_input_path_token())
 	}
 
 	fn approve_manifest() -> Parser {
@@ -1494,6 +1534,21 @@ mod handlers {
 			std::process::exit(1);
 		}
 	}
+
+	pub(super) fn generate_reshard_input(opts: &ClientOpts) {
+		if let Err(e) = services::generate_manifest(GenerateManifestArgs {
+			qos_release_dir: opts.qos_release_dir(),
+			quorum_key_path: opts.quorum_key_path(),
+			pcr3_preimage_path: opts.pcr3_preimage_path(),
+			new_share_set_dir: opts.new_share_set_dir(),
+			old_share_set_dir: opts.old_share_set_dir(),
+			reshard_input_path: opts.reshard_input_path(),
+		}) {
+			println!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
 
 	pub(super) fn approve_manifest(opts: &ClientOpts) {
 		let pair = get_pair_or_yubi(opts);
