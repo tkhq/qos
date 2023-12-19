@@ -79,6 +79,12 @@ pub(in crate::protocol) fn boot_reshard(
 	attestation::reshard_attestation_doc(state)
 }
 
+pub(in crate::protocol) fn reshard_output(
+	state: &mut ProtocolState,
+) -> Result<ReshardOutput, ProtocolError> {
+	state.reshard_output.clone().ok_or(ProtocolError::MissingReshardOutput)
+}
+
 pub(in crate::protocol) fn reshard_provision(
 	encrypted_share: &[u8],
 	approval: &Approval,

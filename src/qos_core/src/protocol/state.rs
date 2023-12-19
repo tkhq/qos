@@ -170,8 +170,16 @@ impl ProtocolRoute {
 	pub fn reshard_provision(_current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::reshard_provision),
-			ProtocolPhase::QuorumKeyProvisioned,
+			ProtocolPhase::ReshardBooted,
 			ProtocolPhase::UnrecoverableReshardFailedBadShares,
+		)
+	}
+
+	pub fn reshard_output(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::reshard_output),
+			current_phase,
+			current_phase,
 		)
 	}
 
@@ -349,6 +357,8 @@ impl ProtocolState {
 				vec![
 					// baseline routes
 					ProtocolRoute::status(self.phase),
+					// phase specific routes
+					ProtocolRoute::reshard_output(self.phase),
 				]
 			}
 		}
@@ -497,6 +507,23 @@ mod handlers {
 			let result = reshard::reshard_provision(share, approval, state)
 				.map(|reconstructed| ProtocolMsg::ReshardProvisionResponse {
 					reconstructed,
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn reshard_output(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::ReshardOutputRequest = req {
+			let result = reshard::reshard_output(state)
+				.map(|reshard_output| ProtocolMsg::ReshardOutputResponse {
+					reshard_output,
 				})
 				.map_err(ProtocolMsg::ProtocolErrorResponse);
 

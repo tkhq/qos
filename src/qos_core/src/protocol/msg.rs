@@ -6,7 +6,7 @@ use crate::protocol::{
 	services::{
 		boot::{Approval, ManifestEnvelope},
 		genesis::{GenesisOutput, GenesisSet},
-		reshard::ReshardInput,
+		reshard::{ReshardInput, ReshardOutput},
 	},
 	ProtocolError,
 };
@@ -175,6 +175,14 @@ pub enum ProtocolMsg {
 		/// If the Quorum key was reconstructed. False indicates still waiting
 		/// for the Kth share.
 		reconstructed: bool,
+	},
+
+	/// Request the reshard service's output.
+	ReshardOutputRequest,
+	/// Response to [Self::ReshardOutputRequest].
+	ReshardOutputResponse {
+		/// The output of the reshard services.
+		reshard_output: ReshardOutput,
 	},
 }
 

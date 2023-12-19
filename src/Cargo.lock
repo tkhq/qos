@@ -1342,6 +1342,7 @@ dependencies = [
  "qos_test_primitives",
  "rand_core",
  "rpassword",
+ "serde",
  "serde_json",
  "ureq",
  "x509",

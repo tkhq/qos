@@ -34,6 +34,7 @@ use qos_nsm::{
 };
 use qos_p256::{P256Error, P256Pair, P256Public};
 use zeroize::Zeroizing;
+use qos_core::protocol::services::reshard::ReshardInput;
 
 use super::DisplayType;
 use crate::request;
@@ -753,6 +754,48 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		manifest_path.as_ref(),
 		&manifest.try_to_vec().unwrap(),
 		"Manifest",
+	);
+
+	Ok(())
+}
+
+struct GenerateReshardInputArgs {
+	qos_release_dir: String,
+	quorum_key_path: String,
+	new_share_set_dir: String,
+	old_share_set_dir: String,
+	reshard_input_path: String,
+	pcr3_preimage_path: String
+}
+
+fn generate_reshard_input(GenerateReshardInputArgs {
+	qos_release_dir,
+	quorum_key_path,
+	new_share_set_dir,
+	old_share_set_dir,
+	reshard_input_path,
+	pcr3_preimage_path,
+}: GenerateReshardInputArgs) -> Result<(), Error> {
+	let nitro_config =
+		extract_nitro_config(qos_release_dir, pcr3_preimage_path);
+
+	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
+		.map_err(Error::FailedToReadQuorumPublicKey)?;
+
+	let old_share_set = get_share_set(old_share_set_dir);
+	let new_share_set = get_share_set(new_share_set_dir);
+
+	let reshard_input = ReshardInput {
+		quorum_key: quorum_key.to_bytes(),
+		new_share_set,
+		old_share_set,
+		enclave: nitro_config,
+	};
+
+	write_json_with_msg(
+		&reshard_input_path.as_ref(),
+		&reshard_input,
+		"ReshardInput"
 	);
 
 	Ok(())
@@ -2146,6 +2189,18 @@ fn split_file_name(p: &Path) -> Vec<String> {
 /// `item_name` was written to `path`.
 fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
 	let path_str = path.as_os_str().to_string_lossy();
+	fs::write(path, buf).unwrap_or_else(|_| {
+		panic!("Failed writing {} to file", path_str.clone())
+	});
+	println!("{item_name} written to: {path_str}");
+}
+
+fn write_json_with_msg<T: serde::Serialize>(path: &Path, item: &T, item_name: &str) {
+	let path_str = path.as_os_str().to_string_lossy();
+
+    let buf = serde_json::to_vec_pretty(item).unwrap_or_else(|_| {
+		panic!("Failed serializing to json when writing {} to file", path_str.clone())
+	});
 	fs::write(path, buf).unwrap_or_else(|_| {
 		panic!("Failed writing {} to file", path_str.clone())
 	});
