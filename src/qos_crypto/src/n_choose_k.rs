@@ -36,7 +36,6 @@ pub fn combinations<T: Clone>(input: &[T], k: usize) -> Vec<Vec<T>> {
 
 	let mut combos =
 		Vec::with_capacity(expected_combinations_count(input.len(), k));
-
 	let mut indices: Vec<_> = (0..k).collect();
 
 	// Generate combinations
