@@ -5,7 +5,6 @@ use qos_crypto::sha_256;
 
 mod error;
 pub mod msg;
-pub mod n_choose_k;
 mod processor;
 pub mod services;
 mod state;

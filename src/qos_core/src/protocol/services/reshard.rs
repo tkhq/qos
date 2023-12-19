@@ -157,7 +157,7 @@ pub(in crate::protocol) fn reshard_provision(
 
 #[cfg(test)]
 mod tests {
-	use qos_crypto::shamir::shares_generate;
+	use qos_crypto::{n_choose_k, shamir::shares_generate};
 	use qos_nsm::mock::MockNsm;
 	use qos_test_primitives::PathWrapper;
 
@@ -165,9 +165,7 @@ mod tests {
 	use crate::{
 		handles::Handles,
 		io::SocketAddress,
-		protocol::{
-			n_choose_k, services::boot::QuorumMember, ProtocolPhase, QosHash,
-		},
+		protocol::{services::boot::QuorumMember, ProtocolPhase, QosHash},
 	};
 
 	struct ReshardSetup {
@@ -274,7 +272,8 @@ mod tests {
 
 	#[test]
 	fn reshard_provision_works() {
-		let eph_file: PathWrapper = "/tmp/reshard_provision_works.eph.key".into();
+		let eph_file: PathWrapper =
+			"/tmp/reshard_provision_works.eph.key".into();
 
 		let ReshardSetup {
 			quorum_pair,
@@ -346,29 +345,28 @@ mod tests {
 
 	#[test]
 	fn reshard_provision_rejects_wrong_reconstructed_key() {
-		let eph_file: PathWrapper = "/tmp/reshard_provision_rejects_wrong_reconstructed_key.eph.key".into();
+		let eph_file: PathWrapper =
+			"/tmp/reshard_provision_rejects_wrong_reconstructed_key.eph.key"
+				.into();
 
 		let ReshardSetup {
-			quorum_pair,
+			quorum_pair: _,
 			eph_pair,
-			mut state,
-			approvals,
+			state,
+			approvals: _,
 			old_members: _,
-			new_members,
+			new_members: _,
 		} = reshard_setup(&eph_file);
 
 		let random_pair = P256Pair::generate().unwrap();
-		let encrypted_shares: Vec<_> = shares_generate(
+		let _encrypted_shares: Vec<_> = shares_generate(
 			random_pair.to_master_seed(),
 			4,
-			state.reshard_input.clone().unwrap().old_share_set.threshold
-				as usize,
+			state.reshard_input.unwrap().old_share_set.threshold as usize,
 		)
 		.iter()
 		.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 		.collect();
-
-
 	}
 
 	#[test]

@@ -10,6 +10,8 @@
 /// # Examples
 ///
 /// ```
+/// use qos_crypto::n_choose_k::combinations;
+///
 /// let input = vec![1, 2, 3, 4];
 /// let k = 2;
 /// let combinations = combinations(&input, k);
@@ -28,41 +30,36 @@
 pub fn combinations<T: Clone>(input: &[T], k: usize) -> Vec<Vec<T>> {
 	let n = input.len();
 
-	// Check for invalid input: k should not be greater than the length of the
-	// input Vec
 	if k > n || k == 0 {
 		return Vec::new();
 	}
 
-	let mut result =
+	let mut combos =
 		Vec::with_capacity(expected_combinations_count(input.len(), k));
-	// Initialize indices with the first combination
-	let mut indices: Vec<usize> = (0..k).collect();
 
-	// Generate combinations using an iterative approach
+	let mut indices: Vec<_> = (0..k).collect();
+
+	// Generate combinations
 	while indices[0] <= n - k {
 		// Create a combination by mapping indices to corresponding elements in
-		// the input Vec
-		let combination: Vec<T> =
+		// the input
+		let combination: Vec<_> =
 			indices.iter().map(|&i| input[i].clone()).collect();
-		result.push(combination.clone());
+		combos.push(combination.clone());
 
-		// Generate the next combination indices
 		let mut i = k;
-		// Find the rightmost index that can be incremented
 		while i > 1 && indices[i - 1] == n - k + i - 1 {
 			i -= 1;
 		}
 
 		indices[i - 1] += 1;
 
-		// Reset subsequent indices to form the next combination
 		for j in i..k {
 			indices[j] = indices[j - 1] + 1;
 		}
 	}
 
-	result
+	combos
 }
 
 fn expected_combinations_count(n: usize, k: usize) -> usize {
