@@ -1,21 +1,36 @@
 //! n choose k helper
 
-/// Generic function to generate combinations of size k from a Vec of type T.
+/// Computes n choose k combinations over a vector of elements of type T.
 ///
-/// The function implements the concept of "n choose k," which represents the
-/// number of ways to choose k elements from a set of n elements, without
-/// considering the order.
+/// # Arguments
 ///
-/// It uses an iterative approach to generate all possible combinations.
-/// For example, if n = 5 and k = 3, the function would generate all possible
-/// combinations of 3 elements from a set of 5 elements.
+/// * `input` - A reference to a vector of elements of type T.
+/// * `k` - The number of elements to choose in each combination.
+///
+/// # Examples
+///
+/// ```
+/// let input = vec![1, 2, 3, 4];
+/// let k = 2;
+/// let combinations = combinations(&input, k);
+///
+/// // Verify that the computed combinations match the expected result
+/// assert_eq!(combinations, vec![
+///     vec![1, 2],
+///     vec![1, 3],
+///     vec![1, 4],
+///     vec![2, 3],
+///     vec![2, 4],
+///     vec![3, 4],
+/// ]);
+/// ```
 #[must_use]
 pub fn combinations<T: Clone>(input: &[T], k: usize) -> Vec<Vec<T>> {
 	let n = input.len();
 
 	// Check for invalid input: k should not be greater than the length of the
 	// input Vec
-	if k > n {
+	if k > n || k == 0 {
 		return Vec::new();
 	}
 
@@ -35,11 +50,10 @@ pub fn combinations<T: Clone>(input: &[T], k: usize) -> Vec<Vec<T>> {
 		// Generate the next combination indices
 		let mut i = k;
 		// Find the rightmost index that can be incremented
-		while i > 0 && indices[i - 1] == n - k + i - 1 {
+		while i > 1 && indices[i - 1] == n - k + i - 1 {
 			i -= 1;
 		}
 
-		// Increment the found index
 		indices[i - 1] += 1;
 
 		// Reset subsequent indices to form the next combination
@@ -110,15 +124,13 @@ mod tests {
 		// empty input
 		let empty_input: Vec<usize> = Vec::new();
 		let empty_result = combinations(&empty_input, 0);
-		assert_eq!(empty_result.len(), 1);
-		assert_eq!(empty_result, vec![vec![]]);
+		assert_eq!(empty_result.len(), 0);
 
 		// k = 0
 		let input = vec![1, 2, 3, 4, 5];
 		let k = 0;
 		let result = combinations(&input, k);
-		assert_eq!(result.len(), 1);
-		assert_eq!(result, vec![vec![]]);
+		assert_eq!(result.len(), 0);
 	}
 
 	#[test]

@@ -90,7 +90,7 @@ pub(in crate::protocol) fn reshard_provision(
 		.ok_or(ProtocolError::MissingReshardInput)?
 		.clone();
 
-	approval.verify(&encrypted_share.qos_hash())?;
+	approval.verify(&reshard_input.qos_hash())?;
 
 	if !reshard_input.old_share_set.members.contains(&approval.member) {
 		return Err(ProtocolError::NotShareSetMember);
@@ -274,7 +274,7 @@ mod tests {
 
 	#[test]
 	fn reshard_provision_works() {
-		let eph_file: PathWrapper = "./reshard_provision_works.eph.key".into();
+		let eph_file: PathWrapper = "/tmp/reshard_provision_works.eph.key".into();
 
 		let ReshardSetup {
 			quorum_pair,
@@ -345,7 +345,31 @@ mod tests {
 	}
 
 	#[test]
-	fn reshard_provision_rejects_wrong_reconstructed_key() {}
+	fn reshard_provision_rejects_wrong_reconstructed_key() {
+		let eph_file: PathWrapper = "/tmp/reshard_provision_rejects_wrong_reconstructed_key.eph.key".into();
+
+		let ReshardSetup {
+			quorum_pair,
+			eph_pair,
+			mut state,
+			approvals,
+			old_members: _,
+			new_members,
+		} = reshard_setup(&eph_file);
+
+		let random_pair = P256Pair::generate().unwrap();
+		let encrypted_shares: Vec<_> = shares_generate(
+			random_pair.to_master_seed(),
+			4,
+			state.reshard_input.clone().unwrap().old_share_set.threshold
+				as usize,
+		)
+		.iter()
+		.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
+		.collect();
+
+
+	}
 
 	#[test]
 	fn reshard_provision_rejects_bad_approval_signature() {}
