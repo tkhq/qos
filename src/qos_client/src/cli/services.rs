@@ -20,6 +20,7 @@ use qos_core::protocol::{
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
+		reshard::ReshardInput,
 	},
 	QosHash,
 };
@@ -34,7 +35,6 @@ use qos_nsm::{
 };
 use qos_p256::{P256Error, P256Pair, P256Public};
 use zeroize::Zeroizing;
-use qos_core::protocol::services::reshard::ReshardInput;
 
 use super::DisplayType;
 use crate::request;
@@ -759,23 +759,25 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 	Ok(())
 }
 
-struct GenerateReshardInputArgs {
-	qos_release_dir: String,
-	quorum_key_path: String,
-	new_share_set_dir: String,
-	old_share_set_dir: String,
-	reshard_input_path: String,
-	pcr3_preimage_path: String
+pub struct GenerateReshardInputArgs {
+	pub qos_release_dir: String,
+	pub quorum_key_path: String,
+	pub new_share_set_dir: String,
+	pub old_share_set_dir: String,
+	pub reshard_input_path: String,
+	pub pcr3_preimage_path: String,
 }
 
-fn generate_reshard_input(GenerateReshardInputArgs {
-	qos_release_dir,
-	quorum_key_path,
-	new_share_set_dir,
-	old_share_set_dir,
-	reshard_input_path,
-	pcr3_preimage_path,
-}: GenerateReshardInputArgs) -> Result<(), Error> {
+pub fn generate_reshard_input(
+	GenerateReshardInputArgs {
+		qos_release_dir,
+		quorum_key_path,
+		new_share_set_dir,
+		old_share_set_dir,
+		reshard_input_path,
+		pcr3_preimage_path,
+	}: GenerateReshardInputArgs,
+) -> Result<(), Error> {
 	let nitro_config =
 		extract_nitro_config(qos_release_dir, pcr3_preimage_path);
 
@@ -793,9 +795,9 @@ fn generate_reshard_input(GenerateReshardInputArgs {
 	};
 
 	write_json_with_msg(
-		&reshard_input_path.as_ref(),
+		reshard_input_path.as_ref(),
 		&reshard_input,
-		"ReshardInput"
+		"ReshardInput",
 	);
 
 	Ok(())
@@ -2195,11 +2197,18 @@ fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
 	println!("{item_name} written to: {path_str}");
 }
 
-fn write_json_with_msg<T: serde::Serialize>(path: &Path, item: &T, item_name: &str) {
+fn write_json_with_msg<T: serde::Serialize>(
+	path: &Path,
+	item: &T,
+	item_name: &str,
+) {
 	let path_str = path.as_os_str().to_string_lossy();
 
-    let buf = serde_json::to_vec_pretty(item).unwrap_or_else(|_| {
-		panic!("Failed serializing to json when writing {} to file", path_str.clone())
+	let buf = serde_json::to_vec_pretty(item).unwrap_or_else(|_| {
+		panic!(
+			"Failed serializing to json when writing {} to file",
+			path_str.clone()
+		)
 	});
 	fs::write(path, buf).unwrap_or_else(|_| {
 		panic!("Failed writing {} to file", path_str.clone())

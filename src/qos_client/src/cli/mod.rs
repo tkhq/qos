@@ -216,6 +216,7 @@ pub enum Command {
 	P256AsymmetricDecrypt,
 	/// Generate the reshard input
 	GenerateReshardInput,
+	BootReshard,
 }
 
 impl From<&str> for Command {
@@ -253,6 +254,7 @@ impl From<&str> for Command {
 			"p256-asymmetric-encrypt" => Self::P256AsymmetricEncrypt,
 			"p256-asymmetric-decrypt" => Self::P256AsymmetricDecrypt,
 			"generate-reshard-input" => Self::GenerateReshardInput,
+			"boot-reshard" => Self::BootReshard,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -678,8 +680,8 @@ impl Command {
 			.token(Self::qos_release_dir_token())
 			.token(Self::quorum_key_path_token())
 			.token(Self::pcr3_preimage_path_token())
-			.token(Self::new_share_set_dir_token())
 			.token(Self::old_share_set_dir_token())
+			.token(Self::new_share_set_dir_token())
 			.token(Self::reshard_input_path_token())
 	}
 
@@ -882,6 +884,7 @@ impl GetParserForCommand for Command {
 			Self::P256Sign => Self::p256_sign(),
 			Self::P256AsymmetricEncrypt => Self::p256_asymmetric_encrypt(),
 			Self::P256AsymmetricDecrypt => Self::p256_asymmetric_decrypt(),
+			Self::GenerateReshardInput => Self::generate_reshard_input(),
 		}
 	}
 }
@@ -1086,6 +1089,27 @@ impl ClientOpts {
 		self.parsed
 			.single(MASTER_SEED_PATH)
 			.expect("Missing `--master-seed-path`")
+			.to_string()
+	}
+
+	fn reshard_input_path(&self) -> String {
+		self.parsed
+			.single(RESHARD_INPUT_PATH)
+			.expect("Missing `--reshard-input-path`")
+			.to_string()
+	}
+
+	fn new_share_set_dir(&self) -> String {
+		self.parsed
+			.single(NEW_SHARE_SET_DIR)
+			.expect("Missing `--new-share-set-path`")
+			.to_string()
+	}
+
+	fn old_share_set_dir(&self) -> String {
+		self.parsed
+			.single(OLD_SHARE_SET_DIR)
+			.expect("Missing `--old-share-set-dir`")
 			.to_string()
 	}
 
@@ -1304,6 +1328,9 @@ impl ClientRunner {
 				Command::P256AsymmetricDecrypt => {
 					handlers::p256_asymmetric_decrypt(&self.opts);
 				}
+				Command::GenerateReshardInput => {
+					handlers::generate_reshard_input(&self.opts);
+				}
 			}
 		}
 	}
@@ -1326,7 +1353,10 @@ mod handlers {
 	use super::services::{ApproveManifestArgs, ProxyReEncryptShareArgs};
 	use crate::{
 		cli::{
-			services::{self, GenerateManifestArgs, PairOrYubi},
+			services::{
+				self, GenerateManifestArgs, GenerateReshardInputArgs,
+				PairOrYubi,
+			},
 			ClientOpts, ProtocolMsg,
 		},
 		request,
@@ -1536,19 +1566,19 @@ mod handlers {
 	}
 
 	pub(super) fn generate_reshard_input(opts: &ClientOpts) {
-		if let Err(e) = services::generate_manifest(GenerateManifestArgs {
-			qos_release_dir: opts.qos_release_dir(),
-			quorum_key_path: opts.quorum_key_path(),
-			pcr3_preimage_path: opts.pcr3_preimage_path(),
-			new_share_set_dir: opts.new_share_set_dir(),
-			old_share_set_dir: opts.old_share_set_dir(),
-			reshard_input_path: opts.reshard_input_path(),
-		}) {
+		if let Err(e) =
+			services::generate_reshard_input(GenerateReshardInputArgs {
+				qos_release_dir: opts.qos_release_dir(),
+				quorum_key_path: opts.quorum_key_path(),
+				pcr3_preimage_path: opts.pcr3_preimage_path(),
+				new_share_set_dir: opts.new_share_set_dir(),
+				old_share_set_dir: opts.old_share_set_dir(),
+				reshard_input_path: opts.reshard_input_path(),
+			}) {
 			println!("Error: {e:?}");
 			std::process::exit(1);
 		}
 	}
-
 
 	pub(super) fn approve_manifest(opts: &ClientOpts) {
 		let pair = get_pair_or_yubi(opts);
