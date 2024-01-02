@@ -88,7 +88,7 @@ pub enum Error {
 	#[cfg(feature = "smartcard")]
 	PinEntryError(std::io::Error),
 	/// Failed to read share
-	ReadShare,
+	ReadShare(String),
 	/// Error while try to read the quorum public key.
 	FailedToReadQuorumPublicKey(qos_p256::P256Error),
 	/// Error trying to the read a file that is supposed to have a manifest.
@@ -141,6 +141,7 @@ pub enum Error {
 	/// Given quorum key seed does not match the hash of the expected quorum
 	/// key seed.
 	SecretDoesNotMatch,
+	FileDidNotHaveValidReshardInput(String)
 }
 
 impl From<borsh::maybestd::io::Error> for Error {
@@ -1203,6 +1204,30 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	Ok(())
 }
 
+pub(crate) fn boot_reshard(
+	uri: String,
+	reshard_input_path: String,
+) -> Result<(), Error> {
+	// Create manifest envelope
+	let reshard_input = read_reshard_input(reshard_input_path)?;
+
+	let req = ProtocolMsg::BootReshardRequest {
+		reshard_input,
+	};
+
+	// Broadcast boot reshard instruction and make sure it has the attestation
+	// doc as the response. For now we ignoring the response.
+	let _cose_sign1 = match request::post(&uri, &req).unwrap() {
+		ProtocolMsg::BootReshardResponse {
+			nsm_response: NsmResponse::Attestation { document },
+		} => document,
+		r => panic!("Unexpected response: {r:?}"),
+	};
+
+
+	Ok(())
+}
+
 pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 	uri: &str,
 	attestation_doc_path: P,
@@ -1232,6 +1257,26 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 			.try_to_vec()
 			.expect("manifest enevelope is valid borsh"),
 		"Manifest envelope",
+	);
+}
+
+pub(crate) fn get_reshard_attestation_doc<P: AsRef<Path>>(
+	uri: &str,
+	attestation_doc_path: P,
+) {
+	let (cose_sign1, _) =
+		match request::post(uri, &ProtocolMsg::ReshardAttestationDocRequest) {
+			Ok(ProtocolMsg::ReshardAttestationDocResponse {
+				nsm_response: NsmResponse::Attestation { document },
+				reshard_input,
+			}) => (document, reshard_input),
+			r => panic!("Unexpected response: {r:?}"),
+		};
+
+	write_with_msg(
+		attestation_doc_path.as_ref(),
+		&cose_sign1,
+		"COSE Sign1 Attestation Doc",
 	);
 }
 
@@ -1275,8 +1320,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	let attestation_doc =
 		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
 	let encrypted_share = std::fs::read(share_path).map_err(|e| {
-		eprintln!("{e:?}");
-		Error::ReadShare
+		Error::ReadShare(e.to_string())
 	})?;
 
 	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
@@ -1452,6 +1496,151 @@ where
 	true
 }
 
+pub struct ReshardReEncryptShareArgs {
+	pub pair: PairOrYubi,
+	pub share_path: String,
+	pub attestation_doc_path: String,
+	pub approval_path: String,
+	pub eph_wrapped_share_path: String,
+
+	pub reshard_input_path: String,
+	pub qos_release_dir: String,
+	pub quorum_key_path: String,
+	pub pcr3_preimage_path: String,
+	pub new_share_set_dir: String,
+	pub old_share_set_dir: String,
+
+	pub alias: String,
+	pub unsafe_skip_attestation: bool,
+	pub unsafe_eph_path_override: Option<String>,
+	pub unsafe_auto_confirm: bool,
+}
+
+// Verifications in this focus around ensuring
+// - the intended reshard input is being used
+//	- verify the contents of the reshard input
+//		- 
+// - the manifest set approved the manifest and is the correct set
+// - the enclave belongs to the intended organization (and not an attackers
+//   organization)
+pub(crate) fn reshard_re_encrypt_share<P: AsRef<Path>>(
+	ReshardReEncryptShareArgs {
+		mut pair,
+		share_path,
+		attestation_doc_path,
+		approval_path,
+		eph_wrapped_share_path,
+		alias,
+		unsafe_skip_attestation,
+		unsafe_eph_path_override,
+		unsafe_auto_confirm,
+
+		reshard_input_path,
+		qos_release_dir,
+		quorum_key_path,
+		pcr3_preimage_path,
+		new_share_set_dir,
+		old_share_set_dir,
+	}: ProxyReEncryptShareArgs<P>,
+) -> Result<(), Error> {
+	let reshard_input = read_reshard_input(&reshard_input_path)?;
+	let attestation_doc =
+		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
+	let encrypted_share = std::fs::read(share_path).map_err(|e| {
+		Error::ReadShare(e.to_string())
+	})?;
+
+	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
+
+	// Verify the attestation doc matches up with the pcrs in the manifest
+	if unsafe_skip_attestation {
+		println!("**WARNING:** Skipping attestation document verification.");
+	} else {
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			&reshard_input.qos_hash(),
+			// TODO(zeke): verify these against the desired qos dist
+			&reshard_input.enclave.pcr0,
+			&reshard_input.enclave.pcr1,
+			&reshard_input.enclave.pcr2,
+			&extract_pcr3(pcr3_preimage_path),
+		)?;
+	}
+
+	// Pull out the ephemeral key or use the override
+	let eph_pub: P256Public = if let Some(eph_path) = unsafe_eph_path_override {
+		P256Pair::from_hex_file(eph_path)
+			.expect("Could not read ephemeral key override")
+			.public_key()
+	} else {
+		P256Public::from_bytes(
+			&attestation_doc
+				.public_key
+				.expect("No ephemeral key in the attestation doc"),
+		)
+		.expect("Ephemeral key not valid public key")
+	};
+
+	let member = QuorumMember { pub_key: pair.public_key_bytes()?, alias };
+	// Programmatic verification
+	// See approve_manifest_programmatic_verifications for inspo
+	// - Verify that member is part of new share set
+	// - Verify new share set matches reshard input
+	// - Verify old share set matches reshard input
+	// - Verify that qos pcrs match reshard input
+	// - Verify the at pcr3 preimage matches reshard input
+
+	// Human verifications
+	// see approve_manifest_human_verifications for inspo
+	// - IAM role
+	// - Quorum key?
+	// - New share set?
+
+	if !unsafe_auto_confirm {
+		let stdin = io::stdin();
+		let stdin_locked = stdin.lock();
+		let mut prompter =
+			Prompter { reader: stdin_locked, writer: io::stdout() };
+		if !reshard_re_encrypt_share_human_verifications(
+			&manifest_envelope,
+			&pcr3_preimage,
+			&mut prompter,
+		) {
+			eprintln!("Exiting early without re-encrypting / approving");
+			std::process::exit(1);
+		}
+		drop(prompter);
+	}
+
+	let share = {
+		let plaintext_share = &pair
+			.decrypt(&encrypted_share)
+			.expect("Failed to decrypt share with personal key.");
+		eph_pub.encrypt(plaintext_share).expect("Envelope encryption error")
+	};
+
+	let approval = Approval {
+		signature: pair
+			.sign(&manifest_envelope.manifest.qos_hash())
+			.expect("Failed to sign"),
+		member,
+	}
+	.try_to_vec()
+	.expect("Could not serialize Approval");
+
+	write_with_msg(approval_path.as_ref(), &approval, "Share Set Approval");
+
+	write_with_msg(
+		eph_wrapped_share_path.as_ref(),
+		&share,
+		"Ephemeral key wrapped share",
+	);
+
+	drop(pair);
+
+	Ok(())
+}
+
 pub(crate) fn post_share<P: AsRef<Path>>(
 	uri: &str,
 	eph_wrapped_share_path: P,
@@ -1583,7 +1772,7 @@ pub(crate) fn display<P: AsRef<Path>>(
 	file_path: P,
 	json: bool,
 ) -> Result<(), Error> {
-	let bytes = fs::read(file_path).map_err(|_| Error::ReadShare)?;
+	let bytes = fs::read(file_path).map_err(|e| Error::ReadShare(e.to_string()))?;
 	match *display_type {
 		DisplayType::Manifest => {
 			let decoded = Manifest::try_from_slice(&bytes)?;
@@ -2005,6 +2194,20 @@ fn read_manifest_envelope<P: AsRef<Path>>(
 		fs::read(file).map_err(Error::FailedToReadManifestEnvelopeFile)?;
 	ManifestEnvelope::try_from_slice(&buf)
 		.map_err(|_| Error::FileDidNotHaveValidManifestEnvelope)
+}
+
+fn read_reshard_input(
+	file: String
+) -> Result<ReshardInput, Error> {
+	let buf = fs::read(&file).map_err(|e| Error::FailedToRead {
+		path: file,
+		error: e.to_string(),
+	})?;
+
+	let reshard_input: ReshardInput = serde_json::from_slice(&buf)
+		.map_err(|e| Error::FileDidNotHaveValidReshardInput(e.to_string()))?;
+
+	Ok(reshard_input)
 }
 
 fn read_attestation_approval<P: AsRef<Path>>(

@@ -10,6 +10,8 @@ async fn reshard_e2e() {
 	let eph_path: PathWrapper = "/tmp/reshard_e2e/eph.secret".into();
 	let usock: PathWrapper = "/tmp/reshard_e2e/usock.sock".into();
 	let secret_path: PathWrapper = "/tmp/reshard_e2e/quorum.secret".into();
+	let attestation_doc_path: PathWrapper = "/tmp/reshard_e2e/att_doc".into();
+	// TODO: we will have to do this on a per member basis
 	let reshard_input_path: PathWrapper =
 		"/tmp/reshard_e2e/reshard_input.json".into();
 
@@ -50,7 +52,6 @@ async fn reshard_e2e() {
 			.unwrap()
 			.into();
 
-	qos_test_primitives::wait_until_port_is_bound(host_port);
 
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
@@ -73,6 +74,40 @@ async fn reshard_e2e() {
 		.wait()
 		.unwrap()
 		.success());
-
 	// TODO: assert contents of reshard_input?
+
+	qos_test_primitives::wait_until_port_is_bound(host_port);
+
+	assert!(Command::new("../target/debug/qos_client")
+		.args([
+			"boot-reshard",
+			"--reshard-input-path",
+			&*reshard_input_path,
+			"--host-port",
+			&host_port.to_string(),
+			"--host-ip",
+			LOCAL_HOST,
+		])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
+	assert!(Command::new("../target/debug/qos_client")
+		.args([
+			"get-reshard-attestation-doc",
+			"--attestation-doc-path",
+			&*attestation_doc_path,
+			"--host-port",
+			&host_port.to_string(),
+			"--host-ip",
+			LOCAL_HOST,
+		])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
 }

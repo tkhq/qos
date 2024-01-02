@@ -216,7 +216,11 @@ pub enum Command {
 	P256AsymmetricDecrypt,
 	/// Generate the reshard input
 	GenerateReshardInput,
+	/// Broadcast the boot reshard instruction.
 	BootReshard,
+	/// Get the attestation doc with the reshard input hash as the user
+	/// data the and ephemeral key as the public key.
+	GetReshardAttestationDoc,
 }
 
 impl From<&str> for Command {
@@ -255,6 +259,7 @@ impl From<&str> for Command {
 			"p256-asymmetric-decrypt" => Self::P256AsymmetricDecrypt,
 			"generate-reshard-input" => Self::GenerateReshardInput,
 			"boot-reshard" => Self::BootReshard,
+			"get-reshard-attestation-doc" => Self::GetReshardAttestationDoc,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -710,10 +715,20 @@ impl Command {
 			.token(Self::unsafe_skip_attestation_token())
 	}
 
+	fn boot_reshard() -> Parser {
+		Self::base()
+			.token(Self::reshard_input_path_token())
+	}
+
 	fn get_attestation_doc() -> Parser {
 		Self::base()
 			.token(Self::attestation_doc_path_token())
 			.token(Self::manifest_envelope_path_token())
+	}
+
+	fn get_reshard_attestation_doc() -> Parser {
+		Self::base()
+			.token(Self::attestation_doc_path_token())
 	}
 
 	fn proxy_re_encrypt_share() -> Parser {
@@ -885,6 +900,8 @@ impl GetParserForCommand for Command {
 			Self::P256AsymmetricEncrypt => Self::p256_asymmetric_encrypt(),
 			Self::P256AsymmetricDecrypt => Self::p256_asymmetric_decrypt(),
 			Self::GenerateReshardInput => Self::generate_reshard_input(),
+			Self::BootReshard => Self::boot_reshard(),
+			Self::GetReshardAttestationDoc => Self::get_reshard_attestation_doc()
 		}
 	}
 }
@@ -1286,9 +1303,11 @@ impl ClientRunner {
 					handlers::approve_manifest(&self.opts);
 				}
 				Command::BootStandard => handlers::boot_standard(&self.opts),
+				Command::BootReshard => handlers::boot_reshard(&self.opts),
 				Command::GetAttestationDoc => {
 					handlers::get_attestation_doc(&self.opts);
 				}
+				Command::GetReshardAttestationDoc => handlers::get_reshard_attestation_doc(&self.opts),
 				Command::ProxyReEncryptShare => {
 					handlers::proxy_re_encrypt_share(&self.opts);
 				}
@@ -1615,11 +1634,28 @@ mod handlers {
 		}
 	}
 
+	pub(super) fn boot_reshard(opts: &ClientOpts) {
+		if let Err(e) = services::boot_reshard(
+			opts.path_message(),
+			opts.reshard_input_path(),
+		) {
+			println!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
 	pub(super) fn get_attestation_doc(opts: &ClientOpts) {
 		services::get_attestation_doc(
 			&opts.path_message(),
 			opts.attestation_doc_path(),
 			opts.manifest_envelope_path(),
+		);
+	}
+
+	pub(super) fn get_reshard_attestation_doc(opts: &ClientOpts) {
+		services::get_reshard_attestation_doc(
+			&opts.path_message(),
+			opts.attestation_doc_path(),
 		);
 	}
 
