@@ -110,4 +110,22 @@ async fn reshard_e2e() {
 		.unwrap()
 		.success());
 
+
+	assert!(Command::new("../target/debug/qos_client")
+		.args([
+			"reshard-re-encrypt-share",
+			"--attestation-doc-path",
+			&*attestation_doc_path,
+			"--host-port",
+			&host_port.to_string(),
+			"--host-ip",
+			LOCAL_HOST,
+		])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
+
 }

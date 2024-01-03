@@ -1516,14 +1516,7 @@ pub struct ReshardReEncryptShareArgs {
 	pub unsafe_auto_confirm: bool,
 }
 
-// Verifications in this focus around ensuring
-// - the intended reshard input is being used
-//	- verify the contents of the reshard input
-//		- 
-// - the manifest set approved the manifest and is the correct set
-// - the enclave belongs to the intended organization (and not an attackers
-//   organization)
-pub(crate) fn reshard_re_encrypt_share<P: AsRef<Path>>(
+pub(crate) fn reshard_re_encrypt_share(
 	ReshardReEncryptShareArgs {
 		mut pair,
 		share_path,
@@ -1541,14 +1534,18 @@ pub(crate) fn reshard_re_encrypt_share<P: AsRef<Path>>(
 		pcr3_preimage_path,
 		new_share_set_dir,
 		old_share_set_dir,
-	}: ProxyReEncryptShareArgs<P>,
+	}: ReshardReEncryptShareArgs,
 ) -> Result<(), Error> {
-	let reshard_input = read_reshard_input(&reshard_input_path)?;
+	let reshard_input = read_reshard_input(reshard_input_path.clone())?;
 	let attestation_doc =
 		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
 	let encrypted_share = std::fs::read(share_path).map_err(|e| {
 		Error::ReadShare(e.to_string())
 	})?;
+	let old_share_set = get_share_set(old_share_set_dir);
+	let mut new_share_set = get_share_set(new_share_set_dir);
+	let quorum_key = P256Public::from_hex_file(quorum_key_path)
+		.expect("failed open quorum key.");
 
 	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
 
@@ -1563,7 +1560,7 @@ pub(crate) fn reshard_re_encrypt_share<P: AsRef<Path>>(
 			&reshard_input.enclave.pcr0,
 			&reshard_input.enclave.pcr1,
 			&reshard_input.enclave.pcr2,
-			&extract_pcr3(pcr3_preimage_path),
+			&extract_pcr3(pcr3_preimage_path.clone()),
 		)?;
 	}
 
@@ -1581,33 +1578,61 @@ pub(crate) fn reshard_re_encrypt_share<P: AsRef<Path>>(
 		.expect("Ephemeral key not valid public key")
 	};
 
-	let member = QuorumMember { pub_key: pair.public_key_bytes()?, alias };
 	// Programmatic verification
-	// See approve_manifest_programmatic_verifications for inspo
+	let member = QuorumMember { pub_key: pair.public_key_bytes()?, alias };
 	// - Verify that member is part of new share set
-	// - Verify new share set matches reshard input
-	// - Verify old share set matches reshard input
-	// - Verify that qos pcrs match reshard input
-	// - Verify the at pcr3 preimage matches reshard input
+	if !reshard_input.old_share_set.members.contains(&member) {
+		panic!("Member does not belong to old share set.");
+	}
 
-	// Human verifications
-	// see approve_manifest_human_verifications for inspo
-	// - IAM role
-	// - Quorum key?
-	// - New share set?
+	// Verify old share set matches reshard input
+	if old_share_set != reshard_input.old_share_set {
+		panic!("Specified old share set does not match old share set in reshard input.");
+	}
+	// Verify new share set matches reshard input
+	if new_share_set != reshard_input.new_share_set {
+		panic!("Specified new share set does not match new share set in reshard input.");
+	}
+	// Verify that pcrs 0, 1, 2 & 3 match reshard input
+	let nitro_config = extract_nitro_config(qos_release_dir.clone(), pcr3_preimage_path.clone());
+	if nitro_config != reshard_input.enclave {
+		panic!("Enclave configuration does not match (PCRs, qos version, etc)");
+	}
+	// Verify quorum key matches
+	if quorum_key.to_bytes() != reshard_input.quorum_key {
+		panic!("Specified quorum key does not match reshard input");
+	}
 
+	// Human verification
 	if !unsafe_auto_confirm {
 		let stdin = io::stdin();
 		let stdin_locked = stdin.lock();
 		let mut prompter =
 			Prompter { reader: stdin_locked, writer: io::stdout() };
-		if !reshard_re_encrypt_share_human_verifications(
-			&manifest_envelope,
-			&pcr3_preimage,
-			&mut prompter,
-		) {
-			eprintln!("Exiting early without re-encrypting / approving");
-			std::process::exit(1);
+		{
+			// Last chance to verify that this enclave belongs to turnkey and not an attacker
+			let prompt = format!(
+				"Does this AWS IAM role belong to the intended organization: {pcr3_preimage}? (yes/no)"
+			);
+			if !prompter.prompt_is_yes(&prompt) {
+				panic!("You indicated that this IAM role does not belong to your organization.")
+			}
+		}
+		{
+			// Last chance to verify that this enclave belongs to turnkey and not an attacker
+			new_share_set.members.sort();
+			let public_keys = new_share_set
+				.members
+				.iter()
+				.map(|m| qos_hex::encode(&m.pub_key))
+				.collect::<Vec<_>>()
+				.join("\n");
+			let prompt = format!(
+				"Does this new share set look correct? (yes/no)\n{public_keys}"
+			);
+			if !prompter.prompt_is_yes(&prompt) {
+				panic!("You indicated that this IAM role does not belong to your organization.")
+			}
 		}
 		drop(prompter);
 	}
@@ -1621,7 +1646,7 @@ pub(crate) fn reshard_re_encrypt_share<P: AsRef<Path>>(
 
 	let approval = Approval {
 		signature: pair
-			.sign(&manifest_envelope.manifest.qos_hash())
+			.sign(&reshard_input.qos_hash())
 			.expect("Failed to sign"),
 		member,
 	}
