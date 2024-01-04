@@ -224,6 +224,9 @@ pub enum Command {
 	/// Re-encrypt a quorum key share to the ephemeral key of an enclave booted
 	/// for resharding.
 	ReshardReEncryptShare,
+	/// Submit an encrypted share along with the associated approval to an
+	/// enclave booted for resahrding.
+	ReshardPostShare,
 }
 
 impl From<&str> for Command {
@@ -264,6 +267,7 @@ impl From<&str> for Command {
 			"boot-reshard" => Self::BootReshard,
 			"get-reshard-attestation-doc" => Self::GetReshardAttestationDoc,
 			"reshard-re-encrypt-share" => Self::ReshardReEncryptShare,
+			"reshard-post-share" => Self::ReshardPostShare,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -720,8 +724,7 @@ impl Command {
 	}
 
 	fn boot_reshard() -> Parser {
-		Self::base()
-			.token(Self::reshard_input_path_token())
+		Self::base().token(Self::reshard_input_path_token())
 	}
 
 	fn get_attestation_doc() -> Parser {
@@ -731,8 +734,7 @@ impl Command {
 	}
 
 	fn get_reshard_attestation_doc() -> Parser {
-		Self::base()
-			.token(Self::attestation_doc_path_token())
+		Self::base().token(Self::attestation_doc_path_token())
 	}
 
 	fn proxy_re_encrypt_share() -> Parser {
@@ -760,14 +762,12 @@ impl Command {
 			.token(Self::attestation_doc_path_token())
 			.token(Self::approval_path_token())
 			.token(Self::eph_wrapped_share_path_token())
-
 			.token(Self::reshard_input_path_token())
 			.token(Self::qos_release_dir_token())
 			.token(Self::quorum_key_path_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::old_share_set_dir_token())
 			.token(Self::new_share_set_dir_token())
-
 			.token(Self::alias_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
@@ -927,8 +927,11 @@ impl GetParserForCommand for Command {
 			Self::P256AsymmetricDecrypt => Self::p256_asymmetric_decrypt(),
 			Self::GenerateReshardInput => Self::generate_reshard_input(),
 			Self::BootReshard => Self::boot_reshard(),
-			Self::GetReshardAttestationDoc => Self::get_reshard_attestation_doc(),
+			Self::GetReshardAttestationDoc => {
+				Self::get_reshard_attestation_doc()
+			}
 			Self::ReshardReEncryptShare => Self::reshard_re_encrypt_share(),
+			Self::ReshardPostShare => Self::post_share(),
 		}
 	}
 }
@@ -1334,7 +1337,9 @@ impl ClientRunner {
 				Command::GetAttestationDoc => {
 					handlers::get_attestation_doc(&self.opts);
 				}
-				Command::GetReshardAttestationDoc => handlers::get_reshard_attestation_doc(&self.opts),
+				Command::GetReshardAttestationDoc => {
+					handlers::get_reshard_attestation_doc(&self.opts)
+				}
 				Command::ProxyReEncryptShare => {
 					handlers::proxy_re_encrypt_share(&self.opts);
 				}
@@ -1380,6 +1385,9 @@ impl ClientRunner {
 				Command::ReshardReEncryptShare => {
 					handlers::reshard_re_encrypt_share(&self.opts);
 				}
+				Command::ReshardPostShare => {
+					handlers::reshard_post_share(&self.opts);
+				}
 			}
 		}
 	}
@@ -1399,7 +1407,9 @@ impl CLI {
 }
 
 mod handlers {
-	use super::services::{ApproveManifestArgs, ProxyReEncryptShareArgs, ReshardReEncryptShareArgs};
+	use super::services::{
+		ApproveManifestArgs, ProxyReEncryptShareArgs, ReshardReEncryptShareArgs,
+	};
 	use crate::{
 		cli::{
 			services::{
@@ -1740,6 +1750,17 @@ mod handlers {
 
 	pub(super) fn post_share(opts: &ClientOpts) {
 		if let Err(e) = services::post_share(
+			&opts.path_message(),
+			opts.eph_wrapped_share_path(),
+			opts.approval_path(),
+		) {
+			eprintln!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn reshard_post_share(opts: &ClientOpts) {
+		if let Err(e) = services::reshard_post_share(
 			&opts.path_message(),
 			opts.eph_wrapped_share_path(),
 			opts.approval_path(),

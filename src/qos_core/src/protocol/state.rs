@@ -70,11 +70,12 @@ impl ProtocolRoute {
 		let resp = (self.handler)(msg, state);
 
 		// ignore transitions in special cases
-		if let Some(Ok(ProtocolMsg::ProvisionResponse { reconstructed })) = resp
-		{
-			if !reconstructed {
-				return resp;
-			}
+		match resp {
+			Some(Ok(ProtocolMsg::ProvisionResponse { reconstructed }))
+			| Some(Ok(ProtocolMsg::ReshardProvisionResponse {
+				reconstructed,
+			})) if !reconstructed => return resp,
+			_ => { /* This isn't a special case, keep going */ }
 		}
 
 		// handle state transitions

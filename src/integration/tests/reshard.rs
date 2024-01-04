@@ -15,7 +15,7 @@ async fn reshard_e2e() {
 	let reshard_input_path: PathWrapper =
 		"/tmp/reshard_e2e/reshard_input.json".into();
 
-	let eph_path: PathWrapper = "/tmp/boot-e2e/ephemeral_key.secret".into();
+	let eph_path: PathWrapper = "/tmp/reshard_e2e/ephemeral_key.secret".into();
 
 	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
 	let personal_dir = |user: &str| format!("{all_personal_dir}/{user}-dir");
@@ -59,7 +59,6 @@ async fn reshard_e2e() {
 			.spawn()
 			.unwrap()
 			.into();
-
 
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
@@ -140,7 +139,6 @@ async fn reshard_e2e() {
 				&*approval_path,
 				"--eph-wrapped-share-path",
 				&eph_wrapped_share_path,
-
 				"--reshard-input-path",
 				&*reshard_input_path,
 				"--qos-release-dir",
@@ -154,7 +152,6 @@ async fn reshard_e2e() {
 				"./mock/keys/new-share-set",
 				"--old-share-set-dir",
 				"./mock/keys/share-set",
-
 				"--alias",
 				user,
 				"--unsafe-skip-attestation",
@@ -168,6 +165,24 @@ async fn reshard_e2e() {
 			.wait()
 			.unwrap()
 			.success());
-	}
 
+		// Post the encrypted share
+		assert!(Command::new("../target/debug/qos_client")
+			.args([
+				"reshard-post-share",
+				"--host-port",
+				&host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--eph-wrapped-share-path",
+				&eph_wrapped_share_path,
+				"--approval-path",
+				&approval_path,
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
+	}
 }

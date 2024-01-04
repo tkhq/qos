@@ -141,7 +141,7 @@ pub enum Error {
 	/// Given quorum key seed does not match the hash of the expected quorum
 	/// key seed.
 	SecretDoesNotMatch,
-	FileDidNotHaveValidReshardInput(String)
+	FileDidNotHaveValidReshardInput(String),
 }
 
 impl From<borsh::maybestd::io::Error> for Error {
@@ -1211,9 +1211,7 @@ pub(crate) fn boot_reshard(
 	// Create manifest envelope
 	let reshard_input = read_reshard_input(reshard_input_path)?;
 
-	let req = ProtocolMsg::BootReshardRequest {
-		reshard_input,
-	};
+	let req = ProtocolMsg::BootReshardRequest { reshard_input };
 
 	// Broadcast boot reshard instruction and make sure it has the attestation
 	// doc as the response. For now we ignoring the response.
@@ -1223,7 +1221,6 @@ pub(crate) fn boot_reshard(
 		} => document,
 		r => panic!("Unexpected response: {r:?}"),
 	};
-
 
 	Ok(())
 }
@@ -1319,9 +1316,8 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	let manifest_envelope = read_manifest_envelope(&manifest_envelope_path)?;
 	let attestation_doc =
 		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
-	let encrypted_share = std::fs::read(share_path).map_err(|e| {
-		Error::ReadShare(e.to_string())
-	})?;
+	let encrypted_share = std::fs::read(share_path)
+		.map_err(|e| Error::ReadShare(e.to_string()))?;
 
 	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
 
@@ -1539,9 +1535,8 @@ pub(crate) fn reshard_re_encrypt_share(
 	let reshard_input = read_reshard_input(reshard_input_path.clone())?;
 	let attestation_doc =
 		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
-	let encrypted_share = std::fs::read(share_path).map_err(|e| {
-		Error::ReadShare(e.to_string())
-	})?;
+	let encrypted_share = std::fs::read(share_path)
+		.map_err(|e| Error::ReadShare(e.to_string()))?;
 	let old_share_set = get_share_set(old_share_set_dir);
 	let mut new_share_set = get_share_set(new_share_set_dir);
 	let quorum_key = P256Public::from_hex_file(quorum_key_path)
@@ -1594,7 +1589,10 @@ pub(crate) fn reshard_re_encrypt_share(
 		panic!("Specified new share set does not match new share set in reshard input.");
 	}
 	// Verify that pcrs 0, 1, 2 & 3 match reshard input
-	let nitro_config = extract_nitro_config(qos_release_dir.clone(), pcr3_preimage_path.clone());
+	let nitro_config = extract_nitro_config(
+		qos_release_dir.clone(),
+		pcr3_preimage_path.clone(),
+	);
 	if nitro_config != reshard_input.enclave {
 		panic!("Enclave configuration does not match (PCRs, qos version, etc)");
 	}
@@ -1610,7 +1608,8 @@ pub(crate) fn reshard_re_encrypt_share(
 		let mut prompter =
 			Prompter { reader: stdin_locked, writer: io::stdout() };
 		{
-			// Last chance to verify that this enclave belongs to turnkey and not an attacker
+			// Last chance to verify that this enclave belongs to turnkey and
+			// not an attacker
 			let prompt = format!(
 				"Does this AWS IAM role belong to the intended organization: {pcr3_preimage}? (yes/no)"
 			);
@@ -1619,7 +1618,8 @@ pub(crate) fn reshard_re_encrypt_share(
 			}
 		}
 		{
-			// Last chance to verify that this enclave belongs to turnkey and not an attacker
+			// Last chance to verify that this enclave belongs to turnkey and
+			// not an attacker
 			new_share_set.members.sort();
 			let public_keys = new_share_set
 				.members
@@ -1679,6 +1679,33 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	let req = ProtocolMsg::ProvisionRequest { share, approval };
 	let is_reconstructed = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::ProvisionResponse { reconstructed } => reconstructed,
+		r => panic!("Unexpected response: {r:?}"),
+	};
+
+	if is_reconstructed {
+		println!("The quorum key has been reconstructed.");
+	} else {
+		println!("The quorum key has *not* been reconstructed.");
+	};
+
+	Ok(())
+}
+
+pub(crate) fn reshard_post_share(
+	uri: &str,
+	eph_wrapped_share_path: String,
+	approval_path: String,
+) -> Result<(), Error> {
+	// Get the ephemeral key wrapped share
+	let share = fs::read(eph_wrapped_share_path)
+		.map_err(Error::FailedToReadEphWrappedShare)?;
+	let approval = read_attestation_approval(&approval_path)?;
+
+	let req = ProtocolMsg::ReshardProvisionRequest { share, approval };
+	let is_reconstructed = match request::post(uri, &req).unwrap() {
+		ProtocolMsg::ReshardProvisionResponse { reconstructed } => {
+			reconstructed
+		}
 		r => panic!("Unexpected response: {r:?}"),
 	};
 
@@ -1797,7 +1824,8 @@ pub(crate) fn display<P: AsRef<Path>>(
 	file_path: P,
 	json: bool,
 ) -> Result<(), Error> {
-	let bytes = fs::read(file_path).map_err(|e| Error::ReadShare(e.to_string()))?;
+	let bytes =
+		fs::read(file_path).map_err(|e| Error::ReadShare(e.to_string()))?;
 	match *display_type {
 		DisplayType::Manifest => {
 			let decoded = Manifest::try_from_slice(&bytes)?;
@@ -2221,9 +2249,7 @@ fn read_manifest_envelope<P: AsRef<Path>>(
 		.map_err(|_| Error::FileDidNotHaveValidManifestEnvelope)
 }
 
-fn read_reshard_input(
-	file: String
-) -> Result<ReshardInput, Error> {
+fn read_reshard_input(file: String) -> Result<ReshardInput, Error> {
 	let buf = fs::read(&file).map_err(|e| Error::FailedToRead {
 		path: file,
 		error: e.to_string(),
