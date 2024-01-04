@@ -7,7 +7,7 @@ use qos_test_primitives::{ChildWrapper, PathWrapper};
 async fn reshard_e2e() {
 	let tmp: PathWrapper = "/tmp/reshard_e2e".into();
 	drop(fs::create_dir_all(&*tmp));
-	let eph_path: PathWrapper = "/tmp/reshard_e2e/eph.secret".into();
+	let _eph_path: PathWrapper = "/tmp/reshard_e2e/eph.secret".into();
 	let usock: PathWrapper = "/tmp/reshard_e2e/usock.sock".into();
 	let secret_path: PathWrapper = "/tmp/reshard_e2e/quorum.secret".into();
 	let attestation_doc_path: PathWrapper = "/tmp/reshard_e2e/att_doc".into();
@@ -21,7 +21,7 @@ async fn reshard_e2e() {
 	let personal_dir = |user: &str| format!("{all_personal_dir}/{user}-dir");
 	let user1 = "user1";
 	let user2 = "user2";
-	let user3 = "user3";
+	let _user3 = "user3";
 
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 

@@ -71,10 +71,10 @@ impl ProtocolRoute {
 
 		// ignore transitions in special cases
 		match resp {
-			Some(Ok(ProtocolMsg::ProvisionResponse { reconstructed }))
-			| Some(Ok(ProtocolMsg::ReshardProvisionResponse {
-				reconstructed,
-			})) if !reconstructed => return resp,
+			Some(Ok(
+				ProtocolMsg::ProvisionResponse { reconstructed }
+				| ProtocolMsg::ReshardProvisionResponse { reconstructed },
+			)) if !reconstructed => return resp,
 			_ => { /* This isn't a special case, keep going */ }
 		}
 

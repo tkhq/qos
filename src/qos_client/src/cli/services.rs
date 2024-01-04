@@ -1532,7 +1532,7 @@ pub(crate) fn reshard_re_encrypt_share(
 		unsafe_auto_confirm,
 	}: ReshardReEncryptShareArgs,
 ) -> Result<(), Error> {
-	let reshard_input = read_reshard_input(reshard_input_path.clone())?;
+	let reshard_input = read_reshard_input(reshard_input_path)?;
 	let attestation_doc =
 		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
 	let encrypted_share = std::fs::read(share_path)
@@ -1576,30 +1576,27 @@ pub(crate) fn reshard_re_encrypt_share(
 	// Programmatic verification
 	let member = QuorumMember { pub_key: pair.public_key_bytes()?, alias };
 	// - Verify that member is part of new share set
-	if !reshard_input.old_share_set.members.contains(&member) {
-		panic!("Member does not belong to old share set.");
-	}
+	assert!(
+		reshard_input.old_share_set.members.contains(&member),
+		"Member does not belong to old share set."
+	);
 
 	// Verify old share set matches reshard input
-	if old_share_set != reshard_input.old_share_set {
-		panic!("Specified old share set does not match old share set in reshard input.");
-	}
+	assert!(!(old_share_set != reshard_input.old_share_set), "Specified old share set does not match old share set in reshard input.");
 	// Verify new share set matches reshard input
-	if new_share_set != reshard_input.new_share_set {
-		panic!("Specified new share set does not match new share set in reshard input.");
-	}
+	assert!(!(new_share_set != reshard_input.new_share_set), "Specified new share set does not match new share set in reshard input.");
 	// Verify that pcrs 0, 1, 2 & 3 match reshard input
-	let nitro_config = extract_nitro_config(
-		qos_release_dir.clone(),
-		pcr3_preimage_path.clone(),
+	let nitro_config =
+		extract_nitro_config(qos_release_dir, pcr3_preimage_path);
+	assert!(
+		!(nitro_config != reshard_input.enclave),
+		"Enclave configuration does not match (PCRs, qos version, etc)"
 	);
-	if nitro_config != reshard_input.enclave {
-		panic!("Enclave configuration does not match (PCRs, qos version, etc)");
-	}
 	// Verify quorum key matches
-	if quorum_key.to_bytes() != reshard_input.quorum_key {
-		panic!("Specified quorum key does not match reshard input");
-	}
+	assert!(
+		quorum_key.to_bytes() == reshard_input.quorum_key,
+		"Specified quorum key does not match reshard input"
+	);
 
 	// Human verification
 	if !unsafe_auto_confirm {
@@ -1613,9 +1610,7 @@ pub(crate) fn reshard_re_encrypt_share(
 			let prompt = format!(
 				"Does this AWS IAM role belong to the intended organization: {pcr3_preimage}? (yes/no)"
 			);
-			if !prompter.prompt_is_yes(&prompt) {
-				panic!("You indicated that this IAM role does not belong to your organization.")
-			}
+			assert!(prompter.prompt_is_yes(&prompt), "You indicated that this IAM role does not belong to your organization.");
 		}
 		{
 			// Last chance to verify that this enclave belongs to turnkey and
@@ -1630,9 +1625,7 @@ pub(crate) fn reshard_re_encrypt_share(
 			let prompt = format!(
 				"Does this new share set look correct? (yes/no)\n{public_keys}"
 			);
-			if !prompter.prompt_is_yes(&prompt) {
-				panic!("You indicated that this IAM role does not belong to your organization.")
-			}
+			assert!(prompter.prompt_is_yes(&prompt), "You indicated that this IAM role does not belong to your organization.");
 		}
 		drop(prompter);
 	}
