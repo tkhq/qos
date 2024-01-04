@@ -15,6 +15,14 @@ async fn reshard_e2e() {
 	let reshard_input_path: PathWrapper =
 		"/tmp/reshard_e2e/reshard_input.json".into();
 
+	let eph_path: PathWrapper = "/tmp/boot-e2e/ephemeral_key.secret".into();
+
+	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
+	let personal_dir = |user: &str| format!("{all_personal_dir}/{user}-dir");
+	let user1 = "user1";
+	let user2 = "user2";
+	let user3 = "user3";
+
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 
 	// Start Enclave
@@ -110,22 +118,56 @@ async fn reshard_e2e() {
 		.unwrap()
 		.success());
 
+	for user in [&user1, &user2] {
+		// TODO(zeke): dry this logic up with boot standard
+		let share_path = format!("{}/{}.share", &personal_dir(user), user);
+		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
+		let eph_wrapped_share_path: PathWrapper =
+			format!("{}/{}.eph_wrapped.share", &*tmp, user).into();
+		let approval_path: PathWrapper =
+			format!("{}/{}.attestation.approval", &*tmp, user).into();
 
-	assert!(Command::new("../target/debug/qos_client")
-		.args([
-			"reshard-re-encrypt-share",
-			"--attestation-doc-path",
-			&*attestation_doc_path,
-			"--host-port",
-			&host_port.to_string(),
-			"--host-ip",
-			LOCAL_HOST,
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+		assert!(Command::new("../target/debug/qos_client")
+			.args([
+				"reshard-re-encrypt-share",
+				"--secret-path",
+				&secret_path,
+				"--share-path",
+				&share_path,
+				"--attestation-doc-path",
+				&*attestation_doc_path,
+				"--approval-path",
+				&*approval_path,
+				"--eph-wrapped-share-path",
+				&eph_wrapped_share_path,
 
+				"--reshard-input-path",
+				&*reshard_input_path,
+				"--qos-release-dir",
+				QOS_DIST_DIR,
+				"--quorum-key-path",
+				// TODO: make const
+				"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
+				"--pcr3-preimage-path",
+				"./mock/namespaces/pcr3-preimage.txt", // TODO: make const
+				"--new-share-set-dir",
+				"./mock/keys/new-share-set",
+				"--old-share-set-dir",
+				"./mock/keys/share-set",
+
+				"--alias",
+				user,
+				"--unsafe-skip-attestation",
+				"--unsafe-eph-path-override",
+				&*eph_path,
+				// TODO: skip this if it doesn't work
+				"--unsafe-auto-confirm",
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
+	}
 
 }

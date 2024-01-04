@@ -1523,10 +1523,6 @@ pub(crate) fn reshard_re_encrypt_share(
 		attestation_doc_path,
 		approval_path,
 		eph_wrapped_share_path,
-		alias,
-		unsafe_skip_attestation,
-		unsafe_eph_path_override,
-		unsafe_auto_confirm,
 
 		reshard_input_path,
 		qos_release_dir,
@@ -1534,6 +1530,10 @@ pub(crate) fn reshard_re_encrypt_share(
 		pcr3_preimage_path,
 		new_share_set_dir,
 		old_share_set_dir,
+		alias,
+		unsafe_skip_attestation,
+		unsafe_eph_path_override,
+		unsafe_auto_confirm,
 	}: ReshardReEncryptShareArgs,
 ) -> Result<(), Error> {
 	let reshard_input = read_reshard_input(reshard_input_path.clone())?;
