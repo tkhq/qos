@@ -227,6 +227,8 @@ pub enum Command {
 	/// Submit an encrypted share along with the associated approval to an
 	/// enclave booted for resahrding.
 	ReshardPostShare,
+	/// Fetch the reshard output after the quorum key has been provisioned for resharding.
+	GetReshardOutput,
 }
 
 impl From<&str> for Command {
@@ -268,6 +270,7 @@ impl From<&str> for Command {
 			"get-reshard-attestation-doc" => Self::GetReshardAttestationDoc,
 			"reshard-re-encrypt-share" => Self::ReshardReEncryptShare,
 			"reshard-post-share" => Self::ReshardPostShare,
+			"get-reshard-output" => Self::GetReshardOutput,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),

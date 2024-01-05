@@ -185,4 +185,23 @@ async fn reshard_e2e() {
 			.unwrap()
 			.success());
 	}
+
+		assert!(Command::new("../target/debug/qos_client")
+			.args([
+				"get-reshard-output",
+				"--host-port",
+				&host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--eph-wrapped-share-path",
+				&eph_wrapped_share_path,
+				"--approval-path",
+				&approval_path,
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
+	}
 }

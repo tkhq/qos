@@ -20,7 +20,7 @@ use qos_core::protocol::{
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
-		reshard::ReshardInput,
+		reshard::{ReshardInput, ReshardOutput},
 	},
 	QosHash,
 };
@@ -1707,6 +1707,23 @@ pub(crate) fn reshard_post_share(
 	} else {
 		println!("The quorum key has *not* been reconstructed.");
 	};
+
+	Ok(())
+}
+
+pub(crate) fn get_reshard_output(
+	uri: &str,
+	reshard_output_path: String, 
+) -> Result<(), Error> {
+	let req = ProtocolMsg::ReshardOutputRequest;
+	let reshard_output = match request::post(uri, &req).unwrap() {
+		ProtocolMsg::ReshardOutputResponse { reshard_output } => {
+			reshard_output
+		}
+		r => panic!("Unexpected response: {r:?}"),
+	};
+
+	write_json_with_msg(reshard_output_path.as_ref(), &reshard_output, "ReshardOutput");
 
 	Ok(())
 }
