@@ -14,6 +14,8 @@ async fn reshard_e2e() {
 	// TODO: we will have to do this on a per member basis
 	let reshard_input_path: PathWrapper =
 		"/tmp/reshard_e2e/reshard_input.json".into();
+	let reshard_output_path: PathWrapper =
+		"/tmp/reshard_e2e/reshard_output.json".into();
 
 	let eph_path: PathWrapper = "/tmp/reshard_e2e/ephemeral_key.secret".into();
 
@@ -186,22 +188,19 @@ async fn reshard_e2e() {
 			.success());
 	}
 
-		assert!(Command::new("../target/debug/qos_client")
-			.args([
-				"get-reshard-output",
-				"--host-port",
-				&host_port.to_string(),
-				"--host-ip",
-				LOCAL_HOST,
-				"--eph-wrapped-share-path",
-				&eph_wrapped_share_path,
-				"--approval-path",
-				&approval_path,
-			])
-			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
-	}
+	assert!(Command::new("../target/debug/qos_client")
+		.args([
+			"get-reshard-output",
+			"--host-port",
+			&host_port.to_string(),
+			"--host-ip",
+			LOCAL_HOST,
+			"--reshard-output-path",
+			&reshard_output_path,
+		])
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
 }

@@ -53,6 +53,7 @@ const APPROVAL_PATH: &str = "approval-path";
 const EPH_WRAPPED_SHARE_PATH: &str = "eph-wrapped-share-path";
 const ATTESTATION_DOC_PATH: &str = "attestation-doc-path";
 const MASTER_SEED_PATH: &str = "master-seed-path";
+const RESHARD_OUTPUT_PATH: &str = "reshard-output-path";
 const SHARE: &str = "share";
 const OUTPUT_DIR: &str = "output-dir";
 const THRESHOLD: &str = "threshold";
@@ -227,7 +228,8 @@ pub enum Command {
 	/// Submit an encrypted share along with the associated approval to an
 	/// enclave booted for resahrding.
 	ReshardPostShare,
-	/// Fetch the reshard output after the quorum key has been provisioned for resharding.
+	/// Fetch the reshard output after the quorum key has been provisioned for
+	/// resharding.
 	GetReshardOutput,
 }
 
@@ -382,6 +384,14 @@ impl Command {
 		Token::new(
 			RESHARD_INPUT_PATH,
 			"Path to the file to write/read the reshard input.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
+	fn reshard_output_path_token() -> Token {
+		Token::new(
+			RESHARD_OUTPUT_PATH,
+			"Path to the file to write/read the reshard output.",
 		)
 		.takes_value(true)
 		.required(true)
@@ -889,6 +899,10 @@ impl Command {
 			.token(Self::master_seed_path_token())
 			.token(Self::output_hex_token())
 	}
+
+	fn get_reshard_output() -> Parser {
+		Self::base().token(Self::reshard_output_path_token())
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -935,6 +949,7 @@ impl GetParserForCommand for Command {
 			}
 			Self::ReshardReEncryptShare => Self::reshard_re_encrypt_share(),
 			Self::ReshardPostShare => Self::post_share(),
+			Self::GetReshardOutput => Self::get_reshard_output(),
 		}
 	}
 }
@@ -1258,6 +1273,13 @@ impl ClientOpts {
 			.to_string()
 	}
 
+	fn reshard_output_path(&self) -> String {
+		self.parsed
+			.single(RESHARD_OUTPUT_PATH)
+			.expect("Missing `--reshard-output-path`")
+			.to_string()
+	}
+
 	fn ciphertext_path(&self) -> String {
 		self.parsed
 			.single(CIPHERTEXT_PATH)
@@ -1390,6 +1412,9 @@ impl ClientRunner {
 				}
 				Command::ReshardPostShare => {
 					handlers::reshard_post_share(&self.opts);
+				}
+				Command::GetReshardOutput => {
+					handlers::get_reshard_output(&self.opts);
 				}
 			}
 		}
@@ -1767,6 +1792,16 @@ mod handlers {
 			&opts.path_message(),
 			opts.eph_wrapped_share_path(),
 			opts.approval_path(),
+		) {
+			eprintln!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn get_reshard_output(opts: &ClientOpts) {
+		if let Err(e) = services::get_reshard_output(
+			&opts.path_message(),
+			opts.reshard_output_path(),
 		) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);
