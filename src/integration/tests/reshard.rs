@@ -203,4 +203,26 @@ async fn reshard_e2e() {
 		.wait()
 		.unwrap()
 		.success());
+
+	for user in [&user1, &user2] {
+		let share_path: PathWrapper =
+			format!("{}/{}.output.share", &*tmp, user).into();
+		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
+
+		assert!(Command::new("../target/debug/qos_client")
+			.args([
+				"verify-reshard-output",
+				"--reshard-output-path",
+				&reshard_output_path,
+				"--secret-path",
+				&secret_path,
+				"--share-path",
+				&share_path,
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
+	}
 }

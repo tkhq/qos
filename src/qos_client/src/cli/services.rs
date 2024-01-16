@@ -20,7 +20,7 @@ use qos_core::protocol::{
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
-		reshard::ReshardInput,
+		reshard::{ReshardInput, ReshardOutput},
 	},
 	QosHash,
 };
@@ -142,6 +142,13 @@ pub enum Error {
 	/// key seed.
 	SecretDoesNotMatch,
 	FileDidNotHaveValidReshardInput(String),
+	/// Could not read the file with the reshard output
+	FailedToReadReshardOutput(std::io::Error),
+	FileDidNotHaveReshardOutput(String),
+	/// Could not find key in new genesis member outputs
+	KeyNotInNewShareSet,
+	FailedToWriteEncryptedShare(std::io::Error),
+
 }
 
 impl From<borsh::maybestd::io::Error> for Error {
@@ -1730,6 +1737,33 @@ pub(crate) fn get_reshard_output(
 	Ok(())
 }
 
+pub(crate) fn verify_reshard_output(
+	reshard_output_path: String,
+	mut pair: PairOrYubi,
+	encrypted_share_path: String
+) -> Result<(), Error> {
+	let reshard_output = read_reshard_output(reshard_output_path)?;
+
+	let pub_key = pair.public_key_bytes()?;
+
+	let member_output = reshard_output.member_outputs
+		.iter()
+		.find(|o| o.share_set_member.pub_key == pub_key)
+		.ok_or(Error::KeyNotInNewShareSet)?;
+
+	let decrypted_share_hash = sha_512(&pair.decrypt(&member_output.encrypted_quorum_key_share)?);
+	assert_eq!(
+		member_output.share_hash,
+		decrypted_share_hash,
+		"decrypted share did not match expected hash"
+	);
+
+	fs::write(encrypted_share_path, &member_output.encrypted_quorum_key_share)
+		.map_err(Error::FailedToWriteEncryptedShare)?;
+
+	Ok(())
+}
+
 #[cfg(feature = "smartcard")]
 pub(crate) fn yubikey_sign(hex_payload: &str) -> Result<(), Error> {
 	let bytes = qos_hex::decode(hex_payload)?;
@@ -2271,6 +2305,18 @@ fn read_reshard_input(file: String) -> Result<ReshardInput, Error> {
 		.map_err(|e| Error::FileDidNotHaveValidReshardInput(e.to_string()))?;
 
 	Ok(reshard_input)
+}
+
+fn read_reshard_output(
+	file: String,
+) -> Result<ReshardOutput, Error> {
+	let buf = fs::read(&file).map_err(|e| Error::FailedToRead {
+		path: file,
+		error: e.to_string(),
+	})?;
+
+	serde_json::from_slice(&buf)
+		.map_err(|e| Error::FileDidNotHaveReshardOutput(e.to_string()))
 }
 
 fn read_attestation_approval<P: AsRef<Path>>(

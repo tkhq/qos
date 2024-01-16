@@ -231,6 +231,8 @@ pub enum Command {
 	/// Fetch the reshard output after the quorum key has been provisioned for
 	/// resharding.
 	GetReshardOutput,
+	/// Verify the reshard output
+	VerifyReshardOutput,
 }
 
 impl From<&str> for Command {
@@ -273,6 +275,7 @@ impl From<&str> for Command {
 			"reshard-re-encrypt-share" => Self::ReshardReEncryptShare,
 			"reshard-post-share" => Self::ReshardPostShare,
 			"get-reshard-output" => Self::GetReshardOutput,
+			"verify-reshard-output" => Self::VerifyReshardOutput,
 			_ => panic!(
 				"Unrecognized command, try something like `host-health --help`"
 			),
@@ -903,6 +906,14 @@ impl Command {
 	fn get_reshard_output() -> Parser {
 		Self::base().token(Self::reshard_output_path_token())
 	}
+
+	fn verify_reshard_output() -> Parser {
+		Parser::new()
+			.token(Self::yubikey_token())
+			.token(Self::secret_path_token())
+			.token(Self::reshard_output_path_token())
+			.token(Self::share_path_token())
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -950,6 +961,7 @@ impl GetParserForCommand for Command {
 			Self::ReshardReEncryptShare => Self::reshard_re_encrypt_share(),
 			Self::ReshardPostShare => Self::post_share(),
 			Self::GetReshardOutput => Self::get_reshard_output(),
+			Self::VerifyReshardOutput => Self::verify_reshard_output(),
 		}
 	}
 }
@@ -1416,6 +1428,9 @@ impl ClientRunner {
 				Command::GetReshardOutput => {
 					handlers::get_reshard_output(&self.opts);
 				}
+				Command::VerifyReshardOutput => {
+					handlers::verify_reshard_output(&self.opts);
+				}
 			}
 		}
 	}
@@ -1802,6 +1817,19 @@ mod handlers {
 		if let Err(e) = services::get_reshard_output(
 			&opts.path_message(),
 			opts.reshard_output_path(),
+		) {
+			eprintln!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn verify_reshard_output(opts: &ClientOpts) {
+		let pair = get_pair_or_yubi(opts);
+
+		if let Err(e) = services::verify_reshard_output(
+			opts.reshard_output_path(),
+			pair,
+			opts.encrypted_quorum_key_path(),
 		) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);
