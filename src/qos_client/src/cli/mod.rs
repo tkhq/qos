@@ -1829,7 +1829,7 @@ mod handlers {
 		if let Err(e) = services::verify_reshard_output(
 			opts.reshard_output_path(),
 			pair,
-			opts.encrypted_quorum_key_path(),
+			opts.share_path(),
 		) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);

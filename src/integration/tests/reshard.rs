@@ -204,10 +204,11 @@ async fn reshard_e2e() {
 		.unwrap()
 		.success());
 
-	for user in [&user1, &user2] {
+	let secret_path_fn = |user: &str| format!("./mock/new-share-set-secrets/reshard-{}.secret", user);
+	for user in ["1", "2", "3", "4"] {
 		let share_path: PathWrapper =
 			format!("{}/{}.output.share", &*tmp, user).into();
-		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
+		let secret_path = secret_path_fn(user);
 
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
