@@ -146,6 +146,22 @@ pub enum ProtocolError {
 	/// Expected to have [ReshardOutput] in enclave state, but it was not
 	/// found.
 	MissingReshardOutput,
+	///
+	DuplicateNewShareSetMember,
+
+	/// The share set member posted more or less shares then the number of quorum keys targeted for reconstruction.
+	ShareCountDoesNotMatchExpectedQuorumKeyCount,
+	/// Could not decrypt the share with the ephemeral key.
+	ShareDecryptionFailed,
+	/// Internal error indicating that the count of shares in each secret builder do not match.
+	/// We expect each secret builder to have the same count of shares because we enforce that 
+	/// the count of shares post by each member equals the count of quorum keys specified for reconstruction
+	/// in the reshard input.
+	InternalDiffCountsForQuorumKeyShares,
+	/// The same quorum key was specified multiple times in the reshard input.
+	DuplicateQuorumKeys,
+	/// Internal error indicating that reshard provisioner was not initialized on boot.
+	MissingReshardProvisioner,
 }
 
 impl From<std::io::Error> for ProtocolError {

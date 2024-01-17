@@ -6,7 +6,7 @@ use qos_nsm::NsmProvider;
 use super::{
 	error::ProtocolError,
 	msg::ProtocolMsg,
-	services::{provision::SecretBuilder, reshard::ReshardInput},
+	services::{provision::SecretBuilder, reshard::{ReshardInput, ReshardProvisioner}},
 };
 use crate::{
 	client::Client, handles::Handles, io::SocketAddress,
@@ -226,6 +226,7 @@ pub(crate) struct ProtocolState {
 	phase: ProtocolPhase,
 	pub reshard_input: Option<ReshardInput>,
 	pub reshard_output: Option<ReshardOutput>,
+	pub reshard_provisioner: Option<ReshardProvisioner>,
 }
 
 impl ProtocolState {
@@ -257,6 +258,7 @@ impl ProtocolState {
 			),
 			reshard_input: None,
 			reshard_output: None,
+			reshard_provisioner: None,
 		}
 	}
 
@@ -504,8 +506,8 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::ReshardProvisionRequest { share, approval } = req {
-			let result = reshard::reshard_provision(share, approval, state)
+		if let ProtocolMsg::ReshardProvisionRequest { input } = req {
+			let result = reshard::reshard_provision(input.clone(), state)
 				.map(|reconstructed| ProtocolMsg::ReshardProvisionResponse {
 					reconstructed,
 				})
