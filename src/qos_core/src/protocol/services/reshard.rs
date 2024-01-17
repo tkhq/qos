@@ -1,12 +1,13 @@
 //! Quorum Key Resharding logic and types.
 
 use core::iter::zip;
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 
 use qos_crypto::sha_512;
 use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Pair, P256Public};
 
+use super::provision::SecretBuilder;
 use crate::protocol::{
 	services::{
 		attestation,
@@ -16,9 +17,8 @@ use crate::protocol::{
 	ProtocolError, ProtocolState, QosHash,
 };
 
-use super::provision::SecretBuilder;
-
-/// Helpful for ensuring always serialized as hex, including when used as a map key
+/// Helpful for ensuring always serialized as hex, including when used as a map
+/// key
 #[derive(
 	Debug,
 	PartialEq,
@@ -34,6 +34,7 @@ use super::provision::SecretBuilder;
 )]
 pub struct QuorumPubKey(#[serde(with = "qos_hex::serde")] pub Vec<u8>);
 
+/// A share and the quorum key it is for.
 #[derive(
 	Debug,
 	PartialEq,
@@ -48,11 +49,14 @@ pub struct QuorumPubKey(#[serde(with = "qos_hex::serde")] pub Vec<u8>);
 	serde::Deserialize,
 )]
 pub struct ReshardProvisionShare {
+	/// Share, encrypted to the ephemeral key
 	#[serde(with = "qos_hex::serde")]
-	share: Vec<u8>,
-	pub_key: QuorumPubKey,
+	pub share: Vec<u8>,
+	/// Public key the share targets
+	pub pub_key: QuorumPubKey,
 }
 
+/// A single members input
 #[derive(
 	Debug,
 	PartialEq,
@@ -64,8 +68,10 @@ pub struct ReshardProvisionShare {
 	serde::Deserialize,
 )]
 pub struct ReshardProvisionInput {
-	approval: Approval,
-	shares: Vec<ReshardProvisionShare>,
+	/// Approval over reshard input
+	pub approval: Approval,
+	/// Shares and the associated quorum keys
+	pub shares: Vec<ReshardProvisionShare>,
 }
 
 /// The parameters for setting up the reshard service.
@@ -83,22 +89,20 @@ pub struct ReshardProvisionInput {
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ReshardInput {
 	/// List of quorum public keys
-	#[serde(with = "qos_hex::serde")]
 	pub quorum_keys: Vec<QuorumPubKey>,
 	/// The set and threshold to shard the key.
 	pub new_share_set: ShareSet,
 	/// The set the key is currently sharded too.
 	pub old_share_set: ShareSet,
 	/// The expected configuration of the enclave. Useful to verify the
-	/// attestation document against. TODO: this isn't strictly neccesary.
+	/// attestation document against. We also want those posting shares to
+	/// explicitly approve the version of QOS used.
 	pub enclave: NitroConfig,
 }
 
 impl ReshardInput {
 	fn deterministic(&mut self) {
-		self
-			.quorum_keys
-			.sort();
+		self.quorum_keys.sort();
 	}
 
 	fn validate(&mut self) -> Result<(), ProtocolError> {
@@ -115,39 +119,39 @@ impl ReshardInput {
 			return Err(ProtocolError::DuplicateNewShareSetMember);
 		}
 
-		let quorum_pub_keys: HashSet<_> = self
-			.quorum_keys
-			.iter()
-			.collect();
+		let quorum_pub_keys: HashSet<_> = self.quorum_keys.iter().collect();
 		if quorum_pub_keys.len() != self.quorum_keys.len() {
 			return Err(ProtocolError::DuplicateQuorumKeys);
 		}
-
 
 		Ok(())
 	}
 }
 
-pub(in crate::protocol) struct ReshardProvisioner {
+pub(crate) struct ReshardProvisioner {
 	secret_builders: HashMap<QuorumPubKey, SecretBuilder>,
 	quorum_key_count: usize,
 }
 
 impl ReshardProvisioner {
 	pub(in crate::protocol) fn new(quorum_key_count: usize) -> Self {
-		Self {
-			secret_builders: HashMap::new(),
-			quorum_key_count,
-		}
+		Self { secret_builders: HashMap::new(), quorum_key_count }
 	}
 
-	pub(in crate::protocol) fn add_shares(&mut self, shares: Vec<ReshardProvisionShare>, eph_key: P256Pair) -> Result<(), ProtocolError> {
+	pub(in crate::protocol) fn add_shares(
+		&mut self,
+		shares: Vec<ReshardProvisionShare>,
+		eph_key: P256Pair,
+	) -> Result<(), ProtocolError> {
 		if shares.len() != self.quorum_key_count {
-			return Err(ProtocolError::ShareCountDoesNotMatchExpectedQuorumKeyCount);
+			return Err(
+				ProtocolError::ShareCountDoesNotMatchExpectedQuorumKeyCount,
+			);
 		}
 
 		for ReshardProvisionShare { share, pub_key } in shares {
-			let decrypted_share = eph_key.decrypt(&share)
+			let decrypted_share = eph_key
+				.decrypt(&share)
 				.map_err(|_| ProtocolError::ShareDecryptionFailed)?;
 
 			let builder = self
@@ -160,12 +164,16 @@ impl ReshardProvisioner {
 		Ok(())
 	}
 
-	pub(in crate::protocol) fn share_count(&self) -> Result<usize, ProtocolError> {
+	pub(in crate::protocol) fn share_count(
+		&self,
+	) -> Result<usize, ProtocolError> {
 		let mut count = None;
 		for builder in self.secret_builders.values() {
 			if let Some(current_count) = count {
-				if current_count != builder.count()  {
-					return Err(ProtocolError::InternalDiffCountsForQuorumKeyShares)
+				if current_count != builder.count() {
+					return Err(
+						ProtocolError::InternalDiffCountsForQuorumKeyShares,
+					);
 				} else {
 					count = Some(builder.count())
 				}
@@ -175,22 +183,29 @@ impl ReshardProvisioner {
 		Ok(count.unwrap_or(0))
 	}
 
-	pub(in crate::protocol) fn build(&self) -> Result<Vec<P256Pair>, ProtocolError> {
-		self.secret_builders.drain().map(|(public, builder)|{
-			let master_seed: [u8; 32] = builder.build()?
-				.try_into()
-				.map_err(|_| ProtocolError::IncorrectSecretLen)?;
+	pub(in crate::protocol) fn build(
+		&mut self,
+	) -> Result<Vec<P256Pair>, ProtocolError> {
+		self.secret_builders
+			.drain()
+			.map(|(public, builder)| {
+				let master_seed: [u8; 32] = builder
+					.build()?
+					.try_into()
+					.map_err(|_| ProtocolError::IncorrectSecretLen)?;
 
-			let pair = P256Pair::from_master_seed(&master_seed)?;
-			let public_key_bytes = pair.public_key().to_bytes();
+				let pair = P256Pair::from_master_seed(&master_seed)?;
+				let public_key_bytes = pair.public_key().to_bytes();
 
-			if public_key_bytes != public.0 {
-				return Err(ProtocolError::ReconstructionErrorIncorrectPubKey);
-			}
+				if public_key_bytes != public.0 {
+					return Err(
+						ProtocolError::ReconstructionErrorIncorrectPubKey,
+					);
+				}
 
-			Ok(pair)
-		})
-		.collect::<Result<Vec<P256Pair>, ProtocolError>>()
+				Ok(pair)
+			})
+			.collect::<Result<Vec<P256Pair>, ProtocolError>>()
 	}
 }
 
@@ -210,7 +225,7 @@ impl ReshardProvisioner {
 pub struct ReshardOutput {
 	/// The new encrypted shards along with metadata about the share set member
 	/// they where encrypted to.
-	pub outputs: HashMap<QuorumPubKey,Vec<GenesisMemberOutput>>,
+	pub outputs: HashMap<QuorumPubKey, Vec<GenesisMemberOutput>>,
 	/// The set the key was sharded too.
 	pub new_share_set: ShareSet,
 }
@@ -221,14 +236,13 @@ pub(in crate::protocol) fn boot_reshard(
 ) -> Result<NsmResponse, ProtocolError> {
 	// 1. Validate reshard input
 	reshard_input.validate()?;
+	// 2. Initialize reshard provisioner
+	state.reshard_provisioner =
+		Some(ReshardProvisioner::new(reshard_input.quorum_keys.len()));
 	// 3. Store reshard input in state
 	state.reshard_input = Some(reshard_input);
-	// 4. Initialize reshard provisioner
-	state.reshard_provisioner = Some(
-		ReshardProvisioner::new(reshard_input.quorum_keys.len())
-	);
 
-	// 2. Generate an Ephemeral Key.
+	// 4. Generate an Ephemeral Key.
 	let ephemeral_key = P256Pair::generate()?;
 	state.handles.put_ephemeral_key(&ephemeral_key)?;
 
@@ -250,10 +264,6 @@ pub(in crate::protocol) fn reshard_provision(
 		.as_ref()
 		.ok_or(ProtocolError::MissingReshardInput)?
 		.clone();
-	let reshard_provisioner = state.reshard_provisioner
-		.as_ref()
-		.ok_or(ProtocolError::MissingReshardProvisioner)?
-		.clone();
 
 	input.approval.verify(&reshard_input.qos_hash())?;
 
@@ -262,27 +272,31 @@ pub(in crate::protocol) fn reshard_provision(
 	}
 
 	let ephemeral_key = state.handles.get_ephemeral_key()?;
-	reshard_provisioner.add_shares(input.shares,ephemeral_key)?;
+	state
+		.get_mut_reshard_provisioner()?
+		.add_shares(input.shares, ephemeral_key)?;
 
 	let quorum_threshold = reshard_input.old_share_set.threshold as usize;
-	if reshard_provisioner.share_count()? < quorum_threshold {
+	if state.get_mut_reshard_provisioner()?.share_count()? < quorum_threshold {
 		// Nothing else to do if we don't have the threshold to reconstruct
 		return Ok(false);
 	}
 
-	let quorum_key_pairs = reshard_provisioner.build()?;
-	let outputs  = quorum_key_pairs.iter().map(|pair| {
-		let master_seed = pair.to_master_seed();
-		let pub_key = QuorumPubKey(pair.public_key().to_bytes());
+	let quorum_key_pairs = state.get_mut_reshard_provisioner()?.build()?;
+	let outputs = quorum_key_pairs
+		.iter()
+		.map(|pair| {
+			let master_seed = pair.to_master_seed();
+			let pub_key = QuorumPubKey(pair.public_key().to_bytes());
 
-		let shares = qos_crypto::shamir::shares_generate(
-			&master_seed[..],
-			reshard_input.new_share_set.members.len(),
-			reshard_input.new_share_set.threshold as usize,
-		);
+			let shares = qos_crypto::shamir::shares_generate(
+				&master_seed[..],
+				reshard_input.new_share_set.members.len(),
+				reshard_input.new_share_set.threshold as usize,
+			);
 
-		// Now, lets create the new shards
-		let member_outputs =
+			// Now, lets create the new shards
+			let member_outputs =
 			zip(shares, reshard_input.new_share_set.members.iter().cloned())
 				.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError> {
 					// 1) encrypt the share to quorum key
@@ -297,9 +311,9 @@ pub(in crate::protocol) fn reshard_provision(
 				})
 				.collect::<Result<Vec<_>, _>>()?;
 
-		Ok((pub_key, member_outputs))
-	})
-	.collect::<Result<HashMap<_, _>, ProtocolError>>()?;
+			Ok((pub_key, member_outputs))
+		})
+		.collect::<Result<HashMap<_, _>, ProtocolError>>()?;
 
 	state.reshard_output = Some(ReshardOutput {
 		outputs,

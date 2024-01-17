@@ -2,6 +2,7 @@
 
 use qos_nsm::types::NsmResponse;
 
+use super::services::reshard::ReshardProvisionInput;
 use crate::protocol::{
 	services::{
 		boot::{Approval, ManifestEnvelope},
@@ -10,8 +11,6 @@ use crate::protocol::{
 	},
 	ProtocolError,
 };
-
-use super::services::reshard::ReshardProvisionInput;
 
 /// Message types for communicating with protocol executor.
 #[derive(Debug, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]

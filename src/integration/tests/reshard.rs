@@ -204,7 +204,9 @@ async fn reshard_e2e() {
 		.unwrap()
 		.success());
 
-	let secret_path_fn = |user: &str| format!("./mock/new-share-set-secrets/reshard-{}.secret", user);
+	let secret_path_fn = |user: &str| {
+		format!("./mock/new-share-set-secrets/reshard-{}.secret", user)
+	};
 	for user in ["1", "2", "3", "4"] {
 		let share_path: PathWrapper =
 			format!("{}/{}.output.share", &*tmp, user).into();

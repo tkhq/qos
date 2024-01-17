@@ -6,7 +6,10 @@ use qos_nsm::NsmProvider;
 use super::{
 	error::ProtocolError,
 	msg::ProtocolMsg,
-	services::{provision::SecretBuilder, reshard::{ReshardInput, ReshardProvisioner}},
+	services::{
+		provision::SecretBuilder,
+		reshard::{ReshardInput, ReshardProvisioner},
+	},
 };
 use crate::{
 	client::Client, handles::Handles, io::SocketAddress,
@@ -226,10 +229,11 @@ pub(crate) struct ProtocolState {
 	phase: ProtocolPhase,
 	pub reshard_input: Option<ReshardInput>,
 	pub reshard_output: Option<ReshardOutput>,
-	pub reshard_provisioner: Option<ReshardProvisioner>,
+	pub(crate) reshard_provisioner: Option<ReshardProvisioner>,
 }
 
 impl ProtocolState {
+	#[allow(unused_variables)]
 	pub fn new(
 		attestor: Box<dyn NsmProvider>,
 		handles: Handles,
@@ -264,6 +268,14 @@ impl ProtocolState {
 
 	pub fn get_phase(&self) -> ProtocolPhase {
 		self.phase
+	}
+
+	pub(crate) fn get_mut_reshard_provisioner<'a>(
+		&'a mut self,
+	) -> Result<&'a mut ReshardProvisioner, ProtocolError> {
+		self.reshard_provisioner
+			.as_mut()
+			.ok_or(ProtocolError::MissingReshardProvisioner)
 	}
 
 	pub fn handle_msg(&mut self, msg_req: &ProtocolMsg) -> Vec<u8> {

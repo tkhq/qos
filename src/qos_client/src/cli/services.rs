@@ -148,7 +148,6 @@ pub enum Error {
 	/// Could not find key in new genesis member outputs
 	KeyNotInNewShareSet,
 	FailedToWriteEncryptedShare(std::io::Error),
-
 }
 
 impl From<borsh::maybestd::io::Error> for Error {
@@ -1740,21 +1739,22 @@ pub(crate) fn get_reshard_output(
 pub(crate) fn verify_reshard_output(
 	reshard_output_path: String,
 	mut pair: PairOrYubi,
-	encrypted_share_path: String
+	encrypted_share_path: String,
 ) -> Result<(), Error> {
 	let reshard_output = read_reshard_output(reshard_output_path)?;
 
 	let pub_key = pair.public_key_bytes()?;
 
-	let member_output = reshard_output.member_outputs
+	let member_output = reshard_output
+		.member_outputs
 		.iter()
 		.find(|o| o.share_set_member.pub_key == pub_key)
 		.ok_or(Error::KeyNotInNewShareSet)?;
 
-	let decrypted_share_hash = sha_512(&pair.decrypt(&member_output.encrypted_quorum_key_share)?);
+	let decrypted_share_hash =
+		sha_512(&pair.decrypt(&member_output.encrypted_quorum_key_share)?);
 	assert_eq!(
-		member_output.share_hash,
-		decrypted_share_hash,
+		member_output.share_hash, decrypted_share_hash,
 		"decrypted share did not match expected hash"
 	);
 
@@ -2307,9 +2307,7 @@ fn read_reshard_input(file: String) -> Result<ReshardInput, Error> {
 	Ok(reshard_input)
 }
 
-fn read_reshard_output(
-	file: String,
-) -> Result<ReshardOutput, Error> {
+fn read_reshard_output(file: String) -> Result<ReshardOutput, Error> {
 	let buf = fs::read(&file).map_err(|e| Error::FailedToRead {
 		path: file,
 		error: e.to_string(),
