@@ -73,6 +73,9 @@ const OUTPUT_HEX: &str = "output-hex";
 const VALIDATION_TIME_OVERRIDE: &str = "validation-time-override";
 const JSON: &str = "json";
 const RESHARD_INPUT_PATH: &str = "reshard-input-path";
+const QUORUM_KEY_PATH_MULTIPLE: &str = "quorum-key-path-multiple";
+const QUORUM_SHARE_DIR_MULTIPLE: &str = "quorum-share-dir-multiple";
+const SHARE_DIR: &str = "share-dir";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -423,6 +426,14 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
+	fn share_dir_token() -> Token {
+		Token::new(
+			SHARE_DIR,
+			"Directory where subdirectories with the new shares will be written.",
+		)
+		.takes_value(true)
+		.required(true)
+	}
 	fn alias_token() -> Token {
 		Token::new(ALIAS, "Alias for identifying the key pair")
 			.takes_value(true)
@@ -617,6 +628,24 @@ impl Command {
 			.required(false)
 			.takes_value(false)
 	}
+	fn quorum_key_path_multiple_token() -> Token {
+		Token::new(
+			QUORUM_KEY_PATH_MULTIPLE,
+			"Use multiple times to specify multiple quorum public key files",
+		)
+		.required(true)
+		.takes_value(true)
+		.allow_multiple(true)
+	}
+	fn quorum_share_dir_multiple_token() -> Token {
+		Token::new(
+			QUORUM_SHARE_DIR_MULTIPLE,
+			"path to directory with just your share and the associated quorum key."
+		)
+			.required(true)
+			.takes_value(true)
+			.allow_multiple(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -707,7 +736,7 @@ impl Command {
 	fn generate_reshard_input() -> Parser {
 		Parser::new()
 			.token(Self::qos_release_dir_token())
-			.token(Self::quorum_key_path_token())
+			.token(Self::quorum_key_path_multiple_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::old_share_set_dir_token())
 			.token(Self::new_share_set_dir_token())
@@ -912,7 +941,7 @@ impl Command {
 			.token(Self::yubikey_token())
 			.token(Self::secret_path_token())
 			.token(Self::reshard_output_path_token())
-			.token(Self::share_path_token())
+			.token(Self::share_dir_token())
 	}
 }
 
@@ -1322,6 +1351,13 @@ impl ClientOpts {
 	fn json(&self) -> bool {
 		self.parsed.flag(JSON).unwrap_or(false)
 	}
+
+	fn quorum_key_path_multiple(&self) -> Vec<String> {
+		self.parsed
+			.multiple(QUORUM_KEY_PATH_MULTIPLE)
+			.expect("Missing `--quorum-key-path-multiple`")
+			.to_vec()
+	}
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -1671,7 +1707,7 @@ mod handlers {
 		if let Err(e) =
 			services::generate_reshard_input(GenerateReshardInputArgs {
 				qos_release_dir: opts.qos_release_dir(),
-				quorum_key_path: opts.quorum_key_path(),
+				quorum_key_paths: opts.quorum_key_path_multiple(),
 				pcr3_preimage_path: opts.pcr3_preimage_path(),
 				new_share_set_dir: opts.new_share_set_dir(),
 				old_share_set_dir: opts.old_share_set_dir(),
@@ -1829,7 +1865,7 @@ mod handlers {
 		if let Err(e) = services::verify_reshard_output(
 			opts.reshard_output_path(),
 			pair,
-			opts.share_path(),
+			opts.share_dir(),
 		) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);

@@ -110,6 +110,11 @@ impl ReshardInput {
 
 		Ok(())
 	}
+
+	/// Get a set of the quorum keys.
+	pub fn quorum_keys(&self) -> HashSet<Vec<u8>> {
+		self.quorum_keys.iter().cloned().collect()
+	}
 }
 
 pub(crate) struct ReshardProvisioner {
@@ -151,19 +156,22 @@ impl ReshardProvisioner {
 	pub(in crate::protocol) fn share_count(
 		&self,
 	) -> Result<usize, ProtocolError> {
-		Ok(self.secret_builders.values().try_fold(None, |count, builder| {
-			if let Some(current_count) = count {
-				if current_count != builder.count() {
-					return Err(
-						ProtocolError::InternalDiffCountsForQuorumKeyShares,
-					);
+		Ok(self
+			.secret_builders
+			.values()
+			.try_fold(None, |count, builder| {
+				if let Some(current_count) = count {
+					if current_count != builder.count() {
+						return Err(
+							ProtocolError::InternalDiffCountsForQuorumKeyShares,
+						);
+					}
+					Ok(count)
+				} else {
+					Ok(Some(builder.count()))
 				}
-				Ok(count)
-			} else {
-			 	Ok(Some(builder.count()))
-			}
-		})?
-		.unwrap_or(0))
+			})?
+			.unwrap_or(0))
 	}
 
 	pub(in crate::protocol) fn build(
@@ -338,24 +346,24 @@ mod tests {
 		let eph_pair = P256Pair::generate().unwrap();
 		handles.put_ephemeral_key(&eph_pair).unwrap();
 
-		let quorum_pairs: Vec<_> = (0..4).map(|_| {
-			let pair = P256Pair::generate().unwrap();
+		let quorum_pairs: Vec<_> = (0..4)
+			.map(|_| {
+				let pair = P256Pair::generate().unwrap();
 
-			let encrypted_shares: Vec<_> = shares_generate(
-				&pair.to_master_seed()[..],
-				4,
-				3, // old share set threshold
-			)
-			.iter()
-			.map(|s| eph_pair.public_key().encrypt(s).unwrap())
-			.collect();
+				let encrypted_shares: Vec<_> = shares_generate(
+					&pair.to_master_seed()[..],
+					4,
+					3, // old share set threshold
+				)
+				.iter()
+				.map(|s| eph_pair.public_key().encrypt(s).unwrap())
+				.collect();
 
-			(pair, encrypted_shares)
-		}).collect();
-		let quorum_keys: Vec<_> = quorum_pairs
-			.iter()
-			.map(|p| p.0.public_key().to_bytes())
+				(pair, encrypted_shares)
+			})
 			.collect();
+		let quorum_keys: Vec<_> =
+			quorum_pairs.iter().map(|p| p.0.public_key().to_bytes()).collect();
 
 		let old_members: Vec<_> = (0..4)
 			.map(|_| P256Pair::generate().unwrap())
@@ -408,14 +416,11 @@ mod tests {
 			.into_iter()
 			.enumerate()
 			.map(|(idx, (member, pair))| {
-
 				let shares = quorum_pairs
 					.iter()
-					.map(|(pair, shares)| {
-						ReshardProvisionShare {
-							share: shares[idx].clone(),
-							pub_key: pair.public_key().to_bytes(),
-						}
+					.map(|(pair, shares)| ReshardProvisionShare {
+						share: shares[idx].clone(),
+						pub_key: pair.public_key().to_bytes(),
 					})
 					.collect();
 				let approval = Approval {
@@ -423,10 +428,7 @@ mod tests {
 					signature: pair.sign(&reshard_input.qos_hash()).unwrap(),
 				};
 
-				ReshardProvisionInput {
-					approval,
-					shares
-				}
+				ReshardProvisionInput { approval, shares }
 			})
 			.collect();
 
@@ -437,10 +439,17 @@ mod tests {
 			None,
 		);
 		state.reshard_input = Some(reshard_input);
-		state.reshard_provisioner = Some(ReshardProvisioner::new(quorum_pairs.len()));
+		state.reshard_provisioner =
+			Some(ReshardProvisioner::new(quorum_pairs.len()));
 		state.transition(ProtocolPhase::ReshardWaitingForQuorumShards).unwrap();
 
-		ReshardSetup { state, new_members, eph_pair, quorum_pairs, provision_inputs }
+		ReshardSetup {
+			state,
+			new_members,
+			eph_pair,
+			quorum_pairs,
+			provision_inputs,
+		}
 	}
 
 	#[test]
@@ -448,21 +457,14 @@ mod tests {
 		let eph_file: PathWrapper =
 			"/tmp/reshard_provision_works.eph.key".into();
 
-		let ReshardSetup {
-			mut state,
-			new_members,
-			provision_inputs,
-			..
-		} = reshard_setup(&eph_file);
+		let ReshardSetup { mut state, new_members, provision_inputs, .. } =
+			reshard_setup(&eph_file);
 
 		// We expect reshard_provision to return Ok(false) for the first
 		// 2
 		for i in 0..2 {
 			assert_eq!(
-				reshard_provision(
-					provision_inputs[i].clone(),
-					&mut state
-				),
+				reshard_provision(provision_inputs[i].clone(), &mut state),
 				Ok(false)
 			);
 		}
@@ -479,14 +481,19 @@ mod tests {
 		assert_eq!(reshard_output.new_share_set, reshard_input.new_share_set);
 
 		for (quorum_pub, member_outputs) in reshard_output.outputs {
-				// Check that decrypted shares match hash
+			// Check that decrypted shares match hash
 			let mut decrypted_shares = vec![];
 			for (member_out, (member, pair)) in
-				zip(member_outputs, new_members.clone()) // TODO: check that these make sense
+				zip(member_outputs, new_members.clone())
+			// TODO: check that these make sense
 			{
-				let share =
-					pair.decrypt(&member_out.encrypted_quorum_key_share).unwrap();
-				assert_eq!(&member_out.share_hash, &qos_crypto::sha_512(&share),);
+				let share = pair
+					.decrypt(&member_out.encrypted_quorum_key_share)
+					.unwrap();
+				assert_eq!(
+					&member_out.share_hash,
+					&qos_crypto::sha_512(&share),
+				);
 				assert_eq!(member_out.share_set_member, member);
 
 				decrypted_shares.push(share);
@@ -497,7 +504,10 @@ mod tests {
 				&decrypted_shares,
 				reshard_output.new_share_set.threshold as usize,
 			) {
-				let secret: [u8; 32] = qos_crypto::shamir::shares_reconstruct(&combo).try_into().unwrap();
+				let secret: [u8; 32] =
+					qos_crypto::shamir::shares_reconstruct(&combo)
+						.try_into()
+						.unwrap();
 				let quorum_key = P256Pair::from_master_seed(&secret).unwrap();
 				assert_eq!(quorum_pub, quorum_key.public_key().to_bytes());
 			}
@@ -524,10 +534,9 @@ mod tests {
 		.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 		.collect();
 
-
-		for  (i, user_input) in provision_inputs.iter_mut().enumerate() {
-			// loop through each of the users input and modify their first share to be for
-			// a different public key
+		for (i, user_input) in provision_inputs.iter_mut().enumerate() {
+			// loop through each of the users input and modify their first share
+			// to be for a different public key
 			user_input.shares[0].share = encrypted_shares[i].clone();
 		}
 
@@ -535,10 +544,7 @@ mod tests {
 		// 2
 		for i in 0..2 {
 			assert_eq!(
-				reshard_provision(
-					provision_inputs[i].clone(),
-					&mut state
-				),
+				reshard_provision(provision_inputs[i].clone(), &mut state),
 				Ok(false)
 			);
 		}
@@ -558,23 +564,18 @@ mod tests {
 				.into();
 
 		let ReshardSetup {
-			mut state,
-			mut provision_inputs,
-			new_members,
-			..
+			mut state, mut provision_inputs, new_members, ..
 		} = reshard_setup(&eph_file);
 
 		// give the third approval a random signature
-		provision_inputs[2].approval.signature = new_members[2].1.sign(&[42; 32]).unwrap();
+		provision_inputs[2].approval.signature =
+			new_members[2].1.sign(&[42; 32]).unwrap();
 
 		// We expect reshard_provision to return Ok(false) for the first
 		// 2
 		for i in 0..2 {
 			assert_eq!(
-				reshard_provision(
-					provision_inputs[i].clone(),
-					&mut state
-				),
+				reshard_provision(provision_inputs[i].clone(), &mut state),
 				Ok(false)
 			);
 		}
@@ -623,10 +624,7 @@ mod tests {
 		// 2
 		for i in 0..2 {
 			assert_eq!(
-				reshard_provision(
-					provision_inputs[i].clone(),
-					&mut state
-				),
+				reshard_provision(provision_inputs[i].clone(), &mut state),
 				Ok(false)
 			);
 		}
@@ -657,7 +655,7 @@ mod tests {
 		);
 
 		let reshard_input = ReshardInput {
-			quorum_keys: vec!(vec![1; 65], vec![2; 65]),
+			quorum_keys: vec![vec![1; 65], vec![2; 65]],
 			new_share_set: ShareSet { threshold: 2, members: vec![] },
 			old_share_set: ShareSet { threshold: 3, members: vec![] },
 			enclave: NitroConfig {

@@ -69,7 +69,7 @@ async fn reshard_e2e() {
 			QOS_DIST_DIR,
 			"--pcr3-preimage-path",
 			"./mock/namespaces/pcr3-preimage.txt",
-			"--quorum-key-path",
+			"--quorum-key-path-multiple",
 			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
 			"--old-share-set-dir",
 			"./mock/keys/share-set",

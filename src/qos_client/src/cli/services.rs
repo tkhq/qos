@@ -1,4 +1,5 @@
 use std::{
+	collections::HashSet,
 	fs,
 	fs::File,
 	io,
@@ -20,7 +21,10 @@ use qos_core::protocol::{
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
-		reshard::{ReshardInput, ReshardOutput},
+		reshard::{
+			ReshardInput, ReshardOutput, ReshardProvisionInput,
+			ReshardProvisionShare,
+		},
 	},
 	QosHash,
 };
@@ -49,6 +53,7 @@ const DR_WRAPPED_QUORUM_KEY: &str = "dr_wrapped_quorum_key";
 const PCRS_PATH: &str = "aws-x86_64.pcrs";
 const QOS_RELEASE_ENV_FILE: &str = "release.env";
 const GENESIS_DR_ARTIFACTS: &str = "genesis_dr_artifacts";
+const SHARE_EXT: &str = "share";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -148,6 +153,8 @@ pub enum Error {
 	/// Could not find key in new genesis member outputs
 	KeyNotInNewShareSet,
 	FailedToWriteEncryptedShare(std::io::Error),
+	ExpectedExactlyOneShare,
+	ExpectedExactlyOneQuorumKey,
 }
 
 impl From<borsh::maybestd::io::Error> for Error {
@@ -789,13 +796,16 @@ pub fn generate_reshard_input(
 		extract_nitro_config(qos_release_dir, pcr3_preimage_path);
 
 	let quorum_keys = quorum_key_paths
-	.iter()
-	.map(|path| {
-		P256Public::from_hex_file(&path)
-			.map_err(|_| Error::FailedToRead { path: path.clone(), error: "p256 error".to_string() })
-			.map(|pair| pair.to_bytes())
-	})
-	.collect::<Result<Vec<_>, _>>()?;
+		.iter()
+		.map(|path| {
+			P256Public::from_hex_file(&path)
+				.map_err(|_| Error::FailedToRead {
+					path: path.clone(),
+					error: "p256 error".to_string(),
+				})
+				.map(|pair| pair.to_bytes())
+		})
+		.collect::<Result<Vec<_>, _>>()?;
 
 	let old_share_set = get_share_set(old_share_set_dir);
 	let new_share_set = get_share_set(new_share_set_dir);
@@ -1506,14 +1516,14 @@ where
 
 pub struct ReshardReEncryptShareArgs {
 	pub pair: PairOrYubi,
-	pub share_path: String,
+	pub quorum_share_dirs: Vec<String>,
 	pub attestation_doc_path: String,
 	pub approval_path: String,
-	pub eph_wrapped_share_path: String,
+	/// File to write [ProvisionInput] to.
+	pub provision_input_path: String,
 
 	pub reshard_input_path: String,
 	pub qos_release_dir: String,
-	pub quorum_key_path: String,
 	pub pcr3_preimage_path: String,
 	pub new_share_set_dir: String,
 	pub old_share_set_dir: String,
@@ -1527,14 +1537,13 @@ pub struct ReshardReEncryptShareArgs {
 pub(crate) fn reshard_re_encrypt_share(
 	ReshardReEncryptShareArgs {
 		mut pair,
-		share_path,
+		quorum_share_dirs,
 		attestation_doc_path,
 		approval_path,
-		eph_wrapped_share_path,
+		provision_input_path,
 
 		reshard_input_path,
 		qos_release_dir,
-		quorum_key_path,
 		pcr3_preimage_path,
 		new_share_set_dir,
 		old_share_set_dir,
@@ -1547,13 +1556,11 @@ pub(crate) fn reshard_re_encrypt_share(
 	let reshard_input = read_reshard_input(reshard_input_path)?;
 	let attestation_doc =
 		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
-	let encrypted_share = std::fs::read(share_path)
-		.map_err(|e| Error::ReadShare(e.to_string()))?;
+
 	let old_share_set = get_share_set(old_share_set_dir);
 	let mut new_share_set = get_share_set(new_share_set_dir);
-	let quorum_key = P256Public::from_hex_file(quorum_key_path)
-		.expect("failed open quorum key.");
 
+	// First check that the public quorum key match up with the quorum keys for
 	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
 
 	// Verify the attestation doc matches up with the pcrs in the manifest
@@ -1601,14 +1608,23 @@ pub(crate) fn reshard_re_encrypt_share(
 	let nitro_config =
 		extract_nitro_config(qos_release_dir, pcr3_preimage_path);
 	assert!(
-		!(nitro_config != reshard_input.enclave),
+		nitro_config != reshard_input.enclave,
 		"Enclave configuration does not match (PCRs, qos version, etc)"
 	);
-	// Verify quorum key matches
-	assert!(
-		quorum_key.to_bytes() == reshard_input.quorum_key,
-		"Specified quorum key does not match reshard input"
-	);
+	let provision_shares = quorum_share_dirs
+		.iter()
+		.map(find_quorum_key_and_share)
+		.collect::<Result<Vec<_>, _>>()?;
+	let found_quorum_keys: HashSet<_> =
+		provision_shares.iter().map(|p| p.pub_key.clone()).collect();
+	if found_quorum_keys != reshard_input.quorum_keys() {
+		let keys = found_quorum_keys
+			.symmetric_difference(&reshard_input.quorum_keys())
+			.map(|b| qos_hex::encode(&b))
+			.collect::<Vec<String>>()
+			.join(", ");
+		panic!("quorum keys given did not match keys in reshard input: difference: {}", keys);
+	}
 
 	// Human verification
 	if !unsafe_auto_confirm {
@@ -1642,31 +1658,36 @@ pub(crate) fn reshard_re_encrypt_share(
 		drop(prompter);
 	}
 
-	let share = {
-		let plaintext_share = &pair
-			.decrypt(&encrypted_share)
-			.expect("Failed to decrypt share with personal key.");
-		eph_pub.encrypt(plaintext_share).expect("Envelope encryption error")
-	};
+	let shares = provision_shares
+		.into_iter()
+		.map(|p| {
+			let plaintext_share = &pair
+				.decrypt(&p.share)
+				.expect("Failed to decrypt share with personal key.");
+
+			ReshardProvisionShare {
+				share: eph_pub
+					.encrypt(plaintext_share)
+					.expect("Envelope encryption error"),
+				pub_key: p.pub_key,
+			}
+		})
+		.collect();
 
 	let approval = Approval {
 		signature: pair
 			.sign(&reshard_input.qos_hash())
 			.expect("Failed to sign"),
 		member,
-	}
-	.try_to_vec()
-	.expect("Could not serialize Approval");
+	};
 
-	write_with_msg(approval_path.as_ref(), &approval, "Share Set Approval");
+	let provision_input = ReshardProvisionInput { approval, shares };
 
-	write_with_msg(
-		eph_wrapped_share_path.as_ref(),
-		&share,
-		"Ephemeral key wrapped share",
+	write_json_with_msg(
+		provision_input_path.as_ref(),
+		&provision_input,
+		"Reshard provision input",
 	);
-
-	drop(pair);
 
 	Ok(())
 }
@@ -1698,15 +1719,17 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 
 pub(crate) fn reshard_post_share(
 	uri: &str,
-	eph_wrapped_share_path: String,
-	approval_path: String,
+	provision_input_path: String,
 ) -> Result<(), Error> {
 	// Get the ephemeral key wrapped share
-	let share = fs::read(eph_wrapped_share_path)
-		.map_err(Error::FailedToReadEphWrappedShare)?;
-	let approval = read_attestation_approval(&approval_path)?;
+	let input: ReshardProvisionInput = {
+		let buf = fs::read(provision_input_path)
+			.map_err(Error::FailedToReadEphWrappedShare)?;
 
-	let req = ProtocolMsg::ReshardProvisionRequest { share, approval };
+		serde_json::from_slice(&buf).expect("failed to deserialize provision input")
+	};
+
+	let req = ProtocolMsg::ReshardProvisionRequest { input };
 	let is_reconstructed = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::ReshardProvisionResponse { reconstructed } => {
 			reconstructed
@@ -1745,27 +1768,42 @@ pub(crate) fn get_reshard_output(
 pub(crate) fn verify_reshard_output(
 	reshard_output_path: String,
 	mut pair: PairOrYubi,
-	encrypted_share_path: String,
+	share_dir: String,
 ) -> Result<(), Error> {
 	let reshard_output = read_reshard_output(reshard_output_path)?;
-
 	let pub_key = pair.public_key_bytes()?;
 
-	let member_output = reshard_output
-		.member_outputs
-		.iter()
-		.find(|o| o.share_set_member.pub_key == pub_key)
-		.ok_or(Error::KeyNotInNewShareSet)?;
+	let mut alias: Option<String> = None;
+	let member_shares = reshard_output
+		.outputs
+		.into_iter()
+		.map(|(quorum_pub, member_outputs)| {
+			let member_output = member_outputs
+				.iter()
+				.find(|m| m.share_set_member.pub_key == pub_key)
+				.ok_or(Error::KeyNotInNewShareSet)?;
+			let decrypted_share_hash =
+				sha_512(&pair.decrypt(&member_output.encrypted_quorum_key_share)?);
+			assert_eq!(
+				member_output.share_hash, decrypted_share_hash,
+				"decrypted share did not match expected hash"
+			);
+			let alias = Some(member_output.share_set_member.alias);
 
-	let decrypted_share_hash =
-		sha_512(&pair.decrypt(&member_output.encrypted_quorum_key_share)?);
-	assert_eq!(
-		member_output.share_hash, decrypted_share_hash,
-		"decrypted share did not match expected hash"
-	);
+			Ok((quorum_pub, member_output.encrypted_quorum_key_share))
+		})
+		.collect::<Result<Vec<(Vec<u8>, Vec<u8>)>, Error>>()?;
 
-	fs::write(encrypted_share_path, &member_output.encrypted_quorum_key_share)
-		.map_err(Error::FailedToWriteEncryptedShare)?;
+	let alias = alias.expect("we exit early above is the person is not a member of the share set");
+	for (quorum_key, share) in member_shares {
+		let dir_name = qos_hex::encode(&quorum_key[0..4]);
+		let dir_path = Path::new(&share_dir).join(dir_name);
+		let quorum_key_path = dir_path.join("quorum_key.pub");
+		let share_path = dir_path.join(format!("{}.share", alias));
+
+		fs::write(quorum_key_path, qos_hex::encode(&quorum_key)).unwrap(); // TODO(zeke)
+		fs::write(share_path, share).unwrap(); // TODO(zeke)
+	}
 
 	Ok(())
 }
@@ -2227,6 +2265,56 @@ fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
 	members.sort();
 
 	GenesisSet { members, threshold: find_threshold(dir) }
+}
+
+fn find_quorum_key_and_share<P: AsRef<Path>>(
+	dir: P,
+) -> Result<ReshardProvisionShare, Error> {
+	let dir_contents = find_file_paths(&dir);
+	let mut share: Vec<_> = dir_contents
+		.iter()
+		.filter_map(|path| {
+			let file_name = split_file_name(path);
+			if file_name.last().map_or(true, |s| s.as_str() != SHARE_EXT) {
+				return None;
+			};
+
+			let share = fs::read(path).unwrap(); // TODO
+			Some(share)
+		})
+		.collect();
+	if share.len() != 1 {
+		return Err(Error::ExpectedExactlyOneShare);
+	}
+
+	let mut quorum_key: Vec<_> = dir_contents
+		.iter()
+		.filter_map(|path| {
+			let file_name = split_file_name(path);
+			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+				return None;
+			};
+			if file_name.first().map_or(true, |s| s.as_str() != "quorum_key") {
+				return None;
+			};
+
+			let quorum_key = P256Public::from_hex_file(path)
+				.map_err(|e| {
+					panic!("Could not read hex from quorum_key.pub: {path:?}: {e:?}")
+				})
+				.unwrap()
+				.to_bytes();
+			Some(quorum_key)
+		})
+		.collect();
+	if quorum_key.len() != 1 {
+		return Err(Error::ExpectedExactlyOneQuorumKey);
+	}
+
+	Ok(ReshardProvisionShare {
+		pub_key: mem::take(&mut quorum_key[0]),
+		share: mem::take(&mut share[0]),
+	})
 }
 
 fn find_approvals<P: AsRef<Path>>(
