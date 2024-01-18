@@ -768,7 +768,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 
 pub struct GenerateReshardInputArgs {
 	pub qos_release_dir: String,
-	pub quorum_key_path: String,
+	pub quorum_key_paths: Vec<String>,
 	pub new_share_set_dir: String,
 	pub old_share_set_dir: String,
 	pub reshard_input_path: String,
@@ -778,7 +778,7 @@ pub struct GenerateReshardInputArgs {
 pub fn generate_reshard_input(
 	GenerateReshardInputArgs {
 		qos_release_dir,
-		quorum_key_path,
+		quorum_key_paths,
 		new_share_set_dir,
 		old_share_set_dir,
 		reshard_input_path,
@@ -788,14 +788,20 @@ pub fn generate_reshard_input(
 	let nitro_config =
 		extract_nitro_config(qos_release_dir, pcr3_preimage_path);
 
-	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
-		.map_err(Error::FailedToReadQuorumPublicKey)?;
+	let quorum_keys = quorum_key_paths
+	.iter()
+	.map(|path| {
+		P256Public::from_hex_file(&path)
+			.map_err(|_| Error::FailedToRead { path: path.clone(), error: "p256 error".to_string() })
+			.map(|pair| pair.to_bytes())
+	})
+	.collect::<Result<Vec<_>, _>>()?;
 
 	let old_share_set = get_share_set(old_share_set_dir);
 	let new_share_set = get_share_set(new_share_set_dir);
 
 	let reshard_input = ReshardInput {
-		quorum_key: quorum_key.to_bytes(),
+		quorum_keys,
 		new_share_set,
 		old_share_set,
 		enclave: nitro_config,
