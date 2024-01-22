@@ -76,6 +76,7 @@ const RESHARD_INPUT_PATH: &str = "reshard-input-path";
 const QUORUM_KEY_PATH_MULTIPLE: &str = "quorum-key-path-multiple";
 const QUORUM_SHARE_DIR_MULTIPLE: &str = "quorum-share-dir-multiple";
 const SHARE_DIR: &str = "share-dir";
+const PROVISION_INPUT_PATH: &str = "provision-input-path";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -429,7 +430,7 @@ impl Command {
 	fn share_dir_token() -> Token {
 		Token::new(
 			SHARE_DIR,
-			"Directory where subdirectories with the new shares will be written.",
+			"directory to read/write subdirectories that contain quorum key and your associated share.",
 		)
 		.takes_value(true)
 		.required(true)
@@ -452,7 +453,6 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
-
 	fn yubikey_token() -> Token {
 		Token::new(YUBIKEY, "Flag to indicate using a yubikey for signing")
 			.takes_value(false)
@@ -646,6 +646,11 @@ impl Command {
 			.takes_value(true)
 			.allow_multiple(true)
 	}
+	fn provision_input_path_token() -> Token {
+		Token::new(PROVISION_INPUT_PATH, "path to file to read/write ReshardProvisionInput")
+			.required(true)
+			.takes_value(true)
+	}
 
 	fn base() -> Parser {
 		Parser::new()
@@ -803,16 +808,16 @@ impl Command {
 		Parser::new()
 			.token(Self::yubikey_token())
 			.token(Self::secret_path_token())
-			.token(Self::share_path_token())
 			.token(Self::attestation_doc_path_token())
-			.token(Self::approval_path_token())
-			.token(Self::eph_wrapped_share_path_token())
+			.token(Self::provision_input_path_token())
+			.token(Self::quorum_share_dir_multiple_token())
+
 			.token(Self::reshard_input_path_token())
 			.token(Self::qos_release_dir_token())
-			.token(Self::quorum_key_path_token())
 			.token(Self::pcr3_preimage_path_token())
-			.token(Self::old_share_set_dir_token())
 			.token(Self::new_share_set_dir_token())
+			.token(Self::old_share_set_dir_token())
+
 			.token(Self::alias_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
@@ -943,6 +948,11 @@ impl Command {
 			.token(Self::reshard_output_path_token())
 			.token(Self::share_dir_token())
 	}
+
+	fn reshard_post_share() -> Parser {
+		Self::base()
+			.token(Self::provision_input_path_token())
+	}
 }
 
 impl GetParserForCommand for Command {
@@ -988,7 +998,7 @@ impl GetParserForCommand for Command {
 				Self::get_reshard_attestation_doc()
 			}
 			Self::ReshardReEncryptShare => Self::reshard_re_encrypt_share(),
-			Self::ReshardPostShare => Self::post_share(),
+			Self::ReshardPostShare => Self::reshard_post_share(),
 			Self::GetReshardOutput => Self::get_reshard_output(),
 			Self::VerifyReshardOutput => Self::verify_reshard_output(),
 		}
@@ -1328,6 +1338,20 @@ impl ClientOpts {
 			.to_string()
 	}
 
+	fn provision_input_path(&self) -> String {
+		self.parsed
+			.single(PROVISION_INPUT_PATH)
+			.expect("Missing `--provision-input-path`")
+			.to_string()
+	}
+
+	fn share_dir(&self) -> String {
+		self.parsed
+			.single(SHARE_DIR)
+			.expect("Missing `--share-dir`")
+			.to_string()
+	}
+
 	fn yubikey(&self) -> bool {
 		self.parsed.flag(YUBIKEY).unwrap_or(false)
 	}
@@ -1356,6 +1380,13 @@ impl ClientOpts {
 		self.parsed
 			.multiple(QUORUM_KEY_PATH_MULTIPLE)
 			.expect("Missing `--quorum-key-path-multiple`")
+			.to_vec()
+	}
+
+	fn quorum_share_dir_multiple(&self) -> Vec<String> {
+		self.parsed
+			.multiple(QUORUM_SHARE_DIR_MULTIPLE)
+			.expect("Missing `--quorum-share-dir-multiple`")
 			.to_vec()
 	}
 }
@@ -1807,20 +1838,20 @@ mod handlers {
 		if let Err(e) =
 			services::reshard_re_encrypt_share(ReshardReEncryptShareArgs {
 				pair,
-				share_path: opts.share_path(),
+				quorum_share_dirs: opts.quorum_share_dir_multiple(),
 				attestation_doc_path: opts.attestation_doc_path(),
-				approval_path: opts.approval_path(),
-				eph_wrapped_share_path: opts.eph_wrapped_share_path(),
+				provision_input_path: opts.provision_input_path(),
+
+				reshard_input_path: opts.reshard_input_path(),
+				qos_release_dir: opts.qos_release_dir(),
+				pcr3_preimage_path: opts.pcr3_preimage_path(),
+				new_share_set_dir: opts.new_share_set_dir(),
+				old_share_set_dir: opts.old_share_set_dir(),
+
 				alias: opts.alias(),
 				unsafe_skip_attestation: opts.unsafe_skip_attestation(),
 				unsafe_eph_path_override: opts.unsafe_eph_path_override(),
 				unsafe_auto_confirm: opts.unsafe_auto_confirm(),
-				reshard_input_path: opts.reshard_input_path(),
-				qos_release_dir: opts.qos_release_dir(),
-				quorum_key_path: opts.quorum_key_path(),
-				pcr3_preimage_path: opts.pcr3_preimage_path(),
-				new_share_set_dir: opts.new_share_set_dir(),
-				old_share_set_dir: opts.old_share_set_dir(),
 			}) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);
@@ -1841,8 +1872,7 @@ mod handlers {
 	pub(super) fn reshard_post_share(opts: &ClientOpts) {
 		if let Err(e) = services::reshard_post_share(
 			&opts.path_message(),
-			opts.eph_wrapped_share_path(),
-			opts.approval_path(),
+			opts.provision_input_path(),
 		) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);

@@ -83,7 +83,7 @@ async fn reshard_e2e() {
 		.wait()
 		.unwrap()
 		.success());
-	// TODO: assert contents of reshard_input?
+	// TODO(zeke): assert contents of reshard_input?
 
 	qos_test_primitives::wait_until_port_is_bound(host_port);
 
@@ -121,39 +121,35 @@ async fn reshard_e2e() {
 
 	for user in [&user1, &user2] {
 		// TODO(zeke): dry this logic up with boot standard
-		let share_path = format!("{}/{}.share", &personal_dir(user), user);
 		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
-		let eph_wrapped_share_path: PathWrapper =
-			format!("{}/{}.eph_wrapped.share", &*tmp, user).into();
-		let approval_path: PathWrapper =
-			format!("{}/{}.attestation.approval", &*tmp, user).into();
+		let provision_input_path: PathWrapper
+			= format!("{}/{}.provision_input.json", &*tmp, user).into();
+		let quorum_share_dir1 =
+			format!("./mock/reshard/{}/qkey1", user);
 
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
 				"reshard-re-encrypt-share",
 				"--secret-path",
 				&secret_path,
-				"--share-path",
-				&share_path,
+				"--quorum-share-dir-multiple",
+				&*quorum_share_dir1,
 				"--attestation-doc-path",
 				&*attestation_doc_path,
-				"--approval-path",
-				&*approval_path,
-				"--eph-wrapped-share-path",
-				&eph_wrapped_share_path,
+				"--provision-input-path",
+				&*provision_input_path,
+
 				"--reshard-input-path",
 				&*reshard_input_path,
 				"--qos-release-dir",
 				QOS_DIST_DIR,
-				"--quorum-key-path",
-				// TODO: make const
-				"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
 				"--pcr3-preimage-path",
 				"./mock/namespaces/pcr3-preimage.txt", // TODO: make const
 				"--new-share-set-dir",
 				"./mock/keys/new-share-set",
 				"--old-share-set-dir",
 				"./mock/keys/share-set",
+
 				"--alias",
 				user,
 				"--unsafe-skip-attestation",
@@ -167,6 +163,7 @@ async fn reshard_e2e() {
 			.wait()
 			.unwrap()
 			.success());
+		// TODO(zeke): walk through all the IO verification
 
 		// Post the encrypted share
 		assert!(Command::new("../target/debug/qos_client")
@@ -176,10 +173,8 @@ async fn reshard_e2e() {
 				&host_port.to_string(),
 				"--host-ip",
 				LOCAL_HOST,
-				"--eph-wrapped-share-path",
-				&eph_wrapped_share_path,
-				"--approval-path",
-				&approval_path,
+				"--provision-input-path",
+				&*provision_input_path,
 			])
 			.spawn()
 			.unwrap()
@@ -208,9 +203,10 @@ async fn reshard_e2e() {
 		format!("./mock/new-share-set-secrets/reshard-{}.secret", user)
 	};
 	for user in ["1", "2", "3", "4"] {
-		let share_path: PathWrapper =
-			format!("{}/{}.output.share", &*tmp, user).into();
 		let secret_path = secret_path_fn(user);
+		let share_dir: PathWrapper =
+			format!("{}/{}/quorum_shares", &*tmp, user).into();
+		fs::create_dir_all(&*share_dir).unwrap();
 
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
@@ -219,8 +215,8 @@ async fn reshard_e2e() {
 				&reshard_output_path,
 				"--secret-path",
 				&secret_path,
-				"--share-path",
-				&share_path,
+				"--share-dir",
+				&share_dir,
 			])
 			.spawn()
 			.unwrap()
@@ -228,4 +224,6 @@ async fn reshard_e2e() {
 			.unwrap()
 			.success());
 	}
+
+	// TODO(zeke): verify that we wrote shares to the directory
 }

@@ -1518,7 +1518,6 @@ pub struct ReshardReEncryptShareArgs {
 	pub pair: PairOrYubi,
 	pub quorum_share_dirs: Vec<String>,
 	pub attestation_doc_path: String,
-	pub approval_path: String,
 	/// File to write [ProvisionInput] to.
 	pub provision_input_path: String,
 
@@ -1539,7 +1538,6 @@ pub(crate) fn reshard_re_encrypt_share(
 		mut pair,
 		quorum_share_dirs,
 		attestation_doc_path,
-		approval_path,
 		provision_input_path,
 
 		reshard_input_path,
@@ -1547,6 +1545,7 @@ pub(crate) fn reshard_re_encrypt_share(
 		pcr3_preimage_path,
 		new_share_set_dir,
 		old_share_set_dir,
+
 		alias,
 		unsafe_skip_attestation,
 		unsafe_eph_path_override,
@@ -1570,7 +1569,6 @@ pub(crate) fn reshard_re_encrypt_share(
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
 			&reshard_input.qos_hash(),
-			// TODO(zeke): verify these against the desired qos dist
 			&reshard_input.enclave.pcr0,
 			&reshard_input.enclave.pcr1,
 			&reshard_input.enclave.pcr2,
@@ -1601,15 +1599,16 @@ pub(crate) fn reshard_re_encrypt_share(
 	);
 
 	// Verify old share set matches reshard input
-	assert!(!(old_share_set != reshard_input.old_share_set), "Specified old share set does not match old share set in reshard input.");
+	assert_eq!(old_share_set, reshard_input.old_share_set, "Specified old share set does not match old share set in reshard input.");
 	// Verify new share set matches reshard input
-	assert!(!(new_share_set != reshard_input.new_share_set), "Specified new share set does not match new share set in reshard input.");
+	assert_eq!(new_share_set, reshard_input.new_share_set, "Specified new share set does not match new share set in reshard input.");
 	// Verify that pcrs 0, 1, 2 & 3 match reshard input
-	let nitro_config =
+	let nitro_config: NitroConfig =
 		extract_nitro_config(qos_release_dir, pcr3_preimage_path);
-	assert!(
-		nitro_config != reshard_input.enclave,
-		"Enclave configuration does not match (PCRs, qos version, etc)"
+
+	assert_eq!(
+		nitro_config, reshard_input.enclave,
+		"Enclave configuration in reshard input does not match given qos dist (PCRs, qos version, etc)"
 	);
 	let provision_shares = quorum_share_dirs
 		.iter()
@@ -1788,9 +1787,9 @@ pub(crate) fn verify_reshard_output(
 				member_output.share_hash, decrypted_share_hash,
 				"decrypted share did not match expected hash"
 			);
-			let alias = Some(member_output.share_set_member.alias);
+			alias = Some(member_output.share_set_member.alias.clone());
 
-			Ok((quorum_pub, member_output.encrypted_quorum_key_share))
+			Ok((quorum_pub, member_output.encrypted_quorum_key_share.clone()))
 		})
 		.collect::<Result<Vec<(Vec<u8>, Vec<u8>)>, Error>>()?;
 
@@ -1798,7 +1797,10 @@ pub(crate) fn verify_reshard_output(
 	for (quorum_key, share) in member_shares {
 		let dir_name = qos_hex::encode(&quorum_key[0..4]);
 		let dir_path = Path::new(&share_dir).join(dir_name);
-		let quorum_key_path = dir_path.join("quorum_key.pub");
+		fs::create_dir(&dir_path)
+			.map_err(|e: io::Error| panic!("failed to create dir {:?}: {}", dir_path, e.to_string()))
+			.unwrap();
+		let quorum_key_path = dir_path.clone().join("quorum_key.pub");
 		let share_path = dir_path.join(format!("{}.share", alias));
 
 		fs::write(quorum_key_path, qos_hex::encode(&quorum_key)).unwrap(); // TODO(zeke)
