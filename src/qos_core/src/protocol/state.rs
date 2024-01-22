@@ -270,9 +270,9 @@ impl ProtocolState {
 		self.phase
 	}
 
-	pub(crate) fn get_mut_reshard_provisioner<'a>(
-		&'a mut self,
-	) -> Result<&'a mut ReshardProvisioner, ProtocolError> {
+	pub(crate) fn get_mut_reshard_provisioner(
+		&mut self,
+	) -> Result<&mut ReshardProvisioner, ProtocolError> {
 		self.reshard_provisioner
 			.as_mut()
 			.ok_or(ProtocolError::MissingReshardProvisioner)

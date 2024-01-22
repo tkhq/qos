@@ -131,7 +131,7 @@ impl ReshardProvisioner {
 	pub(in crate::protocol) fn add_shares(
 		&mut self,
 		shares: Vec<ReshardProvisionShare>,
-		eph_key: P256Pair,
+		eph_key: &P256Pair,
 	) -> Result<(), ProtocolError> {
 		if shares.len() != self.quorum_key_count {
 			return Err(
@@ -266,7 +266,7 @@ pub(in crate::protocol) fn reshard_provision(
 	let ephemeral_key = state.handles.get_ephemeral_key()?;
 	state
 		.get_mut_reshard_provisioner()?
-		.add_shares(input.shares, ephemeral_key)?;
+		.add_shares(input.shares, &ephemeral_key)?;
 
 	let quorum_threshold = reshard_input.old_share_set.threshold as usize;
 	if state.get_mut_reshard_provisioner()?.share_count()? < quorum_threshold {
@@ -561,11 +561,8 @@ mod tests {
 
 		// We expect reshard_provision to return Ok(false) for the first
 		// 2
-		for i in 0..2 {
-			assert_eq!(
-				reshard_provision(provision_inputs[i].clone(), &mut state),
-				Ok(false)
-			);
+		for i in provision_inputs.iter().take(2) {
+			assert_eq!(reshard_provision(i.clone(), &mut state), Ok(false));
 		}
 
 		// And then return an error for the 3rd share to signal it has been
@@ -610,11 +607,8 @@ mod tests {
 
 		// We expect reshard_provision to return Ok(false) for the first
 		// 2
-		for i in 0..2 {
-			assert_eq!(
-				reshard_provision(provision_inputs[i].clone(), &mut state),
-				Ok(false)
-			);
+		for i in provision_inputs.iter().take(2) {
+			assert_eq!(reshard_provision(i.clone(), &mut state), Ok(false));
 		}
 
 		// And then return an error for the 3rd share to signal it has been

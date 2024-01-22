@@ -1442,7 +1442,7 @@ impl ClientRunner {
 					handlers::get_attestation_doc(&self.opts);
 				}
 				Command::GetReshardAttestationDoc => {
-					handlers::get_reshard_attestation_doc(&self.opts)
+					handlers::get_reshard_attestation_doc(&self.opts);
 				}
 				Command::ProxyReEncryptShare => {
 					handlers::proxy_re_encrypt_share(&self.opts);
@@ -1786,7 +1786,7 @@ mod handlers {
 
 	pub(super) fn boot_reshard(opts: &ClientOpts) {
 		if let Err(e) = services::boot_reshard(
-			opts.path_message(),
+			&opts.path_message(),
 			opts.reshard_input_path(),
 		) {
 			println!("Error: {e:?}");
@@ -1880,13 +1880,10 @@ mod handlers {
 	}
 
 	pub(super) fn get_reshard_output(opts: &ClientOpts) {
-		if let Err(e) = services::get_reshard_output(
+		services::get_reshard_output(
 			&opts.path_message(),
-			opts.reshard_output_path(),
-		) {
-			eprintln!("Error: {e:?}");
-			std::process::exit(1);
-		}
+			&opts.reshard_output_path(),
+		);
 	}
 
 	pub(super) fn verify_reshard_output(opts: &ClientOpts) {
@@ -1895,7 +1892,7 @@ mod handlers {
 		if let Err(e) = services::verify_reshard_output(
 			opts.reshard_output_path(),
 			pair,
-			opts.share_dir(),
+			&opts.share_dir(),
 		) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);

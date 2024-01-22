@@ -295,7 +295,8 @@ async fn reshard_e2e() {
 
 				let share = share.unwrap();
 				let decrypted_share = pair.decrypt(&share).unwrap();
-				let quorum_key_pub_bytes = qos_hex::decode_from_vec(quorum_key.unwrap()).unwrap();
+				let quorum_key_pub_bytes =
+					qos_hex::decode_from_vec(quorum_key.unwrap()).unwrap();
 				seen_shares
 					.entry(quorum_key_pub_bytes)
 					.or_insert_with(Vec::new)
