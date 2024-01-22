@@ -127,8 +127,8 @@ async fn reshard_e2e() {
 
 	for user in [&user1, &user2] {
 		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
-		let provision_input_path: PathWrapper =
-			format!("{}/{}.provision_input.json", &*tmp, user).into();
+		let provision_input_path =
+			format!("{}/{}.provision_input.json", &*tmp, user);
 		let quorum_share_dir1 = format!("./mock/reshard/{}/qkey1", user);
 
 		let mut child = Command::new("../target/debug/qos_client")
@@ -200,6 +200,11 @@ async fn reshard_e2e() {
 			"0442993076a3b8345cb58b860477bce9db21bb6caceae8df298860410594ea08d4fc2ffec944fd7623a893b57037e0f20c44ff8eee6eff03110717efb9269181ed04bb495296212027597e2eb93ffbba07f0c41ae3018409b9ad2177e87b53a2729806f52ad6d0f6399ca3d37edddc81a687cd2a0a9f8aab914d76be2930ff8f5bba"
 		);
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+		assert_eq!(
+			stdout.next().unwrap().unwrap(),
+			format!("Reshard provision input written to: /tmp/reshard_e2e/{}.provision_input.json", user),
+		);
+		assert!(child.wait().unwrap().success());
 
 		// Post the encrypted share
 		assert!(Command::new("../target/debug/qos_client")
@@ -269,10 +274,13 @@ async fn reshard_e2e() {
 			let path = entry.unwrap().path();
 
 			if path.is_dir() {
+				dbg!(&path);
 				let mut quorum_key = None;
 				let mut share = None;
 				for inner_entry in fs::read_dir(&*path).unwrap() {
 					let inner_path = inner_entry.unwrap().path();
+					dbg!(&inner_path);
+
 					if inner_path.is_file() {
 						let split_name = split_file_name(&inner_path);
 						let buf = fs::read(inner_path).unwrap();
@@ -287,8 +295,9 @@ async fn reshard_e2e() {
 
 				let share = share.unwrap();
 				let decrypted_share = pair.decrypt(&share).unwrap();
+				let quorum_key_pub_bytes = qos_hex::decode_from_vec(quorum_key.unwrap()).unwrap();
 				seen_shares
-					.entry(quorum_key.unwrap())
+					.entry(quorum_key_pub_bytes)
 					.or_insert_with(Vec::new)
 					.push(decrypted_share)
 			}

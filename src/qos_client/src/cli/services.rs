@@ -1722,8 +1722,11 @@ pub(crate) fn reshard_post_share(
 ) -> Result<(), Error> {
 	// Get the ephemeral key wrapped share
 	let input: ReshardProvisionInput = {
-		let buf = fs::read(provision_input_path)
-			.map_err(Error::FailedToReadEphWrappedShare)?;
+		let buf = fs::read(&provision_input_path)
+			.map_err(|e| Error::FailedToRead {
+				path: provision_input_path.clone(),
+				error: e.to_string(),
+			})?;
 
 		serde_json::from_slice(&buf)
 			.expect("failed to deserialize provision input")
