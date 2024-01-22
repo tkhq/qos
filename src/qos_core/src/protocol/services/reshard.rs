@@ -112,6 +112,7 @@ impl ReshardInput {
 	}
 
 	/// Get a set of the quorum keys.
+	#[must_use]
 	pub fn quorum_keys(&self) -> HashSet<Vec<u8>> {
 		self.quorum_keys.iter().cloned().collect()
 	}
@@ -146,7 +147,7 @@ impl ReshardProvisioner {
 			let builder = self
 				.secret_builders
 				.entry(pub_key)
-				.or_insert(SecretBuilder::new());
+				.or_insert_with(SecretBuilder::new);
 			builder.add_share(decrypted_share)?;
 		}
 
@@ -332,7 +333,6 @@ mod tests {
 		new_members: Vec<(QuorumMember, P256Pair)>,
 		eph_pair: P256Pair,
 		/// Quorum pairs and associated shares, encrypted to the ephemeral key.
-		quorum_pairs: Vec<(P256Pair, Vec<Vec<u8>>)>,
 		provision_inputs: Vec<ReshardProvisionInput>,
 	}
 
@@ -443,13 +443,7 @@ mod tests {
 			Some(ReshardProvisioner::new(quorum_pairs.len()));
 		state.transition(ProtocolPhase::ReshardWaitingForQuorumShards).unwrap();
 
-		ReshardSetup {
-			state,
-			new_members,
-			eph_pair,
-			quorum_pairs,
-			provision_inputs,
-		}
+		ReshardSetup { state, new_members, eph_pair, provision_inputs }
 	}
 
 	#[test]
@@ -462,11 +456,8 @@ mod tests {
 
 		// We expect reshard_provision to return Ok(false) for the first
 		// 2
-		for i in 0..2 {
-			assert_eq!(
-				reshard_provision(provision_inputs[i].clone(), &mut state),
-				Ok(false)
-			);
+		for i in provision_inputs.iter().take(2) {
+			assert_eq!(reshard_provision(i.clone(), &mut state), Ok(false));
 		}
 
 		// And then return Ok(true) for the 3rd share to signal it has been
@@ -542,11 +533,8 @@ mod tests {
 
 		// We expect reshard_provision to return Ok(false) for the first
 		// 2
-		for i in 0..2 {
-			assert_eq!(
-				reshard_provision(provision_inputs[i].clone(), &mut state),
-				Ok(false)
-			);
+		for i in provision_inputs.iter().take(2) {
+			assert_eq!(reshard_provision(i.clone(), &mut state), Ok(false));
 		}
 
 		// And then return an error for the 3rd share to signal it has been

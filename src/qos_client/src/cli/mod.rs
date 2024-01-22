@@ -647,9 +647,12 @@ impl Command {
 			.allow_multiple(true)
 	}
 	fn provision_input_path_token() -> Token {
-		Token::new(PROVISION_INPUT_PATH, "path to file to read/write ReshardProvisionInput")
-			.required(true)
-			.takes_value(true)
+		Token::new(
+			PROVISION_INPUT_PATH,
+			"path to file to read/write ReshardProvisionInput",
+		)
+		.required(true)
+		.takes_value(true)
 	}
 
 	fn base() -> Parser {
@@ -811,13 +814,11 @@ impl Command {
 			.token(Self::attestation_doc_path_token())
 			.token(Self::provision_input_path_token())
 			.token(Self::quorum_share_dir_multiple_token())
-
 			.token(Self::reshard_input_path_token())
 			.token(Self::qos_release_dir_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::new_share_set_dir_token())
 			.token(Self::old_share_set_dir_token())
-
 			.token(Self::alias_token())
 			.token(Self::unsafe_skip_attestation_token())
 			.token(Self::unsafe_eph_path_override_token())
@@ -950,8 +951,7 @@ impl Command {
 	}
 
 	fn reshard_post_share() -> Parser {
-		Self::base()
-			.token(Self::provision_input_path_token())
+		Self::base().token(Self::provision_input_path_token())
 	}
 }
 

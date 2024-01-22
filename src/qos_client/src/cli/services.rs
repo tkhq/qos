@@ -1619,7 +1619,7 @@ pub(crate) fn reshard_re_encrypt_share(
 	if found_quorum_keys != reshard_input.quorum_keys() {
 		let keys = found_quorum_keys
 			.symmetric_difference(&reshard_input.quorum_keys())
-			.map(|b| qos_hex::encode(&b))
+			.map(|b| qos_hex::encode(b))
 			.collect::<Vec<String>>()
 			.join(", ");
 		panic!("quorum keys given did not match keys in reshard input: difference: {}", keys);
@@ -1725,7 +1725,8 @@ pub(crate) fn reshard_post_share(
 		let buf = fs::read(provision_input_path)
 			.map_err(Error::FailedToReadEphWrappedShare)?;
 
-		serde_json::from_slice(&buf).expect("failed to deserialize provision input")
+		serde_json::from_slice(&buf)
+			.expect("failed to deserialize provision input")
 	};
 
 	let req = ProtocolMsg::ReshardProvisionRequest { input };
@@ -1781,8 +1782,9 @@ pub(crate) fn verify_reshard_output(
 				.iter()
 				.find(|m| m.share_set_member.pub_key == pub_key)
 				.ok_or(Error::KeyNotInNewShareSet)?;
-			let decrypted_share_hash =
-				sha_512(&pair.decrypt(&member_output.encrypted_quorum_key_share)?);
+			let decrypted_share_hash = sha_512(
+				&pair.decrypt(&member_output.encrypted_quorum_key_share)?,
+			);
 			assert_eq!(
 				member_output.share_hash, decrypted_share_hash,
 				"decrypted share did not match expected hash"
@@ -1793,12 +1795,16 @@ pub(crate) fn verify_reshard_output(
 		})
 		.collect::<Result<Vec<(Vec<u8>, Vec<u8>)>, Error>>()?;
 
-	let alias = alias.expect("we exit early above is the person is not a member of the share set");
+	let alias = alias.expect(
+		"we exit early above is the person is not a member of the share set",
+	);
 	for (quorum_key, share) in member_shares {
 		let dir_name = qos_hex::encode(&quorum_key[0..4]);
 		let dir_path = Path::new(&share_dir).join(dir_name);
 		fs::create_dir(&dir_path)
-			.map_err(|e: io::Error| panic!("failed to create dir {:?}: {}", dir_path, e.to_string()))
+			.map_err(|e: io::Error| {
+				panic!("failed to create dir {:?}: {}", dir_path, e)
+			})
 			.unwrap();
 		let quorum_key_path = dir_path.clone().join("quorum_key.pub");
 		let share_path = dir_path.join(format!("{}.share", alias));

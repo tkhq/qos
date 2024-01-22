@@ -872,6 +872,7 @@ dependencies = [
  "qos_test_primitives",
  "rand",
  "serde",
+ "serde_json",
  "tokio",
  "ureq",
 ]
