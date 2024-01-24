@@ -14,6 +14,15 @@ Removed: for now removed features.
 Fixed: for any bug fixes.
 Security: in case of vulnerabilities.
 
+## Unreleased
+
+### Added
+
+- BREAKING CHANGE: qos_core: quorum key resharding service, new state machine transitions, and new `ProtocolMsg` variants (#428)
+- qos_client: commands to run quorum key resharding and high level documentation (#428)
+- qos_crypto: function to generate n choose k variants (#428)
+- qos_hex: support more array sizes for serde deserialize
+
 ## [0.4.0] 2024.4.9
 
 ### Added
