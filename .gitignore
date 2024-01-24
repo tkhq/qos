@@ -23,6 +23,9 @@ target/
 !src/integration/mock/boot-e2e/all-personal-dir/user3-dir/*
 !src/integration/mock/boot-e2e/genesis-dir/*
 !src/integration/mock/new-share-set-secrets/*
+!src/integration/mock/reshard/user1/qkey1/*
+!src/integration/mock/reshard/user2/qkey1/*
+!src/integration/mock/reshard/user3/qkey1/*
 src/integration/mock/pivot-build-fingerprints.txt
 src/integration/pivot_ok2_works
 src/integration/pivot_ok_works
