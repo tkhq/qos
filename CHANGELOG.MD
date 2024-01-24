@@ -18,6 +18,9 @@ Security: in case of vulnerabilities.
 
 ### Added
 
+- BREAKING CHANGE: qos_core: quorum key resharding service, new state machine transitions, and new `ProtocolMsg` variants (#428)
+- qos_client: commands to run quorum key resharding and high level documentation (#428)
+- qos_crypto: function to generate n choose k variants (#428)
 - qos_hex: support more array sizes for serde deserialize
 
 
