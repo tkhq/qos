@@ -104,7 +104,7 @@ Verify that we can decrypt our shares. This step should be done on an airgapped 
 
 The new shares will be written to subdirectories generated within the given share dir. The subdirectories will be named with the first four bytes of the quorum key. Each subdirectory will contain a new share and the quorum key it targets. After running the command against an empty `share-dir` and two sharded quorum, keys, the layout would look like:
 
-```
+```sh
 - share-dir
   - 04009fd6
     - quorum_key.pub
