@@ -34,11 +34,24 @@ out/qos_client.tar: \
 	)
 	$(call build)
 
+
+ifeq ($(NOCACHE), 1)
+NOCACHE_FLAG=--no-cache
+else
+NOCACHE_FLAG=
+endif
+export NOCACHE_FLAG
 define build
-	$(eval package := $(basename $@))
+	$(eval package := $(notdir $(basename $@)))
 	docker build \
 		--tag $(REGISTRY)/$(package) \
-		--output type=oci,rewrite-timestamp=true,force-compression=true,name=$(package),dest=$@ \
+		--output "\
+			type=oci,\
+			rewrite-timestamp=true,\
+			force-compression=true,\
+			name=$(package),\
+			dest=$@" \
+		$(NOCACHE_FLAG) \
 		-f src/images/$(package)/Containerfile \
-		src/images/$(package)
+		src/
 endef

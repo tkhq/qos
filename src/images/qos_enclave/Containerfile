@@ -1,0 +1,41 @@
+FROM scratch as base
+LABEL org.opencontainers.image.source=https://github.com/tkhq/qos
+ENV TARGET=x86_64-unknown-linux-musl
+
+FROM base as fetch
+ADD qos_enclave qos_enclave
+
+FROM fetch as build
+COPY --from=stagex/busybox . /
+COPY --from=stagex/musl . /
+COPY --from=stagex/libunwind . /
+COPY --from=stagex/openssl . /
+COPY --from=stagex/zlib . /
+COPY --from=stagex/ca-certificates . /
+COPY --from=stagex/gcc . /
+COPY --from=stagex/binutils . /
+COPY --from=stagex/pkgconf . /
+COPY --from=stagex/git . /
+COPY --from=stagex/rust . /
+WORKDIR qos_enclave
+ENV RUSTFLAGS="-C target-feature=+crt-static"
+ENV OPENSSL_STATIC=true
+RUN <<-EOF
+    set -eux
+    cargo build \
+        --locked \
+        --no-default-features \
+        --release \
+        --target ${TARGET}
+EOF
+
+FROM build as install
+WORKDIR /rootfs
+COPY --from=build /qos_enclave/target/${TARGET}/release/qos_enclave .
+
+FROM scratch as package
+COPY --from=install /rootfs .
+ENTRYPOINT ["/qos_enclave"]
+ENV EIF_PATH=/nitro.eif
+ENV ENCLAVE_NAME=qos
+EXPOSE 8080
