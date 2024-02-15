@@ -1,37 +1,90 @@
 FROM scratch as base
-LABEL org.opencontainers.image.source=https://github.com/tkhq/qos
 ENV TARGET=x86_64-unknown-linux-musl
+ENV RUSTFLAGS="-C target-feature=+crt-static"
+ENV CARGOFLAGS="--locked --no-default-features --release --target ${TARGET}"
+ENV OPENSSL_STATIC=true
 
 FROM base as fetch
 ADD qos_enclave qos_enclave
 
 FROM fetch as build
-COPY --from=stagex/busybox . /
+COPY --from=stagex/bash /bin/bash /bin/sh
+COPY --from=stagex/coreutils . /
+COPY --from=stagex/findutils . /
 COPY --from=stagex/musl . /
 COPY --from=stagex/libunwind . /
 COPY --from=stagex/openssl . /
 COPY --from=stagex/zlib . /
 COPY --from=stagex/ca-certificates . /
-COPY --from=stagex/gcc . /
 COPY --from=stagex/binutils . /
 COPY --from=stagex/pkgconf . /
 COPY --from=stagex/git . /
 COPY --from=stagex/rust . /
+COPY --from=stagex/cpio . /
+COPY --from=stagex/gen_initramfs . /
+COPY --from=stagex/eif_build . /
+COPY --from=stagex/llvm . /
+COPY --from=stagex/gcc . /
+COPY --from=stagex/gcc /usr/lib64/* /usr/lib/
+RUN mkdir /tmp
 WORKDIR qos_enclave
-ENV RUSTFLAGS="-C target-feature=+crt-static"
-ENV OPENSSL_STATIC=true
-RUN <<-EOF
-    set -eux
-    cargo build \
-        --locked \
-        --no-default-features \
-        --release \
-        --target ${TARGET}
+RUN cargo build ${CARGOFLAGS}
+WORKDIR init
+RUN cargo build ${CARGOFLAGS}
+WORKDIR /build_cpio
+COPY /init/target/${TARGET}/release/init .
+COPY --from=stagex/linux-nitro nsm.ko .
+COPY <<-EOF initramfs.list
+dir  /dev                          0755 0 0
+dir  /dev/shm                      0755 0 0
+dir  /dev/pts                      0755 0 0
+nod  /dev/console                  0600 0 0 c 5 1
+dir  /sys                          0755 0 0
+dir  /usr                          0755 0 0
+dir  /run                          0755 0 0
+dir  /tmp                          0755 0 0
+dir  /etc                          0755 0 0
+dir  /proc                         0755 0 0
+dir  /bin                          0755 0 0
+dir  /sbin                         0755 0 0
+dir  /usr/bin                      0755 0 0
+dir  /usr/sbin                     0755 0 0
+file /init     /build_cpio/init    0755 0 0
+file /nsm.ko   /build_cpio/nsm.ko  0755 0 0
 EOF
+RUN <<-EOF
+	mkdir usr
+	cp /usr/bin/gen_init_cpio usr/
+	gen_initramfs -o rootfs.cpio initramfs.list
+	cpio -itv < rootfs.cpio
+EOF
+WORKDIR /build_eif
+COPY --from=stagex/linux-nitro /bzImage .
+COPY --from=stagex/linux-nitro /linux.config .
+RUN eif_build \
+		--kernel bzImage \
+		--kernel_config linux.config \
+		--ramdisk /build_cpio/rootfs.cpio \
+		--pcrs_output nitro.pcrs \
+		--output nitro.eif \
+		--cmdline '\
+			reboot=k \
+			initrd=0x2000000,3228672 \
+			root=/dev/ram0 \
+			panic=1 \
+			pci=off \
+			nomodules \
+			console=ttyS0 \
+			i8042.noaux \
+			i8042.nomux \
+			i8042.nopnp \
+			i8042.dumbkbd'
 
 FROM build as install
 WORKDIR /rootfs
 COPY --from=build /qos_enclave/target/${TARGET}/release/qos_enclave .
+COPY --from=build /build_eif/nitro.eif .
+RUN find . -exec touch -hcd "@0" "{}" +
 
 FROM scratch as package
 COPY --from=install /rootfs .
