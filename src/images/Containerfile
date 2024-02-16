@@ -1,0 +1,50 @@
+FROM stagex/rust@sha256:e7a7a152ddf91ba4f2d6e426867c54ab43b76eef3f2a97dd0c3d9234090f3ce8 as rust
+FROM stagex/bash@sha256:39c6d22701e58c79548cf0601e72f85bb07bf30608827540e74db30220802430 as bash
+FROM stagex/coreutils@sha256:85341b2055493ff8bf3d90c9d4e7a5993e4dd7a1d11a06854f23e0434bb4abaa as coreutils
+FROM stagex/findutils@sha256:d0d30ce5d176fe2e40e93f707220ae6f54788ff14972005d1a51961c17f5294b as findutils
+FROM stagex/grep@sha256:565d7cc8257d45f19326b3ecbbc2dd3096b4a228977c91f4ed07a265faeb8b05 as grep
+FROM stagex/musl@sha256:27ca6026619beae07a1e7096caa7ac41b1403f5c1839ed4ff79b5aee3c409cec as musl
+FROM stagex/libunwind@sha256:422fe0a108d9f1253dd9694ce432aa195d49a3b60b1d977aa4e94024c7ac52bf as libunwind
+FROM stagex/openssl@sha256:f4e218dba1167008456899c5f19d9e1a1be17d4fc6fb6bb84d41b8eb477fd402 as openssl
+FROM stagex/zlib@sha256:d5df909418ef436e3dd23af397ba2b202bd72f45c81b0e161b507adc9e3e9b9c as zlib
+FROM stagex/ca-certificates@sha256:70c5136051c748fff0d1399101d082ecc204c1eb29d93da094ccf0d25f341121 as ca-certificates
+FROM stagex/binutils@sha256:9cc26e56cdfce106108a0f4c416a27967060d8d07c4da0cbc0e14fa87f7b1dfa as binutils
+FROM stagex/pkgconf@sha256:36fc4ed10a6e044d068aa7316e72588dbd365be4eb0271a84cf632521dbd8a09 as pkgconf
+FROM stagex/git@sha256:3a2853fa2fa725f7f02565e24f508912b33223e49bed915e55a5d3f85548d190 as git
+FROM stagex/gen_initramfs@sha256:6d323df1291bfd26e3a1db33065cbec1c44d397dd6b0f23b2f25c0f8c9f7ce76 as gen_initramfs
+FROM stagex/eif_build@sha256:94a4dd467e6f5e7a9967a538179e40737b9b4ff8007219aebbc6e96089a545c7 as eif_build
+FROM stagex/llvm@sha256:9dfc53795c89295da52719959f96df9122e0b921da6283c7bd7a582749545b1d as llvm
+FROM stagex/pcsc-lite@sha256:818ee8367335a47109ec5464bfb8c4a313a25909c430176d543619b75a6c339a as pcsc-lite
+FROM stagex/file@sha256:8ce66c0574777bca83c8297b74372e0be7a6cc5d2b7e21061391726ad6d6d406 as file
+FROM stagex/gcc@sha256:bb550daddcf95acdce9999e359e3ffb1c497916aea41bdd0cae1d6a5a908b4b9 as gcc
+FROM stagex/linux-nitro@sha256:dd38b784ea9f8f0757e549194d078cccde9d6aed46915df2be9086880693fb17 as linux-nitro
+
+FROM scratch as base
+ENV TARGET=x86_64-unknown-linux-musl
+ENV RUSTFLAGS="-C target-feature=+crt-static"
+ENV CARGOFLAGS="--locked --no-default-features --release --target ${TARGET}"
+ENV OPENSSL_STATIC=true
+COPY --from=bash /bin/bash /bin/sh
+COPY --from=coreutils . /
+COPY --from=findutils . /
+COPY --from=grep . /
+COPY --from=musl . /
+COPY --from=libunwind . /
+COPY --from=openssl . /
+COPY --from=zlib . /
+COPY --from=ca-certificates . /
+COPY --from=binutils . /
+COPY --from=pkgconf . /
+COPY --from=git . /
+COPY --from=rust . /
+COPY --from=gen_initramfs . /
+COPY --from=eif_build . /
+COPY --from=llvm . /
+COPY --from=pcsc-lite . /
+COPY --from=file . /
+COPY --from=gcc . /
+COPY --from=gcc /usr/lib64/* /usr/lib/
+COPY --from=linux-nitro /bzImage .
+COPY --from=linux-nitro /nsm.ko .
+COPY --from=linux-nitro /linux.config .
+RUN mkdir /tmp

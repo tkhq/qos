@@ -1,0 +1,20 @@
+FROM qos-local/build-base as base
+ADD . /src
+
+FROM base as build
+ENV PCSC_LIB_NAME=static=pcsclite
+RUN --mount=type=cache,target=/src/qos_client/cache/cargo <<-EOF
+	set -eux
+	env -C /src/qos_client cargo build --features smartcard ${CARGOFLAGS}
+    cp /src/target/${TARGET}/release/qos_client /
+    file /qos_client | grep "static-pie"
+EOF
+
+FROM base as install
+WORKDIR /rootfs
+COPY --from=build /qos_client .
+RUN find . -exec touch -hcd "@0" "{}" +
+
+FROM scratch as package
+COPY --from=install /rootfs .
+ENTRYPOINT ["/qos_client"]
