@@ -3,7 +3,7 @@ ADD . /src
 
 FROM base as build
 ENV PCSC_LIB_NAME=static=pcsclite
-RUN --mount=type=cache,target=/src/qos_client/cache/cargo <<-EOF
+RUN <<-EOF
 	set -eux
 	env -C /src/qos_client cargo build --features smartcard ${CARGOFLAGS}
     cp /src/target/${TARGET}/release/qos_client /

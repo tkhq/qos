@@ -2,7 +2,7 @@ FROM qos-local/build-base as base
 ADD . /src
 
 FROM base as build
-RUN --mount=type=cache,target=/src/qos_host/cache/cargo <<-EOF
+RUN <<-EOF
 	set -eux
 	env -C /src/qos_host cargo build --features vm ${CARGOFLAGS}
     cp /src/target/${TARGET}/release/qos_host /

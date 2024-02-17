@@ -2,7 +2,7 @@ FROM qos-local/build-base as base
 ADD . /src
 
 FROM base as build-qos_enclave
-RUN --mount=type=cache,target=/src/qos_enclave/cache/cargo <<-EOF
+RUN <<-EOF
 	set -eux
 	env -C /src/qos_enclave cargo build ${CARGOFLAGS}
 	cp /src/qos_enclave/target/${TARGET}/release/qos_enclave /
@@ -10,7 +10,7 @@ RUN --mount=type=cache,target=/src/qos_enclave/cache/cargo <<-EOF
 EOF
 
 FROM base as build-init
-RUN --mount=type=cache,target=/src/init/cache/cargo <<-EOF
+RUN <<-EOF
 	set -eux
 	env -C /src/init cargo build ${CARGOFLAGS}
 	cp /src/init/target/${TARGET}/release/init /
@@ -38,7 +38,13 @@ COPY <<-EOF initramfs.list
 	dir  /dev/pts          0755 0 0
 	nod  /dev/console      0600 0 0 c 5 1
 EOF
-RUN gen_initramfs -o rootfs.cpio initramfs.list
+ENV CPIO_TIMESTAMP=1
+ENV KBUILD_BUILD_TIMESTAMP=1
+RUN <<-EOF
+    find . -exec touch -hcd "@0" "{}" +
+    gen_init_cpio -t 1 initramfs.list > rootfs.cpio
+    touch -hcd "@0" rootfs.cpio
+EOF
 WORKDIR /build_eif
 RUN eif_build \
 	--kernel /bzImage \
