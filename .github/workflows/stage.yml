@@ -28,5 +28,4 @@ jobs:
       - name: Run `make out/${{ matrix.target }}`
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          touch cache/toolchain.tgz
-          make -d toolchain out/${{ matrix.target }}
+          make out/${{ matrix.target }}
