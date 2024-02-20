@@ -1,0 +1,32 @@
+name: stagex-build
+
+on:
+  push:
+    tags:
+      - v*.*.*
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch: # Allows manual invocation
+
+jobs:
+  build:
+    name: build default targets
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: qos_host.oci.x86_64.tar
+          - target: qos_enclave.oci.x86_64.tar
+          - target: qos_client.oci.x86_64.tar
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          fetch-depth: 0
+          submodules: true
+      - name: Run `make out/${{ matrix.target }}`
+        shell: 'script -q -e -c "bash {0}"'
+        run: |
+          touch cache/toolchain.tgz
+          make -d toolchain out/${{ matrix.target }}
