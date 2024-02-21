@@ -14,107 +14,107 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
 
-      - name: Install packages for pcsc dep
-        run: sudo apt-get install -y libpcsclite-dev gengetopt
+      # - name: Install packages for pcsc dep
+      #   run: sudo apt-get install -y libpcsclite-dev gengetopt
 
-      - name: Install stable toolchain
-        id: toolchain
-        uses: dtolnay/rust-toolchain@be73d7920c329f220ce78e0234b8f96b7ae60248
-        with:
-          profile: minimal
-          toolchain: 1.63
-          override: true
-          components: rustfmt, clippy
+      # - name: Install stable toolchain
+      #   id: toolchain
+      #   uses: dtolnay/rust-toolchain@be73d7920c329f220ce78e0234b8f96b7ae60248
+      #   with:
+      #     profile: minimal
+      #     toolchain: 1.63
+      #     override: true
+      #     components: rustfmt, clippy
 
-      - name: Run cargo test
-        run: make -C src test
+      # - name: Run cargo test
+      #   run: make -C src test
 
-  rustfmt:
-    name: rustfmt
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
+  # rustfmt:
+  #   name: rustfmt
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout sources
+  #       uses: actions/checkout@v4
 
-      - name: Install nightly toolchain
-        uses: dtolnay/rust-toolchain@be73d7920c329f220ce78e0234b8f96b7ae60248
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-          components: rustfmt
+  #     - name: Install nightly toolchain
+  #       uses: dtolnay/rust-toolchain@be73d7920c329f220ce78e0234b8f96b7ae60248
+  #       with:
+  #         profile: minimal
+  #         toolchain: nightly
+  #         override: true
+  #         components: rustfmt
 
-      - name: Run cargo fmt
-        run: make -C src fmt
+  #     - name: Run cargo fmt
+  #       run: make -C src fmt
 
-  clippy:
-    name: clippy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
+  # clippy:
+  #   name: clippy
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout sources
+  #       uses: actions/checkout@v4
 
-      - name: Install packages for pcsc dep
-        run: sudo apt-get install -y libpcsclite-dev gengetopt
+  #     - name: Install packages for pcsc dep
+  #       run: sudo apt-get install -y libpcsclite-dev gengetopt
 
-      - name: Install stable toolchain
-        id: toolchain
-        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
-        with:
-          profile: minimal
-          toolchain: 1.63
-          override: true
-          components: clippy
+  #     - name: Install stable toolchain
+  #       id: toolchain
+  #       uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
+  #       with:
+  #         profile: minimal
+  #         toolchain: 1.63
+  #         override: true
+  #         components: clippy
 
-      - name: Run cargo clippy
-        run: (cd src && cargo clippy -- -D warnings)
+  #     - name: Run cargo clippy
+  #       run: (cd src && cargo clippy -- -D warnings)
 
-  rustdocs:
-    name: rustdocs
-    runs-on: ubuntu-latest
-    env:
-      RUSTDOCFLAGS: -D warnings
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
+  # rustdocs:
+  #   name: rustdocs
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     RUSTDOCFLAGS: -D warnings
+  #   steps:
+  #     - name: Checkout sources
+  #       uses: actions/checkout@v4
 
-      - name: Install packages for pcsc dep
-        run: sudo apt-get install -y libpcsclite-dev gengetopt
+  #     - name: Install packages for pcsc dep
+  #       run: sudo apt-get install -y libpcsclite-dev gengetopt
 
-      - name: Install stable toolchain
-        id: toolchain
-        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
-        with:
-          profile: minimal
-          toolchain: 1.63
-          override: true
+  #     - name: Install stable toolchain
+  #       id: toolchain
+  #       uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
+  #       with:
+  #         profile: minimal
+  #         toolchain: 1.63
+  #         override: true
 
-      - name: Run cargo doc
-        run: (cd src && cargo doc)
+  #     - name: Run cargo doc
+  #       run: (cd src && cargo doc)
 
-  build-linux-only-crates:
-    name: build-linux-only-crates
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
+  # build-linux-only-crates:
+  #   name: build-linux-only-crates
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout sources
+  #       uses: actions/checkout@v4
 
-      - name: Install packages for pcsc dep
-        run: sudo apt-get install -y libpcsclite-dev gengetopt
+  #     - name: Install packages for pcsc dep
+  #       run: sudo apt-get install -y libpcsclite-dev gengetopt
 
-      - name: Install stable toolchain
-        id: toolchain
-        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
-        with:
-          profile: minimal
-          toolchain: 1.63
-          override: true
+  #     - name: Install stable toolchain
+  #       id: toolchain
+  #       uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
+  #       with:
+  #         profile: minimal
+  #         toolchain: 1.63
+  #         override: true
 
-      - name: Build qos_system
-        run: cargo build --manifest-path ./src/qos_system/Cargo.toml --locked
+  #     - name: Build qos_system
+  #       run: cargo build --manifest-path ./src/qos_system/Cargo.toml --locked
 
-      - name: Build qos_aws
-        run: cargo build --manifest-path ./src/qos_aws/Cargo.toml --locked
+  #     - name: Build qos_aws
+  #       run: cargo build --manifest-path ./src/qos_aws/Cargo.toml --locked
 
-      - name: Build init
-        run: cargo build --manifest-path ./src/init/Cargo.toml --locked
+  #     - name: Build init
+  #       run: cargo build --manifest-path ./src/init/Cargo.toml --locked

@@ -13,19 +13,52 @@ jobs:
   build:
     name: build default targets
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - target: qos_host.oci.x86_64.tar
-          - target: qos_enclave.oci.x86_64.tar
-          - target: qos_client.oci.x86_64.tar
     steps:
+      - name: Setup Latest docker
+        shell: 'script -q -e -c "bash {0}"'
+        run: |
+          # This script basically always needs root
+          [[ $EUID -ne 0 ]] && exec sudo /bin/sh "$0" "$@"
+
+          # uninstall all conflicting packages:
+          for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $pkg; done
+
+          # Add Docker's official GPG key:
+          sudo apt-get update
+          sudo apt-get install ca-certificates curl
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+          # Add the repository to Apt sources:
+          echo \
+            "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+            $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+            sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update
+
+          cat << EOF >/etc/docker/daemon.json
+          {
+            "features": {
+              "containerd-snapshotter": true
+            }
+          }
+          EOF
+
+          # Install required packages
+          sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+          systemctl restart docker
+
+          docker buildx create --driver docker-container --bootstrap --name build --use
+
       - name: Checkout sources
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0
           submodules: true
-      - name: Run `make out/${{ matrix.target }}`
+
+      - name: Run `make dist`
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          make out/${{ matrix.target }}
+          make dist
