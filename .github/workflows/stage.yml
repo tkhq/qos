@@ -10,9 +10,17 @@ on:
   workflow_dispatch: # Allows manual invocation
 
 jobs:
-  docker:
-    name: setup docker
+
+  build:
+    name: build artifacts
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: qos_client.tar
+          - target: qos_host.tar
+          - target: qos_client.tar
+
     steps:
       - name: Setup Latest docker
         shell: 'script -q -e -c "bash {0}"'
@@ -54,19 +62,6 @@ jobs:
 
       - name: Check Docker Version
         run: docker --version
-
-  build:
-    name: build artifacts
-    runs-on: ubuntu-latest
-    needs:
-      - docker
-    strategy:
-      matrix:
-        include:
-          - target: qos_client.tar
-          - target: qos_host.tar
-          - target: qos_client.tar
-    steps:
       - name: Checkout sources
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
