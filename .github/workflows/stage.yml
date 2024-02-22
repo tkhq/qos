@@ -49,7 +49,8 @@ jobs:
           {
             "features": {
               "containerd-snapshotter": true
-            }
+            },
+            "registry-mirrors": ["https://ghcr.io/tkhq"]
           }
           EOF
 
