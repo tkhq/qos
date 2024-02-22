@@ -87,10 +87,14 @@ fn boot() -> String {
 	};
 	println!("{:?}", run_args);
 
-	// Socket directory must exist or Nitro SDK crashes with generic error
+	// Socket/log directories must exist or Nitro SDK crashes generically
 	if !Path::new("/run/nitro_enclaves").is_dir() {
 		create_dir_all("/run/nitro_enclaves")
 			.expect("Failed to create /run/nitro_enclaves");
+	}
+	if !Path::new("/var/log/nitro_enclaves").is_dir() {
+		create_dir_all("/var/log/nitro_enclaves")
+			.expect("Failed to create /var/log/nitro_enclaves");
 	}
 
 	let logger = init_logger()

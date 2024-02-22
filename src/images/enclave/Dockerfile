@@ -2,6 +2,8 @@ FROM scratch
 LABEL org.opencontainers.image.source=https://github.com/tkhq/qos
 ARG BIN
 ARG EIF
+VOLUME /run/nitro_enclaves
+VOLUME /var/log/nitro_enclaves
 COPY ${BIN} /qos_enclave
 COPY ${EIF} /nitro.eif
 ENTRYPOINT ["/qos_enclave"]
