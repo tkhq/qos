@@ -20,7 +20,6 @@ jobs:
           - target: qos_client.tar
           - target: qos_host.tar
           - target: qos_client.tar
-
     steps:
       - name: Setup Latest docker
         shell: 'script -q -e -c "bash {0}"'
@@ -91,6 +90,8 @@ jobs:
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
+      - name: Display structure of downloaded files
+        run: ls -R /etc/usr/artifacts/
       - name: Upload images to GHCR
         env:
           images: >-
@@ -107,8 +108,8 @@ jobs:
             --password "${{ secrets.GITHUB_TOKEN }}" \
             ghcr.io
           for image in ${images}; do
-            skopeo copy --all \
-              "oci-archive:./${image}.tar/${image}.tar" \
+            skopeo copy --all --dest-decompress \
+              "dir:/etc/usr/artifacts/${image}.tar/${image}.tar" \
               "docker://ghcr.io/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
             for tag in ${tags}; do
               skopeo copy --all \
