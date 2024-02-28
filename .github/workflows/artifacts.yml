@@ -18,7 +18,7 @@ jobs:
         include:
           - target: qos_client.tar
           - target: qos_host.tar
-          - target: qos_client.tar
+          - target: qos_enclave.tar
     steps:
       - name: Checkout sources
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
