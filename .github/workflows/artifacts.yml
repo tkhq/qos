@@ -93,7 +93,7 @@ jobs:
             ghcr.io
           for image in ${images}; do
             skopeo copy --all --dest-decompress \
-              "dir:/home/runner/work/qos/qos/${image}.tar/${image}.tar" \
+              "oci-archive:/home/runner/work/qos/qos/${image}.tar/${image}.tar" \
               "docker://ghcr.io/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
             for tag in ${tags}; do
               skopeo copy --all \
