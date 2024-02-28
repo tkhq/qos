@@ -20,11 +20,11 @@ jobs:
           - target: qos_host.tar
           - target: qos_client.tar
     steps:
-      - name: Setup and configure docker
-        uses: ./.github/actions/docker-setup
-
       - name: Checkout sources
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Setup and configure docker
+        uses: ./.github/actions/docker-setup
 
       - name: Run `make`
         shell: 'script -q -e -c "bash {0}"'
