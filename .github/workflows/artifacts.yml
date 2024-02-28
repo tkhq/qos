@@ -26,6 +26,7 @@ jobs:
       - name: Setup and configure docker
         shell: 'script -q -e -c "bash {0}"'
         run: |
+          [[ $EUID -ne 0 ]] && exec sudo /bin/sh "$0" "$@"
           for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; \
             do apt-get remove $pkg; \
           done
