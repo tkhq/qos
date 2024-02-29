@@ -7,7 +7,7 @@ default: \
 	out/qos_enclave.tar
 
 .PHONY: test
-test:
+test: out/build-base/index.json
 	$(call run,\
 		cargo build --all; \
 		cargo test; \
@@ -15,30 +15,30 @@ test:
 	)
 
 .PHONY: lint
-lint:
+lint: out/build-base/index.json
 	$(call run,\
 		cargo clippy -- -D warnings; \
 	)
 
 .PHONY: format
-format:
+format: out/build-base/index.json
 	$(call run,\
 		cargo install rustfmt-nightly; \
 		rustfmt; \
 	)
 
 .PHONY: docs
-docs:
+docs: out/build-base/index.json
 	$(call run,\
 		cargo doc; \
 	)
 
 .PHONY: shell
-shell:
+shell: out/build-base/index.json
 	$(call run,/bin/sh,--tty)
 
 out/qos_enclave.tar: \
-	build-base \
+	out/build-base/index.json \
 	$(shell git ls-files \
 		src/init \
 		src/qos_enclave \
@@ -49,7 +49,7 @@ out/qos_enclave.tar: \
 	$(call build)
 
 out/qos_host.tar: \
-	build-base \
+	out/build-base/index.json \
 	$(shell git ls-files \
 		src/qos_host \
 		src/qos_core \
@@ -57,7 +57,7 @@ out/qos_host.tar: \
 	$(call build)
 
 out/qos_client.tar: \
-	build-base \
+	out/build-base/index.json \
 	$(shell git ls-files \
 		src/qos_client \
 		src/qos_p256 \
