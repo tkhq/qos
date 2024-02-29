@@ -10,6 +10,8 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
       - name: Run tests
         run: make test
 
@@ -19,6 +21,8 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
       - name: Run formatting
         run: make format
 
@@ -28,6 +32,8 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
       - name: Run linting
         run: make lint
 
@@ -37,5 +43,7 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
       - name: Run doc generation
         run: make docs
