@@ -1,3 +1,0 @@
-[submodule "src/toolchain"]
-	path = src/toolchain
-	url = https://git.distrust.co/public/toolchain
