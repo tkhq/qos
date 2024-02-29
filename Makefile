@@ -6,6 +6,37 @@ default: \
 	out/qos_host.tar \
 	out/qos_enclave.tar
 
+.PHONY: test
+test:
+	$(call run,\
+		cargo build --all; \
+		cargo test; \
+		cargo test -p qos_core; \
+	)
+
+.PHONY: lint
+lint:
+	$(call run,\
+		cargo clippy -- -D warnings; \
+	)
+
+.PHONY: format
+format:
+	$(call run,\
+		cargo install rustfmt-nightly; \
+		rustfmt; \
+	)
+
+.PHONY: docs
+docs:
+	$(call run,\
+		cargo doc; \
+	)
+
+.PHONY: shell
+shell:
+	$(call run,/bin/sh,--tty)
+
 out/qos_enclave.tar: \
 	build-base \
 	$(shell git ls-files \
@@ -51,6 +82,10 @@ out/build-base/index.json: src/images/Containerfile
 		-f src/images/Containerfile \
 		src/
 
+out/.build-base-loaded: out/build-base/index.json
+	env -C out/build-base tar -cf - . | docker load
+	touch out/.build-base-loaded
+
 ifeq ($(NOCACHE), 1)
 NOCACHE_FLAG=--no-cache
 else
@@ -59,6 +94,7 @@ endif
 export NOCACHE_FLAG
 define build
 	$(eval package := $(notdir $(basename $@)))
+	$(MAKE) $(out/.build-base-loaded); \
 	docker build \
 		--tag $(REGISTRY)/$(package) \
 		--progress=plain \
@@ -72,4 +108,19 @@ define build
 		$(NOCACHE_FLAG) \
 		-f src/images/$(package)/Containerfile \
 		src/
+endef
+
+define run
+	docker run \
+		--interactive \
+		--volume ./src/:/src \
+		--volume ./cache/cargo/:/.cargo \
+		--workdir /src \
+		--env CARGOFLAGS="" \
+		--env RUSTFLAGS="" \
+		--env RUST_BACKTRACE=full \
+		--env PATH=/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+		$(2) \
+		qos-local/build-base \
+		/bin/sh -c "set -eux; $(1)"
 endef
