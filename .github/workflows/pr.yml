@@ -4,9 +4,8 @@ name: PR
 
 jobs:
   test:
-    name: Test Suite
+    name: test
     runs-on: ubuntu-latest
-    timeout-minutes: 45
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
