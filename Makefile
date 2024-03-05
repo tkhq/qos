@@ -16,26 +16,19 @@ test: out/.build-base-loaded
 
 .PHONY: lint
 lint: out/.build-base-loaded
-	$(call run,\
-		cargo clippy -- -D warnings; \
-	)
+	$(call run,cargo clippy -- -D warnings)
 
 .PHONY: format
 format: out/.build-base-loaded
-	$(call run,\
-		cargo install rustfmt-nightly; \
-		rustfmt; \
-	)
+	$(call run,rustfmt)
 
 .PHONY: docs
 docs: out/.build-base-loaded
-	$(call run,\
-		cargo doc; \
-	)
+	$(call run,cargo doc)
 
 .PHONY: shell
 shell: out/.build-base-loaded
-	$(call run,/bin/sh,--tty)
+	$(call run,/bin/bash,--tty)
 
 out/qos_enclave.tar: \
 	out/.build-base-loaded \
@@ -71,6 +64,9 @@ out/qos_client.tar: \
 .PHONY: build-base
 build-base: out/build-base/index.json
 out/build-base/index.json: src/images/Containerfile
+	DOCKER_BUILDKIT=1 \
+	SOURCE_DATE_EPOCH=1 \
+	BUILDKIT_MULTIPLATFORM=1 \
 	docker build \
 		--output "\
 			type=oci,\
@@ -94,7 +90,6 @@ endif
 export NOCACHE_FLAG
 define build
 	$(eval package := $(notdir $(basename $@)))
-	$(MAKE) $(out/.build-base-loaded); \
 	docker build \
 		--tag $(REGISTRY)/$(package) \
 		--progress=plain \
