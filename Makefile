@@ -111,9 +111,8 @@ define run
 		--volume ./src/:/src \
 		--volume ./cache/cargo/:/.cargo \
 		--workdir /src \
-		--env CARGOFLAGS="" \
 		--env RUSTFLAGS="" \
-		--env RUST_BACKTRACE=full \
+		--env CARGOFLAGS="--locked" \
 		--env PATH=/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
 		$(2) \
 		qos-local/build-base \
