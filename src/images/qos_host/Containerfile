@@ -5,8 +5,8 @@ FROM base as build
 RUN <<-EOF
 	set -eux
 	env -C /src/qos_host cargo build --features vm ${CARGOFLAGS}
-    cp /src/target/${TARGET}/release/qos_host /
-    file /qos_host | grep "static-pie"
+	cp /src/target/${TARGET}/release/qos_host /
+	file /qos_host | grep "static-pie"
 EOF
 
 FROM base as install

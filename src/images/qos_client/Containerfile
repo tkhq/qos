@@ -6,8 +6,8 @@ ENV PCSC_LIB_NAME=static=pcsclite
 RUN <<-EOF
 	set -eux
 	env -C /src/qos_client cargo build --features smartcard ${CARGOFLAGS}
-    cp /src/target/${TARGET}/release/qos_client /
-    file /qos_client | grep "static-pie"
+	cp /src/target/${TARGET}/release/qos_client /
+	file /qos_client | grep "static-pie"
 EOF
 
 FROM base as install
