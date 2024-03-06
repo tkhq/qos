@@ -30,6 +30,17 @@ docs: out/.build-base-loaded
 shell: out/.build-base-loaded
 	$(call run,/bin/bash,--tty)
 
+.PHONY: pcrs
+pcrs: out/qos_enclave.tar
+	@tar -xvOf out/qos_enclave.tar \
+		$$(tar -tvf out/qos_enclave.tar \
+			| sort -k3 -n \
+			| tail -n1 \
+			| awk '{ print $$6 }'\
+		) \
+		2> /dev/null \
+		| tar -xzvO 2> /dev/null nitro.pcrs
+
 out/qos_enclave.tar: \
 	out/.build-base-loaded \
 	$(shell git ls-files \
@@ -72,7 +83,9 @@ out/build-base/index.json: src/images/Containerfile
 			type=oci,\
 			tar=false,\
 			name=build_base,\
+			rewrite-timestamp=true,\
 			dest=out/build-base" \
+		--platform=linux/amd64 \
 		--tag qos-local/build-base \
 		$(NOCACHE_FLAG) \
 		-f src/images/Containerfile \
