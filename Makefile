@@ -79,7 +79,8 @@ out/build-base/index.json: src/images/Containerfile
 		src/
 
 out/.build-base-loaded: out/build-base/index.json
-	env -C out/build-base tar -cf - . | docker load
+	cd out/build-base; \
+		tar -cf - . | docker load
 	touch out/.build-base-loaded
 
 ifeq ($(NOCACHE), 1)
