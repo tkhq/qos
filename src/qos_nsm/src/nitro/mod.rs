@@ -27,11 +27,17 @@ static AWS_NITRO_CERT_SIG_ALG: &[&webpki::SignatureAlgorithm] =
 	&[&webpki::ECDSA_P384_SHA384];
 
 /// AWS Nitro root CA certificate.
-///
-/// This should be validated against the checksum:
-/// `8cf60e2b2efca96c6a9e71e851d00c1b6991cc09eadbe64a6a1d1b1eb9faff7c`. This
-/// checksum and the certificate should be manually verified against
+/// 
+/// The root certificate can be downloaded from 
+/// <https://aws-nitro-enclaves.amazonaws.com/AWS_NitroEnclaves_Root-G1.zip>, 
+/// and it can be verified using the following SHA256 checksum:
+/// `8cf60e2b2efca96c6a9e71e851d00c1b6991cc09eadbe64a6a1d1b1eb9faff7c`.
+/// This official hash checksum is over the AWS-provided zip file.
+/// For context and additional verification details, see
 /// <https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html/>.
+/// 
+/// The `aws_root_cert.pem` contents hash as follows via SHA256:
+/// `6eb9688305e4bbca67f44b59c29a0661ae930f09b5945b5d1d9ae01125c8d6c0`.
 pub const AWS_ROOT_CERT_PEM: &[u8] =
 	std::include_bytes!("./static/aws_root_cert.pem");
 
