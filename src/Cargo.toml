@@ -10,7 +10,16 @@ members = [
   "qos_p256",
   "qos_nsm",
 ]
-exclude = ["init", "qos_aws", "qos_system", "toolchain","qos_enclave", "eif_build"]
+exclude = [
+  "init",
+  "qos_aws",
+  "qos_system",
+  "toolchain",
+  "qos_enclave",
+  "eif_build",
+  "qos_p256/fuzz",
+  "qos_crypto/fuzz",
+]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.
 # https://nickb.dev/blog/cargo-workspace-and-the-feature-unification-pitfall/
