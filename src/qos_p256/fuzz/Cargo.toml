@@ -1,0 +1,77 @@
+[package]
+name = "qos_p256_fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+qos_p256 = { path = "../"}
+
+# arbitrary = { version = "1", features = ["derive"] }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "1_sign_then_verify"
+path = "fuzz_targets/1_sign_then_verify.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "2_public_sign_key_round_trip"
+path = "fuzz_targets/2_public_sign_key_round_trip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "3_public_sign_key_round_trip"
+path = "fuzz_targets/3_public_sign_key_round_trip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "4_public_key_import"
+path = "fuzz_targets/4_public_key_import.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "5_basic_encrypt_decrypt"
+path = "fuzz_targets/5_basic_encrypt_decrypt.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "6_basic_encrypt_decrypt_aesgcm"
+path = "fuzz_targets/6_basic_encrypt_decrypt_aesgcm.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "7_decrypt_aesgcm"
+path = "fuzz_targets/7_decrypt_aesgcm.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "8_decrypt_p256"
+path = "fuzz_targets/8_decrypt_p256.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "9_public_sign_key_import"
+path = "fuzz_targets/9_public_sign_key_import.rs"
+test = false
+doc = false
+
