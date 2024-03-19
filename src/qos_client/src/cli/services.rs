@@ -46,7 +46,6 @@ const APPROVAL_EXT: &str = "approval";
 const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
 const DR_WRAPPED_QUORUM_KEY: &str = "dr_wrapped_quorum_key";
 const PCRS_PATH: &str = "aws-x86_64.pcrs";
-const QOS_RELEASE_ENV_FILE: &str = "release.env";
 const GENESIS_DR_ARTIFACTS: &str = "genesis_dr_artifacts";
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
@@ -619,9 +618,6 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 
 	// Get the PCRs for QOS so we can verify
 	let qos_pcrs = extract_qos_pcrs(&qos_release_dir_path);
-	let release_env = extract_qos_release_env(&qos_release_dir_path);
-	println!("QOS release ref: {}", release_env.git_ref);
-	println!("QOS version: {}", release_env.version);
 
 	// Read in the attestation doc from the genesis directory
 	let cose_sign1 =
@@ -764,14 +760,13 @@ fn extract_nitro_config<P: AsRef<Path>>(
 ) -> NitroConfig {
 	let pcr3 = extract_pcr3(pcr3_preimage_path);
 	let QosPcrs { pcr0, pcr1, pcr2 } = extract_qos_pcrs(&qos_release_dir_path);
-	let release_env = extract_qos_release_env(qos_release_dir_path);
 
 	NitroConfig {
 		pcr0,
 		pcr1,
 		pcr2,
 		pcr3,
-		qos_commit: release_env.git_ref,
+		qos_commit: "".to_string(),
 		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 	}
 }
@@ -2014,55 +2009,6 @@ fn extract_qos_pcrs<P: AsRef<Path>>(qos_release_dir_path: P) -> QosPcrs {
 		pcr0: get_entry(&entries, 0, "PCR0"),
 		pcr1: get_entry(&entries, 1, "PCR1"),
 		pcr2: get_entry(&entries, 2, "PCR2"),
-	}
-}
-
-struct QosReleaseEnv {
-	version: String,
-	git_ref: String,
-	_git_author: String,
-	_git_key: String,
-	_git_timestamp: String,
-}
-
-fn get_env_entry(
-	entries: &[[String; 2]],
-	index: usize,
-	expected_label: &str,
-) -> String {
-	let [label, value] = &entries[index];
-	assert_eq!(label, expected_label, "Label of entry does not match");
-	value.clone()
-}
-
-fn extract_qos_release_env<P: AsRef<Path>>(
-	qos_release_dir_path: P,
-) -> QosReleaseEnv {
-	let release_env_path =
-		PathBuf::from(qos_release_dir_path.as_ref()).join(QOS_RELEASE_ENV_FILE);
-
-	let file = File::open(release_env_path)
-		.expect("failed to open qos release env file");
-
-	let lines = std::io::BufReader::new(file)
-		.lines()
-		.collect::<Result<Vec<String>, _>>()
-		.unwrap();
-
-	let entries: Vec<[String; 2]> = lines
-		.into_iter()
-		.map(|line| {
-			let entry: Vec<_> = line.split('=').map(String::from).collect();
-			entry.try_into().expect("Not exactly 2 words in line of file")
-		})
-		.collect();
-
-	QosReleaseEnv {
-		version: get_env_entry(&entries, 0, "VERSION"),
-		git_ref: get_env_entry(&entries, 1, "GIT_REF"),
-		_git_author: get_env_entry(&entries, 2, "GIT_AUTHOR"),
-		_git_key: get_env_entry(&entries, 3, "GIT_KEY"),
-		_git_timestamp: get_env_entry(&entries, 4, "GIT_TIMESTAMP"),
 	}
 }
 
