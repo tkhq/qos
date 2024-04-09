@@ -12,7 +12,10 @@ on:
 jobs:
   build:
     name: build artifacts
-    runs-on: ubuntu-latest
+    # We use a special group that is configured to use github largest runner instance
+    # This is charged by the minute, so if you want to reduce cost change back to `runs-on: ubuntu-latest`
+    runs-on:
+      group: ubuntu-runners
     strategy:
       matrix:
         include:
@@ -36,7 +39,10 @@ jobs:
 
   upload_to_ecr:
     name: Upload toolchain artifacts to ECR
-    runs-on: ubuntu-latest
+    # We use a special group that is configured to use github largest runner instance
+    # This is charged by the minute, so if you want to reduce cost change back to `runs-on: ubuntu-latest`
+    runs-on:
+      group: ubuntu-runners
     needs:
       - build
     permissions:
@@ -85,7 +91,10 @@ jobs:
 
   upload_to_ghcr:
     name: Upload toolchain artifacts to GHCR
-    runs-on: ubuntu-latest
+    # We use a special group that is configured to use github largest runner instance
+    # This is charged by the minute, so if you want to reduce cost change back to `runs-on: ubuntu-latest`
+    runs-on:
+      group: ubuntu-runners
     needs:
       - build
     permissions:
