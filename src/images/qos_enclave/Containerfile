@@ -54,14 +54,10 @@ RUN eif_build \
 	--output /nitro.eif \
 	--cmdline 'reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd'
 
-FROM base as install
-WORKDIR /rootfs
+FROM scratch as package
 COPY --from=build-eif /nitro.eif .
 COPY --from=build-eif /nitro.pcrs .
 COPY --from=build-qos_enclave /qos_enclave .
-RUN find . -exec touch -hcd "@0" "{}" +
-
-FROM scratch as package
 COPY --from=install /rootfs .
 ENTRYPOINT ["/qos_enclave"]
 ENV EIF_PATH=/nitro.eif
