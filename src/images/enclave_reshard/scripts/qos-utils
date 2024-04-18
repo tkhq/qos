@@ -1,0 +1,83 @@
+#! /bin/bash
+
+: "${LOOP:=}"
+
+genAppHash() {
+  sha256sum "${PIVOT_EXECUTABLE}" | awk '{print $1}' > "${PIVOT_HASH_PATH}"
+}
+
+getAttestationDocument() {
+  local QOS_HOST="${1:?Missing qos host}"
+  local QOS_PORT="${2:?Missing qos port}"
+  qos_client \
+    get-attestation-doc \
+    --host-port "${QOS_PORT}" \
+    --host-ip "${QOS_HOST}" \
+    --attestation-doc-path "${ATTESTATION_DOC_PATH}" \
+    --manifest-envelope-path "${UNUSED_MANIFEST_ENVELOPE_PATH}"
+}
+
+getEnclaveState() {
+  local QOS_HOST="${1:?Missing qos host}"
+  local QOS_PORT="${2:?Missing qos port}"
+  local ENCLAVE_STATE
+  ENCLAVE_STATE=$(qos_client \
+    enclave-status \
+    --host-ip "${QOS_HOST}" \
+    --host-port "${QOS_PORT}")
+  local STATUS_REGEX="Enclave phase: ([a-zA-Z]+)"
+  [[ $ENCLAVE_STATE =~ $STATUS_REGEX ]] && echo "${BASH_REMATCH[1]}"
+}
+
+waitForEnclaveReady() {
+  while true; do
+     set -e # allow curl to fail
+     STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://${QOS_HOST}:8080") || echo "0"
+     set +e
+     if [ $STATUS_CODE -eq 200 ]; then
+        break;
+     fi
+
+     sleep 1
+  done
+
+  while true; do
+     STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://${QOS_HOST}:${QOS_PORT}/qos/host-health") || echo "0" 
+     if [ $STATUS_CODE -eq 200 ]; then
+        break;
+     fi
+
+     sleep 1
+  done
+
+  sleep 1
+}
+
+waitForProvisioned() {
+  local QOS_HOST="${1:?Missing qos host}"
+  local QOS_PORT="${2:?Missing qos port}"
+
+  while true; do
+    local STATUS
+    STATUS=$(getEnclaveState "$QOS_HOST" "$QOS_PORT")
+
+    case "${STATUS}" in
+      QuorumKeyProvisioned)
+        break
+        ;;
+      GenesisBooted|WaitingForQuorumShards|WaitingForBootInstruction|WaitingForForwardedKey)
+        echo "${QOS_HOST}:${QOS_PORT} - In ${STATUS}, waiting" >&2
+        ;;
+      UnrecoverableError)
+        echo "${QOS_HOST}:${QOS_PORT} - In ${STATUS}, can't progress" >&2
+        return 1
+        ;;
+      *)
+        echo "${QOS_HOST}:${QOS_PORT} - Unknown ProtocolPhase: ${STATUS}" >&2
+        return 1
+        ;;
+    esac
+
+    sleep 1
+  done
+}

@@ -1,0 +1,32 @@
+#! /bin/bash
+
+set -euo pipefail
+
+source ./qos-utils
+
+
+QOS_RELEASE_DIR=/qos-dist
+PCR3_PRE_IMAGE_PATH=/etc/enclave/pcr3_preimage
+UMP_QUORUM_KEY_PATH=/etc/quorum-keys/ump
+SIGNER_QUORUM_KEY_PATH=/etc/quorum-keys/signer
+NOTARIZER_QUORUM_KEY_PATH=/etc/quorum-keys/notarizer
+EVM_PARSER_QUORUM_KEY_PATH=/etc/quorum-keys/evm-parser
+OLD_SHARE_SET_DIR=/etc/enclave-sets/old-share
+NEW_SHARE_SET_DIR=/etc/enclave-sets/new-share
+RESHARD_INPUT_PATH=/reshard-input
+
+qos_client generate-reshard-input \
+  --qos-release-dir "${QOS_RELEASE_DIR}" \
+  --pcr3-preimage-path "${PCR3_PRE_IMAGE_PATH}" \
+  --quorum-key-path-multiple "${UMP_QUORUM_KEY_PATH}" \
+  --quorum-key-path-multiple "${SIGNER_QUORUM_KEY_PATH}" \
+  --quorum-key-path-multiple "${NOTARIZER_QUORUM_KEY_PATH}" \
+  --quorum-key-path-multiple "${EVM_PARSER_QUORUM_KEY_PATH}" \
+  --old-share-set-dir "${OLD_SHARE_SET_DIR}" \
+  --new-share-set-dir "${NEW_SHARE_SET_DIR}" \
+  --reshard-input-path "${RESHARD_INPUT_PATH}"
+
+qos_client boot-reshard \
+  --reshard-input-path "${RESHARD_INPUT_PATH}" \
+  --host-port "${QOS_PORT}" \
+  --host-ip "${QOS_PORT}"
