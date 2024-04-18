@@ -9,7 +9,7 @@ default: \
 	out/qos_enclave/index.json
 
 .PHONY: test
-test: out/.build-base-loaded
+test: out/common/index.json
 	$(call run,\
 		cargo build --all; \
 		cargo test; \
@@ -17,15 +17,15 @@ test: out/.build-base-loaded
 	)
 
 .PHONY: lint
-lint: out/.build-base-loaded
+lint: out/common/index.json
 	$(call run,cargo clippy -- -D warnings)
 
 .PHONY: format
-format: out/.build-base-loaded
+format: out/common/index.json
 	$(call run,rustfmt)
 
 .PHONY: docs
-docs: out/.build-base-loaded
+docs: out/common/index.json
 	$(call run,cargo doc)
 
 .PHONY: shell
