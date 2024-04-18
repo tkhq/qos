@@ -28,7 +28,7 @@ endef
 define build
 	$(eval NAME := $(1))
 	$(eval TYPE := $(if $(2),$(2),dir))
-	$(eval REGISTRY := tkhq-qos)
+	$(eval REGISTRY := qos-local)
 	$(eval PLATFORM := linux/amd64)
 	DOCKER_BUILDKIT=1 \
 	SOURCE_DATE_EPOCH=1 \
