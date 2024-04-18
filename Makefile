@@ -17,21 +17,20 @@ test: out/common/index.json
 	)
 
 .PHONY: lint
-lint: out/common/index.json
+lint: out/.common-loaded
 	$(call run,cargo clippy -- -D warnings)
 
 .PHONY: format
-format: out/common/index.json
+format: out/.common-loaded
 	$(call run,rustfmt)
 
 .PHONY: docs
-docs: out/common/index.json
+docs: out/.common-loaded
 	$(call run,cargo doc)
 
 .PHONY: shell
-shell: out/common/index.json
-	env -C ./out/common tar -cf - . | docker load \
-	&& docker run \
+shell: out/.common-loaded
+	docker run \
 		--interactive \
 		--tty \
 		--volume .:/home/qos \
@@ -80,3 +79,7 @@ out/qos_client/index.json: \
 out/common/index.json: \
 	src/images/common/Containerfile
 	$(call build,common)
+
+out/.common-loaded: out/common/index.json
+	env -C ./out/common tar -cf - . | docker load
+	touch out/.common-loaded
