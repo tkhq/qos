@@ -1,10 +1,12 @@
+include src/macros.mk
+
 REGISTRY := local
 .DEFAULT_GOAL :=
 .PHONY: default
 default: \
-	out/qos_client.tar \
-	out/qos_host.tar \
-	out/qos_enclave.tar
+	out/qos_client/index.json \
+	out/qos_host/index.json \
+	out/qos_enclave/index.json
 
 .PHONY: test
 test: out/.build-base-loaded
@@ -27,14 +29,23 @@ docs: out/.build-base-loaded
 	$(call run,cargo doc)
 
 .PHONY: shell
-shell: out/.build-base-loaded
-	$(call run,/bin/bash,--tty)
+shell: out/common/index.json
+	env -C ./out/common tar -cf - . | docker load \
+	&& docker run \
+		--interactive \
+		--tty \
+		--volume .:/home/qos \
+		--workdir /home/qos \
+		--user $(shell id -u):$(shell id -g) \
+		qos-local/common:latest \
+		/bin/bash
 
 out/nitro.pcrs: out/qos_enclave.tar
 	@$(call run,/src/scripts/extract_oci_file.sh qos_enclave.tar nitro.pcrs)
 
-out/qos_enclave.tar: \
-	out/.build-base-loaded \
+out/qos_enclave/index.json: \
+	out/common/index.json \
+	src/images/qos_enclave/Containerfile \
 	$(shell git ls-files \
 		src/init \
 		src/qos_enclave \
@@ -42,18 +53,20 @@ out/qos_enclave.tar: \
 		src/qos_aws \
 		src/qos_system \
 	)
-	$(call build)
+	$(call build,qos_enclave)
 
-out/qos_host.tar: \
-	out/.build-base-loaded \
+out/qos_host/index.json: \
+	out/common/index.json \
+	src/images/qos_host/Containerfile \
 	$(shell git ls-files \
 		src/qos_host \
 		src/qos_core \
 	)
-	$(call build)
+	$(call build,qos_host)
 
-out/qos_client.tar: \
-	out/.build-base-loaded \
+out/qos_client/index.json: \
+	out/common/index.json \
+	src/images/qos_client/Containerfile \
 	$(shell git ls-files \
 		src/qos_client \
 		src/qos_p256 \
@@ -62,70 +75,8 @@ out/qos_client.tar: \
 		src/qos_crypto \
 		src/qos_core \
 	)
-	$(call build)
+	$(call build,qos_client)
 
-.PHONY: build-base
-build-base: out/build-base/index.json
-out/build-base/index.json: src/images/Containerfile
-	DOCKER_BUILDKIT=1 \
-	SOURCE_DATE_EPOCH=1 \
-	BUILDKIT_MULTIPLATFORM=1 \
-	docker build \
-		--output "\
-			type=oci,\
-			tar=false,\
-			name=build_base,\
-			rewrite-timestamp=true,\
-			annotation.org.opencontainers.image.created=2024-03-06T22:00:00Z,\
-			dest=out/build-base" \
-		--platform=linux/amd64 \
-		--tag qos-local/build-base \
-		$(NOCACHE_FLAG) \
-		-f src/images/Containerfile \
-		src/
-
-out/.build-base-loaded: out/build-base/index.json
-	cd out/build-base; \
-		tar -cf - . | docker load
-	touch out/.build-base-loaded
-
-ifeq ($(NOCACHE), 1)
-NOCACHE_FLAG=--no-cache
-else
-NOCACHE_FLAG=
-endif
-export NOCACHE_FLAG
-define build
-	$(eval package := $(notdir $(basename $@)))
-	DOCKER_BUILDKIT=1 \
-	SOURCE_DATE_EPOCH=1 \
-	BUILDKIT_MULTIPLATFORM=1 \
-	docker build \
-		--tag $(REGISTRY)/$(package) \
-		--progress=plain \
-		--build-context "qos-local/build-base=oci-layout://./out/build-base" \
-		--output "\
-			type=oci,\
-			rewrite-timestamp=true,\
-			force-compression=true,\
-			name=$(package),\
-			dest=$@" \
-		$(NOCACHE_FLAG) \
-		-f src/images/$(package)/Containerfile \
-		src/
-endef
-
-define run
-	docker run \
-		--interactive \
-		--volume ./src/:/src \
-		--volume ./out/:/out \
-		--volume ./cache/cargo/:/.cargo \
-		--workdir /src \
-		--env RUSTFLAGS="" \
-		--env CARGOFLAGS="--locked" \
-		--env PATH=/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-		$(2) \
-		qos-local/build-base \
-		/bin/sh -c "set -eu; $(1)"
-endef
+out/common/index.json: \
+	src/images/common/Containerfile
+	$(call build,common)

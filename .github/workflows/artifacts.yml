@@ -19,9 +19,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: qos_client.tar
-          - target: qos_host.tar
-          - target: qos_enclave.tar
+          - target: qos_client
+          - target: qos_host
+          - target: qos_enclave
     steps:
       - name: Checkout sources
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -30,7 +30,7 @@ jobs:
       - name: Run `make`
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          make out/${{ matrix.target }}
+          make out/${{ matrix.target }}/index.json
       - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
         with:
           name: ${{ matrix.target }}
@@ -74,20 +74,16 @@ jobs:
             ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || '' }}
             ${{ github.event_name == 'push' && github.ref_name || '' }}
         run: |
-          skopeo login \
-            --username "${{ steps.login-ecr.outputs.docker_username_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
-            --password "${{ steps.login-ecr.outputs.docker_password_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
-            ${{ steps.login-ecr.outputs.registry }}
-          for image in ${images}; do
-            skopeo copy --all --dest-decompress \
-              "oci-archive:/home/runner/work/qos/qos/${image}.tar/${image}.tar" \
-              "docker://${{ steps.login-ecr.outputs.registry }}/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
-            for tag in ${tags}; do
-              skopeo copy --all \
-                "docker://${{ steps.login-ecr.outputs.registry }}/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}" \
-                "docker://${{ steps.login-ecr.outputs.registry }}/tkhq/${image}:${tag}"
-            done
+          env -C out/${{ matrix.target }} tar -cf - . | docker load
+          for tag in ${tags}; do
+              docker tag "qos-local/${{ matrix.target }}:latest" "${{ steps.login-ecr.outputs.registry }}/${{ matrix.target }}:${tag}"
           done
+          echo "${{ steps.login-ecr.outputs.docker_password_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
+            | docker login \
+              ${{ steps.login-ecr.outputs.registry }}
+              -u "${{ steps.login-ecr.outputs.docker_username_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
+              --password-stdin
+          docker image push --all-tags ${{ steps.login-ecr.outputs.registry }}/tkhq/${{ matrix.target }}
 
   upload_to_ghcr:
     name: Upload toolchain artifacts to GHCR
@@ -114,17 +110,11 @@ jobs:
             ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || '' }}
             ${{ github.event_name == 'push' && github.ref_name || '' }}
         run: |
-          skopeo login \
-            --username "${{ github.actor }}" \
-            --password "${{ secrets.GITHUB_TOKEN }}" \
-            ghcr.io
-          for image in ${images}; do
-            skopeo copy --all --dest-decompress \
-              "oci-archive:/home/runner/work/qos/qos/${image}.tar/${image}.tar" \
-              "docker://ghcr.io/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
-            for tag in ${tags}; do
-              skopeo copy --all \
-                "docker://ghcr.io/tkhq/${image}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}" \
-                "docker://ghcr.io/tkhq/${image}:${tag}"
-            done
+          env -C out/${{ matrix.target }} tar -cf - . | docker load
+
+          for tag in ${tags}; do
+              docker tag "qos-local/${{ matrix.target }}:latest" "ghcr.io/tkhq/${{ matrix.target }}:${tag}"
           done
+
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker image push --all-tags ghcr.io/tkhq/${{ matrix.target }}
