@@ -9,7 +9,7 @@ default: \
 	out/qos_enclave/index.json
 
 .PHONY: test
-test: out/common/index.json
+test: out/.common-loaded
 	$(call run,\
 		cargo build --all; \
 		cargo test; \
