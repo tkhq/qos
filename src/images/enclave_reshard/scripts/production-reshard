@@ -4,13 +4,12 @@ set -euo pipefail
 
 source ./qos-utils
 
-
 QOS_RELEASE_DIR=/qos-dist
 PCR3_PRE_IMAGE_PATH=/etc/enclave/pcr3_preimage
-UMP_QUORUM_KEY_PATH=/etc/quorum-keys/ump
-SIGNER_QUORUM_KEY_PATH=/etc/quorum-keys/signer
-NOTARIZER_QUORUM_KEY_PATH=/etc/quorum-keys/notarizer
-EVM_PARSER_QUORUM_KEY_PATH=/etc/quorum-keys/evm-parser
+UMP_QUORUM_KEY_PATH=/etc/quorum-keys/ump.pub
+SIGNER_QUORUM_KEY_PATH=/etc/quorum-keys/signer.pub
+NOTARIZER_QUORUM_KEY_PATH=/etc/quorum-keys/notarizer.pub
+EVM_PARSER_QUORUM_KEY_PATH=/etc/quorum-keys/evm-parser.pub
 OLD_SHARE_SET_DIR=/etc/enclave-sets/old-share
 NEW_SHARE_SET_DIR=/etc/enclave-sets/new-share
 RESHARD_INPUT_PATH=/reshard-input
