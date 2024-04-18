@@ -1,4 +1,4 @@
-FROM qos-local/build-base as base
+FROM common as base
 ADD . /src
 
 FROM base as build
