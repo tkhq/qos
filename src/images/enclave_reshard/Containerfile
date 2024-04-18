@@ -8,6 +8,6 @@ COPY --from=qos_client /qos_client /usr/local/bin/
 ADD images/enclave_reshard/scripts/* /usr/local/bin/
 
 RUN mkdir -p /qos-dist
-ADD images/enclave_boot/nitro.pcrs /qos-dist/aws-x86_64.pcrs
+ADD images/enclave_reshard/nitro.pcrs /qos-dist/aws-x86_64.pcrs
 
 USER 1000:1000
