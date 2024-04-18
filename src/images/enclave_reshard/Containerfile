@@ -1,13 +1,12 @@
-FROM stagex/kubectl@sha256:5d0d1ad1790d9eed1b526134739778b0878b07ffc8120e4743190aea931da762 as kubectl
-FROM stagex/bash:sx2024.03.0@sha256:d1cbbb56847e6b1e7b879214aa6926b6fdfa210e9b42a2f612a6aea850ddeefc AS bash
-FROM stagex/curl:sx2024.03.0@sha256:925222b88f66aeed382b375343eb49ac1904575ab33d78896fd5285cdc709e7f AS curl
-FROM ghcr.io/tkhq/qos_client as qos_client
+FROM qos-local/build-base as base
 
-COPY --from=qos_client /qos_client /usr/local/bin/
+COPY --from=ghcr.io/tkhq/qos_client  /qos_client /usr/local/bin/
+COPY --from=stagex/curl . /
+COPY --from=stagex/bash . /
+COPY --from=stagex/kubectl . /
 
 ADD images/enclave_reshard/scripts/* /usr/local/bin/
 
-RUN mkdir -p /qos-dist
 ADD images/enclave_reshard/nitro.pcrs /qos-dist/aws-x86_64.pcrs
 
 USER 1000:1000
