@@ -34,8 +34,6 @@ jobs:
       - name: Run `make`
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
           make -j$(nproc) out/${{ matrix.target }}
       - uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
         with:
