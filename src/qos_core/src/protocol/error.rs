@@ -148,7 +148,7 @@ pub enum ProtocolError {
 	MissingReshardOutput,
 	/// The same member was in the share set multiple times.
 	DuplicateNewShareSetMember,
-	/// The share set member posted more or less shares then the number of
+	/// The share set member posted more or less shares than the number of
 	/// quorum keys targeted for reconstruction.
 	ShareCountDoesNotMatchExpectedQuorumKeyCount,
 	/// Could not decrypt the share with the ephemeral key.
