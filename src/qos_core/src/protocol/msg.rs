@@ -148,8 +148,8 @@ pub enum ProtocolMsg {
 	},
 	/// Response to [`Self::BootReshardRequest`].
 	BootReshardResponse {
-		/// Should be `[NsmResponse::Attestation`]. `user_data` is the the
-		/// reshard_input
+		/// Should be `[NsmResponse::Attestation`]. The `user_data` field of
+		/// of the attestation document is the qos hash of [`ReshardInput`].
 		nsm_response: NsmResponse,
 	},
 
@@ -157,8 +157,8 @@ pub enum ProtocolMsg {
 	ReshardAttestationDocRequest,
 	/// Response to [`Self::ReshardAttestationDocRequest`]
 	ReshardAttestationDocResponse {
-		/// Should be `[NsmResponse::Attestation`]. `user_data` is the the
-		/// reshard_input
+		/// Should be `[NsmResponse::Attestation`]. The `user_data` field of
+		/// of the attestation document is the qos hash of [`ReshardInput`].
 		nsm_response: NsmResponse,
 		/// The reshard parameters this enclave is setup for.
 		reshard_input: ReshardInput,
