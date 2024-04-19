@@ -44,7 +44,7 @@ pub fn combinations<T: Clone>(input: &[T], k: usize) -> Vec<Vec<T>> {
 		// the input
 		let combination: Vec<_> =
 			indices.iter().map(|&i| input[i].clone()).collect();
-		combos.push(combination.clone());
+		combos.push(combination);
 
 		let mut i = k;
 		while i > 1 && indices[i - 1] == n - k + i - 1 {
