@@ -1552,7 +1552,8 @@ pub(crate) fn reshard_re_encrypt_share(
 		unsafe_auto_confirm,
 	}: ReshardReEncryptShareArgs,
 ) -> Result<(), Error> {
-	let reshard_input = read_reshard_input(reshard_input_path)?;
+	let mut reshard_input = read_reshard_input(reshard_input_path)?;
+	reshard_input.deterministic();
 	let attestation_doc =
 		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
 	let mut new_share_set = get_share_set(&new_share_set_dir);

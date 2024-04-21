@@ -27,10 +27,11 @@ pub(in crate::protocol) fn reshard_attestation_doc(
 ) -> Result<NsmResponse, ProtocolError> {
 	let ephemeral_public_key =
 		state.handles.get_ephemeral_key()?.public_key().to_bytes();
-	let reshard_input = state
+	let mut reshard_input = state
 		.reshard_input
 		.clone()
 		.ok_or(ProtocolError::MissingReshardInput)?;
+	reshard_input.deterministic();
 
 	Ok(get_post_boot_attestation_doc(
 		&*state.attestor,
