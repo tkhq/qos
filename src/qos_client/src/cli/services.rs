@@ -816,12 +816,14 @@ pub fn generate_reshard_input(
 	let old_share_set = get_share_set(old_share_set_dir);
 	let new_share_set = get_share_set(new_share_set_dir);
 
-	let reshard_input = ReshardInput {
+	let mut reshard_input = ReshardInput {
 		quorum_keys,
 		new_share_set,
 		old_share_set,
 		enclave: nitro_config,
 	};
+
+	reshard_input.deterministic();
 
 	write_json_with_msg(
 		reshard_input_path.as_ref(),
@@ -2461,8 +2463,9 @@ fn read_reshard_input(file: String) -> Result<ReshardInput, Error> {
 		error: e.to_string(),
 	})?;
 
-	let reshard_input: ReshardInput = serde_json::from_slice(&buf)
+	let mut reshard_input: ReshardInput = serde_json::from_slice(&buf)
 		.map_err(|e| Error::FileDidNotHaveValidReshardInput(e.to_string()))?;
+	reshard_input.deterministic();
 
 	Ok(reshard_input)
 }
