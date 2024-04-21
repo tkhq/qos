@@ -85,7 +85,8 @@ pub struct ReshardInput {
 }
 
 impl ReshardInput {
-	fn deterministic(&mut self) {
+	/// Make sure reshard input is deterministic
+	pub fn deterministic(&mut self) {
 		self.quorum_keys.sort();
 	}
 
@@ -249,12 +250,13 @@ pub(in crate::protocol) fn reshard_provision(
 	input: ReshardProvisionInput,
 	state: &mut ProtocolState,
 ) -> Result<bool, ProtocolError> {
-	let reshard_input = state
+	let mut reshard_input = state
 		.reshard_input
 		.as_ref()
 		.ok_or(ProtocolError::MissingReshardInput)?
 		.clone();
 
+	reshard_input.deterministic();
 	input.approval.verify(&reshard_input.qos_hash())?;
 
 	if !reshard_input.old_share_set.members.contains(&input.approval.member) {
