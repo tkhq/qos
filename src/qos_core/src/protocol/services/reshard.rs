@@ -88,6 +88,8 @@ impl ReshardInput {
 	/// Make sure reshard input is deterministic
 	pub fn deterministic(&mut self) {
 		self.quorum_keys.sort();
+		self.new_share_set.members.sort();
+		self.old_share_set.members.sort();
 	}
 
 	fn validate(&mut self) -> Result<(), ProtocolError> {
