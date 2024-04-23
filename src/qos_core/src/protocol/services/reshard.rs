@@ -393,7 +393,7 @@ mod tests {
 			})
 			.collect();
 
-		let reshard_input = ReshardInput {
+		let mut reshard_input = ReshardInput {
 			quorum_keys,
 			new_share_set: ShareSet {
 				threshold: 2,
@@ -413,6 +413,9 @@ mod tests {
 					.to_string(),
 			},
 		};
+
+		// SUPER IMPORTANT: we need to ensure we always sign the correct hash.
+		reshard_input.deterministic();
 
 		let provision_inputs: Vec<_> = old_members
 			.into_iter()

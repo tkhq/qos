@@ -151,11 +151,12 @@ pub enum Error {
 	/// Given quorum key seed does not match the hash of the expected quorum
 	/// key seed.
 	SecretDoesNotMatch,
-	FileDidNotHaveValidReshardInput(String),
+	/// The contents of the file could not be deserialized as `ReshardInput`.
+	FailedToDeserializeReshardInput(String),
 	/// Could not read the file with the reshard output
 	FailedToReadReshardOutput(std::io::Error),
 	/// Could not serialize the reshard output in the file
-	FileDidNotHaveReshardOutput(String),
+	FailedToDeserializeReshardOutput(String),
 	/// Could not find key in new genesis member outputs
 	KeyNotInNewShareSet,
 	/// Failed to write to the file specified for the encrypted share.
@@ -2464,7 +2465,7 @@ fn read_reshard_input(file: String) -> Result<ReshardInput, Error> {
 	})?;
 
 	let mut reshard_input: ReshardInput = serde_json::from_slice(&buf)
-		.map_err(|e| Error::FileDidNotHaveValidReshardInput(e.to_string()))?;
+		.map_err(|e| Error::FailedToDeserializeReshardInput(e.to_string()))?;
 	reshard_input.deterministic();
 
 	Ok(reshard_input)
@@ -2477,7 +2478,7 @@ fn read_reshard_output(file: String) -> Result<ReshardOutput, Error> {
 	})?;
 
 	serde_json::from_slice(&buf)
-		.map_err(|e| Error::FileDidNotHaveReshardOutput(e.to_string()))
+		.map_err(|e| Error::FailedToDeserializeReshardOutput(e.to_string()))
 }
 
 fn read_attestation_approval<P: AsRef<Path>>(

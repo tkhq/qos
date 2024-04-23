@@ -430,7 +430,7 @@ impl Command {
 	fn share_dir_token() -> Token {
 		Token::new(
 			SHARE_DIR,
-			"directory to read/write subdirectories that contain quorum key and your associated share.",
+			"Directory to read/write subdirectories that contain quorum key and your associated share.",
 		)
 		.takes_value(true)
 		.required(true)
@@ -631,7 +631,7 @@ impl Command {
 	fn quorum_key_path_multiple_token() -> Token {
 		Token::new(
 			QUORUM_KEY_PATH_MULTIPLE,
-			"use multiple times to specify multiple quorum public key files.",
+			"Use multiple times to specify multiple quorum public key files.",
 		)
 		.required(true)
 		.takes_value(true)
@@ -640,7 +640,7 @@ impl Command {
 	fn quorum_share_dir_multiple_token() -> Token {
 		Token::new(
 			QUORUM_SHARE_DIR_MULTIPLE,
-			"path to directory with just your share and the associated quorum key."
+			"Path to directory with just your share and the associated quorum key."
 		)
 			.required(true)
 			.takes_value(true)
@@ -649,7 +649,7 @@ impl Command {
 	fn provision_input_path_token() -> Token {
 		Token::new(
 			PROVISION_INPUT_PATH,
-			"path to file to read/write ReshardProvisionInput.",
+			"Path to file to read/write ReshardProvisionInput.",
 		)
 		.required(true)
 		.takes_value(true)
