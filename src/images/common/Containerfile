@@ -28,8 +28,8 @@ ENV TARGET=x86_64-unknown-linux-musl
 ENV RUSTFLAGS="-C target-feature=+crt-static"
 ENV CARGOFLAGS="--locked --no-default-features --release --target ${TARGET}"
 ENV OPENSSL_STATIC=true
-COPY --from=stagex/busybox . /
-COPY --from=stagex/bash . /
+COPY --from=busybox . /
+COPY --from=bash . /
 COPY --from=coreutils . /
 COPY --from=findutils . /
 COPY --from=grep . /
