@@ -1858,7 +1858,8 @@ pub(crate) fn verify_reshard_output(
 				panic!("failed to create dir {:?}: {}", dir_path, e)
 			})
 			.unwrap();
-		let quorum_key_path = dir_path.clone().join(format!("quorum_key.{}", PUB_EXT));
+		let quorum_key_path =
+			dir_path.clone().join(format!("quorum_key.{}", PUB_EXT));
 		let share_path = dir_path.join(format!("{}.{}", alias, SHARE_EXT));
 
 		fs::write(&quorum_key_path, qos_hex::encode(&quorum_key)).map_err(
