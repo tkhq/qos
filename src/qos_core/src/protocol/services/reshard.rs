@@ -292,7 +292,6 @@ pub(in crate::protocol) fn reshard_provision(
 			// Now, lets create the new shards
 			let member_outputs =
 			zip(shares, reshard_input.new_share_set.members.iter().cloned())
-				// .map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError> {
 				.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError> {
 					let personal_pub = P256Public::from_bytes(&share_set_member.pub_key)?;
 					let encrypted_quorum_key_share = personal_pub.encrypt(&share)?;

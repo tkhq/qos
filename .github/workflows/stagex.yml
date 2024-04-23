@@ -33,12 +33,6 @@ jobs:
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
 
-      - name: Run `make`
-        shell: 'script -q -e -c "bash {0}"'
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          make -j$(nproc) out/${{ matrix.target }}
-
       - name: Run `make ${{ matrix.target }}`
         shell: 'script -q -e -c "bash {0}"'
         run: |
