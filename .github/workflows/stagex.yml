@@ -11,85 +11,17 @@ on:
 
 jobs:
   build:
-    name: stagex build+push
+    name: build artifacts
     # We use a special group that is configured to use github largest runner instance
     # This is charged by the minute, so if you want to reduce cost change back to `runs-on: ubuntu-latest`
     runs-on:
       group: ubuntu-runners
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: qos_client
-          - target: qos_host
-          - target: qos_enclave
-    permissions:
-      id-token: write
-      contents: read
-      packages: write
     steps:
       - name: Checkout sources
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
-
-      - name: Run `make ${{ matrix.target }}`
+      - name: Run `make`
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          make -j$(nproc) out/${{ matrix.target }}/index.json
-
-      - name: upload to GHCR
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-          env -C out/${{ matrix.target }} tar -cf - . | docker load
-
-          for tag in ${tags}; do
-              docker tag "qos-local/${{ matrix.target }}:latest" "ghcr.io/tkhq/${{ matrix.target }}:${tag}"
-          done
-
-          docker image push --all-tags ghcr.io/tkhq/${{ matrix.target }}
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a # v4.0.1
-        with:
-          aws-region: us-east-1
-          role-to-assume: arn:aws:iam::799078726966:role/github-mono
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a # v4.0.1
-        with:
-          aws-region: us-east-1
-          role-to-assume: arn:aws:iam::799078726966:role/github-qos
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
-
-      - name: Upload to ECR
-        shell: 'script -q -e -c "bash {0}"'
-        run: |
-          echo "${{ steps.login-ecr.outputs.docker_password_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" | \
-            docker login \
-            ${{ steps.login-ecr.outputs.registry }} \
-            -u "${{ steps.login-ecr.outputs.docker_username_799078726966_dkr_ecr_us_east_1_amazonaws_com }}" \
-            --password-stdin
-
-          export BASE_IMAGE_NAME="${{ steps.login-ecr.outputs.registry }}/tkhq/${{ matrix.target }}"
-          export IMAGE_NAME="${BASE_IMAGE_NAME}:sha-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
-          export DIGEST_FILE=/tmp/image-digest-${{ matrix.target }}.sha256
-
-          cat out/${{ matrix.target }}/index.json | jq -r .manifests[].digest > "${DIGEST_FILE}"
-
-          docker tag "qos-local/${{ matrix.target }}:latest" "$IMAGE_NAME"
-
-          for tag in ${tags}; do
-            docker tag "$IMAGE_NAME" "$BASE_IMAGE_NAME:${tag}"
-          done
-
-          docker image push --all-tags "$BASE_IMAGE_NAME"
-
-          echo "Uploaded image $IMAGE_NAME (SHA-256 digest: $(cat $DIGEST_FILE))"
-
+            make -j$(nproc)
