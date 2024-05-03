@@ -15,7 +15,7 @@ p256 = { version = "0.12.0", features = ["ecdh", "ecdsa", "ecdsa-core", "std"], 
 aes-gcm = { version = "0.10.3", features = ["aes", "alloc"], default-features = false }
 hmac = { version = "0.12", default-features = false }
 hkdf = { version = "0.12", default-features = false }
-zeroize = { version = "1.6", features = ["derive"], default-features = false }
+zeroize = { version = "1.7.0", features = ["derive"], default-features = false }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }

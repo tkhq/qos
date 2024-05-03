@@ -17,7 +17,7 @@ aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
 borsh = { version = "0.10", default-features = false }
 p256 = { version = "0.12.0", default-features = false }
 rand_core = { version = "0.6", default-features = false }
-zeroize = { version = "1.6", default-features = false }
+zeroize = { version = "1.7.0", default-features = false }
 rpassword = { version = "7", default-features = false }
 serde_json = { version = "1" }
 
