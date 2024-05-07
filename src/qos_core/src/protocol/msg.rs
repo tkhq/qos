@@ -10,6 +10,13 @@ use crate::protocol::{
 	ProtocolError,
 };
 
+/// Type to represent UDP or TCP sockets
+#[derive(Debug, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub enum SocketType {
+	TcpSocket,
+	UdpSocket,
+}
+
 /// Message types for communicating with protocol executor.
 #[derive(Debug, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum ProtocolMsg {
@@ -66,7 +73,7 @@ pub enum ProtocolMsg {
 
 	/// Proxy the encoded `data` to the secure app.
 	ProxyRequest {
-		/// Encoded data that will be sent from the nitro enclave serverga to
+		/// Encoded data that will be sent from the nitro enclave server to
 		/// the secure app.
 		data: Vec<u8>,
 	},
@@ -137,6 +144,40 @@ pub enum ProtocolMsg {
 		/// The manifest envelope used to boot the enclave. This will be `None`
 		/// if the manifest envelope does not exist.
 		manifest_envelope: Box<Option<ManifestEnvelope>>,
+	},
+
+	/// Request from the enclave app to open a TCP connection to a remote host
+	/// TODO: can this be done automatically?
+	OpenRemoteConnectionRequest {
+		/// UDP or TCP
+		socket_type: SocketType,
+		/// The hostname to connect to, e.g. "www.googleapis.com"
+		hostname: String,
+		/// e.g. 443
+		port: u8,
+		/// e.g. "8.8.8.8"
+		dns_resolver: String,
+	},
+	/// Response for `OpenTcpConnectionRequest`
+	OpenRemoteConnectionResponse {
+		/// Connection ID to reference the opened connection when used with `RemoteRequest` and `RemoteResponse`.
+		/// TODO: maybe we reply with a fd name directly?
+		/// Not sure what this ID will map to.
+		connection_id: u8,
+	},
+	/// Proxy bytes to a remote host
+	RemoteRequest {
+		/// A connection ID from `OpenRemoteConnectionResponse`
+		connection_id: u8,
+		/// Data to be sent
+		data: Vec<u8>,
+	},
+	/// Response to the proxy request.
+	RemoteResponse {
+		/// Connection ID from `OpenRemoteConnectionResponse`
+		connection_id: u8,
+		/// Data received on the connection
+		data: Vec<u8>,
 	},
 }
 
