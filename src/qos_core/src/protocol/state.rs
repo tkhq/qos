@@ -146,6 +146,22 @@ impl ProtocolRoute {
 		)
 	}
 
+	pub fn open_remote_connection(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::open_remote_connection),
+			current_phase,
+			current_phase,
+		)
+	}
+
+	pub fn remote_send(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::remote_send),
+			current_phase,
+			current_phase,
+		)
+	}
+
 	pub fn export_key(current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::export_key),
@@ -275,6 +291,8 @@ impl ProtocolState {
 					// phase specific routes
 					ProtocolRoute::proxy(self.phase),
 					ProtocolRoute::export_key(self.phase),
+					ProtocolRoute::open_remote_connection(self.phase),
+					ProtocolRoute::remote_send(self.phase),
 				]
 			}
 			ProtocolPhase::WaitingForForwardedKey => {
@@ -371,6 +389,30 @@ mod handlers {
 					state.handles.get_manifest_envelope().ok(),
 				),
 			}))
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn open_remote_connection(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::OpenRemoteConnectionRequest { socket_type, hostname, port, dns_resolver  } = req {
+			// TODO: open a TCP / UDP socket, generate a connection ID, save it to the state
+			Some(Ok(ProtocolMsg::OpenRemoteConnectionResponse { connection_id: 42 }))
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn remote_send(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::RemoteRequest { connection_id, data } = req {
+			// TODO: need to call state.connections.get(id).send(data) to actually send data
+			Some(Ok(ProtocolMsg::RemoteResponse { connection_id: 1, data: vec![] }))
 		} else {
 			None
 		}
