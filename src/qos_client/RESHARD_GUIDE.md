@@ -41,7 +41,7 @@ qos_client boot-reshard \
 
 ### 3 - Get attestation doc (Old Share Holder)
 
-Get the attestation doc from the enclave. The attestation doc contains a refference to the reshard input and the ephemeral key which shares will be encrypted.
+Get the attestation doc from the enclave. The attestation doc contains a reference to the reshard input and the ephemeral key which shares will be encrypted.
 
 ```sh
 qos_client get-reshard-attestation-doc \
@@ -62,7 +62,7 @@ For each quorum key being resharded, the user will need a separate directory wit
   - my_alias.share
 ```
 
-Note that the logic looks at the extension of the file to determine if its a share or the quorum key.
+Note that the logic looks at the extension of the file to determine if it's a share or the quorum key.
 
 ```sh
 qos_client reshard-re-encrypt-share \
@@ -84,7 +84,7 @@ Post the re-encrypted shares from last step in order to reconstruct the quorum k
 
 ```sh
 qos_client reshard-post-share
-  --provision-input-path <write: path to the file to write this users provision input> \
+  --provision-input-path <write: path to the file to write this users ReshardProvisionInput> \
   --host-port 3001 \
   --host-ip localhost
 ```

@@ -74,9 +74,9 @@ pub struct ReshardProvisionInput {
 pub struct ReshardInput {
 	/// List of quorum public keys
 	pub quorum_keys: Vec<Vec<u8>>,
-	/// The set and threshold to shard the key.
+	/// The share set and threshold to shard the quorum keys to.
 	pub new_share_set: ShareSet,
-	/// The set the key is currently sharded too.
+	/// The share set the quorum keys are currently sharded too.
 	pub old_share_set: ShareSet,
 	/// The expected configuration of the enclave. Useful to verify the
 	/// attestation document against. We also want those posting shares to
@@ -289,7 +289,7 @@ pub(in crate::protocol) fn reshard_provision(
 				reshard_input.new_share_set.threshold as usize,
 			);
 
-			// Now, lets create the new shards
+			// Now, let's create the new shards
 			let member_outputs =
 			zip(shares, reshard_input.new_share_set.members.iter().cloned())
 				.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError> {
