@@ -239,9 +239,10 @@ struct ReceiverPublic<'a>(&'a [u8]);
 ///
 /// This allows us to avoid duplicating logic for deriving the shared key.
 enum PrivPubOrSharedSecret<'a> {
-/// Inputs for using Diffie–Hellman to create a shared secret.
-/// Note that this is not a classical private & public keypair.
-/// Instead, the public key represents the remote party of the ECDH operation.
+	/// Inputs for using Diffie–Hellman to create a shared secret.
+	/// Note that this is not a classical private & public keypair.
+	/// Instead, the public key represents the remote party of the ECDH
+	/// operation.
 	PrivPub { private: &'a SecretKey, public: &'a PublicKey },
 	/// This will be used as is as a shared secret.
 	SharedSecret { shared_secret: &'a [u8] },
