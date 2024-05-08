@@ -233,12 +233,22 @@ impl P256EncryptPublic {
 struct SenderPublic<'a>(&'a [u8]);
 struct ReceiverPublic<'a>(&'a [u8]);
 
+/// This is the input into [`create_cipher`] for creating a shared secret.
+/// It provides the option of either a) giving inputs for ECDH or b) providing
+/// a shared secret directly.
+///
+/// This allows us to avoid duplicating logic for deriving the shared key.
 enum PrivPubOrSharedSecret<'a> {
+	/// Inputs for using Diffie–Hellman to create a shared secret.
+	/// Note that this is not a classical private & public keypair.
+	/// Instead, the public key represents the remote party of the ECDH
+	/// operation.
 	PrivPub { private: &'a SecretKey, public: &'a PublicKey },
+	/// This will be used as is as a shared secret.
 	SharedSecret { shared_secret: &'a [u8] },
 }
 
-// Helper function to create the `Aes256Gcm` cypher.
+/// Helper function to create the `Aes256Gcm` cipher.
 fn create_cipher(
 	shared_secret: &PrivPubOrSharedSecret,
 	ephemeral_sender_public: &SenderPublic,
@@ -275,8 +285,8 @@ fn create_cipher(
 		.map_err(|_| P256Error::FailedToCreateAes256GcmCipher)
 }
 
-// Helper function to create the additional associated data (AAD). The data is
-// of the form
+/// Helper function to create the additional associated data (AAD). The data is
+/// of the form
 /// `sender_public||sender_public_len||receiver_public||receiver_public_len`.
 ///
 /// Note that we append the length to each field as per NIST specs here: <https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-56Ar3.pdf/>. See section 5.8.2.
