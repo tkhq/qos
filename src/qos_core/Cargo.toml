@@ -24,6 +24,8 @@ serde = { version = "1", features = ["derive"], default-features = false }
 qos_test_primitives = { path = "../qos_test_primitives" }
 qos_p256 = { path = "../qos_p256", features = ["mock"] }
 qos_nsm = { path = "../qos_nsm", features = ["mock"], default-features = false }
+rustls = { version = "0.23.5" }
+webpki-roots = { version = "0.26.1" }
 
 [features]
 # Support for VSOCK

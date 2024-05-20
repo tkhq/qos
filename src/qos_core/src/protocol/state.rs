@@ -396,11 +396,20 @@ mod handlers {
 
 	pub(super) fn open_remote_connection(
 		req: &ProtocolMsg,
-		state: &mut ProtocolState,
+		_state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::OpenRemoteConnectionRequest { socket_type, hostname, port, dns_resolver  } = req {
-			// TODO: open a TCP / UDP socket, generate a connection ID, save it to the state
-			Some(Ok(ProtocolMsg::OpenRemoteConnectionResponse { connection_id: 42 }))
+		if let ProtocolMsg::OpenRemoteConnectionRequest {
+			socket_type: _,
+			hostname: _,
+			port: _,
+			dns_resolver: _,
+		} = req
+		{
+			// TODO: open a TCP / UDP socket, generate a connection ID, save it
+			// to the state
+			Some(Ok(ProtocolMsg::OpenRemoteConnectionResponse {
+				connection_id: 42,
+			}))
 		} else {
 			None
 		}
@@ -408,11 +417,15 @@ mod handlers {
 
 	pub(super) fn remote_send(
 		req: &ProtocolMsg,
-		state: &mut ProtocolState,
+		_state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::RemoteRequest { connection_id, data } = req {
-			// TODO: need to call state.connections.get(id).send(data) to actually send data
-			Some(Ok(ProtocolMsg::RemoteResponse { connection_id: 1, data: vec![] }))
+		if let ProtocolMsg::RemoteRequest { connection_id: _, data: _ } = req {
+			// TODO: need to call state.connections.get(id).send(data) to
+			// actually send data
+			Some(Ok(ProtocolMsg::RemoteResponse {
+				connection_id: 1,
+				data: vec![],
+			}))
 		} else {
 			None
 		}

@@ -1,6 +1,10 @@
 //! Abstractions to handle connection based socket streams.
 
-use std::{mem::size_of, os::unix::io::RawFd};
+use std::{
+	io::{ErrorKind, Read, Write},
+	mem::size_of,
+	os::unix::io::RawFd,
+};
 
 #[cfg(feature = "vm")]
 use nix::sys::socket::VsockAddr;
@@ -245,6 +249,37 @@ impl Stream {
 	}
 }
 
+impl Read for Stream {
+	fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+		match recv(self.fd, buf, MsgFlags::empty()) {
+			Ok(size) if size == 0 => Err(std::io::Error::new(
+				ErrorKind::ConnectionAborted,
+				"read 0 bytes",
+			)),
+			Ok(size) => Ok(size),
+			Err(err) => Err(std::io::Error::from_raw_os_error(err as i32)),
+		}
+	}
+}
+
+impl Write for Stream {
+	fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
+		match send(self.fd, buf, MsgFlags::empty()) {
+			Ok(size) if size == 0 => Err(std::io::Error::new(
+				ErrorKind::ConnectionAborted,
+				"wrote 0 bytes",
+			)),
+			Ok(size) => Ok(size),
+			Err(err) => Err(std::io::Error::from_raw_os_error(err as i32)),
+		}
+	}
+
+	// No-op because we can't flush a socket.
+	fn flush(&mut self) -> Result<(), std::io::Error> {
+		Ok(())
+	}
+}
+
 impl Drop for Stream {
 	fn drop(&mut self) {
 		// Its ok if either of these error - likely means the other end of the
@@ -328,6 +363,10 @@ fn socket_fd(addr: &SocketAddress) -> Result<RawFd, IOError> {
 #[cfg(test)]
 mod test {
 
+	use std::{io::ErrorKind, sync::Arc};
+
+	use rustls::RootCertStore;
+
 	use super::*;
 
 	fn timeval() -> TimeVal {
@@ -352,6 +391,51 @@ mod test {
 		let resp = server.recv().unwrap();
 
 		assert_eq!(data, resp);
+	}
+
+	#[test]
+	fn stream_implement_reader_writer_interfaces() {
+		let host = "www.turnkey.com";
+		let path = "/health";
+
+		let unix_addr =
+			nix::sys::socket::UnixAddr::new("/tmp/host.sock").unwrap();
+		let addr: SocketAddress = SocketAddress::Unix(unix_addr);
+		let timeout = TimeVal::new(1, 0);
+		let mut stream = Stream::connect(&addr, timeout).unwrap();
+
+		let root_store =
+			RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.into() };
+
+		let server_name: rustls::pki_types::ServerName<'_> =
+			host.try_into().unwrap();
+		let config: rustls::ClientConfig = rustls::ClientConfig::builder()
+			.with_root_certificates(root_store)
+			.with_no_client_auth();
+		let mut conn =
+			rustls::ClientConnection::new(Arc::new(config), server_name)
+				.unwrap();
+		let mut tls = rustls::Stream::new(&mut conn, &mut stream);
+
+		let http_request = format!(
+			"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+		);
+		println!("=== making HTTP request: \n{http_request}");
+
+		tls.write_all(http_request.as_bytes()).unwrap();
+		let ciphersuite = tls.conn.negotiated_cipher_suite().unwrap();
+
+		println!("=== current ciphersuite: {:?}", ciphersuite.suite());
+		let mut response_bytes = Vec::new();
+		let read_to_end_result = tls.read_to_end(&mut response_bytes);
+
+		// Ignore eof errors: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
+		assert!(
+			read_to_end_result.is_ok()
+				|| (read_to_end_result
+					.is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof))
+		);
+		println!("{}", std::str::from_utf8(&response_bytes).unwrap());
 	}
 
 	#[test]

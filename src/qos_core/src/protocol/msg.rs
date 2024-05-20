@@ -160,9 +160,9 @@ pub enum ProtocolMsg {
 	},
 	/// Response for `OpenTcpConnectionRequest`
 	OpenRemoteConnectionResponse {
-		/// Connection ID to reference the opened connection when used with `RemoteRequest` and `RemoteResponse`.
-		/// TODO: maybe we reply with a fd name directly?
-		/// Not sure what this ID will map to.
+		/// Connection ID to reference the opened connection when used with
+		/// `RemoteRequest` and `RemoteResponse`. TODO: maybe we reply with a
+		/// fd name directly? Not sure what this ID will map to.
 		connection_id: u8,
 	},
 	/// Proxy bytes to a remote host
