@@ -41,7 +41,7 @@ fn reaper_works() {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
-			SocketAddress::new_unix(&*usock),
+			SocketAddress::new_unix(&usock),
 			SocketAddress::new_unix("./never.sock"),
 			None,
 		)
@@ -92,7 +92,7 @@ fn reaper_handles_non_zero_exits() {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
-			SocketAddress::new_unix(&*usock),
+			SocketAddress::new_unix(&usock),
 			SocketAddress::new_unix("./never.sock"),
 			None,
 		)
@@ -143,7 +143,7 @@ fn reaper_handles_panic() {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
-			SocketAddress::new_unix(&*usock),
+			SocketAddress::new_unix(&usock),
 			SocketAddress::new_unix("./never.sock"),
 			None,
 		)

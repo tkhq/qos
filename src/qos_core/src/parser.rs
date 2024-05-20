@@ -101,7 +101,7 @@ impl<C: From<String> + GetParserForCommand> CommandParser<C> {
 		inputs.remove(0);
 
 		let command: C =
-			inputs.get(0).expect("No command provided").clone().into();
+			inputs.first().expect("No command provided").clone().into();
 
 		// Remove the command
 		inputs.remove(0);
