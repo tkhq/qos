@@ -1,5 +1,9 @@
 //! Quorum protocol error
+use std::net::AddrParseError;
+
 use borsh::{BorshDeserialize, BorshSerialize};
+#[cfg(feature = "remote_connection")]
+use hickory_resolver::error::ResolveError;
 use qos_p256::P256Error;
 
 use crate::{
@@ -141,6 +145,21 @@ pub enum ProtocolError {
 	/// The new manifest was different from the old manifest when we expected
 	/// them to be the same because they have the same nonce
 	DifferentManifest,
+	/// Parsing error with a protocol message component
+	ParseError(String),
+	/// DNS Resolution error
+	#[cfg(feature = "remote_connection")]
+	DNSResolutionError(String),
+	/// Attempt to save a connection with a duplicate ID
+	#[cfg(feature = "remote_connection")]
+	DuplicateConnectionId(u32),
+	/// Attempt to send a message to a remote connection, but ID isn't found
+	#[cfg(feature = "remote_connection")]
+	RemoteConnectionIdNotFound(u32),
+	/// Attempting to read on a closed remote connection (`.read` returned 0
+	/// bytes)
+	#[cfg(feature = "remote_connection")]
+	RemoteConnectionClosed,
 }
 
 impl From<std::io::Error> for ProtocolError {
@@ -182,5 +201,20 @@ impl From<qos_nsm::nitro::AttestError> for ProtocolError {
 	fn from(err: qos_nsm::nitro::AttestError) -> Self {
 		let msg = format!("{err:?}");
 		Self::QosAttestError(msg)
+	}
+}
+
+impl From<AddrParseError> for ProtocolError {
+	fn from(err: AddrParseError) -> Self {
+		let msg = format!("{err:?}");
+		Self::ParseError(msg)
+	}
+}
+
+#[cfg(feature = "remote_connection")]
+impl From<ResolveError> for ProtocolError {
+	fn from(err: ResolveError) -> Self {
+		let msg = format!("{err:?}");
+		Self::ParseError(msg)
 	}
 }

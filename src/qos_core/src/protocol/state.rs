@@ -2,6 +2,8 @@
 use nix::sys::time::{TimeVal, TimeValLike};
 use qos_nsm::NsmProvider;
 
+#[cfg(feature = "remote_connection")]
+use super::services::remote_connection::RemoteConnection;
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
 };
@@ -146,17 +148,28 @@ impl ProtocolRoute {
 		)
 	}
 
-	pub fn open_remote_connection(current_phase: ProtocolPhase) -> Self {
+	#[cfg(feature = "remote_connection")]
+	pub fn remote_open(current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
-			Box::new(handlers::open_remote_connection),
+			Box::new(handlers::remote_open),
 			current_phase,
 			current_phase,
 		)
 	}
 
-	pub fn remote_send(current_phase: ProtocolPhase) -> Self {
+	#[cfg(feature = "remote_connection")]
+	pub fn remote_read(current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
-			Box::new(handlers::remote_send),
+			Box::new(handlers::remote_read),
+			current_phase,
+			current_phase,
+		)
+	}
+
+	#[cfg(feature = "remote_connection")]
+	pub fn remote_write(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::remote_write),
 			current_phase,
 			current_phase,
 		)
@@ -193,6 +206,8 @@ pub(crate) struct ProtocolState {
 	pub attestor: Box<dyn NsmProvider>,
 	pub app_client: Client,
 	pub handles: Handles,
+	#[cfg(feature = "remote_connection")]
+	pub remote_connections: Vec<RemoteConnection>,
 	phase: ProtocolPhase,
 }
 
@@ -223,11 +238,34 @@ impl ProtocolState {
 				app_addr,
 				TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 			),
+			#[cfg(feature = "remote_connection")]
+			remote_connections: vec![],
 		}
 	}
 
 	pub fn get_phase(&self) -> ProtocolPhase {
 		self.phase
+	}
+
+	#[cfg(feature = "remote_connection")]
+	pub fn save_remote_connection(
+		&mut self,
+		connection: RemoteConnection,
+	) -> Result<(), ProtocolError> {
+		if self.remote_connections.iter().any(|c| c.id == connection.id) {
+			Err(ProtocolError::DuplicateConnectionId(connection.id))
+		} else {
+			self.remote_connections.push(connection);
+			Ok(())
+		}
+	}
+
+	#[cfg(feature = "remote_connection")]
+	pub fn get_remote_connection(
+		&mut self,
+		id: u32,
+	) -> Option<&mut RemoteConnection> {
+		self.remote_connections.iter_mut().find(|c| c.id == id)
 	}
 
 	pub fn handle_msg(&mut self, msg_req: &ProtocolMsg) -> Vec<u8> {
@@ -291,8 +329,12 @@ impl ProtocolState {
 					// phase specific routes
 					ProtocolRoute::proxy(self.phase),
 					ProtocolRoute::export_key(self.phase),
-					ProtocolRoute::open_remote_connection(self.phase),
-					ProtocolRoute::remote_send(self.phase),
+					#[cfg(feature = "remote_connection")]
+					ProtocolRoute::remote_open(self.phase),
+					#[cfg(feature = "remote_connection")]
+					ProtocolRoute::remote_read(self.phase),
+					#[cfg(feature = "remote_connection")]
+					ProtocolRoute::remote_write(self.phase),
 				]
 			}
 			ProtocolPhase::WaitingForForwardedKey => {
@@ -358,6 +400,8 @@ impl ProtocolState {
 
 mod handlers {
 	use super::ProtocolRouteResponse;
+	#[cfg(feature = "remote_connection")]
+	use crate::protocol::services::remote_connection;
 	use crate::protocol::{
 		msg::ProtocolMsg,
 		services::{
@@ -394,38 +438,110 @@ mod handlers {
 		}
 	}
 
-	pub(super) fn open_remote_connection(
+	#[cfg(feature = "remote_connection")]
+	pub(super) fn remote_open(
 		req: &ProtocolMsg,
-		_state: &mut ProtocolState,
+		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::OpenRemoteConnectionRequest {
-			socket_type: _,
-			hostname: _,
-			port: _,
-			dns_resolver: _,
+		if let ProtocolMsg::RemoteOpenRequest {
+			hostname,
+			port,
+			dns_resolvers,
+			dns_port,
 		} = req
 		{
-			// TODO: open a TCP / UDP socket, generate a connection ID, save it
-			// to the state
-			Some(Ok(ProtocolMsg::OpenRemoteConnectionResponse {
-				connection_id: 42,
-			}))
+			match remote_connection::RemoteConnection::new(
+				hostname.clone(),
+				*port,
+				dns_resolvers.clone(),
+				*dns_port,
+			) {
+				Ok(remote_connection) => {
+					let connection_id = remote_connection.id;
+					match state.save_remote_connection(remote_connection) {
+						Ok(()) => Some(Ok(ProtocolMsg::RemoteOpenResponse {
+							connection_id,
+						})),
+						Err(e) => {
+							Some(Err(ProtocolMsg::ProtocolErrorResponse(e)))
+						}
+					}
+				}
+				Err(e) => Some(Err(ProtocolMsg::ProtocolErrorResponse(e))),
+			}
 		} else {
 			None
 		}
 	}
 
-	pub(super) fn remote_send(
+	#[cfg(feature = "remote_connection")]
+	pub(super) fn remote_read(
 		req: &ProtocolMsg,
-		_state: &mut ProtocolState,
+		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::RemoteRequest { connection_id: _, data: _ } = req {
-			// TODO: need to call state.connections.get(id).send(data) to
-			// actually send data
-			Some(Ok(ProtocolMsg::RemoteResponse {
-				connection_id: 1,
-				data: vec![],
-			}))
+		use std::io::Read;
+
+		use crate::protocol::ProtocolError;
+
+		if let ProtocolMsg::RemoteReadRequest { connection_id, size } = req {
+			if let Some(connection) =
+				state.get_remote_connection(*connection_id)
+			{
+				let mut buf: Vec<u8> = vec![0; *size];
+				match connection.tcp_stream.read(&mut buf) {
+					Ok(size) => {
+						if size == 0 {
+							Some(Err(ProtocolMsg::ProtocolErrorResponse(
+								ProtocolError::RemoteConnectionClosed,
+							)))
+						} else {
+							Some(Ok(ProtocolMsg::RemoteReadResponse {
+								connection_id: *connection_id,
+								data: buf,
+							}))
+						}
+					}
+					Err(e) => {
+						Some(Err(ProtocolMsg::ProtocolErrorResponse(e.into())))
+					}
+				}
+			} else {
+				Some(Err(ProtocolMsg::ProtocolErrorResponse(
+					ProtocolError::RemoteConnectionIdNotFound(*connection_id),
+				)))
+			}
+		} else {
+			None
+		}
+	}
+
+	#[cfg(feature = "remote_connection")]
+	pub(super) fn remote_write(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		use std::io::Write;
+
+		use crate::protocol::ProtocolError;
+
+		if let ProtocolMsg::RemoteWriteRequest { connection_id, data } = req {
+			if let Some(connection) =
+				state.get_remote_connection(*connection_id)
+			{
+				match connection.tcp_stream.write(data) {
+					Ok(size) => Some(Ok(ProtocolMsg::RemoteWriteResponse {
+						connection_id: *connection_id,
+						size,
+					})),
+					Err(e) => {
+						Some(Err(ProtocolMsg::ProtocolErrorResponse(e.into())))
+					}
+				}
+			} else {
+				Some(Err(ProtocolMsg::ProtocolErrorResponse(
+					ProtocolError::RemoteConnectionIdNotFound(*connection_id),
+				)))
+			}
 		} else {
 			None
 		}

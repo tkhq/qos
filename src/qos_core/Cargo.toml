@@ -16,10 +16,12 @@ borsh = { version = "1.0", features = ["std", "derive"] , default-features = fal
 
 # For AWS Nitro
 aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
-serde_bytes = { version = "0.11", default-features = false }
 
+serde_bytes = { version = "0.11", default-features = false }
 serde = { version = "1", features = ["derive"], default-features = false }
 
+hickory-resolver = { version = "0.24.1", features = ["tokio-runtime"], default-features = false, optional = true}
+rand = { version = "0.8.5", default-features = false, optional = true }
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
 qos_p256 = { path = "../qos_p256", features = ["mock"] }
@@ -28,7 +30,10 @@ rustls = { version = "0.23.5" }
 webpki-roots = { version = "0.26.1" }
 
 [features]
+default = ["remote_connection"]
 # Support for VSOCK
 vm = []
 # Never use in production - support for mock NSM
 mock = ["qos_nsm/mock"]
+# Support for remote connection
+remote_connection = ["hickory-resolver", "rand"]

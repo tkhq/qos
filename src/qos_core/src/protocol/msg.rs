@@ -10,13 +10,6 @@ use crate::protocol::{
 	ProtocolError,
 };
 
-/// Type to represent UDP or TCP sockets
-#[derive(Debug, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
-pub enum SocketType {
-	TcpSocket,
-	UdpSocket,
-}
-
 /// Message types for communicating with protocol executor.
 #[derive(Debug, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum ProtocolMsg {
@@ -147,37 +140,52 @@ pub enum ProtocolMsg {
 	},
 
 	/// Request from the enclave app to open a TCP connection to a remote host
-	/// TODO: can this be done automatically?
-	OpenRemoteConnectionRequest {
-		/// UDP or TCP
-		socket_type: SocketType,
+	/// This results in a new remote connection saved in protocol state
+	RemoteOpenRequest {
 		/// The hostname to connect to, e.g. "www.googleapis.com"
 		hostname: String,
 		/// e.g. 443
-		port: u8,
-		/// e.g. "8.8.8.8"
-		dns_resolver: String,
+		port: u16,
+		/// An array of DNS resolvers e.g. ["8.8.8.8", "8.8.4.4"]
+		dns_resolvers: Vec<String>,
+		/// Port number to perform DNS resolution, e.g. 53
+		dns_port: u16,
 	},
 	/// Response for `OpenTcpConnectionRequest`
-	OpenRemoteConnectionResponse {
+	RemoteOpenResponse {
 		/// Connection ID to reference the opened connection when used with
 		/// `RemoteRequest` and `RemoteResponse`. TODO: maybe we reply with a
 		/// fd name directly? Not sure what this ID will map to.
-		connection_id: u8,
+		connection_id: u32,
 	},
-	/// Proxy bytes to a remote host
-	RemoteRequest {
-		/// A connection ID from `OpenRemoteConnectionResponse`
-		connection_id: u8,
+	/// Read from a remote connection
+	RemoteReadRequest {
+		/// A connection ID from `RemoteOpenResponse`
+		connection_id: u32,
+		/// number of bytes to read
+		size: usize,
+	},
+	/// Response to `RemoteReadRequest` containing read data
+	RemoteReadResponse {
+		/// A connection ID from `RemoteOpenResponse`
+		connection_id: u32,
+		/// number of bytes read
+		data: Vec<u8>,
+	},
+	/// Write to a remote connection
+	RemoteWriteRequest {
+		/// A connection ID from `RemoteOpenResponse`
+		connection_id: u32,
 		/// Data to be sent
 		data: Vec<u8>,
 	},
-	/// Response to the proxy request.
-	RemoteResponse {
-		/// Connection ID from `OpenRemoteConnectionResponse`
-		connection_id: u8,
-		/// Data received on the connection
-		data: Vec<u8>,
+	/// Response to `RemoteWriteRequest` containing the number of successfully
+	/// written bytes.
+	RemoteWriteResponse {
+		/// Connection ID from `RemoteOpenResponse`
+		connection_id: u32,
+		/// Number of bytes written successfully
+		size: usize,
 	},
 }
 
