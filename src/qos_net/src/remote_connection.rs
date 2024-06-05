@@ -1,3 +1,5 @@
+//! Contains logic for remote connection establishment: DNS resolution and TCP
+//! connection.
 use std::net::{AddrParseError, IpAddr, SocketAddr, TcpStream};
 
 use hickory_resolver::{
@@ -6,15 +8,23 @@ use hickory_resolver::{
 };
 use rand::Rng;
 
-use crate::protocol::ProtocolError;
+use crate::error::ProtocolError;
 
+/// Struct representing a remote connection
 pub struct RemoteConnection {
+	/// Unsigned integer with the connection ID. This is a random positive
+	/// integer
 	pub id: u32,
+	/// IP address for the remote host
+	pub ip: String,
+	/// TCP stream object
 	pub tcp_stream: TcpStream,
 }
 
 impl RemoteConnection {
-	pub fn new(
+	/// Create a new `RemoteConnection` from a name. This results in a DNS
+	/// request + TCP connection
+	pub fn new_from_name(
 		hostname: String,
 		port: u16,
 		dns_resolvers: Vec<String>,
@@ -30,11 +40,34 @@ impl RemoteConnection {
 		let tcp_addr = SocketAddr::new(ip, port);
 		let tcp_stream = TcpStream::connect(tcp_addr)?;
 
-		Ok(RemoteConnection { id: connection_id, tcp_stream })
+		Ok(RemoteConnection {
+			id: connection_id,
+			ip: ip.to_string(),
+			tcp_stream,
+		})
+	}
+
+	/// Create a new `RemoteConnection` from an IP address. This results in a
+	/// new TCP connection
+	pub fn new_from_ip(
+		ip: String,
+		port: u16,
+	) -> Result<RemoteConnection, ProtocolError> {
+		// Generate a new random u32 to get an ID. We'll use it to name our
+		// socket. This will be our connection ID.
+		let mut rng = rand::thread_rng();
+		let connection_id: u32 = rng.gen::<u32>();
+
+		let ip_addr = ip.parse()?;
+		let tcp_addr = SocketAddr::new(ip_addr, port);
+		let tcp_stream = TcpStream::connect(tcp_addr)?;
+
+		Ok(RemoteConnection { id: connection_id, ip, tcp_stream })
 	}
 }
 
-pub(in crate::protocol) fn resolve_hostname(
+// Resolve a name into an IP address
+fn resolve_hostname(
 	hostname: String,
 	resolver_addrs: Vec<String>,
 	port: u16,

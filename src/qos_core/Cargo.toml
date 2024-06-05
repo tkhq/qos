@@ -30,10 +30,7 @@ rustls = { version = "0.23.5" }
 webpki-roots = { version = "0.26.1" }
 
 [features]
-default = ["remote_connection"]
 # Support for VSOCK
 vm = []
 # Never use in production - support for mock NSM
 mock = ["qos_nsm/mock"]
-# Support for remote connection
-remote_connection = ["hickory-resolver", "rand"]

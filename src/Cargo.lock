@@ -1791,6 +1791,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_net"
+version = "0.1.0"
+dependencies = [
+ "aws-nitro-enclaves-nsm-api",
+ "borsh",
+ "hickory-resolver",
+ "libc",
+ "nix",
+ "qos_core",
+ "qos_hex",
+ "qos_test_primitives",
+ "rand",
+ "serde",
+ "serde_bytes",
+]
+
+[[package]]
 name = "qos_nsm"
 version = "0.1.0"
 dependencies = [

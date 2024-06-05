@@ -1,0 +1,30 @@
+[package]
+name = "qos_net"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+qos_hex = { path = "../qos_hex", features = ["serde"] }
+qos_core = { path = "../qos_core", default-features = false }
+
+nix = { version = "0.26", features = ["socket"], default-features = false }
+libc = "=0.2.148"
+borsh = { version = "0.10" }
+
+# For AWS Nitro
+aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
+
+serde_bytes = { version = "0.11", default-features = false }
+serde = { version = "1", features = ["derive"], default-features = false }
+
+hickory-resolver = { version = "0.24.1", features = ["tokio-runtime"], default-features = false}
+rand = { version = "0.8.5", default-features = false }
+
+[dev-dependencies]
+qos_test_primitives = { path = "../qos_test_primitives" }
+
+[features]
+# Support for VSOCK
+vm = []
+
