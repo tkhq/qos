@@ -1,0 +1,53 @@
+FROM stagex/bash:sx2024.03.0@sha256:d1cbbb56847e6b1e7b879214aa6926b6fdfa210e9b42a2f612a6aea850ddeefc AS bash
+FROM stagex/binutils:sx2024.03.0@sha256:3af41227e1fe6a8f9b3df9916ef4876840f33eaa172168e1db1d8f457ba011d5 AS binutils
+FROM stagex/ca-certificates:sx2024.03.0@sha256:6746d2d203be3455bfc5ffd5a051c8edb73ecfd7be77c3da5a2973003a30794f AS ca-certificates
+FROM stagex/coreutils:sx2024.03.0@sha256:cf4032ca6b5f912a8b9d572d527d388401b68a0c9224cc086173e46bc4e1eabe AS coreutils
+FROM stagex/eif_build:sx2024.03.0@sha256:6f3fed0aeaf9f9eebb43a370a5495fab92fcb21119fc23e261f0f24e1174009c AS eif_build
+FROM stagex/file:sx2024.03.0@sha256:7fd68d1e7d5e1d3b1e52433bb6709f28d3e362ea89c9e13586b852ca0412f640 AS file
+FROM stagex/filesystem:sx2024.03.0@sha256:42c8353db508ac79599df38c684502e50167352de2cddc5aea9b89486e7f8498 AS filesystem
+FROM stagex/findutils:sx2024.03.0@sha256:475ea3488840297454f0f20b58e1b8292bf9b3944f901e3fce432fa4afeaa4cd AS findutils
+FROM stagex/gcc:sx2024.03.0@sha256:25798fdde278a9f1f27e4092a1668e93d2766d4f8b089fba38d4684b20a9b0f7 AS gcc
+FROM stagex/gen_initramfs:sx2024.03.0@sha256:a51c840a1c82dbc00c0a813964195d4f4bcb20463701083999320f826ffa49bf AS gen_initramfs
+FROM stagex/git:sx2024.03.0@sha256:2c11f2daf9b8c1738cbd966b6de5dd0bcfaf81b675c2d268d30f972ddab9d9df AS git
+FROM stagex/grep:sx2024.03.0@sha256:589465adc0125128c21534eb560299c335a41935e0ce182a632f4b739bf25c60 AS grep
+FROM stagex/libunwind:sx2024.03.0@sha256:e74819e47c79f68a008302927ef02a5aa39cf12e859a8dfeccf9d1b4769b4833 AS libunwind
+FROM stagex/linux-nitro:sx2024.03.0@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eaea8866b002b04264 AS linux-nitro
+FROM stagex/llvm13:sx2024.03.0@sha256:97d0f3d32f58dca648cd70b0d58364d9bea5170bb99054c0a0b19ef57a7da7b1 AS llvm13
+FROM stagex/llvm:sx2024.03.0@sha256:8e361f1da92e956d947e37b6fc0a3951fcc1130863e2d3a9b4fca40ab4fd07f6 AS llvm
+FROM stagex/musl-fts:sx2024.03.0@sha256:73c3c4647010f7151c711ed5005ef946c7c1a19c6e8921e057b5dbc15ef9559a AS musl-fts
+FROM stagex/musl:sx2024.03.0@sha256:7db05e6817058a512a66ea82f3b99163069424c281363c2e9a48091d0d1d3bd9 AS musl
+FROM stagex/musl-obstack:sx2024.03.0@sha256:4b6737815460908f666fa7a8e91138610d0a0909c408165a575ffb42bf21cd66 AS musl-obstack
+FROM stagex/openssl:sx2024.03.0@sha256:1a2f656ced34d1ade99279c5663fcf0ec4f6526bcc50142079ef8adc080be3a9 AS openssl
+FROM stagex/pcsc-lite:sx2024.03.0@sha256:e720e1795706c7c8c1db14bf730b10521e3ff42e4bed90addc590f7446aac8af AS pcsc-lite
+FROM stagex/pkgconf:sx2024.03.0@sha256:31ce4eddaf4e777ddb51f01923089f3321ec5272ca0aa834d475f644279209b8 AS pkgconf
+FROM stagex/rust:sx2024.03.0@sha256:fe22a0fcdb569cb70b8147378463fb6ff800e642be9d50542f8e25a38d90ec7f AS rust
+FROM stagex/zlib:sx2024.03.0@sha256:de8f56f3ece28b14d575329bead53fc5318962ae3cb8f161a2d69710f7ec51f4 AS zlib
+
+FROM scratch as base
+ENV TARGET=x86_64-unknown-linux-musl
+ENV RUSTFLAGS="-C target-feature=+crt-static"
+ENV CARGOFLAGS="--locked --no-default-features --release --target ${TARGET}"
+ENV OPENSSL_STATIC=true
+COPY --from=stagex/busybox . /
+COPY --from=stagex/bash . /
+COPY --from=coreutils . /
+COPY --from=findutils . /
+COPY --from=grep . /
+COPY --from=musl . /
+COPY --from=libunwind . /
+COPY --from=openssl . /
+COPY --from=zlib . /
+COPY --from=ca-certificates . /
+COPY --from=binutils . /
+COPY --from=pkgconf . /
+COPY --from=git . /
+COPY --from=rust . /
+COPY --from=gen_initramfs . /
+COPY --from=eif_build . /
+COPY --from=llvm . /
+COPY --from=pcsc-lite . /
+COPY --from=file . /
+COPY --from=gcc . /
+COPY --from=linux-nitro /bzImage .
+COPY --from=linux-nitro /nsm.ko .
+COPY --from=linux-nitro /linux.config .

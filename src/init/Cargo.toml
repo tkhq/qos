@@ -14,5 +14,3 @@ qos_nsm = { path = "../qos_nsm", default-features = false }
 [[bin]]
 name = "init"
 path = "init.rs"
-
-

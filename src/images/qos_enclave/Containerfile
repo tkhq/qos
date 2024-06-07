@@ -1,0 +1,64 @@
+FROM common as base
+ADD . /src
+
+FROM base as build-qos_enclave
+RUN <<-EOF
+	set -eux
+	env -C /src/qos_enclave cargo build ${CARGOFLAGS}
+	cp /src/qos_enclave/target/${TARGET}/release/qos_enclave /
+	file /qos_enclave | grep "static-pie"
+EOF
+
+FROM base as build-init
+RUN <<-EOF
+	set -eux
+	env -C /src/init cargo build ${CARGOFLAGS}
+	cp /src/init/target/${TARGET}/release/init /
+	file /init | grep "static-pie"
+EOF
+
+FROM base as build-eif
+WORKDIR /build_cpio
+COPY --from=build-init /init .
+COPY <<-EOF initramfs.list
+	file /init     init    0755 0 0
+	file /nsm.ko   /nsm.ko 0755 0 0
+	dir  /run              0755 0 0
+	dir  /tmp              0755 0 0
+	dir  /etc              0755 0 0
+	dir  /bin              0755 0 0
+	dir  /sbin             0755 0 0
+	dir  /proc             0755 0 0
+	dir  /sys              0755 0 0
+	dir  /usr              0755 0 0
+	dir  /usr/bin          0755 0 0
+	dir  /usr/sbin         0755 0 0
+	dir  /dev              0755 0 0
+	dir  /dev/shm          0755 0 0
+	dir  /dev/pts          0755 0 0
+	nod  /dev/console      0600 0 0 c 5 1
+EOF
+ENV CPIO_TIMESTAMP=1
+ENV KBUILD_BUILD_TIMESTAMP=1
+RUN <<-EOF
+	find . -exec touch -hcd "@0" "{}" +
+	gen_init_cpio -t 1 initramfs.list > rootfs.cpio
+	touch -hcd "@0" rootfs.cpio
+EOF
+WORKDIR /build_eif
+RUN eif_build \
+	--kernel /bzImage \
+	--kernel_config /linux.config \
+	--ramdisk /build_cpio/rootfs.cpio \
+	--pcrs_output /nitro.pcrs \
+	--output /nitro.eif \
+	--cmdline 'reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd'
+
+FROM scratch as package
+COPY --from=build-eif /nitro.eif .
+COPY --from=build-eif /nitro.pcrs .
+COPY --from=build-qos_enclave /qos_enclave .
+ENTRYPOINT ["/qos_enclave"]
+ENV EIF_PATH=/nitro.eif
+ENV ENCLAVE_NAME=qos
+EXPOSE 8080

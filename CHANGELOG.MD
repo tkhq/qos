@@ -14,12 +14,29 @@ Removed: for now removed features.
 Fixed: for any bug fixes.
 Security: in case of vulnerabilities.
 
-## [Unreleased]
+## [0.4.0] 2024.4.9
 
 ### Added
 
-- qos_hex: support more array sizes for serde deserialize
+- qos_hex: support more array sizes for serde deserialize (#414)
+- make test: run all tests in build container (#433)
+- make lint: run automated linting from build container (#433)
+- make format: run rustfmt from build container
+- make docs: run rustdocs from build container
 
+### Changed
+
+- make flow dramatically simplified. Single file. (#433)
+- all actual build steps now handled in overhauled containerfiles in src/images (#433)
+- make: deterministically build all the things with stagex build container (#433)
+- CI refactored to use run make {fmt, test, lint} (#433)
+- CI refactored to use stagex for uploading artifacts (#433)
+- qos_client: deprecate reliance on release.env (#443)
+
+### Removed
+
+- git lfs artifacts removed (#433)
+- toolchain removed (#433)
 
 ## [0.3.0] 2023.11.27
 

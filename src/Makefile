@@ -1,5 +1,4 @@
 ROOT := $(shell git rev-parse --show-toplevel)
-include $(ROOT)/tools.mk
 
 REGISTRY := 339735964233.dkr.ecr.us-east-1.amazonaws.com
 BUCKET := tkhq-development-qos_resources

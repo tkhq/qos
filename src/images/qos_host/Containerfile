@@ -1,0 +1,19 @@
+FROM common as base
+ADD . /src
+
+FROM base as build
+RUN <<-EOF
+	set -eux
+	env -C /src/qos_host cargo build --features vm ${CARGOFLAGS}
+	cp /src/target/${TARGET}/release/qos_host /
+	file /qos_host | grep "static-pie"
+EOF
+
+FROM base as install
+WORKDIR /rootfs
+COPY --from=build /qos_host .
+RUN find . -exec touch -hcd "@0" "{}" +
+
+FROM scratch as package
+COPY --from=install /rootfs .
+ENTRYPOINT ["/qos_host"]
