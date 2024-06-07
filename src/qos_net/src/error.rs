@@ -9,9 +9,8 @@ use hickory_resolver::error::ResolveError;
 pub enum ProtocolError {
 	/// Error variant encapsulating OS IO errors
 	IOError,
-	/// Hash of the Pivot binary does not match the pivot configuration in the
-	/// manifest.
-	InvalidPivotHash,
+	/// Error variant encapsulating OS IO errors
+	QOSIOError,
 	/// The message is too large.
 	OversizeMsg,
 	/// Payload is too big. See `MAX_ENCODED_MSG_LEN` for the upper bound on
@@ -30,11 +29,22 @@ pub enum ProtocolError {
 	/// Attempting to read on a closed remote connection (`.read` returned 0
 	/// bytes)
 	RemoteConnectionClosed,
+	/// Happens if a RemoteRead response has empty data
+	RemoteReadEmpty,
+	/// Happens if a RemoteRead returns too much data for the provided buffer and the data doesn't fit.
+	/// The first `usize` is the size of the received data, the second `usize` is the size of the buffer.
+	RemoteReadOverflow(usize, usize),
 }
 
 impl From<std::io::Error> for ProtocolError {
 	fn from(_err: std::io::Error) -> Self {
 		Self::IOError
+	}
+}
+
+impl From<qos_core::io::IOError> for ProtocolError {
+	fn from(_err: qos_core::io::IOError) -> Self {
+		Self::QOSIOError
 	}
 }
 

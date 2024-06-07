@@ -90,7 +90,7 @@ impl SocketAddress {
 	}
 
 	/// Get the `AddressFamily` of the socket.
-	fn family(&self) -> AddressFamily {
+	pub fn family(&self) -> AddressFamily {
 		match *self {
 			#[cfg(feature = "vm")]
 			Self::Vsock(_) => AddressFamily::Vsock,
@@ -98,8 +98,8 @@ impl SocketAddress {
 		}
 	}
 
-	// Convenience method for accessing the wrapped address
-	fn addr(&self) -> Box<dyn SockaddrLike> {
+	/// Convenience method for accessing the wrapped address
+	pub fn addr(&self) -> Box<dyn SockaddrLike> {
 		match *self {
 			#[cfg(feature = "vm")]
 			Self::Vsock(vsa) => Box::new(vsa),
@@ -109,12 +109,13 @@ impl SocketAddress {
 }
 
 /// Handle on a stream
-pub(crate) struct Stream {
+pub struct Stream {
 	fd: RawFd,
 }
 
 impl Stream {
-	pub(crate) fn connect(
+	/// Create a new `Stream` from a SocketAddress and a timeout
+	pub fn connect(
 		addr: &SocketAddress,
 		timeout: TimeVal,
 	) -> Result<Self, IOError> {
@@ -144,13 +145,14 @@ impl Stream {
 		Err(err)
 	}
 
-	pub(crate) fn send(&self, buf: &[u8]) -> Result<(), IOError> {
+	/// Sends a buffer over the underlying socket
+	pub fn send(&self, buf: &[u8]) -> Result<(), IOError> {
 		let len = buf.len();
 		// First, send the length of the buffer
 		{
 			let len_buf: [u8; size_of::<u64>()] = (len as u64).to_le_bytes();
 
-			// First, sent the length of the buffer
+			// First, send the length of the buffer
 			let mut sent_bytes = 0;
 			while sent_bytes < len_buf.len() {
 				sent_bytes += match send(
@@ -182,7 +184,8 @@ impl Stream {
 		Ok(())
 	}
 
-	pub(crate) fn recv(&self) -> Result<Vec<u8>, IOError> {
+	/// Receive from the underlying socket
+	pub fn recv(&self) -> Result<Vec<u8>, IOError> {
 		let length: usize = {
 			{
 				let mut buf = [0u8; size_of::<u64>()];
@@ -290,7 +293,7 @@ impl Drop for Stream {
 }
 
 /// Abstraction to listen for incoming stream connections.
-pub(crate) struct Listener {
+pub struct Listener {
 	fd: RawFd,
 	addr: SocketAddress,
 }
@@ -395,7 +398,7 @@ mod test {
 
 	#[test]
 	fn stream_implement_reader_writer_interfaces() {
-		let host = "www.turnkey.com";
+		let host = "api.turnkey.com";
 		let path = "/health";
 
 		let unix_addr =

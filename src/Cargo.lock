@@ -1146,13 +1146,16 @@ dependencies = [
  "qos_crypto",
  "qos_hex",
  "qos_host",
+ "qos_net",
  "qos_nsm",
  "qos_p256",
  "qos_test_primitives",
  "rand",
+ "rustls",
  "serde",
  "tokio",
  "ureq",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -1803,8 +1806,10 @@ dependencies = [
  "qos_hex",
  "qos_test_primitives",
  "rand",
+ "rustls",
  "serde",
  "serde_bytes",
+ "webpki-roots",
 ]
 
 [[package]]

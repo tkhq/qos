@@ -5,8 +5,8 @@
 
 mod stream;
 
-pub(crate) use stream::{Listener, Stream};
 pub use stream::{
+	Listener, Stream,
 	SocketAddress, TimeVal, TimeValLike, VMADDR_FLAG_TO_HOST, VMADDR_NO_FLAGS,
 };
 

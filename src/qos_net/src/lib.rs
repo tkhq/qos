@@ -6,3 +6,4 @@ pub mod cli;
 pub mod error;
 pub mod processor;
 pub mod remote_connection;
+pub mod remote_stream;

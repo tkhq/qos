@@ -1,6 +1,6 @@
 //! Contains logic for remote connection establishment: DNS resolution and TCP
 //! connection.
-use std::net::{AddrParseError, IpAddr, SocketAddr, TcpStream};
+use std::{io::{Read, Write}, net::{AddrParseError, IpAddr, SocketAddr, TcpStream}};
 
 use hickory_resolver::{
 	config::{NameServerConfigGroup, ResolverConfig, ResolverOpts},
@@ -18,7 +18,7 @@ pub struct RemoteConnection {
 	/// IP address for the remote host
 	pub ip: String,
 	/// TCP stream object
-	pub tcp_stream: TcpStream,
+	tcp_stream: TcpStream,
 }
 
 impl RemoteConnection {
@@ -39,7 +39,7 @@ impl RemoteConnection {
 
 		let tcp_addr = SocketAddr::new(ip, port);
 		let tcp_stream = TcpStream::connect(tcp_addr)?;
-
+		println!("done. Now persisting TcpStream with connection ID {}", connection_id);
 		Ok(RemoteConnection {
 			id: connection_id,
 			ip: ip.to_string(),
@@ -63,6 +63,21 @@ impl RemoteConnection {
 		let tcp_stream = TcpStream::connect(tcp_addr)?;
 
 		Ok(RemoteConnection { id: connection_id, ip, tcp_stream })
+	}
+}
+
+impl Read for RemoteConnection {
+	fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+		self.tcp_stream.read(buf)
+	}
+}
+
+impl Write for RemoteConnection {
+	fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
+		self.tcp_stream.write(buf)
+	}
+	fn flush(&mut self) -> std::io::Result<()> {
+		self.tcp_stream.flush()
 	}
 }
 
@@ -97,4 +112,59 @@ fn resolve_hostname(
 			"Empty response when querying for host {hostname}"
 		))
 	})
+}
+
+#[cfg(test)]
+mod test {
+
+	use std::{io::{ErrorKind, Read, Write}, sync::Arc};
+	use rustls::RootCertStore;
+
+	use super::*;
+
+	#[test]
+	fn can_fetch_tls_content_with_remote_connection_struct() {
+		let host = "api.turnkey.com";
+		let path = "/health";
+
+		let mut remote_connection = RemoteConnection::new_from_name(
+			host.to_string(),
+			443,
+			vec!["8.8.8.8".to_string()],
+			53,
+		).unwrap();
+
+		let root_store =
+			RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.into() };
+
+		let server_name: rustls::pki_types::ServerName<'_> =
+			host.try_into().unwrap();
+		let config: rustls::ClientConfig = rustls::ClientConfig::builder()
+			.with_root_certificates(root_store)
+			.with_no_client_auth();
+		let mut conn =
+			rustls::ClientConnection::new(Arc::new(config), server_name)
+				.unwrap();
+		let mut tls = rustls::Stream::new(&mut conn, &mut remote_connection);
+
+		let http_request = format!(
+			"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+		);
+		println!("=== making HTTP request: \n{http_request}");
+
+		tls.write_all(http_request.as_bytes()).unwrap();
+		let ciphersuite = tls.conn.negotiated_cipher_suite().unwrap();
+
+		println!("=== current ciphersuite: {:?}", ciphersuite.suite());
+		let mut response_bytes = Vec::new();
+		let read_to_end_result = tls.read_to_end(&mut response_bytes);
+
+		// Ignore eof errors: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
+		assert!(
+			read_to_end_result.is_ok()
+				|| (read_to_end_result
+					.is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof))
+		);
+		println!("{}", std::str::from_utf8(&response_bytes).unwrap());
+	}
 }
