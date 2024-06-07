@@ -1,6 +1,9 @@
 //! Contains logic for remote connection establishment: DNS resolution and TCP
 //! connection.
-use std::{io::{Read, Write}, net::{AddrParseError, IpAddr, SocketAddr, TcpStream}};
+use std::{
+	io::{Read, Write},
+	net::{AddrParseError, IpAddr, SocketAddr, TcpStream},
+};
 
 use hickory_resolver::{
 	config::{NameServerConfigGroup, ResolverConfig, ResolverOpts},
@@ -39,7 +42,10 @@ impl RemoteConnection {
 
 		let tcp_addr = SocketAddr::new(ip, port);
 		let tcp_stream = TcpStream::connect(tcp_addr)?;
-		println!("done. Now persisting TcpStream with connection ID {}", connection_id);
+		println!(
+			"done. Now persisting TcpStream with connection ID {}",
+			connection_id
+		);
 		Ok(RemoteConnection {
 			id: connection_id,
 			ip: ip.to_string(),
@@ -117,7 +123,11 @@ fn resolve_hostname(
 #[cfg(test)]
 mod test {
 
-	use std::{io::{ErrorKind, Read, Write}, sync::Arc};
+	use std::{
+		io::{ErrorKind, Read, Write},
+		sync::Arc,
+	};
+
 	use rustls::RootCertStore;
 
 	use super::*;
@@ -132,7 +142,8 @@ mod test {
 			443,
 			vec!["8.8.8.8".to_string()],
 			53,
-		).unwrap();
+		)
+		.unwrap();
 
 		let root_store =
 			RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.into() };

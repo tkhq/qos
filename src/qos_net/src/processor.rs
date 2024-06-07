@@ -1,5 +1,5 @@
-//! Quorum protocol processor
-use std::io::{ErrorKind, Read, Write};
+//! Protocol processor for our remote QOS net proxy
+use std::io::{Read, Write};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::server;
@@ -105,7 +105,6 @@ impl Processor {
 		connection_id: u32,
 		size: usize,
 	) -> ProtocolMsg {
-		println!("reading {size} bytes from connection {connection_id}");
 		if let Some(connection) = self.get_remote_connection(connection_id) {
 			let mut buf: Vec<u8> = vec![0; size];
 			match connection.read(&mut buf) {
@@ -150,16 +149,10 @@ impl Processor {
 			)
 		}
 	}
-	pub fn remote_flush(
-		&mut self,
-		connection_id: u32,
-	) -> ProtocolMsg {
-		println!("Flushing connection {connection_id}");
+	pub fn remote_flush(&mut self, connection_id: u32) -> ProtocolMsg {
 		if let Some(connection) = self.get_remote_connection(connection_id) {
 			match connection.flush() {
-				Ok(_) => {
-					ProtocolMsg::RemoteFlushResponse { connection_id }
-				}
+				Ok(_) => ProtocolMsg::RemoteFlushResponse { connection_id },
 				Err(e) => ProtocolMsg::ProtocolErrorResponse(e.into()),
 			}
 		} else {
@@ -167,60 +160,6 @@ impl Processor {
 				ProtocolError::RemoteConnectionIdNotFound(connection_id),
 			)
 		}
-	}
-}
-
-impl Read for Processor {
-	// fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
-	//  	let size = self.remote_connections.first_mut().unwrap().read(buf)?;
-	// 	println!("READ {}: read {} bytes: |{}|", buf.len(), size, qos_hex::encode(&buf));
-	// 	Ok(size)
-	// }
-	fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
-		let connection_id = self.remote_connections.first().unwrap().id;
-
-		match self.remote_read(connection_id, buf.len()) {
-			ProtocolMsg::RemoteReadResponse { connection_id: _, size, data } => {
-				if data.len() == 0 {
-					return Err(std::io::Error::new(ErrorKind::Interrupted, "empty RemoteRead"));
-				}
-				if data.len() > buf.len() {
-					return Err(std::io::Error::new(ErrorKind::InvalidData, format!("overflow: cannot read {} bytes into a buffer of {} bytes", data.len(), buf.len())));
-				}
-
-				// Copy data into buffer
-				for (i, b) in data.iter().enumerate() {
-					buf[i] = *b
-				}
-				println!("READ {}: read {} bytes: |{}|", buf.len(), data.len(), qos_hex::encode(&data));
-				Ok(size)
-			},
-			_ => {
-				return Err(std::io::Error::new(ErrorKind::InvalidData, "unexpected response"));
-			}
-		}
-	}
-}
-
-impl Write for Processor {
-	fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
-		let connection_id = self.remote_connections.first().unwrap().id;
-		let resp = self.remote_write(connection_id, buf.to_vec());
-		match resp {
-			ProtocolMsg::RemoteWriteResponse { connection_id: _, size } => {
-				if size == 0 {
-					return Err(std::io::Error::new(ErrorKind::Interrupted, "failed RemoteWrite"));
-				}
-				println!("WRITE {}: sent buf of {} bytes: |{}|", buf.len(), size, qos_hex::encode(buf));
-				Ok(size)
-			},
-			_ => {
-				return Err(std::io::Error::new(ErrorKind::InvalidData, "unexpected response"));
-			}
-		}
-	}
-	fn flush(&mut self) -> std::io::Result<()> {
-		self.remote_connections.first_mut().unwrap().flush()
 	}
 }
 
@@ -287,11 +226,11 @@ impl server::RequestProcessor for Processor {
 				} => ProtocolMsg::ProtocolErrorResponse(
 					ProtocolError::InvalidMsg,
 				),
-				ProtocolMsg::RemoteFlushResponse {
-					connection_id: _,
-				} => ProtocolMsg::ProtocolErrorResponse(
-					ProtocolError::InvalidMsg,
-				),
+				ProtocolMsg::RemoteFlushResponse { connection_id: _ } => {
+					ProtocolMsg::ProtocolErrorResponse(
+						ProtocolError::InvalidMsg,
+					)
+				}
 				ProtocolMsg::RemoteReadResponse {
 					connection_id: _,
 					size: _,
@@ -365,7 +304,8 @@ pub enum ProtocolMsg {
 		connection_id: u32,
 		/// number of bytes read
 		data: Vec<u8>,
-		/// buffer after mutation from `read`. The first `size` bytes contain the result of the `read` call
+		/// buffer after mutation from `read`. The first `size` bytes contain
+		/// the result of the `read` call
 		size: usize,
 	},
 	/// Write to a remote connection
@@ -389,7 +329,8 @@ pub enum ProtocolMsg {
 		connection_id: u32,
 	},
 	/// Response to `RemoteFlushRequest`
-	/// The response only contains the connection ID. Success is implicit: if the flush response fails, a ProtocolErrorResponse will be sent.
+	/// The response only contains the connection ID. Success is implicit: if
+	/// the flush response fails, a ProtocolErrorResponse will be sent.
 	RemoteFlushResponse {
 		/// Connection ID from `RemoteOpenResponse`
 		connection_id: u32,
@@ -398,9 +339,9 @@ pub enum ProtocolMsg {
 
 #[cfg(test)]
 mod test {
-	use std::{io::ErrorKind, str::from_utf8, sync::Arc};
-	use rustls::RootCertStore;
-use server::RequestProcessor;
+	use std::str::from_utf8;
+
+	use server::RequestProcessor;
 
 	use super::*;
 
@@ -414,7 +355,7 @@ use server::RequestProcessor;
 	}
 
 	#[test]
-	fn fetch_plain_http_from_api_turnkey_com() {
+	fn fetch_plaintext_http_from_api_turnkey_com() {
 		let mut processor = Processor::new();
 		let request = ProtocolMsg::RemoteOpenByNameRequest {
 			hostname: "api.turnkey.com".to_string(),
@@ -427,95 +368,47 @@ use server::RequestProcessor;
 		let response = processor.process(request.try_into().unwrap());
 		let msg = ProtocolMsg::try_from_slice(&response).unwrap();
 		let connection_id = match msg {
-			ProtocolMsg::RemoteOpenResponse {
-				connection_id,
-				remote_ip: _
-			} => { connection_id },
-			_ => { panic!("test failure: ProtocolMsg is not RemoteOpenResponse")}
+			ProtocolMsg::RemoteOpenResponse { connection_id, remote_ip: _ } => {
+				connection_id
+			}
+			_ => {
+				panic!("test failure: ProtocolMsg is not RemoteOpenResponse")
+			}
 		};
-		let http_request = format!(
-			"GET / HTTP/1.1\r\nHost: api.turnkey.com\r\nConnection: close\r\n\r\n"
-		);
+		let http_request = "GET / HTTP/1.1\r\nHost: api.turnkey.com\r\nConnection: close\r\n\r\n".to_string();
 
-		let request = ProtocolMsg::RemoteWriteRequest { connection_id: connection_id, data: http_request.as_bytes().to_vec() }
+		let request = ProtocolMsg::RemoteWriteRequest {
+			connection_id,
+			data: http_request.as_bytes().to_vec(),
+		}
 		.try_to_vec()
 		.unwrap();
 		let response = processor.process(request.try_into().unwrap());
 		let msg: ProtocolMsg = ProtocolMsg::try_from_slice(&response).unwrap();
 		assert!(matches!(
 			msg,
-			ProtocolMsg::RemoteWriteResponse {connection_id:_, size }
+			ProtocolMsg::RemoteWriteResponse { connection_id: _, size: _ }
 		));
 
-		let request = ProtocolMsg::RemoteReadRequest { connection_id: connection_id, size: 512 }
-		.try_to_vec()
-		.unwrap();
+		let request =
+			ProtocolMsg::RemoteReadRequest { connection_id, size: 512 }
+				.try_to_vec()
+				.unwrap();
 		let response = processor.process(request.try_into().unwrap());
 		let msg: ProtocolMsg = ProtocolMsg::try_from_slice(&response).unwrap();
 		let data = match msg {
 			ProtocolMsg::RemoteReadResponse {
 				connection_id: _,
 				size: _,
-				data
-			} => { data },
-			_ => { panic!("test failure: ProtocolMsg is not RemoteReadResponse")}
+				data,
+			} => data,
+			_ => {
+				panic!("test failure: ProtocolMsg is not RemoteReadResponse")
+			}
 		};
 
 		let response = from_utf8(&data).unwrap();
 		assert!(response.contains("HTTP/1.1 400 Bad Request"));
 		assert!(response.contains("plain HTTP request was sent to HTTPS port"));
-	}
-
-
-	#[test]
-	fn fetch_tls_content_from_api_turnkey_com() {
-		let host = "api.turnkey.com";
-		let path = "/health";
-		
-		let mut processor = Processor::new();
-		let resp = processor.remote_open_by_name(
-			host.to_string(),
-			443,
-			vec!["8.8.8.8".to_string()],
-			53
-		);
-
-		assert!(matches!(
-			resp,
-			ProtocolMsg::RemoteOpenResponse { connection_id:_, remote_ip: _ }
-		));
-
-		let root_store =
-			RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.into() };
-
-		let server_name: rustls::pki_types::ServerName<'_> =
-			host.try_into().unwrap();
-		let config: rustls::ClientConfig = rustls::ClientConfig::builder()
-			.with_root_certificates(root_store)
-			.with_no_client_auth();
-		let mut conn =
-			rustls::ClientConnection::new(Arc::new(config), server_name)
-				.unwrap();
-		let mut tls = rustls::Stream::new(&mut conn, &mut processor);
-
-		let http_request = format!(
-			"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
-		);
-		println!("=== making HTTP request: \n{http_request}");
-
-		tls.write_all(http_request.as_bytes()).unwrap();
-		let ciphersuite = tls.conn.negotiated_cipher_suite().unwrap();
-
-		println!("=== current ciphersuite: {:?}", ciphersuite.suite());
-		let mut response_bytes = Vec::new();
-		let read_to_end_result = tls.read_to_end(&mut response_bytes);
-
-		// Ignore eof errors: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
-		assert!(
-			read_to_end_result.is_ok()
-				|| (read_to_end_result
-					.is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof))
-		);
-		println!("{}", std::str::from_utf8(&response_bytes).unwrap());
 	}
 }

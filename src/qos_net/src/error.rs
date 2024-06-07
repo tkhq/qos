@@ -31,8 +31,9 @@ pub enum ProtocolError {
 	RemoteConnectionClosed,
 	/// Happens if a RemoteRead response has empty data
 	RemoteReadEmpty,
-	/// Happens if a RemoteRead returns too much data for the provided buffer and the data doesn't fit.
-	/// The first `usize` is the size of the received data, the second `usize` is the size of the buffer.
+	/// Happens if a RemoteRead returns too much data for the provided buffer
+	/// and the data doesn't fit. The first `usize` is the size of the received
+	/// data, the second `usize` is the size of the buffer.
 	RemoteReadOverflow(usize, usize),
 }
 

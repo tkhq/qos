@@ -90,6 +90,7 @@ impl SocketAddress {
 	}
 
 	/// Get the `AddressFamily` of the socket.
+	#[must_use]
 	pub fn family(&self) -> AddressFamily {
 		match *self {
 			#[cfg(feature = "vm")]
@@ -99,6 +100,7 @@ impl SocketAddress {
 	}
 
 	/// Convenience method for accessing the wrapped address
+	#[must_use]
 	pub fn addr(&self) -> Box<dyn SockaddrLike> {
 		match *self {
 			#[cfg(feature = "vm")]
@@ -114,7 +116,7 @@ pub struct Stream {
 }
 
 impl Stream {
-	/// Create a new `Stream` from a SocketAddress and a timeout
+	/// Create a new `Stream` from a `SocketAddress` and a timeout
 	pub fn connect(
 		addr: &SocketAddress,
 		timeout: TimeVal,

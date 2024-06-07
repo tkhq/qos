@@ -1,8 +1,11 @@
 use core::panic;
-use std::{io::{Read, Write}, sync::Arc};
+use std::{
+	io::{Read, Write},
+	sync::Arc,
+};
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use integration::PivotRemoteHttpMsg;
+use integration::PivotRemoteTlsMsg;
 use qos_core::{
 	io::{SocketAddress, TimeVal},
 	server::{RequestProcessor, SocketServer},
@@ -16,19 +19,17 @@ struct Processor {
 
 impl Processor {
 	fn new(proxy_address: String) -> Self {
-		Processor {
-			net_proxy: SocketAddress::new_unix(&proxy_address)
-		}
+		Processor { net_proxy: SocketAddress::new_unix(&proxy_address) }
 	}
 }
 
 impl RequestProcessor for Processor {
 	fn process(&mut self, request: Vec<u8>) -> Vec<u8> {
-		let msg = PivotRemoteHttpMsg::try_from_slice(&request)
+		let msg = PivotRemoteTlsMsg::try_from_slice(&request)
 			.expect("Received invalid message - test is broken!");
 
 		match msg {
-			PivotRemoteHttpMsg::RemoteHttpRequest{ host, path } => {
+			PivotRemoteTlsMsg::RemoteTlsRequest { host, path } => {
 				let timeout = TimeVal::new(1, 0);
 				let mut stream = RemoteStream::new_by_name(
 					&self.net_proxy,
@@ -37,19 +38,24 @@ impl RequestProcessor for Processor {
 					443,
 					vec!["8.8.8.8".to_string()],
 					53,
-				).unwrap();
+				)
+				.unwrap();
 
-				let root_store =
-					RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.into() };
+				let root_store = RootCertStore {
+					roots: webpki_roots::TLS_SERVER_ROOTS.into(),
+				};
 
 				let server_name: rustls::pki_types::ServerName<'_> =
 					host.clone().try_into().unwrap();
-				let config: rustls::ClientConfig = rustls::ClientConfig::builder()
-					.with_root_certificates(root_store)
-					.with_no_client_auth();
-				let mut conn =
-					rustls::ClientConnection::new(Arc::new(config), server_name)
-						.unwrap();
+				let config: rustls::ClientConfig =
+					rustls::ClientConfig::builder()
+						.with_root_certificates(root_store)
+						.with_no_client_auth();
+				let mut conn = rustls::ClientConnection::new(
+					Arc::new(config),
+					server_name,
+				)
+				.unwrap();
 				let mut tls = rustls::Stream::new(&mut conn, &mut stream);
 
 				let http_request = format!(
@@ -62,19 +68,21 @@ impl RequestProcessor for Processor {
 
 				println!("=== current ciphersuite: {:?}", ciphersuite.suite());
 				let mut response_bytes = Vec::new();
-				let read_to_end_result: usize = tls.read_to_end(&mut response_bytes).unwrap();
+				let read_to_end_result: usize =
+					tls.read_to_end(&mut response_bytes).unwrap();
 
 				// Ignore eof errors: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
 
-				let fetched_content = std::str::from_utf8(&response_bytes).unwrap();
-				PivotRemoteHttpMsg::RemoteHttpResponse(format!(
+				let fetched_content =
+					std::str::from_utf8(&response_bytes).unwrap();
+				PivotRemoteTlsMsg::RemoteTlsResponse(format!(
 					"Content fetched successfully ({read_to_end_result} bytes): {fetched_content}"
 				))
 				.try_to_vec()
-				.expect("RemoteHttpResponse is valid borsh")
+				.expect("RemoteTlsResponse is valid borsh")
 			}
-			PivotRemoteHttpMsg::RemoteHttpResponse(_) => {
-				panic!("Unexpected RemoteHttpResponse - test is broken")
+			PivotRemoteTlsMsg::RemoteTlsResponse(_) => {
+				panic!("Unexpected RemoteTlsResponse - test is broken")
 			}
 		}
 	}
@@ -85,12 +93,13 @@ fn main() {
 	// - first argument is the socket to bind to (server)
 	// - second argument is the socket to query (net proxy)
 	let args: Vec<String> = std::env::args().collect();
-	
+
 	let socket_path: &String = &args[1];
 	let proxy_path: &String = &args[2];
-	
+
 	SocketServer::listen(
 		SocketAddress::new_unix(socket_path),
 		Processor::new(proxy_path.to_string()),
-	).unwrap();
+	)
+	.unwrap();
 }
