@@ -1749,7 +1749,6 @@ version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
- "hickory-resolver",
  "libc",
  "nix",
  "qos_crypto",
@@ -1757,7 +1756,6 @@ dependencies = [
  "qos_nsm",
  "qos_p256",
  "qos_test_primitives",
- "rand",
  "rustls",
  "serde",
  "serde_bytes",

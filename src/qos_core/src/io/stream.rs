@@ -201,7 +201,7 @@ impl Stream {
 						&mut buf[received_bytes..len],
 						MsgFlags::empty(),
 					) {
-						Ok(size) if size == 0 => {
+						Ok(0) => {
 							return Err(IOError::RecvConnectionClosed);
 						}
 						Ok(size) => size,
@@ -234,7 +234,7 @@ impl Stream {
 					&mut buf[received_bytes..length],
 					MsgFlags::empty(),
 				) {
-					Ok(size) if size == 0 => {
+					Ok(0) => {
 						return Err(IOError::RecvConnectionClosed);
 					}
 					Ok(size) => size,
@@ -257,7 +257,7 @@ impl Stream {
 impl Read for Stream {
 	fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
 		match recv(self.fd, buf, MsgFlags::empty()) {
-			Ok(size) if size == 0 => Err(std::io::Error::new(
+			Ok(0) => Err(std::io::Error::new(
 				ErrorKind::ConnectionAborted,
 				"read 0 bytes",
 			)),
@@ -270,7 +270,7 @@ impl Read for Stream {
 impl Write for Stream {
 	fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
 		match send(self.fd, buf, MsgFlags::empty()) {
-			Ok(size) if size == 0 => Err(std::io::Error::new(
+			Ok(0) => Err(std::io::Error::new(
 				ErrorKind::ConnectionAborted,
 				"wrote 0 bytes",
 			)),
@@ -398,8 +398,10 @@ mod test {
 		assert_eq!(data, resp);
 	}
 
+	// TODO: replace this test with something simpler. Local socket which does a
+	// simple echo?
 	#[test]
-	fn stream_implement_reader_writer_interfaces() {
+	fn stream_implement_read_write_traits() {
 		let host = "api.turnkey.com";
 		let path = "/health";
 

@@ -1,12 +1,12 @@
-//! Remote protocol error
+//! qos_net errors related to creating and using proxy connections.
 use std::net::AddrParseError;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use hickory_resolver::error::ResolveError;
 
-/// Errors during protocol execution.
+/// Errors related to creating and using proxy connections
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub enum ProtocolError {
+pub enum QosNetError {
 	/// Error variant encapsulating OS IO errors
 	IOError,
 	/// Error variant encapsulating OS IO errors
@@ -25,38 +25,38 @@ pub enum ProtocolError {
 	/// Attempt to save a connection with a duplicate ID
 	DuplicateConnectionId(u32),
 	/// Attempt to send a message to a remote connection, but ID isn't found
-	RemoteConnectionIdNotFound(u32),
+	ConnectionIdNotFound(u32),
 	/// Attempting to read on a closed remote connection (`.read` returned 0
 	/// bytes)
-	RemoteConnectionClosed,
-	/// Happens if a RemoteRead response has empty data
-	RemoteReadEmpty,
-	/// Happens if a RemoteRead returns too much data for the provided buffer
-	/// and the data doesn't fit. The first `usize` is the size of the received
-	/// data, the second `usize` is the size of the buffer.
-	RemoteReadOverflow(usize, usize),
+	ConnectionClosed,
+	/// Happens when a socket `read` results in no data
+	EmptyRead,
+	/// Happens when a socket `read` returns too much data for the provided
+	/// buffer and the data doesn't fit. The first `usize` is the size of the
+	/// received data, the second `usize` is the size of the buffer.
+	ReadOverflow(usize, usize),
 }
 
-impl From<std::io::Error> for ProtocolError {
+impl From<std::io::Error> for QosNetError {
 	fn from(_err: std::io::Error) -> Self {
 		Self::IOError
 	}
 }
 
-impl From<qos_core::io::IOError> for ProtocolError {
+impl From<qos_core::io::IOError> for QosNetError {
 	fn from(_err: qos_core::io::IOError) -> Self {
 		Self::QOSIOError
 	}
 }
 
-impl From<AddrParseError> for ProtocolError {
+impl From<AddrParseError> for QosNetError {
 	fn from(err: AddrParseError) -> Self {
 		let msg = format!("{err:?}");
 		Self::ParseError(msg)
 	}
 }
 
-impl From<ResolveError> for ProtocolError {
+impl From<ResolveError> for QosNetError {
 	fn from(err: ResolveError) -> Self {
 		let msg = format!("{err:?}");
 		Self::ParseError(msg)

@@ -1,26 +1,24 @@
-//! Contains a RemoteStream abstraction to use qos_net's RemoteRead/RemoteWrite
-//! under standard Read/Write traits
+//! Contains an abstraction to implement the standard library's Read/Write
+//! traits with `ProxyMsg`s.
 use std::io::{ErrorKind, Read, Write};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::io::{SocketAddress, Stream, TimeVal};
 
-use crate::{error::ProtocolError, processor::ProtocolMsg};
+use crate::{error::QosNetError, proxy::ProxyMsg};
 
 /// Struct representing a remote connection
 /// This is going to be used by enclaves, on the other side of a socket
-pub struct RemoteStream {
+pub struct ProxyStream {
 	/// socket address and timeout to create the underlying Stream.
 	/// Because `Stream` implements `drop` it can't be persisted here
 	/// unfortunately... TODO: figure out if this can work?
 	/// stream: Box<Stream>,
 	addr: SocketAddress,
 	timeout: TimeVal,
-	/// Tracks the state of the remote stream
-	/// After initialization the connection is is `None`.
-	/// Once a remote connection is established (successful RemoteOpenByName or
-	/// RemoteOpenByIp request), this connection ID is set the u32 in
-	/// RemoteOpenResponse.
+	/// Once a connection is established (successful `ConnectByName` or
+	/// ConnectByIp request), this connection ID is set the u32 in
+	/// `ConnectResponse`.
 	pub connection_id: u32,
 	/// The remote host this connection points to
 	pub remote_hostname: Option<String>,
@@ -28,24 +26,23 @@ pub struct RemoteStream {
 	pub remote_ip: String,
 }
 
-impl RemoteStream {
-	/// Create a new RemoteStream by name
+impl ProxyStream {
+	/// Create a new ProxyStream by targeting a hostname
 	/// `addr` is the USOCK or VSOCK to connect to (this socket should be bound
 	/// to a qos_net proxy) `timeout` is the timeout applied to the socket
 	/// `hostname` is the hostname to connect to (the remote qos_net proxy will
 	/// resolve DNS) `port` is the port the remote qos_net proxy should connect
 	/// to `dns_resolvers` and `dns_port` are the resolvers to use.
-	pub fn new_by_name(
+	pub fn connect_by_name(
 		addr: &SocketAddress,
 		timeout: TimeVal,
 		hostname: String,
 		port: u16,
 		dns_resolvers: Vec<String>,
 		dns_port: u16,
-	) -> Result<Self, ProtocolError> {
-		println!("creating new RemoteStream by name");
+	) -> Result<Self, QosNetError> {
 		let stream = Stream::connect(addr, timeout)?;
-		let req = ProtocolMsg::RemoteOpenByNameRequest {
+		let req = ProxyMsg::ConnectByNameRequest {
 			hostname: hostname.clone(),
 			port,
 			dns_resolvers,
@@ -56,62 +53,60 @@ impl RemoteStream {
 		stream.send(&req)?;
 		let resp_bytes = stream.recv()?;
 
-		match ProtocolMsg::try_from_slice(&resp_bytes) {
+		match ProxyMsg::try_from_slice(&resp_bytes) {
 			Ok(resp) => match resp {
-				ProtocolMsg::RemoteOpenResponse {
-					connection_id,
-					remote_ip,
-				} => Ok(Self {
-					addr: addr.clone(),
-					timeout,
-					connection_id,
-					remote_ip,
-					remote_hostname: Some(hostname),
-				}),
-				_ => Err(ProtocolError::InvalidMsg),
+				ProxyMsg::ConnectResponse { connection_id, remote_ip } => {
+					Ok(Self {
+						addr: addr.clone(),
+						timeout,
+						connection_id,
+						remote_ip,
+						remote_hostname: Some(hostname),
+					})
+				}
+				_ => Err(QosNetError::InvalidMsg),
 			},
-			Err(_) => Err(ProtocolError::InvalidMsg),
+			Err(_) => Err(QosNetError::InvalidMsg),
 		}
 	}
 
-	/// Create a new RemoteStream by IP
+	/// Create a new ProxyStream by targeting an IP address directly.
 	/// `addr` is the USOCK or VSOCK to connect to (this socket should be bound
 	/// to a qos_net proxy) `timeout` is the timeout applied to the socket
 	/// `ip` and `port` are the IP and port to connect to (on the outside of the
 	/// enclave)
-	pub fn new_by_ip(
+	pub fn connect_by_ip(
 		addr: &SocketAddress,
 		timeout: TimeVal,
 		ip: String,
 		port: u16,
-	) -> Result<Self, ProtocolError> {
+	) -> Result<Self, QosNetError> {
 		let stream: Stream = Stream::connect(addr, timeout)?;
-		let req = ProtocolMsg::RemoteOpenByIpRequest { ip, port }
+		let req = ProxyMsg::ConnectByIpRequest { ip, port }
 			.try_to_vec()
 			.expect("ProtocolMsg can always be serialized.");
 		stream.send(&req)?;
 		let resp_bytes = stream.recv()?;
 
-		match ProtocolMsg::try_from_slice(&resp_bytes) {
+		match ProxyMsg::try_from_slice(&resp_bytes) {
 			Ok(resp) => match resp {
-				ProtocolMsg::RemoteOpenResponse {
-					connection_id,
-					remote_ip,
-				} => Ok(Self {
-					addr: addr.clone(),
-					timeout,
-					connection_id,
-					remote_ip,
-					remote_hostname: None,
-				}),
-				_ => Err(ProtocolError::InvalidMsg),
+				ProxyMsg::ConnectResponse { connection_id, remote_ip } => {
+					Ok(Self {
+						addr: addr.clone(),
+						timeout,
+						connection_id,
+						remote_ip,
+						remote_hostname: None,
+					})
+				}
+				_ => Err(QosNetError::InvalidMsg),
 			},
-			Err(_) => Err(ProtocolError::InvalidMsg),
+			Err(_) => Err(QosNetError::InvalidMsg),
 		}
 	}
 }
 
-impl Read for RemoteStream {
+impl Read for ProxyStream {
 	fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
 		let stream: Stream = Stream::connect(&self.addr, self.timeout)
 			.map_err(|e| {
@@ -121,7 +116,7 @@ impl Read for RemoteStream {
 		)
 			})?;
 
-		let req = ProtocolMsg::RemoteReadRequest {
+		let req = ProxyMsg::ReadRequest {
 			connection_id: self.connection_id,
 			size: buf.len(),
 		}
@@ -140,17 +135,13 @@ impl Read for RemoteStream {
 			)
 		})?;
 
-		match ProtocolMsg::try_from_slice(&resp_bytes) {
+		match ProxyMsg::try_from_slice(&resp_bytes) {
 			Ok(resp) => match resp {
-				ProtocolMsg::RemoteReadResponse {
-					connection_id: _,
-					size,
-					data,
-				} => {
+				ProxyMsg::ReadResponse { connection_id: _, size, data } => {
 					if data.is_empty() {
 						return Err(std::io::Error::new(
 							ErrorKind::Interrupted,
-							"empty RemoteRead",
+							"empty Read",
 						));
 					}
 					if data.len() > buf.len() {
@@ -177,7 +168,7 @@ impl Read for RemoteStream {
 	}
 }
 
-impl Write for RemoteStream {
+impl Write for ProxyStream {
 	fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
 		let stream: Stream = Stream::connect(&self.addr, self.timeout)
 			.map_err(|e| {
@@ -187,7 +178,7 @@ impl Write for RemoteStream {
 		)
 			})?;
 
-		let req = ProtocolMsg::RemoteWriteRequest {
+		let req = ProxyMsg::WriteRequest {
 			connection_id: self.connection_id,
 			data: buf.to_vec(),
 		}
@@ -196,22 +187,24 @@ impl Write for RemoteStream {
 		stream.send(&req).map_err(|e| {
 			std::io::Error::new(
 				ErrorKind::Other,
-				format!("QOS IOError sending RemoteWriteRequest: {:?}", e),
+				format!("QOS IOError sending WriteRequest: {:?}", e),
 			)
 		})?;
 
-		let resp_bytes = stream.recv().map_err(|e| std::io::Error::new(
+		let resp_bytes = stream.recv().map_err(|e| {
+			std::io::Error::new(
 			ErrorKind::Other,
-			format!("QOS IOError receiving bytes from stream after RemoteWriteRequest: {:?}", e),
-		))?;
+			format!("QOS IOError receiving bytes from stream after WriteRequest: {:?}", e),
+		)
+		})?;
 
-		match ProtocolMsg::try_from_slice(&resp_bytes) {
+		match ProxyMsg::try_from_slice(&resp_bytes) {
 			Ok(resp) => match resp {
-				ProtocolMsg::RemoteWriteResponse { connection_id: _, size } => {
+				ProxyMsg::WriteResponse { connection_id: _, size } => {
 					if size == 0 {
 						return Err(std::io::Error::new(
 							ErrorKind::Interrupted,
-							"failed RemoteWrite",
+							"Write failed: 0 bytes written",
 						));
 					}
 					println!("WRITE {}: sent buf of {} bytes", buf.len(), size);
@@ -229,10 +222,49 @@ impl Write for RemoteStream {
 		}
 	}
 
-	// No-op because we can't flush a socket. We're not keeping any sort of
-	// client-side buffer here.
 	fn flush(&mut self) -> Result<(), std::io::Error> {
-		Ok(())
+		let stream: Stream = Stream::connect(&self.addr, self.timeout)
+			.map_err(|e| {
+				std::io::Error::new(
+			ErrorKind::NotConnected,
+			format!("Error while connecting to socket (sending read request): {:?}", e),
+				)
+			})?;
+
+		let req = ProxyMsg::FlushRequest { connection_id: self.connection_id }
+			.try_to_vec()
+			.expect("ProtocolMsg can always be serialized.");
+
+		stream.send(&req).map_err(|e| {
+			std::io::Error::new(
+				ErrorKind::Other,
+				format!("QOS IOError sending FlushRequest: {:?}", e),
+			)
+		})?;
+
+		let resp_bytes = stream.recv().map_err(|e| {
+			std::io::Error::new(
+			ErrorKind::Other,
+			format!("QOS IOError receiving bytes from stream after FlushRequest: {:?}", e),
+		)
+		})?;
+
+		match ProxyMsg::try_from_slice(&resp_bytes) {
+			Ok(resp) => match resp {
+				ProxyMsg::FlushResponse { connection_id: _ } => {
+					println!("FLUSH OK");
+					Ok(())
+				}
+				_ => Err(std::io::Error::new(
+					ErrorKind::InvalidData,
+					"unexpected response",
+				)),
+			},
+			Err(_) => Err(std::io::Error::new(
+				ErrorKind::InvalidData,
+				"cannot deserialize message",
+			)),
+		}
 	}
 }
 
@@ -242,10 +274,10 @@ mod test {
 	use std::{io::ErrorKind, sync::Arc};
 
 	use qos_core::server::RequestProcessor;
-	use rustls::RootCertStore;
+	use rustls::{RootCertStore, SupportedCipherSuite};
 
 	use super::*;
-	use crate::processor::Processor;
+	use crate::proxy::Proxy;
 
 	#[test]
 	fn can_fetch_tls_content_with_local_stream() {
@@ -278,12 +310,11 @@ mod test {
 		let http_request = format!(
 			"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
 		);
-		println!("=== making HTTP request: \n{http_request}");
 
 		tls.write_all(http_request.as_bytes()).unwrap();
 		let ciphersuite = tls.conn.negotiated_cipher_suite().unwrap();
+		assert!(matches!(ciphersuite, SupportedCipherSuite::Tls13(_)));
 
-		println!("=== current ciphersuite: {:?}", ciphersuite.suite());
 		let mut response_bytes = Vec::new();
 		let read_to_end_result = tls.read_to_end(&mut response_bytes);
 
@@ -293,83 +324,17 @@ mod test {
 				|| (read_to_end_result
 					.is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof))
 		);
-		println!("{}", std::str::from_utf8(&response_bytes).unwrap());
+		let response_text = std::str::from_utf8(&response_bytes).unwrap();
+		assert!(response_text.contains("HTTP/1.1 200 OK"));
+		assert!(response_text.contains("currentTime"));
 	}
 
-	#[test]
-	fn can_fetch_tls_content_with_remote_stream() {
-		let host = "api.turnkey.com";
-		let path = "/health";
-
-		let proxy_addr =
-			nix::sys::socket::UnixAddr::new("/tmp/proxy.sock").unwrap();
-		let addr: SocketAddress = SocketAddress::Unix(proxy_addr);
-		let timeout = TimeVal::new(1, 0);
-
-		let mut stream = RemoteStream::new_by_name(
-			&addr,
-			timeout,
-			host.to_string(),
-			443,
-			vec!["8.8.8.8".to_string()],
-			53,
-		)
-		.unwrap();
-
-		assert_eq!(stream.remote_hostname, Some("api.turnkey.com".to_string()));
-
-		let root_store =
-			RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.into() };
-
-		let server_name: rustls::pki_types::ServerName<'_> =
-			host.try_into().unwrap();
-		let config: rustls::ClientConfig = rustls::ClientConfig::builder()
-			.with_root_certificates(root_store)
-			.with_no_client_auth();
-		let mut conn =
-			rustls::ClientConnection::new(Arc::new(config), server_name)
-				.unwrap();
-		let mut tls = rustls::Stream::new(&mut conn, &mut stream);
-
-		let http_request = format!(
-			"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
-		);
-		println!("=== making HTTP request: \n{http_request}");
-
-		tls.write_all(http_request.as_bytes()).unwrap();
-		let ciphersuite = tls.conn.negotiated_cipher_suite().unwrap();
-
-		println!("=== current ciphersuite: {:?}", ciphersuite.suite());
-		let mut response_bytes = Vec::new();
-		let read_to_end_result = tls.read_to_end(&mut response_bytes);
-
-		// Ignore eof errors: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
-		assert!(
-			read_to_end_result.is_ok()
-				|| (read_to_end_result
-					.is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof))
-		);
-		println!("{}", std::str::from_utf8(&response_bytes).unwrap());
-	}
-
-	/// Struct representing a connection, with direct access to the processor.
-	/// Useful in tests.
+	/// Struct representing a stream, with direct access to the proxy.
+	/// Useful in tests! :)
 	struct LocalStream {
-		/// socket address and timeout to create the underlying Stream.
-		/// Because `Stream` implements `drop` it can't be persisted here
-		/// unfortunately... TODO: figure out if this can work?
-		/// stream: Box<Stream>,
-		processor: Box<Processor>,
-		/// Tracks the state of the remote stream
-		/// After initialization the connection is is `None`.
-		/// Once a remote connection is established (successful
-		/// RemoteOpenByName or RemoteOpenByIp request), this connection ID is
-		/// set the u32 in RemoteOpenResponse.
+		proxy: Box<Proxy>,
 		pub connection_id: u32,
-		/// The remote host this connection points to
 		pub remote_hostname: Option<String>,
-		/// The remote IP this connection points to
-		pub remote_ip: String,
 	}
 
 	impl LocalStream {
@@ -378,9 +343,8 @@ mod test {
 			port: u16,
 			dns_resolvers: Vec<String>,
 			dns_port: u16,
-		) -> Result<Self, ProtocolError> {
-			println!("creating new RemoteStream by name");
-			let req = ProtocolMsg::RemoteOpenByNameRequest {
+		) -> Result<Self, QosNetError> {
+			let req = ProxyMsg::ConnectByNameRequest {
 				hostname: hostname.clone(),
 				port,
 				dns_resolvers,
@@ -388,48 +352,43 @@ mod test {
 			}
 			.try_to_vec()
 			.expect("ProtocolMsg can always be serialized.");
-			let mut processor = Box::new(Processor::new());
-			let resp_bytes = processor.process(req);
+			let mut proxy = Box::new(Proxy::new());
+			let resp_bytes = proxy.process(req);
 
-			match ProtocolMsg::try_from_slice(&resp_bytes) {
+			match ProxyMsg::try_from_slice(&resp_bytes) {
 				Ok(resp) => match resp {
-					ProtocolMsg::RemoteOpenResponse {
+					ProxyMsg::ConnectResponse {
 						connection_id,
-						remote_ip,
+						remote_ip: _,
 					} => Ok(Self {
-						processor,
+						proxy,
 						connection_id,
-						remote_ip,
 						remote_hostname: Some(hostname),
 					}),
-					_ => Err(ProtocolError::InvalidMsg),
+					_ => Err(QosNetError::InvalidMsg),
 				},
-				Err(_) => Err(ProtocolError::InvalidMsg),
+				Err(_) => Err(QosNetError::InvalidMsg),
 			}
 		}
 	}
 
 	impl Read for LocalStream {
 		fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
-			let req = ProtocolMsg::RemoteReadRequest {
+			let req = ProxyMsg::ReadRequest {
 				connection_id: self.connection_id,
 				size: buf.len(),
 			}
 			.try_to_vec()
 			.expect("ProtocolMsg can always be serialized.");
-			let resp_bytes = self.processor.process(req);
+			let resp_bytes = self.proxy.process(req);
 
-			match ProtocolMsg::try_from_slice(&resp_bytes) {
+			match ProxyMsg::try_from_slice(&resp_bytes) {
 				Ok(resp) => match resp {
-					ProtocolMsg::RemoteReadResponse {
-						connection_id: _,
-						size,
-						data,
-					} => {
+					ProxyMsg::ReadResponse { connection_id: _, size, data } => {
 						if data.is_empty() {
 							return Err(std::io::Error::new(
 								ErrorKind::Interrupted,
-								"empty RemoteRead",
+								"empty Read",
 							));
 						}
 						if data.len() > buf.len() {
@@ -458,32 +417,24 @@ mod test {
 
 	impl Write for LocalStream {
 		fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
-			let req = ProtocolMsg::RemoteWriteRequest {
+			let req = ProxyMsg::WriteRequest {
 				connection_id: self.connection_id,
 				data: buf.to_vec(),
 			}
 			.try_to_vec()
 			.expect("ProtocolMsg can always be serialized.");
-			let resp_bytes = self.processor.process(req);
+			let resp_bytes = self.proxy.process(req);
 
-			match ProtocolMsg::try_from_slice(&resp_bytes) {
+			match ProxyMsg::try_from_slice(&resp_bytes) {
 				Ok(resp) => match resp {
-					ProtocolMsg::RemoteWriteResponse {
-						connection_id: _,
-						size,
-					} => {
+					ProxyMsg::WriteResponse { connection_id: _, size } => {
 						if size == 0 {
 							return Err(std::io::Error::new(
 								ErrorKind::Interrupted,
-								"failed RemoteWrite",
+								"failed Write",
 							));
 						}
-						println!(
-							"WRITE {}: sent buf of {} bytes: |{}|",
-							buf.len(),
-							size,
-							qos_hex::encode(buf)
-						);
+						println!("WRITE {}: sent {} bytes", buf.len(), size,);
 						Ok(size)
 					}
 					_ => Err(std::io::Error::new(
@@ -498,19 +449,16 @@ mod test {
 			}
 		}
 
-		// No-op because we can't flush a socket. We're not keeping any sort of
-		// client-side buffer here.
 		fn flush(&mut self) -> Result<(), std::io::Error> {
-			let req = ProtocolMsg::RemoteFlushRequest {
-				connection_id: self.connection_id,
-			}
-			.try_to_vec()
-			.expect("ProtocolMsg can always be serialized.");
-			let resp_bytes = self.processor.process(req);
+			let req =
+				ProxyMsg::FlushRequest { connection_id: self.connection_id }
+					.try_to_vec()
+					.expect("ProtocolMsg can always be serialized.");
+			let resp_bytes = self.proxy.process(req);
 
-			match ProtocolMsg::try_from_slice(&resp_bytes) {
+			match ProxyMsg::try_from_slice(&resp_bytes) {
 				Ok(resp) => match resp {
-					ProtocolMsg::RemoteFlushResponse { connection_id: _ } => {
+					ProxyMsg::FlushResponse { connection_id: _ } => {
 						println!("FLUSH OK");
 						Ok(())
 					}

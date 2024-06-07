@@ -10,7 +10,7 @@ use qos_core::{
 	io::{SocketAddress, TimeVal},
 	server::{RequestProcessor, SocketServer},
 };
-use qos_net::remote_stream::RemoteStream;
+use qos_net::proxy_stream::ProxyStream;
 use rustls::RootCertStore;
 
 struct Processor {
@@ -31,7 +31,7 @@ impl RequestProcessor for Processor {
 		match msg {
 			PivotRemoteTlsMsg::RemoteTlsRequest { host, path } => {
 				let timeout = TimeVal::new(1, 0);
-				let mut stream = RemoteStream::new_by_name(
+				let mut stream = ProxyStream::connect_by_name(
 					&self.net_proxy,
 					timeout,
 					host.clone(),
@@ -61,12 +61,10 @@ impl RequestProcessor for Processor {
 				let http_request = format!(
 					"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
 				);
-				println!("=== making HTTP request: \n{http_request}");
 
 				tls.write_all(http_request.as_bytes()).unwrap();
-				let ciphersuite = tls.conn.negotiated_cipher_suite().unwrap();
+				let _ciphersuite = tls.conn.negotiated_cipher_suite().unwrap();
 
-				println!("=== current ciphersuite: {:?}", ciphersuite.suite());
 				let mut response_bytes = Vec::new();
 				let read_to_end_result: usize =
 					tls.read_to_end(&mut response_bytes).unwrap();
@@ -90,8 +88,8 @@ impl RequestProcessor for Processor {
 
 fn main() {
 	// Parse args:
-	// - first argument is the socket to bind to (server)
-	// - second argument is the socket to query (net proxy)
+	// - first argument is the socket to bind to (normal server server)
+	// - second argument is the socket to use for remote proxying
 	let args: Vec<String> = std::env::args().collect();
 
 	let socket_path: &String = &args[1];

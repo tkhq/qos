@@ -11,28 +11,27 @@ use hickory_resolver::{
 };
 use rand::Rng;
 
-use crate::error::ProtocolError;
+use crate::error::QosNetError;
 
-/// Struct representing a remote connection
-pub struct RemoteConnection {
-	/// Unsigned integer with the connection ID. This is a random positive
-	/// integer
+/// Struct representing a TCP connection held on our proxy
+pub struct ProxyConnection {
+	/// Unsigned integer with the connection ID (random positive int)
 	pub id: u32,
-	/// IP address for the remote host
+	/// IP address of the remote host
 	pub ip: String,
 	/// TCP stream object
 	tcp_stream: TcpStream,
 }
 
-impl RemoteConnection {
-	/// Create a new `RemoteConnection` from a name. This results in a DNS
+impl ProxyConnection {
+	/// Create a new `ProxyConnection` from a name. This results in a DNS
 	/// request + TCP connection
 	pub fn new_from_name(
 		hostname: String,
 		port: u16,
 		dns_resolvers: Vec<String>,
 		dns_port: u16,
-	) -> Result<RemoteConnection, ProtocolError> {
+	) -> Result<ProxyConnection, QosNetError> {
 		let ip = resolve_hostname(hostname, dns_resolvers, dns_port)?;
 
 		// Generate a new random u32 to get an ID. We'll use it to name our
@@ -42,23 +41,19 @@ impl RemoteConnection {
 
 		let tcp_addr = SocketAddr::new(ip, port);
 		let tcp_stream = TcpStream::connect(tcp_addr)?;
-		println!(
-			"done. Now persisting TcpStream with connection ID {}",
-			connection_id
-		);
-		Ok(RemoteConnection {
+		Ok(ProxyConnection {
 			id: connection_id,
 			ip: ip.to_string(),
 			tcp_stream,
 		})
 	}
 
-	/// Create a new `RemoteConnection` from an IP address. This results in a
+	/// Create a new `ProxyConnection` from an IP address. This results in a
 	/// new TCP connection
 	pub fn new_from_ip(
 		ip: String,
 		port: u16,
-	) -> Result<RemoteConnection, ProtocolError> {
+	) -> Result<ProxyConnection, QosNetError> {
 		// Generate a new random u32 to get an ID. We'll use it to name our
 		// socket. This will be our connection ID.
 		let mut rng = rand::thread_rng();
@@ -68,17 +63,17 @@ impl RemoteConnection {
 		let tcp_addr = SocketAddr::new(ip_addr, port);
 		let tcp_stream = TcpStream::connect(tcp_addr)?;
 
-		Ok(RemoteConnection { id: connection_id, ip, tcp_stream })
+		Ok(ProxyConnection { id: connection_id, ip, tcp_stream })
 	}
 }
 
-impl Read for RemoteConnection {
+impl Read for ProxyConnection {
 	fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
 		self.tcp_stream.read(buf)
 	}
 }
 
-impl Write for RemoteConnection {
+impl Write for ProxyConnection {
 	fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
 		self.tcp_stream.write(buf)
 	}
@@ -92,7 +87,7 @@ fn resolve_hostname(
 	hostname: String,
 	resolver_addrs: Vec<String>,
 	port: u16,
-) -> Result<IpAddr, ProtocolError> {
+) -> Result<IpAddr, QosNetError> {
 	let resolver_parsed_addrs = resolver_addrs
 		.iter()
 		.map(|resolver_address| {
@@ -114,7 +109,7 @@ fn resolve_hostname(
 	let resolver = Resolver::new(resolver_config, ResolverOpts::default())?;
 	let response = resolver.lookup_ip(hostname.clone())?;
 	response.iter().next().ok_or_else(|| {
-		ProtocolError::DNSResolutionError(format!(
+		QosNetError::DNSResolutionError(format!(
 			"Empty response when querying for host {hostname}"
 		))
 	})
@@ -128,16 +123,16 @@ mod test {
 		sync::Arc,
 	};
 
-	use rustls::RootCertStore;
+	use rustls::{RootCertStore, SupportedCipherSuite};
 
 	use super::*;
 
 	#[test]
-	fn can_fetch_tls_content_with_remote_connection_struct() {
+	fn can_fetch_tls_content_with_proxy_connection() {
 		let host = "api.turnkey.com";
 		let path = "/health";
 
-		let mut remote_connection = RemoteConnection::new_from_name(
+		let mut remote_connection = ProxyConnection::new_from_name(
 			host.to_string(),
 			443,
 			vec!["8.8.8.8".to_string()],
@@ -161,12 +156,11 @@ mod test {
 		let http_request = format!(
 			"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
 		);
-		println!("=== making HTTP request: \n{http_request}");
 
 		tls.write_all(http_request.as_bytes()).unwrap();
 		let ciphersuite = tls.conn.negotiated_cipher_suite().unwrap();
+		assert!(matches!(ciphersuite, SupportedCipherSuite::Tls13(_)));
 
-		println!("=== current ciphersuite: {:?}", ciphersuite.suite());
 		let mut response_bytes = Vec::new();
 		let read_to_end_result = tls.read_to_end(&mut response_bytes);
 
@@ -176,6 +170,9 @@ mod test {
 				|| (read_to_end_result
 					.is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof))
 		);
-		println!("{}", std::str::from_utf8(&response_bytes).unwrap());
+
+		let response_text = std::str::from_utf8(&response_bytes).unwrap();
+		assert!(response_text.contains("HTTP/1.1 200 OK"));
+		assert!(response_text.contains("currentTime"));
 	}
 }

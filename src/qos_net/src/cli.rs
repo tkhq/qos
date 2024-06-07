@@ -8,7 +8,7 @@ use qos_core::{
 	server::SocketServer,
 };
 
-use crate::processor::Processor;
+use crate::proxy::Proxy;
 
 /// "cid"
 pub const CID: &str = "cid";
@@ -68,7 +68,7 @@ impl CLI {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
-			SocketServer::listen(opts.addr(), Processor::new()).unwrap();
+			SocketServer::listen(opts.addr(), Proxy::new()).unwrap();
 		}
 	}
 }
