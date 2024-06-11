@@ -368,14 +368,52 @@ fn socket_fd(addr: &SocketAddress) -> Result<RawFd, IOError> {
 #[cfg(test)]
 mod test {
 
-	use std::{io::ErrorKind, sync::Arc};
-
-	use rustls::RootCertStore;
+	use std::{
+		os::{fd::AsRawFd, unix::net::UnixListener},
+		path::Path,
+		str::from_utf8,
+		thread,
+	};
 
 	use super::*;
 
 	fn timeval() -> TimeVal {
 		TimeVal::seconds(1)
+	}
+
+	// A simple test socket server which says "PONG" when you send "PING". Then
+	// it kills itself.
+	pub struct HarakiriPongServer {
+		path: String,
+	}
+
+	impl HarakiriPongServer {
+		pub fn new(path: String) -> Self {
+			Self { path }
+		}
+		pub fn start(&mut self) {
+			let listener = UnixListener::bind(&self.path).unwrap();
+			let path = self.path.clone();
+			thread::spawn(move || {
+				let (mut stream, _peer_addr) = listener.accept().unwrap();
+
+				// Read 4 bytes ("PING")
+				let mut buf = [0u8; 4];
+				stream.read_exact(&mut buf).unwrap();
+				if from_utf8(&buf).unwrap() == "PING" {
+					stream.write(b"PONG").unwrap();
+				}
+
+				// And shutdown the server
+				let _ = shutdown(listener.as_raw_fd(), Shutdown::Both);
+				let _ = close(listener.as_raw_fd());
+
+				let server_socket = Path::new(&path);
+				if server_socket.exists() {
+					drop(std::fs::remove_file(server_socket));
+				}
+			});
+		}
 	}
 
 	#[test]
@@ -385,8 +423,8 @@ mod test {
 		let unix_addr =
 			nix::sys::socket::UnixAddr::new("./stream_integration_test.sock")
 				.unwrap();
-		let addr = SocketAddress::Unix(unix_addr);
-		let listener = Listener::listen(addr.clone()).unwrap();
+		let addr: SocketAddress = SocketAddress::Unix(unix_addr);
+		let listener: Listener = Listener::listen(addr.clone()).unwrap();
 		let client = Stream::connect(&addr, timeval()).unwrap();
 		let server = listener.accept().unwrap();
 
@@ -398,51 +436,33 @@ mod test {
 		assert_eq!(data, resp);
 	}
 
-	// TODO: replace this test with something simpler. Local socket which does a
-	// simple echo?
 	#[test]
-	fn stream_implement_read_write_traits() {
-		let host = "api.turnkey.com";
-		let path = "/health";
+	fn stream_implements_read_write_traits() {
+		let socket_server_path = "./stream_implements_read_write_traits.sock";
 
+		// Start a barebone socket server which replies "Roger that." to any
+		// incoming request
+		let mut server =
+			HarakiriPongServer::new(socket_server_path.to_string());
+		thread::spawn(move || {
+			server.start();
+		});
+
+		// Now create a stream connecting to this mini-server
 		let unix_addr =
-			nix::sys::socket::UnixAddr::new("/tmp/host.sock").unwrap();
-		let addr: SocketAddress = SocketAddress::Unix(unix_addr);
-		let timeout = TimeVal::new(1, 0);
-		let mut stream = Stream::connect(&addr, timeout).unwrap();
+			nix::sys::socket::UnixAddr::new(socket_server_path).unwrap();
+		let addr = SocketAddress::Unix(unix_addr);
+		let mut pong_stream = Stream::connect(&addr, timeval()).unwrap();
 
-		let root_store =
-			RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.into() };
+		// Write "PING"
+		let written = pong_stream.write(b"PING").unwrap();
+		assert_eq!(written, 4);
 
-		let server_name: rustls::pki_types::ServerName<'_> =
-			host.try_into().unwrap();
-		let config: rustls::ClientConfig = rustls::ClientConfig::builder()
-			.with_root_certificates(root_store)
-			.with_no_client_auth();
-		let mut conn =
-			rustls::ClientConnection::new(Arc::new(config), server_name)
-				.unwrap();
-		let mut tls = rustls::Stream::new(&mut conn, &mut stream);
-
-		let http_request = format!(
-			"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
-		);
-		println!("=== making HTTP request: \n{http_request}");
-
-		tls.write_all(http_request.as_bytes()).unwrap();
-		let ciphersuite = tls.conn.negotiated_cipher_suite().unwrap();
-
-		println!("=== current ciphersuite: {:?}", ciphersuite.suite());
-		let mut response_bytes = Vec::new();
-		let read_to_end_result = tls.read_to_end(&mut response_bytes);
-
-		// Ignore eof errors: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
-		assert!(
-			read_to_end_result.is_ok()
-				|| (read_to_end_result
-					.is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof))
-		);
-		println!("{}", std::str::from_utf8(&response_bytes).unwrap());
+		// Read, and expect "PONG"
+		let mut resp = [0u8; 4];
+		let res = pong_stream.read(&mut resp).unwrap();
+		assert_eq!(res, 4);
+		assert_eq!(from_utf8(&resp).unwrap(), "PONG");
 	}
 
 	#[test]
