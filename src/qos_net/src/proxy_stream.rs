@@ -5,16 +5,15 @@ use std::io::{ErrorKind, Read, Write};
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::io::{SocketAddress, Stream, TimeVal};
 
-use crate::{error::QosNetError, proxy::ProxyMsg};
+use crate::{error::QosNetError, proxy_msg::ProxyMsg};
 
 /// Struct representing a remote connection
 /// This is going to be used by enclaves, on the other side of a socket
 pub struct ProxyStream {
-	/// socket address and timeout to create the underlying Stream.
-	/// Because `Stream` implements `drop` it can't be persisted here
-	/// unfortunately... TODO: figure out if this can work?
-	/// stream: Box<Stream>,
+	/// socket address to create the underlying `Stream` over which we send
+	/// `ProxyMsg`s
 	addr: SocketAddress,
+	/// timeout to create the underlying `Stream`
 	timeout: TimeVal,
 	/// Once a connection is established (successful `ConnectByName` or
 	/// ConnectByIp request), this connection ID is set the u32 in
@@ -28,11 +27,18 @@ pub struct ProxyStream {
 
 impl ProxyStream {
 	/// Create a new ProxyStream by targeting a hostname
-	/// `addr` is the USOCK or VSOCK to connect to (this socket should be bound
+	///
+	/// # Arguments
+	/// * `addr` - the USOCK or VSOCK to connect to (this socket should be bound
 	/// to a qos_net proxy) `timeout` is the timeout applied to the socket
-	/// `hostname` is the hostname to connect to (the remote qos_net proxy will
-	/// resolve DNS) `port` is the port the remote qos_net proxy should connect
-	/// to `dns_resolvers` and `dns_port` are the resolvers to use.
+	/// * `timeout` - the timeout to connect with
+	/// * `hostname` - the hostname to connect to (the remote qos_net proxy will
+	/// resolve DNS)
+	/// * `port` - the port the remote qos_net proxy should connect to
+	///   (typically: 80 or 443 for http/https)
+	/// * `dns_resolvers` - array of resolvers to use to resolve `hostname`
+	/// * `dns_port` - DNS port to use while resolving DNS (typically: 53 or
+	///   853)
 	pub fn connect_by_name(
 		addr: &SocketAddress,
 		timeout: TimeVal,
@@ -71,10 +77,14 @@ impl ProxyStream {
 	}
 
 	/// Create a new ProxyStream by targeting an IP address directly.
-	/// `addr` is the USOCK or VSOCK to connect to (this socket should be bound
+	///
+	/// # Arguments
+	/// * `addr` - the USOCK or VSOCK to connect to (this socket should be bound
 	/// to a qos_net proxy) `timeout` is the timeout applied to the socket
-	/// `ip` and `port` are the IP and port to connect to (on the outside of the
-	/// enclave)
+	/// * `timeout` - the timeout to connect with
+	/// * `ip` - the IP the remote qos_net proxy should connect to
+	/// * `port` - the port the remote qos_net proxy should connect to
+	///   (typically: 80 or 443 for http/https)
 	pub fn connect_by_ip(
 		addr: &SocketAddress,
 		timeout: TimeVal,

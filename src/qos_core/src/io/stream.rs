@@ -381,8 +381,8 @@ mod test {
 		TimeVal::seconds(1)
 	}
 
-	// A simple test socket server which says "PONG" when you send "PING". Then
-	// it kills itself.
+	// A simple test socket server which says "PONG" when you send "PING".
+	// Then it kills itself.
 	pub struct HarakiriPongServer {
 		path: String,
 	}
@@ -400,11 +400,13 @@ mod test {
 				// Read 4 bytes ("PING")
 				let mut buf = [0u8; 4];
 				stream.read_exact(&mut buf).unwrap();
+
+				// Send "PONG" if "PING" was sent
 				if from_utf8(&buf).unwrap() == "PING" {
 					stream.write(b"PONG").unwrap();
 				}
 
-				// And shutdown the server
+				// Then shutdown the server
 				let _ = shutdown(listener.as_raw_fd(), Shutdown::Both);
 				let _ = close(listener.as_raw_fd());
 
