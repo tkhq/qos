@@ -36,6 +36,8 @@ pub enum QosNetError {
 	/// buffer and the data doesn't fit. The first `usize` is the size of the
 	/// received data, the second `usize` is the size of the buffer.
 	ReadOverflow(usize, usize),
+	/// Happens when too many connections are opened in the proxy
+	TooManyConnections(usize),
 }
 
 impl From<std::io::Error> for QosNetError {

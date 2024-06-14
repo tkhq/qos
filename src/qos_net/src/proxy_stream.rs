@@ -29,6 +29,7 @@ impl ProxyStream {
 	/// Create a new ProxyStream by targeting a hostname
 	///
 	/// # Arguments
+	///
 	/// * `addr` - the USOCK or VSOCK to connect to (this socket should be bound
 	/// to a qos_net proxy) `timeout` is the timeout applied to the socket
 	/// * `timeout` - the timeout to connect with
@@ -109,6 +110,24 @@ impl ProxyStream {
 						remote_hostname: None,
 					})
 				}
+				_ => Err(QosNetError::InvalidMsg),
+			},
+			Err(_) => Err(QosNetError::InvalidMsg),
+		}
+	}
+
+	/// Close the remote connection
+	pub fn close(&mut self) -> Result<(), QosNetError> {
+		let stream: Stream = Stream::connect(&self.addr, self.timeout)?;
+		let req = ProxyMsg::CloseRequest { connection_id: self.connection_id }
+			.try_to_vec()
+			.expect("ProtocolMsg can always be serialized.");
+		stream.send(&req)?;
+		let resp_bytes = stream.recv()?;
+
+		match ProxyMsg::try_from_slice(&resp_bytes) {
+			Ok(resp) => match resp {
+				ProxyMsg::CloseResponse { connection_id: _ } => Ok(()),
 				_ => Err(QosNetError::InvalidMsg),
 			},
 			Err(_) => Err(QosNetError::InvalidMsg),
@@ -301,6 +320,7 @@ mod test {
 			53,
 		)
 		.unwrap();
+		assert_eq!(stream.num_connections(), 1);
 
 		assert_eq!(stream.remote_hostname, Some("api.turnkey.com".to_string()));
 
@@ -337,6 +357,10 @@ mod test {
 		let response_text = std::str::from_utf8(&response_bytes).unwrap();
 		assert!(response_text.contains("HTTP/1.1 200 OK"));
 		assert!(response_text.contains("currentTime"));
+
+		let closed = stream.close();
+		assert!(closed.is_ok());
+		assert_eq!(stream.num_connections(), 0);
 	}
 
 	/// Struct representing a stream, with direct access to the proxy.
@@ -379,6 +403,17 @@ mod test {
 				},
 				Err(_) => Err(QosNetError::InvalidMsg),
 			}
+		}
+
+		pub fn close(&mut self) -> Result<(), QosNetError> {
+			match self.proxy.close(self.connection_id) {
+				ProxyMsg::CloseResponse { connection_id: _ } => Ok(()),
+				_ => Err(QosNetError::InvalidMsg),
+			}
+		}
+
+		pub fn num_connections(&self) -> usize {
+			self.proxy.num_connections()
 		}
 	}
 

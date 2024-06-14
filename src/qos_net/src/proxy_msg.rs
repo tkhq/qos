@@ -41,6 +41,16 @@ pub enum ProxyMsg {
 		/// The remote host IP, e.g. "1.2.3.4"
 		remote_ip: String,
 	},
+	/// Request from the enclave app to close the connection
+	CloseRequest {
+		/// Connection ID
+		connection_id: u32,
+	},
+	/// Response for `CloseRequest`
+	CloseResponse {
+		/// Connection ID
+		connection_id: u32,
+	},
 	/// Read from a remote connection
 	ReadRequest {
 		/// A connection ID from `ConnectResponse`
