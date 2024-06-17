@@ -9,9 +9,9 @@ use hickory_resolver::error::ResolveError;
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum QosNetError {
 	/// Error variant encapsulating OS IO errors
-	IOError,
+	IOError(String),
 	/// Error variant encapsulating OS IO errors
-	QOSIOError,
+	QOSIOError(String),
 	/// The message is too large.
 	OversizeMsg,
 	/// Payload is too big. See `MAX_ENCODED_MSG_LEN` for the upper bound on
@@ -41,14 +41,16 @@ pub enum QosNetError {
 }
 
 impl From<std::io::Error> for QosNetError {
-	fn from(_err: std::io::Error) -> Self {
-		Self::IOError
+	fn from(err: std::io::Error) -> Self {
+		let msg = format!("{err:?}");
+		Self::IOError(msg)
 	}
 }
 
 impl From<qos_core::io::IOError> for QosNetError {
-	fn from(_err: qos_core::io::IOError) -> Self {
-		Self::QOSIOError
+	fn from(err: qos_core::io::IOError) -> Self {
+		let msg = format!("{err:?}");
+		Self::QOSIOError(msg)
 	}
 }
 
