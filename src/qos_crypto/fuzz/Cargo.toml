@@ -1,0 +1,27 @@
+[package]
+name = "qos_crypto_fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+qos_crypto = { path = "../" }
+arbitrary = { version = "1", features = ["derive"] }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "1_shamir_generate_reconstruct"
+path = "fuzz_targets/1_shamir_generate_reconstruct.rs"
+test = false
+doc = false
