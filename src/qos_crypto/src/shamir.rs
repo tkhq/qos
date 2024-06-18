@@ -165,6 +165,10 @@ fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 /// This is an old implementation. We are only keeping it here to show that
 /// the new implementation is backwards compatible.
 ///
+/// The known differences are:
+/// n=1 k=1 should be valid but triggers `SharingMinThreshold` in new impl
+/// n=2 k=1 should be valid triggers `SharingMinThreshold` in new impl
+///
 /// Generate n shares requiring k shares to reconstruct.
 #[must_use]
 pub fn deprecated_shares_generate(
@@ -213,6 +217,10 @@ pub fn shares_generate(
 ///
 /// The only case when this is used is for when we have a set of 1 share, which
 /// can be useful for development.
+///
+/// The known differences are:
+/// n=1 k=1 should be valid but triggers `SharingMinThreshold` in new impl
+/// n=2 k=1 should be valid triggers `SharingMinThreshold` in new impl
 ///
 /// Reconstruct our secret from the given `shares`.
 pub fn deprecated_shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
