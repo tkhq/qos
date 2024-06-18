@@ -210,35 +210,72 @@ pub fn shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
 
 #[cfg(test)]
 mod test {
-	use rand::prelude::SliceRandom;
-
+    use rand::prelude::SliceRandom;
+    use vsss_rs::Gf256;
+    
 	use super::*;
 	#[test]
 	fn make_and_reconstruct_shares() {
-		let secret = b"this is a crazy secret";
-		let n = 6;
-		let k = 3;
-		let all_shares = shares_generate(secret, n, k);
+        let secret = b"this is a crazy secret";
+        let n = 6;
+        let k = 3;
+        let all_shares = shares_generate(secret, n, k);
 
-		// Reconstruct with all the shares
-		let shares = all_shares.clone();
-		let reconstructed = shares_reconstruct(&shares);
-		assert_eq!(secret.to_vec(), reconstructed);
+        println!("shamir.rs");
+        for share in all_shares.clone() {
+            println!("{:?}", share);
+            println!("{}", share.len());
+        }
 
-		// Reconstruct with enough shares
-		let shares = &all_shares[..k];
-		let reconstructed = shares_reconstruct(shares);
-		assert_eq!(secret.to_vec(), reconstructed);
+        // example share generation code
+        // not used since the different internal RNGs won't create the same shares
+        //
+        // let mut osrng = OsRng::default();
+        // let shares = Gf256::split_array(k, n, secret, &mut osrng).unwrap();
+        // assert_eq!(shares.len(), n);
+        // println!("vsss-rs");
+        // // print all shares
+        // for share in shares {
+        //     println!("{:?}", share);
+        //     println!("{}", share.len());
+        // }
 
-		// Reconstruct with not enough shares
-		let shares = &all_shares[..(k - 1)];
-		let reconstructed = shares_reconstruct(shares);
-		assert!(secret.to_vec() != reconstructed);
+        // Reconstruct with all the shares
+        let shares = all_shares.clone();
+        let reconstructed = shares_reconstruct(&shares);
+        assert_eq!(secret.to_vec(), reconstructed);
+        assert_eq!(shares.len(), n);
+        println!("reconstructed shamir.rs: {:?}", reconstructed);
 
-		// Reconstruct with enough shuffled shares
-		let mut shares = all_shares.clone()[..k].to_vec();
-		shares.shuffle(&mut rand::thread_rng());
-		let reconstructed = shares_reconstruct(&shares);
-		assert_eq!(secret.to_vec(), reconstructed);
+        let vsss_reconstructed = Gf256::combine_array(all_shares.clone()).unwrap();
+        assert_eq!(reconstructed, vsss_reconstructed);
+        println!("reconstructed vsss-rs: {:?}", vsss_reconstructed);
+
+        // Reconstruct with enough shares
+        let shares = &all_shares[..k];
+        let reconstructed = shares_reconstruct(shares);
+        assert_eq!(secret.to_vec(), reconstructed);
+        let vsss_reconstructed = Gf256::combine_array(shares).unwrap();
+        assert_eq!(reconstructed, vsss_reconstructed);
+
+        // Reconstruct with not enough shares
+        let shares = &all_shares[..(k - 1)];
+        let reconstructed = shares_reconstruct(shares);
+        assert!(secret.to_vec() != reconstructed);
+        let vsss_reconstructed = Gf256::combine_array(shares).unwrap();
+        assert_eq!(reconstructed, vsss_reconstructed);
+        assert!(secret.to_vec() != vsss_reconstructed);
+
+        // Reconstruct with enough shuffled shares
+        let mut shares = all_shares.clone()[..k].to_vec();
+        shares.shuffle(&mut rand::thread_rng());
+        let reconstructed = shares_reconstruct(&shares);
+        assert_eq!(secret.to_vec(), reconstructed);
+        let vsss_reconstructed = Gf256::combine_array(shares).unwrap();
+        assert_eq!(reconstructed, vsss_reconstructed);
+        assert_eq!(secret.to_vec(), vsss_reconstructed);
+
 	}
+
+
 }
