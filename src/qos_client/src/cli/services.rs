@@ -805,7 +805,7 @@ pub fn generate_reshard_input(
 	let quorum_keys = quorum_key_paths
 		.iter()
 		.map(|path| {
-			P256Public::from_hex_file(&path)
+			P256Public::from_hex_file(path)
 				.map_err(|_| Error::FailedToRead {
 					path: path.clone(),
 					error: "p256 error".to_string(),
@@ -847,7 +847,7 @@ fn extract_nitro_config<P: AsRef<Path>>(
 		pcr1,
 		pcr2,
 		pcr3,
-		qos_commit: "".to_string(),
+		qos_commit: String::new(),
 		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 	}
 }
@@ -1558,8 +1558,8 @@ pub(crate) fn reshard_re_encrypt_share(
 	let mut reshard_input = read_reshard_input(reshard_input_path)?;
 	reshard_input.deterministic();
 	let attestation_doc =
-		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
-	let mut new_share_set = get_share_set(&new_share_set_dir);
+		read_attestation_doc(attestation_doc_path, unsafe_skip_attestation)?;
+	let mut new_share_set = get_share_set(new_share_set_dir);
 	let member = QuorumMember { pub_key: pair.public_key_bytes()?, alias };
 	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
 
@@ -1622,7 +1622,7 @@ pub(crate) fn reshard_re_encrypt_share(
 			.map(|b| qos_hex::encode(b))
 			.collect::<Vec<String>>()
 			.join(", ");
-		panic!("quorum keys given did not match keys in reshard input: difference: {}", keys);
+		panic!("quorum keys given did not match keys in reshard input: difference: {keys}");
 	}
 
 	let shares = provision_shares
@@ -1855,12 +1855,12 @@ pub(crate) fn verify_reshard_output(
 		let dir_path = Path::new(&share_dir).join(dir_name);
 		fs::create_dir(&dir_path)
 			.map_err(|e: io::Error| {
-				panic!("failed to create dir {:?}: {}", dir_path, e)
+				panic!("failed to create dir {dir_path:?}: {e}")
 			})
 			.unwrap();
 		let quorum_key_path =
-			dir_path.clone().join(format!("quorum_key.{}", PUB_EXT));
-		let share_path = dir_path.join(format!("{}.{}", alias, SHARE_EXT));
+			dir_path.clone().join(format!("quorum_key.{PUB_EXT}"));
+		let share_path = dir_path.join(format!("{alias}.{SHARE_EXT}"));
 
 		fs::write(&quorum_key_path, qos_hex::encode(&quorum_key)).map_err(
 			|e| Error::FailedToWrite {
@@ -2031,7 +2031,8 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			quorum_pair.to_master_seed(),
 			1,
 			1,
-		);
+		)
+		.unwrap();
 		assert_eq!(
 			shares.len(),
 			1,
@@ -2149,7 +2150,8 @@ pub(crate) fn shamir_split(
 		error: e.to_string(),
 	})?;
 	let shares =
-		qos_crypto::shamir::shares_generate(&secret, total_shares, threshold);
+		qos_crypto::shamir::shares_generate(&secret, total_shares, threshold)
+			.expect("failed to generate shares");
 
 	for (i, share) in shares.iter().enumerate() {
 		let file_name = format!("{}.share", i + 1);
@@ -2175,7 +2177,7 @@ pub(crate) fn shamir_reconstruct(
 		.collect::<Result<Vec<Vec<u8>>, Error>>()?;
 
 	let secret =
-		Zeroizing::new(qos_crypto::shamir::shares_reconstruct(&shares));
+		Zeroizing::new(qos_crypto::shamir::shares_reconstruct(shares).unwrap());
 
 	write_with_msg(output_path.as_ref(), &secret, "Reconstructed secret");
 

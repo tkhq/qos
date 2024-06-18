@@ -287,7 +287,8 @@ pub(in crate::protocol) fn reshard_provision(
 				&master_seed[..],
 				reshard_input.new_share_set.members.len(),
 				reshard_input.new_share_set.threshold as usize,
-			);
+			)
+			.map_err(|e| ProtocolError::QosCrypto(format!("{e:?}")))?;
 
 			// Now, let's create the new shards
 			let member_outputs =
@@ -356,6 +357,7 @@ mod tests {
 					4,
 					3, // old share set threshold
 				)
+				.unwrap()
 				.iter()
 				.map(|s| eph_pair.public_key().encrypt(s).unwrap())
 				.collect();
@@ -500,6 +502,7 @@ mod tests {
 			) {
 				let secret: [u8; 32] =
 					qos_crypto::shamir::shares_reconstruct(&combo)
+						.unwrap()
 						.try_into()
 						.unwrap();
 				let quorum_key = P256Pair::from_master_seed(&secret).unwrap();
@@ -524,6 +527,7 @@ mod tests {
 			4,
 			reshard_input.new_share_set.threshold as usize,
 		)
+		.unwrap()
 		.iter()
 		.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 		.collect();
@@ -597,6 +601,7 @@ mod tests {
 			4,
 			reshard_input.new_share_set.threshold as usize,
 		)
+		.unwrap()
 		.iter()
 		.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 		.collect();

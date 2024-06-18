@@ -5,6 +5,9 @@
 use std::{convert::TryFrom, iter};
 
 use rand::Rng;
+use vsss_rs::Gf256;
+
+use crate::QosCryptoError;
 
 // lookup tables for log and exp of polynomials in GF(256),
 #[rustfmt::skip]
@@ -161,7 +164,11 @@ fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 
 /// Generate n shares requiring k shares to reconstruct.
 #[must_use]
-pub fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
+pub fn deprecated_shares_generate(
+	secret: &[u8],
+	n: usize,
+	k: usize,
+) -> Vec<Vec<u8>> {
 	let mut shares = vec![vec![]; n];
 
 	// we need to store x for each point somewhere, so just prepend
@@ -186,8 +193,19 @@ pub fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
 	shares
 }
 
+/// Generate n shares requiring k shares to reconstruct.
+pub fn shares_generate(
+	secret: &[u8],
+	n: usize,
+	k: usize,
+) -> Result<Vec<Vec<u8>>, QosCryptoError> {
+	use rand_core::OsRng;
+
+	Gf256::split_array(k, n, secret, OsRng).map_err(QosCryptoError::Vsss)
+}
+
 /// Reconstruct our secret from the given `shares`.
-pub fn shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
+pub fn deprecated_shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
 	let len = shares.iter().map(|s| s.as_ref().len()).min().unwrap_or(0);
 	// rather than erroring, return empty secrets if input is malformed.
 	// This matches the behavior of bad shares (random output) and simplifies
@@ -208,6 +226,13 @@ pub fn shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
 	secret
 }
 
+/// Reconstruct our secret from the given `shares`.
+pub fn shares_reconstruct<B: AsRef<[Vec<u8>]>>(
+	shares: B,
+) -> Result<Vec<u8>, QosCryptoError> {
+	Gf256::combine_array(shares).map_err(QosCryptoError::Vsss)
+}
+
 #[cfg(test)]
 mod test {
 	use rand::prelude::SliceRandom;
@@ -218,31 +243,31 @@ mod test {
 		let secret = b"this is a crazy secret";
 		let n = 6;
 		let k = 3;
-		let all_shares = shares_generate(secret, n, k);
+		let all_shares = shares_generate(secret, n, k).unwrap();
 
 		// Reconstruct with all the shares
 		let shares = all_shares.clone();
-		let reconstructed = shares_reconstruct(&shares);
+		let reconstructed = shares_reconstruct(shares).unwrap();
 		assert_eq!(secret.to_vec(), reconstructed);
 
 		// Reconstruct with enough shares
 		let shares = &all_shares[..k];
-		let reconstructed = shares_reconstruct(shares);
+		let reconstructed = shares_reconstruct(shares).unwrap();
 		assert_eq!(secret.to_vec(), reconstructed);
 
 		// Reconstruct with not enough shares
 		let shares = &all_shares[..(k - 1)];
-		let reconstructed = shares_reconstruct(shares);
+		let reconstructed = shares_reconstruct(shares).unwrap();
 		assert!(secret.to_vec() != reconstructed);
 
 		// Reconstruct with enough shuffled shares
 		let mut shares = all_shares.clone()[..k].to_vec();
 		shares.shuffle(&mut rand::thread_rng());
-		let reconstructed = shares_reconstruct(&shares);
+		let reconstructed = shares_reconstruct(&shares).unwrap();
 		assert_eq!(secret.to_vec(), reconstructed);
 
 		for combo in crate::n_choose_k::combinations(&all_shares, k) {
-			let reconstructed = shares_reconstruct(&combo);
+			let reconstructed = shares_reconstruct(&combo).unwrap();
 			assert_eq!(secret.to_vec(), reconstructed);
 		}
 	}

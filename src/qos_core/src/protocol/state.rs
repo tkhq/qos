@@ -723,7 +723,7 @@ mod handlers {
 					signature: signature.clone(),
 				},
 			)
-			.map(|_| ProtocolMsg::InjectKeyResponse)
+			.map(|()| ProtocolMsg::InjectKeyResponse)
 			.map_err(ProtocolMsg::ProtocolErrorResponse);
 
 			Some(result)

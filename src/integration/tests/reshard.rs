@@ -309,7 +309,7 @@ async fn reshard_e2e() {
 					qos_hex::decode_from_vec(quorum_key.unwrap()).unwrap();
 				seen_shares
 					.entry(quorum_key_pub_bytes)
-					.or_insert_with(Vec::new)
+					.or_default()
 					.push(decrypted_share)
 			}
 		}
@@ -321,6 +321,7 @@ async fn reshard_e2e() {
 		) {
 			let secret: [u8; 32] =
 				qos_crypto::shamir::shares_reconstruct(&combo)
+					.unwrap()
 					.try_into()
 					.unwrap();
 

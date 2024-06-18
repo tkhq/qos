@@ -33,7 +33,8 @@ impl SecretBuilder {
 
 	/// Attempt to reconstruct the secret from the
 	pub(crate) fn build(&self) -> Result<Secret, ProtocolError> {
-		let secret = qos_crypto::shamir::shares_reconstruct(&self.shares);
+		let secret = qos_crypto::shamir::shares_reconstruct(&self.shares)
+			.map_err(|e| ProtocolError::QosCrypto(format!("{e:?}")))?;
 
 		if secret.is_empty() {
 			return Err(ProtocolError::ReconstructionErrorEmptySecret);
@@ -250,6 +251,7 @@ mod test {
 		let quorum_key = quorum_pair.to_master_seed();
 		let encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
+				.unwrap()
 				.iter()
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();
@@ -307,6 +309,7 @@ mod test {
 			P256Pair::generate().unwrap().to_master_seed().to_vec();
 		let encrypted_shares: Vec<_> =
 			shares_generate(&random_key, 4, threshold)
+				.unwrap()
 				.iter()
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();
@@ -351,6 +354,7 @@ mod test {
 
 		let encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
+				.unwrap()
 				.iter()
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();
@@ -401,6 +405,7 @@ mod test {
 		let quorum_key = quorum_pair.to_master_seed();
 		let mut encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
+				.unwrap()
 				.iter()
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();
@@ -437,6 +442,7 @@ mod test {
 		let quorum_key = quorum_pair.to_master_seed();
 		let mut encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
+				.unwrap()
 				.iter()
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();
@@ -479,6 +485,7 @@ mod test {
 		let quorum_key = quorum_pair.to_master_seed();
 		let mut encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
+				.unwrap()
 				.iter()
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();

@@ -165,6 +165,8 @@ pub enum ProtocolError {
 	/// Internal error indicating that reshard provisioner was not initialized
 	/// on boot.
 	MissingReshardProvisioner,
+	/// Error from the qos crypto library.
+	QosCrypto(String),
 }
 
 impl From<std::io::Error> for ProtocolError {

@@ -136,7 +136,8 @@ pub(in crate::protocol) fn boot_genesis(
 		master_seed,
 		genesis_set.members.len(),
 		genesis_set.threshold as usize,
-	);
+	)
+	.map_err(|e| ProtocolError::QosCrypto(format!("{e:?}")))?;
 
 	let member_outputs: Result<Vec<_>, _> =
 		zip(shares, genesis_set.members.iter().cloned())
@@ -254,6 +255,7 @@ mod test {
 			qos_crypto::shamir::shares_reconstruct(
 				&shares[0..threshold as usize],
 			)
+			.unwrap()
 			.try_into()
 			.unwrap();
 		let reconstructed_quorum_key =
