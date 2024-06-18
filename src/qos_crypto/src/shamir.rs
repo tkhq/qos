@@ -5,6 +5,7 @@
 use std::{convert::TryFrom, iter};
 
 use rand::Rng;
+use vsss_rs::Gf256;
 
 // lookup tables for log and exp of polynomials in GF(256),
 #[rustfmt::skip]
@@ -208,10 +209,20 @@ pub fn shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
 	secret
 }
 
+/// Reconstruct our secret from the given `shares`.
+/// Experimental replacement of shares_reconstruct()
+/// TODO error case behavior
+pub fn shares_reconstruct2<S: AsRef<[Vec<u8>]>>(shares: S) -> Vec<u8> {
+
+    // TODO error handling
+    // example:
+    // `Result::unwrap()` on an `Err` value: SharingMinThreshold
+    Gf256::combine_array(shares).unwrap()
+}
+
 #[cfg(test)]
 mod test {
     use rand::prelude::SliceRandom;
-    use vsss_rs::Gf256;
     
 	use super::*;
 	#[test]
@@ -247,9 +258,14 @@ mod test {
         assert_eq!(shares.len(), n);
         println!("reconstructed shamir.rs: {:?}", reconstructed);
 
-        let vsss_reconstructed = Gf256::combine_array(all_shares.clone()).unwrap();
+        let vsss_reconstructed: Vec<u8> = Gf256::combine_array(all_shares.clone()).unwrap();
         assert_eq!(reconstructed, vsss_reconstructed);
         println!("reconstructed vsss-rs: {:?}", vsss_reconstructed);
+
+        let vsss_reconstructed2: Vec<u8> = shares_reconstruct2(&shares);
+        assert_eq!(reconstructed, vsss_reconstructed2);
+        println!("reconstructed vsss-rs2: {:?}", vsss_reconstructed2);
+
 
         // Reconstruct with enough shares
         let shares = &all_shares[..k];
@@ -257,6 +273,8 @@ mod test {
         assert_eq!(secret.to_vec(), reconstructed);
         let vsss_reconstructed = Gf256::combine_array(shares).unwrap();
         assert_eq!(reconstructed, vsss_reconstructed);
+        let vsss_reconstructed2 = shares_reconstruct2(shares);
+        assert_eq!(secret.to_vec(), vsss_reconstructed2);
 
         // Reconstruct with not enough shares
         let shares = &all_shares[..(k - 1)];
@@ -265,6 +283,9 @@ mod test {
         let vsss_reconstructed = Gf256::combine_array(shares).unwrap();
         assert_eq!(reconstructed, vsss_reconstructed);
         assert!(secret.to_vec() != vsss_reconstructed);
+        let vsss_reconstructed2 = shares_reconstruct2(shares);
+        assert!(secret.to_vec() != vsss_reconstructed2);
+        assert_eq!(reconstructed, vsss_reconstructed2);
 
         // Reconstruct with enough shuffled shares
         let mut shares = all_shares.clone()[..k].to_vec();
@@ -274,6 +295,15 @@ mod test {
         let vsss_reconstructed = Gf256::combine_array(shares).unwrap();
         assert_eq!(reconstructed, vsss_reconstructed);
         assert_eq!(secret.to_vec(), vsss_reconstructed);
+
+        // Reconstruct with no shares
+        let shares = vec![];
+        let reconstructed = shares_reconstruct(&shares);
+        // special return case
+        assert_eq!(reconstructed, vec![]);
+        // explicit error
+        let vsss_reconstructed = Gf256::combine_array(shares);
+        assert_eq!(vsss_rs::Error::SharingMinThreshold, vsss_reconstructed.unwrap_err());
 
 	}
 
