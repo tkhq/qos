@@ -2027,12 +2027,11 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 
 	// Shard it with N=1, K=1
 	let share = {
-		let mut shares = qos_crypto::shamir::shares_generate(
+		let mut shares = qos_crypto::shamir::deprecated_shares_generate(
 			quorum_pair.to_master_seed(),
 			1,
 			1,
-		)
-		.unwrap();
+		);
 		assert_eq!(
 			shares.len(),
 			1,

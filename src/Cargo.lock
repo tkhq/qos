@@ -1442,6 +1442,7 @@ dependencies = [
  "qos_test_primitives",
  "serde",
  "serde_bytes",
+ "vsss-rs",
 ]
 
 [[package]]

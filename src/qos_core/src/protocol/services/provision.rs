@@ -33,8 +33,14 @@ impl SecretBuilder {
 
 	/// Attempt to reconstruct the secret from the
 	pub(crate) fn build(&self) -> Result<Secret, ProtocolError> {
-		let secret = qos_crypto::shamir::shares_reconstruct(&self.shares)
-			.map_err(|e| ProtocolError::QosCrypto(format!("{e:?}")))?;
+		let secret = if self.shares.len() == 1 {
+			// For development, turnkey has a share set of 1, which is not
+			// supported by vsss-rs
+			qos_crypto::shamir::deprecated_shares_reconstruct(&self.shares)
+		} else {
+			qos_crypto::shamir::shares_reconstruct(&self.shares)
+				.map_err(|e| ProtocolError::QosCrypto(format!("{e:?}")))?
+		};
 
 		if secret.is_empty() {
 			return Err(ProtocolError::ReconstructionErrorEmptySecret);
