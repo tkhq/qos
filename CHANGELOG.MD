@@ -2,8 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+This project used to adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) but we've since
+moved out of versioning: `mono` references `qos` with a submodule (git SHA pointer).
+
+If you're changing QOS in a meaningful way, please add a changelog entry, but no need to group these in version sections.
 
 Types of changes:
 
@@ -13,6 +16,15 @@ Deprecated: for soon-to-be removed features.
 Removed: for now removed features.
 Fixed: for any bug fixes.
 Security: in case of vulnerabilities.
+
+## Added: `qos_net` crate
+
+In PR #449 we introduce `qos_net`, a crate which contains a socket<>TCP proxy to let enclave application communicate with the outside world.
+
+This new crate contains:
+
+- a new CLI and associated binary containing the proxy logic, running outside enclaves (on the host side)
+- a `ProxyStream` abstraction to let enclaves send `ProxyMsg` messages to `Open`, `Read`, `Write` or `Flush` proxy-held connections.
 
 ## [0.4.0] 2024.4.9
 
