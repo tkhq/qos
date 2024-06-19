@@ -2,7 +2,7 @@
 
 use std::{fs, os::unix::fs::PermissionsExt, path::Path};
 
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use qos_p256::P256Pair;
 
 use crate::protocol::{services::boot::ManifestEnvelope, ProtocolError};
@@ -158,7 +158,7 @@ impl Handles {
 	) -> Result<(), ProtocolError> {
 		Self::write_as_read_only(
 			&self.manifest,
-			&manifest_envelope.try_to_vec()?,
+			&borsh::to_vec(manifest_envelope)?,
 			ProtocolError::FailedToPutManifestEnvelope,
 		)
 	}
@@ -182,7 +182,7 @@ impl Handles {
 			&self.manifest,
 			std::fs::Permissions::from_mode(0o666),
 		)?;
-		fs::write(&self.manifest, manifest_envelope.try_to_vec()?)
+		fs::write(&self.manifest, borsh::to_vec(&manifest_envelope)?)
 			.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?;
 
 		// Set the permissions back to read only

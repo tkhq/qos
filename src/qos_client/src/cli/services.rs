@@ -9,7 +9,7 @@ use std::{
 };
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use qos_core::protocol::{
 	msg::ProtocolMsg,
 	services::{
@@ -141,8 +141,8 @@ pub enum Error {
 	SecretDoesNotMatch,
 }
 
-impl From<borsh::maybestd::io::Error> for Error {
-	fn from(_: borsh::maybestd::io::Error) -> Self {
+impl From<borsh::io::Error> for Error {
+	fn from(_: borsh::io::Error) -> Self {
 		Self::BorshError
 	}
 }
@@ -511,7 +511,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	write_with_msg(
 		&genesis_output_path,
-		&genesis_output.deref().try_to_vec().unwrap(),
+		&borsh::to_vec(genesis_output.deref()).unwrap(),
 		"`GenesisOutput`",
 	);
 
@@ -747,7 +747,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 
 	write_with_msg(
 		manifest_path.as_ref(),
-		&manifest.try_to_vec().unwrap(),
+		&borsh::to_vec(&manifest).unwrap(),
 		"Manifest",
 	);
 
@@ -850,7 +850,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	));
 	write_with_msg(
 		&approval_path,
-		&approval.try_to_vec().expect("Failed to serialize approval"),
+		&borsh::to_vec(&approval).expect("Failed to serialize approval"),
 		"Manifest Approval",
 	);
 
@@ -988,8 +988,7 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	);
 	write_with_msg(
 		&path,
-		&manifest_envelope
-			.try_to_vec()
+		&borsh::to_vec(&manifest_envelope)
 			.expect("Failed to serialize manifest envelope"),
 		"Manifest Envelope",
 	);
@@ -1055,7 +1054,7 @@ pub(crate) fn export_key<P: AsRef<Path>>(
 
 	write_with_msg(
 		encrypted_quorum_key_path.as_ref(),
-		&encrypted_quorum_key.try_to_vec().expect("valid borsh. qed."),
+		&borsh::to_vec(&encrypted_quorum_key).expect("valid borsh. qed."),
 		"Encrypted Quorum Key",
 	);
 
@@ -1178,9 +1177,7 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 	);
 	write_with_msg(
 		manifest_envelope_path.as_ref(),
-		&manifest_envelope
-			.try_to_vec()
-			.expect("manifest enevelope is valid borsh"),
+		&borsh::to_vec(&manifest_envelope).expect("manifest enevelope is valid borsh"),
 		"Manifest envelope",
 	);
 }
@@ -1293,13 +1290,12 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		eph_pub.encrypt(plaintext_share).expect("Envelope encryption error")
 	};
 
-	let approval = Approval {
+	let approval = borsh::to_vec(&Approval {
 		signature: pair
 			.sign(&manifest_envelope.manifest.qos_hash())
 			.expect("Failed to sign"),
 		member,
-	}
-	.try_to_vec()
+	})
 	.expect("Could not serialize Approval");
 
 	write_with_msg(approval_path.as_ref(), &approval, "Share Set Approval");

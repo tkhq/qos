@@ -13,7 +13,7 @@ pub mod yubikey;
 pub mod request {
 	use std::io::Read;
 
-	use borsh::{BorshDeserialize, BorshSerialize};
+	use borsh::BorshDeserialize;
 	use qos_core::protocol::msg::ProtocolMsg;
 
 	const MAX_SIZE: u64 = u32::MAX as u64;
@@ -24,7 +24,7 @@ pub mod request {
 
 		let response = ureq::post(url)
 			.send_bytes(
-				&msg.try_to_vec()
+				&borsh::to_vec(msg)
 					.expect("ProtocolMsg can always be serialized. qed."),
 			)
 			.map_err(|e| match e {

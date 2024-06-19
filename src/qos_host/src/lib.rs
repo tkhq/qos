@@ -27,7 +27,7 @@ use axum::{
 	routing::{get, post},
 	Json, Router,
 };
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use qos_core::{
 	client::Client,
 	io::{SocketAddress, TimeVal, TimeValLike},
@@ -173,8 +173,7 @@ impl HostServer {
 	) -> impl IntoResponse {
 		println!("Enclave health...");
 
-		let encoded_request = ProtocolMsg::StatusRequest
-			.try_to_vec()
+		let encoded_request = borsh::to_vec(&ProtocolMsg::StatusRequest)
 			.expect("ProtocolMsg can always serialize. qed.");
 		let encoded_response = match state.enclave_client.send(&encoded_request)
 		{
@@ -222,8 +221,7 @@ impl HostServer {
 	) -> Result<Json<EnclaveInfo>, Error> {
 		println!("Enclave info...");
 
-		let enc_status_req = ProtocolMsg::StatusRequest
-			.try_to_vec()
+		let enc_status_req = borsh::to_vec(&ProtocolMsg::StatusRequest)
 			.expect("ProtocolMsg can always serialize. qed.");
 		let enc_status_resp = state.enclave_client.send(&enc_status_req)
 			.map_err(|e|
@@ -243,8 +241,7 @@ impl HostServer {
 			}
 		};
 
-		let enc_manifest_envelope_req = ProtocolMsg::ManifestEnvelopeRequest
-			.try_to_vec()
+		let enc_manifest_envelope_req = borsh::to_vec(&ProtocolMsg::ManifestEnvelopeRequest)
 			.expect("ProtocolMsg can always serialize. qed.");
 		let enc_manifest_envelope_resp = state
 			.enclave_client
@@ -299,8 +296,7 @@ impl HostServer {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
 			return (
 				StatusCode::BAD_REQUEST,
-				ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg)
-					.try_to_vec()
+				borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg))
 					.expect("ProtocolMsg can always serialize. qed."),
 			);
 		}
@@ -313,10 +309,9 @@ impl HostServer {
 
 				(
 					StatusCode::INTERNAL_SERVER_ERROR,
-					ProtocolMsg::ProtocolErrorResponse(
+					borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
 						ProtocolError::EnclaveClient,
-					)
-					.try_to_vec()
+					))
 					.expect("ProtocolMsg can always serialize. qed."),
 				)
 			}

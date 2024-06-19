@@ -255,7 +255,6 @@ mod test {
 	use std::{collections::BTreeMap, ops::Deref};
 
 	use aws_nitro_enclaves_nsm_api::api::{AttestationDoc, Digest};
-	use borsh::BorshSerialize;
 	use qos_crypto::sha_256;
 	use qos_nsm::{mock::MockNsm, types::NsmResponse};
 	use qos_p256::P256Pair;
@@ -1058,7 +1057,7 @@ mod test {
 
 			std::fs::write(
 				&*manifest_file,
-				manifest_envelope.try_to_vec().unwrap(),
+				borsh::to_vec(&manifest_envelope).unwrap(),
 			)
 			.unwrap();
 			let handles = Handles::new(
@@ -1115,7 +1114,7 @@ mod test {
 				"inject_key_works.quorum.secret".into();
 			std::fs::write(
 				&*manifest_file,
-				manifest_envelope.try_to_vec().unwrap(),
+				borsh::to_vec(&manifest_envelope).unwrap(),
 			)
 			.unwrap();
 
@@ -1167,7 +1166,7 @@ mod test {
 				"inject_rejects_bad_signature.quorum.secret".into();
 			std::fs::write(
 				&*manifest_file,
-				manifest_envelope.try_to_vec().unwrap(),
+				borsh::to_vec(&manifest_envelope).unwrap(),
 			)
 			.unwrap();
 
@@ -1222,7 +1221,7 @@ mod test {
 				"inject_key_rejects_wrong_quorum_key.quorum.secret".into();
 			std::fs::write(
 				&*manifest_file,
-				manifest_envelope.try_to_vec().unwrap(),
+				borsh::to_vec(&manifest_envelope).unwrap(),
 			)
 			.unwrap();
 
@@ -1277,7 +1276,7 @@ mod test {
 				"inject_key_rejects_invalid_quorum_key.quorum.secret".into();
 			std::fs::write(
 				&*manifest_file,
-				manifest_envelope.try_to_vec().unwrap(),
+				borsh::to_vec(&manifest_envelope).unwrap(),
 			)
 			.unwrap();
 

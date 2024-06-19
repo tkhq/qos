@@ -4,7 +4,6 @@ use aes_gcm::{
 	aead::{Aead, KeyInit, Payload},
 	Aes256Gcm, Nonce,
 };
-use borsh::{BorshDeserialize, BorshSerialize};
 use hmac::{Hmac, Mac};
 use p256::{
 	ecdh::diffie_hellman, elliptic_curve::sec1::ToEncodedPoint, PublicKey,
@@ -13,6 +12,7 @@ use p256::{
 use rand_core::OsRng;
 use sha2::Sha512;
 use zeroize::ZeroizeOnDrop;
+use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{bytes_os_rng, P256Error, PUB_KEY_LEN_UNCOMPRESSED};
 
@@ -24,7 +24,7 @@ const QOS_ENCRYPTION_HMAC_MESSAGE: &[u8] = b"qos_encryption_hmac_message";
 type HmacSha512 = Hmac<Sha512>;
 
 /// Envelope for serializing an encrypted message with it's context.
-#[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(BorshDeserialize, BorshSerialize, Debug)]
 pub struct Envelope {
 	/// Nonce used as an input to the cipher.
 	nonce: [u8; BITS_96_AS_BYTES as usize],
@@ -169,7 +169,7 @@ impl P256EncryptPublic {
 		let envelope =
 			Envelope { nonce, ephemeral_sender_public, encrypted_message };
 
-		envelope.try_to_vec().map_err(|_| P256Error::FailedToSerializeEnvelope)
+		borsh::to_vec(&envelope).map_err(|_| P256Error::FailedToSerializeEnvelope)
 	}
 
 	/// Decrypt a message encoded to this pair's public key.
@@ -322,7 +322,7 @@ fn create_additional_associated_data(
 
 /// Envelope for holding an encrypted message and some metadata needed to
 /// perform decryption.
-#[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize)]
 pub struct SymmetricEnvelope {
 	/// Nonce used by the cipher.
 	pub nonce: [u8; BITS_96_AS_BYTES as usize],
@@ -375,7 +375,7 @@ impl AesGcm256Secret {
 			.try_into()
 			.map_err(|_| P256Error::FailedToCoerceNonceToIntendedLength)?;
 		let envelope = SymmetricEnvelope { nonce, encrypted_message };
-		envelope.try_to_vec().map_err(|_| P256Error::FailedToSerializeEnvelope)
+		borsh::to_vec(&envelope).map_err(|_| P256Error::FailedToSerializeEnvelope)
 	}
 
 	/// Decrypt the given serialized [`SymmetricEnvelope`].
@@ -451,7 +451,7 @@ mod test_asymmetric {
 			Envelope::try_from_slice(&serialized_envelope).unwrap();
 
 		envelope.encrypted_message.push(0);
-		let tampered_envelope = envelope.try_to_vec().unwrap();
+		let tampered_envelope = borsh::to_vec(&envelope).unwrap();
 
 		assert_eq!(
 			alice_pair.decrypt(&tampered_envelope).unwrap_err(),
@@ -477,7 +477,7 @@ mod test_asymmetric {
 		} else {
 			envelope.nonce[0] = 0;
 		};
-		let tampered_envelope = envelope.try_to_vec().unwrap();
+		let tampered_envelope = borsh::to_vec(&envelope).unwrap();
 
 		assert_eq!(
 			alice_pair.decrypt(&tampered_envelope).unwrap_err(),
@@ -503,7 +503,7 @@ mod test_asymmetric {
 		} else {
 			envelope.ephemeral_sender_public[0] = 0;
 		};
-		let tampered_envelope = envelope.try_to_vec().unwrap();
+		let tampered_envelope = borsh::to_vec(&envelope).unwrap();
 
 		assert_eq!(
 			alice_pair.decrypt(&tampered_envelope).unwrap_err(),
@@ -602,7 +602,7 @@ mod test_symmetric {
 		} else {
 			envelope.nonce[0] += 1;
 		}
-		let serialized_envelope = envelope.try_to_vec().unwrap();
+		let serialized_envelope = borsh::to_vec(&envelope).unwrap();
 
 		let err = key.decrypt(&serialized_envelope).unwrap_err();
 		assert_eq!(err, P256Error::AesGcm256DecryptError,);
@@ -623,7 +623,7 @@ mod test_symmetric {
 		} else {
 			envelope.encrypted_message[0] += 1;
 		};
-		let serialized_envelope = envelope.try_to_vec().unwrap();
+		let serialized_envelope = borsh::to_vec(&envelope).unwrap();
 
 		let err = key.decrypt(&serialized_envelope).unwrap_err();
 		assert_eq!(err, P256Error::AesGcm256DecryptError,);

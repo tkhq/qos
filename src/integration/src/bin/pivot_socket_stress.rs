@@ -1,6 +1,6 @@
 use core::panic;
 
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use integration::PivotSocketStressMsg;
 use qos_core::{
 	io::SocketAddress,
@@ -19,8 +19,7 @@ impl RequestProcessor for Processor {
 			.expect("Received invalid message - test is broken");
 
 		match msg {
-			PivotSocketStressMsg::OkRequest => PivotSocketStressMsg::OkResponse
-				.try_to_vec()
+			PivotSocketStressMsg::OkRequest => borsh::to_vec(&PivotSocketStressMsg::OkResponse)
 				.expect("OkResponse is valid borsh"),
 			PivotSocketStressMsg::PanicRequest => {
 				panic!(
@@ -31,8 +30,7 @@ impl RequestProcessor for Processor {
 				std::thread::sleep(std::time::Duration::from_secs(
 					ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS as u64 + 1,
 				));
-				PivotSocketStressMsg::SlowResponse
-					.try_to_vec()
+				borsh::to_vec(&PivotSocketStressMsg::SlowResponse)
 					.expect("OkResponse is valid borsh")
 			}
 			PivotSocketStressMsg::SlowResponse => {
