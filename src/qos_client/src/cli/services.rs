@@ -4,7 +4,6 @@ use std::{
 	io,
 	io::{BufRead, BufReader, Write},
 	mem,
-	ops::Deref,
 	path::{Path, PathBuf},
 };
 
@@ -511,7 +510,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	write_with_msg(
 		&genesis_output_path,
-		&borsh::to_vec(genesis_output.deref()).unwrap(),
+		&borsh::to_vec(&*genesis_output).unwrap(),
 		"`GenesisOutput`",
 	);
 
@@ -766,7 +765,7 @@ fn extract_nitro_config<P: AsRef<Path>>(
 		pcr1,
 		pcr2,
 		pcr3,
-		qos_commit: "".to_string(),
+		qos_commit: String::new(),
 		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 	}
 }
@@ -1177,7 +1176,8 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 	);
 	write_with_msg(
 		manifest_envelope_path.as_ref(),
-		&borsh::to_vec(&manifest_envelope).expect("manifest enevelope is valid borsh"),
+		&borsh::to_vec(&manifest_envelope)
+			.expect("manifest enevelope is valid borsh"),
 		"Manifest envelope",
 	);
 }

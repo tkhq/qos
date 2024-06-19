@@ -14,7 +14,7 @@ pub mod shamir;
 pub fn sha_256(buf: &[u8]) -> [u8; 32] {
 	let mut hasher = sha2::Sha256::new();
 	hasher.update(buf);
-	hasher.finalize().try_into().expect("sha256 digest is 32 bytes")
+	hasher.finalize().into()
 }
 
 /// Create a SHA384 hash digest of `buf`.
@@ -22,7 +22,7 @@ pub fn sha_256(buf: &[u8]) -> [u8; 32] {
 pub fn sha_384(buf: &[u8]) -> [u8; 48] {
 	let mut hasher = sha2::Sha384::new();
 	hasher.update(buf);
-	hasher.finalize().try_into().expect("sha384 digest is 48 bytes")
+	hasher.finalize().into()
 }
 
 /// Create a SHA512 hash digest of `buf`.
@@ -30,7 +30,7 @@ pub fn sha_384(buf: &[u8]) -> [u8; 48] {
 pub fn sha_512(buf: &[u8]) -> [u8; 64] {
 	let mut hasher = sha2::Sha512::new();
 	hasher.update(buf);
-	hasher.finalize().try_into().expect("sha512 digest is 64 bytes")
+	hasher.finalize().into()
 }
 
 #[cfg(test)]

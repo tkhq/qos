@@ -312,7 +312,7 @@ mod test {
 		];
 
 		let members_with_keys = vec![
-			(member1_pair, quorum_members.get(0).unwrap().clone()),
+			(member1_pair, quorum_members.first().unwrap().clone()),
 			(member2_pair, quorum_members.get(1).unwrap().clone()),
 			(member3_pair, quorum_members.get(2).unwrap().clone()),
 		];

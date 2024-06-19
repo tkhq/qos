@@ -19,8 +19,10 @@ impl RequestProcessor for Processor {
 			.expect("Received invalid message - test is broken");
 
 		match msg {
-			PivotSocketStressMsg::OkRequest => borsh::to_vec(&PivotSocketStressMsg::OkResponse)
-				.expect("OkResponse is valid borsh"),
+			PivotSocketStressMsg::OkRequest => {
+				borsh::to_vec(&PivotSocketStressMsg::OkResponse)
+					.expect("OkResponse is valid borsh")
+			}
 			PivotSocketStressMsg::PanicRequest => {
 				panic!(
 					"\"socket stress\" pivot app has received a PanicRequest"

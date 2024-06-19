@@ -33,7 +33,7 @@ pub mod request {
 					format!("http_post error: [url: {url}, status: {code}, body: {body:?}]")
 				}
 				ureq::Error::Transport(e) => {
-					format!("http_post error: transport error: {}", e)
+					format!("http_post error: transport error: {e}")
 				}
 			})?;
 

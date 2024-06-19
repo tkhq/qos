@@ -229,7 +229,8 @@ impl ProtocolState {
 		}
 
 		let err = ProtocolError::NoMatchingRoute(self.phase);
-		borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(err)).expect("ProtocolMsg can always be serialized. qed.")
+		borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
+			.expect("ProtocolMsg can always be serialized. qed.")
 	}
 
 	#[allow(clippy::too_many_lines)]
@@ -536,7 +537,7 @@ mod handlers {
 					signature: signature.clone(),
 				},
 			)
-			.map(|_| ProtocolMsg::InjectKeyResponse)
+			.map(|()| ProtocolMsg::InjectKeyResponse)
 			.map_err(ProtocolMsg::ProtocolErrorResponse);
 
 			Some(result)

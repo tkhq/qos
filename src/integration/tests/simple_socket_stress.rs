@@ -25,14 +25,16 @@ fn simple_socket_stress() {
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 	);
 
-	let app_request = borsh::to_vec(&PivotSocketStressMsg::SlowRequest).unwrap();
+	let app_request =
+		borsh::to_vec(&PivotSocketStressMsg::SlowRequest).unwrap();
 	let err = enclave_client.send(&app_request).unwrap_err();
 	match err {
 		ClientError::IOError(qos_core::io::IOError::RecvTimeout) => (),
 		e => panic!("did not get expected err {:?}", e),
 	};
 
-	let app_request = borsh::to_vec(&PivotSocketStressMsg::PanicRequest).unwrap();
+	let app_request =
+		borsh::to_vec(&PivotSocketStressMsg::PanicRequest).unwrap();
 	let err = enclave_client.send(&app_request).unwrap_err();
 	match err {
 		ClientError::IOError(qos_core::io::IOError::RecvConnectionClosed) => (),

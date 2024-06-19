@@ -241,8 +241,9 @@ impl HostServer {
 			}
 		};
 
-		let enc_manifest_envelope_req = borsh::to_vec(&ProtocolMsg::ManifestEnvelopeRequest)
-			.expect("ProtocolMsg can always serialize. qed.");
+		let enc_manifest_envelope_req =
+			borsh::to_vec(&ProtocolMsg::ManifestEnvelopeRequest)
+				.expect("ProtocolMsg can always serialize. qed.");
 		let enc_manifest_envelope_resp = state
 			.enclave_client
 			.send(&enc_manifest_envelope_req)
@@ -296,8 +297,10 @@ impl HostServer {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
 			return (
 				StatusCode::BAD_REQUEST,
-				borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg))
-					.expect("ProtocolMsg can always serialize. qed."),
+				borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+					ProtocolError::OversizeMsg,
+				))
+				.expect("ProtocolMsg can always serialize. qed."),
 			);
 		}
 

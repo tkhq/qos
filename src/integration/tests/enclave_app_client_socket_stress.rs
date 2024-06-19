@@ -93,9 +93,11 @@ fn enclave_app_client_socket_stress() {
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 1),
 	);
 
-	let app_request = borsh::to_vec(&PivotSocketStressMsg::PanicRequest).unwrap();
+	let app_request =
+		borsh::to_vec(&PivotSocketStressMsg::PanicRequest).unwrap();
 	let request =
-		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request }).unwrap();
+		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
+			.unwrap();
 	let raw_response = enclave_client.send(&request).unwrap();
 	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
 	assert_eq!(
@@ -111,7 +113,8 @@ fn enclave_app_client_socket_stress() {
 	// The pivot panicked and should have been restarted.
 	let app_request = borsh::to_vec(&PivotSocketStressMsg::OkRequest).unwrap();
 	let request =
-	borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request }).unwrap();
+		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
+			.unwrap();
 	let raw_response = enclave_client.send(&request).unwrap();
 	let response = {
 		let msg = ProtocolMsg::try_from_slice(&raw_response).unwrap();
@@ -124,9 +127,11 @@ fn enclave_app_client_socket_stress() {
 	assert_eq!(response, PivotSocketStressMsg::OkResponse);
 
 	// Send a request that the app will take too long to respond to
-	let app_request = borsh::to_vec(&PivotSocketStressMsg::SlowRequest).unwrap();
+	let app_request =
+		borsh::to_vec(&PivotSocketStressMsg::SlowRequest).unwrap();
 	let request =
-		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request }).unwrap();
+		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
+			.unwrap();
 	let raw_response = enclave_client.send(&request).unwrap();
 	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
 	assert_eq!(

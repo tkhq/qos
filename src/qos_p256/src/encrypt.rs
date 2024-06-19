@@ -4,6 +4,7 @@ use aes_gcm::{
 	aead::{Aead, KeyInit, Payload},
 	Aes256Gcm, Nonce,
 };
+use borsh::{BorshDeserialize, BorshSerialize};
 use hmac::{Hmac, Mac};
 use p256::{
 	ecdh::diffie_hellman, elliptic_curve::sec1::ToEncodedPoint, PublicKey,
@@ -12,7 +13,6 @@ use p256::{
 use rand_core::OsRng;
 use sha2::Sha512;
 use zeroize::ZeroizeOnDrop;
-use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{bytes_os_rng, P256Error, PUB_KEY_LEN_UNCOMPRESSED};
 
@@ -169,7 +169,8 @@ impl P256EncryptPublic {
 		let envelope =
 			Envelope { nonce, ephemeral_sender_public, encrypted_message };
 
-		borsh::to_vec(&envelope).map_err(|_| P256Error::FailedToSerializeEnvelope)
+		borsh::to_vec(&envelope)
+			.map_err(|_| P256Error::FailedToSerializeEnvelope)
 	}
 
 	/// Decrypt a message encoded to this pair's public key.
@@ -375,7 +376,8 @@ impl AesGcm256Secret {
 			.try_into()
 			.map_err(|_| P256Error::FailedToCoerceNonceToIntendedLength)?;
 		let envelope = SymmetricEnvelope { nonce, encrypted_message };
-		borsh::to_vec(&envelope).map_err(|_| P256Error::FailedToSerializeEnvelope)
+		borsh::to_vec(&envelope)
+			.map_err(|_| P256Error::FailedToSerializeEnvelope)
 	}
 
 	/// Decrypt the given serialized [`SymmetricEnvelope`].
