@@ -1,15 +1,13 @@
-use borsh::{BorshSerialize, BorshDeserialize};
-
-#[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq)]
-struct TestSerializable {
-    a: u32,
-    b: String,
-    c: Vec<u8>,
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use borsh::{BorshSerialize, BorshDeserialize};
+
+    #[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq)]
+    struct TestSerializable {
+        a: u32,
+        b: String,
+        c: Vec<u8>,
+    }
 
     #[test]
     fn test_serializable_to_vec() {
