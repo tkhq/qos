@@ -1,6 +1,6 @@
-use borsh::{BorshSerialize, BorshDeserialize};
+use borsh::BorshSerialize;
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq)]
+#[derive(BorshSerialize, Debug, PartialEq)]
 struct TestSerializable {
     a: u32,
     b: String,
