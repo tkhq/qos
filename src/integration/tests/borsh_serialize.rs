@@ -29,7 +29,7 @@ mod tests {
         ];
 
         // Serialize the instance
-        let serialized = inst.try_to_vec().expect("Serialization failed");
+        let serialized = borsh::to_vec(&inst).expect("Serialization failed");
 
         // Assert that the serialized output matches the expected value
         assert_eq!(serialized, expected_serialized, "Serialized bytes differ from the expected value");
