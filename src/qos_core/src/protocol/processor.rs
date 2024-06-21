@@ -1,5 +1,5 @@
 //! Quorum protocol processor
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use qos_nsm::NsmProvider;
 
 use super::{
@@ -38,20 +38,18 @@ impl Processor {
 impl server::RequestProcessor for Processor {
 	fn process(&mut self, req_bytes: Vec<u8>) -> Vec<u8> {
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
-			return ProtocolMsg::ProtocolErrorResponse(
+			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
 				ProtocolError::OversizedPayload,
-			)
-			.try_to_vec()
+			))
 			.expect("ProtocolMsg can always be serialized. qed.");
 		}
 
 		let msg_req = match ProtocolMsg::try_from_slice(&req_bytes) {
 			Ok(req) => req,
 			Err(_) => {
-				return ProtocolMsg::ProtocolErrorResponse(
+				return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
 					ProtocolError::ProtocolMsgDeserialization,
-				)
-				.try_to_vec()
+				))
 				.expect("ProtocolMsg can always be serialized. qed.")
 			}
 		};

@@ -142,7 +142,7 @@ pub enum ProtocolMsg {
 
 #[cfg(test)]
 mod test {
-	use borsh::{BorshDeserialize, BorshSerialize};
+	use borsh::BorshDeserialize;
 
 	use super::*;
 
@@ -150,7 +150,7 @@ mod test {
 	fn boot_genesis_response_deserialize() {
 		let nsm_response = NsmResponse::LockPCR;
 
-		let vec = nsm_response.try_to_vec().unwrap();
+		let vec = borsh::to_vec(&nsm_response).unwrap();
 		let test = NsmResponse::try_from_slice(&vec).unwrap();
 		assert_eq!(nsm_response, test);
 
@@ -169,7 +169,7 @@ mod test {
 			}),
 		};
 
-		let vec = genesis_response.try_to_vec().unwrap();
+		let vec = borsh::to_vec(&genesis_response).unwrap();
 		let test = ProtocolMsg::try_from_slice(&vec).unwrap();
 
 		assert_eq!(test, genesis_response);

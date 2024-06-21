@@ -1,4 +1,4 @@
-use borsh::{ser::BorshSerialize, BorshDeserialize};
+use borsh::BorshDeserialize;
 use integration::{PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH};
 use qos_core::{
 	client::Client,
@@ -93,9 +93,11 @@ fn enclave_app_client_socket_stress() {
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 1),
 	);
 
-	let app_request = PivotSocketStressMsg::PanicRequest.try_to_vec().unwrap();
+	let app_request =
+		borsh::to_vec(&PivotSocketStressMsg::PanicRequest).unwrap();
 	let request =
-		ProtocolMsg::ProxyRequest { data: app_request }.try_to_vec().unwrap();
+		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
+			.unwrap();
 	let raw_response = enclave_client.send(&request).unwrap();
 	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
 	assert_eq!(
@@ -109,9 +111,10 @@ fn enclave_app_client_socket_stress() {
 		REAPER_RESTART_DELAY_IN_SECONDS + 1,
 	));
 	// The pivot panicked and should have been restarted.
-	let app_request = PivotSocketStressMsg::OkRequest.try_to_vec().unwrap();
+	let app_request = borsh::to_vec(&PivotSocketStressMsg::OkRequest).unwrap();
 	let request =
-		ProtocolMsg::ProxyRequest { data: app_request }.try_to_vec().unwrap();
+		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
+			.unwrap();
 	let raw_response = enclave_client.send(&request).unwrap();
 	let response = {
 		let msg = ProtocolMsg::try_from_slice(&raw_response).unwrap();
@@ -124,9 +127,11 @@ fn enclave_app_client_socket_stress() {
 	assert_eq!(response, PivotSocketStressMsg::OkResponse);
 
 	// Send a request that the app will take too long to respond to
-	let app_request = PivotSocketStressMsg::SlowRequest.try_to_vec().unwrap();
+	let app_request =
+		borsh::to_vec(&PivotSocketStressMsg::SlowRequest).unwrap();
 	let request =
-		ProtocolMsg::ProxyRequest { data: app_request }.try_to_vec().unwrap();
+		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
+			.unwrap();
 	let raw_response = enclave_client.send(&request).unwrap();
 	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
 	assert_eq!(

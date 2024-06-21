@@ -128,7 +128,7 @@ impl Stream {
 			send_timeout.set(fd, &timeout)?;
 
 			match connect(stream.fd, &*addr.addr()) {
-				Ok(_) => return Ok(stream),
+				Ok(()) => return Ok(stream),
 				Err(e) => err = IOError::ConnectNixError(e),
 			}
 

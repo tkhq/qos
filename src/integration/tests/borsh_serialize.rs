@@ -1,15 +1,13 @@
-use borsh::{BorshSerialize, BorshDeserialize};
-
-#[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq)]
-struct TestSerializable {
-    a: u32,
-    b: String,
-    c: Vec<u8>,
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use borsh::{BorshSerialize, BorshDeserialize};
+
+    #[derive(BorshSerialize, BorshDeserialize, Debug, PartialEq)]
+    struct TestSerializable {
+        a: u32,
+        b: String,
+        c: Vec<u8>,
+    }
 
     #[test]
     fn test_serializable_to_vec() {
@@ -29,7 +27,7 @@ mod tests {
         ];
 
         // Serialize the instance
-        let serialized = inst.try_to_vec().expect("Serialization failed");
+        let serialized = borsh::to_vec(&inst).expect("Serialization failed");
 
         // Assert that the serialized output matches the expected value
         assert_eq!(serialized, expected_serialized, "Serialized bytes differ from the expected value");

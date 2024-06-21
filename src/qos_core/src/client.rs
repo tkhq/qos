@@ -8,8 +8,8 @@ use crate::io::{self, SocketAddress, Stream, TimeVal};
 pub enum ClientError {
 	/// [`io::IOError`] wrapper.
 	IOError(io::IOError),
-	/// `borsh::maybestd::io::Error` wrapper.
-	BorshError(borsh::maybestd::io::Error),
+	/// `borsh::io::Error` wrapper.
+	BorshError(borsh::io::Error),
 }
 
 impl From<io::IOError> for ClientError {
@@ -18,8 +18,8 @@ impl From<io::IOError> for ClientError {
 	}
 }
 
-impl From<borsh::maybestd::io::Error> for ClientError {
-	fn from(err: borsh::maybestd::io::Error) -> Self {
+impl From<borsh::io::Error> for ClientError {
+	fn from(err: borsh::io::Error) -> Self {
 		Self::BorshError(err)
 	}
 }
