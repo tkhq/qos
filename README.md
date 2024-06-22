@@ -152,36 +152,8 @@ make toolchain-shell
 make toolchain-update
 ```
 
-
-### Release Process
-
- 0. Determine the release semver version by consulting the [changelog](./CHANGELOG.MD).
- 1. Create a branch for your release e.g.
-    `git checkout -b release/v1.0.0`
- 2. Run `make dist` as described in ["Release" section](#release)
- 3. Commit the new dist folder `git commit -m "Release v1.0.0" -- dist/`
- 4. Push up your branch to github, and make a pull request.
- 5. You may also create and push a signed `-rcX` git tag where the number after `rc` doesn't already exist.
-    `git tag -S v1.0.0-rc0 -m v1.0.0-rc0`
-    `git push origin v1.0.0-rc0`
- 6. Wait for others to replicate your build, see ["Verify" section](#verify)
- 7. Once the release has enough `git sig` signatures, make the final tag and merge the pull request.
-    `git tag -S v1.0.0 -m v1.0.0`
-    `git push origin v1.0.0`
-
-
 [gs]: https://codeberg.org/distrust/git-sig
 
-### LFS setup
-
-This repository externalises large files so that they do not bulk up the git repo itself.
-This is done through a tool called `git-lfs`, which must be installed for it to work.
-Additionally, we use a custom agent to store our LFS objects in S3 (rather than the default and more expensive Github LFS service).
-
-In order to setup our s3 based lfs:
-
-1) Install [tkinfra](https://github.com/tkhq/mono/tree/main/src/go/tkinfra)
-2) Run `./scripts/setup-lfs.sh`
 
 #### Troubleshooting
 

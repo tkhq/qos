@@ -938,6 +938,7 @@ dependencies = [
  "qos_test_primitives",
  "rand",
  "serde",
+ "serde_json",
  "tokio",
  "ureq",
 ]
@@ -1404,6 +1405,7 @@ dependencies = [
  "qos_test_primitives",
  "rand_core",
  "rpassword",
+ "serde",
  "serde_json",
  "ureq",
  "x509",

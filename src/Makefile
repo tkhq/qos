@@ -48,7 +48,7 @@ local-host:
 	cargo run --bin qos_host \
 		-- \
 		--host-ip 127.0.0.1 \
-		--host-port 3000 \
+		--host-port 3001 \
 		--usock ./dev.sock
 
 .PHONY: vm-host

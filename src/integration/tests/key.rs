@@ -1,6 +1,8 @@
 use std::{fs, process::Command};
 
-use integration::{LOCAL_HOST, PIVOT_LOOP_PATH, QOS_DIST_DIR};
+use integration::{
+	LOCAL_HOST, PCR3_PRE_IMAGE_PATH, PIVOT_LOOP_PATH, QOS_DIST_DIR,
+};
 use qos_crypto::sha_256;
 use qos_p256::{P256Pair, P256Public};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
@@ -158,7 +160,7 @@ fn generate_manifest_envelope() {
 			"--restart-policy",
 			"always",
 			"--pcr3-preimage-path",
-			"./mock/namespaces/pcr3-preimage.txt",
+			PCR3_PRE_IMAGE_PATH,
 			"--pivot-hash-path",
 			PIVOT_HASH_PATH,
 			"--qos-release-dir",
@@ -196,7 +198,7 @@ fn generate_manifest_envelope() {
 				"--manifest-approvals-dir",
 				BOOT_DIR,
 				"--pcr3-preimage-path",
-				"./mock/namespaces/pcr3-preimage.txt",
+				PCR3_PRE_IMAGE_PATH,
 				"--pivot-hash-path",
 				PIVOT_HASH_PATH,
 				"--qos-release-dir",
@@ -293,7 +295,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 			"--host-ip",
 			LOCAL_HOST,
 			"--pcr3-preimage-path",
-			"./mock/namespaces/pcr3-preimage.txt",
+			PCR3_PRE_IMAGE_PATH,
 			"--unsafe-skip-attestation",
 		])
 		.spawn()
@@ -343,7 +345,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 				"--manifest-envelope-path",
 				MANIFEST_ENVELOPE_PATH,
 				"--pcr3-preimage-path",
-				"./mock/namespaces/pcr3-preimage.txt",
+				PCR3_PRE_IMAGE_PATH,
 				"--manifest-set-dir",
 				"./mock/keys/manifest-set",
 				"--alias",

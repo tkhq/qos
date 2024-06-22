@@ -3,9 +3,17 @@ use nix::sys::time::{TimeVal, TimeValLike};
 use qos_nsm::NsmProvider;
 
 use super::{
-	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
+	error::ProtocolError,
+	msg::ProtocolMsg,
+	services::{
+		provision::SecretBuilder,
+		reshard::{ReshardInput, ReshardProvisioner},
+	},
 };
-use crate::{client::Client, handles::Handles, io::SocketAddress};
+use crate::{
+	client::Client, handles::Handles, io::SocketAddress,
+	protocol::services::reshard::ReshardOutput,
+};
 
 /// The timeout for the qos core when making requests to an enclave app.
 pub const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: i64 = 5;
@@ -35,6 +43,13 @@ pub enum ProtocolPhase {
 	QuorumKeyProvisioned,
 	/// Waiting for a forwarded key to be injected
 	WaitingForForwardedKey,
+	/// Waiting for quorum key shards to be posted so the reshard service can
+	/// be executed.
+	ReshardWaitingForQuorumShards,
+	/// Reshard service has completed
+	ReshardBooted,
+	/// Reshard failed to reconstruct the quorum key
+	UnrecoverableReshardFailedBadShares,
 }
 
 /// Enclave routes
@@ -57,11 +72,12 @@ impl ProtocolRoute {
 		let resp = (self.handler)(msg, state);
 
 		// ignore transitions in special cases
-		if let Some(Ok(ProtocolMsg::ProvisionResponse { reconstructed })) = resp
-		{
-			if !reconstructed {
-				return resp;
-			}
+		match resp {
+			Some(Ok(
+				ProtocolMsg::ProvisionResponse { reconstructed }
+				| ProtocolMsg::ReshardProvisionResponse { reconstructed },
+			)) if !reconstructed => return resp,
+			_ => { /* This isn't a special case, keep going */ }
 		}
 
 		// handle state transitions
@@ -106,6 +122,14 @@ impl ProtocolRoute {
 		)
 	}
 
+	pub fn reshard_attestation_doc(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::reshard_attestation_doc),
+			current_phase,
+			current_phase,
+		)
+	}
+
 	pub fn boot_genesis(_current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::boot_genesis),
@@ -118,6 +142,14 @@ impl ProtocolRoute {
 		ProtocolRoute::new(
 			Box::new(handlers::boot_standard),
 			ProtocolPhase::WaitingForQuorumShards,
+			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
+	pub fn boot_reshard(_current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::boot_reshard),
+			ProtocolPhase::ReshardWaitingForQuorumShards,
 			ProtocolPhase::UnrecoverableError,
 		)
 	}
@@ -135,6 +167,22 @@ impl ProtocolRoute {
 			Box::new(handlers::provision),
 			ProtocolPhase::QuorumKeyProvisioned,
 			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
+	pub fn reshard_provision(_current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::reshard_provision),
+			ProtocolPhase::ReshardBooted,
+			ProtocolPhase::UnrecoverableReshardFailedBadShares,
+		)
+	}
+
+	pub fn reshard_output(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::reshard_output),
+			current_phase,
+			current_phase,
 		)
 	}
 
@@ -178,9 +226,13 @@ pub(crate) struct ProtocolState {
 	pub app_client: Client,
 	pub handles: Handles,
 	phase: ProtocolPhase,
+	pub reshard_input: Option<ReshardInput>,
+	pub reshard_output: Option<ReshardOutput>,
+	pub(crate) reshard_provisioner: Option<ReshardProvisioner>,
 }
 
 impl ProtocolState {
+	#[allow(unused_variables)]
 	pub fn new(
 		attestor: Box<dyn NsmProvider>,
 		handles: Handles,
@@ -207,11 +259,22 @@ impl ProtocolState {
 				app_addr,
 				TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 			),
+			reshard_input: None,
+			reshard_output: None,
+			reshard_provisioner: None,
 		}
 	}
 
 	pub fn get_phase(&self) -> ProtocolPhase {
 		self.phase
+	}
+
+	pub(crate) fn get_mut_reshard_provisioner(
+		&mut self,
+	) -> Result<&mut ReshardProvisioner, ProtocolError> {
+		self.reshard_provisioner
+			.as_mut()
+			.ok_or(ProtocolError::MissingReshardProvisioner)
 	}
 
 	pub fn handle_msg(&mut self, msg_req: &ProtocolMsg) -> Vec<u8> {
@@ -255,6 +318,7 @@ impl ProtocolState {
 				ProtocolRoute::boot_genesis(self.phase),
 				ProtocolRoute::boot_standard(self.phase),
 				ProtocolRoute::boot_key_forward(self.phase),
+				ProtocolRoute::boot_reshard(self.phase),
 			],
 			ProtocolPhase::WaitingForQuorumShards => {
 				vec![
@@ -287,6 +351,29 @@ impl ProtocolState {
 					ProtocolRoute::inject_key(self.phase),
 				]
 			}
+			ProtocolPhase::ReshardWaitingForQuorumShards => {
+				vec![
+					// baseline routes
+					ProtocolRoute::status(self.phase),
+					ProtocolRoute::reshard_attestation_doc(self.phase),
+					// phase specific routes
+					ProtocolRoute::reshard_provision(self.phase),
+				]
+			}
+			ProtocolPhase::UnrecoverableReshardFailedBadShares => {
+				vec![
+					// baseline routes
+					ProtocolRoute::status(self.phase),
+				]
+			}
+			ProtocolPhase::ReshardBooted => {
+				vec![
+					// baseline routes
+					ProtocolRoute::status(self.phase),
+					// phase specific routes
+					ProtocolRoute::reshard_output(self.phase),
+				]
+			}
 		}
 	}
 
@@ -305,6 +392,7 @@ impl ProtocolState {
 				ProtocolPhase::UnrecoverableError,
 				ProtocolPhase::GenesisBooted,
 				ProtocolPhase::WaitingForQuorumShards,
+				ProtocolPhase::ReshardWaitingForQuorumShards,
 				ProtocolPhase::WaitingForForwardedKey,
 			],
 			ProtocolPhase::GenesisBooted => {
@@ -325,6 +413,18 @@ impl ProtocolState {
 					ProtocolPhase::QuorumKeyProvisioned,
 				]
 			}
+			ProtocolPhase::ReshardWaitingForQuorumShards => {
+				vec![
+					ProtocolPhase::UnrecoverableReshardFailedBadShares,
+					ProtocolPhase::ReshardBooted,
+				]
+			}
+			ProtocolPhase::ReshardBooted => {
+				vec![ProtocolPhase::UnrecoverableError]
+			}
+			ProtocolPhase::UnrecoverableReshardFailedBadShares => {
+				vec![ProtocolPhase::UnrecoverableError]
+			}
 		};
 
 		if !transitions.contains(&next) {
@@ -341,9 +441,11 @@ impl ProtocolState {
 mod handlers {
 	use super::ProtocolRouteResponse;
 	use crate::protocol::{
+		error::ProtocolError,
 		msg::ProtocolMsg,
 		services::{
-			attestation, boot, genesis, key, key::EncryptedQuorumKey, provision,
+			attestation, boot, genesis, key, key::EncryptedQuorumKey,
+			provision, reshard,
 		},
 		ProtocolState,
 	};
@@ -410,6 +512,40 @@ mod handlers {
 		}
 	}
 
+	pub(super) fn reshard_provision(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::ReshardProvisionRequest { input } = req {
+			let result = reshard::reshard_provision(input.clone(), state)
+				.map(|reconstructed| ProtocolMsg::ReshardProvisionResponse {
+					reconstructed,
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn reshard_output(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::ReshardOutputRequest = req {
+			let result = reshard::reshard_output(state)
+				.map(|reshard_output| ProtocolMsg::ReshardOutputResponse {
+					reshard_output,
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
+		} else {
+			None
+		}
+	}
+
 	/// Handle `ProtocolMsg::BootStandardRequest`.
 	pub(super) fn boot_standard(
 		req: &ProtocolMsg,
@@ -450,6 +586,23 @@ mod handlers {
 		}
 	}
 
+	pub(super) fn boot_reshard(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::BootReshardRequest { reshard_input } = req {
+			let result = reshard::boot_reshard(state, reshard_input.clone())
+				.map(|nsm_response| ProtocolMsg::BootReshardResponse {
+					nsm_response,
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
+		} else {
+			None
+		}
+	}
+
 	pub(super) fn live_attestation_doc(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
@@ -463,6 +616,37 @@ mod handlers {
 						.get_manifest_envelope()
 						.ok()
 						.map(Box::new),
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn reshard_attestation_doc(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::ReshardAttestationDocRequest = req {
+			let reshard_input = match state
+				.reshard_input
+				.as_ref()
+				.ok_or(ProtocolError::MissingReshardInput)
+			{
+				Ok(r) => r.clone(),
+				Err(e) => {
+					return Some(Ok(ProtocolMsg::ProtocolErrorResponse(e)))
+				}
+			};
+
+			let result = attestation::reshard_attestation_doc(state)
+				.map(|nsm_response| {
+					ProtocolMsg::ReshardAttestationDocResponse {
+						nsm_response,
+						reshard_input,
+					}
 				})
 				.map_err(ProtocolMsg::ProtocolErrorResponse);
 
