@@ -16,9 +16,12 @@ use rand::{seq::SliceRandom, thread_rng};
 
 const DR_KEY_PUBLIC_PATH: &str = "./mock/mock_p256_dr.pub";
 const DR_KEY_PRIVATE_PATH: &str = "./mock/mock_p256_dr.secret.keep";
+const DEV_SHARE_PUBLIC: &str = "./mock/dev-dir/dev.pub";
+const DEV_SHARE_SECRET: &str = "./mock/dev-dir/dev.secret.keep";
 
+/// This test can be used as a script to generate additional development quorum keys
 #[tokio::test]
-async fn genesis_e2e() {
+async fn dev_genesis_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/genesis-e2e".into();
 	fs::create_dir_all(&*tmp).unwrap();
@@ -46,45 +49,25 @@ async fn genesis_e2e() {
 		|user: &str| (format!("{user}.secret"), format!("{user}.pub"));
 
 	let threshold = 1;
-	let user1 = "dev";
-	let (user1_private_share_key, user1_public_share_key) =
-		get_key_paths(user1);
+	let dev = "dev";
+	let (dev_private_share_key, dev_public_share_key) =
+		get_key_paths(dev);
 
-	// -- CLIENT Create 3 setup keys
-	// Make sure the directory keys are getting written to already exist.
-	for (user, private, public) in [
-		(&user1, &user1_private_share_key, &user1_public_share_key),
-	] {
-		fs::create_dir_all(personal_dir(user)).unwrap();
-		let master_seed_path = format!("{}/{}", personal_dir(user), private);
-		let public_path = format!("{}/{}", personal_dir(user), public);
-		assert!(Command::new("../target/debug/qos_client")
-			.args([
-				"generate-file-key",
-				"--master-seed-path",
-				&master_seed_path,
-				"--pub-path",
-				&public_path,
-			])
-			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
-		assert!(Path::new(&*personal_dir(user)).join(public).is_file());
-		assert!(Path::new(&*personal_dir(user)).join(private).is_file());
-	}
-
+	// We already have the dev key generated. We simply copy from the dev folder.
+	fs::create_dir_all(personal_dir(dev)).unwrap();
+	let dev_public_path = format!("{}/{}", personal_dir(dev), &dev_public_share_key);
+	let dev_secret_path = format!("{}/{}", personal_dir(dev), &dev_private_share_key);
+	fs::copy(DEV_SHARE_PUBLIC, dev_public_path).unwrap();
+	fs::copy(DEV_SHARE_SECRET, dev_secret_path).unwrap();
+	assert!(Path::new(&*personal_dir(dev)).join(&dev_public_share_key).is_file());
+	assert!(Path::new(&*personal_dir(dev)).join(&dev_private_share_key).is_file());
+	
 	// Make the genesis dir
 	fs::create_dir_all(&*genesis_dir).unwrap();
 	// Move the setup keys to the genesis dir - this will be the Genesis Set
-	for (user, public) in [
-		(&user1, &user1_public_share_key),
-	] {
-		let from = Path::new(&*personal_dir(user)).join(public);
-		let to = Path::new(&*genesis_dir).join(public);
-		fs::copy(from, to).unwrap();
-	}
+	let from = Path::new(&*personal_dir(dev)).join(&dev_public_share_key);
+	let to = Path::new(&*genesis_dir).join(&dev_public_share_key);
+	fs::copy(from, to).unwrap();
 	let quorum_threshold_path =
 		Path::new(&*genesis_dir).join("quorum_threshold");
 	fs::write(quorum_threshold_path, b"1\n").unwrap();
@@ -196,7 +179,7 @@ async fn genesis_e2e() {
 
 	// -- CLIENT make sure each user can run `after-genesis` against their
 	// member output and decrypt their share with their share key.
-	for user in [&user1] {
+	for user in [&dev] {
 		let share_path = format!("{}/{}.share", &personal_dir(user), user);
 		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
 		assert!(Command::new("../target/debug/qos_client")
@@ -254,8 +237,8 @@ async fn genesis_e2e() {
 	// Check that we can verify the dr artifacts.
 	let reconstructed_path = tmp_dir("reconstructed_quorum_master_seed_hex");
 	reconstructed.to_hex_file(&*reconstructed_path).unwrap();
-	println!("starting a quick nap");
-	std::thread::sleep(time::Duration::from_millis(10000));
+
+		
 	assert!(Command::new("../target/debug/qos_client")
 		.arg("verify-genesis")
 		.arg("--namespace-dir")
@@ -267,4 +250,8 @@ async fn genesis_e2e() {
 		.wait()
 		.unwrap()
 		.success());
+
+	println!("starting a quick nap -- 30 seconds -- time to grab your output!");
+	println!("cp -r /tmp/genesis-e2e ~/dev-quorum");
+	std::thread::sleep(time::Duration::from_millis(30000));
 }
