@@ -220,7 +220,7 @@ impl server::RequestProcessor for Proxy {
 						dns_resolvers,
 						dns_port,
 					)
-				},
+				}
 				ProxyMsg::ConnectByIpRequest { ip, port } => {
 					println!("Proxy connecting to {ip}:{port}");
 					self.connect_by_ip(ip, port)
