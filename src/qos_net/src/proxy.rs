@@ -194,6 +194,7 @@ impl Proxy {
 
 impl server::RequestProcessor for Proxy {
 	fn process(&mut self, req_bytes: Vec<u8>) -> Vec<u8> {
+		println!("Proxy processing request");
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
 			return ProxyMsg::ProxyError(QosNetError::OversizedPayload)
 				.try_to_vec()
@@ -203,6 +204,7 @@ impl server::RequestProcessor for Proxy {
 		let resp = match ProxyMsg::try_from_slice(&req_bytes) {
 			Ok(req) => match req {
 				ProxyMsg::StatusRequest => {
+					println!("Proxy processing StatusRequest");
 					ProxyMsg::StatusResponse(self.connections.len())
 				}
 				ProxyMsg::ConnectByNameRequest {
@@ -210,25 +212,33 @@ impl server::RequestProcessor for Proxy {
 					port,
 					dns_resolvers,
 					dns_port,
-				} => self.connect_by_name(
-					hostname,
-					port,
-					dns_resolvers,
-					dns_port,
-				),
+				} => {
+					println!("Proxy connecting to {hostname}:{port}");
+					self.connect_by_name(
+						hostname,
+						port,
+						dns_resolvers,
+						dns_port,
+					)
+				},
 				ProxyMsg::ConnectByIpRequest { ip, port } => {
+					println!("Proxy connecting to {ip}:{port}");
 					self.connect_by_ip(ip, port)
 				}
 				ProxyMsg::CloseRequest { connection_id } => {
+					println!("Proxy closing connection {connection_id}");
 					self.close(connection_id)
 				}
 				ProxyMsg::ReadRequest { connection_id, size } => {
+					println!("Proxy reading {size} bytes from connection {connection_id}");
 					self.read(connection_id, size)
 				}
 				ProxyMsg::WriteRequest { connection_id, data } => {
+					println!("Proxy writing to connection {connection_id}");
 					self.write(connection_id, data)
 				}
 				ProxyMsg::FlushRequest { connection_id } => {
+					println!("Proxy flushing connection {connection_id}");
 					self.flush(connection_id)
 				}
 				ProxyMsg::ProxyError(_) => {
