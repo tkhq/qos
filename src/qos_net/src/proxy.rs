@@ -104,14 +104,22 @@ impl Proxy {
 			Ok(conn) => {
 				let connection_id = conn.id;
 				let remote_ip = conn.ip.clone();
+				println!("called new_from_name successfully. Saving connection ID {connection_id}...");
 				match self.save_connection(conn) {
 					Ok(()) => {
+						println!("Connection established and saved. Returning ConnectResponse to client");
 						ProxyMsg::ConnectResponse { connection_id, remote_ip }
 					}
-					Err(e) => ProxyMsg::ProxyError(e),
+					Err(e) => {
+						println!("error saving connection.");
+						ProxyMsg::ProxyError(e)
+					}
 				}
 			}
-			Err(e) => ProxyMsg::ProxyError(e),
+			Err(e) => {
+				println!("error calling new_from_name");
+				ProxyMsg::ProxyError(e)
+			}
 		}
 	}
 
@@ -214,12 +222,14 @@ impl server::RequestProcessor for Proxy {
 					dns_port,
 				} => {
 					println!("Proxy connecting to {hostname}:{port}");
-					self.connect_by_name(
-						hostname,
+					let resp = self.connect_by_name(
+						hostname.clone(),
 						port,
 						dns_resolvers,
 						dns_port,
-					)
+					);
+					println!("Proxy connected to {hostname}:{port}");
+					resp
 				}
 				ProxyMsg::ConnectByIpRequest { ip, port } => {
 					println!("Proxy connecting to {ip}:{port}");
