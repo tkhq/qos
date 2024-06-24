@@ -65,6 +65,6 @@ impl From<AddrParseError> for QosNetError {
 impl From<ResolveError> for QosNetError {
 	fn from(err: ResolveError) -> Self {
 		let msg = format!("{err:?}");
-		Self::ParseError(msg)
+		Self::DNSResolutionError(msg)
 	}
 }

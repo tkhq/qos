@@ -114,7 +114,10 @@ fn resolve_hostname(
 	);
 	let resolver = Resolver::new(resolver_config, ResolverOpts::default())?;
 	println!("resolver ready");
-	let response = resolver.lookup_ip(hostname.clone())?;
+	let response = resolver.lookup_ip(hostname.clone()).map_err(|e| {
+		println!("error invoking resolver: {:?}", e);
+		QosNetError::from(e)
+	})?;
 	println!("resolver successfully invoked");
 	response.iter().next().ok_or_else(|| {
 		QosNetError::DNSResolutionError(format!(
