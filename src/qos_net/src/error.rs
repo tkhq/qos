@@ -27,11 +27,6 @@ pub enum QosNetError {
 	DuplicateConnectionId(u32),
 	/// Attempt to send a message to a remote connection, but ID isn't found
 	ConnectionIdNotFound(u32),
-	/// Attempting to read on a closed remote connection (`.read` returned 0
-	/// bytes)
-	ConnectionClosed,
-	/// Happens when a socket `read` results in no data
-	EmptyRead,
 	/// Happens when a socket `read` returns too much data for the provided
 	/// buffer and the data doesn't fit. The first `usize` is the size of the
 	/// received data, the second `usize` is the size of the buffer.

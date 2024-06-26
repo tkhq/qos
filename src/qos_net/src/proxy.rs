@@ -151,7 +151,12 @@ impl Proxy {
 					// connection close. So we can safely remove it.
 					match self.remove_connection(connection_id) {
 						Ok(_) => {
-							ProxyMsg::ProxyError(QosNetError::ConnectionClosed)
+							// Connection was successfully removed / closed
+							ProxyMsg::ReadResponse {
+								connection_id,
+								data: buf,
+								size: 0,
+							}
 						}
 						Err(e) => ProxyMsg::ProxyError(e),
 					}

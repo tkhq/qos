@@ -184,6 +184,10 @@ impl Read for ProxyStream {
 					println!("READ {}: read {} bytes", buf.len(), size);
 					Ok(size)
 				}
+				ProxyMsg::ProxyError(e) => Err(std::io::Error::new(
+					ErrorKind::InvalidData,
+					format!("Proxy error: {e:?}"),
+				)),
 				_ => Err(std::io::Error::new(
 					ErrorKind::InvalidData,
 					"unexpected response",
@@ -310,8 +314,8 @@ mod test {
 
 	#[test]
 	fn can_fetch_tls_content_with_local_stream() {
-		let host = "api.turnkey.com";
-		let path = "/health";
+		let host = "www.googleapis.com";
+		let path = "/oauth2/v3/certs";
 
 		let mut stream = LocalStream::new_by_name(
 			host.to_string(),
@@ -322,7 +326,10 @@ mod test {
 		.unwrap();
 		assert_eq!(stream.num_connections(), 1);
 
-		assert_eq!(stream.remote_hostname, Some("api.turnkey.com".to_string()));
+		assert_eq!(
+			stream.remote_hostname,
+			Some("www.googleapis.com".to_string())
+		);
 
 		let root_store =
 			RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.into() };
@@ -348,19 +355,27 @@ mod test {
 		let mut response_bytes = Vec::new();
 		let read_to_end_result = tls.read_to_end(&mut response_bytes);
 
-		// Ignore eof errors: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
-		assert!(
-			read_to_end_result.is_ok()
-				|| (read_to_end_result
-					.is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof))
-		);
+		match read_to_end_result {
+			Ok(read_size) => {
+				assert!(read_size > 0);
+				// Close the connection
+				let closed = stream.close();
+				assert!(closed.is_ok());
+			}
+			Err(e) => {
+				// Only EOF errors are expected. This means the connection was
+				// closed by the remote server https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
+				assert_eq!(e.kind(), ErrorKind::UnexpectedEof)
+			}
+		}
+
+		// We should be at 0 connections in our proxy: either the remote
+		// auto-closed (UnexpectedEof), or we did.
+		assert_eq!(stream.num_connections(), 0);
+
 		let response_text = std::str::from_utf8(&response_bytes).unwrap();
 		assert!(response_text.contains("HTTP/1.1 200 OK"));
-		assert!(response_text.contains("currentTime"));
-
-		let closed = stream.close();
-		assert!(closed.is_ok());
-		assert_eq!(stream.num_connections(), 0);
+		assert!(response_text.contains("keys"));
 	}
 
 	/// Struct representing a stream, with direct access to the proxy.
@@ -447,6 +462,10 @@ mod test {
 						println!("READ {}: read {} bytes", buf.len(), size);
 						Ok(size)
 					}
+					ProxyMsg::ProxyError(e) => Err(std::io::Error::new(
+						ErrorKind::InvalidData,
+						format!("Proxy error: {e:?}"),
+					)),
 					_ => Err(std::io::Error::new(
 						ErrorKind::InvalidData,
 						"unexpected response",

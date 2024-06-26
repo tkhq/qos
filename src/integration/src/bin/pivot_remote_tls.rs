@@ -1,6 +1,6 @@
 use core::panic;
 use std::{
-	io::{Read, Write},
+	io::{ErrorKind, Read, Write},
 	sync::Arc,
 };
 
@@ -63,18 +63,31 @@ impl RequestProcessor for Processor {
 				);
 
 				tls.write_all(http_request.as_bytes()).unwrap();
-				let _ciphersuite = tls.conn.negotiated_cipher_suite().unwrap();
 
 				let mut response_bytes = Vec::new();
-				let read_to_end_result: usize =
-					tls.read_to_end(&mut response_bytes).unwrap();
-
-				// Ignore eof errors: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
+				let read_to_end_result = tls.read_to_end(&mut response_bytes);
+				match read_to_end_result {
+					Ok(read_size) => {
+						assert!(read_size > 0);
+						// Close the connection
+						let closed = stream.close();
+						closed.unwrap();
+					}
+					Err(e) => {
+						// Only EOF errors are expected. This means the
+						// connection was closed by the remote server https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
+						if e.kind() != ErrorKind::UnexpectedEof {
+							panic!(
+								"unexpected error trying to read_to_end: {e:?}"
+							);
+						}
+					}
+				}
 
 				let fetched_content =
 					std::str::from_utf8(&response_bytes).unwrap();
 				PivotRemoteTlsMsg::RemoteTlsResponse(format!(
-					"Content fetched successfully ({read_to_end_result} bytes): {fetched_content}"
+					"Content fetched successfully: {fetched_content}"
 				))
 				.try_to_vec()
 				.expect("RemoteTlsResponse is valid borsh")

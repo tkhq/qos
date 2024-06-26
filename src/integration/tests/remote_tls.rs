@@ -47,4 +47,18 @@ fn fetch_remote_tls_content() {
 	assert!(response_text.contains("Content fetched successfully"));
 	assert!(response_text.contains("HTTP/1.1 200 OK"));
 	assert!(response_text.contains("currentTime"));
+
+	let app_request = PivotRemoteTlsMsg::RemoteTlsRequest {
+		host: "www.googleapis.com".to_string(),
+		path: "/oauth2/v3/certs".to_string(),
+	}
+	.try_to_vec()
+	.unwrap();
+
+	let response = enclave_client.send(&app_request).unwrap();
+	let response_text = str::from_utf8(&response).unwrap();
+
+	assert!(response_text.contains("Content fetched successfully"));
+	assert!(response_text.contains("HTTP/1.1 200 OK"));
+	assert!(response_text.contains("keys"));
 }
