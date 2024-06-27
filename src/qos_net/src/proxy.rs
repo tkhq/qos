@@ -1,7 +1,7 @@
 //! Protocol proxy for our remote QOS net proxy
 use std::io::{Read, Write};
 
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use qos_core::server;
 
 use crate::{
@@ -214,9 +214,10 @@ impl Proxy {
 impl server::RequestProcessor for Proxy {
 	fn process(&mut self, req_bytes: Vec<u8>) -> Vec<u8> {
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
-			return ProxyMsg::ProxyError(QosNetError::OversizedPayload)
-				.try_to_vec()
-				.expect("ProtocolMsg can always be serialized. qed.");
+			return borsh::to_vec(&ProxyMsg::ProxyError(
+				QosNetError::OversizedPayload,
+			))
+			.expect("ProtocolMsg can always be serialized. qed.");
 		}
 
 		let resp = match ProxyMsg::try_from_slice(&req_bytes) {
@@ -278,7 +279,7 @@ impl server::RequestProcessor for Proxy {
 			Err(_) => ProxyMsg::ProxyError(QosNetError::InvalidMsg),
 		};
 
-		resp.try_to_vec()
+		borsh::to_vec(&resp)
 			.expect("Protocol message can always be serialized. qed!")
 	}
 }
@@ -294,7 +295,7 @@ mod test {
 	#[test]
 	fn simple_status_request() {
 		let mut proxy = Proxy::new();
-		let request = ProxyMsg::StatusRequest.try_to_vec().unwrap();
+		let request = borsh::to_vec(&ProxyMsg::StatusRequest).unwrap();
 		let response = proxy.process(request);
 		let msg = ProxyMsg::try_from_slice(&response).unwrap();
 		assert_eq!(msg, ProxyMsg::StatusResponse(0));
@@ -305,13 +306,12 @@ mod test {
 		let mut proxy = Proxy::new();
 		assert_eq!(proxy.num_connections(), 0);
 
-		let request = ProxyMsg::ConnectByNameRequest {
+		let request = borsh::to_vec(&ProxyMsg::ConnectByNameRequest {
 			hostname: "api.turnkey.com".to_string(),
 			port: 443,
 			dns_resolvers: vec!["8.8.8.8".to_string()],
 			dns_port: 53,
-		}
-		.try_to_vec()
+		})
 		.unwrap();
 		let response = proxy.process(request);
 		let msg = ProxyMsg::try_from_slice(&response).unwrap();
@@ -325,11 +325,10 @@ mod test {
 		};
 		let http_request = "GET / HTTP/1.1\r\nHost: api.turnkey.com\r\nConnection: close\r\n\r\n".to_string();
 
-		let request = ProxyMsg::WriteRequest {
+		let request = borsh::to_vec(&ProxyMsg::WriteRequest {
 			connection_id,
 			data: http_request.as_bytes().to_vec(),
-		}
-		.try_to_vec()
+		})
 		.unwrap();
 		let response = proxy.process(request);
 		let msg: ProxyMsg = ProxyMsg::try_from_slice(&response).unwrap();
@@ -341,9 +340,9 @@ mod test {
 		// Check that we now have an active connection
 		assert_eq!(proxy.num_connections(), 1);
 
-		let request = ProxyMsg::ReadRequest { connection_id, size: 512 }
-			.try_to_vec()
-			.unwrap();
+		let request =
+			borsh::to_vec(&ProxyMsg::ReadRequest { connection_id, size: 512 })
+				.unwrap();
 		let response = proxy.process(request);
 		let msg: ProxyMsg = ProxyMsg::try_from_slice(&response).unwrap();
 		let data = match msg {

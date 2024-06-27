@@ -17,7 +17,7 @@ pub const PORT: &str = "port";
 /// "usock"
 pub const USOCK: &str = "usock";
 
-/// CLI options for starting up the enclave server.
+/// CLI options for starting up the proxy.
 #[derive(Default, Clone, Debug, PartialEq)]
 struct ProxyOpts {
 	parsed: Parser,
@@ -55,10 +55,10 @@ impl ProxyOpts {
 	}
 }
 
-/// Enclave server CLI.
+/// Proxy CLI.
 pub struct CLI;
 impl CLI {
-	/// Execute the enclave server CLI with the environment args.
+	/// Execute the enclave proxy CLI with the environment args.
 	pub fn execute() {
 		let mut args: Vec<String> = env::args().collect();
 		let opts = ProxyOpts::new(&mut args);

@@ -2,7 +2,7 @@
 //! traits with `ProxyMsg`s.
 use std::io::{ErrorKind, Read, Write};
 
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use qos_core::io::{SocketAddress, Stream, TimeVal};
 
 use crate::{error::QosNetError, proxy_msg::ProxyMsg};
@@ -49,13 +49,12 @@ impl ProxyStream {
 		dns_port: u16,
 	) -> Result<Self, QosNetError> {
 		let stream = Stream::connect(addr, timeout)?;
-		let req = ProxyMsg::ConnectByNameRequest {
+		let req = borsh::to_vec(&ProxyMsg::ConnectByNameRequest {
 			hostname: hostname.clone(),
 			port,
 			dns_resolvers,
 			dns_port,
-		}
-		.try_to_vec()
+		})
 		.expect("ProtocolMsg can always be serialized.");
 		stream.send(&req)?;
 		let resp_bytes = stream.recv()?;
@@ -93,8 +92,7 @@ impl ProxyStream {
 		port: u16,
 	) -> Result<Self, QosNetError> {
 		let stream: Stream = Stream::connect(addr, timeout)?;
-		let req = ProxyMsg::ConnectByIpRequest { ip, port }
-			.try_to_vec()
+		let req = borsh::to_vec(&ProxyMsg::ConnectByIpRequest { ip, port })
 			.expect("ProtocolMsg can always be serialized.");
 		stream.send(&req)?;
 		let resp_bytes = stream.recv()?;
@@ -119,9 +117,10 @@ impl ProxyStream {
 	/// Close the remote connection
 	pub fn close(&mut self) -> Result<(), QosNetError> {
 		let stream: Stream = Stream::connect(&self.addr, self.timeout)?;
-		let req = ProxyMsg::CloseRequest { connection_id: self.connection_id }
-			.try_to_vec()
-			.expect("ProtocolMsg can always be serialized.");
+		let req = borsh::to_vec(&ProxyMsg::CloseRequest {
+			connection_id: self.connection_id,
+		})
+		.expect("ProtocolMsg can always be serialized.");
 		stream.send(&req)?;
 		let resp_bytes = stream.recv()?;
 
@@ -145,11 +144,10 @@ impl Read for ProxyStream {
 		)
 			})?;
 
-		let req = ProxyMsg::ReadRequest {
+		let req = borsh::to_vec(&ProxyMsg::ReadRequest {
 			connection_id: self.connection_id,
 			size: buf.len(),
-		}
-		.try_to_vec()
+		})
 		.expect("ProtocolMsg can always be serialized.");
 		stream.send(&req).map_err(|e| {
 			std::io::Error::new(
@@ -210,11 +208,10 @@ impl Write for ProxyStream {
 		)
 			})?;
 
-		let req = ProxyMsg::WriteRequest {
+		let req = borsh::to_vec(&ProxyMsg::WriteRequest {
 			connection_id: self.connection_id,
 			data: buf.to_vec(),
-		}
-		.try_to_vec()
+		})
 		.expect("ProtocolMsg can always be serialized.");
 		stream.send(&req).map_err(|e| {
 			std::io::Error::new(
@@ -262,9 +259,10 @@ impl Write for ProxyStream {
 				)
 			})?;
 
-		let req = ProxyMsg::FlushRequest { connection_id: self.connection_id }
-			.try_to_vec()
-			.expect("ProtocolMsg can always be serialized.");
+		let req = borsh::to_vec(&ProxyMsg::FlushRequest {
+			connection_id: self.connection_id,
+		})
+		.expect("ProtocolMsg can always be serialized.");
 
 		stream.send(&req).map_err(|e| {
 			std::io::Error::new(
@@ -388,13 +386,12 @@ mod test {
 			dns_resolvers: Vec<String>,
 			dns_port: u16,
 		) -> Result<Self, QosNetError> {
-			let req = ProxyMsg::ConnectByNameRequest {
+			let req = borsh::to_vec(&ProxyMsg::ConnectByNameRequest {
 				hostname: hostname.clone(),
 				port,
 				dns_resolvers,
 				dns_port,
-			}
-			.try_to_vec()
+			})
 			.expect("ProtocolMsg can always be serialized.");
 			let mut proxy = Box::new(Proxy::new());
 			let resp_bytes = proxy.process(req);
@@ -429,11 +426,10 @@ mod test {
 
 	impl Read for LocalStream {
 		fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
-			let req = ProxyMsg::ReadRequest {
+			let req = borsh::to_vec(&ProxyMsg::ReadRequest {
 				connection_id: self.connection_id,
 				size: buf.len(),
-			}
-			.try_to_vec()
+			})
 			.expect("ProtocolMsg can always be serialized.");
 			let resp_bytes = self.proxy.process(req);
 
@@ -475,11 +471,10 @@ mod test {
 
 	impl Write for LocalStream {
 		fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
-			let req = ProxyMsg::WriteRequest {
+			let req = borsh::to_vec(&ProxyMsg::WriteRequest {
 				connection_id: self.connection_id,
 				data: buf.to_vec(),
-			}
-			.try_to_vec()
+			})
 			.expect("ProtocolMsg can always be serialized.");
 			let resp_bytes = self.proxy.process(req);
 
@@ -507,10 +502,10 @@ mod test {
 		}
 
 		fn flush(&mut self) -> Result<(), std::io::Error> {
-			let req =
-				ProxyMsg::FlushRequest { connection_id: self.connection_id }
-					.try_to_vec()
-					.expect("ProtocolMsg can always be serialized.");
+			let req = borsh::to_vec(&ProxyMsg::FlushRequest {
+				connection_id: self.connection_id,
+			})
+			.expect("ProtocolMsg can always be serialized.");
 			let resp_bytes = self.proxy.process(req);
 
 			match ProxyMsg::try_from_slice(&resp_bytes) {

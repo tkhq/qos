@@ -442,8 +442,8 @@ mod test {
 	fn stream_implements_read_write_traits() {
 		let socket_server_path = "./stream_implements_read_write_traits.sock";
 
-		// Start a barebone socket server which replies "Roger that." to any
-		// incoming request
+		// Start a simple socket server which replies "PONG" to any incoming
+		// request
 		let mut server =
 			HarakiriPongServer::new(socket_server_path.to_string());
 		thread::spawn(move || {
