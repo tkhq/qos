@@ -403,7 +403,7 @@ mod test {
 
 				// Send "PONG" if "PING" was sent
 				if from_utf8(&buf).unwrap() == "PING" {
-					stream.write(b"PONG").unwrap();
+					let _ = stream.write(b"PONG").unwrap();
 				}
 
 				// Then shutdown the server

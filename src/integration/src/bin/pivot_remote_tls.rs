@@ -4,7 +4,7 @@ use std::{
 	sync::Arc,
 };
 
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use integration::PivotRemoteTlsMsg;
 use qos_core::{
 	io::{SocketAddress, TimeVal},
@@ -86,10 +86,9 @@ impl RequestProcessor for Processor {
 
 				let fetched_content =
 					std::str::from_utf8(&response_bytes).unwrap();
-				PivotRemoteTlsMsg::RemoteTlsResponse(format!(
+				borsh::to_vec(&PivotRemoteTlsMsg::RemoteTlsResponse(format!(
 					"Content fetched successfully: {fetched_content}"
-				))
-				.try_to_vec()
+				)))
 				.expect("RemoteTlsResponse is valid borsh")
 			}
 			PivotRemoteTlsMsg::RemoteTlsResponse(_) => {

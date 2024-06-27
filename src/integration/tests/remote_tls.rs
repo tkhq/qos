@@ -1,6 +1,5 @@
 use std::{process::Command, str};
 
-use borsh::BorshSerialize;
 use integration::{PivotRemoteTlsMsg, PIVOT_REMOTE_TLS_PATH, QOS_NET_PATH};
 use qos_core::{
 	client::Client,
@@ -34,11 +33,10 @@ fn fetch_remote_tls_content() {
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 	);
 
-	let app_request = PivotRemoteTlsMsg::RemoteTlsRequest {
+	let app_request = borsh::to_vec(&PivotRemoteTlsMsg::RemoteTlsRequest {
 		host: "api.turnkey.com".to_string(),
 		path: "/health".to_string(),
-	}
-	.try_to_vec()
+	})
 	.unwrap();
 
 	let response = enclave_client.send(&app_request).unwrap();
@@ -48,11 +46,10 @@ fn fetch_remote_tls_content() {
 	assert!(response_text.contains("HTTP/1.1 200 OK"));
 	assert!(response_text.contains("currentTime"));
 
-	let app_request = PivotRemoteTlsMsg::RemoteTlsRequest {
+	let app_request = borsh::to_vec(&PivotRemoteTlsMsg::RemoteTlsRequest {
 		host: "www.googleapis.com".to_string(),
 		path: "/oauth2/v3/certs".to_string(),
-	}
-	.try_to_vec()
+	})
 	.unwrap();
 
 	let response = enclave_client.send(&app_request).unwrap();
