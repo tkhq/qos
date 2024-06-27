@@ -181,7 +181,6 @@ impl Read for ProxyStream {
 					for (i, b) in data.iter().enumerate() {
 						buf[i] = *b
 					}
-					println!("READ {}: read {} bytes", buf.len(), size);
 					Ok(size)
 				}
 				ProxyMsg::ProxyError(e) => Err(std::io::Error::new(
@@ -240,7 +239,6 @@ impl Write for ProxyStream {
 							"Write failed: 0 bytes written",
 						));
 					}
-					println!("WRITE {}: sent buf of {} bytes", buf.len(), size);
 					Ok(size)
 				}
 				_ => Err(std::io::Error::new(
@@ -284,10 +282,7 @@ impl Write for ProxyStream {
 
 		match ProxyMsg::try_from_slice(&resp_bytes) {
 			Ok(resp) => match resp {
-				ProxyMsg::FlushResponse { connection_id: _ } => {
-					println!("FLUSH OK");
-					Ok(())
-				}
+				ProxyMsg::FlushResponse { connection_id: _ } => Ok(()),
 				_ => Err(std::io::Error::new(
 					ErrorKind::InvalidData,
 					"unexpected response",
@@ -459,7 +454,6 @@ mod test {
 						for (i, b) in data.iter().enumerate() {
 							buf[i] = *b
 						}
-						println!("READ {}: read {} bytes", buf.len(), size);
 						Ok(size)
 					}
 					ProxyMsg::ProxyError(e) => Err(std::io::Error::new(
@@ -498,7 +492,6 @@ mod test {
 								"failed Write",
 							));
 						}
-						println!("WRITE {}: sent {} bytes", buf.len(), size,);
 						Ok(size)
 					}
 					_ => Err(std::io::Error::new(
@@ -522,10 +515,7 @@ mod test {
 
 			match ProxyMsg::try_from_slice(&resp_bytes) {
 				Ok(resp) => match resp {
-					ProxyMsg::FlushResponse { connection_id: _ } => {
-						println!("FLUSH OK");
-						Ok(())
-					}
+					ProxyMsg::FlushResponse { connection_id: _ } => Ok(()),
 					_ => Err(std::io::Error::new(
 						ErrorKind::InvalidData,
 						"unexpected response",

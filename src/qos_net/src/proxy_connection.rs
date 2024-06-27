@@ -32,20 +32,15 @@ impl ProxyConnection {
 		dns_resolvers: Vec<String>,
 		dns_port: u16,
 	) -> Result<ProxyConnection, QosNetError> {
-		println!("new_from_name invoked");
 		let ip = resolve_hostname(hostname, dns_resolvers, dns_port)?;
-		println!("resolved name into an IP");
 
 		// Generate a new random u32 to get an ID. We'll use it to name our
 		// socket. This will be our connection ID.
 		let mut rng = rand::thread_rng();
 		let connection_id: u32 = rng.gen::<u32>();
-		println!("Random connection ID generated");
 
 		let tcp_addr = SocketAddr::new(ip, port);
-		println!("TCP addr created. Connecting...");
 		let tcp_stream = TcpStream::connect(tcp_addr)?;
-		println!("Connected");
 		Ok(ProxyConnection {
 			id: connection_id,
 			ip: ip.to_string(),
@@ -93,7 +88,6 @@ fn resolve_hostname(
 	resolver_addrs: Vec<String>,
 	port: u16,
 ) -> Result<IpAddr, QosNetError> {
-	println!("resolving hostname...");
 	let resolver_parsed_addrs = resolver_addrs
 		.iter()
 		.map(|resolver_address| {
@@ -113,12 +107,8 @@ fn resolve_hostname(
 		),
 	);
 	let resolver = Resolver::new(resolver_config, ResolverOpts::default())?;
-	println!("resolver ready");
-	let response = resolver.lookup_ip(hostname.clone()).map_err(|e| {
-		println!("error invoking resolver: {:?}", e);
-		QosNetError::from(e)
-	})?;
-	println!("resolver successfully invoked");
+	let response =
+		resolver.lookup_ip(hostname.clone()).map_err(QosNetError::from)?;
 	response.iter().next().ok_or_else(|| {
 		QosNetError::DNSResolutionError(format!(
 			"Empty response when querying for host {hostname}"
