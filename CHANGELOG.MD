@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project used to adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) but we've since
-moved out of versioning: `mono` references `qos` with a submodule (git SHA pointer).
+moved out of versioning: we use submodule references to pull `qos` into repositories which depend on it (git SHA pointer).
 
 If you're changing QOS in a meaningful way, please add a changelog entry, but no need to group these in version sections.
 
