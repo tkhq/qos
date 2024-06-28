@@ -36,14 +36,13 @@ jobs:
       - name: Run doc generation
         run: make docs
 
-# Currently broken locally
-#  lint:
-#    name: lint
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#      - name: Setup Docker
-#        uses: ./.github/actions/docker-setup
-#      - name: Run linting
-#        run: make lint
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
+      - name: Run linting
+        run: make lint
