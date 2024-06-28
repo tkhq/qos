@@ -109,7 +109,7 @@ impl fmt::Debug for GenesisOutput {
 			.field("threshold", &self.threshold)
 			.field("member_outputs", &self.member_outputs)
 			.field("recovery_permutations", &self.recovery_permutations)
-			.finish()
+			.finish_non_exhaustive()
 	}
 }
 

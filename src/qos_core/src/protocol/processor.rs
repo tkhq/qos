@@ -44,14 +44,11 @@ impl server::RequestProcessor for Processor {
 			.expect("ProtocolMsg can always be serialized. qed.");
 		}
 
-		let msg_req = match ProtocolMsg::try_from_slice(&req_bytes) {
-			Ok(req) => req,
-			Err(_) => {
-				return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
-					ProtocolError::ProtocolMsgDeserialization,
-				))
-				.expect("ProtocolMsg can always be serialized. qed.")
-			}
+		let Ok(msg_req) = ProtocolMsg::try_from_slice(&req_bytes) else {
+			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+				ProtocolError::ProtocolMsgDeserialization,
+			))
+			.expect("ProtocolMsg can always be serialized. qed.")
 		};
 
 		self.state.handle_msg(&msg_req)

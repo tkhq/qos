@@ -160,6 +160,9 @@ fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 }
 
 /// Generate n shares requiring k shares to reconstruct.
+/// 
+/// # Panics
+/// Panics if the number of shares exceeds 255
 #[must_use]
 pub fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
 	let mut shares = vec![vec![]; n];
@@ -178,7 +181,7 @@ pub fn shares_generate(secret: &[u8], n: usize, k: usize) -> Vec<Vec<u8>> {
 		for (i, share) in shares.iter_mut().enumerate().take(n) {
 			share.push(gf256_eval(
 				&f,
-				u8::try_from(i + 1).expect("exceeeded 255 shares"),
+				u8::try_from(i + 1).expect("exceeded 255 shares"),
 			));
 		}
 	}
