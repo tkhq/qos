@@ -82,6 +82,7 @@ pub enum Error {
 	#[cfg(feature = "smartcard")]
 	WrongPublicKey,
 	/// An error trying to read a pin from the terminal
+	#[allow(clippy::enum_variant_names)]
 	#[cfg(feature = "smartcard")]
 	PinEntryError(std::io::Error),
 	/// Failed to read share
@@ -115,6 +116,7 @@ pub enum Error {
 	/// Failed to decode some hex
 	CouldNotDecodeHex(qos_hex::HexError),
 	/// Failed to deserialize something from borsh.
+	#[allow(clippy::enum_variant_names)]
 	BorshError,
 	FailedToReadDrKey(qos_p256::P256Error),
 	QosAttest(String),
@@ -134,6 +136,7 @@ pub enum Error {
 	BadDecryption,
 	/// The seed was read two different ways and the results did not match -
 	/// most likely a bug with the code.
+	#[allow(clippy::enum_variant_names)]
 	ErrorReadingSeed,
 	/// Given quorum key seed does not match the hash of the expected quorum
 	/// key seed.

@@ -162,12 +162,14 @@ impl HostServer {
 	}
 
 	/// Health route handler.
+	#[allow(clippy::unused_async)]
 	async fn host_health(_: State<Arc<QosHostState>>) -> impl IntoResponse {
 		println!("Host health...");
 		Html("Ok!")
 	}
 
 	/// Health route handler.
+	#[allow(clippy::unused_async)]
 	async fn enclave_health(
 		State(state): State<Arc<QosHostState>>,
 	) -> impl IntoResponse {
@@ -216,6 +218,7 @@ impl HostServer {
 		}
 	}
 
+	#[allow(clippy::unused_async)]
 	async fn enclave_info(
 		State(state): State<Arc<QosHostState>>,
 	) -> Result<Json<EnclaveInfo>, Error> {
@@ -290,6 +293,7 @@ impl HostServer {
 	}
 
 	/// Message route handler.
+	#[allow(clippy::unused_async)]
 	async fn message(
 		State(state): State<Arc<QosHostState>>,
 		encoded_request: Bytes,

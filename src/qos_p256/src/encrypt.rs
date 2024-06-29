@@ -162,10 +162,7 @@ impl P256EncryptPublic {
 			.encrypt(&nonce, payload)
 			.map_err(|_| P256Error::AesGcm256EncryptError)?;
 
-		let nonce = nonce
-			.try_into()
-			.map_err(|_| P256Error::FailedToCoerceNonceToIntendedLength)?;
-
+		let nonce = nonce.into();
 		let envelope =
 			Envelope { nonce, ephemeral_sender_public, encrypted_message };
 
@@ -359,6 +356,9 @@ impl AesGcm256Secret {
 	/// Encrypt the given `msg`.
 	///
 	/// Returns a serialized [`SymmetricEnvelope`].
+	/// 
+	/// # Panics
+	/// Panics if `self.secret` is an invalid AES256 secret. This should never happen in practice.
 	pub fn encrypt(&self, msg: &[u8]) -> Result<Vec<u8>, P256Error> {
 		let nonce = {
 			let random_bytes = bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
@@ -372,9 +372,7 @@ impl AesGcm256Secret {
 			.encrypt(&nonce, payload)
 			.map_err(|_| P256Error::AesGcm256EncryptError)?;
 
-		let nonce = nonce
-			.try_into()
-			.map_err(|_| P256Error::FailedToCoerceNonceToIntendedLength)?;
+		let nonce = nonce.into();
 		let envelope = SymmetricEnvelope { nonce, encrypted_message };
 		borsh::to_vec(&envelope)
 			.map_err(|_| P256Error::FailedToSerializeEnvelope)
@@ -383,6 +381,9 @@ impl AesGcm256Secret {
 	/// Decrypt the given serialized [`SymmetricEnvelope`].
 	///
 	/// Returns the plaintext.
+	/// 
+	/// # Panics
+	/// Panics if the secret is invalid. This should never happen in practice.
 	pub fn decrypt(
 		&self,
 		serialized_envelope: &[u8],

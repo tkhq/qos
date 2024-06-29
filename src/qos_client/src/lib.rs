@@ -19,6 +19,10 @@ pub mod request {
 	const MAX_SIZE: u64 = u32::MAX as u64;
 
 	/// Post a [`qos_core::protocol::msg::ProtocolMsg`] to the given host `url`.
+	/// 
+	/// # Panics
+	/// Panics if the `msg` cannot be Borsh serialized.
+	/// Should never happen in practice because all protocol messages are Borsh-serializable.
 	pub fn post(url: &str, msg: &ProtocolMsg) -> Result<ProtocolMsg, String> {
 		let mut buf: Vec<u8> = vec![];
 
