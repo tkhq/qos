@@ -902,7 +902,7 @@ fn approve_manifest_programmatic_verifications(
 
 	// Verify the intended Quorum Key is being used
 	if manifest.namespace.quorum_key != quorum_key.to_bytes() {
-		eprintln!("Pivot commit does not match");
+		eprintln!("Quorum public key does not match");
 		return false;
 	}
 
