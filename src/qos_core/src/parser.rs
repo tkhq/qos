@@ -145,13 +145,13 @@ impl Parser {
 		self
 	}
 
-	/// Wether or not the user passed in `--help`. Should always be checked.
+	/// Whether or not the user passed in `--help`. Should always be checked.
 	#[must_use]
 	pub fn help(&self) -> bool {
 		self.token_map.get_flag(HELP).unwrap_or(false)
 	}
 
-	/// Wether or not the user passed in `--version`. Should always be checked.
+	/// Whether or not the user passed in `--version`. Should always be checked.
 	#[must_use]
 	pub fn version(&self) -> bool {
 		self.token_map.get_flag(VERSION).unwrap_or(false)

@@ -8,7 +8,7 @@ LOCAL_EPH_PATH := ./local-enclave/qos.ephemeral.key
 .PHONY: local-enclave
 local-enclave:
 	@# Remove the directory where we default to setting up the enclave file system
-	rm -rf ./local-encalve
+	rm -rf ./local-enclave
 	@# Start the enclave with mock feature and mock flag so we can use the MockNSM
 	cargo run --bin qos_core \
 		--features mock \
