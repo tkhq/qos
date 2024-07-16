@@ -11,7 +11,7 @@ qos_p256 = { path = "../qos_p256" }
 qos_nsm = { path = "../qos_nsm", default-features = false }
 
 nix = { version = "0.26", features = ["socket"], default-features = false }
-libc = "=0.2.148"
+libc = "=0.2.149"
 borsh = { version = "1.0", features = ["std", "derive"] , default-features = false}
 
 # For AWS Nitro
