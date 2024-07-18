@@ -54,6 +54,10 @@ We use [git-sig][gs] for this.
 
 Please install it in order to follow our signing and verification steps.
 
+Two libraries you may need to `brew install` first are `bash` in order to get to version 5+ and `gnu-getopt`.  After
+installing `gnu-getopt` in order to get it to be the one that is automatically picked up on the PATH, follow the instructions
+provided by `brew` in order to update your PATH.  
+
 ### Reproduce ###
 
 This allows you to prove that published binaries correspond with the source
