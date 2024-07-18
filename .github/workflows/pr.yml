@@ -4,7 +4,7 @@ name: PR
 
 jobs:
   checkout_and_setup:
-    name: Checkout Sources and Setup Docker:
+    name: Checkout Sources and Setup Docker
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
