@@ -3,14 +3,19 @@ on: [pull_request]
 name: PR
 
 jobs:
-  test:
-    name: test
+  checkout_and_setup:
+    name: Checkout Sources and Setup Docker:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    needs: checkout_and_setup
+    steps:
       - name: Run tests
         run: make test
 
