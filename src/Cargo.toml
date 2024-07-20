@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "benchmarking",
   "integration",
   "qos_client",
   "qos_core",
