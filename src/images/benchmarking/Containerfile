@@ -1,0 +1,16 @@
+ARG BASE_IMAGE=common
+
+FROM ${BASE_IMAGE} as base_image
+FROM common as base
+
+FROM base as build-benchmarking
+ADD . /src
+ARG BASE_IMAGE
+RUN <<-EOF
+	set -eux
+	env -C /src/benchmarking cargo build ${CARGOFLAGS}
+	cp /src/benchmarking/target/${TARGET}/release/benchmarking /
+	file /benchmarking/${BASE_IMAGE} | grep "static-pie"
+EOF
+
+ENTRYPOINT ["/benchmark"]

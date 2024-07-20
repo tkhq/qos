@@ -2,6 +2,7 @@ include src/macros.mk
 
 REGISTRY := local
 .DEFAULT_GOAL :=
+
 .PHONY: default
 default: \
 	out/qos_client/index.json \
@@ -75,6 +76,14 @@ out/qos_client/index.json: \
 		src/qos_core \
 	)
 	$(call build,qos_client)
+
+out/benchmarking/index.json: \
+	out/$(BASE_IMAGE)/index.json \
+	src/images/benchmarking/Containerfile \
+	$(shell git ls-files \
+		src/benchmarking \
+	)
+	$(call build,benchmarking,,$(BASE_IMAGE))
 
 out/common/index.json: \
 	src/images/common/Containerfile
