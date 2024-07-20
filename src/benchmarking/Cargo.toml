@@ -1,7 +1,9 @@
 [package]
 name = "benchmarking"
 version = "0.1.0"
-edition = "2021"
+authors = [""]
+edition = "2018"
+rust-version = "1.61"
 publish = false
 
 [dependencies]
@@ -10,3 +12,7 @@ reqwest = { version = "0.11", features = ["json", "stream", "time"] }
 criterion = "0.5.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
+
+[[bench]]
+name = "maloc"
+harness = false
