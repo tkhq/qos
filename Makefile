@@ -1,6 +1,7 @@
 include src/macros.mk
 
 REGISTRY := local
+BASE_IMAGE ?= common
 .DEFAULT_GOAL :=
 
 .PHONY: default
