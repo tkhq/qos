@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qos-enclave-benchmarking
+  labels:
+    qos.turnkey.io: benchmarking
+spec:
+  template:
+    spec:
+      containers:
+        - name: qos-enclave-benchmarking
+          image: ghcr.io/tkhq/benchmarking/qos_enclave
+          command:
+            - /benchmark

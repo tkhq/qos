@@ -5,8 +5,8 @@ resources:
 
 patches:
   - target:
-      group: apps
+      group: benchmarking
       version: v1
       kind: Deployment
-      labelSelector: qos.turnkey.io=app
+      labelSelector: qos.turnkey.io=benchmarking
     path: deployment.yaml
