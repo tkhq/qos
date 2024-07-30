@@ -177,7 +177,7 @@ pub fn import_key_and_generate_signed_certificate(
 }
 
 /// Sign data with the yubikey and return the signature as a raw bytes.
-/// 
+///
 /// # Panics
 /// Panics if `piv::sign_data` doesn't return a valid DER signature
 pub fn sign_data(

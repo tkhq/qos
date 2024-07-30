@@ -299,14 +299,17 @@ mod test {
 
 	use std::{io::ErrorKind, sync::Arc};
 
+	use chunked_transfer::Decoder;
+	use httparse::Response;
 	use qos_core::server::RequestProcessor;
 	use rustls::{RootCertStore, SupportedCipherSuite};
+	use serde_json::Value;
 
 	use super::*;
 	use crate::proxy::Proxy;
 
 	#[test]
-	fn can_fetch_tls_content_with_local_stream() {
+	fn can_fetch_and_parse_chunked_json_over_tls_with_local_stream() {
 		let host = "www.googleapis.com";
 		let path = "/oauth2/v3/certs";
 
@@ -361,14 +364,37 @@ mod test {
 				assert_eq!(e.kind(), ErrorKind::UnexpectedEof)
 			}
 		}
-
 		// We should be at 0 connections in our proxy: either the remote
 		// auto-closed (UnexpectedEof), or we did.
 		assert_eq!(stream.num_connections(), 0);
 
-		let response_text = std::str::from_utf8(&response_bytes).unwrap();
-		assert!(response_text.contains("HTTP/1.1 200 OK"));
-		assert!(response_text.contains("keys"));
+		// Parse headers with httparse
+		let mut headers = [httparse::EMPTY_HEADER; 16];
+		let mut response = Response::new(&mut headers);
+		let res = httparse::ParserConfig::default()
+			.parse_response(&mut response, &response_bytes);
+		assert!(matches!(res, Ok(httparse::Status::Complete(..))));
+		assert_eq!(response.code, Some(200));
+		let header_byte_size = res.unwrap().unwrap();
+
+		// Assert that the response is chunk-encoded
+		let transfer_encoding_header =
+			response.headers.iter().find(|h| h.name == "Transfer-Encoding");
+		assert!(transfer_encoding_header.is_some());
+		assert_eq!(
+			transfer_encoding_header.unwrap().value,
+			"chunked".as_bytes()
+		);
+
+		// Decode the chunked content
+		let mut decoded = String::new();
+		let mut decoder = Decoder::new(&response_bytes[header_byte_size..]);
+		let res = decoder.read_to_string(&mut decoded);
+		assert!(res.is_ok());
+
+		// Parse the JSON response body and make sure there is a proper "keys" array in it
+		let json_content: Value = serde_json::from_str(&decoded).unwrap();
+		assert!(json_content["keys"].is_array());
 	}
 
 	/// Struct representing a stream, with direct access to the proxy.
