@@ -356,9 +356,10 @@ impl AesGcm256Secret {
 	/// Encrypt the given `msg`.
 	///
 	/// Returns a serialized [`SymmetricEnvelope`].
-	/// 
+	///
 	/// # Panics
-	/// Panics if `self.secret` is an invalid AES256 secret. This should never happen in practice.
+	/// Panics if `self.secret` is an invalid AES256 secret. This should never
+	/// happen in practice.
 	pub fn encrypt(&self, msg: &[u8]) -> Result<Vec<u8>, P256Error> {
 		let nonce = {
 			let random_bytes = bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
@@ -381,7 +382,7 @@ impl AesGcm256Secret {
 	/// Decrypt the given serialized [`SymmetricEnvelope`].
 	///
 	/// Returns the plaintext.
-	/// 
+	///
 	/// # Panics
 	/// Panics if the secret is invalid. This should never happen in practice.
 	pub fn decrypt(

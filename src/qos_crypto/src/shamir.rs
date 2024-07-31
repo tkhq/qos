@@ -160,7 +160,7 @@ fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 }
 
 /// Generate n shares requiring k shares to reconstruct.
-/// 
+///
 /// # Panics
 /// Panics if the number of shares exceeds 255
 #[must_use]

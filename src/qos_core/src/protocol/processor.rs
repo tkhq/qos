@@ -48,7 +48,7 @@ impl server::RequestProcessor for Processor {
 			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
 				ProtocolError::ProtocolMsgDeserialization,
 			))
-			.expect("ProtocolMsg can always be serialized. qed.")
+			.expect("ProtocolMsg can always be serialized. qed.");
 		};
 
 		self.state.handle_msg(&msg_req)
