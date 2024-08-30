@@ -422,11 +422,10 @@ mod test {
 			let response =
 				boot_key_forward(&mut state, &manifest_envelope, &pivot)
 					.unwrap();
-			match response {
-				NsmResponse::Attestation { document } => {
-					assert!(!document.is_empty());
-				}
-				_ => panic!(),
+			if let NsmResponse::Attestation { document } = response {
+				assert!(!document.is_empty());
+			} else {
+				panic!()
 			};
 
 			assert!(handles.pivot_exists());

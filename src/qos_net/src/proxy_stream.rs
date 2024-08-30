@@ -392,7 +392,8 @@ mod test {
 		let res = decoder.read_to_string(&mut decoded);
 		assert!(res.is_ok());
 
-		// Parse the JSON response body and make sure there is a proper "keys" array in it
+		// Parse the JSON response body and make sure there is a proper "keys"
+		// array in it
 		let json_content: Value = serde_json::from_str(&decoded).unwrap();
 		assert!(json_content["keys"].is_array());
 	}
