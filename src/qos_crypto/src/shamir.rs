@@ -1,6 +1,8 @@
-//! Shamir Secret Sharing implementation.
-// Grabbed from here:
-// https://github.com/veracruz-project/veracruz/blob/main/sdk/data-generators/shamir-secret-sharing/src/main.rs
+//! Shamir's Secret Sharing implementation
+// The original self-contained SSS Gf256 implementation is adopted from
+// https://github.com/veracruz-project/veracruz/blob/398e4d3ab3023492a64ea91740528e58776e1827/sdk/data-generators/shamir-secret-sharing/src/main.rs
+// The original code is under MIT license, see
+// https://github.com/veracruz-project/veracruz/blob/398e4d3ab3023492a64ea91740528e58776e1827/LICENSE_MIT.markdown
 
 use std::{convert::TryFrom, iter};
 
