@@ -206,6 +206,10 @@ pub fn deprecated_insecure_shares_generate(
 }
 
 /// Generate `share_count` shares requiring `threshold` shares to reconstruct.
+///
+/// Known limitations:
+/// threshold >= 2
+/// share_count <= 255
 pub fn shares_generate(
 	secret: &[u8],
 	share_count: usize,
