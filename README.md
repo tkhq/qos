@@ -56,24 +56,7 @@ Please install it in order to follow our signing and verification steps.
 
 Two libraries you may need to `brew install` first are `bash` in order to get to version 5+ and `gnu-getopt`.  After
 installing `gnu-getopt` in order to get it to be the one that is automatically picked up on the PATH, follow the instructions
-provided by `brew` in order to update your PATH.  
-
-### Reproduce ###
-
-This allows you to prove that published binaries correspond with the source
-code in this repo.
-
-It is recommended to read the "reproduce" target in "src/toolchain/Makefile" to
-ensure you understand how it functions.
-
-It will preserve hashes of all binaries in tree, remove them all, build from
-scratch, then verify new hashes match the old ones.
-
-```
-make reproduce
-```
-
-If this target exits 0, then the attestation was successful.
+provided by `brew` in order to update your PATH.
 
 ### Verify ###
 
@@ -175,18 +158,3 @@ make toolchain-update
 
 
 [gs]: https://codeberg.org/distrust/git-sig
-
-### LFS setup
-
-This repository externalises large files so that they do not bulk up the git repo itself.
-This is done through a tool called `git-lfs`, which must be installed for it to work.
-Additionally, we use a custom agent to store our LFS objects in S3 (rather than the default and more expensive Github LFS service).
-
-In order to setup our s3 based lfs:
-
-1) Install [tkinfra](https://github.com/tkhq/mono/tree/main/src/go/tkinfra)
-2) Run `./scripts/setup-lfs.sh`
-
-#### Troubleshooting
-
-Our mono repo uses the same lfs configuration. For troubleshooting tips consult monos [LFS troubleshooting](https://github.com/tkhq/mono#troubleshooting-lfs) section.
