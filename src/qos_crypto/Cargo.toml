@@ -11,6 +11,7 @@ sha2 = { version = "0.10", default-features = false }
 rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
 vsss-rs = { version = "4.3", default-features = false, features = ["std"] }
 rand_core = { version = "0.6.4", default-features = false }
+thiserror = "1.0.63"
 
 [dev-dependencies]
 qos_hex = { path = "../qos_hex" }
