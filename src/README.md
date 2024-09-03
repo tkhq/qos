@@ -12,19 +12,15 @@ The Quorum Key itself can be used by QuorumOS and enclave apps to encrypt and au
 
 ### Submitting a PR
 
-Before a PR can be merged it must:
-
-Be formatted
+Before a PR can be merged, you must run
 
 ```bash
-make lint
+make lint  # apply standardized code formatting
+make test  # run unit tests locally
 ```
 
-And pass all tests
+All tests must pass.
 
-```bash
-make test
-```
 
 The PR will also need to pass the `build-linux-only-crates` github workflow. There are 3 crates excluded from the rust workspace: `qos_system`, `qos_aws`, and `init`. These crates are excluded because they only build on linux. If you are not working directly with these crates they generally only need to be updated if the dependencies for `qos_core` change. The linux only crates each have their own lockfile and that will need to be up to date for deterministic builds to work. To update the locks files you will need a linux build environment. Once in a linux build enviroment you can run `make build-linux-only`, which will update lock files if neccesary; any updated lock files should then be committed.
 
