@@ -164,16 +164,19 @@ fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 	y
 }
 
-/// This is an old implementation. We are only keeping it here to show that
-/// the new implementation is backwards compatible.
+/// This is an old implementation with known runtime security problems and insufficient parameter checks.
+/// We are keeping it here to show that the new implementation is backwards compatible.
 ///
-/// The known differences are:
-/// n=1 k=1 should be valid but triggers `SharingMinThreshold` in new impl
-/// n=2 k=1 should be valid triggers `SharingMinThreshold` in new impl
+/// For meaningful k-of-n share configurations with k >= 2, this share generation mechanism
+/// should be fully compatible in both directions.
 ///
-/// Generate n shares requiring k shares to reconstruct.
+/// 1-of-n share generations (k=1) are rejected by the new vsss-rs implementation and not compatible.
+///
+/// Examples:
+/// n=1 k=1 should be possible but triggers `SharingMinThreshold` in new impl
+/// n=2 k=1 should be possible but triggers `SharingMinThreshold` in new impl
 #[must_use]
-pub fn deprecated_shares_generate(
+pub fn deprecated_insecure_shares_generate(
 	secret: &[u8],
 	n: usize,
 	k: usize,
