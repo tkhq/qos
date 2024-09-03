@@ -217,18 +217,13 @@ pub fn shares_generate(
 		.map_err(QosCryptoError::Vsss)
 }
 
-/// This is an old implementation. We are only keeping it here to show that
-/// the new implementation is backwards compatible.
+/// This is an old implementation with known runtime security problems and insufficient internal checks.
+/// We are keeping it here to show that the new implementation is mostly backwards compatible.
 ///
-/// The only case when this is used is for when we have a set of 1 share, which
-/// can be useful for development.
-///
-/// The known differences are:
-/// n=1 k=1 should be valid but triggers `SharingMinThreshold` in new impl
-/// n=2 k=1 should be valid triggers `SharingMinThreshold` in new impl
-///
-/// Reconstruct our secret from the given `shares`.
-pub fn deprecated_shares_reconstruct<S: AsRef<[u8]>>(shares: &[S]) -> Vec<u8> {
+/// See the corresponding deprecated share generation function for details on the known differences.
+pub fn deprecated_insecure_shares_reconstruct<S: AsRef<[u8]>>(
+	shares: &[S],
+) -> Vec<u8> {
 	let len = shares.iter().map(|s| s.as_ref().len()).min().unwrap_or(0);
 	// rather than erroring, return empty secrets if input is malformed.
 	// This matches the behavior of bad shares (random output) and simplifies
@@ -271,21 +266,21 @@ mod test {
 		// Reconstruct with all the shares
 		let shares = all_shares.clone();
 		let reconstructed = shares_reconstruct(&shares).unwrap();
-		let old_reconstructed = deprecated_shares_reconstruct(&shares);
+		let old_reconstructed = deprecated_insecure_shares_reconstruct(&shares);
 		assert_eq!(secret.to_vec(), reconstructed);
 		assert_eq!(secret.to_vec(), old_reconstructed);
 
 		// Reconstruct with enough shares
 		let shares = &all_shares[..k];
 		let reconstructed = shares_reconstruct(shares).unwrap();
-		let old_reconstructed = deprecated_shares_reconstruct(shares);
+		let old_reconstructed = deprecated_insecure_shares_reconstruct(shares);
 		assert_eq!(secret.to_vec(), reconstructed);
 		assert_eq!(secret.to_vec(), old_reconstructed);
 
 		// Reconstruct with not enough shares
 		let shares = &all_shares[..(k - 1)];
 		let reconstructed = shares_reconstruct(shares).unwrap();
-		let old_reconstructed = deprecated_shares_reconstruct(shares);
+		let old_reconstructed = deprecated_insecure_shares_reconstruct(shares);
 		assert!(secret.to_vec() != reconstructed);
 		assert!(secret.to_vec() != old_reconstructed);
 
@@ -293,13 +288,14 @@ mod test {
 		let mut shares = all_shares.clone()[..k].to_vec();
 		shares.shuffle(&mut rand::thread_rng());
 		let reconstructed = shares_reconstruct(&shares).unwrap();
-		let old_reconstructed = deprecated_shares_reconstruct(&shares);
+		let old_reconstructed = deprecated_insecure_shares_reconstruct(&shares);
 		assert_eq!(secret.to_vec(), reconstructed);
 		assert_eq!(secret.to_vec(), old_reconstructed);
 
 		for combo in crate::n_choose_k::combinations(&all_shares, k) {
 			let reconstructed = shares_reconstruct(&combo).unwrap();
-			let old_reconstructed = deprecated_shares_reconstruct(&shares);
+			let old_reconstructed =
+				deprecated_insecure_shares_reconstruct(&shares);
 			assert_eq!(secret.to_vec(), reconstructed);
 			assert_eq!(secret.to_vec(), old_reconstructed);
 		}

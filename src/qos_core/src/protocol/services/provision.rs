@@ -36,7 +36,9 @@ impl SecretBuilder {
 		let secret = if self.shares.len() == 1 {
 			// For development, turnkey has a share set of 1, which is not
 			// supported by vsss-rs
-			qos_crypto::shamir::deprecated_shares_reconstruct(&self.shares)
+			qos_crypto::shamir::deprecated_insecure_shares_reconstruct(
+				&self.shares,
+			)
 		} else {
 			qos_crypto::shamir::shares_reconstruct(&self.shares)
 				.map_err(|e| ProtocolError::QosCrypto(format!("{e:?}")))?
