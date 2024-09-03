@@ -164,13 +164,15 @@ fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 	y
 }
 
-/// This is an old implementation with known runtime security problems and insufficient parameter checks.
-/// We are keeping it here to show that the new implementation is backwards compatible.
+/// This is an old implementation with known runtime security problems and
+/// insufficient parameter checks. We are keeping it here to show that the new
+/// implementation is backwards compatible.
 ///
-/// For meaningful k-of-n share configurations with k >= 2, this share generation mechanism
-/// should be fully compatible in both directions.
+/// For meaningful k-of-n share configurations with k >= 2, this share
+/// generation mechanism should be fully compatible in both directions.
 ///
-/// 1-of-n share generations (k=1) are rejected by the new vsss-rs implementation and not compatible.
+/// 1-of-n share generations (k=1) are rejected by the new vsss-rs
+/// implementation and not compatible.
 ///
 /// Examples:
 /// n=1 k=1 should be possible but triggers `SharingMinThreshold` in new impl
@@ -209,7 +211,7 @@ pub fn deprecated_insecure_shares_generate(
 ///
 /// Known limitations:
 /// threshold >= 2
-/// share_count <= 255
+/// `share_count` <= 255
 pub fn shares_generate(
 	secret: &[u8],
 	share_count: usize,
@@ -221,10 +223,12 @@ pub fn shares_generate(
 		.map_err(QosCryptoError::Vsss)
 }
 
-/// This is an old implementation with known runtime security problems and insufficient internal checks.
-/// We are keeping it here to show that the new implementation is mostly backwards compatible.
+/// This is an old implementation with known runtime security problems and
+/// insufficient internal checks. We are keeping it here to show that the new
+/// implementation is mostly backwards compatible.
 ///
-/// See the corresponding deprecated share generation function for details on the known differences.
+/// See the corresponding deprecated share generation function for details on
+/// the known differences.
 pub fn deprecated_insecure_shares_reconstruct<S: AsRef<[u8]>>(
 	shares: &[S],
 ) -> Vec<u8> {

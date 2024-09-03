@@ -2176,8 +2176,9 @@ pub(crate) fn shamir_reconstruct(
 		})
 		.collect::<Result<Vec<Vec<u8>>, Error>>()?;
 
-	let secret =
-		Zeroizing::new(qos_crypto::shamir::shares_reconstruct(shares).unwrap());
+	let reconstructed = qos_crypto::shamir::shares_reconstruct(shares)
+		.expect("Reconstruction failed");
+	let secret = Zeroizing::new(reconstructed);
 
 	write_with_msg(output_path.as_ref(), &secret, "Reconstructed secret");
 
