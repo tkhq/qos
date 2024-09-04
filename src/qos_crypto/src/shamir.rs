@@ -199,7 +199,7 @@ pub fn deprecated_insecure_shares_generate(
 		for (i, share) in shares.iter_mut().enumerate().take(n) {
 			share.push(gf256_eval(
 				&f,
-				u8::try_from(i + 1).expect("exceeeded 255 shares"),
+				u8::try_from(i + 1).expect("exceeded 255 shares"),
 			));
 		}
 	}

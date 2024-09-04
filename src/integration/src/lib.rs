@@ -25,6 +25,10 @@ pub const PIVOT_LOOP_PATH: &str = "../target/debug/pivot_loop";
 pub const PIVOT_ABORT_PATH: &str = "../target/debug/pivot_abort";
 /// Path to pivot panic for tests.
 pub const PIVOT_PANIC_PATH: &str = "../target/debug/pivot_panic";
+/// Path to an enclave app that has routes to test remote connection features.
+pub const PIVOT_REMOTE_TLS_PATH: &str = "../target/debug/pivot_remote_tls";
+/// Path to an enclave app that has routes to test remote connection features.
+pub const QOS_NET_PATH: &str = "../target/debug/qos_net";
 /// Path to an enclave app that has routes to stress our socket.
 pub const PIVOT_SOCKET_STRESS_PATH: &str =
 	"../target/debug/pivot_socket_stress";
@@ -53,6 +57,23 @@ pub enum PivotSocketStressMsg {
 	SlowRequest,
 	/// Response to [`Self::SlowRequest`].
 	SlowResponse,
+}
+
+/// Request/Response messages for "socket stress" pivot app.
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
+pub enum PivotRemoteTlsMsg {
+	/// Request a remote host / port to be fetched over the socket.
+	/// We assume the port to be 443, and we use Google's servers to perform
+	/// DNS resolution (8.8.8.8)
+	RemoteTlsRequest {
+		/// Hostname (e.g. "api.turnkey.com")
+		host: String,
+		/// Path to fetch (e.g. "/health")
+		path: String,
+	},
+	/// A successful response to [`Self::RemoteTlsRequest`] with the contents
+	/// of the response.
+	RemoteTlsResponse(String),
 }
 
 struct PivotParser;

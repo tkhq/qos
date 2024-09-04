@@ -27,7 +27,7 @@ use axum::{
 	routing::{get, post},
 	Json, Router,
 };
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use qos_core::{
 	client::Client,
 	io::{SocketAddress, TimeVal, TimeValLike},
@@ -162,19 +162,20 @@ impl HostServer {
 	}
 
 	/// Health route handler.
+	#[allow(clippy::unused_async)]
 	async fn host_health(_: State<Arc<QosHostState>>) -> impl IntoResponse {
 		println!("Host health...");
 		Html("Ok!")
 	}
 
 	/// Health route handler.
+	#[allow(clippy::unused_async)]
 	async fn enclave_health(
 		State(state): State<Arc<QosHostState>>,
 	) -> impl IntoResponse {
 		println!("Enclave health...");
 
-		let encoded_request = ProtocolMsg::StatusRequest
-			.try_to_vec()
+		let encoded_request = borsh::to_vec(&ProtocolMsg::StatusRequest)
 			.expect("ProtocolMsg can always serialize. qed.");
 		let encoded_response = match state.enclave_client.send(&encoded_request)
 		{
@@ -222,13 +223,13 @@ impl HostServer {
 		}
 	}
 
+	#[allow(clippy::unused_async)]
 	async fn enclave_info(
 		State(state): State<Arc<QosHostState>>,
 	) -> Result<Json<EnclaveInfo>, Error> {
 		println!("Enclave info...");
 
-		let enc_status_req = ProtocolMsg::StatusRequest
-			.try_to_vec()
+		let enc_status_req = borsh::to_vec(&ProtocolMsg::StatusRequest)
 			.expect("ProtocolMsg can always serialize. qed.");
 		let enc_status_resp = state.enclave_client.send(&enc_status_req)
 			.map_err(|e|
@@ -248,9 +249,9 @@ impl HostServer {
 			}
 		};
 
-		let enc_manifest_envelope_req = ProtocolMsg::ManifestEnvelopeRequest
-			.try_to_vec()
-			.expect("ProtocolMsg can always serialize. qed.");
+		let enc_manifest_envelope_req =
+			borsh::to_vec(&ProtocolMsg::ManifestEnvelopeRequest)
+				.expect("ProtocolMsg can always serialize. qed.");
 		let enc_manifest_envelope_resp = state
 			.enclave_client
 			.send(&enc_manifest_envelope_req)
@@ -297,6 +298,7 @@ impl HostServer {
 	}
 
 	/// Message route handler.
+	#[allow(clippy::unused_async)]
 	async fn message(
 		State(state): State<Arc<QosHostState>>,
 		encoded_request: Bytes,
@@ -304,9 +306,10 @@ impl HostServer {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
 			return (
 				StatusCode::BAD_REQUEST,
-				ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg)
-					.try_to_vec()
-					.expect("ProtocolMsg can always serialize. qed."),
+				borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+					ProtocolError::OversizeMsg,
+				))
+				.expect("ProtocolMsg can always serialize. qed."),
 			);
 		}
 
@@ -318,10 +321,9 @@ impl HostServer {
 
 				(
 					StatusCode::INTERNAL_SERVER_ERROR,
-					ProtocolMsg::ProtocolErrorResponse(
+					borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
 						ProtocolError::EnclaveClient,
-					)
-					.try_to_vec()
+					))
 					.expect("ProtocolMsg can always serialize. qed."),
 				)
 			}

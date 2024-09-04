@@ -68,7 +68,7 @@ pub enum ProtocolMsg {
 
 	/// Proxy the encoded `data` to the secure app.
 	ProxyRequest {
-		/// Encoded data that will be sent from the nitro enclave serverga to
+		/// Encoded data that will be sent from the nitro enclave server to
 		/// the secure app.
 		data: Vec<u8>,
 	},
@@ -187,7 +187,7 @@ pub enum ProtocolMsg {
 
 #[cfg(test)]
 mod test {
-	use borsh::{BorshDeserialize, BorshSerialize};
+	use borsh::BorshDeserialize;
 
 	use super::*;
 
@@ -195,7 +195,7 @@ mod test {
 	fn boot_genesis_response_deserialize() {
 		let nsm_response = NsmResponse::LockPCR;
 
-		let vec = nsm_response.try_to_vec().unwrap();
+		let vec = borsh::to_vec(&nsm_response).unwrap();
 		let test = NsmResponse::try_from_slice(&vec).unwrap();
 		assert_eq!(nsm_response, test);
 
@@ -214,7 +214,7 @@ mod test {
 			}),
 		};
 
-		let vec = genesis_response.try_to_vec().unwrap();
+		let vec = borsh::to_vec(&genesis_response).unwrap();
 		let test = ProtocolMsg::try_from_slice(&vec).unwrap();
 
 		assert_eq!(test, genesis_response);

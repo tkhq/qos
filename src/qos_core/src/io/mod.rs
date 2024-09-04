@@ -5,9 +5,9 @@
 
 mod stream;
 
-pub(crate) use stream::{Listener, Stream};
 pub use stream::{
-	SocketAddress, TimeVal, TimeValLike, VMADDR_FLAG_TO_HOST, VMADDR_NO_FLAGS,
+	Listener, SocketAddress, Stream, TimeVal, TimeValLike, VMADDR_FLAG_TO_HOST,
+	VMADDR_NO_FLAGS,
 };
 
 /// QOS I/O error

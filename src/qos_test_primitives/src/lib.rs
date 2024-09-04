@@ -119,7 +119,7 @@ pub fn wait_until_port_is_bound(port: u16) {
 	)
 }
 
-/// Return wether or not the port can be bind-ed too.
+/// Return whether or not the port can be bind-ed too.
 fn port_is_available(port: u16) -> bool {
 	TcpListener::bind(("127.0.0.1", port)).is_ok()
 }

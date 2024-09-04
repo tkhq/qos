@@ -1,6 +1,5 @@
 use std::process::Command;
 
-use borsh::BorshSerialize;
 use integration::{PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH};
 use qos_core::{
 	client::{Client, ClientError},
@@ -26,14 +25,16 @@ fn simple_socket_stress() {
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 	);
 
-	let app_request = PivotSocketStressMsg::SlowRequest.try_to_vec().unwrap();
+	let app_request =
+		borsh::to_vec(&PivotSocketStressMsg::SlowRequest).unwrap();
 	let err = enclave_client.send(&app_request).unwrap_err();
 	match err {
 		ClientError::IOError(qos_core::io::IOError::RecvTimeout) => (),
 		e => panic!("did not get expected err {:?}", e),
 	};
 
-	let app_request = PivotSocketStressMsg::PanicRequest.try_to_vec().unwrap();
+	let app_request =
+		borsh::to_vec(&PivotSocketStressMsg::PanicRequest).unwrap();
 	let err = enclave_client.send(&app_request).unwrap_err();
 	match err {
 		ClientError::IOError(qos_core::io::IOError::RecvConnectionClosed) => (),
@@ -43,7 +44,7 @@ fn simple_socket_stress() {
 	std::thread::sleep(std::time::Duration::from_secs(1));
 
 	// The app has panic'ed and exited - so any proceeding request should fail.
-	let app_request = PivotSocketStressMsg::OkRequest.try_to_vec().unwrap();
+	let app_request = borsh::to_vec(&PivotSocketStressMsg::OkRequest).unwrap();
 	let err = enclave_client.send(&app_request).unwrap_err();
 	match err {
 		ClientError::IOError(qos_core::io::IOError::ConnectNixError(

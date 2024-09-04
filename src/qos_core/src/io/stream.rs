@@ -1,6 +1,10 @@
 //! Abstractions to handle connection based socket streams.
 
-use std::{mem::size_of, os::unix::io::RawFd};
+use std::{
+	io::{ErrorKind, Read, Write},
+	mem::size_of,
+	os::unix::io::RawFd,
+};
 
 #[cfg(feature = "vm")]
 use nix::sys::socket::VsockAddr;
@@ -86,7 +90,8 @@ impl SocketAddress {
 	}
 
 	/// Get the `AddressFamily` of the socket.
-	fn family(&self) -> AddressFamily {
+	#[must_use]
+	pub fn family(&self) -> AddressFamily {
 		match *self {
 			#[cfg(feature = "vm")]
 			Self::Vsock(_) => AddressFamily::Vsock,
@@ -94,8 +99,9 @@ impl SocketAddress {
 		}
 	}
 
-	// Convenience method for accessing the wrapped address
-	fn addr(&self) -> Box<dyn SockaddrLike> {
+	/// Convenience method for accessing the wrapped address
+	#[must_use]
+	pub fn addr(&self) -> Box<dyn SockaddrLike> {
 		match *self {
 			#[cfg(feature = "vm")]
 			Self::Vsock(vsa) => Box::new(vsa),
@@ -105,12 +111,13 @@ impl SocketAddress {
 }
 
 /// Handle on a stream
-pub(crate) struct Stream {
+pub struct Stream {
 	fd: RawFd,
 }
 
 impl Stream {
-	pub(crate) fn connect(
+	/// Create a new `Stream` from a `SocketAddress` and a timeout
+	pub fn connect(
 		addr: &SocketAddress,
 		timeout: TimeVal,
 	) -> Result<Self, IOError> {
@@ -140,13 +147,14 @@ impl Stream {
 		Err(err)
 	}
 
-	pub(crate) fn send(&self, buf: &[u8]) -> Result<(), IOError> {
+	/// Sends a buffer over the underlying socket
+	pub fn send(&self, buf: &[u8]) -> Result<(), IOError> {
 		let len = buf.len();
 		// First, send the length of the buffer
 		{
 			let len_buf: [u8; size_of::<u64>()] = (len as u64).to_le_bytes();
 
-			// First, sent the length of the buffer
+			// First, send the length of the buffer
 			let mut sent_bytes = 0;
 			while sent_bytes < len_buf.len() {
 				sent_bytes += match send(
@@ -178,7 +186,8 @@ impl Stream {
 		Ok(())
 	}
 
-	pub(crate) fn recv(&self) -> Result<Vec<u8>, IOError> {
+	/// Receive from the underlying socket
+	pub fn recv(&self) -> Result<Vec<u8>, IOError> {
 		let length: usize = {
 			{
 				let mut buf = [0u8; size_of::<u64>()];
@@ -192,7 +201,7 @@ impl Stream {
 						&mut buf[received_bytes..len],
 						MsgFlags::empty(),
 					) {
-						Ok(size) if size == 0 => {
+						Ok(0) => {
 							return Err(IOError::RecvConnectionClosed);
 						}
 						Ok(size) => size,
@@ -225,7 +234,7 @@ impl Stream {
 					&mut buf[received_bytes..length],
 					MsgFlags::empty(),
 				) {
-					Ok(size) if size == 0 => {
+					Ok(0) => {
 						return Err(IOError::RecvConnectionClosed);
 					}
 					Ok(size) => size,
@@ -245,6 +254,37 @@ impl Stream {
 	}
 }
 
+impl Read for Stream {
+	fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+		match recv(self.fd, buf, MsgFlags::empty()) {
+			Ok(0) => Err(std::io::Error::new(
+				ErrorKind::ConnectionAborted,
+				"read 0 bytes",
+			)),
+			Ok(size) => Ok(size),
+			Err(err) => Err(std::io::Error::from_raw_os_error(err as i32)),
+		}
+	}
+}
+
+impl Write for Stream {
+	fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
+		match send(self.fd, buf, MsgFlags::empty()) {
+			Ok(0) => Err(std::io::Error::new(
+				ErrorKind::ConnectionAborted,
+				"wrote 0 bytes",
+			)),
+			Ok(size) => Ok(size),
+			Err(err) => Err(std::io::Error::from_raw_os_error(err as i32)),
+		}
+	}
+
+	// No-op because we can't flush a socket.
+	fn flush(&mut self) -> Result<(), std::io::Error> {
+		Ok(())
+	}
+}
+
 impl Drop for Stream {
 	fn drop(&mut self) {
 		// Its ok if either of these error - likely means the other end of the
@@ -255,7 +295,7 @@ impl Drop for Stream {
 }
 
 /// Abstraction to listen for incoming stream connections.
-pub(crate) struct Listener {
+pub struct Listener {
 	fd: RawFd,
 	addr: SocketAddress,
 }
@@ -328,10 +368,54 @@ fn socket_fd(addr: &SocketAddress) -> Result<RawFd, IOError> {
 #[cfg(test)]
 mod test {
 
+	use std::{
+		os::{fd::AsRawFd, unix::net::UnixListener},
+		path::Path,
+		str::from_utf8,
+		thread,
+	};
+
 	use super::*;
 
 	fn timeval() -> TimeVal {
 		TimeVal::seconds(1)
+	}
+
+	// A simple test socket server which says "PONG" when you send "PING".
+	// Then it kills itself.
+	pub struct HarakiriPongServer {
+		path: String,
+	}
+
+	impl HarakiriPongServer {
+		pub fn new(path: String) -> Self {
+			Self { path }
+		}
+		pub fn start(&mut self) {
+			let listener = UnixListener::bind(&self.path).unwrap();
+			let path = self.path.clone();
+			thread::spawn(move || {
+				let (mut stream, _peer_addr) = listener.accept().unwrap();
+
+				// Read 4 bytes ("PING")
+				let mut buf = [0u8; 4];
+				stream.read_exact(&mut buf).unwrap();
+
+				// Send "PONG" if "PING" was sent
+				if from_utf8(&buf).unwrap() == "PING" {
+					let _ = stream.write(b"PONG").unwrap();
+				}
+
+				// Then shutdown the server
+				let _ = shutdown(listener.as_raw_fd(), Shutdown::Both);
+				let _ = close(listener.as_raw_fd());
+
+				let server_socket = Path::new(&path);
+				if server_socket.exists() {
+					drop(std::fs::remove_file(server_socket));
+				}
+			});
+		}
 	}
 
 	#[test]
@@ -341,8 +425,8 @@ mod test {
 		let unix_addr =
 			nix::sys::socket::UnixAddr::new("./stream_integration_test.sock")
 				.unwrap();
-		let addr = SocketAddress::Unix(unix_addr);
-		let listener = Listener::listen(addr.clone()).unwrap();
+		let addr: SocketAddress = SocketAddress::Unix(unix_addr);
+		let listener: Listener = Listener::listen(addr.clone()).unwrap();
 		let client = Stream::connect(&addr, timeval()).unwrap();
 		let server = listener.accept().unwrap();
 
@@ -352,6 +436,35 @@ mod test {
 		let resp = server.recv().unwrap();
 
 		assert_eq!(data, resp);
+	}
+
+	#[test]
+	fn stream_implements_read_write_traits() {
+		let socket_server_path = "./stream_implements_read_write_traits.sock";
+
+		// Start a simple socket server which replies "PONG" to any incoming
+		// request
+		let mut server =
+			HarakiriPongServer::new(socket_server_path.to_string());
+		thread::spawn(move || {
+			server.start();
+		});
+
+		// Now create a stream connecting to this mini-server
+		let unix_addr =
+			nix::sys::socket::UnixAddr::new(socket_server_path).unwrap();
+		let addr = SocketAddress::Unix(unix_addr);
+		let mut pong_stream = Stream::connect(&addr, timeval()).unwrap();
+
+		// Write "PING"
+		let written = pong_stream.write(b"PING").unwrap();
+		assert_eq!(written, 4);
+
+		// Read, and expect "PONG"
+		let mut resp = [0u8; 4];
+		let res = pong_stream.read(&mut resp).unwrap();
+		assert_eq!(res, 4);
+		assert_eq!(from_utf8(&resp).unwrap(), "PONG");
 	}
 
 	#[test]

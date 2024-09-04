@@ -1,5 +1,4 @@
 //! Quorum protocol state machine
-use borsh::BorshSerialize;
 use nix::sys::time::{TimeVal, TimeValLike};
 use qos_nsm::NsmProvider;
 
@@ -284,7 +283,7 @@ impl ProtocolState {
 				None => continue,
 				Some(result) => match result {
 					Ok(msg_resp) | Err(msg_resp) => {
-						return msg_resp.try_to_vec().expect(
+						return borsh::to_vec(&msg_resp).expect(
 							"ProtocolMsg can always be serialized. qed.",
 						)
 					}
@@ -293,8 +292,7 @@ impl ProtocolState {
 		}
 
 		let err = ProtocolError::NoMatchingRoute(self.phase);
-		ProtocolMsg::ProtocolErrorResponse(err)
-			.try_to_vec()
+		borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
 			.expect("ProtocolMsg can always be serialized. qed.")
 	}
 

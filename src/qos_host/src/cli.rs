@@ -55,7 +55,7 @@ impl GetParserForOptions for HostParser {
 					.takes_value(true)
 			)
 			.token(
-				Token::new(VSOCK_TO_HOST, "wether to add the to-host svm flag to the enclave vsock connection. Valid options are `true` or `false`")
+				Token::new(VSOCK_TO_HOST, "whether to add the to-host svm flag to the enclave vsock connection. Valid options are `true` or `false`")
 					.takes_value(true)
 					.required(false)
 					.forbids(vec![USOCK])
@@ -95,6 +95,8 @@ impl HostOpts {
 	}
 
 	/// Address the host server should listen on.
+	/// # Panics
+	/// Panics if the IP string cannot be parsed into an IPv4.
 	#[must_use]
 	pub fn host_addr(&self) -> SocketAddr {
 		let ip = Ipv4Addr::from_str(&self.ip())

@@ -5,12 +5,11 @@ use std::{
 	io,
 	io::{BufRead, BufReader, Write},
 	mem,
-	ops::Deref,
 	path::{Path, PathBuf},
 };
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use qos_core::protocol::{
 	msg::ProtocolMsg,
 	services::{
@@ -89,6 +88,7 @@ pub enum Error {
 	#[cfg(feature = "smartcard")]
 	WrongPublicKey,
 	/// An error trying to read a pin from the terminal
+	#[allow(clippy::enum_variant_names)]
 	#[cfg(feature = "smartcard")]
 	PinEntryError(std::io::Error),
 	/// Failed to read share
@@ -128,6 +128,7 @@ pub enum Error {
 	/// Failed to decode some hex
 	CouldNotDecodeHex(qos_hex::HexError),
 	/// Failed to deserialize something from borsh.
+	#[allow(clippy::enum_variant_names)]
 	BorshError,
 	FailedToReadDrKey(qos_p256::P256Error),
 	QosAttest(String),
@@ -147,6 +148,7 @@ pub enum Error {
 	BadDecryption,
 	/// The seed was read two different ways and the results did not match -
 	/// most likely a bug with the code.
+	#[allow(clippy::enum_variant_names)]
 	ErrorReadingSeed,
 	/// Given quorum key seed does not match the hash of the expected quorum
 	/// key seed.
@@ -167,8 +169,8 @@ pub enum Error {
 	ExpectedExactlyOneQuorumKey,
 }
 
-impl From<borsh::maybestd::io::Error> for Error {
-	fn from(_: borsh::maybestd::io::Error) -> Self {
+impl From<borsh::io::Error> for Error {
+	fn from(_: borsh::io::Error) -> Self {
 		Self::BorshError
 	}
 }
@@ -537,7 +539,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	write_with_msg(
 		&genesis_output_path,
-		&genesis_output.deref().try_to_vec().unwrap(),
+		&borsh::to_vec(&*genesis_output).unwrap(),
 		"`GenesisOutput`",
 	);
 
@@ -773,7 +775,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 
 	write_with_msg(
 		manifest_path.as_ref(),
-		&manifest.try_to_vec().unwrap(),
+		&borsh::to_vec(&manifest).unwrap(),
 		"Manifest",
 	);
 
@@ -931,7 +933,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	));
 	write_with_msg(
 		&approval_path,
-		&approval.try_to_vec().expect("Failed to serialize approval"),
+		&borsh::to_vec(&approval).expect("Failed to serialize approval"),
 		"Manifest Approval",
 	);
 
@@ -981,7 +983,7 @@ fn approve_manifest_programmatic_verifications(
 
 	// Verify the intended Quorum Key is being used
 	if manifest.namespace.quorum_key != quorum_key.to_bytes() {
-		eprintln!("Pivot commit does not match");
+		eprintln!("Quorum public key does not match");
 		return false;
 	}
 
@@ -1069,8 +1071,7 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	);
 	write_with_msg(
 		&path,
-		&manifest_envelope
-			.try_to_vec()
+		&borsh::to_vec(&manifest_envelope)
 			.expect("Failed to serialize manifest envelope"),
 		"Manifest Envelope",
 	);
@@ -1136,7 +1137,7 @@ pub(crate) fn export_key<P: AsRef<Path>>(
 
 	write_with_msg(
 		encrypted_quorum_key_path.as_ref(),
-		&encrypted_quorum_key.try_to_vec().expect("valid borsh. qed."),
+		&borsh::to_vec(&encrypted_quorum_key).expect("valid borsh. qed."),
 		"Encrypted Quorum Key",
 	);
 
@@ -1280,8 +1281,7 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 	);
 	write_with_msg(
 		manifest_envelope_path.as_ref(),
-		&manifest_envelope
-			.try_to_vec()
+		&borsh::to_vec(&manifest_envelope)
 			.expect("manifest enevelope is valid borsh"),
 		"Manifest envelope",
 	);
@@ -1413,13 +1413,12 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		eph_pub.encrypt(plaintext_share).expect("Envelope encryption error")
 	};
 
-	let approval = Approval {
+	let approval = borsh::to_vec(&Approval {
 		signature: pair
 			.sign(&manifest_envelope.manifest.qos_hash())
 			.expect("Failed to sign"),
 		member,
-	}
-	.try_to_vec()
+	})
 	.expect("Could not serialize Approval");
 
 	write_with_msg(approval_path.as_ref(), &approval, "Share Set Approval");

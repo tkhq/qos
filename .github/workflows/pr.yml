@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
       - name: Run tests
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
       - name: Run formatting
@@ -30,20 +30,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
       - name: Run doc generation
         run: make docs
 
-# Currently broken locally
-#  lint:
-#    name: lint
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout sources
-#        uses: actions/checkout@v4
-#      - name: Setup Docker
-#        uses: ./.github/actions/docker-setup
-#      - name: Run linting
-#        run: make lint
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
+      - name: Run linting
+        run: make lint

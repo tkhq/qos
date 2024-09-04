@@ -21,7 +21,7 @@ pub type Hash256 = [u8; 32];
 pub trait QosHash: BorshSerialize {
 	/// Get the canonical hash.
 	fn qos_hash(&self) -> Hash256 {
-		sha_256(&self.try_to_vec().expect("Implements borsh serialize"))
+		sha_256(&borsh::to_vec(self).expect("Implements borsh serialize"))
 	}
 }
 
