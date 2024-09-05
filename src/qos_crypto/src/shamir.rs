@@ -4,6 +4,8 @@
 // The original code is under MIT license, see
 // https://github.com/veracruz-project/veracruz/blob/398e4d3ab3023492a64ea91740528e58776e1827/LICENSE_MIT.markdown
 
+#![allow(clippy::expect_used)]
+
 use std::{convert::TryFrom, iter};
 
 use rand::Rng;
