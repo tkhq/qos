@@ -177,7 +177,12 @@ fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 /// Examples:
 /// n=1 k=1 should be possible but triggers `SharingMinThreshold` in new impl
 /// n=2 k=1 should be possible but triggers `SharingMinThreshold` in new impl
+///
+/// # Panics
+/// This function will panic if more than 255 shares are requested, as the
+/// `u8::try_from` conversion will fail.
 #[must_use]
+#[allow(clippy::expect_used)]
 pub fn deprecated_insecure_shares_generate(
 	secret: &[u8],
 	n: usize,
