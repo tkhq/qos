@@ -2740,9 +2740,9 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "vsss-rs"
-version = "4.3.0"
+version = "4.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f56d0c69f186496b2e56f8ad174a8f0f9cfea7e15e0ca0e6abeaedd2767e61a"
+checksum = "8fabeca519a296f0b39428cfe496b600c0179c9498687986449d61fa40e60806"
 dependencies = [
  "crypto-bigint 0.5.5",
  "elliptic-curve 0.13.7",
