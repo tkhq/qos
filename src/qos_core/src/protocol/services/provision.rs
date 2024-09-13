@@ -380,7 +380,7 @@ mod test {
 		}
 
 		// 6) Add a bogus shard as the Kth shard
-		let bogus_share = &[69u8; 2349];
+		let bogus_share = &[69u8; 33];
 		let encrypted_bogus_share =
 			eph_pair.public_key().encrypt(bogus_share).unwrap();
 		let approval = approvals[threshold].clone();
