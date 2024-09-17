@@ -164,35 +164,6 @@ pub fn shares_generate(
 		.map_err(QosCryptoError::Vsss)
 }
 
-/// This is an old implementation with known runtime security problems and
-/// insufficient internal checks. We are keeping it here to show that the new
-/// implementation is mostly backwards compatible.
-///
-/// See the corresponding deprecated share generation function for details on
-/// the known differences.
-pub fn deprecated_insecure_shares_reconstruct<S: AsRef<[u8]>>(
-	shares: &[S],
-) -> Vec<u8> {
-	let len = shares.iter().map(|s| s.as_ref().len()).min().unwrap_or(0);
-	// rather than erroring, return empty secrets if input is malformed.
-	// This matches the behavior of bad shares (random output) and simplifies
-	// consumers.
-	if len == 0 {
-		return vec![];
-	}
-
-	let mut secret = vec![];
-
-	// x is prepended to each share
-	let xs: Vec<u8> = shares.iter().map(|v| v.as_ref()[0]).collect();
-	for i in 1..len {
-		let ys: Vec<u8> = shares.iter().map(|v| v.as_ref()[i]).collect();
-		secret.push(gf256_interpolate(&xs, &ys));
-	}
-
-	secret
-}
-
 /// Reconstruct our secret from the given `shares`.
 pub fn shares_reconstruct<B: AsRef<[Vec<u8>]>>(
 	shares: B,
