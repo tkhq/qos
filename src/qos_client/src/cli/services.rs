@@ -2026,16 +2026,17 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 
 	// Shard it with N=1, K=1
 	let share = {
-		let mut shares =
-			qos_crypto::shamir::deprecated_insecure_shares_generate(
-				quorum_pair.to_master_seed(),
-				1,
-				1,
-			);
+		let mut shares = qos_crypto::shamir::shares_generate(
+			quorum_pair.to_master_seed(),
+			2,
+			2,
+		)
+		.unwrap();
+
 		assert_eq!(
 			shares.len(),
-			1,
-			"Error generating shares - did not get exactly one share."
+			2,
+			"Error generating shares - did not get exactly two share."
 		);
 		shares.remove(0)
 	};

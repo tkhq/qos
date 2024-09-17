@@ -4,9 +4,6 @@
 // The original code is under MIT license, see
 // https://github.com/veracruz-project/veracruz/blob/398e4d3ab3023492a64ea91740528e58776e1827/LICENSE_MIT.markdown
 
-use std::{convert::TryFrom, iter};
-
-use rand::Rng;
 use vsss_rs::Gf256;
 
 use crate::QosCryptoError;
@@ -133,19 +130,6 @@ fn gf256_div(a: u8, b: u8) -> u8 {
 	gf256_mul(a, GF256_EXP[usize::from(255 - GF256_LOG[usize::from(b)])])
 }
 
-/// Evaluate a polynomial at x over GF(256) using Horner's method.
-fn gf256_eval(f: &[u8], x: u8) -> u8 {
-	f.iter().rev().fold(0, |acc, c| gf256_mul(acc, x) ^ c)
-}
-
-/// Generate a random polynomial of given degree, fixing f(0) = secret.
-fn gf256_generate(secret: u8, degree: usize) -> Vec<u8> {
-	let mut rng = rand::thread_rng();
-	iter::once(secret)
-		.chain(iter::repeat_with(|| rng.gen_range(1..=255)).take(degree))
-		.collect()
-}
-
 /// Find f(0) using Lagrange interpolation.
 fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 	assert!(xs.len() == ys.len());
@@ -162,54 +146,6 @@ fn gf256_interpolate(xs: &[u8], ys: &[u8]) -> u8 {
 	}
 
 	y
-}
-
-/// This is an old implementation with known runtime security problems and
-/// insufficient parameter checks. We are keeping it here to show that the new
-/// implementation is backwards compatible.
-///
-/// For meaningful k-of-n share configurations with k >= 2, this share
-/// generation mechanism should be fully compatible in both directions.
-///
-/// 1-of-n share generations (k=1) are rejected by the new vsss-rs
-/// implementation and not compatible.
-///
-/// Examples:
-/// n=1 k=1 should be possible but triggers `SharingMinThreshold` in new impl
-/// n=2 k=1 should be possible but triggers `SharingMinThreshold` in new impl
-///
-/// # Panics
-/// This function will panic if more than 255 shares are requested, as the
-/// `u8::try_from` conversion will fail.
-#[must_use]
-#[allow(clippy::expect_used)]
-pub fn deprecated_insecure_shares_generate(
-	secret: &[u8],
-	n: usize,
-	k: usize,
-) -> Vec<Vec<u8>> {
-	let mut shares = vec![vec![]; n];
-
-	// we need to store x for each point somewhere, so just prepend
-	// each array with it
-	for (i, share) in shares.iter_mut().enumerate().take(n) {
-		share.push(u8::try_from(i + 1).expect("exceeded 255 shares"));
-	}
-
-	for x in secret {
-		// generate random polynomial for each byte
-		let f = gf256_generate(*x, k - 1);
-
-		// assign each share a point at f(i)
-		for (i, share) in shares.iter_mut().enumerate().take(n) {
-			share.push(gf256_eval(
-				&f,
-				u8::try_from(i + 1).expect("exceeded 255 shares"),
-			));
-		}
-	}
-
-	shares
 }
 
 /// Generate `share_count` shares requiring `threshold` shares to reconstruct.

@@ -177,7 +177,7 @@ pub enum Command {
 	/// Pivot the enclave to the specified binary.
 	///
 	/// This command goes through the steps of generating a Quorum Key,
-	/// sharding it (N=1), creating/signing/posting a Manifest, and
+	/// sharding it (N=2), creating/signing/posting a Manifest, and
 	/// provisioning the quorum key.
 	DangerousDevBoot,
 	/// Provision a yubikey with a singing and encryption key.
