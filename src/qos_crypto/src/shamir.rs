@@ -74,8 +74,7 @@ mod test {
 
 		for combo in crate::n_choose_k::combinations(&all_shares, k) {
 			let reconstructed = shares_reconstruct(&combo).unwrap();
-			let old_reconstructed =
-				shares_reconstruct(&shares).unwrap();
+			let old_reconstructed = shares_reconstruct(&shares).unwrap();
 			assert_eq!(secret.to_vec(), reconstructed);
 			assert_eq!(secret.to_vec(), old_reconstructed);
 		}
