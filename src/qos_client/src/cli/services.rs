@@ -2045,7 +2045,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	let pivot = fs::read(&pivot_path).expect("Failed to read pivot binary.");
 
 	let mock_pcr = vec![0; 48];
-	// Create a manifest with manifest set of 1 - everything hardcoded expect
+	// Create a manifest with manifest set of 1 - everything hardcoded except
 	// pivot config
 	let manifest = Manifest {
 		namespace: Namespace {
