@@ -26,7 +26,6 @@ use qos_core::protocol::{
 		},
 	},
 	QosHash,
-	ProtocolError,
 };
 use qos_crypto::{sha_256, sha_384, sha_512};
 use qos_nsm::{
@@ -2026,12 +2025,9 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 
 	// Shard it with N=2, K=2
-	let shares = qos_crypto::shamir::shares_generate(
-		quorum_pair.to_master_seed(),
-		2,
-		2,
-	)
-	.unwrap();
+	let shares =
+		qos_crypto::shamir::shares_generate(quorum_pair.to_master_seed(), 2, 2)
+			.unwrap();
 	assert_eq!(
 		shares.len(),
 		2,
@@ -2119,7 +2115,8 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		},
 	};
 
-	// Post the share a first time.  It won't work because it'll be the first share.
+	// Post the share a first time.  It won't work because it'll be the first
+	// share.
 	let req1 = ProtocolMsg::ProvisionRequest {
 		share: eph_pub
 			.encrypt(&shares[0])
@@ -2128,7 +2125,10 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 	match request::post(uri, &req1).unwrap() {
 		ProtocolMsg::ProvisionResponse { reconstructed } => {
-			assert!(!reconstructed, "Quorum Key should NOT be reconstructed (1/2)");
+			assert!(
+				!reconstructed,
+				"Quorum Key should NOT be reconstructed (1/2)"
+			);
 		}
 		r => panic!("Unexpected response: {r:?}"),
 	};
