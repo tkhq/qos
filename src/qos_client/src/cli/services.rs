@@ -26,6 +26,7 @@ use qos_core::protocol::{
 		},
 	},
 	QosHash,
+	ProtocolError,
 };
 use qos_crypto::{sha_256, sha_384, sha_512};
 use qos_nsm::{
@@ -2024,22 +2025,18 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		pub_key: quorum_public_der.clone(),
 	};
 
-	// Shard it with N=1, K=1
-	let share = {
-		let mut shares = qos_crypto::shamir::shares_generate(
-			quorum_pair.to_master_seed(),
-			2,
-			2,
-		)
-		.unwrap();
-
-		assert_eq!(
-			shares.len(),
-			2,
-			"Error generating shares - did not get exactly two share."
-		);
-		shares.remove(0)
-	};
+	// Shard it with N=2, K=2
+	let shares = qos_crypto::shamir::shares_generate(
+		quorum_pair.to_master_seed(),
+		2,
+		2,
+	)
+	.unwrap();
+	assert_eq!(
+		shares.len(),
+		2,
+		"Error generating shares - did not get exactly two share."
+	);
 
 	// Read in the pivot
 	let pivot = fs::read(&pivot_path).expect("Failed to read pivot binary.");
@@ -2068,7 +2065,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			members: vec![member.clone()],
 		},
 		share_set: ShareSet {
-			threshold: 1,
+			threshold: 2,
 			// The only member is the quorum member
 			members: vec![member.clone()],
 		},
@@ -2122,16 +2119,30 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		},
 	};
 
-	// Post the share
-	let req = ProtocolMsg::ProvisionRequest {
+	// Post the share a first time.  It won't work because it'll be the first share.
+	let req1 = ProtocolMsg::ProvisionRequest {
 		share: eph_pub
-			.encrypt(&share)
+			.encrypt(&shares[0])
 			.expect("Failed to encrypt share to eph key."),
-		approval,
+		approval: approval.clone(),
 	};
-	match request::post(uri, &req).unwrap() {
+	match request::post(uri, &req1).unwrap() {
 		ProtocolMsg::ProvisionResponse { reconstructed } => {
-			assert!(reconstructed, "Quorum Key was not reconstructed");
+			assert!(!reconstructed, "Quorum Key should NOT be reconstructed (1/2)");
+		}
+		r => panic!("Unexpected response: {r:?}"),
+	};
+
+	// Post the second share; expected to reconstruct.
+	let req2 = ProtocolMsg::ProvisionRequest {
+		share: eph_pub
+			.encrypt(&shares[1])
+			.expect("Failed to encrypt share to eph key."),
+		approval: approval.clone(),
+	};
+	match request::post(uri, &req2).unwrap() {
+		ProtocolMsg::ProvisionResponse { reconstructed } => {
+			assert!(reconstructed, "Quorum Key should be reconstructed (2/2)");
 		}
 		r => panic!("Unexpected response: {r:?}"),
 	};
