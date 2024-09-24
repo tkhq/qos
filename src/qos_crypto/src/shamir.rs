@@ -45,17 +45,13 @@ mod test {
 
 		// Reconstruct with all the shares
 		let shares = all_shares.clone();
-		let reconstructed = shares_reconstruct(&shares).unwrap();
-		let old_reconstructed = shares_reconstruct(&shares).unwrap();
+		let reconstructed = shares_reconstruct(shares).unwrap();
 		assert_eq!(secret.to_vec(), reconstructed);
-		assert_eq!(secret.to_vec(), old_reconstructed);
 
 		// Reconstruct with enough shares
 		let shares = &all_shares[..k];
 		let reconstructed = shares_reconstruct(shares).unwrap();
-		let old_reconstructed = shares_reconstruct(shares).unwrap();
 		assert_eq!(secret.to_vec(), reconstructed);
-		assert_eq!(secret.to_vec(), old_reconstructed);
 
 		// Reconstruct with not enough shares
 		let shares = &all_shares[..(k - 1)];
@@ -68,15 +64,11 @@ mod test {
 		let mut shares = all_shares.clone()[..k].to_vec();
 		shares.shuffle(&mut rand::thread_rng());
 		let reconstructed = shares_reconstruct(&shares).unwrap();
-		let old_reconstructed = shares_reconstruct(&shares).unwrap();
 		assert_eq!(secret.to_vec(), reconstructed);
-		assert_eq!(secret.to_vec(), old_reconstructed);
 
 		for combo in crate::n_choose_k::combinations(&all_shares, k) {
 			let reconstructed = shares_reconstruct(&combo).unwrap();
-			let old_reconstructed = shares_reconstruct(&shares).unwrap();
 			assert_eq!(secret.to_vec(), reconstructed);
-			assert_eq!(secret.to_vec(), old_reconstructed);
 		}
 	}
 }
