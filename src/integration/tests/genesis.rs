@@ -8,7 +8,7 @@ use std::{
 use borsh::de::BorshDeserialize;
 use integration::{LOCAL_HOST, QOS_DIST_DIR};
 use qos_core::protocol::services::genesis::GenesisOutput;
-use qos_crypto::{sha_512, shamir::shares_reconstruct};
+use qos_crypto::{sha_512, shamir::{shares_reconstruct, shares_generate}};
 use qos_nsm::nitro::unsafe_attestation_doc_from_der;
 use qos_p256::{P256Pair, P256Public};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
@@ -277,4 +277,91 @@ async fn genesis_e2e() {
 		.wait()
 		.unwrap()
 		.success());
+}
+
+
+#[tokio::test]
+async fn preprod_reshard() {
+	let threshold = 2;
+
+	// Step 0:  two new dev keys
+	let all_personal_dir = "/tmp/personal";
+	let personal_dir =
+		|user: &str| format!("{}/{}-dir", &*all_personal_dir, user);
+	let get_key_paths =
+		|user: &str| (format!("{user}.secret"), format!("{user}.pub"));
+
+	let user1 = "user1";
+	let (user1_private_share_key, user1_public_share_key) =
+		get_key_paths(user1);
+
+	let user2 = "user2";
+	let (user2_private_share_key, user2_public_share_key) =
+		get_key_paths(user2);
+
+
+	for (user, private, public) in [
+		(&user1, &user1_private_share_key, &user1_public_share_key),
+		(&user2, &user2_private_share_key, &user2_public_share_key),
+	] {
+		fs::create_dir_all(personal_dir(user)).unwrap();
+		let master_seed_path = format!("{}/{}", personal_dir(user), private);
+		let public_path = format!("{}/{}", personal_dir(user), public);
+		assert!(Command::new("../target/debug/qos_client")
+			.args([
+				"generate-file-key",
+				"--master-seed-path",
+				&master_seed_path,
+				"--pub-path",
+				&public_path,
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
+		assert!(Path::new(&*personal_dir(user)).join(public).is_file());
+		assert!(Path::new(&*personal_dir(user)).join(private).is_file());
+	}
+
+
+	// Step 1:  load dev secret
+	let dev_secret_utf8_bytes = fs::read("/tmp/dev.secret").unwrap();  // decrypts dev shares
+	let dev_secret_hex_bytes = qos_hex::decode(std::str::from_utf8(&dev_secret_utf8_bytes).unwrap()).unwrap();
+	let dev_key = P256Pair::from_master_seed(&dev_secret_hex_bytes.try_into().unwrap()).unwrap();
+
+	// Step 2:  for each quorum key that we want to reshard...
+	let encrypted_evm_parser_dev_share = fs::read("/Users/lthibault/tkhq/code/namespaces/preprod/evm-parser/dev.share").unwrap();
+	let decrypted_evm_parser_dev_share = dev_key.decrypt(&encrypted_evm_parser_dev_share).unwrap();
+	
+	let reconstructed = shares_reconstruct(&[decrypted_evm_parser_dev_share]);
+	let pk = P256Pair::from_master_seed(&reconstructed.clone().try_into().unwrap()).unwrap().public_key();
+	println!("{}", qos_hex::encode(&pk.to_bytes()));
+
+	// Step 4: Shard the master seed into 2 partitions (shares)
+	let new_shares = shares_generate(&reconstructed, threshold, 2); // (threshold, total)
+
+
+	// Step 5: Encrypt and save the new shares to files in /tmp/
+    let user1_share_path = "/tmp/1_reshard.share";
+    let user2_share_path = "/tmp/2_reshard.share";
+
+    // Load the key pairs for user1 and user2
+    let user1_key_pair = P256Pair::from_hex_file(format!("{}/{}", personal_dir(user1), user1_private_share_key)).unwrap();
+    let user2_key_pair = P256Pair::from_hex_file(format!("{}/{}", personal_dir(user2), user2_private_share_key)).unwrap();
+
+    // Encrypt the shares
+    let encrypted_share_user1 = user1_key_pair.aes_gcm_256_encrypt(&new_shares[0]).unwrap();
+    let encrypted_share_user2 = user2_key_pair.aes_gcm_256_encrypt(&new_shares[1]).unwrap();
+
+    // Save the encrypted shares
+    fs::write(&user1_share_path, &encrypted_share_user1).unwrap();
+    fs::write(&user2_share_path, &encrypted_share_user2).unwrap();
+
+    // Verify that the encrypted shares were successfully saved
+    assert!(Path::new(&user1_share_path).is_file());
+    assert!(Path::new(&user2_share_path).is_file());
+
+    println!("Encrypted share for user1 saved to: {}", user1_share_path);
+    println!("Encrypted share for user2 saved to: {}", user2_share_path);
 }
