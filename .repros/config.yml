@@ -1,0 +1,11 @@
+build:
+  command: make
+sign:
+  file: out/manifest.txt
+  format: raw
+  method: ssh
+  backing: tpm
+storage:
+  method: git
+  location: self
+  path: .repros/sigs/
