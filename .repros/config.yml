@@ -7,5 +7,5 @@ sign:
   backing: tpm
 storage:
   method: git
-  location: self
-  path: .repros/sigs/
+  location: git@github.com:tkhq/repros-sigs.git
+  path: /qos
