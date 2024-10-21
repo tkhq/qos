@@ -81,7 +81,7 @@ fn boot() -> String {
 		memory_mib: memory_mib.parse::<u64>().unwrap(),
 		cpu_ids: None,
 		debug_mode: debug_mode.parse::<bool>().unwrap(),
-		attach_console: false,
+		attach_console: debug_mode.parse::<bool>().unwrap(),
 		cpu_count: Some(cpu_count.parse::<u32>().unwrap()),
 		enclave_name: Some(enclave_name.clone()),
 	};
