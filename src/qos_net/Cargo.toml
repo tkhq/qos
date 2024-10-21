@@ -23,3 +23,4 @@ webpki-roots = { version = "0.26.1" }
 [features]
 default = ["proxy"] # keep this as a default feature ensures we lint by default
 proxy = ["rand", "hickory-resolver"]
+vm = []
