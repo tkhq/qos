@@ -1,7 +1,7 @@
 build:
   command: make
 sign:
-  file: out/manifest.txt
+  file: out/digests.txt
   format: raw
   method: ssh
   backing: tpm
