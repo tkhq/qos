@@ -25,3 +25,29 @@ jobs:
         shell: 'script -q -e -c "bash {0}"'
         run: |
             make -j$(nproc)
+  reproduce:
+    name: reproduce artifacts
+    runs-on:
+      group: ubuntu-runners
+    strategy:
+      matrix:
+        host: [144.76.154.76]
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Run `make`
+        shell: 'script -q -e -c "bash {0}"'
+        run: |
+          mkdir -p ~/.ssh/
+          echo "$REPROS_KEY" > ~/.ssh/repros.key
+          cat >>~/.ssh/config <<-END
+            Host lance-repros
+                HostName ${{matrix.host}}
+                User git
+                IdentityFile ~/.ssh/repros.key
+                StrictHostKeyChecking no
+          END
+          git remote add repros-lance git@${{matrix.host}}:qos
+          git push repros-lance HEAD
+        env:
+          REPROS_KEY: $${{ secrets.REPROS_KEY }}
