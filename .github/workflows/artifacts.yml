@@ -36,7 +36,6 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Run `make`
-        shell: 'script -q -e -c "bash {0}"'
         run: |
           mkdir -p ~/.ssh/
           echo "$REPROS_KEY" > ~/.ssh/repros.key
