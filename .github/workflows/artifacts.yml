@@ -38,7 +38,9 @@ jobs:
       - name: Run `make`
         run: |
           mkdir -p ~/.ssh/
+          chmod 700 ~/.ssh
           echo "${{ secrets.REPROS_KEY }}" > ~/.ssh/repros.key
+          chmod 600 ~/.ssh/repros.key
           cat >>~/.ssh/config <<-END
             Host lance-repros
                 HostName ${{matrix.host}}
