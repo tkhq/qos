@@ -53,4 +53,4 @@ jobs:
           git remote add repros-lance git@${{matrix.host}}:qos
           git push repros-lance HEAD
         env:
-          REPROS_KEY: $${{ secrets.REPROS_KEY }}
+          REPROS_KEY: ${{ secrets.REPROS_KEY }}
