@@ -40,6 +40,7 @@ jobs:
         run: |
           mkdir -p ~/.ssh/
           echo "$REPROS_KEY" > ~/.ssh/repros.key
+          sha256sum ~/.ssh/repros.key
           cat >>~/.ssh/config <<-END
             Host lance-repros
                 HostName ${{matrix.host}}
