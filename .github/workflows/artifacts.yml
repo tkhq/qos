@@ -52,4 +52,4 @@ jobs:
           ssh-keygen -l -f /home/runner/.ssh/repros.key
           ssh-keyscan -H ${{matrix.host}} >> ~/.ssh/known_hosts
           git remote add repros-lance git@${{matrix.host}}:qos
-          ssh-agent sh -c "ssh-add ~/.ssh/repros.key && git push repros-lance HEAD
+          git push repros-lance HEAD
