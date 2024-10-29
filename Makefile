@@ -3,7 +3,10 @@ include src/macros.mk
 REGISTRY := local
 .DEFAULT_GOAL :=
 .PHONY: default
-default: \
+default: out/digests.txt
+
+.PHONY: all
+all: \
 	out/qos_client/index.json \
 	out/qos_host/index.json \
 	out/qos_enclave/index.json
@@ -38,6 +41,9 @@ shell: out/.common-loaded
 		--user $(shell id -u):$(shell id -g) \
 		qos-local/common:latest \
 		/bin/bash
+
+out/digests.txt: all
+	@$(call digests) > $@
 
 out/nitro.pcrs: out/qos_enclave.tar
 	@$(call run,/src/scripts/extract_oci_file.sh qos_enclave.tar nitro.pcrs)

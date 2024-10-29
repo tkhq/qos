@@ -13,6 +13,18 @@ define run
 		/bin/sh -c "set -eu; $(1)"
 endef
 
+define digests
+	find out -iname "index.json" \
+	| awk -F/ '{print $$2}' \
+	| sort \
+	| while IFS= read -r package; do \
+	    jq \
+	        -jr '.manifests[].digest | sub ("sha256:";"")' \
+	        out/$${package}/index.json; \
+	    printf " %s\n" "$${package}"; \
+	done
+endef
+
 define build_context
 $$( \
 	self=$(1); \

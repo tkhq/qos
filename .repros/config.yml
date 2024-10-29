@@ -1,0 +1,11 @@
+build:
+  command: make
+sign:
+  file: out/digests.txt
+  format: raw
+  method: ssh
+  backing: tpm
+storage:
+  method: git
+  location: git@github.com:tkhq/repros-sigs.git
+  path: /qos
