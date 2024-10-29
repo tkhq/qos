@@ -39,8 +39,6 @@ jobs:
         run: |
           mkdir -p ~/.ssh/
           echo "${{ secrets.REPROS_KEY }}" > ~/.ssh/repros.key
-          echo "Using key: ~/.ssh/repros.key"
-          ssh-keygen -l -f "~/.ssh/repros.key"
           cat >>~/.ssh/config <<-END
             Host lance-repros
                 HostName ${{matrix.host}}
@@ -48,6 +46,9 @@ jobs:
                 IdentityFile ~/.ssh/repros.key
                 StrictHostKeyChecking no
           END
+          echo "Using key: ~/.ssh/repros.key"
+          ls -Rlah ~/.ssh/
+          ssh-keygen -l -f "~/.ssh/repros.key"
           ssh-keyscan -H ${{matrix.host}} >> ~/.ssh/known_hosts
           git remote add repros-lance git@${{matrix.host}}:qos
           git push repros-lance HEAD
