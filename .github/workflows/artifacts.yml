@@ -47,6 +47,7 @@ jobs:
                 IdentityFile ~/.ssh/repros.key
                 StrictHostKeyChecking no
           END
+          ssh-keyscan -H ${{matrix.host}} >> ~/.ssh/known_hosts
           git remote add repros-lance git@${{matrix.host}}:qos
           git push repros-lance HEAD
         env:
