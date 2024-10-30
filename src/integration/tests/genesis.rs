@@ -10,7 +10,7 @@ use integration::{LOCAL_HOST, QOS_DIST_DIR};
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{sha_512, shamir::{shares_reconstruct, shares_generate}};
 use qos_nsm::nitro::unsafe_attestation_doc_from_der;
-use qos_p256::{P256Pair, P256Public};
+use qos_p256::{derive_secret, encrypt::P256EncryptPair, P256Pair, P256Public, P256_ENCRYPT_DERIVE_PATH};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 use rand::{seq::SliceRandom, thread_rng};
 
@@ -280,56 +280,81 @@ async fn genesis_e2e() {
 }
 
 
+#[test]
+fn dothething() {
+	// FAIL
+	let sharepath = "/Users/lthibault/Desktop/reshard-2024-09-19/1.share";
+	let master_seed_path = "/Users/lthibault/Desktop/reshard-2024-09-19/personal/user1-dir/user1.secret";
+
+	// PASS
+	// let sharepath = "/Users/lthibault/tkhq/code/namespaces/preprod/evm-parser/dev.share";
+	// let master_seed_path = "/Users/lthibault/tkhq/code/keys/deployment/preprod/evm-parser/manifest-set/dev.secret";
+
+	let b = fs::read(sharepath).unwrap();
+	let master_seed_hex_bytes = fs::read(master_seed_path).unwrap();
+	let master_seed_utf8 = std::str::from_utf8(&master_seed_hex_bytes).unwrap();
+	let master_seed = qos_hex::decode(master_seed_utf8).unwrap();
+	let encryption_pair_secret = derive_secret(&master_seed.try_into().unwrap(), P256_ENCRYPT_DERIVE_PATH).unwrap();
+	let pair = P256EncryptPair::from_bytes(&encryption_pair_secret).unwrap();
+
+
+	let encrypt_keypair_bytes = fs::read(master_seed_path).unwrap();
+	let encrypt_keypair_utf8 = std::str::from_utf8(&encrypt_keypair_bytes).unwrap();
+	let encrypt_keypair = qos_hex::decode(encrypt_keypair_utf8).unwrap();
+	let direct_pair = P256EncryptPair::from_bytes(&encrypt_keypair).unwrap();
+	// let direct_pair = P256EncryptPair::from_bytes(&encryption_pair_secret).expect("I puked");
+	
+	let result = pair.decrypt(&b).expect("failed to decrypt result");
+	println!("{:?}", result);
+	
+	let direct_result = direct_pair.decrypt(&b).expect("failed to decrypt direct_result");
+	println!("{:?}", direct_result);
+}
+
+fn assert_can_decrypt(sharepath: String, user_secret_path: String) {
+	let b = fs::read(sharepath).unwrap();
+	let master_seed_hex_bytes = fs::read(user_secret_path).unwrap();
+	let master_seed_utf8 = std::str::from_utf8(&master_seed_hex_bytes).unwrap();
+	let master_seed = qos_hex::decode(master_seed_utf8).unwrap();
+	let encryption_pair_secret = derive_secret(&master_seed.try_into().unwrap(), P256_ENCRYPT_DERIVE_PATH).unwrap();
+	let pair = P256EncryptPair::from_bytes(&encryption_pair_secret).unwrap();
+	
+	let result = pair.decrypt(&b).unwrap();
+	println!("{:?}", result)
+}
+
 #[tokio::test]
 async fn preprod_reshard() {
-	let threshold = 2;
-
 	// Step 0:  two new dev keys
-	let all_personal_dir = "/tmp/personal";
-	let personal_dir =
-		|user: &str| format!("{}/{}-dir", &*all_personal_dir, user);
-	let get_key_paths =
-		|user: &str| (format!("{user}.secret"), format!("{user}.pub"));
+	let user1 = new_user("user1".to_string());
+	let user2 = new_user("user2".to_string());
 
-	let user1 = "user1";
-	let (user1_private_share_key, user1_public_share_key) =
-		get_key_paths(user1);
-
-	let user2 = "user2";
-	let (user2_private_share_key, user2_public_share_key) =
-		get_key_paths(user2);
-
-
-	for (user, private, public) in [
-		(&user1, &user1_private_share_key, &user1_public_share_key),
-		(&user2, &user2_private_share_key, &user2_public_share_key),
-	] {
-		fs::create_dir_all(personal_dir(user)).unwrap();
-		let master_seed_path = format!("{}/{}", personal_dir(user), private);
-		let public_path = format!("{}/{}", personal_dir(user), public);
-		assert!(Command::new("../target/debug/qos_client")
-			.args([
-				"generate-file-key",
-				"--master-seed-path",
-				&master_seed_path,
-				"--pub-path",
-				&public_path,
-			])
-			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
-		assert!(Path::new(&*personal_dir(user)).join(public).is_file());
-		assert!(Path::new(&*personal_dir(user)).join(private).is_file());
+	for u in [user1.clone(), user2.clone()] {
+		// assert!(Command::new("../target/debug/qos_client")
+		// 	.args([
+		// 		"generate-file-key",
+		// 		"--master-seed-path",
+		// 		&user_secret_path,
+		// 		"--pub-path",
+		// 		&public_path,
+		// 	])
+		// 	.spawn()
+		// 	.unwrap()
+		// 	.wait()
+		// 	.unwrap()
+		// 	.success());
+		u.must_generate_and_save();
+		
+		assert!(Path::new(&u.public_path()).is_file());
+		assert!(Path::new(&u.secret_path()).is_file());
 	}
 
-
 	// Step 1:  load dev secret
-	let dev_secret_utf8_bytes = fs::read("/tmp/dev.secret").unwrap();  // decrypts dev shares
-	let dev_secret_hex_bytes = qos_hex::decode(std::str::from_utf8(&dev_secret_utf8_bytes).unwrap()).unwrap();
-	let dev_key = P256Pair::from_master_seed(&dev_secret_hex_bytes.try_into().unwrap()).unwrap();
 
+	let dev_secret_utf8_bytes = fs::read("/Users/lthibault/tkhq/code/keys/deployment/preprod/evm-parser/manifest-set/dev.secret").unwrap();  // decrypts dev shares
+	let dev_secret_hex_bytes = qos_hex::decode(std::str::from_utf8(&dev_secret_utf8_bytes).unwrap()).unwrap();
+	let dev_key = P256Pair::from_master_seed(&dev_secret_hex_bytes.clone().try_into().unwrap()).unwrap();
+	
 	// Step 2:  for each quorum key that we want to reshard...
 	let encrypted_evm_parser_dev_share = fs::read("/Users/lthibault/tkhq/code/namespaces/preprod/evm-parser/dev.share").unwrap();
 	let decrypted_evm_parser_dev_share = dev_key.decrypt(&encrypted_evm_parser_dev_share).unwrap();
@@ -339,6 +364,7 @@ async fn preprod_reshard() {
 	println!("{}", qos_hex::encode(&pk.to_bytes()));
 
 	// Step 4: Shard the master seed into 2 partitions (shares)
+	let threshold = 2;
 	let new_shares = shares_generate(&reconstructed, threshold, 2); // (threshold, total)
 
 
@@ -347,16 +373,22 @@ async fn preprod_reshard() {
     let user2_share_path = "/tmp/2_reshard.share";
 
     // Load the key pairs for user1 and user2
-    let user1_key_pair = P256Pair::from_hex_file(format!("{}/{}", personal_dir(user1), user1_private_share_key)).unwrap();
-    let user2_key_pair = P256Pair::from_hex_file(format!("{}/{}", personal_dir(user2), user2_private_share_key)).unwrap();
+    let user1_key_pair = P256Pair::from_hex_file(format!("{}/{}", user1.personal_dir(), user1.private_share_key)).unwrap();
+    let user2_key_pair = P256Pair::from_hex_file(format!("{}/{}", user2.personal_dir(), user2.private_share_key)).unwrap();
 
     // Encrypt the shares
-    let encrypted_share_user1 = user1_key_pair.aes_gcm_256_encrypt(&new_shares[0]).unwrap();
-    let encrypted_share_user2 = user2_key_pair.aes_gcm_256_encrypt(&new_shares[1]).unwrap();
+    let encrypted_share_user1 = user1_key_pair.public_key().encrypt(&new_shares[0]).unwrap();
+    let encrypted_share_user2 = user2_key_pair.public_key().encrypt(&new_shares[1]).unwrap();
 
     // Save the encrypted shares
     fs::write(&user1_share_path, &encrypted_share_user1).unwrap();
     fs::write(&user2_share_path, &encrypted_share_user2).unwrap();
+	for u in [user1, user2] {
+		// let user_secret_path = format!("{}/{}", personal_dir(&u.id), u.private_share_key);
+		assert_can_decrypt(
+			user1_share_path.to_string(),
+			u.secret_path());
+	}
 
     // Verify that the encrypted shares were successfully saved
     assert!(Path::new(&user1_share_path).is_file());
@@ -364,4 +396,46 @@ async fn preprod_reshard() {
 
     println!("Encrypted share for user1 saved to: {}", user1_share_path);
     println!("Encrypted share for user2 saved to: {}", user2_share_path);
+}
+
+#[derive(Clone)]
+struct User {
+	id: String,
+	private_share_key: String,
+	public_share_key: String,
+}
+
+fn new_user(id: String) -> User {
+	let get_key_paths =
+		|user: &str| (format!("{user}.secret"), format!("{user}.pub"));
+	let (private_share_key, public_share_key) = get_key_paths(&id);
+	
+	return User {
+		 id: id,
+		 private_share_key: private_share_key,
+		 public_share_key: public_share_key
+	}
+}
+
+impl User {
+	fn must_generate_and_save(&self) {
+		let user_keypair = P256Pair::generate().unwrap();
+		let user_master_seed_hex= user_keypair.to_master_seed_hex();
+
+		fs::create_dir_all(self.personal_dir()).unwrap();
+		fs::write(self.secret_path(), &user_master_seed_hex).unwrap();
+		fs::write(self.public_path(), qos_hex::encode(&user_keypair.public_key().to_bytes())).unwrap();
+	}
+
+	fn secret_path(&self) -> String {
+		return format!("{}/{}", self.personal_dir(), self.private_share_key);
+	}
+
+	fn public_path(&self) -> String {
+		return format!("{}/{}", self.personal_dir(), self.public_share_key);
+	}
+
+	fn personal_dir(&self) -> String {
+		return format!("/tmp/personal/{}-dir", self.id)
+	}
 }
