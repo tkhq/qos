@@ -451,13 +451,6 @@ impl UserFiles {
 			&share_key_pair.public_key().to_hex_bytes(),
 			"File Key Public",
 		);
-
-		// let user_keypair = P256Pair::generate().expect("unable to generate P256 keypair");
-		// let user_master_seed_hex= user_keypair.to_master_seed_hex();
-
-		// fs::create_dir_all(self.personal_dir()).unwrap();
-		// fs::write(self.secret_path(), &user_master_seed_hex).unwrap();
-		// fs::write(self.public_path(), qos_hex::encode(&user_keypair.public_key().to_bytes())).unwrap();
 	}
 
 	fn secret_key_path(&self) -> String {
