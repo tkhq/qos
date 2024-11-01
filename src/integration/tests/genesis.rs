@@ -323,35 +323,50 @@ fn assert_can_decrypt(sharepath: String, user_secret_path: String) {
 	println!("{:?}", result)
 }
 
+// REMOVE ME.  This is a hacky sanity check.
+#[test]
+fn qos_client_and_generate_are_equivalent() {
+	let user = files_for_user("some-user".to_string());
+	user.must_generate_and_save_user_dir();
+	
+	let secret_from_code = fs::read(user.secret_key_path()).unwrap();
+	assert_eq!(secret_from_code.len(), 64);
+	
+	assert!(Command::new("../target/debug/qos_client")
+		.args([
+			"generate-file-key",
+			"--master-seed-path",
+			&user.secret_key_path(),
+			"--pub-path",
+			&user.public_key_path(),
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success());
+		
+		// HACK:  if it's different, it was overwritten by the qos_client command,
+		// so it's at least saving to the same path.
+		assert_ne!(secret_from_code, fs::read(user.secret_key_path()).unwrap());
+		// From there, we just want to make sure the data has the correct shape.
+		assert_eq!(secret_from_code.len(), 64);
+}
+
 #[tokio::test]
 async fn preprod_reshard() {
 	// Step 0:  two new dev keys
-	let user1 = new_user("user1".to_string());
-	let user2 = new_user("user2".to_string());
+	let user1 = files_for_user("user1".to_string());
+	let user2 = files_for_user("user2".to_string());
 
 	for u in [user1.clone(), user2.clone()] {
-		// assert!(Command::new("../target/debug/qos_client")
-		// 	.args([
-		// 		"generate-file-key",
-		// 		"--master-seed-path",
-		// 		&user_secret_path,
-		// 		"--pub-path",
-		// 		&public_path,
-		// 	])
-		// 	.spawn()
-		// 	.unwrap()
-		// 	.wait()
-		// 	.unwrap()
-		// 	.success());
-		u.must_generate_and_save();
-		
-		assert!(Path::new(&u.public_path()).is_file());
-		assert!(Path::new(&u.secret_path()).is_file());
+		u.must_generate_and_save_user_dir();
+		assert!(Path::new(&u.public_key_path()).is_file());
+		assert!(Path::new(&u.secret_key_path()).is_file());
 	}
-
+	
 	// Step 1:  load dev secret
-
-	let dev_secret_utf8_bytes = fs::read("/Users/lthibault/tkhq/code/keys/deployment/preprod/evm-parser/manifest-set/dev.secret").unwrap();  // decrypts dev shares
+	let dev_secret_utf8_bytes = read_dev_secret();
 	let dev_secret_hex_bytes = qos_hex::decode(std::str::from_utf8(&dev_secret_utf8_bytes).unwrap()).unwrap();
 	let dev_key = P256Pair::from_master_seed(&dev_secret_hex_bytes.clone().try_into().unwrap()).unwrap();
 	
@@ -383,11 +398,10 @@ async fn preprod_reshard() {
     // Save the encrypted shares
     fs::write(&user1_share_path, &encrypted_share_user1).unwrap();
     fs::write(&user2_share_path, &encrypted_share_user2).unwrap();
-	for u in [user1, user2] {
-		// let user_secret_path = format!("{}/{}", personal_dir(&u.id), u.private_share_key);
+	for (u, share_path) in [(user1, user1_share_path), (user2, user2_share_path)] {
 		assert_can_decrypt(
-			user1_share_path.to_string(),
-			u.secret_path());
+			share_path.to_string(),
+			u.secret_key_path());
 	}
 
     // Verify that the encrypted shares were successfully saved
@@ -399,43 +413,79 @@ async fn preprod_reshard() {
 }
 
 #[derive(Clone)]
-struct User {
-	id: String,
+struct UserFiles {
+	name: String,
 	private_share_key: String,
 	public_share_key: String,
 }
 
-fn new_user(id: String) -> User {
+fn files_for_user(name: String) -> UserFiles {
 	let get_key_paths =
 		|user: &str| (format!("{user}.secret"), format!("{user}.pub"));
-	let (private_share_key, public_share_key) = get_key_paths(&id);
+
+	let (private_share_key, public_share_key) = get_key_paths(&name);
 	
-	return User {
-		 id: id,
+	return UserFiles {
+		 name: name,
 		 private_share_key: private_share_key,
 		 public_share_key: public_share_key
 	}
 }
 
-impl User {
-	fn must_generate_and_save(&self) {
-		let user_keypair = P256Pair::generate().unwrap();
-		let user_master_seed_hex= user_keypair.to_master_seed_hex();
+impl UserFiles {
+	fn must_generate_and_save_user_dir(&self) {
+		// See qos_client::src::cli::services::generate_file_key
+		let share_key_pair =
+			P256Pair::generate().expect("unable to generate P256 keypair");
+	
+		// Write the personal key secret
+		write_with_msg(
+			self.secret_key_path().as_ref(),
+			&share_key_pair.to_master_seed_hex(),
+			"Master Seed",
+		);
 
-		fs::create_dir_all(self.personal_dir()).unwrap();
-		fs::write(self.secret_path(), &user_master_seed_hex).unwrap();
-		fs::write(self.public_path(), qos_hex::encode(&user_keypair.public_key().to_bytes())).unwrap();
+		// Write the setup key public key
+		write_with_msg(
+			self.public_key_path().as_ref(),
+			&share_key_pair.public_key().to_hex_bytes(),
+			"File Key Public",
+		);
+
+		// let user_keypair = P256Pair::generate().expect("unable to generate P256 keypair");
+		// let user_master_seed_hex= user_keypair.to_master_seed_hex();
+
+		// fs::create_dir_all(self.personal_dir()).unwrap();
+		// fs::write(self.secret_path(), &user_master_seed_hex).unwrap();
+		// fs::write(self.public_path(), qos_hex::encode(&user_keypair.public_key().to_bytes())).unwrap();
 	}
 
-	fn secret_path(&self) -> String {
+	fn secret_key_path(&self) -> String {
 		return format!("{}/{}", self.personal_dir(), self.private_share_key);
 	}
 
-	fn public_path(&self) -> String {
+	fn public_key_path(&self) -> String {
 		return format!("{}/{}", self.personal_dir(), self.public_share_key);
 	}
 
 	fn personal_dir(&self) -> String {
-		return format!("/tmp/personal/{}-dir", self.id)
+		return format!("/tmp/personal/{}-dir", self.name)
 	}
+}
+
+fn read_dev_secret() -> Vec<u8> {
+	let path = "/Users/lthibault/tkhq/code/keys/deployment/preprod/evm-parser/manifest-set/dev.secret";  // picked arbitrarily; should all be the same
+	return fs::read(path).unwrap();  // this key decrypts dev shares
+}
+
+/// Write `buf` to the file specified by `path` and write to stdout that
+/// `item_name` was written to `path`.
+/// 
+/// Copied from qos_client::src::cli::servies
+fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
+	let path_str = path.as_os_str().to_string_lossy();
+	fs::write(path, buf).unwrap_or_else(|_| {
+		panic!("Failed writing {} to file", path_str.clone())
+	});
+	println!("{item_name} written to: {path_str}");
 }
