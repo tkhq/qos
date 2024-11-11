@@ -18,11 +18,11 @@ test: out/.common-loaded
 
 .PHONY: lint
 lint: out/.common-loaded
-	$(call run,cargo clippy -- -D warnings)
+	$(call run,make -C src lint)
 
 .PHONY: format
 format: out/.common-loaded
-	$(call run,rustfmt)
+	$(call run,make -C src fmt)
 
 .PHONY: docs
 docs: out/.common-loaded

@@ -144,6 +144,10 @@ lint:
 
 .PHONY: clippy
 clippy:
+	cargo clippy -- -D warnings
+
+.PHONY: clippy-fix
+clippy-fix:
 	cargo clippy --fix --allow-dirty
 
 .PHONY: fmt

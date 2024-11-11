@@ -31,10 +31,10 @@ impl ProxyStream {
 	/// # Arguments
 	///
 	/// * `addr` - the USOCK or VSOCK to connect to (this socket should be bound
-	/// to a qos_net proxy) `timeout` is the timeout applied to the socket
+	///   to a qos_net proxy) `timeout` is the timeout applied to the socket
 	/// * `timeout` - the timeout to connect with
 	/// * `hostname` - the hostname to connect to (the remote qos_net proxy will
-	/// resolve DNS)
+	///   resolve DNS)
 	/// * `port` - the port the remote qos_net proxy should connect to
 	///   (typically: 80 or 443 for http/https)
 	/// * `dns_resolvers` - array of resolvers to use to resolve `hostname`
@@ -80,7 +80,7 @@ impl ProxyStream {
 	///
 	/// # Arguments
 	/// * `addr` - the USOCK or VSOCK to connect to (this socket should be bound
-	/// to a qos_net proxy) `timeout` is the timeout applied to the socket
+	///   to a qos_net proxy) `timeout` is the timeout applied to the socket
 	/// * `timeout` - the timeout to connect with
 	/// * `ip` - the IP the remote qos_net proxy should connect to
 	/// * `port` - the port the remote qos_net proxy should connect to
