@@ -10,15 +10,15 @@ default: \
 
 .PHONY: test
 test: out/.common-loaded
-	$(call run,make -C src test)
+	$(call run,make test)
 
 .PHONY: lint
 lint: out/.common-loaded
-	$(call run,make -C src lint)
+	$(call run,make lint)
 
 .PHONY: format
 format: out/.common-loaded
-	$(call run,make -C src fmt)
+	$(call run,make fmt)
 
 .PHONY: docs
 docs: out/.common-loaded
