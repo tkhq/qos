@@ -22,6 +22,7 @@ FROM stagex/pcsc-lite:sx2024.03.0@sha256:e720e1795706c7c8c1db14bf730b10521e3ff42
 FROM stagex/pkgconf:sx2024.03.0@sha256:31ce4eddaf4e777ddb51f01923089f3321ec5272ca0aa834d475f644279209b8 AS pkgconf
 FROM stagex/rust:sx2024.03.0@sha256:fe22a0fcdb569cb70b8147378463fb6ff800e642be9d50542f8e25a38d90ec7f AS rust
 FROM stagex/zlib:sx2024.03.0@sha256:de8f56f3ece28b14d575329bead53fc5318962ae3cb8f161a2d69710f7ec51f4 AS zlib
+FROM stagex/make:4.4@sha256:df43f0cf3ac1ad91bf91baefb539e8df42c11b0954a6e2498322a5467deb81e3 AS make
 
 FROM scratch as base
 ENV TARGET=x86_64-unknown-linux-musl
@@ -48,6 +49,7 @@ COPY --from=llvm . /
 COPY --from=pcsc-lite . /
 COPY --from=file . /
 COPY --from=gcc . /
+COPY --from=make . /
 COPY --from=linux-nitro /bzImage .
 COPY --from=linux-nitro /nsm.ko .
 COPY --from=linux-nitro /linux.config .
