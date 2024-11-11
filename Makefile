@@ -10,11 +10,7 @@ default: \
 
 .PHONY: test
 test: out/.common-loaded
-	$(call run,\
-		cargo build --all; \
-		cargo test; \
-		cargo test -p qos_core; \
-	)
+	$(call run,make -C src test)
 
 .PHONY: lint
 lint: out/.common-loaded
