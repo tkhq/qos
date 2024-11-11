@@ -1592,8 +1592,8 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	let pivot = fs::read(&pivot_path).expect("Failed to read pivot binary.");
 
 	let mock_pcr = vec![0; 48];
-	// Create a manifest with manifest set of 1 - everything hardcoded expect
-	// pivot config
+	// Create a manifest with manifest set of 1
+	// everything below is hardcoded except pivot config
 	let manifest = Manifest {
 		namespace: Namespace {
 			name: DANGEROUS_DEV_BOOT_NAMESPACE.to_string(),
@@ -1615,7 +1615,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			members: vec![member.clone()],
 		},
 		share_set: ShareSet {
-			threshold: 1,
+			threshold: 2,
 			// The only member is the quorum member
 			members: vec![member.clone()],
 		},
@@ -1677,15 +1677,18 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		approval: approval.clone(),
 	};
 	let resp1 = request::post(uri, &req1).unwrap();
-	assert!(matches!(
-		resp1,
-		ProtocolMsg::ProvisionResponse { reconstructed: false }
-	));
+	assert!(
+		matches!(
+			resp1,
+			ProtocolMsg::ProvisionResponse { reconstructed: false }
+		),
+		"{resp1:?}"
+	);
 
 	// Post the second share; expected to reconstruct.
 	let req2 = ProtocolMsg::ProvisionRequest {
 		share: eph_pub
-			.encrypt(&shares[0])
+			.encrypt(&shares[1])
 			.expect("Failed to encrypt share to eph key."),
 		approval,
 	};
