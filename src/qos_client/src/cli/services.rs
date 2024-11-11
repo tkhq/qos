@@ -1,8 +1,6 @@
 use std::{
-	fs,
-	fs::File,
-	io,
-	io::{BufRead, BufReader, Write},
+	fs::{self, File},
+	io::{self, BufRead, BufReader, Write},
 	mem,
 	path::{Path, PathBuf},
 };
@@ -86,7 +84,7 @@ pub enum Error {
 	#[cfg(feature = "smartcard")]
 	PinEntryError(std::io::Error),
 	/// Failed to read share
-	ReadShare,
+	ReadShare(String),
 	/// Error while try to read the quorum public key.
 	FailedToReadQuorumPublicKey(qos_p256::P256Error),
 	/// Error trying to the read a file that is supposed to have a manifest.
@@ -1229,10 +1227,8 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	let manifest_envelope = read_manifest_envelope(&manifest_envelope_path)?;
 	let attestation_doc =
 		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
-	let encrypted_share = std::fs::read(share_path).map_err(|e| {
-		eprintln!("{e:?}");
-		Error::ReadShare
-	})?;
+	let encrypted_share = std::fs::read(share_path)
+		.map_err(|e| Error::ReadShare(e.to_string()))?;
 
 	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
 
@@ -1539,7 +1535,8 @@ pub(crate) fn display<P: AsRef<Path>>(
 	file_path: P,
 	json: bool,
 ) -> Result<(), Error> {
-	let bytes = fs::read(file_path).map_err(|_| Error::ReadShare)?;
+	let bytes =
+		fs::read(file_path).map_err(|e| Error::ReadShare(e.to_string()))?;
 	match *display_type {
 		DisplayType::Manifest => {
 			let decoded = Manifest::try_from_slice(&bytes)?;
@@ -1581,20 +1578,15 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		pub_key: quorum_public_der.clone(),
 	};
 
-	// Shard it with N=1, K=1
-	let share = {
-		let mut shares = qos_crypto::shamir::shares_generate(
-			quorum_pair.to_master_seed(),
-			1,
-			1,
-		);
-		assert_eq!(
-			shares.len(),
-			1,
-			"Error generating shares - did not get exactly one share."
-		);
-		shares.remove(0)
-	};
+	// Shard it with N=2, K=2
+	let shares =
+		qos_crypto::shamir::shares_generate(quorum_pair.to_master_seed(), 2, 2)
+			.unwrap();
+	assert_eq!(
+		shares.len(),
+		2,
+		"Error generating shares - did not get exactly two shares."
+	);
 
 	// Read in the pivot
 	let pivot = fs::read(&pivot_path).expect("Failed to read pivot binary.");
@@ -1677,21 +1669,33 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		},
 	};
 
-	// Post the share
-	let req = ProtocolMsg::ProvisionRequest {
+	// Post the share a first time. It won't work (1/2 shares aren't enough)
+	let req1 = ProtocolMsg::ProvisionRequest {
 		share: eph_pub
-			.encrypt(&share)
+			.encrypt(&shares[0])
+			.expect("Failed to encrypt share to eph key."),
+		approval: approval.clone(),
+	};
+	let resp1 = request::post(uri, &req1).unwrap();
+	assert!(matches!(
+		resp1,
+		ProtocolMsg::ProvisionResponse { reconstructed: false }
+	));
+
+	// Post the second share; expected to reconstruct.
+	let req2 = ProtocolMsg::ProvisionRequest {
+		share: eph_pub
+			.encrypt(&shares[0])
 			.expect("Failed to encrypt share to eph key."),
 		approval,
 	};
-	match request::post(uri, &req).unwrap() {
-		ProtocolMsg::ProvisionResponse { reconstructed } => {
-			assert!(reconstructed, "Quorum Key was not reconstructed");
-		}
-		r => panic!("Unexpected response: {r:?}"),
-	};
+	let resp2 = request::post(uri, &req2).unwrap();
+	assert!(matches!(
+		resp2,
+		ProtocolMsg::ProvisionResponse { reconstructed: true }
+	));
 
-	println!("Enclave should be finished booting!");
+	println!("Enclave is provisioned!");
 }
 
 pub(crate) fn shamir_split(
@@ -1705,7 +1709,8 @@ pub(crate) fn shamir_split(
 		error: e.to_string(),
 	})?;
 	let shares =
-		qos_crypto::shamir::shares_generate(&secret, total_shares, threshold);
+		qos_crypto::shamir::shares_generate(&secret, total_shares, threshold)
+			.unwrap();
 
 	for (i, share) in shares.iter().enumerate() {
 		let file_name = format!("{}.share", i + 1);
@@ -1730,8 +1735,9 @@ pub(crate) fn shamir_reconstruct(
 		})
 		.collect::<Result<Vec<Vec<u8>>, Error>>()?;
 
-	let secret =
-		Zeroizing::new(qos_crypto::shamir::shares_reconstruct(&shares));
+	let secret = Zeroizing::new(
+		qos_crypto::shamir::shares_reconstruct(&shares).unwrap(),
+	);
 
 	write_with_msg(output_path.as_ref(), &secret, "Reconstructed secret");
 

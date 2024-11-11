@@ -51,15 +51,24 @@ pub struct RecoveredPermutation(Vec<MemberShard>);
 
 /// Genesis output per Setup Member.
 #[derive(
-	PartialEq, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Eq,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct GenesisMemberOutput {
 	/// The Quorum Member whom's Setup Key was used.
 	pub share_set_member: QuorumMember,
 	/// Quorum Key Share encrypted to the `setup_member`'s Personal Key.
+	#[serde(with = "qos_hex::serde")]
 	pub encrypted_quorum_key_share: Vec<u8>,
 	/// Sha512 hash of the plaintext quorum key share. Used by the share set
 	/// member to verify they correctly decrypted the share.
+	#[serde(with = "qos_hex::serde")]
 	pub share_hash: [u8; 64],
 }
 
@@ -127,7 +136,8 @@ pub(in crate::protocol) fn boot_genesis(
 		master_seed,
 		genesis_set.members.len(),
 		genesis_set.threshold as usize,
-	);
+	)
+	.map_err(|e| ProtocolError::QosCrypto(format!("{e:?}")))?;
 
 	let member_outputs: Result<Vec<_>, _> = zip(shares, genesis_set.members.iter().cloned())
 		.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError> {
@@ -243,6 +253,7 @@ mod test {
 			qos_crypto::shamir::shares_reconstruct(
 				&shares[0..threshold as usize],
 			)
+			.unwrap()
 			.try_into()
 			.unwrap();
 		let reconstructed_quorum_key =

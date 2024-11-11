@@ -141,6 +141,8 @@ pub enum ProtocolError {
 	/// The new manifest was different from the old manifest when we expected
 	/// them to be the same because they have the same nonce
 	DifferentManifest,
+	/// Error from the qos crypto library.
+	QosCrypto(String),
 }
 
 impl From<std::io::Error> for ProtocolError {
