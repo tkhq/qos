@@ -139,9 +139,9 @@ impl Read for ProxyStream {
 		let stream: Stream = Stream::connect(&self.addr, self.timeout)
 			.map_err(|e| {
 				std::io::Error::new(
-			ErrorKind::NotConnected,
-			format!("Error while connecting to socket (sending read request): {:?}", e),
-		)
+				ErrorKind::NotConnected,
+				format!("Error while connecting to socket (sending read request): {:?}", e),
+			)
 			})?;
 
 		let req = borsh::to_vec(&ProxyMsg::ReadRequest {
@@ -172,7 +172,14 @@ impl Read for ProxyStream {
 						));
 					}
 					if data.len() > buf.len() {
-						return Err(std::io::Error::new(ErrorKind::InvalidData, format!("overflow: cannot read {} bytes into a buffer of {} bytes", data.len(), buf.len())));
+						return Err(std::io::Error::new(
+							ErrorKind::InvalidData,
+							format!(
+								"overflow: cannot read {} bytes into a buffer of {} bytes",
+								data.len(),
+								buf.len()
+							),
+						));
 					}
 
 					// Copy data into buffer
@@ -203,9 +210,9 @@ impl Write for ProxyStream {
 		let stream: Stream = Stream::connect(&self.addr, self.timeout)
 			.map_err(|e| {
 				std::io::Error::new(
-			ErrorKind::NotConnected,
-			format!("Error while connecting to socket (sending read request): {:?}", e),
-		)
+				ErrorKind::NotConnected,
+				format!("Error while connecting to socket (sending read request): {:?}", e),
+			)
 			})?;
 
 		let req = borsh::to_vec(&ProxyMsg::WriteRequest {
@@ -222,9 +229,9 @@ impl Write for ProxyStream {
 
 		let resp_bytes = stream.recv().map_err(|e| {
 			std::io::Error::new(
-			ErrorKind::Other,
-			format!("QOS IOError receiving bytes from stream after WriteRequest: {:?}", e),
-		)
+				ErrorKind::Other,
+				format!("QOS IOError receiving bytes from stream after WriteRequest: {:?}", e),
+			)
 		})?;
 
 		match ProxyMsg::try_from_slice(&resp_bytes) {
@@ -254,9 +261,9 @@ impl Write for ProxyStream {
 		let stream: Stream = Stream::connect(&self.addr, self.timeout)
 			.map_err(|e| {
 				std::io::Error::new(
-			ErrorKind::NotConnected,
-			format!("Error while connecting to socket (sending read request): {:?}", e),
-				)
+				ErrorKind::NotConnected,
+				format!("Error while connecting to socket (sending read request): {:?}", e),
+			)
 			})?;
 
 		let req = borsh::to_vec(&ProxyMsg::FlushRequest {
@@ -273,9 +280,9 @@ impl Write for ProxyStream {
 
 		let resp_bytes = stream.recv().map_err(|e| {
 			std::io::Error::new(
-			ErrorKind::Other,
-			format!("QOS IOError receiving bytes from stream after FlushRequest: {:?}", e),
-		)
+				ErrorKind::Other,
+				format!("QOS IOError receiving bytes from stream after FlushRequest: {:?}", e),
+			)
 		})?;
 
 		match ProxyMsg::try_from_slice(&resp_bytes) {
@@ -470,7 +477,14 @@ mod test {
 							));
 						}
 						if data.len() > buf.len() {
-							return Err(std::io::Error::new(ErrorKind::InvalidData, format!("overflow: cannot read {} bytes into a buffer of {} bytes", data.len(), buf.len())));
+							return Err(std::io::Error::new(
+								ErrorKind::InvalidData,
+								format!(
+									"overflow: cannot read {} bytes into a buffer of {} bytes",
+									data.len(),
+									buf.len()
+								),
+							));
 						}
 
 						// Copy data into buffer

@@ -115,7 +115,7 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 					verify_ascii(&sanitized_s_bytes[i])?;
 					verify_ascii(&sanitized_s_bytes[i + 1])?;
 
-					let s = std::str::from_utf8(&sanitized_s_bytes[i..i+2])
+					let s = std::str::from_utf8(&sanitized_s_bytes[i..i + 2])
 						.expect("We ensure that input slice represents ASCII above. qed.");
 					u8::from_str_radix(s, 16).map_err(Into::into)
 				})

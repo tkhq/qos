@@ -77,5 +77,5 @@ out/common/index.json: \
 	$(call build,common)
 
 out/.common-loaded: out/common/index.json
-	env -C ./out/common tar -cf - . | docker load
-	touch out/.common-loaded
+	cd ./out/common && tar -cf - . | docker load
+	touch ./out/.common-loaded

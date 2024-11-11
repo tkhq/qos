@@ -129,21 +129,19 @@ pub(in crate::protocol) fn boot_genesis(
 		genesis_set.threshold as usize,
 	);
 
-	let member_outputs: Result<Vec<_>, _> =
-		zip(shares, genesis_set.members.iter().cloned())
-			.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError>{
-				// 1) encrypt the share to quorum key
-				let personal_pub = P256Public::from_bytes(&share_set_member.pub_key)?;
-				let encrypted_quorum_key_share =
-					personal_pub.encrypt(&share)?;
+	let member_outputs: Result<Vec<_>, _> = zip(shares, genesis_set.members.iter().cloned())
+		.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError> {
+			// 1) encrypt the share to quorum key
+			let personal_pub = P256Public::from_bytes(&share_set_member.pub_key)?;
+			let encrypted_quorum_key_share = personal_pub.encrypt(&share)?;
 
-				Ok(GenesisMemberOutput {
-					share_set_member,
-					encrypted_quorum_key_share,
-					share_hash: sha_512(&share),
-				})
+			Ok(GenesisMemberOutput {
+				share_set_member,
+				encrypted_quorum_key_share,
+				share_hash: sha_512(&share),
 			})
-			.collect();
+		})
+		.collect();
 
 	let dr_key_wrapped_quorum_key = if let Some(dr_key) = maybe_dr_key {
 		let dr_public = P256Public::from_bytes(&dr_key)

@@ -152,8 +152,7 @@ clippy-fix:
 
 .PHONY: fmt
 fmt:
-	cargo +nightly version
-	cargo +nightly fmt
+	cargo fmt
 
 .PHONY: test
 test:

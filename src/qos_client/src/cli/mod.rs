@@ -499,11 +499,11 @@ impl Command {
 	}
 	fn display_type_token() -> Token {
 		Token::new(
-				DISPLAY_TYPE,
-				"The type contained in the file (manifest, manifest-envelope, genesis-output)."
-			)
-			.takes_value(true)
-			.required(true)
+			DISPLAY_TYPE,
+			"The type contained in the file (manifest, manifest-envelope, genesis-output).",
+		)
+		.takes_value(true)
+		.required(true)
 	}
 	fn dr_key_path_token() -> Token {
 		Token::new(DR_KEY_PATH, "Path to a DR key certificate")

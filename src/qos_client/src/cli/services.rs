@@ -547,7 +547,10 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	let genesis_output = GenesisOutput::try_from_slice(
 		&fs::read(genesis_output_path).expect("Failed to read genesis output file"),
-	).expect("Failed to deserialize genesis output - check that qos_client and qos_core version line up");
+	)
+	.expect(
+		"Failed to deserialize genesis output - check that qos_client and qos_core version line up",
+	);
 
 	let master_seed_hex = fs::read_to_string(&master_seed_path)
 		.expect("Failed to read master seed to string");
@@ -1167,8 +1170,10 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 			}) => (document, manifest_envelope),
 			Ok(ProtocolMsg::LiveAttestationDocResponse {
 				nsm_response: _,
-				manifest_envelope: None
-			}) => panic!("ManifestEnvelope does not exist in enclave - likely waiting for boot instruction"),
+				manifest_envelope: None,
+			}) => panic!(
+				"ManifestEnvelope does not exist in enclave - likely waiting for boot instruction"
+			),
 			r => panic!("Unexpected response: {r:?}"),
 		};
 
@@ -1391,7 +1396,9 @@ where
 		approvers.sort();
 		let approvers = approvers.join("\n");
 
-		let prompt = format!("The following manifest set members approved:\n{approvers}\nIs this ok? (yes/no)");
+		let prompt = format!(
+			"The following manifest set members approved:\n{approvers}\nIs this ok? (yes/no)"
+		);
 
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1888,15 +1895,12 @@ fn find_approvals<P: AsRef<Path>>(
 	boot_dir: P,
 	manifest: &Manifest,
 ) -> Vec<Approval> {
-	let approvals: Vec<_> =  find_file_paths(&boot_dir)
+	let approvals: Vec<_> = find_file_paths(&boot_dir)
 		.iter()
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
 			// Only look at files with the approval extension
-			if file_name
-				.last()
-				.map_or(true, |s| s.as_str() != APPROVAL_EXT)
-			{
+			if file_name.last().map_or(true, |s| s.as_str() != APPROVAL_EXT) {
 				return None;
 			};
 
@@ -1907,7 +1911,8 @@ fn find_approvals<P: AsRef<Path>>(
 
 			assert!(
 				manifest.manifest_set.members.contains(&approval.member),
-				"Found approval from member ({:?}) not included in the Manifest Set", approval.member.alias
+				"Found approval from member ({:?}) not included in the Manifest Set",
+				approval.member.alias
 			);
 
 			let pub_key = P256Public::from_bytes(&approval.member.pub_key)
@@ -2554,10 +2559,7 @@ mod tests {
 			));
 
 			let output = String::from_utf8(vec_out).unwrap();
-			assert_eq!(
-				&output,
-				"Is this the correct namespace name: test-namespace? (yes/no)\n"
-			);
+			assert_eq!(&output, "Is this the correct namespace name: test-namespace? (yes/no)\n");
 		}
 
 		#[test]
@@ -2806,7 +2808,10 @@ mod tests {
 
 			let output = String::from_utf8(vec_out).unwrap();
 			let output: Vec<_> = output.trim().split('\n').collect();
-			assert_eq!(output.last().unwrap(), &"Does this AWS IAM role belong to the intended organization: pr3? (yes/no)");
+			assert_eq!(
+				output.last().unwrap(),
+				&"Does this AWS IAM role belong to the intended organization: pr3? (yes/no)"
+			);
 		}
 
 		#[test]
