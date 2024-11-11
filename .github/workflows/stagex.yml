@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    name: build StageX artifacts
+    name: build artifacts
     # We use a special group that is configured to use github largest runner instance
     # This is charged by the minute, so if you want to reduce cost change back to `runs-on: ubuntu-latest`
     runs-on:
