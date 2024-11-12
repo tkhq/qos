@@ -1,4 +1,4 @@
-name: artifacts-build
+name: stagex-build
 
 on:
   push:
