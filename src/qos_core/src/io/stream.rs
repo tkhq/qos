@@ -385,43 +385,53 @@ mod test {
 	// Then it kills itself.
 	pub struct HarakiriPongServer {
 		path: String,
+		fd: Option<i32>,
 	}
 
 	impl HarakiriPongServer {
 		pub fn new(path: String) -> Self {
-			Self { path }
+			Self { path, fd: None }
 		}
 		pub fn start(&mut self) {
 			let listener = UnixListener::bind(&self.path).unwrap();
-			let path = self.path.clone();
-			thread::spawn(move || {
-				let (mut stream, _peer_addr) = listener.accept().unwrap();
+			self.fd = Some(listener.as_raw_fd());
 
-				// Read 4 bytes ("PING")
-				let mut buf = [0u8; 4];
-				stream.read_exact(&mut buf).unwrap();
+			let (mut stream, _peer_addr) = listener.accept().unwrap();
 
-				// Send "PONG" if "PING" was sent
-				if from_utf8(&buf).unwrap() == "PING" {
-					let _ = stream.write(b"PONG").unwrap();
-				}
+			// Read 4 bytes ("PING")
+			let mut buf = [0u8; 4];
+			stream.read_exact(&mut buf).unwrap();
 
-				// Then shutdown the server
-				let _ = shutdown(listener.as_raw_fd(), Shutdown::Both);
-				let _ = close(listener.as_raw_fd());
+			// Send "PONG" if "PING" was sent
+			if from_utf8(&buf).unwrap() == "PING" {
+				let _ = stream.write(b"PONG").unwrap();
+			}
+		}
+	}
 
-				let server_socket = Path::new(&path);
+	impl Drop for HarakiriPongServer {
+		fn drop(&mut self) {
+			if let Some(fd) = &self.fd {
+				// Cleanup server fd if we have access to one
+				let _ = shutdown(fd.to_owned(), Shutdown::Both);
+				let _ = close(fd.to_owned());
+
+				let server_socket = Path::new(&self.path);
 				if server_socket.exists() {
 					drop(std::fs::remove_file(server_socket));
 				}
-			});
+				println!("HarakiriPongServer dropped successfully.")
+			} else {
+				println!(
+					"HarakiriPongServer dropped without a fd set. All done."
+				)
+			}
 		}
 	}
 
 	#[test]
 	fn stream_integration_test() {
-		// Ensure concurrent tests are not attempting to listen at the same
-		// address
+		// Ensure concurrent tests do not listen at the same path
 		let unix_addr =
 			nix::sys::socket::UnixAddr::new("./stream_integration_test.sock")
 				.unwrap();
@@ -446,6 +456,8 @@ mod test {
 		// request
 		let mut server =
 			HarakiriPongServer::new(socket_server_path.to_string());
+
+		// Start the server in its own thread
 		thread::spawn(move || {
 			server.start();
 		});
