@@ -7,15 +7,16 @@ tab_spaces = 4
 # Line wrapping
 use_small_heuristics = "Max"
 max_width = 80
-# Not a stable feature yet, can't use consistently on StageX builds
-# wrap_comments = true
 
 # Imports
 reorder_imports = true
-# Not a stable feature yet, can't use consistently on StageX builds
-# imports_granularity = "Crate"
-# group_imports = "StdExternalCrate"
 
 # Random
 use_field_init_shorthand = true
 newline_style = "Unix"
+
+# These lints are not available on stable Rust toolchains, hence can't be used on StageX builds.
+# TODO: consider re-enabling them when they've made their way to stable rustfmt
+# wrap_comments = true
+# imports_granularity = "Crate"
+# group_imports = "StdExternalCrate"
