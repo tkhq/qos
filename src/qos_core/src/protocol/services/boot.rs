@@ -154,7 +154,7 @@ pub struct QuorumMember {
 	/// cryptographically guaranteed and thus should not be trusted without
 	/// verification.
 	pub alias: String,
-	/// P256Public as bytes
+	/// `P256Public` as bytes
 	#[serde(with = "qos_hex::serde")]
 	pub pub_key: Vec<u8>,
 }
@@ -272,7 +272,7 @@ pub struct PatchSet {
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct Namespace {
 	/// The namespace. This should be unique relative to other namespaces the
-	/// organization running QuorumOs has.
+	/// organization running `QuorumOs` has.
 	pub name: String,
 	/// A monotonically increasing value, used to identify the order in which
 	/// manifests for this namespace have been created. This is used to prevent

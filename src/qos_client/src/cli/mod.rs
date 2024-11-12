@@ -203,13 +203,13 @@ pub enum Command {
 	ExportKey,
 	/// Inject a quorum key into a non-fully provisioned enclave
 	InjectKey,
-	/// Verify a signature from qos_p256 pair.
+	/// Verify a signature from `qos_p256` pair.
 	P256Verify,
 	/// Sign with a p256 signature.
 	P256Sign,
-	/// Encrypt to a qos_p256 public key.
+	/// Encrypt to a `qos_p256` public key.
 	P256AsymmetricEncrypt,
-	/// Decrypt a payload encrypted to a qos_p256 public key.
+	/// Decrypt a payload encrypted to a `qos_p256` public key.
 	P256AsymmetricDecrypt,
 }
 
@@ -979,7 +979,7 @@ impl ClientOpts {
 	}
 
 	fn secret_path(&self) -> Option<String> {
-		self.parsed.single(SECRET_PATH).map(String::clone)
+		self.parsed.single(SECRET_PATH).cloned()
 	}
 
 	fn share_path(&self) -> String {

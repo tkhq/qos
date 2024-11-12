@@ -2783,7 +2783,7 @@ mod tests {
 			));
 
 			let output = String::from_utf8(vec_out).unwrap();
-			let output: Vec<_> = output.trim().split('\n').collect();
+			let output: Vec<_> = output.lines().collect();
 			assert_eq!(
 				output.last().unwrap(),
 				&"Is this the correct namespace nonce: 2? (yes/no)"
@@ -2807,7 +2807,7 @@ mod tests {
 			));
 
 			let output = String::from_utf8(vec_out).unwrap();
-			let output: Vec<_> = output.trim().split('\n').collect();
+			let output: Vec<_> = output.lines().collect();
 			assert_eq!(
 				output.last().unwrap(),
 				&"Does this AWS IAM role belong to the intended organization: pr3? (yes/no)"
@@ -2831,7 +2831,7 @@ mod tests {
 			));
 
 			let output = String::from_utf8(vec_out).unwrap();
-			let output: Vec<_> = output.trim().split('\n').collect();
+			let output: Vec<_> = output.lines().collect();
 
 			assert_eq!(
 				output[3],
