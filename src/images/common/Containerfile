@@ -1,27 +1,31 @@
-FROM stagex/bash:sx2024.03.0@sha256:d1cbbb56847e6b1e7b879214aa6926b6fdfa210e9b42a2f612a6aea850ddeefc AS bash
-FROM stagex/binutils:sx2024.03.0@sha256:3af41227e1fe6a8f9b3df9916ef4876840f33eaa172168e1db1d8f457ba011d5 AS binutils
-FROM stagex/ca-certificates:sx2024.03.0@sha256:6746d2d203be3455bfc5ffd5a051c8edb73ecfd7be77c3da5a2973003a30794f AS ca-certificates
-FROM stagex/coreutils:sx2024.03.0@sha256:cf4032ca6b5f912a8b9d572d527d388401b68a0c9224cc086173e46bc4e1eabe AS coreutils
-FROM stagex/eif_build:sx2024.03.0@sha256:6f3fed0aeaf9f9eebb43a370a5495fab92fcb21119fc23e261f0f24e1174009c AS eif_build
-FROM stagex/file:sx2024.03.0@sha256:7fd68d1e7d5e1d3b1e52433bb6709f28d3e362ea89c9e13586b852ca0412f640 AS file
-FROM stagex/filesystem:sx2024.03.0@sha256:42c8353db508ac79599df38c684502e50167352de2cddc5aea9b89486e7f8498 AS filesystem
-FROM stagex/findutils:sx2024.03.0@sha256:475ea3488840297454f0f20b58e1b8292bf9b3944f901e3fce432fa4afeaa4cd AS findutils
-FROM stagex/gcc:sx2024.03.0@sha256:25798fdde278a9f1f27e4092a1668e93d2766d4f8b089fba38d4684b20a9b0f7 AS gcc
-FROM stagex/gen_initramfs:sx2024.03.0@sha256:a51c840a1c82dbc00c0a813964195d4f4bcb20463701083999320f826ffa49bf AS gen_initramfs
-FROM stagex/git:sx2024.03.0@sha256:2c11f2daf9b8c1738cbd966b6de5dd0bcfaf81b675c2d268d30f972ddab9d9df AS git
-FROM stagex/grep:sx2024.03.0@sha256:589465adc0125128c21534eb560299c335a41935e0ce182a632f4b739bf25c60 AS grep
-FROM stagex/libunwind:sx2024.03.0@sha256:e74819e47c79f68a008302927ef02a5aa39cf12e859a8dfeccf9d1b4769b4833 AS libunwind
-FROM stagex/linux-nitro:sx2024.03.0@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eaea8866b002b04264 AS linux-nitro
-FROM stagex/llvm13:sx2024.03.0@sha256:97d0f3d32f58dca648cd70b0d58364d9bea5170bb99054c0a0b19ef57a7da7b1 AS llvm13
-FROM stagex/llvm:sx2024.03.0@sha256:8e361f1da92e956d947e37b6fc0a3951fcc1130863e2d3a9b4fca40ab4fd07f6 AS llvm
-FROM stagex/musl-fts:sx2024.03.0@sha256:73c3c4647010f7151c711ed5005ef946c7c1a19c6e8921e057b5dbc15ef9559a AS musl-fts
-FROM stagex/musl:sx2024.03.0@sha256:7db05e6817058a512a66ea82f3b99163069424c281363c2e9a48091d0d1d3bd9 AS musl
-FROM stagex/musl-obstack:sx2024.03.0@sha256:4b6737815460908f666fa7a8e91138610d0a0909c408165a575ffb42bf21cd66 AS musl-obstack
-FROM stagex/openssl:sx2024.03.0@sha256:1a2f656ced34d1ade99279c5663fcf0ec4f6526bcc50142079ef8adc080be3a9 AS openssl
+FROM stagex/bash:5.2.21@sha256:cb58f55d268fbe7ef629cda86e3a8af893066e4af7f26ef54748b6ad47bdaa66 AS bash
+FROM stagex/binutils:2.43.1@sha256:30a1bd110273894fe91c3a4a2103894f53eaac43cf12a035008a6982cb0e6908 AS binutils
+FROM stagex/ca-certificates:sx2024.11.0@sha256:a84695f983a448a82acfe78af11f33c6a66b27124266e1fdc3ecfb8dc5852573 AS ca-certificates
+FROM stagex/coreutils:9.4@sha256:1955f532d8923b5e17f60635c994bd9577bb3e6bccb5da702a69e79070bae0a9 AS coreutils
+FROM stagex/eif_build:0.2.2@sha256:9d086a2743f9df4eddf934c7b68c9dee4a7fb131b6465a24237a67f6c359dfb0 AS eif_build
+FROM stagex/file:5.45@sha256:f1053114ea2ef35dc04bd1d1f1572c3f1b86e3d57dffda99faac9e191bd7ab5d AS file
+FROM stagex/filesystem:sx2024.11.0@sha256:d03195563f548c3ac8f34acf777b7e86f0d0d049a9430d715e5774eb7cc93302 AS filesystem
+FROM stagex/findutils:4.9.0@sha256:d92494daaf08999aac0a277327d240a0149494716707fbce93381df058f693e2 AS findutils
+FROM stagex/gcc:13.1.0@sha256:439bf36289ef036a934129d69dd6b4c196427e4f8e28bc1a3de5b9aab6e062f0 AS gcc
+FROM stagex/gen_initramfs:6.8@sha256:f5b9271cca6003e952cbbb9ef041ffa92ba328894f563d1d77942e6b5cdeac1a AS gen_initramfs
+FROM stagex/git:2.9.5@sha256:29a02c423a4b55fa72cf2fce89f3bbabd1defea86d251bb2aea84c056340ab22 AS git
+FROM stagex/grep:3.11@sha256:576288125a7ecda969285e5edfaedef479c4bc18cba8230c0502000fdf2586c1 AS grep
+FROM stagex/libunwind:1.7.2@sha256:97ee6068a8e8c9f1c74409f80681069c8051abb31f9559dedf0d0d562d3bfc82 AS libunwind
+
+FROM stagex/linux-nitro:5.19.6@sha256:e6c8a861f9b18edfad56b1aa130feb822a25987c71e2b2932b020750dd7325bc AS linux-nitro
+FROM stagex/llvm13:13.0.1@sha256:aa60e2883ecf2070c7591fc29622a578c8ea24a14a2b7fcce95d3e5d9c00b101 AS llvm13
+FROM stagex/llvm:18.1.8@sha256:30517a41af648305afe6398af5b8c527d25545037df9d977018c657ba1b1708f AS llvm
+FROM stagex/musl-fts:1.2.7@sha256:87edcc648085e8fd6cd8a6ebc94a9464181c3035a00266c621c6450f5d7c66d8 AS musl-fts
+FROM stagex/musl:1.2.4@sha256:ad351b875f26294562d21740a3ee51c23609f15e6f9f0310e0994179c4231e1d AS musl
+FROM stagex/musl-obstack:1.2.3@sha256:2a308833441b46a64a1fa5cf90d0bb75dec4807d5a15035776165db88ca661fd AS musl-obstack
+FROM stagex/openssl:3.0.12@sha256:2c1a9d8fcc6f52cb11a206f380b17d74c1079f04cbb08071a4176648b4df52c1 AS openssl
+# This is using an old version of pcsc-lite since upgrading to v2.2.3 broke
+# static builds. Once we have confirmed an updated pcsc-lite has fixed this
+# issue, we should upgrade this again.
 FROM stagex/pcsc-lite:sx2024.03.0@sha256:e720e1795706c7c8c1db14bf730b10521e3ff42e4bed90addc590f7446aac8af AS pcsc-lite
-FROM stagex/pkgconf:sx2024.03.0@sha256:31ce4eddaf4e777ddb51f01923089f3321ec5272ca0aa834d475f644279209b8 AS pkgconf
+FROM stagex/pkgconf:1.6.3@sha256:ba7fce4108b721e8bf1a0d993a5f9be9b65eceda8ba073fe7e8ebca2a31b1494 AS pkgconf
 FROM stagex/rust:1.81.0@sha256:b7c834268a81bfcc473246995c55b47fe18414cc553e3293b6294fde4e579163 AS rust
-FROM stagex/zlib:sx2024.03.0@sha256:de8f56f3ece28b14d575329bead53fc5318962ae3cb8f161a2d69710f7ec51f4 AS zlib
+FROM stagex/zlib:1.3.1@sha256:96b4100550760026065dac57148d99e20a03d17e5ee20d6b32cbacd61125dbb6 AS zlib
 FROM stagex/make:4.4@sha256:df43f0cf3ac1ad91bf91baefb539e8df42c11b0954a6e2498322a5467deb81e3 AS make
 
 FROM scratch AS base
