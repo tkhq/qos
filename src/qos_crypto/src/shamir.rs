@@ -30,6 +30,7 @@ mod test {
 	use rand::prelude::SliceRandom;
 
 	use super::*;
+
 	#[test]
 	fn make_and_reconstruct_shares() {
 		let secret = b"this is a crazy secret";
@@ -64,5 +65,55 @@ mod test {
 			let reconstructed = shares_reconstruct(&combo).unwrap();
 			assert_eq!(secret.to_vec(), reconstructed);
 		}
+	}
+
+	#[test]
+	fn can_reconstruct_from_old_shares() {
+		// This test if fundamental to ensure updates to the Shamir Secret
+		// Sharing logic can be made safely. Here we hardcode shares that were
+		// created with the oldest version of this logic, and ensure that we can
+		// reconstruct. If this test starts failing please do _not_ ignore it,
+		// it's telling you the current quorum key shares will become invalid
+		// when combined!
+		// --------
+		// These shares were generated with the following QOS commit:
+		// `31ad6ac8458781f592a442b7dc0e0e019e03f2f4` (2022-05-12)
+		// with the following test code:
+		//  #[test]
+		//  fn make_shares() {
+		//      let secret = b"my cute little secret";
+		//      let n = 3;
+		//      let k = 2;
+		//
+		//      let all_shares = shares_generate(secret, n, k);
+		//      for share in all_shares {
+		//          println!("share: {}", hex::encode(share));
+		//      }
+		//  }
+		let shares = [
+			qos_hex::decode("01661fc0cc265daa4e7bde354c281dcc23a80c590249")
+				.unwrap(),
+			qos_hex::decode("027bb5fb26d326e0fc421cf604e495e3d3e4bd24ab0e")
+				.unwrap(),
+			qos_hex::decode("0370d31b89800f2f9255abb73ca0ed0f8329d20fcc33")
+				.unwrap(),
+		];
+
+		// Setting is 2-out-of-3. Let's try 3 ways.
+		let reconstructed1 =
+			shares_reconstruct(vec![shares[0].clone(), shares[1].clone()])
+				.unwrap();
+		let reconstructed2 =
+			shares_reconstruct(vec![shares[1].clone(), shares[2].clone()])
+				.unwrap();
+		let reconstructed3 =
+			shares_reconstruct(vec![shares[0].clone(), shares[2].clone()])
+				.unwrap();
+
+		// Regardless of the combination we should get the same secret
+		let expected_secret = b"my cute little secret";
+		assert_eq!(reconstructed1, expected_secret);
+		assert_eq!(reconstructed2, expected_secret);
+		assert_eq!(reconstructed3, expected_secret);
 	}
 }
