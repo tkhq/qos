@@ -250,9 +250,11 @@ impl HostServer {
 		let enc_manifest_envelope_resp = state
 			.enclave_client
 			.send(&enc_manifest_envelope_req)
-			.map_err(|e|
-				Error(format!("error while trying to send manifest envelope socket request to enclave: {e:?}"))
-			)?;
+			.map_err(|e| {
+				Error(format!(
+					"error while trying to send manifest envelope socket request to enclave: {e:?}"
+				))
+			})?;
 
 		let manifest_envelope_resp = ProtocolMsg::try_from_slice(
 			&enc_manifest_envelope_resp,
@@ -311,7 +313,8 @@ impl HostServer {
 		match state.enclave_client.send(&encoded_request) {
 			Ok(encoded_response) => (StatusCode::OK, encoded_response),
 			Err(e) => {
-				let msg = format!("Error while trying to send request over socket to enclave: {e:?}");
+				let msg =
+					format!("Error while trying to send request over socket to enclave: {e:?}");
 				eprint!("{msg}");
 
 				(

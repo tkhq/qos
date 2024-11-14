@@ -10,19 +10,15 @@ default: \
 
 .PHONY: test
 test: out/.common-loaded
-	$(call run,\
-		cargo build --all; \
-		cargo test; \
-		cargo test -p qos_core; \
-	)
+	$(call run,make test)
 
 .PHONY: lint
 lint: out/.common-loaded
-	$(call run,cargo clippy -- -D warnings)
+	$(call run,make lint)
 
 .PHONY: format
 format: out/.common-loaded
-	$(call run,rustfmt)
+	$(call run,make fmt)
 
 .PHONY: docs
 docs: out/.common-loaded
@@ -81,5 +77,5 @@ out/common/index.json: \
 	$(call build,common)
 
 out/.common-loaded: out/common/index.json
-	env -C ./out/common tar -cf - . | docker load
-	touch out/.common-loaded
+	cd ./out/common && tar -cf - . | docker load
+	touch ./out/.common-loaded

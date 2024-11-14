@@ -138,7 +138,7 @@ impl HostOpts {
 	}
 
 	fn base_path(&self) -> Option<String> {
-		self.parsed.single(ENDPOINT_BASE_PATH).map(Clone::clone)
+		self.parsed.single(ENDPOINT_BASE_PATH).cloned()
 	}
 
 	#[cfg(feature = "vm")]

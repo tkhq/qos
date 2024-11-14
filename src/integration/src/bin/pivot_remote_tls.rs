@@ -58,9 +58,8 @@ impl RequestProcessor for Processor {
 				.unwrap();
 				let mut tls = rustls::Stream::new(&mut conn, &mut stream);
 
-				let http_request = format!(
-					"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
-				);
+				let http_request =
+					format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n");
 
 				tls.write_all(http_request.as_bytes()).unwrap();
 

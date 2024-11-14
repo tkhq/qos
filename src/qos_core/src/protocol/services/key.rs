@@ -447,7 +447,8 @@ mod test {
 			let ephemeral_file: PathWrapper =
 				"/tmp/boot_key_rejects_manifest_if_not_enough_approvals.secret"
 					.into();
-			let manifest_file: PathWrapper = "/tmp/boot_key_rejects_manifest_if_not_enough_approvals.manifest".into();
+			let manifest_file: PathWrapper =
+				"/tmp/boot_key_rejects_manifest_if_not_enough_approvals.manifest".into();
 
 			let handles = Handles::new(
 				ephemeral_file.deref().to_string(),
@@ -524,9 +525,13 @@ mod test {
 		fn rejects_manifest_with_bad_approval_signature() {
 			let TestArgs { mut manifest_envelope, pivot, .. } = get_test_args();
 
-			let pivot_file: PathWrapper = "/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.pivot".into();
-			let ephemeral_file: PathWrapper = "/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.secret".into();
-			let manifest_file: PathWrapper = "/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.manifest".into();
+			let pivot_file: PathWrapper =
+				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.pivot".into();
+			let ephemeral_file: PathWrapper =
+				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.secret".into();
+			let manifest_file: PathWrapper =
+				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.manifest"
+					.into();
 
 			let handles = Handles::new(
 				ephemeral_file.deref().to_string(),
@@ -578,9 +583,12 @@ mod test {
 				member: non_member,
 			};
 
-			let pivot_file: PathWrapper = "/tmp/boot_key_reject_manifest_with_approval_from_non_memberpivot".into();
-			let ephemeral_file: PathWrapper = "/tmp/boot_key_reject_manifest_with_approval_from_non_membersecret".into();
-			let manifest_file: PathWrapper = "/tmp/boot_key_reject_manifest_with_approval_from_non_membermanifest".into();
+			let pivot_file: PathWrapper =
+				"/tmp/boot_key_reject_manifest_with_approval_from_non_memberpivot".into();
+			let ephemeral_file: PathWrapper =
+				"/tmp/boot_key_reject_manifest_with_approval_from_non_membersecret".into();
+			let manifest_file: PathWrapper =
+				"/tmp/boot_key_reject_manifest_with_approval_from_non_membermanifest".into();
 
 			let handles = Handles::new(
 				ephemeral_file.deref().to_string(),

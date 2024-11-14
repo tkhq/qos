@@ -203,13 +203,13 @@ pub enum Command {
 	ExportKey,
 	/// Inject a quorum key into a non-fully provisioned enclave
 	InjectKey,
-	/// Verify a signature from qos_p256 pair.
+	/// Verify a signature from `qos_p256` pair.
 	P256Verify,
 	/// Sign with a p256 signature.
 	P256Sign,
-	/// Encrypt to a qos_p256 public key.
+	/// Encrypt to a `qos_p256` public key.
 	P256AsymmetricEncrypt,
-	/// Decrypt a payload encrypted to a qos_p256 public key.
+	/// Decrypt a payload encrypted to a `qos_p256` public key.
 	P256AsymmetricDecrypt,
 }
 
@@ -499,11 +499,11 @@ impl Command {
 	}
 	fn display_type_token() -> Token {
 		Token::new(
-				DISPLAY_TYPE,
-				"The type contained in the file (manifest, manifest-envelope, genesis-output)."
-			)
-			.takes_value(true)
-			.required(true)
+			DISPLAY_TYPE,
+			"The type contained in the file (manifest, manifest-envelope, genesis-output).",
+		)
+		.takes_value(true)
+		.required(true)
 	}
 	fn dr_key_path_token() -> Token {
 		Token::new(DR_KEY_PATH, "Path to a DR key certificate")
@@ -979,7 +979,7 @@ impl ClientOpts {
 	}
 
 	fn secret_path(&self) -> Option<String> {
-		self.parsed.single(SECRET_PATH).map(String::clone)
+		self.parsed.single(SECRET_PATH).cloned()
 	}
 
 	fn share_path(&self) -> String {

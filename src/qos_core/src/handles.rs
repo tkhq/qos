@@ -305,7 +305,7 @@ mod test {
 		let ephemeral_file: PathWrapper =
 			"put_quorum_key_is_read_only_write_eph.secret".into();
 		let quorum_file: PathWrapper =
-			"put_pivot_is_read_only_write_quor.secret".into();
+			"put_quorum_key_is_read_only_write_quor.secret".into();
 		let manifest_file: PathWrapper =
 			"put_quorum_key_is_read_only_write.manifest".into();
 

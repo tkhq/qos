@@ -106,7 +106,9 @@ impl Proxy {
 				let remote_ip = conn.ip.clone();
 				match self.save_connection(conn) {
 					Ok(()) => {
-						println!("Connection to {hostname} established and saved as ID {connection_id}");
+						println!(
+							"Connection to {hostname} established and saved as ID {connection_id}"
+						);
 						ProxyMsg::ConnectResponse { connection_id, remote_ip }
 					}
 					Err(e) => {
@@ -323,7 +325,8 @@ mod test {
 				panic!("test failure: msg is not ConnectResponse")
 			}
 		};
-		let http_request = "GET / HTTP/1.1\r\nHost: api.turnkey.com\r\nConnection: close\r\n\r\n".to_string();
+		let http_request =
+			"GET / HTTP/1.1\r\nHost: api.turnkey.com\r\nConnection: close\r\n\r\n".to_string();
 
 		let request = borsh::to_vec(&ProxyMsg::WriteRequest {
 			connection_id,
