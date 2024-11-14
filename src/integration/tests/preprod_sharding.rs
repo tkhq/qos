@@ -89,7 +89,7 @@ fn preprod_reshard_ceremony() {
 
 	// For each of the enclaves...
 	for enclave_name in
-		["ump", "evm-parser", "notarizer", "signer", "tls-fetcher"]
+		["ump", "evm-parser", "notarizer", "signer", "tls-fetcher", "deploy-test"]
 	{
 		// Decrypt the old dev share and assert that the resulting quorum key
 		// has the right public key. Decrypted dev shares are _basically_ master
