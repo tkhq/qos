@@ -1,11 +1,13 @@
 use std::{process::Command, str};
 
+use borsh::BorshDeserialize;
 use integration::{PivotRemoteTlsMsg, PIVOT_REMOTE_TLS_PATH, QOS_NET_PATH};
 use qos_core::{
 	client::Client,
 	io::{SocketAddress, TimeVal, TimeValLike},
 	protocol::ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
 };
+
 use qos_test_primitives::ChildWrapper;
 
 const REMOTE_TLS_TEST_NET_PROXY_SOCKET: &str = "/tmp/remote_tls_test.net.sock";
@@ -40,7 +42,13 @@ fn fetch_remote_tls_content() {
 	.unwrap();
 
 	let response = enclave_client.send(&app_request).unwrap();
-	let response_text = str::from_utf8(&response).unwrap();
+	let response_text =
+		match PivotRemoteTlsMsg::try_from_slice(&response).unwrap() {
+			PivotRemoteTlsMsg::RemoteTlsResponse(s) => s,
+			PivotRemoteTlsMsg::RemoteTlsRequest { host: _, path: _ } => {
+				panic!("unexpected RemoteTlsRequest sent as response")
+			}
+		};
 
 	assert!(response_text.contains("Content fetched successfully"));
 	assert!(response_text.contains("HTTP/1.1 200 OK"));
@@ -53,7 +61,13 @@ fn fetch_remote_tls_content() {
 	.unwrap();
 
 	let response = enclave_client.send(&app_request).unwrap();
-	let response_text = str::from_utf8(&response).unwrap();
+	let response_text =
+		match PivotRemoteTlsMsg::try_from_slice(&response).unwrap() {
+			PivotRemoteTlsMsg::RemoteTlsResponse(s) => s,
+			PivotRemoteTlsMsg::RemoteTlsRequest { host: _, path: _ } => {
+				panic!("unexpected RemoteTlsRequest sent as response")
+			}
+		};
 
 	assert!(response_text.contains("Content fetched successfully"));
 	assert!(response_text.contains("HTTP/1.1 200 OK"));
