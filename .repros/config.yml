@@ -1,10 +1,14 @@
 build:
   command: make
 sign:
-  file: out/digests.txt
+  files:
+    - out/qos_client/index.json
+    - out/qos_enclave/index.json
+    - out/qos_host/index.json
+    - out/digests.txt
   format: raw
   method: ssh
-  backing: tpm
+  backing: disk
 storage:
   method: git
   location: git@github.com:tkhq/repros-sigs.git
