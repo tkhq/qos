@@ -5,9 +5,26 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 
-use sha2::Digest;
+use std::fmt;
 
+use sha2::Digest;
+use thiserror::Error;
+
+pub mod n_choose_k;
 pub mod shamir;
+
+/// Errors for this crate
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum QosCryptoError {
+	/// Errors from vsss-rs lib
+	Vsss(vsss_rs::Error),
+}
+
+impl fmt::Display for QosCryptoError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "QosCryptoError: {self:?}")
+	}
+}
 
 /// Create a SHA256 hash digest of `buf`.
 #[must_use]

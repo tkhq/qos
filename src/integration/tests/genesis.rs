@@ -6,7 +6,7 @@ use std::{
 };
 
 use borsh::de::BorshDeserialize;
-use integration::{LOCAL_HOST, QOS_DIST_DIR};
+use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{sha_512, shamir::shares_reconstruct};
 use qos_nsm::nitro::unsafe_attestation_doc_from_der;
@@ -153,7 +153,7 @@ async fn genesis_e2e() {
 			"--qos-release-dir",
 			QOS_DIST_DIR,
 			"--pcr3-preimage-path",
-			"./mock/pcr3-preimage.txt",
+			PCR3_PRE_IMAGE_PATH,
 			"--dr-key-path",
 			DR_KEY_PUBLIC_PATH,
 			"--unsafe-skip-attestation"
@@ -199,7 +199,10 @@ async fn genesis_e2e() {
 	// Try recovering from a random permutation
 	decrypted_shares.shuffle(&mut thread_rng());
 	let master_secret: [u8; qos_p256::MASTER_SEED_LEN] =
-		shares_reconstruct(&decrypted_shares[0..threshold]).try_into().unwrap();
+		shares_reconstruct(&decrypted_shares[0..threshold])
+			.unwrap()
+			.try_into()
+			.unwrap();
 	let reconstructed = P256Pair::from_master_seed(&master_secret).unwrap();
 	assert!(
 		reconstructed.public_key()

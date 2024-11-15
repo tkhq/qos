@@ -7,7 +7,8 @@ use std::{
 
 use borsh::de::BorshDeserialize;
 use integration::{
-	LOCAL_HOST, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE, QOS_DIST_DIR,
+	LOCAL_HOST, PCR3_PRE_IMAGE_PATH, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE,
+	QOS_DIST_DIR,
 };
 use qos_core::protocol::{
 	services::{
@@ -81,7 +82,7 @@ async fn standard_boot_e2e() {
 			"--qos-release-dir",
 			QOS_DIST_DIR,
 			"--pcr3-preimage-path",
-			"./mock/namespaces/pcr3-preimage.txt",
+			PCR3_PRE_IMAGE_PATH,
 			"--manifest-path",
 			&cli_manifest_path,
 			"--pivot-args",
@@ -157,7 +158,7 @@ async fn standard_boot_e2e() {
 				"--manifest-approvals-dir",
 				&*boot_dir,
 				"--pcr3-preimage-path",
-				"./mock/namespaces/pcr3-preimage.txt",
+				PCR3_PRE_IMAGE_PATH,
 				"--pivot-hash-path",
 				PIVOT_HASH_PATH,
 				"--qos-release-dir",
@@ -361,7 +362,7 @@ async fn standard_boot_e2e() {
 				"--manifest-envelope-path",
 				&manifest_envelope_path,
 				"--pcr3-preimage-path",
-				"./mock/namespaces/pcr3-preimage.txt",
+				PCR3_PRE_IMAGE_PATH,
 				"--manifest-set-dir",
 				"./mock/keys/manifest-set",
 				"--alias",
