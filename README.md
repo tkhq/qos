@@ -27,7 +27,7 @@ QuorumOS ("QOS") is a minimal, immutable, and deterministic Linux unikernel targ
 
 Before a PR can be merged our linter and unit tests need to pass.
 
-Run them within [StageX]() (dockerized) with:
+Run them within [StageX](https://codeberg.org/stagex/stagex) (containerized) with:
 
 ```bash
 make lint # apply standardized code formatting
