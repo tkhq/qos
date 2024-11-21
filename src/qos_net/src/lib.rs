@@ -14,3 +14,4 @@ pub mod proxy;
 pub mod proxy_connection;
 pub mod proxy_msg;
 pub mod proxy_stream;
+pub mod retry;
