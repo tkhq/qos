@@ -46,3 +46,18 @@ jobs:
         uses: ./.github/actions/docker-setup
       - name: Run linting
         run: make lint
+
+  build-linux-only-crates:
+    name: build-linux-only-crates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
+      - name: Build qos_system
+        run: cargo build --manifest-path ./src/qos_system/Cargo.toml --locked
+      - name: Build qos_aws
+        run: cargo build --manifest-path ./src/qos_aws/Cargo.toml --locked
+      - name: Build init
+        run: cargo build --manifest-path ./src/init/Cargo.toml --locked
