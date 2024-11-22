@@ -4,7 +4,7 @@
 
 ## About
 
-QuorumOS is a trusted computation layer for hosting enclave apps at modern cloud scale. The OS architecture is based on the principle that a threshold of actors must coordinate to provision a secure compute environment with sensitive application logic and secret material; no single actor can unilaterally provision the environment or secret material.
+QuorumOS is a computation layer for running applications inside a Trusted Execution Environment ("TEE", also referred to as "enclave") at modern cloud scale. The OS architecture is based on the principle that a threshold of actors must coordinate to provision a secure compute environment with sensitive application logic and secret material; no single actor can unilaterally provision the environment or secret material.
 
 Concretely, QuorumOS is designed to boot in an enclave by attesting to the enclave configuration, reconstructing a Quorum Key and then launching a single enclave app that can leverage the Quorum Key to encrypt and authenticate data.
 
