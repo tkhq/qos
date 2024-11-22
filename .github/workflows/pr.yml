@@ -46,3 +46,14 @@ jobs:
         uses: ./.github/actions/docker-setup
       - name: Run linting
         run: make lint
+
+  build-linux-only-crates:
+    name: build-linux-only-crates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
+      - name: Run build-linux-only
+        run: make build-linux-only

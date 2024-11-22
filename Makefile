@@ -24,6 +24,10 @@ format: out/.common-loaded
 docs: out/.common-loaded
 	$(call run,cargo doc)
 
+.PHONY: build-linux-only
+build-linux-only: out/.common-loaded
+	$(call run,make build-linux-only)
+
 .PHONY: shell
 shell: out/.common-loaded
 	docker run \
