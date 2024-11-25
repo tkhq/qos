@@ -1,1 +1,8 @@
 * @tkhq/qos-operators
+
+# For Cargo.toml files and Cargo.lock files, we want an extra review from dependency reviewers
+Cargo.* @tkhq/dependency-reviewers
+
+# We also want this file (COWDEOWNERS file) to be subject to the utmost scrutiny.
+# Otherwise qos-operators can collude to remove dependency reviews.
+/.github/CODEOWNERS @tkhq/qos-operators @tkhq/dependency-reviewers
