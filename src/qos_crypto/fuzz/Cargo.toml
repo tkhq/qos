@@ -1,0 +1,42 @@
+[package]
+name = "qos_crypto_fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+[dependencies.qos_crypto]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+# enable arithmetic checks at runtime
+overflow-check = 1
+
+[[bin]]
+name = "1_shamir_generate_reconstruct"
+path = "fuzz_targets/1_shamir_generate_reconstruct.rs"
+test = false
+doc = false
+
+
+[[bin]]
+name = "2_shamir_input_reconstruct_two_shares"
+path = "fuzz_targets/2_shamir_input_reconstruct_two_shares.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "3_shamir_input_reconstruct_three_shares"
+path = "fuzz_targets/3_shamir_input_reconstruct_three_shares.rs"
+test = false
+doc = false
