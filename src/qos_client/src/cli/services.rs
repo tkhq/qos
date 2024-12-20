@@ -2136,11 +2136,11 @@ where
 		while attempts > 0 {
 			let answer = self.prompt(prompt);
 
-			if ["yes", "Yes", "Y", "y"].contains(&answer.as_ref()) {
+			if ["yes", "Yes", "YES", "Y", "y"].contains(&answer.as_ref()) {
 				return true;
 			}
 
-			if ["no", "No", "N", "n"].contains(&answer.as_ref()) {
+			if ["no", "No", "NO", "N", "n"].contains(&answer.as_ref()) {
 				return false;
 			}
 
@@ -2575,7 +2575,7 @@ mod tests {
 			let Setup { manifest, .. } = setup();
 
 			let mut vec_out: Vec<u8> = vec![];
-			let vec_in = "ye\n".as_bytes();
+			let vec_in = "No\n".as_bytes();
 
 			let mut prompter =
 				Prompter { reader: vec_in, writer: &mut vec_out };
@@ -2781,7 +2781,8 @@ mod tests {
 			let Setup { manifest_envelope, .. } = setup();
 
 			let mut vec_out: Vec<u8> = vec![];
-			let vec_in = "y\nyes\nyea\ntes\nyes\nyes\n".as_bytes();
+			// Try all the accepted yes variants: y, yes, Yes, and YES!
+			let vec_in = "y\nyes\nyea\ntes\nYes\nYES\n".as_bytes();
 
 			let mut prompter =
 				Prompter { reader: vec_in, writer: &mut vec_out };
