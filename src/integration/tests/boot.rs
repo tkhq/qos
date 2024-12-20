@@ -189,21 +189,31 @@ async fn standard_boot_e2e() {
 
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
-			"Is this the correct namespace name: quit-coding-to-vape? (yes/no)"
+			"Is this the correct namespace name: quit-coding-to-vape? (y/n)"
 		);
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct namespace nonce: 2? (y/n)"
+		);
+		// On purpose, try to input a bad value, neither yes or no
+		stdin
+			.write_all("maybe\n".as_bytes())
+			.expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Please answer with either \"yes\" (y) or \"no\" (n)"
+		);
+		// Try the longer option ("yes" rather than "y")
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
-			"Is this the correct namespace nonce: 2? (yes/no)"
+			"Is this the correct pivot restart policy: RestartPolicy::Never? (y/n)"
 		);
-		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
-
-		assert_eq!(
-			&stdout.next().unwrap().unwrap(),
-			"Is this the correct pivot restart policy: RestartPolicy::Never? (yes/no)"
-		);
-		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
@@ -213,8 +223,8 @@ async fn standard_boot_e2e() {
 			&stdout.next().unwrap().unwrap(),
 			"[\"--msg\", \"testing420\"]?"
 		);
-		assert_eq!(&stdout.next().unwrap().unwrap(), "(yes/no)");
-		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
+		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 
 		// Wait for the command to write the approval and exit
 		assert!(child.wait().unwrap().success());
@@ -390,19 +400,19 @@ async fn standard_boot_e2e() {
 		// Answer prompts with yes
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
-			"Is this the correct namespace name: quit-coding-to-vape? (yes/no)"
+			"Is this the correct namespace name: quit-coding-to-vape? (y/n)"
 		);
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
-			"Is this the correct namespace nonce: 2? (yes/no)"
+			"Is this the correct namespace nonce: 2? (y/n)"
 		);
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
 		assert_eq!(
 				&stdout.next().unwrap().unwrap(),
-				"Does this AWS IAM role belong to the intended organization: arn:aws:iam::123456789012:role/Webserver? (yes/no)"
+				"Does this AWS IAM role belong to the intended organization: arn:aws:iam::123456789012:role/Webserver? (y/n)"
 			);
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
