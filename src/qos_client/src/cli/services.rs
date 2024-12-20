@@ -921,7 +921,7 @@ where
 	// Check the namespace name
 	{
 		let prompt = format!(
-			"Is this the correct namespace name: {}? (yes/no)",
+			"Is this the correct namespace name: {}? (y/n)",
 			manifest.namespace.name
 		);
 		if !prompter.prompt_is_yes(&prompt) {
@@ -932,7 +932,7 @@ where
 	// Check the namespace nonce
 	{
 		let prompt = format!(
-			"Is this the correct namespace nonce: {}? (yes/no)",
+			"Is this the correct namespace nonce: {}? (y/n)",
 			manifest.namespace.nonce
 		);
 		if !prompter.prompt_is_yes(&prompt) {
@@ -943,7 +943,7 @@ where
 	// Check pivot restart policy
 	{
 		let prompt = format!(
-			"Is this the correct pivot restart policy: {:?}? (yes/no)",
+			"Is this the correct pivot restart policy: {:?}? (y/n)",
 			manifest.pivot.restart
 		);
 		if !prompter.prompt_is_yes(&prompt) {
@@ -954,7 +954,7 @@ where
 	// Check pivot arguments
 	{
 		let prompt = format!(
-			"Are these the correct pivot args:\n{:?}?\n(yes/no)",
+			"Are these the correct pivot args:\n{:?}?\n(y/n)",
 			manifest.pivot.args
 		);
 		if !prompter.prompt_is_yes(&prompt) {
@@ -1352,7 +1352,7 @@ where
 	// Check the namespace name
 	{
 		let prompt = format!(
-			"Is this the correct namespace name: {}? (yes/no)",
+			"Is this the correct namespace name: {}? (y/n)",
 			manifest_envelope.manifest.namespace.name
 		);
 		if !prompter.prompt_is_yes(&prompt) {
@@ -1363,7 +1363,7 @@ where
 	// Check the namespace nonce
 	{
 		let prompt = format!(
-			"Is this the correct namespace nonce: {}? (yes/no)",
+			"Is this the correct namespace nonce: {}? (y/n)",
 			manifest_envelope.manifest.namespace.nonce
 		);
 		if !prompter.prompt_is_yes(&prompt) {
@@ -1374,7 +1374,7 @@ where
 	// Check that the IAM role is correct
 	{
 		let prompt = format!(
-			"Does this AWS IAM role belong to the intended organization: {pcr3_preimage}? (yes/no)"
+			"Does this AWS IAM role belong to the intended organization: {pcr3_preimage}? (y/n)"
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1393,7 +1393,7 @@ where
 		let approvers = approvers.join("\n");
 
 		let prompt = format!(
-			"The following manifest set members approved:\n{approvers}\nIs this ok? (yes/no)"
+			"The following manifest set members approved:\n{approvers}\nIs this ok? (y/n)"
 		);
 
 		if !prompter.prompt_is_yes(&prompt) {
@@ -1738,9 +1738,8 @@ pub(crate) fn shamir_reconstruct(
 		})
 		.collect::<Result<Vec<Vec<u8>>, Error>>()?;
 
-	let secret = Zeroizing::new(
-		qos_crypto::shamir::shares_reconstruct(shares).unwrap(),
-	);
+	let secret =
+		Zeroizing::new(qos_crypto::shamir::shares_reconstruct(shares).unwrap());
 
 	write_with_msg(output_path.as_ref(), &secret, "Reconstructed secret");
 
@@ -2129,7 +2128,26 @@ where
 	}
 
 	fn prompt_is_yes(&mut self, question: &str) -> bool {
-		self.prompt(question) == "yes"
+		// Fixed amount of attempts to avoid a "while true" loop
+		let mut attempts = 3;
+		// First prompt is the question. Subsequent prompts (if any) are the reminder to answer either yes or no.
+		let mut prompt = question;
+
+		while attempts > 0 {
+			let answer = self.prompt(prompt);
+
+			if ["yes", "Yes", "Y", "y"].contains(&answer.as_ref()) {
+				return true;
+			}
+
+			if ["no", "No", "N", "n"].contains(&answer.as_ref()) {
+				return false;
+			}
+
+			attempts -= 1;
+			prompt = "Please answer with either \"yes\" (y) or \"no\" (n)";
+		}
+		false
 	}
 }
 
@@ -2568,7 +2586,10 @@ mod tests {
 			));
 
 			let output = String::from_utf8(vec_out).unwrap();
-			assert_eq!(&output, "Is this the correct namespace name: test-namespace? (yes/no)\n");
+			assert_eq!(
+				&output,
+				"Is this the correct namespace name: test-namespace? (y/n)\n"
+			);
 		}
 
 		#[test]
@@ -2591,7 +2612,7 @@ mod tests {
 
 			assert_eq!(
 				output[1],
-				"Is this the correct namespace nonce: 2? (yes/no)"
+				"Is this the correct namespace nonce: 2? (y/n)"
 			);
 		}
 
@@ -2615,7 +2636,7 @@ mod tests {
 
 			assert_eq!(
 				output[2],
-				"Is this the correct pivot restart policy: RestartPolicy::Never? (yes/no)"
+				"Is this the correct pivot restart policy: RestartPolicy::Never? (y/n)"
 			);
 		}
 
@@ -2639,7 +2660,7 @@ mod tests {
 
 			assert_eq!(output[3], "Are these the correct pivot args:");
 			assert_eq!(output[4], "[\"--option1\", \"argument\"]?");
-			assert_eq!(output[5], "(yes/no)");
+			assert_eq!(output[5], "(y/n)");
 		}
 	}
 
@@ -2690,7 +2711,7 @@ mod tests {
 				.get_mut(0)
 				.unwrap()
 				.member
-				.alias = "yoloswag420blazeit".to_string();
+				.alias = "not-a-member".to_string();
 
 			let member = share_set.members[0].clone();
 			assert!(!proxy_re_encrypt_share_programmatic_verifications(
@@ -2756,6 +2777,40 @@ mod tests {
 		}
 
 		#[test]
+		fn accepts_with_some_typos_from_operator() {
+			let Setup { manifest_envelope, .. } = setup();
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "y\nyes\nyea\ntes\nyes\nyes\n".as_bytes();
+
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(proxy_re_encrypt_share_human_verifications(
+				&manifest_envelope,
+				"pr3",
+				&mut prompter
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.lines().collect();
+			assert_eq!(
+				output,
+				vec![
+				"Is this the correct namespace name: test-namespace? (y/n)",
+				"Is this the correct namespace nonce: 2? (y/n)",
+				"Does this AWS IAM role belong to the intended organization: pr3? (y/n)",
+				"Please answer with either \"yes\" (y) or \"no\" (n)",
+				"Please answer with either \"yes\" (y) or \"no\" (n)",
+				"The following manifest set members approved:",
+				"\talias: 0",
+				"\talias: 1",
+				"Is this ok? (y/n)",
+			]
+			);
+		}
+
+		#[test]
 		fn exits_early_bad_namespace_name() {
 			let Setup { manifest_envelope, .. } = setup();
 
@@ -2772,7 +2827,10 @@ mod tests {
 			));
 
 			let output = String::from_utf8(vec_out).unwrap();
-			assert_eq!(&output, "Is this the correct namespace name: test-namespace? (yes/no)\n");
+			assert_eq!(
+				&output,
+				"Is this the correct namespace name: test-namespace? (y/n)\n"
+			);
 		}
 
 		#[test]
@@ -2795,7 +2853,7 @@ mod tests {
 			let output: Vec<_> = output.lines().collect();
 			assert_eq!(
 				output.last().unwrap(),
-				&"Is this the correct namespace nonce: 2? (yes/no)"
+				&"Is this the correct namespace nonce: 2? (y/n)"
 			);
 		}
 
@@ -2819,7 +2877,7 @@ mod tests {
 			let output: Vec<_> = output.lines().collect();
 			assert_eq!(
 				output.last().unwrap(),
-				&"Does this AWS IAM role belong to the intended organization: pr3? (yes/no)"
+				&"Does this AWS IAM role belong to the intended organization: pr3? (y/n)"
 			);
 		}
 
@@ -2828,7 +2886,7 @@ mod tests {
 			let Setup { manifest_envelope, .. } = setup();
 
 			let mut vec_out: Vec<u8> = vec![];
-			let vec_in = "yes\nyes\nyes\ny".as_bytes();
+			let vec_in = "yes\nyes\nyes\nno".as_bytes();
 
 			let mut prompter =
 				Prompter { reader: vec_in, writer: &mut vec_out };
@@ -2848,8 +2906,37 @@ mod tests {
 			);
 			assert_eq!(output[4], "\talias: 0");
 			assert_eq!(output[5], "\talias: 1");
-			assert_eq!(output[6], "Is this ok? (yes/no)");
+			assert_eq!(output[6], "Is this ok? (y/n)");
 			assert_eq!(output.len(), 7);
+		}
+
+		#[test]
+		fn exits_after_three_hesitations() {
+			let Setup { manifest_envelope, .. } = setup();
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "maybe\ndunno\nunsure\n".as_bytes();
+
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(!proxy_re_encrypt_share_human_verifications(
+				&manifest_envelope,
+				"pr3",
+				&mut prompter
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.lines().collect();
+
+			assert_eq!(
+				output,
+				vec![
+					"Is this the correct namespace name: test-namespace? (y/n)",
+					"Please answer with either \"yes\" (y) or \"no\" (n)",
+					"Please answer with either \"yes\" (y) or \"no\" (n)",
+				]
+			);
 		}
 	}
 }
