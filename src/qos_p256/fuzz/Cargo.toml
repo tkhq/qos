@@ -1,0 +1,81 @@
+[package]
+name = "qos_p256_fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+qos_p256 = { path = "../"}
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+# enable integer overflow checks
+overflow-checks = true
+
+[features]
+# feature used by some harnesses to signal a special mode, does nothing on other targets
+fuzzer_corpus_seed1 = []
+
+[[bin]]
+name = "1_sign_then_verify"
+path = "fuzz_targets/1_sign_then_verify.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "2_public_sign_key_round_trip"
+path = "fuzz_targets/2_public_sign_key_round_trip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "3_public_sign_key_import"
+path = "fuzz_targets/3_public_sign_key_import.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "4_public_key_import"
+path = "fuzz_targets/4_public_key_import.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "5_basic_encrypt_decrypt"
+path = "fuzz_targets/5_basic_encrypt_decrypt.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "6_basic_encrypt_decrypt_aesgcm"
+path = "fuzz_targets/6_basic_encrypt_decrypt_aesgcm.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "7_decrypt_aesgcm"
+path = "fuzz_targets/7_decrypt_aesgcm.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "8_decrypt_p256"
+path = "fuzz_targets/8_decrypt_p256.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "9_decrypt_shared_secret"
+path = "fuzz_targets/9_decrypt_shared_secret.rs"
+test = false
+doc = false
