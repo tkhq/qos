@@ -7,7 +7,7 @@ use p256::ecdsa::{
 use rand_core::OsRng;
 use zeroize::ZeroizeOnDrop;
 
-use crate::P256Error;
+use crate::{P256Error, PUB_KEY_LEN_UNCOMPRESSED};
 
 /// Sign private key pair.
 #[derive(ZeroizeOnDrop)]
@@ -86,6 +86,13 @@ impl P256SignPublic {
 
 	/// Deserialize from a SEC1 encoded point, not compressed.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize {
+			return Err(P256Error::EncodedPublicKeyTooLong);
+		}
+		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED as usize {
+			return Err(P256Error::EncodedPublicKeyTooShort);
+		}
+
 		Ok(Self {
 			public: VerifyingKey::from_sec1_bytes(bytes)
 				.map_err(|_| P256Error::FailedToReadPublicKey)?,
