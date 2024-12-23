@@ -220,6 +220,13 @@ impl P256EncryptPublic {
 
 	/// Deserialize from a SEC1 encoded point, not compressed.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize {
+			return Err(P256Error::EncodedPublicKeyTooLong);
+		}
+		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED as usize {
+			return Err(P256Error::EncodedPublicKeyTooShort);
+		}
+
 		Ok(Self {
 			public: PublicKey::from_sec1_bytes(bytes)
 				.map_err(|_| P256Error::FailedToReadPublicKey)?,
