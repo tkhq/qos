@@ -19,6 +19,7 @@ exclude = [
   "eif_build",
   "qos_p256/fuzz",
   "qos_crypto/fuzz",
+  "qos_net/fuzz",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.

@@ -1,0 +1,30 @@
+[package]
+name = "integration-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+qos_net = { path = ".." }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+
+[profile.release]
+# enable arithmetic checks at runtime
+overflow-check = 1
+
+[[bin]]
+name = "1_new_from_ip"
+path = "fuzz_targets/1_new_from_ip.rs"
+test = false
+doc = false
+bench = false
