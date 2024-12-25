@@ -1,0 +1,29 @@
+[package]
+name = "qos_nsm_fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.qos_nsm]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+# enable arithmetic checks at runtime
+overflow-check = 1
+
+[[bin]]
+name = "1_attestation_doc_from_der"
+path = "fuzz_targets/1_attestation_doc_from_der.rs"
+test = false
+doc = false
+bench = false
