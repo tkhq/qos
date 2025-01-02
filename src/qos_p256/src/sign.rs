@@ -7,7 +7,7 @@ use p256::ecdsa::{
 use rand_core::OsRng;
 use zeroize::ZeroizeOnDrop;
 
-use crate::P256Error;
+use crate::{P256Error, PUB_KEY_LEN_UNCOMPRESSED};
 
 /// Sign private key pair.
 #[derive(ZeroizeOnDrop)]
@@ -86,6 +86,13 @@ impl P256SignPublic {
 
 	/// Deserialize from a SEC1 encoded point, not compressed.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize {
+			return Err(P256Error::EncodedPublicKeyTooLong);
+		}
+		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED as usize {
+			return Err(P256Error::EncodedPublicKeyTooShort);
+		}
+
 		Ok(Self {
 			public: VerifyingKey::from_sec1_bytes(bytes)
 				.map_err(|_| P256Error::FailedToReadPublicKey)?,
@@ -156,5 +163,29 @@ mod tests {
 		let raw_secret2 = pair2.to_bytes();
 
 		assert_eq!(raw_secret1, raw_secret2);
+	}
+
+	#[test]
+	fn encoded_public_keys_bytes_are_validated() {
+		let too_short = vec![0u8; 64];
+		let too_long = vec![0u8; 66];
+
+		// Uncompressed public key with a compressed prefix (0x02)
+		let bad_prefix = qos_hex::decode("02bf772379de68fed2e81a47a141210c827c31fadc5b24ed3dafa84a9d19896172cb1b53ee6ecb38ca5c4be4d664b63f034886b764ad520c301fe542dfdf4002e4").unwrap();
+		let just_right = qos_hex::decode("04bf772379de68fed2e81a47a141210c827c31fadc5b24ed3dafa84a9d19896172cb1b53ee6ecb38ca5c4be4d664b63f034886b764ad520c301fe542dfdf4002e4").unwrap();
+
+		assert!(matches!(
+			P256SignPublic::from_bytes(&too_short),
+			Err(P256Error::EncodedPublicKeyTooShort)
+		));
+		assert!(matches!(
+			P256SignPublic::from_bytes(&too_long),
+			Err(P256Error::EncodedPublicKeyTooLong)
+		));
+		assert!(matches!(
+			P256SignPublic::from_bytes(&bad_prefix),
+			Err(P256Error::FailedToReadPublicKey),
+		));
+		assert!(matches!(P256SignPublic::from_bytes(&just_right), Ok(_),));
 	}
 }
