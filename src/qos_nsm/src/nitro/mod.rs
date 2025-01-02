@@ -63,9 +63,7 @@ pub fn cert_from_pem(pem: &[u8]) -> Result<Vec<u8>, AttestError> {
 /// * `pcr1` - expected value of PCR index 1.
 /// * `pcr2` - expected value of PCR index 3.
 ///
-/// # Panics
-///
-/// Panics if any part of verification fails.
+/// Returns an `AttestError` if any part of the verification fails.
 pub fn verify_attestation_doc_against_user_input(
 	attestation_doc: &AttestationDoc,
 	user_data: &[u8],
