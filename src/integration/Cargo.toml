@@ -23,7 +23,7 @@ webpki-roots = { version = "0.26.1" }
 
 [dev-dependencies]
 qos_core = { path = "../qos_core", features = ["mock"], default-features = false }
-aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
+aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
 rand = "0.8"
 ureq = { version = "2.9", features = ["json"], default-features = false }
 serde = { version = "1", features = ["derive"] }
