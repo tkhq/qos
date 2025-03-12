@@ -16,7 +16,6 @@ exclude = [
   "qos_aws",
   "qos_system",
   "qos_enclave",
-  "eif_build",
   "qos_p256/fuzz",
   "qos_crypto/fuzz",
 ]
