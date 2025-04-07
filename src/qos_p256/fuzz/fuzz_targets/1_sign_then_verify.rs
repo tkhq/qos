@@ -1,9 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use qos_p256::sign::P256SignPair;
 use qos_p256::P256Pair;
-use std::{convert::TryFrom, iter};
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct FuzzKeyDataStruct {
