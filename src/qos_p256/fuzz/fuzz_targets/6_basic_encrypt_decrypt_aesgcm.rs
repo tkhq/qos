@@ -14,9 +14,8 @@ pub struct FuzzKeyDataStruct {
 
 fuzz_target!(|input: FuzzKeyDataStruct| {
 	// let the fuzzer control a message plaintext that is encrypted and then decrypted again
+	// the fuzzer also controls the encryption key
 
-	// private key generation is non-deterministic: not ideal
-	// let random_key = AesGcm256Secret::generate();
 	let random_key = match AesGcm256Secret::from_bytes(input.key) {
 		Ok(pair) => pair,
 		Err(_err) => {
