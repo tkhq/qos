@@ -2,7 +2,7 @@ FROM stagex/bash:5.2.21@sha256:cb58f55d268fbe7ef629cda86e3a8af893066e4af7f26ef54
 FROM stagex/binutils:2.43.1@sha256:30a1bd110273894fe91c3a4a2103894f53eaac43cf12a035008a6982cb0e6908 AS binutils
 FROM stagex/ca-certificates:sx2024.09.0@sha256:33787f1feb634be4232a6dfe77578c1a9b890ad82a2cf18c11dd44507b358803 AS ca-certificates
 FROM stagex/coreutils:9.4@sha256:1955f532d8923b5e17f60635c994bd9577bb3e6bccb5da702a69e79070bae0a9 AS coreutils
-FROM stagex/eif_build:0.2.2@sha256:291653f1ca528af48fd05858749c443300f6b24d2ffefa7f5a3a06c27c774566 AS eif_build
+FROM stagex/eif_build:0.2.2@sha256:9d086a2743f9df4eddf934c7b68c9dee4a7fb131b6465a24237a67f6c359dfb0 AS eif_build
 FROM stagex/file:5.45@sha256:b43a7f0bd50419a39d91d77a316bb888ed87c94aeb6f9eb11f12efd275ca4ab8 AS file
 FROM stagex/filesystem:sx2024.11.0@sha256:d03195563f548c3ac8f34acf777b7e86f0d0d049a9430d715e5774eb7cc93302 AS filesystem
 FROM stagex/findutils:4.9.0@sha256:d92494daaf08999aac0a277327d240a0149494716707fbce93381df058f693e2 AS findutils
