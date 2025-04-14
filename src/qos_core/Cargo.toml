@@ -16,7 +16,7 @@ borsh = { version = "1.0", features = ["std", "derive"] , default-features = fal
 vsss-rs = { version = "5.1", default-features = false, features = ["std", "zeroize"] }
 
 # For AWS Nitro
-aws-nitro-enclaves-nsm-api = { version = "0.3", default-features = false }
+aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
 
 serde_bytes = { version = "0.11", default-features = false }
 serde = { version = "1", features = ["derive"], default-features = false }
