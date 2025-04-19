@@ -18,6 +18,7 @@ exclude = [
   "qos_enclave",
   "qos_p256/fuzz",
   "qos_crypto/fuzz",
+  "qos_nsm/fuzz",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.
