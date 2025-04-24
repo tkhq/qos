@@ -1490,6 +1490,7 @@ dependencies = [
  "rustls",
  "serde",
  "tokio",
+ "tokio-rustls",
  "ureq",
  "webpki-roots",
 ]
@@ -2221,6 +2222,7 @@ version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
+ "futures",
  "libc",
  "nix 0.26.4",
  "qos_crypto",
@@ -2275,6 +2277,7 @@ version = "0.1.0"
 dependencies = [
  "borsh",
  "chunked_transfer",
+ "futures",
  "hickory-resolver",
  "httparse",
  "qos_core",
@@ -2324,6 +2327,7 @@ dependencies = [
 name = "qos_test_primitives"
 version = "0.1.0"
 dependencies = [
+ "nix 0.26.4",
  "rand 0.8.5",
 ]
 
@@ -2833,6 +2837,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
+name = "signal-hook-registry"
+version = "1.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9203b8055f63a2a00e2f593bb0510367fe707d7ff1e5c872de2f537b339e5410"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "signature"
 version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3126,6 +3139,7 @@ dependencies = [
  "mio",
  "num_cpus",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.48.0",
@@ -3140,6 +3154,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.87",
+]
+
+[[package]]
+name = "tokio-rustls"
+version = "0.26.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e727b36a1a0e8b74c376ac2211e40c2c8af09fb4013c60d910495810f008e9b"
+dependencies = [
+ "rustls",
+ "tokio",
 ]
 
 [[package]]

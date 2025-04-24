@@ -3,8 +3,16 @@
 //! NOTE TO MAINTAINERS: Interaction with any sys calls should be contained
 //! within this module.
 
-mod stream;
+#[cfg(feature = "async")]
+mod async_pool;
+#[cfg(feature = "async")]
+mod async_stream;
+#[cfg(feature = "async")]
+pub use async_pool::*;
+#[cfg(feature = "async")]
+pub use async_stream::*;
 
+mod stream;
 pub use stream::{
 	Listener, SocketAddress, Stream, TimeVal, TimeValLike, MAX_PAYLOAD_SIZE,
 	VMADDR_FLAG_TO_HOST, VMADDR_NO_FLAGS,
@@ -13,12 +21,20 @@ pub use stream::{
 /// QOS I/O error
 #[derive(Debug)]
 pub enum IOError {
+	/// `std::io::Error` wrapper.
+	StdIoError(std::io::Error),
 	/// `nix::Error` wrapper.
 	NixError(nix::Error),
 	/// Arithmetic operation saturated.
 	ArithmeticSaturation,
 	/// Unknown error.
 	UnknownError,
+	/// Stream was not connected when expected to be connected.
+	DisconnectedStream,
+	/// Connect address invalid
+	ConnectAddressInvalid,
+	/// Timed out while claling `connect` over a socket.
+	ConnectTimeout,
 	/// Timed out while calling `recv` over a socket.
 	RecvTimeout,
 	/// The `recv` system call was interrupted while receiving over a socket.
@@ -33,10 +49,33 @@ pub enum IOError {
 	RecvNixError(nix::Error),
 	/// Reading the response size resulted in a size which exceeds the max payload size.
 	OversizedPayload(usize),
+	#[cfg(feature = "async")]
+	/// A async socket pool error during pool operations.
+	PoolError(PoolError),
 }
 
 impl From<nix::Error> for IOError {
 	fn from(err: nix::Error) -> Self {
 		Self::NixError(err)
+	}
+}
+
+impl From<std::io::Error> for IOError {
+	fn from(err: std::io::Error) -> Self {
+		Self::StdIoError(err)
+	}
+}
+
+#[cfg(feature = "async")]
+impl From<tokio::time::error::Elapsed> for IOError {
+	fn from(_: tokio::time::error::Elapsed) -> Self {
+		Self::ConnectTimeout
+	}
+}
+
+#[cfg(feature = "async")]
+impl From<PoolError> for IOError {
+	fn from(value: PoolError) -> Self {
+		Self::PoolError(value)
 	}
 }

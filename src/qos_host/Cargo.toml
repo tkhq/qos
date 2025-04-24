@@ -16,4 +16,5 @@ serde_json = { version = "1" }
 serde = { version = "1", features = ["derive"], default-features = false }
 
 [features]
+async = ["qos_core/async"]
 vm = ["qos_core/vm"]
