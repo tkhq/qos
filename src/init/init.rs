@@ -1,18 +1,14 @@
-use qos_system::{dmesg, get_local_cid, freopen, mount, reboot};
 use qos_core::{
-    handles::Handles,
-    io::{SocketAddress, VMADDR_NO_FLAGS},
-    reaper::Reaper,
-    EPHEMERAL_KEY_FILE,
-    MANIFEST_FILE,
-    PIVOT_FILE,
-    QUORUM_FILE,
-    SEC_APP_SOCK,
+	handles::Handles,
+	io::{SocketAddress, VMADDR_NO_FLAGS},
+	reaper::Reaper,
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
 };
 use qos_nsm::Nsm;
+use qos_system::{dmesg, freopen, get_local_cid, mount, reboot};
 
 //TODO: Feature flag
-use qos_aws::{init_platform};
+use qos_aws::init_platform;
 
 // Mount common filesystems with conservative permissions
 fn init_rootfs() {
@@ -58,6 +54,7 @@ fn boot() {
 	init_platform();
 }
 
+#[cfg(not(feature = "async"))]
 fn main() {
 	boot();
 	dmesg("QuorumOS Booted".to_string());
@@ -66,18 +63,60 @@ fn main() {
 	dmesg(format!("CID is {}", cid));
 
 	let handles = Handles::new(
-	     EPHEMERAL_KEY_FILE.to_string(),
-	     QUORUM_FILE.to_string(),
-	     MANIFEST_FILE.to_string(),
-	     PIVOT_FILE.to_string(),
+		EPHEMERAL_KEY_FILE.to_string(),
+		QUORUM_FILE.to_string(),
+		MANIFEST_FILE.to_string(),
+		PIVOT_FILE.to_string(),
 	);
+
 	Reaper::execute(
-	     &handles,
-	     Box::new(Nsm),
-	     SocketAddress::new_vsock(cid, 3, VMADDR_NO_FLAGS),
-	     SocketAddress::new_unix(SEC_APP_SOCK),
-	     None,
+		&handles,
+		Box::new(Nsm),
+		SocketAddress::new_vsock(cid, 3, VMADDR_NO_FLAGS),
+		SocketAddress::new_unix(SEC_APP_SOCK),
+		None,
 	);
+
+	reboot();
+}
+
+#[cfg(feature = "async")]
+#[tokio::main]
+async fn main() {
+	use qos_core::io::{AsyncStreamPool, TimeVal, TimeValLike};
+
+	boot();
+	dmesg("QuorumOS Booted in Async mode".to_string());
+
+	let cid = get_local_cid().unwrap();
+	dmesg(format!("CID is {}", cid));
+
+	let handles = Handles::new(
+		EPHEMERAL_KEY_FILE.to_string(),
+		QUORUM_FILE.to_string(),
+		MANIFEST_FILE.to_string(),
+		PIVOT_FILE.to_string(),
+	);
+
+	let start_port = 3;
+	let default_pool_size = qos_core::DEFAULT_POOL_SIZE
+		.parse()
+		.expect("unable to parse default pool size");
+	let core_pool = AsyncStreamPool::new(
+		(start_port..start_port + default_pool_size)
+			.into_iter()
+			.map(|p| SocketAddress::new_vsock(cid, p, VMADDR_NO_FLAGS)),
+		TimeVal::seconds(0),
+	);
+
+	let app_pool = AsyncStreamPool::new(
+		(0..default_pool_size)
+			.into_iter()
+			.map(|p| SocketAddress::new_unix(&format!("{SEC_APP_SOCK}_{p}"))),
+		TimeVal::seconds(5),
+	);
+
+	Reaper::async_execute(&handles, Box::new(Nsm), core_pool, app_pool, None);
 
 	reboot();
 }

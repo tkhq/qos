@@ -9,8 +9,12 @@ use crate::{
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 	reaper::Reaper,
-	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
+	DEFAULT_POOL_SIZE, EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE,
+	QUORUM_FILE, SEC_APP_SOCK,
 };
+
+#[cfg(feature = "async")]
+use crate::io::AsyncStreamPool;
 
 /// "cid"
 pub const CID: &str = "cid";
@@ -28,6 +32,8 @@ pub const EPHEMERAL_FILE_OPT: &str = "ephemeral-file";
 /// Name for the option to specify the manifest file.
 pub const MANIFEST_FILE_OPT: &str = "manifest-file";
 const APP_USOCK: &str = "app-usock";
+/// Name for the option to specify the maximum `AsyncPool` size.
+pub const POOL_SIZE: &str = "pool-size";
 
 /// CLI options for starting up the enclave server.
 #[derive(Default, Clone, Debug, PartialEq)]
@@ -44,11 +50,55 @@ impl EnclaveOpts {
 		Self { parsed }
 	}
 
+	/// Create a new [`AsyncPool`] of [`AsyncStream`] using the list of [`SocketAddress`] for the enclave server and
+	/// return the new [`AsyncPool`]. Analogous to [`Self::addr`] and [`Self::app_addr`] depending on the [`app`] parameter.
+	#[cfg(feature = "async")]
+	#[allow(unused)]
+	fn async_pool(&self, app: bool) -> AsyncStreamPool {
+		use nix::sys::time::{TimeVal, TimeValLike};
+
+		let pool_size: u32 = self
+			.parsed
+			.single(POOL_SIZE)
+			.expect("invalid pool options")
+			.parse()
+			.expect("invalid pool_size specified");
+		let usock_param = if app { APP_USOCK } else { USOCK };
+
+		match (
+			self.parsed.single(CID),
+			self.parsed.single(PORT),
+			self.parsed.single(usock_param),
+		) {
+			#[cfg(feature = "vm")]
+			(Some(c), Some(p), None) => {
+				let c = c.parse::<u32>().unwrap();
+				let start_port = p.parse::<u32>().unwrap();
+
+				let addresses = (start_port..start_port + pool_size).map(|p| {
+					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS)
+				});
+
+				AsyncStreamPool::new(addresses, TimeVal::seconds(5))
+			}
+			(None, None, Some(u)) => {
+				let addresses = (0..pool_size).map(|i| {
+					let u = format!("{u}_{i}"); // add _X suffix for pooling
+					SocketAddress::new_unix(&u)
+				});
+
+				AsyncStreamPool::new(addresses, TimeVal::seconds(5))
+			}
+			_ => panic!("Invalid socket opts"),
+		}
+	}
+
 	/// Get the `SocketAddress` for the enclave server.
 	///
 	/// # Panics
 	///
 	/// Panics if the opts are not valid for exactly one of unix or vsock.
+	#[allow(unused)]
 	fn addr(&self) -> SocketAddress {
 		match (
 			self.parsed.single(CID),
@@ -66,6 +116,7 @@ impl EnclaveOpts {
 		}
 	}
 
+	#[allow(unused)]
 	fn app_addr(&self) -> SocketAddress {
 		SocketAddress::new_unix(
 			self.parsed
@@ -149,6 +200,32 @@ impl CLI {
 			);
 		}
 	}
+
+	/// Execute the enclave server CLI with the environment args using tokio/async
+	#[cfg(feature = "async")]
+	pub fn async_execute() {
+		let mut args: Vec<String> = env::args().collect();
+		let opts = EnclaveOpts::new(&mut args);
+
+		if opts.parsed.version() {
+			println!("version: {}", env!("CARGO_PKG_VERSION"));
+		} else if opts.parsed.help() {
+			println!("{}", opts.parsed.info());
+		} else {
+			Reaper::async_execute(
+				&Handles::new(
+					opts.ephemeral_file(),
+					opts.quorum_file(),
+					opts.manifest_file(),
+					opts.pivot_file(),
+				),
+				opts.nsm(),
+				opts.async_pool(false),
+				opts.async_pool(true),
+				None,
+			);
+		}
+	}
 }
 
 /// Parser for enclave CLI
@@ -200,6 +277,11 @@ impl GetParserForOptions for EnclaveParser {
 				Token::new(APP_USOCK, "the socket the secure app is listening on.")
 					.takes_value(true)
 					.default_value(SEC_APP_SOCK)
+			)
+			.token(
+				Token::new(POOL_SIZE, "the pool size for use with all socket types")
+					.takes_value(true)
+					.default_value(DEFAULT_POOL_SIZE)
 			)
 	}
 }
@@ -279,6 +361,20 @@ mod test {
 		let opts = EnclaveOpts::new(&mut args);
 
 		assert_eq!(opts.addr(), SocketAddress::new_unix("./test.sock"));
+	}
+
+	#[test]
+	#[cfg(feature = "async")]
+	fn parse_pool_size() {
+		let mut args: Vec<_> =
+			vec!["binary", "--usock", "./test.sock", "--pool-size", "7"]
+				.into_iter()
+				.map(String::from)
+				.collect();
+		let opts = EnclaveOpts::new(&mut args);
+
+		let pool = opts.async_pool(false);
+		assert_eq!(pool.len(), 7);
 	}
 
 	#[test]

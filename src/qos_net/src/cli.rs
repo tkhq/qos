@@ -1,14 +1,12 @@
 //! CLI for running a host proxy to provide remote connections.
 
-use std::env;
-
 use qos_core::{
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
-	server::SocketServer,
 };
 
-use crate::proxy::Proxy;
+#[cfg(feature = "async_proxy")]
+use qos_core::io::AsyncStreamPool;
 
 /// "cid"
 pub const CID: &str = "cid";
@@ -16,20 +14,64 @@ pub const CID: &str = "cid";
 pub const PORT: &str = "port";
 /// "usock"
 pub const USOCK: &str = "usock";
+/// "pool-size"
+pub const POOL_SIZE: &str = "pool-size";
+
+const DEFAULT_POOL_SIZE: &str = "20";
 
 /// CLI options for starting up the proxy.
 #[derive(Default, Clone, Debug, PartialEq)]
-struct ProxyOpts {
-	parsed: Parser,
+pub(crate) struct ProxyOpts {
+	pub(crate) parsed: Parser,
 }
 
 impl ProxyOpts {
 	/// Create a new instance of [`Self`] with some defaults.
-	fn new(args: &mut Vec<String>) -> Self {
+	pub(crate) fn new(args: &mut Vec<String>) -> Self {
 		let parsed = OptionsParser::<ProxyParser>::parse(args)
 			.expect("Entered invalid CLI args");
 
 		Self { parsed }
+	}
+
+	/// Create a new `AsyncPool` of `AsyncStream` using the list of `SocketAddress` for the enclave server and
+	/// return the new `AsyncPool`.
+	#[cfg(feature = "async_proxy")]
+	pub(crate) fn async_pool(&self) -> AsyncStreamPool {
+		use qos_core::io::{TimeVal, TimeValLike};
+
+		let pool_size: u32 = self
+			.parsed
+			.single(POOL_SIZE)
+			.expect("invalid pool options")
+			.parse()
+			.expect("invalid pool_size specified");
+		match (
+			self.parsed.single(CID),
+			self.parsed.single(PORT),
+			self.parsed.single(USOCK),
+		) {
+			#[cfg(feature = "vm")]
+			(Some(c), Some(p), None) => {
+				let c = c.parse::<u32>().unwrap();
+				let start_port = p.parse::<u32>().unwrap();
+
+				let addresses = (start_port..start_port + pool_size).map(|p| {
+					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS)
+				});
+
+				AsyncStreamPool::new(addresses)
+			}
+			(None, None, Some(u)) => {
+				let addresses = (0..pool_size).map(|i| {
+					let u = format!("{u}_{i}"); // add _X suffix for pooling
+					SocketAddress::new_unix(&u)
+				});
+
+				AsyncStreamPool::new(addresses, TimeVal::seconds(0))
+			}
+			_ => panic!("Invalid socket opts"),
+		}
 	}
 
 	/// Get the `SocketAddress` for the proxy server.
@@ -37,7 +79,8 @@ impl ProxyOpts {
 	/// # Panics
 	///
 	/// Panics if the opts are not valid for exactly one of unix or vsock.
-	fn addr(&self) -> SocketAddress {
+	#[allow(unused)]
+	pub(crate) fn addr(&self) -> SocketAddress {
 		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
@@ -47,7 +90,7 @@ impl ProxyOpts {
 			(Some(c), Some(p), None) => SocketAddress::new_vsock(
 				c.parse::<u32>().unwrap(),
 				p.parse::<u32>().unwrap(),
-				crate::io::VMADDR_NO_FLAGS,
+				qos_core::io::VMADDR_NO_FLAGS,
 			),
 			(None, None, Some(u)) => SocketAddress::new_unix(u),
 			_ => panic!("Invalid socket opts"),
@@ -57,9 +100,14 @@ impl ProxyOpts {
 
 /// Proxy CLI.
 pub struct CLI;
+
 impl CLI {
 	/// Execute the enclave proxy CLI with the environment args.
 	pub fn execute() {
+		use crate::proxy::Proxy;
+		use qos_core::server::SocketServer;
+		use std::env;
+
 		let mut args: Vec<String> = env::args().collect();
 		let opts = ProxyOpts::new(&mut args);
 
@@ -98,6 +146,15 @@ impl GetParserForOptions for ProxyParser {
 					.takes_value(true)
 					.forbids(vec!["port", "cid"]),
 			)
+			.token(
+				Token::new(
+					POOL_SIZE,
+					"the pool size to use with all socket types.",
+				)
+				.takes_value(true)
+				.forbids(vec!["port", "cid"])
+				.default_value(DEFAULT_POOL_SIZE),
+			)
 	}
 }
 
@@ -125,6 +182,20 @@ mod test {
 		let opts = ProxyOpts::new(&mut args);
 
 		assert_eq!(opts.addr(), SocketAddress::new_unix("./test.sock"));
+	}
+
+	#[test]
+	#[cfg(feature = "async_proxy")]
+	fn parse_pool_size() {
+		let mut args: Vec<_> =
+			vec!["binary", "--usock", "./test.sock", "--pool-size", "7"]
+				.into_iter()
+				.map(String::from)
+				.collect();
+		let opts = ProxyOpts::new(&mut args);
+
+		let pool = opts.async_pool();
+		assert_eq!(pool.len(), 7);
 	}
 
 	#[test]
