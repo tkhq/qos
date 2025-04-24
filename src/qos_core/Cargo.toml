@@ -11,7 +11,7 @@ qos_p256 = { path = "../qos_p256" }
 qos_nsm = { path = "../qos_nsm", default-features = false }
 
 nix = { version = "0.26", features = ["socket"], default-features = false }
-libc = "=0.2.155"
+libc = "=0.2.172"
 borsh = { version = "1.0", features = ["std", "derive"] , default-features = false}
 vsss-rs = { version = "5.1", default-features = false, features = ["std", "zeroize"] }
 
@@ -21,8 +21,8 @@ aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 serde = { version = "1", features = ["derive"], default-features = false }
 
-tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"], default-features = false }
-tokio-vsock = { version = "0.7.1", default-features = false }
+tokio = { version = "1.38.0", features = ["io-util", "macros", "net", "rt-multi-thread", "time"], default-features = false }
+tokio-vsock = { version = "0.7.1", optional = true }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
@@ -33,6 +33,6 @@ webpki-roots = { version = "0.26.1" }
 
 [features]
 # Support for VSOCK
-vm = []
+vm = ["tokio-vsock"]
 # Never use in production - support for mock NSM
 mock = ["qos_nsm/mock"]
