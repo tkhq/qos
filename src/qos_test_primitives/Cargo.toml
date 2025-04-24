@@ -6,3 +6,4 @@ publish = false
 
 [dependencies]
 rand = "0.8"
+nix = { version = "0.26", default-features = false }
