@@ -5,12 +5,24 @@
 
 #![deny(clippy::all, unsafe_code)]
 
-#[cfg(feature = "proxy")]
-pub mod cli;
 pub mod error;
+pub mod proxy_msg;
+
+#[cfg(any(feature = "proxy", feature = "async_proxy"))]
+pub mod cli;
+
 #[cfg(feature = "proxy")]
 pub mod proxy;
 #[cfg(feature = "proxy")]
 pub mod proxy_connection;
-pub mod proxy_msg;
+#[cfg(feature = "proxy")]
 pub mod proxy_stream;
+
+#[cfg(feature = "async_proxy")]
+pub mod async_cli;
+#[cfg(feature = "async_proxy")]
+pub mod async_proxy;
+#[cfg(feature = "async_proxy")]
+pub mod async_proxy_connection;
+#[cfg(feature = "async_proxy")]
+pub mod async_proxy_stream;
