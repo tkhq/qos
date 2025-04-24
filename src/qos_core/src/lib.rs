@@ -17,6 +17,7 @@ compile_error!(
 	"feature \"vm\" and feature \"mock\" cannot be enabled at the same time"
 );
 
+pub mod async_server;
 pub mod cli;
 pub mod client;
 pub mod handles;

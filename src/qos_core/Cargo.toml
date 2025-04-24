@@ -32,6 +32,7 @@ rustls = { version = "0.23.5" }
 webpki-roots = { version = "0.26.1" }
 
 [features]
+default = ["vm"]
 # Support for VSOCK
 vm = ["tokio-vsock"]
 # Never use in production - support for mock NSM
