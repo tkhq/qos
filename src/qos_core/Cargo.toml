@@ -21,6 +21,9 @@ aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 serde = { version = "1", features = ["derive"], default-features = false }
 
+tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"], default-features = false }
+tokio-vsock = { version = "0.7.1", default-features = false }
+
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
 qos_p256 = { path = "../qos_p256", features = ["mock"] }
