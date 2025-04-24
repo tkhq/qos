@@ -20,6 +20,9 @@ aws-nitro-enclaves-nsm-api = { workspace = true }
 serde_bytes = { workspace = true }
 serde = { workspace = true }
 
+tokio = { version = "1.38.0", features = ["io-util", "macros", "net", "rt-multi-thread", "time"], default-features = false }
+tokio-vsock = { version = "0.7.1", optional = true }
+
 [dev-dependencies]
 qos_test_primitives = { workspace = true }
 qos_p256 = { workspace = true, features = ["mock"] }
@@ -29,6 +32,6 @@ webpki-roots = { workspace = true }
 
 [features]
 # Support for VSOCK
-vm = []
+vm = ["tokio-vsock"]
 # Never use in production - support for mock NSM
 mock = ["qos_nsm/mock"]
