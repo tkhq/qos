@@ -2217,6 +2217,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_bytes",
+ "tokio",
  "vsss-rs",
  "webpki-roots",
 ]
