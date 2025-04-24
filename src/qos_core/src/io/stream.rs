@@ -114,6 +114,24 @@ impl SocketAddress {
 			Self::Unix(ua) => Box::new(ua),
 		}
 	}
+
+	/// Shows socket debug info
+	pub fn debug_info(&self) -> String {
+		match self {
+			#[cfg(feature = "vm")]
+			Self::Vsock(vsock) => {
+				format!("vsock cid: {} port: {}", vsock.cid(), vsock.port())
+			}
+			Self::Unix(usock) => {
+				format!(
+					"usock path: {:?}",
+					usock
+						.path()
+						.unwrap_or(&std::path::PathBuf::from("unknown/error"))
+				)
+			}
+		}
+	}
 }
 
 /// Handle on a stream

@@ -23,106 +23,46 @@ use axum::{
 	body::Bytes,
 	extract::{DefaultBodyLimit, State},
 	http::StatusCode,
-	response::{Html, IntoResponse, Response},
+	response::{Html, IntoResponse},
 	routing::{get, post},
 	Json, Router,
 };
 use borsh::BorshDeserialize;
 use qos_core::{
-	client::Client,
-	io::{SocketAddress, TimeVal, TimeValLike},
-	protocol::{
-		msg::ProtocolMsg, services::boot::ManifestEnvelope, Hash256,
-		ProtocolError, ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
-	},
+	async_client::AsyncClient,
+	io::SharedAsyncStreamPool,
+	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase},
 };
 
-#[cfg(feature = "async")]
-pub mod async_host;
-pub mod cli;
-
-const MEGABYTE: usize = 1024 * 1024;
-const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
-const QOS_SOCKET_CLIENT_TIMEOUT_SECS: i64 =
-	ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 2;
-
-/// Simple error that implements [`IntoResponse`] so it can
-/// be returned from handlers as an http response (and not get silently
-/// dropped).
-struct Error(String);
-
-impl IntoResponse for Error {
-	fn into_response(self) -> Response {
-		let body = JsonError { error: self.0 };
-		eprintln!("qos_host error: {body:?}");
-
-		// In the future we may want to change `Error` into an enum
-		// indicating what status code to use. For now it will always be
-		// an internal error since we don't need to express other error types.
-		(StatusCode::INTERNAL_SERVER_ERROR, Json(body)).into_response()
-	}
-}
+use crate::{
+	EnclaveInfo, EnclaveVitalStats, Error, ENCLAVE_HEALTH, ENCLAVE_INFO,
+	HOST_HEALTH, MAX_ENCODED_MSG_LEN, MESSAGE,
+};
 
 /// Resource shared across tasks in the [`HostServer`].
 #[derive(Debug)]
-struct QosHostState {
-	enclave_client: Client,
+struct AsyncQosHostState {
+	enclave_client: AsyncClient,
 }
 
 /// HTTP server for the host of the enclave; proxies requests to the enclave.
-pub struct HostServer {
-	enclave_addr: SocketAddress,
+#[allow(clippy::module_name_repetitions)]
+pub struct AsyncHostServer {
+	enclave_pool: SharedAsyncStreamPool,
 	addr: SocketAddr,
 	base_path: Option<String>,
 }
 
-const HOST_HEALTH: &str = "/host-health";
-const ENCLAVE_HEALTH: &str = "/enclave-health";
-const MESSAGE: &str = "/message";
-const ENCLAVE_INFO: &str = "/enclave-info";
-
-/// Response body to the `/enclave-info` endpoint.
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EnclaveInfo {
-	/// Current phase of the enclave.
-	pub phase: ProtocolPhase,
-	/// Manifest envelope in the enclave.
-	pub manifest_envelope: Option<ManifestEnvelope>,
-}
-
-/// Vitals we just use for logging right now to avoid logging the entire
-/// manifest.
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EnclaveVitalStats {
-	phase: ProtocolPhase,
-	namespace: String,
-	nonce: u32,
-	#[serde(with = "qos_hex::serde")]
-	pivot_hash: Hash256,
-	#[serde(with = "qos_hex::serde")]
-	pcr0: Vec<u8>,
-	pivot_args: Vec<String>,
-}
-
-/// Body of a 4xx or 5xx response
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
-pub struct JsonError {
-	/// Error message.
-	pub error: String,
-}
-
-impl HostServer {
+impl AsyncHostServer {
 	/// Create a new [`HostServer`]. See [`Self::serve`] for starting the
 	/// server.
 	#[must_use]
 	pub fn new(
-		enclave_addr: SocketAddress,
+		enclave_pool: SharedAsyncStreamPool,
 		addr: SocketAddr,
 		base_path: Option<String>,
 	) -> Self {
-		Self { enclave_addr, addr, base_path }
+		Self { enclave_pool, addr, base_path }
 	}
 
 	fn path(&self, endpoint: &str) -> String {
@@ -140,11 +80,8 @@ impl HostServer {
 	/// Panics if there is an issue starting the server.
 	// pub async fn serve(&self) -> Result<(), String> {
 	pub async fn serve(&self) {
-		let state = Arc::new(QosHostState {
-			enclave_client: Client::new(
-				self.enclave_addr.clone(),
-				TimeVal::seconds(QOS_SOCKET_CLIENT_TIMEOUT_SECS),
-			),
+		let state = Arc::new(AsyncQosHostState {
+			enclave_client: AsyncClient::new(self.enclave_pool.clone()),
 		});
 
 		let app = Router::new()
@@ -165,7 +102,9 @@ impl HostServer {
 
 	/// Health route handler.
 	#[allow(clippy::unused_async)]
-	async fn host_health(_: State<Arc<QosHostState>>) -> impl IntoResponse {
+	async fn host_health(
+		_: State<Arc<AsyncQosHostState>>,
+	) -> impl IntoResponse {
 		println!("Host health...");
 		Html("Ok!")
 	}
@@ -173,13 +112,16 @@ impl HostServer {
 	/// Health route handler.
 	#[allow(clippy::unused_async)]
 	async fn enclave_health(
-		State(state): State<Arc<QosHostState>>,
+		State(state): State<Arc<AsyncQosHostState>>,
 	) -> impl IntoResponse {
 		println!("Enclave health...");
 
 		let encoded_request = borsh::to_vec(&ProtocolMsg::StatusRequest)
 			.expect("ProtocolMsg can always serialize. qed.");
-		let encoded_response = match state.enclave_client.send(&encoded_request)
+		let encoded_response = match state
+			.enclave_client
+			.call(&encoded_request)
+			.await
 		{
 			Ok(encoded_response) => encoded_response,
 			Err(e) => {
@@ -222,14 +164,14 @@ impl HostServer {
 
 	#[allow(clippy::unused_async)]
 	async fn enclave_info(
-		State(state): State<Arc<QosHostState>>,
+		State(state): State<Arc<AsyncQosHostState>>,
 	) -> Result<Json<EnclaveInfo>, Error> {
 		println!("Enclave info...");
 
 		let enc_status_req = borsh::to_vec(&ProtocolMsg::StatusRequest)
 			.expect("ProtocolMsg can always serialize. qed.");
 		let enc_status_resp =
-			state.enclave_client.send(&enc_status_req).map_err(|e| {
+			state.enclave_client.call(&enc_status_req).await.map_err(|e| {
 				Error(format!("error sending status request to enclave: {e:?}"))
 			})?;
 
@@ -251,7 +193,8 @@ impl HostServer {
 				.expect("ProtocolMsg can always serialize. qed.");
 		let enc_manifest_envelope_resp = state
 			.enclave_client
-			.send(&enc_manifest_envelope_req)
+			.call(&enc_manifest_envelope_req)
+			.await
 			.map_err(|e| {
 				Error(format!(
 					"error while trying to send manifest envelope socket request to enclave: {e:?}"
@@ -299,7 +242,7 @@ impl HostServer {
 	/// Message route handler.
 	#[allow(clippy::unused_async)]
 	async fn message(
-		State(state): State<Arc<QosHostState>>,
+		State(state): State<Arc<AsyncQosHostState>>,
 		encoded_request: Bytes,
 	) -> impl IntoResponse {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
@@ -312,7 +255,7 @@ impl HostServer {
 			);
 		}
 
-		match state.enclave_client.send(&encoded_request) {
+		match state.enclave_client.call(&encoded_request).await {
 			Ok(encoded_response) => (StatusCode::OK, encoded_response),
 			Err(e) => {
 				let msg =
