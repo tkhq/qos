@@ -12,8 +12,9 @@ The consensus on environment configuration is coordinated through the Manifest d
 
 The Quorum Key itself can be used by QuorumOS and enclave apps to encrypt and authenticate data.
 
-
 QuorumOS ("QOS") is a minimal, immutable, and deterministic Linux unikernel targeting various Trusted Execution Environments for use cases that require high security and accountability.
+
+For more information about how it's used within Turnkey, please refer to [The Turnkey Whitepaper](https://whitepaper.turnkey.com/), and more specifically: [Foundations](https://whitepaper.turnkey.com/foundations).
 
 ## Development
 
@@ -22,6 +23,41 @@ QuorumOS ("QOS") is a minimal, immutable, and deterministic Linux unikernel targ
 - 10GB+ free RAM
 - Docker 26+
 - GNU Make
+
+### Reproducing builds
+
+QuorumOS is built with [StageX](https://codeberg.org/stagex/stagex), a new deterministic Linux distro. StageX provides reproducible builds and guarantees a 1-to-1, immutable relationship between the human-readable source code in this repo and the resulting machine-executable artifacts produced by the build system.
+
+This repository produces deterministic OCI container images. QuorumOS, the operating system, is packaged for execution inside of a Nitro EIF (Enclave Image File). This packaging is deterministic and done as part of [`qos_enclave`](./src/qos_enclave). The associated [Containerfile](./src/images/qos_enclave/Containerfile) contains the set of instructions to build the `nitro.eif` file, as well as `nitro.pcrs`, which contains the PCR measurements.
+
+To produce the `qos_enclave` OCI container image, run:
+```
+make out/qos_enclave/index.json
+```
+
+If you need to extract files from it, you can do so by using [docker](https://docs.docker.com/get-started/get-docker/) and [skopeo](https://github.com/containers/skopeo):
+
+```sh
+# Creates an archive called qos_enclave.tar, with a tag "qos-enclave:latest"
+skopeo copy oci:./out/qos_enclave docker-archive:qos_enclave.tar:qos-enclave:latest
+
+# Load the tar into local docker
+docker load < qos_enclave.tar
+
+# Create the container without running it (outputs a container ID)
+docker create qos-enclave:latest
+
+# Copy files locally for inspection
+docker cp CONTAINER_ID:/nitro.pcrs nitro.pcrs
+
+# Look at the PCR values
+cat nitro.pcrs
+b26733f9... PCR0
+b26733f9... PCR1
+21b9efbc... PCR2
+```
+
+These PCR values can be referenced against the content of [AWS remote attestations](https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#pcr012).
 
 ### Submitting a PR
 
