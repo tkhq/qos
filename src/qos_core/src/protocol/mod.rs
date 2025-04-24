@@ -14,6 +14,9 @@ pub use processor::Processor;
 use state::ProtocolState;
 pub use state::{ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS};
 
+#[cfg(feature = "async")]
+pub(crate) mod async_processor;
+
 /// 256bit hash
 pub type Hash256 = [u8; 32];
 
