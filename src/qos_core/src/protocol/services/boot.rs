@@ -480,7 +480,7 @@ mod test {
 	use qos_test_primitives::PathWrapper;
 
 	use super::*;
-	use crate::{handles::Handles, io::SocketAddress};
+	use crate::handles::Handles;
 
 	fn get_manifest() -> (Manifest, Vec<(P256Pair, QuorumMember)>, Vec<u8>) {
 		let quorum_pair = P256Pair::generate().unwrap();
@@ -580,12 +580,8 @@ mod test {
 			manifest_file.clone(),
 			pivot_file.clone(),
 		);
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			handles.clone(),
-			SocketAddress::new_unix("./never.sock"),
-			None,
-		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
 
 		let _nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
@@ -638,12 +634,8 @@ mod test {
 			manifest_file,
 			pivot_file,
 		);
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			handles.clone(),
-			SocketAddress::new_unix("./never.sock"),
-			None,
-		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
 
 		let nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
@@ -686,12 +678,8 @@ mod test {
 			manifest_file,
 			pivot_file,
 		);
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			handles.clone(),
-			SocketAddress::new_unix("./never.sock"),
-			None,
-		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
 
 		let nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
@@ -736,12 +724,8 @@ mod test {
 			(*manifest_file).to_string(),
 			(*pivot_file).to_string(),
 		);
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			handles,
-			SocketAddress::new_unix("./never.sock"),
-			None,
-		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles, None);
 
 		let error =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
@@ -796,12 +780,8 @@ mod test {
 			(*manifest_file).to_string(),
 			(*pivot_file).to_string(),
 		);
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			handles,
-			SocketAddress::new_unix("./never.sock"),
-			None,
-		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles, None);
 
 		let error =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
