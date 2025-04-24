@@ -12,12 +12,14 @@ use qos_core::{
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
 
-use crate::HostServer;
+#[cfg(feature = "async")]
+use qos_core::io::AsyncStreamPool;
 
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const VSOCK_TO_HOST: &str = "vsock-to-host";
+const POOL_SIZE: &str = "pool-size";
 
 struct HostParser;
 impl GetParserForOptions for HostParser {
@@ -53,6 +55,11 @@ impl GetParserForOptions for HostParser {
 			.token(
 				Token::new(ENDPOINT_BASE_PATH, "base path for all endpoints. e.g. <BASE>/enclave-health")
 					.takes_value(true)
+			)
+			.token(
+				Token::new(POOL_SIZE, "pool size for USOCK/VSOCK sockets")
+					.takes_value(true)
+					.default_value(qos_core::DEFAULT_POOL_SIZE)
 			)
 			.token(
 				Token::new(VSOCK_TO_HOST, "whether to add the to-host svm flag to the enclave vsock connection. Valid options are `true` or `false`")
@@ -104,6 +111,45 @@ impl HostOpts {
 		let port =
 			self.port().parse::<u16>().expect("Could not parse port to u16");
 		SocketAddr::new(IpAddr::V4(ip), port)
+	}
+
+	/// Create a new `AsyncPool` of `AsyncStream` using the list of `SocketAddress` for the enclave server and
+	/// return the new `AsyncPool`.
+	#[cfg(feature = "async")]
+	pub(crate) fn enclave_pool(&self) -> AsyncStreamPool {
+		use qos_core::io::{TimeVal, TimeValLike};
+		let pool_size: u32 = self
+			.parsed
+			.single(POOL_SIZE)
+			.expect("invalid pool options")
+			.parse()
+			.expect("invalid pool_size specified");
+		match (
+			self.parsed.single(CID),
+			self.parsed.single(PORT),
+			self.parsed.single(USOCK),
+		) {
+			#[cfg(feature = "vm")]
+			(Some(c), Some(p), None) => {
+				let c = c.parse::<u32>().unwrap();
+				let start_port = p.parse::<u32>().unwrap();
+
+				let addresses = (start_port..start_port + pool_size).map(|p| {
+					SocketAddress::new_vsock(c, p, self.to_host_flag())
+				});
+
+				AsyncStreamPool::new(addresses, TimeVal::seconds(5))
+			}
+			(None, None, Some(u)) => {
+				let addresses = (0..pool_size).map(|i| {
+					let u = format!("{u}_{i}"); // add _X suffix for pooling
+					SocketAddress::new_unix(&u)
+				});
+
+				AsyncStreamPool::new(addresses, TimeVal::seconds(5))
+			}
+			_ => panic!("Invalid socket opts"),
+		}
 	}
 
 	/// Get the `SocketAddress` for the enclave server.
@@ -176,8 +222,18 @@ impl CLI {
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
 		} else {
-			HostServer::new(
+			#[cfg(not(feature = "async"))]
+			crate::HostServer::new(
 				options.enclave_addr(),
+				options.host_addr(),
+				options.base_path(),
+			)
+			.serve()
+			.await;
+
+			#[cfg(feature = "async")]
+			crate::async_host::AsyncHostServer::new(
+				options.enclave_pool().shared(),
 				options.host_addr(),
 				options.base_path(),
 			)

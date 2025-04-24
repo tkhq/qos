@@ -16,4 +16,5 @@ serde_json = { workspace = true }
 serde = { workspace = true }
 
 [features]
+async = ["qos_core/async"]
 vm = ["qos_core/vm"]
