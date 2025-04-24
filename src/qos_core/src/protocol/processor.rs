@@ -1,14 +1,18 @@
 //! Quorum protocol processor
 use borsh::BorshDeserialize;
+use nix::sys::time::{TimeVal, TimeValLike};
 use qos_nsm::NsmProvider;
 
 use super::{
-	error::ProtocolError, msg::ProtocolMsg, state::ProtocolState, ProtocolPhase,
+	error::ProtocolError, msg::ProtocolMsg, state::ProtocolState,
+	ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
 };
 use crate::io::MAX_PAYLOAD_SIZE;
-use crate::{handles::Handles, io::SocketAddress, server};
+use crate::{client::Client, handles::Handles, io::SocketAddress, server};
+
 /// Enclave state machine that executes when given a `ProtocolMsg`.
 pub struct Processor {
+	app_client: Client,
 	state: ProtocolState,
 }
 
@@ -21,11 +25,16 @@ impl Processor {
 		app_addr: SocketAddress,
 		test_only_init_phase_override: Option<ProtocolPhase>,
 	) -> Self {
+		let app_client = Client::new(
+			app_addr,
+			TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
+		);
+
 		Self {
+			app_client,
 			state: ProtocolState::new(
 				attestor,
 				handles,
-				app_addr,
 				test_only_init_phase_override,
 			),
 		}
@@ -48,6 +57,29 @@ impl server::RequestProcessor for Processor {
 			.expect("ProtocolMsg can always be serialized. qed.");
 		};
 
-		self.state.handle_msg(&msg_req)
+		// handle Proxy outside of the state
+		match msg_req {
+			ProtocolMsg::ProxyRequest { data } => {
+				let phase = self.state.get_phase();
+				if phase != ProtocolPhase::QuorumKeyProvisioned {
+					let err = ProtocolError::NoMatchingRoute(phase);
+					return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+						err,
+					))
+					.expect("ProtocolMsg can always be serialized. qed.");
+				}
+				let result = self
+					.app_client
+					.send(&data)
+					.map(|data| ProtocolMsg::ProxyResponse { data })
+					.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into()));
+
+				match result {
+					Ok(msg_resp) | Err(msg_resp) => borsh::to_vec(&msg_resp)
+						.expect("ProtocolMsg can always be serialized. qed."),
+				}
+			}
+			_ => self.state.handle_msg(&msg_req),
+		}
 	}
 }
