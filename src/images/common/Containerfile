@@ -3,7 +3,7 @@ FROM stagex/binutils:2.43.1@sha256:30a1bd110273894fe91c3a4a2103894f53eaac43cf12a
 FROM stagex/busybox:1.36.1@sha256:d34bfa56566aa72d605d6cbdc154de8330cf426cfea1bc4ba8013abcac594395 AS busybox
 FROM stagex/ca-certificates:sx2024.09.0@sha256:33787f1feb634be4232a6dfe77578c1a9b890ad82a2cf18c11dd44507b358803 AS ca-certificates
 FROM stagex/coreutils:9.4@sha256:1955f532d8923b5e17f60635c994bd9577bb3e6bccb5da702a69e79070bae0a9 AS coreutils
-FROM stagex/file:5.45@sha256:b43a7f0bd50419a39d91d77a316bb888ed87c94aeb6f9eb11f12efd275ca4ab8 AS file
+FROM stagex/file:5.45@sha256:f1053114ea2ef35dc04bd1d1f1572c3f1b86e3d57dffda99faac9e191bd7ab5d AS file
 FROM stagex/filesystem:sx2024.11.0@sha256:d03195563f548c3ac8f34acf777b7e86f0d0d049a9430d715e5774eb7cc93302 AS filesystem
 FROM stagex/findutils:4.9.0@sha256:d92494daaf08999aac0a277327d240a0149494716707fbce93381df058f693e2 AS findutils
 FROM stagex/gcc:13.1.0@sha256:439bf36289ef036a934129d69dd6b4c196427e4f8e28bc1a3de5b9aab6e062f0 AS gcc
