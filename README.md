@@ -1,7 +1,7 @@
 # QuorumOS
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://github.com/tkhq/qos/blob/main/LICENSE) 
-![stagex-build Status](https://github.com/tkhq/qos/actions/workflows/stagex.yml/badge.svg) 
+[![stagex-build Status](https://github.com/tkhq/qos/actions/workflows/stagex.yml/badge.svg)](https://github.com/tkhq/qos/actions/workflows/stagex.yml) 
 ![stagex-build Status](https://github.com/tkhq/qos/actions/workflows/pr.yml/badge.svg)
 
 ## About
