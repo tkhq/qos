@@ -5,7 +5,7 @@ FROM stagex/ca-certificates:sx2024.09.0@sha256:33787f1feb634be4232a6dfe77578c1a9
 FROM stagex/coreutils:9.4@sha256:1955f532d8923b5e17f60635c994bd9577bb3e6bccb5da702a69e79070bae0a9 AS coreutils
 FROM stagex/file:5.45@sha256:b43a7f0bd50419a39d91d77a316bb888ed87c94aeb6f9eb11f12efd275ca4ab8 AS file
 FROM stagex/filesystem:sx2024.11.0@sha256:d03195563f548c3ac8f34acf777b7e86f0d0d049a9430d715e5774eb7cc93302 AS filesystem
-FROM stagex/findutils:4.9.0@sha256:d92494daaf08999aac0a277327d240a0149494716707fbce93381df058f693e2 AS findutils
+FROM stagex/findutils:4.9.0@sha256:b13a22a89b8a110edca30576305873bf8688ad2eb151568959c56f7fb3834af5 AS findutils
 FROM stagex/gcc:13.1.0@sha256:439bf36289ef036a934129d69dd6b4c196427e4f8e28bc1a3de5b9aab6e062f0 AS gcc
 FROM stagex/git:2.9.5@sha256:29a02c423a4b55fa72cf2fce89f3bbabd1defea86d251bb2aea84c056340ab22 AS git
 FROM stagex/grep:3.11@sha256:576288125a7ecda969285e5edfaedef479c4bc18cba8230c0502000fdf2586c1 AS grep
