@@ -190,7 +190,7 @@ Continued reading for attesting with nitro enclaves:
 
 ## Enclave Data Flow
 
-Nitro enclaves have a single socket for communicating to their parent EC2 instance. When QuorumOS initially starts up, it starts listening on a [socket server](.src/qos_core/src/server.rs) for [`ProtocolMsg`s](./src/qos_core/src/protocol/msg.rs) (the routing logic for the enclave server is [here](./src/qos_core/src/protocol/mod.rs)) that are sent over a single VSOCK connection with the EC2 instance. The enclave server only supports simple request/response communication with a client on the EC2 instance end of the VSOCK connection.
+Nitro enclaves have a single socket for communicating to their parent EC2 instance. When QuorumOS initially starts up, it starts listening on a [socket server](./src/qos_core/src/server.rs) for [`ProtocolMsg`s](./src/qos_core/src/protocol/msg.rs) (the routing logic for the enclave server is [here](./src/qos_core/src/protocol/mod.rs)) that are sent over a single VSOCK connection with the EC2 instance. The enclave server only supports simple request/response communication with a client on the EC2 instance end of the VSOCK connection.
 
 For communicating just with the QuorumOS enclave server, we have [`qos_host`](./src/qos_host/src/lib.rs), a simple HTTP service that allows for `GET`ing health checks and `POST`ing `ProtocolMsg`s.
 
