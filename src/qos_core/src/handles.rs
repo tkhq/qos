@@ -32,6 +32,31 @@ impl QuorumKeyHandle {
 	}
 }
 
+/// Handle for accessing the enclave ephemeral key.
+#[derive(Debug, Clone)]
+pub struct EphemeralKeyHandle {
+	ephemeral_key_path: String,
+}
+
+impl EphemeralKeyHandle {
+	/// Create a new instance of [`Self`].
+	#[must_use]
+	pub fn new(ephemeral_key_path: String) -> Self {
+		Self { ephemeral_key_path }
+	}
+
+	/// Get the Ephemeral Key Pair
+	///
+	/// # Errors
+	///
+	/// Errors if the Ephemeral key pair isn't present or can't be built.
+	pub fn get_ephemeral_key(&self) -> Result<P256Pair, ProtocolError> {
+		let pair = P256Pair::from_hex_file(&self.ephemeral_key_path)
+			.map_err(ProtocolError::FailedToGetEphemeralKey)?;
+		Ok(pair)
+	}
+}
+
 /// Handles for read only state accessible to all of QOS.
 ///
 /// All data here should be "put" once at some point in the boot flow. Once
@@ -39,7 +64,7 @@ impl QuorumKeyHandle {
 #[derive(Debug, Clone)]
 pub struct Handles {
 	/// Path to the file containing the PEM encoded Ephemeral Key.
-	ephemeral: String,
+	ephemeral: EphemeralKeyHandle,
 	/// Path to the file containing the PEM encoded Quorum Key.
 	quorum: QuorumKeyHandle,
 	/// Path to the file containing the Borsh encoded [`ManifestEnvelope`].
@@ -58,28 +83,20 @@ impl Handles {
 		pivot: String,
 	) -> Self {
 		Self {
-			ephemeral,
+			ephemeral: EphemeralKeyHandle::new(ephemeral),
 			quorum: QuorumKeyHandle::new(quorum),
 			manifest,
 			pivot,
 		}
 	}
 
-	/// Get the path to the Ephemeral Key.
-	#[must_use]
-	pub fn ephemeral_key_path(&self) -> String {
-		self.ephemeral.clone()
-	}
-
 	/// Get the Ephemeral Key pair.
 	///
 	/// # Errors
 	///
-	/// Errors if the Ephemeral Key has not been put.
+	/// Errors if the Ephemeral Key isn't present.
 	pub fn get_ephemeral_key(&self) -> Result<P256Pair, ProtocolError> {
-		let pair = P256Pair::from_hex_file(&self.ephemeral)
-			.map_err(ProtocolError::FailedToGetEphemeralKey)?;
-		Ok(pair)
+		self.ephemeral.get_ephemeral_key()
 	}
 
 	/// Put the Ephemeral Key pair.
@@ -92,16 +109,10 @@ impl Handles {
 		pair: &P256Pair,
 	) -> Result<(), ProtocolError> {
 		Self::write_as_read_only(
-			&self.ephemeral,
+			&self.ephemeral.ephemeral_key_path,
 			&pair.to_master_seed_hex(),
 			ProtocolError::FailedToPutEphemeralKey,
 		)
-	}
-
-	/// Delete the Ephemeral Key. Silently fails if the Ephemeral Key does not
-	/// exist.
-	pub fn delete_ephemeral_key(&self) {
-		drop(fs::remove_file(&self.ephemeral));
 	}
 
 	/// Get the Quorum Key pair.

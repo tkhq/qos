@@ -107,9 +107,6 @@ pub(in crate::protocol) fn provision(
 	}
 
 	state.handles.put_quorum_key(&pair)?;
-	// We want to minimize the use of the Ephemeral Key because it is
-	// provisioned before we can externally seed the entropy pool.
-	state.handles.delete_ephemeral_key();
 
 	Ok(true)
 }
