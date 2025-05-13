@@ -274,8 +274,8 @@ mod test {
 
 		assert_eq!(quorum_key, quorum_pair.to_master_seed_hex());
 
-		// Make sure the EK is deleted
-		assert!(!Path::new(&*eph_file).exists());
+		// Make sure the EK is persisted
+		assert!(Path::new(&*eph_file).exists());
 
 		// The share set approvals where recorded in the manifest envelope
 		assert_eq!(
