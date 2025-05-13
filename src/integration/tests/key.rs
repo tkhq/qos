@@ -37,6 +37,17 @@ async fn key_fwd_e2e() {
 	let (_enclave_child_wrapper, _host_child_wrapper) =
 		boot_old_enclave(old_host_port);
 
+	// A bit of a hack: because we're using the same path for OLD and NEW enclave ephemeral keys, they conflict.
+	// We have to share the ephemeral key path because it's complex to generate legit attestations.
+	// So, when qos_core is compiled with the `mock` feature, the old enclave's ephemeral public
+	// key (rather than the attestation public key) is used as a target to encrypt the quorum key.
+	// See `export_key_internal` for more information.
+	//
+	// Now that our OLD enclave is booted and we're about to boot the NEW enclave, we can remove
+	// the old file so `write_as_read_only` doesn't error out when the new enclave's ephemeral key is written to disk.
+	// This is a test-only quirk: in a real situation enclaves have their own filesystems...
+	fs::remove_file(SHARED_EPH_PATH).unwrap();
+
 	// start up new enclave
 	let new_secret_path = "/tmp/key-fwd-e2e/new_secret.secret";
 	let new_pivot_path = "/tmp/key-fwd-e2e/new_pivot.pivot";
