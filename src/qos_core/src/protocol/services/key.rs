@@ -101,23 +101,13 @@ fn export_key_internal(
 		attestation_doc,
 	)?;
 
-	let eph_key = {
-		#[cfg(not(feature = "mock"))]
-		{
-			let eph_key_bytes = attestation_doc
-				.public_key
-				.as_ref()
-				.ok_or(ProtocolError::MissingEphemeralKey)?;
-			P256Public::from_bytes(eph_key_bytes)
-				.map_err(|_| ProtocolError::InvalidEphemeralKey)?
-		}
-		#[cfg(feature = "mock")]
-		{
-			// For testing, the old enclave and new enclave will need to share
-			// an ephemeral key for this to work
-			state.handles.get_ephemeral_key()?.public_key()
-		}
-	};
+	let eph_key_bytes = attestation_doc
+		.public_key
+		.as_ref()
+		.ok_or(ProtocolError::MissingEphemeralKey)?;
+	println!("eph key bytes: {:?} (hex: {})", eph_key_bytes, qos_hex::encode(eph_key_bytes));
+	let eph_key = P256Public::from_bytes(eph_key_bytes)
+		.map_err(|_| ProtocolError::InvalidEphemeralKey)?;
 
 	let quorum_key = state.handles.get_quorum_key()?;
 	// 10. Return the Quorum Key encrypted to the New Node's Ephemeral Key

@@ -136,7 +136,7 @@ pub fn import_key_and_generate_signed_certificate(
 	}
 
 	let public_key_info = {
-		let encoded_point = SecretKey::from_be_bytes(key_data)
+		let encoded_point = SecretKey::from_bytes(key_data.into())
 			.map_err(|_| YubiKeyError::InvalidSecret)?
 			.public_key()
 			.to_encoded_point(false);

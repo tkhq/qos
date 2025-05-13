@@ -12,8 +12,8 @@ aws-nitro-enclaves-cose = { version = "0.5", default-features = false }
 sha2 = { version = "0.10", default-features = false }
 webpki = { version =  "0.22.4", default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
-p384 = { version = "0.12", features = ["sha384", "ecdsa", "ecdsa-core", "std"], default-features = false }
-x509-cert = { version = "=0.1.0", features = ["pem"], default-features = false }
+p384 = { version = "0.13", features = ["sha384", "ecdsa", "ecdsa-core", "std"], default-features = false }
+x509-cert = { version = "0.2.5", features = ["pem"], default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.4"

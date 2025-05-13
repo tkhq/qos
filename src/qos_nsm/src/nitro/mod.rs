@@ -254,7 +254,7 @@ fn verify_cose_sign1_sig(
 
 	let pub_key =
 		ee_cert.tbs_certificate.subject_public_key_info.subject_public_key;
-	let key = PublicKey::from_sec1_bytes(pub_key)
+	let key = PublicKey::from_sec1_bytes(pub_key.raw_bytes())
 		.map_err(|_| AttestError::FailedDecodeKeyFromCert)?;
 	let key_wrapped = P384PubKey(key);
 
@@ -363,7 +363,7 @@ mod test {
 			"55c6aa815a31741bc37f0ffddea73af2397bad640816ef22bfb689efc1b6cc68
 		2a73f7e5a657248e3abad500e46d5afc"
 		);
-		let private = p384::SecretKey::from_be_bytes(&secret).unwrap();
+		let private = p384::SecretKey::from_bytes(&secret.into()).unwrap();
 		let public = private.public_key();
 
 		(P384PrivateKey(private), P384PubKey(public))
@@ -412,7 +412,7 @@ mod test {
 		);
 
 		// Rejects incorrect key
-		let random_private = SecretKey::random(rand::rngs::OsRng);
+		let random_private = SecretKey::random(&mut rand::rngs::OsRng);
 		let random_public = random_private.public_key();
 
 		assert!(cose_doc

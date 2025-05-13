@@ -1,9 +1,25 @@
+use std::time::{Duration, SystemTime};
 use std::{fs, process::Command};
-
+use aws_nitro_enclaves_cose::crypto::Openssl;
+use aws_nitro_enclaves_cose::{header_map::HeaderMap, CoseSign1};
+use openssl::ec::{EcGroup, EcKey};
+use openssl::nid::Nid;
+use openssl::pkey::PKey;
+use openssl::rsa::Rsa;
+use serde_bytes::ByteBuf;
 use integration::{
 	LOCAL_HOST, PCR3_PRE_IMAGE_PATH, PIVOT_LOOP_PATH, QOS_DIST_DIR,
 };
+
+use der::Decode;
+use x509_cert::spki::SubjectPublicKeyInfoOwned;
+use x509_cert::builder::{Builder, CertificateBuilder, Profile};
+use x509_cert::name::Name;
+use x509_cert::serial_number::SerialNumber;
+use x509_cert::time::{Time, Validity};
+use std::str::FromStr;
 use qos_crypto::sha_256;
+use qos_nsm::nitro::unsafe_attestation_doc_from_der;
 use qos_p256::{P256Pair, P256Public};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
@@ -19,8 +35,8 @@ const PIVOT_HASH_PATH: &str = "/tmp/key-fwd-e2e/pivot-hash-path.txt";
 const USERS: &[&str] = &["user1", "user2", "user3"];
 const TEST_MSG: &str = "test-msg";
 const NEW_ATTESTATION_DOC_PATH: &str = "/tmp/key-fwd-e2e/new_attestation_doc";
+const NEW_ATTESTATION_DOC_PATH_FIXED: &str = "/tmp/key-fwd-e2e/new_attestation_doc_fixed";
 const ENCRYPTED_QUORUM_KEY_PATH: &str = "/tmp/key-fwd-e2e/encrypted_quorum_key";
-const SHARED_EPH_PATH: &str = "/tmp/key-fwd-e2e/shared_eph.secret";
 const QUORUM_KEY_PUB_PATH: &str =
 	"./mock/namespaces/quit-coding-to-vape/quorum_key.pub";
 
@@ -34,11 +50,13 @@ async fn key_fwd_e2e() {
 
 	build_pivot_fingerprints();
 	generate_manifest_envelope();
+
 	let (_enclave_child_wrapper, _host_child_wrapper) =
-		boot_old_enclave(old_host_port);
+	boot_old_enclave(old_host_port);
 
 	// start up new enclave
-	let new_secret_path = "/tmp/key-fwd-e2e/new_secret.secret";
+	let new_quorum_path = "/tmp/key-fwd-e2e/new_quorum.secret";
+	let new_ephemeral_path = "/tmp/key-fwd-e2e/new_ephemeral.secret";
 	let new_pivot_path = "/tmp/key-fwd-e2e/new_pivot.pivot";
 	let new_manifest_path = "/tmp/key-fwd-e2e/new_manifest.manifest";
 	let new_usock = "/tmp/key-fwd-e2e/new_usock.sock";
@@ -50,13 +68,11 @@ async fn key_fwd_e2e() {
 				"--usock",
 				new_usock,
 				"--quorum-file",
-				new_secret_path,
+				new_quorum_path,
 				"--pivot-file",
 				new_pivot_path,
 				"--ephemeral-file",
-				SHARED_EPH_PATH, /* this is shared so the old enclave can
-				                  * encrypt to this key. See `extract_key`
-				                  * logic */
+				new_ephemeral_path,
 				"--mock",
 				"--manifest-file",
 				new_manifest_path,
@@ -64,21 +80,21 @@ async fn key_fwd_e2e() {
 			.spawn()
 			.unwrap()
 			.into();
-
+	
 	// -- HOST start new host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_host")
-			.args([
-				"--host-port",
-				&new_host_port.to_string(),
-				"--host-ip",
-				LOCAL_HOST,
-				"--usock",
-				new_usock,
-			])
-			.spawn()
-			.unwrap()
-			.into();
+	Command::new("../target/debug/qos_host")
+		.args([
+			"--host-port",
+			&new_host_port.to_string(),
+			"--host-ip",
+			LOCAL_HOST,
+			"--usock",
+			new_usock,
+		])
+		.spawn()
+		.unwrap()
+		.into();
 
 	// -- Make sure the new enclave and host have time to boot
 	qos_test_primitives::wait_until_port_is_bound(new_host_port);
@@ -104,6 +120,44 @@ async fn key_fwd_e2e() {
 		.unwrap()
 		.success());
 
+	let mut attestation_doc = unsafe_attestation_doc_from_der(&fs::read(NEW_ATTESTATION_DOC_PATH).unwrap()).unwrap();
+	let new_ephemeral_key_pair = P256Pair::from_hex_file(new_ephemeral_path).unwrap();
+	let new_ephemeral_key_pair_public_bytes = new_ephemeral_key_pair.public_key().to_bytes();
+	println!("new_ephemeral_key_pair_public_bytes: {:?} (hex: {})", new_ephemeral_key_pair_public_bytes, qos_hex::encode(&new_ephemeral_key_pair_public_bytes));
+	attestation_doc.public_key = Some(ByteBuf::from(new_ephemeral_key_pair_public_bytes));
+
+	// See https://github.com/awslabs/aws-nitro-enclaves-cose/blob/6064f826d551a9db0bd42e9cf928feaf272e8d17/src/crypto/openssl_pkey.rs#L24C9-L24C23
+	// P-384 is the recommended curve to work with SHA-384, which aws nitros use.
+	let nid = Nid::SECP384R1;
+	let group = EcGroup::from_curve_name(nid).unwrap();
+	let ec_key = EcKey::generate(&group).unwrap();
+	let signing_key_public_der = ec_key.public_key_to_der().unwrap();
+	let signing_key = PKey::from_ec_key(ec_key).unwrap();
+
+	// Create the certificate (needs to be inserted in the attestation)
+	let serial_number = SerialNumber::from(42u32);
+	let validity = Validity::from_now(Duration::new(60, 0)).unwrap();
+	let profile = Profile::Root;
+	let subject = Name::from_str("CN=Turnkey World Domination,O=World domination Inc,C=US").unwrap();
+	let pub_key = SubjectPublicKeyInfoOwned::try_from(signing_key_public_der.into()).expect("get rsa pub key");
+
+	//let mut signer = Rsa::generate(2048).unwrap();
+	let signer_key = qos_hex::decode("83e41c719b3616993060d35cc054c8c1cd232d166f0ef13392fa7c3614b62060").unwrap();
+	let signer_secret_key = p256::SecretKey::from_slice(&signer_key).unwrap();
+
+	let mut builder = CertificateBuilder::new(
+		profile,
+		serial_number,
+		validity,
+		subject,
+		pub_key,
+		&signer_secret_key,
+	).unwrap();
+	attestation_doc.certificate = builder.build().unwrap();
+
+	let fixed_attestation_doc = CoseSign1::new::<Openssl>(&attestation_doc.to_binary(), &HeaderMap::new(), &signing_key).unwrap();
+	fs::write(NEW_ATTESTATION_DOC_PATH_FIXED, fixed_attestation_doc.as_bytes(false).unwrap()).unwrap();
+
 	// -- CLIENT broadcast key request to the old enclave
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
@@ -111,7 +165,7 @@ async fn key_fwd_e2e() {
 			"--manifest-envelope-path",
 			MANIFEST_ENVELOPE_PATH,
 			"--attestation-doc-path",
-			NEW_ATTESTATION_DOC_PATH,
+			NEW_ATTESTATION_DOC_PATH_FIXED,
 			"--encrypted-quorum-key-path",
 			ENCRYPTED_QUORUM_KEY_PATH,
 			"--host-port",
@@ -143,7 +197,7 @@ async fn key_fwd_e2e() {
 		.success());
 
 	// Check that the quorum key got written
-	let quorum_pair = P256Pair::from_hex_file(new_secret_path).unwrap();
+	let quorum_pair = P256Pair::from_hex_file(new_quorum_path).unwrap();
 	let quorum_pub = P256Public::from_hex_file(QUORUM_KEY_PUB_PATH).unwrap();
 	assert!(quorum_pair.public_key() == quorum_pub);
 }
@@ -224,7 +278,8 @@ fn generate_manifest_envelope() {
 }
 
 fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
-	let old_secret_path = "/tmp/key-fwd-e2e/old_secret.secret";
+	let old_ephemeral_path = "/tmp/key-fwd-e2e/old_ephemeral.secret";
+	let old_quorum_path = "/tmp/key-fwd-e2e/old_quorum.secret";
 	let old_pivot_path = "/tmp/key-fwd-e2e/old_pivot.pivot";
 	let old_manifest_path = "/tmp/key-fwd-e2e/old_manifest.manifest";
 	let old_usock = "/tmp/key-fwd-e2e/old_usock.sock";
@@ -236,11 +291,11 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 				"--usock",
 				old_usock,
 				"--quorum-file",
-				old_secret_path,
+				old_quorum_path,
 				"--pivot-file",
 				old_pivot_path,
 				"--ephemeral-file",
-				SHARED_EPH_PATH,
+				old_ephemeral_path,
 				"--mock",
 				"--manifest-file",
 				old_manifest_path,
@@ -352,7 +407,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 				user,
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
-				SHARED_EPH_PATH,
+				&old_ephemeral_path,
 				"--unsafe-auto-confirm",
 			])
 			.spawn()
@@ -381,7 +436,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 	}
 
 	// Check that the enclave wrote its quorum key
-	let quorum_pair = P256Pair::from_hex_file(old_secret_path).unwrap();
+	let quorum_pair = P256Pair::from_hex_file(old_quorum_path).unwrap();
 	let quorum_pub = P256Public::from_hex_file(QUORUM_KEY_PUB_PATH).unwrap();
 	assert!(quorum_pair.public_key() == quorum_pub);
 

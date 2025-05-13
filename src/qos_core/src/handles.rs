@@ -209,6 +209,7 @@ impl Handles {
 	/// Put the Pivot binary, ensuring it is an executable.
 	pub fn put_pivot(&self, pivot: &[u8]) -> Result<(), ProtocolError> {
 		if Path::new(&self.pivot).exists() {
+			println!("writing pivot at: {:?}", self.pivot);
 			Err(ProtocolError::CannotModifyPostPivotStatic)?;
 		}
 
@@ -242,6 +243,7 @@ impl Handles {
 		err: ProtocolError,
 	) -> Result<(), ProtocolError> {
 		if path.as_ref().exists() {
+			println!("write as read only: {:?}", path.as_ref().display());
 			Err(ProtocolError::CannotModifyPostPivotStatic)?;
 		}
 

@@ -15,14 +15,14 @@ qos_nsm = { path = "../qos_nsm", default-features = false }
 ureq = { version = "2.9", default-features = false }
 aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
 borsh = { version = "1.0", features = ["std", "derive"] , default-features = false}
-p256 = { version = "0.12.0", default-features = false }
+p256 = { version = "0.13", features = ["ecdsa-core"], default-features = false }
 rand_core = { version = "0.6", default-features = false }
 zeroize = { version = "1.6", default-features = false }
 rpassword = { version = "7", default-features = false }
 serde_json = { version = "1" }
 
 x509 = { version = "0.2", default-features = false, optional = true }
-yubikey = { version = "*", features = ["untested"], default-features = false, optional = true }
+yubikey = { version = "0.8.0", features = ["untested"], default-features = false, optional = true }
 
 [dev-dependencies]
 # We need mock enabled to grab things related to the mock NSM.
