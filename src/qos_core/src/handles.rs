@@ -115,6 +115,32 @@ impl Handles {
 		)
 	}
 
+	/// Rotate the ephemeral key to a new key pair. This happens post-boot, to protect key material encrypted to it.
+	/// QOS apps can then use this new ephemeral key without worrying about implications for boot flows.
+	///
+	/// # Errors
+	///
+	/// Errors if the Ephemeral key isn't present already, or if the delete fails, or if the new write fails.
+	pub fn rotate_ephemeral_key(
+		&self,
+		new_pair: &P256Pair,
+	) -> Result<(), ProtocolError> {
+		let path = Path::new(&self.ephemeral.ephemeral_key_path);
+		if !path.exists() {
+			Err(ProtocolError::CannotRotateNonExistentEphemeralKey)?;
+		}
+
+		fs::remove_file(path).map_err(|e| {
+			ProtocolError::CannotDeleteEphemeralKey(e.to_string())
+		})?;
+
+		Self::write_as_read_only(
+			path,
+			&new_pair.to_master_seed_hex(),
+			ProtocolError::FailedToPutEphemeralKey,
+		)
+	}
+
 	/// Get the Quorum Key pair.
 	///
 	/// # Errors

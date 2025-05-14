@@ -53,6 +53,10 @@ pub enum ProtocolError {
 	FailedToGetEphemeralKey(P256Error),
 	/// Failed to write the Ephemeral key to the file system.
 	FailedToPutEphemeralKey,
+	/// Failed to rotate the ephemeral key because the underlying file is missing.
+	CannotRotateNonExistentEphemeralKey,
+	/// Failed to delete the old ephemeral key (underlying failure in argument)
+	CannotDeleteEphemeralKey(String),
 	/// For some reason the Quorum Key could not be read from the file
 	/// system.
 	FailedToGetQuorumKey(P256Error),

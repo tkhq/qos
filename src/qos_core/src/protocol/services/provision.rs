@@ -1,4 +1,6 @@
 //! Quorum Key provisioning logic and types.
+use qos_p256::P256Pair;
+
 use crate::protocol::{
 	services::boot::Approval, ProtocolError, ProtocolState, QosHash,
 };
@@ -107,6 +109,12 @@ pub(in crate::protocol) fn provision(
 	}
 
 	state.handles.put_quorum_key(&pair)?;
+
+	// Rotate the ephemeral key so it's safe for apps to use it independently
+	// of boot-related operations, which use the pre-boot ephemeral key as
+	// an encryption target (boot standard flow encrypts quorum key shares to it.)
+	let new_ephemeral_key = P256Pair::generate()?;
+	state.handles.rotate_ephemeral_key(&new_ephemeral_key)?;
 
 	Ok(true)
 }
@@ -265,6 +273,8 @@ mod test {
 			);
 		}
 
+		let boot_eph_key = std::fs::read(&*eph_file).unwrap();
+
 		// 6) For shard K, call provision, make sure returns true and writes
 		// quorum key as a ready only file
 		let share = &encrypted_shares[threshold];
@@ -277,7 +287,11 @@ mod test {
 		// Make sure the EK is persisted
 		assert!(Path::new(&*eph_file).exists());
 
-		// The share set approvals where recorded in the manifest envelope
+		// Make sure the EK rotation happened, post-boot
+		let new_eph_key = std::fs::read(&*eph_file).unwrap();
+		assert_ne!(new_eph_key, boot_eph_key);
+
+		// The share set approvals were recorded in the manifest envelope
 		assert_eq!(
 			state
 				.handles
