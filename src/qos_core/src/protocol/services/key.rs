@@ -264,7 +264,6 @@ mod test {
 	use super::{boot_key_forward, export_key_internal, validate_manifest};
 	use crate::{
 		handles::Handles,
-		io::SocketAddress,
 		protocol::{
 			services::{
 				boot::{
@@ -412,12 +411,8 @@ mod test {
 				manifest_file.deref().to_string(),
 				pivot_file.deref().to_string(),
 			);
-			let mut state = ProtocolState::new(
-				Box::new(MockNsm),
-				handles.clone(),
-				SocketAddress::new_unix("./never.sock"),
-				None,
-			);
+			let mut state =
+				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
 
 			let response =
 				boot_key_forward(&mut state, &manifest_envelope, &pivot)
@@ -456,12 +451,8 @@ mod test {
 				manifest_file.deref().to_string(),
 				pivot_file.deref().to_string(),
 			);
-			let mut state = ProtocolState::new(
-				Box::new(MockNsm),
-				handles.clone(),
-				SocketAddress::new_unix("./never.sock"),
-				None,
-			);
+			let mut state =
+				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
 
 			// Remove an approval
 			manifest_envelope.manifest_set_approvals.pop().unwrap();
@@ -498,12 +489,8 @@ mod test {
 				manifest_file.deref().to_string(),
 				pivot_file.deref().to_string(),
 			);
-			let mut state = ProtocolState::new(
-				Box::new(MockNsm),
-				handles.clone(),
-				SocketAddress::new_unix("./never.sock"),
-				None,
-			);
+			let mut state =
+				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
 
 			// Use a different pivot then what is referenced in the manifest
 			let other_pivot = b"other pivot".to_vec();
@@ -539,12 +526,8 @@ mod test {
 				manifest_file.deref().to_string(),
 				pivot_file.deref().to_string(),
 			);
-			let mut state = ProtocolState::new(
-				Box::new(MockNsm),
-				handles.clone(),
-				SocketAddress::new_unix("./never.sock"),
-				None,
-			);
+			let mut state =
+				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
 
 			// Change the signature to something invalid
 			manifest_envelope.manifest_set_approvals[0].signature = vec![1; 32];
@@ -596,12 +579,8 @@ mod test {
 				manifest_file.deref().to_string(),
 				pivot_file.deref().to_string(),
 			);
-			let mut state = ProtocolState::new(
-				Box::new(MockNsm),
-				handles.clone(),
-				SocketAddress::new_unix("./never.sock"),
-				None,
-			);
+			let mut state =
+				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
 
 			// Add an approval from a random key
 			manifest_envelope.manifest_set_approvals.push(non_member_approval);
@@ -1074,12 +1053,8 @@ mod test {
 				"pivot".to_string(),
 			);
 
-			let mut protocol_state = ProtocolState::new(
-				Box::new(MockNsm),
-				handles,
-				SocketAddress::new_unix("./never.sock"),
-				None,
-			);
+			let mut protocol_state =
+				ProtocolState::new(Box::new(MockNsm), handles, None);
 			let EncryptedQuorumKey { encrypted_quorum_key, signature } =
 				export_key_internal(
 					&mut protocol_state,
@@ -1137,12 +1112,8 @@ mod test {
 				manifest_file.deref().to_string(),
 				"pivot".to_string(),
 			);
-			let mut protocol_state = ProtocolState::new(
-				Box::new(MockNsm),
-				handles,
-				SocketAddress::new_unix("./never.sock"),
-				None,
-			);
+			let mut protocol_state =
+				ProtocolState::new(Box::new(MockNsm), handles, None);
 			protocol_state
 				.transition(ProtocolPhase::WaitingForForwardedKey)
 				.unwrap();
@@ -1190,12 +1161,8 @@ mod test {
 				manifest_file.deref().to_string(),
 				"pivot".to_string(),
 			);
-			let mut protocol_state = ProtocolState::new(
-				Box::new(MockNsm),
-				handles,
-				SocketAddress::new_unix("./never.sock"),
-				None,
-			);
+			let mut protocol_state =
+				ProtocolState::new(Box::new(MockNsm), handles, None);
 
 			assert_eq!(
 				inject_key(
@@ -1245,12 +1212,8 @@ mod test {
 				manifest_file.deref().to_string(),
 				"pivot".to_string(),
 			);
-			let mut protocol_state = ProtocolState::new(
-				Box::new(MockNsm),
-				handles,
-				SocketAddress::new_unix("./never.sock"),
-				None,
-			);
+			let mut protocol_state =
+				ProtocolState::new(Box::new(MockNsm), handles, None);
 
 			assert_eq!(
 				inject_key(
@@ -1300,12 +1263,8 @@ mod test {
 				manifest_file.deref().to_string(),
 				"pivot".to_string(),
 			);
-			let mut protocol_state = ProtocolState::new(
-				Box::new(MockNsm),
-				handles,
-				SocketAddress::new_unix("./never.sock"),
-				None,
-			);
+			let mut protocol_state =
+				ProtocolState::new(Box::new(MockNsm), handles, None);
 
 			assert_eq!(
 				inject_key(

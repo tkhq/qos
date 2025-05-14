@@ -1,14 +1,9 @@
 //! CLI for running a host proxy to provide remote connections.
 
-use std::env;
-
 use qos_core::{
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
-	server::SocketServer,
 };
-
-use crate::proxy::Proxy;
 
 /// "cid"
 pub const CID: &str = "cid";
@@ -19,13 +14,13 @@ pub const USOCK: &str = "usock";
 
 /// CLI options for starting up the proxy.
 #[derive(Default, Clone, Debug, PartialEq)]
-struct ProxyOpts {
-	parsed: Parser,
+pub(crate) struct ProxyOpts {
+	pub(crate) parsed: Parser,
 }
 
 impl ProxyOpts {
 	/// Create a new instance of [`Self`] with some defaults.
-	fn new(args: &mut Vec<String>) -> Self {
+	pub(crate) fn new(args: &mut Vec<String>) -> Self {
 		let parsed = OptionsParser::<ProxyParser>::parse(args)
 			.expect("Entered invalid CLI args");
 
@@ -37,7 +32,7 @@ impl ProxyOpts {
 	/// # Panics
 	///
 	/// Panics if the opts are not valid for exactly one of unix or vsock.
-	fn addr(&self) -> SocketAddress {
+	pub(crate) fn addr(&self) -> SocketAddress {
 		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
@@ -57,9 +52,15 @@ impl ProxyOpts {
 
 /// Proxy CLI.
 pub struct CLI;
+
+#[cfg(feature = "proxy")]
 impl CLI {
 	/// Execute the enclave proxy CLI with the environment args.
 	pub fn execute() {
+		use crate::proxy::Proxy;
+		use qos_core::server::SocketServer;
+		use std::env;
+
 		let mut args: Vec<String> = env::args().collect();
 		let opts = ProxyOpts::new(&mut args);
 

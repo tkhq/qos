@@ -125,7 +125,6 @@ mod test {
 
 	use crate::{
 		handles::Handles,
-		io::SocketAddress,
 		protocol::{
 			services::{
 				boot::{
@@ -227,12 +226,7 @@ mod test {
 		handles.put_manifest_envelope(&manifest_envelope).unwrap();
 
 		// 3) Create state with eph key and manifest
-		let mut state = ProtocolState::new(
-			Box::new(MockNsm),
-			handles,
-			SocketAddress::new_unix("./never.sock"),
-			None,
-		);
+		let mut state = ProtocolState::new(Box::new(MockNsm), handles, None);
 		state.transition(ProtocolPhase::WaitingForQuorumShards).unwrap();
 
 		Setup { quorum_pair, eph_pair, threshold, state, approvals }
