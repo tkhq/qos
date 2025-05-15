@@ -6,8 +6,8 @@
 mod stream;
 
 pub use stream::{
-	Listener, SocketAddress, Stream, TimeVal, TimeValLike, VMADDR_FLAG_TO_HOST,
-	VMADDR_NO_FLAGS,
+	Listener, SocketAddress, Stream, TimeVal, TimeValLike, MAX_PAYLOAD_SIZE,
+	VMADDR_FLAG_TO_HOST, VMADDR_NO_FLAGS,
 };
 
 /// QOS I/O error
@@ -31,6 +31,8 @@ pub enum IOError {
 	SendNixError(nix::Error),
 	/// A nix error encountered while calling `recv`.
 	RecvNixError(nix::Error),
+	/// Reading the response size resulted in a size which exceeds the max payload size.
+	OversizedPayload(usize),
 }
 
 impl From<nix::Error> for IOError {
