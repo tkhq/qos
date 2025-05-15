@@ -65,6 +65,17 @@ impl ProxyConnection {
 
 		Ok(ProxyConnection { id: connection_id, ip, tcp_stream })
 	}
+
+	/// Closes the underlying TCP connection (`Shutdown::Both`)
+	pub fn shutdown(&mut self) -> Result<(), QosNetError> {
+		if let Err(e) = self.tcp_stream.shutdown(std::net::Shutdown::Both) {
+			if e.kind() == std::io::ErrorKind::NotConnected {
+				return Ok(());
+			}
+			return Err(QosNetError::from(e));
+		}
+		Ok(())
+	}
 }
 
 impl Read for ProxyConnection {

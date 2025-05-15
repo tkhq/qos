@@ -68,9 +68,11 @@ impl RequestProcessor for Processor {
 				match read_to_end_result {
 					Ok(read_size) => {
 						assert!(read_size > 0);
-						// Close the connection
-						let closed = stream.close();
-						closed.unwrap();
+
+						// Assert the connection isn't closed yet, and close it.
+						assert!(!stream.is_closed());
+						stream.close().expect("unable to close stream");
+						assert!(stream.is_closed());
 					}
 					Err(e) => {
 						// Only EOF errors are expected. This means the

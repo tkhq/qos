@@ -1,4 +1,6 @@
-use std::{process::Command, str};
+use std::os::unix::net::UnixStream;
+use std::time::{Duration, Instant};
+use std::{path::Path, process::Command, str};
 
 use borsh::BorshDeserialize;
 use integration::{PivotRemoteTlsMsg, PIVOT_REMOTE_TLS_PATH, QOS_NET_PATH};
@@ -13,6 +15,31 @@ use qos_test_primitives::ChildWrapper;
 const REMOTE_TLS_TEST_NET_PROXY_SOCKET: &str = "/tmp/remote_tls_test.net.sock";
 const REMOTE_TLS_TEST_ENCLAVE_SOCKET: &str =
 	"/tmp/remote_tls_test.enclave.sock";
+
+/// Waits for socket at `path` until it becomes ready.
+/// If the socket isn't ready after `timeout`, this function panics.
+fn wait_for_socket_ready<P: AsRef<Path>>(path: P, timeout: Duration) {
+	let start = Instant::now();
+	while start.elapsed() < timeout {
+		match UnixStream::connect(&path) {
+			Ok(_) => return, // socket is ready
+			Err(e) => {
+				// Error while connecting. Retry.
+				println!(
+					"[retrying] error while connecting at {}: {}",
+					path.as_ref().display(),
+					e
+				)
+			}
+		}
+		std::thread::sleep(Duration::from_millis(50));
+	}
+	panic!(
+		"Unable to connect to {}: timing out after retrying for {} seconds.",
+		path.as_ref().display(),
+		timeout.as_secs()
+	);
+}
 
 #[test]
 fn fetch_remote_tls_content() {
@@ -40,6 +67,15 @@ fn fetch_remote_tls_content() {
 		path: "/health".to_string(),
 	})
 	.unwrap();
+
+	wait_for_socket_ready(
+		REMOTE_TLS_TEST_NET_PROXY_SOCKET,
+		Duration::from_secs(2),
+	);
+	wait_for_socket_ready(
+		REMOTE_TLS_TEST_ENCLAVE_SOCKET,
+		Duration::from_secs(2),
+	);
 
 	let response = enclave_client.send(&app_request).unwrap();
 	let response_text =
