@@ -228,7 +228,7 @@ impl HostServer {
 			.expect("ProtocolMsg can always serialize. qed.");
 		let enc_status_resp = state.enclave_client.send(&enc_status_req)
 			.map_err(|e|
-				Error(format!("error deserializing status response from enclave, make sure qos_host version match qos_core: {e:?}"))
+				Error(format!("error sending status request to enclave: {e:?}"))
 			)?;
 
 		let status_resp = match ProtocolMsg::try_from_slice(&enc_status_resp) {
