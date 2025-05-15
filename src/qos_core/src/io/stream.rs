@@ -25,6 +25,12 @@ const MAX_RETRY: usize = 25;
 const BACKOFF_MILLISECONDS: u64 = 10;
 const BACKLOG: usize = 128;
 
+const MEGABYTE: usize = 1024 * 1024;
+
+/// Maximum payload size for a single recv / send call. We're being generous with 128MB.
+/// The goal here is to avoid server crashes if the payload size exceeds the available system memory.
+pub const MAX_PAYLOAD_SIZE: usize = 128 * MEGABYTE;
+
 /// Socket address.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SocketAddress {
@@ -224,6 +230,10 @@ impl Stream {
 			}
 		};
 
+		if length > MAX_PAYLOAD_SIZE {
+			return Err(IOError::OversizedPayload(length));
+		}
+
 		// Read the buffer
 		let mut buf = vec![0; length];
 		{
@@ -372,7 +382,9 @@ mod test {
 		os::{fd::AsRawFd, unix::net::UnixListener},
 		path::Path,
 		str::from_utf8,
+		sync::mpsc,
 		thread,
+		time::Duration,
 	};
 
 	use super::*;
@@ -505,5 +517,68 @@ mod test {
 		assert_eq!(data, resp);
 
 		handler.join().unwrap();
+	}
+
+	#[test]
+	fn limit_sized_payload() {
+		// Ensure concurrent tests are not attempting to listen on the same socket
+		let unix_addr =
+			nix::sys::socket::UnixAddr::new("./limit_sized_payload.sock")
+				.unwrap();
+		let addr = SocketAddress::Unix(unix_addr);
+
+		let mut listener = Listener::listen(addr.clone()).unwrap();
+		let handler = std::thread::spawn(move || {
+			if let Some(stream) = listener.next() {
+				let req = stream.recv().unwrap();
+				stream.send(&req.clone()).unwrap();
+			}
+		});
+
+		// Sending a request that is strictly less than the max size should work
+		// (the response will be exactly max size)
+		let client = Stream::connect(&addr, timeval()).unwrap();
+		let req = vec![1u8; MAX_PAYLOAD_SIZE];
+		client.send(&req).unwrap();
+		let resp = client.recv().unwrap();
+		assert_eq!(resp.len(), MAX_PAYLOAD_SIZE);
+		handler.join().unwrap();
+	}
+
+	#[test]
+	fn oversized_payload() {
+		// Ensure concurrent tests are not attempting to listen on the same socket
+		let unix_addr =
+			nix::sys::socket::UnixAddr::new("./oversized_payload.sock")
+				.unwrap();
+		let addr = SocketAddress::Unix(unix_addr);
+		let mut listener = Listener::listen(addr.clone()).unwrap();
+
+		// Sneaky handler: adds one byte to the req, and returns this as a response
+		let _handler = std::thread::spawn(move || {
+			if let Some(stream) = listener.next() {
+				let req = stream.recv().unwrap();
+				stream.send(&[req.clone(), vec![1u8]].concat()).unwrap();
+			}
+		});
+
+		let client = Stream::connect(&addr, timeval()).unwrap();
+
+		// Sending with the limit payload size will fail to receive: our sneaky handler
+		// will add one byte and cause the response to be oversized.
+		let req = vec![1u8; MAX_PAYLOAD_SIZE];
+		client.send(&req).unwrap();
+
+		match client.recv().unwrap_err() {
+			IOError::OversizedPayload(size) => {
+				assert_eq!(size, MAX_PAYLOAD_SIZE + 1);
+			}
+			other => {
+				panic!("test failed: unexpected error variant ({:?})", other);
+			}
+		}
+
+		// N.B: we do not call _handler.join().unwrap() here, because the handler is blocking (indefinitely) on "send"
+		// Once the test exits, Rust/OS checks will pick up the slack and clean up this thread when this test exits.
 	}
 }

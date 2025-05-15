@@ -5,11 +5,8 @@ use qos_nsm::NsmProvider;
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, state::ProtocolState, ProtocolPhase,
 };
+use crate::io::MAX_PAYLOAD_SIZE;
 use crate::{handles::Handles, io::SocketAddress, server};
-
-const MEGABYTE: usize = 1024 * 1024;
-const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
-
 /// Enclave state machine that executes when given a `ProtocolMsg`.
 pub struct Processor {
 	state: ProtocolState,
@@ -37,7 +34,7 @@ impl Processor {
 
 impl server::RequestProcessor for Processor {
 	fn process(&mut self, req_bytes: Vec<u8>) -> Vec<u8> {
-		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
+		if req_bytes.len() > MAX_PAYLOAD_SIZE {
 			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
 				ProtocolError::OversizedPayload,
 			))
