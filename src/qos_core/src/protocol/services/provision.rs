@@ -108,13 +108,17 @@ pub(in crate::protocol) fn provision(
 		return Err(ProtocolError::ReconstructionErrorIncorrectPubKey);
 	}
 
-	state.handles.put_quorum_key(&pair)?;
-
 	// Rotate the ephemeral key so it's safe for apps to use it independently
 	// of boot-related operations, which use the pre-boot ephemeral key as
 	// an encryption target (boot standard flow encrypts quorum key shares to it.)
 	let new_ephemeral_key = P256Pair::generate()?;
 	state.handles.rotate_ephemeral_key(&new_ephemeral_key)?;
+
+	// Write the quorum key to the file system.
+	// Note: it's important to do this _last_, because the enclave will
+	// automatically pivot to running the Pivot App once the file exists.
+	// (see `src/qos_core/src/reaper.rs`: we loop until the quorum key file exists)
+	state.handles.put_quorum_key(&pair)?;
 
 	Ok(true)
 }
