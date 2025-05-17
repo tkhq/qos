@@ -32,6 +32,8 @@ pub const QOS_NET_PATH: &str = "../target/debug/qos_net";
 /// Path to an enclave app that has routes to stress our socket.
 pub const PIVOT_SOCKET_STRESS_PATH: &str =
 	"../target/debug/pivot_socket_stress";
+/// Path to an enclave app that has routes to fetch app proofs.
+pub const PIVOT_PROOF_PATH: &str = "../target/debug/pivot_proof";
 /// Local host IP address.
 pub const LOCAL_HOST: &str = "127.0.0.1";
 /// PCR3 image associated with the preimage in `./mock/pcr3-preimage.txt`.
@@ -59,7 +61,7 @@ pub enum PivotSocketStressMsg {
 	SlowResponse,
 }
 
-/// Request/Response messages for "socket stress" pivot app.
+/// Request/Response messages for the "remote TLS" pivot app.
 #[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
 pub enum PivotRemoteTlsMsg {
 	/// Request a remote host / port to be fetched over the socket.
@@ -74,6 +76,47 @@ pub enum PivotRemoteTlsMsg {
 	/// A successful response to [`Self::RemoteTlsRequest`] with the contents
 	/// of the response.
 	RemoteTlsResponse(String),
+}
+
+/// Request/Response messages for the "proof" pivot app.
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
+pub enum PivotProofMsg {
+	/// Simple request for an addition
+	AdditionRequest {
+		/// First input
+		a: usize,
+		/// Second input to add
+		b: usize,
+	},
+	/// A successful response to [`Self::AdditionRequest`]
+	AdditionResponse {
+		/// The addition result
+		result: usize,
+		/// The addition proof, proving the result
+		proof: AdditionProof,
+	},
+}
+
+/// An addition proof: which contains a signature, a public key, and a payload
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
+pub struct AdditionProof {
+	/// Signature of the ephemeral key over the proof message
+	pub signature: Vec<u8>,
+	/// Ephemeral public key
+	pub public_key: Vec<u8>,
+	/// Proof payload, over which we sign
+	pub payload: AdditionProofPayload,
+}
+
+/// Payload of an addition proof, with the two input integers (a, b) and the result (result)
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
+pub struct AdditionProofPayload {
+	/// First integer in the addition
+	pub a: usize,
+	/// Second integer in the addition
+	pub b: usize,
+	/// Result of the addition
+	pub result: usize,
 }
 
 struct PivotParser;
