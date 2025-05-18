@@ -56,9 +56,17 @@ pub(in crate::protocol) fn inject_key(
 		return Err(ProtocolError::WrongQuorumKey);
 	}
 
-	// 4. Write the Quorum Key to the file system, at which point New Node will
+	// 4. Rotate the ephemeral key so it's safe for apps to use it independently
+	// of boot-related operations, which use the pre-boot ephemeral key as
+	// an encryption target (key-forward boot encrypts the quorum key to it)
+	let new_ephemeral_key = P256Pair::generate()?;
+	state.handles.rotate_ephemeral_key(&new_ephemeral_key)?;
+
+	// 5. Write the Quorum Key to the file system, at which point New Node will
 	// automatically pivot to running the Pivot App.
+	// (see `src/qos_core/src/reaper.rs`: we loop until the quorum key file exists)
 	state.handles.put_quorum_key(&decrypted_quorum_pair)?;
+
 	Ok(())
 }
 
@@ -1106,6 +1114,8 @@ mod test {
 
 	mod inject_key {
 
+		use std::{fs, path::Path};
+
 		use super::*;
 
 		#[test]
@@ -1147,6 +1157,8 @@ mod test {
 				.transition(ProtocolPhase::WaitingForForwardedKey)
 				.unwrap();
 
+			let boot_eph_key = fs::read(&*ephemeral_file).unwrap();
+
 			assert_eq!(
 				inject_key(
 					&mut protocol_state,
@@ -1157,6 +1169,13 @@ mod test {
 
 			// writes the quorum key
 			assert!(protocol_state.handles.quorum_key_exists());
+
+			// Make sure the EK is persisted
+			assert!(Path::new(&*ephemeral_file).exists());
+
+			// Make sure the EK still exists, and ensure rotation happened post injection
+			let new_eph_key = std::fs::read(&*ephemeral_file).unwrap();
+			assert_ne!(new_eph_key, boot_eph_key);
 		}
 
 		#[test]

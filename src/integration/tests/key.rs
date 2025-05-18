@@ -37,6 +37,32 @@ async fn key_fwd_e2e() {
 	let (_enclave_child_wrapper, _host_child_wrapper) =
 		boot_old_enclave(old_host_port);
 
+	// We manually remove the ephemeral key file because if we didn't, we'd get a failure from the
+	// NEW enclave: as it comes up it'd try to write its ephemeral key at `SHARED_EPH_PATH` and fail
+	// to write because the file already exists.
+	// Why does the file already exist? Because the OLD enclave already persisted its ephemeral key
+	// there (and why is this a problem you ask? Well, that's just the semantics of `write_as_read_only`
+	// -- for security reasons, we want to avoid silently/accidentally overriding key material)
+	//
+	// Another question you might ask is: why do we need to share this ephemeral key path at all?
+	// Can't we just give OLD and NEW enclaves their own ephemeral path and be done?
+	// That's a nice thought, but unfortunately we can't quite do that. To perform a key-forward boot,
+	// in normal conditions, the OLD enclave encrypts its quorum key to the NEW enclave's ephemeral
+	// public key. The "transport" mechanism for this public key is the AWS attestation (`public_key` field).
+	// Which means we'd need to produce AWS attestations dynamically. And unfortunately, that's just a pain
+	// in the rear to mock/produce in testing. So here we are.
+	//
+	// The solution we've found is to share the ephemeral key between OLD and NEW enclave AND have
+	// a special case: when `qos_core` is compiled with the `mock` feature, the OLD enclave encrypts its
+	// quorum key to its _own_ ephemeral public key (rather than the AWS attestation `public_key` field.)
+	// See `export_key_internal` for details.
+	//
+	// Because the OLD and NEW enclave share the ephemeral key path, the NEW enclave can trivially decrypt
+	// the encrypted quorum key that is injected, and the integration test works.
+	//
+	// This is obviously a test-only quirk: in a real situation enclaves have their own filesystems..!
+	fs::remove_file(SHARED_EPH_PATH).unwrap();
+
 	// start up new enclave
 	let new_secret_path = "/tmp/key-fwd-e2e/new_secret.secret";
 	let new_pivot_path = "/tmp/key-fwd-e2e/new_pivot.pivot";
