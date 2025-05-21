@@ -15,8 +15,10 @@ pub struct ProxyStream {
 	addr: SocketAddress,
 	/// timeout to create the underlying `Stream`
 	timeout: TimeVal,
+	/// Whether the underlying stream has been closed
+	is_closed: bool,
 	/// Once a connection is established (successful `ConnectByName` or
-	/// ConnectByIp request), this connection ID is set the u32 in
+	/// `ConnectByIp` request), this connection ID is set to the u32 in
 	/// `ConnectResponse`.
 	pub connection_id: u32,
 	/// The remote host this connection points to
@@ -68,6 +70,7 @@ impl ProxyStream {
 						connection_id,
 						remote_ip,
 						remote_hostname: Some(hostname),
+						is_closed: false,
 					})
 				}
 				_ => Err(QosNetError::InvalidMsg),
@@ -106,6 +109,7 @@ impl ProxyStream {
 						connection_id,
 						remote_ip,
 						remote_hostname: None,
+						is_closed: false,
 					})
 				}
 				_ => Err(QosNetError::InvalidMsg),
@@ -116,6 +120,10 @@ impl ProxyStream {
 
 	/// Close the remote connection
 	pub fn close(&mut self) -> Result<(), QosNetError> {
+		if self.is_closed() {
+			return Ok(());
+		}
+
 		let stream: Stream = Stream::connect(&self.addr, self.timeout)?;
 		let req = borsh::to_vec(&ProxyMsg::CloseRequest {
 			connection_id: self.connection_id,
@@ -126,11 +134,20 @@ impl ProxyStream {
 
 		match ProxyMsg::try_from_slice(&resp_bytes) {
 			Ok(resp) => match resp {
-				ProxyMsg::CloseResponse { connection_id: _ } => Ok(()),
+				ProxyMsg::CloseResponse { connection_id: _ } => {
+					self.is_closed = true;
+					Ok(())
+				}
+				ProxyMsg::ProxyError(e) => Err(e),
 				_ => Err(QosNetError::InvalidMsg),
 			},
 			Err(_) => Err(QosNetError::InvalidMsg),
 		}
+	}
+
+	/// Getter function for the internal `is_closed` boolean. Call `.close()` to close the underlying connection.
+	pub fn is_closed(&self) -> bool {
+		self.is_closed
 	}
 }
 
@@ -165,12 +182,6 @@ impl Read for ProxyStream {
 		match ProxyMsg::try_from_slice(&resp_bytes) {
 			Ok(resp) => match resp {
 				ProxyMsg::ReadResponse { connection_id: _, size, data } => {
-					if data.is_empty() {
-						return Err(std::io::Error::new(
-							ErrorKind::Interrupted,
-							"empty Read",
-						));
-					}
 					if data.len() > buf.len() {
 						return Err(std::io::Error::new(
 							ErrorKind::InvalidData,
@@ -186,6 +197,13 @@ impl Read for ProxyStream {
 					for (i, b) in data.iter().enumerate() {
 						buf[i] = *b
 					}
+
+					// A 0-sized read means that the remote server has closed the connection gracefully
+					// If this happens we're clear to consider this stream closed.
+					if size == 0 {
+						self.is_closed = true;
+					}
+
 					Ok(size)
 				}
 				ProxyMsg::ProxyError(e) => Err(std::io::Error::new(
@@ -297,6 +315,16 @@ impl Write for ProxyStream {
 				ErrorKind::InvalidData,
 				"cannot deserialize message",
 			)),
+		}
+	}
+}
+
+/// Implements drop. Clients are expected to call `close()` manually if error handling is needed.
+/// Otherwise this implementation will catch non-closed connections and forcefully close them on drop.
+impl Drop for ProxyStream {
+	fn drop(&mut self) {
+		if !self.is_closed() {
+			self.close().expect("unable to close the connection cleanly")
 		}
 	}
 }

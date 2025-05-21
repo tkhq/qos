@@ -75,10 +75,21 @@ impl Proxy {
 
 	/// Close a connection by its ID
 	pub fn close(&mut self, connection_id: u32) -> ProxyMsg {
-		match self.remove_connection(connection_id) {
+		match self.shutdown_and_remove_connection(connection_id) {
 			Ok(_) => ProxyMsg::CloseResponse { connection_id },
 			Err(e) => ProxyMsg::ProxyError(e),
 		}
+	}
+
+	fn shutdown_and_remove_connection(
+		&mut self,
+		id: u32,
+	) -> Result<(), QosNetError> {
+		let conn = self
+			.get_connection(id)
+			.ok_or(QosNetError::ConnectionIdNotFound(id))?;
+		conn.shutdown()?;
+		self.remove_connection(id)
 	}
 
 	/// Return the number of open remote connections
@@ -156,26 +167,33 @@ impl Proxy {
 			match conn.read(&mut buf) {
 				Ok(0) => {
 					// A zero-sized read indicates a successful/graceful
-					// connection close. So we can safely remove it.
-					match self.remove_connection(connection_id) {
-						Ok(_) => {
-							// Connection was successfully removed / closed
-							ProxyMsg::ReadResponse {
-								connection_id,
-								data: buf,
-								size: 0,
-							}
-						}
-						Err(e) => ProxyMsg::ProxyError(e),
+					// connection close. Close it on our side as well.
+					match self.shutdown_and_remove_connection(connection_id) {
+						Ok(_) => ProxyMsg::ReadResponse {
+							connection_id,
+							data: buf,
+							size: 0,
+						},
+						Err(e) => ProxyMsg::ProxyError(e)
 					}
 				}
 				Ok(size) => {
 					ProxyMsg::ReadResponse { connection_id, data: buf, size }
 				}
-				Err(e) => match self.remove_connection(connection_id) {
+				Err(e) => match self.shutdown_and_remove_connection(connection_id) {
 					Ok(_) => ProxyMsg::ProxyError(e.into()),
-					Err(e) => ProxyMsg::ProxyError(e),
-				},
+					// If we fail to shutdown / remove the connection we have 2 errors to communicate back up: the read error
+					// and the close error. We combine them under a single `IOError`, in the message.
+					Err(close_err) => ProxyMsg::ProxyError(
+						QosNetError::IOError(
+							format!(
+								"unable to read from connection: {}. Warning: unable to cleanly close to underlying connection: {:?}",
+								e,
+								close_err,
+							)
+						)
+					),
+				}
 			}
 		} else {
 			ProxyMsg::ProxyError(QosNetError::ConnectionIdNotFound(
