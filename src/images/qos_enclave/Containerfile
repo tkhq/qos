@@ -1,4 +1,4 @@
-FROM stagex/eif_build:0.2.2@sha256:291653f1ca528af48fd05858749c443300f6b24d2ffefa7f5a3a06c27c774566 AS eif_build
+FROM stagex/eif_build:0.2.2@sha256:9d086a2743f9df4eddf934c7b68c9dee4a7fb131b6465a24237a67f6c359dfb0 AS eif_build
 FROM stagex/gen_initramfs:6.8@sha256:f5b9271cca6003e952cbbb9ef041ffa92ba328894f563d1d77942e6b5cdeac1a AS gen_initramfs
 FROM stagex/linux-nitro:sx2024.03.0@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eaea8866b002b04264 AS linux-nitro
 
