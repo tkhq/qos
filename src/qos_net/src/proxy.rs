@@ -1,5 +1,8 @@
 //! Protocol proxy for our remote QOS net proxy
-use std::io::{Read, Write};
+use std::{
+	collections::HashMap,
+	io::{Read, Write},
+};
 
 use borsh::BorshDeserialize;
 use qos_core::server;
@@ -17,7 +20,8 @@ pub const DEFAULT_MAX_CONNECTION_SIZE: usize = 512;
 
 /// Socket<>TCP proxy to enable remote connections
 pub struct Proxy {
-	connections: Vec<ProxyConnection>,
+	connections: HashMap<u32, ProxyConnection>,
+	next_connection_id: u32,
 	max_connections: usize,
 }
 
@@ -32,37 +36,62 @@ impl Proxy {
 	#[must_use]
 	pub fn new() -> Self {
 		Self {
-			connections: vec![],
+			connections: HashMap::new(),
 			max_connections: DEFAULT_MAX_CONNECTION_SIZE,
+			next_connection_id: 0,
 		}
 	}
 
 	#[must_use]
 	pub fn new_with_max_connections(max_connections: usize) -> Self {
-		Self { connections: vec![], max_connections }
-	}
-
-	fn save_connection(
-		&mut self,
-		connection: ProxyConnection,
-	) -> Result<(), QosNetError> {
-		if self.connections.iter().any(|c| c.id == connection.id) {
-			Err(QosNetError::DuplicateConnectionId(connection.id))
-		} else {
-			if self.connections.len() >= self.max_connections {
-				return Err(QosNetError::TooManyConnections(
-					self.max_connections,
-				));
-			}
-			self.connections.push(connection);
-			Ok(())
+		Self {
+			connections: HashMap::new(),
+			max_connections,
+			next_connection_id: 0,
 		}
 	}
 
+	/// Save the connection in the proxy and assigns a connection ID
+	fn save_connection(
+		&mut self,
+		connection: ProxyConnection,
+	) -> Result<u32, QosNetError> {
+		if self.connections.len() >= self.max_connections {
+			return Err(QosNetError::TooManyConnections(self.max_connections));
+		}
+		let connection_id = self.next_id();
+		if self.connections.contains_key(&connection_id) {
+			// This should never happen because "next_id" auto-increments
+			// Still, out of an abundance of caution, we error out here.
+			return Err(QosNetError::DuplicateConnectionId(connection_id));
+		}
+
+		match self.connections.insert(connection_id, connection) {
+			// Should never, ever happen because we checked above that the connection id was not present before proceeding.
+			// We explicitly handle this case here out of paranoia. If this happens, it means saving this connection
+			// overrode another. This is _very_ concerning.
+			Some(_) => Err(QosNetError::ConnectionOverridden(connection_id)),
+			// Normal case: no value was present before
+			None => Ok(connection_id),
+		}
+	}
+
+	// Simple convenience method to get the next connection ID
+	// This function increments `next_connection_id` and wraps around once at u32::MAX
+	fn next_id(&mut self) -> u32 {
+		// Grab the next available ID
+		let id = self.next_connection_id;
+
+		// Increment the next_connection_id and wrap around if we're at u32::MAX
+		self.next_connection_id = self.next_connection_id.wrapping_add(1);
+
+		id
+	}
+
 	fn remove_connection(&mut self, id: u32) -> Result<(), QosNetError> {
-		match self.connections.iter().position(|c| c.id == id) {
-			Some(i) => {
-				self.connections.remove(i);
+		match self.get_connection(id) {
+			Some(_) => {
+				self.connections.remove(&id);
 				Ok(())
 			}
 			None => Err(QosNetError::ConnectionIdNotFound(id)),
@@ -70,7 +99,7 @@ impl Proxy {
 	}
 
 	fn get_connection(&mut self, id: u32) -> Option<&mut ProxyConnection> {
-		self.connections.iter_mut().find(|c| c.id == id)
+		self.connections.get_mut(&id)
 	}
 
 	/// Close a connection by its ID
@@ -113,10 +142,9 @@ impl Proxy {
 			dns_port,
 		) {
 			Ok(conn) => {
-				let connection_id = conn.id;
 				let remote_ip = conn.ip.clone();
 				match self.save_connection(conn) {
-					Ok(()) => {
+					Ok(connection_id) => {
 						println!(
 							"Connection to {hostname} established and saved as ID {connection_id}"
 						);
@@ -140,10 +168,9 @@ impl Proxy {
 	pub fn connect_by_ip(&mut self, ip: String, port: u16) -> ProxyMsg {
 		match proxy_connection::ProxyConnection::new_from_ip(ip.clone(), port) {
 			Ok(conn) => {
-				let connection_id = conn.id;
 				let remote_ip = conn.ip.clone();
 				match self.save_connection(conn) {
-					Ok(()) => {
+					Ok(connection_id) => {
 						println!("Connection to {ip} established and saved as ID {connection_id}");
 						ProxyMsg::ConnectResponse { connection_id, remote_ip }
 					}
@@ -401,6 +428,48 @@ mod test {
 			connect3,
 			ProxyMsg::ProxyError(QosNetError::TooManyConnections(2))
 		));
+	}
+
+	#[test]
+	fn test_connection_id_wraps_around() {
+		let mut proxy =
+			Proxy::new_with_max_connections(DEFAULT_MAX_CONNECTION_SIZE);
+		proxy.next_connection_id = u32::MAX;
+
+		let connect_max = proxy.connect_by_ip("8.8.8.8".to_string(), 53);
+		assert!(matches!(
+			connect_max,
+			ProxyMsg::ConnectResponse { connection_id: u32::MAX, remote_ip: _ }
+		));
+
+		//
+		let connect_0 = proxy.connect_by_ip("8.8.8.8".to_string(), 53);
+		assert!(matches!(
+			connect_0,
+			ProxyMsg::ConnectResponse { connection_id: 0, remote_ip: _ }
+		));
+	}
+
+	#[test]
+	fn test_connection_id_detects_duplicates() {
+		let mut proxy =
+			Proxy::new_with_max_connections(DEFAULT_MAX_CONNECTION_SIZE);
+
+		let connect = proxy.connect_by_ip("8.8.8.8".to_string(), 53);
+		assert!(matches!(
+			connect,
+			ProxyMsg::ConnectResponse { connection_id: 0, remote_ip: _ }
+		));
+
+		// The "next_connection_id" should move to 1 automatically for us
+		assert_eq!(proxy.next_connection_id, 1);
+		// Now we artificially "roll back" our "next_connection_id" to trigger a DuplicateConnectionId error
+		proxy.next_connection_id = 0;
+
+		assert_eq!(
+			proxy.connect_by_ip("8.8.8.8".to_string(), 53),
+			ProxyMsg::ProxyError(QosNetError::DuplicateConnectionId(0)),
+		);
 	}
 
 	#[test]

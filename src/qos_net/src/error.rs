@@ -23,8 +23,12 @@ pub enum QosNetError {
 	ParseError(String),
 	/// DNS Resolution error
 	DNSResolutionError(String),
-	/// Attempt to save a connection with a duplicate ID
+	/// Attempt to save a connection with a duplicate connection ID
 	DuplicateConnectionId(u32),
+	/// Error that should not happen: saving a connection overrode another
+	/// We take great care to ensure code prior to saving the connection checks
+	/// that it's not present in the connection map (and if it is, we return `DuplicateConnectionId`)
+	ConnectionOverridden(u32),
 	/// Attempt to send a message to a remote connection, but ID isn't found
 	ConnectionIdNotFound(u32),
 	/// Happens when a socket `read` returns too much data for the provided
