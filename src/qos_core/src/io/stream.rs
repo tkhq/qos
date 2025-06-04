@@ -382,9 +382,7 @@ mod test {
 		os::{fd::AsRawFd, unix::net::UnixListener},
 		path::Path,
 		str::from_utf8,
-		sync::mpsc,
 		thread,
-		time::Duration,
 	};
 
 	use super::*;
