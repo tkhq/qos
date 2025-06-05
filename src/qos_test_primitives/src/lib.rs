@@ -27,6 +27,19 @@ impl From<std::process::Child> for ChildWrapper {
 
 impl Drop for ChildWrapper {
 	fn drop(&mut self) {
+		#[cfg(unix)]
+		{
+			use nix::{sys::signal::Signal::SIGINT, unistd::Pid};
+			let pid = Pid::from_raw(self.0.id() as i32);
+			match nix::sys::signal::kill(pid, SIGINT) {
+				Ok(_) => {}
+				Err(err) => eprintln!("error sending signal to child: {}", err),
+			}
+
+			// allow clean exit
+			std::thread::sleep(Duration::from_millis(10));
+		}
+
 		// Kill the process and explicitly ignore the result
 		drop(self.0.kill());
 	}

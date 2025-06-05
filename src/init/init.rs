@@ -1,18 +1,14 @@
-use qos_system::{dmesg, get_local_cid, freopen, mount, reboot};
 use qos_core::{
-    handles::Handles,
-    io::{SocketAddress, VMADDR_NO_FLAGS},
-    reaper::Reaper,
-    EPHEMERAL_KEY_FILE,
-    MANIFEST_FILE,
-    PIVOT_FILE,
-    QUORUM_FILE,
-    SEC_APP_SOCK,
+	handles::Handles,
+	io::{SocketAddress, VMADDR_NO_FLAGS},
+	reaper::Reaper,
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
 };
 use qos_nsm::Nsm;
+use qos_system::{dmesg, freopen, get_local_cid, mount, reboot};
 
 //TODO: Feature flag
-use qos_aws::{init_platform};
+use qos_aws::init_platform;
 
 // Mount common filesystems with conservative permissions
 fn init_rootfs() {
@@ -66,18 +62,46 @@ fn main() {
 	dmesg(format!("CID is {}", cid));
 
 	let handles = Handles::new(
-	     EPHEMERAL_KEY_FILE.to_string(),
-	     QUORUM_FILE.to_string(),
-	     MANIFEST_FILE.to_string(),
-	     PIVOT_FILE.to_string(),
+		EPHEMERAL_KEY_FILE.to_string(),
+		QUORUM_FILE.to_string(),
+		MANIFEST_FILE.to_string(),
+		PIVOT_FILE.to_string(),
 	);
+
+	#[cfg(not(feature = "async"))]
 	Reaper::execute(
-	     &handles,
-	     Box::new(Nsm),
-	     SocketAddress::new_vsock(cid, 3, VMADDR_NO_FLAGS),
-	     SocketAddress::new_unix(SEC_APP_SOCK),
-	     None,
+		&handles,
+		Box::new(Nsm),
+		SocketAddress::new_vsock(cid, 3, VMADDR_NO_FLAGS),
+		SocketAddress::new_unix(SEC_APP_SOCK),
+		None,
 	);
+
+	#[cfg(feature = "async")]
+	{
+		use qos_core::io::AsyncStreamPool;
+
+		const POOL_SIZE: u32 = 20; // TODO: ales - configure, but how?
+
+		let core_pool = AsyncStreamPool::new(
+			(0..POOL_SIZE)
+				.into_iter()
+				.map(|p| SocketAddress::new_vsock(cid, p, VMADDR_NO_FLAGS)),
+		);
+
+		let app_pool =
+			AsyncStreamPool::new((0..POOL_SIZE).into_iter().map(|p| {
+				SocketAddress::new_unix(&format!("{SEC_APP_SOCK}_{p}"))
+			}));
+
+		Reaper::async_execute(
+			&handles,
+			Box::new(Nsm),
+			core_pool,
+			app_pool,
+			None,
+		);
+	}
 
 	reboot();
 }
