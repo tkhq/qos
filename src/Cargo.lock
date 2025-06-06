@@ -2159,6 +2159,7 @@ dependencies = [
  "httparse",
  "qos_core",
  "qos_test_primitives",
+ "rand",
  "rustls",
  "serde",
  "serde_json",

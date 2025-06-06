@@ -12,6 +12,7 @@ use crate::{
 	proxy_connection::{self, ProxyConnection},
 	proxy_msg::ProxyMsg,
 };
+use rand::Rng;
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
@@ -20,8 +21,7 @@ pub const DEFAULT_MAX_CONNECTION_SIZE: usize = 512;
 
 /// Socket<>TCP proxy to enable remote connections
 pub struct Proxy {
-	connections: HashMap<u32, ProxyConnection>,
-	next_connection_id: u32,
+	connections: HashMap<u128, ProxyConnection>,
 	max_connections: usize,
 }
 
@@ -38,24 +38,19 @@ impl Proxy {
 		Self {
 			connections: HashMap::new(),
 			max_connections: DEFAULT_MAX_CONNECTION_SIZE,
-			next_connection_id: 0,
 		}
 	}
 
 	#[must_use]
 	pub fn new_with_max_connections(max_connections: usize) -> Self {
-		Self {
-			connections: HashMap::new(),
-			max_connections,
-			next_connection_id: 0,
-		}
+		Self { connections: HashMap::new(), max_connections }
 	}
 
 	/// Save the connection in the proxy and assigns a connection ID
 	fn save_connection(
 		&mut self,
 		connection: ProxyConnection,
-	) -> Result<u32, QosNetError> {
+	) -> Result<u128, QosNetError> {
 		if self.connections.len() >= self.max_connections {
 			return Err(QosNetError::TooManyConnections(self.max_connections));
 		}
@@ -77,18 +72,12 @@ impl Proxy {
 	}
 
 	// Simple convenience method to get the next connection ID
-	// This function increments `next_connection_id` and wraps around once at u32::MAX
-	fn next_id(&mut self) -> u32 {
-		// Grab the next available ID
-		let id = self.next_connection_id;
-
-		// Increment the next_connection_id and wrap around if we're at u32::MAX
-		self.next_connection_id = self.next_connection_id.wrapping_add(1);
-
-		id
+	// We use a simple strategy here: pick a random u128.
+	fn next_id(&mut self) -> u128 {
+		rand::thread_rng().gen::<u128>()
 	}
 
-	fn remove_connection(&mut self, id: u32) -> Result<(), QosNetError> {
+	fn remove_connection(&mut self, id: u128) -> Result<(), QosNetError> {
 		match self.get_connection(id) {
 			Some(_) => {
 				self.connections.remove(&id);
@@ -98,12 +87,12 @@ impl Proxy {
 		}
 	}
 
-	fn get_connection(&mut self, id: u32) -> Option<&mut ProxyConnection> {
+	fn get_connection(&mut self, id: u128) -> Option<&mut ProxyConnection> {
 		self.connections.get_mut(&id)
 	}
 
 	/// Close a connection by its ID
-	pub fn close(&mut self, connection_id: u32) -> ProxyMsg {
+	pub fn close(&mut self, connection_id: u128) -> ProxyMsg {
 		match self.shutdown_and_remove_connection(connection_id) {
 			Ok(_) => ProxyMsg::CloseResponse { connection_id },
 			Err(e) => ProxyMsg::ProxyError(e),
@@ -112,7 +101,7 @@ impl Proxy {
 
 	fn shutdown_and_remove_connection(
 		&mut self,
-		id: u32,
+		id: u128,
 	) -> Result<(), QosNetError> {
 		let conn = self
 			.get_connection(id)
@@ -188,7 +177,7 @@ impl Proxy {
 	}
 
 	/// Performs a Read on a connection
-	pub fn read(&mut self, connection_id: u32, size: usize) -> ProxyMsg {
+	pub fn read(&mut self, connection_id: u128, size: usize) -> ProxyMsg {
 		if let Some(conn) = self.get_connection(connection_id) {
 			let mut buf: Vec<u8> = vec![0; size];
 			match conn.read(&mut buf) {
@@ -230,7 +219,7 @@ impl Proxy {
 	}
 
 	/// Performs a Write on an existing connection
-	pub fn write(&mut self, connection_id: u32, data: Vec<u8>) -> ProxyMsg {
+	pub fn write(&mut self, connection_id: u128, data: Vec<u8>) -> ProxyMsg {
 		if let Some(conn) = self.get_connection(connection_id) {
 			match conn.write(&data) {
 				Ok(size) => ProxyMsg::WriteResponse { connection_id, size },
@@ -244,7 +233,7 @@ impl Proxy {
 	}
 
 	/// Performs a Flush on an existing TCP connection
-	pub fn flush(&mut self, connection_id: u32) -> ProxyMsg {
+	pub fn flush(&mut self, connection_id: u128) -> ProxyMsg {
 		if let Some(conn) = self.get_connection(connection_id) {
 			match conn.flush() {
 				Ok(_) => ProxyMsg::FlushResponse { connection_id },
@@ -428,48 +417,6 @@ mod test {
 			connect3,
 			ProxyMsg::ProxyError(QosNetError::TooManyConnections(2))
 		));
-	}
-
-	#[test]
-	fn test_connection_id_wraps_around() {
-		let mut proxy =
-			Proxy::new_with_max_connections(DEFAULT_MAX_CONNECTION_SIZE);
-		proxy.next_connection_id = u32::MAX;
-
-		let connect_max = proxy.connect_by_ip("8.8.8.8".to_string(), 53);
-		assert!(matches!(
-			connect_max,
-			ProxyMsg::ConnectResponse { connection_id: u32::MAX, remote_ip: _ }
-		));
-
-		//
-		let connect_0 = proxy.connect_by_ip("8.8.8.8".to_string(), 53);
-		assert!(matches!(
-			connect_0,
-			ProxyMsg::ConnectResponse { connection_id: 0, remote_ip: _ }
-		));
-	}
-
-	#[test]
-	fn test_connection_id_detects_duplicates() {
-		let mut proxy =
-			Proxy::new_with_max_connections(DEFAULT_MAX_CONNECTION_SIZE);
-
-		let connect = proxy.connect_by_ip("8.8.8.8".to_string(), 53);
-		assert!(matches!(
-			connect,
-			ProxyMsg::ConnectResponse { connection_id: 0, remote_ip: _ }
-		));
-
-		// The "next_connection_id" should move to 1 automatically for us
-		assert_eq!(proxy.next_connection_id, 1);
-		// Now we artificially "roll back" our "next_connection_id" to trigger a DuplicateConnectionId error
-		proxy.next_connection_id = 0;
-
-		assert_eq!(
-			proxy.connect_by_ip("8.8.8.8".to_string(), 53),
-			ProxyMsg::ProxyError(QosNetError::DuplicateConnectionId(0)),
-		);
 	}
 
 	#[test]
