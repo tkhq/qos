@@ -20,7 +20,7 @@ pub struct ProxyStream {
 	/// Once a connection is established (successful `ConnectByName` or
 	/// `ConnectByIp` request), this connection ID is set to the u32 in
 	/// `ConnectResponse`.
-	pub connection_id: u32,
+	pub connection_id: u128,
 	/// The remote host this connection points to
 	pub remote_hostname: Option<String>,
 	/// The remote IP this connection points to
@@ -437,7 +437,7 @@ mod test {
 	/// Useful in tests! :)
 	struct LocalStream {
 		proxy: Box<Proxy>,
-		pub connection_id: u32,
+		pub connection_id: u128,
 		pub remote_hostname: Option<String>,
 	}
 

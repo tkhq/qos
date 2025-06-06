@@ -9,14 +9,11 @@ use hickory_resolver::{
 	config::{NameServerConfigGroup, ResolverConfig, ResolverOpts},
 	Resolver,
 };
-use rand::Rng;
 
 use crate::error::QosNetError;
 
 /// Struct representing a TCP connection held on our proxy
 pub struct ProxyConnection {
-	/// Unsigned integer with the connection ID (random positive int)
-	pub id: u32,
 	/// IP address of the remote host
 	pub ip: String,
 	/// TCP stream object
@@ -33,19 +30,10 @@ impl ProxyConnection {
 		dns_port: u16,
 	) -> Result<ProxyConnection, QosNetError> {
 		let ip = resolve_hostname(hostname, dns_resolvers, dns_port)?;
-
-		// Generate a new random u32 to get an ID. We'll use it to name our
-		// socket. This will be our connection ID.
-		let mut rng = rand::thread_rng();
-		let connection_id: u32 = rng.gen::<u32>();
-
 		let tcp_addr = SocketAddr::new(ip, port);
 		let tcp_stream = TcpStream::connect(tcp_addr)?;
-		Ok(ProxyConnection {
-			id: connection_id,
-			ip: ip.to_string(),
-			tcp_stream,
-		})
+
+		Ok(ProxyConnection { ip: ip.to_string(), tcp_stream })
 	}
 
 	/// Create a new `ProxyConnection` from an IP address. This results in a
@@ -54,16 +42,11 @@ impl ProxyConnection {
 		ip: String,
 		port: u16,
 	) -> Result<ProxyConnection, QosNetError> {
-		// Generate a new random u32 to get an ID. We'll use it to name our
-		// socket. This will be our connection ID.
-		let mut rng = rand::thread_rng();
-		let connection_id: u32 = rng.gen::<u32>();
-
 		let ip_addr = ip.parse()?;
 		let tcp_addr = SocketAddr::new(ip_addr, port);
 		let tcp_stream = TcpStream::connect(tcp_addr)?;
 
-		Ok(ProxyConnection { id: connection_id, ip, tcp_stream })
+		Ok(ProxyConnection { ip, tcp_stream })
 	}
 
 	/// Closes the underlying TCP connection (`Shutdown::Both`)
