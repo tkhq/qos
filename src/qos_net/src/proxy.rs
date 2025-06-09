@@ -1,5 +1,8 @@
 //! Protocol proxy for our remote QOS net proxy
-use std::io::{Read, Write};
+use std::{
+	collections::HashMap,
+	io::{Read, Write},
+};
 
 use borsh::BorshDeserialize;
 use qos_core::server;
@@ -9,6 +12,7 @@ use crate::{
 	proxy_connection::{self, ProxyConnection},
 	proxy_msg::ProxyMsg,
 };
+use rand::Rng;
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
@@ -17,7 +21,7 @@ pub const DEFAULT_MAX_CONNECTION_SIZE: usize = 512;
 
 /// Socket<>TCP proxy to enable remote connections
 pub struct Proxy {
-	connections: Vec<ProxyConnection>,
+	connections: HashMap<u128, ProxyConnection>,
 	max_connections: usize,
 }
 
@@ -32,49 +36,63 @@ impl Proxy {
 	#[must_use]
 	pub fn new() -> Self {
 		Self {
-			connections: vec![],
+			connections: HashMap::new(),
 			max_connections: DEFAULT_MAX_CONNECTION_SIZE,
 		}
 	}
 
 	#[must_use]
 	pub fn new_with_max_connections(max_connections: usize) -> Self {
-		Self { connections: vec![], max_connections }
+		Self { connections: HashMap::new(), max_connections }
 	}
 
+	/// Save the connection in the proxy and assigns a connection ID
 	fn save_connection(
 		&mut self,
 		connection: ProxyConnection,
-	) -> Result<(), QosNetError> {
-		if self.connections.iter().any(|c| c.id == connection.id) {
-			Err(QosNetError::DuplicateConnectionId(connection.id))
-		} else {
-			if self.connections.len() >= self.max_connections {
-				return Err(QosNetError::TooManyConnections(
-					self.max_connections,
-				));
-			}
-			self.connections.push(connection);
-			Ok(())
+	) -> Result<u128, QosNetError> {
+		if self.connections.len() >= self.max_connections {
+			return Err(QosNetError::TooManyConnections(self.max_connections));
+		}
+		let connection_id = self.next_id();
+		if self.connections.contains_key(&connection_id) {
+			// This should never happen because "next_id" auto-increments
+			// Still, out of an abundance of caution, we error out here.
+			return Err(QosNetError::DuplicateConnectionId(connection_id));
+		}
+
+		match self.connections.insert(connection_id, connection) {
+			// Should never, ever happen because we checked above that the connection id was not present before proceeding.
+			// We explicitly handle this case here out of paranoia. If this happens, it means saving this connection
+			// overrode another. This is _very_ concerning.
+			Some(_) => Err(QosNetError::ConnectionOverridden(connection_id)),
+			// Normal case: no value was present before
+			None => Ok(connection_id),
 		}
 	}
 
-	fn remove_connection(&mut self, id: u32) -> Result<(), QosNetError> {
-		match self.connections.iter().position(|c| c.id == id) {
-			Some(i) => {
-				self.connections.remove(i);
+	// Simple convenience method to get the next connection ID
+	// We use a simple strategy here: pick a random u128.
+	fn next_id(&mut self) -> u128 {
+		rand::thread_rng().gen::<u128>()
+	}
+
+	fn remove_connection(&mut self, id: u128) -> Result<(), QosNetError> {
+		match self.get_connection(id) {
+			Some(_) => {
+				self.connections.remove(&id);
 				Ok(())
 			}
 			None => Err(QosNetError::ConnectionIdNotFound(id)),
 		}
 	}
 
-	fn get_connection(&mut self, id: u32) -> Option<&mut ProxyConnection> {
-		self.connections.iter_mut().find(|c| c.id == id)
+	fn get_connection(&mut self, id: u128) -> Option<&mut ProxyConnection> {
+		self.connections.get_mut(&id)
 	}
 
 	/// Close a connection by its ID
-	pub fn close(&mut self, connection_id: u32) -> ProxyMsg {
+	pub fn close(&mut self, connection_id: u128) -> ProxyMsg {
 		match self.shutdown_and_remove_connection(connection_id) {
 			Ok(_) => ProxyMsg::CloseResponse { connection_id },
 			Err(e) => ProxyMsg::ProxyError(e),
@@ -83,7 +101,7 @@ impl Proxy {
 
 	fn shutdown_and_remove_connection(
 		&mut self,
-		id: u32,
+		id: u128,
 	) -> Result<(), QosNetError> {
 		let conn = self
 			.get_connection(id)
@@ -113,10 +131,9 @@ impl Proxy {
 			dns_port,
 		) {
 			Ok(conn) => {
-				let connection_id = conn.id;
 				let remote_ip = conn.ip.clone();
 				match self.save_connection(conn) {
-					Ok(()) => {
+					Ok(connection_id) => {
 						println!(
 							"Connection to {hostname} established and saved as ID {connection_id}"
 						);
@@ -140,10 +157,9 @@ impl Proxy {
 	pub fn connect_by_ip(&mut self, ip: String, port: u16) -> ProxyMsg {
 		match proxy_connection::ProxyConnection::new_from_ip(ip.clone(), port) {
 			Ok(conn) => {
-				let connection_id = conn.id;
 				let remote_ip = conn.ip.clone();
 				match self.save_connection(conn) {
-					Ok(()) => {
+					Ok(connection_id) => {
 						println!("Connection to {ip} established and saved as ID {connection_id}");
 						ProxyMsg::ConnectResponse { connection_id, remote_ip }
 					}
@@ -161,7 +177,7 @@ impl Proxy {
 	}
 
 	/// Performs a Read on a connection
-	pub fn read(&mut self, connection_id: u32, size: usize) -> ProxyMsg {
+	pub fn read(&mut self, connection_id: u128, size: usize) -> ProxyMsg {
 		if let Some(conn) = self.get_connection(connection_id) {
 			let mut buf: Vec<u8> = vec![0; size];
 			match conn.read(&mut buf) {
@@ -203,7 +219,7 @@ impl Proxy {
 	}
 
 	/// Performs a Write on an existing connection
-	pub fn write(&mut self, connection_id: u32, data: Vec<u8>) -> ProxyMsg {
+	pub fn write(&mut self, connection_id: u128, data: Vec<u8>) -> ProxyMsg {
 		if let Some(conn) = self.get_connection(connection_id) {
 			match conn.write(&data) {
 				Ok(size) => ProxyMsg::WriteResponse { connection_id, size },
@@ -217,7 +233,7 @@ impl Proxy {
 	}
 
 	/// Performs a Flush on an existing TCP connection
-	pub fn flush(&mut self, connection_id: u32) -> ProxyMsg {
+	pub fn flush(&mut self, connection_id: u128) -> ProxyMsg {
 		if let Some(conn) = self.get_connection(connection_id) {
 			match conn.flush() {
 				Ok(_) => ProxyMsg::FlushResponse { connection_id },
