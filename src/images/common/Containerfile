@@ -1,5 +1,5 @@
 FROM stagex/bash:5.2.21@sha256:cb58f55d268fbe7ef629cda86e3a8af893066e4af7f26ef54748b6ad47bdaa66 AS bash
-FROM stagex/binutils:2.43.1@sha256:30a1bd110273894fe91c3a4a2103894f53eaac43cf12a035008a6982cb0e6908 AS binutils
+FROM stagex/binutils:2.43.1@sha256:eff721a796fdfba8c34e21a487b0e376fb55ca2633524926998f1660fbb810de AS binutils
 FROM stagex/busybox:1.36.1@sha256:3d128909dbc8e7b6c4b8c3c31f4583f01a307907ea179934bb42c4ef056c7efd AS busybox
 FROM stagex/ca-certificates:sx2024.09.0@sha256:33787f1feb634be4232a6dfe77578c1a9b890ad82a2cf18c11dd44507b358803 AS ca-certificates
 FROM stagex/coreutils:9.4@sha256:1955f532d8923b5e17f60635c994bd9577bb3e6bccb5da702a69e79070bae0a9 AS coreutils
