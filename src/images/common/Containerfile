@@ -13,7 +13,7 @@ FROM stagex/libunwind:1.7.2@sha256:290b8d183a467edc55e338471632f2e40859aef92a4ee
 FROM stagex/llvm:18.1.8@sha256:27da8a38ec621317dbafbf1dbdefb07a5b007d1d28ae86393480209652ed3770 AS llvm
 FROM stagex/make:4.4@sha256:ad81793d21d9778421925085c52734fdcca443957ade4f9bb80e4032b88252db AS make
 FROM stagex/musl:1.2.4@sha256:d7f6c365f5724c65cadb2b96d9f594e46132ceb366174c89dbf7554897f2bc53 AS musl
-FROM stagex/openssl:3.0.12@sha256:2c1a9d8fcc6f52cb11a206f380b17d74c1079f04cbb08071a4176648b4df52c1 AS openssl
+FROM stagex/openssl:3.0.12@sha256:8e3eb24b4d21639f7ea204b89211d8bc03a2e1b729fb1123f8d0b3752b4beaa1 AS openssl
 # This is using an old version of pcsc-lite since upgrading to v2.2.3 broke
 # static builds. Once we have confirmed an updated pcsc-lite has fixed this
 # issue, we should upgrade this again.
