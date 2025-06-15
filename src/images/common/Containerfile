@@ -10,7 +10,7 @@ FROM stagex/gcc:13.1.0@sha256:49ea63c81c65f8be25c242b7e64f2758b23effdaafb458b586
 FROM stagex/git:2.9.5@sha256:29a02c423a4b55fa72cf2fce89f3bbabd1defea86d251bb2aea84c056340ab22 AS git
 FROM stagex/grep:3.11@sha256:a41691a8b4347958ab72c67538db3a1d0fc50b8bd7858507e525530fceb54cf4 AS grep
 FROM stagex/libunwind:1.7.2@sha256:290b8d183a467edc55e338471632f2e40859aef92a4eecf12415ca29b9c16e9f AS libunwind
-FROM stagex/llvm:18.1.8@sha256:30517a41af648305afe6398af5b8c527d25545037df9d977018c657ba1b1708f AS llvm
+FROM stagex/llvm:18.1.8@sha256:27da8a38ec621317dbafbf1dbdefb07a5b007d1d28ae86393480209652ed3770 AS llvm
 FROM stagex/make:4.4@sha256:df43f0cf3ac1ad91bf91baefb539e8df42c11b0954a6e2498322a5467deb81e3 AS make
 FROM stagex/musl:1.2.4@sha256:d7f6c365f5724c65cadb2b96d9f594e46132ceb366174c89dbf7554897f2bc53 AS musl
 FROM stagex/openssl:3.0.12@sha256:2c1a9d8fcc6f52cb11a206f380b17d74c1079f04cbb08071a4176648b4df52c1 AS openssl
