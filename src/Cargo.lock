@@ -697,7 +697,7 @@ checksum = "413301934810f597c1d19ca71c8710e99a3f1ba28a0d2ebc01551a2daeea3c5c"
 dependencies = [
  "der 0.6.1",
  "elliptic-curve 0.12.3",
- "rfc6979",
+ "rfc6979 0.3.1",
  "signature 1.6.4",
 ]
 
@@ -709,8 +709,22 @@ checksum = "12844141594ad74185a926d030f3b605f6a903b4e3fec351f3ea338ac5b7637e"
 dependencies = [
  "der 0.6.1",
  "elliptic-curve 0.12.3",
- "rfc6979",
+ "rfc6979 0.3.1",
  "signature 2.0.0",
+]
+
+[[package]]
+name = "ecdsa"
+version = "0.16.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee27f32b5c5292967d2d4a9d7f1e0b0aed2c15daded5a60300e4abb9d8020bca"
+dependencies = [
+ "der 0.7.9",
+ "digest",
+ "elliptic-curve 0.13.8",
+ "rfc6979 0.4.0",
+ "signature 2.0.0",
+ "spki 0.7.3",
 ]
 
 [[package]]
@@ -1825,13 +1839,13 @@ dependencies = [
 
 [[package]]
 name = "p256"
-version = "0.12.0"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49c124b3cbce43bcbac68c58ec181d98ed6cc7e6d0aa7c3ba97b2563410b0e55"
+checksum = "c9863ad85fa8f4460f9c48cb909d38a0d689dba1f6f6988a5e3e0d31071bcd4b"
 dependencies = [
- "ecdsa 0.15.1",
- "elliptic-curve 0.12.3",
- "primeorder",
+ "ecdsa 0.16.9",
+ "elliptic-curve 0.13.8",
+ "primeorder 0.13.6",
  "sha2",
 ]
 
@@ -1854,7 +1868,7 @@ checksum = "630a4a9b2618348ececfae61a4905f564b817063bf2d66cdfc2ced523fe1d2d4"
 dependencies = [
  "ecdsa 0.15.1",
  "elliptic-curve 0.12.3",
- "primeorder",
+ "primeorder 0.12.1",
  "sha2",
 ]
 
@@ -2044,6 +2058,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "primeorder"
+version = "0.13.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "353e1ca18966c16d9deb1c69278edbc5f194139612772bd9537af60ac231e1e6"
+dependencies = [
+ "elliptic-curve 0.13.8",
+]
+
+[[package]]
 name = "proc-macro-crate"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2092,7 +2115,7 @@ dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "lazy_static",
- "p256 0.12.0",
+ "p256 0.13.2",
  "qos_core",
  "qos_crypto",
  "qos_hex",
@@ -2202,7 +2225,7 @@ dependencies = [
  "borsh",
  "hkdf",
  "hmac",
- "p256 0.12.0",
+ "p256 0.13.2",
  "qos_hex",
  "qos_test_primitives",
  "rand_core 0.6.4",
@@ -2344,6 +2367,16 @@ dependencies = [
  "crypto-bigint 0.4.9",
  "hmac",
  "zeroize",
+]
+
+[[package]]
+name = "rfc6979"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8dd2a808d456c4a54e300a23e9f5a67e122c3024119acbfd73e3bf664491cb2"
+dependencies = [
+ "hmac",
+ "subtle",
 ]
 
 [[package]]
