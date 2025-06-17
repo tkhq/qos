@@ -286,9 +286,9 @@ mod test {
 		},
 	};
 
-	#[allow(dead_code)]
 	struct TestArgs {
 		manifest_envelope: ManifestEnvelope,
+		#[cfg(not(feature = "mock"))]
 		members_with_keys: Vec<(P256Pair, QuorumMember)>,
 		att_doc: AttestationDoc,
 		eph_pair: P256Pair,
@@ -392,6 +392,7 @@ mod test {
 
 		TestArgs {
 			manifest_envelope,
+			#[cfg(not(feature = "mock"))]
 			members_with_keys,
 			att_doc,
 			eph_pair,
