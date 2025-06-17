@@ -74,7 +74,7 @@ impl Proxy {
 	// Simple convenience method to get the next connection ID
 	// We use a simple strategy here: pick a random u128.
 	fn next_id(&mut self) -> u128 {
-		rand::thread_rng().gen::<u128>()
+		rand::rng().random::<u128>()
 	}
 
 	fn remove_connection(&mut self, id: u128) -> Result<(), QosNetError> {
