@@ -1,16 +1,16 @@
 //! Contains logic for remote connection establishment: DNS resolution and TCP
 //! connection.
-use std::{
-	io::{Read, Write},
-	net::{AddrParseError, IpAddr, SocketAddr, TcpStream},
-};
-
+use crate::error::QosNetError;
+use hickory_resolver::name_server::TokioConnectionProvider;
 use hickory_resolver::{
 	config::{NameServerConfigGroup, ResolverConfig, ResolverOpts},
 	Resolver,
 };
-
-use crate::error::QosNetError;
+use std::{
+	io::{Read, Write},
+	net::{AddrParseError, IpAddr, SocketAddr, TcpStream},
+};
+use tokio::runtime::Runtime;
 
 /// Struct representing a TCP connection held on our proxy
 pub struct ProxyConnection {
@@ -28,8 +28,14 @@ impl ProxyConnection {
 		port: u16,
 		dns_resolvers: Vec<String>,
 		dns_port: u16,
+		tokio_runtime_context: &Runtime,
 	) -> Result<ProxyConnection, QosNetError> {
-		let ip = resolve_hostname(hostname, dns_resolvers, dns_port)?;
+		let ip = resolve_hostname(
+			hostname,
+			dns_resolvers,
+			dns_port,
+			tokio_runtime_context,
+		)?;
 		let tcp_addr = SocketAddr::new(ip, port);
 		let tcp_stream = TcpStream::connect(tcp_addr)?;
 
@@ -81,6 +87,7 @@ fn resolve_hostname(
 	hostname: String,
 	resolver_addrs: Vec<String>,
 	port: u16,
+	tokio_runtime_context: &Runtime,
 ) -> Result<IpAddr, QosNetError> {
 	let resolver_parsed_addrs = resolver_addrs
 		.iter()
@@ -100,9 +107,32 @@ fn resolve_hostname(
 			true,
 		),
 	);
-	let resolver = Resolver::new(resolver_config, ResolverOpts::default())?;
-	let response =
-		resolver.lookup_ip(hostname.clone()).map_err(QosNetError::from)?;
+
+	let mut resolver_builder = Resolver::builder_with_config(
+		resolver_config,
+		TokioConnectionProvider::default(),
+	);
+	let mut resolver_options = ResolverOpts::default();
+	// this validates DNSSEC in responses if DNSSEC is present
+	// it still allows responses without DNSSEC to succeed, limiting its effectiveness
+	// against on-path MITM attackers, but is preferrable to not checking response validity
+	resolver_options.validate = true;
+
+	// enable case randomization for improved security
+	// see https://developers.google.com/speed/public-dns/docs/security#randomize_case
+	resolver_options.case_randomization = true;
+
+	// set our improved resolver options
+	*resolver_builder.options_mut() = resolver_options;
+
+	let resolver = resolver_builder.build();
+
+	// needed for borrowing in async block
+	let cloned_hostname = hostname.clone();
+	let response = tokio_runtime_context
+		.block_on(async move { resolver.lookup_ip(cloned_hostname).await })
+		.map_err(QosNetError::from)?;
+
 	response.iter().next().ok_or_else(|| {
 		QosNetError::DNSResolutionError(format!(
 			"Empty response when querying for host {hostname}"
@@ -127,13 +157,19 @@ mod test {
 		let host = "api.turnkey.com";
 		let path = "/health";
 
+		// manually set up a Tokio runtime
+		let runtime = Runtime::new().expect("Failed to create tokio runtime");
+
 		let mut remote_connection = ProxyConnection::new_from_name(
 			host.to_string(),
 			443,
 			vec!["8.8.8.8".to_string()],
 			53,
+			&runtime,
 		)
 		.unwrap();
+
+		drop(runtime);
 
 		let root_store =
 			RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.into() };
