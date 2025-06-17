@@ -2,7 +2,7 @@
 use std::net::AddrParseError;
 
 use borsh::{BorshDeserialize, BorshSerialize};
-#[cfg(feature = "proxy")]
+#[cfg(any(feature = "proxy", feature = "async_proxy"))]
 use hickory_resolver::error::ResolveError;
 
 /// Errors related to creating and using proxy connections
@@ -60,7 +60,7 @@ impl From<AddrParseError> for QosNetError {
 	}
 }
 
-#[cfg(feature = "proxy")]
+#[cfg(any(feature = "proxy", feature = "async_proxy"))]
 impl From<ResolveError> for QosNetError {
 	fn from(err: ResolveError) -> Self {
 		let msg = format!("{err:?}");

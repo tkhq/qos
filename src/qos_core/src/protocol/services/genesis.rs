@@ -195,7 +195,7 @@ mod test {
 	use qos_p256::MASTER_SEED_LEN;
 
 	use super::*;
-	use crate::{handles::Handles, io::SocketAddress};
+	use crate::handles::Handles;
 
 	#[test]
 	fn boot_genesis_works() {
@@ -205,12 +205,8 @@ mod test {
 			"MAN".to_string(),
 			"PIV".to_string(),
 		);
-		let mut protocol_state = ProtocolState::new(
-			Box::new(MockNsm),
-			handles.clone(),
-			SocketAddress::new_unix("./never.sock"),
-			None,
-		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
 		let member1_pair = P256Pair::generate().unwrap();
 		let member2_pair = P256Pair::generate().unwrap();
 		let member3_pair = P256Pair::generate().unwrap();
