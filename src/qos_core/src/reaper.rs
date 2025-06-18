@@ -34,7 +34,6 @@ impl Reaper {
 	///
 	/// - If spawning the pivot errors.
 	/// - If waiting for the pivot errors.
-	#[allow(dead_code)]
 	pub fn execute(
 		handles: &Handles,
 		nsm: Box<dyn NsmProvider + Send>,
