@@ -332,7 +332,7 @@ async fn retry_unix_connect(
 				return Ok(stream);
 			}
 			Err(err) => {
-				eprintln!("Error connecting to USOCK: {}", err);
+				eprintln!("Error connecting to USOCK: {err}");
 				if SystemTime::now() > eot {
 					return Err(err);
 				}

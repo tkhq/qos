@@ -140,6 +140,89 @@ pub enum ProtocolMsg {
 	},
 }
 
+impl std::fmt::Display for ProtocolMsg {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::ProtocolErrorResponse(_) => {
+				write!(f, "ProtocolErrorResponse")
+			}
+			Self::StatusRequest => write!(f, "StatusRequest"),
+			Self::StatusResponse(_) => {
+				write!(f, "StatusResponse")
+			}
+			Self::BootStandardRequest { .. } => {
+				write!(f, "BootStandardRequest")
+			}
+			Self::BootStandardResponse { .. } => {
+				write!(f, "BootStandardResponse")
+			}
+			Self::BootGenesisRequest { .. } => {
+				write!(f, "BootGenesisRequest")
+			}
+			Self::BootGenesisResponse { .. } => {
+				write!(f, "BootGenesisResponse")
+			}
+			Self::ProvisionRequest { .. } => {
+				write!(f, "ProvisionRequest")
+			}
+			Self::ProvisionResponse { reconstructed } => {
+				write!(
+					f,
+					"ProvisionResponse{{ reconstructed: {reconstructed} }}"
+				)
+			}
+			Self::ProxyRequest { .. } => {
+				write!(f, "ProxyRequest")
+			}
+			Self::ProxyResponse { .. } => {
+				write!(f, "ProxyResponse")
+			}
+			Self::LiveAttestationDocRequest { .. } => {
+				write!(f, "LiveAttestationDocRequest")
+			}
+			Self::LiveAttestationDocResponse { .. } => {
+				write!(f, "LiveAttestationDocResponse")
+			}
+			Self::BootKeyForwardRequest { .. } => {
+				write!(f, "BootKeyForwardRequest")
+			}
+			Self::BootKeyForwardResponse { nsm_response } => match nsm_response
+			{
+				NsmResponse::Attestation { .. } => write!(
+					f,
+					"BootKeyForwardResponse {{ nsm_response: Attestation }}"
+				),
+				NsmResponse::Error(ecode) => write!(
+					f,
+					"BootKeyForwardResponse {{ nsm_response: Error({ecode:?}) }}"
+				),
+				_ => write!(
+					f,
+					"BootKeyForwardResponse {{ nsm_response: Other }}" // this shouldn't really show up
+				),
+			},
+			Self::ExportKeyRequest { .. } => {
+				write!(f, "ExportKeyRequest")
+			}
+			Self::ExportKeyResponse { .. } => {
+				write!(f, "ExportKeyResponse")
+			}
+			Self::InjectKeyRequest { .. } => {
+				write!(f, "InjectKeyRequest")
+			}
+			Self::InjectKeyResponse { .. } => {
+				write!(f, "InjectKeyResponse")
+			}
+			Self::ManifestEnvelopeRequest { .. } => {
+				write!(f, "ManifestEnvelopeRequest")
+			}
+			Self::ManifestEnvelopeResponse { .. } => {
+				write!(f, "ManifestEnvelopeResponse")
+			}
+		}
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use borsh::BorshDeserialize;
