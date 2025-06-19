@@ -72,6 +72,9 @@ where
 				Err(err) => match err {
 					IOError::StdIoError(err) => {
 						if err.kind() == std::io::ErrorKind::UnexpectedEof {
+							eprintln!(
+								"AsyncServer: unexpected eof, re-accepting"
+							);
 							break; // just re-accept
 						}
 					}

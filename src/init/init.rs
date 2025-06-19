@@ -116,7 +116,8 @@ async fn main() {
 		TimeVal::seconds(5),
 	);
 
-	Reaper::async_execute(&handles, Box::new(Nsm), core_pool, app_pool, None);
+	Reaper::async_execute(&handles, Box::new(Nsm), core_pool, app_pool, None)
+		.await;
 
 	reboot();
 }

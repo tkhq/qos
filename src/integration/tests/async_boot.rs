@@ -7,7 +7,7 @@ use std::{
 
 use borsh::de::BorshDeserialize;
 use integration::{
-	LOCAL_HOST, PCR3_PRE_IMAGE_PATH, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE,
+	LOCAL_HOST, PCR3_PRE_IMAGE_PATH, PIVOT_OK5_PATH, PIVOT_OK5_SUCCESS_FILE,
 	QOS_DIST_DIR,
 };
 use qos_core::protocol::{
@@ -26,12 +26,12 @@ use qos_p256::P256Pair;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]
-async fn standard_boot_e2e() {
-	const PIVOT_HASH_PATH: &str = "/tmp/standard_boot_e2e-pivot-hash.txt";
+async fn async_standard_boot_e2e() {
+	const PIVOT_HASH_PATH: &str = "/tmp/async_standard_boot_e2e-pivot-hash.txt";
 
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/boot-e2e".into();
-	let _: PathWrapper = PIVOT_OK2_SUCCESS_FILE.into();
+	let _: PathWrapper = PIVOT_OK5_SUCCESS_FILE.into();
 	let _: PathWrapper = PIVOT_HASH_PATH.into();
 	fs::create_dir_all(&*tmp).unwrap();
 
@@ -58,7 +58,7 @@ async fn standard_boot_e2e() {
 	let user3 = "user3";
 
 	// -- Create pivot-build-fingerprints.txt
-	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
+	let pivot = fs::read(PIVOT_OK5_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
 	let pivot_hash = qos_hex::encode_to_vec(&mock_pivot_hash);
 	std::fs::write(PIVOT_HASH_PATH, pivot_hash).unwrap();
@@ -252,7 +252,7 @@ async fn standard_boot_e2e() {
 
 	// -- ENCLAVE start enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_core")
+		Command::new("../target/debug/async_qos_core")
 			.args([
 				"--usock",
 				&*usock,
@@ -272,7 +272,7 @@ async fn standard_boot_e2e() {
 
 	// -- HOST start host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_host")
+		Command::new("../target/debug/async_qos_host")
 			.args([
 				"--host-port",
 				&host_port.to_string(),
@@ -311,7 +311,7 @@ async fn standard_boot_e2e() {
 			"--manifest-envelope-path",
 			&manifest_envelope_path,
 			"--pivot-path",
-			PIVOT_OK2_PATH,
+			PIVOT_OK5_PATH,
 			"--host-port",
 			&host_port.to_string(),
 			"--host-ip",
@@ -328,7 +328,7 @@ async fn standard_boot_e2e() {
 
 	// For each user, post a share,
 	// and sanity check the pivot has not yet executed.
-	assert!(!Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
+	assert!(!Path::new(PIVOT_OK5_SUCCESS_FILE).exists());
 	for user in [&user1, &user2] {
 		// Get attestation doc and manifest
 		assert!(Command::new("../target/debug/qos_client")
@@ -449,7 +449,7 @@ async fn standard_boot_e2e() {
 	std::thread::sleep(std::time::Duration::from_secs(2));
 
 	// Check that the pivot executed
-	let contents = std::fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
+	let contents = std::fs::read(PIVOT_OK5_SUCCESS_FILE).unwrap();
 	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
 
 	let enclave_info_url =
@@ -458,5 +458,5 @@ async fn standard_boot_e2e() {
 		ureq::get(&enclave_info_url).call().unwrap().into_json().unwrap();
 	assert_eq!(enclave_info.phase, ProtocolPhase::QuorumKeyProvisioned);
 
-	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
+	fs::remove_file(PIVOT_OK5_SUCCESS_FILE).unwrap();
 }

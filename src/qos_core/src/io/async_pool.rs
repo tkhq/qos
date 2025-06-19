@@ -93,9 +93,10 @@ impl<T> AsyncPool<T> {
 	/// Will wait (async) if all connections are locked until one becomes available
 	async fn get(&self) -> MutexGuard<T> {
 		// TODO: make this into an error
-		if self.handles.is_empty() {
-			panic!("empty handles in AsyncPool. Bad init?");
-		}
+		assert!(
+			!self.handles.is_empty(),
+			"empty handles in AsyncPool. Bad init?"
+		);
 
 		let iter = self.handles.iter().map(|h| {
 			let l = h.lock();
