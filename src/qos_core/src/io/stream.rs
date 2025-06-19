@@ -120,10 +120,13 @@ impl SocketAddress {
 			}
 			Self::Unix(usock) => {
 				format!(
-					"usock path: {:?}",
+					"usock path: {}",
 					usock
 						.path()
 						.unwrap_or(&std::path::PathBuf::from("unknown/error"))
+						.as_os_str()
+						.to_str()
+						.unwrap()
 				)
 			}
 		}

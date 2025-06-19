@@ -113,6 +113,9 @@ impl Reaper {
 
 #[cfg(feature = "async")]
 mod inner {
+	use std::sync::Arc;
+	use tokio::sync::RwLock;
+
 	#[allow(clippy::wildcard_imports)]
 	use super::*;
 	use crate::{
@@ -129,7 +132,7 @@ mod inner {
 		/// - If spawning the pivot errors.
 		/// - If waiting for the pivot errors.
 		#[allow(dead_code)]
-		pub fn async_execute(
+		pub async fn async_execute(
 			handles: &Handles,
 			nsm: Box<dyn NsmProvider + Send>,
 			pool: AsyncStreamPool,
@@ -137,6 +140,9 @@ mod inner {
 			test_only_init_phase_override: Option<ProtocolPhase>,
 		) {
 			let handles2 = handles.clone();
+			let quit = Arc::new(RwLock::new(false));
+			let inner_quit = quit.clone();
+
 			tokio::spawn(async move {
 				// create the state
 				let protocol_state = ProtocolState::new(
@@ -159,12 +165,18 @@ mod inner {
 						for task in tasks {
 							task.abort();
 						}
+						*inner_quit.write().await = true;
 					}
 					Err(err) => panic!("{err}"),
 				}
 			});
 
 			loop {
+				if *quit.read().await == true {
+					eprintln!("quit called by ctrl+c");
+					std::process::exit(1);
+				}
+
 				if handles.quorum_key_exists()
 					&& handles.pivot_exists()
 					&& handles.manifest_envelope_exists()
@@ -174,7 +186,7 @@ mod inner {
 					break;
 				}
 
-				std::thread::sleep(std::time::Duration::from_secs(1));
+				tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 			}
 
 			println!("Reaper::execute about to spawn pivot");
@@ -199,9 +211,10 @@ mod inner {
 
 					// pause to ensure OS has enough time to clean up resources
 					// before restarting
-					std::thread::sleep(std::time::Duration::from_secs(
+					tokio::time::sleep(std::time::Duration::from_secs(
 						REAPER_RESTART_DELAY_IN_SECONDS,
-					));
+					))
+					.await;
 
 					println!("Restarting pivot ...");
 				},
@@ -215,9 +228,10 @@ mod inner {
 				}
 			}
 
-			std::thread::sleep(std::time::Duration::from_secs(
+			tokio::time::sleep(std::time::Duration::from_secs(
 				REAPER_EXIT_DELAY_IN_SECONDS,
-			));
+			))
+			.await;
 			println!("Reaper exiting ... ");
 		}
 	}
