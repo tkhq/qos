@@ -5,7 +5,6 @@ use std::{
 	time::{Duration, SystemTime},
 };
 
-use nix::sys::socket::UnixAddr;
 pub use nix::sys::time::TimeVal;
 
 use tokio::{
@@ -74,16 +73,20 @@ impl AsyncStream {
 	}
 
 	/// Create a new `Stream` from a `SocketAddress` and a timeout and connect using async
+	/// Sets `inner` to the new stream.
 	pub async fn connect(&mut self) -> Result<(), IOError> {
+		let timeout = self.timeout;
+		let addr = self.address()?.clone();
+
 		match self.address()? {
-			SocketAddress::Unix(uaddr) => {
-				let inner = retry_unix_connect(uaddr, self.timeout).await?;
+			SocketAddress::Unix(_uaddr) => {
+				let inner = retry_unix_connect(addr, timeout).await?;
 
 				self.inner = Some(InnerStream::Unix(inner));
 			}
 			#[cfg(feature = "vm")]
-			SocketAddress::Vsock(vaddr) => {
-				let inner = retry_vsock_connect(vaddr, self.timeout).await?;
+			SocketAddress::Vsock(_vaddr) => {
+				let inner = retry_vsock_connect(addr, timeout).await?;
 
 				self.inner = Some(InnerStream::Vsock(inner));
 			}
@@ -92,38 +95,18 @@ impl AsyncStream {
 		Ok(())
 	}
 
-	fn address(&self) -> Result<&SocketAddress, IOError> {
-		self.address.as_ref().ok_or(IOError::ConnectAddressInvalid)
-	}
-
-	fn inner_mut(&mut self) -> Result<&mut InnerStream, IOError> {
-		self.inner.as_mut().ok_or(IOError::DisconnectedStream)
-	}
-
 	/// Reconnects this `AsyncStream` by calling `connect` again on the underlaying socket
 	pub async fn reconnect(&mut self) -> Result<(), IOError> {
 		let timeout = self.timeout;
+		let addr = self.address()?.clone();
 
 		match &mut self.inner_mut()? {
 			InnerStream::Unix(ref mut s) => {
-				let addr = s
-					.peer_addr()?
-					.as_pathname()
-					.ok_or(IOError::ConnectAddressInvalid)?
-					.to_owned();
-				let new_socket = UnixSocket::new_stream()?;
-				let new_stream =
-					tokio::time::timeout(timeout, new_socket.connect(addr))
-						.await??;
-				*s = new_stream;
+				*s = retry_unix_connect(addr, timeout).await?;
 			}
 			#[cfg(feature = "vm")]
 			InnerStream::Vsock(ref mut s) => {
-				let vaddr = s.peer_addr()?;
-				let new_stream =
-					tokio::time::timeout(timeout, VsockStream::connect(vaddr))
-						.await??;
-				*s = new_stream;
+				*s = retry_vsock_connect(addr, timeout).await?;
 			}
 		}
 		Ok(())
@@ -156,6 +139,14 @@ impl AsyncStream {
 
 		self.send(req_buf).await?;
 		self.recv().await
+	}
+
+	fn address(&self) -> Result<&SocketAddress, IOError> {
+		self.address.as_ref().ok_or(IOError::ConnectAddressInvalid)
+	}
+
+	fn inner_mut(&mut self) -> Result<&mut InnerStream, IOError> {
+		self.inner.as_mut().ok_or(IOError::DisconnectedStream)
 	}
 }
 
@@ -323,19 +314,25 @@ impl Drop for AsyncListener {
 
 // raw unix socket connect retry with timeout, 50ms period
 async fn retry_unix_connect(
-	addr: &UnixAddr,
+	addr: SocketAddress,
 	timeout: Duration,
 ) -> Result<UnixStream, std::io::Error> {
 	let sleep_time = Duration::from_millis(50);
 	let eot = SystemTime::now() + timeout;
+	let addr = addr.usock();
 	let path = addr.path().ok_or(IOError::ConnectAddressInvalid)?;
 
 	loop {
 		let socket = UnixSocket::new_stream()?;
 
+		eprintln!("Attempting USOCK connect to: {:?}", addr.path());
 		match tokio::time::timeout(timeout, socket.connect(path)).await? {
-			Ok(stream) => return Ok(stream),
+			Ok(stream) => {
+				eprintln!("Connected to USOCK at: {:?}", addr.path());
+				return Ok(stream);
+			}
 			Err(err) => {
+				eprintln!("Error connecting to USOCK: {}", err);
 				if SystemTime::now() > eot {
 					return Err(err);
 				}
@@ -348,18 +345,23 @@ async fn retry_unix_connect(
 // raw vsock socket connect retry with timeout, 50ms period
 #[cfg(feature = "vm")]
 async fn retry_vsock_connect(
-	addr: &tokio_vsock::VsockAddr,
+	addr: SocketAddress,
 	timeout: Duration,
 ) -> Result<VsockStream, std::io::Error> {
 	let sleep_time = Duration::from_millis(50);
 	let eot = SystemTime::now() + timeout;
+	let addr = addr.vsock();
 
 	loop {
 		eprintln!("Attempting VSOCK connect to: {:?}", addr);
 		match tokio::time::timeout(timeout, VsockStream::connect(*addr)).await?
 		{
-			Ok(stream) => return Ok(stream),
+			Ok(stream) => {
+				eprintln!("Connected to VSOCK at: {:?}", addr);
+				return Ok(stream);
+			}
 			Err(err) => {
+				eprintln!("Error connecting to VSOCK: {}", err);
 				if SystemTime::now() > eot {
 					return Err(err);
 				}
