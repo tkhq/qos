@@ -3,27 +3,23 @@
 use std::{
 	io::{ErrorKind, Read, Write},
 	mem::size_of,
-	os::unix::io::RawFd,
+	os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd},
 };
 
 #[cfg(feature = "vm")]
 use nix::sys::socket::VsockAddr;
-pub use nix::sys::time::{TimeVal, TimeValLike};
-use nix::{
-	sys::socket::{
-		accept, bind, connect, listen, recv, send, shutdown, socket, sockopt,
-		AddressFamily, MsgFlags, SetSockOpt, Shutdown, SockFlag, SockType,
-		SockaddrLike, UnixAddr,
-	},
-	unistd::close,
+use nix::sys::socket::{
+	accept, bind, connect, listen, recv, send, socket, sockopt, AddressFamily,
+	Backlog, MsgFlags, SetSockOpt, SockFlag, SockType, SockaddrLike, UnixAddr,
 };
+pub use nix::sys::time::{TimeVal, TimeValLike};
 
 use super::IOError;
 
 // 25(retries) x 10(milliseconds) = 1/4 a second of retrying
 const MAX_RETRY: usize = 25;
 const BACKOFF_MILLISECONDS: u64 = 10;
-const BACKLOG: usize = 128;
+const BACKLOG: i32 = 128;
 
 const MEGABYTE: usize = 1024 * 1024;
 
@@ -136,7 +132,7 @@ impl SocketAddress {
 
 /// Handle on a stream
 pub struct Stream {
-	fd: RawFd,
+	fd: OwnedFd,
 }
 
 impl Stream {
@@ -149,16 +145,16 @@ impl Stream {
 
 		for _ in 0..MAX_RETRY {
 			let fd = socket_fd(addr)?;
-			let stream = Self { fd };
 
 			// set `SO_RCVTIMEO`
 			let receive_timeout = sockopt::ReceiveTimeout;
-			receive_timeout.set(fd, &timeout)?;
+			receive_timeout.set(&fd.as_fd(), &timeout)?;
 
 			let send_timeout = sockopt::SendTimeout;
-			send_timeout.set(fd, &timeout)?;
+			send_timeout.set(&fd.as_fd(), &timeout)?;
 
-			match connect(stream.fd, &*addr.addr()) {
+			let stream = Self { fd };
+			match connect(stream.fd.as_raw_fd(), &*addr.addr()) {
 				Ok(()) => return Ok(stream),
 				Err(e) => err = IOError::ConnectNixError(e),
 			}
@@ -182,7 +178,7 @@ impl Stream {
 			let mut sent_bytes = 0;
 			while sent_bytes < len_buf.len() {
 				sent_bytes += match send(
-					self.fd,
+					self.fd.as_raw_fd(),
 					&len_buf[sent_bytes..len_buf.len()],
 					MsgFlags::empty(),
 				) {
@@ -197,7 +193,7 @@ impl Stream {
 			let mut sent_bytes = 0;
 			while sent_bytes < len {
 				sent_bytes += match send(
-					self.fd,
+					self.fd.as_raw_fd(),
 					&buf[sent_bytes..len],
 					MsgFlags::empty(),
 				) {
@@ -221,7 +217,7 @@ impl Stream {
 				let mut received_bytes = 0;
 				while received_bytes < len {
 					received_bytes += match recv(
-						self.fd,
+						self.fd.as_raw_fd(),
 						&mut buf[received_bytes..len],
 						MsgFlags::empty(),
 					) {
@@ -258,7 +254,7 @@ impl Stream {
 			let mut received_bytes = 0;
 			while received_bytes < length {
 				received_bytes += match recv(
-					self.fd,
+					self.fd.as_raw_fd(),
 					&mut buf[received_bytes..length],
 					MsgFlags::empty(),
 				) {
@@ -284,7 +280,7 @@ impl Stream {
 
 impl Read for Stream {
 	fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
-		match recv(self.fd, buf, MsgFlags::empty()) {
+		match recv(self.fd.as_raw_fd(), buf, MsgFlags::empty()) {
 			Ok(0) => Err(std::io::Error::new(
 				ErrorKind::ConnectionAborted,
 				"read 0 bytes",
@@ -297,7 +293,7 @@ impl Read for Stream {
 
 impl Write for Stream {
 	fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
-		match send(self.fd, buf, MsgFlags::empty()) {
+		match send(self.fd.as_raw_fd(), buf, MsgFlags::empty()) {
 			Ok(0) => Err(std::io::Error::new(
 				ErrorKind::ConnectionAborted,
 				"wrote 0 bytes",
@@ -313,18 +309,9 @@ impl Write for Stream {
 	}
 }
 
-impl Drop for Stream {
-	fn drop(&mut self) {
-		// Its ok if either of these error - likely means the other end of the
-		// connection has been shutdown
-		let _ = shutdown(self.fd, Shutdown::Both);
-		let _ = close(self.fd);
-	}
-}
-
 /// Abstraction to listen for incoming stream connections.
 pub struct Listener {
-	fd: RawFd,
+	fd: OwnedFd,
 	addr: SocketAddress,
 }
 
@@ -335,16 +322,17 @@ impl Listener {
 		Self::clean(&addr);
 
 		let fd = socket_fd(&addr)?;
-		bind(fd, &*addr.addr())?;
-		listen(fd, BACKLOG)?;
+		bind(fd.as_raw_fd(), &*addr.addr())?;
+		listen(&fd.as_fd(), Backlog::new(BACKLOG)?)?;
 
 		Ok(Self { fd, addr })
 	}
 
+	#[allow(unsafe_code)]
 	fn accept(&self) -> Result<Stream, IOError> {
-		let fd = accept(self.fd)?;
+		let fd = accept(self.fd.as_raw_fd())?;
 
-		Ok(Stream { fd })
+		Ok(Stream { fd: unsafe { OwnedFd::from_raw_fd(fd) } })
 	}
 
 	/// Remove Unix socket if it exists
@@ -370,15 +358,12 @@ impl Iterator for Listener {
 
 impl Drop for Listener {
 	fn drop(&mut self) {
-		// Its ok if either of these error - likely means the other end of the
-		// connection has been shutdown
-		let _ = shutdown(self.fd, Shutdown::Both);
-		let _ = close(self.fd);
+		// OwnedFd::Drop will close the socket, we just need to clear the file
 		Self::clean(&self.addr);
 	}
 }
 
-fn socket_fd(addr: &SocketAddress) -> Result<RawFd, IOError> {
+fn socket_fd(addr: &SocketAddress) -> Result<OwnedFd, IOError> {
 	socket(
 		addr.family(),
 		// Type - sequenced, two way byte stream. (full duplexed).
@@ -397,10 +382,7 @@ fn socket_fd(addr: &SocketAddress) -> Result<RawFd, IOError> {
 mod test {
 
 	use std::{
-		os::{fd::AsRawFd, unix::net::UnixListener},
-		path::Path,
-		str::from_utf8,
-		thread,
+		os::unix::net::UnixListener, path::Path, str::from_utf8, thread,
 	};
 
 	use super::*;
@@ -413,18 +395,18 @@ mod test {
 	// Then it kills itself.
 	pub struct HarakiriPongServer {
 		path: String,
-		fd: Option<i32>,
+		listener: Option<UnixListener>,
 	}
 
 	impl HarakiriPongServer {
 		pub fn new(path: String) -> Self {
-			Self { path, fd: None }
+			Self { path, listener: None }
 		}
 		pub fn start(&mut self) {
 			let listener = UnixListener::bind(&self.path).unwrap();
-			self.fd = Some(listener.as_raw_fd());
 
 			let (mut stream, _peer_addr) = listener.accept().unwrap();
+			self.listener = Some(listener);
 
 			// Read 4 bytes ("PING")
 			let mut buf = [0u8; 4];
@@ -439,11 +421,7 @@ mod test {
 
 	impl Drop for HarakiriPongServer {
 		fn drop(&mut self) {
-			if let Some(fd) = &self.fd {
-				// Cleanup server fd if we have access to one
-				let _ = shutdown(fd.to_owned(), Shutdown::Both);
-				let _ = close(fd.to_owned());
-
+			if let Some(_listener) = &self.listener {
 				let server_socket = Path::new(&self.path);
 				if server_socket.exists() {
 					drop(std::fs::remove_file(server_socket));
