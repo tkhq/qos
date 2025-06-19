@@ -39,7 +39,7 @@ use crate::{
 	HOST_HEALTH, MAX_ENCODED_MSG_LEN, MESSAGE,
 };
 
-/// Resource shared across tasks in the [`HostServer`].
+/// Resource shared across tasks in the `AsyncHostServer`.
 #[derive(Debug)]
 struct AsyncQosHostState {
 	enclave_client: AsyncClient,
@@ -54,7 +54,7 @@ pub struct AsyncHostServer {
 }
 
 impl AsyncHostServer {
-	/// Create a new [`HostServer`]. See [`Self::serve`] for starting the
+	/// Create a new `HostServer`. See `Self::serve` for starting the
 	/// server.
 	#[must_use]
 	pub fn new(
@@ -240,7 +240,6 @@ impl AsyncHostServer {
 	}
 
 	/// Message route handler.
-	#[allow(clippy::unused_async)]
 	async fn message(
 		State(state): State<Arc<AsyncQosHostState>>,
 		encoded_request: Bytes,

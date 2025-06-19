@@ -131,6 +131,26 @@ impl SocketAddress {
 			}
 		}
 	}
+
+	/// Returns the `UnixAddr` if this is a USOCK `SocketAddress`, panics otherwise
+	#[must_use]
+	pub fn usock(&self) -> &UnixAddr {
+		match self {
+			Self::Unix(usock) => usock,
+			#[cfg(feature = "vm")]
+			_ => panic!("invalid socket address requested"),
+		}
+	}
+
+	/// Returns the `UnixAddr` if this is a USOCK `SocketAddress`, panics otherwise
+	#[must_use]
+	#[cfg(feature = "vm")]
+	pub fn vsock(&self) -> &VsockAddr {
+		match self {
+			Self::Vsock(vsock) => vsock,
+			_ => panic!("invalid socket address requested"),
+		}
+	}
 }
 
 /// Handle on a stream
