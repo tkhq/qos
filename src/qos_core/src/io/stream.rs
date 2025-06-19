@@ -115,6 +115,7 @@ impl SocketAddress {
 	}
 
 	/// Shows socket debug info
+	#[must_use]
 	pub fn debug_info(&self) -> String {
 		match self {
 			#[cfg(feature = "vm")]
@@ -123,10 +124,13 @@ impl SocketAddress {
 			}
 			Self::Unix(usock) => {
 				format!(
-					"usock path: {:?}",
+					"usock path: {}",
 					usock
 						.path()
 						.unwrap_or(&std::path::PathBuf::from("unknown/error"))
+						.as_os_str()
+						.to_str()
+						.unwrap_or("unable to procure")
 				)
 			}
 		}
