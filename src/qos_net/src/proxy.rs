@@ -474,10 +474,8 @@ mod test {
 				// the upstream resolver lets us know with SERVFAIL that a DNSSEC check failed
 				assert_eq!(
 					qos_error,
-					QosNetError::DNSResolutionError("ResolveError { kind: Proto(ProtoError { kind: NoRecordsFound \
-					{ query: Query { name: Name(\"sigfail.ippacket.stream.\"), query_type: AAAA, query_class: IN }, \
-					soa: None, ns: None, negative_ttl: None, response_code: ServFail, trusted: true, authorities: \
-					None } }) }".to_string())
+					QosNetError::DNSResolutionError("ResolveError { kind: Proto(ProtoError { kind: Message(\"\
+					could not validate negative response missing SOA\") }) }".to_string())
 				);
 			}
 			_ => {
@@ -499,10 +497,8 @@ mod test {
 				// the upstream resolver lets us know with SERVFAIL that a DNSSEC check failed
 				assert_eq!(
 					qos_error,
-					QosNetError::DNSResolutionError("ResolveError { kind: Proto(ProtoError { kind: NoRecordsFound \
-					{ query: Query { name: Name(\"www.dnssec-failed.org.\"), query_type: AAAA, query_class: IN }, \
-					soa: None, ns: None, negative_ttl: None, response_code: ServFail, trusted: true, authorities: \
-					None } }) }".to_string())
+					QosNetError::DNSResolutionError("ResolveError { kind: Proto(ProtoError { kind: Message(\"\
+					could not validate negative response missing SOA\") }) }".to_string())
 				);
 			}
 			_ => {

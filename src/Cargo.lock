@@ -1152,6 +1152,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8a6fe56c0038198998a6f217ca4e7ef3a5e51f46163bd6dd60b5c71ca6c6502"
 dependencies = [
  "async-trait",
+ "bitflags 2.6.0",
  "cfg-if",
  "data-encoding",
  "enum-as-inner",
@@ -1163,7 +1164,9 @@ dependencies = [
  "once_cell",
  "rand 0.9.1",
  "ring",
+ "rustls-pki-types",
  "thiserror 2.0.12",
+ "time",
  "tinyvec",
  "tokio",
  "tracing",
