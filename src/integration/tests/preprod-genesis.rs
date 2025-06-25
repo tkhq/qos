@@ -47,7 +47,7 @@ async fn preprod_genesis() {
 	let dr_artifacts_path = format!("{}/genesis_dr_artifacts", genesis_dir);
 
 	let preprod_fixture_dev_pub = |user: &str| format!("fixtures/preprod/dev-users/{}.pub", user);
-	let preprod_fixture_dev_secret = |user: &str| format!("fixtures/preprod/dev-users/{}.secret", user);
+	let preprod_fixture_dev_secret = |user: &str| format!("fixtures/preprod/dev-users/{}.secret.keep", user);
 
 	let personal_dir =
 		|user: &str| format!("{}/{}-dir", &*all_personal_dir, user);
