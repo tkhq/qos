@@ -12,12 +12,14 @@ borsh = { version = "1.0", features = [
     "derive",
 ], default-features = false }
 serde = { version = "1", features = ["derive"], default-features = false }
-hickory-resolver = { version = "0.24.1", features = [
-    "tokio-runtime",
+hickory-resolver = { version = "0.25.2", features = [
+    "tokio",       # for async
+    "dnssec-ring", # for DNSSEC
 ], default-features = false, optional = true }
 rand = { version = "0.9.1", features = [
     "thread_rng",
 ], default-features = false, optional = true }
+tokio = { version = "1.38.0", default-features = false }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
