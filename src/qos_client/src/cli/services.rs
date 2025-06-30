@@ -49,7 +49,7 @@ const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 	"DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
 
-#[allow(dead_code)]
+#[cfg(not(feature = "smartcard"))]
 pub(crate) const SMARTCARD_FEAT_DISABLED_MSG: &str =
 	"The \"smartcard\" feature must be enabled to use YubiKey related functionality.";
 
