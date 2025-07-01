@@ -137,16 +137,16 @@ fn boot() -> String {
 	})
 	.ok_or_exit_with_errno(None);
 
-	return get_id_by_name(enclave_name)
-		.or_else(|_| Err("Failed to parse enclave name"))
-		.unwrap();
+	get_id_by_name(enclave_name)
+		.map_err(|_| "Failed to parse enclave name")
+		.unwrap()
 }
 
 fn shutdown(enclave_id: String, sig_num: i32) {
 	println!("Got signal: {}", sig_num);
 	println!("Shutting down Enclave");
 	let mut comm = enclave_proc_connect_to_single(&enclave_id)
-		.or_else(|_| Err("Failed to send command to Enclave"))
+		.map_err(|_| "Failed to send command to Enclave")
 		.unwrap();
 
 	// TODO: Replicate output of old CLI on invalid enclave IDs.
@@ -155,7 +155,7 @@ fn shutdown(enclave_id: String, sig_num: i32) {
 		None,
 		&mut comm,
 	)
-	.or_else(|_| Err("Unable to terminate Enclave"));
+	.map_err(|_| "Unable to terminate Enclave");
 
 	exit(0);
 }
@@ -190,23 +190,23 @@ fn handle_signals() -> c_int {
 	unsafe { sigaddset(&mut mask, SIGINT) };
 	unsafe { sigaddset(&mut mask, SIGTERM) };
 	unsafe { sigprocmask(SIG_BLOCK, &mask, ptr::null_mut()) };
-	let signal = unsafe { sigwaitinfo(&mask, ptr::null_mut()) } as i32;
-	return signal;
+	// return signal
+	(unsafe { sigwaitinfo(&mask, ptr::null_mut()) }) as i32
 }
 
 fn main() {
 	println!("Booting Nitro Enclave:");
 
-	//TODO: Implement ability to allow skipping boot
-	//let allow_skip: _ = std::env::var("ALLOW_SKIP_BOOT")
-	//    .unwrap_or("false".to_string())
-	//    .trim().parse::<F>().unwrap();
-	//boot(allow_skip);
+	// TODO: Implement ability to allow skipping boot
+	// let allow_skip: _ = std::env::var("ALLOW_SKIP_BOOT")
+	//     .unwrap_or("false".to_string())
+	//     .trim().parse::<F>().unwrap();
+	// boot(allow_skip);
 
 	let enclave_id = boot();
 
 	match healthy() {
-		Ok(_) => eprintln!("{}", "Enclave is healthy"),
+		Ok(_) => eprintln!("Enclave is healthy"),
 		Err(e) => eprintln!("Enclave is sad: {}", e),
 	};
 
