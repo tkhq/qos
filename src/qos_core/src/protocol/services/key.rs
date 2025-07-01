@@ -873,7 +873,7 @@ mod test {
 					&manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::QosAttestError("DifferentPcr0".to_string()))
+				Err(ProtocolError::QosAttestError("DifferentPcr0(\"8080808080808080808080808080808080808080808080808080808080808080\", \"0404040404040404040404040404040404040404040404040404040404040404\")".to_string()))
 			);
 		}
 

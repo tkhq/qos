@@ -55,7 +55,7 @@ pub enum AttestError {
 	/// The attestation doc does not contain a pcr0.
 	MissingPcr0,
 	/// The pcr3 in the attestation doc does not match.
-	DifferentPcr0,
+	DifferentPcr0(String, String), // TODO: DEBUG: ales - remove later
 	/// The attestation doc does not have a pcr1.
 	MissingPcr1,
 	/// The attestation doc has a different pcr1.

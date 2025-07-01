@@ -87,15 +87,17 @@ pub fn verify_attestation_doc_against_user_input(
 		return Err(AttestError::UnexpectedAttestationDocNonce);
 	}
 
-	if pcr0
-		!= attestation_doc
-			.pcrs
-			.get(&0)
-			.ok_or(AttestError::MissingPcr0)?
-			.clone()
-			.into_vec()
-	{
-		return Err(AttestError::DifferentPcr0);
+	let doc_pcr0 = attestation_doc
+		.pcrs
+		.get(&0)
+		.ok_or(AttestError::MissingPcr0)?
+		.clone()
+		.into_vec();
+	if pcr0 != doc_pcr0 {
+		return Err(AttestError::DifferentPcr0(
+			qos_hex::encode(pcr0),
+			qos_hex::encode(&doc_pcr0),
+		));
 	}
 
 	// pcr1 matches
@@ -707,7 +709,7 @@ mod test {
 		.unwrap_err();
 
 		match err {
-			AttestError::DifferentPcr0 => (),
+			AttestError::DifferentPcr0(_, _) => (),
 			_ => panic!(),
 		}
 	}

@@ -73,8 +73,6 @@ fn boot() -> String {
 	let memory_mib = std::env::var("MEMORY_MIB").unwrap_or("1024".to_string());
 	let cpu_count = std::env::var("CPU_COUNT").unwrap_or("2".to_string());
 	let debug_mode = std::env::var("DEBUG").unwrap_or("false".to_string());
-	let attach_console =
-		std::env::var("ATTACH_CONSOLE").unwrap_or("false".to_string());
 	let enclave_name =
 		std::env::var("ENCLAVE_NAME").unwrap_or("nitro".to_string());
 	let run_args = RunEnclavesArgs {
@@ -83,7 +81,7 @@ fn boot() -> String {
 		memory_mib: memory_mib.parse::<u64>().unwrap(),
 		cpu_ids: None,
 		debug_mode: debug_mode.parse::<bool>().unwrap(),
-		attach_console: attach_console.parse::<bool>().unwrap(), // TODO: I think we don't want this variable, remove once debug is done
+		attach_console: false,
 		cpu_count: Some(cpu_count.parse::<u32>().unwrap()),
 		enclave_name: Some(enclave_name.clone()),
 	};
