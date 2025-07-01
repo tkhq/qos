@@ -1,26 +1,26 @@
 FROM stagex/bash:5.2.21@sha256:cb58f55d268fbe7ef629cda86e3a8af893066e4af7f26ef54748b6ad47bdaa66 AS bash
-FROM stagex/binutils:2.43.1@sha256:30a1bd110273894fe91c3a4a2103894f53eaac43cf12a035008a6982cb0e6908 AS binutils
-FROM stagex/busybox:1.36.1@sha256:d34bfa56566aa72d605d6cbdc154de8330cf426cfea1bc4ba8013abcac594395 AS busybox
+FROM stagex/binutils:2.43.1@sha256:eff721a796fdfba8c34e21a487b0e376fb55ca2633524926998f1660fbb810de AS binutils
+FROM stagex/busybox:1.36.1@sha256:3d128909dbc8e7b6c4b8c3c31f4583f01a307907ea179934bb42c4ef056c7efd AS busybox
 FROM stagex/ca-certificates:sx2024.09.0@sha256:33787f1feb634be4232a6dfe77578c1a9b890ad82a2cf18c11dd44507b358803 AS ca-certificates
 FROM stagex/coreutils:9.4@sha256:1955f532d8923b5e17f60635c994bd9577bb3e6bccb5da702a69e79070bae0a9 AS coreutils
-FROM stagex/file:5.45@sha256:b43a7f0bd50419a39d91d77a316bb888ed87c94aeb6f9eb11f12efd275ca4ab8 AS file
+FROM stagex/file:5.45@sha256:f1053114ea2ef35dc04bd1d1f1572c3f1b86e3d57dffda99faac9e191bd7ab5d AS file
 FROM stagex/filesystem:sx2024.11.0@sha256:d03195563f548c3ac8f34acf777b7e86f0d0d049a9430d715e5774eb7cc93302 AS filesystem
-FROM stagex/findutils:4.9.0@sha256:d92494daaf08999aac0a277327d240a0149494716707fbce93381df058f693e2 AS findutils
-FROM stagex/gcc:13.1.0@sha256:439bf36289ef036a934129d69dd6b4c196427e4f8e28bc1a3de5b9aab6e062f0 AS gcc
+FROM stagex/findutils:4.9.0@sha256:b13a22a89b8a110edca30576305873bf8688ad2eb151568959c56f7fb3834af5 AS findutils
+FROM stagex/gcc:13.1.0@sha256:49ea63c81c65f8be25c242b7e64f2758b23effdaafb458b5862d0f23ec803075 AS gcc
 FROM stagex/git:2.9.5@sha256:29a02c423a4b55fa72cf2fce89f3bbabd1defea86d251bb2aea84c056340ab22 AS git
-FROM stagex/grep:3.11@sha256:576288125a7ecda969285e5edfaedef479c4bc18cba8230c0502000fdf2586c1 AS grep
-FROM stagex/libunwind:1.7.2@sha256:97ee6068a8e8c9f1c74409f80681069c8051abb31f9559dedf0d0d562d3bfc82 AS libunwind
-FROM stagex/llvm:18.1.8@sha256:30517a41af648305afe6398af5b8c527d25545037df9d977018c657ba1b1708f AS llvm
-FROM stagex/make:4.4@sha256:df43f0cf3ac1ad91bf91baefb539e8df42c11b0954a6e2498322a5467deb81e3 AS make
-FROM stagex/musl:1.2.4@sha256:ad351b875f26294562d21740a3ee51c23609f15e6f9f0310e0994179c4231e1d AS musl
-FROM stagex/openssl:3.0.12@sha256:2c1a9d8fcc6f52cb11a206f380b17d74c1079f04cbb08071a4176648b4df52c1 AS openssl
+FROM stagex/grep:3.11@sha256:a41691a8b4347958ab72c67538db3a1d0fc50b8bd7858507e525530fceb54cf4 AS grep
+FROM stagex/libunwind:1.7.2@sha256:290b8d183a467edc55e338471632f2e40859aef92a4eecf12415ca29b9c16e9f AS libunwind
+FROM stagex/llvm:18.1.8@sha256:27da8a38ec621317dbafbf1dbdefb07a5b007d1d28ae86393480209652ed3770 AS llvm
+FROM stagex/make:4.4@sha256:ad81793d21d9778421925085c52734fdcca443957ade4f9bb80e4032b88252db AS make
+FROM stagex/musl:1.2.4@sha256:d7f6c365f5724c65cadb2b96d9f594e46132ceb366174c89dbf7554897f2bc53 AS musl
+FROM stagex/openssl:3.0.12@sha256:8e3eb24b4d21639f7ea204b89211d8bc03a2e1b729fb1123f8d0b3752b4beaa1 AS openssl
 # This is using an old version of pcsc-lite since upgrading to v2.2.3 broke
 # static builds. Once we have confirmed an updated pcsc-lite has fixed this
 # issue, we should upgrade this again.
 FROM stagex/pcsc-lite:sx2024.03.0@sha256:e720e1795706c7c8c1db14bf730b10521e3ff42e4bed90addc590f7446aac8af AS pcsc-lite
-FROM stagex/pkgconf:1.6.3@sha256:ba7fce4108b721e8bf1a0d993a5f9be9b65eceda8ba073fe7e8ebca2a31b1494 AS pkgconf
+FROM stagex/pkgconf:1.6.3@sha256:05b4ac6b931cd81fe5aff48c5a77bb9ae472e2bfbce3cc7d4698c670712d4409 AS pkgconf
 FROM stagex/rust:1.81.0@sha256:b7c834268a81bfcc473246995c55b47fe18414cc553e3293b6294fde4e579163 AS rust
-FROM stagex/zlib:1.3.1@sha256:96b4100550760026065dac57148d99e20a03d17e5ee20d6b32cbacd61125dbb6 AS zlib
+FROM stagex/zlib:1.3.1@sha256:09d63654e27decb6147f1b23005d539e30db8e53eb2d284e824bcf4d4e7c3c11 AS zlib
 
 FROM scratch AS base
 

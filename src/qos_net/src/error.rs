@@ -3,7 +3,7 @@ use std::net::AddrParseError;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 #[cfg(any(feature = "proxy", feature = "async_proxy"))]
-use hickory_resolver::error::ResolveError;
+use hickory_resolver::ResolveError;
 
 /// Errors related to creating and using proxy connections
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]

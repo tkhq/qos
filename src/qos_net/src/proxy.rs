@@ -13,6 +13,7 @@ use crate::{
 	proxy_msg::ProxyMsg,
 };
 use rand::Rng;
+use tokio::runtime::Runtime;
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
@@ -23,6 +24,7 @@ pub const DEFAULT_MAX_CONNECTION_SIZE: usize = 512;
 pub struct Proxy {
 	connections: HashMap<u128, ProxyConnection>,
 	max_connections: usize,
+	tokio_runtime_context: Runtime,
 }
 
 impl Default for Proxy {
@@ -33,17 +35,28 @@ impl Default for Proxy {
 
 impl Proxy {
 	/// Create a new `Self`.
+	/// # Panics
+	/// Panics if Tokio setup fails
 	#[must_use]
 	pub fn new() -> Self {
 		Self {
 			connections: HashMap::new(),
 			max_connections: DEFAULT_MAX_CONNECTION_SIZE,
+			tokio_runtime_context: Runtime::new()
+				.expect("Failed to create tokio runtime"),
 		}
 	}
 
 	#[must_use]
+	/// # Panics
+	/// Panics if Tokio setup fails
 	pub fn new_with_max_connections(max_connections: usize) -> Self {
-		Self { connections: HashMap::new(), max_connections }
+		Self {
+			connections: HashMap::new(),
+			max_connections,
+			tokio_runtime_context: Runtime::new()
+				.expect("Failed to create tokio runtime"),
+		}
 	}
 
 	/// Save the connection in the proxy and assigns a connection ID
@@ -74,7 +87,7 @@ impl Proxy {
 	// Simple convenience method to get the next connection ID
 	// We use a simple strategy here: pick a random u128.
 	fn next_id(&mut self) -> u128 {
-		rand::thread_rng().gen::<u128>()
+		rand::rng().random::<u128>()
 	}
 
 	fn remove_connection(&mut self, id: u128) -> Result<(), QosNetError> {
@@ -129,6 +142,7 @@ impl Proxy {
 			port,
 			dns_resolvers.clone(),
 			dns_port,
+			&self.tokio_runtime_context,
 		) {
 			Ok(conn) => {
 				let remote_ip = conn.ip.clone();
@@ -437,6 +451,113 @@ mod test {
 			_ => panic!(
 				"test failure: expected ConnectResponse and got: {connect:?}"
 			),
+		}
+	}
+
+	/// Check how the upstream resolver deals with a known-bad DNSSEC protected domain
+	/// It does NOT actively test the security behavior of our local DNSSEC verification
+	#[test]
+	fn test_lookup_domain_bad_dnssec_record() {
+		let mut proxy = Proxy::new();
+		assert_eq!(proxy.num_connections(), 0);
+
+		let connect = proxy.connect_by_name(
+			"sigfail.ippacket.stream".to_string(),
+			443,
+			vec!["8.8.8.8".to_string()],
+			53,
+		);
+
+		assert_eq!(proxy.num_connections(), 0);
+		match connect {
+			ProxyMsg::ProxyError(qos_error) => {
+				// the upstream resolver lets us know with SERVFAIL that a DNSSEC check failed
+				assert_eq!(
+					qos_error,
+					QosNetError::DNSResolutionError("ResolveError { kind: Proto(ProtoError { kind: Message(\"\
+					could not validate negative response missing SOA\") }) }".to_string())
+				);
+			}
+			_ => {
+				panic!("test failure: the resolution should fail: {connect:?}")
+			}
+		}
+
+		// test domain seen in https://bind9.readthedocs.io/en/v9.18.14/dnssec-guide.html
+		let connect = proxy.connect_by_name(
+			"www.dnssec-failed.org".to_string(),
+			443,
+			vec!["8.8.8.8".to_string()],
+			53,
+		);
+
+		assert_eq!(proxy.num_connections(), 0);
+		match connect {
+			ProxyMsg::ProxyError(qos_error) => {
+				// the upstream resolver lets us know with SERVFAIL that a DNSSEC check failed
+				assert_eq!(
+					qos_error,
+					QosNetError::DNSResolutionError("ResolveError { kind: Proto(ProtoError { kind: Message(\"\
+					could not validate negative response missing SOA\") }) }".to_string())
+				);
+			}
+			_ => {
+				panic!("test failure: the resolution should fail: {connect:?}")
+			}
+		}
+	}
+
+	#[test]
+	/// Check how the upstream resolver deals with a known-good DNSSEC protected domain
+	/// It does NOT actively test the security behavior of our local DNSSEC verification
+	fn test_lookup_domain_good_dnssec_record() {
+		let mut proxy = Proxy::new();
+		assert_eq!(proxy.num_connections(), 0);
+
+		let connect = proxy.connect_by_name(
+			"sigok.ippacket.stream".to_string(),
+			443,
+			vec!["8.8.8.8".to_string()],
+			53,
+		);
+
+		assert_eq!(proxy.num_connections(), 1);
+		match connect {
+			ProxyMsg::ConnectResponse { connection_id: _, remote_ip } => {
+				assert_eq!(remote_ip, "195.201.14.36");
+			}
+			_ => {
+				panic!(
+					"test failure: the resolution should succeed: {connect:?}"
+				)
+			}
+		}
+	}
+
+	/// Test that resolving a domain without DNSSEC records still works
+	#[test]
+	fn test_lookup_domain_no_dnssec_successful() {
+		let mut proxy = Proxy::new();
+		assert_eq!(proxy.num_connections(), 0);
+
+		// as of 6/2025, google.com doesn't have DNSSEC records
+		let connect = proxy.connect_by_name(
+			"google.com".to_string(),
+			443,
+			vec!["8.8.8.8".to_string()],
+			53,
+		);
+
+		assert_eq!(proxy.num_connections(), 1);
+		match connect {
+			ProxyMsg::ConnectResponse { connection_id: _, remote_ip: _ } => {
+				// any normal response is OK, we don't expect a specific IP
+			}
+			_ => {
+				panic!(
+					"test failure: the resolution should succeed: {connect:?}"
+				)
+			}
 		}
 	}
 }
