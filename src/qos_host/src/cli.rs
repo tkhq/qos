@@ -20,6 +20,7 @@ const HOST_PORT: &str = "host-port";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const VSOCK_TO_HOST: &str = "vsock-to-host";
 const POOL_SIZE: &str = "pool-size";
+const SOCKET_TIMEOUT: &str = "socket-timeout";
 
 struct HostParser;
 impl GetParserForOptions for HostParser {
@@ -60,6 +61,11 @@ impl GetParserForOptions for HostParser {
 				Token::new(POOL_SIZE, "pool size for USOCK/VSOCK sockets")
 					.takes_value(true)
 					.default_value(qos_core::DEFAULT_POOL_SIZE)
+			)
+			.token(
+				Token::new(SOCKET_TIMEOUT, "maximum time in ms a connect to the USOCK/VSOCK will take")
+					.takes_value(true)
+					.default_value(qos_core::DEFAULT_SOCKET_TIMEOUT)
 			)
 			.token(
 				Token::new(VSOCK_TO_HOST, "whether to add the to-host svm flag to the enclave vsock connection. Valid options are `true` or `false`")
@@ -118,6 +124,13 @@ impl HostOpts {
 	#[cfg(feature = "async")]
 	pub(crate) fn enclave_pool(&self) -> AsyncStreamPool {
 		use qos_core::io::{TimeVal, TimeValLike};
+
+		let default_timeout = &qos_core::DEFAULT_SOCKET_TIMEOUT.to_owned();
+		let timeout_str =
+			self.parsed.single(SOCKET_TIMEOUT).unwrap_or(&default_timeout);
+		let timeout = TimeVal::milliseconds(
+			timeout_str.parse().expect("invalid timeout value"),
+		);
 		let pool_size: u32 = self
 			.parsed
 			.single(POOL_SIZE)
@@ -138,7 +151,7 @@ impl HostOpts {
 					SocketAddress::new_vsock(c, p, self.to_host_flag())
 				});
 
-				AsyncStreamPool::new(addresses, TimeVal::seconds(5))
+				AsyncStreamPool::new(addresses, timeout)
 			}
 			(None, None, Some(u)) => {
 				let addresses = (0..pool_size).map(|i| {
@@ -146,7 +159,7 @@ impl HostOpts {
 					SocketAddress::new_unix(&u)
 				});
 
-				AsyncStreamPool::new(addresses, TimeVal::seconds(5))
+				AsyncStreamPool::new(addresses, timeout)
 			}
 			_ => panic!("Invalid socket opts"),
 		}

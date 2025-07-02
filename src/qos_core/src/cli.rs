@@ -203,7 +203,7 @@ impl CLI {
 
 	/// Execute the enclave server CLI with the environment args using tokio/async
 	#[cfg(feature = "async")]
-	pub async fn async_execute() {
+	pub fn async_execute() {
 		let mut args: Vec<String> = env::args().collect();
 		let opts = EnclaveOpts::new(&mut args);
 
@@ -223,8 +223,7 @@ impl CLI {
 				opts.async_pool(false),
 				opts.async_pool(true),
 				None,
-			)
-			.await;
+			);
 		}
 	}
 }
