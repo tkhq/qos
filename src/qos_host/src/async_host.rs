@@ -92,7 +92,7 @@ impl AsyncHostServer {
 			.layer(DefaultBodyLimit::disable())
 			.with_state(state);
 
-		println!("HostServer listening on {}", self.addr);
+		println!("AsyncHostServer listening on {}", self.addr);
 
 		axum::Server::bind(&self.addr)
 			.serve(app.into_make_service())

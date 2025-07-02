@@ -112,8 +112,7 @@ impl Reaper {
 
 #[cfg(feature = "async")]
 mod inner {
-	use std::sync::Arc;
-	use tokio::sync::RwLock;
+	use std::sync::{Arc, RwLock};
 
 	#[allow(clippy::wildcard_imports)]
 	use super::*;
@@ -124,14 +123,14 @@ mod inner {
 	};
 
 	impl Reaper {
-		/// Run the Reaper in an async way using Tokio runtime.
+		/// Run the Reaper using Tokio inside a thread for server processing.
 		///
 		/// # Panics
 		///
 		/// - If spawning the pivot errors.
 		/// - If waiting for the pivot errors.
 		#[allow(dead_code)]
-		pub async fn async_execute(
+		pub fn async_execute(
 			handles: &Handles,
 			nsm: Box<dyn NsmProvider + Send>,
 			pool: AsyncStreamPool,
@@ -142,36 +141,45 @@ mod inner {
 			let quit = Arc::new(RwLock::new(false));
 			let inner_quit = quit.clone();
 
-			tokio::spawn(async move {
-				// create the state
-				let protocol_state = ProtocolState::new(
-					nsm,
-					handles2,
-					test_only_init_phase_override,
-				);
-				// send a shared version of state and the async pool to each processor
-				let processor = AsyncProcessor::new(
-					protocol_state.shared(),
-					app_pool.shared(),
-				);
-				// listen_all will multiplex the processor accross all sockets
-				let tasks = AsyncSocketServer::listen_all(pool, &processor)
-					.expect("unable to get listen task list");
+			std::thread::spawn(move || {
+				tokio::runtime::Builder::new_current_thread()
+					.enable_all()
+					.build()
+					.unwrap()
+					.block_on(async move {
+						// run the state processor inside a tokio runtime in this thread
+						// create the state
+						let protocol_state = ProtocolState::new(
+							nsm,
+							handles2,
+							test_only_init_phase_override,
+						);
+						// send a shared version of state and the async pool to each processor
+						let processor = AsyncProcessor::new(
+							protocol_state.shared(),
+							app_pool.shared(),
+						);
+						// listen_all will multiplex the processor accross all sockets
+						let tasks =
+							AsyncSocketServer::listen_all(pool, &processor)
+								.expect("unable to get listen task list");
 
-				match tokio::signal::ctrl_c().await {
-					Ok(()) => {
-						eprintln!("handling ctrl+c the tokio way");
-						for task in tasks {
-							task.abort();
+						match tokio::signal::ctrl_c().await {
+							Ok(()) => {
+								eprintln!("handling ctrl+c the tokio way");
+								for task in tasks {
+									task.abort();
+								}
+								*inner_quit.write().unwrap() = true;
+							}
+							Err(err) => panic!("{err}"),
 						}
-						*inner_quit.write().await = true;
-					}
-					Err(err) => panic!("{err}"),
-				}
+					});
 			});
 
 			loop {
-				if *quit.read().await {
+				// helper for integration tests and manual runs aka qos_core binary
+				if *quit.read().unwrap() {
 					eprintln!("quit called by ctrl+c");
 					std::process::exit(1);
 				}
@@ -185,7 +193,9 @@ mod inner {
 					break;
 				}
 
-				tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+				eprintln!("Reaper looping");
+				std::thread::sleep(std::time::Duration::from_secs(1));
+				eprintln!("Reaper done looping");
 			}
 
 			println!("Reaper::execute about to spawn pivot");
@@ -210,10 +220,9 @@ mod inner {
 
 					// pause to ensure OS has enough time to clean up resources
 					// before restarting
-					tokio::time::sleep(std::time::Duration::from_secs(
+					std::thread::sleep(std::time::Duration::from_secs(
 						REAPER_RESTART_DELAY_IN_SECONDS,
-					))
-					.await;
+					));
 
 					println!("Restarting pivot ...");
 				},
@@ -227,10 +236,9 @@ mod inner {
 				}
 			}
 
-			tokio::time::sleep(std::time::Duration::from_secs(
+			std::thread::sleep(std::time::Duration::from_secs(
 				REAPER_EXIT_DELAY_IN_SECONDS,
-			))
-			.await;
+			));
 			println!("Reaper exiting ... ");
 		}
 	}

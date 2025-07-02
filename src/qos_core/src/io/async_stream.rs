@@ -136,7 +136,6 @@ impl AsyncStream {
 		if self.inner.is_none() {
 			self.connect().await?;
 		}
-
 		self.send(req_buf).await?;
 		self.recv().await
 	}
@@ -256,7 +255,7 @@ pub struct AsyncListener {
 impl AsyncListener {
 	/// Bind and listen on the given address.
 	pub(crate) fn listen(addr: &SocketAddress) -> Result<Self, IOError> {
-		let listener = match addr {
+		let listener = match *addr {
 			SocketAddress::Unix(uaddr) => {
 				let path =
 					uaddr.path().ok_or(IOError::ConnectAddressInvalid)?;
@@ -265,8 +264,6 @@ impl AsyncListener {
 			}
 			#[cfg(feature = "vm")]
 			SocketAddress::Vsock(vaddr) => {
-				let vaddr =
-					tokio_vsock::VsockAddr::new(vaddr.cid(), vaddr.port());
 				let inner = InnerListener::Vsock(VsockListener::bind(vaddr)?);
 				Self { inner }
 			}
@@ -326,17 +323,26 @@ async fn retry_unix_connect(
 		let socket = UnixSocket::new_stream()?;
 
 		eprintln!("Attempting USOCK connect to: {:?}", addr.path());
-		match tokio::time::timeout(timeout, socket.connect(path)).await? {
-			Ok(stream) => {
-				eprintln!("Connected to USOCK at: {:?}", addr.path());
-				return Ok(stream);
-			}
-			Err(err) => {
-				eprintln!("Error connecting to USOCK: {err}");
-				if SystemTime::now() > eot {
-					return Err(err);
+		let tr = tokio::time::timeout(timeout, socket.connect(path)).await;
+		match tr {
+			Ok(r) => match r {
+				Ok(stream) => {
+					eprintln!("Connected to USOCK at: {:?}", addr.path());
+					return Ok(stream);
 				}
-				tokio::time::sleep(sleep_time).await;
+				Err(err) => {
+					eprintln!("Error connecting to USOCK: {err}");
+					if SystemTime::now() > eot {
+						return Err(err);
+					}
+					tokio::time::sleep(sleep_time).await;
+				}
+			},
+			Err(err) => {
+				eprintln!(
+					"Connecting to USOCK failed with timeout error: {err}"
+				);
+				return Err(err.into());
 			}
 		}
 	}
@@ -354,18 +360,27 @@ async fn retry_vsock_connect(
 
 	loop {
 		eprintln!("Attempting VSOCK connect to: {:?}", addr);
-		match tokio::time::timeout(timeout, VsockStream::connect(*addr)).await?
-		{
-			Ok(stream) => {
-				eprintln!("Connected to VSOCK at: {:?}", addr);
-				return Ok(stream);
-			}
-			Err(err) => {
-				eprintln!("Error connecting to VSOCK: {}", err);
-				if SystemTime::now() > eot {
-					return Err(err);
+		let tr =
+			tokio::time::timeout(timeout, VsockStream::connect(*addr)).await;
+		match tr {
+			Ok(r) => match r {
+				Ok(stream) => {
+					eprintln!("Connected to VSOCK at: {:?}", addr);
+					return Ok(stream);
 				}
-				tokio::time::sleep(sleep_time).await;
+				Err(err) => {
+					eprintln!("Error connecting to VSOCK: {}", err);
+					if SystemTime::now() > eot {
+						return Err(err);
+					}
+					tokio::time::sleep(sleep_time).await;
+				}
+			},
+			Err(err) => {
+				eprintln!(
+					"Connecting to VSOCK failed with timeout error: {err}"
+				);
+				return Err(err.into());
 			}
 		}
 	}
