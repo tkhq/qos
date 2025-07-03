@@ -13,12 +13,20 @@ pub const PIVOT_OK_SUCCESS_FILE: &str = "./pivot_ok_works";
 pub const PIVOT_OK2_SUCCESS_FILE: &str = "./pivot_ok2_works";
 /// Path to the file `pivot_ok3` writes on success for tests.
 pub const PIVOT_OK3_SUCCESS_FILE: &str = "./pivot_ok3_works";
+/// Path to the file `pivot_ok4` writes on success for tests.
+pub const PIVOT_OK4_SUCCESS_FILE: &str = "./pivot_ok4_works";
+/// Path to the file `pivot_ok5` writes on success for tests.
+pub const PIVOT_OK5_SUCCESS_FILE: &str = "./pivot_ok5_works";
 /// Path to pivot_ok bin for tests.
 pub const PIVOT_OK_PATH: &str = "../target/debug/pivot_ok";
 /// Path to pivot_ok2 bin for tests.
 pub const PIVOT_OK2_PATH: &str = "../target/debug/pivot_ok2";
 /// Path to pivot_ok3 bin for tests.
 pub const PIVOT_OK3_PATH: &str = "../target/debug/pivot_ok3";
+/// Path to pivot_ok4 bin for tests.
+pub const PIVOT_OK4_PATH: &str = "../target/debug/pivot_ok4";
+/// Path to pivot_ok5 bin for tests.
+pub const PIVOT_OK5_PATH: &str = "../target/debug/pivot_ok5";
 /// Path to pivot loop bin for tests.
 pub const PIVOT_LOOP_PATH: &str = "../target/debug/pivot_loop";
 /// Path to pivot_abort bin for tests.
@@ -28,7 +36,12 @@ pub const PIVOT_PANIC_PATH: &str = "../target/debug/pivot_panic";
 /// Path to an enclave app that has routes to test remote connection features.
 pub const PIVOT_REMOTE_TLS_PATH: &str = "../target/debug/pivot_remote_tls";
 /// Path to an enclave app that has routes to test remote connection features.
+pub const PIVOT_ASYNC_REMOTE_TLS_PATH: &str =
+	"../target/debug/pivot_async_remote_tls";
+/// Path to an enclave app that has routes to test remote connection features.
 pub const QOS_NET_PATH: &str = "../target/debug/qos_net";
+/// Path to an enclave app that has routes to test async remote connection features.
+pub const ASYNC_QOS_NET_PATH: &str = "../target/debug/async_qos_net";
 /// Path to an enclave app that has routes to stress our socket.
 pub const PIVOT_SOCKET_STRESS_PATH: &str =
 	"../target/debug/pivot_socket_stress";
