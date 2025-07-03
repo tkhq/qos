@@ -60,7 +60,7 @@ impl GetParserForOptions for HostParser {
 			.token(
 				Token::new(POOL_SIZE, "pool size for USOCK/VSOCK sockets")
 					.takes_value(true)
-					.default_value(qos_core::DEFAULT_POOL_SIZE)
+					.default_value("1") // qos-host should default to 1 only
 			)
 			.token(
 				Token::new(SOCKET_TIMEOUT, "maximum time in ms a connect to the USOCK/VSOCK will take")
