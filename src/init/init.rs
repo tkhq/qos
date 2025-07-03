@@ -99,9 +99,7 @@ async fn main() {
 	);
 
 	let start_port = 3;
-	let default_pool_size = qos_core::DEFAULT_POOL_SIZE
-		.parse()
-		.expect("unable to parse default pool size");
+	let default_pool_size = 2; // 1 for qos-host, 1 for <app>-host, more are added as needed
 	let core_pool = AsyncStreamPool::new(
 		(start_port..start_port + default_pool_size)
 			.into_iter()
