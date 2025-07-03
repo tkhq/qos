@@ -20,9 +20,7 @@ impl AsyncClient {
 	/// timeout.
 	pub async fn call(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
 		// TODO: ales - remove later, debug reasons
-		eprintln!("AsyncClient::call - Attempting to claim pool read lock");
 		let pool = self.pool.read().await;
-		eprintln!("AsyncClient::call - Attempting to claim pool stream");
 		let mut stream = pool.get().await;
 		eprintln!("AsyncClient::call - Stream aquired");
 
