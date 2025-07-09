@@ -7,7 +7,10 @@ use tokio::sync::Mutex;
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, state::ProtocolState, ProtocolPhase,
 };
-use crate::{async_server::AsyncRequestProcessor, io::SharedAsyncStreamPool};
+use crate::{
+	async_server::AsyncRequestProcessor,
+	io::{IOError, SharedAsyncStreamPool},
+};
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
@@ -43,6 +46,11 @@ impl AsyncProcessor {
 	async fn get_phase(&self) -> ProtocolPhase {
 		self.state.lock().await.get_phase()
 	}
+
+	/// Expands the app pool to given pool size
+	pub async fn expand_to(&mut self, pool_size: u32) -> Result<(), IOError> {
+		self.app_pool.write().await.expand_to(pool_size)
+	}
 }
 
 impl AsyncRequestProcessor for AsyncProcessor {
@@ -62,39 +70,35 @@ impl AsyncRequestProcessor for AsyncProcessor {
 		};
 
 		// handle Proxy outside of the state
-		match msg_req {
-			ProtocolMsg::ProxyRequest { data } => {
-				let phase = self.get_phase().await;
+		if let ProtocolMsg::ProxyRequest { data } = msg_req {
+			let phase = self.get_phase().await;
 
-				if phase != ProtocolPhase::QuorumKeyProvisioned {
-					let err = ProtocolError::NoMatchingRoute(phase);
-					return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
-						err,
-					))
+			if phase != ProtocolPhase::QuorumKeyProvisioned {
+				let err = ProtocolError::NoMatchingRoute(phase);
+				return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
 					.expect("ProtocolMsg can always be serialized. qed.");
-				}
-
-				let result = self
-					.app_pool
-					.read()
-					.await
-					.get()
-					.await
-					.call(&data)
-					.await
-					.map(|data| ProtocolMsg::ProxyResponse { data })
-					.map_err(|_e| {
-						ProtocolMsg::ProtocolErrorResponse(
-							ProtocolError::IOError,
-						)
-					});
-
-				match result {
-					Ok(msg_resp) | Err(msg_resp) => borsh::to_vec(&msg_resp)
-						.expect("ProtocolMsg can always be serialized. qed."),
-				}
 			}
-			_ => self.state.lock().await.handle_msg(&msg_req),
+
+			let result = self
+				.app_pool
+				.read()
+				.await
+				.get()
+				.await
+				.call(&data)
+				.await
+				.map(|data| ProtocolMsg::ProxyResponse { data })
+				.map_err(|_e| {
+					ProtocolMsg::ProtocolErrorResponse(ProtocolError::IOError)
+				});
+
+			match result {
+				Ok(msg_resp) | Err(msg_resp) => borsh::to_vec(&msg_resp)
+					.expect("ProtocolMsg can always be serialized. qed."),
+			}
+		} else {
+			// handle all the others here
+			self.state.lock().await.handle_msg(&msg_req)
 		}
 	}
 }

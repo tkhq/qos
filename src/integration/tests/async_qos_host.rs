@@ -3,17 +3,17 @@ use std::{process::Command, time::Duration};
 use integration::PIVOT_OK_PATH;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
-const TEST_ENCLAVE_SOCKET: &str = "/tmp/async_qos_host_test.enclave.sock";
-const POOL_SIZE: &str = "1";
+const TEST_ENCLAVE_SOCKET: &str = "/tmp/async_qos_host_test/enclave.sock";
 
 #[tokio::test]
 async fn connects_and_gets_info() {
+	// prep sock pool dir
+	std::fs::create_dir_all("/tmp/async_qos_host_test").unwrap();
+
 	let _qos_host: ChildWrapper =
 		Command::new("../target/debug/async_qos_host")
 			.arg("--usock")
 			.arg(TEST_ENCLAVE_SOCKET)
-			.arg("--pool-size")
-			.arg(POOL_SIZE)
 			.arg("--host-ip")
 			.arg("127.0.0.1")
 			.arg("--host-port")
@@ -32,7 +32,7 @@ async fn connects_and_gets_info() {
 	let enclave_socket = format!("{TEST_ENCLAVE_SOCKET}_0"); // manually pick the 1st one
 	let secret_path: PathWrapper = "./async_qos_host_test.secret".into();
 	// let eph_path = "reaper_works.eph.key";
-	let manifest_path: PathWrapper = "async_qos_host_test..manifest".into();
+	let manifest_path: PathWrapper = "async_qos_host_test.manifest".into();
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(std::fs::remove_file(&*secret_path));

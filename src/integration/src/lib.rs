@@ -57,6 +57,7 @@ pub const QOS_DIST_DIR: &str = "./mock/dist";
 pub const PCR3_PRE_IMAGE_PATH: &str = "./mock/namespaces/pcr3-preimage.txt";
 
 const MSG: &str = "msg";
+const POOL_SIZE: &str = "pool-size";
 
 /// Request/Response messages for "socket stress" pivot app.
 #[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
@@ -135,9 +136,17 @@ pub struct AdditionProofPayload {
 struct PivotParser;
 impl GetParserForOptions for PivotParser {
 	fn parser() -> Parser {
-		Parser::new().token(
-			Token::new(MSG, "A msg to write").takes_value(true).required(true),
-		)
+		Parser::new()
+			.token(
+				Token::new(MSG, "A msg to write")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(POOL_SIZE, "App pool size")
+					.takes_value(true)
+					.required(false),
+			)
 	}
 }
 

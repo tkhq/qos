@@ -19,7 +19,6 @@ const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const VSOCK_TO_HOST: &str = "vsock-to-host";
-const POOL_SIZE: &str = "pool-size";
 const SOCKET_TIMEOUT: &str = "socket-timeout";
 
 struct HostParser;
@@ -56,11 +55,6 @@ impl GetParserForOptions for HostParser {
 			.token(
 				Token::new(ENDPOINT_BASE_PATH, "base path for all endpoints. e.g. <BASE>/enclave-health")
 					.takes_value(true)
-			)
-			.token(
-				Token::new(POOL_SIZE, "pool size for USOCK/VSOCK sockets")
-					.takes_value(true)
-					.default_value("1") // qos-host should default to 1 only
 			)
 			.token(
 				Token::new(SOCKET_TIMEOUT, "maximum time in ms a connect to the USOCK/VSOCK will take")
@@ -122,21 +116,17 @@ impl HostOpts {
 	/// Create a new `AsyncPool` of `AsyncStream` using the list of `SocketAddress` for the enclave server and
 	/// return the new `AsyncPool`.
 	#[cfg(feature = "async")]
-	pub(crate) fn enclave_pool(&self) -> AsyncStreamPool {
+	pub(crate) fn enclave_pool(
+		&self,
+	) -> Result<AsyncStreamPool, qos_core::io::IOError> {
 		use qos_core::io::{TimeVal, TimeValLike};
 
 		let default_timeout = &qos_core::DEFAULT_SOCKET_TIMEOUT.to_owned();
 		let timeout_str =
-			self.parsed.single(SOCKET_TIMEOUT).unwrap_or(&default_timeout);
+			self.parsed.single(SOCKET_TIMEOUT).unwrap_or(default_timeout);
 		let timeout = TimeVal::milliseconds(
 			timeout_str.parse().expect("invalid timeout value"),
 		);
-		let pool_size: u32 = self
-			.parsed
-			.single(POOL_SIZE)
-			.expect("invalid pool options")
-			.parse()
-			.expect("invalid pool_size specified");
 		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
@@ -144,22 +134,22 @@ impl HostOpts {
 		) {
 			#[cfg(feature = "vm")]
 			(Some(c), Some(p), None) => {
-				let c = c.parse::<u32>().unwrap();
-				let start_port = p.parse::<u32>().unwrap();
+				let c = c.parse().map_err(|_| {
+					qos_core::io::IOError::ConnectAddressInvalid
+				})?;
+				let p = p.parse().map_err(|_| {
+					qos_core::io::IOError::ConnectAddressInvalid
+				})?;
 
-				let addresses = (start_port..start_port + pool_size).map(|p| {
-					SocketAddress::new_vsock(c, p, self.to_host_flag())
-				});
+				let address =
+					SocketAddress::new_vsock(c, p, self.to_host_flag());
 
-				AsyncStreamPool::new(addresses, timeout)
+				AsyncStreamPool::new(address, timeout, 1) // qos_host needs only 1
 			}
 			(None, None, Some(u)) => {
-				let addresses = (0..pool_size).map(|i| {
-					let u = format!("{u}_{i}"); // add _X suffix for pooling
-					SocketAddress::new_unix(&u)
-				});
+				let address = SocketAddress::new_unix(u);
 
-				AsyncStreamPool::new(addresses, timeout)
+				AsyncStreamPool::new(address, timeout, 1)
 			}
 			_ => panic!("Invalid socket opts"),
 		}
@@ -226,6 +216,8 @@ impl HostOpts {
 pub struct CLI;
 impl CLI {
 	/// Execute the command line interface.
+	/// # Panics
+	/// If pool creation fails
 	pub async fn execute() {
 		let mut args: Vec<String> = env::args().collect();
 		let options = HostOpts::new(&mut args);
@@ -246,7 +238,10 @@ impl CLI {
 
 			#[cfg(feature = "async")]
 			crate::async_host::AsyncHostServer::new(
-				options.enclave_pool().shared(),
+				options
+					.enclave_pool()
+					.expect("unable to create enclave pool")
+					.shared(),
 				options.host_addr(),
 				options.base_path(),
 			)

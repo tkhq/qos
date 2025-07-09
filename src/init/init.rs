@@ -98,21 +98,20 @@ async fn main() {
 		PIVOT_FILE.to_string(),
 	);
 
-	let start_port = 3;
-	let default_pool_size = 21; // 1 for qos-host, 20 for <app>-host, more are added as needed TODO: make the add logic dynamic
+	let start_port = 3; // used for qos-host only! others follow 4+ for the <app>-host
 	let core_pool = AsyncStreamPool::new(
-		(start_port..start_port + default_pool_size)
-			.into_iter()
-			.map(|p| SocketAddress::new_vsock(cid, p, VMADDR_NO_FLAGS)),
+		SocketAddress::new_vsock(cid, start_port, VMADDR_NO_FLAGS),
 		TimeVal::seconds(0),
-	);
+		1, // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)
+	)
+	.expect("unable to create core pool");
 
 	let app_pool = AsyncStreamPool::new(
-		(0..default_pool_size)
-			.into_iter()
-			.map(|p| SocketAddress::new_unix(&format!("{SEC_APP_SOCK}_{p}"))),
+		SocketAddress::new_unix(SEC_APP_SOCK),
 		TimeVal::seconds(5),
-	);
+		1, // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)
+	)
+	.expect("unable to create app pool");
 
 	Reaper::async_execute(&handles, Box::new(Nsm), core_pool, app_pool, None);
 

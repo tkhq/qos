@@ -112,7 +112,10 @@ impl Reaper {
 
 #[cfg(feature = "async")]
 mod inner {
-	use std::sync::{Arc, RwLock};
+	use std::{
+		sync::{Arc, RwLock},
+		time::Duration,
+	};
 
 	#[allow(clippy::wildcard_imports)]
 	use super::*;
@@ -122,6 +125,17 @@ mod inner {
 		protocol::{async_processor::AsyncProcessor, ProtocolState},
 	};
 
+	// basic helper for x-thread comms in Reaper
+	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+	enum InterState {
+		// We're booting, no pivot yet
+		Booting,
+		// We've booted and pivot is ready
+		PivotReady,
+		// We're quitting (ctrl+c for tests and such)
+		Quitting,
+	}
+
 	impl Reaper {
 		/// Run the Reaper using Tokio inside a thread for server processing.
 		///
@@ -130,6 +144,7 @@ mod inner {
 		/// - If spawning the pivot errors.
 		/// - If waiting for the pivot errors.
 		#[allow(dead_code)]
+		#[allow(clippy::too_many_lines)]
 		pub fn async_execute(
 			handles: &Handles,
 			nsm: Box<dyn NsmProvider + Send>,
@@ -138,8 +153,8 @@ mod inner {
 			test_only_init_phase_override: Option<ProtocolPhase>,
 		) {
 			let handles2 = handles.clone();
-			let quit = Arc::new(RwLock::new(false));
-			let inner_quit = quit.clone();
+			let inter_state = Arc::new(RwLock::new(InterState::Booting));
+			let server_state = inter_state.clone();
 
 			std::thread::spawn(move || {
 				tokio::runtime::Builder::new_current_thread()
@@ -151,35 +166,66 @@ mod inner {
 						// create the state
 						let protocol_state = ProtocolState::new(
 							nsm,
-							handles2,
+							handles2.clone(),
 							test_only_init_phase_override,
 						);
 						// send a shared version of state and the async pool to each processor
-						let processor = AsyncProcessor::new(
+						let mut processor = AsyncProcessor::new(
 							protocol_state.shared(),
 							app_pool.shared(),
 						);
 						// listen_all will multiplex the processor accross all sockets
-						let tasks =
+						let mut server =
 							AsyncSocketServer::listen_all(pool, &processor)
 								.expect("unable to get listen task list");
 
-						match tokio::signal::ctrl_c().await {
-							Ok(()) => {
-								eprintln!("handling ctrl+c the tokio way");
-								for task in tasks {
-									task.abort();
-								}
-								*inner_quit.write().unwrap() = true;
+						loop {
+							let (manifest_present, pool_size) =
+								get_pool_size_from_pivot_args(&handles2);
+							let pool_size = pool_size.unwrap_or(1);
+							// expand server to pool_size + 1 (due to qos-host extra socket)
+							server.listen_to(pool_size + 1, &processor).expect(
+								"unable to listen_to on the running server",
+							);
+							// expand app connections to pool_size
+							processor.expand_to(pool_size).await.expect(
+								"unable to expand_to on the processor app pool",
+							);
+
+							if manifest_present {
+								*server_state.write().unwrap() =
+									InterState::PivotReady;
+								eprintln!("manifest is present, breaking out of server check loop");
+								break;
 							}
-							Err(err) => panic!("{err}"),
+
+							// sleep up to 1s, checking for ctrl+c, if it happens break out
+							if let Ok(ctrl_res) = tokio::time::timeout(
+								Duration::from_secs(1),
+								tokio::signal::ctrl_c(),
+							)
+							.await
+							{
+								return ctrl_c_handler(
+									ctrl_res,
+									server,
+									&server_state,
+								);
+							}
 						}
+						// wait until ctrl+c
+						ctrl_c_handler(
+							tokio::signal::ctrl_c().await,
+							server,
+							&server_state,
+						);
 					});
 			});
 
 			loop {
+				let server_state = *inter_state.read().unwrap();
 				// helper for integration tests and manual runs aka qos_core binary
-				if *quit.read().unwrap() {
+				if server_state == InterState::Quitting {
 					eprintln!("quit called by ctrl+c");
 					std::process::exit(1);
 				}
@@ -187,6 +233,7 @@ mod inner {
 				if handles.quorum_key_exists()
 					&& handles.pivot_exists()
 					&& handles.manifest_envelope_exists()
+					&& server_state == InterState::PivotReady
 				{
 					// The state required to pivot exists, so we can break this
 					// holding pattern and start the pivot.
@@ -242,6 +289,93 @@ mod inner {
 			println!("Reaper exiting ... ");
 		}
 	}
+
+	fn ctrl_c_handler(
+		ctrl_c: std::io::Result<()>,
+		server: AsyncSocketServer,
+		server_state: &Arc<RwLock<InterState>>,
+	) {
+		match ctrl_c {
+			Ok(()) => {
+				server.terminate();
+				*server_state.write().unwrap() = InterState::Quitting;
+			}
+			Err(err) => panic!("{err}"),
+		}
+	}
+
+	// return if we have manifest and get pool_size args if present from it
+	fn get_pool_size_from_pivot_args(handles: &Handles) -> (bool, Option<u32>) {
+		if let Ok(envelope) = handles.get_manifest_envelope() {
+			(true, extract_pool_size_arg(&envelope.manifest.pivot.args))
+		} else {
+			(false, None)
+		}
+	}
+
+	// find the u32 value of --pool-size argument passed to the pivot if present
+	fn extract_pool_size_arg(args: &[String]) -> Option<u32> {
+		if let Some((i, _)) =
+			args.iter().enumerate().find(|(_, a)| *a == "--pool-size")
+		{
+			if let Some(pool_size_str) = args.get(i + 1) {
+				match pool_size_str.parse::<u32>() {
+					Ok(pool_size) => Some(pool_size),
+					Err(_) => None,
+				}
+			} else {
+				None
+			}
+		} else {
+			None
+		}
+	}
+
+	#[cfg(test)]
+	mod test {
+		use super::*;
+
+		#[test]
+		fn extract_pool_size_arg_works() {
+			// no arg
+			assert_eq!(
+				extract_pool_size_arg(&vec![
+					"unrelated".to_owned(),
+					"--args".to_owned(),
+				]),
+				None
+			);
+
+			// should work
+			assert_eq!(
+				extract_pool_size_arg(&vec![
+					"--pool-size".to_owned(),
+					"8".to_owned(),
+				]),
+				Some(8)
+			);
+
+			// wrong number, expect None
+			assert_eq!(
+				extract_pool_size_arg(&vec![
+					"--pool-size".to_owned(),
+					"8a".to_owned(),
+				]),
+				None
+			);
+
+			// duplicate arg, use 1st
+			assert_eq!(
+				extract_pool_size_arg(&vec![
+					"--pool-size".to_owned(),
+					"8".to_owned(),
+					"--pool-size".to_owned(),
+					"9".to_owned(),
+				]),
+				Some(8)
+			);
+		}
+	}
 }
 
-// See qos_test/tests/reaper for tests
+// See qos_test/tests/async_reaper for more tests

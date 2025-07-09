@@ -39,7 +39,7 @@ impl<R: RequestProcessor> SocketServer<R> {
 		addr: SocketAddress,
 		mut processor: R,
 	) -> Result<(), SocketServerError> {
-		println!("`SocketServer` listening on {addr:?}");
+		println!("`SocketServer` listening on {}", addr.debug_info());
 
 		let listener = Listener::listen(addr)?;
 

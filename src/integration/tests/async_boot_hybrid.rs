@@ -26,27 +26,30 @@ use qos_p256::P256Pair;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]
-async fn async_standard_boot_e2e() {
-	const PIVOT_HASH_PATH: &str = "/tmp/async_standard_boot_e2e-pivot-hash.txt";
+async fn async_standard_boot_hybrid_e2e() {
+	const PIVOT_HASH_PATH: &str =
+		"/tmp/async_standard_boot_hybrid_e2e-pivot-hash.txt";
 
 	let host_port = qos_test_primitives::find_free_port().unwrap();
-	let tmp: PathWrapper = "/tmp/async-boot-e2e".into();
+	let tmp: PathWrapper = "/tmp/async-boot-hybrid-e2e".into();
 	let _: PathWrapper = PIVOT_OK5_SUCCESS_FILE.into();
 	let _: PathWrapper = PIVOT_HASH_PATH.into();
 	fs::create_dir_all(&*tmp).unwrap();
 
-	let usock: PathWrapper = "/tmp/async-boot-e2e/boot_e2e.sock".into();
-	let secret_path: PathWrapper = "/tmp/async-boot-e2e/boot_e2e.secret".into();
-	let pivot_path: PathWrapper = "/tmp/async-boot-e2e/boot_e2e.pivot".into();
+	let usock: PathWrapper = "/tmp/async-boo-hybrid-e2e/boot_e2e.sock".into();
+	let secret_path: PathWrapper =
+		"/tmp/async-boo-hybrid-e2e/boot_e2e.secret".into();
+	let pivot_path: PathWrapper =
+		"/tmp/async-boo-hybrid-e2e/boot_e2e.pivot".into();
 	let manifest_path: PathWrapper =
-		"/tmp/async-boot-e2e/boot_e2e.manifest".into();
+		"/tmp/async-boo-hybrid-e2e/boot_e2e.manifest".into();
 	let eph_path: PathWrapper =
-		"/tmp/async-boot-e2e/ephemeral_key.secret".into();
+		"/tmp/async-boo-hybrid-e2e/ephemeral_key.secret".into();
 
-	let boot_dir: PathWrapper = "/tmp/async-boot-e2e/boot-dir".into();
+	let boot_dir: PathWrapper = "/tmp/async-boo-hybrid-e2e/boot-dir".into();
 	fs::create_dir_all(&*boot_dir).unwrap();
 	let attestation_dir: PathWrapper =
-		"/tmp/async-boot-e2e/attestation-dir".into();
+		"/tmp/async-boo-hybrid-e2e/attestation-dir".into();
 	fs::create_dir_all(&*attestation_dir).unwrap();
 	let attestation_doc_path = format!("{}/attestation_doc", &*attestation_dir);
 
@@ -68,7 +71,7 @@ async fn async_standard_boot_e2e() {
 
 	// -- CLIENT create manifest.
 	let msg = "testing420";
-	let pivot_args = format!("[--msg,{msg},--pool-size,20]");
+	let pivot_args = format!("[--msg,{msg}]");
 	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
 
 	assert!(Command::new("../target/debug/qos_client")
@@ -134,12 +137,7 @@ async fn async_standard_boot_e2e() {
 	let pivot = PivotConfig {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
-		args: vec![
-			"--msg".to_string(),
-			msg.to_string(),
-			"--pool-size".to_string(),
-			"20".to_string(),
-		],
+		args: vec!["--msg".to_string(), msg.to_string()],
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
@@ -229,7 +227,7 @@ async fn async_standard_boot_e2e() {
 		);
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
-			"[\"--msg\", \"testing420\", \"--pool-size\", \"20\"]?"
+			"[\"--msg\", \"testing420\"]?"
 		);
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
@@ -280,7 +278,7 @@ async fn async_standard_boot_e2e() {
 
 	// -- HOST start host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/async_qos_host")
+		Command::new("../target/debug/qos_host")
 			.args([
 				"--host-port",
 				&host_port.to_string(),

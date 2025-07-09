@@ -110,26 +110,28 @@ async fn main() {
 	let proxy_path: &String = &args[2];
 
 	let pool = AsyncStreamPool::new(
-		std::iter::once(SocketAddress::new_unix(socket_path)),
+		SocketAddress::new_unix(socket_path),
 		TimeVal::seconds(0), // listener, no timeout
-	);
+		1,
+	)
+	.expect("unable to create async stream pool");
 
 	let proxy_pool = AsyncStreamPool::new(
-		std::iter::once(SocketAddress::new_unix(proxy_path)),
+		SocketAddress::new_unix(proxy_path),
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
+		1,
 	)
+	.expect("unable to create async stream pool")
 	.shared();
 
-	let tasks =
+	let server =
 		AsyncSocketServer::listen_all(pool, &Processor::new(proxy_pool))
 			.unwrap();
 
 	match tokio::signal::ctrl_c().await {
 		Ok(_) => {
 			eprintln!("pivot handling ctrl+c the tokio way");
-			for task in tasks {
-				task.abort();
-			}
+			server.terminate();
 		}
 		Err(err) => panic!("{err}"),
 	}
