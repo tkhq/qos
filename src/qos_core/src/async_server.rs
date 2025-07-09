@@ -22,25 +22,39 @@ pub trait AsyncRequestProcessor: Send {
 }
 
 /// A bare bones, socket based server.
-pub struct AsyncSocketServer;
+pub struct AsyncSocketServer {
+	/// `AsyncStreamPool` used to serve messages over.
+	pub pool: AsyncStreamPool,
+	/// List of tasks that are running on the server.
+	pub tasks: Vec<JoinHandle<Result<(), SocketServerError>>>,
+}
 
 impl AsyncSocketServer {
 	/// Listen and respond to incoming requests on all the pool's addresses with the given `processor`.
-	/// *NOTE*: the `POOL_SIZE` must match on both sides, since we expect ALL sockets to be connected
-	/// to right away (e.g. not on first use). The client side connect (above) will always connect them all.
 	/// This method returns a list of tasks that are running as part of this listener. `JoinHandle::abort()`
 	/// should be called on each when the program exists (e.g. on ctrl+c)
-	pub fn listen_all<R>(
+	pub fn listen_all<P>(
 		pool: AsyncStreamPool,
-		processor: &R,
-	) -> Result<Vec<JoinHandle<Result<(), SocketServerError>>>, SocketServerError>
+		processor: &P,
+	) -> Result<Self, SocketServerError>
 	where
-		R: AsyncRequestProcessor + 'static + Clone,
+		P: AsyncRequestProcessor + 'static + Clone,
 	{
 		println!("`AsyncSocketServer` listening on pool size {}", pool.len());
 
 		let listeners = pool.listen()?;
+		let tasks = Self::spawn_tasks_for_listeners(listeners, processor);
 
+		Ok(Self { pool, tasks })
+	}
+
+	fn spawn_tasks_for_listeners<P>(
+		listeners: Vec<AsyncListener>,
+		processor: &P,
+	) -> Vec<JoinHandle<Result<(), SocketServerError>>>
+	where
+		P: AsyncRequestProcessor + 'static + Clone,
+	{
 		let mut tasks = Vec::new();
 		for listener in listeners {
 			let p = processor.clone();
@@ -50,7 +64,31 @@ impl AsyncSocketServer {
 			tasks.push(task);
 		}
 
-		Ok(tasks)
+		tasks
+	}
+
+	/// Expand the server with listeners up to pool size. This adds new tasks as needed.
+	pub fn listen_to<P>(
+		&mut self,
+		pool_size: u32,
+		processor: &P,
+	) -> Result<(), IOError>
+	where
+		P: AsyncRequestProcessor + 'static + Clone,
+	{
+		let listeners = self.pool.listen_to(pool_size)?;
+		let tasks = Self::spawn_tasks_for_listeners(listeners, processor);
+
+		self.tasks.extend(tasks);
+
+		Ok(())
+	}
+
+	/// Consume the socket server and terminate all running tasks.
+	pub fn terminate(self) {
+		for task in self.tasks {
+			task.abort();
+		}
 	}
 }
 

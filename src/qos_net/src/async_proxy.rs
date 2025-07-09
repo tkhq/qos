@@ -6,7 +6,6 @@ use qos_core::{
 	io::{AsyncListener, AsyncStream, AsyncStreamPool, IOError},
 	server::SocketServerError,
 };
-use tokio::task::JoinHandle;
 
 use crate::{
 	async_proxy_connection::AsyncProxyConnection, error::QosNetError,
@@ -148,12 +147,7 @@ impl AsyncProxy {
 pub trait AsyncProxyServer {
 	fn listen_proxy(
 		pool: AsyncStreamPool,
-	) -> impl Future<
-		Output = Result<
-			Vec<JoinHandle<Result<(), SocketServerError>>>,
-			SocketServerError,
-		>,
-	> + Send;
+	) -> impl Future<Output = Result<Box<Self>, SocketServerError>> + Send;
 }
 
 impl AsyncProxyServer for AsyncSocketServer {
@@ -161,8 +155,7 @@ impl AsyncProxyServer for AsyncSocketServer {
 	/// dumb pipe after getting the `connect*` calls.
 	async fn listen_proxy(
 		pool: AsyncStreamPool,
-	) -> Result<Vec<JoinHandle<Result<(), SocketServerError>>>, SocketServerError>
-	{
+	) -> Result<Box<Self>, SocketServerError> {
 		println!(
 			"`AsyncSocketServer` proxy listening on pool size {}",
 			pool.len()
@@ -178,7 +171,7 @@ impl AsyncProxyServer for AsyncSocketServer {
 			tasks.push(task);
 		}
 
-		Ok(tasks)
+		Ok(Box::new(Self { pool, tasks }))
 	}
 }
 

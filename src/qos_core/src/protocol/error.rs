@@ -147,6 +147,8 @@ pub enum ProtocolError {
 	DifferentManifest,
 	/// Error from the qos crypto library.
 	QosCrypto(String),
+	/// Error during expanding the `AsyncPool`.
+	PoolExpandError,
 }
 
 impl From<std::io::Error> for ProtocolError {

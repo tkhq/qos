@@ -254,8 +254,8 @@ impl AsyncHostServer {
 
 		// DEBUG: remove later
 		match ProtocolMsg::try_from_slice(&encoded_request) {
-			Ok(r) => eprintln!("Received message: {}", r),
-			Err(e) => eprintln!("Unable to decode request: {}", e),
+			Ok(r) => eprintln!("Received message: {r}"),
+			Err(e) => eprintln!("Unable to decode request: {e}"),
 		}
 
 		match state.enclave_client.call(&encoded_request).await {
@@ -263,7 +263,7 @@ impl AsyncHostServer {
 				// DEBUG: remove later
 				match ProtocolMsg::try_from_slice(&encoded_response) {
 					Ok(r) => {
-						eprintln!("Enclave responded with: {}", r);
+						eprintln!("Enclave responded with: {r}");
 					}
 					Err(e) => {
 						eprintln!("Error deserializing response from enclave, make sure qos_host version match qos_core: {e}");

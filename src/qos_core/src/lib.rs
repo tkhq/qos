@@ -67,9 +67,3 @@ pub const SEC_APP_SOCK: &str = "./local-enclave/sec_app.sock";
 pub const SEC_APP_SOCK: &str = "/sec_app.sock";
 /// Default socket connect timeout in milliseconds
 pub const DEFAULT_SOCKET_TIMEOUT: &str = "5000";
-/// Default socket pool size is 20
-#[cfg(feature = "async")]
-pub const DEFAULT_POOL_SIZE: &str = "20"; // DEBUG: ales - set to something real after debugging
-/// Default socket pool size is 0 for sync (unused)
-#[cfg(not(feature = "async"))]
-pub const DEFAULT_POOL_SIZE: &str = "1";

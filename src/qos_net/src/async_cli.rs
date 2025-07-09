@@ -17,16 +17,16 @@ impl CLI {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
-			let tasks = AsyncSocketServer::listen_proxy(opts.async_pool())
-				.await
-				.expect("unable to get listen join handles");
+			let server = AsyncSocketServer::listen_proxy(
+				opts.async_pool().expect("unable to create async socket pool"),
+			)
+			.await
+			.expect("unable to get listen join handles");
 
 			match tokio::signal::ctrl_c().await {
 				Ok(_) => {
 					eprintln!("handling ctrl+c the tokio way");
-					for task in tasks {
-						task.abort();
-					}
+					server.terminate();
 				}
 				Err(err) => panic!("{err}"),
 			}

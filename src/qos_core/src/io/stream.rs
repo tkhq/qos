@@ -19,7 +19,7 @@ use super::IOError;
 // 25(retries) x 10(milliseconds) = 1/4 a second of retrying
 const MAX_RETRY: usize = 25;
 const BACKOFF_MILLISECONDS: u64 = 10;
-const BACKLOG: i32 = 128;
+const BACKLOG: i32 = 127; // due to bug in nix::Backlog check, 128 is disallowed, fixed in https://github.com/nix-rust/nix/commit/a0869f993c0e7639b13b9bb11cb74d54a8018fbd
 
 const MIB: usize = 1024 * 1024;
 
@@ -61,21 +61,17 @@ impl SocketAddress {
 	///
 	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>).
 	#[cfg(feature = "vm")]
-	#[allow(unsafe_code)]
 	pub fn new_vsock(cid: u32, port: u32, flags: u8) -> Self {
-		#[repr(C)]
-		struct sockaddr_vm {
-			svm_family: libc::sa_family_t,
-			svm_reserved1: libc::c_ushort,
-			svm_port: libc::c_uint,
-			svm_cid: libc::c_uint,
-			// Field added [here](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6)
-			// but not yet in a version of libc we can use.
-			svm_flags: u8,
-			svm_zero: [u8; 3],
-		}
+		Self::Vsock(Self::new_vsock_raw(cid, port, flags))
+	}
 
-		let vsock_addr = sockaddr_vm {
+	/// Create a new raw VsockAddr.
+	///
+	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>).
+	#[cfg(feature = "vm")]
+	#[allow(unsafe_code)]
+	pub fn new_vsock_raw(cid: u32, port: u32, flags: u8) -> VsockAddr {
+		let vsock_addr = SockAddrVm {
 			svm_family: AddressFamily::Vsock as libc::sa_family_t,
 			svm_reserved1: 0,
 			svm_cid: cid,
@@ -83,15 +79,15 @@ impl SocketAddress {
 			svm_flags: flags,
 			svm_zero: [0; 3],
 		};
-		let vsock_addr_len = size_of::<sockaddr_vm>() as libc::socklen_t;
+		let vsock_addr_len = size_of::<SockAddrVm>() as libc::socklen_t;
 		let addr = unsafe {
 			VsockAddr::from_raw(
-				&vsock_addr as *const sockaddr_vm as *const libc::sockaddr,
+				&vsock_addr as *const SockAddrVm as *const libc::sockaddr,
 				Some(vsock_addr_len),
 			)
 			.unwrap()
 		};
-		Self::Vsock(addr)
+		addr
 	}
 
 	/// Get the `AddressFamily` of the socket.
@@ -155,6 +151,29 @@ impl SocketAddress {
 			_ => panic!("invalid socket address requested"),
 		}
 	}
+}
+
+/// Extract svm_flags field value from existing VSOCK.
+#[cfg(all(feature = "vm", feature = "async"))]
+#[allow(unsafe_code)]
+pub fn vsock_svm_flags(vsock: VsockAddr) -> u8 {
+	unsafe {
+		let cast: SockAddrVm = std::mem::transmute(vsock);
+		cast.svm_flags
+	}
+}
+
+#[cfg(feature = "vm")]
+#[repr(C)]
+struct SockAddrVm {
+	svm_family: libc::sa_family_t,
+	svm_reserved1: libc::c_ushort,
+	svm_port: libc::c_uint,
+	svm_cid: libc::c_uint,
+	// Field added [here](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6)
+	// but not yet in a version of libc we can use.
+	svm_flags: u8,
+	svm_zero: [u8; 3],
 }
 
 /// Handle on a stream
@@ -354,6 +373,7 @@ impl Listener {
 
 		let fd = socket_fd(&addr)?;
 		bind(fd.as_raw_fd(), &*addr.addr())?;
+
 		listen(&fd.as_fd(), Backlog::new(BACKLOG)?)?;
 
 		Ok(Self { fd, addr })
@@ -605,5 +625,23 @@ mod test {
 
 		// N.B: we do not call _handler.join().unwrap() here, because the handler is blocking (indefinitely) on "send"
 		// Once the test exits, Rust/OS checks will pick up the slack and clean up this thread when this test exits.
+	}
+
+	#[cfg(feature = "vm")]
+	#[test]
+	fn vsock_svm_flags_are_not_lost() {
+		let vsock = SocketAddress::new_vsock_raw(1, 1, VMADDR_FLAG_TO_HOST);
+
+		assert_eq!(vsock_svm_flags(vsock), VMADDR_FLAG_TO_HOST);
+
+		let first = SocketAddress::new_vsock(3, 3, VMADDR_FLAG_TO_HOST);
+		let second = first.next_address().unwrap();
+
+		match second {
+			SocketAddress::Vsock(second_vsock) => {
+				assert_eq!(vsock_svm_flags(second_vsock), VMADDR_FLAG_TO_HOST)
+			}
+			_ => panic!("not a vsock??"),
+		}
 	}
 }

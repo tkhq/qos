@@ -9,12 +9,11 @@ use crate::{
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 	reaper::Reaper,
-	DEFAULT_POOL_SIZE, EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE,
-	QUORUM_FILE, SEC_APP_SOCK,
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
 };
 
 #[cfg(feature = "async")]
-use crate::io::AsyncStreamPool;
+use crate::io::{AsyncStreamPool, IOError};
 
 /// "cid"
 pub const CID: &str = "cid";
@@ -54,15 +53,9 @@ impl EnclaveOpts {
 	/// return the new [`AsyncPool`]. Analogous to [`Self::addr`] and [`Self::app_addr`] depending on the [`app`] parameter.
 	#[cfg(feature = "async")]
 	#[allow(unused)]
-	fn async_pool(&self, app: bool) -> AsyncStreamPool {
+	fn async_pool(&self, app: bool) -> Result<AsyncStreamPool, IOError> {
 		use nix::sys::time::{TimeVal, TimeValLike};
 
-		let pool_size: u32 = self
-			.parsed
-			.single(POOL_SIZE)
-			.expect("invalid pool options")
-			.parse()
-			.expect("invalid pool_size specified");
 		let usock_param = if app { APP_USOCK } else { USOCK };
 
 		match (
@@ -72,23 +65,21 @@ impl EnclaveOpts {
 		) {
 			#[cfg(feature = "vm")]
 			(Some(c), Some(p), None) => {
-				let c = c.parse::<u32>().unwrap();
-				let start_port = p.parse::<u32>().unwrap();
-
-				let addresses = (start_port..start_port + pool_size).map(|p| {
-					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS)
-				});
-
-				AsyncStreamPool::new(addresses, TimeVal::seconds(5))
+				let c =
+					c.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
+				let p =
+					p.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
+				AsyncStreamPool::new(
+					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS),
+					TimeVal::seconds(5),
+					1,
+				)
 			}
-			(None, None, Some(u)) => {
-				let addresses = (0..pool_size).map(|i| {
-					let u = format!("{u}_{i}"); // add _X suffix for pooling
-					SocketAddress::new_unix(&u)
-				});
-
-				AsyncStreamPool::new(addresses, TimeVal::seconds(5))
-			}
+			(None, None, Some(u)) => AsyncStreamPool::new(
+				SocketAddress::new_unix(u),
+				TimeVal::seconds(5),
+				1,
+			),
 			_ => panic!("Invalid socket opts"),
 		}
 	}
@@ -202,6 +193,9 @@ impl CLI {
 	}
 
 	/// Execute the enclave server CLI with the environment args using tokio/async
+	///
+	/// # Panics
+	/// If the socket pools cannot be created
 	#[cfg(feature = "async")]
 	pub fn async_execute() {
 		let mut args: Vec<String> = env::args().collect();
@@ -220,8 +214,10 @@ impl CLI {
 					opts.pivot_file(),
 				),
 				opts.nsm(),
-				opts.async_pool(false),
-				opts.async_pool(true),
+				opts.async_pool(false)
+					.expect("Unable to create enclave socket pool"),
+				opts.async_pool(true)
+					.expect("Unable to create enclave app pool"),
 				None,
 			);
 		}
@@ -277,11 +273,6 @@ impl GetParserForOptions for EnclaveParser {
 				Token::new(APP_USOCK, "the socket the secure app is listening on.")
 					.takes_value(true)
 					.default_value(SEC_APP_SOCK)
-			)
-			.token(
-				Token::new(POOL_SIZE, "the pool size for use with all socket types")
-					.takes_value(true)
-					.default_value(DEFAULT_POOL_SIZE)
 			)
 	}
 }
@@ -361,20 +352,6 @@ mod test {
 		let opts = EnclaveOpts::new(&mut args);
 
 		assert_eq!(opts.addr(), SocketAddress::new_unix("./test.sock"));
-	}
-
-	#[test]
-	#[cfg(feature = "async")]
-	fn parse_pool_size() {
-		let mut args: Vec<_> =
-			vec!["binary", "--usock", "./test.sock", "--pool-size", "7"]
-				.into_iter()
-				.map(String::from)
-				.collect();
-		let opts = EnclaveOpts::new(&mut args);
-
-		let pool = opts.async_pool(false);
-		assert_eq!(pool.len(), 7);
 	}
 
 	#[test]

@@ -17,8 +17,6 @@ pub const USOCK: &str = "usock";
 /// "pool-size"
 pub const POOL_SIZE: &str = "pool-size";
 
-const DEFAULT_POOL_SIZE: &str = "20";
-
 /// CLI options for starting up the proxy.
 #[derive(Default, Clone, Debug, PartialEq)]
 pub(crate) struct ProxyOpts {
@@ -37,7 +35,9 @@ impl ProxyOpts {
 	/// Create a new `AsyncPool` of `AsyncStream` using the list of `SocketAddress` for the enclave server and
 	/// return the new `AsyncPool`.
 	#[cfg(feature = "async_proxy")]
-	pub(crate) fn async_pool(&self) -> AsyncStreamPool {
+	pub(crate) fn async_pool(
+		&self,
+	) -> Result<AsyncStreamPool, qos_core::io::IOError> {
 		use qos_core::io::{TimeVal, TimeValLike};
 
 		let pool_size: u32 = self
@@ -54,21 +54,17 @@ impl ProxyOpts {
 			#[cfg(feature = "vm")]
 			(Some(c), Some(p), None) => {
 				let c = c.parse::<u32>().unwrap();
-				let start_port = p.parse::<u32>().unwrap();
+				let p = p.parse::<u32>().unwrap();
 
-				let addresses = (start_port..start_port + pool_size).map(|p| {
-					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS)
-				});
+				let address =
+					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS);
 
-				AsyncStreamPool::new(addresses)
+				AsyncStreamPool::new(address, TimeVal::seconds(5), pool_size)
 			}
 			(None, None, Some(u)) => {
-				let addresses = (0..pool_size).map(|i| {
-					let u = format!("{u}_{i}"); // add _X suffix for pooling
-					SocketAddress::new_unix(&u)
-				});
+				let address = SocketAddress::new_unix(u);
 
-				AsyncStreamPool::new(addresses, TimeVal::seconds(0))
+				AsyncStreamPool::new(address, TimeVal::seconds(0), pool_size)
 			}
 			_ => panic!("Invalid socket opts"),
 		}
@@ -153,7 +149,7 @@ impl GetParserForOptions for ProxyParser {
 				)
 				.takes_value(true)
 				.forbids(vec!["port", "cid"])
-				.default_value(DEFAULT_POOL_SIZE),
+				.default_value("1"),
 			)
 	}
 }
@@ -194,7 +190,7 @@ mod test {
 				.collect();
 		let opts = ProxyOpts::new(&mut args);
 
-		let pool = opts.async_pool();
+		let pool = opts.async_pool().unwrap();
 		assert_eq!(pool.len(), 7);
 	}
 

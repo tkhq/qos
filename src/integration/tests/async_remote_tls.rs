@@ -29,13 +29,9 @@ async fn fetch_async_remote_tls_content() {
 		.unwrap()
 		.into();
 
-	// because qos_net's listen call uses a pool it will create a "_X" suffix, we just point to the 1st and only
-	// listening socket in the pool here
-	let socket_net_path = format!("{REMOTE_TLS_TEST_NET_PROXY_SOCKET}_0");
-
 	let _enclave_app: ChildWrapper = Command::new(PIVOT_ASYNC_REMOTE_TLS_PATH)
 		.arg(REMOTE_TLS_TEST_ENCLAVE_SOCKET)
-		.arg(&socket_net_path)
+		.arg(REMOTE_TLS_TEST_NET_PROXY_SOCKET)
 		.spawn()
 		.unwrap()
 		.into();
@@ -46,11 +42,11 @@ async fn fetch_async_remote_tls_content() {
 	}
 
 	let enclave_pool = AsyncStreamPool::new(
-		std::iter::once(SocketAddress::new_unix(
-			REMOTE_TLS_TEST_ENCLAVE_SOCKET,
-		)),
+		SocketAddress::new_unix(REMOTE_TLS_TEST_ENCLAVE_SOCKET),
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
-	);
+		1,
+	)
+	.expect("unable to create enclave async pool");
 
 	let enclave_client = AsyncClient::new(enclave_pool.shared());
 
