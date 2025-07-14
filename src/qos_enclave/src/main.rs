@@ -1,6 +1,8 @@
 use std::{
 	fs::create_dir_all,
 	io::Write,
+	io::stdout,
+	convert::TryFrom,
 	mem::MaybeUninit,
 	net::{Shutdown, TcpListener},
 	os::unix::net::UnixStream,
@@ -25,7 +27,7 @@ use nitro_cli::{
 		enclave_proc_command_send_all, enclave_proc_connect_to_single,
 		enclave_proc_spawn, enclave_process_handle_all_replies,
 	},
-	get_id_by_name,CID_TO_CONSOLE_PORT_OFFSET,
+	get_id_by_name,CID_TO_CONSOLE_PORT_OFFSET,VMADDR_CID_HYPERVISOR,
 	utils::Console
 };
 
@@ -112,13 +114,20 @@ fn boot() -> (String, Option<Console>) {
 		})
 		.ok_or_exit_with_errno(None);
 
-	let console = match (logs) {
-		true => Console::new(
-			VMADDR_CID_HYPERVISOR,
-        	run_args.enclave_cid + CID_TO_CONSOLE_PORT_OFFSET,
-    	),
+	let console = match run_args.attach_console {
+		true => Some(
+				Console::new(
+					VMADDR_CID_HYPERVISOR,
+					u32::try_from(run_args.enclave_cid.unwrap()).unwrap()
+						+ CID_TO_CONSOLE_PORT_OFFSET,
+				).map_err(|err| {
+					err.add_subaction("Failed to attach console to enclave".to_string())
+						.set_action(RUN_ENCLAVE_STR.to_string())
+				})
+				.ok_or_exit_with_errno(None)
+			),
 		false => None,
-	}
+	};
 
 	enclave_proc_command_send_single(
 		EnclaveProcessCommandType::Run,
@@ -147,9 +156,9 @@ fn boot() -> (String, Option<Console>) {
 	})
 	.ok_or_exit_with_errno(None);
 
-	return get_id_by_name(enclave_name)
+	return (get_id_by_name(enclave_name)
 		.or_else(|_| Err("Failed to parse enclave name"))
-		.unwrap(), console;
+		.unwrap(), console);
 }
 
 fn shutdown(enclave_id: String, sig_num: i32) {
@@ -206,7 +215,8 @@ fn handle_signals() -> c_int {
 
 fn read_logs(console: Console) {
 	// TODO: maybe pass in a disconnect_timeout_sec
-    console.read_to(io::stdout().by_ref())
+	let disconnect_timeout_sec: Option<u64> = None;
+    console.read_to(stdout().by_ref(), disconnect_timeout_sec);
 }
 
 fn main() {
@@ -218,7 +228,7 @@ fn main() {
 	//    .trim().parse::<F>().unwrap();
 	//boot(allow_skip);
 
-	let enclave_id, maybe_console = boot();
+	let (enclave_id, maybe_console) = boot();
 
 	match healthy() {
 		Ok(_) => eprintln!("{}", "Enclave is healthy"),
@@ -230,11 +240,10 @@ fn main() {
 		health_service();
 	});
 
-	match maybe_console {
-		Some(console) => thread::spawn(|| {
+	if let Some(console) = maybe_console {
+		thread::spawn(|| {
 			read_logs(console);
-		}),
-		None => {},
+		});
 	}
 
 	let sig_num = handle_signals();
