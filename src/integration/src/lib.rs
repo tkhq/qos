@@ -40,8 +40,6 @@ pub const PIVOT_ASYNC_REMOTE_TLS_PATH: &str =
 	"../target/debug/pivot_async_remote_tls";
 /// Path to an enclave app that has routes to test remote connection features.
 pub const QOS_NET_PATH: &str = "../target/debug/qos_net";
-/// Path to an enclave app that has routes to test async remote connection features.
-pub const ASYNC_QOS_NET_PATH: &str = "../target/debug/async_qos_net";
 /// Path to an enclave app that has routes to stress our socket.
 pub const PIVOT_SOCKET_STRESS_PATH: &str =
 	"../target/debug/pivot_socket_stress";

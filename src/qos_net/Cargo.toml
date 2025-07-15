@@ -14,6 +14,7 @@ rand = { workspace = true, features = [
 ], optional = true }
 serde = { workspace = true, features = ["derive"], default-features = false }
 tokio = { workspace = true }
+tokio-rustls = { workspace = true, optional = true }
 
 [dev-dependencies]
 qos_test_primitives = { workspace = true }
@@ -27,11 +28,5 @@ webpki-roots = { workspace = true }
 
 [features]
 default = ["proxy"] # keep this as a default feature ensures we lint by default
-async_proxy = ["hickory-resolver", "rand", "tokio", "qos_core/async"]
-proxy = ["rand", "hickory-resolver", "tokio"]
+proxy = ["hickory-resolver", "rand", "tokio", "qos_core/async", "tokio-rustls"]
 vm = ["qos_core/vm"]
-
-[[bin]]
-name = "async_qos_net"
-path = "src/bin/async_qos_net.rs"
-required-features = ["async_proxy"]
