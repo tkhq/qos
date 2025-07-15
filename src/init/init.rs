@@ -54,33 +54,6 @@ fn boot() {
 	init_platform();
 }
 
-#[cfg(not(feature = "async"))]
-fn main() {
-	boot();
-	dmesg("QuorumOS Booted".to_string());
-
-	let cid = get_local_cid().unwrap();
-	dmesg(format!("CID is {}", cid));
-
-	let handles = Handles::new(
-		EPHEMERAL_KEY_FILE.to_string(),
-		QUORUM_FILE.to_string(),
-		MANIFEST_FILE.to_string(),
-		PIVOT_FILE.to_string(),
-	);
-
-	Reaper::execute(
-		&handles,
-		Box::new(Nsm),
-		SocketAddress::new_vsock(cid, 3, VMADDR_NO_FLAGS),
-		SocketAddress::new_unix(SEC_APP_SOCK),
-		None,
-	);
-
-	reboot();
-}
-
-#[cfg(feature = "async")]
 #[tokio::main]
 async fn main() {
 	use qos_core::io::{AsyncStreamPool, TimeVal, TimeValLike};
