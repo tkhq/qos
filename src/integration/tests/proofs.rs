@@ -1,10 +1,10 @@
 use std::{process::Command, str};
 
 use borsh::BorshDeserialize;
-use integration::{PivotProofMsg, PIVOT_PROOF_PATH};
+use integration::{wait_for_usock, PivotProofMsg, PIVOT_PROOF_PATH};
 use qos_core::{
-	client::Client,
-	io::{SocketAddress, TimeVal, TimeValLike},
+	async_client::AsyncClient,
+	io::{AsyncStreamPool, SocketAddress, TimeVal, TimeValLike},
 	protocol::ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
 };
 
@@ -13,23 +13,31 @@ use qos_test_primitives::ChildWrapper;
 
 const PROOF_TEST_ENCLAVE_SOCKET: &str = "/tmp/proof_test.enclave.sock";
 
-#[test]
-fn fetch_and_verify_app_proof() {
+#[tokio::test]
+async fn fetch_and_verify_app_proof() {
 	let _enclave_app: ChildWrapper = Command::new(PIVOT_PROOF_PATH)
 		.arg(PROOF_TEST_ENCLAVE_SOCKET)
 		.spawn()
 		.unwrap()
 		.into();
 
-	let enclave_client = Client::new(
+	wait_for_usock(PROOF_TEST_ENCLAVE_SOCKET).await;
+
+	let enclave_pool = AsyncStreamPool::new(
 		SocketAddress::new_unix(PROOF_TEST_ENCLAVE_SOCKET),
+		1,
+	)
+	.unwrap();
+
+	let enclave_client = AsyncClient::new(
+		enclave_pool.shared(),
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 	);
 
 	let app_request =
 		borsh::to_vec(&PivotProofMsg::AdditionRequest { a: 2, b: 2 }).unwrap();
 
-	let response = enclave_client.send(&app_request).unwrap();
+	let response = enclave_client.call(&app_request).await.unwrap();
 
 	match PivotProofMsg::try_from_slice(&response).unwrap() {
 		PivotProofMsg::AdditionResponse { result, proof } => {

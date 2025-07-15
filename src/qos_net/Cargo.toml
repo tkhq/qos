@@ -28,5 +28,5 @@ webpki-roots = { workspace = true }
 
 [features]
 default = ["proxy"] # keep this as a default feature ensures we lint by default
-proxy = ["hickory-resolver", "rand", "tokio", "qos_core/async", "tokio-rustls"]
+proxy = ["hickory-resolver", "rand", "tokio", "tokio-rustls"]
 vm = ["qos_core/vm"]

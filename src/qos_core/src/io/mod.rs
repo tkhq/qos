@@ -3,20 +3,15 @@
 //! NOTE TO MAINTAINERS: Interaction with any sys calls should be contained
 //! within this module.
 
-#[cfg(feature = "async")]
 mod async_pool;
-#[cfg(feature = "async")]
 mod async_stream;
-#[cfg(feature = "async")]
 pub use async_pool::*;
-#[cfg(feature = "async")]
 pub use async_stream::*;
 
 mod stream;
-pub use stream::{
-	Listener, SocketAddress, Stream, TimeVal, TimeValLike, MAX_PAYLOAD_SIZE,
-	VMADDR_FLAG_TO_HOST, VMADDR_NO_FLAGS,
-};
+pub use stream::{SocketAddress, VMADDR_FLAG_TO_HOST, VMADDR_NO_FLAGS};
+
+pub use nix::sys::time::{TimeVal, TimeValLike};
 
 /// QOS I/O error
 #[derive(Debug)]
@@ -49,7 +44,6 @@ pub enum IOError {
 	RecvNixError(nix::Error),
 	/// Reading the response size resulted in a size which exceeds the max payload size.
 	OversizedPayload(usize),
-	#[cfg(feature = "async")]
 	/// A async socket pool error during pool operations.
 	PoolError(PoolError),
 }
@@ -66,14 +60,6 @@ impl From<std::io::Error> for IOError {
 	}
 }
 
-#[cfg(feature = "async")]
-impl From<tokio::time::error::Elapsed> for IOError {
-	fn from(_: tokio::time::error::Elapsed) -> Self {
-		Self::ConnectTimeout
-	}
-}
-
-#[cfg(feature = "async")]
 impl From<PoolError> for IOError {
 	fn from(value: PoolError) -> Self {
 		Self::PoolError(value)

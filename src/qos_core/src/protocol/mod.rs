@@ -5,16 +5,13 @@ use qos_crypto::sha_256;
 
 mod error;
 pub mod msg;
-mod processor;
 pub mod services;
 mod state;
 
 pub use error::ProtocolError;
-pub use processor::Processor;
 pub(crate) use state::ProtocolState;
 pub use state::{ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS};
 
-#[cfg(feature = "async")]
 pub(crate) mod async_processor;
 
 /// 256bit hash

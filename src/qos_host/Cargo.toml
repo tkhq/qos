@@ -16,10 +16,4 @@ serde_json = { workspace = true }
 serde = { workspace = true }
 
 [features]
-async = ["qos_core/async"]
 vm = ["qos_core/vm"]
-
-[[bin]]
-name = "async_qos_host"
-path = "src/bin/async_qos_host.rs"
-required-features = ["async"]

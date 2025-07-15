@@ -10,19 +10,18 @@ async fn connects_and_gets_info() {
 	// prep sock pool dir
 	std::fs::create_dir_all("/tmp/async_qos_host_test").unwrap();
 
-	let _qos_host: ChildWrapper =
-		Command::new("../target/debug/async_qos_host")
-			.arg("--usock")
-			.arg(TEST_ENCLAVE_SOCKET)
-			.arg("--host-ip")
-			.arg("127.0.0.1")
-			.arg("--host-port")
-			.arg("3323")
-			.arg("--socket-timeout")
-			.arg("50") // ms
-			.spawn()
-			.unwrap()
-			.into();
+	let _qos_host: ChildWrapper = Command::new("../target/debug/qos_host")
+		.arg("--usock")
+		.arg(TEST_ENCLAVE_SOCKET)
+		.arg("--host-ip")
+		.arg("127.0.0.1")
+		.arg("--host-port")
+		.arg("3323")
+		.arg("--socket-timeout")
+		.arg("50") // ms
+		.spawn()
+		.unwrap()
+		.into();
 
 	tokio::time::sleep(Duration::from_millis(100)).await; // let the qos_host start
 
@@ -40,7 +39,7 @@ async fn connects_and_gets_info() {
 	drop(std::fs::remove_file(&enclave_socket));
 
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/async_qos_core")
+		Command::new("../target/debug/qos_core")
 			.args([
 				"--usock",
 				TEST_ENCLAVE_SOCKET,

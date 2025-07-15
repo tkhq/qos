@@ -4,8 +4,14 @@
 #![deny(clippy::all)]
 #![warn(missing_docs)]
 
+use std::time::Duration;
+
 use borsh::{BorshDeserialize, BorshSerialize};
-use qos_core::parser::{GetParserForOptions, OptionsParser, Parser, Token};
+use qos_core::{
+	async_client::AsyncClient,
+	io::{AsyncStreamPool, SocketAddress, TimeVal, TimeValLike},
+	parser::{GetParserForOptions, OptionsParser, Parser, Token},
+};
 
 /// Path to the file `pivot_ok` writes on success for tests.
 pub const PIVOT_OK_SUCCESS_FILE: &str = "./pivot_ok_works";
@@ -66,9 +72,8 @@ pub enum PivotSocketStressMsg {
 	OkResponse,
 	/// Request the app to panic. Does not have a response.
 	PanicRequest,
-	/// Request a response that will be slower then
-	/// `ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS`.
-	SlowRequest,
+	/// Request a response that will be slower than the provided `u64` value in milliseconds
+	SlowRequest(u64), // milliseconds
 	/// Response to [`Self::SlowRequest`].
 	SlowResponse,
 }
@@ -129,6 +134,25 @@ pub struct AdditionProofPayload {
 	pub b: usize,
 	/// Result of the addition
 	pub result: usize,
+}
+
+/// Wait for a given usock file to exist and be connectible with a timeout of 5s.
+///
+/// # Panics
+/// Panics if fs::exists errors.
+pub async fn wait_for_usock(path: &str) {
+	let addr = SocketAddress::new_unix(path);
+	let pool = AsyncStreamPool::new(addr, 1).unwrap().shared();
+	let client = AsyncClient::new(pool, TimeVal::milliseconds(50));
+
+	for _ in 0..50 {
+		if std::fs::exists(path).unwrap() && client.try_connect().await.is_ok()
+		{
+			break;
+		}
+
+		tokio::time::sleep(Duration::from_millis(100)).await;
+	}
 }
 
 struct PivotParser;

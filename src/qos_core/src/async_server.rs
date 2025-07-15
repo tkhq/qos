@@ -3,10 +3,20 @@
 
 use tokio::task::JoinHandle;
 
-use crate::{
-	io::{AsyncListener, AsyncStreamPool, IOError},
-	server::SocketServerError,
-};
+use crate::io::{AsyncListener, AsyncStreamPool, IOError};
+
+/// Error variants for [`SocketServer`]
+#[derive(Debug)]
+pub enum SocketServerError {
+	/// `io::IOError` wrapper.
+	IOError(IOError),
+}
+
+impl From<IOError> for SocketServerError {
+	fn from(err: IOError) -> Self {
+		Self::IOError(err)
+	}
+}
 
 /// Something that can process requests in an async way.
 pub trait AsyncRequestProcessor: Send {
@@ -100,24 +110,38 @@ where
 	P: AsyncRequestProcessor + Clone,
 {
 	loop {
+		eprintln!("AsyncServer: accepting");
 		let mut stream = listener.accept().await?;
 		loop {
 			match stream.recv().await {
 				Ok(payload) => {
 					let response = processor.process(payload).await;
-					stream.send(&response).await?;
+					match stream.send(&response).await {
+						Ok(()) => {}
+						Err(err) => {
+							eprintln!(
+								"AsyncServer: error sending reply {err:?}, re-accepting"
+							);
+							break;
+						}
+					}
 				}
-				Err(err) => match err {
-					IOError::StdIoError(err) => {
+				Err(err) => {
+					if let IOError::StdIoError(err) = err {
+						eprintln!("AsyncServer: io error {err:?}");
 						if err.kind() == std::io::ErrorKind::UnexpectedEof {
 							eprintln!(
 								"AsyncServer: unexpected eof, re-accepting"
 							);
-							break; // just re-accept
+							break;
 						}
+					} else {
+						eprintln!(
+							"AsyncServer: unknown error {err:?}, re-accepting"
+						);
+						break;
 					}
-					_ => return Err(err.into()),
-				},
+				}
 			}
 		}
 	}

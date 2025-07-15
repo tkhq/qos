@@ -25,9 +25,10 @@ fn connects_and_gets_info() {
 	let r = ureq::get("http://127.0.0.1:3323/qos/enclave-info").call();
 	assert!(r.is_err()); // expect 500 here
 
-	let secret_path: PathWrapper = "./reaper_works.secret".into();
+	let secret_path: PathWrapper = "/tmp/qos_host_reaper_works.secret".into();
 	// let eph_path = "reaper_works.eph.key";
-	let manifest_path: PathWrapper = "reaper_works.manifest".into();
+	let manifest_path: PathWrapper =
+		"/tmp/qos_host_reaper_works.manifest".into();
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(std::fs::remove_file(&*secret_path));
@@ -52,7 +53,7 @@ fn connects_and_gets_info() {
 			.into();
 
 	// Give the enclave server time to bind to the socket
-	std::thread::sleep(std::time::Duration::from_millis(200));
+	std::thread::sleep(std::time::Duration::from_millis(500));
 
 	let r = ureq::get("http://127.0.0.1:3323/qos/enclave-info").call();
 	assert!(r.is_ok()); // expect 200 here

@@ -17,19 +17,15 @@ compile_error!(
 	"feature \"vm\" and feature \"mock\" cannot be enabled at the same time"
 );
 
-#[cfg(feature = "async")]
 pub mod async_client;
-#[cfg(feature = "async")]
 pub mod async_server;
 
 pub mod cli;
-pub mod client;
 pub mod handles;
 pub mod io;
 pub mod parser;
 pub mod protocol;
 pub mod reaper;
-pub mod server;
 
 /// Path to Quorum Key secret.
 #[cfg(not(feature = "vm"))]

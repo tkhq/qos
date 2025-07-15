@@ -8,12 +8,9 @@ use std::{
 
 use qos_core::{
 	cli::{CID, PORT, USOCK},
-	io::SocketAddress,
+	io::{AsyncStreamPool, SocketAddress, TimeVal, TimeValLike},
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
-
-#[cfg(feature = "async")]
-use qos_core::io::AsyncStreamPool;
 
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
@@ -113,20 +110,20 @@ impl HostOpts {
 		SocketAddr::new(IpAddr::V4(ip), port)
 	}
 
-	/// Create a new `AsyncPool` of `AsyncStream` using the list of `SocketAddress` for the enclave server and
-	/// return the new `AsyncPool`.
-	#[cfg(feature = "async")]
-	pub(crate) fn enclave_pool(
-		&self,
-	) -> Result<AsyncStreamPool, qos_core::io::IOError> {
-		use qos_core::io::{TimeVal, TimeValLike};
-
+	pub(crate) fn socket_timeout(&self) -> TimeVal {
 		let default_timeout = &qos_core::DEFAULT_SOCKET_TIMEOUT.to_owned();
 		let timeout_str =
 			self.parsed.single(SOCKET_TIMEOUT).unwrap_or(default_timeout);
-		let timeout = TimeVal::milliseconds(
+		TimeVal::milliseconds(
 			timeout_str.parse().expect("invalid timeout value"),
-		);
+		)
+	}
+
+	/// Create a new `AsyncPool` of `AsyncStream` using the list of `SocketAddress` for the enclave server and
+	/// return the new `AsyncPool`.
+	pub(crate) fn enclave_pool(
+		&self,
+	) -> Result<AsyncStreamPool, qos_core::io::IOError> {
 		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
@@ -144,12 +141,12 @@ impl HostOpts {
 				let address =
 					SocketAddress::new_vsock(c, p, self.to_host_flag());
 
-				AsyncStreamPool::new(address, timeout, 1) // qos_host needs only 1
+				AsyncStreamPool::new(address, 1) // qos_host needs only 1
 			}
 			(None, None, Some(u)) => {
 				let address = SocketAddress::new_unix(u);
 
-				AsyncStreamPool::new(address, timeout, 1)
+				AsyncStreamPool::new(address, 1)
 			}
 			_ => panic!("Invalid socket opts"),
 		}
@@ -227,21 +224,12 @@ impl CLI {
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
 		} else {
-			#[cfg(not(feature = "async"))]
-			crate::HostServer::new(
-				options.enclave_addr(),
-				options.host_addr(),
-				options.base_path(),
-			)
-			.serve()
-			.await;
-
-			#[cfg(feature = "async")]
 			crate::async_host::AsyncHostServer::new(
 				options
 					.enclave_pool()
 					.expect("unable to create enclave pool")
 					.shared(),
+				options.socket_timeout(),
 				options.host_addr(),
 				options.base_path(),
 			)

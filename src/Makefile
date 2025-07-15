@@ -159,10 +159,6 @@ test:
 	@# The integration tests rely on binaries from other crates being built, so
 	@# we build all the workspace targets.
 	cargo build --all
-	@# We also need the async version of qos_core
-	cargo build --bin async_qos_core --features async,mock
-	@# We also need the async version of qos_host
-	cargo build --bin async_qos_host --features async
 	@# Run tests
 	cargo test
 	@# When we build the workspace it resolves with the qos_core mock feature
