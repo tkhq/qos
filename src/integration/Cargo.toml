@@ -9,7 +9,7 @@ qos_core = { path = "../qos_core", features = ["mock"], default-features = false
 qos_nsm = { path = "../qos_nsm", features = ["mock"], default-features = false }
 qos_host = { path = "../qos_host", default-features = false }
 qos_client = { path = "../qos_client", default-features = false }
-qos_net = { path = "../qos_net", features = ["proxy", "async_proxy"], default-features = false }
+qos_net = { path = "../qos_net", features = ["proxy"], default-features = false }
 qos_crypto = { path = "../qos_crypto" }
 qos_hex = { path = "../qos_hex" }
 qos_p256 = { path = "../qos_p256", features = ["mock"] }

@@ -2,7 +2,7 @@ use std::{process::Command, time::Duration};
 
 use borsh::BorshDeserialize;
 use integration::{
-	PivotRemoteTlsMsg, ASYNC_QOS_NET_PATH, PIVOT_ASYNC_REMOTE_TLS_PATH,
+	PivotRemoteTlsMsg, PIVOT_ASYNC_REMOTE_TLS_PATH, QOS_NET_PATH,
 };
 use qos_core::{
 	async_client::AsyncClient,
@@ -20,7 +20,7 @@ const POOL_SIZE: &str = "1";
 
 #[tokio::test]
 async fn fetch_async_remote_tls_content() {
-	let _net_proxy: ChildWrapper = Command::new(ASYNC_QOS_NET_PATH)
+	let _net_proxy: ChildWrapper = Command::new(QOS_NET_PATH)
 		.arg("--usock")
 		.arg(REMOTE_TLS_TEST_NET_PROXY_SOCKET)
 		.arg("--pool-size")

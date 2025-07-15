@@ -5,8 +5,9 @@ use qos_core::{
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
 
-#[cfg(feature = "async_proxy")]
 use qos_core::io::AsyncStreamPool;
+
+use crate::async_proxy::AsyncProxyServer;
 
 /// "cid"
 pub const CID: &str = "cid";
@@ -34,7 +35,6 @@ impl ProxyOpts {
 
 	/// Create a new `AsyncPool` of `AsyncStream` using the list of `SocketAddress` for the enclave server and
 	/// return the new `AsyncPool`.
-	#[cfg(feature = "async_proxy")]
 	pub(crate) fn async_pool(
 		&self,
 	) -> Result<AsyncStreamPool, qos_core::io::IOError> {
@@ -98,13 +98,11 @@ impl ProxyOpts {
 pub struct CLI;
 
 impl CLI {
-	/// Execute the enclave proxy CLI with the environment args.
-	pub fn execute() {
-		use crate::proxy::Proxy;
-		use qos_core::server::SocketServer;
-		use std::env;
+	/// Execute the enclave proxy CLI with the environment args in an async way.
+	pub async fn execute() {
+		use qos_core::async_server::AsyncSocketServer;
 
-		let mut args: Vec<String> = env::args().collect();
+		let mut args: Vec<String> = std::env::args().collect();
 		let opts = ProxyOpts::new(&mut args);
 
 		if opts.parsed.version() {
@@ -112,7 +110,19 @@ impl CLI {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
-			SocketServer::listen(opts.addr(), Proxy::new()).unwrap();
+			let server = AsyncSocketServer::listen_proxy(
+				opts.async_pool().expect("unable to create async socket pool"),
+			)
+			.await
+			.expect("unable to get listen join handles");
+
+			match tokio::signal::ctrl_c().await {
+				Ok(_) => {
+					eprintln!("handling ctrl+c the tokio way");
+					server.terminate();
+				}
+				Err(err) => panic!("{err}"),
+			}
 		}
 	}
 }
@@ -181,7 +191,6 @@ mod test {
 	}
 
 	#[test]
-	#[cfg(feature = "async_proxy")]
 	fn parse_pool_size() {
 		let mut args: Vec<_> =
 			vec!["binary", "--usock", "./test.sock", "--pool-size", "7"]

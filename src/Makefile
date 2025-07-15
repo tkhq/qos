@@ -163,8 +163,6 @@ test:
 	cargo build --bin async_qos_core --features async,mock
 	@# We also need the async version of qos_host
 	cargo build --bin async_qos_host --features async
-	@# We also need the async version of qos_net
-	cargo build --bin async_qos_net --features async_proxy
 	@# Run tests
 	cargo test
 	@# When we build the workspace it resolves with the qos_core mock feature
