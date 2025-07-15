@@ -37,7 +37,7 @@ impl Drop for ChildWrapper {
 			}
 
 			// allow clean exit
-			std::thread::sleep(Duration::from_millis(10));
+			std::thread::sleep(Duration::from_millis(50));
 		}
 
 		// Kill the process and explicitly ignore the result

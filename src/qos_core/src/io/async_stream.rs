@@ -1,11 +1,6 @@
 //! Abstractions to handle connection based socket streams.
 
-use std::{
-	pin::Pin,
-	time::{Duration, SystemTime},
-};
-
-pub use nix::sys::time::TimeVal;
+use std::{io::ErrorKind, pin::Pin};
 
 use tokio::{
 	io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
@@ -35,58 +30,41 @@ enum InnerStream {
 pub struct AsyncStream {
 	address: Option<SocketAddress>,
 	inner: Option<InnerStream>,
-	timeout: Duration,
 }
 
 impl AsyncStream {
 	// accept a new connection, used by server side
 	fn unix_accepted(stream: UnixStream) -> Self {
-		Self {
-			address: None,
-			inner: Some(InnerStream::Unix(stream)),
-			timeout: Duration::ZERO,
-		}
+		Self { address: None, inner: Some(InnerStream::Unix(stream)) }
 	}
 
 	// accept a new connection, used by server side
 	#[cfg(feature = "vm")]
 	fn vsock_accepted(stream: VsockStream) -> Self {
-		Self {
-			address: None,
-			inner: Some(InnerStream::Vsock(stream)),
-			timeout: Duration::ZERO,
-		}
+		Self { address: None, inner: Some(InnerStream::Vsock(stream)) }
 	}
 
 	/// Create a new `AsyncStream` with known `SocketAddress` and `TimeVal`. The stream starts disconnected
 	/// and will connect on the first `call`.
 	#[must_use]
-	pub fn new(address: &SocketAddress, timeout: TimeVal) -> Self {
-		#[allow(clippy::cast_possible_truncation)]
-		#[allow(clippy::cast_sign_loss)]
-		let timeout = Duration::new(
-			timeout.tv_sec() as u64,
-			timeout.tv_usec() as u32 * 1000,
-		);
-
-		Self { address: Some(address.clone()), inner: None, timeout }
+	pub fn new(address: &SocketAddress) -> Self {
+		Self { address: Some(address.clone()), inner: None }
 	}
 
 	/// Create a new `Stream` from a `SocketAddress` and a timeout and connect using async
 	/// Sets `inner` to the new stream.
 	pub async fn connect(&mut self) -> Result<(), IOError> {
-		let timeout = self.timeout;
 		let addr = self.address()?.clone();
 
 		match self.address()? {
 			SocketAddress::Unix(_uaddr) => {
-				let inner = retry_unix_connect(addr, timeout).await?;
+				let inner = unix_connect(addr).await?;
 
 				self.inner = Some(InnerStream::Unix(inner));
 			}
 			#[cfg(feature = "vm")]
 			SocketAddress::Vsock(_vaddr) => {
-				let inner = retry_vsock_connect(addr, timeout).await?;
+				let inner = vsock_connect(addr).await?;
 
 				self.inner = Some(InnerStream::Vsock(inner));
 			}
@@ -97,16 +75,15 @@ impl AsyncStream {
 
 	/// Reconnects this `AsyncStream` by calling `connect` again on the underlaying socket
 	pub async fn reconnect(&mut self) -> Result<(), IOError> {
-		let timeout = self.timeout;
 		let addr = self.address()?.clone();
 
 		match &mut self.inner_mut()? {
 			InnerStream::Unix(ref mut s) => {
-				*s = retry_unix_connect(addr, timeout).await?;
+				*s = unix_connect(addr).await?;
 			}
 			#[cfg(feature = "vm")]
 			InnerStream::Vsock(ref mut s) => {
-				*s = retry_vsock_connect(addr, timeout).await?;
+				*s = vsock_connect(addr).await?;
 			}
 		}
 		Ok(())
@@ -136,8 +113,20 @@ impl AsyncStream {
 		if self.inner.is_none() {
 			self.connect().await?;
 		}
-		self.send(req_buf).await?;
-		self.recv().await
+
+		let send_result = self.send(req_buf).await;
+		if send_result.is_err() {
+			self.reset();
+			send_result?;
+		}
+
+		let result = self.recv().await;
+		eprintln!("AsyncStream: received");
+		if result.is_err() {
+			self.reset();
+		}
+
+		result
 	}
 
 	fn address(&self) -> Result<&SocketAddress, IOError> {
@@ -146,6 +135,11 @@ impl AsyncStream {
 
 	fn inner_mut(&mut self) -> Result<&mut InnerStream, IOError> {
 		self.inner.as_mut().ok_or(IOError::DisconnectedStream)
+	}
+
+	/// Resets the inner stream, forcing a re-connect next `call`
+	pub fn reset(&mut self) {
+		self.inner = None;
 	}
 }
 
@@ -156,6 +150,8 @@ async fn send<S: AsyncWriteExt + Unpin>(
 	let len = buf.len();
 	// First, send the length of the buffer
 	let len_buf: [u8; size_of::<u64>()] = (len as u64).to_le_bytes();
+
+	// send the header
 	stream.write_all(&len_buf).await?;
 	// Send the actual contents of the buffer
 	stream.write_all(buf).await?;
@@ -168,7 +164,14 @@ async fn recv<S: AsyncReadExt + Unpin>(
 ) -> Result<Vec<u8>, IOError> {
 	let length: usize = {
 		let mut buf = [0u8; size_of::<u64>()];
-		stream.read_exact(&mut buf).await?;
+
+		let r = stream.read_exact(&mut buf).await.map_err(|e| match e.kind() {
+			ErrorKind::UnexpectedEof => IOError::RecvConnectionClosed,
+			_ => IOError::StdIoError(e),
+		});
+
+		r?;
+
 		u64::from_le_bytes(buf)
 			.try_into()
 			// Should only be possible if we are on 32bit architecture
@@ -177,7 +180,10 @@ async fn recv<S: AsyncReadExt + Unpin>(
 
 	// Read the buffer
 	let mut buf = vec![0; length];
-	stream.read_exact(&mut buf).await?;
+	stream.read_exact(&mut buf).await.map_err(|e| match e.kind() {
+		ErrorKind::UnexpectedEof => IOError::RecvConnectionClosed,
+		_ => IOError::StdIoError(e),
+	})?;
 
 	Ok(buf)
 }
@@ -259,6 +265,10 @@ impl AsyncListener {
 			SocketAddress::Unix(uaddr) => {
 				let path =
 					uaddr.path().ok_or(IOError::ConnectAddressInvalid)?;
+				if path.exists() {
+					// attempt cleanup, this mostly happens from tests/panics
+					std::fs::remove_file(path)?;
+				}
 				let inner = InnerListener::Unix(UnixListener::bind(path)?);
 				Self { inner }
 			}
@@ -309,79 +319,24 @@ impl Drop for AsyncListener {
 	}
 }
 
-// raw unix socket connect retry with timeout, 50ms period
-async fn retry_unix_connect(
+async fn unix_connect(
 	addr: SocketAddress,
-	timeout: Duration,
 ) -> Result<UnixStream, std::io::Error> {
-	let sleep_time = Duration::from_millis(50);
-	let eot = SystemTime::now() + timeout;
 	let addr = addr.usock();
 	let path = addr.path().ok_or(IOError::ConnectAddressInvalid)?;
 
-	loop {
-		let socket = UnixSocket::new_stream()?;
-
-		eprintln!("Attempting USOCK connect to: {:?}", addr.path());
-		let tr = tokio::time::timeout(timeout, socket.connect(path)).await;
-		match tr {
-			Ok(r) => match r {
-				Ok(stream) => {
-					eprintln!("Connected to USOCK at: {:?}", addr.path());
-					return Ok(stream);
-				}
-				Err(err) => {
-					eprintln!("Error connecting to USOCK: {err}");
-					if SystemTime::now() > eot {
-						return Err(err);
-					}
-					tokio::time::sleep(sleep_time).await;
-				}
-			},
-			Err(err) => {
-				eprintln!(
-					"Connecting to USOCK failed with timeout error: {err}"
-				);
-				return Err(err.into());
-			}
-		}
-	}
+	let socket = UnixSocket::new_stream()?;
+	eprintln!("Attempting USOCK connect to: {:?}", addr.path());
+	socket.connect(path).await
 }
 
-// raw vsock socket connect retry with timeout, 50ms period
+// raw vsock socket connect
 #[cfg(feature = "vm")]
-async fn retry_vsock_connect(
+async fn vsock_connect(
 	addr: SocketAddress,
-	timeout: Duration,
 ) -> Result<VsockStream, std::io::Error> {
-	let sleep_time = Duration::from_millis(50);
-	let eot = SystemTime::now() + timeout;
 	let addr = addr.vsock();
 
-	loop {
-		eprintln!("Attempting VSOCK connect to: {:?}", addr);
-		let tr =
-			tokio::time::timeout(timeout, VsockStream::connect(*addr)).await;
-		match tr {
-			Ok(r) => match r {
-				Ok(stream) => {
-					eprintln!("Connected to VSOCK at: {:?}", addr);
-					return Ok(stream);
-				}
-				Err(err) => {
-					eprintln!("Error connecting to VSOCK: {}", err);
-					if SystemTime::now() > eot {
-						return Err(err);
-					}
-					tokio::time::sleep(sleep_time).await;
-				}
-			},
-			Err(err) => {
-				eprintln!(
-					"Connecting to VSOCK failed with timeout error: {err}"
-				);
-				return Err(err.into());
-			}
-		}
-	}
+	eprintln!("Attempting VSOCK connect to: {:?}", addr);
+	VsockStream::connect(*addr).await
 }

@@ -38,8 +38,6 @@ impl ProxyOpts {
 	pub(crate) fn async_pool(
 		&self,
 	) -> Result<AsyncStreamPool, qos_core::io::IOError> {
-		use qos_core::io::{TimeVal, TimeValLike};
-
 		let pool_size: u32 = self
 			.parsed
 			.single(POOL_SIZE)
@@ -59,12 +57,12 @@ impl ProxyOpts {
 				let address =
 					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS);
 
-				AsyncStreamPool::new(address, TimeVal::seconds(5), pool_size)
+				AsyncStreamPool::new(address, pool_size)
 			}
 			(None, None, Some(u)) => {
 				let address = SocketAddress::new_unix(u);
 
-				AsyncStreamPool::new(address, TimeVal::seconds(0), pool_size)
+				AsyncStreamPool::new(address, pool_size)
 			}
 			_ => panic!("Invalid socket opts"),
 		}

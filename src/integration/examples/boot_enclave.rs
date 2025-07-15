@@ -241,7 +241,7 @@ async fn main() {
 
 	// -- ENCLAVE start enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/async_qos_core")
+		Command::new("../target/debug/qos_core")
 			.args([
 				"--usock",
 				&*usock,

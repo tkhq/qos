@@ -22,8 +22,8 @@ serde_bytes = { version = "0.11", default-features = false }
 serde = { version = "1", features = ["derive"], default-features = false }
 
 futures = { version = "0.3.30" }
-tokio = { version = "1.38.0", features = ["io-util", "macros", "net", "rt-multi-thread", "time", "signal"], default-features = false, optional = true}
-tokio-vsock = { version = "0.7.1", optional = true }
+tokio = { version = "1.38.0", features = ["io-util", "macros", "net", "rt-multi-thread", "time", "signal"], default-features = false }
+tokio-vsock = { version = "0.7.1" }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
@@ -33,13 +33,11 @@ rustls = { version = "0.23.5" }
 webpki-roots = { version = "1.0.2" }
 
 [features]
-async = ["tokio", "tokio-vsock"]
 # Support for VSOCK
 vm = []
 # Never use in production - support for mock NSM
 mock = ["qos_nsm/mock"]
 
 [[bin]]
-name = "async_qos_core"
-path = "src/bin/async_qos_core.rs"
-required-features = ["async"]
+name = "qos_core"
+path = "src/main.rs"

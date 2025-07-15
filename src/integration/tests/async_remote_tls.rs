@@ -43,12 +43,14 @@ async fn fetch_async_remote_tls_content() {
 
 	let enclave_pool = AsyncStreamPool::new(
 		SocketAddress::new_unix(REMOTE_TLS_TEST_ENCLAVE_SOCKET),
-		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 		1,
 	)
 	.expect("unable to create enclave async pool");
 
-	let enclave_client = AsyncClient::new(enclave_pool.shared());
+	let enclave_client = AsyncClient::new(
+		enclave_pool.shared(),
+		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
+	);
 
 	let app_request = borsh::to_vec(&PivotRemoteTlsMsg::RemoteTlsRequest {
 		host: "api.turnkey.com".to_string(),

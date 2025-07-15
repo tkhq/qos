@@ -1,20 +1,8 @@
 //! Abstractions to handle connection based socket streams.
 
-use std::{
-	io::{ErrorKind, Read, Write},
-	mem::size_of,
-	os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd},
-};
-
 #[cfg(feature = "vm")]
 use nix::sys::socket::VsockAddr;
-use nix::sys::socket::{
-	accept, bind, connect, listen, recv, send, socket, sockopt, AddressFamily,
-	Backlog, MsgFlags, SetSockOpt, SockFlag, SockType, SockaddrLike, UnixAddr,
-};
-pub use nix::sys::time::{TimeVal, TimeValLike};
-
-use super::IOError;
+use nix::sys::socket::{AddressFamily, SockaddrLike, UnixAddr};
 
 // 25(retries) x 10(milliseconds) = 1/4 a second of retrying
 const MAX_RETRY: usize = 25;
@@ -154,7 +142,7 @@ impl SocketAddress {
 }
 
 /// Extract svm_flags field value from existing VSOCK.
-#[cfg(all(feature = "vm", feature = "async"))]
+#[cfg(feature = "vm")]
 #[allow(unsafe_code)]
 pub fn vsock_svm_flags(vsock: VsockAddr) -> u8 {
 	unsafe {
@@ -175,7 +163,6 @@ struct SockAddrVm {
 	svm_flags: u8,
 	svm_zero: [u8; 3],
 }
-
 /// Handle on a stream
 pub struct Stream {
 	fd: OwnedFd,

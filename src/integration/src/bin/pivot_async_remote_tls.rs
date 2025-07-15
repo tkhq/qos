@@ -5,11 +5,7 @@ use borsh::BorshDeserialize;
 use integration::PivotRemoteTlsMsg;
 use qos_core::{
 	async_server::{AsyncRequestProcessor, AsyncSocketServer},
-	io::{
-		AsyncStreamPool, SharedAsyncStreamPool, SocketAddress, TimeVal,
-		TimeValLike,
-	},
-	protocol::ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
+	io::{AsyncStreamPool, SharedAsyncStreamPool, SocketAddress},
 };
 use qos_net::async_proxy_stream::AsyncProxyStream;
 use rustls::RootCertStore;
@@ -109,24 +105,20 @@ async fn main() {
 	let socket_path: &String = &args[1];
 	let proxy_path: &String = &args[2];
 
-	let pool = AsyncStreamPool::new(
-		SocketAddress::new_unix(socket_path),
-		TimeVal::seconds(0), // listener, no timeout
-		1,
-	)
-	.expect("unable to create async stream pool");
+	let enclave_pool =
+		AsyncStreamPool::new(SocketAddress::new_unix(socket_path), 1)
+			.expect("unable to create async stream pool");
 
-	let proxy_pool = AsyncStreamPool::new(
-		SocketAddress::new_unix(proxy_path),
-		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
-		1,
-	)
-	.expect("unable to create async stream pool")
-	.shared();
+	let proxy_pool =
+		AsyncStreamPool::new(SocketAddress::new_unix(proxy_path), 1)
+			.expect("unable to create async stream pool")
+			.shared();
 
-	let server =
-		AsyncSocketServer::listen_all(pool, &Processor::new(proxy_pool))
-			.unwrap();
+	let server = AsyncSocketServer::listen_all(
+		enclave_pool,
+		&Processor::new(proxy_pool),
+	)
+	.unwrap();
 
 	match tokio::signal::ctrl_c().await {
 		Ok(_) => {

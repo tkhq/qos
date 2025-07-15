@@ -1,5 +1,6 @@
 use qos_core::cli::CLI;
 
-pub fn main() {
-	CLI::execute();
+#[tokio::main]
+async fn main() {
+	CLI::execute().await;
 }

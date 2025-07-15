@@ -1,9 +1,11 @@
 use borsh::BorshDeserialize;
-use integration::{PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH};
+use integration::{
+	wait_for_usock, PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH,
+};
 use qos_core::{
-	client::Client,
+	async_client::AsyncClient,
 	handles::Handles,
-	io::{SocketAddress, TimeVal, TimeValLike},
+	io::{AsyncStreamPool, SocketAddress, TimeVal, TimeValLike},
 	protocol::{
 		msg::ProtocolMsg,
 		services::boot::{
@@ -22,8 +24,8 @@ const TEST_TMP: &str = "/tmp/enclave_app_client_socket_stress";
 const ENCLAVE_SOCK: &str = "/tmp/enclave_app_client_socket_stress/enclave.sock";
 const APP_SOCK: &str = "/tmp/enclave_app_client_socket_stress/app.sock";
 
-#[test]
-fn enclave_app_client_socket_stress() {
+#[tokio::test]
+async fn enclave_app_client_socket_stress() {
 	let _: PathWrapper = TEST_TMP.into();
 	std::fs::create_dir_all(TEST_TMP).unwrap();
 
@@ -73,12 +75,18 @@ fn enclave_app_client_socket_stress() {
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	handles.put_quorum_key(&p256_pair).unwrap();
 
+	let enclave_pool =
+		AsyncStreamPool::new(SocketAddress::new_unix(ENCLAVE_SOCK), 1).unwrap();
+
+	let app_pool =
+		AsyncStreamPool::new(SocketAddress::new_unix(APP_SOCK), 1).unwrap();
+
 	std::thread::spawn(move || {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
-			SocketAddress::new_unix(ENCLAVE_SOCK),
-			SocketAddress::new_unix(APP_SOCK),
+			enclave_pool,
+			app_pool,
 			// Force the phase to quorum key provisioned so message proxy-ing
 			// works
 			Some(ProtocolPhase::QuorumKeyProvisioned),
@@ -86,11 +94,13 @@ fn enclave_app_client_socket_stress() {
 	});
 
 	// Make sure the pivot has some time to start up
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	wait_for_usock(APP_SOCK).await;
 
-	let enclave_client = Client::new(
-		SocketAddress::new_unix(ENCLAVE_SOCK),
-		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 1),
+	let enclave_client_pool =
+		AsyncStreamPool::new(SocketAddress::new_unix(ENCLAVE_SOCK), 1).unwrap();
+	let enclave_client = AsyncClient::new(
+		enclave_client_pool.shared(),
+		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 3), // needs to be bigger than the slow request below + some time for recovery
 	);
 
 	let app_request =
@@ -98,8 +108,9 @@ fn enclave_app_client_socket_stress() {
 	let request =
 		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
 			.unwrap();
-	let raw_response = enclave_client.send(&request).unwrap();
+	let raw_response = enclave_client.call(&request).await.unwrap();
 	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
+
 	assert_eq!(
 		response,
 		ProtocolMsg::ProtocolErrorResponse(
@@ -107,15 +118,16 @@ fn enclave_app_client_socket_stress() {
 		)
 	);
 
-	std::thread::sleep(std::time::Duration::from_secs(
+	tokio::time::sleep(std::time::Duration::from_secs(
 		REAPER_RESTART_DELAY_IN_SECONDS + 1,
-	));
+	))
+	.await;
 	// The pivot panicked and should have been restarted.
 	let app_request = borsh::to_vec(&PivotSocketStressMsg::OkRequest).unwrap();
 	let request =
 		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
 			.unwrap();
-	let raw_response = enclave_client.send(&request).unwrap();
+	let raw_response = enclave_client.call(&request).await.unwrap();
 	let response = {
 		let msg = ProtocolMsg::try_from_slice(&raw_response).unwrap();
 		let data = match msg {
@@ -128,11 +140,11 @@ fn enclave_app_client_socket_stress() {
 
 	// Send a request that the app will take too long to respond to
 	let app_request =
-		borsh::to_vec(&PivotSocketStressMsg::SlowRequest).unwrap();
+		borsh::to_vec(&PivotSocketStressMsg::SlowRequest(5500)).unwrap();
 	let request =
 		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
 			.unwrap();
-	let raw_response = enclave_client.send(&request).unwrap();
+	let raw_response = enclave_client.call(&request).await.unwrap();
 	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
 	assert_eq!(
 		response,

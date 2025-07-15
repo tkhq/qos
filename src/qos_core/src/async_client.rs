@@ -1,30 +1,105 @@
 //! Streaming socket based client to connect with
 //! [`crate::server::SocketServer`].
 
-use crate::{client::ClientError, io::SharedAsyncStreamPool};
+use std::time::Duration;
 
+use nix::sys::time::TimeVal;
+
+use crate::io::{IOError, SharedAsyncStreamPool};
+
+/// Enclave client error.
+#[derive(Debug)]
+pub enum ClientError {
+	/// [`io::IOError`] wrapper.
+	IOError(IOError),
+	/// `borsh::io::Error` wrapper.
+	BorshError(borsh::io::Error),
+}
+
+impl From<IOError> for ClientError {
+	fn from(err: IOError) -> Self {
+		Self::IOError(err)
+	}
+}
+
+impl From<borsh::io::Error> for ClientError {
+	fn from(err: borsh::io::Error) -> Self {
+		Self::BorshError(err)
+	}
+}
 /// Client for communicating with the enclave `crate::server::SocketServer`.
 #[derive(Clone, Debug)]
 pub struct AsyncClient {
 	pool: SharedAsyncStreamPool,
+	timeout: Duration,
 }
 
 impl AsyncClient {
 	/// Create a new client.
 	#[must_use]
-	pub fn new(pool: SharedAsyncStreamPool) -> Self {
-		Self { pool }
+	pub fn new(pool: SharedAsyncStreamPool, timeout: TimeVal) -> Self {
+		let timeout = timeval_to_duration(timeout);
+		Self { pool, timeout }
 	}
 
 	/// Send raw bytes and wait for a response until the clients configured
 	/// timeout.
+	///
+	/// # Panics
+	/// Does not. See comment bellow.
 	pub async fn call(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
-		// TODO: ales - remove later, debug reasons
 		let pool = self.pool.read().await;
-		let mut stream = pool.get().await;
-		eprintln!("AsyncClient::call - Stream aquired");
 
-		let resp = stream.call(request).await?;
+		// hold the stream if we got it before timeout, but errored out on timeout later
+		let mut maybe_stream = None;
+
+		// timeout should apply to the entire operation
+		let timeout_result = tokio::time::timeout(self.timeout, async {
+			maybe_stream = Some(pool.get().await);
+
+			maybe_stream
+				.as_deref_mut()
+				.expect("unreachable unwrap") // this can't happen, we just assigned it above
+				.call(request)
+				.await
+		})
+		.await;
+
+		let resp = match timeout_result {
+			Ok(result) => result?,
+			Err(_err) => {
+				// ensure we clean up the stream if we had it
+				if let Some(mut stream) = maybe_stream {
+					stream.reset();
+				}
+				return Err(IOError::RecvTimeout.into());
+			}
+		};
+
 		Ok(resp)
 	}
+
+	/// Expands the underlaying `AsyncPool` to given `pool_size`
+	pub async fn expand_to(
+		&mut self,
+		pool_size: u32,
+	) -> Result<(), ClientError> {
+		self.pool.write().await.expand_to(pool_size)?;
+
+		Ok(())
+	}
+
+	/// Attempt a one-off connection, used for tests
+	pub async fn try_connect(&self) -> Result<(), IOError> {
+		let pool = self.pool.read().await;
+		let mut stream = pool.get().await;
+
+		stream.connect().await
+	}
+}
+
+fn timeval_to_duration(timeval: TimeVal) -> Duration {
+	#[allow(clippy::cast_possible_truncation)]
+	#[allow(clippy::cast_sign_loss)]
+	Duration::new(timeval.tv_sec() as u64, timeval.tv_usec() as u32 * 1000)
 }

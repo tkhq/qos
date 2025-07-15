@@ -2,9 +2,8 @@
 use borsh::BorshDeserialize;
 use futures::Future;
 use qos_core::{
-	async_server::AsyncSocketServer,
+	async_server::{AsyncSocketServer, SocketServerError},
 	io::{AsyncListener, AsyncStream, AsyncStreamPool, IOError},
-	server::SocketServerError,
 };
 
 use crate::{

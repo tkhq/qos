@@ -1,8 +1,8 @@
 use qos_core::{
 	async_client::AsyncClient,
+	async_server::SocketServerError,
 	async_server::{AsyncRequestProcessor, AsyncSocketServer},
 	io::{AsyncStreamPool, SocketAddress, TimeVal, TimeValLike},
-	server::SocketServerError,
 };
 
 #[derive(Clone)]
@@ -17,10 +17,8 @@ impl AsyncRequestProcessor for EchoProcessor {
 async fn run_echo_server(
 	socket_path: &str,
 ) -> Result<AsyncSocketServer, SocketServerError> {
-	let timeout = TimeVal::milliseconds(50);
-	let pool =
-		AsyncStreamPool::new(SocketAddress::new_unix(socket_path), timeout, 1)
-			.expect("unable to create async pool");
+	let pool = AsyncStreamPool::new(SocketAddress::new_unix(socket_path), 1)
+		.expect("unable to create async pool");
 	let server = AsyncSocketServer::listen_all(pool, &EchoProcessor)?;
 
 	Ok(server)
@@ -30,12 +28,12 @@ async fn run_echo_server(
 async fn direct_connect_works() {
 	let socket_path = "/tmp/async_client_test_direct_connect_works.sock";
 	let socket = SocketAddress::new_unix(socket_path);
-	let timeout = TimeVal::milliseconds(50);
-	let pool = AsyncStreamPool::new(socket, timeout, 1)
+	let timeout = TimeVal::milliseconds(500);
+	let pool = AsyncStreamPool::new(socket, 1)
 		.expect("unable to create async pool")
 		.shared();
 
-	let client = AsyncClient::new(pool);
+	let client = AsyncClient::new(pool, timeout);
 
 	let server = run_echo_server(socket_path).await.unwrap();
 
@@ -49,11 +47,11 @@ async fn direct_connect_works() {
 async fn times_out_properly() {
 	let socket_path = "/tmp/async_client_test_times_out_properly.sock";
 	let socket = SocketAddress::new_unix(socket_path);
-	let timeout = TimeVal::milliseconds(50);
-	let pool = AsyncStreamPool::new(socket, timeout, 1)
+	let timeout = TimeVal::milliseconds(500);
+	let pool = AsyncStreamPool::new(socket, 1)
 		.expect("unable to create async pool")
 		.shared();
-	let client = AsyncClient::new(pool);
+	let client = AsyncClient::new(pool, timeout);
 
 	let r = client.call(&[0]).await;
 	assert!(r.is_err());
@@ -63,11 +61,11 @@ async fn times_out_properly() {
 async fn repeat_connect_works() {
 	let socket_path = "/tmp/async_client_test_repeat_connect_works.sock";
 	let socket = SocketAddress::new_unix(socket_path);
-	let timeout = TimeVal::milliseconds(50);
-	let pool = AsyncStreamPool::new(socket, timeout, 1)
+	let timeout = TimeVal::milliseconds(500);
+	let pool = AsyncStreamPool::new(socket, 1)
 		.expect("unable to create async pool")
 		.shared();
-	let client = AsyncClient::new(pool);
+	let client = AsyncClient::new(pool, timeout);
 
 	// server not running yet, expect a connection error
 	let r = client.call(&[0]).await;

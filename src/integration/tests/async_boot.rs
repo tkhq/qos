@@ -260,7 +260,7 @@ async fn async_standard_boot_e2e() {
 
 	// -- ENCLAVE start enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/async_qos_core")
+		Command::new("../target/debug/qos_core")
 			.args([
 				"--usock",
 				&*usock,
@@ -280,7 +280,7 @@ async fn async_standard_boot_e2e() {
 
 	// -- HOST start host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/async_qos_host")
+		Command::new("../target/debug/qos_host")
 			.args([
 				"--host-port",
 				&host_port.to_string(),

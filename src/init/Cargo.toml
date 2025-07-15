@@ -8,7 +8,7 @@ publish = false
 libc = "0.2.172"
 qos_aws = { path = "../qos_aws"}
 qos_system = { path = "../qos_system"}
-qos_core = { path = "../qos_core", features = ["vm", "async"], default-features = false }
+qos_core = { path = "../qos_core", features = ["vm"], default-features = false }
 qos_nsm = { path = "../qos_nsm", default-features = false }
 tokio = { version = "1.38.0", features = ["io-util", "macros", "net", "rt-multi-thread", "time", "signal"], default-features = false }
 

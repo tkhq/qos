@@ -30,7 +30,7 @@ use axum::{
 use borsh::BorshDeserialize;
 use qos_core::{
 	async_client::AsyncClient,
-	io::SharedAsyncStreamPool,
+	io::{SharedAsyncStreamPool, TimeVal},
 	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase},
 };
 
@@ -49,6 +49,7 @@ struct AsyncQosHostState {
 #[allow(clippy::module_name_repetitions)]
 pub struct AsyncHostServer {
 	enclave_pool: SharedAsyncStreamPool,
+	timeout: TimeVal,
 	addr: SocketAddr,
 	base_path: Option<String>,
 }
@@ -59,10 +60,11 @@ impl AsyncHostServer {
 	#[must_use]
 	pub fn new(
 		enclave_pool: SharedAsyncStreamPool,
+		timeout: TimeVal,
 		addr: SocketAddr,
 		base_path: Option<String>,
 	) -> Self {
-		Self { enclave_pool, addr, base_path }
+		Self { enclave_pool, timeout, addr, base_path }
 	}
 
 	fn path(&self, endpoint: &str) -> String {
@@ -81,7 +83,10 @@ impl AsyncHostServer {
 	// pub async fn serve(&self) -> Result<(), String> {
 	pub async fn serve(&self) {
 		let state = Arc::new(AsyncQosHostState {
-			enclave_client: AsyncClient::new(self.enclave_pool.clone()),
+			enclave_client: AsyncClient::new(
+				self.enclave_pool.clone(),
+				self.timeout,
+			),
 		});
 
 		let app = Router::new()

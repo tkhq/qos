@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-qos_core = { path = "../qos_core", default-features = false, features = ["async"] }
+qos_core = { path = "../qos_core", default-features = false }
 
 borsh = { version = "1.0", features = [
     "std",
@@ -35,5 +35,5 @@ webpki-roots = { version = "1.0.2" }
 
 [features]
 default = ["proxy"] # keep this as a default feature ensures we lint by default
-proxy = ["hickory-resolver", "rand", "tokio", "qos_core/async", "tokio-rustls"]
+proxy = ["hickory-resolver", "rand", "tokio", "tokio-rustls"]
 vm = ["qos_core/vm"]

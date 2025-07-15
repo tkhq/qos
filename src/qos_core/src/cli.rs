@@ -12,7 +12,6 @@ use crate::{
 	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
 };
 
-#[cfg(feature = "async")]
 use crate::io::{AsyncStreamPool, IOError};
 
 /// "cid"
@@ -51,11 +50,7 @@ impl EnclaveOpts {
 
 	/// Create a new [`AsyncPool`] of [`AsyncStream`] using the list of [`SocketAddress`] for the enclave server and
 	/// return the new [`AsyncPool`]. Analogous to [`Self::addr`] and [`Self::app_addr`] depending on the [`app`] parameter.
-	#[cfg(feature = "async")]
-	#[allow(unused)]
 	fn async_pool(&self, app: bool) -> Result<AsyncStreamPool, IOError> {
-		use nix::sys::time::{TimeVal, TimeValLike};
-
 		let usock_param = if app { APP_USOCK } else { USOCK };
 
 		match (
@@ -71,15 +66,12 @@ impl EnclaveOpts {
 					p.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
 				AsyncStreamPool::new(
 					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS),
-					TimeVal::seconds(5),
 					1,
 				)
 			}
-			(None, None, Some(u)) => AsyncStreamPool::new(
-				SocketAddress::new_unix(u),
-				TimeVal::seconds(5),
-				1,
-			),
+			(None, None, Some(u)) => {
+				AsyncStreamPool::new(SocketAddress::new_unix(u), 1)
+			}
 			_ => panic!("Invalid socket opts"),
 		}
 	}
@@ -167,37 +159,11 @@ impl EnclaveOpts {
 /// Enclave server CLI.
 pub struct CLI;
 impl CLI {
-	/// Execute the enclave server CLI with the environment args.
-	pub fn execute() {
-		let mut args: Vec<String> = env::args().collect();
-		let opts = EnclaveOpts::new(&mut args);
-
-		if opts.parsed.version() {
-			println!("version: {}", env!("CARGO_PKG_VERSION"));
-		} else if opts.parsed.help() {
-			println!("{}", opts.parsed.info());
-		} else {
-			Reaper::execute(
-				&Handles::new(
-					opts.ephemeral_file(),
-					opts.quorum_file(),
-					opts.manifest_file(),
-					opts.pivot_file(),
-				),
-				opts.nsm(),
-				opts.addr(),
-				opts.app_addr(),
-				None,
-			);
-		}
-	}
-
 	/// Execute the enclave server CLI with the environment args using tokio/async
 	///
 	/// # Panics
 	/// If the socket pools cannot be created
-	#[cfg(feature = "async")]
-	pub fn async_execute() {
+	pub async fn execute() {
 		let mut args: Vec<String> = env::args().collect();
 		let opts = EnclaveOpts::new(&mut args);
 
@@ -206,20 +172,26 @@ impl CLI {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
-			Reaper::async_execute(
-				&Handles::new(
-					opts.ephemeral_file(),
-					opts.quorum_file(),
-					opts.manifest_file(),
-					opts.pivot_file(),
-				),
-				opts.nsm(),
-				opts.async_pool(false)
-					.expect("Unable to create enclave socket pool"),
-				opts.async_pool(true)
-					.expect("Unable to create enclave app pool"),
-				None,
-			);
+			// start reaper in a thread so we can terminate on ctrl+c properly
+			std::thread::spawn(move || {
+				Reaper::execute(
+					&Handles::new(
+						opts.ephemeral_file(),
+						opts.quorum_file(),
+						opts.manifest_file(),
+						opts.pivot_file(),
+					),
+					opts.nsm(),
+					opts.async_pool(false)
+						.expect("Unable to create enclave socket pool"),
+					opts.async_pool(true)
+						.expect("Unable to create enclave app pool"),
+					None,
+				);
+			});
+
+			eprintln!("qos_core: Reaper running, press ctrl+c to quit");
+			let _ = tokio::signal::ctrl_c().await;
 		}
 	}
 }

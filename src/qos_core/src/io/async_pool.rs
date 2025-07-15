@@ -1,6 +1,6 @@
 use std::{path::Path, sync::Arc};
 
-use nix::sys::{socket::UnixAddr, time::TimeVal};
+use nix::sys::socket::UnixAddr;
 use tokio::sync::{Mutex, MutexGuard, RwLock};
 
 use super::{AsyncListener, AsyncStream, IOError, SocketAddress};
@@ -25,7 +25,6 @@ struct AsyncPool<T> {
 pub struct AsyncStreamPool {
 	addresses: Vec<SocketAddress>, // local copy used for `listen` only TODO: refactor listeners out of pool
 	pool: AsyncPool<AsyncStream>,
-	timeout: TimeVal,
 }
 
 /// Helper type to wrap `AsyncStreamPool` in `Arc` and `RwLock`. Used to allow multiple processors to run across IO
@@ -36,7 +35,6 @@ impl AsyncStreamPool {
 	/// Create a new `AsyncStreamPool` with given starting `SocketAddress`, timout and number of addresses to populate.
 	pub fn new(
 		start_address: SocketAddress,
-		timeout: TimeVal,
 		mut count: u32,
 	) -> Result<Self, IOError> {
 		eprintln!(
@@ -56,24 +54,22 @@ impl AsyncStreamPool {
 			addr = addr.next_address()?;
 		}
 
-		Ok(Self::with_addresses(addresses, timeout))
+		Ok(Self::with_addresses(addresses))
 	}
 
 	/// Create a new `AsyncStreamPool` which will contain all the provided addresses but no connections yet.
-	/// Includes the connect timeout which gets used in case `get` gets called.
 	#[must_use]
 	fn with_addresses(
 		addresses: impl IntoIterator<Item = SocketAddress>,
-		timeout: TimeVal,
 	) -> Self {
 		let addresses: Vec<SocketAddress> = addresses.into_iter().collect();
 
 		let streams: Vec<AsyncStream> =
-			addresses.iter().map(|a| AsyncStream::new(a, timeout)).collect();
+			addresses.iter().map(AsyncStream::new).collect();
 
 		let pool = AsyncPool::from(streams);
 
-		Self { addresses, pool, timeout }
+		Self { addresses, pool }
 	}
 
 	/// Helper function to get the Arc and Mutex wrapping
@@ -123,7 +119,7 @@ impl AsyncStreamPool {
 			for _ in count..size {
 				next = next.next_address()?;
 
-				self.pool.push(AsyncStream::new(&next, self.timeout));
+				self.pool.push(AsyncStream::new(&next));
 				self.addresses.push(next.clone());
 			}
 		}

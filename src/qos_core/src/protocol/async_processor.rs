@@ -1,15 +1,18 @@
 //! Quorum protocol processor
 use std::sync::Arc;
 
+use crate::io::{TimeVal, TimeValLike};
 use borsh::BorshDeserialize;
 use tokio::sync::Mutex;
 
 use super::{
-	error::ProtocolError, msg::ProtocolMsg, state::ProtocolState, ProtocolPhase,
+	error::ProtocolError, msg::ProtocolMsg, state::ProtocolState,
+	ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
 };
 use crate::{
+	async_client::{AsyncClient, ClientError},
 	async_server::AsyncRequestProcessor,
-	io::{IOError, SharedAsyncStreamPool},
+	io::SharedAsyncStreamPool,
 };
 
 const MEGABYTE: usize = 1024 * 1024;
@@ -28,7 +31,7 @@ impl ProtocolState {
 /// Enclave state machine that executes when given a `ProtocolMsg`.
 #[derive(Clone)]
 pub struct AsyncProcessor {
-	app_pool: SharedAsyncStreamPool,
+	app_client: AsyncClient,
 	state: SharedProtocolState,
 }
 
@@ -39,7 +42,11 @@ impl AsyncProcessor {
 		state: SharedProtocolState,
 		app_pool: SharedAsyncStreamPool,
 	) -> Self {
-		Self { app_pool, state }
+		let app_client = AsyncClient::new(
+			app_pool,
+			TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
+		);
+		Self { app_client, state }
 	}
 
 	/// Helper to get phase between locking the shared state
@@ -48,8 +55,11 @@ impl AsyncProcessor {
 	}
 
 	/// Expands the app pool to given pool size
-	pub async fn expand_to(&mut self, pool_size: u32) -> Result<(), IOError> {
-		self.app_pool.write().await.expand_to(pool_size)
+	pub async fn expand_to(
+		&mut self,
+		pool_size: u32,
+	) -> Result<(), ClientError> {
+		self.app_client.expand_to(pool_size).await
 	}
 }
 
@@ -80,17 +90,11 @@ impl AsyncRequestProcessor for AsyncProcessor {
 			}
 
 			let result = self
-				.app_pool
-				.read()
-				.await
-				.get()
-				.await
+				.app_client
 				.call(&data)
 				.await
 				.map(|data| ProtocolMsg::ProxyResponse { data })
-				.map_err(|_e| {
-					ProtocolMsg::ProtocolErrorResponse(ProtocolError::IOError)
-				});
+				.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into()));
 
 			match result {
 				Ok(msg_resp) | Err(msg_resp) => borsh::to_vec(&msg_resp)
