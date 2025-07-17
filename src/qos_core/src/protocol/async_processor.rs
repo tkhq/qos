@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::io::{TimeVal, TimeValLike};
 use borsh::BorshDeserialize;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, state::ProtocolState,
@@ -19,12 +19,12 @@ const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
 
 /// Helper type to keep `ProtocolState` shared using `Arc<Mutex<ProtocolState>>`
-type SharedProtocolState = Arc<Mutex<ProtocolState>>;
+type SharedProtocolState = Arc<RwLock<ProtocolState>>;
 
 impl ProtocolState {
 	/// Wrap this `ProtocolState` into a `Mutex` in an `Arc`.
 	pub fn shared(self) -> SharedProtocolState {
-		Arc::new(Mutex::new(self))
+		Arc::new(RwLock::new(self))
 	}
 }
 
@@ -36,19 +36,22 @@ pub struct AsyncProcessor {
 }
 
 impl AsyncProcessor {
-	/// Create a new `Self`.
+	/// Create a new `Self` inside `Arc` and `Mutex`.
 	#[must_use]
-	pub fn new(state: SharedProtocolState, app_pool: SharedStreamPool) -> Self {
+	pub fn new(
+		state: SharedProtocolState,
+		app_pool: SharedStreamPool,
+	) -> Arc<RwLock<Self>> {
 		let app_client = SocketClient::new(
 			app_pool,
 			TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 		);
-		Self { app_client, state }
+		Arc::new(RwLock::new(Self { app_client, state }))
 	}
 
 	/// Helper to get phase between locking the shared state
 	async fn get_phase(&self) -> ProtocolPhase {
-		self.state.lock().await.get_phase()
+		self.state.read().await.get_phase()
 	}
 
 	/// Expands the app pool to given pool size
@@ -99,7 +102,7 @@ impl RequestProcessor for AsyncProcessor {
 			}
 		} else {
 			// handle all the others here
-			self.state.lock().await.handle_msg(&msg_req)
+			self.state.write().await.handle_msg(&msg_req)
 		}
 	}
 }

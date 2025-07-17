@@ -9,7 +9,10 @@ use qos_core::{
 };
 use qos_net::proxy_stream::ProxyStream;
 use rustls::RootCertStore;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::{
+	io::{AsyncReadExt, AsyncWriteExt},
+	sync::RwLock,
+};
 use tokio_rustls::TlsConnector;
 
 #[derive(Clone)]
@@ -18,8 +21,8 @@ struct Processor {
 }
 
 impl Processor {
-	fn new(net_pool: SharedStreamPool) -> Self {
-		Processor { net_pool }
+	fn new(net_pool: SharedStreamPool) -> Arc<RwLock<Self>> {
+		Arc::new(RwLock::new(Processor { net_pool }))
 	}
 }
 
