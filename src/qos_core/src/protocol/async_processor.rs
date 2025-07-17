@@ -10,9 +10,9 @@ use super::{
 	ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
 };
 use crate::{
-	async_client::{AsyncClient, ClientError},
-	async_server::AsyncRequestProcessor,
-	io::SharedAsyncStreamPool,
+	client::{ClientError, SocketClient},
+	io::SharedStreamPool,
+	server::RequestProcessor,
 };
 
 const MEGABYTE: usize = 1024 * 1024;
@@ -31,18 +31,15 @@ impl ProtocolState {
 /// Enclave state machine that executes when given a `ProtocolMsg`.
 #[derive(Clone)]
 pub struct AsyncProcessor {
-	app_client: AsyncClient,
+	app_client: SocketClient,
 	state: SharedProtocolState,
 }
 
 impl AsyncProcessor {
 	/// Create a new `Self`.
 	#[must_use]
-	pub fn new(
-		state: SharedProtocolState,
-		app_pool: SharedAsyncStreamPool,
-	) -> Self {
-		let app_client = AsyncClient::new(
+	pub fn new(state: SharedProtocolState, app_pool: SharedStreamPool) -> Self {
+		let app_client = SocketClient::new(
 			app_pool,
 			TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 		);
@@ -63,7 +60,7 @@ impl AsyncProcessor {
 	}
 }
 
-impl AsyncRequestProcessor for AsyncProcessor {
+impl RequestProcessor for AsyncProcessor {
 	async fn process(&self, req_bytes: Vec<u8>) -> Vec<u8> {
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
 			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(

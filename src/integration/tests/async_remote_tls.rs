@@ -5,8 +5,8 @@ use integration::{
 	PivotRemoteTlsMsg, PIVOT_ASYNC_REMOTE_TLS_PATH, QOS_NET_PATH,
 };
 use qos_core::{
-	async_client::AsyncClient,
-	io::{AsyncStreamPool, SocketAddress, TimeVal, TimeValLike},
+	client::SocketClient,
+	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
 	protocol::ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
 };
 
@@ -41,13 +41,13 @@ async fn fetch_async_remote_tls_content() {
 		tokio::time::sleep(Duration::from_millis(50)).await;
 	}
 
-	let enclave_pool = AsyncStreamPool::new(
+	let enclave_pool = StreamPool::new(
 		SocketAddress::new_unix(REMOTE_TLS_TEST_ENCLAVE_SOCKET),
 		1,
 	)
 	.expect("unable to create enclave async pool");
 
-	let enclave_client = AsyncClient::new(
+	let enclave_client = SocketClient::new(
 		enclave_pool.shared(),
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 	);

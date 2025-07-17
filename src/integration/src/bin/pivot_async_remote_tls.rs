@@ -4,26 +4,26 @@ use std::{io::ErrorKind, sync::Arc};
 use borsh::BorshDeserialize;
 use integration::PivotRemoteTlsMsg;
 use qos_core::{
-	async_server::{AsyncRequestProcessor, AsyncSocketServer},
-	io::{AsyncStreamPool, SharedAsyncStreamPool, SocketAddress},
+	io::{SharedStreamPool, SocketAddress, StreamPool},
+	server::{RequestProcessor, SocketServer},
 };
-use qos_net::async_proxy_stream::AsyncProxyStream;
+use qos_net::proxy_stream::ProxyStream;
 use rustls::RootCertStore;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_rustls::TlsConnector;
 
 #[derive(Clone)]
 struct Processor {
-	net_pool: SharedAsyncStreamPool,
+	net_pool: SharedStreamPool,
 }
 
 impl Processor {
-	fn new(net_pool: SharedAsyncStreamPool) -> Self {
+	fn new(net_pool: SharedStreamPool) -> Self {
 		Processor { net_pool }
 	}
 }
 
-impl AsyncRequestProcessor for Processor {
+impl RequestProcessor for Processor {
 	async fn process(&self, request: Vec<u8>) -> Vec<u8> {
 		let msg = PivotRemoteTlsMsg::try_from_slice(&request)
 			.expect("Received invalid message - test is broken!");
@@ -31,7 +31,7 @@ impl AsyncRequestProcessor for Processor {
 		match msg {
 			PivotRemoteTlsMsg::RemoteTlsRequest { host, path } => {
 				let pool = self.net_pool.read().await;
-				let mut stream = AsyncProxyStream::connect_by_name(
+				let mut stream = ProxyStream::connect_by_name(
 					pool.get().await,
 					host.clone(),
 					443,
@@ -105,20 +105,16 @@ async fn main() {
 	let socket_path: &String = &args[1];
 	let proxy_path: &String = &args[2];
 
-	let enclave_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix(socket_path), 1)
-			.expect("unable to create async stream pool");
+	let enclave_pool = StreamPool::new(SocketAddress::new_unix(socket_path), 1)
+		.expect("unable to create async stream pool");
 
-	let proxy_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix(proxy_path), 1)
-			.expect("unable to create async stream pool")
-			.shared();
+	let proxy_pool = StreamPool::new(SocketAddress::new_unix(proxy_path), 1)
+		.expect("unable to create async stream pool")
+		.shared();
 
-	let server = AsyncSocketServer::listen_all(
-		enclave_pool,
-		&Processor::new(proxy_pool),
-	)
-	.unwrap();
+	let server =
+		SocketServer::listen_all(enclave_pool, &Processor::new(proxy_pool))
+			.unwrap();
 
 	match tokio::signal::ctrl_c().await {
 		Ok(_) => {

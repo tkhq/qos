@@ -3,7 +3,7 @@ use std::fs;
 use integration::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
 use qos_core::{
 	handles::Handles,
-	io::{AsyncStreamPool, SocketAddress},
+	io::{SocketAddress, StreamPool},
 	protocol::services::boot::ManifestEnvelope,
 	reaper::{Reaper, REAPER_EXIT_DELAY_IN_SECONDS},
 };
@@ -38,11 +38,10 @@ fn reaper_works() {
 	assert!(handles.pivot_exists());
 
 	let enclave_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix(&usock), 1).unwrap();
+		StreamPool::new(SocketAddress::new_unix(&usock), 1).unwrap();
 
 	let app_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix("./never.sock"), 1)
-			.unwrap();
+		StreamPool::new(SocketAddress::new_unix("./never.sock"), 1).unwrap();
 
 	let reaper_handle = std::thread::spawn(move || {
 		Reaper::execute(
@@ -96,11 +95,10 @@ fn reaper_handles_non_zero_exits() {
 	assert!(handles.pivot_exists());
 
 	let enclave_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix(&usock), 1).unwrap();
+		StreamPool::new(SocketAddress::new_unix(&usock), 1).unwrap();
 
 	let app_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix("./never.sock"), 1)
-			.unwrap();
+		StreamPool::new(SocketAddress::new_unix("./never.sock"), 1).unwrap();
 
 	let reaper_handle = std::thread::spawn(move || {
 		Reaper::execute(
@@ -155,11 +153,10 @@ fn reaper_handles_panic() {
 	assert!(handles.pivot_exists());
 
 	let enclave_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix(&usock), 1).unwrap();
+		StreamPool::new(SocketAddress::new_unix(&usock), 1).unwrap();
 
 	let app_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix("./never.sock"), 1)
-			.unwrap();
+		StreamPool::new(SocketAddress::new_unix("./never.sock"), 1).unwrap();
 
 	let reaper_handle = std::thread::spawn(move || {
 		Reaper::execute(

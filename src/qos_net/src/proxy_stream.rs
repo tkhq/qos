@@ -3,7 +3,7 @@
 use std::pin::Pin;
 
 use borsh::BorshDeserialize;
-use qos_core::io::AsyncStream;
+use qos_core::io::Stream;
 use tokio::{
 	io::{AsyncRead, AsyncWrite},
 	sync::MutexGuard,
@@ -14,9 +14,9 @@ use crate::{error::QosNetError, proxy_msg::ProxyMsg};
 /// Struct representing a remote connection
 /// This is going to be used by enclaves, on the other side of a socket
 /// and plugged into the tokio-rustls via the AsyncWrite and AsyncRead traits
-pub struct AsyncProxyStream<'pool> {
-	/// AsyncStream we hold for this connection
-	stream: MutexGuard<'pool, AsyncStream>,
+pub struct ProxyStream<'pool> {
+	/// Stream we hold for this connection
+	stream: MutexGuard<'pool, Stream>,
 	/// Once a connection is established (successful `ConnectByName` or
 	/// ConnectByIp request), this connection ID is set the u32 in
 	/// `ConnectResponse`.
@@ -27,12 +27,12 @@ pub struct AsyncProxyStream<'pool> {
 	pub remote_ip: String,
 }
 
-impl<'pool> AsyncProxyStream<'pool> {
+impl<'pool> ProxyStream<'pool> {
 	/// Create a new AsyncProxyStream by targeting a hostname
 	///
 	/// # Arguments
 	///
-	/// * `stream` - the `AsyncStream` picked from a `AsyncStreamPool` behind a `MutexGuard` (e.g. from `pool.get().await`)
+	/// * `stream` - the `Stream` picked from a `StreamPool` behind a `MutexGuard` (e.g. from `pool.get().await`)
 	/// * `hostname` - the hostname to connect to (the remote qos_net proxy will
 	///   resolve DNS)
 	/// * `port` - the port the remote qos_net proxy should connect to
@@ -41,7 +41,7 @@ impl<'pool> AsyncProxyStream<'pool> {
 	/// * `dns_port` - DNS port to use while resolving DNS (typically: 53 or
 	///   853)
 	pub async fn connect_by_name(
-		mut stream: MutexGuard<'pool, AsyncStream>,
+		mut stream: MutexGuard<'pool, Stream>,
 		hostname: String,
 		port: u16,
 		dns_resolvers: Vec<String>,
@@ -75,12 +75,12 @@ impl<'pool> AsyncProxyStream<'pool> {
 	/// Create a new ProxyStream by targeting an IP address directly.
 	///
 	/// # Arguments
-	/// * `stream` - the `AsyncStream` picked from a `AsyncStreamPool` behind a `MutexGuard` (e.g. from `pool.get().await`)
+	/// * `stream` - the `Stream` picked from a `StreamPool` behind a `MutexGuard` (e.g. from `pool.get().await`)
 	/// * `ip` - the IP the remote qos_net proxy should connect to
 	/// * `port` - the port the remote qos_net proxy should connect to
 	///   (typically: 80 or 443 for http/https)
 	pub async fn connect_by_ip(
-		mut stream: MutexGuard<'pool, AsyncStream>,
+		mut stream: MutexGuard<'pool, Stream>,
 		ip: String,
 		port: u16,
 	) -> Result<Self, QosNetError> {
@@ -113,36 +113,36 @@ impl<'pool> AsyncProxyStream<'pool> {
 	}
 }
 
-impl AsyncRead for AsyncProxyStream<'_> {
+impl AsyncRead for ProxyStream<'_> {
 	fn poll_read(
 		mut self: std::pin::Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 		buf: &mut tokio::io::ReadBuf<'_>,
 	) -> std::task::Poll<std::io::Result<()>> {
-		Pin::<&mut AsyncStream>::new(&mut self.stream).poll_read(cx, buf)
+		Pin::<&mut Stream>::new(&mut self.stream).poll_read(cx, buf)
 	}
 }
 
-impl AsyncWrite for AsyncProxyStream<'_> {
+impl AsyncWrite for ProxyStream<'_> {
 	fn poll_write(
 		mut self: Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 		buf: &[u8],
 	) -> std::task::Poll<Result<usize, std::io::Error>> {
-		Pin::<&mut AsyncStream>::new(&mut self.stream).poll_write(cx, buf)
+		Pin::<&mut Stream>::new(&mut self.stream).poll_write(cx, buf)
 	}
 
 	fn poll_flush(
 		mut self: Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> std::task::Poll<Result<(), std::io::Error>> {
-		Pin::<&mut AsyncStream>::new(&mut self.stream).poll_flush(cx)
+		Pin::<&mut Stream>::new(&mut self.stream).poll_flush(cx)
 	}
 
 	fn poll_shutdown(
 		mut self: Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> std::task::Poll<Result<(), std::io::Error>> {
-		Pin::<&mut AsyncStream>::new(&mut self.stream).poll_shutdown(cx)
+		Pin::<&mut Stream>::new(&mut self.stream).poll_shutdown(cx)
 	}
 }

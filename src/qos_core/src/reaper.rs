@@ -13,14 +13,14 @@ use std::{
 use qos_nsm::NsmProvider;
 
 use crate::{
-	async_server::AsyncSocketServer,
 	handles::Handles,
-	io::AsyncStreamPool,
+	io::StreamPool,
 	protocol::{
 		async_processor::AsyncProcessor,
 		services::boot::{PivotConfig, RestartPolicy},
 		ProtocolPhase, ProtocolState,
 	},
+	server::SocketServer,
 };
 
 /// Delay for restarting the pivot app if the process exits.
@@ -46,8 +46,8 @@ impl Reaper {
 	pub fn execute(
 		handles: &Handles,
 		nsm: Box<dyn NsmProvider + Send>,
-		pool: AsyncStreamPool,
-		app_pool: AsyncStreamPool,
+		pool: StreamPool,
+		app_pool: StreamPool,
 		test_only_init_phase_override: Option<ProtocolPhase>,
 	) {
 		let handles2 = handles.clone();
@@ -73,9 +73,8 @@ impl Reaper {
 						app_pool.shared(),
 					);
 					// listen_all will multiplex the processor accross all sockets
-					let mut server =
-						AsyncSocketServer::listen_all(pool, &processor)
-							.expect("unable to get listen task list");
+					let mut server = SocketServer::listen_all(pool, &processor)
+						.expect("unable to get listen task list");
 
 					loop {
 						// see if we got interrupted

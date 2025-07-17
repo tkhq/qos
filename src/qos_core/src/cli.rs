@@ -12,7 +12,7 @@ use crate::{
 	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
 };
 
-use crate::io::{AsyncStreamPool, IOError};
+use crate::io::{IOError, StreamPool};
 
 /// "cid"
 pub const CID: &str = "cid";
@@ -30,7 +30,7 @@ pub const EPHEMERAL_FILE_OPT: &str = "ephemeral-file";
 /// Name for the option to specify the manifest file.
 pub const MANIFEST_FILE_OPT: &str = "manifest-file";
 const APP_USOCK: &str = "app-usock";
-/// Name for the option to specify the maximum `AsyncPool` size.
+/// Name for the option to specify the maximum `StreamPool` size.
 pub const POOL_SIZE: &str = "pool-size";
 
 /// CLI options for starting up the enclave server.
@@ -48,9 +48,9 @@ impl EnclaveOpts {
 		Self { parsed }
 	}
 
-	/// Create a new [`AsyncPool`] of [`AsyncStream`] using the list of [`SocketAddress`] for the enclave server and
-	/// return the new [`AsyncPool`]. Analogous to [`Self::addr`] and [`Self::app_addr`] depending on the [`app`] parameter.
-	fn async_pool(&self, app: bool) -> Result<AsyncStreamPool, IOError> {
+	/// Create a new `StreamPool` using the list of `SocketAddress` for the qos host.
+	/// The `app` parameter specifies if this is a pool meant for the enclave itself, or the enclave app.
+	fn async_pool(&self, app: bool) -> Result<StreamPool, IOError> {
 		let usock_param = if app { APP_USOCK } else { USOCK };
 
 		match (
@@ -64,48 +64,16 @@ impl EnclaveOpts {
 					c.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
 				let p =
 					p.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
-				AsyncStreamPool::new(
+				StreamPool::new(
 					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS),
 					1,
 				)
 			}
 			(None, None, Some(u)) => {
-				AsyncStreamPool::new(SocketAddress::new_unix(u), 1)
+				StreamPool::new(SocketAddress::new_unix(u), 1)
 			}
 			_ => panic!("Invalid socket opts"),
 		}
-	}
-
-	/// Get the `SocketAddress` for the enclave server.
-	///
-	/// # Panics
-	///
-	/// Panics if the opts are not valid for exactly one of unix or vsock.
-	#[allow(unused)]
-	fn addr(&self) -> SocketAddress {
-		match (
-			self.parsed.single(CID),
-			self.parsed.single(PORT),
-			self.parsed.single(USOCK),
-		) {
-			#[cfg(feature = "vm")]
-			(Some(c), Some(p), None) => SocketAddress::new_vsock(
-				c.parse::<u32>().unwrap(),
-				p.parse::<u32>().unwrap(),
-				crate::io::VMADDR_NO_FLAGS,
-			),
-			(None, None, Some(u)) => SocketAddress::new_unix(u),
-			_ => panic!("Invalid socket opts"),
-		}
-	}
-
-	#[allow(unused)]
-	fn app_addr(&self) -> SocketAddress {
-		SocketAddress::new_unix(
-			self.parsed
-				.single(APP_USOCK)
-				.expect("app-usock has a default value."),
-		)
 	}
 
 	/// Get the [`NsmProvider`]
@@ -286,6 +254,44 @@ mod test {
 	}
 
 	#[test]
+	fn parse_usock() {
+		let mut args: Vec<_> = vec![
+			"binary",
+			"--usock",
+			"/tmp/usock",
+			"--app-usock",
+			"/tmp/app_usock",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+		let opts = EnclaveOpts::new(&mut args);
+
+		assert_eq!(
+			*opts.parsed.single(USOCK).unwrap(),
+			"/tmp/usock".to_string()
+		);
+		assert_eq!(
+			*opts.parsed.single(APP_USOCK).unwrap(),
+			"/tmp/app_usock".to_string()
+		);
+	}
+
+	#[test]
+	fn builds_async_pool() {
+		let mut args: Vec<_> = vec!["binary", "--usock", "./test.sock"]
+			.into_iter()
+			.map(String::from)
+			.collect();
+		let opts = EnclaveOpts::new(&mut args);
+
+		let pool = opts.async_pool(true).unwrap();
+		assert_eq!(pool.len(), 1);
+		let pool = opts.async_pool(false).unwrap();
+		assert_eq!(pool.len(), 1);
+	}
+
+	#[test]
 	fn parse_pivot_file_and_quorum_file() {
 		let pivot = "pivot.file";
 		let secret = "secret.file";
@@ -313,17 +319,6 @@ mod test {
 		assert_eq!(opts.quorum_file(), secret);
 		assert_eq!(opts.pivot_file(), pivot);
 		assert_eq!(opts.ephemeral_file(), ephemeral);
-	}
-
-	#[test]
-	fn parse_usock() {
-		let mut args: Vec<_> = vec!["binary", "--usock", "./test.sock"]
-			.into_iter()
-			.map(String::from)
-			.collect();
-		let opts = EnclaveOpts::new(&mut args);
-
-		assert_eq!(opts.addr(), SocketAddress::new_unix("./test.sock"));
 	}
 
 	#[test]

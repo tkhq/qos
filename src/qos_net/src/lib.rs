@@ -9,11 +9,11 @@ pub mod error;
 pub mod proxy_msg;
 
 #[cfg(feature = "proxy")]
-pub mod async_proxy;
+pub mod proxy;
 #[cfg(feature = "proxy")]
-pub mod async_proxy_connection;
+pub mod proxy_connection;
 #[cfg(feature = "proxy")]
-pub mod async_proxy_stream;
+pub mod proxy_stream;
 
 #[cfg(feature = "proxy")]
 pub mod cli;

@@ -4,8 +4,8 @@ use integration::{
 	wait_for_usock, PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH,
 };
 use qos_core::{
-	async_client::{AsyncClient, ClientError},
-	io::{AsyncStreamPool, IOError, SocketAddress, TimeVal, TimeValLike},
+	client::{ClientError, SocketClient},
+	io::{IOError, SocketAddress, StreamPool, TimeVal, TimeValLike},
 	protocol::ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
 };
 use qos_test_primitives::ChildWrapper;
@@ -26,10 +26,10 @@ async fn simple_socket_stress() {
 	let timeout = TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS);
 
 	let app_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix(SOCKET_STRESS_SOCK), 1)
+		StreamPool::new(SocketAddress::new_unix(SOCKET_STRESS_SOCK), 1)
 			.unwrap();
 
-	let enclave_client = AsyncClient::new(app_pool.shared(), timeout);
+	let enclave_client = SocketClient::new(app_pool.shared(), timeout);
 
 	let app_request =
 		borsh::to_vec(&PivotSocketStressMsg::SlowRequest(5500)).unwrap();

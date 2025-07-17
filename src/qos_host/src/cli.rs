@@ -8,7 +8,7 @@ use std::{
 
 use qos_core::{
 	cli::{CID, PORT, USOCK},
-	io::{AsyncStreamPool, SocketAddress, TimeVal, TimeValLike},
+	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
 
@@ -119,11 +119,10 @@ impl HostOpts {
 		)
 	}
 
-	/// Create a new `AsyncPool` of `AsyncStream` using the list of `SocketAddress` for the enclave server and
-	/// return the new `AsyncPool`.
+	/// Create a new `StreamPool` using the list of `SocketAddress` for the qos host.
 	pub(crate) fn enclave_pool(
 		&self,
-	) -> Result<AsyncStreamPool, qos_core::io::IOError> {
+	) -> Result<StreamPool, qos_core::io::IOError> {
 		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
@@ -141,37 +140,14 @@ impl HostOpts {
 				let address =
 					SocketAddress::new_vsock(c, p, self.to_host_flag());
 
-				AsyncStreamPool::new(address, 1) // qos_host needs only 1
+				StreamPool::new(address, 1) // qos_host needs only 1
 			}
 			(None, None, Some(u)) => {
 				let address = SocketAddress::new_unix(u);
 
-				AsyncStreamPool::new(address, 1)
+				StreamPool::new(address, 1)
 			}
 			_ => panic!("Invalid socket opts"),
-		}
-	}
-
-	/// Get the `SocketAddress` for the enclave server.
-	///
-	/// # Panics
-	///
-	/// Panics if the options are not valid for exactly one of unix or vsock.
-	#[must_use]
-	pub fn enclave_addr(&self) -> SocketAddress {
-		match (
-			self.parsed.single(CID),
-			self.parsed.single(PORT),
-			self.parsed.single(USOCK),
-		) {
-			#[cfg(feature = "vm")]
-			(Some(c), Some(p), None) => SocketAddress::new_vsock(
-				c.parse::<u32>().unwrap(),
-				p.parse::<u32>().unwrap(),
-				self.to_host_flag(),
-			),
-			(None, None, Some(u)) => SocketAddress::new_unix(u),
-			_ => panic!("Invalid socket options"),
 		}
 	}
 

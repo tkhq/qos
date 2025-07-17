@@ -2,27 +2,26 @@
 use borsh::BorshDeserialize;
 use futures::Future;
 use qos_core::{
-	async_server::{AsyncSocketServer, SocketServerError},
-	io::{AsyncListener, AsyncStream, AsyncStreamPool, IOError},
+	io::{IOError, Listener, Stream, StreamPool},
+	server::{SocketServer, SocketServerError},
 };
 
 use crate::{
-	async_proxy_connection::AsyncProxyConnection, error::QosNetError,
-	proxy_msg::ProxyMsg,
+	error::QosNetError, proxy_connection::ProxyConnection, proxy_msg::ProxyMsg,
 };
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
 
 /// Socket<>TCP proxy to enable remote connections
-pub struct AsyncProxy {
-	tcp_connection: Option<AsyncProxyConnection>,
-	sock_stream: AsyncStream,
+pub struct Proxy {
+	tcp_connection: Option<ProxyConnection>,
+	sock_stream: Stream,
 }
 
-impl AsyncProxy {
-	/// Create a new AsyncProxy from the given AsyncStream, with empty tcp_connection
-	pub fn new(sock_stream: AsyncStream) -> Self {
+impl Proxy {
+	/// Create a new `Proxy` from the given `Stream`, with empty tcp_connection
+	pub fn new(sock_stream: Stream) -> Self {
 		Self { tcp_connection: None, sock_stream }
 	}
 
@@ -35,7 +34,7 @@ impl AsyncProxy {
 		dns_resolvers: Vec<String>,
 		dns_port: u16,
 	) -> ProxyMsg {
-		match AsyncProxyConnection::new_from_name(
+		match ProxyConnection::new_from_name(
 			hostname.clone(),
 			port,
 			dns_resolvers.clone(),
@@ -60,7 +59,7 @@ impl AsyncProxy {
 	/// Create a new connection, targeting an IP address directly.
 	/// address. The TCP connection is opened and saved in internal state.
 	async fn connect_by_ip(&mut self, ip: String, port: u16) -> ProxyMsg {
-		match AsyncProxyConnection::new_from_ip(ip.clone(), port).await {
+		match ProxyConnection::new_from_ip(ip.clone(), port).await {
 			Ok(conn) => {
 				let connection_id = conn.id;
 				let remote_ip = conn.ip.clone();
@@ -115,7 +114,7 @@ impl AsyncProxy {
 	}
 }
 
-impl AsyncProxy {
+impl Proxy {
 	async fn run(&mut self) -> Result<(), IOError> {
 		loop {
 			// Only try to process ProxyMsg content on the USOCK/VSOCK if we're not connected to TCP yet.
@@ -143,17 +142,17 @@ impl AsyncProxy {
 	}
 }
 
-pub trait AsyncProxyServer {
+pub trait ProxyServer {
 	fn listen_proxy(
-		pool: AsyncStreamPool,
+		pool: StreamPool,
 	) -> impl Future<Output = Result<Box<Self>, SocketServerError>> + Send;
 }
 
-impl AsyncProxyServer for AsyncSocketServer {
+impl ProxyServer for SocketServer {
 	/// Listen on a tcp proxy server in a way that allows the USOCK/VSOCK to be used as a
 	/// dumb pipe after getting the `connect*` calls.
 	async fn listen_proxy(
-		pool: AsyncStreamPool,
+		pool: StreamPool,
 	) -> Result<Box<Self>, SocketServerError> {
 		println!(
 			"`AsyncSocketServer` proxy listening on pool size {}",
@@ -175,11 +174,11 @@ impl AsyncProxyServer for AsyncSocketServer {
 }
 
 async fn accept_loop_proxy(
-	listener: AsyncListener,
+	listener: Listener,
 ) -> Result<(), SocketServerError> {
 	loop {
 		let stream = listener.accept().await?;
-		let mut proxy = AsyncProxy::new(stream);
+		let mut proxy = Proxy::new(stream);
 		proxy.run().await?;
 	}
 }
