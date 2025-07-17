@@ -8,7 +8,7 @@ use crate::{nitro, types};
 /// generic so mock providers can be subbed in for testing. In production use
 /// [`Nsm`].
 // https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/docs/attestation_process.md
-pub trait NsmProvider: Send {
+pub trait NsmProvider: Send + Sync {
 	/// Create a message with input data and output capacity from a given
 	/// request, then send it to the NSM driver via `ioctl()` and wait
 	/// for the driver's response.

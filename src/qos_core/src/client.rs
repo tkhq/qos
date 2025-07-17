@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use nix::sys::time::TimeVal;
 
-use crate::io::{IOError, SharedStreamPool};
+use crate::io::{IOError, SharedStreamPool, SocketAddress, StreamPool};
 
 /// Enclave client error.
 #[derive(Debug)]
@@ -35,11 +35,22 @@ pub struct SocketClient {
 }
 
 impl SocketClient {
-	/// Create a new client.
+	/// Create a new client with given `StreamPool`.
 	#[must_use]
 	pub fn new(pool: SharedStreamPool, timeout: TimeVal) -> Self {
 		let timeout = timeval_to_duration(timeout);
 		Self { pool, timeout }
+	}
+
+	/// Create a new client from a single `SocketAddress`. This creates an implicit single socket `StreamPool`.
+	pub fn single(
+		addr: SocketAddress,
+		timeout: TimeVal,
+	) -> Result<Self, IOError> {
+		let pool = StreamPool::new(addr, 1)?.shared();
+		let timeout = timeval_to_duration(timeout);
+
+		Ok(Self { pool, timeout })
 	}
 
 	/// Send raw bytes and wait for a response until the clients configured

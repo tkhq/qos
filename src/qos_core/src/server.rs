@@ -1,7 +1,9 @@
 //! Streaming socket based server for use in an enclave. Listens for connections
 //! from [`crate::client::Client`].
 
-use tokio::task::JoinHandle;
+use std::sync::Arc;
+
+use tokio::{sync::RwLock, task::JoinHandle};
 
 use crate::io::{IOError, Listener, StreamPool};
 
@@ -17,6 +19,9 @@ impl From<IOError> for SocketServerError {
 		Self::IOError(err)
 	}
 }
+
+/// Alias to simplify `Arc<RwLock<P>>` where `P` is the `RequestProcessor`
+pub type SharedProcessor<P> = Arc<RwLock<P>>;
 
 /// Something that can process requests in an async way.
 pub trait RequestProcessor: Send {
@@ -45,10 +50,10 @@ impl SocketServer {
 	/// should be called on each when the program exists (e.g. on ctrl+c)
 	pub fn listen_all<P>(
 		pool: StreamPool,
-		processor: &P,
+		processor: &SharedProcessor<P>,
 	) -> Result<Self, SocketServerError>
 	where
-		P: RequestProcessor + 'static + Clone,
+		P: RequestProcessor + Sync + 'static,
 	{
 		println!("`AsyncSocketServer` listening on pool size {}", pool.len());
 
@@ -60,10 +65,10 @@ impl SocketServer {
 
 	fn spawn_tasks_for_listeners<P>(
 		listeners: Vec<Listener>,
-		processor: &P,
+		processor: &SharedProcessor<P>,
 	) -> Vec<JoinHandle<Result<(), SocketServerError>>>
 	where
-		P: RequestProcessor + 'static + Clone,
+		P: RequestProcessor + Sync + 'static,
 	{
 		let mut tasks = Vec::new();
 		for listener in listeners {
@@ -81,10 +86,10 @@ impl SocketServer {
 	pub fn listen_to<P>(
 		&mut self,
 		pool_size: u32,
-		processor: &P,
+		processor: &SharedProcessor<P>,
 	) -> Result<(), IOError>
 	where
-		P: RequestProcessor + 'static + Clone,
+		P: RequestProcessor + Sync + 'static,
 	{
 		let listeners = self.pool.listen_to(pool_size)?;
 		let tasks = Self::spawn_tasks_for_listeners(listeners, processor);
@@ -104,10 +109,10 @@ impl SocketServer {
 
 async fn accept_loop<P>(
 	listener: Listener,
-	processor: P,
+	processor: SharedProcessor<P>,
 ) -> Result<(), SocketServerError>
 where
-	P: RequestProcessor + Clone,
+	P: RequestProcessor,
 {
 	loop {
 		eprintln!("AsyncServer: accepting");
@@ -115,7 +120,9 @@ where
 		loop {
 			match stream.recv().await {
 				Ok(payload) => {
-					let response = processor.process(payload).await;
+					let response =
+						processor.read().await.process(payload).await;
+
 					match stream.send(&response).await {
 						Ok(()) => {}
 						Err(err) => {

@@ -68,7 +68,7 @@ impl Reaper {
 						test_only_init_phase_override,
 					);
 					// send a shared version of state and the async pool to each processor
-					let mut processor = AsyncProcessor::new(
+					let processor = AsyncProcessor::new(
 						protocol_state.shared(),
 						app_pool.shared(),
 					);
@@ -94,7 +94,12 @@ impl Reaper {
 								"unable to listen_to on the running server",
 							);
 							// expand app connections to pool_size
-							processor.expand_to(pool_size).await.expect(
+							processor
+								.write()
+								.await
+								.expand_to(pool_size)
+								.await
+								.expect(
 								"unable to expand_to on the processor app pool",
 							);
 
