@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
-	async_client::AsyncClient,
-	io::{AsyncStreamPool, SocketAddress, TimeVal, TimeValLike},
+	client::SocketClient,
+	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
 
@@ -142,8 +142,8 @@ pub struct AdditionProofPayload {
 /// Panics if fs::exists errors.
 pub async fn wait_for_usock(path: &str) {
 	let addr = SocketAddress::new_unix(path);
-	let pool = AsyncStreamPool::new(addr, 1).unwrap().shared();
-	let client = AsyncClient::new(pool, TimeVal::milliseconds(50));
+	let pool = StreamPool::new(addr, 1).unwrap().shared();
+	let client = SocketClient::new(pool, TimeVal::milliseconds(50));
 
 	for _ in 0..50 {
 		if std::fs::exists(path).unwrap() && client.try_connect().await.is_ok()

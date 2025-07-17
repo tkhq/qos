@@ -29,8 +29,8 @@ use axum::{
 };
 use borsh::BorshDeserialize;
 use qos_core::{
-	async_client::AsyncClient,
-	io::{SharedAsyncStreamPool, TimeVal},
+	client::SocketClient,
+	io::{SharedStreamPool, TimeVal},
 	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase},
 };
 
@@ -42,13 +42,13 @@ use crate::{
 /// Resource shared across tasks in the `AsyncHostServer`.
 #[derive(Debug)]
 struct AsyncQosHostState {
-	enclave_client: AsyncClient,
+	enclave_client: SocketClient,
 }
 
 /// HTTP server for the host of the enclave; proxies requests to the enclave.
 #[allow(clippy::module_name_repetitions)]
 pub struct AsyncHostServer {
-	enclave_pool: SharedAsyncStreamPool,
+	enclave_pool: SharedStreamPool,
 	timeout: TimeVal,
 	addr: SocketAddr,
 	base_path: Option<String>,
@@ -59,7 +59,7 @@ impl AsyncHostServer {
 	/// server.
 	#[must_use]
 	pub fn new(
-		enclave_pool: SharedAsyncStreamPool,
+		enclave_pool: SharedStreamPool,
 		timeout: TimeVal,
 		addr: SocketAddr,
 		base_path: Option<String>,
@@ -83,7 +83,7 @@ impl AsyncHostServer {
 	// pub async fn serve(&self) -> Result<(), String> {
 	pub async fn serve(&self) {
 		let state = Arc::new(AsyncQosHostState {
-			enclave_client: AsyncClient::new(
+			enclave_client: SocketClient::new(
 				self.enclave_pool.clone(),
 				self.timeout,
 			),

@@ -16,7 +16,7 @@ use tokio::{
 use crate::error::QosNetError;
 
 /// Struct representing a TCP connection held on our proxy
-pub struct AsyncProxyConnection {
+pub struct ProxyConnection {
 	/// Unsigned integer with the connection ID (random positive int)
 	pub id: u128,
 	/// IP address of the remote host
@@ -25,7 +25,7 @@ pub struct AsyncProxyConnection {
 	pub(crate) tcp_stream: TcpStream,
 }
 
-impl AsyncProxyConnection {
+impl ProxyConnection {
 	/// Create a new `ProxyConnection` from a name. This results in a DNS
 	/// request + TCP connection
 	pub async fn new_from_name(
@@ -33,7 +33,7 @@ impl AsyncProxyConnection {
 		port: u16,
 		dns_resolvers: Vec<String>,
 		dns_port: u16,
-	) -> Result<AsyncProxyConnection, QosNetError> {
+	) -> Result<ProxyConnection, QosNetError> {
 		let ip = resolve_hostname(hostname, dns_resolvers, dns_port).await?;
 
 		// Generate a new random u32 to get an ID. We'll use it to name our
@@ -45,7 +45,7 @@ impl AsyncProxyConnection {
 
 		let tcp_addr = SocketAddr::new(ip, port);
 		let tcp_stream = TcpStream::connect(tcp_addr).await?;
-		Ok(AsyncProxyConnection {
+		Ok(ProxyConnection {
 			id: connection_id,
 			ip: ip.to_string(),
 			tcp_stream,
@@ -57,7 +57,7 @@ impl AsyncProxyConnection {
 	pub async fn new_from_ip(
 		ip: String,
 		port: u16,
-	) -> Result<AsyncProxyConnection, QosNetError> {
+	) -> Result<ProxyConnection, QosNetError> {
 		// Generate a new random u32 to get an ID. We'll use it to name our
 		// socket. This will be our connection ID.
 		let connection_id = {
@@ -69,11 +69,11 @@ impl AsyncProxyConnection {
 		let tcp_addr = SocketAddr::new(ip_addr, port);
 		let tcp_stream = TcpStream::connect(tcp_addr).await?;
 
-		Ok(AsyncProxyConnection { id: connection_id, ip, tcp_stream })
+		Ok(ProxyConnection { id: connection_id, ip, tcp_stream })
 	}
 }
 
-impl AsyncProxyConnection {
+impl ProxyConnection {
 	pub async fn read(
 		&mut self,
 		buf: &mut [u8],

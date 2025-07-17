@@ -3,7 +3,7 @@
 
 use tokio::task::JoinHandle;
 
-use crate::io::{AsyncListener, AsyncStreamPool, IOError};
+use crate::io::{IOError, Listener, StreamPool};
 
 /// Error variants for [`SocketServer`]
 #[derive(Debug)]
@@ -19,7 +19,7 @@ impl From<IOError> for SocketServerError {
 }
 
 /// Something that can process requests in an async way.
-pub trait AsyncRequestProcessor: Send {
+pub trait RequestProcessor: Send {
 	/// Process an incoming request and return a response in async.
 	///
 	/// The request and response are raw bytes. Likely this should be encoded
@@ -32,23 +32,23 @@ pub trait AsyncRequestProcessor: Send {
 }
 
 /// A bare bones, socket based server.
-pub struct AsyncSocketServer {
-	/// `AsyncStreamPool` used to serve messages over.
-	pub pool: AsyncStreamPool,
+pub struct SocketServer {
+	/// `StreamPool` used to serve messages over.
+	pub pool: StreamPool,
 	/// List of tasks that are running on the server.
 	pub tasks: Vec<JoinHandle<Result<(), SocketServerError>>>,
 }
 
-impl AsyncSocketServer {
+impl SocketServer {
 	/// Listen and respond to incoming requests on all the pool's addresses with the given `processor`.
 	/// This method returns a list of tasks that are running as part of this listener. `JoinHandle::abort()`
 	/// should be called on each when the program exists (e.g. on ctrl+c)
 	pub fn listen_all<P>(
-		pool: AsyncStreamPool,
+		pool: StreamPool,
 		processor: &P,
 	) -> Result<Self, SocketServerError>
 	where
-		P: AsyncRequestProcessor + 'static + Clone,
+		P: RequestProcessor + 'static + Clone,
 	{
 		println!("`AsyncSocketServer` listening on pool size {}", pool.len());
 
@@ -59,11 +59,11 @@ impl AsyncSocketServer {
 	}
 
 	fn spawn_tasks_for_listeners<P>(
-		listeners: Vec<AsyncListener>,
+		listeners: Vec<Listener>,
 		processor: &P,
 	) -> Vec<JoinHandle<Result<(), SocketServerError>>>
 	where
-		P: AsyncRequestProcessor + 'static + Clone,
+		P: RequestProcessor + 'static + Clone,
 	{
 		let mut tasks = Vec::new();
 		for listener in listeners {
@@ -84,7 +84,7 @@ impl AsyncSocketServer {
 		processor: &P,
 	) -> Result<(), IOError>
 	where
-		P: AsyncRequestProcessor + 'static + Clone,
+		P: RequestProcessor + 'static + Clone,
 	{
 		let listeners = self.pool.listen_to(pool_size)?;
 		let tasks = Self::spawn_tasks_for_listeners(listeners, processor);
@@ -103,11 +103,11 @@ impl AsyncSocketServer {
 }
 
 async fn accept_loop<P>(
-	listener: AsyncListener,
+	listener: Listener,
 	processor: P,
 ) -> Result<(), SocketServerError>
 where
-	P: AsyncRequestProcessor + Clone,
+	P: RequestProcessor + Clone,
 {
 	loop {
 		eprintln!("AsyncServer: accepting");

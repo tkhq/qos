@@ -3,9 +3,9 @@ use integration::{
 	wait_for_usock, PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH,
 };
 use qos_core::{
-	async_client::AsyncClient,
+	client::SocketClient,
 	handles::Handles,
-	io::{AsyncStreamPool, SocketAddress, TimeVal, TimeValLike},
+	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
 	protocol::{
 		msg::ProtocolMsg,
 		services::boot::{
@@ -76,10 +76,10 @@ async fn enclave_app_client_socket_stress() {
 	handles.put_quorum_key(&p256_pair).unwrap();
 
 	let enclave_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix(ENCLAVE_SOCK), 1).unwrap();
+		StreamPool::new(SocketAddress::new_unix(ENCLAVE_SOCK), 1).unwrap();
 
 	let app_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix(APP_SOCK), 1).unwrap();
+		StreamPool::new(SocketAddress::new_unix(APP_SOCK), 1).unwrap();
 
 	std::thread::spawn(move || {
 		Reaper::execute(
@@ -97,8 +97,8 @@ async fn enclave_app_client_socket_stress() {
 	wait_for_usock(APP_SOCK).await;
 
 	let enclave_client_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix(ENCLAVE_SOCK), 1).unwrap();
-	let enclave_client = AsyncClient::new(
+		StreamPool::new(SocketAddress::new_unix(ENCLAVE_SOCK), 1).unwrap();
+	let enclave_client = SocketClient::new(
 		enclave_client_pool.shared(),
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 3), // needs to be bigger than the slow request below + some time for recovery
 	);

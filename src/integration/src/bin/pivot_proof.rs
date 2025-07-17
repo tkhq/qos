@@ -3,9 +3,9 @@ use core::panic;
 use borsh::BorshDeserialize;
 use integration::{AdditionProof, AdditionProofPayload, PivotProofMsg};
 use qos_core::{
-	async_server::{AsyncRequestProcessor, AsyncSocketServer},
 	handles::EphemeralKeyHandle,
-	io::{AsyncStreamPool, SocketAddress},
+	io::{SocketAddress, StreamPool},
+	server::{RequestProcessor, SocketServer},
 };
 
 #[derive(Clone)]
@@ -13,7 +13,7 @@ struct Processor {
 	ephemeral_key_handle: EphemeralKeyHandle,
 }
 
-impl AsyncRequestProcessor for Processor {
+impl RequestProcessor for Processor {
 	async fn process(&self, request: Vec<u8>) -> Vec<u8> {
 		let msg = PivotProofMsg::try_from_slice(&request)
 			.expect("Received invalid message - test is broken!");
@@ -54,11 +54,10 @@ async fn main() {
 	let args: Vec<String> = std::env::args().collect();
 	let socket_path: &String = &args[1];
 
-	let app_pool =
-		AsyncStreamPool::new(SocketAddress::new_unix(socket_path), 1)
-			.expect("unable to create app pool");
+	let app_pool = StreamPool::new(SocketAddress::new_unix(socket_path), 1)
+		.expect("unable to create app pool");
 
-	let server = AsyncSocketServer::listen_all(
+	let server = SocketServer::listen_all(
 		app_pool,
 		&Processor {
 			ephemeral_key_handle: EphemeralKeyHandle::new(

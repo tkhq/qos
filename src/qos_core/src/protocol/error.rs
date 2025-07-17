@@ -3,7 +3,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use qos_p256::P256Error;
 
 use crate::{
-	async_client::ClientError,
+	client::ClientError,
 	io::IOError,
 	protocol::{services::boot, ProtocolPhase},
 };
@@ -147,7 +147,7 @@ pub enum ProtocolError {
 	DifferentManifest,
 	/// Error from the qos crypto library.
 	QosCrypto(String),
-	/// Error during expanding the `AsyncPool`.
+	/// Error during expanding the `StreamPool`.
 	PoolExpandError,
 }
 

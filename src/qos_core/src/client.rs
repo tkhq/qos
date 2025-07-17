@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use nix::sys::time::TimeVal;
 
-use crate::io::{IOError, SharedAsyncStreamPool};
+use crate::io::{IOError, SharedStreamPool};
 
 /// Enclave client error.
 #[derive(Debug)]
@@ -29,15 +29,15 @@ impl From<borsh::io::Error> for ClientError {
 }
 /// Client for communicating with the enclave `crate::server::SocketServer`.
 #[derive(Clone, Debug)]
-pub struct AsyncClient {
-	pool: SharedAsyncStreamPool,
+pub struct SocketClient {
+	pool: SharedStreamPool,
 	timeout: Duration,
 }
 
-impl AsyncClient {
+impl SocketClient {
 	/// Create a new client.
 	#[must_use]
-	pub fn new(pool: SharedAsyncStreamPool, timeout: TimeVal) -> Self {
+	pub fn new(pool: SharedStreamPool, timeout: TimeVal) -> Self {
 		let timeout = timeval_to_duration(timeout);
 		Self { pool, timeout }
 	}

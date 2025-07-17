@@ -3,8 +3,8 @@ use std::{process::Command, str};
 use borsh::BorshDeserialize;
 use integration::{wait_for_usock, PivotProofMsg, PIVOT_PROOF_PATH};
 use qos_core::{
-	async_client::AsyncClient,
-	io::{AsyncStreamPool, SocketAddress, TimeVal, TimeValLike},
+	client::SocketClient,
+	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
 	protocol::ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
 };
 
@@ -23,13 +23,11 @@ async fn fetch_and_verify_app_proof() {
 
 	wait_for_usock(PROOF_TEST_ENCLAVE_SOCKET).await;
 
-	let enclave_pool = AsyncStreamPool::new(
-		SocketAddress::new_unix(PROOF_TEST_ENCLAVE_SOCKET),
-		1,
-	)
-	.unwrap();
+	let enclave_pool =
+		StreamPool::new(SocketAddress::new_unix(PROOF_TEST_ENCLAVE_SOCKET), 1)
+			.unwrap();
 
-	let enclave_client = AsyncClient::new(
+	let enclave_client = SocketClient::new(
 		enclave_pool.shared(),
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 	);

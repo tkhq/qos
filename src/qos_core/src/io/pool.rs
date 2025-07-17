@@ -3,7 +3,7 @@ use std::{path::Path, sync::Arc};
 use nix::sys::socket::UnixAddr;
 use tokio::sync::{Mutex, MutexGuard, RwLock};
 
-use super::{AsyncListener, AsyncStream, IOError, SocketAddress};
+use super::{IOError, Listener, SocketAddress, Stream};
 
 /// Socket Pool Errors
 #[derive(Debug)]
@@ -20,27 +20,24 @@ struct AsyncPool<T> {
 	handles: Vec<Mutex<T>>,
 }
 
-/// Specialization of `AsyncPool` with `AsyncStream` and connection/liste logic.
+/// Specialization of `AsyncPool` with `Stream` and connection/liste logic.
 #[derive(Debug)]
-pub struct AsyncStreamPool {
+pub struct StreamPool {
 	addresses: Vec<SocketAddress>, // local copy used for `listen` only TODO: refactor listeners out of pool
-	pool: AsyncPool<AsyncStream>,
+	pool: AsyncPool<Stream>,
 }
 
-/// Helper type to wrap `AsyncStreamPool` in `Arc` and `RwLock`. Used to allow multiple processors to run across IO
+/// Helper type to wrap `StreamPool` in `Arc` and `RwLock`. Used to allow multiple processors to run across IO
 /// await points without locking the whole set.
-pub type SharedAsyncStreamPool = Arc<RwLock<AsyncStreamPool>>;
+pub type SharedStreamPool = Arc<RwLock<StreamPool>>;
 
-impl AsyncStreamPool {
-	/// Create a new `AsyncStreamPool` with given starting `SocketAddress`, timout and number of addresses to populate.
+impl StreamPool {
+	/// Create a new `StreamPool` with given starting `SocketAddress`, timout and number of addresses to populate.
 	pub fn new(
 		start_address: SocketAddress,
 		mut count: u32,
 	) -> Result<Self, IOError> {
-		eprintln!(
-			"AsyncStreamPool start address: {:?}",
-			start_address.debug_info()
-		);
+		eprintln!("StreamPool start address: {:?}", start_address.debug_info());
 
 		let mut addresses = Vec::new();
 		let mut addr = start_address;
@@ -57,15 +54,14 @@ impl AsyncStreamPool {
 		Ok(Self::with_addresses(addresses))
 	}
 
-	/// Create a new `AsyncStreamPool` which will contain all the provided addresses but no connections yet.
+	/// Create a new `StreamPool` which will contain all the provided addresses but no connections yet.
 	#[must_use]
 	fn with_addresses(
 		addresses: impl IntoIterator<Item = SocketAddress>,
 	) -> Self {
 		let addresses: Vec<SocketAddress> = addresses.into_iter().collect();
 
-		let streams: Vec<AsyncStream> =
-			addresses.iter().map(AsyncStream::new).collect();
+		let streams: Vec<Stream> = addresses.iter().map(Stream::new).collect();
 
 		let pool = AsyncPool::from(streams);
 
@@ -74,7 +70,7 @@ impl AsyncStreamPool {
 
 	/// Helper function to get the Arc and Mutex wrapping
 	#[must_use]
-	pub fn shared(self) -> SharedAsyncStreamPool {
+	pub fn shared(self) -> SharedStreamPool {
 		Arc::new(RwLock::new(self))
 	}
 
@@ -90,17 +86,17 @@ impl AsyncStreamPool {
 		self.len() == 0
 	}
 
-	/// Gets the next available `AsyncStream` behind a `MutexGuard`
-	pub async fn get(&self) -> MutexGuard<AsyncStream> {
+	/// Gets the next available `Stream` behind a `MutexGuard`
+	pub async fn get(&self) -> MutexGuard<Stream> {
 		self.pool.get().await
 	}
 
 	/// Create a new pool by listening new connection on all the addresses
-	pub fn listen(&self) -> Result<Vec<AsyncListener>, IOError> {
+	pub fn listen(&self) -> Result<Vec<Listener>, IOError> {
 		let mut listeners = Vec::new();
 
 		for addr in &self.addresses {
-			let listener = AsyncListener::listen(addr)?;
+			let listener = Listener::listen(addr)?;
 
 			listeners.push(listener);
 		}
@@ -119,7 +115,7 @@ impl AsyncStreamPool {
 			for _ in count..size {
 				next = next.next_address()?;
 
-				self.pool.push(AsyncStream::new(&next));
+				self.pool.push(Stream::new(&next));
 				self.addresses.push(next.clone());
 			}
 		}
@@ -127,11 +123,8 @@ impl AsyncStreamPool {
 		Ok(())
 	}
 
-	/// Listen to new connections on added sockets on top of existing listeners, returning the list of new `AsyncListener`
-	pub fn listen_to(
-		&mut self,
-		size: u32,
-	) -> Result<Vec<AsyncListener>, IOError> {
+	/// Listen to new connections on added sockets on top of existing listeners, returning the list of new `Listener`
+	pub fn listen_to(&mut self, size: u32) -> Result<Vec<Listener>, IOError> {
 		eprintln!("listening async pool to {size}");
 		let size = size as usize;
 		let mut listeners = Vec::new();
@@ -144,7 +137,7 @@ impl AsyncStreamPool {
 				eprintln!("adding listener on {}", next.debug_info());
 
 				self.addresses.push(next.clone());
-				let listener = AsyncListener::listen(&next)?;
+				let listener = Listener::listen(&next)?;
 
 				listeners.push(listener);
 			}
@@ -155,7 +148,7 @@ impl AsyncStreamPool {
 }
 
 impl<T> AsyncPool<T> {
-	/// Get a `AsyncStream` behind a `MutexGuard` for use in a `AsyncStream::call`
+	/// Get a `Stream` behind a `MutexGuard` for use in a `Stream::call`
 	/// Will wait (async) if all connections are locked until one becomes available
 	async fn get(&self) -> MutexGuard<T> {
 		// TODO: make this into an error
@@ -212,7 +205,7 @@ impl SocketAddress {
 	/// Creates and returns the "following" `SocketAddress`. In case of VSOCK we increment the port from the source by 1.
 	/// In case of USOCK we increment the postfix of the path if present, or add a `"_0"` at the end.
 	///
-	/// This is mostly used by the `AsyncSocketPool`.
+	/// This is mostly used by the `SocketPool`.
 	pub(crate) fn next_address(&self) -> Result<Self, IOError> {
 		match self {
 			Self::Unix(usock) => match usock.path() {
@@ -229,7 +222,7 @@ impl SocketAddress {
 			Self::Vsock(vsock) => Ok(Self::new_vsock(
 				vsock.cid(),
 				vsock.port() + 1,
-				super::stream::vsock_svm_flags(*vsock),
+				super::vsock_svm_flags(*vsock),
 			)),
 		}
 	}
