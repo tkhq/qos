@@ -27,7 +27,7 @@ const BACKLOG: usize = 128;
 
 const MIB: usize = 1024 * 1024;
 
-/// Maximum payload size for a single recv / send call. We're being generous with 128MB.
+/// Maximum payload size for a single recv / send call. We're being generous with 128MiB.
 /// The goal here is to avoid server crashes if the payload size exceeds the available system memory.
 pub const MAX_PAYLOAD_SIZE: usize = 128 * MIB;
 
