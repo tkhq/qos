@@ -25,14 +25,14 @@ const MAX_RETRY: usize = 25;
 const BACKOFF_MILLISECONDS: u64 = 10;
 const BACKLOG: usize = 128;
 
-const MEGABYTE: usize = 1024 * 1024;
+const MIB: usize = 1024 * 1024;
 
 /// Maximum payload size for a single recv / send call. We're being generous with 128MB.
 /// The goal here is to avoid server crashes if the payload size exceeds the available system memory.
-pub const MAX_PAYLOAD_SIZE: usize = 128 * MEGABYTE;
+pub const MAX_PAYLOAD_SIZE: usize = 128 * MIB;
 
 /// Even though we allow for big payloads we start by allocating a small buffer first. Then allocate more as needed.
-pub const INITIAL_RECV_BUF_SIZE: usize = 2 * MEGABYTE;
+pub const INITIAL_RECV_BUF_SIZE: usize = 2 * MIB;
 
 /// Socket address.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -540,7 +540,7 @@ mod test {
 			}
 		});
 
-		// Sending a request that is strictly less than the max size should work
+		// Sending a request that is exactly the max size should work
 		// (the response will be exactly max size)
 		let client = Stream::connect(&addr, timeval()).unwrap();
 		let req = vec![1u8; MAX_PAYLOAD_SIZE];
