@@ -30,12 +30,12 @@ impl ProtocolState {
 
 /// Enclave state machine that executes when given a `ProtocolMsg`.
 #[derive(Clone)]
-pub struct AsyncProcessor {
+pub struct ProtocolProcessor {
 	app_client: SocketClient,
 	state: SharedProtocolState,
 }
 
-impl AsyncProcessor {
+impl ProtocolProcessor {
 	/// Create a new `Self` inside `Arc` and `Mutex`.
 	#[must_use]
 	pub fn new(
@@ -63,7 +63,7 @@ impl AsyncProcessor {
 	}
 }
 
-impl RequestProcessor for AsyncProcessor {
+impl RequestProcessor for ProtocolProcessor {
 	async fn process(&self, req_bytes: Vec<u8>) -> Vec<u8> {
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
 			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(

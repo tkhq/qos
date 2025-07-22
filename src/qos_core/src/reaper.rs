@@ -16,7 +16,7 @@ use crate::{
 	handles::Handles,
 	io::StreamPool,
 	protocol::{
-		async_processor::AsyncProcessor,
+		async_processor::ProtocolProcessor,
 		services::boot::{PivotConfig, RestartPolicy},
 		ProtocolPhase, ProtocolState,
 	},
@@ -68,7 +68,7 @@ impl Reaper {
 						test_only_init_phase_override,
 					);
 					// send a shared version of state and the async pool to each processor
-					let processor = AsyncProcessor::new(
+					let processor = ProtocolProcessor::new(
 						protocol_state.shared(),
 						app_pool.shared(),
 					);
