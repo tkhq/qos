@@ -39,22 +39,22 @@ use crate::{
 	HOST_HEALTH, MAX_ENCODED_MSG_LEN, MESSAGE,
 };
 
-/// Resource shared across tasks in the `AsyncHostServer`.
+/// Resource shared across tasks in the `HostServer`.
 #[derive(Debug)]
-struct AsyncQosHostState {
+struct QosHostState {
 	enclave_client: SocketClient,
 }
 
 /// HTTP server for the host of the enclave; proxies requests to the enclave.
 #[allow(clippy::module_name_repetitions)]
-pub struct AsyncHostServer {
+pub struct HostServer {
 	enclave_pool: SharedStreamPool,
 	timeout: TimeVal,
 	addr: SocketAddr,
 	base_path: Option<String>,
 }
 
-impl AsyncHostServer {
+impl HostServer {
 	/// Create a new `HostServer`. See `Self::serve` for starting the
 	/// server.
 	#[must_use]
@@ -82,7 +82,7 @@ impl AsyncHostServer {
 	/// Panics if there is an issue starting the server.
 	// pub async fn serve(&self) -> Result<(), String> {
 	pub async fn serve(&self) {
-		let state = Arc::new(AsyncQosHostState {
+		let state = Arc::new(QosHostState {
 			enclave_client: SocketClient::new(
 				self.enclave_pool.clone(),
 				self.timeout,
@@ -107,16 +107,14 @@ impl AsyncHostServer {
 
 	/// Health route handler.
 	#[allow(clippy::unused_async)]
-	async fn host_health(
-		_: State<Arc<AsyncQosHostState>>,
-	) -> impl IntoResponse {
+	async fn host_health(_: State<Arc<QosHostState>>) -> impl IntoResponse {
 		println!("Host health...");
 		Html("Ok!")
 	}
 
 	/// Health route handler.
 	async fn enclave_health(
-		State(state): State<Arc<AsyncQosHostState>>,
+		State(state): State<Arc<QosHostState>>,
 	) -> impl IntoResponse {
 		println!("Enclave health...");
 
@@ -167,7 +165,7 @@ impl AsyncHostServer {
 	}
 
 	async fn enclave_info(
-		State(state): State<Arc<AsyncQosHostState>>,
+		State(state): State<Arc<QosHostState>>,
 	) -> Result<Json<EnclaveInfo>, Error> {
 		println!("Enclave info...");
 
@@ -244,7 +242,7 @@ impl AsyncHostServer {
 
 	/// Message route handler.
 	async fn message(
-		State(state): State<Arc<AsyncQosHostState>>,
+		State(state): State<Arc<QosHostState>>,
 		encoded_request: Bytes,
 	) -> impl IntoResponse {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {

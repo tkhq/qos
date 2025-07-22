@@ -200,7 +200,7 @@ impl CLI {
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
 		} else {
-			crate::async_host::AsyncHostServer::new(
+			crate::host::HostServer::new(
 				options
 					.enclave_pool()
 					.expect("unable to create enclave pool")
