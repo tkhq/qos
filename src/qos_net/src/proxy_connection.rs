@@ -1,9 +1,12 @@
 //! Contains logic for remote connection establishment: DNS resolution and TCP
 //! connection.
-use std::net::{AddrParseError, IpAddr, SocketAddr};
+use std::{
+	net::{AddrParseError, IpAddr, SocketAddr},
+	time::Duration,
+};
 
 use hickory_resolver::{
-	config::{NameServerConfigGroup, ResolverConfig},
+	config::{NameServerConfigGroup, ResolverConfig, ResolverOpts},
 	name_server::TokioConnectionProvider,
 	TokioResolver,
 };
@@ -114,10 +117,18 @@ pub async fn resolve_hostname(
 			true,
 		),
 	);
+
+	// ensure the resolve call will be < 5s for our socket timeout (so we return a meaningful error and don't hog the socket)
+	// this means attempts * timeout < 5s
+	let mut resolver_opts = ResolverOpts::default();
+	resolver_opts.timeout = Duration::from_secs(1);
+	resolver_opts.attempts = 1;
+
 	let resolver = TokioResolver::builder_with_config(
 		resolver_config,
 		TokioConnectionProvider::default(),
 	)
+	.with_options(resolver_opts)
 	.build();
 
 	let response = resolver
