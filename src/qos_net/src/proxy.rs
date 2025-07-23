@@ -125,17 +125,19 @@ impl Proxy {
 				let resp_bytes = self.process_req(req_bytes).await;
 				self.sock_stream.send(&resp_bytes).await?;
 				if let Some(tcp_connection) = &mut self.tcp_connection {
-					let (_, _) = tokio::io::copy_bidirectional(
+					let result = tokio::io::copy_bidirectional(
 						&mut self.sock_stream,
 						&mut tcp_connection.tcp_stream,
 					)
-					.await?;
+					.await
+					.map(|_| ())
+					.map_err(IOError::from);
 
 					// Once the "dumb pipe" is closed we need to clear our tcp_connection and refresh
 					// the proxy socket stream by using shutdown
 					self.tcp_connection = None;
 
-					break Ok(()); // return to the accept loop
+					break result; // return to the accept loop
 				}
 			}
 		}
@@ -177,8 +179,17 @@ async fn accept_loop_proxy(
 	listener: Listener,
 ) -> Result<(), SocketServerError> {
 	loop {
+		eprintln!("Proxy::accept_loop_proxy accepting connection");
 		let stream = listener.accept().await?;
 		let mut proxy = Proxy::new(stream);
-		proxy.run().await?;
+
+		match proxy.run().await {
+			Ok(()) => {
+				eprintln!("Proxy::run done");
+			}
+			Err(err) => {
+				eprintln!("Error on proxy run {:?} rerunning", err);
+			}
+		}
 	}
 }

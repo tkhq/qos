@@ -46,8 +46,8 @@ pub struct SocketServer {
 
 impl SocketServer {
 	/// Listen and respond to incoming requests on all the pool's addresses with the given `processor`.
-	/// This method returns a list of tasks that are running as part of this listener. `JoinHandle::abort()`
-	/// should be called on each when the program exists (e.g. on ctrl+c)
+	/// This method returns `SocketServer` which contains all the handles for running tasks.
+	/// `terminate` should be called on the server when execution is to be finished (e.g. ctrl+c handling)
 	pub fn listen_all<P>(
 		pool: StreamPool,
 		processor: &SharedProcessor<P>,
