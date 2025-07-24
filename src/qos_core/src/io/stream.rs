@@ -25,30 +25,51 @@ enum InnerStream {
 	Vsock(VsockStream),
 }
 
+/// `StreamMode` describes if the socket stream should re-connect after each `call` or stay connected.
+/// Reconnecting is backwards compatible to old enclave apps, while connected mode is necessary for the new
+/// `Proxy` implementation.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum StreamMode {
+	/// Reconnect after each `call`.
+	#[default]
+	Reconnecting,
+	/// Stay connected after each `call`
+	Connected,
+}
+
 /// Handle on a stream
 #[derive(Debug)]
 pub struct Stream {
 	address: Option<SocketAddress>,
 	inner: Option<InnerStream>,
+	mode: StreamMode,
 }
 
 impl Stream {
 	// accept a new connection, used by server side
 	fn unix_accepted(stream: UnixStream) -> Self {
-		Self { address: None, inner: Some(InnerStream::Unix(stream)) }
+		Self {
+			address: None,
+			inner: Some(InnerStream::Unix(stream)),
+			mode: StreamMode::default(),
+		}
 	}
 
 	// accept a new connection, used by server side
 	#[cfg(feature = "vm")]
 	fn vsock_accepted(stream: VsockStream) -> Self {
-		Self { address: None, inner: Some(InnerStream::Vsock(stream)) }
+		Self {
+			address: None,
+			inner: Some(InnerStream::Vsock(stream)),
+			mode: StreamMode::default(),
+		}
 	}
 
-	/// Create a new `Stream` with known `SocketAddress` and `TimeVal`. The stream starts disconnected
+	/// Create a new `Stream` with known `SocketAddress` and `StreamMode`. The stream starts disconnected
 	/// and will connect on the first `call`.
 	#[must_use]
-	pub fn new(address: &SocketAddress) -> Self {
-		Self { address: Some(address.clone()), inner: None }
+	pub fn new(address: &SocketAddress, mode: StreamMode) -> Self {
+		Self { address: Some(address.clone()), inner: None, mode }
 	}
 
 	/// Create a new `Stream` from a `SocketAddress` and a timeout and connect using async
@@ -121,7 +142,7 @@ impl Stream {
 		}
 
 		let result = self.recv().await;
-		if result.is_err() {
+		if result.is_err() || self.mode == StreamMode::Reconnecting {
 			self.reset();
 		}
 
@@ -139,6 +160,16 @@ impl Stream {
 	/// Resets the inner stream, forcing a re-connect next `call`
 	pub fn reset(&mut self) {
 		self.inner = None;
+	}
+}
+
+impl std::fmt::Display for Stream {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		if let Some(addr) = &self.address {
+			write!(f, "Stream @ {}", addr.debug_info())
+		} else {
+			write!(f, "Stream NOADDR")
+		}
 	}
 }
 

@@ -263,7 +263,7 @@ async fn main() {
 
 	// -- HOST start host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/async_qos_host")
+		Command::new("../target/debug/qos_host")
 			.args([
 				"--host-port",
 				&host_port.to_string(),
