@@ -89,8 +89,8 @@ impl Reaper {
 
 						if manifest_present {
 							let pool_size = pool_size.unwrap_or(1);
-							// expand server to pool_size + 1 (due to qos-host extra socket)
-							server.listen_to(pool_size + 1, &processor).expect(
+							// expand server to pool_size
+							server.listen_to(pool_size, &processor).expect(
 								"unable to listen_to on the running server",
 							);
 							// expand app connections to pool_size

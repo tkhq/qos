@@ -3,7 +3,7 @@ use std::{path::Path, sync::Arc};
 use nix::sys::socket::UnixAddr;
 use tokio::sync::{Mutex, MutexGuard, RwLock};
 
-use super::{IOError, Listener, SocketAddress, Stream};
+use super::{IOError, Listener, SocketAddress, Stream, StreamMode};
 
 /// Socket Pool Errors
 #[derive(Debug)]
@@ -25,6 +25,7 @@ struct AsyncPool<T> {
 pub struct StreamPool {
 	addresses: Vec<SocketAddress>, // local copy used for `listen` only TODO: refactor listeners out of pool
 	pool: AsyncPool<Stream>,
+	mode: StreamMode,
 }
 
 /// Helper type to wrap `StreamPool` in `Arc` and `RwLock`. Used to allow multiple processors to run across IO
@@ -35,7 +36,16 @@ impl StreamPool {
 	/// Create a new `StreamPool` with given starting `SocketAddress`, timout and number of addresses to populate.
 	pub fn new(
 		start_address: SocketAddress,
+		count: u32,
+	) -> Result<Self, IOError> {
+		Self::with_mode(start_address, count, StreamMode::default())
+	}
+
+	/// Create a new `StreamPool` with given starting `SocketAddress`, timeout, number of addresses and given `StreamMode`.
+	pub fn with_mode(
+		start_address: SocketAddress,
 		mut count: u32,
+		mode: StreamMode,
 	) -> Result<Self, IOError> {
 		eprintln!("StreamPool start address: {:?}", start_address.debug_info());
 
@@ -51,21 +61,23 @@ impl StreamPool {
 			addr = addr.next_address()?;
 		}
 
-		Ok(Self::with_addresses(addresses))
+		Ok(Self::with_addresses(addresses, mode))
 	}
 
 	/// Create a new `StreamPool` which will contain all the provided addresses but no connections yet.
 	#[must_use]
 	fn with_addresses(
 		addresses: impl IntoIterator<Item = SocketAddress>,
+		mode: StreamMode,
 	) -> Self {
 		let addresses: Vec<SocketAddress> = addresses.into_iter().collect();
 
-		let streams: Vec<Stream> = addresses.iter().map(Stream::new).collect();
+		let streams: Vec<Stream> =
+			addresses.iter().map(|a| Stream::new(a, mode)).collect();
 
 		let pool = AsyncPool::from(streams);
 
-		Self { addresses, pool }
+		Self { addresses, pool, mode }
 	}
 
 	/// Helper function to get the Arc and Mutex wrapping
@@ -115,7 +127,7 @@ impl StreamPool {
 			for _ in count..size {
 				next = next.next_address()?;
 
-				self.pool.push(Stream::new(&next));
+				self.pool.push(Stream::new(&next, self.mode));
 				self.addresses.push(next.clone());
 			}
 		}

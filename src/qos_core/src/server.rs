@@ -58,7 +58,7 @@ impl SocketServer {
 		println!("`AsyncSocketServer` listening on pool size {}", pool.len());
 
 		let listeners = pool.listen()?;
-		let tasks = Self::spawn_tasks_for_listeners(listeners, processor);
+		let tasks = Self::spawn_tasks_for_listeners(listeners, processor, 0);
 
 		Ok(Self { pool, tasks })
 	}
@@ -66,15 +66,20 @@ impl SocketServer {
 	fn spawn_tasks_for_listeners<P>(
 		listeners: Vec<Listener>,
 		processor: &SharedProcessor<P>,
+		start_index: usize,
 	) -> Vec<JoinHandle<Result<(), SocketServerError>>>
 	where
 		P: RequestProcessor + Sync + 'static,
 	{
 		let mut tasks = Vec::new();
+		let mut index = start_index;
 		for listener in listeners {
 			let p = processor.clone();
 			let task =
-				tokio::spawn(async move { accept_loop(listener, p).await });
+				tokio::spawn(
+					async move { accept_loop(listener, p, index).await },
+				);
+			index += 1;
 
 			tasks.push(task);
 		}
@@ -91,8 +96,10 @@ impl SocketServer {
 	where
 		P: RequestProcessor + Sync + 'static,
 	{
+		let start_index = self.tasks.len();
 		let listeners = self.pool.listen_to(pool_size)?;
-		let tasks = Self::spawn_tasks_for_listeners(listeners, processor);
+		let tasks =
+			Self::spawn_tasks_for_listeners(listeners, processor, start_index);
 
 		self.tasks.extend(tasks);
 
@@ -110,44 +117,34 @@ impl SocketServer {
 async fn accept_loop<P>(
 	listener: Listener,
 	processor: SharedProcessor<P>,
+	index: usize,
 ) -> Result<(), SocketServerError>
 where
 	P: RequestProcessor,
 {
 	loop {
-		eprintln!("AsyncServer: accepting");
+		eprintln!("SocketServer[{index}]: accepting");
 		let mut stream = listener.accept().await?;
+
+		eprintln!("SocketServer[{index}]: accepted @ {stream}");
 		loop {
 			match stream.recv().await {
 				Ok(payload) => {
+					eprintln!("SocketServer[{index}]: received msg @ {stream}");
 					let response =
 						processor.read().await.process(payload).await;
 
 					match stream.send(&response).await {
 						Ok(()) => {}
 						Err(err) => {
-							eprintln!(
-								"AsyncServer: error sending reply {err:?}, re-accepting"
-							);
+							eprintln!("SocketServer[{index}]: error sending reply {err:?}, re-accepting @ {stream}");
 							break;
 						}
 					}
 				}
 				Err(err) => {
-					if let IOError::StdIoError(err) = err {
-						eprintln!("AsyncServer: io error {err:?}");
-						if err.kind() == std::io::ErrorKind::UnexpectedEof {
-							eprintln!(
-								"AsyncServer: unexpected eof, re-accepting"
-							);
-							break;
-						}
-					} else {
-						eprintln!(
-							"AsyncServer: unknown error {err:?}, re-accepting"
-						);
-						break;
-					}
+					eprintln!("SocketServer[{index}]: error receiving request {err:?}, re-accepting @ {stream}");
+					break;
 				}
 			}
 		}

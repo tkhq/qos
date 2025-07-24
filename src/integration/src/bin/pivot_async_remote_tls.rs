@@ -4,7 +4,7 @@ use std::{io::ErrorKind, sync::Arc};
 use borsh::BorshDeserialize;
 use integration::PivotRemoteTlsMsg;
 use qos_core::{
-	io::{SharedStreamPool, SocketAddress, StreamPool},
+	io::{SharedStreamPool, SocketAddress, StreamMode, StreamPool},
 	server::{RequestProcessor, SocketServer},
 };
 use qos_net::proxy_stream::ProxyStream;
@@ -111,9 +111,13 @@ async fn main() {
 	let enclave_pool = StreamPool::new(SocketAddress::new_unix(socket_path), 1)
 		.expect("unable to create async stream pool");
 
-	let proxy_pool = StreamPool::new(SocketAddress::new_unix(proxy_path), 1)
-		.expect("unable to create async stream pool")
-		.shared();
+	let proxy_pool = StreamPool::with_mode(
+		SocketAddress::new_unix(proxy_path),
+		1,
+		StreamMode::Connected,
+	)
+	.expect("unable to create async stream pool")
+	.shared();
 
 	let server =
 		SocketServer::listen_all(enclave_pool, &Processor::new(proxy_pool))
