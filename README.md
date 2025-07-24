@@ -41,7 +41,7 @@ If you need to extract files from it, you can do so by using [docker](https://do
 
 ```sh
 # Creates an archive called qos_enclave.tar, with a tag "qos-enclave:latest"
-skopeo copy oci:./out/qos_enclave docker-archive:qos_enclave.tar:qos-enclave:latest
+skopeo copy oci:./out/qos_enclave:latest docker-archive:qos_enclave.tar:qos-enclave:latest
 
 # Load the tar into local docker
 docker load < qos_enclave.tar
