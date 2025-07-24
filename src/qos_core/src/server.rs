@@ -55,7 +55,7 @@ impl SocketServer {
 	where
 		P: RequestProcessor + Sync + 'static,
 	{
-		println!("`AsyncSocketServer` listening on pool size {}", pool.len());
+		println!("`SocketServer` listening on pool size {}", pool.len());
 
 		let listeners = pool.listen()?;
 		let tasks = Self::spawn_tasks_for_listeners(listeners, processor, 0);
@@ -126,24 +126,23 @@ where
 		eprintln!("SocketServer[{index}]: accepting");
 		let mut stream = listener.accept().await?;
 
-		eprintln!("SocketServer[{index}]: accepted @ {stream}");
+		eprintln!("SocketServer[{index}]: accepted");
 		loop {
 			match stream.recv().await {
 				Ok(payload) => {
-					eprintln!("SocketServer[{index}]: received msg @ {stream}");
 					let response =
 						processor.read().await.process(payload).await;
 
 					match stream.send(&response).await {
 						Ok(()) => {}
 						Err(err) => {
-							eprintln!("SocketServer[{index}]: error sending reply {err:?}, re-accepting @ {stream}");
+							eprintln!("SocketServer[{index}]: error sending reply {err:?}, re-accepting");
 							break;
 						}
 					}
 				}
 				Err(err) => {
-					eprintln!("SocketServer[{index}]: error receiving request {err:?}, re-accepting @ {stream}");
+					eprintln!("SocketServer[{index}]: error receiving request {err:?}, re-accepting");
 					break;
 				}
 			}
