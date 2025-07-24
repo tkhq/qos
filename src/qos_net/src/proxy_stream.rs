@@ -28,7 +28,7 @@ pub struct ProxyStream<'pool> {
 }
 
 impl<'pool> ProxyStream<'pool> {
-	/// Create a new AsyncProxyStream by targeting a hostname
+	/// Create a new `ProxyStream` by targeting a hostname
 	///
 	/// # Arguments
 	///

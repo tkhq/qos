@@ -66,13 +66,14 @@ impl SocketClient {
 
 		// timeout should apply to the entire operation
 		let timeout_result = tokio::time::timeout(self.timeout, async {
-			maybe_stream = Some(pool.get().await);
+			maybe_stream = Some(pool.get().await); // needed for timeout error handling below
+			let stream =
+				maybe_stream.as_deref_mut().expect("unreachable unwrap");
 
-			maybe_stream
-				.as_deref_mut()
-				.expect("unreachable unwrap") // this can't happen, we just assigned it above
-				.call(request)
-				.await
+			let result = stream.call(request).await;
+			stream.reset(); // emulate original re-connect functionality
+
+			result
 		})
 		.await;
 

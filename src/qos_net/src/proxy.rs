@@ -156,10 +156,7 @@ impl ProxyServer for SocketServer {
 	async fn listen_proxy(
 		pool: StreamPool,
 	) -> Result<Box<Self>, SocketServerError> {
-		println!(
-			"`AsyncSocketServer` proxy listening on pool size {}",
-			pool.len()
-		);
+		println!("`SocketServer` proxy listening on pool size {}", pool.len());
 
 		let listeners = pool.listen()?;
 
