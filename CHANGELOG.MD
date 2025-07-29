@@ -21,6 +21,10 @@ Security: in case of vulnerabilities.
 
 - Introduced new async version of each crate and a socket pool to allow proper concurrency of requests
 
+## Removed: `qos_net`
+
+- Removed `connection_id` from all `Proxy` structs and messages.
+
 ## Added: `qos_net` crate
 
 In PR #449 we introduce `qos_net`, a crate which contains a socket<>TCP proxy to let enclave application communicate with the outside world.

@@ -17,10 +17,6 @@ use crate::{error::QosNetError, proxy_msg::ProxyMsg};
 pub struct ProxyStream<'pool> {
 	/// Stream we hold for this connection
 	stream: MutexGuard<'pool, Stream>,
-	/// Once a connection is established (successful `ConnectByName` or
-	/// ConnectByIp request), this connection ID is set the u32 in
-	/// `ConnectResponse`.
-	pub connection_id: u128,
 	/// The remote host this connection points to
 	pub remote_hostname: Option<String>,
 	/// The remote IP this connection points to
@@ -58,14 +54,11 @@ impl<'pool> ProxyStream<'pool> {
 
 		match ProxyMsg::try_from_slice(&resp_bytes) {
 			Ok(resp) => match resp {
-				ProxyMsg::ConnectResponse { connection_id, remote_ip } => {
-					Ok(Self {
-						stream,
-						connection_id,
-						remote_ip,
-						remote_hostname: Some(hostname),
-					})
-				}
+				ProxyMsg::ConnectResponse { remote_ip } => Ok(Self {
+					stream,
+					remote_ip,
+					remote_hostname: Some(hostname),
+				}),
 				_ => Err(QosNetError::InvalidMsg),
 			},
 			Err(_) => Err(QosNetError::InvalidMsg),
@@ -90,13 +83,8 @@ impl<'pool> ProxyStream<'pool> {
 
 		match ProxyMsg::try_from_slice(&resp_bytes) {
 			Ok(resp) => match resp {
-				ProxyMsg::ConnectResponse { connection_id, remote_ip } => {
-					Ok(Self {
-						stream,
-						connection_id,
-						remote_ip,
-						remote_hostname: None,
-					})
+				ProxyMsg::ConnectResponse { remote_ip } => {
+					Ok(Self { stream, remote_ip, remote_hostname: None })
 				}
 				_ => Err(QosNetError::InvalidMsg),
 			},

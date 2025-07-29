@@ -43,11 +43,10 @@ impl Proxy {
 		.await
 		{
 			Ok(conn) => {
-				let connection_id = conn.id;
 				let remote_ip = conn.ip.clone();
 				self.tcp_connection = Some(conn);
-				println!("Connection to {hostname} established");
-				ProxyMsg::ConnectResponse { connection_id, remote_ip }
+				println!("Connection to {hostname}@{remote_ip} established");
+				ProxyMsg::ConnectResponse { remote_ip }
 			}
 			Err(e) => {
 				println!("error while establishing connection: {e:?}");
@@ -61,11 +60,10 @@ impl Proxy {
 	async fn connect_by_ip(&mut self, ip: String, port: u16) -> ProxyMsg {
 		match ProxyConnection::new_from_ip(ip.clone(), port).await {
 			Ok(conn) => {
-				let connection_id = conn.id;
 				let remote_ip = conn.ip.clone();
 				self.tcp_connection = Some(conn);
-				println!("Connection to {ip} established and saved as ID {connection_id}");
-				ProxyMsg::ConnectResponse { connection_id, remote_ip }
+				println!("Connection to {ip} established");
+				ProxyMsg::ConnectResponse { remote_ip }
 			}
 			Err(e) => {
 				println!("error while establishing connection: {e:?}");
