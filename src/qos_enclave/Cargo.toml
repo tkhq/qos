@@ -7,6 +7,9 @@ rust-version = "1.61"
 publish = false
 
 [dependencies]
+# newer versions 1.4.1 and 1.4.2 available
+# as of 7/2025, AWS doesn't have a recent crate version of aws-nitro-enclaves-cli published
+# directly use the git version as a workaround
 nitro-cli = { git = "https://github.com/aws/aws-nitro-enclaves-cli", version = "1.4.0" }
 libc = "0.2.172" # NOTE: nitro-cli requires ^0.2.161
 

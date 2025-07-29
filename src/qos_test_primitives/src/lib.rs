@@ -83,9 +83,9 @@ impl<'a> Deref for PathWrapper<'a> {
 /// Get a bind-able TCP port on the local system.
 #[must_use]
 pub fn find_free_port() -> Option<u16> {
-	let mut rng = rand::thread_rng();
+	let mut rng = rand::rng();
 	for _ in 0..MAX_PORT_SEARCH_ATTEMPTS {
-		let port = rng.gen_range(SERVER_PORT_RANGE);
+		let port = rng.random_range(SERVER_PORT_RANGE);
 		if port_is_available(port) {
 			return Some(port);
 		}

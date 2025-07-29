@@ -7,7 +7,7 @@ use p256::{
 	SecretKey,
 };
 use qos_p256::encrypt::Envelope;
-use rand_core::{OsRng, RngCore};
+use rand_core::{OsRng, TryRngCore};
 use x509::RelativeDistinguishedName;
 use yubikey::{
 	certificate::{Certificate, PublicKeyInfo},
@@ -70,6 +70,9 @@ pub enum YubiKeyError {
 /// Generate a signed certificate with a p256 key for the given `slot`.
 ///
 /// Returns the public key as an uncompressed encoded point.
+///
+/// # Panics
+/// Panics if the `OsRng` is unable to provide data, which shouldn't happen in normal operation.
 pub fn generate_signed_certificate(
 	yubikey: &mut YubiKey,
 	slot: SlotId,
@@ -95,7 +98,9 @@ pub fn generate_signed_certificate(
 
 	// Create a random serial number
 	let mut serial = [0u8; 20];
-	OsRng.fill_bytes(&mut serial);
+	OsRng.try_fill_bytes(&mut serial).expect(
+		"The OsRng was unable to provide data, which should never happen",
+	);
 
 	// Don't add any extensions
 	let extensions: &[x509::Extension<'_, &[u64]>] = &[];
@@ -117,6 +122,9 @@ pub fn generate_signed_certificate(
 
 /// Import the given `key_data` onto the `yubikey` and create a signed
 /// certificate for the key.
+///
+/// # Panics
+/// Panics if the `OsRng` is unable to provide data, which shouldn't happen in normal operation.
 pub fn import_key_and_generate_signed_certificate(
 	yubikey: &mut YubiKey,
 	key_data: &[u8],
@@ -156,7 +164,9 @@ pub fn import_key_and_generate_signed_certificate(
 
 	// Create a random serial number
 	let mut serial = [0u8; 20];
-	OsRng.fill_bytes(&mut serial);
+	OsRng.try_fill_bytes(&mut serial).expect(
+		"The OsRng was unable to provide data, which should never happen",
+	);
 
 	// Don't add any extensions
 	let extensions: &[x509::Extension<'_, &[u64]>] = &[];

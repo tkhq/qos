@@ -235,8 +235,8 @@ fn verify_certificate_chain(
 	Ok(())
 }
 
-// Check that cose sign1 structure is signed with the key in the end
-// entity certificate.
+/// Check that cose sign1 structure is signed with the key in the end
+/// entity certificate.
 fn verify_cose_sign1_sig(
 	end_entity_certificate: &[u8],
 	cose_sign1: &CoseSign1,
@@ -252,8 +252,22 @@ fn verify_cose_sign1_sig(
 		return Err(AttestError::InvalidEndEntityCert);
 	}
 
-	let pub_key =
-		ee_cert.tbs_certificate.subject_public_key_info.subject_public_key;
+	// The ASN.1 format of certificates wraps the `subject_public_key` as BIT STRING type,
+	// which can optionally have 1 to 7 bits in the last octet marked as unused but still sent on the wire
+	// The `der` crate doesn't have an automatic conversion (masking) function if unused_bits() > 0,
+	// and the raw_bytes() data of those bits can be non-zero (!)
+	//
+	// Since we expect the wrapped inner data to be of OCTET STRING type and unused_bits() == 0,
+	// we can use `as_bytes()` which returns `None` if the underlying BitString has unused bits
+	// and treat that case as a decode failure
+	let pub_key = ee_cert
+		.tbs_certificate
+		.subject_public_key_info
+		.subject_public_key
+		.as_bytes()
+		.ok_or(AttestError::FailedDecodeKeyFromCert)?;
+
+	// Decode the public key from `Elliptic-Curve-Point-to-Octet-String`
 	let key = PublicKey::from_sec1_bytes(pub_key)
 		.map_err(|_| AttestError::FailedDecodeKeyFromCert)?;
 	let key_wrapped = P384PubKey(key);
@@ -262,6 +276,7 @@ fn verify_cose_sign1_sig(
 	let is_valid_sig = cose_sign1
 		.verify_signature::<Sha2>(&key_wrapped)
 		.map_err(|_| AttestError::InvalidCOSESign1Signature)?;
+
 	if is_valid_sig {
 		Ok(())
 	} else {
@@ -363,7 +378,7 @@ mod test {
 			"55c6aa815a31741bc37f0ffddea73af2397bad640816ef22bfb689efc1b6cc68
 		2a73f7e5a657248e3abad500e46d5afc"
 		);
-		let private = p384::SecretKey::from_be_bytes(&secret).unwrap();
+		let private = p384::SecretKey::from_slice(&secret).unwrap();
 		let public = private.public_key();
 
 		(P384PrivateKey(private), P384PubKey(public))
@@ -412,7 +427,8 @@ mod test {
 		);
 
 		// Rejects incorrect key
-		let random_private = SecretKey::random(rand::rngs::OsRng);
+		let random_private =
+			SecretKey::random(&mut p384::elliptic_curve::rand_core::OsRng);
 		let random_public = random_private.public_key();
 
 		assert!(cose_doc
