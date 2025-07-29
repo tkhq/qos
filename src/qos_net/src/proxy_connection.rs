@@ -10,7 +10,6 @@ use hickory_resolver::{
 	name_server::TokioConnectionProvider,
 	TokioResolver,
 };
-use rand::Rng;
 use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt},
 	net::TcpStream,
@@ -20,8 +19,6 @@ use crate::error::QosNetError;
 
 /// Struct representing a TCP connection held on our proxy
 pub struct ProxyConnection {
-	/// Unsigned integer with the connection ID (random positive int)
-	pub id: u128,
 	/// IP address of the remote host
 	pub ip: String,
 	/// TCP stream object
@@ -39,20 +36,9 @@ impl ProxyConnection {
 	) -> Result<ProxyConnection, QosNetError> {
 		let ip = resolve_hostname(hostname, dns_resolvers, dns_port).await?;
 
-		// Generate a new random u32 to get an ID. We'll use it to name our
-		// socket. This will be our connection ID.
-		let connection_id = {
-			let mut rng = rand::rng();
-			rng.random::<u128>()
-		};
-
 		let tcp_addr = SocketAddr::new(ip, port);
 		let tcp_stream = TcpStream::connect(tcp_addr).await?;
-		Ok(ProxyConnection {
-			id: connection_id,
-			ip: ip.to_string(),
-			tcp_stream,
-		})
+		Ok(ProxyConnection { ip: ip.to_string(), tcp_stream })
 	}
 
 	/// Create a new `ProxyConnection` from an IP address. This results in a
@@ -61,18 +47,11 @@ impl ProxyConnection {
 		ip: String,
 		port: u16,
 	) -> Result<ProxyConnection, QosNetError> {
-		// Generate a new random u32 to get an ID. We'll use it to name our
-		// socket. This will be our connection ID.
-		let connection_id = {
-			let mut rng = rand::rng();
-			rng.random::<u128>()
-		};
-
 		let ip_addr = ip.parse()?;
 		let tcp_addr = SocketAddr::new(ip_addr, port);
 		let tcp_stream = TcpStream::connect(tcp_addr).await?;
 
-		Ok(ProxyConnection { id: connection_id, ip, tcp_stream })
+		Ok(ProxyConnection { ip, tcp_stream })
 	}
 }
 
