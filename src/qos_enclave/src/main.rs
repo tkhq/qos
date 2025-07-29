@@ -1,6 +1,7 @@
 use std::{
 	fs::create_dir_all,
 	io::Write,
+	io::stdout,
 	mem::MaybeUninit,
 	net::{Shutdown, TcpListener},
 	os::unix::net::UnixStream,
@@ -25,7 +26,8 @@ use nitro_cli::{
 		enclave_proc_command_send_all, enclave_proc_connect_to_single,
 		enclave_proc_spawn, enclave_process_handle_all_replies,
 	},
-	get_id_by_name,
+	get_id_by_name,CID_TO_CONSOLE_PORT_OFFSET,VMADDR_CID_HYPERVISOR,
+	utils::Console
 };
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
@@ -61,7 +63,7 @@ fn healthy() -> Result<(), Box<dyn std::error::Error>> {
 	}
 }
 
-fn boot() -> String {
+fn boot() -> (String, Option<Console>) {
 	//TODO: allow_skip: do not bail if boot fails
 	// currently ignored until we figure out how to hook into the nitro CLI
 	// libs properly, or re-implement some of their functions
@@ -73,15 +75,17 @@ fn boot() -> String {
 	let memory_mib = std::env::var("MEMORY_MIB").unwrap_or("1024".to_string());
 	let cpu_count = std::env::var("CPU_COUNT").unwrap_or("2".to_string());
 	let debug_mode = std::env::var("DEBUG").unwrap_or("false".to_string());
+	let logs_mode = std::env::var("LOGS").unwrap_or("false".to_string());
 	let enclave_name =
 		std::env::var("ENCLAVE_NAME").unwrap_or("nitro".to_string());
+	let enclave_cid_u32 = enclave_cid.parse::<u32>().expect("enclave_cid must be a valid u32 to boot an enclave");
 	let run_args = RunEnclavesArgs {
 		eif_path,
-		enclave_cid: Some(enclave_cid.parse::<u64>().unwrap()),
+		enclave_cid: Some(enclave_cid_u32.into()),
 		memory_mib: memory_mib.parse::<u64>().unwrap(),
 		cpu_ids: None,
 		debug_mode: debug_mode.parse::<bool>().unwrap(),
-		attach_console: false,
+		attach_console: logs_mode.parse::<bool>().unwrap(),
 		cpu_count: Some(cpu_count.parse::<u32>().unwrap()),
 		enclave_name: Some(enclave_name.clone()),
 	};
@@ -137,9 +141,22 @@ fn boot() -> String {
 	})
 	.ok_or_exit_with_errno(None);
 
-	return get_id_by_name(enclave_name)
+	let console = match run_args.attach_console {
+		true => Some(
+				Console::new(
+					VMADDR_CID_HYPERVISOR, enclave_cid_u32 + CID_TO_CONSOLE_PORT_OFFSET,
+				).map_err(|err| {
+					err.add_subaction("Failed to attach console to enclave".to_string())
+						.set_action(RUN_ENCLAVE_STR.to_string())
+				})
+				.ok_or_exit_with_errno(None)
+			),
+		false => None,
+	};
+
+	return (get_id_by_name(enclave_name)
 		.or_else(|_| Err("Failed to parse enclave name"))
-		.unwrap();
+		.unwrap(), console);
 }
 
 fn shutdown(enclave_id: String, sig_num: i32) {
@@ -194,16 +211,16 @@ fn handle_signals() -> c_int {
 	return signal;
 }
 
+fn read_logs(console: Console) {
+	println!("Reading logs to stdout");
+	let disconnect_timeout_sec: Option<u64> = None;
+	console.read_to(stdout().by_ref(), disconnect_timeout_sec);
+}
+
 fn main() {
 	println!("Booting Nitro Enclave:");
 
-	//TODO: Implement ability to allow skipping boot
-	//let allow_skip: _ = std::env::var("ALLOW_SKIP_BOOT")
-	//    .unwrap_or("false".to_string())
-	//    .trim().parse::<F>().unwrap();
-	//boot(allow_skip);
-
-	let enclave_id = boot();
+	let (enclave_id, maybe_console) = boot();
 
 	match healthy() {
 		Ok(_) => eprintln!("{}", "Enclave is healthy"),
@@ -214,6 +231,12 @@ fn main() {
 	thread::spawn(|| {
 		health_service();
 	});
+
+	if let Some(console) = maybe_console {
+		thread::spawn(|| {
+			read_logs(console);
+		});
+	}
 
 	let sig_num = handle_signals();
 
