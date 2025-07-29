@@ -2,7 +2,6 @@ use std::{
 	fs::create_dir_all,
 	io::Write,
 	io::stdout,
-	convert::TryFrom,
 	mem::MaybeUninit,
 	net::{Shutdown, TcpListener},
 	os::unix::net::UnixStream,
@@ -79,9 +78,10 @@ fn boot() -> (String, Option<Console>) {
 	let logs_mode = std::env::var("LOGS").unwrap_or("false".to_string());
 	let enclave_name =
 		std::env::var("ENCLAVE_NAME").unwrap_or("nitro".to_string());
+	let enclave_cid_u32 = enclave_cid.parse::<u32>().expect("enclave_cid must be a valid u32 to boot an enclave");
 	let run_args = RunEnclavesArgs {
 		eif_path,
-		enclave_cid: Some(enclave_cid.parse::<u64>().unwrap()),
+		enclave_cid: Some(enclave_cid_u32.into()),
 		memory_mib: memory_mib.parse::<u64>().unwrap(),
 		cpu_ids: None,
 		debug_mode: debug_mode.parse::<bool>().unwrap(),
@@ -144,8 +144,7 @@ fn boot() -> (String, Option<Console>) {
 	let console = match run_args.attach_console {
 		true => Some(
 				Console::new(
-					VMADDR_CID_HYPERVISOR,
-					u32::try_from(run_args.enclave_cid.unwrap()).unwrap() + CID_TO_CONSOLE_PORT_OFFSET,
+					VMADDR_CID_HYPERVISOR, enclave_cid_u32 + CID_TO_CONSOLE_PORT_OFFSET,
 				).map_err(|err| {
 					err.add_subaction("Failed to attach console to enclave".to_string())
 						.set_action(RUN_ENCLAVE_STR.to_string())
@@ -213,18 +212,14 @@ fn handle_signals() -> c_int {
 }
 
 fn read_logs(console: Console) {
+	println!("Reading logs to stdout");
 	let disconnect_timeout_sec: Option<u64> = None;
-    console.read_to(stdout().by_ref(), disconnect_timeout_sec);
+	console.read_to(stdout().by_ref(), disconnect_timeout_sec);
 }
 
 fn main() {
 	println!("Booting Nitro Enclave:");
 
-	//TODO: Implement ability to allow skipping boot
-	//let allow_skip: _ = std::env::var("ALLOW_SKIP_BOOT")
-	//    .unwrap_or("false".to_string())
-	//    .trim().parse::<F>().unwrap();
-	//boot(allow_skip);
 	let (enclave_id, maybe_console) = boot();
 
 	match healthy() {
