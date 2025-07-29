@@ -59,7 +59,7 @@ impl RequestProcessor for Processor {
 async fn main() {
 	let args: Vec<String> = std::env::args().collect();
 	let socket_path = &args[1];
-	let pool_size_str: &str = &args.get(2).map(String::as_str).unwrap_or("1");
+	let pool_size_str: &str = args.get(2).map(String::as_str).unwrap_or("1");
 	let pool_size =
 		pool_size_str.parse().expect("Unable to parse pool size argument");
 
