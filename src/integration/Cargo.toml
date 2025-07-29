@@ -5,11 +5,10 @@ edition = "2021"
 publish = false
 
 [dependencies]
-<<<<<<< HEAD
 qos_core = { workspace = true, features = ["mock"], default-features = false }
 qos_nsm = { workspace = true, features = ["mock"], default-features = false }
 qos_host = { workspace = true, default-features = false }
-qos_net = { workspace = true,, features = ["proxy"], default-features = false }
+qos_net = { workspace = true, features = ["proxy" ], default-features = false }
 qos_crypto = { workspace = true }
 qos_hex = { workspace = true }
 qos_p256 = { workspace = true, features = ["mock"] }

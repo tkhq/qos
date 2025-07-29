@@ -8,12 +8,13 @@ publish = false
 qos_core = { workspace = true, default-features = false }
 
 borsh = { workspace = true }
+futures = { workspace = true }
 hickory-resolver = { workspace = true, optional = true }
 rand = { workspace = true, features = [
     "thread_rng",
 ], optional = true }
 serde = { workspace = true, features = ["derive"], default-features = false }
-tokio = { workspace = true }
+tokio = { workspace = true, optional = true }
 tokio-rustls = { workspace = true, optional = true }
 
 [dev-dependencies]

@@ -20,7 +20,7 @@ aws-nitro-enclaves-nsm-api = { workspace = true }
 serde_bytes = { workspace = true }
 serde = { workspace = true }
 
-futures = { version = "0.3.30" }
+futures = { workspace = true }
 tokio = { version = "1.38.0", features = ["io-util", "macros", "net", "rt-multi-thread", "time", "signal"], default-features = false }
 tokio-vsock = { version = "0.7.1" }
 
