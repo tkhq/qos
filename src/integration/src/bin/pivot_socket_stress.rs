@@ -42,10 +42,10 @@ impl RequestProcessor for Processor {
 				);
 				tokio::time::sleep(std::time::Duration::from_millis(delay))
 					.await;
-				borsh::to_vec(&PivotSocketStressMsg::SlowResponse)
+				borsh::to_vec(&PivotSocketStressMsg::SlowResponse(delay))
 					.expect("OkResponse is valid borsh")
 			}
-			PivotSocketStressMsg::SlowResponse => {
+			PivotSocketStressMsg::SlowResponse(_) => {
 				panic!("Unexpected SlowResponse - test is broken")
 			}
 			PivotSocketStressMsg::OkResponse => {
@@ -59,9 +59,13 @@ impl RequestProcessor for Processor {
 async fn main() {
 	let args: Vec<String> = std::env::args().collect();
 	let socket_path = &args[1];
+	let pool_size_str: &str = &args.get(2).map(String::as_str).unwrap_or("1");
+	let pool_size =
+		pool_size_str.parse().expect("Unable to parse pool size argument");
 
-	let app_pool = StreamPool::new(SocketAddress::new_unix(socket_path), 1)
-		.expect("unable to create app pool");
+	let app_pool =
+		StreamPool::new(SocketAddress::new_unix(socket_path), pool_size)
+			.expect("unable to create app pool");
 
 	let server = SocketServer::listen_all(app_pool, &Processor::new()).unwrap();
 

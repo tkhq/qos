@@ -67,7 +67,7 @@ pub enum PivotSocketStressMsg {
 	/// Request a response that will be slower than the provided `u64` value in milliseconds
 	SlowRequest(u64), // milliseconds
 	/// Response to [`Self::SlowRequest`].
-	SlowResponse,
+	SlowResponse(u64),
 }
 
 /// Request/Response messages for the "remote TLS" pivot app.
