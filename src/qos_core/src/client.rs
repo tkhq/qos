@@ -70,22 +70,18 @@ impl SocketClient {
 			let stream =
 				maybe_stream.as_deref_mut().expect("unreachable unwrap");
 
-			let result = stream.call(request).await;
-			stream.reset(); // emulate original re-connect functionality
-
-			result
+			stream.call(request).await
 		})
 		.await;
 
+		// ensure we reset the stream in all cases, needed for backwards compatibility AND proper error recovery/mixmatch issue prevention
+		if let Some(mut stream) = maybe_stream {
+			stream.reset();
+		}
+
 		let resp = match timeout_result {
 			Ok(result) => result?,
-			Err(_err) => {
-				// ensure we clean up the stream if we had it
-				if let Some(mut stream) = maybe_stream {
-					stream.reset();
-				}
-				return Err(IOError::RecvTimeout.into());
-			}
+			Err(_err) => return Err(IOError::RecvTimeout.into()),
 		};
 
 		Ok(resp)
