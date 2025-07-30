@@ -58,10 +58,10 @@ const POOL_SIZE: &str = "pool-size";
 /// Request/Response messages for "socket stress" pivot app.
 #[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
 pub enum PivotSocketStressMsg {
-	/// Request a [`Self::OkResponse`].
-	OkRequest,
+	/// Request a [`Self::OkResponse`] with a specific identifier.
+	OkRequest(u64),
 	/// A successful response to [`Self::OkRequest`].
-	OkResponse,
+	OkResponse(u64),
 	/// Request the app to panic. Does not have a response.
 	PanicRequest,
 	/// Request a response that will be slower than the provided `u64` value in milliseconds

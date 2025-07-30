@@ -61,23 +61,12 @@ impl SocketClient {
 	pub async fn call(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
 		let pool = self.pool.read().await;
 
-		// hold the stream if we got it before timeout, but errored out on timeout later
-		let mut maybe_stream = None;
-
 		// timeout should apply to the entire operation
 		let timeout_result = tokio::time::timeout(self.timeout, async {
-			maybe_stream = Some(pool.get().await); // needed for timeout error handling below
-			let stream =
-				maybe_stream.as_deref_mut().expect("unreachable unwrap");
-
+			let mut stream = pool.get().await;
 			stream.call(request).await
 		})
 		.await;
-
-		// ensure we reset the stream in all cases, needed for backwards compatibility AND proper error recovery/mixmatch issue prevention
-		if let Some(mut stream) = maybe_stream {
-			stream.reset();
-		}
 
 		let resp = match timeout_result {
 			Ok(result) => result?,

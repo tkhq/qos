@@ -50,7 +50,8 @@ async fn simple_socket_stress() {
 	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
 	// The app has panic'ed and exited - so any proceeding request should fail.
-	let app_request = borsh::to_vec(&PivotSocketStressMsg::OkRequest).unwrap();
+	let app_request =
+		borsh::to_vec(&PivotSocketStressMsg::OkRequest(1)).unwrap();
 	let err = enclave_client.call(&app_request).await.unwrap_err();
 	match err {
 		ClientError::IOError(IOError::StdIoError(_)) => (), // for usock this is probably "no such file or directoy", vsock would differ

@@ -22,7 +22,7 @@ serde_bytes = { version = "0.11", default-features = false }
 serde = { version = "1", features = ["derive"], default-features = false }
 
 futures = { version = "0.3.30" }
-tokio = { version = "1.38.0", features = ["io-util", "macros", "net", "rt-multi-thread", "time", "signal"], default-features = false }
+tokio = { version = "1.43.1", features = ["io-util", "macros", "net", "rt-multi-thread", "time", "signal"], default-features = false }
 tokio-vsock = { version = "0.7.1" }
 
 [dev-dependencies]

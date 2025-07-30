@@ -123,7 +123,8 @@ async fn enclave_app_client_socket_stress() {
 	))
 	.await;
 	// The pivot panicked and should have been restarted.
-	let app_request = borsh::to_vec(&PivotSocketStressMsg::OkRequest).unwrap();
+	let app_request =
+		borsh::to_vec(&PivotSocketStressMsg::OkRequest(1)).unwrap();
 	let request =
 		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
 			.unwrap();
@@ -136,7 +137,7 @@ async fn enclave_app_client_socket_stress() {
 		};
 		PivotSocketStressMsg::try_from_slice(&data).unwrap()
 	};
-	assert_eq!(response, PivotSocketStressMsg::OkResponse);
+	assert_eq!(response, PivotSocketStressMsg::OkResponse(1));
 
 	// Send a request that the app will take too long to respond to
 	let app_request =

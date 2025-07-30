@@ -12,7 +12,7 @@ pub use error::ProtocolError;
 pub(crate) use state::ProtocolState;
 pub use state::{ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS};
 
-pub(crate) mod async_processor;
+pub(crate) mod processor;
 
 /// 256bit hash
 pub type Hash256 = [u8; 32];

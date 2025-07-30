@@ -70,7 +70,7 @@ pub enum ProtocolMsg {
 		/// the secure app.
 		data: Vec<u8>,
 	},
-	/// Response to the proxy request.
+	/// Response to the proxy request
 	ProxyResponse {
 		/// Encoded data the secure app responded with to the nitro enclave
 		/// server.

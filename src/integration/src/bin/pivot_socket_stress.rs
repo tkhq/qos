@@ -19,16 +19,19 @@ impl Processor {
 }
 
 impl RequestProcessor for Processor {
-	async fn process(&self, request: Vec<u8>) -> Vec<u8> {
+	async fn process(&self, request: &[u8]) -> Vec<u8> {
 		// Simulate just some baseline lag for all requests
 		std::thread::sleep(std::time::Duration::from_secs(1));
 
-		let msg = PivotSocketStressMsg::try_from_slice(&request)
+		let msg = PivotSocketStressMsg::try_from_slice(request)
 			.expect("Received invalid message - test is broken");
 
 		match msg {
-			PivotSocketStressMsg::OkRequest => {
-				borsh::to_vec(&PivotSocketStressMsg::OkResponse)
+			PivotSocketStressMsg::OkRequest(id) => {
+				eprintln!(
+					"PIVOT: OkRequest({id}) received, responding with OkResponse({id})"
+				);
+				borsh::to_vec(&PivotSocketStressMsg::OkResponse(id))
 					.expect("OkResponse is valid borsh")
 			}
 			PivotSocketStressMsg::PanicRequest => {
@@ -48,7 +51,7 @@ impl RequestProcessor for Processor {
 			PivotSocketStressMsg::SlowResponse(_) => {
 				panic!("Unexpected SlowResponse - test is broken")
 			}
-			PivotSocketStressMsg::OkResponse => {
+			PivotSocketStressMsg::OkResponse(_) => {
 				panic!("Unexpected OkResponse - test is broken")
 			}
 		}
@@ -59,7 +62,8 @@ impl RequestProcessor for Processor {
 async fn main() {
 	let args: Vec<String> = std::env::args().collect();
 	let socket_path = &args[1];
-	let pool_size_str: &str = args.get(2).map(String::as_str).unwrap_or("1");
+	// 2nd arg should be "--pool-size" for Reaper compatibility
+	let pool_size_str: &str = args.get(3).map(String::as_str).unwrap_or("1");
 	let pool_size =
 		pool_size_str.parse().expect("Unable to parse pool size argument");
 
