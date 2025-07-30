@@ -16,7 +16,7 @@ use crate::{
 	handles::Handles,
 	io::StreamPool,
 	protocol::{
-		async_processor::ProtocolProcessor,
+		processor::ProtocolProcessor,
 		services::boot::{PivotConfig, RestartPolicy},
 		ProtocolPhase, ProtocolState,
 	},

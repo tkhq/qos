@@ -18,6 +18,7 @@ async fn interleaving_socket_stress() {
 	let pool_size = 5;
 	let _enclave_app: ChildWrapper = Command::new(PIVOT_SOCKET_STRESS_PATH)
 		.arg(SOCKET_STRESS_SOCK)
+		.arg("--pool-size")
 		.arg(pool_size.to_string()) // pool size
 		.spawn()
 		.unwrap()
@@ -27,7 +28,6 @@ async fn interleaving_socket_stress() {
 
 	// needs to be long enough for process exit to register and not cause a timeout
 	let timeout = TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS);
-
 	let app_pool =
 		StreamPool::new(SocketAddress::new_unix(SOCKET_STRESS_SOCK), pool_size)
 			.unwrap();
@@ -35,17 +35,17 @@ async fn interleaving_socket_stress() {
 	let enclave_client = SocketClient::new(app_pool.shared(), timeout);
 	let mut tasks = Vec::new();
 
-	let ec = enclave_client.clone();
-	tasks.push(tokio::spawn(async move {
-		// perform a "Ok" request
-		let app_request =
-			borsh::to_vec(&PivotSocketStressMsg::OkRequest).unwrap();
-		let resp = ec.call(&app_request).await.expect("OkResponse");
-		assert_eq!(
-			PivotSocketStressMsg::try_from_slice(&resp).expect("OkResponse"),
-			PivotSocketStressMsg::OkResponse
-		);
-	}));
+	// wait long enough for app to be running and listening
+	tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+	// perform a "Ok" request
+	let app_request =
+		borsh::to_vec(&PivotSocketStressMsg::OkRequest(1)).unwrap();
+	let resp = enclave_client.call(&app_request).await.expect("OkResponse");
+	assert_eq!(
+		PivotSocketStressMsg::try_from_slice(&resp).expect("OkResponse"),
+		PivotSocketStressMsg::OkResponse(1)
+	);
 
 	// do a bunch of timing out requests at the same time, this still needs to fit within the pool size
 	for _ in 0..3 {

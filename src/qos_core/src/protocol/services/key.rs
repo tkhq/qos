@@ -142,8 +142,7 @@ fn export_key_internal(
 fn validate_manifest(
 	new_manifest_envelope: &ManifestEnvelope,
 	old_manifest_envelope: &ManifestEnvelope,
-	#[allow(unused_variables)]
-	attestation_doc: &AttestationDoc,
+	#[allow(unused_variables)] attestation_doc: &AttestationDoc,
 ) -> Result<(), ProtocolError> {
 	// 2. Check the signatures over the New Manifest. Ensures that K Manifest
 	// Set Members approved the New Manifest.

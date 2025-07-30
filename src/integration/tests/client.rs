@@ -18,8 +18,8 @@ impl EchoProcessor {
 }
 
 impl RequestProcessor for EchoProcessor {
-	async fn process(&self, request: Vec<u8>) -> Vec<u8> {
-		request
+	async fn process(&self, request: &[u8]) -> Vec<u8> {
+		request.to_vec()
 	}
 }
 

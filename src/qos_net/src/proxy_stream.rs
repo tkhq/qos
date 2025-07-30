@@ -3,11 +3,8 @@
 use std::pin::Pin;
 
 use borsh::BorshDeserialize;
-use qos_core::io::Stream;
-use tokio::{
-	io::{AsyncRead, AsyncWrite},
-	sync::MutexGuard,
-};
+use qos_core::io::{PoolGuard, Stream};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{error::QosNetError, proxy_msg::ProxyMsg};
 
@@ -16,7 +13,7 @@ use crate::{error::QosNetError, proxy_msg::ProxyMsg};
 /// and plugged into the tokio-rustls via the AsyncWrite and AsyncRead traits
 pub struct ProxyStream<'pool> {
 	/// Stream we hold for this connection
-	stream: MutexGuard<'pool, Stream>,
+	stream: PoolGuard<'pool>,
 	/// The remote host this connection points to
 	pub remote_hostname: Option<String>,
 	/// The remote IP this connection points to
@@ -37,7 +34,7 @@ impl<'pool> ProxyStream<'pool> {
 	/// * `dns_port` - DNS port to use while resolving DNS (typically: 53 or
 	///   853)
 	pub async fn connect_by_name(
-		mut stream: MutexGuard<'pool, Stream>,
+		mut stream: PoolGuard<'pool>,
 		hostname: String,
 		port: u16,
 		dns_resolvers: Vec<String>,
@@ -73,7 +70,7 @@ impl<'pool> ProxyStream<'pool> {
 	/// * `port` - the port the remote qos_net proxy should connect to
 	///   (typically: 80 or 443 for http/https)
 	pub async fn connect_by_ip(
-		mut stream: MutexGuard<'pool, Stream>,
+		mut stream: PoolGuard<'pool>,
 		ip: String,
 		port: u16,
 	) -> Result<Self, QosNetError> {

@@ -64,7 +64,7 @@ impl ProtocolProcessor {
 }
 
 impl RequestProcessor for ProtocolProcessor {
-	async fn process(&self, req_bytes: Vec<u8>) -> Vec<u8> {
+	async fn process(&self, req_bytes: &[u8]) -> Vec<u8> {
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
 			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
 				ProtocolError::OversizedPayload,
@@ -72,7 +72,7 @@ impl RequestProcessor for ProtocolProcessor {
 			.expect("ProtocolMsg can always be serialized. qed.");
 		}
 
-		let Ok(msg_req) = ProtocolMsg::try_from_slice(&req_bytes) else {
+		let Ok(msg_req) = ProtocolMsg::try_from_slice(req_bytes) else {
 			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
 				ProtocolError::ProtocolMsgDeserialization,
 			))

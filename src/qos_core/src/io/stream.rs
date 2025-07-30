@@ -112,20 +112,12 @@ impl Stream {
 		// first time? connect
 		if self.inner.is_none() {
 			self.connect().await?;
+		} else {
+			eprintln!("SocketStream already connected, call proceeding");
 		}
 
-		let send_result = self.send(req_buf).await;
-		if send_result.is_err() {
-			self.reset();
-			send_result?;
-		}
-
-		let result = self.recv().await;
-		if result.is_err() {
-			self.reset();
-		}
-
-		result
+		self.send(req_buf).await?;
+		self.recv().await
 	}
 
 	fn address(&self) -> Result<&SocketAddress, IOError> {
@@ -139,6 +131,13 @@ impl Stream {
 	/// Resets the inner stream, forcing a re-connect next `call`
 	pub fn reset(&mut self) {
 		self.inner = None;
+	}
+
+	/// Checks if we're in `connected` state.
+	/// NOTE: this does NOT mean that the connection is currently OK. It just means we've
+	/// connected in the past, and our `inner` field is active.
+	pub fn is_connected(&self) -> bool {
+		self.inner.is_some()
 	}
 }
 
@@ -254,7 +253,6 @@ impl AsyncWrite for Stream {
 /// Abstraction to listen for incoming stream connections.
 pub struct Listener {
 	inner: InnerListener,
-	// addr: SocketAddress,
 }
 
 impl Listener {
@@ -325,7 +323,6 @@ async fn unix_connect(
 	let path = addr.path().ok_or(IOError::ConnectAddressInvalid)?;
 
 	let socket = UnixSocket::new_stream()?;
-	eprintln!("Attempting USOCK connect to: {:?}", addr.path());
 	socket.connect(path).await
 }
 
@@ -335,7 +332,5 @@ async fn vsock_connect(
 	addr: SocketAddress,
 ) -> Result<VsockStream, std::io::Error> {
 	let addr = addr.vsock();
-
-	eprintln!("Attempting VSOCK connect to: {:?}", addr);
 	VsockStream::connect(*addr).await
 }

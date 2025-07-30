@@ -27,8 +27,8 @@ impl Processor {
 }
 
 impl RequestProcessor for Processor {
-	async fn process(&self, request: Vec<u8>) -> Vec<u8> {
-		let msg = PivotRemoteTlsMsg::try_from_slice(&request)
+	async fn process(&self, request: &[u8]) -> Vec<u8> {
+		let msg = PivotRemoteTlsMsg::try_from_slice(request)
 			.expect("Received invalid message - test is broken!");
 
 		match msg {

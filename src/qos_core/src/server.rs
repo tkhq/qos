@@ -32,7 +32,7 @@ pub trait RequestProcessor: Send {
 	/// request and encoding a response.
 	fn process(
 		&self,
-		request: Vec<u8>,
+		request: &[u8],
 	) -> impl std::future::Future<Output = Vec<u8>> + Send;
 }
 
@@ -58,7 +58,7 @@ impl SocketServer {
 		println!("`SocketServer` listening on pool size {}", pool.len());
 
 		let listeners = pool.listen()?;
-		let tasks = Self::spawn_tasks_for_listeners(listeners, processor, 0);
+		let tasks = Self::spawn_tasks_for_listeners(listeners, processor);
 
 		Ok(Self { pool, tasks })
 	}
@@ -66,20 +66,15 @@ impl SocketServer {
 	fn spawn_tasks_for_listeners<P>(
 		listeners: Vec<Listener>,
 		processor: &SharedProcessor<P>,
-		start_index: usize,
 	) -> Vec<JoinHandle<Result<(), SocketServerError>>>
 	where
 		P: RequestProcessor + Sync + 'static,
 	{
 		let mut tasks = Vec::new();
-		let mut index = start_index;
 		for listener in listeners {
 			let p = processor.clone();
 			let task =
-				tokio::spawn(
-					async move { accept_loop(listener, p, index).await },
-				);
-			index += 1;
+				tokio::spawn(async move { accept_loop(listener, p).await });
 
 			tasks.push(task);
 		}
@@ -96,10 +91,8 @@ impl SocketServer {
 	where
 		P: RequestProcessor + Sync + 'static,
 	{
-		let start_index = self.tasks.len();
 		let listeners = self.pool.listen_to(pool_size)?;
-		let tasks =
-			Self::spawn_tasks_for_listeners(listeners, processor, start_index);
+		let tasks = Self::spawn_tasks_for_listeners(listeners, processor);
 
 		self.tasks.extend(tasks);
 
@@ -117,32 +110,28 @@ impl SocketServer {
 async fn accept_loop<P>(
 	listener: Listener,
 	processor: SharedProcessor<P>,
-	index: usize,
 ) -> Result<(), SocketServerError>
 where
 	P: RequestProcessor,
 {
 	loop {
-		eprintln!("SocketServer[{index}]: accepting");
 		let mut stream = listener.accept().await?;
-
-		eprintln!("SocketServer[{index}]: accepted");
 		loop {
 			match stream.recv().await {
 				Ok(payload) => {
 					let response =
-						processor.read().await.process(payload).await;
+						processor.read().await.process(&payload).await;
 
 					match stream.send(&response).await {
 						Ok(()) => {}
 						Err(err) => {
-							eprintln!("SocketServer[{index}]: error sending reply {err:?}, re-accepting");
+							eprintln!("SocketServer: error sending reply {err:?}, re-accepting");
 							break;
 						}
 					}
 				}
 				Err(err) => {
-					eprintln!("SocketServer[{index}]: error receiving request {err:?}, re-accepting");
+					eprintln!("SocketServer: error receiving request {err:?}, re-accepting");
 					break;
 				}
 			}

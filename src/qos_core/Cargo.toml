@@ -21,8 +21,8 @@ serde_bytes = { workspace = true }
 serde = { workspace = true }
 
 futures = { workspace = true }
-tokio = { version = "1.38.0", features = ["io-util", "macros", "net", "rt-multi-thread", "time", "signal"], default-features = false }
-tokio-vsock = { version = "0.7.1" }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "time", "signal"], default-features = false }
+tokio-vsock = { workspace = true }
 
 [dev-dependencies]
 qos_test_primitives = { workspace = true }
