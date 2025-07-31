@@ -100,7 +100,7 @@ impl P256EncryptPair {
 	/// Deserialize key from raw scalar byte slice.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
 		Ok(Self {
-			private: SecretKey::from_be_bytes(bytes)
+			private: SecretKey::from_slice(bytes)
 				.map_err(|_| P256Error::FailedToReadSecret)?,
 		})
 	}
@@ -108,7 +108,7 @@ impl P256EncryptPair {
 	/// Serialize key to raw scalar byte slice.
 	#[must_use]
 	pub fn to_bytes(&self) -> Vec<u8> {
-		self.private.to_be_bytes().to_vec()
+		self.private.to_bytes().to_vec()
 	}
 }
 

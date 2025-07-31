@@ -3,14 +3,17 @@
 use borsh::BorshDeserialize;
 use p256::{
 	ecdsa::{signature::Verifier, Signature, VerifyingKey},
-	elliptic_curve::sec1::ToEncodedPoint,
+	pkcs8::SubjectPublicKeyInfo,
 	SecretKey,
 };
 use qos_p256::encrypt::Envelope;
 use rand_core::{OsRng, TryRngCore};
-use x509::RelativeDistinguishedName;
+use std::{str::FromStr, time::Duration};
+use x509_cert::{
+	name::RdnSequence, serial_number::SerialNumber, time::Validity,
+};
 use yubikey::{
-	certificate::{Certificate, PublicKeyInfo},
+	certificate::Certificate,
 	piv::{self, AlgorithmId, SlotId},
 	MgmKey, PinPolicy, TouchPolicy, YubiKey,
 };
@@ -65,6 +68,14 @@ pub enum YubiKeyError {
 	InvalidSecret,
 	/// The pin could not be changed.
 	FailedToChangePin,
+	/// See [`der::Error`].
+	DerError(Box<der::Error>),
+}
+
+impl From<der::Error> for YubiKeyError {
+	fn from(from: der::Error) -> Self {
+		Self::DerError(from.into())
+	}
 }
 
 /// Generate a signed certificate with a p256 key for the given `slot`.
@@ -94,7 +105,8 @@ pub fn generate_signed_certificate(
 	let public_key_info =
 		piv::generate(yubikey, slot, ALGO, PinPolicy::Always, touch_policy)
 			.map_err(|_| YubiKeyError::FailedToGenerateKey)?;
-	let encoded_point = extract_encoded_point(&public_key_info)?;
+	let encoded_point =
+		extract_encoded_point(public_key_info.subject_public_key.as_bytes())?;
 
 	// Create a random serial number
 	let mut serial = [0u8; 20];
@@ -102,18 +114,15 @@ pub fn generate_signed_certificate(
 		"The OsRng was unable to provide data, which should never happen",
 	);
 
-	// Don't add any extensions
-	let extensions: &[x509::Extension<'_, &[u64]>] = &[];
-
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
-	Certificate::generate_self_signed(
+	Certificate::generate_self_signed::<_, p256::NistP256>(
 		yubikey,
 		slot,
-		serial,
-		None, // not_after is none so this never expires
-		&[RelativeDistinguishedName::organization("Turnkey")],
+		SerialNumber::new(&serial)?,
+		Validity::from_now(Duration::from_secs(u64::MAX))?,
+		RdnSequence::from_str("Turnkey")?,
 		public_key_info,
-		extensions,
+		|_| Ok(()),
 	)
 	.map_err(|_| YubiKeyError::FailedToGenerateSelfSignedCert)?;
 
@@ -143,13 +152,10 @@ pub fn import_key_and_generate_signed_certificate(
 		return Err(YubiKeyError::WillNotOverwriteSlot);
 	}
 
-	let public_key_info = {
-		let encoded_point = SecretKey::from_be_bytes(key_data)
-			.map_err(|_| YubiKeyError::InvalidSecret)?
-			.public_key()
-			.to_encoded_point(false);
-		PublicKeyInfo::EcP256(encoded_point)
-	};
+	let public_key_info = SecretKey::from_slice(key_data)
+		.ok()
+		.and_then(|sk| SubjectPublicKeyInfo::from_key(sk.public_key()).ok())
+		.ok_or(YubiKeyError::InvalidSecret)?;
 
 	// Import a key in the slot
 	piv::import_ecc_key(
@@ -168,18 +174,15 @@ pub fn import_key_and_generate_signed_certificate(
 		"The OsRng was unable to provide data, which should never happen",
 	);
 
-	// Don't add any extensions
-	let extensions: &[x509::Extension<'_, &[u64]>] = &[];
-
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
-	Certificate::generate_self_signed(
+	Certificate::generate_self_signed::<_, p256::NistP256>(
 		yubikey,
 		slot,
-		serial,
-		None, // not_after is none so this never expires
-		&[RelativeDistinguishedName::organization("Turnkey")],
+		SerialNumber::new(&serial)?,
+		Validity::from_now(Duration::from_secs(u64::MAX))?,
+		RdnSequence::from_str("Turnkey")?,
 		public_key_info,
-		extensions,
+		|_| Ok(()),
 	)
 	.map_err(|_| YubiKeyError::FailedToGenerateSelfSignedCert)?;
 
@@ -199,7 +202,8 @@ pub fn sign_data(
 	let signing_slot_cert = Certificate::read(yubikey, SIGNING_SLOT)
 		.map_err(|_| YubiKeyError::CannotFindSigningKey)?;
 	let public_key_info = signing_slot_cert.subject_pki();
-	let encoded_point = extract_encoded_point(public_key_info)?;
+	let encoded_point =
+		extract_encoded_point(public_key_info.subject_public_key.as_bytes())?;
 	let verifying_key = VerifyingKey::from_sec1_bytes(encoded_point.as_bytes())
 		.map_err(|_| YubiKeyError::FoundNonP256Key)?;
 
@@ -236,7 +240,6 @@ pub fn key_agreement(
 	pin: &[u8],
 ) -> Result<Zeroizing<Vec<u8>>, YubiKeyError> {
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
-
 	piv::decrypt_data(yubikey, sender_public_key, ALGO, KEY_AGREEMENT_SLOT)
 		.map_err(|_| YubiKeyError::KeyAgreementFailed)
 }
@@ -253,7 +256,9 @@ pub fn pair_public_key(yubikey: &mut YubiKey) -> Result<Vec<u8>, YubiKeyError> {
 	let signing_slot_cert = Certificate::read(yubikey, SIGNING_SLOT)
 		.map_err(|_| YubiKeyError::CannotFindSigningKey)?;
 	let signing_public_key_info = signing_slot_cert.subject_pki();
-	let signing_encoded_point = extract_encoded_point(signing_public_key_info)?;
+	let signing_encoded_point = extract_encoded_point(
+		signing_public_key_info.subject_public_key.as_bytes(),
+	)?;
 
 	let pair_public_key: Vec<_> = key_agree_public_key(yubikey)?
 		.iter()
@@ -271,8 +276,9 @@ pub fn key_agree_public_key(
 	let key_agree_slot_cert = Certificate::read(yubikey, KEY_AGREEMENT_SLOT)
 		.map_err(|_| YubiKeyError::CannotFindKeyAgree)?;
 	let key_agree_key_info = key_agree_slot_cert.subject_pki();
-	let key_agree_key_encoded_point =
-		extract_encoded_point(key_agree_key_info)?;
+	let key_agree_key_encoded_point = extract_encoded_point(
+		key_agree_key_info.subject_public_key.as_bytes(),
+	)?;
 
 	Ok(key_agree_key_encoded_point.to_bytes().to_vec())
 }
@@ -324,10 +330,9 @@ pub fn yubikey_piv_reset() -> Result<(), YubiKeyError> {
 }
 
 fn extract_encoded_point(
-	public_key_info: &PublicKeyInfo,
+	bytes: Option<&[u8]>,
 ) -> Result<p256::EncodedPoint, YubiKeyError> {
-	match public_key_info {
-		PublicKeyInfo::EcP256(encoded_point) => Ok(*encoded_point),
-		_ => Err(YubiKeyError::FoundNonP256Key),
-	}
+	bytes
+		.and_then(|el| p256::EncodedPoint::from_bytes(el).ok())
+		.ok_or(YubiKeyError::FoundNonP256Key)
 }
