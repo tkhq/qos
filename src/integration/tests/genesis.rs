@@ -12,7 +12,7 @@ use qos_crypto::{sha_512, shamir::shares_reconstruct};
 use qos_nsm::nitro::unsafe_attestation_doc_from_der;
 use qos_p256::{P256Pair, P256Public};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{seq::SliceRandom, rng};
 
 const DR_KEY_PUBLIC_PATH: &str = "./mock/mock_p256_dr.pub";
 const DR_KEY_PRIVATE_PATH: &str = "./mock/mock_p256_dr.secret.keep";
@@ -197,7 +197,7 @@ async fn genesis_e2e() {
 		.collect();
 
 	// Try recovering from a random permutation
-	decrypted_shares.shuffle(&mut thread_rng());
+	decrypted_shares.shuffle(&mut rng());
 	let master_secret: [u8; qos_p256::MASTER_SEED_LEN] =
 		shares_reconstruct(&decrypted_shares[0..threshold])
 			.unwrap()

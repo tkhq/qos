@@ -19,7 +19,7 @@ hickory-resolver = { version = "0.25.2", features = [
 rand = { version = "0.9.1", features = [
     "thread_rng",
 ], default-features = false, optional = true }
-tokio = { version = "1.38.0", default-features = false }
+tokio = { version = "1.43.1", default-features = false }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
@@ -29,7 +29,7 @@ serde_json = { version = "1.0.121", features = [
     "std",
 ], default-features = false }
 rustls = { version = "0.23.5" }
-webpki-roots = { version = "0.26.1" }
+webpki-roots = { version = "1.0.2" }
 
 [features]
 default = ["proxy"]                  # keep this as a default feature ensures we lint by default
