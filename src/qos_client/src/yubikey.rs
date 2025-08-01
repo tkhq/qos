@@ -108,11 +108,8 @@ pub fn generate_signed_certificate(
 	let encoded_point =
 		extract_encoded_point(public_key_info.subject_public_key.as_bytes())?;
 
-	// Create a random serial number
-	let mut serial = [0u8; 20];
-	OsRng.try_fill_bytes(&mut serial).expect(
-		"The OsRng was unable to provide data, which should never happen",
-	);
+	// Create a random serial number compliant with RFC5280
+	let serial = generate_random_rfc5280_serial();
 
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
 	Certificate::generate_self_signed::<_, p256::NistP256>(
@@ -168,11 +165,8 @@ pub fn import_key_and_generate_signed_certificate(
 	)
 	.map_err(|_| YubiKeyError::FailedToLoadKey)?;
 
-	// Create a random serial number
-	let mut serial = [0u8; 20];
-	OsRng.try_fill_bytes(&mut serial).expect(
-		"The OsRng was unable to provide data, which should never happen",
-	);
+	// Create a random serial number compliant with RFC5280
+	let serial = generate_random_rfc5280_serial();
 
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
 	Certificate::generate_self_signed::<_, p256::NistP256>(
@@ -335,4 +329,42 @@ fn extract_encoded_point(
 	bytes
 		.and_then(|el| p256::EncodedPoint::from_bytes(el).ok())
 		.ok_or(YubiKeyError::FoundNonP256Key)
+}
+
+/// Generate an RFC5280 compliant serial number from a Cryptographically Secure
+/// Pseudo Random Number Generator (CS-PRNG)
+///
+/// #Panics
+///
+/// Panics if the RNG fails, which should never happen.
+fn generate_random_rfc5280_serial() -> [u8; 20] {
+	let mut serial = [0u8; 20];
+	OsRng.try_fill_bytes(&mut serial).expect(
+		"The OsRng was unable to provide data, which should never happen",
+	);
+	// RFC5280 requires the serial to fit into 20 bytes and represent a positive signed integer,
+	// which requires the most significant bit to be 0
+	// Ensure this by masking a part the first byte
+	serial[0] &= 0x7f;
+
+	serial
+}
+
+#[test]
+fn test_rfc5280_serial_generation_success() {
+	use x509_cert::certificate::Rfc5280;
+
+	// the generation behavior is non-deterministic by design, try it a few dozen times
+	const TEST_ITERATIONS: usize = 100;
+
+	for _ in 0..TEST_ITERATIONS {
+		let serial_data = generate_random_rfc5280_serial();
+
+		// ensure most significant bit is 0
+		assert_eq!(serial_data[0] & 0x80, 0);
+
+		// test if serial conversion works
+		let _serial: SerialNumber<Rfc5280> =
+			SerialNumber::new(&serial_data).unwrap();
+	}
 }
