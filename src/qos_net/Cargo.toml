@@ -12,6 +12,7 @@ hickory-resolver = { workspace = true, optional = true }
 rand = { workspace = true, features = [
     "thread_rng",
 ], optional = true }
+serde = { workspace = true, features = ["derive"], default-features = false }
 tokio = { workspace = true }
 
 [dev-dependencies]
@@ -25,6 +26,12 @@ rustls = { workspace = true }
 webpki-roots = { workspace = true }
 
 [features]
-default = ["proxy"]                  # keep this as a default feature ensures we lint by default
-proxy = ["rand", "hickory-resolver"]
-vm = []
+default = ["proxy"] # keep this as a default feature ensures we lint by default
+async_proxy = ["hickory-resolver", "rand", "tokio", "qos_core/async"]
+proxy = ["rand", "hickory-resolver", "tokio"]
+vm = ["qos_core/vm"]
+
+[[bin]]
+name = "async_qos_net"
+path = "src/bin/async_qos_net.rs"
+required-features = ["async_proxy"]
