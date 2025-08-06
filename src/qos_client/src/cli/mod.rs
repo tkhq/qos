@@ -74,6 +74,8 @@ pub(crate) enum DisplayType {
 	Manifest,
 	ManifestEnvelope,
 	GenesisOutput,
+	AttestationDoc,
+	EphemeralKey,
 }
 
 impl From<&str> for DisplayType {
@@ -82,6 +84,8 @@ impl From<&str> for DisplayType {
 			"manifest" => Self::Manifest,
 			"manifest-envelope" => Self::ManifestEnvelope,
 			"genesis-output" => Self::GenesisOutput,
+			"attestation-doc" => Self::AttestationDoc,
+			"ephemeral-key" => Self::EphemeralKey,
 			unknown => panic!("unrecognized display type: {unknown}"),
 		}
 	}

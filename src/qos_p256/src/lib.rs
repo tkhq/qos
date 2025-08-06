@@ -254,7 +254,7 @@ impl P256Pair {
 
 /// P256 public key for signing and encryption. Internally this uses
 /// separate public keys for signing and encryption.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct P256Public {
 	encrypt_public: P256EncryptPublic,
 	sign_public: P256SignPublic,

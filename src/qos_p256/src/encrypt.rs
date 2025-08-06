@@ -113,7 +113,7 @@ impl P256EncryptPair {
 }
 
 /// P256 Public key.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct P256EncryptPublic {
 	public: PublicKey,
 }
