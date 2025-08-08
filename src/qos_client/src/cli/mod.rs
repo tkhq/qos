@@ -64,6 +64,7 @@ const ENCRYPTED_QUORUM_KEY_PATH: &str = "encrypted-quorum-key-path";
 const PAYLOAD: &str = "payload";
 const PAYLOAD_PATH: &str = "payload-path";
 const SIGNATURE_PATH: &str = "signature-path";
+const EPHEMERAL_KEY_PATH: &str = "ephemeral-key-path";
 const CIPHERTEXT_PATH: &str = "ciphertext-path";
 const PLAINTEXT_PATH: &str = "plaintext-path";
 const OUTPUT_HEX: &str = "output-hex";
@@ -74,8 +75,6 @@ pub(crate) enum DisplayType {
 	Manifest,
 	ManifestEnvelope,
 	GenesisOutput,
-	AttestationDoc,
-	EphemeralKey,
 }
 
 impl From<&str> for DisplayType {
@@ -84,8 +83,6 @@ impl From<&str> for DisplayType {
 			"manifest" => Self::Manifest,
 			"manifest-envelope" => Self::ManifestEnvelope,
 			"genesis-output" => Self::GenesisOutput,
-			"attestation-doc" => Self::AttestationDoc,
-			"ephemeral-key" => Self::EphemeralKey,
 			unknown => panic!("unrecognized display type: {unknown}"),
 		}
 	}
@@ -151,6 +148,9 @@ pub enum Command {
 	/// Get the attestation document from an enclave. Will also get the
 	/// manifest envelope if it exists.
 	GetAttestationDoc,
+	/// Extract the `public_key` i.e. ephemeral key from the given attestation
+	/// doc file and store it in hex in the given file
+	ExtractAndWriteEphemeralKeyHex,
 	/// Given an attestation document from an enclave waiting for shares,
 	/// re-encrypt the local share to the Ephemeral Key from the attestation
 	/// doc.
@@ -231,6 +231,7 @@ impl From<&str> for Command {
 			"approve-manifest" => Self::ApproveManifest,
 			"boot-standard" => Self::BootStandard,
 			"get-attestation-doc" => Self::GetAttestationDoc,
+			"extract-and-write-ephemeral-key-hex" => Self::ExtractAndWriteEphemeralKeyHex,
 			"proxy-re-encrypt-share" => Self::ProxyReEncryptShare,
 			"post-share" => Self::PostShare,
 			"dangerous-dev-boot" => Self::DangerousDevBoot,
@@ -496,6 +497,11 @@ impl Command {
 			.takes_value(true)
 			.required(true)
 	}
+	fn ephemeral_key_path_token() -> Token {
+		Token::new(EPHEMERAL_KEY_PATH, "Path to desired ephemeral key file.")
+			.takes_value(true)
+			.required(true)
+	}
 	fn file_path_token() -> Token {
 		Token::new(FILE_PATH, "Path to a file.")
 			.takes_value(true)
@@ -754,6 +760,12 @@ impl Command {
 			.token(Self::new_pin_path_token())
 	}
 
+	fn extract_and_write_ephemeral_key_hex() -> Parser {
+		Parser::new()
+			.token(Self::attestation_doc_path_token())
+			.token(Self::ephemeral_key_path_token())
+	}
+
 	fn display() -> Parser {
 		Parser::new()
 			.token(Self::file_path_token())
@@ -822,6 +834,7 @@ impl GetParserForCommand for Command {
 			Self::BootStandard => Self::boot_standard(),
 			Self::GetAttestationDoc => Self::get_attestation_doc(),
 			Self::ProxyReEncryptShare => Self::proxy_re_encrypt_share(),
+			Self::ExtractAndWriteEphemeralKeyHex => Self::extract_and_write_ephemeral_key_hex(),
 			Self::PostShare => Self::post_share(),
 			Self::DangerousDevBoot => Self::dangerous_dev_boot(),
 			Self::GenerateManifestEnvelope => {
@@ -1098,6 +1111,14 @@ impl ClientOpts {
 			.to_string()
 	}
 
+	fn ephemeral_key_path(&self) -> String {
+		self.parsed
+			.single(EPHEMERAL_KEY_PATH)
+			.expect("Missing `--ephemeral-key-path`")
+			.to_string()
+	}
+	
+
 	fn file_path(&self) -> String {
 		self.parsed
 			.single(FILE_PATH)
@@ -1231,6 +1252,9 @@ impl ClientRunner {
 				}
 				Command::ProxyReEncryptShare => {
 					handlers::proxy_re_encrypt_share(&self.opts);
+				}
+				Command::ExtractAndWriteEphemeralKeyHex => {
+					handlers::extract_and_write_ephemeral_key_hex(&self.opts);
 				}
 				Command::PostShare => handlers::post_share(&self.opts),
 				Command::DangerousDevBoot => {
@@ -1540,6 +1564,16 @@ mod handlers {
 			opts.attestation_doc_path(),
 			opts.manifest_envelope_path(),
 		);
+	}
+
+	pub(super) fn extract_and_write_ephemeral_key_hex(opts: &ClientOpts) {
+		if let Err(e) = services::extract_and_write_ephemeral_key_hex(
+			opts.attestation_doc_path(),
+			opts.ephemeral_key_path(),
+		) {
+			eprintln!("Error: {e:?}");
+			std::process::exit(1);
+		}
 	}
 
 	pub(super) fn proxy_re_encrypt_share(opts: &ClientOpts) {

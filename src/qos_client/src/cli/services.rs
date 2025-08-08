@@ -1530,6 +1530,18 @@ pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 	Ok(())
 }
 
+pub(crate) fn extract_and_write_ephemeral_key_hex<P: AsRef<Path>>(
+	attestation_doc_path: P,
+	ephemeral_key_path: P,
+) -> Result<(), Error> {
+	let bytes =
+		fs::read(attestation_doc_path).map_err(|e| Error::ReadShare(e.to_string()))?;
+	let attestation_doc: AttestationDoc = extract_attestation_doc(bytes.as_ref(), true, None);
+	let ephemeral_key: P256Public = P256Public::from_bytes(&attestation_doc.public_key.expect("No ephemeral key in the attestation doc"),).expect("Ephemeral key not valid public key");
+	ephemeral_key.to_hex_file(ephemeral_key_path)?;
+	Ok(())
+}
+
 pub(crate) fn display<P: AsRef<Path>>(
 	display_type: &DisplayType,
 	file_path: P,
@@ -1556,25 +1568,6 @@ pub(crate) fn display<P: AsRef<Path>>(
 		}
 		DisplayType::GenesisOutput => {
 			let decoded = GenesisOutput::try_from_slice(&bytes)?;
-			println!("{decoded:#?}");
-		}
-		DisplayType::AttestationDoc => {
-			let decoded = extract_attestation_doc(bytes.as_ref(), true, None);
-			if json {
-				println!("{}", serde_json::to_string(&decoded).unwrap());
-			} else {
-				println!("{decoded:#?}");
-			}
-		}
-		DisplayType::EphemeralKey => {
-			let attestation_doc: AttestationDoc =
-				extract_attestation_doc(bytes.as_ref(), true, None);
-			let decoded: P256Public = P256Public::from_bytes(
-				&attestation_doc
-					.public_key
-					.expect("No ephemeral key in the attestation doc"),
-			)
-			.expect("Ephemeral key not valid public key");
 			println!("{decoded:#?}");
 		}
 	};
