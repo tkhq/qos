@@ -2104,8 +2104,8 @@ fn split_file_name(p: &Path) -> Vec<String> {
 /// `item_name` was written to `path`.
 fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
 	let path_str = path.as_os_str().to_string_lossy();
-	fs::write(path, buf).unwrap_or_else(|_| {
-		panic!("Failed writing {} to file", path_str.clone())
+	fs::write(path, buf).unwrap_or_else(|e| {
+		panic!("Failed writing {} to file: {:?}", path_str.clone(), e)
 	});
 	println!("{item_name} written to: {path_str}");
 }
