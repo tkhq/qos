@@ -2,7 +2,7 @@
 
 use std::io::Read;
 use qos_core::{
-	cli::{QUORUM_FILE_OPT, USOCK}, handles::QuorumKeyHandle, io::SocketAddress, parser::{GetParserForOptions, OptionsParser, Parser, Token}, protocol::services::boot::ShareSet, server::SocketServer, QUORUM_FILE, SEC_APP_SOCK
+	cli::{EPHEMERAL_FILE_OPT, QUORUM_FILE_OPT, USOCK}, handles::{EphemeralKeyHandle, QuorumKeyHandle}, io::SocketAddress, parser::{GetParserForOptions, OptionsParser, Parser, Token}, protocol::services::boot::ShareSet, server::SocketServer, EPHEMERAL_KEY_FILE, QUORUM_FILE, SEC_APP_SOCK
 };
 
 /// CLI options for starting up the app server.
@@ -40,6 +40,13 @@ impl ReshardOpts {
 			.single(QUORUM_FILE_OPT)
 			.expect("no default value for quorum file")
 			.clone()
+	}
+
+	fn ephemeral_file(&self) -> String {
+        self.parsed
+            .single(EPHEMERAL_FILE_OPT)
+            .expect("has a default value.")
+            .clone()
 	}
 
 	fn mock_nsm(&self) -> bool {
@@ -84,8 +91,8 @@ impl GetParserForOptions for ReshardParser {
                 Token::new(
                     NEW_SHARE_SET,
                     r#"JSON ShareSet. Pass JSON inline, or "-" to read from stdin.
-Example:
-{"threshold":3,"members":[{"alias":"reshard-1","pubKey":"04..."}]}"#,
+							Example:
+							{"threshold":3,"members":[{"alias":"reshard-1","pubKey":"04..."}]}"#,
                 )
                 .takes_value(true),
             )
@@ -93,6 +100,14 @@ Example:
                 MOCK_NSM,
                 "use the MockNsm. Should never be used in production",
             ))
+			.token(
+                Token::new(
+                    EPHEMERAL_FILE_OPT,
+                    "path to file where the Ephemeral Key secret should be retrieved from. Use default for production.",
+                )
+                .takes_value(true)
+                .default_value(EPHEMERAL_KEY_FILE),
+            )
 	}
 }
 
@@ -129,13 +144,13 @@ impl Cli {
 				Box::new(qos_nsm::Nsm)
 			};
 
-			let share_set = opts.share_set();
-
+			// Build processor; panic on error so the app fails to come up if anything is wrong
 			let processor = crate::service::ReshardProcessor::new(
 				QuorumKeyHandle::new(opts.quorum_file()),
-				share_set,
+				EphemeralKeyHandle::new(opts.ephemeral_file()),
+				opts.share_set(),
 				nsm,
-			);
+			).unwrap_or_else(|e| panic!("reshard precompute failed: {e}"));
 
 			println!("---- Starting Reshard server -----");
 			SocketServer::listen(opts.addr(), processor)

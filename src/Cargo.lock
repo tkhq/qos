@@ -2720,16 +2720,20 @@ checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
 name = "reshard_app"
 version = "0.1.0"
 dependencies = [
+ "borsh",
  "chunked_transfer",
  "generated",
  "http",
  "httparse",
  "qos_core",
+ "qos_crypto",
+ "qos_hex",
  "qos_net",
  "qos_nsm",
  "qos_p256",
  "reshard_app",
  "rustls",
+ "serde",
  "url",
  "webpki-roots 0.26.11",
 ]

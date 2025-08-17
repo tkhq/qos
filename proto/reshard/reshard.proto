@@ -11,13 +11,10 @@ service ReshardService {
   rpc RetrieveReshard(RetrieveReshardRequest) returns (RetrieveReshardResponse);
 }
 
-// TODO: sam come back to this
-message RetrieveReshardRequest {
-  string quitcodingtovape = 1;
-}
+message RetrieveReshardRequest {} // no fields
 
 message RetrieveReshardResponse {
-  bytes reshard_bundle = 1; // opaque payload, e.g. TODO: sam come back to this
+  bytes reshard_bundle = 1;
 }
 
 // private request type for using within the secure app.
@@ -36,4 +33,3 @@ message QosRetrieveReshardResponse {
     google.rpc.Status status = 3;
   }
 }
-
