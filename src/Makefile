@@ -10,7 +10,7 @@ RESHARD_PORT ?= 33169
 RESHARD_METRICS_PORT ?= 33420
 RESHARD_OUTER_SOCKET_PATH ?= /tmp/outer_reshard.sock
 RESHARD_INNER_SOCKET_PATH ?= /tmp/inner_reshard.sock
-NEW_SHARE_SET_JSON ?= $(CURDIR)/fixtures/reshard/new-share-set/new-share-set.jsons
+NEW_SHARE_SET_JSON ?= $(CURDIR)/integration/fixtures/reshard/new-share-set/new-share-set.json
 
 .PHONY: local-enclave
 local-enclave:
@@ -193,12 +193,11 @@ reshard:
 
 .PHONY: reshard_app
 reshard_app:
-	cat $(NEW_SHARE_SET_JSON) | \
 	cargo run --bin reshard_app --features mock -- \
 	--usock $(RESHARD_INNER_SOCKET_PATH) \
 	--quorum-file $(CURDIR)/integration/fixtures/reshard/quorum.secret \
 	--new-share-set - \
-	--mock-nsm
+	--mock-nsm < $(NEW_SHARE_SET_JSON)
 
 .PHONY: reshard_enclave
 reshard_enclave:

@@ -7,7 +7,7 @@ use generated::{
 		QosRetrieveReshardRequest, QosRetrieveReshardResponse,
 	}
 };
-use qos_core::{handles::QuorumKeyHandle, server::RequestProcessor};
+use qos_core::{handles::QuorumKeyHandle, protocol::services::boot::ShareSet, server::RequestProcessor};
 
 pub struct ReshardProcessor {
 	handle: QuorumKeyHandle,
@@ -17,6 +17,7 @@ pub struct ReshardProcessor {
 impl ReshardProcessor {
 	pub fn new(
 		handle: QuorumKeyHandle,
+		ss: ShareSet,
 		nsm: Box<dyn qos_nsm::NsmProvider>,
 	) -> Self {
 		Self { handle, nsm }

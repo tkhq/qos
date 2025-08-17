@@ -1,6 +1,6 @@
 //! Standard boot logic and types.
 
-use std::{collections::HashSet, fmt};
+use std::{collections::HashSet, fmt, str::FromStr};
 
 use qos_crypto::sha_256;
 use qos_nsm::types::NsmResponse;
@@ -208,6 +208,28 @@ pub struct ShareSet {
 	/// Members composing the set. The length of this, N, must be gte to the
 	/// `threshold`, K.
 	pub members: Vec<QuorumMember>,
+}
+
+impl FromStr for ShareSet {
+	type Err = serde_json::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+
+		// Parse JSON -> ShareSet
+        let ss: ShareSet = serde_json::from_str(s)?;
+
+		// Sanity check: 1 <= K <= N
+        if ss.threshold == 0 || (ss.threshold as usize) > ss.members.len() {
+            return Err(<serde_json::Error as serde::de::Error>::custom(
+                format!(
+                    "threshold must be in 1..N (N = members.len()); got K={} N={}",
+                    ss.threshold,
+                    ss.members.len()
+                ),
+            ));
+        }
+
+		Ok(ss)
+	}
 }
 
 /// A member of a quorum set identified solely by their public key.

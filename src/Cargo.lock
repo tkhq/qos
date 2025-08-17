@@ -2470,6 +2470,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_bytes",
+ "serde_json",
  "vsss-rs",
  "webpki-roots 1.0.2",
 ]

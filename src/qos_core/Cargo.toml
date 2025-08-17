@@ -20,6 +20,7 @@ aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
 
 serde_bytes = { version = "0.11", default-features = false }
 serde = { version = "1", features = ["derive"], default-features = false }
+serde_json = { version = "1" }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
