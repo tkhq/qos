@@ -13,3 +13,10 @@ pub mod grpc {
 pub mod health {
     include!("health.rs");
 }
+pub mod services {
+    pub mod reshard {
+        pub mod v1 {
+            include!("services.reshard.v1.rs");
+        }
+    }
+}
