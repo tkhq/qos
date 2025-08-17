@@ -1,0 +1,30 @@
+[package]
+name = "reshard_app"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+
+[features]
+mock = ["qos_core/mock", "qos_nsm/mock_realtime"]
+vsock = ["qos_core/vm"]
+
+[dependencies]
+qos_core = { path = "../../qos_core" }
+qos_p256 = { path = "../../qos_p256" }
+qos_nsm = { path = "../../qos_nsm" }
+qos_net = { path = "../../qos_net" }
+http = { version = "0.2", default-features = false }
+httparse = { version = "1.6", default-features = false }
+url = { version = "2.5.2", default-features = false }
+rustls = { version = "0.23.5", features = [
+  "std",
+  "aws_lc_rs",
+  "std",
+  "tls12",
+], default-features = false }
+webpki-roots = { version = "0.26.1", default-features = false }
+chunked_transfer = { version = "1.5.0", default-features = false }
+
+[dev-dependencies]
+reshard_app = { path = ".", features = ["mock"] }

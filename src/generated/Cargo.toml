@@ -1,0 +1,37 @@
+[package]
+name = "generated"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+qos_crypto = { path = "../qos_crypto" }
+qos_nsm = { path = "../qos_nsm" }
+qos_hex = { path = "../qos_hex"}
+qos_p256 = { path = "../qos_p256" }
+
+prost = { version = "0.11", features = [
+  "prost-derive",
+  "std",
+], default-features = false }
+prost-types = { version = "0.11" }
+borsh = { version = "1.5.7", features = [
+  "std",
+  "derive",
+], default-features = false }
+
+# Optional deps
+serde = { version = "1", features = [
+  "derive",
+], optional = true, default-features = false }
+serde_json = { version = "1", optional = true, default-features = false }
+tonic = { version = "0.9", optional = true, features = [
+  "transport",
+], default-features = false }
+tonic-reflection = { version = "0.9", optional = true, default-features = false }
+
+[features]
+# Derive serde serialize/deserialize on some select types and general serde compatibility
+serde_derive = ["serde", "serde_json"]
+# Tonic server and clients
+tonic_types = ["tonic", "tonic-reflection"]

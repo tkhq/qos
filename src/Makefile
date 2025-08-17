@@ -5,6 +5,13 @@ BUCKET := tkhq-development-qos_resources
 
 LOCAL_EPH_PATH := ./local-enclave/qos.ephemeral.key
 
+RESHARD_HOST ?= 127.0.0.1
+RESHARD_PORT ?= 33169
+RESHARD_METRICS_PORT ?= 33420
+RESHARD_OUTER_SOCKET_PATH ?= /tmp/outer_reshard.sock
+RESHARD_INNER_SOCKET_PATH ?= /tmp/inner_reshard.sock
+NEW_SHARE_SET_JSON ?= $(CURDIR)/fixtures/reshard/new-share-set/new-share-set.jsons
+
 .PHONY: local-enclave
 local-enclave:
 	@# Remove the directory where we default to setting up the enclave file system
@@ -174,4 +181,35 @@ test-vm:
 build-linux-only:
 	cargo build --manifest-path ./qos_system/Cargo.toml
 	cargo build --manifest-path ./qos_aws/Cargo.toml
-	cargo build --manifest-path ./init/Cargo.toml
+	cargo build --manifest-path ./init/Cargo.
+
+.PHONY: generated
+generated:
+	cargo run --manifest-path ./codegen/Cargo.toml && make fmt
+
+.PHONY: reshard
+reshard:
+	make -j3 reshard_host reshard_enclave reshard_app
+
+.PHONY: reshard_app
+reshard_app:
+	cat $(NEW_SHARE_SET_JSON) | \
+	cargo run --bin reshard_app --features mock -- \
+	--usock $(RESHARD_INNER_SOCKET_PATH) \
+	--quorum-file $(CURDIR)/fixtures/reshard/quorum.secret \
+	--new-share-set - \
+	--mock-nsm
+
+.PHONY: reshard_enclave
+reshard_enclave:
+	cargo run --bin simulator_enclave $(RESHARD_OUTER_SOCKET_PATH) $(RESHARD_INNER_SOCKET_PATH)
+
+.PHONY: build_reshard
+build_reshard:
+	cargo build --bin --features mock reshard_app
+	cargo build --bin reshard_host
+	cargo build --bin simulator_enclave
+
+.PHONY: reshard_host
+reshard_host:
+	cargo run --bin reshard_host -- --host-ip $(RESHARD_HOST) --host-port $(RESHARD_PORT) --metrics --metrics-port $(RESHARD_METRICS_PORT) --usock $(RESHARD_OUTER_SOCKET_PATH)
