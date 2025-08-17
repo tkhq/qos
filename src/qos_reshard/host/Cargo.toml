@@ -7,6 +7,9 @@ publish = false
 [dependencies]
 qos_core = { path = "../../qos_core" }
 qos_host_primitives = { path = "../../qos_host_primitives" }
+health_check = { path = "../../health_check" }
+generated = { path = "../../generated", features = ["tonic_types"] }
+metrics = { path = "../../metrics" }
 
 tokio = { version = "=1.43.1", features = [
     "macros",

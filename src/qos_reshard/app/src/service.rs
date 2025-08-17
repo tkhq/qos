@@ -1,9 +1,9 @@
 //! Service
 use crate::routes;
-use errors::{Status, TurnkeyError};
-use gen::services::{
-	health_check::v1::AppHealthResponse,
-	reshard::v1::{
+// use errors::{Status, TurnkeyError};
+use generated::{
+	health::AppHealthResponse,
+	services::reshard::v1::{
 		qos_retrieve_reshard_request, qos_retrieve_reshard_response,
 		QosRetrieveReshardRequest, QosRetrieveReshardResponse,
 	},
@@ -27,7 +27,7 @@ impl ReshardProcessor {
 impl RequestProcessor for ReshardProcessor {
 	#[allow(clippy::too_many_lines)]
 	fn process(&mut self, request: Vec<u8>) -> Vec<u8> {
-		use gen::prost::Message as _;
+		use generated::prost::Message as _;
 
 		let reshard_request = match QosRetrieveReshardRequest::decode(&*request)
 			.map_err(TurnkeyError::from)

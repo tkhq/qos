@@ -1,14 +1,12 @@
 //! Reshard Host.
-use gen::{
-	services::{
-		health_check::v1::{AppHealthRequest, AppHealthResponse},
-		reshard::v1::{
-			qos_retrieve_reshard_request, qos_retrieve_reshard_response,
-			reshard_service_server, QosRetrieveReshardRequest,
-			QosRetrieveReshardResponse, RetrieveReshardRequest,
-			RetrieveReshardResponse,
-		},
-	},
+use generated::health::{AppHealthRequest, AppHealthResponse};
+use generated::{
+    services::reshard::v1::{
+        qos_retrieve_reshard_request, qos_retrieve_reshard_response,
+        reshard_service_server, QosRetrieveReshardRequest,
+        QosRetrieveReshardResponse, RetrieveReshardRequest,
+        RetrieveReshardResponse,
+    },
 	tonic::{self, Request, Response, Status},
 };
 use health_check::AppHealthCheckable;

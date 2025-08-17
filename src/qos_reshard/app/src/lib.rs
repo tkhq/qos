@@ -5,6 +5,8 @@
 
 pub mod cli;
 
+pub mod errors;
+
 mod service;
 
 mod routes {

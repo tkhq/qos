@@ -14,6 +14,7 @@ qos_core = { path = "../../qos_core" }
 qos_p256 = { path = "../../qos_p256" }
 qos_nsm = { path = "../../qos_nsm" }
 qos_net = { path = "../../qos_net" }
+generated = { path = "../../generated" }
 http = { version = "0.2", default-features = false }
 httparse = { version = "1.6", default-features = false }
 url = { version = "2.5.2", default-features = false }

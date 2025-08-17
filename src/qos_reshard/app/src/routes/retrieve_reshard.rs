@@ -1,7 +1,7 @@
 //! Reshard routes
 
-use errors::{Code, TurnkeyError};
-use gen::services::reshard::v1::{
+use crate::{errors::GrpcError};
+use generated::services::reshard::v1::{
 	RetrieveReshardRequest, RetrieveReshardResponse,
 };
 use qos_p256::P256Pair;
@@ -11,6 +11,6 @@ pub fn retrieve_reshard(
 	request: &RetrieveReshardRequest,
 	quorum_key: &P256Pair,
 	nsm: &dyn qos_nsm::NsmProvider,
-) -> Result<RetrieveReshardResponse, TurnkeyError> {
+) -> Result<RetrieveReshardResponse, GrpcError> {
 	Ok(RetrieveReshardResponse { reshard_bundle: (Vec::new()) })
 }
