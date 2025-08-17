@@ -67,7 +67,7 @@ impl Host {
 		let k8_health_service =
 			health_check::K8Health::build_service(app_checker);
 		let attestation_service =
-			attestation::attestation::build_service(enclave_addr.clone());
+			attestation::Attestation::build_service(enclave_addr.clone());
 
 		let host = Host::new(response_channel);
 

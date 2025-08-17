@@ -2,11 +2,10 @@
 use crate::routes;
 // use errors::{Status, TurnkeyError};
 use generated::{
-	health::AppHealthResponse,
-	services::reshard::v1::{
+	google::rpc::{Status, Code}, health::AppHealthResponse, services::reshard::v1::{
 		qos_retrieve_reshard_request, qos_retrieve_reshard_response,
 		QosRetrieveReshardRequest, QosRetrieveReshardResponse,
-	},
+	}
 };
 use qos_core::{handles::QuorumKeyHandle, server::RequestProcessor};
 
@@ -30,28 +29,31 @@ impl RequestProcessor for ReshardProcessor {
 		use generated::prost::Message as _;
 
 		let reshard_request = match QosRetrieveReshardRequest::decode(&*request)
-			.map_err(TurnkeyError::from)
-			.map_err(Status::from)
-			.map_err(qos_retrieve_reshard_response::Output::Status)
-			.map_err(|output| QosRetrieveReshardResponse {
-				output: Some(output),
-			}) {
-			Ok(req) => req,
+			.map_err(|e| {
+				qos_retrieve_reshard_response::Output::Status(Status {
+					code: Code::Internal as i32,
+					message: e.to_string(),
+					details: vec![],
+				})
+			})
+			.map_err(|o| QosRetrieveReshardResponse { output: Some(o)})
+		{
+			Ok(reshard_request) => reshard_request,
 			Err(err_resp) => return err_resp.encode_to_vec(),
 		};
-
+			
 		let quorum_key = match self
 			.handle
 			.get_quorum_key()
 			.map_err(|err| {
-				TurnkeyError::internal(&format!(
-					"unable to get quorum key: {err:?}"
-				))
+				qos_retrieve_reshard_response::Output::Status(Status {
+					code: Code::Internal as i32,
+					message: format!("unable to get quorum key: {err:?}"),
+					details: vec![]
+				})
 			})
-			.map_err(Status::from)
-			.map_err(qos_retrieve_reshard_response::Output::Status)
 			.map_err(|output| QosRetrieveReshardResponse {
-				output: Some(output),
+				output: Some(output)
 			}) {
 			Ok(result) => result,
 			Err(err_resp) => return err_resp.encode_to_vec(),
@@ -59,24 +61,31 @@ impl RequestProcessor for ReshardProcessor {
 
 		let input = match reshard_request
 			.input
-			.ok_or_else(|| TurnkeyError::internal("missing request input"))
-			.map_err(Status::from)
-			.map_err(qos_retrieve_reshard_response::Output::Status)
-			.map_err(|output| QosRetrieveReshardResponse {
-				output: Some(output),
-			}) {
+			.ok_or({
+				qos_retrieve_reshard_response::Output::Status(Status { 
+					code: Code::Internal as i32, 
+					message: "missing request input".to_string(),
+					 details: vec![] })
+			})
+			.map_err(|o| QosRetrieveReshardResponse { output: Some(o) })
+		{
 			Ok(input) => input,
 			Err(err_resp) => return err_resp.encode_to_vec(),
 		};
-
+			
 		let output = match input {
 			qos_retrieve_reshard_request::Input::RetrieveReshardRequest(
 				reshard_request,
 			) => {
 				match routes::retrieve_reshard::retrieve_reshard(&reshard_request, &quorum_key, &*self.nsm)
                     .map(qos_retrieve_reshard_response::Output::RetrieveReshardResponse)
-                    .map_err(Status::from)
-                    .map_err(qos_retrieve_reshard_response::Output::Status)
+                    .map_err(|e| {
+						qos_retrieve_reshard_response::Output::Status(Status { 
+							code: Code::Internal as i32,
+                            message: format!("{e:?}"),
+                            details: vec![],
+						})
+					})
                 {
                     Ok(o) | Err(o) => o,
                 }

@@ -196,7 +196,7 @@ reshard_app:
 	cat $(NEW_SHARE_SET_JSON) | \
 	cargo run --bin reshard_app --features mock -- \
 	--usock $(RESHARD_INNER_SOCKET_PATH) \
-	--quorum-file $(CURDIR)/fixtures/reshard/quorum.secret \
+	--quorum-file $(CURDIR)/integration/fixtures/reshard/quorum.secret \
 	--new-share-set - \
 	--mock-nsm
 
