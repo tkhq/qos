@@ -1,6 +1,6 @@
 //! Reshard routes
 
-use crate::{errors::GrpcError};
+use crate::errors::GrpcError;
 use generated::services::reshard::v1::{
 	RetrieveReshardRequest, RetrieveReshardResponse,
 };

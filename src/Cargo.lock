@@ -151,6 +151,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "attestation"
+version = "0.1.0"
+dependencies = [
+ "borsh",
+ "generated",
+ "qos_core",
+ "qos_host_primitives",
+ "qos_nsm",
+ "tokio",
+ "tokio-stream",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2724,6 +2737,7 @@ dependencies = [
 name = "reshard_host"
 version = "0.1.0"
 dependencies = [
+ "attestation",
  "futures",
  "generated",
  "health_check",

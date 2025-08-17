@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package services.attestation.v1;
+
+service AttestationService {
+  rpc GetAttestation(GetAttestationRequest) returns (GetAttestationResponse);
+}
+
+// A null request type for endpoints that don't need any arguments.
+message GetAttestationRequest {}
+
+// Nitro Attestation
+message GetAttestationResponse {
+  bytes attestation_document = 1;
+}

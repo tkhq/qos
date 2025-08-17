@@ -1,12 +1,12 @@
 //! Reshard Host.
 use generated::health::{AppHealthRequest, AppHealthResponse};
 use generated::{
-    services::reshard::v1::{
-        qos_retrieve_reshard_request, qos_retrieve_reshard_response,
-        reshard_service_server, QosRetrieveReshardRequest,
-        QosRetrieveReshardResponse, RetrieveReshardRequest,
-        RetrieveReshardResponse,
-    },
+	services::reshard::v1::{
+		qos_retrieve_reshard_request, qos_retrieve_reshard_response,
+		reshard_service_server, QosRetrieveReshardRequest,
+		QosRetrieveReshardResponse, RetrieveReshardRequest,
+		RetrieveReshardResponse,
+	},
 	tonic::{self, Request, Response, Status},
 };
 use health_check::AppHealthCheckable;
@@ -47,8 +47,10 @@ impl Host {
 		enclave_addr: SocketAddress,
 	) -> Result<(), tonic::transport::Error> {
 		let reflection_service =
-			gen::tonic_reflection::server::Builder::configure()
-				.register_encoded_file_descriptor_set(gen::FILE_DESCRIPTOR_SET)
+			generated::tonic_reflection::server::Builder::configure()
+				.register_encoded_file_descriptor_set(
+					generated::FILE_DESCRIPTOR_SET,
+				)
 				.build()
 				.expect("failed to start reflection service");
 
@@ -65,7 +67,7 @@ impl Host {
 		let k8_health_service =
 			health_check::K8Health::build_service(app_checker);
 		let attestation_service =
-			attestation::TkAttestation::build_service(enclave_addr.clone());
+			attestation::attestation::build_service(enclave_addr.clone());
 
 		let host = Host::new(response_channel);
 

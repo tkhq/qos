@@ -17,8 +17,8 @@ pub use prometheus;
 
 /// metrics
 mod metrics {
-    #[cfg(feature = "request")]
-    pub mod request;
+	#[cfg(feature = "request")]
+	pub mod request;
 }
 
 // features
