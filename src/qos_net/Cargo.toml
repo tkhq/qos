@@ -11,6 +11,7 @@ borsh = { version = "1.0", features = [
     "std",
     "derive",
 ], default-features = false }
+futures = { version = "0.3.30", optional = false }
 serde = { version = "1", features = ["derive"], default-features = false }
 hickory-resolver = { version = "0.25.2", features = [
     "tokio",       # for async
@@ -19,19 +20,20 @@ hickory-resolver = { version = "0.25.2", features = [
 rand = { version = "0.9.1", features = [
     "thread_rng",
 ], default-features = false, optional = true }
-tokio = { version = "1.43.1", default-features = false }
+tokio = { version = "1.43.1", features = ["io-util", "macros", "net", "rt-multi-thread", "time"], default-features = false, optional = true }
+tokio-rustls = { version = "0.26.2", optional = true }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
 httparse = { version = "1.9.4", default-features = false }
 chunked_transfer = { version = "1.5.0", default-features = false }
+rustls = { version = "0.23.5" }
 serde_json = { version = "1.0.121", features = [
     "std",
 ], default-features = false }
-rustls = { version = "0.23.5" }
 webpki-roots = { version = "1.0.2" }
 
 [features]
-default = ["proxy"]                  # keep this as a default feature ensures we lint by default
-proxy = ["rand", "hickory-resolver"]
-vm = []
+default = ["proxy"] # keep this as a default feature ensures we lint by default
+proxy = ["hickory-resolver", "tokio", "tokio-rustls"]
+vm = ["qos_core/vm"]
