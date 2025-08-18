@@ -6,6 +6,18 @@
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::parser::{GetParserForOptions, OptionsParser, Parser, Token};
+use generated::services::reshard::v1::reshard_service_client::ReshardServiceClient;
+use generated::services::health_check::v1::health_check_service_client::HealthCheckServiceClient;
+use generated::grpc::health::v1::{health_check_response::ServingStatus, health_client::HealthClient};
+use generated::grpc::health::v1::{HealthCheckRequest, HealthCheckResponse};
+use qos_core::protocol::services::boot::{Manifest, ManifestEnvelope};
+use qos_p256::{P256Pair, P256Public};
+use qos_core::protocol::services::boot::{MemberPubKey, PatchSet};
+use core::panic;
+use std::{fs, future::Future, panic::AssertUnwindSafe, process::Command};
+use rand::{seq::SliceRandom, rng};
+use qos_test_primitives::PathWrapper;
+use tonic::transport::Channel;
 
 /// Path to the file `pivot_ok` writes on success for tests.
 pub const PIVOT_OK_SUCCESS_FILE: &str = "./pivot_ok_works";
@@ -42,6 +54,7 @@ pub const PCR3: &str = "78fce75db17cd4e0a3fb8dad3ad128ca5e77edbb2b2c7f75329dccd9
 pub const QOS_DIST_DIR: &str = "./mock/dist";
 /// Mock pcr3 pre-image.
 pub const PCR3_PRE_IMAGE_PATH: &str = "./mock/namespaces/pcr3-preimage.txt";
+const SIMULATOR_ENCLAVE_PATH: &str = "../target/debug/simulator_enclave";
 
 const MSG: &str = "msg";
 
@@ -128,6 +141,23 @@ impl GetParserForOptions for PivotParser {
 	}
 }
 
+/// Wrapper type for [`std::process::Child`] that kills the process on drop.
+#[derive(Debug)]
+pub struct ChildWrapper(std::process::Child);
+
+impl From<std::process::Child> for ChildWrapper {
+    fn from(child: std::process::Child) -> Self {
+        Self(child)
+    }
+}
+
+impl Drop for ChildWrapper {
+    fn drop(&mut self) {
+        // Kill the process and explicitly ignore the result
+        drop(self.0.kill());
+    }
+}
+
 /// Simple pivot CLI.
 pub struct Cli;
 impl Cli {
@@ -145,4 +175,115 @@ impl Cli {
 
 		std::fs::write(path, msg).expect("Failed to write to pivot success");
 	}
+}
+
+/// Arguments passed to the `test` function in [`Builder::execute`].
+#[derive(Default)]
+pub struct TestArgs {
+    /// A client for reshard host server.
+    pub reshard_client: Option<ReshardServiceClient<Channel>>,
+    /// Reshard client's address
+    pub reshard_client_addr: Option<String>,
+	/// A client for health checks
+    pub health_check_client: Option<HealthCheckServiceClient<Channel>>,
+    /// A client for canonical gRPC health check service
+    /// See <https://github.com/grpc/grpc/blob/master/doc/health-checking.md>
+    pub k8_health_client: Option<HealthClient<Channel>>,
+    /// Key pairs for the patch set
+    pub patch_set_pairs: Vec<P256Pair>,
+}
+
+/// Test harness builder.
+#[derive(Default)]
+pub struct Builder {
+    setup_reshard: bool,
+}
+
+impl Builder {
+	/// Set up the reshard host and secure app.
+    #[must_use]
+    pub fn setup_reshard(mut self) -> Self {
+        self.setup_reshard = true;
+        self
+    }
+
+	/// Execute `test`.
+    ///
+    /// Note this test env builder relies on binaries from other crates already
+    /// being built and existing in the target directory. Thus any test that
+    /// uses this should only be called after the whole workspace is compiled.
+    /// This can be accomplished by either running `cargo build` or `cargo test`
+    /// in the workspace root. However if you just test this crate (`cargo test
+    /// -p integration`), this might fail because we don't build the
+    /// binaries from the other crates.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `test` panics or any of the binaries started panics.
+	pub async fn execute<F, T>(self, test: F)
+    where
+        F: Fn(TestArgs) -> T,
+        T: Future<Output = ()>,
+    {
+		let test_id = format!("{:?}", rng());
+		let mut process_handles = vec![];
+		let mut file_handles = vec![];
+		let (patch_set_pairs, manifest_path) = setup_manifest(&test_id);
+		let mut test_args = TestArgs {
+			patch_set_pairs,
+			..Default::default()
+		};
+
+		if self.setup_reshard {
+			let app_sock_path = format!("./{test_id}.ump.app.sock");
+			file_handles.push(app_sock_path.clone());
+			let enclave_sock_path = format!("./{test_id}.ump.enclave.sock");
+			file_handles.push(enclave_sock_path.clone());
+
+			// Start ump enclave
+			let enclave_process: ChildWrapper = Command::new(SIMULATOR_ENCLAVE_PATH)
+				.arg(&enclave_sock_path)
+				.arg(&app_sock_path)
+				.spawn()
+				.unwrap()
+				.into();
+			process_handles.push(enclave_process);
+
+			panic!("sam was here")
+
+		}
+	}
+}
+
+/// Make a manifest set and get the associated key pairs.
+fn make_patch_set(member_count: usize, threshold: u32) -> (PatchSet, Vec<P256Pair>) {
+    let pairs: Vec<_> = (0..member_count).map(|_| P256Pair::generate().unwrap()).collect();
+
+    let members = pairs
+        .iter()
+        .map(|p| MemberPubKey {
+            pub_key: p.public_key().to_bytes(),
+        })
+        .collect();
+
+    (PatchSet { threshold, members }, pairs)
+}
+
+
+fn setup_manifest(test_id: &str) -> (Vec<P256Pair>, PathWrapper) {
+    let path: PathWrapper = format!("./{test_id}.manifest_envelope").into();
+    let (patch_set, pairs) = make_patch_set(3, 2);
+    let manifest = Manifest {
+        patch_set,
+        ..Default::default()
+    };
+
+    let envelope = borsh::to_vec(&ManifestEnvelope {
+        manifest,
+        ..Default::default()
+    })
+    .unwrap();
+    fs::write(&*path, envelope).expect("failed to write manifest envelope to disk");
+
+    (pairs, path)
 }

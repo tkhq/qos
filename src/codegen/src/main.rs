@@ -46,6 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 				"../proto/vendor/google/rpc/status.proto",
 				"../proto/vendor/google/rpc/code.proto",
 				"../proto/reshard/reshard.proto",
+				"../proto/health_check/health_check.proto",
 				"../proto/attestation/attestation.proto",
 			],
 			&[PROTO_INCLUDE_PATH],

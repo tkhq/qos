@@ -196,6 +196,9 @@ reshard_app:
 	cargo run --bin reshard_app --features mock -- \
 	--usock $(RESHARD_INNER_SOCKET_PATH) \
 	--quorum-file $(CURDIR)/integration/fixtures/reshard/quorum.secret \
+	--ephemeral-file $(CURDIR)/integration/fixtures/reshard/ephemeral.secret \
+	--pivot-file $(CURDIR)/integration/fixtures/reshard/quitcodingtovape.pivot \
+	--manifest-file $(CURDIR)/integration/fixtures/reshard/\
 	--new-share-set - \
 	--mock-nsm < $(NEW_SHARE_SET_JSON)
 

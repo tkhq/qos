@@ -106,12 +106,9 @@ impl ReshardProcessor {
 		let n = new_share_set.members.len();
 		let k = new_share_set.threshold as usize;
 		// shares_generate -> Result<Vec<Vec<u8>>, _>;
-		let shares: Vec<Vec<u8>> = qos_crypto::shamir::shares_generate(
-			&master_seed[..],
-			n,
-			k,
-		)
-		.map_err(|e| format!("shares_generate failed: {e:?}"))?;
+		let shares: Vec<Vec<u8>> =
+			qos_crypto::shamir::shares_generate(&master_seed[..], n, k)
+				.map_err(|e| format!("shares_generate failed: {e:?}"))?;
 
 		// Encrypt per member of the new share set
 		let mut member_outputs = Vec::with_capacity(n);
@@ -195,12 +192,17 @@ impl RequestProcessor for ReshardProcessor {
 			| Some(
 				qos_retrieve_reshard_request::Input::RetrieveReshardRequest(_),
 			) => {
-                let resp = match crate::routes::retrieve_reshard::retrieve_reshard(&self.cached_reshard_bundle) {
-                    Ok(r) => r,
-                    Err(e) => return respond_err(e.code, e.message),
-                 };
+				let resp =
+					match crate::routes::retrieve_reshard::retrieve_reshard(
+						&self.cached_reshard_bundle,
+					) {
+						Ok(r) => r,
+						Err(e) => return respond_err(e.code, e.message),
+					};
 
-                qos_retrieve_reshard_response::Output::RetrieveReshardResponse(resp)
+				qos_retrieve_reshard_response::Output::RetrieveReshardResponse(
+					resp,
+				)
 			}
 
 			Some(qos_retrieve_reshard_request::Input::HealthRequest(_)) => {

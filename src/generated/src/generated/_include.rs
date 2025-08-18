@@ -19,6 +19,11 @@ pub mod services {
             include!("services.attestation.v1.rs");
         }
     }
+    pub mod health_check {
+        pub mod v1 {
+            include!("services.health_check.v1.rs");
+        }
+    }
     pub mod reshard {
         pub mod v1 {
             include!("services.reshard.v1.rs");
