@@ -5,6 +5,7 @@
 #![warn(missing_docs)]
 
 use borsh::{BorshDeserialize, BorshSerialize};
+use generated::services::reshard;
 use qos_core::parser::{GetParserForOptions, OptionsParser, Parser, Token};
 use generated::services::reshard::v1::reshard_service_client::ReshardServiceClient;
 use generated::services::health_check::v1::health_check_service_client::HealthCheckServiceClient;
@@ -55,6 +56,8 @@ pub const QOS_DIST_DIR: &str = "./mock/dist";
 /// Mock pcr3 pre-image.
 pub const PCR3_PRE_IMAGE_PATH: &str = "./mock/namespaces/pcr3-preimage.txt";
 const SIMULATOR_ENCLAVE_PATH: &str = "../target/debug/simulator_enclave";
+/// Maximum gRPC message size. Set to 25MB (25*1024*1024)
+pub static GRPC_MAX_RECV_MSG_SIZE: usize = 26_214_400;
 
 const MSG: &str = "msg";
 
@@ -235,12 +238,12 @@ impl Builder {
 		};
 
 		if self.setup_reshard {
-			let app_sock_path = format!("./{test_id}.ump.app.sock");
+			let app_sock_path = format!("./{test_id}.reshard.app.sock");
 			file_handles.push(app_sock_path.clone());
-			let enclave_sock_path = format!("./{test_id}.ump.enclave.sock");
+			let enclave_sock_path = format!("./{test_id}.reshard.enclave.sock");
 			file_handles.push(enclave_sock_path.clone());
 
-			// Start ump enclave
+			// Start enclave
 			let enclave_process: ChildWrapper = Command::new(SIMULATOR_ENCLAVE_PATH)
 				.arg(&enclave_sock_path)
 				.arg(&app_sock_path)
@@ -249,9 +252,57 @@ impl Builder {
 				.into();
 			process_handles.push(enclave_process);
 
-			panic!("sam was here")
+			// Start reshard secure app
+			let mut reshard_command = Command::new("../target/debug/reshard_app");
+            let reshard_command_and_args = reshard_command
+                .arg("--usock")
+                .arg(&app_sock_path)
+                .arg("--mock-nsm")
+                .arg("--quorum-file")
+                .arg("../fixtures/reshard/quorum.secret")
+                .arg("--manifest-file")
+                .arg(&*manifest_path);
 
+			let reshard_process: ChildWrapper = reshard_command_and_args.spawn().unwrap().into();
+            process_handles.push(reshard_process);
+
+			// Start reshard host
+            let host_port = qos_test_primitives::find_free_port().unwrap();
+            let host_process: ChildWrapper = Command::new("../target/debug/reshard_host")
+                .arg("--host-ip")
+                .arg(LOCAL_HOST)
+                .arg("--host-port")
+                .arg(host_port.to_string())
+                .arg("--usock")
+                .arg(&enclave_sock_path)
+                .spawn()
+                .unwrap()
+                .into();
+
+            process_handles.push(host_process);
+            qos_test_primitives::wait_until_port_is_bound(host_port);
+
+            let host_addr = format!("http://{LOCAL_HOST}:{host_port}");
+            test_args.reshard_client_addr = Some(host_addr.clone());
+
+            let health_check_client = HealthCheckServiceClient::connect(host_addr.clone()).await.unwrap();
+            test_args.health_check_client = Some(health_check_client);
+
+            let k8_health_client = HealthClient::connect(host_addr.clone()).await.unwrap();
+            test_args.k8_health_client = Some(k8_health_client);
+
+            let reshard_client = ReshardServiceClient::connect(host_addr)
+                .await
+                .unwrap()
+                .max_decoding_message_size(GRPC_MAX_RECV_MSG_SIZE);
+
+            test_args.reshard_client = Some(reshard_client);
 		}
+
+        for path in file_handles {
+            drop(fs::remove_file(path));
+        }
+
 	}
 }
 
