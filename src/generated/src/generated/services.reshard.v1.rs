@@ -1,16 +1,11 @@
-/// TODO: sam come back to this
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RetrieveReshardRequest {
-    #[prost(string, tag = "1")]
-    pub quitcodingtovape: ::prost::alloc::string::String,
-}
+pub struct RetrieveReshardRequest {}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RetrieveReshardResponse {
-    /// opaque payload, e.g. TODO: sam come back to this
-    #[prost(bytes = "vec", tag = "1")]
-    pub reshard_bundle: ::prost::alloc::vec::Vec<u8>,
+    #[prost(string, tag = "1")]
+    pub reshard_bundle: ::prost::alloc::string::String,
 }
 /// private request type for using within the secure app.
 #[allow(clippy::derive_partial_eq_without_eq)]

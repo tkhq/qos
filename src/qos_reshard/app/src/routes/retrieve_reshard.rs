@@ -1,16 +1,16 @@
 //! Reshard routes
 
 use crate::errors::GrpcError;
+use crate::service::ReshardBundle;
 use generated::services::reshard::v1::{
-	RetrieveReshardRequest, RetrieveReshardResponse,
+	RetrieveReshardResponse, 
 };
-use qos_p256::P256Pair;
 
-// reshards a quorum key
 pub fn retrieve_reshard(
-	request: &RetrieveReshardRequest,
-	quorum_key: &P256Pair,
-	nsm: &dyn qos_nsm::NsmProvider,
+    bundle: &ReshardBundle,
 ) -> Result<RetrieveReshardResponse, GrpcError> {
-	Ok(RetrieveReshardResponse { reshard_bundle: (Vec::new()) })
+    let json = serde_json::to_string_pretty(bundle)
+        .map_err(|e| GrpcError::internal(&format!("serialize failed: {e}")))?;
+
+    Ok(RetrieveReshardResponse { reshard_bundle: json })
 }

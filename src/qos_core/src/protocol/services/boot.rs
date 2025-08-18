@@ -212,21 +212,20 @@ pub struct ShareSet {
 
 impl FromStr for ShareSet {
 	type Err = serde_json::Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		// Parse JSON -> ShareSet
-        let ss: ShareSet = serde_json::from_str(s)?;
+		let ss: ShareSet = serde_json::from_str(s)?;
 
 		// Sanity check: 1 <= K <= N
-        if ss.threshold == 0 || (ss.threshold as usize) > ss.members.len() {
-            return Err(<serde_json::Error as serde::de::Error>::custom(
+		if ss.threshold == 0 || (ss.threshold as usize) > ss.members.len() {
+			return Err(<serde_json::Error as serde::de::Error>::custom(
                 format!(
                     "threshold must be in 1..N (N = members.len()); got K={} N={}",
                     ss.threshold,
                     ss.members.len()
                 ),
             ));
-        }
+		}
 
 		Ok(ss)
 	}

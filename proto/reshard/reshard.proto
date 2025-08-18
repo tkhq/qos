@@ -14,7 +14,7 @@ service ReshardService {
 message RetrieveReshardRequest {} // no fields
 
 message RetrieveReshardResponse {
-  bytes reshard_bundle = 1;
+  string reshard_bundle = 1;
 }
 
 // private request type for using within the secure app.

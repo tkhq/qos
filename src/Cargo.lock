@@ -2734,6 +2734,7 @@ dependencies = [
  "reshard_app",
  "rustls",
  "serde",
+ "serde_json",
  "url",
  "webpki-roots 0.26.11",
 ]
