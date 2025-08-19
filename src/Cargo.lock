@@ -1604,6 +1604,7 @@ name = "integration"
 version = "0.1.0"
 dependencies = [
  "borsh",
+ "futures",
  "generated",
  "nix",
  "qos_client",
@@ -1618,6 +1619,7 @@ dependencies = [
  "qos_test_primitives",
  "rand 0.9.2",
  "rustls",
+ "serde_json",
  "tokio",
  "tonic",
  "ureq",

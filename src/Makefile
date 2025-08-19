@@ -191,6 +191,10 @@ generated:
 reshard:
 	make -j3 reshard_host reshard_enclave reshard_app
 
+.PHONY: reshard_test
+reshard_test: build_reshard
+	cargo test --test reshard reshard_e2e_json -- --exact --nocapture
+
 .PHONY: reshard_app
 reshard_app:
 	cargo run --bin reshard_app --features mock -- \
@@ -208,7 +212,7 @@ reshard_enclave:
 
 .PHONY: build_reshard
 build_reshard:
-	cargo build --bin --features mock reshard_app
+	cargo build --features mock --bin reshard_app
 	cargo build --bin reshard_host
 	cargo build --bin simulator_enclave
 
