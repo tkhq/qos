@@ -32,6 +32,8 @@ const ALGO: AlgorithmId = AlgorithmId::EccP256;
 /// Equivalent to about 10 years
 /// Chosen arbitrarily as a long certificate validity
 const CERTIFICATE_VALIDITY_SECS: u32 = 10 * 60 * 60 * 24 * 365;
+/// Generic information for newly generated local certificates
+const CERTIFICATE_DISTINGUISHED_NAME: &str = "CN=QuorumOS";
 
 /// Errors for yubikey interaction
 #[derive(Debug, PartialEq, Eq)]
@@ -119,8 +121,10 @@ pub fn generate_signed_certificate(
 		yubikey,
 		slot,
 		SerialNumber::new(&serial)?,
-		Validity::from_now(Duration::from_secs(CERTIFICATE_VALIDITY_SECS.into()))?,
-		RdnSequence::from_str("CN=QuorumOS")?,
+		Validity::from_now(Duration::from_secs(
+			CERTIFICATE_VALIDITY_SECS.into(),
+		))?,
+		RdnSequence::from_str(CERTIFICATE_DISTINGUISHED_NAME)?,
 		public_key_info,
 		|_| Ok(()),
 	)
@@ -176,8 +180,10 @@ pub fn import_key_and_generate_signed_certificate(
 		yubikey,
 		slot,
 		SerialNumber::new(&serial)?,
-		Validity::from_now(Duration::from_secs(CERTIFICATE_VALIDITY_SECS.into()))?,
-		RdnSequence::from_str("CN=QuorumOS")?,
+		Validity::from_now(Duration::from_secs(
+			CERTIFICATE_VALIDITY_SECS.into(),
+		))?,
+		RdnSequence::from_str(CERTIFICATE_DISTINGUISHED_NAME)?,
 		public_key_info,
 		|_| Ok(()),
 	)

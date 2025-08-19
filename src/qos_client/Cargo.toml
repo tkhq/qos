@@ -22,7 +22,6 @@ rpassword = { version = "7", default-features = false }
 serde_json = { version = "1" }
 
 der = { version = "0.7", default-features = false, optional = true }
-x509 = { version = "0.2", default-features = false, optional = true }
 x509-cert = { version = "0.2", default-features = false, optional = true }
 yubikey = { version = "0.8", features = ["untested"], default-features = false, optional = true }
 
@@ -35,5 +34,5 @@ qos_p256 = { path = "../qos_p256", features = ["mock"] }
 
 [features]
 default = ["smartcard"]
-smartcard = ["der", "x509", "x509-cert", "yubikey"]
+smartcard = ["der", "x509-cert", "yubikey"]
 
