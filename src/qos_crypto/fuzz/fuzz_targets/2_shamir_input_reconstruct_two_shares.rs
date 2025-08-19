@@ -20,7 +20,6 @@ fuzz_target!(|fuzzerdata: FuzzShareReconstruct| {
 	// this construction with three shares covers more edge cases than the two share variant
 	let mut share_one: Vec<u8> = Vec::new();
 	let mut share_two: Vec<u8> = Vec::new();
-	let mut share_three: Vec<u8> = Vec::new();
 
 	share_one.extend_from_slice(&fuzzerdata.share_one);
 	share_two.extend_from_slice(&fuzzerdata.share_two);

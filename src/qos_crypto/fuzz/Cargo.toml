@@ -20,7 +20,7 @@ members = ["."]
 
 [profile.release]
 # enable arithmetic checks at runtime
-overflow-check = 1
+overflow-checks = true
 
 [[bin]]
 name = "1_shamir_generate_reconstruct"

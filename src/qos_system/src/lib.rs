@@ -91,6 +91,8 @@ pub fn freopen(
 		freopen(
 			filename_cs.as_ptr(),
 			mode_cs.as_ptr(),
+			// TODO clippy says the pointer casting is unecessary
+			// is this true for all configurations and platforms?
 			fdopen(file, mode_cs.as_ptr() as *const i8),
 		)
 	}
@@ -164,22 +166,22 @@ pub fn check_hwrng(rng_expected: &str) -> Result<(), SystemError> {
 	Ok(())
 }
 
-#[cfg(any(target_env = "musl"))]
-type ioctl_num_type = ::libc::c_int;
-#[cfg(not(any(target_env = "musl")))]
-type ioctl_num_type = ::libc::c_ulong;
+#[cfg(target_env = "musl")]
+type IoctlNumType = ::libc::c_int;
+#[cfg(not(target_env = "musl"))]
+type IoctlNumType = ::libc::c_ulong;
 
-const IOCTL_VM_SOCKETS_GET_LOCAL_CID: ioctl_num_type = 0x7b9;
+const IOCTL_VM_SOCKETS_GET_LOCAL_CID: IoctlNumType = 0x7b9;
 
 pub fn get_local_cid() -> Result<u32, SystemError> {
 	use libc::ioctl;
 	let f = match File::open("/dev/vsock") {
 		Ok(f) => f,
-		Err(e) => return Err(SystemError{ message: format!("Failed to open /dev/vsock") }),
+		Err(_e) => return Err(SystemError{ message: "Failed to open /dev/vsock".to_string() }),
 	};
 	let mut cid = 0;
 	if unsafe { ioctl(f.as_raw_fd(), IOCTL_VM_SOCKETS_GET_LOCAL_CID, &mut cid) } == -1 {
 		return Err(SystemError{ message: "Failed to fetch local CID".to_string() });
 	}
-	return Ok(cid);
+	Ok(cid)
 }

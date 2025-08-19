@@ -18,7 +18,7 @@ fn nitro_heartbeat() {
 		read(fd, buf.as_ptr() as _, 1);
 		close(fd);
 	}
-	dmesg(format!("Sent NSM heartbeat"));
+	dmesg("Sent NSM heartbeat".to_string());
 }
 
 /// Initialize nitro device
@@ -27,12 +27,12 @@ pub fn init_platform() {
 	nitro_heartbeat();
 
 	match insmod("/nsm.ko") {
-		Ok(()) => dmesg(format!("Loaded nsm.ko")),
+		Ok(()) => dmesg("Loaded nsm.ko".to_string()),
 		Err(e) => eprintln!("{}", e),
 	};
 
 	match check_hwrng("nsm-hwrng") {
-		Ok(()) => dmesg(format!("Validated entropy source is nsm-hwrng")),
+		Ok(()) => dmesg("Validated entropy source is nsm-hwrng".to_string()),
 		Err(e) => {
 			eprintln!("{}", e);
 			poweroff();

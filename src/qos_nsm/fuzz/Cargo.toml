@@ -22,7 +22,7 @@ members = ["."]
 
 [profile.release]
 # enable arithmetic checks at runtime
-overflow-check = 1
+overflow-checks = true
 
 [[bin]]
 name = "1_attestation_doc_from_der"
