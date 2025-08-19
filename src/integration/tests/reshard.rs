@@ -216,21 +216,32 @@ async fn reshard_e2e_json() {
             shares.push(pt);
         }
 
-        // 4) Try all k-of-n combinations to reconstruct the seed and verify quorum pubkey
-        // let mut ok = false;
-        // for combo in n_choose_k::combinations(&shares, threshold) {
-        //     let seed_vec = shamir::shares_reconstruct(&combo);
-        //     let seed: [u8; 32] = seed_vec.try_into().expect("seed must be 32 bytes");
-        //     let qp = P256Pair::from_master_seed(&seed).unwrap();
-        //     if qp.public_key().to_bytes() == bundle.quorum_public_key_bytes() {
-        //         ok = true;
-        //         println!("✅ reconstructed quorum key matches with {}-of-{} shares", threshold, shares.len());
-        //         break;
-        //     }
-        // }
-        // assert!(ok, "no combination produced a matching quorum public key");
+        let quorum_secret_path = "./fixtures/reshard/quorum.secret";
+        let expected_pair = qos_p256::P256Pair::from_hex_file(
+            quorum_secret_path
+        ).expect("load quorum.secret");
+        let expected_pub = expected_pair.public_key().to_bytes();
+        let mut found = false;
+        let k: usize = bundle.manifest_envelope.manifest.share_set.threshold
+            .try_into()
+            .expect("threshold doesn't fit into usize");
 
+        for combo in qos_crypto::n_choose_k::combinations(&shares, k) {
+            let seed_vec = qos_crypto::shamir::shares_reconstruct(&combo).unwrap();
 
+            let seed: [u8; 32] = seed_vec
+                .as_slice()
+                .try_into()
+                .expect("reconstructed seed must be 32 bytes");
+                
+            let quorum_key = P256Pair::from_master_seed(&seed).unwrap();
+
+            assert_eq!(
+                quorum_key.public_key().to_bytes(),
+                expected_pub,
+                "quorum key public mismatch",
+            );
+        }
     }
 
     Builder::new().setup_reshard().execute(test).await;
