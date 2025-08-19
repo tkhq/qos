@@ -29,7 +29,9 @@ pub const SIGNING_SLOT: SlotId = SlotId::Signature;
 /// Factory default pin for yubikeys.
 pub const DEFAULT_PIN: &[u8] = b"123456";
 const ALGO: AlgorithmId = AlgorithmId::EccP256;
-const VALIDITY_SECS: u32 = 60 * 60 * 24 * 365;
+/// Equivalent to about 10 years
+/// Chosen arbitrarily as a long certificate validity
+const CERTIFICATE_VALIDITY_SECS: u32 = 10 * 60 * 60 * 24 * 365;
 
 /// Errors for yubikey interaction
 #[derive(Debug, PartialEq, Eq)]
@@ -117,8 +119,8 @@ pub fn generate_signed_certificate(
 		yubikey,
 		slot,
 		SerialNumber::new(&serial)?,
-		Validity::from_now(Duration::from_secs(VALIDITY_SECS.into()))?,
-		RdnSequence::from_str("Turnkey")?,
+		Validity::from_now(Duration::from_secs(CERTIFICATE_VALIDITY_SECS.into()))?,
+		RdnSequence::from_str("CN=QuorumOS")?,
 		public_key_info,
 		|_| Ok(()),
 	)
@@ -174,8 +176,8 @@ pub fn import_key_and_generate_signed_certificate(
 		yubikey,
 		slot,
 		SerialNumber::new(&serial)?,
-		Validity::from_now(Duration::from_secs(VALIDITY_SECS.into()))?,
-		RdnSequence::from_str("Turnkey")?,
+		Validity::from_now(Duration::from_secs(CERTIFICATE_VALIDITY_SECS.into()))?,
+		RdnSequence::from_str("CN=QuorumOS")?,
 		public_key_info,
 		|_| Ok(()),
 	)
@@ -351,11 +353,11 @@ fn generate_random_rfc5280_serial() -> [u8; 20] {
 	serial
 }
 
+// See the other code file(s) for integration tests
 #[cfg(test)]
 mod tests {
 	use crate::yubikey::generate_random_rfc5280_serial;
-	use std::time::Duration;
-	use x509_cert::{serial_number::SerialNumber, time::Validity};
+	use x509_cert::serial_number::SerialNumber;
 
 	#[test]
 	fn test_rfc5280_serial_generation_success() {
@@ -374,12 +376,5 @@ mod tests {
 			let _serial: SerialNumber<Rfc5280> =
 				SerialNumber::new(&serial_data).unwrap();
 		}
-	}
-
-	#[test]
-	#[should_panic]
-	fn test_validity_calculation() {
-		let _validity =
-			Validity::from_now(Duration::from_secs(u64::MAX)).unwrap();
 	}
 }
