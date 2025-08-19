@@ -142,7 +142,8 @@ fn export_key_internal(
 fn validate_manifest(
 	new_manifest_envelope: &ManifestEnvelope,
 	old_manifest_envelope: &ManifestEnvelope,
-	_attestation_doc: &AttestationDoc,
+	#[allow(unused_variables)]
+	attestation_doc: &AttestationDoc,
 ) -> Result<(), ProtocolError> {
 	// 2. Check the signatures over the New Manifest. Ensures that K Manifest
 	// Set Members approved the New Manifest.
@@ -221,7 +222,7 @@ fn validate_manifest(
 	#[cfg(not(feature = "mock"))]
 	{
 		qos_nsm::nitro::verify_attestation_doc_against_user_input(
-			_attestation_doc,
+			attestation_doc,
 			&new_manifest_envelope.manifest.qos_hash(),
 			&new_manifest_envelope.manifest.enclave.pcr0,
 			&new_manifest_envelope.manifest.enclave.pcr1,

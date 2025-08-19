@@ -163,7 +163,7 @@ fn shutdown(enclave_id: String, sig_num: i32) {
 	println!("Got signal: {}", sig_num);
 	println!("Shutting down Enclave");
 	let mut comm = enclave_proc_connect_to_single(&enclave_id)
-		.or_else(|_| Err("Failed to send command to Enclave"))
+		.map_err(|_| "Failed to send command to Enclave")
 		.unwrap();
 
 	// TODO: Replicate output of old CLI on invalid enclave IDs.
@@ -172,7 +172,7 @@ fn shutdown(enclave_id: String, sig_num: i32) {
 		None,
 		&mut comm,
 	)
-	.or_else(|_| Err("Unable to terminate Enclave"));
+	.map_err(|_| "Unable to terminate Enclave");
 
 	exit(0);
 }
@@ -207,8 +207,8 @@ fn handle_signals() -> c_int {
 	unsafe { sigaddset(&mut mask, SIGINT) };
 	unsafe { sigaddset(&mut mask, SIGTERM) };
 	unsafe { sigprocmask(SIG_BLOCK, &mask, ptr::null_mut()) };
-	let signal = unsafe { sigwaitinfo(&mask, ptr::null_mut()) } as i32;
-	return signal;
+	// return signal
+	(unsafe { sigwaitinfo(&mask, ptr::null_mut()) }) as i32
 }
 
 fn read_logs(console: Console) {
@@ -223,7 +223,7 @@ fn main() {
 	let (enclave_id, maybe_console) = boot();
 
 	match healthy() {
-		Ok(_) => eprintln!("{}", "Enclave is healthy"),
+		Ok(_) => eprintln!("Enclave is healthy"),
 		Err(e) => eprintln!("Enclave is sad: {}", e),
 	};
 

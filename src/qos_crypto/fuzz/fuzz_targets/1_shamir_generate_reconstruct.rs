@@ -10,8 +10,6 @@ pub struct FuzzShamirStruct {
 	secret: Box<[u8]>,
 }
 
-use std::{convert::TryFrom, iter};
-
 // let the fuzzer control the number of shares, share threshold number, and secret
 fuzz_target!(|fuzzerdata: FuzzShamirStruct| {
 	let n = fuzzerdata.n;
