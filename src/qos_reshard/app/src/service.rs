@@ -36,32 +36,32 @@ use qos_p256::{P256Pair, P256Public};
 )]
 #[serde(rename_all = "camelCase")]
 pub struct ReshardBundle {
-	// Public key of the quorum key that was resharded (hex in JSON thanks to qos_hex in types below).
+	/// Public key of the quorum key that was resharded (hex in JSON thanks to qos_hex in types below).
 	#[serde(with = "qos_hex::serde")]
-	quorum_public_key: Vec<u8>,
+	pub quorum_public_key: Vec<u8>,
 
-	// Live attestation document bytes / contains the eph key used to sign per member outputs
+	/// Live attestation document bytes / contains the eph key used to sign per member outputs
 	#[serde(with = "qos_hex::serde")]
-	attestation_doc: Vec<u8>,
+	pub attestation_doc: Vec<u8>,
 
-	// Contains manaifest, manifest_set_approvals, share_set_approvals
-	manifest_envelope: ManifestEnvelope,
+	/// Contains manaifest, manifest_set_approvals, share_set_approvals
+	pub manifest_envelope: ManifestEnvelope,
 
-	// Encapsulated manifest.
-	manifest: Manifest,
+	/// Encapsulated manifest.
+	pub manifest: Manifest,
 
-	// Approvals from the manifest set.
-	manifest_set_approvals: Vec<Approval>,
+	/// Approvals from the manifest set.
+	pub manifest_set_approvals: Vec<Approval>,
 
-	// Approvals from the share set. This is used to audit what share holders provisioned the quorum key.
-	share_set_approvals: Vec<Approval>,
+	/// Approvals from the share set. This is used to audit what share holders provisioned the quorum key.
+	pub share_set_approvals: Vec<Approval>,
 
-	// Vector of {share_set_member (pub key), encrypted_quorum_key_share, share_hash (to verify correctly decrypted share)}
-	member_outputs: Vec<GenesisMemberOutput>,
+	/// Vector of {share_set_member (pub key), encrypted_quorum_key_share, share_hash (to verify correctly decrypted share)}
+	pub member_outputs: Vec<GenesisMemberOutput>,
 
-	// Signature over sha512(member_outputs borsh) with ephemeral key.
+	/// Signature over sha512(member_outputs borsh) with ephemeral key.
 	#[serde(with = "qos_hex::serde")]
-	signature: Vec<u8>,
+	pub signature: Vec<u8>,
 }
 
 pub struct ReshardProcessor {

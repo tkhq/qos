@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[lib]
+name = "reshard_app"
+path = "src/lib.rs"
 
 [features]
 mock = ["qos_core/mock", "qos_nsm/mock_realtime"]

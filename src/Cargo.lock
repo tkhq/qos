@@ -1618,6 +1618,7 @@ dependencies = [
  "qos_p256",
  "qos_test_primitives",
  "rand 0.9.2",
+ "reshard_app",
  "rustls",
  "serde_json",
  "tokio",

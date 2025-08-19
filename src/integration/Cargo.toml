@@ -5,7 +5,8 @@ edition = "2021"
 publish = false
 
 [dependencies]
-generated = { path = "../generated" }
+reshard_app = { path = "../qos_reshard/app" }
+generated = { path = "../generated" , default-features = false}
 qos_core = { path = "../qos_core", features = ["mock"], default-features = false }
 qos_nsm = { path = "../qos_nsm", features = ["mock"], default-features = false }
 qos_host = { path = "../qos_host", default-features = false }

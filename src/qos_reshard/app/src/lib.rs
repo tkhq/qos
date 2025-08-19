@@ -9,6 +9,8 @@ pub mod errors;
 
 mod service;
 
+pub use crate::service::ReshardBundle;
+
 mod routes {
 	pub(crate) mod retrieve_reshard;
 }
