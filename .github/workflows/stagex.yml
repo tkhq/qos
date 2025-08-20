@@ -39,7 +39,6 @@ jobs:
         ${{ github.ref == format('refs/heads/{0}', 'main') && 'latest' || '' }}
         ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || '' }}
         ${{ github.event_name == 'push' && github.ref_name || '' }}
-        strategy:
     strategy:
       matrix:
         target:
