@@ -12,8 +12,8 @@ members = [
   "qos_test_primitives",
   "qos_p256",
   "qos_nsm",
-  "qos_reshard/app",
-  "qos_reshard/host",
+  "reshard/app",
+  "reshard/host",
 ]
 exclude = [
   "init",
