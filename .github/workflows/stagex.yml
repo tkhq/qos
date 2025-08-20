@@ -67,6 +67,6 @@ jobs:
         run: |
           docker images
           for tag in ${tags}; do
-              docker tag "tkhq-qos/${{ matrix.target.name }}:latest" "ghcr.io/tkhq/${{ matrix.target.name }}:${tag}"
+              docker tag "qos-local/${{ matrix.target.name }}:latest" "ghcr.io/tkhq/${{ matrix.target.name }}:${tag}"
           done
           docker image push --all-tags "ghcr.io/tkhq/${{ matrix.target.name }}"
