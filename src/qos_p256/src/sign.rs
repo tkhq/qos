@@ -41,7 +41,7 @@ impl P256SignPair {
 	/// Deserialize key from raw scalar byte slice.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
 		Ok(Self {
-			private: SigningKey::from_bytes(bytes)
+			private: SigningKey::from_slice(bytes)
 				.map_err(|_| P256Error::FailedToReadSecret)?,
 		})
 	}
