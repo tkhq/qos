@@ -10,23 +10,10 @@ on:
   workflow_dispatch: # Allows manual invocation
 
 jobs:
-  build:
-    name: build artifacts
-    # We use a special group that is configured to use github largest runner instance
-    # This is charged by the minute, so if you want to reduce cost change back to `runs-on: ubuntu-latest`
-    runs-on:
-      group: ubuntu-runners
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Setup Docker
-        uses: ./.github/actions/docker-setup
-      - name: Run `make`
-        shell: 'script -q -e -c "bash {0}"'
-        run: |
-            make -j$(nproc)
   images:
     name: Build and push images
+    # We use a special group that is configured to use github largest runner instance
+    # This is charged by the minute, so if you want to reduce cost change back to `runs-on: ubuntu-latest`
     runs-on:
       group: ubuntu-runners
     timeout-minutes: 60
