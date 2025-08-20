@@ -54,14 +54,14 @@ jobs:
         with:
           ghcr: ${{ secrets.GITHUB_TOKEN }}
     
-      - name: Build ${{ matrix.app.name }}
+      - name: Build ${{ matrix.target.name }}
         uses: ./.github/actions/stagex-pkg
         with:
-          name: ${{ matrix.app.name }}
+          name: ${{ matrix.target.name }}
 
       - name: Load artifact to Docker
         run: |
-          env -C out/${{ matrix.app.name }} tar -cf - . | docker load
+          env -C out/${{ matrix.target.name }} tar -cf - . | docker load
       
       - name: Upload to GHCR
         run: |
