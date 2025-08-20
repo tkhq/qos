@@ -1,0 +1,27 @@
+FROM stagex/pallet-rust:sx2025.06.0@sha256:740b9ed5f2a897d45cafdc806976d84231aa50a64998610750b42a48f8daacab AS build
+
+# Rust configuration
+ENV RUSTFLAGS='-C target-feature=+crt-static'
+ENV CARGOFLAGS='--target x86_64-unknown-linux-musl --no-default-features --locked --release'
+
+# Directory for Rust artifacts
+ENV RELEASE_DIR=/src/target/x86_64-unknown-linux-musl/release
+
+# Load Rust sources
+ADD . /src
+WORKDIR /src
+
+# pre-fetch all workspace deps; we need to them to build with `--network=none` later
+RUN cargo fetch
+
+WORKDIR /src/reshard/app
+RUN --network=none <<-EOF
+    set -eu
+    cargo build ${CARGOFLAGS} --features vsock
+    mkdir -p /rootfs
+    mv ${RELEASE_DIR}/reshard_app /rootfs/
+EOF
+
+# Use busybox as a base so we can easily cp the pivot binary if needed
+FROM stagex/core-busybox:1.36.1@sha256:cac5d773db1c69b832d022c469ccf5f52daf223b91166e6866d42d6983a3b374 AS package
+COPY --from=build /rootfs/. .

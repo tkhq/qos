@@ -5,6 +5,8 @@ edition = "2021"
 publish = false
 
 [dependencies]
+reshard_app = { path = "../reshard/app" }
+generated = { path = "../generated" , default-features = false}
 qos_core = { path = "../qos_core", features = ["mock"], default-features = false }
 qos_nsm = { path = "../qos_nsm", features = ["mock"], default-features = false }
 qos_host = { path = "../qos_host", default-features = false }
@@ -14,13 +16,22 @@ qos_crypto = { path = "../qos_crypto" }
 qos_hex = { path = "../qos_hex" }
 qos_p256 = { path = "../qos_p256", features = ["mock"] }
 qos_test_primitives = { path = "../qos_test_primitives" }
+qos_host_primitives = { path = "../qos_host_primitives" }
 
 tokio = { version = "1.43.1", features = ["macros", "rt-multi-thread"], default-features = false }
 borsh = { version = "1.0", features = ["std", "derive"] , default-features = false}
 nix = { version = "0.26", features = ["socket"], default-features = false }
 rustls = { version = "0.23.5" }
 webpki-roots = { version = "1.0.2" }
+tonic = "0.9"
+rand = "0.9"
+futures = "0.3"
+serde_json = { version = "1" }
 
 [dev-dependencies]
 rand = "0.9"
 ureq = { version = "2.9", features = ["json"], default-features = false }
+tokio = { version = "1.25.0", features = [
+  "macros",
+  "rt-multi-thread",
+], default-features = false }

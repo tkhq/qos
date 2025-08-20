@@ -1,0 +1,42 @@
+name: "Build a stagex package"
+description: "Build a stagex package"
+inputs:
+  name:
+    description: name of the package to be built
+    required: true
+  version:
+    description: version to be asserted to the build
+    required: true
+    default: "dev"
+  disable-artifact:
+    description: disable uploading the artifact after build
+    type: boolean
+    required: false
+    default: false
+
+# NB: I tried wrapping these as artifacts, but the artifact system is so incredibly slow (even v4, which is support to offer a 90% improvement) that it is not even remotely worth it.
+# Both upload and download are slow; they each take more than an order of magnitude more time than cache operations.
+runs:
+  using: "composite"
+  steps:
+    - name: Build ${{ inputs.name }} container image
+      # NB: this weird logic is because:
+      #   - we only want a single cache operation performed, because even a lookup-only cache operation will still _update_ the cache, if the source material exists (according to https://github.com/actions/cache#inputs)
+      #   - we do want to build when verifyOnly is true, so that we can assert that the cache is, in fact, verified
+      # Keeping this complexity in here allows us to be simpler at point-of-use.
+      # NB: we cannot evaluate complex expressions in an "if:" clause... thus the bash.
+      shell: bash
+      run: |
+        echo "Setting timestamps of everything in out to now, to trick make into accepting cached dependencies..."
+        if [ -d out ]; then find out/ -exec touch {} +; fi
+        echo "Building ${{ inputs.name }}..."
+        make VERSION=${{ inputs.version }} -j$(nproc) out/${{ inputs.name }}/index.json
+
+    - name: artifact
+      if: ${{ inputs.disable-artifact == 'false' }}
+      id: artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: ${{ inputs.name }}
+        path: out/${{ inputs.name }}
+        compression-level: 0

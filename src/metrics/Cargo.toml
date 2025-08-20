@@ -1,0 +1,31 @@
+[package]
+name = "metrics"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "metrics"
+
+[features]
+default = ["request"]
+request = []
+
+[dependencies]
+generated = { path = "../generated", features = ["tonic_types"] }
+tracing = "0.1"
+prometheus = { version = "0.13", default-features = false }
+axum = { version = "0.6.20", features = [
+  "http1",
+  "tokio",
+], default-features = false }
+lazy_static = { version = "1.4", default-features = false }
+
+[dev-dependencies]
+tokio = { version = "1.25.0", features = [
+  "macros",
+  "rt-multi-thread",
+], default-features = false }
+
+[[example]]
+name = "demo"
