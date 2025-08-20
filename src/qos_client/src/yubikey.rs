@@ -73,13 +73,14 @@ pub enum YubiKeyError {
 	InvalidSecret,
 	/// The pin could not be changed.
 	FailedToChangePin,
-	/// See [`der::Error`].
-	DerError(Box<der::Error>),
+	/// See [`der::Error`] for inner string contents.
+	DerError(String),
 }
 
 impl From<der::Error> for YubiKeyError {
 	fn from(from: der::Error) -> Self {
-		Self::DerError(from.into())
+		// add a debug-print of the inner error
+		Self::DerError(format!("{from:?}"))
 	}
 }
 
