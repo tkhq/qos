@@ -84,7 +84,7 @@ impl Builder {
             let enc_sock = PathBuf::from(format!("./{test_id}.reshard.enclave.sock"));
             file_handles.extend([app_sock.clone(), enc_sock.clone()]);
 
-            // Minimal manifest envelope (borsh) on disk
+            // Minimal manifest envelope
             let manifest_path = PathBuf::from(format!("./{test_id}.manifest_envelope"));
             write_minimal_manifest(&manifest_path);
             file_handles.push(manifest_path.clone());
@@ -101,7 +101,7 @@ impl Builder {
             // 2) reshard_app
             let quorum_secret = "./fixtures/reshard/quorum.secret";
             let ephemeral_secret = "./fixtures/reshard/ephemeral.secret";
-            let share_set_json = std::fs::read_to_string("./fixtures/reshard/new-share-set/new-share-set.json")
+            let new_share_set_json = std::fs::read_to_string("./fixtures/reshard/new-share-set/new-share-set.json")
                 .expect("read new-share-set.json");
             let app: ChildWrapper = Command::new("../target/debug/reshard_app")
                 .arg("--usock")
@@ -113,7 +113,7 @@ impl Builder {
                 .arg("--manifest-file")
                 .arg(&manifest_path)
                 .arg("--new-share-set")
-                .arg(&share_set_json)
+                .arg(&new_share_set_json)
                 .arg("--mock-nsm")
                 .spawn()
                 .expect("spawn reshard_app")
@@ -158,7 +158,6 @@ impl Builder {
     }
 }
 
-/// Write a minimal borsh-encoded `ManifestEnvelope` to `path`.
 fn write_minimal_manifest(path: &PathBuf) {
     let env = ManifestEnvelope {
         manifest: Manifest { ..Default::default() },
@@ -186,14 +185,14 @@ async fn reshard_e2e_json() {
         
         let v: serde_json::Value = 
             serde_json::from_str(&resp.reshard_bundle).expect("valid JSON");
-        // Make sure we can rehydrate the bundle
-        let bundle: ReshardBundle =
-            serde_json::from_str(&resp.reshard_bundle).expect("valid JSON");
-
         println!(
             "{}",
             serde_json::to_string_pretty(&v).expect("pretty json")
         );
+
+        // Make sure we can rehydrate the bundle
+        let bundle: ReshardBundle =
+            serde_json::from_str(&resp.reshard_bundle).expect("valid JSON");
 
         // Decrypt each member's share using the fixture private keys
         let secrets_dir = PathBuf::from("./fixtures/reshard/new-share-set-secrets");
@@ -222,10 +221,11 @@ async fn reshard_e2e_json() {
         ).expect("load quorum.secret");
         let expected_pub = expected_pair.public_key().to_bytes();
         let mut found = false;
-        let k: usize = bundle.manifest_envelope.manifest.share_set.threshold
-            .try_into()
-            .expect("threshold doesn't fit into usize");
+        let s = std::fs::read_to_string("./fixtures/reshard/new-share-set/quorum_threshold")
+            .expect("read threshold");
+        let k: usize = s.trim().parse::<usize>().expect("parse threshold");
 
+        // Positive check: ALL k-of-n combos must reconstruct the quorum key
         for combo in qos_crypto::n_choose_k::combinations(&shares, k) {
             let seed_vec = qos_crypto::shamir::shares_reconstruct(&combo).unwrap();
 
@@ -242,7 +242,43 @@ async fn reshard_e2e_json() {
                 "quorum key public mismatch",
             );
         }
-    }
 
+        // Negative checks: for every r < k, NO combo should yield the quorum pubkey
+        for r in 1..k {
+            let mut matches = 0usize;
+            let mut errs = 0usize;
+            let mut mismatches = 0usize;
+
+            for combo in qos_crypto::n_choose_k::combinations(&shares, r) {
+                match qos_crypto::shamir::shares_reconstruct(&combo) {
+                    Err(_e) => {
+                        errs += 1;
+                    }
+                    Ok(seed_vec) => {
+                        // Even if the lib returns something, it must NOT match the real key
+                        if let Ok(seed) = <[u8; 32]>::try_from(seed_vec.as_slice()) {
+                            let qp = P256Pair::from_master_seed(&seed).unwrap();
+                            if qp.public_key().to_bytes() == expected_pub {
+                                matches += 1; // this would be a failure
+                            } else {
+                                mismatches += 1;
+                            }
+                        } else {
+                            // Wrong length => cannot match
+                            mismatches += 1;
+                        }
+                    }
+                }
+            }
+
+            println!("r={r}: reconstruct_errs={errs}, non-matching_reconstructions={mismatches}, matches={matches}");
+
+            // Assert we never matched with fewer than k shares.
+            assert_eq!(
+                matches, 0,
+                "found an unexpected quorum key match using only {r} shares (< {k})"
+            );
+        }
+    }
     Builder::new().setup_reshard().execute(test).await;
 }

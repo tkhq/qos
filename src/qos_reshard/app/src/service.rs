@@ -44,7 +44,7 @@ pub struct ReshardBundle {
 	#[serde(with = "qos_hex::serde")]
 	pub attestation_doc: Vec<u8>,
 
-	/// Contains manaifest, manifest_set_approvals, share_set_approvals
+	/// Contains manifest, manifest_set_approvals, share_set_approvals
 	pub manifest_envelope: ManifestEnvelope,
 
 	/// Encapsulated manifest.
