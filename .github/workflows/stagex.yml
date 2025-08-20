@@ -59,6 +59,6 @@ jobs:
       - name: Upload to GHCR
         run: |
           for tag in ${tags}; do
-              docker tag "tkhq-qos/${{ matrix.app.name }}:latest" "ghcr.io/tkhq/${{ matrix.app.name }}:${tag}"
+              docker tag "tkhq-qos/${{ matrix.target.name }}:latest" "ghcr.io/tkhq/${{ matrix.target.name }}:${tag}"
           done
-          docker image push --all-tags "ghcr.io/tkhq/${{ matrix.app.name }}"
+          docker image push --all-tags "ghcr.io/tkhq/${{ matrix.target.name }}"
