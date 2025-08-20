@@ -39,7 +39,7 @@ const DATA: &[u8] = b"test data";
 #[test]
 #[ignore]
 fn yubikey_tests() {
-	let mut yubikey = YubiKey::open().unwrap();
+	let mut yubikey = YubiKey::open().expect("A supported PIV smartcard should be present and accessible");
 	piv_reset(&mut yubikey);
 
 	signing_works(&mut yubikey);
