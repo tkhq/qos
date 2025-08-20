@@ -12,8 +12,7 @@ use futures::future::FutureExt;
 use generated::services::reshard::v1::reshard_service_client::ReshardServiceClient;
 use generated::services::reshard::v1::RetrieveReshardRequest;
 use qos_core::protocol::services::boot::{Manifest, ManifestEnvelope};
-use qos_hex::encode as hex_encode;
-use qos_p256::P256Pair;
+use qos_p256::{P256Pair, P256Public};
 use rand::{thread_rng, Rng};
 use tonic::transport::Channel;
 
@@ -279,6 +278,24 @@ async fn reshard_e2e_json() {
                 "found an unexpected quorum key match using only {r} shares (< {k})"
             );
         }
+
+        // Verify the signature over the member output was by the ephemeral key
+        // bytes we signed: borsh(member_outputs)
+        let mo_bytes = borsh_to_vec(&bundle.member_outputs).expect("borsh");
+        let digest = qos_crypto::sha_512(&mo_bytes);
+
+        // verify signature
+        let eph_pub = P256Public::from_hex_file(
+            "./fixtures/reshard/ephemeral.pub"
+        ).expect("load ephemeral.pub");
+
+        eph_pub.verify(&digest, &bundle.signature).expect("ephemeral sig verify");
+
+        // Sanity check random pub key doesn't verify 
+        let random_key = P256Pair::generate().unwrap();
+        let random_key_pub = random_key.public_key();
+
+        random_key_pub.verify(&digest, &bundle.signature).is_err();
     }
     Builder::new().setup_reshard().execute(test).await;
 }
