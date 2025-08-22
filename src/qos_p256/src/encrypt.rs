@@ -6,11 +6,11 @@ use aes_gcm::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use hmac::{Hmac, Mac};
+use p256::elliptic_curve::rand_core::OsRng;
 use p256::{
 	ecdh::diffie_hellman, elliptic_curve::sec1::ToEncodedPoint, PublicKey,
 	SecretKey,
 };
-use rand_core::OsRng;
 use sha2::Sha512;
 use zeroize::ZeroizeOnDrop;
 

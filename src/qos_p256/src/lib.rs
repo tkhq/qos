@@ -9,7 +9,7 @@ use std::path::Path;
 
 use encrypt::AesGcm256Secret;
 use hkdf::Hkdf;
-use rand_core::{OsRng, RngCore};
+use p256::elliptic_curve::rand_core::{OsRng, RngCore};
 use sha2::Sha512;
 use zeroize::ZeroizeOnDrop;
 
