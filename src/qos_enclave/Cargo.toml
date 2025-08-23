@@ -3,7 +3,7 @@ name = "qos_enclave"
 version = "1.2.0"
 authors = [""]
 edition = "2018"
-rust-version = "1.61"
+rust-version = "1.88"
 publish = false
 
 [dependencies]
