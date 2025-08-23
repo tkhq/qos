@@ -217,9 +217,7 @@ impl Proxy {
 					Err(close_err) => ProxyMsg::ProxyError(
 						QosNetError::IOError(
 							format!(
-								"unable to read from connection: {}. Warning: unable to cleanly close to underlying connection: {:?}",
-								e,
-								close_err,
+								"unable to read from connection: {e}. Warning: unable to cleanly close to underlying connection: {close_err:?}",
 							)
 						)
 					),

@@ -453,7 +453,7 @@ async fn standard_boot_e2e() {
 	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
 
 	let enclave_info_url =
-		format!("http://{LOCAL_HOST}:{}/qos/enclave-info", host_port);
+		format!("http://{LOCAL_HOST}:{host_port}/qos/enclave-info");
 	let enclave_info: EnclaveInfo =
 		ureq::get(&enclave_info_url).call().unwrap().into_json().unwrap();
 	assert_eq!(enclave_info.phase, ProtocolPhase::QuorumKeyProvisioned);

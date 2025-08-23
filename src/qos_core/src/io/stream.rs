@@ -579,7 +579,7 @@ mod test {
 				assert_eq!(size, MAX_PAYLOAD_SIZE + 1);
 			}
 			other => {
-				panic!("test failed: unexpected error variant ({:?})", other);
+				panic!("test failed: unexpected error variant ({other:?})");
 			}
 		}
 

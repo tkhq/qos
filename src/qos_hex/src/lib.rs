@@ -140,7 +140,7 @@ pub fn decode_to_buf(raw_s: &str, buf: &mut [u8]) -> Result<(), HexError> {
 		1 => return Err(HexError::LengthOne),
 		_ => {
 			if &raw_s.as_bytes()[0..2] == b"0x" {
-				raw_s[2..].as_bytes()
+				&raw_s.as_bytes()[0..2]
 			} else {
 				raw_s.as_bytes()
 			}

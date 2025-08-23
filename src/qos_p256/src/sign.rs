@@ -186,6 +186,6 @@ mod tests {
 			P256SignPublic::from_bytes(&bad_prefix),
 			Err(P256Error::FailedToReadPublicKey),
 		));
-		assert!(matches!(P256SignPublic::from_bytes(&just_right), Ok(_),));
+		assert!(P256SignPublic::from_bytes(&just_right).is_ok());
 	}
 }
