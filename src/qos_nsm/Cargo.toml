@@ -5,20 +5,20 @@ edition = "2021"
 publish = false
 
 [dependencies]
-qos_hex = { path = "../qos_hex" }
-borsh = { version = "1.5", features = ["std", "derive"] , default-features = false}
-aws-nitro-enclaves-nsm-api = { version = "0.4", features = ["nix"], default-features = false }
-aws-nitro-enclaves-cose = { version = "0.5", default-features = false }
-sha2 = { version = "0.10", default-features = false }
-webpki = { version =  "0.22.4", default-features = false }
-serde_bytes = { version = "0.11", default-features = false }
+qos_hex = { workspace = true }
+borsh = { workspace = true }
+aws-nitro-enclaves-nsm-api = { workspace = true, features = ["nix"] }
+aws-nitro-enclaves-cose = { workspace = true }
+sha2 = { workspace = true }
+webpki = { workspace = true }
+serde_bytes = { workspace = true }
 # as of 0.12.0, the "ecdsa" feature enables "sha384", some "ecdsa-core", and others
-p384 = { version = "0.13", features = ["ecdsa", "std"], default-features = false }
-x509-cert = { version = "0.2.5", features = ["pem"], default-features = false }
+p384 = { workspace = true }
+x509-cert = { workspace = true }
 
 [dev-dependencies]
 # 1.0.0 requires Rust edition 2024
-hex-literal = "0.4.0"
+hex-literal = { workspace = true }
 
 [features]
 # Never use in production - support for mock NSM

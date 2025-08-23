@@ -5,31 +5,24 @@ edition = "2021"
 publish = false
 
 [dependencies]
-qos_core = { path = "../qos_core", default-features = false }
+qos_core = { workspace = true, default-features = false }
 
-borsh = { version = "1.0", features = [
-    "std",
-    "derive",
-], default-features = false }
-serde = { version = "1", features = ["derive"], default-features = false }
-hickory-resolver = { version = "0.25.2", features = [
-    "tokio",       # for async
-    "dnssec-ring", # for DNSSEC
-], default-features = false, optional = true }
-rand = { version = "0.9.1", features = [
+borsh = { workspace = true }
+hickory-resolver = { workspace = true, optional = true }
+rand = { workspace = true, features = [
     "thread_rng",
-], default-features = false, optional = true }
-tokio = { version = "1.43.1", default-features = false }
+], optional = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
-qos_test_primitives = { path = "../qos_test_primitives" }
-httparse = { version = "1.9.4", default-features = false }
-chunked_transfer = { version = "1.5.0", default-features = false }
-serde_json = { version = "1.0.121", features = [
+qos_test_primitives = { workspace = true }
+httparse = { workspace = true }
+chunked_transfer = { workspace = true }
+serde_json = { workspace = true, features = [
     "std",
-], default-features = false }
-rustls = { version = "0.23.5" }
-webpki-roots = { version = "1.0.2" }
+] }
+rustls = { workspace = true }
+webpki-roots = { workspace = true }
 
 [features]
 default = ["proxy"]                  # keep this as a default feature ensures we lint by default

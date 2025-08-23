@@ -5,28 +5,27 @@ edition = "2021"
 publish = false
 
 [dependencies]
-qos_crypto = { path = "../qos_crypto" }
-qos_hex = { path = "../qos_hex", features = ["serde"] }
-qos_p256 = { path = "../qos_p256" }
-qos_nsm = { path = "../qos_nsm", default-features = false }
+qos_crypto = { workspace = true }
+qos_hex = { workspace = true, features = ["serde"] }
+qos_p256 = { workspace = true }
+qos_nsm = { workspace = true, default-features = false }
 
-nix = { version = "0.26", features = ["socket"], default-features = false }
-libc = "=0.2.172"
-borsh = { version = "1.0", features = ["std", "derive"] , default-features = false}
-vsss-rs = { version = "5.1", default-features = false, features = ["std", "zeroize"] }
+nix = { workspace = true }
+libc = { workspace = true }
+borsh = { workspace = true }
 
 # For AWS Nitro
-aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
+aws-nitro-enclaves-nsm-api = { workspace = true }
 
-serde_bytes = { version = "0.11", default-features = false }
-serde = { version = "1", features = ["derive"], default-features = false }
+serde_bytes = { workspace = true }
+serde = { workspace = true }
 
 [dev-dependencies]
-qos_test_primitives = { path = "../qos_test_primitives" }
-qos_p256 = { path = "../qos_p256", features = ["mock"] }
-qos_nsm = { path = "../qos_nsm", features = ["mock"], default-features = false }
-rustls = { version = "0.23.5" }
-webpki-roots = { version = "1.0.2" }
+qos_test_primitives = { workspace = true }
+qos_p256 = { workspace = true, features = ["mock"] }
+qos_nsm = { workspace = true, features = ["mock"], default-features = false }
+rustls = { workspace = true }
+webpki-roots = { workspace = true }
 
 [features]
 # Support for VSOCK

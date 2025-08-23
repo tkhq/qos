@@ -4,7 +4,7 @@ use p256::ecdsa::{
 	signature::{Signer, Verifier},
 	Signature, SigningKey, VerifyingKey,
 };
-use rand_core::OsRng;
+use p256::elliptic_curve::rand_core::OsRng;
 use zeroize::ZeroizeOnDrop;
 
 use crate::{P256Error, PUB_KEY_LEN_UNCOMPRESSED};

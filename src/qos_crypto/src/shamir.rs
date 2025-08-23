@@ -1,5 +1,5 @@
 //! Shamir Secret Sharing module. We use the [`vsss-rs`](https://crates.io/crates/vsss-rs)
-use rand_core::OsRng;
+use vsss_rs::elliptic_curve::rand_core::OsRng;
 use vsss_rs::Gf256;
 
 use crate::QosCryptoError;

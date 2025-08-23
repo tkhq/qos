@@ -5,22 +5,21 @@ edition = "2021"
 publish = false
 
 [dependencies]
-qos_core = { path = "../qos_core", features = ["mock"], default-features = false }
-qos_nsm = { path = "../qos_nsm", features = ["mock"], default-features = false }
-qos_host = { path = "../qos_host", default-features = false }
-qos_client = { path = "../qos_client", default-features = false }
-qos_net = { path = "../qos_net", default-features = false }
-qos_crypto = { path = "../qos_crypto" }
-qos_hex = { path = "../qos_hex" }
-qos_p256 = { path = "../qos_p256", features = ["mock"] }
-qos_test_primitives = { path = "../qos_test_primitives" }
+qos_core = { workspace = true, features = ["mock"], default-features = false }
+qos_nsm = { workspace = true, features = ["mock"], default-features = false }
+qos_host = { workspace = true, default-features = false }
+qos_net = { workspace = true, default-features = false }
+qos_crypto = { workspace = true }
+qos_hex = { workspace = true }
+qos_p256 = { workspace = true, features = ["mock"] }
+qos_test_primitives = { workspace = true }
 
-tokio = { version = "1.43.1", features = ["macros", "rt-multi-thread"], default-features = false }
-borsh = { version = "1.0", features = ["std", "derive"] , default-features = false}
-nix = { version = "0.26", features = ["socket"], default-features = false }
-rustls = { version = "0.23.5" }
-webpki-roots = { version = "1.0.2" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+borsh = { workspace = true }
+nix = { workspace = true }
+rustls = { workspace = true }
+webpki-roots = { workspace = true }
 
 [dev-dependencies]
-rand = "0.9"
-ureq = { version = "2.9", features = ["json"], default-features = false }
+rand = { workspace = true, features = ["thread_rng"] }
+ureq = { workspace = true, features = ["json"] }

@@ -5,13 +5,11 @@ edition = "2021"
 publish = false
 
 [dependencies]
-sha2 = { version = "0.10", default-features = false }
-thiserror = { version = "2.0.12",  features = ["std"], default-features = false }
-vsss-rs = { version = "5.1", default-features = false, features = ["std", "zeroize"] }
-# dependent on rand_core version used in vsss-rs
-rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
-# dependent on rand_core version used in vsss-rs
-rand_core = { version = "0.6.4", default-features = false }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+vsss-rs = { workspace = true }
+rand = { workspace = true, features = ["std", "std_rng"] }
+
 
 [dev-dependencies]
-qos_hex = { path = "../qos_hex" }
+qos_hex = { workspace = true }
