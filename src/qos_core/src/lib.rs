@@ -7,10 +7,6 @@
 //! This crate should have as minimal dependencies as possible to decrease
 //! supply chain attack vectors and audit burden
 
-#![deny(clippy::all, unsafe_code)]
-#![warn(missing_docs, clippy::pedantic)]
-#![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
-
 // "vm" is necessary for production and we don't want any mock data slipping in.
 #[cfg(all(feature = "vm", feature = "mock"))]
 compile_error!(

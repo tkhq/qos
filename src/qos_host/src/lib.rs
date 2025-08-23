@@ -12,10 +12,6 @@
 //! * Request body extractors: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/extract.md/>
 //! * Response: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/response.md/>
 //! * Responding with error: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/error_handling.md/>
-#![forbid(unsafe_code)]
-#![deny(clippy::all)]
-#![warn(missing_docs, clippy::pedantic)]
-#![allow(clippy::missing_errors_doc)]
 
 use std::{net::SocketAddr, sync::Arc};
 

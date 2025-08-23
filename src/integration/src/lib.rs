@@ -1,9 +1,5 @@
 //! Integration tests.
 
-#![forbid(unsafe_code)]
-#![deny(clippy::all)]
-#![warn(missing_docs)]
-
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::parser::{GetParserForOptions, OptionsParser, Parser, Token};
 
