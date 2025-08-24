@@ -31,7 +31,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 
 [workspace.lints.clippy]
 missing_errors_doc = "allow"
