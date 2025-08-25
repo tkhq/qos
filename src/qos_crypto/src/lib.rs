@@ -1,10 +1,5 @@
 //! Cryptographic primitves for use with `QuorumOS`.
 
-#![forbid(unsafe_code)]
-#![deny(clippy::all)]
-#![warn(missing_docs, clippy::pedantic)]
-#![allow(clippy::missing_errors_doc)]
-
 use std::fmt;
 
 use sha2::Digest;

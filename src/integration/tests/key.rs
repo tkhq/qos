@@ -352,9 +352,9 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 		let share_path = format!("{}/{}.share", &personal_dir(user), user);
 		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
 		let eph_wrapped_share_path: PathWrapper =
-			format!("{}/{}.eph_wrapped.share", TMP_DIR, user).into();
+			format!("{TMP_DIR}/{user}.eph_wrapped.share").into();
 		let approval_path: PathWrapper =
-			format!("{}/{}.attestation.approval", TMP_DIR, user).into();
+			format!("{TMP_DIR}/{user}.attestation.approval").into();
 		assert!(Command::new("../target/debug/qos_client")
 			.args([
 				"proxy-re-encrypt-share",

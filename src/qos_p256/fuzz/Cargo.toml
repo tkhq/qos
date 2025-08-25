@@ -3,6 +3,7 @@ name = "qos_p256_fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
+rust-version = "1.88"
 
 [package.metadata]
 cargo-fuzz = true

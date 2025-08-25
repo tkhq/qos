@@ -30,7 +30,7 @@ fn simple_socket_stress() {
 	let err = enclave_client.send(&app_request).unwrap_err();
 	match err {
 		ClientError::IOError(qos_core::io::IOError::RecvTimeout) => (),
-		e => panic!("did not get expected err {:?}", e),
+		e => panic!("did not get expected err {e:?}"),
 	};
 
 	let app_request =
@@ -38,7 +38,7 @@ fn simple_socket_stress() {
 	let err = enclave_client.send(&app_request).unwrap_err();
 	match err {
 		ClientError::IOError(qos_core::io::IOError::RecvConnectionClosed) => (),
-		e => panic!("did not get expected err {:?}", e),
+		e => panic!("did not get expected err {e:?}"),
 	};
 
 	std::thread::sleep(std::time::Duration::from_secs(1));
@@ -50,6 +50,6 @@ fn simple_socket_stress() {
 		ClientError::IOError(qos_core::io::IOError::ConnectNixError(
 			nix::Error::ENOENT,
 		)) => (),
-		e => panic!("did not get expected err {:?}", e),
+		e => panic!("did not get expected err {e:?}"),
 	};
 }
