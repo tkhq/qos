@@ -27,7 +27,7 @@ RUN --network=none cargo build ${CARGOFLAGS}
 RUN cp target/x86_64-unknown-linux-musl/release/init /
 RUN file /init | grep "static-pie"
 
-FROM base as build-eif
+FROM base AS build-eif
 WORKDIR /build_cpio
 COPY --from=eif_build . /
 COPY --from=gen_initramfs . /
@@ -70,7 +70,7 @@ RUN eif_build \
 	--output /nitro.eif \
 	--cmdline 'reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd'
 
-FROM scratch as package
+FROM scratch AS package
 COPY --from=build-eif /nitro.eif .
 COPY --from=build-eif /nitro.pcrs .
 COPY --from=build-qos_enclave /qos_enclave .
