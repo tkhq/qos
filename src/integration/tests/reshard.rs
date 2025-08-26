@@ -8,13 +8,14 @@ use std::{fs, path::PathBuf, process::Command};
 use reshard_app::ReshardBundle;
 
 use borsh::to_vec as borsh_to_vec;
-use futures::future::FutureExt;
+use futures::FutureExt;
 use generated::services::reshard::v1::reshard_service_client::ReshardServiceClient;
 use generated::services::reshard::v1::RetrieveReshardRequest;
 use qos_core::protocol::services::boot::{Manifest, ManifestEnvelope};
 use qos_p256::{P256Pair, P256Public};
 use rand::{thread_rng, Rng};
 use tonic::transport::Channel;
+use serde_json;
 
 /// Local host IP address.
 pub const LOCAL_HOST: &str = "127.0.0.1";
