@@ -177,14 +177,14 @@ impl Cli {
 
 			// Build processor; panic on error so the app fails to come up if anything is wrong
 			let processor = crate::service::ReshardProcessor::new(
-				Handles::new(
+				&Handles::new(
 					opts.ephemeral_file(),
 					opts.quorum_file(),
 					opts.manifest_file(),
 					opts.pivot_file(),
 				),
-				opts.share_set(),
-				nsm,
+				&opts.share_set(),
+				nsm.as_ref(),
 			)
 			.unwrap_or_else(|e| panic!("reshard precompute failed: {e}"));
 
