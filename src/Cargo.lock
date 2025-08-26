@@ -2206,6 +2206,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_bytes",
+ "serde_json",
  "webpki-roots",
 ]
 

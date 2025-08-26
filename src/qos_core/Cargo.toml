@@ -19,6 +19,7 @@ aws-nitro-enclaves-nsm-api = { workspace = true }
 
 serde_bytes = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 qos_test_primitives = { workspace = true }
