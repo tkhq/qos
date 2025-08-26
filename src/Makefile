@@ -166,6 +166,8 @@ test:
 	@# The integration tests rely on binaries from other crates being built, so
 	@# we build all the workspace targets.
 	cargo build --all
+	@# Reshard test relies on --features mock flag
+	cargo build --features mock --bin reshard_app
 	@# Run tests
 	cargo test
 	@# When we build the workspace it resolves with the qos_core mock feature
