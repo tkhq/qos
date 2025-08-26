@@ -6,7 +6,9 @@ REGISTRY := local
 default: \
 	out/qos_client/index.json \
 	out/qos_host/index.json \
-	out/qos_enclave/index.json
+	out/qos_enclave/index.json \
+	out/reshard_host/index.json \
+	out/reshard_app/index.json
 
 .PHONY: test
 test: out/.common-loaded
@@ -83,3 +85,30 @@ out/common/index.json: \
 out/.common-loaded: out/common/index.json
 	cd ./out/common && tar -cf - . | docker load
 	touch ./out/.common-loaded
+
+out/reshard_host/index.json: \
+	out/common/index.json \
+	src/images/reshard_host/Containerfile \
+	$(shell git ls-files \
+		src/Cargo.toml \
+		src/Cargo.lock \
+		src/reshard/host \
+		src/qos_core \
+		src/qos_net \
+		src/generated)
+	$(call build,reshard_host)
+
+out/reshard_app/index.json: \
+	out/common/index.json \
+	src/images/reshard_app/Containerfile \
+	$(shell git ls-files \
+		src/Cargo.toml \
+		src/Cargo.lock \
+		src/reshard/app \
+		src/generated \
+		src/qos_p256 \
+		src/qos_crypto \
+		src/qos_nsm \
+		src/qos_hex \
+		src/attestation)
+	$(call build,reshard_app)

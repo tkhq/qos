@@ -1,5 +1,7 @@
 [workspace]
 members = [
+  "codegen",
+  "generated",
   "integration",
   "qos_client",
   "qos_core",
@@ -10,6 +12,8 @@ members = [
   "qos_test_primitives",
   "qos_p256",
   "qos_nsm",
+  "reshard/app",
+  "reshard/host",
 ]
 exclude = [
   "init",
