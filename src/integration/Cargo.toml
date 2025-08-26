@@ -24,6 +24,8 @@ nix = { workspace = true }
 rustls = { workspace = true }
 webpki-roots = { workspace = true }
 tonic = { workspace = true }
+futures = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true, features = ["thread_rng"] }

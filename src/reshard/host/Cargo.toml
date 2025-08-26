@@ -5,19 +5,15 @@ edition = "2021"
 publish = false
 
 [dependencies]
-qos_core = { path = "../../qos_core" }
-qos_host_primitives = { path = "../../qos_host_primitives" }
-health_check = { path = "../../health_check" }
-attestation = { path = "../../attestation" }
-generated = { path = "../../generated", features = ["tonic_types"] }
-metrics = { path = "../../metrics" }
+qos_core           = { workspace = true }
+qos_host_primitives= { workspace = true }
+health_check       = { workspace = true }
+attestation        = { workspace = true }
+generated          = { workspace = true, features = ["tonic_types"] }
+metrics            = { workspace = true }
 
-tokio = { version = "=1.43.1", features = [
-    "macros",
-    "rt-multi-thread",
-    "signal",
-], default-features = false }
-futures = "0.3"
+tokio   = { workspace = true, features = ["macros","rt-multi-thread","signal"], default-features = false }
+futures = { workspace = true }
 
 [features]
 vsock = ["qos_core/vm"]

@@ -37,7 +37,9 @@ aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
 axum = { version = "0.6.20", features = ["http1", "tokio", "json"], default-features = false }
 borsh = { version = "1.0", features = ["std", "derive"], default-features = false }
 chunked_transfer = { version = "1.5.0", default-features = false }
+futures = "0.3"
 hex-literal = "0.4.0"
+http = { version = "0.2", default-features = false }
 hickory-resolver = { version = "0.25.2", features = ["tokio", "dnssec-ring"], default-features = false }
 hkdf = { version = "0.12", default-features = false }
 hmac = { version = "0.12", default-features = false }
@@ -59,6 +61,7 @@ thiserror = { version = "2.0.12", features = ["std"], default-features = false }
 tokio = { version = "1.43.1", features = ["macros", "rt-multi-thread"], default-features = false }
 tonic = { version = "0.9"}
 ureq = { version = "2.9", default-features = false }
+url = { version = "2.5.2", default-features = false }
 vsss-rs = { version = "5.1", default-features = false, features = ["std", "zeroize"] }
 webpki = { version = "0.22.4", default-features = false }
 webpki-roots = { version = "1.0.2" }
@@ -68,8 +71,11 @@ yubikey = { version = "0.7", features = ["untested"], default-features = false }
 zeroize = { version = "1.6", default-features = false }
 
 # Internal workspace dependencies
+attestation = { path = "attestation" }
+health_check = { path = "health_check" }
 integration = { path = "integration" }
 generated  = { path = "generated" }
+metrics = { path = "metrics" }
 reshard_app = { path = "reshard/app" }
 qos_client = { path = "qos_client", default-features = false }
 qos_core = { path = "qos_core", default-features = false }
