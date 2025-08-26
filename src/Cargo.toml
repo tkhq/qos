@@ -64,6 +64,8 @@ zeroize = { version = "1.6", default-features = false }
 
 # Internal workspace dependencies
 integration = { path = "integration" }
+generate  = { path = "generated" }
+reshard_app = { path = "reshard_app" }
 qos_client = { path = "qos_client", default-features = false }
 qos_core = { path = "qos_core", default-features = false }
 qos_crypto = { path = "qos_crypto", default-features = false }

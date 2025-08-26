@@ -5,7 +5,10 @@ edition = "2021"
 publish = false
 
 [dependencies]
+generated = { workspace = true }
+reshard_app = { workspace = true }
 qos_core = { workspace = true, features = ["mock"], default-features = false }
+qos_client = { workspace = true, default-features = false }
 qos_nsm = { workspace = true, features = ["mock"], default-features = false }
 qos_host = { workspace = true, default-features = false }
 qos_net = { workspace = true, default-features = false }
@@ -13,12 +16,14 @@ qos_crypto = { workspace = true }
 qos_hex = { workspace = true }
 qos_p256 = { workspace = true, features = ["mock"] }
 qos_test_primitives = { workspace = true }
+qos_host_primitives = { workspace = true }
 
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 borsh = { workspace = true }
 nix = { workspace = true }
 rustls = { workspace = true }
 webpki-roots = { workspace = true }
+tonic = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true, features = ["thread_rng"] }
