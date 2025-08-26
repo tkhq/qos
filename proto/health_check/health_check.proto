@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package services.health_check.v1;
+
+service HealthCheckService {
+  rpc HostHealth(HostHealthRequest) returns (HostHealthResponse);
+  rpc EnclaveHealth(EnclaveHealthRequest) returns (EnclaveHealthResponse);
+  rpc AppHealth(AppHealthRequest) returns (AppHealthResponse);
+}
+
+// A null request type for endpoints that don't need any arguments.
+message HostHealthRequest {}
+message EnclaveHealthRequest {}
+message AppHealthRequest {}
+
+// Status of the secure app host server.
+message HostHealthResponse {
+  // A HTTP status code.
+  int32 code = 1;
+}
+
+// The current phase of the enclave.
+message EnclaveHealthResponse {
+  // The phase as a string. E.G. "WaitingForBootInstruction".
+  string phase = 1;
+}
+
+message AppHealthResponse {
+  // A gRPC status code.
+  int32 code = 1;
+}

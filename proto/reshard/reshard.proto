@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package services.reshard.v1;
+
+import "health/rpc.proto";
+import "vendor/google/rpc/status.proto";
+
+// ---------- Public gRPC surface exposed by the host ----------
+service ReshardService {
+  // Retrieve the result of the reshard operation
+  rpc RetrieveReshard(RetrieveReshardRequest) returns (RetrieveReshardResponse);
+}
+
+message RetrieveReshardRequest {} // no fields
+
+message RetrieveReshardResponse {
+  string reshard_bundle = 1;
+}
+
+// private request type for using within the secure app.
+message QosRetrieveReshardRequest {
+  oneof input {
+    RetrieveReshardRequest retrieve_reshard_request = 1;
+    health.AppHealthRequest health_request = 2;
+  }
+}
+
+// private response type from the secure app
+message QosRetrieveReshardResponse {
+  oneof output {
+    RetrieveReshardResponse retrieve_reshard_response = 1;
+    health.AppHealthResponse health_response = 2;
+    google.rpc.Status status = 3;
+  }
+}
