@@ -162,9 +162,11 @@ impl reshard_service_server::ReshardService for Host {
 			qos_retrieve_reshard_response::Output::Status(status) => {
 				Err(Status::from(status))
 			}
-			_ => Err(Status::internal(format!(
-				"Unexpected response from enclave: {output:?}",
-			))),
+			qos_retrieve_reshard_response::Output::HealthResponse(_) => {
+				Err(Status::internal(format!(
+					"unexpected HealthResponse during retrieve: {output:?}"
+				)))
+			}
 		};
 
 		let response_encode_elapsed = now_step.elapsed();
@@ -225,7 +227,7 @@ impl AppHealthCheckable for ReshardHealth {
 		})?
 		.output
 		.ok_or_else(|| {
-			Status::internal("QosReshardResponse::output was None")
+			Status::internal("QosRetrieveReshardResponse::output was None")
 		})?;
 
 		let response = match output {
@@ -235,8 +237,10 @@ impl AppHealthCheckable for ReshardHealth {
 			qos_retrieve_reshard_response::Output::Status(status) => {
 				Err(Status::from(status))
 			}
-			_ => Err(Status::internal(format!(
-				"unexpected enclave response: {output:?}"
+			qos_retrieve_reshard_response::Output::RetrieveReshardResponse(
+				_,
+			) => Err(Status::internal(format!(
+				"unexpected RetrieveReshardResponse during health: {output:?}"
 			))),
 		};
 
