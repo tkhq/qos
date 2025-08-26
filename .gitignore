@@ -12,7 +12,6 @@ target/
 *.sock
 *.key
 *.pivot
-*.secret
 *.configuration
 *.share
 .toolchain
