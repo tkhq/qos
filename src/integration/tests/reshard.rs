@@ -97,6 +97,7 @@ impl Builder {
                 .into();
             process_handles.push(sim);
 
+
             // 2) reshard_app
             let quorum_secret = "./fixtures/reshard/quorum.secret";
             let ephemeral_secret = "./fixtures/reshard/ephemeral.secret";
@@ -182,9 +183,6 @@ async fn reshard_e2e_json() {
             "server returned empty JSON"
         );
         
-        let v: serde_json::Value = 
-            serde_json::from_str(&resp.reshard_bundle).expect("valid JSON");
-
         // Make sure we can rehydrate the bundle
         let bundle: ReshardBundle =
             serde_json::from_str(&resp.reshard_bundle).expect("valid JSON");
@@ -290,7 +288,8 @@ async fn reshard_e2e_json() {
         let random_key = P256Pair::generate().unwrap();
         let random_key_pub = random_key.public_key();
 
-        random_key_pub.verify(&digest, &bundle.signature).is_err();
+        let res = random_key_pub.verify(&digest, &bundle.signature);
+        assert!(res.is_err(), "verification unexpectedly succeeded with random key");
     }
     Builder::new().setup_reshard().execute(test).await;
 }

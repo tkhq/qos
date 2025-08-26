@@ -41,7 +41,7 @@ use qos_p256::{P256Pair, P256Public};
 /// - **what ran** (manifest + approvals),
 /// - **where/how it ran** (AWS Nitro attestation w/ ephemeral key),
 /// - **what it produced** (per-member encrypted shares),
-/// together with an **ephemeral-key signature** over the outputs.
+///     together with an **ephemeral-key signature** over the outputs.
 /// 
 /// Safe to check into git alongside genesis artifacts.
 #[serde(rename_all = "camelCase")]
@@ -65,9 +65,9 @@ pub struct ReshardBundle {
 
 	/// Envelope that **encapsulates the manifest and its approvals**, including:
 	/// 
-	/// - manifest
-	/// - manifest_approvals
-	/// - share_set_approvals
+	/// - `manifest``
+	/// - `manifest_approvals`
+	/// - `share_set_approvals``
 	/// 
 	pub manifest_envelope: ManifestEnvelope,
 
@@ -95,11 +95,11 @@ pub struct ReshardProcessor {
 }
 
 impl ReshardProcessor {
-	pub fn new(
-		handles: handles::Handles,
-		new_share_set: ShareSet,
-		nsm: Box<dyn qos_nsm::NsmProvider>,
-	) -> Result<Self, String> {
+		pub fn new<N: qos_nsm::NsmProvider + ?Sized>(
+			handles: &handles::Handles,
+			new_share_set: &ShareSet,
+			nsm: &N,
+			) -> Result<Self, String> {
 		// load keys
 		let quorum_pair: P256Pair = handles
 			.get_quorum_key()
@@ -168,7 +168,7 @@ impl ReshardProcessor {
 
 		let manifest_envelope = handles
 			.get_manifest_envelope()
-			.map_err(|_| format!("get_manifest_envelope failed"))?;
+			.map_err(|_| "get_manifest_envelope failed")?;
 
 		// assemble all outputs together
 		let reshard_bundle = ReshardBundle {
