@@ -4,16 +4,17 @@
 #![deny(clippy::all)]
 #![warn(missing_docs)]
 
-use std::{fs, path::PathBuf, process::Command};
 use reshard_app::ReshardBundle;
+use std::{fs, path::PathBuf, process::Command};
 
 use borsh::to_vec as borsh_to_vec;
-use futures::future::FutureExt;
+use futures::FutureExt;
 use generated::services::reshard::v1::reshard_service_client::ReshardServiceClient;
 use generated::services::reshard::v1::RetrieveReshardRequest;
 use qos_core::protocol::services::boot::{Manifest, ManifestEnvelope};
 use qos_p256::{P256Pair, P256Public};
 use rand::{thread_rng, Rng};
+use serde_json;
 use tonic::transport::Channel;
 
 /// Local host IP address.
@@ -26,270 +27,286 @@ pub const GRPC_MAX_RECV_MSG_SIZE: usize = 26_214_400;
 /// Arguments passed to the user test callback.
 #[derive(Default)]
 pub struct TestArgs {
-    /// Reshard gRPC client.
-    pub reshard_client: Option<ReshardServiceClient<Channel>>,
-    /// Reshard host base address (e.g., `http://127.0.0.1:PORT`).
-    pub reshard_client_addr: Option<String>,
+	/// Reshard gRPC client.
+	pub reshard_client: Option<ReshardServiceClient<Channel>>,
+	/// Reshard host base address (e.g., `http://127.0.0.1:PORT`).
+	pub reshard_client_addr: Option<String>,
 }
 
 /// Kills a child process on drop.
 #[derive(Debug)]
 pub struct ChildWrapper(std::process::Child);
 impl From<std::process::Child> for ChildWrapper {
-    fn from(child: std::process::Child) -> Self {
-        Self(child)
-    }
+	fn from(child: std::process::Child) -> Self {
+		Self(child)
+	}
 }
 impl Drop for ChildWrapper {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
+	fn drop(&mut self) {
+		let _ = self.0.kill();
+		let _ = self.0.wait();
+	}
 }
 
 /// Minimal harness builder living in this file.
 #[derive(Default)]
 pub struct Builder {
-    setup_reshard: bool,
+	setup_reshard: bool,
 }
 
 impl Builder {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
+	#[must_use]
+	pub fn new() -> Self {
+		Self::default()
+	}
 
-    /// Set up reshard enclave/app/host.
-    #[must_use]
-    pub fn setup_reshard(mut self) -> Self {
-        self.setup_reshard = true;
-        self
-    }
+	/// Set up reshard enclave/app/host.
+	#[must_use]
+	pub fn setup_reshard(mut self) -> Self {
+		self.setup_reshard = true;
+		self
+	}
 
-    /// Bring up the stack, run `test`, then tear down.
-    pub async fn execute<F, T>(self, test: F)
-    where
-        F: Fn(TestArgs) -> T,
-        T: std::future::Future<Output = ()>,
-    {
-        let test_id = format!("{:016x}", thread_rng().gen::<u64>());
-        let mut process_handles: Vec<ChildWrapper> = vec![];
-        let mut file_handles: Vec<PathBuf> = vec![];
-        let mut test_args = TestArgs::default();
+	/// Bring up the stack, run `test`, then tear down.
+	pub async fn execute<F, T>(self, test: F)
+	where
+		F: Fn(TestArgs) -> T,
+		T: std::future::Future<Output = ()>,
+	{
+		let test_id = format!("{:016x}", thread_rng().gen::<u64>());
+		let mut process_handles: Vec<ChildWrapper> = vec![];
+		let mut file_handles: Vec<PathBuf> = vec![];
+		let mut test_args = TestArgs::default();
 
-        if self.setup_reshard {
-            // Socket paths
-            let app_sock = PathBuf::from(format!("./{test_id}.reshard.app.sock"));
-            let enc_sock = PathBuf::from(format!("./{test_id}.reshard.enclave.sock"));
-            file_handles.extend([app_sock.clone(), enc_sock.clone()]);
+		if self.setup_reshard {
+			// Socket paths
+			let app_sock =
+				PathBuf::from(format!("./{test_id}.reshard.app.sock"));
+			let enc_sock =
+				PathBuf::from(format!("./{test_id}.reshard.enclave.sock"));
+			file_handles.extend([app_sock.clone(), enc_sock.clone()]);
 
-            // Minimal manifest envelope
-            let manifest_path = PathBuf::from(format!("./{test_id}.manifest_envelope"));
-            write_minimal_manifest(&manifest_path);
-            file_handles.push(manifest_path.clone());
+			// Minimal manifest envelope
+			let manifest_path =
+				PathBuf::from(format!("./{test_id}.manifest_envelope"));
+			write_minimal_manifest(&manifest_path);
+			file_handles.push(manifest_path.clone());
 
-            // 1) simulator_enclave
-            let sim: ChildWrapper = Command::new(SIMULATOR_ENCLAVE_PATH)
-                .arg(&enc_sock)
-                .arg(&app_sock)
-                .spawn()
-                .expect("spawn simulator_enclave")
-                .into();
-            process_handles.push(sim);
+			// 1) simulator_enclave
+			let sim: ChildWrapper = Command::new(SIMULATOR_ENCLAVE_PATH)
+				.arg(&enc_sock)
+				.arg(&app_sock)
+				.spawn()
+				.expect("spawn simulator_enclave")
+				.into();
+			process_handles.push(sim);
 
+			// 2) reshard_app
+			let quorum_secret = "./fixtures/reshard/quorum.secret";
+			let ephemeral_secret = "./fixtures/reshard/ephemeral.secret";
+			let new_share_set_json = std::fs::read_to_string(
+				"./fixtures/reshard/new-share-set/new-share-set.json",
+			)
+			.expect("read new-share-set.json");
+			let app: ChildWrapper = Command::new("../target/debug/reshard_app")
+				.arg("--usock")
+				.arg(&app_sock)
+				.arg("--quorum-file")
+				.arg(quorum_secret)
+				.arg("--ephemeral-file")
+				.arg(ephemeral_secret)
+				.arg("--manifest-file")
+				.arg(&manifest_path)
+				.arg("--new-share-set")
+				.arg(&new_share_set_json)
+				.arg("--mock-nsm")
+				.spawn()
+				.expect("spawn reshard_app")
+				.into();
+			process_handles.push(app);
 
-            // 2) reshard_app
-            let quorum_secret = "./fixtures/reshard/quorum.secret";
-            let ephemeral_secret = "./fixtures/reshard/ephemeral.secret";
-            let new_share_set_json = std::fs::read_to_string("./fixtures/reshard/new-share-set/new-share-set.json")
-                .expect("read new-share-set.json");
-            let app: ChildWrapper = Command::new("../target/debug/reshard_app")
-                .arg("--usock")
-                .arg(&app_sock)
-                .arg("--quorum-file")
-                .arg(quorum_secret)
-                .arg("--ephemeral-file")
-                .arg(ephemeral_secret)
-                .arg("--manifest-file")
-                .arg(&manifest_path)
-                .arg("--new-share-set")
-                .arg(&new_share_set_json)
-                .arg("--mock-nsm")
-                .spawn()
-                .expect("spawn reshard_app")
-                .into();
-            process_handles.push(app);
+			// 3) reshard_host
+			let host_port =
+				qos_test_primitives::find_free_port().expect("find free port");
+			let host: ChildWrapper =
+				Command::new("../target/debug/reshard_host")
+					.arg("--host-ip")
+					.arg(LOCAL_HOST)
+					.arg("--host-port")
+					.arg(host_port.to_string())
+					.arg("--usock")
+					.arg(&enc_sock)
+					.spawn()
+					.expect("spawn reshard_host")
+					.into();
+			process_handles.push(host);
+			qos_test_primitives::wait_until_port_is_bound(host_port);
 
-            // 3) reshard_host
-            let host_port = qos_test_primitives::find_free_port().expect("find free port");
-            let host: ChildWrapper = Command::new("../target/debug/reshard_host")
-                .arg("--host-ip")
-                .arg(LOCAL_HOST)
-                .arg("--host-port")
-                .arg(host_port.to_string())
-                .arg("--usock")
-                .arg(&enc_sock)
-                .spawn()
-                .expect("spawn reshard_host")
-                .into();
-            process_handles.push(host);
-            qos_test_primitives::wait_until_port_is_bound(host_port);
+			let host_addr = format!("http://{LOCAL_HOST}:{host_port}");
+			test_args.reshard_client_addr = Some(host_addr.clone());
 
-            let host_addr = format!("http://{LOCAL_HOST}:{host_port}");
-            test_args.reshard_client_addr = Some(host_addr.clone());
+			let reshard = ReshardServiceClient::connect(host_addr)
+				.await
+				.unwrap()
+				.max_decoding_message_size(GRPC_MAX_RECV_MSG_SIZE);
+			test_args.reshard_client = Some(reshard);
+		}
 
-            let reshard = ReshardServiceClient::connect(host_addr)
-                .await
-                .unwrap()
-                .max_decoding_message_size(GRPC_MAX_RECV_MSG_SIZE);
-            test_args.reshard_client = Some(reshard);
-        }
+		// Run the user test and ensure cleanup.
+		let res =
+			std::panic::AssertUnwindSafe(test(test_args)).catch_unwind().await;
 
-        // Run the user test and ensure cleanup.
-        let res = std::panic::AssertUnwindSafe(test(test_args))
-            .catch_unwind()
-            .await;
+		for p in file_handles {
+			let _ = fs::remove_file(p);
+		}
 
-        for p in file_handles {
-            let _ = fs::remove_file(p);
-        }
-
-        assert!(res.is_ok(), "test body panicked");
-    }
+		assert!(res.is_ok(), "test body panicked");
+	}
 }
 
 fn write_minimal_manifest(path: &PathBuf) {
-    let env = ManifestEnvelope {
-        manifest: Manifest { ..Default::default() },
-        ..Default::default()
-    };
-    let bytes = borsh_to_vec(&env).expect("borsh ManifestEnvelope");
-    fs::write(path, bytes).expect("write manifest");
+	let env = ManifestEnvelope {
+		manifest: Manifest { ..Default::default() },
+		..Default::default()
+	};
+	let bytes = borsh_to_vec(&env).expect("borsh ManifestEnvelope");
+	fs::write(path, bytes).expect("write manifest");
 }
 
 #[tokio::test]
 async fn reshard_e2e_json() {
-    async fn test(mut args: TestArgs) {
-        let mut client: ReshardServiceClient<_> = args.reshard_client.take().unwrap();
+	async fn test(mut args: TestArgs) {
+		let mut client: ReshardServiceClient<_> =
+			args.reshard_client.take().unwrap();
 
-        let resp = client
-            .retrieve_reshard(tonic::Request::new(RetrieveReshardRequest {}))
-            .await
-            .unwrap()
-            .into_inner();
+		let resp = client
+			.retrieve_reshard(tonic::Request::new(RetrieveReshardRequest {}))
+			.await
+			.unwrap()
+			.into_inner();
 
-        assert!(
-            !resp.reshard_bundle.is_empty(),
-            "server returned empty JSON"
-        );
-        
-        // Make sure we can rehydrate the bundle
-        let bundle: ReshardBundle =
-            serde_json::from_str(&resp.reshard_bundle).expect("valid JSON");
+		assert!(!resp.reshard_bundle.is_empty(), "server returned empty JSON");
 
-        // Decrypt each member's share using the fixture private keys
-        let secrets_dir = PathBuf::from("./fixtures/reshard/new-share-set-secrets");
-        let mut shares: Vec<Vec<u8>> = Vec::with_capacity(bundle.member_outputs.len());
-        for m in bundle.member_outputs.iter() {
-            let alias = m.share_set_member.alias.clone();
-            let sk_path = secrets_dir.join(format!("{alias}.secret"));
-            let pair = P256Pair::from_hex_file(sk_path.to_str().unwrap())
-                .expect("load member private key");
-            let pt = pair.decrypt(&m.encrypted_quorum_key_share)
-                .expect("decrypt share");
+		// Make sure we can rehydrate the bundle
+		let bundle: ReshardBundle =
+			serde_json::from_str(&resp.reshard_bundle).expect("valid JSON");
 
-            // integrity: verify hash matches
-            assert_eq!(
-                qos_crypto::sha_512(&pt),
-                m.share_hash,
-                "share hash mismatch for {alias}",
-            );
+		// Decrypt each member's share using the fixture private keys
+		let secrets_dir =
+			PathBuf::from("./fixtures/reshard/new-share-set-secrets");
+		let mut shares: Vec<Vec<u8>> =
+			Vec::with_capacity(bundle.member_outputs.len());
+		for m in bundle.member_outputs.iter() {
+			let alias = m.share_set_member.alias.clone();
+			let sk_path = secrets_dir.join(format!("{alias}.secret"));
+			let pair = P256Pair::from_hex_file(sk_path.to_str().unwrap())
+				.expect("load member private key");
+			let pt = pair
+				.decrypt(&m.encrypted_quorum_key_share)
+				.expect("decrypt share");
 
-            shares.push(pt);
-        }
+			// integrity: verify hash matches
+			assert_eq!(
+				qos_crypto::sha_512(&pt),
+				m.share_hash,
+				"share hash mismatch for {alias}",
+			);
 
-        let quorum_secret_path = "./fixtures/reshard/quorum.secret";
-        let expected_pair = qos_p256::P256Pair::from_hex_file(
-            quorum_secret_path
-        ).expect("load quorum.secret");
-        let expected_pub = expected_pair.public_key().to_bytes();
-        let k = std::fs::read_to_string("./fixtures/reshard/new-share-set/quorum_threshold")
-            .expect("read threshold");
-        let k: usize = k.trim().parse::<usize>().expect("parse threshold");
+			shares.push(pt);
+		}
 
-        // Positive check: ALL k-of-n combos must reconstruct the quorum key
-        for combo in qos_crypto::n_choose_k::combinations(&shares, k) {
-            let seed_vec = qos_crypto::shamir::shares_reconstruct(&combo).unwrap();
+		let quorum_secret_path = "./fixtures/reshard/quorum.secret";
+		let expected_pair =
+			qos_p256::P256Pair::from_hex_file(quorum_secret_path)
+				.expect("load quorum.secret");
+		let expected_pub = expected_pair.public_key().to_bytes();
+		let k = std::fs::read_to_string(
+			"./fixtures/reshard/new-share-set/quorum_threshold",
+		)
+		.expect("read threshold");
+		let k: usize = k.trim().parse::<usize>().expect("parse threshold");
 
-            let seed: [u8; 32] = seed_vec
-                .as_slice()
-                .try_into()
-                .expect("reconstructed seed must be 32 bytes");
-                
-            let quorum_key = P256Pair::from_master_seed(&seed).unwrap();
+		// Positive check: ALL k-of-n combos must reconstruct the quorum key
+		for combo in qos_crypto::n_choose_k::combinations(&shares, k) {
+			let seed_vec =
+				qos_crypto::shamir::shares_reconstruct(&combo).unwrap();
 
-            assert_eq!(
-                quorum_key.public_key().to_bytes(),
-                expected_pub,
-                "quorum key public mismatch",
-            );
-        }
+			let seed: [u8; 32] = seed_vec
+				.as_slice()
+				.try_into()
+				.expect("reconstructed seed must be 32 bytes");
 
-        // Negative checks: for every r < k, NO combo should yield the quorum pubkey
-        for r in 1..k {
-            let mut matches = 0usize;
-            let mut errs = 0usize;
-            let mut mismatches = 0usize;
+			let quorum_key = P256Pair::from_master_seed(&seed).unwrap();
 
-            for combo in qos_crypto::n_choose_k::combinations(&shares, r) {
-                match qos_crypto::shamir::shares_reconstruct(&combo) {
-                    Err(_e) => {
-                        errs += 1;
-                    }
-                    Ok(seed_vec) => {
-                        // Even if the lib returns something, it must NOT match the real key
-                        if let Ok(seed) = <[u8; 32]>::try_from(seed_vec.as_slice()) {
-                            let qp = P256Pair::from_master_seed(&seed).unwrap();
-                            if qp.public_key().to_bytes() == expected_pub {
-                                matches += 1; // this would be a failure
-                            } else {
-                                mismatches += 1;
-                            }
-                        } else {
-                            // Wrong length => cannot match
-                            mismatches += 1;
-                        }
-                    }
-                }
-            }
+			assert_eq!(
+				quorum_key.public_key().to_bytes(),
+				expected_pub,
+				"quorum key public mismatch",
+			);
+		}
 
-            println!("r={r}: reconstruct_errs={errs}, non-matching_reconstructions={mismatches}, matches={matches}");
+		// Negative checks: for every r < k, NO combo should yield the quorum pubkey
+		for r in 1..k {
+			let mut matches = 0usize;
+			let mut errs = 0usize;
+			let mut mismatches = 0usize;
 
-            // Assert we never matched with fewer than k shares.
-            assert_eq!(
+			for combo in qos_crypto::n_choose_k::combinations(&shares, r) {
+				match qos_crypto::shamir::shares_reconstruct(&combo) {
+					Err(_e) => {
+						errs += 1;
+					}
+					Ok(seed_vec) => {
+						// Even if the lib returns something, it must NOT match the real key
+						if let Ok(seed) =
+							<[u8; 32]>::try_from(seed_vec.as_slice())
+						{
+							let qp = P256Pair::from_master_seed(&seed).unwrap();
+							if qp.public_key().to_bytes() == expected_pub {
+								matches += 1; // this would be a failure
+							} else {
+								mismatches += 1;
+							}
+						} else {
+							// Wrong length => cannot match
+							mismatches += 1;
+						}
+					}
+				}
+			}
+
+			println!("r={r}: reconstruct_errs={errs}, non-matching_reconstructions={mismatches}, matches={matches}");
+
+			// Assert we never matched with fewer than k shares.
+			assert_eq!(
                 matches, 0,
                 "found an unexpected quorum key match using only {r} shares (< {k})"
             );
-        }
+		}
 
-        // Verify the signature over the member output was by the ephemeral key
-        // bytes we signed: borsh(member_outputs)
-        let mo_bytes = borsh_to_vec(&bundle.member_outputs).expect("borsh");
-        let digest = qos_crypto::sha_512(&mo_bytes);
+		// Verify the signature over the member output was by the ephemeral key
+		// bytes we signed: borsh(member_outputs)
+		let mo_bytes = borsh_to_vec(&bundle.member_outputs).expect("borsh");
+		let digest = qos_crypto::sha_512(&mo_bytes);
 
-        // verify signature
-        let eph_pub = P256Public::from_hex_file(
-            "./fixtures/reshard/ephemeral.pub"
-        ).expect("load ephemeral.pub");
+		// verify signature
+		let eph_pub =
+			P256Public::from_hex_file("./fixtures/reshard/ephemeral.pub")
+				.expect("load ephemeral.pub");
 
-        eph_pub.verify(&digest, &bundle.signature).expect("ephemeral sig verify");
+		eph_pub
+			.verify(&digest, &bundle.signature)
+			.expect("ephemeral sig verify");
 
-        // Sanity check random pub key doesn't verify 
-        let random_key = P256Pair::generate().unwrap();
-        let random_key_pub = random_key.public_key();
+		// Sanity check random pub key doesn't verify
+		let random_key = P256Pair::generate().unwrap();
+		let random_key_pub = random_key.public_key();
 
-        let res = random_key_pub.verify(&digest, &bundle.signature);
-        assert!(res.is_err(), "verification unexpectedly succeeded with random key");
-    }
-    Builder::new().setup_reshard().execute(test).await;
+		let res = random_key_pub.verify(&digest, &bundle.signature);
+		assert!(
+			res.is_err(),
+			"verification unexpectedly succeeded with random key"
+		);
+	}
+	Builder::new().setup_reshard().execute(test).await;
 }

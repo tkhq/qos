@@ -183,7 +183,7 @@ test-vm:
 build-linux-only:
 	cargo build --manifest-path ./qos_system/Cargo.toml
 	cargo build --manifest-path ./qos_aws/Cargo.toml
-	cargo build --manifest-path ./init/Cargo.
+	cargo build --manifest-path ./init/Cargo.toml
 
 .PHONY: generated
 generated:
