@@ -1,0 +1,44 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - name: git checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy,rustfmt
+      - name: install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "21.4"
+      - name: Run codegen
+        run: make -C src generated
+      - name: Ensure working tree is clean
+        run: |
+          if ! git diff --quiet --exit-code; then
+            echo "Uncommitted changes detected. Run codegen locally and commit the results."
+            git --no-pager diff
+            exit 1
+          fi
+      - name: Run linters
+        run: make lint
+      - name: Run tests
+        run: make test
+
+  build-linux-only:
+    runs-on: ubuntu-latest
+    steps:
+      - name: git checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build linux-only crates
+        run: make build-linux-only
