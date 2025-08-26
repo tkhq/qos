@@ -1604,9 +1604,9 @@ name = "integration"
 version = "0.1.0"
 dependencies = [
  "borsh",
- "futures",
  "generated",
  "nix",
+ "qos_client",
  "qos_core",
  "qos_crypto",
  "qos_hex",
@@ -1619,7 +1619,6 @@ dependencies = [
  "rand 0.9.2",
  "reshard_app",
  "rustls",
- "serde_json",
  "tokio",
  "tonic",
  "ureq",
@@ -2475,7 +2474,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "webpki-roots",
+ "webpki-roots 1.0.2",
 ]
 
 [[package]]

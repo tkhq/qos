@@ -57,6 +57,7 @@ serde_json = { version = "1" }
 sha2 = { version = "0.10", default-features = false }
 thiserror = { version = "2.0.12", features = ["std"], default-features = false }
 tokio = { version = "1.43.1", features = ["macros", "rt-multi-thread"], default-features = false }
+tonic = { version = "0.9"}
 ureq = { version = "2.9", default-features = false }
 vsss-rs = { version = "5.1", default-features = false, features = ["std", "zeroize"] }
 webpki = { version = "0.22.4", default-features = false }
@@ -68,8 +69,8 @@ zeroize = { version = "1.6", default-features = false }
 
 # Internal workspace dependencies
 integration = { path = "integration" }
-generate  = { path = "generated" }
-reshard_app = { path = "reshard_app" }
+generated  = { path = "generated" }
+reshard_app = { path = "reshard/app" }
 qos_client = { path = "qos_client", default-features = false }
 qos_core = { path = "qos_core", default-features = false }
 qos_crypto = { path = "qos_crypto", default-features = false }
@@ -79,3 +80,4 @@ qos_net = { path = "qos_net", default-features = false }
 qos_nsm = { path = "qos_nsm", default-features = false }
 qos_p256 = { path = "qos_p256" }
 qos_test_primitives = { path = "qos_test_primitives" }
+qos_host_primitives = { path = "qos_host_primitives" }
