@@ -13,7 +13,7 @@ use qos_core::{
 	handles::{self},
 	protocol::{
 		services::{
-			boot::{Approval, Manifest, ManifestEnvelope, ShareSet},
+			boot::{ManifestEnvelope, ShareSet},
 			genesis::GenesisMemberOutput,
 		},
 		QosHash,
@@ -34,32 +34,58 @@ use qos_p256::{P256Pair, P256Public};
 	serde::Serialize,
 	serde::Deserialize,
 )]
+
+/// Signed, attested, and audit-friendly output of a resharding run.
+/// 
+/// This bundle is what operators fetch after a successful reshard. It ties:
+/// - **what ran** (manifest + approvals),
+/// - **where/how it ran** (AWS Nitro attestation w/ ephemeral key),
+/// - **what it produced** (per-member encrypted shares),
+/// together with an **ephemeral-key signature** over the outputs.
+/// 
+/// Safe to check into git alongside genesis artifacts.
 #[serde(rename_all = "camelCase")]
 pub struct ReshardBundle {
-	/// Public key of the quorum key that was resharded (hex in JSON thanks to qos_hex in types below).
+
+	/// Identifies the **exact quorum key** that was resharded.
+    ///
+    /// Consumers can use this to confirm they're rotating the intended key,
+    /// and to cross-reference previous ceremonies for the same key.
 	#[serde(with = "qos_hex::serde")]
 	pub quorum_public_key: Vec<u8>,
 
-	/// Live attestation document bytes / contains the eph key used to sign per member outputs
+	/// Raw AWS Nitro **attestation document** bytes (as produced by NSM).
+    ///
+    /// Share holders verify this before posting shares. The document binds:
+    /// - the enclave's measured state (PCRs / EIF),
+    /// - the **ephemeral public key** created at boot (used below in `signature`),
+    /// - the manifest hash via `user_data`.
 	#[serde(with = "qos_hex::serde")]
 	pub attestation_doc: Vec<u8>,
 
-	/// Contains manifest, manifest_set_approvals, share_set_approvals
+	/// Envelope that **encapsulates the manifest and its approvals**, including:
+	/// 
+	/// - manifest
+	/// - manifest_approvals
+	/// - share_set_approvals
+	/// 
 	pub manifest_envelope: ManifestEnvelope,
 
-	/// Encapsulated manifest.
-	pub manifest: Manifest,
-
-	/// Approvals from the manifest set.
-	pub manifest_set_approvals: Vec<Approval>,
-
-	/// Approvals from the share set. This is used to audit what share holders provisioned the quorum key.
-	pub share_set_approvals: Vec<Approval>,
-
-	/// Vector of {share_set_member (pub key), encrypted_quorum_key_share, share_hash (to verify correctly decrypted share)}
+	/// Per-new-member outputs of the resharding step (**reuses genesis format**).
+    ///
+    /// Each entry contains:
+    /// - the **member’s public key** in the **new share-set**,
+    /// - the **encrypted quorum key share** for that member,
+    /// - a **share hash** used to validate correct decryption **offline**.
 	pub member_outputs: Vec<GenesisMemberOutput>,
 
-	/// Signature over sha512(member_outputs borsh) with ephemeral key.
+	/// Ephemeral-key signature binding outputs to this **attested run**.
+    ///
+    /// The ephemeral public key is carried in `attestation_doc`. The signature
+    /// is computed over `sha512(borsh(member_outputs))`. Verifiers should:
+    /// 1) parse & verify the attestation (incl. ephemeral pubkey),
+    /// 2) recompute the digest from `member_outputs`,
+    /// 3) verify this signature with the ephemeral pubkey.
 	#[serde(with = "qos_hex::serde")]
 	pub signature: Vec<u8>,
 }
@@ -144,19 +170,11 @@ impl ReshardProcessor {
 			.get_manifest_envelope()
 			.map_err(|_| format!("get_manifest_envelope failed"))?;
 
-		let manifest = manifest_envelope.manifest.clone();
-		let manifest_set_approvals =
-			manifest_envelope.manifest_set_approvals.clone();
-		let share_set_approvals = manifest_envelope.share_set_approvals.clone();
-
 		// assemble all outputs together
 		let reshard_bundle = ReshardBundle {
 			quorum_public_key: quorum_pub,
 			attestation_doc,
 			manifest_envelope,
-			manifest,
-			manifest_set_approvals,
-			share_set_approvals,
 			member_outputs,
 			signature,
 		};
@@ -186,7 +204,6 @@ impl RequestProcessor for ReshardProcessor {
 			}
 		};
 
-		// With an empty RetrieveReshardRequest, callers can omit the oneof entirely.
 		let output = match req.input {
 			None
 			| Some(

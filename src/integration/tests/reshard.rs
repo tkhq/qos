@@ -184,10 +184,6 @@ async fn reshard_e2e_json() {
         
         let v: serde_json::Value = 
             serde_json::from_str(&resp.reshard_bundle).expect("valid JSON");
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&v).expect("pretty json")
-        );
 
         // Make sure we can rehydrate the bundle
         let bundle: ReshardBundle =
@@ -219,10 +215,9 @@ async fn reshard_e2e_json() {
             quorum_secret_path
         ).expect("load quorum.secret");
         let expected_pub = expected_pair.public_key().to_bytes();
-        let mut found = false;
-        let s = std::fs::read_to_string("./fixtures/reshard/new-share-set/quorum_threshold")
+        let k = std::fs::read_to_string("./fixtures/reshard/new-share-set/quorum_threshold")
             .expect("read threshold");
-        let k: usize = s.trim().parse::<usize>().expect("parse threshold");
+        let k: usize = k.trim().parse::<usize>().expect("parse threshold");
 
         // Positive check: ALL k-of-n combos must reconstruct the quorum key
         for combo in qos_crypto::n_choose_k::combinations(&shares, k) {
