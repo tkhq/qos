@@ -2,16 +2,18 @@
 name = "qos_enclave"
 version = "1.2.0"
 authors = [""]
-edition = "2018"
-rust-version = "1.61"
+edition = "2021"
+# keep in sync with upstream MSRV
+rust-version = "1.71"
 publish = false
 
 [dependencies]
-# newer versions 1.4.1 and 1.4.2 available
-# as of 7/2025, AWS doesn't have a recent crate version of aws-nitro-enclaves-cli published
-# directly use the git version as a workaround
-nitro-cli = { git = "https://github.com/aws/aws-nitro-enclaves-cli", version = "1.4.0" }
-libc = "0.2.172" # NOTE: nitro-cli requires ^0.2.161
+# As of 8/2025, AWS doesn't have a recent crate version of aws-nitro-enclaves-cli published
+# in a typical crate repository -> directly use the git version on GitHub as a workaround
+#
+# The pinned commit corresponds to tag "v1.4.3" after https://github.com/aws/aws-nitro-enclaves-cli/issues/705
+nitro-cli = { git = "https://github.com/aws/aws-nitro-enclaves-cli", rev = "82501bb9637e4b41c87ce73f8ffc2ce51ca37a6a" }
+libc = "0.2.172"
 
 [features]
 default = []

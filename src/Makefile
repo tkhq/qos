@@ -172,6 +172,7 @@ test-vm:
 
 .PHONY: build-linux-only
 build-linux-only:
+	cargo build --manifest-path ./qos_enclave/Cargo.toml
 	cargo build --manifest-path ./qos_system/Cargo.toml
 	cargo build --manifest-path ./qos_aws/Cargo.toml
 	cargo build --manifest-path ./init/Cargo.toml
