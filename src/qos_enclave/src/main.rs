@@ -1,7 +1,7 @@
 use std::{
 	fs::create_dir_all,
-	io::Write,
 	io::stdout,
+	io::Write,
 	mem::MaybeUninit,
 	net::{Shutdown, TcpListener},
 	os::unix::net::UnixStream,
@@ -26,8 +26,9 @@ use nitro_cli::{
 		enclave_proc_command_send_all, enclave_proc_connect_to_single,
 		enclave_proc_spawn, enclave_process_handle_all_replies,
 	},
-	get_id_by_name,CID_TO_CONSOLE_PORT_OFFSET,VMADDR_CID_HYPERVISOR,
-	utils::Console
+	get_id_by_name,
+	utils::Console,
+	CID_TO_CONSOLE_PORT_OFFSET, VMADDR_CID_HYPERVISOR,
 };
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
@@ -64,10 +65,11 @@ fn healthy() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn boot() -> (String, Option<Console>) {
-	//TODO: allow_skip: do not bail if boot fails
+	// TODO: allow_skip: do not bail if boot fails
+	//
 	// currently ignored until we figure out how to hook into the nitro CLI
 	// libs properly, or re-implement some of their functions
-	// fn boot(const allow_skip: bool){
+	// fn boot(const allow_skip: bool) {
 
 	let eif_path =
 		std::env::var("EIF_PATH").unwrap_or("/aws-x86_64.eif".to_string());
@@ -78,7 +80,9 @@ fn boot() -> (String, Option<Console>) {
 	let logs_mode = std::env::var("LOGS").unwrap_or("false".to_string());
 	let enclave_name =
 		std::env::var("ENCLAVE_NAME").unwrap_or("nitro".to_string());
-	let enclave_cid_u32 = enclave_cid.parse::<u32>().expect("enclave_cid must be a valid u32 to boot an enclave");
+	let enclave_cid_u32 = enclave_cid
+		.parse::<u32>()
+		.expect("enclave_cid must be a valid u32 to boot an enclave");
 	let run_args = RunEnclavesArgs {
 		eif_path,
 		enclave_cid: Some(enclave_cid_u32.into()),
@@ -143,20 +147,28 @@ fn boot() -> (String, Option<Console>) {
 
 	let console = match run_args.attach_console {
 		true => Some(
-				Console::new(
-					VMADDR_CID_HYPERVISOR, enclave_cid_u32 + CID_TO_CONSOLE_PORT_OFFSET,
-				).map_err(|err| {
-					err.add_subaction("Failed to attach console to enclave".to_string())
-						.set_action(RUN_ENCLAVE_STR.to_string())
-				})
-				.ok_or_exit_with_errno(None)
-			),
+			Console::new(
+				VMADDR_CID_HYPERVISOR,
+				enclave_cid_u32 + CID_TO_CONSOLE_PORT_OFFSET,
+			)
+			.map_err(|err| {
+				err.add_subaction(
+					"Failed to attach console to enclave".to_string(),
+				)
+				.set_action(RUN_ENCLAVE_STR.to_string())
+			})
+			.ok_or_exit_with_errno(None),
+		),
 		false => None,
 	};
 
-	return (get_id_by_name(enclave_name)
-		.or_else(|_| Err("Failed to parse enclave name"))
-		.unwrap(), console);
+	// return result
+	(
+		get_id_by_name(enclave_name)
+			.map_err(|_| "Failed to parse enclave name")
+			.unwrap(),
+		console,
+	)
 }
 
 fn shutdown(enclave_id: String, sig_num: i32) {
@@ -214,7 +226,7 @@ fn handle_signals() -> c_int {
 fn read_logs(console: Console) {
 	println!("Reading logs to stdout");
 	let disconnect_timeout_sec: Option<u64> = None;
-	console.read_to(stdout().by_ref(), disconnect_timeout_sec);
+	let _ = console.read_to(stdout().by_ref(), disconnect_timeout_sec);
 }
 
 fn main() {
