@@ -1,10 +1,5 @@
 //! CLI Client for interacting with `QuorumOS` enclave and host.
 
-#![forbid(unsafe_code)]
-#![deny(clippy::all)]
-#![warn(missing_docs, clippy::pedantic)]
-#![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
-
 pub mod cli;
 #[cfg(feature = "smartcard")]
 pub mod yubikey;

@@ -2,9 +2,8 @@
 name = "qos_enclave"
 version = "1.2.0"
 authors = [""]
+rust-version = "1.88"
 edition = "2021"
-# keep in sync with upstream MSRV
-rust-version = "1.71"
 publish = false
 
 [dependencies]

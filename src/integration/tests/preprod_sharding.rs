@@ -30,7 +30,7 @@ fn preprod_reshard_ceremony() {
 		format!("/tmp/preprod-reshard-{}", unix_timestamp.as_millis());
 	fs::create_dir_all(&tmp_dir).unwrap();
 
-	let tmp_path = |file: &str| -> String { format!("{}/{file}", tmp_dir) };
+	let tmp_path = |file: &str| -> String { format!("{tmp_dir}/{file}") };
 
 	let dev_users_dir = tmp_path("dev-users");
 	fs::create_dir_all(dev_users_dir.clone()).unwrap();
@@ -38,8 +38,8 @@ fn preprod_reshard_ceremony() {
 	let enclaves_dir = tmp_path("enclaves");
 	fs::create_dir_all(enclaves_dir.clone()).unwrap();
 
-	let user_dir = |user: &str| format!("{}/{}", dev_users_dir, user);
-	let enclave_dir = |enclave: &str| format!("{}/{}", enclaves_dir, enclave);
+	let user_dir = |user: &str| format!("{dev_users_dir}/{user}");
+	let enclave_dir = |enclave: &str| format!("{enclaves_dir}/{enclave}");
 	let get_key_paths =
 		|user: &str| (format!("{user}.secret"), format!("{user}.pub"));
 
@@ -101,8 +101,7 @@ fn preprod_reshard_ceremony() {
 		// seeds. They're just have a "01" prefix because it's the one and only
 		// "share" in a 1/1 SSS sharing.
 		let encrypted_old_dev_share = fs::read(format!(
-			"./fixtures/preprod/{}/old_dev.share.keep",
-			enclave_name
+			"./fixtures/preprod/{enclave_name}/old_dev.share.keep"
 		))
 		.unwrap();
 		let mut decrypted_dev_share =
@@ -116,8 +115,7 @@ fn preprod_reshard_ceremony() {
 		.unwrap()
 		.public_key();
 		let expected_quorum_public_key = fs::read(format!(
-			"./fixtures/preprod/{}/quorum_key.pub",
-			enclave_name
+			"./fixtures/preprod/{enclave_name}/quorum_key.pub"
 		))
 		.unwrap();
 		assert_eq!(
@@ -154,7 +152,7 @@ fn preprod_reshard_ceremony() {
 		}
 	}
 
-	println!("success, reshard complete. Outputs are in {}", tmp_dir);
+	println!("success, reshard complete. Outputs are in {tmp_dir}");
 }
 
 // Helper function to assert a given user secret (1st arg) can decrypt a share

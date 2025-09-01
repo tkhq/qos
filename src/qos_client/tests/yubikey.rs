@@ -300,6 +300,7 @@ fn provision_sign_and_verify() {
 
 	stdout.next();
 	let signature = stdout.next().unwrap().unwrap();
+	child.wait().unwrap();
 
 	std::fs::write(payload_path, DATA).unwrap();
 	std::fs::write(signature_path, signature).unwrap();

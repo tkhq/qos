@@ -185,8 +185,9 @@ impl ProtocolState {
 		attestor: Box<dyn NsmProvider>,
 		handles: Handles,
 		app_addr: SocketAddress,
-		#[allow(unused_variables)]
-		test_only_init_phase_override: Option<ProtocolPhase>,
+		#[allow(unused_variables)] test_only_init_phase_override: Option<
+			ProtocolPhase,
+		>,
 	) -> Self {
 		let provisioner = SecretBuilder::new();
 
