@@ -65,10 +65,11 @@ fn healthy() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn boot() -> (String, Option<Console>) {
-	//TODO: allow_skip: do not bail if boot fails
+	// TODO: allow_skip: do not bail if boot fails
+	//
 	// currently ignored until we figure out how to hook into the nitro CLI
 	// libs properly, or re-implement some of their functions
-	// fn boot(const allow_skip: bool){
+	// fn boot(const allow_skip: bool) {
 
 	let eif_path =
 		std::env::var("EIF_PATH").unwrap_or("/aws-x86_64.eif".to_string());
@@ -161,12 +162,13 @@ fn boot() -> (String, Option<Console>) {
 		false => None,
 	};
 
-	return (
+	// return result
+	(
 		get_id_by_name(enclave_name)
-			.or_else(|_| Err("Failed to parse enclave name"))
+			.map_err(|_| "Failed to parse enclave name")
 			.unwrap(),
 		console,
-	);
+	)
 }
 
 fn shutdown(enclave_id: String, sig_num: i32) {
@@ -224,9 +226,7 @@ fn handle_signals() -> c_int {
 fn read_logs(console: Console) {
 	println!("Reading logs to stdout");
 	let disconnect_timeout_sec: Option<u64> = None;
-	console
-		.read_to(stdout().by_ref(), disconnect_timeout_sec)
-		.expect("Failed to read to console");
+	let _ = console.read_to(stdout().by_ref(), disconnect_timeout_sec);
 }
 
 fn main() {

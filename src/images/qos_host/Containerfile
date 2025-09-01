@@ -4,8 +4,7 @@ ADD . /src
 FROM base AS build
 RUN <<-EOF
 	set -eux
-	cd /src/qos_client
-	cargo build --features vm ${CARGOFLAGS}
+	cd /src && cargo build --features ${CARGOFLAGS} -p qos_client
 	cp /src/target/${TARGET}/release/qos_host /
 	file /qos_host | grep "static-pie"
 EOF
