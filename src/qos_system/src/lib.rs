@@ -150,10 +150,9 @@ pub fn socket_connect(
 pub fn check_hwrng(rng_expected: &str) -> Result<(), SystemError> {
 	use std::fs::read_to_string;
 	let filename: &str = "/sys/class/misc/hw_random/rng_current";
-	let rng_current_raw = read_to_string(filename)
-		.map_err(|_| SystemError {
-			message: format!("Failed to read {}", &filename),
-		})?;
+	let rng_current_raw = read_to_string(filename).map_err(|_| {
+		SystemError { message: format!("Failed to read {}", &filename) }
+	})?;
 	let rng_current = rng_current_raw.trim();
 	if rng_expected != rng_current {
 		return Err(SystemError {
@@ -161,7 +160,7 @@ pub fn check_hwrng(rng_expected: &str) -> Result<(), SystemError> {
 				"Entropy source was {} instead of {}",
 				rng_current, rng_expected
 			),
-		})
+		});
 	};
 	Ok(())
 }
@@ -177,11 +176,19 @@ pub fn get_local_cid() -> Result<u32, SystemError> {
 	use libc::ioctl;
 	let f = match File::open("/dev/vsock") {
 		Ok(f) => f,
-		Err(_e) => return Err(SystemError{ message: "Failed to open /dev/vsock".to_string() }),
+		Err(_e) => {
+			return Err(SystemError {
+				message: "Failed to open /dev/vsock".to_string(),
+			})
+		}
 	};
 	let mut cid = 0;
-	if unsafe { ioctl(f.as_raw_fd(), IOCTL_VM_SOCKETS_GET_LOCAL_CID, &mut cid) } == -1 {
-		return Err(SystemError{ message: "Failed to fetch local CID".to_string() });
+	if unsafe { ioctl(f.as_raw_fd(), IOCTL_VM_SOCKETS_GET_LOCAL_CID, &mut cid) }
+		== -1
+	{
+		return Err(SystemError {
+			message: "Failed to fetch local CID".to_string(),
+		});
 	}
 	Ok(cid)
 }

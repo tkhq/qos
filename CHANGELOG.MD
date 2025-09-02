@@ -17,6 +17,14 @@ Removed: for now removed features.
 Fixed: for any bug fixes.
 Security: in case of vulnerabilities.
 
+## Changed: `qos_core`, `qos_net`, `qos_host`, `init`
+
+- Introduced new async version of each crate and a socket pool to allow proper concurrency of requests
+
+## Removed: `qos_net`
+
+- Removed `connection_id` from all `Proxy` structs and messages.
+
 ## Added: `qos_net` crate
 
 In PR #449 we introduce `qos_net`, a crate which contains a socket<>TCP proxy to let enclave application communicate with the outside world.

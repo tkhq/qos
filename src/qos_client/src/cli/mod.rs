@@ -1117,7 +1117,6 @@ impl ClientOpts {
 			.expect("Missing `--ephemeral-key-path`")
 			.to_string()
 	}
-	
 
 	fn file_path(&self) -> String {
 		self.parsed

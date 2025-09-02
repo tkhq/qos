@@ -1534,11 +1534,19 @@ pub(crate) fn get_ephemeral_key_hex<P: AsRef<Path>>(
 	attestation_doc_path: P,
 	ephemeral_key_path: P,
 ) {
-	let bytes =
-		fs::read(attestation_doc_path).unwrap_or_else(|e| {panic!("Failed reading attestation doc: {e:?}")});
-	let attestation_doc: AttestationDoc = extract_attestation_doc(bytes.as_ref(), true, None);
-	let ephemeral_key = P256Public::from_bytes(&attestation_doc.public_key.expect("No ephemeral key in the attestation doc"),).expect("Ephemeral key not valid public key");
-	ephemeral_key.to_hex_file(ephemeral_key_path).unwrap_or_else(|e| {panic!("Failed to encode ephemeral key to hex: {e:?}")});
+	let bytes = fs::read(attestation_doc_path)
+		.unwrap_or_else(|e| panic!("Failed reading attestation doc: {e:?}"));
+	let attestation_doc: AttestationDoc =
+		extract_attestation_doc(bytes.as_ref(), true, None);
+	let ephemeral_key = P256Public::from_bytes(
+		&attestation_doc
+			.public_key
+			.expect("No ephemeral key in the attestation doc"),
+	)
+	.expect("Ephemeral key not valid public key");
+	ephemeral_key.to_hex_file(ephemeral_key_path).unwrap_or_else(|e| {
+		panic!("Failed to encode ephemeral key to hex: {e:?}")
+	});
 }
 
 pub(crate) fn display<P: AsRef<Path>>(
