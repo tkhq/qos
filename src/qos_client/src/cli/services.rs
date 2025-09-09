@@ -271,6 +271,7 @@ impl PairOrYubi {
 }
 
 /// Generate a Setup Key for use in the Genesis ceremony.
+#[allow(clippy::missing_panics_doc)]
 pub fn generate_file_key<P: AsRef<Path>>(
 	master_secret_path: P,
 	pub_key_path: P,
