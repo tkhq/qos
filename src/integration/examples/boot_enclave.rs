@@ -445,8 +445,6 @@ async fn main() {
 	eprintln!("=========ENCLAVE READY WITH PIVOT RUNNING!!==========");
 	eprintln!("press ctrl+c to quit");
 
-	// drop(_host_child_process);
-
 	match tokio::signal::ctrl_c().await {
 		Ok(()) => {}
 		Err(err) => panic!("{err}"),

@@ -62,12 +62,12 @@ impl std::ops::DerefMut for PoolGuard<'_> {
 }
 
 impl StreamPool {
-	/// Create a new `StreamPool` with given starting `SocketAddress`, timout and number of addresses to populate.
+	/// Create a new `StreamPool` with given starting `SocketAddress`, timeout and number of addresses to populate.
 	pub fn new(
 		start_address: SocketAddress,
 		mut count: u32,
 	) -> Result<Self, IOError> {
-		eprintln!("StreamPool start address: {:?}", start_address.debug_info());
+		eprintln!("StreamPool start address: {start_address}");
 
 		let mut addresses = Vec::new();
 		let mut addr = start_address;
@@ -268,7 +268,7 @@ mod test {
 		drop(third);
 		drop(second);
 
-		assert_eq!(result.is_err(), true); // elapsed is not constructible?
+		assert!(result.is_err()); // Elapsed is not constructible
 	}
 
 	// We need to ensure that Socket stream is ALWAYS reset when it returns to the pool, no matter
@@ -292,9 +292,7 @@ mod test {
 		let client_task = tokio::task::spawn(async move {
 			let borrowed_pool = pool_clone.read().await;
 			let mut stream = borrowed_pool.get().await;
-			eprintln!("Calling");
 			let _ = stream.call(&[1]).await;
-			eprintln!("Call done");
 		});
 
 		// give the call time to connect and hang on send

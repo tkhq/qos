@@ -98,10 +98,11 @@ impl SocketServer {
 
 		Ok(())
 	}
+}
 
-	/// Consume the socket server and terminate all running tasks.
-	pub fn terminate(self) {
-		for task in self.tasks {
+impl Drop for SocketServer {
+	fn drop(&mut self) {
+		for task in &self.tasks {
 			task.abort();
 		}
 	}
@@ -115,7 +116,14 @@ where
 	P: RequestProcessor,
 {
 	loop {
-		let mut stream = listener.accept().await?;
+		let mut stream = match listener.accept().await {
+			Ok(stream) => stream,
+			Err(err) => {
+				eprintln!("SocketServer: error on accept {err:?}");
+				continue;
+			}
+		};
+
 		loop {
 			match stream.recv().await {
 				Ok(payload) => {

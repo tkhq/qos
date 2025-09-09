@@ -65,7 +65,7 @@ async fn main() {
 	let app_pool = StreamPool::new(SocketAddress::new_unix(socket_path), 1)
 		.expect("unable to create app pool");
 
-	let server = SocketServer::listen_all(
+	let _server = SocketServer::listen_all(
 		app_pool,
 		&Processor::new(EphemeralKeyHandle::new(
 			"./mock/ephemeral_seed.secret.keep".to_string(),
@@ -74,5 +74,4 @@ async fn main() {
 	.unwrap();
 
 	tokio::signal::ctrl_c().await.unwrap();
-	server.terminate();
 }

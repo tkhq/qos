@@ -71,8 +71,8 @@ async fn main() {
 		StreamPool::new(SocketAddress::new_unix(socket_path), pool_size)
 			.expect("unable to create app pool");
 
-	let server = SocketServer::listen_all(app_pool, &Processor::new()).unwrap();
+	let _server =
+		SocketServer::listen_all(app_pool, &Processor::new()).unwrap();
 
 	tokio::signal::ctrl_c().await.unwrap();
-	server.terminate();
 }

@@ -29,9 +29,8 @@ async fn connects_and_gets_info() {
 	assert!(r.is_err()); // expect 500 here
 
 	let enclave_socket = format!("{TEST_ENCLAVE_SOCKET}_0"); // manually pick the 1st one
-	let secret_path: PathWrapper = "./async_qos_host_test.secret".into();
-	// let eph_path = "reaper_works.eph.key";
-	let manifest_path: PathWrapper = "async_qos_host_test.manifest".into();
+	let secret_path: PathWrapper = "/tmp/async_qos_host_test.secret".into();
+	let manifest_path: PathWrapper = "/tmp/async_qos_host_test.manifest".into();
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(std::fs::remove_file(&*secret_path));

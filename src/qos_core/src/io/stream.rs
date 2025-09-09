@@ -54,7 +54,7 @@ impl Stream {
 	/// Create a new `Stream` from a `SocketAddress` and a timeout and connect using async
 	/// Sets `inner` to the new stream.
 	pub async fn connect(&mut self) -> Result<(), IOError> {
-		let addr = self.address()?.clone();
+		let addr = self.address()?;
 
 		match self.address()? {
 			SocketAddress::Unix(_uaddr) => {
@@ -64,7 +64,7 @@ impl Stream {
 			}
 			#[cfg(feature = "vm")]
 			SocketAddress::Vsock(_vaddr) => {
-				let inner = vsock_connect(addr).await?;
+				let inner = vsock_connect(&addr).await?;
 
 				self.inner = Some(InnerStream::Vsock(inner));
 			}
@@ -79,11 +79,11 @@ impl Stream {
 
 		match &mut self.inner_mut()? {
 			InnerStream::Unix(ref mut s) => {
-				*s = unix_connect(addr).await?;
+				*s = unix_connect(&addr).await?;
 			}
 			#[cfg(feature = "vm")]
 			InnerStream::Vsock(ref mut s) => {
-				*s = vsock_connect(addr).await?;
+				*s = vsock_connect(&addr).await?;
 			}
 		}
 		Ok(())
@@ -163,12 +163,10 @@ async fn recv<S: AsyncReadExt + Unpin>(
 	let length: usize = {
 		let mut buf = [0u8; size_of::<u64>()];
 
-		let r = stream.read_exact(&mut buf).await.map_err(|e| match e.kind() {
+		stream.read_exact(&mut buf).await.map_err(|e| match e.kind() {
 			ErrorKind::UnexpectedEof => IOError::RecvConnectionClosed,
 			_ => IOError::StdIoError(e),
-		});
-
-		r?;
+		})?;
 
 		u64::from_le_bytes(buf)
 			.try_into()
@@ -264,7 +262,7 @@ impl Listener {
 					uaddr.path().ok_or(IOError::ConnectAddressInvalid)?;
 				if path.exists() {
 					// attempt cleanup, this mostly happens from tests/panics
-					std::fs::remove_file(path)?;
+					_ = std::fs::remove_file(path);
 				}
 				let inner = InnerListener::Unix(UnixListener::bind(path)?);
 				Self { inner }
@@ -317,7 +315,7 @@ impl Drop for Listener {
 }
 
 async fn unix_connect(
-	addr: SocketAddress,
+	addr: &SocketAddress,
 ) -> Result<UnixStream, std::io::Error> {
 	let addr = addr.usock();
 	let path = addr.path().ok_or(IOError::ConnectAddressInvalid)?;
@@ -329,7 +327,7 @@ async fn unix_connect(
 // raw vsock socket connect
 #[cfg(feature = "vm")]
 async fn vsock_connect(
-	addr: SocketAddress,
+	addr: &SocketAddress,
 ) -> Result<VsockStream, std::io::Error> {
 	let addr = addr.vsock();
 	VsockStream::connect(*addr).await

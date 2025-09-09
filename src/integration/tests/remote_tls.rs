@@ -1,8 +1,9 @@
-use std::{process::Command, time::Duration};
+use std::process::Command;
 
 use borsh::BorshDeserialize;
 use integration::{
-	PivotRemoteTlsMsg, PIVOT_ASYNC_REMOTE_TLS_PATH, QOS_NET_PATH,
+	wait_for_usock, PivotRemoteTlsMsg, PIVOT_ASYNC_REMOTE_TLS_PATH,
+	QOS_NET_PATH,
 };
 use qos_core::{
 	client::SocketClient,
@@ -36,10 +37,7 @@ async fn fetch_async_remote_tls_content() {
 		.unwrap()
 		.into();
 
-	// ensure the enclave socket is created by qos_net before proceeding
-	while !std::fs::exists(REMOTE_TLS_TEST_ENCLAVE_SOCKET).unwrap() {
-		tokio::time::sleep(Duration::from_millis(50)).await;
-	}
+	wait_for_usock(REMOTE_TLS_TEST_ENCLAVE_SOCKET).await;
 
 	let enclave_pool = StreamPool::new(
 		SocketAddress::new_unix(REMOTE_TLS_TEST_ENCLAVE_SOCKET),

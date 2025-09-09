@@ -80,7 +80,6 @@ impl Reaper {
 						// see if we got interrupted
 						if *server_state.read().unwrap() == InterState::Quitting
 						{
-							server.terminate();
 							return;
 						}
 
@@ -121,7 +120,6 @@ impl Reaper {
 					}
 
 					eprintln!("Reaper server shutdown");
-					server.terminate(); // ensure we cleanup the sockets
 					*server_state.write().unwrap() = InterState::Quitting;
 				});
 		});

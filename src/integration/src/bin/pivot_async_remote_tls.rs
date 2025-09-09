@@ -115,15 +115,13 @@ async fn main() {
 		.expect("unable to create async stream pool")
 		.shared();
 
-	let server =
+	let _server =
 		SocketServer::listen_all(enclave_pool, &Processor::new(proxy_pool))
 			.unwrap();
 
 	match tokio::signal::ctrl_c().await {
-		Ok(_) => {
-			eprintln!("pivot handling ctrl+c the tokio way");
-			server.terminate();
-		}
+		Ok(_) => eprintln!("pivot handling ctrl+c the tokio way"),
+
 		Err(err) => panic!("{err}"),
 	}
 }

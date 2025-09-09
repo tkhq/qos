@@ -69,7 +69,7 @@ async fn main() {
 		PIVOT_FILE.to_string(),
 	);
 
-	let start_port = 3; // used for qos-host only! others follow 4+ for the <app>-host
+	let start_port = 3;
 	let core_pool = StreamPool::new(
 		SocketAddress::new_vsock(cid, start_port, VMADDR_NO_FLAGS),
 		1, // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)

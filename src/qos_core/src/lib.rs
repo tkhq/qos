@@ -62,4 +62,4 @@ pub const SEC_APP_SOCK: &str = "./local-enclave/sec_app.sock";
 #[cfg(feature = "vm")]
 pub const SEC_APP_SOCK: &str = "/sec_app.sock";
 /// Default socket connect timeout in milliseconds
-pub const DEFAULT_SOCKET_TIMEOUT: &str = "5000";
+pub const DEFAULT_SOCKET_TIMEOUT_MS: &str = "5000";

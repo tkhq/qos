@@ -56,7 +56,7 @@ impl GetParserForOptions for HostParser {
 			.token(
 				Token::new(SOCKET_TIMEOUT, "maximum time in ms a connect to the USOCK/VSOCK will take")
 					.takes_value(true)
-					.default_value(qos_core::DEFAULT_SOCKET_TIMEOUT)
+					.default_value(qos_core::DEFAULT_SOCKET_TIMEOUT_MS)
 			)
 			.token(
 				Token::new(VSOCK_TO_HOST, "whether to add the to-host svm flag to the enclave vsock connection. Valid options are `true` or `false`")
@@ -111,7 +111,7 @@ impl HostOpts {
 	}
 
 	pub(crate) fn socket_timeout(&self) -> TimeVal {
-		let default_timeout = &qos_core::DEFAULT_SOCKET_TIMEOUT.to_owned();
+		let default_timeout = &qos_core::DEFAULT_SOCKET_TIMEOUT_MS.to_owned();
 		let timeout_str =
 			self.parsed.single(SOCKET_TIMEOUT).unwrap_or(default_timeout);
 		TimeVal::milliseconds(

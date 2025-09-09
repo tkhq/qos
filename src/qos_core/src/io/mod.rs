@@ -75,7 +75,7 @@ pub enum SocketAddress {
 	Unix(UnixAddr),
 }
 
-/// VSOCK flag for talking to host.
+/// VSOCK flag for talking to host if we deploy multiple enclave "horizontally" on the same VM.
 pub const VMADDR_FLAG_TO_HOST: u8 = 0x01;
 /// Don't specify any flags for a VSOCK.
 pub const VMADDR_NO_FLAGS: u8 = 0x00;
@@ -145,28 +145,6 @@ impl SocketAddress {
 		}
 	}
 
-	/// Shows socket debug info
-	#[must_use]
-	pub fn debug_info(&self) -> String {
-		match self {
-			#[cfg(feature = "vm")]
-			Self::Vsock(vsock) => {
-				format!("vsock cid: {} port: {}", vsock.cid(), vsock.port())
-			}
-			Self::Unix(usock) => {
-				format!(
-					"usock path: {}",
-					usock
-						.path()
-						.unwrap_or(&std::path::PathBuf::from("unknown/error"))
-						.as_os_str()
-						.to_str()
-						.unwrap_or("unable to procure")
-				)
-			}
-		}
-	}
-
 	/// Returns the `UnixAddr` if this is a USOCK `SocketAddress`, panics otherwise
 	#[must_use]
 	pub fn usock(&self) -> &UnixAddr {
@@ -184,6 +162,29 @@ impl SocketAddress {
 		match self {
 			Self::Vsock(vsock) => vsock,
 			_ => panic!("invalid socket address requested"),
+		}
+	}
+}
+
+impl std::fmt::Display for SocketAddress {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			#[cfg(feature = "vm")]
+			Self::Vsock(vsock) => {
+				write!(f, "vsock cid: {} port: {}", vsock.cid(), vsock.port())
+			}
+			Self::Unix(usock) => {
+				write!(
+					f,
+					"usock path: {}",
+					usock
+						.path()
+						.unwrap_or(&std::path::PathBuf::from("unknown/error"))
+						.as_os_str()
+						.to_str()
+						.unwrap_or("unable to procure")
+				)
+			}
 		}
 	}
 }

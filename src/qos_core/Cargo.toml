@@ -36,7 +36,3 @@ webpki-roots = { workspace = true }
 vm = []
 # Never use in production - support for mock NSM
 mock = ["qos_nsm/mock"]
-
-[[bin]]
-name = "qos_core"
-path = "src/main.rs"

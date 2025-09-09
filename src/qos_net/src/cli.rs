@@ -84,17 +84,15 @@ impl CLI {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
-			let server = SocketServer::listen_proxy(
+			let _server = SocketServer::listen_proxy(
 				opts.async_pool().expect("unable to create async socket pool"),
 			)
 			.await
 			.expect("unable to get listen join handles");
 
 			match tokio::signal::ctrl_c().await {
-				Ok(_) => {
-					eprintln!("handling ctrl+c the tokio way");
-					server.terminate();
-				}
+				Ok(_) => eprintln!("handling ctrl+c the tokio way"),
+
 				Err(err) => panic!("{err}"),
 			}
 		}

@@ -44,12 +44,10 @@ async fn direct_connect_works() {
 
 	let client = SocketClient::new(pool, timeout);
 
-	let server = run_echo_server(socket_path).await.unwrap();
+	let _server = run_echo_server(socket_path).await.unwrap();
 
 	let r = client.call(&[0]).await;
 	assert!(r.is_ok());
-
-	server.terminate();
 }
 
 #[tokio::test]
@@ -81,12 +79,9 @@ async fn repeat_connect_works() {
 	assert!(r.is_err());
 
 	// start server
-	let server = run_echo_server(socket_path).await.unwrap();
+	let _server = run_echo_server(socket_path).await.unwrap();
 
 	// server running, expect success
 	let r = client.call(&[0]).await;
 	assert!(r.is_ok());
-
-	// cleanup
-	server.terminate();
 }

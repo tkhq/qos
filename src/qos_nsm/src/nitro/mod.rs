@@ -94,10 +94,7 @@ pub fn verify_attestation_doc_against_user_input(
 		.clone()
 		.into_vec();
 	if pcr0 != doc_pcr0 {
-		return Err(AttestError::DifferentPcr0(
-			qos_hex::encode(pcr0),
-			qos_hex::encode(&doc_pcr0),
-		));
+		return Err(AttestError::DifferentPcr0);
 	}
 
 	// pcr1 matches
@@ -725,7 +722,7 @@ mod test {
 		.unwrap_err();
 
 		match err {
-			AttestError::DifferentPcr0(_, _) => (),
+			AttestError::DifferentPcr0 => (),
 			_ => panic!(),
 		}
 	}
