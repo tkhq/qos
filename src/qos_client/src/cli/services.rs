@@ -270,7 +270,8 @@ impl PairOrYubi {
 	}
 }
 
-pub(crate) fn generate_file_key<P: AsRef<Path>>(
+/// Generate a Setup Key for use in the Genesis ceremony.
+pub fn generate_file_key<P: AsRef<Path>>(
 	master_secret_path: P,
 	pub_key_path: P,
 ) {
@@ -349,8 +350,9 @@ pub(crate) fn pin_from_path<P: AsRef<Path>>(path: P) -> Vec<u8> {
 		.to_vec()
 }
 
+/// Provision a yubikey from a pre-generated master seed
 #[cfg(feature = "smartcard")]
-pub(crate) fn advanced_provision_yubikey<P: AsRef<Path>>(
+pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 	master_seed_path: P,
 	maybe_pin_path: Option<String>,
 ) -> Result<(), Error> {
