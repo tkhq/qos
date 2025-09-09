@@ -151,8 +151,8 @@ impl CLI {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
-			// start reaper in a thread so we can terminate on ctrl+c properly
-			std::thread::spawn(move || {
+			// start reaper in a task so we can terminate on ctrl+c properly
+			tokio::spawn(async move {
 				Reaper::execute(
 					&Handles::new(
 						opts.ephemeral_file(),
@@ -165,7 +165,8 @@ impl CLI {
 						.expect("Unable to create enclave socket pool"),
 					opts.app_pool().expect("Unable to create enclave app pool"),
 					None,
-				);
+				)
+				.await;
 			});
 
 			eprintln!("qos_core: Reaper running, press ctrl+c to quit");

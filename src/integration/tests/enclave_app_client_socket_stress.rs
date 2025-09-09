@@ -76,12 +76,12 @@ async fn enclave_app_client_socket_stress() {
 	handles.put_quorum_key(&p256_pair).unwrap();
 
 	let enclave_pool =
-		StreamPool::new(SocketAddress::new_unix(ENCLAVE_SOCK), 1).unwrap();
+		StreamPool::single(SocketAddress::new_unix(ENCLAVE_SOCK)).unwrap();
 
 	let app_pool =
-		StreamPool::new(SocketAddress::new_unix(APP_SOCK), 1).unwrap();
+		StreamPool::single(SocketAddress::new_unix(APP_SOCK)).unwrap();
 
-	std::thread::spawn(move || {
+	tokio::spawn(async move {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
@@ -91,13 +91,14 @@ async fn enclave_app_client_socket_stress() {
 			// works
 			Some(ProtocolPhase::QuorumKeyProvisioned),
 		)
+		.await;
 	});
 
 	// Make sure the pivot has some time to start up
 	wait_for_usock(APP_SOCK).await;
 
 	let enclave_client_pool =
-		StreamPool::new(SocketAddress::new_unix(ENCLAVE_SOCK), 1).unwrap();
+		StreamPool::single(SocketAddress::new_unix(ENCLAVE_SOCK)).unwrap();
 	let enclave_client = SocketClient::new(
 		enclave_client_pool.shared(),
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 3), // needs to be bigger than the slow request below + some time for recovery

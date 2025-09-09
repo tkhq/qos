@@ -85,6 +85,7 @@ impl SocketClient {
 
 	/// Attempt a one-off connection, used for tests
 	pub async fn try_connect(&self) -> Result<(), IOError> {
+		eprintln!("TRY C");
 		let pool = self.pool.read().await;
 		let mut stream = pool.get().await;
 

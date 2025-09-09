@@ -10,8 +10,8 @@ use qos_core::{
 use qos_nsm::mock::MockNsm;
 use qos_test_primitives::PathWrapper;
 
-#[test]
-fn reaper_works() {
+#[tokio::test]
+async fn reaper_works() {
 	let secret_path: PathWrapper = "/tmp/reaper_works.secret".into();
 	// let eph_path = "reaper_works.eph.key";
 	let usock: PathWrapper = "/tmp/reaper_works.sock".into();
@@ -43,7 +43,7 @@ fn reaper_works() {
 	let app_pool =
 		StreamPool::new(SocketAddress::new_unix("./never.sock"), 1).unwrap();
 
-	let reaper_handle = std::thread::spawn(move || {
+	let reaper_handle = tokio::spawn(async move {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
@@ -51,6 +51,7 @@ fn reaper_works() {
 			app_pool,
 			None,
 		)
+		.await;
 	});
 
 	// Give the enclave server time to bind to the socket
@@ -65,14 +66,14 @@ fn reaper_works() {
 	fs::write(&*secret_path, b"super dank tank secret tech").unwrap();
 
 	// Make the sure the reaper executed successfully.
-	reaper_handle.join().unwrap();
+	reaper_handle.await.unwrap();
 	let contents = fs::read(integration::PIVOT_OK_SUCCESS_FILE).unwrap();
 	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
 	assert!(fs::remove_file(integration::PIVOT_OK_SUCCESS_FILE).is_ok());
 }
 
-#[test]
-fn reaper_handles_non_zero_exits() {
+#[tokio::test]
+async fn reaper_handles_non_zero_exits() {
 	let secret_path: PathWrapper =
 		"/tmp/reaper_handles_non_zero_exits.secret".into();
 	let usock: PathWrapper = "/tmp/reaper_handles_non_zero_exits.sock".into();
@@ -100,7 +101,7 @@ fn reaper_handles_non_zero_exits() {
 	let app_pool =
 		StreamPool::new(SocketAddress::new_unix("./never.sock"), 1).unwrap();
 
-	let reaper_handle = std::thread::spawn(move || {
+	let reaper_handle = tokio::spawn(async move {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
@@ -108,6 +109,7 @@ fn reaper_handles_non_zero_exits() {
 			app_pool,
 			None,
 		)
+		.await;
 	});
 
 	// Give the enclave server time to bind to the socket
@@ -130,8 +132,8 @@ fn reaper_handles_non_zero_exits() {
 	assert!(reaper_handle.is_finished());
 }
 
-#[test]
-fn reaper_handles_panic() {
+#[tokio::test]
+async fn reaper_handles_panic() {
 	let secret_path: PathWrapper = "/tmp/reaper_handles_panics.secret".into();
 	let usock: PathWrapper = "/tmp/reaper_handles_panics.sock".into();
 	let manifest_path: PathWrapper =
@@ -158,7 +160,7 @@ fn reaper_handles_panic() {
 	let app_pool =
 		StreamPool::new(SocketAddress::new_unix("./never.sock"), 1).unwrap();
 
-	let reaper_handle = std::thread::spawn(move || {
+	let reaper_handle = tokio::spawn(async move {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
@@ -166,6 +168,7 @@ fn reaper_handles_panic() {
 			app_pool,
 			None,
 		)
+		.await;
 	});
 
 	// Give the enclave server time to bind to the socket
