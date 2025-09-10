@@ -120,3 +120,61 @@ pub async fn resolve_hostname(
 		))
 	})
 }
+
+#[cfg(test)]
+mod test {
+
+	use std::{io::ErrorKind, sync::Arc};
+
+	use rustls::RootCertStore;
+	use tokio_rustls::TlsConnector;
+
+	use super::*;
+
+	#[tokio::test]
+	async fn can_fetch_tls_content_with_proxy_connection() {
+		let host = "api.turnkey.com";
+		let path = "/health";
+
+		let mut remote_connection = ProxyConnection::new_from_name(
+			host.to_string(),
+			443,
+			vec!["8.8.8.8".to_string()],
+			53,
+		)
+		.await
+		.unwrap();
+
+		let root_store =
+			RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.into() };
+
+		let server_name: rustls::pki_types::ServerName<'_> =
+			host.try_into().unwrap();
+		let config: rustls::ClientConfig = rustls::ClientConfig::builder()
+			.with_root_certificates(root_store)
+			.with_no_client_auth();
+		let conn = TlsConnector::from(Arc::new(config));
+		let stream = &mut remote_connection.tcp_stream;
+		let mut tls = conn.connect(server_name, stream).await.unwrap();
+
+		let http_request = format!(
+			"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+		);
+
+		tls.write_all(http_request.as_bytes()).await.unwrap();
+
+		let mut response_bytes = Vec::new();
+		let read_to_end_result = tls.read_to_end(&mut response_bytes).await;
+
+		// Ignore eof errors: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
+		assert!(
+			read_to_end_result.is_ok()
+				|| (read_to_end_result
+					.is_err_and(|e| e.kind() == ErrorKind::UnexpectedEof))
+		);
+
+		let response_text = std::str::from_utf8(&response_bytes).unwrap();
+		assert!(response_text.contains("HTTP/1.1 200 OK"));
+		assert!(response_text.contains("currentTime"));
+	}
+}

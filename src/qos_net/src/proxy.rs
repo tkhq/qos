@@ -83,7 +83,6 @@ impl Proxy {
 
 		let resp = match ProxyMsg::try_from_slice(&req_bytes) {
 			Ok(req) => match req {
-				// TODO: do we need this??
 				ProxyMsg::StatusRequest => ProxyMsg::StatusResponse(0),
 				ProxyMsg::ConnectByNameRequest {
 					hostname,
