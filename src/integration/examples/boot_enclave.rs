@@ -1,3 +1,6 @@
+//! Example showing how enclaves can be booted locally end-to-end.
+//! Useful to make debugging easier when iterating on the core of QOS.
+
 use std::{
 	fs,
 	io::{BufRead, BufReader, Write},

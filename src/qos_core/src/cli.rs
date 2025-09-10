@@ -48,6 +48,16 @@ impl EnclaveOpts {
 		Self { parsed }
 	}
 
+	/// Create a new `StreamPool` for connecting to the enclave.
+	fn enclave_pool(&self) -> Result<StreamPool, IOError> {
+		self.async_pool(false)
+	}
+
+	/// Create a new `StreamPool` for connecting to the app.
+	fn app_pool(&self) -> Result<StreamPool, IOError> {
+		self.async_pool(true)
+	}
+
 	/// Create a new `StreamPool` using the list of `SocketAddress` for the qos host.
 	/// The `app` parameter specifies if this is a pool meant for the enclave itself, or the enclave app.
 	fn async_pool(&self, app: bool) -> Result<StreamPool, IOError> {
@@ -64,13 +74,14 @@ impl EnclaveOpts {
 					c.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
 				let p =
 					p.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
-				StreamPool::new(
-					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS),
-					1,
-				)
+				StreamPool::single(SocketAddress::new_vsock(
+					c,
+					p,
+					crate::io::VMADDR_NO_FLAGS,
+				))
 			}
 			(None, None, Some(u)) => {
-				StreamPool::new(SocketAddress::new_unix(u), 1)
+				StreamPool::single(SocketAddress::new_unix(u))
 			}
 			_ => panic!("Invalid socket opts"),
 		}
@@ -150,10 +161,9 @@ impl CLI {
 						opts.pivot_file(),
 					),
 					opts.nsm(),
-					opts.async_pool(false)
+					opts.enclave_pool()
 						.expect("Unable to create enclave socket pool"),
-					opts.async_pool(true)
-						.expect("Unable to create enclave app pool"),
+					opts.app_pool().expect("Unable to create enclave app pool"),
 					None,
 				);
 			});

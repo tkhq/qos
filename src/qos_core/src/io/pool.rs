@@ -84,6 +84,11 @@ impl StreamPool {
 		Ok(Self::with_addresses(addresses))
 	}
 
+	/// Create a single address pool.
+	pub fn single(address: SocketAddress) -> Result<Self, IOError> {
+		Self::new(address, 1)
+	}
+
 	/// Create a new `StreamPool` which will contain all the provided addresses but no connections yet.
 	#[must_use]
 	fn with_addresses(

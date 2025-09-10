@@ -24,7 +24,7 @@ async fn fetch_and_verify_app_proof() {
 	wait_for_usock(PROOF_TEST_ENCLAVE_SOCKET).await;
 
 	let enclave_pool =
-		StreamPool::new(SocketAddress::new_unix(PROOF_TEST_ENCLAVE_SOCKET), 1)
+		StreamPool::single(SocketAddress::new_unix(PROOF_TEST_ENCLAVE_SOCKET))
 			.unwrap();
 
 	let enclave_client = SocketClient::new(

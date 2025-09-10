@@ -29,6 +29,8 @@ pub const REAPER_RESTART_DELAY_IN_SECONDS: u64 = 1;
 /// exits.
 pub const REAPER_EXIT_DELAY_IN_SECONDS: u64 = 3;
 
+const REAPER_STATE_CHECK_DELAY: Duration = Duration::from_millis(100);
+
 /// Primary entry point for running the enclave. Coordinates spawning the server
 /// and pivot binary.
 pub struct Reaper;
@@ -108,7 +110,7 @@ impl Reaper {
 							break;
 						}
 
-						tokio::time::sleep(Duration::from_millis(100)).await;
+						tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
 					}
 
 					eprintln!(
@@ -116,7 +118,7 @@ impl Reaper {
 					);
 					while *server_state.read().unwrap() != InterState::Quitting
 					{
-						tokio::time::sleep(Duration::from_millis(100)).await;
+						tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
 					}
 
 					eprintln!("Reaper server shutdown");

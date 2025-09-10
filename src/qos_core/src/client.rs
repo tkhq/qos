@@ -55,9 +55,6 @@ impl SocketClient {
 
 	/// Send raw bytes and wait for a response until the clients configured
 	/// timeout.
-	///
-	/// # Panics
-	/// Does not. See comment bellow.
 	pub async fn call(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
 		let pool = self.pool.read().await;
 
@@ -95,8 +92,13 @@ impl SocketClient {
 	}
 }
 
+// Convers TimeVal to Duration
+// # Panics
+//
+// Panics if timeval values are negative
 fn timeval_to_duration(timeval: TimeVal) -> Duration {
-	#[allow(clippy::cast_possible_truncation)]
-	#[allow(clippy::cast_sign_loss)]
-	Duration::new(timeval.tv_sec() as u64, timeval.tv_usec() as u32 * 1000)
+	let secs: u64 = timeval.tv_sec().try_into().expect("invalid TimeVal value");
+	let usecs: u32 =
+		timeval.tv_usec().try_into().expect("invalid TimeVal value");
+	Duration::new(secs, usecs * 1000)
 }

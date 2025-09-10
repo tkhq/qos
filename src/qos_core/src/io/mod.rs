@@ -44,7 +44,7 @@ pub enum IOError {
 	RecvNixError(nix::Error),
 	/// Reading the response size resulted in a size which exceeds the max payload size.
 	OversizedPayload(usize),
-	/// A async socket pool error during pool operations.
+	/// An async socket pool error during pool operations.
 	PoolError(PoolError),
 }
 

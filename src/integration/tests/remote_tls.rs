@@ -2,8 +2,7 @@ use std::process::Command;
 
 use borsh::BorshDeserialize;
 use integration::{
-	wait_for_usock, PivotRemoteTlsMsg, PIVOT_ASYNC_REMOTE_TLS_PATH,
-	QOS_NET_PATH,
+	wait_for_usock, PivotRemoteTlsMsg, PIVOT_REMOTE_TLS_PATH, QOS_NET_PATH,
 };
 use qos_core::{
 	client::SocketClient,
@@ -13,10 +12,9 @@ use qos_core::{
 
 use qos_test_primitives::ChildWrapper;
 
-const REMOTE_TLS_TEST_NET_PROXY_SOCKET: &str =
-	"/tmp/async_remote_tls_test.net.sock";
+const REMOTE_TLS_TEST_NET_PROXY_SOCKET: &str = "/tmp/remote_tls_test.net.sock";
 const REMOTE_TLS_TEST_ENCLAVE_SOCKET: &str =
-	"/tmp/async_remote_tls_test.enclave.sock";
+	"/tmp/remote_tls_test.enclave.sock";
 const POOL_SIZE: &str = "1";
 
 #[tokio::test]
@@ -30,7 +28,7 @@ async fn fetch_async_remote_tls_content() {
 		.unwrap()
 		.into();
 
-	let _enclave_app: ChildWrapper = Command::new(PIVOT_ASYNC_REMOTE_TLS_PATH)
+	let _enclave_app: ChildWrapper = Command::new(PIVOT_REMOTE_TLS_PATH)
 		.arg(REMOTE_TLS_TEST_ENCLAVE_SOCKET)
 		.arg(REMOTE_TLS_TEST_NET_PROXY_SOCKET)
 		.spawn()

@@ -355,23 +355,6 @@ mod handlers {
 		}
 	}
 
-	// pub(super) fn proxy(
-	// 	req: &ProtocolMsg,
-	// 	state: &mut ProtocolState,
-	// ) -> ProtocolRouteResponse {
-	// 	if let ProtocolMsg::ProxyRequest { data: req_data } = req {
-	// 		let result = state
-	// 			.app_client
-	// 			.send(req_data)
-	// 			.map(|data| ProtocolMsg::ProxyResponse { data })
-	// 			.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into()));
-
-	// 		Some(result)
-	// 	} else {
-	// 		None
-	// 	}
-	// }
-
 	pub(super) fn provision(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,

@@ -10,7 +10,6 @@ use qos_core::{
 };
 use tokio::sync::RwLock;
 
-#[derive(Clone)]
 struct Processor {
 	ephemeral_key_handle: EphemeralKeyHandle,
 }
