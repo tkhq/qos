@@ -57,7 +57,7 @@ fn boot() {
 #[tokio::main]
 async fn main() {
 	boot();
-	dmesg("QuorumOS Booted in Async mode".to_string());
+	dmesg("QuorumOS Booted".to_string());
 
 	let cid = get_local_cid().unwrap();
 	dmesg(format!("CID is {}", cid));
@@ -69,16 +69,17 @@ async fn main() {
 		PIVOT_FILE.to_string(),
 	);
 
-	let start_port = 3;
+	const START_PORT: u32 = 3;
+	const INITIAL_POOL_SIZE: u32 = 1; // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)
 	let core_pool = StreamPool::new(
-		SocketAddress::new_vsock(cid, start_port, VMADDR_NO_FLAGS),
-		1, // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)
+		SocketAddress::new_vsock(cid, START_PORT, VMADDR_NO_FLAGS),
+		INITIAL_POOL_SIZE,
 	)
 	.expect("unable to create core pool");
 
 	let app_pool = StreamPool::new(
 		SocketAddress::new_unix(SEC_APP_SOCK),
-		1, // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)
+		INITIAL_POOL_SIZE, // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)
 	)
 	.expect("unable to create app pool");
 

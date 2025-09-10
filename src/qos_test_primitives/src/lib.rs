@@ -14,6 +14,7 @@ const PORT_BIND_WAIT_TIME_INCREMENT: Duration = Duration::from_millis(500);
 const POST_BIND_SLEEP: Duration = Duration::from_millis(500);
 const SERVER_PORT_RANGE: Range<u16> = 10000..60000;
 const MAX_PORT_SEARCH_ATTEMPTS: u16 = 50;
+const EXIT_DELAY: Duration = Duration::from_millis(50);
 
 /// Wrapper type for [`std::process::Child`] that kills the process on drop.
 #[derive(Debug)]
@@ -37,7 +38,7 @@ impl Drop for ChildWrapper {
 			}
 
 			// allow clean exit
-			std::thread::sleep(Duration::from_millis(50));
+			std::thread::sleep(EXIT_DELAY);
 		}
 
 		// Kill the process and explicitly ignore the result
