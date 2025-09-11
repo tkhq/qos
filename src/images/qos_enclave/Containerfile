@@ -2,7 +2,7 @@ FROM stagex/eif_build:0.2.2@sha256:9d086a2743f9df4eddf934c7b68c9dee4a7fb131b6465
 FROM stagex/gen_initramfs:6.8@sha256:f5b9271cca6003e952cbbb9ef041ffa92ba328894f563d1d77942e6b5cdeac1a AS gen_initramfs
 FROM stagex/linux-nitro:sx2024.03.0@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eaea8866b002b04264 AS linux-nitro
 
-FROM common as base
+FROM common AS base
 
 RUN mkdir -p /qos/src
 ADD . /qos/src
@@ -27,7 +27,7 @@ RUN --network=none cargo build ${CARGOFLAGS}
 RUN cp target/x86_64-unknown-linux-musl/release/init /
 RUN file /init | grep "static-pie"
 
-FROM base as build-eif
+FROM base AS build-eif
 WORKDIR /build_cpio
 COPY --from=eif_build . /
 COPY --from=gen_initramfs . /
@@ -70,7 +70,7 @@ RUN eif_build \
 	--output /nitro.eif \
 	--cmdline 'reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd'
 
-FROM scratch as package
+FROM scratch AS package
 COPY --from=build-eif /nitro.eif .
 COPY --from=build-eif /nitro.pcrs .
 COPY --from=build-qos_enclave /qos_enclave .

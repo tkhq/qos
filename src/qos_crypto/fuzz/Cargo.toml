@@ -3,6 +3,7 @@ name = "qos_crypto_fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
+rust-version = "1.88"
 
 [package.metadata]
 cargo-fuzz = true

@@ -57,7 +57,7 @@ mod test {
 
 		// Reconstruct with enough shuffled shares
 		let mut shares = all_shares.clone()[..k].to_vec();
-		shares.shuffle(&mut rand::thread_rng());
+		shares.shuffle(&mut rand::rng());
 		let reconstructed = shares_reconstruct(&shares).unwrap();
 		assert_eq!(secret.to_vec(), reconstructed);
 

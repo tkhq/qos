@@ -157,7 +157,7 @@ impl Read for ProxyStream {
 			.map_err(|e| {
 				std::io::Error::new(
 				ErrorKind::NotConnected,
-				format!("Error while connecting to socket (sending read request): {:?}", e),
+				format!("Error while connecting to socket (sending read request): {e:?}"),
 			)
 			})?;
 
@@ -167,16 +167,10 @@ impl Read for ProxyStream {
 		})
 		.expect("ProtocolMsg can always be serialized.");
 		stream.send(&req).map_err(|e| {
-			std::io::Error::new(
-				ErrorKind::Other,
-				format!("QOS IOError: {:?}", e),
-			)
+			std::io::Error::other(format!("QOS IOError: {e:?}"))
 		})?;
 		let resp_bytes = stream.recv().map_err(|e| {
-			std::io::Error::new(
-				ErrorKind::Other,
-				format!("QOS IOError: {:?}", e),
-			)
+			std::io::Error::other(format!("QOS IOError: {e:?}"))
 		})?;
 
 		match ProxyMsg::try_from_slice(&resp_bytes) {
@@ -229,7 +223,7 @@ impl Write for ProxyStream {
 			.map_err(|e| {
 				std::io::Error::new(
 				ErrorKind::NotConnected,
-				format!("Error while connecting to socket (sending read request): {:?}", e),
+				format!("Error while connecting to socket (sending read request): {e:?}"),
 			)
 			})?;
 
@@ -239,16 +233,14 @@ impl Write for ProxyStream {
 		})
 		.expect("ProtocolMsg can always be serialized.");
 		stream.send(&req).map_err(|e| {
-			std::io::Error::new(
-				ErrorKind::Other,
-				format!("QOS IOError sending WriteRequest: {:?}", e),
-			)
+			std::io::Error::other(format!(
+				"QOS IOError sending WriteRequest: {e:?}"
+			))
 		})?;
 
 		let resp_bytes = stream.recv().map_err(|e| {
-			std::io::Error::new(
-				ErrorKind::Other,
-				format!("QOS IOError receiving bytes from stream after WriteRequest: {:?}", e),
+			std::io::Error::other(
+				format!("QOS IOError receiving bytes from stream after WriteRequest: {e:?}"),
 			)
 		})?;
 
@@ -280,7 +272,7 @@ impl Write for ProxyStream {
 			.map_err(|e| {
 				std::io::Error::new(
 				ErrorKind::NotConnected,
-				format!("Error while connecting to socket (sending read request): {:?}", e),
+				format!("Error while connecting to socket (sending read request): {e:?}"),
 			)
 			})?;
 
@@ -290,16 +282,14 @@ impl Write for ProxyStream {
 		.expect("ProtocolMsg can always be serialized.");
 
 		stream.send(&req).map_err(|e| {
-			std::io::Error::new(
-				ErrorKind::Other,
-				format!("QOS IOError sending FlushRequest: {:?}", e),
-			)
+			std::io::Error::other(format!(
+				"QOS IOError sending FlushRequest: {e:?}"
+			))
 		})?;
 
 		let resp_bytes = stream.recv().map_err(|e| {
-			std::io::Error::new(
-				ErrorKind::Other,
-				format!("QOS IOError receiving bytes from stream after FlushRequest: {:?}", e),
+			std::io::Error::other(
+				format!("QOS IOError receiving bytes from stream after FlushRequest: {e:?}"),
 			)
 		})?;
 

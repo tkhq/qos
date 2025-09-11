@@ -1537,11 +1537,19 @@ pub(crate) fn get_ephemeral_key_hex<P: AsRef<Path>>(
 	attestation_doc_path: P,
 	ephemeral_key_path: P,
 ) {
-	let bytes =
-		fs::read(attestation_doc_path).unwrap_or_else(|e| {panic!("Failed reading attestation doc: {e:?}")});
-	let attestation_doc: AttestationDoc = extract_attestation_doc(bytes.as_ref(), true, None);
-	let ephemeral_key = P256Public::from_bytes(&attestation_doc.public_key.expect("No ephemeral key in the attestation doc"),).expect("Ephemeral key not valid public key");
-	ephemeral_key.to_hex_file(ephemeral_key_path).unwrap_or_else(|e| {panic!("Failed to encode ephemeral key to hex: {e:?}")});
+	let bytes = fs::read(attestation_doc_path)
+		.unwrap_or_else(|e| panic!("Failed reading attestation doc: {e:?}"));
+	let attestation_doc: AttestationDoc =
+		extract_attestation_doc(bytes.as_ref(), true, None);
+	let ephemeral_key = P256Public::from_bytes(
+		&attestation_doc
+			.public_key
+			.expect("No ephemeral key in the attestation doc"),
+	)
+	.expect("Ephemeral key not valid public key");
+	ephemeral_key.to_hex_file(ephemeral_key_path).unwrap_or_else(|e| {
+		panic!("Failed to encode ephemeral key to hex: {e:?}")
+	});
 }
 
 pub(crate) fn display<P: AsRef<Path>>(
@@ -1787,7 +1795,7 @@ fn find_threshold<P: AsRef<Path>>(dir: P) -> u32 {
 			if file_name.len() != 1
 				|| file_name
 					.first()
-					.map_or(true, |s| s.as_str() != QUORUM_THRESHOLD_FILE)
+					.is_none_or(|s| s.as_str() != QUORUM_THRESHOLD_FILE)
 			{
 				return None;
 			};
@@ -1821,7 +1829,7 @@ fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
 		.iter()
 		.filter_map(|path| {
 			let mut file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
 			};
 
@@ -1845,7 +1853,7 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 		.iter()
 		.filter_map(|path| {
 			let mut file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
 			};
 
@@ -1869,7 +1877,7 @@ fn get_patch_set<P: AsRef<Path>>(dir: P) -> PatchSet {
 		.iter()
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
 			};
 
@@ -1890,7 +1898,7 @@ fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
 		.iter()
 		.filter_map(|path| {
 			let mut file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
 			};
 
@@ -1922,7 +1930,7 @@ fn find_approvals<P: AsRef<Path>>(
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
 			// Only look at files with the approval extension
-			if file_name.last().map_or(true, |s| s.as_str() != APPROVAL_EXT) {
+			if file_name.last().is_none_or(|s| s.as_str() != APPROVAL_EXT) {
 				return None;
 			};
 
