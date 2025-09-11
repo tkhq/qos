@@ -14,6 +14,7 @@ const PORT_BIND_WAIT_TIME_INCREMENT: Duration = Duration::from_millis(500);
 const POST_BIND_SLEEP: Duration = Duration::from_millis(500);
 const SERVER_PORT_RANGE: Range<u16> = 10000..60000;
 const MAX_PORT_SEARCH_ATTEMPTS: u16 = 50;
+const EXIT_DELAY: Duration = Duration::from_millis(50);
 
 /// Wrapper type for [`std::process::Child`] that kills the process on drop.
 #[derive(Debug)]
@@ -27,6 +28,19 @@ impl From<std::process::Child> for ChildWrapper {
 
 impl Drop for ChildWrapper {
 	fn drop(&mut self) {
+		#[cfg(unix)]
+		{
+			use nix::{sys::signal::Signal::SIGINT, unistd::Pid};
+			let pid = Pid::from_raw(self.0.id() as i32);
+			match nix::sys::signal::kill(pid, SIGINT) {
+				Ok(_) => {}
+				Err(err) => eprintln!("error sending signal to child: {}", err),
+			}
+
+			// allow clean exit
+			std::thread::sleep(EXIT_DELAY);
+		}
+
 		// Kill the process and explicitly ignore the result
 		drop(self.0.kill());
 	}

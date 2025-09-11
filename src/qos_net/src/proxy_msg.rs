@@ -35,9 +35,6 @@ pub enum ProxyMsg {
 	},
 	/// Response for `ConnectByNameRequest` and `ConnectByIpRequest`
 	ConnectResponse {
-		/// Connection ID to reference the opened connection in later messages
-		/// (`Read`, `Write`, `Flush`)
-		connection_id: u128,
 		/// The remote host IP, e.g. "1.2.3.4"
 		remote_ip: String,
 	},

@@ -3,7 +3,7 @@ use std::fs;
 use integration::{PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH};
 use qos_core::{
 	handles::Handles,
-	io::SocketAddress,
+	io::{SocketAddress, StreamPool},
 	protocol::services::boot::ManifestEnvelope,
 	reaper::{Reaper, REAPER_EXIT_DELAY_IN_SECONDS},
 };
@@ -12,10 +12,10 @@ use qos_test_primitives::PathWrapper;
 
 #[test]
 fn reaper_works() {
-	let secret_path: PathWrapper = "./reaper_works.secret".into();
+	let secret_path: PathWrapper = "/tmp/reaper_works.secret".into();
 	// let eph_path = "reaper_works.eph.key";
-	let usock: PathWrapper = "./reaper_works/reaper_works.sock".into();
-	let manifest_path: PathWrapper = "reaper_works.manifest".into();
+	let usock: PathWrapper = "/tmp/reaper_works.sock".into();
+	let manifest_path: PathWrapper = "/tmp/reaper_works.manifest".into();
 	let msg = "durp-a-durp";
 
 	// For our sanity, ensure the secret does not yet exist
@@ -37,12 +37,18 @@ fn reaper_works() {
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());
 
+	let enclave_pool =
+		StreamPool::new(SocketAddress::new_unix(&usock), 1).unwrap();
+
+	let app_pool =
+		StreamPool::new(SocketAddress::new_unix("./never.sock"), 1).unwrap();
+
 	let reaper_handle = std::thread::spawn(move || {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
-			SocketAddress::new_unix(&usock),
-			SocketAddress::new_unix("./never.sock"),
+			enclave_pool,
+			app_pool,
 			None,
 		)
 	});
@@ -68,10 +74,10 @@ fn reaper_works() {
 #[test]
 fn reaper_handles_non_zero_exits() {
 	let secret_path: PathWrapper =
-		"./reaper_handles_non_zero_exits.secret".into();
-	let usock: PathWrapper = "./reaper_handles_non_zero_exits.sock".into();
+		"/tmp/reaper_handles_non_zero_exits.secret".into();
+	let usock: PathWrapper = "/tmp/reaper_handles_non_zero_exits.sock".into();
 	let manifest_path: PathWrapper =
-		"./reaper_handles_non_zero_exits.manifest".into();
+		"/tmp/reaper_handles_non_zero_exits.manifest".into();
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(fs::remove_file(&*secret_path));
@@ -88,12 +94,18 @@ fn reaper_handles_non_zero_exits() {
 	handles.put_manifest_envelope(&Default::default()).unwrap();
 	assert!(handles.pivot_exists());
 
+	let enclave_pool =
+		StreamPool::new(SocketAddress::new_unix(&usock), 1).unwrap();
+
+	let app_pool =
+		StreamPool::new(SocketAddress::new_unix("./never.sock"), 1).unwrap();
+
 	let reaper_handle = std::thread::spawn(move || {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
-			SocketAddress::new_unix(&usock),
-			SocketAddress::new_unix("./never.sock"),
+			enclave_pool,
+			app_pool,
 			None,
 		)
 	});
@@ -120,9 +132,10 @@ fn reaper_handles_non_zero_exits() {
 
 #[test]
 fn reaper_handles_panic() {
-	let secret_path: PathWrapper = "./reaper_handles_panics.secret".into();
-	let usock: PathWrapper = "./reaper_handles_panics.sock".into();
-	let manifest_path: PathWrapper = "./reaper_handles_panics.manifest".into();
+	let secret_path: PathWrapper = "/tmp/reaper_handles_panics.secret".into();
+	let usock: PathWrapper = "/tmp/reaper_handles_panics.sock".into();
+	let manifest_path: PathWrapper =
+		"/tmp/reaper_handles_panics.manifest".into();
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(fs::remove_file(&*secret_path));
@@ -139,12 +152,18 @@ fn reaper_handles_panic() {
 	handles.put_manifest_envelope(&Default::default()).unwrap();
 	assert!(handles.pivot_exists());
 
+	let enclave_pool =
+		StreamPool::new(SocketAddress::new_unix(&usock), 1).unwrap();
+
+	let app_pool =
+		StreamPool::new(SocketAddress::new_unix("./never.sock"), 1).unwrap();
+
 	let reaper_handle = std::thread::spawn(move || {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
-			SocketAddress::new_unix(&usock),
-			SocketAddress::new_unix("./never.sock"),
+			enclave_pool,
+			app_pool,
 			None,
 		)
 	});

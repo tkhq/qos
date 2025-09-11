@@ -10,6 +10,7 @@ qos_aws = { path = "../qos_aws"}
 qos_system = { path = "../qos_system"}
 qos_core = { path = "../qos_core", features = ["vm"], default-features = false }
 qos_nsm = { path = "../qos_nsm", default-features = false }
+tokio = { version = "1.43.1", features = ["macros", "rt-multi-thread"], default-features = false }
 
 [[bin]]
 name = "init"

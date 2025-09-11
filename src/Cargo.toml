@@ -33,6 +33,7 @@ aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
 axum = { version = "0.6.20", features = ["http1", "tokio", "json"], default-features = false }
 borsh = { version = "1.0", features = ["std", "derive"], default-features = false }
 chunked_transfer = { version = "1.5.0", default-features = false }
+futures = { version = "0.3.30" }
 hex-literal = "0.4.0"
 hickory-resolver = { version = "0.25.2", features = ["tokio", "dnssec-ring"], default-features = false }
 hkdf = { version = "0.12", default-features = false }
@@ -40,7 +41,7 @@ hmac = { version = "0.12", default-features = false }
 httparse = { version = "1.9.4", default-features = false }
 lazy_static = "1.4"
 libc = "=0.2.172"
-nix = { version = "0.26", features = ["socket"], default-features = false }
+nix = { version = "0.29.0", features = ["socket"], default-features = false }
 p256 = { version = "0.12.0", default-features = false }
 p384 = { version = "0.13", features = ["ecdsa", "std"], default-features = false }
 rand = "0.9"
@@ -53,6 +54,8 @@ serde_json = { version = "1" }
 sha2 = { version = "0.10", default-features = false }
 thiserror = { version = "2.0.12", features = ["std"], default-features = false }
 tokio = { version = "1.43.1", features = ["macros", "rt-multi-thread"], default-features = false }
+tokio-rustls = { version = "0.26.2" }
+tokio-vsock = { version = "0.7.1" }
 ureq = { version = "2.9", default-features = false }
 vsss-rs = { version = "5.1", default-features = false, features = ["std", "zeroize"] }
 webpki = { version = "0.22.4", default-features = false }

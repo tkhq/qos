@@ -8,17 +8,19 @@ publish = false
 qos_core = { workspace = true, features = ["mock"], default-features = false }
 qos_nsm = { workspace = true, features = ["mock"], default-features = false }
 qos_host = { workspace = true, default-features = false }
-qos_net = { workspace = true, default-features = false }
+qos_net = { workspace = true, features = ["proxy" ], default-features = false }
 qos_crypto = { workspace = true }
 qos_hex = { workspace = true }
 qos_p256 = { workspace = true, features = ["mock"] }
 qos_test_primitives = { workspace = true }
 
+futures = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 borsh = { workspace = true }
 nix = { workspace = true }
 rustls = { workspace = true }
 webpki-roots = { workspace = true }
+tokio-rustls = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true, features = ["thread_rng"] }

@@ -1,14 +1,13 @@
 //! CLI for running a host proxy to provide remote connections.
 
-use std::env;
-
 use qos_core::{
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
-	server::SocketServer,
 };
 
-use crate::proxy::Proxy;
+use qos_core::io::StreamPool;
+
+use crate::proxy::ProxyServer;
 
 /// "cid"
 pub const CID: &str = "cid";
@@ -16,40 +15,54 @@ pub const CID: &str = "cid";
 pub const PORT: &str = "port";
 /// "usock"
 pub const USOCK: &str = "usock";
+/// "pool-size"
+pub const POOL_SIZE: &str = "pool-size";
 
 /// CLI options for starting up the proxy.
 #[derive(Default, Clone, Debug, PartialEq)]
-struct ProxyOpts {
-	parsed: Parser,
+pub(crate) struct ProxyOpts {
+	pub(crate) parsed: Parser,
 }
 
 impl ProxyOpts {
 	/// Create a new instance of [`Self`] with some defaults.
-	fn new(args: &mut Vec<String>) -> Self {
+	pub(crate) fn new(args: &mut Vec<String>) -> Self {
 		let parsed = OptionsParser::<ProxyParser>::parse(args)
 			.expect("Entered invalid CLI args");
 
 		Self { parsed }
 	}
 
-	/// Get the `SocketAddress` for the proxy server.
-	///
-	/// # Panics
-	///
-	/// Panics if the opts are not valid for exactly one of unix or vsock.
-	fn addr(&self) -> SocketAddress {
+	/// Create a new `StreamPool` using the list of `SocketAddress` for the enclave server.
+	pub(crate) fn async_pool(
+		&self,
+	) -> Result<StreamPool, qos_core::io::IOError> {
+		let pool_size: u32 = self
+			.parsed
+			.single(POOL_SIZE)
+			.expect("invalid pool options")
+			.parse()
+			.expect("invalid pool_size specified");
 		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
 			self.parsed.single(USOCK),
 		) {
 			#[cfg(feature = "vm")]
-			(Some(c), Some(p), None) => SocketAddress::new_vsock(
-				c.parse::<u32>().unwrap(),
-				p.parse::<u32>().unwrap(),
-				crate::io::VMADDR_NO_FLAGS,
-			),
-			(None, None, Some(u)) => SocketAddress::new_unix(u),
+			(Some(c), Some(p), None) => {
+				let c = c.parse::<u32>().unwrap();
+				let p = p.parse::<u32>().unwrap();
+
+				let address =
+					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS);
+
+				StreamPool::new(address, pool_size)
+			}
+			(None, None, Some(u)) => {
+				let address = SocketAddress::new_unix(u);
+
+				StreamPool::new(address, pool_size)
+			}
 			_ => panic!("Invalid socket opts"),
 		}
 	}
@@ -57,10 +70,13 @@ impl ProxyOpts {
 
 /// Proxy CLI.
 pub struct CLI;
+
 impl CLI {
-	/// Execute the enclave proxy CLI with the environment args.
-	pub fn execute() {
-		let mut args: Vec<String> = env::args().collect();
+	/// Execute the enclave proxy CLI with the environment args in an async way.
+	pub async fn execute() {
+		use qos_core::server::SocketServer;
+
+		let mut args: Vec<String> = std::env::args().collect();
 		let opts = ProxyOpts::new(&mut args);
 
 		if opts.parsed.version() {
@@ -68,7 +84,17 @@ impl CLI {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
-			SocketServer::listen(opts.addr(), Proxy::new()).unwrap();
+			let _server = SocketServer::listen_proxy(
+				opts.async_pool().expect("unable to create async socket pool"),
+			)
+			.await
+			.expect("unable to get listen join handles");
+
+			match tokio::signal::ctrl_c().await {
+				Ok(_) => eprintln!("handling ctrl+c the tokio way"),
+
+				Err(err) => panic!("{err}"),
+			}
 		}
 	}
 }
@@ -98,6 +124,15 @@ impl GetParserForOptions for ProxyParser {
 					.takes_value(true)
 					.forbids(vec!["port", "cid"]),
 			)
+			.token(
+				Token::new(
+					POOL_SIZE,
+					"the pool size to use with all socket types.",
+				)
+				.takes_value(true)
+				.forbids(vec!["port", "cid"])
+				.default_value("1"),
+			)
 	}
 }
 
@@ -116,15 +151,45 @@ mod test {
 		assert_eq!(*opts.parsed.single(CID).unwrap(), "6".to_string());
 		assert_eq!(*opts.parsed.single(PORT).unwrap(), "3999".to_string());
 	}
+
 	#[test]
 	fn parse_usock() {
-		let mut args: Vec<_> = vec!["binary", "--usock", "./test.sock"]
+		let mut args: Vec<_> = vec!["binary", "--usock", "/tmp/usock"]
 			.into_iter()
 			.map(String::from)
 			.collect();
 		let opts = ProxyOpts::new(&mut args);
 
-		assert_eq!(opts.addr(), SocketAddress::new_unix("./test.sock"));
+		assert_eq!(
+			*opts.parsed.single(USOCK).unwrap(),
+			"/tmp/usock".to_string()
+		);
+	}
+
+	#[test]
+	fn parse_pool_size() {
+		let mut args: Vec<_> =
+			vec!["binary", "--usock", "./test.sock", "--pool-size", "7"]
+				.into_iter()
+				.map(String::from)
+				.collect();
+		let opts = ProxyOpts::new(&mut args);
+
+		let pool = opts.async_pool().unwrap();
+		assert_eq!(pool.len(), 7);
+	}
+
+	#[test]
+	fn builds_async_pool() {
+		let mut args: Vec<_> =
+			vec!["binary", "--usock", "./test.sock", "--pool-size", "3"]
+				.into_iter()
+				.map(String::from)
+				.collect();
+		let opts = ProxyOpts::new(&mut args);
+
+		let pool = opts.async_pool().unwrap();
+		assert_eq!(pool.len(), 3);
 	}
 
 	#[test]

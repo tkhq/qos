@@ -1,18 +1,14 @@
-use qos_system::{dmesg, get_local_cid, freopen, mount, reboot};
 use qos_core::{
-    handles::Handles,
-    io::{SocketAddress, VMADDR_NO_FLAGS},
-    reaper::Reaper,
-    EPHEMERAL_KEY_FILE,
-    MANIFEST_FILE,
-    PIVOT_FILE,
-    QUORUM_FILE,
-    SEC_APP_SOCK,
+	handles::Handles,
+	io::{SocketAddress, StreamPool, VMADDR_NO_FLAGS},
+	reaper::Reaper,
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
 };
 use qos_nsm::Nsm;
+use qos_system::{dmesg, freopen, get_local_cid, mount, reboot};
 
 //TODO: Feature flag
-use qos_aws::{init_platform};
+use qos_aws::init_platform;
 
 // Mount common filesystems with conservative permissions
 fn init_rootfs() {
@@ -58,7 +54,8 @@ fn boot() {
 	init_platform();
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	boot();
 	dmesg("QuorumOS Booted".to_string());
 
@@ -66,18 +63,27 @@ fn main() {
 	dmesg(format!("CID is {}", cid));
 
 	let handles = Handles::new(
-	     EPHEMERAL_KEY_FILE.to_string(),
-	     QUORUM_FILE.to_string(),
-	     MANIFEST_FILE.to_string(),
-	     PIVOT_FILE.to_string(),
+		EPHEMERAL_KEY_FILE.to_string(),
+		QUORUM_FILE.to_string(),
+		MANIFEST_FILE.to_string(),
+		PIVOT_FILE.to_string(),
 	);
-	Reaper::execute(
-	     &handles,
-	     Box::new(Nsm),
-	     SocketAddress::new_vsock(cid, 3, VMADDR_NO_FLAGS),
-	     SocketAddress::new_unix(SEC_APP_SOCK),
-	     None,
-	);
+
+	const START_PORT: u32 = 3;
+	const INITIAL_POOL_SIZE: u32 = 1; // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)
+	let core_pool = StreamPool::new(
+		SocketAddress::new_vsock(cid, START_PORT, VMADDR_NO_FLAGS),
+		INITIAL_POOL_SIZE,
+	)
+	.expect("unable to create core pool");
+
+	let app_pool = StreamPool::new(
+		SocketAddress::new_unix(SEC_APP_SOCK),
+		INITIAL_POOL_SIZE, // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)
+	)
+	.expect("unable to create app pool");
+
+	Reaper::execute(&handles, Box::new(Nsm), core_pool, app_pool, None);
 
 	reboot();
 }

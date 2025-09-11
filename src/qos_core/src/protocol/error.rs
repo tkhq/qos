@@ -3,7 +3,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use qos_p256::P256Error;
 
 use crate::{
-	client::{self, ClientError},
+	client::ClientError,
 	io::IOError,
 	protocol::{services::boot, ProtocolPhase},
 };
@@ -147,6 +147,8 @@ pub enum ProtocolError {
 	DifferentManifest,
 	/// Error from the qos crypto library.
 	QosCrypto(String),
+	/// Error during expanding the `StreamPool`.
+	PoolExpandError,
 }
 
 impl From<std::io::Error> for ProtocolError {
@@ -155,8 +157,8 @@ impl From<std::io::Error> for ProtocolError {
 	}
 }
 
-impl From<client::ClientError> for ProtocolError {
-	fn from(err: client::ClientError) -> Self {
+impl From<ClientError> for ProtocolError {
+	fn from(err: ClientError) -> Self {
 		match err {
 			ClientError::IOError(IOError::RecvTimeout) => {
 				ProtocolError::AppClientRecvTimeout

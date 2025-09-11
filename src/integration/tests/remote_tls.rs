@@ -1,12 +1,12 @@
-use std::os::unix::net::UnixStream;
-use std::time::{Duration, Instant};
-use std::{path::Path, process::Command, str};
+use std::process::Command;
 
 use borsh::BorshDeserialize;
-use integration::{PivotRemoteTlsMsg, PIVOT_REMOTE_TLS_PATH, QOS_NET_PATH};
+use integration::{
+	wait_for_usock, PivotRemoteTlsMsg, PIVOT_REMOTE_TLS_PATH, QOS_NET_PATH,
+};
 use qos_core::{
-	client::Client,
-	io::{SocketAddress, TimeVal, TimeValLike},
+	client::SocketClient,
+	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
 	protocol::ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
 };
 
@@ -15,37 +15,15 @@ use qos_test_primitives::ChildWrapper;
 const REMOTE_TLS_TEST_NET_PROXY_SOCKET: &str = "/tmp/remote_tls_test.net.sock";
 const REMOTE_TLS_TEST_ENCLAVE_SOCKET: &str =
 	"/tmp/remote_tls_test.enclave.sock";
+const POOL_SIZE: &str = "1";
 
-/// Waits for socket at `path` until it becomes ready.
-/// If the socket isn't ready after `timeout`, this function panics.
-fn wait_for_socket_ready<P: AsRef<Path>>(path: P, timeout: Duration) {
-	let start = Instant::now();
-	while start.elapsed() < timeout {
-		match UnixStream::connect(&path) {
-			Ok(_) => return, // socket is ready
-			Err(e) => {
-				// Error while connecting. Retry.
-				println!(
-					"[retrying] error while connecting at {}: {}",
-					path.as_ref().display(),
-					e
-				)
-			}
-		}
-		std::thread::sleep(Duration::from_millis(50));
-	}
-	panic!(
-		"Unable to connect to {}: timing out after retrying for {} seconds.",
-		path.as_ref().display(),
-		timeout.as_secs()
-	);
-}
-
-#[test]
-fn fetch_remote_tls_content() {
+#[tokio::test]
+async fn fetch_async_remote_tls_content() {
 	let _net_proxy: ChildWrapper = Command::new(QOS_NET_PATH)
 		.arg("--usock")
 		.arg(REMOTE_TLS_TEST_NET_PROXY_SOCKET)
+		.arg("--pool-size")
+		.arg(POOL_SIZE)
 		.spawn()
 		.unwrap()
 		.into();
@@ -57,8 +35,16 @@ fn fetch_remote_tls_content() {
 		.unwrap()
 		.into();
 
-	let enclave_client = Client::new(
+	wait_for_usock(REMOTE_TLS_TEST_ENCLAVE_SOCKET).await;
+
+	let enclave_pool = StreamPool::new(
 		SocketAddress::new_unix(REMOTE_TLS_TEST_ENCLAVE_SOCKET),
+		1,
+	)
+	.expect("unable to create enclave async pool");
+
+	let enclave_client = SocketClient::new(
+		enclave_pool.shared(),
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
 	);
 
@@ -68,16 +54,7 @@ fn fetch_remote_tls_content() {
 	})
 	.unwrap();
 
-	wait_for_socket_ready(
-		REMOTE_TLS_TEST_NET_PROXY_SOCKET,
-		Duration::from_secs(2),
-	);
-	wait_for_socket_ready(
-		REMOTE_TLS_TEST_ENCLAVE_SOCKET,
-		Duration::from_secs(2),
-	);
-
-	let response = enclave_client.send(&app_request).unwrap();
+	let response = enclave_client.call(&app_request).await.unwrap();
 	let response_text =
 		match PivotRemoteTlsMsg::try_from_slice(&response).unwrap() {
 			PivotRemoteTlsMsg::RemoteTlsResponse(s) => s,
@@ -96,7 +73,7 @@ fn fetch_remote_tls_content() {
 	})
 	.unwrap();
 
-	let response = enclave_client.send(&app_request).unwrap();
+	let response = enclave_client.call(&app_request).await.unwrap();
 	let response_text =
 		match PivotRemoteTlsMsg::try_from_slice(&response).unwrap() {
 			PivotRemoteTlsMsg::RemoteTlsResponse(s) => s,

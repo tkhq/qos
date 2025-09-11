@@ -1,21 +1,17 @@
+//! Example showing how enclaves can be booted locally end-to-end.
+//! Useful to make debugging easier when iterating on the core of QOS.
+
 use std::{
 	fs,
 	io::{BufRead, BufReader, Write},
-	path::Path,
 	process::{Command, Stdio},
 };
 
 use borsh::de::BorshDeserialize;
-use integration::{
-	LOCAL_HOST, PCR3_PRE_IMAGE_PATH, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE,
-	QOS_DIST_DIR,
-};
+use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
 use qos_core::protocol::{
 	services::{
-		boot::{
-			Approval, Manifest, ManifestSet, Namespace, PivotConfig,
-			RestartPolicy, ShareSet,
-		},
+		boot::{Approval, Manifest, ManifestSet, Namespace, ShareSet},
 		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
 	ProtocolPhase, QosHash,
@@ -25,25 +21,31 @@ use qos_host::EnclaveInfo;
 use qos_p256::P256Pair;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
-#[tokio::test]
-async fn standard_boot_e2e() {
-	const PIVOT_HASH_PATH: &str = "/tmp/standard_boot_e2e-pivot-hash.txt";
+#[tokio::main]
+async fn main() {
+	let pivot_file_path =
+		std::env::args().nth(1).expect("No pivot file path provided");
 
-	let host_port = qos_test_primitives::find_free_port().unwrap();
-	let tmp: PathWrapper = "/tmp/boot-e2e".into();
-	let _: PathWrapper = PIVOT_OK2_SUCCESS_FILE.into();
+	const PIVOT_HASH_PATH: &str = "/tmp/enclave-example-pivot-hash.txt";
+
+	let host_port = 3001;
+	let tmp: PathWrapper = "/tmp/enclave-example".into();
 	let _: PathWrapper = PIVOT_HASH_PATH.into();
 	fs::create_dir_all(&*tmp).unwrap();
 
-	let usock: PathWrapper = "/tmp/boot-e2e/boot_e2e.sock".into();
-	let secret_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.secret".into();
-	let pivot_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.pivot".into();
-	let manifest_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.manifest".into();
-	let eph_path: PathWrapper = "/tmp/boot-e2e/ephemeral_key.secret".into();
+	let usock: PathWrapper = "/tmp/enclave-example/example.sock".into();
+	let app_usock: PathWrapper = "/tmp/enclave-example/example-app.sock".into();
+	let secret_path: PathWrapper = "/tmp/enclave-example/example.secret".into();
+	let pivot_path: PathWrapper = "/tmp/enclave-example/example.pivot".into();
+	let manifest_path: PathWrapper =
+		"/tmp/enclave-example/example.manifest".into();
+	let eph_path: PathWrapper =
+		"/tmp/enclave-example/ephemeral_key.secret".into();
 
-	let boot_dir: PathWrapper = "/tmp/boot-e2e/boot-dir".into();
+	let boot_dir: PathWrapper = "/tmp/enclave-example/boot-dir".into();
 	fs::create_dir_all(&*boot_dir).unwrap();
-	let attestation_dir: PathWrapper = "/tmp/boot-e2e/attestation-dir".into();
+	let attestation_dir: PathWrapper =
+		"/tmp/enclave-example/attestation-dir".into();
 	fs::create_dir_all(&*attestation_dir).unwrap();
 	let attestation_doc_path = format!("{}/attestation_doc", &*attestation_dir);
 
@@ -58,14 +60,13 @@ async fn standard_boot_e2e() {
 	let user3 = "user3";
 
 	// -- Create pivot-build-fingerprints.txt
-	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
+	let pivot = fs::read(&pivot_file_path).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
 	let pivot_hash = qos_hex::encode_to_vec(&mock_pivot_hash);
 	std::fs::write(PIVOT_HASH_PATH, pivot_hash).unwrap();
 
 	// -- CLIENT create manifest.
-	let msg = "testing420";
-	let pivot_args = format!("[--msg,{msg}]");
+	let pivot_args = std::env::args().nth(2).expect("No pivot args provided");
 	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
 
 	assert!(Command::new("../target/debug/qos_client")
@@ -128,12 +129,6 @@ async fn standard_boot_e2e() {
 		quorum_key: genesis_output.quorum_key,
 	};
 	assert_eq!(manifest.namespace, namespace_field);
-	let pivot = PivotConfig {
-		hash: mock_pivot_hash,
-		restart: RestartPolicy::Never,
-		args: vec!["--msg".to_string(), msg.to_string()],
-	};
-	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
 	assert_eq!(manifest.manifest_set, manifest_set);
 	let share_set = ShareSet { threshold: 2, members };
@@ -219,10 +214,7 @@ async fn standard_boot_e2e() {
 			&stdout.next().unwrap().unwrap(),
 			"Are these the correct pivot args:"
 		);
-		assert_eq!(
-			&stdout.next().unwrap().unwrap(),
-			"[\"--msg\", \"testing420\"]?"
-		);
+		stdout.next().unwrap().unwrap(); // pivot args confirm msg
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 
@@ -256,6 +248,8 @@ async fn standard_boot_e2e() {
 			.args([
 				"--usock",
 				&*usock,
+				"--app-usock",
+				&*app_usock,
 				"--quorum-file",
 				&*secret_path,
 				"--pivot-file",
@@ -311,7 +305,7 @@ async fn standard_boot_e2e() {
 			"--manifest-envelope-path",
 			&manifest_envelope_path,
 			"--pivot-path",
-			PIVOT_OK2_PATH,
+			&pivot_file_path,
 			"--host-port",
 			&host_port.to_string(),
 			"--host-ip",
@@ -326,9 +320,6 @@ async fn standard_boot_e2e() {
 		.unwrap()
 		.success());
 
-	// For each user, post a share,
-	// and sanity check the pivot has not yet executed.
-	assert!(!Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
 	for user in [&user1, &user2] {
 		// Get attestation doc and manifest
 		assert!(Command::new("../target/debug/qos_client")
@@ -448,15 +439,17 @@ async fn standard_boot_e2e() {
 	// Give the enclave time to start the pivot
 	std::thread::sleep(std::time::Duration::from_secs(2));
 
-	// Check that the pivot executed
-	let contents = std::fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
-	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
-
 	let enclave_info_url =
 		format!("http://{LOCAL_HOST}:{}/qos/enclave-info", host_port);
 	let enclave_info: EnclaveInfo =
 		ureq::get(&enclave_info_url).call().unwrap().into_json().unwrap();
 	assert_eq!(enclave_info.phase, ProtocolPhase::QuorumKeyProvisioned);
 
-	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
+	eprintln!("=========ENCLAVE READY WITH PIVOT RUNNING!!==========");
+	eprintln!("press ctrl+c to quit");
+
+	match tokio::signal::ctrl_c().await {
+		Ok(()) => {}
+		Err(err) => panic!("{err}"),
+	}
 }
