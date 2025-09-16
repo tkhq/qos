@@ -11,6 +11,12 @@ use tokio_vsock::{VsockListener, VsockStream};
 
 use super::{IOError, SocketAddress};
 
+const MIB: usize = 1024 * 1024;
+
+/// Maximum payload size for a single recv / send call. We're being generous with 128MiB.
+/// The goal here is to avoid server crashes if the payload size exceeds the available system memory.
+pub const MAX_PAYLOAD_SIZE: usize = 128 * MIB;
+
 #[derive(Debug)]
 enum InnerListener {
 	Unix(UnixListener),
@@ -51,7 +57,7 @@ impl Stream {
 		Self { address: Some(address.clone()), inner: None }
 	}
 
-	/// Create a new `Stream` from a `SocketAddress` and a timeout and connect using async
+	/// Connect `Stream` to `SocketAddress`
 	/// Sets `inner` to the new stream.
 	pub async fn connect(&mut self) -> Result<(), IOError> {
 		let addr = self.address()?;
@@ -145,9 +151,14 @@ async fn send<S: AsyncWriteExt + Unpin>(
 	stream: &mut S,
 	buf: &[u8],
 ) -> Result<(), IOError> {
-	let len = buf.len();
+	let length = buf.len();
+
+	if length > MAX_PAYLOAD_SIZE {
+		return Err(IOError::OversizedPayload(length));
+	}
+
 	// First, send the length of the buffer
-	let len_buf: [u8; size_of::<u64>()] = (len as u64).to_le_bytes();
+	let len_buf: [u8; size_of::<u64>()] = (length as u64).to_le_bytes();
 
 	// send the header
 	stream.write_all(&len_buf).await?;
@@ -173,6 +184,10 @@ async fn recv<S: AsyncReadExt + Unpin>(
 			// Should only be possible if we are on 32bit architecture
 			.map_err(|_| IOError::ArithmeticSaturation)?
 	};
+
+	if length > MAX_PAYLOAD_SIZE {
+		return Err(IOError::OversizedPayload(length));
+	}
 
 	// Read the buffer
 	let mut buf = vec![0; length];
@@ -331,4 +346,213 @@ async fn vsock_connect(
 ) -> Result<VsockStream, std::io::Error> {
 	let addr = addr.vsock();
 	VsockStream::connect(*addr).await
+}
+
+#[cfg(test)]
+mod test {
+
+	use std::{str::from_utf8, time::Duration};
+
+	use nix::sys::time::{TimeVal, TimeValLike};
+
+	use crate::{client::SocketClient, io::StreamPool};
+
+	use super::*;
+
+	/// Wait for a given usock file to exist and be connectible with a timeout of 5s.
+	///
+	/// # Panics
+	/// Panics if fs::exists errors.
+	pub async fn wait_for_usock(path: &str) {
+		let addr = SocketAddress::new_unix(path);
+		let pool = StreamPool::new(addr, 1).unwrap().shared();
+		let client = SocketClient::new(pool, TimeVal::milliseconds(50));
+
+		for _ in 0..50 {
+			if std::fs::exists(path).unwrap()
+				&& client.try_connect().await.is_ok()
+			{
+				break;
+			}
+
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}
+
+	// A simple test socket server which says "PONG" when you send "PING".
+	// Then it kills itself.
+	pub struct HarakiriPongServer {
+		path: String,
+	}
+
+	impl Drop for HarakiriPongServer {
+		fn drop(&mut self) {
+			let _ = std::fs::remove_file(&self.path);
+		}
+	}
+
+	impl HarakiriPongServer {
+		pub fn new(path: String) -> Self {
+			// in case of panics, cleanup beforehand too
+			let _ = std::fs::remove_file(&path);
+			Self { path }
+		}
+
+		pub async fn start(&mut self) {
+			let listener = UnixListener::bind(&self.path).unwrap();
+
+			// first time accept is from "wait_for_usock" above, just ignore
+			let (_stream, _peer_addr) = listener.accept().await.unwrap();
+
+			// second accept should be for the test
+			let (mut stream, _peer_addr) = listener.accept().await.unwrap();
+
+			// Read 4 bytes ("PING")
+			let mut buf = [0u8; 4];
+			let r = stream.read_exact(&mut buf).await;
+			eprintln!("BYTES: {buf:?}");
+			r.unwrap();
+
+			// Send "PONG" if "PING" was sent
+			if from_utf8(&buf).unwrap() == "PING" {
+				let _ = stream.write(b"PONG").await.unwrap();
+			}
+		}
+	}
+
+	#[tokio::test]
+	async fn stream_integration_test() {
+		// Ensure concurrent tests do not listen at the same path
+		let addr: SocketAddress =
+			SocketAddress::new_unix("/tmp/stream_integration_test.sock");
+		let listener: Listener = Listener::listen(&addr).unwrap();
+		let mut client = Stream::new(&addr);
+		client.connect().await.unwrap();
+		let mut server = listener.accept().await.unwrap();
+
+		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
+		client.send(&data).await.unwrap();
+
+		let resp = server.recv().await.unwrap();
+
+		assert_eq!(data, resp);
+	}
+
+	#[tokio::test]
+	async fn stream_implements_read_write_traits() {
+		let socket_server_path =
+			"/tmp/stream_implements_read_write_traits.sock";
+
+		// Start a simple socket server which replies "PONG" to any incoming
+		// request
+		let mut server =
+			HarakiriPongServer::new(socket_server_path.to_string());
+
+		// Start the server in its own thread
+		tokio::spawn(async move {
+			server.start().await;
+		});
+
+		wait_for_usock(socket_server_path).await; // wait for server
+
+		// Now create a stream connecting to this mini-server
+		let addr = SocketAddress::new_unix(socket_server_path);
+		let mut pong_stream = Stream::new(&addr);
+		pong_stream.connect().await.unwrap();
+
+		// Write "PING"
+		let written = pong_stream.write(b"PING").await.unwrap();
+		assert_eq!(written, 4);
+
+		// Read, and expect "PONG"
+		let mut resp = [0u8; 4];
+		let res = pong_stream.read(&mut resp).await.unwrap();
+		assert_eq!(res, 4);
+		assert_eq!(from_utf8(&resp).unwrap(), "PONG");
+	}
+
+	#[tokio::test]
+	async fn listener_accept_test() {
+		// Ensure concurrent tests are not attempting to listen at the same
+		// address
+		let addr = SocketAddress::new_unix("./listener_iterator_test.sock");
+
+		let listener = Listener::listen(&addr).unwrap();
+
+		let handler = tokio::spawn(async move {
+			if let Ok(mut stream) = listener.accept().await {
+				let req = stream.recv().await.unwrap();
+				stream.send(&req).await.unwrap();
+			}
+		});
+
+		let mut client = Stream::new(&addr);
+		client.connect().await.unwrap();
+
+		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
+		client.send(&data).await.unwrap();
+		let resp = client.recv().await.unwrap();
+		assert_eq!(data, resp);
+
+		handler.await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn limit_sized_payload() {
+		// Ensure concurrent tests are not attempting to listen on the same socket
+		let unix_addr =
+			nix::sys::socket::UnixAddr::new("./limit_sized_payload.sock")
+				.unwrap();
+		let addr = SocketAddress::Unix(unix_addr);
+
+		let listener = Listener::listen(&addr).unwrap();
+		let handler = tokio::spawn(async move {
+			if let Ok(mut stream) = listener.accept().await {
+				let req = stream.recv().await.unwrap();
+				stream.send(&req.clone()).await.unwrap();
+			}
+		});
+
+		// Sending a request that is exactly the max size should work
+		// (the response will be exactly max size)
+		let mut client = Stream::new(&addr);
+		client.connect().await.unwrap();
+
+		let req = vec![1u8; MAX_PAYLOAD_SIZE];
+		client.send(&req).await.unwrap();
+		let resp = client.recv().await.unwrap();
+		assert_eq!(resp.len(), MAX_PAYLOAD_SIZE);
+		handler.await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn oversized_payload() {
+		// Ensure concurrent tests are not attempting to listen on the same socket
+		let addr = SocketAddress::new_unix("./oversized_payload.sock");
+		let listener = Listener::listen(&addr).unwrap();
+
+		// accept-only handler
+		let handler = tokio::spawn(async move {
+			if let Err(err) = listener.accept().await {
+				panic!("{err:?}");
+			}
+		});
+
+		let mut client = Stream::new(&addr);
+		client.connect().await.unwrap();
+
+		// Sending with the limit payload size + 1 will fail
+		let req = vec![1u8; MAX_PAYLOAD_SIZE + 1];
+
+		match client.send(&req).await.unwrap_err() {
+			IOError::OversizedPayload(size) => {
+				assert_eq!(size, MAX_PAYLOAD_SIZE + 1);
+			}
+			other => {
+				panic!("test failed: unexpected error variant ({:?})", other);
+			}
+		}
+
+		handler.await.unwrap();
+	}
 }
