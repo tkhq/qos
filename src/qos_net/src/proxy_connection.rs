@@ -110,10 +110,8 @@ pub async fn resolve_hostname(
 	.with_options(resolver_opts)
 	.build();
 
-	let response = resolver
-		.lookup_ip(hostname.clone())
-		.await
-		.map_err(QosNetError::from)?;
+	let response =
+		resolver.lookup_ip(&hostname).await.map_err(QosNetError::from)?;
 	response.iter().next().ok_or_else(|| {
 		QosNetError::DNSResolutionError(format!(
 			"Empty response when querying for host {hostname}"
