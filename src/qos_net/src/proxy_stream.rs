@@ -131,3 +131,96 @@ impl AsyncWrite for ProxyStream<'_> {
 		Pin::<&mut Stream>::new(&mut self.stream).poll_shutdown(cx)
 	}
 }
+
+#[cfg(test)]
+mod test {
+
+	use std::{
+		io::{ErrorKind, Read},
+		sync::Arc,
+	};
+
+	use chunked_transfer::Decoder;
+	use httparse::Response;
+	use rustls::RootCertStore;
+	use serde_json::Value;
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+	use tokio_rustls::TlsConnector;
+
+	use crate::proxy_connection::ProxyConnection;
+
+	#[tokio::test]
+	async fn can_fetch_and_parse_chunked_json_over_tls_with_local_stream() {
+		let host = "www.googleapis.com";
+		let path = "/oauth2/v3/certs";
+
+		let mut remote_connection = ProxyConnection::new_from_name(
+			host.to_string(),
+			443,
+			vec!["8.8.8.8".to_string()],
+			53,
+		)
+		.await
+		.unwrap();
+
+		let root_store =
+			RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.into() };
+
+		let server_name: rustls::pki_types::ServerName<'_> =
+			host.try_into().unwrap();
+		let config: rustls::ClientConfig = rustls::ClientConfig::builder()
+			.with_root_certificates(root_store)
+			.with_no_client_auth();
+		let conn = TlsConnector::from(Arc::new(config));
+		let stream = &mut remote_connection.tcp_stream;
+		let mut tls = conn.connect(server_name, stream).await.unwrap();
+
+		let http_request = format!(
+			"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+		);
+
+		tls.write_all(http_request.as_bytes()).await.unwrap();
+
+		let mut response_bytes = Vec::new();
+		let read_to_end_result = tls.read_to_end(&mut response_bytes).await;
+
+		match read_to_end_result {
+			Ok(read_size) => assert!(read_size > 0),
+
+			Err(e) => {
+				// Only EOF errors are expected. This means the connection was
+				// closed by the remote server https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
+				assert_eq!(e.kind(), ErrorKind::UnexpectedEof)
+			}
+		}
+
+		// Parse headers with httparse
+		let mut headers = [httparse::EMPTY_HEADER; 16];
+		let mut response = Response::new(&mut headers);
+		let res = httparse::ParserConfig::default()
+			.parse_response(&mut response, &response_bytes);
+		assert!(matches!(res, Ok(httparse::Status::Complete(..))));
+		assert_eq!(response.code, Some(200));
+		let header_byte_size = res.unwrap().unwrap();
+
+		// Assert that the response is chunk-encoded
+		let transfer_encoding_header =
+			response.headers.iter().find(|h| h.name == "Transfer-Encoding");
+		assert!(transfer_encoding_header.is_some());
+		assert_eq!(
+			transfer_encoding_header.unwrap().value,
+			"chunked".as_bytes()
+		);
+
+		// Decode the chunked content
+		let mut decoded = String::new();
+		let mut decoder = Decoder::new(&response_bytes[header_byte_size..]);
+		let res = decoder.read_to_string(&mut decoded);
+		assert!(res.is_ok());
+
+		// Parse the JSON response body and make sure there is a proper "keys"
+		// array in it
+		let json_content: Value = serde_json::from_str(&decoded).unwrap();
+		assert!(json_content["keys"].is_array());
+	}
+}
