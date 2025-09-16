@@ -48,7 +48,6 @@ rand = "0.9"
 rand_core = { version = "0.9", default-features = false, features = ["os_rng"] }
 rpassword = { version = "7", default-features = false }
 rustls = { version = "0.23.5" }
-procfs = { version = "0.18.0" }
 serde = { version = "1", features = ["derive"], default-features = false }
 serde_bytes = { version = "0.11", default-features = false }
 serde_json = { version = "1" }

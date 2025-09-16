@@ -351,24 +351,27 @@ async fn vsock_connect(
 #[cfg(test)]
 mod test {
 
-	use std::str::from_utf8;
+	use std::{str::from_utf8, time::Duration};
+
+	use nix::sys::time::{TimeVal, TimeValLike};
+
+	use crate::{client::SocketClient, io::StreamPool};
 
 	use super::*;
 
 	/// Wait for a given usock file to exist and be connectible with a timeout of 5s.
-	/// Used in raw socket tests. NOTE: this differs from integration test `wait_for_usock`
-	/// because we CANNOT connect here, we have to check via `/proc/net/unix` so there's no
-	/// "phantom" connection before data comes in.
 	///
 	/// # Panics
-	/// Panics if `procfs::net::unix` errors.
-	async fn wait_for_usock(path: &str) {
-		use std::time::Duration;
-		let path = std::path::PathBuf::from(path);
+	/// Panics if fs::exists errors.
+	pub async fn wait_for_usock(path: &str) {
+		let addr = SocketAddress::new_unix(path);
+		let pool = StreamPool::new(addr, 1).unwrap().shared();
+		let client = SocketClient::new(pool, TimeVal::milliseconds(50));
 
 		for _ in 0..50 {
-			let sockets = procfs::net::unix().unwrap();
-			if sockets.iter().any(|unet| unet.path.as_ref() == Some(&path)) {
+			if std::fs::exists(path).unwrap()
+				&& client.try_connect().await.is_ok()
+			{
 				break;
 			}
 
@@ -398,6 +401,10 @@ mod test {
 		pub async fn start(&mut self) {
 			let listener = UnixListener::bind(&self.path).unwrap();
 
+			// first time accept is from "wait_for_usock" above, just ignore
+			let (_stream, _peer_addr) = listener.accept().await.unwrap();
+
+			// second accept should be for the test
 			let (mut stream, _peer_addr) = listener.accept().await.unwrap();
 
 			// Read 4 bytes ("PING")

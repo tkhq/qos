@@ -30,7 +30,6 @@ qos_p256 = { workspace = true, features = ["mock"] }
 qos_nsm = { workspace = true, features = ["mock"], default-features = false }
 rustls = { workspace = true }
 webpki-roots = { workspace = true }
-procfs = { workspace = true }
 
 [features]
 # Support for VSOCK
