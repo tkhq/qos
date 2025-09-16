@@ -73,7 +73,7 @@ impl SocketClient {
 		Ok(resp)
 	}
 
-	/// Expands the underlaying `AsyncPool` to given `pool_size`
+	/// Expands the underlying `AsyncPool` to given `pool_size`
 	pub async fn expand_to(
 		&mut self,
 		pool_size: u32,
