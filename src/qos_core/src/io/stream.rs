@@ -11,6 +11,12 @@ use tokio_vsock::{VsockListener, VsockStream};
 
 use super::{IOError, SocketAddress};
 
+const MIB: usize = 1024 * 1024;
+
+/// Maximum payload size for a single recv / send call. We're being generous with 128MiB.
+/// The goal here is to avoid server crashes if the payload size exceeds the available system memory.
+pub const MAX_PAYLOAD_SIZE: usize = 128 * MIB;
+
 #[derive(Debug)]
 enum InnerListener {
 	Unix(UnixListener),
@@ -145,9 +151,14 @@ async fn send<S: AsyncWriteExt + Unpin>(
 	stream: &mut S,
 	buf: &[u8],
 ) -> Result<(), IOError> {
-	let len = buf.len();
+	let length = buf.len();
+
+	if length > MAX_PAYLOAD_SIZE {
+		return Err(IOError::OversizedPayload(length));
+	}
+
 	// First, send the length of the buffer
-	let len_buf: [u8; size_of::<u64>()] = (len as u64).to_le_bytes();
+	let len_buf: [u8; size_of::<u64>()] = (length as u64).to_le_bytes();
 
 	// send the header
 	stream.write_all(&len_buf).await?;
@@ -173,6 +184,10 @@ async fn recv<S: AsyncReadExt + Unpin>(
 			// Should only be possible if we are on 32bit architecture
 			.map_err(|_| IOError::ArithmeticSaturation)?
 	};
+
+	if length > MAX_PAYLOAD_SIZE {
+		return Err(IOError::OversizedPayload(length));
+	}
 
 	// Read the buffer
 	let mut buf = vec![0; length];
