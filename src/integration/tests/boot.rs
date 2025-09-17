@@ -452,7 +452,7 @@ async fn standard_boot_e2e() {
 	assert_eq!(enclave_info.phase, ProtocolPhase::QuorumKeyProvisioned);
 
 	// Give the enclave time to start the pivot
-	std::thread::sleep(std::time::Duration::from_secs(2));
+	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
 	// Check that the pivot executed
 	let contents = std::fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();

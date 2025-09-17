@@ -21,7 +21,7 @@ impl Processor {
 impl RequestProcessor for Processor {
 	async fn process(&self, request: &[u8]) -> Vec<u8> {
 		// Simulate just some baseline lag for all requests
-		std::thread::sleep(std::time::Duration::from_secs(1));
+		tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
 		let msg = PivotSocketStressMsg::try_from_slice(request)
 			.expect("Received invalid message - test is broken");

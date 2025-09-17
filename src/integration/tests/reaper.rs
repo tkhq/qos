@@ -55,7 +55,7 @@ async fn reaper_works() {
 	});
 
 	// Give the enclave server time to bind to the socket
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
 	// Check that the reaper is still running, presumably waiting for
 	// the secret.
@@ -113,7 +113,7 @@ async fn reaper_handles_non_zero_exits() {
 	});
 
 	// Give the enclave server time to bind to the socket
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
 	// Check that the reaper is still running, presumably waiting for
 	// the secret.
@@ -125,9 +125,10 @@ async fn reaper_handles_non_zero_exits() {
 
 	// Ensure the reaper has enough time to detect the secret, launch the
 	// pivot, and let the pivot exit.
-	std::thread::sleep(std::time::Duration::from_secs(
+	tokio::time::sleep(std::time::Duration::from_secs(
 		REAPER_EXIT_DELAY_IN_SECONDS * 2,
-	));
+	))
+	.await;
 
 	assert!(reaper_handle.is_finished());
 }
@@ -172,7 +173,7 @@ async fn reaper_handles_panic() {
 	});
 
 	// Give the enclave server time to bind to the socket
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
 	// Check that the reaper is still running, presumably waiting for
 	// the secret.
@@ -184,9 +185,10 @@ async fn reaper_handles_panic() {
 
 	// Ensure the reaper has enough time to detect the secret, launch the
 	// pivot, and let the pivot exit.
-	std::thread::sleep(std::time::Duration::from_secs(
+	tokio::time::sleep(std::time::Duration::from_secs(
 		REAPER_EXIT_DELAY_IN_SECONDS * 2,
-	));
+	))
+	.await;
 
 	assert!(reaper_handle.is_finished());
 }
