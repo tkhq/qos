@@ -31,6 +31,67 @@ pub const REAPER_EXIT_DELAY_IN_SECONDS: u64 = 3;
 
 const REAPER_STATE_CHECK_DELAY: Duration = Duration::from_millis(100);
 
+// runs the enclave and app servers, waiting for manifest/pivot
+// executed as a task from `Reaper::execute`
+async fn run_server(
+	server_state: Arc<RwLock<InterState>>,
+	handles: Handles,
+	nsm: Box<dyn NsmProvider + Send>,
+	pool: StreamPool,
+	app_pool: StreamPool,
+	test_only_init_phase_override: Option<ProtocolPhase>,
+) {
+	// run the state processor inside a tokio runtime in this thread
+	// create the state
+	let protocol_state =
+		ProtocolState::new(nsm, handles.clone(), test_only_init_phase_override);
+	// send a shared version of state and the async pool to each processor
+	let processor =
+		ProtocolProcessor::new(protocol_state.shared(), app_pool.shared());
+	// listen_all will multiplex the processor accross all sockets
+	let mut server = SocketServer::listen_all(pool, &processor)
+		.expect("unable to get listen task list");
+
+	loop {
+		// see if we got interrupted
+		if *server_state.read().unwrap() == InterState::Quitting {
+			return;
+		}
+
+		let (manifest_present, pool_size) =
+			get_pool_size_from_pivot_args(&handles);
+
+		if manifest_present {
+			let pool_size = pool_size.unwrap_or(1);
+			// expand server to pool_size
+			server
+				.listen_to(pool_size, &processor)
+				.expect("unable to listen_to on the running server");
+			// expand app connections to pool_size
+			processor
+				.write()
+				.await
+				.expand_to(pool_size)
+				.await
+				.expect("unable to expand_to on the processor app pool");
+
+			*server_state.write().unwrap() = InterState::PivotReady;
+			eprintln!("Reaper::server manifest is present, breaking out of server check loop");
+			break;
+		}
+
+		tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
+	}
+
+	eprintln!("Reaper::server post-expansion, waiting for shutdown");
+	while *server_state.read().unwrap() != InterState::Quitting {
+		tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
+	}
+
+	eprintln!("Reaper::server shutdown");
+	*server_state.write().unwrap() = InterState::Quitting;
+}
+
 /// Primary entry point for running the enclave. Coordinates spawning the server
 /// and pivot binary.
 pub struct Reaper;
@@ -44,7 +105,6 @@ impl Reaper {
 	/// - If spawning the pivot errors.
 	/// - If waiting for the pivot errors.
 	#[allow(dead_code)]
-	#[allow(clippy::too_many_lines)]
 	pub async fn execute(
 		handles: &Handles,
 		nsm: Box<dyn NsmProvider + Send>,
@@ -52,63 +112,19 @@ impl Reaper {
 		app_pool: StreamPool,
 		test_only_init_phase_override: Option<ProtocolPhase>,
 	) {
-		let handles2 = handles.clone();
+		// state switch to communicate between pivot run task (here) and run_server task
+		// we need to establish
 		let inter_state = Arc::new(RwLock::new(InterState::Booting));
 		let server_state = inter_state.clone();
 
-		let worker = tokio::spawn(async move {
-			// run the state processor inside a tokio runtime in this thread
-			// create the state
-			let protocol_state = ProtocolState::new(
-				nsm,
-				handles2.clone(),
-				test_only_init_phase_override,
-			);
-			// send a shared version of state and the async pool to each processor
-			let processor = ProtocolProcessor::new(
-				protocol_state.shared(),
-				app_pool.shared(),
-			);
-			// listen_all will multiplex the processor accross all sockets
-			let mut server = SocketServer::listen_all(pool, &processor)
-				.expect("unable to get listen task list");
-
-			loop {
-				// see if we got interrupted
-				if *server_state.read().unwrap() == InterState::Quitting {
-					return;
-				}
-
-				let (manifest_present, pool_size) =
-					get_pool_size_from_pivot_args(&handles2);
-
-				if manifest_present {
-					let pool_size = pool_size.unwrap_or(1);
-					// expand server to pool_size
-					server
-						.listen_to(pool_size, &processor)
-						.expect("unable to listen_to on the running server");
-					// expand app connections to pool_size
-					processor.write().await.expand_to(pool_size).await.expect(
-						"unable to expand_to on the processor app pool",
-					);
-
-					*server_state.write().unwrap() = InterState::PivotReady;
-					eprintln!("Reaper::server manifest is present, breaking out of server check loop");
-					break;
-				}
-
-				tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
-			}
-
-			eprintln!("Reaper::server post-expansion, waiting for shutdown");
-			while *server_state.read().unwrap() != InterState::Quitting {
-				tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
-			}
-
-			eprintln!("Reaper::server shutdown");
-			*server_state.write().unwrap() = InterState::Quitting;
-		});
+		let server_worker = tokio::spawn(run_server(
+			server_state,
+			handles.clone(),
+			nsm,
+			pool,
+			app_pool,
+			test_only_init_phase_override,
+		));
 
 		loop {
 			let server_state = *inter_state.read().unwrap();
@@ -180,8 +196,8 @@ impl Reaper {
 		))
 		.await;
 
-		if let Err(err) = worker.await {
-			eprintln!("Worker join error: {err:?}");
+		if let Err(err) = server_worker.await {
+			eprintln!("Reaper::execute server_worker join error: {err:?}");
 		}
 
 		println!("Reaper exiting ... ");
