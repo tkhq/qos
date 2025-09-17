@@ -157,7 +157,7 @@ impl StreamPool {
 	}
 
 	/// Expands the pool with new addresses using `SocketAddress::next_address`
-	pub fn expand_to(&mut self, size: u32) -> Result<(), IOError> {
+	pub fn expand_to(&mut self, size: u8) -> Result<(), IOError> {
 		eprintln!("StreamPool: expanding async pool to {size}");
 		let size = size as usize;
 
@@ -176,7 +176,7 @@ impl StreamPool {
 	}
 
 	/// Listen to new connections on added sockets on top of existing listeners, returning the list of new `Listener`
-	pub fn listen_to(&mut self, size: u32) -> Result<Vec<Listener>, IOError> {
+	pub fn listen_to(&mut self, size: u8) -> Result<Vec<Listener>, IOError> {
 		eprintln!("StreamPool: listening async pool to {size}");
 		let size = size as usize;
 		let mut listeners = Vec::new();

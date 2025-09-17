@@ -57,7 +57,7 @@ impl ProtocolProcessor {
 	/// Expands the app pool to given pool size
 	pub async fn expand_to(
 		&mut self,
-		pool_size: u32,
+		pool_size: u8,
 	) -> Result<(), ClientError> {
 		self.app_client.expand_to(pool_size).await
 	}

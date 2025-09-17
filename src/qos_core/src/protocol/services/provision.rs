@@ -201,6 +201,7 @@ mod test {
 				hash: sha_256(pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
+				pool_size: None,
 			},
 			manifest_set: ManifestSet {
 				threshold: threshold.try_into().unwrap(),

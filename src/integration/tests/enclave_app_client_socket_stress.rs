@@ -41,6 +41,7 @@ async fn enclave_app_client_socket_stress() {
 			hash: [1; 32],
 			restart: RestartPolicy::Always,
 			args: vec![APP_SOCK.to_string()],
+			pool_size: None,
 		},
 		manifest_set: ManifestSet { threshold: 0, members: vec![] },
 		share_set: ShareSet { threshold: 0, members: vec![] },

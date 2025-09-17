@@ -30,6 +30,7 @@ pub const REAPER_RESTART_DELAY: Duration = Duration::from_millis(50);
 pub const REAPER_EXIT_DELAY: Duration = Duration::from_secs(3);
 
 const REAPER_STATE_CHECK_DELAY: Duration = Duration::from_millis(100);
+const DEFAULT_POOL_SIZE: u8 = 1;
 
 // runs the enclave and app servers, waiting for manifest/pivot
 // executed as a task from `Reaper::execute`
@@ -56,11 +57,9 @@ async fn run_server(
 			return;
 		}
 
-		let (manifest_present, pool_size) =
-			get_pool_size_from_pivot_args(&handles);
-
-		if manifest_present {
-			let pool_size = pool_size.unwrap_or(1);
+		if let Ok(envelope) = handles.get_manifest_envelope() {
+			let pool_size =
+				envelope.manifest.pivot.pool_size.unwrap_or(DEFAULT_POOL_SIZE);
 			// expand server to pool_size
 			server
 				.listen_to(pool_size, &processor)
@@ -147,13 +146,18 @@ impl Reaper {
 
 		println!("Reaper::execute about to spawn pivot");
 
-		let PivotConfig { args, restart, .. } = handles
+		let PivotConfig { args, restart, pool_size, .. } = handles
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest
 			.pivot;
 
 		let mut pivot = Command::new(handles.pivot_path());
+		// set the pool-size env var for pivots that use it
+		pivot.env(
+			"POOL_SIZE",
+			pool_size.unwrap_or(DEFAULT_POOL_SIZE).to_string(),
+		);
 		pivot.args(&args[..]);
 		match restart {
 			RestartPolicy::Always => loop {
@@ -204,79 +208,6 @@ enum InterState {
 	PivotReady,
 	// We're quitting (ctrl+c for tests and such)
 	Quitting,
-}
-
-// return if we have manifest and get pool_size args if present from it
-fn get_pool_size_from_pivot_args(handles: &Handles) -> (bool, Option<u32>) {
-	if let Ok(envelope) = handles.get_manifest_envelope() {
-		(true, extract_pool_size_arg(&envelope.manifest.pivot.args))
-	} else {
-		(false, None)
-	}
-}
-
-// find the u32 value of --pool-size argument passed to the pivot if present
-fn extract_pool_size_arg(args: &[String]) -> Option<u32> {
-	if let Some((i, _)) =
-		args.iter().enumerate().find(|(_, a)| *a == "--pool-size")
-	{
-		if let Some(pool_size_str) = args.get(i + 1) {
-			match pool_size_str.parse::<u32>() {
-				Ok(pool_size) => Some(pool_size),
-				Err(_) => None,
-			}
-		} else {
-			None
-		}
-	} else {
-		None
-	}
-}
-
-#[cfg(test)]
-mod test {
-	use super::*;
-
-	#[test]
-	fn extract_pool_size_arg_works() {
-		// no arg
-		assert_eq!(
-			extract_pool_size_arg(&vec![
-				"unrelated".to_owned(),
-				"--args".to_owned(),
-			]),
-			None
-		);
-
-		// should work
-		assert_eq!(
-			extract_pool_size_arg(&vec![
-				"--pool-size".to_owned(),
-				"8".to_owned(),
-			]),
-			Some(8)
-		);
-
-		// wrong number, expect None
-		assert_eq!(
-			extract_pool_size_arg(&vec![
-				"--pool-size".to_owned(),
-				"8a".to_owned(),
-			]),
-			None
-		);
-
-		// duplicate arg, use 1st
-		assert_eq!(
-			extract_pool_size_arg(&vec![
-				"--pool-size".to_owned(),
-				"8".to_owned(),
-				"--pool-size".to_owned(),
-				"9".to_owned(),
-			]),
-			Some(8)
-		);
-	}
 }
 
 // See qos_test/tests/async_reaper for more tests

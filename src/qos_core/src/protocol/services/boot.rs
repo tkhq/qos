@@ -123,6 +123,8 @@ pub struct PivotConfig {
 	/// Arguments to invoke the binary with. Leave this empty if none are
 	/// needed.
 	pub args: Vec<String>,
+	/// Pool size argument used to set up our socket pipes, defaults to 1 if not specified
+	pub pool_size: Option<u8>,
 }
 
 impl fmt::Debug for PivotConfig {
@@ -131,6 +133,7 @@ impl fmt::Debug for PivotConfig {
 			.field("hash", &qos_hex::encode(&self.hash))
 			.field("restart", &self.restart)
 			.field("args", &self.args.join(" "))
+			.field("pool-size", &self.pool_size)
 			.finish()
 	}
 }
@@ -529,6 +532,7 @@ mod test {
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
+				pool_size: None,
 			},
 			manifest_set: ManifestSet { threshold: 2, members: quorum_members },
 			share_set: ShareSet { threshold: 2, members: vec![] },

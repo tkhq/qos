@@ -701,6 +701,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub quorum_key_path: P,
 	pub manifest_path: P,
 	pub pivot_args: Vec<String>,
+	pub pool_size: Option<u8>,
 }
 
 pub(crate) fn generate_manifest<P: AsRef<Path>>(
@@ -719,6 +720,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		quorum_key_path,
 		manifest_path,
 		pivot_args,
+		pool_size,
 	} = args;
 
 	let nitro_config =
@@ -744,6 +746,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
+			pool_size,
 		},
 		manifest_set,
 		share_set,
@@ -1630,7 +1633,12 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			qos_commit: "mock-qos-commit-ref".to_string(),
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
-		pivot: PivotConfig { hash: sha_256(&pivot), restart, args },
+		pivot: PivotConfig {
+			hash: sha_256(&pivot),
+			restart,
+			args,
+			pool_size: None,
+		},
 		manifest_set: ManifestSet {
 			threshold: 1,
 			// The only member is the quorum member
@@ -2251,6 +2259,7 @@ mod tests {
 					.into_iter()
 					.map(String::from)
 					.collect(),
+				pool_size: None,
 			},
 			manifest_set: manifest_set.clone(),
 			share_set: share_set.clone(),

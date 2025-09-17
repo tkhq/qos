@@ -76,7 +76,7 @@ impl SocketClient {
 	/// Expands the underlying `AsyncPool` to given `pool_size`
 	pub async fn expand_to(
 		&mut self,
-		pool_size: u32,
+		pool_size: u8,
 	) -> Result<(), ClientError> {
 		self.pool.write().await.expand_to(pool_size)?;
 

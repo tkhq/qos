@@ -40,6 +40,7 @@ const PATCH_SET_DIR: &str = "patch-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
 const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
 const PUB_PATH: &str = "pub-path";
+const POOL_SIZE: &str = "pool-size";
 const YUBIKEY: &str = "yubikey";
 const SECRET_PATH: &str = "secret-path";
 const SHARE_PATH: &str = "share-path";
@@ -992,6 +993,12 @@ impl ClientOpts {
 		}
 	}
 
+	fn pool_size(&self) -> Option<u8> {
+		self.parsed.single(POOL_SIZE).map(|s| {
+			s.parse().expect("pool-size not valid integer in range <1..255>")
+		})
+	}
+
 	fn pub_path(&self) -> String {
 		self.parsed.single(PUB_PATH).expect("Missing `--pub-path`").to_string()
 	}
@@ -1517,6 +1524,7 @@ mod handlers {
 			manifest_set_dir: opts.manifest_set_dir(),
 			patch_set_dir: opts.patch_set_dir(),
 			quorum_key_path: opts.quorum_key_path(),
+			pool_size: opts.pool_size(),
 		}) {
 			println!("Error: {e:?}");
 			std::process::exit(1);
