@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use borsh::BorshDeserialize;
 use integration::{
 	wait_for_usock, PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH,
@@ -14,7 +16,7 @@ use qos_core::{
 		},
 		ProtocolError, ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
 	},
-	reaper::{Reaper, REAPER_RESTART_DELAY_IN_SECONDS},
+	reaper::{Reaper, REAPER_RESTART_DELAY},
 };
 use qos_nsm::mock::MockNsm;
 use qos_p256::P256Pair;
@@ -76,12 +78,12 @@ async fn enclave_app_client_socket_stress() {
 	handles.put_quorum_key(&p256_pair).unwrap();
 
 	let enclave_pool =
-		StreamPool::new(SocketAddress::new_unix(ENCLAVE_SOCK), 1).unwrap();
+		StreamPool::single(SocketAddress::new_unix(ENCLAVE_SOCK)).unwrap();
 
 	let app_pool =
-		StreamPool::new(SocketAddress::new_unix(APP_SOCK), 1).unwrap();
+		StreamPool::single(SocketAddress::new_unix(APP_SOCK)).unwrap();
 
-	std::thread::spawn(move || {
+	tokio::spawn(async move {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
@@ -91,13 +93,14 @@ async fn enclave_app_client_socket_stress() {
 			// works
 			Some(ProtocolPhase::QuorumKeyProvisioned),
 		)
+		.await;
 	});
 
 	// Make sure the pivot has some time to start up
 	wait_for_usock(APP_SOCK).await;
 
 	let enclave_client_pool =
-		StreamPool::new(SocketAddress::new_unix(ENCLAVE_SOCK), 1).unwrap();
+		StreamPool::single(SocketAddress::new_unix(ENCLAVE_SOCK)).unwrap();
 	let enclave_client = SocketClient::new(
 		enclave_client_pool.shared(),
 		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 3), // needs to be bigger than the slow request below + some time for recovery
@@ -118,10 +121,7 @@ async fn enclave_app_client_socket_stress() {
 		)
 	);
 
-	tokio::time::sleep(std::time::Duration::from_secs(
-		REAPER_RESTART_DELAY_IN_SECONDS + 1,
-	))
-	.await;
+	tokio::time::sleep(REAPER_RESTART_DELAY + Duration::from_secs(1)).await;
 	// The pivot panicked and should have been restarted.
 	let app_request =
 		borsh::to_vec(&PivotSocketStressMsg::OkRequest(1)).unwrap();

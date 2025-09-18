@@ -437,7 +437,7 @@ async fn main() {
 	}
 
 	// Give the enclave time to start the pivot
-	std::thread::sleep(std::time::Duration::from_secs(2));
+	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
 	let enclave_info_url =
 		format!("http://{LOCAL_HOST}:{}/qos/enclave-info", host_port);

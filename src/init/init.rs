@@ -83,7 +83,7 @@ async fn main() {
 	)
 	.expect("unable to create app pool");
 
-	Reaper::execute(&handles, Box::new(Nsm), core_pool, app_pool, None);
+	Reaper::execute(&handles, Box::new(Nsm), core_pool, app_pool, None).await;
 
 	reboot();
 }

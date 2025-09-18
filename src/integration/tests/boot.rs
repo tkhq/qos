@@ -445,18 +445,18 @@ async fn standard_boot_e2e() {
 			.success());
 	}
 
-	// Give the enclave time to start the pivot
-	std::thread::sleep(std::time::Duration::from_secs(2));
-
-	// Check that the pivot executed
-	let contents = std::fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
-	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
-
 	let enclave_info_url =
 		format!("http://{LOCAL_HOST}:{}/qos/enclave-info", host_port);
 	let enclave_info: EnclaveInfo =
 		ureq::get(&enclave_info_url).call().unwrap().into_json().unwrap();
 	assert_eq!(enclave_info.phase, ProtocolPhase::QuorumKeyProvisioned);
+
+	// Give the enclave time to start the pivot
+	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+	// Check that the pivot executed
+	let contents = std::fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
+	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
 
 	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
 }
