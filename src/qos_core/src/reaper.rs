@@ -24,10 +24,10 @@ use crate::{
 };
 
 /// Delay for restarting the pivot app if the process exits.
-pub const REAPER_RESTART_DELAY_IN_SECONDS: u64 = 1;
+pub const REAPER_RESTART_DELAY: Duration = Duration::from_millis(50);
 /// Delay until the reaper exits after pivot app with a Never restart policy
 /// exits.
-pub const REAPER_EXIT_DELAY_IN_SECONDS: u64 = 3;
+pub const REAPER_EXIT_DELAY: Duration = Duration::from_secs(3);
 
 const REAPER_STATE_CHECK_DELAY: Duration = Duration::from_millis(100);
 
@@ -143,7 +143,7 @@ impl Reaper {
 			}
 
 			eprintln!("Reaper::execute waiting for pivot and manifest");
-			tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+			tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
 		}
 
 		println!("Reaper::execute about to spawn pivot");
@@ -169,10 +169,7 @@ impl Reaper {
 
 				// pause to ensure OS has enough time to clean up resources
 				// before restarting
-				tokio::time::sleep(std::time::Duration::from_secs(
-					REAPER_RESTART_DELAY_IN_SECONDS,
-				))
-				.await;
+				tokio::time::sleep(REAPER_RESTART_DELAY).await;
 
 				println!("Restarting pivot ...");
 			},
@@ -189,10 +186,7 @@ impl Reaper {
 
 		*inter_state.write().unwrap() = InterState::Quitting;
 
-		tokio::time::sleep(std::time::Duration::from_secs(
-			REAPER_EXIT_DELAY_IN_SECONDS,
-		))
-		.await;
+		tokio::time::sleep(REAPER_EXIT_DELAY).await;
 
 		if let Err(err) = server_worker.await {
 			eprintln!("Reaper::execute server_worker join error: {err:?}");

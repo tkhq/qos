@@ -5,7 +5,7 @@ use qos_core::{
 	handles::Handles,
 	io::{SocketAddress, StreamPool},
 	protocol::services::boot::ManifestEnvelope,
-	reaper::{Reaper, REAPER_EXIT_DELAY_IN_SECONDS},
+	reaper::{Reaper, REAPER_EXIT_DELAY},
 };
 use qos_nsm::mock::MockNsm;
 use qos_test_primitives::PathWrapper;
@@ -125,10 +125,7 @@ async fn reaper_handles_non_zero_exits() {
 
 	// Ensure the reaper has enough time to detect the secret, launch the
 	// pivot, and let the pivot exit.
-	tokio::time::sleep(std::time::Duration::from_secs(
-		REAPER_EXIT_DELAY_IN_SECONDS * 2,
-	))
-	.await;
+	tokio::time::sleep(REAPER_EXIT_DELAY * 2).await;
 
 	assert!(reaper_handle.is_finished());
 }
@@ -185,10 +182,7 @@ async fn reaper_handles_panic() {
 
 	// Ensure the reaper has enough time to detect the secret, launch the
 	// pivot, and let the pivot exit.
-	tokio::time::sleep(std::time::Duration::from_secs(
-		REAPER_EXIT_DELAY_IN_SECONDS * 2,
-	))
-	.await;
+	tokio::time::sleep(REAPER_EXIT_DELAY * 2).await;
 
 	assert!(reaper_handle.is_finished());
 }
