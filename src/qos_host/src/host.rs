@@ -17,7 +17,7 @@
 #![warn(missing_docs, clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
 	body::Bytes,
@@ -30,7 +30,7 @@ use axum::{
 use borsh::BorshDeserialize;
 use qos_core::{
 	client::SocketClient,
-	io::{SharedStreamPool, TimeVal},
+	io::SharedStreamPool,
 	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase},
 };
 
@@ -49,7 +49,7 @@ struct QosHostState {
 #[allow(clippy::module_name_repetitions)]
 pub struct HostServer {
 	enclave_pool: SharedStreamPool,
-	timeout: TimeVal,
+	timeout: Duration,
 	addr: SocketAddr,
 	base_path: Option<String>,
 }
@@ -60,7 +60,7 @@ impl HostServer {
 	#[must_use]
 	pub fn new(
 		enclave_pool: SharedStreamPool,
-		timeout: TimeVal,
+		timeout: Duration,
 		addr: SocketAddr,
 		base_path: Option<String>,
 	) -> Self {

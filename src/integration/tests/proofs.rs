@@ -4,8 +4,8 @@ use borsh::BorshDeserialize;
 use integration::{wait_for_usock, PivotProofMsg, PIVOT_PROOF_PATH};
 use qos_core::{
 	client::SocketClient,
-	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
-	protocol::ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
+	io::{SocketAddress, StreamPool},
+	protocol::INITIAL_CLIENT_TIMEOUT,
 };
 
 use qos_p256::P256Public;
@@ -27,10 +27,8 @@ async fn fetch_and_verify_app_proof() {
 		StreamPool::single(SocketAddress::new_unix(PROOF_TEST_ENCLAVE_SOCKET))
 			.unwrap();
 
-	let enclave_client = SocketClient::new(
-		enclave_pool.shared(),
-		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
-	);
+	let enclave_client =
+		SocketClient::new(enclave_pool.shared(), INITIAL_CLIENT_TIMEOUT);
 
 	let app_request =
 		borsh::to_vec(&PivotProofMsg::AdditionRequest { a: 2, b: 2 }).unwrap();

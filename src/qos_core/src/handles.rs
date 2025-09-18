@@ -436,6 +436,8 @@ mod test {
 			manifest_set: ManifestSet { threshold: 2, members: vec![] },
 			share_set: ShareSet { threshold: 2, members: vec![] },
 			patch_set: PatchSet::default(),
+			pool_size: None,
+			client_timeout_ms: None,
 		};
 
 		let manifest_envelope = ManifestEnvelope {

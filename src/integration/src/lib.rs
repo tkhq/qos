@@ -9,7 +9,7 @@ use std::time::Duration;
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::SocketClient,
-	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
+	io::{SocketAddress, StreamPool},
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
 
@@ -19,12 +19,16 @@ pub const PIVOT_OK_SUCCESS_FILE: &str = "./pivot_ok_works";
 pub const PIVOT_OK2_SUCCESS_FILE: &str = "./pivot_ok2_works";
 /// Path to the file `pivot_ok3` writes on success for tests.
 pub const PIVOT_OK3_SUCCESS_FILE: &str = "./pivot_ok3_works";
+/// Path to the file `pivot_pool_size` writes on success for tests.
+pub const PIVOT_POOL_SIZE_SUCCESS_FILE: &str = "./pivot_pool_size_works";
 /// Path to pivot_ok bin for tests.
 pub const PIVOT_OK_PATH: &str = "../target/debug/pivot_ok";
 /// Path to pivot_ok2 bin for tests.
 pub const PIVOT_OK2_PATH: &str = "../target/debug/pivot_ok2";
 /// Path to pivot_ok3 bin for tests.
 pub const PIVOT_OK3_PATH: &str = "../target/debug/pivot_ok3";
+/// Path to pivot_pool_size bin for tests.
+pub const PIVOT_POOL_SIZE_PATH: &str = "../target/debug/pivot_pool_size";
 /// Path to pivot loop bin for tests.
 pub const PIVOT_LOOP_PATH: &str = "../target/debug/pivot_loop";
 /// Path to pivot_abort bin for tests.
@@ -132,7 +136,7 @@ pub struct AdditionProofPayload {
 pub async fn wait_for_usock(path: &str) {
 	let addr = SocketAddress::new_unix(path);
 	let pool = StreamPool::new(addr, 1).unwrap().shared();
-	let client = SocketClient::new(pool, TimeVal::milliseconds(50));
+	let client = SocketClient::new(pool, Duration::from_millis(50));
 
 	for _ in 0..50 {
 		if std::fs::exists(path).unwrap() && client.try_connect().await.is_ok()

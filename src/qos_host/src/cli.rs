@@ -4,11 +4,12 @@ use std::{
 	env,
 	net::{IpAddr, Ipv4Addr, SocketAddr},
 	str::FromStr,
+	time::Duration,
 };
 
 use qos_core::{
 	cli::{CID, PORT, USOCK},
-	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
+	io::{SocketAddress, StreamPool},
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
 
@@ -110,11 +111,11 @@ impl HostOpts {
 		SocketAddr::new(IpAddr::V4(ip), port)
 	}
 
-	pub(crate) fn socket_timeout(&self) -> TimeVal {
+	pub(crate) fn socket_timeout(&self) -> Duration {
 		let default_timeout = &qos_core::DEFAULT_SOCKET_TIMEOUT_MS.to_owned();
 		let timeout_str =
 			self.parsed.single(SOCKET_TIMEOUT).unwrap_or(default_timeout);
-		TimeVal::milliseconds(
+		Duration::from_millis(
 			timeout_str.parse().expect("invalid timeout value"),
 		)
 	}

@@ -6,8 +6,8 @@ use integration::{
 };
 use qos_core::{
 	client::SocketClient,
-	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
-	protocol::ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
+	io::{SocketAddress, StreamPool},
+	protocol::INITIAL_CLIENT_TIMEOUT,
 };
 
 use qos_test_primitives::ChildWrapper;
@@ -43,10 +43,8 @@ async fn fetch_async_remote_tls_content() {
 	)
 	.expect("unable to create enclave async pool");
 
-	let enclave_client = SocketClient::new(
-		enclave_pool.shared(),
-		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
-	);
+	let enclave_client =
+		SocketClient::new(enclave_pool.shared(), INITIAL_CLIENT_TIMEOUT);
 
 	let app_request = borsh::to_vec(&PivotRemoteTlsMsg::RemoteTlsRequest {
 		host: "api.turnkey.com".to_string(),
