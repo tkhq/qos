@@ -41,8 +41,6 @@ async fn run_server(
 	app_pool: StreamPool,
 	test_only_init_phase_override: Option<ProtocolPhase>,
 ) {
-	// run the state processor inside a tokio runtime in this thread
-	// create the state
 	let protocol_state =
 		ProtocolState::new(nsm, handles.clone(), test_only_init_phase_override);
 	// send a shared version of state and the async pool to each processor
