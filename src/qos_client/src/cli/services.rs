@@ -746,12 +746,12 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
-			pool_size,
 		},
 		manifest_set,
 		share_set,
 		patch_set,
 		enclave: nitro_config,
+		pool_size,
 	};
 
 	write_with_msg(
@@ -1633,12 +1633,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			qos_commit: "mock-qos-commit-ref".to_string(),
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
-		pivot: PivotConfig {
-			hash: sha_256(&pivot),
-			restart,
-			args,
-			pool_size: None,
-		},
+		pivot: PivotConfig { hash: sha_256(&pivot), restart, args },
 		manifest_set: ManifestSet {
 			threshold: 1,
 			// The only member is the quorum member
@@ -1650,6 +1645,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			members: vec![member.clone()],
 		},
 		patch_set: PatchSet { threshold: 0, members: vec![] },
+		pool_size: None,
 	};
 
 	// Create and post the boot standard instruction
@@ -2259,12 +2255,12 @@ mod tests {
 					.into_iter()
 					.map(String::from)
 					.collect(),
-				pool_size: None,
 			},
 			manifest_set: manifest_set.clone(),
 			share_set: share_set.clone(),
 			patch_set: patch_set.clone(),
 			enclave: nitro_config.clone(),
+			pool_size: None,
 		};
 
 		let manifest_envelope = ManifestEnvelope {

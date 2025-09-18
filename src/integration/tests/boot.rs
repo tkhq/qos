@@ -132,7 +132,6 @@ async fn standard_boot_e2e() {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
 		args: vec!["--msg".to_string(), msg.to_string()],
-		pool_size: None,
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };

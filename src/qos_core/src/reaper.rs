@@ -59,7 +59,7 @@ async fn run_server(
 
 		if let Ok(envelope) = handles.get_manifest_envelope() {
 			let pool_size =
-				envelope.manifest.pivot.pool_size.unwrap_or(DEFAULT_POOL_SIZE);
+				envelope.manifest.pool_size.unwrap_or(DEFAULT_POOL_SIZE);
 			// expand server to pool_size
 			server
 				.listen_to(pool_size, &processor)
@@ -146,17 +146,17 @@ impl Reaper {
 
 		println!("Reaper::execute about to spawn pivot");
 
-		let PivotConfig { args, restart, pool_size, .. } = handles
+		let manifest = handles
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
-			.manifest
-			.pivot;
+			.manifest;
+		let PivotConfig { args, restart, .. } = manifest.pivot;
 
 		let mut pivot = Command::new(handles.pivot_path());
 		// set the pool-size env var for pivots that use it
 		pivot.env(
 			"POOL_SIZE",
-			pool_size.unwrap_or(DEFAULT_POOL_SIZE).to_string(),
+			manifest.pool_size.unwrap_or(DEFAULT_POOL_SIZE).to_string(),
 		);
 		pivot.args(&args[..]);
 		match restart {
