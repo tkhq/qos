@@ -320,6 +320,8 @@ pub struct Manifest {
 	pub enclave: NitroConfig,
 	/// Patch set members and threshold
 	pub patch_set: PatchSet,
+	/// Client timeout for calls via the VSOCK/USOCK, defaults to 5s if not specified
+	pub client_timeout_ms: Option<u16>,
 	/// Pool size argument used to set up our socket pipes, defaults to 1 if not specified
 	pub pool_size: Option<u8>,
 }

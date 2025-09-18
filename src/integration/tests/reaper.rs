@@ -36,6 +36,7 @@ async fn reaper_works() {
 	let mut manifest_envelope = ManifestEnvelope::default();
 	manifest_envelope.manifest.pivot.args =
 		vec!["--msg".to_string(), msg.to_string()];
+	manifest_envelope.manifest.client_timeout_ms = Some(2000); // check if this gets applied
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());

@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use qos_core::{
 	client::SocketClient,
-	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
+	io::{SocketAddress, StreamPool},
 	server::SocketServerError,
 	server::{RequestProcessor, SocketServer},
 };
@@ -37,7 +37,7 @@ async fn run_echo_server(
 async fn direct_connect_works() {
 	let socket_path = "/tmp/async_client_test_direct_connect_works.sock";
 	let socket = SocketAddress::new_unix(socket_path);
-	let timeout = TimeVal::milliseconds(500);
+	let timeout = Duration::from_millis(500);
 	let pool = StreamPool::new(socket, 1)
 		.expect("unable to create async pool")
 		.shared();
@@ -54,7 +54,7 @@ async fn direct_connect_works() {
 async fn times_out_properly() {
 	let socket_path = "/tmp/async_client_test_times_out_properly.sock";
 	let socket = SocketAddress::new_unix(socket_path);
-	let timeout = TimeVal::milliseconds(500);
+	let timeout = Duration::from_millis(500);
 	let pool = StreamPool::new(socket, 1)
 		.expect("unable to create async pool")
 		.shared();
@@ -68,7 +68,7 @@ async fn times_out_properly() {
 async fn repeat_connect_works() {
 	let socket_path = "/tmp/async_client_test_repeat_connect_works.sock";
 	let socket = SocketAddress::new_unix(socket_path);
-	let timeout = TimeVal::milliseconds(500);
+	let timeout = Duration::from_millis(500);
 	let pool = StreamPool::new(socket, 1)
 		.expect("unable to create async pool")
 		.shared();

@@ -64,13 +64,19 @@ async fn run_server(
 			server
 				.listen_to(pool_size, &processor)
 				.expect("unable to listen_to on the running server");
-			// expand app connections to pool_size
-			processor
-				.write()
-				.await
-				.expand_to(pool_size)
-				.await
-				.expect("unable to expand_to on the processor app pool");
+			{
+				// get the processor writable
+				let mut p = processor.write().await;
+
+				// expand app connections to pool_size
+				p.expand_to(pool_size)
+					.await
+					.expect("unable to expand_to on the processor app pool");
+				if let Some(timeout_ms) = envelope.manifest.client_timeout_ms {
+					let timeout = Duration::from_millis(timeout_ms.into());
+					p.set_client_timeout(timeout);
+				}
+			}
 
 			*server_state.write().unwrap() = InterState::PivotReady;
 			eprintln!("Reaper::server manifest is present, breaking out of server check loop");

@@ -212,6 +212,7 @@ mod test {
 			},
 			patch_set: PatchSet::default(),
 			pool_size: None,
+			client_timeout_ms: None,
 		};
 
 		let approvals: Vec<_> = members

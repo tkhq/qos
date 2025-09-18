@@ -3,8 +3,6 @@
 
 use std::time::Duration;
 
-use nix::sys::time::TimeVal;
-
 use crate::io::{IOError, SharedStreamPool, SocketAddress, StreamPool};
 
 /// Enclave client error.
@@ -37,18 +35,16 @@ pub struct SocketClient {
 impl SocketClient {
 	/// Create a new client with given `StreamPool`.
 	#[must_use]
-	pub fn new(pool: SharedStreamPool, timeout: TimeVal) -> Self {
-		let timeout = timeval_to_duration(timeout);
+	pub fn new(pool: SharedStreamPool, timeout: Duration) -> Self {
 		Self { pool, timeout }
 	}
 
 	/// Create a new client from a single `SocketAddress`. This creates an implicit single socket `StreamPool`.
 	pub fn single(
 		addr: SocketAddress,
-		timeout: TimeVal,
+		timeout: Duration,
 	) -> Result<Self, IOError> {
 		let pool = StreamPool::new(addr, 1)?.shared();
-		let timeout = timeval_to_duration(timeout);
 
 		Ok(Self { pool, timeout })
 	}
@@ -73,6 +69,11 @@ impl SocketClient {
 		Ok(resp)
 	}
 
+	/// Sets the client's timeout value
+	pub fn set_timeout(&mut self, timeout: Duration) {
+		self.timeout = timeout;
+	}
+
 	/// Expands the underlying `AsyncPool` to given `pool_size`
 	pub async fn expand_to(
 		&mut self,
@@ -90,15 +91,4 @@ impl SocketClient {
 
 		stream.connect().await
 	}
-}
-
-// Convers TimeVal to Duration
-// # Panics
-//
-// Panics if timeval values are negative
-fn timeval_to_duration(timeval: TimeVal) -> Duration {
-	let secs: u64 = timeval.tv_sec().try_into().expect("invalid TimeVal value");
-	let usecs: u32 =
-		timeval.tv_usec().try_into().expect("invalid TimeVal value");
-	Duration::new(secs, usecs * 1000)
 }
