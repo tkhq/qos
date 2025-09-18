@@ -87,7 +87,6 @@ async fn run_server(
 	}
 
 	eprintln!("Reaper::server shutdown");
-	*server_state.write().unwrap() = InterState::Quitting;
 }
 
 /// Primary entry point for running the enclave. Coordinates spawning the server
