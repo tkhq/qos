@@ -103,7 +103,7 @@ async fn enclave_app_client_socket_stress() {
 		StreamPool::single(SocketAddress::new_unix(ENCLAVE_SOCK)).unwrap();
 	let enclave_client = SocketClient::new(
 		enclave_client_pool.shared(),
-		INITIAL_CLIENT_TIMEOUT + Duration::from_secs(3), // needs to be bigger than the sdlow request below + some time for recovery
+		INITIAL_CLIENT_TIMEOUT + Duration::from_secs(3), // needs to be bigger than the slow request below + some time for recovery
 	);
 
 	let app_request =

@@ -65,7 +65,7 @@ impl StreamPool {
 	/// Create a new `StreamPool` with given starting `SocketAddress`, timeout and number of addresses to populate.
 	pub fn new(
 		start_address: SocketAddress,
-		mut count: u32,
+		mut count: u8,
 	) -> Result<Self, IOError> {
 		eprintln!("StreamPool start address: {start_address}");
 

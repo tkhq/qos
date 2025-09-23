@@ -22,8 +22,6 @@ async fn simple_socket_stress() {
 
 	wait_for_usock(SOCKET_STRESS_SOCK).await;
 
-	// needs to be long enough for process exit to register and not cause a timeout
-
 	let app_pool =
 		StreamPool::new(SocketAddress::new_unix(SOCKET_STRESS_SOCK), 1)
 			.unwrap();

@@ -70,7 +70,7 @@ async fn main() {
 	);
 
 	const START_PORT: u32 = 3;
-	const INITIAL_POOL_SIZE: u32 = 1; // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)
+	const INITIAL_POOL_SIZE: u8 = 1; // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)
 	let core_pool = StreamPool::new(
 		SocketAddress::new_vsock(cid, START_PORT, VMADDR_NO_FLAGS),
 		INITIAL_POOL_SIZE,
