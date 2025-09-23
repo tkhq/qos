@@ -570,6 +570,21 @@ impl Command {
 			.takes_value(false)
 	}
 
+	fn pool_size() -> Token {
+		Token::new(POOL_SIZE, "Socket pool size for USOCK/VSOCK")
+			.required(false)
+			.takes_value(true)
+	}
+
+	fn client_timeout() -> Token {
+		Token::new(
+			CLIENT_TIMEOUT,
+			"Client timeout for enclave <-> app communication",
+		)
+		.required(false)
+		.takes_value(true)
+	}
+
 	fn base() -> Parser {
 		Parser::new()
 			.token(
@@ -654,6 +669,8 @@ impl Command {
 			.token(Self::patch_set_dir_token())
 			.token(Self::quorum_key_path_token())
 			.token(Self::pivot_args_token())
+			.token(Self::pool_size())
+			.token(Self::client_timeout())
 	}
 
 	fn approve_manifest() -> Parser {
