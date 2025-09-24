@@ -1,13 +1,11 @@
 //! Quorum protocol processor
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use crate::io::{TimeVal, TimeValLike};
 use borsh::BorshDeserialize;
 use tokio::sync::RwLock;
 
 use super::{
-	error::ProtocolError, msg::ProtocolMsg, state::ProtocolState,
-	ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
+	error::ProtocolError, msg::ProtocolMsg, state::ProtocolState, ProtocolPhase,
 };
 use crate::{
 	client::{ClientError, SocketClient},
@@ -17,6 +15,9 @@ use crate::{
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
+
+/// Initial client timeout for the processor until the Manifest says otherwise, see reaper.rs
+pub const INITIAL_CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Helper type to keep `ProtocolState` shared using `Arc<Mutex<ProtocolState>>`
 type SharedProtocolState = Arc<RwLock<ProtocolState>>;
@@ -42,10 +43,7 @@ impl ProtocolProcessor {
 		state: SharedProtocolState,
 		app_pool: SharedStreamPool,
 	) -> Arc<RwLock<Self>> {
-		let app_client = SocketClient::new(
-			app_pool,
-			TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
-		);
+		let app_client = SocketClient::new(app_pool, INITIAL_CLIENT_TIMEOUT);
 		Arc::new(RwLock::new(Self { app_client, state }))
 	}
 
@@ -54,10 +52,16 @@ impl ProtocolProcessor {
 		self.state.read().await.get_phase()
 	}
 
+	/// Sets the client timeout value for the `app_client`, maximum allowed value is `u16::MAX` milliseconds
+	pub fn set_client_timeout(&mut self, timeout: Duration) {
+		assert!(timeout.as_millis() < u16::MAX.into(), "client timeout > 65s");
+		self.app_client.set_timeout(timeout);
+	}
+
 	/// Expands the app pool to given pool size
 	pub async fn expand_to(
 		&mut self,
-		pool_size: u32,
+		pool_size: u8,
 	) -> Result<(), ClientError> {
 		self.app_client.expand_to(pool_size).await
 	}

@@ -351,13 +351,9 @@ async fn vsock_connect(
 #[cfg(test)]
 mod test {
 
-	use std::{str::from_utf8, time::Duration};
-
-	use nix::sys::time::{TimeVal, TimeValLike};
-
-	use crate::{client::SocketClient, io::StreamPool};
-
 	use super::*;
+	use crate::{client::SocketClient, io::StreamPool};
+	use std::{str::from_utf8, time::Duration};
 
 	/// Wait for a given usock file to exist and be connectible with a timeout of 5s.
 	///
@@ -366,7 +362,7 @@ mod test {
 	pub async fn wait_for_usock(path: &str) {
 		let addr = SocketAddress::new_unix(path);
 		let pool = StreamPool::new(addr, 1).unwrap().shared();
-		let client = SocketClient::new(pool, TimeVal::milliseconds(50));
+		let client = SocketClient::new(pool, Duration::from_millis(50));
 
 		for _ in 0..50 {
 			if std::fs::exists(path).unwrap()

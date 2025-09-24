@@ -6,8 +6,8 @@ use integration::{
 };
 use qos_core::{
 	client::{ClientError, SocketClient},
-	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
-	protocol::ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
+	io::{SocketAddress, StreamPool},
+	protocol::INITIAL_CLIENT_TIMEOUT,
 };
 use qos_test_primitives::ChildWrapper;
 
@@ -27,12 +27,12 @@ async fn interleaving_socket_stress() {
 	wait_for_usock(SOCKET_STRESS_SOCK).await;
 
 	// needs to be long enough for process exit to register and not cause a timeout
-	let timeout = TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS);
 	let app_pool =
 		StreamPool::new(SocketAddress::new_unix(SOCKET_STRESS_SOCK), pool_size)
 			.unwrap();
 
-	let enclave_client = SocketClient::new(app_pool.shared(), timeout);
+	let enclave_client =
+		SocketClient::new(app_pool.shared(), INITIAL_CLIENT_TIMEOUT);
 	let mut tasks = Vec::new();
 
 	// wait long enough for app to be running and listening
