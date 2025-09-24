@@ -7,14 +7,14 @@ use integration::{
 use qos_core::{
 	client::SocketClient,
 	handles::Handles,
-	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
+	io::{SocketAddress, StreamPool},
 	protocol::{
 		msg::ProtocolMsg,
 		services::boot::{
 			Manifest, ManifestEnvelope, ManifestSet, Namespace, NitroConfig,
 			PivotConfig, RestartPolicy, ShareSet,
 		},
-		ProtocolError, ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS,
+		ProtocolError, ProtocolPhase, INITIAL_CLIENT_TIMEOUT,
 	},
 	reaper::{Reaper, REAPER_RESTART_DELAY},
 };
@@ -103,7 +103,7 @@ async fn enclave_app_client_socket_stress() {
 		StreamPool::single(SocketAddress::new_unix(ENCLAVE_SOCK)).unwrap();
 	let enclave_client = SocketClient::new(
 		enclave_client_pool.shared(),
-		TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS + 3), // needs to be bigger than the slow request below + some time for recovery
+		INITIAL_CLIENT_TIMEOUT + Duration::from_secs(3), // needs to be bigger than the slow request below + some time for recovery
 	);
 
 	let app_request =

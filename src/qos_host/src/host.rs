@@ -13,7 +13,7 @@
 //! * Response: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/response.md/>
 //! * Responding with error: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/error_handling.md/>
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
 	body::Bytes,
@@ -26,7 +26,7 @@ use axum::{
 use borsh::BorshDeserialize;
 use qos_core::{
 	client::SocketClient,
-	io::{SharedStreamPool, TimeVal},
+	io::SharedStreamPool,
 	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase},
 };
 
@@ -45,7 +45,7 @@ struct QosHostState {
 #[allow(clippy::module_name_repetitions)]
 pub struct HostServer {
 	enclave_pool: SharedStreamPool,
-	timeout: TimeVal,
+	timeout: Duration,
 	addr: SocketAddr,
 	base_path: Option<String>,
 }
@@ -56,7 +56,7 @@ impl HostServer {
 	#[must_use]
 	pub fn new(
 		enclave_pool: SharedStreamPool,
-		timeout: TimeVal,
+		timeout: Duration,
 		addr: SocketAddr,
 		base_path: Option<String>,
 	) -> Self {

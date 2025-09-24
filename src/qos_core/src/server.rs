@@ -85,7 +85,7 @@ impl SocketServer {
 	/// Expand the server with listeners up to pool size. This adds new tasks as needed.
 	pub fn listen_to<P>(
 		&mut self,
-		pool_size: u32,
+		pool_size: u8,
 		processor: &SharedProcessor<P>,
 	) -> Result<(), IOError>
 	where

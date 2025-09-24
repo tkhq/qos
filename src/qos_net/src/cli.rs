@@ -37,7 +37,7 @@ impl ProxyOpts {
 	pub(crate) fn async_pool(
 		&self,
 	) -> Result<StreamPool, qos_core::io::IOError> {
-		let pool_size: u32 = self
+		let pool_size: u8 = self
 			.parsed
 			.single(POOL_SIZE)
 			.expect("invalid pool options")

@@ -9,10 +9,11 @@ pub mod services;
 mod state;
 
 pub use error::ProtocolError;
+pub use state::ProtocolPhase;
 pub(crate) use state::ProtocolState;
-pub use state::{ProtocolPhase, ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS};
 
 pub(crate) mod processor;
+pub use processor::INITIAL_CLIENT_TIMEOUT;
 
 /// 256bit hash
 pub type Hash256 = [u8; 32];

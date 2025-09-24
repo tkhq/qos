@@ -701,6 +701,8 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub quorum_key_path: P,
 	pub manifest_path: P,
 	pub pivot_args: Vec<String>,
+	pub pool_size: Option<u8>,
+	pub client_timeout_ms: Option<u16>,
 }
 
 pub(crate) fn generate_manifest<P: AsRef<Path>>(
@@ -719,6 +721,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		quorum_key_path,
 		manifest_path,
 		pivot_args,
+		pool_size,
+		client_timeout_ms,
 	} = args;
 
 	let nitro_config =
@@ -749,6 +753,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		share_set,
 		patch_set,
 		enclave: nitro_config,
+		pool_size,
+		client_timeout_ms,
 	};
 
 	write_with_msg(
@@ -1642,6 +1648,8 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			members: vec![member.clone()],
 		},
 		patch_set: PatchSet { threshold: 0, members: vec![] },
+		pool_size: None,
+		client_timeout_ms: None,
 	};
 
 	// Create and post the boot standard instruction
@@ -2256,6 +2264,8 @@ mod tests {
 			share_set: share_set.clone(),
 			patch_set: patch_set.clone(),
 			enclave: nitro_config.clone(),
+			pool_size: None,
+			client_timeout_ms: None,
 		};
 
 		let manifest_envelope = ManifestEnvelope {

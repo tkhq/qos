@@ -211,6 +211,8 @@ mod test {
 				members: members.clone().into_iter().map(|(m, _)| m).collect(),
 			},
 			patch_set: PatchSet::default(),
+			pool_size: None,
+			client_timeout_ms: None,
 		};
 
 		let approvals: Vec<_> = members
