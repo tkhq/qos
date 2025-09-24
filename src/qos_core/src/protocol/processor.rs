@@ -16,7 +16,7 @@ use crate::{
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
 
-/// Initial client timeout for the processor until the Manifest says otherwise
+/// Initial client timeout for the processor until the Manifest says otherwise, see reaper.rs
 pub const INITIAL_CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Helper type to keep `ProtocolState` shared using `Arc<Mutex<ProtocolState>>`
@@ -52,8 +52,9 @@ impl ProtocolProcessor {
 		self.state.read().await.get_phase()
 	}
 
-	/// Sets the client timeout value for the `app_client`
+	/// Sets the client timeout value for the `app_client`, maximum allowed value is `u16::MAX` milliseconds
 	pub fn set_client_timeout(&mut self, timeout: Duration) {
+		assert!(timeout.as_millis() < u16::MAX.into(), "client timeout > 65s");
 		self.app_client.set_timeout(timeout);
 	}
 
