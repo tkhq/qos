@@ -3,12 +3,15 @@
 //! It exposes a simple protocol for remote clients who
 //! connect to let them manipulate these connections (read/write/flush)
 
-#[cfg(feature = "proxy")]
-pub mod cli;
 pub mod error;
+pub mod proxy_msg;
+
 #[cfg(feature = "proxy")]
 pub mod proxy;
 #[cfg(feature = "proxy")]
 pub mod proxy_connection;
-pub mod proxy_msg;
+#[cfg(feature = "proxy")]
 pub mod proxy_stream;
+
+#[cfg(feature = "proxy")]
+pub mod cli;

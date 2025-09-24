@@ -35,64 +35,7 @@ pub enum ProxyMsg {
 	},
 	/// Response for `ConnectByNameRequest` and `ConnectByIpRequest`
 	ConnectResponse {
-		/// Connection ID to reference the opened connection in later messages
-		/// (`Read`, `Write`, `Flush`)
-		connection_id: u128,
 		/// The remote host IP, e.g. "1.2.3.4"
 		remote_ip: String,
-	},
-	/// Request from the enclave app to close the connection
-	CloseRequest {
-		/// Connection ID
-		connection_id: u128,
-	},
-	/// Response for `CloseRequest`
-	CloseResponse {
-		/// Connection ID
-		connection_id: u128,
-	},
-	/// Read from a remote connection
-	ReadRequest {
-		/// A connection ID from `ConnectResponse`
-		connection_id: u128,
-		/// number of bytes to read
-		size: usize,
-	},
-	/// Response to `ReadRequest` containing read data
-	ReadResponse {
-		/// A connection ID from `ConnectResponse`
-		connection_id: u128,
-		/// number of bytes read
-		data: Vec<u8>,
-		/// buffer after mutation from `read`. The first `size` bytes contain
-		/// the result of the `read` call
-		size: usize,
-	},
-	/// Write to a remote connection
-	WriteRequest {
-		/// A connection ID from `ConnectResponse`
-		connection_id: u128,
-		/// Data to be sent
-		data: Vec<u8>,
-	},
-	/// Response to `WriteRequest` containing the number of successfully
-	/// written bytes.
-	WriteResponse {
-		/// Connection ID from `ConnectResponse`
-		connection_id: u128,
-		/// Number of bytes written successfully
-		size: usize,
-	},
-	/// Write to a remote connection
-	FlushRequest {
-		/// A connection ID from `ConnectResponse`
-		connection_id: u128,
-	},
-	/// Response to `FlushRequest`
-	/// The response only contains the connection ID. Success is implicit: if
-	/// the flush response fails, a `ProxyError` will be sent instead.
-	FlushResponse {
-		/// Connection ID from `ConnectResponse`
-		connection_id: u128,
 	},
 }

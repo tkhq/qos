@@ -1,20 +1,28 @@
 use core::panic;
+use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use integration::{AdditionProof, AdditionProofPayload, PivotProofMsg};
 use qos_core::{
 	handles::EphemeralKeyHandle,
-	io::SocketAddress,
+	io::{SocketAddress, StreamPool},
 	server::{RequestProcessor, SocketServer},
 };
+use tokio::sync::RwLock;
 
 struct Processor {
 	ephemeral_key_handle: EphemeralKeyHandle,
 }
 
+impl Processor {
+	pub fn new(ephemeral_key_handle: EphemeralKeyHandle) -> Arc<RwLock<Self>> {
+		Arc::new(RwLock::new(Self { ephemeral_key_handle }))
+	}
+}
+
 impl RequestProcessor for Processor {
-	fn process(&mut self, request: Vec<u8>) -> Vec<u8> {
-		let msg = PivotProofMsg::try_from_slice(&request)
+	async fn process(&self, request: &[u8]) -> Vec<u8> {
+		let msg = PivotProofMsg::try_from_slice(request)
 			.expect("Received invalid message - test is broken!");
 
 		match msg {
@@ -48,17 +56,21 @@ impl RequestProcessor for Processor {
 	}
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	let args: Vec<String> = std::env::args().collect();
 	let socket_path: &String = &args[1];
 
-	SocketServer::listen(
-		SocketAddress::new_unix(socket_path),
-		Processor {
-			ephemeral_key_handle: EphemeralKeyHandle::new(
-				"./mock/ephemeral_seed.secret.keep".to_string(),
-			),
-		},
+	let app_pool = StreamPool::new(SocketAddress::new_unix(socket_path), 1)
+		.expect("unable to create app pool");
+
+	let _server = SocketServer::listen_all(
+		app_pool,
+		&Processor::new(EphemeralKeyHandle::new(
+			"./mock/ephemeral_seed.secret.keep".to_string(),
+		)),
 	)
 	.unwrap();
+
+	tokio::signal::ctrl_c().await.unwrap();
 }

@@ -18,6 +18,7 @@ use qos_core::{
 mod services;
 
 pub use services::PairOrYubi;
+pub use services::{advanced_provision_yubikey, generate_file_key};
 
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";

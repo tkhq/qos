@@ -24,6 +24,10 @@ aws-nitro-enclaves-nsm-api = { workspace = true }
 serde_bytes = { workspace = true }
 serde = { workspace = true }
 
+futures = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "time", "signal", "process"], default-features = false }
+tokio-vsock = { workspace = true }
+
 [dev-dependencies]
 qos_test_primitives = { workspace = true }
 qos_p256 = { workspace = true, features = ["mock"] }

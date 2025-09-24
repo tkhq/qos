@@ -8,16 +8,15 @@ use std::{
 
 use qos_core::{
 	cli::{CID, PORT, USOCK},
-	io::SocketAddress,
+	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
-
-use crate::HostServer;
 
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const VSOCK_TO_HOST: &str = "vsock-to-host";
+const SOCKET_TIMEOUT: &str = "socket-timeout";
 
 struct HostParser;
 impl GetParserForOptions for HostParser {
@@ -53,6 +52,11 @@ impl GetParserForOptions for HostParser {
 			.token(
 				Token::new(ENDPOINT_BASE_PATH, "base path for all endpoints. e.g. <BASE>/enclave-health")
 					.takes_value(true)
+			)
+			.token(
+				Token::new(SOCKET_TIMEOUT, "maximum time in ms a connect to the USOCK/VSOCK will take")
+					.takes_value(true)
+					.default_value(qos_core::DEFAULT_SOCKET_TIMEOUT_MS)
 			)
 			.token(
 				Token::new(VSOCK_TO_HOST, "whether to add the to-host svm flag to the enclave vsock connection. Valid options are `true` or `false`")
@@ -106,26 +110,44 @@ impl HostOpts {
 		SocketAddr::new(IpAddr::V4(ip), port)
 	}
 
-	/// Get the `SocketAddress` for the enclave server.
-	///
-	/// # Panics
-	///
-	/// Panics if the options are not valid for exactly one of unix or vsock.
-	#[must_use]
-	pub fn enclave_addr(&self) -> SocketAddress {
+	pub(crate) fn socket_timeout(&self) -> TimeVal {
+		let default_timeout = &qos_core::DEFAULT_SOCKET_TIMEOUT_MS.to_owned();
+		let timeout_str =
+			self.parsed.single(SOCKET_TIMEOUT).unwrap_or(default_timeout);
+		TimeVal::milliseconds(
+			timeout_str.parse().expect("invalid timeout value"),
+		)
+	}
+
+	/// Create a new `StreamPool` using the list of `SocketAddress` for the qos host.
+	pub(crate) fn enclave_pool(
+		&self,
+	) -> Result<StreamPool, qos_core::io::IOError> {
 		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
 			self.parsed.single(USOCK),
 		) {
 			#[cfg(feature = "vm")]
-			(Some(c), Some(p), None) => SocketAddress::new_vsock(
-				c.parse::<u32>().unwrap(),
-				p.parse::<u32>().unwrap(),
-				self.to_host_flag(),
-			),
-			(None, None, Some(u)) => SocketAddress::new_unix(u),
-			_ => panic!("Invalid socket options"),
+			(Some(c), Some(p), None) => {
+				let c = c.parse().map_err(|_| {
+					qos_core::io::IOError::ConnectAddressInvalid
+				})?;
+				let p = p.parse().map_err(|_| {
+					qos_core::io::IOError::ConnectAddressInvalid
+				})?;
+
+				let address =
+					SocketAddress::new_vsock(c, p, self.to_host_flag());
+
+				StreamPool::new(address, 1) // qos_host needs only 1
+			}
+			(None, None, Some(u)) => {
+				let address = SocketAddress::new_unix(u);
+
+				StreamPool::new(address, 1)
+			}
+			_ => panic!("Invalid socket opts"),
 		}
 	}
 
@@ -167,6 +189,8 @@ impl HostOpts {
 pub struct CLI;
 impl CLI {
 	/// Execute the command line interface.
+	/// # Panics
+	/// If pool creation fails
 	pub async fn execute() {
 		let mut args: Vec<String> = env::args().collect();
 		let options = HostOpts::new(&mut args);
@@ -176,8 +200,12 @@ impl CLI {
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
 		} else {
-			HostServer::new(
-				options.enclave_addr(),
+			crate::host::HostServer::new(
+				options
+					.enclave_pool()
+					.expect("unable to create enclave pool")
+					.shared(),
+				options.socket_timeout(),
 				options.host_addr(),
 				options.base_path(),
 			)

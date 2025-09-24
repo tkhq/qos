@@ -1,29 +1,15 @@
 //! Abstractions to handle connection based socket streams.
 
-use std::{
-	io::{ErrorKind, Read, Write},
-	mem::size_of,
-	os::unix::io::RawFd,
-};
+use std::{io::ErrorKind, pin::Pin};
 
+use tokio::{
+	io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
+	net::{UnixListener, UnixSocket, UnixStream},
+};
 #[cfg(feature = "vm")]
-use nix::sys::socket::VsockAddr;
-pub use nix::sys::time::{TimeVal, TimeValLike};
-use nix::{
-	sys::socket::{
-		accept, bind, connect, listen, recv, send, shutdown, socket, sockopt,
-		AddressFamily, MsgFlags, SetSockOpt, Shutdown, SockFlag, SockType,
-		SockaddrLike, UnixAddr,
-	},
-	unistd::close,
-};
+use tokio_vsock::{VsockListener, VsockStream};
 
-use super::IOError;
-
-// 25(retries) x 10(milliseconds) = 1/4 a second of retrying
-const MAX_RETRY: usize = 25;
-const BACKOFF_MILLISECONDS: u64 = 10;
-const BACKLOG: usize = 128;
+use super::{IOError, SocketAddress};
 
 const MIB: usize = 1024 * 1024;
 
@@ -31,443 +17,429 @@ const MIB: usize = 1024 * 1024;
 /// The goal here is to avoid server crashes if the payload size exceeds the available system memory.
 pub const MAX_PAYLOAD_SIZE: usize = 128 * MIB;
 
-/// Even though we allow for big payloads we start by allocating a small buffer first. Then allocate more as needed.
-pub const INITIAL_RECV_BUF_SIZE: usize = 2 * MIB;
-
-/// Socket address.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SocketAddress {
-	/// VSOCK address.
+#[derive(Debug)]
+enum InnerListener {
+	Unix(UnixListener),
 	#[cfg(feature = "vm")]
-	Vsock(VsockAddr),
-	/// Unix address.
-	Unix(UnixAddr),
+	Vsock(VsockListener),
 }
 
-/// VSOCK flag for talking to host.
-pub const VMADDR_FLAG_TO_HOST: u8 = 0x01;
-/// Don't specify any flags for a VSOCK.
-pub const VMADDR_NO_FLAGS: u8 = 0x00;
-
-impl SocketAddress {
-	/// Create a new Unix socket.
-	///
-	/// # Panics
-	///
-	/// Panics if `nix::sys::socket::UnixAddr::new` panics.
-	#[must_use]
-	pub fn new_unix(path: &str) -> Self {
-		let addr = UnixAddr::new(path).unwrap();
-		Self::Unix(addr)
-	}
-
-	/// Create a new Vsock socket.
-	///
-	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>).
+#[derive(Debug)]
+enum InnerStream {
+	Unix(UnixStream),
 	#[cfg(feature = "vm")]
-	#[allow(unsafe_code)]
-	pub fn new_vsock(cid: u32, port: u32, flags: u8) -> Self {
-		#[repr(C)]
-		struct sockaddr_vm {
-			svm_family: libc::sa_family_t,
-			svm_reserved1: libc::c_ushort,
-			svm_port: libc::c_uint,
-			svm_cid: libc::c_uint,
-			// Field added [here](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6)
-			// but not yet in a version of libc we can use.
-			svm_flags: u8,
-			svm_zero: [u8; 3],
-		}
-
-		let vsock_addr = sockaddr_vm {
-			svm_family: AddressFamily::Vsock as libc::sa_family_t,
-			svm_reserved1: 0,
-			svm_cid: cid,
-			svm_port: port,
-			svm_flags: flags,
-			svm_zero: [0; 3],
-		};
-		let vsock_addr_len = size_of::<sockaddr_vm>() as libc::socklen_t;
-		let addr = unsafe {
-			VsockAddr::from_raw(
-				&vsock_addr as *const sockaddr_vm as *const libc::sockaddr,
-				Some(vsock_addr_len),
-			)
-			.unwrap()
-		};
-		Self::Vsock(addr)
-	}
-
-	/// Get the `AddressFamily` of the socket.
-	#[must_use]
-	pub fn family(&self) -> AddressFamily {
-		match *self {
-			#[cfg(feature = "vm")]
-			Self::Vsock(_) => AddressFamily::Vsock,
-			Self::Unix(_) => AddressFamily::Unix,
-		}
-	}
-
-	/// Convenience method for accessing the wrapped address
-	#[must_use]
-	pub fn addr(&self) -> Box<dyn SockaddrLike> {
-		match *self {
-			#[cfg(feature = "vm")]
-			Self::Vsock(vsa) => Box::new(vsa),
-			Self::Unix(ua) => Box::new(ua),
-		}
-	}
+	Vsock(VsockStream),
 }
 
 /// Handle on a stream
+#[derive(Debug)]
 pub struct Stream {
-	fd: RawFd,
+	address: Option<SocketAddress>,
+	inner: Option<InnerStream>,
 }
 
 impl Stream {
-	/// Create a new `Stream` from a `SocketAddress` and a timeout
-	pub fn connect(
-		addr: &SocketAddress,
-		timeout: TimeVal,
-	) -> Result<Self, IOError> {
-		let mut err = IOError::UnknownError;
-
-		for _ in 0..MAX_RETRY {
-			let fd = socket_fd(addr)?;
-			let stream = Self { fd };
-
-			// set `SO_RCVTIMEO`
-			let receive_timeout = sockopt::ReceiveTimeout;
-			receive_timeout.set(fd, &timeout)?;
-
-			let send_timeout = sockopt::SendTimeout;
-			send_timeout.set(fd, &timeout)?;
-
-			match connect(stream.fd, &*addr.addr()) {
-				Ok(()) => return Ok(stream),
-				Err(e) => err = IOError::ConnectNixError(e),
-			}
-
-			std::thread::sleep(std::time::Duration::from_millis(
-				BACKOFF_MILLISECONDS,
-			));
-		}
-
-		Err(err)
+	// accept a new connection, used by server side
+	fn unix_accepted(stream: UnixStream) -> Self {
+		Self { address: None, inner: Some(InnerStream::Unix(stream)) }
 	}
 
-	/// Sends a buffer over the underlying socket
-	pub fn send(&self, buf: &[u8]) -> Result<(), IOError> {
-		let len = buf.len();
-		// First, send the length of the buffer
-		{
-			let len_buf: [u8; size_of::<u64>()] = (len as u64).to_le_bytes();
+	// accept a new connection, used by server side
+	#[cfg(feature = "vm")]
+	fn vsock_accepted(stream: VsockStream) -> Self {
+		Self { address: None, inner: Some(InnerStream::Vsock(stream)) }
+	}
 
-			// First, send the length of the buffer
-			let mut sent_bytes = 0;
-			while sent_bytes < len_buf.len() {
-				sent_bytes += match send(
-					self.fd,
-					&len_buf[sent_bytes..len_buf.len()],
-					MsgFlags::empty(),
-				) {
-					Ok(size) => size,
-					Err(err) => return Err(IOError::SendNixError(err)),
-				};
+	/// Create a new `Stream` with known `SocketAddress`. The stream starts disconnected
+	/// and will connect on the first `call`.
+	#[must_use]
+	pub fn new(address: &SocketAddress) -> Self {
+		Self { address: Some(address.clone()), inner: None }
+	}
+
+	/// Connect `Stream` to `SocketAddress`
+	/// Sets `inner` to the new stream.
+	pub async fn connect(&mut self) -> Result<(), IOError> {
+		let addr = self.address()?;
+
+		match self.address()? {
+			SocketAddress::Unix(_uaddr) => {
+				let inner = unix_connect(addr).await?;
+
+				self.inner = Some(InnerStream::Unix(inner));
 			}
-		}
+			#[cfg(feature = "vm")]
+			SocketAddress::Vsock(_vaddr) => {
+				let inner = vsock_connect(&addr).await?;
 
-		// Then, send the contents of the buffer
-		{
-			let mut sent_bytes = 0;
-			while sent_bytes < len {
-				sent_bytes += match send(
-					self.fd,
-					&buf[sent_bytes..len],
-					MsgFlags::empty(),
-				) {
-					Ok(size) => size,
-					Err(err) => return Err(IOError::SendNixError(err)),
-				}
+				self.inner = Some(InnerStream::Vsock(inner));
 			}
 		}
 
 		Ok(())
 	}
 
-	/// Receive from the underlying socket
-	pub fn recv(&self) -> Result<Vec<u8>, IOError> {
-		let length: usize = {
-			{
-				let mut buf = [0u8; size_of::<u64>()];
-				let len = buf.len();
-				std::debug_assert!(buf.len() == 8);
+	/// Reconnects this `Stream` by calling `connect` again on the underlaying socket
+	pub async fn reconnect(&mut self) -> Result<(), IOError> {
+		let addr = self.address()?.clone();
 
-				let mut received_bytes = 0;
-				while received_bytes < len {
-					received_bytes += match recv(
-						self.fd,
-						&mut buf[received_bytes..len],
-						MsgFlags::empty(),
-					) {
-						Ok(0) => {
-							return Err(IOError::RecvConnectionClosed);
-						}
-						Ok(size) => size,
-						Err(nix::Error::EINTR) => {
-							return Err(IOError::RecvInterrupted);
-						}
-						Err(nix::Error::EAGAIN) => {
-							return Err(IOError::RecvTimeout);
-						}
-						Err(err) => {
-							return Err(IOError::RecvNixError(err));
-						}
-					};
-				}
-
-				u64::from_le_bytes(buf)
-					.try_into()
-					// Should only be possible if we are on 32bit architecture
-					.map_err(|_| IOError::ArithmeticSaturation)?
+		match &mut self.inner_mut()? {
+			InnerStream::Unix(ref mut s) => {
+				*s = unix_connect(&addr).await?;
 			}
-		};
-
-		if length > MAX_PAYLOAD_SIZE {
-			return Err(IOError::OversizedPayload(length));
-		}
-
-		// Allocate conservatively to avoid clients setting 128MB as their declared length and keeping the connection open.
-		// We'd only need a few of these to run out of memory. This "as needed" allocation ensures clients have skin in the game.
-		let initial_recv_buf_len =
-			core::cmp::min(length, INITIAL_RECV_BUF_SIZE);
-		let mut recv_buf = vec![0u8; initial_recv_buf_len];
-
-		let mut received_bytes = 0;
-		while received_bytes < length {
-			// If the receive buffer is full, double it.
-			if received_bytes == recv_buf.len() {
-				// Using `saturating_mul` here out of paranoia; it's cheap enough to saturate instead of overflow.
-				// We either double the recv buffer capacity, or set it to `length` if doubling would exceed it.
-				let new_len =
-					core::cmp::min(recv_buf.len().saturating_mul(2), length);
-				recv_buf.resize(new_len, 0);
+			#[cfg(feature = "vm")]
+			InnerStream::Vsock(ref mut s) => {
+				*s = vsock_connect(&addr).await?;
 			}
-
-			received_bytes += match recv(
-				self.fd,
-				&mut recv_buf[received_bytes..],
-				MsgFlags::empty(),
-			) {
-				Ok(0) => return Err(IOError::RecvConnectionClosed),
-				Ok(size) => size,
-				Err(nix::Error::EINTR) => return Err(IOError::RecvInterrupted),
-				Err(nix::Error::EAGAIN) => return Err(IOError::RecvTimeout),
-				Err(err) => return Err(IOError::NixError(err)),
-			};
 		}
-
-		Ok(recv_buf)
-	}
-}
-
-impl Read for Stream {
-	fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
-		match recv(self.fd, buf, MsgFlags::empty()) {
-			Ok(0) => Err(std::io::Error::new(
-				ErrorKind::ConnectionAborted,
-				"read 0 bytes",
-			)),
-			Ok(size) => Ok(size),
-			Err(err) => Err(std::io::Error::from_raw_os_error(err as i32)),
-		}
-	}
-}
-
-impl Write for Stream {
-	fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
-		match send(self.fd, buf, MsgFlags::empty()) {
-			Ok(0) => Err(std::io::Error::new(
-				ErrorKind::ConnectionAborted,
-				"wrote 0 bytes",
-			)),
-			Ok(size) => Ok(size),
-			Err(err) => Err(std::io::Error::from_raw_os_error(err as i32)),
-		}
-	}
-
-	// No-op because we can't flush a socket.
-	fn flush(&mut self) -> Result<(), std::io::Error> {
 		Ok(())
 	}
+
+	/// Sends a buffer over the underlying socket using async
+	pub async fn send(&mut self, buf: &[u8]) -> Result<(), IOError> {
+		match &mut self.inner_mut()? {
+			InnerStream::Unix(ref mut s) => send(s, buf).await,
+			#[cfg(feature = "vm")]
+			InnerStream::Vsock(ref mut s) => send(s, buf).await,
+		}
+	}
+
+	/// Receive from the underlying socket using async
+	pub async fn recv(&mut self) -> Result<Vec<u8>, IOError> {
+		match &mut self.inner_mut()? {
+			InnerStream::Unix(ref mut s) => recv(s).await,
+			#[cfg(feature = "vm")]
+			InnerStream::Vsock(ref mut s) => recv(s).await,
+		}
+	}
+
+	/// Perform a "call" by sending the `req_buf` bytes and waiting for reply on the same socket.
+	pub async fn call(&mut self, req_buf: &[u8]) -> Result<Vec<u8>, IOError> {
+		// first time? connect
+		if self.inner.is_none() {
+			self.connect().await?;
+		} else {
+			eprintln!("SocketStream already connected, call proceeding");
+		}
+
+		self.send(req_buf).await?;
+		self.recv().await
+	}
+
+	fn address(&self) -> Result<&SocketAddress, IOError> {
+		self.address.as_ref().ok_or(IOError::ConnectAddressInvalid)
+	}
+
+	fn inner_mut(&mut self) -> Result<&mut InnerStream, IOError> {
+		self.inner.as_mut().ok_or(IOError::DisconnectedStream)
+	}
+
+	/// Resets the inner stream, forcing a re-connect next `call`
+	pub fn reset(&mut self) {
+		self.inner = None;
+	}
+
+	/// Checks if we're in `connected` state.
+	/// NOTE: this does NOT mean that the connection is currently OK. It just means we've
+	/// connected in the past, and our `inner` field is active.
+	pub fn is_connected(&self) -> bool {
+		self.inner.is_some()
+	}
 }
 
-impl Drop for Stream {
-	fn drop(&mut self) {
-		// Its ok if either of these error - likely means the other end of the
-		// connection has been shutdown
-		let _ = shutdown(self.fd, Shutdown::Both);
-		let _ = close(self.fd);
+async fn send<S: AsyncWriteExt + Unpin>(
+	stream: &mut S,
+	buf: &[u8],
+) -> Result<(), IOError> {
+	let length = buf.len();
+
+	if length > MAX_PAYLOAD_SIZE {
+		return Err(IOError::OversizedPayload(length));
+	}
+
+	// First, send the length of the buffer
+	let len_buf: [u8; size_of::<u64>()] = (length as u64).to_le_bytes();
+
+	// send the header
+	stream.write_all(&len_buf).await?;
+	// Send the actual contents of the buffer
+	stream.write_all(buf).await?;
+
+	Ok(())
+}
+
+async fn recv<S: AsyncReadExt + Unpin>(
+	stream: &mut S,
+) -> Result<Vec<u8>, IOError> {
+	let length: usize = {
+		let mut buf = [0u8; size_of::<u64>()];
+
+		stream.read_exact(&mut buf).await.map_err(|e| match e.kind() {
+			ErrorKind::UnexpectedEof => IOError::RecvConnectionClosed,
+			_ => IOError::StdIoError(e),
+		})?;
+
+		u64::from_le_bytes(buf)
+			.try_into()
+			// Should only be possible if we are on 32bit architecture
+			.map_err(|_| IOError::ArithmeticSaturation)?
+	};
+
+	if length > MAX_PAYLOAD_SIZE {
+		return Err(IOError::OversizedPayload(length));
+	}
+
+	// Read the buffer
+	let mut buf = vec![0; length];
+	stream.read_exact(&mut buf).await.map_err(|e| match e.kind() {
+		ErrorKind::UnexpectedEof => IOError::RecvConnectionClosed,
+		_ => IOError::StdIoError(e),
+	})?;
+
+	Ok(buf)
+}
+
+impl From<IOError> for std::io::Error {
+	fn from(value: IOError) -> Self {
+		match value {
+			IOError::DisconnectedStream => std::io::Error::new(
+				std::io::ErrorKind::NotFound,
+				"connection not found",
+			),
+			_ => std::io::Error::other("unknown error"),
+		}
+	}
+}
+
+impl AsyncRead for Stream {
+	fn poll_read(
+		mut self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+		buf: &mut tokio::io::ReadBuf<'_>,
+	) -> std::task::Poll<std::io::Result<()>> {
+		match &mut self.inner_mut()? {
+			InnerStream::Unix(ref mut s) => Pin::new(s).poll_read(cx, buf),
+			#[cfg(feature = "vm")]
+			InnerStream::Vsock(ref mut s) => Pin::new(s).poll_read(cx, buf),
+		}
+	}
+}
+
+impl AsyncWrite for Stream {
+	fn poll_write(
+		mut self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+		buf: &[u8],
+	) -> std::task::Poll<Result<usize, std::io::Error>> {
+		match &mut self.inner_mut()? {
+			InnerStream::Unix(ref mut s) => Pin::new(s).poll_write(cx, buf),
+			#[cfg(feature = "vm")]
+			InnerStream::Vsock(ref mut s) => Pin::new(s).poll_write(cx, buf),
+		}
+	}
+
+	fn poll_flush(
+		mut self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> std::task::Poll<Result<(), std::io::Error>> {
+		match &mut self.inner_mut()? {
+			InnerStream::Unix(ref mut s) => Pin::new(s).poll_flush(cx),
+			#[cfg(feature = "vm")]
+			InnerStream::Vsock(ref mut s) => Pin::new(s).poll_flush(cx),
+		}
+	}
+
+	fn poll_shutdown(
+		mut self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> std::task::Poll<Result<(), std::io::Error>> {
+		match &mut self.inner_mut()? {
+			InnerStream::Unix(ref mut s) => Pin::new(s).poll_shutdown(cx),
+			#[cfg(feature = "vm")]
+			InnerStream::Vsock(ref mut s) => Pin::new(s).poll_shutdown(cx),
+		}
 	}
 }
 
 /// Abstraction to listen for incoming stream connections.
 pub struct Listener {
-	fd: RawFd,
-	addr: SocketAddress,
+	inner: InnerListener,
 }
 
 impl Listener {
 	/// Bind and listen on the given address.
-	pub(crate) fn listen(addr: SocketAddress) -> Result<Self, IOError> {
-		// In case the last connection at this addr did not shutdown correctly
-		Self::clean(&addr);
-
-		let fd = socket_fd(&addr)?;
-		bind(fd, &*addr.addr())?;
-		listen(fd, BACKLOG)?;
-
-		Ok(Self { fd, addr })
-	}
-
-	fn accept(&self) -> Result<Stream, IOError> {
-		let fd = accept(self.fd)?;
-
-		Ok(Stream { fd })
-	}
-
-	/// Remove Unix socket if it exists
-	fn clean(addr: &SocketAddress) {
-		// Not irrefutable when "vm" is enabled
-		#[allow(irrefutable_let_patterns)]
-		if let SocketAddress::Unix(addr) = addr {
-			if let Some(path) = addr.path() {
+	pub(crate) fn listen(addr: &SocketAddress) -> Result<Self, IOError> {
+		let listener = match *addr {
+			SocketAddress::Unix(uaddr) => {
+				let path =
+					uaddr.path().ok_or(IOError::ConnectAddressInvalid)?;
 				if path.exists() {
-					drop(std::fs::remove_file(path));
+					// attempt cleanup, this mostly happens from tests/panics
+					_ = std::fs::remove_file(path);
 				}
+				let inner = InnerListener::Unix(UnixListener::bind(path)?);
+				Self { inner }
 			}
-		}
-	}
-}
+			#[cfg(feature = "vm")]
+			SocketAddress::Vsock(vaddr) => {
+				let inner = InnerListener::Vsock(VsockListener::bind(vaddr)?);
+				Self { inner }
+			}
+		};
 
-impl Iterator for Listener {
-	type Item = Stream;
-	fn next(&mut self) -> Option<Self::Item> {
-		self.accept().ok()
+		Ok(listener)
+	}
+
+	/// Accept a new connection.
+	pub async fn accept(&self) -> Result<Stream, IOError> {
+		let stream = match &self.inner {
+			InnerListener::Unix(l) => {
+				let (s, _) = l.accept().await?;
+				Stream::unix_accepted(s)
+			}
+			#[cfg(feature = "vm")]
+			InnerListener::Vsock(l) => {
+				let (s, _) = l.accept().await?;
+				Stream::vsock_accepted(s)
+			}
+		};
+
+		Ok(stream)
 	}
 }
 
 impl Drop for Listener {
 	fn drop(&mut self) {
-		// Its ok if either of these error - likely means the other end of the
-		// connection has been shutdown
-		let _ = shutdown(self.fd, Shutdown::Both);
-		let _ = close(self.fd);
-		Self::clean(&self.addr);
+		match &mut self.inner {
+			InnerListener::Unix(usock) => match usock.local_addr() {
+				Ok(addr) => {
+					if let Some(path) = addr.as_pathname() {
+						_ = std::fs::remove_file(path);
+					} else {
+						eprintln!("unable to path the usock"); // do not crash in Drop
+					}
+				}
+				Err(e) => eprintln!("{e}"), // do not crash in Drop
+			},
+			#[cfg(feature = "vm")]
+			InnerListener::Vsock(_vsock) => {} // vsock's drop will clear this
+		}
 	}
 }
 
-fn socket_fd(addr: &SocketAddress) -> Result<RawFd, IOError> {
-	socket(
-		addr.family(),
-		// Type - sequenced, two way byte stream. (full duplexed).
-		// Stream must be in a connected state before send/receive.
-		SockType::Stream,
-		// Flags
-		SockFlag::empty(),
-		// Protocol - no protocol needs to be specified as SOCK_STREAM
-		// is both a type and protocol.
-		None,
-	)
-	.map_err(IOError::NixError)
+async fn unix_connect(
+	addr: &SocketAddress,
+) -> Result<UnixStream, std::io::Error> {
+	let addr = addr.usock();
+	let path = addr.path().ok_or(IOError::ConnectAddressInvalid)?;
+
+	let socket = UnixSocket::new_stream()?;
+	socket.connect(path).await
+}
+
+// raw vsock socket connect
+#[cfg(feature = "vm")]
+async fn vsock_connect(
+	addr: &SocketAddress,
+) -> Result<VsockStream, std::io::Error> {
+	let addr = addr.vsock();
+	VsockStream::connect(*addr).await
 }
 
 #[cfg(test)]
 mod test {
 
-	use std::{
-		os::{fd::AsRawFd, unix::net::UnixListener},
-		path::Path,
-		str::from_utf8,
-		thread,
-	};
+	use std::{str::from_utf8, time::Duration};
+
+	use nix::sys::time::{TimeVal, TimeValLike};
+
+	use crate::{client::SocketClient, io::StreamPool};
 
 	use super::*;
 
-	fn timeval() -> TimeVal {
-		TimeVal::seconds(1)
+	/// Wait for a given usock file to exist and be connectible with a timeout of 5s.
+	///
+	/// # Panics
+	/// Panics if fs::exists errors.
+	pub async fn wait_for_usock(path: &str) {
+		let addr = SocketAddress::new_unix(path);
+		let pool = StreamPool::new(addr, 1).unwrap().shared();
+		let client = SocketClient::new(pool, TimeVal::milliseconds(50));
+
+		for _ in 0..50 {
+			if std::fs::exists(path).unwrap()
+				&& client.try_connect().await.is_ok()
+			{
+				break;
+			}
+
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
 	}
 
 	// A simple test socket server which says "PONG" when you send "PING".
 	// Then it kills itself.
 	pub struct HarakiriPongServer {
 		path: String,
-		fd: Option<i32>,
-	}
-
-	impl HarakiriPongServer {
-		pub fn new(path: String) -> Self {
-			Self { path, fd: None }
-		}
-		pub fn start(&mut self) {
-			let listener = UnixListener::bind(&self.path).unwrap();
-			self.fd = Some(listener.as_raw_fd());
-
-			let (mut stream, _peer_addr) = listener.accept().unwrap();
-
-			// Read 4 bytes ("PING")
-			let mut buf = [0u8; 4];
-			stream.read_exact(&mut buf).unwrap();
-
-			// Send "PONG" if "PING" was sent
-			if from_utf8(&buf).unwrap() == "PING" {
-				let _ = stream.write(b"PONG").unwrap();
-			}
-		}
 	}
 
 	impl Drop for HarakiriPongServer {
 		fn drop(&mut self) {
-			if let Some(fd) = &self.fd {
-				// Cleanup server fd if we have access to one
-				let _ = shutdown(fd.to_owned(), Shutdown::Both);
-				let _ = close(fd.to_owned());
+			let _ = std::fs::remove_file(&self.path);
+		}
+	}
 
-				let server_socket = Path::new(&self.path);
-				if server_socket.exists() {
-					drop(std::fs::remove_file(server_socket));
-				}
-				println!("HarakiriPongServer dropped successfully.")
-			} else {
-				println!(
-					"HarakiriPongServer dropped without a fd set. All done."
-				)
+	impl HarakiriPongServer {
+		pub fn new(path: String) -> Self {
+			// in case of panics, cleanup beforehand too
+			let _ = std::fs::remove_file(&path);
+			Self { path }
+		}
+
+		pub async fn start(&mut self) {
+			let listener = UnixListener::bind(&self.path).unwrap();
+
+			// first time accept is from "wait_for_usock" above, just ignore
+			let (_stream, _peer_addr) = listener.accept().await.unwrap();
+
+			// second accept should be for the test
+			let (mut stream, _peer_addr) = listener.accept().await.unwrap();
+
+			// Read 4 bytes ("PING")
+			let mut buf = [0u8; 4];
+			let r = stream.read_exact(&mut buf).await;
+			eprintln!("BYTES: {buf:?}");
+			r.unwrap();
+
+			// Send "PONG" if "PING" was sent
+			if from_utf8(&buf).unwrap() == "PING" {
+				let _ = stream.write(b"PONG").await.unwrap();
 			}
 		}
 	}
 
-	#[test]
-	fn stream_integration_test() {
+	#[tokio::test]
+	async fn stream_integration_test() {
 		// Ensure concurrent tests do not listen at the same path
-		let unix_addr =
-			nix::sys::socket::UnixAddr::new("./stream_integration_test.sock")
-				.unwrap();
-		let addr: SocketAddress = SocketAddress::Unix(unix_addr);
-		let listener: Listener = Listener::listen(addr.clone()).unwrap();
-		let client = Stream::connect(&addr, timeval()).unwrap();
-		let server = listener.accept().unwrap();
+		let addr: SocketAddress =
+			SocketAddress::new_unix("/tmp/stream_integration_test.sock");
+		let listener: Listener = Listener::listen(&addr).unwrap();
+		let mut client = Stream::new(&addr);
+		client.connect().await.unwrap();
+		let mut server = listener.accept().await.unwrap();
 
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
-		client.send(&data).unwrap();
+		client.send(&data).await.unwrap();
 
-		let resp = server.recv().unwrap();
+		let resp = server.recv().await.unwrap();
 
 		assert_eq!(data, resp);
 	}
 
-	#[test]
-	fn stream_implements_read_write_traits() {
-		let socket_server_path = "./stream_implements_read_write_traits.sock";
+	#[tokio::test]
+	async fn stream_implements_read_write_traits() {
+		let socket_server_path =
+			"/tmp/stream_implements_read_write_traits.sock";
 
 		// Start a simple socket server which replies "PONG" to any incoming
 		// request
@@ -475,106 +447,102 @@ mod test {
 			HarakiriPongServer::new(socket_server_path.to_string());
 
 		// Start the server in its own thread
-		thread::spawn(move || {
-			server.start();
+		tokio::spawn(async move {
+			server.start().await;
 		});
 
+		wait_for_usock(socket_server_path).await; // wait for server
+
 		// Now create a stream connecting to this mini-server
-		let unix_addr =
-			nix::sys::socket::UnixAddr::new(socket_server_path).unwrap();
-		let addr = SocketAddress::Unix(unix_addr);
-		let mut pong_stream = Stream::connect(&addr, timeval()).unwrap();
+		let addr = SocketAddress::new_unix(socket_server_path);
+		let mut pong_stream = Stream::new(&addr);
+		pong_stream.connect().await.unwrap();
 
 		// Write "PING"
-		let written = pong_stream.write(b"PING").unwrap();
+		let written = pong_stream.write(b"PING").await.unwrap();
 		assert_eq!(written, 4);
 
 		// Read, and expect "PONG"
 		let mut resp = [0u8; 4];
-		let res = pong_stream.read(&mut resp).unwrap();
+		let res = pong_stream.read(&mut resp).await.unwrap();
 		assert_eq!(res, 4);
 		assert_eq!(from_utf8(&resp).unwrap(), "PONG");
 	}
 
-	#[test]
-	fn listener_iterator_test() {
+	#[tokio::test]
+	async fn listener_accept_test() {
 		// Ensure concurrent tests are not attempting to listen at the same
 		// address
-		let unix_addr =
-			nix::sys::socket::UnixAddr::new("./listener_iterator_test.sock")
-				.unwrap();
-		let addr = SocketAddress::Unix(unix_addr);
+		let addr = SocketAddress::new_unix("./listener_iterator_test.sock");
 
-		let mut listener = Listener::listen(addr.clone()).unwrap();
+		let listener = Listener::listen(&addr).unwrap();
 
-		let handler = std::thread::spawn(move || {
-			if let Some(stream) = listener.next() {
-				let req = stream.recv().unwrap();
-				stream.send(&req).unwrap();
+		let handler = tokio::spawn(async move {
+			if let Ok(mut stream) = listener.accept().await {
+				let req = stream.recv().await.unwrap();
+				stream.send(&req).await.unwrap();
 			}
 		});
 
-		let client = Stream::connect(&addr, timeval()).unwrap();
+		let mut client = Stream::new(&addr);
+		client.connect().await.unwrap();
 
 		let data = vec![1, 2, 3, 4, 5, 6, 6, 6];
-		client.send(&data).unwrap();
-		let resp = client.recv().unwrap();
+		client.send(&data).await.unwrap();
+		let resp = client.recv().await.unwrap();
 		assert_eq!(data, resp);
 
-		handler.join().unwrap();
+		handler.await.unwrap();
 	}
 
-	#[test]
-	fn limit_sized_payload() {
+	#[tokio::test]
+	async fn limit_sized_payload() {
 		// Ensure concurrent tests are not attempting to listen on the same socket
 		let unix_addr =
 			nix::sys::socket::UnixAddr::new("./limit_sized_payload.sock")
 				.unwrap();
 		let addr = SocketAddress::Unix(unix_addr);
 
-		let mut listener = Listener::listen(addr.clone()).unwrap();
-		let handler = std::thread::spawn(move || {
-			if let Some(stream) = listener.next() {
-				let req = stream.recv().unwrap();
-				stream.send(&req.clone()).unwrap();
+		let listener = Listener::listen(&addr).unwrap();
+		let handler = tokio::spawn(async move {
+			if let Ok(mut stream) = listener.accept().await {
+				let req = stream.recv().await.unwrap();
+				stream.send(&req.clone()).await.unwrap();
 			}
 		});
 
 		// Sending a request that is exactly the max size should work
 		// (the response will be exactly max size)
-		let client = Stream::connect(&addr, timeval()).unwrap();
+		let mut client = Stream::new(&addr);
+		client.connect().await.unwrap();
+
 		let req = vec![1u8; MAX_PAYLOAD_SIZE];
-		client.send(&req).unwrap();
-		let resp = client.recv().unwrap();
+		client.send(&req).await.unwrap();
+		let resp = client.recv().await.unwrap();
 		assert_eq!(resp.len(), MAX_PAYLOAD_SIZE);
-		handler.join().unwrap();
+		handler.await.unwrap();
 	}
 
-	#[test]
-	fn oversized_payload() {
+	#[tokio::test]
+	async fn oversized_payload() {
 		// Ensure concurrent tests are not attempting to listen on the same socket
-		let unix_addr =
-			nix::sys::socket::UnixAddr::new("./oversized_payload.sock")
-				.unwrap();
-		let addr = SocketAddress::Unix(unix_addr);
-		let mut listener = Listener::listen(addr.clone()).unwrap();
+		let addr = SocketAddress::new_unix("./oversized_payload.sock");
+		let listener = Listener::listen(&addr).unwrap();
 
-		// Sneaky handler: adds one byte to the req, and returns this as a response
-		let _handler = std::thread::spawn(move || {
-			if let Some(stream) = listener.next() {
-				let req = stream.recv().unwrap();
-				stream.send(&[req.clone(), vec![1u8]].concat()).unwrap();
+		// accept-only handler
+		let handler = tokio::spawn(async move {
+			if let Err(err) = listener.accept().await {
+				panic!("{err:?}");
 			}
 		});
 
-		let client = Stream::connect(&addr, timeval()).unwrap();
+		let mut client = Stream::new(&addr);
+		client.connect().await.unwrap();
 
-		// Sending with the limit payload size will fail to receive: our sneaky handler
-		// will add one byte and cause the response to be oversized.
-		let req = vec![1u8; MAX_PAYLOAD_SIZE];
-		client.send(&req).unwrap();
+		// Sending with the limit payload size + 1 will fail
+		let req = vec![1u8; MAX_PAYLOAD_SIZE + 1];
 
-		match client.recv().unwrap_err() {
+		match client.send(&req).await.unwrap_err() {
 			IOError::OversizedPayload(size) => {
 				assert_eq!(size, MAX_PAYLOAD_SIZE + 1);
 			}
@@ -583,7 +551,6 @@ mod test {
 			}
 		}
 
-		// N.B: we do not call _handler.join().unwrap() here, because the handler is blocking (indefinitely) on "send"
-		// Once the test exits, Rust/OS checks will pick up the slack and clean up this thread when this test exits.
+		handler.await.unwrap();
 	}
 }

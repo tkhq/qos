@@ -1,78 +1,77 @@
 use core::panic;
-use std::{
-	io::{ErrorKind, Read, Write},
-	sync::Arc,
-};
+use std::{io::ErrorKind, sync::Arc};
 
 use borsh::BorshDeserialize;
 use integration::PivotRemoteTlsMsg;
 use qos_core::{
-	io::{SocketAddress, TimeVal},
+	io::{SharedStreamPool, SocketAddress, StreamPool},
 	server::{RequestProcessor, SocketServer},
 };
 use qos_net::proxy_stream::ProxyStream;
 use rustls::RootCertStore;
+use tokio::{
+	io::{AsyncReadExt, AsyncWriteExt},
+	sync::RwLock,
+};
+use tokio_rustls::TlsConnector;
 
+#[derive(Clone)]
 struct Processor {
-	net_proxy: SocketAddress,
+	net_pool: SharedStreamPool,
 }
 
 impl Processor {
-	fn new(proxy_address: String) -> Self {
-		Processor { net_proxy: SocketAddress::new_unix(&proxy_address) }
+	fn new(net_pool: SharedStreamPool) -> Arc<RwLock<Self>> {
+		Arc::new(RwLock::new(Processor { net_pool }))
 	}
 }
 
 impl RequestProcessor for Processor {
-	fn process(&mut self, request: Vec<u8>) -> Vec<u8> {
-		let msg = PivotRemoteTlsMsg::try_from_slice(&request)
+	async fn process(&self, request: &[u8]) -> Vec<u8> {
+		let msg = PivotRemoteTlsMsg::try_from_slice(request)
 			.expect("Received invalid message - test is broken!");
 
 		match msg {
 			PivotRemoteTlsMsg::RemoteTlsRequest { host, path } => {
-				let timeout = TimeVal::new(1, 0);
+				let pool = self.net_pool.read().await;
 				let mut stream = ProxyStream::connect_by_name(
-					&self.net_proxy,
-					timeout,
+					pool.get().await,
 					host.clone(),
 					443,
 					vec!["8.8.8.8".to_string()],
 					53,
 				)
+				.await
 				.unwrap();
 
 				let root_store = RootCertStore {
 					roots: webpki_roots::TLS_SERVER_ROOTS.into(),
 				};
-
 				let server_name: rustls::pki_types::ServerName<'_> =
 					host.clone().try_into().unwrap();
 				let config: rustls::ClientConfig =
 					rustls::ClientConfig::builder()
 						.with_root_certificates(root_store)
 						.with_no_client_auth();
-				let mut conn = rustls::ClientConnection::new(
-					Arc::new(config),
-					server_name,
-				)
-				.unwrap();
-				let mut tls = rustls::Stream::new(&mut conn, &mut stream);
+				let conn = TlsConnector::from(Arc::new(config));
+				let mut tls = conn
+					.connect(server_name, &mut stream)
+					.await
+					.expect("tls unable to establish connection");
 
 				let http_request =
 					format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n");
 
-				tls.write_all(http_request.as_bytes()).unwrap();
+				tls.write_all(http_request.as_bytes()).await.unwrap();
 
 				let mut response_bytes = Vec::new();
-				let read_to_end_result = tls.read_to_end(&mut response_bytes);
+				let read_to_end_result =
+					tls.read_to_end(&mut response_bytes).await;
 				match read_to_end_result {
 					Ok(read_size) => {
 						assert!(read_size > 0);
-
-						// Assert the connection isn't closed yet, and close it.
-						assert!(!stream.is_closed());
-						stream.close().expect("unable to close stream");
-						assert!(stream.is_closed());
+						// Refresh the connection for additional calls
+						stream.refresh().await.unwrap();
 					}
 					Err(e) => {
 						// Only EOF errors are expected. This means the
@@ -99,7 +98,8 @@ impl RequestProcessor for Processor {
 	}
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	// Parse args:
 	// - first argument is the socket to bind to (normal server server)
 	// - second argument is the socket to use for remote proxying
@@ -108,9 +108,20 @@ fn main() {
 	let socket_path: &String = &args[1];
 	let proxy_path: &String = &args[2];
 
-	SocketServer::listen(
-		SocketAddress::new_unix(socket_path),
-		Processor::new(proxy_path.to_string()),
-	)
-	.unwrap();
+	let enclave_pool = StreamPool::new(SocketAddress::new_unix(socket_path), 1)
+		.expect("unable to create async stream pool");
+
+	let proxy_pool = StreamPool::new(SocketAddress::new_unix(proxy_path), 1)
+		.expect("unable to create async stream pool")
+		.shared();
+
+	let _server =
+		SocketServer::listen_all(enclave_pool, &Processor::new(proxy_pool))
+			.unwrap();
+
+	match tokio::signal::ctrl_c().await {
+		Ok(_) => eprintln!("pivot handling ctrl+c the tokio way"),
+
+		Err(err) => panic!("{err}"),
+	}
 }

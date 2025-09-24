@@ -77,7 +77,7 @@ async fn dev_boot_e2e() {
 		.unwrap();
 
 	// Give the coordinator time to pivot
-	std::thread::sleep(std::time::Duration::from_secs(2));
+	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
 	// Make sure pivot ran
 	assert!(Path::new(PIVOT_OK3_SUCCESS_FILE).exists());

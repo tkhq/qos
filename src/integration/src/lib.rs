@@ -1,7 +1,12 @@
 //! Integration tests.
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use qos_core::parser::{GetParserForOptions, OptionsParser, Parser, Token};
+use qos_core::{
+	client::SocketClient,
+	io::{SocketAddress, StreamPool, TimeVal, TimeValLike},
+	parser::{GetParserForOptions, OptionsParser, Parser, Token},
+};
+use std::time::Duration;
 
 /// Path to the file `pivot_ok` writes on success for tests.
 pub const PIVOT_OK_SUCCESS_FILE: &str = "./pivot_ok_works";
@@ -40,21 +45,21 @@ pub const QOS_DIST_DIR: &str = "./mock/dist";
 pub const PCR3_PRE_IMAGE_PATH: &str = "./mock/namespaces/pcr3-preimage.txt";
 
 const MSG: &str = "msg";
+const POOL_SIZE: &str = "pool-size";
 
 /// Request/Response messages for "socket stress" pivot app.
 #[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
 pub enum PivotSocketStressMsg {
-	/// Request a [`Self::OkResponse`].
-	OkRequest,
+	/// Request a [`Self::OkResponse`] with a specific identifier.
+	OkRequest(u64),
 	/// A successful response to [`Self::OkRequest`].
-	OkResponse,
+	OkResponse(u64),
 	/// Request the app to panic. Does not have a response.
 	PanicRequest,
-	/// Request a response that will be slower then
-	/// `ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS`.
-	SlowRequest,
+	/// Request a response that will be slower than the provided `u64` value in milliseconds
+	SlowRequest(u64), // milliseconds
 	/// Response to [`Self::SlowRequest`].
-	SlowResponse,
+	SlowResponse(u64),
 }
 
 /// Request/Response messages for the "remote TLS" pivot app.
@@ -115,12 +120,39 @@ pub struct AdditionProofPayload {
 	pub result: usize,
 }
 
+/// Wait for a given usock file to exist and be connectible with a timeout of 5s.
+///
+/// # Panics
+/// Panics if fs::exists errors.
+pub async fn wait_for_usock(path: &str) {
+	let addr = SocketAddress::new_unix(path);
+	let pool = StreamPool::new(addr, 1).unwrap().shared();
+	let client = SocketClient::new(pool, TimeVal::milliseconds(50));
+
+	for _ in 0..50 {
+		if std::fs::exists(path).unwrap() && client.try_connect().await.is_ok()
+		{
+			break;
+		}
+
+		tokio::time::sleep(Duration::from_millis(100)).await;
+	}
+}
+
 struct PivotParser;
 impl GetParserForOptions for PivotParser {
 	fn parser() -> Parser {
-		Parser::new().token(
-			Token::new(MSG, "A msg to write").takes_value(true).required(true),
-		)
+		Parser::new()
+			.token(
+				Token::new(MSG, "A msg to write")
+					.takes_value(true)
+					.required(true),
+			)
+			.token(
+				Token::new(POOL_SIZE, "App pool size")
+					.takes_value(true)
+					.required(false),
+			)
 	}
 }
 

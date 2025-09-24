@@ -10,3 +10,4 @@ workspace = true
 
 [dependencies]
 rand = { workspace = true }
+nix = { workspace = true, default-features = false, features = ["signal"] }

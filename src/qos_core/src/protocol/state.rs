@@ -1,11 +1,10 @@
 //! Quorum protocol state machine
-use nix::sys::time::{TimeVal, TimeValLike};
 use qos_nsm::NsmProvider;
 
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
 };
-use crate::{client::Client, handles::Handles, io::SocketAddress};
+use crate::handles::Handles;
 
 /// The timeout for the qos core when making requests to an enclave app.
 pub const ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS: i64 = 5;
@@ -138,14 +137,6 @@ impl ProtocolRoute {
 		)
 	}
 
-	pub fn proxy(current_phase: ProtocolPhase) -> Self {
-		ProtocolRoute::new(
-			Box::new(handlers::proxy),
-			current_phase,
-			current_phase,
-		)
-	}
-
 	pub fn export_key(current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::export_key),
@@ -175,7 +166,6 @@ impl ProtocolRoute {
 pub(crate) struct ProtocolState {
 	pub provisioner: SecretBuilder,
 	pub attestor: Box<dyn NsmProvider>,
-	pub app_client: Client,
 	pub handles: Handles,
 	phase: ProtocolPhase,
 }
@@ -184,10 +174,7 @@ impl ProtocolState {
 	pub fn new(
 		attestor: Box<dyn NsmProvider>,
 		handles: Handles,
-		app_addr: SocketAddress,
-		#[allow(unused_variables)] test_only_init_phase_override: Option<
-			ProtocolPhase,
-		>,
+		#[allow(unused)] test_only_init_phase_override: Option<ProtocolPhase>,
 	) -> Self {
 		let provisioner = SecretBuilder::new();
 
@@ -200,16 +187,7 @@ impl ProtocolState {
 		#[cfg(not(any(feature = "mock", test)))]
 		let init_phase = ProtocolPhase::WaitingForBootInstruction;
 
-		Self {
-			attestor,
-			provisioner,
-			phase: init_phase,
-			handles,
-			app_client: Client::new(
-				app_addr,
-				TimeVal::seconds(ENCLAVE_APP_SOCKET_CLIENT_TIMEOUT_SECS),
-			),
-		}
+		Self { attestor, provisioner, phase: init_phase, handles }
 	}
 
 	pub fn get_phase(&self) -> ProtocolPhase {
@@ -275,7 +253,6 @@ impl ProtocolState {
 					ProtocolRoute::live_attestation_doc(self.phase),
 					ProtocolRoute::manifest_envelope(self.phase),
 					// phase specific routes
-					ProtocolRoute::proxy(self.phase),
 					ProtocolRoute::export_key(self.phase),
 				]
 			}
@@ -373,23 +350,6 @@ mod handlers {
 					state.handles.get_manifest_envelope().ok(),
 				),
 			}))
-		} else {
-			None
-		}
-	}
-
-	pub(super) fn proxy(
-		req: &ProtocolMsg,
-		state: &mut ProtocolState,
-	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::ProxyRequest { data: req_data } = req {
-			let result = state
-				.app_client
-				.send(req_data)
-				.map(|data| ProtocolMsg::ProxyResponse { data })
-				.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into()));
-
-			Some(result)
 		} else {
 			None
 		}

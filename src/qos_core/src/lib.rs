@@ -13,14 +13,15 @@ compile_error!(
 	"feature \"vm\" and feature \"mock\" cannot be enabled at the same time"
 );
 
-pub mod cli;
 pub mod client;
+pub mod server;
+
+pub mod cli;
 pub mod handles;
 pub mod io;
 pub mod parser;
 pub mod protocol;
 pub mod reaper;
-pub mod server;
 
 /// Path to Quorum Key secret.
 #[cfg(not(feature = "vm"))]
@@ -56,3 +57,5 @@ pub const SEC_APP_SOCK: &str = "./local-enclave/sec_app.sock";
 /// Default socket for enclave <-> secure app communication.
 #[cfg(feature = "vm")]
 pub const SEC_APP_SOCK: &str = "/sec_app.sock";
+/// Default socket connect timeout in milliseconds
+pub const DEFAULT_SOCKET_TIMEOUT_MS: &str = "5000";

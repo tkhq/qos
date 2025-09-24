@@ -12,11 +12,14 @@ workspace = true
 qos_core = { workspace = true, default-features = false }
 
 borsh = { workspace = true }
+futures = { workspace = true }
 hickory-resolver = { workspace = true, optional = true }
 rand = { workspace = true, features = [
     "thread_rng",
 ], optional = true }
-tokio = { workspace = true }
+serde = { workspace = true, features = ["derive"], default-features = false }
+tokio = { workspace = true, optional = true }
+tokio-rustls = { workspace = true, optional = true }
 
 [dev-dependencies]
 qos_test_primitives = { workspace = true }
@@ -29,6 +32,6 @@ rustls = { workspace = true }
 webpki-roots = { workspace = true }
 
 [features]
-default = ["proxy"]                  # keep this as a default feature ensures we lint by default
-proxy = ["rand", "hickory-resolver"]
-vm = []
+default = ["proxy"] # keep this as a default feature ensures we lint by default
+proxy = ["hickory-resolver", "tokio", "tokio-rustls"]
+vm = ["qos_core/vm"]
