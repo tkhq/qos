@@ -25,6 +25,21 @@ exclude = [
 # https://nickb.dev/blog/cargo-workspace-and-the-feature-unification-pitfall/
 resolver = "2"
 
+[workspace.package]
+rust-version = "1.88"
+version = "0.1.0"
+edition = "2021"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+missing_errors_doc = "allow"
+module_name_repetitions = "allow"
+
+[workspace.lints.rustdoc]
+missing_docs = "warn"
+
 [workspace.dependencies]
 # External dependencies
 aes-gcm = { version = "0.10.3", features = ["aes", "alloc"], default-features = false }

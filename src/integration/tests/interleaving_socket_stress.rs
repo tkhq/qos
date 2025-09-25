@@ -58,7 +58,7 @@ async fn interleaving_socket_stress() {
 			let err = ec.call(&app_request).await.unwrap_err();
 			match err {
 				ClientError::IOError(qos_core::io::IOError::RecvTimeout) => (),
-				e => panic!("slow pivot did not get expected err {:?}", e),
+				e => panic!("slow pivot did not get expected err {e:?}"),
 			};
 		}));
 	}

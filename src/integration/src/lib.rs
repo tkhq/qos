@@ -1,17 +1,12 @@
 //! Integration tests.
 
-#![forbid(unsafe_code)]
-#![deny(clippy::all)]
-#![warn(missing_docs)]
-
-use std::time::Duration;
-
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::SocketClient,
 	io::{SocketAddress, StreamPool},
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
+use std::time::Duration;
 
 /// Path to the file `pivot_ok` writes on success for tests.
 pub const PIVOT_OK_SUCCESS_FILE: &str = "./pivot_ok_works";

@@ -311,7 +311,7 @@ mod test {
 		let stream = borrowed_pool.get().await;
 
 		// checkk if the stream has been reset properly
-		assert_eq!(false, stream.is_connected());
+		assert!(!stream.is_connected());
 
 		// clean up the server
 		server_task.abort();

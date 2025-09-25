@@ -206,9 +206,7 @@ impl From<IOError> for std::io::Error {
 				std::io::ErrorKind::NotFound,
 				"connection not found",
 			),
-			_ => {
-				std::io::Error::new(std::io::ErrorKind::Other, "unknown error")
-			}
+			_ => std::io::Error::other("unknown error"),
 		}
 	}
 }
@@ -545,7 +543,7 @@ mod test {
 				assert_eq!(size, MAX_PAYLOAD_SIZE + 1);
 			}
 			other => {
-				panic!("test failed: unexpected error variant ({:?})", other);
+				panic!("test failed: unexpected error variant ({other:?})");
 			}
 		}
 

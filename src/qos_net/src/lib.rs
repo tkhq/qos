@@ -3,8 +3,6 @@
 //! It exposes a simple protocol for remote clients who
 //! connect to let them manipulate these connections (read/write/flush)
 
-#![deny(clippy::all, unsafe_code)]
-
 pub mod error;
 pub mod proxy_msg;
 

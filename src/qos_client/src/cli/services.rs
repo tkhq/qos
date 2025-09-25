@@ -1803,7 +1803,7 @@ fn find_threshold<P: AsRef<Path>>(dir: P) -> u32 {
 			if file_name.len() != 1
 				|| file_name
 					.first()
-					.map_or(true, |s| s.as_str() != QUORUM_THRESHOLD_FILE)
+					.is_none_or(|s| s.as_str() != QUORUM_THRESHOLD_FILE)
 			{
 				return None;
 			};
@@ -1837,7 +1837,7 @@ fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
 		.iter()
 		.filter_map(|path| {
 			let mut file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
 			};
 
@@ -1861,7 +1861,7 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 		.iter()
 		.filter_map(|path| {
 			let mut file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
 			};
 
@@ -1885,7 +1885,7 @@ fn get_patch_set<P: AsRef<Path>>(dir: P) -> PatchSet {
 		.iter()
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
 			};
 
@@ -1906,7 +1906,7 @@ fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
 		.iter()
 		.filter_map(|path| {
 			let mut file_name = split_file_name(path);
-			if file_name.last().map_or(true, |s| s.as_str() != PUB_EXT) {
+			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
 			};
 
@@ -1938,7 +1938,7 @@ fn find_approvals<P: AsRef<Path>>(
 		.filter_map(|path| {
 			let file_name = split_file_name(path);
 			// Only look at files with the approval extension
-			if file_name.last().map_or(true, |s| s.as_str() != APPROVAL_EXT) {
+			if file_name.last().is_none_or(|s| s.as_str() != APPROVAL_EXT) {
 				return None;
 			};
 

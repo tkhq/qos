@@ -579,7 +579,7 @@ mod test_asymmetric {
 			P256EncryptPublic::from_bytes(&bad_prefix),
 			Err(P256Error::FailedToReadPublicKey),
 		));
-		assert!(matches!(P256EncryptPublic::from_bytes(&just_right), Ok(_),));
+		assert!(P256EncryptPublic::from_bytes(&just_right).is_ok());
 	}
 
 	#[test]

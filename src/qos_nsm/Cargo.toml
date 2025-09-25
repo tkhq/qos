@@ -1,8 +1,12 @@
 [package]
 name = "qos_nsm"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 publish = false
+
+[lints]
+workspace = true
 
 [dependencies]
 qos_hex = { workspace = true }

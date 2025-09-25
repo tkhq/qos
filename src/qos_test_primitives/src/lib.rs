@@ -34,7 +34,7 @@ impl Drop for ChildWrapper {
 			let pid = Pid::from_raw(self.0.id() as i32);
 			match nix::sys::signal::kill(pid, SIGINT) {
 				Ok(_) => {}
-				Err(err) => eprintln!("error sending signal to child: {}", err),
+				Err(err) => eprintln!("error sending signal to child: {err}"),
 			}
 
 			// allow clean exit

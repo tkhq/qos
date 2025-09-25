@@ -182,7 +182,7 @@ async fn accept_loop_proxy(
 				eprintln!("Proxy::run done");
 			}
 			Err(err) => {
-				eprintln!("Error on proxy run {:?} rerunning", err);
+				eprintln!("Error on proxy run {err:?} rerunning");
 			}
 		}
 	}
