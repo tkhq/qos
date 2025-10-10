@@ -33,13 +33,14 @@ const DATA: &[u8] = b"test data";
 ///
 /// To run this test: `cargo test -p qos_client yubikey -- --ignored`.
 ///
-/// Be prepared for multiple rounds of entering the `DEFAULT_PIN` on the console 
+/// Be prepared for multiple rounds of entering the `DEFAULT_PIN` on the console
 /// and pressing the Yubikey for confirmation while the tests are ongoing,
-/// otherwise they'll fail with timeout related errors. 
+/// otherwise they'll fail with timeout related errors.
 #[test]
 #[ignore]
 fn yubikey_tests() {
-	let mut yubikey = YubiKey::open().expect("A supported PIV smartcard should be present and accessible");
+	let mut yubikey = YubiKey::open()
+		.expect("A supported PIV smartcard should be present and accessible");
 	piv_reset(&mut yubikey);
 
 	signing_works(&mut yubikey);
@@ -326,7 +327,6 @@ fn provision_sign_and_verify() {
 
 /// Similar to [`qos_client::yubikey::yubikey_piv_reset`], but does not open a new connection
 fn piv_reset(yubikey: &mut YubiKey) {
-
 	// Pins need to be blocked before device can be reset
 	for _ in 0..3 {
 		assert!(yubikey.authenticate(MgmKey::generate()).is_err());
