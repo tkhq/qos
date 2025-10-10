@@ -20,35 +20,40 @@ use yubikey::{MgmKey, TouchPolicy, YubiKey};
 
 const DATA: &[u8] = b"test data";
 
-// CAREFUL: Only run these tests when a test yubikey is plugged in - this will
-// factory reset the yubikey.
-//
-// These are tests that require a physical card to be plugged in. The
-// `provision_yubikey_works` requires tapping the yubikey. These tests are
-// ignored because they require a yubikey to be plugged in.
-//
-// The tests are all run by this one function so we don't have issues trying to
-// share the underlying PCSC connection to the yubikey. We need to disconnect
-// the connection before we try to reconnect.
-//
-// To run this test: `cargo test -p qos_client yubikey -- --ignored`.
+/// CAREFUL: Only run these tests when a test Yubikey is plugged in.
+/// This will perform multiple FACTORY RESETS on the Yubikey PIV component!
+///
+/// These are tests that require a physical card to be plugged in. The
+/// `provision_yubikey_works` requires tapping the Yubikey. These tests are
+/// ignored because they require a Yubikey to be plugged in.
+///
+/// The tests are all run by this one function so we don't have issues trying to
+/// share the underlying PCSC connection to the Yubikey. We need to disconnect
+/// the connection before we try to reconnect.
+///
+/// To run this test: `cargo test -p qos_client yubikey -- --ignored`.
+///
+/// Be prepared for multiple rounds of entering the `DEFAULT_PIN` on the console
+/// and pressing the Yubikey for confirmation while the tests are ongoing,
+/// otherwise they'll fail with timeout related errors.
 #[test]
 #[ignore]
 fn yubikey_tests() {
-	let mut yubikey = YubiKey::open().unwrap();
-	reset(&mut yubikey);
+	let mut yubikey = YubiKey::open()
+		.expect("A supported PIV smartcard should be present and accessible");
+	piv_reset(&mut yubikey);
 
 	signing_works(&mut yubikey);
-	reset(&mut yubikey);
+	piv_reset(&mut yubikey);
 
 	key_agreement_works(&mut yubikey);
-	reset(&mut yubikey);
+	piv_reset(&mut yubikey);
 
 	import_signing_works(&mut yubikey);
-	reset(&mut yubikey);
+	piv_reset(&mut yubikey);
 
 	import_key_agreement_works(&mut yubikey);
-	reset(&mut yubikey);
+	piv_reset(&mut yubikey);
 
 	// Dropping the yubikey should disconnect the underlying PCSC reader
 	// connection. We want to disconnect before using the CLI
@@ -60,19 +65,19 @@ fn yubikey_tests() {
 
 	// Reset the yubikey from provisioning
 	let mut yubikey = YubiKey::open().unwrap();
-	reset(&mut yubikey);
+	piv_reset(&mut yubikey);
 	drop(yubikey);
 
 	advanced_provision_yubikey_works();
 
 	let mut yubikey = YubiKey::open().unwrap();
-	reset(&mut yubikey);
+	piv_reset(&mut yubikey);
 	drop(yubikey);
 
 	provision_sign_and_verify();
 
 	let mut yubikey = YubiKey::open().unwrap();
-	reset(&mut yubikey);
+	piv_reset(&mut yubikey);
 	drop(yubikey);
 }
 
@@ -320,7 +325,8 @@ fn provision_sign_and_verify() {
 		.success());
 }
 
-fn reset(yubikey: &mut YubiKey) {
+/// Similar to [`qos_client::yubikey::yubikey_piv_reset`], but does not open a new connection
+fn piv_reset(yubikey: &mut YubiKey) {
 	// Pins need to be blocked before device can be reset
 	for _ in 0..3 {
 		assert!(yubikey.authenticate(MgmKey::generate()).is_err());

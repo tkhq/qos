@@ -1,16 +1,20 @@
 //! Yubikey interfaces
 
 use borsh::BorshDeserialize;
+use der::{asn1::BitStringRef, referenced::OwnedToRef};
 use p256::{
 	ecdsa::{signature::Verifier, Signature, VerifyingKey},
-	elliptic_curve::sec1::ToEncodedPoint,
+	pkcs8::SubjectPublicKeyInfo,
 	SecretKey,
 };
 use qos_p256::encrypt::Envelope;
 use rand_core::{OsRng, TryRngCore};
-use x509::RelativeDistinguishedName;
+use std::{str::FromStr, time::Duration};
+use x509_cert::{
+	name::RdnSequence, serial_number::SerialNumber, time::Validity,
+};
 use yubikey::{
-	certificate::{Certificate, PublicKeyInfo},
+	certificate::Certificate,
 	piv::{self, AlgorithmId, SlotId},
 	MgmKey, PinPolicy, TouchPolicy, YubiKey,
 };
@@ -26,6 +30,11 @@ pub const SIGNING_SLOT: SlotId = SlotId::Signature;
 /// Factory default pin for yubikeys.
 pub const DEFAULT_PIN: &[u8] = b"123456";
 const ALGO: AlgorithmId = AlgorithmId::EccP256;
+/// Equivalent to about 10 years
+/// Chosen arbitrarily as a long certificate validity
+const CERTIFICATE_VALIDITY_SECS: u32 = 10 * 60 * 60 * 24 * 365;
+/// Generic information for newly generated local certificates
+const CERTIFICATE_DISTINGUISHED_NAME: &str = "CN=QuorumOS";
 
 /// Errors for yubikey interaction
 #[derive(Debug, PartialEq, Eq)]
@@ -65,6 +74,17 @@ pub enum YubiKeyError {
 	InvalidSecret,
 	/// The pin could not be changed.
 	FailedToChangePin,
+	/// See [`der::Error`] for inner string contents.
+	DerError(String),
+	/// Problem extracting the public key data
+	EmptyPublicKeyInfo,
+}
+
+impl From<der::Error> for YubiKeyError {
+	fn from(from: der::Error) -> Self {
+		// add a debug-print of the inner error
+		Self::DerError(format!("{from:?}"))
+	}
 }
 
 /// Generate a signed certificate with a p256 key for the given `slot`.
@@ -94,26 +114,24 @@ pub fn generate_signed_certificate(
 	let public_key_info =
 		piv::generate(yubikey, slot, ALGO, PinPolicy::Always, touch_policy)
 			.map_err(|_| YubiKeyError::FailedToGenerateKey)?;
-	let encoded_point = extract_encoded_point(&public_key_info)?;
+	let encoded_point = extract_encoded_point(
+		public_key_info.subject_public_key.owned_to_ref(),
+	)?;
 
-	// Create a random serial number
-	let mut serial = [0u8; 20];
-	OsRng.try_fill_bytes(&mut serial).expect(
-		"The OsRng was unable to provide data, which should never happen",
-	);
-
-	// Don't add any extensions
-	let extensions: &[x509::Extension<'_, &[u64]>] = &[];
+	// Create a random serial number compliant with RFC5280
+	let serial = generate_random_rfc5280_serial();
 
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
-	Certificate::generate_self_signed(
+	Certificate::generate_self_signed::<_, p256::NistP256>(
 		yubikey,
 		slot,
-		serial,
-		None, // not_after is none so this never expires
-		&[RelativeDistinguishedName::organization("Turnkey")],
+		SerialNumber::new(&serial)?,
+		Validity::from_now(Duration::from_secs(
+			CERTIFICATE_VALIDITY_SECS.into(),
+		))?,
+		RdnSequence::from_str(CERTIFICATE_DISTINGUISHED_NAME)?,
 		public_key_info,
-		extensions,
+		|_| Ok(()),
 	)
 	.map_err(|_| YubiKeyError::FailedToGenerateSelfSignedCert)?;
 
@@ -143,13 +161,10 @@ pub fn import_key_and_generate_signed_certificate(
 		return Err(YubiKeyError::WillNotOverwriteSlot);
 	}
 
-	let public_key_info = {
-		let encoded_point = SecretKey::from_be_bytes(key_data)
-			.map_err(|_| YubiKeyError::InvalidSecret)?
-			.public_key()
-			.to_encoded_point(false);
-		PublicKeyInfo::EcP256(encoded_point)
-	};
+	let public_key_info = SecretKey::from_slice(key_data)
+		.ok()
+		.and_then(|sk| SubjectPublicKeyInfo::from_key(sk.public_key()).ok())
+		.ok_or(YubiKeyError::InvalidSecret)?;
 
 	// Import a key in the slot
 	piv::import_ecc_key(
@@ -162,24 +177,20 @@ pub fn import_key_and_generate_signed_certificate(
 	)
 	.map_err(|_| YubiKeyError::FailedToLoadKey)?;
 
-	// Create a random serial number
-	let mut serial = [0u8; 20];
-	OsRng.try_fill_bytes(&mut serial).expect(
-		"The OsRng was unable to provide data, which should never happen",
-	);
-
-	// Don't add any extensions
-	let extensions: &[x509::Extension<'_, &[u64]>] = &[];
+	// Create a random serial number compliant with RFC5280
+	let serial = generate_random_rfc5280_serial();
 
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
-	Certificate::generate_self_signed(
+	Certificate::generate_self_signed::<_, p256::NistP256>(
 		yubikey,
 		slot,
-		serial,
-		None, // not_after is none so this never expires
-		&[RelativeDistinguishedName::organization("Turnkey")],
+		SerialNumber::new(&serial)?,
+		Validity::from_now(Duration::from_secs(
+			CERTIFICATE_VALIDITY_SECS.into(),
+		))?,
+		RdnSequence::from_str(CERTIFICATE_DISTINGUISHED_NAME)?,
 		public_key_info,
-		extensions,
+		|_| Ok(()),
 	)
 	.map_err(|_| YubiKeyError::FailedToGenerateSelfSignedCert)?;
 
@@ -199,7 +210,8 @@ pub fn sign_data(
 	let signing_slot_cert = Certificate::read(yubikey, SIGNING_SLOT)
 		.map_err(|_| YubiKeyError::CannotFindSigningKey)?;
 	let public_key_info = signing_slot_cert.subject_pki();
-	let encoded_point = extract_encoded_point(public_key_info)?;
+	let encoded_point =
+		extract_encoded_point(public_key_info.subject_public_key)?;
 	let verifying_key = VerifyingKey::from_sec1_bytes(encoded_point.as_bytes())
 		.map_err(|_| YubiKeyError::FoundNonP256Key)?;
 
@@ -236,7 +248,6 @@ pub fn key_agreement(
 	pin: &[u8],
 ) -> Result<Zeroizing<Vec<u8>>, YubiKeyError> {
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
-
 	piv::decrypt_data(yubikey, sender_public_key, ALGO, KEY_AGREEMENT_SLOT)
 		.map_err(|_| YubiKeyError::KeyAgreementFailed)
 }
@@ -253,7 +264,8 @@ pub fn pair_public_key(yubikey: &mut YubiKey) -> Result<Vec<u8>, YubiKeyError> {
 	let signing_slot_cert = Certificate::read(yubikey, SIGNING_SLOT)
 		.map_err(|_| YubiKeyError::CannotFindSigningKey)?;
 	let signing_public_key_info = signing_slot_cert.subject_pki();
-	let signing_encoded_point = extract_encoded_point(signing_public_key_info)?;
+	let signing_encoded_point =
+		extract_encoded_point(signing_public_key_info.subject_public_key)?;
 
 	let pair_public_key: Vec<_> = key_agree_public_key(yubikey)?
 		.iter()
@@ -272,7 +284,7 @@ pub fn key_agree_public_key(
 		.map_err(|_| YubiKeyError::CannotFindKeyAgree)?;
 	let key_agree_key_info = key_agree_slot_cert.subject_pki();
 	let key_agree_key_encoded_point =
-		extract_encoded_point(key_agree_key_info)?;
+		extract_encoded_point(key_agree_key_info.subject_public_key)?;
 
 	Ok(key_agree_key_encoded_point.to_bytes().to_vec())
 }
@@ -324,10 +336,57 @@ pub fn yubikey_piv_reset() -> Result<(), YubiKeyError> {
 }
 
 fn extract_encoded_point(
-	public_key_info: &PublicKeyInfo,
+	public_key_info: BitStringRef,
 ) -> Result<p256::EncodedPoint, YubiKeyError> {
-	match public_key_info {
-		PublicKeyInfo::EcP256(encoded_point) => Ok(*encoded_point),
-		_ => Err(YubiKeyError::FoundNonP256Key),
+	public_key_info.as_bytes().ok_or(YubiKeyError::EmptyPublicKeyInfo).and_then(
+		|el| {
+			p256::EncodedPoint::from_bytes(el)
+				.map_err(|_err| YubiKeyError::FoundNonP256Key)
+		},
+	)
+}
+
+/// Generate an RFC5280 compliant serial number from a Cryptographically Secure
+/// Pseudo Random Number Generator (CS-PRNG)
+///
+/// #Panics
+///
+/// Panics if the RNG fails, which should never happen.
+fn generate_random_rfc5280_serial() -> [u8; 20] {
+	let mut serial = [0u8; 20];
+	OsRng.try_fill_bytes(&mut serial).expect(
+		"The OsRng was unable to provide data, which should never happen",
+	);
+	// RFC5280 requires the serial to fit into 20 bytes and represent a positive signed integer,
+	// which requires the most significant bit to be 0
+	// Ensure this by masking a part the first byte
+	serial[0] &= 0x7f;
+
+	serial
+}
+
+// See the other code file(s) for integration tests
+#[cfg(test)]
+mod tests {
+	use crate::yubikey::generate_random_rfc5280_serial;
+	use x509_cert::serial_number::SerialNumber;
+
+	#[test]
+	fn test_rfc5280_serial_generation_success() {
+		use x509_cert::certificate::Rfc5280;
+
+		// the generation behavior is non-deterministic by design, try it a few dozen times
+		const TEST_ITERATIONS: usize = 100;
+
+		for _ in 0..TEST_ITERATIONS {
+			let serial_data = generate_random_rfc5280_serial();
+
+			// ensure most significant bit is 0
+			assert_eq!(serial_data[0] & 0x80, 0);
+
+			// test if serial conversion works
+			let _serial: SerialNumber<Rfc5280> =
+				SerialNumber::new(&serial_data).unwrap();
+		}
 	}
 }

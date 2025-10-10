@@ -14,7 +14,7 @@ qos_hex = { workspace = true }
 borsh = { workspace = true }
 
 sha2 = { workspace = true }
-# as of 0.12.0, the "ecdsa" feature enables "sha384", some "ecdsa-core", and others
+# as of 0.13.0, the p256 crate "ecdsa" feature enables "sha384", some "ecdsa-core", and others
 p256 = { workspace = true, features = ["ecdh", "ecdsa", "std"] }
 aes-gcm = { workspace = true }
 hmac = { workspace = true }

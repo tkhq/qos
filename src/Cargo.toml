@@ -49,6 +49,7 @@ axum = { version = "0.6.20", features = ["http1", "tokio", "json"], default-feat
 borsh = { version = "1.0", features = ["std", "derive"], default-features = false }
 chunked_transfer = { version = "1.5.0", default-features = false }
 futures = { version = "0.3.30" }
+der = { version = "0.7", default-features = false }
 hex-literal = "0.4.0"
 hickory-resolver = { version = "0.25.2", features = ["tokio", "dnssec-ring"], default-features = false }
 hkdf = { version = "0.12", default-features = false }
@@ -57,14 +58,14 @@ httparse = { version = "1.9.4", default-features = false }
 lazy_static = "1.4"
 libc = "=0.2.172"
 nix = { version = "0.29.0", features = ["socket"], default-features = false }
-p256 = { version = "0.12.0", default-features = false }
+p256 = { version = "0.13.2", default-features = false }
 p384 = { version = "0.13", features = ["ecdsa", "std"], default-features = false }
 rand = "0.9"
 rand_core = { version = "0.9", default-features = false, features = ["os_rng"] }
 rpassword = { version = "7", default-features = false }
 rustls = { version = "0.23.5" }
 serde = { version = "1", features = ["derive"], default-features = false }
-serde_bytes = { version = "0.11", default-features = false }
+serde_bytes = { version = "0.11.10", default-features = false }
 serde_json = { version = "1" }
 sha2 = { version = "0.10", default-features = false }
 thiserror = { version = "2.0.12", features = ["std"], default-features = false }
@@ -75,10 +76,9 @@ ureq = { version = "2.9", default-features = false }
 vsss-rs = { version = "5.1", default-features = false, features = ["std", "zeroize"] }
 webpki = { version = "0.22.4", default-features = false }
 webpki-roots = { version = "1.0.2" }
-x509 = { version = "0.2", default-features = false }
 x509-cert = { version = "0.2.5", features = ["pem"], default-features = false }
-yubikey = { version = "0.7", features = ["untested"], default-features = false }
-zeroize = { version = "1.6", default-features = false }
+yubikey = { version = "0.8", features = ["untested"], default-features = false }
+zeroize = { version = "1.8", default-features = false }
 
 # Internal workspace dependencies
 integration = { path = "integration" }
