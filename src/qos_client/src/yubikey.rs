@@ -1,6 +1,7 @@
 //! Yubikey interfaces
 
 use borsh::BorshDeserialize;
+use der::{asn1::BitStringRef, referenced::OwnedToRef};
 use p256::{
 	ecdsa::{signature::Verifier, Signature, VerifyingKey},
 	pkcs8::SubjectPublicKeyInfo,
@@ -75,6 +76,8 @@ pub enum YubiKeyError {
 	FailedToChangePin,
 	/// See [`der::Error`] for inner string contents.
 	DerError(String),
+	/// Problem extracting the public key data
+	EmptyPublicKeyInfo,
 }
 
 impl From<der::Error> for YubiKeyError {
@@ -111,8 +114,9 @@ pub fn generate_signed_certificate(
 	let public_key_info =
 		piv::generate(yubikey, slot, ALGO, PinPolicy::Always, touch_policy)
 			.map_err(|_| YubiKeyError::FailedToGenerateKey)?;
-	let encoded_point =
-		extract_encoded_point(public_key_info.subject_public_key.as_bytes())?;
+	let encoded_point = extract_encoded_point(
+		public_key_info.subject_public_key.owned_to_ref(),
+	)?;
 
 	// Create a random serial number compliant with RFC5280
 	let serial = generate_random_rfc5280_serial();
@@ -207,7 +211,7 @@ pub fn sign_data(
 		.map_err(|_| YubiKeyError::CannotFindSigningKey)?;
 	let public_key_info = signing_slot_cert.subject_pki();
 	let encoded_point =
-		extract_encoded_point(public_key_info.subject_public_key.as_bytes())?;
+		extract_encoded_point(public_key_info.subject_public_key)?;
 	let verifying_key = VerifyingKey::from_sec1_bytes(encoded_point.as_bytes())
 		.map_err(|_| YubiKeyError::FoundNonP256Key)?;
 
@@ -260,9 +264,8 @@ pub fn pair_public_key(yubikey: &mut YubiKey) -> Result<Vec<u8>, YubiKeyError> {
 	let signing_slot_cert = Certificate::read(yubikey, SIGNING_SLOT)
 		.map_err(|_| YubiKeyError::CannotFindSigningKey)?;
 	let signing_public_key_info = signing_slot_cert.subject_pki();
-	let signing_encoded_point = extract_encoded_point(
-		signing_public_key_info.subject_public_key.as_bytes(),
-	)?;
+	let signing_encoded_point =
+		extract_encoded_point(signing_public_key_info.subject_public_key)?;
 
 	let pair_public_key: Vec<_> = key_agree_public_key(yubikey)?
 		.iter()
@@ -280,9 +283,8 @@ pub fn key_agree_public_key(
 	let key_agree_slot_cert = Certificate::read(yubikey, KEY_AGREEMENT_SLOT)
 		.map_err(|_| YubiKeyError::CannotFindKeyAgree)?;
 	let key_agree_key_info = key_agree_slot_cert.subject_pki();
-	let key_agree_key_encoded_point = extract_encoded_point(
-		key_agree_key_info.subject_public_key.as_bytes(),
-	)?;
+	let key_agree_key_encoded_point =
+		extract_encoded_point(key_agree_key_info.subject_public_key)?;
 
 	Ok(key_agree_key_encoded_point.to_bytes().to_vec())
 }
@@ -334,11 +336,14 @@ pub fn yubikey_piv_reset() -> Result<(), YubiKeyError> {
 }
 
 fn extract_encoded_point(
-	bytes: Option<&[u8]>,
+	public_key_info: BitStringRef,
 ) -> Result<p256::EncodedPoint, YubiKeyError> {
-	bytes
-		.and_then(|el| p256::EncodedPoint::from_bytes(el).ok())
-		.ok_or(YubiKeyError::FoundNonP256Key)
+	public_key_info.as_bytes().ok_or(YubiKeyError::EmptyPublicKeyInfo).and_then(
+		|el| {
+			p256::EncodedPoint::from_bytes(el)
+				.map_err(|_err| YubiKeyError::FoundNonP256Key)
+		},
+	)
 }
 
 /// Generate an RFC5280 compliant serial number from a Cryptographically Secure
