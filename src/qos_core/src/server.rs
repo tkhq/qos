@@ -138,10 +138,13 @@ where
 						}
 					}
 				}
-				Err(err) => {
-					eprintln!("SocketServer: error receiving request {err:?}, re-accepting");
-					break;
-				}
+				Err(err) => match err {
+					IOError::RecvConnectionClosed => break, // expected as we reconnect after each request currently
+					_ => {
+						eprintln!("SocketServer: error receiving request {err:?}, re-accepting");
+						break;
+					}
+				},
 			}
 		}
 	}
