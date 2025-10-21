@@ -226,6 +226,14 @@ async fn standard_boot_e2e() {
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct socket pool size:"
+		);
+		assert_eq!(&stdout.next().unwrap().unwrap(), "1?");
+		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
+
 		// Wait for the command to write the approval and exit
 		assert!(child.wait().unwrap().success());
 
