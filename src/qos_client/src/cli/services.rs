@@ -970,6 +970,16 @@ where
 			return false;
 		}
 	}
+	// Check socket pool size
+	{
+		let prompt = format!(
+			"Is this the correct socket pool size:\n{:?}?\n(y/n)",
+			manifest.pool_size.unwrap_or(1)
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
 
 	true
 }
@@ -2591,7 +2601,7 @@ mod tests {
 			let Setup { manifest, .. } = setup();
 
 			let mut vec_out = Vec::<u8>::new();
-			let vec_in = "yes\nyes\nyes\nyes\n".as_bytes();
+			let vec_in = "yes\nyes\nyes\nyes\nyes\n".as_bytes();
 
 			let mut prompter =
 				Prompter { reader: vec_in, writer: &mut vec_out };
