@@ -94,7 +94,7 @@ pub struct CommandParser<C: From<String> + GetParserForCommand> {
 impl<C: From<String> + GetParserForCommand> CommandParser<C> {
 	/// Parse inputs for the command `C`.
 	pub fn parse(inputs: &mut Vec<String>) -> Result<(C, Parser), ParserError> {
-		let command = Self::extract_command(inputs);
+		let command = Self::extract_command(inputs)?;
 		let mut parser = command.parser();
 		parser.parse(inputs)?;
 
@@ -103,17 +103,20 @@ impl<C: From<String> + GetParserForCommand> CommandParser<C> {
 
 	/// Helper function to extract the command from inputs.
 	/// WARNING: this removes the first two items from `args`
-	fn extract_command(inputs: &mut Vec<String>) -> C {
+	fn extract_command(inputs: &mut Vec<String>) -> Result<C, ParserError> {
 		// Remove the binary name
 		inputs.remove(0);
 
-		let command: C =
-			inputs.first().expect("No command provided").clone().into();
+		let command: C = inputs
+			.first()
+			.ok_or(ParserError::MissingInput("No command provided".to_owned()))?
+			.clone()
+			.into();
 
 		// Remove the command
 		inputs.remove(0);
 
-		command
+		Ok(command)
 	}
 }
 

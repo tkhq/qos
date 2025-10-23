@@ -269,6 +269,12 @@ impl From<String> for Command {
 }
 
 impl Command {
+	fn print_all() {
+		println!(
+			"\thost-health, enclave-status, generate-file-key, generate-manifest-envelope, boot-genesis,\n\tafter-genesis, verify-genesis, generate-manifest, approve-manifest, boot-standard, get-attestation-doc,\n\tget-ephemeral-key-hex, proxy-re-encrypt-share, post-share, dangerous-dev-boot,\n\tprovision-yubikey, advanced-provision-yubikey, pivot-hash, shamir-split, shamir-reconstruct,\n\tyubikey-sign, yubikey-public, yubikey-piv-reset, yubikey-change-pin, display,\n\tboot-key-fwd, export-key, inject-key, p256-verify, p256-sign, p256-asymmetric-encrypt, p256-asymmetric-decrypt"
+		);
+	}
+
 	fn namespace_token() -> Token {
 		Token::new(NAMESPACE, "Namespace for the associated manifest.")
 			.takes_value(true)
@@ -1241,10 +1247,16 @@ struct ClientRunner {
 impl ClientRunner {
 	/// Create [`Self`] from the command line arguments.
 	pub fn new(args: &mut Vec<String>) -> Self {
-		let (cmd, parsed) =
-			CommandParser::<Command>::parse(args).expect("Invalid CLI args");
+		let result = CommandParser::<Command>::parse(args);
 
-		Self { cmd, opts: ClientOpts { parsed } }
+		if let Ok((cmd, parsed)) = result {
+			Self { cmd, opts: ClientOpts { parsed } }
+		} else {
+			println!("Invalid input, try using --help with any of the following commands");
+			Command::print_all();
+
+			std::process::exit(1);
+		}
 	}
 
 	/// Run the given command.

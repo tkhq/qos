@@ -874,4 +874,15 @@ mod test {
 		let err = manifest_envelope.check_approvals().unwrap_err();
 		assert_eq!(err, ProtocolError::DuplicateApproval);
 	}
+
+	#[test]
+	fn try_from_slice_compat_works() {
+		let bytes = std::fs::read("./fixtures/old_manifest").unwrap();
+
+		let manifest = Manifest::try_from_slice_compat(&bytes).unwrap();
+
+		assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
+		assert_eq!(manifest.pool_size, None);
+		assert_eq!(manifest.client_timeout_ms, None);
+	}
 }
