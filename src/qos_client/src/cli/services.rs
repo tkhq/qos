@@ -1577,7 +1577,7 @@ pub(crate) fn display<P: AsRef<Path>>(
 		fs::read(file_path).map_err(|e| Error::ReadShare(e.to_string()))?;
 	match *display_type {
 		DisplayType::Manifest => {
-			let decoded = Manifest::try_from_slice(&bytes)?;
+			let decoded = Manifest::try_from_slice_compat(&bytes)?;
 			if json {
 				println!("{}", serde_json::to_string(&decoded).unwrap());
 			} else {

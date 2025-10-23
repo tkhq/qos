@@ -326,6 +326,52 @@ pub struct Manifest {
 	pub pool_size: Option<u8>,
 }
 
+// TODO: remove this once json is the default manifest format
+/// The Manifest for the enclave, backwards compatible version 0
+#[derive(PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize)]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
+pub struct ManifestV0 {
+	/// Namespace this manifest belongs too.
+	pub namespace: Namespace,
+	/// Pivot binary configuration and verifiable values.
+	pub pivot: PivotConfig,
+	/// Manifest Set members and threshold.
+	pub manifest_set: ManifestSet,
+	/// Share Set members and threshold
+	pub share_set: ShareSet,
+	/// Configuration and verifiable values for the enclave hardware.
+	pub enclave: NitroConfig,
+	/// Patch set members and threshold
+	pub patch_set: PatchSet,
+}
+
+impl Manifest {
+	/// Read a manifest from a `u8` buffer, in a backwards compatible way
+	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
+		use borsh::BorshDeserialize;
+
+		let result = Self::try_from_slice(buf);
+
+		// try loading the old version of manifest
+		if result.is_err() {
+			let old = ManifestV0::try_from_slice(buf)?;
+
+			Ok(Self {
+				namespace: old.namespace,
+				pivot: old.pivot,
+				manifest_set: old.manifest_set,
+				share_set: old.share_set,
+				enclave: old.enclave,
+				patch_set: old.patch_set,
+				pool_size: None,
+				client_timeout_ms: None,
+			})
+		} else {
+			result
+		}
+	}
+}
+
 /// An approval by a Quorum Member.
 #[derive(
 	PartialEq,
@@ -827,5 +873,16 @@ mod test {
 
 		let err = manifest_envelope.check_approvals().unwrap_err();
 		assert_eq!(err, ProtocolError::DuplicateApproval);
+	}
+
+	#[test]
+	fn try_from_slice_compat_works() {
+		let bytes = std::fs::read("./fixtures/old_manifest").unwrap();
+
+		let manifest = Manifest::try_from_slice_compat(&bytes).unwrap();
+
+		assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
+		assert_eq!(manifest.pool_size, None);
+		assert_eq!(manifest.client_timeout_ms, None);
 	}
 }
