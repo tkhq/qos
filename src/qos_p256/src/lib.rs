@@ -220,15 +220,21 @@ impl P256Pair {
 		path: P,
 	) -> Result<(), P256Error> {
 		let hex_string = qos_hex::encode(&self.master_seed);
-		std::fs::write(path, hex_string.as_bytes()).map_err(|e| {
-			P256Error::IOError(format!("failed to write master secret {e}"))
+		std::fs::write(&path, hex_string.as_bytes()).map_err(|e| {
+			P256Error::IOError(format!(
+				"failed to write master secret to {}: {e}",
+				path.as_ref().display()
+			))
 		})
 	}
 
 	/// Read the raw, hex encoded master from a file.
 	pub fn from_hex_file<P: AsRef<Path>>(path: P) -> Result<Self, P256Error> {
-		let hex_bytes = std::fs::read(path).map_err(|e| {
-			P256Error::IOError(format!("failed to read master seed: {e}"))
+		let hex_bytes = std::fs::read(&path).map_err(|e| {
+			P256Error::IOError(format!(
+				"failed to read master seed from {}: {e}",
+				path.as_ref().display()
+			))
 		})?;
 
 		let master_seed =
@@ -318,15 +324,21 @@ impl P256Public {
 		path: P,
 	) -> Result<(), P256Error> {
 		let hex_string = qos_hex::encode(&self.to_bytes());
-		std::fs::write(path, hex_string.as_bytes()).map_err(|e| {
-			P256Error::IOError(format!("failed to write master secret: {e}"))
+		std::fs::write(&path, hex_string.as_bytes()).map_err(|e| {
+			P256Error::IOError(format!(
+				"failed to write public key bytes to {}: {e}",
+				path.as_ref().display()
+			))
 		})
 	}
 
 	/// Read the hex encoded public keys from a file.
 	pub fn from_hex_file<P: AsRef<Path>>(path: P) -> Result<Self, P256Error> {
-		let hex_bytes = std::fs::read(path).map_err(|e| {
-			P256Error::IOError(format!("failed to read master seed: {e}"))
+		let hex_bytes = std::fs::read(&path).map_err(|e| {
+			P256Error::IOError(format!(
+				"failed to read public key bytes from {}: {e}",
+				path.as_ref().display()
+			))
 		})?;
 
 		let public_keys_bytes =
