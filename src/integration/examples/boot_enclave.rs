@@ -7,7 +7,6 @@ use std::{
 	process::{Command, Stdio},
 };
 
-use borsh::de::BorshDeserialize;
 use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
 use qos_core::protocol::{
 	services::{
@@ -104,14 +103,13 @@ async fn main() {
 		.success());
 
 	// Check the manifest written to file
-	let manifest =
-		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
-			.unwrap();
+	let manifest: Manifest =
+		serde_json::from_slice(&fs::read(&cli_manifest_path).unwrap()).unwrap();
 
-	let genesis_output = {
+	let genesis_output: GenesisOutput = {
 		let contents =
 			fs::read("./mock/boot-e2e/genesis-dir/genesis_output").unwrap();
-		GenesisOutput::try_from_slice(&contents).unwrap()
+		serde_json::from_slice(&contents).unwrap()
 	};
 	// For simplicity sake, we use the same keys for the share set and manifest
 	// set.
@@ -222,9 +220,8 @@ async fn main() {
 		assert!(child.wait().unwrap().success());
 
 		// Read in the generated approval to check it was created correctly
-		let approval =
-			Approval::try_from_slice(&fs::read(approval_path).unwrap())
-				.unwrap();
+		let approval: Approval =
+			serde_json::from_slice(&fs::read(approval_path).unwrap()).unwrap();
 		let personal_pair = P256Pair::from_hex_file(format!(
 			"{}/{}.secret",
 			personal_dir(alias),
