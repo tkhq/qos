@@ -5,6 +5,7 @@ use std::{fmt, iter::zip};
 use qos_crypto::sha_512;
 use qos_nsm::types::{NsmRequest, NsmResponse};
 use qos_p256::{P256Pair, P256Public};
+use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
 	services::boot::QuorumMember, ProtocolError, ProtocolState, QosHash,
@@ -24,7 +25,14 @@ pub struct GenesisSet {
 	pub threshold: u32,
 }
 
-#[derive(PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	Serialize,
+	Deserialize,
+)]
 struct MemberShard {
 	/// Member of the Setup Set.
 	member: QuorumMember,
@@ -45,7 +53,13 @@ impl fmt::Debug for MemberShard {
 /// A set of member shards used to successfully recover the quorum key during
 /// the genesis ceremony.
 #[derive(
-	PartialEq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Debug,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	Serialize,
+	Deserialize,
 )]
 pub struct RecoveredPermutation(Vec<MemberShard>);
 
@@ -87,7 +101,14 @@ impl fmt::Debug for GenesisMemberOutput {
 
 /// Output from running Genesis Boot. Should contain all information relevant to
 /// how the quorum shares where created.
-#[derive(PartialEq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	Serialize,
+	Deserialize,
+)]
 pub struct GenesisOutput {
 	/// Public Quorum Key, DER encoded.
 	pub quorum_key: Vec<u8>,
@@ -101,6 +122,7 @@ pub struct GenesisOutput {
 	/// The quorum key encrypted to the DR key. None if no DR Key was provided
 	pub dr_key_wrapped_quorum_key: Option<Vec<u8>>,
 	/// Hash of the quorum key secret
+	#[serde(with = "qos_hex::serde")]
 	pub quorum_key_hash: [u8; 64],
 	/// Test message encrypted to the quorum public key.
 	pub test_message_ciphertext: Vec<u8>,

@@ -113,9 +113,8 @@ pub enum Error {
 	},
 	/// Failed to decode some hex
 	CouldNotDecodeHex(qos_hex::HexError),
-	/// Failed to deserialize something from borsh.
-	#[allow(clippy::enum_variant_names)]
-	BorshError,
+	/// Failed to deserialize something from borsh or json
+	Deserialize,
 	FailedToReadDrKey(qos_p256::P256Error),
 	QosAttest(String),
 	/// Pivot file
@@ -141,9 +140,15 @@ pub enum Error {
 	SecretDoesNotMatch,
 }
 
+impl From<serde_json::Error> for Error {
+	fn from(_: serde_json::Error) -> Self {
+		Self::Deserialize
+	}
+}
+
 impl From<borsh::io::Error> for Error {
 	fn from(_: borsh::io::Error) -> Self {
-		Self::BorshError
+		Self::Deserialize
 	}
 }
 
@@ -759,7 +764,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 
 	write_with_msg(
 		manifest_path.as_ref(),
-		&borsh::to_vec(&manifest).unwrap(),
+		&serde_json::to_vec(&manifest).expect("failed to serialize manifest"),
 		"Manifest",
 	);
 
@@ -862,7 +867,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	));
 	write_with_msg(
 		&approval_path,
-		&borsh::to_vec(&approval).expect("Failed to serialize approval"),
+		&serde_json::to_vec(&approval).expect("Failed to serialize approval"),
 		"Manifest Approval",
 	);
 
@@ -1010,7 +1015,7 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	);
 	write_with_msg(
 		&path,
-		&borsh::to_vec(&manifest_envelope)
+		&serde_json::to_vec(&manifest_envelope)
 			.expect("Failed to serialize manifest envelope"),
 		"Manifest Envelope",
 	);
@@ -1076,7 +1081,7 @@ pub(crate) fn export_key<P: AsRef<Path>>(
 
 	write_with_msg(
 		encrypted_quorum_key_path.as_ref(),
-		&borsh::to_vec(&encrypted_quorum_key).expect("valid borsh. qed."),
+		&serde_json::to_vec(&encrypted_quorum_key).expect("valid borsh. qed."),
 		"Encrypted Quorum Key",
 	);
 
@@ -1087,10 +1092,10 @@ pub(crate) fn inject_key<P: AsRef<Path>>(
 	uri: &str,
 	encrypted_quorum_key_path: P,
 ) -> Result<(), Error> {
-	let encrypted_quorum_key = {
+	let encrypted_quorum_key: EncryptedQuorumKey = {
 		let bytes = std::fs::read(encrypted_quorum_key_path)
 			.map_err(|_| Error::FailedToReadEncryptedQuorumKey)?;
-		EncryptedQuorumKey::try_from_slice(&bytes)
+		serde_json::from_slice(&bytes)
 			.map_err(|_| Error::InvalidEncryptedQuorumKey)?
 	};
 
@@ -1201,8 +1206,8 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 	);
 	write_with_msg(
 		manifest_envelope_path.as_ref(),
-		&borsh::to_vec(&manifest_envelope)
-			.expect("manifest enevelope is valid borsh"),
+		&serde_json::to_vec(&manifest_envelope)
+			.expect("manifest enevelope is valid json"),
 		"Manifest envelope",
 	);
 }
@@ -1313,7 +1318,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		eph_pub.encrypt(plaintext_share).expect("Envelope encryption error")
 	};
 
-	let approval = borsh::to_vec(&Approval {
+	let approval = serde_json::to_vec(&Approval {
 		signature: pair
 			.sign(&manifest_envelope.manifest.qos_hash())
 			.expect("Failed to sign"),
@@ -1573,11 +1578,10 @@ pub(crate) fn display<P: AsRef<Path>>(
 	file_path: P,
 	json: bool,
 ) -> Result<(), Error> {
-	let bytes =
-		fs::read(file_path).map_err(|e| Error::ReadShare(e.to_string()))?;
 	match *display_type {
 		DisplayType::Manifest => {
-			let decoded = Manifest::try_from_slice_compat(&bytes)?;
+			let decoded = read_manifest(file_path)?;
+
 			if json {
 				println!("{}", serde_json::to_string(&decoded).unwrap());
 			} else {
@@ -1585,7 +1589,8 @@ pub(crate) fn display<P: AsRef<Path>>(
 			}
 		}
 		DisplayType::ManifestEnvelope => {
-			let decoded = ManifestEnvelope::try_from_slice(&bytes)?;
+			let decoded = read_manifest_envelope(file_path)?;
+
 			if json {
 				println!("{}", serde_json::to_string(&decoded).unwrap());
 			} else {
@@ -1593,6 +1598,8 @@ pub(crate) fn display<P: AsRef<Path>>(
 			}
 		}
 		DisplayType::GenesisOutput => {
+			let bytes = fs::read(file_path)
+				.map_err(|e| Error::ReadShare(e.to_string()))?;
 			let decoded = GenesisOutput::try_from_slice(&bytes)?;
 			println!("{decoded:#?}");
 		}
@@ -1952,7 +1959,7 @@ fn find_approvals<P: AsRef<Path>>(
 				return None;
 			};
 
-			let approval = Approval::try_from_slice(
+			let approval: Approval = serde_json::from_slice(
 				&fs::read(path).expect("Failed to read in approval"),
 			)
 			.expect("Failed to deserialize approval");
@@ -1981,9 +1988,16 @@ fn find_approvals<P: AsRef<Path>>(
 }
 
 fn read_manifest<P: AsRef<Path>>(file: P) -> Result<Manifest, Error> {
-	let buf = fs::read(file).map_err(Error::FailedToReadManifestFile)?;
-	Manifest::try_from_slice(&buf)
-		.map_err(|_| Error::FileDidNotHaveValidManifest)
+	let bytes = fs::read(file).map_err(Error::FailedToReadManifestFile)?;
+
+	// try getting Manifest from json
+	let result = serde_json::from_slice::<Manifest>(&bytes);
+	if result.is_err() {
+		// if not try the old borsh format
+		Manifest::try_from_slice_compat(&bytes).map_err(Error::from)
+	} else {
+		result.map_err(Error::from)
+	}
 }
 
 fn read_attestation_doc<P: AsRef<Path>>(
@@ -2003,10 +2017,16 @@ fn read_attestation_doc<P: AsRef<Path>>(
 fn read_manifest_envelope<P: AsRef<Path>>(
 	file: P,
 ) -> Result<ManifestEnvelope, Error> {
-	let buf =
-		fs::read(file).map_err(Error::FailedToReadManifestEnvelopeFile)?;
-	ManifestEnvelope::try_from_slice(&buf)
-		.map_err(|_| Error::FileDidNotHaveValidManifestEnvelope)
+	let bytes = fs::read(file).map_err(Error::FailedToReadManifestFile)?;
+
+	// try getting Manifest from json
+	let result = serde_json::from_slice::<ManifestEnvelope>(&bytes);
+	if result.is_err() {
+		// if not try the old borsh format
+		ManifestEnvelope::try_from_slice_compat(&bytes).map_err(Error::from)
+	} else {
+		result.map_err(Error::from)
+	}
 }
 
 fn read_attestation_approval<P: AsRef<Path>>(
@@ -2015,7 +2035,7 @@ fn read_attestation_approval<P: AsRef<Path>>(
 	let manifest_envelope =
 		fs::read(path).map_err(Error::FailedToReadAttestationApproval)?;
 
-	Approval::try_from_slice(&manifest_envelope)
+	serde_json::from_slice(&manifest_envelope)
 		.map_err(|_| Error::FileDidNotHaveValidAttestationApproval)
 }
 

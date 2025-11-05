@@ -1,8 +1,11 @@
 //! Logic for accessing read only QOS state.
 
-use std::{fs, os::unix::fs::PermissionsExt, path::Path};
+use std::{
+	fs,
+	os::unix::fs::PermissionsExt,
+	path::{Path, PathBuf},
+};
 
-use borsh::BorshDeserialize;
 use qos_p256::P256Pair;
 
 use crate::protocol::{services::boot::ManifestEnvelope, ProtocolError};
@@ -179,8 +182,9 @@ impl Handles {
 	) -> Result<ManifestEnvelope, ProtocolError> {
 		let contents = fs::read(&self.manifest)
 			.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)?;
-		let manifest = ManifestEnvelope::try_from_slice(&contents)
+		let manifest = serde_json::from_slice(&contents)
 			.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)?;
+
 		Ok(manifest)
 	}
 
@@ -195,7 +199,8 @@ impl Handles {
 	) -> Result<(), ProtocolError> {
 		Self::write_as_read_only(
 			&self.manifest,
-			&borsh::to_vec(manifest_envelope)?,
+			&serde_json::to_vec(manifest_envelope)
+				.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?,
 			ProtocolError::FailedToPutManifestEnvelope,
 		)
 	}
@@ -219,8 +224,12 @@ impl Handles {
 			&self.manifest,
 			std::fs::Permissions::from_mode(0o666),
 		)?;
-		fs::write(&self.manifest, borsh::to_vec(&manifest_envelope)?)
-			.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?;
+		fs::write(
+			&self.manifest,
+			serde_json::to_vec(&manifest_envelope)
+				.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?,
+		)
+		.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?;
 
 		// Set the permissions back to read only
 		fs::set_permissions(
@@ -272,7 +281,7 @@ impl Handles {
 		Path::new(&self.pivot).exists()
 	}
 
-	/// Helper function for ready only writes.
+	/// Helper function for ready only writes that also ensures full write atomicity by renaming at the end.
 	fn write_as_read_only<P: AsRef<Path>>(
 		path: P,
 		buf: &[u8],
@@ -288,7 +297,13 @@ impl Handles {
 			}
 		}
 
-		fs::write(&path, buf).map_err(|_| err.clone())?;
+		let tmp_path = PathBuf::from(path.as_ref()).with_extension("tmp");
+
+		fs::write(&tmp_path, buf).map_err(|_| err.clone())?;
+
+		// atomically move to destination once fully written to prevent partial reads
+		fs::rename(&tmp_path, &path)?;
+
 		fs::set_permissions(&path, fs::Permissions::from_mode(0o444))
 			.map_err(|_| err)?;
 

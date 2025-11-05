@@ -22,6 +22,7 @@ borsh = { workspace = true }
 aws-nitro-enclaves-nsm-api = { workspace = true }
 
 serde_bytes = { workspace = true }
+serde_json = { workspace = true }
 serde = { workspace = true }
 
 futures = { workspace = true }

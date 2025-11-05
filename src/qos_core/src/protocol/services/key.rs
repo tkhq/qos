@@ -7,6 +7,7 @@ use qos_nsm::{
 	types::NsmResponse,
 };
 use qos_p256::{P256Pair, P256Public};
+use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
 	services::boot::{put_manifest_and_pivot, ManifestEnvelope},
@@ -15,7 +16,7 @@ use crate::protocol::{
 
 /// An encrypted quorum key along with a signature over the encrypted payload
 /// from the sender.
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 pub struct EncryptedQuorumKey {
 	/// The encrypted payload: a quorum key
 	pub encrypted_quorum_key: Vec<u8>,
@@ -1051,7 +1052,7 @@ mod test {
 
 			std::fs::write(
 				&*manifest_file,
-				borsh::to_vec(&manifest_envelope).unwrap(),
+				serde_json::to_vec(&manifest_envelope).unwrap(),
 			)
 			.unwrap();
 			let handles = Handles::new(
@@ -1106,7 +1107,7 @@ mod test {
 				"inject_key_works.quorum.secret".into();
 			std::fs::write(
 				&*manifest_file,
-				borsh::to_vec(&manifest_envelope).unwrap(),
+				serde_json::to_vec(&manifest_envelope).unwrap(),
 			)
 			.unwrap();
 
@@ -1163,7 +1164,7 @@ mod test {
 				"inject_rejects_bad_signature.quorum.secret".into();
 			std::fs::write(
 				&*manifest_file,
-				borsh::to_vec(&manifest_envelope).unwrap(),
+				serde_json::to_vec(&manifest_envelope).unwrap(),
 			)
 			.unwrap();
 
@@ -1214,7 +1215,7 @@ mod test {
 				"inject_key_rejects_wrong_quorum_key.quorum.secret".into();
 			std::fs::write(
 				&*manifest_file,
-				borsh::to_vec(&manifest_envelope).unwrap(),
+				serde_json::to_vec(&manifest_envelope).unwrap(),
 			)
 			.unwrap();
 
@@ -1265,7 +1266,7 @@ mod test {
 				"inject_key_rejects_invalid_quorum_key.quorum.secret".into();
 			std::fs::write(
 				&*manifest_file,
-				borsh::to_vec(&manifest_envelope).unwrap(),
+				serde_json::to_vec(&manifest_envelope).unwrap(),
 			)
 			.unwrap();
 

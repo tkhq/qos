@@ -103,9 +103,8 @@ async fn standard_boot_e2e() {
 		.success());
 
 	// Check the manifest written to file
-	let manifest =
-		Manifest::try_from_slice(&fs::read(&cli_manifest_path).unwrap())
-			.unwrap();
+	let manifest: Manifest =
+		serde_json::from_slice(&fs::read(&cli_manifest_path).unwrap()).unwrap();
 
 	let genesis_output = {
 		let contents =
@@ -238,9 +237,8 @@ async fn standard_boot_e2e() {
 		assert!(child.wait().unwrap().success());
 
 		// Read in the generated approval to check it was created correctly
-		let approval =
-			Approval::try_from_slice(&fs::read(approval_path).unwrap())
-				.unwrap();
+		let approval: Approval =
+			serde_json::from_slice(&fs::read(approval_path).unwrap()).unwrap();
 		let personal_pair = P256Pair::from_hex_file(format!(
 			"{}/{}.secret",
 			personal_dir(alias),
