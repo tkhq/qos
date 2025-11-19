@@ -295,6 +295,9 @@ impl fmt::Debug for Namespace {
 }
 
 /// The Manifest for the enclave.
+/// NOTE: we currently use JSON format for storing this value.
+/// Since we don't have any `HashMap` inside the `Manifest` it works out of the box.
+/// If we ever do need a map inside, we should use a `BTreeMap` to ensure keys are sorted.
 #[derive(
 	PartialEq,
 	Eq,
@@ -345,8 +348,23 @@ pub struct ManifestV0 {
 	pub patch_set: PatchSet,
 }
 
+impl From<ManifestV0> for Manifest {
+	fn from(old: ManifestV0) -> Self {
+		Self {
+			namespace: old.namespace,
+			pivot: old.pivot,
+			manifest_set: old.manifest_set,
+			share_set: old.share_set,
+			enclave: old.enclave,
+			patch_set: old.patch_set,
+			pool_size: None,
+			client_timeout_ms: None,
+		}
+	}
+}
+
 impl Manifest {
-	/// Read a manifest from a `u8` buffer, in a backwards compatible way
+	/// Read a `Manifest` in borsh encoded format from a `u8` buffer, in a backwards compatible way
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
 		use borsh::BorshDeserialize;
 
@@ -356,16 +374,7 @@ impl Manifest {
 		if result.is_err() {
 			let old = ManifestV0::try_from_slice(buf)?;
 
-			Ok(Self {
-				namespace: old.namespace,
-				pivot: old.pivot,
-				manifest_set: old.manifest_set,
-				share_set: old.share_set,
-				enclave: old.enclave,
-				patch_set: old.patch_set,
-				pool_size: None,
-				client_timeout_ms: None,
-			})
+			Ok(old.into())
 		} else {
 			result
 		}
@@ -437,6 +446,19 @@ pub struct ManifestEnvelope {
 	pub share_set_approvals: Vec<Approval>,
 }
 
+/// [`ManifestV0`] with accompanying [`Approval`]s.
+#[derive(PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize)]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
+pub struct ManifestEnvelopeV0 {
+	/// Encapsulated manifest.
+	pub manifest: ManifestV0,
+	/// Approvals for [`Self::manifest`] from the manifest set.
+	pub manifest_set_approvals: Vec<Approval>,
+	///  Approvals for [`Self::manifest`] from the share set. This is primarily
+	/// used to audit what share holders provisioned the quorum key.
+	pub share_set_approvals: Vec<Approval>,
+}
+
 impl ManifestEnvelope {
 	/// Check if the encapsulated manifest has K valid approvals from the
 	/// manifest approval set.
@@ -476,6 +498,25 @@ impl ManifestEnvelope {
 		}
 
 		Ok(())
+	}
+	/// Read a `ManifestEnvelope` from a `u8` buffer, in a backwards compatible way
+	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
+		use borsh::BorshDeserialize;
+
+		let result = Self::try_from_slice(buf);
+
+		// try loading the old version of manifest
+		if result.is_err() {
+			let old = ManifestEnvelopeV0::try_from_slice(buf)?;
+
+			Ok(Self {
+				manifest: Manifest::from(old.manifest),
+				manifest_set_approvals: old.manifest_set_approvals,
+				share_set_approvals: old.share_set_approvals,
+			})
+		} else {
+			result
+		}
 	}
 }
 
