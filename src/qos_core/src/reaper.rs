@@ -14,7 +14,7 @@ use tokio::process::Command;
 
 use crate::{
 	handles::Handles,
-	io::StreamPool,
+	io::{SocketAddress, StreamPool},
 	protocol::{
 		processor::ProtocolProcessor,
 		services::boot::{PivotConfig, RestartPolicy},
@@ -38,55 +38,23 @@ async fn run_server(
 	server_state: Arc<RwLock<InterState>>,
 	handles: Handles,
 	nsm: Box<dyn NsmProvider + Send>,
-	pool: StreamPool,
-	app_pool: StreamPool,
+	core_socket: SocketAddress,
 	test_only_init_phase_override: Option<ProtocolPhase>,
 ) {
 	let protocol_state =
-		ProtocolState::new(nsm, handles.clone(), test_only_init_phase_override);
+		ProtocolState::new(nsm, handles.clone(), test_only_init_phase_override)
+			.shared();
+	let core_pool = StreamPool::single(core_socket)
+		.expect("unable to create single socket core pool");
 	// send a shared version of state and the async pool to each processor
-	let processor =
-		ProtocolProcessor::new(protocol_state.shared(), app_pool.shared());
-	// listen_all will multiplex the processor accross all sockets
-	let mut server = SocketServer::listen_all(pool, &processor)
-		.expect("unable to get listen task list");
+	let protocol_processor = ProtocolProcessor::new(protocol_state);
 
-	loop {
-		// see if we got interrupted
-		if *server_state.read().unwrap() == InterState::Quitting {
-			return;
-		}
+	// listen on the protocol server
+	let _protocol_server =
+		SocketServer::listen_all(core_pool, &protocol_processor)
+			.expect("unable to get listen task list for protocol server");
 
-		if let Ok(envelope) = handles.get_manifest_envelope() {
-			let pool_size =
-				envelope.manifest.pool_size.unwrap_or(DEFAULT_POOL_SIZE);
-			// expand server to pool_size
-			server
-				.listen_to(pool_size, &processor)
-				.expect("unable to listen_to on the running server");
-			{
-				// get the processor writable
-				let mut p = processor.write().await;
-
-				// expand app connections to pool_size
-				p.expand_to(pool_size)
-					.await
-					.expect("unable to expand_to on the processor app pool");
-				if let Some(timeout_ms) = envelope.manifest.client_timeout_ms {
-					let timeout = Duration::from_millis(timeout_ms.into());
-					p.set_client_timeout(timeout);
-				}
-			}
-
-			*server_state.write().unwrap() = InterState::PivotReady;
-			eprintln!("Reaper::server manifest is present, breaking out of server check loop");
-			break;
-		}
-
-		tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
-	}
-
-	eprintln!("Reaper::server post-expansion, waiting for shutdown");
+	eprintln!("Reaper::server running");
 	while *server_state.read().unwrap() != InterState::Quitting {
 		tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
 	}
@@ -110,8 +78,7 @@ impl Reaper {
 	pub async fn execute(
 		handles: &Handles,
 		nsm: Box<dyn NsmProvider + Send>,
-		pool: StreamPool,
-		app_pool: StreamPool,
+		core_socket: SocketAddress,
 		test_only_init_phase_override: Option<ProtocolPhase>,
 	) {
 		// state switch to communicate between pivot run task (here) and run_server task
@@ -123,8 +90,7 @@ impl Reaper {
 			server_state,
 			handles.clone(),
 			nsm,
-			pool,
-			app_pool,
+			core_socket,
 			test_only_init_phase_override,
 		));
 
@@ -139,7 +105,6 @@ impl Reaper {
 			if handles.quorum_key_exists()
 				&& handles.pivot_exists()
 				&& handles.manifest_envelope_exists()
-				&& server_state == InterState::PivotReady
 			{
 				// The state required to pivot exists, so we can break this
 				// holding pattern and start the pivot.
@@ -210,8 +175,6 @@ impl Reaper {
 enum InterState {
 	// We're booting, no pivot yet
 	Booting,
-	// We've booted and pivot is ready
-	PivotReady,
 	// We're quitting (ctrl+c for tests and such)
 	Quitting,
 }

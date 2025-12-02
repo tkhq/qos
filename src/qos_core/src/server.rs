@@ -12,6 +12,8 @@ use crate::io::{IOError, Listener, StreamPool};
 pub enum SocketServerError {
 	/// `io::IOError` wrapper.
 	IOError(IOError),
+	/// invalid pool configuration
+	PoolInvalid,
 }
 
 impl From<IOError> for SocketServerError {

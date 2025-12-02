@@ -1157,6 +1157,7 @@ dependencies = [
  "qos_p256",
  "serde",
  "serde_bytes",
+ "serde_json",
  "tokio",
  "tokio-vsock",
 ]
