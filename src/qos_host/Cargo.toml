@@ -11,13 +11,14 @@ workspace = true
 [dependencies]
 qos_core = { workspace = true, default-features = false }
 qos_hex = { workspace = true, features = ["serde"], default-features = false }
+qos_nsm = { workspace = true, default-features = false }
 
 # Third party
 axum = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 borsh = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
 vm = ["qos_core/vm"]

@@ -125,10 +125,13 @@ impl Reaper {
 
 		let mut pivot = Command::new(handles.pivot_path());
 		// set the pool-size env var for pivots that use it
-		pivot.env(
-			"POOL_SIZE",
-			manifest.pool_size.unwrap_or(DEFAULT_POOL_SIZE).to_string(),
-		);
+		pivot
+			.env_clear()
+			.env(
+				"POOL_SIZE",
+				manifest.pool_size.unwrap_or(DEFAULT_POOL_SIZE).to_string(),
+			)
+			.env("CID", "3"); // TODO: ales channels
 		pivot.args(&args[..]);
 		match restart {
 			RestartPolicy::Always => loop {

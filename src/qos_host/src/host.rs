@@ -13,7 +13,11 @@
 //! * Response: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/response.md/>
 //! * Responding with error: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/error_handling.md/>
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+	net::{Ipv4Addr, SocketAddr},
+	sync::Arc,
+	time::Duration,
+};
 
 use axum::{
 	body::Bytes,
@@ -26,9 +30,10 @@ use axum::{
 use borsh::BorshDeserialize;
 use qos_core::{
 	client::SocketClient,
-	io::SharedStreamPool,
+	io::{HostBridge, SocketAddress, StreamPool},
 	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase},
 };
+use qos_nsm::types::NsmResponse;
 
 use crate::{
 	EnclaveInfo, EnclaveVitalStats, Error, ENCLAVE_HEALTH, ENCLAVE_INFO,
@@ -38,29 +43,34 @@ use crate::{
 /// Resource shared across tasks in the `HostServer`.
 #[derive(Debug)]
 struct QosHostState {
+	enclave_address: SocketAddress,
 	enclave_client: SocketClient,
+	enable_host_bridge: bool,
 }
 
 /// HTTP server for the host of the enclave; proxies requests to the enclave.
 #[allow(clippy::module_name_repetitions)]
 pub struct HostServer {
-	enclave_pool: SharedStreamPool,
+	enclave_address: SocketAddress,
 	timeout: Duration,
 	addr: SocketAddr,
 	base_path: Option<String>,
+	enable_host_bridge: bool,
 }
 
 impl HostServer {
-	/// Create a new `HostServer`. See `Self::serve` for starting the
-	/// server.
+	/// Create a new `HostServer`. See `Self::serve` for starting the server.
+	/// Uses `enclave_pool` to connect to the enclave for commands and `app_socket` to create
+	/// a tcp to VSOCK bridge after the pivot is accepted if the `enable_host_bridge` is set to `true`.
 	#[must_use]
 	pub fn new(
-		enclave_pool: SharedStreamPool,
+		enclave_address: SocketAddress,
 		timeout: Duration,
 		addr: SocketAddr,
 		base_path: Option<String>,
+		enable_host_bridge: bool,
 	) -> Self {
-		Self { enclave_pool, timeout, addr, base_path }
+		Self { enclave_address, timeout, addr, base_path, enable_host_bridge }
 	}
 
 	fn path(&self, endpoint: &str) -> String {
@@ -77,12 +87,15 @@ impl HostServer {
 	///
 	/// Panics if there is an issue starting the server.
 	// pub async fn serve(&self) -> Result<(), String> {
-	pub async fn serve(&self) {
+	pub async fn serve(self) {
 		let state = Arc::new(QosHostState {
-			enclave_client: SocketClient::new(
-				self.enclave_pool.clone(),
+			enclave_address: self.enclave_address.clone(),
+			enclave_client: SocketClient::single(
+				self.enclave_address.clone(),
 				self.timeout,
-			),
+			)
+			.expect("unable to create enclave socket client"),
+			enable_host_bridge: self.enable_host_bridge,
 		});
 
 		let app = Router::new()
@@ -252,7 +265,17 @@ impl HostServer {
 		}
 
 		match state.enclave_client.call(&encoded_request).await {
-			Ok(encoded_response) => (StatusCode::OK, encoded_response),
+			Ok(encoded_response) => {
+				if state.enable_host_bridge {
+					maybe_start_app_host_bridge(
+						&state.enclave_address,
+						&encoded_request,
+						&encoded_response,
+					)
+					.await;
+				}
+				(StatusCode::OK, encoded_response)
+			}
 			Err(e) => {
 				eprintln!("Error while trying to send request over socket to enclave: {e:?}");
 
@@ -265,5 +288,83 @@ impl HostServer {
 				)
 			}
 		}
+	}
+}
+
+// Start the tcp -> vsock `HostBridge` in case we have successfully processed the manifest
+async fn maybe_start_app_host_bridge(
+	enclave_socket: &SocketAddress,
+	encoded_request: &Bytes,
+	encoded_response: &[u8],
+) {
+	if let Ok(decoded_msg) = borsh::from_slice::<ProtocolMsg>(encoded_request) {
+		// if we got the pivot and it was accepted by the enclave, we should start the tcp -> vsock host bridge
+		match decoded_msg {
+			ProtocolMsg::BootStandardRequest {
+				manifest_envelope,
+				pivot: _,
+			}
+			| ProtocolMsg::BootKeyForwardRequest {
+				manifest_envelope,
+				pivot: _,
+			} => {
+				if let Ok(decoded_msg) =
+					borsh::from_slice::<ProtocolMsg>(encoded_response)
+				{
+					// check if we got success
+					match decoded_msg {
+						ProtocolMsg::BootStandardResponse { nsm_response }
+						| ProtocolMsg::BootKeyForwardResponse {
+							nsm_response,
+						} => {
+							if let NsmResponse::Error(_) = nsm_response {
+								return; // do not run bridge if we got an error back
+							}
+						}
+						_ => {
+							// this really shouldn't happen
+							eprintln!("mismatched boot response, tcp to vsock bridge might not start");
+							return;
+						}
+					};
+				} else {
+					eprintln!("error decoding response msg, tcp to vsock bridge might not start");
+					return;
+				}
+
+				let pool_size =
+					manifest_envelope.manifest.pool_size.unwrap_or(1);
+				let host_port = manifest_envelope.manifest.app_host_port;
+				let host_addr =
+					SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), host_port);
+
+				// derive the app socket, for vsock just use the app host port with same CID as the enclave socket,
+				// with usock just add ".appsock" suffix
+				let app_socket = match enclave_socket.with_port(host_port) {
+					Ok(value) => value,
+					Err(err) => {
+						eprintln!("unable to derive app socket from enclave socket: {err:?}, tcp to vsock bridge will not start");
+						return;
+					}
+				};
+
+				let app_pool = match StreamPool::new(app_socket, pool_size) {
+					Ok(value) => value,
+					Err(err) => {
+						eprintln!("unable to create new app socket pool: {err:?}, tcp to vsock bridge will not start");
+						return;
+					}
+				};
+
+				let bridge = HostBridge::new(app_pool, host_addr);
+
+				bridge.tcp_to_vsock().await; // NOTE: this doesn't await for completion
+			}
+			_ => {}
+		}
+	} else {
+		eprintln!(
+			"error decoding request msg, tcp to vsock bridge might not start"
+		);
 	}
 }

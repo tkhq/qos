@@ -140,6 +140,7 @@ mod test {
 					Approval, Manifest, ManifestEnvelope, ManifestSet,
 					Namespace, NitroConfig, PatchSet, PivotConfig,
 					QuorumMember, RestartPolicy, ShareSet,
+					DEFAULT_APP_HOST_PORT,
 				},
 				provision::provision,
 			},
@@ -211,6 +212,7 @@ mod test {
 				members: members.clone().into_iter().map(|(m, _)| m).collect(),
 			},
 			patch_set: PatchSet::default(),
+			app_host_port: DEFAULT_APP_HOST_PORT,
 			pool_size: None,
 			client_timeout_ms: None,
 		};

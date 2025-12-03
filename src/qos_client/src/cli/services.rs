@@ -13,7 +13,7 @@ use qos_core::protocol::{
 		boot::{
 			Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
 			Namespace, NitroConfig, PatchSet, PivotConfig, QuorumMember,
-			RestartPolicy, ShareSet,
+			RestartPolicy, ShareSet, DEFAULT_APP_HOST_PORT,
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
@@ -706,6 +706,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub quorum_key_path: P,
 	pub manifest_path: P,
 	pub pivot_args: Vec<String>,
+	pub app_host_port: u16,
 	pub pool_size: Option<u8>,
 	pub client_timeout_ms: Option<u16>,
 }
@@ -726,6 +727,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		quorum_key_path,
 		manifest_path,
 		pivot_args,
+		app_host_port,
 		pool_size,
 		client_timeout_ms,
 	} = args;
@@ -758,6 +760,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		share_set,
 		patch_set,
 		enclave: nitro_config,
+		app_host_port,
 		pool_size,
 		client_timeout_ms,
 	};
@@ -1665,6 +1668,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			members: vec![member.clone()],
 		},
 		patch_set: PatchSet { threshold: 0, members: vec![] },
+		app_host_port: DEFAULT_APP_HOST_PORT,
 		pool_size: None,
 		client_timeout_ms: None,
 	};
@@ -2219,7 +2223,7 @@ mod tests {
 		services::boot::{
 			Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
 			Namespace, NitroConfig, PatchSet, PivotConfig, QuorumMember,
-			RestartPolicy, ShareSet,
+			RestartPolicy, ShareSet, DEFAULT_APP_HOST_PORT,
 		},
 		QosHash,
 	};
@@ -2294,6 +2298,7 @@ mod tests {
 			share_set: share_set.clone(),
 			patch_set: patch_set.clone(),
 			enclave: nitro_config.clone(),
+			app_host_port: DEFAULT_APP_HOST_PORT,
 			pool_size: None,
 			client_timeout_ms: None,
 		};

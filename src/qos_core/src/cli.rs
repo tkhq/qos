@@ -9,7 +9,7 @@ use crate::{
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 	reaper::Reaper,
-	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE,
 };
 
 use crate::io::IOError;
@@ -29,7 +29,6 @@ pub const PIVOT_FILE_OPT: &str = "pivot-file";
 pub const EPHEMERAL_FILE_OPT: &str = "ephemeral-file";
 /// Name for the option to specify the manifest file.
 pub const MANIFEST_FILE_OPT: &str = "manifest-file";
-const APP_USOCK: &str = "app-usock";
 /// Name for the option to specify the maximum `StreamPool` size.
 pub const POOL_SIZE: &str = "pool-size";
 
@@ -200,11 +199,6 @@ impl GetParserForOptions for EnclaveParser {
 					.takes_value(true)
 					.default_value(MANIFEST_FILE)
 			)
-			.token(
-				Token::new(APP_USOCK, "the socket the secure app is listening on.")
-					.takes_value(true)
-					.default_value(SEC_APP_SOCK)
-			)
 	}
 }
 
@@ -246,25 +240,15 @@ mod test {
 
 	#[test]
 	fn parse_usock() {
-		let mut args: Vec<_> = vec![
-			"binary",
-			"--usock",
-			"/tmp/usock",
-			"--app-usock",
-			"/tmp/app_usock",
-		]
-		.into_iter()
-		.map(String::from)
-		.collect();
+		let mut args: Vec<_> = vec!["binary", "--usock", "/tmp/usock"]
+			.into_iter()
+			.map(String::from)
+			.collect();
 		let opts = EnclaveOpts::new(&mut args);
 
 		assert_eq!(
 			*opts.parsed.single(USOCK).unwrap(),
 			"/tmp/usock".to_string()
-		);
-		assert_eq!(
-			*opts.parsed.single(APP_USOCK).unwrap(),
-			"/tmp/app_usock".to_string()
 		);
 	}
 

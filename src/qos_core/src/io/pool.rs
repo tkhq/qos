@@ -143,7 +143,7 @@ impl StreamPool {
 		PoolGuard::new(guard)
 	}
 
-	/// Create a new pool by listening new connection on all the addresses
+	/// Create a new pool by listening for new connection on all the addresses
 	pub fn listen(&self) -> Result<Vec<Listener>, IOError> {
 		let mut listeners = Vec::new();
 
@@ -195,6 +195,11 @@ impl StreamPool {
 		}
 
 		Ok(listeners)
+	}
+
+	/// Deconstruct the pool into all contained `Stream` objects.
+	pub fn to_streams(self) -> Vec<Stream> {
+		self.handles.into_iter().map(|m| m.into_inner()).collect()
 	}
 }
 

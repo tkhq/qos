@@ -3,8 +3,10 @@
 //! NOTE TO MAINTAINERS: Interaction with any sys calls should be contained
 //! within this module.
 
+mod host_bridge;
 mod pool;
 mod stream;
+pub use host_bridge::*;
 pub use pool::*;
 pub use stream::*;
 
@@ -162,6 +164,34 @@ impl SocketAddress {
 		match self {
 			Self::Vsock(vsock) => vsock,
 			_ => panic!("invalid socket address requested"),
+		}
+	}
+
+	/// Returns anew `SocketAddress` depending on socket type:
+	/// If VSOCK, the same CID is used with the provided port
+	/// If USOCK, the ".appsock" suffix is added and port is unused
+	#[allow(unused)]
+	pub fn with_port(&self, port: u16) -> Result<SocketAddress, IOError> {
+		match self {
+			#[cfg(feature = "vm")]
+			Self::Vsock(vsa) => Ok(Self::new_vsock(
+				vsa.cid(),
+				port.into(),
+				vsock_svm_flags(vsa),
+			)),
+			Self::Unix(ua) => {
+				let mut path = ua
+					.path()
+					.ok_or(IOError::ConnectAddressInvalid)?
+					.as_os_str()
+					.to_owned();
+
+				path.push(".appsock");
+
+				Ok(Self::new_unix(
+					path.to_str().ok_or(IOError::ConnectAddressInvalid)?,
+				))
+			}
 		}
 	}
 }

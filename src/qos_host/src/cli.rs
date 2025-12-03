@@ -9,7 +9,7 @@ use std::{
 
 use qos_core::{
 	cli::{CID, PORT, USOCK},
-	io::{SocketAddress, StreamPool},
+	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
 
@@ -18,6 +18,7 @@ const HOST_PORT: &str = "host-port";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const VSOCK_TO_HOST: &str = "vsock-to-host";
 const SOCKET_TIMEOUT: &str = "socket-timeout";
+const ENABLE_HOST_BRIDGE: &str = "enable-host-bridge";
 
 struct HostParser;
 impl GetParserForOptions for HostParser {
@@ -38,7 +39,7 @@ impl GetParserForOptions for HostParser {
 			.token(
 				Token::new(USOCK, "name of the socket file (ex: `dev.sock`) (only for unix sockets)")
 					.takes_value(true)
-					.forbids(vec!["port", "cid"])
+					.forbids(vec![PORT, CID])
 			)
 			.token(
 				Token::new(HOST_IP, "IP address this server should listen on")
@@ -64,6 +65,12 @@ impl GetParserForOptions for HostParser {
 					.takes_value(true)
 					.required(false)
 					.forbids(vec![USOCK])
+			)
+			.token(
+				Token::new(ENABLE_HOST_BRIDGE, "whether to enable the app host bridge for tcp -> vsock")
+					.takes_value(false)
+					.required(false)
+					.default_value("false")
 			)
 	}
 }
@@ -121,9 +128,9 @@ impl HostOpts {
 	}
 
 	/// Create a new `StreamPool` using the list of `SocketAddress` for the qos host.
-	pub(crate) fn enclave_pool(
+	pub(crate) fn enclave_socket(
 		&self,
-	) -> Result<StreamPool, qos_core::io::IOError> {
+	) -> Result<SocketAddress, qos_core::io::IOError> {
 		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
@@ -138,16 +145,10 @@ impl HostOpts {
 					qos_core::io::IOError::ConnectAddressInvalid
 				})?;
 
-				let address =
-					SocketAddress::new_vsock(c, p, self.to_host_flag());
-
-				StreamPool::new(address, 1) // qos_host needs only 1
+				Ok(SocketAddress::new_vsock(c, p, self.to_host_flag()))
 			}
-			(None, None, Some(u)) => {
-				let address = SocketAddress::new_unix(u);
+			(None, None, Some(u)) => Ok(SocketAddress::new_unix(u)),
 
-				StreamPool::new(address, 1)
-			}
 			_ => panic!("Invalid socket opts"),
 		}
 	}
@@ -162,6 +163,15 @@ impl HostOpts {
 
 	fn base_path(&self) -> Option<String> {
 		self.parsed.single(ENDPOINT_BASE_PATH).cloned()
+	}
+
+	fn enable_host_bridge(&self) -> bool {
+		self.parsed
+			.single(ENABLE_HOST_BRIDGE)
+			.map(String::as_str)
+			.unwrap_or("false")
+			.parse()
+			.unwrap_or(false)
 	}
 
 	#[cfg(feature = "vm")]
@@ -202,13 +212,11 @@ impl CLI {
 			println!("{}", options.parsed.info());
 		} else {
 			crate::host::HostServer::new(
-				options
-					.enclave_pool()
-					.expect("unable to create enclave pool")
-					.shared(),
+				options.enclave_socket().expect("invalid enclave socket"),
 				options.socket_timeout(),
 				options.host_addr(),
 				options.base_path(),
+				options.enable_host_bridge(),
 			)
 			.serve()
 			.await;

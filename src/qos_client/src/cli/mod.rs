@@ -12,7 +12,10 @@ use std::env;
 
 use qos_core::{
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
-	protocol::{msg::ProtocolMsg, services::boot},
+	protocol::{
+		msg::ProtocolMsg,
+		services::boot::{self, DEFAULT_APP_HOST_PORT},
+	},
 };
 
 mod services;
@@ -40,6 +43,7 @@ const PATCH_SET_DIR: &str = "patch-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
 const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
 const PUB_PATH: &str = "pub-path";
+const APP_HOST_PORT: &str = "app-host-port";
 const POOL_SIZE: &str = "pool-size";
 const CLIENT_TIMEOUT: &str = "client-timeout";
 const YUBIKEY: &str = "yubikey";
@@ -1017,6 +1021,22 @@ impl ClientOpts {
 		}
 	}
 
+	fn app_host_port(&self) -> u16 {
+		if let Some(port_str) = self.parsed.single(APP_HOST_PORT) {
+			let val = port_str.parse().expect(
+				"app-host-port not valid integer in range <1026..65535>",
+			);
+			// ensure we can only use valid ports
+			if val < 1026 {
+				panic!("app-host-port not in valid range <1026..65535>");
+			}
+
+			val
+		} else {
+			DEFAULT_APP_HOST_PORT
+		}
+	}
+
 	fn pool_size(&self) -> Option<u8> {
 		self.parsed.single(POOL_SIZE).map(|s| {
 			s.parse().expect("pool-size not valid integer in range <1..255>")
@@ -1561,6 +1581,7 @@ mod handlers {
 			manifest_set_dir: opts.manifest_set_dir(),
 			patch_set_dir: opts.patch_set_dir(),
 			quorum_key_path: opts.quorum_key_path(),
+			app_host_port: opts.app_host_port(),
 			pool_size: opts.pool_size(),
 			client_timeout_ms: opts.client_timeout_ms(),
 		}) {

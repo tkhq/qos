@@ -294,6 +294,8 @@ impl fmt::Debug for Namespace {
 	}
 }
 
+pub const DEFAULT_APP_HOST_PORT: u16 = 3000;
+
 /// The Manifest for the enclave.
 /// NOTE: we currently use JSON format for storing this value.
 /// Since we don't have any `HashMap` inside the `Manifest` it works out of the box.
@@ -323,6 +325,8 @@ pub struct Manifest {
 	pub enclave: NitroConfig,
 	/// Patch set members and threshold
 	pub patch_set: PatchSet,
+	/// App host TCP port
+	pub app_host_port: u16,
 	/// Client timeout for calls via the VSOCK/USOCK, defaults to 5s if not specified
 	pub client_timeout_ms: Option<u16>,
 	/// Pool size argument used to set up our socket pipes, defaults to 1 if not specified
@@ -357,6 +361,7 @@ impl From<ManifestV0> for Manifest {
 			share_set: old.share_set,
 			enclave: old.enclave,
 			patch_set: old.patch_set,
+			app_host_port: DEFAULT_APP_HOST_PORT,
 			pool_size: None,
 			client_timeout_ms: None,
 		}
