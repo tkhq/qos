@@ -177,7 +177,7 @@ impl SocketAddress {
 			Self::Vsock(vsa) => Ok(Self::new_vsock(
 				vsa.cid(),
 				port.into(),
-				vsock_svm_flags(vsa),
+				vsock_svm_flags(*vsa),
 			)),
 			Self::Unix(ua) => {
 				let mut path = ua
