@@ -70,7 +70,6 @@ impl GetParserForOptions for HostParser {
 				Token::new(ENABLE_HOST_BRIDGE, "whether to enable the app host bridge for tcp -> vsock")
 					.takes_value(false)
 					.required(false)
-					.default_value("false")
 			)
 	}
 }
@@ -166,12 +165,7 @@ impl HostOpts {
 	}
 
 	fn enable_host_bridge(&self) -> bool {
-		self.parsed
-			.single(ENABLE_HOST_BRIDGE)
-			.map(String::as_str)
-			.unwrap_or("false")
-			.parse()
-			.unwrap_or(false)
+		self.parsed.flag(ENABLE_HOST_BRIDGE).unwrap_or(false)
 	}
 
 	#[cfg(feature = "vm")]

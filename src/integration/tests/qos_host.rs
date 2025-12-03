@@ -3,13 +3,12 @@ use std::{process::Command, time::Duration};
 use integration::PIVOT_OK_PATH;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
-const TEST_ENCLAVE_SOCKET: &str = "/tmp/async_qos_host_test/enclave.sock";
-
 #[tokio::test]
 async fn connects_and_gets_info() {
 	// prep sock pool dir
-	std::fs::create_dir_all("/tmp/async_qos_host_test").unwrap();
+	std::fs::create_dir_all("/tmp/qos_host_test").unwrap();
 
+	const TEST_ENCLAVE_SOCKET: &str = "/tmp/qos_host_test/enclave.sock";
 	let _qos_host: ChildWrapper = Command::new("../target/debug/qos_host")
 		.arg("--usock")
 		.arg(TEST_ENCLAVE_SOCKET)
@@ -29,8 +28,8 @@ async fn connects_and_gets_info() {
 	assert!(r.is_err()); // expect 500 here
 
 	let enclave_socket = format!("{TEST_ENCLAVE_SOCKET}_0"); // manually pick the 1st one
-	let secret_path: PathWrapper = "/tmp/async_qos_host_test.secret".into();
-	let manifest_path: PathWrapper = "/tmp/async_qos_host_test.manifest".into();
+	let secret_path: PathWrapper = "/tmp/qos_host_test.secret".into();
+	let manifest_path: PathWrapper = "/tmp/qos_host_test.manifest".into();
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(std::fs::remove_file(&*secret_path));
