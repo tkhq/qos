@@ -10,21 +10,20 @@ use tokio::{
 use super::{IOError, Listener, Stream, StreamPool};
 
 pub struct HostBridge {
-	enclave_pool: StreamPool,
+	stream_pool: StreamPool,
 	host_addr: SocketAddr,
 }
 
 impl HostBridge {
 	/// Create a new `HostBridge` with given `StreamPool` VSOCK connections and target `SocketAddr`.
 	/// NOTE: bridge operation is decided by run calls e.g. `tcp_to_vsock`.
-	pub fn new(enclave_pool: StreamPool, host_addr: SocketAddr) -> Self {
+	pub fn new(stream_pool: StreamPool, host_addr: SocketAddr) -> Self {
 		// ensure we have ports to spare
 		assert!(
-			enclave_pool.len() + usize::from(host_addr.port())
-				< u16::MAX.into()
+			stream_pool.len() + usize::from(host_addr.port()) < u16::MAX.into()
 		);
 
-		Self { enclave_pool, host_addr }
+		Self { stream_pool, host_addr }
 	}
 
 	/// Create a TCP to VSOCK bridge using the provided `StreamPool` and `SocketAddr` from constructor.
@@ -32,7 +31,7 @@ impl HostBridge {
 	/// NOTE: this spawns a standalone tasks and *DOES NOT WAIT* for completion.
 	pub async fn tcp_to_vsock(self) {
 		tokio::spawn(async move {
-			let streams = self.enclave_pool.to_streams();
+			let streams = self.stream_pool.to_streams();
 			let mut tasks = Vec::new();
 			let mut host_addr = self.host_addr;
 
@@ -53,7 +52,7 @@ impl HostBridge {
 	pub async fn vsock_to_tcp(self) {
 		tokio::spawn(async move {
 			let listeners = self
-				.enclave_pool
+				.stream_pool
 				.listen()
 				.expect("unable to listen on vsock connections");
 

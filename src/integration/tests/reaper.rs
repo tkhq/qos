@@ -160,7 +160,7 @@ async fn reaper_handles_panic() {
 }
 
 #[tokio::test]
-async fn reaper_handles_pool_size() {
+async fn reaper_handles_pivot_host_config() {
 	let secret_path: PathWrapper =
 		"/tmp/reaper_handles_pool_size.secret".into();
 	let usock: PathWrapper = "/tmp/reaper_handles_pool_size.sock".into();
@@ -184,7 +184,7 @@ async fn reaper_handles_pool_size() {
 	manifest_envelope.manifest.pivot.args =
 		vec!["--msg".to_string(), msg.to_string()];
 	// set a pool size > 1
-	manifest_envelope.manifest.pool_size = Some(5);
+	manifest_envelope.manifest.pivot.host_config.pool_size = 5;
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());

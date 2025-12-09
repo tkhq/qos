@@ -131,6 +131,7 @@ async fn standard_boot_e2e() {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
 		args: vec!["--msg".to_string(), msg.to_string()],
+		..Default::default()
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
@@ -222,14 +223,6 @@ async fn standard_boot_e2e() {
 			&stdout.next().unwrap().unwrap(),
 			"[\"--msg\", \"testing420\"]?"
 		);
-		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
-		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
-
-		assert_eq!(
-			&stdout.next().unwrap().unwrap(),
-			"Is this the correct socket pool size:"
-		);
-		assert_eq!(&stdout.next().unwrap().unwrap(), "1?");
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 

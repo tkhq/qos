@@ -320,7 +320,7 @@ mod test {
 	use super::*;
 	use crate::protocol::services::boot::{
 		Manifest, ManifestSet, Namespace, NitroConfig, PatchSet, PivotConfig,
-		RestartPolicy, ShareSet, DEFAULT_APP_HOST_PORT,
+		RestartPolicy, ShareSet,
 	};
 
 	#[test]
@@ -447,13 +447,11 @@ mod test {
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
+				..Default::default()
 			},
 			manifest_set: ManifestSet { threshold: 2, members: vec![] },
 			share_set: ShareSet { threshold: 2, members: vec![] },
 			patch_set: PatchSet::default(),
-			app_host_port: DEFAULT_APP_HOST_PORT,
-			pool_size: None,
-			client_timeout_ms: None,
 		};
 
 		let manifest_envelope = ManifestEnvelope {

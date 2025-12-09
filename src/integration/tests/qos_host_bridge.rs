@@ -139,6 +139,7 @@ async fn qos_host_bridge_works() {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
 		args: vec![pivot_app_sock_path.to_string()],
+		..Default::default()
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
@@ -230,14 +231,6 @@ async fn qos_host_bridge_works() {
 			&stdout.next().unwrap().unwrap(),
 			"[\"/tmp/qos_host_bridge/qos_host_bridge.sock.appsock\"]?"
 		);
-		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
-		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
-
-		assert_eq!(
-			&stdout.next().unwrap().unwrap(),
-			"Is this the correct socket pool size:"
-		);
-		assert_eq!(&stdout.next().unwrap().unwrap(), "1?");
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 

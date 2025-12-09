@@ -5,6 +5,7 @@
 //! The pivot is an executable the enclave runs to initialize the secure
 //! applications.
 use std::{
+	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
 	sync::{Arc, RwLock},
 	time::Duration,
 };
@@ -14,10 +15,10 @@ use tokio::process::Command;
 
 use crate::{
 	handles::Handles,
-	io::{SocketAddress, StreamPool},
+	io::{HostBridge, IOError, SocketAddress, StreamPool},
 	protocol::{
 		processor::ProtocolProcessor,
-		services::boot::{PivotConfig, RestartPolicy},
+		services::boot::{PivotConfig, PivotHostConfig, RestartPolicy},
 		ProtocolPhase, ProtocolState,
 	},
 	server::SocketServer,
@@ -30,9 +31,8 @@ pub const REAPER_RESTART_DELAY: Duration = Duration::from_millis(50);
 pub const REAPER_EXIT_DELAY: Duration = Duration::from_secs(3);
 
 const REAPER_STATE_CHECK_DELAY: Duration = Duration::from_millis(100);
-const DEFAULT_POOL_SIZE: u8 = 1;
 
-// runs the enclave and app servers, waiting for manifest/pivot
+// runs the enclave vsock setup server for qos_host communication, waiting for manifest/pivot
 // executed as a task from `Reaper::execute`
 async fn run_server(
 	server_state: Arc<RwLock<InterState>>,
@@ -60,6 +60,29 @@ async fn run_server(
 	}
 
 	eprintln!("Reaper::server shutdown");
+}
+
+// runs the VSOCK -> TCP bridge so that apps can use any TCP based protocol without worrying about VSOCK
+// communication. This is started if `Manifest::bridge_vsock_to_tcp` is set to true.
+// uses the enclave core socket and given pivot host port to constuct the VSOCK to TCP bridge.
+async fn run_vsock_to_tcp_bridge(
+	core_socket: &SocketAddress,
+	host_config: &PivotHostConfig,
+) -> Result<(), IOError> {
+	// do nothing if we're not asked to provide bridging
+	if !host_config.enabled {
+		return Ok(());
+	}
+
+	let app_socket = core_socket.with_port(host_config.port)?;
+	let host_addr: SocketAddr =
+		SocketAddrV4::new(Ipv4Addr::LOCALHOST, host_config.port).into();
+	let app_pool = StreamPool::new(app_socket, host_config.pool_size)?;
+	let bridge = HostBridge::new(app_pool, host_addr);
+
+	bridge.vsock_to_tcp().await;
+
+	Ok(())
 }
 
 /// Primary entry point for running the enclave. Coordinates spawning the server
@@ -90,7 +113,7 @@ impl Reaper {
 			server_state,
 			handles.clone(),
 			nsm,
-			core_socket,
+			core_socket.clone(),
 			test_only_init_phase_override,
 		));
 
@@ -121,17 +144,22 @@ impl Reaper {
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest;
-		let PivotConfig { args, restart, .. } = manifest.pivot;
+		let PivotConfig { args, restart, host_config, .. } = manifest.pivot;
+
+		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task
+		run_vsock_to_tcp_bridge(&core_socket, &host_config)
+			.await
+			.expect("failed to run VSOCK -> TCP socket bridge");
 
 		let mut pivot = Command::new(handles.pivot_path());
-		// set the pool-size env var for pivots that use it
-		pivot
-			.env_clear()
-			.env(
-				"POOL_SIZE",
-				manifest.pool_size.unwrap_or(DEFAULT_POOL_SIZE).to_string(),
-			)
-			.env("CID", "3"); // TODO: ales channels
+		pivot.env_clear();
+		if host_config.enabled {
+			pivot.env("QOS_HOST_CONFIG_PORT", host_config.port.to_string());
+			pivot.env(
+				"QOS_HOST_CONFIG_POOL_SIZE",
+				host_config.pool_size.to_string(),
+			);
+		}
 		pivot.args(&args[..]);
 		match restart {
 			RestartPolicy::Always => loop {

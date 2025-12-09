@@ -102,6 +102,33 @@ impl TryFrom<String> for RestartPolicy {
 	}
 }
 
+/// Pivot host configuration
+#[derive(
+	PartialEq,
+	Eq,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
+pub struct PivotHostConfig {
+	/// Whether to use the bridge/host for the pivot or not. If disabled the pivot will be servicing VSOCK
+	/// traffic directly and NOT be provided by a host bridge.
+	pub enabled: bool,
+	/// Start port of the host both on the app and host side, usually 3000
+	pub port: u16,
+	/// Pool size for the host, defaults to 1
+	pub pool_size: u8,
+}
+
+impl Default for PivotHostConfig {
+	fn default() -> Self {
+		Self { enabled: true, port: DEFAULT_APP_HOST_PORT, pool_size: 1 }
+	}
+}
+
 /// Pivot binary configuration
 #[derive(
 	PartialEq,
@@ -120,9 +147,48 @@ pub struct PivotConfig {
 	pub hash: Hash256,
 	/// Restart policy for running the pivot binary.
 	pub restart: RestartPolicy,
+	/// Host configuration for the pivot.
+	/// If set the pivot will service TCP with the provided ports and a bridge will provide the TCP -> VSOCK -> TCP streams.
+	/// If not set the pivot will service VSOCK and the host side needs to be provided manually.
+	pub host_config: PivotHostConfig,
 	/// Arguments to invoke the binary with. Leave this empty if none are
 	/// needed.
 	pub args: Vec<String>,
+}
+
+/// Pivot binary configuration, original version (V0)
+#[derive(
+	PartialEq,
+	Eq,
+	Clone,
+	Debug,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
+pub struct PivotConfigV0 {
+	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
+	#[serde(with = "qos_hex::serde")]
+	pub hash: Hash256,
+	/// Restart policy for running the pivot binary.
+	pub restart: RestartPolicy,
+	/// Arguments to invoke the binary with. Leave this empty if none are
+	/// needed.
+	pub args: Vec<String>,
+}
+
+impl From<PivotConfigV0> for PivotConfig {
+	fn from(value: PivotConfigV0) -> Self {
+		Self {
+			hash: value.hash,
+			restart: value.restart,
+			args: value.args,
+			host_config: PivotHostConfig::default(),
+		}
+	}
 }
 
 impl fmt::Debug for PivotConfig {
@@ -325,12 +391,6 @@ pub struct Manifest {
 	pub enclave: NitroConfig,
 	/// Patch set members and threshold
 	pub patch_set: PatchSet,
-	/// App host TCP port
-	pub app_host_port: u16,
-	/// Client timeout for calls via the VSOCK/USOCK, defaults to 5s if not specified
-	pub client_timeout_ms: Option<u16>,
-	/// Pool size argument used to set up our socket pipes, defaults to 1 if not specified
-	pub pool_size: Option<u8>,
 }
 
 // TODO: remove this once json is the default manifest format
@@ -341,7 +401,7 @@ pub struct ManifestV0 {
 	/// Namespace this manifest belongs too.
 	pub namespace: Namespace,
 	/// Pivot binary configuration and verifiable values.
-	pub pivot: PivotConfig,
+	pub pivot: PivotConfigV0,
 	/// Manifest Set members and threshold.
 	pub manifest_set: ManifestSet,
 	/// Share Set members and threshold
@@ -356,14 +416,11 @@ impl From<ManifestV0> for Manifest {
 	fn from(old: ManifestV0) -> Self {
 		Self {
 			namespace: old.namespace,
-			pivot: old.pivot,
+			pivot: old.pivot.into(),
 			manifest_set: old.manifest_set,
 			share_set: old.share_set,
 			enclave: old.enclave,
 			patch_set: old.patch_set,
-			app_host_port: DEFAULT_APP_HOST_PORT,
-			pool_size: None,
-			client_timeout_ms: None,
 		}
 	}
 }
@@ -630,6 +687,7 @@ mod test {
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
+				..Default::default()
 			},
 			manifest_set: ManifestSet { threshold: 2, members: quorum_members },
 			share_set: ShareSet { threshold: 2, members: vec![] },
@@ -933,7 +991,8 @@ mod test {
 		let manifest = Manifest::try_from_slice_compat(&bytes).unwrap();
 
 		assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
-		assert_eq!(manifest.pool_size, None);
-		assert_eq!(manifest.client_timeout_ms, None);
+		assert_eq!(manifest.pivot.host_config.enabled, true);
+		assert_eq!(manifest.pivot.host_config.port, 3000);
+		assert_eq!(manifest.pivot.host_config.pool_size, 1);
 	}
 }

@@ -14,7 +14,7 @@ use qos_core::{
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
 	protocol::{
 		msg::ProtocolMsg,
-		services::boot::{self, DEFAULT_APP_HOST_PORT},
+		services::boot::{self, PivotHostConfig, DEFAULT_APP_HOST_PORT},
 	},
 };
 
@@ -43,9 +43,11 @@ const PATCH_SET_DIR: &str = "patch-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
 const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
 const PUB_PATH: &str = "pub-path";
-const APP_HOST_PORT: &str = "app-host-port";
 const POOL_SIZE: &str = "pool-size";
 const CLIENT_TIMEOUT: &str = "client-timeout";
+const APP_HOST_ENABLED: &str = "app-host-enabled";
+const APP_HOST_PORT: &str = "app-host-port";
+const APP_HOST_POOL_SIZE: &str = "app-host-pool-size";
 const YUBIKEY: &str = "yubikey";
 const SECRET_PATH: &str = "secret-path";
 const SHARE_PATH: &str = "share-path";
@@ -1021,6 +1023,15 @@ impl ClientOpts {
 		}
 	}
 
+	fn app_host_enabled(&self) -> bool {
+		self.parsed
+			.single(APP_HOST_ENABLED)
+			.map(String::as_str)
+			.unwrap_or("true")
+			.parse()
+			.expect("invalid bool for --app-host-enabled option")
+	}
+
 	fn app_host_port(&self) -> u16 {
 		if let Some(port_str) = self.parsed.single(APP_HOST_PORT) {
 			let val = port_str.parse().expect(
@@ -1037,17 +1048,28 @@ impl ClientOpts {
 		}
 	}
 
-	fn pool_size(&self) -> Option<u8> {
-		self.parsed.single(POOL_SIZE).map(|s| {
-			s.parse().expect("pool-size not valid integer in range <1..255>")
-		})
+	fn app_host_pool_size(&self) -> u8 {
+		if let Some(pool_size) = self.parsed.single(APP_HOST_POOL_SIZE) {
+			let value = pool_size.parse().expect(
+				"--app-host-pool-size not valid integer in range <1..255>",
+			);
+
+			if value == 0 {
+				panic!("--app-host-pool-size must be a positive number");
+			}
+
+			value
+		} else {
+			PivotHostConfig::default().pool_size
+		}
 	}
 
-	fn client_timeout_ms(&self) -> Option<u16> {
-		self.parsed.single(CLIENT_TIMEOUT).map(|s| {
-			s.parse()
-				.expect("client timeout invalid integer in range <0..65535>")
-		})
+	fn host_config(&self) -> PivotHostConfig {
+		PivotHostConfig {
+			enabled: self.app_host_enabled(),
+			port: self.app_host_port(),
+			pool_size: self.app_host_pool_size(),
+		}
 	}
 
 	fn pub_path(&self) -> String {
@@ -1581,9 +1603,7 @@ mod handlers {
 			manifest_set_dir: opts.manifest_set_dir(),
 			patch_set_dir: opts.patch_set_dir(),
 			quorum_key_path: opts.quorum_key_path(),
-			app_host_port: opts.app_host_port(),
-			pool_size: opts.pool_size(),
-			client_timeout_ms: opts.client_timeout_ms(),
+			host_config: opts.host_config(),
 		}) {
 			println!("Error: {e:?}");
 			std::process::exit(1);
@@ -1691,6 +1711,7 @@ mod handlers {
 			opts.pivot_path(),
 			opts.restart_policy(),
 			opts.pivot_args(),
+			opts.host_config(),
 			opts.unsafe_eph_path_override(),
 		);
 	}

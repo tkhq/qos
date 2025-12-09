@@ -377,6 +377,7 @@ mod test {
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
+				..Default::default()
 			},
 			manifest_set: ManifestSet { threshold: 2, members: quorum_members },
 			share_set: ShareSet { threshold: 2, members: vec![] },

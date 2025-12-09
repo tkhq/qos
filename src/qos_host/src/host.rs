@@ -332,9 +332,16 @@ async fn maybe_start_app_host_bridge(
 					return;
 				}
 
+				// nothing to do, app does not want a HOST bridge
+				if !manifest_envelope.manifest.pivot.host_config.enabled {
+					eprintln!("app refused host bridge, skipping");
+					return;
+				}
+
+				let host_port =
+					manifest_envelope.manifest.pivot.host_config.port;
 				let pool_size =
-					manifest_envelope.manifest.pool_size.unwrap_or(1);
-				let host_port = manifest_envelope.manifest.app_host_port;
+					manifest_envelope.manifest.pivot.host_config.pool_size;
 				let host_addr =
 					SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), host_port);
 
