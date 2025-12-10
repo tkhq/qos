@@ -1,8 +1,8 @@
-use std::fs;
+use std::{fs, time::Duration};
 
 use integration::{
 	wait_for_usock, PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH,
-	PIVOT_POOL_SIZE_PATH,
+	PIVOT_POOL_SIZE_PATH, PIVOT_TCP_PATH,
 };
 use qos_core::{
 	handles::Handles,
@@ -12,6 +12,10 @@ use qos_core::{
 };
 use qos_nsm::mock::MockNsm;
 use qos_test_primitives::PathWrapper;
+use tokio::{
+	io::{AsyncReadExt, AsyncWriteExt},
+	net::TcpStream,
+};
 
 #[tokio::test]
 async fn reaper_works() {
@@ -214,15 +218,76 @@ async fn reaper_handles_pivot_host_config() {
 	assert!(fs::remove_file(integration::PIVOT_POOL_SIZE_SUCCESS_FILE).is_ok());
 }
 
-#[test]
-fn can_restart_panicking_pivot() {
-	// Create a manifest with restart option
+#[tokio::test]
+async fn reaper_handles_bridge() {
+	let secret_path: PathWrapper = "/tmp/reaper_handles_bridge.secret".into();
+	let usock: PathWrapper = "/tmp/reaper_handles_bridge.sock".into();
+	let manifest_path: PathWrapper =
+		"/tmp/reaper_handles_bridge.manifest".into();
 
-	// Create a different panicking pivot
+	// For our sanity, ensure the secret does not yet exist
+	drop(fs::remove_file(&*secret_path));
 
-	// Start reaper
+	let handles = Handles::new(
+		"eph_path".to_string(),
+		(*secret_path).to_string(),
+		(*manifest_path).to_string(),
+		PIVOT_TCP_PATH.to_string(),
+	);
 
-	// Make sure it hasn't finished
+	// Make sure we have written everything necessary to pivot, except the
+	// quorum key
+	let mut manifest_envelope = ManifestEnvelope::default();
+	manifest_envelope.manifest.pivot.host_config.enabled = true;
 
-	// Write the secret
+	handles.put_manifest_envelope(&manifest_envelope).unwrap();
+	assert!(handles.pivot_exists());
+
+	let enclave_socket = SocketAddress::new_unix(&usock);
+
+	let reaper_handle = tokio::spawn(async move {
+		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
+			.await;
+	});
+
+	// wait for enclave to listen
+	wait_for_usock(&usock).await;
+
+	// Check that the reaper is still running, presumably waiting for
+	// the secret.
+	assert!(!reaper_handle.is_finished());
+
+	// Create the file with the secret, which should cause the reaper
+	// to start executable.
+	fs::write(&*secret_path, b"super dank tank secret tech").unwrap();
+
+	// attempt to connect, this can fail a few times due to timing, max 1s timeout
+	let mut attempts = 0;
+	let mut stream = loop {
+		match TcpStream::connect("localhost:3000").await {
+			Ok(stream) => break stream,
+			Err(_) => {
+				if attempts > 9 {
+					panic!("unable to connect to localhost:3000");
+				}
+				attempts += 1;
+				tokio::time::sleep(Duration::from_millis(100)).await;
+			}
+		}
+	};
+
+	// send the msg to the pivot via the bridge
+	let msg = b"hello";
+	stream.write_all(msg).await.unwrap();
+
+	// read the reply and ensure it's the same as msg
+	let mut reply = [0u8; 5]; // reply buffer
+	assert_eq!(stream.read_exact(&mut reply).await.unwrap(), 5);
+	assert_eq!(&reply, msg);
+
+	// Make the sure the reaper executed successfully.
+	reaper_handle.await.unwrap();
+	let contents = fs::read(integration::PIVOT_TCP_SUCCESS_FILE).unwrap();
+	assert_eq!(&contents, msg);
+	assert!(fs::remove_file(integration::PIVOT_TCP_SUCCESS_FILE).is_ok());
 }
