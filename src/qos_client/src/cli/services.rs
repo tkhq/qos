@@ -1984,7 +1984,7 @@ fn read_manifest<P: AsRef<Path>>(file: P) -> Result<Manifest, Error> {
 	// try getting Manifest from json
 	let result = serde_json::from_slice::<Manifest>(&bytes);
 	if result.is_err() {
-		// if not try the old borsh format
+		// if not try the old formats
 		Manifest::try_from_slice_compat(&bytes).map_err(Error::from)
 	} else {
 		result.map_err(Error::from)

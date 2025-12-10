@@ -395,7 +395,10 @@ pub struct Manifest {
 
 // TODO: remove this once json is the default manifest format
 /// The Manifest for the enclave, backwards compatible version 0
-#[derive(PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize, serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestV0 {
 	/// Namespace this manifest belongs too.
@@ -426,13 +429,18 @@ impl From<ManifestV0> for Manifest {
 }
 
 impl Manifest {
-	/// Read a `Manifest` in borsh encoded format from a `u8` buffer, in a backwards compatible way
+	/// Read a `Manifest` in a backwards compatible way
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
 		use borsh::BorshDeserialize;
 
+		// try old version with json format
+		if let Ok(v0) = serde_json::from_slice::<ManifestV0>(buf) {
+			return Ok(v0.into());
+		};
+
 		let result = Self::try_from_slice(buf);
 
-		// try loading the old version of manifest
+		// try loading the old version with borsh format
 		if result.is_err() {
 			let old = ManifestV0::try_from_slice(buf)?;
 
