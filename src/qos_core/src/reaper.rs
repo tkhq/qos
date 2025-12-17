@@ -6,12 +6,16 @@
 //! applications.
 use std::{
 	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+	process::Stdio,
 	sync::{Arc, RwLock},
 	time::Duration,
 };
 
 use qos_nsm::NsmProvider;
-use tokio::process::Command;
+use tokio::{
+	io::{AsyncBufReadExt, BufReader},
+	process::{ChildStderr, ChildStdout, Command},
+};
 
 use crate::{
 	handles::Handles,
@@ -83,6 +87,35 @@ async fn run_vsock_to_tcp_bridge(
 	bridge.vsock_to_tcp().await;
 
 	Ok(())
+}
+
+async fn reprint_pivot_output(
+	stdout_reader: BufReader<ChildStdout>,
+	stderr_reader: BufReader<ChildStderr>,
+) {
+	tokio::spawn(async move {
+		let mut stdout_lines = stdout_reader.lines();
+		let mut stderr_lines = stderr_reader.lines();
+
+		loop {
+			tokio::select! {
+				line = stdout_lines.next_line() => {
+					match line {
+						Ok(Some(line)) => println!("PIVOT[OUT]: {line}"),
+						Ok(None) => break, // process exit
+						Err(e) => eprintln!("error reading pivot stdout: {e}"),
+					}
+				}
+				line = stderr_lines.next_line() => {
+					match line {
+						Ok(Some(line)) => eprintln!("PIVOT[ERR]: {line}"),
+						Ok(None) => break, // process exit
+						Err(e) => eprintln!("error reading pivot stderr: {e}"),
+					}
+				}
+			}
+		}
+	});
 }
 
 /// Primary entry point for running the enclave. Coordinates spawning the server
@@ -161,32 +194,33 @@ impl Reaper {
 			);
 		}
 		pivot.args(&args[..]);
-		match restart {
-			RestartPolicy::Always => loop {
-				let status = pivot
-					.spawn()
-					.expect("Failed to spawn")
-					.wait()
-					.await
-					.expect("Pivot executable never started...");
+		pivot.stdout(Stdio::piped()).stderr(Stdio::piped());
 
-				println!("Pivot exited with status: {status}");
+		loop {
+			let mut child = pivot.spawn().expect("Failed to spawn pivot");
 
-				// pause to ensure OS has enough time to clean up resources
-				// before restarting
-				tokio::time::sleep(REAPER_RESTART_DELAY).await;
+			let stdout =
+				child.stdout.take().expect("failed to get pivot stdout");
+			let stderr =
+				child.stderr.take().expect("failed to get pivot stderr");
 
-				println!("Restarting pivot ...");
-			},
-			RestartPolicy::Never => {
-				let status = pivot
-					.spawn()
-					.expect("Failed to spawn")
-					.wait()
-					.await
-					.expect("Pivot executable never started...");
-				println!("Pivot (no restart) exited with status: {status}");
+			let stdout_reader = BufReader::new(stdout);
+			let stderr_reader = BufReader::new(stderr);
+			reprint_pivot_output(stdout_reader, stderr_reader).await;
+
+			let status =
+				child.wait().await.expect("Pivot executable never started...");
+
+			println!("Pivot exited with status: {status}");
+			// pause to ensure OS has enough time to clean up resources
+			// before restarting
+			tokio::time::sleep(REAPER_RESTART_DELAY).await;
+
+			match restart {
+				RestartPolicy::Always => {}
+				RestartPolicy::Never => break,
 			}
+			println!("Restarting pivot ...");
 		}
 
 		*inter_state.write().unwrap() = InterState::Quitting;
