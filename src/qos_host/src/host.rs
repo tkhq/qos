@@ -346,7 +346,7 @@ async fn maybe_start_app_host_bridge(
 					SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), host_port);
 
 				// derive the app socket, for vsock just use the app host port with same CID as the enclave socket,
-				// with usock just add ".appsock" suffix
+				// with usock just add "<port>.appsock" suffix
 				let app_socket = match enclave_socket.with_port(host_port) {
 					Ok(value) => value,
 					Err(err) => {

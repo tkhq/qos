@@ -7,6 +7,8 @@ use tokio::{
 	task::JoinHandle,
 };
 
+use crate::io::SocketAddress;
+
 use super::{IOError, Listener, Stream, StreamPool};
 
 pub struct HostBridge {
@@ -30,13 +32,14 @@ impl HostBridge {
 	/// This consumes the `HostBridge` instance and starts background tasks that only return on unrecoverable errors.
 	/// NOTE: this spawns a standalone tasks and *DOES NOT WAIT* for completion.
 	pub async fn tcp_to_vsock(self) {
+		println!("starting tcp to vsock host bridge @ {}", self.host_addr);
 		tokio::spawn(async move {
 			let streams = self.stream_pool.to_streams();
 			let mut tasks = Vec::new();
 			let mut host_addr = self.host_addr;
 
 			for stream in streams {
-				eprintln!("tcp to vsock bridge listening on tcp:{host_addr}");
+				eprintln!("tcp to vsock bridge listening on {host_addr}");
 				tasks.push(tokio::spawn(tcp_to_vsock(stream, host_addr)));
 				// bump port by 1 for next listener
 				host_addr.set_port(host_addr.port() + 1);
@@ -50,6 +53,7 @@ impl HostBridge {
 	/// This consumes the `HostBridge` instance and starts background tasks that only return on unrecoverable errors.
 	/// NOTE: this spawns a standalone tasks and *DOES NOT WAIT* for completion.
 	pub async fn vsock_to_tcp(self) {
+		println!("starting vsock to tcp host bridge @ {}", self.host_addr);
 		tokio::spawn(async move {
 			let listeners = self
 				.stream_pool
@@ -60,7 +64,10 @@ impl HostBridge {
 			let mut host_addr = self.host_addr;
 
 			for listener in listeners {
-				eprintln!("vsock to tcp bridge listening on vsock:TODO");
+				eprintln!(
+					"vsock to tcp bridge listening on {}",
+					listener.addr()
+				);
 				tasks.push(tokio::spawn(vsock_to_tcp(listener, host_addr)));
 				// bump port by 1 for next listener
 				host_addr.set_port(host_addr.port() + 1);
@@ -94,9 +101,7 @@ async fn tcp_to_vsock(
 		let listener = match TcpListener::bind(host_addr).await {
 			Ok(value) => value,
 			Err(err) => {
-				eprintln!(
-					"error binding tcp addr {host_addr}: {err:?}, retrying"
-				);
+				eprintln!("error binding tcp addr {host_addr}: {err:?}");
 				continue;
 			}
 		};
@@ -105,33 +110,30 @@ async fn tcp_to_vsock(
 			Ok((value, _)) => value,
 			Err(err) => {
 				eprintln!(
-					"error accepting connection on tcp addr {host_addr}: {err:?}, retrying"
+					"error accepting connection on tcp addr {host_addr}: {err:?}"
 				);
 				continue;
 			}
 		};
 
 		let mut stream = Stream::from(&enclave_stream);
-		if let Err(err) = tokio::spawn(async move {
+		tokio::spawn(async move {
 			if let Err(err) = stream.connect().await {
-				eprintln!("error connecting to VSOCK {err:?}, retrying");
+				eprintln!(
+					"error connecting to VSOCK @ {} error: {err:?}",
+					stream
+						.address()
+						.unwrap_or(&SocketAddress::new_unix("unknown")),
+				);
 				return;
 			}
 
 			if let Err(err) =
 				copy_bidirectional(&mut tcp_stream, &mut stream).await
 			{
-				eprintln!(
-					"error on tcp to vsock stream bridge: {err:?}, retrying"
-				);
-			} else {
-				eprintln!("tcp to vsock stream bridge shutdown, retrying");
+				eprintln!("error on tcp to vsock stream bridge: {err:?}");
 			}
-		})
-		.await
-		{
-			eprintln!("error awaiting tcp_to_vsock bridge worker {err}");
-		}
+		});
 	}
 }
 
@@ -144,19 +146,17 @@ async fn vsock_to_tcp(
 		let mut enclave_stream = match enclave_listener.accept().await {
 			Ok(value) => value,
 			Err(err) => {
-				eprintln!(
-					"error accepting connection on vsock: {err:?}, retrying"
-				);
+				eprintln!("error accepting connection on vsock: {err:?}");
 				continue;
 			}
 		};
 
-		if let Err(err) = tokio::spawn(async move {
+		tokio::spawn(async move {
 			let mut tcp_stream = match TcpStream::connect(host_addr).await {
 				Ok(value) => value,
 				Err(err) => {
 					eprintln!(
-						"error connecting to tcp addr {host_addr}: {err:?}, retrying"
+						"error connecting to tcp addr {host_addr}: {err:?}"
 					);
 					return;
 				}
@@ -165,16 +165,8 @@ async fn vsock_to_tcp(
 			if let Err(err) =
 				copy_bidirectional(&mut enclave_stream, &mut tcp_stream).await
 			{
-				eprintln!(
-					"error on vsock to tcp stream bridge: {err:?}, retrying"
-				);
-			} else {
-				eprintln!("vsock to tcp stream bridge shutdown, retrying");
+				eprintln!("error on vsock to tcp stream bridge: {err:?}");
 			}
-		})
-		.await
-		{
-			eprintln!("error awaiting vsock_to_tcp bridge worker {err}");
-		}
+		});
 	}
 }

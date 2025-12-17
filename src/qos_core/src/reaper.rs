@@ -75,6 +75,7 @@ async fn run_vsock_to_tcp_bridge(
 ) -> Result<(), IOError> {
 	// do nothing if we're not asked to provide bridging
 	if !host_config.enabled {
+		println!("skipping host bridge, not configured");
 		return Ok(());
 	}
 

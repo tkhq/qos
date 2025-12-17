@@ -169,7 +169,7 @@ impl SocketAddress {
 
 	/// Returns anew `SocketAddress` depending on socket type:
 	/// If VSOCK, the same CID is used with the provided port
-	/// If USOCK, the ".appsock" suffix is added and port is unused
+	/// If USOCK, the "<port>.appsock" suffix is added
 	#[allow(unused)]
 	pub fn with_port(&self, port: u16) -> Result<SocketAddress, IOError> {
 		match self {
@@ -186,7 +186,7 @@ impl SocketAddress {
 					.as_os_str()
 					.to_owned();
 
-				path.push(".appsock");
+				path.push(format!(".{port}.appsock"));
 
 				Ok(Self::new_unix(
 					path.to_str().ok_or(IOError::ConnectAddressInvalid)?,

@@ -133,7 +133,7 @@ impl Stream {
 		self.recv().await
 	}
 
-	fn address(&self) -> Result<&SocketAddress, IOError> {
+	pub fn address(&self) -> Result<&SocketAddress, IOError> {
 		self.address.as_ref().ok_or(IOError::ConnectAddressInvalid)
 	}
 
@@ -271,6 +271,7 @@ impl AsyncWrite for Stream {
 /// Abstraction to listen for incoming stream connections.
 pub struct Listener {
 	inner: InnerListener,
+	addr: SocketAddress, // just for info
 }
 
 impl Listener {
@@ -285,12 +286,12 @@ impl Listener {
 					_ = std::fs::remove_file(path);
 				}
 				let inner = InnerListener::Unix(UnixListener::bind(path)?);
-				Self { inner }
+				Self { inner, addr: addr.clone() }
 			}
 			#[cfg(feature = "vm")]
 			SocketAddress::Vsock(vaddr) => {
 				let inner = InnerListener::Vsock(VsockListener::bind(vaddr)?);
-				Self { inner }
+				Self { inner, addr: addr.clone() }
 			}
 		};
 
@@ -312,6 +313,10 @@ impl Listener {
 		};
 
 		Ok(stream)
+	}
+
+	pub fn addr(&self) -> &SocketAddress {
+		&self.addr
 	}
 }
 
