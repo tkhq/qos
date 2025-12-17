@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, time::Duration};
+use std::net::SocketAddr;
 
 use futures::future::join_all;
 use tokio::{
@@ -85,26 +85,12 @@ async fn await_all(tasks: Vec<JoinHandle<Result<(), IOError>>>) {
 	}
 }
 
-const DEFAULT_RETRY_DELAY: Duration = Duration::from_millis(1000);
-
 // bridge tcp to vsock in an endless loop with 1s retry on errors
 async fn tcp_to_vsock(
 	mut enclave_stream: Stream,
 	host_addr: SocketAddr,
 ) -> Result<(), IOError> {
-	let mut first_time = true;
-
 	loop {
-		if !first_time {
-			tokio::time::sleep(DEFAULT_RETRY_DELAY).await;
-		}
-		first_time = false;
-
-		if let Err(err) = enclave_stream.connect().await {
-			eprintln!("error connecting to VSOCK {err:?}, retrying");
-			continue;
-		}
-
 		let listener = match TcpListener::bind(host_addr).await {
 			Ok(value) => value,
 			Err(err) => {
@@ -125,6 +111,11 @@ async fn tcp_to_vsock(
 			}
 		};
 
+		if let Err(err) = enclave_stream.connect().await {
+			eprintln!("error connecting to VSOCK {err:?}, retrying");
+			continue;
+		}
+
 		if let Err(err) =
 			copy_bidirectional(&mut tcp_stream, &mut enclave_stream).await
 		{
@@ -140,14 +131,7 @@ async fn vsock_to_tcp(
 	enclave_listener: Listener,
 	host_addr: SocketAddr,
 ) -> Result<(), IOError> {
-	let mut first_time = true;
-
 	loop {
-		if !first_time {
-			tokio::time::sleep(DEFAULT_RETRY_DELAY).await;
-		}
-		first_time = false;
-
 		let mut enclave_stream = match enclave_listener.accept().await {
 			Ok(value) => value,
 			Err(err) => {
@@ -175,6 +159,5 @@ async fn vsock_to_tcp(
 		} else {
 			eprintln!("vsock to tcp stream bridge shutdown, retrying");
 		}
-		tokio::time::sleep(DEFAULT_RETRY_DELAY).await;
 	}
 }
