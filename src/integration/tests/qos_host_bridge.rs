@@ -13,7 +13,7 @@ use qos_core::protocol::{
 	services::{
 		boot::{
 			Approval, Manifest, ManifestSet, Namespace, PivotConfig,
-			RestartPolicy, ShareSet, DEFAULT_APP_HOST_PORT,
+			PivotHostConfig, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
@@ -33,6 +33,7 @@ async fn qos_host_bridge_works() {
 	const PIVOT_HASH_PATH: &str = "/tmp/qos_host_bridge-pivot-hash.txt";
 
 	let host_port = qos_test_primitives::find_free_port().unwrap();
+	let app_host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/qos_host_bridge".into();
 	let _: PathWrapper = PIVOT_HASH_PATH.into();
 	fs::create_dir_all(&*tmp).unwrap();
@@ -72,7 +73,8 @@ async fn qos_host_bridge_works() {
 	std::fs::write(PIVOT_HASH_PATH, pivot_hash).unwrap();
 
 	// -- CLIENT create manifest.
-	let pivot_app_sock_path = usock_path + ".appsock";
+	let pivot_app_sock_path =
+		usock_path + "." + &app_host_port.to_string() + ".appsock";
 	let pivot_args = format!("[{pivot_app_sock_path}]");
 	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
 
@@ -102,7 +104,9 @@ async fn qos_host_bridge_works() {
 			"--patch-set-dir",
 			"./mock/keys/manifest-set",
 			"--quorum-key-path",
-			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub"
+			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
+			"--app-host-port",
+			&app_host_port.to_string(),
 		])
 		.spawn()
 		.unwrap()
@@ -139,7 +143,11 @@ async fn qos_host_bridge_works() {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
 		args: vec![pivot_app_sock_path.to_string()],
-		..Default::default()
+		host_config: PivotHostConfig {
+			enabled: true,
+			port: app_host_port,
+			pool_size: 1,
+		},
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
@@ -229,7 +237,7 @@ async fn qos_host_bridge_works() {
 		);
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
-			"[\"/tmp/qos_host_bridge/qos_host_bridge.sock.appsock\"]?"
+			&format!("[\"/tmp/qos_host_bridge/qos_host_bridge.sock.{app_host_port}.appsock\"]?")
 		);
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
@@ -461,10 +469,11 @@ async fn qos_host_bridge_works() {
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
 	// Wait for the qos_host app bridge to run
-	qos_test_primitives::wait_until_port_is_bound(DEFAULT_APP_HOST_PORT);
+	qos_test_primitives::wait_until_port_is_bound(app_host_port);
 
-	// send a PivotSocketStressMsg to check if the  bridge works all the way
-	let mut tcp_stream = TcpStream::connect("127.0.0.1:3000").await.unwrap();
+	// send a PivotSocketStressMsg to check if the  bridge works all the wayi
+	let bridge_addr = format!("127.0.0.1:{app_host_port}");
+	let mut tcp_stream = TcpStream::connect(&bridge_addr).await.unwrap();
 
 	let msg = PivotSocketStressMsg::OkRequest(42);
 	let msg_bytes = borsh::to_vec(&msg).unwrap();

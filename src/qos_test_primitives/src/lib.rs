@@ -18,7 +18,7 @@ const EXIT_DELAY: Duration = Duration::from_millis(50);
 
 /// Wrapper type for [`std::process::Child`] that kills the process on drop.
 #[derive(Debug)]
-pub struct ChildWrapper(std::process::Child);
+pub struct ChildWrapper(pub std::process::Child);
 
 impl From<std::process::Child> for ChildWrapper {
 	fn from(child: std::process::Child) -> Self {

@@ -1,4 +1,8 @@
-use std::{fs, time::Duration};
+use std::{
+	fs,
+	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+	time::Duration,
+};
 
 use integration::{
 	wait_for_usock, PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH,
@@ -6,7 +10,7 @@ use integration::{
 };
 use qos_core::{
 	handles::Handles,
-	io::SocketAddress,
+	io::{HostBridge, SocketAddress, StreamPool},
 	protocol::services::boot::ManifestEnvelope,
 	reaper::{Reaper, REAPER_EXIT_DELAY},
 };
@@ -222,6 +226,8 @@ async fn reaper_handles_pivot_host_config() {
 async fn reaper_handles_bridge() {
 	let secret_path: PathWrapper = "/tmp/reaper_handles_bridge.secret".into();
 	let usock: PathWrapper = "/tmp/reaper_handles_bridge.sock".into();
+	let app_usock: PathWrapper =
+		"/tmp/reaper_handles_bridge.sock.4000.appsock".into();
 	let manifest_path: PathWrapper =
 		"/tmp/reaper_handles_bridge.manifest".into();
 
@@ -235,10 +241,20 @@ async fn reaper_handles_bridge() {
 		PIVOT_TCP_PATH.to_string(),
 	);
 
+	// start the tcp -> vsock bridge on port 3000
+	let host_port = 3000;
+	let host_addr: SocketAddr =
+		SocketAddrV4::new(Ipv4Addr::LOCALHOST, host_port).into();
+	let app_pool =
+		StreamPool::single(SocketAddress::new_unix(&app_usock)).unwrap();
+	HostBridge::new(app_pool, host_addr).tcp_to_vsock().await;
+
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key
 	let mut manifest_envelope = ManifestEnvelope::default();
+	manifest_envelope.manifest.pivot.args = vec!["4000".to_string()];
 	manifest_envelope.manifest.pivot.host_config.enabled = true;
+	manifest_envelope.manifest.pivot.host_config.port = 4000;
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());
@@ -261,14 +277,18 @@ async fn reaper_handles_bridge() {
 	// to start executable.
 	fs::write(&*secret_path, b"super dank tank secret tech").unwrap();
 
+	// wait for app to listen
+	wait_for_usock(&app_usock).await;
+
 	// attempt to connect, this can fail a few times due to timing, max 1s timeout
 	let mut attempts = 0;
+	let host_addr = format!("localhost:{host_port}");
 	let mut stream = loop {
-		match TcpStream::connect("localhost:3000").await {
+		match TcpStream::connect(&host_addr).await {
 			Ok(stream) => break stream,
 			Err(_) => {
 				if attempts > 9 {
-					panic!("unable to connect to localhost:3000");
+					panic!("unable to connect to {host_addr}");
 				}
 				attempts += 1;
 				tokio::time::sleep(Duration::from_millis(100)).await;
@@ -277,9 +297,10 @@ async fn reaper_handles_bridge() {
 	};
 
 	// make sure we can handle 2+ connections in parallel
-	let mut stream2 = TcpStream::connect("localhost:3000")
+	let mut stream2 = TcpStream::connect(&host_addr)
 		.await
 		.expect("second stream failed to connect");
+	eprintln!("reaper test: second stream connected");
 
 	// send the msg to the pivot via the bridge
 	stream.write_all(b"hello").await.unwrap();
@@ -289,6 +310,7 @@ async fn reaper_handles_bridge() {
 	assert_eq!(stream.read_exact(&mut reply).await.unwrap(), 5);
 	assert_eq!(&reply, b"hello");
 
+	eprintln!("reaper test: hello msg done");
 	// send the "finished" msg on the second connection
 	stream2.write_all(b"done").await.unwrap();
 
@@ -296,6 +318,7 @@ async fn reaper_handles_bridge() {
 	assert_eq!(stream2.read_exact(&mut done_reply).await.unwrap(), 4);
 	assert_eq!(&done_reply, b"done");
 
+	eprintln!("reaper test: done msg done");
 	// Make the sure the reaper executed successfully.
 	reaper_handle.await.unwrap();
 	let contents = fs::read(integration::PIVOT_TCP_SUCCESS_FILE).unwrap();

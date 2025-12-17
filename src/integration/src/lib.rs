@@ -134,7 +134,7 @@ pub struct AdditionProofPayload {
 /// Panics if fs::exists errors.
 pub async fn wait_for_usock(path: &str) {
 	let addr = SocketAddress::new_unix(path);
-	let pool = StreamPool::new(addr, 1).unwrap().shared();
+	let pool = StreamPool::single(addr).unwrap().shared();
 	let client = SocketClient::new(pool, Duration::from_millis(50));
 
 	for _ in 0..50 {
