@@ -87,7 +87,7 @@ async fn await_all(tasks: Vec<JoinHandle<Result<(), IOError>>>) {
 
 // bridge tcp to vsock in an endless loop with 1s retry on errors
 async fn tcp_to_vsock(
-	mut enclave_stream: Stream,
+	enclave_stream: Stream,
 	host_addr: SocketAddr,
 ) -> Result<(), IOError> {
 	loop {
@@ -111,17 +111,26 @@ async fn tcp_to_vsock(
 			}
 		};
 
-		if let Err(err) = enclave_stream.connect().await {
-			eprintln!("error connecting to VSOCK {err:?}, retrying");
-			continue;
-		}
+		let mut stream = Stream::from(&enclave_stream);
+		if let Err(err) = tokio::spawn(async move {
+			if let Err(err) = stream.connect().await {
+				eprintln!("error connecting to VSOCK {err:?}, retrying");
+				return;
+			}
 
-		if let Err(err) =
-			copy_bidirectional(&mut tcp_stream, &mut enclave_stream).await
+			if let Err(err) =
+				copy_bidirectional(&mut tcp_stream, &mut stream).await
+			{
+				eprintln!(
+					"error on tcp to vsock stream bridge: {err:?}, retrying"
+				);
+			} else {
+				eprintln!("tcp to vsock stream bridge shutdown, retrying");
+			}
+		})
+		.await
 		{
-			eprintln!("error on tcp to vsock stream bridge: {err:?}, retrying");
-		} else {
-			eprintln!("tcp to vsock stream bridge shutdown, retrying");
+			eprintln!("error awaiting tcp_to_vsock bridge worker {err}");
 		}
 	}
 }
@@ -142,22 +151,30 @@ async fn vsock_to_tcp(
 			}
 		};
 
-		let mut tcp_stream = match TcpStream::connect(host_addr).await {
-			Ok(value) => value,
-			Err(err) => {
-				eprintln!(
-					"error connecting to tcp addr {host_addr}: {err:?}, retrying"
-				);
-				continue;
-			}
-		};
+		if let Err(err) = tokio::spawn(async move {
+			let mut tcp_stream = match TcpStream::connect(host_addr).await {
+				Ok(value) => value,
+				Err(err) => {
+					eprintln!(
+						"error connecting to tcp addr {host_addr}: {err:?}, retrying"
+					);
+					return;
+				}
+			};
 
-		if let Err(err) =
-			copy_bidirectional(&mut enclave_stream, &mut tcp_stream).await
+			if let Err(err) =
+				copy_bidirectional(&mut enclave_stream, &mut tcp_stream).await
+			{
+				eprintln!(
+					"error on vsock to tcp stream bridge: {err:?}, retrying"
+				);
+			} else {
+				eprintln!("vsock to tcp stream bridge shutdown, retrying");
+			}
+		})
+		.await
 		{
-			eprintln!("error on vsock to tcp stream bridge: {err:?}, retrying");
-		} else {
-			eprintln!("vsock to tcp stream bridge shutdown, retrying");
+			eprintln!("error awaiting vsock_to_tcp bridge worker {err}");
 		}
 	}
 }

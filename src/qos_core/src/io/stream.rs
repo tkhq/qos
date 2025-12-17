@@ -38,6 +38,13 @@ pub struct Stream {
 	inner: Option<InnerStream>,
 }
 
+impl From<&Stream> for Stream {
+	/// Construct a not yet connected Stream from another Stream.
+	fn from(other: &Stream) -> Self {
+		Self { address: other.address.clone(), inner: None }
+	}
+}
+
 impl Stream {
 	// accept a new connection, used by server side
 	fn unix_accepted(stream: UnixStream) -> Self {
