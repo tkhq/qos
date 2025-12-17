@@ -588,6 +588,12 @@ impl Command {
 			.takes_value(true)
 	}
 
+	fn app_host_port() -> Token {
+		Token::new(APP_HOST_PORT, "host port for the app bridge")
+			.required(false)
+			.takes_value(true)
+	}
+
 	fn client_timeout() -> Token {
 		Token::new(
 			CLIENT_TIMEOUT,
@@ -682,6 +688,7 @@ impl Command {
 			.token(Self::quorum_key_path_token())
 			.token(Self::pivot_args_token())
 			.token(Self::pool_size())
+			.token(Self::app_host_port())
 			.token(Self::client_timeout())
 	}
 
