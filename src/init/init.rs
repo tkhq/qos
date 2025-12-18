@@ -49,6 +49,14 @@ fn init_console() {
 }
 
 fn init_localhost() {
+	use std::fs;
+
+	let paths = fs::read_dir("/").unwrap();
+
+	for path in paths {
+		println!("FILE: {}", path.unwrap().path().display())
+	}
+
 	if !std::process::Command::new("/ip")
 		.args(["addr", "add", "127.0.0.1/32", "dev", "lo"])
 		.spawn()
