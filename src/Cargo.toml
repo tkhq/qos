@@ -10,15 +10,30 @@ members = [
   "qos_test_primitives",
   "qos_p256",
   "qos_nsm",
+  # special members that are not default-members
+  "qos_crypto/fuzz",
+  "qos_net/fuzz",
+  "qos_nsm/fuzz",
+  "qos_p256/fuzz",
 ]
+default-members = [
+  "integration",
+  "qos_client",
+  "qos_core",
+  "qos_crypto",
+  "qos_host",
+  "qos_hex",
+  "qos_net",
+  "qos_test_primitives",
+  "qos_p256",
+  "qos_nsm",
+]
+
 exclude = [
   "init",
   "qos_aws",
   "qos_system",
   "qos_enclave",
-  "qos_p256/fuzz",
-  "qos_crypto/fuzz",
-  "qos_nsm/fuzz",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.
@@ -91,3 +106,14 @@ qos_net = { path = "qos_net", default-features = false }
 qos_nsm = { path = "qos_nsm", default-features = false }
 qos_p256 = { path = "qos_p256" }
 qos_test_primitives = { path = "qos_test_primitives" }
+
+# Option for the future: build all QOS applications with additional runtime checks
+# to intentionally panic on integer overflows instead of continuing execution
+# with unexpected values.
+# This turns some logic bugs into denial-of-service, which is a tradeoff we're 
+# likely willing to take.
+# 
+# reminder: test extensively before enabling by default
+# [profile.release]
+# # enable arithmetic checks at runtime
+# overflow-checks = true

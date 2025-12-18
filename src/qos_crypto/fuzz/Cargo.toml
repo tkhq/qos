@@ -12,16 +12,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 
-[dependencies.qos_crypto]
-path = ".."
-
-# Prevent this from interfering with workspaces
-[workspace]
-members = ["."]
-
-[profile.release]
-# enable arithmetic checks at runtime
-overflow-checks = true
+qos_crypto = { path = ".." }
 
 [[bin]]
 name = "1_shamir_generate_reconstruct"

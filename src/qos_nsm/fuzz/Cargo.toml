@@ -12,18 +12,8 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 
 qos_hex = { path = "../../qos_hex" }
-
 # we need some of the mock code features
 qos_nsm = { path = "../", features = ["mock"] }
-
-
-# Prevent this from interfering with workspaces
-[workspace]
-members = ["."]
-
-[profile.release]
-# enable arithmetic checks at runtime
-overflow-checks = true
 
 [[bin]]
 name = "1_attestation_doc_from_der"
