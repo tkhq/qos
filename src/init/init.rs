@@ -48,10 +48,24 @@ fn init_console() {
 	}
 }
 
+fn init_localhost() {
+	if !std::process::Command::new("/ip")
+		.args(["addr", "add", "127.0.0.1/32", "dev", "lo"])
+		.spawn()
+		.expect("unable to spawn ip command to assign localhost ip address")
+		.wait()
+		.expect("ip command fialure")
+		.success()
+	{
+		panic!("ip command failure")
+	}
+}
+
 fn boot() {
 	init_rootfs();
 	init_console();
 	init_platform();
+	init_localhost();
 }
 
 #[tokio::main]
