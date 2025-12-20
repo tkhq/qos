@@ -10,6 +10,9 @@ use qos_system::{dmesg, freopen, get_local_cid, mount, reboot};
 //TODO: Feature flag
 use qos_aws::init_platform;
 
+mod setip;
+use setip::init_localhost;
+
 // Mount common filesystems with conservative permissions
 fn init_rootfs() {
 	use libc::{MS_NODEV, MS_NOEXEC, MS_NOSUID};
@@ -45,27 +48,6 @@ fn init_console() {
 			Ok(()) => {}
 			Err(e) => eprintln!("{e}"),
 		}
-	}
-}
-
-fn init_localhost() {
-	use std::fs;
-
-	let paths = fs::read_dir("/").unwrap();
-
-	for path in paths {
-		println!("FILE: {}", path.unwrap().path().display())
-	}
-
-	if !std::process::Command::new("/ip")
-		.args(["addr", "add", "127.0.0.1/32", "dev", "lo"])
-		.spawn()
-		.expect("unable to spawn ip command to assign localhost ip address")
-		.wait()
-		.expect("ip command fialure")
-		.success()
-	{
-		panic!("ip command failure")
 	}
 }
 

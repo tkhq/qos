@@ -767,6 +767,7 @@ name = "init"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "nix 0.29.0",
  "qos_aws",
  "qos_core",
  "qos_nsm",
