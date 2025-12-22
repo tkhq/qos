@@ -97,15 +97,12 @@ async fn tcp_to_vsock(
 	enclave_stream: Stream,
 	host_addr: SocketAddr,
 ) -> Result<(), IOError> {
-	loop {
-		let listener = match TcpListener::bind(host_addr).await {
-			Ok(value) => value,
-			Err(err) => {
-				eprintln!("error binding tcp addr {host_addr}: {err:?}");
-				continue;
-			}
-		};
+	let listener = match TcpListener::bind(host_addr).await {
+		Ok(value) => value,
+		Err(err) => panic!("error binding to {host_addr}: {err}"),
+	};
 
+	loop {
 		let mut tcp_stream = match listener.accept().await {
 			Ok((value, _)) => value,
 			Err(err) => {
