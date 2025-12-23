@@ -175,15 +175,18 @@ async fn accept_loop_proxy(
 	loop {
 		eprintln!("Proxy::accept_loop_proxy accepting connection");
 		let stream = listener.accept().await?;
-		let mut proxy = Proxy::new(stream);
 
-		match proxy.run().await {
-			Ok(()) => {
-				eprintln!("Proxy::run done");
+		tokio::task::spawn(async move {
+			let mut proxy = Proxy::new(stream);
+
+			match proxy.run().await {
+				Ok(()) => {
+					eprintln!("Proxy::run done");
+				}
+				Err(err) => {
+					eprintln!("Error on proxy run {err:?} rerunning");
+				}
 			}
-			Err(err) => {
-				eprintln!("Error on proxy run {err:?} rerunning");
-			}
-		}
+		});
 	}
 }
