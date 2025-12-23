@@ -14,15 +14,6 @@ arbitrary = { version = "1", features = ["derive"] }
 
 qos_p256 = { path = "../"}
 
-# Prevent this from interfering with workspaces
-[workspace]
-members = ["."]
-
-[profile.release]
-debug = 1
-# enable integer overflow checks
-overflow-checks = true
-
 [features]
 # feature used by some harnesses to signal a special mode, does nothing on other targets
 fuzzer_corpus_seed1 = []

@@ -95,6 +95,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arbitrary"
+version = "1.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
+dependencies = [
+ "derive_arbitrary",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -576,6 +585,17 @@ checksum = "b42b6fa04a440b495c8b04d0e71b707c585f83cb9cb28cf8cd0d976c315e31b4"
 dependencies = [
  "powerfmt",
  "serde",
+]
+
+[[package]]
+name = "derive_arbitrary"
+version = "1.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e567bd82dcff979e4b03460c307b3cdc9e96fde3d73bed1496d2bc75d9dd62a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1412,6 +1432,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa"
 
 [[package]]
+name = "libfuzzer-sys"
+version = "0.4.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5037190e1f70cbeef565bd267599242926f724d3b8a9f510fd7e0b540cfa4404"
+dependencies = [
+ "arbitrary",
+ "cc",
+]
+
+[[package]]
 name = "libloading"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2020,6 +2050,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_crypto_fuzz"
+version = "0.0.0"
+dependencies = [
+ "arbitrary",
+ "libfuzzer-sys",
+ "qos_crypto",
+]
+
+[[package]]
 name = "qos_hex"
 version = "0.1.0"
 dependencies = [
@@ -2060,6 +2099,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_net_fuzz"
+version = "0.0.0"
+dependencies = [
+ "arbitrary",
+ "libfuzzer-sys",
+ "qos_net",
+]
+
+[[package]]
 name = "qos_nsm"
 version = "0.1.0"
 dependencies = [
@@ -2076,6 +2124,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_nsm_fuzz"
+version = "0.0.0"
+dependencies = [
+ "libfuzzer-sys",
+ "qos_hex",
+ "qos_nsm",
+]
+
+[[package]]
 name = "qos_p256"
 version = "0.1.0"
 dependencies = [
@@ -2088,6 +2145,15 @@ dependencies = [
  "qos_test_primitives",
  "sha2",
  "zeroize",
+]
+
+[[package]]
+name = "qos_p256_fuzz"
+version = "0.0.0"
+dependencies = [
+ "arbitrary",
+ "libfuzzer-sys",
+ "qos_p256",
 ]
 
 [[package]]
