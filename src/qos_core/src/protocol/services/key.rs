@@ -43,16 +43,14 @@ pub(in crate::protocol) fn inject_key(
 	// Key.
 	let quorum_master_seed = {
 		let ephemeral_pair = state.handles.get_ephemeral_key()?;
-		let bytes = ephemeral_pair.decrypt(&encrypted_quorum_key)?;
-		bytes
-			.try_into()
-			.map_err(|_| ProtocolError::EncryptedQuorumKeyInvalidLen)?
+		ephemeral_pair.decrypt(&encrypted_quorum_key)?
 	};
 
 	// 3. Check that the decrypted Quorum Key public key matches the one
 	// specified in the New Manifest.
-	let decrypted_quorum_pair = P256Pair::from_master_seed(&quorum_master_seed)
-		.map_err(|_| ProtocolError::InvalidQuorumSecret)?;
+	let decrypted_quorum_pair =
+		P256Pair::from_versioned_secret(&quorum_master_seed)
+			.map_err(|_| ProtocolError::InvalidQuorumSecret)?;
 	if decrypted_quorum_pair.public_key() != quorum_public {
 		return Err(ProtocolError::WrongQuorumKey);
 	}
@@ -133,7 +131,8 @@ fn export_key_internal(
 	// extracted from the attestation document and a signature over the
 	// encrypted payload. The Original Node uses its Quorum Key to create the
 	// signature.
-	let encrypted_quorum_key = eph_key.encrypt(quorum_key.to_master_seed())?;
+	let encrypted_quorum_key =
+		eph_key.encrypt(quorum_key.to_versioned_secret())?;
 	let signature = quorum_key.sign(&encrypted_quorum_key)?;
 
 	Ok(EncryptedQuorumKey { encrypted_quorum_key, signature })
@@ -1080,10 +1079,9 @@ mod test {
 
 			let decrypted_quorum_secret =
 				eph_pair.decrypt(&encrypted_quorum_key).unwrap();
-			let reconstructed_quorum_pair = P256Pair::from_master_seed(
-				&decrypted_quorum_secret.try_into().unwrap(),
-			)
-			.unwrap();
+			let reconstructed_quorum_pair =
+				P256Pair::from_versioned_secret(&decrypted_quorum_secret)
+					.unwrap();
 			assert!(quorum_pair == reconstructed_quorum_pair);
 		}
 	}
@@ -1113,7 +1111,7 @@ mod test {
 
 			let encrypted_quorum_key = eph_pair
 				.public_key()
-				.encrypt(quorum_pair.to_master_seed())
+				.encrypt(quorum_pair.to_versioned_secret())
 				.unwrap();
 			let signature = quorum_pair.sign(&encrypted_quorum_key).unwrap();
 
@@ -1171,7 +1169,7 @@ mod test {
 			let wrong_key = P256Pair::generate().unwrap();
 			let encrypted_quorum_key = eph_pair
 				.public_key()
-				.encrypt(wrong_key.to_master_seed())
+				.encrypt(wrong_key.to_versioned_secret())
 				.unwrap();
 			let signature = quorum_pair.sign(&encrypted_quorum_key).unwrap();
 
@@ -1222,7 +1220,7 @@ mod test {
 			let wrong_key = P256Pair::generate().unwrap();
 			let encrypted_quorum_key = eph_pair
 				.public_key()
-				.encrypt(quorum_pair.to_master_seed())
+				.encrypt(quorum_pair.to_versioned_secret())
 				.unwrap();
 			let signature = wrong_key.sign(&encrypted_quorum_key).unwrap();
 
@@ -1270,7 +1268,8 @@ mod test {
 			)
 			.unwrap();
 
-			let mut invalid_master_seed = quorum_pair.to_master_seed().to_vec();
+			let mut invalid_master_seed =
+				quorum_pair.to_versioned_secret().to_vec();
 			invalid_master_seed.remove(0);
 			let invalid_encrypted_quorum_key =
 				eph_pair.public_key().encrypt(&invalid_master_seed).unwrap();

@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use encrypt::AesGcm256Secret;
+use encrypt::{AesGcm256Secret, AesKeyId};
 use hkdf::Hkdf;
 use p256::elliptic_curve::rand_core::{OsRng, RngCore};
 use sha2::Sha512;
@@ -14,6 +14,7 @@ use crate::{
 };
 
 const PUB_KEY_LEN_UNCOMPRESSED: u8 = 65;
+const VERSION_LEN: usize = 8;
 
 /// Master seed derive path for encryption secret
 pub const P256_ENCRYPT_DERIVE_PATH: &[u8] = b"qos_p256_encrypt";
@@ -25,6 +26,8 @@ pub const AES_GCM_256_PATH: &[u8] = b"qos_aes_gcm_encrypt";
 pub const P256_SECRET_LEN: usize = 32;
 /// Length of the master seed.
 pub const MASTER_SEED_LEN: usize = 32;
+/// The first versioned format for quorum key secret.
+pub const Q_KEY_V1: &[u8] = b"Q_KEY_V1";
 
 pub mod encrypt;
 pub mod sign;
@@ -78,6 +81,10 @@ pub enum P256Error {
 	/// Failed to convert a len (usize) to a u8. This is an internal error and
 	/// the code has a bug.
 	CannotCoerceLenToU8,
+	/// The length of the versioned secret is invalid.
+	VersionedSecretInvalidLength,
+	/// The length of the QuorumKeyId is invalid.
+	QuorumKeyIdInvalidLength,
 }
 
 impl From<qos_hex::HexError> for P256Error {
@@ -113,6 +120,72 @@ pub fn bytes_os_rng<const N: usize>() -> [u8; N] {
 	key
 }
 
+#[derive(ZeroizeOnDrop)]
+#[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
+pub enum VersionedSecret {
+	/// Version 0, otherwise known as master seed.
+	V0([u8; MASTER_SEED_LEN]),
+	/// Version 1.
+	V1([u8; 8 + 3 * 32]),
+}
+
+impl VersionedSecret {
+	/// Create a versioned secret from raw bytes.
+	pub fn from_bytes(secret: &[u8]) -> Result<Self, P256Error> {
+		Ok(match &secret[..VERSION_LEN] {
+			Q_KEY_V1 => VersionedSecret::V1(
+				secret
+					.try_into()
+					.map_err(|_| P256Error::VersionedSecretInvalidLength)?,
+			),
+			_ => VersionedSecret::V0(
+				secret
+					.try_into()
+					.map_err(|_| P256Error::VersionedSecretInvalidLength)?,
+			),
+		})
+	}
+
+	/// Encryption secret.
+	pub fn encrypt_secret(&self) -> Result<[u8; P256_SECRET_LEN], P256Error> {
+		match &self {
+			Self::V0(ref s) => derive_secret(s, P256_ENCRYPT_DERIVE_PATH),
+			Self::V1(ref s) => {
+				let secrets = &s[VERSION_LEN..];
+				secrets[32..2 * 32]
+					.try_into()
+					.map_err(|_| P256Error::VersionedSecretInvalidLength)
+			}
+		}
+	}
+
+	/// Signing secret.
+	pub fn signing_secret(&self) -> Result<[u8; P256_SECRET_LEN], P256Error> {
+		match &self {
+			Self::V0(ref s) => derive_secret(s, P256_SIGN_DERIVE_PATH),
+			Self::V1(ref s) => {
+				let secrets = &s[VERSION_LEN..];
+				secrets[..32]
+					.try_into()
+					.map_err(|_| P256Error::VersionedSecretInvalidLength)
+			}
+		}
+	}
+
+	/// AES GCM 256 symmetric encryption secret.
+	fn aes_gcm_256_secret(&self) -> Result<[u8; P256_SECRET_LEN], P256Error> {
+		match &self {
+			Self::V0(ref s) => derive_secret(s, AES_GCM_256_PATH),
+			Self::V1(ref s) => {
+				let secrets = &s[VERSION_LEN..];
+				secrets[2 * 32..3 * 32]
+					.try_into()
+					.map_err(|_| P256Error::VersionedSecretInvalidLength)
+			}
+		}
+	}
+}
+
 /// P256 private key pair for signing and encryption. Internally this uses a
 /// separate secret for signing and encryption.
 #[derive(ZeroizeOnDrop)]
@@ -120,27 +193,34 @@ pub fn bytes_os_rng<const N: usize>() -> [u8; N] {
 pub struct P256Pair {
 	p256_encrypt_private: P256EncryptPair,
 	sign_private: P256SignPair,
-	master_seed: [u8; MASTER_SEED_LEN],
+	versioned_secret: VersionedSecret,
 	aes_gcm_256_secret: AesGcm256Secret,
 }
 
 impl P256Pair {
 	/// Generate a new private key using the OS randomness source.
 	pub fn generate() -> Result<Self, P256Error> {
-		let master_seed = bytes_os_rng::<MASTER_SEED_LEN>();
+		let p256_encrypt_secret = bytes_os_rng::<MASTER_SEED_LEN>();
+		let p256_sign_secret = bytes_os_rng::<MASTER_SEED_LEN>();
+		let aes_gcm_secret = bytes_os_rng::<MASTER_SEED_LEN>();
 
-		let p256_encrypt_secret =
-			derive_secret(&master_seed, P256_ENCRYPT_DERIVE_PATH)?;
-		let p256_sign_secret =
-			derive_secret(&master_seed, P256_SIGN_DERIVE_PATH)?;
-		let aes_gcm_secret = derive_secret(&master_seed, AES_GCM_256_PATH)?;
+		let versioned_secret_v1 = Q_KEY_V1
+			.iter()
+			.chain(p256_sign_secret.iter())
+			.chain(p256_encrypt_secret.iter())
+			.chain(aes_gcm_secret.iter())
+			.copied()
+			.collect::<Vec<u8>>()
+			.try_into()
+			// Impossible but we always stay defensive
+			.map_err(|_| P256Error::VersionedSecretInvalidLength)?;
 
 		Ok(Self {
 			p256_encrypt_private: P256EncryptPair::from_bytes(
 				&p256_encrypt_secret,
 			)?,
 			sign_private: P256SignPair::from_bytes(&p256_sign_secret)?,
-			master_seed,
+			versioned_secret: VersionedSecret::V1(versioned_secret_v1),
 			aes_gcm_256_secret: AesGcm256Secret::from_bytes(aes_gcm_secret)?,
 		})
 	}
@@ -183,43 +263,47 @@ impl P256Pair {
 		}
 	}
 
-	/// Create `Self` from a master seed.
-	pub fn from_master_seed(
-		master_seed: &[u8; MASTER_SEED_LEN],
-	) -> Result<Self, P256Error> {
-		let encrypt_secret =
-			derive_secret(master_seed, P256_ENCRYPT_DERIVE_PATH)?;
-		let sign_secret = derive_secret(master_seed, P256_SIGN_DERIVE_PATH)?;
-		let aes_gcm_256_encrypt = derive_secret(master_seed, AES_GCM_256_PATH)?;
+	/// Create self from a
+	pub fn from_versioned_secret(secret: &[u8]) -> Result<Self, P256Error> {
+		let versioned_secret = VersionedSecret::from_bytes(secret)?;
 
 		Ok(Self {
-			p256_encrypt_private: P256EncryptPair::from_bytes(&encrypt_secret)?,
-			sign_private: P256SignPair::from_bytes(&sign_secret)?,
-			master_seed: *master_seed,
-			aes_gcm_256_secret: AesGcm256Secret::from_bytes(
-				aes_gcm_256_encrypt,
+			p256_encrypt_private: P256EncryptPair::from_bytes(
+				&versioned_secret.encrypt_secret()?,
 			)?,
+			sign_private: P256SignPair::from_bytes(
+				&versioned_secret.signing_secret()?,
+			)?,
+			aes_gcm_256_secret: AesGcm256Secret::from_bytes(
+				versioned_secret.aes_gcm_256_secret()?,
+			)?,
+			versioned_secret,
 		})
 	}
 
-	/// Get the raw master seed used to create this pair.
+	/// Get the versioned secret used to create this pair.
 	#[must_use]
-	pub fn to_master_seed(&self) -> &[u8; MASTER_SEED_LEN] {
-		&self.master_seed
+	pub fn to_versioned_secret(&self) -> &[u8] {
+		match &self.versioned_secret {
+			VersionedSecret::V0(ref s) => s,
+			VersionedSecret::V1(ref s) => s,
+		}
 	}
 
-	/// Convert to hex bytes.
 	#[must_use]
-	pub fn to_master_seed_hex(&self) -> Vec<u8> {
-		qos_hex::encode_to_vec(&self.master_seed)
+	pub fn to_versioned_secret_hex(&self) -> Vec<u8> {
+		qos_hex::encode_to_vec(self.to_versioned_secret())
 	}
 
-	/// Write the raw master seed to file as hex encoded.
+	/// Write the hex encoded versioned secret to a file.
 	pub fn to_hex_file<P: AsRef<Path>>(
 		&self,
 		path: P,
 	) -> Result<(), P256Error> {
-		let hex_string = qos_hex::encode(&self.master_seed);
+		let mut hex_string = qos_hex::encode(self.to_versioned_secret());
+		// Add a newline character for readability
+		hex_string.push('\n');
+
 		std::fs::write(&path, hex_string.as_bytes()).map_err(|e| {
 			P256Error::IOError(format!(
 				"failed to write master secret to {}: {e}",
@@ -228,21 +312,19 @@ impl P256Pair {
 		})
 	}
 
-	/// Read the raw, hex encoded master from a file.
+	/// Read the hex encoded versioned secret from a file.
 	pub fn from_hex_file<P: AsRef<Path>>(path: P) -> Result<Self, P256Error> {
-		let hex_bytes = std::fs::read(&path).map_err(|e| {
+		let untrimmed_hex = std::fs::read_to_string(&path).map_err(|e| {
 			P256Error::IOError(format!(
 				"failed to read master seed from {}: {e}",
 				path.as_ref().display()
 			))
 		})?;
+		let hex = untrimmed_hex.trim();
 
-		let master_seed =
-			qos_hex::decode_from_vec(hex_bytes).map_err(P256Error::from)?;
-		let master_seed: [u8; MASTER_SEED_LEN] = master_seed
-			.try_into()
-			.map_err(|_| P256Error::MasterSeedInvalidLength)?;
-		Self::from_master_seed(&master_seed)
+		let versioned_secret = qos_hex::decode(hex).map_err(P256Error::from)?;
+
+		Self::from_versioned_secret(&versioned_secret)
 	}
 
 	/// Get a reference to the underlying signing key. Useful for interoperation
@@ -352,6 +434,131 @@ impl P256Public {
 	#[must_use]
 	pub fn signing_key(&self) -> &p256::ecdsa::VerifyingKey {
 		&self.sign_public.public
+	}
+}
+
+/// Quorum Key Identifier.
+///
+/// A compact identifier for a QOS key set consisting of:
+/// - Encryption public key (SEC1 compressed, 33 bytes)
+/// - Signing public key (SEC1 compressed, 33 bytes)
+/// - AES key identifier (32 bytes)
+///
+/// Total size: 98 bytes
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuorumKeyId {
+	/// Encryption public key in SEC1 compressed format
+	encrypt_public: [u8; Self::COMPRESSED_PUB_KEY_LEN],
+	/// Signing public key in SEC1 compressed format
+	sign_public: [u8; Self::COMPRESSED_PUB_KEY_LEN],
+	/// AES key identifier
+	aes_key_id: [u8; AesKeyId::LEN],
+}
+
+impl QuorumKeyId {
+	/// Length of a SEC1 compressed public key.
+	pub const COMPRESSED_PUB_KEY_LEN: usize = 33;
+	/// Total serialized length.
+	pub const LEN: usize = Self::COMPRESSED_PUB_KEY_LEN * 2 + AesKeyId::LEN;
+
+	/// Create a new `QuorumKeyId` from a `P256Pair`.
+	#[must_use]
+	pub fn from_pair(pair: &P256Pair) -> Self {
+		let encrypt_public =
+			pair.p256_encrypt_private.public_key().to_bytes_compressed();
+		let sign_public = pair.sign_private.public_key().to_bytes_compressed();
+		let aes_key_id = *pair.aes_gcm_256_secret.id().as_bytes();
+
+		Self { encrypt_public, sign_public, aes_key_id }
+	}
+
+	/// Create a new `QuorumKeyId` from a `P256Public` and `AesKeyId`.
+	#[must_use]
+	pub fn from_public(public: &P256Public, aes_key_id: &AesKeyId) -> Self {
+		let encrypt_public = public.encrypt_public.to_bytes_compressed();
+		let sign_public = public.sign_public.to_bytes_compressed();
+		let aes_key_id_bytes = *aes_key_id.as_bytes();
+
+		Self { encrypt_public, sign_public, aes_key_id: aes_key_id_bytes }
+	}
+
+	/// Serialize to bytes.
+	#[must_use]
+	pub fn to_bytes(&self) -> [u8; Self::LEN] {
+		let mut bytes = [0u8; Self::LEN];
+		let mut offset = 0;
+
+		bytes[offset..offset + Self::COMPRESSED_PUB_KEY_LEN]
+			.copy_from_slice(&self.encrypt_public);
+		offset += Self::COMPRESSED_PUB_KEY_LEN;
+
+		bytes[offset..offset + Self::COMPRESSED_PUB_KEY_LEN]
+			.copy_from_slice(&self.sign_public);
+		offset += Self::COMPRESSED_PUB_KEY_LEN;
+
+		bytes[offset..offset + AesKeyId::LEN].copy_from_slice(&self.aes_key_id);
+
+		bytes
+	}
+
+	/// Deserialize from bytes.
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+		if bytes.len() != Self::LEN {
+			return Err(P256Error::QuorumKeyIdInvalidLength);
+		}
+
+		let mut offset = 0;
+
+		let encrypt_public: [u8; Self::COMPRESSED_PUB_KEY_LEN] = bytes
+			[offset..offset + Self::COMPRESSED_PUB_KEY_LEN]
+			.try_into()
+			.map_err(|_| P256Error::QuorumKeyIdInvalidLength)?;
+		offset += Self::COMPRESSED_PUB_KEY_LEN;
+
+		let sign_public: [u8; Self::COMPRESSED_PUB_KEY_LEN] = bytes
+			[offset..offset + Self::COMPRESSED_PUB_KEY_LEN]
+			.try_into()
+			.map_err(|_| P256Error::QuorumKeyIdInvalidLength)?;
+		offset += Self::COMPRESSED_PUB_KEY_LEN;
+
+		let aes_key_id: [u8; AesKeyId::LEN] = bytes
+			[offset..offset + AesKeyId::LEN]
+			.try_into()
+			.map_err(|_| P256Error::QuorumKeyIdInvalidLength)?;
+
+		// Validate that the public keys are valid SEC1 compressed points
+		P256EncryptPublic::from_bytes_compressed(&encrypt_public)?;
+		P256SignPublic::from_bytes_compressed(&sign_public)?;
+
+		Ok(Self { encrypt_public, sign_public, aes_key_id })
+	}
+
+	/// Serialize to hex string.
+	#[must_use]
+	pub fn to_hex(&self) -> String {
+		qos_hex::encode(&self.to_bytes())
+	}
+
+	/// Deserialize from hex string.
+	pub fn from_hex(hex: &str) -> Result<Self, P256Error> {
+		let bytes = qos_hex::decode(hex)?;
+		Self::from_bytes(&bytes)
+	}
+
+	/// Get the encryption public key.
+	pub fn encrypt_public(&self) -> Result<P256EncryptPublic, P256Error> {
+		P256EncryptPublic::from_bytes_compressed(&self.encrypt_public)
+	}
+
+	/// Get the signing public key.
+	pub fn sign_public(&self) -> Result<P256SignPublic, P256Error> {
+		P256SignPublic::from_bytes_compressed(&self.sign_public)
+	}
+
+	/// Get the AES key identifier bytes.
+	#[must_use]
+	pub fn aes_key_id(&self) -> &[u8; AesKeyId::LEN] {
+		&self.aes_key_id
 	}
 }
 
@@ -477,9 +684,9 @@ mod test {
 	fn master_seed_bytes_roundtrip() {
 		let alice_pair = P256Pair::generate().unwrap();
 		let public_key = alice_pair.public_key();
-		let master_seed = alice_pair.to_master_seed();
+		let master_seed = alice_pair.to_versioned_secret();
 
-		let alice_pair2 = P256Pair::from_master_seed(master_seed).unwrap();
+		let alice_pair2 = P256Pair::from_versioned_secret(master_seed).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope = public_key.encrypt(plaintext).unwrap();
@@ -540,6 +747,202 @@ mod test {
 				.aes_gcm_256_decrypt(&serialized_envelope)
 				.unwrap_err();
 			assert_eq!(err, P256Error::AesGcm256DecryptError,);
+		}
+	}
+
+	mod v0_backwards_compatibility {
+		use super::*;
+
+		// Known V0 (master seed) test vector - this is the same key used in
+		// qos_client/tests/mock/primary.secret.keep
+		const V0_MASTER_SEED_HEX: &str =
+			"c0e30ffefdad72ee214173f34af0faa57d58a1b733239e8100e903695bdd9a0c";
+		const V0_PUBLIC_KEY_HEX: &str = "040f461f922c36cfdf16a65f3f370f106e33157d24608e1541291bc20e7d8182fa5030e074bb663a8d10ed424bcd26a369bd2753cbbf19162a5492b5d592d2b33e042d79aeeb3d76adde343d7dba3614bc63d8c7e247478bc7cfaec41e572ef20b1e637303393e16baf7891d8c6cdaba124ff098d1d9d8df9bfaff8fd1423e57d025";
+		const V0_EXPECTED_SIGNATURE: &str = "36c7f22c3831a32b8c8a9e823641e7df591c6e92848e7baa54f66d65963d15eaf02abbf5f01f99a8dddfe7a35453a4df486a708ffa3ef2d8159d4d0763f5ee89";
+		const TEST_MESSAGE: &[u8] = b"test data";
+
+		#[test]
+		fn v0_secret_is_parsed_as_v0() {
+			let secret_bytes = qos_hex::decode(V0_MASTER_SEED_HEX).unwrap();
+			let versioned = VersionedSecret::from_bytes(&secret_bytes).unwrap();
+			assert!(matches!(versioned, VersionedSecret::V0(_)));
+		}
+
+		#[test]
+		fn v0_secret_produces_expected_public_key() {
+			let secret_bytes = qos_hex::decode(V0_MASTER_SEED_HEX).unwrap();
+			let pair = P256Pair::from_versioned_secret(&secret_bytes).unwrap();
+			let public_key = pair.public_key();
+
+			let expected_pub_bytes =
+				qos_hex::decode(V0_PUBLIC_KEY_HEX).unwrap();
+			assert_eq!(public_key.to_bytes(), expected_pub_bytes);
+		}
+
+		#[test]
+		fn v0_secret_produces_expected_signature() {
+			let secret_bytes = qos_hex::decode(V0_MASTER_SEED_HEX).unwrap();
+			let pair = P256Pair::from_versioned_secret(&secret_bytes).unwrap();
+
+			let signature = pair.sign(TEST_MESSAGE).unwrap();
+			let expected_sig = qos_hex::decode(V0_EXPECTED_SIGNATURE).unwrap();
+			assert_eq!(signature, expected_sig);
+		}
+
+		#[test]
+		fn v0_secret_roundtrip_works() {
+			let secret_bytes = qos_hex::decode(V0_MASTER_SEED_HEX).unwrap();
+			let pair = P256Pair::from_versioned_secret(&secret_bytes).unwrap();
+			let public_key = pair.public_key();
+
+			// Test that we can serialize and deserialize the V0 secret
+			let serialized = pair.to_versioned_secret();
+			assert_eq!(serialized, secret_bytes.as_slice());
+
+			let pair2 = P256Pair::from_versioned_secret(serialized).unwrap();
+
+			// Verify signing still works after roundtrip
+			let signature = pair2.sign(TEST_MESSAGE).unwrap();
+			assert!(public_key.verify(TEST_MESSAGE, &signature).is_ok());
+		}
+
+		#[test]
+		fn v0_secret_encrypt_decrypt_works() {
+			let secret_bytes = qos_hex::decode(V0_MASTER_SEED_HEX).unwrap();
+			let pair = P256Pair::from_versioned_secret(&secret_bytes).unwrap();
+			let public_key = pair.public_key();
+
+			let plaintext = b"backwards compatible encryption";
+			let ciphertext = public_key.encrypt(plaintext).unwrap();
+			let decrypted = pair.decrypt(&ciphertext).unwrap();
+
+			assert_eq!(decrypted, plaintext);
+		}
+
+		#[test]
+		fn v0_secret_aes_gcm_works() {
+			let secret_bytes = qos_hex::decode(V0_MASTER_SEED_HEX).unwrap();
+			let pair = P256Pair::from_versioned_secret(&secret_bytes).unwrap();
+
+			let plaintext = b"backwards compatible aes gcm";
+			let ciphertext = pair.aes_gcm_256_encrypt(plaintext).unwrap();
+			let decrypted = pair.aes_gcm_256_decrypt(&ciphertext).unwrap();
+
+			assert_eq!(decrypted, plaintext);
+		}
+	}
+
+	mod quorum_key_id {
+		use super::*;
+
+		#[test]
+		fn quorum_key_id_has_correct_length() {
+			assert_eq!(QuorumKeyId::LEN, 98);
+		}
+
+		#[test]
+		fn from_pair_roundtrip() {
+			let pair = P256Pair::generate().unwrap();
+			let key_id = QuorumKeyId::from_pair(&pair);
+
+			let bytes = key_id.to_bytes();
+			assert_eq!(bytes.len(), QuorumKeyId::LEN);
+
+			let key_id2 = QuorumKeyId::from_bytes(&bytes).unwrap();
+			assert_eq!(key_id, key_id2);
+		}
+
+		#[test]
+		fn from_public_roundtrip() {
+			let pair = P256Pair::generate().unwrap();
+			let public = pair.public_key();
+			let aes_key_id = pair.aes_gcm_256_secret.id();
+
+			let key_id = QuorumKeyId::from_public(&public, &aes_key_id);
+
+			let bytes = key_id.to_bytes();
+			let key_id2 = QuorumKeyId::from_bytes(&bytes).unwrap();
+			assert_eq!(key_id, key_id2);
+		}
+
+		#[test]
+		fn hex_roundtrip() {
+			let pair = P256Pair::generate().unwrap();
+			let key_id = QuorumKeyId::from_pair(&pair);
+
+			let hex = key_id.to_hex();
+			assert_eq!(hex.len(), QuorumKeyId::LEN * 2);
+
+			let key_id2 = QuorumKeyId::from_hex(&hex).unwrap();
+			assert_eq!(key_id, key_id2);
+		}
+
+		#[test]
+		fn invalid_length_rejected() {
+			let too_short = vec![0u8; QuorumKeyId::LEN - 1];
+			let too_long = vec![0u8; QuorumKeyId::LEN + 1];
+
+			assert_eq!(
+				QuorumKeyId::from_bytes(&too_short).unwrap_err(),
+				P256Error::QuorumKeyIdInvalidLength
+			);
+			assert_eq!(
+				QuorumKeyId::from_bytes(&too_long).unwrap_err(),
+				P256Error::QuorumKeyIdInvalidLength
+			);
+		}
+
+		#[test]
+		fn can_recover_public_keys() {
+			let pair = P256Pair::generate().unwrap();
+			let public = pair.public_key();
+			let key_id = QuorumKeyId::from_pair(&pair);
+
+			let recovered_encrypt = key_id.encrypt_public().unwrap();
+			let recovered_sign = key_id.sign_public().unwrap();
+
+			// Verify recovered keys work for encryption/verification
+			let plaintext = b"test message";
+			let ciphertext = recovered_encrypt.encrypt(plaintext).unwrap();
+			let decrypted = pair.decrypt(&ciphertext).unwrap();
+			assert_eq!(decrypted, plaintext);
+
+			let signature = pair.sign(plaintext).unwrap();
+			assert!(recovered_sign.verify(plaintext, &signature).is_ok());
+
+			// Verify they match the original
+			assert_eq!(
+				recovered_encrypt.to_bytes_compressed(),
+				public.encrypt_public.to_bytes_compressed()
+			);
+			assert_eq!(
+				recovered_sign.to_bytes_compressed(),
+				public.sign_public.to_bytes_compressed()
+			);
+		}
+
+		#[test]
+		fn from_pair_and_from_public_produce_same_result() {
+			let pair = P256Pair::generate().unwrap();
+			let public = pair.public_key();
+			let aes_key_id = pair.aes_gcm_256_secret.id();
+
+			let key_id_from_pair = QuorumKeyId::from_pair(&pair);
+			let key_id_from_public =
+				QuorumKeyId::from_public(&public, &aes_key_id);
+
+			assert_eq!(key_id_from_pair, key_id_from_public);
+		}
+
+		#[test]
+		fn different_pairs_produce_different_key_ids() {
+			let pair1 = P256Pair::generate().unwrap();
+			let pair2 = P256Pair::generate().unwrap();
+
+			let key_id1 = QuorumKeyId::from_pair(&pair1);
+			let key_id2 = QuorumKeyId::from_pair(&pair2);
+
+			assert_ne!(key_id1, key_id2);
 		}
 	}
 }

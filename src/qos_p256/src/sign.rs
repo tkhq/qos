@@ -77,14 +77,32 @@ impl P256SignPublic {
 			.map_err(|_| P256Error::FailedSignatureVerification)
 	}
 
-	/// Serialize to SEC1 encoded point, not compressed.
+	/// Serialize to SEC1 encoded point, not compressed (65 bytes).
 	#[must_use]
 	pub fn to_bytes(&self) -> Box<[u8]> {
 		let sec1_encoded_point = self.public.to_encoded_point(false);
 		sec1_encoded_point.to_bytes()
 	}
 
-	/// Deserialize from a SEC1 encoded point, not compressed.
+	/// Serialize to SEC1 compressed format (33 bytes).
+	#[must_use]
+	pub fn to_bytes_compressed(&self) -> [u8; 33] {
+		let sec1_encoded_point = self.public.to_encoded_point(true);
+		sec1_encoded_point
+			.as_bytes()
+			.try_into()
+			.expect("compressed sec1 point is always 33 bytes")
+	}
+
+	/// Deserialize from SEC1 compressed format (33 bytes).
+	pub fn from_bytes_compressed(bytes: &[u8; 33]) -> Result<Self, P256Error> {
+		Ok(Self {
+			public: VerifyingKey::from_sec1_bytes(bytes)
+				.map_err(|_| P256Error::FailedToReadPublicKey)?,
+		})
+	}
+
+	/// Deserialize from a SEC1 encoded point, not compressed (65 bytes).
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
 		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize {
 			return Err(P256Error::EncodedPublicKeyTooLong);

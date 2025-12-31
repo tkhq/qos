@@ -152,10 +152,10 @@ pub(in crate::protocol) fn boot_genesis(
 	maybe_dr_key: Option<Vec<u8>>,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
 	let quorum_pair = P256Pair::generate()?;
-	let master_seed = &quorum_pair.to_master_seed()[..];
+	let versioned_secret = quorum_pair.to_versioned_secret();
 
 	let shares = qos_crypto::shamir::shares_generate(
-		master_seed,
+		versioned_secret,
 		genesis_set.members.len(),
 		genesis_set.threshold as usize,
 	)
@@ -178,12 +178,12 @@ pub(in crate::protocol) fn boot_genesis(
 	let dr_key_wrapped_quorum_key = if let Some(dr_key) = maybe_dr_key {
 		let dr_public = P256Public::from_bytes(&dr_key)
 			.map_err(ProtocolError::InvalidP256DRKey)?;
-		Some(dr_public.encrypt(master_seed)?)
+		Some(dr_public.encrypt(versioned_secret)?)
 	} else {
 		None
 	};
 
-	let hex_master_seed = qos_hex::encode(master_seed);
+	let hex_versioned_secret = qos_hex::encode(versioned_secret);
 	let genesis_output = GenesisOutput {
 		member_outputs: member_outputs?,
 		quorum_key: quorum_pair.public_key().to_bytes(),
@@ -191,7 +191,7 @@ pub(in crate::protocol) fn boot_genesis(
 		// TODO: generate N choose K recovery permutations
 		recovery_permutations: vec![],
 		dr_key_wrapped_quorum_key,
-		quorum_key_hash: sha_512(hex_master_seed.as_bytes()),
+		quorum_key_hash: sha_512(hex_versioned_secret.as_bytes()),
 		test_message_ciphertext: quorum_pair
 			.public_key()
 			.encrypt(QOS_TEST_MESSAGE)?,
@@ -214,7 +214,6 @@ pub(in crate::protocol) fn boot_genesis(
 #[cfg(test)]
 mod test {
 	use qos_nsm::mock::MockNsm;
-	use qos_p256::MASTER_SEED_LEN;
 
 	use super::*;
 	use crate::handles::Handles;
@@ -267,15 +266,12 @@ mod test {
 			})
 			.collect();
 
-		let reconstructed: [u8; MASTER_SEED_LEN] =
-			qos_crypto::shamir::shares_reconstruct(
-				&shares[0..threshold as usize],
-			)
-			.unwrap()
-			.try_into()
-			.unwrap();
+		let reconstructed = qos_crypto::shamir::shares_reconstruct(
+			&shares[0..threshold as usize],
+		)
+		.unwrap();
 		let reconstructed_quorum_key =
-			P256Pair::from_master_seed(&reconstructed).unwrap();
+			P256Pair::from_versioned_secret(&reconstructed).unwrap();
 
 		let quorum_public_key =
 			P256Public::from_bytes(&output.quorum_key).unwrap();

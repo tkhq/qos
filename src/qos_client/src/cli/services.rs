@@ -287,7 +287,7 @@ pub fn generate_file_key<P: AsRef<Path>>(
 	// Write the personal key secret
 	write_with_msg(
 		master_secret_path.as_ref(),
-		&share_key_pair.to_master_seed_hex(),
+		&share_key_pair.to_versioned_secret_hex(),
 		"Master Seed",
 	);
 
@@ -359,7 +359,7 @@ pub(crate) fn pin_from_path<P: AsRef<Path>>(path: P) -> Vec<u8> {
 /// Provision a yubikey from a pre-generated master seed
 #[cfg(feature = "smartcard")]
 pub fn advanced_provision_yubikey<P: AsRef<Path>>(
-	master_seed_path: P,
+	versioned_secret_path: P,
 	maybe_pin_path: Option<String>,
 ) -> Result<(), Error> {
 	let mut yubikey =
@@ -374,15 +374,12 @@ pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 			.to_vec()
 	};
 
-	let pair = P256Pair::from_hex_file(master_seed_path)?;
+	let pair = P256Pair::from_hex_file(versioned_secret_path)?;
 
-	let master_seed = pair.to_master_seed();
-	let encrypt_secret = qos_p256::derive_secret(
-		master_seed,
-		qos_p256::P256_ENCRYPT_DERIVE_PATH,
-	)?;
-	let sign_secret =
-		qos_p256::derive_secret(master_seed, qos_p256::P256_SIGN_DERIVE_PATH)?;
+	let versioned_secret =
+		qos_p256::VersionedSecret::from_bytes(pair.to_versioned_secret())?;
+	let encrypt_secret = versioned_secret.encrypt_secret()?;
+	let sign_secret = versioned_secret.signing_secret()?;
 
 	crate::yubikey::import_key_and_generate_signed_certificate(
 		&mut yubikey,
@@ -548,7 +545,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 
 pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	namespace_dir: P,
-	master_seed_path: P,
+	versioned_secret_path: P,
 ) -> Result<(), Error> {
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	let genesis_output = GenesisOutput::try_from_slice(
@@ -558,13 +555,13 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 		"Failed to deserialize genesis output - check that qos_client and qos_core version line up",
 	);
 
-	let master_seed_hex = fs::read_to_string(&master_seed_path)
+	let master_seed_hex = fs::read_to_string(&versioned_secret_path)
 		.expect("Failed to read master seed to string");
-	let pair = P256Pair::from_hex_file(master_seed_path)
+	let pair = P256Pair::from_hex_file(versioned_secret_path)
 		.expect("Failed to use master seed to create p256 pair: {e:?}");
 
 	// sanity check our logic to read in master seed
-	if pair.to_master_seed_hex() != master_seed_hex.as_bytes() {
+	if pair.to_versioned_secret_hex() != master_seed_hex.as_bytes() {
 		return Err(Error::ErrorReadingSeed);
 	}
 
@@ -1503,10 +1500,10 @@ pub(crate) fn p256_verify<P: AsRef<Path>>(
 pub(crate) fn p256_sign<P: AsRef<Path>>(
 	payload_path: &str,
 	signature_path: P,
-	master_seed_path: P,
+	versioned_secret_path: P,
 ) -> Result<(), Error> {
 	let payload = fs::read(payload_path)?;
-	let pair = P256Pair::from_hex_file(master_seed_path)?;
+	let pair = P256Pair::from_hex_file(versioned_secret_path)?;
 
 	let signature = {
 		let signature = pair.sign(&payload)?;
@@ -1539,10 +1536,10 @@ pub(crate) fn p256_asymmetric_encrypt<P: AsRef<Path>>(
 pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 	plaintext_path: P,
 	ciphertext_path: P,
-	master_seed_path: P,
+	versioned_secret_path: P,
 	output_hex: bool,
 ) -> Result<(), Error> {
-	let pair = P256Pair::from_hex_file(master_seed_path)?;
+	let pair = P256Pair::from_hex_file(versioned_secret_path)?;
 	let ciphertext = std::fs::read(ciphertext_path.as_ref())?;
 
 	let plaintext = pair.decrypt(&ciphertext)?;
@@ -1624,9 +1621,12 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 
 	// Shard it with N=2, K=2
-	let shares =
-		qos_crypto::shamir::shares_generate(quorum_pair.to_master_seed(), 2, 2)
-			.unwrap();
+	let shares = qos_crypto::shamir::shares_generate(
+		quorum_pair.to_versioned_secret(),
+		2,
+		2,
+	)
+	.unwrap();
 	assert_eq!(
 		shares.len(),
 		2,

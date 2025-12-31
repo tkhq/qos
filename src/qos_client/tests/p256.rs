@@ -3,10 +3,18 @@ use std::{path::PathBuf, process::Command};
 use qos_test_primitives::PathWrapper;
 
 const DATA: &str = "test data";
+
+// V0 (master seed) test keys
 const MOCK_PRIMARY_SEED_PATH: &str = "./tests/mock/primary.secret.keep";
 const MOCK_PRIMARY_PUB_PATH: &str = "./tests/mock/primary.pub";
 // If this is updated there is a breaking change to the commands api
 const EXPECTED_SIGNATURE: &str = "36c7f22c3831a32b8c8a9e823641e7df591c6e92848e7baa54f66d65963d15eaf02abbf5f01f99a8dddfe7a35453a4df486a708ffa3ef2d8159d4d0763f5ee89";
+
+// V1 (versioned secret) test keys
+const MOCK_PRIMARY_V1_SEED_PATH: &str = "./tests/mock/primary_v1.secret.keep";
+const MOCK_PRIMARY_V1_PUB_PATH: &str = "./tests/mock/primary_v1.pub";
+// If this is updated there is a breaking change to the commands api
+const EXPECTED_SIGNATURE_V1: &str = "04b74414283bdc344d769772c0d5b2f694ceccbcbcf83417c43feffc229009cf405082a434c9c904fbe30f995317913302ab0b9b97481262e315242d9e612e4a";
 
 #[test]
 fn p256_sign_verify_roundtrip() {
@@ -111,6 +119,121 @@ fn p256_asymmetric_encrypt_decrypt_roundtrip() {
 		.arg(ciphertext_path)
 		.arg("--master-seed-path")
 		.arg(MOCK_PRIMARY_SEED_PATH)
+		.arg("--output-hex")
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
+	let hex_plaintext = std::fs::read_to_string(plaintext_output_path).unwrap();
+
+	assert_eq!(qos_hex::decode(&hex_plaintext).unwrap(), decrypted_bytes);
+}
+
+#[test]
+fn p256_sign_verify_roundtrip_v1() {
+	let tmp: PathWrapper = "/tmp/p256_sign_verify_roundtrip_v1".into();
+	std::fs::create_dir_all(&*tmp).unwrap();
+
+	let payload_path = "/tmp/p256_sign_verify_roundtrip_v1/payload";
+	let signature_path = "/tmp/p256_sign_verify_roundtrip_v1/signature";
+
+	std::fs::write(payload_path, DATA).unwrap();
+	// Sanity check the signature output doesn't already exist
+	assert!(!PathBuf::from(signature_path).exists());
+
+	assert!(Command::new("../target/debug/qos_client")
+		.arg("p256-sign")
+		.arg("--payload-path")
+		.arg(payload_path)
+		.arg("--signature-path")
+		.arg(signature_path)
+		.arg("--master-seed-path")
+		.arg(MOCK_PRIMARY_V1_SEED_PATH)
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
+	let signature = std::fs::read_to_string(signature_path).unwrap();
+	assert_eq!(EXPECTED_SIGNATURE_V1, signature);
+
+	assert!(Command::new("../target/debug/qos_client")
+		.arg("p256-verify")
+		.arg("--payload-path")
+		.arg(payload_path)
+		.arg("--signature-path")
+		.arg(signature_path)
+		.arg("--pub-path")
+		.arg(MOCK_PRIMARY_V1_PUB_PATH)
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+}
+
+#[test]
+fn p256_asymmetric_encrypt_decrypt_roundtrip_v1() {
+	let tmp: PathWrapper =
+		"/tmp/p256_asymmetric_encrypt_decrypt_roundtrip_v1".into();
+	std::fs::create_dir_all(&*tmp).unwrap();
+
+	let plaintext_input_path =
+		"/tmp/p256_asymmetric_encrypt_decrypt_roundtrip_v1/plaintext_input";
+	std::fs::write(plaintext_input_path, DATA.as_bytes()).unwrap();
+	let ciphertext_path =
+		"/tmp/p256_asymmetric_encrypt_decrypt_roundtrip_v1/ciphertext";
+	// Sanity check the ciphertext output doesn't already exist
+	assert!(!PathBuf::from(ciphertext_path).exists());
+
+	assert!(Command::new("../target/debug/qos_client")
+		.arg("p256-asymmetric-encrypt")
+		.arg("--plaintext-path")
+		.arg(plaintext_input_path)
+		.arg("--ciphertext-path")
+		.arg(ciphertext_path)
+		.arg("--pub-path")
+		.arg(MOCK_PRIMARY_V1_PUB_PATH)
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
+	let plaintext_output_path =
+		"/tmp/p256_asymmetric_encrypt_decrypt_roundtrip_v1/plaintext_output";
+	assert!(!PathBuf::from(plaintext_output_path).exists());
+
+	assert!(Command::new("../target/debug/qos_client")
+		.arg("p256-asymmetric-decrypt")
+		.arg("--plaintext-path")
+		.arg(plaintext_output_path)
+		.arg("--ciphertext-path")
+		.arg(ciphertext_path)
+		.arg("--master-seed-path")
+		.arg(MOCK_PRIMARY_V1_SEED_PATH)
+		.spawn()
+		.unwrap()
+		.wait()
+		.unwrap()
+		.success());
+
+	let decrypted_bytes = std::fs::read(plaintext_output_path).unwrap();
+	assert_eq!(decrypted_bytes, DATA.as_bytes());
+
+	let hex_plaintext_output_path =
+		"/tmp/p256_asymmetric_encrypt_decrypt_roundtrip_v1/plaintext_output";
+	assert!(Command::new("../target/debug/qos_client")
+		.arg("p256-asymmetric-decrypt")
+		.arg("--plaintext-path")
+		.arg(hex_plaintext_output_path)
+		.arg("--ciphertext-path")
+		.arg(ciphertext_path)
+		.arg("--master-seed-path")
+		.arg(MOCK_PRIMARY_V1_SEED_PATH)
 		.arg("--output-hex")
 		.spawn()
 		.unwrap()

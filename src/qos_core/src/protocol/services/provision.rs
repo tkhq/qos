@@ -100,7 +100,7 @@ pub(in crate::protocol) fn provision(
 		master_seed
 			.try_into()
 			.map_err(|_| ProtocolError::IncorrectSecretLen)?;
-	let pair = qos_p256::P256Pair::from_master_seed(&master_seed)?;
+	let pair = qos_p256::P256Pair::from_versioned_secret(&master_seed)?;
 	let public_key_bytes = pair.public_key().to_bytes();
 
 	if public_key_bytes != manifest_envelope.manifest.namespace.quorum_key {
@@ -253,7 +253,7 @@ mod test {
 			setup(&eph_file, &quorum_file, &manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
-		let quorum_key = quorum_pair.to_master_seed();
+		let quorum_key = quorum_pair.to_versioned_secret();
 		let encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
 				.unwrap()
@@ -282,7 +282,7 @@ mod test {
 		assert_eq!(provision(share, approval, &mut state), Ok(true));
 		let quorum_key = std::fs::read(&*quorum_file).unwrap();
 
-		assert_eq!(quorum_key, quorum_pair.to_master_seed_hex());
+		assert_eq!(quorum_key, quorum_pair.to_versioned_secret_hex());
 
 		// Make sure the EK is persisted
 		assert!(Path::new(&*eph_file).exists());
@@ -317,7 +317,7 @@ mod test {
 
 		// 4) Create shards of a RANDOM KEY and encrypt them to eph key
 		let random_key =
-			P256Pair::generate().unwrap().to_master_seed().to_vec();
+			P256Pair::generate().unwrap().to_versioned_secret().to_vec();
 		let encrypted_shares: Vec<_> =
 			shares_generate(&random_key, 4, threshold)
 				.unwrap()
@@ -361,7 +361,7 @@ mod test {
 			setup(&eph_file, &quorum_file, &manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
-		let quorum_key = quorum_pair.to_master_seed();
+		let quorum_key = quorum_pair.to_versioned_secret();
 
 		let encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
@@ -413,7 +413,7 @@ mod test {
 			mut approvals,
 		} = setup(&eph_file, &quorum_file, &manifest_file);
 
-		let quorum_key = quorum_pair.to_master_seed();
+		let quorum_key = quorum_pair.to_versioned_secret();
 		let mut encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
 				.unwrap()
@@ -450,7 +450,7 @@ mod test {
 			mut approvals,
 		} = setup(&eph_file, &quorum_file, &manifest_file);
 
-		let quorum_key = quorum_pair.to_master_seed();
+		let quorum_key = quorum_pair.to_versioned_secret();
 		let mut encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
 				.unwrap()
@@ -493,7 +493,7 @@ mod test {
 			mut approvals,
 		} = setup(&eph_file, &quorum_file, &manifest_file);
 
-		let quorum_key = quorum_pair.to_master_seed();
+		let quorum_key = quorum_pair.to_versioned_secret();
 		let mut encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
 				.unwrap()
