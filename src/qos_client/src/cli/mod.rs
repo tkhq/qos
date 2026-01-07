@@ -594,6 +594,18 @@ impl Command {
 			.takes_value(true)
 	}
 
+	fn app_host_enabled() -> Token {
+		Token::new(APP_HOST_ENABLED, "host app bridge toggle")
+			.required(false)
+			.takes_value(true)
+	}
+
+	fn app_host_pool_size() -> Token {
+		Token::new(APP_HOST_POOL_SIZE, "host app bridge pool size")
+			.required(false)
+			.takes_value(true)
+	}
+
 	fn client_timeout() -> Token {
 		Token::new(
 			CLIENT_TIMEOUT,
@@ -689,6 +701,8 @@ impl Command {
 			.token(Self::pivot_args_token())
 			.token(Self::pool_size())
 			.token(Self::app_host_port())
+			.token(Self::app_host_enabled())
+			.token(Self::app_host_pool_size())
 			.token(Self::client_timeout())
 	}
 
