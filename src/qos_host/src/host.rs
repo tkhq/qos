@@ -31,7 +31,10 @@ use borsh::BorshDeserialize;
 use qos_core::{
 	client::SocketClient,
 	io::{HostBridge, SocketAddress, StreamPool},
-	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase},
+	protocol::{
+		msg::ProtocolMsg, services::boot::BridgeConfig, ProtocolError,
+		ProtocolPhase,
+	},
 };
 use qos_nsm::types::NsmResponse;
 
@@ -45,7 +48,6 @@ use crate::{
 struct QosHostState {
 	enclave_address: SocketAddress,
 	enclave_client: SocketClient,
-	enable_host_bridge: bool,
 }
 
 /// HTTP server for the host of the enclave; proxies requests to the enclave.
@@ -55,7 +57,6 @@ pub struct HostServer {
 	timeout: Duration,
 	addr: SocketAddr,
 	base_path: Option<String>,
-	enable_host_bridge: bool,
 }
 
 impl HostServer {
@@ -68,9 +69,8 @@ impl HostServer {
 		timeout: Duration,
 		addr: SocketAddr,
 		base_path: Option<String>,
-		enable_host_bridge: bool,
 	) -> Self {
-		Self { enclave_address, timeout, addr, base_path, enable_host_bridge }
+		Self { enclave_address, timeout, addr, base_path }
 	}
 
 	fn path(&self, endpoint: &str) -> String {
@@ -95,7 +95,6 @@ impl HostServer {
 				self.timeout,
 			)
 			.expect("unable to create enclave socket client"),
-			enable_host_bridge: self.enable_host_bridge,
 		});
 
 		let app = Router::new()
@@ -266,14 +265,12 @@ impl HostServer {
 
 		match state.enclave_client.call(&encoded_request).await {
 			Ok(encoded_response) => {
-				if state.enable_host_bridge {
-					maybe_start_app_host_bridge(
-						&state.enclave_address,
-						&encoded_request,
-						&encoded_response,
-					)
-					.await;
-				}
+				maybe_start_app_host_bridge(
+					&state.enclave_address,
+					&encoded_request,
+					&encoded_response,
+				)
+				.await;
 				(StatusCode::OK, encoded_response)
 			}
 			Err(e) => {
@@ -333,39 +330,45 @@ async fn maybe_start_app_host_bridge(
 				}
 
 				// nothing to do, app does not want a HOST bridge
-				if !manifest_envelope.manifest.pivot.host_config.enabled {
+				if manifest_envelope.manifest.pivot.host_config.is_empty() {
 					eprintln!("app refused host bridge, skipping");
 					return;
 				}
 
-				let host_port =
-					manifest_envelope.manifest.pivot.host_config.port;
-				let pool_size =
-					manifest_envelope.manifest.pivot.host_config.pool_size;
-				let host_addr =
-					SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), host_port);
+				for bc in manifest_envelope.manifest.pivot.host_config {
+					let host_port = match bc {
+						BridgeConfig::Server(port) => port,
+						BridgeConfig::Client(_, _) => {
+							panic!("client bridge unimplemented")
+						}
+					};
+					let host_addr = SocketAddr::new(
+						Ipv4Addr::UNSPECIFIED.into(),
+						host_port,
+					);
 
-				// derive the app socket, for vsock just use the app host port with same CID as the enclave socket,
-				// with usock just add "<port>.appsock" suffix
-				let app_socket = match enclave_socket.with_port(host_port) {
-					Ok(value) => value,
-					Err(err) => {
-						eprintln!("unable to derive app socket from enclave socket: {err:?}, tcp to vsock bridge will not start");
-						return;
-					}
-				};
+					// derive the app socket, for vsock just use the app host port with same CID as the enclave socket,
+					// with usock just add "<port>.appsock" suffix
+					let app_socket = match enclave_socket.with_port(host_port) {
+						Ok(value) => value,
+						Err(err) => {
+							eprintln!("unable to derive app socket from enclave socket: {err:?}, tcp to vsock bridge will not start");
+							return;
+						}
+					};
 
-				let app_pool = match StreamPool::new(app_socket, pool_size) {
-					Ok(value) => value,
-					Err(err) => {
-						eprintln!("unable to create new app socket pool: {err:?}, tcp to vsock bridge will not start");
-						return;
-					}
-				};
+					let app_pool = match StreamPool::single(app_socket) {
+						Ok(value) => value,
+						Err(err) => {
+							eprintln!("unable to create new app socket pool: {err:?}, tcp to vsock bridge will not start");
+							return;
+						}
+					};
 
-				let bridge = HostBridge::new(app_pool, host_addr);
+					let bridge = HostBridge::new(app_pool, host_addr);
 
-				bridge.tcp_to_vsock().await; // NOTE: this doesn't await for completion
+					bridge.tcp_to_vsock().await; // NOTE: this doesn't await for completion
+				}
 			}
 			_ => {}
 		}

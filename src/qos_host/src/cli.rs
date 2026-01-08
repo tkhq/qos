@@ -18,7 +18,6 @@ const HOST_PORT: &str = "host-port";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
 const VSOCK_TO_HOST: &str = "vsock-to-host";
 const SOCKET_TIMEOUT: &str = "socket-timeout";
-const ENABLE_HOST_BRIDGE: &str = "enable-host-bridge";
 
 struct HostParser;
 impl GetParserForOptions for HostParser {
@@ -65,11 +64,6 @@ impl GetParserForOptions for HostParser {
 					.takes_value(true)
 					.required(false)
 					.forbids(vec![USOCK])
-			)
-			.token(
-				Token::new(ENABLE_HOST_BRIDGE, "whether to enable the app host bridge for tcp -> vsock")
-					.takes_value(false)
-					.required(false)
 			)
 	}
 }
@@ -164,10 +158,6 @@ impl HostOpts {
 		self.parsed.single(ENDPOINT_BASE_PATH).cloned()
 	}
 
-	fn enable_host_bridge(&self) -> bool {
-		self.parsed.flag(ENABLE_HOST_BRIDGE).unwrap_or(false)
-	}
-
 	#[cfg(feature = "vm")]
 	fn to_host_flag(&self) -> u8 {
 		let include = self
@@ -210,7 +200,6 @@ impl CLI {
 				options.socket_timeout(),
 				options.host_addr(),
 				options.base_path(),
-				options.enable_host_bridge(),
 			)
 			.serve()
 			.await;

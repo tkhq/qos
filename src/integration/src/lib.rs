@@ -24,8 +24,6 @@ pub const PIVOT_OK_PATH: &str = "../target/debug/pivot_ok";
 pub const PIVOT_OK2_PATH: &str = "../target/debug/pivot_ok2";
 /// Path to pivot_ok3 bin for tests.
 pub const PIVOT_OK3_PATH: &str = "../target/debug/pivot_ok3";
-/// Path to pivot_pool_size bin for tests.
-pub const PIVOT_POOL_SIZE_PATH: &str = "../target/debug/pivot_pool_size";
 /// Path to pivot_tcp bin for tests.
 pub const PIVOT_TCP_PATH: &str = "../target/debug/pivot_tcp";
 /// Path to pivot loop bin for tests.

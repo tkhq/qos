@@ -22,7 +22,7 @@ use crate::{
 	io::{HostBridge, IOError, SocketAddress, StreamPool},
 	protocol::{
 		processor::ProtocolProcessor,
-		services::boot::{PivotConfig, PivotHostConfig, RestartPolicy},
+		services::boot::{BridgeConfig, PivotConfig, RestartPolicy},
 		ProtocolPhase, ProtocolState,
 	},
 	server::SocketServer,
@@ -67,25 +67,32 @@ async fn run_server(
 }
 
 // runs the VSOCK -> TCP bridge so that apps can use any TCP based protocol without worrying about VSOCK
-// communication. This is started if `Manifest::bridge_vsock_to_tcp` is set to true.
+// communication. This is started if `Manifest::host_config` has any members defined.
 // uses the enclave core socket and given pivot host port to constuct the VSOCK to TCP bridge.
 async fn run_vsock_to_tcp_bridge(
 	core_socket: &SocketAddress,
-	host_config: &PivotHostConfig,
+	bridges: &Vec<BridgeConfig>,
 ) -> Result<(), IOError> {
 	// do nothing if we're not asked to provide bridging
-	if !host_config.enabled {
+	if bridges.is_empty() {
 		println!("skipping host bridge, not configured");
 		return Ok(());
 	}
 
-	let app_socket = core_socket.with_port(host_config.port)?;
-	let host_addr: SocketAddr =
-		SocketAddrV4::new(Ipv4Addr::LOCALHOST, host_config.port).into();
-	let app_pool = StreamPool::new(app_socket, host_config.pool_size)?;
-	let bridge = HostBridge::new(app_pool, host_addr);
+	for bc in bridges {
+		match bc {
+			BridgeConfig::Server(port) => {
+				let app_socket = core_socket.with_port(*port)?;
+				let host_addr: SocketAddr =
+					SocketAddrV4::new(Ipv4Addr::LOCALHOST, *port).into();
+				let app_pool = StreamPool::single(app_socket)?;
+				let bridge = HostBridge::new(app_pool, host_addr);
 
-	bridge.vsock_to_tcp().await;
+				bridge.vsock_to_tcp().await;
+			}
+			BridgeConfig::Client(_, _) => panic!("client bridge unimplemented"), // TODO: implement
+		}
+	}
 
 	Ok(())
 }
@@ -187,13 +194,6 @@ impl Reaper {
 
 		let mut pivot = Command::new(handles.pivot_path());
 		pivot.env_clear();
-		if host_config.enabled {
-			pivot.env("QOS_HOST_CONFIG_PORT", host_config.port.to_string());
-			pivot.env(
-				"QOS_HOST_CONFIG_POOL_SIZE",
-				host_config.pool_size.to_string(),
-			);
-		}
 		pivot.args(&args[..]);
 		pivot.stdout(Stdio::piped()).stderr(Stdio::piped());
 

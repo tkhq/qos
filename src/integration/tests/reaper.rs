@@ -6,12 +6,12 @@ use std::{
 
 use integration::{
 	wait_for_usock, PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH,
-	PIVOT_POOL_SIZE_PATH, PIVOT_TCP_PATH,
+	PIVOT_TCP_PATH,
 };
 use qos_core::{
 	handles::Handles,
 	io::{HostBridge, SocketAddress, StreamPool},
-	protocol::services::boot::ManifestEnvelope,
+	protocol::services::boot::{BridgeConfig, ManifestEnvelope},
 	reaper::{Reaper, REAPER_EXIT_DELAY},
 };
 use qos_nsm::mock::MockNsm;
@@ -168,61 +168,6 @@ async fn reaper_handles_panic() {
 }
 
 #[tokio::test]
-async fn reaper_handles_pivot_host_config() {
-	let secret_path: PathWrapper =
-		"/tmp/reaper_handles_pool_size.secret".into();
-	let usock: PathWrapper = "/tmp/reaper_handles_pool_size.sock".into();
-	let manifest_path: PathWrapper =
-		"/tmp/reaper_handles_pool_size.manifest".into();
-	let msg = "5"; // must match pool-size in manifest below (test thing)
-
-	// For our sanity, ensure the secret does not yet exist
-	drop(fs::remove_file(&*secret_path));
-
-	let handles = Handles::new(
-		"eph_path".to_string(),
-		(*secret_path).to_string(),
-		(*manifest_path).to_string(),
-		PIVOT_POOL_SIZE_PATH.to_string(),
-	);
-
-	// Make sure we have written everything necessary to pivot, except the
-	// quorum key
-	let mut manifest_envelope = ManifestEnvelope::default();
-	manifest_envelope.manifest.pivot.args =
-		vec!["--msg".to_string(), msg.to_string()];
-	// set a pool size > 1
-	manifest_envelope.manifest.pivot.host_config.pool_size = 5;
-
-	handles.put_manifest_envelope(&manifest_envelope).unwrap();
-	assert!(handles.pivot_exists());
-
-	let enclave_socket = SocketAddress::new_unix(&usock);
-
-	let reaper_handle = tokio::spawn(async move {
-		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
-			.await;
-	});
-
-	// wait for enclave to listen
-	wait_for_usock(&usock).await;
-
-	// Check that the reaper is still running, presumably waiting for
-	// the secret.
-	assert!(!reaper_handle.is_finished());
-
-	// Create the file with the secret, which should cause the reaper
-	// to start executable.
-	fs::write(&*secret_path, b"super dank tank secret tech").unwrap();
-
-	// Make the sure the reaper executed successfully.
-	reaper_handle.await.unwrap();
-	let contents = fs::read(integration::PIVOT_POOL_SIZE_SUCCESS_FILE).unwrap();
-	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
-	assert!(fs::remove_file(integration::PIVOT_POOL_SIZE_SUCCESS_FILE).is_ok());
-}
-
-#[tokio::test]
 async fn reaper_handles_bridge() {
 	let secret_path: PathWrapper = "/tmp/reaper_handles_bridge.secret".into();
 	let usock: PathWrapper = "/tmp/reaper_handles_bridge.sock".into();
@@ -253,8 +198,8 @@ async fn reaper_handles_bridge() {
 	// quorum key
 	let mut manifest_envelope = ManifestEnvelope::default();
 	manifest_envelope.manifest.pivot.args = vec!["4000".to_string()];
-	manifest_envelope.manifest.pivot.host_config.enabled = true;
-	manifest_envelope.manifest.pivot.host_config.port = 4000;
+	manifest_envelope.manifest.pivot.host_config =
+		vec![BridgeConfig::Server(4000)];
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());

@@ -8,13 +8,13 @@
 //! cargo run --bin qos_client <command-name> --help
 //! ```
 
-use std::env;
+use std::{collections::HashSet, env};
 
 use qos_core::{
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
 	protocol::{
 		msg::ProtocolMsg,
-		services::boot::{self, PivotHostConfig, DEFAULT_APP_HOST_PORT},
+		services::boot::{self, BridgeConfig},
 	},
 };
 
@@ -43,11 +43,7 @@ const PATCH_SET_DIR: &str = "patch-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
 const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
 const PUB_PATH: &str = "pub-path";
-const POOL_SIZE: &str = "pool-size";
-const CLIENT_TIMEOUT: &str = "client-timeout";
-const APP_HOST_ENABLED: &str = "app-host-enabled";
-const APP_HOST_PORT: &str = "app-host-port";
-const APP_HOST_POOL_SIZE: &str = "app-host-pool-size";
+const BRIDGE_CONFIG: &str = "bridge-config";
 const YUBIKEY: &str = "yubikey";
 const SECRET_PATH: &str = "secret-path";
 const SHARE_PATH: &str = "share-path";
@@ -582,37 +578,10 @@ impl Command {
 			.takes_value(false)
 	}
 
-	fn pool_size() -> Token {
-		Token::new(POOL_SIZE, "Socket pool size for USOCK/VSOCK")
+	fn bridge_config() -> Token {
+		Token::new(BRIDGE_CONFIG, "host app bridge configuration")
 			.required(false)
 			.takes_value(true)
-	}
-
-	fn app_host_port() -> Token {
-		Token::new(APP_HOST_PORT, "host port for the app bridge")
-			.required(false)
-			.takes_value(true)
-	}
-
-	fn app_host_enabled() -> Token {
-		Token::new(APP_HOST_ENABLED, "host app bridge toggle")
-			.required(false)
-			.takes_value(true)
-	}
-
-	fn app_host_pool_size() -> Token {
-		Token::new(APP_HOST_POOL_SIZE, "host app bridge pool size")
-			.required(false)
-			.takes_value(true)
-	}
-
-	fn client_timeout() -> Token {
-		Token::new(
-			CLIENT_TIMEOUT,
-			"Client timeout for enclave <-> app communication",
-		)
-		.required(false)
-		.takes_value(true)
 	}
 
 	fn base() -> Parser {
@@ -699,11 +668,7 @@ impl Command {
 			.token(Self::patch_set_dir_token())
 			.token(Self::quorum_key_path_token())
 			.token(Self::pivot_args_token())
-			.token(Self::pool_size())
-			.token(Self::app_host_port())
-			.token(Self::app_host_enabled())
-			.token(Self::app_host_pool_size())
-			.token(Self::client_timeout())
+			.token(Self::bridge_config())
 	}
 
 	fn approve_manifest() -> Parser {
@@ -1044,52 +1009,22 @@ impl ClientOpts {
 		}
 	}
 
-	fn app_host_enabled(&self) -> bool {
-		self.parsed
-			.single(APP_HOST_ENABLED)
-			.map(String::as_str)
-			.unwrap_or("true")
-			.parse()
-			.expect("invalid bool for --app-host-enabled option")
-	}
+	fn host_config(&self) -> Vec<BridgeConfig> {
+		if let Some(json_str) = self.parsed.single(BRIDGE_CONFIG) {
+			let result: Vec<BridgeConfig> = serde_json::from_str(json_str)
+				.expect("invalid bridge configuration json");
 
-	fn app_host_port(&self) -> u16 {
-		if let Some(port_str) = self.parsed.single(APP_HOST_PORT) {
-			let val = port_str.parse().expect(
-				"app-host-port not valid integer in range <1026..65535>",
-			);
-			// ensure we can only use valid ports
-			if val < 1026 {
-				panic!("app-host-port not in valid range <1026..65535>");
+			// check for duplicate ports
+			let mut ports = HashSet::new();
+			for bc in &result {
+				if !ports.insert(bc.port()) {
+					panic!("duplicate bridge port: {}", bc.port());
+				}
 			}
 
-			val
+			result
 		} else {
-			DEFAULT_APP_HOST_PORT
-		}
-	}
-
-	fn app_host_pool_size(&self) -> u8 {
-		if let Some(pool_size) = self.parsed.single(APP_HOST_POOL_SIZE) {
-			let value = pool_size.parse().expect(
-				"--app-host-pool-size not valid integer in range <1..255>",
-			);
-
-			if value == 0 {
-				panic!("--app-host-pool-size must be a positive number");
-			}
-
-			value
-		} else {
-			PivotHostConfig::default().pool_size
-		}
-	}
-
-	fn host_config(&self) -> PivotHostConfig {
-		PivotHostConfig {
-			enabled: self.app_host_enabled(),
-			port: self.app_host_port(),
-			pool_size: self.app_host_pool_size(),
+			Vec::new()
 		}
 	}
 

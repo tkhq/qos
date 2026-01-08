@@ -133,6 +133,7 @@ impl Stream {
 		self.recv().await
 	}
 
+	/// Get the address of the socket or error out in case it's invalid
 	pub fn address(&self) -> Result<&SocketAddress, IOError> {
 		self.address.as_ref().ok_or(IOError::ConnectAddressInvalid)
 	}
@@ -315,6 +316,7 @@ impl Listener {
 		Ok(stream)
 	}
 
+	/// Return the listener's address
 	pub fn addr(&self) -> &SocketAddress {
 		&self.addr
 	}

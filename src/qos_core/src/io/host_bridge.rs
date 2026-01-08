@@ -11,6 +11,7 @@ use crate::io::SocketAddress;
 
 use super::{IOError, Listener, Stream, StreamPool};
 
+/// A bridge implementing streaming connectivity TCP -> VSOCK -> TCP in either direction
 pub struct HostBridge {
 	stream_pool: StreamPool,
 	host_addr: SocketAddr,
@@ -19,6 +20,9 @@ pub struct HostBridge {
 impl HostBridge {
 	/// Create a new `HostBridge` with given `StreamPool` VSOCK connections and target `SocketAddr`.
 	/// NOTE: bridge operation is decided by run calls e.g. `tcp_to_vsock`.
+	///
+	/// # Panics
+	/// This panics in case the pool size + start port is bigger than `u16::MAX`
 	pub fn new(stream_pool: StreamPool, host_addr: SocketAddr) -> Self {
 		// ensure we have ports to spare
 		assert!(
@@ -64,7 +68,7 @@ impl HostBridge {
 			let mut host_addr = self.host_addr;
 
 			for listener in listeners {
-				eprintln!(
+				println!(
 					"vsock to tcp bridge listening on {}",
 					listener.addr()
 				);
@@ -85,7 +89,7 @@ async fn await_all(tasks: Vec<JoinHandle<Result<(), IOError>>>) {
 		match result {
 				Err(err) => eprintln!("error on task joining: {err:?}"),
 				Ok(result) => match result {
-					Ok(()) => eprintln!("tcp to vsock bridge host exit, no errors. This shouldn't happen"), // TODO: error? panic?
+					Ok(()) => eprintln!("tcp to vsock bridge host exit, no errors. This shouldn't happen"),
 					Err(err) => eprintln!("error in task: {err:?}"),
 				},
 			}

@@ -102,30 +102,38 @@ impl TryFrom<String> for RestartPolicy {
 	}
 }
 
-/// Pivot host configuration
+/// Pivot bridge host configuration
 #[derive(
 	PartialEq,
 	Eq,
 	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
 	serde::Serialize,
 	serde::Deserialize,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
 )]
 #[serde(rename_all = "camelCase")]
-pub struct PivotHostConfig {
-	/// Whether to use the bridge/host for the pivot or not. If disabled the pivot will be servicing VSOCK
-	/// traffic directly and NOT be provided by a host bridge.
-	pub enabled: bool,
-	/// Start port of the host both on the app and host side, usually 3000
-	pub port: u16,
-	/// Pool size for the host, defaults to 1
-	pub pool_size: u8,
+pub enum BridgeConfig {
+	/// Server hosting bridge, connections go INTO the enclave app on given port
+	Server(u16),
+	/// Client connecting bridge, connections go OUT of the enclave app via given port, connecting
+	/// to the provided hostname. If `None` it will use the transparent protocol.
+	/// *NOTE*: currently unimplemented and results in boot panic if set
+	Client(u16, Option<String>),
 }
 
-impl Default for PivotHostConfig {
+impl Default for BridgeConfig {
 	fn default() -> Self {
-		Self { enabled: true, port: DEFAULT_APP_HOST_PORT, pool_size: 1 }
+		Self::Server(DEFAULT_APP_HOST_PORT)
+	}
+}
+
+impl BridgeConfig {
+	/// Helper to extract port from either variant
+	pub fn port(&self) -> u16 {
+		match self {
+			Self::Server(port) | Self::Client(port, _) => *port,
+		}
 	}
 }
 
@@ -147,10 +155,10 @@ pub struct PivotConfig {
 	pub hash: Hash256,
 	/// Restart policy for running the pivot binary.
 	pub restart: RestartPolicy,
-	/// Host configuration for the pivot.
+	/// Bridge host configuration for the pivot is a set of per-port rules.
 	/// If set the pivot will service TCP with the provided ports and a bridge will provide the TCP -> VSOCK -> TCP streams.
 	/// If not set the pivot will service VSOCK and the host side needs to be provided manually.
-	pub host_config: PivotHostConfig,
+	pub host_config: Vec<BridgeConfig>,
 	/// Arguments to invoke the binary with. Leave this empty if none are
 	/// needed.
 	pub args: Vec<String>,
@@ -186,7 +194,7 @@ impl From<PivotConfigV0> for PivotConfig {
 			hash: value.hash,
 			restart: value.restart,
 			args: value.args,
-			host_config: PivotHostConfig::default(),
+			host_config: Vec::new(),
 		}
 	}
 }
@@ -360,6 +368,7 @@ impl fmt::Debug for Namespace {
 	}
 }
 
+/// Default port to use for host bridge in server mode
 pub const DEFAULT_APP_HOST_PORT: u16 = 3000;
 
 /// The Manifest for the enclave.
@@ -999,8 +1008,6 @@ mod test {
 		let manifest = Manifest::try_from_slice_compat(&bytes).unwrap();
 
 		assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
-		assert_eq!(manifest.pivot.host_config.enabled, true);
-		assert_eq!(manifest.pivot.host_config.port, 3000);
-		assert_eq!(manifest.pivot.host_config.pool_size, 1);
+		assert_eq!(manifest.pivot.host_config.len(), 0);
 	}
 }

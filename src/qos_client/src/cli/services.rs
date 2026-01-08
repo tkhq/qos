@@ -11,8 +11,8 @@ use qos_core::protocol::{
 	msg::ProtocolMsg,
 	services::{
 		boot::{
-			Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
-			Namespace, NitroConfig, PatchSet, PivotConfig, PivotHostConfig,
+			Approval, BridgeConfig, Manifest, ManifestEnvelope, ManifestSet,
+			MemberPubKey, Namespace, NitroConfig, PatchSet, PivotConfig,
 			QuorumMember, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisOutput, GenesisSet},
@@ -706,7 +706,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub quorum_key_path: P,
 	pub manifest_path: P,
 	pub pivot_args: Vec<String>,
-	pub host_config: PivotHostConfig,
+	pub host_config: Vec<BridgeConfig>,
 }
 
 pub(crate) fn generate_manifest<P: AsRef<Path>>(
@@ -1600,7 +1600,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	pivot_path: P,
 	restart: RestartPolicy,
 	args: Vec<String>,
-	host_config: PivotHostConfig,
+	host_config: Vec<BridgeConfig>,
 	unsafe_eph_path_override: Option<String>,
 ) {
 	// Generate a quorum key

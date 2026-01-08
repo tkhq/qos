@@ -12,8 +12,8 @@ use integration::{
 use qos_core::protocol::{
 	services::{
 		boot::{
-			Approval, Manifest, ManifestSet, Namespace, PivotConfig,
-			PivotHostConfig, RestartPolicy, ShareSet,
+			Approval, BridgeConfig, Manifest, ManifestSet, Namespace,
+			PivotConfig, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
@@ -105,8 +105,8 @@ async fn qos_host_bridge_works() {
 			"./mock/keys/manifest-set",
 			"--quorum-key-path",
 			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
-			"--app-host-port",
-			&app_host_port.to_string(),
+			"--bridge-config",
+			&format!("[{{\"server\": {}}}]", app_host_port),
 		])
 		.spawn()
 		.unwrap()
@@ -143,11 +143,7 @@ async fn qos_host_bridge_works() {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
 		args: vec![pivot_app_sock_path.to_string()],
-		host_config: PivotHostConfig {
-			enabled: true,
-			port: app_host_port,
-			pool_size: 1,
-		},
+		host_config: vec![BridgeConfig::Server(app_host_port)],
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
@@ -295,7 +291,6 @@ async fn qos_host_bridge_works() {
 				LOCAL_HOST,
 				"--usock",
 				&*usock,
-				"--enable-host-bridge",
 			])
 			.spawn()
 			.unwrap()
