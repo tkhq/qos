@@ -116,11 +116,11 @@ PRs also need to pass the `build-linux-only` job (part of the `pr` workflow). Th
 
 ### Quorum Key
 
-An asymmetric key used to uniquely authenticate and encrypt data. This key should only ever be reconstituted inside of an enclave. Additionally, the full provisioning of the Quorum Key concludes the attestation flow, at which point QuorumOS pivots to launching the specified enclave app. At rest, outside of the enclave, the key is intended to be stored across shares using shamir's secret sharing. Note that key shares are always intended to be stored encrypted to the Personal Key, never in plaintext.
+A set of 3 keys used for authentication, public key encryption, and encryption at rest. They are derived from a single seed. See the [QOS Key Set Specification](./src/qos_p256/SPEC.md) for details. The Quorum Key should only ever be reconstituted inside of an enclave. Additionally, the full provisioning of the Quorum Key concludes the attestation flow, at which point QuorumOS pivots to launching the specified enclave app. At rest, outside of the enclave, the key is intended to be stored across shares using shamir's secret sharing. Note that key shares are always intended to be stored encrypted to the Personal Key, never in plaintext.
 
-### Quorum Member
+### Operator
 
-An entity that is a member of the Manifest Set and holds a share of the Quorum Key.
+An entity that may be a member of the [Manifest Set](#manifest-set) and/or [Share Set](#share-set). Operators use the P256 Signing and P256 HPKE schemes from the [QOS Key Set](./src/qos_p256/SPEC.md).
 
 ### Quorum Sets
 
