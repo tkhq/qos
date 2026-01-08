@@ -28,7 +28,7 @@ async fn run_echo_server(
 ) -> Result<SocketServer, SocketServerError> {
 	let pool = StreamPool::new(SocketAddress::new_unix(socket_path), 1)
 		.expect("unable to create async pool");
-	let server = SocketServer::listen_all(pool, &EchoProcessor::new())?;
+	let server = SocketServer::listen_all(pool, &EchoProcessor::new(), 128)?;
 
 	Ok(server)
 }

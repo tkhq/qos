@@ -72,7 +72,7 @@ async fn main() {
 			.expect("unable to create app pool");
 
 	let _server =
-		SocketServer::listen_all(app_pool, &Processor::new()).unwrap();
+		SocketServer::listen_all(app_pool, &Processor::new(), 128).unwrap();
 
 	tokio::signal::ctrl_c().await.unwrap();
 }

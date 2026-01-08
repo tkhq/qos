@@ -3,9 +3,12 @@
 
 use std::sync::Arc;
 
-use tokio::{sync::RwLock, task::JoinHandle};
+use tokio::{
+	sync::{OwnedSemaphorePermit, RwLock, Semaphore},
+	task::JoinHandle,
+};
 
-use crate::io::{IOError, Listener, StreamPool};
+use crate::io::{IOError, Listener, Stream, StreamPool};
 
 /// Error variants for [`SocketServer`]
 #[derive(Debug)]
@@ -26,7 +29,7 @@ impl From<IOError> for SocketServerError {
 pub type SharedProcessor<P> = Arc<RwLock<P>>;
 
 /// Something that can process requests in an async way.
-pub trait RequestProcessor: Send {
+pub trait RequestProcessor: Send + Sync {
 	/// Process an incoming request and return a response in async.
 	///
 	/// The request and response are raw bytes. Likely this should be encoded
@@ -44,15 +47,20 @@ pub struct SocketServer {
 	pub pool: StreamPool,
 	/// List of tasks that are running on the server.
 	pub tasks: Vec<JoinHandle<Result<(), SocketServerError>>>,
+	/// Max connections set during creation, used for `listen_to` calls
+	pub max_connections: usize,
 }
 
 impl SocketServer {
 	/// Listen and respond to incoming requests on all the pool's addresses with the given `processor`.
 	/// This method returns `SocketServer` which contains all the handles for running tasks.
 	/// `terminate` should be called on the server when execution is to be finished (e.g. ctrl+c handling)
+	/// The `max_connections` attribute limits how many accepted connections and running tasks can be handled concurrently
+	/// per each pool address.
 	pub fn listen_all<P>(
 		pool: StreamPool,
 		processor: &SharedProcessor<P>,
+		max_connections: usize,
 	) -> Result<Self, SocketServerError>
 	where
 		P: RequestProcessor + Sync + 'static,
@@ -60,14 +68,19 @@ impl SocketServer {
 		println!("`SocketServer` listening on pool size {}", pool.len());
 
 		let listeners = pool.listen()?;
-		let tasks = Self::spawn_tasks_for_listeners(listeners, processor);
+		let tasks = Self::spawn_tasks_for_listeners(
+			listeners,
+			processor,
+			max_connections,
+		);
 
-		Ok(Self { pool, tasks })
+		Ok(Self { pool, tasks, max_connections })
 	}
 
 	fn spawn_tasks_for_listeners<P>(
 		listeners: Vec<Listener>,
 		processor: &SharedProcessor<P>,
+		max_connections: usize,
 	) -> Vec<JoinHandle<Result<(), SocketServerError>>>
 	where
 		P: RequestProcessor + Sync + 'static,
@@ -75,8 +88,9 @@ impl SocketServer {
 		let mut tasks = Vec::new();
 		for listener in listeners {
 			let p = processor.clone();
-			let task =
-				tokio::spawn(async move { accept_loop(listener, p).await });
+			let task = tokio::spawn(async move {
+				accept_loop(listener, p, max_connections).await
+			});
 
 			tasks.push(task);
 		}
@@ -94,7 +108,11 @@ impl SocketServer {
 		P: RequestProcessor + Sync + 'static,
 	{
 		let listeners = self.pool.listen_to(pool_size)?;
-		let tasks = Self::spawn_tasks_for_listeners(listeners, processor);
+		let tasks = Self::spawn_tasks_for_listeners(
+			listeners,
+			processor,
+			self.max_connections,
+		);
 
 		self.tasks.extend(tasks);
 
@@ -110,44 +128,80 @@ impl Drop for SocketServer {
 	}
 }
 
+// used to ensure we drop permits as tasks exit for any reason
+struct PermittedStream {
+	_permit: OwnedSemaphorePermit,
+	stream: Stream,
+}
+
+impl PermittedStream {
+	async fn accept(
+		listener: &Listener,
+		connections: Arc<Semaphore>,
+	) -> Result<Self, IOError> {
+		let _permit = connections
+			.acquire_owned()
+			.await
+			.map_err(|_| IOError::UnknownError)?; // this really shouldn't happen since we never close the semaphore
+
+		let stream = listener.accept().await?;
+
+		Ok(PermittedStream { _permit, stream })
+	}
+
+	async fn send(&mut self, value: &[u8]) -> Result<(), IOError> {
+		self.stream.send(value).await
+	}
+
+	async fn recv(&mut self) -> Result<Vec<u8>, IOError> {
+		self.stream.recv().await
+	}
+}
+
 async fn accept_loop<P>(
 	listener: Listener,
 	processor: SharedProcessor<P>,
+	max_connections: usize,
 ) -> Result<(), SocketServerError>
 where
-	P: RequestProcessor,
+	P: RequestProcessor + 'static,
 {
+	let connections = Arc::new(Semaphore::const_new(max_connections));
 	loop {
-		let mut stream = match listener.accept().await {
-			Ok(stream) => stream,
-			Err(err) => {
-				eprintln!("SocketServer: error on accept {err:?}");
-				continue;
-			}
-		};
+		let mut stream =
+			match PermittedStream::accept(&listener, connections.clone()).await
+			{
+				Ok(stream) => stream,
+				Err(err) => {
+					eprintln!("SocketServer: error on accept {err:?}");
+					continue;
+				}
+			};
 
-		loop {
-			match stream.recv().await {
-				Ok(payload) => {
-					let response =
-						processor.read().await.process(&payload).await;
+		let p = processor.clone();
+		tokio::spawn(async move {
+			loop {
+				match stream.recv().await {
+					Ok(payload) => {
+						let response = p.read().await.process(&payload).await;
 
-					match stream.send(&response).await {
-						Ok(()) => {}
-						Err(err) => {
-							eprintln!("SocketServer: error sending reply {err:?}, re-accepting");
-							break;
+						match stream.send(&response).await {
+							Ok(()) => {}
+							Err(err) => {
+								eprintln!("SocketServer: error sending reply {err:?}, re-accepting");
+								break;
+							}
 						}
 					}
+					Err(err) => match err {
+						IOError::RecvConnectionClosed => break, // expected as we reconnect after each request currently
+						_ => {
+							eprintln!("SocketServer: error receiving request {err:?}, re-accepting");
+							break;
+						}
+					},
 				}
-				Err(err) => match err {
-					IOError::RecvConnectionClosed => break, // expected as we reconnect after each request currently
-					_ => {
-						eprintln!("SocketServer: error receiving request {err:?}, re-accepting");
-						break;
-					}
-				},
 			}
-		}
+		});
 	}
 }

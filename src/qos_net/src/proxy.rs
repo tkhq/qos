@@ -10,6 +10,9 @@ use crate::{
 	error::QosNetError, proxy_connection::ProxyConnection, proxy_msg::ProxyMsg,
 };
 
+// max number of accepts running concurrently per socket
+const MAX_PROXY_CONNECTIONS: usize = 128;
+
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
 
@@ -165,7 +168,11 @@ impl ProxyServer for SocketServer {
 			tasks.push(task);
 		}
 
-		Ok(Box::new(Self { pool, tasks }))
+		Ok(Box::new(Self {
+			pool,
+			tasks,
+			max_connections: MAX_PROXY_CONNECTIONS,
+		}))
 	}
 }
 

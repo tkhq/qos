@@ -55,7 +55,7 @@ async fn run_server(
 
 	// listen on the protocol server
 	let _protocol_server =
-		SocketServer::listen_all(core_pool, &protocol_processor)
+		SocketServer::listen_all(core_pool, &protocol_processor, 1)
 			.expect("unable to get listen task list for protocol server");
 
 	eprintln!("Reaper::server running");

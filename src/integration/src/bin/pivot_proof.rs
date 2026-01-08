@@ -69,6 +69,7 @@ async fn main() {
 		&Processor::new(EphemeralKeyHandle::new(
 			"./mock/ephemeral_seed.secret.keep".to_string(),
 		)),
+		1,
 	)
 	.unwrap();
 
