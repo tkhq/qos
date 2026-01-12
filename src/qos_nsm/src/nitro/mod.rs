@@ -72,14 +72,16 @@ pub fn verify_attestation_doc_against_user_input(
 	pcr2: &[u8],
 	pcr3: &[u8],
 ) -> Result<(), AttestError> {
-	if user_data
-		!= attestation_doc
-			.user_data
-			.as_ref()
-			.ok_or(AttestError::MissingUserData)?
-			.to_vec()
-	{
-		return Err(AttestError::DifferentUserData);
+	let doc_user_data = attestation_doc
+		.user_data
+		.as_ref()
+		.ok_or(AttestError::MissingUserData)?
+		.to_vec();
+	if user_data != doc_user_data {
+		return Err(AttestError::DifferentUserData {
+			expected: qos_hex::encode(user_data),
+			actual: qos_hex::encode(&doc_user_data),
+		});
 	}
 
 	// nonce is none
@@ -94,43 +96,52 @@ pub fn verify_attestation_doc_against_user_input(
 		.clone()
 		.into_vec();
 	if pcr0 != doc_pcr0 {
-		return Err(AttestError::DifferentPcr0);
+		return Err(AttestError::DifferentPcr0 {
+			expected: qos_hex::encode(pcr0),
+			actual: qos_hex::encode(&doc_pcr0),
+		});
 	}
 
 	// pcr1 matches
-	if pcr1
-		!= attestation_doc
-			.pcrs
-			.get(&1)
-			.ok_or(AttestError::MissingPcr1)?
-			.clone()
-			.into_vec()
-	{
-		return Err(AttestError::DifferentPcr1);
+	let doc_pcr1 = attestation_doc
+		.pcrs
+		.get(&1)
+		.ok_or(AttestError::MissingPcr1)?
+		.clone()
+		.into_vec();
+	if pcr1 != doc_pcr1 {
+		return Err(AttestError::DifferentPcr1 {
+			expected: qos_hex::encode(pcr1),
+			actual: qos_hex::encode(&doc_pcr1),
+		});
 	}
 
 	// pcr2 matches
-	if pcr2
-		!= attestation_doc
-			.pcrs
-			.get(&2)
-			.ok_or(AttestError::MissingPcr2)?
-			.clone()
-			.into_vec()
-	{
-		return Err(AttestError::DifferentPcr2);
+	let doc_pcr2 = attestation_doc
+		.pcrs
+		.get(&2)
+		.ok_or(AttestError::MissingPcr2)?
+		.clone()
+		.into_vec();
+	if pcr2 != doc_pcr2 {
+		return Err(AttestError::DifferentPcr2 {
+			expected: qos_hex::encode(pcr2),
+			actual: qos_hex::encode(&doc_pcr2),
+		});
 	}
 
 	// pcr3 matches
-	if pcr3
-		!= attestation_doc
-			.pcrs
-			.get(&3)
-			.ok_or(AttestError::MissingPcr3)?
-			.clone()
-			.into_vec()
-	{
-		return Err(AttestError::DifferentPcr3);
+	let doc_pcr3 = attestation_doc
+		.pcrs
+		.get(&3)
+		.ok_or(AttestError::MissingPcr3)?
+		.clone()
+		.into_vec();
+	if pcr3 != doc_pcr3 {
+		return Err(AttestError::DifferentPcr3 {
+			expected: qos_hex::encode(pcr3),
+			actual: qos_hex::encode(&doc_pcr3),
+		});
 	}
 
 	Ok(())
@@ -675,7 +686,7 @@ mod test {
 		.unwrap_err();
 
 		match err {
-			AttestError::DifferentUserData => (),
+			AttestError::DifferentUserData { .. } => (),
 			_ => panic!(),
 		}
 	}
@@ -722,7 +733,7 @@ mod test {
 		.unwrap_err();
 
 		match err {
-			AttestError::DifferentPcr0 => (),
+			AttestError::DifferentPcr0 { .. } => (),
 			_ => panic!(),
 		}
 	}
@@ -744,7 +755,7 @@ mod test {
 		.unwrap_err();
 
 		match err {
-			AttestError::DifferentPcr1 => (),
+			AttestError::DifferentPcr1 { .. } => (),
 			_ => panic!(),
 		}
 	}
@@ -766,7 +777,7 @@ mod test {
 		.unwrap_err();
 
 		match err {
-			AttestError::DifferentPcr2 => (),
+			AttestError::DifferentPcr2 { .. } => (),
 			_ => panic!(),
 		}
 	}
@@ -788,7 +799,7 @@ mod test {
 		.unwrap_err();
 
 		match err {
-			AttestError::DifferentPcr3 => (),
+			AttestError::DifferentPcr3 { .. } => (),
 			_ => panic!(),
 		}
 	}
