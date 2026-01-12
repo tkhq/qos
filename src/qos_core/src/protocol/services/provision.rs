@@ -1,8 +1,10 @@
 //! Quorum Key provisioning logic and types.
 use qos_p256::P256Pair;
+use qos_proto::ProtoHash;
 
 use crate::protocol::{
-	services::boot::Approval, ProtocolError, ProtocolState, QosHash,
+	services::boot::{Approval, ApprovalExt},
+	ProtocolError, ProtocolState,
 };
 
 type Secret = Vec<u8>;
@@ -61,14 +63,29 @@ pub(in crate::protocol) fn provision(
 	state: &mut ProtocolState,
 ) -> Result<bool, ProtocolError> {
 	let manifest_envelope = state.handles.get_manifest_envelope()?;
+	let manifest = manifest_envelope
+		.manifest
+		.as_ref()
+		.ok_or(ProtocolError::MissingManifest)?;
+	let share_set = manifest
+		.share_set
+		.as_ref()
+		.ok_or(ProtocolError::MissingShareSet)?;
+	let namespace = manifest
+		.namespace
+		.as_ref()
+		.ok_or(ProtocolError::MissingNamespace)?;
 
 	// Check that the approval is valid
 	// 1) the signature is valid. Note that we want to check signature before
 	// interacting with data
-	approval.verify(&manifest_envelope.manifest.qos_hash())?;
+	approval.verify(&manifest.proto_hash())?;
 	// 2) the approver belongs to the share set
-	if !manifest_envelope.manifest.share_set.members.contains(&approval.member)
-	{
+	let approval_member = approval
+		.member
+		.as_ref()
+		.ok_or(ProtocolError::MissingApprovalMember)?;
+	if !share_set.members.contains(approval_member) {
 		return Err(ProtocolError::NotShareSetMember);
 	}
 
@@ -86,8 +103,7 @@ pub(in crate::protocol) fn provision(
 
 	state.provisioner.add_share(share)?;
 
-	let quorum_threshold =
-		manifest_envelope.manifest.share_set.threshold as usize;
+	let quorum_threshold = share_set.threshold as usize;
 	if state.provisioner.count() < quorum_threshold {
 		// Nothing else to do if we don't have the threshold to reconstruct
 		return Ok(false);
@@ -103,7 +119,7 @@ pub(in crate::protocol) fn provision(
 	let pair = qos_p256::P256Pair::from_master_seed(&master_seed)?;
 	let public_key_bytes = pair.public_key().to_bytes();
 
-	if public_key_bytes != manifest_envelope.manifest.namespace.quorum_key {
+	if public_key_bytes != namespace.quorum_key {
 		// We did not construct the intended key
 		return Err(ProtocolError::ReconstructionErrorIncorrectPubKey);
 	}
@@ -132,18 +148,20 @@ mod test {
 	use qos_p256::P256Pair;
 	use qos_test_primitives::PathWrapper;
 
+	use qos_proto::ProtoHash;
+
 	use crate::{
 		handles::Handles,
 		protocol::{
 			services::{
 				boot::{
-					Approval, Manifest, ManifestEnvelope, ManifestSet,
-					Namespace, NitroConfig, PatchSet, PivotConfig,
+					Approval, ApprovalExt, Manifest, ManifestEnvelope,
+					ManifestSet, Namespace, NitroConfig, PatchSet, PivotConfig,
 					QuorumMember, RestartPolicy, ShareSet,
 				},
 				provision::provision,
 			},
-			ProtocolError, ProtocolPhase, ProtocolState, QosHash,
+			ProtocolError, ProtocolPhase, ProtocolState,
 		},
 	};
 
@@ -184,33 +202,33 @@ mod test {
 			.collect();
 
 		let manifest = Manifest {
-			namespace: Namespace {
+			namespace: Some(Namespace {
 				nonce: 420,
 				name: "vape-space".to_string(),
 				quorum_key: quorum_pair.public_key().to_bytes(),
-			},
-			enclave: NitroConfig {
+			}),
+			enclave: Some(NitroConfig {
 				pcr0: vec![4; 32],
 				pcr1: vec![3; 32],
 				pcr2: vec![2; 32],
 				pcr3: vec![1; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
 				qos_commit: "mock qos commit".to_string(),
-			},
-			pivot: PivotConfig {
-				hash: sha_256(pivot),
-				restart: RestartPolicy::Always,
+			}),
+			pivot: Some(PivotConfig {
+				hash: sha_256(pivot).to_vec(),
+				restart: RestartPolicy::Always as i32,
 				args: vec![],
-			},
-			manifest_set: ManifestSet {
+			}),
+			manifest_set: Some(ManifestSet {
 				threshold: threshold.try_into().unwrap(),
 				members: vec![],
-			},
-			share_set: ShareSet {
+			}),
+			share_set: Some(ShareSet {
 				threshold: threshold.try_into().unwrap(),
 				members: members.clone().into_iter().map(|(m, _)| m).collect(),
-			},
-			patch_set: PatchSet::default(),
+			}),
+			patch_set: Some(PatchSet::default()),
 			pool_size: None,
 			client_timeout_ms: None,
 		};
@@ -219,18 +237,18 @@ mod test {
 			.into_iter()
 			.map(|(member, pair)| {
 				let approval = Approval {
-					member,
-					signature: pair.sign(&manifest.qos_hash()).unwrap(),
+					member: Some(member),
+					signature: pair.sign(&manifest.proto_hash()).unwrap(),
 				};
 
-				assert!(approval.verify(&manifest.qos_hash()).is_ok());
+				assert!(approval.verify(&manifest.proto_hash()).is_ok());
 
 				approval
 			})
 			.collect();
 
 		let manifest_envelope = ManifestEnvelope {
-			manifest,
+			manifest: Some(manifest),
 			manifest_set_approvals: vec![],
 			share_set_approvals: vec![],
 		};
@@ -458,13 +476,14 @@ mod test {
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();
 
-		let manifest = state.handles.get_manifest_envelope().unwrap().manifest;
+		let manifest =
+			state.handles.get_manifest_envelope().unwrap().manifest.unwrap();
 		let mut approval = approvals.remove(0);
 		let pair = P256Pair::generate().unwrap();
 
 		// Change the member so that are not recognized as part of the set
-		approval.member.pub_key = pair.public_key().to_bytes();
-		approval.signature = pair.sign(&manifest.qos_hash()).unwrap();
+		approval.member.as_mut().unwrap().pub_key = pair.public_key().to_bytes();
+		approval.signature = pair.sign(&manifest.proto_hash()).unwrap();
 
 		let share = encrypted_shares.remove(0);
 		assert_eq!(
@@ -505,7 +524,7 @@ mod test {
 		let pair = P256Pair::generate().unwrap();
 
 		// Change the member so that are not recognized as part of the set
-		approval.member.pub_key = pair.public_key().to_bytes();
+		approval.member.as_mut().unwrap().pub_key = pair.public_key().to_bytes();
 		// DO NOT update the approval signature, so it doesn't match the pub key
 
 		let share = encrypted_shares.remove(0);

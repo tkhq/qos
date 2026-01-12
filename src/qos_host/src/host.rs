@@ -23,11 +23,14 @@ use axum::{
 	routing::{get, post},
 	Json, Router,
 };
-use borsh::BorshDeserialize;
+use prost::Message;
 use qos_core::{
 	client::SocketClient,
 	io::SharedStreamPool,
-	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase},
+	protocol::{
+		msg::{protocol_msg, ProtocolMsg, ProtocolMsgExt},
+		ProtocolError, ProtocolPhase,
+	},
 };
 
 use crate::{
@@ -114,8 +117,7 @@ impl HostServer {
 	) -> impl IntoResponse {
 		println!("Enclave health...");
 
-		let encoded_request = borsh::to_vec(&ProtocolMsg::StatusRequest)
-			.expect("ProtocolMsg can always serialize. qed.");
+		let encoded_request = ProtocolMsg::status_request().encode_to_vec();
 		let encoded_response = match state
 			.enclave_client
 			.call(&encoded_request)
@@ -129,7 +131,7 @@ impl HostServer {
 			}
 		};
 
-		let response = match ProtocolMsg::try_from_slice(&encoded_response) {
+		let response = match ProtocolMsg::decode(encoded_response.as_slice()) {
 			Ok(r) => r,
 			Err(e) => {
 				let msg = format!("Error deserializing response from enclave, make sure qos_host version match qos_core: {e}");
@@ -138,8 +140,9 @@ impl HostServer {
 			}
 		};
 
-		match response {
-			ProtocolMsg::StatusResponse(phase) => {
+		match &response.msg {
+			Some(protocol_msg::Msg::StatusResponse(status_resp)) => {
+				let phase = proto_phase_to_local(status_resp.phase);
 				let inner = format!("{phase:?}");
 				let status = match phase {
 					ProtocolPhase::UnrecoverableError
@@ -165,29 +168,29 @@ impl HostServer {
 	) -> Result<Json<EnclaveInfo>, Error> {
 		println!("Enclave info...");
 
-		let enc_status_req = borsh::to_vec(&ProtocolMsg::StatusRequest)
-			.expect("ProtocolMsg can always serialize. qed.");
+		let enc_status_req = ProtocolMsg::status_request().encode_to_vec();
 		let enc_status_resp =
 			state.enclave_client.call(&enc_status_req).await.map_err(|e| {
 				Error(format!("error sending status request to enclave: {e:?}"))
 			})?;
 
-		let status_resp = match ProtocolMsg::try_from_slice(&enc_status_resp) {
+		let status_resp = match ProtocolMsg::decode(enc_status_resp.as_slice()) {
 			Ok(status_resp) => status_resp,
 			Err(e) => {
 				return Err(Error(format!("error deserializing status response from enclave, make sure qos_host version match qos_core: {e:?}")));
 			}
 		};
-		let phase = match status_resp {
-			ProtocolMsg::StatusResponse(phase) => phase,
+		let phase = match &status_resp.msg {
+			Some(protocol_msg::Msg::StatusResponse(resp)) => {
+				proto_phase_to_local(resp.phase)
+			}
 			other => {
 				return Err(Error(format!("unexpected response: expected a ProtocolMsg::StatusResponse, but got: {other:?}")));
 			}
 		};
 
 		let enc_manifest_envelope_req =
-			borsh::to_vec(&ProtocolMsg::ManifestEnvelopeRequest)
-				.expect("ProtocolMsg can always serialize. qed.");
+			ProtocolMsg::manifest_envelope_request().encode_to_vec();
 		let enc_manifest_envelope_resp = state
 			.enclave_client
 			.call(&enc_manifest_envelope_req)
@@ -198,16 +201,16 @@ impl HostServer {
 				))
 			})?;
 
-		let manifest_envelope_resp = ProtocolMsg::try_from_slice(
-			&enc_manifest_envelope_resp,
+		let manifest_envelope_resp = ProtocolMsg::decode(
+			enc_manifest_envelope_resp.as_slice(),
 		)
 		.map_err(|e|
 			Error(format!("error deserializing manifest envelope response from enclave, make sure qos_host version match qos_core: {e}"))
 		)?;
 
-		let manifest_envelope = match manifest_envelope_resp {
-			ProtocolMsg::ManifestEnvelopeResponse { manifest_envelope } => {
-				*manifest_envelope
+		let manifest_envelope = match &manifest_envelope_resp.msg {
+			Some(protocol_msg::Msg::ManifestEnvelopeResponse(resp)) => {
+				resp.manifest_envelope.clone()
 			}
 			other => {
 				return Err(
@@ -217,15 +220,22 @@ impl HostServer {
 		};
 
 		let vitals_log = if let Some(m) = manifest_envelope.as_ref() {
-			serde_json::to_string(&EnclaveVitalStats {
-				phase,
-				namespace: m.manifest.namespace.name.clone(),
-				nonce: m.manifest.namespace.nonce,
-				pivot_hash: m.manifest.pivot.hash,
-				pcr0: m.manifest.enclave.pcr0.clone(),
-				pivot_args: m.manifest.pivot.args.clone(),
-			})
-			.expect("always valid json. qed.")
+			if let Some(manifest) = m.manifest.as_ref() {
+				let namespace = manifest.namespace.as_ref();
+				let pivot = manifest.pivot.as_ref();
+				let enclave = manifest.enclave.as_ref();
+				serde_json::to_string(&EnclaveVitalStats {
+					phase,
+					namespace: namespace.map(|n| n.name.clone()).unwrap_or_default(),
+					nonce: namespace.map(|n| n.nonce).unwrap_or(0),
+					pivot_hash: pivot.map(|p| p.hash.clone()).unwrap_or_default(),
+					pcr0: enclave.map(|e| e.pcr0.clone()).unwrap_or_default(),
+					pivot_args: pivot.map(|p| p.args.clone()).unwrap_or_default(),
+				})
+				.expect("always valid json. qed.")
+			} else {
+				serde_json::to_string(&phase).expect("always valid json. qed.")
+			}
 		} else {
 			serde_json::to_string(&phase).expect("always valid json. qed.")
 		};
@@ -244,10 +254,8 @@ impl HostServer {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
 			return (
 				StatusCode::BAD_REQUEST,
-				borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
-					ProtocolError::OversizeMsg,
-				))
-				.expect("ProtocolMsg can always serialize. qed."),
+				ProtocolMsg::error_response(ProtocolError::OversizeMsg.into())
+					.encode_to_vec(),
 			);
 		}
 
@@ -258,12 +266,35 @@ impl HostServer {
 
 				(
 					StatusCode::INTERNAL_SERVER_ERROR,
-					borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
-						ProtocolError::EnclaveClient,
-					))
-					.expect("ProtocolMsg can always serialize. qed."),
+					ProtocolMsg::error_response(ProtocolError::EnclaveClient.into())
+						.encode_to_vec(),
 				)
 			}
 		}
+	}
+}
+
+/// Convert proto ProtocolPhase (i32) to local ProtocolPhase.
+fn proto_phase_to_local(phase: i32) -> ProtocolPhase {
+	match qos_proto::ProtocolPhase::try_from(phase) {
+		Ok(qos_proto::ProtocolPhase::UnrecoverableError) => {
+			ProtocolPhase::UnrecoverableError
+		}
+		Ok(qos_proto::ProtocolPhase::WaitingForBootInstruction) => {
+			ProtocolPhase::WaitingForBootInstruction
+		}
+		Ok(qos_proto::ProtocolPhase::GenesisBooted) => {
+			ProtocolPhase::GenesisBooted
+		}
+		Ok(qos_proto::ProtocolPhase::WaitingForQuorumShards) => {
+			ProtocolPhase::WaitingForQuorumShards
+		}
+		Ok(qos_proto::ProtocolPhase::QuorumKeyProvisioned) => {
+			ProtocolPhase::QuorumKeyProvisioned
+		}
+		Ok(qos_proto::ProtocolPhase::WaitingForForwardedKey) => {
+			ProtocolPhase::WaitingForForwardedKey
+		}
+		_ => ProtocolPhase::UnrecoverableError,
 	}
 }

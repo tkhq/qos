@@ -1,419 +1,117 @@
 //! Standard boot logic and types.
 
-use std::{collections::HashSet, fmt};
+use std::collections::HashSet;
 
 use qos_crypto::sha_256;
 use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Pair, P256Public};
+use qos_proto::ProtoHash;
 
-use crate::protocol::{
-	services::attestation, Hash256, ProtocolError, ProtocolState, QosHash,
+use crate::protocol::{services::attestation, ProtocolError, ProtocolState};
+
+// Re-export proto types for external use
+pub use qos_proto::{
+	Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey, Namespace,
+	NitroConfig, PatchSet, PivotConfig, QuorumMember, RestartPolicy, ShareSet,
 };
 
-/// Enclave configuration specific to AWS Nitro.
-#[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct NitroConfig {
-	/// The hash of the enclave image file
-	#[serde(with = "qos_hex::serde")]
-	pub pcr0: Vec<u8>,
-	/// The hash of the Linux kernel and bootstrap
-	#[serde(with = "qos_hex::serde")]
-	pub pcr1: Vec<u8>,
-	/// The hash of the application
-	#[serde(with = "qos_hex::serde")]
-	pub pcr2: Vec<u8>,
-	/// The hash of the Amazon resource name (ARN) of the IAM role that's
-	/// associated with the EC2 instance.
-	#[serde(with = "qos_hex::serde")]
-	pub pcr3: Vec<u8>,
-	/// DER encoded X509 AWS root certificate
-	#[serde(with = "qos_hex::serde")]
-	pub aws_root_certificate: Vec<u8>,
-	/// Reference to the commit QOS was built off of.
-	pub qos_commit: String,
-}
+/// Convert internal `qos_nsm::types::NsmResponse` to proto `qos_proto::NsmResponse`.
+pub fn nsm_response_to_proto(response: NsmResponse) -> qos_proto::NsmResponse {
+	use qos_proto::nsm_response::Response;
 
-impl fmt::Debug for NitroConfig {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("NitroConfig")
-			.field("pcr0", &qos_hex::encode(&self.pcr0))
-			.field("pcr1", &qos_hex::encode(&self.pcr1))
-			.field("pcr2", &qos_hex::encode(&self.pcr2))
-			.field("pcr3", &qos_hex::encode(&self.pcr3))
-			.field("qos_commit", &self.qos_commit)
-			.finish_non_exhaustive()
-	}
-}
-
-/// Policy for restarting the pivot binary.
-#[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	Copy,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-pub enum RestartPolicy {
-	/// Never restart the pivot application
-	Never,
-	/// Always restart the pivot application
-	Always,
-}
-
-impl fmt::Debug for RestartPolicy {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Self::Never => write!(f, "RestartPolicy::Never")?,
-			Self::Always => write!(f, "RestartPolicy::Always")?,
-		};
-		Ok(())
-	}
-}
-
-#[cfg(any(feature = "mock", test))]
-impl Default for RestartPolicy {
-	fn default() -> Self {
-		Self::Never
-	}
-}
-
-impl TryFrom<String> for RestartPolicy {
-	type Error = ProtocolError;
-
-	fn try_from(s: String) -> Result<RestartPolicy, Self::Error> {
-		match s.to_ascii_lowercase().as_str() {
-			"never" => Ok(Self::Never),
-			"always" => Ok(Self::Always),
-			_ => Err(ProtocolError::FailedToParseFromString),
+	let inner = match response {
+		NsmResponse::DescribePCR { lock, data } => {
+			Response::DescribePcr(qos_proto::DescribePcrResponse { lock, data })
 		}
-	}
-}
-
-/// Pivot binary configuration
-#[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct PivotConfig {
-	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
-	#[serde(with = "qos_hex::serde")]
-	pub hash: Hash256,
-	/// Restart policy for running the pivot binary.
-	pub restart: RestartPolicy,
-	/// Arguments to invoke the binary with. Leave this empty if none are
-	/// needed.
-	pub args: Vec<String>,
-}
-
-impl fmt::Debug for PivotConfig {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("PivotConfig")
-			.field("hash", &qos_hex::encode(&self.hash))
-			.field("restart", &self.restart)
-			.field("args", &self.args.join(" "))
-			.finish()
-	}
-}
-
-/// A quorum member's alias and public key.
-#[derive(
-	PartialEq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	Eq,
-	PartialOrd,
-	Ord,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct QuorumMember {
-	/// A human readable alias to identify the member. The alias is not
-	/// cryptographically guaranteed and thus should not be trusted without
-	/// verification.
-	pub alias: String,
-	/// `P256Public` as bytes
-	#[serde(with = "qos_hex::serde")]
-	pub pub_key: Vec<u8>,
-}
-
-impl fmt::Debug for QuorumMember {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("QuorumMember")
-			.field("alias", &self.alias)
-			.field("pub_key", &qos_hex::encode(&self.pub_key))
-			.finish()
-	}
-}
-
-/// The Manifest Set.
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct ManifestSet {
-	/// The threshold, K, of signatures necessary to have quorum.
-	pub threshold: u32,
-	/// Members composing the set. The length of this, N, must be gte to the
-	/// `threshold`, K.
-	pub members: Vec<QuorumMember>,
-}
-
-/// The set of share keys that can post shares.
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct ShareSet {
-	/// The threshold, K, of signatures necessary to have quorum.
-	pub threshold: u32,
-	/// Members composing the set. The length of this, N, must be gte to the
-	/// `threshold`, K.
-	pub members: Vec<QuorumMember>,
-}
-
-/// A member of a quorum set identified solely by their public key.
-#[derive(
-	PartialEq,
-	PartialOrd,
-	Ord,
-	Eq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-pub struct MemberPubKey {
-	/// Public key of the member
-	#[serde(with = "qos_hex::serde")]
-	pub pub_key: Vec<u8>,
-}
-
-impl fmt::Debug for MemberPubKey {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("MemberPubKey")
-			.field("pub_key", &qos_hex::encode(&self.pub_key))
-			.finish()
-	}
-}
-
-/// The set of share keys that can post shares.
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct PatchSet {
-	/// The threshold, K, of signatures necessary to have quorum.
-	pub threshold: u32,
-	/// Public keys of members composing the set. The length of this, N, must
-	/// be gte to the `threshold`, K.
-	pub members: Vec<MemberPubKey>,
-}
-
-/// A Namespace and its relative nonce.
-#[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct Namespace {
-	/// The namespace. This should be unique relative to other namespaces the
-	/// organization running `QuorumOs` has.
-	pub name: String,
-	/// A monotonically increasing value, used to identify the order in which
-	/// manifests for this namespace have been created. This is used to prevent
-	/// downgrade attacks - quorum members should only approve a manifest that
-	/// has the highest nonce.
-	pub nonce: u32,
-	/// Quorum Key
-	#[serde(with = "qos_hex::serde")]
-	pub quorum_key: Vec<u8>,
-}
-
-impl fmt::Debug for Namespace {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("Namespace")
-			.field("name", &self.name)
-			.field("nonce", &self.nonce)
-			.field("quorum_key", &qos_hex::encode(&self.quorum_key))
-			.finish()
-	}
-}
-
-/// The Manifest for the enclave.
-/// NOTE: we currently use JSON format for storing this value.
-/// Since we don't have any `HashMap` inside the `Manifest` it works out of the box.
-/// If we ever do need a map inside, we should use a `BTreeMap` to ensure keys are sorted.
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct Manifest {
-	/// Namespace this manifest belongs too.
-	pub namespace: Namespace,
-	/// Pivot binary configuration and verifiable values.
-	pub pivot: PivotConfig,
-	/// Manifest Set members and threshold.
-	pub manifest_set: ManifestSet,
-	/// Share Set members and threshold
-	pub share_set: ShareSet,
-	/// Configuration and verifiable values for the enclave hardware.
-	pub enclave: NitroConfig,
-	/// Patch set members and threshold
-	pub patch_set: PatchSet,
-	/// Client timeout for calls via the VSOCK/USOCK, defaults to 5s if not specified
-	pub client_timeout_ms: Option<u16>,
-	/// Pool size argument used to set up our socket pipes, defaults to 1 if not specified
-	pub pool_size: Option<u8>,
-}
-
-// TODO: remove this once json is the default manifest format
-/// The Manifest for the enclave, backwards compatible version 0
-#[derive(PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize)]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct ManifestV0 {
-	/// Namespace this manifest belongs too.
-	pub namespace: Namespace,
-	/// Pivot binary configuration and verifiable values.
-	pub pivot: PivotConfig,
-	/// Manifest Set members and threshold.
-	pub manifest_set: ManifestSet,
-	/// Share Set members and threshold
-	pub share_set: ShareSet,
-	/// Configuration and verifiable values for the enclave hardware.
-	pub enclave: NitroConfig,
-	/// Patch set members and threshold
-	pub patch_set: PatchSet,
-}
-
-impl From<ManifestV0> for Manifest {
-	fn from(old: ManifestV0) -> Self {
-		Self {
-			namespace: old.namespace,
-			pivot: old.pivot,
-			manifest_set: old.manifest_set,
-			share_set: old.share_set,
-			enclave: old.enclave,
-			patch_set: old.patch_set,
-			pool_size: None,
-			client_timeout_ms: None,
+		NsmResponse::ExtendPCR { data } => {
+			Response::ExtendPcr(qos_proto::ExtendPcrResponse { data })
 		}
-	}
-}
-
-impl Manifest {
-	/// Read a `Manifest` in borsh encoded format from a `u8` buffer, in a backwards compatible way
-	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
-		use borsh::BorshDeserialize;
-
-		let result = Self::try_from_slice(buf);
-
-		// try loading the old version of manifest
-		if result.is_err() {
-			let old = ManifestV0::try_from_slice(buf)?;
-
-			Ok(old.into())
-		} else {
-			result
+		NsmResponse::LockPCR => {
+			Response::LockPcr(qos_proto::LockPcrResponse {})
 		}
-	}
+		NsmResponse::LockPCRs => {
+			Response::LockPcrs(qos_proto::LockPcrsResponse {})
+		}
+		NsmResponse::DescribeNSM {
+			version_major,
+			version_minor,
+			version_patch,
+			module_id,
+			max_pcrs,
+			locked_pcrs,
+			digest,
+		} => {
+			let proto_digest = match digest {
+				qos_nsm::types::NsmDigest::SHA256 => qos_proto::NsmDigest::Sha256,
+				qos_nsm::types::NsmDigest::SHA384 => qos_proto::NsmDigest::Sha384,
+				qos_nsm::types::NsmDigest::SHA512 => qos_proto::NsmDigest::Sha512,
+			};
+			Response::DescribeNsm(qos_proto::DescribeNsmResponse {
+				version_major: version_major as u32,
+				version_minor: version_minor as u32,
+				version_patch: version_patch as u32,
+				module_id,
+				max_pcrs: max_pcrs as u32,
+				locked_pcrs: locked_pcrs.into_iter().map(|x| x as u32).collect(),
+				digest: proto_digest as i32,
+			})
+		}
+		NsmResponse::Attestation { document } => {
+			Response::Attestation(qos_proto::AttestationResponse { document })
+		}
+		NsmResponse::GetRandom { random } => {
+			Response::GetRandom(qos_proto::GetRandomResponse { random })
+		}
+		NsmResponse::Error(code) => {
+			let proto_code = match code {
+				qos_nsm::types::NsmErrorCode::Success => {
+					qos_proto::NsmErrorCode::Success
+				}
+				qos_nsm::types::NsmErrorCode::InvalidArgument => {
+					qos_proto::NsmErrorCode::InvalidArgument
+				}
+				qos_nsm::types::NsmErrorCode::InvalidIndex => {
+					qos_proto::NsmErrorCode::InvalidIndex
+				}
+				qos_nsm::types::NsmErrorCode::InvalidResponse => {
+					qos_proto::NsmErrorCode::InvalidResponse
+				}
+				qos_nsm::types::NsmErrorCode::ReadOnlyIndex => {
+					qos_proto::NsmErrorCode::ReadOnlyIndex
+				}
+				qos_nsm::types::NsmErrorCode::InvalidOperation => {
+					qos_proto::NsmErrorCode::InvalidOperation
+				}
+				qos_nsm::types::NsmErrorCode::BufferTooSmall => {
+					qos_proto::NsmErrorCode::BufferTooSmall
+				}
+				qos_nsm::types::NsmErrorCode::InputTooLarge => {
+					qos_proto::NsmErrorCode::InputTooLarge
+				}
+				qos_nsm::types::NsmErrorCode::InternalError => {
+					qos_proto::NsmErrorCode::InternalError
+				}
+			};
+			Response::Error(qos_proto::NsmErrorResponse {
+				code: proto_code as i32,
+			})
+		}
+	};
+
+	qos_proto::NsmResponse { response: Some(inner) }
 }
 
-/// An approval by a Quorum Member.
-#[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct Approval {
-	/// Quorum Member's signature.
-	#[serde(with = "qos_hex::serde")]
-	pub signature: Vec<u8>,
-	/// Description of the Quorum Member
-	pub member: QuorumMember,
+/// Extension trait for Approval verification.
+pub trait ApprovalExt {
+	/// Verify that the approval is a valid signature for the given `msg`.
+	fn verify(&self, msg: &[u8]) -> Result<(), ProtocolError>;
 }
 
-impl fmt::Debug for Approval {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("Approval")
-			.field("signature", &qos_hex::encode(&self.signature))
-			.field("member", &self.member)
-			.finish()
-	}
-}
-
-impl Approval {
-	/// Verify that the approval is a valid a signature for the given `msg`.
-	pub(crate) fn verify(&self, msg: &[u8]) -> Result<(), ProtocolError> {
-		let pub_key = P256Public::from_bytes(&self.member.pub_key)?;
+impl ApprovalExt for Approval {
+	fn verify(&self, msg: &[u8]) -> Result<(), ProtocolError> {
+		let member =
+			self.member.as_ref().ok_or(ProtocolError::MissingApprovalMember)?;
+		let pub_key = P256Public::from_bytes(&member.pub_key)?;
 
 		if pub_key.verify(msg, &self.signature).is_ok() {
 			Ok(())
@@ -423,54 +121,33 @@ impl Approval {
 	}
 }
 
-/// [`Manifest`] with accompanying [`Approval`]s.
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct ManifestEnvelope {
-	/// Encapsulated manifest.
-	pub manifest: Manifest,
-	/// Approvals for [`Self::manifest`] from the manifest set.
-	pub manifest_set_approvals: Vec<Approval>,
-	///  Approvals for [`Self::manifest`] from the share set. This is primarily
-	/// used to audit what share holders provisioned the quorum key.
-	pub share_set_approvals: Vec<Approval>,
-}
-
-/// [`ManifestV0`] with accompanying [`Approval`]s.
-#[derive(PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize)]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct ManifestEnvelopeV0 {
-	/// Encapsulated manifest.
-	pub manifest: ManifestV0,
-	/// Approvals for [`Self::manifest`] from the manifest set.
-	pub manifest_set_approvals: Vec<Approval>,
-	///  Approvals for [`Self::manifest`] from the share set. This is primarily
-	/// used to audit what share holders provisioned the quorum key.
-	pub share_set_approvals: Vec<Approval>,
-}
-
-impl ManifestEnvelope {
+/// Extension trait for ManifestEnvelope validation.
+pub trait ManifestEnvelopeExt {
 	/// Check if the encapsulated manifest has K valid approvals from the
 	/// manifest approval set.
-	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
+	fn check_approvals(&self) -> Result<(), ProtocolError>;
+}
+
+impl ManifestEnvelopeExt for ManifestEnvelope {
+	fn check_approvals(&self) -> Result<(), ProtocolError> {
+		let manifest =
+			self.manifest.as_ref().ok_or(ProtocolError::MissingManifest)?;
+		let manifest_set = manifest
+			.manifest_set
+			.as_ref()
+			.ok_or(ProtocolError::MissingManifestSet)?;
+
 		let mut uniq_members = HashSet::new();
 		for approval in &self.manifest_set_approvals {
-			let member_pub_key =
-				P256Public::from_bytes(&approval.member.pub_key)?;
+			let member = approval
+				.member
+				.as_ref()
+				.ok_or(ProtocolError::MissingApprovalMember)?;
+			let member_pub_key = P256Public::from_bytes(&member.pub_key)?;
 
 			// Ensure that this is a valid signature from the member
 			let is_valid_signature = member_pub_key
-				.verify(&self.manifest.qos_hash(), &approval.signature)
+				.verify(&manifest.proto_hash(), &approval.signature)
 				.is_ok();
 			if !is_valid_signature {
 				return Err(ProtocolError::InvalidManifestApproval(
@@ -479,7 +156,7 @@ impl ManifestEnvelope {
 			}
 
 			// Ensure that this member belongs to the manifest set
-			if !self.manifest.manifest_set.members.contains(&approval.member) {
+			if !manifest_set.members.contains(member) {
 				return Err(ProtocolError::NotManifestSetMember);
 			}
 
@@ -487,36 +164,17 @@ impl ManifestEnvelope {
 			// include the signature in this check because the signature is
 			// malleable. i.e. there could be two different signatures per
 			// member.
-			if !uniq_members.insert(approval.member.qos_hash()) {
+			if !uniq_members.insert(member.proto_hash()) {
 				return Err(ProtocolError::DuplicateApproval);
 			}
 		}
 
 		// Ensure that there are at least threshold unique members who approved
-		if uniq_members.len() < self.manifest.manifest_set.threshold as usize {
+		if uniq_members.len() < manifest_set.threshold as usize {
 			return Err(ProtocolError::NotEnoughApprovals);
 		}
 
 		Ok(())
-	}
-	/// Read a `ManifestEnvelope` from a `u8` buffer, in a backwards compatible way
-	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
-		use borsh::BorshDeserialize;
-
-		let result = Self::try_from_slice(buf);
-
-		// try loading the old version of manifest
-		if result.is_err() {
-			let old = ManifestEnvelopeV0::try_from_slice(buf)?;
-
-			Ok(Self {
-				manifest: Manifest::from(old.manifest),
-				manifest_set_approvals: old.manifest_set_approvals,
-				share_set_approvals: old.share_set_approvals,
-			})
-		} else {
-			result
-		}
 	}
 }
 
@@ -530,7 +188,13 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	if !manifest_envelope.share_set_approvals.is_empty() {
 		return Err(ProtocolError::BadShareSetApprovals);
 	}
-	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
+
+	let manifest =
+		manifest_envelope.manifest.as_ref().ok_or(ProtocolError::MissingManifest)?;
+	let pivot_config =
+		manifest.pivot.as_ref().ok_or(ProtocolError::MissingPivotConfig)?;
+
+	if sha_256(pivot) != pivot_config.hash.as_slice() {
 		return Err(ProtocolError::InvalidPivotHash);
 	};
 
@@ -546,7 +210,7 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	let nsm_response = attestation::get_post_boot_attestation_doc(
 		&*state.attestor,
 		ephemeral_key.public_key().to_bytes(),
-		manifest_envelope.manifest.qos_hash().to_vec(),
+		manifest.proto_hash().to_vec(),
 	);
 
 	// 4. Return the NSM Response containing COSE Sign1 encoded attestation
@@ -603,27 +267,32 @@ mod test {
 		];
 
 		let manifest = Manifest {
-			namespace: Namespace {
+			namespace: Some(Namespace {
 				nonce: 420,
 				name: "vape lord".to_string(),
 				quorum_key: quorum_pair.public_key().to_bytes(),
-			},
-			enclave: NitroConfig {
+			}),
+			enclave: Some(NitroConfig {
 				pcr0: vec![4; 32],
 				pcr1: vec![3; 32],
 				pcr2: vec![2; 32],
 				pcr3: vec![1; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
 				qos_commit: "mock qos commit".to_string(),
-			},
-			pivot: PivotConfig {
-				hash: sha_256(&pivot),
-				restart: RestartPolicy::Always,
+			}),
+			pivot: Some(PivotConfig {
+				hash: sha_256(&pivot).to_vec(),
+				restart: RestartPolicy::Always as i32,
 				args: vec![],
-			},
-			manifest_set: ManifestSet { threshold: 2, members: quorum_members },
-			share_set: ShareSet { threshold: 2, members: vec![] },
-			..Default::default()
+			}),
+			manifest_set: Some(ManifestSet {
+				threshold: 2,
+				members: quorum_members,
+			}),
+			share_set: Some(ShareSet { threshold: 2, members: vec![] }),
+			patch_set: Some(PatchSet::default()),
+			client_timeout_ms: None,
+			pool_size: None,
 		};
 
 		(manifest, member_with_keys, pivot)
@@ -633,7 +302,7 @@ mod test {
 	fn manifest_hash() {
 		let (manifest, _members, _pivot) = get_manifest();
 
-		let hashes: Vec<_> = (0..10).map(|_| manifest.qos_hash()).collect();
+		let hashes: Vec<_> = (0..10).map(|_| manifest.proto_hash()).collect();
 		let is_valid = (1..10).all(|i| hashes[i] == hashes[0]);
 		assert!(is_valid);
 	}
@@ -643,17 +312,17 @@ mod test {
 		let (manifest, members, pivot) = get_manifest();
 
 		let manifest_envelope = {
-			let manifest_hash = manifest.qos_hash();
+			let manifest_hash = manifest.proto_hash();
 			let approvals = members
 				.into_iter()
 				.map(|(pair, member)| Approval {
 					signature: pair.sign(&manifest_hash).unwrap(),
-					member,
+					member: Some(member),
 				})
 				.collect();
 
 			ManifestEnvelope {
-				manifest,
+				manifest: Some(manifest),
 				manifest_set_approvals: approvals,
 				share_set_approvals: vec![],
 			}
@@ -691,20 +360,21 @@ mod test {
 	#[test]
 	fn boot_standard_rejects_manifest_if_not_enough_approvals() {
 		let (manifest, members, pivot) = get_manifest();
+		let threshold =
+			manifest.manifest_set.as_ref().unwrap().threshold as usize;
 
 		let manifest_envelope = {
-			let manifest_hash = manifest.qos_hash();
-			let approvals = members
-				[0usize..manifest.manifest_set.threshold as usize - 1]
+			let manifest_hash = manifest.proto_hash();
+			let approvals = members[0usize..threshold - 1]
 				.iter()
 				.map(|(pair, member)| Approval {
 					signature: pair.sign(&manifest_hash).unwrap(),
-					member: member.clone(),
+					member: Some(member.clone()),
 				})
 				.collect();
 
 			ManifestEnvelope {
-				manifest,
+				manifest: Some(manifest),
 				manifest_set_approvals: approvals,
 				share_set_approvals: vec![],
 			}
@@ -746,12 +416,12 @@ mod test {
 				.into_iter()
 				.map(|(_pair, member)| Approval {
 					signature: vec![0, 0],
-					member,
+					member: Some(member),
 				})
 				.collect();
 
 			ManifestEnvelope {
-				manifest,
+				manifest: Some(manifest),
 				manifest_set_approvals: approvals,
 				share_set_approvals: vec![],
 			}
@@ -786,17 +456,17 @@ mod test {
 		let (manifest, members, pivot) = get_manifest();
 
 		let manifest_envelope = {
-			let manifest_hash = manifest.qos_hash();
+			let manifest_hash = manifest.proto_hash();
 			let mut approvals: Vec<_> = members
 				.into_iter()
 				.map(|(pair, member)| Approval {
 					signature: pair.sign(&manifest_hash).unwrap(),
-					member,
+					member: Some(member),
 				})
 				.collect();
 
 			ManifestEnvelope {
-				manifest,
+				manifest: Some(manifest),
 				manifest_set_approvals: approvals.clone(),
 				share_set_approvals: vec![approvals.remove(0)],
 			}
@@ -834,24 +504,26 @@ mod test {
 		let (manifest, members, pivot) = get_manifest();
 
 		let manifest_envelope = {
-			let manifest_hash = manifest.qos_hash();
+			let manifest_hash = manifest.proto_hash();
 			let mut approvals: Vec<_> = members
 				.into_iter()
 				.map(|(pair, member)| Approval {
 					signature: pair.sign(&manifest_hash).unwrap(),
-					member,
+					member: Some(member),
 				})
 				.collect();
 
-			// Change a member so that are not recognized as part of the
+			// Change a member so that they are not recognized as part of the
 			// manifest set.
 			let approval = approvals.get_mut(0).unwrap();
 			let pair = P256Pair::generate().unwrap();
-			approval.member.pub_key = pair.public_key().to_bytes();
-			approval.signature = pair.sign(&manifest.qos_hash()).unwrap();
+			let mut member = approval.member.take().unwrap();
+			member.pub_key = pair.public_key().to_bytes();
+			approval.member = Some(member);
+			approval.signature = pair.sign(&manifest.proto_hash()).unwrap();
 
 			ManifestEnvelope {
-				manifest,
+				manifest: Some(manifest),
 				manifest_set_approvals: approvals.clone(),
 				share_set_approvals: vec![],
 			}
@@ -890,14 +562,14 @@ mod test {
 		let (manifest, members, ..) = get_manifest();
 
 		let manifest_envelope = {
-			let manifest_hash = manifest.qos_hash();
+			let manifest_hash = manifest.proto_hash();
 			// Just make 1 approval
 			let mut approvals: Vec<_> = members[..1]
 				.iter()
 				.cloned()
 				.map(|(pair, member)| Approval {
 					signature: pair.sign(&manifest_hash).unwrap(),
-					member,
+					member: Some(member),
 				})
 				.collect();
 
@@ -906,7 +578,7 @@ mod test {
 			approvals.push(duplicate_approval);
 
 			ManifestEnvelope {
-				manifest,
+				manifest: Some(manifest),
 				manifest_set_approvals: approvals.clone(),
 				share_set_approvals: vec![],
 			}
@@ -914,16 +586,5 @@ mod test {
 
 		let err = manifest_envelope.check_approvals().unwrap_err();
 		assert_eq!(err, ProtocolError::DuplicateApproval);
-	}
-
-	#[test]
-	fn try_from_slice_compat_works() {
-		let bytes = std::fs::read("./fixtures/old_manifest").unwrap();
-
-		let manifest = Manifest::try_from_slice_compat(&bytes).unwrap();
-
-		assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
-		assert_eq!(manifest.pool_size, None);
-		assert_eq!(manifest.client_timeout_ms, None);
 	}
 }

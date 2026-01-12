@@ -12,7 +12,7 @@ use std::env;
 
 use qos_core::{
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
-	protocol::{msg::ProtocolMsg, services::boot},
+	protocol::{msg::{protocol_msg, ProtocolMsg, ProtocolMsgExt}, services::boot},
 };
 
 mod services;
@@ -1359,7 +1359,7 @@ mod handlers {
 	use crate::{
 		cli::{
 			services::{self, GenerateManifestArgs, PairOrYubi},
-			ClientOpts, ProtocolMsg,
+			ClientOpts, ProtocolMsg, protocol_msg, ProtocolMsgExt,
 		},
 		request,
 	};
@@ -1387,12 +1387,14 @@ mod handlers {
 	pub(super) fn enclave_status(opts: &ClientOpts) {
 		let path = &opts.path_message();
 
-		let response = request::post(path, &ProtocolMsg::StatusRequest)
+		let response = request::post(path, &ProtocolMsg::status_request())
 			.map_err(|e| println!("{e:?}"))
 			.expect("Enclave request failed");
 
-		match response {
-			ProtocolMsg::StatusResponse(phase) => {
+		match &response.msg {
+			Some(protocol_msg::Msg::StatusResponse(resp)) => {
+				let phase = qos_proto::ProtocolPhase::try_from(resp.phase)
+					.unwrap_or(qos_proto::ProtocolPhase::UnrecoverableError);
 				println!("Enclave phase: {phase:?}");
 			}
 			other => panic!("Unexpected response {other:?}"),

@@ -95,6 +95,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.100"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
+
+[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1992,6 +1998,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost"
+version = "0.13.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2796faa41db3ec313a31f7624d9286acf277b52de526150b7e69f3debf891ee5"
+dependencies = [
+ "bytes",
+ "prost-derive",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.13.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "qos_client"
 version = "0.1.0"
 dependencies = [
@@ -2000,11 +2029,13 @@ dependencies = [
  "der",
  "lazy_static",
  "p256",
+ "prost",
  "qos_core",
  "qos_crypto",
  "qos_hex",
  "qos_nsm",
  "qos_p256",
+ "qos_proto",
  "qos_test_primitives",
  "rand_core 0.9.3",
  "rpassword",
@@ -2024,10 +2055,12 @@ dependencies = [
  "futures",
  "libc",
  "nix 0.29.0",
+ "prost",
  "qos_crypto",
  "qos_hex",
  "qos_nsm",
  "qos_p256",
+ "qos_proto",
  "qos_test_primitives",
  "rustls",
  "serde",
@@ -2070,9 +2103,10 @@ name = "qos_host"
 version = "0.1.0"
 dependencies = [
  "axum",
- "borsh",
+ "prost",
  "qos_core",
  "qos_hex",
+ "qos_proto",
  "serde",
  "serde_json",
  "tokio",
@@ -2154,6 +2188,17 @@ dependencies = [
  "arbitrary",
  "libfuzzer-sys",
  "qos_p256",
+]
+
+[[package]]
+name = "qos_proto"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "qos_crypto",
+ "qos_hex",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

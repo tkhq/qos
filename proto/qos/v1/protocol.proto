@@ -1,0 +1,251 @@
+// QOS Protocol types
+//
+// These types define the protocol messages exchanged between
+// the client and the enclave.
+
+syntax = "proto3";
+package qos.v1;
+
+import "qos/v1/manifest.proto";
+import "qos/v1/genesis.proto";
+import "qos/v1/nsm.proto";
+
+// Protocol execution phase.
+enum ProtocolPhase {
+  PROTOCOL_PHASE_UNSPECIFIED = 0;
+  PROTOCOL_PHASE_UNRECOVERABLE_ERROR = 1;
+  PROTOCOL_PHASE_WAITING_FOR_BOOT_INSTRUCTION = 2;
+  PROTOCOL_PHASE_GENESIS_BOOTED = 3;
+  PROTOCOL_PHASE_WAITING_FOR_QUORUM_SHARDS = 4;
+  PROTOCOL_PHASE_QUORUM_KEY_PROVISIONED = 5;
+  PROTOCOL_PHASE_WAITING_FOR_FORWARDED_KEY = 6;
+}
+
+// Protocol message - the main RPC type for client-enclave communication.
+message ProtocolMsg {
+  oneof msg {
+    ProtocolError error_response = 1;
+
+    // Status
+    StatusRequest status_request = 2;
+    StatusResponse status_response = 3;
+
+    // Boot flows
+    BootStandardRequest boot_standard_request = 4;
+    BootStandardResponse boot_standard_response = 5;
+    BootGenesisRequest boot_genesis_request = 6;
+    BootGenesisResponse boot_genesis_response = 7;
+    BootKeyForwardRequest boot_key_forward_request = 8;
+    BootKeyForwardResponse boot_key_forward_response = 9;
+
+    // Provisioning
+    ProvisionRequest provision_request = 10;
+    ProvisionResponse provision_response = 11;
+
+    // Proxy
+    ProxyRequest proxy_request = 12;
+    ProxyResponse proxy_response = 13;
+
+    // Attestation
+    LiveAttestationDocRequest live_attestation_doc_request = 14;
+    LiveAttestationDocResponse live_attestation_doc_response = 15;
+
+    // Key operations
+    ExportKeyRequest export_key_request = 16;
+    ExportKeyResponse export_key_response = 17;
+    InjectKeyRequest inject_key_request = 18;
+    InjectKeyResponse inject_key_response = 19;
+
+    // Manifest
+    ManifestEnvelopeRequest manifest_envelope_request = 20;
+    ManifestEnvelopeResponse manifest_envelope_response = 21;
+  }
+}
+
+// Status request
+message StatusRequest {}
+
+// Status response
+message StatusResponse {
+  ProtocolPhase phase = 1;
+}
+
+// Standard boot request
+message BootStandardRequest {
+  ManifestEnvelope manifest_envelope = 1;
+  bytes pivot = 2;
+}
+
+// Standard boot response
+message BootStandardResponse {
+  NsmResponse nsm_response = 1;
+}
+
+// Genesis boot request
+message BootGenesisRequest {
+  GenesisSet set = 1;
+  optional bytes dr_key = 2;
+}
+
+// Genesis boot response
+message BootGenesisResponse {
+  NsmResponse nsm_response = 1;
+  GenesisOutput genesis_output = 2;
+}
+
+// Key forward boot request
+message BootKeyForwardRequest {
+  ManifestEnvelope manifest_envelope = 1;
+  bytes pivot = 2;
+}
+
+// Key forward boot response
+message BootKeyForwardResponse {
+  NsmResponse nsm_response = 1;
+}
+
+// Provision request - post a quorum key shard
+message ProvisionRequest {
+  // Quorum key share encrypted to the Ephemeral Key
+  bytes share = 1;
+  // Approval of the manifest from a share set member
+  Approval approval = 2;
+}
+
+// Provision response
+message ProvisionResponse {
+  // True if the quorum key was reconstructed
+  bool reconstructed = 1;
+}
+
+// Proxy request - forward data to the secure app
+message ProxyRequest {
+  bytes data = 1;
+}
+
+// Proxy response
+message ProxyResponse {
+  bytes data = 1;
+}
+
+// Live attestation document request
+message LiveAttestationDocRequest {}
+
+// Live attestation document response
+message LiveAttestationDocResponse {
+  NsmResponse nsm_response = 1;
+  optional ManifestEnvelope manifest_envelope = 2;
+}
+
+// Export key request
+message ExportKeyRequest {
+  ManifestEnvelope manifest_envelope = 1;
+  // Attestation document from the requesting enclave
+  bytes cose_sign1_attestation_doc = 2;
+}
+
+// Export key response
+message ExportKeyResponse {
+  // Quorum key encrypted to the Ephemeral Key
+  bytes encrypted_quorum_key = 1;
+  // Signature over the encrypted quorum key
+  bytes signature = 2;
+}
+
+// Inject key request
+message InjectKeyRequest {
+  // Quorum key encrypted to this enclave's Ephemeral Key
+  bytes encrypted_quorum_key = 1;
+  // Signature over the encrypted quorum key
+  bytes signature = 2;
+}
+
+// Inject key response
+message InjectKeyResponse {}
+
+// Manifest envelope request
+message ManifestEnvelopeRequest {}
+
+// Manifest envelope response
+message ManifestEnvelopeResponse {
+  optional ManifestEnvelope manifest_envelope = 1;
+}
+
+// Protocol error
+message ProtocolError {
+  ProtocolErrorCode code = 1;
+  // Additional error details (optional)
+  optional string message = 2;
+  // For InvalidManifestApproval, the invalid approval
+  optional Approval invalid_approval = 3;
+  // For P256Error, InvalidP256DRKey, FailedToGetEphemeralKey, FailedToGetQuorumKey
+  optional string p256_error = 4;
+  // For NoMatchingRoute, InvalidStateTransition
+  optional ProtocolPhase phase = 5;
+  optional ProtocolPhase expected_phase = 6;
+}
+
+// Protocol error codes
+enum ProtocolErrorCode {
+  PROTOCOL_ERROR_CODE_UNSPECIFIED = 0;
+  PROTOCOL_ERROR_CODE_INVALID_SHARE = 1;
+  PROTOCOL_ERROR_CODE_RECONSTRUCTION_ERROR_EMPTY_SECRET = 2;
+  PROTOCOL_ERROR_CODE_RECONSTRUCTION_ERROR_INCORRECT_PUB_KEY = 3;
+  PROTOCOL_ERROR_CODE_IO_ERROR = 4;
+  PROTOCOL_ERROR_CODE_INVALID_MANIFEST_APPROVAL = 5;
+  PROTOCOL_ERROR_CODE_NOT_ENOUGH_APPROVALS = 6;
+  PROTOCOL_ERROR_CODE_NO_MATCHING_ROUTE = 7;
+  PROTOCOL_ERROR_CODE_INVALID_PIVOT_HASH = 8;
+  PROTOCOL_ERROR_CODE_OVERSIZE_MSG = 9;
+  PROTOCOL_ERROR_CODE_INVALID_MSG = 10;
+  PROTOCOL_ERROR_CODE_ENCLAVE_CLIENT = 11;
+  PROTOCOL_ERROR_CODE_DECRYPTION_FAILED = 12;
+  PROTOCOL_ERROR_CODE_INVALID_PRIVATE_KEY = 13;
+  PROTOCOL_ERROR_CODE_FAILED_TO_PARSE_FROM_STRING = 14;
+  PROTOCOL_ERROR_CODE_BAD_EPHEMERAL_KEY_PATH = 15;
+  PROTOCOL_ERROR_CODE_CANNOT_MODIFY_POST_PIVOT_STATIC = 16;
+  PROTOCOL_ERROR_CODE_FAILED_TO_GET_EPHEMERAL_KEY = 17;
+  PROTOCOL_ERROR_CODE_FAILED_TO_PUT_EPHEMERAL_KEY = 18;
+  PROTOCOL_ERROR_CODE_CANNOT_ROTATE_NON_EXISTENT_EPHEMERAL_KEY = 19;
+  PROTOCOL_ERROR_CODE_CANNOT_DELETE_EPHEMERAL_KEY = 20;
+  PROTOCOL_ERROR_CODE_FAILED_TO_GET_QUORUM_KEY = 21;
+  PROTOCOL_ERROR_CODE_FAILED_TO_PUT_QUORUM_KEY = 22;
+  PROTOCOL_ERROR_CODE_FAILED_TO_GET_MANIFEST_ENVELOPE = 23;
+  PROTOCOL_ERROR_CODE_FAILED_TO_PUT_MANIFEST_ENVELOPE = 24;
+  PROTOCOL_ERROR_CODE_FAILED_TO_PUT_PIVOT = 25;
+  PROTOCOL_ERROR_CODE_APP_CLIENT_RECV_TIMEOUT = 26;
+  PROTOCOL_ERROR_CODE_APP_CLIENT_RECV_INTERRUPTED = 27;
+  PROTOCOL_ERROR_CODE_APP_CLIENT_RECV_CONNECTION_CLOSED = 28;
+  PROTOCOL_ERROR_CODE_APP_CLIENT_CONNECT_ERROR = 29;
+  PROTOCOL_ERROR_CODE_APP_CLIENT_SEND_ERROR = 30;
+  PROTOCOL_ERROR_CODE_APP_CLIENT_ERROR = 31;
+  PROTOCOL_ERROR_CODE_OVERSIZED_PAYLOAD = 32;
+  PROTOCOL_ERROR_CODE_PROTOCOL_MSG_DESERIALIZATION = 33;
+  PROTOCOL_ERROR_CODE_BAD_SHARE_SET_APPROVALS = 34;
+  PROTOCOL_ERROR_CODE_COULD_NOT_VERIFY_APPROVAL = 35;
+  PROTOCOL_ERROR_CODE_NOT_SHARE_SET_MEMBER = 36;
+  PROTOCOL_ERROR_CODE_NOT_MANIFEST_SET_MEMBER = 37;
+  PROTOCOL_ERROR_CODE_P256_ERROR = 38;
+  PROTOCOL_ERROR_CODE_INVALID_P256_DR_KEY = 39;
+  PROTOCOL_ERROR_CODE_INCORRECT_SECRET_LEN = 40;
+  PROTOCOL_ERROR_CODE_QOS_ATTEST_ERROR = 41;
+  PROTOCOL_ERROR_CODE_DIFFERENT_QUORUM_KEY = 42;
+  PROTOCOL_ERROR_CODE_DIFFERENT_MANIFEST_SET = 43;
+  PROTOCOL_ERROR_CODE_DIFFERENT_NAMESPACE_NAME = 44;
+  PROTOCOL_ERROR_CODE_LOW_NONCE = 45;
+  PROTOCOL_ERROR_CODE_DIFFERENT_PCR0 = 46;
+  PROTOCOL_ERROR_CODE_DIFFERENT_PCR1 = 47;
+  PROTOCOL_ERROR_CODE_DIFFERENT_PCR2 = 48;
+  PROTOCOL_ERROR_CODE_DIFFERENT_PCR3 = 49;
+  PROTOCOL_ERROR_CODE_MISSING_EPHEMERAL_KEY = 50;
+  PROTOCOL_ERROR_CODE_INVALID_EPHEMERAL_KEY = 51;
+  PROTOCOL_ERROR_CODE_INVALID_ENCRYPTED_QUORUM_KEY_SIGNATURE = 52;
+  PROTOCOL_ERROR_CODE_ENCRYPTED_QUORUM_KEY_INVALID_LEN = 53;
+  PROTOCOL_ERROR_CODE_INVALID_QUORUM_SECRET = 54;
+  PROTOCOL_ERROR_CODE_WRONG_QUORUM_KEY = 55;
+  PROTOCOL_ERROR_CODE_INVALID_STATE_TRANSITION = 56;
+  PROTOCOL_ERROR_CODE_DUPLICATE_APPROVAL = 57;
+  PROTOCOL_ERROR_CODE_DIFFERENT_MANIFEST = 58;
+  PROTOCOL_ERROR_CODE_QOS_CRYPTO = 59;
+  PROTOCOL_ERROR_CODE_POOL_EXPAND_ERROR = 60;
+}

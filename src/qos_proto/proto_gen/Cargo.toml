@@ -1,0 +1,17 @@
+[package]
+name = "proto_gen"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# This crate is intentionally NOT part of the workspace.
+# It is a standalone tool for generating protobuf code.
+# Run with: cd src/qos_proto/proto_gen && cargo run
+
+# Empty workspace table to prevent inheriting from parent
+[workspace]
+
+[dependencies]
+# Pure Rust protobuf compiler - no protoc needed
+protox = "0.7"
+prost-build = "0.13"

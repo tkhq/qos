@@ -17,7 +17,7 @@ use crate::{
 	io::StreamPool,
 	protocol::{
 		processor::ProtocolProcessor,
-		services::boot::{PivotConfig, RestartPolicy},
+		services::boot::RestartPolicy,
 		ProtocolPhase, ProtocolState,
 	},
 	server::SocketServer,
@@ -58,8 +58,12 @@ async fn run_server(
 		}
 
 		if let Ok(envelope) = handles.get_manifest_envelope() {
-			let pool_size =
-				envelope.manifest.pool_size.unwrap_or(DEFAULT_POOL_SIZE);
+			// Get manifest from envelope (proto types use Option<T>)
+			let manifest = envelope.manifest.as_ref().expect("manifest should exist");
+			let pool_size = manifest
+				.pool_size
+				.map(|p| p as u8)
+				.unwrap_or(DEFAULT_POOL_SIZE);
 			// expand server to pool_size
 			server
 				.listen_to(pool_size, &processor)
@@ -72,7 +76,7 @@ async fn run_server(
 				p.expand_to(pool_size)
 					.await
 					.expect("unable to expand_to on the processor app pool");
-				if let Some(timeout_ms) = envelope.manifest.client_timeout_ms {
+				if let Some(timeout_ms) = manifest.client_timeout_ms {
 					let timeout = Duration::from_millis(timeout_ms.into());
 					p.set_client_timeout(timeout);
 				}
@@ -152,21 +156,24 @@ impl Reaper {
 
 		println!("Reaper::execute about to spawn pivot");
 
-		let manifest = handles
+		let envelope = handles
 			.get_manifest_envelope()
-			.expect("Checked above that the manifest exists.")
-			.manifest;
-		let PivotConfig { args, restart, .. } = manifest.pivot;
+			.expect("Checked above that the manifest exists.");
+		let manifest = envelope.manifest.as_ref().expect("manifest should exist");
+		let pivot_config = manifest.pivot.as_ref().expect("pivot should exist");
+		let args = &pivot_config.args;
+		let restart = pivot_config.restart;
 
 		let mut pivot = Command::new(handles.pivot_path());
 		// set the pool-size env var for pivots that use it
 		pivot.env(
 			"POOL_SIZE",
-			manifest.pool_size.unwrap_or(DEFAULT_POOL_SIZE).to_string(),
+			manifest.pool_size.map(|p| p as u8).unwrap_or(DEFAULT_POOL_SIZE).to_string(),
 		);
 		pivot.args(&args[..]);
-		match restart {
-			RestartPolicy::Always => loop {
+		// Proto RestartPolicy is i32, compare against enum values
+		if restart == RestartPolicy::Always as i32 {
+			loop {
 				let status = pivot
 					.spawn()
 					.expect("Failed to spawn")
@@ -181,16 +188,16 @@ impl Reaper {
 				tokio::time::sleep(REAPER_RESTART_DELAY).await;
 
 				println!("Restarting pivot ...");
-			},
-			RestartPolicy::Never => {
-				let status = pivot
-					.spawn()
-					.expect("Failed to spawn")
-					.wait()
-					.await
-					.expect("Pivot executable never started...");
-				println!("Pivot (no restart) exited with status: {status}");
 			}
+		} else {
+			// RestartPolicy::Never or any other value
+			let status = pivot
+				.spawn()
+				.expect("Failed to spawn")
+				.wait()
+				.await
+				.expect("Pivot executable never started...");
+			println!("Pivot (no restart) exited with status: {status}");
 		}
 
 		*inter_state.write().unwrap() = InterState::Quitting;

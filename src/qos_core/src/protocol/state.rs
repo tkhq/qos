@@ -1,23 +1,16 @@
 //! Quorum protocol state machine
+use prost::Message;
 use qos_nsm::NsmProvider;
 
 use super::{
-	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
+	error::ProtocolError,
+	msg::{protocol_msg, ProtocolMsg, ProtocolMsgExt},
+	services::provision::SecretBuilder,
 };
 use crate::handles::Handles;
 
 /// Enclave phase
-#[derive(
-	Debug,
-	Copy,
-	PartialEq,
-	Eq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
+#[derive(Debug, Copy, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ProtocolPhase {
 	/// The state machine cannot recover. The enclave must be rebooted.
 	UnrecoverableError,
@@ -53,10 +46,13 @@ impl ProtocolRoute {
 		let resp = (self.handler)(msg, state);
 
 		// ignore transitions in special cases
-		if let Some(Ok(ProtocolMsg::ProvisionResponse { reconstructed })) = resp
-		{
-			if !reconstructed {
-				return resp;
+		if let Some(Ok(ref msg_resp)) = resp {
+			if let Some(protocol_msg::Msg::ProvisionResponse(ref prov)) =
+				msg_resp.msg
+			{
+				if !prov.reconstructed {
+					return resp;
+				}
 			}
 		}
 
@@ -71,7 +67,7 @@ impl ProtocolRoute {
 
 		if let Some(phase) = transition {
 			if let Err(e) = state.transition(phase) {
-				return Some(Err(ProtocolMsg::ProtocolErrorResponse(e)));
+				return Some(Err(ProtocolMsg::error_response(e.into())));
 			}
 		};
 
@@ -197,17 +193,14 @@ impl ProtocolState {
 				None => continue,
 				Some(result) => match result {
 					Ok(msg_resp) | Err(msg_resp) => {
-						return borsh::to_vec(&msg_resp).expect(
-							"ProtocolMsg can always be serialized. qed.",
-						)
+						return msg_resp.encode_to_vec();
 					}
 				},
 			}
 		}
 
 		let err = ProtocolError::NoMatchingRoute(self.phase);
-		borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
-			.expect("ProtocolMsg can always be serialized. qed.")
+		ProtocolMsg::error_response(err.into()).encode_to_vec()
 	}
 
 	#[allow(clippy::too_many_lines)]
@@ -317,21 +310,23 @@ impl ProtocolState {
 mod handlers {
 	use super::ProtocolRouteResponse;
 	use crate::protocol::{
-		msg::ProtocolMsg,
+		msg::{protocol_msg, ProtocolMsg, ProtocolMsgExt},
 		services::{
-			attestation, boot, genesis, key, key::EncryptedQuorumKey, provision,
+			attestation, boot, boot::nsm_response_to_proto, genesis, key,
+			key::EncryptedQuorumKey, provision,
 		},
 		ProtocolState,
 	};
 
-	// TODO: Add tests for this in the middle of some integration tests
 	/// Status of the enclave.
 	pub(super) fn status(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::StatusRequest = req {
-			Some(Ok(ProtocolMsg::StatusResponse(state.get_phase())))
+		if let Some(protocol_msg::Msg::StatusRequest(_)) = &req.msg {
+			Some(Ok(ProtocolMsg::status_response(
+				qos_proto::ProtocolPhase::from(state.get_phase()),
+			)))
 		} else {
 			None
 		}
@@ -341,12 +336,10 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::ManifestEnvelopeRequest = req {
-			Some(Ok(ProtocolMsg::ManifestEnvelopeResponse {
-				manifest_envelope: Box::new(
-					state.handles.get_manifest_envelope().ok(),
-				),
-			}))
+		if let Some(protocol_msg::Msg::ManifestEnvelopeRequest(_)) = &req.msg {
+			Some(Ok(ProtocolMsg::manifest_envelope_response(
+				state.handles.get_manifest_envelope().ok(),
+			)))
 		} else {
 			None
 		}
@@ -356,12 +349,18 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::ProvisionRequest { share, approval } = req {
-			let result = provision::provision(share, approval.clone(), state)
-				.map(|reconstructed| ProtocolMsg::ProvisionResponse {
-					reconstructed,
-				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+		if let Some(protocol_msg::Msg::ProvisionRequest(prov_req)) = &req.msg {
+			let approval = match &prov_req.approval {
+				Some(a) => a.clone(),
+				None => {
+					return Some(Err(ProtocolMsg::error_response(
+						crate::protocol::ProtocolError::MissingApprovalMember.into(),
+					)))
+				}
+			};
+			let result = provision::provision(&prov_req.share, approval, state)
+				.map(ProtocolMsg::provision_response)
+				.map_err(|e| ProtocolMsg::error_response(e.into()));
 
 			Some(result)
 		} else {
@@ -374,14 +373,22 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::BootStandardRequest { manifest_envelope, pivot } =
-			req
-		{
-			let result = boot::boot_standard(state, manifest_envelope, pivot)
-				.map(|nsm_response| ProtocolMsg::BootStandardResponse {
-					nsm_response,
+		if let Some(protocol_msg::Msg::BootStandardRequest(boot_req)) = &req.msg {
+			let envelope = match &boot_req.manifest_envelope {
+				Some(e) => e,
+				None => {
+					return Some(Err(ProtocolMsg::error_response(
+						crate::protocol::ProtocolError::MissingManifest.into(),
+					)))
+				}
+			};
+			let result = boot::boot_standard(state, envelope, &boot_req.pivot)
+				.map(|nsm_response| {
+					ProtocolMsg::boot_standard_response(
+						nsm_response_to_proto(nsm_response),
+					)
 				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+				.map_err(|e| ProtocolMsg::error_response(e.into()));
 
 			Some(result)
 		} else {
@@ -393,15 +400,25 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::BootGenesisRequest { set, dr_key } = req {
-			let result = genesis::boot_genesis(state, set, dr_key.clone())
-				.map(|(genesis_output, nsm_response)| {
-					ProtocolMsg::BootGenesisResponse {
-						nsm_response,
-						genesis_output: Box::new(genesis_output),
-					}
-				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+		if let Some(protocol_msg::Msg::BootGenesisRequest(genesis_req)) = &req.msg
+		{
+			let set = match &genesis_req.set {
+				Some(s) => s,
+				None => {
+					return Some(Err(ProtocolMsg::error_response(
+						crate::protocol::ProtocolError::MissingShareSet.into(),
+					)))
+				}
+			};
+			let result =
+				genesis::boot_genesis(state, set, genesis_req.dr_key.clone())
+					.map(|(genesis_output, nsm_response)| {
+						ProtocolMsg::boot_genesis_response(
+							nsm_response_to_proto(nsm_response),
+							genesis_output,
+						)
+					})
+					.map_err(|e| ProtocolMsg::error_response(e.into()));
 
 			Some(result)
 		} else {
@@ -413,17 +430,15 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::LiveAttestationDocRequest = req {
+		if let Some(protocol_msg::Msg::LiveAttestationDocRequest(_)) = &req.msg {
 			let result = attestation::live_attestation_doc(state)
-				.map(|nsm_response| ProtocolMsg::LiveAttestationDocResponse {
-					nsm_response,
-					manifest_envelope: state
-						.handles
-						.get_manifest_envelope()
-						.ok()
-						.map(Box::new),
+				.map(|nsm_response| {
+					ProtocolMsg::live_attestation_doc_response(
+						nsm_response_to_proto(nsm_response),
+						state.handles.get_manifest_envelope().ok(),
+					)
 				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+				.map_err(|e| ProtocolMsg::error_response(e.into()));
 
 			Some(result)
 		} else {
@@ -435,14 +450,23 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::BootKeyForwardRequest { manifest_envelope, pivot } =
-			req
+		if let Some(protocol_msg::Msg::BootKeyForwardRequest(boot_req)) = &req.msg
 		{
-			let result = key::boot_key_forward(state, manifest_envelope, pivot)
-				.map(|nsm_response| ProtocolMsg::BootKeyForwardResponse {
-					nsm_response,
+			let envelope = match &boot_req.manifest_envelope {
+				Some(e) => e,
+				None => {
+					return Some(Err(ProtocolMsg::error_response(
+						crate::protocol::ProtocolError::MissingManifest.into(),
+					)))
+				}
+			};
+			let result = key::boot_key_forward(state, envelope, &boot_req.pivot)
+				.map(|nsm_response| {
+					ProtocolMsg::boot_key_forward_response(
+						nsm_response_to_proto(nsm_response),
+					)
 				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+				.map_err(|e| ProtocolMsg::error_response(e.into()));
 
 			Some(result)
 		} else {
@@ -454,25 +478,25 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::ExportKeyRequest {
-			manifest_envelope,
-			cose_sign1_attestation_doc,
-		} = req
-		{
+		if let Some(protocol_msg::Msg::ExportKeyRequest(export_req)) = &req.msg {
+			let envelope = match &export_req.manifest_envelope {
+				Some(e) => e,
+				None => {
+					return Some(Err(ProtocolMsg::error_response(
+						crate::protocol::ProtocolError::MissingManifest.into(),
+					)))
+				}
+			};
 			let result = key::export_key(
 				state,
-				manifest_envelope,
-				cose_sign1_attestation_doc,
+				envelope,
+				&export_req.cose_sign1_attestation_doc,
 			)
 			.map(|key| {
-				let EncryptedQuorumKey { encrypted_quorum_key, signature } =
-					key;
-				ProtocolMsg::ExportKeyResponse {
-					encrypted_quorum_key,
-					signature,
-				}
+				let EncryptedQuorumKey { encrypted_quorum_key, signature } = key;
+				ProtocolMsg::export_key_response(encrypted_quorum_key, signature)
 			})
-			.map_err(ProtocolMsg::ProtocolErrorResponse);
+			.map_err(|e| ProtocolMsg::error_response(e.into()));
 
 			Some(result)
 		} else {
@@ -484,20 +508,16 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::InjectKeyRequest {
-			encrypted_quorum_key,
-			signature,
-		} = req
-		{
+		if let Some(protocol_msg::Msg::InjectKeyRequest(inject_req)) = &req.msg {
 			let result = key::inject_key(
 				state,
 				EncryptedQuorumKey {
-					encrypted_quorum_key: encrypted_quorum_key.clone(),
-					signature: signature.clone(),
+					encrypted_quorum_key: inject_req.encrypted_quorum_key.clone(),
+					signature: inject_req.signature.clone(),
 				},
 			)
-			.map(|()| ProtocolMsg::InjectKeyResponse)
-			.map_err(ProtocolMsg::ProtocolErrorResponse);
+			.map(|()| ProtocolMsg::inject_key_response())
+			.map_err(|e| ProtocolMsg::error_response(e.into()));
 
 			Some(result)
 		} else {

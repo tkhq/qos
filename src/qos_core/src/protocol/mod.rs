@@ -1,7 +1,9 @@
 //! Quorum protocol
-
-use borsh::BorshSerialize;
-use qos_crypto::sha_256;
+//!
+//! This module contains the protocol types and logic for QuorumOS.
+//!
+//! Protocol types are defined in [`qos_proto`] using Protocol Buffers
+//! for cross-language interoperability and deterministic encoding.
 
 mod error;
 pub mod msg;
@@ -15,16 +17,5 @@ pub(crate) use state::ProtocolState;
 pub(crate) mod processor;
 pub use processor::INITIAL_CLIENT_TIMEOUT;
 
-/// 256bit hash
+/// 256-bit hash.
 pub type Hash256 = [u8; 32];
-
-/// Canonical hash of `QuorumOS` types.
-pub trait QosHash: BorshSerialize {
-	/// Get the canonical hash.
-	fn qos_hash(&self) -> Hash256 {
-		sha_256(&borsh::to_vec(self).expect("Implements borsh serialize"))
-	}
-}
-
-// Blanket implement QosHash for any type that implements BorshSerialize.
-impl<T: BorshSerialize> QosHash for T {}

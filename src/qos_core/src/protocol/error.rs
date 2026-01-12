@@ -1,15 +1,15 @@
 //! Quorum protocol error
-use borsh::{BorshDeserialize, BorshSerialize};
 use qos_p256::P256Error;
+use qos_proto::Approval;
 
 use crate::{
 	client::ClientError,
 	io::IOError,
-	protocol::{services::boot, ProtocolPhase},
+	protocol::ProtocolPhase,
 };
 
-/// A error from protocol execution.
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+/// An error from protocol execution.
+#[derive(Debug, Clone, PartialEq)]
 pub enum ProtocolError {
 	/// A encrypted quorum key share sent to the enclave was invalid.
 	InvalidShare,
@@ -19,10 +19,23 @@ pub enum ProtocolError {
 	ReconstructionErrorIncorrectPubKey,
 	/// Filesystem error
 	IOError,
-	/// Cryptography error
 	/// Approval was not valid for a manifest.
-	InvalidManifestApproval(boot::Approval),
-	/// [`boot::ManifestEnvelope`] did not have approvals
+	InvalidManifestApproval(Approval),
+	/// Manifest envelope is missing the manifest field.
+	MissingManifest,
+	/// Manifest is missing the manifest_set field.
+	MissingManifestSet,
+	/// Manifest is missing the pivot field.
+	MissingPivotConfig,
+	/// Approval is missing the member field.
+	MissingApprovalMember,
+	/// Manifest is missing the namespace field.
+	MissingNamespace,
+	/// Manifest is missing the enclave field.
+	MissingEnclaveConfig,
+	/// Manifest is missing the share_set field.
+	MissingShareSet,
+	/// [`ManifestEnvelope`] did not have approvals
 	NotEnoughApprovals,
 	/// Protocol Message could not be matched against an available route.
 	/// Ensure the executor is in the correct phase.
@@ -190,5 +203,558 @@ impl From<qos_nsm::nitro::AttestError> for ProtocolError {
 	fn from(err: qos_nsm::nitro::AttestError) -> Self {
 		let msg = format!("{err:?}");
 		Self::QosAttestError(msg)
+	}
+}
+
+impl From<ProtocolError> for qos_proto::ProtocolError {
+	fn from(err: ProtocolError) -> Self {
+		use qos_proto::ProtocolErrorCode;
+
+		let (code, message, invalid_approval, p256_error, phase, expected_phase) =
+			match err {
+				ProtocolError::InvalidShare => {
+					(ProtocolErrorCode::InvalidShare, None, None, None, None, None)
+				}
+				ProtocolError::ReconstructionErrorEmptySecret => (
+					ProtocolErrorCode::ReconstructionErrorEmptySecret,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::ReconstructionErrorIncorrectPubKey => (
+					ProtocolErrorCode::ReconstructionErrorIncorrectPubKey,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::IOError => {
+					(ProtocolErrorCode::IoError, None, None, None, None, None)
+				}
+				ProtocolError::InvalidManifestApproval(approval) => (
+					ProtocolErrorCode::InvalidManifestApproval,
+					None,
+					Some(approval),
+					None,
+					None,
+					None,
+				),
+				ProtocolError::MissingManifest => (
+					ProtocolErrorCode::InvalidMsg,
+					Some("missing manifest".to_string()),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::MissingManifestSet => (
+					ProtocolErrorCode::InvalidMsg,
+					Some("missing manifest set".to_string()),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::MissingPivotConfig => (
+					ProtocolErrorCode::InvalidMsg,
+					Some("missing pivot config".to_string()),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::MissingApprovalMember => (
+					ProtocolErrorCode::InvalidMsg,
+					Some("missing approval member".to_string()),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::MissingNamespace => (
+					ProtocolErrorCode::InvalidMsg,
+					Some("missing namespace".to_string()),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::MissingEnclaveConfig => (
+					ProtocolErrorCode::InvalidMsg,
+					Some("missing enclave config".to_string()),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::MissingShareSet => (
+					ProtocolErrorCode::InvalidMsg,
+					Some("missing share set".to_string()),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::NotEnoughApprovals => (
+					ProtocolErrorCode::NotEnoughApprovals,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::NoMatchingRoute(phase) => (
+					ProtocolErrorCode::NoMatchingRoute,
+					None,
+					None,
+					None,
+					Some(ProtocolPhase::from(phase) as i32),
+					None,
+				),
+				ProtocolError::InvalidPivotHash => (
+					ProtocolErrorCode::InvalidPivotHash,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::OversizeMsg => {
+					(ProtocolErrorCode::OversizeMsg, None, None, None, None, None)
+				}
+				ProtocolError::InvalidMsg => {
+					(ProtocolErrorCode::InvalidMsg, None, None, None, None, None)
+				}
+				ProtocolError::EnclaveClient => (
+					ProtocolErrorCode::EnclaveClient,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::DecryptionFailed => (
+					ProtocolErrorCode::DecryptionFailed,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::InvalidPrivateKey => (
+					ProtocolErrorCode::InvalidPrivateKey,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::FailedToParseFromString => (
+					ProtocolErrorCode::FailedToParseFromString,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::BadEphemeralKeyPath => (
+					ProtocolErrorCode::BadEphemeralKeyPath,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::CannotModifyPostPivotStatic => (
+					ProtocolErrorCode::CannotModifyPostPivotStatic,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::FailedToGetEphemeralKey(e) => (
+					ProtocolErrorCode::FailedToGetEphemeralKey,
+					None,
+					None,
+					Some(format!("{e:?}")),
+					None,
+					None,
+				),
+				ProtocolError::FailedToPutEphemeralKey => (
+					ProtocolErrorCode::FailedToPutEphemeralKey,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::CannotRotateNonExistentEphemeralKey => (
+					ProtocolErrorCode::CannotRotateNonExistentEphemeralKey,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::CannotDeleteEphemeralKey(msg) => (
+					ProtocolErrorCode::CannotDeleteEphemeralKey,
+					Some(msg),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::FailedToGetQuorumKey(e) => (
+					ProtocolErrorCode::FailedToGetQuorumKey,
+					None,
+					None,
+					Some(format!("{e:?}")),
+					None,
+					None,
+				),
+				ProtocolError::FailedToPutQuorumKey => (
+					ProtocolErrorCode::FailedToPutQuorumKey,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::FailedToGetManifestEnvelope => (
+					ProtocolErrorCode::FailedToGetManifestEnvelope,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::FailedToPutManifestEnvelope => (
+					ProtocolErrorCode::FailedToPutManifestEnvelope,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::FailedToPutPivot => (
+					ProtocolErrorCode::FailedToPutPivot,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::AppClientRecvTimeout => (
+					ProtocolErrorCode::AppClientRecvTimeout,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::AppClientRecvInterrupted => (
+					ProtocolErrorCode::AppClientRecvInterrupted,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::AppClientRecvConnectionClosed => (
+					ProtocolErrorCode::AppClientRecvConnectionClosed,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::AppClientConnectError(msg) => (
+					ProtocolErrorCode::AppClientConnectError,
+					Some(msg),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::AppClientSendError(msg) => (
+					ProtocolErrorCode::AppClientSendError,
+					Some(msg),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::AppClientError(msg) => (
+					ProtocolErrorCode::AppClientError,
+					Some(msg),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::OversizedPayload => (
+					ProtocolErrorCode::OversizedPayload,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::ProtocolMsgDeserialization => (
+					ProtocolErrorCode::ProtocolMsgDeserialization,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::BadShareSetApprovals => (
+					ProtocolErrorCode::BadShareSetApprovals,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::CouldNotVerifyApproval => (
+					ProtocolErrorCode::CouldNotVerifyApproval,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::NotShareSetMember => (
+					ProtocolErrorCode::NotShareSetMember,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::NotManifestSetMember => (
+					ProtocolErrorCode::NotManifestSetMember,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::P256Error(e) => (
+					ProtocolErrorCode::P256Error,
+					None,
+					None,
+					Some(format!("{e:?}")),
+					None,
+					None,
+				),
+				ProtocolError::InvalidP256DRKey(e) => (
+					ProtocolErrorCode::InvalidP256DrKey,
+					None,
+					None,
+					Some(format!("{e:?}")),
+					None,
+					None,
+				),
+				ProtocolError::IncorrectSecretLen => (
+					ProtocolErrorCode::IncorrectSecretLen,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::QosAttestError(msg) => (
+					ProtocolErrorCode::QosAttestError,
+					Some(msg),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::DifferentQuorumKey => (
+					ProtocolErrorCode::DifferentQuorumKey,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::DifferentManifestSet => (
+					ProtocolErrorCode::DifferentManifestSet,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::DifferentNamespaceName => (
+					ProtocolErrorCode::DifferentNamespaceName,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::LowNonce => {
+					(ProtocolErrorCode::LowNonce, None, None, None, None, None)
+				}
+				ProtocolError::DifferentPcr0 => (
+					ProtocolErrorCode::DifferentPcr0,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::DifferentPcr1 => (
+					ProtocolErrorCode::DifferentPcr1,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::DifferentPcr2 => (
+					ProtocolErrorCode::DifferentPcr2,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::DifferentPcr3 => (
+					ProtocolErrorCode::DifferentPcr3,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::MissingEphemeralKey => (
+					ProtocolErrorCode::MissingEphemeralKey,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::InvalidEphemeralKey => (
+					ProtocolErrorCode::InvalidEphemeralKey,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::InvalidEncryptedQuorumKeySignature => (
+					ProtocolErrorCode::InvalidEncryptedQuorumKeySignature,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::EncryptedQuorumKeyInvalidLen => (
+					ProtocolErrorCode::EncryptedQuorumKeyInvalidLen,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::InvalidQuorumSecret => (
+					ProtocolErrorCode::InvalidQuorumSecret,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::WrongQuorumKey => (
+					ProtocolErrorCode::WrongQuorumKey,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::InvalidStateTransition(from, to) => (
+					ProtocolErrorCode::InvalidStateTransition,
+					None,
+					None,
+					None,
+					Some(ProtocolPhase::from(from) as i32),
+					Some(ProtocolPhase::from(to) as i32),
+				),
+				ProtocolError::DuplicateApproval => (
+					ProtocolErrorCode::DuplicateApproval,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::DifferentManifest => (
+					ProtocolErrorCode::DifferentManifest,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::QosCrypto(msg) => (
+					ProtocolErrorCode::QosCrypto,
+					Some(msg),
+					None,
+					None,
+					None,
+					None,
+				),
+				ProtocolError::PoolExpandError => (
+					ProtocolErrorCode::PoolExpandError,
+					None,
+					None,
+					None,
+					None,
+					None,
+				),
+			};
+
+		qos_proto::ProtocolError {
+			code: code as i32,
+			message,
+			invalid_approval,
+			p256_error,
+			phase,
+			expected_phase,
+		}
+	}
+}
+
+impl From<ProtocolPhase> for qos_proto::ProtocolPhase {
+	fn from(phase: ProtocolPhase) -> Self {
+		match phase {
+			ProtocolPhase::UnrecoverableError => {
+				qos_proto::ProtocolPhase::UnrecoverableError
+			}
+			ProtocolPhase::WaitingForBootInstruction => {
+				qos_proto::ProtocolPhase::WaitingForBootInstruction
+			}
+			ProtocolPhase::GenesisBooted => qos_proto::ProtocolPhase::GenesisBooted,
+			ProtocolPhase::WaitingForQuorumShards => {
+				qos_proto::ProtocolPhase::WaitingForQuorumShards
+			}
+			ProtocolPhase::QuorumKeyProvisioned => {
+				qos_proto::ProtocolPhase::QuorumKeyProvisioned
+			}
+			ProtocolPhase::WaitingForForwardedKey => {
+				qos_proto::ProtocolPhase::WaitingForForwardedKey
+			}
+		}
 	}
 }

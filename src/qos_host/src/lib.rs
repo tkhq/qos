@@ -18,9 +18,8 @@ use axum::{
 	response::{IntoResponse, Response},
 	Json,
 };
-use qos_core::protocol::{
-	services::boot::ManifestEnvelope, Hash256, ProtocolPhase,
-};
+use qos_core::protocol::ProtocolPhase;
+use qos_proto::ManifestEnvelope;
 
 pub mod cli;
 pub mod host;
@@ -69,7 +68,7 @@ pub struct EnclaveVitalStats {
 	namespace: String,
 	nonce: u32,
 	#[serde(with = "qos_hex::serde")]
-	pivot_hash: Hash256,
+	pivot_hash: Vec<u8>,
 	#[serde(with = "qos_hex::serde")]
 	pcr0: Vec<u8>,
 	pivot_args: Vec<String>,

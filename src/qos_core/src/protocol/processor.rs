@@ -1,11 +1,13 @@
 //! Quorum protocol processor
 use std::{sync::Arc, time::Duration};
 
-use borsh::BorshDeserialize;
+use prost::Message;
 use tokio::sync::RwLock;
 
 use super::{
-	error::ProtocolError, msg::ProtocolMsg, state::ProtocolState, ProtocolPhase,
+	msg::{protocol_msg, ProtocolMsg, ProtocolMsgExt},
+	state::ProtocolState,
+	ProtocolError, ProtocolPhase,
 };
 use crate::{
 	client::{ClientError, SocketClient},
@@ -70,39 +72,35 @@ impl ProtocolProcessor {
 impl RequestProcessor for ProtocolProcessor {
 	async fn process(&self, req_bytes: &[u8]) -> Vec<u8> {
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
-			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
-				ProtocolError::OversizedPayload,
-			))
-			.expect("ProtocolMsg can always be serialized. qed.");
+			return ProtocolMsg::error_response(ProtocolError::OversizedPayload.into())
+				.encode_to_vec();
 		}
 
-		let Ok(msg_req) = ProtocolMsg::try_from_slice(req_bytes) else {
-			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
-				ProtocolError::ProtocolMsgDeserialization,
-			))
-			.expect("ProtocolMsg can always be serialized. qed.");
+		let Ok(msg_req) = ProtocolMsg::decode(req_bytes) else {
+			return ProtocolMsg::error_response(
+				ProtocolError::ProtocolMsgDeserialization.into(),
+			)
+			.encode_to_vec();
 		};
 
 		// handle Proxy outside of the state
-		if let ProtocolMsg::ProxyRequest { data } = msg_req {
+		if let Some(protocol_msg::Msg::ProxyRequest(ref proxy_req)) = msg_req.msg {
 			let phase = self.get_phase().await;
 
 			if phase != ProtocolPhase::QuorumKeyProvisioned {
 				let err = ProtocolError::NoMatchingRoute(phase);
-				return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
-					.expect("ProtocolMsg can always be serialized. qed.");
+				return ProtocolMsg::error_response(err.into()).encode_to_vec();
 			}
 
 			let result = self
 				.app_client
-				.call(&data)
+				.call(&proxy_req.data)
 				.await
-				.map(|data| ProtocolMsg::ProxyResponse { data })
-				.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into()));
+				.map(|data| ProtocolMsg::proxy_response(data))
+				.map_err(|e| ProtocolMsg::error_response(ProtocolError::from(e).into()));
 
 			match result {
-				Ok(msg_resp) | Err(msg_resp) => borsh::to_vec(&msg_resp)
-					.expect("ProtocolMsg can always be serialized. qed."),
+				Ok(msg_resp) | Err(msg_resp) => msg_resp.encode_to_vec(),
 			}
 		} else {
 			// handle all the others here

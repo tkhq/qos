@@ -18,13 +18,15 @@ qos_nsm = { workspace = true, default-features = false }
 # Third party
 ureq = { workspace = true }
 aws-nitro-enclaves-nsm-api = { workspace = true }
-borsh = { workspace = true}
+prost = { workspace = true }
 p256 = { workspace = true }
+qos_proto = { workspace = true }
 rand_core = { workspace = true, features = ["os_rng"] }
 zeroize = { workspace = true }
 rpassword = { workspace = true }
 serde_json = { workspace = true }
 
+borsh = { workspace = true, optional = true }
 der = { workspace = true, optional = true }
 x509-cert = { workspace = true, optional = true }
 yubikey = { workspace = true, optional = true }
@@ -38,4 +40,4 @@ qos_p256 = { workspace = true, features = ["mock"] }
 
 [features]
 default = ["smartcard"]
-smartcard = ["der", "x509-cert", "yubikey"]
+smartcard = ["borsh", "der", "x509-cert", "yubikey"]
