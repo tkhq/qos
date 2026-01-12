@@ -13,6 +13,7 @@ qos_crypto = { workspace = true }
 qos_hex = { workspace = true, features = ["serde"] }
 qos_p256 = { workspace = true }
 qos_nsm = { workspace = true, default-features = false }
+qos_proto = { workspace = true }
 
 nix = { workspace = true }
 libc = { workspace = true }

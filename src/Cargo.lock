@@ -2057,6 +2057,7 @@ dependencies = [
  "qos_hex",
  "qos_nsm",
  "qos_p256",
+ "qos_proto",
  "qos_test_primitives",
  "rustls",
  "serde",

@@ -6,6 +6,7 @@ use qos_crypto::sha_256;
 mod error;
 pub mod legacy;
 pub mod msg;
+pub mod proto;
 pub mod services;
 mod state;
 
