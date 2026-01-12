@@ -1,0 +1,15 @@
+[package]
+name = "proto_gen"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# This crate is intentionally NOT part of the workspace.
+# It is a standalone tool for generating protobuf code.
+
+# Empty workspace table to prevent inheriting from parent
+[workspace]
+
+[dependencies]
+tonic-build = { version = "=0.9.2", features = ["cleanup-markdown"] }
+protobuf-src = "=1.1.0"

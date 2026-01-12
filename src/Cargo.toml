@@ -7,6 +7,7 @@ members = [
   "qos_host",
   "qos_hex",
   "qos_net",
+  "qos_proto",
   "qos_test_primitives",
   "qos_p256",
   "qos_nsm",
@@ -24,6 +25,7 @@ default-members = [
   "qos_host",
   "qos_hex",
   "qos_net",
+  "qos_proto",
   "qos_test_primitives",
   "qos_p256",
   "qos_nsm",
@@ -47,13 +49,12 @@ edition = "2021"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
+# TODO: enable this to require docs https://linear.app/turnkey/issue/ENG-3241/require-doc-comments-in-qos
+# missing_docs = "warn"
 
 [workspace.lints.clippy]
 missing_errors_doc = "allow"
 module_name_repetitions = "allow"
-
-[workspace.lints.rustdoc]
-missing_docs = "warn"
 
 [workspace.dependencies]
 # External dependencies
@@ -75,6 +76,7 @@ libc = "=0.2.172"
 nix = { version = "0.29.0", features = ["socket"], default-features = false }
 p256 = { version = "0.13.2", default-features = false }
 p384 = { version = "0.13", features = ["ecdsa", "std"], default-features = false }
+prost = "=0.11.9"
 rand = "0.9"
 rand_core = { version = "0.9", default-features = false, features = ["os_rng"] }
 rpassword = { version = "7", default-features = false }
@@ -105,6 +107,7 @@ qos_host = { path = "qos_host", default-features = false }
 qos_net = { path = "qos_net", default-features = false }
 qos_nsm = { path = "qos_nsm", default-features = false }
 qos_p256 = { path = "qos_p256" }
+qos_proto = { path = "qos_proto", default-features = false }
 qos_test_primitives = { path = "qos_test_primitives" }
 
 # Option for the future: build all QOS applications with additional runtime checks

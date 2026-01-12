@@ -1,0 +1,183 @@
+// QOS NSM (Nitro Secure Module) types
+//
+// These types mirror the AWS Nitro Secure Module API types,
+// allowing them to be serialized with protobuf.
+
+syntax = "proto3";
+package qos.v1;
+
+// Possible error codes from the Nitro Secure Module API.
+enum NsmErrorCode {
+  // Success - no error occurred
+  NSM_ERROR_CODE_SUCCESS = 0;
+  // Invalid argument was provided
+  NSM_ERROR_CODE_INVALID_ARGUMENT = 1;
+  // Invalid PCR index was specified
+  NSM_ERROR_CODE_INVALID_INDEX = 2;
+  // Response from NSM was invalid
+  NSM_ERROR_CODE_INVALID_RESPONSE = 3;
+  // Attempted to modify a read-only PCR index
+  NSM_ERROR_CODE_READ_ONLY_INDEX = 4;
+  // Operation is not valid in current state
+  NSM_ERROR_CODE_INVALID_OPERATION = 5;
+  // Provided buffer was too small for the response
+  NSM_ERROR_CODE_BUFFER_TOO_SMALL = 6;
+  // Input data exceeded maximum allowed size
+  NSM_ERROR_CODE_INPUT_TOO_LARGE = 7;
+  // Internal NSM error occurred
+  NSM_ERROR_CODE_INTERNAL_ERROR = 8;
+}
+
+// Possible hash digests for the Nitro Secure Module API.
+enum NsmDigest {
+  // Unspecified digest type
+  NSM_DIGEST_UNSPECIFIED = 0;
+  // SHA-256 digest (256 bits)
+  NSM_DIGEST_SHA256 = 1;
+  // SHA-384 digest (384 bits)
+  NSM_DIGEST_SHA384 = 2;
+  // SHA-512 digest (512 bits)
+  NSM_DIGEST_SHA512 = 3;
+}
+
+// Request type for the Nitro Secure Module API.
+message NsmRequest {
+  // The specific NSM request variant
+  oneof request {
+    // Request to describe a PCR
+    DescribePcrRequest describe_pcr = 1;
+    // Request to extend a PCR
+    ExtendPcrRequest extend_pcr = 2;
+    // Request to lock a single PCR
+    LockPcrRequest lock_pcr = 3;
+    // Request to lock a range of PCRs
+    LockPcrsRequest lock_pcrs = 4;
+    // Request to describe NSM capabilities
+    DescribeNsmRequest describe_nsm = 5;
+    // Request for an attestation document
+    AttestationRequest attestation = 6;
+    // Request for random bytes
+    GetRandomRequest get_random = 7;
+  }
+}
+
+// Request to describe a specific PCR.
+message DescribePcrRequest {
+  // PCR index to describe (0-15)
+  uint32 index = 1;
+}
+
+// Request to extend a PCR with additional data.
+message ExtendPcrRequest {
+  // PCR index to extend (0-15)
+  uint32 index = 1;
+  // Data to extend into the PCR
+  bytes data = 2;
+}
+
+// Request to lock a specific PCR.
+message LockPcrRequest {
+  // PCR index to lock (0-15)
+  uint32 index = 1;
+}
+
+// Request to lock a range of PCRs.
+message LockPcrsRequest {
+  // Number of PCRs to lock starting from index 0
+  uint32 range = 1;
+}
+
+// Request to describe NSM capabilities.
+message DescribeNsmRequest {}
+
+// Request for an attestation document.
+message AttestationRequest {
+  // Optional user data to include in attestation (max 512 bytes)
+  optional bytes user_data = 1;
+  // Optional nonce for freshness (max 512 bytes)
+  optional bytes nonce = 2;
+  // Optional public key to include in attestation (max 1024 bytes)
+  optional bytes public_key = 3;
+}
+
+// Request for random bytes from the NSM.
+message GetRandomRequest {}
+
+// Response type for the Nitro Secure Module API.
+message NsmResponse {
+  // The specific NSM response variant
+  oneof response {
+    // Response describing a PCR
+    DescribePcrResponse describe_pcr = 1;
+    // Response from extending a PCR
+    ExtendPcrResponse extend_pcr = 2;
+    // Response from locking a PCR
+    LockPcrResponse lock_pcr = 3;
+    // Response from locking PCRs
+    LockPcrsResponse lock_pcrs = 4;
+    // Response describing NSM capabilities
+    DescribeNsmResponse describe_nsm = 5;
+    // Response containing attestation document
+    AttestationResponse attestation = 6;
+    // Response containing random bytes
+    GetRandomResponse get_random = 7;
+    // Error response
+    NsmErrorResponse error = 8;
+  }
+}
+
+// Response describing a PCR.
+message DescribePcrResponse {
+  // Whether the PCR is locked
+  bool lock = 1;
+  // Current PCR value
+  bytes data = 2;
+}
+
+// Response from extending a PCR.
+message ExtendPcrResponse {
+  // New PCR value after extension
+  bytes data = 1;
+}
+
+// Response from locking a PCR.
+message LockPcrResponse {}
+
+// Response from locking PCRs.
+message LockPcrsResponse {}
+
+// Response describing NSM capabilities.
+message DescribeNsmResponse {
+  // NSM major version number
+  uint32 version_major = 1;
+  // NSM minor version number
+  uint32 version_minor = 2;
+  // NSM patch version number
+  uint32 version_patch = 3;
+  // Unique module identifier
+  string module_id = 4;
+  // Maximum number of PCRs supported
+  uint32 max_pcrs = 5;
+  // Indices of currently locked PCRs (repeated instead of set for deterministic ordering)
+  repeated uint32 locked_pcrs = 6;
+  // Hash digest algorithm used by the NSM
+  NsmDigest digest = 7;
+}
+
+// Response containing an attestation document.
+message AttestationResponse {
+  // COSE Sign1 structure containing CBOR-encoded AttestationDocument
+  bytes document = 1;
+}
+
+// Response containing random bytes.
+message GetRandomResponse {
+  // Random bytes from the NSM hardware RNG
+  bytes random = 1;
+}
+
+// Error response from NSM.
+message NsmErrorResponse {
+  // The error code indicating what went wrong
+  NsmErrorCode code = 1;
+}

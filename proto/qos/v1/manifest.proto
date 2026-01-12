@@ -1,0 +1,129 @@
+// QOS Manifest types
+//
+// These types define the enclave manifest and its approval structure.
+// They are the primary types used for enclave configuration and signing.
+
+syntax = "proto3";
+package qos.v1;
+
+// Enclave configuration specific to AWS Nitro.
+message NitroConfig {
+  // Hash of the enclave image file (PCR0)
+  bytes pcr0 = 1;
+  // Hash of the Linux kernel and bootstrap (PCR1)
+  bytes pcr1 = 2;
+  // Hash of the application (PCR2)
+  bytes pcr2 = 3;
+  // Hash of the IAM role ARN (PCR3)
+  bytes pcr3 = 4;
+  // DER encoded X509 AWS root certificate
+  bytes aws_root_certificate = 5;
+  // Reference to the commit QOS was built off of
+  string qos_commit = 6;
+}
+
+// Policy for restarting the pivot binary.
+enum RestartPolicy {
+  // Unspecified restart policy
+  RESTART_POLICY_UNSPECIFIED = 0;
+  // Never restart the pivot binary after it exits
+  RESTART_POLICY_NEVER = 1;
+  // Always restart the pivot binary after it exits
+  RESTART_POLICY_ALWAYS = 2;
+}
+
+// Pivot binary configuration
+message PivotConfig {
+  // SHA-256 hash of the pivot binary
+  bytes hash = 1;
+  // Restart policy for running the pivot binary
+  RestartPolicy restart = 2;
+  // Arguments to invoke the binary with
+  repeated string args = 3;
+}
+
+// A quorum member's alias and public key.
+message QuorumMember {
+  // Human readable alias to identify the member
+  string alias = 1;
+  // P256 public key bytes
+  bytes pub_key = 2;
+}
+
+// A member of a quorum set identified solely by their public key.
+message MemberPubKey {
+  // P256 public key bytes
+  bytes pub_key = 1;
+}
+
+// The Manifest Set - members who can approve manifests.
+message ManifestSet {
+  // Threshold K of signatures necessary for quorum
+  uint32 threshold = 1;
+  // Members composing the set (N >= K)
+  repeated QuorumMember members = 2;
+}
+
+// The Share Set - members who hold key shares.
+message ShareSet {
+  // Threshold K of signatures necessary for quorum
+  uint32 threshold = 1;
+  // Members composing the set (N >= K)
+  repeated QuorumMember members = 2;
+}
+
+// The Patch Set - members who can approve patches.
+message PatchSet {
+  // Threshold K of signatures necessary for quorum
+  uint32 threshold = 1;
+  // Public keys of members (N >= K)
+  repeated MemberPubKey members = 2;
+}
+
+// A Namespace and its relative nonce.
+message Namespace {
+  // Unique namespace name
+  string name = 1;
+  // Monotonically increasing nonce to prevent downgrade attacks
+  uint32 nonce = 2;
+  // P256 quorum key public bytes
+  bytes quorum_key = 3;
+}
+
+// The Manifest for the enclave.
+message Manifest {
+  // Namespace this manifest belongs to
+  Namespace namespace = 1;
+  // Pivot binary configuration
+  PivotConfig pivot = 2;
+  // Manifest Set members and threshold
+  ManifestSet manifest_set = 3;
+  // Share Set members and threshold
+  ShareSet share_set = 4;
+  // Enclave hardware configuration
+  NitroConfig enclave = 5;
+  // Patch set members and threshold
+  PatchSet patch_set = 6;
+  // Client timeout for calls via the VSOCK/USOCK (optional, defaults to 5s)
+  optional uint32 client_timeout_ms = 7;
+  // Pool size for socket pipes (optional, defaults to 1)
+  optional uint32 pool_size = 8;
+}
+
+// An approval by a Quorum Member.
+message Approval {
+  // P256 ECDSA signature over the manifest hash
+  bytes signature = 1;
+  // The quorum member who signed
+  QuorumMember member = 2;
+}
+
+// Manifest with accompanying Approvals.
+message ManifestEnvelope {
+  // Encapsulated manifest
+  Manifest manifest = 1;
+  // Approvals from the manifest set
+  repeated Approval manifest_set_approvals = 2;
+  // Approvals from the share set (for audit)
+  repeated Approval share_set_approvals = 3;
+}

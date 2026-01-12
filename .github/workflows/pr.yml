@@ -25,6 +25,36 @@ jobs:
       - name: Run linting
         run: make lint
 
+  proto-gen:
+    name: proto-gen
+    runs-on: ubicloud-standard-2
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Check for modified proto files
+        run: |
+          # Get list of modified (not added) proto files compared to main
+          MODIFIED=$(git diff --name-only --diff-filter=M origin/main...HEAD -- 'proto/**/*.proto')
+          if [ -n "$MODIFIED" ]; then
+            echo "ERROR: Proto files must not be modified. Create a new version instead."
+            echo ""
+            echo "Modified files:"
+            echo "$MODIFIED"
+            echo ""
+            echo "To maintain backwards compatibility, proto files are immutable once committed."
+            echo "If you need to make changes, create a new version (e.g., proto/qos/v2/)."
+            exit 1
+          fi
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
+      - name: Run proto-gen
+        run: make proto-gen
+      - name: Check for uncommitted changes
+        run: |
+          git diff --exit-code || (echo "Proto generated code is out of sync. Run 'make proto-gen' and commit the changes." && exit 1)
+
   build-linux-only-crates:
     name: build-linux-only-crates
     runs-on: ubicloud-standard-8

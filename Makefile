@@ -24,6 +24,10 @@ format: out/.common-loaded
 docs: out/.common-loaded
 	$(call run,cargo doc)
 
+.PHONY: proto-gen
+proto-gen: out/.common-loaded
+	cd src/qos_proto/proto_gen && cargo run
+
 .PHONY: build-linux-only
 build-linux-only: out/.common-loaded
 	$(call run,make build-linux-only)

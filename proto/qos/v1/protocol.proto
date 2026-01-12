@@ -1,0 +1,345 @@
+// QOS Protocol types
+//
+// These types define the protocol messages exchanged between
+// the client and the enclave.
+
+syntax = "proto3";
+package qos.v1;
+
+import "qos/v1/manifest.proto";
+import "qos/v1/genesis.proto";
+import "qos/v1/nsm.proto";
+
+// Protocol execution phase.
+enum ProtocolPhase {
+  // Phase is not specified
+  PROTOCOL_PHASE_UNSPECIFIED = 0;
+  // Enclave encountered an unrecoverable error
+  PROTOCOL_PHASE_UNRECOVERABLE_ERROR = 1;
+  // Enclave is waiting for boot instruction
+  PROTOCOL_PHASE_WAITING_FOR_BOOT_INSTRUCTION = 2;
+  // Enclave has completed genesis boot
+  PROTOCOL_PHASE_GENESIS_BOOTED = 3;
+  // Enclave is waiting for quorum key shards
+  PROTOCOL_PHASE_WAITING_FOR_QUORUM_SHARDS = 4;
+  // Quorum key has been provisioned
+  PROTOCOL_PHASE_QUORUM_KEY_PROVISIONED = 5;
+  // Enclave is waiting for a forwarded key
+  PROTOCOL_PHASE_WAITING_FOR_FORWARDED_KEY = 6;
+}
+
+// Protocol message - the main RPC type for client-enclave communication.
+message ProtocolMsg {
+  // The specific message variant
+  oneof msg {
+    // Error response from enclave
+    ProtocolError error_response = 1;
+
+    // Request enclave status
+    StatusRequest status_request = 2;
+    // Enclave status response
+    StatusResponse status_response = 3;
+
+    // Request standard boot
+    BootStandardRequest boot_standard_request = 4;
+    // Standard boot response
+    BootStandardResponse boot_standard_response = 5;
+    // Request genesis boot
+    BootGenesisRequest boot_genesis_request = 6;
+    // Genesis boot response
+    BootGenesisResponse boot_genesis_response = 7;
+    // Request key forward boot
+    BootKeyForwardRequest boot_key_forward_request = 8;
+    // Key forward boot response
+    BootKeyForwardResponse boot_key_forward_response = 9;
+
+    // Post a Shamir share of the quorum key
+    ProvisionRequest provision_request = 10;
+    // Provision response
+    ProvisionResponse provision_response = 11;
+
+    // Request to proxy data to pivot
+    ProxyRequest proxy_request = 12;
+    // Proxy response from pivot
+    ProxyResponse proxy_response = 13;
+
+    // Request live attestation document
+    LiveAttestationDocRequest live_attestation_doc_request = 14;
+    // Live attestation document response
+    LiveAttestationDocResponse live_attestation_doc_response = 15;
+
+    // Request to export the quorum key
+    ExportKeyRequest export_key_request = 16;
+    // Export key response
+    ExportKeyResponse export_key_response = 17;
+    // Request to inject a quorum key
+    InjectKeyRequest inject_key_request = 18;
+    // Inject key response
+    InjectKeyResponse inject_key_response = 19;
+
+    // Request manifest envelope
+    ManifestEnvelopeRequest manifest_envelope_request = 20;
+    // Manifest envelope response
+    ManifestEnvelopeResponse manifest_envelope_response = 21;
+  }
+}
+
+// Request for enclave status.
+message StatusRequest {}
+
+// Response containing enclave status.
+message StatusResponse {
+  // Current protocol execution phase
+  ProtocolPhase phase = 1;
+}
+
+// Request to boot the enclave in standard mode.
+message BootStandardRequest {
+  // Manifest envelope with approvals
+  ManifestEnvelope manifest_envelope = 1;
+  // Pivot binary bytes
+  bytes pivot = 2;
+}
+
+// Response from standard boot.
+message BootStandardResponse {
+  // NSM attestation response
+  NsmResponse nsm_response = 1;
+}
+
+// Request to boot the enclave in genesis mode.
+message BootGenesisRequest {
+  // Genesis set configuration for key sharding
+  GenesisSet set = 1;
+  // Optional disaster recovery P256 public key (DER encoded)
+  optional bytes dr_key = 2;
+}
+
+// Response from genesis boot.
+message BootGenesisResponse {
+  // NSM attestation response
+  NsmResponse nsm_response = 1;
+  // Genesis ceremony output
+  GenesisOutput genesis_output = 2;
+}
+
+// Request to boot the enclave in key forward mode.
+message BootKeyForwardRequest {
+  // Manifest envelope with approvals
+  ManifestEnvelope manifest_envelope = 1;
+  // Pivot binary bytes
+  bytes pivot = 2;
+}
+
+// Response from key forward boot.
+message BootKeyForwardResponse {
+  // NSM attestation response
+  NsmResponse nsm_response = 1;
+}
+
+// Request to post a Shamir share of the quorum key.
+message ProvisionRequest {
+  // Quorum key share encrypted to the Ephemeral Key
+  bytes share = 1;
+  // Approval of the manifest from a share set member
+  Approval approval = 2;
+}
+
+// Response from posting a Shamir share.
+message ProvisionResponse {
+  // True if the quorum key was successfully reconstructed
+  bool reconstructed = 1;
+}
+
+// Request to proxy data to the pivot application.
+message ProxyRequest {
+  // Data to forward to the pivot
+  bytes data = 1;
+}
+
+// Response from the pivot application.
+message ProxyResponse {
+  // Data returned from the pivot
+  bytes data = 1;
+}
+
+// Request for a live attestation document.
+message LiveAttestationDocRequest {}
+
+// Response containing a live attestation document.
+message LiveAttestationDocResponse {
+  // NSM attestation response
+  NsmResponse nsm_response = 1;
+  // Current manifest envelope (if available)
+  optional ManifestEnvelope manifest_envelope = 2;
+}
+
+// Request to export the quorum key to another enclave.
+message ExportKeyRequest {
+  // Manifest envelope of the requesting enclave
+  ManifestEnvelope manifest_envelope = 1;
+  // COSE Sign1 attestation document from the requesting enclave
+  bytes cose_sign1_attestation_doc = 2;
+}
+
+// Response containing the exported quorum key.
+message ExportKeyResponse {
+  // Quorum key encrypted to the requesting enclave's Ephemeral Key
+  bytes encrypted_quorum_key = 1;
+  // Signature over the encrypted quorum key
+  bytes signature = 2;
+}
+
+// Request to inject a quorum key into this enclave.
+message InjectKeyRequest {
+  // Quorum key encrypted to this enclave's Ephemeral Key
+  bytes encrypted_quorum_key = 1;
+  // Signature over the encrypted quorum key
+  bytes signature = 2;
+}
+
+// Response from injecting a quorum key.
+message InjectKeyResponse {}
+
+// Request for the current manifest envelope.
+message ManifestEnvelopeRequest {}
+
+// Response containing the manifest envelope.
+message ManifestEnvelopeResponse {
+  // Current manifest envelope (if available)
+  optional ManifestEnvelope manifest_envelope = 1;
+}
+
+// Protocol error with code and message.
+message ProtocolError {
+  // Error code indicating the type of error
+  ProtocolErrorCode code = 1;
+  // Human-readable error message with details interpolated
+  optional string message = 2;
+}
+
+// Protocol error codes.
+enum ProtocolErrorCode {
+  // Unspecified error
+  PROTOCOL_ERROR_CODE_UNSPECIFIED = 0;
+  // Invalid share format or content
+  PROTOCOL_ERROR_CODE_INVALID_SHARE = 1;
+  // Reconstruction failed: secret was empty
+  PROTOCOL_ERROR_CODE_RECONSTRUCTION_ERROR_EMPTY_SECRET = 2;
+  // Reconstruction failed: public key mismatch
+  PROTOCOL_ERROR_CODE_RECONSTRUCTION_ERROR_INCORRECT_PUB_KEY = 3;
+  // I/O error occurred
+  PROTOCOL_ERROR_CODE_IO_ERROR = 4;
+  // Manifest approval signature is invalid
+  PROTOCOL_ERROR_CODE_INVALID_MANIFEST_APPROVAL = 5;
+  // Insufficient approvals for quorum
+  PROTOCOL_ERROR_CODE_NOT_ENOUGH_APPROVALS = 6;
+  // No matching route for request
+  PROTOCOL_ERROR_CODE_NO_MATCHING_ROUTE = 7;
+  // Pivot hash does not match manifest
+  PROTOCOL_ERROR_CODE_INVALID_PIVOT_HASH = 8;
+  // Message exceeds maximum size
+  PROTOCOL_ERROR_CODE_OVERSIZE_MSG = 9;
+  // Message format is invalid
+  PROTOCOL_ERROR_CODE_INVALID_MSG = 10;
+  // Enclave client error
+  PROTOCOL_ERROR_CODE_ENCLAVE_CLIENT = 11;
+  // Decryption operation failed
+  PROTOCOL_ERROR_CODE_DECRYPTION_FAILED = 12;
+  // Private key format is invalid
+  PROTOCOL_ERROR_CODE_INVALID_PRIVATE_KEY = 13;
+  // Failed to parse value from string
+  PROTOCOL_ERROR_CODE_FAILED_TO_PARSE_FROM_STRING = 14;
+  // Ephemeral key path is invalid
+  PROTOCOL_ERROR_CODE_BAD_EPHEMERAL_KEY_PATH = 15;
+  // Cannot modify static data after pivot started
+  PROTOCOL_ERROR_CODE_CANNOT_MODIFY_POST_PIVOT_STATIC = 16;
+  // Failed to retrieve ephemeral key
+  PROTOCOL_ERROR_CODE_FAILED_TO_GET_EPHEMERAL_KEY = 17;
+  // Failed to store ephemeral key
+  PROTOCOL_ERROR_CODE_FAILED_TO_PUT_EPHEMERAL_KEY = 18;
+  // Cannot rotate non-existent ephemeral key
+  PROTOCOL_ERROR_CODE_CANNOT_ROTATE_NON_EXISTENT_EPHEMERAL_KEY = 19;
+  // Cannot delete ephemeral key
+  PROTOCOL_ERROR_CODE_CANNOT_DELETE_EPHEMERAL_KEY = 20;
+  // Failed to retrieve quorum key
+  PROTOCOL_ERROR_CODE_FAILED_TO_GET_QUORUM_KEY = 21;
+  // Failed to store quorum key
+  PROTOCOL_ERROR_CODE_FAILED_TO_PUT_QUORUM_KEY = 22;
+  // Failed to retrieve manifest envelope
+  PROTOCOL_ERROR_CODE_FAILED_TO_GET_MANIFEST_ENVELOPE = 23;
+  // Failed to store manifest envelope
+  PROTOCOL_ERROR_CODE_FAILED_TO_PUT_MANIFEST_ENVELOPE = 24;
+  // Failed to store pivot binary
+  PROTOCOL_ERROR_CODE_FAILED_TO_PUT_PIVOT = 25;
+  // App client receive timed out
+  PROTOCOL_ERROR_CODE_APP_CLIENT_RECV_TIMEOUT = 26;
+  // App client receive was interrupted
+  PROTOCOL_ERROR_CODE_APP_CLIENT_RECV_INTERRUPTED = 27;
+  // App client connection was closed
+  PROTOCOL_ERROR_CODE_APP_CLIENT_RECV_CONNECTION_CLOSED = 28;
+  // App client failed to connect
+  PROTOCOL_ERROR_CODE_APP_CLIENT_CONNECT_ERROR = 29;
+  // App client failed to send
+  PROTOCOL_ERROR_CODE_APP_CLIENT_SEND_ERROR = 30;
+  // General app client error
+  PROTOCOL_ERROR_CODE_APP_CLIENT_ERROR = 31;
+  // Payload exceeds size limit
+  PROTOCOL_ERROR_CODE_OVERSIZED_PAYLOAD = 32;
+  // Failed to deserialize protocol message
+  PROTOCOL_ERROR_CODE_PROTOCOL_MSG_DESERIALIZATION = 33;
+  // Share set approvals are invalid
+  PROTOCOL_ERROR_CODE_BAD_SHARE_SET_APPROVALS = 34;
+  // Could not verify approval signature
+  PROTOCOL_ERROR_CODE_COULD_NOT_VERIFY_APPROVAL = 35;
+  // Signer is not a share set member
+  PROTOCOL_ERROR_CODE_NOT_SHARE_SET_MEMBER = 36;
+  // Signer is not a manifest set member
+  PROTOCOL_ERROR_CODE_NOT_MANIFEST_SET_MEMBER = 37;
+  // P256 cryptographic error
+  PROTOCOL_ERROR_CODE_P256_ERROR = 38;
+  // Disaster recovery key is not valid P256
+  PROTOCOL_ERROR_CODE_INVALID_P256_DR_KEY = 39;
+  // Secret length is incorrect
+  PROTOCOL_ERROR_CODE_INCORRECT_SECRET_LEN = 40;
+  // Attestation verification failed
+  PROTOCOL_ERROR_CODE_QOS_ATTEST_ERROR = 41;
+  // Quorum key does not match expected
+  PROTOCOL_ERROR_CODE_DIFFERENT_QUORUM_KEY = 42;
+  // Manifest set does not match expected
+  PROTOCOL_ERROR_CODE_DIFFERENT_MANIFEST_SET = 43;
+  // Namespace name does not match expected
+  PROTOCOL_ERROR_CODE_DIFFERENT_NAMESPACE_NAME = 44;
+  // Nonce is lower than current value
+  PROTOCOL_ERROR_CODE_LOW_NONCE = 45;
+  // PCR0 does not match expected
+  PROTOCOL_ERROR_CODE_DIFFERENT_PCR0 = 46;
+  // PCR1 does not match expected
+  PROTOCOL_ERROR_CODE_DIFFERENT_PCR1 = 47;
+  // PCR2 does not match expected
+  PROTOCOL_ERROR_CODE_DIFFERENT_PCR2 = 48;
+  // PCR3 does not match expected
+  PROTOCOL_ERROR_CODE_DIFFERENT_PCR3 = 49;
+  // Ephemeral key is missing
+  PROTOCOL_ERROR_CODE_MISSING_EPHEMERAL_KEY = 50;
+  // Ephemeral key is invalid
+  PROTOCOL_ERROR_CODE_INVALID_EPHEMERAL_KEY = 51;
+  // Signature over encrypted quorum key is invalid
+  PROTOCOL_ERROR_CODE_INVALID_ENCRYPTED_QUORUM_KEY_SIGNATURE = 52;
+  // Encrypted quorum key has invalid length
+  PROTOCOL_ERROR_CODE_ENCRYPTED_QUORUM_KEY_INVALID_LEN = 53;
+  // Quorum secret is invalid
+  PROTOCOL_ERROR_CODE_INVALID_QUORUM_SECRET = 54;
+  // Quorum key does not match expected public key
+  PROTOCOL_ERROR_CODE_WRONG_QUORUM_KEY = 55;
+  // Invalid state transition attempted
+  PROTOCOL_ERROR_CODE_INVALID_STATE_TRANSITION = 56;
+  // Duplicate approval from same member
+  PROTOCOL_ERROR_CODE_DUPLICATE_APPROVAL = 57;
+  // Manifest does not match expected
+  PROTOCOL_ERROR_CODE_DIFFERENT_MANIFEST = 58;
+  // QOS cryptographic operation failed
+  PROTOCOL_ERROR_CODE_QOS_CRYPTO = 59;
+  // Failed to expand connection pool
+  PROTOCOL_ERROR_CODE_POOL_EXPAND_ERROR = 60;
+}
