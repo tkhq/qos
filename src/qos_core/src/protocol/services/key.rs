@@ -873,7 +873,9 @@ mod test {
 					&manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::QosAttestError("DifferentPcr0".to_string()))
+				Err(ProtocolError::QosAttestError(
+					"DifferentPcr0 { expected: \"8080808080808080808080808080808080808080808080808080808080808080\", actual: \"0404040404040404040404040404040404040404040404040404040404040404\" }".to_string()
+				))
 			);
 		}
 
@@ -910,7 +912,9 @@ mod test {
 					&manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::QosAttestError("DifferentPcr1".to_string()))
+				Err(ProtocolError::QosAttestError(
+					"DifferentPcr1 { expected: \"8080808080808080808080808080808080808080808080808080808080808080\", actual: \"0303030303030303030303030303030303030303030303030303030303030303\" }".to_string()
+				))
 			);
 		}
 
@@ -947,7 +951,9 @@ mod test {
 					&manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::QosAttestError("DifferentPcr2".to_string()))
+				Err(ProtocolError::QosAttestError(
+					"DifferentPcr2 { expected: \"8080808080808080808080808080808080808080808080808080808080808080\", actual: \"0202020202020202020202020202020202020202020202020202020202020202\" }".to_string()
+				))
 			);
 		}
 
@@ -984,7 +990,9 @@ mod test {
 					&manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::QosAttestError("DifferentPcr3".to_string()))
+				Err(ProtocolError::QosAttestError(
+					"DifferentPcr3 { expected: \"8080808080808080808080808080808080808080808080808080808080808080\", actual: \"0101010101010101010101010101010101010101010101010101010101010101\" }".to_string()
+				))
 			);
 		}
 
@@ -1012,16 +1020,13 @@ mod test {
 
 			// Don't update the manifest hash in the attestation doc
 
-			assert_eq!(
-				validate_manifest(
-					&new_manifest_envelope,
-					&manifest_envelope,
-					&att_doc
-				),
-				Err(ProtocolError::QosAttestError(
-					"DifferentUserData".to_string()
-				))
+			let err = validate_manifest(
+				&new_manifest_envelope,
+				&manifest_envelope,
+				&att_doc
 			);
+			// The hash values are dynamically generated, so we check the error format
+			assert!(matches!(&err, Err(ProtocolError::QosAttestError(msg)) if msg.starts_with("DifferentUserData {")));
 		}
 	}
 	mod export_key_inner {
