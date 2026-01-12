@@ -14,7 +14,7 @@ use qos_host::EnclaveInfo;
 use qos_p256::P256Pair;
 use qos_proto::{
 	Approval, GenesisMemberOutput, GenesisOutput, Manifest, ManifestSet,
-	Namespace, ProtoHash, QuorumMember, ShareSet,
+	Namespace, ProtoHash, ShareSet,
 };
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 

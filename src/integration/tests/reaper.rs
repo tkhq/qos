@@ -10,7 +10,7 @@ use qos_core::{
 	handles::Handles,
 	io::{SocketAddress, StreamPool},
 	protocol::{
-		msg::{protocol_msg, ProtocolMsg, ProtocolMsgExt},
+		msg::{ProtocolMsg, ProtocolMsgExt},
 		services::boot::ManifestEnvelope,
 		ProtocolError, ProtocolPhase,
 	},

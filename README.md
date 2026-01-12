@@ -192,6 +192,8 @@ Continued reading for attesting with nitro enclaves:
 
 Nitro enclaves have a single socket for communicating to their parent EC2 instance. When QuorumOS initially starts up, it starts listening on a [socket server](./src/qos_core/src/server.rs) for [`ProtocolMsg`s](./src/qos_core/src/protocol/msg.rs) (the routing logic for the enclave server is [here](./src/qos_core/src/protocol/mod.rs)) that are sent over a single VSOCK connection with the EC2 instance. The enclave server only supports simple request/response communication with a client on the EC2 instance end of the VSOCK connection.
 
+Protocol messages use [Protocol Buffers](https://protobuf.dev/) for wire format encoding to enable cross-language interoperability. See [docs/proto-encoding.md](./docs/proto-encoding.md) for details on the encoding conventions and working with proto types.
+
 For communicating just with the QuorumOS enclave server, we have [`qos_host`](./src/qos_host/src/lib.rs), a simple HTTP service that allows for `GET`ing health checks and `POST`ing `ProtocolMsg`s.
 
 We expect that Enclave Apps will have their own host (app host) that will talk to the enclave server over the same socket. A Enclave App is expected to use a simple request/response pattern and arbitrary message serialization. Communication to an app is proxied by the QuorumOS enclave server; so for a app host to communicate with the app it must send a `ProtocolMsg::ProxyRequest { data: Vec<u8> }` to the QuorumOS enclave server, and then the enclave server will send just the `data` to the application over a unix socket. The app will respond to the enclave server with raw data and then the enclave server will respond to the app host with `ProtocolMsg::ProxyResponse { data: Vec<u8> }`.
