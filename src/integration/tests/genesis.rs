@@ -5,12 +5,11 @@ use std::{
 	process::Command,
 };
 
-use borsh::de::BorshDeserialize;
 use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
-use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{sha_512, shamir::shares_reconstruct};
 use qos_nsm::nitro::unsafe_attestation_doc_from_der;
 use qos_p256::{P256Pair, P256Public};
+use qos_proto::GenesisOutput;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 use rand::{rng, seq::SliceRandom};
 
@@ -168,7 +167,7 @@ async fn genesis_e2e() {
 	drop(unsafe_attestation_doc_from_der(
 		&fs::read(&*attestation_doc_path).unwrap(),
 	));
-	let genesis_output = GenesisOutput::try_from_slice(
+	let genesis_output: GenesisOutput = serde_json::from_slice(
 		&fs::read(&*genesis_output_path).unwrap(),
 	)
 	.unwrap();
@@ -178,7 +177,8 @@ async fn genesis_e2e() {
 		.member_outputs
 		.iter()
 		.map(|member| {
-			let alias = &member.share_set_member.alias;
+			let share_set_member = member.share_set_member.as_ref().expect("missing share_set_member");
+			let alias = &share_set_member.alias;
 
 			let (private_share_key, _) = get_key_paths(alias);
 			let share_key_path =
@@ -190,7 +190,7 @@ async fn genesis_e2e() {
 			let plain_text_share =
 				share_pair.decrypt(&member.encrypted_quorum_key_share).unwrap();
 
-			assert_eq!(sha_512(&plain_text_share), member.share_hash);
+			assert_eq!(sha_512(&plain_text_share).as_slice(), member.share_hash.as_slice());
 
 			plain_text_share
 		})

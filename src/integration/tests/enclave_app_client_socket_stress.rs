@@ -4,22 +4,24 @@ use borsh::BorshDeserialize;
 use integration::{
 	wait_for_usock, PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH,
 };
+use prost::Message;
 use qos_core::{
 	client::SocketClient,
 	handles::Handles,
 	io::{SocketAddress, StreamPool},
 	protocol::{
-		msg::ProtocolMsg,
-		services::boot::{
-			Manifest, ManifestEnvelope, ManifestSet, Namespace, NitroConfig,
-			PivotConfig, RestartPolicy, ShareSet,
-		},
+		msg::{protocol_msg, ProtocolMsg, ProtocolMsgExt},
+		services::boot::ManifestEnvelope,
 		ProtocolError, ProtocolPhase, INITIAL_CLIENT_TIMEOUT,
 	},
 	reaper::{Reaper, REAPER_RESTART_DELAY},
 };
 use qos_nsm::mock::MockNsm;
 use qos_p256::P256Pair;
+use qos_proto::{
+	Manifest, ManifestSet, Namespace, NitroConfig, PivotConfig, RestartPolicy,
+	ShareSet,
+};
 use qos_test_primitives::PathWrapper;
 
 const TEST_TMP: &str = "/tmp/enclave_app_client_socket_stress";
@@ -32,31 +34,31 @@ async fn enclave_app_client_socket_stress() {
 	std::fs::create_dir_all(TEST_TMP).unwrap();
 
 	let manifest = Manifest {
-		namespace: Namespace {
+		namespace: Some(Namespace {
 			name: String::default(),
 			nonce: 0,
 			quorum_key: vec![],
-		},
-		pivot: PivotConfig {
-			hash: [1; 32],
-			restart: RestartPolicy::Always,
+		}),
+		pivot: Some(PivotConfig {
+			hash: [1; 32].to_vec(),
+			restart: RestartPolicy::Always.into(),
 			args: vec![APP_SOCK.to_string()],
-		},
-		manifest_set: ManifestSet { threshold: 0, members: vec![] },
-		share_set: ShareSet { threshold: 0, members: vec![] },
-		enclave: NitroConfig {
+		}),
+		manifest_set: Some(ManifestSet { threshold: 0, members: vec![] }),
+		share_set: Some(ShareSet { threshold: 0, members: vec![] }),
+		enclave: Some(NitroConfig {
 			pcr0: vec![1; 32],
 			pcr1: vec![1; 32],
 			pcr2: vec![1; 32],
 			pcr3: vec![1; 32],
 			aws_root_certificate: vec![],
 			qos_commit: String::default(),
-		},
+		}),
 		..Default::default()
 	};
 
 	let manifest_envelope = ManifestEnvelope {
-		manifest,
+		manifest: Some(manifest),
 		manifest_set_approvals: vec![],
 		share_set_approvals: vec![],
 	};
@@ -108,31 +110,26 @@ async fn enclave_app_client_socket_stress() {
 
 	let app_request =
 		borsh::to_vec(&PivotSocketStressMsg::PanicRequest).unwrap();
-	let request =
-		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
-			.unwrap();
+	let request = ProtocolMsg::proxy_request(app_request).encode_to_vec();
 	let raw_response = enclave_client.call(&request).await.unwrap();
-	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
+	let response = ProtocolMsg::decode(raw_response.as_slice()).unwrap();
 
-	assert_eq!(
-		response,
-		ProtocolMsg::ProtocolErrorResponse(
-			ProtocolError::AppClientRecvConnectionClosed
-		)
-	);
+	let expected =
+		ProtocolMsg::error_response(ProtocolError::AppClientRecvConnectionClosed.into());
+	assert_eq!(response, expected);
 
 	tokio::time::sleep(REAPER_RESTART_DELAY + Duration::from_secs(1)).await;
 	// The pivot panicked and should have been restarted.
 	let app_request =
 		borsh::to_vec(&PivotSocketStressMsg::OkRequest(1)).unwrap();
-	let request =
-		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
-			.unwrap();
+	let request = ProtocolMsg::proxy_request(app_request).encode_to_vec();
 	let raw_response = enclave_client.call(&request).await.unwrap();
 	let response = {
-		let msg = ProtocolMsg::try_from_slice(&raw_response).unwrap();
-		let data = match msg {
-			ProtocolMsg::ProxyResponse { data } => data,
+		let msg = ProtocolMsg::decode(raw_response.as_slice()).unwrap();
+		let data = match &msg.msg {
+			Some(protocol_msg::Msg::ProxyResponse(proxy_resp)) => {
+				proxy_resp.data.clone()
+			}
 			x => panic!("Expected proxy response, got {x:?}"),
 		};
 		PivotSocketStressMsg::try_from_slice(&data).unwrap()
@@ -142,13 +139,10 @@ async fn enclave_app_client_socket_stress() {
 	// Send a request that the app will take too long to respond to
 	let app_request =
 		borsh::to_vec(&PivotSocketStressMsg::SlowRequest(5500)).unwrap();
-	let request =
-		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
-			.unwrap();
+	let request = ProtocolMsg::proxy_request(app_request).encode_to_vec();
 	let raw_response = enclave_client.call(&request).await.unwrap();
-	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
-	assert_eq!(
-		response,
-		ProtocolMsg::ProtocolErrorResponse(ProtocolError::AppClientRecvTimeout)
-	);
+	let response = ProtocolMsg::decode(raw_response.as_slice()).unwrap();
+	let expected =
+		ProtocolMsg::error_response(ProtocolError::AppClientRecvTimeout.into());
+	assert_eq!(response, expected);
 }

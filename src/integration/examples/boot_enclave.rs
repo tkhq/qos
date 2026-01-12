@@ -8,16 +8,14 @@ use std::{
 };
 
 use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
-use qos_core::protocol::{
-	services::{
-		boot::{Approval, Manifest, ManifestSet, Namespace, ShareSet},
-		genesis::{GenesisMemberOutput, GenesisOutput},
-	},
-	ProtocolPhase, QosHash,
-};
+use qos_core::protocol::ProtocolPhase;
 use qos_crypto::sha_256;
 use qos_host::EnclaveInfo;
 use qos_p256::P256Pair;
+use qos_proto::{
+	Approval, GenesisMemberOutput, GenesisOutput, Manifest, ManifestSet,
+	Namespace, ProtoHash, QuorumMember, ShareSet,
+};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::main]
@@ -117,26 +115,27 @@ async fn main() {
 		.member_outputs
 		.iter()
 		.cloned()
-		.map(|GenesisMemberOutput { share_set_member, .. }| share_set_member)
+		.filter_map(|GenesisMemberOutput { share_set_member, .. }| share_set_member)
 		.collect();
-	members.sort();
+	members.sort_by(|a, b| (&a.alias, &a.pub_key).cmp(&(&b.alias, &b.pub_key)));
 
 	let namespace_field = Namespace {
 		name: namespace.to_string(),
 		nonce: 2,
 		quorum_key: genesis_output.quorum_key,
 	};
-	assert_eq!(manifest.namespace, namespace_field);
+	assert_eq!(manifest.namespace, Some(namespace_field));
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
-	assert_eq!(manifest.manifest_set, manifest_set);
+	assert_eq!(manifest.manifest_set, Some(manifest_set));
 	let share_set = ShareSet { threshold: 2, members };
-	assert_eq!(manifest.share_set, share_set);
+	assert_eq!(manifest.share_set, Some(share_set));
 
+	let manifest_namespace = manifest.namespace.as_ref().expect("missing namespace");
 	// -- CLIENT make sure each user can run `approve-manifest`
 	for alias in [user1, user2, user3] {
 		let approval_path = format!(
 			"{}/{}-{}-{}.approval",
-			&*boot_dir, alias, namespace, manifest.namespace.nonce,
+			&*boot_dir, alias, namespace, manifest_namespace.nonce,
 		);
 
 		let secret_path = format!("{}/{}.secret", &personal_dir(alias), alias);
@@ -204,7 +203,7 @@ async fn main() {
 
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
-			"Is this the correct pivot restart policy: RestartPolicy::Never? (y/n)"
+			"Is this the correct pivot restart policy: Never? (y/n)"
 		);
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 
@@ -229,12 +228,13 @@ async fn main() {
 		))
 		.unwrap();
 
-		let signature = personal_pair.sign(&manifest.qos_hash()).unwrap();
+		let signature = personal_pair.sign(&manifest.proto_hash()).unwrap();
 		assert_eq!(approval.signature, signature);
 
-		assert_eq!(approval.member.alias, alias);
+		let member = approval.member.as_ref().expect("missing member");
+		assert_eq!(member.alias, alias);
 		assert_eq!(
-			approval.member.pub_key,
+			member.pub_key,
 			personal_pair.public_key().to_bytes(),
 		);
 	}

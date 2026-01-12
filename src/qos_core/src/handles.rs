@@ -427,36 +427,36 @@ mod test {
 		let pivot = b"this is a pivot binary".to_vec();
 
 		let manifest = Manifest {
-			namespace: Namespace {
+			namespace: Some(Namespace {
 				nonce: 420,
 				name: "vape lord".to_string(),
 				quorum_key: P256Pair::generate()
 					.unwrap()
 					.public_key()
 					.to_bytes(),
-			},
-			enclave: NitroConfig {
+			}),
+			enclave: Some(NitroConfig {
 				pcr0: vec![4; 32],
 				pcr1: vec![3; 32],
 				pcr2: vec![2; 32],
 				pcr3: vec![1; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
 				qos_commit: "mock qos commit".to_string(),
-			},
-			pivot: PivotConfig {
-				hash: sha_256(&pivot),
-				restart: RestartPolicy::Always,
+			}),
+			pivot: Some(PivotConfig {
+				hash: sha_256(&pivot).to_vec(),
+				restart: RestartPolicy::Always.into(),
 				args: vec![],
-			},
-			manifest_set: ManifestSet { threshold: 2, members: vec![] },
-			share_set: ShareSet { threshold: 2, members: vec![] },
-			patch_set: PatchSet::default(),
+			}),
+			manifest_set: Some(ManifestSet { threshold: 2, members: vec![] }),
+			share_set: Some(ShareSet { threshold: 2, members: vec![] }),
+			patch_set: Some(PatchSet::default()),
 			pool_size: None,
 			client_timeout_ms: None,
 		};
 
 		let manifest_envelope = ManifestEnvelope {
-			manifest,
+			manifest: Some(manifest),
 			manifest_set_approvals: vec![],
 			share_set_approvals: vec![],
 		};

@@ -6,24 +6,19 @@ use std::{
 };
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
-use prost::Message;
 use qos_core::protocol::{
 	msg::{protocol_msg, ProtocolMsg, ProtocolMsgExt},
-	services::key::EncryptedQuorumKey,
+	services::{boot::ManifestEnvelopeExt, key::EncryptedQuorumKey},
+};
+use qos_crypto::{sha_256, sha_384, sha_512};
+use qos_nsm::nitro::{
+	attestation_doc_from_der, cert_from_pem, unsafe_attestation_doc_from_der,
+	verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
 };
 use qos_proto::{
 	Approval, GenesisOutput, GenesisSet, Manifest, ManifestEnvelope, ManifestSet,
 	MemberPubKey, Namespace, NitroConfig, PatchSet, PivotConfig, ProtoHash,
 	QuorumMember, RestartPolicy, ShareSet,
-};
-use qos_crypto::{sha_256, sha_384, sha_512};
-use qos_nsm::{
-	nitro::{
-		attestation_doc_from_der, cert_from_pem,
-		unsafe_attestation_doc_from_der,
-		verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
-	},
-	types::NsmResponse,
 };
 use qos_p256::{P256Error, P256Pair, P256Public};
 use zeroize::Zeroizing;
@@ -134,6 +129,14 @@ pub enum Error {
 	/// Given quorum key seed does not match the hash of the expected quorum
 	/// key seed.
 	SecretDoesNotMatch,
+	/// Generic IO error.
+	Io(std::io::Error),
+}
+
+impl From<std::io::Error> for Error {
+	fn from(err: std::io::Error) -> Self {
+		Error::Io(err)
+	}
 }
 
 impl From<serde_json::Error> for Error {
@@ -472,9 +475,10 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		"Output of genesis ceremony does not have same members as Genesis Set"
 	);
 	assert!(
-		genesis_output.member_outputs.iter().all(|member_out| genesis_set
-			.members
-			.contains(&member_out.share_set_member)),
+		genesis_output.member_outputs.iter().all(|member_out| {
+			let member = member_out.share_set_member.as_ref().expect("missing share_set_member");
+			genesis_set.members.contains(member)
+		}),
 		"Output of genesis ceremony does not have same members as Genesis Set"
 	);
 
@@ -573,7 +577,7 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	}
 
 	// check quorum_key_hash
-	if sha_512(master_seed_hex.as_bytes()) != genesis_output.quorum_key_hash {
+	if sha_512(master_seed_hex.as_bytes()).as_slice() != genesis_output.quorum_key_hash.as_slice() {
 		return Err(Error::SecretDoesNotMatch);
 	}
 	println!("Quorum key hash is correct");
@@ -670,8 +674,8 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		.member_outputs
 		.iter()
 		.find(|m| {
-			m.share_set_member.pub_key == share_key_public
-				&& m.share_set_member.alias == alias
+			let member = m.share_set_member.as_ref().expect("missing share_set_member");
+			member.pub_key == share_key_public && member.alias == alias
 		})
 		.expect("Could not find a member output associated with the setup key");
 
@@ -680,8 +684,8 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 		pair.decrypt(&member_output.encrypted_quorum_key_share)?;
 
 	assert_eq!(
-		sha_512(&plaintext_share),
-		member_output.share_hash,
+		sha_512(&plaintext_share).as_slice(),
+		member_output.share_hash.as_slice(),
 		"Expected share hash do not match the actual share hash"
 	);
 
@@ -748,22 +752,22 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
 	let manifest = Manifest {
-		namespace: Namespace {
+		namespace: Some(Namespace {
 			name: namespace,
 			nonce,
 			quorum_key: quorum_key.to_bytes(),
-		},
-		pivot: PivotConfig {
+		}),
+		pivot: Some(PivotConfig {
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
-			restart: restart_policy,
+			restart: restart_policy.into(),
 			args: pivot_args,
-		},
-		manifest_set,
-		share_set,
-		patch_set,
-		enclave: nitro_config,
-		pool_size,
-		client_timeout_ms,
+		}),
+		manifest_set: Some(manifest_set),
+		share_set: Some(share_set),
+		patch_set: Some(patch_set),
+		enclave: Some(nitro_config),
+		pool_size: pool_size.map(|x| x as u32),
+		client_timeout_ms: client_timeout_ms.map(|x| x as u32),
 	};
 
 	write_with_msg(
@@ -856,17 +860,18 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 
 	let approval = Approval {
 		signature: pair.sign(&manifest.proto_hash())?,
-		member: QuorumMember {
+		member: Some(QuorumMember {
 			pub_key: pair.public_key_bytes()?,
 			alias: alias.clone(),
-		},
+		}),
 	};
 
+	let namespace = manifest.namespace.as_ref().expect("missing namespace");
 	let approval_path = manifest_approvals_dir.as_ref().join(format!(
 		"{}-{}-{}.{}",
 		alias,
-		manifest.namespace.name.replace('/', "-"),
-		manifest.namespace.nonce,
+		namespace.name.replace('/', "-"),
+		namespace.nonce,
 		APPROVAL_EXT
 	));
 	write_with_msg(
@@ -890,37 +895,39 @@ fn approve_manifest_programmatic_verifications(
 	quorum_key: &P256Public,
 ) -> bool {
 	// Verify manifest set composition
-	if manifest.manifest_set != *manifest_set {
+	if manifest.manifest_set.as_ref() != Some(manifest_set) {
 		eprintln!("Manifest Set composition does not match");
 		return false;
 	}
 
 	// Verify share set composition
-	if manifest.share_set != *share_set {
+	if manifest.share_set.as_ref() != Some(share_set) {
 		eprintln!("Share Set composition does not match");
 		return false;
 	}
 
 	// Verify share set composition
-	if manifest.patch_set != *patch_set {
+	if manifest.patch_set.as_ref() != Some(patch_set) {
 		eprintln!("Share Set composition does not match");
 		return false;
 	}
 
 	// Verify pcrs 0, 1, 2, 3.
-	if manifest.enclave != *nitro_config {
+	if manifest.enclave.as_ref() != Some(nitro_config) {
 		eprintln!("Nitro configuration does not match");
 		return false;
 	}
 
+	let pivot = manifest.pivot.as_ref().expect("missing pivot config");
 	// Verify the pivot could be built deterministically
-	if manifest.pivot.hash != pivot_hash {
+	if pivot.hash != pivot_hash {
 		eprintln!("Pivot hash does not match");
 		return false;
 	}
 
+	let namespace = manifest.namespace.as_ref().expect("missing namespace");
 	// Verify the intended Quorum Key is being used
-	if manifest.namespace.quorum_key != quorum_key.to_bytes() {
+	if namespace.quorum_key != quorum_key.to_bytes() {
 		eprintln!("Quorum public key does not match");
 		return false;
 	}
@@ -936,11 +943,14 @@ where
 	R: BufRead,
 	W: Write,
 {
+	let namespace = manifest.namespace.as_ref().expect("missing namespace");
+	let pivot = manifest.pivot.as_ref().expect("missing pivot config");
+
 	// Check the namespace name
 	{
 		let prompt = format!(
 			"Is this the correct namespace name: {}? (y/n)",
-			manifest.namespace.name
+			namespace.name
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -951,7 +961,7 @@ where
 	{
 		let prompt = format!(
 			"Is this the correct namespace nonce: {}? (y/n)",
-			manifest.namespace.nonce
+			namespace.nonce
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -960,9 +970,11 @@ where
 
 	// Check pivot restart policy
 	{
+		let restart = qos_proto::RestartPolicy::try_from(pivot.restart)
+			.unwrap_or(qos_proto::RestartPolicy::Never);
 		let prompt = format!(
 			"Is this the correct pivot restart policy: {:?}? (y/n)",
-			manifest.pivot.restart
+			restart
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -973,7 +985,7 @@ where
 	{
 		let prompt = format!(
 			"Are these the correct pivot args:\n{:?}?\n(y/n)",
-			manifest.pivot.args
+			pivot.args
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1003,7 +1015,7 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 
 	// Create manifest envelope
 	let manifest_envelope = ManifestEnvelope {
-		manifest,
+		manifest: Some(manifest),
 		manifest_set_approvals: approvals,
 		share_set_approvals: vec![],
 	};
@@ -1353,11 +1365,12 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		eph_pub.encrypt(plaintext_share).expect("Envelope encryption error")
 	};
 
+	let manifest = manifest_envelope.manifest.as_ref().expect("missing manifest");
 	let approval = serde_json::to_vec(&Approval {
 		signature: pair
-			.sign(&manifest_envelope.manifest.proto_hash())
+			.sign(&manifest.proto_hash())
 			.expect("Failed to sign"),
-		member,
+		member: Some(member),
 	})
 	.expect("Could not serialize Approval");
 
@@ -1414,7 +1427,7 @@ fn proxy_re_encrypt_share_programmatic_verifications(
 	};
 
 	let member_found = share_set.members.iter().any(|m| {
-		m.as_ref().map(|qm| qm.pub_key == member.pub_key && qm.alias == member.alias).unwrap_or(false)
+		m.pub_key == member.pub_key && m.alias == member.alias
 	});
 	if !member_found {
 		eprintln!("The provided share set key and alias are not part of the Share Set");
@@ -1715,31 +1728,31 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	// Create a manifest with manifest set of 1
 	// everything below is hardcoded except pivot config
 	let manifest = Manifest {
-		namespace: Namespace {
+		namespace: Some(Namespace {
 			name: DANGEROUS_DEV_BOOT_NAMESPACE.to_string(),
 			nonce: u32::MAX,
 			quorum_key: quorum_public_der,
-		},
-		enclave: NitroConfig {
+		}),
+		enclave: Some(NitroConfig {
 			pcr0: mock_pcr.clone(),
 			pcr1: mock_pcr.clone(),
 			pcr2: mock_pcr.clone(),
 			pcr3: mock_pcr,
 			qos_commit: "mock-qos-commit-ref".to_string(),
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
-		},
-		pivot: PivotConfig { hash: sha_256(&pivot), restart, args },
-		manifest_set: ManifestSet {
+		}),
+		pivot: Some(PivotConfig { hash: sha_256(&pivot).to_vec(), restart: restart.into(), args }),
+		manifest_set: Some(ManifestSet {
 			threshold: 1,
 			// The only member is the quorum member
 			members: vec![member.clone()],
-		},
-		share_set: ShareSet {
+		}),
+		share_set: Some(ShareSet {
 			threshold: 2,
 			// The only member is the quorum member
 			members: vec![member.clone()],
-		},
-		patch_set: PatchSet { threshold: 0, members: vec![] },
+		}),
+		patch_set: Some(PatchSet { threshold: 0, members: vec![] }),
 		pool_size: None,
 		client_timeout_ms: None,
 	};
@@ -1949,7 +1962,7 @@ fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
 		.collect();
 
 	// We want to try and build the same manifest regardless of the OS.
-	members.sort();
+	members.sort_by(|a, b| (&a.alias, &a.pub_key).cmp(&(&b.alias, &b.pub_key)));
 
 	ShareSet { members, threshold: find_threshold(dir) }
 }
@@ -1973,7 +1986,7 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 		.collect();
 
 	// We want to try and build the same manifest regardless of the OS.
-	members.sort();
+	members.sort_by(|a, b| (&a.alias, &a.pub_key).cmp(&(&b.alias, &b.pub_key)));
 
 	ManifestSet { members, threshold: find_threshold(dir) }
 }
@@ -1994,7 +2007,7 @@ fn get_patch_set<P: AsRef<Path>>(dir: P) -> PatchSet {
 		.collect();
 
 	// We want to try and build the same manifest regardless of the OS.
-	members.sort();
+	members.sort_by(|a, b| a.pub_key.cmp(&b.pub_key));
 
 	PatchSet { members, threshold: find_threshold(dir) }
 }
@@ -2022,7 +2035,7 @@ fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
 		.collect();
 
 	// We want to try and build the same manifest regardless of the OS.
-	members.sort();
+	members.sort_by(|a, b| (&a.alias, &a.pub_key).cmp(&(&b.alias, &b.pub_key)));
 
 	GenesisSet { members, threshold: find_threshold(dir) }
 }
@@ -2031,6 +2044,7 @@ fn find_approvals<P: AsRef<Path>>(
 	boot_dir: P,
 	manifest: &Manifest,
 ) -> Vec<Approval> {
+	let manifest_set = manifest.manifest_set.as_ref().expect("missing manifest_set");
 	let approvals: Vec<_> = find_file_paths(&boot_dir)
 		.iter()
 		.filter_map(|path| {
@@ -2045,13 +2059,14 @@ fn find_approvals<P: AsRef<Path>>(
 			)
 			.expect("Failed to deserialize approval");
 
+			let member = approval.member.as_ref().expect("missing member in approval");
 			assert!(
-				manifest.manifest_set.members.contains(&approval.member),
+				manifest_set.members.contains(member),
 				"Found approval from member ({:?}) not included in the Manifest Set",
-				approval.member.alias
+				member.alias
 			);
 
-			let pub_key = P256Public::from_bytes(&approval.member.pub_key)
+			let pub_key = P256Public::from_bytes(&member.pub_key)
 				.expect("Failed to interpret pub key");
 			assert!(
 				pub_key
@@ -2063,7 +2078,7 @@ fn find_approvals<P: AsRef<Path>>(
 			Some(approval)
 		})
 		.collect();
-	assert!(approvals.len() >= manifest.manifest_set.threshold as usize);
+	assert!(approvals.len() >= manifest_set.threshold as usize);
 
 	approvals
 }
@@ -2280,16 +2295,13 @@ where
 mod tests {
 	use std::vec;
 
-	use qos_core::protocol::{
-		services::boot::{
-			Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
-			Namespace, NitroConfig, PatchSet, PivotConfig, QuorumMember,
-			RestartPolicy, ShareSet,
-		},
-		QosHash,
-	};
 	use qos_nsm::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
 	use qos_p256::{P256Pair, P256Public};
+	use qos_proto::{
+		Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
+		Namespace, NitroConfig, PatchSet, PivotConfig, ProtoHash, QuorumMember,
+		RestartPolicy, ShareSet,
+	};
 
 	use super::{
 		approve_manifest_human_verifications,
@@ -2342,36 +2354,36 @@ mod tests {
 		let quorum_key: P256Public = P256Pair::generate().unwrap().public_key();
 
 		let manifest = Manifest {
-			namespace: Namespace {
+			namespace: Some(Namespace {
 				name: "test-namespace".to_string(),
 				nonce: 2,
 				quorum_key: quorum_key.to_bytes(),
-			},
-			pivot: PivotConfig {
+			}),
+			pivot: Some(PivotConfig {
 				hash: pivot_hash.clone().try_into().unwrap(),
-				restart: RestartPolicy::Never,
+				restart: RestartPolicy::Never.into(),
 				args: ["--option1", "argument"]
 					.into_iter()
 					.map(String::from)
 					.collect(),
-			},
-			manifest_set: manifest_set.clone(),
-			share_set: share_set.clone(),
-			patch_set: patch_set.clone(),
-			enclave: nitro_config.clone(),
+			}),
+			manifest_set: Some(manifest_set.clone()),
+			share_set: Some(share_set.clone()),
+			patch_set: Some(patch_set.clone()),
+			enclave: Some(nitro_config.clone()),
 			pool_size: None,
 			client_timeout_ms: None,
 		};
 
 		let manifest_envelope = ManifestEnvelope {
-			manifest: manifest.clone(),
+			manifest: Some(manifest.clone()),
 			manifest_set_approvals: std::iter::zip(
 				pairs[..2].iter(),
 				members.iter(),
 			)
 			.map(|(pair, member)| Approval {
 				signature: pair.sign(&manifest.proto_hash()).unwrap(),
-				member: member.clone(),
+				member: Some(member.clone()),
 			})
 			.collect(),
 			share_set_approvals: vec![],
@@ -2763,7 +2775,7 @@ mod tests {
 
 			assert_eq!(
 				output[2],
-				"Is this the correct pivot restart policy: RestartPolicy::Never? (y/n)"
+				"Is this the correct pivot restart policy: Never? (y/n)"
 			);
 		}
 
@@ -2838,6 +2850,8 @@ mod tests {
 				.get_mut(0)
 				.unwrap()
 				.member
+				.as_mut()
+				.unwrap()
 				.alias = "not-a-member".to_string();
 
 			let member = share_set.members[0].clone();

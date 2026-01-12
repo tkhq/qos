@@ -934,12 +934,14 @@ impl ClientOpts {
 	}
 
 	fn restart_policy(&self) -> boot::RestartPolicy {
-		self.parsed
+		let policy_str = self.parsed
 			.single(RESTART_POLICY)
-			.expect("required arg")
-			.to_string()
-			.try_into()
-			.expect("Could not parse `--restart-policy`")
+			.expect("required arg");
+		match policy_str.to_lowercase().as_str() {
+			"never" => boot::RestartPolicy::Never,
+			"always" => boot::RestartPolicy::Always,
+			_ => panic!("Could not parse `--restart-policy`: expected 'never' or 'always'"),
+		}
 	}
 
 	fn pivot_path(&self) -> String {

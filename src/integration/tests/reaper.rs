@@ -4,13 +4,15 @@ use integration::{
 	wait_for_usock, PivotSocketStressMsg, PIVOT_ABORT_PATH, PIVOT_OK_PATH,
 	PIVOT_PANIC_PATH, PIVOT_POOL_SIZE_PATH, PIVOT_SOCKET_STRESS_PATH,
 };
+use prost::Message;
 use qos_core::{
 	client::SocketClient,
 	handles::Handles,
 	io::{SocketAddress, StreamPool},
 	protocol::{
-		msg::ProtocolMsg, services::boot::ManifestEnvelope, ProtocolError,
-		ProtocolPhase,
+		msg::{protocol_msg, ProtocolMsg, ProtocolMsgExt},
+		services::boot::ManifestEnvelope,
+		ProtocolError, ProtocolPhase,
 	},
 	reaper::{Reaper, REAPER_EXIT_DELAY},
 };
@@ -37,8 +39,9 @@ async fn reaper_works() {
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key
 	let mut manifest_envelope = ManifestEnvelope::default();
-	manifest_envelope.manifest.pivot.args =
-		vec!["--msg".to_string(), msg.to_string()];
+	let manifest = manifest_envelope.manifest.get_or_insert_with(Default::default);
+	let pivot = manifest.pivot.get_or_insert_with(Default::default);
+	pivot.args = vec!["--msg".to_string(), msg.to_string()];
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());
@@ -102,11 +105,13 @@ async fn reaper_timeout_works() {
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key
 	let mut manifest_envelope = ManifestEnvelope::default();
+	let manifest = manifest_envelope.manifest.get_or_insert_with(Default::default);
 	// Tell pivot where to open up the server app socket
-	manifest_envelope.manifest.pivot.args = vec![app_sock.to_string()];
+	let pivot = manifest.pivot.get_or_insert_with(Default::default);
+	pivot.args = vec![app_sock.to_string()];
 
 	// we'll be checking if this is set by passing slow and fast requests
-	manifest_envelope.manifest.client_timeout_ms = Some(2000);
+	manifest.client_timeout_ms = Some(2000);
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());
@@ -145,9 +150,7 @@ async fn reaper_timeout_works() {
 	// create a "slow" app request longer than client timeout from `Manifest`, but longer than 5s timeout on our local client.
 	let app_request =
 		borsh::to_vec(&PivotSocketStressMsg::SlowRequest(3000)).unwrap();
-	let request =
-		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
-			.unwrap();
+	let request = ProtocolMsg::proxy_request(app_request).encode_to_vec();
 
 	// ensure our client to the enclave has longer timeout than the configured 2s and the slow request 3s
 	let client = SocketClient::single(
@@ -156,14 +159,12 @@ async fn reaper_timeout_works() {
 	)
 	.unwrap();
 
-	let response: ProtocolMsg =
-		borsh::from_slice(&client.call(&request).await.unwrap()).unwrap();
+	let response =
+		ProtocolMsg::decode(client.call(&request).await.unwrap().as_slice()).unwrap();
 
 	// The response should be AppClientRecvTimeout which indicates the enclave short-circuited the timeout
-	assert_eq!(
-		response,
-		ProtocolMsg::ProtocolErrorResponse(ProtocolError::AppClientRecvTimeout)
-	);
+	let expected = ProtocolMsg::error_response(ProtocolError::AppClientRecvTimeout.into());
+	assert_eq!(response, expected);
 }
 
 #[tokio::test]
@@ -303,10 +304,11 @@ async fn reaper_handles_pool_size() {
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key
 	let mut manifest_envelope = ManifestEnvelope::default();
-	manifest_envelope.manifest.pivot.args =
-		vec!["--msg".to_string(), msg.to_string()];
+	let manifest = manifest_envelope.manifest.get_or_insert_with(Default::default);
+	let pivot = manifest.pivot.get_or_insert_with(Default::default);
+	pivot.args = vec!["--msg".to_string(), msg.to_string()];
 	// set a pool size > 1
-	manifest_envelope.manifest.pool_size = Some(5);
+	manifest.pool_size = Some(5);
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());

@@ -1,10 +1,5 @@
 //! Proto generation tool for QOS types.
 //!
-//! This tool generates Rust code from .proto files using protox (pure Rust)
-//! and prost-build. No system protoc installation required.
-//!
-//! The generated code is checked into git and verified by CI.
-//!
 //! Usage:
 //!   cd src/qos_proto/proto_gen && cargo run
 
@@ -40,9 +35,6 @@ fn main() {
 
     // Configure prost-build
     let mut config = prost_build::Config::new();
-
-    // Use BTreeMap for any map fields (defense in depth - CI rejects maps)
-    config.btree_map(&["."]);
 
     // Add serde derives for JSON compatibility
     config.type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]");
