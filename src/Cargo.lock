@@ -2053,6 +2053,7 @@ dependencies = [
  "futures",
  "libc",
  "nix 0.29.0",
+ "prost",
  "qos_crypto",
  "qos_hex",
  "qos_nsm",

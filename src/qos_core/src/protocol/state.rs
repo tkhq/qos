@@ -2,7 +2,10 @@
 use qos_nsm::NsmProvider;
 
 use super::{
-	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
+	error::ProtocolError,
+	msg::ProtocolMsg,
+	proto::encode_proto_msg,
+	services::provision::SecretBuilder,
 };
 use crate::handles::Handles;
 
@@ -196,18 +199,15 @@ impl ProtocolState {
 			match route.try_msg(msg_req, self) {
 				None => continue,
 				Some(result) => match result {
-					Ok(msg_resp) | Err(msg_resp) => {
-						return borsh::to_vec(&msg_resp).expect(
-							"ProtocolMsg can always be serialized. qed.",
-						)
+					Ok(ref msg_resp) | Err(ref msg_resp) => {
+						return encode_proto_msg(msg_resp)
 					}
 				},
 			}
 		}
 
 		let err = ProtocolError::NoMatchingRoute(self.phase);
-		borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
-			.expect("ProtocolMsg can always be serialized. qed.")
+		encode_proto_msg(&ProtocolMsg::ProtocolErrorResponse(err))
 	}
 
 	#[allow(clippy::too_many_lines)]

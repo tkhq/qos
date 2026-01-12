@@ -1,11 +1,14 @@
 //! Quorum protocol processor
 use std::{sync::Arc, time::Duration};
 
-use borsh::BorshDeserialize;
 use tokio::sync::RwLock;
 
 use super::{
-	error::ProtocolError, msg::ProtocolMsg, state::ProtocolState, ProtocolPhase,
+	error::ProtocolError,
+	msg::ProtocolMsg,
+	proto::{decode_proto_msg, encode_proto_msg},
+	state::ProtocolState,
+	ProtocolPhase,
 };
 use crate::{
 	client::{ClientError, SocketClient},
@@ -70,17 +73,18 @@ impl ProtocolProcessor {
 impl RequestProcessor for ProtocolProcessor {
 	async fn process(&self, req_bytes: &[u8]) -> Vec<u8> {
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
-			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+			return encode_proto_msg(&ProtocolMsg::ProtocolErrorResponse(
 				ProtocolError::OversizedPayload,
-			))
-			.expect("ProtocolMsg can always be serialized. qed.");
+			));
 		}
 
-		let Ok(msg_req) = ProtocolMsg::try_from_slice(req_bytes) else {
-			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
-				ProtocolError::ProtocolMsgDeserialization,
-			))
-			.expect("ProtocolMsg can always be serialized. qed.");
+		let msg_req = match decode_proto_msg(req_bytes) {
+			Ok(msg) => msg,
+			Err(_) => {
+				return encode_proto_msg(&ProtocolMsg::ProtocolErrorResponse(
+					ProtocolError::ProtocolMsgDeserialization,
+				));
+			}
 		};
 
 		// handle Proxy outside of the state
@@ -89,8 +93,7 @@ impl RequestProcessor for ProtocolProcessor {
 
 			if phase != ProtocolPhase::QuorumKeyProvisioned {
 				let err = ProtocolError::NoMatchingRoute(phase);
-				return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
-					.expect("ProtocolMsg can always be serialized. qed.");
+				return encode_proto_msg(&ProtocolMsg::ProtocolErrorResponse(err));
 			}
 
 			let result = self
@@ -101,8 +104,7 @@ impl RequestProcessor for ProtocolProcessor {
 				.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into()));
 
 			match result {
-				Ok(msg_resp) | Err(msg_resp) => borsh::to_vec(&msg_resp)
-					.expect("ProtocolMsg can always be serialized. qed."),
+				Ok(ref msg_resp) | Err(ref msg_resp) => encode_proto_msg(msg_resp),
 			}
 		} else {
 			// handle all the others here

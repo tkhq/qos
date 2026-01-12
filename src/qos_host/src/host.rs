@@ -23,11 +23,14 @@ use axum::{
 	routing::{get, post},
 	Json, Router,
 };
-use borsh::BorshDeserialize;
 use qos_core::{
 	client::SocketClient,
 	io::SharedStreamPool,
-	protocol::{msg::ProtocolMsg, ProtocolError, ProtocolPhase},
+	protocol::{
+		msg::ProtocolMsg,
+		proto::{decode_proto_msg, encode_proto_msg},
+		ProtocolError, ProtocolPhase,
+	},
 };
 
 use crate::{
@@ -114,8 +117,7 @@ impl HostServer {
 	) -> impl IntoResponse {
 		println!("Enclave health...");
 
-		let encoded_request = borsh::to_vec(&ProtocolMsg::StatusRequest)
-			.expect("ProtocolMsg can always serialize. qed.");
+		let encoded_request = encode_proto_msg(&ProtocolMsg::StatusRequest);
 		let encoded_response = match state
 			.enclave_client
 			.call(&encoded_request)
@@ -129,7 +131,7 @@ impl HostServer {
 			}
 		};
 
-		let response = match ProtocolMsg::try_from_slice(&encoded_response) {
+		let response = match decode_proto_msg(&encoded_response) {
 			Ok(r) => r,
 			Err(e) => {
 				let msg = format!("Error deserializing response from enclave, make sure qos_host version match qos_core: {e}");
@@ -165,14 +167,13 @@ impl HostServer {
 	) -> Result<Json<EnclaveInfo>, Error> {
 		println!("Enclave info...");
 
-		let enc_status_req = borsh::to_vec(&ProtocolMsg::StatusRequest)
-			.expect("ProtocolMsg can always serialize. qed.");
+		let enc_status_req = encode_proto_msg(&ProtocolMsg::StatusRequest);
 		let enc_status_resp =
 			state.enclave_client.call(&enc_status_req).await.map_err(|e| {
 				Error(format!("error sending status request to enclave: {e:?}"))
 			})?;
 
-		let status_resp = match ProtocolMsg::try_from_slice(&enc_status_resp) {
+		let status_resp = match decode_proto_msg(&enc_status_resp) {
 			Ok(status_resp) => status_resp,
 			Err(e) => {
 				return Err(Error(format!("error deserializing status response from enclave, make sure qos_host version match qos_core: {e:?}")));
@@ -186,8 +187,7 @@ impl HostServer {
 		};
 
 		let enc_manifest_envelope_req =
-			borsh::to_vec(&ProtocolMsg::ManifestEnvelopeRequest)
-				.expect("ProtocolMsg can always serialize. qed.");
+			encode_proto_msg(&ProtocolMsg::ManifestEnvelopeRequest);
 		let enc_manifest_envelope_resp = state
 			.enclave_client
 			.call(&enc_manifest_envelope_req)
@@ -198,12 +198,10 @@ impl HostServer {
 				))
 			})?;
 
-		let manifest_envelope_resp = ProtocolMsg::try_from_slice(
-			&enc_manifest_envelope_resp,
-		)
-		.map_err(|e|
-			Error(format!("error deserializing manifest envelope response from enclave, make sure qos_host version match qos_core: {e}"))
-		)?;
+		let manifest_envelope_resp = decode_proto_msg(&enc_manifest_envelope_resp)
+			.map_err(|e| {
+				Error(format!("error deserializing manifest envelope response from enclave, make sure qos_host version match qos_core: {e}"))
+			})?;
 
 		let manifest_envelope = match manifest_envelope_resp {
 			ProtocolMsg::ManifestEnvelopeResponse { manifest_envelope } => {
@@ -244,10 +242,9 @@ impl HostServer {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
 			return (
 				StatusCode::BAD_REQUEST,
-				borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+				encode_proto_msg(&ProtocolMsg::ProtocolErrorResponse(
 					ProtocolError::OversizeMsg,
-				))
-				.expect("ProtocolMsg can always serialize. qed."),
+				)),
 			);
 		}
 
@@ -258,10 +255,9 @@ impl HostServer {
 
 				(
 					StatusCode::INTERNAL_SERVER_ERROR,
-					borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+					encode_proto_msg(&ProtocolMsg::ProtocolErrorResponse(
 						ProtocolError::EnclaveClient,
-					))
-					.expect("ProtocolMsg can always serialize. qed."),
+					)),
 				)
 			}
 		}

@@ -18,6 +18,7 @@ qos_proto = { workspace = true }
 nix = { workspace = true }
 libc = { workspace = true }
 borsh = { workspace = true }
+prost = { workspace = true }
 
 # For AWS Nitro
 aws-nitro-enclaves-nsm-api = { workspace = true }

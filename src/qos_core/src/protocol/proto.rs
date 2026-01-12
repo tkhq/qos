@@ -599,6 +599,443 @@ impl From<ProtocolPhase> for crate::protocol::ProtocolPhase {
 	}
 }
 
+// ============================================================================
+// Conversions: NSM Response (using functions to avoid orphan rule)
+// ============================================================================
+
+use qos_nsm::types::NsmResponse as LegacyNsmResponse;
+
+fn nsm_response_to_proto(v: &LegacyNsmResponse) -> NsmResponse {
+	use qos_proto::nsm_response::Response;
+	let response = match v {
+		LegacyNsmResponse::DescribePCR { lock, data } => {
+			Response::DescribePcr(DescribePcrResponse {
+				lock: *lock,
+				data: data.clone(),
+			})
+		}
+		LegacyNsmResponse::ExtendPCR { data } => {
+			Response::ExtendPcr(ExtendPcrResponse { data: data.clone() })
+		}
+		LegacyNsmResponse::LockPCR => Response::LockPcr(LockPcrResponse {}),
+		LegacyNsmResponse::LockPCRs => Response::LockPcrs(LockPcrsResponse {}),
+		LegacyNsmResponse::DescribeNSM {
+			version_major,
+			version_minor,
+			version_patch,
+			module_id,
+			max_pcrs,
+			locked_pcrs,
+			digest,
+		} => Response::DescribeNsm(DescribeNsmResponse {
+			version_major: *version_major as u32,
+			version_minor: *version_minor as u32,
+			version_patch: *version_patch as u32,
+			module_id: module_id.clone(),
+			max_pcrs: *max_pcrs as u32,
+			locked_pcrs: locked_pcrs.iter().map(|x| *x as u32).collect(),
+			digest: match digest {
+				qos_nsm::types::NsmDigest::SHA256 => NsmDigest::Sha256 as i32,
+				qos_nsm::types::NsmDigest::SHA384 => NsmDigest::Sha384 as i32,
+				qos_nsm::types::NsmDigest::SHA512 => NsmDigest::Sha512 as i32,
+			},
+		}),
+		LegacyNsmResponse::Attestation { document } => {
+			Response::Attestation(AttestationResponse { document: document.clone() })
+		}
+		LegacyNsmResponse::GetRandom { random } => {
+			Response::GetRandom(GetRandomResponse { random: random.clone() })
+		}
+		LegacyNsmResponse::Error(code) => Response::Error(NsmErrorResponse {
+			code: match code {
+				qos_nsm::types::NsmErrorCode::Success => {
+					NsmErrorCode::Success as i32
+				}
+				qos_nsm::types::NsmErrorCode::InvalidArgument => {
+					NsmErrorCode::InvalidArgument as i32
+				}
+				qos_nsm::types::NsmErrorCode::InvalidIndex => {
+					NsmErrorCode::InvalidIndex as i32
+				}
+				qos_nsm::types::NsmErrorCode::InvalidResponse => {
+					NsmErrorCode::InvalidResponse as i32
+				}
+				qos_nsm::types::NsmErrorCode::ReadOnlyIndex => {
+					NsmErrorCode::ReadOnlyIndex as i32
+				}
+				qos_nsm::types::NsmErrorCode::InvalidOperation => {
+					NsmErrorCode::InvalidOperation as i32
+				}
+				qos_nsm::types::NsmErrorCode::BufferTooSmall => {
+					NsmErrorCode::BufferTooSmall as i32
+				}
+				qos_nsm::types::NsmErrorCode::InputTooLarge => {
+					NsmErrorCode::InputTooLarge as i32
+				}
+				qos_nsm::types::NsmErrorCode::InternalError => {
+					NsmErrorCode::InternalError as i32
+				}
+			},
+		}),
+	};
+	NsmResponse { response: Some(response) }
+}
+
+fn proto_to_nsm_response(v: &NsmResponse) -> Result<LegacyNsmResponse, &'static str> {
+	use qos_proto::nsm_response::Response;
+	let response = v.response.as_ref().ok_or("missing response")?;
+	Ok(match response {
+		Response::DescribePcr(r) => {
+			LegacyNsmResponse::DescribePCR { lock: r.lock, data: r.data.clone() }
+		}
+		Response::ExtendPcr(r) => {
+			LegacyNsmResponse::ExtendPCR { data: r.data.clone() }
+		}
+		Response::LockPcr(_) => LegacyNsmResponse::LockPCR,
+		Response::LockPcrs(_) => LegacyNsmResponse::LockPCRs,
+		Response::DescribeNsm(r) => LegacyNsmResponse::DescribeNSM {
+			version_major: r.version_major as u16,
+			version_minor: r.version_minor as u16,
+			version_patch: r.version_patch as u16,
+			module_id: r.module_id.clone(),
+			max_pcrs: r.max_pcrs as u16,
+			locked_pcrs: r.locked_pcrs.iter().map(|x| *x as u16).collect(),
+			digest: match NsmDigest::try_from(r.digest) {
+				Ok(NsmDigest::Sha256) => qos_nsm::types::NsmDigest::SHA256,
+				Ok(NsmDigest::Sha384) => qos_nsm::types::NsmDigest::SHA384,
+				Ok(NsmDigest::Sha512) => qos_nsm::types::NsmDigest::SHA512,
+				_ => qos_nsm::types::NsmDigest::SHA256,
+			},
+		},
+		Response::Attestation(r) => {
+			LegacyNsmResponse::Attestation { document: r.document.clone() }
+		}
+		Response::GetRandom(r) => {
+			LegacyNsmResponse::GetRandom { random: r.random.clone() }
+		}
+		Response::Error(r) => {
+			let code = match NsmErrorCode::try_from(r.code) {
+				Ok(NsmErrorCode::InvalidArgument) => {
+					qos_nsm::types::NsmErrorCode::InvalidArgument
+				}
+				Ok(NsmErrorCode::InvalidIndex) => {
+					qos_nsm::types::NsmErrorCode::InvalidIndex
+				}
+				Ok(NsmErrorCode::InvalidResponse) => {
+					qos_nsm::types::NsmErrorCode::InvalidResponse
+				}
+				Ok(NsmErrorCode::ReadOnlyIndex) => {
+					qos_nsm::types::NsmErrorCode::ReadOnlyIndex
+				}
+				Ok(NsmErrorCode::InvalidOperation) => {
+					qos_nsm::types::NsmErrorCode::InvalidOperation
+				}
+				Ok(NsmErrorCode::BufferTooSmall) => {
+					qos_nsm::types::NsmErrorCode::BufferTooSmall
+				}
+				Ok(NsmErrorCode::InputTooLarge) => {
+					qos_nsm::types::NsmErrorCode::InputTooLarge
+				}
+				Ok(NsmErrorCode::InternalError) | _ => {
+					qos_nsm::types::NsmErrorCode::InternalError
+				}
+			};
+			LegacyNsmResponse::Error(code)
+		}
+	})
+}
+
+// ============================================================================
+// Conversions: Protocol Message
+// ============================================================================
+
+use qos_proto::protocol_msg::Msg;
+
+impl From<&legacy::ProtocolMsg> for ProtocolMsg {
+	fn from(v: &legacy::ProtocolMsg) -> Self {
+		let msg = match v {
+			legacy::ProtocolMsg::ProtocolErrorResponse(e) => {
+				Msg::ErrorResponse(ProtocolError::from(e))
+			}
+			legacy::ProtocolMsg::StatusRequest => {
+				Msg::StatusRequest(StatusRequest {})
+			}
+			legacy::ProtocolMsg::StatusResponse(phase) => {
+				Msg::StatusResponse(StatusResponse {
+					phase: ProtocolPhase::from(phase) as i32,
+				})
+			}
+			legacy::ProtocolMsg::BootStandardRequest { manifest_envelope, pivot } => {
+				Msg::BootStandardRequest(BootStandardRequest {
+					manifest_envelope: Some(ManifestEnvelope::from(
+						manifest_envelope.as_ref(),
+					)),
+					pivot: pivot.clone(),
+				})
+			}
+			legacy::ProtocolMsg::BootStandardResponse { nsm_response } => {
+				Msg::BootStandardResponse(BootStandardResponse {
+					nsm_response: Some(nsm_response_to_proto(nsm_response)),
+				})
+			}
+			legacy::ProtocolMsg::BootGenesisRequest { set, dr_key } => {
+				Msg::BootGenesisRequest(BootGenesisRequest {
+					set: Some(GenesisSet::from(set)),
+					dr_key: dr_key.clone(),
+				})
+			}
+			legacy::ProtocolMsg::BootGenesisResponse {
+				nsm_response,
+				genesis_output,
+			} => Msg::BootGenesisResponse(BootGenesisResponse {
+				nsm_response: Some(nsm_response_to_proto(nsm_response)),
+				genesis_output: Some(GenesisOutput::from(genesis_output.as_ref())),
+			}),
+			legacy::ProtocolMsg::ProvisionRequest { share, approval } => {
+				Msg::ProvisionRequest(ProvisionRequest {
+					share: share.clone(),
+					approval: Some(Approval::from(approval)),
+				})
+			}
+			legacy::ProtocolMsg::ProvisionResponse { reconstructed } => {
+				Msg::ProvisionResponse(ProvisionResponse {
+					reconstructed: *reconstructed,
+				})
+			}
+			legacy::ProtocolMsg::ProxyRequest { data } => {
+				Msg::ProxyRequest(ProxyRequest { data: data.clone() })
+			}
+			legacy::ProtocolMsg::ProxyResponse { data } => {
+				Msg::ProxyResponse(ProxyResponse { data: data.clone() })
+			}
+			legacy::ProtocolMsg::LiveAttestationDocRequest => {
+				Msg::LiveAttestationDocRequest(LiveAttestationDocRequest {})
+			}
+			legacy::ProtocolMsg::LiveAttestationDocResponse {
+				nsm_response,
+				manifest_envelope,
+			} => Msg::LiveAttestationDocResponse(LiveAttestationDocResponse {
+				nsm_response: Some(nsm_response_to_proto(nsm_response)),
+				manifest_envelope: manifest_envelope
+					.as_ref()
+					.map(|e| ManifestEnvelope::from(e.as_ref())),
+			}),
+			legacy::ProtocolMsg::BootKeyForwardRequest { manifest_envelope, pivot } => {
+				Msg::BootKeyForwardRequest(BootKeyForwardRequest {
+					manifest_envelope: Some(ManifestEnvelope::from(
+						manifest_envelope.as_ref(),
+					)),
+					pivot: pivot.clone(),
+				})
+			}
+			legacy::ProtocolMsg::BootKeyForwardResponse { nsm_response } => {
+				Msg::BootKeyForwardResponse(BootKeyForwardResponse {
+					nsm_response: Some(nsm_response_to_proto(nsm_response)),
+				})
+			}
+			legacy::ProtocolMsg::ExportKeyRequest {
+				manifest_envelope,
+				cose_sign1_attestation_doc,
+			} => Msg::ExportKeyRequest(ExportKeyRequest {
+				manifest_envelope: Some(ManifestEnvelope::from(
+					manifest_envelope.as_ref(),
+				)),
+				cose_sign1_attestation_doc: cose_sign1_attestation_doc.clone(),
+			}),
+			legacy::ProtocolMsg::ExportKeyResponse {
+				encrypted_quorum_key,
+				signature,
+			} => Msg::ExportKeyResponse(ExportKeyResponse {
+				encrypted_quorum_key: encrypted_quorum_key.clone(),
+				signature: signature.clone(),
+			}),
+			legacy::ProtocolMsg::InjectKeyRequest {
+				encrypted_quorum_key,
+				signature,
+			} => Msg::InjectKeyRequest(InjectKeyRequest {
+				encrypted_quorum_key: encrypted_quorum_key.clone(),
+				signature: signature.clone(),
+			}),
+			legacy::ProtocolMsg::InjectKeyResponse => {
+				Msg::InjectKeyResponse(InjectKeyResponse {})
+			}
+			legacy::ProtocolMsg::ManifestEnvelopeRequest => {
+				Msg::ManifestEnvelopeRequest(ManifestEnvelopeRequest {})
+			}
+			legacy::ProtocolMsg::ManifestEnvelopeResponse { manifest_envelope } => {
+				Msg::ManifestEnvelopeResponse(ManifestEnvelopeResponse {
+					manifest_envelope: manifest_envelope
+						.as_ref()
+						.as_ref()
+						.map(ManifestEnvelope::from),
+				})
+			}
+		};
+		Self { msg: Some(msg) }
+	}
+}
+
+impl TryFrom<&ProtocolMsg> for legacy::ProtocolMsg {
+	type Error = &'static str;
+
+	fn try_from(v: &ProtocolMsg) -> Result<Self, Self::Error> {
+		let msg = v.msg.as_ref().ok_or("missing msg")?;
+		Ok(match msg {
+			Msg::ErrorResponse(_) => {
+				// Can't convert proto error back to legacy with full fidelity
+				legacy::ProtocolMsg::ProtocolErrorResponse(
+					legacy::ProtocolError::InvalidMsg,
+				)
+			}
+			Msg::StatusRequest(_) => legacy::ProtocolMsg::StatusRequest,
+			Msg::StatusResponse(r) => {
+				let phase = ProtocolPhase::try_from(r.phase)
+					.unwrap_or(ProtocolPhase::Unspecified);
+				legacy::ProtocolMsg::StatusResponse(phase.into())
+			}
+			Msg::BootStandardRequest(r) => legacy::ProtocolMsg::BootStandardRequest {
+				manifest_envelope: Box::new(
+					r.manifest_envelope
+						.as_ref()
+						.ok_or("missing manifest_envelope")
+						.and_then(legacy::ManifestEnvelope::try_from)?,
+				),
+				pivot: r.pivot.clone(),
+			},
+			Msg::BootStandardResponse(r) => legacy::ProtocolMsg::BootStandardResponse {
+				nsm_response: r
+					.nsm_response
+					.as_ref()
+					.ok_or("missing nsm_response")
+					.and_then(proto_to_nsm_response)?,
+			},
+			Msg::BootGenesisRequest(r) => legacy::ProtocolMsg::BootGenesisRequest {
+				set: r
+					.set
+					.as_ref()
+					.map(legacy::GenesisSet::from)
+					.ok_or("missing set")?,
+				dr_key: r.dr_key.clone(),
+			},
+			Msg::BootGenesisResponse(r) => legacy::ProtocolMsg::BootGenesisResponse {
+				nsm_response: r
+					.nsm_response
+					.as_ref()
+					.ok_or("missing nsm_response")
+					.and_then(proto_to_nsm_response)?,
+				genesis_output: Box::new(
+					r.genesis_output
+						.as_ref()
+						.ok_or("missing genesis_output")
+						.and_then(legacy::GenesisOutput::try_from)?,
+				),
+			},
+			Msg::ProvisionRequest(r) => legacy::ProtocolMsg::ProvisionRequest {
+				share: r.share.clone(),
+				approval: r
+					.approval
+					.as_ref()
+					.ok_or("missing approval")
+					.and_then(legacy::Approval::try_from)?,
+			},
+			Msg::ProvisionResponse(r) => legacy::ProtocolMsg::ProvisionResponse {
+				reconstructed: r.reconstructed,
+			},
+			Msg::ProxyRequest(r) => {
+				legacy::ProtocolMsg::ProxyRequest { data: r.data.clone() }
+			}
+			Msg::ProxyResponse(r) => {
+				legacy::ProtocolMsg::ProxyResponse { data: r.data.clone() }
+			}
+			Msg::LiveAttestationDocRequest(_) => {
+				legacy::ProtocolMsg::LiveAttestationDocRequest
+			}
+			Msg::LiveAttestationDocResponse(r) => {
+				legacy::ProtocolMsg::LiveAttestationDocResponse {
+					nsm_response: r
+						.nsm_response
+						.as_ref()
+						.ok_or("missing nsm_response")
+						.and_then(proto_to_nsm_response)?,
+					manifest_envelope: r
+						.manifest_envelope
+						.as_ref()
+						.map(|e| legacy::ManifestEnvelope::try_from(e).map(Box::new))
+						.transpose()?,
+				}
+			}
+			Msg::BootKeyForwardRequest(r) => {
+				legacy::ProtocolMsg::BootKeyForwardRequest {
+					manifest_envelope: Box::new(
+						r.manifest_envelope
+							.as_ref()
+							.ok_or("missing manifest_envelope")
+							.and_then(legacy::ManifestEnvelope::try_from)?,
+					),
+					pivot: r.pivot.clone(),
+				}
+			}
+			Msg::BootKeyForwardResponse(r) => {
+				legacy::ProtocolMsg::BootKeyForwardResponse {
+					nsm_response: r
+						.nsm_response
+						.as_ref()
+						.ok_or("missing nsm_response")
+						.and_then(proto_to_nsm_response)?,
+				}
+			}
+			Msg::ExportKeyRequest(r) => legacy::ProtocolMsg::ExportKeyRequest {
+				manifest_envelope: Box::new(
+					r.manifest_envelope
+						.as_ref()
+						.ok_or("missing manifest_envelope")
+						.and_then(legacy::ManifestEnvelope::try_from)?,
+				),
+				cose_sign1_attestation_doc: r.cose_sign1_attestation_doc.clone(),
+			},
+			Msg::ExportKeyResponse(r) => legacy::ProtocolMsg::ExportKeyResponse {
+				encrypted_quorum_key: r.encrypted_quorum_key.clone(),
+				signature: r.signature.clone(),
+			},
+			Msg::InjectKeyRequest(r) => legacy::ProtocolMsg::InjectKeyRequest {
+				encrypted_quorum_key: r.encrypted_quorum_key.clone(),
+				signature: r.signature.clone(),
+			},
+			Msg::InjectKeyResponse(_) => legacy::ProtocolMsg::InjectKeyResponse,
+			Msg::ManifestEnvelopeRequest(_) => {
+				legacy::ProtocolMsg::ManifestEnvelopeRequest
+			}
+			Msg::ManifestEnvelopeResponse(r) => {
+				legacy::ProtocolMsg::ManifestEnvelopeResponse {
+					manifest_envelope: Box::new(
+						r.manifest_envelope
+							.as_ref()
+							.map(legacy::ManifestEnvelope::try_from)
+							.transpose()?,
+					),
+				}
+			}
+		})
+	}
+}
+
+/// Encode a legacy ProtocolMsg to protobuf bytes.
+pub fn encode_proto_msg(msg: &legacy::ProtocolMsg) -> Vec<u8> {
+	use prost::Message;
+	let proto_msg = ProtocolMsg::from(msg);
+	proto_msg.encode_to_vec()
+}
+
+/// Decode protobuf bytes to a legacy ProtocolMsg.
+pub fn decode_proto_msg(
+	bytes: &[u8],
+) -> Result<legacy::ProtocolMsg, &'static str> {
+	use prost::Message;
+	let proto_msg =
+		ProtocolMsg::decode(bytes).map_err(|_| "failed to decode proto msg")?;
+	legacy::ProtocolMsg::try_from(&proto_msg)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
