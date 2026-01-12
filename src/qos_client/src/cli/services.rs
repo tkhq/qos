@@ -1392,8 +1392,11 @@ fn proxy_re_encrypt_share_programmatic_verifications(
 	manifest_set: &ManifestSet,
 	member: &QuorumMember,
 ) -> bool {
-	// Note: check_approvals was removed in proto migration - approval verification
-	// should be done via signature verification directly
+	// Check that the manifest has valid approvals from the manifest set
+	if let Err(e) = manifest_envelope.check_approvals() {
+		eprintln!("Approval verification failed: {e:?}");
+		return false;
+	}
 
 	let manifest = match manifest_envelope.manifest.as_ref() {
 		Some(m) => m,
