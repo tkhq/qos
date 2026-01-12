@@ -1,0 +1,119 @@
+// QOS NSM (Nitro Secure Module) types
+//
+// These types mirror the AWS Nitro Secure Module API types,
+// allowing them to be serialized with protobuf.
+
+syntax = "proto3";
+package qos.v1;
+
+// Possible error codes from the Nitro Secure Module API.
+enum NsmErrorCode {
+  NSM_ERROR_CODE_SUCCESS = 0;
+  NSM_ERROR_CODE_INVALID_ARGUMENT = 1;
+  NSM_ERROR_CODE_INVALID_INDEX = 2;
+  NSM_ERROR_CODE_INVALID_RESPONSE = 3;
+  NSM_ERROR_CODE_READ_ONLY_INDEX = 4;
+  NSM_ERROR_CODE_INVALID_OPERATION = 5;
+  NSM_ERROR_CODE_BUFFER_TOO_SMALL = 6;
+  NSM_ERROR_CODE_INPUT_TOO_LARGE = 7;
+  NSM_ERROR_CODE_INTERNAL_ERROR = 8;
+}
+
+// Possible hash digests for the Nitro Secure Module API.
+enum NsmDigest {
+  NSM_DIGEST_UNSPECIFIED = 0;
+  NSM_DIGEST_SHA256 = 1;
+  NSM_DIGEST_SHA384 = 2;
+  NSM_DIGEST_SHA512 = 3;
+}
+
+// Request type for the Nitro Secure Module API.
+message NsmRequest {
+  oneof request {
+    DescribePcrRequest describe_pcr = 1;
+    ExtendPcrRequest extend_pcr = 2;
+    LockPcrRequest lock_pcr = 3;
+    LockPcrsRequest lock_pcrs = 4;
+    DescribeNsmRequest describe_nsm = 5;
+    AttestationRequest attestation = 6;
+    GetRandomRequest get_random = 7;
+  }
+}
+
+message DescribePcrRequest {
+  uint32 index = 1;
+}
+
+message ExtendPcrRequest {
+  uint32 index = 1;
+  bytes data = 2;
+}
+
+message LockPcrRequest {
+  uint32 index = 1;
+}
+
+message LockPcrsRequest {
+  uint32 range = 1;
+}
+
+message DescribeNsmRequest {}
+
+message AttestationRequest {
+  optional bytes user_data = 1;
+  optional bytes nonce = 2;
+  optional bytes public_key = 3;
+}
+
+message GetRandomRequest {}
+
+// Response type for the Nitro Secure Module API.
+message NsmResponse {
+  oneof response {
+    DescribePcrResponse describe_pcr = 1;
+    ExtendPcrResponse extend_pcr = 2;
+    LockPcrResponse lock_pcr = 3;
+    LockPcrsResponse lock_pcrs = 4;
+    DescribeNsmResponse describe_nsm = 5;
+    AttestationResponse attestation = 6;
+    GetRandomResponse get_random = 7;
+    NsmErrorResponse error = 8;
+  }
+}
+
+message DescribePcrResponse {
+  bool lock = 1;
+  bytes data = 2;
+}
+
+message ExtendPcrResponse {
+  bytes data = 1;
+}
+
+message LockPcrResponse {}
+
+message LockPcrsResponse {}
+
+message DescribeNsmResponse {
+  uint32 version_major = 1;
+  uint32 version_minor = 2;
+  uint32 version_patch = 3;
+  string module_id = 4;
+  uint32 max_pcrs = 5;
+  // Note: Using repeated instead of a set for deterministic ordering
+  repeated uint32 locked_pcrs = 6;
+  NsmDigest digest = 7;
+}
+
+message AttestationResponse {
+  // COSE Sign1 structure containing CBOR-encoded AttestationDocument
+  bytes document = 1;
+}
+
+message GetRandomResponse {
+  bytes random = 1;
+}
+
+message NsmErrorResponse {
+  NsmErrorCode code = 1;
+}

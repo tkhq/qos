@@ -1,0 +1,63 @@
+// QOS Genesis types
+//
+// These types are used during the genesis boot ceremony for creating
+// and sharding the quorum key.
+
+syntax = "proto3";
+package qos.v1;
+
+import "qos/v1/manifest.proto";
+
+// Configuration for sharding a Quorum Key created in the Genesis flow.
+message GenesisSet {
+  // Share Set Members whose keys will be used to encrypt outputs
+  repeated QuorumMember members = 1;
+  // Threshold for successful reconstitution of the Quorum Key shards
+  uint32 threshold = 2;
+}
+
+// A member shard - internal type for recovery permutations.
+message MemberShard {
+  // Member of the Setup Set
+  QuorumMember member = 1;
+  // Shard encrypted to the member's key
+  bytes shard = 2;
+}
+
+// A set of member shards used to successfully recover the quorum key.
+message RecoveredPermutation {
+  // The shards that were used for recovery
+  repeated MemberShard shards = 1;
+}
+
+// Genesis output per Setup Member.
+message GenesisMemberOutput {
+  // The Quorum Member whose Setup Key was used
+  QuorumMember share_set_member = 1;
+  // Quorum Key Share encrypted to the member's Personal Key
+  bytes encrypted_quorum_key_share = 2;
+  // SHA-512 hash of the plaintext quorum key share (for verification)
+  bytes share_hash = 3;
+}
+
+// Output from running Genesis Boot.
+message GenesisOutput {
+  // Public Quorum Key, DER encoded
+  bytes quorum_key = 1;
+  // Quorum Member specific outputs from the genesis ceremony
+  repeated GenesisMemberOutput member_outputs = 2;
+  // All successfully recovered permutations during genesis
+  repeated RecoveredPermutation recovery_permutations = 3;
+  // The threshold K used to generate the shards
+  uint32 threshold = 4;
+  // The quorum key encrypted to the DR key (if DR key was provided)
+  optional bytes dr_key_wrapped_quorum_key = 5;
+  // SHA-512 hash of the quorum key secret
+  bytes quorum_key_hash = 6;
+  // Test message encrypted to the quorum public key
+  bytes test_message_ciphertext = 7;
+  // Signature over the test message by the quorum key
+  bytes test_message_signature = 8;
+  // The message used for the test signature and ciphertext
+  bytes test_message = 9;
+}

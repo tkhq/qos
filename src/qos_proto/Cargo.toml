@@ -1,0 +1,16 @@
+[package]
+name = "qos_proto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+prost = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+qos_hex = { workspace = true, features = ["serde"] }
+qos_crypto = { workspace = true }
