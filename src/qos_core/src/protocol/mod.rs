@@ -1,6 +1,6 @@
 //! Quorum protocol
 
-use borsh::BorshSerialize;
+use prost::Message;
 use qos_crypto::sha_256;
 
 mod error;
@@ -20,13 +20,36 @@ pub use processor::INITIAL_CLIENT_TIMEOUT;
 /// 256bit hash
 pub type Hash256 = [u8; 32];
 
-/// Canonical hash of `QuorumOS` types.
-pub trait QosHash: BorshSerialize {
-	/// Get the canonical hash.
+/// Canonical hash of `QuorumOS` types using protobuf encoding.
+pub trait QosHash {
+	/// Get the canonical hash using proto encoding.
+	fn qos_hash(&self) -> Hash256;
+}
+
+impl QosHash for legacy::Manifest {
 	fn qos_hash(&self) -> Hash256 {
-		sha_256(&borsh::to_vec(self).expect("Implements borsh serialize"))
+		let proto = qos_proto::Manifest::from(self);
+		sha_256(&proto.encode_to_vec())
 	}
 }
 
-// Blanket implement QosHash for any type that implements BorshSerialize.
-impl<T: BorshSerialize> QosHash for T {}
+impl QosHash for legacy::GenesisOutput {
+	fn qos_hash(&self) -> Hash256 {
+		let proto = qos_proto::GenesisOutput::from(self);
+		sha_256(&proto.encode_to_vec())
+	}
+}
+
+impl QosHash for legacy::QuorumMember {
+	fn qos_hash(&self) -> Hash256 {
+		let proto = qos_proto::QuorumMember::from(self);
+		sha_256(&proto.encode_to_vec())
+	}
+}
+
+impl QosHash for legacy::ManifestSet {
+	fn qos_hash(&self) -> Hash256 {
+		let proto = qos_proto::ManifestSet::from(self);
+		sha_256(&proto.encode_to_vec())
+	}
+}
