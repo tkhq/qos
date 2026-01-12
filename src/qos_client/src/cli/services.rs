@@ -1392,7 +1392,6 @@ fn proxy_re_encrypt_share_programmatic_verifications(
 	manifest_set: &ManifestSet,
 	member: &QuorumMember,
 ) -> bool {
-	// Check that the manifest has valid approvals from the manifest set
 	if let Err(e) = manifest_envelope.check_approvals() {
 		eprintln!("Approval verification failed: {e:?}");
 		return false;

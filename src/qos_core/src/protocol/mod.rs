@@ -16,6 +16,3 @@ pub(crate) use state::ProtocolState;
 
 pub(crate) mod processor;
 pub use processor::INITIAL_CLIENT_TIMEOUT;
-
-/// 256-bit hash.
-pub type Hash256 = [u8; 32];

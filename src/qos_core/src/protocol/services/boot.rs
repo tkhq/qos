@@ -9,7 +9,6 @@ use qos_proto::ProtoHash;
 
 use crate::protocol::{services::attestation, ProtocolError, ProtocolState};
 
-// Re-export proto types for external use
 pub use qos_proto::{
 	Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey, Namespace,
 	NitroConfig, PatchSet, PivotConfig, QuorumMember, RestartPolicy, ShareSet,
