@@ -4,6 +4,7 @@ use borsh::BorshSerialize;
 use qos_crypto::sha_256;
 
 mod error;
+pub mod internal;
 pub mod msg;
 pub mod services;
 mod state;
