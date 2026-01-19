@@ -183,7 +183,9 @@ fn validate_manifest(
 		old_manifest.manifest_set.members.sort();
 		if old_manifest.manifest_set != new_manifest.manifest_set {
 			return Err(ProtocolError::DifferentManifestSet {
-				expected: qos_hex::encode(&old_manifest.manifest_set.qos_hash()),
+				expected: qos_hex::encode(
+					&old_manifest.manifest_set.qos_hash(),
+				),
 				actual: qos_hex::encode(&new_manifest.manifest_set.qos_hash()),
 			});
 		}
@@ -224,7 +226,9 @@ fn validate_manifest(
 			!= new_manifest_envelope.manifest.qos_hash()
 	{
 		return Err(ProtocolError::DifferentManifest {
-			expected: qos_hex::encode(&old_manifest_envelope.manifest.qos_hash()),
+			expected: qos_hex::encode(
+				&old_manifest_envelope.manifest.qos_hash(),
+			),
 			actual: qos_hex::encode(&new_manifest_envelope.manifest.qos_hash()),
 		});
 	}
@@ -261,8 +265,12 @@ fn validate_manifest(
 		!= new_manifest_envelope.manifest.enclave.pcr3
 	{
 		return Err(ProtocolError::DifferentPcr3 {
-			expected: qos_hex::encode(&old_manifest_envelope.manifest.enclave.pcr3),
-			actual: qos_hex::encode(&new_manifest_envelope.manifest.enclave.pcr3),
+			expected: qos_hex::encode(
+				&old_manifest_envelope.manifest.enclave.pcr3,
+			),
+			actual: qos_hex::encode(
+				&new_manifest_envelope.manifest.enclave.pcr3,
+			),
 		});
 	}
 
@@ -527,7 +535,10 @@ mod test {
 			let other_pivot = b"other pivot".to_vec();
 			let err =
 				boot_key_forward(&mut state, &manifest_envelope, &other_pivot);
-			assert_eq!(Err(ProtocolError::InvalidPivotHash), err,);
+			assert!(
+				matches!(err, Err(ProtocolError::InvalidPivotHash { .. })),
+				"expected InvalidPivotHash error, got {err:?}"
+			);
 
 			// check that nothing was written
 			assert!(!handles.pivot_exists());
@@ -1046,10 +1057,12 @@ mod test {
 			let err = validate_manifest(
 				&new_manifest_envelope,
 				&manifest_envelope,
-				&att_doc
+				&att_doc,
 			);
 			// The hash values are dynamically generated, so we check the error format
-			assert!(matches!(&err, Err(ProtocolError::QosAttestError(msg)) if msg.starts_with("DifferentUserData {")));
+			assert!(
+				matches!(&err, Err(ProtocolError::QosAttestError(msg)) if msg.starts_with("DifferentUserData {"))
+			);
 		}
 	}
 	mod export_key_inner {

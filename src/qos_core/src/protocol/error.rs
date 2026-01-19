@@ -28,8 +28,8 @@ pub enum ProtocolError {
 	/// Ensure the executor is in the correct phase.
 	NoMatchingRoute(ProtocolPhase),
 	/// Hash of the Pivot binary does not match the pivot configuration in the
-	/// manifest.
-	InvalidPivotHash,
+	/// manifest. Contains (expected, actual) as hex strings.
+	InvalidPivotHash { expected: String, actual: String },
 	/// The message is too large.
 	OversizeMsg,
 	/// Message could not be deserialized
@@ -214,13 +214,20 @@ impl std::fmt::Display for ProtocolError {
 			Self::NoMatchingRoute(phase) => {
 				write!(f, "no matching route for phase {phase:?}")
 			}
-			Self::InvalidPivotHash => write!(f, "pivot hash does not match manifest"),
+			Self::InvalidPivotHash { expected, actual } => {
+				write!(
+					f,
+					"invalid pivot hash: expected {expected}, got {actual}"
+				)
+			}
 			Self::OversizeMsg => write!(f, "message too large"),
 			Self::InvalidMsg => write!(f, "invalid message"),
 			Self::EnclaveClient => write!(f, "enclave client error"),
 			Self::DecryptionFailed => write!(f, "decryption failed"),
 			Self::InvalidPrivateKey => write!(f, "invalid private key"),
-			Self::FailedToParseFromString => write!(f, "failed to parse from string"),
+			Self::FailedToParseFromString => {
+				write!(f, "failed to parse from string")
+			}
 			Self::BadEphemeralKeyPath => write!(f, "bad ephemeral key path"),
 			Self::CannotModifyPostPivotStatic => {
 				write!(f, "cannot modify state after pivot")
@@ -228,7 +235,9 @@ impl std::fmt::Display for ProtocolError {
 			Self::FailedToGetEphemeralKey(e) => {
 				write!(f, "failed to get ephemeral key: {e:?}")
 			}
-			Self::FailedToPutEphemeralKey => write!(f, "failed to put ephemeral key"),
+			Self::FailedToPutEphemeralKey => {
+				write!(f, "failed to put ephemeral key")
+			}
 			Self::CannotRotateNonExistentEphemeralKey => {
 				write!(f, "cannot rotate non-existent ephemeral key")
 			}
@@ -246,33 +255,53 @@ impl std::fmt::Display for ProtocolError {
 				write!(f, "failed to put manifest envelope")
 			}
 			Self::FailedToPutPivot => write!(f, "failed to put pivot"),
-			Self::AppClientRecvTimeout => write!(f, "app client receive timeout"),
-			Self::AppClientRecvInterrupted => write!(f, "app client receive interrupted"),
+			Self::AppClientRecvTimeout => {
+				write!(f, "app client receive timeout")
+			}
+			Self::AppClientRecvInterrupted => {
+				write!(f, "app client receive interrupted")
+			}
 			Self::AppClientRecvConnectionClosed => {
 				write!(f, "app client connection closed")
 			}
 			Self::AppClientConnectError(e) => {
 				write!(f, "app client connect error: {e}")
 			}
-			Self::AppClientSendError(e) => write!(f, "app client send error: {e}"),
+			Self::AppClientSendError(e) => {
+				write!(f, "app client send error: {e}")
+			}
 			Self::AppClientError(e) => write!(f, "app client error: {e}"),
 			Self::OversizedPayload => write!(f, "oversized payload"),
 			Self::ProtocolMsgDeserialization => {
 				write!(f, "protocol message deserialization failed")
 			}
-			Self::BadShareSetApprovals => write!(f, "unexpected share set approvals"),
-			Self::CouldNotVerifyApproval => write!(f, "could not verify approval"),
+			Self::BadShareSetApprovals => {
+				write!(f, "unexpected share set approvals")
+			}
+			Self::CouldNotVerifyApproval => {
+				write!(f, "could not verify approval")
+			}
 			Self::NotShareSetMember => write!(f, "not a share set member"),
-			Self::NotManifestSetMember => write!(f, "not a manifest set member"),
+			Self::NotManifestSetMember => {
+				write!(f, "not a manifest set member")
+			}
 			Self::P256Error(e) => write!(f, "P256 error: {e:?}"),
-			Self::InvalidP256DRKey(e) => write!(f, "invalid P256 DR key: {e:?}"),
+			Self::InvalidP256DRKey(e) => {
+				write!(f, "invalid P256 DR key: {e:?}")
+			}
 			Self::IncorrectSecretLen => write!(f, "incorrect secret length"),
 			Self::QosAttestError(e) => write!(f, "attestation error: {e}"),
 			Self::DifferentQuorumKey { expected, actual } => {
-				write!(f, "different quorum key: expected {expected}, got {actual}")
+				write!(
+					f,
+					"different quorum key: expected {expected}, got {actual}"
+				)
 			}
 			Self::DifferentManifestSet { expected, actual } => {
-				write!(f, "different manifest set: expected {expected}, got {actual}")
+				write!(
+					f,
+					"different manifest set: expected {expected}, got {actual}"
+				)
 			}
 			Self::DifferentNamespaceName { expected, actual } => {
 				write!(
@@ -301,7 +330,10 @@ impl std::fmt::Display for ProtocolError {
 			}
 			Self::DuplicateApproval => write!(f, "duplicate approval"),
 			Self::DifferentManifest { expected, actual } => {
-				write!(f, "different manifest: expected {expected}, got {actual}")
+				write!(
+					f,
+					"different manifest: expected {expected}, got {actual}"
+				)
 			}
 			Self::QosCrypto(e) => write!(f, "crypto error: {e}"),
 			Self::PoolExpandError => write!(f, "pool expand error"),

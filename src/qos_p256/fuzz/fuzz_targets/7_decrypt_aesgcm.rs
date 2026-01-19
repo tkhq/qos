@@ -24,11 +24,13 @@ fuzz_target!(|input: FuzzKeyDataStruct| {
 		}
 	};
 
-    // we expect this to fail
-    match key.decrypt(&input.data) {
-        Ok(_res) => panic!("the fuzzer can't create valid AEAD protected encrypted messages"),
-        Err(_err) => {
-            return; 
-        },
-    };
+	// we expect this to fail
+	match key.decrypt(&input.data) {
+		Ok(_res) => panic!(
+			"the fuzzer can't create valid AEAD protected encrypted messages"
+		),
+		Err(_err) => {
+			return;
+		}
+	};
 });

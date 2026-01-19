@@ -86,9 +86,13 @@ impl std::fmt::Display for AttestError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::WebPki(e) => write!(f, "webpki error: {e}"),
-			Self::InvalidCertChain(e) => write!(f, "invalid certificate chain: {e}"),
+			Self::InvalidCertChain(e) => {
+				write!(f, "invalid certificate chain: {e}")
+			}
 			Self::Nsm(e) => write!(f, "NSM error: {e:?}"),
-			Self::InvalidEndEntityCert => write!(f, "invalid end entity certificate"),
+			Self::InvalidEndEntityCert => {
+				write!(f, "invalid end entity certificate")
+			}
 			Self::InvalidCOSESign1Signature => {
 				write!(f, "invalid COSE Sign1 signature")
 			}
@@ -98,7 +102,9 @@ impl std::fmt::Display for AttestError {
 			Self::InvalidDigest => write!(f, "invalid hash digest"),
 			Self::InvalidModuleId => write!(f, "invalid NSM module ID"),
 			Self::InvalidPcr => write!(f, "invalid PCR"),
-			Self::InvalidCABundle => write!(f, "invalid certificate authority bundle"),
+			Self::InvalidCABundle => {
+				write!(f, "invalid certificate authority bundle")
+			}
 			Self::InvalidTimeStamp => write!(f, "invalid timestamp"),
 			Self::InvalidPubKey => write!(f, "invalid public key"),
 			Self::InvalidBytes => write!(f, "invalid bytes"),
@@ -114,24 +120,35 @@ impl std::fmt::Display for AttestError {
 				write!(f, "user data missing in attestation document")
 			}
 			Self::DifferentUserData { expected, actual } => {
-				write!(f, "different user data: expected {expected}, got {actual}")
+				write!(
+					f,
+					"different user data: expected {expected}, got {actual}"
+				)
 			}
 			Self::UnexpectedAttestationDocNonce => {
 				write!(f, "unexpected nonce in attestation document")
 			}
-			Self::MissingPcr0 => write!(f, "PCR0 missing in attestation document"),
+			Self::MissingPcr0 => {
+				write!(f, "PCR0 missing in attestation document")
+			}
 			Self::DifferentPcr0 { expected, actual } => {
 				write!(f, "different PCR0: expected {expected}, got {actual}")
 			}
-			Self::MissingPcr1 => write!(f, "PCR1 missing in attestation document"),
+			Self::MissingPcr1 => {
+				write!(f, "PCR1 missing in attestation document")
+			}
 			Self::DifferentPcr1 { expected, actual } => {
 				write!(f, "different PCR1: expected {expected}, got {actual}")
 			}
-			Self::MissingPcr2 => write!(f, "PCR2 missing in attestation document"),
+			Self::MissingPcr2 => {
+				write!(f, "PCR2 missing in attestation document")
+			}
 			Self::DifferentPcr2 { expected, actual } => {
 				write!(f, "different PCR2: expected {expected}, got {actual}")
 			}
-			Self::MissingPcr3 => write!(f, "PCR3 missing in attestation document"),
+			Self::MissingPcr3 => {
+				write!(f, "PCR3 missing in attestation document")
+			}
 			Self::DifferentPcr3 { expected, actual } => {
 				write!(f, "different PCR3: expected {expected}, got {actual}")
 			}

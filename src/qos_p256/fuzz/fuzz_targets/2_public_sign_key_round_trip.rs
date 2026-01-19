@@ -37,10 +37,11 @@ fuzz_target!(|input: FuzzKeyDataStruct| {
 	// expect the signature verification with the reconstructed pubkey to always succeed
 	assert!(public_reimported.verify(&input.data, &signature).is_ok());
 
-    let mut wrong_signature = signature.clone();
-    let wrong_signature_last_element_index = wrong_signature.len() - 1;
-    // flip a bit in the signature
-    wrong_signature[wrong_signature_last_element_index] = wrong_signature[wrong_signature_last_element_index] ^ 1;
-    // expect the verification to fail since the signature is bad
-    assert!(public_reimported.verify(&input.data, &wrong_signature).is_err());
+	let mut wrong_signature = signature.clone();
+	let wrong_signature_last_element_index = wrong_signature.len() - 1;
+	// flip a bit in the signature
+	wrong_signature[wrong_signature_last_element_index] =
+		wrong_signature[wrong_signature_last_element_index] ^ 1;
+	// expect the verification to fail since the signature is bad
+	assert!(public_reimported.verify(&input.data, &wrong_signature).is_err());
 });

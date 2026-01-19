@@ -530,8 +530,13 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	if !manifest_envelope.share_set_approvals.is_empty() {
 		return Err(ProtocolError::BadShareSetApprovals);
 	}
-	if sha_256(pivot) != manifest_envelope.manifest.pivot.hash {
-		return Err(ProtocolError::InvalidPivotHash);
+	let actual_hash = sha_256(pivot);
+	let expected_hash = manifest_envelope.manifest.pivot.hash;
+	if actual_hash != expected_hash {
+		return Err(ProtocolError::InvalidPivotHash {
+			expected: qos_hex::encode(&expected_hash),
+			actual: qos_hex::encode(&actual_hash),
+		});
 	};
 
 	// 2. Generate an Ephemeral Key.
