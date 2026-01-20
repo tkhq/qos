@@ -1,7 +1,9 @@
 //! CLI for running a host proxy to provide remote connections.
 
+use std::num::ParseIntError;
+
 use qos_core::{
-	io::SocketAddress,
+	io::{IOError, SocketAddress},
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
 
@@ -17,6 +19,10 @@ pub const PORT: &str = "port";
 pub const USOCK: &str = "usock";
 /// "pool-size"
 pub const POOL_SIZE: &str = "pool-size";
+/// "max-connections"
+pub const MAX_CONNECTIONS: &str = "max-connections";
+
+const DEFAULT_MAX_CONNECTIONS: &str = "256";
 
 /// CLI options for starting up the proxy.
 #[derive(Default, Clone, Debug, PartialEq)]
@@ -33,10 +39,16 @@ impl ProxyOpts {
 		Self { parsed }
 	}
 
+	pub(crate) fn max_connections(&self) -> Result<usize, ParseIntError> {
+		self.parsed
+			.single(MAX_CONNECTIONS)
+			.map(String::as_str)
+			.unwrap_or(DEFAULT_MAX_CONNECTIONS)
+			.parse()
+	}
+
 	/// Create a new `StreamPool` using the list of `SocketAddress` for the enclave server.
-	pub(crate) fn async_pool(
-		&self,
-	) -> Result<StreamPool, qos_core::io::IOError> {
+	pub(crate) fn async_pool(&self) -> Result<StreamPool, IOError> {
 		let pool_size: u8 = self
 			.parsed
 			.single(POOL_SIZE)
@@ -86,12 +98,14 @@ impl CLI {
 		} else {
 			let _server = SocketServer::listen_proxy(
 				opts.async_pool().expect("unable to create async socket pool"),
+				opts.max_connections()
+					.expect("unable to parse max connections argument"),
 			)
 			.await
 			.expect("unable to get listen join handles");
 
 			match tokio::signal::ctrl_c().await {
-				Ok(_) => eprintln!("handling ctrl+c the tokio way"),
+				Ok(_) => println!("handling ctrl+c the tokio way"),
 
 				Err(err) => panic!("{err}"),
 			}
@@ -123,6 +137,14 @@ impl GetParserForOptions for ProxyParser {
 				Token::new(USOCK, "unix socket (`.sock`) to listen on.")
 					.takes_value(true)
 					.forbids(vec!["port", "cid"]),
+			)
+			.token(
+				Token::new(
+					MAX_CONNECTIONS,
+					"maximum concurrent connections allowed",
+				)
+				.takes_value(true)
+				.default_value(DEFAULT_MAX_CONNECTIONS),
 			)
 			.token(
 				Token::new(

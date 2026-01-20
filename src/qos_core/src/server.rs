@@ -128,14 +128,14 @@ impl Drop for SocketServer {
 	}
 }
 
-// used to ensure we drop permits as tasks exit for any reason
-struct PermittedStream {
+/// Used to ensure we drop `Stream` permits as tasks exit for any reason
+pub struct PermittedStream {
 	_permit: OwnedSemaphorePermit,
 	stream: Stream,
 }
 
 impl PermittedStream {
-	async fn accept(
+	pub async fn accept(
 		listener: &Listener,
 		connections: Arc<Semaphore>,
 	) -> Result<Self, IOError> {
@@ -149,12 +149,19 @@ impl PermittedStream {
 		Ok(PermittedStream { _permit, stream })
 	}
 
-	async fn send(&mut self, value: &[u8]) -> Result<(), IOError> {
+	/// Perform a `Stream::send`
+	pub async fn send(&mut self, value: &[u8]) -> Result<(), IOError> {
 		self.stream.send(value).await
 	}
 
-	async fn recv(&mut self) -> Result<Vec<u8>, IOError> {
+	/// Perform a `Stream::recv`
+	pub async fn recv(&mut self) -> Result<Vec<u8>, IOError> {
 		self.stream.recv().await
+	}
+
+	/// Mutable access to the underlaying `Stream`
+	pub fn stream(&mut self) -> &mut Stream {
+		&mut self.stream
 	}
 }
 
