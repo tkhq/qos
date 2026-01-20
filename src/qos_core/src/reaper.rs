@@ -58,12 +58,12 @@ async fn run_server(
 		SocketServer::listen_all(core_pool, &protocol_processor, 1)
 			.expect("unable to get listen task list for protocol server");
 
-	eprintln!("Reaper::server running");
+	println!("Reaper::server running");
 	while *server_state.read().unwrap() != InterState::Quitting {
 		tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
 	}
 
-	eprintln!("Reaper::server shutdown");
+	println!("Reaper::server shutdown");
 }
 
 // runs the VSOCK -> TCP bridge so that apps can use any TCP based protocol without worrying about VSOCK

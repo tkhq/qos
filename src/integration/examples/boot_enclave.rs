@@ -439,8 +439,8 @@ async fn main() {
 		ureq::get(&enclave_info_url).call().unwrap().into_json().unwrap();
 	assert_eq!(enclave_info.phase, ProtocolPhase::QuorumKeyProvisioned);
 
-	eprintln!("=========ENCLAVE READY WITH PIVOT RUNNING!!==========");
-	eprintln!("press ctrl+c to quit");
+	println!("=========ENCLAVE READY WITH PIVOT RUNNING!!==========");
+	println!("press ctrl+c to quit");
 
 	match tokio::signal::ctrl_c().await {
 		Ok(()) => {}

@@ -43,7 +43,7 @@ impl HostBridge {
 			let mut host_addr = self.host_addr;
 
 			for stream in streams {
-				eprintln!("tcp to vsock bridge listening on {host_addr}");
+				println!("tcp to vsock bridge listening on {host_addr}");
 				tasks.push(tokio::spawn(tcp_to_vsock(stream, host_addr)));
 				// bump port by 1 for next listener
 				host_addr.set_port(host_addr.port() + 1);
@@ -89,7 +89,7 @@ async fn await_all(tasks: Vec<JoinHandle<Result<(), IOError>>>) {
 		match result {
 				Err(err) => eprintln!("error on task joining: {err:?}"),
 				Ok(result) => match result {
-					Ok(()) => eprintln!("tcp to vsock bridge host exit, no errors. This shouldn't happen"),
+					Ok(()) => println!("tcp to vsock bridge host exit, no errors. This shouldn't happen"),
 					Err(err) => eprintln!("error in task: {err:?}"),
 				},
 			}
