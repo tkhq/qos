@@ -9,7 +9,7 @@ use std::{
 
 use rand::prelude::*;
 
-const MAX_PORT_BIND_WAIT_TIME: Duration = Duration::from_secs(90);
+const MAX_PORT_BIND_WAIT_TIME: Duration = Duration::from_secs(5);
 const PORT_BIND_WAIT_TIME_INCREMENT: Duration = Duration::from_millis(500);
 const POST_BIND_SLEEP: Duration = Duration::from_millis(500);
 const SERVER_PORT_RANGE: Range<u16> = 10000..60000;

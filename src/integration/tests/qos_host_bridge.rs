@@ -282,7 +282,7 @@ async fn qos_host_bridge_works() {
 			.into();
 
 	// -- HOST start host
-	let mut _host_child_process: ChildWrapper =
+	let mut host_child_process: ChildWrapper =
 		Command::new("../target/debug/qos_host")
 			.args([
 				"--host-port",
@@ -466,7 +466,60 @@ async fn qos_host_bridge_works() {
 	// Wait for the qos_host app bridge to run
 	qos_test_primitives::wait_until_port_is_bound(app_host_port);
 
-	// send a PivotSocketStressMsg to check if the  bridge works all the wayi
+	// send a PivotSocketStressMsg to check if the  bridge works all the way
+	let bridge_addr = format!("127.0.0.1:{app_host_port}");
+	let mut tcp_stream = TcpStream::connect(&bridge_addr).await.unwrap();
+
+	let msg = PivotSocketStressMsg::OkRequest(42);
+	let msg_bytes = borsh::to_vec(&msg).unwrap();
+	let mut header = (msg_bytes.len() as u64).to_le_bytes();
+
+	// send the header/length
+	tcp_stream.write(&header).await.unwrap();
+	// send the msg
+	tcp_stream.write(&msg_bytes).await.unwrap();
+
+	// receive the reply header
+	assert_eq!(8, tcp_stream.read_exact(&mut header).await.unwrap());
+	let reply_size = usize::from_le_bytes(header);
+	let mut reply_bytes = vec![0u8; reply_size];
+	// receive the reply msg
+	assert_eq!(
+		reply_size,
+		tcp_stream.read_exact(&mut reply_bytes).await.unwrap()
+	);
+	// decode the reply msg
+	let reply: PivotSocketStressMsg = borsh::from_slice(&reply_bytes).unwrap();
+
+	match reply {
+		PivotSocketStressMsg::OkResponse(val) => assert_eq!(val, 42),
+		_ => panic!("invalid pivot response"),
+	}
+
+	// test qos_host restart keeping the bridge up via the envelope logic
+	// kill the original
+	host_child_process.0.kill().expect("unable to kill qos_host");
+	drop(host_child_process);
+
+	// -- HOST restart host
+	let mut _host_child_process: ChildWrapper =
+		Command::new("../target/debug/qos_host")
+			.args([
+				"--host-port",
+				&host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--usock",
+				&*usock,
+			])
+			.spawn()
+			.unwrap()
+			.into();
+
+	// Wait for the qos_host app bridge to run
+	qos_test_primitives::wait_until_port_is_bound(app_host_port);
+
+	// send a PivotSocketStressMsg to check if the  bridge works all the way
 	let bridge_addr = format!("127.0.0.1:{app_host_port}");
 	let mut tcp_stream = TcpStream::connect(&bridge_addr).await.unwrap();
 

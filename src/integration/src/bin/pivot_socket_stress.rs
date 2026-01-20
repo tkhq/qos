@@ -28,7 +28,7 @@ impl RequestProcessor for Processor {
 
 		match msg {
 			PivotSocketStressMsg::OkRequest(id) => {
-				eprintln!(
+				println!(
 					"PIVOT: OkRequest({id}) received, responding with OkResponse({id})"
 				);
 				borsh::to_vec(&PivotSocketStressMsg::OkResponse(id))
@@ -40,7 +40,7 @@ impl RequestProcessor for Processor {
 				std::process::exit(1)
 			}
 			PivotSocketStressMsg::SlowRequest(delay) => {
-				eprintln!(
+				println!(
 					"PIVOT: slow request received, sleeping for {delay}ms"
 				);
 				tokio::time::sleep(std::time::Duration::from_millis(delay))
