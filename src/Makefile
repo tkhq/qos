@@ -152,7 +152,7 @@ clippy-fix:
 
 .PHONY: fmt
 fmt:
-	cargo fmt
+	cargo fmt --all -- --check
 
 .PHONY: test
 test:

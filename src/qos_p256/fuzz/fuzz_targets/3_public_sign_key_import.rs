@@ -29,11 +29,11 @@ fuzz_target!(|data: &[u8]| {
 	// this should never succeed
 	assert!(pubkey_special.verify(message, &bad_signature).is_err());
 
-    let re_exported_public_key_data = pubkey_special.to_bytes();
-    // the exported data doesn't actually have to be identical to initial input,
-    // since P256SignPublic::from_bytes() accepts compressed points as well
-    // 
-    // workaround: compare only the 32 data bytes corresponding to the first sub-point,
-    // ignoring the first format byte and any trailing data
-    assert_eq!(data[1..33], re_exported_public_key_data[1..33]);
+	let re_exported_public_key_data = pubkey_special.to_bytes();
+	// the exported data doesn't actually have to be identical to initial input,
+	// since P256SignPublic::from_bytes() accepts compressed points as well
+	//
+	// workaround: compare only the 32 data bytes corresponding to the first sub-point,
+	// ignoring the first format byte and any trailing data
+	assert_eq!(data[1..33], re_exported_public_key_data[1..33]);
 });

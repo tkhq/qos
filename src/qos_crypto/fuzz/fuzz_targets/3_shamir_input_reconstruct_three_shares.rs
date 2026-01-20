@@ -14,7 +14,7 @@ pub struct FuzzShareReconstruct {
 // let the fuzzer control the share data in a three share reconstruction scenario
 fuzz_target!(|fuzzerdata: FuzzShareReconstruct| {
 	let mut shares: Vec<Vec<u8>> = Vec::new();
-	
+
 	// note that the effort to reconstruct shares is O(n²) so inputs with a large n
 	// are particularly slow
 	// here we have n == 3, so this is not a problem
