@@ -143,7 +143,7 @@ async fn qos_host_bridge_works() {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
 		args: vec![pivot_app_sock_path.to_string()],
-		host_config: vec![BridgeConfig::Server(app_host_port)],
+		bridge_config: vec![BridgeConfig::Server(app_host_port)],
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };

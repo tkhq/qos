@@ -185,7 +185,8 @@ impl Reaper {
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest;
-		let PivotConfig { args, restart, host_config, .. } = manifest.pivot;
+		let PivotConfig { args, restart, bridge_config: host_config, .. } =
+			manifest.pivot;
 
 		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task
 		run_vsock_to_tcp_bridge(&core_socket, &host_config)

@@ -198,7 +198,7 @@ async fn reaper_handles_bridge() {
 	// quorum key
 	let mut manifest_envelope = ManifestEnvelope::default();
 	manifest_envelope.manifest.pivot.args = vec!["4000".to_string()];
-	manifest_envelope.manifest.pivot.host_config =
+	manifest_envelope.manifest.pivot.bridge_config =
 		vec![BridgeConfig::Server(4000)];
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();

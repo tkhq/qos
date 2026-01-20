@@ -158,7 +158,7 @@ pub struct PivotConfig {
 	/// Bridge host configuration for the pivot is a set of per-port rules.
 	/// If set the pivot will service TCP with the provided ports and a bridge will provide the TCP -> VSOCK -> TCP streams.
 	/// If not set the pivot will service VSOCK and the host side needs to be provided manually.
-	pub host_config: Vec<BridgeConfig>,
+	pub bridge_config: Vec<BridgeConfig>,
 	/// Arguments to invoke the binary with. Leave this empty if none are
 	/// needed.
 	pub args: Vec<String>,
@@ -194,7 +194,7 @@ impl From<PivotConfigV0> for PivotConfig {
 			hash: value.hash,
 			restart: value.restart,
 			args: value.args,
-			host_config: Vec::new(),
+			bridge_config: Vec::new(),
 		}
 	}
 }
@@ -1008,6 +1008,6 @@ mod test {
 		let manifest = Manifest::try_from_slice_compat(&bytes).unwrap();
 
 		assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
-		assert_eq!(manifest.pivot.host_config.len(), 0);
+		assert_eq!(manifest.pivot.bridge_config.len(), 0);
 	}
 }

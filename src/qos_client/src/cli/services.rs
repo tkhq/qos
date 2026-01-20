@@ -751,7 +751,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
-			host_config,
+			bridge_config: host_config,
 		},
 		manifest_set,
 		share_set,
@@ -1645,7 +1645,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			hash: sha_256(&pivot),
 			restart,
 			args,
-			host_config,
+			bridge_config: host_config,
 		},
 		manifest_set: ManifestSet {
 			threshold: 1,

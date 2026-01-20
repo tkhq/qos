@@ -330,12 +330,12 @@ async fn maybe_start_app_host_bridge(
 				}
 
 				// nothing to do, app does not want a HOST bridge
-				if manifest_envelope.manifest.pivot.host_config.is_empty() {
+				if manifest_envelope.manifest.pivot.bridge_config.is_empty() {
 					eprintln!("app refused host bridge, skipping");
 					return;
 				}
 
-				for bc in manifest_envelope.manifest.pivot.host_config {
+				for bc in manifest_envelope.manifest.pivot.bridge_config {
 					let host_port = match bc {
 						BridgeConfig::Server(port) => port,
 						BridgeConfig::Client(_, _) => {
