@@ -159,7 +159,14 @@ fn validate_manifest(
 	if old_manifest_envelope.manifest.namespace.quorum_key
 		!= new_manifest_envelope.manifest.namespace.quorum_key
 	{
-		return Err(ProtocolError::DifferentQuorumKey);
+		return Err(ProtocolError::DifferentQuorumKey {
+			expected: qos_hex::encode(
+				&old_manifest_envelope.manifest.namespace.quorum_key,
+			),
+			actual: qos_hex::encode(
+				&new_manifest_envelope.manifest.namespace.quorum_key,
+			),
+		});
 	}
 
 	// 4. Check that the Manifest Set of the New Manifest matches the Manifest
@@ -175,7 +182,12 @@ fn validate_manifest(
 		new_manifest.manifest_set.members.sort();
 		old_manifest.manifest_set.members.sort();
 		if old_manifest.manifest_set != new_manifest.manifest_set {
-			return Err(ProtocolError::DifferentManifestSet);
+			return Err(ProtocolError::DifferentManifestSet {
+				expected: qos_hex::encode(
+					&old_manifest.manifest_set.qos_hash(),
+				),
+				actual: qos_hex::encode(&new_manifest.manifest_set.qos_hash()),
+			});
 		}
 	}
 
@@ -186,7 +198,10 @@ fn validate_manifest(
 	if old_manifest_envelope.manifest.namespace.name
 		!= new_manifest_envelope.manifest.namespace.name
 	{
-		return Err(ProtocolError::DifferentNamespaceName);
+		return Err(ProtocolError::DifferentNamespaceName {
+			expected: old_manifest_envelope.manifest.namespace.name.clone(),
+			actual: new_manifest_envelope.manifest.namespace.name.clone(),
+		});
 	}
 
 	// 6. Check that the nonce of the New Manifest is greater than or equal to
@@ -201,13 +216,21 @@ fn validate_manifest(
 	if old_manifest_envelope.manifest.namespace.nonce
 		> new_manifest_envelope.manifest.namespace.nonce
 	{
-		return Err(ProtocolError::LowNonce);
+		return Err(ProtocolError::LowNonce {
+			expected: old_manifest_envelope.manifest.namespace.nonce,
+			actual: new_manifest_envelope.manifest.namespace.nonce,
+		});
 	} else if old_manifest_envelope.manifest.namespace.nonce
 		== new_manifest_envelope.manifest.namespace.nonce
 		&& old_manifest_envelope.manifest.qos_hash()
 			!= new_manifest_envelope.manifest.qos_hash()
 	{
-		return Err(ProtocolError::DifferentManifest);
+		return Err(ProtocolError::DifferentManifest {
+			expected: qos_hex::encode(
+				&old_manifest_envelope.manifest.qos_hash(),
+			),
+			actual: qos_hex::encode(&new_manifest_envelope.manifest.qos_hash()),
+		});
 	}
 
 	// 7. Check that the hash of the new manifest is in the `user_data` field of
@@ -241,7 +264,14 @@ fn validate_manifest(
 	if old_manifest_envelope.manifest.enclave.pcr3
 		!= new_manifest_envelope.manifest.enclave.pcr3
 	{
-		return Err(ProtocolError::DifferentPcr3);
+		return Err(ProtocolError::DifferentPcr3 {
+			expected: qos_hex::encode(
+				&old_manifest_envelope.manifest.enclave.pcr3,
+			),
+			actual: qos_hex::encode(
+				&new_manifest_envelope.manifest.enclave.pcr3,
+			),
+		});
 	}
 
 	Ok(())
@@ -505,7 +535,10 @@ mod test {
 			let other_pivot = b"other pivot".to_vec();
 			let err =
 				boot_key_forward(&mut state, &manifest_envelope, &other_pivot);
-			assert_eq!(Err(ProtocolError::InvalidPivotHash), err,);
+			assert!(
+				matches!(err, Err(ProtocolError::InvalidPivotHash { .. })),
+				"expected InvalidPivotHash error, got {err:?}"
+			);
 
 			// check that nothing was written
 			assert!(!handles.pivot_exists());
@@ -641,14 +674,14 @@ mod test {
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.namespace.nonce += 1;
 
-			assert_eq!(
+			assert!(matches!(
 				validate_manifest(
 					&manifest_envelope,
 					&old_manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::LowNonce)
-			);
+				Err(ProtocolError::LowNonce { .. })
+			));
 		}
 
 		#[test]
@@ -657,14 +690,14 @@ mod test {
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.enclave.pcr0 = vec![128; 32];
 
-			assert_eq!(
+			assert!(matches!(
 				validate_manifest(
 					&manifest_envelope,
 					&old_manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::DifferentManifest)
-			);
+				Err(ProtocolError::DifferentManifest { .. })
+			));
 		}
 
 		#[test]
@@ -676,14 +709,14 @@ mod test {
 			old_manifest_envelope.manifest.namespace.quorum_key =
 				different_quorum_key;
 
-			assert_eq!(
+			assert!(matches!(
 				validate_manifest(
 					&manifest_envelope,
 					&old_manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::DifferentQuorumKey)
-			);
+				Err(ProtocolError::DifferentQuorumKey { .. })
+			));
 		}
 
 		#[test]
@@ -693,25 +726,25 @@ mod test {
 			old_manifest_envelope.manifest.manifest_set.members.pop();
 			old_manifest_envelope.manifest.namespace.nonce -= 1;
 
-			assert_eq!(
+			assert!(matches!(
 				validate_manifest(
 					&manifest_envelope,
 					&old_manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::DifferentManifestSet)
-			);
+				Err(ProtocolError::DifferentManifestSet { .. })
+			));
 
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.manifest_set.threshold = 1;
-			assert_eq!(
+			assert!(matches!(
 				validate_manifest(
 					&manifest_envelope,
 					&old_manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::DifferentManifestSet)
-			);
+				Err(ProtocolError::DifferentManifestSet { .. })
+			));
 		}
 
 		#[test]
@@ -743,14 +776,14 @@ mod test {
 			old_manifest_envelope.manifest.namespace.name =
 				"other namespace".to_string();
 
-			assert_eq!(
+			assert!(matches!(
 				validate_manifest(
 					&manifest_envelope,
 					&old_manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::DifferentNamespaceName),
-			);
+				Err(ProtocolError::DifferentNamespaceName { .. }),
+			));
 		}
 
 		#[test]
@@ -760,14 +793,14 @@ mod test {
 			old_manifest_envelope.manifest.enclave.pcr3 = vec![128; 32];
 			old_manifest_envelope.manifest.namespace.nonce -= 1;
 
-			assert_eq!(
+			assert!(matches!(
 				validate_manifest(
 					&manifest_envelope,
 					&old_manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::DifferentPcr3),
-			);
+				Err(ProtocolError::DifferentPcr3 { .. }),
+			));
 		}
 
 		#[test]
@@ -874,7 +907,9 @@ mod test {
 					&manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::QosAttestError("DifferentPcr0".to_string()))
+				Err(ProtocolError::QosAttestError(
+					"DifferentPcr0 { expected: \"8080808080808080808080808080808080808080808080808080808080808080\", actual: \"0404040404040404040404040404040404040404040404040404040404040404\" }".to_string()
+				))
 			);
 		}
 
@@ -911,7 +946,9 @@ mod test {
 					&manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::QosAttestError("DifferentPcr1".to_string()))
+				Err(ProtocolError::QosAttestError(
+					"DifferentPcr1 { expected: \"8080808080808080808080808080808080808080808080808080808080808080\", actual: \"0303030303030303030303030303030303030303030303030303030303030303\" }".to_string()
+				))
 			);
 		}
 
@@ -948,7 +985,9 @@ mod test {
 					&manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::QosAttestError("DifferentPcr2".to_string()))
+				Err(ProtocolError::QosAttestError(
+					"DifferentPcr2 { expected: \"8080808080808080808080808080808080808080808080808080808080808080\", actual: \"0202020202020202020202020202020202020202020202020202020202020202\" }".to_string()
+				))
 			);
 		}
 
@@ -985,7 +1024,9 @@ mod test {
 					&manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::QosAttestError("DifferentPcr3".to_string()))
+				Err(ProtocolError::QosAttestError(
+					"DifferentPcr3 { expected: \"8080808080808080808080808080808080808080808080808080808080808080\", actual: \"0101010101010101010101010101010101010101010101010101010101010101\" }".to_string()
+				))
 			);
 		}
 
@@ -1013,15 +1054,14 @@ mod test {
 
 			// Don't update the manifest hash in the attestation doc
 
-			assert_eq!(
-				validate_manifest(
-					&new_manifest_envelope,
-					&manifest_envelope,
-					&att_doc
-				),
-				Err(ProtocolError::QosAttestError(
-					"DifferentUserData".to_string()
-				))
+			let err = validate_manifest(
+				&new_manifest_envelope,
+				&manifest_envelope,
+				&att_doc,
+			);
+			// The hash values are dynamically generated, so we check the error format
+			assert!(
+				matches!(&err, Err(ProtocolError::QosAttestError(msg)) if msg.starts_with("DifferentUserData {"))
 			);
 		}
 	}

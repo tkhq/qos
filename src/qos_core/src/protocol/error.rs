@@ -28,8 +28,8 @@ pub enum ProtocolError {
 	/// Ensure the executor is in the correct phase.
 	NoMatchingRoute(ProtocolPhase),
 	/// Hash of the Pivot binary does not match the pivot configuration in the
-	/// manifest.
-	InvalidPivotHash,
+	/// manifest. Contains (expected, actual) as hex strings.
+	InvalidPivotHash { expected: String, actual: String },
 	/// The message is too large.
 	OversizeMsg,
 	/// Message could not be deserialized
@@ -110,22 +110,20 @@ pub enum ProtocolError {
 	/// An error from the attest crate.
 	QosAttestError(String),
 	/// Quorum Key in the new manifest does not match the quorum key in the old
-	/// manifest.
-	DifferentQuorumKey,
+	/// manifest. Contains (expected, actual) as hex strings.
+	DifferentQuorumKey { expected: String, actual: String },
 	/// The manifest sets do not match.
-	DifferentManifestSet,
+	/// Contains (expected_hash, actual_hash) as hex strings.
+	DifferentManifestSet { expected: String, actual: String },
 	/// The manifests do not have the same namespace names.
-	DifferentNamespaceName,
-	/// The manifest has a lower nonce then the current manifest
-	LowNonce,
-	/// The manifests have different PCR0 values
-	DifferentPcr0,
-	/// The manifests have different PCR1 values
-	DifferentPcr1,
-	/// The manifests have different PCR2 values
-	DifferentPcr2,
-	/// The manifests have different PCR2 values
-	DifferentPcr3,
+	/// Contains (expected, actual) namespace names.
+	DifferentNamespaceName { expected: String, actual: String },
+	/// The manifest has a lower nonce then the current manifest.
+	/// Contains (expected_min, actual) nonce values.
+	LowNonce { expected: u32, actual: u32 },
+	/// The manifests have different PCR3 values.
+	/// Contains (expected, actual) as hex strings.
+	DifferentPcr3 { expected: String, actual: String },
 	/// Attestation document is missing ephemeral key.
 	MissingEphemeralKey,
 	/// Ephemeral key cannot be decoded.
@@ -143,8 +141,9 @@ pub enum ProtocolError {
 	/// The manifest envelope has duplicate approvals.
 	DuplicateApproval,
 	/// The new manifest was different from the old manifest when we expected
-	/// them to be the same because they have the same nonce
-	DifferentManifest,
+	/// them to be the same because they have the same nonce.
+	/// Contains (expected_hash, actual_hash) as hex strings.
+	DifferentManifest { expected: String, actual: String },
 	/// Error from the qos crypto library.
 	QosCrypto(String),
 	/// Error during expanding the `StreamPool`.
@@ -192,3 +191,154 @@ impl From<qos_nsm::nitro::AttestError> for ProtocolError {
 		Self::QosAttestError(msg)
 	}
 }
+
+impl std::fmt::Display for ProtocolError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::InvalidShare => write!(f, "invalid quorum key share"),
+			Self::ReconstructionErrorEmptySecret => {
+				write!(f, "failed to reconstruct quorum key: empty secret")
+			}
+			Self::ReconstructionErrorIncorrectPubKey => {
+				write!(f, "reconstructed incorrect public key")
+			}
+			Self::IOError => write!(f, "filesystem error"),
+			Self::InvalidManifestApproval(approval) => {
+				write!(
+					f,
+					"invalid manifest approval from member '{}'",
+					approval.member.alias
+				)
+			}
+			Self::NotEnoughApprovals => write!(f, "not enough approvals"),
+			Self::NoMatchingRoute(phase) => {
+				write!(f, "no matching route for phase {phase:?}")
+			}
+			Self::InvalidPivotHash { expected, actual } => {
+				write!(
+					f,
+					"invalid pivot hash: expected {expected}, got {actual}"
+				)
+			}
+			Self::OversizeMsg => write!(f, "message too large"),
+			Self::InvalidMsg => write!(f, "invalid message"),
+			Self::EnclaveClient => write!(f, "enclave client error"),
+			Self::DecryptionFailed => write!(f, "decryption failed"),
+			Self::InvalidPrivateKey => write!(f, "invalid private key"),
+			Self::FailedToParseFromString => {
+				write!(f, "failed to parse from string")
+			}
+			Self::BadEphemeralKeyPath => write!(f, "bad ephemeral key path"),
+			Self::CannotModifyPostPivotStatic => {
+				write!(f, "cannot modify state after pivot")
+			}
+			Self::FailedToGetEphemeralKey(e) => {
+				write!(f, "failed to get ephemeral key: {e:?}")
+			}
+			Self::FailedToPutEphemeralKey => {
+				write!(f, "failed to put ephemeral key")
+			}
+			Self::CannotRotateNonExistentEphemeralKey => {
+				write!(f, "cannot rotate non-existent ephemeral key")
+			}
+			Self::CannotDeleteEphemeralKey(e) => {
+				write!(f, "cannot delete ephemeral key: {e}")
+			}
+			Self::FailedToGetQuorumKey(e) => {
+				write!(f, "failed to get quorum key: {e:?}")
+			}
+			Self::FailedToPutQuorumKey => write!(f, "failed to put quorum key"),
+			Self::FailedToGetManifestEnvelope => {
+				write!(f, "failed to get manifest envelope")
+			}
+			Self::FailedToPutManifestEnvelope => {
+				write!(f, "failed to put manifest envelope")
+			}
+			Self::FailedToPutPivot => write!(f, "failed to put pivot"),
+			Self::AppClientRecvTimeout => {
+				write!(f, "app client receive timeout")
+			}
+			Self::AppClientRecvInterrupted => {
+				write!(f, "app client receive interrupted")
+			}
+			Self::AppClientRecvConnectionClosed => {
+				write!(f, "app client connection closed")
+			}
+			Self::AppClientConnectError(e) => {
+				write!(f, "app client connect error: {e}")
+			}
+			Self::AppClientSendError(e) => {
+				write!(f, "app client send error: {e}")
+			}
+			Self::AppClientError(e) => write!(f, "app client error: {e}"),
+			Self::OversizedPayload => write!(f, "oversized payload"),
+			Self::ProtocolMsgDeserialization => {
+				write!(f, "protocol message deserialization failed")
+			}
+			Self::BadShareSetApprovals => {
+				write!(f, "unexpected share set approvals")
+			}
+			Self::CouldNotVerifyApproval => {
+				write!(f, "could not verify approval")
+			}
+			Self::NotShareSetMember => write!(f, "not a share set member"),
+			Self::NotManifestSetMember => {
+				write!(f, "not a manifest set member")
+			}
+			Self::P256Error(e) => write!(f, "P256 error: {e:?}"),
+			Self::InvalidP256DRKey(e) => {
+				write!(f, "invalid P256 DR key: {e:?}")
+			}
+			Self::IncorrectSecretLen => write!(f, "incorrect secret length"),
+			Self::QosAttestError(e) => write!(f, "attestation error: {e}"),
+			Self::DifferentQuorumKey { expected, actual } => {
+				write!(
+					f,
+					"different quorum key: expected {expected}, got {actual}"
+				)
+			}
+			Self::DifferentManifestSet { expected, actual } => {
+				write!(
+					f,
+					"different manifest set: expected {expected}, got {actual}"
+				)
+			}
+			Self::DifferentNamespaceName { expected, actual } => {
+				write!(
+					f,
+					"different namespace name: expected '{expected}', got '{actual}'"
+				)
+			}
+			Self::LowNonce { expected, actual } => {
+				write!(f, "manifest nonce too low: expected >= {expected}, got {actual}")
+			}
+			Self::DifferentPcr3 { expected, actual } => {
+				write!(f, "different PCR3: expected {expected}, got {actual}")
+			}
+			Self::MissingEphemeralKey => write!(f, "missing ephemeral key"),
+			Self::InvalidEphemeralKey => write!(f, "invalid ephemeral key"),
+			Self::InvalidEncryptedQuorumKeySignature => {
+				write!(f, "invalid encrypted quorum key signature")
+			}
+			Self::EncryptedQuorumKeyInvalidLen => {
+				write!(f, "encrypted quorum key has invalid length")
+			}
+			Self::InvalidQuorumSecret => write!(f, "invalid quorum secret"),
+			Self::WrongQuorumKey => write!(f, "wrong quorum key"),
+			Self::InvalidStateTransition(from, to) => {
+				write!(f, "invalid state transition from {from:?} to {to:?}")
+			}
+			Self::DuplicateApproval => write!(f, "duplicate approval"),
+			Self::DifferentManifest { expected, actual } => {
+				write!(
+					f,
+					"different manifest: expected {expected}, got {actual}"
+				)
+			}
+			Self::QosCrypto(e) => write!(f, "crypto error: {e}"),
+			Self::PoolExpandError => write!(f, "pool expand error"),
+		}
+	}
+}
+
+impl std::error::Error for ProtocolError {}
