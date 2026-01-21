@@ -109,6 +109,10 @@ async fn enclave_app_client_socket_stress() {
 		_ => panic!("unexpected error received: {:?}", raw_response),
 	}
 
+	// we need to give the panicking pivot time to quit and close the old socket before trying to see
+	// if it restarted a new one. Since we don't know the PID we need to do a basic sleep here.
+	tokio::time::sleep(Duration::from_millis(500)).await;
+
 	// Make sure the pivot has some time to restart
 	wait_for_usock(APP_SOCK).await;
 
