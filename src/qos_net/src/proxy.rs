@@ -156,7 +156,7 @@ pub trait ProxyServer {
 
 impl ProxyServer for SocketServer {
 	/// Listen on a tcp proxy server in a way that allows the USOCK/VSOCK to be used as a
-	/// dumb pipe after getting the `connect*` calls.
+	/// dumb pipe after getting the `connect*` calls. Allows up to `max_connections`.
 	async fn listen_proxy(
 		pool: StreamPool,
 		max_connections: usize,
@@ -200,6 +200,7 @@ async fn accept_loop_proxy(
 				Ok(()) => {
 					println!("Proxy::run done");
 				}
+				Err(IOError::RecvConnectionClosed) => {} // expected, do not log and just re-accept
 				Err(err) => {
 					eprintln!("Error on proxy run {err:?} rerunning");
 				}
