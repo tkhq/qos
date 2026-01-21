@@ -106,7 +106,7 @@ async fn qos_host_bridge_works() {
 			"--quorum-key-path",
 			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
 			"--bridge-config",
-			&format!("[{{\"server\": {}}}]", app_host_port),
+			&format!("[{{\"server\": [{},\"0.0.0.0\"]}}]", app_host_port),
 		])
 		.spawn()
 		.unwrap()
@@ -143,7 +143,10 @@ async fn qos_host_bridge_works() {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
 		args: vec![pivot_app_sock_path.to_string()],
-		bridge_config: vec![BridgeConfig::Server(app_host_port)],
+		bridge_config: vec![BridgeConfig::Server(
+			app_host_port,
+			"0.0.0.0".into(),
+		)],
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };

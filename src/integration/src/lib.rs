@@ -7,6 +7,7 @@ use qos_core::{
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
 use std::time::Duration;
+use tokio::net::TcpStream;
 
 /// Path to the file `pivot_ok` writes on success for tests.
 pub const PIVOT_OK_SUCCESS_FILE: &str = "./pivot_ok_works";
@@ -142,6 +143,26 @@ pub async fn wait_for_usock(path: &str) {
 		}
 
 		tokio::time::sleep(Duration::from_millis(100)).await;
+	}
+}
+
+pub async fn wait_for_tcp_sock(host_addr: &str) {
+	// attempt to connect, this can fail a few times due to timing, max 1s timeout
+	let mut attempts = 0;
+	loop {
+		match TcpStream::connect(&host_addr).await {
+			Ok(_stream) => {
+				eprintln!("XXX connected");
+				return;
+			}
+			Err(_) => {
+				if attempts > 9 {
+					panic!("unable to connect to {host_addr}");
+				}
+				attempts += 1;
+				tokio::time::sleep(Duration::from_millis(100)).await;
+			}
+		}
 	}
 }
 

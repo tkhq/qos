@@ -1,12 +1,11 @@
 use std::{
 	fs,
 	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-	time::Duration,
 };
 
 use integration::{
-	wait_for_usock, PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_PANIC_PATH,
-	PIVOT_TCP_PATH,
+	wait_for_tcp_sock, wait_for_usock, PIVOT_ABORT_PATH, PIVOT_OK_PATH,
+	PIVOT_PANIC_PATH, PIVOT_TCP_PATH,
 };
 use qos_core::{
 	handles::Handles,
@@ -169,10 +168,12 @@ async fn reaper_handles_panic() {
 
 #[tokio::test]
 async fn reaper_handles_bridge() {
+	let pivot_port = 4000;
+	let host_port = 3000;
 	let secret_path: PathWrapper = "/tmp/reaper_handles_bridge.secret".into();
 	let usock: PathWrapper = "/tmp/reaper_handles_bridge.sock".into();
 	let app_usock: PathWrapper =
-		"/tmp/reaper_handles_bridge.sock.4000.appsock".into();
+		format!("/tmp/reaper_handles_bridge.sock.{pivot_port}.appsock").into();
 	let manifest_path: PathWrapper =
 		"/tmp/reaper_handles_bridge.manifest".into();
 
@@ -187,7 +188,6 @@ async fn reaper_handles_bridge() {
 	);
 
 	// start the tcp -> vsock bridge on port 3000
-	let host_port = 3000;
 	let host_addr: SocketAddr =
 		SocketAddrV4::new(Ipv4Addr::LOCALHOST, host_port).into();
 	let app_pool =
@@ -197,9 +197,9 @@ async fn reaper_handles_bridge() {
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key
 	let mut manifest_envelope = ManifestEnvelope::default();
-	manifest_envelope.manifest.pivot.args = vec!["4000".to_string()];
+	manifest_envelope.manifest.pivot.args = vec![format!("{pivot_port}")];
 	manifest_envelope.manifest.pivot.bridge_config =
-		vec![BridgeConfig::Server(4000)];
+		vec![BridgeConfig::Server(pivot_port, "127.0.0.1".into())];
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());
@@ -222,24 +222,20 @@ async fn reaper_handles_bridge() {
 	// to start executable.
 	fs::write(&*secret_path, b"super dank tank secret tech").unwrap();
 
-	// wait for app to listen
+	// wait for internal VSOCK -> tcp bridge to listen
 	wait_for_usock(&app_usock).await;
 
-	// attempt to connect, this can fail a few times due to timing, max 1s timeout
-	let mut attempts = 0;
 	let host_addr = format!("localhost:{host_port}");
-	let mut stream = loop {
-		match TcpStream::connect(&host_addr).await {
-			Ok(stream) => break stream,
-			Err(_) => {
-				if attempts > 9 {
-					panic!("unable to connect to {host_addr}");
-				}
-				attempts += 1;
-				tokio::time::sleep(Duration::from_millis(100)).await;
-			}
-		}
-	};
+	let pivot_addr = format!("localhost:{pivot_port}");
+
+	// ensure pivot is ready and accepting on tcp://localhost:4000
+	wait_for_tcp_sock(&pivot_addr).await;
+	// ensure bridge is ready and accepting on tcp://localhost:3000
+	wait_for_tcp_sock(&host_addr).await;
+
+	let mut stream = TcpStream::connect(&host_addr)
+		.await
+		.expect("first stream failed to connect");
 
 	// make sure we can handle 2+ connections in parallel
 	let mut stream2 = TcpStream::connect(&host_addr)
