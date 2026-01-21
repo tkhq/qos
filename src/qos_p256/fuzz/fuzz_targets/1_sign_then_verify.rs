@@ -14,7 +14,7 @@ pub struct FuzzKeyDataStruct {
 fuzz_target!(|input: FuzzKeyDataStruct| {
 	// let the fuzzer control the key and data that is going to be signed
 
-	let keypair = match P256Pair::from_master_seed(&input.key) {
+	let keypair = match P256Pair::from_versioned_secret(&input.key) {
 		Ok(pair) => pair,
 		Err(_err) => {
 			return;

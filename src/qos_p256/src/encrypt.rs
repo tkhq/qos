@@ -20,6 +20,8 @@ const AES256_KEY_LEN: usize = 32;
 const BITS_96_AS_BYTES: u8 = 12;
 const AES_GCM_256_HMAC_SHA512_TAG: &[u8] = b"qos_aes_gcm_256_hmac_sha512";
 const QOS_ENCRYPTION_HMAC_MESSAGE: &[u8] = b"qos_encryption_hmac_message";
+const AES_KEY_ID_LEN: usize = 32;
+const AES_KEY_ID: &[u8] = b"AES_KEY_ID";
 
 type HmacSha512 = Hmac<Sha512>;
 
@@ -211,14 +213,32 @@ impl P256EncryptPublic {
 			.map_err(|_| P256Error::AesGcm256DecryptError)
 	}
 
-	/// Serialize to SEC1 encoded point, not compressed.
+	/// Serialize to SEC1 encoded point, not compressed (65 bytes).
 	#[must_use]
 	pub fn to_bytes(&self) -> Box<[u8]> {
 		let sec1_encoded_point = self.public.to_encoded_point(false);
 		sec1_encoded_point.to_bytes()
 	}
 
-	/// Deserialize from a SEC1 encoded point, not compressed.
+	/// Serialize to SEC1 compressed format (33 bytes).
+	#[must_use]
+	pub fn to_bytes_compressed(&self) -> [u8; 33] {
+		let sec1_encoded_point = self.public.to_encoded_point(true);
+		sec1_encoded_point
+			.as_bytes()
+			.try_into()
+			.expect("compressed sec1 point is always 33 bytes")
+	}
+
+	/// Deserialize from SEC1 compressed format (33 bytes).
+	pub fn from_bytes_compressed(bytes: &[u8; 33]) -> Result<Self, P256Error> {
+		Ok(Self {
+			public: PublicKey::from_sec1_bytes(bytes)
+				.map_err(|_| P256Error::FailedToReadPublicKey)?,
+		})
+	}
+
+	/// Deserialize from a SEC1 encoded point, not compressed (65 bytes).
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
 		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize {
 			return Err(P256Error::EncodedPublicKeyTooLong);
@@ -362,6 +382,12 @@ impl AesGcm256Secret {
 		Ok(Self { secret: bytes })
 	}
 
+	/// Get the cryptographic identifier for this key.
+	#[must_use]
+	pub fn id(&self) -> AesKeyId {
+		AesKeyId::from_secret(&self.secret)
+	}
+
 	/// Encrypt the given `msg`.
 	///
 	/// Returns a serialized [`SymmetricEnvelope`].
@@ -413,6 +439,48 @@ impl AesGcm256Secret {
 		cipher
 			.decrypt(nonce, payload)
 			.map_err(|_| P256Error::AesGcm256DecryptError)
+	}
+}
+
+/// Identifier for AES encryption key.
+///
+/// Derived from the AES secret via HMAC-SHA512.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AesKeyId {
+	/// The identifier
+	id: [u8; AES_KEY_ID_LEN],
+}
+
+impl AesKeyId {
+	/// Length of the AES key identifier in bytes.
+	pub const LEN: usize = AES_KEY_ID_LEN;
+
+	/// Derive the AES encryption key identifier from an AES secret.
+	#[must_use]
+	pub fn from_secret(bytes: &[u8; AES256_KEY_LEN]) -> Self {
+		// HMAC accepts any key length, so this cannot fail
+		let mut mac = <HmacSha512 as KeyInit>::new_from_slice(&bytes[..])
+			.expect("hmac can take a key of any size");
+		mac.update(AES_KEY_ID);
+		let id = mac.finalize().into_bytes();
+		Self {
+			// SHA512 output is 64 bytes, we take first 32, so this cannot fail
+			id: id[..AES_KEY_ID_LEN]
+				.try_into()
+				.expect("sha512 output is 64 bytes, taking first 32"),
+		}
+	}
+
+	/// Identifier byte array.
+	#[must_use]
+	pub fn as_bytes(&self) -> &[u8; AES_KEY_ID_LEN] {
+		&self.id
+	}
+
+	/// Hex encoded identifier.
+	#[must_use]
+	pub fn to_hex(&self) -> String {
+		qos_hex::encode(&self.id)
 	}
 }
 
@@ -599,6 +667,23 @@ mod test_asymmetric {
 #[cfg(test)]
 mod test_symmetric {
 	use super::*;
+
+	#[test]
+	fn aes_key_id() {
+		let expected =
+			"10c2301935dba1b7b708c211f18be260ad289e0462c98112ee4fe770c05c5eb5";
+		let expected_bytes = qos_hex::decode(expected).unwrap();
+		let secret = AesGcm256Secret::from_bytes([42u8; 32]).unwrap();
+
+		let aes_key_id = secret.id();
+
+		assert_eq!(aes_key_id.to_hex(), String::from("10c2301935dba1b7b708c211f18be260ad289e0462c98112ee4fe770c05c5eb5"));
+		assert_eq!(&aes_key_id.as_bytes()[..], &expected_bytes);
+
+		let aes_key_id_dupe = AesKeyId::from_secret(secret.to_bytes());
+
+		assert_eq!(aes_key_id_dupe, aes_key_id);
+	}
 
 	#[test]
 	fn encrypt_decrypt_round_trip() {

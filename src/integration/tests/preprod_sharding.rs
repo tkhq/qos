@@ -82,10 +82,8 @@ fn preprod_reshard_ceremony() {
 	let dev_secret_hex_bytes =
 		qos_hex::decode(std::str::from_utf8(&dev_secret_utf8_bytes).unwrap())
 			.unwrap();
-	let dev_key = P256Pair::from_master_seed(
-		&dev_secret_hex_bytes.clone().try_into().unwrap(),
-	)
-	.unwrap();
+	let dev_key =
+		P256Pair::from_versioned_secret(&dev_secret_hex_bytes.clone()).unwrap();
 
 	// For each of the enclaves...
 	for enclave_name in [
@@ -109,11 +107,9 @@ fn preprod_reshard_ceremony() {
 		let removed_byte = decrypted_dev_share.remove(0);
 		assert_eq!(removed_byte, 1);
 
-		let pk = P256Pair::from_master_seed(
-			&decrypted_dev_share.clone().try_into().unwrap(),
-		)
-		.unwrap()
-		.public_key();
+		let pk = P256Pair::from_versioned_secret(&decrypted_dev_share.clone())
+			.unwrap()
+			.public_key();
 		let expected_quorum_public_key = fs::read(format!(
 			"./fixtures/preprod/{enclave_name}/quorum_key.pub"
 		))

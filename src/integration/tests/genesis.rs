@@ -198,12 +198,10 @@ async fn genesis_e2e() {
 
 	// Try recovering from a random permutation
 	decrypted_shares.shuffle(&mut rng());
-	let master_secret: [u8; qos_p256::MASTER_SEED_LEN] =
-		shares_reconstruct(&decrypted_shares[0..threshold])
-			.unwrap()
-			.try_into()
-			.unwrap();
-	let reconstructed = P256Pair::from_master_seed(&master_secret).unwrap();
+	let versioned_secret =
+		shares_reconstruct(&decrypted_shares[0..threshold]).unwrap();
+	let reconstructed =
+		P256Pair::from_versioned_secret(&versioned_secret).unwrap();
 	assert!(
 		reconstructed.public_key()
 			== P256Public::from_bytes(&genesis_output.quorum_key).unwrap()
@@ -260,7 +258,7 @@ async fn genesis_e2e() {
 		.unwrap()
 		.try_into()
 		.unwrap();
-	let pair = P256Pair::from_master_seed(&master_seed).unwrap();
+	let pair = P256Pair::from_versioned_secret(&master_seed).unwrap();
 	assert!(pair == reconstructed);
 
 	let dr_artifacts_contents = fs::File::open(dr_artifacts_path).unwrap();
