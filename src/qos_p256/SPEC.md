@@ -8,7 +8,7 @@ Currently, the canonical implementation lives here, in this crate (`qos_p256`).
 
 ## Overview
 
-A QOS Key Set consists of three cryptographically linked keys derived from a single master seed:
+A QOS Key Set consists of three cryptographically independent keys that function together:
 
 1. **P256 Signing Key** - ECDSA signatures for authentication
 2. **P256 HPKE Key** - Hybrid public key encryption (ECDH + AES-GCM)
@@ -208,6 +208,7 @@ Symmetric authenticated encryption for data at rest.
 
 ```text
 AES_GCM_256_HMAC_SHA512_TAG = b"qos_aes_gcm_256_hmac_sha512"
+AES_GCM_256_KEY_ID_TAG = b"AES_GCM_256_KEY_ID_TAG"
 ```
 
 ### Envelope Format
@@ -261,13 +262,38 @@ Process:
   4. Return plaintext (or error if authentication fails)
 ```
 
+### AES Key Identifier
+
+A non-secret identifier derived from the AES key for key management purposes.
+
+```
+AES_GCM_256_KEY_ID(secret) -> identifier
+
+Input:
+  secret: 32-byte AES key
+
+Output:
+  identifier: 32-byte key identifier
+
+Process:
+  1. mac = HMAC-SHA512(key=secret, message=AES_GCM_256_KEY_ID_TAG)
+  2. Return mac[0..32]
+```
+
 ## 4. Secret Management
 
 ### Overview
 
+The QOS system supports two secret formats for storing the three cryptographic keys:
+
+- **V0**: Single 32-byte master seed from which all three secrets are derived.
+- **V1**: Three independent secrets stored explicitly
+
+### V0 Format (Master Seed)
+
 A single 32-byte master seed from which all three secrets are derived.
 
-### Derivation
+#### Derivation
 
 All secrets are derived using HKDF-SHA512 with domain-specific salts:
 
@@ -287,8 +313,131 @@ Process:
   3. Return secret
 ```
 
-### Salt Paths
+#### Salt Paths
 
 - Signing: `b"qos_p256_sign"`
 - HPKE: `b"qos_p256_encrypt"`
 - AES-GCM-256: `b"qos_aes_gcm_encrypt"`
+
+### V1 Format (Explicit Secrets)
+
+Three independent 32-byte secrets stored with a version marker.
+
+#### Layout
+
+```
+┌──────────┬──────────────┬────────────────┬──────────────┐
+│ Q_KEY_V1 │ sign_secret  │ encrypt_secret │ aes_secret   │
+│ 8 bytes  │ 32 bytes     │ 32 bytes       │ 32 bytes     │
+└──────────┴──────────────┴────────────────┴──────────────┘
+Total: 104 bytes
+```
+
+#### Version Marker
+
+```
+Q_KEY_V1 = b"Q_KEY_V1"  (8 bytes: 0x515f4b45595f5631)
+```
+
+#### Secret Extraction
+
+```
+Offset  Size  Content
+0       8     "Q_KEY_V1" version marker
+8       32    signing_secret
+40      32    encryption_secret
+72      32    aes_gcm_256_secret
+```
+
+### Version Detection
+
+```
+PARSE_SECRET(bytes) -> VersionedSecret | Error
+
+Input:
+  bytes: arbitrary-length byte string
+
+Output:
+  VersionedSecret or parsing error
+
+Process:
+  1. If len(bytes) == 104 AND bytes[0..8] == Q_KEY_V1:
+       Return V1(bytes)
+  2. Else if len(bytes) == 32:
+       Return V0(bytes)
+  3. Else:
+       Return Error (invalid secret format)
+```
+
+### Design Rationale
+
+**V0 Advantages:**
+- Compact storage (32 bytes)
+- Single secret to backup
+- All keys cryptographically linked since they are derived from single seed
+
+**V1 Advantages:**
+- Easier integration with external key management
+
+## 5. Quorum Key Identifier
+
+### Overview
+
+A compact identifier for a complete QOS key set, suitable for key management and verification.
+
+### V0 Format (P256Public)
+
+Two uncompressed P256 public keys concatenated.
+
+#### Layout
+
+```
+┌─────────────────────┬───────────────────┐
+│ encrypt_public      │ sign_public       │
+│ 65 bytes (SEC1)     │ 65 bytes (SEC1)   │
+└─────────────────────┴───────────────────┘
+Total: 130 bytes
+```
+
+**Note:** V0 does not include an AES key identifier. This was acceptable when all secrets were derived from a single master seed (V0 secret format).
+
+### V1 Format (QuorumKeyId)
+
+Compressed public keys plus AES key identifier.
+
+#### Layout
+
+```
+┌───────────────────┬───────────────────┬──────────────--------┐
+│ encrypt_public    │ sign_public       │ aes_gcm_256_key_id   │
+│ 33 bytes (SEC1)   │ 33 bytes (SEC1)   │ 32 bytes             │
+└───────────────────┴───────────────────┴─────────────--------─┘
+Total: 98 bytes
+```
+
+#### Field Definitions
+
+| Field | Offset | Size | Format |
+|-------|--------|------|--------|
+| encrypt_public | 0 | 33 | SEC1 compressed |
+| sign_public | 33 | 33 | SEC1 compressed |
+| aes_gcm_256_key_id | 66 | 32 | HMAC-SHA512 derived identifier |
+
+#### Construction
+
+```
+QUORUM_KEY_ID(encrypt_pub, sign_pub, aes_secret) -> key_id
+
+Process:
+  1. encrypt_compressed = SEC1_Compress(encrypt_pub)     // 33 bytes
+  2. sign_compressed = SEC1_Compress(sign_pub)           // 33 bytes
+  3. aes_gcm_256_key_id = AES_GCM_256_KEY_ID(aes_secret) // 32 bytes
+  4. Return encrypt_compressed || sign_compressed || aes_gcm_256_key_id
+```
+
+#### Validation
+
+When deserializing a QuorumKeyId:
+1. Verify total length is exactly 98 bytes
+2. Validate encrypt_public is a valid SEC1 compressed P256 point
+3. Validate sign_public is a valid SEC1 compressed P256 point
