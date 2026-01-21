@@ -367,14 +367,18 @@ async fn maybe_start_app_host_bridge(
 	}
 
 	for bc in &manifest_envelope.manifest.pivot.bridge_config {
-		let host_port = match bc {
-			BridgeConfig::Server(port) => port,
+		let (host_port, host_ip_str) = match bc {
+			BridgeConfig::Server(port, ip) => (port, ip.as_str()),
 			BridgeConfig::Client(_, _) => {
 				panic!("client bridge unimplemented")
 			}
 		};
-		let host_addr =
-			SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), *host_port);
+
+		let Ok(host_ip) = host_ip_str.parse::<Ipv4Addr>() else {
+			eprintln!("unable to parse host ip for bridge configuration: {host_ip_str}");
+			return;
+		};
+		let host_addr = SocketAddr::new(host_ip.into(), *host_port);
 
 		// derive the app socket, for vsock just use the app host port with same CID as the enclave socket,
 		// with usock just add "<port>.appsock" suffix

@@ -114,8 +114,8 @@ impl TryFrom<String> for RestartPolicy {
 )]
 #[serde(rename_all = "camelCase")]
 pub enum BridgeConfig {
-	/// Server hosting bridge, connections go INTO the enclave app on given port
-	Server(u16),
+	/// Server hosting bridge, connections go INTO the enclave app on given port and host ip string
+	Server(u16, String),
 	/// Client connecting bridge, connections go OUT of the enclave app via given port, connecting
 	/// to the provided hostname. If `None` it will use the transparent protocol.
 	/// *NOTE*: currently unimplemented and results in boot panic if set
@@ -124,7 +124,7 @@ pub enum BridgeConfig {
 
 impl Default for BridgeConfig {
 	fn default() -> Self {
-		Self::Server(DEFAULT_APP_HOST_PORT)
+		Self::Server(DEFAULT_APP_HOST_PORT, DEFAULT_APP_HOST_IP.into())
 	}
 }
 
@@ -132,7 +132,7 @@ impl BridgeConfig {
 	/// Helper to extract port from either variant
 	pub fn port(&self) -> u16 {
 		match self {
-			Self::Server(port) | Self::Client(port, _) => *port,
+			Self::Server(port, _) | Self::Client(port, _) => *port,
 		}
 	}
 }
@@ -370,6 +370,8 @@ impl fmt::Debug for Namespace {
 
 /// Default port to use for host bridge in server mode
 pub const DEFAULT_APP_HOST_PORT: u16 = 3000;
+/// Default host ip string for host bridge in server mode
+pub const DEFAULT_APP_HOST_IP: &str = "0.0.0.0";
 
 /// The Manifest for the enclave.
 /// NOTE: we currently use JSON format for storing this value.

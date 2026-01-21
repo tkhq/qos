@@ -67,7 +67,7 @@ async fn run_server(
 }
 
 // runs the VSOCK -> TCP bridge so that apps can use any TCP based protocol without worrying about VSOCK
-// communication. This is started if `Manifest::host_config` has any members defined.
+// communication. This is started if `PivotConfig::bridge_config` has any members defined.
 // uses the enclave core socket and given pivot host port to constuct the VSOCK to TCP bridge.
 async fn run_vsock_to_tcp_bridge(
 	core_socket: &SocketAddress,
@@ -81,7 +81,7 @@ async fn run_vsock_to_tcp_bridge(
 
 	for bc in bridges {
 		match bc {
-			BridgeConfig::Server(port) => {
+			BridgeConfig::Server(port, _) => {
 				let app_socket = core_socket.with_port(*port)?;
 				let host_addr: SocketAddr =
 					SocketAddrV4::new(Ipv4Addr::LOCALHOST, *port).into();
