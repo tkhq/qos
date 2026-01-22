@@ -2,9 +2,9 @@
 
 This document provides a formal specification for the cryptographic key schemes of the QOS Key Set.
 
-The QOS Key Set is a collection of 3 cryptographic key schemes that comprise what is commonly referred to as a [Quorum Key](../../README.md#quorum-key). Additionally, 2 of the schemes, P256 Signing and P256 HPKE, are used by [Operators](../../README.md#operator).
+The QOS Key Set is a collection of 3 cryptographic keys using 3 distinct schemes that comprise what is commonly referred to as a [Quorum Key](../../README.md#quorum-key). Each key is used for different cryptographic operations (more info in the [Overview](#overview) section). Additionally, 2 of the schemes, P256 Signing and P256 HPKE, are used by [Operators](../../README.md#operator).
 
-Currently, the canon implementation lives in the `qos_p256` crate.
+Currently, the canonical implementation lives here, in this crate (`qos_p256`).
 
 ## Overview
 
@@ -14,6 +14,9 @@ A QOS Key Set consists of three cryptographically linked keys derived from a sin
 2. **P256 HPKE Key** - Hybrid public key encryption (ECDH + AES-GCM)
 3. **AES-GCM-256 Key** - Symmetric encryption for data at rest
 
+_Note:_ We use distinct keys for signing and HPKE to have clear domain separation.
+_Note:_ While we use the term HPKE, this does not follow RFC 9180. See the [P256 HPKE](#2-p256-hpke) section for details.
+
 ## 1. P256 Signing Key
 
 ### Purpose
@@ -22,19 +25,63 @@ Digital signatures for message authentication using NIST P-256 (secp256r1) ECDSA
 
 ### Algorithm
 
-- **Curve**: NIST P-256 (secp256r1)
+- **Curve**: [NIST P-256](https://csrc.nist.gov/publications/detail/fips/186-5/final) (secp256r1)
 - **Signature Scheme**: ECDSA with SHA-256 digest
-- **Signature Generation**: Deterministic per RFC 6979
+- **Signature Generation**: Deterministic per [RFC 6979](https://www.rfc-editor.org/rfc/rfc6979)
+- **Signature Format**: Fixed 64 bytes (r || s, big-endian, not DER-encoded)
+
+### Operations
+
+#### Sign
+
+```
+SIGN(message, private_key) -> signature
+
+Input:
+  message: arbitrary-length byte string
+  private_key: P256 private key (32 bytes)
+
+Output:
+  signature: 64 bytes (r || s)
+
+Process:
+  1. Compute digest = SHA-256(message)
+  2. Generate signature (r, s) per RFC 6979 deterministic ECDSA
+  3. Return r || s (each 32 bytes, big-endian)
+```
+
+#### Verify
+
+```
+VERIFY(message, signature, public_key) -> result
+
+Input:
+  message: arbitrary-length byte string
+  signature: 64 bytes (r || s)
+  public_key: P256 public key (65 bytes, SEC1 uncompressed)
+
+Output:
+  result: success or error
+
+Process:
+  1. Parse signature as (r, s) where r = signature[0..32], s = signature[32..64]
+  2. Validate r and s are in range [1, n-1] where n is the curve order
+  3. Compute digest = SHA-256(message)
+  4. Perform ECDSA verification
+  5. Return success if valid, error otherwise
+```
 
 ## 2. P256 HPKE
 
 ### Purpose
 
-Public key encryption using ECDH key agreement combined with AES-GCM-256 authenticated encryption.
+Public key encryption using [ECDH](https://csrc.nist.gov/publications/detail/sp/800-56a/rev-3/final) key agreement combined with [AES-GCM-256](https://csrc.nist.gov/publications/detail/sp/800-38d/final) authenticated encryption.
 
 ### Algorithm Overview
 
-The HPKE scheme is custom, which is a historical artifact and not for any specific reason.
+The HPKE scheme is custom. This is a historical artifact rather than an intentional design choice.
+
+Both recipient and sender must use valid P256 keys for ECDH.
 
 1. Generate ephemeral ECDH key pair
 2. Perform ECDH with recipient's public key
@@ -82,19 +129,22 @@ Process:
 
   2. Compute ECDH shared secret:
      shared_secret = ECDH(ephemeral_private, receiver_public)
+     // shared_secret is the x-coordinate of the resulting point (32 bytes, per SEC 1)
 
   3. Derive cipher key:
      pre_image = ephemeral_public || receiver_public || shared_secret
      mac_output = HMAC-SHA512(key=pre_image, message=QOS_ENCRYPTION_HMAC_MESSAGE)
      cipher_key = mac_output[0..32]
+     // Note: This custom HMAC-based key derivation is a historical artifact.
+     // HMAC-SHA512 with high-entropy input provides adequate key derivation.
 
   4. Compute additional associated data:
-     aad = ephemeral_public || len(ephemeral_public) || receiver_public || len(receiver_public)
+     aad = ephemeral_public || 0x41 || receiver_public || 0x41
      // Note: lengths are appended after each field rather than prepended.
      // This differs from NIST SP 800-56Ar3 5.8.2 which specifies len || data.
-     // The ordering is a historical artifact, not intentional.
-     // lengths are single bytes (0x41 = 65).
-     // This is not an issue because the AAD is never parsed and is instead computed.
+     // The ordering is a historical artifact. This is safe because:
+     // (1) AAD is never transmitted: both parties derive it from shared context
+     // (2) Since both parties compute AAD deterministically from shared context, there's no parsing attack surface
 
   5. Generate random nonce:
      nonce = random 12 bytes
@@ -120,10 +170,11 @@ Output:
 Process:
   1. Parse Envelope { nonce, ephemeral_public, ciphertext }
 
-  2. Validate ephemeral_public is a valid SEC1 point
+  2. Validate that ephemeral_public is a valid SEC1 point
 
   3. Compute ECDH shared secret:
      shared_secret = ECDH(receiver_private, ephemeral_public)
+     // shared_secret is the x-coordinate of the resulting point (32 bytes, per SEC 1)
 
   4. Derive cipher key (same as encryption):
      receiver_public = receiver_private * G

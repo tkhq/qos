@@ -1,4 +1,4 @@
-//! Abstractions for authentication and encryption with NIST-P256.
+#![doc = include_str!("../SPEC.md")]
 
 use std::path::Path;
 
