@@ -34,7 +34,7 @@ Digital signatures for message authentication using NIST P-256 (secp256r1) ECDSA
 
 #### Sign
 
-```
+```text
 SIGN(message, private_key) -> signature
 
 Input:
@@ -52,7 +52,7 @@ Process:
 
 #### Verify
 
-```
+```text
 VERIFY(message, signature, public_key) -> result
 
 Input:
@@ -90,7 +90,7 @@ Both recipient and sender must use valid P256 keys for ECDH.
 
 ### Constants
 
-```
+```text
 QOS_ENCRYPTION_HMAC_MESSAGE = b"qos_encryption_hmac_message"
 NONCE_LEN = 12 bytes
 AES_KEY_LEN = 32 bytes
@@ -100,7 +100,7 @@ AES_KEY_LEN = 32 bytes
 
 Serialized using Borsh encoding:
 
-```
+```text
 Envelope {
   nonce: [u8; 12],                    // Random nonce for AES-GCM-256
   ephemeral_sender_public: [u8; 65],  // Sender's ephemeral public key (SEC1 uncompressed)
@@ -112,7 +112,7 @@ Envelope {
 
 #### Encrypt
 
-```
+```text
 ENCRYPT(plaintext, receiver_public) -> envelope
 
 Input:
@@ -157,7 +157,7 @@ Process:
 
 #### Decrypt
 
-```
+```text
 DECRYPT(envelope, receiver_private) -> plaintext
 
 Input:
@@ -206,7 +206,7 @@ Symmetric authenticated encryption for data at rest.
 
 ### Constants
 
-```
+```text
 AES_GCM_256_HMAC_SHA512_TAG = b"qos_aes_gcm_256_hmac_sha512"
 ```
 
@@ -214,7 +214,7 @@ AES_GCM_256_HMAC_SHA512_TAG = b"qos_aes_gcm_256_hmac_sha512"
 
 Serialized using Borsh encoding:
 
-```
+```text
 SymmetricEnvelope {
   nonce: [u8; 12],           // Random nonce
   encrypted_message: Vec<u8>, // Ciphertext with 16-byte auth tag
@@ -225,7 +225,7 @@ SymmetricEnvelope {
 
 #### Encrypt
 
-```
+```text
 AES_ENCRYPT(plaintext, secret) -> envelope
 
 Input:
@@ -244,7 +244,7 @@ Process:
 
 #### Decrypt
 
-```
+```text
 AES_DECRYPT(envelope, secret) -> plaintext
 
 Input:
@@ -271,7 +271,7 @@ A single 32-byte master seed from which all three secrets are derived.
 
 All secrets are derived using HKDF-SHA512 with domain-specific salts:
 
-```
+```text
 DERIVE_SECRET(seed, path) -> secret
 
 Input:
