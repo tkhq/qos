@@ -1,12 +1,12 @@
 use std::ffi::c_void;
 
 use nix::libc::{
-	htonl, ifreq, memcpy, sockaddr, sockaddr_in, socket, AF_INET, IFF_UP,
-	SIOCGIFFLAGS, SIOCSIFADDR, SIOCSIFFLAGS, SOCK_DGRAM,
+	close, htonl, ifreq, memcpy, sockaddr, sockaddr_in, socket, AF_INET,
+	IFF_UP, SIOCGIFFLAGS, SIOCSIFADDR, SIOCSIFFLAGS, SOCK_DGRAM,
 };
-use nix::{ioctl_read_bad, ioctl_write_ptr_bad};
+use nix::{errno::Errno, ioctl_read_bad, ioctl_write_ptr_bad};
 
-const LOCALHOST_U32: u32 = 2130706433; // little endian 127.0.0.1 needs htonl
+const LOCALHOST_U32: u32 = 2130706433; // 127.0.0.1 in big endian, needs htonl on little endian platforms
 
 pub fn init_localhost() {
 	// create the dgram setter socket
@@ -43,17 +43,17 @@ pub fn init_localhost() {
 		// get the current flags for "lo" interface
 		match sio_cgi_fflags(sockfd, &mut ifr) {
 			Err(err) => {
-				panic!("unable to read interface flags, errno: {}", err)
+				panic!("unable to read interface flags, errno: {err}")
 			}
 			Ok(r) => println!("sio_cgi_fflags result: {r}"),
 		}
 		// flag "lo" interface to up if it wasn't
-		if (ifr.ifr_ifru.ifru_flags | !(IFF_UP as i16)) != 0 {
+		if (ifr.ifr_ifru.ifru_flags & (IFF_UP as i16)) == 0 {
 			println!("interface offline, brinding it up");
 			ifr.ifr_ifru.ifru_flags |= IFF_UP as i16;
 			match sio_csi_fflags(sockfd, &ifr) {
 				Err(err) => {
-					panic!("unable to set interface flags, errno: {}", err)
+					panic!("unable to set interface flags, errno: {err}")
 				}
 				Ok(r) => println!("sio_csi_fflags result: {r}"),
 			}
@@ -65,9 +65,17 @@ pub fn init_localhost() {
 		// set the ip address flags on the "lo" interface
 		match sio_csi_faddr(sockfd, &ifr) {
 			Err(err) => {
-				panic!("unable to set interface address, errno: {}", err)
+				panic!("unable to set interface address, errno: {err}")
 			}
 			Ok(r) => println!("sio_csi_faddr result: {r}"),
+		}
+
+		// close the fd
+		if close(sockfd) != 0 {
+			eprintln!(
+				"unable to close localhost setup filedescriptor: {}",
+				Errno::last().desc()
+			)
 		}
 	}
 }
