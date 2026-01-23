@@ -100,7 +100,9 @@ pub async fn resolve_hostname(
 	// ensure the resolve call will be < 5s for our socket timeout (so we return a meaningful error and don't hog the socket)
 	// this means attempts * timeout < 5s
 	let mut resolver_opts = ResolverOpts::default();
-	resolver_opts.timeout = Duration::from_secs(1);
+	
+	// TODO Remove -- updates this for debugging purposes
+	resolver_opts.timeout = Duration::from_secs(20);
 	resolver_opts.attempts = 1;
 
 	let resolver = TokioResolver::builder_with_config(
@@ -112,6 +114,10 @@ pub async fn resolve_hostname(
 
 	let response =
 		resolver.lookup_ip(&hostname).await.map_err(QosNetError::from)?;
+
+	// TODO remove print statement
+	eprintln!("Resolved {hostname} to {:?}", response);
+
 	response.iter().next().ok_or_else(|| {
 		QosNetError::DNSResolutionError(format!(
 			"Empty response when querying for host {hostname}"
