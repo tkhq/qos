@@ -87,6 +87,80 @@ mod tests {
 		assert_eq!(hash1, hash2);
 	}
 
+	/// Simulates a "new" proto type with a NON-optional field (no `optional` keyword).
+	/// In proto3, non-optional fields with default values are NOT serialized.
+	#[derive(Clone, PartialEq, prost::Message)]
+	struct NewTypeNonOptional {
+		#[prost(string, tag = "1")]
+		name: String,
+		#[prost(uint64, tag = "2")]
+		nonce: u64,
+		#[prost(string, tag = "3")] // NOT optional - empty string is default
+		new_field: String,
+	}
+
+	#[test]
+	fn non_optional_field_with_default_value_does_not_change_hash() {
+		let old = OldType { name: "test".to_string(), nonce: 42 };
+
+		// Non-optional field set to default (empty string)
+		let new_with_default = NewTypeNonOptional {
+			name: "test".to_string(),
+			nonce: 42,
+			new_field: String::new(), // empty string = default
+		};
+
+		// Proto3 does NOT serialize fields with default values,
+		// so the encoding is identical
+		assert_eq!(
+			old.encode_to_vec(),
+			new_with_default.encode_to_vec(),
+			"Empty non-optional field should not be serialized"
+		);
+		assert_eq!(old.proto_hash(), new_with_default.proto_hash());
+
+		// But if the non-optional field has a non-default value, hash differs
+		let new_with_value = NewTypeNonOptional {
+			name: "test".to_string(),
+			nonce: 42,
+			new_field: "extra".to_string(),
+		};
+		assert_ne!(old.proto_hash(), new_with_value.proto_hash());
+	}
+
+	#[test]
+	fn optional_vs_non_optional_difference() {
+		// Key difference: optional fields CAN distinguish between
+		// "not set" (None) and "set to default" (Some(""))
+
+		let with_optional_none =
+			NewType { name: "test".to_string(), nonce: 42, new_field: None };
+
+		let with_optional_empty = NewType {
+			name: "test".to_string(),
+			nonce: 42,
+			new_field: Some(String::new()), // explicitly set to empty
+		};
+
+		let with_non_optional_empty = NewTypeNonOptional {
+			name: "test".to_string(),
+			nonce: 42,
+			new_field: String::new(),
+		};
+
+		// Optional None and non-optional default serialize the same (field omitted)
+		assert_eq!(
+			with_optional_none.encode_to_vec(),
+			with_non_optional_empty.encode_to_vec()
+		);
+
+		// But optional Some("") is DIFFERENT - it serializes the empty string
+		assert_ne!(
+			with_optional_none.encode_to_vec(),
+			with_optional_empty.encode_to_vec(),
+		);
+	}
+
 	#[test]
 	fn different_manifests_have_different_hashes() {
 		let manifest1 = Manifest {

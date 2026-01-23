@@ -28,11 +28,71 @@ let hash: [u8; 32] = manifest.proto_hash();
 
 This encodes the message to protobuf bytes and computes SHA-256.
 
-## Immutability Policy
+## Backwards Compatible Hashing
 
-Proto files are **immutable** once committed to main. This ensures backwards compatibility for signature verification - old messages can still be verified against signatures made with newer schemas.
+Adding new fields to proto types can be done without breaking existing hashes, provided you follow these rules:
 
-If you need to make changes to proto definitions, create a new version directory (e.g., `proto/qos/v2/`).
+### Adding Optional Fields
+
+When you add an `optional` field, existing messages (where the field is `None`) will hash identically to before:
+
+```text
+OldType { name: "test", nonce: 42 }
+NewType { name: "test", nonce: 42, new_field: None }
+         ↓                              ↓
+   [same bytes]                   [same bytes]
+         ↓                              ↓
+     [same hash]   ==            [same hash]
+```
+
+### Adding Non-Optional Fields
+
+Non-optional fields (without the `optional` keyword) also preserve hashes when set to their default value, because proto3 does not serialize default values:
+
+```text
+OldType { name: "test", nonce: 42 }
+NewType { name: "test", nonce: 42, new_field: "" }  // empty = default
+         ↓                              ↓
+   [same bytes]                   [same bytes]  // default not serialized
+         ↓                              ↓
+     [same hash]   ==            [same hash]
+```
+
+### Key Difference: Optional vs Non-Optional
+
+| Field Type | Value | Serialized? | Hash Changes? |
+|------------|-------|-------------|---------------|
+| `optional` | `None` | No | No |
+| `optional` | `Some("")` | Yes | **Yes** |
+| `optional` | `Some("value")` | Yes | **Yes** |
+| non-optional | `""` (default) | No | No |
+| non-optional | `"value"` | Yes | **Yes** |
+
+The `optional` keyword allows distinguishing between "not set" (`None`) and "explicitly set to empty" (`Some("")`). Use `optional` when this distinction matters for your application logic.
+
+## Schema Evolution Policy
+
+Proto schemas can be evolved while maintaining backwards-compatible hashes, but certain changes are prohibited.
+
+### Allowed Changes
+
+- **Add new fields** (optional or non-optional with defaults)
+- **Rename fields** (field names are not part of wire format)
+- **Add new enum variants** (append only, don't change existing values)
+- **Add doc comments**
+
+### Prohibited Changes
+
+These changes will break existing hashes and signatures:
+- **Remove fields** - old messages would hash differently
+- **Change field tag numbers** - completely breaks wire format
+- **Change field types** - e.g., `string` → `bytes`
+- **Reorder or renumber enum variants** - enum values are integers on wire
+- **Change `optional` to non-optional** (or vice versa for some cases)
+
+### When to Create a New Version
+
+If you need to make a prohibited change, create a new version directory (e.g., `proto/qos/v2/`).
 
 ## Regenerating Types
 

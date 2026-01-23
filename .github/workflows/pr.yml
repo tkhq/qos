@@ -33,22 +33,18 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - name: Check for modified proto files
+      - name: Setup buf
+        uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+      - name: Check for breaking proto changes
         run: |
-          # Get list of modified (not added) proto files compared to main
-          MODIFIED=$(git diff --name-only --diff-filter=M origin/main...HEAD -- 'proto/**/*.proto')
-          if [ -n "$MODIFIED" ]; then
-            echo "ERROR: Proto files must not be modified. Create a new version instead."
-            echo ""
-            echo "Modified files:"
-            echo "$MODIFIED"
-            echo ""
-            echo "To maintain backwards compatibility, proto files are immutable once committed."
-            echo "If you need to make changes, create a new version (e.g., proto/qos/v2/)."
-            exit 1
+          # Only run buf breaking if main has proto files (skip on first PR adding protos)
+          if git ls-tree -r origin/main --name-only | grep -q '^proto/.*\.proto$'; then
+            buf breaking proto --against '.git#branch=origin/main'
+          else
+            echo "Skipping buf breaking check - no proto files on main branch yet"
           fi
-      - name: Setup Docker
-        uses: ./.github/actions/docker-setup
       - name: Run proto-gen
         run: make proto-gen
       - name: Check for uncommitted changes

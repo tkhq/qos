@@ -25,7 +25,7 @@ docs: out/.common-loaded
 	$(call run,cargo doc)
 
 .PHONY: proto-gen
-proto-gen: out/.common-loaded
+proto-gen:
 	cd src/qos_proto/proto_gen && cargo run
 
 .PHONY: build-linux-only
