@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup buf
-        uses: bufbuild/buf-action@v1
+        uses: bufbuild/buf-action@4ceee320c664d3bebaf58ed0f5f189954164e203 # v1
         with:
           setup_only: true
       - name: Check for breaking proto changes
