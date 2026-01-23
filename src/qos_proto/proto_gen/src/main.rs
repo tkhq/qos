@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 
 fn main() {
-    // Use protoc from protobuf-src for consistent versioning (same as mono)
+    // Use protoc from protobuf-src for consistent versioning
     std::env::set_var("PROTOC", protobuf_src::protoc());
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
