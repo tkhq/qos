@@ -2,7 +2,7 @@
 
 This document provides a formal specification for the cryptographic key schemes of the QOS Key Set.
 
-The QOS Key Set is a collection of 3 cryptographic keys using 3 distinct schemes that comprise what is commonly referred to as a [Quorum Key](../../README.md#quorum-key). Each key is used for different cryptographic operations (more info in the [Overview](#overview) section). Additionally, 2 of the schemes, P256 Signing and P256 HPKE, are used by [Operators](../../README.md#operator).
+The QOS Key Set is a collection of 3 cryptographic keys using 3 distinct schemes that comprise what is commonly referred to as a [Quorum Key](https://github.com/tkhq/qos/tree/main?tab=readme-ov-file#quorum-key). Each key is used for different cryptographic operations (more info in the [Overview](#overview) section). Additionally, 2 of the schemes, P256 Signing and P256 HPKE, are used by [Operators](https://github.com/tkhq/qos/tree/main?tab=readme-ov-file#operator).
 
 Currently, the canonical implementation lives here, in this crate (`qos_p256`).
 
