@@ -6,18 +6,23 @@
 pub struct NitroConfig {
     /// Hash of the enclave image file (PCR0)
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub pcr0: ::prost::alloc::vec::Vec<u8>,
     /// Hash of the Linux kernel and bootstrap (PCR1)
     #[prost(bytes = "vec", tag = "2")]
+    #[serde(with = "qos_hex::serde")]
     pub pcr1: ::prost::alloc::vec::Vec<u8>,
     /// Hash of the application (PCR2)
     #[prost(bytes = "vec", tag = "3")]
+    #[serde(with = "qos_hex::serde")]
     pub pcr2: ::prost::alloc::vec::Vec<u8>,
     /// Hash of the IAM role ARN (PCR3)
     #[prost(bytes = "vec", tag = "4")]
+    #[serde(with = "qos_hex::serde")]
     pub pcr3: ::prost::alloc::vec::Vec<u8>,
     /// DER encoded X509 AWS root certificate
     #[prost(bytes = "vec", tag = "5")]
+    #[serde(with = "qos_hex::serde")]
     pub aws_root_certificate: ::prost::alloc::vec::Vec<u8>,
     /// Reference to the commit QOS was built off of
     #[prost(string, tag = "6")]
@@ -31,6 +36,7 @@ pub struct NitroConfig {
 pub struct PivotConfig {
     /// SHA-256 hash of the pivot binary
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub hash: ::prost::alloc::vec::Vec<u8>,
     /// Restart policy for running the pivot binary
     #[prost(enumeration = "RestartPolicy", tag = "2")]
@@ -50,6 +56,7 @@ pub struct QuorumMember {
     pub alias: ::prost::alloc::string::String,
     /// P256 public key bytes
     #[prost(bytes = "vec", tag = "2")]
+    #[serde(with = "qos_hex::serde")]
     pub pub_key: ::prost::alloc::vec::Vec<u8>,
 }
 /// A member of a quorum set identified solely by their public key.
@@ -60,6 +67,7 @@ pub struct QuorumMember {
 pub struct MemberPubKey {
     /// P256 public key bytes
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub pub_key: ::prost::alloc::vec::Vec<u8>,
 }
 /// The Manifest Set - members who can approve manifests.
@@ -115,6 +123,7 @@ pub struct Namespace {
     pub nonce: u32,
     /// P256 quorum key public bytes
     #[prost(bytes = "vec", tag = "3")]
+    #[serde(with = "qos_hex::serde")]
     pub quorum_key: ::prost::alloc::vec::Vec<u8>,
 }
 /// The Manifest for the enclave.
@@ -156,6 +165,7 @@ pub struct Manifest {
 pub struct Approval {
     /// P256 ECDSA signature over the manifest hash
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub signature: ::prost::alloc::vec::Vec<u8>,
     /// The quorum member who signed
     #[prost(message, optional, tag = "2")]
@@ -236,6 +246,7 @@ pub struct MemberShard {
     pub member: ::core::option::Option<QuorumMember>,
     /// Shard encrypted to the member's key
     #[prost(bytes = "vec", tag = "2")]
+    #[serde(with = "qos_hex::serde")]
     pub shard: ::prost::alloc::vec::Vec<u8>,
 }
 /// A set of member shards used to successfully recover the quorum key.
@@ -259,9 +270,11 @@ pub struct GenesisMemberOutput {
     pub share_set_member: ::core::option::Option<QuorumMember>,
     /// Quorum Key Share encrypted to the member's Personal Key
     #[prost(bytes = "vec", tag = "2")]
+    #[serde(with = "qos_hex::serde")]
     pub encrypted_quorum_key_share: ::prost::alloc::vec::Vec<u8>,
     /// SHA-512 hash of the plaintext quorum key share (for verification)
     #[prost(bytes = "vec", tag = "3")]
+    #[serde(with = "qos_hex::serde")]
     pub share_hash: ::prost::alloc::vec::Vec<u8>,
 }
 /// Output from running Genesis Boot.
@@ -272,6 +285,7 @@ pub struct GenesisMemberOutput {
 pub struct GenesisOutput {
     /// Public Quorum Key, DER encoded
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub quorum_key: ::prost::alloc::vec::Vec<u8>,
     /// Quorum Member specific outputs from the genesis ceremony
     #[prost(message, repeated, tag = "2")]
@@ -284,18 +298,23 @@ pub struct GenesisOutput {
     pub threshold: u32,
     /// The quorum key encrypted to the DR key (if DR key was provided)
     #[prost(bytes = "vec", optional, tag = "5")]
+    #[serde(with = "qos_hex::serde_option")]
     pub dr_key_wrapped_quorum_key: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
     /// SHA-512 hash of the quorum key secret
     #[prost(bytes = "vec", tag = "6")]
+    #[serde(with = "qos_hex::serde")]
     pub quorum_key_hash: ::prost::alloc::vec::Vec<u8>,
     /// Test message encrypted to the quorum public key
     #[prost(bytes = "vec", tag = "7")]
+    #[serde(with = "qos_hex::serde")]
     pub test_message_ciphertext: ::prost::alloc::vec::Vec<u8>,
     /// Signature over the test message by the quorum key
     #[prost(bytes = "vec", tag = "8")]
+    #[serde(with = "qos_hex::serde")]
     pub test_message_signature: ::prost::alloc::vec::Vec<u8>,
     /// The message used for the test signature and ciphertext
     #[prost(bytes = "vec", tag = "9")]
+    #[serde(with = "qos_hex::serde")]
     pub test_message: ::prost::alloc::vec::Vec<u8>,
 }
 /// Request type for the Nitro Secure Module API.
@@ -360,6 +379,7 @@ pub struct ExtendPcrRequest {
     pub index: u32,
     /// Data to extend into the PCR
     #[prost(bytes = "vec", tag = "2")]
+    #[serde(with = "qos_hex::serde")]
     pub data: ::prost::alloc::vec::Vec<u8>,
 }
 /// Request to lock a specific PCR.
@@ -396,12 +416,15 @@ pub struct DescribeNsmRequest {}
 pub struct AttestationRequest {
     /// Optional user data to include in attestation (max 512 bytes)
     #[prost(bytes = "vec", optional, tag = "1")]
+    #[serde(with = "qos_hex::serde_option")]
     pub user_data: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
     /// Optional nonce for freshness (max 512 bytes)
     #[prost(bytes = "vec", optional, tag = "2")]
+    #[serde(with = "qos_hex::serde_option")]
     pub nonce: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
     /// Optional public key to include in attestation (max 1024 bytes)
     #[prost(bytes = "vec", optional, tag = "3")]
+    #[serde(with = "qos_hex::serde_option")]
     pub public_key: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
 }
 /// Request for random bytes from the NSM.
@@ -465,6 +488,7 @@ pub struct DescribePcrResponse {
     pub lock: bool,
     /// Current PCR value
     #[prost(bytes = "vec", tag = "2")]
+    #[serde(with = "qos_hex::serde")]
     pub data: ::prost::alloc::vec::Vec<u8>,
 }
 /// Response from extending a PCR.
@@ -475,6 +499,7 @@ pub struct DescribePcrResponse {
 pub struct ExtendPcrResponse {
     /// New PCR value after extension
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub data: ::prost::alloc::vec::Vec<u8>,
 }
 /// Response from locking a PCR.
@@ -525,6 +550,7 @@ pub struct DescribeNsmResponse {
 pub struct AttestationResponse {
     /// COSE Sign1 structure containing CBOR-encoded AttestationDocument
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub document: ::prost::alloc::vec::Vec<u8>,
 }
 /// Response containing random bytes.
@@ -535,6 +561,7 @@ pub struct AttestationResponse {
 pub struct GetRandomResponse {
     /// Random bytes from the NSM hardware RNG
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub random: ::prost::alloc::vec::Vec<u8>,
 }
 /// Error response from NSM.
@@ -758,6 +785,7 @@ pub struct BootStandardRequest {
     pub manifest_envelope: ::core::option::Option<ManifestEnvelope>,
     /// Pivot binary bytes
     #[prost(bytes = "vec", tag = "2")]
+    #[serde(with = "qos_hex::serde")]
     pub pivot: ::prost::alloc::vec::Vec<u8>,
 }
 /// Response from standard boot.
@@ -781,6 +809,7 @@ pub struct BootGenesisRequest {
     pub set: ::core::option::Option<GenesisSet>,
     /// Optional disaster recovery P256 public key (DER encoded)
     #[prost(bytes = "vec", optional, tag = "2")]
+    #[serde(with = "qos_hex::serde_option")]
     pub dr_key: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
 }
 /// Response from genesis boot.
@@ -807,6 +836,7 @@ pub struct BootKeyForwardRequest {
     pub manifest_envelope: ::core::option::Option<ManifestEnvelope>,
     /// Pivot binary bytes
     #[prost(bytes = "vec", tag = "2")]
+    #[serde(with = "qos_hex::serde")]
     pub pivot: ::prost::alloc::vec::Vec<u8>,
 }
 /// Response from key forward boot.
@@ -827,6 +857,7 @@ pub struct BootKeyForwardResponse {
 pub struct ProvisionRequest {
     /// Quorum key share encrypted to the Ephemeral Key
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub share: ::prost::alloc::vec::Vec<u8>,
     /// Approval of the manifest from a share set member
     #[prost(message, optional, tag = "2")]
@@ -850,6 +881,7 @@ pub struct ProvisionResponse {
 pub struct ProxyRequest {
     /// Data to forward to the pivot
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub data: ::prost::alloc::vec::Vec<u8>,
 }
 /// Response from the pivot application.
@@ -860,6 +892,7 @@ pub struct ProxyRequest {
 pub struct ProxyResponse {
     /// Data returned from the pivot
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub data: ::prost::alloc::vec::Vec<u8>,
 }
 /// Request for a live attestation document.
@@ -892,6 +925,7 @@ pub struct ExportKeyRequest {
     pub manifest_envelope: ::core::option::Option<ManifestEnvelope>,
     /// COSE Sign1 attestation document from the requesting enclave
     #[prost(bytes = "vec", tag = "2")]
+    #[serde(with = "qos_hex::serde")]
     pub cose_sign1_attestation_doc: ::prost::alloc::vec::Vec<u8>,
 }
 /// Response containing the exported quorum key.
@@ -902,9 +936,11 @@ pub struct ExportKeyRequest {
 pub struct ExportKeyResponse {
     /// Quorum key encrypted to the requesting enclave's Ephemeral Key
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub encrypted_quorum_key: ::prost::alloc::vec::Vec<u8>,
     /// Signature over the encrypted quorum key
     #[prost(bytes = "vec", tag = "2")]
+    #[serde(with = "qos_hex::serde")]
     pub signature: ::prost::alloc::vec::Vec<u8>,
 }
 /// Request to inject a quorum key into this enclave.
@@ -915,9 +951,11 @@ pub struct ExportKeyResponse {
 pub struct InjectKeyRequest {
     /// Quorum key encrypted to this enclave's Ephemeral Key
     #[prost(bytes = "vec", tag = "1")]
+    #[serde(with = "qos_hex::serde")]
     pub encrypted_quorum_key: ::prost::alloc::vec::Vec<u8>,
     /// Signature over the encrypted quorum key
     #[prost(bytes = "vec", tag = "2")]
+    #[serde(with = "qos_hex::serde")]
     pub signature: ::prost::alloc::vec::Vec<u8>,
 }
 /// Response from injecting a quorum key.
