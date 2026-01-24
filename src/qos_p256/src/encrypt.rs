@@ -294,7 +294,9 @@ fn create_cipher(
 /// of the form
 /// `sender_public||sender_public_len||receiver_public||receiver_public_len`.
 ///
-/// Note that we append the length to each field as per NIST specs here: <https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-56Ar3.pdf/>. See section 5.8.2.
+/// Note: lengths are appended after each field rather than prepended. This
+/// differs from NIST SP 800-56Ar3 5.8.2 (<https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-56Ar3.pdf>)
+/// which specifies `len || data`. The ordering is a historical artifact.
 fn create_additional_associated_data(
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,
