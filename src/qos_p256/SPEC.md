@@ -207,8 +207,8 @@ Symmetric authenticated encryption for data at rest.
 ### Constants
 
 ```text
-AES_GCM_256_HMAC_SHA512_TAG = b"qos_aes_gcm_256_hmac_sha512"
-AES_GCM_256_KEY_ID_TAG = b"AES_GCM_256_KEY_ID_TAG"
+AES_GCM_256_HMAC_SHA512_TAG = b"qos_aes_gcm_256_hmac_sha512" (Naming for historical reasons, used as AAD)
+AES_GCM_256_KEY_ID_INFO = b"AES_GCM_256_KEY_ID"
 ```
 
 ### Envelope Format
@@ -262,11 +262,13 @@ Process:
   4. Return plaintext (or error if authentication fails)
 ```
 
-### AES Key Identifier
+### AES GCM 256 Key Identifier
 
-A non-secret identifier derived from the AES key for key management purposes.
+A non-secret identifier derived from the AES GCM 256 key using HKDF-SHA256 for key management purposes. This identifier allows key management systems to reference and compare keys without exposing the secret material.
 
-```
+_Note:_ While historically we have used HKDF-SHA512, going forward we intend to standardize on HKDF-SHA256 since it is more standard among modern cryptography protocols.
+
+```text
 AES_GCM_256_KEY_ID(secret) -> identifier
 
 Input:
@@ -276,8 +278,9 @@ Output:
   identifier: 32-byte key identifier
 
 Process:
-  1. mac = HMAC-SHA512(key=secret, message=AES_GCM_256_KEY_ID_TAG)
-  2. Return mac[0..32]
+  1. prk = HKDF-SHA256-Extract(salt=empty, ikm=secret)
+  2. identifier = HKDF-SHA256-Expand(prk, info=AES_GCM_256_KEY_ID_INFO, length=32)
+  3. Return identifier
 ```
 
 ## 4. Secret Management
@@ -316,42 +319,42 @@ Process:
 #### Salt Paths
 
 - Signing: `b"qos_p256_sign"`
-- HPKE: `b"qos_p256_encrypt"`
+- HPKE: `b"qos_p256_encrypt"` (historical terminology, retained for V0 compatibility)
 - AES-GCM-256: `b"qos_aes_gcm_encrypt"`
 
 ### V1 Format (Explicit Secrets)
 
-Three independent 32-byte secrets stored with a version marker.
+Three independent 32-byte secrets stored with a version byte prefix.
 
 #### Layout
 
-```
-┌──────────┬──────────────┬────────────────┬──────────────┐
-│ Q_KEY_V1 │ sign_secret  │ encrypt_secret │ aes_secret   │
-│ 8 bytes  │ 32 bytes     │ 32 bytes       │ 32 bytes     │
-└──────────┴──────────────┴────────────────┴──────────────┘
-Total: 104 bytes
+```text
+┌─────────┬────────────────┬──────────────┬──────────────--------┐
+│ version │ hpke_secret    │ sign_secret  │ aes_gcm_256_secret   │
+│ 1 byte  │ 32 bytes       │ 32 bytes     │ 32 bytes             │
+└─────────┴────────────────┴──────────────┴─────────────--------─┘
+Total: 97 bytes
 ```
 
-#### Version Marker
+#### Version Byte
 
-```
-Q_KEY_V1 = b"Q_KEY_V1"  (8 bytes: 0x515f4b45595f5631)
+```text
+SECRET_V1 = 0x01
 ```
 
 #### Secret Extraction
 
-```
+```text
 Offset  Size  Content
-0       8     "Q_KEY_V1" version marker
-8       32    signing_secret
-40      32    encryption_secret
-72      32    aes_gcm_256_secret
+0       1     Version byte (0x01 for V1)
+1       32    hpke_secret
+33      32    sign_secret
+65      32    aes_gcm_256_secret
 ```
 
 ### Version Detection
 
-```
+```text
 PARSE_SECRET(bytes) -> VersionedSecret | Error
 
 Input:
@@ -361,8 +364,9 @@ Output:
   VersionedSecret or parsing error
 
 Process:
-  1. If len(bytes) == 104 AND bytes[0..8] == Q_KEY_V1:
-       Return V1(bytes)
+  1. If len(bytes) == 97 AND bytes[0] == SECRET_V1:
+       a. Validate hpke_secret and sign_secret are valid P256 scalars
+       b. Return V1(bytes)
   2. Else if len(bytes) == 32:
        Return V0(bytes)
   3. Else:
@@ -383,7 +387,7 @@ Process:
 
 ### Overview
 
-A compact identifier for a complete QOS key set, suitable for key management and verification.
+An identifier for a complete QOS key set, suitable for key management and verification.
 
 ### V0 Format (P256Public)
 
@@ -391,53 +395,98 @@ Two uncompressed P256 public keys concatenated.
 
 #### Layout
 
-```
+```text
 ┌─────────────────────┬───────────────────┐
-│ encrypt_public      │ sign_public       │
+│ hpke_public         │ sign_public       │
 │ 65 bytes (SEC1)     │ 65 bytes (SEC1)   │
 └─────────────────────┴───────────────────┘
 Total: 130 bytes
 ```
 
-**Note:** V0 does not include an AES key identifier. This was acceptable when all secrets were derived from a single master seed (V0 secret format).
+_Note:_ V0 does not include an AES GCM 256 key identifier. This was acceptable when all secrets were derived from a single master seed (V0 secret format).
 
 ### V1 Format (QuorumKeyId)
 
-Compressed public keys plus AES key identifier.
+Uncompressed public keys plus AES GCM 256 key identifier, with a version byte prefix.
 
 #### Layout
 
+```text
+┌─────────┬───────────────────┬───────────────────┬──────────────--------┐
+│ version │ hpke_public       │ sign_public       │ aes_gcm_256_key_id   │
+│ 1 byte  │ 65 bytes (SEC1)   │ 65 bytes (SEC1)   │ 32 bytes             │
+└─────────┴───────────────────┴───────────────────┴─────────────--------─┘
+Total: 163 bytes
 ```
-┌───────────────────┬───────────────────┬──────────────--------┐
-│ encrypt_public    │ sign_public       │ aes_gcm_256_key_id   │
-│ 33 bytes (SEC1)   │ 33 bytes (SEC1)   │ 32 bytes             │
-└───────────────────┴───────────────────┴─────────────--------─┘
-Total: 98 bytes
+
+#### Version Byte
+
+```text
+QUORUM_KEY_ID_V1 = 0x01
 ```
 
 #### Field Definitions
 
 | Field | Offset | Size | Format |
 |-------|--------|------|--------|
-| encrypt_public | 0 | 33 | SEC1 compressed |
-| sign_public | 33 | 33 | SEC1 compressed |
-| aes_gcm_256_key_id | 66 | 32 | HMAC-SHA512 derived identifier |
+| version | 0 | 1 | Version byte (0x01 for V1) |
+| hpke_public | 1 | 65 | SEC1 uncompressed |
+| sign_public | 66 | 65 | SEC1 uncompressed |
+| aes_gcm_256_key_id | 131 | 32 | HKDF-SHA256 derived identifier |
 
 #### Construction
 
-```
-QUORUM_KEY_ID(encrypt_pub, sign_pub, aes_secret) -> key_id
+```text
+QUORUM_KEY_ID(hpke_pub, sign_pub, aes_gcm_256_secret) -> key_id
 
 Process:
-  1. encrypt_compressed = SEC1_Compress(encrypt_pub)     // 33 bytes
-  2. sign_compressed = SEC1_Compress(sign_pub)           // 33 bytes
-  3. aes_gcm_256_key_id = AES_GCM_256_KEY_ID(aes_secret) // 32 bytes
-  4. Return encrypt_compressed || sign_compressed || aes_gcm_256_key_id
+  1. version = 0x01                                                 // 1 byte
+  2. hpke_uncompressed = SEC1_Uncompressed(hpke_pub)                // 65 bytes
+  3. sign_uncompressed = SEC1_Uncompressed(sign_pub)                // 65 bytes
+  4. aes_gcm_256_key_id = AES_GCM_256_KEY_ID(aes_gcm_256_secret)    // 32 bytes
+  5. Return version || hpke_uncompressed || sign_uncompressed || aes_gcm_256_key_id
 ```
 
-#### Validation
+### Version Detection
 
-When deserializing a QuorumKeyId:
-1. Verify total length is exactly 98 bytes
-2. Validate encrypt_public is a valid SEC1 compressed P256 point
-3. Validate sign_public is a valid SEC1 compressed P256 point
+```text
+PARSE_QUORUM_KEY_ID(bytes) -> VersionedQuorumKeyId | Error
+
+Input:
+  bytes: arbitrary-length byte string
+
+Output:
+  VersionedQuorumKeyId or parsing error
+
+Process:
+  1. If len(bytes) == 163 AND bytes[0] == QUORUM_KEY_ID_V1:
+       a. Validate hpke_public and sign_public are valid SEC1 uncompressed P256 points
+       b. Return V1(bytes)
+  2. Else if len(bytes) == 130:
+       a. Validate hpke_public and sign_public are valid SEC1 uncompressed P256 points
+       b. Return V0(bytes)
+  3. Else:
+       Return Error (invalid quorum key id format)
+```
+
+### Fingerprint
+
+A compact 32-byte identifier for a QuorumKeyId.
+
+**Rationale:** Hashing the entire QuorumKeyId ensures integrity of all components as a unit. This makes it easy to verify the complete key set and detect if any component has been modified or substituted. We chose SHA256 instead of an HKDF since SHA256 is more easily available for a variety of clients.
+
+```text
+QUORUM_KEY_FINGERPRINT(bytes) -> fingerprint
+
+Input:
+  bytes: 130-byte or 163-byte QuorumKeyId
+
+Output:
+  fingerprint: 32-byte identifier
+
+Process:
+  1. If PARSE_QUORUM_KEY_ID(bytes) == Error:
+      Return Error (invalid quorum key id format)
+  2. fingerprint = SHA-256(bytes)
+  3. Return fingerprint
+```
