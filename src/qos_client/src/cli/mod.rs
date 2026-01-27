@@ -43,6 +43,7 @@ const PATCH_SET_DIR: &str = "patch-set-dir";
 const NAMESPACE_DIR: &str = "namespace-dir";
 const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
 const PUB_PATH: &str = "pub-path";
+const DEBUG_MODE: &str = "debug-mode";
 const BRIDGE_CONFIG: &str = "bridge-config";
 const YUBIKEY: &str = "yubikey";
 const SECRET_PATH: &str = "secret-path";
@@ -572,13 +573,21 @@ impl Command {
 		.required(false)
 		.takes_value(true)
 	}
+
 	fn json_token() -> Token {
 		Token::new(JSON, "Include to format the output in json")
 			.required(false)
 			.takes_value(false)
 	}
 
-	fn bridge_config() -> Token {
+	fn debug_mode_token() -> Token {
+		Token::new(DEBUG_MODE, "debug mode to enable logging of pivot and qos")
+			.required(false)
+			.default_value("false")
+			.takes_value(true)
+	}
+
+	fn bridge_config_token() -> Token {
 		Token::new(BRIDGE_CONFIG, "host app bridge configuration")
 			.required(false)
 			.takes_value(true)
@@ -668,7 +677,8 @@ impl Command {
 			.token(Self::patch_set_dir_token())
 			.token(Self::quorum_key_path_token())
 			.token(Self::pivot_args_token())
-			.token(Self::bridge_config())
+			.token(Self::bridge_config_token())
+			.token(Self::debug_mode_token())
 	}
 
 	fn approve_manifest() -> Parser {
@@ -1009,7 +1019,7 @@ impl ClientOpts {
 		}
 	}
 
-	fn host_config(&self) -> Vec<BridgeConfig> {
+	fn bridge_config(&self) -> Vec<BridgeConfig> {
 		if let Some(json_str) = self.parsed.single(BRIDGE_CONFIG) {
 			let result: Vec<BridgeConfig> = serde_json::from_str(json_str)
 				.expect("invalid bridge configuration json");
@@ -1026,6 +1036,15 @@ impl ClientOpts {
 		} else {
 			Vec::new()
 		}
+	}
+
+	fn debug_mode(&self) -> bool {
+		self.parsed
+			.single(DEBUG_MODE)
+			.map(String::as_str)
+			.unwrap_or("false")
+			.parse()
+			.expect("invalid `--debug-mode` flag value")
 	}
 
 	fn pub_path(&self) -> String {
@@ -1559,7 +1578,8 @@ mod handlers {
 			manifest_set_dir: opts.manifest_set_dir(),
 			patch_set_dir: opts.patch_set_dir(),
 			quorum_key_path: opts.quorum_key_path(),
-			host_config: opts.host_config(),
+			bridge_config: opts.bridge_config(),
+			debug_mode: opts.debug_mode(),
 		}) {
 			println!("Error: {e:?}");
 			std::process::exit(1);
@@ -1667,7 +1687,7 @@ mod handlers {
 			opts.pivot_path(),
 			opts.restart_policy(),
 			opts.pivot_args(),
-			opts.host_config(),
+			opts.bridge_config(),
 			opts.unsafe_eph_path_override(),
 		);
 	}

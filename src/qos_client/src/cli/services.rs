@@ -706,7 +706,8 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub quorum_key_path: P,
 	pub manifest_path: P,
 	pub pivot_args: Vec<String>,
-	pub host_config: Vec<BridgeConfig>,
+	pub bridge_config: Vec<BridgeConfig>,
+	pub debug_mode: bool,
 }
 
 pub(crate) fn generate_manifest<P: AsRef<Path>>(
@@ -725,7 +726,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		quorum_key_path,
 		manifest_path,
 		pivot_args,
-		host_config,
+		bridge_config,
+		debug_mode,
 	} = args;
 
 	let nitro_config =
@@ -751,7 +753,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
-			bridge_config: host_config,
+			bridge_config,
+			debug_mode,
 		},
 		manifest_set,
 		share_set,
@@ -1646,6 +1649,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			restart,
 			args,
 			bridge_config: host_config,
+			debug_mode: false,
 		},
 		manifest_set: ManifestSet {
 			threshold: 1,

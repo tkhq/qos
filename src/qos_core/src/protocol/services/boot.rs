@@ -159,6 +159,9 @@ pub struct PivotConfig {
 	/// If set the pivot will service TCP with the provided ports and a bridge will provide the TCP -> VSOCK -> TCP streams.
 	/// If not set the pivot will service VSOCK and the host side needs to be provided manually.
 	pub bridge_config: Vec<BridgeConfig>,
+	/// Whether we're invoking the enclave and pivot in DEBUG mode. This controls output piping.
+	/// *NOTE*: this requires `DEBUG` and `LOGS` env var to be set to `true` when `qos_enclave` is running.
+	pub debug_mode: bool,
 	/// Arguments to invoke the binary with. Leave this empty if none are
 	/// needed.
 	pub args: Vec<String>,
@@ -194,6 +197,7 @@ impl From<PivotConfigV0> for PivotConfig {
 			hash: value.hash,
 			restart: value.restart,
 			args: value.args,
+			debug_mode: false,
 			bridge_config: Vec::new(),
 		}
 	}

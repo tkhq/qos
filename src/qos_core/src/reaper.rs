@@ -14,7 +14,7 @@ use std::{
 use qos_nsm::NsmProvider;
 use tokio::{
 	io::{AsyncBufReadExt, BufReader},
-	process::{ChildStderr, ChildStdout, Command},
+	process::{Child, Command},
 };
 
 use crate::{
@@ -97,10 +97,13 @@ async fn run_vsock_to_tcp_bridge(
 	Ok(())
 }
 
-async fn reprint_pivot_output(
-	stdout_reader: BufReader<ChildStdout>,
-	stderr_reader: BufReader<ChildStderr>,
-) {
+async fn reprint_pivot_output(child: &mut Child) {
+	let stdout = child.stdout.take().expect("failed to get pivot stdout");
+	let stderr = child.stderr.take().expect("failed to get pivot stderr");
+
+	let stdout_reader = BufReader::new(stdout);
+	let stderr_reader = BufReader::new(stderr);
+
 	tokio::spawn(async move {
 		let mut stdout_lines = stdout_reader.lines();
 		let mut stderr_lines = stderr_reader.lines();
@@ -200,15 +203,11 @@ impl Reaper {
 
 		loop {
 			let mut child = pivot.spawn().expect("Failed to spawn pivot");
-
-			let stdout =
-				child.stdout.take().expect("failed to get pivot stdout");
-			let stderr =
-				child.stderr.take().expect("failed to get pivot stderr");
-
-			let stdout_reader = BufReader::new(stdout);
-			let stderr_reader = BufReader::new(stderr);
-			reprint_pivot_output(stdout_reader, stderr_reader).await;
+			// print pivot stderr and stdout if in debug mode
+			// *NOTE*: this requires `DEBUG` and `LOGS` env vars set when booting the enclave itself. If not, nothing will be visible
+			if manifest.pivot.debug_mode {
+				reprint_pivot_output(&mut child).await;
+			}
 
 			let status =
 				child.wait().await.expect("Pivot executable never started...");

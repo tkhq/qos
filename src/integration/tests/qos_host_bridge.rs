@@ -143,6 +143,7 @@ async fn qos_host_bridge_works() {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
 		args: vec![pivot_app_sock_path.to_string()],
+		debug_mode: false,
 		bridge_config: vec![BridgeConfig::Server(
 			app_host_port,
 			"0.0.0.0".into(),
