@@ -4,7 +4,7 @@ use std::{collections::HashSet, fmt};
 
 use qos_crypto::sha_256;
 use qos_nsm::types::NsmResponse;
-use qos_p256::{P256Pair, P256Public};
+use qos_p256::{QosKeySet, QosKeySetV0Public};
 
 use crate::protocol::{
 	services::attestation, Hash256, ProtocolError, ProtocolState, QosHash,
@@ -232,7 +232,7 @@ pub struct QuorumMember {
 	/// cryptographically guaranteed and thus should not be trusted without
 	/// verification.
 	pub alias: String,
-	/// `P256Public` as bytes
+	/// `QosKeySetV0Public` as bytes
 	#[serde(with = "qos_hex::serde")]
 	pub pub_key: Vec<u8>,
 }
@@ -498,7 +498,7 @@ impl fmt::Debug for Approval {
 impl Approval {
 	/// Verify that the approval is a valid a signature for the given `msg`.
 	pub(crate) fn verify(&self, msg: &[u8]) -> Result<(), ProtocolError> {
-		let pub_key = P256Public::from_bytes(&self.member.pub_key)?;
+		let pub_key = QosKeySetV0Public::from_bytes(&self.member.pub_key)?;
 
 		if pub_key.verify(msg, &self.signature).is_ok() {
 			Ok(())
@@ -551,7 +551,7 @@ impl ManifestEnvelope {
 		let mut uniq_members = HashSet::new();
 		for approval in &self.manifest_set_approvals {
 			let member_pub_key =
-				P256Public::from_bytes(&approval.member.pub_key)?;
+				QosKeySetV0Public::from_bytes(&approval.member.pub_key)?;
 
 			// Ensure that this is a valid signature from the member
 			let is_valid_signature = member_pub_key
@@ -625,7 +625,7 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	};
 
 	// 2. Generate an Ephemeral Key.
-	let ephemeral_key = P256Pair::generate()?;
+	let ephemeral_key = QosKeySet::generate()?;
 	state.handles.put_ephemeral_key(&ephemeral_key)?;
 	state.handles.put_pivot(pivot)?;
 	state.handles.put_manifest_envelope(manifest_envelope)?;
@@ -663,11 +663,11 @@ mod test {
 	use super::*;
 	use crate::handles::Handles;
 
-	fn get_manifest() -> (Manifest, Vec<(P256Pair, QuorumMember)>, Vec<u8>) {
-		let quorum_pair = P256Pair::generate().unwrap();
-		let member1_pair = P256Pair::generate().unwrap();
-		let member2_pair = P256Pair::generate().unwrap();
-		let member3_pair = P256Pair::generate().unwrap();
+	fn get_manifest() -> (Manifest, Vec<(QosKeySet, QuorumMember)>, Vec<u8>) {
+		let quorum_pair = QosKeySet::generate().unwrap();
+		let member1_pair = QosKeySet::generate().unwrap();
+		let member2_pair = QosKeySet::generate().unwrap();
+		let member3_pair = QosKeySet::generate().unwrap();
 
 		let pivot = b"this is a pivot binary".to_vec();
 
@@ -937,7 +937,7 @@ mod test {
 			// Change a member so that are not recognized as part of the
 			// manifest set.
 			let approval = approvals.get_mut(0).unwrap();
-			let pair = P256Pair::generate().unwrap();
+			let pair = QosKeySet::generate().unwrap();
 			approval.member.pub_key = pair.public_key().to_bytes();
 			approval.signature = pair.sign(&manifest.qos_hash()).unwrap();
 

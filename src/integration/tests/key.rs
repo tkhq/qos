@@ -4,7 +4,7 @@ use integration::{
 	LOCAL_HOST, PCR3_PRE_IMAGE_PATH, PIVOT_LOOP_PATH, QOS_DIST_DIR,
 };
 use qos_crypto::sha_256;
-use qos_p256::{P256Pair, P256Public};
+use qos_p256::{QosKeySet, QosKeySetV0Public};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 const NAMESPACE: &str = "a-namespace";
@@ -169,8 +169,8 @@ async fn key_fwd_e2e() {
 		.success());
 
 	// Check that the quorum key got written
-	let quorum_pair = P256Pair::from_hex_file(new_secret_path).unwrap();
-	let quorum_pub = P256Public::from_hex_file(QUORUM_KEY_PUB_PATH).unwrap();
+	let quorum_pair = QosKeySet::from_hex_file(new_secret_path).unwrap();
+	let quorum_pub = QosKeySetV0Public::from_hex_file(QUORUM_KEY_PUB_PATH).unwrap();
 	assert!(quorum_pair.public_key() == quorum_pub);
 }
 
@@ -407,8 +407,8 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 	}
 
 	// Check that the enclave wrote its quorum key
-	let quorum_pair = P256Pair::from_hex_file(old_secret_path).unwrap();
-	let quorum_pub = P256Public::from_hex_file(QUORUM_KEY_PUB_PATH).unwrap();
+	let quorum_pair = QosKeySet::from_hex_file(old_secret_path).unwrap();
+	let quorum_pub = QosKeySetV0Public::from_hex_file(QUORUM_KEY_PUB_PATH).unwrap();
 	assert!(quorum_pair.public_key() == quorum_pub);
 
 	(enclave_child_process, host_child_process)

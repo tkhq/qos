@@ -22,7 +22,7 @@ use qos_core::protocol::{
 };
 use qos_crypto::sha_256;
 use qos_host::EnclaveInfo;
-use qos_p256::P256Pair;
+use qos_p256::QosKeySet;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]
@@ -232,7 +232,7 @@ async fn standard_boot_e2e() {
 		// Read in the generated approval to check it was created correctly
 		let approval: Approval =
 			serde_json::from_slice(&fs::read(approval_path).unwrap()).unwrap();
-		let personal_pair = P256Pair::from_hex_file(format!(
+		let personal_pair = QosKeySet::from_hex_file(format!(
 			"{}/{}.secret",
 			personal_dir(alias),
 			alias,

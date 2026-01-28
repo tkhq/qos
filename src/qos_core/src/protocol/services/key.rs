@@ -6,7 +6,7 @@ use qos_nsm::{
 	nitro::{attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM},
 	types::NsmResponse,
 };
-use qos_p256::{P256Pair, P256Public};
+use qos_p256::{QosKeySet, QosKeySetV0Public};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
@@ -32,7 +32,7 @@ pub(in crate::protocol) fn inject_key(
 
 	// 1. Verify the signature over the `encrypted_quorum_key` against the
 	// Quorum Key specified in the New Manifest.
-	let quorum_public = P256Public::from_bytes(
+	let quorum_public = QosKeySetV0Public::from_bytes(
 		&manifest_envelope.manifest.namespace.quorum_key,
 	)?;
 	quorum_public
@@ -51,7 +51,7 @@ pub(in crate::protocol) fn inject_key(
 
 	// 3. Check that the decrypted Quorum Key public key matches the one
 	// specified in the New Manifest.
-	let decrypted_quorum_pair = P256Pair::from_master_seed(&quorum_master_seed)
+	let decrypted_quorum_pair = QosKeySet::from_master_seed(&quorum_master_seed)
 		.map_err(|_| ProtocolError::InvalidQuorumSecret)?;
 	if decrypted_quorum_pair.public_key() != quorum_public {
 		return Err(ProtocolError::WrongQuorumKey);
@@ -60,7 +60,7 @@ pub(in crate::protocol) fn inject_key(
 	// 4. Rotate the ephemeral key so it's safe for apps to use it independently
 	// of boot-related operations, which use the pre-boot ephemeral key as
 	// an encryption target (key-forward boot encrypts the quorum key to it)
-	let new_ephemeral_key = P256Pair::generate()?;
+	let new_ephemeral_key = QosKeySet::generate()?;
 	state.handles.rotate_ephemeral_key(&new_ephemeral_key)?;
 
 	// 5. Write the Quorum Key to the file system, at which point New Node will
@@ -117,7 +117,7 @@ fn export_key_internal(
 				.public_key
 				.as_ref()
 				.ok_or(ProtocolError::MissingEphemeralKey)?;
-			P256Public::from_bytes(eph_key_bytes)
+			QosKeySetV0Public::from_bytes(eph_key_bytes)
 				.map_err(|_| ProtocolError::InvalidEphemeralKey)?
 		}
 		#[cfg(feature = "mock")]
@@ -296,7 +296,7 @@ mod test {
 	use aws_nitro_enclaves_nsm_api::api::{AttestationDoc, Digest};
 	use qos_crypto::sha_256;
 	use qos_nsm::{mock::MockNsm, types::NsmResponse};
-	use qos_p256::P256Pair;
+	use qos_p256::QosKeySet;
 	use qos_test_primitives::PathWrapper;
 	use serde_bytes::ByteBuf;
 
@@ -319,18 +319,18 @@ mod test {
 	struct TestArgs {
 		manifest_envelope: ManifestEnvelope,
 		#[allow(dead_code)]
-		members_with_keys: Vec<(P256Pair, QuorumMember)>,
+		members_with_keys: Vec<(QosKeySet, QuorumMember)>,
 		att_doc: AttestationDoc,
-		eph_pair: P256Pair,
-		quorum_pair: P256Pair,
+		eph_pair: QosKeySet,
+		quorum_pair: QosKeySet,
 		pivot: Vec<u8>,
 	}
 
 	fn get_test_args() -> TestArgs {
-		let quorum_pair = P256Pair::generate().unwrap();
-		let member1_pair = P256Pair::generate().unwrap();
-		let member2_pair = P256Pair::generate().unwrap();
-		let member3_pair = P256Pair::generate().unwrap();
+		let quorum_pair = QosKeySet::generate().unwrap();
+		let member1_pair = QosKeySet::generate().unwrap();
+		let member2_pair = QosKeySet::generate().unwrap();
+		let member3_pair = QosKeySet::generate().unwrap();
 
 		let pivot = b"this is a pivot binary".to_vec();
 
@@ -400,7 +400,7 @@ mod test {
 		pcr_map.insert(2, ByteBuf::from(pcr2));
 		pcr_map.insert(3, ByteBuf::from(pcr3));
 
-		let eph_pair = P256Pair::generate().unwrap();
+		let eph_pair = QosKeySet::generate().unwrap();
 		let eph_pub_key = eph_pair.public_key().to_bytes();
 
 		let att_doc = AttestationDoc {
@@ -597,7 +597,7 @@ mod test {
 		fn rejects_manifest_with_approval_from_non_member() {
 			let TestArgs { mut manifest_envelope, pivot, .. } = get_test_args();
 
-			let non_member_pair = P256Pair::generate().unwrap();
+			let non_member_pair = QosKeySet::generate().unwrap();
 			let non_member = QuorumMember {
 				alias: "member1".to_string(),
 				pub_key: non_member_pair.public_key().to_bytes(),
@@ -706,7 +706,7 @@ mod test {
 			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			let different_quorum_key =
-				P256Pair::generate().unwrap().public_key().to_bytes();
+				QosKeySet::generate().unwrap().public_key().to_bytes();
 			old_manifest_envelope.manifest.namespace.quorum_key =
 				different_quorum_key;
 
@@ -844,7 +844,7 @@ mod test {
 		fn rejects_manifest_with_approval_from_non_member() {
 			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
-			let non_member_pair = P256Pair::generate().unwrap();
+			let non_member_pair = QosKeySet::generate().unwrap();
 
 			let non_member = QuorumMember {
 				alias: "member1".to_string(),
@@ -1121,7 +1121,7 @@ mod test {
 
 			let decrypted_quorum_secret =
 				eph_pair.decrypt(&encrypted_quorum_key).unwrap();
-			let reconstructed_quorum_pair = P256Pair::from_master_seed(
+			let reconstructed_quorum_pair = QosKeySet::from_master_seed(
 				&decrypted_quorum_secret.try_into().unwrap(),
 			)
 			.unwrap();
@@ -1209,7 +1209,7 @@ mod test {
 			)
 			.unwrap();
 
-			let wrong_key = P256Pair::generate().unwrap();
+			let wrong_key = QosKeySet::generate().unwrap();
 			let encrypted_quorum_key = eph_pair
 				.public_key()
 				.encrypt(wrong_key.to_master_seed())
@@ -1260,7 +1260,7 @@ mod test {
 			)
 			.unwrap();
 
-			let wrong_key = P256Pair::generate().unwrap();
+			let wrong_key = QosKeySet::generate().unwrap();
 			let encrypted_quorum_key = eph_pair
 				.public_key()
 				.encrypt(quorum_pair.to_master_seed())

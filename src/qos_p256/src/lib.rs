@@ -33,7 +33,7 @@ pub mod sign;
 #[derive(
 	Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
-pub enum P256Error {
+pub enum QosKeySetError {
 	/// Hex encoding error.
 	QosHex(String),
 	/// IO error
@@ -80,7 +80,7 @@ pub enum P256Error {
 	CannotCoerceLenToU8,
 }
 
-impl From<qos_hex::HexError> for P256Error {
+impl From<qos_hex::HexError> for QosKeySetError {
 	fn from(err: qos_hex::HexError) -> Self {
 		match err {
 			qos_hex::HexError::InvalidUtf8(_) => {
@@ -117,14 +117,14 @@ pub fn bytes_os_rng<const N: usize>() -> [u8; N] {
 /// separate secret for signing and encryption.
 #[derive(ZeroizeOnDrop)]
 #[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
-pub struct P256Pair {
+pub struct QosKeySet {
 	p256_encrypt_private: P256EncryptPair,
 	sign_private: P256SignPair,
 	master_seed: [u8; MASTER_SEED_LEN],
 	aes_gcm_256_secret: AesGcm256Secret,
 }
 
-impl P256Pair {
+impl QosKeySet {
 	/// Generate a new private key using the OS randomness source.
 	pub fn generate() -> Result<Self, P256Error> {
 		let master_seed = bytes_os_rng::<MASTER_SEED_LEN>();
@@ -176,8 +176,8 @@ impl P256Pair {
 
 	/// Get the public key.
 	#[must_use]
-	pub fn public_key(&self) -> P256Public {
-		P256Public {
+	pub fn public_key(&self) -> QosKeySetV0Public {
+		QosKeySetV0Public {
 			encrypt_public: self.p256_encrypt_private.public_key(),
 			sign_public: self.sign_private.public_key(),
 		}
@@ -256,12 +256,12 @@ impl P256Pair {
 /// P256 public key for signing and encryption. Internally this uses
 /// separate public keys for signing and encryption.
 #[derive(Clone, PartialEq, Eq)]
-pub struct P256Public {
+pub struct QosKeySetV0Public {
 	encrypt_public: P256EncryptPublic,
 	sign_public: P256SignPublic,
 }
 
-impl P256Public {
+impl QosKeySetV0Public {
 	/// Encrypt a message to this public key.
 	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
 		self.encrypt_public.encrypt(message)
@@ -365,7 +365,7 @@ mod test {
 	fn signatures_are_deterministic() {
 		let message = b"a message to authenticate";
 
-		let pair = P256Pair::generate().unwrap();
+		let pair = QosKeySet::generate().unwrap();
 		(0..100)
 			.map(|_| pair.sign(message).unwrap())
 			.collect::<Vec<_>>()
@@ -377,7 +377,7 @@ mod test {
 	fn sign_and_verification_works() {
 		let message = b"a message to authenticate";
 
-		let pair = P256Pair::generate().unwrap();
+		let pair = QosKeySet::generate().unwrap();
 		let signature = pair.sign(message).unwrap();
 
 		assert!(pair.public_key().verify(message, &signature).is_ok());
@@ -387,10 +387,10 @@ mod test {
 	fn verification_rejects_wrong_signature() {
 		let message = b"a message to authenticate";
 
-		let alice_pair = P256Pair::generate().unwrap();
+		let alice_pair = QosKeySet::generate().unwrap();
 		let signature = alice_pair.sign(message).unwrap();
 
-		let bob_public = P256Pair::generate().unwrap().public_key();
+		let bob_public = QosKeySet::generate().unwrap().public_key();
 
 		assert_eq!(
 			bob_public.verify(message, &signature).unwrap_err(),
@@ -400,7 +400,7 @@ mod test {
 
 	#[test]
 	fn basic_encrypt_decrypt_works() {
-		let alice_pair = P256Pair::generate().unwrap();
+		let alice_pair = QosKeySet::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 
 		let plaintext = b"rust test message";
@@ -413,14 +413,14 @@ mod test {
 
 	#[test]
 	fn wrong_receiver_cannot_decrypt() {
-		let alice_pair = P256Pair::generate().unwrap();
+		let alice_pair = QosKeySet::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 
 		let plaintext = b"rust test message";
 
 		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
 
-		let bob_pair = P256Pair::generate().unwrap();
+		let bob_pair = QosKeySet::generate().unwrap();
 
 		assert_eq!(
 			bob_pair.decrypt(&serialized_envelope).unwrap_err(),
@@ -430,7 +430,7 @@ mod test {
 
 	#[test]
 	fn public_key_bytes_roundtrip() {
-		let alice_pair = P256Pair::generate().unwrap();
+		let alice_pair = QosKeySet::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 		let alice_public_bytes = alice_public.to_bytes();
 
@@ -440,7 +440,7 @@ mod test {
 		);
 
 		let alice_public2 =
-			P256Public::from_bytes(&alice_public_bytes).unwrap();
+			QosKeySetV0Public::from_bytes(&alice_public_bytes).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
@@ -456,12 +456,12 @@ mod test {
 	fn public_key_to_file_roundtrip() {
 		let path: PathWrapper =
 			"/tmp/public_key_to_file_roundtrip.secret".into();
-		let alice_pair = P256Pair::generate().unwrap();
+		let alice_pair = QosKeySet::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 
 		alice_public.to_hex_file(&*path).unwrap();
 
-		let alice_public2 = P256Public::from_hex_file(&*path).unwrap();
+		let alice_public2 = QosKeySetV0Public::from_hex_file(&*path).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
@@ -475,11 +475,11 @@ mod test {
 
 	#[test]
 	fn master_seed_bytes_roundtrip() {
-		let alice_pair = P256Pair::generate().unwrap();
+		let alice_pair = QosKeySet::generate().unwrap();
 		let public_key = alice_pair.public_key();
 		let master_seed = alice_pair.to_master_seed();
 
-		let alice_pair2 = P256Pair::from_master_seed(master_seed).unwrap();
+		let alice_pair2 = QosKeySet::from_master_seed(master_seed).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope = public_key.encrypt(plaintext).unwrap();
@@ -496,10 +496,10 @@ mod test {
 		let path: PathWrapper =
 			"/tmp/master_seed_to_file_round_trip.secret".into();
 
-		let alice_pair = P256Pair::generate().unwrap();
+		let alice_pair = QosKeySet::generate().unwrap();
 		alice_pair.to_hex_file(&*path).unwrap();
 
-		let alice_pair2 = P256Pair::from_hex_file(&*path).unwrap();
+		let alice_pair2 = QosKeySet::from_hex_file(&*path).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope =
@@ -519,7 +519,7 @@ mod test {
 		fn encrypt_decrypt_round_trip() {
 			let plaintext = b"rust test message";
 
-			let key = P256Pair::generate().unwrap();
+			let key = QosKeySet::generate().unwrap();
 
 			let envelope = key.aes_gcm_256_encrypt(plaintext).unwrap();
 			let result = key.aes_gcm_256_decrypt(&envelope).unwrap();
@@ -530,8 +530,8 @@ mod test {
 		#[test]
 		fn different_key_cannot_decrypt() {
 			let plaintext = b"rust test message";
-			let key = P256Pair::generate().unwrap();
-			let other_key = P256Pair::generate().unwrap();
+			let key = QosKeySet::generate().unwrap();
+			let other_key = QosKeySet::generate().unwrap();
 
 			let serialized_envelope =
 				key.aes_gcm_256_encrypt(plaintext).unwrap();

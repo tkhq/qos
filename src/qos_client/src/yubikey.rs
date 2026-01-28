@@ -258,7 +258,7 @@ pub fn open_single() -> Result<YubiKey, YubiKeyError> {
 }
 
 /// Get the public key from the yubikey that corresponds to
-/// `P256Public::to_bytes`. This is the key agree public key concatenated with
+/// `QosKeySetV0Public::to_bytes`. This is the key agree public key concatenated with
 /// the signature public key. Encodes as `encrypt_public||sign_public`.
 pub fn pair_public_key(yubikey: &mut YubiKey) -> Result<Vec<u8>, YubiKeyError> {
 	let signing_slot_cert = Certificate::read(yubikey, SIGNING_SLOT)

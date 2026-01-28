@@ -10,7 +10,7 @@ use std::{
 
 use qos_crypto::shamir::shares_generate;
 use qos_p256::{
-	derive_secret, encrypt::P256EncryptPair, P256Pair, P256_ENCRYPT_DERIVE_PATH,
+	derive_secret, encrypt::P256EncryptPair, QosKeySet, P256_ENCRYPT_DERIVE_PATH,
 };
 
 // Note: the dev secret can also be found in our keys repo
@@ -82,7 +82,7 @@ fn preprod_reshard_ceremony() {
 	let dev_secret_hex_bytes =
 		qos_hex::decode(std::str::from_utf8(&dev_secret_utf8_bytes).unwrap())
 			.unwrap();
-	let dev_key = P256Pair::from_master_seed(
+	let dev_key = QosKeySet::from_master_seed(
 		&dev_secret_hex_bytes.clone().try_into().unwrap(),
 	)
 	.unwrap();
@@ -109,7 +109,7 @@ fn preprod_reshard_ceremony() {
 		let removed_byte = decrypted_dev_share.remove(0);
 		assert_eq!(removed_byte, 1);
 
-		let pk = P256Pair::from_master_seed(
+		let pk = QosKeySet::from_master_seed(
 			&decrypted_dev_share.clone().try_into().unwrap(),
 		)
 		.unwrap()
@@ -135,7 +135,7 @@ fn preprod_reshard_ceremony() {
 			let user_secret_path =
 				format!("{}/{}.secret", user_dir(user), user);
 			let user_key_pair =
-				P256Pair::from_hex_file(user_secret_path.clone()).unwrap();
+				QosKeySet::from_hex_file(user_secret_path.clone()).unwrap();
 			// Encrypt the new share to it
 			let encrypted_share =
 				user_key_pair.public_key().encrypt(share).unwrap();

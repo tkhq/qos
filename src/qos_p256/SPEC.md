@@ -389,7 +389,7 @@ Process:
 
 An identifier for a complete QOS key set, suitable for key management and verification.
 
-### V0 Format (P256Public)
+### V0 Format (QosKeySetV0Public)
 
 Two uncompressed P256 public keys concatenated.
 

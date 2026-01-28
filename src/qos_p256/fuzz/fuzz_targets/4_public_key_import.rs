@@ -5,14 +5,14 @@ use libfuzzer_sys::fuzz_mutator;
 use libfuzzer_sys::fuzz_target;
 
 #[cfg(feature = "fuzzer_corpus_seed1")]
-use qos_p256::P256Pair;
-use qos_p256::P256Public;
+use qos_p256::QosKeySet;
+use qos_p256::QosKeySetV0Public;
 
-// this helps the fuzzer over the major obstacle of learning what a valid P256Public object looks like
+// this helps the fuzzer over the major obstacle of learning what a valid QosKeySetV0Public object looks like
 #[cfg(feature = "fuzzer_corpus_seed1")]
 fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, _seed: u32| {
 	// this is random and does not depend on the input
-	let random_key_pair = P256Pair::generate().unwrap();
+	let random_key_pair = QosKeySet::generate().unwrap();
 
 	let mut public_bytes = random_key_pair.public_key().to_bytes();
 	let public_bytes_length = public_bytes.len();
@@ -41,7 +41,7 @@ fuzz_target!(|data: &[u8]| {
 
 	// import public keys from bytes
 	// silently exit in case of errors
-	let pubkey_special = match P256Public::from_bytes(data) {
+	let pubkey_special = match QosKeySetV0Public::from_bytes(data) {
 		Ok(pubkey) => pubkey,
 		Err(_err) => {
 			return;
