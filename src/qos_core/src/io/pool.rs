@@ -67,6 +67,10 @@ impl StreamPool {
 		start_address: SocketAddress,
 		mut count: u8,
 	) -> Result<Self, IOError> {
+		if count == 0 {
+			return Err(IOError::PoolError(PoolError::NoAddressesSpecified));
+		}
+
 		println!("StreamPool start address: {start_address}");
 
 		let mut addresses = Vec::new();
