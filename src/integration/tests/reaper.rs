@@ -241,17 +241,25 @@ async fn reaper_handles_bridge() {
 	let mut stream2 = TcpStream::connect(&host_addr)
 		.await
 		.expect("second stream failed to connect");
-	eprintln!("reaper test: second stream connected");
+	let mut stream3 = TcpStream::connect(&host_addr)
+		.await
+		.expect("second stream failed to connect");
 
+	// send the msg to the pivot via the bridge, out of order to check for x-streams
+	stream3.write_all(b"worlds").await.unwrap();
 	// send the msg to the pivot via the bridge
 	stream.write_all(b"hello").await.unwrap();
 
-	// read the reply and ensure it's the same as msg
+	// read the reply of the "chronologically 2nd" request and ensure it's the same as msg
 	let mut reply = [0u8; 5]; // reply buffer
 	assert_eq!(stream.read_exact(&mut reply).await.unwrap(), 5);
 	assert_eq!(&reply, b"hello");
 
-	eprintln!("reaper test: hello msg done");
+	// read the reply of the "chronologically 1st" request and ensure it's the same as msg
+	let mut reply = [0u8; 6]; // reply buffer
+	assert_eq!(stream3.read_exact(&mut reply).await.unwrap(), 6);
+	assert_eq!(&reply, b"worlds");
+
 	// send the "finished" msg on the second connection
 	stream2.write_all(b"done").await.unwrap();
 
@@ -259,10 +267,9 @@ async fn reaper_handles_bridge() {
 	assert_eq!(stream2.read_exact(&mut done_reply).await.unwrap(), 4);
 	assert_eq!(&done_reply, b"done");
 
-	eprintln!("reaper test: done msg done");
 	// Make the sure the reaper executed successfully.
 	reaper_handle.await.unwrap();
 	let contents = fs::read(integration::PIVOT_TCP_SUCCESS_FILE).unwrap();
-	assert_eq!(&contents, b"hello"); // expects the first msg
+	assert_eq!(&contents, b"worlds"); // expects the chronologically first msg
 	assert!(fs::remove_file(integration::PIVOT_TCP_SUCCESS_FILE).is_ok());
 }
