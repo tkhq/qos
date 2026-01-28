@@ -152,7 +152,6 @@ pub async fn wait_for_tcp_sock(host_addr: &str) {
 	loop {
 		match TcpStream::connect(&host_addr).await {
 			Ok(_stream) => {
-				eprintln!("XXX connected");
 				return;
 			}
 			Err(_) => {
