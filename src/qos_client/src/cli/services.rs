@@ -29,7 +29,7 @@ use qos_nsm::{
 	},
 	types::NsmResponse,
 };
-use qos_p256::{QosKeySet, QosKeySetError, QosKeySetV0Public};
+use qos_p256::{QuorumKey, QuorumKeyError, QuorumKeyV0Public};
 use zeroize::Zeroizing;
 
 use super::DisplayType;
@@ -74,7 +74,7 @@ pub enum Error {
 	#[cfg(feature = "smartcard")]
 	YubiKey(crate::yubikey::YubiKeyError),
 	/// Error from qos p256.
-	P256(qos_p256::QosKeySetError),
+	P256(qos_p256::QuorumKeyError),
 	/// The public key read from the yubikey for the pair did not match what
 	/// was expected.
 	#[cfg(feature = "smartcard")]
@@ -86,7 +86,7 @@ pub enum Error {
 	/// Failed to read share
 	ReadShare(String),
 	/// Error while try to read the quorum public key.
-	FailedToReadQuorumPublicKey(qos_p256::QosKeySetError),
+	FailedToReadQuorumPublicKey(qos_p256::QuorumKeyError),
 	/// Error trying to the read a file that is supposed to have a manifest.
 	FailedToReadManifestFile(std::io::Error),
 	/// Error deserializing manifest.
@@ -120,7 +120,7 @@ pub enum Error {
 	CouldNotDecodeHex(qos_hex::HexError),
 	/// Failed to deserialize something from borsh or json
 Deserialize(String),
-	FailedToReadDrKey(qos_p256::QosKeySetError),
+	FailedToReadDrKey(qos_p256::QuorumKeyError),
 	QosAttest(String),
 	/// Pivot file
 	FailedToReadPivot(std::io::Error),
@@ -164,8 +164,8 @@ impl From<crate::yubikey::YubiKeyError> for Error {
 	}
 }
 
-impl From<QosKeySetError> for Error {
-	fn from(err: QosKeySetError) -> Self {
+impl From<QuorumKeyError> for Error {
+	fn from(err: QuorumKeyError) -> Self {
 		Error::P256(err)
 	}
 }
@@ -189,7 +189,7 @@ pub enum PairOrYubi {
 	#[cfg(feature = "smartcard")]
 	Yubi((yubikey::YubiKey, Vec<u8>)),
 	/// P256 keypair
-	Pair(QosKeySet),
+	Pair(QuorumKey),
 }
 
 impl PairOrYubi {
@@ -223,7 +223,7 @@ impl PairOrYubi {
 				}
 			}
 			(false, Some(path)) => {
-				let pair = QosKeySet::from_hex_file(path)?;
+				let pair = QuorumKey::from_hex_file(path)?;
 				PairOrYubi::Pair(pair)
 			}
 			(false, None) => panic!("Need either yubikey flag or secret path"),
@@ -287,7 +287,7 @@ pub fn generate_file_key<P: AsRef<Path>>(
 	pub_key_path: P,
 ) {
 	let share_key_pair =
-		QosKeySet::generate_v0().expect("unable to generate P256 keypair");
+		QuorumKey::generate_v0().expect("unable to generate P256 keypair");
 
 	// Write the personal key secret
 	write_with_msg(
@@ -379,7 +379,7 @@ pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 			.to_vec()
 	};
 
-	let key_set = QosKeySet::from_hex_file(master_seed_path)?;
+	let key_set = QuorumKey::from_hex_file(master_seed_path)?;
 
 	let sign_secret = key_set.versioned_secret().sign_secret()?;
 	let encrypt_secret = key_set.versioned_secret().hpke_secret()?;
@@ -439,7 +439,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	let genesis_set = get_genesis_set(&share_set_dir);
 	let dr_key = if let Some(p) = dr_key_path {
-		let public = QosKeySetV0Public::from_hex_file(p)
+		let public = QuorumKeyV0Public::from_hex_file(p)
 			.map_err(Error::FailedToReadDrKey)?;
 		Some(public.to_bytes())
 	} else {
@@ -456,7 +456,7 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		r => panic!("Unexpected response: {r:?}"),
 	};
 	let quorum_key =
-		QosKeySetV0Public::from_bytes(&genesis_output.quorum_key).unwrap();
+		QuorumKeyV0Public::from_bytes(&genesis_output.quorum_key).unwrap();
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation, None);
 
@@ -562,7 +562,7 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 		.expect("Failed to read master seed to string");
 	let versioned_secret_hex = versioned_secret_hex.trim();
 
-	let pair = QosKeySet::from_hex_file(master_seed_path)
+	let pair = QuorumKey::from_hex_file(master_seed_path)
 		.expect("Failed to use master seed to create p256 pair: {e:?}");
 
 	// sanity check our logic to read in master seed
@@ -744,7 +744,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 	let share_set = get_share_set(share_set_dir);
 	let patch_set = get_patch_set(patch_set_dir);
 	// Get quorum key from namespaces dir
-	let quorum_key = QosKeySetV0Public::from_hex_file(&quorum_key_path)
+	let quorum_key = QuorumKeyV0Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
 	let manifest = Manifest {
@@ -826,7 +826,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	} = args;
 
 	let manifest = read_manifest(&manifest_path)?;
-	let quorum_key = QosKeySetV0Public::from_hex_file(&quorum_key_path)
+	let quorum_key = QuorumKeyV0Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
 	if !approve_manifest_programmatic_verifications(
@@ -887,7 +887,7 @@ fn approve_manifest_programmatic_verifications(
 	patch_set: &PatchSet,
 	nitro_config: &NitroConfig,
 	pivot_hash: &[u8],
-	quorum_key: &QosKeySetV0Public,
+	quorum_key: &QuorumKeyV0Public,
 ) -> bool {
 	// Verify manifest set composition
 	if manifest.manifest_set != *manifest_set {
@@ -1166,7 +1166,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		let eph_pub_bytes = attestation_doc
 			.public_key
 			.expect("No ephemeral key in the attestation doc");
-		QosKeySetV0Public::from_bytes(&eph_pub_bytes)
+		QuorumKeyV0Public::from_bytes(&eph_pub_bytes)
 			.expect("Ephemeral key not valid public key");
 	}
 
@@ -1265,13 +1265,13 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	}
 
 	// Pull out the ephemeral key or use the override
-	let eph_pub: QosKeySetV0Public =
+	let eph_pub: QuorumKeyV0Public =
 		if let Some(eph_path) = unsafe_eph_path_override {
-			QosKeySet::from_hex_file(eph_path)
+			QuorumKey::from_hex_file(eph_path)
 				.expect("Could not read ephemeral key override")
 				.public_key()
 		} else {
-			QosKeySetV0Public::from_bytes(
+			QuorumKeyV0Public::from_bytes(
 				&attestation_doc
 					.public_key
 					.expect("No ephemeral key in the attestation doc"),
@@ -1478,7 +1478,7 @@ pub(crate) fn p256_verify<P: AsRef<Path>>(
 	pub_path: P,
 ) -> Result<(), Error> {
 	let payload = fs::read(payload_path)?;
-	let public = QosKeySetV0Public::from_hex_file(pub_path)?;
+	let public = QuorumKeyV0Public::from_hex_file(pub_path)?;
 	let signature_bytes = {
 		let signature_hex = fs::read_to_string(signature_path)?;
 
@@ -1501,7 +1501,7 @@ pub(crate) fn p256_sign<P: AsRef<Path>>(
 	master_seed_path: P,
 ) -> Result<(), Error> {
 	let payload = fs::read(payload_path)?;
-	let pair = QosKeySet::from_hex_file(master_seed_path)?;
+	let pair = QuorumKey::from_hex_file(master_seed_path)?;
 
 	let signature = {
 		let signature = pair.sign(&payload)?;
@@ -1521,7 +1521,7 @@ pub(crate) fn p256_asymmetric_encrypt<P: AsRef<Path>>(
 	ciphertext_path: P,
 	pub_path: P,
 ) -> Result<(), Error> {
-	let public = QosKeySetV0Public::from_hex_file(pub_path)?;
+	let public = QuorumKeyV0Public::from_hex_file(pub_path)?;
 	let plaintext = std::fs::read(plaintext_path.as_ref())?;
 
 	let ciphertext = public.encrypt(&plaintext)?;
@@ -1537,7 +1537,7 @@ pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 	master_seed_path: P,
 	output_hex: bool,
 ) -> Result<(), Error> {
-	let pair = QosKeySet::from_hex_file(master_seed_path)?;
+	let pair = QuorumKey::from_hex_file(master_seed_path)?;
 	let ciphertext = std::fs::read(ciphertext_path.as_ref())?;
 
 	let plaintext = pair.decrypt(&ciphertext)?;
@@ -1557,7 +1557,7 @@ pub(crate) fn get_ephemeral_key_hex<P: AsRef<Path>>(
 		.unwrap_or_else(|e| panic!("Failed reading attestation doc: {e:?}"));
 	let attestation_doc: AttestationDoc =
 		extract_attestation_doc(bytes.as_ref(), true, None);
-	let ephemeral_key = QosKeySetV0Public::from_bytes(
+	let ephemeral_key = QuorumKeyV0Public::from_bytes(
 		&attestation_doc
 			.public_key
 			.expect("No ephemeral key in the attestation doc"),
@@ -1648,7 +1648,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	unsafe_eph_path_override: Option<String>,
 ) {
 	// Generate a quorum key
-	let quorum_pair = QosKeySet::generate().expect("Failed P256 key gen");
+	let quorum_pair = QuorumKey::generate().expect("Failed P256 key gen");
 	let quorum_public_der = quorum_pair.public_key().to_bytes();
 	let member = QuorumMember {
 		alias: DANGEROUS_DEV_BOOT_MEMBER.to_string(),
@@ -1728,13 +1728,13 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 
 	// Pull out the ephemeral key or use the override
-	let eph_pub: QosKeySetV0Public =
+	let eph_pub: QuorumKeyV0Public =
 		if let Some(eph_path) = unsafe_eph_path_override {
-			QosKeySet::from_hex_file(eph_path)
+			QuorumKey::from_hex_file(eph_path)
 				.expect("Could not read ephemeral key override")
 				.public_key()
 		} else {
-			QosKeySetV0Public::from_bytes(
+			QuorumKeyV0Public::from_bytes(
 				&attestation_doc
 					.public_key
 					.expect("No ephemeral key in the attestation doc"),
@@ -1895,7 +1895,7 @@ fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
 				return None;
 			};
 
-			let public = QosKeySetV0Public::from_hex_file(path)
+			let public = QuorumKeyV0Public::from_hex_file(path)
 				.expect("Could not read PEM from share_key.pub");
 			Some(QuorumMember {
 				alias: mem::take(&mut file_name[0]),
@@ -1919,7 +1919,7 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 				return None;
 			};
 
-			let public = QosKeySetV0Public::from_hex_file(path)
+			let public = QuorumKeyV0Public::from_hex_file(path)
 				.expect("Could not read PEM from share_key.pub");
 			Some(QuorumMember {
 				alias: mem::take(&mut file_name[0]),
@@ -1943,7 +1943,7 @@ fn get_patch_set<P: AsRef<Path>>(dir: P) -> PatchSet {
 				return None;
 			};
 
-			let public = QosKeySetV0Public::from_hex_file(path)
+			let public = QuorumKeyV0Public::from_hex_file(path)
 				.expect("Could not read public key.");
 			Some(MemberPubKey { pub_key: public.to_bytes() })
 		})
@@ -1964,7 +1964,7 @@ fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
 				return None;
 			};
 
-			let public = QosKeySetV0Public::from_hex_file(path)
+			let public = QuorumKeyV0Public::from_hex_file(path)
 				.map_err(|e| {
 					panic!("Could not read hex from share_key.pub: {path:?}: {e:?}")
 				})
@@ -2008,7 +2008,7 @@ fn find_approvals<P: AsRef<Path>>(
 			);
 
 			let pub_key =
-				QosKeySetV0Public::from_bytes(&approval.member.pub_key)
+				QuorumKeyV0Public::from_bytes(&approval.member.pub_key)
 					.expect("Failed to interpret pub key");
 			assert!(
 				pub_key
@@ -2262,7 +2262,7 @@ mod tests {
 		QosHash,
 	};
 	use qos_nsm::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
-	use qos_p256::{QosKeySet, QosKeySetV0Public};
+	use qos_p256::{QuorumKey, QuorumKeyV0Public};
 
 	use super::{
 		approve_manifest_human_verifications,
@@ -2277,13 +2277,13 @@ mod tests {
 		share_set: ShareSet,
 		nitro_config: NitroConfig,
 		pivot_hash: Vec<u8>,
-		quorum_key: QosKeySetV0Public,
+		quorum_key: QuorumKeyV0Public,
 		manifest_envelope: ManifestEnvelope,
 		patch_set: PatchSet,
 	}
 	fn setup() -> Setup {
 		let pairs: Vec<_> =
-			(0..3).map(|_| QosKeySet::generate().unwrap()).collect();
+			(0..3).map(|_| QuorumKey::generate().unwrap()).collect();
 
 		let members: Vec<_> = pairs
 			.iter()
@@ -2312,8 +2312,8 @@ mod tests {
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		};
 		let pivot_hash = vec![5; 32];
-		let quorum_key: QosKeySetV0Public =
-			QosKeySet::generate().unwrap().public_key();
+		let quorum_key: QuorumKeyV0Public =
+			QuorumKey::generate().unwrap().public_key();
 
 		let manifest = Manifest {
 			namespace: Namespace {
@@ -2637,8 +2637,8 @@ mod tests {
 				..
 			} = setup();
 
-			let quorum_key: QosKeySetV0Public =
-				QosKeySet::generate().unwrap().public_key();
+			let quorum_key: QuorumKeyV0Public =
+				QuorumKey::generate().unwrap().public_key();
 
 			assert!(!approve_manifest_programmatic_verifications(
 				&manifest,
@@ -2845,7 +2845,7 @@ mod tests {
 
 			manifest_set.members.push(QuorumMember {
 				alias: "got what plants need".to_string(),
-				pub_key: QosKeySet::generate().unwrap().public_key().to_bytes(),
+				pub_key: QuorumKey::generate().unwrap().public_key().to_bytes(),
 			});
 
 			let member = share_set.members[0].clone();

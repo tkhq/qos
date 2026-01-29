@@ -27,7 +27,7 @@ pub const P256_SIGN_DERIVE_PATH: &[u8] = b"qos_p256_sign";
 pub const AES_GCM_256_PATH: &[u8] = b"qos_aes_gcm_encrypt";
 /// Length of a p256 secret seed.
 pub const P256_SECRET_LEN: usize = 32;
-/// Length of the master seed.
+/// Length of the master seed. Otherwise known as the V0 versioned secret.
 pub const MASTER_SEED_LEN: usize = 32;
 
 pub mod encrypt;
@@ -37,7 +37,7 @@ pub mod sign;
 #[derive(
 	Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize,
 )]
-pub enum QosKeySetError {
+pub enum QuorumKeyError {
 	/// Hex encoding error.
 	QosHex(String),
 	/// IO error
@@ -84,11 +84,11 @@ pub enum QosKeySetError {
 	CannotCoerceLenToU8,
 }
 
-impl From<qos_hex::HexError> for QosKeySetError {
+impl From<qos_hex::HexError> for QuorumKeyError {
 	fn from(err: qos_hex::HexError) -> Self {
 		match err {
 			qos_hex::HexError::InvalidUtf8(_) => {
-				QosKeySetError::MasterSeedInvalidUtf8
+				QuorumKeyError::MasterSeedInvalidUtf8
 			}
 			_ => Self::QosHex(format!("{err:?}")),
 		}
@@ -99,12 +99,12 @@ impl From<qos_hex::HexError> for QosKeySetError {
 pub fn derive_secret(
 	seed: &[u8; MASTER_SEED_LEN],
 	derive_path: &[u8],
-) -> Result<[u8; P256_SECRET_LEN], QosKeySetError> {
+) -> Result<[u8; P256_SECRET_LEN], QuorumKeyError> {
 	let hk = Hkdf::<Sha512>::new(Some(derive_path), seed);
 
 	let mut buf = [0u8; P256_SECRET_LEN];
 	hk.expand(&[], &mut buf)
-		.map_err(|_| QosKeySetError::HkdfExpansionFailed)?;
+		.map_err(|_| QuorumKeyError::HkdfExpansionFailed)?;
 
 	Ok(buf)
 }
@@ -118,7 +118,7 @@ pub fn bytes_os_rng<const N: usize>() -> [u8; N] {
 	key
 }
 
-/// A secret to create a [`QosKeySet`]
+/// A secret to create a [`QuorumKey`]
 #[derive(ZeroizeOnDrop)]
 #[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub enum VersionedSecret {
@@ -128,7 +128,7 @@ pub enum VersionedSecret {
 
 impl VersionedSecret {
 	/// Parse a secret from raw bytes.
-	fn from_bytes(bytes: &[u8]) -> Result<Self, QosKeySetError> {
+	fn from_bytes(bytes: &[u8]) -> Result<Self, QuorumKeyError> {
 		if let Ok(array) = TryInto::<[u8; 97]>::try_into(bytes) {
 			// Validations from spec `PARSE_SECRET`
 			if array[0] == SECRET_V1 {
@@ -144,7 +144,7 @@ impl VersionedSecret {
 			return Ok(Self::V0(array));
 		}
 
-		Err(QosKeySetError::FailedToReadSecret)
+		Err(QuorumKeyError::FailedToReadSecret)
 	}
 
 	/// Get the secret bytes
@@ -156,7 +156,7 @@ impl VersionedSecret {
 	}
 
 	/// Get the HPKE (encryption) secret bytes.
-	pub fn hpke_secret(&self) -> Result<[u8; 32], QosKeySetError> {
+	pub fn hpke_secret(&self) -> Result<[u8; 32], QuorumKeyError> {
 		match &self {
 			Self::V0(seed) => derive_secret(seed, P256_ENCRYPT_DERIVE_PATH),
 			Self::V1(bytes) => {
@@ -166,7 +166,7 @@ impl VersionedSecret {
 	}
 
 	/// Get the signing secret bytes.
-	pub fn sign_secret(&self) -> Result<[u8; 32], QosKeySetError> {
+	pub fn sign_secret(&self) -> Result<[u8; 32], QuorumKeyError> {
 		match &self {
 			Self::V0(seed) => derive_secret(seed, P256_SIGN_DERIVE_PATH),
 			Self::V1(bytes) => {
@@ -176,7 +176,7 @@ impl VersionedSecret {
 	}
 
 	/// Get the AES-GCM-256 symmetric encryption secret bytes.
-	pub fn aes_gcm_256_secret(&self) -> Result<[u8; 32], QosKeySetError> {
+	pub fn aes_gcm_256_secret(&self) -> Result<[u8; 32], QuorumKeyError> {
 		match &self {
 			Self::V0(seed) => derive_secret(seed, AES_GCM_256_PATH),
 			Self::V1(bytes) => {
@@ -190,16 +190,16 @@ impl VersionedSecret {
 /// separate secret for signing and encryption.
 #[derive(ZeroizeOnDrop)]
 #[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
-pub struct QosKeySet {
+pub struct QuorumKey {
 	p256_encrypt_private: P256EncryptPair,
 	sign_private: P256SignPair,
 	aes_gcm_256_secret: AesGcm256Secret,
 	versioned_secret: VersionedSecret,
 }
 
-impl QosKeySet {
+impl QuorumKey {
 	/// Generate a new private key using the OS randomness source.
-	pub fn generate() -> Result<Self, QosKeySetError> {
+	pub fn generate() -> Result<Self, QuorumKeyError> {
 		let mut bytes = bytes_os_rng::<97>();
 		bytes[0] = SECRET_V1;
 		let versioned_secret = VersionedSecret::from_bytes(&bytes)?;
@@ -219,7 +219,7 @@ impl QosKeySet {
 	}
 
 	/// Generate a key set from a V0 secret.
-	pub fn generate_v0() -> Result<Self, QosKeySetError> {
+	pub fn generate_v0() -> Result<Self, QuorumKeyError> {
 		// V0 secrets are 32 bytes
 		let bytes = bytes_os_rng::<32>();
 		let versioned_secret = VersionedSecret::from_bytes(&bytes)?;
@@ -242,7 +242,7 @@ impl QosKeySet {
 	pub fn aes_gcm_256_encrypt(
 		&self,
 		msg: &[u8],
-	) -> Result<Vec<u8>, QosKeySetError> {
+	) -> Result<Vec<u8>, QuorumKeyError> {
 		self.aes_gcm_256_secret.encrypt(msg)
 	}
 
@@ -250,7 +250,7 @@ impl QosKeySet {
 	pub fn aes_gcm_256_decrypt(
 		&self,
 		serialized_envelope: &[u8],
-	) -> Result<Vec<u8>, QosKeySetError> {
+	) -> Result<Vec<u8>, QuorumKeyError> {
 		self.aes_gcm_256_secret.decrypt(serialized_envelope)
 	}
 
@@ -258,26 +258,26 @@ impl QosKeySet {
 	pub fn decrypt(
 		&self,
 		serialized_envelope: &[u8],
-	) -> Result<Vec<u8>, QosKeySetError> {
+	) -> Result<Vec<u8>, QuorumKeyError> {
 		self.p256_encrypt_private.decrypt(serialized_envelope)
 	}
 
 	/// Sign the message and return the raw signature.
-	pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, QosKeySetError> {
+	pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, QuorumKeyError> {
 		self.sign_private.sign(message)
 	}
 
 	/// Get the public key.
 	#[must_use]
-	pub fn public_key(&self) -> QosKeySetV0Public {
-		QosKeySetV0Public {
+	pub fn public_key(&self) -> QuorumKeyV0Public {
+		QuorumKeyV0Public {
 			encrypt_public: self.p256_encrypt_private.public_key(),
 			sign_public: self.sign_private.public_key(),
 		}
 	}
 
 	/// Create `Self` from the raw bytes of the versioned secret.
-	pub fn from_bytes(bytes: &[u8]) -> Result<Self, QosKeySetError> {
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, QuorumKeyError> {
 		let versioned_secret = VersionedSecret::from_bytes(bytes)?;
 
 		Ok(Self {
@@ -310,10 +310,10 @@ impl QosKeySet {
 	pub fn to_hex_file<P: AsRef<Path>>(
 		&self,
 		path: P,
-	) -> Result<(), QosKeySetError> {
+	) -> Result<(), QuorumKeyError> {
 		let hex_string = qos_hex::encode(self.versioned_secret.as_bytes());
 		std::fs::write(&path, hex_string.as_bytes()).map_err(|e| {
-			QosKeySetError::IOError(format!(
+			QuorumKeyError::IOError(format!(
 				"failed to write master secret to {}: {e}",
 				path.as_ref().display()
 			))
@@ -323,9 +323,9 @@ impl QosKeySet {
 	/// Read the raw, hex encoded master from a file.
 	pub fn from_hex_file<P: AsRef<Path>>(
 		path: P,
-	) -> Result<Self, QosKeySetError> {
+	) -> Result<Self, QuorumKeyError> {
 		let hex = std::fs::read_to_string(&path).map_err(|e| {
-			QosKeySetError::IOError(format!(
+			QuorumKeyError::IOError(format!(
 				"failed to read master seed from {}: {e}",
 				path.as_ref().display()
 			))
@@ -333,7 +333,7 @@ impl QosKeySet {
 		let hex = hex.trim();
 
 		let versioned_secret =
-			qos_hex::decode(hex).map_err(QosKeySetError::from)?;
+			qos_hex::decode(hex).map_err(QuorumKeyError::from)?;
 		Self::from_bytes(&versioned_secret)
 	}
 
@@ -350,7 +350,7 @@ impl QosKeySet {
 	}
 
 	/// Compute the quorum key ID for this key set.
-	pub fn quorum_key_id(&self) -> Result<QuorumKeyId, QosKeySetError> {
+	pub fn quorum_key_id(&self) -> Result<QuorumKeyId, QuorumKeyError> {
 		let key_id =
 			aes_gcm_256_key_id(&self.versioned_secret.aes_gcm_256_secret()?)?;
 		QuorumKeyId::from_parts(
@@ -364,14 +364,14 @@ impl QosKeySet {
 /// P256 public key for signing and encryption. Internally this uses
 /// separate public keys for signing and encryption.
 #[derive(Clone, PartialEq, Eq)]
-pub struct QosKeySetV0Public {
+pub struct QuorumKeyV0Public {
 	encrypt_public: P256EncryptPublic,
 	sign_public: P256SignPublic,
 }
 
-impl QosKeySetV0Public {
+impl QuorumKeyV0Public {
 	/// Encrypt a message to this public key.
-	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, QosKeySetError> {
+	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, QuorumKeyError> {
 		self.encrypt_public.encrypt(message)
 	}
 
@@ -383,7 +383,7 @@ impl QosKeySetV0Public {
 		&self,
 		message: &[u8],
 		signature: &[u8],
-	) -> Result<(), QosKeySetError> {
+	) -> Result<(), QuorumKeyError> {
 		self.sign_public.verify(message, signature)
 	}
 
@@ -401,12 +401,12 @@ impl QosKeySetV0Public {
 
 	/// Deserialize each public key from a SEC1 encoded point, not compressed.
 	/// Expects encoding as `encrypt_public||sign_public`.
-	pub fn from_bytes(bytes: &[u8]) -> Result<Self, QosKeySetError> {
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, QuorumKeyError> {
 		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize * 2 {
-			return Err(QosKeySetError::EncodedPublicKeyTooLong);
+			return Err(QuorumKeyError::EncodedPublicKeyTooLong);
 		}
 		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED as usize * 2 {
-			return Err(QosKeySetError::EncodedPublicKeyTooShort);
+			return Err(QuorumKeyError::EncodedPublicKeyTooShort);
 		}
 
 		let (encrypt_bytes, sign_bytes) =
@@ -414,9 +414,9 @@ impl QosKeySetV0Public {
 
 		Ok(Self {
 			encrypt_public: P256EncryptPublic::from_bytes(encrypt_bytes)
-				.map_err(|_| QosKeySetError::FailedToReadPublicKey)?,
+				.map_err(|_| QuorumKeyError::FailedToReadPublicKey)?,
 			sign_public: P256SignPublic::from_bytes(sign_bytes)
-				.map_err(|_| QosKeySetError::FailedToReadPublicKey)?,
+				.map_err(|_| QuorumKeyError::FailedToReadPublicKey)?,
 		})
 	}
 
@@ -430,10 +430,10 @@ impl QosKeySetV0Public {
 	pub fn to_hex_file<P: AsRef<Path>>(
 		&self,
 		path: P,
-	) -> Result<(), QosKeySetError> {
+	) -> Result<(), QuorumKeyError> {
 		let hex_string = format!("{}\n", qos_hex::encode(&self.to_bytes()));
 		std::fs::write(&path, hex_string.as_bytes()).map_err(|e| {
-			QosKeySetError::IOError(format!(
+			QuorumKeyError::IOError(format!(
 				"failed to write public key bytes to {}: {e}",
 				path.as_ref().display()
 			))
@@ -443,9 +443,9 @@ impl QosKeySetV0Public {
 	/// Read the hex encoded public keys from a file.
 	pub fn from_hex_file<P: AsRef<Path>>(
 		path: P,
-	) -> Result<Self, QosKeySetError> {
+	) -> Result<Self, QuorumKeyError> {
 		let hex = std::fs::read_to_string(&path).map_err(|e| {
-			QosKeySetError::IOError(format!(
+			QuorumKeyError::IOError(format!(
 				"failed to read public key bytes from {}: {e}",
 				path.as_ref().display()
 			))
@@ -453,7 +453,7 @@ impl QosKeySetV0Public {
 		let hex = hex.trim();
 
 		let public_keys_bytes =
-			qos_hex::decode(hex).map_err(QosKeySetError::from)?;
+			qos_hex::decode(hex).map_err(QuorumKeyError::from)?;
 
 		Self::from_bytes(&public_keys_bytes)
 	}
@@ -467,12 +467,12 @@ impl QosKeySetV0Public {
 }
 
 /// AES_GCM_256_KEY_ID as per spec.
-pub fn aes_gcm_256_key_id(secret: &[u8]) -> Result<[u8; 32], QosKeySetError> {
+pub fn aes_gcm_256_key_id(secret: &[u8]) -> Result<[u8; 32], QuorumKeyError> {
 	let prk = Hkdf::<sha2::Sha256>::new(None, secret);
 
 	let mut buf = [0u8; 32];
 	prk.expand(AES_GCM_256_KEY_ID_INFO, &mut buf)
-		.map_err(|_| QosKeySetError::HkdfExpansionFailed)?;
+		.map_err(|_| QuorumKeyError::HkdfExpansionFailed)?;
 
 	Ok(buf)
 }
@@ -489,16 +489,16 @@ impl QuorumKeyId {
 		hpke_public: &[u8],
 		sign_public: &[u8],
 		aes_gcm_256_key_id: &[u8],
-	) -> Result<Self, QosKeySetError> {
+	) -> Result<Self, QuorumKeyError> {
 		let hpke_public = hpke_public
 			.try_into()
-			.map_err(|_| QosKeySetError::FailedToReadPublicKey)?;
+			.map_err(|_| QuorumKeyError::FailedToReadPublicKey)?;
 		let sign_public = sign_public
 			.try_into()
-			.map_err(|_| QosKeySetError::FailedToReadPublicKey)?;
+			.map_err(|_| QuorumKeyError::FailedToReadPublicKey)?;
 		let aes_gcm_256_key_id = aes_gcm_256_key_id
 			.try_into()
-			.map_err(|_| QosKeySetError::FailedToReadPublicKey)?;
+			.map_err(|_| QuorumKeyError::FailedToReadPublicKey)?;
 
 		Ok(Self { hpke_public, sign_public, aes_gcm_256_key_id })
 	}
@@ -529,7 +529,7 @@ mod test {
 	fn signatures_are_deterministic() {
 		let message = b"a message to authenticate";
 
-		let pair = QosKeySet::generate().unwrap();
+		let pair = QuorumKey::generate().unwrap();
 		(0..100)
 			.map(|_| pair.sign(message).unwrap())
 			.collect::<Vec<_>>()
@@ -541,7 +541,7 @@ mod test {
 	fn sign_and_verification_works() {
 		let message = b"a message to authenticate";
 
-		let pair = QosKeySet::generate().unwrap();
+		let pair = QuorumKey::generate().unwrap();
 		let signature = pair.sign(message).unwrap();
 
 		assert!(pair.public_key().verify(message, &signature).is_ok());
@@ -551,20 +551,20 @@ mod test {
 	fn verification_rejects_wrong_signature() {
 		let message = b"a message to authenticate";
 
-		let alice_pair = QosKeySet::generate().unwrap();
+		let alice_pair = QuorumKey::generate().unwrap();
 		let signature = alice_pair.sign(message).unwrap();
 
-		let bob_public = QosKeySet::generate().unwrap().public_key();
+		let bob_public = QuorumKey::generate().unwrap().public_key();
 
 		assert_eq!(
 			bob_public.verify(message, &signature).unwrap_err(),
-			QosKeySetError::FailedSignatureVerification
+			QuorumKeyError::FailedSignatureVerification
 		);
 	}
 
 	#[test]
 	fn basic_encrypt_decrypt_works() {
-		let alice_pair = QosKeySet::generate().unwrap();
+		let alice_pair = QuorumKey::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 
 		let plaintext = b"rust test message";
@@ -577,24 +577,24 @@ mod test {
 
 	#[test]
 	fn wrong_receiver_cannot_decrypt() {
-		let alice_pair = QosKeySet::generate().unwrap();
+		let alice_pair = QuorumKey::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 
 		let plaintext = b"rust test message";
 
 		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
 
-		let bob_pair = QosKeySet::generate().unwrap();
+		let bob_pair = QuorumKey::generate().unwrap();
 
 		assert_eq!(
 			bob_pair.decrypt(&serialized_envelope).unwrap_err(),
-			QosKeySetError::AesGcm256DecryptError
+			QuorumKeyError::AesGcm256DecryptError
 		);
 	}
 
 	#[test]
 	fn public_key_bytes_roundtrip() {
-		let alice_pair = QosKeySet::generate().unwrap();
+		let alice_pair = QuorumKey::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 		let alice_public_bytes = alice_public.to_bytes();
 
@@ -604,7 +604,7 @@ mod test {
 		);
 
 		let alice_public2 =
-			QosKeySetV0Public::from_bytes(&alice_public_bytes).unwrap();
+			QuorumKeyV0Public::from_bytes(&alice_public_bytes).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
@@ -620,12 +620,12 @@ mod test {
 	fn public_key_to_file_roundtrip() {
 		let path: PathWrapper =
 			"/tmp/public_key_to_file_roundtrip.secret".into();
-		let alice_pair = QosKeySet::generate().unwrap();
+		let alice_pair = QuorumKey::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 
 		alice_public.to_hex_file(&*path).unwrap();
 
-		let alice_public2 = QosKeySetV0Public::from_hex_file(&*path).unwrap();
+		let alice_public2 = QuorumKeyV0Public::from_hex_file(&*path).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
@@ -639,11 +639,11 @@ mod test {
 
 	#[test]
 	fn master_seed_bytes_roundtrip() {
-		let alice_pair = QosKeySet::generate().unwrap();
+		let alice_pair = QuorumKey::generate().unwrap();
 		let public_key = alice_pair.public_key();
 		let master_seed = alice_pair.versioned_secret().as_bytes();
 
-		let alice_pair2 = QosKeySet::from_bytes(master_seed).unwrap();
+		let alice_pair2 = QuorumKey::from_bytes(master_seed).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope = public_key.encrypt(plaintext).unwrap();
@@ -660,10 +660,10 @@ mod test {
 		let path: PathWrapper =
 			"/tmp/master_seed_to_file_round_trip.secret".into();
 
-		let alice_pair = QosKeySet::generate().unwrap();
+		let alice_pair = QuorumKey::generate().unwrap();
 		alice_pair.to_hex_file(&*path).unwrap();
 
-		let alice_pair2 = QosKeySet::from_hex_file(&*path).unwrap();
+		let alice_pair2 = QuorumKey::from_hex_file(&*path).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope =
@@ -683,7 +683,7 @@ mod test {
 		fn encrypt_decrypt_round_trip() {
 			let plaintext = b"rust test message";
 
-			let key = QosKeySet::generate().unwrap();
+			let key = QuorumKey::generate().unwrap();
 
 			let envelope = key.aes_gcm_256_encrypt(plaintext).unwrap();
 			let result = key.aes_gcm_256_decrypt(&envelope).unwrap();
@@ -694,8 +694,8 @@ mod test {
 		#[test]
 		fn different_key_cannot_decrypt() {
 			let plaintext = b"rust test message";
-			let key = QosKeySet::generate().unwrap();
-			let other_key = QosKeySet::generate().unwrap();
+			let key = QuorumKey::generate().unwrap();
+			let other_key = QuorumKey::generate().unwrap();
 
 			let serialized_envelope =
 				key.aes_gcm_256_encrypt(plaintext).unwrap();
@@ -703,7 +703,7 @@ mod test {
 			let err = other_key
 				.aes_gcm_256_decrypt(&serialized_envelope)
 				.unwrap_err();
-			assert_eq!(err, QosKeySetError::AesGcm256DecryptError,);
+			assert_eq!(err, QuorumKeyError::AesGcm256DecryptError,);
 		}
 	}
 }

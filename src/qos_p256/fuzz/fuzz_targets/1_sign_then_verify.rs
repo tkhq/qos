@@ -1,7 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use qos_p256::QosKeySet;
+use qos_p256::QuorumKey;
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct FuzzKeyDataStruct {
@@ -14,7 +14,7 @@ pub struct FuzzKeyDataStruct {
 fuzz_target!(|input: FuzzKeyDataStruct| {
 	// let the fuzzer control the key and data that is going to be signed
 
-	let keypair = match QosKeySet::from_bytes(&input.key) {
+	let keypair = match QuorumKey::from_bytes(&input.key) {
 		Ok(pair) => pair,
 		Err(_err) => {
 			return;

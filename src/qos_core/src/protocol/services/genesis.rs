@@ -4,7 +4,7 @@ use std::{fmt, iter::zip};
 
 use qos_crypto::sha_512;
 use qos_nsm::types::{NsmRequest, NsmResponse};
-use qos_p256::{QosKeySet, QosKeySetV0Public};
+use qos_p256::{QuorumKey, QuorumKeyV0Public};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
@@ -153,7 +153,7 @@ pub(in crate::protocol) fn boot_genesis(
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
 	// Generate a v0 quorum key.
 	// This is primarily to reduces the number of test fixtures we break
-	let quorum_pair = QosKeySet::generate_v0()?;
+	let quorum_pair = QuorumKey::generate_v0()?;
 	let master_seed = quorum_pair.as_bytes();
 
 	let shares = qos_crypto::shamir::shares_generate(
@@ -166,7 +166,7 @@ pub(in crate::protocol) fn boot_genesis(
 	let member_outputs: Result<Vec<_>, _> = zip(shares, genesis_set.members.iter().cloned())
 		.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError> {
 			// 1) encrypt the share to quorum key
-			let personal_pub = QosKeySetV0Public::from_bytes(&share_set_member.pub_key)?;
+			let personal_pub = QuorumKeyV0Public::from_bytes(&share_set_member.pub_key)?;
 			let encrypted_quorum_key_share = personal_pub.encrypt(&share)?;
 
 			Ok(GenesisMemberOutput {
@@ -178,7 +178,7 @@ pub(in crate::protocol) fn boot_genesis(
 		.collect();
 
 	let dr_key_wrapped_quorum_key = if let Some(dr_key) = maybe_dr_key {
-		let dr_public = QosKeySetV0Public::from_bytes(&dr_key)
+		let dr_public = QuorumKeyV0Public::from_bytes(&dr_key)
 			.map_err(ProtocolError::InvalidP256DRKey)?;
 		Some(dr_public.encrypt(master_seed)?)
 	} else {
@@ -230,9 +230,9 @@ mod test {
 		);
 		let mut protocol_state =
 			ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
-		let member1_pair = QosKeySet::generate().unwrap();
-		let member2_pair = QosKeySet::generate().unwrap();
-		let member3_pair = QosKeySet::generate().unwrap();
+		let member1_pair = QuorumKey::generate().unwrap();
+		let member2_pair = QuorumKey::generate().unwrap();
+		let member3_pair = QuorumKey::generate().unwrap();
 
 		let genesis_members = vec![
 			QuorumMember {
@@ -273,10 +273,10 @@ mod test {
 		)
 		.unwrap();
 		let reconstructed_quorum_key =
-			QosKeySet::from_bytes(&reconstructed).unwrap();
+			QuorumKey::from_bytes(&reconstructed).unwrap();
 
 		let quorum_public_key =
-			QosKeySetV0Public::from_bytes(&output.quorum_key).unwrap();
+			QuorumKeyV0Public::from_bytes(&output.quorum_key).unwrap();
 		assert_eq!(
 			reconstructed_quorum_key.public_key().to_bytes(),
 			quorum_public_key.to_bytes()

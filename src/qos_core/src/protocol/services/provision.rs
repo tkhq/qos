@@ -1,5 +1,5 @@
 //! Quorum Key provisioning logic and types.
-use qos_p256::QosKeySet;
+use qos_p256::QuorumKey;
 
 use crate::protocol::{
 	services::boot::Approval, ProtocolError, ProtocolState, QosHash,
@@ -96,7 +96,7 @@ pub(in crate::protocol) fn provision(
 	let master_seed = state.provisioner.build()?;
 	state.provisioner.clear();
 
-	let pair = qos_p256::QosKeySet::from_bytes(&master_seed)?;
+	let pair = qos_p256::QuorumKey::from_bytes(&master_seed)?;
 	let public_key_bytes = pair.public_key().to_bytes();
 
 	if public_key_bytes != manifest_envelope.manifest.namespace.quorum_key {
@@ -107,7 +107,7 @@ pub(in crate::protocol) fn provision(
 	// Rotate the ephemeral key so it's safe for apps to use it independently
 	// of boot-related operations, which use the pre-boot ephemeral key as
 	// an encryption target (boot standard flow encrypts quorum key shares to it.)
-	let new_ephemeral_key = QosKeySet::generate()?;
+	let new_ephemeral_key = QuorumKey::generate()?;
 	state.handles.rotate_ephemeral_key(&new_ephemeral_key)?;
 
 	// Write the quorum key to the file system.
@@ -125,7 +125,7 @@ mod test {
 
 	use qos_crypto::{sha_256, shamir::shares_generate};
 	use qos_nsm::mock::MockNsm;
-	use qos_p256::QosKeySet;
+	use qos_p256::QuorumKey;
 	use qos_test_primitives::PathWrapper;
 
 	use crate::{
@@ -144,8 +144,8 @@ mod test {
 	};
 
 	struct Setup {
-		quorum_pair: QosKeySet,
-		eph_pair: QosKeySet,
+		quorum_pair: QuorumKey,
+		eph_pair: QuorumKey,
 		threshold: usize,
 		state: ProtocolState,
 		approvals: Vec<Approval>,
@@ -159,15 +159,15 @@ mod test {
 			"pivot".to_string(),
 		);
 		// 1) Create and write eph key
-		let eph_pair = QosKeySet::generate().unwrap();
+		let eph_pair = QuorumKey::generate().unwrap();
 		handles.put_ephemeral_key(&eph_pair).unwrap();
 		// 2) Create and write manifest with threshold and quorum key
-		let quorum_pair = QosKeySet::generate().unwrap();
+		let quorum_pair = QuorumKey::generate().unwrap();
 		let threshold = 3usize;
 		let pivot = b"this is a pivot binary";
 
 		let members: Vec<_> = (0..4)
-			.map(|_| QosKeySet::generate().unwrap())
+			.map(|_| QuorumKey::generate().unwrap())
 			.enumerate()
 			.map(|(i, pair)| {
 				let member = QuorumMember {
@@ -311,7 +311,7 @@ mod test {
 			setup(&eph_file, &quorum_file, &manifest_file);
 
 		// 4) Create shards of a RANDOM KEY and encrypt them to eph key
-		let random_key = QosKeySet::generate().unwrap().as_bytes().to_vec();
+		let random_key = QuorumKey::generate().unwrap().as_bytes().to_vec();
 		let encrypted_shares: Vec<_> =
 			shares_generate(&random_key, 4, threshold)
 				.unwrap()
@@ -454,7 +454,7 @@ mod test {
 
 		let manifest = state.handles.get_manifest_envelope().unwrap().manifest;
 		let mut approval = approvals.remove(0);
-		let pair = QosKeySet::generate().unwrap();
+		let pair = QuorumKey::generate().unwrap();
 
 		// Change the member so that are not recognized as part of the set
 		approval.member.pub_key = pair.public_key().to_bytes();
@@ -496,7 +496,7 @@ mod test {
 				.collect();
 
 		let mut approval = approvals.remove(0);
-		let pair = QosKeySet::generate().unwrap();
+		let pair = QuorumKey::generate().unwrap();
 
 		// Change the member so that are not recognized as part of the set
 		approval.member.pub_key = pair.public_key().to_bytes();

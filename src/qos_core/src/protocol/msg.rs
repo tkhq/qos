@@ -38,7 +38,7 @@ pub enum ProtocolMsg {
 	BootGenesisRequest {
 		/// Parameters for creating a Share Set
 		set: GenesisSet,
-		/// Optionally include a `qos_p256::QosKeySetV0Public` key for encrypting the
+		/// Optionally include a `qos_p256::QuorumKeyV0Public` key for encrypting the
 		/// quorum key too. Intended for disaster recovery.
 		dr_key: Option<Vec<u8>>,
 	},

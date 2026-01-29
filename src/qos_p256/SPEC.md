@@ -1,14 +1,14 @@
-# QOS Key Set Specification
+# Quorum Key Set Specification
 
-This document provides a formal specification for the cryptographic key schemes of the QOS Key Set.
+This document provides a formal specification for the cryptographic key schemes of the Quorum Key Set.
 
-The QOS Key Set is a collection of 3 cryptographic keys using 3 distinct schemes that comprise what is commonly referred to as a [Quorum Key](https://github.com/tkhq/qos/tree/main?tab=readme-ov-file#quorum-key). Each key is used for different cryptographic operations (more info in the [Overview](#overview) section). Additionally, 2 of the schemes, P256 Signing and P256 HPKE, are used by [Operators](https://github.com/tkhq/qos/tree/main?tab=readme-ov-file#operator).
+The Quorum Key Set is a collection of 3 cryptographic keys using 3 distinct schemes that comprise what is commonly referred to as a [Quorum Key](https://github.com/tkhq/qos/tree/main?tab=readme-ov-file#quorum-key). Each key is used for different cryptographic operations (more info in the [Overview](#overview) section). Additionally, 2 of the schemes, P256 Signing and P256 HPKE, are used by [Operators](https://github.com/tkhq/qos/tree/main?tab=readme-ov-file#operator).
 
 Currently, the canonical implementation lives here, in this crate (`qos_p256`).
 
 ## Overview
 
-A QOS Key Set consists of three cryptographically independent keys that function together:
+A Quorum Key Set consists of three cryptographically independent keys that function together:
 
 1. **P256 Signing Key** - ECDSA signatures for authentication
 2. **P256 HPKE Key** - Hybrid public key encryption (ECDH + AES-GCM)
@@ -387,9 +387,9 @@ Process:
 
 ### Overview
 
-An identifier for a complete QOS key set, suitable for key management and verification.
+An identifier for a complete Quorum Key Set, suitable for key management and verification.
 
-### V0 Format (QosKeySetV0Public)
+### V0 Format (QuorumKeyV0Public)
 
 Two uncompressed P256 public keys concatenated.
 

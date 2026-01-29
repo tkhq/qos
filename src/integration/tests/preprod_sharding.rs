@@ -10,7 +10,7 @@ use std::{
 
 use qos_crypto::shamir::shares_generate;
 use qos_p256::{
-	derive_secret, encrypt::P256EncryptPair, QosKeySet,
+	derive_secret, encrypt::P256EncryptPair, QuorumKey,
 	P256_ENCRYPT_DERIVE_PATH,
 };
 
@@ -83,7 +83,7 @@ fn preprod_reshard_ceremony() {
 	let dev_secret_hex_bytes =
 		qos_hex::decode(std::str::from_utf8(&dev_secret_utf8_bytes).unwrap())
 			.unwrap();
-	let dev_key = QosKeySet::from_bytes(&dev_secret_hex_bytes).unwrap();
+	let dev_key = QuorumKey::from_bytes(&dev_secret_hex_bytes).unwrap();
 
 	// For each of the enclaves...
 	for enclave_name in [
@@ -108,7 +108,7 @@ fn preprod_reshard_ceremony() {
 		assert_eq!(removed_byte, 1);
 
 		let pk =
-			QosKeySet::from_bytes(&decrypted_dev_share).unwrap().public_key();
+			QuorumKey::from_bytes(&decrypted_dev_share).unwrap().public_key();
 		let expected_quorum_public_key = fs::read(format!(
 			"./fixtures/preprod/{enclave_name}/quorum_key.pub"
 		))
@@ -130,7 +130,7 @@ fn preprod_reshard_ceremony() {
 			let user_secret_path =
 				format!("{}/{}.secret", user_dir(user), user);
 			let user_key_pair =
-				QosKeySet::from_hex_file(user_secret_path.clone()).unwrap();
+				QuorumKey::from_hex_file(user_secret_path.clone()).unwrap();
 			// Encrypt the new share to it
 			let encrypted_share =
 				user_key_pair.public_key().encrypt(share).unwrap();

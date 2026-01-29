@@ -6,7 +6,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use qos_p256::QosKeySet;
+use qos_p256::QuorumKey;
 
 use crate::protocol::{services::boot::ManifestEnvelope, ProtocolError};
 
@@ -28,8 +28,8 @@ impl QuorumKeyHandle {
 	/// # Errors
 	///
 	/// Errors if the Quorum Key has not been put.
-	pub fn get_quorum_key(&self) -> Result<QosKeySet, ProtocolError> {
-		let pair = QosKeySet::from_hex_file(&self.quorum)
+	pub fn get_quorum_key(&self) -> Result<QuorumKey, ProtocolError> {
+		let pair = QuorumKey::from_hex_file(&self.quorum)
 			.map_err(ProtocolError::FailedToGetQuorumKey)?;
 		Ok(pair)
 	}
@@ -53,8 +53,8 @@ impl EphemeralKeyHandle {
 	/// # Errors
 	///
 	/// Errors if the Ephemeral key pair isn't present or can't be built.
-	pub fn get_ephemeral_key(&self) -> Result<QosKeySet, ProtocolError> {
-		let pair = QosKeySet::from_hex_file(&self.ephemeral_key_path)
+	pub fn get_ephemeral_key(&self) -> Result<QuorumKey, ProtocolError> {
+		let pair = QuorumKey::from_hex_file(&self.ephemeral_key_path)
 			.map_err(ProtocolError::FailedToGetEphemeralKey)?;
 		Ok(pair)
 	}
@@ -98,7 +98,7 @@ impl Handles {
 	/// # Errors
 	///
 	/// Errors if the Ephemeral Key isn't present.
-	pub fn get_ephemeral_key(&self) -> Result<QosKeySet, ProtocolError> {
+	pub fn get_ephemeral_key(&self) -> Result<QuorumKey, ProtocolError> {
 		self.ephemeral.get_ephemeral_key()
 	}
 
@@ -109,7 +109,7 @@ impl Handles {
 	/// Errors if the Ephemeral Key has already been put.
 	pub fn put_ephemeral_key(
 		&self,
-		pair: &QosKeySet,
+		pair: &QuorumKey,
 	) -> Result<(), ProtocolError> {
 		Self::write_as_read_only(
 			&self.ephemeral.ephemeral_key_path,
@@ -126,7 +126,7 @@ impl Handles {
 	/// Errors if the Ephemeral key isn't present already, or if the delete fails, or if the new write fails.
 	pub fn rotate_ephemeral_key(
 		&self,
-		new_pair: &QosKeySet,
+		new_pair: &QuorumKey,
 	) -> Result<(), ProtocolError> {
 		let path = Path::new(&self.ephemeral.ephemeral_key_path);
 		if !path.exists() {
@@ -149,7 +149,7 @@ impl Handles {
 	/// # Errors
 	///
 	/// Errors if the Quorum Key has not been put.
-	pub fn get_quorum_key(&self) -> Result<QosKeySet, ProtocolError> {
+	pub fn get_quorum_key(&self) -> Result<QuorumKey, ProtocolError> {
 		self.quorum.get_quorum_key()
 	}
 
@@ -160,7 +160,7 @@ impl Handles {
 	/// Errors if the Quorum Key has already been put.
 	pub fn put_quorum_key(
 		&self,
-		pair: &QosKeySet,
+		pair: &QuorumKey,
 	) -> Result<(), ProtocolError> {
 		Self::write_as_read_only(
 			&self.quorum.quorum,
@@ -344,7 +344,7 @@ mod test {
 			(*pivot_file).to_string(),
 		);
 
-		let ephemeral_key = QosKeySet::generate().unwrap();
+		let ephemeral_key = QuorumKey::generate().unwrap();
 		let result = handles.put_ephemeral_key(&ephemeral_key);
 		let error = handles.put_ephemeral_key(&ephemeral_key).unwrap_err();
 
@@ -371,7 +371,7 @@ mod test {
 			(*pivot_file).to_string(),
 		);
 
-		let quorum_key = QosKeySet::generate().unwrap();
+		let quorum_key = QuorumKey::generate().unwrap();
 		let result = handles.put_quorum_key(&quorum_key);
 		let error = handles.put_quorum_key(&quorum_key).unwrap_err();
 
@@ -433,7 +433,7 @@ mod test {
 			namespace: Namespace {
 				nonce: 420,
 				name: "vape lord".to_string(),
-				quorum_key: QosKeySet::generate()
+				quorum_key: QuorumKey::generate()
 					.unwrap()
 					.public_key()
 					.to_bytes(),
