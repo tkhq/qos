@@ -10,7 +10,7 @@ use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{sha_512, shamir::shares_reconstruct};
 use qos_nsm::nitro::unsafe_attestation_doc_from_der;
-use qos_p256::{QuorumKey, QuorumKeyV0Public};
+use qos_p256::{QuorumKey, QuorumKeyPublic};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 use rand::{rng, seq::SliceRandom};
 
@@ -203,7 +203,7 @@ async fn genesis_e2e() {
 	let reconstructed = QuorumKey::from_bytes(&master_secret).unwrap();
 	assert!(
 		reconstructed.public_key()
-			== QuorumKeyV0Public::from_bytes(&genesis_output.quorum_key)
+			== QuorumKeyPublic::from_bytes(&genesis_output.quorum_key)
 				.unwrap()
 	);
 

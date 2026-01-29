@@ -13,7 +13,7 @@ use qos_p256::{
 	bytes_os_rng,
 	encrypt::{Envelope, P256EncryptPair, P256EncryptPublic},
 	sign::{P256SignPair, P256SignPublic},
-	QuorumKey, QuorumKeyV0Public, P256_SECRET_LEN,
+	QuorumKey, QuorumKeyPublic, P256_SECRET_LEN,
 };
 use qos_test_primitives::PathWrapper;
 use yubikey::{MgmKey, TouchPolicy, YubiKey};
@@ -215,8 +215,8 @@ fn provision_yubikey_works() {
 	{
 		let hex_bytes = std::fs::read(&*pub_path).unwrap();
 		let bytes = qos_hex::decode_from_vec(hex_bytes).unwrap();
-		assert!(QuorumKeyV0Public::from_bytes(&bytes).is_ok());
-		QuorumKeyV0Public::from_bytes(&bytes).unwrap();
+		assert!(QuorumKeyPublic::from_bytes(&bytes).is_ok());
+		QuorumKeyPublic::from_bytes(&bytes).unwrap();
 	}
 }
 
@@ -256,7 +256,7 @@ fn advanced_provision_yubikey_works() {
 	let public = {
 		let hex_bytes = std::fs::read(&*pub_path).unwrap();
 		let bytes = qos_hex::decode_from_vec(hex_bytes).unwrap();
-		QuorumKeyV0Public::from_bytes(&bytes).unwrap()
+		QuorumKeyPublic::from_bytes(&bytes).unwrap()
 	};
 
 	let mut yubikey = YubiKey::open().unwrap();

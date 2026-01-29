@@ -269,8 +269,8 @@ impl QuorumKey {
 
 	/// Get the public key.
 	#[must_use]
-	pub fn public_key(&self) -> QuorumKeyV0Public {
-		QuorumKeyV0Public {
+	pub fn public_key(&self) -> QuorumKeyPublic {
+		QuorumKeyPublic {
 			encrypt_public: self.p256_encrypt_private.public_key(),
 			sign_public: self.sign_private.public_key(),
 		}
@@ -361,15 +361,19 @@ impl QuorumKey {
 	}
 }
 
-/// P256 public key for signing and encryption. Internally this uses
+/// P256 public keys for signing and encryption. Internally this uses
 /// separate public keys for signing and encryption.
+///
+/// Note: as of V1, this is not a complete identifier for a Quorum Key Set as
+/// it does not identify the associated AES GCM 256 secret. Use `[QuorumKeyId]`
+/// and/or the associated fingerprint to identify a Quorum Key SEt.
 #[derive(Clone, PartialEq, Eq)]
-pub struct QuorumKeyV0Public {
+pub struct QuorumKeyPublic {
 	encrypt_public: P256EncryptPublic,
 	sign_public: P256SignPublic,
 }
 
-impl QuorumKeyV0Public {
+impl QuorumKeyPublic {
 	/// Encrypt a message to this public key.
 	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, QuorumKeyError> {
 		self.encrypt_public.encrypt(message)
@@ -604,7 +608,7 @@ mod test {
 		);
 
 		let alice_public2 =
-			QuorumKeyV0Public::from_bytes(&alice_public_bytes).unwrap();
+			QuorumKeyPublic::from_bytes(&alice_public_bytes).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
@@ -625,7 +629,7 @@ mod test {
 
 		alice_public.to_hex_file(&*path).unwrap();
 
-		let alice_public2 = QuorumKeyV0Public::from_hex_file(&*path).unwrap();
+		let alice_public2 = QuorumKeyPublic::from_hex_file(&*path).unwrap();
 
 		let plaintext = b"rust test message";
 		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();

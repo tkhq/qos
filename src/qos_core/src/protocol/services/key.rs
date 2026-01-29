@@ -6,7 +6,7 @@ use qos_nsm::{
 	nitro::{attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM},
 	types::NsmResponse,
 };
-use qos_p256::{QuorumKey, QuorumKeyV0Public};
+use qos_p256::{QuorumKey, QuorumKeyPublic};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
@@ -32,7 +32,7 @@ pub(in crate::protocol) fn inject_key(
 
 	// 1. Verify the signature over the `encrypted_quorum_key` against the
 	// Quorum Key specified in the New Manifest.
-	let quorum_public = QuorumKeyV0Public::from_bytes(
+	let quorum_public = QuorumKeyPublic::from_bytes(
 		&manifest_envelope.manifest.namespace.quorum_key,
 	)?;
 	quorum_public
@@ -114,7 +114,7 @@ fn export_key_internal(
 				.public_key
 				.as_ref()
 				.ok_or(ProtocolError::MissingEphemeralKey)?;
-			QuorumKeyV0Public::from_bytes(eph_key_bytes)
+			QuorumKeyPublic::from_bytes(eph_key_bytes)
 				.map_err(|_| ProtocolError::InvalidEphemeralKey)?
 		}
 		#[cfg(feature = "mock")]

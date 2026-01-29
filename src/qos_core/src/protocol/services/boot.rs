@@ -4,7 +4,7 @@ use std::{collections::HashSet, fmt};
 
 use qos_crypto::sha_256;
 use qos_nsm::types::NsmResponse;
-use qos_p256::{QuorumKey, QuorumKeyV0Public};
+use qos_p256::{QuorumKey, QuorumKeyPublic};
 
 use crate::protocol::{
 	services::attestation, Hash256, ProtocolError, ProtocolState, QosHash,
@@ -232,7 +232,7 @@ pub struct QuorumMember {
 	/// cryptographically guaranteed and thus should not be trusted without
 	/// verification.
 	pub alias: String,
-	/// `QuorumKeyV0Public` as bytes
+	/// `QuorumKeyPublic` as bytes
 	#[serde(with = "qos_hex::serde")]
 	pub pub_key: Vec<u8>,
 }
@@ -498,7 +498,7 @@ impl fmt::Debug for Approval {
 impl Approval {
 	/// Verify that the approval is a valid a signature for the given `msg`.
 	pub(crate) fn verify(&self, msg: &[u8]) -> Result<(), ProtocolError> {
-		let pub_key = QuorumKeyV0Public::from_bytes(&self.member.pub_key)?;
+		let pub_key = QuorumKeyPublic::from_bytes(&self.member.pub_key)?;
 
 		if pub_key.verify(msg, &self.signature).is_ok() {
 			Ok(())
@@ -551,7 +551,7 @@ impl ManifestEnvelope {
 		let mut uniq_members = HashSet::new();
 		for approval in &self.manifest_set_approvals {
 			let member_pub_key =
-				QuorumKeyV0Public::from_bytes(&approval.member.pub_key)?;
+				QuorumKeyPublic::from_bytes(&approval.member.pub_key)?;
 
 			// Ensure that this is a valid signature from the member
 			let is_valid_signature = member_pub_key

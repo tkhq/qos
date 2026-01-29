@@ -8,7 +8,7 @@ use qos_core::{
 	protocol::INITIAL_CLIENT_TIMEOUT,
 };
 
-use qos_p256::QuorumKeyV0Public;
+use qos_p256::QuorumKeyPublic;
 use qos_test_primitives::ChildWrapper;
 
 const PROOF_TEST_ENCLAVE_SOCKET: &str = "/tmp/proof_test.enclave.sock";
@@ -38,7 +38,7 @@ async fn fetch_and_verify_app_proof() {
 	match PivotProofMsg::try_from_slice(&response).unwrap() {
 		PivotProofMsg::AdditionResponse { result, proof } => {
 			let ephemeral_public_key =
-				QuorumKeyV0Public::from_bytes(&proof.public_key).unwrap();
+				QuorumKeyPublic::from_bytes(&proof.public_key).unwrap();
 			assert!(ephemeral_public_key
 				.verify(
 					&borsh::to_vec(&proof.payload).unwrap(),

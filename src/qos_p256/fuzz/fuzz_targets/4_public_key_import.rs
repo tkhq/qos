@@ -6,9 +6,9 @@ use libfuzzer_sys::fuzz_target;
 
 #[cfg(feature = "fuzzer_corpus_seed1")]
 use qos_p256::QuorumKey;
-use qos_p256::QuorumKeyV0Public;
+use qos_p256::QuorumKeyPublic;
 
-// this helps the fuzzer over the major obstacle of learning what a valid QuorumKeyV0Public object looks like
+// this helps the fuzzer over the major obstacle of learning what a valid QuorumKeyPublic object looks like
 #[cfg(feature = "fuzzer_corpus_seed1")]
 fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, _seed: u32| {
 	// this is random and does not depend on the input
@@ -41,7 +41,7 @@ fuzz_target!(|data: &[u8]| {
 
 	// import public keys from bytes
 	// silently exit in case of errors
-	let pubkey_special = match QuorumKeyV0Public::from_bytes(data) {
+	let pubkey_special = match QuorumKeyPublic::from_bytes(data) {
 		Ok(pubkey) => pubkey,
 		Err(_err) => {
 			return;

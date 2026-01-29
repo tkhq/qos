@@ -389,7 +389,7 @@ Process:
 
 An identifier for a complete Quorum Key Set, suitable for key management and verification.
 
-### V0 Format (QuorumKeyV0Public)
+### V0 Format (QuorumKeyPublic)
 
 Two uncompressed P256 public keys concatenated.
 
