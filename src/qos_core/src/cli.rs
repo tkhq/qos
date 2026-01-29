@@ -9,10 +9,10 @@ use crate::{
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 	reaper::Reaper,
-	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE,
 };
 
-use crate::io::{IOError, StreamPool};
+use crate::io::IOError;
 
 /// "cid"
 pub const CID: &str = "cid";
@@ -29,7 +29,6 @@ pub const PIVOT_FILE_OPT: &str = "pivot-file";
 pub const EPHEMERAL_FILE_OPT: &str = "ephemeral-file";
 /// Name for the option to specify the manifest file.
 pub const MANIFEST_FILE_OPT: &str = "manifest-file";
-const APP_USOCK: &str = "app-usock";
 /// Name for the option to specify the maximum `StreamPool` size.
 pub const POOL_SIZE: &str = "pool-size";
 
@@ -48,25 +47,12 @@ impl EnclaveOpts {
 		Self { parsed }
 	}
 
-	/// Create a new `StreamPool` for connecting to the enclave.
-	fn enclave_pool(&self) -> Result<StreamPool, IOError> {
-		self.async_pool(false)
-	}
-
-	/// Create a new `StreamPool` for connecting to the app.
-	fn app_pool(&self) -> Result<StreamPool, IOError> {
-		self.async_pool(true)
-	}
-
-	/// Create a new `StreamPool` using the list of `SocketAddress` for the qos host.
-	/// The `app` parameter specifies if this is a pool meant for the enclave itself, or the enclave app.
-	fn async_pool(&self, app: bool) -> Result<StreamPool, IOError> {
-		let usock_param = if app { APP_USOCK } else { USOCK };
-
+	/// Create a new `StreamSocket` for the qos host.
+	fn enclave_socket(&self) -> Result<SocketAddress, IOError> {
 		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
-			self.parsed.single(usock_param),
+			self.parsed.single(USOCK),
 		) {
 			#[cfg(feature = "vm")]
 			(Some(c), Some(p), None) => {
@@ -74,15 +60,9 @@ impl EnclaveOpts {
 					c.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
 				let p =
 					p.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
-				StreamPool::single(SocketAddress::new_vsock(
-					c,
-					p,
-					crate::io::VMADDR_NO_FLAGS,
-				))
+				Ok(SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS))
 			}
-			(None, None, Some(u)) => {
-				StreamPool::single(SocketAddress::new_unix(u))
-			}
+			(None, None, Some(u)) => Ok(SocketAddress::new_unix(u)),
 			_ => panic!("Invalid socket opts"),
 		}
 	}
@@ -161,9 +141,8 @@ impl CLI {
 						opts.pivot_file(),
 					),
 					opts.nsm(),
-					opts.enclave_pool()
-						.expect("Unable to create enclave socket pool"),
-					opts.app_pool().expect("Unable to create enclave app pool"),
+					opts.enclave_socket()
+						.expect("Unable to create enclave socket"),
 					None,
 				)
 				.await;
@@ -220,11 +199,6 @@ impl GetParserForOptions for EnclaveParser {
 					.takes_value(true)
 					.default_value(MANIFEST_FILE)
 			)
-			.token(
-				Token::new(APP_USOCK, "the socket the secure app is listening on.")
-					.takes_value(true)
-					.default_value(SEC_APP_SOCK)
-			)
 	}
 }
 
@@ -266,40 +240,16 @@ mod test {
 
 	#[test]
 	fn parse_usock() {
-		let mut args: Vec<_> = vec![
-			"binary",
-			"--usock",
-			"/tmp/usock",
-			"--app-usock",
-			"/tmp/app_usock",
-		]
-		.into_iter()
-		.map(String::from)
-		.collect();
+		let mut args: Vec<_> = vec!["binary", "--usock", "/tmp/usock"]
+			.into_iter()
+			.map(String::from)
+			.collect();
 		let opts = EnclaveOpts::new(&mut args);
 
 		assert_eq!(
 			*opts.parsed.single(USOCK).unwrap(),
 			"/tmp/usock".to_string()
 		);
-		assert_eq!(
-			*opts.parsed.single(APP_USOCK).unwrap(),
-			"/tmp/app_usock".to_string()
-		);
-	}
-
-	#[test]
-	fn builds_async_pool() {
-		let mut args: Vec<_> = vec!["binary", "--usock", "./test.sock"]
-			.into_iter()
-			.map(String::from)
-			.collect();
-		let opts = EnclaveOpts::new(&mut args);
-
-		let pool = opts.async_pool(true).unwrap();
-		assert_eq!(pool.len(), 1);
-		let pool = opts.async_pool(false).unwrap();
-		assert_eq!(pool.len(), 1);
 	}
 
 	#[test]

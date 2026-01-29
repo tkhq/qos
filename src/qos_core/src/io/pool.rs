@@ -67,7 +67,11 @@ impl StreamPool {
 		start_address: SocketAddress,
 		mut count: u8,
 	) -> Result<Self, IOError> {
-		eprintln!("StreamPool start address: {start_address}");
+		if count == 0 {
+			return Err(IOError::PoolError(PoolError::NoAddressesSpecified));
+		}
+
+		println!("StreamPool start address: {start_address}");
 
 		let mut addresses = Vec::new();
 		let mut addr = start_address;
@@ -143,7 +147,7 @@ impl StreamPool {
 		PoolGuard::new(guard)
 	}
 
-	/// Create a new pool by listening new connection on all the addresses
+	/// Create a new pool by listening for new connection on all the addresses
 	pub fn listen(&self) -> Result<Vec<Listener>, IOError> {
 		let mut listeners = Vec::new();
 
@@ -158,7 +162,7 @@ impl StreamPool {
 
 	/// Expands the pool with new addresses using `SocketAddress::next_address`
 	pub fn expand_to(&mut self, size: u8) -> Result<(), IOError> {
-		eprintln!("StreamPool: expanding async pool to {size}");
+		println!("StreamPool: expanding async pool to {size}");
 		let size = size as usize;
 
 		if let Some(last_address) = self.addresses.last().cloned() {
@@ -177,7 +181,7 @@ impl StreamPool {
 
 	/// Listen to new connections on added sockets on top of existing listeners, returning the list of new `Listener`
 	pub fn listen_to(&mut self, size: u8) -> Result<Vec<Listener>, IOError> {
-		eprintln!("StreamPool: listening async pool to {size}");
+		println!("StreamPool: listening async pool to {size}");
 		let size = size as usize;
 		let mut listeners = Vec::new();
 
@@ -195,6 +199,11 @@ impl StreamPool {
 		}
 
 		Ok(listeners)
+	}
+
+	/// Deconstruct the pool into all contained `Stream` objects.
+	pub fn to_streams(self) -> Vec<Stream> {
+		self.handles.into_iter().map(|m| m.into_inner()).collect()
 	}
 }
 

@@ -1,20 +1,19 @@
 use std::{
 	fs,
 	io::{BufRead, BufReader, Write},
-	path::Path,
 	process::{Command, Stdio},
 };
 
 use borsh::de::BorshDeserialize;
 use integration::{
-	LOCAL_HOST, PCR3_PRE_IMAGE_PATH, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE,
-	QOS_DIST_DIR,
+	PivotSocketStressMsg, LOCAL_HOST, PCR3_PRE_IMAGE_PATH,
+	PIVOT_SOCKET_STRESS_PATH, QOS_DIST_DIR,
 };
 use qos_core::protocol::{
 	services::{
 		boot::{
-			Approval, Manifest, ManifestSet, Namespace, PivotConfig,
-			RestartPolicy, ShareSet,
+			Approval, BridgeConfig, Manifest, ManifestSet, Namespace,
+			PivotConfig, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
@@ -24,26 +23,36 @@ use qos_crypto::sha_256;
 use qos_host::EnclaveInfo;
 use qos_p256::P256Pair;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
+use tokio::{
+	io::{AsyncReadExt, AsyncWriteExt},
+	net::TcpStream,
+};
 
 #[tokio::test]
-async fn standard_boot_e2e() {
-	const PIVOT_HASH_PATH: &str = "/tmp/standard_boot_e2e-pivot-hash.txt";
+async fn qos_host_bridge_works() {
+	const PIVOT_HASH_PATH: &str = "/tmp/qos_host_bridge-pivot-hash.txt";
 
 	let host_port = qos_test_primitives::find_free_port().unwrap();
-	let tmp: PathWrapper = "/tmp/boot-e2e".into();
-	let _: PathWrapper = PIVOT_OK2_SUCCESS_FILE.into();
+	let app_host_port = qos_test_primitives::find_free_port().unwrap();
+	let tmp: PathWrapper = "/tmp/qos_host_bridge".into();
 	let _: PathWrapper = PIVOT_HASH_PATH.into();
 	fs::create_dir_all(&*tmp).unwrap();
 
-	let usock: PathWrapper = "/tmp/boot-e2e/boot_e2e.sock".into();
-	let secret_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.secret".into();
-	let pivot_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.pivot".into();
-	let manifest_path: PathWrapper = "/tmp/boot-e2e/boot_e2e.manifest".into();
-	let eph_path: PathWrapper = "/tmp/boot-e2e/ephemeral_key.secret".into();
+	let usock_path = "/tmp/qos_host_bridge/qos_host_bridge.sock".to_owned();
+	let usock: PathWrapper = usock_path.clone().into();
+	let secret_path: PathWrapper =
+		"/tmp/qos_host_bridge/qos_host_bridge.secret".into();
+	let pivot_path: PathWrapper =
+		"/tmp/qos_host_bridge/qos_host_bridge.pivot".into();
+	let manifest_path: PathWrapper =
+		"/tmp/qos_host_bridge/qos_host_bridge.manifest".into();
+	let eph_path: PathWrapper =
+		"/tmp/qos_host_bridge/ephemeral_key.secret".into();
 
-	let boot_dir: PathWrapper = "/tmp/boot-e2e/boot-dir".into();
+	let boot_dir: PathWrapper = "/tmp/qos_host_bridge/boot-dir".into();
 	fs::create_dir_all(&*boot_dir).unwrap();
-	let attestation_dir: PathWrapper = "/tmp/boot-e2e/attestation-dir".into();
+	let attestation_dir: PathWrapper =
+		"/tmp/qos_host_bridge/attestation-dir".into();
 	fs::create_dir_all(&*attestation_dir).unwrap();
 	let attestation_doc_path = format!("{}/attestation_doc", &*attestation_dir);
 
@@ -58,14 +67,15 @@ async fn standard_boot_e2e() {
 	let user3 = "user3";
 
 	// -- Create pivot-build-fingerprints.txt
-	let pivot = fs::read(PIVOT_OK2_PATH).unwrap();
+	let pivot = fs::read(PIVOT_SOCKET_STRESS_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
 	let pivot_hash = qos_hex::encode_to_vec(&mock_pivot_hash);
 	std::fs::write(PIVOT_HASH_PATH, pivot_hash).unwrap();
 
 	// -- CLIENT create manifest.
-	let msg = "testing420";
-	let pivot_args = format!("[--msg,{msg}]");
+	let pivot_app_sock_path =
+		usock_path + "." + &app_host_port.to_string() + ".appsock";
+	let pivot_args = format!("[{pivot_app_sock_path}]");
 	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
 
 	assert!(Command::new("../target/debug/qos_client")
@@ -94,7 +104,9 @@ async fn standard_boot_e2e() {
 			"--patch-set-dir",
 			"./mock/keys/manifest-set",
 			"--quorum-key-path",
-			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub"
+			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
+			"--bridge-config",
+			&format!("[{{\"server\": [{},\"0.0.0.0\"]}}]", app_host_port),
 		])
 		.spawn()
 		.unwrap()
@@ -130,8 +142,12 @@ async fn standard_boot_e2e() {
 	let pivot = PivotConfig {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
-		args: vec!["--msg".to_string(), msg.to_string()],
-		..Default::default()
+		args: vec![pivot_app_sock_path.to_string()],
+		debug_mode: false,
+		bridge_config: vec![BridgeConfig::Server(
+			app_host_port,
+			"0.0.0.0".into(),
+		)],
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
@@ -221,7 +237,7 @@ async fn standard_boot_e2e() {
 		);
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
-			"[\"--msg\", \"testing420\"]?"
+			&format!("[\"/tmp/qos_host_bridge/qos_host_bridge.sock.{app_host_port}.appsock\"]?")
 		);
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
@@ -270,7 +286,7 @@ async fn standard_boot_e2e() {
 			.into();
 
 	// -- HOST start host
-	let mut _host_child_process: ChildWrapper =
+	let mut host_child_process: ChildWrapper =
 		Command::new("../target/debug/qos_host")
 			.args([
 				"--host-port",
@@ -310,7 +326,7 @@ async fn standard_boot_e2e() {
 			"--manifest-envelope-path",
 			&manifest_envelope_path,
 			"--pivot-path",
-			PIVOT_OK2_PATH,
+			PIVOT_SOCKET_STRESS_PATH,
 			"--host-port",
 			&host_port.to_string(),
 			"--host-ip",
@@ -326,8 +342,6 @@ async fn standard_boot_e2e() {
 		.success());
 
 	// For each user, post a share,
-	// and sanity check the pivot has not yet executed.
-	assert!(!Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
 	for user in [&user1, &user2] {
 		// Get attestation doc and manifest
 		assert!(Command::new("../target/debug/qos_client")
@@ -453,9 +467,89 @@ async fn standard_boot_e2e() {
 	// Give the enclave time to start the pivot
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-	// Check that the pivot executed
-	let contents = std::fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
-	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
+	// Wait for the qos_host app bridge to run
+	qos_test_primitives::wait_until_port_is_bound(app_host_port);
 
-	fs::remove_file(PIVOT_OK2_SUCCESS_FILE).unwrap();
+	// send a PivotSocketStressMsg to check if the  bridge works all the way
+	let bridge_addr = format!("127.0.0.1:{app_host_port}");
+	let mut tcp_stream = TcpStream::connect(&bridge_addr).await.unwrap();
+
+	let msg = PivotSocketStressMsg::OkRequest(42);
+	let msg_bytes = borsh::to_vec(&msg).unwrap();
+	let mut header = (msg_bytes.len() as u64).to_le_bytes();
+
+	// send the header/length
+	tcp_stream.write(&header).await.unwrap();
+	// send the msg
+	tcp_stream.write(&msg_bytes).await.unwrap();
+
+	// receive the reply header
+	assert_eq!(8, tcp_stream.read_exact(&mut header).await.unwrap());
+	let reply_size = usize::from_le_bytes(header);
+	let mut reply_bytes = vec![0u8; reply_size];
+	// receive the reply msg
+	assert_eq!(
+		reply_size,
+		tcp_stream.read_exact(&mut reply_bytes).await.unwrap()
+	);
+	// decode the reply msg
+	let reply: PivotSocketStressMsg = borsh::from_slice(&reply_bytes).unwrap();
+
+	match reply {
+		PivotSocketStressMsg::OkResponse(val) => assert_eq!(val, 42),
+		_ => panic!("invalid pivot response"),
+	}
+
+	// test qos_host restart keeping the bridge up via the envelope logic
+	// kill the original
+	host_child_process.0.kill().expect("unable to kill qos_host");
+	drop(host_child_process);
+
+	// -- HOST restart host
+	let mut _host_child_process: ChildWrapper =
+		Command::new("../target/debug/qos_host")
+			.args([
+				"--host-port",
+				&host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--usock",
+				&*usock,
+			])
+			.spawn()
+			.unwrap()
+			.into();
+
+	// Wait for the qos_host app bridge to run
+	qos_test_primitives::wait_until_port_is_bound(app_host_port);
+
+	// send a PivotSocketStressMsg to check if the  bridge works all the way
+	let bridge_addr = format!("127.0.0.1:{app_host_port}");
+	let mut tcp_stream = TcpStream::connect(&bridge_addr).await.unwrap();
+
+	let msg = PivotSocketStressMsg::OkRequest(42);
+	let msg_bytes = borsh::to_vec(&msg).unwrap();
+	let mut header = (msg_bytes.len() as u64).to_le_bytes();
+
+	// send the header/length
+	tcp_stream.write(&header).await.unwrap();
+	// send the msg
+	tcp_stream.write(&msg_bytes).await.unwrap();
+
+	// receive the reply header
+	assert_eq!(8, tcp_stream.read_exact(&mut header).await.unwrap());
+	let reply_size = usize::from_le_bytes(header);
+	let mut reply_bytes = vec![0u8; reply_size];
+	// receive the reply msg
+	assert_eq!(
+		reply_size,
+		tcp_stream.read_exact(&mut reply_bytes).await.unwrap()
+	);
+	// decode the reply msg
+	let reply: PivotSocketStressMsg = borsh::from_slice(&reply_bytes).unwrap();
+
+	match reply {
+		PivotSocketStressMsg::OkResponse(val) => assert_eq!(val, 42),
+		_ => panic!("invalid pivot response"),
+	}
 }

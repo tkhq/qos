@@ -44,7 +44,7 @@ pub enum HexError {
 	LengthOne,
 	/// Could not decode the input because it was an odd length.
 	OddLength,
-	// There was a char that was not valid hex i.e not in 0..=9,a..=f.
+	/// There was a char that was not valid hex i.e not in 0..=9,a..=f.
 	NotHexChar,
 	/// Error trying to parse hex characters to a u8.
 	ParseInt(ParseIntError),

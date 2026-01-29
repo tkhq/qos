@@ -12,6 +12,8 @@ pub enum ClientError {
 	IOError(IOError),
 	/// `borsh::io::Error` wrapper.
 	BorshError(borsh::io::Error),
+	/// Invalid enclave response to a request (e.g. mismatch)
+	ResponseMismatch,
 }
 
 impl From<IOError> for ClientError {

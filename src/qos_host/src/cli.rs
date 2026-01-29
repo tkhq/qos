@@ -9,7 +9,7 @@ use std::{
 
 use qos_core::{
 	cli::{CID, PORT, USOCK},
-	io::{SocketAddress, StreamPool},
+	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
 
@@ -38,7 +38,7 @@ impl GetParserForOptions for HostParser {
 			.token(
 				Token::new(USOCK, "name of the socket file (ex: `dev.sock`) (only for unix sockets)")
 					.takes_value(true)
-					.forbids(vec!["port", "cid"])
+					.forbids(vec![PORT, CID])
 			)
 			.token(
 				Token::new(HOST_IP, "IP address this server should listen on")
@@ -121,9 +121,9 @@ impl HostOpts {
 	}
 
 	/// Create a new `StreamPool` using the list of `SocketAddress` for the qos host.
-	pub(crate) fn enclave_pool(
+	pub(crate) fn enclave_socket(
 		&self,
-	) -> Result<StreamPool, qos_core::io::IOError> {
+	) -> Result<SocketAddress, qos_core::io::IOError> {
 		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
@@ -138,16 +138,10 @@ impl HostOpts {
 					qos_core::io::IOError::ConnectAddressInvalid
 				})?;
 
-				let address =
-					SocketAddress::new_vsock(c, p, self.to_host_flag());
-
-				StreamPool::new(address, 1) // qos_host needs only 1
+				Ok(SocketAddress::new_vsock(c, p, self.to_host_flag()))
 			}
-			(None, None, Some(u)) => {
-				let address = SocketAddress::new_unix(u);
+			(None, None, Some(u)) => Ok(SocketAddress::new_unix(u)),
 
-				StreamPool::new(address, 1)
-			}
 			_ => panic!("Invalid socket opts"),
 		}
 	}
@@ -202,10 +196,7 @@ impl CLI {
 			println!("{}", options.parsed.info());
 		} else {
 			crate::host::HostServer::new(
-				options
-					.enclave_pool()
-					.expect("unable to create enclave pool")
-					.shared(),
+				options.enclave_socket().expect("invalid enclave socket"),
 				options.socket_timeout(),
 				options.host_addr(),
 				options.base_path(),

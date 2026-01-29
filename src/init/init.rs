@@ -1,14 +1,17 @@
 use qos_core::{
 	handles::Handles,
-	io::{SocketAddress, StreamPool, VMADDR_NO_FLAGS},
+	io::{SocketAddress, VMADDR_NO_FLAGS},
 	reaper::Reaper,
-	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE, SEC_APP_SOCK,
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE,
 };
 use qos_nsm::Nsm;
 use qos_system::{dmesg, freopen, get_local_cid, mount, reboot};
 
 //TODO: Feature flag
 use qos_aws::init_platform;
+
+mod setip;
+use setip::init_localhost;
 
 // Mount common filesystems with conservative permissions
 fn init_rootfs() {
@@ -27,8 +30,8 @@ fn init_rootfs() {
 	];
 	for (src, target, fstype, flags, data) in args {
 		match mount(src, target, fstype, flags, data) {
-			Ok(()) => dmesg(format!("Mounted {}", target)),
-			Err(e) => eprintln!("{}", e),
+			Ok(()) => dmesg(format!("Mounted {target}")),
+			Err(e) => eprintln!("{e}"),
 		}
 	}
 }
@@ -43,7 +46,7 @@ fn init_console() {
 	for (filename, mode, file) in args {
 		match freopen(filename, mode, file) {
 			Ok(()) => {}
-			Err(e) => eprintln!("{}", e),
+			Err(e) => eprintln!("{e}"),
 		}
 	}
 }
@@ -52,6 +55,7 @@ fn boot() {
 	init_rootfs();
 	init_console();
 	init_platform();
+	init_localhost();
 }
 
 #[tokio::main]
@@ -60,7 +64,7 @@ async fn main() {
 	dmesg("QuorumOS Booted".to_string());
 
 	let cid = get_local_cid().unwrap();
-	dmesg(format!("CID is {}", cid));
+	dmesg(format!("CID is {cid}"));
 
 	let handles = Handles::new(
 		EPHEMERAL_KEY_FILE.to_string(),
@@ -70,20 +74,10 @@ async fn main() {
 	);
 
 	const START_PORT: u32 = 3;
-	const INITIAL_POOL_SIZE: u8 = 1; // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)
-	let core_pool = StreamPool::new(
-		SocketAddress::new_vsock(cid, START_PORT, VMADDR_NO_FLAGS),
-		INITIAL_POOL_SIZE,
-	)
-	.expect("unable to create core pool");
+	let core_socket =
+		SocketAddress::new_vsock(cid, START_PORT, VMADDR_NO_FLAGS);
 
-	let app_pool = StreamPool::new(
-		SocketAddress::new_unix(SEC_APP_SOCK),
-		INITIAL_POOL_SIZE, // start at pool size 1, grow based on  manifest/args as necessary (see Reaper)
-	)
-	.expect("unable to create app pool");
-
-	Reaper::execute(&handles, Box::new(Nsm), core_pool, app_pool, None).await;
+	Reaper::execute(&handles, Box::new(Nsm), core_socket, None).await;
 
 	reboot();
 }

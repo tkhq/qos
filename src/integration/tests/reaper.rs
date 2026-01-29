@@ -1,21 +1,24 @@
-use std::{fs, time::Duration};
+use std::{
+	fs,
+	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+};
 
 use integration::{
-	wait_for_usock, PivotSocketStressMsg, PIVOT_ABORT_PATH, PIVOT_OK_PATH,
-	PIVOT_PANIC_PATH, PIVOT_POOL_SIZE_PATH, PIVOT_SOCKET_STRESS_PATH,
+	wait_for_tcp_sock, wait_for_usock, PIVOT_ABORT_PATH, PIVOT_OK_PATH,
+	PIVOT_PANIC_PATH, PIVOT_TCP_PATH,
 };
 use qos_core::{
-	client::SocketClient,
 	handles::Handles,
-	io::{SocketAddress, StreamPool},
-	protocol::{
-		msg::ProtocolMsg, services::boot::ManifestEnvelope, ProtocolError,
-		ProtocolPhase,
-	},
+	io::{HostBridge, SocketAddress, StreamPool},
+	protocol::services::boot::{BridgeConfig, ManifestEnvelope},
 	reaper::{Reaper, REAPER_EXIT_DELAY},
 };
 use qos_nsm::mock::MockNsm;
 use qos_test_primitives::PathWrapper;
+use tokio::{
+	io::{AsyncReadExt, AsyncWriteExt},
+	net::TcpStream,
+};
 
 #[tokio::test]
 async fn reaper_works() {
@@ -43,21 +46,11 @@ async fn reaper_works() {
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());
 
-	let enclave_pool =
-		StreamPool::single(SocketAddress::new_unix(&usock)).unwrap();
-
-	let app_pool =
-		StreamPool::single(SocketAddress::new_unix("./never.sock")).unwrap();
+	let enclave_socket = SocketAddress::new_unix(&usock);
 
 	let reaper_handle = tokio::spawn(async move {
-		Reaper::execute(
-			&handles,
-			Box::new(MockNsm),
-			enclave_pool,
-			app_pool,
-			None,
-		)
-		.await;
+		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
+			.await;
 	});
 
 	// Give the enclave server time to bind to the socket
@@ -76,94 +69,6 @@ async fn reaper_works() {
 	let contents = fs::read(integration::PIVOT_OK_SUCCESS_FILE).unwrap();
 	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
 	assert!(fs::remove_file(integration::PIVOT_OK_SUCCESS_FILE).is_ok());
-}
-
-#[tokio::test]
-async fn reaper_timeout_works() {
-	let secret_path: PathWrapper = "/tmp/reaper_timeout_works.secret".into();
-	let enclave_sock: PathWrapper = "/tmp/reaper_timeout_works.sock".into();
-	let app_sock: PathWrapper = "/tmp/reaper_timeout_works_app.sock".into();
-	let manifest_path: PathWrapper =
-		"/tmp/reaper_timeout_works.manifest".into();
-
-	// clean up old manifest if it's left from a panic
-	drop(std::fs::remove_file(&*manifest_path));
-
-	// For our sanity, ensure the secret does not yet exist
-	drop(fs::remove_file(&*secret_path));
-
-	let handles = Handles::new(
-		"eph_path".to_string(),
-		(*secret_path).to_string(),
-		(*manifest_path).to_string(),
-		PIVOT_SOCKET_STRESS_PATH.to_string(),
-	);
-
-	// Make sure we have written everything necessary to pivot, except the
-	// quorum key
-	let mut manifest_envelope = ManifestEnvelope::default();
-	// Tell pivot where to open up the server app socket
-	manifest_envelope.manifest.pivot.args = vec![app_sock.to_string()];
-
-	// we'll be checking if this is set by passing slow and fast requests
-	manifest_envelope.manifest.client_timeout_ms = Some(2000);
-
-	handles.put_manifest_envelope(&manifest_envelope).unwrap();
-	assert!(handles.pivot_exists());
-
-	let enclave_pool =
-		StreamPool::single(SocketAddress::new_unix(&enclave_sock)).unwrap();
-
-	let app_pool =
-		StreamPool::single(SocketAddress::new_unix(&app_sock)).unwrap();
-
-	let reaper_handle = tokio::spawn(async move {
-		Reaper::execute(
-			&handles,
-			Box::new(MockNsm),
-			enclave_pool,
-			app_pool,
-			Some(ProtocolPhase::QuorumKeyProvisioned),
-		)
-		.await;
-	});
-
-	// Give the enclave server time to bind to the socket
-	wait_for_usock(&enclave_sock).await;
-
-	// Check that the reaper is still running, presumably waiting for
-	// the secret.
-	assert!(!reaper_handle.is_finished());
-
-	// Create the file with the secret, which should cause the reaper
-	// to start executable.
-	fs::write(&*secret_path, b"super dank tank secret tech").unwrap();
-
-	// Give the app server time to bind to the socket
-	wait_for_usock(&app_sock).await;
-
-	// create a "slow" app request longer than client timeout from `Manifest`, but longer than 5s timeout on our local client.
-	let app_request =
-		borsh::to_vec(&PivotSocketStressMsg::SlowRequest(3000)).unwrap();
-	let request =
-		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
-			.unwrap();
-
-	// ensure our client to the enclave has longer timeout than the configured 2s and the slow request 3s
-	let client = SocketClient::single(
-		SocketAddress::new_unix(&enclave_sock),
-		Duration::from_millis(5000),
-	)
-	.unwrap();
-
-	let response: ProtocolMsg =
-		borsh::from_slice(&client.call(&request).await.unwrap()).unwrap();
-
-	// The response should be AppClientRecvTimeout which indicates the enclave short-circuited the timeout
-	assert_eq!(
-		response,
-		ProtocolMsg::ProtocolErrorResponse(ProtocolError::AppClientRecvTimeout)
-	);
 }
 
 #[tokio::test]
@@ -189,21 +94,11 @@ async fn reaper_handles_non_zero_exits() {
 	handles.put_manifest_envelope(&Default::default()).unwrap();
 	assert!(handles.pivot_exists());
 
-	let enclave_pool =
-		StreamPool::new(SocketAddress::new_unix(&usock), 1).unwrap();
-
-	let app_pool =
-		StreamPool::new(SocketAddress::new_unix("./never.sock"), 1).unwrap();
+	let enclave_socket = SocketAddress::new_unix(&usock);
 
 	let reaper_handle = tokio::spawn(async move {
-		Reaper::execute(
-			&handles,
-			Box::new(MockNsm),
-			enclave_pool,
-			app_pool,
-			None,
-		)
-		.await;
+		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
+			.await;
 	});
 
 	// Give the enclave server time to bind to the socket
@@ -246,21 +141,11 @@ async fn reaper_handles_panic() {
 	handles.put_manifest_envelope(&Default::default()).unwrap();
 	assert!(handles.pivot_exists());
 
-	let enclave_pool =
-		StreamPool::new(SocketAddress::new_unix(&usock), 1).unwrap();
-
-	let app_pool =
-		StreamPool::new(SocketAddress::new_unix("./never.sock"), 1).unwrap();
+	let enclave_socket = SocketAddress::new_unix(&usock);
 
 	let reaper_handle = tokio::spawn(async move {
-		Reaper::execute(
-			&handles,
-			Box::new(MockNsm),
-			enclave_pool,
-			app_pool,
-			None,
-		)
-		.await;
+		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
+			.await;
 	});
 
 	// Give the enclave server time to bind to the socket
@@ -282,13 +167,15 @@ async fn reaper_handles_panic() {
 }
 
 #[tokio::test]
-async fn reaper_handles_pool_size() {
-	let secret_path: PathWrapper =
-		"/tmp/reaper_handles_pool_size.secret".into();
-	let usock: PathWrapper = "/tmp/reaper_handles_pool_size.sock".into();
+async fn reaper_handles_bridge() {
+	let pivot_port = 4000;
+	let host_port = 3000;
+	let secret_path: PathWrapper = "/tmp/reaper_handles_bridge.secret".into();
+	let usock: PathWrapper = "/tmp/reaper_handles_bridge.sock".into();
+	let app_usock: PathWrapper =
+		format!("/tmp/reaper_handles_bridge.sock.{pivot_port}.appsock").into();
 	let manifest_path: PathWrapper =
-		"/tmp/reaper_handles_pool_size.manifest".into();
-	let msg = "5"; // must match pool-size in manifest below (test thing)
+		"/tmp/reaper_handles_bridge.manifest".into();
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(fs::remove_file(&*secret_path));
@@ -297,35 +184,31 @@ async fn reaper_handles_pool_size() {
 		"eph_path".to_string(),
 		(*secret_path).to_string(),
 		(*manifest_path).to_string(),
-		PIVOT_POOL_SIZE_PATH.to_string(),
+		PIVOT_TCP_PATH.to_string(),
 	);
+
+	// start the tcp -> vsock bridge on port 3000
+	let host_addr: SocketAddr =
+		SocketAddrV4::new(Ipv4Addr::LOCALHOST, host_port).into();
+	let app_pool =
+		StreamPool::single(SocketAddress::new_unix(&app_usock)).unwrap();
+	HostBridge::new(app_pool, host_addr).tcp_to_vsock().await;
 
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key
 	let mut manifest_envelope = ManifestEnvelope::default();
-	manifest_envelope.manifest.pivot.args =
-		vec!["--msg".to_string(), msg.to_string()];
-	// set a pool size > 1
-	manifest_envelope.manifest.pool_size = Some(5);
+	manifest_envelope.manifest.pivot.args = vec![format!("{pivot_port}")];
+	manifest_envelope.manifest.pivot.bridge_config =
+		vec![BridgeConfig::Server(pivot_port, "127.0.0.1".into())];
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());
 
-	let enclave_pool =
-		StreamPool::single(SocketAddress::new_unix(&usock)).unwrap();
-
-	let app_pool =
-		StreamPool::single(SocketAddress::new_unix("/tmp/never.sock")).unwrap();
+	let enclave_socket = SocketAddress::new_unix(&usock);
 
 	let reaper_handle = tokio::spawn(async move {
-		Reaper::execute(
-			&handles,
-			Box::new(MockNsm),
-			enclave_pool,
-			app_pool,
-			None,
-		)
-		.await;
+		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
+			.await;
 	});
 
 	// wait for enclave to listen
@@ -339,22 +222,54 @@ async fn reaper_handles_pool_size() {
 	// to start executable.
 	fs::write(&*secret_path, b"super dank tank secret tech").unwrap();
 
+	// wait for internal VSOCK -> tcp bridge to listen
+	wait_for_usock(&app_usock).await;
+
+	let host_addr = format!("localhost:{host_port}");
+	let pivot_addr = format!("localhost:{pivot_port}");
+
+	// ensure pivot is ready and accepting on tcp://localhost:4000
+	wait_for_tcp_sock(&pivot_addr).await;
+	// ensure bridge is ready and accepting on tcp://localhost:3000
+	wait_for_tcp_sock(&host_addr).await;
+
+	let mut stream = TcpStream::connect(&host_addr)
+		.await
+		.expect("first stream failed to connect");
+
+	// make sure we can handle 2+ connections in parallel
+	let mut stream2 = TcpStream::connect(&host_addr)
+		.await
+		.expect("second stream failed to connect");
+	let mut stream3 = TcpStream::connect(&host_addr)
+		.await
+		.expect("second stream failed to connect");
+
+	// send the msg to the pivot via the bridge, out of order to check for x-streams
+	stream3.write_all(b"worlds").await.unwrap();
+	// send the msg to the pivot via the bridge
+	stream.write_all(b"hello").await.unwrap();
+
+	// read the reply of the "chronologically 2nd" request and ensure it's the same as msg
+	let mut reply = [0u8; 5]; // reply buffer
+	assert_eq!(stream.read_exact(&mut reply).await.unwrap(), 5);
+	assert_eq!(&reply, b"hello");
+
+	// read the reply of the "chronologically 1st" request and ensure it's the same as msg
+	let mut reply = [0u8; 6]; // reply buffer
+	assert_eq!(stream3.read_exact(&mut reply).await.unwrap(), 6);
+	assert_eq!(&reply, b"worlds");
+
+	// send the "finished" msg on the second connection
+	stream2.write_all(b"done").await.unwrap();
+
+	let mut done_reply = [0u8; 4]; // reply buffer
+	assert_eq!(stream2.read_exact(&mut done_reply).await.unwrap(), 4);
+	assert_eq!(&done_reply, b"done");
+
 	// Make the sure the reaper executed successfully.
 	reaper_handle.await.unwrap();
-	let contents = fs::read(integration::PIVOT_POOL_SIZE_SUCCESS_FILE).unwrap();
-	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
-	assert!(fs::remove_file(integration::PIVOT_POOL_SIZE_SUCCESS_FILE).is_ok());
-}
-
-#[test]
-fn can_restart_panicking_pivot() {
-	// Create a manifest with restart option
-
-	// Create a different panicking pivot
-
-	// Start reaper
-
-	// Make sure it hasn't finished
-
-	// Write the secret
+	let contents = fs::read(integration::PIVOT_TCP_SUCCESS_FILE).unwrap();
+	assert_eq!(&contents, b"worlds"); // expects the chronologically first msg
+	assert!(fs::remove_file(integration::PIVOT_TCP_SUCCESS_FILE).is_ok());
 }

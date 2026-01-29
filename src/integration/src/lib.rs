@@ -7,6 +7,7 @@ use qos_core::{
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
 use std::time::Duration;
+use tokio::net::TcpStream;
 
 /// Path to the file `pivot_ok` writes on success for tests.
 pub const PIVOT_OK_SUCCESS_FILE: &str = "./pivot_ok_works";
@@ -16,14 +17,16 @@ pub const PIVOT_OK2_SUCCESS_FILE: &str = "./pivot_ok2_works";
 pub const PIVOT_OK3_SUCCESS_FILE: &str = "./pivot_ok3_works";
 /// Path to the file `pivot_pool_size` writes on success for tests.
 pub const PIVOT_POOL_SIZE_SUCCESS_FILE: &str = "./pivot_pool_size_works";
+/// Path to the file `pivot_tcp` writes on success for tests.
+pub const PIVOT_TCP_SUCCESS_FILE: &str = "./pivot_tcp_works";
 /// Path to pivot_ok bin for tests.
 pub const PIVOT_OK_PATH: &str = "../target/debug/pivot_ok";
 /// Path to pivot_ok2 bin for tests.
 pub const PIVOT_OK2_PATH: &str = "../target/debug/pivot_ok2";
 /// Path to pivot_ok3 bin for tests.
 pub const PIVOT_OK3_PATH: &str = "../target/debug/pivot_ok3";
-/// Path to pivot_pool_size bin for tests.
-pub const PIVOT_POOL_SIZE_PATH: &str = "../target/debug/pivot_pool_size";
+/// Path to pivot_tcp bin for tests.
+pub const PIVOT_TCP_PATH: &str = "../target/debug/pivot_tcp";
 /// Path to pivot loop bin for tests.
 pub const PIVOT_LOOP_PATH: &str = "../target/debug/pivot_loop";
 /// Path to pivot_abort bin for tests.
@@ -130,7 +133,7 @@ pub struct AdditionProofPayload {
 /// Panics if fs::exists errors.
 pub async fn wait_for_usock(path: &str) {
 	let addr = SocketAddress::new_unix(path);
-	let pool = StreamPool::new(addr, 1).unwrap().shared();
+	let pool = StreamPool::single(addr).unwrap().shared();
 	let client = SocketClient::new(pool, Duration::from_millis(50));
 
 	for _ in 0..50 {
@@ -140,6 +143,25 @@ pub async fn wait_for_usock(path: &str) {
 		}
 
 		tokio::time::sleep(Duration::from_millis(100)).await;
+	}
+}
+
+pub async fn wait_for_tcp_sock(host_addr: &str) {
+	// attempt to connect, this can fail a few times due to timing, max 1s timeout
+	let mut attempts = 0;
+	loop {
+		match TcpStream::connect(&host_addr).await {
+			Ok(_stream) => {
+				return;
+			}
+			Err(_) => {
+				if attempts > 9 {
+					panic!("unable to connect to {host_addr}");
+				}
+				attempts += 1;
+				tokio::time::sleep(Duration::from_millis(100)).await;
+			}
+		}
 	}
 }
 

@@ -5,19 +5,24 @@
 //! The pivot is an executable the enclave runs to initialize the secure
 //! applications.
 use std::{
+	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+	process::Stdio,
 	sync::{Arc, RwLock},
 	time::Duration,
 };
 
 use qos_nsm::NsmProvider;
-use tokio::process::Command;
+use tokio::{
+	io::{AsyncBufReadExt, BufReader},
+	process::{Child, Command},
+};
 
 use crate::{
 	handles::Handles,
-	io::StreamPool,
+	io::{HostBridge, IOError, SocketAddress, StreamPool},
 	protocol::{
 		processor::ProtocolProcessor,
-		services::boot::{PivotConfig, RestartPolicy},
+		services::boot::{BridgeConfig, PivotConfig, RestartPolicy},
 		ProtocolPhase, ProtocolState,
 	},
 	server::SocketServer,
@@ -30,68 +35,98 @@ pub const REAPER_RESTART_DELAY: Duration = Duration::from_millis(50);
 pub const REAPER_EXIT_DELAY: Duration = Duration::from_secs(3);
 
 const REAPER_STATE_CHECK_DELAY: Duration = Duration::from_millis(100);
-const DEFAULT_POOL_SIZE: u8 = 1;
 
-// runs the enclave and app servers, waiting for manifest/pivot
+// runs the enclave vsock setup server for qos_host communication, waiting for manifest/pivot
 // executed as a task from `Reaper::execute`
 async fn run_server(
 	server_state: Arc<RwLock<InterState>>,
 	handles: Handles,
 	nsm: Box<dyn NsmProvider + Send>,
-	pool: StreamPool,
-	app_pool: StreamPool,
+	core_socket: SocketAddress,
 	test_only_init_phase_override: Option<ProtocolPhase>,
 ) {
 	let protocol_state =
-		ProtocolState::new(nsm, handles.clone(), test_only_init_phase_override);
+		ProtocolState::new(nsm, handles.clone(), test_only_init_phase_override)
+			.shared();
+	let core_pool = StreamPool::single(core_socket)
+		.expect("unable to create single socket core pool");
 	// send a shared version of state and the async pool to each processor
-	let processor =
-		ProtocolProcessor::new(protocol_state.shared(), app_pool.shared());
-	// listen_all will multiplex the processor accross all sockets
-	let mut server = SocketServer::listen_all(pool, &processor)
-		.expect("unable to get listen task list");
+	let protocol_processor = ProtocolProcessor::new(protocol_state);
 
-	loop {
-		// see if we got interrupted
-		if *server_state.read().unwrap() == InterState::Quitting {
-			return;
-		}
+	// listen on the protocol server
+	let _protocol_server =
+		SocketServer::listen_all(core_pool, &protocol_processor, 1)
+			.expect("unable to get listen task list for protocol server");
 
-		if let Ok(envelope) = handles.get_manifest_envelope() {
-			let pool_size =
-				envelope.manifest.pool_size.unwrap_or(DEFAULT_POOL_SIZE);
-			// expand server to pool_size
-			server
-				.listen_to(pool_size, &processor)
-				.expect("unable to listen_to on the running server");
-			{
-				// get the processor writable
-				let mut p = processor.write().await;
-
-				// expand app connections to pool_size
-				p.expand_to(pool_size)
-					.await
-					.expect("unable to expand_to on the processor app pool");
-				if let Some(timeout_ms) = envelope.manifest.client_timeout_ms {
-					let timeout = Duration::from_millis(timeout_ms.into());
-					p.set_client_timeout(timeout);
-				}
-			}
-
-			*server_state.write().unwrap() = InterState::PivotReady;
-			eprintln!("Reaper::server manifest is present, breaking out of server check loop");
-			break;
-		}
-
-		tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
-	}
-
-	eprintln!("Reaper::server post-expansion, waiting for shutdown");
+	println!("Reaper::server running");
 	while *server_state.read().unwrap() != InterState::Quitting {
 		tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
 	}
 
-	eprintln!("Reaper::server shutdown");
+	println!("Reaper::server shutdown");
+}
+
+// runs the VSOCK -> TCP bridge so that apps can use any TCP based protocol without worrying about VSOCK
+// communication. This is started if `PivotConfig::bridge_config` has any members defined.
+// uses the enclave core socket and given pivot host port to constuct the VSOCK to TCP bridge.
+async fn run_vsock_to_tcp_bridge(
+	core_socket: &SocketAddress,
+	bridges: &Vec<BridgeConfig>,
+) -> Result<(), IOError> {
+	// do nothing if we're not asked to provide bridging
+	if bridges.is_empty() {
+		println!("skipping host bridge, not configured");
+		return Ok(());
+	}
+
+	for bc in bridges {
+		match bc {
+			BridgeConfig::Server(port, _) => {
+				let app_socket = core_socket.with_port(*port)?;
+				let host_addr: SocketAddr =
+					SocketAddrV4::new(Ipv4Addr::LOCALHOST, *port).into();
+				let app_pool = StreamPool::single(app_socket)?;
+				let bridge = HostBridge::new(app_pool, host_addr);
+
+				bridge.vsock_to_tcp().await;
+			}
+			BridgeConfig::Client(_, _) => panic!("client bridge unimplemented"), // TODO: implement
+		}
+	}
+
+	Ok(())
+}
+
+async fn reprint_pivot_output(child: &mut Child) {
+	let stdout = child.stdout.take().expect("failed to get pivot stdout");
+	let stderr = child.stderr.take().expect("failed to get pivot stderr");
+
+	let stdout_reader = BufReader::new(stdout);
+	let stderr_reader = BufReader::new(stderr);
+
+	tokio::spawn(async move {
+		let mut stdout_lines = stdout_reader.lines();
+		let mut stderr_lines = stderr_reader.lines();
+
+		loop {
+			tokio::select! {
+				line = stdout_lines.next_line() => {
+					match line {
+						Ok(Some(line)) => println!("PIVOT[OUT]: {line}"),
+						Ok(None) => break, // process exit
+						Err(e) => eprintln!("error reading pivot stdout: {e}"),
+					}
+				}
+				line = stderr_lines.next_line() => {
+					match line {
+						Ok(Some(line)) => eprintln!("PIVOT[ERR]: {line}"),
+						Ok(None) => break, // process exit
+						Err(e) => eprintln!("error reading pivot stderr: {e}"),
+					}
+				}
+			}
+		}
+	});
 }
 
 /// Primary entry point for running the enclave. Coordinates spawning the server
@@ -110,8 +145,7 @@ impl Reaper {
 	pub async fn execute(
 		handles: &Handles,
 		nsm: Box<dyn NsmProvider + Send>,
-		pool: StreamPool,
-		app_pool: StreamPool,
+		core_socket: SocketAddress,
 		test_only_init_phase_override: Option<ProtocolPhase>,
 	) {
 		// state switch to communicate between pivot run task (here) and run_server task
@@ -123,8 +157,7 @@ impl Reaper {
 			server_state,
 			handles.clone(),
 			nsm,
-			pool,
-			app_pool,
+			core_socket.clone(),
 			test_only_init_phase_override,
 		));
 
@@ -139,7 +172,6 @@ impl Reaper {
 			if handles.quorum_key_exists()
 				&& handles.pivot_exists()
 				&& handles.manifest_envelope_exists()
-				&& server_state == InterState::PivotReady
 			{
 				// The state required to pivot exists, so we can break this
 				// holding pattern and start the pivot.
@@ -156,41 +188,40 @@ impl Reaper {
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest;
-		let PivotConfig { args, restart, .. } = manifest.pivot;
+		let PivotConfig { args, restart, bridge_config: host_config, .. } =
+			manifest.pivot;
+
+		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task
+		run_vsock_to_tcp_bridge(&core_socket, &host_config)
+			.await
+			.expect("failed to run VSOCK -> TCP socket bridge");
 
 		let mut pivot = Command::new(handles.pivot_path());
-		// set the pool-size env var for pivots that use it
-		pivot.env(
-			"POOL_SIZE",
-			manifest.pool_size.unwrap_or(DEFAULT_POOL_SIZE).to_string(),
-		);
+		pivot.env_clear();
 		pivot.args(&args[..]);
-		match restart {
-			RestartPolicy::Always => loop {
-				let status = pivot
-					.spawn()
-					.expect("Failed to spawn")
-					.wait()
-					.await
-					.expect("Pivot executable never started...");
+		pivot.stdout(Stdio::piped()).stderr(Stdio::piped());
 
-				println!("Pivot exited with status: {status}");
-
-				// pause to ensure OS has enough time to clean up resources
-				// before restarting
-				tokio::time::sleep(REAPER_RESTART_DELAY).await;
-
-				println!("Restarting pivot ...");
-			},
-			RestartPolicy::Never => {
-				let status = pivot
-					.spawn()
-					.expect("Failed to spawn")
-					.wait()
-					.await
-					.expect("Pivot executable never started...");
-				println!("Pivot (no restart) exited with status: {status}");
+		loop {
+			let mut child = pivot.spawn().expect("Failed to spawn pivot");
+			// print pivot stderr and stdout if in debug mode
+			// *NOTE*: this requires `DEBUG` and `LOGS` env vars set when booting the enclave itself. If not, nothing will be visible
+			if manifest.pivot.debug_mode {
+				reprint_pivot_output(&mut child).await;
 			}
+
+			let status =
+				child.wait().await.expect("Pivot executable never started...");
+
+			println!("Pivot exited with status: {status}");
+			// pause to ensure OS has enough time to clean up resources
+			// before restarting
+			tokio::time::sleep(REAPER_RESTART_DELAY).await;
+
+			match restart {
+				RestartPolicy::Always => {}
+				RestartPolicy::Never => break,
+			}
+			println!("Restarting pivot ...");
 		}
 
 		*inter_state.write().unwrap() = InterState::Quitting;
@@ -210,8 +241,6 @@ impl Reaper {
 enum InterState {
 	// We're booting, no pivot yet
 	Booting,
-	// We've booted and pivot is ready
-	PivotReady,
 	// We're quitting (ctrl+c for tests and such)
 	Quitting,
 }

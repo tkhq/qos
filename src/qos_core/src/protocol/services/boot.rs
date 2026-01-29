@@ -102,6 +102,41 @@ impl TryFrom<String> for RestartPolicy {
 	}
 }
 
+/// Pivot bridge host configuration
+#[derive(
+	PartialEq,
+	Eq,
+	Clone,
+	serde::Serialize,
+	serde::Deserialize,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+)]
+#[serde(rename_all = "camelCase")]
+pub enum BridgeConfig {
+	/// Server hosting bridge, connections go INTO the enclave app on given port and host ip string
+	Server(u16, String),
+	/// Client connecting bridge, connections go OUT of the enclave app via given port, connecting
+	/// to the provided hostname. If `None` it will use the transparent protocol.
+	/// *NOTE*: currently unimplemented and results in boot panic if set
+	Client(u16, Option<String>),
+}
+
+impl Default for BridgeConfig {
+	fn default() -> Self {
+		Self::Server(DEFAULT_APP_HOST_PORT, DEFAULT_APP_HOST_IP.into())
+	}
+}
+
+impl BridgeConfig {
+	/// Helper to extract port from either variant
+	pub fn port(&self) -> u16 {
+		match self {
+			Self::Server(port, _) | Self::Client(port, _) => *port,
+		}
+	}
+}
+
 /// Pivot binary configuration
 #[derive(
 	PartialEq,
@@ -120,9 +155,52 @@ pub struct PivotConfig {
 	pub hash: Hash256,
 	/// Restart policy for running the pivot binary.
 	pub restart: RestartPolicy,
+	/// Bridge host configuration for the pivot is a set of per-port rules.
+	/// If set the pivot will service TCP with the provided ports and a bridge will provide the TCP -> VSOCK -> TCP streams.
+	/// If not set the pivot will service VSOCK and the host side needs to be provided manually.
+	pub bridge_config: Vec<BridgeConfig>,
+	/// Whether we're invoking the enclave and pivot in DEBUG mode. This controls output piping.
+	/// *NOTE*: this requires `DEBUG` and `LOGS` env var to be set to `true` when `qos_enclave` is running.
+	pub debug_mode: bool,
 	/// Arguments to invoke the binary with. Leave this empty if none are
 	/// needed.
 	pub args: Vec<String>,
+}
+
+/// Pivot binary configuration, original version (V0)
+#[derive(
+	PartialEq,
+	Eq,
+	Clone,
+	Debug,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
+pub struct PivotConfigV0 {
+	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
+	#[serde(with = "qos_hex::serde")]
+	pub hash: Hash256,
+	/// Restart policy for running the pivot binary.
+	pub restart: RestartPolicy,
+	/// Arguments to invoke the binary with. Leave this empty if none are
+	/// needed.
+	pub args: Vec<String>,
+}
+
+impl From<PivotConfigV0> for PivotConfig {
+	fn from(value: PivotConfigV0) -> Self {
+		Self {
+			hash: value.hash,
+			restart: value.restart,
+			args: value.args,
+			debug_mode: false,
+			bridge_config: Vec::new(),
+		}
+	}
 }
 
 impl fmt::Debug for PivotConfig {
@@ -294,6 +372,11 @@ impl fmt::Debug for Namespace {
 	}
 }
 
+/// Default port to use for host bridge in server mode
+pub const DEFAULT_APP_HOST_PORT: u16 = 3000;
+/// Default host ip string for host bridge in server mode
+pub const DEFAULT_APP_HOST_IP: &str = "0.0.0.0";
+
 /// The Manifest for the enclave.
 /// NOTE: we currently use JSON format for storing this value.
 /// Since we don't have any `HashMap` inside the `Manifest` it works out of the box.
@@ -323,21 +406,20 @@ pub struct Manifest {
 	pub enclave: NitroConfig,
 	/// Patch set members and threshold
 	pub patch_set: PatchSet,
-	/// Client timeout for calls via the VSOCK/USOCK, defaults to 5s if not specified
-	pub client_timeout_ms: Option<u16>,
-	/// Pool size argument used to set up our socket pipes, defaults to 1 if not specified
-	pub pool_size: Option<u8>,
 }
 
 // TODO: remove this once json is the default manifest format
 /// The Manifest for the enclave, backwards compatible version 0
-#[derive(PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize, serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestV0 {
 	/// Namespace this manifest belongs too.
 	pub namespace: Namespace,
 	/// Pivot binary configuration and verifiable values.
-	pub pivot: PivotConfig,
+	pub pivot: PivotConfigV0,
 	/// Manifest Set members and threshold.
 	pub manifest_set: ManifestSet,
 	/// Share Set members and threshold
@@ -352,25 +434,28 @@ impl From<ManifestV0> for Manifest {
 	fn from(old: ManifestV0) -> Self {
 		Self {
 			namespace: old.namespace,
-			pivot: old.pivot,
+			pivot: old.pivot.into(),
 			manifest_set: old.manifest_set,
 			share_set: old.share_set,
 			enclave: old.enclave,
 			patch_set: old.patch_set,
-			pool_size: None,
-			client_timeout_ms: None,
 		}
 	}
 }
 
 impl Manifest {
-	/// Read a `Manifest` in borsh encoded format from a `u8` buffer, in a backwards compatible way
+	/// Read a `Manifest` in a backwards compatible way
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
 		use borsh::BorshDeserialize;
 
+		// try old version with json format
+		if let Ok(v0) = serde_json::from_slice::<ManifestV0>(buf) {
+			return Ok(v0.into());
+		};
+
 		let result = Self::try_from_slice(buf);
 
-		// try loading the old version of manifest
+		// try loading the old version with borsh format
 		if result.is_err() {
 			let old = ManifestV0::try_from_slice(buf)?;
 
@@ -625,6 +710,7 @@ mod test {
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
+				..Default::default()
 			},
 			manifest_set: ManifestSet { threshold: 2, members: quorum_members },
 			share_set: ShareSet { threshold: 2, members: vec![] },
@@ -928,7 +1014,6 @@ mod test {
 		let manifest = Manifest::try_from_slice_compat(&bytes).unwrap();
 
 		assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
-		assert_eq!(manifest.pool_size, None);
-		assert_eq!(manifest.client_timeout_ms, None);
+		assert_eq!(manifest.pivot.bridge_config.len(), 0);
 	}
 }

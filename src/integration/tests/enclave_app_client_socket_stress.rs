@@ -5,18 +5,17 @@ use integration::{
 	wait_for_usock, PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH,
 };
 use qos_core::{
-	client::SocketClient,
+	client::{ClientError, SocketClient},
 	handles::Handles,
-	io::{SocketAddress, StreamPool},
+	io::{IOError, SocketAddress, StreamPool},
 	protocol::{
-		msg::ProtocolMsg,
 		services::boot::{
 			Manifest, ManifestEnvelope, ManifestSet, Namespace, NitroConfig,
 			PivotConfig, RestartPolicy, ShareSet,
 		},
-		ProtocolError, ProtocolPhase, INITIAL_CLIENT_TIMEOUT,
+		ProtocolPhase,
 	},
-	reaper::{Reaper, REAPER_RESTART_DELAY},
+	reaper::Reaper,
 };
 use qos_nsm::mock::MockNsm;
 use qos_p256::P256Pair;
@@ -41,6 +40,7 @@ async fn enclave_app_client_socket_stress() {
 			hash: [1; 32],
 			restart: RestartPolicy::Always,
 			args: vec![APP_SOCK.to_string()],
+			..Default::default()
 		},
 		manifest_set: ManifestSet { threshold: 0, members: vec![] },
 		share_set: ShareSet { threshold: 0, members: vec![] },
@@ -77,18 +77,13 @@ async fn enclave_app_client_socket_stress() {
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	handles.put_quorum_key(&p256_pair).unwrap();
 
-	let enclave_pool =
-		StreamPool::single(SocketAddress::new_unix(ENCLAVE_SOCK)).unwrap();
-
-	let app_pool =
-		StreamPool::single(SocketAddress::new_unix(APP_SOCK)).unwrap();
+	let enclave_socket = SocketAddress::new_unix(ENCLAVE_SOCK);
 
 	tokio::spawn(async move {
 		Reaper::execute(
 			&handles,
 			Box::new(MockNsm),
-			enclave_pool,
-			app_pool,
+			enclave_socket,
 			// Force the phase to quorum key provisioned so message proxy-ing
 			// works
 			Some(ProtocolPhase::QuorumKeyProvisioned),
@@ -99,56 +94,41 @@ async fn enclave_app_client_socket_stress() {
 	// Make sure the pivot has some time to start up
 	wait_for_usock(APP_SOCK).await;
 
-	let enclave_client_pool =
-		StreamPool::single(SocketAddress::new_unix(ENCLAVE_SOCK)).unwrap();
-	let enclave_client = SocketClient::new(
-		enclave_client_pool.shared(),
-		INITIAL_CLIENT_TIMEOUT + Duration::from_secs(3), // needs to be bigger than the slow request below + some time for recovery
+	let app_client_pool =
+		StreamPool::single(SocketAddress::new_unix(APP_SOCK)).unwrap();
+	let app_client = SocketClient::new(
+		app_client_pool.shared(),
+		Duration::from_millis(2000),
 	);
 
-	let app_request =
-		borsh::to_vec(&PivotSocketStressMsg::PanicRequest).unwrap();
-	let request =
-		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
-			.unwrap();
-	let raw_response = enclave_client.call(&request).await.unwrap();
-	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
+	let request = borsh::to_vec(&PivotSocketStressMsg::PanicRequest).unwrap();
+	let raw_response = app_client.call(&request).await.unwrap_err();
 
-	assert_eq!(
-		response,
-		ProtocolMsg::ProtocolErrorResponse(
-			ProtocolError::AppClientRecvConnectionClosed
-		)
-	);
+	match raw_response {
+		ClientError::IOError(IOError::RecvConnectionClosed) => {} // expected
+		_ => panic!("unexpected error received: {:?}", raw_response),
+	}
 
-	tokio::time::sleep(REAPER_RESTART_DELAY + Duration::from_secs(1)).await;
+	// we need to give the panicking pivot time to quit and close the old socket before trying to see
+	// if it restarted a new one. Since we don't know the PID we need to do a basic sleep here.
+	tokio::time::sleep(Duration::from_millis(500)).await;
+
+	// Make sure the pivot has some time to restart
+	wait_for_usock(APP_SOCK).await;
+
 	// The pivot panicked and should have been restarted.
-	let app_request =
-		borsh::to_vec(&PivotSocketStressMsg::OkRequest(1)).unwrap();
-	let request =
-		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
-			.unwrap();
-	let raw_response = enclave_client.call(&request).await.unwrap();
-	let response = {
-		let msg = ProtocolMsg::try_from_slice(&raw_response).unwrap();
-		let data = match msg {
-			ProtocolMsg::ProxyResponse { data } => data,
-			x => panic!("Expected proxy response, got {x:?}"),
-		};
-		PivotSocketStressMsg::try_from_slice(&data).unwrap()
-	};
+	let request = borsh::to_vec(&PivotSocketStressMsg::OkRequest(1)).unwrap();
+	let raw_response = app_client.call(&request).await.unwrap();
+	let response = PivotSocketStressMsg::try_from_slice(&raw_response).unwrap();
 	assert_eq!(response, PivotSocketStressMsg::OkResponse(1));
 
 	// Send a request that the app will take too long to respond to
-	let app_request =
-		borsh::to_vec(&PivotSocketStressMsg::SlowRequest(5500)).unwrap();
 	let request =
-		borsh::to_vec(&ProtocolMsg::ProxyRequest { data: app_request })
-			.unwrap();
-	let raw_response = enclave_client.call(&request).await.unwrap();
-	let response = ProtocolMsg::try_from_slice(&raw_response).unwrap();
-	assert_eq!(
-		response,
-		ProtocolMsg::ProtocolErrorResponse(ProtocolError::AppClientRecvTimeout)
-	);
+		borsh::to_vec(&PivotSocketStressMsg::SlowRequest(2100)).unwrap();
+	let raw_response = app_client.call(&request).await.unwrap_err();
+
+	match raw_response {
+		ClientError::IOError(IOError::RecvTimeout) => {} // expected
+		_ => panic!("unexpected error received: {:?}", raw_response),
+	}
 }

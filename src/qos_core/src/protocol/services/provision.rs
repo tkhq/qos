@@ -201,6 +201,7 @@ mod test {
 				hash: sha_256(pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
+				..Default::default()
 			},
 			manifest_set: ManifestSet {
 				threshold: threshold.try_into().unwrap(),
@@ -211,8 +212,6 @@ mod test {
 				members: members.clone().into_iter().map(|(m, _)| m).collect(),
 			},
 			patch_set: PatchSet::default(),
-			pool_size: None,
-			client_timeout_ms: None,
 		};
 
 		let approvals: Vec<_> = members

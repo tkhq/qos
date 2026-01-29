@@ -9,7 +9,7 @@ use std::{
 
 use rand::prelude::*;
 
-const MAX_PORT_BIND_WAIT_TIME: Duration = Duration::from_secs(90);
+const MAX_PORT_BIND_WAIT_TIME: Duration = Duration::from_secs(5);
 const PORT_BIND_WAIT_TIME_INCREMENT: Duration = Duration::from_millis(500);
 const POST_BIND_SLEEP: Duration = Duration::from_millis(500);
 const SERVER_PORT_RANGE: Range<u16> = 10000..60000;
@@ -18,7 +18,7 @@ const EXIT_DELAY: Duration = Duration::from_millis(50);
 
 /// Wrapper type for [`std::process::Child`] that kills the process on drop.
 #[derive(Debug)]
-pub struct ChildWrapper(std::process::Child);
+pub struct ChildWrapper(pub std::process::Child);
 
 impl From<std::process::Child> for ChildWrapper {
 	fn from(child: std::process::Child) -> Self {

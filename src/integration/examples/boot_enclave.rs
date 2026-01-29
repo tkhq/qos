@@ -33,7 +33,6 @@ async fn main() {
 	fs::create_dir_all(&*tmp).unwrap();
 
 	let usock: PathWrapper = "/tmp/enclave-example/example.sock".into();
-	let app_usock: PathWrapper = "/tmp/enclave-example/example-app.sock".into();
 	let secret_path: PathWrapper = "/tmp/enclave-example/example.secret".into();
 	let pivot_path: PathWrapper = "/tmp/enclave-example/example.pivot".into();
 	let manifest_path: PathWrapper =
@@ -245,8 +244,6 @@ async fn main() {
 			.args([
 				"--usock",
 				&*usock,
-				"--app-usock",
-				&*app_usock,
 				"--quorum-file",
 				&*secret_path,
 				"--pivot-file",
@@ -442,8 +439,8 @@ async fn main() {
 		ureq::get(&enclave_info_url).call().unwrap().into_json().unwrap();
 	assert_eq!(enclave_info.phase, ProtocolPhase::QuorumKeyProvisioned);
 
-	eprintln!("=========ENCLAVE READY WITH PIVOT RUNNING!!==========");
-	eprintln!("press ctrl+c to quit");
+	println!("=========ENCLAVE READY WITH PIVOT RUNNING!!==========");
+	println!("press ctrl+c to quit");
 
 	match tokio::signal::ctrl_c().await {
 		Ok(()) => {}

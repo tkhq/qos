@@ -235,7 +235,7 @@ fn main() {
 	let (enclave_id, maybe_console) = boot();
 
 	match healthy() {
-		Ok(_) => eprintln!("Enclave is healthy"),
+		Ok(_) => println!("Enclave is healthy"),
 		Err(e) => eprintln!("Enclave is sad: {}", e),
 	};
 

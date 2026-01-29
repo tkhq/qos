@@ -11,9 +11,9 @@ use qos_core::protocol::{
 	msg::ProtocolMsg,
 	services::{
 		boot::{
-			Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
-			Namespace, NitroConfig, PatchSet, PivotConfig, QuorumMember,
-			RestartPolicy, ShareSet,
+			Approval, BridgeConfig, Manifest, ManifestEnvelope, ManifestSet,
+			MemberPubKey, Namespace, NitroConfig, PatchSet, PivotConfig,
+			QuorumMember, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
@@ -706,8 +706,8 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub quorum_key_path: P,
 	pub manifest_path: P,
 	pub pivot_args: Vec<String>,
-	pub pool_size: Option<u8>,
-	pub client_timeout_ms: Option<u16>,
+	pub bridge_config: Vec<BridgeConfig>,
+	pub debug_mode: bool,
 }
 
 pub(crate) fn generate_manifest<P: AsRef<Path>>(
@@ -726,8 +726,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		quorum_key_path,
 		manifest_path,
 		pivot_args,
-		pool_size,
-		client_timeout_ms,
+		bridge_config,
+		debug_mode,
 	} = args;
 
 	let nitro_config =
@@ -753,13 +753,13 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
+			bridge_config,
+			debug_mode,
 		},
 		manifest_set,
 		share_set,
 		patch_set,
 		enclave: nitro_config,
-		pool_size,
-		client_timeout_ms,
 	};
 
 	write_with_msg(
@@ -970,16 +970,6 @@ where
 		let prompt = format!(
 			"Are these the correct pivot args:\n{:?}?\n(y/n)",
 			manifest.pivot.args
-		);
-		if !prompter.prompt_is_yes(&prompt) {
-			return false;
-		}
-	}
-	// Check socket pool size
-	{
-		let prompt = format!(
-			"Is this the correct socket pool size:\n{:?}?\n(y/n)",
-			manifest.pool_size.unwrap_or(1)
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1613,6 +1603,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	pivot_path: P,
 	restart: RestartPolicy,
 	args: Vec<String>,
+	host_config: Vec<BridgeConfig>,
 	unsafe_eph_path_override: Option<String>,
 ) {
 	// Generate a quorum key
@@ -1653,7 +1644,13 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			qos_commit: "mock-qos-commit-ref".to_string(),
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
-		pivot: PivotConfig { hash: sha_256(&pivot), restart, args },
+		pivot: PivotConfig {
+			hash: sha_256(&pivot),
+			restart,
+			args,
+			bridge_config: host_config,
+			debug_mode: false,
+		},
 		manifest_set: ManifestSet {
 			threshold: 1,
 			// The only member is the quorum member
@@ -1665,8 +1662,6 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			members: vec![member.clone()],
 		},
 		patch_set: PatchSet { threshold: 0, members: vec![] },
-		pool_size: None,
-		client_timeout_ms: None,
 	};
 
 	// Create and post the boot standard instruction
@@ -1993,7 +1988,7 @@ fn read_manifest<P: AsRef<Path>>(file: P) -> Result<Manifest, Error> {
 	// try getting Manifest from json
 	let result = serde_json::from_slice::<Manifest>(&bytes);
 	if result.is_err() {
-		// if not try the old borsh format
+		// if not try the old formats
 		Manifest::try_from_slice_compat(&bytes).map_err(Error::from)
 	} else {
 		result.map_err(Error::from)
@@ -2289,13 +2284,12 @@ mod tests {
 					.into_iter()
 					.map(String::from)
 					.collect(),
+				..Default::default()
 			},
 			manifest_set: manifest_set.clone(),
 			share_set: share_set.clone(),
 			patch_set: patch_set.clone(),
 			enclave: nitro_config.clone(),
-			pool_size: None,
-			client_timeout_ms: None,
 		};
 
 		let manifest_envelope = ManifestEnvelope {

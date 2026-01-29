@@ -1,10 +1,13 @@
 //! Protocol proxy for our remote QOS net proxy
+use std::sync::Arc;
+
 use borsh::BorshDeserialize;
 use futures::Future;
 use qos_core::{
-	io::{IOError, Listener, Stream, StreamPool},
-	server::{SocketServer, SocketServerError},
+	io::{IOError, Listener, StreamPool},
+	server::{PermittedStream, SocketServer, SocketServerError},
 };
+use tokio::sync::Semaphore;
 
 use crate::{
 	error::QosNetError, proxy_connection::ProxyConnection, proxy_msg::ProxyMsg,
@@ -16,12 +19,12 @@ const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
 /// Socket<>TCP proxy to enable remote connections
 pub struct Proxy {
 	tcp_connection: Option<ProxyConnection>,
-	sock_stream: Stream,
+	sock_stream: PermittedStream,
 }
 
 impl Proxy {
 	/// Create a new `Proxy` from the given `Stream`, with empty tcp_connection
-	pub fn new(sock_stream: Stream) -> Self {
+	pub fn new(sock_stream: PermittedStream) -> Self {
 		Self { tcp_connection: None, sock_stream }
 	}
 
@@ -123,7 +126,7 @@ impl Proxy {
 				self.sock_stream.send(&resp_bytes).await?;
 				if let Some(tcp_connection) = &mut self.tcp_connection {
 					let result = tokio::io::copy_bidirectional(
-						&mut self.sock_stream,
+						&mut self.sock_stream.stream(),
 						&mut tcp_connection.tcp_stream,
 					)
 					.await
@@ -144,14 +147,16 @@ impl Proxy {
 pub trait ProxyServer {
 	fn listen_proxy(
 		pool: StreamPool,
+		max_connections: usize,
 	) -> impl Future<Output = Result<Box<Self>, SocketServerError>> + Send;
 }
 
 impl ProxyServer for SocketServer {
 	/// Listen on a tcp proxy server in a way that allows the USOCK/VSOCK to be used as a
-	/// dumb pipe after getting the `connect*` calls.
+	/// dumb pipe after getting the `connect*` calls. Allows up to `max_connections`.
 	async fn listen_proxy(
 		pool: StreamPool,
+		max_connections: usize,
 	) -> Result<Box<Self>, SocketServerError> {
 		println!("`SocketServer` proxy listening on pool size {}", pool.len());
 
@@ -159,31 +164,40 @@ impl ProxyServer for SocketServer {
 
 		let mut tasks = Vec::new();
 		for listener in listeners {
-			let task =
-				tokio::spawn(async move { accept_loop_proxy(listener).await });
+			let task = tokio::spawn(async move {
+				accept_loop_proxy(listener, max_connections).await
+			});
 
 			tasks.push(task);
 		}
 
-		Ok(Box::new(Self { pool, tasks }))
+		Ok(Box::new(Self { pool, tasks, max_connections }))
 	}
 }
 
 async fn accept_loop_proxy(
 	listener: Listener,
+	max_connections: usize,
 ) -> Result<(), SocketServerError> {
+	let connections = Arc::new(Semaphore::const_new(max_connections));
 	loop {
-		eprintln!("Proxy::accept_loop_proxy accepting connection");
-		let stream = listener.accept().await?;
-		let mut proxy = Proxy::new(stream);
+		println!("Proxy::accept_loop_proxy accepting connection");
+		let stream =
+			PermittedStream::accept(&listener, connections.clone()).await?;
+		println!("Proxy::accept_loop_proxy new connection accepted");
 
-		match proxy.run().await {
-			Ok(()) => {
-				eprintln!("Proxy::run done");
+		tokio::task::spawn(async move {
+			let mut proxy = Proxy::new(stream);
+
+			match proxy.run().await {
+				Ok(()) => {
+					println!("Proxy::run done");
+				}
+				Err(IOError::RecvConnectionClosed) => {} // expected, do not log and just re-accept
+				Err(err) => {
+					eprintln!("Error on proxy run {err:?} rerunning");
+				}
 			}
-			Err(err) => {
-				eprintln!("Error on proxy run {err:?} rerunning");
-			}
-		}
+		});
 	}
 }
