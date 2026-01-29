@@ -113,7 +113,7 @@ impl Handles {
 	) -> Result<(), ProtocolError> {
 		Self::write_as_read_only(
 			&self.ephemeral.ephemeral_key_path,
-			&pair.to_master_seed_hex(),
+			&pair.to_hex(),
 			ProtocolError::FailedToPutEphemeralKey,
 		)
 	}
@@ -139,7 +139,7 @@ impl Handles {
 
 		Self::write_as_read_only(
 			path,
-			&new_pair.to_master_seed_hex(),
+			&new_pair.to_hex(),
 			ProtocolError::FailedToPutEphemeralKey,
 		)
 	}
@@ -158,10 +158,13 @@ impl Handles {
 	/// # Errors
 	///
 	/// Errors if the Quorum Key has already been put.
-	pub fn put_quorum_key(&self, pair: &QosKeySet) -> Result<(), ProtocolError> {
+	pub fn put_quorum_key(
+		&self,
+		pair: &QosKeySet,
+	) -> Result<(), ProtocolError> {
 		Self::write_as_read_only(
 			&self.quorum.quorum,
-			&pair.to_master_seed_hex(),
+			&pair.to_hex(),
 			ProtocolError::FailedToPutQuorumKey,
 		)
 	}

@@ -151,8 +151,10 @@ pub(in crate::protocol) fn boot_genesis(
 	genesis_set: &GenesisSet,
 	maybe_dr_key: Option<Vec<u8>>,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
-	let quorum_pair = QosKeySet::generate()?;
-	let master_seed = &quorum_pair.to_master_seed()[..];
+	// Generate a v0 quorum key.
+	// This is primarily to reduces the number of test fixtures we break
+	let quorum_pair = QosKeySet::generate_v0()?;
+	let master_seed = quorum_pair.as_bytes();
 
 	let shares = qos_crypto::shamir::shares_generate(
 		master_seed,
@@ -214,7 +216,6 @@ pub(in crate::protocol) fn boot_genesis(
 #[cfg(test)]
 mod test {
 	use qos_nsm::mock::MockNsm;
-	use qos_p256::MASTER_SEED_LEN;
 
 	use super::*;
 	use crate::handles::Handles;
@@ -267,15 +268,12 @@ mod test {
 			})
 			.collect();
 
-		let reconstructed: [u8; MASTER_SEED_LEN] =
-			qos_crypto::shamir::shares_reconstruct(
-				&shares[0..threshold as usize],
-			)
-			.unwrap()
-			.try_into()
-			.unwrap();
+		let reconstructed = qos_crypto::shamir::shares_reconstruct(
+			&shares[0..threshold as usize],
+		)
+		.unwrap();
 		let reconstructed_quorum_key =
-			QosKeySet::from_master_seed(&reconstructed).unwrap();
+			QosKeySet::from_bytes(&reconstructed).unwrap();
 
 		let quorum_public_key =
 			QosKeySetV0Public::from_bytes(&output.quorum_key).unwrap();

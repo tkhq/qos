@@ -96,11 +96,7 @@ pub(in crate::protocol) fn provision(
 	let master_seed = state.provisioner.build()?;
 	state.provisioner.clear();
 
-	let master_seed: [u8; qos_p256::MASTER_SEED_LEN] =
-		master_seed
-			.try_into()
-			.map_err(|_| ProtocolError::IncorrectSecretLen)?;
-	let pair = qos_p256::QosKeySet::from_master_seed(&master_seed)?;
+	let pair = qos_p256::QosKeySet::from_bytes(&master_seed)?;
 	let public_key_bytes = pair.public_key().to_bytes();
 
 	if public_key_bytes != manifest_envelope.manifest.namespace.quorum_key {
@@ -252,7 +248,7 @@ mod test {
 			setup(&eph_file, &quorum_file, &manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
-		let quorum_key = quorum_pair.to_master_seed();
+		let quorum_key = quorum_pair.as_bytes();
 		let encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
 				.unwrap()
@@ -281,7 +277,7 @@ mod test {
 		assert_eq!(provision(share, approval, &mut state), Ok(true));
 		let quorum_key = std::fs::read(&*quorum_file).unwrap();
 
-		assert_eq!(quorum_key, quorum_pair.to_master_seed_hex());
+		assert_eq!(quorum_key, quorum_pair.to_hex());
 
 		// Make sure the EK is persisted
 		assert!(Path::new(&*eph_file).exists());
@@ -315,8 +311,7 @@ mod test {
 			setup(&eph_file, &quorum_file, &manifest_file);
 
 		// 4) Create shards of a RANDOM KEY and encrypt them to eph key
-		let random_key =
-			QosKeySet::generate().unwrap().to_master_seed().to_vec();
+		let random_key = QosKeySet::generate().unwrap().as_bytes().to_vec();
 		let encrypted_shares: Vec<_> =
 			shares_generate(&random_key, 4, threshold)
 				.unwrap()
@@ -360,7 +355,7 @@ mod test {
 			setup(&eph_file, &quorum_file, &manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
-		let quorum_key = quorum_pair.to_master_seed();
+		let quorum_key = quorum_pair.versioned_secret().as_bytes();
 
 		let encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
@@ -388,7 +383,7 @@ mod test {
 		let approval = approvals[threshold].clone();
 		assert_eq!(
 			provision(&encrypted_bogus_share, approval, &mut state),
-			Err(ProtocolError::ReconstructionErrorIncorrectPubKey)
+			Err(ProtocolError::QosCrypto("Vsss(InvalidShare)".to_string()))
 		);
 		assert!(!Path::new(&*quorum_file).exists());
 		// Note that the handler should set the state to unrecoverable error
@@ -412,7 +407,7 @@ mod test {
 			mut approvals,
 		} = setup(&eph_file, &quorum_file, &manifest_file);
 
-		let quorum_key = quorum_pair.to_master_seed();
+		let quorum_key = quorum_pair.versioned_secret().as_bytes();
 		let mut encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
 				.unwrap()
@@ -449,7 +444,7 @@ mod test {
 			mut approvals,
 		} = setup(&eph_file, &quorum_file, &manifest_file);
 
-		let quorum_key = quorum_pair.to_master_seed();
+		let quorum_key = quorum_pair.versioned_secret().as_bytes();
 		let mut encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
 				.unwrap()
@@ -492,7 +487,7 @@ mod test {
 			mut approvals,
 		} = setup(&eph_file, &quorum_file, &manifest_file);
 
-		let quorum_key = quorum_pair.to_master_seed();
+		let quorum_key = quorum_pair.versioned_secret().as_bytes();
 		let mut encrypted_shares: Vec<_> =
 			shares_generate(quorum_key, 4, threshold)
 				.unwrap()

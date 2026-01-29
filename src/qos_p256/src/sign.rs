@@ -7,7 +7,7 @@ use p256::ecdsa::{
 use p256::elliptic_curve::rand_core::OsRng;
 use zeroize::ZeroizeOnDrop;
 
-use crate::{P256Error, PUB_KEY_LEN_UNCOMPRESSED};
+use crate::{QosKeySetError, PUB_KEY_LEN_UNCOMPRESSED};
 
 /// Sign private key pair.
 #[derive(ZeroizeOnDrop)]
@@ -26,7 +26,7 @@ impl P256SignPair {
 
 	/// Sign the message and return the. Signs the SHA512 digest of
 	/// the message.
-	pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
+	pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, QosKeySetError> {
 		let signature: Signature = self.private.sign(message);
 
 		Ok(signature.to_vec())
@@ -39,10 +39,10 @@ impl P256SignPair {
 	}
 
 	/// Deserialize key from raw scalar byte slice.
-	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, QosKeySetError> {
 		Ok(Self {
 			private: SigningKey::from_slice(bytes)
-				.map_err(|_| P256Error::FailedToReadSecret)?,
+				.map_err(|_| QosKeySetError::FailedToReadSecret)?,
 		})
 	}
 
@@ -68,13 +68,13 @@ impl P256SignPublic {
 		&self,
 		message: &[u8],
 		signature: &[u8],
-	) -> Result<(), P256Error> {
+	) -> Result<(), QosKeySetError> {
 		let signature = Signature::try_from(signature)
-			.map_err(|_| P256Error::FailedToDeserializeSignature)?;
+			.map_err(|_| QosKeySetError::FailedToDeserializeSignature)?;
 
 		self.public
 			.verify(message, &signature)
-			.map_err(|_| P256Error::FailedSignatureVerification)
+			.map_err(|_| QosKeySetError::FailedSignatureVerification)
 	}
 
 	/// Serialize to SEC1 encoded point, not compressed.
@@ -85,17 +85,17 @@ impl P256SignPublic {
 	}
 
 	/// Deserialize from a SEC1 encoded point, not compressed.
-	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, QosKeySetError> {
 		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize {
-			return Err(P256Error::EncodedPublicKeyTooLong);
+			return Err(QosKeySetError::EncodedPublicKeyTooLong);
 		}
 		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED as usize {
-			return Err(P256Error::EncodedPublicKeyTooShort);
+			return Err(QosKeySetError::EncodedPublicKeyTooShort);
 		}
 
 		Ok(Self {
 			public: VerifyingKey::from_sec1_bytes(bytes)
-				.map_err(|_| P256Error::FailedToReadPublicKey)?,
+				.map_err(|_| QosKeySetError::FailedToReadPublicKey)?,
 		})
 	}
 }
@@ -137,7 +137,7 @@ mod tests {
 
 		assert_eq!(
 			bob_public.verify(message, &signature).unwrap_err(),
-			P256Error::FailedSignatureVerification
+			QosKeySetError::FailedSignatureVerification
 		);
 	}
 
@@ -176,15 +176,15 @@ mod tests {
 
 		assert!(matches!(
 			P256SignPublic::from_bytes(&too_short),
-			Err(P256Error::EncodedPublicKeyTooShort)
+			Err(QosKeySetError::EncodedPublicKeyTooShort)
 		));
 		assert!(matches!(
 			P256SignPublic::from_bytes(&too_long),
-			Err(P256Error::EncodedPublicKeyTooLong)
+			Err(QosKeySetError::EncodedPublicKeyTooLong)
 		));
 		assert!(matches!(
 			P256SignPublic::from_bytes(&bad_prefix),
-			Err(P256Error::FailedToReadPublicKey),
+			Err(QosKeySetError::FailedToReadPublicKey),
 		));
 		assert!(P256SignPublic::from_bytes(&just_right).is_ok());
 	}

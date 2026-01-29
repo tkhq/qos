@@ -14,7 +14,7 @@ pub struct FuzzKeyDataStruct {
 fuzz_target!(|input: FuzzKeyDataStruct| {
 	// let the fuzzer control the key and data that is going to be signed
 
-	let keypair = match QosKeySet::from_master_seed(&input.key) {
+	let keypair = match QosKeySet::from_bytes(&input.key) {
 		Ok(pair) => pair,
 		Err(_err) => {
 			return;

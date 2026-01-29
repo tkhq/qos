@@ -10,7 +10,8 @@ use std::{
 
 use qos_crypto::shamir::shares_generate;
 use qos_p256::{
-	derive_secret, encrypt::P256EncryptPair, QosKeySet, P256_ENCRYPT_DERIVE_PATH,
+	derive_secret, encrypt::P256EncryptPair, QosKeySet,
+	P256_ENCRYPT_DERIVE_PATH,
 };
 
 // Note: the dev secret can also be found in our keys repo
@@ -82,10 +83,7 @@ fn preprod_reshard_ceremony() {
 	let dev_secret_hex_bytes =
 		qos_hex::decode(std::str::from_utf8(&dev_secret_utf8_bytes).unwrap())
 			.unwrap();
-	let dev_key = QosKeySet::from_master_seed(
-		&dev_secret_hex_bytes.clone().try_into().unwrap(),
-	)
-	.unwrap();
+	let dev_key = QosKeySet::from_bytes(&dev_secret_hex_bytes).unwrap();
 
 	// For each of the enclaves...
 	for enclave_name in [
@@ -109,11 +107,8 @@ fn preprod_reshard_ceremony() {
 		let removed_byte = decrypted_dev_share.remove(0);
 		assert_eq!(removed_byte, 1);
 
-		let pk = QosKeySet::from_master_seed(
-			&decrypted_dev_share.clone().try_into().unwrap(),
-		)
-		.unwrap()
-		.public_key();
+		let pk =
+			QosKeySet::from_bytes(&decrypted_dev_share).unwrap().public_key();
 		let expected_quorum_public_key = fs::read(format!(
 			"./fixtures/preprod/{enclave_name}/quorum_key.pub"
 		))

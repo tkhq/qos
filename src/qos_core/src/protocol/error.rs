@@ -1,6 +1,6 @@
 //! Quorum protocol error
 use borsh::{BorshDeserialize, BorshSerialize};
-use qos_p256::P256Error;
+use qos_p256::QosKeySetError;
 
 use crate::{
 	client::ClientError,
@@ -50,7 +50,7 @@ pub enum ProtocolError {
 	CannotModifyPostPivotStatic,
 	/// For some reason the Ephemeral could not be read from the file
 	/// system.
-	FailedToGetEphemeralKey(P256Error),
+	FailedToGetEphemeralKey(QosKeySetError),
 	/// Failed to write the Ephemeral key to the file system.
 	FailedToPutEphemeralKey,
 	/// Failed to rotate the ephemeral key because the underlying file is missing.
@@ -59,7 +59,7 @@ pub enum ProtocolError {
 	CannotDeleteEphemeralKey(String),
 	/// For some reason the Quorum Key could not be read from the file
 	/// system.
-	FailedToGetQuorumKey(P256Error),
+	FailedToGetQuorumKey(QosKeySetError),
 	/// Failed to put the quorum key into the file system
 	FailedToPutQuorumKey,
 	/// For some reason the manifest envelope could not be read from the file
@@ -102,9 +102,9 @@ pub enum ProtocolError {
 	/// Not a member of the [`boot::ManifestSet`].
 	NotManifestSetMember,
 	/// `qos_p256` Error wrapper.
-	P256Error(qos_p256::P256Error),
+	QosKeySetError(qos_p256::QosKeySetError),
 	/// Error with trying to read p256 DR public key.
-	InvalidP256DRKey(qos_p256::P256Error),
+	InvalidP256DRKey(qos_p256::QosKeySetError),
 	/// The provisioned secret is the incorrect length.
 	IncorrectSecretLen,
 	/// An error from the attest crate.
@@ -179,9 +179,9 @@ impl From<ClientError> for ProtocolError {
 	}
 }
 
-impl From<qos_p256::P256Error> for ProtocolError {
-	fn from(err: qos_p256::P256Error) -> Self {
-		Self::P256Error(err)
+impl From<qos_p256::QosKeySetError> for ProtocolError {
+	fn from(err: qos_p256::QosKeySetError) -> Self {
+		Self::QosKeySetError(err)
 	}
 }
 
@@ -285,7 +285,7 @@ impl std::fmt::Display for ProtocolError {
 			Self::NotManifestSetMember => {
 				write!(f, "not a manifest set member")
 			}
-			Self::P256Error(e) => write!(f, "P256 error: {e:?}"),
+			Self::QosKeySetError(e) => write!(f, "P256 error: {e:?}"),
 			Self::InvalidP256DRKey(e) => {
 				write!(f, "invalid P256 DR key: {e:?}")
 			}

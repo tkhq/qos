@@ -2141,6 +2141,7 @@ dependencies = [
  "hkdf",
  "hmac",
  "p256",
+ "qos_crypto",
  "qos_hex",
  "qos_test_primitives",
  "sha2",
