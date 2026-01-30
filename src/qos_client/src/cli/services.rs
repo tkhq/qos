@@ -287,7 +287,7 @@ pub fn generate_file_key<P: AsRef<Path>>(
 	pub_key_path: P,
 ) {
 	let share_key_pair =
-		QuorumKey::generate_v0().expect("unable to generate P256 keypair");
+		QuorumKey::generate().expect("unable to generate P256 keypair");
 
 	// Write the personal key secret
 	write_with_msg(

@@ -252,11 +252,8 @@ async fn genesis_e2e() {
 	let dr_key_pair = QuorumKey::from_hex_file(DR_KEY_PRIVATE_PATH).unwrap();
 
 	let dr_wrapped_quorum_key = fs::read(dr_wrapped_quorum_key_path).unwrap();
-	let master_seed: [u8; 32] = dr_key_pair
-		.decrypt(&dr_wrapped_quorum_key)
-		.unwrap()
-		.try_into()
-		.unwrap();
+	let master_seed = dr_key_pair.decrypt(&dr_wrapped_quorum_key).unwrap();
+
 	let pair = QuorumKey::from_bytes(&master_seed).unwrap();
 	assert!(pair == reconstructed);
 

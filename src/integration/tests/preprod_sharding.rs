@@ -9,10 +9,7 @@ use std::{
 };
 
 use qos_crypto::shamir::shares_generate;
-use qos_p256::{
-	derive_secret, encrypt::P256EncryptPair, QuorumKey,
-	P256_ENCRYPT_DERIVE_PATH,
-};
+use qos_p256::QuorumKey;
 
 // Note: the dev secret can also be found in our keys repo
 // (tkhq/keys:deployment/preprod/evm-parser/manifest-set/dev.secret)
@@ -157,11 +154,7 @@ fn assert_can_decrypt(user_secret_path: String, sharepath: String) {
 	let master_seed_hex_bytes = fs::read(user_secret_path).unwrap();
 	let master_seed_utf8 = std::str::from_utf8(&master_seed_hex_bytes).unwrap();
 	let master_seed = qos_hex::decode(master_seed_utf8).unwrap();
-	let encryption_pair_secret = derive_secret(
-		&master_seed.try_into().unwrap(),
-		P256_ENCRYPT_DERIVE_PATH,
-	)
-	.unwrap();
-	let pair = P256EncryptPair::from_bytes(&encryption_pair_secret).unwrap();
-	assert!(pair.decrypt(&share).is_ok());
+
+	let quorum_key = QuorumKey::from_bytes(&master_seed).unwrap();
+	assert!(quorum_key.decrypt(&share).is_ok());
 }

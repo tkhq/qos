@@ -151,9 +151,7 @@ pub(in crate::protocol) fn boot_genesis(
 	genesis_set: &GenesisSet,
 	maybe_dr_key: Option<Vec<u8>>,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
-	// Generate a v0 quorum key.
-	// This is primarily to reduces the number of test fixtures we break
-	let quorum_pair = QuorumKey::generate_v0()?;
+	let quorum_pair = QuorumKey::generate()?;
 	let master_seed = quorum_pair.as_bytes();
 
 	let shares = qos_crypto::shamir::shares_generate(
