@@ -197,6 +197,8 @@ pub enum Command {
 	YubiKeyPublic,
 	/// Display some borsh encoded type in an easy to read format.
 	Display,
+	/// Convert a JSON manifest or manifest-envelope to Borsh format.
+	JsonToBorsh,
 	/// Reset the PIV app. WARNING: this is a destructive operation that will
 	/// destroy all PIV keys!
 	YubiKeyPivReset,
@@ -248,6 +250,7 @@ impl From<&str> for Command {
 			"yubikey-piv-reset" => Self::YubiKeyPivReset,
 			"yubikey-change-pin" => Self::YubiKeyChangePin,
 			"display" => Self::Display,
+			"json-to-borsh" => Self::JsonToBorsh,
 			"boot-key-fwd" => Self::BootKeyFwd,
 			"export-key" => Self::ExportKey,
 			"inject-key" => Self::InjectKey,
@@ -271,7 +274,7 @@ impl From<String> for Command {
 impl Command {
 	fn print_all() {
 		println!(
-			"\thost-health, enclave-status, generate-file-key, generate-manifest-envelope, boot-genesis,\n\tafter-genesis, verify-genesis, generate-manifest, approve-manifest, boot-standard, get-attestation-doc,\n\tget-ephemeral-key-hex, proxy-re-encrypt-share, post-share, dangerous-dev-boot,\n\tprovision-yubikey, advanced-provision-yubikey, pivot-hash, shamir-split, shamir-reconstruct,\n\tyubikey-sign, yubikey-public, yubikey-piv-reset, yubikey-change-pin, display,\n\tboot-key-fwd, export-key, inject-key, p256-verify, p256-sign, p256-asymmetric-encrypt, p256-asymmetric-decrypt"
+			"\thost-health, enclave-status, generate-file-key, generate-manifest-envelope, boot-genesis,\n\tafter-genesis, verify-genesis, generate-manifest, approve-manifest, boot-standard, get-attestation-doc,\n\tget-ephemeral-key-hex, proxy-re-encrypt-share, post-share, dangerous-dev-boot,\n\tprovision-yubikey, advanced-provision-yubikey, pivot-hash, shamir-split, shamir-reconstruct,\n\tyubikey-sign, yubikey-public, yubikey-piv-reset, yubikey-change-pin, display, json-to-borsh,\n\tboot-key-fwd, export-key, inject-key, p256-verify, p256-sign, p256-asymmetric-encrypt, p256-asymmetric-decrypt"
 		);
 	}
 
@@ -799,6 +802,13 @@ impl Command {
 			.token(Self::json_token())
 	}
 
+	fn json_to_borsh() -> Parser {
+		Parser::new()
+			.token(Self::file_path_token())
+			.token(Self::display_type_token())
+			.token(Self::output_path_token())
+	}
+
 	fn boot_key_fwd() -> Parser {
 		Self::base()
 			.token(Self::manifest_envelope_path_token())
@@ -878,6 +888,7 @@ impl GetParserForCommand for Command {
 			Self::YubiKeyPivReset => Parser::new(),
 			Self::YubiKeyChangePin => Self::yubikey_change_pin(),
 			Self::Display => Self::display(),
+			Self::JsonToBorsh => Self::json_to_borsh(),
 			Self::BootKeyFwd => Self::boot_key_fwd(),
 			Self::ExportKey => Self::export_key(),
 			Self::InjectKey => Self::inject_key(),
@@ -1325,6 +1336,9 @@ impl ClientRunner {
 				Command::Display => {
 					handlers::display(&self.opts);
 				}
+				Command::JsonToBorsh => {
+					handlers::json_to_borsh(&self.opts);
+				}
 				Command::BootKeyFwd => handlers::boot_key_fwd(&self.opts),
 				Command::ExportKey => handlers::export_key(&self.opts),
 				Command::InjectKey => handlers::inject_key(&self.opts),
@@ -1658,6 +1672,17 @@ mod handlers {
 			&opts.display_type(),
 			opts.file_path(),
 			opts.json(),
+		) {
+			eprintln!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn json_to_borsh(opts: &ClientOpts) {
+		if let Err(e) = services::json_to_borsh(
+			&opts.display_type(),
+			opts.file_path(),
+			opts.output_path(),
 		) {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);

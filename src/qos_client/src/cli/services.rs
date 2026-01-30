@@ -111,6 +111,11 @@ pub enum Error {
 		path: String,
 		error: String,
 	},
+	/// Failed to write file.
+	FailedToWrite {
+		path: String,
+		error: String,
+	},
 	/// Failed to decode some hex
 	CouldNotDecodeHex(qos_hex::HexError),
 	/// Failed to deserialize something from borsh or json
@@ -1602,6 +1607,42 @@ pub(crate) fn display<P: AsRef<Path>>(
 				.map_err(|e| Error::ReadShare(e.to_string()))?;
 			let decoded = GenesisOutput::try_from_slice(&bytes)?;
 			println!("{decoded:#?}");
+		}
+	};
+	Ok(())
+}
+
+pub(crate) fn json_to_borsh<P: AsRef<Path>>(
+	display_type: &DisplayType,
+	file_path: P,
+	output_path: P,
+) -> Result<(), Error> {
+	match *display_type {
+		DisplayType::Manifest => {
+			let manifest = read_manifest(&file_path)?;
+			let borsh_bytes = borsh::to_vec(&manifest)?;
+			fs::write(&output_path, borsh_bytes).map_err(|e| {
+				Error::FailedToWrite {
+					path: output_path.as_ref().display().to_string(),
+					error: e.to_string(),
+				}
+			})?;
+		}
+		DisplayType::ManifestEnvelope => {
+			let envelope = read_manifest_envelope(&file_path)?;
+			let borsh_bytes = borsh::to_vec(&envelope)?;
+			fs::write(&output_path, borsh_bytes).map_err(|e| {
+				Error::FailedToWrite {
+					path: output_path.as_ref().display().to_string(),
+					error: e.to_string(),
+				}
+			})?;
+		}
+		DisplayType::GenesisOutput => {
+			// GenesisOutput doesn't implement serde, so we can't read it from JSON
+			return Err(Error::ReadShare(
+				"GenesisOutput cannot be converted from JSON".to_string(),
+			));
 		}
 	};
 	Ok(())
