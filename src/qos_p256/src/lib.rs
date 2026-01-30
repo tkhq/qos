@@ -16,7 +16,9 @@ use crate::{
 const PUB_KEY_LEN_UNCOMPRESSED: u8 = 65;
 /// Leading byte to indicate a secret is version 1.
 const SECRET_V1: u8 = 0x01;
+/// Leading byte to indicate a key ID is version 1.
 const QUORUM_KEY_ID_V1: u8 = 0x01;
+/// HKDF info for deriving a AES GCM 256 key ID.
 const AES_GCM_256_KEY_ID_INFO: &[u8] = b"AES_GCM_256_KEY_ID";
 
 /// Master seed derive path for encryption secret
@@ -369,7 +371,7 @@ impl QuorumKey {
 ///
 /// Note: as of V1, this is not a complete identifier for a Quorum Key Set as
 /// it does not identify the associated AES GCM 256 secret. Use `[QuorumKeyId]`
-/// and/or the associated fingerprint to identify a Quorum Key SEt.
+/// and/or the associated fingerprint to identify a Quorum Key Set.
 #[derive(Clone, PartialEq, Eq)]
 pub struct QuorumKeyPublic {
 	encrypt_public: P256EncryptPublic,
@@ -493,11 +495,18 @@ pub struct QuorumKeyId {
 
 impl QuorumKeyId {
 	/// Create a quorum key from requisite key identifiers.
+	///
+	/// Validates that `hpke_public` and `sign_public` are valid SEC1
+	/// uncompressed P256 points.
 	pub fn from_parts(
 		hpke_public: &[u8],
 		sign_public: &[u8],
 		aes_gcm_256_key_id: &[u8],
 	) -> Result<Self, QuorumKeyError> {
+		// Validate that the public keys are valid SEC1 uncompressed points
+		P256EncryptPublic::from_bytes(hpke_public)?;
+		P256SignPublic::from_bytes(sign_public)?;
+
 		let hpke_public = hpke_public
 			.try_into()
 			.map_err(|_| QuorumKeyError::FailedToReadPublicKey)?;
@@ -524,6 +533,20 @@ impl QuorumKeyId {
 	/// Compute the SHA-256 fingerprint of this quorum key ID.
 	pub fn fingerprint(&self) -> [u8; 32] {
 		qos_crypto::sha_256(&self.to_bytes())
+	}
+
+	/// Parse a QuorumKeyId from bytes.
+	///
+	/// Expects 163 bytes: `version || hpke_public || sign_public || aes_gcm_256_key_id`
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, QuorumKeyError> {
+		if bytes.len() != 163 {
+			return Err(QuorumKeyError::FailedToReadPublicKey);
+		}
+		if bytes[0] != QUORUM_KEY_ID_V1 {
+			return Err(QuorumKeyError::FailedToReadPublicKey);
+		}
+
+		Self::from_parts(&bytes[1..66], &bytes[66..131], &bytes[131..163])
 	}
 }
 
@@ -836,5 +859,107 @@ mod test {
 		// Assert public key bytes (130) are equal to bytes[1..131] of key id
 		assert_eq!(&v0_public.to_bytes()[..], &v0_id.to_bytes()[1..131]);
 		assert_eq!(&v1_public.to_bytes()[..], &v1_id.to_bytes()[1..131]);
+	}
+
+	mod versioned_secret_validation {
+		use super::*;
+
+		#[test]
+		fn rejects_wrong_version_byte_for_97_bytes() {
+			let mut bytes = [0u8; 97];
+			// Set version to 0x02 instead of 0x01
+			bytes[0] = 0x02;
+			// Fill with valid-ish data (won't matter since version check fails)
+			bytes[1..33].copy_from_slice(&[1u8; 32]);
+			bytes[33..65].copy_from_slice(&[2u8; 32]);
+			bytes[65..97].copy_from_slice(&[3u8; 32]);
+
+			assert!(matches!(
+				VersionedSecret::from_bytes(&bytes),
+				Err(QuorumKeyError::FailedToReadSecret)
+			));
+		}
+
+		#[test]
+		fn rejects_invalid_p256_scalar_all_zeros() {
+			let mut bytes = [0u8; 97];
+			bytes[0] = SECRET_V1;
+			// hpke_secret is all zeros - invalid P256 scalar
+			// sign_secret and aes_gcm_256_secret don't matter
+
+			assert!(matches!(
+				VersionedSecret::from_bytes(&bytes),
+				Err(QuorumKeyError::FailedToReadSecret)
+			));
+		}
+
+		#[test]
+		fn rejects_invalid_lengths() {
+			// Too short for V0
+			assert!(matches!(
+				VersionedSecret::from_bytes(&[0u8; 31]),
+				Err(QuorumKeyError::FailedToReadSecret)
+			));
+
+			// Between V0 and V1
+			assert!(matches!(
+				VersionedSecret::from_bytes(&[0u8; 33]),
+				Err(QuorumKeyError::FailedToReadSecret)
+			));
+			assert!(matches!(
+				VersionedSecret::from_bytes(&[0u8; 96]),
+				Err(QuorumKeyError::FailedToReadSecret)
+			));
+
+			// Too long for V1
+			assert!(matches!(
+				VersionedSecret::from_bytes(&[0u8; 98]),
+				Err(QuorumKeyError::FailedToReadSecret)
+			));
+		}
+	}
+
+	mod quorum_key_id_parsing {
+		use super::*;
+
+		#[test]
+		fn from_bytes_roundtrip() {
+			let key = QuorumKey::generate().unwrap();
+			let id = key.quorum_key_id().unwrap();
+			let bytes = id.to_bytes();
+
+			let parsed = QuorumKeyId::from_bytes(&bytes).unwrap();
+
+			assert_eq!(parsed.to_bytes(), bytes);
+			assert_eq!(parsed.fingerprint(), id.fingerprint());
+		}
+
+		#[test]
+		fn rejects_wrong_length() {
+			assert!(QuorumKeyId::from_bytes(&[0u8; 162]).is_err());
+			assert!(QuorumKeyId::from_bytes(&[0u8; 164]).is_err());
+			assert!(QuorumKeyId::from_bytes(&[0u8; 130]).is_err());
+		}
+
+		#[test]
+		fn rejects_wrong_version_byte() {
+			let key = QuorumKey::generate().unwrap();
+			let id = key.quorum_key_id().unwrap();
+			let mut bytes = id.to_bytes();
+
+			// Change version byte
+			bytes[0] = 0x02;
+
+			assert!(QuorumKeyId::from_bytes(&bytes).is_err());
+		}
+
+		#[test]
+		fn rejects_invalid_public_keys() {
+			let mut bytes = [0u8; 163];
+			bytes[0] = QUORUM_KEY_ID_V1;
+			// Rest is zeros - invalid SEC1 points
+
+			assert!(QuorumKeyId::from_bytes(&bytes).is_err());
+		}
 	}
 }
