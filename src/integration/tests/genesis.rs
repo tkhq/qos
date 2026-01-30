@@ -203,8 +203,7 @@ async fn genesis_e2e() {
 	let reconstructed = QuorumKey::from_bytes(&master_secret).unwrap();
 	assert!(
 		reconstructed.public_key()
-			== QuorumKeyPublic::from_bytes(&genesis_output.quorum_key)
-				.unwrap()
+			== QuorumKeyPublic::from_bytes(&genesis_output.quorum_key).unwrap()
 	);
 
 	// -- CLIENT make sure each user can run `after-genesis` against their

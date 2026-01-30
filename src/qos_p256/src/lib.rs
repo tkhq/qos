@@ -100,6 +100,9 @@ pub fn derive_secret(
 	seed: &[u8; MASTER_SEED_LEN],
 	derive_path: &[u8],
 ) -> Result<[u8; P256_SECRET_LEN], QuorumKeyError> {
+	// Using the path as the salt parameter is non-standard and is an historical
+	// implementation artifact kept for v0 compatibility. While non-standard this
+	// is still safe.
 	let hk = Hkdf::<Sha512>::new(Some(derive_path), seed);
 
 	let mut buf = [0u8; P256_SECRET_LEN];
@@ -135,8 +138,8 @@ impl VersionedSecret {
 				let this = Self::V1(array);
 
 				// Validate hpke_secret and sign_secret are valid P256 scalars
-				P256SignPair::from_bytes(&this.hpke_secret()?)?;
-				P256EncryptPair::from_bytes(&this.sign_secret()?)?;
+				P256EncryptPair::from_bytes(&this.hpke_secret()?)?;
+				P256SignPair::from_bytes(&this.sign_secret()?)?;
 
 				return Ok(this);
 			}
@@ -489,7 +492,8 @@ pub struct QuorumKeyId {
 }
 
 impl QuorumKeyId {
-	fn from_parts(
+	/// Create a quorum key from requisite key identifiers.
+	pub fn from_parts(
 		hpke_public: &[u8],
 		sign_public: &[u8],
 		aes_gcm_256_key_id: &[u8],
@@ -552,6 +556,16 @@ mod test {
 	}
 
 	#[test]
+	fn v0_sign_and_verification_works() {
+		let message = b"a message to authenticate";
+
+		let pair = QuorumKey::generate_v0().unwrap();
+		let signature = pair.sign(message).unwrap();
+
+		assert!(pair.public_key().verify(message, &signature).is_ok());
+	}
+
+	#[test]
 	fn verification_rejects_wrong_signature() {
 		let message = b"a message to authenticate";
 
@@ -569,6 +583,19 @@ mod test {
 	#[test]
 	fn basic_encrypt_decrypt_works() {
 		let alice_pair = QuorumKey::generate().unwrap();
+		let alice_public = alice_pair.public_key();
+
+		let plaintext = b"rust test message";
+
+		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
+
+		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
+		assert_eq!(decrypted, plaintext);
+	}
+
+	#[test]
+	fn v0_basic_encrypt_decrypt_works() {
+		let alice_pair = QuorumKey::generate_v0().unwrap();
 		let alice_public = alice_pair.public_key();
 
 		let plaintext = b"rust test message";
@@ -641,11 +668,12 @@ mod test {
 		assert!(alice_public2.verify(message, &signature).is_ok());
 	}
 
+	// Explicitly use v0 versioned secret
 	#[test]
 	fn master_seed_bytes_roundtrip() {
-		let alice_pair = QuorumKey::generate().unwrap();
+		let alice_pair = QuorumKey::generate_v0().unwrap();
 		let public_key = alice_pair.public_key();
-		let master_seed = alice_pair.versioned_secret().as_bytes();
+		let master_seed = alice_pair.as_bytes();
 
 		let alice_pair2 = QuorumKey::from_bytes(master_seed).unwrap();
 
@@ -660,7 +688,47 @@ mod test {
 	}
 
 	#[test]
+	fn versioned_secrets_bytes_roundtrip() {
+		let alice_pair = QuorumKey::generate().unwrap();
+		let public_key = alice_pair.public_key();
+		let secret = alice_pair.as_bytes();
+
+		let alice_pair2 = QuorumKey::from_bytes(secret).unwrap();
+
+		let plaintext = b"rust test message";
+		let serialized_envelope = public_key.encrypt(plaintext).unwrap();
+		let decrypted = alice_pair2.decrypt(&serialized_envelope).unwrap();
+		assert_eq!(decrypted, plaintext);
+
+		let message = b"a message to authenticate";
+		let signature = alice_pair2.sign(message).unwrap();
+		assert!(public_key.verify(message, &signature).is_ok());
+	}
+
+	// Explicitly use v0 versioned secret
+	#[test]
 	fn master_seed_to_file_round_trip() {
+		let path: PathWrapper =
+			"/tmp/master_seed_to_file_round_trip.secret".into();
+
+		let alice_pair = QuorumKey::generate_v0().unwrap();
+		alice_pair.to_hex_file(&*path).unwrap();
+
+		let alice_pair2 = QuorumKey::from_hex_file(&*path).unwrap();
+
+		let plaintext = b"rust test message";
+		let serialized_envelope =
+			alice_pair.public_key().encrypt(plaintext).unwrap();
+		let decrypted = alice_pair2.decrypt(&serialized_envelope).unwrap();
+		assert_eq!(decrypted, plaintext);
+
+		let message = b"a message to authenticate";
+		let signature = alice_pair2.sign(message).unwrap();
+		assert!(alice_pair.public_key().verify(message, &signature).is_ok());
+	}
+
+	#[test]
+	fn versioned_secret_to_file_round_trip() {
 		let path: PathWrapper =
 			"/tmp/master_seed_to_file_round_trip.secret".into();
 
@@ -709,5 +777,64 @@ mod test {
 				.unwrap_err();
 			assert_eq!(err, QuorumKeyError::AesGcm256DecryptError,);
 		}
+	}
+
+	// Known answer test. Values can be used as test vectors for
+	// other implementations.
+	#[test]
+	fn quorum_key_id_works() {
+		let v0_secret = qos_hex::decode(
+			"c56d1a681fca7fc6402fe325a8ca5b65f743907e16bc468795f44bca4020e67b",
+		)
+		.unwrap();
+		let v1_secret = qos_hex::decode(
+				"0106422fe2b549236d0f829686984addea6859d28736afcbea74ae684e1cb1e6bd4dcec5f81816ce98e58d0d009e7fc73b6c7d13e8da59b116d52c34c667ffd9a9feb93b1b850ec84bc28a93c0c22868b885bea24aae8a8581d78d7d013c63f479",
+			)
+			.unwrap();
+
+		let v0_key = QuorumKey::from_bytes(&v0_secret).unwrap();
+		let v1_key = QuorumKey::from_bytes(&v1_secret).unwrap();
+
+		let v0_id = v0_key.quorum_key_id().unwrap();
+		let v1_id = v1_key.quorum_key_id().unwrap();
+
+		let v0_fingerprint = v0_id.fingerprint();
+		let v1_fingerprint = v1_id.fingerprint();
+
+		let v0_public = v0_key.public_key();
+		let v1_public = v1_key.public_key();
+
+		let expected_v0_id = qos_hex::decode(
+				"010481d34ce6eb734228ed8302be0852157a1602735b904541fd6d2c0f4294ee23dce451396110719966c7f987bfb814f7a0e4e1e38794c3c697d13e613e1ad0a76b0442f3d7b73e08a23a4568c85c59de1216e1c279cfbcf02adcf370f59b8fea602fd322ca4cbae20fee70bd9a8e5c579e546a8c99644bce7174be8a3ade148f361e2ac6e762303782bc083d25fb1d029f39a2f76e87115b067a2c20130ac480ab6a",
+			)
+			.unwrap();
+		let expected_v1_id = qos_hex::decode(
+				"01040d99146818b0bd971a4ad6b423275feecab4d001da35e4fe03fc83e5fe2cd35e63b382479fae11d3fbbc04f9febd33e737757a77da5119c9c8c4b588dab1cf880411950611dfba917695171766fa7a1ab8abe0678fe4cc2fa80c32d343c9d19b71b68f75b036c70e222c19fe2014d8c486836e4a769f310832c8fcfc6a8e3d4bf7c44f0ab0be9f51b0ef9bfaa0c25bebe9b5dd1c09163bd93ed820559c46aca5ec",
+			)
+			.unwrap();
+		let expected_v0_fingerprint = qos_hex::decode(
+			"3c22450be1f8f1da1ffaa82b4a41357b35add734a1b85cf1cb6b0a4f429a5d80",
+		)
+		.unwrap();
+		let expected_v1_fingerprint = qos_hex::decode(
+			"9f089ad98807f4d2f49601c3462c33999fb2a82f697822aa2d401414245945d5",
+		)
+		.unwrap();
+
+		// Assert key ids match expected
+		assert_eq!(expected_v0_id, v0_id.to_bytes());
+		assert_eq!(expected_v1_id, v1_id.to_bytes());
+
+		// Assert fingerprints match expected
+		assert_eq!(expected_v0_fingerprint, v0_fingerprint);
+		assert_eq!(expected_v1_fingerprint, v1_fingerprint);
+
+		// Assert fingerprints are sha_256 of key ids
+		assert_eq!(v0_fingerprint, qos_crypto::sha_256(&v0_id.to_bytes()));
+		assert_eq!(v1_fingerprint, qos_crypto::sha_256(&v1_id.to_bytes()));
+
+		// Assert public key bytes (130) are equal to bytes[1..131] of key id
+		assert_eq!(&v0_public.to_bytes()[..], &v0_id.to_bytes()[1..131]);
+		assert_eq!(&v1_public.to_bytes()[..], &v1_id.to_bytes()[1..131]);
 	}
 }

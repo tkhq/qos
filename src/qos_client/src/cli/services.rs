@@ -2007,9 +2007,8 @@ fn find_approvals<P: AsRef<Path>>(
 				approval.member.alias
 			);
 
-			let pub_key =
-				QuorumKeyPublic::from_bytes(&approval.member.pub_key)
-					.expect("Failed to interpret pub key");
+			let pub_key = QuorumKeyPublic::from_bytes(&approval.member.pub_key)
+				.expect("Failed to interpret pub key");
 			assert!(
 				pub_key
 					.verify(&manifest.qos_hash(), &approval.signature)
