@@ -3098,7 +3098,8 @@ mod tests {
 
 			// Read back and verify
 			let borsh_bytes = fs::read(&borsh_path).unwrap();
-			let decoded = ManifestEnvelope::try_from_slice(&borsh_bytes).unwrap();
+			let decoded =
+				ManifestEnvelope::try_from_slice(&borsh_bytes).unwrap();
 			assert_eq!(decoded, manifest_envelope);
 
 			// Cleanup

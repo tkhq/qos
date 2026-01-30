@@ -106,7 +106,7 @@ async fn enclave_app_client_socket_stress() {
 
 	match raw_response {
 		ClientError::IOError(IOError::RecvConnectionClosed) => {} // expected
-		_ => panic!("unexpected error received: {:?}", raw_response),
+		_ => panic!("unexpected error received: {raw_response:?}"),
 	}
 
 	// we need to give the panicking pivot time to quit and close the old socket before trying to see
@@ -129,6 +129,6 @@ async fn enclave_app_client_socket_stress() {
 
 	match raw_response {
 		ClientError::IOError(IOError::RecvTimeout) => {} // expected
-		_ => panic!("unexpected error received: {:?}", raw_response),
+		_ => panic!("unexpected error received: {raw_response:?}"),
 	}
 }
