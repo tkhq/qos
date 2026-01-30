@@ -6,7 +6,7 @@ use encrypt::AesGcm256Secret;
 use hkdf::Hkdf;
 use p256::elliptic_curve::rand_core::{OsRng, RngCore};
 use sha2::Sha512;
-use zeroize::ZeroizeOnDrop;
+use zeroize::{ZeroizeOnDrop, Zeroizing};
 
 use crate::{
 	encrypt::{P256EncryptPair, P256EncryptPublic},
@@ -101,14 +101,14 @@ impl From<qos_hex::HexError> for QuorumKeyError {
 pub fn derive_secret(
 	seed: &[u8; MASTER_SEED_LEN],
 	derive_path: &[u8],
-) -> Result<[u8; P256_SECRET_LEN], QuorumKeyError> {
+) -> Result<Zeroizing<[u8; P256_SECRET_LEN]>, QuorumKeyError> {
 	// Using the path as the salt parameter is non-standard and is an historical
 	// implementation artifact kept for v0 compatibility. While non-standard this
 	// is still safe.
 	let hk = Hkdf::<Sha512>::new(Some(derive_path), seed);
 
-	let mut buf = [0u8; P256_SECRET_LEN];
-	hk.expand(&[], &mut buf)
+	let mut buf = Zeroizing::new([0u8; P256_SECRET_LEN]);
+	hk.expand(&[], &mut *buf)
 		.map_err(|_| QuorumKeyError::HkdfExpansionFailed)?;
 
 	Ok(buf)
@@ -140,8 +140,8 @@ impl VersionedSecret {
 				let this = Self::V1(array);
 
 				// Validate hpke_secret and sign_secret are valid P256 scalars
-				P256EncryptPair::from_bytes(&this.hpke_secret()?)?;
-				P256SignPair::from_bytes(&this.sign_secret()?)?;
+				P256EncryptPair::from_bytes(&*this.hpke_secret()?)?;
+				P256SignPair::from_bytes(&*this.sign_secret()?)?;
 
 				return Ok(this);
 			}
@@ -161,32 +161,34 @@ impl VersionedSecret {
 	}
 
 	/// Get the HPKE (encryption) secret bytes.
-	pub fn hpke_secret(&self) -> Result<[u8; 32], QuorumKeyError> {
+	pub fn hpke_secret(&self) -> Result<Zeroizing<[u8; 32]>, QuorumKeyError> {
 		match &self {
 			Self::V0(seed) => derive_secret(seed, P256_ENCRYPT_DERIVE_PATH),
-			Self::V1(bytes) => {
-				Ok(bytes[1..33].try_into().expect("exactly 32 bytes. qed."))
-			}
+			Self::V1(bytes) => Ok(Zeroizing::new(
+				bytes[1..33].try_into().expect("exactly 32 bytes. qed."),
+			)),
 		}
 	}
 
 	/// Get the signing secret bytes.
-	pub fn sign_secret(&self) -> Result<[u8; 32], QuorumKeyError> {
+	pub fn sign_secret(&self) -> Result<Zeroizing<[u8; 32]>, QuorumKeyError> {
 		match &self {
 			Self::V0(seed) => derive_secret(seed, P256_SIGN_DERIVE_PATH),
-			Self::V1(bytes) => {
-				Ok(bytes[33..65].try_into().expect("exactly 32 bytes. qed."))
-			}
+			Self::V1(bytes) => Ok(Zeroizing::new(
+				bytes[33..65].try_into().expect("exactly 32 bytes. qed."),
+			)),
 		}
 	}
 
 	/// Get the AES-GCM-256 symmetric encryption secret bytes.
-	pub fn aes_gcm_256_secret(&self) -> Result<[u8; 32], QuorumKeyError> {
+	pub fn aes_gcm_256_secret(
+		&self,
+	) -> Result<Zeroizing<[u8; 32]>, QuorumKeyError> {
 		match &self {
 			Self::V0(seed) => derive_secret(seed, AES_GCM_256_PATH),
-			Self::V1(bytes) => {
-				Ok(bytes[65..].try_into().expect("exactly 32 bytes. qed."))
-			}
+			Self::V1(bytes) => Ok(Zeroizing::new(
+				bytes[65..].try_into().expect("exactly 32 bytes. qed."),
+			)),
 		}
 	}
 }
@@ -211,19 +213,19 @@ impl QuorumKey {
 
 		Ok(Self {
 			p256_encrypt_private: P256EncryptPair::from_bytes(
-				&versioned_secret.hpke_secret()?,
+				&*versioned_secret.hpke_secret()?,
 			)?,
 			sign_private: P256SignPair::from_bytes(
-				&versioned_secret.sign_secret()?,
+				&*versioned_secret.sign_secret()?,
 			)?,
 			aes_gcm_256_secret: AesGcm256Secret::from_bytes(
-				versioned_secret.aes_gcm_256_secret()?,
+				*versioned_secret.aes_gcm_256_secret()?,
 			)?,
 			versioned_secret,
 		})
 	}
 
-	/// Generate a key set from a V0 secret.
+	/// Generate a key set with a V0 secret.
 	pub fn generate_v0() -> Result<Self, QuorumKeyError> {
 		// V0 secrets are 32 bytes
 		let bytes = bytes_os_rng::<32>();
@@ -231,13 +233,13 @@ impl QuorumKey {
 
 		Ok(Self {
 			p256_encrypt_private: P256EncryptPair::from_bytes(
-				&versioned_secret.hpke_secret()?,
+				&*versioned_secret.hpke_secret()?,
 			)?,
 			sign_private: P256SignPair::from_bytes(
-				&versioned_secret.sign_secret()?,
+				&*versioned_secret.sign_secret()?,
 			)?,
 			aes_gcm_256_secret: AesGcm256Secret::from_bytes(
-				versioned_secret.aes_gcm_256_secret()?,
+				*versioned_secret.aes_gcm_256_secret()?,
 			)?,
 			versioned_secret,
 		})
@@ -287,13 +289,13 @@ impl QuorumKey {
 
 		Ok(Self {
 			p256_encrypt_private: P256EncryptPair::from_bytes(
-				&versioned_secret.hpke_secret()?,
+				&*versioned_secret.hpke_secret()?,
 			)?,
 			sign_private: P256SignPair::from_bytes(
-				&versioned_secret.sign_secret()?,
+				&*versioned_secret.sign_secret()?,
 			)?,
 			aes_gcm_256_secret: AesGcm256Secret::from_bytes(
-				versioned_secret.aes_gcm_256_secret()?,
+				*versioned_secret.aes_gcm_256_secret()?,
 			)?,
 			versioned_secret,
 		})
@@ -357,7 +359,7 @@ impl QuorumKey {
 	/// Compute the quorum key ID for this key set.
 	pub fn quorum_key_id(&self) -> Result<QuorumKeyId, QuorumKeyError> {
 		let key_id =
-			aes_gcm_256_key_id(&self.versioned_secret.aes_gcm_256_secret()?)?;
+			aes_gcm_256_key_id(&*self.versioned_secret.aes_gcm_256_secret()?)?;
 		QuorumKeyId::from_parts(
 			&self.p256_encrypt_private.public_key().to_bytes(),
 			&self.sign_private.public_key().to_bytes(),
@@ -753,7 +755,7 @@ mod test {
 	#[test]
 	fn versioned_secret_to_file_round_trip() {
 		let path: PathWrapper =
-			"/tmp/master_seed_to_file_round_trip.secret".into();
+			"/tmp/versioned_secret_to_file_round_trip.secret".into();
 
 		let alice_pair = QuorumKey::generate().unwrap();
 		alice_pair.to_hex_file(&*path).unwrap();

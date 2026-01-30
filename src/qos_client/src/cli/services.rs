@@ -386,7 +386,7 @@ pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 
 	crate::yubikey::import_key_and_generate_signed_certificate(
 		&mut yubikey,
-		&sign_secret,
+		&*sign_secret,
 		crate::yubikey::SIGNING_SLOT,
 		&pin,
 		yubikey::MgmKey::default(),
@@ -396,7 +396,7 @@ pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 
 	crate::yubikey::import_key_and_generate_signed_certificate(
 		&mut yubikey,
-		&encrypt_secret,
+		&*encrypt_secret,
 		crate::yubikey::KEY_AGREEMENT_SLOT,
 		&pin,
 		yubikey::MgmKey::default(),
