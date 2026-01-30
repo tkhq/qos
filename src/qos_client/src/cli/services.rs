@@ -3037,4 +3037,94 @@ mod tests {
 			);
 		}
 	}
+
+	mod json_to_borsh {
+		use std::fs;
+
+		use borsh::BorshDeserialize;
+
+		use super::*;
+		use crate::cli::DisplayType;
+
+		#[test]
+		fn converts_manifest_json_to_borsh() {
+			let Setup { manifest, .. } = setup();
+
+			let temp_dir = std::env::temp_dir();
+			let json_path = temp_dir.join("test_manifest.json");
+			let borsh_path = temp_dir.join("test_manifest.borsh");
+
+			// Write manifest as JSON
+			let json_bytes = serde_json::to_vec(&manifest).unwrap();
+			fs::write(&json_path, &json_bytes).unwrap();
+
+			// Convert to borsh
+			super::super::json_to_borsh(
+				&DisplayType::Manifest,
+				&json_path,
+				&borsh_path,
+			)
+			.unwrap();
+
+			// Read back and verify
+			let borsh_bytes = fs::read(&borsh_path).unwrap();
+			let decoded = Manifest::try_from_slice(&borsh_bytes).unwrap();
+			assert_eq!(decoded, manifest);
+
+			// Cleanup
+			let _ = fs::remove_file(&json_path);
+			let _ = fs::remove_file(&borsh_path);
+		}
+
+		#[test]
+		fn converts_manifest_envelope_json_to_borsh() {
+			let Setup { manifest_envelope, .. } = setup();
+
+			let temp_dir = std::env::temp_dir();
+			let json_path = temp_dir.join("test_manifest_envelope.json");
+			let borsh_path = temp_dir.join("test_manifest_envelope.borsh");
+
+			// Write manifest envelope as JSON
+			let json_bytes = serde_json::to_vec(&manifest_envelope).unwrap();
+			fs::write(&json_path, &json_bytes).unwrap();
+
+			// Convert to borsh
+			super::super::json_to_borsh(
+				&DisplayType::ManifestEnvelope,
+				&json_path,
+				&borsh_path,
+			)
+			.unwrap();
+
+			// Read back and verify
+			let borsh_bytes = fs::read(&borsh_path).unwrap();
+			let decoded = ManifestEnvelope::try_from_slice(&borsh_bytes).unwrap();
+			assert_eq!(decoded, manifest_envelope);
+
+			// Cleanup
+			let _ = fs::remove_file(&json_path);
+			let _ = fs::remove_file(&borsh_path);
+		}
+
+		#[test]
+		fn genesis_output_returns_error() {
+			let temp_dir = std::env::temp_dir();
+			let json_path = temp_dir.join("test_genesis.json");
+			let borsh_path = temp_dir.join("test_genesis.borsh");
+
+			// Create a dummy file
+			fs::write(&json_path, b"{}").unwrap();
+
+			// Should return an error for GenesisOutput
+			let result = super::super::json_to_borsh(
+				&DisplayType::GenesisOutput,
+				&json_path,
+				&borsh_path,
+			);
+			assert!(result.is_err());
+
+			// Cleanup
+			let _ = fs::remove_file(&json_path);
+		}
+	}
 }
