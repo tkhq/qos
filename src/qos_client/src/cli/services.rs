@@ -111,6 +111,11 @@ pub enum Error {
 		path: String,
 		error: String,
 	},
+	/// Failed to write file.
+	FailedToWrite {
+		path: String,
+		error: String,
+	},
 	/// Failed to decode some hex
 	CouldNotDecodeHex(qos_hex::HexError),
 	/// Failed to deserialize something from borsh or json
@@ -1597,6 +1602,42 @@ pub(crate) fn display<P: AsRef<Path>>(
 	Ok(())
 }
 
+pub(crate) fn json_to_borsh<P: AsRef<Path>>(
+	display_type: &DisplayType,
+	file_path: P,
+	output_path: P,
+) -> Result<(), Error> {
+	match *display_type {
+		DisplayType::Manifest => {
+			let manifest = read_manifest(&file_path)?;
+			let borsh_bytes = borsh::to_vec(&manifest)?;
+			fs::write(&output_path, borsh_bytes).map_err(|e| {
+				Error::FailedToWrite {
+					path: output_path.as_ref().display().to_string(),
+					error: e.to_string(),
+				}
+			})?;
+		}
+		DisplayType::ManifestEnvelope => {
+			let envelope = read_manifest_envelope(&file_path)?;
+			let borsh_bytes = borsh::to_vec(&envelope)?;
+			fs::write(&output_path, borsh_bytes).map_err(|e| {
+				Error::FailedToWrite {
+					path: output_path.as_ref().display().to_string(),
+					error: e.to_string(),
+				}
+			})?;
+		}
+		DisplayType::GenesisOutput => {
+			// GenesisOutput doesn't implement serde, so we can't read it from JSON
+			return Err(Error::ReadShare(
+				"GenesisOutput cannot be converted from JSON".to_string(),
+			));
+		}
+	};
+	Ok(())
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	uri: &str,
@@ -2994,6 +3035,97 @@ mod tests {
 					"Please answer with either \"yes\" (y) or \"no\" (n)",
 				]
 			);
+		}
+	}
+
+	mod json_to_borsh {
+		use std::fs;
+
+		use borsh::BorshDeserialize;
+
+		use super::*;
+		use crate::cli::DisplayType;
+
+		#[test]
+		fn converts_manifest_json_to_borsh() {
+			let Setup { manifest, .. } = setup();
+
+			let temp_dir = std::env::temp_dir();
+			let json_path = temp_dir.join("test_manifest.json");
+			let borsh_path = temp_dir.join("test_manifest.borsh");
+
+			// Write manifest as JSON
+			let json_bytes = serde_json::to_vec(&manifest).unwrap();
+			fs::write(&json_path, &json_bytes).unwrap();
+
+			// Convert to borsh
+			super::super::json_to_borsh(
+				&DisplayType::Manifest,
+				&json_path,
+				&borsh_path,
+			)
+			.unwrap();
+
+			// Read back and verify
+			let borsh_bytes = fs::read(&borsh_path).unwrap();
+			let decoded = Manifest::try_from_slice(&borsh_bytes).unwrap();
+			assert_eq!(decoded, manifest);
+
+			// Cleanup
+			let _ = fs::remove_file(&json_path);
+			let _ = fs::remove_file(&borsh_path);
+		}
+
+		#[test]
+		fn converts_manifest_envelope_json_to_borsh() {
+			let Setup { manifest_envelope, .. } = setup();
+
+			let temp_dir = std::env::temp_dir();
+			let json_path = temp_dir.join("test_manifest_envelope.json");
+			let borsh_path = temp_dir.join("test_manifest_envelope.borsh");
+
+			// Write manifest envelope as JSON
+			let json_bytes = serde_json::to_vec(&manifest_envelope).unwrap();
+			fs::write(&json_path, &json_bytes).unwrap();
+
+			// Convert to borsh
+			super::super::json_to_borsh(
+				&DisplayType::ManifestEnvelope,
+				&json_path,
+				&borsh_path,
+			)
+			.unwrap();
+
+			// Read back and verify
+			let borsh_bytes = fs::read(&borsh_path).unwrap();
+			let decoded =
+				ManifestEnvelope::try_from_slice(&borsh_bytes).unwrap();
+			assert_eq!(decoded, manifest_envelope);
+
+			// Cleanup
+			let _ = fs::remove_file(&json_path);
+			let _ = fs::remove_file(&borsh_path);
+		}
+
+		#[test]
+		fn genesis_output_returns_error() {
+			let temp_dir = std::env::temp_dir();
+			let json_path = temp_dir.join("test_genesis.json");
+			let borsh_path = temp_dir.join("test_genesis.borsh");
+
+			// Create a dummy file
+			fs::write(&json_path, b"{}").unwrap();
+
+			// Should return an error for GenesisOutput
+			let result = super::super::json_to_borsh(
+				&DisplayType::GenesisOutput,
+				&json_path,
+				&borsh_path,
+			);
+			assert!(result.is_err());
+
+			// Cleanup
+			let _ = fs::remove_file(&json_path);
 		}
 	}
 }

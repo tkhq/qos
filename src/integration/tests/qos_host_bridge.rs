@@ -106,7 +106,7 @@ async fn qos_host_bridge_works() {
 			"--quorum-key-path",
 			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
 			"--bridge-config",
-			&format!("[{{\"server\": [{},\"0.0.0.0\"]}}]", app_host_port),
+			&format!("[{{\"server\": [{app_host_port},\"0.0.0.0\"]}}]"),
 		])
 		.spawn()
 		.unwrap()
