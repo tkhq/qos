@@ -10,8 +10,8 @@ use crate::io::{IOError, SharedStreamPool, SocketAddress, StreamPool};
 pub enum ClientError {
 	/// [`io::IOError`] wrapper.
 	IOError(IOError),
-	/// `borsh::io::Error` wrapper.
-	BorshError(borsh::io::Error),
+	/// Deserialization error
+	DeserializationError(String),
 	/// Invalid enclave response to a request (e.g. mismatch)
 	ResponseMismatch,
 }
@@ -22,9 +22,9 @@ impl From<IOError> for ClientError {
 	}
 }
 
-impl From<borsh::io::Error> for ClientError {
-	fn from(err: borsh::io::Error) -> Self {
-		Self::BorshError(err)
+impl From<serde_json::Error> for ClientError {
+	fn from(err: serde_json::Error) -> Self {
+		Self::DeserializationError(err.to_string())
 	}
 }
 /// Client for communicating with the enclave `crate::server::SocketServer`.

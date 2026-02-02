@@ -197,7 +197,7 @@ impl ProtocolState {
 				None => continue,
 				Some(result) => match result {
 					Ok(msg_resp) | Err(msg_resp) => {
-						return borsh::to_vec(&msg_resp).expect(
+						return serde_json::to_vec(&msg_resp).expect(
 							"ProtocolMsg can always be serialized. qed.",
 						)
 					}
@@ -206,7 +206,7 @@ impl ProtocolState {
 		}
 
 		let err = ProtocolError::NoMatchingRoute(self.phase);
-		borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
+		serde_json::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
 			.expect("ProtocolMsg can always be serialized. qed.")
 	}
 

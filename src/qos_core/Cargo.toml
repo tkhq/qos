@@ -11,6 +11,7 @@ workspace = true
 [dependencies]
 qos_crypto = { workspace = true }
 qos_hex = { workspace = true, features = ["serde"] }
+qos_json = { workspace = true }
 qos_p256 = { workspace = true }
 qos_nsm = { workspace = true, default-features = false }
 

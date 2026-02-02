@@ -15,8 +15,16 @@ const QOS_TEST_MESSAGE: &[u8] = b"qos-test-message";
 
 /// Configuration for sharding a Quorum Key created in the Genesis flow.
 #[derive(
-	PartialEq, Debug, Eq, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Debug,
+	Eq,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct GenesisSet {
 	/// Share Set Member's who's production key will be used to encrypt Genesis
 	/// flow outputs.
@@ -33,11 +41,13 @@ pub struct GenesisSet {
 	Serialize,
 	Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 struct MemberShard {
 	/// Member of the Setup Set.
 	member: QuorumMember,
 	/// Shard of the generated Quorum Key, encrypted to the `member`s Setup
 	/// Key.
+	#[serde(with = "qos_hex::serde")]
 	shard: Vec<u8>,
 }
 
@@ -61,6 +71,7 @@ impl fmt::Debug for MemberShard {
 	Serialize,
 	Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct RecoveredPermutation(Vec<MemberShard>);
 
 /// Genesis output per Setup Member.
@@ -109,8 +120,10 @@ impl fmt::Debug for GenesisMemberOutput {
 	Serialize,
 	Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct GenesisOutput {
 	/// Public Quorum Key, DER encoded.
+	#[serde(with = "qos_hex::serde")]
 	pub quorum_key: Vec<u8>,
 	/// Quorum Member specific outputs from the genesis ceremony.
 	pub member_outputs: Vec<GenesisMemberOutput>,
@@ -120,16 +133,24 @@ pub struct GenesisOutput {
 	/// The threshold, K, used to generate the shards.
 	pub threshold: u32,
 	/// The quorum key encrypted to the DR key. None if no DR Key was provided
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "qos_hex::serde_opt"
+	)]
 	pub dr_key_wrapped_quorum_key: Option<Vec<u8>>,
 	/// Hash of the quorum key secret
 	#[serde(with = "qos_hex::serde")]
 	pub quorum_key_hash: [u8; 64],
 	/// Test message encrypted to the quorum public key.
+	#[serde(with = "qos_hex::serde")]
 	pub test_message_ciphertext: Vec<u8>,
 	/// Signature over the test message by the quorum key.
+	#[serde(with = "qos_hex::serde")]
 	pub test_message_signature: Vec<u8>,
 	/// The message that was used to generate [`Self::test_message_signature`]
 	/// and [`Self::test_message_ciphertext`]
+	#[serde(with = "qos_hex::serde")]
 	pub test_message: Vec<u8>,
 }
 

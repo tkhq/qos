@@ -1,0 +1,17 @@
+[package]
+name = "qos_json"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+qos_hex = { workspace = true, features = ["serde"] }
+sha2 = { workspace = true }

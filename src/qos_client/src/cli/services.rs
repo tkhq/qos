@@ -1076,7 +1076,7 @@ pub(crate) fn export_key<P: AsRef<Path>>(
 
 	write_with_msg(
 		encrypted_quorum_key_path.as_ref(),
-		&serde_json::to_vec(&encrypted_quorum_key).expect("valid borsh. qed."),
+		&serde_json::to_vec(&encrypted_quorum_key).expect("valid json. qed."),
 		"Encrypted Quorum Key",
 	);
 

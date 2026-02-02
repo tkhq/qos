@@ -2025,6 +2025,7 @@ dependencies = [
  "nix 0.29.0",
  "qos_crypto",
  "qos_hex",
+ "qos_json",
  "qos_nsm",
  "qos_p256",
  "qos_test_primitives",
@@ -2079,6 +2080,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_json"
+version = "0.1.0"
+dependencies = [
+ "qos_hex",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "qos_net"
 version = "0.1.0"
 dependencies = [
@@ -2113,10 +2124,10 @@ version = "0.1.0"
 dependencies = [
  "aws-nitro-enclaves-cose",
  "aws-nitro-enclaves-nsm-api",
- "borsh",
  "hex-literal",
  "p384",
  "qos_hex",
+ "serde",
  "serde_bytes",
  "sha2",
  "webpki",
@@ -2143,6 +2154,7 @@ dependencies = [
  "p256",
  "qos_hex",
  "qos_test_primitives",
+ "serde",
  "sha2",
  "zeroize",
 ]

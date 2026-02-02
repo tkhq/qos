@@ -8,7 +8,6 @@ pub mod yubikey;
 pub mod request {
 	use std::io::Read;
 
-	use borsh::BorshDeserialize;
 	use qos_core::protocol::msg::ProtocolMsg;
 
 	const MAX_SIZE: u64 = u32::MAX as u64;
@@ -16,15 +15,15 @@ pub mod request {
 	/// Post a [`qos_core::protocol::msg::ProtocolMsg`] to the given host `url`.
 	///
 	/// # Panics
-	/// Panics if the `msg` cannot be Borsh serialized.
+	/// Panics if the `msg` cannot be JSON serialized.
 	/// Should never happen in practice because all protocol messages are
-	/// Borsh-serializable.
+	/// JSON-serializable.
 	pub fn post(url: &str, msg: &ProtocolMsg) -> Result<ProtocolMsg, String> {
 		let mut buf: Vec<u8> = vec![];
 
 		let response = ureq::post(url)
 			.send_bytes(
-				&borsh::to_vec(msg)
+				&serde_json::to_vec(msg)
 					.expect("ProtocolMsg can always be serialized. qed."),
 			)
 			.map_err(|e| match e {
@@ -45,10 +44,9 @@ pub mod request {
 			},
 		)?;
 
-		let decoded_response =
-			ProtocolMsg::try_from_slice(&buf).map_err(|e| {
-				format!("http_post error: deserialization error: {e:?}")
-			})?;
+		let decoded_response = serde_json::from_slice(&buf).map_err(|e| {
+			format!("http_post error: deserialization error: {e:?}")
+		})?;
 
 		Ok(decoded_response)
 	}

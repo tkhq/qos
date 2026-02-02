@@ -31,8 +31,16 @@ pub mod sign;
 
 /// Errors for qos P256.
 #[derive(
-	Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize,
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub enum P256Error {
 	/// Hex encoding error.
 	QosHex(String),

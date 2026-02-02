@@ -43,32 +43,32 @@ impl NsmProvider for MockNsm {
 	fn nsm_process_request(&self, request: NsmRequest) -> NsmResponse {
 		match request {
 			NsmRequest::Attestation {
-				user_data: _,
 				nonce: _,
 				public_key: _,
+				user_data: _,
 			} => NsmResponse::Attestation {
 				document: MOCK_NSM_ATTESTATION_DOCUMENT.to_vec(),
 			},
-			NsmRequest::DescribeNSM => NsmResponse::DescribeNSM {
+			NsmRequest::DescribeNsm => NsmResponse::DescribeNsm {
+				digest: NsmDigest::Sha256,
+				locked_pcrs: BTreeSet::from([90, 91, 92]),
+				max_pcrs: 1024,
+				module_id: "mock_module_id".to_string(),
 				version_major: 1,
 				version_minor: 2,
 				version_patch: 14,
-				module_id: "mock_module_id".to_string(),
-				max_pcrs: 1024,
-				locked_pcrs: BTreeSet::from([90, 91, 92]),
-				digest: NsmDigest::SHA256,
 			},
-			NsmRequest::ExtendPCR { index: _, data: _ } => {
-				NsmResponse::ExtendPCR { data: vec![3, 4, 7, 4] }
+			NsmRequest::DescribePcr { index: _ } => {
+				NsmResponse::DescribePcr { data: vec![3, 4, 7, 4], lock: false }
+			}
+			NsmRequest::ExtendPcr { data: _, index: _ } => {
+				NsmResponse::ExtendPcr { data: vec![3, 4, 7, 4] }
 			}
 			NsmRequest::GetRandom => {
 				NsmResponse::GetRandom { random: vec![4, 2, 0, 69] }
 			}
-			NsmRequest::LockPCR { index: _ } => NsmResponse::LockPCR,
-			NsmRequest::LockPCRs { range: _ } => NsmResponse::LockPCRs,
-			NsmRequest::DescribePCR { index: _ } => {
-				NsmResponse::DescribePCR { lock: false, data: vec![3, 4, 7, 4] }
-			}
+			NsmRequest::LockPcr { index: _ } => NsmResponse::LockPcr,
+			NsmRequest::LockPcrs { range: _ } => NsmResponse::LockPcrs,
 		}
 	}
 
