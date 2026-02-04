@@ -7,12 +7,22 @@ edition = "2021"
 publish = false
 
 [dependencies]
-# As of 8/2025, AWS doesn't have a recent crate version of aws-nitro-enclaves-cli published
-# in a typical crate repository -> directly use the git version on GitHub as a workaround
+# As of 2/2026, AWS doesn't have a recent crate version of aws-nitro-enclaves-cli published
+# in a typical crate repository
+# -> directly use the git version on GitHub as a workaround
 #
-# The pinned commit corresponds to tag "v1.4.3" after https://github.com/aws/aws-nitro-enclaves-cli/issues/705
-nitro-cli = { git = "https://github.com/aws/aws-nitro-enclaves-cli", rev = "82501bb9637e4b41c87ce73f8ffc2ce51ca37a6a" }
+# pinned commit corresponds to git tag "v1.4.4"
+nitro-cli = { git = "https://github.com/aws/aws-nitro-enclaves-cli", rev = "d7830d68dc1e6c31d1ed25ecf06684d766737392" }
 libc = "0.2.172"
 
 [features]
 default = []
+
+
+[patch.crates-io]
+# Pin newest git main from Feb 2, 2026, two commits before release tag 0.6.0
+# This removes the dependency on clap 3.x and other older package versions that are
+# otherwise present in the standard 0.5.0 version
+#
+# Delete this override once nitro-cli can use a native release with those changes
+aws-nitro-enclaves-image-format = { git = "https://github.com/aws/aws-nitro-enclaves-image-format", rev = "5c103f594bbb0997bc9191e210814606b182438a" }
