@@ -119,7 +119,7 @@ pub enum Error {
 	/// Failed to decode some hex
 	CouldNotDecodeHex(qos_hex::HexError),
 	/// Failed to deserialize something from borsh or json
-Deserialize(String),
+	Deserialize(String),
 	FailedToReadDrKey(qos_p256::QuorumKeyError),
 	QosAttest(String),
 	/// Pivot file
