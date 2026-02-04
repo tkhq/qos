@@ -119,7 +119,7 @@ pub enum Error {
 	/// Failed to decode some hex
 	CouldNotDecodeHex(qos_hex::HexError),
 	/// Failed to deserialize something from borsh or json
-	Deserialize,
+	Deserialize(String),
 	FailedToReadDrKey(qos_p256::P256Error),
 	QosAttest(String),
 	/// Pivot file
@@ -146,14 +146,14 @@ pub enum Error {
 }
 
 impl From<serde_json::Error> for Error {
-	fn from(_: serde_json::Error) -> Self {
-		Self::Deserialize
+	fn from(err: serde_json::Error) -> Self {
+		Self::Deserialize(err.to_string())
 	}
 }
 
 impl From<borsh::io::Error> for Error {
-	fn from(_: borsh::io::Error) -> Self {
-		Self::Deserialize
+	fn from(err: borsh::io::Error) -> Self {
+		Self::Deserialize(err.to_string())
 	}
 }
 
