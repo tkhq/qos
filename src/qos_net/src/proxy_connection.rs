@@ -56,6 +56,7 @@ impl ProxyConnection {
 }
 
 impl ProxyConnection {
+	/// Read data from the TCP stream into the buffer.
 	pub async fn read(
 		&mut self,
 		buf: &mut [u8],
@@ -63,16 +64,18 @@ impl ProxyConnection {
 		self.tcp_stream.read(buf).await
 	}
 
+	/// Write data to the TCP stream.
 	pub async fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
 		self.tcp_stream.write(buf).await
 	}
 
+	/// Flush any buffered data to the TCP stream.
 	pub async fn flush(&mut self) -> std::io::Result<()> {
 		self.tcp_stream.flush().await
 	}
 }
 
-// Resolve a name into an IP address
+/// Resolve a hostname into an IP address using the specified DNS resolvers.
 pub async fn resolve_hostname(
 	hostname: String,
 	resolver_addrs: Vec<String>,

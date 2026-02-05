@@ -144,7 +144,9 @@ impl Proxy {
 	}
 }
 
+/// Trait for proxy server implementations.
 pub trait ProxyServer {
+	/// Listen for incoming connections on the proxy server.
 	fn listen_proxy(
 		pool: StreamPool,
 		max_connections: usize,

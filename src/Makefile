@@ -144,7 +144,7 @@ lint:
 
 .PHONY: clippy
 clippy:
-	cargo clippy -- -D warnings
+	cargo clippy --all-targets -- -D warnings
 
 .PHONY: clippy-fix
 clippy-fix:

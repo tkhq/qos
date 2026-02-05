@@ -28,8 +28,13 @@ pub enum ProtocolError {
 	/// Ensure the executor is in the correct phase.
 	NoMatchingRoute(ProtocolPhase),
 	/// Hash of the Pivot binary does not match the pivot configuration in the
-	/// manifest. Contains (expected, actual) as hex strings.
-	InvalidPivotHash { expected: String, actual: String },
+	/// manifest.
+	InvalidPivotHash {
+		/// Expected hash as hex string.
+		expected: String,
+		/// Actual hash as hex string.
+		actual: String,
+	},
 	/// The message is too large.
 	OversizeMsg,
 	/// Message could not be deserialized
@@ -110,20 +115,41 @@ pub enum ProtocolError {
 	/// An error from the attest crate.
 	QosAttestError(String),
 	/// Quorum Key in the new manifest does not match the quorum key in the old
-	/// manifest. Contains (expected, actual) as hex strings.
-	DifferentQuorumKey { expected: String, actual: String },
+	/// manifest.
+	DifferentQuorumKey {
+		/// Expected value as hex string.
+		expected: String,
+		/// Actual value as hex string.
+		actual: String,
+	},
 	/// The manifest sets do not match.
-	/// Contains (expected_hash, actual_hash) as hex strings.
-	DifferentManifestSet { expected: String, actual: String },
+	DifferentManifestSet {
+		/// Expected hash as hex string.
+		expected: String,
+		/// Actual hash as hex string.
+		actual: String,
+	},
 	/// The manifests do not have the same namespace names.
-	/// Contains (expected, actual) namespace names.
-	DifferentNamespaceName { expected: String, actual: String },
+	DifferentNamespaceName {
+		/// Expected namespace name.
+		expected: String,
+		/// Actual namespace name.
+		actual: String,
+	},
 	/// The manifest has a lower nonce then the current manifest.
-	/// Contains (expected_min, actual) nonce values.
-	LowNonce { expected: u32, actual: u32 },
+	LowNonce {
+		/// Expected minimum nonce value.
+		expected: u32,
+		/// Actual nonce value.
+		actual: u32,
+	},
 	/// The manifests have different PCR3 values.
-	/// Contains (expected, actual) as hex strings.
-	DifferentPcr3 { expected: String, actual: String },
+	DifferentPcr3 {
+		/// Expected value as hex string.
+		expected: String,
+		/// Actual value as hex string.
+		actual: String,
+	},
 	/// Attestation document is missing ephemeral key.
 	MissingEphemeralKey,
 	/// Ephemeral key cannot be decoded.
@@ -142,8 +168,12 @@ pub enum ProtocolError {
 	DuplicateApproval,
 	/// The new manifest was different from the old manifest when we expected
 	/// them to be the same because they have the same nonce.
-	/// Contains (expected_hash, actual_hash) as hex strings.
-	DifferentManifest { expected: String, actual: String },
+	DifferentManifest {
+		/// Expected hash as hex string.
+		expected: String,
+		/// Actual hash as hex string.
+		actual: String,
+	},
 	/// Error from the qos crypto library.
 	QosCrypto(String),
 	/// Error during expanding the `StreamPool`.

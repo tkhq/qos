@@ -44,30 +44,50 @@ pub enum AttestError {
 	/// User data is missing in the attestation doc.
 	MissingUserData,
 	/// User data (normally manifest hash) does not match the attestation doc.
-	/// Contains (expected, actual) as hex strings.
-	DifferentUserData { expected: String, actual: String },
+	DifferentUserData {
+		/// Expected value as hex string.
+		expected: String,
+		/// Actual value as hex string.
+		actual: String,
+	},
 	/// The attestation doc has a nonce when none was expected.
 	UnexpectedAttestationDocNonce,
 	/// The attestation doc does not contain a pcr0.
 	MissingPcr0,
 	/// The pcr0 in the attestation doc does not match.
-	/// Contains (expected, actual) as hex strings.
-	DifferentPcr0 { expected: String, actual: String },
+	DifferentPcr0 {
+		/// Expected value as hex string.
+		expected: String,
+		/// Actual value as hex string.
+		actual: String,
+	},
 	/// The attestation doc does not have a pcr1.
 	MissingPcr1,
 	/// The attestation doc has a different pcr1.
-	/// Contains (expected, actual) as hex strings.
-	DifferentPcr1 { expected: String, actual: String },
+	DifferentPcr1 {
+		/// Expected value as hex string.
+		expected: String,
+		/// Actual value as hex string.
+		actual: String,
+	},
 	/// The attestation doc does not have a pcr2.
 	MissingPcr2,
 	/// The attestation doc has a different pcr2.
-	/// Contains (expected, actual) as hex strings.
-	DifferentPcr2 { expected: String, actual: String },
+	DifferentPcr2 {
+		/// Expected value as hex string.
+		expected: String,
+		/// Actual value as hex string.
+		actual: String,
+	},
 	/// The attestation doc does not have a pcr3.
 	MissingPcr3,
 	/// The attestation doc has a different pcr3.
-	/// Contains (expected, actual) as hex strings.
-	DifferentPcr3 { expected: String, actual: String },
+	DifferentPcr3 {
+		/// Expected value as hex string.
+		expected: String,
+		/// Actual value as hex string.
+		actual: String,
+	},
 }
 
 impl From<webpki::Error> for AttestError {

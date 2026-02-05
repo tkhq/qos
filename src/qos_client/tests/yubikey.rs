@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use std::{
 	fs::create_dir_all,
 	io::{BufRead, BufReader},
