@@ -135,6 +135,8 @@ pub struct PermittedStream {
 }
 
 impl PermittedStream {
+	/// Accept a connection from the listener, acquiring a permit from the
+	/// semaphore.
 	pub async fn accept(
 		listener: &Listener,
 		connections: Arc<Semaphore>,
