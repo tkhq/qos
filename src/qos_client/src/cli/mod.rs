@@ -1396,14 +1396,18 @@ mod handlers {
 	};
 
 	pub(super) fn pivot_hash(opts: &ClientOpts) {
-		let pivot = std::fs::read(opts.pivot_path())
-			.expect("Failed to read pivot file");
+		let pivot_path = opts.pivot_path();
+		let pivot = std::fs::read(&pivot_path).unwrap_or_else(|e| {
+			panic!("pivot_hash: Could not read pivot file from {pivot_path:?}: {e}")
+		});
 
 		let hash = qos_crypto::sha_256(&pivot);
 		let hex_hash = qos_hex::encode(&hash);
 
-		std::fs::write(opts.output_path(), hex_hash.as_bytes())
-			.expect("Failed to write pivot hash to specified path");
+		let output_path = opts.output_path();
+		std::fs::write(&output_path, hex_hash.as_bytes()).unwrap_or_else(|e| {
+			panic!("pivot_hash: Could not write pivot hash to {output_path:?}: {e}")
+		});
 	}
 
 	pub(super) fn host_health(opts: &ClientOpts) {
