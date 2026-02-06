@@ -4,7 +4,7 @@ use std::{fmt, iter::zip};
 
 use qos_crypto::sha_512;
 use qos_nsm::types::{NsmRequest, NsmResponse};
-use qos_p256::{P256Pair, P256Public};
+use qos_p256::{QuorumKey, QuorumKeyPublic};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
@@ -151,8 +151,8 @@ pub(in crate::protocol) fn boot_genesis(
 	genesis_set: &GenesisSet,
 	maybe_dr_key: Option<Vec<u8>>,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
-	let quorum_pair = P256Pair::generate()?;
-	let master_seed = &quorum_pair.to_master_seed()[..];
+	let quorum_pair = QuorumKey::generate()?;
+	let master_seed = quorum_pair.as_bytes();
 
 	let shares = qos_crypto::shamir::shares_generate(
 		master_seed,
@@ -164,7 +164,7 @@ pub(in crate::protocol) fn boot_genesis(
 	let member_outputs: Result<Vec<_>, _> = zip(shares, genesis_set.members.iter().cloned())
 		.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError> {
 			// 1) encrypt the share to quorum key
-			let personal_pub = P256Public::from_bytes(&share_set_member.pub_key)?;
+			let personal_pub = QuorumKeyPublic::from_bytes(&share_set_member.pub_key)?;
 			let encrypted_quorum_key_share = personal_pub.encrypt(&share)?;
 
 			Ok(GenesisMemberOutput {
@@ -176,7 +176,7 @@ pub(in crate::protocol) fn boot_genesis(
 		.collect();
 
 	let dr_key_wrapped_quorum_key = if let Some(dr_key) = maybe_dr_key {
-		let dr_public = P256Public::from_bytes(&dr_key)
+		let dr_public = QuorumKeyPublic::from_bytes(&dr_key)
 			.map_err(ProtocolError::InvalidP256DRKey)?;
 		Some(dr_public.encrypt(master_seed)?)
 	} else {
@@ -214,7 +214,6 @@ pub(in crate::protocol) fn boot_genesis(
 #[cfg(test)]
 mod test {
 	use qos_nsm::mock::MockNsm;
-	use qos_p256::MASTER_SEED_LEN;
 
 	use super::*;
 	use crate::handles::Handles;
@@ -229,9 +228,9 @@ mod test {
 		);
 		let mut protocol_state =
 			ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
-		let member1_pair = P256Pair::generate().unwrap();
-		let member2_pair = P256Pair::generate().unwrap();
-		let member3_pair = P256Pair::generate().unwrap();
+		let member1_pair = QuorumKey::generate().unwrap();
+		let member2_pair = QuorumKey::generate().unwrap();
+		let member3_pair = QuorumKey::generate().unwrap();
 
 		let genesis_members = vec![
 			QuorumMember {
@@ -267,18 +266,15 @@ mod test {
 			})
 			.collect();
 
-		let reconstructed: [u8; MASTER_SEED_LEN] =
-			qos_crypto::shamir::shares_reconstruct(
-				&shares[0..threshold as usize],
-			)
-			.unwrap()
-			.try_into()
-			.unwrap();
+		let reconstructed = qos_crypto::shamir::shares_reconstruct(
+			&shares[0..threshold as usize],
+		)
+		.unwrap();
 		let reconstructed_quorum_key =
-			P256Pair::from_master_seed(&reconstructed).unwrap();
+			QuorumKey::from_bytes(&reconstructed).unwrap();
 
 		let quorum_public_key =
-			P256Public::from_bytes(&output.quorum_key).unwrap();
+			QuorumKeyPublic::from_bytes(&output.quorum_key).unwrap();
 		assert_eq!(
 			reconstructed_quorum_key.public_key().to_bytes(),
 			quorum_public_key.to_bytes()

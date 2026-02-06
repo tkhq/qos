@@ -9,9 +9,7 @@ use std::{
 };
 
 use qos_crypto::shamir::shares_generate;
-use qos_p256::{
-	derive_secret, encrypt::P256EncryptPair, P256Pair, P256_ENCRYPT_DERIVE_PATH,
-};
+use qos_p256::QuorumKey;
 
 // Note: the dev secret can also be found in our keys repo
 // (tkhq/keys:deployment/preprod/evm-parser/manifest-set/dev.secret)
@@ -82,10 +80,7 @@ fn preprod_reshard_ceremony() {
 	let dev_secret_hex_bytes =
 		qos_hex::decode(std::str::from_utf8(&dev_secret_utf8_bytes).unwrap())
 			.unwrap();
-	let dev_key = P256Pair::from_master_seed(
-		&dev_secret_hex_bytes.clone().try_into().unwrap(),
-	)
-	.unwrap();
+	let dev_key = QuorumKey::from_bytes(&dev_secret_hex_bytes).unwrap();
 
 	// For each of the enclaves...
 	for enclave_name in [
@@ -109,11 +104,8 @@ fn preprod_reshard_ceremony() {
 		let removed_byte = decrypted_dev_share.remove(0);
 		assert_eq!(removed_byte, 1);
 
-		let pk = P256Pair::from_master_seed(
-			&decrypted_dev_share.clone().try_into().unwrap(),
-		)
-		.unwrap()
-		.public_key();
+		let pk =
+			QuorumKey::from_bytes(&decrypted_dev_share).unwrap().public_key();
 		let expected_quorum_public_key = fs::read(format!(
 			"./fixtures/preprod/{enclave_name}/quorum_key.pub"
 		))
@@ -135,7 +127,7 @@ fn preprod_reshard_ceremony() {
 			let user_secret_path =
 				format!("{}/{}.secret", user_dir(user), user);
 			let user_key_pair =
-				P256Pair::from_hex_file(user_secret_path.clone()).unwrap();
+				QuorumKey::from_hex_file(user_secret_path.clone()).unwrap();
 			// Encrypt the new share to it
 			let encrypted_share =
 				user_key_pair.public_key().encrypt(share).unwrap();
@@ -162,11 +154,7 @@ fn assert_can_decrypt(user_secret_path: String, sharepath: String) {
 	let master_seed_hex_bytes = fs::read(user_secret_path).unwrap();
 	let master_seed_utf8 = std::str::from_utf8(&master_seed_hex_bytes).unwrap();
 	let master_seed = qos_hex::decode(master_seed_utf8).unwrap();
-	let encryption_pair_secret = derive_secret(
-		&master_seed.try_into().unwrap(),
-		P256_ENCRYPT_DERIVE_PATH,
-	)
-	.unwrap();
-	let pair = P256EncryptPair::from_bytes(&encryption_pair_secret).unwrap();
-	assert!(pair.decrypt(&share).is_ok());
+
+	let quorum_key = QuorumKey::from_bytes(&master_seed).unwrap();
+	assert!(quorum_key.decrypt(&share).is_ok());
 }

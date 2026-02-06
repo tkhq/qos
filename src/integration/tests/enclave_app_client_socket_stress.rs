@@ -18,7 +18,7 @@ use qos_core::{
 	reaper::Reaper,
 };
 use qos_nsm::mock::MockNsm;
-use qos_p256::P256Pair;
+use qos_p256::QuorumKey;
 use qos_test_primitives::PathWrapper;
 
 const TEST_TMP: &str = "/tmp/enclave_app_client_socket_stress";
@@ -71,7 +71,7 @@ async fn enclave_app_client_socket_stress() {
 		PIVOT_SOCKET_STRESS_PATH.to_string(),
 	);
 
-	let p256_pair = P256Pair::generate().unwrap();
+	let p256_pair = QuorumKey::generate().unwrap();
 	// Enclave app already exists, but we need to add a quorum key and manifest
 	// envelope so the reaper pivots.
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();

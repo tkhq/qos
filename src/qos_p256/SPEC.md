@@ -1,14 +1,14 @@
-# QOS Key Set Specification
+# Quorum Key Set Specification
 
-This document provides a formal specification for the cryptographic key schemes of the QOS Key Set.
+This document provides a formal specification for the cryptographic key schemes of the Quorum Key Set.
 
-The QOS Key Set is a collection of 3 cryptographic keys using 3 distinct schemes that comprise what is commonly referred to as a [Quorum Key](https://github.com/tkhq/qos/tree/main?tab=readme-ov-file#quorum-key). Each key is used for different cryptographic operations (more info in the [Overview](#overview) section). Additionally, 2 of the schemes, P256 Signing and P256 HPKE, are used by [Operators](https://github.com/tkhq/qos/tree/main?tab=readme-ov-file#operator).
+The Quorum Key Set is a collection of 3 cryptographic keys using 3 distinct schemes that comprise what is commonly referred to as a [Quorum Key](https://github.com/tkhq/qos/tree/main?tab=readme-ov-file#quorum-key). Each key is used for different cryptographic operations (more info in the [Overview](#overview) section). Additionally, 2 of the schemes, P256 Signing and P256 HPKE, are used by [Operators](https://github.com/tkhq/qos/tree/main?tab=readme-ov-file#operator).
 
 Currently, the canonical implementation lives here, in this crate (`qos_p256`).
 
 ## Overview
 
-A QOS Key Set consists of three cryptographically linked keys derived from a single master seed:
+A Quorum Key Set consists of three cryptographically independent keys that function together:
 
 1. **P256 Signing Key** - ECDSA signatures for authentication
 2. **P256 HPKE Key** - Hybrid public key encryption (ECDH + AES-GCM)
@@ -207,7 +207,8 @@ Symmetric authenticated encryption for data at rest.
 ### Constants
 
 ```text
-AES_GCM_256_HMAC_SHA512_TAG = b"qos_aes_gcm_256_hmac_sha512"
+AES_GCM_256_HMAC_SHA512_TAG = b"qos_aes_gcm_256_hmac_sha512" (Naming for historical reasons, used as AAD)
+AES_GCM_256_KEY_ID_INFO = b"AES_GCM_256_KEY_ID"
 ```
 
 ### Envelope Format
@@ -261,13 +262,41 @@ Process:
   4. Return plaintext (or error if authentication fails)
 ```
 
+### AES GCM 256 Key Identifier
+
+A non-secret identifier derived from the AES GCM 256 key using HKDF-SHA256 for key management purposes. This identifier allows key management systems to reference and compare keys without exposing the secret material.
+
+_Note:_ While historically we have used HKDF-SHA512, going forward we intend to standardize on HKDF-SHA256 since it is more standard among modern cryptography protocols.
+
+```text
+AES_GCM_256_KEY_ID(secret) -> identifier
+
+Input:
+  secret: 32-byte AES key
+
+Output:
+  identifier: 32-byte key identifier
+
+Process:
+  1. prk = HKDF-SHA256-Extract(salt=empty, ikm=secret)
+  2. identifier = HKDF-SHA256-Expand(prk, info=AES_GCM_256_KEY_ID_INFO, length=32)
+  3. Return identifier
+```
+
 ## 4. Secret Management
 
 ### Overview
 
+The QOS system supports two secret formats for storing the three cryptographic keys:
+
+- **V0**: Single 32-byte master seed from which all three secrets are derived.
+- **V1**: Three independent secrets stored explicitly
+
+### V0 Format (Master Seed)
+
 A single 32-byte master seed from which all three secrets are derived.
 
-### Derivation
+#### Derivation
 
 All secrets are derived using HKDF-SHA512 with domain-specific salts:
 
@@ -287,8 +316,177 @@ Process:
   3. Return secret
 ```
 
-### Salt Paths
+#### Salt Paths
 
 - Signing: `b"qos_p256_sign"`
-- HPKE: `b"qos_p256_encrypt"`
+- HPKE: `b"qos_p256_encrypt"` (historical terminology, retained for V0 compatibility)
 - AES-GCM-256: `b"qos_aes_gcm_encrypt"`
+
+### V1 Format (Explicit Secrets)
+
+Three independent 32-byte secrets stored with a version byte prefix.
+
+#### Layout
+
+```text
+┌─────────┬────────────────┬──────────────┬──────────────--------┐
+│ version │ hpke_secret    │ sign_secret  │ aes_gcm_256_secret   │
+│ 1 byte  │ 32 bytes       │ 32 bytes     │ 32 bytes             │
+└─────────┴────────────────┴──────────────┴─────────────--------─┘
+Total: 97 bytes
+```
+
+#### Version Byte
+
+```text
+SECRET_V1 = 0x01
+```
+
+#### Secret Extraction
+
+```text
+Offset  Size  Content
+0       1     Version byte (0x01 for V1)
+1       32    hpke_secret
+33      32    sign_secret
+65      32    aes_gcm_256_secret
+```
+
+### Version Detection
+
+```text
+PARSE_SECRET(bytes) -> VersionedSecret | Error
+
+Input:
+  bytes: arbitrary-length byte string
+
+Output:
+  VersionedSecret or parsing error
+
+Process:
+  1. If len(bytes) == 97 AND bytes[0] == SECRET_V1:
+       a. Validate hpke_secret and sign_secret are valid P256 scalars
+       b. Return V1(bytes)
+  2. Else if len(bytes) == 32:
+       Return V0(bytes)
+  3. Else:
+       Return Error (invalid secret format)
+```
+
+### Design Rationale
+
+**V0 Advantages:**
+- Compact storage (32 bytes)
+- Single secret to backup
+- All keys cryptographically linked since they are derived from single seed
+
+**V1 Advantages:**
+- Easier integration with external key management
+
+## 5. Quorum Key Identifier
+
+### Overview
+
+An identifier for a complete Quorum Key Set, suitable for key management and verification.
+
+### V0 Format (QuorumKeyPublic)
+
+Two uncompressed P256 public keys concatenated.
+
+#### Layout
+
+```text
+┌─────────────────────┬───────────────────┐
+│ hpke_public         │ sign_public       │
+│ 65 bytes (SEC1)     │ 65 bytes (SEC1)   │
+└─────────────────────┴───────────────────┘
+Total: 130 bytes
+```
+
+_Note:_ V0 does not include an AES GCM 256 key identifier. This was acceptable when all secrets were derived from a single master seed (V0 secret format).
+
+### V1 Format (QuorumKeyId)
+
+Uncompressed public keys plus AES GCM 256 key identifier, with a version byte prefix.
+
+#### Layout
+
+```text
+┌─────────┬───────────────────┬───────────────────┬──────────────--------┐
+│ version │ hpke_public       │ sign_public       │ aes_gcm_256_key_id   │
+│ 1 byte  │ 65 bytes (SEC1)   │ 65 bytes (SEC1)   │ 32 bytes             │
+└─────────┴───────────────────┴───────────────────┴─────────────--------─┘
+Total: 163 bytes
+```
+
+#### Version Byte
+
+```text
+QUORUM_KEY_ID_V1 = 0x01
+```
+
+#### Field Definitions
+
+| Field | Offset | Size | Format |
+|-------|--------|------|--------|
+| version | 0 | 1 | Version byte (0x01 for V1) |
+| hpke_public | 1 | 65 | SEC1 uncompressed |
+| sign_public | 66 | 65 | SEC1 uncompressed |
+| aes_gcm_256_key_id | 131 | 32 | HKDF-SHA256 derived identifier |
+
+#### Construction
+
+```text
+QUORUM_KEY_ID(hpke_pub, sign_pub, aes_gcm_256_secret) -> key_id
+
+Process:
+  1. version = 0x01                                                 // 1 byte
+  2. hpke_uncompressed = SEC1_Uncompressed(hpke_pub)                // 65 bytes
+  3. sign_uncompressed = SEC1_Uncompressed(sign_pub)                // 65 bytes
+  4. aes_gcm_256_key_id = AES_GCM_256_KEY_ID(aes_gcm_256_secret)    // 32 bytes
+  5. Return version || hpke_uncompressed || sign_uncompressed || aes_gcm_256_key_id
+```
+
+### Version Detection
+
+```text
+PARSE_QUORUM_KEY_ID(bytes) -> VersionedQuorumKeyId | Error
+
+Input:
+  bytes: arbitrary-length byte string
+
+Output:
+  VersionedQuorumKeyId or parsing error
+
+Process:
+  1. If len(bytes) == 163 AND bytes[0] == QUORUM_KEY_ID_V1:
+       a. Validate hpke_public and sign_public are valid SEC1 uncompressed P256 points
+       b. Return V1(bytes)
+  2. Else if len(bytes) == 130:
+       a. Validate hpke_public and sign_public are valid SEC1 uncompressed P256 points
+       b. Return V0(bytes)
+  3. Else:
+       Return Error (invalid quorum key id format)
+```
+
+### Fingerprint
+
+A compact 32-byte identifier for a QuorumKeyId.
+
+**Rationale:** Hashing the entire QuorumKeyId ensures integrity of all components as a unit. This makes it easy to verify the complete key set and detect if any component has been modified or substituted. We chose SHA256 instead of an HKDF since SHA256 is more easily available for a variety of clients.
+
+```text
+QUORUM_KEY_FINGERPRINT(bytes) -> fingerprint
+
+Input:
+  bytes: 130-byte or 163-byte QuorumKeyId
+
+Output:
+  fingerprint: 32-byte identifier
+
+Process:
+  1. If PARSE_QUORUM_KEY_ID(bytes) == Error:
+      Return Error (invalid quorum key id format)
+  2. fingerprint = SHA-256(bytes)
+  3. Return fingerprint
+```

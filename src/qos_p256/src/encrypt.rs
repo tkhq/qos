@@ -14,7 +14,7 @@ use p256::{
 use sha2::Sha512;
 use zeroize::ZeroizeOnDrop;
 
-use crate::{bytes_os_rng, P256Error, PUB_KEY_LEN_UNCOMPRESSED};
+use crate::{bytes_os_rng, QuorumKeyError, PUB_KEY_LEN_UNCOMPRESSED};
 
 const AES256_KEY_LEN: usize = 32;
 const BITS_96_AS_BYTES: u8 = 12;
@@ -52,18 +52,18 @@ impl P256EncryptPair {
 	pub fn decrypt(
 		&self,
 		serialized_envelope: &[u8],
-	) -> Result<Vec<u8>, P256Error> {
+	) -> Result<Vec<u8>, QuorumKeyError> {
 		let Envelope {
 			nonce,
 			ephemeral_sender_public: ephemeral_sender_public_bytes,
 			encrypted_message,
 		} = Envelope::try_from_slice(serialized_envelope)
-			.map_err(|_| P256Error::FailedToDeserializeEnvelope)?;
+			.map_err(|_| QuorumKeyError::FailedToDeserializeEnvelope)?;
 
 		let nonce = Nonce::from_slice(&nonce);
 		let ephemeral_sender_public =
 			PublicKey::from_sec1_bytes(&ephemeral_sender_public_bytes)
-				.map_err(|_| P256Error::FailedToDeserializePublicKey)?;
+				.map_err(|_| QuorumKeyError::FailedToDeserializePublicKey)?;
 
 		let sender_public_typed = SenderPublic(&ephemeral_sender_public_bytes);
 		let receiver_encoded_point =
@@ -88,7 +88,7 @@ impl P256EncryptPair {
 
 		cipher
 			.decrypt(nonce, payload)
-			.map_err(|_| P256Error::AesGcm256DecryptError)
+			.map_err(|_| QuorumKeyError::AesGcm256DecryptError)
 	}
 
 	/// Get the public key.
@@ -98,10 +98,10 @@ impl P256EncryptPair {
 	}
 
 	/// Deserialize key from raw scalar byte slice.
-	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, QuorumKeyError> {
 		Ok(Self {
 			private: SecretKey::from_slice(bytes)
-				.map_err(|_| P256Error::FailedToReadSecret)?,
+				.map_err(|_| QuorumKeyError::FailedToReadSecret)?,
 		})
 	}
 
@@ -120,7 +120,7 @@ pub struct P256EncryptPublic {
 
 impl P256EncryptPublic {
 	/// Encrypt a message to this public key.
-	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
+	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, QuorumKeyError> {
 		let ephemeral_sender_private = SecretKey::random(&mut OsRng);
 		let ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED as usize] =
 			ephemeral_sender_private
@@ -129,7 +129,7 @@ impl P256EncryptPublic {
 				.as_ref()
 				.try_into()
 				.map_err(|_| {
-					P256Error::FailedToCoercePublicKeyToIntendedLength
+					QuorumKeyError::FailedToCoercePublicKeyToIntendedLength
 				})?;
 
 		let sender_public_typed = SenderPublic(&ephemeral_sender_public);
@@ -160,14 +160,14 @@ impl P256EncryptPublic {
 
 		let encrypted_message = cipher
 			.encrypt(&nonce, payload)
-			.map_err(|_| P256Error::AesGcm256EncryptError)?;
+			.map_err(|_| QuorumKeyError::AesGcm256EncryptError)?;
 
 		let nonce = nonce.into();
 		let envelope =
 			Envelope { nonce, ephemeral_sender_public, encrypted_message };
 
 		borsh::to_vec(&envelope)
-			.map_err(|_| P256Error::FailedToSerializeEnvelope)
+			.map_err(|_| QuorumKeyError::FailedToSerializeEnvelope)
 	}
 
 	/// Decrypt a message encoded to this pair's public key.
@@ -179,13 +179,13 @@ impl P256EncryptPublic {
 		&self,
 		serialized_envelope: &[u8],
 		shared_secret: &[u8],
-	) -> Result<Vec<u8>, P256Error> {
+	) -> Result<Vec<u8>, QuorumKeyError> {
 		let Envelope {
 			nonce,
 			ephemeral_sender_public: ephemeral_sender_public_bytes,
 			encrypted_message,
 		} = Envelope::try_from_slice(serialized_envelope)
-			.map_err(|_| P256Error::FailedToDeserializeEnvelope)?;
+			.map_err(|_| QuorumKeyError::FailedToDeserializeEnvelope)?;
 
 		let nonce = Nonce::from_slice(&nonce);
 
@@ -208,7 +208,7 @@ impl P256EncryptPublic {
 
 		cipher
 			.decrypt(nonce, payload)
-			.map_err(|_| P256Error::AesGcm256DecryptError)
+			.map_err(|_| QuorumKeyError::AesGcm256DecryptError)
 	}
 
 	/// Serialize to SEC1 encoded point, not compressed.
@@ -219,17 +219,17 @@ impl P256EncryptPublic {
 	}
 
 	/// Deserialize from a SEC1 encoded point, not compressed.
-	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, QuorumKeyError> {
 		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize {
-			return Err(P256Error::EncodedPublicKeyTooLong);
+			return Err(QuorumKeyError::EncodedPublicKeyTooLong);
 		}
 		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED as usize {
-			return Err(P256Error::EncodedPublicKeyTooShort);
+			return Err(QuorumKeyError::EncodedPublicKeyTooShort);
 		}
 
 		Ok(Self {
 			public: PublicKey::from_sec1_bytes(bytes)
-				.map_err(|_| P256Error::FailedToReadPublicKey)?,
+				.map_err(|_| QuorumKeyError::FailedToReadPublicKey)?,
 		})
 	}
 }
@@ -258,7 +258,7 @@ fn create_cipher(
 	shared_secret: &PrivPubOrSharedSecret,
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,
-) -> Result<Aes256Gcm, P256Error> {
+) -> Result<Aes256Gcm, QuorumKeyError> {
 	let shared_secret = match shared_secret {
 		PrivPubOrSharedSecret::PrivPub { private, public } => {
 			diffie_hellman(private.to_nonzero_scalar(), public.as_affine())
@@ -287,7 +287,7 @@ fn create_cipher(
 	let shared_key = mac.finalize().into_bytes();
 
 	Aes256Gcm::new_from_slice(&shared_key[..AES256_KEY_LEN])
-		.map_err(|_| P256Error::FailedToCreateAes256GcmCipher)
+		.map_err(|_| QuorumKeyError::FailedToCreateAes256GcmCipher)
 }
 
 /// Helper function to create the additional associated data (AAD). The data is
@@ -300,17 +300,17 @@ fn create_cipher(
 fn create_additional_associated_data(
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,
-) -> Result<Vec<u8>, P256Error> {
+) -> Result<Vec<u8>, QuorumKeyError> {
 	let ephemeral_sender_len_int: u8 = ephemeral_sender_public
 		.0
 		.len()
 		.try_into()
-		.map_err(|_| P256Error::CannotCoerceLenToU8)?;
+		.map_err(|_| QuorumKeyError::CannotCoerceLenToU8)?;
 	let receiver_len_int: u8 = receiver_public
 		.0
 		.len()
 		.try_into()
-		.map_err(|_| P256Error::CannotCoerceLenToU8)?;
+		.map_err(|_| QuorumKeyError::CannotCoerceLenToU8)?;
 
 	let ephemeral_sender_len = &[ephemeral_sender_len_int];
 	let receiver_public_len = &[receiver_len_int];
@@ -358,7 +358,9 @@ impl AesGcm256Secret {
 	}
 
 	/// Create [`Self`] from bytes.
-	pub fn from_bytes(bytes: [u8; AES256_KEY_LEN]) -> Result<Self, P256Error> {
+	pub fn from_bytes(
+		bytes: [u8; AES256_KEY_LEN],
+	) -> Result<Self, QuorumKeyError> {
 		Ok(Self { secret: bytes })
 	}
 
@@ -369,7 +371,7 @@ impl AesGcm256Secret {
 	/// # Panics
 	/// Panics if `self.secret` is an invalid AES256 secret. This should never
 	/// happen in practice.
-	pub fn encrypt(&self, msg: &[u8]) -> Result<Vec<u8>, P256Error> {
+	pub fn encrypt(&self, msg: &[u8]) -> Result<Vec<u8>, QuorumKeyError> {
 		let nonce = {
 			let random_bytes = bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
 			*Nonce::from_slice(&random_bytes)
@@ -380,12 +382,12 @@ impl AesGcm256Secret {
 			.expect("secret is a valid aes256 key len. qed.");
 		let encrypted_message = cipher
 			.encrypt(&nonce, payload)
-			.map_err(|_| P256Error::AesGcm256EncryptError)?;
+			.map_err(|_| QuorumKeyError::AesGcm256EncryptError)?;
 
 		let nonce = nonce.into();
 		let envelope = SymmetricEnvelope { nonce, encrypted_message };
 		borsh::to_vec(&envelope)
-			.map_err(|_| P256Error::FailedToSerializeEnvelope)
+			.map_err(|_| QuorumKeyError::FailedToSerializeEnvelope)
 	}
 
 	/// Decrypt the given serialized [`SymmetricEnvelope`].
@@ -397,10 +399,10 @@ impl AesGcm256Secret {
 	pub fn decrypt(
 		&self,
 		serialized_envelope: &[u8],
-	) -> Result<Vec<u8>, P256Error> {
+	) -> Result<Vec<u8>, QuorumKeyError> {
 		let SymmetricEnvelope { nonce, encrypted_message } =
 			SymmetricEnvelope::try_from_slice(serialized_envelope)
-				.map_err(|_| P256Error::FailedToDeserializeEnvelope)?;
+				.map_err(|_| QuorumKeyError::FailedToDeserializeEnvelope)?;
 
 		let nonce = Nonce::from_slice(&nonce);
 		let payload = Payload {
@@ -412,7 +414,7 @@ impl AesGcm256Secret {
 			.expect("secret is a valid aes256 key len. qed.");
 		cipher
 			.decrypt(nonce, payload)
-			.map_err(|_| P256Error::AesGcm256DecryptError)
+			.map_err(|_| QuorumKeyError::AesGcm256DecryptError)
 	}
 }
 
@@ -447,7 +449,7 @@ mod test_asymmetric {
 
 		assert_eq!(
 			bob_pair.decrypt(&serialized_envelope).unwrap_err(),
-			P256Error::AesGcm256DecryptError
+			QuorumKeyError::AesGcm256DecryptError
 		);
 	}
 
@@ -468,7 +470,7 @@ mod test_asymmetric {
 
 		assert_eq!(
 			alice_pair.decrypt(&tampered_envelope).unwrap_err(),
-			P256Error::AesGcm256DecryptError
+			QuorumKeyError::AesGcm256DecryptError
 		);
 	}
 
@@ -494,7 +496,7 @@ mod test_asymmetric {
 
 		assert_eq!(
 			alice_pair.decrypt(&tampered_envelope).unwrap_err(),
-			P256Error::AesGcm256DecryptError
+			QuorumKeyError::AesGcm256DecryptError
 		);
 	}
 
@@ -520,7 +522,7 @@ mod test_asymmetric {
 
 		assert_eq!(
 			alice_pair.decrypt(&tampered_envelope).unwrap_err(),
-			P256Error::FailedToDeserializePublicKey
+			QuorumKeyError::FailedToDeserializePublicKey
 		);
 	}
 
@@ -538,7 +540,7 @@ mod test_asymmetric {
 
 		assert_eq!(
 			alice_pair.decrypt(&serialized_envelope).unwrap_err(),
-			P256Error::FailedToDeserializeEnvelope
+			QuorumKeyError::FailedToDeserializeEnvelope
 		);
 	}
 
@@ -571,15 +573,15 @@ mod test_asymmetric {
 
 		assert!(matches!(
 			P256EncryptPublic::from_bytes(&too_short),
-			Err(P256Error::EncodedPublicKeyTooShort)
+			Err(QuorumKeyError::EncodedPublicKeyTooShort)
 		));
 		assert!(matches!(
 			P256EncryptPublic::from_bytes(&too_long),
-			Err(P256Error::EncodedPublicKeyTooLong)
+			Err(QuorumKeyError::EncodedPublicKeyTooLong)
 		));
 		assert!(matches!(
 			P256EncryptPublic::from_bytes(&bad_prefix),
-			Err(P256Error::FailedToReadPublicKey),
+			Err(QuorumKeyError::FailedToReadPublicKey),
 		));
 		assert!(P256EncryptPublic::from_bytes(&just_right).is_ok());
 	}
@@ -642,7 +644,7 @@ mod test_symmetric {
 		let serialized_envelope = borsh::to_vec(&envelope).unwrap();
 
 		let err = key.decrypt(&serialized_envelope).unwrap_err();
-		assert_eq!(err, P256Error::AesGcm256DecryptError,);
+		assert_eq!(err, QuorumKeyError::AesGcm256DecryptError,);
 	}
 
 	#[test]
@@ -663,7 +665,7 @@ mod test_symmetric {
 		let serialized_envelope = borsh::to_vec(&envelope).unwrap();
 
 		let err = key.decrypt(&serialized_envelope).unwrap_err();
-		assert_eq!(err, P256Error::AesGcm256DecryptError,);
+		assert_eq!(err, QuorumKeyError::AesGcm256DecryptError,);
 	}
 
 	#[test]
@@ -675,6 +677,6 @@ mod test_symmetric {
 		let serialized_envelope = key.encrypt(plaintext).unwrap();
 
 		let err = other_key.decrypt(&serialized_envelope).unwrap_err();
-		assert_eq!(err, P256Error::AesGcm256DecryptError,);
+		assert_eq!(err, QuorumKeyError::AesGcm256DecryptError,);
 	}
 }

@@ -10,7 +10,7 @@ use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
 use qos_core::protocol::services::genesis::GenesisOutput;
 use qos_crypto::{sha_512, shamir::shares_reconstruct};
 use qos_nsm::nitro::unsafe_attestation_doc_from_der;
-use qos_p256::{P256Pair, P256Public};
+use qos_p256::{QuorumKey, QuorumKeyPublic};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 use rand::{rng, seq::SliceRandom};
 
@@ -184,7 +184,7 @@ async fn genesis_e2e() {
 			let share_key_path =
 				Path::new(&*personal_dir(alias)).join(private_share_key);
 
-			let share_pair = P256Pair::from_hex_file(share_key_path).unwrap();
+			let share_pair = QuorumKey::from_hex_file(share_key_path).unwrap();
 
 			// Decrypt the share with the personal key
 			let plain_text_share =
@@ -198,15 +198,12 @@ async fn genesis_e2e() {
 
 	// Try recovering from a random permutation
 	decrypted_shares.shuffle(&mut rng());
-	let master_secret: [u8; qos_p256::MASTER_SEED_LEN] =
-		shares_reconstruct(&decrypted_shares[0..threshold])
-			.unwrap()
-			.try_into()
-			.unwrap();
-	let reconstructed = P256Pair::from_master_seed(&master_secret).unwrap();
+	let master_secret =
+		shares_reconstruct(&decrypted_shares[0..threshold]).unwrap();
+	let reconstructed = QuorumKey::from_bytes(&master_secret).unwrap();
 	assert!(
 		reconstructed.public_key()
-			== P256Public::from_bytes(&genesis_output.quorum_key).unwrap()
+			== QuorumKeyPublic::from_bytes(&genesis_output.quorum_key).unwrap()
 	);
 
 	// -- CLIENT make sure each user can run `after-genesis` against their
@@ -241,7 +238,7 @@ async fn genesis_e2e() {
 			Path::new(&personal_dir(user)).join(format!("{user}.secret"));
 		let share_path =
 			Path::new(&personal_dir(user)).join(format!("{user}.share"));
-		let share_key_pair = P256Pair::from_hex_file(share_key_path).unwrap();
+		let share_key_pair = QuorumKey::from_hex_file(share_key_path).unwrap();
 
 		// Check the share is encrypted to personal key
 		let share =
@@ -252,15 +249,12 @@ async fn genesis_e2e() {
 	}
 
 	// Check that we can use the DR key to decrypt the quorum key
-	let dr_key_pair = P256Pair::from_hex_file(DR_KEY_PRIVATE_PATH).unwrap();
+	let dr_key_pair = QuorumKey::from_hex_file(DR_KEY_PRIVATE_PATH).unwrap();
 
 	let dr_wrapped_quorum_key = fs::read(dr_wrapped_quorum_key_path).unwrap();
-	let master_seed: [u8; 32] = dr_key_pair
-		.decrypt(&dr_wrapped_quorum_key)
-		.unwrap()
-		.try_into()
-		.unwrap();
-	let pair = P256Pair::from_master_seed(&master_seed).unwrap();
+	let master_seed = dr_key_pair.decrypt(&dr_wrapped_quorum_key).unwrap();
+
+	let pair = QuorumKey::from_bytes(&master_seed).unwrap();
 	assert!(pair == reconstructed);
 
 	let dr_artifacts_contents = fs::File::open(dr_artifacts_path).unwrap();
