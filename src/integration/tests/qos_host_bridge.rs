@@ -479,9 +479,9 @@ async fn qos_host_bridge_works() {
 	let mut header = (msg_bytes.len() as u64).to_le_bytes();
 
 	// send the header/length
-	tcp_stream.write(&header).await.unwrap();
+	tcp_stream.write_all(&header).await.unwrap();
 	// send the msg
-	tcp_stream.write(&msg_bytes).await.unwrap();
+	tcp_stream.write_all(&msg_bytes).await.unwrap();
 
 	// receive the reply header
 	assert_eq!(8, tcp_stream.read_exact(&mut header).await.unwrap());
@@ -532,9 +532,9 @@ async fn qos_host_bridge_works() {
 	let mut header = (msg_bytes.len() as u64).to_le_bytes();
 
 	// send the header/length
-	tcp_stream.write(&header).await.unwrap();
+	tcp_stream.write_all(&header).await.unwrap();
 	// send the msg
-	tcp_stream.write(&msg_bytes).await.unwrap();
+	tcp_stream.write_all(&msg_bytes).await.unwrap();
 
 	// receive the reply header
 	assert_eq!(8, tcp_stream.read_exact(&mut header).await.unwrap());

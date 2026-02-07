@@ -1,3 +1,5 @@
+//! QOS Host binary entry point.
+
 #[tokio::main]
 async fn main() {
 	// Development quick start
