@@ -11,7 +11,8 @@ use crate::protocol::{
 };
 
 /// Message types for communicating with protocol executor.
-#[derive(Debug, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum ProtocolMsg {
 	/// A error from executing the protocol.
 	ProtocolErrorResponse(ProtocolError),
@@ -26,6 +27,7 @@ pub enum ProtocolMsg {
 		/// Manifest with approvals
 		manifest_envelope: Box<ManifestEnvelope>,
 		/// Pivot binary
+		#[serde(with = "qos_hex::serde")]
 		pivot: Vec<u8>,
 	},
 	/// Response for Standard Boot.
@@ -40,6 +42,11 @@ pub enum ProtocolMsg {
 		set: GenesisSet,
 		/// Optionally include a `qos_p256::P256Public` key for encrypting the
 		/// quorum key too. Intended for disaster recovery.
+		#[serde(
+			default,
+			skip_serializing_if = "Option::is_none",
+			with = "qos_hex::serde_opt"
+		)]
 		dr_key: Option<Vec<u8>>,
 	},
 	/// Response for Genesis Boot.
@@ -53,6 +60,7 @@ pub enum ProtocolMsg {
 	/// Post a quorum key shard
 	ProvisionRequest {
 		/// Quorum Key share encrypted to the Ephemeral Key.
+		#[serde(with = "qos_hex::serde")]
 		share: Vec<u8>,
 		/// Approval of the manifest from a member of the share set.
 		approval: Approval,
@@ -68,12 +76,14 @@ pub enum ProtocolMsg {
 	ProxyRequest {
 		/// Encoded data that will be sent from the nitro enclave server to
 		/// the secure app.
+		#[serde(with = "qos_hex::serde")]
 		data: Vec<u8>,
 	},
 	/// Response to the proxy request
 	ProxyResponse {
 		/// Encoded data the secure app responded with to the nitro enclave
 		/// server.
+		#[serde(with = "qos_hex::serde")]
 		data: Vec<u8>,
 	},
 
@@ -85,6 +95,7 @@ pub enum ProtocolMsg {
 		/// COSE SIGN1 structure with Attestation Doc
 		nsm_response: NsmResponse,
 		/// Manifest Envelope, if it exists, otherwise None.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
 		manifest_envelope: Option<Box<ManifestEnvelope>>,
 	},
 
@@ -93,6 +104,7 @@ pub enum ProtocolMsg {
 		/// Manifest with approvals
 		manifest_envelope: Box<ManifestEnvelope>,
 		/// Pivot binary
+		#[serde(with = "qos_hex::serde")]
 		pivot: Vec<u8>,
 	},
 	/// Response to a key forward attestation request
@@ -108,14 +120,17 @@ pub enum ProtocolMsg {
 		/// Attestation document from the enclave requesting the quorum key. We
 		/// assume this attestation document contains a hash of the given
 		/// manifest in the user data field.
+		#[serde(with = "qos_hex::serde")]
 		cose_sign1_attestation_doc: Vec<u8>,
 	},
 	/// Response to [`Self::ExportKeyRequest`]
 	ExportKeyResponse {
 		/// Quorum key encrypted to the Ephemeral Key from the submitted
 		/// attestation document.
+		#[serde(with = "qos_hex::serde")]
 		encrypted_quorum_key: Vec<u8>,
 		/// Signature over the encrypted quorum key.
+		#[serde(with = "qos_hex::serde")]
 		signature: Vec<u8>,
 	},
 
@@ -123,8 +138,10 @@ pub enum ProtocolMsg {
 	InjectKeyRequest {
 		/// Quorum key encrypted to the Ephemeral Key of the enclave this
 		/// request is being sent to.
+		#[serde(with = "qos_hex::serde")]
 		encrypted_quorum_key: Vec<u8>,
 		/// Signature over the encrypted quorum key.
+		#[serde(with = "qos_hex::serde")]
 		signature: Vec<u8>,
 	},
 	/// Successful response to [`Self::InjectKeyRequest`].
@@ -225,16 +242,14 @@ impl std::fmt::Display for ProtocolMsg {
 
 #[cfg(test)]
 mod test {
-	use borsh::BorshDeserialize;
-
 	use super::*;
 
 	#[test]
 	fn boot_genesis_response_deserialize() {
-		let nsm_response = NsmResponse::LockPCR;
+		let nsm_response = NsmResponse::LockPcr;
 
-		let vec = borsh::to_vec(&nsm_response).unwrap();
-		let test = NsmResponse::try_from_slice(&vec).unwrap();
+		let vec = serde_json::to_vec(&nsm_response).unwrap();
+		let test: NsmResponse = serde_json::from_slice(&vec).unwrap();
 		assert_eq!(nsm_response, test);
 
 		let genesis_response = ProtocolMsg::BootGenesisResponse {
@@ -252,8 +267,8 @@ mod test {
 			}),
 		};
 
-		let vec = borsh::to_vec(&genesis_response).unwrap();
-		let test = ProtocolMsg::try_from_slice(&vec).unwrap();
+		let vec = serde_json::to_vec(&genesis_response).unwrap();
+		let test: ProtocolMsg = serde_json::from_slice(&vec).unwrap();
 
 		assert_eq!(test, genesis_response);
 	}

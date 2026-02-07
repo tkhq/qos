@@ -1,7 +1,6 @@
 //! The services involved in the key forwarding flow.
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
-use borsh::{BorshDeserialize, BorshSerialize};
 use qos_nsm::{
 	nitro::{attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM},
 	types::NsmResponse,
@@ -16,7 +15,7 @@ use crate::protocol::{
 
 /// An encrypted quorum key along with a signature over the encrypted payload
 /// from the sender.
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct EncryptedQuorumKey {
 	/// The encrypted payload: a quorum key
 	pub encrypted_quorum_key: Vec<u8>,

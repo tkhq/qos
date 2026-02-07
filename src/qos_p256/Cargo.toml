@@ -12,6 +12,7 @@ workspace = true
 qos_hex = { workspace = true }
 
 borsh = { workspace = true }
+serde = { workspace = true }
 
 sha2 = { workspace = true }
 # as of 0.13.0, the p256 crate "ecdsa" feature enables "sha384", some "ecdsa-core", and others
