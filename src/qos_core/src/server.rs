@@ -130,7 +130,7 @@ impl Drop for SocketServer {
 
 /// Used to ensure we drop `Stream` permits as tasks exit for any reason
 pub struct PermittedStream {
-	_permit: OwnedSemaphorePermit,
+	permit: OwnedSemaphorePermit,
 	stream: Stream,
 }
 
@@ -139,14 +139,19 @@ impl PermittedStream {
 		listener: &Listener,
 		connections: Arc<Semaphore>,
 	) -> Result<Self, IOError> {
-		let _permit = connections
+		println!(
+			"PermittedStream::accept available permits {}",
+			connections.available_permits()
+		);
+
+		let permit = connections
 			.acquire_owned()
 			.await
 			.map_err(|_| IOError::UnknownError)?; // this really shouldn't happen since we never close the semaphore
 
 		let stream = listener.accept().await?;
 
-		Ok(PermittedStream { _permit, stream })
+		Ok(PermittedStream { permit, stream })
 	}
 
 	/// Perform a `Stream::send`
@@ -162,6 +167,15 @@ impl PermittedStream {
 	/// Mutable access to the underlaying `Stream`
 	pub fn stream(&mut self) -> &mut Stream {
 		&mut self.stream
+	}
+}
+
+impl Drop for PermittedStream {
+	fn drop(&mut self) {
+		println!(
+			"PermittedStream::drop available permits {}",
+			self.permit.semaphore().available_permits()
+		);
 	}
 }
 
