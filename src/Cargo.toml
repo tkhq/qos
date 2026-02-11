@@ -71,7 +71,7 @@ hkdf = { version = "0.12", default-features = false }
 hmac = { version = "0.12", default-features = false }
 httparse = { version = "1.9.4", default-features = false }
 lazy_static = "1.4"
-libc = "=0.2.172"
+libc = "=0.2.174"
 nix = { version = "0.29.0", features = ["socket"], default-features = false }
 p256 = { version = "0.13.2", default-features = false }
 p384 = { version = "0.13", features = ["ecdsa", "std"], default-features = false }
@@ -84,7 +84,7 @@ serde_bytes = { version = "0.11.10", default-features = false }
 serde_json = { version = "1" }
 sha2 = { version = "0.10", default-features = false }
 thiserror = { version = "2.0.12", features = ["std"], default-features = false }
-tokio = { version = "1.43.1", features = ["macros", "rt-multi-thread"], default-features = false }
+tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"], default-features = false }
 tokio-rustls = { version = "0.26.2" }
 tokio-vsock = { version = "0.7.1" }
 ureq = { version = "2.9", default-features = false }
