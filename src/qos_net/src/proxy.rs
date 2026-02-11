@@ -1,5 +1,5 @@
 //! Protocol proxy for our remote QOS net proxy
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use borsh::BorshDeserialize;
 use futures::Future;
@@ -12,6 +12,9 @@ use tokio::sync::Semaphore;
 use crate::{
 	error::QosNetError, proxy_connection::ProxyConnection, proxy_msg::ProxyMsg,
 };
+
+// maximum time a single proxy request can take
+const PROXY_CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
@@ -125,13 +128,23 @@ impl Proxy {
 				let resp_bytes = self.process_req(req_bytes).await;
 				self.sock_stream.send(&resp_bytes).await?;
 				if let Some(tcp_connection) = &mut self.tcp_connection {
-					let result = tokio::io::copy_bidirectional(
-						&mut self.sock_stream.stream(),
-						&mut tcp_connection.tcp_stream,
-					)
-					.await
-					.map(|_| ())
-					.map_err(IOError::from);
+					let result =
+						match tokio::time::timeout(PROXY_CLIENT_TIMEOUT, {
+							tokio::io::copy_bidirectional(
+								&mut self.sock_stream.stream(),
+								&mut tcp_connection.tcp_stream,
+							)
+						})
+						.await
+						{
+							Ok(result) => {
+								result.map(|_| ()).map_err(IOError::from)
+							}
+							Err(err) => {
+								eprintln!("proxy timeout: {err}");
+								Err(IOError::RecvTimeout)
+							}
+						};
 
 					// Once the "dumb pipe" is closed we need to clear our tcp_connection and refresh
 					// the proxy socket stream by using shutdown
