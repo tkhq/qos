@@ -119,40 +119,52 @@ impl Proxy {
 
 impl Proxy {
 	async fn run(&mut self) -> Result<(), IOError> {
-		loop {
-			// Only try to process ProxyMsg content on the USOCK/VSOCK if we're not connected to TCP yet.
-			// If we're connected, we should be a "dumb pipe" using the `tokio::io::copy_bidirectional`
-			// which is handled in the connect functions above
-			if self.tcp_connection.is_none() {
-				let req_bytes = self.sock_stream.recv().await?;
-				let resp_bytes = self.process_req(req_bytes).await;
-				self.sock_stream.send(&resp_bytes).await?;
-				if let Some(tcp_connection) = &mut self.tcp_connection {
-					let result =
-						match tokio::time::timeout(PROXY_CLIENT_TIMEOUT, {
-							tokio::io::copy_bidirectional(
-								&mut self.sock_stream.stream(),
-								&mut tcp_connection.tcp_stream,
-							)
-						})
-						.await
-						{
-							Ok(result) => {
-								result.map(|_| ()).map_err(IOError::from)
-							}
-							Err(err) => {
-								eprintln!("proxy timeout: {err}");
-								Err(IOError::RecvTimeout)
-							}
-						};
+		// Only try to process ProxyMsg content on the USOCK/VSOCK if we're not connected to TCP yet.
+		// If we're connected, we should be a "dumb pipe" using the `tokio::io::copy_bidirectional`
+		// which is handled in the connect functions above
+		if self.tcp_connection.is_some() {
+			return Err(IOError::UnexpectedProxyConnection);
+		}
 
-					// Once the "dumb pipe" is closed we need to clear our tcp_connection and refresh
-					// the proxy socket stream by using shutdown
-					self.tcp_connection = None;
-
-					break result; // return to the accept loop
-				}
+		// ensure we timeout the entire proxy request within 10s
+		match tokio::time::timeout(PROXY_CLIENT_TIMEOUT, {
+			self.connect_and_stream()
+		})
+		.await
+		{
+			Ok(result) => result,
+			Err(err) => {
+				eprintln!("proxy timeout: {err}");
+				Err(IOError::RecvTimeout)
 			}
+		}
+	}
+
+	async fn connect_and_stream(&mut self) -> Result<(), IOError> {
+		let req_bytes = self.sock_stream.recv().await?;
+		let resp_bytes = self.process_req(req_bytes).await;
+
+		if let Err(err) = self.sock_stream.send(&resp_bytes).await {
+			self.tcp_connection = None; // ensure we clear this socket's tcp state if we errored after we assigned it
+			return Err(err);
+		}
+
+		if let Some(tcp_connection) = &mut self.tcp_connection {
+			let result = tokio::io::copy_bidirectional(
+				&mut self.sock_stream.stream(),
+				&mut tcp_connection.tcp_stream,
+			)
+			.await
+			.map(|_| ())
+			.map_err(IOError::from);
+
+			// Once the "dumb pipe" is closed we need to clear our tcp_connection and refresh
+			// the proxy socket stream by using shutdown
+			self.tcp_connection = None;
+
+			result
+		} else {
+			Err(IOError::MissingProxyConnection)
 		}
 	}
 }
