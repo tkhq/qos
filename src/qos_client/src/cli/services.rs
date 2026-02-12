@@ -1852,6 +1852,13 @@ fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
 			panic!("Failed to read dir {}", dir.as_ref().display())
 		})
 		.map(|p| p.unwrap().path())
+		.filter(|p| {
+			// macOS creates ._ (dot-underscore) resource fork files when files 
+			// are copied to non-HFS volumes. We want to ignore these
+			p.file_name()
+				.and_then(|n| n.to_str())
+				.is_none_or(|n| !n.starts_with("._"))
+		})
 		.collect()
 }
 
