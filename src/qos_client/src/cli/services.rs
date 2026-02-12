@@ -1853,7 +1853,7 @@ fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
 		})
 		.map(|p| p.unwrap().path())
 		.filter(|p| {
-			// macOS creates ._ (dot-underscore) resource fork files when files 
+			// macOS creates ._ (dot-underscore) resource fork files when files
 			// are copied to non-HFS volumes. We want to ignore these
 			p.file_name()
 				.and_then(|n| n.to_str())
@@ -3151,5 +3151,26 @@ mod tests {
 			// Cleanup
 			let _ = fs::remove_file(&json_path);
 		}
+	}
+
+	#[test]
+	fn find_file_paths_ignores_dot_underscore_files() {
+		let dir = std::env::temp_dir().join("find_file_paths_dot_underscore");
+		let _ = std::fs::remove_dir_all(&dir);
+		std::fs::create_dir_all(&dir).unwrap();
+
+		// Create a normal file and a macOS dot-underscore resource fork file
+		std::fs::write(dir.join("alice.pub"), b"key").unwrap();
+		std::fs::write(dir.join("._alice.pub"), b"junk").unwrap();
+
+		let paths = super::find_file_paths(&dir);
+		let names: Vec<_> = paths
+			.iter()
+			.map(|p| p.file_name().unwrap().to_str().unwrap())
+			.collect();
+
+		assert_eq!(names, vec!["alice.pub"]);
+
+		let _ = std::fs::remove_dir_all(&dir);
 	}
 }
