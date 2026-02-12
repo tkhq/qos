@@ -48,6 +48,10 @@ pub enum IOError {
 	OversizedPayload(usize),
 	/// An async socket pool error during pool operations.
 	PoolError(PoolError),
+	/// Proxy connection unexpected, e.g. connected after accepting
+	UnexpectedProxyConnection,
+	/// Proxy connection expected, e.g. not connected after processing
+	MissingProxyConnection,
 }
 
 impl From<nix::Error> for IOError {

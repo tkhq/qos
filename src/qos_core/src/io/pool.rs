@@ -125,6 +125,17 @@ impl StreamPool {
 		self.len() == 0
 	}
 
+	/// Returns true if all callable streams are currently exhausted
+	pub async fn busy(&self) -> bool {
+		for h in &self.handles {
+			if h.try_lock().is_ok() {
+				return false;
+			}
+		}
+
+		true
+	}
+
 	/// Gets the next available `Stream` behind a `MutexGuard`
 	///
 	/// # Panics
