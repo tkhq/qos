@@ -49,6 +49,7 @@ const HOST_HEALTH: &str = "/host-health";
 const ENCLAVE_HEALTH: &str = "/enclave-health";
 const MESSAGE: &str = "/message";
 const ENCLAVE_INFO: &str = "/enclave-info";
+const PROTOCOL_HEALTH: &str = "/protocol-health";
 
 /// Response body to the `/enclave-info` endpoint.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -73,6 +74,17 @@ pub struct EnclaveVitalStats {
 	#[serde(with = "qos_hex::serde")]
 	pcr0: Vec<u8>,
 	pivot_args: Vec<String>,
+}
+
+/// Response body to the `/protocol-health` endpoint.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtocolHealth {
+	/// Whether the quorum key has been fully assembled.
+	pub quorum_key_assembled: bool,
+	/// Whether the manifest envelope is available, which implies the bridge
+	/// has been started.
+	pub has_manifest_envelope: bool,
 }
 
 /// Body of a 4xx or 5xx response

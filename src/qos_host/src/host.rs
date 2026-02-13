@@ -40,8 +40,9 @@ use qos_core::{
 use qos_nsm::types::NsmResponse;
 
 use crate::{
-	EnclaveInfo, EnclaveVitalStats, Error, ENCLAVE_HEALTH, ENCLAVE_INFO,
-	HOST_HEALTH, MAX_ENCODED_MSG_LEN, MESSAGE,
+	EnclaveInfo, EnclaveVitalStats, Error, ProtocolHealth, ENCLAVE_HEALTH,
+	ENCLAVE_INFO, HOST_HEALTH, MAX_ENCODED_MSG_LEN, MESSAGE,
+	PROTOCOL_HEALTH,
 };
 
 /// Resource shared across tasks in the `HostServer`.
@@ -116,6 +117,10 @@ impl HostServer {
 			.route(&self.path(ENCLAVE_HEALTH), get(Self::enclave_health))
 			.route(&self.path(MESSAGE), post(Self::message))
 			.route(&self.path(ENCLAVE_INFO), get(Self::enclave_info))
+			.route(
+				&self.path(PROTOCOL_HEALTH),
+				get(Self::protocol_health),
+			)
 			.layer(DefaultBodyLimit::disable())
 			.with_state(state);
 
@@ -234,6 +239,60 @@ impl HostServer {
 		let info = EnclaveInfo { phase, manifest_envelope };
 
 		Ok(Json(info))
+	}
+
+	/// Protocol health route handler. Returns whether the quorum key is
+	/// assembled and the manifest envelope is accessible (implying the
+	/// bridge is started).
+	async fn protocol_health(
+		State(state): State<Arc<QosHostState>>,
+	) -> Result<impl IntoResponse, Error> {
+		println!("Protocol health...");
+
+		let enc_status_req = borsh::to_vec(&ProtocolMsg::StatusRequest)
+			.expect("ProtocolMsg can always serialize. qed.");
+		let enc_status_resp =
+			state.enclave_client.call(&enc_status_req).await.map_err(
+				|e| {
+					Error(format!(
+						"error sending status request to enclave: {e:?}"
+					))
+				},
+			)?;
+
+		let phase = match ProtocolMsg::try_from_slice(&enc_status_resp) {
+			Ok(ProtocolMsg::StatusResponse(phase)) => phase,
+			Ok(other) => {
+				return Err(Error(format!("unexpected response: expected StatusResponse, got: {other:?}")));
+			}
+			Err(e) => {
+				return Err(Error(format!("error deserializing status response from enclave: {e:?}")));
+			}
+		};
+
+		let quorum_key_assembled =
+			phase == ProtocolPhase::QuorumKeyProvisioned;
+
+		let has_manifest_envelope =
+			match get_manifest_envelope(&state.enclave_client).await {
+				Ok(Some(_)) => true,
+				Ok(None) => false,
+				Err(e) => {
+					return Err(Error(format!(
+						"error fetching manifest envelope: {e:?}"
+					)));
+				}
+			};
+
+		let body =
+			ProtocolHealth { quorum_key_assembled, has_manifest_envelope };
+		let status = if quorum_key_assembled && has_manifest_envelope {
+			StatusCode::OK
+		} else {
+			StatusCode::SERVICE_UNAVAILABLE
+		};
+
+		Ok((status, Json(body)))
 	}
 
 	/// Message route handler.
