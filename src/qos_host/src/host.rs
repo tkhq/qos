@@ -368,8 +368,8 @@ async fn maybe_start_app_host_bridge(
 
 	for bc in &manifest_envelope.manifest.pivot.bridge_config {
 		let (host_port, host_ip_str) = match bc {
-			BridgeConfig::Server(port, ip) => (port, ip.as_str()),
-			BridgeConfig::Client(_, _) => {
+			BridgeConfig::Server { port, host } => (port, host.as_str()),
+			BridgeConfig::Client { port: _, host: _ } => {
 				panic!("client bridge unimplemented")
 			}
 		};

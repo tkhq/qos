@@ -102,7 +102,7 @@ impl TryFrom<String> for RestartPolicy {
 	}
 }
 
-/// Pivot bridge host configuration
+/// Pivot bridge host configuration, ipv4 only
 #[derive(
 	PartialEq,
 	Eq,
@@ -113,18 +113,33 @@ impl TryFrom<String> for RestartPolicy {
 	borsh::BorshDeserialize,
 )]
 #[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
 pub enum BridgeConfig {
-	/// Server hosting bridge, connections go INTO the enclave app on given port and host ip string
-	Server(u16, String),
+	/// Server hosting bridge, connections go INTO the enclave app on given port and host binding
+	Server {
+		/// The port to listen on, matching on host and app sides
+		port: u16,
+		/// The host ip to listen on, use `0.0.0.0` for any
+		host: String,
+	},
 	/// Client connecting bridge, connections go OUT of the enclave app via given port, connecting
 	/// to the provided hostname. If `None` it will use the transparent protocol.
-	/// *NOTE*: currently unimplemented and results in boot panic if set
-	Client(u16, Option<String>),
+	/// *NOTE*: currently **unimplemented** and results in boot panic if set.
+	Client {
+		/// Port to connect to when app initiates outgoing connections.
+		port: u16,
+		/// Host name to connect to when app initiates outgoing connections.
+		/// If `None` an internal protocol is used to determine the destination (**unimplemented**)
+		host: Option<String>,
+	},
 }
 
 impl Default for BridgeConfig {
 	fn default() -> Self {
-		Self::Server(DEFAULT_APP_HOST_PORT, DEFAULT_APP_HOST_IP.into())
+		Self::Server {
+			port: DEFAULT_APP_HOST_PORT,
+			host: DEFAULT_APP_HOST_IP.into(),
+		}
 	}
 }
 
@@ -132,7 +147,9 @@ impl BridgeConfig {
 	/// Helper to extract port from either variant
 	pub fn port(&self) -> u16 {
 		match self {
-			Self::Server(port, _) | Self::Client(port, _) => *port,
+			Self::Server { port, host: _ } | Self::Client { port, host: _ } => {
+				*port
+			}
 		}
 	}
 }

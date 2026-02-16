@@ -81,7 +81,7 @@ async fn run_vsock_to_tcp_bridge(
 
 	for bc in bridges {
 		match bc {
-			BridgeConfig::Server(port, _) => {
+			BridgeConfig::Server { port, host: _ } => {
 				let app_socket = core_socket.with_port(*port)?;
 				let host_addr: SocketAddr =
 					SocketAddrV4::new(Ipv4Addr::LOCALHOST, *port).into();
@@ -90,7 +90,9 @@ async fn run_vsock_to_tcp_bridge(
 
 				bridge.vsock_to_tcp().await;
 			}
-			BridgeConfig::Client(_, _) => panic!("client bridge unimplemented"), // TODO: implement
+			BridgeConfig::Client { port: _, host: _ } => {
+				panic!("client bridge unimplemented")
+			} // TODO: implement
 		}
 	}
 
