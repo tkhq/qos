@@ -199,7 +199,10 @@ async fn reaper_handles_bridge() {
 	let mut manifest_envelope = ManifestEnvelope::default();
 	manifest_envelope.manifest.pivot.args = vec![format!("{pivot_port}")];
 	manifest_envelope.manifest.pivot.bridge_config =
-		vec![BridgeConfig::Server(pivot_port, "127.0.0.1".into())];
+		vec![BridgeConfig::Server {
+			port: pivot_port,
+			host: "127.0.0.1".into(),
+		}];
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());

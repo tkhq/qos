@@ -591,7 +591,7 @@ impl Command {
 	}
 
 	fn bridge_config_token() -> Token {
-		Token::new(BRIDGE_CONFIG, "host app bridge configuration")
+		Token::new(BRIDGE_CONFIG, "pivot app bridge configuration json e.g. `{{\"type\": \"server\", \"port\": 3000, \"host\": \"0.0.0.0\"}}`")
 			.required(false)
 			.takes_value(true)
 	}
