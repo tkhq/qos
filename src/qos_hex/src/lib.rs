@@ -293,6 +293,46 @@ pub mod serde {
 	}
 }
 
+/// Serde helpers for optional hex-encoded bytes.
+///
+/// Use with `#[serde(with = "qos_hex::serde_opt")]` for `Option<Vec<u8>>`.
+#[cfg(feature = "serde")]
+pub mod serde_opt {
+	use serde::{Deserialize, Deserializer, Serializer};
+
+	use super::{decode, encode};
+
+	pub fn serialize<S>(
+		value: &Option<Vec<u8>>,
+		serializer: S,
+	) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		match value {
+			Some(bytes) => serializer.serialize_some(&encode(bytes)),
+			None => serializer.serialize_none(),
+		}
+	}
+
+	pub fn deserialize<'de, D>(
+		deserializer: D,
+	) -> Result<Option<Vec<u8>>, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let opt: Option<String> = Option::deserialize(deserializer)?;
+		match opt {
+			Some(s) => {
+				let bytes = decode(&s)
+					.map_err(|e| serde::de::Error::custom(format!("{e:?}")))?;
+				Ok(Some(bytes))
+			}
+			None => Ok(None),
+		}
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;

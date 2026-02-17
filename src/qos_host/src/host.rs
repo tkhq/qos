@@ -27,7 +27,6 @@ use axum::{
 	routing::{get, post},
 	Json, Router,
 };
-use borsh::BorshDeserialize;
 use qos_core::{
 	client::{ClientError, SocketClient},
 	io::{HostBridge, SocketAddress, StreamPool},
@@ -140,7 +139,7 @@ impl HostServer {
 	) -> impl IntoResponse {
 		println!("Enclave health...");
 
-		let encoded_request = borsh::to_vec(&ProtocolMsg::StatusRequest)
+		let encoded_request = serde_json::to_vec(&ProtocolMsg::StatusRequest)
 			.expect("ProtocolMsg can always serialize. qed.");
 		let encoded_response = match state
 			.enclave_client
@@ -155,7 +154,9 @@ impl HostServer {
 			}
 		};
 
-		let response = match ProtocolMsg::try_from_slice(&encoded_response) {
+		let response = match serde_json::from_slice::<ProtocolMsg>(
+			&encoded_response,
+		) {
 			Ok(r) => r,
 			Err(e) => {
 				let msg = format!("Error deserializing response from enclave, make sure qos_host version match qos_core: {e}");
@@ -191,14 +192,16 @@ impl HostServer {
 	) -> Result<Json<EnclaveInfo>, Error> {
 		println!("Enclave info...");
 
-		let enc_status_req = borsh::to_vec(&ProtocolMsg::StatusRequest)
+		let enc_status_req = serde_json::to_vec(&ProtocolMsg::StatusRequest)
 			.expect("ProtocolMsg can always serialize. qed.");
 		let enc_status_resp =
 			state.enclave_client.call(&enc_status_req).await.map_err(|e| {
 				Error(format!("error sending status request to enclave: {e:?}"))
 			})?;
 
-		let status_resp = match ProtocolMsg::try_from_slice(&enc_status_resp) {
+		let status_resp = match serde_json::from_slice::<ProtocolMsg>(
+			&enc_status_resp,
+		) {
 			Ok(status_resp) => status_resp,
 			Err(e) => {
 				return Err(Error(format!("error deserializing status response from enclave, make sure qos_host version match qos_core: {e:?}")));
@@ -244,7 +247,7 @@ impl HostServer {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
 			return (
 				StatusCode::BAD_REQUEST,
-				borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+				serde_json::to_vec(&ProtocolMsg::ProtocolErrorResponse(
 					ProtocolError::OversizeMsg,
 				))
 				.expect("ProtocolMsg can always serialize. qed."),
@@ -271,7 +274,7 @@ impl HostServer {
 
 				(
 					StatusCode::INTERNAL_SERVER_ERROR,
-					borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+					serde_json::to_vec(&ProtocolMsg::ProtocolErrorResponse(
 						ProtocolError::EnclaveClient,
 					))
 					.expect("ProtocolMsg can always serialize. qed."),
@@ -287,7 +290,9 @@ fn extract_envelope_from_boot_instruction(
 	encoded_request: &Bytes,
 	encoded_response: &[u8],
 ) -> Option<Box<ManifestEnvelope>> {
-	if let Ok(decoded_msg) = borsh::from_slice::<ProtocolMsg>(encoded_request) {
+	if let Ok(decoded_msg) =
+		serde_json::from_slice::<ProtocolMsg>(encoded_request)
+	{
 		// if we got the pivot and it was accepted by the enclave, we should start the tcp -> vsock host bridge
 		match decoded_msg {
 			ProtocolMsg::BootStandardRequest {
@@ -299,7 +304,7 @@ fn extract_envelope_from_boot_instruction(
 				pivot: _,
 			} => {
 				if let Ok(decoded_msg) =
-					borsh::from_slice::<ProtocolMsg>(encoded_response)
+					serde_json::from_slice::<ProtocolMsg>(encoded_response)
 				{
 					// check if we got success
 					match decoded_msg {
@@ -337,13 +342,13 @@ async fn get_manifest_envelope(
 	enclave_client: &SocketClient,
 ) -> Result<Option<ManifestEnvelope>, ClientError> {
 	let enc_manifest_envelope_req =
-		borsh::to_vec(&ProtocolMsg::ManifestEnvelopeRequest)
+		serde_json::to_vec(&ProtocolMsg::ManifestEnvelopeRequest)
 			.expect("ProtocolMsg can always serialize. qed.");
 	let enc_manifest_envelope_resp =
 		enclave_client.call(&enc_manifest_envelope_req).await?;
 
 	let manifest_envelope_resp =
-		ProtocolMsg::try_from_slice(&enc_manifest_envelope_resp)?;
+		serde_json::from_slice::<ProtocolMsg>(&enc_manifest_envelope_resp)?;
 
 	let manifest_envelope = match manifest_envelope_resp {
 		ProtocolMsg::ManifestEnvelopeResponse { manifest_envelope } => {

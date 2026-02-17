@@ -9,7 +9,17 @@ use crate::{
 };
 
 /// A error from protocol execution.
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	BorshSerialize,
+	BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
 pub enum ProtocolError {
 	/// A encrypted quorum key share sent to the enclave was invalid.
 	InvalidShare,

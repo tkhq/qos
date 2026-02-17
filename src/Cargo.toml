@@ -6,6 +6,7 @@ members = [
   "qos_crypto",
   "qos_host",
   "qos_hex",
+  "qos_json",
   "qos_net",
   "qos_test_primitives",
   "qos_p256",
@@ -23,6 +24,7 @@ default-members = [
   "qos_crypto",
   "qos_host",
   "qos_hex",
+  "qos_json",
   "qos_net",
   "qos_test_primitives",
   "qos_p256",
@@ -103,6 +105,7 @@ qos_core = { path = "qos_core", default-features = false }
 qos_crypto = { path = "qos_crypto", default-features = false }
 qos_hex = { path = "qos_hex", default-features = false }
 qos_host = { path = "qos_host", default-features = false }
+qos_json = { path = "qos_json" }
 qos_net = { path = "qos_net", default-features = false }
 qos_nsm = { path = "qos_nsm", default-features = false }
 qos_p256 = { path = "qos_p256" }

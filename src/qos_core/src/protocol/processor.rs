@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use borsh::BorshDeserialize;
 use tokio::sync::RwLock;
 
 use super::{
@@ -27,14 +26,15 @@ impl ProtocolProcessor {
 impl RequestProcessor for ProtocolProcessor {
 	async fn process(&self, req_bytes: &[u8]) -> Vec<u8> {
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
-			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+			return serde_json::to_vec(&ProtocolMsg::ProtocolErrorResponse(
 				ProtocolError::OversizedPayload,
 			))
 			.expect("ProtocolMsg can always be serialized. qed.");
 		}
 
-		let Ok(msg_req) = ProtocolMsg::try_from_slice(req_bytes) else {
-			return borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+		let Ok(msg_req) = serde_json::from_slice::<ProtocolMsg>(req_bytes)
+		else {
+			return serde_json::to_vec(&ProtocolMsg::ProtocolErrorResponse(
 				ProtocolError::ProtocolMsgDeserialization,
 			))
 			.expect("ProtocolMsg can always be serialized. qed.");
