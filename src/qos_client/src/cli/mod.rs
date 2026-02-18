@@ -1290,7 +1290,11 @@ impl ClientRunner {
 	/// Run the given command.
 	pub fn run(self) {
 		if self.opts.parsed.version() {
-			println!("version: {}", env!("CARGO_PKG_VERSION"));
+			println!(
+				"version: {} (git sha {})",
+				env!("CARGO_PKG_VERSION"),
+				env!("GIT_SHA")
+			);
 		} else if self.opts.parsed.help() {
 			println!("Command: {:?}", self.cmd);
 			println!("{}", self.opts.parsed.info());
