@@ -231,7 +231,12 @@ impl HostServer {
 		};
 		println!("{vitals_log}");
 
-		let info = EnclaveInfo { phase, manifest_envelope };
+		let info = EnclaveInfo {
+			phase,
+			manifest_envelope,
+			host_version: env!("CARGO_PKG_VERSION").to_string(),
+			host_build_sha: env!("GIT_SHA").to_string(),
+		};
 
 		Ok(Json(info))
 	}

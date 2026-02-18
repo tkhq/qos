@@ -58,6 +58,10 @@ pub struct EnclaveInfo {
 	pub phase: ProtocolPhase,
 	/// Manifest envelope in the enclave.
 	pub manifest_envelope: Option<ManifestEnvelope>,
+	/// Crate version of the host binary.
+	pub host_version: String,
+	/// Git commit SHA of the host binary build.
+	pub host_build_sha: String,
 }
 
 /// Vitals we just use for logging right now to avoid logging the entire
