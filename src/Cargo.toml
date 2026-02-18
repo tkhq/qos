@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "integration",
+  "qos_bridge",
   "qos_client",
   "qos_core",
   "qos_crypto",
@@ -18,6 +19,7 @@ members = [
 ]
 default-members = [
   "integration",
+  "qos_bridge",
   "qos_client",
   "qos_core",
   "qos_crypto",

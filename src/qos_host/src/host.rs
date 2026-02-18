@@ -13,11 +13,7 @@
 //! * Response: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/response.md/>
 //! * Responding with error: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/error_handling.md/>
 
-use std::{
-	net::{Ipv4Addr, SocketAddr},
-	sync::Arc,
-	time::Duration,
-};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
 	body::Bytes,
@@ -30,14 +26,12 @@ use axum::{
 use borsh::BorshDeserialize;
 use qos_core::{
 	client::{ClientError, SocketClient},
-	io::{HostBridge, SocketAddress, StreamPool},
+	io::SocketAddress,
 	protocol::{
-		msg::ProtocolMsg,
-		services::boot::{BridgeConfig, ManifestEnvelope},
-		ProtocolError, ProtocolPhase,
+		msg::ProtocolMsg, services::boot::ManifestEnvelope, ProtocolError,
+		ProtocolPhase,
 	},
 };
-use qos_nsm::types::NsmResponse;
 
 use crate::{
 	EnclaveInfo, EnclaveVitalStats, Error, ENCLAVE_HEALTH, ENCLAVE_INFO,
@@ -47,7 +41,6 @@ use crate::{
 /// Resource shared across tasks in the `HostServer`.
 #[derive(Debug)]
 struct QosHostState {
-	enclave_address: SocketAddress,
 	enclave_client: SocketClient,
 }
 
@@ -93,23 +86,7 @@ impl HostServer {
 			SocketClient::single(self.enclave_address.clone(), self.timeout)
 				.expect("unable to create enclave socket client");
 
-		// try to get the manifest envelope in case we got restarted, but the enclave is already up and ready
-		// if we get ANY error here, or `None` back we just continue as normal
-		// if we got the envelope successfully, we need to start the bridge accordingly
-		if let Ok(Some(manifest_envelope)) =
-			get_manifest_envelope(&enclave_client).await
-		{
-			maybe_start_app_host_bridge(
-				&self.enclave_address,
-				&manifest_envelope,
-			)
-			.await;
-		}
-
-		let state = Arc::new(QosHostState {
-			enclave_address: self.enclave_address.clone(),
-			enclave_client,
-		});
+		let state = Arc::new(QosHostState { enclave_client });
 
 		let app = Router::new()
 			.route(&self.path(HOST_HEALTH), get(Self::host_health))
@@ -252,20 +229,8 @@ impl HostServer {
 		}
 
 		match state.enclave_client.call(&encoded_request).await {
-			Ok(encoded_response) => {
-				if let Some(manifest_envelope) =
-					extract_envelope_from_boot_instruction(
-						&encoded_request,
-						&encoded_response,
-					) {
-					maybe_start_app_host_bridge(
-						&state.enclave_address,
-						&manifest_envelope,
-					)
-					.await;
-				}
-				(StatusCode::OK, encoded_response)
-			}
+			Ok(encoded_response) => (StatusCode::OK, encoded_response),
+
 			Err(e) => {
 				eprintln!("Error while trying to send request over socket to enclave: {e:?}");
 
@@ -281,58 +246,7 @@ impl HostServer {
 	}
 }
 
-// extracts the `ManifestEnvelope` from a boot instruction in case it was succesful.
-// errors are logged only, not returned
-fn extract_envelope_from_boot_instruction(
-	encoded_request: &Bytes,
-	encoded_response: &[u8],
-) -> Option<Box<ManifestEnvelope>> {
-	if let Ok(decoded_msg) = borsh::from_slice::<ProtocolMsg>(encoded_request) {
-		// if we got the pivot and it was accepted by the enclave, we should start the tcp -> vsock host bridge
-		match decoded_msg {
-			ProtocolMsg::BootStandardRequest {
-				manifest_envelope,
-				pivot: _,
-			}
-			| ProtocolMsg::BootKeyForwardRequest {
-				manifest_envelope,
-				pivot: _,
-			} => {
-				if let Ok(decoded_msg) =
-					borsh::from_slice::<ProtocolMsg>(encoded_response)
-				{
-					// check if we got success
-					match decoded_msg {
-						ProtocolMsg::BootStandardResponse { nsm_response }
-						| ProtocolMsg::BootKeyForwardResponse {
-							nsm_response,
-						} => {
-							if let NsmResponse::Error(_) = nsm_response {
-								return None;
-							}
-							Some(manifest_envelope)
-						}
-						_ => {
-							// this really shouldn't happen
-							eprintln!("mismatched boot response, tcp to vsock bridge might not start");
-							None
-						}
-					}
-				} else {
-					eprintln!("error decoding response msg, tcp to vsock bridge might not start");
-					None
-				}
-			}
-			_ => None,
-		}
-	} else {
-		None
-	}
-}
-
-// try to get the manifest envelope from the enclave, used for restart handling of qos_host
-// in case qos_host gets restarted, we need to see if the envelope is already in the enclave and if so  restart
-// the bridge as well.
+// try to get the manifest denvelope from the enclave, used for restart handling of qos_host
 async fn get_manifest_envelope(
 	enclave_client: &SocketClient,
 ) -> Result<Option<ManifestEnvelope>, ClientError> {
@@ -353,53 +267,4 @@ async fn get_manifest_envelope(
 	};
 
 	Ok(manifest_envelope)
-}
-
-// Start the tcp -> vsock `HostBridge` in case we have successfully processed the manifest
-async fn maybe_start_app_host_bridge(
-	enclave_socket: &SocketAddress,
-	manifest_envelope: &ManifestEnvelope,
-) {
-	// nothing to do, app does not want a HOST bridge
-	if manifest_envelope.manifest.pivot.bridge_config.is_empty() {
-		eprintln!("app refused host bridge, skipping");
-		return;
-	}
-
-	for bc in &manifest_envelope.manifest.pivot.bridge_config {
-		let (host_port, host_ip_str) = match bc {
-			BridgeConfig::Server { port, host } => (port, host.as_str()),
-			BridgeConfig::Client { port: _, host: _ } => {
-				panic!("client bridge unimplemented")
-			}
-		};
-
-		let Ok(host_ip) = host_ip_str.parse::<Ipv4Addr>() else {
-			eprintln!("unable to parse host ip for bridge configuration: {host_ip_str}");
-			return;
-		};
-		let host_addr = SocketAddr::new(host_ip.into(), *host_port);
-
-		// derive the app socket, for vsock just use the app host port with same CID as the enclave socket,
-		// with usock just add "<port>.appsock" suffix
-		let app_socket = match enclave_socket.with_port(*host_port) {
-			Ok(value) => value,
-			Err(err) => {
-				eprintln!("unable to derive app socket from enclave socket: {err:?}, tcp to vsock bridge will not start");
-				return;
-			}
-		};
-
-		let app_pool = match StreamPool::single(app_socket) {
-			Ok(value) => value,
-			Err(err) => {
-				eprintln!("unable to create new app socket pool: {err:?}, tcp to vsock bridge will not start");
-				return;
-			}
-		};
-
-		let bridge = HostBridge::new(app_pool, host_addr);
-
-		bridge.tcp_to_vsock().await; // NOTE: this doesn't await for completion
-	}
 }

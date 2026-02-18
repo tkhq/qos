@@ -29,11 +29,12 @@ use tokio::{
 };
 
 #[tokio::test]
-async fn qos_host_bridge_works() {
+async fn qos_bridge_works() {
 	const PIVOT_HASH_PATH: &str = "/tmp/qos_host_bridge-pivot-hash.txt";
 
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let app_host_port = qos_test_primitives::find_free_port().unwrap();
+	let app_host_port_override = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/qos_host_bridge".into();
 	let _: PathWrapper = PIVOT_HASH_PATH.into();
 	fs::create_dir_all(&*tmp).unwrap();
@@ -286,7 +287,7 @@ async fn qos_host_bridge_works() {
 			.into();
 
 	// -- HOST start host
-	let mut host_child_process: ChildWrapper =
+	let mut _host_child_process: ChildWrapper =
 		Command::new("../target/debug/qos_host")
 			.args([
 				"--host-port",
@@ -302,6 +303,22 @@ async fn qos_host_bridge_works() {
 
 	// -- Make sure the enclave and host have time to boot
 	qos_test_primitives::wait_until_port_is_bound(host_port);
+
+	let control_url = format!("http://localhost:{host_port}/qos");
+	// -- BRIDGE start bridge
+	let mut bridge_child_process: ChildWrapper =
+		Command::new("../target/debug/qos_bridge")
+			.args([
+				"--host-port-override",
+				&app_host_port_override.to_string(),
+				"--usock",
+				&*usock,
+				"--control-url",
+				&control_url,
+			])
+			.spawn()
+			.unwrap()
+			.into();
 
 	// -- CLIENT generate the manifest envelope
 	assert!(Command::new("../target/debug/qos_client")
@@ -468,10 +485,10 @@ async fn qos_host_bridge_works() {
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
 	// Wait for the qos_host app bridge to run
-	qos_test_primitives::wait_until_port_is_bound(app_host_port);
+	qos_test_primitives::wait_until_port_is_bound(app_host_port_override);
 
 	// send a PivotSocketStressMsg to check if the  bridge works all the way
-	let bridge_addr = format!("127.0.0.1:{app_host_port}");
+	let bridge_addr = format!("127.0.0.1:{app_host_port_override}");
 	let mut tcp_stream = TcpStream::connect(&bridge_addr).await.unwrap();
 
 	let msg = PivotSocketStressMsg::OkRequest(42);
@@ -500,31 +517,30 @@ async fn qos_host_bridge_works() {
 		_ => panic!("invalid pivot response"),
 	}
 
-	// test qos_host restart keeping the bridge up via the envelope logic
-	// kill the original
-	host_child_process.0.kill().expect("unable to kill qos_host");
-	drop(host_child_process);
+	// test qos_bridge restart after enclave is up
+	bridge_child_process.0.kill().expect("unable to kill qos_host");
+	drop(bridge_child_process);
 
-	// -- HOST restart host
-	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_host")
+	// -- BRIDGE restart bridge
+	let _bridge_child_process: ChildWrapper =
+		Command::new("../target/debug/qos_bridge")
 			.args([
-				"--host-port",
-				&host_port.to_string(),
-				"--host-ip",
-				LOCAL_HOST,
+				"--host-port-override",
+				&app_host_port_override.to_string(),
 				"--usock",
 				&*usock,
+				"--control-url",
+				&control_url,
 			])
 			.spawn()
 			.unwrap()
 			.into();
 
-	// Wait for the qos_host app bridge to run
-	qos_test_primitives::wait_until_port_is_bound(app_host_port);
+	// Wait for the qos_bridge app bridge to run
+	qos_test_primitives::wait_until_port_is_bound(app_host_port_override);
 
 	// send a PivotSocketStressMsg to check if the  bridge works all the way
-	let bridge_addr = format!("127.0.0.1:{app_host_port}");
+	let bridge_addr = format!("127.0.0.1:{app_host_port_override}");
 	let mut tcp_stream = TcpStream::connect(&bridge_addr).await.unwrap();
 
 	let msg = PivotSocketStressMsg::OkRequest(42);
