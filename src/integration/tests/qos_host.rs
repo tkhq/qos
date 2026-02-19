@@ -1,6 +1,7 @@
 use std::{process::Command, time::Duration};
 
 use integration::PIVOT_OK_PATH;
+use qos_host::{GIT_SHA, CRATE_VERSION};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]
@@ -59,9 +60,9 @@ async fn connects_and_gets_info() {
 	tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
 	let r = ureq::get("http://127.0.0.1:3323/qos/enclave-info").call();
-	assert!(r.is_ok()); // expect 200 here
-	assert_eq!(
-		r.unwrap().into_string().unwrap(),
-		"{\"phase\":\"WaitingForBootInstruction\",\"manifestEnvelope\":null}"
+	let json = r.unwrap().into_string().unwrap();
+	let expected = format!(
+		"{{\"phase\":\"WaitingForBootInstruction\",\"manifestEnvelope\":null,\"hostVersion\":\"{CRATE_VERSION}\",\"hostBuildSha\":\"{GIT_SHA}\"}}"
 	);
+	assert_eq!(json, expected);
 }

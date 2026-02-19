@@ -1,5 +1,10 @@
 //! CLI Client for interacting with `QuorumOS` enclave and host.
 
+/// Crate version, sourced from `Cargo.toml`.
+pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Git commit SHA at build time, set by `build.rs`.
+pub const GIT_SHA: &str = env!("GIT_SHA");
+
 pub mod cli;
 #[cfg(feature = "smartcard")]
 pub mod yubikey;
@@ -64,5 +69,19 @@ pub mod request {
 			.unwrap()
 			.into_string()
 			.map_err(|_| format!("GET `{url:?}` failed"))
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn git_sha_is_valid() {
+		assert_eq!(GIT_SHA.len(), 8, "expected 8 char short SHA, got {GIT_SHA:?}");
+		assert!(
+			GIT_SHA.chars().all(|c| c.is_ascii_hexdigit()),
+			"expected hex characters, got {GIT_SHA:?}"
+		);
 	}
 }
