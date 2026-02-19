@@ -48,7 +48,9 @@ impl IntoResponse for Error {
 const HOST_HEALTH: &str = "/host-health";
 const ENCLAVE_HEALTH: &str = "/enclave-health";
 const MESSAGE: &str = "/message";
-const ENCLAVE_INFO: &str = "/enclave-info";
+
+/// enclave-info method path
+pub const ENCLAVE_INFO: &str = "/enclave-info";
 
 /// Response body to the `/enclave-info` endpoint.
 #[derive(serde::Serialize, serde::Deserialize)]

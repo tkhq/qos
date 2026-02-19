@@ -7,6 +7,7 @@ use std::{
 	process::{Command, Stdio},
 };
 
+use borsh::BorshDeserialize;
 use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
 use qos_core::protocol::{
 	services::{
@@ -66,6 +67,7 @@ async fn main() {
 	// -- CLIENT create manifest.
 	let pivot_args = std::env::args().nth(2).expect("No pivot args provided");
 	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
+	let app_host_port = 3000;
 
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
@@ -93,7 +95,9 @@ async fn main() {
 			"--patch-set-dir",
 			"./mock/keys/manifest-set",
 			"--quorum-key-path",
-			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub"
+			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
+			"--bridge-config",
+			&format!("[{{\"type\": \"server\", \"port\": {app_host_port}, \"host\": \"0.0.0.0\"}}]"),
 		])
 		.spawn()
 		.unwrap()
@@ -105,11 +109,12 @@ async fn main() {
 	let manifest: Manifest =
 		serde_json::from_slice(&fs::read(&cli_manifest_path).unwrap()).unwrap();
 
-	let genesis_output: GenesisOutput = {
+	let genesis_output = {
 		let contents =
 			fs::read("./mock/boot-e2e/genesis-dir/genesis_output").unwrap();
-		serde_json::from_slice(&contents).unwrap()
+		GenesisOutput::try_from_slice(&contents).unwrap()
 	};
+
 	// For simplicity sake, we use the same keys for the share set and manifest
 	// set.
 	let mut members: Vec<_> = genesis_output

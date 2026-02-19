@@ -14,7 +14,7 @@ use qos_core::{
 	reaper::{Reaper, REAPER_EXIT_DELAY},
 };
 use qos_nsm::mock::MockNsm;
-use qos_test_primitives::PathWrapper;
+use qos_test_primitives::{find_free_port, PathWrapper};
 use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt},
 	net::TcpStream,
@@ -168,8 +168,8 @@ async fn reaper_handles_panic() {
 
 #[tokio::test]
 async fn reaper_handles_bridge() {
-	let pivot_port = 4000;
-	let host_port = 3000;
+	let pivot_port = find_free_port().unwrap();
+	let host_port = find_free_port().unwrap();
 	let secret_path: PathWrapper = "/tmp/reaper_handles_bridge.secret".into();
 	let usock: PathWrapper = "/tmp/reaper_handles_bridge.sock".into();
 	let app_usock: PathWrapper =

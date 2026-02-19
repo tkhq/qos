@@ -1989,6 +1989,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_bridge"
+version = "0.1.0"
+dependencies = [
+ "qos_core",
+ "qos_hex",
+ "qos_host",
+ "qos_nsm",
+ "serde",
+ "serde_json",
+ "tokio",
+ "ureq",
+]
+
+[[package]]
 name = "qos_client"
 version = "0.1.0"
 dependencies = [
