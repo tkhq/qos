@@ -773,6 +773,8 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		share_set,
 		patch_set,
 		enclave: nitro_config,
+		unverified_client_qos_commit: crate::GIT_SHA.to_string(),
+		unverified_client_qos_version: crate::CRATE_VERSION.to_string(),
 	};
 
 	write_with_msg(
@@ -796,7 +798,6 @@ fn extract_nitro_config<P: AsRef<Path>>(
 		pcr1,
 		pcr2,
 		pcr3,
-		qos_commit: String::new(),
 		aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 	}
 }
@@ -900,37 +901,57 @@ fn approve_manifest_programmatic_verifications(
 ) -> bool {
 	// Verify manifest set composition
 	if manifest.manifest_set != *manifest_set {
-		eprintln!("Manifest Set composition does not match");
+		eprintln!(
+			"Manifest Set composition does not match.\n  Got: {:?}\n  Expected: {:?}",
+			manifest.manifest_set, manifest_set
+		);
 		return false;
 	}
 
 	// Verify share set composition
 	if manifest.share_set != *share_set {
-		eprintln!("Share Set composition does not match");
+		eprintln!(
+			"Share Set composition does not match.\n  Got: {:?}\n  Expected: {:?}",
+			manifest.share_set, share_set
+		);
 		return false;
 	}
 
-	// Verify share set composition
+	// Verify patch set composition
 	if manifest.patch_set != *patch_set {
-		eprintln!("Share Set composition does not match");
+		eprintln!(
+			"Patch Set composition does not match.\n  Got: {:?}\n  Expected: {:?}",
+			manifest.patch_set, patch_set
+		);
 		return false;
 	}
 
 	// Verify pcrs 0, 1, 2, 3.
 	if manifest.enclave != *nitro_config {
-		eprintln!("Nitro configuration does not match");
+		eprintln!(
+			"Nitro configuration does not match.\n  Got: {:?}\n  Expected: {:?}",
+			manifest.enclave, nitro_config
+		);
 		return false;
 	}
 
 	// Verify the pivot could be built deterministically
 	if manifest.pivot.hash != pivot_hash {
-		eprintln!("Pivot hash does not match");
+		eprintln!(
+			"Pivot hash does not match.\n  Got: {}\n  Expected: {}",
+			qos_hex::encode(&manifest.pivot.hash),
+			qos_hex::encode(pivot_hash)
+		);
 		return false;
 	}
 
 	// Verify the intended Quorum Key is being used
 	if manifest.namespace.quorum_key != quorum_key.to_bytes() {
-		eprintln!("Quorum public key does not match");
+		eprintln!(
+			"Quorum public key does not match.\n  Got: {}\n  Expected: {}",
+			qos_hex::encode(&manifest.namespace.quorum_key),
+			qos_hex::encode(&quorum_key.to_bytes())
+		);
 		return false;
 	}
 
@@ -1697,7 +1718,6 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			pcr1: mock_pcr.clone(),
 			pcr2: mock_pcr.clone(),
 			pcr3: mock_pcr,
-			qos_commit: "mock-qos-commit-ref".to_string(),
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
 		pivot: PivotConfig {
@@ -1718,6 +1738,8 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			members: vec![member.clone()],
 		},
 		patch_set: PatchSet { threshold: 0, members: vec![] },
+		unverified_client_qos_commit: crate::GIT_SHA.to_string(),
+		unverified_client_qos_version: crate::CRATE_VERSION.to_string(),
 	};
 
 	// Create and post the boot standard instruction
@@ -2334,7 +2356,6 @@ mod tests {
 			pcr1: vec![2; 42],
 			pcr2: vec![3; 42],
 			pcr3: vec![4; 42],
-			qos_commit: "good-qos-commit".to_string(),
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		};
 		let pivot_hash = vec![5; 32];
@@ -2359,6 +2380,7 @@ mod tests {
 			share_set: share_set.clone(),
 			patch_set: patch_set.clone(),
 			enclave: nitro_config.clone(),
+			..Default::default()
 		};
 
 		let manifest_envelope = ManifestEnvelope {
@@ -2586,32 +2608,6 @@ mod tests {
 			} = setup();
 
 			nitro_config.pcr3 = vec![42; 42];
-
-			assert!(!approve_manifest_programmatic_verifications(
-				&manifest,
-				&manifest_set,
-				&share_set,
-				&patch_set,
-				&nitro_config,
-				&pivot_hash,
-				&quorum_key,
-			));
-		}
-
-		#[test]
-		fn rejects_mismatched_qos_commit() {
-			let Setup {
-				manifest,
-				manifest_set,
-				share_set,
-				patch_set,
-				mut nitro_config,
-				pivot_hash,
-				quorum_key,
-				..
-			} = setup();
-
-			nitro_config.qos_commit = "bad qos commit".to_string();
 
 			assert!(!approve_manifest_programmatic_verifications(
 				&manifest,

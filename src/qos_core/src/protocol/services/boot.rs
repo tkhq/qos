@@ -39,8 +39,6 @@ pub struct NitroConfig {
 	/// DER encoded X509 AWS root certificate
 	#[serde(with = "qos_hex::serde")]
 	pub aws_root_certificate: Vec<u8>,
-	/// Reference to the commit QOS was built off of.
-	pub qos_commit: String,
 }
 
 impl fmt::Debug for NitroConfig {
@@ -50,8 +48,47 @@ impl fmt::Debug for NitroConfig {
 			.field("pcr1", &qos_hex::encode(&self.pcr1))
 			.field("pcr2", &qos_hex::encode(&self.pcr2))
 			.field("pcr3", &qos_hex::encode(&self.pcr3))
-			.field("qos_commit", &self.qos_commit)
 			.finish_non_exhaustive()
+	}
+}
+
+/// Enclave configuration specific to AWS Nitro, version 0.
+/// Contains the now-removed `qos_commit` field for backwards compatibility.
+#[derive(
+	PartialEq, Eq, Clone, Debug, borsh::BorshDeserialize, serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
+pub struct NitroConfigV0 {
+	/// The hash of the enclave image file
+	#[serde(with = "qos_hex::serde")]
+	pub pcr0: Vec<u8>,
+	/// The hash of the Linux kernel and bootstrap
+	#[serde(with = "qos_hex::serde")]
+	pub pcr1: Vec<u8>,
+	/// The hash of the application
+	#[serde(with = "qos_hex::serde")]
+	pub pcr2: Vec<u8>,
+	/// The hash of the Amazon resource name (ARN) of the IAM role that's
+	/// associated with the EC2 instance.
+	#[serde(with = "qos_hex::serde")]
+	pub pcr3: Vec<u8>,
+	/// DER encoded X509 AWS root certificate
+	#[serde(with = "qos_hex::serde")]
+	pub aws_root_certificate: Vec<u8>,
+	/// Reference to the commit QOS was built off of.
+	pub qos_commit: String,
+}
+
+impl From<NitroConfigV0> for NitroConfig {
+	fn from(old: NitroConfigV0) -> Self {
+		Self {
+			pcr0: old.pcr0,
+			pcr1: old.pcr1,
+			pcr2: old.pcr2,
+			pcr3: old.pcr3,
+			aws_root_certificate: old.aws_root_certificate,
+		}
 	}
 }
 
@@ -423,6 +460,14 @@ pub struct Manifest {
 	pub enclave: NitroConfig,
 	/// Patch set members and threshold
 	pub patch_set: PatchSet,
+	/// Unverified git commit of the QOS client that created this manifest.
+	/// For debugging purposes only.
+	#[serde(default)]
+	pub unverified_client_qos_commit: String,
+	/// Unverified version of the QOS client that created this manifest.
+	/// For debugging purposes only.
+	#[serde(default)]
+	pub unverified_client_qos_version: String,
 }
 
 // TODO: remove this once json is the default manifest format
@@ -442,7 +487,7 @@ pub struct ManifestV0 {
 	/// Share Set members and threshold
 	pub share_set: ShareSet,
 	/// Configuration and verifiable values for the enclave hardware.
-	pub enclave: NitroConfig,
+	pub enclave: NitroConfigV0,
 	/// Patch set members and threshold
 	pub patch_set: PatchSet,
 }
@@ -454,8 +499,44 @@ impl From<ManifestV0> for Manifest {
 			pivot: old.pivot.into(),
 			manifest_set: old.manifest_set,
 			share_set: old.share_set,
-			enclave: old.enclave,
+			enclave: old.enclave.into(),
 			patch_set: old.patch_set,
+			unverified_client_qos_commit: String::new(),
+			unverified_client_qos_version: String::new(),
+		}
+	}
+}
+
+/// The Manifest for the enclave, backwards compatible version 1.
+/// Uses current PivotConfig but old NitroConfigV0 (with qos_commit).
+#[derive(PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize)]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
+pub struct ManifestV1 {
+	/// Namespace this manifest belongs too.
+	pub namespace: Namespace,
+	/// Pivot binary configuration and verifiable values.
+	pub pivot: PivotConfig,
+	/// Manifest Set members and threshold.
+	pub manifest_set: ManifestSet,
+	/// Share Set members and threshold
+	pub share_set: ShareSet,
+	/// Configuration and verifiable values for the enclave hardware.
+	pub enclave: NitroConfigV0,
+	/// Patch set members and threshold
+	pub patch_set: PatchSet,
+}
+
+impl From<ManifestV1> for Manifest {
+	fn from(old: ManifestV1) -> Self {
+		Self {
+			namespace: old.namespace,
+			pivot: old.pivot,
+			manifest_set: old.manifest_set,
+			share_set: old.share_set,
+			enclave: old.enclave.into(),
+			patch_set: old.patch_set,
+			unverified_client_qos_commit: String::new(),
+			unverified_client_qos_version: String::new(),
 		}
 	}
 }
@@ -465,21 +546,24 @@ impl Manifest {
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
 		use borsh::BorshDeserialize;
 
-		// try old version with json format
+		// try old version with json format (serde ignores unknown fields)
 		if let Ok(v0) = serde_json::from_slice::<ManifestV0>(buf) {
 			return Ok(v0.into());
 		};
 
-		let result = Self::try_from_slice(buf);
-
-		// try loading the old version with borsh format
-		if result.is_err() {
-			let old = ManifestV0::try_from_slice(buf)?;
-
-			Ok(old.into())
-		} else {
-			result
+		// try current borsh format
+		if let Ok(current) = Self::try_from_slice(buf) {
+			return Ok(current);
 		}
+
+		// try v1 borsh format (current PivotConfig + NitroConfigV0)
+		if let Ok(v1) = ManifestV1::try_from_slice(buf) {
+			return Ok(v1.into());
+		}
+
+		// try v0 borsh format (PivotConfigV0 + NitroConfigV0)
+		let v0 = ManifestV0::try_from_slice(buf)?;
+		Ok(v0.into())
 	}
 }
 
@@ -520,7 +604,10 @@ impl Approval {
 		if pub_key.verify(msg, &self.signature).is_ok() {
 			Ok(())
 		} else {
-			Err(ProtocolError::CouldNotVerifyApproval)
+			Err(ProtocolError::CouldNotVerifyApproval {
+				member_alias: self.member.alias.clone(),
+				member_pub_key: qos_hex::encode(&self.member.pub_key),
+			})
 		}
 	}
 }
@@ -561,6 +648,19 @@ pub struct ManifestEnvelopeV0 {
 	pub share_set_approvals: Vec<Approval>,
 }
 
+/// [`ManifestV1`] with accompanying [`Approval`]s.
+#[derive(PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize)]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
+pub struct ManifestEnvelopeV1 {
+	/// Encapsulated manifest.
+	pub manifest: ManifestV1,
+	/// Approvals for [`Self::manifest`] from the manifest set.
+	pub manifest_set_approvals: Vec<Approval>,
+	///  Approvals for [`Self::manifest`] from the share set. This is primarily
+	/// used to audit what share holders provisioned the quorum key.
+	pub share_set_approvals: Vec<Approval>,
+}
+
 impl ManifestEnvelope {
 	/// Check if the encapsulated manifest has K valid approvals from the
 	/// manifest approval set.
@@ -582,7 +682,14 @@ impl ManifestEnvelope {
 
 			// Ensure that this member belongs to the manifest set
 			if !self.manifest.manifest_set.members.contains(&approval.member) {
-				return Err(ProtocolError::NotManifestSetMember);
+				return Err(ProtocolError::NotManifestSetMember {
+					member_alias: approval.member.alias.clone(),
+					member_pub_key: qos_hex::encode(&approval.member.pub_key),
+					expected_members: format!(
+						"{:?}",
+						self.manifest.manifest_set.members
+					),
+				});
 			}
 
 			// Ensure that the member only has 1 approval. Note that we don't
@@ -590,13 +697,19 @@ impl ManifestEnvelope {
 			// malleable. i.e. there could be two different signatures per
 			// member.
 			if !uniq_members.insert(approval.member.qos_hash()) {
-				return Err(ProtocolError::DuplicateApproval);
+				return Err(ProtocolError::DuplicateApproval {
+					member_alias: approval.member.alias.clone(),
+					member_pub_key: qos_hex::encode(&approval.member.pub_key),
+				});
 			}
 		}
 
 		// Ensure that there are at least threshold unique members who approved
 		if uniq_members.len() < self.manifest.manifest_set.threshold as usize {
-			return Err(ProtocolError::NotEnoughApprovals);
+			return Err(ProtocolError::NotEnoughApprovals {
+				got: uniq_members.len(),
+				threshold: self.manifest.manifest_set.threshold as usize,
+			});
 		}
 
 		Ok(())
@@ -605,20 +718,27 @@ impl ManifestEnvelope {
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
 		use borsh::BorshDeserialize;
 
-		let result = Self::try_from_slice(buf);
-
-		// try loading the old version of manifest
-		if result.is_err() {
-			let old = ManifestEnvelopeV0::try_from_slice(buf)?;
-
-			Ok(Self {
-				manifest: Manifest::from(old.manifest),
-				manifest_set_approvals: old.manifest_set_approvals,
-				share_set_approvals: old.share_set_approvals,
-			})
-		} else {
-			result
+		// try current borsh format
+		if let Ok(current) = Self::try_from_slice(buf) {
+			return Ok(current);
 		}
+
+		// try v1 borsh format (ManifestV1)
+		if let Ok(v1) = ManifestEnvelopeV1::try_from_slice(buf) {
+			return Ok(Self {
+				manifest: Manifest::from(v1.manifest),
+				manifest_set_approvals: v1.manifest_set_approvals,
+				share_set_approvals: v1.share_set_approvals,
+			});
+		}
+
+		// try v0 borsh format (ManifestV0)
+		let v0 = ManifestEnvelopeV0::try_from_slice(buf)?;
+		Ok(Self {
+			manifest: Manifest::from(v0.manifest),
+			manifest_set_approvals: v0.manifest_set_approvals,
+			share_set_approvals: v0.share_set_approvals,
+		})
 	}
 }
 
@@ -721,7 +841,6 @@ mod test {
 				pcr2: vec![2; 32],
 				pcr3: vec![1; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
-				qos_commit: "mock qos commit".to_string(),
 			},
 			pivot: PivotConfig {
 				hash: sha_256(&pivot),
@@ -986,7 +1105,7 @@ mod test {
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
 				.unwrap_err();
 
-		assert_eq!(error, ProtocolError::NotManifestSetMember);
+		assert!(matches!(error, ProtocolError::NotManifestSetMember { .. }));
 
 		assert!(!Path::new(&*pivot_file).exists());
 		assert!(!Path::new(&*ephemeral_file).exists());
@@ -1021,7 +1140,7 @@ mod test {
 		};
 
 		let err = manifest_envelope.check_approvals().unwrap_err();
-		assert_eq!(err, ProtocolError::DuplicateApproval);
+		assert!(matches!(err, ProtocolError::DuplicateApproval { .. }));
 	}
 
 	#[test]

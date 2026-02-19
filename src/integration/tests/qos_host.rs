@@ -1,7 +1,7 @@
 use std::{process::Command, time::Duration};
 
 use integration::PIVOT_OK_PATH;
-use qos_host::{GIT_SHA, CRATE_VERSION};
+use qos_host::{CRATE_VERSION, GIT_SHA};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test]

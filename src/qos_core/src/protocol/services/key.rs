@@ -54,7 +54,12 @@ pub(in crate::protocol) fn inject_key(
 	let decrypted_quorum_pair = P256Pair::from_master_seed(&quorum_master_seed)
 		.map_err(|_| ProtocolError::InvalidQuorumSecret)?;
 	if decrypted_quorum_pair.public_key() != quorum_public {
-		return Err(ProtocolError::WrongQuorumKey);
+		return Err(ProtocolError::WrongQuorumKey {
+			expected: qos_hex::encode(&quorum_public.to_bytes()),
+			actual: qos_hex::encode(
+				&decrypted_quorum_pair.public_key().to_bytes(),
+			),
+		});
 	}
 
 	// 4. Rotate the ephemeral key so it's safe for apps to use it independently
@@ -371,7 +376,6 @@ mod test {
 				pcr2: pcr2.clone(),
 				pcr3: pcr3.clone(),
 				aws_root_certificate: b"mock cert".to_vec(),
-				qos_commit: "mock qos commit".to_string(),
 			},
 			pivot: PivotConfig {
 				hash: sha_256(&pivot),
@@ -497,7 +501,10 @@ mod test {
 			// Remove an approval
 			manifest_envelope.manifest_set_approvals.pop().unwrap();
 			let err = boot_key_forward(&mut state, &manifest_envelope, &pivot);
-			assert_eq!(Err(ProtocolError::NotEnoughApprovals), err,);
+			assert!(matches!(
+				err,
+				Err(ProtocolError::NotEnoughApprovals { .. })
+			));
 
 			// check that nothing was written
 			assert!(!handles.pivot_exists());
@@ -629,7 +636,10 @@ mod test {
 			manifest_envelope.manifest_set_approvals.push(non_member_approval);
 
 			let err = boot_key_forward(&mut state, &manifest_envelope, &pivot);
-			assert_eq!(Err(ProtocolError::NotManifestSetMember), err,);
+			assert!(matches!(
+				err,
+				Err(ProtocolError::NotManifestSetMember { .. })
+			));
 
 			// check that nothing was written
 			assert!(!handles.pivot_exists());
@@ -810,14 +820,14 @@ mod test {
 			let mut new_manifest_envelope = manifest_envelope.clone();
 
 			new_manifest_envelope.manifest_set_approvals.pop().unwrap();
-			assert_eq!(
+			assert!(matches!(
 				validate_manifest(
 					&new_manifest_envelope,
 					&manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::NotEnoughApprovals)
-			);
+				Err(ProtocolError::NotEnoughApprovals { .. })
+			));
 		}
 
 		#[test]
@@ -861,14 +871,14 @@ mod test {
 				.manifest_set_approvals
 				.push(non_member_approval);
 
-			assert_eq!(
+			assert!(matches!(
 				validate_manifest(
 					&new_manifest_envelope,
 					&manifest_envelope,
 					&att_doc
 				),
-				Err(ProtocolError::NotManifestSetMember)
-			);
+				Err(ProtocolError::NotManifestSetMember { .. })
+			));
 		}
 	}
 
@@ -1225,13 +1235,13 @@ mod test {
 			let mut protocol_state =
 				ProtocolState::new(Box::new(MockNsm), handles, None);
 
-			assert_eq!(
+			assert!(matches!(
 				inject_key(
 					&mut protocol_state,
 					EncryptedQuorumKey { encrypted_quorum_key, signature }
 				),
-				Err(ProtocolError::WrongQuorumKey)
-			);
+				Err(ProtocolError::WrongQuorumKey { .. })
+			));
 
 			// does not write the quorum key
 			assert!(!protocol_state.handles.quorum_key_exists());

@@ -10,7 +10,7 @@ pub mod msg;
 pub mod services;
 mod state;
 
-pub use error::ProtocolError;
+pub use error::{ProtocolError, VersionInfo};
 pub use state::ProtocolPhase;
 pub(crate) use state::ProtocolState;
 

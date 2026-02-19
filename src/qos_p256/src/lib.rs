@@ -71,9 +71,19 @@ pub enum P256Error {
 	/// uncompressed.
 	FailedToReadPublicKey,
 	/// The  public key is too long to be valid.
-	EncodedPublicKeyTooLong,
+	EncodedPublicKeyTooLong {
+		/// Actual length of the encoded key.
+		actual: usize,
+		/// Expected length of the encoded key.
+		expected: usize,
+	},
 	/// The public key is too short to be valid.
-	EncodedPublicKeyTooShort,
+	EncodedPublicKeyTooShort {
+		/// Actual length of the encoded key.
+		actual: usize,
+		/// Expected length of the encoded key.
+		expected: usize,
+	},
 	/// Error'ed while running HKDF expansion
 	HkdfExpansionFailed,
 	/// Master seed was not stored as valid utf8 encoding.
@@ -299,11 +309,18 @@ impl P256Public {
 	/// Deserialize each public key from a SEC1 encoded point, not compressed.
 	/// Expects encoding as `encrypt_public||sign_public`.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
-		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize * 2 {
-			return Err(P256Error::EncodedPublicKeyTooLong);
+		let expected = PUB_KEY_LEN_UNCOMPRESSED as usize * 2;
+		if bytes.len() > expected {
+			return Err(P256Error::EncodedPublicKeyTooLong {
+				actual: bytes.len(),
+				expected,
+			});
 		}
-		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED as usize * 2 {
-			return Err(P256Error::EncodedPublicKeyTooShort);
+		if bytes.len() < expected {
+			return Err(P256Error::EncodedPublicKeyTooShort {
+				actual: bytes.len(),
+				expected,
+			});
 		}
 
 		let (encrypt_bytes, sign_bytes) =
@@ -368,7 +385,11 @@ mod test {
 
 	#[test]
 	fn git_sha_is_valid() {
-		assert_eq!(GIT_SHA.len(), 8, "expected 8 char short SHA, got {GIT_SHA:?}");
+		assert_eq!(
+			GIT_SHA.len(),
+			8,
+			"expected 8 char short SHA, got {GIT_SHA:?}"
+		);
 		assert!(
 			GIT_SHA.chars().all(|c| c.is_ascii_hexdigit()),
 			"expected hex characters, got {GIT_SHA:?}"

@@ -97,7 +97,11 @@ mod test {
 
 	#[test]
 	fn git_sha_is_valid() {
-		assert_eq!(GIT_SHA.len(), 8, "expected 8 char short SHA, got {GIT_SHA:?}");
+		assert_eq!(
+			GIT_SHA.len(),
+			8,
+			"expected 8 char short SHA, got {GIT_SHA:?}"
+		);
 		assert!(
 			GIT_SHA.chars().all(|c| c.is_ascii_hexdigit()),
 			"expected hex characters, got {GIT_SHA:?}"
