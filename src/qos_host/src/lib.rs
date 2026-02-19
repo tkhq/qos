@@ -25,6 +25,11 @@ use qos_core::protocol::{
 pub mod cli;
 pub mod host;
 
+/// Crate version of the host binary, sourced from `Cargo.toml`.
+pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Git commit SHA of the host binary build, set by `build.rs`.
+pub const GIT_SHA: &str = env!("GIT_SHA");
+
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
 
@@ -86,4 +91,15 @@ pub struct EnclaveVitalStats {
 pub struct JsonError {
 	/// Error message.
 	pub error: String,
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn git_sha_is_valid() {
+		assert!((7..=8).contains(&GIT_SHA.len()));
+		assert!(GIT_SHA.chars().all(|c| c.is_ascii_hexdigit()));
+	}
 }

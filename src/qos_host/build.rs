@@ -3,8 +3,9 @@
 use std::process::Command;
 
 fn main() {
+	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 	let sha = Command::new("git")
-		.args(["rev-parse", "--short", "HEAD"])
+		.args(["-C", &manifest_dir, "rev-parse", "--short", "HEAD"])
 		.output()
 		.ok()
 		.filter(|o| o.status.success())

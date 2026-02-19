@@ -193,8 +193,8 @@ impl CLI {
 		if options.parsed.version() {
 			println!(
 				"version: {} (git sha: {})",
-				env!("CARGO_PKG_VERSION"),
-				env!("GIT_SHA")
+				crate::CRATE_VERSION,
+				crate::GIT_SHA
 			);
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
