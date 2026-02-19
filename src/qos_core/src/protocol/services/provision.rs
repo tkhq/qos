@@ -69,7 +69,14 @@ pub(in crate::protocol) fn provision(
 	// 2) the approver belongs to the share set
 	if !manifest_envelope.manifest.share_set.members.contains(&approval.member)
 	{
-		return Err(ProtocolError::NotShareSetMember);
+		return Err(ProtocolError::NotShareSetMember {
+			member_alias: approval.member.alias.clone(),
+			member_pub_key: qos_hex::encode(&approval.member.pub_key),
+			expected_members: format!(
+				"{:?}",
+				manifest_envelope.manifest.share_set.members
+			),
+		});
 	}
 
 	// Record the share set approval
@@ -424,10 +431,10 @@ mod test {
 		let mut approval = approvals.remove(0);
 		approval.signature =
 			b"ffffffffffffffffffffffffffffffffffffffffffffff".to_vec();
-		assert_eq!(
+		assert!(matches!(
 			provision(&share, approval, &mut state).unwrap_err(),
-			ProtocolError::CouldNotVerifyApproval
-		);
+			ProtocolError::CouldNotVerifyApproval { .. }
+		));
 		assert!(!Path::new(&*quorum_file).exists());
 		assert_eq!(state.get_phase(), ProtocolPhase::WaitingForQuorumShards);
 	}
@@ -466,10 +473,10 @@ mod test {
 		approval.signature = pair.sign(&manifest.qos_hash()).unwrap();
 
 		let share = encrypted_shares.remove(0);
-		assert_eq!(
+		assert!(matches!(
 			provision(&share, approval, &mut state).unwrap_err(),
-			ProtocolError::NotShareSetMember
-		);
+			ProtocolError::NotShareSetMember { .. }
+		));
 		assert!(!Path::new(&*quorum_file).exists());
 		assert_eq!(state.get_phase(), ProtocolPhase::WaitingForQuorumShards);
 	}
@@ -510,10 +517,10 @@ mod test {
 		let share = encrypted_shares.remove(0);
 		// we get an invalid signature error (not an error that they are not
 		// part of the set)
-		assert_eq!(
+		assert!(matches!(
 			provision(&share, approval, &mut state).unwrap_err(),
-			ProtocolError::CouldNotVerifyApproval
-		);
+			ProtocolError::CouldNotVerifyApproval { .. }
+		));
 		assert!(!Path::new(&*quorum_file).exists());
 		assert_eq!(state.get_phase(), ProtocolPhase::WaitingForQuorumShards);
 	}

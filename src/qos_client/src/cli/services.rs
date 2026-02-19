@@ -900,37 +900,57 @@ fn approve_manifest_programmatic_verifications(
 ) -> bool {
 	// Verify manifest set composition
 	if manifest.manifest_set != *manifest_set {
-		eprintln!("Manifest Set composition does not match");
+		eprintln!(
+			"Manifest Set composition does not match.\n  Got: {:?}\n  Expected: {:?}",
+			manifest.manifest_set, manifest_set
+		);
 		return false;
 	}
 
 	// Verify share set composition
 	if manifest.share_set != *share_set {
-		eprintln!("Share Set composition does not match");
+		eprintln!(
+			"Share Set composition does not match.\n  Got: {:?}\n  Expected: {:?}",
+			manifest.share_set, share_set
+		);
 		return false;
 	}
 
-	// Verify share set composition
+	// Verify patch set composition
 	if manifest.patch_set != *patch_set {
-		eprintln!("Share Set composition does not match");
+		eprintln!(
+			"Patch Set composition does not match.\n  Got: {:?}\n  Expected: {:?}",
+			manifest.patch_set, patch_set
+		);
 		return false;
 	}
 
 	// Verify pcrs 0, 1, 2, 3.
 	if manifest.enclave != *nitro_config {
-		eprintln!("Nitro configuration does not match");
+		eprintln!(
+			"Nitro configuration does not match.\n  Got: {:?}\n  Expected: {:?}",
+			manifest.enclave, nitro_config
+		);
 		return false;
 	}
 
 	// Verify the pivot could be built deterministically
 	if manifest.pivot.hash != pivot_hash {
-		eprintln!("Pivot hash does not match");
+		eprintln!(
+			"Pivot hash does not match.\n  Got: {}\n  Expected: {}",
+			qos_hex::encode(&manifest.pivot.hash),
+			qos_hex::encode(pivot_hash)
+		);
 		return false;
 	}
 
 	// Verify the intended Quorum Key is being used
 	if manifest.namespace.quorum_key != quorum_key.to_bytes() {
-		eprintln!("Quorum public key does not match");
+		eprintln!(
+			"Quorum public key does not match.\n  Got: {}\n  Expected: {}",
+			qos_hex::encode(&manifest.namespace.quorum_key),
+			qos_hex::encode(&quorum_key.to_bytes())
+		);
 		return false;
 	}
 

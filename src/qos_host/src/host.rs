@@ -249,10 +249,8 @@ impl HostServer {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
 			return (
 				StatusCode::BAD_REQUEST,
-				borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
-					ProtocolError::OversizeMsg,
-				))
-				.expect("ProtocolMsg can always serialize. qed."),
+				borsh::to_vec(&ProtocolMsg::error(ProtocolError::OversizeMsg))
+					.expect("ProtocolMsg can always serialize. qed."),
 			);
 		}
 
@@ -276,7 +274,7 @@ impl HostServer {
 
 				(
 					StatusCode::INTERNAL_SERVER_ERROR,
-					borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+					borsh::to_vec(&ProtocolMsg::error(
 						ProtocolError::EnclaveClient,
 					))
 					.expect("ProtocolMsg can always serialize. qed."),
@@ -319,7 +317,7 @@ fn extract_envelope_from_boot_instruction(
 						}
 						_ => {
 							// this really shouldn't happen
-							eprintln!("mismatched boot response, tcp to vsock bridge might not start");
+							eprintln!("mismatched boot response ({decoded_msg}), tcp to vsock bridge might not start");
 							None
 						}
 					}

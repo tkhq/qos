@@ -86,11 +86,18 @@ impl P256SignPublic {
 
 	/// Deserialize from a SEC1 encoded point, not compressed.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
-		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize {
-			return Err(P256Error::EncodedPublicKeyTooLong);
+		let expected = PUB_KEY_LEN_UNCOMPRESSED as usize;
+		if bytes.len() > expected {
+			return Err(P256Error::EncodedPublicKeyTooLong {
+				actual: bytes.len(),
+				expected,
+			});
 		}
-		if bytes.len() < PUB_KEY_LEN_UNCOMPRESSED as usize {
-			return Err(P256Error::EncodedPublicKeyTooShort);
+		if bytes.len() < expected {
+			return Err(P256Error::EncodedPublicKeyTooShort {
+				actual: bytes.len(),
+				expected,
+			});
 		}
 
 		Ok(Self {
@@ -176,11 +183,11 @@ mod tests {
 
 		assert!(matches!(
 			P256SignPublic::from_bytes(&too_short),
-			Err(P256Error::EncodedPublicKeyTooShort)
+			Err(P256Error::EncodedPublicKeyTooShort { .. })
 		));
 		assert!(matches!(
 			P256SignPublic::from_bytes(&too_long),
-			Err(P256Error::EncodedPublicKeyTooLong)
+			Err(P256Error::EncodedPublicKeyTooLong { .. })
 		));
 		assert!(matches!(
 			P256SignPublic::from_bytes(&bad_prefix),

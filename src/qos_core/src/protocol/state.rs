@@ -71,7 +71,7 @@ impl ProtocolRoute {
 
 		if let Some(phase) = transition {
 			if let Err(e) = state.transition(phase) {
-				return Some(Err(ProtocolMsg::ProtocolErrorResponse(e)));
+				return Some(Err(ProtocolMsg::error(e)));
 			}
 		};
 
@@ -206,7 +206,7 @@ impl ProtocolState {
 		}
 
 		let err = ProtocolError::NoMatchingRoute(self.phase);
-		borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
+		borsh::to_vec(&ProtocolMsg::error(err))
 			.expect("ProtocolMsg can always be serialized. qed.")
 	}
 
@@ -361,7 +361,7 @@ mod handlers {
 				.map(|reconstructed| ProtocolMsg::ProvisionResponse {
 					reconstructed,
 				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+				.map_err(ProtocolMsg::error);
 
 			Some(result)
 		} else {
@@ -381,7 +381,7 @@ mod handlers {
 				.map(|nsm_response| ProtocolMsg::BootStandardResponse {
 					nsm_response,
 				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+				.map_err(ProtocolMsg::error);
 
 			Some(result)
 		} else {
@@ -401,7 +401,7 @@ mod handlers {
 						genesis_output: Box::new(genesis_output),
 					}
 				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+				.map_err(ProtocolMsg::error);
 
 			Some(result)
 		} else {
@@ -423,7 +423,7 @@ mod handlers {
 						.ok()
 						.map(Box::new),
 				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+				.map_err(ProtocolMsg::error);
 
 			Some(result)
 		} else {
@@ -442,7 +442,7 @@ mod handlers {
 				.map(|nsm_response| ProtocolMsg::BootKeyForwardResponse {
 					nsm_response,
 				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+				.map_err(ProtocolMsg::error);
 
 			Some(result)
 		} else {
@@ -472,7 +472,7 @@ mod handlers {
 					signature,
 				}
 			})
-			.map_err(ProtocolMsg::ProtocolErrorResponse);
+			.map_err(ProtocolMsg::error);
 
 			Some(result)
 		} else {
@@ -497,7 +497,7 @@ mod handlers {
 				},
 			)
 			.map(|()| ProtocolMsg::InjectKeyResponse)
-			.map_err(ProtocolMsg::ProtocolErrorResponse);
+			.map_err(ProtocolMsg::error);
 
 			Some(result)
 		} else {

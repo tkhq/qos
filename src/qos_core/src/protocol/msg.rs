@@ -3,6 +3,7 @@
 use qos_nsm::types::NsmResponse;
 
 use crate::protocol::{
+	error::VersionInfo,
 	services::{
 		boot::{Approval, ManifestEnvelope},
 		genesis::{GenesisOutput, GenesisSet},
@@ -14,7 +15,12 @@ use crate::protocol::{
 #[derive(Debug, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum ProtocolMsg {
 	/// A error from executing the protocol.
-	ProtocolErrorResponse(ProtocolError),
+	ProtocolErrorResponse {
+		/// The protocol error.
+		error: ProtocolError,
+		/// Version and git SHA of the enclave binary that produced this error.
+		version_info: VersionInfo,
+	},
 
 	/// Request the status of the enclave.
 	StatusRequest,
@@ -140,10 +146,20 @@ pub enum ProtocolMsg {
 	},
 }
 
+impl ProtocolMsg {
+	/// Create a `ProtocolErrorResponse` with current build version info.
+	pub fn error(error: ProtocolError) -> Self {
+		Self::ProtocolErrorResponse {
+			error,
+			version_info: VersionInfo::current(),
+		}
+	}
+}
+
 impl std::fmt::Display for ProtocolMsg {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Self::ProtocolErrorResponse(_) => {
+			Self::ProtocolErrorResponse { .. } => {
 				write!(f, "ProtocolErrorResponse")
 			}
 			Self::StatusRequest => write!(f, "StatusRequest"),

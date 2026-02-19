@@ -8,6 +8,32 @@ use crate::{
 	protocol::{services::boot, ProtocolPhase},
 };
 
+/// Version and git SHA of the running binary, for inclusion in errors.
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct VersionInfo {
+	/// Crate version from Cargo.toml.
+	pub version: String,
+	/// Short git SHA at build time.
+	pub git_sha: String,
+}
+
+impl VersionInfo {
+	/// Create a `VersionInfo` from the current build constants.
+	#[must_use]
+	pub fn current() -> Self {
+		Self {
+			version: crate::CRATE_VERSION.to_string(),
+			git_sha: crate::GIT_SHA.to_string(),
+		}
+	}
+}
+
+impl std::fmt::Display for VersionInfo {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "v{} ({})", self.version, self.git_sha)
+	}
+}
+
 /// A error from protocol execution.
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum ProtocolError {
@@ -22,8 +48,13 @@ pub enum ProtocolError {
 	/// Cryptography error
 	/// Approval was not valid for a manifest.
 	InvalidManifestApproval(boot::Approval),
-	/// [`boot::ManifestEnvelope`] did not have approvals
-	NotEnoughApprovals,
+	/// [`boot::ManifestEnvelope`] did not have enough approvals.
+	NotEnoughApprovals {
+		/// Number of unique approvals received.
+		got: usize,
+		/// Required threshold.
+		threshold: usize,
+	},
 	/// Protocol Message could not be matched against an available route.
 	/// Ensure the executor is in the correct phase.
 	NoMatchingRoute(ProtocolPhase),
@@ -100,12 +131,31 @@ pub enum ProtocolError {
 	/// Share set approvals existed in the manifest envelope when they should
 	/// not have.
 	BadShareSetApprovals,
-	/// Could not verify a message against an approval
-	CouldNotVerifyApproval,
+	/// Could not verify a message against an approval.
+	CouldNotVerifyApproval {
+		/// Alias of the member whose approval failed verification.
+		member_alias: String,
+		/// Hex-encoded public key of the member.
+		member_pub_key: String,
+	},
 	/// Not a member of the [`boot::ShareSet`].
-	NotShareSetMember,
+	NotShareSetMember {
+		/// Alias of the member that was not found.
+		member_alias: String,
+		/// Hex-encoded public key of the member that was not found.
+		member_pub_key: String,
+		/// Debug representation of the expected members.
+		expected_members: String,
+	},
 	/// Not a member of the [`boot::ManifestSet`].
-	NotManifestSetMember,
+	NotManifestSetMember {
+		/// Alias of the member that was not found.
+		member_alias: String,
+		/// Hex-encoded public key of the member that was not found.
+		member_pub_key: String,
+		/// Debug representation of the expected members.
+		expected_members: String,
+	},
 	/// `qos_p256` Error wrapper.
 	P256Error(qos_p256::P256Error),
 	/// Error with trying to read p256 DR public key.
@@ -161,11 +211,21 @@ pub enum ProtocolError {
 	/// The quorum secret was invalid.
 	InvalidQuorumSecret,
 	/// The injected quorum key was not the expected key.
-	WrongQuorumKey,
+	WrongQuorumKey {
+		/// Expected quorum public key as hex string.
+		expected: String,
+		/// Actual quorum public key as hex string.
+		actual: String,
+	},
 	/// State machine transitioned unexpectedly
 	InvalidStateTransition(ProtocolPhase, ProtocolPhase),
 	/// The manifest envelope has duplicate approvals.
-	DuplicateApproval,
+	DuplicateApproval {
+		/// Alias of the member who submitted a duplicate approval.
+		member_alias: String,
+		/// Hex-encoded public key of the member.
+		member_pub_key: String,
+	},
 	/// The new manifest was different from the old manifest when we expected
 	/// them to be the same because they have the same nonce.
 	DifferentManifest {
@@ -240,7 +300,9 @@ impl std::fmt::Display for ProtocolError {
 					approval.member.alias
 				)
 			}
-			Self::NotEnoughApprovals => write!(f, "not enough approvals"),
+			Self::NotEnoughApprovals { got, threshold } => {
+				write!(f, "not enough approvals: got {got}, need {threshold}")
+			}
 			Self::NoMatchingRoute(phase) => {
 				write!(f, "no matching route for phase {phase:?}")
 			}
@@ -308,12 +370,22 @@ impl std::fmt::Display for ProtocolError {
 			Self::BadShareSetApprovals => {
 				write!(f, "unexpected share set approvals")
 			}
-			Self::CouldNotVerifyApproval => {
-				write!(f, "could not verify approval")
+			Self::CouldNotVerifyApproval { member_alias, member_pub_key } => {
+				write!(f, "could not verify approval from member '{member_alias}' (pub_key: {member_pub_key})")
 			}
-			Self::NotShareSetMember => write!(f, "not a share set member"),
-			Self::NotManifestSetMember => {
-				write!(f, "not a manifest set member")
+			Self::NotShareSetMember {
+				member_alias,
+				member_pub_key,
+				expected_members,
+			} => {
+				write!(f, "not a share set member: '{member_alias}' (pub_key: {member_pub_key}). Expected one of: {expected_members}")
+			}
+			Self::NotManifestSetMember {
+				member_alias,
+				member_pub_key,
+				expected_members,
+			} => {
+				write!(f, "not a manifest set member: '{member_alias}' (pub_key: {member_pub_key}). Expected one of: {expected_members}")
 			}
 			Self::P256Error(e) => write!(f, "P256 error: {e:?}"),
 			Self::InvalidP256DRKey(e) => {
@@ -354,11 +426,15 @@ impl std::fmt::Display for ProtocolError {
 				write!(f, "encrypted quorum key has invalid length")
 			}
 			Self::InvalidQuorumSecret => write!(f, "invalid quorum secret"),
-			Self::WrongQuorumKey => write!(f, "wrong quorum key"),
+			Self::WrongQuorumKey { expected, actual } => {
+				write!(f, "wrong quorum key: expected {expected}, got {actual}")
+			}
 			Self::InvalidStateTransition(from, to) => {
 				write!(f, "invalid state transition from {from:?} to {to:?}")
 			}
-			Self::DuplicateApproval => write!(f, "duplicate approval"),
+			Self::DuplicateApproval { member_alias, member_pub_key } => {
+				write!(f, "duplicate approval from member '{member_alias}' (pub_key: {member_pub_key})")
+			}
 			Self::DifferentManifest { expected, actual } => {
 				write!(
 					f,

@@ -520,7 +520,10 @@ impl Approval {
 		if pub_key.verify(msg, &self.signature).is_ok() {
 			Ok(())
 		} else {
-			Err(ProtocolError::CouldNotVerifyApproval)
+			Err(ProtocolError::CouldNotVerifyApproval {
+				member_alias: self.member.alias.clone(),
+				member_pub_key: qos_hex::encode(&self.member.pub_key),
+			})
 		}
 	}
 }
@@ -582,7 +585,14 @@ impl ManifestEnvelope {
 
 			// Ensure that this member belongs to the manifest set
 			if !self.manifest.manifest_set.members.contains(&approval.member) {
-				return Err(ProtocolError::NotManifestSetMember);
+				return Err(ProtocolError::NotManifestSetMember {
+					member_alias: approval.member.alias.clone(),
+					member_pub_key: qos_hex::encode(&approval.member.pub_key),
+					expected_members: format!(
+						"{:?}",
+						self.manifest.manifest_set.members
+					),
+				});
 			}
 
 			// Ensure that the member only has 1 approval. Note that we don't
@@ -590,13 +600,19 @@ impl ManifestEnvelope {
 			// malleable. i.e. there could be two different signatures per
 			// member.
 			if !uniq_members.insert(approval.member.qos_hash()) {
-				return Err(ProtocolError::DuplicateApproval);
+				return Err(ProtocolError::DuplicateApproval {
+					member_alias: approval.member.alias.clone(),
+					member_pub_key: qos_hex::encode(&approval.member.pub_key),
+				});
 			}
 		}
 
 		// Ensure that there are at least threshold unique members who approved
 		if uniq_members.len() < self.manifest.manifest_set.threshold as usize {
-			return Err(ProtocolError::NotEnoughApprovals);
+			return Err(ProtocolError::NotEnoughApprovals {
+				got: uniq_members.len(),
+				threshold: self.manifest.manifest_set.threshold as usize,
+			});
 		}
 
 		Ok(())
@@ -986,7 +1002,7 @@ mod test {
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
 				.unwrap_err();
 
-		assert_eq!(error, ProtocolError::NotManifestSetMember);
+		assert!(matches!(error, ProtocolError::NotManifestSetMember { .. }));
 
 		assert!(!Path::new(&*pivot_file).exists());
 		assert!(!Path::new(&*ephemeral_file).exists());
@@ -1021,7 +1037,7 @@ mod test {
 		};
 
 		let err = manifest_envelope.check_approvals().unwrap_err();
-		assert_eq!(err, ProtocolError::DuplicateApproval);
+		assert!(matches!(err, ProtocolError::DuplicateApproval { .. }));
 	}
 
 	#[test]
