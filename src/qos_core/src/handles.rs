@@ -441,7 +441,6 @@ mod test {
 				pcr2: vec![2; 32],
 				pcr3: vec![1; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
-				qos_commit: "mock qos commit".to_string(),
 			},
 			pivot: PivotConfig {
 				hash: sha_256(&pivot),
@@ -452,6 +451,7 @@ mod test {
 			manifest_set: ManifestSet { threshold: 2, members: vec![] },
 			share_set: ShareSet { threshold: 2, members: vec![] },
 			patch_set: PatchSet::default(),
+			..Default::default()
 		};
 
 		let manifest_envelope = ManifestEnvelope {

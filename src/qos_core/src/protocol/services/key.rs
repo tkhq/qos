@@ -376,7 +376,6 @@ mod test {
 				pcr2: pcr2.clone(),
 				pcr3: pcr3.clone(),
 				aws_root_certificate: b"mock cert".to_vec(),
-				qos_commit: "mock qos commit".to_string(),
 			},
 			pivot: PivotConfig {
 				hash: sha_256(&pivot),

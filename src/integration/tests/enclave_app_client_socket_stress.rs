@@ -50,7 +50,6 @@ async fn enclave_app_client_socket_stress() {
 			pcr2: vec![1; 32],
 			pcr3: vec![1; 32],
 			aws_root_certificate: vec![],
-			qos_commit: String::default(),
 		},
 		..Default::default()
 	};

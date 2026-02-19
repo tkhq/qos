@@ -202,7 +202,6 @@ mod test {
 				pcr2: vec![2; 32],
 				pcr3: vec![1; 32],
 				aws_root_certificate: b"cert lord".to_vec(),
-				qos_commit: "mock qos commit".to_string(),
 			},
 			pivot: PivotConfig {
 				hash: sha_256(pivot),
@@ -219,6 +218,7 @@ mod test {
 				members: members.clone().into_iter().map(|(m, _)| m).collect(),
 			},
 			patch_set: PatchSet::default(),
+			..Default::default()
 		};
 
 		let approvals: Vec<_> = members
