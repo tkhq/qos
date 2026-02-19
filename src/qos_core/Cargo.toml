@@ -3,7 +3,11 @@ name = "qos_core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish = false
+license.workspace = true
+description = "Core components and logic for QuorumOS applications"
+repository = "https://github.com/tkhq/qos"
+keywords = ["quorumos", "enclave", "nitro", "tee", "quorum"]
+categories = ["os"]
 
 [lints]
 workspace = true

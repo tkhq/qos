@@ -1,0 +1,81 @@
+[workspace]
+pr_labels = ["release"]
+# See https://release-plz.dev/docs/config#the-release_always-field
+release_always = false
+changelog_path = "../CHANGELOG.md"
+
+# See https://release-plz.dev/docs/extra/single-changelog#all-packages
+[changelog]
+body = """
+
+## `{{ package }}` - [{{ version }}]{%- if release_link -%}({{ release_link }}){% endif %} - {{ timestamp | date(format="%Y-%m-%d") }}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+{%- if commit.scope -%}
+- *({{commit.scope}})* {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message }}{%- if commit.links %} ({% for link in commit.links %}[{{link.text}}]({{link.href}}) {% endfor -%}){% endif %}
+{% else -%}
+- {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message }}
+{% endif -%}
+{% endfor -%}
+{% endfor -%}
+"""
+
+[[package]]
+name = "qos_client"
+changelog_update = true
+publish = true
+version_group = "qos"
+
+[[package]]
+name = "qos_core"
+changelog_update = true
+publish = true
+version_group = "qos"
+
+[[package]]
+name = "qos_crypto"
+changelog_update = true
+publish = true
+version_group = "qos"
+
+[[package]]
+name = "qos_hex"
+changelog_update = true
+publish = true
+version_group = "qos"
+
+[[package]]
+name = "qos_net"
+changelog_update = true
+publish = true
+version_group = "qos"
+
+[[package]]
+name = "qos_p256"
+changelog_update = true
+publish = true
+version_group = "qos"
+
+[[package]]
+name = "qos_nsm"
+changelog_update = true
+publish = true
+version_group = "qos"
+
+# Unpublished packages
+
+[[package]]
+name = "integration"
+publish = false
+changelog_update = false
+
+[[package]]
+name = "qos_test_primitives"
+publish = false
+changelog_update = false
+
+[[package]]
+name = "qos_host"
+changelog_update = false
+publish = false

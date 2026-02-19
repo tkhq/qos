@@ -3,7 +3,11 @@ name = "qos_net"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish = false
+license.workspace = true
+description = "Socket to TCP proxy for QuorumOS enclave network access"
+repository = "https://github.com/tkhq/qos"
+keywords = ["quorumos", "enclave", "nitro", "proxy", "vsock"]
+categories = ["network-programming"]
 
 [lints]
 workspace = true

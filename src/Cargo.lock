@@ -1316,7 +1316,7 @@ dependencies = [
 
 [[package]]
 name = "integration"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "borsh",
  "futures",
@@ -1990,7 +1990,7 @@ dependencies = [
 
 [[package]]
 name = "qos_bridge"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "qos_core",
  "qos_hex",
@@ -2004,7 +2004,7 @@ dependencies = [
 
 [[package]]
 name = "qos_client"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
@@ -2028,7 +2028,7 @@ dependencies = [
 
 [[package]]
 name = "qos_core"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
@@ -2051,7 +2051,7 @@ dependencies = [
 
 [[package]]
 name = "qos_crypto"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "qos_hex",
  "rand 0.9.2",
@@ -2071,14 +2071,14 @@ dependencies = [
 
 [[package]]
 name = "qos_hex"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "qos_host"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "axum",
  "borsh",
@@ -2092,7 +2092,7 @@ dependencies = [
 
 [[package]]
 name = "qos_net"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "borsh",
  "chunked_transfer",
@@ -2121,7 +2121,7 @@ dependencies = [
 
 [[package]]
 name = "qos_nsm"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aws-nitro-enclaves-cose",
  "aws-nitro-enclaves-nsm-api",
@@ -2146,7 +2146,7 @@ dependencies = [
 
 [[package]]
 name = "qos_p256"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "aes-gcm",
  "borsh",
@@ -2170,7 +2170,7 @@ dependencies = [
 
 [[package]]
 name = "qos_test_primitives"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "nix 0.29.0",
  "rand 0.9.2",

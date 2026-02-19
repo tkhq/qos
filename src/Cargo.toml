@@ -44,8 +44,9 @@ resolver = "2"
 
 [workspace.package]
 rust-version = "1.88"
-version = "0.1.0"
+version = "0.5.0"
 edition = "2021"
+license = "AGPL-3.0-only"
 
 [workspace.lints.rust]
 missing_docs = "warn"
@@ -100,14 +101,14 @@ zeroize = { version = "1.8", default-features = false }
 
 # Internal workspace dependencies
 integration = { path = "integration" }
-qos_client = { path = "qos_client", default-features = false }
-qos_core = { path = "qos_core", default-features = false }
-qos_crypto = { path = "qos_crypto", default-features = false }
-qos_hex = { path = "qos_hex", default-features = false }
-qos_host = { path = "qos_host", default-features = false }
-qos_net = { path = "qos_net", default-features = false }
-qos_nsm = { path = "qos_nsm", default-features = false }
-qos_p256 = { path = "qos_p256" }
+qos_client = { path = "qos_client", version = "0.5.0", default-features = false }
+qos_core = { path = "qos_core", version = "0.5.0", default-features = false }
+qos_crypto = { path = "qos_crypto", version = "0.5.0", default-features = false }
+qos_hex = { path = "qos_hex", version = "0.5.0", default-features = false }
+qos_host = { path = "qos_host", version = "0.5.0", default-features = false }
+qos_net = { path = "qos_net", version = "0.5.0", default-features = false }
+qos_nsm = { path = "qos_nsm", version = "0.5.0", default-features = false }
+qos_p256 = { path = "qos_p256", version = "0.5.0" }
 qos_test_primitives = { path = "qos_test_primitives" }
 
 # Option for the future: build all QOS applications with additional runtime checks

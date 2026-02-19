@@ -3,7 +3,11 @@ name = "qos_hex"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish = false
+license.workspace = true
+description = "Utilities for encoding and decoding hex strings"
+repository = "https://github.com/tkhq/qos"
+keywords = ["quorumos", "hex", "encoding"]
+categories = ["encoding"]
 
 [lints]
 workspace = true
