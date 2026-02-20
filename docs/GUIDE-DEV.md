@@ -8,7 +8,6 @@ Mock mode allows you to run QOS locally without an AWS Nitro enclave. It uses a 
 
 ## Prerequisites
 
-- Build all binaries: `cargo build --all`
 - Have your custom application binary ready
 
 ## Quick Start
@@ -26,12 +25,6 @@ cargo run --bin qos_client -- dangerous-dev-boot \
   --pivot-path ./path/to/your/app \
   --restart-policy never --pivot-args "[]" \
   --unsafe-eph-path-override ./local-enclave/qos.ephemeral.key
-```
-
-For web UIs, also start the JSON proxy:
-```bash
-# Terminal 4: JSON proxy (converts JSON ↔ Borsh)
-cargo run --bin qos-json-proxy --release
 ```
 
 ## Manual Setup (Step by Step)
