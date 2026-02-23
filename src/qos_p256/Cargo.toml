@@ -3,7 +3,11 @@ name = "qos_p256"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish = false
+license.workspace = true
+description = "Signing and encryption utilities for P-256 keys"
+repository = "https://github.com/tkhq/qos"
+keywords = ["quorumos", "p256", "ecdsa", "ecdh", "encryption"]
+categories = ["cryptography"]
 
 [lints]
 workspace = true

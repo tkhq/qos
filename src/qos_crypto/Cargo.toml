@@ -3,7 +3,11 @@ name = "qos_crypto"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish = false
+license.workspace = true
+description = "Cryptographic primitives for use with QuorumOS"
+repository = "https://github.com/tkhq/qos"
+keywords = ["quorumos", "shamir", "secret-sharing", "threshold", "cryptography"]
+categories = ["cryptography"]
 
 [lints]
 workspace = true

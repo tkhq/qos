@@ -3,7 +3,11 @@ name = "qos_client"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish = false
+license.workspace = true
+description = "Multipurpose CLI client for interacting with QuorumOS enclaves and related operations"
+repository = "https://github.com/tkhq/qos"
+keywords = ["quorumos", "enclave", "nitro", "attestation", "client"]
+categories = ["command-line-utilities"]
 
 [lints]
 workspace = true
