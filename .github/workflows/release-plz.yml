@@ -6,21 +6,24 @@ permissions:
   contents: write
 
 on:
-  pull_request:
+  pull_request: # trigger a release when the release PR is merged
     types: [ closed ]
+    branches: [ main ]
+  push: # trigger a release PR update on pushes to main
     branches: [ main ]
 
 jobs:
-  # Release unpublished packages.
+  # Publish crates when the release PR is merged.
   release-plz-release:
     name: Release-plz release
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # This environment gives access to CARGO_REGISTRY_TOKEN, and requires approval
     environment: release 
-    # only trigger this job if the push to main is from a merged PR with a "release" label
+    # only trigger this job for a merged PR with a "release" label
     if: >
       github.repository_owner == 'tkhq' &&
+      github.event_name == 'pull_request' &&
       github.event.pull_request.merged == true &&
       contains(github.event.pull_request.labels.*.name, 'release')
     permissions:
@@ -42,21 +45,26 @@ jobs:
         with:
           command: release
           manifest_path: src/Cargo.toml
+          config: src/release-plz.toml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-  # Create a PR with the new versions and changelog, preparing the next release.
+  # Create or update release PR with the new versions and changelog on pushes to main
   release-plz-pr:
     name: Release-plz PR
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ github.repository_owner == 'tkhq' }}
+    # trigger on pushes to main
+    if: >
+      github.repository_owner == 'tkhq' &&
+      github.event_name == 'push'
     permissions:
       contents: write
       pull-requests: write
+      issues: write # needed for labels
     concurrency:
-      group: release-plz-${{ github.ref }}
+      group: release-plz-${{ github.ref_name }}
       cancel-in-progress: false
     steps:
       - name: git checkout
@@ -75,5 +83,6 @@ jobs:
         with:
           command: release-pr
           manifest_path: src/Cargo.toml
+          config: src/release-plz.toml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
