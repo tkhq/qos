@@ -187,7 +187,7 @@ async fn reaper_handles_bridge() {
 		PIVOT_TCP_PATH.to_string(),
 	);
 
-	// start the tcp -> vsock bridge on port 3000
+	// start the tcp -> vsock bridge on host_port
 	let host_addr: SocketAddr =
 		SocketAddrV4::new(Ipv4Addr::LOCALHOST, host_port).into();
 	let app_pool =
@@ -231,9 +231,9 @@ async fn reaper_handles_bridge() {
 	let host_addr = format!("localhost:{host_port}");
 	let pivot_addr = format!("localhost:{pivot_port}");
 
-	// ensure pivot is ready and accepting on tcp://localhost:4000
+	// ensure pivot is ready and accepting on tcp://localhost:pivot_port
 	wait_for_tcp_sock(&pivot_addr).await;
-	// ensure bridge is ready and accepting on tcp://localhost:3000
+	// ensure bridge is ready and accepting on tcp://localhost:host_port
 	wait_for_tcp_sock(&host_addr).await;
 
 	let mut stream = TcpStream::connect(&host_addr)
@@ -273,6 +273,6 @@ async fn reaper_handles_bridge() {
 	// Make the sure the reaper executed successfully.
 	reaper_handle.await.unwrap();
 	let contents = fs::read(integration::PIVOT_TCP_SUCCESS_FILE).unwrap();
-	assert_eq!(&contents, b"worlds"); // expects the chronologically first msg
+	assert_eq!(&contents, b"finished"); // expects the finished msg
 	assert!(fs::remove_file(integration::PIVOT_TCP_SUCCESS_FILE).is_ok());
 }

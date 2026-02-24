@@ -44,12 +44,12 @@ async fn main() {
 			// final msg received, exit
 			if &buf[..size] == b"done" {
 				stream.shutdown().await.expect("unable to shutdown cleanly");
+
+				// we don't want to force "fs" into tokio so we just use std/sync here
+				std::fs::write(PIVOT_TCP_SUCCESS_FILE, "finished")
+					.expect("unable to write tcp pivot success file");
 				std::process::exit(0);
 			}
-
-			// we don't want to force "fs" into tokio so we just use std/sync here
-			std::fs::write(PIVOT_TCP_SUCCESS_FILE, &buf[..size])
-				.expect("unable to write tcp pivot success file");
 		});
 	}
 }
