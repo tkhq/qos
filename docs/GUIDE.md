@@ -8,13 +8,15 @@
 
 ## Overview
 
-The production flow has 9 phases:
+This flow is meant to walk through many of the components for secret provisioning and booting enclaves, but it is not meant to be a complete guide for running this system in production.
+
+This flow has 9 phases:
 1. **Setup**: Generate member keypairs, prepare directories
 2. **Genesis**: Generate quorum key and distribute encrypted shards
 3. **Share Distribution**: Each member decrypts their share
 4. **Manifest**: Create and approve manifest with PCRs
-5. **Boot**: Send manifest to enclave, verify attestation
-6. **Provisioning**: Re-encrypt and post shares (K=2 triggers reconstruction)
+5. **Boot**: Send manifest to enclave and fetch attestation
+6. **Provisioning**: Verify attestation, re-encrypt and post shares (K=2 triggers reconstruction)
 7. **Verification**: Confirm the enclave is provisioned and your app is running
 8. **Updates**: Deploy new application versions without redoing genesis
 9. **Disaster Recovery**: Optional backup encryption of quorum key
@@ -87,6 +89,8 @@ cd $WORKDIR
 sha256sum your_app | awk '{print $1}' > manifest-dir/pivot-hash.txt
 ```
 
+**Note**: For production, deterministic builds (e.g., using [StageX](https://github.com/stagex/stagex)) are recommended so that clients, manifest set, and share set can independently reproduce builds before taking action. Instructions for deterministic app builds are a TODO.
+
 ### 1.6 Create QOS Release Directory
 
 **What this does**: Defines the expected PCR0/1/2 values from your QuorumOS build. These measurements uniquely identify which version of the QuorumOS system is running. During boot and provisioning, these values are verified against the live attestation to confirm you're deploying to the correct QuorumOS version.
@@ -99,7 +103,7 @@ cat > qos-release-dir/aws-x86_64.pcrs << 'EOF'
 EOF
 ```
 
-**Important**: Replace with actual PCR values from your Nitro enclave build. For initial testing with `--unsafe-skip-attestation`, you can use placeholder values.
+**Important**: Replace with actual PCR values from your Nitro enclave build. See [Reproducing Builds](https://github.com/tkhq/qos?tab=readme-ov-file#reproducing-builds) for instructions on how to get these values. For initial testing with `--unsafe-skip-attestation`, you can use placeholder values.
 
 ---
 
@@ -225,7 +229,7 @@ echo "2" > manifest-dir/share-set/quorum_threshold
 
 ### 4.2 Generate Manifest
 
-**What this does**: Creates the unsigned manifest document that specifies exactly what will run in the enclave. This includes the app binary hash (pivot-hash), expected QuorumOS version (PCRs), AWS identity (PCR3), and governance rules (manifest/share/patch sets). The namespace and nonce create a unique identifier preventing replay attacks.
+**What this does**: Creates the unsigned manifest document that specifies exactly what will run in the enclave. This includes the app binary hash (pivot-hash), expected QuorumOS version (PCR{0,1,2}), AWS identity (PCR3), and governance rules (manifest/share/patch sets). The namespace and nonce create a unique identifier preventing replay attacks.
 
 ```bash
 qos_client generate-manifest \
@@ -641,6 +645,8 @@ The quorum key reconstructs to the same value, but now your updated application 
 - ✓ PCR values (unless QuorumOS version changes)
 
 **The Nonce Mechanism**: The monotonically increasing nonce prevents rollback attacks. Members should only approve manifests with nonces higher than the current deployment, ensuring adversaries cannot force downgrades to vulnerable versions.
+
+**Note**: if we had two nitro enclaves running simultaneously targeting the same application but different versions, we could use the already provisioned enclave to key forward off of, removing the need to post shares. This is helpful for HA production setups that require horizontally scalable workloads with no human intervention. Key forwarding is not covered in this guide, but you can find some information [here](https://github.com/tkhq/qos/blob/main/src/qos_core/KEY_FORWARDING.MD).
 
 ---
 

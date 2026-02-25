@@ -98,7 +98,7 @@ The mock NSM:
 
 ### Why --unsafe-eph-path-override?
 
-The mock attestation document contains a **broken** ephemeral public key (PEM format, 800 bytes) instead of the expected DER format (65 bytes). This causes parsing errors.
+The boot flow requires the enclave side to have the ephemeral private key and the client side to have the associated public key. We typically embed the ephemeral public key in the attestation document: clients are expected to verify the attestation document before using the ephemeral public key. Locally, we cannot generate attestation documents, so we return a hardcoded mock attestation document. The mock attestation document contains an **invalid** ephemeral public key, and even if it was valid we would not have access to the associated private key.
 
 The `--unsafe-eph-path-override` flag tells the client to:
 1. **Ignore** the public key from the attestation document
@@ -161,11 +161,7 @@ When running in mock mode, qos_core creates a `./local-enclave/` directory with:
 
 ### Viewing Logs
 
-qos_core and qos_host output logs to their respective terminals. Set `RUST_LOG` for more verbose logging:
-
-```bash
-RUST_LOG=debug cargo run --bin qos_core --features mock -- --usock ./dev.sock --mock
-```
+qos_core and qos_host output logs to their respective terminals, so all output appears in stdout/stderr by default.
 
 ### Restarting After Changes
 
