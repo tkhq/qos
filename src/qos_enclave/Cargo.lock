@@ -771,23 +771,23 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.4.18"
+version = "4.5.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e578d6ec4194633722ccf9544794b71b1385c3c027efe0c55db226fc880865c"
+checksum = "2797f34da339ce31042b27d23607e051786132987f595b02ba4f6a6dffb7030a"
 dependencies = [
  "clap_builder",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.4.18"
+version = "4.5.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4df4df40ec50c46000231c914968278b1eb05098cf8f1b3a518a95030e71d1c7"
+checksum = "24a241312cea5059b13574bb9b3861cabf758b879c15190b37b6d6fd63ab6876"
 dependencies = [
  "anstream",
  "anstyle",
- "clap_lex 0.6.0",
- "strsim 0.10.0",
+ "clap_lex 1.0.0",
+ "strsim 0.11.1",
 ]
 
 [[package]]
@@ -801,9 +801,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.6.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "702fc72eb24e5a1e48ce58027a675bc24edd52096d5397d4aea7c6dd9eca0bd1"
+checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
 name = "cmake"
@@ -974,7 +974,7 @@ dependencies = [
 [[package]]
 name = "driver-bindings"
 version = "0.1.0"
-source = "git+https://github.com/aws/aws-nitro-enclaves-cli?rev=82501bb9637e4b41c87ce73f8ffc2ce51ca37a6a#82501bb9637e4b41c87ce73f8ffc2ce51ca37a6a"
+source = "git+https://github.com/aws/aws-nitro-enclaves-cli?rev=66e60163843aa083992b6d6c0d6c94c90cd9baf4#66e60163843aa083992b6d6c0d6c94c90cd9baf4"
 
 [[package]]
 name = "dunce"
@@ -985,7 +985,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 [[package]]
 name = "eif_loader"
 version = "0.1.0"
-source = "git+https://github.com/aws/aws-nitro-enclaves-cli?rev=82501bb9637e4b41c87ce73f8ffc2ce51ca37a6a#82501bb9637e4b41c87ce73f8ffc2ce51ca37a6a"
+source = "git+https://github.com/aws/aws-nitro-enclaves-cli?rev=66e60163843aa083992b6d6c0d6c94c90cd9baf4#66e60163843aa083992b6d6c0d6c94c90cd9baf4"
 dependencies = [
  "aws-nitro-enclaves-image-format",
  "libc",
@@ -1002,12 +1002,12 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 [[package]]
 name = "enclave_build"
 version = "0.1.0"
-source = "git+https://github.com/aws/aws-nitro-enclaves-cli?rev=82501bb9637e4b41c87ce73f8ffc2ce51ca37a6a#82501bb9637e4b41c87ce73f8ffc2ce51ca37a6a"
+source = "git+https://github.com/aws/aws-nitro-enclaves-cli?rev=66e60163843aa083992b6d6c0d6c94c90cd9baf4#66e60163843aa083992b6d6c0d6c94c90cd9baf4"
 dependencies = [
  "aws-nitro-enclaves-image-format",
  "base64 0.22.1",
  "bollard",
- "clap 4.4.18",
+ "clap 4.5.60",
  "flate2",
  "futures",
  "log",
@@ -1932,14 +1932,14 @@ dependencies = [
 
 [[package]]
 name = "nitro-cli"
-version = "1.4.3"
-source = "git+https://github.com/aws/aws-nitro-enclaves-cli?rev=82501bb9637e4b41c87ce73f8ffc2ce51ca37a6a#82501bb9637e4b41c87ce73f8ffc2ce51ca37a6a"
+version = "1.4.4"
+source = "git+https://github.com/aws/aws-nitro-enclaves-cli?rev=66e60163843aa083992b6d6c0d6c94c90cd9baf4#66e60163843aa083992b6d6c0d6c94c90cd9baf4"
 dependencies = [
  "aws-nitro-enclaves-image-format",
  "bindgen",
  "chrono",
  "ciborium",
- "clap 4.4.18",
+ "clap 4.5.60",
  "driver-bindings",
  "eif_loader",
  "enclave_build",
@@ -3066,9 +3066,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vmm-sys-util"
-version = "0.12.1"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d1435039746e20da4f8d507a72ee1b916f7b4b05af7a91c093d2c6561934ede"
+checksum = "506c62fdf617a5176827c2f9afbcf1be155b03a9b4bf9617a60dbc07e3a1642f"
 dependencies = [
  "bitflags 1.3.2",
  "libc",
