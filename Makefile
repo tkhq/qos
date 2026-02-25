@@ -6,7 +6,8 @@ REGISTRY := local
 default: \
 	out/qos_client/index.json \
 	out/qos_host/index.json \
-	out/qos_enclave/index.json
+	out/qos_enclave/index.json \
+	out/qos_bridge/index.json
 
 .PHONY: test
 test: out/.common-loaded
@@ -75,6 +76,18 @@ out/qos_client/index.json: \
 		src/qos_core \
 	)
 	$(call build,qos_client)
+
+out/qos_bridge/index.json: \
+	out/common/index.json \
+	src/images/qos_bridge/Containerfile \
+	$(shell git ls-files \
+		src/qos_bridge \
+		src/qos_host \
+		src/qos_core \
+		src/qos_hex \
+		src/qos_nsm \
+	)
+	$(call build,qos_bridge)
 
 out/common/index.json: \
 	src/images/common/Containerfile

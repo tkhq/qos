@@ -171,7 +171,7 @@ test-vm:
 	cargo test -p qos_core -p qos_host --features vm --no-default-features
 
 .PHONY: build-linux-only
-build-linux-only: qos_system qos_aws init qos_enclave
+build-linux-only: qos_system qos_aws init qos_enclave qos_bridge
 
 .PHONY: qos_system
 qos_system:
@@ -188,3 +188,7 @@ init:
 .PHONY: qos_enclave
 qos_enclave:
 	cargo build --manifest-path ./qos_enclave/Cargo.toml
+
+.PHONY: qos_bridge
+qos_bridge:
+	cargo build --manifest-path ./qos_bridge/Cargo.toml
