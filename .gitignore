@@ -1,12 +1,12 @@
 out/*
 dist/*
 cache/*
-.*
 src/integration/core
 src/init/target
 src/*/cache
 .DS_Store
 .vscode
+.claude
 target/
 
 *.sock
