@@ -2,7 +2,7 @@
 # static builds. Once we have confirmed an updated pcsc-lite has fixed this
 # issue, we should upgrade this again.
 FROM stagex/pcsc-lite:sx2024.03.0@sha256:e720e1795706c7c8c1db14bf730b10521e3ff42e4bed90addc590f7446aac8af AS pcsc-lite
-FROM stagex/pallet-rust:1.88.0@sha256:81c39a3b42b0336e439aee3c90e9e1e4da1d32425451e7222198a978eb8c2623 AS rust
+FROM stagex/pallet-rust:1.88.0@sha256:b9021d2b75eac64fe8b931d96dde63ef11792e5023cee77c3471ccc34a95a377 AS rust
 FROM stagex/user-file:5.45@sha256:07ebef1a7d375c785c2268c5532b473a7130e4fbcf9807cc8f7b5d61e3b84b74 AS file
 FROM stagex/core-make:4.4@sha256:a47d8f67f8fd74905f724fdc5f0d18e29df96391751754947bdeaba9bef8f7d8 AS make
 
