@@ -3,6 +3,7 @@ pr_labels = ["release"]
 # See https://release-plz.dev/docs/config#the-release_always-field
 release_always = false
 changelog_path = "../CHANGELOG.md"
+max_analyze_commits = 5
 
 # See https://release-plz.dev/docs/extra/single-changelog#all-packages
 [changelog]
