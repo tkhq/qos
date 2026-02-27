@@ -6,7 +6,7 @@ rust-version = "1.88"
 publish = false
 
 [dependencies]
-libc = "=0.2.174"
+libc = "=0.2.182"
 nix = { version = "0.30.1", features = ["ioctl"]}
 qos_aws = { path = "../qos_aws"}
 qos_system = { path = "../qos_system"}
