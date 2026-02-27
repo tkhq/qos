@@ -3,7 +3,10 @@ name: stagex-build
 on:
   push:
     tags:
-      - v*.*.*
+      # release-plz creates per-package tags like "qos_core-v0.5.0".
+      # We use qos_core as the canonical release trigger to avoid
+      # duplicate runs (all packages in the version group share the same version).
+      - qos_core-v*.*.*
     branches:
       - main
   pull_request:
@@ -13,12 +16,48 @@ jobs:
   build:
     name: build artifacts
     runs-on: ubicloud-standard-16
+    permissions:
+      contents: write   # needed for uploading release assets
+      packages: write   # needed for pushing to GHCR
+    env:
+      # On a tag push, this is e.g. "qos_core-v0.5.0"; empty for PRs and manual runs
+      release_tag: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
+        with:
+          ghcr: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run `make`
         shell: 'script -q -e -c "bash {0}"'
+        run: make -j$(nproc)
+
+      - name: Push images to GHCR
+        if: env.release_tag != ''
         run: |
-            make -j$(nproc)
+          # Extract version from tag (e.g. "qos_core-v0.5.0" -> "v0.5.0")
+          version="${release_tag#qos_core-}"
+          for name in qos_client qos_host qos_enclave qos_bridge; do
+            env -C out/${name} tar -cf - . | docker load
+            docker tag "qos-local/${name}:latest" "ghcr.io/tkhq/${name}:${version}"
+            docker tag "qos-local/${name}:latest" "ghcr.io/tkhq/${name}:latest"
+            docker push "ghcr.io/tkhq/${name}:${version}"
+            docker push "ghcr.io/tkhq/${name}:latest"
+          done
+
+      - name: Extract PCRs
+        if: env.release_tag != ''
+        run: |
+          id=$(docker create "qos-local/qos_enclave:latest")
+          docker cp "${id}:/nitro.pcrs" out/nitro.pcrs
+          docker rm "${id}"
+
+      - name: Upload PCRs to GitHub release
+        if: env.release_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # upload to qos_core release tag
+        run: gh release upload "${release_tag}" out/nitro.pcrs --clobber
