@@ -208,7 +208,12 @@ impl HostServer {
 		};
 		println!("{vitals_log}");
 
-		let info = EnclaveInfo { phase, manifest_envelope };
+		let info = EnclaveInfo {
+			phase,
+			manifest_envelope,
+			host_version: crate::CRATE_VERSION.to_string(),
+			host_build_sha: crate::GIT_SHA.to_string(),
+		};
 
 		Ok(Json(info))
 	}

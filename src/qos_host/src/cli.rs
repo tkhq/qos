@@ -191,7 +191,11 @@ impl CLI {
 		let options = HostOpts::new(&mut args);
 
 		if options.parsed.version() {
-			println!("version: {}", env!("CARGO_PKG_VERSION"));
+			println!(
+				"version: {} (git sha: {})",
+				crate::CRATE_VERSION,
+				crate::GIT_SHA
+			);
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
 		} else {
