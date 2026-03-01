@@ -25,6 +25,19 @@ jobs:
       - name: Run linting
         run: make lint
 
+  docs:
+    name: docs
+    runs-on: ubicloud-standard-2
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
+      - name: Build docs and check for missing documentation
+        run: make docs
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
   build-linux-only-crates:
     name: build-linux-only-crates
     runs-on: ubicloud-standard-8
