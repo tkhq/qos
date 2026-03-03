@@ -1,12 +1,14 @@
 name: stagex-build
 
 on:
+  workflow_call: # Triggered by other workflows (e.g. release-plz)
+    inputs:
+      release_tag:
+        description: "Release tag (eg 'qos_core-v0.5.0') that triggered this workflow; empty for PRs and manual runs"
+        required: false
+        type: string
+        default: ""
   push:
-    tags:
-      # release-plz creates per-package tags like "qos_core-v0.5.0".
-      # We use qos_core as the canonical release trigger to avoid
-      # duplicate runs (all packages in the version group share the same version).
-      - qos_core-v*.*.*
     branches:
       - main
   pull_request:
@@ -20,11 +22,13 @@ jobs:
       contents: write   # needed for uploading release assets
       packages: write   # needed for pushing to GHCR
     env:
-      # On a tag push, this is e.g. "qos_core-v0.5.0"; empty for PRs and manual runs
-      release_tag: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+      # Set by calling workflow during releases, e.g. "qos_core-v0.5.0"; empty for PRs and manual runs
+      release_tag: ${{ inputs.release_tag }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
 
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
