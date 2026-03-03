@@ -20,4 +20,4 @@ rand = { workspace = true, features = ["std", "std_rng"] }
 
 
 [dev-dependencies]
-qos_hex = { workspace = true }
+qos_hex = { path = "../qos_hex" }
