@@ -1,34 +1,21 @@
-name: stagex-build
+name: stagex-build CI # build check for PR and main
 
 on:
-  workflow_call: # Triggered by other workflows (e.g. release-plz)
-    inputs:
-      release_tag:
-        description: "Release tag (eg 'qos_core-v0.5.0') that triggered this workflow; empty for PRs and manual runs"
-        required: false
-        type: string
-        default: ""
   push:
     branches:
       - main
   pull_request:
-  workflow_dispatch: # Allows manual invocation
 
 jobs:
   build:
     name: build artifacts
     runs-on: ubicloud-standard-16
     permissions:
-      contents: write   # needed for uploading release assets
-      packages: write   # needed for pushing to GHCR
-    env:
-      # Set by calling workflow during releases, e.g. "qos_core-v0.5.0"; empty for PRs and manual runs
-      release_tag: ${{ inputs.release_tag }}
+      contents: read
+      packages: read
     steps:
       - name: Checkout sources
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          ref: main
 
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
@@ -38,30 +25,3 @@ jobs:
       - name: Run `make`
         shell: 'script -q -e -c "bash {0}"'
         run: make -j$(nproc)
-
-      - name: Push images to GHCR
-        if: env.release_tag != ''
-        run: |
-          # Extract version from tag (e.g. "qos_core-v0.5.0" -> "v0.5.0")
-          version="${release_tag#qos_core-}"
-          for name in qos_client qos_host qos_enclave qos_bridge; do
-            env -C out/${name} tar -cf - . | docker load
-            docker tag "qos-local/${name}:latest" "ghcr.io/tkhq/${name}:${version}"
-            docker tag "qos-local/${name}:latest" "ghcr.io/tkhq/${name}:latest"
-            docker push "ghcr.io/tkhq/${name}:${version}"
-            docker push "ghcr.io/tkhq/${name}:latest"
-          done
-
-      - name: Extract PCRs
-        if: env.release_tag != ''
-        run: |
-          id=$(docker create "qos-local/qos_enclave:latest")
-          docker cp "${id}:/nitro.pcrs" out/nitro.pcrs
-          docker rm "${id}"
-
-      - name: Upload PCRs to GitHub release
-        if: env.release_tag != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # upload to qos_core release tag
-        run: gh release upload "${release_tag}" out/nitro.pcrs --clobber
