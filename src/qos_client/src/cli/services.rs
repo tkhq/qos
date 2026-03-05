@@ -1354,13 +1354,17 @@ fn proxy_re_encrypt_share_programmatic_verifications(
 
 	if manifest_envelope.manifest.manifest_set != *manifest_set {
 		eprintln!(
-			"Manifest's manifest set does not match locally found Manifest Set"
+			"Manifest's manifest set does not match locally found Manifest Set.\n  Got: {:?}\n  Expected: {:?}",
+			manifest_envelope.manifest.manifest_set, manifest_set
 		);
 		return false;
 	}
 
 	if !manifest_envelope.manifest.share_set.members.contains(member) {
-		eprintln!("The provided share set key and alias are not part of the Share Set");
+		eprintln!(
+			"The provided share set key and alias are not part of the Share Set.\n  Got: {:?}\n  Expected one of: {:?}",
+			member, manifest_envelope.manifest.share_set.members
+		);
 		return false;
 	}
 
