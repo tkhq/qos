@@ -6,6 +6,7 @@ define run
 		--volume ./cache/cargo/:/.cargo \
 		--workdir /src \
 		--env RUSTFLAGS="" \
+		--env RUSTDOCFLAGS \
 		--env CARGOFLAGS="--locked" \
 		--env PATH=/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
 		$(2) \
