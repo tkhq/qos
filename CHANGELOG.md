@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.5.1](https://github.com/tkhq/qos/compare/qos_client-v0.5.0...qos_client-v0.5.1) - 2026-03-05
+
+### Other
+- update Cargo.lock dependencies
+
+## `qos_net` - [0.5.1](https://github.com/tkhq/qos/compare/qos_net-v0.5.0...qos_net-v0.5.1) - 2026-03-05
+
+### Other
+- update Cargo.lock dependencies
+
+## `qos_core` - [0.5.1](https://github.com/tkhq/qos/compare/qos_core-v0.5.0...qos_core-v0.5.1) - 2026-03-05
+
+### Other
+- update Cargo.lock dependencies
+
 ## `qos_core` - [0.5.0](https://github.com/tkhq/qos/releases/tag/qos_core-v0.5.0) - 2026-02-28
 
 ### Added
