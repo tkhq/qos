@@ -34,7 +34,7 @@ jobs:
 
       - name: Verify checkout matches requested release tag
         run: |
-          expected="$(git rev-list -n1 -- "$release_tag")"
+          expected="$(git rev-parse --verify "${release_tag}^{commit}")"
           actual="$(git rev-parse HEAD)"
           if [ "$expected" != "$actual" ]; then
             echo "Expected tag $release_tag to resolve to $expected, but HEAD is $actual" >&2
