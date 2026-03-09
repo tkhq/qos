@@ -1,4 +1,4 @@
-name: Release-plz
+name: Release-plz Publish # publish to crates.io
 
 permissions:
   pull-requests: write
@@ -8,8 +8,6 @@ permissions:
 on:
   pull_request: # trigger a release when the release PR is merged
     types: [ closed ]
-    branches: [ main ]
-  push: # trigger a release PR update on pushes to main
     branches: [ main ]
 
 jobs:
@@ -70,54 +68,24 @@ jobs:
           ref: main
       - run: git fetch --tags --force
       - id: detect
+        env:
+          # check both PR head and merge SHAs for the tag in case of merge or squash commit
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
-          tag="$(git tag --points-at HEAD | grep -E '^qos_core-v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
+          tag="$(git tag --points-at "$PR_HEAD_SHA" | grep -E '^qos_core-v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
+          if [ -z "$tag" ] && [ -n "$PR_MERGE_SHA" ]; then
+            tag="$(git tag --points-at "$PR_MERGE_SHA" | grep -E '^qos_core-v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
+          fi
           echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
   stagex-release:
     name: Build/publish images for release
     needs: detect-release-tag
     if: needs.detect-release-tag.outputs.release_tag != ''
-    uses: ./.github/workflows/stagex.yml
+    uses: ./.github/workflows/stagex-release.yml
     with:
       release_tag: ${{ needs.detect-release-tag.outputs.release_tag }}
     permissions:
       contents: write
       packages: write
     secrets: inherit
-
-  # Create or update release PR with the new versions and changelog on pushes to main
-  release-plz-pr:
-    name: Release-plz PR
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    # trigger on pushes to main
-    if: >
-      github.repository_owner == 'tkhq' &&
-      github.event_name == 'push'
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write # needed for labels
-    concurrency:
-      group: release-plz-${{ github.ref_name }}
-      cancel-in-progress: false
-    steps:
-      - name: git checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          # `fetch-depth: 0` is needed to clone all the git history, which is necessary to
-          # determine the next version and build the changelog.
-          fetch-depth: 0
-      - name: install Rust
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 #v1
-        with:
-          toolchain: stable
-          components: clippy,rustfmt
-      - name: Run release-plz
-        uses: release-plz/action@f708778669256143d984cce4b23592637532e040 # v0.5.127
-        with:
-          command: release-pr
-          manifest_path: src/Cargo.toml
-          config: src/release-plz.toml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

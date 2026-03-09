@@ -1,0 +1,48 @@
+name: Release-plz PR Update # create/update release PR on pushes to main
+
+permissions:
+  pull-requests: write
+  issues: write # needed for labels
+  contents: write
+
+on:
+  push: # trigger a release PR update on pushes to main
+    branches: [ main ]
+
+jobs:
+  # Create or update release PR with the new versions and changelog on pushes to main
+  release-plz-pr:
+    name: Release-plz PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # trigger on pushes to main
+    if: >
+      github.repository_owner == 'tkhq' &&
+      github.event_name == 'push'
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write # needed for labels
+    concurrency:
+      group: release-plz-${{ github.ref_name }}
+      cancel-in-progress: false
+    steps:
+      - name: git checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # `fetch-depth: 0` is needed to clone all the git history, which is necessary to
+          # determine the next version and build the changelog.
+          fetch-depth: 0
+      - name: install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 #v1
+        with:
+          toolchain: stable
+          components: clippy,rustfmt
+      - name: Run release-plz
+        uses: release-plz/action@f708778669256143d984cce4b23592637532e040 # v0.5.127
+        with:
+          command: release-pr
+          manifest_path: src/Cargo.toml
+          config: src/release-plz.toml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
