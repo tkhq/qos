@@ -73,8 +73,9 @@ changelog_update = false
 
 [[package]]
 name = "qos_test_primitives"
-publish = false
-changelog_update = false
+publish = true
+changelog_update = true
+version_group = "qos"
 
 [[package]]
 name = "qos_host"

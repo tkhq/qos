@@ -34,7 +34,7 @@ tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-th
 tokio-vsock = { workspace = true }
 
 [dev-dependencies]
-qos_test_primitives = { workspace = true }
+qos_test_primitives = { path = "../qos_test_primitives" }
 qos_p256 = { workspace = true, features = ["mock"] }
 qos_nsm = { workspace = true, features = ["mock"], default-features = false }
 rustls = { workspace = true }

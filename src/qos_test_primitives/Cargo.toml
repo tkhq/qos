@@ -3,7 +3,9 @@ name = "qos_test_primitives"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish = false
+license.workspace = true
+description = "Test utilities and helper primitives for QuorumOS crates"
+repository = "https://github.com/tkhq/qos"
 
 # Override workspace lints for this test crate
 [lints.rust]
