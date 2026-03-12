@@ -109,7 +109,7 @@ qos_host = { path = "qos_host", version = "0.5.0", default-features = false }
 qos_net = { path = "qos_net", version = "0.5.0", default-features = false }
 qos_nsm = { path = "qos_nsm", version = "0.5.0", default-features = false }
 qos_p256 = { path = "qos_p256", version = "0.5.0" }
-qos_test_primitives = { path = "qos_test_primitives" }
+qos_test_primitives = { path = "qos_test_primitives", version = "0.5.0" }
 
 # Option for the future: build all QOS applications with additional runtime checks
 # to intentionally panic on integer overflows instead of continuing execution
