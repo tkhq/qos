@@ -11,7 +11,7 @@ publish = false
 # in a typical crate repository -> directly use the git version on GitHub as a workaround
 #
 # The pinned commit corresponds to tag "v1.4.3" after https://github.com/aws/aws-nitro-enclaves-cli/issues/705
-nitro-cli = { git = "https://github.com/aws/aws-nitro-enclaves-cli", rev = "82501bb9637e4b41c87ce73f8ffc2ce51ca37a6a" }
+nitro-cli = { git = "https://github.com/aws/aws-nitro-enclaves-cli", rev = "66e60163843aa083992b6d6c0d6c94c90cd9baf4" }
 libc = "=0.2.174"
 
 [features]
