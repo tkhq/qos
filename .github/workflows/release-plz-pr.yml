@@ -1,10 +1,5 @@
 name: Release-plz PR Update # create/update release PR on pushes to main
 
-permissions:
-  pull-requests: write
-  issues: write # needed for labels
-  contents: write
-
 on:
   push: # trigger a release PR update on pushes to main
     branches: [ main ]
