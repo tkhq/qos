@@ -107,6 +107,7 @@ impl Proxy {
 				ProxyMsg::ConnectByIpRequest { ip, port } => {
 					self.connect_by_ip(ip, port).await
 				}
+				ProxyMsg::ProxyError(err) => ProxyMsg::ProxyError(err),
 				_ => ProxyMsg::ProxyError(QosNetError::InvalidMsg),
 			},
 			Err(_) => ProxyMsg::ProxyError(QosNetError::InvalidMsg),
