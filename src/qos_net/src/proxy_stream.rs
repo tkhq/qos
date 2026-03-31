@@ -56,6 +56,7 @@ impl<'pool> ProxyStream<'pool> {
 					remote_ip,
 					remote_hostname: Some(hostname),
 				}),
+				ProxyMsg::ProxyError(err) => Err(err),
 				_ => Err(QosNetError::InvalidMsg),
 			},
 			Err(_) => Err(QosNetError::InvalidMsg),
@@ -83,6 +84,7 @@ impl<'pool> ProxyStream<'pool> {
 				ProxyMsg::ConnectResponse { remote_ip } => {
 					Ok(Self { stream, remote_ip, remote_hostname: None })
 				}
+				ProxyMsg::ProxyError(err) => Err(err),
 				_ => Err(QosNetError::InvalidMsg),
 			},
 			Err(_) => Err(QosNetError::InvalidMsg),
