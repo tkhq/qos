@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.6.0](https://github.com/tkhq/qos/compare/qos_client-v0.5.0...qos_client-v0.6.0) - 2026-04-02
+
+### Other
+- publish qos_test_primitives
+
+## `qos_test_primitives` - [0.6.0](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.5.0...qos_test_primitives-v0.6.0) - 2026-04-02
+
+### Other
+- publish qos_test_primitives
+- Deny missing rust docs
+- restart bridge if enclave is in a deployed state
+- fix up tcp_pivot and add multi connection/accept tests
+- try merge origin main
+
+## `qos_net` - [0.6.0](https://github.com/tkhq/qos/compare/qos_net-v0.5.0...qos_net-v0.6.0) - 2026-04-02
+
+### Other
+- fix ProxyMsg error handling
+- publish qos_test_primitives
+
+## `qos_core` - [0.6.0](https://github.com/tkhq/qos/compare/qos_core-v0.5.0...qos_core-v0.6.0) - 2026-04-02
+
+### Other
+- publish qos_test_primitives
+
+## `qos_p256` - [0.6.0](https://github.com/tkhq/qos/compare/qos_p256-v0.5.0...qos_p256-v0.6.0) - 2026-04-02
+
+### Other
+- publish qos_test_primitives
+
 ## `qos_core` - [0.5.0](https://github.com/tkhq/qos/releases/tag/qos_core-v0.5.0) - 2026-02-28
 
 ### Added
