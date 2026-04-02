@@ -64,18 +64,18 @@ changelog_update = true
 publish = true
 version_group = "qos"
 
+[[package]]
+name = "qos_test_primitives"
+publish = true
+changelog_update = true
+version_group = "qos"
+
 # Unpublished packages
 
 [[package]]
 name = "integration"
 publish = false
 changelog_update = false
-
-[[package]]
-name = "qos_test_primitives"
-publish = true
-changelog_update = true
-version_group = "qos"
 
 [[package]]
 name = "qos_host"

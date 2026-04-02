@@ -101,11 +101,11 @@ zeroize = { version = "1.8", default-features = false }
 
 # Internal workspace dependencies
 integration = { path = "integration" }
+qos_host = { path = "qos_host", default-features = false }
 qos_client = { path = "qos_client", version = "0.5.0", default-features = false }
 qos_core = { path = "qos_core", version = "0.5.0", default-features = false }
 qos_crypto = { path = "qos_crypto", version = "0.5.0", default-features = false }
 qos_hex = { path = "qos_hex", version = "0.5.0", default-features = false }
-qos_host = { path = "qos_host", version = "0.5.0", default-features = false }
 qos_net = { path = "qos_net", version = "0.5.0", default-features = false }
 qos_nsm = { path = "qos_nsm", version = "0.5.0", default-features = false }
 qos_p256 = { path = "qos_p256", version = "0.5.0" }
