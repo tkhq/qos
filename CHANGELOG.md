@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_net` - [0.6.0](https://github.com/tkhq/qos/compare/qos_net-v0.5.0...qos_net-v0.6.0) - 2026-04-02
+
+### Fixed
+- `ProxyMsg::ProxyError` responses now properly propagated instead of being silently dropped as `InvalidMsg` ([#655](https://github.com/tkhq/qos/pull/655))
+
+### Changed
+- Removed unused error variants `DuplicateConnectionId`, `ConnectionOverridden`, `ConnectionIdNotFound` ([#655](https://github.com/tkhq/qos/pull/655))
+
+### Security
+- Patched `aws-lc-rs`, `tar`, `rustls-webpki` ([#650](https://github.com/tkhq/qos/pull/650))
+- Patched `time` and `keccak` crates ([#649](https://github.com/tkhq/qos/pull/649))
+
+
 ## `qos_core` - [0.5.0](https://github.com/tkhq/qos/releases/tag/qos_core-v0.5.0) - 2026-02-28
 
 ### Added
