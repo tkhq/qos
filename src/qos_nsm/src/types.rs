@@ -16,11 +16,11 @@ pub enum NsmErrorCode {
 	Success,
 	/// Input argument(s) invalid
 	InvalidArgument,
-	/// PlatformConfigurationRegister index out of bounds
+	/// `PlatformConfigurationRegister` index out of bounds
 	InvalidIndex,
 	/// The received response does not correspond to the earlier request
 	InvalidResponse,
-	/// PlatformConfigurationRegister is in read-only mode and the operation
+	/// `PlatformConfigurationRegister` is in read-only mode and the operation
 	/// attempted to modify it
 	ReadOnlyIndex,
 	/// Given request cannot be fulfilled due to missing capabilities
@@ -29,7 +29,7 @@ pub enum NsmErrorCode {
 	BufferTooSmall,
 	/// The user-provided input is too large
 	InputTooLarge,
-	/// NitroSecureModule cannot fulfill request due to internal errors
+	/// `NitroSecureModule` cannot fulfill request due to internal errors
 	InternalError,
 }
 
@@ -113,43 +113,43 @@ impl From<NsmDigest> for Digest {
 	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Eq, Clone,
 )]
 pub enum NsmRequest {
-	/// Read data from PlatformConfigurationRegister at `index`
+	/// Read data from `PlatformConfigurationRegister` at `index`
 	DescribePCR {
 		/// index of the PCR to describe
 		index: u16,
 	},
-	/// Extend PlatformConfigurationRegister at `index` with `data`
+	/// Extend `PlatformConfigurationRegister` at `index` with `data`
 	ExtendPCR {
 		/// index the PCR to extend
 		index: u16,
 		/// data to extend it with
 		data: Vec<u8>,
 	},
-	/// Lock PlatformConfigurationRegister at `index` from further
+	/// Lock `PlatformConfigurationRegister` at `index` from further
 	/// modifications
 	LockPCR {
 		/// index to lock
 		index: u16,
 	},
-	/// Lock PlatformConfigurationRegisters at indexes `[0, range)` from
+	/// Lock `PlatformConfigurationRegisters` at indexes `[0, range)` from
 	/// further modifications
 	LockPCRs {
 		/// number of PCRs to lock, starting from index 0
 		range: u16,
 	},
-	/// Return capabilities and version of the connected NitroSecureModule.
-	/// Clients are recommended to decode major_version and minor_version
+	/// Return capabilities and version of the connected `NitroSecureModule`.
+	/// Clients are recommended to decode `major_version` and `minor_version`
 	/// first, and use an appropriate structure to hold this data, or fail
 	/// if the version is not supported.
 	DescribeNSM,
-	/// Requests the NSM to create an AttestationDoc and sign it with it's
+	/// Requests the NSM to create an `AttestationDoc` and sign it with it's
 	/// private key to ensure authenticity.
 	Attestation {
-		/// Includes additional user data in the AttestationDoc.
+		/// Includes additional user data in the `AttestationDoc`.
 		user_data: Option<Vec<u8>>,
-		/// Includes an additional nonce in the AttestationDoc.
+		/// Includes an additional nonce in the `AttestationDoc`.
 		nonce: Option<Vec<u8>>,
-		/// Includes a user provided public key in the AttestationDoc.
+		/// Includes a user provided public key in the `AttestationDoc`.
 		public_key: Option<Vec<u8>>,
 	},
 	/// Requests entropy from the NSM side.
@@ -205,26 +205,26 @@ impl From<NsmRequest> for Request {
 	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Eq, Clone,
 )]
 pub enum NsmResponse {
-	/// returns the current PlatformConfigurationRegister state
+	/// returns the current `PlatformConfigurationRegister` state
 	DescribePCR {
 		/// true if the PCR is read-only, false otherwise
 		lock: bool,
 		/// the current value of the PCR
 		data: Vec<u8>,
 	},
-	/// returned if PlatformConfigurationRegister has been successfully
+	/// returned if `PlatformConfigurationRegister` has been successfully
 	/// extended
 	ExtendPCR {
 		/// The new value of the PCR after extending the data into the
 		/// register.
 		data: Vec<u8>,
 	},
-	/// returned if PlatformConfigurationRegister has been successfully locked
+	/// returned if `PlatformConfigurationRegister` has been successfully locked
 	LockPCR,
-	/// returned if PlatformConfigurationRegisters have been successfully
+	/// returned if `PlatformConfigurationRegisters` have been successfully
 	/// locked
 	LockPCRs,
-	/// returns the runtime configuration of the NitroSecureModule
+	/// returns the runtime configuration of the `NitroSecureModule`
 	DescribeNSM {
 		/// Breaking API changes are denoted by `major_version`
 		version_major: u16,
@@ -234,9 +234,9 @@ pub enum NsmResponse {
 		/// Patch version. These are security and stability updates and do not
 		/// affect API.
 		version_patch: u16,
-		/// `module_id` is an identifier for a singular NitroSecureModule
+		/// `module_id` is an identifier for a singular `NitroSecureModule`
 		module_id: String,
-		/// The maximum number of PCRs exposed by the NitroSecureModule.
+		/// The maximum number of PCRs exposed by the `NitroSecureModule`.
 		max_pcrs: u16,
 		/// The PCRs that are read-only.
 		locked_pcrs: BTreeSet<u16>,
@@ -244,11 +244,11 @@ pub enum NsmResponse {
 		digest: NsmDigest,
 	},
 	/// A response to an Attestation Request containing the CBOR-encoded
-	/// AttestationDoc and the signature generated from the doc by the
-	/// NitroSecureModule
+	/// `AttestationDoc` and the signature generated from the doc by the
+	/// `NitroSecureModule`
 	Attestation {
 		/// A signed COSE structure containing a CBOR-encoded
-		/// AttestationDocument as the payload.
+		/// `AttestationDocument` as the payload.
 		document: Vec<u8>,
 	},
 	/// A response containing a number of bytes of entropy.
@@ -256,7 +256,7 @@ pub enum NsmResponse {
 		/// The random bytes.
 		random: Vec<u8>,
 	},
-	/// An error has occured, and the NitroSecureModule could not successfully
+	/// An error has occured, and the `NitroSecureModule` could not successfully
 	/// complete the operation
 	Error(NsmErrorCode),
 }

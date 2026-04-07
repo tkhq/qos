@@ -461,7 +461,7 @@ mod test {
 				assert!(!document.is_empty());
 			} else {
 				panic!()
-			};
+			}
 
 			assert!(handles.pivot_exists());
 			assert_eq!(

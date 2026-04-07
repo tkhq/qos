@@ -78,7 +78,7 @@ impl fmt::Debug for RestartPolicy {
 		match self {
 			Self::Never => write!(f, "RestartPolicy::Never")?,
 			Self::Always => write!(f, "RestartPolicy::Always")?,
-		};
+		}
 		Ok(())
 	}
 }
@@ -145,6 +145,7 @@ impl Default for BridgeConfig {
 
 impl BridgeConfig {
 	/// Helper to extract port from either variant
+	#[must_use]
 	pub fn port(&self) -> u16 {
 		match self {
 			Self::Server { port, host: _ } | Self::Client { port, host: _ } => {
@@ -468,7 +469,7 @@ impl Manifest {
 		// try old version with json format
 		if let Ok(v0) = serde_json::from_slice::<ManifestV0>(buf) {
 			return Ok(v0.into());
-		};
+		}
 
 		let result = Self::try_from_slice(buf);
 
@@ -639,7 +640,7 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 			expected: qos_hex::encode(&expected_hash),
 			actual: qos_hex::encode(&actual_hash),
 		});
-	};
+	}
 
 	// 2. Generate an Ephemeral Key.
 	let ephemeral_key = P256Pair::generate()?;

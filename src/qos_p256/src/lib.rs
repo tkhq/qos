@@ -260,6 +260,7 @@ impl P256Pair {
 	/// with other crypto abstractions.
 	///
 	/// CAUTION: this is secret material and should be used with care.
+	#[must_use]
 	pub fn encryption_key(&self) -> &p256::SecretKey {
 		&self.p256_encrypt_private.private
 	}

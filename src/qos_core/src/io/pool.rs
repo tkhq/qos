@@ -213,8 +213,9 @@ impl StreamPool {
 	}
 
 	/// Deconstruct the pool into all contained `Stream` objects.
+	#[must_use]
 	pub fn to_streams(self) -> Vec<Stream> {
-		self.handles.into_iter().map(|m| m.into_inner()).collect()
+		self.handles.into_iter().map(tokio::sync::Mutex::into_inner).collect()
 	}
 }
 

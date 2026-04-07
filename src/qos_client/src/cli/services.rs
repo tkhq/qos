@@ -1112,7 +1112,7 @@ pub(crate) fn inject_key<P: AsRef<Path>>(
 		r => {
 			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")))
 		}
-	};
+	}
 
 	Ok(())
 }
@@ -1350,7 +1350,7 @@ fn proxy_re_encrypt_share_programmatic_verifications(
 	if let Err(e) = manifest_envelope.check_approvals() {
 		eprintln!("Manifest envelope did not have valid approvals: {e:?}");
 		return false;
-	};
+	}
 
 	if manifest_envelope.manifest.manifest_set != *manifest_set {
 		eprintln!(
@@ -1451,7 +1451,7 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 		println!("The quorum key has been reconstructed.");
 	} else {
 		println!("The quorum key has *not* been reconstructed.");
-	};
+	}
 
 	Ok(())
 }
@@ -1606,7 +1606,7 @@ pub(crate) fn display<P: AsRef<Path>>(
 			let decoded = GenesisOutput::try_from_slice(&bytes)?;
 			println!("{decoded:#?}");
 		}
-	};
+	}
 	Ok(())
 }
 
@@ -1642,7 +1642,7 @@ pub(crate) fn json_to_borsh<P: AsRef<Path>>(
 				"GenesisOutput cannot be converted from JSON".to_string(),
 			));
 		}
-	};
+	}
 	Ok(())
 }
 
@@ -1877,7 +1877,7 @@ fn find_threshold<P: AsRef<Path>>(dir: P) -> u32 {
 					.is_none_or(|s| s.as_str() != QUORUM_THRESHOLD_FILE)
 			{
 				return None;
-			};
+			}
 
 			let file =
 				File::open(path).expect("failed to open quorum_threshold file");
@@ -1910,7 +1910,7 @@ fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
 			let mut file_name = split_file_name(path);
 			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
-			};
+			}
 
 			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
 				panic!("get_share_set: Could not read public key from {path:?}: {e:?}")
@@ -1935,7 +1935,7 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 			let mut file_name = split_file_name(path);
 			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
-			};
+			}
 
 			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
 				panic!("get_manifest_set: Could not read public key from {path:?}: {e:?}")
@@ -1960,7 +1960,7 @@ fn get_patch_set<P: AsRef<Path>>(dir: P) -> PatchSet {
 			let file_name = split_file_name(path);
 			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
-			};
+			}
 
 			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
 				panic!("get_patch_set: Could not read public key from {path:?}: {e:?}")
@@ -1982,7 +1982,7 @@ fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
 			let mut file_name = split_file_name(path);
 			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
-			};
+			}
 
 			let public = P256Public::from_hex_file(path)
 				.map_err(|e| {
@@ -2014,7 +2014,7 @@ fn find_approvals<P: AsRef<Path>>(
 			// Only look at files with the approval extension
 			if file_name.last().is_none_or(|s| s.as_str() != APPROVAL_EXT) {
 				return None;
-			};
+			}
 
 			let approval: Approval =
 				serde_json::from_slice(&fs::read(path).unwrap_or_else(|e| {

@@ -121,7 +121,7 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 				})
 				.collect()
 		}
-		(true, false) | (false, false) => Err(HexError::ExceedsMaxLength),
+		(true | false, false) => Err(HexError::ExceedsMaxLength),
 		(false, true) => Err(HexError::OddLength),
 	}
 }
@@ -131,11 +131,10 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 pub fn decode_to_buf(raw_s: &str, buf: &mut [u8]) -> Result<(), HexError> {
 	let sanitized_s_bytes = match raw_s.len() {
 		0 => {
-			if !buf.is_empty() {
-				return Err(HexError::StringDoesNotMatchBufferLength);
-			} else {
+			if buf.is_empty() {
 				return Ok(());
 			}
+			return Err(HexError::StringDoesNotMatchBufferLength);
 		}
 		1 => return Err(HexError::LengthOne),
 		_ => {
@@ -393,7 +392,7 @@ mod test {
 
 		let mut buf = vec![0u8; encoded.len() / 2];
 		assert!(decode_to_buf(encoded, &mut buf).is_ok());
-		assert_eq!(buf.to_vec(), decoded);
+		assert_eq!(buf.clone(), decoded);
 	}
 
 	#[test]
@@ -412,7 +411,7 @@ mod test {
 
 		let mut buf = vec![0u8; (address.len() - 2) / 2];
 		assert!(decode_to_buf(address, &mut buf).is_ok());
-		assert_eq!(buf.to_vec(), decoded);
+		assert_eq!(buf.clone(), decoded);
 	}
 
 	#[test]
