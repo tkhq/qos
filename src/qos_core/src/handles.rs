@@ -36,15 +36,18 @@ impl QuorumKeyHandle {
 }
 
 /// Handle for accessing the enclave ephemeral key.
-#[derive(Debug, Clone)]
-pub struct EphemeralKeyHandle {
-	ephemeral_key_path: String,
+#[derive(Debug, Clone, Copy)]
+pub struct EphemeralKeyHandle<S = String> {
+	ephemeral_key_path: S,
 }
 
-impl EphemeralKeyHandle {
+impl<P> EphemeralKeyHandle<P>
+where
+	P: AsRef<Path>,
+{
 	/// Create a new instance of [`Self`].
 	#[must_use]
-	pub fn new(ephemeral_key_path: String) -> Self {
+	pub fn new(ephemeral_key_path: P) -> Self {
 		Self { ephemeral_key_path }
 	}
 

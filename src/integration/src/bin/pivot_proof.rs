@@ -1,5 +1,4 @@
 use core::panic;
-use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use integration::{AdditionProof, AdditionProofPayload, PivotProofMsg};
@@ -8,15 +7,15 @@ use qos_core::{
 	io::{SocketAddress, StreamPool},
 	server::{RequestProcessor, SocketServer},
 };
-use tokio::sync::RwLock;
 
+#[derive(Clone)]
 struct Processor {
-	ephemeral_key_handle: EphemeralKeyHandle,
+	ephemeral_key_handle: EphemeralKeyHandle<&'static str>,
 }
 
 impl Processor {
-	pub fn new(ephemeral_key_handle: EphemeralKeyHandle) -> Arc<RwLock<Self>> {
-		Arc::new(RwLock::new(Self { ephemeral_key_handle }))
+	pub fn new(ephemeral_key_handle: EphemeralKeyHandle<&'static str>) -> Self {
+		Self { ephemeral_key_handle }
 	}
 }
 
@@ -66,8 +65,8 @@ async fn main() {
 
 	let _server = SocketServer::listen_all(
 		app_pool,
-		&Processor::new(EphemeralKeyHandle::new(
-			"./mock/ephemeral_seed.secret.keep".to_string(),
+		Processor::new(EphemeralKeyHandle::new(
+			"./mock/ephemeral_seed.secret.keep",
 		)),
 		1,
 	)

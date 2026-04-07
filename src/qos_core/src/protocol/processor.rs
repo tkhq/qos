@@ -1,17 +1,15 @@
 //! Quorum protocol processor
 
-use std::sync::Arc;
-
 use borsh::BorshDeserialize;
-use tokio::sync::RwLock;
 
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, SharedProtocolState,
 	MAX_ENCODED_MSG_LEN,
 };
-use crate::server::{RequestProcessor, SharedProcessor};
+use crate::server::RequestProcessor;
 
 /// Enclave state machine that executes when given a `ProtocolMsg`.
+#[derive(Clone)]
 pub struct ProtocolProcessor {
 	state: SharedProtocolState,
 }
@@ -19,8 +17,8 @@ pub struct ProtocolProcessor {
 impl ProtocolProcessor {
 	/// Create a new `Self` inside `Arc` and `Mutex`.
 	#[must_use]
-	pub fn new(state: SharedProtocolState) -> SharedProcessor<Self> {
-		Arc::new(RwLock::new(Self { state }))
+	pub fn new(state: SharedProtocolState) -> Self {
+		Self { state }
 	}
 }
 

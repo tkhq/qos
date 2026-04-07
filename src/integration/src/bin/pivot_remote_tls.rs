@@ -9,10 +9,7 @@ use qos_core::{
 };
 use qos_net::proxy_stream::ProxyStream;
 use rustls::RootCertStore;
-use tokio::{
-	io::{AsyncReadExt, AsyncWriteExt},
-	sync::RwLock,
-};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_rustls::TlsConnector;
 
 #[derive(Clone)]
@@ -21,8 +18,8 @@ struct Processor {
 }
 
 impl Processor {
-	fn new(net_pool: SharedStreamPool) -> Arc<RwLock<Self>> {
-		Arc::new(RwLock::new(Processor { net_pool }))
+	fn new(net_pool: SharedStreamPool) -> Self {
+		Self { net_pool }
 	}
 }
 
@@ -113,13 +110,9 @@ async fn main() {
 	let proxy_pool = StreamPool::new(SocketAddress::new_unix(proxy_path), 1)
 		.expect("unable to create async stream pool")
 		.shared();
-
-	let _server = SocketServer::listen_all(
-		enclave_pool,
-		&Processor::new(proxy_pool),
-		128,
-	)
-	.unwrap();
+	let _server =
+		SocketServer::listen_all(enclave_pool, Processor::new(proxy_pool), 128)
+			.unwrap();
 
 	match tokio::signal::ctrl_c().await {
 		Ok(()) => eprintln!("pivot handling ctrl+c the tokio way"),
