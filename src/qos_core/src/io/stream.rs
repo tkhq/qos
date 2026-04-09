@@ -170,8 +170,20 @@ async fn send<S: AsyncWriteExt + Unpin>(
 
 	// send the header
 	stream.write_all(&len_buf).await?;
+
 	// Send the actual contents of the buffer
-	stream.write_all(buf).await?;
+	// NOTE: due to this kernel bug: https://github.com/cloud-hypervisor/cloud-hypervisor/issues/7672
+	// we need to write in chunks of < 32kiB each
+	const MAX_WRITE_SIZE: usize = 31234;
+	let mut total = 0;
+
+	while total < length {
+		total += stream
+			.write(
+				&buf[total..std::cmp::min(buf.len(), total + MAX_WRITE_SIZE)],
+			)
+			.await?;
+	}
 
 	Ok(())
 }
