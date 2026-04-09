@@ -1,5 +1,10 @@
 #![doc = include_str!("../SPEC.md")]
 
+/// Crate version, sourced from `Cargo.toml`.
+pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Git commit SHA at build time, set by `build.rs`.
+pub const GIT_SHA: &str = env!("GIT_SHA");
+
 use std::path::Path;
 
 use encrypt::AesGcm256Secret;
@@ -251,6 +256,12 @@ impl P256Pair {
 	pub fn signing_key(&self) -> &p256::ecdsa::SigningKey {
 		&self.sign_private.private
 	}
+
+	/// Get a reference to the underlying encryption key. Useful for interoperation
+	/// with other crypto abstractions.
+	pub fn encryption_key(&self) -> &p256::SecretKey {
+		&self.p256_encrypt_private.private
+	}
 }
 
 /// P256 public key for signing and encryption. Internally this uses
@@ -360,6 +371,12 @@ mod test {
 	use qos_test_primitives::PathWrapper;
 
 	use super::*;
+
+	#[test]
+	fn git_sha_is_valid() {
+		assert!((7..=8).contains(&GIT_SHA.len()));
+		assert!(GIT_SHA.chars().all(|c| c.is_ascii_hexdigit()));
+	}
 
 	#[test]
 	fn signatures_are_deterministic() {

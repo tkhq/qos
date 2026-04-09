@@ -7,6 +7,11 @@
 //! This crate should have as minimal dependencies as possible to decrease
 //! supply chain attack vectors and audit burden
 
+/// Crate version, sourced from `Cargo.toml`.
+pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Git commit SHA at build time, set by `build.rs`.
+pub const GIT_SHA: &str = env!("GIT_SHA");
+
 // "vm" is necessary for production and we don't want any mock data slipping in.
 #[cfg(all(feature = "vm", feature = "mock"))]
 compile_error!(
@@ -59,3 +64,14 @@ pub const SEC_APP_SOCK: &str = "./local-enclave/sec_app.sock";
 pub const SEC_APP_SOCK: &str = "/sec_app.sock";
 /// Default socket connect timeout in milliseconds
 pub const DEFAULT_SOCKET_TIMEOUT_MS: &str = "5000";
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn git_sha_is_valid() {
+		assert!((7..=8).contains(&GIT_SHA.len()));
+		assert!(GIT_SHA.chars().all(|c| c.is_ascii_hexdigit()));
+	}
+}
