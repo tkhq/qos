@@ -34,5 +34,7 @@ fetch/openssl/
 fetch/pcsc/
 fetch/rust/
 
+docs/plans/
+
 !.github
 !.lfsconfig
