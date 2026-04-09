@@ -19,10 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## `qos_p256` - [0.6.1](https://github.com/tkhq/qos/compare/qos_p256-v0.6.0...qos_p256-v0.6.1) - 2026-04-09
 
-### Other
-- Merge pull-request #662
-- caution when using secret material
-- expose encryption secret
+### Added
+- Expose `encryption_secret` accessor on `P256Pair` ([#662](https://github.com/tkhq/qos/pull/662))
 
 ## `qos_net` - [0.6.0](https://github.com/tkhq/qos/compare/qos_net-v0.5.0...qos_net-v0.6.0) - 2026-04-02
 
