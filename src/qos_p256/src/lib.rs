@@ -203,12 +203,14 @@ impl P256Pair {
 	}
 
 	/// Get the raw master seed used to create this pair.
+	/// CAUTION: this is secret material and should be used with care.
 	#[must_use]
 	pub fn to_master_seed(&self) -> &[u8; MASTER_SEED_LEN] {
 		&self.master_seed
 	}
 
 	/// Convert to hex bytes.
+	/// CAUTION: this is secret material and should be used with care.
 	#[must_use]
 	pub fn to_master_seed_hex(&self) -> Vec<u8> {
 		qos_hex::encode_to_vec(&self.master_seed)
@@ -247,6 +249,8 @@ impl P256Pair {
 
 	/// Get a reference to the underlying signing key. Useful for interoperation
 	/// with other crypto abstractions.
+	///
+	/// CAUTION: this is secret material and should be used with care.
 	#[must_use]
 	pub fn signing_key(&self) -> &p256::ecdsa::SigningKey {
 		&self.sign_private.private
@@ -254,6 +258,8 @@ impl P256Pair {
 
 	/// Get a reference to the underlying encryption key. Useful for interoperation
 	/// with other crypto abstractions.
+	///
+	/// CAUTION: this is secret material and should be used with care.
 	pub fn encryption_key(&self) -> &p256::SecretKey {
 		&self.p256_encrypt_private.private
 	}
