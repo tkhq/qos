@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.6.1](https://github.com/tkhq/qos/compare/qos_client-v0.5.0...qos_client-v0.6.1) - 2026-04-09
+
+### Other
+- publish qos_test_primitives
+
+## `qos_core` - [0.6.1](https://github.com/tkhq/qos/compare/qos_core-v0.6.0...qos_core-v0.6.1) - 2026-04-09
+
+### Other
+- workaround kernel bug by writing < 32KiB chunks to vsock
+
+## `qos_p256` - [0.6.1](https://github.com/tkhq/qos/compare/qos_p256-v0.6.0...qos_p256-v0.6.1) - 2026-04-09
+
+### Other
+- Merge pull-request #662
+- caution when using secret material
+- expose encryption secret
+
 ## `qos_net` - [0.6.0](https://github.com/tkhq/qos/compare/qos_net-v0.5.0...qos_net-v0.6.0) - 2026-04-02
 
 ### Fixed
