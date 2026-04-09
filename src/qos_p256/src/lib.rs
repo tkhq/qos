@@ -256,6 +256,12 @@ impl P256Pair {
 	pub fn signing_key(&self) -> &p256::ecdsa::SigningKey {
 		&self.sign_private.private
 	}
+
+	/// Get a reference to the underlying encryption key. Useful for interoperation
+	/// with other crypto abstractions.
+	pub fn encryption_key(&self) -> &p256::SecretKey {
+		&self.p256_encrypt_private.private
+	}
 }
 
 /// P256 public key for signing and encryption. Internally this uses
