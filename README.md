@@ -83,6 +83,34 @@ All tests must pass.
 
 PRs also need to pass the `build-linux-only` job (part of the `pr` workflow). There are 3 crates excluded from the Rust workspace: `qos_system`, `qos_aws`, and `init`. These crates are excluded because they only build on Linux. If you are not working directly with these crates they generally only need to be updated if the dependencies for `qos_core` change. The linux only crates each have their own lockfile and that will need to be up to date for deterministic builds to work. To update the locks files you will need a linux build environment. Once in a linux build environment you can run `make build-linux-only`, which updates lock files if necessary; any updated lock files should then be committed.
 
+## Releases
+
+This project uses [`release-plz`](https://github.com/release-plz/release-plz). Install it with:
+
+```sh
+cargo install --locked release-plz
+```
+
+Once you have it installed you can try a release locally, to see what the release PR would be:
+
+```
+release-plz update
+```
+
+### Release flow
+
+When PRs are merged to main, release-plz automatically opens a release PR if it doesn't exist yet, or updates the existing one.
+
+The release PR is opened by the github-actions bot and tagged `release`. A **human** is expected to double check this PR and manually push any fixes to the release PR if necessary (usually: cosmetic changes to the CHANGELOGs).
+
+Once the release PR is merged, the release-plz `release` workflow is triggered and all crates are published automatically.
+
+**DO NOT** bump crates manually in standard PRs, let release-plz take care of this for you and edit the already-open release PR!
+
+### Manually re-triggering a release
+
+If something goes wrong during a release and you want to retry, you can open a PR tagged `release` and with a branch named `release-plz-****` to kick off the release workflow again (the `release` tag is necessary to trigger the workflow, and the branch name prefix is how release-plz determines that the PR is a release PR -- see [this](https://release-plz.dev/docs/config#the-release_always-field))
+
 ## Platforms
 
 | Platform                   | Target  | Status   | Verified boot Method  |
