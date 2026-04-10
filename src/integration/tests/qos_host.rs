@@ -62,6 +62,6 @@ async fn connects_and_gets_info() {
 	assert!(r.is_ok()); // expect 200 here
 	assert_eq!(
 		r.unwrap().into_string().unwrap(),
-		"{\"phase\":\"WaitingForBootInstruction\",\"manifestEnvelope\":null}"
+		"{\"phase\":\"WaitingForBootInstruction\",\"manifestEnvelope\":null,\"ephemeralKey\":null}"
 	);
 }
