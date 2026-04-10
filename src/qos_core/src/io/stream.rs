@@ -1,6 +1,6 @@
 //! Abstractions to handle connection based socket streams.
 
-use std::{io::ErrorKind, pin::Pin};
+use std::{fmt::Write, io::ErrorKind, pin::Pin};
 
 use tokio::{
 	io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
@@ -155,6 +155,14 @@ impl Stream {
 	}
 }
 
+pub fn to_hex_string(bytes: &[u8]) -> String {
+	let mut s = String::with_capacity(bytes.len() * 2);
+	for &b in bytes {
+		write!(&mut s, "{b:02X}").unwrap();
+	}
+	s
+}
+
 async fn send<S: AsyncWriteExt + Unpin>(
 	stream: &mut S,
 	buf: &[u8],
@@ -167,6 +175,10 @@ async fn send<S: AsyncWriteExt + Unpin>(
 
 	// First, send the length of the buffer
 	let len_buf: [u8; size_of::<u64>()] = (length as u64).to_le_bytes();
+
+	eprintln!("Sending ProtocolMsg bytes to enclave of len {length}");
+	eprintln!("START BYTES: {}", to_hex_string(&buf[0..20]));
+	eprintln!("END BYTES: {}", to_hex_string(&buf[buf.len() - 20..]));
 
 	// send the header
 	stream.write_all(&len_buf).await?;
@@ -210,11 +222,32 @@ async fn recv<S: AsyncReadExt + Unpin>(
 	}
 
 	// Read the buffer
-	let mut buf = vec![0; length];
-	stream.read_exact(&mut buf).await.map_err(|e| match e.kind() {
-		ErrorKind::UnexpectedEof => IOError::RecvConnectionClosed,
-		_ => IOError::StdIoError(e),
-	})?;
+	let mut buf: Vec<u8> = Vec::new();
+	// stream.read_exact(&mut buf).await.map_err(|e| match e.kind() {
+	// 	ErrorKind::UnexpectedEof => IOError::RecvConnectionClosed,
+	// 	_ => IOError::StdIoError(e),
+	// })?;
+
+	const CHUNK_SIZE: usize = 4096 * 4;
+
+	loop {
+		let mut tmp_buf = [0u8; CHUNK_SIZE];
+		let read = stream.read(&mut tmp_buf).await?;
+
+		buf.extend_from_slice(&tmp_buf[0..read]);
+
+		if buf.len() == length {
+			break;
+		}
+
+		if read == 0 {
+			panic!("empty read on exact recv, expected length: {} received length: {}", length, buf.len());
+		}
+	}
+
+	eprintln!("Received ProtocolMsg bytes to enclave of len {length}");
+	eprintln!("START BYTES: {}", to_hex_string(&buf[0..20]));
+	eprintln!("END BYTES: {}", to_hex_string(&buf[buf.len() - 20..]));
 
 	Ok(buf)
 }
