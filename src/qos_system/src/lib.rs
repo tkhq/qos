@@ -62,7 +62,7 @@ pub fn mount(
 	let fstype_cs = CString::new(fstype).unwrap();
 	let data_cs = CString::new(data).unwrap();
 	let target_cs = CString::new(target).unwrap();
-	if unsafe {
+	let mount_result = unsafe {
 		mount(
 			src_cs.as_ptr(),
 			target_cs.as_ptr(),
@@ -70,8 +70,9 @@ pub fn mount(
 			flags,
 			data_cs.as_ptr() as *const c_void,
 		)
-	} != 0
-	{
+	};
+
+	if mount_result != 0 {
 		Err(SystemError { message: format!("Failed to mount: {}", target) })
 	} else {
 		Ok(())
@@ -87,7 +88,7 @@ pub fn freopen(
 	use libc::{fdopen, freopen};
 	let filename_cs = CString::new(filename).unwrap();
 	let mode_cs = CString::new(mode).unwrap();
-	if unsafe {
+	let freopen_result = unsafe {
 		freopen(
 			filename_cs.as_ptr(),
 			mode_cs.as_ptr(),
@@ -95,9 +96,8 @@ pub fn freopen(
 			// is this true for all configurations and platforms?
 			fdopen(file, mode_cs.as_ptr() as *const i8),
 		)
-	}
-	.is_null()
-	{
+	};
+	if freopen_result.is_null() {
 		Err(SystemError { message: format!("Failed to freopen: {}", filename) })
 	} else {
 		Ok(())
@@ -109,7 +109,9 @@ pub fn insmod(path: &str) -> Result<(), SystemError> {
 	use libc::{syscall, SYS_finit_module};
 	let file = File::open(path).unwrap();
 	let fd = file.as_raw_fd();
-	if unsafe { syscall(SYS_finit_module, fd, &[0u8; 1], 0) } < 0 {
+	let finit_module_result =
+		unsafe { syscall(SYS_finit_module, fd, &[0u8; 1], 0) };
+	if finit_module_result < 0 {
 		Err(SystemError {
 			message: format!("Failed to insert kernel module: {}", path),
 		})
@@ -126,7 +128,7 @@ pub fn socket_connect(
 ) -> Result<c_int, SystemError> {
 	use libc::{connect, sockaddr, sockaddr_vm, socket, SOCK_STREAM};
 	let fd = unsafe { socket(family, SOCK_STREAM, 0) };
-	if unsafe {
+	let connect_result = unsafe {
 		let mut sa: sockaddr_vm = zeroed();
 		sa.svm_family = family as _;
 		sa.svm_port = port;
@@ -136,8 +138,9 @@ pub fn socket_connect(
 			&sa as *const _ as *mut sockaddr,
 			size_of::<sockaddr_vm>() as _,
 		)
-	} < 0
-	{
+	};
+
+	if connect_result < 0 {
 		Err(SystemError {
 			message: format!("Failed to connect to socket: {}", family),
 		})
@@ -182,10 +185,13 @@ pub fn get_local_cid() -> Result<u32, SystemError> {
 			})
 		}
 	};
+
 	let mut cid = 0;
-	if unsafe { ioctl(f.as_raw_fd(), IOCTL_VM_SOCKETS_GET_LOCAL_CID, &mut cid) }
-		== -1
-	{
+	let get_local_cid_result = unsafe {
+		ioctl(f.as_raw_fd(), IOCTL_VM_SOCKETS_GET_LOCAL_CID, &mut cid)
+	};
+
+	if get_local_cid_result == -1 {
 		return Err(SystemError {
 			message: "Failed to fetch local CID".to_string(),
 		});
