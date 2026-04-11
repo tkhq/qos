@@ -76,7 +76,7 @@ hmac = { version = "0.12", default-features = false }
 httparse = { version = "1.9.4", default-features = false }
 lazy_static = "1.4"
 libc = "=0.2.174"
-nix = { version = "0.30.1", features = ["socket"], default-features = false }
+nix = { version = "0.31.0", features = ["socket"], default-features = false }
 p256 = { version = "0.13.2", default-features = false }
 p384 = { version = "0.13", features = ["ecdsa", "std"], default-features = false }
 rand = "0.9"
