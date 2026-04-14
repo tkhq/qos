@@ -1911,6 +1911,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_clock"
+version = "0.6.1"
+dependencies = [
+ "qos_system",
+]
+
+[[package]]
 name = "qos_core"
 version = "0.6.1"
 dependencies = [
@@ -2050,6 +2057,13 @@ dependencies = [
  "arbitrary",
  "libfuzzer-sys",
  "qos_p256",
+]
+
+[[package]]
+name = "qos_system"
+version = "0.1.0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

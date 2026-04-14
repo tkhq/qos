@@ -8,6 +8,10 @@ use std::{
 
 use libc::{c_int, c_ulong, c_void};
 
+const HWRNG_CURRENT_PATH: &str = "/sys/class/misc/hw_random/rng_current";
+const CLOCKSOURCE_CURRENT_PATH: &str =
+	"/sys/devices/system/clocksource/clocksource0/current_clocksource";
+
 #[derive(Debug)]
 pub struct SystemError {
 	pub message: String,
@@ -166,6 +170,44 @@ pub fn check_hwrng(rng_expected: &str) -> Result<(), SystemError> {
 		});
 	};
 	Ok(())
+}
+
+fn read_trimmed(path: &str) -> Result<String, SystemError> {
+	use std::fs::read_to_string;
+
+	read_to_string(path)
+		.map(|value| value.trim().to_string())
+		.map_err(|_| SystemError { message: format!("Failed to read {path}") })
+}
+
+/// Verify the expected clock source is active.
+pub fn check_clocksource(clock_expected: &str) -> Result<(), SystemError> {
+	let clock_current = read_trimmed(CLOCKSOURCE_CURRENT_PATH)?;
+	if clock_expected != clock_current {
+		return Err(SystemError {
+			message: format!(
+				"Clock source was {} instead of {}",
+				clock_current, clock_expected
+			),
+		});
+	}
+
+	Ok(())
+}
+
+/// Detect whether a PTP hardware clock device is exposed in the enclave.
+///
+/// AWS documents both `/dev/ptp<index>` and the stable `/dev/ptp_ena`
+/// symlink for supported instances:
+/// https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configure-ec2-ntp.html
+pub fn detect_ptp_clock_device() -> Option<&'static str> {
+	for path in ["/dev/ptp_ena", "/dev/ptp0"] {
+		if File::open(path).is_ok() {
+			return Some(path);
+		}
+	}
+
+	None
 }
 
 #[cfg(target_env = "musl")]
