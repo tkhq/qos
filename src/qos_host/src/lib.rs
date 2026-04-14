@@ -60,6 +60,8 @@ pub struct EnclaveInfo {
 	pub phase: ProtocolPhase,
 	/// Manifest envelope in the enclave.
 	pub manifest_envelope: Option<ManifestEnvelope>,
+	/// Ephemeral public key from the live attestation doc.
+	pub ephemeral_key: Option<String>,
 }
 
 /// Vitals we just use for logging right now to avoid logging the entire
@@ -75,6 +77,8 @@ pub struct EnclaveVitalStats {
 	#[serde(with = "qos_hex::serde")]
 	pcr0: Vec<u8>,
 	pivot_args: Vec<String>,
+	/// Ephemeral public key from the live attestation doc.
+	pub ephemeral_key: Option<String>,
 }
 
 /// Body of a 4xx or 5xx response

@@ -32,6 +32,7 @@ use qos_core::{
 		ProtocolPhase,
 	},
 };
+use qos_nsm::types::NsmResponse;
 
 use crate::{
 	EnclaveInfo, EnclaveVitalStats, Error, ENCLAVE_HEALTH, ENCLAVE_INFO,
@@ -192,7 +193,8 @@ impl HostServer {
 			get_manifest_envelope(&state.enclave_client).await.map_err(
 				|e| Error(format!("unable to get manifest envelope: {e:?}")),
 			)?;
-
+		let ephemeral_key =
+			get_eph_key_from_attestation_doc(&state.enclave_client).await;
 		let vitals_log = if let Some(m) = manifest_envelope.as_ref() {
 			serde_json::to_string(&EnclaveVitalStats {
 				phase,
@@ -201,14 +203,20 @@ impl HostServer {
 				pivot_hash: m.manifest.pivot.hash,
 				pcr0: m.manifest.enclave.pcr0.clone(),
 				pivot_args: m.manifest.pivot.args.clone(),
+				ephemeral_key: ephemeral_key.clone(),
 			})
 			.expect("always valid json. qed.")
 		} else {
-			serde_json::to_string(&phase).expect("always valid json. qed.")
+			let info = serde_json::json!({
+				"phase": phase,
+				"ephemeralKey": ephemeral_key.clone(),
+			});
+			serde_json::to_string(&info).expect("always valid json. qed.")
 		};
+
 		println!("{vitals_log}");
 
-		let info = EnclaveInfo { phase, manifest_envelope };
+		let info = EnclaveInfo { phase, manifest_envelope, ephemeral_key };
 
 		Ok(Json(info))
 	}
@@ -244,6 +252,30 @@ impl HostServer {
 			}
 		}
 	}
+}
+
+async fn get_eph_key_from_attestation_doc(
+	enclave_client: &SocketClient,
+) -> Option<String> {
+	let req = borsh::to_vec(&ProtocolMsg::LiveAttestationDocRequest).ok()?;
+	let resp_bytes = enclave_client.call(&req).await.ok()?;
+	let resp = ProtocolMsg::try_from_slice(&resp_bytes).ok()?;
+
+	let nsm_response = match resp {
+		ProtocolMsg::LiveAttestationDocResponse { nsm_response, .. } => {
+			nsm_response
+		}
+		_ => return None,
+	};
+
+	let document = match nsm_response {
+		NsmResponse::Attestation { document } => document,
+		_ => return None,
+	};
+
+	let attestation_doc =
+		qos_nsm::nitro::unsafe_attestation_doc_from_der(&document).ok()?;
+	attestation_doc.public_key.as_ref().map(|pk| qos_hex::encode(pk))
 }
 
 // try to get the manifest denvelope from the enclave, used for restart handling of qos_host
