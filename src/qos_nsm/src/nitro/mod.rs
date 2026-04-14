@@ -313,7 +313,7 @@ impl SigningPublicKey for P384PubKey {
 		let verifier = VerifyingKey::from(self.0);
 		verifier
 			.verify_prehash(digest, &signature_wrapped)
-			.map(|_| true)
+			.map(|()| true)
 			.map_err(|e| CoseError::SignatureError(Box::new(e)))
 	}
 }
@@ -377,7 +377,7 @@ mod test {
 			let verifier = VerifyingKey::from(self.0.public_key());
 			verifier
 				.verify_prehash(digest, &signature_wrapped)
-				.map(|_| true)
+				.map(|()| true)
 				.map_err(|e| CoseError::SignatureError(Box::new(e)))
 		}
 	}
@@ -474,7 +474,7 @@ mod test {
 		match err_result {
 			Err(AttestError::InvalidCertChain(webpki::Error::CertExpired)) => {}
 			_ => panic!("{err_result:?}"),
-		};
+		}
 	}
 
 	#[test]
@@ -492,7 +492,7 @@ mod test {
 				webpki::Error::CertNotValidYet,
 			)) => {}
 			_ => panic!("{err_result:?}"),
-		};
+		}
 	}
 
 	#[test]
@@ -530,7 +530,7 @@ mod test {
 					webpki::Error::UnknownIssuer,
 				)) => {}
 				_ => panic!("{err_result:?}"),
-			};
+			}
 		}
 
 		{
@@ -558,7 +558,7 @@ mod test {
 					webpki::Error::UnknownIssuer,
 				)) => {}
 				_ => panic!("{err_result:?}"),
-			};
+			}
 		}
 
 		{
@@ -583,7 +583,7 @@ mod test {
 			match err_result {
 				Err(AttestError::InvalidCOSESign1Signature) => {}
 				_ => panic!("{err_result:?}"),
-			};
+			}
 		}
 	}
 
@@ -621,7 +621,7 @@ mod test {
 				webpki::Error::UnknownIssuer,
 			)) => {}
 			_ => panic!("{err_result:?}"),
-		};
+		}
 	}
 
 	#[test]
@@ -685,10 +685,7 @@ mod test {
 		)
 		.unwrap_err();
 
-		match err {
-			AttestError::DifferentUserData { .. } => (),
-			_ => panic!(),
-		}
+		assert!(matches!(err, AttestError::DifferentUserData { .. }));
 	}
 
 	#[test]
@@ -710,10 +707,7 @@ mod test {
 		)
 		.unwrap_err();
 
-		match err {
-			AttestError::UnexpectedAttestationDocNonce => (),
-			_ => panic!(),
-		}
+		assert!(matches!(err, AttestError::UnexpectedAttestationDocNonce));
 	}
 
 	#[test]
@@ -732,10 +726,7 @@ mod test {
 		)
 		.unwrap_err();
 
-		match err {
-			AttestError::DifferentPcr0 { .. } => (),
-			_ => panic!(),
-		}
+		assert!(matches!(err, AttestError::DifferentPcr0 { .. }));
 	}
 
 	#[test]
@@ -754,10 +745,7 @@ mod test {
 		)
 		.unwrap_err();
 
-		match err {
-			AttestError::DifferentPcr1 { .. } => (),
-			_ => panic!(),
-		}
+		assert!(matches!(err, AttestError::DifferentPcr1 { .. }));
 	}
 
 	#[test]
@@ -776,10 +764,7 @@ mod test {
 		)
 		.unwrap_err();
 
-		match err {
-			AttestError::DifferentPcr2 { .. } => (),
-			_ => panic!(),
-		}
+		assert!(matches!(err, AttestError::DifferentPcr2 { .. }));
 	}
 
 	#[test]
@@ -798,10 +783,7 @@ mod test {
 		)
 		.unwrap_err();
 
-		match err {
-			AttestError::DifferentPcr3 { .. } => (),
-			_ => panic!(),
-		}
+		assert!(matches!(err, AttestError::DifferentPcr3 { .. }));
 	}
 
 	// #[test]

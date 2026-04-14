@@ -10,7 +10,7 @@ use crate::{error::QosNetError, proxy_msg::ProxyMsg};
 
 /// Struct representing a remote connection
 /// This is going to be used by enclaves, on the other side of a socket
-/// and plugged into the tokio-rustls via the AsyncWrite and AsyncRead traits
+/// and plugged into the tokio-rustls via the `AsyncWrite` and `AsyncRead` traits
 pub struct ProxyStream<'pool> {
 	/// Stream we hold for this connection
 	stream: PoolGuard<'pool>,
@@ -26,9 +26,9 @@ impl<'pool> ProxyStream<'pool> {
 	/// # Arguments
 	///
 	/// * `stream` - the `Stream` picked from a `StreamPool` behind a `MutexGuard` (e.g. from `pool.get().await`)
-	/// * `hostname` - the hostname to connect to (the remote qos_net proxy will
+	/// * `hostname` - the hostname to connect to (the remote `qos_net` proxy will
 	///   resolve DNS)
-	/// * `port` - the port the remote qos_net proxy should connect to
+	/// * `port` - the port the remote `qos_net` proxy should connect to
 	///   (typically: 80 or 443 for http/https)
 	/// * `dns_resolvers` - array of resolvers to use to resolve `hostname`
 	/// * `dns_port` - DNS port to use while resolving DNS (typically: 53 or
@@ -63,12 +63,12 @@ impl<'pool> ProxyStream<'pool> {
 		}
 	}
 
-	/// Create a new ProxyStream by targeting an IP address directly.
+	/// Create a new `ProxyStream` by targeting an IP address directly.
 	///
 	/// # Arguments
 	/// * `stream` - the `Stream` picked from a `StreamPool` behind a `MutexGuard` (e.g. from `pool.get().await`)
-	/// * `ip` - the IP the remote qos_net proxy should connect to
-	/// * `port` - the port the remote qos_net proxy should connect to
+	/// * `ip` - the IP the remote `qos_net` proxy should connect to
+	/// * `port` - the port the remote `qos_net` proxy should connect to
 	///   (typically: 80 or 443 for http/https)
 	pub async fn connect_by_ip(
 		mut stream: PoolGuard<'pool>,
@@ -192,7 +192,7 @@ mod test {
 			Err(e) => {
 				// Only EOF errors are expected. This means the connection was
 				// closed by the remote server https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
-				assert_eq!(e.kind(), ErrorKind::UnexpectedEof)
+				assert_eq!(e.kind(), ErrorKind::UnexpectedEof);
 			}
 		}
 

@@ -33,7 +33,7 @@ impl Drop for ChildWrapper {
 			use nix::{sys::signal::Signal::SIGINT, unistd::Pid};
 			let pid = Pid::from_raw(self.0.id() as i32);
 			match nix::sys::signal::kill(pid, SIGINT) {
-				Ok(_) => {}
+				Ok(()) => {}
 				Err(err) => eprintln!("error sending signal to child: {err}"),
 			}
 
@@ -63,13 +63,13 @@ impl<'a> From<&'a str> for PathWrapper<'a> {
 	}
 }
 
-impl<'a> From<String> for PathWrapper<'a> {
+impl From<String> for PathWrapper<'_> {
 	fn from(path: String) -> Self {
 		Self(Internal::String(path))
 	}
 }
 
-impl<'a> Drop for PathWrapper<'a> {
+impl Drop for PathWrapper<'_> {
 	fn drop(&mut self) {
 		let path = match &self.0 {
 			Internal::String(i) => i,
@@ -83,7 +83,7 @@ impl<'a> Drop for PathWrapper<'a> {
 	}
 }
 
-impl<'a> Deref for PathWrapper<'a> {
+impl Deref for PathWrapper<'_> {
 	type Target = str;
 
 	fn deref(&self) -> &Self::Target {

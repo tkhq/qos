@@ -76,11 +76,10 @@ impl RequestProcessor for Processor {
 					Err(e) => {
 						// Only EOF errors are expected. This means the
 						// connection was closed by the remote server https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
-						if e.kind() != ErrorKind::UnexpectedEof {
-							panic!(
-								"unexpected error trying to read_to_end: {e:?}"
-							);
-						}
+						assert!(
+							(e.kind() == ErrorKind::UnexpectedEof),
+							"unexpected error trying to read_to_end: {e:?}"
+						);
 					}
 				}
 
@@ -123,7 +122,7 @@ async fn main() {
 	.unwrap();
 
 	match tokio::signal::ctrl_c().await {
-		Ok(_) => eprintln!("pivot handling ctrl+c the tokio way"),
+		Ok(()) => eprintln!("pivot handling ctrl+c the tokio way"),
 
 		Err(err) => panic!("{err}"),
 	}

@@ -489,7 +489,7 @@ mod test_asymmetric {
 			envelope.nonce[0] = 1;
 		} else {
 			envelope.nonce[0] = 0;
-		};
+		}
 		let tampered_envelope = borsh::to_vec(&envelope).unwrap();
 
 		assert_eq!(
@@ -515,7 +515,7 @@ mod test_asymmetric {
 			envelope.ephemeral_sender_public[0] = 1;
 		} else {
 			envelope.ephemeral_sender_public[0] = 0;
-		};
+		}
 		let tampered_envelope = borsh::to_vec(&envelope).unwrap();
 
 		assert_eq!(
@@ -659,7 +659,7 @@ mod test_symmetric {
 			envelope.encrypted_message[0] -= 1;
 		} else {
 			envelope.encrypted_message[0] += 1;
-		};
+		}
 		let serialized_envelope = borsh::to_vec(&envelope).unwrap();
 
 		let err = key.decrypt(&serialized_envelope).unwrap_err();

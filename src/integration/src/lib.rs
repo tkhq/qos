@@ -19,17 +19,17 @@ pub const PIVOT_OK3_SUCCESS_FILE: &str = "./pivot_ok3_works";
 pub const PIVOT_POOL_SIZE_SUCCESS_FILE: &str = "./pivot_pool_size_works";
 /// Path to the file `pivot_tcp` writes on success for tests.
 pub const PIVOT_TCP_SUCCESS_FILE: &str = "./pivot_tcp_works";
-/// Path to pivot_ok bin for tests.
+/// Path to `pivot_ok` bin for tests.
 pub const PIVOT_OK_PATH: &str = "../target/debug/pivot_ok";
-/// Path to pivot_ok2 bin for tests.
+/// Path to `pivot_ok2` bin for tests.
 pub const PIVOT_OK2_PATH: &str = "../target/debug/pivot_ok2";
-/// Path to pivot_ok3 bin for tests.
+/// Path to `pivot_ok3` bin for tests.
 pub const PIVOT_OK3_PATH: &str = "../target/debug/pivot_ok3";
-/// Path to pivot_tcp bin for tests.
+/// Path to `pivot_tcp` bin for tests.
 pub const PIVOT_TCP_PATH: &str = "../target/debug/pivot_tcp";
 /// Path to pivot loop bin for tests.
 pub const PIVOT_LOOP_PATH: &str = "../target/debug/pivot_loop";
-/// Path to pivot_abort bin for tests.
+/// Path to `pivot_abort` bin for tests.
 pub const PIVOT_ABORT_PATH: &str = "../target/debug/pivot_abort";
 /// Path to pivot panic for tests.
 pub const PIVOT_PANIC_PATH: &str = "../target/debug/pivot_panic";
@@ -130,7 +130,7 @@ pub struct AdditionProofPayload {
 /// Wait for a given usock file to exist and be connectible with a timeout of 5s.
 ///
 /// # Panics
-/// Panics if fs::exists errors.
+/// Panics if `fs::exists` errors.
 pub async fn wait_for_usock(path: &str) {
 	let addr = SocketAddress::new_unix(path);
 	let pool = StreamPool::single(addr).unwrap().shared();
@@ -150,18 +150,12 @@ pub async fn wait_for_tcp_sock(host_addr: &str) {
 	// attempt to connect, this can fail a few times due to timing, max 1s timeout
 	let mut attempts = 0;
 	loop {
-		match TcpStream::connect(&host_addr).await {
-			Ok(_stream) => {
-				return;
-			}
-			Err(_) => {
-				if attempts > 9 {
-					panic!("unable to connect to {host_addr}");
-				}
-				attempts += 1;
-				tokio::time::sleep(Duration::from_millis(100)).await;
-			}
+		if let Ok(_stream) = TcpStream::connect(&host_addr).await {
+			return;
 		}
+		assert!((attempts <= 9), "unable to connect to {host_addr}");
+		attempts += 1;
+		tokio::time::sleep(Duration::from_millis(100)).await;
 	}
 }
 

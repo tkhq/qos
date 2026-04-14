@@ -54,5 +54,5 @@ async fn fetch_and_verify_app_proof() {
 		_ => {
 			panic!("unexpected response")
 		}
-	};
+	}
 }

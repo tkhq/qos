@@ -63,7 +63,7 @@ async fn main() {
 	let args: Vec<String> = std::env::args().collect();
 	let socket_path = &args[1];
 	// 2nd arg should be "--pool-size" for Reaper compatibility
-	let pool_size_str: &str = args.get(3).map(String::as_str).unwrap_or("1");
+	let pool_size_str: &str = args.get(3).map_or("1", String::as_str);
 	let pool_size =
 		pool_size_str.parse().expect("Unable to parse pool size argument");
 

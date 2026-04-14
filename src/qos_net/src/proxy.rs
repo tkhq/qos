@@ -26,7 +26,7 @@ pub struct Proxy {
 }
 
 impl Proxy {
-	/// Create a new `Proxy` from the given `Stream`, with empty tcp_connection
+	/// Create a new `Proxy` from the given `Stream`, with empty `tcp_connection`
 	pub fn new(sock_stream: PermittedStream) -> Self {
 		Self { tcp_connection: None, sock_stream }
 	}

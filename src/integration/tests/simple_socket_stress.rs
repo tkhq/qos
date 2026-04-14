@@ -35,7 +35,7 @@ async fn simple_socket_stress() {
 	match err {
 		ClientError::IOError(qos_core::io::IOError::RecvTimeout) => (),
 		e => panic!("slow pivot did not get expected err {e:?}"),
-	};
+	}
 
 	let app_request =
 		borsh::to_vec(&PivotSocketStressMsg::PanicRequest).unwrap();
@@ -43,7 +43,7 @@ async fn simple_socket_stress() {
 	match err {
 		ClientError::IOError(qos_core::io::IOError::RecvConnectionClosed) => (),
 		e => panic!("panicing pivot did not get expected err {e:?}"),
-	};
+	}
 
 	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
@@ -54,5 +54,5 @@ async fn simple_socket_stress() {
 	match err {
 		ClientError::IOError(IOError::StdIoError(_)) => (), // for usock this is probably "no such file or directoy", vsock would differ
 		e => panic!("did not get expected err {e:?}"),
-	};
+	}
 }

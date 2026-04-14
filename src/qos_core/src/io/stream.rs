@@ -382,7 +382,7 @@ mod test {
 	/// Wait for a given usock file to exist and be connectible with a timeout of 5s.
 	///
 	/// # Panics
-	/// Panics if fs::exists errors.
+	/// Panics if `fs::exists` errors.
 	pub async fn wait_for_usock(path: &str) {
 		let addr = SocketAddress::new_unix(path);
 		let pool = StreamPool::new(addr, 1).unwrap().shared();

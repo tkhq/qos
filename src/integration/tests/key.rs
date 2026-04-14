@@ -348,7 +348,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 		.unwrap()
 		.success());
 
-	for user in USERS[0..2].iter() {
+	for user in &USERS[0..2] {
 		let share_path = format!("{}/{}.share", &personal_dir(user), user);
 		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
 		let eph_wrapped_share_path: PathWrapper =

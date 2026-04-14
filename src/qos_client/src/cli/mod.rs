@@ -1038,9 +1038,11 @@ impl ClientOpts {
 			// check for duplicate ports
 			let mut ports = HashSet::new();
 			for bc in &result {
-				if !ports.insert(bc.port()) {
-					panic!("duplicate bridge port: {}", bc.port());
-				}
+				assert!(
+					ports.insert(bc.port()),
+					"duplicate bridge port: {}",
+					bc.port()
+				);
 			}
 
 			result
@@ -1052,8 +1054,7 @@ impl ClientOpts {
 	fn debug_mode(&self) -> bool {
 		self.parsed
 			.single(DEBUG_MODE)
-			.map(String::as_str)
-			.unwrap_or("false")
+			.map_or("false", String::as_str)
 			.parse()
 			.expect("invalid `--debug-mode` flag value")
 	}
