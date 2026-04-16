@@ -1,10 +1,10 @@
 //! Streaming socket based server for use in an enclave. Listens for connections
 //! from [`crate::client::Client`].
 
-use std::sync::Arc;
+use std::{future::Future, ops::Deref, sync::Arc};
 
 use tokio::{
-	sync::{OwnedSemaphorePermit, RwLock, Semaphore},
+	sync::{OwnedSemaphorePermit, Semaphore},
 	task::JoinHandle,
 };
 
@@ -25,9 +25,6 @@ impl From<IOError> for SocketServerError {
 	}
 }
 
-/// Alias to simplify `Arc<RwLock<P>>` where `P` is the `RequestProcessor`
-pub type SharedProcessor<P> = Arc<RwLock<P>>;
-
 /// Something that can process requests in an async way.
 pub trait RequestProcessor: Send + Sync {
 	/// Process an incoming request and return a response in async.
@@ -39,6 +36,16 @@ pub trait RequestProcessor: Send + Sync {
 		&self,
 		request: &[u8],
 	) -> impl std::future::Future<Output = Vec<u8>> + Send;
+}
+
+impl<T, U> RequestProcessor for T
+where
+	T: Deref<Target = U> + Send + Sync,
+	U: RequestProcessor + 'static,
+{
+	fn process(&self, request: &[u8]) -> impl Future<Output = Vec<u8>> + Send {
+		self.deref().process(request)
+	}
 }
 
 /// A bare bones, socket based server.
@@ -59,11 +66,11 @@ impl SocketServer {
 	/// per each pool address.
 	pub fn listen_all<P>(
 		pool: StreamPool,
-		processor: &SharedProcessor<P>,
+		processor: P,
 		max_connections: usize,
 	) -> Result<Self, SocketServerError>
 	where
-		P: RequestProcessor + Sync + 'static,
+		P: RequestProcessor + Clone + 'static,
 	{
 		println!("`SocketServer` listening on pool size {}", pool.len());
 
@@ -77,35 +84,14 @@ impl SocketServer {
 		Ok(Self { pool, tasks, max_connections })
 	}
 
-	fn spawn_tasks_for_listeners<P>(
-		listeners: Vec<Listener>,
-		processor: &SharedProcessor<P>,
-		max_connections: usize,
-	) -> Vec<JoinHandle<Result<(), SocketServerError>>>
-	where
-		P: RequestProcessor + Sync + 'static,
-	{
-		let mut tasks = Vec::new();
-		for listener in listeners {
-			let p = processor.clone();
-			let task = tokio::spawn(async move {
-				accept_loop(listener, p, max_connections).await
-			});
-
-			tasks.push(task);
-		}
-
-		tasks
-	}
-
 	/// Expand the server with listeners up to pool size. This adds new tasks as needed.
 	pub fn listen_to<P>(
 		&mut self,
 		pool_size: u8,
-		processor: &SharedProcessor<P>,
+		processor: P,
 	) -> Result<(), IOError>
 	where
-		P: RequestProcessor + Sync + 'static,
+		P: RequestProcessor + Clone + 'static,
 	{
 		let listeners = self.pool.listen_to(pool_size)?;
 		let tasks = Self::spawn_tasks_for_listeners(
@@ -117,6 +103,27 @@ impl SocketServer {
 		self.tasks.extend(tasks);
 
 		Ok(())
+	}
+
+	fn spawn_tasks_for_listeners<P>(
+		listeners: Vec<Listener>,
+		processor: P,
+		max_connections: usize,
+	) -> Vec<JoinHandle<Result<(), SocketServerError>>>
+	where
+		P: RequestProcessor + Clone + 'static,
+	{
+		let mut tasks = Vec::new();
+		for listener in listeners {
+			let p = processor.clone();
+			let task = tokio::spawn(async move {
+				accept_loop(listener, &p, max_connections).await
+			});
+
+			tasks.push(task);
+		}
+
+		tasks
 	}
 }
 
@@ -169,11 +176,11 @@ impl PermittedStream {
 
 async fn accept_loop<P>(
 	listener: Listener,
-	processor: SharedProcessor<P>,
+	processor: &P,
 	max_connections: usize,
 ) -> Result<(), SocketServerError>
 where
-	P: RequestProcessor + 'static,
+	P: RequestProcessor + Clone + 'static,
 {
 	let connections = Arc::new(Semaphore::const_new(max_connections));
 	loop {
@@ -187,12 +194,13 @@ where
 				}
 			};
 
-		let p = processor.clone();
+		let processor = processor.clone();
+
 		tokio::spawn(async move {
 			loop {
 				match stream.recv().await {
 					Ok(payload) => {
-						let response = p.read().await.process(&payload).await;
+						let response = processor.process(&payload).await;
 
 						match stream.send(&response).await {
 							Ok(()) => {}

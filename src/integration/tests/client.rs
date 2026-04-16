@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use qos_core::{
 	client::SocketClient,
@@ -6,16 +6,9 @@ use qos_core::{
 	server::SocketServerError,
 	server::{RequestProcessor, SocketServer},
 };
-use tokio::sync::RwLock;
 
 #[derive(Clone)]
 struct EchoProcessor;
-
-impl EchoProcessor {
-	pub fn new() -> Arc<RwLock<Self>> {
-		Arc::new(RwLock::new(Self))
-	}
-}
 
 impl RequestProcessor for EchoProcessor {
 	async fn process(&self, request: &[u8]) -> Vec<u8> {
@@ -28,7 +21,7 @@ async fn run_echo_server(
 ) -> Result<SocketServer, SocketServerError> {
 	let pool = StreamPool::new(SocketAddress::new_unix(socket_path), 1)
 		.expect("unable to create async pool");
-	let server = SocketServer::listen_all(pool, &EchoProcessor::new(), 128)?;
+	let server = SocketServer::listen_all(pool, EchoProcessor, 128)?;
 
 	Ok(server)
 }

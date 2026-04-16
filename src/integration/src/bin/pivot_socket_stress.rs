@@ -1,5 +1,4 @@
 use core::panic;
-use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use integration::PivotSocketStressMsg;
@@ -7,16 +6,9 @@ use qos_core::{
 	io::{SocketAddress, StreamPool},
 	server::{RequestProcessor, SocketServer},
 };
-use tokio::sync::RwLock;
 
 #[derive(Clone)]
 struct Processor;
-
-impl Processor {
-	pub fn new() -> Arc<RwLock<Self>> {
-		Arc::new(RwLock::new(Self))
-	}
-}
 
 impl RequestProcessor for Processor {
 	async fn process(&self, request: &[u8]) -> Vec<u8> {
@@ -71,8 +63,7 @@ async fn main() {
 		StreamPool::new(SocketAddress::new_unix(socket_path), pool_size)
 			.expect("unable to create app pool");
 
-	let _server =
-		SocketServer::listen_all(app_pool, &Processor::new(), 128).unwrap();
+	let _server = SocketServer::listen_all(app_pool, Processor, 128).unwrap();
 
 	tokio::signal::ctrl_c().await.unwrap();
 }
