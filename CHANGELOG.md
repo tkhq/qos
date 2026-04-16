@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.6.2](https://github.com/tkhq/qos/compare/qos_client-v0.6.1...qos_client-v0.6.2) - 2026-04-16
+
+### Other
+- Adhere closer to clippy::pedantic
+
+## `qos_test_primitives` - [0.6.2](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.6.1...qos_test_primitives-v0.6.2) - 2026-04-16
+
+### Other
+- Adhere closer to clippy::pedantic
+
+## `qos_net` - [0.6.2](https://github.com/tkhq/qos/compare/qos_net-v0.6.1...qos_net-v0.6.2) - 2026-04-16
+
+### Other
+- Adhere closer to clippy::pedantic
+
+## `qos_core` - [0.6.2](https://github.com/tkhq/qos/compare/qos_core-v0.6.1...qos_core-v0.6.2) - 2026-04-16
+
+### Other
+- Prevent excessive RwLock wrapping
+- Adhere closer to clippy::pedantic
+
+## `qos_p256` - [0.6.2](https://github.com/tkhq/qos/compare/qos_p256-v0.6.1...qos_p256-v0.6.2) - 2026-04-16
+
+### Other
+- Adhere closer to clippy::pedantic
+
+## `qos_nsm` - [0.6.2](https://github.com/tkhq/qos/compare/qos_nsm-v0.6.1...qos_nsm-v0.6.2) - 2026-04-16
+
+### Other
+- Adhere closer to clippy::pedantic
+
+## `qos_hex` - [0.6.2](https://github.com/tkhq/qos/compare/qos_hex-v0.6.1...qos_hex-v0.6.2) - 2026-04-16
+
+### Other
+- Adhere closer to clippy::pedantic
+
 ## `qos_client` - [0.6.1](https://github.com/tkhq/qos/compare/qos_client-v0.5.0...qos_client-v0.6.1) - 2026-04-09
 
 ### Other
