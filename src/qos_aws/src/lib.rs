@@ -1,4 +1,6 @@
-use qos_system::{check_hwrng, dmesg, poweroff};
+use qos_system::{
+	check_clocksource, check_hwrng, detect_ptp_clock_device, dmesg, poweroff,
+};
 
 /// Signal to Nitro hypervisor that booting was successful
 fn nitro_heartbeat() {
@@ -38,4 +40,23 @@ pub fn init_platform() {
 			poweroff();
 		}
 	};
+
+	match check_clocksource("kvm-clock") {
+		Ok(()) => dmesg("Validated clock source is kvm-clock".to_string()),
+		Err(e) => {
+			eprintln!("{}", e);
+			dmesg(format!("Clock source validation failed: {}", e.message));
+			poweroff();
+		}
+	};
+
+	match detect_ptp_clock_device() {
+		Some(path) => dmesg(format!(
+			"PTP hardware clock device is visible at {path}; synchronization is not configured by init"
+		)),
+		None => dmesg(
+			"No PTP hardware clock device is exposed to the enclave; synchronization is not configured by init"
+				.to_string(),
+		),
+	}
 }

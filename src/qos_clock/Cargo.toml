@@ -1,0 +1,18 @@
+[package]
+name = "qos_clock"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Clock abstractions for QuorumOS"
+repository = "https://github.com/tkhq/qos"
+keywords = ["quorumos", "clock", "time"]
+categories = ["os"]
+
+[lints]
+workspace = true
+
+[dependencies]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+qos_system = { path = "../qos_system" }
