@@ -44,7 +44,7 @@ jobs:
         # for verification during cargo publish
         run: sudo apt-get install -y pkg-config libpcsclite-dev
       - name: Run release-plz
-        uses: release-plz/action@f708778669256143d984cce4b23592637532e040 # v0.5.127
+        uses: release-plz/action@1528104d2ca23787631a1c1f022abb64b34c1e11 # v0.5.128
         with:
           command: release
           manifest_path: src/Cargo.toml
