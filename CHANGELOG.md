@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_core` - [0.7.0](https://github.com/tkhq/qos/compare/qos_core-v0.6.1...qos_core-v0.7.0) - 2026-04-16
+
+### Changed
+- [**breaking**] Removed `Arc<RwLock<>>` wrapping from `ProtocolProcessor` — the processor is now `Clone` and passed by value, eliminating a read-lock acquisition on every incoming request ([#660](https://github.com/tkhq/qos/pull/660))
+- [**breaking**] Removed `SharedProcessor<P>` type alias; `SocketServer::listen_all` and `listen_to` now take `P: RequestProcessor + Clone` instead of `&SharedProcessor<P>` ([#660](https://github.com/tkhq/qos/pull/660))
+- Added blanket `RequestProcessor` impl for any `T: Deref<Target = U>` where `U: RequestProcessor` ([#660](https://github.com/tkhq/qos/pull/660))
+- `EphemeralKeyHandle` is now generic over `P: AsRef<Path>` and derives `Copy` ([#660](https://github.com/tkhq/qos/pull/660))
+
+- Adhere closer to clippy::pedantic
+
+## `qos_p256` - [0.7.0](https://github.com/tkhq/qos/compare/qos_p256-v0.6.1...qos_p256-v0.7.0) - 2026-04-16
+
+### Changed
+- Added `#[must_use]` to `P256Pair::encryption_key()` ([#658](https://github.com/tkhq/qos/pull/658))
+- Adhere closer to clippy::pedantic
+
+## `qos_host` - 0.7.0 - 2026-04-16
+
+### Added
+- `/enclave-info` endpoint now returns the ephemeral public key extracted from the live attestation document ([#659](https://github.com/tkhq/qos/pull/659))
+
+## `qos_client` - [0.7.0](https://github.com/tkhq/qos/compare/qos_client-v0.6.1...qos_client-v0.7.0) - 2026-04-16
+
+### Changed
+- Adhere closer to clippy::pedantic
+
+## `qos_net` - [0.7.0](https://github.com/tkhq/qos/compare/qos_net-v0.6.1...qos_net-v0.7.0) - 2026-04-16
+
+### Changed
+- Adhere closer to clippy::pedantic
+
+## `qos_nsm` - [0.7.0](https://github.com/tkhq/qos/compare/qos_nsm-v0.6.1...qos_nsm-v0.7.0) - 2026-04-16
+
+### Changed
+- Adhere closer to clippy::pedantic
+
+## `qos_hex` - [0.7.0](https://github.com/tkhq/qos/compare/qos_hex-v0.6.1...qos_hex-v0.7.0) - 2026-04-16
+
+### Changed
+- Adhere closer to clippy::pedantic
+
+## `qos_test_primitives` - [0.7.0](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.6.1...qos_test_primitives-v0.7.0) - 2026-04-16
+
+### Changed
+- Adhere closer to clippy::pedantic
+
 ## `qos_client` - [0.6.1](https://github.com/tkhq/qos/compare/qos_client-v0.5.0...qos_client-v0.6.1) - 2026-04-09
 
 ### Other
