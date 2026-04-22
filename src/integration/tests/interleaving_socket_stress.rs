@@ -13,7 +13,7 @@ use qos_test_primitives::ChildWrapper;
 
 const SOCKET_STRESS_SOCK: &str = "/tmp/interleaving_socket_stress.sock";
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn interleaving_socket_stress() {
 	let pool_size = 5;
 	let _enclave_app: ChildWrapper = Command::new(PIVOT_SOCKET_STRESS_PATH)

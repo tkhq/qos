@@ -26,7 +26,7 @@ async fn run_echo_server(
 	Ok(server)
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn direct_connect_works() {
 	let socket_path = "/tmp/async_client_test_direct_connect_works.sock";
 	let socket = SocketAddress::new_unix(socket_path);
@@ -43,7 +43,7 @@ async fn direct_connect_works() {
 	assert!(r.is_ok());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn times_out_properly() {
 	let socket_path = "/tmp/async_client_test_times_out_properly.sock";
 	let socket = SocketAddress::new_unix(socket_path);
@@ -57,7 +57,7 @@ async fn times_out_properly() {
 	assert!(r.is_err());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn repeat_connect_works() {
 	let socket_path = "/tmp/async_client_test_repeat_connect_works.sock";
 	let socket = SocketAddress::new_unix(socket_path);

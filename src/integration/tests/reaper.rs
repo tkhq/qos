@@ -20,7 +20,7 @@ use tokio::{
 	net::TcpStream,
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn reaper_works() {
 	let secret_path: PathWrapper = "/tmp/reaper_works.secret".into();
 	let usock: PathWrapper = "/tmp/reaper_works.sock".into();
@@ -71,7 +71,7 @@ async fn reaper_works() {
 	assert!(fs::remove_file(integration::PIVOT_OK_SUCCESS_FILE).is_ok());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn reaper_handles_non_zero_exits() {
 	let secret_path: PathWrapper =
 		"/tmp/reaper_handles_non_zero_exits.secret".into();
@@ -119,7 +119,7 @@ async fn reaper_handles_non_zero_exits() {
 	assert!(reaper_handle.is_finished());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn reaper_handles_panic() {
 	let secret_path: PathWrapper = "/tmp/reaper_handles_panics.secret".into();
 	let usock: PathWrapper = "/tmp/reaper_handles_panics.sock".into();
@@ -166,7 +166,7 @@ async fn reaper_handles_panic() {
 	assert!(reaper_handle.is_finished());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn reaper_handles_bridge() {
 	let pivot_port = find_free_port().unwrap();
 	let host_port = find_free_port().unwrap();

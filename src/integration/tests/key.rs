@@ -24,7 +24,7 @@ const SHARED_EPH_PATH: &str = "/tmp/key-fwd-e2e/shared_eph.secret";
 const QUORUM_KEY_PUB_PATH: &str =
 	"./mock/namespaces/quit-coding-to-vape/quorum_key.pub";
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn key_fwd_e2e() {
 	// Make sure everything in the temp dir gets dropped
 	let _: PathWrapper = TMP_DIR.into();
