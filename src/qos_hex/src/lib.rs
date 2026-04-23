@@ -226,7 +226,7 @@ from_hex_array_impl! {
 	32 33 34 64 65 66
 	128 256
 	384
-	512 768 1024 2048 4096 8192 16384 32768
+	512 768 1024 2048 4096 8192 16384
 }
 
 /// Serde support for hex encoding/decoding.
