@@ -92,6 +92,10 @@ impl From<qos_hex::HexError> for P256Error {
 }
 
 /// Helper function to derive a secret from a master seed.
+///
+/// # Errors
+///
+/// Returns [`P256Error::HkdfExpansionFailed`] if HKDF expansion fails.
 pub fn derive_secret(
 	seed: &[u8; MASTER_SEED_LEN],
 	derive_path: &[u8],
@@ -126,6 +130,10 @@ pub struct P256Pair {
 
 impl P256Pair {
 	/// Generate a new private key using the OS randomness source.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if key derivation or construction fails.
 	pub fn generate() -> Result<Self, P256Error> {
 		let master_seed = bytes_os_rng::<MASTER_SEED_LEN>();
 
@@ -146,6 +154,10 @@ impl P256Pair {
 	}
 
 	/// Encrypt the given `msg` with the symmetric encryption secret.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if encryption fails.
 	pub fn aes_gcm_256_encrypt(
 		&self,
 		msg: &[u8],
@@ -154,6 +166,10 @@ impl P256Pair {
 	}
 
 	/// Decrypt a message with the symmetric encryption secret.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if decryption or envelope deserialization fails.
 	pub fn aes_gcm_256_decrypt(
 		&self,
 		serialized_envelope: &[u8],
@@ -162,6 +178,10 @@ impl P256Pair {
 	}
 
 	/// Decrypt a message encoded to this pair's public key.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if decryption or envelope deserialization fails.
 	pub fn decrypt(
 		&self,
 		serialized_envelope: &[u8],
@@ -170,6 +190,10 @@ impl P256Pair {
 	}
 
 	/// Sign the message and return the raw signature.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if signing fails.
 	pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
 		self.sign_private.sign(message)
 	}
@@ -184,6 +208,10 @@ impl P256Pair {
 	}
 
 	/// Create `Self` from a master seed.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if key derivation or construction fails.
 	pub fn from_master_seed(
 		master_seed: &[u8; MASTER_SEED_LEN],
 	) -> Result<Self, P256Error> {
@@ -217,6 +245,10 @@ impl P256Pair {
 	}
 
 	/// Write the raw master seed to file as hex encoded.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error::IOError`] if the file cannot be written.
 	pub fn to_hex_file<P: AsRef<Path>>(
 		&self,
 		path: P,
@@ -231,6 +263,11 @@ impl P256Pair {
 	}
 
 	/// Read the raw, hex encoded master from a file.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if the file cannot be read, the hex is invalid,
+	/// or the seed length is wrong.
 	pub fn from_hex_file<P: AsRef<Path>>(path: P) -> Result<Self, P256Error> {
 		let hex_bytes = std::fs::read(&path).map_err(|e| {
 			P256Error::IOError(format!(
@@ -276,6 +313,10 @@ pub struct P256Public {
 
 impl P256Public {
 	/// Encrypt a message to this public key.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if encryption fails.
 	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
 		self.encrypt_public.encrypt(message)
 	}
@@ -284,6 +325,11 @@ impl P256Public {
 	/// the SHA512 digest of the message.
 	///
 	/// Returns Ok if the signature is good.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error::FailedSignatureVerification`] if the signature
+	/// is invalid.
 	pub fn verify(
 		&self,
 		message: &[u8],
@@ -306,6 +352,11 @@ impl P256Public {
 
 	/// Deserialize each public key from a SEC1 encoded point, not compressed.
 	/// Expects encoding as `encrypt_public||sign_public`.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if the bytes are the wrong length or cannot be
+	/// deserialized as valid public keys.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
 		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize * 2 {
 			return Err(P256Error::EncodedPublicKeyTooLong);
@@ -332,6 +383,10 @@ impl P256Public {
 	}
 
 	/// Write the public key to a file encoded as a hex string.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error::IOError`] if the file cannot be written.
 	pub fn to_hex_file<P: AsRef<Path>>(
 		&self,
 		path: P,
@@ -346,6 +401,11 @@ impl P256Public {
 	}
 
 	/// Read the hex encoded public keys from a file.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if the file cannot be read, the hex is invalid,
+	/// or the bytes are not valid public keys.
 	pub fn from_hex_file<P: AsRef<Path>>(path: P) -> Result<Self, P256Error> {
 		let hex_bytes = std::fs::read(&path).map_err(|e| {
 			P256Error::IOError(format!(
