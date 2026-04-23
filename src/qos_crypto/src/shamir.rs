@@ -9,6 +9,10 @@ use crate::QosCryptoError;
 /// Known limitations:
 /// threshold >= 2
 /// `share_count` <= 255
+///
+/// # Errors
+///
+/// Returns [`QosCryptoError::Vsss`] if the secret splitting fails.
 pub fn shares_generate(
 	secret: &[u8],
 	share_count: usize,
@@ -19,6 +23,10 @@ pub fn shares_generate(
 }
 
 /// Reconstruct our secret from the given `shares`.
+///
+/// # Errors
+///
+/// Returns [`QosCryptoError::Vsss`] if share reconstruction fails.
 pub fn shares_reconstruct<B: AsRef<[Vec<u8>]>>(
 	shares: B,
 ) -> Result<Vec<u8>, QosCryptoError> {
