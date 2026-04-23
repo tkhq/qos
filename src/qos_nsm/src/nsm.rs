@@ -19,8 +19,13 @@ pub trait NsmProvider: Send + Sync {
 		request: types::NsmRequest,
 	) -> types::NsmResponse;
 
-	/// requests an attestation document and returns its timestamp in
-	/// milliseconds
+	/// Requests an attestation document and returns its timestamp in
+	/// milliseconds.
+	///
+	/// # Errors
+	///
+	/// Returns [`nitro::AttestError`] if the attestation request fails or
+	/// the timestamp cannot be extracted.
 	fn timestamp_ms(&self) -> Result<u64, nitro::AttestError>;
 }
 

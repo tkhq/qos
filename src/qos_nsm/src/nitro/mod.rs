@@ -43,6 +43,10 @@ pub const AWS_ROOT_CERT_PEM: &[u8] =
 
 /// Extract a DER encoded certificate from bytes representing a PEM encoded
 /// certificate.
+///
+/// # Errors
+///
+/// Returns [`AttestError::PemDecodingError`] if the PEM cannot be decoded.
 pub fn cert_from_pem(pem: &[u8]) -> Result<Vec<u8>, AttestError> {
 	let (_, doc) =
 		x509_cert::der::Document::from_pem(&String::from_utf8_lossy(pem))
@@ -63,7 +67,10 @@ pub fn cert_from_pem(pem: &[u8]) -> Result<Vec<u8>, AttestError> {
 /// * `pcr1` - expected value of PCR index 1.
 /// * `pcr2` - expected value of PCR index 3.
 ///
-/// Returns an `AttestError` if any part of the verification fails.
+/// # Errors
+///
+/// Returns [`AttestError`] if any field is missing or does not match the
+/// expected value.
 pub fn verify_attestation_doc_against_user_input(
 	attestation_doc: &AttestationDoc,
 	user_data: &[u8],
@@ -158,6 +165,11 @@ pub fn verify_attestation_doc_against_user_input(
 ///
 /// * `cose_sign1_der` - the DER encoded COSE Sign1 structure containing the
 ///   attestation document payload.
+///
+/// # Errors
+///
+/// Returns [`AttestError`] if the COSE Sign1 structure or attestation
+/// document cannot be decoded.
 pub fn unsafe_attestation_doc_from_der(
 	cose_sign1_der: &[u8],
 ) -> Result<AttestationDoc, AttestError> {
@@ -188,6 +200,11 @@ pub fn unsafe_attestation_doc_from_der(
 /// * `validation_time` - a moment in time that the certificates should be
 ///   valid. This is measured in seconds since the unix epoch. Most likely this
 ///   will be the current time.
+///
+/// # Errors
+///
+/// Returns [`AttestError`] if the COSE Sign1 structure cannot be decoded,
+/// the certificate chain is invalid, or signature verification fails.
 pub fn attestation_doc_from_der(
 	cose_sign1_der: &[u8],
 	root_cert: &[u8],
