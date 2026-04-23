@@ -73,8 +73,8 @@ impl From<FromUtf8Error> for HexError {
 	}
 }
 
-fn verify_ascii(byte: &u8) -> Result<(), HexError> {
-	if byte >= &128 {
+fn verify_ascii(byte: u8) -> Result<(), HexError> {
+	if byte >= 128 {
 		return Err(HexError::NonAsciiChar);
 	}
 	Ok(())
@@ -112,8 +112,8 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 				.step_by(2)
 				.map(|i| {
 					// check that both bytes represent ascii chars
-					verify_ascii(&sanitized_s_bytes[i])?;
-					verify_ascii(&sanitized_s_bytes[i + 1])?;
+					verify_ascii(sanitized_s_bytes[i])?;
+					verify_ascii(sanitized_s_bytes[i + 1])?;
 
 					let s = std::str::from_utf8(&sanitized_s_bytes[i..i + 2])
 						.expect("We ensure that input slice represents ASCII above. qed.");
@@ -156,8 +156,8 @@ pub fn decode_to_buf(raw_s: &str, buf: &mut [u8]) -> Result<(), HexError> {
 	for (i, b) in buf.iter_mut().enumerate() {
 		let str_idx = i * 2;
 
-		verify_ascii(&sanitized_s_bytes[str_idx])?;
-		verify_ascii(&sanitized_s_bytes[str_idx + 1])?;
+		verify_ascii(sanitized_s_bytes[str_idx])?;
+		verify_ascii(sanitized_s_bytes[str_idx + 1])?;
 
 		let s = std::str::from_utf8(&sanitized_s_bytes[str_idx..str_idx + 2])
 			.expect("We ensure that input slice represents ASCII above. qed.");
