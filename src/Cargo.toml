@@ -53,8 +53,7 @@ missing_docs = "warn"
 unsafe_code = "deny"
 
 [workspace.lints.clippy]
-missing_errors_doc = "allow"
-module_name_repetitions = "allow"
+pedantic = "deny"
 
 [workspace.lints.rustdoc]
 missing_docs = "warn"
