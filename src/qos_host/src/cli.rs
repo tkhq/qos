@@ -307,7 +307,7 @@ mod test {
 		let opts = HostOpts::new(&mut args);
 
 		assert_eq!(
-			opts.enclave_addr(),
+			opts.enclave_socket().unwrap(),
 			qos_core::io::SocketAddress::new_vsock(6, 3999, 0)
 		);
 
@@ -330,7 +330,7 @@ mod test {
 		let opts = HostOpts::new(&mut args);
 
 		assert_eq!(
-			opts.enclave_addr(),
+			opts.enclave_socket().unwrap(),
 			qos_core::io::SocketAddress::new_vsock(6, 3999, 1)
 		);
 	}
