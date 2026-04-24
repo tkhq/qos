@@ -8,7 +8,7 @@ use qos_core::io::{HostBridge, SocketAddress, Stream, StreamPool};
 use qos_test_primitives::{find_free_port, ChildWrapper};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn vsock_to_tcp_bridge_works() {
 	const APP_USOCK: &str = "/tmp/vsock_to_tcp_bridge_works.usock";
 	let port = find_free_port().unwrap();

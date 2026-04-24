@@ -25,7 +25,7 @@ use qos_host::EnclaveInfo;
 use qos_p256::P256Pair;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn standard_boot_e2e() {
 	const PIVOT_HASH_PATH: &str = "/tmp/standard_boot_e2e-pivot-hash.txt";
 

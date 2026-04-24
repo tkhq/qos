@@ -13,7 +13,7 @@ use qos_test_primitives::ChildWrapper;
 
 const PROOF_TEST_ENCLAVE_SOCKET: &str = "/tmp/proof_test.enclave.sock";
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn fetch_and_verify_app_proof() {
 	let _enclave_app: ChildWrapper = Command::new(PIVOT_PROOF_PATH)
 		.arg(PROOF_TEST_ENCLAVE_SOCKET)

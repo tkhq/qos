@@ -28,7 +28,7 @@ use tokio::{
 	net::TcpStream,
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn qos_bridge_works() {
 	const PIVOT_HASH_PATH: &str = "/tmp/qos_host_bridge-pivot-hash.txt";
 
