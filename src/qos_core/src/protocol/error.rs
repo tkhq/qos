@@ -35,6 +35,8 @@ pub enum ProtocolError {
 		/// Actual hash as hex string.
 		actual: String,
 	},
+	/// Pivot environment variables are invalid.
+	InvalidPivotEnv(String),
 	/// The message is too large.
 	OversizeMsg,
 	/// Message could not be deserialized
@@ -250,6 +252,7 @@ impl std::fmt::Display for ProtocolError {
 					"invalid pivot hash: expected {expected}, got {actual}"
 				)
 			}
+			Self::InvalidPivotEnv(e) => write!(f, "invalid pivot env: {e}"),
 			Self::OversizeMsg => write!(f, "message too large"),
 			Self::InvalidMsg => write!(f, "invalid message"),
 			Self::EnclaveClient => write!(f, "enclave client error"),

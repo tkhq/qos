@@ -66,6 +66,7 @@ async fn main() {
 
 	// -- CLIENT create manifest.
 	let pivot_args = std::env::args().nth(2).expect("No pivot args provided");
+	let pivot_env = "pivot_env_var=will be set";
 	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
 	let app_host_port = 3000;
 
@@ -88,6 +89,8 @@ async fn main() {
 			&cli_manifest_path,
 			"--pivot-args",
 			&pivot_args,
+			"--pivot-env",
+			pivot_env,
 			"--manifest-set-dir",
 			"./mock/keys/manifest-set",
 			"--share-set-dir",
@@ -217,6 +220,17 @@ async fn main() {
 			"Are these the correct pivot args:"
 		);
 		stdout.next().unwrap().unwrap(); // pivot args confirm msg
+		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Are these the correct pivot env vars:"
+		);
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"{\"pivot_env_var\": Plain { value: \"will be set\" }}?"
+		);
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 
