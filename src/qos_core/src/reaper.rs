@@ -190,8 +190,9 @@ impl Reaper {
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest;
-		let PivotConfig { args, restart, bridge_config: host_config, .. } =
-			manifest.pivot;
+		let PivotConfig {
+			args, restart, bridge_config: host_config, env, ..
+		} = manifest.pivot;
 
 		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task
 		run_vsock_to_tcp_bridge(&core_socket, &host_config)
@@ -200,6 +201,12 @@ impl Reaper {
 
 		let mut pivot = Command::new(handles.pivot_path());
 		pivot.env_clear();
+		for (name, value) in env.iter() {
+			let plain_value = value
+				.as_plain_value()
+				.expect("pivot env was validated before pivot launch");
+			pivot.env(name.as_str(), plain_value);
+		}
 		pivot.args(&args[..]);
 		pivot.stdout(Stdio::piped()).stderr(Stdio::piped());
 

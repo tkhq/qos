@@ -6,7 +6,7 @@ use std::{
 
 use borsh::de::BorshDeserialize;
 use integration::{
-	PivotSocketStressMsg, LOCAL_HOST, PCR3_PRE_IMAGE_PATH,
+	wait_for_tcp_sock, PivotSocketStressMsg, LOCAL_HOST, PCR3_PRE_IMAGE_PATH,
 	PIVOT_SOCKET_STRESS_PATH, QOS_DIST_DIR,
 };
 use qos_core::protocol::{
@@ -149,6 +149,7 @@ async fn qos_bridge_works() {
 			port: app_host_port,
 			host: "0.0.0.0".into(),
 		}],
+		..Default::default()
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
@@ -485,10 +486,10 @@ async fn qos_bridge_works() {
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
 	// Wait for the qos_host app bridge to run
-	qos_test_primitives::wait_until_port_is_bound(app_host_port_override);
+	let bridge_addr = format!("127.0.0.1:{app_host_port_override}");
+	wait_for_tcp_sock(&bridge_addr).await;
 
 	// send a PivotSocketStressMsg to check if the  bridge works all the way
-	let bridge_addr = format!("127.0.0.1:{app_host_port_override}");
 	let mut tcp_stream = TcpStream::connect(&bridge_addr).await.unwrap();
 
 	let msg = PivotSocketStressMsg::OkRequest(42);
@@ -537,10 +538,10 @@ async fn qos_bridge_works() {
 			.into();
 
 	// Wait for the qos_bridge app bridge to run
-	qos_test_primitives::wait_until_port_is_bound(app_host_port_override);
+	let bridge_addr = format!("127.0.0.1:{app_host_port_override}");
+	wait_for_tcp_sock(&bridge_addr).await;
 
 	// send a PivotSocketStressMsg to check if the  bridge works all the way
-	let bridge_addr = format!("127.0.0.1:{app_host_port_override}");
 	let mut tcp_stream = TcpStream::connect(&bridge_addr).await.unwrap();
 
 	let msg = PivotSocketStressMsg::OkRequest(42);
