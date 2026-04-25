@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_test_primitives` - [0.7.1](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.7.0...qos_test_primitives-v0.7.1) - 2026-04-25
+
+### Fixed
+- test port logic not working on macos
+
+## `qos_core` - [0.7.1](https://github.com/tkhq/qos/compare/qos_core-v0.7.0...qos_core-v0.7.1) - 2026-04-25
+
+### Other
+- Merge pull request #671 from tkhq/avi/fix-blocking-tokio
+- cover vm feature gated tests
+
 ## `qos_core` - [0.7.0](https://github.com/tkhq/qos/compare/qos_core-v0.6.1...qos_core-v0.7.0) - 2026-04-16
 
 ### Changed
