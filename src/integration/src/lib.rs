@@ -149,13 +149,14 @@ pub async fn wait_for_usock(path: &str) {
 }
 
 pub async fn wait_for_tcp_sock(host_addr: &str) {
-	// attempt to connect, this can fail a few times due to timing, max 1s timeout
+	// Some integration flows start the listener only after a few control-loop
+	// iterations, so give the socket enough time to appear before failing.
 	let mut attempts = 0;
 	loop {
 		if let Ok(_stream) = TcpStream::connect(&host_addr).await {
 			return;
 		}
-		assert!((attempts <= 9), "unable to connect to {host_addr}");
+		assert!((attempts <= 99), "unable to connect to {host_addr}");
 		attempts += 1;
 		tokio::time::sleep(Duration::from_millis(100)).await;
 	}
