@@ -15,6 +15,7 @@ use serde_bytes::ByteBuf;
 
 mod error;
 mod syntactic_validation;
+use syntactic_validation::validate_attestation_doc;
 
 pub use error::AttestError;
 
@@ -214,14 +215,7 @@ pub fn attestation_doc_from_der(
 	let cose_sign1 = CoseSign1::from_bytes(cose_sign1_der)
 		.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
 
-	syntactic_validation::module_id(&attestation_doc.module_id)?;
-	syntactic_validation::digest(attestation_doc.digest)?;
-	syntactic_validation::pcrs(&attestation_doc.pcrs)?;
-	syntactic_validation::cabundle(&attestation_doc.cabundle)?;
-	syntactic_validation::timestamp(attestation_doc.timestamp)?;
-	syntactic_validation::public_key(&attestation_doc.public_key)?;
-	syntactic_validation::user_data(&attestation_doc.user_data)?;
-	syntactic_validation::nonce(&attestation_doc.nonce)?;
+	validate_attestation_doc(&attestation_doc)?;
 
 	verify_certificate_chain(
 		&attestation_doc.cabundle,
