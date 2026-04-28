@@ -190,6 +190,13 @@ pub struct PivotConfig {
 	/// needed.
 	pub args: Vec<String>,
 	/// Environment variables to inject into the pivot process.
+	///
+	/// Variable names must match `[A-Za-z_][A-Za-z0-9_]*` and be at most
+	/// [`MAX_PIVOT_ENV_NAME_LEN`] bytes long. Values may contain any UTF-8
+	/// except NUL bytes and must be at most [`MAX_PIVOT_ENV_VALUE_LEN`] bytes
+	/// long. A manifest may contain at most [`MAX_PIVOT_ENV_VARS`] variables
+	/// with a combined key-and-value payload of at most
+	/// [`MAX_PIVOT_ENV_TOTAL_LEN`] bytes. Values are not restricted to ASCII.
 	#[serde(default, skip_serializing_if = "PivotEnv::is_empty")]
 	pub env: PivotEnv,
 }
@@ -874,6 +881,27 @@ mod test {
 	}
 
 	#[test]
+	fn pivot_env_serializes_to_sorted_externally_tagged_json() {
+		let mut env = PivotEnv::new();
+		env.insert(
+			PivotEnvVarName::new("ZETA".to_string()).unwrap(),
+			PivotEnvValue::plain("last".to_string()).unwrap(),
+		)
+		.unwrap();
+		env.insert(
+			PivotEnvVarName::new("ALPHA".to_string()).unwrap(),
+			PivotEnvValue::plain("first".to_string()).unwrap(),
+		)
+		.unwrap();
+
+		let serialized = serde_json::to_string(&env).unwrap();
+		assert_eq!(
+			serialized,
+			r#"{"ALPHA":{"plain":{"value":"first"}},"ZETA":{"plain":{"value":"last"}}}"#
+		);
+	}
+
+	#[test]
 	fn manifest_round_trips_pivot_env_through_borsh() {
 		let (manifest, _members, _pivot) = get_manifest();
 		let mut manifest_with_env = manifest.clone();
@@ -928,8 +956,9 @@ mod test {
 	fn rejects_invalid_pivot_env_during_serde_deserialize() {
 		let value = serde_json::json!({
 			"1BAD": {
-				"kind": "plain",
-				"value": "bar"
+				"plain": {
+					"value": "bar"
+				}
 			}
 		});
 

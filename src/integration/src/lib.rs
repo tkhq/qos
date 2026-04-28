@@ -211,7 +211,7 @@ impl Cli {
 		// variable in the manifest, then pass both names to this pivot. This
 		// code fails if the parent-only name is visible here, appends the
 		// manifest variable's value to `msg`, and writes that combined string
-		// to `path`. The test reads `path` and expects `msg + manifest_value`.
+		// to `path`. The test reads `path` and expects `msg + env_value`.
 		if let Some(key) = opts.single(MISSING_ENV_KEY) {
 			assert!(
 				std::env::var(key).is_err(),

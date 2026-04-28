@@ -3,7 +3,6 @@
 use std::{borrow::Borrow, collections::BTreeMap, fmt};
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use serde::ser::SerializeStruct;
 
 use crate::protocol::ProtocolError;
 
@@ -17,7 +16,17 @@ pub const MAX_PIVOT_ENV_VALUE_LEN: usize = 64 * 1024;
 pub const MAX_PIVOT_ENV_TOTAL_LEN: usize = 512 * 1024;
 
 /// Environment variable name to inject into the pivot process.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+#[derive(
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Clone,
+	Hash,
+	Debug,
+	BorshSerialize,
+	serde::Serialize,
+)]
 pub struct PivotEnvVarName(String);
 
 impl PivotEnvVarName {
@@ -60,12 +69,6 @@ impl PivotEnvVarName {
 	}
 }
 
-impl fmt::Debug for PivotEnvVarName {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		self.0.fmt(f)
-	}
-}
-
 impl fmt::Display for PivotEnvVarName {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		self.0.fmt(f)
@@ -86,15 +89,6 @@ impl TryFrom<String> for PivotEnvVarName {
 	}
 }
 
-impl BorshSerialize for PivotEnvVarName {
-	fn serialize<W: borsh::io::Write>(
-		&self,
-		writer: &mut W,
-	) -> borsh::io::Result<()> {
-		self.0.serialize(writer)
-	}
-}
-
 impl BorshDeserialize for PivotEnvVarName {
 	fn deserialize_reader<R: borsh::io::Read>(
 		reader: &mut R,
@@ -103,15 +97,6 @@ impl BorshDeserialize for PivotEnvVarName {
 		Self::new(name).map_err(|e| {
 			borsh::io::Error::new(borsh::io::ErrorKind::InvalidData, e)
 		})
-	}
-}
-
-impl serde::Serialize for PivotEnvVarName {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		serializer.serialize_str(self.as_str())
 	}
 }
 
@@ -126,7 +111,8 @@ impl<'de> serde::Deserialize<'de> for PivotEnvVarName {
 }
 
 /// Environment variable value to inject into the pivot process.
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, BorshSerialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PivotEnvValue {
 	/// A plain, non-secret environment variable value.
 	Plain {
@@ -163,20 +149,6 @@ impl PivotEnvValue {
 	}
 }
 
-impl BorshSerialize for PivotEnvValue {
-	fn serialize<W: borsh::io::Write>(
-		&self,
-		writer: &mut W,
-	) -> borsh::io::Result<()> {
-		match self {
-			Self::Plain { value } => {
-				0u8.serialize(writer)?;
-				value.serialize(writer)
-			}
-		}
-	}
-}
-
 impl BorshDeserialize for PivotEnvValue {
 	fn deserialize_reader<R: borsh::io::Read>(
 		reader: &mut R,
@@ -197,32 +169,14 @@ impl BorshDeserialize for PivotEnvValue {
 	}
 }
 
-impl serde::Serialize for PivotEnvValue {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		match self {
-			Self::Plain { value } => {
-				let mut state =
-					serializer.serialize_struct("PivotEnvValue", 2)?;
-				state.serialize_field("kind", "plain")?;
-				state.serialize_field("value", value)?;
-				state.end()
-			}
-		}
-	}
-}
-
 impl<'de> serde::Deserialize<'de> for PivotEnvValue {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
 		D: serde::Deserializer<'de>,
 	{
 		#[derive(serde::Deserialize)]
-		#[serde(tag = "kind", rename_all = "camelCase")]
+		#[serde(rename_all = "camelCase")]
 		enum PivotEnvValueDef {
-			#[serde(rename = "plain")]
 			Plain { value: String },
 		}
 
@@ -235,7 +189,7 @@ impl<'de> serde::Deserialize<'de> for PivotEnvValue {
 }
 
 /// Environment variables to inject into the pivot process.
-#[derive(PartialEq, Eq, Clone, Default)]
+#[derive(PartialEq, Eq, Clone, Default, BorshSerialize, serde::Serialize)]
 #[repr(transparent)]
 pub struct PivotEnv(BTreeMap<PivotEnvVarName, PivotEnvValue>);
 
@@ -289,72 +243,7 @@ impl PivotEnv {
 	pub fn get(&self, name: &str) -> Option<&PivotEnvValue> {
 		self.0.get(name)
 	}
-}
 
-impl TryFrom<BTreeMap<PivotEnvVarName, PivotEnvValue>> for PivotEnv {
-	type Error = ProtocolError;
-
-	fn try_from(
-		value: BTreeMap<PivotEnvVarName, PivotEnvValue>,
-	) -> Result<Self, Self::Error> {
-		let env = Self(value);
-		env.check_aggregate_limits()?;
-		Ok(env)
-	}
-}
-
-impl BorshSerialize for PivotEnv {
-	fn serialize<W: borsh::io::Write>(
-		&self,
-		writer: &mut W,
-	) -> borsh::io::Result<()> {
-		self.0.serialize(writer)
-	}
-}
-
-impl BorshDeserialize for PivotEnv {
-	fn deserialize_reader<R: borsh::io::Read>(
-		reader: &mut R,
-	) -> borsh::io::Result<Self> {
-		let env =
-			BTreeMap::<PivotEnvVarName, PivotEnvValue>::deserialize_reader(
-				reader,
-			)?;
-		Self::try_from(env).map_err(|e| {
-			borsh::io::Error::new(borsh::io::ErrorKind::InvalidData, e)
-		})
-	}
-}
-
-impl serde::Serialize for PivotEnv {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		serde::Serialize::serialize(&self.0, serializer)
-	}
-}
-
-impl<'de> serde::Deserialize<'de> for PivotEnv {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		let env =
-			<BTreeMap<PivotEnvVarName, PivotEnvValue> as serde::Deserialize>::deserialize(
-				deserializer,
-			)?;
-		Self::try_from(env).map_err(serde::de::Error::custom)
-	}
-}
-
-impl fmt::Debug for PivotEnv {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		self.0.fmt(f)
-	}
-}
-
-impl PivotEnv {
 	fn check_aggregate_limits(&self) -> Result<(), ProtocolError> {
 		if self.len() > MAX_PIVOT_ENV_VARS {
 			return Err(ProtocolError::InvalidPivotEnv(format!(
@@ -388,5 +277,50 @@ impl PivotEnv {
 		}
 
 		Ok(())
+	}
+}
+
+impl TryFrom<BTreeMap<PivotEnvVarName, PivotEnvValue>> for PivotEnv {
+	type Error = ProtocolError;
+
+	fn try_from(
+		value: BTreeMap<PivotEnvVarName, PivotEnvValue>,
+	) -> Result<Self, Self::Error> {
+		let env = Self(value);
+		env.check_aggregate_limits()?;
+		Ok(env)
+	}
+}
+
+impl BorshDeserialize for PivotEnv {
+	fn deserialize_reader<R: borsh::io::Read>(
+		reader: &mut R,
+	) -> borsh::io::Result<Self> {
+		let env =
+			BTreeMap::<PivotEnvVarName, PivotEnvValue>::deserialize_reader(
+				reader,
+			)?;
+		Self::try_from(env).map_err(|e| {
+			borsh::io::Error::new(borsh::io::ErrorKind::InvalidData, e)
+		})
+	}
+}
+
+impl<'de> serde::Deserialize<'de> for PivotEnv {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let env =
+			<BTreeMap<PivotEnvVarName, PivotEnvValue> as serde::Deserialize>::deserialize(
+				deserializer,
+			)?;
+		Self::try_from(env).map_err(serde::de::Error::custom)
+	}
+}
+
+impl fmt::Debug for PivotEnv {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		self.0.fmt(f)
 	}
 }
