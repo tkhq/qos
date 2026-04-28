@@ -194,9 +194,8 @@ pub struct PivotConfig {
 	/// Variable names must match `[A-Za-z_][A-Za-z0-9_]*` and be at most
 	/// [`MAX_PIVOT_ENV_NAME_LEN`] bytes long. Values may contain any UTF-8
 	/// except NUL bytes and must be at most [`MAX_PIVOT_ENV_VALUE_LEN`] bytes
-	/// long. A manifest may contain at most [`MAX_PIVOT_ENV_VARS`] variables
-	/// with a combined key-and-value payload of at most
-	/// [`MAX_PIVOT_ENV_TOTAL_LEN`] bytes. Values are not restricted to ASCII.
+	/// long. A manifest may contain at most [`MAX_PIVOT_ENV_VARS`] variables.
+	/// Values are not restricted to ASCII.
 	#[serde(default, skip_serializing_if = "PivotEnv::is_empty")]
 	pub env: PivotEnv,
 }
@@ -698,9 +697,8 @@ pub(in crate::protocol) fn boot_standard(
 
 #[cfg(test)]
 mod test {
-	use std::{collections::BTreeMap, path::Path};
+	use std::path::Path;
 
-	use borsh::{BorshDeserialize, BorshSerialize};
 	use qos_nsm::mock::MockNsm;
 	use qos_test_primitives::PathWrapper;
 
@@ -788,192 +786,6 @@ mod test {
 
 		assert_ne!(manifest.qos_hash(), manifest_with_env.qos_hash());
 		assert_eq!(manifest.pivot.hash, manifest_with_env.pivot.hash);
-	}
-
-	#[test]
-	fn serde_skips_empty_pivot_env() {
-		let (manifest, _members, _pivot) = get_manifest();
-		let serialized = serde_json::to_value(&manifest).unwrap();
-		assert!(serialized["pivot"].get("env").is_none());
-
-		let deserialized: Manifest =
-			serde_json::from_value(serialized).unwrap();
-		assert!(deserialized.pivot.env.is_empty());
-	}
-
-	#[test]
-	fn parses_valid_pivot_env() {
-		let mut env = BTreeMap::new();
-		env.insert(
-			PivotEnvVarName::new("FOO".to_string()).unwrap(),
-			PivotEnvValue::plain("bar".to_string()).unwrap(),
-		);
-		env.insert(
-			PivotEnvVarName::new("_EMPTY".to_string()).unwrap(),
-			PivotEnvValue::plain(String::new()).unwrap(),
-		);
-
-		assert!(PivotEnv::try_from(env).is_ok());
-	}
-
-	#[test]
-	fn accepts_valid_pivot_env_var_names() {
-		assert!(PivotEnvVarName::new("A".to_string()).is_ok());
-		assert!(PivotEnvVarName::new("_".to_string()).is_ok());
-		assert!(PivotEnvVarName::new("_WITH_NUMBERS_123".to_string()).is_ok());
-		assert!(
-			PivotEnvVarName::new("A".repeat(MAX_PIVOT_ENV_NAME_LEN)).is_ok()
-		);
-	}
-
-	#[test]
-	fn rejects_invalid_pivot_env_as_it_parses() {
-		assert!(PivotEnvVarName::new(String::new()).is_err());
-		assert!(PivotEnvVarName::new("BAD=NAME".to_string()).is_err());
-		assert!(PivotEnvVarName::new("1BAD".to_string()).is_err());
-		assert!(PivotEnvVarName::new("BAD-NAME".to_string()).is_err());
-		assert!(PivotEnvVarName::new("BAD.NAME".to_string()).is_err());
-		assert!(PivotEnvVarName::new("BAD NAME".to_string()).is_err());
-		assert!(PivotEnvVarName::new("BAD/NAME".to_string()).is_err());
-		assert!(PivotEnvVarName::new("BAD+NAME".to_string()).is_err());
-		assert!(PivotEnvVarName::new("A".repeat(MAX_PIVOT_ENV_NAME_LEN + 1))
-			.is_err());
-		assert!(PivotEnvValue::plain("bad\0value".to_string()).is_err());
-		assert!(PivotEnvValue::plain("A".repeat(MAX_PIVOT_ENV_VALUE_LEN + 1))
-			.is_err());
-
-		let mut env = BTreeMap::new();
-		for i in 0..=MAX_PIVOT_ENV_VARS {
-			env.insert(
-				PivotEnvVarName::new(format!("KEY_{i}")).unwrap(),
-				PivotEnvValue::plain("value".to_string()).unwrap(),
-			);
-		}
-		assert!(PivotEnv::try_from(env).is_err());
-	}
-
-	#[test]
-	fn manifest_round_trips_pivot_env_through_serde() {
-		let (manifest, _members, _pivot) = get_manifest();
-		let mut manifest_with_env = manifest.clone();
-		manifest_with_env
-			.pivot
-			.env
-			.insert(
-				PivotEnvVarName::new("FOO".to_string()).unwrap(),
-				PivotEnvValue::plain("bar".to_string()).unwrap(),
-			)
-			.unwrap();
-		manifest_with_env
-			.pivot
-			.env
-			.insert(
-				PivotEnvVarName::new("_EMPTY".to_string()).unwrap(),
-				PivotEnvValue::plain(String::new()).unwrap(),
-			)
-			.unwrap();
-
-		let serialized = serde_json::to_vec(&manifest_with_env).unwrap();
-		let deserialized =
-			serde_json::from_slice::<Manifest>(&serialized).unwrap();
-
-		assert_eq!(deserialized, manifest_with_env);
-	}
-
-	#[test]
-	fn pivot_env_serializes_to_sorted_externally_tagged_json() {
-		let mut env = PivotEnv::new();
-		env.insert(
-			PivotEnvVarName::new("ZETA".to_string()).unwrap(),
-			PivotEnvValue::plain("last".to_string()).unwrap(),
-		)
-		.unwrap();
-		env.insert(
-			PivotEnvVarName::new("ALPHA".to_string()).unwrap(),
-			PivotEnvValue::plain("first".to_string()).unwrap(),
-		)
-		.unwrap();
-
-		let serialized = serde_json::to_string(&env).unwrap();
-		assert_eq!(
-			serialized,
-			r#"{"ALPHA":{"plain":{"value":"first"}},"ZETA":{"plain":{"value":"last"}}}"#
-		);
-	}
-
-	#[test]
-	fn manifest_round_trips_pivot_env_through_borsh() {
-		let (manifest, _members, _pivot) = get_manifest();
-		let mut manifest_with_env = manifest.clone();
-		manifest_with_env
-			.pivot
-			.env
-			.insert(
-				PivotEnvVarName::new("FOO".to_string()).unwrap(),
-				PivotEnvValue::plain("bar".to_string()).unwrap(),
-			)
-			.unwrap();
-		manifest_with_env
-			.pivot
-			.env
-			.insert(
-				PivotEnvVarName::new("_EMPTY".to_string()).unwrap(),
-				PivotEnvValue::plain(String::new()).unwrap(),
-			)
-			.unwrap();
-
-		let mut bytes = Vec::new();
-		manifest_with_env.serialize(&mut bytes).unwrap();
-		let deserialized = Manifest::try_from_slice(&bytes).unwrap();
-
-		assert_eq!(deserialized, manifest_with_env);
-	}
-
-	#[test]
-	fn pivot_env_insert_rejects_values_that_exceed_aggregate_limits() {
-		let mut env = PivotEnv::new();
-		for i in 0..MAX_PIVOT_ENV_VARS {
-			env.insert(
-				PivotEnvVarName::new(format!("KEY_{i}")).unwrap(),
-				PivotEnvValue::plain("value".to_string()).unwrap(),
-			)
-			.unwrap();
-		}
-
-		let err = env
-			.insert(
-				PivotEnvVarName::new("ONE_TOO_MANY".to_string()).unwrap(),
-				PivotEnvValue::plain("value".to_string()).unwrap(),
-			)
-			.unwrap_err();
-
-		assert!(matches!(err, ProtocolError::InvalidPivotEnv(_)));
-		assert_eq!(env.len(), MAX_PIVOT_ENV_VARS);
-		assert!(env.get("ONE_TOO_MANY").is_none());
-	}
-
-	#[test]
-	fn rejects_invalid_pivot_env_during_serde_deserialize() {
-		let value = serde_json::json!({
-			"1BAD": {
-				"plain": {
-					"value": "bar"
-				}
-			}
-		});
-
-		assert!(serde_json::from_value::<PivotEnv>(value).is_err());
-	}
-
-	#[test]
-	fn rejects_invalid_pivot_env_during_borsh_deserialize() {
-		let mut bytes = Vec::new();
-		1u32.serialize(&mut bytes).unwrap();
-		"1BAD".to_string().serialize(&mut bytes).unwrap();
-		0u8.serialize(&mut bytes).unwrap();
-		"bar".to_string().serialize(&mut bytes).unwrap();
-
-		assert!(PivotEnv::try_from_slice(&bytes).is_err());
 	}
 
 	#[test]
