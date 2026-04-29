@@ -194,7 +194,7 @@ impl ProtocolState {
 	pub fn handle_msg(&mut self, msg_req: &ProtocolMsg) -> Vec<u8> {
 		for route in &self.routes() {
 			match route.try_msg(msg_req, self) {
-				None => continue,
+				None => (),
 				Some(result) => match result {
 					Ok(msg_resp) | Err(msg_resp) => {
 						return borsh::to_vec(&msg_resp).expect(

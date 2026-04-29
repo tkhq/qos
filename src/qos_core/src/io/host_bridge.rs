@@ -36,7 +36,7 @@ impl HostBridge {
 	/// Create a TCP to VSOCK bridge using the provided `StreamPool` and `SocketAddr` from constructor.
 	/// This consumes the `HostBridge` instance and starts background tasks that only return on unrecoverable errors.
 	/// NOTE: this spawns a standalone tasks and *DOES NOT WAIT* for completion.
-	pub async fn tcp_to_vsock(self) {
+	pub fn tcp_to_vsock(self) {
 		println!("starting tcp to vsock host bridge @ {}", self.host_addr);
 		tokio::spawn(async move {
 			let streams = self.stream_pool.to_streams();
@@ -54,10 +54,17 @@ impl HostBridge {
 		});
 	}
 
-	/// Create a VSOCK to TCP bridge using the provided `StreamPool` and `SocketAddr` from constructor.
-	/// This consumes the `HostBridge` instance and starts background tasks that only return on unrecoverable errors.
-	/// NOTE: this spawns a standalone tasks and *DOES NOT WAIT* for completion.
-	pub async fn vsock_to_tcp(self) {
+	/// Create a VSOCK to TCP bridge using the provided `StreamPool` and
+	/// `SocketAddr` from constructor. This consumes the `HostBridge`
+	/// instance and starts background tasks that only return on
+	/// unrecoverable errors.
+	/// NOTE: this spawns a standalone tasks and *DOES NOT WAIT* for
+	/// completion.
+	///
+	/// # Panics
+	///
+	/// Panics if the stream pool fails to bind its listeners.
+	pub fn vsock_to_tcp(self) {
 		println!("starting vsock to tcp host bridge @ {}", self.host_addr);
 		tokio::spawn(async move {
 			let listeners = self

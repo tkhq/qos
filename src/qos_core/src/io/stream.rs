@@ -64,8 +64,13 @@ impl Stream {
 		Self { address: Some(address.clone()), inner: None }
 	}
 
-	/// Connect `Stream` to `SocketAddress`
+	/// Connect `Stream` to `SocketAddress`.
 	/// Sets `inner` to the new stream.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if the address is invalid or the connection
+	/// fails.
 	pub async fn connect(&mut self) -> Result<(), IOError> {
 		let addr = self.address()?;
 
@@ -86,7 +91,13 @@ impl Stream {
 		Ok(())
 	}
 
-	/// Reconnects this `Stream` by calling `connect` again on the underlaying socket
+	/// Reconnects this `Stream` by calling `connect` again on the underlying
+	/// socket.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if the address is invalid or the connection
+	/// fails.
 	pub async fn reconnect(&mut self) -> Result<(), IOError> {
 		let addr = self.address()?.clone();
 
@@ -102,7 +113,12 @@ impl Stream {
 		Ok(())
 	}
 
-	/// Sends a buffer over the underlying socket using async
+	/// Sends a buffer over the underlying socket using async.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if the stream is disconnected or the write
+	/// fails.
 	pub async fn send(&mut self, buf: &[u8]) -> Result<(), IOError> {
 		match &mut self.inner_mut()? {
 			InnerStream::Unix(ref mut s) => send(s, buf).await,
@@ -111,7 +127,11 @@ impl Stream {
 		}
 	}
 
-	/// Receive from the underlying socket using async
+	/// Receive from the underlying socket using async.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if the stream is disconnected or the read fails.
 	pub async fn recv(&mut self) -> Result<Vec<u8>, IOError> {
 		match &mut self.inner_mut()? {
 			InnerStream::Unix(ref mut s) => recv(s).await,
@@ -120,7 +140,12 @@ impl Stream {
 		}
 	}
 
-	/// Perform a "call" by sending the `req_buf` bytes and waiting for reply on the same socket.
+	/// Perform a "call" by sending the `req_buf` bytes and waiting for a
+	/// reply on the same socket.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if connecting, sending, or receiving fails.
 	pub async fn call(&mut self, req_buf: &[u8]) -> Result<Vec<u8>, IOError> {
 		// first time? connect
 		if self.inner.is_none() {
@@ -133,7 +158,11 @@ impl Stream {
 		self.recv().await
 	}
 
-	/// Get the address of the socket or error out in case it's invalid
+	/// Get the address of the socket or error out in case it's invalid.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError::ConnectAddressInvalid`] if no address is set.
 	pub fn address(&self) -> Result<&SocketAddress, IOError> {
 		self.address.as_ref().ok_or(IOError::ConnectAddressInvalid)
 	}
@@ -159,6 +188,10 @@ async fn send<S: AsyncWriteExt + Unpin>(
 	stream: &mut S,
 	buf: &[u8],
 ) -> Result<(), IOError> {
+	// NOTE: due to this kernel bug: https://github.com/cloud-hypervisor/cloud-hypervisor/issues/7672
+	// we need to write in chunks of < 32kiB each
+	const MAX_WRITE_SIZE: usize = 31234;
+
 	let length = buf.len();
 
 	if length > MAX_PAYLOAD_SIZE {
@@ -172,9 +205,6 @@ async fn send<S: AsyncWriteExt + Unpin>(
 	stream.write_all(&len_buf).await?;
 
 	// Send the actual contents of the buffer
-	// NOTE: due to this kernel bug: https://github.com/cloud-hypervisor/cloud-hypervisor/issues/7672
-	// we need to write in chunks of < 32kiB each
-	const MAX_WRITE_SIZE: usize = 31234;
 	let mut total = 0;
 
 	while total < length {
@@ -312,6 +342,10 @@ impl Listener {
 	}
 
 	/// Accept a new connection.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if accepting the connection fails.
 	pub async fn accept(&self) -> Result<Stream, IOError> {
 		let stream = match &self.inner {
 			InnerListener::Unix(l) => {

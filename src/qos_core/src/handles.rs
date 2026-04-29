@@ -256,6 +256,11 @@ impl Handles {
 	}
 
 	/// Put the Pivot binary, ensuring it is an executable.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError`] if the pivot already exists, the
+	/// directory cannot be created, or the file cannot be written.
 	pub fn put_pivot(&self, pivot: &[u8]) -> Result<(), ProtocolError> {
 		if Path::new(&self.pivot).exists() {
 			Err(ProtocolError::CannotModifyPostPivotStatic)?;

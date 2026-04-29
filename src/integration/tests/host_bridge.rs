@@ -22,7 +22,7 @@ async fn vsock_to_tcp_bridge_works() {
 		.unwrap()
 		.into();
 
-	HostBridge::new(pool, host_addr).vsock_to_tcp().await;
+	HostBridge::new(pool, host_addr).vsock_to_tcp();
 	wait_for_usock(APP_USOCK).await;
 
 	let mut stream = Stream::new(&SocketAddress::new_unix(APP_USOCK));
