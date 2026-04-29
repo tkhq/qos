@@ -31,6 +31,11 @@ pub struct PivotEnvVarName(String);
 
 impl PivotEnvVarName {
 	/// Parse and validate an environment variable name.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError::InvalidPivotEnv`] if the name is empty,
+	/// too long, or contains invalid characters.
 	pub fn new(name: String) -> Result<Self, ProtocolError> {
 		if name.len() > MAX_PIVOT_ENV_NAME_LEN {
 			return Err(ProtocolError::InvalidPivotEnv(format!(
@@ -119,6 +124,11 @@ pub struct PivotEnvPlainValue(String);
 
 impl PivotEnvPlainValue {
 	/// Parse and validate a plain environment variable value.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError::InvalidPivotEnv`] if the value contains
+	/// NUL bytes or exceeds the maximum length.
 	pub fn new(value: String) -> Result<Self, ProtocolError> {
 		if value.contains('\0') {
 			return Err(ProtocolError::InvalidPivotEnv(
@@ -210,6 +220,11 @@ pub enum PivotEnvValue {
 
 impl PivotEnvValue {
 	/// Parse and validate a plain environment variable value.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError::InvalidPivotEnv`] if the value is
+	/// invalid.
 	pub fn plain(value: String) -> Result<Self, ProtocolError> {
 		Ok(Self::Plain { value: PivotEnvPlainValue::try_from(value)? })
 	}
@@ -279,6 +294,11 @@ impl PivotEnv {
 	}
 
 	/// Insert an environment variable.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError::InvalidPivotEnv`] if inserting the
+	/// variable would exceed the collection limits.
 	pub fn insert(
 		&mut self,
 		name: PivotEnvVarName,

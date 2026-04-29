@@ -129,7 +129,7 @@ mod tests {
 	#[test]
 	fn valid_attestation_do_passes_validation() {
 		let attestation_doc = valid_attestation_doc();
-		assert!(validate_attestation_doc(&attestation_doc).is_ok())
+		assert!(validate_attestation_doc(&attestation_doc).is_ok());
 	}
 
 	#[test]
