@@ -10,6 +10,12 @@ use crate::protocol::{
 	services::attestation, Hash256, ProtocolError, ProtocolState, QosHash,
 };
 
+pub mod env;
+pub use env::{
+	PivotEnv, PivotEnvValue, PivotEnvVarName, MAX_PIVOT_ENV_NAME_LEN,
+	MAX_PIVOT_ENV_VALUE_LEN, MAX_PIVOT_ENV_VARS,
+};
+
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
 	PartialEq,
@@ -183,6 +189,15 @@ pub struct PivotConfig {
 	/// Arguments to invoke the binary with. Leave this empty if none are
 	/// needed.
 	pub args: Vec<String>,
+	/// Environment variables to inject into the pivot process.
+	///
+	/// Variable names must match `[A-Za-z_][A-Za-z0-9_]*` and be at most
+	/// [`MAX_PIVOT_ENV_NAME_LEN`] bytes long. Values may contain any UTF-8
+	/// except NUL bytes and must be at most [`MAX_PIVOT_ENV_VALUE_LEN`] bytes
+	/// long. A manifest may contain at most [`MAX_PIVOT_ENV_VARS`] variables.
+	/// Values are not restricted to ASCII.
+	#[serde(default, skip_serializing_if = "PivotEnv::is_empty")]
+	pub env: PivotEnv,
 }
 
 /// Pivot binary configuration, original version (V0)
@@ -217,6 +232,7 @@ impl From<PivotConfigV0> for PivotConfig {
 			args: value.args,
 			debug_mode: false,
 			bridge_config: Vec::new(),
+			env: PivotEnv::new(),
 		}
 	}
 }
@@ -227,6 +243,7 @@ impl fmt::Debug for PivotConfig {
 			.field("hash", &qos_hex::encode(&self.hash))
 			.field("restart", &self.restart)
 			.field("args", &self.args.join(" "))
+			.field("env", &self.env)
 			.finish()
 	}
 }
@@ -462,7 +479,14 @@ impl From<ManifestV0> for Manifest {
 }
 
 impl Manifest {
-	/// Read a `Manifest` in a backwards compatible way
+	/// Read a `Manifest` in a backwards compatible way.
+	///
+	/// Callers should only use this after trying to parse the current JSON
+	/// schema first. This helper attempts `ManifestV0` JSON before the current
+	/// type, so direct use on current JSON can silently drop newer `pivot`
+	/// fields that `ManifestV0` ignores. In-tree callers avoid that by going
+	/// through `read_manifest`, which tries the current `Manifest` JSON parse
+	/// before falling back here.
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
 		use borsh::BorshDeserialize;
 
@@ -745,6 +769,23 @@ mod test {
 		let hashes: Vec<_> = (0..10).map(|_| manifest.qos_hash()).collect();
 		let is_valid = (1..10).all(|i| hashes[i] == hashes[0]);
 		assert!(is_valid);
+	}
+
+	#[test]
+	fn manifest_hash_changes_when_env_changes() {
+		let (manifest, _members, _pivot) = get_manifest();
+		let mut manifest_with_env = manifest.clone();
+		manifest_with_env
+			.pivot
+			.env
+			.insert(
+				PivotEnvVarName::new("FOO".to_string()).unwrap(),
+				PivotEnvValue::plain("bar".to_string()).unwrap(),
+			)
+			.unwrap();
+
+		assert_ne!(manifest.qos_hash(), manifest_with_env.qos_hash());
+		assert_eq!(manifest.pivot.hash, manifest_with_env.pivot.hash);
 	}
 
 	#[test]
@@ -1033,5 +1074,6 @@ mod test {
 
 		assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
 		assert_eq!(manifest.pivot.bridge_config.len(), 0);
+		assert!(manifest.pivot.env.is_empty());
 	}
 }

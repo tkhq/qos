@@ -52,6 +52,8 @@ pub const QOS_DIST_DIR: &str = "./mock/dist";
 pub const PCR3_PRE_IMAGE_PATH: &str = "./mock/namespaces/pcr3-preimage.txt";
 
 const MSG: &str = "msg";
+const ENV_KEY: &str = "env-key";
+const MISSING_ENV_KEY: &str = "missing-env-key";
 const POOL_SIZE: &str = "pool-size";
 
 /// Request/Response messages for "socket stress" pivot app.
@@ -147,13 +149,14 @@ pub async fn wait_for_usock(path: &str) {
 }
 
 pub async fn wait_for_tcp_sock(host_addr: &str) {
-	// attempt to connect, this can fail a few times due to timing, max 1s timeout
+	// Some integration flows start the listener only after a few control-loop
+	// iterations, so give the socket enough time to appear before failing.
 	let mut attempts = 0;
 	loop {
 		if let Ok(_stream) = TcpStream::connect(&host_addr).await {
 			return;
 		}
-		assert!((attempts <= 9), "unable to connect to {host_addr}");
+		assert!((attempts <= 99), "unable to connect to {host_addr}");
 		attempts += 1;
 		tokio::time::sleep(Duration::from_millis(100)).await;
 	}
@@ -167,6 +170,19 @@ impl GetParserForOptions for PivotParser {
 				Token::new(MSG, "A msg to write")
 					.takes_value(true)
 					.required(true),
+			)
+			.token(
+				Token::new(ENV_KEY, "Env var name to append")
+					.takes_value(true)
+					.required(false),
+			)
+			.token(
+				Token::new(
+					MISSING_ENV_KEY,
+					"Env var name expected to be missing",
+				)
+				.takes_value(true)
+				.required(false),
 			)
 			.token(
 				Token::new(POOL_SIZE, "App pool size")
@@ -189,7 +205,24 @@ impl Cli {
 		let opts = OptionsParser::<PivotParser>::parse(&mut args)
 			.expect("Entered invalid CLI args");
 
-		let msg = opts.single(MSG).expect("required argument.");
+		let mut msg = opts.single(MSG).expect("required argument.").to_string();
+
+		// Env tests set one variable in the parent process and a different
+		// variable in the manifest, then pass both names to this pivot. This
+		// code fails if the parent-only name is visible here, appends the
+		// manifest variable's value to `msg`, and writes that combined string
+		// to `path`. The test reads `path` and expects `msg + env_value`.
+		if let Some(key) = opts.single(MISSING_ENV_KEY) {
+			assert!(
+				std::env::var(key).is_err(),
+				"unexpected env var leaked into pivot process: {key}"
+			);
+		}
+
+		if let Some(key) = opts.single(ENV_KEY) {
+			let value = std::env::var(key).expect("expected pivot env var");
+			msg.push_str(&value);
+		}
 
 		std::fs::write(path, msg).expect("Failed to write to pivot success");
 	}
