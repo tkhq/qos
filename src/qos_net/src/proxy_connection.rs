@@ -27,7 +27,11 @@ pub struct ProxyConnection {
 
 impl ProxyConnection {
 	/// Create a new `ProxyConnection` from a name. This results in a DNS
-	/// request + TCP connection
+	/// request + TCP connection.
+	///
+	/// # Errors
+	///
+	/// Returns [`QosNetError`] if DNS resolution or TCP connection fails.
 	pub async fn new_from_name(
 		hostname: String,
 		port: u16,
@@ -42,7 +46,12 @@ impl ProxyConnection {
 	}
 
 	/// Create a new `ProxyConnection` from an IP address. This results in a
-	/// new TCP connection
+	/// new TCP connection.
+	///
+	/// # Errors
+	///
+	/// Returns [`QosNetError`] if the IP cannot be parsed or the TCP
+	/// connection fails.
 	pub async fn new_from_ip(
 		ip: String,
 		port: u16,
@@ -57,6 +66,10 @@ impl ProxyConnection {
 
 impl ProxyConnection {
 	/// Read data from the TCP stream into the buffer.
+	///
+	/// # Errors
+	///
+	/// Returns [`std::io::Error`] if the read fails.
 	pub async fn read(
 		&mut self,
 		buf: &mut [u8],
@@ -65,17 +78,30 @@ impl ProxyConnection {
 	}
 
 	/// Write data to the TCP stream.
+	///
+	/// # Errors
+	///
+	/// Returns [`std::io::Error`] if the write fails.
 	pub async fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
 		self.tcp_stream.write(buf).await
 	}
 
 	/// Flush any buffered data to the TCP stream.
+	///
+	/// # Errors
+	///
+	/// Returns [`std::io::Error`] if the flush fails.
 	pub async fn flush(&mut self) -> std::io::Result<()> {
 		self.tcp_stream.flush().await
 	}
 }
 
 /// Resolve a hostname into an IP address using the specified DNS resolvers.
+///
+/// # Errors
+///
+/// Returns [`QosNetError`] if the resolver addresses cannot be parsed or
+/// DNS resolution fails.
 pub async fn resolve_hostname(
 	hostname: String,
 	resolver_addrs: Vec<String>,

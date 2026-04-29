@@ -193,7 +193,12 @@ pub enum PairOrYubi {
 }
 
 impl PairOrYubi {
-	/// Create a P256 key pair or yubikey from the given inputs
+	/// Create a P256 key pair or yubikey from the given inputs.
+	///
+	/// # Errors
+	///
+	/// Returns [`Error`] if the YubiKey cannot be opened, the PIN cannot
+	/// be read, or the secret file is invalid.
 	#[allow(clippy::missing_panics_doc)]
 	pub fn from_inputs(
 		yubikey_flag: bool,
@@ -235,7 +240,11 @@ impl PairOrYubi {
 		Ok(result)
 	}
 
-	/// Sign the payload
+	/// Sign the payload.
+	///
+	/// # Errors
+	///
+	/// Returns [`Error`] if signing fails.
 	pub fn sign(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
@@ -247,7 +256,11 @@ impl PairOrYubi {
 		}
 	}
 
-	/// Decrypt the payload
+	/// Decrypt the payload.
+	///
+	/// # Errors
+	///
+	/// Returns [`Error`] if decryption fails.
 	pub fn decrypt(&mut self, payload: &[u8]) -> Result<Vec<u8>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
@@ -268,7 +281,11 @@ impl PairOrYubi {
 		}
 	}
 
-	/// Get the public key in bytes
+	/// Get the public key in bytes.
+	///
+	/// # Errors
+	///
+	/// Returns [`Error`] if the public key cannot be read.
 	pub fn public_key_bytes(&mut self) -> Result<Vec<u8>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
@@ -361,7 +378,12 @@ pub(crate) fn pin_from_path<P: AsRef<Path>>(path: P) -> Vec<u8> {
 		.to_vec()
 }
 
-/// Provision a yubikey from a pre-generated master seed
+/// Provision a yubikey from a pre-generated master seed.
+///
+/// # Errors
+///
+/// Returns [`Error`] if the YubiKey cannot be opened, the PIN cannot be
+/// read, or provisioning fails.
 #[cfg(feature = "smartcard")]
 pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 	master_seed_path: P,

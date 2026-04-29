@@ -91,6 +91,11 @@ impl From<der::Error> for YubiKeyError {
 ///
 /// Returns the public key as an uncompressed encoded point.
 ///
+/// # Errors
+///
+/// Returns [`YubiKeyError`] if PIN verification, key generation, or
+/// certificate creation fails, or if the slot is already occupied.
+///
 /// # Panics
 /// Panics if the `OsRng` is unable to provide data, which shouldn't happen in normal operation.
 pub fn generate_signed_certificate(
@@ -140,6 +145,11 @@ pub fn generate_signed_certificate(
 
 /// Import the given `key_data` onto the `yubikey` and create a signed
 /// certificate for the key.
+///
+/// # Errors
+///
+/// Returns [`YubiKeyError`] if PIN verification, key import, or
+/// certificate creation fails, or if the slot is already occupied.
 ///
 /// # Panics
 /// Panics if the `OsRng` is unable to provide data, which shouldn't happen in normal operation.
@@ -197,10 +207,15 @@ pub fn import_key_and_generate_signed_certificate(
 	Ok(())
 }
 
-/// Sign data with the yubikey and return the signature as a raw bytes.
+/// Sign data with the yubikey and return the signature as raw bytes.
+///
+/// # Errors
+///
+/// Returns [`YubiKeyError`] if the signing key cannot be found, PIN
+/// verification fails, or signature verification fails.
 ///
 /// # Panics
-/// Panics if `piv::sign_data` doesn't return a valid DER signature
+/// Panics if `piv::sign_data` doesn't return a valid DER signature.
 pub fn sign_data(
 	yubikey: &mut YubiKey,
 	data: &[u8],
@@ -242,6 +257,10 @@ pub fn sign_data(
 ///
 /// `sender_public_key` is an uncompressed encoded point of the public key used
 /// by the sender to create the shared secret.
+///
+/// # Errors
+///
+/// Returns [`YubiKeyError`] if PIN verification or key agreement fails.
 pub fn key_agreement(
 	yubikey: &mut YubiKey,
 	sender_public_key: &[u8],
@@ -253,6 +272,11 @@ pub fn key_agreement(
 }
 
 /// Open the single connected yubikey.
+///
+/// # Errors
+///
+/// Returns [`YubiKeyError`] if no YubiKey is connected or it cannot be
+/// opened.
 pub fn open_single() -> Result<YubiKey, YubiKeyError> {
 	YubiKey::open().map_err(YubiKeyError::Connection)
 }
@@ -260,6 +284,11 @@ pub fn open_single() -> Result<YubiKey, YubiKeyError> {
 /// Get the public key from the yubikey that corresponds to
 /// `P256Public::to_bytes`. This is the key agree public key concatenated with
 /// the signature public key. Encodes as `encrypt_public||sign_public`.
+///
+/// # Errors
+///
+/// Returns [`YubiKeyError`] if the signing or key agreement certificate
+/// cannot be read.
 pub fn pair_public_key(yubikey: &mut YubiKey) -> Result<Vec<u8>, YubiKeyError> {
 	let signing_slot_cert = Certificate::read(yubikey, SIGNING_SLOT)
 		.map_err(|_| YubiKeyError::CannotFindSigningKey)?;
@@ -277,6 +306,11 @@ pub fn pair_public_key(yubikey: &mut YubiKey) -> Result<Vec<u8>, YubiKeyError> {
 }
 
 /// Get the public key on the key agree slot.
+///
+/// # Errors
+///
+/// Returns [`YubiKeyError`] if the key agreement certificate cannot be
+/// read.
 pub fn key_agree_public_key(
 	yubikey: &mut YubiKey,
 ) -> Result<Vec<u8>, YubiKeyError> {
@@ -293,6 +327,11 @@ pub fn key_agree_public_key(
 /// given `serialized_envelope`.
 ///
 /// Returns `(shared_secret, public_key_bytes)`.
+///
+/// # Errors
+///
+/// Returns [`YubiKeyError`] if the envelope cannot be deserialized or
+/// key agreement fails.
 pub fn shared_secret(
 	yubikey: &mut YubiKey,
 	serialized_envelope: &[u8],
@@ -309,6 +348,11 @@ pub fn shared_secret(
 }
 
 /// Change the PIV authorization PIN on the yubikey.
+///
+/// # Errors
+///
+/// Returns [`YubiKeyError`] if the YubiKey cannot be opened or the PIN
+/// change fails.
 pub fn yubikey_change_pin(
 	current_pin: &[u8],
 	new_pin: &[u8],
@@ -323,6 +367,10 @@ pub fn yubikey_change_pin(
 /// Reset the PIV app on the attached yubikey.
 ///
 /// **WARNING:** This will delete all private keys on the PIV app.
+///
+/// # Errors
+///
+/// Returns [`YubiKeyError`] if the YubiKey cannot be opened.
 pub fn yubikey_piv_reset() -> Result<(), YubiKeyError> {
 	let mut yubikey = open_single()?;
 	// Pins need to be blocked before device can be reset

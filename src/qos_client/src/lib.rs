@@ -15,6 +15,11 @@ pub mod request {
 
 	/// Post a [`qos_core::protocol::msg::ProtocolMsg`] to the given host `url`.
 	///
+	/// # Errors
+	///
+	/// Returns an error string if the HTTP request fails, the response
+	/// cannot be read, or deserialization fails.
+	///
 	/// # Panics
 	/// Panics if the `msg` cannot be Borsh serialized.
 	/// Should never happen in practice because all protocol messages are
@@ -54,6 +59,10 @@ pub mod request {
 	}
 
 	/// Get the resource at the given host `url`.
+	///
+	/// # Errors
+	///
+	/// Returns an error string if the response body cannot be read.
 	///
 	/// # Panics
 	///
