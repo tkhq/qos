@@ -580,7 +580,7 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	let genesis_output = GenesisOutput::try_from_slice(
 		&fs::read(&genesis_output_path).unwrap_or_else(|e| {
-			panic!("verify_genesis: Could not read genesis output from {genesis_output_path:?}: {e}")
+			panic!("verify_genesis: Could not read genesis output from {}: {e}", genesis_output_path.display())
 		}),
 	)
 	.expect(
@@ -588,11 +588,18 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	);
 
 	let master_seed_path = master_seed_path.as_ref();
-	let master_seed_hex = fs::read_to_string(master_seed_path).unwrap_or_else(|e| {
-		panic!("verify_genesis: Could not read master seed from {master_seed_path:?}: {e}")
-	});
+	let master_seed_hex =
+		fs::read_to_string(master_seed_path).unwrap_or_else(|e| {
+			panic!(
+				"verify_genesis: Could not read master seed from {}: {e}",
+				master_seed_path.display()
+			)
+		});
 	let pair = P256Pair::from_hex_file(master_seed_path).unwrap_or_else(|e| {
-		panic!("verify_genesis: Could not parse master seed from {master_seed_path:?}: {e:?}")
+		panic!(
+			"verify_genesis: Could not parse master seed from {}: {e:?}",
+			master_seed_path.display()
+		)
 	});
 
 	// sanity check our logic to read in master seed
@@ -664,7 +671,10 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 
 	// Read in the attestation doc from the genesis directory
 	let cose_sign1 = fs::read(&attestation_doc_path).unwrap_or_else(|e| {
-		panic!("after_genesis: Could not read attestation doc from {attestation_doc_path:?}: {e}")
+		panic!(
+			"after_genesis: Could not read attestation doc from {}: {e}",
+			attestation_doc_path.display()
+		)
 	});
 	let attestation_doc = extract_attestation_doc(
 		&cose_sign1,
@@ -675,7 +685,10 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	// Read in the genesis output from the genesis directory
 	let genesis_output = GenesisOutput::try_from_slice(
 		&fs::read(&genesis_set_path).unwrap_or_else(|e| {
-			panic!("after_genesis: Could not read genesis output from {genesis_set_path:?}: {e}")
+			panic!(
+				"after_genesis: Could not read genesis output from {}: {e}",
+				genesis_set_path.display()
+			)
 		}),
 	)
 	.expect("after_genesis: Could not deserialize the genesis output");
@@ -1699,7 +1712,10 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	// Read in the pivot
 	let pivot_path = pivot_path.as_ref();
 	let pivot = fs::read(pivot_path).unwrap_or_else(|e| {
-		panic!("dangerous_dev_boot: Could not read pivot binary from {pivot_path:?}: {e}")
+		panic!(
+			"dangerous_dev_boot: Could not read pivot binary from {}: {e}",
+			pivot_path.display()
+		)
 	});
 
 	let mock_pcr = vec![0; 48];
@@ -1937,7 +1953,10 @@ fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
 			}
 
 			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
-				panic!("get_share_set: Could not read public key from {path:?}: {e:?}")
+				panic!(
+					"get_share_set: Could not read public key from {}: {e:?}",
+					path.display()
+				)
 			});
 			Some(QuorumMember {
 				alias: mem::take(&mut file_name[0]),
@@ -1962,7 +1981,7 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 			}
 
 			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
-				panic!("get_manifest_set: Could not read public key from {path:?}: {e:?}")
+				panic!("get_manifest_set: Could not read public key from {}: {e:?}", path.display())
 			});
 			Some(QuorumMember {
 				alias: mem::take(&mut file_name[0]),
@@ -1987,7 +2006,10 @@ fn get_patch_set<P: AsRef<Path>>(dir: P) -> PatchSet {
 			}
 
 			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
-				panic!("get_patch_set: Could not read public key from {path:?}: {e:?}")
+				panic!(
+					"get_patch_set: Could not read public key from {}: {e:?}",
+					path.display()
+				)
 			});
 			Some(MemberPubKey { pub_key: public.to_bytes() })
 		})
@@ -2010,7 +2032,10 @@ fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
 
 			let public = P256Public::from_hex_file(path)
 				.map_err(|e| {
-					panic!("Could not read hex from share_key.pub: {path:?}: {e:?}")
+					panic!(
+						"Could not read hex from share_key.pub: {}: {e:?}",
+						path.display()
+					)
 				})
 				.unwrap();
 
@@ -2042,10 +2067,10 @@ fn find_approvals<P: AsRef<Path>>(
 
 			let approval: Approval =
 				serde_json::from_slice(&fs::read(path).unwrap_or_else(|e| {
-					panic!("find_approvals: Could not read approval from {path:?}: {e}")
+					panic!("find_approvals: Could not read approval from {}: {e}", path.display())
 				}))
 				.unwrap_or_else(|e| {
-					panic!("find_approvals: Could not deserialize approval from {path:?}: {e}")
+					panic!("find_approvals: Could not deserialize approval from {}: {e}", path.display())
 				});
 
 			assert!(
