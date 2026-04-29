@@ -1689,7 +1689,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	restart: RestartPolicy,
 	args: Vec<String>,
 	host_config: Vec<BridgeConfig>,
-	unsafe_eph_path_override: Option<String>,
+	unsafe_eph_path_override: Option<&str>,
 ) {
 	// Generate a quorum key
 	let quorum_pair = P256Pair::generate().expect("Failed P256 key gen");
@@ -1779,9 +1779,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 
 	// Pull out the ephemeral key or use the override
-	let eph_pub: P256Public = if let Some(ref eph_path) =
-		unsafe_eph_path_override
-	{
+	let eph_pub: P256Public = if let Some(eph_path) = unsafe_eph_path_override {
 		P256Pair::from_hex_file(eph_path)
 			.unwrap_or_else(|e| panic!("dangerous_dev_boot: Could not read ephemeral key from {eph_path:?}: {e:?}"))
 			.public_key()
