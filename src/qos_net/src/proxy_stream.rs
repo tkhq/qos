@@ -37,6 +37,10 @@ impl<'pool> ProxyStream<'pool> {
 	///
 	/// Returns [`QosNetError`] if the connection request fails or the
 	/// proxy returns an error.
+	///
+	/// # Panics
+	///
+	/// Panics if the request cannot be serialized.
 	pub async fn connect_by_name(
 		mut stream: PoolGuard<'pool>,
 		hostname: String,
@@ -78,6 +82,10 @@ impl<'pool> ProxyStream<'pool> {
 	///
 	/// Returns [`QosNetError`] if the connection request fails or the
 	/// proxy returns an error.
+	///
+	/// # Panics
+	///
+	/// Panics if the request cannot be serialized.
 	pub async fn connect_by_ip(
 		mut stream: PoolGuard<'pool>,
 		ip: String,
