@@ -275,7 +275,7 @@ pub fn key_agreement(
 ///
 /// # Errors
 ///
-/// Returns [`YubiKeyError`] if no YubiKey is connected or it cannot be
+/// Returns [`YubiKeyError`] if no `YubiKey` is connected or it cannot be
 /// opened.
 pub fn open_single() -> Result<YubiKey, YubiKeyError> {
 	YubiKey::open().map_err(YubiKeyError::Connection)
@@ -351,7 +351,7 @@ pub fn shared_secret(
 ///
 /// # Errors
 ///
-/// Returns [`YubiKeyError`] if the YubiKey cannot be opened or the PIN
+/// Returns [`YubiKeyError`] if the `YubiKey` cannot be opened or the PIN
 /// change fails.
 pub fn yubikey_change_pin(
 	current_pin: &[u8],
@@ -370,7 +370,7 @@ pub fn yubikey_change_pin(
 ///
 /// # Errors
 ///
-/// Returns [`YubiKeyError`] if the YubiKey cannot be opened.
+/// Returns [`YubiKeyError`] if the `YubiKey` cannot be opened.
 pub fn yubikey_piv_reset() -> Result<(), YubiKeyError> {
 	let mut yubikey = open_single()?;
 	// Pins need to be blocked before device can be reset

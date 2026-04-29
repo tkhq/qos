@@ -197,7 +197,7 @@ impl PairOrYubi {
 	///
 	/// # Errors
 	///
-	/// Returns [`Error`] if the YubiKey cannot be opened, the PIN cannot
+	/// Returns [`Error`] if the `YubiKey` cannot be opened, the PIN cannot
 	/// be read, or the secret file is invalid.
 	#[allow(clippy::missing_panics_doc)]
 	pub fn from_inputs(
@@ -382,7 +382,7 @@ pub(crate) fn pin_from_path<P: AsRef<Path>>(path: P) -> Vec<u8> {
 ///
 /// # Errors
 ///
-/// Returns [`Error`] if the YubiKey cannot be opened, the PIN cannot be
+/// Returns [`Error`] if the `YubiKey` cannot be opened, the PIN cannot be
 /// read, or provisioning fails.
 #[cfg(feature = "smartcard")]
 pub fn advanced_provision_yubikey<P: AsRef<Path>>(
