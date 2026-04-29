@@ -235,14 +235,15 @@ mod test {
 		);
 
 		// Decode the chunked content
-		let mut decoded = String::new();
+		let mut decoded_string = String::new();
 		let mut decoder = Decoder::new(&response_bytes[header_byte_size..]);
-		let res = decoder.read_to_string(&mut decoded);
+		let res = decoder.read_to_string(&mut decoded_string);
 		assert!(res.is_ok());
 
 		// Parse the JSON response body and make sure there is a proper "keys"
 		// array in it
-		let json_content: Value = serde_json::from_str(&decoded).unwrap();
+		let json_content: Value =
+			serde_json::from_str(&decoded_string).unwrap();
 		assert!(json_content["keys"].is_array());
 	}
 }
