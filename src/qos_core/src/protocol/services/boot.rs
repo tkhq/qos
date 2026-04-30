@@ -6,8 +6,11 @@ use qos_crypto::sha_256;
 use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Pair, P256Public};
 
-use crate::protocol::{
-	services::attestation, Hash256, ProtocolError, ProtocolState, QosHash,
+use crate::{
+	io::to_hex_string,
+	protocol::{
+		services::attestation, Hash256, ProtocolError, ProtocolState, QosHash,
+	},
 };
 
 pub mod env;
@@ -657,7 +660,19 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	if !manifest_envelope.share_set_approvals.is_empty() {
 		return Err(ProtocolError::BadShareSetApprovals);
 	}
+
 	let actual_hash = sha_256(pivot);
+
+	eprintln!("-========PIVOT========");
+	eprintln!(
+		"Received pivot bytes to enclave of len {} and sha256: {:0}",
+		pivot.len(),
+		qos_hex::encode(&actual_hash),
+	);
+	eprintln!("START BYTES: {}", to_hex_string(&pivot[0..20]));
+	eprintln!("END BYTES: {}", to_hex_string(&pivot[pivot.len() - 20..]));
+	eprintln!("-=======/PIVOT========");
+
 	let expected_hash = manifest_envelope.manifest.pivot.hash;
 	if actual_hash != expected_hash {
 		return Err(ProtocolError::InvalidPivotHash {
