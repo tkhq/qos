@@ -30,6 +30,7 @@ pub struct GenesisSet {
 	/// flow outputs.
 	pub members: Vec<QuorumMember>,
 	/// Threshold for successful reconstitution of the Quorum Key shards
+	#[serde(with = "qos_json::string_number")]
 	pub threshold: u32,
 }
 
@@ -131,13 +132,10 @@ pub struct GenesisOutput {
 	/// process.
 	pub recovery_permutations: Vec<RecoveredPermutation>,
 	/// The threshold, K, used to generate the shards.
+	#[serde(with = "qos_json::string_number")]
 	pub threshold: u32,
 	/// The quorum key encrypted to the DR key. None if no DR Key was provided
-	#[serde(
-		default,
-		skip_serializing_if = "Option::is_none",
-		with = "qos_hex::serde_opt"
-	)]
+	#[serde(default, with = "qos_hex::serde")]
 	pub dr_key_wrapped_quorum_key: Option<Vec<u8>>,
 	/// Hash of the quorum key secret
 	#[serde(with = "qos_hex::serde")]

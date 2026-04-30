@@ -22,10 +22,7 @@ pub mod request {
 		let mut buf: Vec<u8> = vec![];
 
 		let response = ureq::post(url)
-			.send_bytes(
-				&serde_json::to_vec(msg)
-					.expect("ProtocolMsg can always be serialized. qed."),
-			)
+			.send_bytes(&msg.to_canonical_json_vec())
 			.map_err(|e| match e {
 				ureq::Error::Status(code, r) => {
 					let body = r.into_string();
@@ -44,9 +41,13 @@ pub mod request {
 			},
 		)?;
 
-		let decoded_response = serde_json::from_slice(&buf).map_err(|e| {
-			format!("http_post error: deserialization error: {e:?}")
-		})?;
+		let decoded_response =
+			ProtocolMsg::from_json_slice(&buf).map_err(|e| {
+				let body = String::from_utf8_lossy(&buf);
+				format!(
+					"http_post error: deserialization error: {e:?}, body: {body:?}"
+				)
+			})?;
 
 		Ok(decoded_response)
 	}

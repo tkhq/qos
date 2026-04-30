@@ -5,7 +5,9 @@ use std::{
 
 use integration::{wait_for_tcp_sock, wait_for_usock, PIVOT_TCP_PATH};
 use qos_core::io::{HostBridge, SocketAddress, Stream, StreamPool};
-use qos_test_primitives::{find_free_port, ChildWrapper};
+use qos_test_primitives::{
+	find_free_port, wait_until_port_is_bound, ChildWrapper,
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::test(flavor = "multi_thread")]
@@ -24,6 +26,7 @@ async fn vsock_to_tcp_bridge_works() {
 
 	HostBridge::new(pool, host_addr).vsock_to_tcp().await;
 	wait_for_usock(APP_USOCK).await;
+	wait_until_port_is_bound(port);
 
 	let mut stream = Stream::new(&SocketAddress::new_unix(APP_USOCK));
 	let mut stream2 = Stream::new(&SocketAddress::new_unix(APP_USOCK));

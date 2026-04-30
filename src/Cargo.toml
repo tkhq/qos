@@ -88,7 +88,6 @@ rustls = { version = "0.23.5" }
 serde = { version = "1", features = ["derive"], default-features = false }
 serde_bytes = { version = "0.11.10", default-features = false }
 serde_json = { version = "1" }
-serde_json_canonicalizer = "0.3.2"
 sha2 = { version = "0.10", default-features = false }
 thiserror = { version = "2.0.12", features = ["std"], default-features = false }
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"], default-features = false }

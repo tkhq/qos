@@ -14,6 +14,7 @@ workspace = true
 
 [dependencies]
 qos_hex = { workspace = true, features = ["serde"] }
+qos_json = { workspace = true }
 serde = { workspace = true }
 aws-nitro-enclaves-nsm-api = { workspace = true, features = ["nix"] }
 aws-nitro-enclaves-cose = { workspace = true }

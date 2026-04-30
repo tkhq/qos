@@ -5,6 +5,7 @@ use tokio::{
 	io::copy_bidirectional,
 	net::{TcpListener, TcpStream},
 	task::JoinHandle,
+	time::{sleep, Duration},
 };
 
 use crate::io::SocketAddress;
@@ -102,9 +103,14 @@ async fn tcp_to_vsock(
 	enclave_stream: Stream,
 	host_addr: SocketAddr,
 ) -> Result<(), IOError> {
-	let listener = match TcpListener::bind(host_addr).await {
-		Ok(value) => value,
-		Err(err) => panic!("error binding to {host_addr}: {err}"),
+	let listener = loop {
+		match TcpListener::bind(host_addr).await {
+			Ok(value) => break value,
+			Err(err) => {
+				eprintln!("error binding to {host_addr}: {err:?}");
+				sleep(Duration::from_secs(1)).await;
+			}
+		}
 	};
 
 	loop {

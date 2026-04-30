@@ -1,5 +1,4 @@
 //! Quorum protocol error
-use borsh::{BorshDeserialize, BorshSerialize};
 use qos_p256::P256Error;
 
 use crate::{
@@ -9,16 +8,7 @@ use crate::{
 };
 
 /// A error from protocol execution.
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	BorshSerialize,
-	BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ProtocolError {
 	/// A encrypted quorum key share sent to the enclave was invalid.
@@ -151,8 +141,10 @@ pub enum ProtocolError {
 	/// The manifest has a lower nonce then the current manifest.
 	LowNonce {
 		/// Expected minimum nonce value.
+		#[serde(with = "qos_json::string_number")]
 		expected: u32,
 		/// Actual nonce value.
+		#[serde(with = "qos_json::string_number")]
 		actual: u32,
 	},
 	/// The manifests have different PCR3 values.

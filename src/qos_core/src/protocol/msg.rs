@@ -42,11 +42,7 @@ pub enum ProtocolMsg {
 		set: GenesisSet,
 		/// Optionally include a `qos_p256::P256Public` key for encrypting the
 		/// quorum key too. Intended for disaster recovery.
-		#[serde(
-			default,
-			skip_serializing_if = "Option::is_none",
-			with = "qos_hex::serde_opt"
-		)]
+		#[serde(default, with = "qos_hex::serde")]
 		dr_key: Option<Vec<u8>>,
 	},
 	/// Response for Genesis Boot.
@@ -95,7 +91,7 @@ pub enum ProtocolMsg {
 		/// COSE SIGN1 structure with Attestation Doc
 		nsm_response: NsmResponse,
 		/// Manifest Envelope, if it exists, otherwise None.
-		#[serde(default, skip_serializing_if = "Option::is_none")]
+		#[serde(default)]
 		manifest_envelope: Option<Box<ManifestEnvelope>>,
 	},
 
@@ -153,8 +149,28 @@ pub enum ProtocolMsg {
 	ManifestEnvelopeResponse {
 		/// The manifest envelope used to boot the enclave. This will be `None`
 		/// if the manifest envelope does not exist.
+		#[serde(default)]
 		manifest_envelope: Box<Option<ManifestEnvelope>>,
 	},
+}
+
+impl ProtocolMsg {
+	/// Encode this protocol message as RFC 8785 canonical JSON bytes.
+	///
+	/// # Panics
+	///
+	/// Panics only if the protocol message cannot be serialized, which would be
+	/// a bug in the message schema.
+	#[must_use]
+	pub fn to_canonical_json_vec(&self) -> Vec<u8> {
+		qos_json::to_vec(self)
+			.expect("ProtocolMsg can always be serialized. qed.")
+	}
+
+	/// Decode a protocol message from JSON bytes.
+	pub fn from_json_slice(bytes: &[u8]) -> serde_json::Result<Self> {
+		serde_json::from_slice(bytes)
+	}
 }
 
 impl std::fmt::Display for ProtocolMsg {
@@ -248,7 +264,7 @@ mod test {
 	fn boot_genesis_response_deserialize() {
 		let nsm_response = NsmResponse::LockPcr;
 
-		let vec = serde_json::to_vec(&nsm_response).unwrap();
+		let vec = qos_json::to_vec(&nsm_response).unwrap();
 		let test: NsmResponse = serde_json::from_slice(&vec).unwrap();
 		assert_eq!(nsm_response, test);
 
@@ -267,9 +283,27 @@ mod test {
 			}),
 		};
 
-		let vec = serde_json::to_vec(&genesis_response).unwrap();
-		let test: ProtocolMsg = serde_json::from_slice(&vec).unwrap();
+		let vec = genesis_response.to_canonical_json_vec();
+		let test = ProtocolMsg::from_json_slice(&vec).unwrap();
 
 		assert_eq!(test, genesis_response);
+	}
+
+	#[test]
+	fn optional_fields_are_omitted_and_bytes_are_hex() {
+		let msg = ProtocolMsg::BootGenesisRequest {
+			set: GenesisSet { members: vec![], threshold: 1 },
+			dr_key: None,
+		};
+		assert_eq!(
+			qos_json::to_string(&msg).unwrap(),
+			r#"{"bootGenesisRequest":{"set":{"members":[],"threshold":"1"}}}"#
+		);
+
+		let msg = ProtocolMsg::ProxyRequest { data: vec![0xde, 0xad] };
+		assert_eq!(
+			msg.to_canonical_json_vec(),
+			br#"{"proxyRequest":{"data":"dead"}}"#
+		);
 	}
 }

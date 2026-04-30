@@ -1,184 +1,410 @@
-//! Canonical JSON serialization for QOS types.
-//!
-//! # Key features
-//!
-//! - Alphabetically sorted object keys (at runtime, via [`sort_keys`])
-//! - Numbers serialized as base-10 strings (via [`string_number`] module)
-//! - Optional fields omitted when None
-//! - Compact output (no whitespace)
-//!
-//! # Instrumenting types for canonical JSON
-//!
-//! ```rust,ignore
-//! use serde::{Serialize, Deserialize};
-//!
-//! #[derive(Serialize, Deserialize)]
-//! #[serde(rename_all = "camelCase")]  // Use camelCase for JSON keys
-//! struct MyType {
-//!     // Binary data as lowercase hex
-//!     #[serde(with = "qos_hex::serde")]
-//!     data: Vec<u8>,
-//!
-//!     // Numbers as base-10 strings for cross-language consistency
-//!     #[serde(with = "qos_json::string_number")]
-//!     threshold: u32,
-//!
-//!     // Optional fields omitted when None
-//!     #[serde(default, skip_serializing_if = "Option::is_none")]
-//!     optional_field: Option<String>,
-//! }
-//! ```
-//!
-//! Then serialize using [`to_vec`] or [`to_string`] which sort keys alphabetically.
+#![doc = include_str!("../SPEC.md")]
 
-use serde::Serialize;
-use serde_json::Value;
+use serde::{de::DeserializeOwned, Serialize};
+use sha2::{Digest, Sha256};
+use std::io::{self, Write};
 
-/// Maximum recursion depth to prevent stack overflow attacks.
-pub const MAX_DEPTH: usize = 8;
+/// A SHA-256 digest.
+pub type Hash256 = [u8; 32];
 
-/// Error type for canonical JSON operations.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Error {
-	/// Serialization error from serde_json.
-	Serialization(String),
-	/// Maximum recursion depth exceeded.
-	MaxDepthExceeded,
+/// Serialize a value as QOS canonical JSON bytes.
+///
+/// Typed values are first converted into `serde_json::Value` and then
+/// canonicalized. This matches the inbound JSON hashing path, where bytes are
+/// parsed and re-encoded before hashing.
+///
+/// # Panics
+///
+/// Panics if the value contains a JSON number. QOS canonical JSON requires
+/// numeric domain values to be encoded as decimal strings.
+///
+/// # Errors
+///
+/// Returns an error if serde serialization or canonical JSON serialization
+/// fails.
+pub fn to_vec<T: Serialize>(value: &T) -> serde_json::Result<Vec<u8>> {
+	let value = serde_json::to_value(value)?;
+	to_vec_value(&value)
 }
 
-impl std::fmt::Display for Error {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Error::Serialization(msg) => {
-				write!(f, "serialization error: {msg}")
-			}
-			Error::MaxDepthExceeded => write!(f, "max depth exceeded"),
-		}
-	}
+/// Serialize a value as a QOS canonical JSON string.
+///
+/// # Panics
+///
+/// Panics if the value contains a JSON number. QOS canonical JSON requires
+/// numeric domain values to be encoded as decimal strings.
+///
+/// # Errors
+///
+/// Returns an error if serde serialization or canonical JSON serialization
+/// fails.
+pub fn to_string<T: Serialize>(value: &T) -> serde_json::Result<String> {
+	let value = serde_json::to_value(value)?;
+	to_string_value(&value)
 }
 
-impl std::error::Error for Error {}
-
-impl From<serde_json::Error> for Error {
-	fn from(e: serde_json::Error) -> Self {
-		Error::Serialization(e.to_string())
-	}
+/// Parse JSON bytes and re-encode them as QOS canonical JSON bytes.
+///
+/// # Panics
+///
+/// Panics if the parsed value contains a JSON number. QOS canonical JSON
+/// requires numeric domain values to be encoded as decimal strings.
+///
+/// # Errors
+///
+/// Returns an error if parsing or canonicalization fails.
+pub fn canonicalize_slice(bytes: &[u8]) -> serde_json::Result<Vec<u8>> {
+	let value: serde_json::Value = serde_json::from_slice(bytes)?;
+	to_vec_value(&value)
 }
 
-/// Serialize to canonical JSON bytes with alphabetically sorted keys.
-pub fn to_vec<T: Serialize>(value: &T) -> Result<Vec<u8>, Error> {
-	let v = serde_json::to_value(value)?;
-	let sorted = sort_keys(&v, 0)?;
-	Ok(serde_json::to_vec(&sorted)?)
+/// Parse a JSON string and re-encode it as a QOS canonical JSON string.
+///
+/// # Panics
+///
+/// Panics if the parsed value contains a JSON number. QOS canonical JSON
+/// requires numeric domain values to be encoded as decimal strings.
+///
+/// # Errors
+///
+/// Returns an error if parsing or canonicalization fails.
+pub fn canonicalize_str(json: &str) -> serde_json::Result<String> {
+	let value: serde_json::Value = serde_json::from_str(json)?;
+	to_string_value(&value)
 }
 
-/// Serialize to canonical JSON string with alphabetically sorted keys.
-pub fn to_string<T: Serialize>(value: &T) -> Result<String, Error> {
-	let v = serde_json::to_value(value)?;
-	let sorted = sort_keys(&v, 0)?;
-	Ok(serde_json::to_string(&sorted)?)
+/// Deserialize JSON bytes as `T`.
+///
+/// # Errors
+///
+/// Returns an error if the bytes are not valid JSON for `T`.
+pub fn from_slice<T: DeserializeOwned>(bytes: &[u8]) -> serde_json::Result<T> {
+	serde_json::from_slice(bytes)
 }
 
-/// Sort object keys alphabetically, recursively.
-fn sort_keys(value: &Value, depth: usize) -> Result<Value, Error> {
-	if depth > MAX_DEPTH {
-		return Err(Error::MaxDepthExceeded);
-	}
+/// Hash a typed value after QOS canonical JSON serialization.
+///
+/// # Panics
+///
+/// Panics if the value contains a JSON number. QOS canonical JSON requires
+/// numeric domain values to be encoded as decimal strings.
+///
+/// # Errors
+///
+/// Returns an error if serialization or canonicalization fails.
+pub fn hash<T: Serialize>(value: &T) -> serde_json::Result<Hash256> {
+	let canonical = to_vec(value)?;
+	Ok(sha_256(&canonical))
+}
 
+/// Hash inbound JSON after parsing and QOS re-canonicalization.
+///
+/// # Panics
+///
+/// Panics if the parsed value contains a JSON number. QOS canonical JSON
+/// requires numeric domain values to be encoded as decimal strings.
+///
+/// # Errors
+///
+/// Returns an error if parsing or canonicalization fails.
+pub fn hash_json_slice(bytes: &[u8]) -> serde_json::Result<Hash256> {
+	let canonical = canonicalize_slice(bytes)?;
+	Ok(sha_256(&canonical))
+}
+
+/// Hash a typed value and return the lowercase hex digest.
+///
+/// # Panics
+///
+/// Panics if the value contains a JSON number. QOS canonical JSON requires
+/// numeric domain values to be encoded as decimal strings.
+///
+/// # Errors
+///
+/// Returns an error if serialization or canonicalization fails.
+pub fn hash_hex<T: Serialize>(value: &T) -> serde_json::Result<String> {
+	hash(value).map(|hash| qos_hex::encode(&hash))
+}
+
+fn sha_256(bytes: &[u8]) -> Hash256 {
+	let mut hasher = Sha256::new();
+	hasher.update(bytes);
+	hasher.finalize().into()
+}
+
+fn to_vec_value(value: &serde_json::Value) -> serde_json::Result<Vec<u8>> {
+	let mut bytes = Vec::new();
+	to_writer_value(&mut bytes, value)?;
+	Ok(bytes)
+}
+
+fn to_string_value(value: &serde_json::Value) -> serde_json::Result<String> {
+	let bytes = to_vec_value(value)?;
+	String::from_utf8(bytes).map_err(|err| {
+		serde_json::Error::io(io::Error::new(io::ErrorKind::InvalidData, err))
+	})
+}
+
+fn to_writer_value<W>(
+	writer: &mut W,
+	value: &serde_json::Value,
+) -> serde_json::Result<()>
+where
+	W: ?Sized + Write,
+{
+	write_value(writer, value).map_err(serde_json::Error::io)
+}
+
+fn write_value<W>(writer: &mut W, value: &serde_json::Value) -> io::Result<()>
+where
+	W: ?Sized + Write,
+{
 	match value {
-		Value::Object(map) => {
-			let mut sorted: serde_json::Map<String, Value> =
-				serde_json::Map::new();
-			let mut keys: Vec<&String> = map.keys().collect();
-			keys.sort();
-			for key in keys {
-				let sorted_value = sort_keys(&map[key], depth + 1)?;
-				sorted.insert(key.clone(), sorted_value);
-			}
-			Ok(Value::Object(sorted))
+		serde_json::Value::Null => writer.write_all(b"null"),
+		serde_json::Value::Bool(true) => writer.write_all(b"true"),
+		serde_json::Value::Bool(false) => writer.write_all(b"false"),
+		serde_json::Value::Number(_) => {
+			panic!("QOS canonical JSON forbids JSON numbers");
 		}
-		Value::Array(arr) => {
-			// Note we don't actually sort the array, but we still want to recursively
-			// sort any nested maps.
-			let sorted: Result<Vec<Value>, _> =
-				arr.iter().map(|v| sort_keys(v, depth + 1)).collect();
-			Ok(Value::Array(sorted?))
+		serde_json::Value::String(value) => write_string(writer, value),
+		serde_json::Value::Array(values) => write_array(writer, values),
+		serde_json::Value::Object(map) => write_object(writer, map),
+	}
+}
+
+fn write_array<W>(
+	writer: &mut W,
+	values: &[serde_json::Value],
+) -> io::Result<()>
+where
+	W: ?Sized + Write,
+{
+	writer.write_all(b"[")?;
+	for (index, value) in values.iter().enumerate() {
+		if index > 0 {
+			writer.write_all(b",")?;
 		}
-		_ => Ok(value.clone()),
+		write_value(writer, value)?;
+	}
+	writer.write_all(b"]")
+}
+
+fn write_object<W>(
+	writer: &mut W,
+	map: &serde_json::Map<String, serde_json::Value>,
+) -> io::Result<()>
+where
+	W: ?Sized + Write,
+{
+	let mut entries =
+		map.iter().filter(|(_, value)| !value.is_null()).collect::<Vec<_>>();
+	entries.sort_by(|(left, _), (right, _)| {
+		left.encode_utf16().cmp(right.encode_utf16())
+	});
+
+	writer.write_all(b"{")?;
+	for (index, (key, value)) in entries.into_iter().enumerate() {
+		if index > 0 {
+			writer.write_all(b",")?;
+		}
+		write_string(writer, key)?;
+		writer.write_all(b":")?;
+		write_value(writer, value)?;
+	}
+	writer.write_all(b"}")
+}
+
+fn write_string<W>(writer: &mut W, value: &str) -> io::Result<()>
+where
+	W: ?Sized + Write,
+{
+	serde_json::to_writer(writer, value).map_err(io::Error::other)
+}
+
+fn decimal_string_from_json_value<E>(
+	value: serde_json::Value,
+) -> Result<String, E>
+where
+	E: serde::de::Error,
+{
+	match value {
+		serde_json::Value::String(s) => Ok(s),
+		other => {
+			Err(E::custom(format!("expected decimal string, got {other}")))
+		}
 	}
 }
 
 /// Serde serialization helpers for numbers as strings.
-///
-/// Use this module with `#[serde(with = "qos_json::string_number")]` to
-/// serialize numeric types as base-10 strings.
 pub mod string_number {
-	use serde::{Deserialize, Deserializer, Serializer};
-	use std::fmt::Display;
-	use std::str::FromStr;
+	use serde::{Deserialize, Deserializer, Serialize, Serializer};
+	use std::{collections::BTreeSet, fmt::Display, str::FromStr};
 
 	/// Serialize a number as a base-10 string.
 	pub fn serialize<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
-		T: Display,
+		for<'a> &'a T: StringNumberSerialize,
 	{
-		serializer.serialize_str(&value.to_string())
+		value.serialize_string_number(serializer)
 	}
 
 	/// Deserialize a base-10 string as a number.
 	pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 	where
 		D: Deserializer<'de>,
-		T: FromStr,
-		T::Err: std::fmt::Display,
+		T: StringNumberDeserialize<'de>,
 	{
-		let s = String::deserialize(deserializer)?;
-		s.parse().map_err(serde::de::Error::custom)
+		T::deserialize_string_number(deserializer)
 	}
-}
 
-/// Serde serialization helpers for optional numbers as strings.
-///
-/// Use this module with `#[serde(with = "qos_json::string_number_opt")]` to
-/// serialize optional numeric types as base-10 strings.
-pub mod string_number_opt {
-	use serde::{Deserialize, Deserializer, Serializer};
-	use std::fmt::Display;
-	use std::str::FromStr;
+	/// A type that can be serialized as one or more base-10 strings.
+	pub trait StringNumberSerialize {
+		/// Serialize the type as base-10 string JSON.
+		fn serialize_string_number<S>(
+			self,
+			serializer: S,
+		) -> Result<S::Ok, S::Error>
+		where
+			S: Serializer;
+	}
 
-	/// Serialize an optional number as a base-10 string.
-	pub fn serialize<S, T>(
-		value: &Option<T>,
-		serializer: S,
-	) -> Result<S::Ok, S::Error>
+	macro_rules! impl_string_number_serialize {
+		($($ty:ty),+ $(,)?) => {$(
+			impl StringNumberSerialize for &$ty {
+				fn serialize_string_number<S>(
+					self,
+					serializer: S,
+				) -> Result<S::Ok, S::Error>
+				where
+					S: Serializer,
+				{
+					serializer.serialize_str(&self.to_string())
+				}
+			}
+		)+};
+	}
+
+	impl_string_number_serialize!(
+		u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize
+	);
+
+	impl<T> StringNumberSerialize for &Option<T>
 	where
-		S: Serializer,
 		T: Display,
 	{
-		match value {
-			Some(v) => serializer.serialize_some(&v.to_string()),
-			None => serializer.serialize_none(),
+		fn serialize_string_number<S>(
+			self,
+			serializer: S,
+		) -> Result<S::Ok, S::Error>
+		where
+			S: Serializer,
+		{
+			match self {
+				Some(value) => serializer.serialize_some(&value.to_string()),
+				None => serializer.serialize_none(),
+			}
 		}
 	}
 
-	/// Deserialize a base-10 string as an optional number.
-	pub fn deserialize<'de, D, T>(
+	impl<T> StringNumberSerialize for &BTreeSet<T>
+	where
+		T: Display,
+	{
+		fn serialize_string_number<S>(
+			self,
+			serializer: S,
+		) -> Result<S::Ok, S::Error>
+		where
+			S: Serializer,
+		{
+			let strings =
+				self.iter().map(ToString::to_string).collect::<Vec<_>>();
+			strings.serialize(serializer)
+		}
+	}
+
+	/// A type that can be deserialized from one or more base-10 strings.
+	pub trait StringNumberDeserialize<'de>: Sized {
+		/// Deserialize the type from base-10 string JSON.
+		fn deserialize_string_number<D>(
+			deserializer: D,
+		) -> Result<Self, D::Error>
+		where
+			D: Deserializer<'de>;
+	}
+
+	macro_rules! impl_string_number_deserialize {
+		($($ty:ty),+ $(,)?) => {$(
+			impl<'de> StringNumberDeserialize<'de> for $ty {
+				fn deserialize_string_number<D>(
+					deserializer: D,
+				) -> Result<Self, D::Error>
+				where
+					D: Deserializer<'de>,
+				{
+					deserialize_string_number_value(deserializer)
+				}
+			}
+		)+};
+	}
+
+	impl_string_number_deserialize!(
+		u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize
+	);
+
+	impl<'de, T> StringNumberDeserialize<'de> for Option<T>
+	where
+		T: FromStr,
+		T::Err: Display,
+	{
+		fn deserialize_string_number<D>(
+			deserializer: D,
+		) -> Result<Self, D::Error>
+		where
+			D: Deserializer<'de>,
+		{
+			let opt = Option::<serde_json::Value>::deserialize(deserializer)?;
+			opt.map(parse_string_number_value).transpose()
+		}
+	}
+
+	impl<'de, T> StringNumberDeserialize<'de> for BTreeSet<T>
+	where
+		T: FromStr + Ord,
+		T::Err: Display,
+	{
+		fn deserialize_string_number<D>(
+			deserializer: D,
+		) -> Result<Self, D::Error>
+		where
+			D: Deserializer<'de>,
+		{
+			let values = Vec::<serde_json::Value>::deserialize(deserializer)?;
+			values.into_iter().map(parse_string_number_value).collect()
+		}
+	}
+
+	fn deserialize_string_number_value<'de, D, T>(
 		deserializer: D,
-	) -> Result<Option<T>, D::Error>
+	) -> Result<T, D::Error>
 	where
 		D: Deserializer<'de>,
 		T: FromStr,
-		T::Err: std::fmt::Display,
+		T::Err: Display,
 	{
-		let opt: Option<String> = Option::deserialize(deserializer)?;
-		match opt {
-			Some(s) => {
-				let v = s.parse().map_err(serde::de::Error::custom)?;
-				Ok(Some(v))
-			}
-			None => Ok(None),
-		}
+		let value = serde_json::Value::deserialize(deserializer)?;
+		parse_string_number_value(value)
+	}
+
+	fn parse_string_number_value<E, T>(value: serde_json::Value) -> Result<T, E>
+	where
+		E: serde::de::Error,
+		T: FromStr,
+		T::Err: Display,
+	{
+		let s = super::decimal_string_from_json_value::<E>(value)?;
+		s.parse().map_err(serde::de::Error::custom)
 	}
 }
 
@@ -186,180 +412,50 @@ pub mod string_number_opt {
 mod tests {
 	use super::*;
 	use serde::{Deserialize, Serialize};
+	use std::{collections::BTreeSet, panic};
 
 	#[test]
-	fn sort_keys_simple() {
-		#[derive(Serialize)]
-		struct Example {
-			zebra: u32,
-			alpha: String,
-			beta: bool,
-		}
+	fn canonicalizes_key_order_before_hashing() {
+		let a = br#"{"version":"1","name":"test","threshold":"3"}"#;
+		let b = br#"{
+			"threshold": "3",
+			"name": "test",
+			"version": "1"
+		}"#;
 
-		let example =
-			Example { zebra: 1, alpha: "test".to_string(), beta: true };
-		let json = to_string(&example).unwrap();
-		assert_eq!(json, r#"{"alpha":"test","beta":true,"zebra":1}"#);
-	}
-
-	#[test]
-	fn sort_keys_nested() {
-		#[derive(Serialize)]
-		struct Inner {
-			z: u32,
-			a: u32,
-		}
-
-		#[derive(Serialize)]
-		struct Outer {
-			inner: Inner,
-			name: String,
-		}
-
-		let example =
-			Outer { inner: Inner { z: 2, a: 1 }, name: "test".into() };
-		let json = to_string(&example).unwrap();
-		assert_eq!(json, r#"{"inner":{"a":1,"z":2},"name":"test"}"#);
-	}
-
-	#[test]
-	fn string_number_serialize_deserialize() {
-		#[derive(Serialize, Deserialize, PartialEq, Debug)]
-		struct Example {
-			#[serde(with = "string_number")]
-			count: u32,
-		}
-
-		let example = Example { count: 42 };
-		let json = serde_json::to_string(&example).unwrap();
-		assert_eq!(json, r#"{"count":"42"}"#);
-
-		let decoded: Example = serde_json::from_str(&json).unwrap();
-		assert_eq!(decoded, example);
-	}
-
-	#[test]
-	fn string_number_opt_serialize_deserialize() {
-		#[derive(Serialize, Deserialize, PartialEq, Debug)]
-		struct Example {
-			#[serde(
-				default,
-				skip_serializing_if = "Option::is_none",
-				with = "string_number_opt"
-			)]
-			count: Option<u32>,
-		}
-
-		// Some value
-		let example = Example { count: Some(42) };
-		let json = serde_json::to_string(&example).unwrap();
-		assert_eq!(json, r#"{"count":"42"}"#);
-
-		let decoded: Example = serde_json::from_str(&json).unwrap();
-		assert_eq!(decoded, example);
-
-		// None value
-		let example = Example { count: None };
-		let json = serde_json::to_string(&example).unwrap();
-		assert_eq!(json, r#"{}"#);
-	}
-
-	#[test]
-	fn max_depth_exceeded() {
-		// Create a deeply nested structure
-		let mut value = serde_json::json!({"a": 1});
-		for _ in 0..100 {
-			value = serde_json::json!({"nested": value});
-		}
-
-		let result = sort_keys(&value, 0);
-		assert!(matches!(result, Err(Error::MaxDepthExceeded)));
-	}
-
-	#[test]
-	fn canonical_json_determinism() {
-		// Ensure the same data always produces the same output
-		#[derive(Serialize)]
-		struct Example {
-			c: u32,
-			a: u32,
-			b: u32,
-		}
-
-		let example = Example { c: 3, a: 1, b: 2 };
-		let json1 = to_vec(&example).unwrap();
-		let json2 = to_vec(&example).unwrap();
-		assert_eq!(json1, json2);
-		assert_eq!(json1, br#"{"a":1,"b":2,"c":3}"#);
-	}
-
-	#[test]
-	fn array_of_objects_sorts_keys() {
-		use std::collections::HashMap;
-
-		let mut map1 = HashMap::new();
-		map1.insert("zebra".to_string(), "z".to_string());
-		map1.insert("alpha".to_string(), "a".to_string());
-
-		let mut map2 = HashMap::new();
-		map2.insert("gamma".to_string(), "g".to_string());
-		map2.insert("beta".to_string(), "b".to_string());
-
-		let items: Vec<HashMap<String, String>> = vec![map1, map2];
-		let json = to_string(&items).unwrap();
-
-		// Each object in the array should have sorted keys
 		assert_eq!(
-			json,
-			r#"[{"alpha":"a","zebra":"z"},{"beta":"b","gamma":"g"}]"#
+			canonicalize_slice(a).unwrap(),
+			canonicalize_slice(b).unwrap()
+		);
+		assert_eq!(hash_json_slice(a).unwrap(), hash_json_slice(b).unwrap());
+		assert_eq!(
+			qos_hex::encode(&hash_json_slice(a).unwrap()),
+			"898eaf2263b3ca34a9fb0b59615a16e5819b43c53fabc44396f92128f72ccc7e"
 		);
 	}
 
-	// SPEC.md test vector: Simple Object
 	#[test]
-	fn spec_vector_simple_object() {
+	fn typed_values_use_same_canonical_path() {
 		#[derive(Serialize)]
 		struct Example {
-			threshold: &'static str,
 			version: &'static str,
 			name: &'static str,
-		}
-
-		let example = Example { threshold: "3", version: "1", name: "test" };
-		let json = to_string(&example).unwrap();
-		// Keys should be sorted alphabetically
-		assert_eq!(json, r#"{"name":"test","threshold":"3","version":"1"}"#);
-	}
-
-	// SPEC.md test vector: Nested Object
-	#[test]
-	fn spec_vector_nested_object() {
-		#[derive(Serialize)]
-		struct Manifest {
-			namespace: &'static str,
-			version: &'static str,
-		}
-
-		#[derive(Serialize)]
-		struct Example {
-			manifest: Manifest,
 			threshold: &'static str,
 		}
 
-		let example = Example {
-			manifest: Manifest { namespace: "prod", version: "2" },
-			threshold: "3",
-		};
-		let json = to_string(&example).unwrap();
+		let example = Example { version: "1", name: "test", threshold: "3" };
 		assert_eq!(
-			json,
-			r#"{"manifest":{"namespace":"prod","version":"2"},"threshold":"3"}"#
+			to_string(&example).unwrap(),
+			r#"{"name":"test","threshold":"3","version":"1"}"#
+		);
+		assert_eq!(
+			hash_hex(&example).unwrap(),
+			"898eaf2263b3ca34a9fb0b59615a16e5819b43c53fabc44396f92128f72ccc7e"
 		);
 	}
 
-	// SPEC.md test vector: Binary Data (Hex Encoding)
 	#[test]
-	fn spec_vector_binary_data_hex() {
+	fn binary_hex_vector_matches_spec() {
 		#[derive(Serialize)]
 		struct Example {
 			#[serde(with = "qos_hex::serde")]
@@ -367,84 +463,228 @@ mod tests {
 		}
 
 		let example = Example { data: vec![0xde, 0xad, 0xbe, 0xef] };
+		assert_eq!(to_string(&example).unwrap(), r#"{"data":"deadbeef"}"#);
+		assert_eq!(
+			hash_hex(&example).unwrap(),
+			"03fe564ceddcb54a7a742bd7a4db57318a068cecd22ae44435ce68d35e754e13"
+		);
+	}
+
+	#[test]
+	fn skip_serializing_if_none_is_not_needed_for_qos_json_output() {
+		#[derive(Serialize)]
+		struct WithSkip {
+			name: &'static str,
+			#[serde(default, skip_serializing_if = "Option::is_none")]
+			maybe: Option<&'static str>,
+		}
+
+		#[derive(Serialize)]
+		struct WithoutSkip {
+			name: &'static str,
+			#[serde(default)]
+			maybe: Option<&'static str>,
+		}
+
+		let with_skip =
+			to_string(&WithSkip { name: "test", maybe: None }).unwrap();
+		let without_skip =
+			to_string(&WithoutSkip { name: "test", maybe: None }).unwrap();
+
+		assert_eq!(
+			serde_json::to_string(&WithSkip { name: "test", maybe: None })
+				.unwrap(),
+			r#"{"name":"test"}"#
+		);
+		assert_eq!(
+			serde_json::to_string(&WithoutSkip { name: "test", maybe: None })
+				.unwrap(),
+			r#"{"name":"test","maybe":null}"#
+		);
+		assert_eq!(with_skip, r#"{"name":"test"}"#);
+		assert_eq!(with_skip, without_skip);
+		assert_eq!(
+			to_string(&WithSkip { name: "test", maybe: Some("value") })
+				.unwrap(),
+			to_string(&WithoutSkip { name: "test", maybe: Some("value") })
+				.unwrap()
+		);
+	}
+
+	#[test]
+	fn object_null_members_are_omitted() {
+		assert_eq!(
+			canonicalize_str(r#"{"b":null,"a":"1","nested":{"z":null,"y":"2"},"items":[null,{"x":null,"y":true}]}"#).unwrap(),
+			r#"{"a":"1","items":[null,{"y":true}],"nested":{"y":"2"}}"#
+		);
+		assert_eq!(
+			hash_json_slice(br#"{"a":"1","b":null}"#).unwrap(),
+			hash_json_slice(br#"{"a":"1"}"#).unwrap()
+		);
+	}
+
+	#[test]
+	fn panics_on_integer_json_numbers() {
+		assert_qos_number_panic(|| {
+			canonicalize_str(r#"{"n":1}"#).unwrap();
+		});
+		assert_qos_number_panic(|| {
+			canonicalize_str(r#"{"n":-9007199254740991}"#).unwrap();
+		});
+	}
+
+	#[test]
+	fn panics_on_floating_point_json_numbers() {
+		assert_qos_number_panic(|| {
+			canonicalize_str(r#"{"n":1.0}"#).unwrap();
+		});
+		assert_qos_number_panic(|| {
+			canonicalize_str(r#"{"n":1e0}"#).unwrap();
+		});
+		assert_qos_number_panic(|| {
+			canonicalize_str(r#"{"n":-1.25}"#).unwrap();
+		});
+	}
+
+	#[test]
+	fn panics_on_typed_numeric_fields() {
+		#[derive(Serialize)]
+		struct Example {
+			count: u32,
+		}
+
+		assert_qos_number_panic(|| {
+			to_string(&Example { count: 42 }).unwrap();
+		});
+	}
+
+	#[test]
+	fn sorts_object_keys_by_utf16_code_units() {
+		let canonical = canonicalize_str(
+			r#"{
+				"\u20ac": "Euro Sign",
+				"\r": "Carriage Return",
+				"\ufb33": "Hebrew Letter Dalet With Dagesh",
+				"1": "One",
+				"\ud83d\ude00": "Emoji: Grinning Face",
+				"\u0080": "Control",
+				"\u00f6": "Latin Small Letter O With Diaeresis"
+			}"#,
+		)
+		.unwrap();
+
+		let expected_values = [
+			"Carriage Return",
+			"One",
+			"Control",
+			"Latin Small Letter O With Diaeresis",
+			"Euro Sign",
+			"Emoji: Grinning Face",
+			"Hebrew Letter Dalet With Dagesh",
+		];
+		let mut last_position = 0;
+		for value in expected_values {
+			let position = canonical[last_position..].find(value).unwrap();
+			last_position += position + value.len();
+		}
+	}
+
+	#[test]
+	fn recursively_sorts_objects_without_reordering_arrays() {
+		assert_eq!(
+			canonicalize_str(
+				r#"{"z":{"b":"2","a":"1"},"a":[{"d":"4","c":"3"},"second",{"b":"2","a":"1"}]}"#
+			)
+			.unwrap(),
+			r#"{"a":[{"c":"3","d":"4"},"second",{"a":"1","b":"2"}],"z":{"a":"1","b":"2"}}"#
+		);
+	}
+
+	#[test]
+	fn escaped_object_keys_sort_by_raw_key_and_remain_escaped() {
+		assert_eq!(
+			canonicalize_str(
+				"{\"b\":\"plain\",\"\\n\":\"line feed\",\"\\r\":\"carriage return\",\"\\u0001\":\"control\"}"
+			)
+			.unwrap(),
+			"{\"\\u0001\":\"control\",\"\\n\":\"line feed\",\"\\r\":\"carriage return\",\"b\":\"plain\"}"
+		);
+	}
+
+	#[test]
+	fn supports_external_enums_and_decimal_string_numbers() {
+		#[derive(Serialize)]
+		#[serde(rename_all = "camelCase")]
+		enum Example {
+			Request {
+				#[serde(with = "string_number")]
+				count: u32,
+			},
+		}
+
+		assert_eq!(
+			to_string(&Example::Request { count: 42 }).unwrap(),
+			r#"{"request":{"count":"42"}}"#
+		);
+	}
+
+	#[test]
+	fn string_number_round_trips() {
+		#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+		struct Example {
+			#[serde(with = "string_number")]
+			count: u32,
+			#[serde(default, with = "string_number")]
+			limit: Option<u64>,
+		}
+
+		let example = Example { count: 42, limit: None };
 		let json = to_string(&example).unwrap();
-		assert_eq!(json, r#"{"data":"deadbeef"}"#);
+		assert_eq!(json, r#"{"count":"42"}"#);
+		assert_eq!(from_slice::<Example>(json.as_bytes()).unwrap(), example);
 	}
 
-	// SPEC.md test vector: Externally Tagged Enum (Unit Variant)
 	#[test]
-	fn spec_vector_enum_unit_variant() {
-		#[derive(Serialize)]
-		#[serde(rename_all = "camelCase")]
-		enum RestartPolicy {
-			Never,
+	fn string_number_helpers_reject_json_numbers() {
+		#[derive(Debug, PartialEq, Eq, Deserialize)]
+		struct Example {
+			#[serde(with = "string_number")]
+			count: u32,
+			#[serde(default, with = "string_number")]
+			limit: Option<u64>,
+			#[serde(with = "string_number")]
+			indexes: BTreeSet<u8>,
 		}
 
-		let policy = RestartPolicy::Never;
-		let json = serde_json::to_string(&policy).unwrap();
-		assert_eq!(json, r#""never""#);
+		let parsed = from_slice::<Example>(
+			br#"{"count":"42","limit":"7","indexes":["1","2"]}"#,
+		)
+		.unwrap();
+		assert_eq!(parsed.count, 42);
+		assert_eq!(parsed.limit, Some(7));
+		assert_eq!(parsed.indexes, BTreeSet::from([1, 2]));
+
+		assert!(from_slice::<Example>(
+			br#"{"count":42,"limit":"7","indexes":["1"]}"#
+		)
+		.is_err());
+		assert!(from_slice::<Example>(
+			br#"{"count":"42","limit":7,"indexes":["1"]}"#
+		)
+		.is_err());
+		assert!(from_slice::<Example>(
+			br#"{"count":"42","limit":"7","indexes":[1]}"#
+		)
+		.is_err());
 	}
 
-	// SPEC.md test vector: Externally Tagged Enum (Tuple Variant)
-	#[test]
-	fn spec_vector_enum_tuple_variant() {
-		#[derive(Serialize)]
-		#[serde(rename_all = "camelCase")]
-		enum BridgeConfig {
-			Server(String, String),
-		}
-
-		let config =
-			BridgeConfig::Server("3000".to_string(), "0.0.0.0".to_string());
-		let json = to_string(&config).unwrap();
-		assert_eq!(json, r#"{"server":["3000","0.0.0.0"]}"#);
-	}
-
-	// SPEC.md test vector: Externally Tagged Enum (Struct Variant)
-	#[test]
-	fn spec_vector_enum_struct_variant() {
-		#[derive(Serialize)]
-		#[serde(rename_all = "camelCase")]
-		enum Message {
-			Request { data: String, id: String },
-		}
-
-		let msg =
-			Message::Request { id: "42".to_string(), data: "abcd".to_string() };
-		let json = to_string(&msg).unwrap();
-		// Fields should be sorted alphabetically within the struct variant
-		assert_eq!(json, r#"{"request":{"data":"abcd","id":"42"}}"#);
-	}
-
-	// SPEC.md test vector: Optional Field (None)
-	#[test]
-	fn spec_vector_optional_field_none() {
-		#[derive(Serialize)]
-		struct Config {
-			name: String,
-			#[serde(skip_serializing_if = "Option::is_none")]
-			debug: Option<bool>,
-		}
-
-		let config = Config { name: "test".to_string(), debug: None };
-		let json = to_string(&config).unwrap();
-		// debug field should be omitted entirely
-		assert_eq!(json, r#"{"name":"test"}"#);
-	}
-
-	// SPEC.md test vector: Optional Field (Some)
-	#[test]
-	fn spec_vector_optional_field_some() {
-		#[derive(Serialize)]
-		struct Config {
-			name: String,
-			#[serde(skip_serializing_if = "Option::is_none")]
-			debug: Option<bool>,
-		}
-
-		let config = Config { name: "test".to_string(), debug: Some(true) };
-		let json = to_string(&config).unwrap();
-		// Fields sorted alphabetically: debug comes before name
-		assert_eq!(json, r#"{"debug":true,"name":"test"}"#);
+	fn assert_qos_number_panic(action: impl FnOnce() + panic::UnwindSafe) {
+		let panic = panic::catch_unwind(action).unwrap_err();
+		let message = panic
+			.downcast_ref::<String>()
+			.map(String::as_str)
+			.or_else(|| panic.downcast_ref::<&str>().copied())
+			.unwrap_or("");
+		assert_eq!(message, "QOS canonical JSON forbids JSON numbers");
 	}
 }

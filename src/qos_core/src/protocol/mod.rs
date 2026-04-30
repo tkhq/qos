@@ -36,7 +36,11 @@ pub trait QosHash: Serialize {
 	where
 		Self: Sized,
 	{
-		sha_256(&qos_json::to_vec(self).expect("Implements serde serialize"))
+		sha_256(
+			&qos_json::to_vec(self).expect(
+				"Implements serde serialize in a QOS JSON compatible way",
+			),
+		)
 	}
 }
 
@@ -86,7 +90,9 @@ mod tests {
 	fn qos_hash_deterministic() {
 		#[derive(serde::Serialize)]
 		struct Data {
+			#[serde(with = "qos_json::string_number")]
 			z: u32,
+			#[serde(with = "qos_json::string_number")]
 			a: u32,
 		}
 
@@ -98,6 +104,6 @@ mod tests {
 
 		// Sorts keys alphabetically
 		let canonical = qos_json::to_string(&data).unwrap();
-		assert_eq!(canonical, r#"{"a":1,"z":2}"#);
+		assert_eq!(canonical, r#"{"a":"1","z":"2"}"#);
 	}
 }

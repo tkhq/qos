@@ -1977,7 +1977,7 @@ dependencies = [
 
 [[package]]
 name = "qos_json"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "qos_hex",
  "serde",
@@ -2023,6 +2023,7 @@ dependencies = [
  "hex-literal",
  "p384",
  "qos_hex",
+ "qos_json",
  "serde",
  "serde_bytes",
  "sha2",

@@ -36,6 +36,7 @@ impl RequestProcessor for ProtocolProcessor {
 			.to_canonical_json_vec();
 		};
 
-		self.state.write().await.handle_msg(&msg_req)
+		let mut state = self.state.write().await;
+		tokio::task::block_in_place(|| state.handle_msg(&msg_req))
 	}
 }

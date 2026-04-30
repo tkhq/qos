@@ -144,25 +144,13 @@ pub enum NsmRequest {
 	/// private key to ensure authenticity.
 	Attestation {
 		/// Includes additional user data in the AttestationDoc.
-		#[serde(
-			default,
-			skip_serializing_if = "Option::is_none",
-			with = "qos_hex::serde_opt"
-		)]
+		#[serde(default, with = "qos_hex::serde")]
 		user_data: Option<Vec<u8>>,
 		/// Includes an additional nonce in the AttestationDoc.
-		#[serde(
-			default,
-			skip_serializing_if = "Option::is_none",
-			with = "qos_hex::serde_opt"
-		)]
+		#[serde(default, with = "qos_hex::serde")]
 		nonce: Option<Vec<u8>>,
 		/// Includes a user provided public key in the AttestationDoc.
-		#[serde(
-			default,
-			skip_serializing_if = "Option::is_none",
-			with = "qos_hex::serde_opt"
-		)]
+		#[serde(default, with = "qos_hex::serde")]
 		public_key: Option<Vec<u8>>,
 	},
 	/// Requests entropy from the NSM side.
@@ -257,7 +245,7 @@ pub enum NsmResponse {
 		#[serde(with = "qos_json::string_number")]
 		max_pcrs: u16,
 		/// The PCRs that are read-only.
-		#[serde(with = "qos_json::string_number_btreeset")]
+		#[serde(with = "qos_json::string_number")]
 		locked_pcrs: BTreeSet<u16>,
 		/// The digest of the PCR Bank
 		digest: NsmDigest,

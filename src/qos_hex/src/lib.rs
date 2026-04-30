@@ -236,22 +236,111 @@ from_hex_array_impl! {
 pub mod serde {
 	use core::{fmt, marker::PhantomData};
 
-	use serde::{de::Visitor, Deserializer, Serializer};
+	use serde::{de::Visitor, Deserialize, Deserializer, Serializer};
 
 	use super::{encode, FromHex};
 
 	/// Serialize bytes as a hex string.
 	pub fn serialize<T, S>(bytes: T, serializer: S) -> Result<S::Ok, S::Error>
 	where
-		T: AsRef<[u8]>,
+		T: HexSerialize,
 		S: Serializer,
 	{
-		let hex = encode(bytes.as_ref());
-		serializer.serialize_str(&hex)
+		bytes.serialize_hex(serializer)
 	}
 
 	/// Deserialize a hex string into bytes.
 	pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+	where
+		D: Deserializer<'de>,
+		T: HexDeserialize<'de>,
+	{
+		T::deserialize_hex(deserializer)
+	}
+
+	/// A type that can be serialized as a hex string.
+	pub trait HexSerialize {
+		/// Serialize the type as a hex string.
+		fn serialize_hex<S>(self, serializer: S) -> Result<S::Ok, S::Error>
+		where
+			S: Serializer;
+	}
+
+	impl HexSerialize for &Vec<u8> {
+		fn serialize_hex<S>(self, serializer: S) -> Result<S::Ok, S::Error>
+		where
+			S: Serializer,
+		{
+			let hex = encode(self.as_ref());
+			serializer.serialize_str(&hex)
+		}
+	}
+
+	impl<const N: usize> HexSerialize for &[u8; N] {
+		fn serialize_hex<S>(self, serializer: S) -> Result<S::Ok, S::Error>
+		where
+			S: Serializer,
+		{
+			let hex = encode(self);
+			serializer.serialize_str(&hex)
+		}
+	}
+
+	impl<T> HexSerialize for &Option<T>
+	where
+		T: AsRef<[u8]>,
+	{
+		fn serialize_hex<S>(self, serializer: S) -> Result<S::Ok, S::Error>
+		where
+			S: Serializer,
+		{
+			match self {
+				Some(bytes) => {
+					serializer.serialize_some(&encode(bytes.as_ref()))
+				}
+				None => serializer.serialize_none(),
+			}
+		}
+	}
+
+	/// A type that can be deserialized from a hex string.
+	pub trait HexDeserialize<'de>: Sized {
+		/// Deserialize the type from a hex string.
+		fn deserialize_hex<D>(deserializer: D) -> Result<Self, D::Error>
+		where
+			D: Deserializer<'de>;
+	}
+
+	impl<'de, T> HexDeserialize<'de> for T
+	where
+		T: FromHex,
+	{
+		fn deserialize_hex<D>(deserializer: D) -> Result<Self, D::Error>
+		where
+			D: Deserializer<'de>,
+		{
+			deserialize_hex_string(deserializer)
+		}
+	}
+
+	impl<'de, T> HexDeserialize<'de> for Option<T>
+	where
+		T: FromHex,
+	{
+		fn deserialize_hex<D>(deserializer: D) -> Result<Self, D::Error>
+		where
+			D: Deserializer<'de>,
+		{
+			let opt: Option<String> = Option::deserialize(deserializer)?;
+			opt.map(|s| {
+				T::from_hex(&s)
+					.map_err(|e| serde::de::Error::custom(format!("{e:?}")))
+			})
+			.transpose()
+		}
+	}
+
+	fn deserialize_hex_string<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 	where
 		D: Deserializer<'de>,
 		T: FromHex,
@@ -289,46 +378,6 @@ pub mod serde {
 		}
 
 		deserializer.deserialize_str(StrVisitor(PhantomData))
-	}
-}
-
-/// Serde helpers for optional hex-encoded bytes.
-///
-/// Use with `#[serde(with = "qos_hex::serde_opt")]` for `Option<Vec<u8>>`.
-#[cfg(feature = "serde")]
-pub mod serde_opt {
-	use serde::{Deserialize, Deserializer, Serializer};
-
-	use super::{decode, encode};
-
-	pub fn serialize<S>(
-		value: &Option<Vec<u8>>,
-		serializer: S,
-	) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		match value {
-			Some(bytes) => serializer.serialize_some(&encode(bytes)),
-			None => serializer.serialize_none(),
-		}
-	}
-
-	pub fn deserialize<'de, D>(
-		deserializer: D,
-	) -> Result<Option<Vec<u8>>, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		let opt: Option<String> = Option::deserialize(deserializer)?;
-		match opt {
-			Some(s) => {
-				let bytes = decode(&s)
-					.map_err(|e| serde::de::Error::custom(format!("{e:?}")))?;
-				Ok(Some(bytes))
-			}
-			None => Ok(None),
-		}
 	}
 }
 

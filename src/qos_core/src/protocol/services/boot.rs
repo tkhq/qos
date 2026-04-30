@@ -124,6 +124,7 @@ pub enum BridgeConfig {
 	/// Server hosting bridge, connections go INTO the enclave app on given port and host binding
 	Server {
 		/// The port to listen on, matching on host and app sides
+		#[serde(with = "qos_json::string_number")]
 		port: u16,
 		/// The host ip to listen on, use `0.0.0.0` for any
 		host: String,
@@ -133,6 +134,7 @@ pub enum BridgeConfig {
 	/// *NOTE*: currently **unimplemented** and results in boot panic if set.
 	Client {
 		/// Port to connect to when app initiates outgoing connections.
+		#[serde(with = "qos_json::string_number")]
 		port: u16,
 		/// Host name to connect to when app initiates outgoing connections.
 		/// If `None` an internal protocol is used to determine the destination (**unimplemented**)
@@ -296,6 +298,7 @@ impl fmt::Debug for QuorumMember {
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestSet {
 	/// The threshold, K, of signatures necessary to have quorum.
+	#[serde(with = "qos_json::string_number")]
 	pub threshold: u32,
 	/// Members composing the set. The length of this, N, must be gte to the
 	/// `threshold`, K.
@@ -317,6 +320,7 @@ pub struct ManifestSet {
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ShareSet {
 	/// The threshold, K, of signatures necessary to have quorum.
+	#[serde(with = "qos_json::string_number")]
 	pub threshold: u32,
 	/// Members composing the set. The length of this, N, must be gte to the
 	/// `threshold`, K.
@@ -365,6 +369,7 @@ impl fmt::Debug for MemberPubKey {
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PatchSet {
 	/// The threshold, K, of signatures necessary to have quorum.
+	#[serde(with = "qos_json::string_number")]
 	pub threshold: u32,
 	/// Public keys of members composing the set. The length of this, N, must
 	/// be gte to the `threshold`, K.
@@ -391,6 +396,7 @@ pub struct Namespace {
 	/// manifests for this namespace have been created. This is used to prevent
 	/// downgrade attacks - quorum members should only approve a manifest that
 	/// has the highest nonce.
+	#[serde(with = "qos_json::string_number")]
 	pub nonce: u32,
 	/// Quorum Key
 	#[serde(with = "qos_hex::serde")]

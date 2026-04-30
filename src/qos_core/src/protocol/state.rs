@@ -8,16 +8,9 @@ use crate::handles::Handles;
 
 /// Enclave phase
 #[derive(
-	Debug,
-	Copy,
-	PartialEq,
-	Eq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
+	Debug, Copy, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub enum ProtocolPhase {
 	/// The state machine cannot recover. The enclave must be rebooted.
 	UnrecoverableError,
@@ -197,17 +190,14 @@ impl ProtocolState {
 				None => continue,
 				Some(result) => match result {
 					Ok(msg_resp) | Err(msg_resp) => {
-						return serde_json::to_vec(&msg_resp).expect(
-							"ProtocolMsg can always be serialized. qed.",
-						)
+						return msg_resp.to_canonical_json_vec()
 					}
 				},
 			}
 		}
 
 		let err = ProtocolError::NoMatchingRoute(self.phase);
-		serde_json::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
-			.expect("ProtocolMsg can always be serialized. qed.")
+		ProtocolMsg::ProtocolErrorResponse(err).to_canonical_json_vec()
 	}
 
 	#[allow(clippy::too_many_lines)]
