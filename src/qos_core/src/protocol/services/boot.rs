@@ -239,11 +239,13 @@ impl From<PivotConfigV0> for PivotConfig {
 
 impl fmt::Debug for PivotConfig {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let Self { hash, restart, bridge_config: _, debug_mode: _, args, env } =
+			self;
 		f.debug_struct("PivotConfig")
-			.field("hash", &qos_hex::encode(&self.hash))
-			.field("restart", &self.restart)
-			.field("args", &self.args.join(" "))
-			.field("env", &self.env)
+			.field("hash", &qos_hex::encode(hash))
+			.field("restart", restart)
+			.field("args", &args.join(" "))
+			.field("env", env)
 			.finish()
 	}
 }
@@ -487,6 +489,11 @@ impl Manifest {
 	/// fields that `ManifestV0` ignores. In-tree callers avoid that by going
 	/// through `read_manifest`, which tries the current `Manifest` JSON parse
 	/// before falling back here.
+	///
+	/// # Errors
+	///
+	/// Returns [`borsh::io::Error`] if deserialization fails for both the
+	/// current and legacy formats.
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
 		use borsh::BorshDeserialize;
 
@@ -589,6 +596,15 @@ pub struct ManifestEnvelopeV0 {
 impl ManifestEnvelope {
 	/// Check if the encapsulated manifest has K valid approvals from the
 	/// manifest approval set.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError::InvalidManifestApproval`] if a signature is
+	/// invalid, [`ProtocolError::NotManifestSetMember`] if an approver is
+	/// not in the manifest set, [`ProtocolError::DuplicateApproval`] if a
+	/// member has more than one approval, or
+	/// [`ProtocolError::NotEnoughApprovals`] if fewer than the threshold
+	/// number of members approved.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
 		let mut uniq_members = HashSet::new();
 		for approval in &self.manifest_set_approvals {
@@ -626,7 +642,13 @@ impl ManifestEnvelope {
 
 		Ok(())
 	}
-	/// Read a `ManifestEnvelope` from a `u8` buffer, in a backwards compatible way
+	/// Read a `ManifestEnvelope` from a `u8` buffer, in a backwards
+	/// compatible way.
+	///
+	/// # Errors
+	///
+	/// Returns [`borsh::io::Error`] if deserialization fails for both the
+	/// current and legacy formats.
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
 		use borsh::BorshDeserialize;
 

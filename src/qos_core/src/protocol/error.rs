@@ -225,6 +225,7 @@ impl From<qos_nsm::nitro::AttestError> for ProtocolError {
 }
 
 impl std::fmt::Display for ProtocolError {
+	#[allow(clippy::too_many_lines)]
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::InvalidShare => write!(f, "invalid quorum key share"),

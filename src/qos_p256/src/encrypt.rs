@@ -49,6 +49,11 @@ impl P256EncryptPair {
 	}
 
 	/// Decrypt a message encoded to this pair's public key.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if the envelope cannot be deserialized or
+	/// decryption fails.
 	pub fn decrypt(
 		&self,
 		serialized_envelope: &[u8],
@@ -98,6 +103,11 @@ impl P256EncryptPair {
 	}
 
 	/// Deserialize key from raw scalar byte slice.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error::FailedToReadSecret`] if the bytes are not a
+	/// valid P256 scalar.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
 		Ok(Self {
 			private: SecretKey::from_slice(bytes)
@@ -120,6 +130,10 @@ pub struct P256EncryptPublic {
 
 impl P256EncryptPublic {
 	/// Encrypt a message to this public key.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if encryption or envelope serialization fails.
 	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
 		let ephemeral_sender_private = SecretKey::random(&mut OsRng);
 		let ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED as usize] =
@@ -175,6 +189,11 @@ impl P256EncryptPublic {
 	/// This is designed to be used in scenarios where the private key is stored
 	/// in enclave that computes a shared secret. That shared secret is then
 	// used as input to this function.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if the envelope cannot be deserialized or
+	/// decryption fails.
 	pub fn decrypt_from_shared_secret(
 		&self,
 		serialized_envelope: &[u8],
@@ -219,6 +238,11 @@ impl P256EncryptPublic {
 	}
 
 	/// Deserialize from a SEC1 encoded point, not compressed.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if the bytes are the wrong length or not a
+	/// valid SEC1 encoded point.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
 		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize {
 			return Err(P256Error::EncodedPublicKeyTooLong);
@@ -358,6 +382,11 @@ impl AesGcm256Secret {
 	}
 
 	/// Create [`Self`] from bytes.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error::FailedToCreateAes256GcmCipher`] if the key is
+	/// invalid.
 	pub fn from_bytes(bytes: [u8; AES256_KEY_LEN]) -> Result<Self, P256Error> {
 		Ok(Self { secret: bytes })
 	}
@@ -365,6 +394,10 @@ impl AesGcm256Secret {
 	/// Encrypt the given `msg`.
 	///
 	/// Returns a serialized [`SymmetricEnvelope`].
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if encryption or envelope serialization fails.
 	///
 	/// # Panics
 	/// Panics if `self.secret` is an invalid AES256 secret. This should never
@@ -391,6 +424,11 @@ impl AesGcm256Secret {
 	/// Decrypt the given serialized [`SymmetricEnvelope`].
 	///
 	/// Returns the plaintext.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if the envelope cannot be deserialized or
+	/// decryption fails.
 	///
 	/// # Panics
 	/// Panics if the secret is invalid. This should never happen in practice.

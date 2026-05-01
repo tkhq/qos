@@ -73,8 +73,8 @@ impl From<FromUtf8Error> for HexError {
 	}
 }
 
-fn verify_ascii(byte: &u8) -> Result<(), HexError> {
-	if byte >= &128 {
+fn verify_ascii(byte: u8) -> Result<(), HexError> {
+	if byte >= 128 {
 		return Err(HexError::NonAsciiChar);
 	}
 	Ok(())
@@ -89,6 +89,11 @@ fn verify_ascii(byte: &u8) -> Result<(), HexError> {
 /// - if the input is an odd length
 /// - if a character is invalid hex
 /// - if the input is too long.
+///
+/// # Panics
+///
+/// Panics if validated ASCII bytes are not valid UTF-8, which should not
+/// happen.
 pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 	let sanitized_s = match raw_s.len() {
 		0 => return Ok(Vec::new()),
@@ -112,8 +117,8 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 				.step_by(2)
 				.map(|i| {
 					// check that both bytes represent ascii chars
-					verify_ascii(&sanitized_s_bytes[i])?;
-					verify_ascii(&sanitized_s_bytes[i + 1])?;
+					verify_ascii(sanitized_s_bytes[i])?;
+					verify_ascii(sanitized_s_bytes[i + 1])?;
 
 					let s = std::str::from_utf8(&sanitized_s_bytes[i..i + 2])
 						.expect("We ensure that input slice represents ASCII above. qed.");
@@ -128,6 +133,16 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 
 /// Decode `raw_s` into a mutable buffer slice. Length of `buf` must exactly
 /// match the length of the bytes represented by `raw_s`.
+///
+/// # Errors
+///
+/// Returns [`HexError`] if the input is an odd length, contains non-hex
+/// characters, or does not match the buffer length.
+///
+/// # Panics
+///
+/// Panics if validated ASCII bytes are not valid UTF-8, which should not
+/// happen.
 pub fn decode_to_buf(raw_s: &str, buf: &mut [u8]) -> Result<(), HexError> {
 	let sanitized_s_bytes = match raw_s.len() {
 		0 => {
@@ -156,8 +171,8 @@ pub fn decode_to_buf(raw_s: &str, buf: &mut [u8]) -> Result<(), HexError> {
 	for (i, b) in buf.iter_mut().enumerate() {
 		let str_idx = i * 2;
 
-		verify_ascii(&sanitized_s_bytes[str_idx])?;
-		verify_ascii(&sanitized_s_bytes[str_idx + 1])?;
+		verify_ascii(sanitized_s_bytes[str_idx])?;
+		verify_ascii(sanitized_s_bytes[str_idx + 1])?;
 
 		let s = std::str::from_utf8(&sanitized_s_bytes[str_idx..str_idx + 2])
 			.expect("We ensure that input slice represents ASCII above. qed.");
@@ -168,7 +183,12 @@ pub fn decode_to_buf(raw_s: &str, buf: &mut [u8]) -> Result<(), HexError> {
 	Ok(())
 }
 
-/// Decode bytes from a hex byte slice
+/// Decode bytes from a hex byte slice.
+///
+/// # Errors
+///
+/// Returns [`HexError::InvalidUtf8`] if the input is not valid UTF-8, or
+/// any [`HexError`] variant from [`decode`].
 pub fn decode_from_vec(vec: Vec<u8>) -> Result<Vec<u8>, HexError> {
 	let hex_string = String::from_utf8(vec).map_err(HexError::from)?;
 	let hex_string = hex_string.trim();
@@ -176,6 +196,11 @@ pub fn decode_from_vec(vec: Vec<u8>) -> Result<Vec<u8>, HexError> {
 }
 
 /// Encode a byte slice to hex string. Always encodes with lowercase characters.
+///
+/// # Panics
+///
+/// Panics if a byte value does not index into the hex lookup table, which
+/// should not happen since the table covers all 256 byte values.
 #[must_use]
 pub fn encode(bytes: &[u8]) -> String {
 	bytes
@@ -200,6 +225,10 @@ pub fn encode_to_vec(bytes: &[u8]) -> Vec<u8> {
 /// Implemented for some `u8` arrays and `Vec<u8>`.
 pub trait FromHex: Sized {
 	/// Creates an instance of `Self` from a hex string.
+	///
+	/// # Errors
+	///
+	/// Returns [`HexError`] if the hex string is invalid.
 	fn from_hex(raw_s: &str) -> Result<Self, HexError>;
 }
 
@@ -226,7 +255,7 @@ from_hex_array_impl! {
 	32 33 34 64 65 66
 	128 256
 	384
-	512 768 1024 2048 4096 8192 16384 32768
+	512 768 1024 2048 4096 8192 16384
 }
 
 /// Serde support for hex encoding/decoding.
@@ -241,6 +270,10 @@ pub mod serde {
 	use super::{encode, FromHex};
 
 	/// Serialize bytes as a hex string.
+	///
+	/// # Errors
+	///
+	/// Returns the serializer's error type if serialization fails.
 	pub fn serialize<T, S>(bytes: T, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		T: AsRef<[u8]>,
@@ -251,6 +284,11 @@ pub mod serde {
 	}
 
 	/// Deserialize a hex string into bytes.
+	///
+	/// # Errors
+	///
+	/// Returns the deserializer's error type if the input is not a valid hex
+	/// string.
 	pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -438,7 +476,7 @@ mod test {
 	}
 
 	#[test]
-	#[ignore]
+	#[ignore = "long running test"]
 	fn decode_respects_max_len() {
 		// Accepts a string of exactly the correct length
 		let valid =

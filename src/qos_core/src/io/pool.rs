@@ -62,7 +62,13 @@ impl std::ops::DerefMut for PoolGuard<'_> {
 }
 
 impl StreamPool {
-	/// Create a new `StreamPool` with given starting `SocketAddress`, timeout and number of addresses to populate.
+	/// Create a new `StreamPool` with given starting `SocketAddress`, timeout
+	/// and number of addresses to populate.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError::PoolError`] if `count` is zero, or [`IOError`] if
+	/// computing the next address fails.
 	pub fn new(
 		start_address: SocketAddress,
 		mut count: u8,
@@ -89,6 +95,10 @@ impl StreamPool {
 	}
 
 	/// Create a single address pool.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if pool creation fails.
 	pub fn single(address: SocketAddress) -> Result<Self, IOError> {
 		Self::new(address, 1)
 	}
@@ -125,8 +135,9 @@ impl StreamPool {
 		self.len() == 0
 	}
 
-	/// Returns true if all callable streams are currently exhausted
-	pub async fn busy(&self) -> bool {
+	/// Returns true if all callable streams are currently exhausted.
+	#[must_use]
+	pub fn busy(&self) -> bool {
 		for h in &self.handles {
 			if h.try_lock().is_ok() {
 				return false;
@@ -158,7 +169,12 @@ impl StreamPool {
 		PoolGuard::new(guard)
 	}
 
-	/// Create a new pool by listening for new connection on all the addresses
+	/// Create a new pool by listening for new connections on all the
+	/// addresses.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if binding a listener fails.
 	pub fn listen(&self) -> Result<Vec<Listener>, IOError> {
 		let mut listeners = Vec::new();
 
@@ -171,7 +187,12 @@ impl StreamPool {
 		Ok(listeners)
 	}
 
-	/// Expands the pool with new addresses using `SocketAddress::next_address`
+	/// Expands the pool with new addresses using
+	/// `SocketAddress::next_address`.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if computing the next address fails.
 	pub fn expand_to(&mut self, size: u8) -> Result<(), IOError> {
 		println!("StreamPool: expanding async pool to {size}");
 		let size = size as usize;
@@ -190,7 +211,13 @@ impl StreamPool {
 		Ok(())
 	}
 
-	/// Listen to new connections on added sockets on top of existing listeners, returning the list of new `Listener`
+	/// Listen to new connections on added sockets on top of existing
+	/// listeners, returning the list of new `Listener`s.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if computing the next address or binding a
+	/// listener fails.
 	pub fn listen_to(&mut self, size: u8) -> Result<Vec<Listener>, IOError> {
 		println!("StreamPool: listening async pool to {size}");
 		let size = size as usize;

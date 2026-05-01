@@ -259,7 +259,7 @@ async fn reaper_handles_bridge() {
 		SocketAddrV4::new(Ipv4Addr::LOCALHOST, host_port).into();
 	let app_pool =
 		StreamPool::single(SocketAddress::new_unix(&app_usock)).unwrap();
-	HostBridge::new(app_pool, host_addr).tcp_to_vsock().await;
+	HostBridge::new(app_pool, host_addr).tcp_to_vsock();
 
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key

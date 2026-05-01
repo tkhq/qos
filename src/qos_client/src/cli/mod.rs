@@ -1718,7 +1718,7 @@ mod handlers {
 			opts.restart_policy(),
 			opts.pivot_args(),
 			opts.bridge_config(),
-			opts.unsafe_eph_path_override(),
+			opts.unsafe_eph_path_override().as_deref(),
 		);
 	}
 

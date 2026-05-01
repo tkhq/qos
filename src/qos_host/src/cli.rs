@@ -121,6 +121,7 @@ impl HostOpts {
 	}
 
 	/// Create a new `StreamPool` using the list of `SocketAddress` for the qos host.
+	#[cfg_attr(not(feature = "vm"), allow(clippy::unnecessary_wraps))]
 	pub(crate) fn enclave_socket(
 		&self,
 	) -> Result<SocketAddress, qos_core::io::IOError> {

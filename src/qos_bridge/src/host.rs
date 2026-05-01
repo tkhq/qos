@@ -44,8 +44,7 @@ impl BridgeServer {
 						.manifest_envelope
 					{
 						break self
-							.run_bridges(&me.manifest.pivot.bridge_config)
-							.await;
+							.run_bridges(&me.manifest.pivot.bridge_config);
 					}
 				}
 				Err(err) => eprintln!("unable to query enclave: {err}"),
@@ -61,7 +60,7 @@ impl BridgeServer {
 		self.host_port_override.unwrap_or(port)
 	}
 
-	async fn run_bridges(&self, configs: &Vec<BridgeConfig>) {
+	fn run_bridges(&self, configs: &Vec<BridgeConfig>) {
 		for config in configs {
 			let (host_port, host_ip_str) = match config {
 				BridgeConfig::Client { port: _, host: _ } => {
@@ -99,7 +98,7 @@ impl BridgeServer {
 			};
 			let host_addr = SocketAddr::new(host_ip.into(), host_port);
 
-			HostBridge::new(app_pool, host_addr).tcp_to_vsock().await;
+			HostBridge::new(app_pool, host_addr).tcp_to_vsock();
 		}
 	}
 }

@@ -33,6 +33,14 @@ impl<'pool> ProxyStream<'pool> {
 	/// * `dns_resolvers` - array of resolvers to use to resolve `hostname`
 	/// * `dns_port` - DNS port to use while resolving DNS (typically: 53 or
 	///   853)
+	/// # Errors
+	///
+	/// Returns [`QosNetError`] if the connection request fails or the
+	/// proxy returns an error.
+	///
+	/// # Panics
+	///
+	/// Panics if the request cannot be serialized.
 	pub async fn connect_by_name(
 		mut stream: PoolGuard<'pool>,
 		hostname: String,
@@ -70,6 +78,14 @@ impl<'pool> ProxyStream<'pool> {
 	/// * `ip` - the IP the remote `qos_net` proxy should connect to
 	/// * `port` - the port the remote `qos_net` proxy should connect to
 	///   (typically: 80 or 443 for http/https)
+	/// # Errors
+	///
+	/// Returns [`QosNetError`] if the connection request fails or the
+	/// proxy returns an error.
+	///
+	/// # Panics
+	///
+	/// Panics if the request cannot be serialized.
 	pub async fn connect_by_ip(
 		mut stream: PoolGuard<'pool>,
 		ip: String,
@@ -91,8 +107,12 @@ impl<'pool> ProxyStream<'pool> {
 		}
 	}
 
-	/// Refresh this connection after a request has been completed. This MUST be called
-	/// after each successful rustls session.
+	/// Refresh this connection after a request has been completed. This MUST
+	/// be called after each successful rustls session.
+	///
+	/// # Errors
+	///
+	/// Returns [`QosNetError`] if reconnecting the stream fails.
 	pub async fn refresh(&mut self) -> Result<(), QosNetError> {
 		self.stream.reconnect().await?;
 
@@ -215,14 +235,15 @@ mod test {
 		);
 
 		// Decode the chunked content
-		let mut decoded = String::new();
+		let mut decoded_string = String::new();
 		let mut decoder = Decoder::new(&response_bytes[header_byte_size..]);
-		let res = decoder.read_to_string(&mut decoded);
+		let res = decoder.read_to_string(&mut decoded_string);
 		assert!(res.is_ok());
 
 		// Parse the JSON response body and make sure there is a proper "keys"
 		// array in it
-		let json_content: Value = serde_json::from_str(&decoded).unwrap();
+		let json_content: Value =
+			serde_json::from_str(&decoded_string).unwrap();
 		assert!(json_content["keys"].is_array());
 	}
 }

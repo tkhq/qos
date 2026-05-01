@@ -15,6 +15,7 @@ use serde_bytes::ByteBuf;
 
 mod error;
 mod syntactic_validation;
+use syntactic_validation::validate_attestation_doc;
 
 pub use error::AttestError;
 
@@ -43,6 +44,10 @@ pub const AWS_ROOT_CERT_PEM: &[u8] =
 
 /// Extract a DER encoded certificate from bytes representing a PEM encoded
 /// certificate.
+///
+/// # Errors
+///
+/// Returns [`AttestError::PemDecodingError`] if the PEM cannot be decoded.
 pub fn cert_from_pem(pem: &[u8]) -> Result<Vec<u8>, AttestError> {
 	let (_, doc) =
 		x509_cert::der::Document::from_pem(&String::from_utf8_lossy(pem))
@@ -63,7 +68,10 @@ pub fn cert_from_pem(pem: &[u8]) -> Result<Vec<u8>, AttestError> {
 /// * `pcr1` - expected value of PCR index 1.
 /// * `pcr2` - expected value of PCR index 3.
 ///
-/// Returns an `AttestError` if any part of the verification fails.
+/// # Errors
+///
+/// Returns [`AttestError`] if any field is missing or does not match the
+/// expected value.
 pub fn verify_attestation_doc_against_user_input(
 	attestation_doc: &AttestationDoc,
 	user_data: &[u8],
@@ -158,6 +166,11 @@ pub fn verify_attestation_doc_against_user_input(
 ///
 /// * `cose_sign1_der` - the DER encoded COSE Sign1 structure containing the
 ///   attestation document payload.
+///
+/// # Errors
+///
+/// Returns [`AttestError`] if the COSE Sign1 structure or attestation
+/// document cannot be decoded.
 pub fn unsafe_attestation_doc_from_der(
 	cose_sign1_der: &[u8],
 ) -> Result<AttestationDoc, AttestError> {
@@ -188,6 +201,11 @@ pub fn unsafe_attestation_doc_from_der(
 /// * `validation_time` - a moment in time that the certificates should be
 ///   valid. This is measured in seconds since the unix epoch. Most likely this
 ///   will be the current time.
+///
+/// # Errors
+///
+/// Returns [`AttestError`] if the COSE Sign1 structure cannot be decoded,
+/// the certificate chain is invalid, or signature verification fails.
 pub fn attestation_doc_from_der(
 	cose_sign1_der: &[u8],
 	root_cert: &[u8],
@@ -197,14 +215,7 @@ pub fn attestation_doc_from_der(
 	let cose_sign1 = CoseSign1::from_bytes(cose_sign1_der)
 		.map_err(|_| AttestError::InvalidCOSESign1Structure)?;
 
-	syntactic_validation::module_id(&attestation_doc.module_id)?;
-	syntactic_validation::digest(attestation_doc.digest)?;
-	syntactic_validation::pcrs(&attestation_doc.pcrs)?;
-	syntactic_validation::cabundle(&attestation_doc.cabundle)?;
-	syntactic_validation::timestamp(attestation_doc.timestamp)?;
-	syntactic_validation::public_key(&attestation_doc.public_key)?;
-	syntactic_validation::user_data(&attestation_doc.user_data)?;
-	syntactic_validation::nonce(&attestation_doc.nonce)?;
+	validate_attestation_doc(&attestation_doc)?;
 
 	verify_certificate_chain(
 		&attestation_doc.cabundle,
