@@ -15,7 +15,7 @@ side has no direct host networking; its external communication path is VSOCK.
 flowchart LR
     subgraph EC2["EC2 instance with Nitro"]
         subgraph Host["Host OS"]
-            Launcher["EIF launcherF"]
+            Launcher["EIF launcher"]
             QH["qos_host<br/>HTTP control API"]
             Coordinator["boot coordinator"]
             QB["qos_bridge<br/>TCP to VSOCK bridge"]

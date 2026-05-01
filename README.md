@@ -184,9 +184,10 @@ The application QuorumOS pivots to once it finishes booting. This applications b
 
 ## Provisioning
 
-Immediately after a valid Manifest is loaded into QuorumOS, the instance will generate an Ephemeral Key. This key is specific to a particular individual machine and, after successfully verifying the machine image and metadata contained in the manifest file, will be used by the Quorum Members to post their shares into the machine.
-Prior to posting their share to the machine, Quorum Members use a variety of cryptographic attestations and social coordination to determine if it is appropriate to provision a particular instance of QuorumOS with a given secret.
-Upon successful verification of the attestation outputs, each member will encrypt their share to an Ephemeral Key. Once threshold shares have been collected by the instance, it will use Shamir’s Secret Sharing to reconstruct the Quorum Key.
+There are two modes for provisioning:
+
+- [Boot Standard](docs/boot_standard.md): mode for provisioning an enclave with quorum key shares. This is commonly used if there is no instance from the same namespace to key forward from or if there is any change to the QuorumOS verification API that breaks Key Forwarding. Boot Standard is also required if the manifest set or share set change.
+- [Key Forward](docs/key_forward.md): mode for provisioning an enclave from an already provisionedq enclave of the same namespace. This allows QuorumOS to support horizontal scaling cloud workloads. Effectively, a pre-existing enclave will verify attestation and manifest for a new enclave and then forward its quorum key to the new enclave.
 
 ### Remote Attestation
 
