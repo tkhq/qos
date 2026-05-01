@@ -37,7 +37,10 @@ Node is reachable through `qos_host`.
     The manifest specifies all environment configuration including the namespace, nonce, expected Quorum Key public key,
     Pivot App hash, restart policy, optional pivot configuration, Manifest Set,
     Share Set, and Nitro PCR values. The Manifest Envelope must have
-    at least K valid approvals from members of the Manifest Set.
+    at least `manifest.manifest_set.threshold` valid approvals from distinct
+    members of the Manifest Set. The Share Set has its own threshold,
+    `manifest.share_set.threshold`, which controls quorum key reconstruction
+    during provisioning rather than manifest approval.
 
 2) The Node gets a `BootStandardRequest` from the Client.
 
@@ -48,8 +51,10 @@ Node is reachable through `qos_host`.
     }
     ```
 
-3) The Node processes the request by performing the following steps:
-    1) Check signatures over the manifest envelope. This ensures that K Manifest Set Members approved the manifest.
+3) The Node processes the request by performing the following steps. The
+   implementation lives in [`put_manifest_and_pivot`](../src/qos_core/src/protocol/services/boot.rs#L650-L687) and
+   [`boot_standard`](../src/qos_core/src/protocol/services/boot.rs#L689-L696).
+    1) Check signatures over the manifest envelope with [`ManifestEnvelope::check_approvals`](../src/qos_core/src/protocol/services/boot.rs#L589-L628). This ensures that at least `manifest.manifest_set.threshold` distinct Manifest Set Members approved the manifest.
     1) Reject the request if the Manifest Envelope already contains Share Set approvals. Share Set approvals are recorded as shares are posted during provisioning, not during the initial boot instruction.
     1) Hash the submitted Pivot App binary and check that it matches `manifest_envelope.manifest.pivot.hash`.
     1) Generate an Ephemeral Key.
@@ -63,12 +68,13 @@ Node is reachable through `qos_host`.
         }
         ```
 
-4) Each Share Holder, verifies the attestation document before provisioning shares:
+4) Each Share Holder verifies the attestation document before provisioning shares. An
+   example of this flow is implemented by [`proxy_re_encrypt_share`](../src/qos_client/src/cli/services.rs#L1239-L1344).
     1) Check the basic validity of the attestation doc (cert chain etc). This ensures that the attestation document is actually from an AWS controlled NSM module and that the document's timestamp was recent.
     1) Check that the manifest hash is in the `user_data` field of the attestation doc.
     1) Check that PCR0, PCR1, PCR2, and PCR3 in the manifest match the PCRs in the attestation document. This ensures the manifest was used against a Nitro enclave booted with the intended version of QOS and the intended AWS identity.
     1) Extract the Ephemeral Key public key from the `public_key` field of the attestation document.
-    1) Check that the Manifest Envelope has K valid Manifest Set approvals.
+    1) Check that the Manifest Envelope has at least `manifest.manifest_set.threshold` valid Manifest Set approvals.
     1) Check that the Share Holder belongs to the Share Set in the manifest.
     1) Perform any required human checks, such as confirming the namespace name, nonce, IAM role, and Manifest Set approvers.
 
@@ -88,16 +94,17 @@ Node is reachable through `qos_host`.
     proves that the intended Share Holder intentionally provisioned a share for this
     manifest.
 
-6) The Node processes each `ProvisionRequest` by performing the following steps:
+6) The Node processes each `ProvisionRequest` by performing the following steps in
+   [`provision`](../src/qos_core/src/protocol/services/provision.rs#L58-L124):
     1) Fetch the local Manifest Envelope written during `BootStandardRequest`.
     1) Verify that the approval signature is valid over the manifest hash.
     1) Verify that the approver belongs to the manifest's Share Set.
     1) Record the Share Set approval in the local Manifest Envelope for auditability.
     1) Decrypt the posted share with the Node's Ephemeral Key.
-    1) Add the decrypted share to the provisioning state.
-    1) If fewer than K shares have been posted, return `ProvisionResponse { reconstructed: false }`.
-    1) Once K shares have been posted, reconstruct the Quorum Key with Shamir reconstruction.
-    1) Check that the reconstructed Quorum Key public key matches `manifest.namespace.quorum_key`.
+    1) Add the decrypted share to the provisioning state. Each recorded Share Set approval corresponds to one posted encrypted share; the Node does not separately accept a batch of Share Set approvals before shares are posted. Note the approvals are primarily for audit trail purposes.
+    1) If fewer than `manifest.share_set.threshold` shares have been posted, return `ProvisionResponse { reconstructed: false }`.
+    1) Once `manifest.share_set.threshold` shares have been posted, reconstruct the Quorum Key with Shamir reconstruction. The true cryptographic reconstruction threshold is determined by how the Shamir shares were originally split. `manifest.share_set.threshold` represents the minimum number of Share Set approvals required before the Node attempts reconstruction, so it should be greater than or equal to the Shamir reconstruction threshold.
+    1) Check that the reconstructed Quorum Key public key matches `manifest.namespace.quorum_key`. This is the effective cryptographic check for provisioning: if the posted shares cannot reconstruct the intended key, provisioning fails.
     1) Rotate the Ephemeral Key so app-level uses do not reuse the pre-boot key that protected share provisioning.
     1) Write the Quorum Key to the filesystem, at which point the Node will automatically pivot to running the Pivot App.
     1) Return `ProvisionResponse { reconstructed: true }`.
