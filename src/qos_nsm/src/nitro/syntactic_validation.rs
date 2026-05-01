@@ -277,7 +277,7 @@ mod tests {
 	}
 
 	#[test]
-	fn invalid_pcr() {
+	fn invalid_pcr_length() {
 		let invalid_pcr = pcr::<31>();
 		let pcrs = BTreeMap::from([(5, invalid_pcr)]);
 		let attestion_doc = AttestationDoc { pcrs, ..valid_attestation_doc() };
