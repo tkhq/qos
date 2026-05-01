@@ -152,7 +152,7 @@ An entity that may be a member of the [Manifest Set](#manifest-set) and/or [Shar
 
 ### Quorum Sets
 
-There are three types of quorum sets:
+There are two types of quorum sets:
 
 ### Manifest Set
 
@@ -161,22 +161,6 @@ The collection of members who can approve a manifest. In the typical instance pr
 ### Share Set
 
 The collection of members who each hold shares of the Quorum Key and thus provision an enclave by attesting and then posting their shares. When posting shares, these members will also provide a signature of the manifest. The signature is recorded in manifest envelope in order to leave an audit trail. This way, third parties can check which share set members actually participated in provisioning the quorum key
-
-### Patch Set
-
-The collection of members who can approve live configuration patches to running enclaves.
-
-### Manifest Key
-
-A key that is part of the manifest set. This key is used to approve (sign) manifests.
-
-### Share Key
-
-A key that is part of the Share Set. This is a key that the genesis service encrypts a share too.
-
-### Patch Key
-
-A key that is part of the Patch Set. This is a key that signs live configuration changes.
 
 ### Ephemeral Key
 
@@ -218,15 +202,4 @@ Continued reading for attesting with nitro enclaves:
 
 ## Enclave Data Flow
 
-Nitro enclaves have a single socket for communicating to their parent EC2 instance. When QuorumOS initially starts up, it starts listening on a [socket server](./src/qos_core/src/server.rs) for [`ProtocolMsg`s](./src/qos_core/src/protocol/msg.rs) (the routing logic for the enclave server is [here](./src/qos_core/src/protocol/mod.rs)) that are sent over a single VSOCK connection with the EC2 instance. The enclave server only supports simple request/response communication with a client on the EC2 instance end of the VSOCK connection.
-
-For communicating just with the QuorumOS enclave server, we have [`qos_host`](./src/qos_host/src/lib.rs), a simple HTTP service that allows for `GET`ing health checks and `POST`ing `ProtocolMsg`s.
-
-We expect that Enclave Apps will have their own host (app host) that will talk to the enclave server over the same socket. A Enclave App is expected to use a simple request/response pattern and arbitrary message serialization. Communication to an app is proxied by the QuorumOS enclave server; so for a app host to communicate with the app it must send a `ProtocolMsg::ProxyRequest { data: Vec<u8> }` to the QuorumOS enclave server, and then the enclave server will send just the `data` to the application over a unix socket. The app will respond to the enclave server with raw data and then the enclave server will respond to the app host with `ProtocolMsg::ProxyResponse { data: Vec<u8> }`.
-
-We expect an EC2 instance to have both a QuorumOS host for booting the enclave and doing health checks and an app host for app specific communication.
-
-Below is a diagram showing the aforementioned app data flow. The diagram mentions gRPC just as an arbitrary example for a protocol that an app caller would use to communicate with the app host.
-
-![Enclave App Data Flow Diagram](./src/static/enclave-app-data-flow.png)
-[Excalidraw link](https://app.excalidraw.com/s/6bemxcXUAIE/251cQGJS1by)
+See the [networking doc](docs/networking.md) for more info.
