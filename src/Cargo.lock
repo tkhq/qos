@@ -1887,6 +1887,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_bytes"
+version = "0.7.0"
+dependencies = [
+ "qos_hex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "qos_client"
 version = "0.7.0"
 dependencies = [
