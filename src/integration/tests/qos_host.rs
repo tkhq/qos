@@ -3,7 +3,7 @@ use std::{process::Command, time::Duration};
 use integration::PIVOT_OK_PATH;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn connects_and_gets_info() {
 	// prep sock pool dir
 	std::fs::create_dir_all("/tmp/qos_host_test").unwrap();
@@ -62,6 +62,6 @@ async fn connects_and_gets_info() {
 	assert!(r.is_ok()); // expect 200 here
 	assert_eq!(
 		r.unwrap().into_string().unwrap(),
-		"{\"phase\":\"WaitingForBootInstruction\",\"manifestEnvelope\":null}"
+		"{\"phase\":\"WaitingForBootInstruction\",\"manifestEnvelope\":null,\"ephemeralKey\":null}"
 	);
 }

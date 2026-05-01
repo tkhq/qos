@@ -125,6 +125,17 @@ impl StreamPool {
 		self.len() == 0
 	}
 
+	/// Returns true if all callable streams are currently exhausted
+	pub async fn busy(&self) -> bool {
+		for h in &self.handles {
+			if h.try_lock().is_ok() {
+				return false;
+			}
+		}
+
+		true
+	}
+
 	/// Gets the next available `Stream` behind a `MutexGuard`
 	///
 	/// # Panics
@@ -202,8 +213,9 @@ impl StreamPool {
 	}
 
 	/// Deconstruct the pool into all contained `Stream` objects.
+	#[must_use]
 	pub fn to_streams(self) -> Vec<Stream> {
-		self.handles.into_iter().map(|m| m.into_inner()).collect()
+		self.handles.into_iter().map(tokio::sync::Mutex::into_inner).collect()
 	}
 }
 

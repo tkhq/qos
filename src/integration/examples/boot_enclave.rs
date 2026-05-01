@@ -7,6 +7,7 @@ use std::{
 	process::{Command, Stdio},
 };
 
+use borsh::BorshDeserialize;
 use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
 use qos_core::protocol::{
 	services::{
@@ -65,7 +66,9 @@ async fn main() {
 
 	// -- CLIENT create manifest.
 	let pivot_args = std::env::args().nth(2).expect("No pivot args provided");
+	let pivot_env = "pivot_env_var=will be set";
 	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
+	let app_host_port = 3000;
 
 	assert!(Command::new("../target/debug/qos_client")
 		.args([
@@ -86,6 +89,8 @@ async fn main() {
 			&cli_manifest_path,
 			"--pivot-args",
 			&pivot_args,
+			"--pivot-env",
+			pivot_env,
 			"--manifest-set-dir",
 			"./mock/keys/manifest-set",
 			"--share-set-dir",
@@ -93,7 +98,9 @@ async fn main() {
 			"--patch-set-dir",
 			"./mock/keys/manifest-set",
 			"--quorum-key-path",
-			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub"
+			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
+			"--bridge-config",
+			&format!("[{{\"type\": \"server\", \"port\": {app_host_port}, \"host\": \"0.0.0.0\"}}]"),
 		])
 		.spawn()
 		.unwrap()
@@ -105,11 +112,12 @@ async fn main() {
 	let manifest: Manifest =
 		serde_json::from_slice(&fs::read(&cli_manifest_path).unwrap()).unwrap();
 
-	let genesis_output: GenesisOutput = {
+	let genesis_output = {
 		let contents =
 			fs::read("./mock/boot-e2e/genesis-dir/genesis_output").unwrap();
-		serde_json::from_slice(&contents).unwrap()
+		GenesisOutput::try_from_slice(&contents).unwrap()
 	};
+
 	// For simplicity sake, we use the same keys for the share set and manifest
 	// set.
 	let mut members: Vec<_> = genesis_output
@@ -212,6 +220,17 @@ async fn main() {
 			"Are these the correct pivot args:"
 		);
 		stdout.next().unwrap().unwrap(); // pivot args confirm msg
+		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Are these the correct pivot env vars:"
+		);
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"{\"pivot_env_var\": Plain { value: \"will be set\" }}?"
+		);
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 

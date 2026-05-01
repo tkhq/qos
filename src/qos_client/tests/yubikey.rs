@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use std::{
 	fs::create_dir_all,
 	io::{BufRead, BufReader},
@@ -267,7 +269,7 @@ fn advanced_provision_yubikey_works() {
 
 	let pair = P256Pair::from_hex_file(&*master_seed_path).unwrap();
 
-	assert!(pair.public_key() == public)
+	assert!(pair.public_key() == public);
 }
 
 fn provision_sign_and_verify() {

@@ -109,11 +109,13 @@ pub enum NsmRequest {
 	/// Read data from PlatformConfigurationRegister at `index`
 	DescribePcr {
 		/// index of the PCR to describe
+		#[serde(with = "qos_json::string_number")]
 		index: u16,
 	},
 	/// Extend PlatformConfigurationRegister at `index` with `data`
 	ExtendPcr {
 		/// index the PCR to extend
+		#[serde(with = "qos_json::string_number")]
 		index: u16,
 		/// data to extend it with
 		#[serde(with = "qos_hex::serde")]
@@ -123,12 +125,14 @@ pub enum NsmRequest {
 	/// modifications
 	LockPcr {
 		/// index to lock
+		#[serde(with = "qos_json::string_number")]
 		index: u16,
 	},
 	/// Lock PlatformConfigurationRegisters at indexes `[0, range)` from
 	/// further modifications
 	LockPcrs {
 		/// number of PCRs to lock, starting from index 0
+		#[serde(with = "qos_json::string_number")]
 		range: u16,
 	},
 	/// Return capabilities and version of the connected NitroSecureModule.
@@ -237,18 +241,23 @@ pub enum NsmResponse {
 	/// returns the runtime configuration of the NitroSecureModule
 	DescribeNsm {
 		/// Breaking API changes are denoted by `major_version`
+		#[serde(with = "qos_json::string_number")]
 		version_major: u16,
 		/// Minor API changes are denoted by `minor_version`. Minor versions
 		/// should be backwards compatible.
+		#[serde(with = "qos_json::string_number")]
 		version_minor: u16,
 		/// Patch version. These are security and stability updates and do not
 		/// affect API.
+		#[serde(with = "qos_json::string_number")]
 		version_patch: u16,
 		/// `module_id` is an identifier for a singular NitroSecureModule
 		module_id: String,
 		/// The maximum number of PCRs exposed by the NitroSecureModule.
+		#[serde(with = "qos_json::string_number")]
 		max_pcrs: u16,
 		/// The PCRs that are read-only.
+		#[serde(with = "qos_json::string_number_btreeset")]
 		locked_pcrs: BTreeSet<u16>,
 		/// The digest of the PCR Bank
 		digest: NsmDigest,

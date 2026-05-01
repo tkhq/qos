@@ -5,8 +5,14 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
-[lints]
-workspace = true
+# Override workspace lints for this test crate
+[lints.rust]
+missing_docs = "allow"
+unsafe_code = "deny"
+
+[lints.clippy]
+missing_errors_doc = "allow"
+module_name_repetitions = "allow"
 
 [dependencies]
 qos_core = { workspace = true, features = ["mock"], default-features = false }

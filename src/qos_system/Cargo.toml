@@ -8,4 +8,4 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libc = "=0.2.172"
+libc = "=0.2.174"

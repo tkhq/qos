@@ -1,0 +1,19 @@
+FROM common AS base
+ADD . /src
+
+FROM base AS build
+RUN <<-EOF
+	set -eux
+	cd /src && cargo build ${CARGOFLAGS} --features vm -p qos_bridge
+	cp /src/target/${TARGET}/release/qos_bridge /
+	file /qos_bridge | grep "static-pie"
+EOF
+
+FROM base AS install
+WORKDIR /rootfs
+COPY --from=build /qos_bridge .
+RUN find . -exec touch -hcd "@0" "{}" +
+
+FROM scratch AS package
+COPY --from=install /rootfs .
+ENTRYPOINT ["/qos_bridge"]

@@ -121,7 +121,7 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 				})
 				.collect()
 		}
-		(true, false) | (false, false) => Err(HexError::ExceedsMaxLength),
+		(true | false, false) => Err(HexError::ExceedsMaxLength),
 		(false, true) => Err(HexError::OddLength),
 	}
 }
@@ -131,11 +131,10 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 pub fn decode_to_buf(raw_s: &str, buf: &mut [u8]) -> Result<(), HexError> {
 	let sanitized_s_bytes = match raw_s.len() {
 		0 => {
-			if !buf.is_empty() {
-				return Err(HexError::StringDoesNotMatchBufferLength);
-			} else {
+			if buf.is_empty() {
 				return Ok(());
 			}
+			return Err(HexError::StringDoesNotMatchBufferLength);
 		}
 		1 => return Err(HexError::LengthOne),
 		_ => {
@@ -230,6 +229,9 @@ from_hex_array_impl! {
 	512 768 1024 2048 4096 8192 16384 32768
 }
 
+/// Serde support for hex encoding/decoding.
+///
+/// Use with `#[serde(with = "qos_hex::serde")]` on struct fields.
 #[cfg(feature = "serde")]
 pub mod serde {
 	use core::{fmt, marker::PhantomData};
@@ -238,6 +240,7 @@ pub mod serde {
 
 	use super::{encode, FromHex};
 
+	/// Serialize bytes as a hex string.
 	pub fn serialize<T, S>(bytes: T, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		T: AsRef<[u8]>,
@@ -247,6 +250,7 @@ pub mod serde {
 		serializer.serialize_str(&hex)
 	}
 
+	/// Deserialize a hex string into bytes.
 	pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -428,7 +432,7 @@ mod test {
 
 		let mut buf = vec![0u8; encoded.len() / 2];
 		assert!(decode_to_buf(encoded, &mut buf).is_ok());
-		assert_eq!(buf.to_vec(), decoded);
+		assert_eq!(buf.clone(), decoded);
 	}
 
 	#[test]
@@ -447,7 +451,7 @@ mod test {
 
 		let mut buf = vec![0u8; (address.len() - 2) / 2];
 		assert!(decode_to_buf(address, &mut buf).is_ok());
-		assert_eq!(buf.to_vec(), decoded);
+		assert_eq!(buf.clone(), decoded);
 	}
 
 	#[test]

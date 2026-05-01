@@ -3,7 +3,11 @@ name = "qos_net"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish = false
+license.workspace = true
+description = "Socket to TCP proxy for QuorumOS enclave network access"
+repository = "https://github.com/tkhq/qos"
+keywords = ["quorumos", "enclave", "nitro", "proxy", "vsock"]
+categories = ["network-programming"]
 
 [lints]
 workspace = true
@@ -22,7 +26,7 @@ tokio = { workspace = true, optional = true }
 tokio-rustls = { workspace = true, optional = true }
 
 [dev-dependencies]
-qos_test_primitives = { workspace = true }
+qos_test_primitives = { path = "../qos_test_primitives" }
 httparse = { workspace = true }
 chunked_transfer = { workspace = true }
 serde_json = { workspace = true, features = [

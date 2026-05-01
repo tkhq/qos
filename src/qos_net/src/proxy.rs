@@ -1,5 +1,5 @@
 //! Protocol proxy for our remote QOS net proxy
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use borsh::BorshDeserialize;
 use futures::Future;
@@ -13,6 +13,9 @@ use crate::{
 	error::QosNetError, proxy_connection::ProxyConnection, proxy_msg::ProxyMsg,
 };
 
+// maximum time a single proxy request can take
+const PROXY_CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
+
 const MEGABYTE: usize = 1024 * 1024;
 const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
 
@@ -23,7 +26,7 @@ pub struct Proxy {
 }
 
 impl Proxy {
-	/// Create a new `Proxy` from the given `Stream`, with empty tcp_connection
+	/// Create a new `Proxy` from the given `Stream`, with empty `tcp_connection`
 	pub fn new(sock_stream: PermittedStream) -> Self {
 		Self { tcp_connection: None, sock_stream }
 	}
@@ -104,6 +107,7 @@ impl Proxy {
 				ProxyMsg::ConnectByIpRequest { ip, port } => {
 					self.connect_by_ip(ip, port).await
 				}
+				ProxyMsg::ProxyError(err) => ProxyMsg::ProxyError(err),
 				_ => ProxyMsg::ProxyError(QosNetError::InvalidMsg),
 			},
 			Err(_) => ProxyMsg::ProxyError(QosNetError::InvalidMsg),
@@ -116,35 +120,59 @@ impl Proxy {
 
 impl Proxy {
 	async fn run(&mut self) -> Result<(), IOError> {
-		loop {
-			// Only try to process ProxyMsg content on the USOCK/VSOCK if we're not connected to TCP yet.
-			// If we're connected, we should be a "dumb pipe" using the `tokio::io::copy_bidirectional`
-			// which is handled in the connect functions above
-			if self.tcp_connection.is_none() {
-				let req_bytes = self.sock_stream.recv().await?;
-				let resp_bytes = self.process_req(req_bytes).await;
-				self.sock_stream.send(&resp_bytes).await?;
-				if let Some(tcp_connection) = &mut self.tcp_connection {
-					let result = tokio::io::copy_bidirectional(
-						&mut self.sock_stream.stream(),
-						&mut tcp_connection.tcp_stream,
-					)
-					.await
-					.map(|_| ())
-					.map_err(IOError::from);
+		// Only try to process ProxyMsg content on the USOCK/VSOCK if we're not connected to TCP yet.
+		// If we're connected, we should be a "dumb pipe" using the `tokio::io::copy_bidirectional`
+		// which is handled in the connect functions above
+		if self.tcp_connection.is_some() {
+			return Err(IOError::UnexpectedProxyConnection);
+		}
 
-					// Once the "dumb pipe" is closed we need to clear our tcp_connection and refresh
-					// the proxy socket stream by using shutdown
-					self.tcp_connection = None;
-
-					break result; // return to the accept loop
-				}
+		// ensure we timeout the entire proxy request within 10s
+		match tokio::time::timeout(PROXY_CLIENT_TIMEOUT, {
+			self.connect_and_stream()
+		})
+		.await
+		{
+			Ok(result) => result,
+			Err(err) => {
+				eprintln!("proxy timeout: {err}");
+				Err(IOError::RecvTimeout)
 			}
+		}
+	}
+
+	async fn connect_and_stream(&mut self) -> Result<(), IOError> {
+		let req_bytes = self.sock_stream.recv().await?;
+		let resp_bytes = self.process_req(req_bytes).await;
+
+		if let Err(err) = self.sock_stream.send(&resp_bytes).await {
+			self.tcp_connection = None; // ensure we clear this socket's tcp state if we errored after we assigned it
+			return Err(err);
+		}
+
+		if let Some(tcp_connection) = &mut self.tcp_connection {
+			let result = tokio::io::copy_bidirectional(
+				&mut self.sock_stream.stream(),
+				&mut tcp_connection.tcp_stream,
+			)
+			.await
+			.map(|_| ())
+			.map_err(IOError::from);
+
+			// Once the "dumb pipe" is closed we need to clear our tcp_connection and refresh
+			// the proxy socket stream by using shutdown
+			self.tcp_connection = None;
+
+			result
+		} else {
+			Err(IOError::MissingProxyConnection)
 		}
 	}
 }
 
+/// Trait for proxy server implementations.
 pub trait ProxyServer {
+	/// Listen for incoming connections on the proxy server.
 	fn listen_proxy(
 		pool: StreamPool,
 		max_connections: usize,

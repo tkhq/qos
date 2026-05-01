@@ -13,7 +13,7 @@ use qos_core::protocol::{
 		boot::{
 			Approval, BridgeConfig, Manifest, ManifestEnvelope, ManifestSet,
 			MemberPubKey, Namespace, NitroConfig, PatchSet, PivotConfig,
-			QuorumMember, RestartPolicy, ShareSet,
+			PivotEnv, QuorumMember, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
@@ -557,16 +557,21 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	let genesis_output = GenesisOutput::try_from_slice(
-		&fs::read(genesis_output_path).expect("Failed to read genesis output file"),
+		&fs::read(&genesis_output_path).unwrap_or_else(|e| {
+			panic!("verify_genesis: Could not read genesis output from {genesis_output_path:?}: {e}")
+		}),
 	)
 	.expect(
-		"Failed to deserialize genesis output - check that qos_client and qos_core version line up",
+		"verify_genesis: Could not deserialize genesis output - check that qos_client and qos_core version line up",
 	);
 
-	let master_seed_hex = fs::read_to_string(&master_seed_path)
-		.expect("Failed to read master seed to string");
-	let pair = P256Pair::from_hex_file(master_seed_path)
-		.expect("Failed to use master seed to create p256 pair: {e:?}");
+	let master_seed_path = master_seed_path.as_ref();
+	let master_seed_hex = fs::read_to_string(master_seed_path).unwrap_or_else(|e| {
+		panic!("verify_genesis: Could not read master seed from {master_seed_path:?}: {e}")
+	});
+	let pair = P256Pair::from_hex_file(master_seed_path).unwrap_or_else(|e| {
+		panic!("verify_genesis: Could not parse master seed from {master_seed_path:?}: {e:?}")
+	});
 
 	// sanity check our logic to read in master seed
 	if pair.to_master_seed_hex() != master_seed_hex.as_bytes() {
@@ -636,8 +641,9 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	let qos_pcrs = extract_qos_pcrs(&qos_release_dir_path);
 
 	// Read in the attestation doc from the genesis directory
-	let cose_sign1 =
-		fs::read(attestation_doc_path).expect("Could not read attestation_doc");
+	let cose_sign1 = fs::read(&attestation_doc_path).unwrap_or_else(|e| {
+		panic!("after_genesis: Could not read attestation doc from {attestation_doc_path:?}: {e}")
+	});
 	let attestation_doc = extract_attestation_doc(
 		&cose_sign1,
 		unsafe_skip_attestation,
@@ -646,9 +652,11 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 
 	// Read in the genesis output from the genesis directory
 	let genesis_output = GenesisOutput::try_from_slice(
-		&fs::read(genesis_set_path).expect("Failed to read genesis set"),
+		&fs::read(&genesis_set_path).unwrap_or_else(|e| {
+			panic!("after_genesis: Could not read genesis output from {genesis_set_path:?}: {e}")
+		}),
 	)
-	.expect("Could not deserialize the genesis set");
+	.expect("after_genesis: Could not deserialize the genesis output");
 
 	// Check the attestation document
 	if unsafe_skip_attestation {
@@ -758,6 +766,7 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
+			env: PivotEnv::new(),
 			bridge_config,
 			debug_mode,
 		},
@@ -1104,7 +1113,7 @@ pub(crate) fn inject_key<P: AsRef<Path>>(
 		r => {
 			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")))
 		}
-	};
+	}
 
 	Ok(())
 }
@@ -1266,17 +1275,17 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	}
 
 	// Pull out the ephemeral key or use the override
-	let eph_pub: P256Public = if let Some(eph_path) = unsafe_eph_path_override {
+	let eph_pub: P256Public = if let Some(ref eph_path) =
+		unsafe_eph_path_override
+	{
 		P256Pair::from_hex_file(eph_path)
-			.expect("Could not read ephemeral key override")
+			.unwrap_or_else(|e| panic!("proxy_re_encrypt_share: Could not read ephemeral key from {eph_path:?}: {e:?}"))
 			.public_key()
 	} else {
-		P256Public::from_bytes(
-			&attestation_doc
-				.public_key
-				.expect("No ephemeral key in the attestation doc"),
-		)
-		.expect("Ephemeral key not valid public key")
+		P256Public::from_bytes(&attestation_doc.public_key.expect(
+			"proxy_re_encrypt_share: No ephemeral key in the attestation doc",
+		))
+		.expect("proxy_re_encrypt_share: Ephemeral key not valid public key")
 	};
 
 	let member = QuorumMember { pub_key: pair.public_key_bytes()?, alias };
@@ -1342,7 +1351,7 @@ fn proxy_re_encrypt_share_programmatic_verifications(
 	if let Err(e) = manifest_envelope.check_approvals() {
 		eprintln!("Manifest envelope did not have valid approvals: {e:?}");
 		return false;
-	};
+	}
 
 	if manifest_envelope.manifest.manifest_set != *manifest_set {
 		eprintln!(
@@ -1443,7 +1452,7 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 		println!("The quorum key has been reconstructed.");
 	} else {
 		println!("The quorum key has *not* been reconstructed.");
-	};
+	}
 
 	Ok(())
 }
@@ -1598,7 +1607,7 @@ pub(crate) fn display<P: AsRef<Path>>(
 			let decoded = GenesisOutput::try_from_slice(&bytes)?;
 			println!("{decoded:#?}");
 		}
-	};
+	}
 	Ok(())
 }
 
@@ -1634,7 +1643,7 @@ pub(crate) fn json_to_borsh<P: AsRef<Path>>(
 				"GenesisOutput cannot be converted from JSON".to_string(),
 			));
 		}
-	};
+	}
 	Ok(())
 }
 
@@ -1666,7 +1675,10 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	);
 
 	// Read in the pivot
-	let pivot = fs::read(&pivot_path).expect("Failed to read pivot binary.");
+	let pivot_path = pivot_path.as_ref();
+	let pivot = fs::read(pivot_path).unwrap_or_else(|e| {
+		panic!("dangerous_dev_boot: Could not read pivot binary from {pivot_path:?}: {e}")
+	});
 
 	let mock_pcr = vec![0; 48];
 	// Create a manifest with manifest set of 1
@@ -1689,6 +1701,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			hash: sha_256(&pivot),
 			restart,
 			args,
+			env: PivotEnv::new(),
 			bridge_config: host_config,
 			debug_mode: false,
 		},
@@ -1728,17 +1741,17 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 
 	// Pull out the ephemeral key or use the override
-	let eph_pub: P256Public = if let Some(eph_path) = unsafe_eph_path_override {
+	let eph_pub: P256Public = if let Some(ref eph_path) =
+		unsafe_eph_path_override
+	{
 		P256Pair::from_hex_file(eph_path)
-			.expect("Could not read ephemeral key override")
+			.unwrap_or_else(|e| panic!("dangerous_dev_boot: Could not read ephemeral key from {eph_path:?}: {e:?}"))
 			.public_key()
 	} else {
-		P256Public::from_bytes(
-			&attestation_doc
-				.public_key
-				.expect("No ephemeral key in the attestation doc"),
-		)
-		.expect("Ephemeral key not valid public key")
+		P256Public::from_bytes(&attestation_doc.public_key.expect(
+			"dangerous_dev_boot: No ephemeral key in the attestation doc",
+		))
+		.expect("dangerous_dev_boot: Ephemeral key not valid public key")
 	};
 
 	// Create ShareSet approval
@@ -1841,6 +1854,13 @@ fn find_file_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
 			panic!("Failed to read dir {}", dir.as_ref().display())
 		})
 		.map(|p| p.unwrap().path())
+		.filter(|p| {
+			// macOS creates ._ (dot-underscore) resource fork files when files
+			// are copied to non-HFS volumes. We want to ignore these
+			p.file_name()
+				.and_then(|n| n.to_str())
+				.is_none_or(|n| !n.starts_with("._"))
+		})
 		.collect()
 }
 
@@ -1859,7 +1879,7 @@ fn find_threshold<P: AsRef<Path>>(dir: P) -> u32 {
 					.is_none_or(|s| s.as_str() != QUORUM_THRESHOLD_FILE)
 			{
 				return None;
-			};
+			}
 
 			let file =
 				File::open(path).expect("failed to open quorum_threshold file");
@@ -1892,10 +1912,11 @@ fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
 			let mut file_name = split_file_name(path);
 			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
-			};
+			}
 
-			let public = P256Public::from_hex_file(path)
-				.expect("Could not read PEM from share_key.pub");
+			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
+				panic!("get_share_set: Could not read public key from {path:?}: {e:?}")
+			});
 			Some(QuorumMember {
 				alias: mem::take(&mut file_name[0]),
 				pub_key: public.to_bytes(),
@@ -1916,10 +1937,11 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 			let mut file_name = split_file_name(path);
 			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
-			};
+			}
 
-			let public = P256Public::from_hex_file(path)
-				.expect("Could not read PEM from share_key.pub");
+			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
+				panic!("get_manifest_set: Could not read public key from {path:?}: {e:?}")
+			});
 			Some(QuorumMember {
 				alias: mem::take(&mut file_name[0]),
 				pub_key: public.to_bytes(),
@@ -1940,10 +1962,11 @@ fn get_patch_set<P: AsRef<Path>>(dir: P) -> PatchSet {
 			let file_name = split_file_name(path);
 			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
-			};
+			}
 
-			let public = P256Public::from_hex_file(path)
-				.expect("Could not read public key.");
+			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
+				panic!("get_patch_set: Could not read public key from {path:?}: {e:?}")
+			});
 			Some(MemberPubKey { pub_key: public.to_bytes() })
 		})
 		.collect();
@@ -1961,7 +1984,7 @@ fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
 			let mut file_name = split_file_name(path);
 			if file_name.last().is_none_or(|s| s.as_str() != PUB_EXT) {
 				return None;
-			};
+			}
 
 			let public = P256Public::from_hex_file(path)
 				.map_err(|e| {
@@ -1993,12 +2016,15 @@ fn find_approvals<P: AsRef<Path>>(
 			// Only look at files with the approval extension
 			if file_name.last().is_none_or(|s| s.as_str() != APPROVAL_EXT) {
 				return None;
-			};
+			}
 
-			let approval: Approval = serde_json::from_slice(
-				&fs::read(path).expect("Failed to read in approval"),
-			)
-			.expect("Failed to deserialize approval");
+			let approval: Approval =
+				serde_json::from_slice(&fs::read(path).unwrap_or_else(|e| {
+					panic!("find_approvals: Could not read approval from {path:?}: {e}")
+				}))
+				.unwrap_or_else(|e| {
+					panic!("find_approvals: Could not deserialize approval from {path:?}: {e}")
+				});
 
 			assert!(
 				manifest.manifest_set.members.contains(&approval.member),
@@ -3127,5 +3153,26 @@ mod tests {
 			// Cleanup
 			let _ = fs::remove_file(&json_path);
 		}
+	}
+
+	#[test]
+	fn find_file_paths_ignores_dot_underscore_files() {
+		let dir = std::env::temp_dir().join("find_file_paths_dot_underscore");
+		let _ = std::fs::remove_dir_all(&dir);
+		std::fs::create_dir_all(&dir).unwrap();
+
+		// Create a normal file and a macOS dot-underscore resource fork file
+		std::fs::write(dir.join("alice.pub"), b"key").unwrap();
+		std::fs::write(dir.join("._alice.pub"), b"junk").unwrap();
+
+		let paths = super::find_file_paths(&dir);
+		let names: Vec<_> = paths
+			.iter()
+			.map(|p| p.file_name().unwrap().to_str().unwrap())
+			.collect();
+
+		assert_eq!(names, vec!["alice.pub"]);
+
+		let _ = std::fs::remove_dir_all(&dir);
 	}
 }

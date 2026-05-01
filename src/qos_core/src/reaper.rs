@@ -55,7 +55,7 @@ async fn run_server(
 
 	// listen on the protocol server
 	let _protocol_server =
-		SocketServer::listen_all(core_pool, &protocol_processor, 1)
+		SocketServer::listen_all(core_pool, protocol_processor, 1)
 			.expect("unable to get listen task list for protocol server");
 
 	println!("Reaper::server running");
@@ -81,7 +81,7 @@ async fn run_vsock_to_tcp_bridge(
 
 	for bc in bridges {
 		match bc {
-			BridgeConfig::Server(port, _) => {
+			BridgeConfig::Server { port, host: _ } => {
 				let app_socket = core_socket.with_port(*port)?;
 				let host_addr: SocketAddr =
 					SocketAddrV4::new(Ipv4Addr::LOCALHOST, *port).into();
@@ -90,7 +90,9 @@ async fn run_vsock_to_tcp_bridge(
 
 				bridge.vsock_to_tcp().await;
 			}
-			BridgeConfig::Client(_, _) => panic!("client bridge unimplemented"), // TODO: implement
+			BridgeConfig::Client { port: _, host: _ } => {
+				panic!("client bridge unimplemented")
+			} // TODO: implement
 		}
 	}
 
@@ -188,8 +190,9 @@ impl Reaper {
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest;
-		let PivotConfig { args, restart, bridge_config: host_config, .. } =
-			manifest.pivot;
+		let PivotConfig {
+			args, restart, bridge_config: host_config, env, ..
+		} = manifest.pivot;
 
 		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task
 		run_vsock_to_tcp_bridge(&core_socket, &host_config)
@@ -198,6 +201,12 @@ impl Reaper {
 
 		let mut pivot = Command::new(handles.pivot_path());
 		pivot.env_clear();
+		for (name, value) in env.iter() {
+			let plain_value = value.as_plain_value().unwrap_or_else(|| {
+				panic!("pivot env {name} failed validation")
+			});
+			pivot.env(&**name, plain_value);
+		}
 		pivot.args(&args[..]);
 		pivot.stdout(Stdio::piped()).stderr(Stdio::piped());
 

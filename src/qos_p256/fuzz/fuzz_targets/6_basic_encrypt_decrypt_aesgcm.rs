@@ -38,8 +38,7 @@ fuzz_target!(|input: FuzzKeyDataStruct| {
 	let mut corrupted_encrypted_envelope = encrypted_envelope.clone();
 	let last_element_index_envelope = corrupted_encrypted_envelope.len() - 1;
 	// flip one bit in the end of the message as a simple example of data corruption
-	corrupted_encrypted_envelope[last_element_index_envelope] =
-		corrupted_encrypted_envelope[last_element_index_envelope] ^ 1;
+	corrupted_encrypted_envelope[last_element_index_envelope] ^= 1;
 	// expect detection of the corruption
 	assert!(random_key.decrypt(&corrupted_encrypted_envelope).is_err());
 });

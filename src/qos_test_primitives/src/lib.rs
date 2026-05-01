@@ -1,19 +1,17 @@
 //! Primitive types for test setup.
 
 use std::{
-	net::TcpListener,
-	ops::{Deref, Range},
+	net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream},
+	ops::Deref,
 	thread,
 	time::Duration,
 };
 
-use rand::prelude::*;
-
 const MAX_PORT_BIND_WAIT_TIME: Duration = Duration::from_secs(5);
 const PORT_BIND_WAIT_TIME_INCREMENT: Duration = Duration::from_millis(500);
 const POST_BIND_SLEEP: Duration = Duration::from_millis(500);
-const SERVER_PORT_RANGE: Range<u16> = 10000..60000;
-const MAX_PORT_SEARCH_ATTEMPTS: u16 = 50;
+const FIND_FREE_PORT_RETRY_DELAY: Duration = Duration::from_millis(50);
+const MAX_FIND_FREE_PORT_ATTEMPTS: usize = 50;
 const EXIT_DELAY: Duration = Duration::from_millis(50);
 
 /// Wrapper type for [`std::process::Child`] that kills the process on drop.
@@ -33,7 +31,7 @@ impl Drop for ChildWrapper {
 			use nix::{sys::signal::Signal::SIGINT, unistd::Pid};
 			let pid = Pid::from_raw(self.0.id() as i32);
 			match nix::sys::signal::kill(pid, SIGINT) {
-				Ok(_) => {}
+				Ok(()) => {}
 				Err(err) => eprintln!("error sending signal to child: {err}"),
 			}
 
@@ -63,13 +61,13 @@ impl<'a> From<&'a str> for PathWrapper<'a> {
 	}
 }
 
-impl<'a> From<String> for PathWrapper<'a> {
+impl From<String> for PathWrapper<'_> {
 	fn from(path: String) -> Self {
 		Self(Internal::String(path))
 	}
 }
 
-impl<'a> Drop for PathWrapper<'a> {
+impl Drop for PathWrapper<'_> {
 	fn drop(&mut self) {
 		let path = match &self.0 {
 			Internal::String(i) => i,
@@ -83,7 +81,7 @@ impl<'a> Drop for PathWrapper<'a> {
 	}
 }
 
-impl<'a> Deref for PathWrapper<'a> {
+impl Deref for PathWrapper<'_> {
 	type Target = str;
 
 	fn deref(&self) -> &Self::Target {
@@ -97,12 +95,22 @@ impl<'a> Deref for PathWrapper<'a> {
 /// Get a bind-able TCP port on the local system.
 #[must_use]
 pub fn find_free_port() -> Option<u16> {
-	let mut rng = rand::rng();
-	for _ in 0..MAX_PORT_SEARCH_ATTEMPTS {
-		let port = rng.random_range(SERVER_PORT_RANGE);
-		if port_is_available(port) {
-			return Some(port);
+	let mut last_err = None;
+
+	for _ in 0..MAX_FIND_FREE_PORT_ATTEMPTS {
+		match TcpListener::bind(("127.0.0.1", 0)) {
+			Ok(listener) => {
+				return listener.local_addr().ok().map(|addr| addr.port())
+			}
+			Err(err) => {
+				last_err = Some(err);
+				thread::sleep(FIND_FREE_PORT_RETRY_DELAY);
+			}
 		}
+	}
+
+	if let Some(err) = last_err {
+		eprintln!("failed to find free port: {err}");
 	}
 
 	None
@@ -119,7 +127,7 @@ pub fn wait_until_port_is_bound(port: u16) {
 
 	while wait_time < MAX_PORT_BIND_WAIT_TIME {
 		thread::sleep(wait_time);
-		if port_is_available(port) {
+		if !can_connect_to_port(port) {
 			wait_time += PORT_BIND_WAIT_TIME_INCREMENT;
 		} else {
 			thread::sleep(POST_BIND_SLEEP);
@@ -133,7 +141,8 @@ pub fn wait_until_port_is_bound(port: u16) {
 	)
 }
 
-/// Return whether or not the port can be bind-ed too.
-fn port_is_available(port: u16) -> bool {
-	TcpListener::bind(("127.0.0.1", port)).is_ok()
+/// Return whether or not a server is accepting connections on the given port.
+fn can_connect_to_port(port: u16) -> bool {
+	let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+	TcpStream::connect_timeout(&addr.into(), Duration::from_millis(100)).is_ok()
 }

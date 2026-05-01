@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use std::process::Command;
 
 use qos_test_primitives::PathWrapper;

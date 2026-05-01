@@ -339,7 +339,7 @@ mod test {
 		let opts = EnclaveOpts::new(&mut args);
 
 		assert_eq!(
-			opts.addr(),
+			opts.enclave_socket().unwrap(),
 			SocketAddress::new_vsock(6, 3999, crate::io::VMADDR_NO_FLAGS)
 		);
 	}

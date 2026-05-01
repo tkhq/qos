@@ -1,0 +1,24 @@
+[package]
+name = "qos_bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+qos_host = { workspace = true, default-features = false }
+qos_core = { workspace = true, default-features = false }
+qos_hex = { workspace = true, features = ["serde"], default-features = false }
+qos_nsm = { workspace = true, default-features = false }
+ureq = { workspace = true, features = ["json"] }
+
+# Third party
+serde_json = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+vm = ["qos_core/vm"]

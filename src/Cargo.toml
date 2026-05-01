@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "integration",
+  "qos_bridge",
   "qos_client",
   "qos_core",
   "qos_crypto",
@@ -19,6 +20,7 @@ members = [
 ]
 default-members = [
   "integration",
+  "qos_bridge",
   "qos_client",
   "qos_core",
   "qos_crypto",
@@ -44,10 +46,12 @@ resolver = "2"
 
 [workspace.package]
 rust-version = "1.88"
-version = "0.1.0"
+version = "0.7.0"
 edition = "2021"
+license = "AGPL-3.0-only"
 
 [workspace.lints.rust]
+missing_docs = "warn"
 unsafe_code = "deny"
 
 [workspace.lints.clippy]
@@ -73,8 +77,8 @@ hkdf = { version = "0.12", default-features = false }
 hmac = { version = "0.12", default-features = false }
 httparse = { version = "1.9.4", default-features = false }
 lazy_static = "1.4"
-libc = "=0.2.172"
-nix = { version = "0.29.0", features = ["socket"], default-features = false }
+libc = "=0.2.174"
+nix = { version = "0.30.1", features = ["socket"], default-features = false }
 p256 = { version = "0.13.2", default-features = false }
 p384 = { version = "0.13", features = ["ecdsa", "std"], default-features = false }
 rand = "0.9"
@@ -84,11 +88,12 @@ rustls = { version = "0.23.5" }
 serde = { version = "1", features = ["derive"], default-features = false }
 serde_bytes = { version = "0.11.10", default-features = false }
 serde_json = { version = "1" }
+serde_json_canonicalizer = "0.3.2"
 sha2 = { version = "0.10", default-features = false }
 thiserror = { version = "2.0.12", features = ["std"], default-features = false }
-tokio = { version = "1.43.1", features = ["macros", "rt-multi-thread"], default-features = false }
+tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"], default-features = false }
 tokio-rustls = { version = "0.26.2" }
-tokio-vsock = { version = "0.7.1" }
+tokio-vsock = { version = "0.7.2" }
 ureq = { version = "2.9", default-features = false }
 vsss-rs = { version = "5.1", default-features = false, features = ["std", "zeroize"] }
 webpki = { version = "0.22.4", default-features = false }
@@ -99,16 +104,16 @@ zeroize = { version = "1.8", default-features = false }
 
 # Internal workspace dependencies
 integration = { path = "integration" }
-qos_client = { path = "qos_client", default-features = false }
-qos_core = { path = "qos_core", default-features = false }
-qos_crypto = { path = "qos_crypto", default-features = false }
-qos_hex = { path = "qos_hex", default-features = false }
 qos_host = { path = "qos_host", default-features = false }
+qos_client = { path = "qos_client", version = "0.7.0", default-features = false }
+qos_core = { path = "qos_core", version = "0.7.0", default-features = false }
+qos_crypto = { path = "qos_crypto", version = "0.7.0", default-features = false }
+qos_hex = { path = "qos_hex", version = "0.7.0", default-features = false }
 qos_json = { path = "qos_json" }
-qos_net = { path = "qos_net", default-features = false }
-qos_nsm = { path = "qos_nsm", default-features = false }
-qos_p256 = { path = "qos_p256" }
-qos_test_primitives = { path = "qos_test_primitives" }
+qos_net = { path = "qos_net", version = "0.7.0", default-features = false }
+qos_nsm = { path = "qos_nsm", version = "0.7.0", default-features = false }
+qos_p256 = { path = "qos_p256", version = "0.7.0" }
+qos_test_primitives = { path = "qos_test_primitives", version = "0.7.0" }
 
 # Option for the future: build all QOS applications with additional runtime checks
 # to intentionally panic on integer overflows instead of continuing execution

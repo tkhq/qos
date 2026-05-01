@@ -1,16 +1,13 @@
 //! Quorum protocol processor
 
-use std::sync::Arc;
-
-use tokio::sync::RwLock;
-
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, SharedProtocolState,
 	MAX_ENCODED_MSG_LEN,
 };
-use crate::server::{RequestProcessor, SharedProcessor};
+use crate::server::RequestProcessor;
 
 /// Enclave state machine that executes when given a `ProtocolMsg`.
+#[derive(Clone)]
 pub struct ProtocolProcessor {
 	state: SharedProtocolState,
 }
@@ -18,26 +15,25 @@ pub struct ProtocolProcessor {
 impl ProtocolProcessor {
 	/// Create a new `Self` inside `Arc` and `Mutex`.
 	#[must_use]
-	pub fn new(state: SharedProtocolState) -> SharedProcessor<Self> {
-		Arc::new(RwLock::new(Self { state }))
+	pub fn new(state: SharedProtocolState) -> Self {
+		Self { state }
 	}
 }
 
 impl RequestProcessor for ProtocolProcessor {
 	async fn process(&self, req_bytes: &[u8]) -> Vec<u8> {
 		if req_bytes.len() > MAX_ENCODED_MSG_LEN {
-			return serde_json::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+			return ProtocolMsg::ProtocolErrorResponse(
 				ProtocolError::OversizedPayload,
-			))
-			.expect("ProtocolMsg can always be serialized. qed.");
+			)
+			.to_canonical_json_vec();
 		}
 
-		let Ok(msg_req) = serde_json::from_slice::<ProtocolMsg>(req_bytes)
-		else {
-			return serde_json::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+		let Ok(msg_req) = ProtocolMsg::from_json_slice(req_bytes) else {
+			return ProtocolMsg::ProtocolErrorResponse(
 				ProtocolError::ProtocolMsgDeserialization,
-			))
-			.expect("ProtocolMsg can always be serialized. qed.");
+			)
+			.to_canonical_json_vec();
 		};
 
 		self.state.write().await.handle_msg(&msg_req)

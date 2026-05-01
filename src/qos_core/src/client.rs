@@ -51,6 +51,11 @@ impl SocketClient {
 		Ok(Self { pool, timeout })
 	}
 
+	/// Returns true if all callable streams are currently exhausted
+	pub async fn busy(&self) -> bool {
+		self.pool.read().await.busy().await
+	}
+
 	/// Send raw bytes and wait for a response until the clients configured
 	/// timeout.
 	pub async fn call(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {

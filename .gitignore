@@ -1,12 +1,12 @@
 out/*
 dist/*
 cache/*
-.*
 src/integration/core
 src/init/target
 src/*/cache
 .DS_Store
 .vscode
+.claude
 target/
 
 *.sock
@@ -33,6 +33,8 @@ fetch/aws-nitro-enclaves-sdk-bootstrap/
 fetch/openssl/
 fetch/pcsc/
 fetch/rust/
+
+docs/plans/
 
 !.github
 !.lfsconfig

@@ -10,6 +10,12 @@ use crate::protocol::{
 	services::attestation, Hash256, ProtocolError, ProtocolState, QosHash,
 };
 
+pub mod env;
+pub use env::{
+	PivotEnv, PivotEnvValue, PivotEnvVarName, MAX_PIVOT_ENV_NAME_LEN,
+	MAX_PIVOT_ENV_VALUE_LEN, MAX_PIVOT_ENV_VARS,
+};
+
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
 	PartialEq,
@@ -78,7 +84,7 @@ impl fmt::Debug for RestartPolicy {
 		match self {
 			Self::Never => write!(f, "RestartPolicy::Never")?,
 			Self::Always => write!(f, "RestartPolicy::Always")?,
-		};
+		}
 		Ok(())
 	}
 }
@@ -102,7 +108,7 @@ impl TryFrom<String> for RestartPolicy {
 	}
 }
 
-/// Pivot bridge host configuration
+/// Pivot bridge host configuration, ipv4 only
 #[derive(
 	PartialEq,
 	Eq,
@@ -113,26 +119,44 @@ impl TryFrom<String> for RestartPolicy {
 	borsh::BorshDeserialize,
 )]
 #[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
 pub enum BridgeConfig {
-	/// Server hosting bridge, connections go INTO the enclave app on given port and host ip string
-	Server(u16, String),
+	/// Server hosting bridge, connections go INTO the enclave app on given port and host binding
+	Server {
+		/// The port to listen on, matching on host and app sides
+		port: u16,
+		/// The host ip to listen on, use `0.0.0.0` for any
+		host: String,
+	},
 	/// Client connecting bridge, connections go OUT of the enclave app via given port, connecting
 	/// to the provided hostname. If `None` it will use the transparent protocol.
-	/// *NOTE*: currently unimplemented and results in boot panic if set
-	Client(u16, Option<String>),
+	/// *NOTE*: currently **unimplemented** and results in boot panic if set.
+	Client {
+		/// Port to connect to when app initiates outgoing connections.
+		port: u16,
+		/// Host name to connect to when app initiates outgoing connections.
+		/// If `None` an internal protocol is used to determine the destination (**unimplemented**)
+		host: Option<String>,
+	},
 }
 
 impl Default for BridgeConfig {
 	fn default() -> Self {
-		Self::Server(DEFAULT_APP_HOST_PORT, DEFAULT_APP_HOST_IP.into())
+		Self::Server {
+			port: DEFAULT_APP_HOST_PORT,
+			host: DEFAULT_APP_HOST_IP.into(),
+		}
 	}
 }
 
 impl BridgeConfig {
 	/// Helper to extract port from either variant
+	#[must_use]
 	pub fn port(&self) -> u16 {
 		match self {
-			Self::Server(port, _) | Self::Client(port, _) => *port,
+			Self::Server { port, host: _ } | Self::Client { port, host: _ } => {
+				*port
+			}
 		}
 	}
 }
@@ -165,6 +189,15 @@ pub struct PivotConfig {
 	/// Arguments to invoke the binary with. Leave this empty if none are
 	/// needed.
 	pub args: Vec<String>,
+	/// Environment variables to inject into the pivot process.
+	///
+	/// Variable names must match `[A-Za-z_][A-Za-z0-9_]*` and be at most
+	/// [`MAX_PIVOT_ENV_NAME_LEN`] bytes long. Values may contain any UTF-8
+	/// except NUL bytes and must be at most [`MAX_PIVOT_ENV_VALUE_LEN`] bytes
+	/// long. A manifest may contain at most [`MAX_PIVOT_ENV_VARS`] variables.
+	/// Values are not restricted to ASCII.
+	#[serde(default, skip_serializing_if = "PivotEnv::is_empty")]
+	pub env: PivotEnv,
 }
 
 /// Pivot binary configuration, original version (V0)
@@ -199,6 +232,7 @@ impl From<PivotConfigV0> for PivotConfig {
 			args: value.args,
 			debug_mode: false,
 			bridge_config: Vec::new(),
+			env: PivotEnv::new(),
 		}
 	}
 }
@@ -209,6 +243,7 @@ impl fmt::Debug for PivotConfig {
 			.field("hash", &qos_hex::encode(&self.hash))
 			.field("restart", &self.restart)
 			.field("args", &self.args.join(" "))
+			.field("env", &self.env)
 			.finish()
 	}
 }
@@ -444,14 +479,21 @@ impl From<ManifestV0> for Manifest {
 }
 
 impl Manifest {
-	/// Read a `Manifest` in a backwards compatible way
+	/// Read a `Manifest` in a backwards compatible way.
+	///
+	/// Callers should only use this after trying to parse the current JSON
+	/// schema first. This helper attempts `ManifestV0` JSON before the current
+	/// type, so direct use on current JSON can silently drop newer `pivot`
+	/// fields that `ManifestV0` ignores. In-tree callers avoid that by going
+	/// through `read_manifest`, which tries the current `Manifest` JSON parse
+	/// before falling back here.
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
 		use borsh::BorshDeserialize;
 
 		// try old version with json format
 		if let Ok(v0) = serde_json::from_slice::<ManifestV0>(buf) {
 			return Ok(v0.into());
-		};
+		}
 
 		let result = Self::try_from_slice(buf);
 
@@ -622,7 +664,7 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 			expected: qos_hex::encode(&expected_hash),
 			actual: qos_hex::encode(&actual_hash),
 		});
-	};
+	}
 
 	// 2. Generate an Ephemeral Key.
 	let ephemeral_key = P256Pair::generate()?;
@@ -727,6 +769,23 @@ mod test {
 		let hashes: Vec<_> = (0..10).map(|_| manifest.qos_hash()).collect();
 		let is_valid = (1..10).all(|i| hashes[i] == hashes[0]);
 		assert!(is_valid);
+	}
+
+	#[test]
+	fn manifest_hash_changes_when_env_changes() {
+		let (manifest, _members, _pivot) = get_manifest();
+		let mut manifest_with_env = manifest.clone();
+		manifest_with_env
+			.pivot
+			.env
+			.insert(
+				PivotEnvVarName::new("FOO".to_string()).unwrap(),
+				PivotEnvValue::plain("bar".to_string()).unwrap(),
+			)
+			.unwrap();
+
+		assert_ne!(manifest.qos_hash(), manifest_with_env.qos_hash());
+		assert_eq!(manifest.pivot.hash, manifest_with_env.pivot.hash);
 	}
 
 	#[test]
@@ -1015,5 +1074,6 @@ mod test {
 
 		assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
 		assert_eq!(manifest.pivot.bridge_config.len(), 0);
+		assert!(manifest.pivot.env.is_empty());
 	}
 }

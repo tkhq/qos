@@ -23,6 +23,7 @@ impl HostBridge {
 	///
 	/// # Panics
 	/// This panics in case the pool size + start port is bigger than `u16::MAX`
+	#[must_use]
 	pub fn new(stream_pool: StreamPool, host_addr: SocketAddr) -> Self {
 		// ensure we have ports to spare
 		assert!(

@@ -17,7 +17,7 @@ use rand::{rng, seq::SliceRandom};
 const DR_KEY_PUBLIC_PATH: &str = "./mock/mock_p256_dr.pub";
 const DR_KEY_PRIVATE_PATH: &str = "./mock/mock_p256_dr.secret.keep";
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn genesis_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let tmp: PathWrapper = "/tmp/genesis-e2e".into();

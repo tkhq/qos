@@ -4,23 +4,25 @@ use std::{
 };
 
 use integration::{
-	wait_for_tcp_sock, wait_for_usock, PIVOT_ABORT_PATH, PIVOT_OK_PATH,
-	PIVOT_PANIC_PATH, PIVOT_TCP_PATH,
+	wait_for_tcp_sock, wait_for_usock, PIVOT_ABORT_PATH, PIVOT_OK2_PATH,
+	PIVOT_OK2_SUCCESS_FILE, PIVOT_OK_PATH, PIVOT_PANIC_PATH, PIVOT_TCP_PATH,
 };
 use qos_core::{
 	handles::Handles,
 	io::{HostBridge, SocketAddress, StreamPool},
-	protocol::services::boot::{BridgeConfig, ManifestEnvelope},
+	protocol::services::boot::{
+		BridgeConfig, ManifestEnvelope, PivotEnvValue, PivotEnvVarName,
+	},
 	reaper::{Reaper, REAPER_EXIT_DELAY},
 };
 use qos_nsm::mock::MockNsm;
-use qos_test_primitives::PathWrapper;
+use qos_test_primitives::{find_free_port, PathWrapper};
 use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt},
 	net::TcpStream,
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn reaper_works() {
 	let secret_path: PathWrapper = "/tmp/reaper_works.secret".into();
 	let usock: PathWrapper = "/tmp/reaper_works.sock".into();
@@ -72,6 +74,71 @@ async fn reaper_works() {
 }
 
 #[tokio::test]
+async fn reaper_injects_manifest_env_and_clears_host_env() {
+	let secret_path: PathWrapper =
+		"/tmp/reaper_injects_manifest_env.secret".into();
+	let usock: PathWrapper = "/tmp/reaper_injects_manifest_env.sock".into();
+	let manifest_path: PathWrapper =
+		"/tmp/reaper_injects_manifest_env.manifest".into();
+	let msg = "manifest-env:";
+	let manifest_env_key = "QOS_TEST_MANIFEST_ENV";
+	let host_only_env_key = "QOS_TEST_HOST_ONLY_ENV";
+	let manifest_env_value = "available";
+
+	drop(fs::remove_file(&*secret_path));
+	std::env::set_var(host_only_env_key, "must-not-leak");
+
+	let handles = Handles::new(
+		"reaper_injects_manifest_env.eph".to_string(),
+		(*secret_path).to_string(),
+		(*manifest_path).to_string(),
+		PIVOT_OK2_PATH.to_string(),
+	);
+
+	let mut manifest_envelope = ManifestEnvelope::default();
+	manifest_envelope.manifest.pivot.args = vec![
+		"--msg".to_string(),
+		msg.to_string(),
+		"--env-key".to_string(),
+		manifest_env_key.to_string(),
+		"--missing-env-key".to_string(),
+		host_only_env_key.to_string(),
+	];
+	manifest_envelope
+		.manifest
+		.pivot
+		.env
+		.insert(
+			PivotEnvVarName::new(manifest_env_key.to_string()).unwrap(),
+			PivotEnvValue::plain(manifest_env_value.to_string()).unwrap(),
+		)
+		.unwrap();
+
+	handles.put_manifest_envelope(&manifest_envelope).unwrap();
+	assert!(handles.pivot_exists());
+
+	let enclave_socket = SocketAddress::new_unix(&usock);
+	let reaper_handle = tokio::spawn(async move {
+		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
+			.await;
+	});
+
+	wait_for_usock(&usock).await;
+	assert!(!reaper_handle.is_finished());
+
+	fs::write(&*secret_path, b"test secret material").unwrap();
+
+	reaper_handle.await.unwrap();
+	let contents = fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
+	assert_eq!(
+		std::str::from_utf8(&contents).unwrap(),
+		format!("{msg}{manifest_env_value}")
+	);
+	assert!(fs::remove_file(PIVOT_OK2_SUCCESS_FILE).is_ok());
+	std::env::remove_var(host_only_env_key);
+}
+
+#[tokio::test]
 async fn reaper_handles_non_zero_exits() {
 	let secret_path: PathWrapper =
 		"/tmp/reaper_handles_non_zero_exits.secret".into();
@@ -119,7 +186,7 @@ async fn reaper_handles_non_zero_exits() {
 	assert!(reaper_handle.is_finished());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn reaper_handles_panic() {
 	let secret_path: PathWrapper = "/tmp/reaper_handles_panics.secret".into();
 	let usock: PathWrapper = "/tmp/reaper_handles_panics.sock".into();
@@ -166,10 +233,10 @@ async fn reaper_handles_panic() {
 	assert!(reaper_handle.is_finished());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn reaper_handles_bridge() {
-	let pivot_port = 4000;
-	let host_port = 3000;
+	let pivot_port = find_free_port().unwrap();
+	let host_port = find_free_port().unwrap();
 	let secret_path: PathWrapper = "/tmp/reaper_handles_bridge.secret".into();
 	let usock: PathWrapper = "/tmp/reaper_handles_bridge.sock".into();
 	let app_usock: PathWrapper =
@@ -187,7 +254,7 @@ async fn reaper_handles_bridge() {
 		PIVOT_TCP_PATH.to_string(),
 	);
 
-	// start the tcp -> vsock bridge on port 3000
+	// start the tcp -> vsock bridge on host_port
 	let host_addr: SocketAddr =
 		SocketAddrV4::new(Ipv4Addr::LOCALHOST, host_port).into();
 	let app_pool =
@@ -199,7 +266,10 @@ async fn reaper_handles_bridge() {
 	let mut manifest_envelope = ManifestEnvelope::default();
 	manifest_envelope.manifest.pivot.args = vec![format!("{pivot_port}")];
 	manifest_envelope.manifest.pivot.bridge_config =
-		vec![BridgeConfig::Server(pivot_port, "127.0.0.1".into())];
+		vec![BridgeConfig::Server {
+			port: pivot_port,
+			host: "127.0.0.1".into(),
+		}];
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());
@@ -228,9 +298,9 @@ async fn reaper_handles_bridge() {
 	let host_addr = format!("localhost:{host_port}");
 	let pivot_addr = format!("localhost:{pivot_port}");
 
-	// ensure pivot is ready and accepting on tcp://localhost:4000
+	// ensure pivot is ready and accepting on tcp://localhost:pivot_port
 	wait_for_tcp_sock(&pivot_addr).await;
-	// ensure bridge is ready and accepting on tcp://localhost:3000
+	// ensure bridge is ready and accepting on tcp://localhost:host_port
 	wait_for_tcp_sock(&host_addr).await;
 
 	let mut stream = TcpStream::connect(&host_addr)
@@ -270,6 +340,6 @@ async fn reaper_handles_bridge() {
 	// Make the sure the reaper executed successfully.
 	reaper_handle.await.unwrap();
 	let contents = fs::read(integration::PIVOT_TCP_SUCCESS_FILE).unwrap();
-	assert_eq!(&contents, b"worlds"); // expects the chronologically first msg
+	assert_eq!(&contents, b"finished"); // expects the finished msg
 	assert!(fs::remove_file(integration::PIVOT_TCP_SUCCESS_FILE).is_ok());
 }

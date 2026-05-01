@@ -139,8 +139,8 @@ impl HostServer {
 	) -> impl IntoResponse {
 		println!("Enclave health...");
 
-		let encoded_request = serde_json::to_vec(&ProtocolMsg::StatusRequest)
-			.expect("ProtocolMsg can always serialize. qed.");
+		let encoded_request =
+			ProtocolMsg::StatusRequest.to_canonical_json_vec();
 		let encoded_response = match state
 			.enclave_client
 			.call(&encoded_request)
@@ -154,9 +154,7 @@ impl HostServer {
 			}
 		};
 
-		let response = match serde_json::from_slice::<ProtocolMsg>(
-			&encoded_response,
-		) {
+		let response = match ProtocolMsg::from_json_slice(&encoded_response) {
 			Ok(r) => r,
 			Err(e) => {
 				let msg = format!("Error deserializing response from enclave, make sure qos_host version match qos_core: {e}");
@@ -192,16 +190,13 @@ impl HostServer {
 	) -> Result<Json<EnclaveInfo>, Error> {
 		println!("Enclave info...");
 
-		let enc_status_req = serde_json::to_vec(&ProtocolMsg::StatusRequest)
-			.expect("ProtocolMsg can always serialize. qed.");
+		let enc_status_req = ProtocolMsg::StatusRequest.to_canonical_json_vec();
 		let enc_status_resp =
 			state.enclave_client.call(&enc_status_req).await.map_err(|e| {
 				Error(format!("error sending status request to enclave: {e:?}"))
 			})?;
 
-		let status_resp = match serde_json::from_slice::<ProtocolMsg>(
-			&enc_status_resp,
-		) {
+		let status_resp = match ProtocolMsg::from_json_slice(&enc_status_resp) {
 			Ok(status_resp) => status_resp,
 			Err(e) => {
 				return Err(Error(format!("error deserializing status response from enclave, make sure qos_host version match qos_core: {e:?}")));
@@ -218,6 +213,8 @@ impl HostServer {
 			get_manifest_envelope(&state.enclave_client).await.map_err(
 				|e| Error(format!("unable to get manifest envelope: {e:?}")),
 			)?;
+		let ephemeral_key =
+			get_eph_key_from_attestation_doc(&state.enclave_client).await;
 
 		let vitals_log = if let Some(m) = manifest_envelope.as_ref() {
 			serde_json::to_string(&EnclaveVitalStats {
@@ -227,6 +224,7 @@ impl HostServer {
 				pivot_hash: m.manifest.pivot.hash,
 				pcr0: m.manifest.enclave.pcr0.clone(),
 				pivot_args: m.manifest.pivot.args.clone(),
+				ephemeral_key: ephemeral_key.clone(),
 			})
 			.expect("always valid json. qed.")
 		} else {
@@ -234,7 +232,7 @@ impl HostServer {
 		};
 		println!("{vitals_log}");
 
-		let info = EnclaveInfo { phase, manifest_envelope };
+		let info = EnclaveInfo { phase, manifest_envelope, ephemeral_key };
 
 		Ok(Json(info))
 	}
@@ -247,10 +245,8 @@ impl HostServer {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
 			return (
 				StatusCode::BAD_REQUEST,
-				serde_json::to_vec(&ProtocolMsg::ProtocolErrorResponse(
-					ProtocolError::OversizeMsg,
-				))
-				.expect("ProtocolMsg can always serialize. qed."),
+				ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg)
+					.to_canonical_json_vec(),
 			);
 		}
 
@@ -274,14 +270,38 @@ impl HostServer {
 
 				(
 					StatusCode::INTERNAL_SERVER_ERROR,
-					serde_json::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+					ProtocolMsg::ProtocolErrorResponse(
 						ProtocolError::EnclaveClient,
-					))
-					.expect("ProtocolMsg can always serialize. qed."),
+					)
+					.to_canonical_json_vec(),
 				)
 			}
 		}
 	}
+}
+
+async fn get_eph_key_from_attestation_doc(
+	enclave_client: &SocketClient,
+) -> Option<String> {
+	let req = ProtocolMsg::LiveAttestationDocRequest.to_canonical_json_vec();
+	let resp_bytes = enclave_client.call(&req).await.ok()?;
+	let resp = ProtocolMsg::from_json_slice(&resp_bytes).ok()?;
+
+	let nsm_response = match resp {
+		ProtocolMsg::LiveAttestationDocResponse { nsm_response, .. } => {
+			nsm_response
+		}
+		_ => return None,
+	};
+
+	let document = match nsm_response {
+		NsmResponse::Attestation { document } => document,
+		_ => return None,
+	};
+
+	let attestation_doc =
+		qos_nsm::nitro::unsafe_attestation_doc_from_der(&document).ok()?;
+	attestation_doc.public_key.as_ref().map(|pk| qos_hex::encode(pk))
 }
 
 // extracts the `ManifestEnvelope` from a boot instruction in case it was succesful.
@@ -290,9 +310,7 @@ fn extract_envelope_from_boot_instruction(
 	encoded_request: &Bytes,
 	encoded_response: &[u8],
 ) -> Option<Box<ManifestEnvelope>> {
-	if let Ok(decoded_msg) =
-		serde_json::from_slice::<ProtocolMsg>(encoded_request)
-	{
+	if let Ok(decoded_msg) = ProtocolMsg::from_json_slice(encoded_request) {
 		// if we got the pivot and it was accepted by the enclave, we should start the tcp -> vsock host bridge
 		match decoded_msg {
 			ProtocolMsg::BootStandardRequest {
@@ -304,7 +322,7 @@ fn extract_envelope_from_boot_instruction(
 				pivot: _,
 			} => {
 				if let Ok(decoded_msg) =
-					serde_json::from_slice::<ProtocolMsg>(encoded_response)
+					ProtocolMsg::from_json_slice(encoded_response)
 				{
 					// check if we got success
 					match decoded_msg {
@@ -342,13 +360,12 @@ async fn get_manifest_envelope(
 	enclave_client: &SocketClient,
 ) -> Result<Option<ManifestEnvelope>, ClientError> {
 	let enc_manifest_envelope_req =
-		serde_json::to_vec(&ProtocolMsg::ManifestEnvelopeRequest)
-			.expect("ProtocolMsg can always serialize. qed.");
+		ProtocolMsg::ManifestEnvelopeRequest.to_canonical_json_vec();
 	let enc_manifest_envelope_resp =
 		enclave_client.call(&enc_manifest_envelope_req).await?;
 
 	let manifest_envelope_resp =
-		serde_json::from_slice::<ProtocolMsg>(&enc_manifest_envelope_resp)?;
+		ProtocolMsg::from_json_slice(&enc_manifest_envelope_resp)?;
 
 	let manifest_envelope = match manifest_envelope_resp {
 		ProtocolMsg::ManifestEnvelopeResponse { manifest_envelope } => {
@@ -373,8 +390,8 @@ async fn maybe_start_app_host_bridge(
 
 	for bc in &manifest_envelope.manifest.pivot.bridge_config {
 		let (host_port, host_ip_str) = match bc {
-			BridgeConfig::Server(port, ip) => (port, ip.as_str()),
-			BridgeConfig::Client(_, _) => {
+			BridgeConfig::Server { port, host } => (*port, host.as_str()),
+			BridgeConfig::Client { .. } => {
 				panic!("client bridge unimplemented")
 			}
 		};
@@ -383,11 +400,11 @@ async fn maybe_start_app_host_bridge(
 			eprintln!("unable to parse host ip for bridge configuration: {host_ip_str}");
 			return;
 		};
-		let host_addr = SocketAddr::new(host_ip.into(), *host_port);
+		let host_addr = SocketAddr::new(host_ip.into(), host_port);
 
 		// derive the app socket, for vsock just use the app host port with same CID as the enclave socket,
 		// with usock just add "<port>.appsock" suffix
-		let app_socket = match enclave_socket.with_port(*host_port) {
+		let app_socket = match enclave_socket.with_port(host_port) {
 			Ok(value) => value,
 			Err(err) => {
 				eprintln!("unable to derive app socket from enclave socket: {err:?}, tcp to vsock bridge will not start");

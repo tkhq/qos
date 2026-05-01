@@ -42,8 +42,7 @@ impl ProxyOpts {
 	pub(crate) fn max_connections(&self) -> Result<usize, ParseIntError> {
 		self.parsed
 			.single(MAX_CONNECTIONS)
-			.map(String::as_str)
-			.unwrap_or(DEFAULT_MAX_CONNECTIONS)
+			.map_or(DEFAULT_MAX_CONNECTIONS, String::as_str)
 			.parse()
 	}
 
@@ -105,7 +104,7 @@ impl CLI {
 			.expect("unable to get listen join handles");
 
 			match tokio::signal::ctrl_c().await {
-				Ok(_) => println!("handling ctrl+c the tokio way"),
+				Ok(()) => println!("handling ctrl+c the tokio way"),
 
 				Err(err) => panic!("{err}"),
 			}

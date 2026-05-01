@@ -9,10 +9,7 @@ use qos_core::{
 };
 use qos_net::proxy_stream::ProxyStream;
 use rustls::RootCertStore;
-use tokio::{
-	io::{AsyncReadExt, AsyncWriteExt},
-	sync::RwLock,
-};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_rustls::TlsConnector;
 
 #[derive(Clone)]
@@ -21,8 +18,8 @@ struct Processor {
 }
 
 impl Processor {
-	fn new(net_pool: SharedStreamPool) -> Arc<RwLock<Self>> {
-		Arc::new(RwLock::new(Processor { net_pool }))
+	fn new(net_pool: SharedStreamPool) -> Self {
+		Self { net_pool }
 	}
 }
 
@@ -76,11 +73,10 @@ impl RequestProcessor for Processor {
 					Err(e) => {
 						// Only EOF errors are expected. This means the
 						// connection was closed by the remote server https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof
-						if e.kind() != ErrorKind::UnexpectedEof {
-							panic!(
-								"unexpected error trying to read_to_end: {e:?}"
-							);
-						}
+						assert!(
+							(e.kind() == ErrorKind::UnexpectedEof),
+							"unexpected error trying to read_to_end: {e:?}"
+						);
 					}
 				}
 
@@ -114,16 +110,12 @@ async fn main() {
 	let proxy_pool = StreamPool::new(SocketAddress::new_unix(proxy_path), 1)
 		.expect("unable to create async stream pool")
 		.shared();
-
-	let _server = SocketServer::listen_all(
-		enclave_pool,
-		&Processor::new(proxy_pool),
-		128,
-	)
-	.unwrap();
+	let _server =
+		SocketServer::listen_all(enclave_pool, Processor::new(proxy_pool), 128)
+			.unwrap();
 
 	match tokio::signal::ctrl_c().await {
-		Ok(_) => eprintln!("pivot handling ctrl+c the tokio way"),
+		Ok(()) => eprintln!("pivot handling ctrl+c the tokio way"),
 
 		Err(err) => panic!("{err}"),
 	}

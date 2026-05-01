@@ -40,7 +40,7 @@ fuzz_target!(|fuzzerdata: FuzzShareReconstruct| {
 
 	// Reconstruct with the shares, we expect this to error out often
 	let reconstructed_res = shares_reconstruct(&shares);
-	if !reconstructed_res.is_err() {
+	if reconstructed_res.is_ok() {
 		// let _reconstructed = reconstructed_res.unwrap();
 
 		// debug print is useful for manual evaluation

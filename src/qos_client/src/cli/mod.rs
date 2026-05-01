@@ -591,7 +591,7 @@ impl Command {
 	}
 
 	fn bridge_config_token() -> Token {
-		Token::new(BRIDGE_CONFIG, "host app bridge configuration")
+		Token::new(BRIDGE_CONFIG, "pivot app bridge configuration json e.g. `{{\"type\": \"server\", \"port\": 3000, \"host\": \"0.0.0.0\"}}`")
 			.required(false)
 			.takes_value(true)
 	}
@@ -1038,9 +1038,11 @@ impl ClientOpts {
 			// check for duplicate ports
 			let mut ports = HashSet::new();
 			for bc in &result {
-				if !ports.insert(bc.port()) {
-					panic!("duplicate bridge port: {}", bc.port());
-				}
+				assert!(
+					ports.insert(bc.port()),
+					"duplicate bridge port: {}",
+					bc.port()
+				);
 			}
 
 			result
@@ -1052,8 +1054,7 @@ impl ClientOpts {
 	fn debug_mode(&self) -> bool {
 		self.parsed
 			.single(DEBUG_MODE)
-			.map(String::as_str)
-			.unwrap_or("false")
+			.map_or("false", String::as_str)
 			.parse()
 			.expect("invalid `--debug-mode` flag value")
 	}
@@ -1396,14 +1397,18 @@ mod handlers {
 	};
 
 	pub(super) fn pivot_hash(opts: &ClientOpts) {
-		let pivot = std::fs::read(opts.pivot_path())
-			.expect("Failed to read pivot file");
+		let pivot_path = opts.pivot_path();
+		let pivot = std::fs::read(&pivot_path).unwrap_or_else(|e| {
+			panic!("pivot_hash: Could not read pivot file from {pivot_path:?}: {e}")
+		});
 
 		let hash = qos_crypto::sha_256(&pivot);
 		let hex_hash = qos_hex::encode(&hash);
 
-		std::fs::write(opts.output_path(), hex_hash.as_bytes())
-			.expect("Failed to write pivot hash to specified path");
+		let output_path = opts.output_path();
+		std::fs::write(&output_path, hex_hash.as_bytes()).unwrap_or_else(|e| {
+			panic!("pivot_hash: Could not write pivot hash to {output_path:?}: {e}")
+		});
 	}
 
 	pub(super) fn host_health(opts: &ClientOpts) {

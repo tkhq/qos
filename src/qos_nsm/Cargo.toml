@@ -3,7 +3,11 @@ name = "qos_nsm"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish = false
+license.workspace = true
+description = "AWS Nitro Secure Module attestation endpoints and types"
+repository = "https://github.com/tkhq/qos"
+keywords = ["quorumos", "nitro", "enclave", "attestation", "aws"]
+categories = ["cryptography"]
 
 [lints]
 workspace = true

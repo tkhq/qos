@@ -73,7 +73,7 @@ impl ProtocolRoute {
 			if let Err(e) = state.transition(phase) {
 				return Some(Err(ProtocolMsg::ProtocolErrorResponse(e)));
 			}
-		};
+		}
 
 		resp
 	}
