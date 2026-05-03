@@ -4,7 +4,9 @@ This playbook covers provisioning yubikey for use with qos manifest and share se
 
 ## Background: Management Key Compatibility
 
-The `qos_client` uses the [`yubikey`](https://crates.io/crates/yubikey) Rust crate (v0.8), which only supports **3DES** management keys. yubikeys with firmware 5.7+ ship with **AES192** as the default management key algorithm. If you attempt to run `provision-yubikey` against such a device you will see: `Error: GenerateSign(FailedToAuthWithMGM)`
+The `qos_client` uses the [`yubikey`](https://crates.io/crates/yubikey) Rust crate (v0.8), which only supports **3DES** management keys. yubikeys with firmware 5.7+ ship with **AES192** as the default management key algorithm. If you attempt to run `provision-yubikey` against such a device you will see: `Error: GenerateSign(FailedToAuthWithMGM)`. 
+
+_Note_: we hope that once a new version of the `yubikey` crate is released it will support AES192 and we can remove the step (1) to downgrade the management key algorithm to TDES.
 
 You can confirm the algorithm your device is using:
 
@@ -30,7 +32,7 @@ ykman piv access change-management-key --algorithm TDES
 When prompted:
 
 - **Current management key**: press Enter to use the default
-- **New management key**: `010203040506070801020304050607080102030405060708`
+- **New management key**: `010203040506070801020304050607080102030405060708` (this is suggested as it is the yubikey default management key. It should be changed before using in production: see [step 4](#4-lock-the-management-key))
 
 Verify the change:
 
