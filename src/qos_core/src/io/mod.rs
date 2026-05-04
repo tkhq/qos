@@ -171,9 +171,14 @@ impl SocketAddress {
 		}
 	}
 
-	/// Returns anew `SocketAddress` depending on socket type:
-	/// If VSOCK, the same CID is used with the provided port
-	/// If USOCK, the "<port>.appsock" suffix is added
+	/// Returns a new `SocketAddress` depending on socket type:
+	/// If VSOCK, the same CID is used with the provided port.
+	/// If USOCK, the "<port>.appsock" suffix is added.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError::ConnectAddressInvalid`] if the Unix socket path
+	/// cannot be resolved.
 	#[allow(unused)]
 	pub fn with_port(&self, port: u16) -> Result<SocketAddress, IOError> {
 		match self {

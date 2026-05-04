@@ -20,7 +20,7 @@ pub enum ProxyMsg {
 		hostname: String,
 		/// e.g. 443
 		port: u16,
-		/// An array of DNS resolvers e.g. ["8.8.8.8", "8.8.4.4"]
+		/// An array of DNS resolvers e.g. `["8.8.8.8", "8.8.4.4"]`
 		dns_resolvers: Vec<String>,
 		/// Port number to perform DNS resolution, e.g. 53
 		dns_port: u16,

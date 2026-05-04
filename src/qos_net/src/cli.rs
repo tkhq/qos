@@ -83,7 +83,13 @@ impl ProxyOpts {
 pub struct CLI;
 
 impl CLI {
-	/// Execute the enclave proxy CLI with the environment args in an async way.
+	/// Execute the enclave proxy CLI with the environment args in an async
+	/// way.
+	///
+	/// # Panics
+	///
+	/// Panics if the socket pool cannot be created, max connections cannot
+	/// be parsed, or the server fails to start.
 	pub async fn execute() {
 		use qos_core::server::SocketServer;
 

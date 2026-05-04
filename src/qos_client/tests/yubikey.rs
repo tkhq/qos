@@ -39,7 +39,7 @@ const DATA: &[u8] = b"test data";
 /// and pressing the Yubikey for confirmation while the tests are ongoing,
 /// otherwise they'll fail with timeout related errors.
 #[test]
-#[ignore]
+#[ignore = "See doc comment for use with YubiKey"]
 fn yubikey_tests() {
 	let mut yubikey = YubiKey::open()
 		.expect("A supported PIV smartcard should be present and accessible");

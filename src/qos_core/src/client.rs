@@ -42,6 +42,10 @@ impl SocketClient {
 	}
 
 	/// Create a new client from a single `SocketAddress`. This creates an implicit single socket `StreamPool`.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if the stream pool cannot be created.
 	pub fn single(
 		addr: SocketAddress,
 		timeout: Duration,
@@ -53,11 +57,16 @@ impl SocketClient {
 
 	/// Returns true if all callable streams are currently exhausted
 	pub async fn busy(&self) -> bool {
-		self.pool.read().await.busy().await
+		self.pool.read().await.busy()
 	}
 
 	/// Send raw bytes and wait for a response until the clients configured
 	/// timeout.
+	///
+	/// # Errors
+	///
+	/// Returns [`ClientError`] if the request times out, the connection
+	/// fails, or serialization errors occur.
 	pub async fn call(&self, request: &[u8]) -> Result<Vec<u8>, ClientError> {
 		let pool = self.pool.read().await;
 
@@ -81,7 +90,11 @@ impl SocketClient {
 		self.timeout = timeout;
 	}
 
-	/// Expands the underlying `AsyncPool` to given `pool_size`
+	/// Expands the underlying `AsyncPool` to given `pool_size`.
+	///
+	/// # Errors
+	///
+	/// Returns [`ClientError`] if the pool expansion fails.
 	pub async fn expand_to(
 		&mut self,
 		pool_size: u8,
@@ -91,7 +104,11 @@ impl SocketClient {
 		Ok(())
 	}
 
-	/// Attempt a one-off connection, used for tests
+	/// Attempt a one-off connection, used for tests.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if the connection fails.
 	pub async fn try_connect(&self) -> Result<(), IOError> {
 		let pool = self.pool.read().await;
 		let mut stream = pool.get().await;

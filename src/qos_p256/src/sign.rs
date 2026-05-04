@@ -26,6 +26,10 @@ impl P256SignPair {
 
 	/// Sign the message and return the. Signs the SHA512 digest of
 	/// the message.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if signing fails.
 	pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
 		let signature: Signature = self.private.sign(message);
 
@@ -39,6 +43,11 @@ impl P256SignPair {
 	}
 
 	/// Deserialize key from raw scalar byte slice.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error::FailedToReadSecret`] if the bytes are not a
+	/// valid P256 scalar.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
 		Ok(Self {
 			private: SigningKey::from_slice(bytes)
@@ -64,6 +73,12 @@ impl P256SignPublic {
 	/// the SHA512 digest of the message.
 	///
 	/// Returns Ok if the signature is good.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error::FailedToDeserializeSignature`] if the signature
+	/// bytes are invalid, or [`P256Error::FailedSignatureVerification`] if
+	/// verification fails.
 	pub fn verify(
 		&self,
 		message: &[u8],
@@ -85,6 +100,11 @@ impl P256SignPublic {
 	}
 
 	/// Deserialize from a SEC1 encoded point, not compressed.
+	///
+	/// # Errors
+	///
+	/// Returns [`P256Error`] if the bytes are the wrong length or not a
+	/// valid SEC1 encoded point.
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
 		if bytes.len() > PUB_KEY_LEN_UNCOMPRESSED as usize {
 			return Err(P256Error::EncodedPublicKeyTooLong);

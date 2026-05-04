@@ -193,7 +193,12 @@ pub enum PairOrYubi {
 }
 
 impl PairOrYubi {
-	/// Create a P256 key pair or yubikey from the given inputs
+	/// Create a P256 key pair or yubikey from the given inputs.
+	///
+	/// # Errors
+	///
+	/// Returns [`Error`] if the `YubiKey` cannot be opened, the PIN cannot
+	/// be read, or the secret file is invalid.
 	#[allow(clippy::missing_panics_doc)]
 	pub fn from_inputs(
 		yubikey_flag: bool,
@@ -235,7 +240,11 @@ impl PairOrYubi {
 		Ok(result)
 	}
 
-	/// Sign the payload
+	/// Sign the payload.
+	///
+	/// # Errors
+	///
+	/// Returns [`Error`] if signing fails.
 	pub fn sign(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
@@ -247,7 +256,11 @@ impl PairOrYubi {
 		}
 	}
 
-	/// Decrypt the payload
+	/// Decrypt the payload.
+	///
+	/// # Errors
+	///
+	/// Returns [`Error`] if decryption fails.
 	pub fn decrypt(&mut self, payload: &[u8]) -> Result<Vec<u8>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
@@ -268,7 +281,11 @@ impl PairOrYubi {
 		}
 	}
 
-	/// Get the public key in bytes
+	/// Get the public key in bytes.
+	///
+	/// # Errors
+	///
+	/// Returns [`Error`] if the public key cannot be read.
 	pub fn public_key_bytes(&mut self) -> Result<Vec<u8>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
@@ -361,7 +378,12 @@ pub(crate) fn pin_from_path<P: AsRef<Path>>(path: P) -> Vec<u8> {
 		.to_vec()
 }
 
-/// Provision a yubikey from a pre-generated master seed
+/// Provision a yubikey from a pre-generated master seed.
+///
+/// # Errors
+///
+/// Returns [`Error`] if the `YubiKey` cannot be opened, the PIN cannot be
+/// read, or provisioning fails.
 #[cfg(feature = "smartcard")]
 pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 	master_seed_path: P,
@@ -558,7 +580,7 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	let genesis_output_path = namespace_dir.as_ref().join(GENESIS_OUTPUT_FILE);
 	let genesis_output = GenesisOutput::try_from_slice(
 		&fs::read(&genesis_output_path).unwrap_or_else(|e| {
-			panic!("verify_genesis: Could not read genesis output from {genesis_output_path:?}: {e}")
+			panic!("verify_genesis: Could not read genesis output from {}: {e}", genesis_output_path.display())
 		}),
 	)
 	.expect(
@@ -566,11 +588,18 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	);
 
 	let master_seed_path = master_seed_path.as_ref();
-	let master_seed_hex = fs::read_to_string(master_seed_path).unwrap_or_else(|e| {
-		panic!("verify_genesis: Could not read master seed from {master_seed_path:?}: {e}")
-	});
+	let master_seed_hex =
+		fs::read_to_string(master_seed_path).unwrap_or_else(|e| {
+			panic!(
+				"verify_genesis: Could not read master seed from {}: {e}",
+				master_seed_path.display()
+			)
+		});
 	let pair = P256Pair::from_hex_file(master_seed_path).unwrap_or_else(|e| {
-		panic!("verify_genesis: Could not parse master seed from {master_seed_path:?}: {e:?}")
+		panic!(
+			"verify_genesis: Could not parse master seed from {}: {e:?}",
+			master_seed_path.display()
+		)
 	});
 
 	// sanity check our logic to read in master seed
@@ -642,7 +671,10 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 
 	// Read in the attestation doc from the genesis directory
 	let cose_sign1 = fs::read(&attestation_doc_path).unwrap_or_else(|e| {
-		panic!("after_genesis: Could not read attestation doc from {attestation_doc_path:?}: {e}")
+		panic!(
+			"after_genesis: Could not read attestation doc from {}: {e}",
+			attestation_doc_path.display()
+		)
 	});
 	let attestation_doc = extract_attestation_doc(
 		&cose_sign1,
@@ -653,7 +685,10 @@ pub(crate) fn after_genesis<P: AsRef<Path>>(
 	// Read in the genesis output from the genesis directory
 	let genesis_output = GenesisOutput::try_from_slice(
 		&fs::read(&genesis_set_path).unwrap_or_else(|e| {
-			panic!("after_genesis: Could not read genesis output from {genesis_set_path:?}: {e}")
+			panic!(
+				"after_genesis: Could not read genesis output from {}: {e}",
+				genesis_set_path.display()
+			)
 		}),
 	)
 	.expect("after_genesis: Could not deserialize the genesis output");
@@ -1654,7 +1689,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	restart: RestartPolicy,
 	args: Vec<String>,
 	host_config: Vec<BridgeConfig>,
-	unsafe_eph_path_override: Option<String>,
+	unsafe_eph_path_override: Option<&str>,
 ) {
 	// Generate a quorum key
 	let quorum_pair = P256Pair::generate().expect("Failed P256 key gen");
@@ -1677,7 +1712,10 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	// Read in the pivot
 	let pivot_path = pivot_path.as_ref();
 	let pivot = fs::read(pivot_path).unwrap_or_else(|e| {
-		panic!("dangerous_dev_boot: Could not read pivot binary from {pivot_path:?}: {e}")
+		panic!(
+			"dangerous_dev_boot: Could not read pivot binary from {}: {e}",
+			pivot_path.display()
+		)
 	});
 
 	let mock_pcr = vec![0; 48];
@@ -1741,9 +1779,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 
 	// Pull out the ephemeral key or use the override
-	let eph_pub: P256Public = if let Some(ref eph_path) =
-		unsafe_eph_path_override
-	{
+	let eph_pub: P256Public = if let Some(eph_path) = unsafe_eph_path_override {
 		P256Pair::from_hex_file(eph_path)
 			.unwrap_or_else(|e| panic!("dangerous_dev_boot: Could not read ephemeral key from {eph_path:?}: {e:?}"))
 			.public_key()
@@ -1915,7 +1951,10 @@ fn get_share_set<P: AsRef<Path>>(dir: P) -> ShareSet {
 			}
 
 			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
-				panic!("get_share_set: Could not read public key from {path:?}: {e:?}")
+				panic!(
+					"get_share_set: Could not read public key from {}: {e:?}",
+					path.display()
+				)
 			});
 			Some(QuorumMember {
 				alias: mem::take(&mut file_name[0]),
@@ -1940,7 +1979,7 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 			}
 
 			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
-				panic!("get_manifest_set: Could not read public key from {path:?}: {e:?}")
+				panic!("get_manifest_set: Could not read public key from {}: {e:?}", path.display())
 			});
 			Some(QuorumMember {
 				alias: mem::take(&mut file_name[0]),
@@ -1965,7 +2004,10 @@ fn get_patch_set<P: AsRef<Path>>(dir: P) -> PatchSet {
 			}
 
 			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
-				panic!("get_patch_set: Could not read public key from {path:?}: {e:?}")
+				panic!(
+					"get_patch_set: Could not read public key from {}: {e:?}",
+					path.display()
+				)
 			});
 			Some(MemberPubKey { pub_key: public.to_bytes() })
 		})
@@ -1988,7 +2030,10 @@ fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
 
 			let public = P256Public::from_hex_file(path)
 				.map_err(|e| {
-					panic!("Could not read hex from share_key.pub: {path:?}: {e:?}")
+					panic!(
+						"Could not read hex from share_key.pub: {}: {e:?}",
+						path.display()
+					)
 				})
 				.unwrap();
 
@@ -2020,10 +2065,10 @@ fn find_approvals<P: AsRef<Path>>(
 
 			let approval: Approval =
 				serde_json::from_slice(&fs::read(path).unwrap_or_else(|e| {
-					panic!("find_approvals: Could not read approval from {path:?}: {e}")
+					panic!("find_approvals: Could not read approval from {}: {e}", path.display())
 				}))
 				.unwrap_or_else(|e| {
-					panic!("find_approvals: Could not deserialize approval from {path:?}: {e}")
+					panic!("find_approvals: Could not deserialize approval from {}: {e}", path.display())
 				});
 
 			assert!(

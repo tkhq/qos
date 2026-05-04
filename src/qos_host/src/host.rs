@@ -249,20 +249,18 @@ impl HostServer {
 async fn get_eph_key_from_attestation_doc(
 	enclave_client: &SocketClient,
 ) -> Option<String> {
+	use ProtocolMsg::LiveAttestationDocResponse;
+
 	let req = ProtocolMsg::LiveAttestationDocRequest.to_canonical_json_vec();
 	let resp_bytes = enclave_client.call(&req).await.ok()?;
 	let resp = ProtocolMsg::from_json_slice(&resp_bytes).ok()?;
 
-	let nsm_response = match resp {
-		ProtocolMsg::LiveAttestationDocResponse { nsm_response, .. } => {
-			nsm_response
-		}
-		_ => return None,
+	let LiveAttestationDocResponse { nsm_response, .. } = resp else {
+		return None;
 	};
 
-	let document = match nsm_response {
-		NsmResponse::Attestation { document } => document,
-		_ => return None,
+	let NsmResponse::Attestation { document } = nsm_response else {
+		return None;
 	};
 
 	let attestation_doc =

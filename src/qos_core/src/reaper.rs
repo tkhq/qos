@@ -69,7 +69,7 @@ async fn run_server(
 // runs the VSOCK -> TCP bridge so that apps can use any TCP based protocol without worrying about VSOCK
 // communication. This is started if `PivotConfig::bridge_config` has any members defined.
 // uses the enclave core socket and given pivot host port to constuct the VSOCK to TCP bridge.
-async fn run_vsock_to_tcp_bridge(
+fn run_vsock_to_tcp_bridge(
 	core_socket: &SocketAddress,
 	bridges: &Vec<BridgeConfig>,
 ) -> Result<(), IOError> {
@@ -88,7 +88,7 @@ async fn run_vsock_to_tcp_bridge(
 				let app_pool = StreamPool::single(app_socket)?;
 				let bridge = HostBridge::new(app_pool, host_addr);
 
-				bridge.vsock_to_tcp().await;
+				bridge.vsock_to_tcp();
 			}
 			BridgeConfig::Client { port: _, host: _ } => {
 				panic!("client bridge unimplemented")
@@ -99,7 +99,7 @@ async fn run_vsock_to_tcp_bridge(
 	Ok(())
 }
 
-async fn reprint_pivot_output(child: &mut Child) {
+fn reprint_pivot_output(child: &mut Child) {
 	let stdout = child.stdout.take().expect("failed to get pivot stdout");
 	let stderr = child.stderr.take().expect("failed to get pivot stderr");
 
@@ -196,7 +196,6 @@ impl Reaper {
 
 		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task
 		run_vsock_to_tcp_bridge(&core_socket, &host_config)
-			.await
 			.expect("failed to run VSOCK -> TCP socket bridge");
 
 		let mut pivot = Command::new(handles.pivot_path());
@@ -215,7 +214,7 @@ impl Reaper {
 			// print pivot stderr and stdout if in debug mode
 			// *NOTE*: this requires `DEBUG` and `LOGS` env vars set when booting the enclave itself. If not, nothing will be visible
 			if manifest.pivot.debug_mode {
-				reprint_pivot_output(&mut child).await;
+				reprint_pivot_output(&mut child);
 			}
 
 			let status =

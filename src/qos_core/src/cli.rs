@@ -48,6 +48,7 @@ impl EnclaveOpts {
 	}
 
 	/// Create a new `StreamSocket` for the qos host.
+	#[cfg_attr(not(feature = "vm"), allow(clippy::unnecessary_wraps))]
 	fn enclave_socket(&self) -> Result<SocketAddress, IOError> {
 		match (
 			self.parsed.single(CID),

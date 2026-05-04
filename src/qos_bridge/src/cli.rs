@@ -75,6 +75,7 @@ impl HostOpts {
 	}
 
 	/// Create a new `StreamPool` using the list of `SocketAddress` for the qos host.
+	#[cfg_attr(not(feature = "vm"), allow(clippy::unnecessary_wraps))]
 	pub(crate) fn enclave_socket(&self) -> Result<SocketAddress, IOError> {
 		match (self.parsed.single(CID), self.parsed.single(USOCK)) {
 			#[cfg(feature = "vm")]

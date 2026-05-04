@@ -64,6 +64,10 @@ impl SocketServer {
 	/// `terminate` should be called on the server when execution is to be finished (e.g. ctrl+c handling)
 	/// The `max_connections` attribute limits how many accepted connections and running tasks can be handled concurrently
 	/// per each pool address.
+	///
+	/// # Errors
+	///
+	/// Returns [`SocketServerError`] if the pool fails to bind listeners.
 	pub fn listen_all<P>(
 		pool: StreamPool,
 		processor: P,
@@ -85,6 +89,10 @@ impl SocketServer {
 	}
 
 	/// Expand the server with listeners up to pool size. This adds new tasks as needed.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if new listeners cannot be bound.
 	pub fn listen_to<P>(
 		&mut self,
 		pool_size: u8,
@@ -144,26 +152,39 @@ pub struct PermittedStream {
 impl PermittedStream {
 	/// Accept a connection from the listener, acquiring a permit from the
 	/// semaphore.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if the permit cannot be acquired or the
+	/// connection cannot be accepted.
 	pub async fn accept(
 		listener: &Listener,
 		connections: Arc<Semaphore>,
 	) -> Result<Self, IOError> {
-		let _permit = connections
+		let permit = connections
 			.acquire_owned()
 			.await
 			.map_err(|_| IOError::UnknownError)?; // this really shouldn't happen since we never close the semaphore
 
 		let stream = listener.accept().await?;
 
-		Ok(PermittedStream { _permit, stream })
+		Ok(PermittedStream { _permit: permit, stream })
 	}
 
-	/// Perform a `Stream::send`
+	/// Perform a `Stream::send`.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if the send fails.
 	pub async fn send(&mut self, value: &[u8]) -> Result<(), IOError> {
 		self.stream.send(value).await
 	}
 
-	/// Perform a `Stream::recv`
+	/// Perform a `Stream::recv`.
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError`] if the receive fails.
 	pub async fn recv(&mut self) -> Result<Vec<u8>, IOError> {
 		self.stream.recv().await
 	}
@@ -210,13 +231,11 @@ where
 							}
 						}
 					}
-					Err(err) => match err {
-						IOError::RecvConnectionClosed => break, // expected as we reconnect after each request currently
-						_ => {
-							eprintln!("SocketServer: error receiving request {err:?}, re-accepting");
-							break;
-						}
-					},
+					Err(IOError::RecvConnectionClosed) => break,
+					Err(err) => {
+						eprintln!("SocketServer: error receiving request {err:?}, re-accepting");
+						break;
+					}
 				}
 			}
 		});

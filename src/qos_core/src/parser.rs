@@ -60,6 +60,11 @@ pub struct OptionsParser<T: GetParserForOptions> {
 
 impl<T: GetParserForOptions> OptionsParser<T> {
 	/// Parse inputs for `C`.
+	///
+	/// # Errors
+	///
+	/// Returns [`ParserError`] if a required token is missing or an input
+	/// is invalid.
 	pub fn parse(inputs: &mut Vec<String>) -> Result<Parser, ParserError> {
 		// Check if the first element is binary name before removing it
 		if !inputs.is_empty() && !inputs[0].starts_with(INPUT_PREFIX) {
@@ -93,6 +98,11 @@ pub struct CommandParser<C: From<String> + GetParserForCommand> {
 
 impl<C: From<String> + GetParserForCommand> CommandParser<C> {
 	/// Parse inputs for the command `C`.
+	///
+	/// # Errors
+	///
+	/// Returns [`ParserError`] if the command is missing or unrecognized,
+	/// or if a required token is missing or an input is invalid.
 	pub fn parse(inputs: &mut Vec<String>) -> Result<(C, Parser), ParserError> {
 		let command = Self::extract_command(inputs)?;
 		let mut parser = command.parser();
@@ -190,6 +200,11 @@ impl Parser {
 
 	/// Parse the command line arguments. Instead of using this directly it is
 	/// preferred to use [`OptionsParser`] or [`CommandParser`].
+	///
+	/// # Errors
+	///
+	/// Returns [`ParserError`] if a required token is missing or an input
+	/// is invalid.
 	///
 	/// # Note
 	///
