@@ -1,0 +1,23 @@
+[package]
+name = "qos_bytes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Raw byte wrappers that format and serialize as hex"
+repository = "https://github.com/tkhq/qos"
+keywords = ["quorumos", "bytes", "hex", "encoding"]
+categories = ["encoding"]
+
+[lints]
+workspace = true
+
+[dependencies]
+qos_hex = { workspace = true }
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[features]
+serde = ["dep:serde"]

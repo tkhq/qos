@@ -5,6 +5,7 @@ members = [
   "qos_client",
   "qos_core",
   "qos_crypto",
+  "qos_bytes",
   "qos_host",
   "qos_hex",
   "qos_net",
@@ -23,6 +24,7 @@ default-members = [
   "qos_client",
   "qos_core",
   "qos_crypto",
+  "qos_bytes",
   "qos_host",
   "qos_hex",
   "qos_net",
@@ -104,6 +106,7 @@ qos_host = { path = "qos_host", default-features = false }
 qos_client = { path = "qos_client", version = "0.7.0", default-features = false }
 qos_core = { path = "qos_core", version = "0.7.0", default-features = false }
 qos_crypto = { path = "qos_crypto", version = "0.7.0", default-features = false }
+qos_bytes = { path = "qos_bytes", version = "0.7.0", default-features = false }
 qos_hex = { path = "qos_hex", version = "0.7.0", default-features = false }
 qos_net = { path = "qos_net", version = "0.7.0", default-features = false }
 qos_nsm = { path = "qos_nsm", version = "0.7.0", default-features = false }
