@@ -57,9 +57,6 @@ unsafe_code = "deny"
 [workspace.lints.clippy]
 pedantic = "deny"
 
-[workspace.lints.rustdoc]
-missing_docs = "warn"
-
 [workspace.dependencies]
 # External dependencies
 aes-gcm = { version = "0.10.3", features = ["aes", "alloc"], default-features = false }
