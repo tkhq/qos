@@ -16,6 +16,7 @@ workspace = true
 qos_core = { workspace = true, default-features = false }
 qos_crypto = { workspace = true, default-features = false }
 qos_hex = { workspace = true }
+qos_json = { workspace = true }
 qos_p256 = { workspace = true }
 qos_nsm = { workspace = true, default-features = false }
 
@@ -23,6 +24,7 @@ qos_nsm = { workspace = true, default-features = false }
 ureq = { workspace = true }
 aws-nitro-enclaves-nsm-api = { workspace = true }
 borsh = { workspace = true}
+clap = { workspace = true }
 p256 = { workspace = true }
 rand_core = { workspace = true, features = ["os_rng"] }
 zeroize = { workspace = true }

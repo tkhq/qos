@@ -10,6 +10,7 @@
 
 use std::{collections::HashSet, env};
 
+use clap::{Parser as ClapParser, Subcommand};
 use qos_core::{
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
 	protocol::{
@@ -20,8 +21,10 @@ use qos_core::{
 
 mod services;
 
+#[cfg(feature = "smartcard")]
+pub use services::advanced_provision_yubikey;
+pub use services::generate_file_key;
 pub use services::PairOrYubi;
-pub use services::{advanced_provision_yubikey, generate_file_key};
 
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
@@ -76,6 +79,7 @@ const PLAINTEXT_PATH: &str = "plaintext-path";
 const OUTPUT_HEX: &str = "output-hex";
 const VALIDATION_TIME_OVERRIDE: &str = "validation-time-override";
 const JSON: &str = "json";
+const USE_QOS_VERSION: &str = "--use-qos-version";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -1380,9 +1384,124 @@ impl CLI {
 	pub fn execute() {
 		let mut args: Vec<String> = env::args().collect();
 
-		let runner = ClientRunner::new(&mut args);
+		match QosVersionDispatch::from_args(&mut args) {
+			Ok(QosVersionDispatch::Legacy) => {
+				let runner = ClientRunner::new(&mut args);
+				runner.run();
+			}
+			Ok(QosVersionDispatch::Versioned) => {
+				VersionedClientRunner::new(args).run();
+			}
+			Err(err) => {
+				eprintln!("{err}");
+				std::process::exit(1);
+			}
+		}
+	}
+}
 
-		runner.run();
+enum QosVersionDispatch {
+	Legacy,
+	Versioned,
+}
+
+impl QosVersionDispatch {
+	fn from_args(args: &mut Vec<String>) -> Result<Self, String> {
+		let Some(pos) = args.iter().position(|arg| arg == USE_QOS_VERSION)
+		else {
+			return Ok(Self::Legacy);
+		};
+
+		let version = args
+			.get(pos + 1)
+			.ok_or_else(|| {
+				format!("{USE_QOS_VERSION} requires an integer value")
+			})?
+			.parse::<u32>()
+			.map_err(|_| {
+				format!("{USE_QOS_VERSION} requires an integer value")
+			})?;
+
+		if version <= 1 {
+			args.remove(pos);
+			args.remove(pos);
+			Ok(Self::Legacy)
+		} else {
+			Ok(Self::Versioned)
+		}
+	}
+}
+
+#[derive(ClapParser)]
+#[command(author, version, about)]
+struct VersionedCli {
+	#[arg(long, global = true, default_value_t = 2)]
+	use_qos_version: u32,
+	#[command(subcommand)]
+	command: VersionedCommand,
+}
+
+#[derive(Subcommand)]
+#[command(rename_all = "kebab-case")]
+enum VersionedCommand {
+	GenerateManifest(VersionedGenerateManifest),
+}
+
+#[derive(clap::Args)]
+struct VersionedGenerateManifest {
+	#[arg(long)]
+	nonce: u32,
+	#[arg(long)]
+	namespace: String,
+	#[arg(long)]
+	pivot_hash_path: String,
+	#[arg(long)]
+	restart_policy: String,
+	#[arg(long)]
+	qos_release_dir: String,
+	#[arg(long)]
+	pcr3_preimage_path: String,
+	#[arg(long)]
+	manifest_path: String,
+	#[arg(long)]
+	manifest_set_dir: String,
+	#[arg(long)]
+	share_set_dir: String,
+	#[arg(long)]
+	patch_set_dir: String,
+	#[arg(long)]
+	quorum_key_path: String,
+	#[arg(long, default_value = "[]")]
+	pivot_args: String,
+	#[arg(long)]
+	bridge_config: Option<String>,
+	#[arg(long, default_value = "false")]
+	debug_mode: bool,
+}
+
+struct VersionedClientRunner {
+	args: VersionedCli,
+}
+
+impl VersionedClientRunner {
+	fn new(args: Vec<String>) -> Self {
+		Self { args: VersionedCli::parse_from(args) }
+	}
+
+	fn run(self) {
+		if self.args.use_qos_version != 2 {
+			eprintln!(
+				"unsupported QOS manifest version: {}",
+				self.args.use_qos_version
+			);
+			std::process::exit(1);
+		}
+
+		match self.args.command {
+			VersionedCommand::GenerateManifest(args) => {
+				versioned_handlers::generate_manifest(args);
+			}
+		}
 	}
 }
 
@@ -1845,5 +1964,677 @@ mod handlers {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);
 		}
+	}
+}
+
+mod versioned_handlers {
+	use std::collections::HashSet;
+
+	use qos_core::protocol::services::boot::{BridgeConfig, RestartPolicy};
+
+	use super::{services, VersionedGenerateManifest};
+	use crate::cli::services::GenerateManifestArgs;
+
+	pub(super) fn generate_manifest(opts: VersionedGenerateManifest) {
+		let pivot_args = parse_pivot_args(&opts.pivot_args);
+		let bridge_config = parse_bridge_config(opts.bridge_config.as_deref());
+		let restart_policy = RestartPolicy::try_from(opts.restart_policy)
+			.expect("Could not parse `--restart-policy`");
+
+		if let Err(e) = services::generate_manifest_v2(GenerateManifestArgs {
+			nonce: opts.nonce,
+			namespace: opts.namespace,
+			restart_policy,
+			pivot_hash_path: opts.pivot_hash_path,
+			qos_release_dir_path: opts.qos_release_dir,
+			pcr3_preimage_path: opts.pcr3_preimage_path,
+			manifest_path: opts.manifest_path,
+			pivot_args,
+			share_set_dir: opts.share_set_dir,
+			manifest_set_dir: opts.manifest_set_dir,
+			patch_set_dir: opts.patch_set_dir,
+			quorum_key_path: opts.quorum_key_path,
+			bridge_config,
+			debug_mode: opts.debug_mode,
+		}) {
+			println!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	fn parse_pivot_args(value: &str) -> Vec<String> {
+		let mut chars = value.chars();
+		assert_eq!(
+			chars.next().unwrap(),
+			'[',
+			"Pivot args must start with a \"[\""
+		);
+		assert_eq!(
+			chars.next_back().unwrap(),
+			']',
+			"Pivot args must end with a \"]\""
+		);
+
+		if chars.clone().count() > 0 {
+			chars.as_str().split(',').map(String::from).collect()
+		} else {
+			vec![]
+		}
+	}
+
+	fn parse_bridge_config(json: Option<&str>) -> Vec<BridgeConfig> {
+		let Some(json_str) = json else {
+			return Vec::new();
+		};
+
+		let result: Vec<BridgeConfig> = serde_json::from_str(json_str)
+			.expect("invalid bridge configuration json");
+		let mut ports = HashSet::new();
+		for bc in &result {
+			assert!(
+				ports.insert(bc.port()),
+				"duplicate bridge port: {}",
+				bc.port()
+			);
+		}
+
+		result
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	fn strings(args: &[&str]) -> Vec<String> {
+		args.iter().map(|arg| (*arg).to_string()).collect()
+	}
+
+	fn parse(args: &[&str]) -> ClientRunner {
+		let mut args = strings(args);
+		ClientRunner::new(&mut args)
+	}
+
+	#[test]
+	fn dispatch_defaults_to_legacy() {
+		let mut args = strings(&["qos_client", "display", "--help"]);
+		let dispatch = QosVersionDispatch::from_args(&mut args).unwrap();
+		assert!(matches!(dispatch, QosVersionDispatch::Legacy));
+		assert_eq!(args, strings(&["qos_client", "display", "--help"]));
+	}
+
+	#[test]
+	fn dispatch_strips_legacy_version_flag() {
+		for version in ["0", "1"] {
+			let mut args = strings(&[
+				"qos_client",
+				"generate-manifest",
+				"--use-qos-version",
+				version,
+				"--help",
+			]);
+			let dispatch = QosVersionDispatch::from_args(&mut args).unwrap();
+			assert!(matches!(dispatch, QosVersionDispatch::Legacy));
+			assert_eq!(
+				args,
+				strings(&["qos_client", "generate-manifest", "--help"])
+			);
+		}
+	}
+
+	#[test]
+	fn dispatch_uses_clap_for_newer_versions() {
+		let mut args = strings(&[
+			"qos_client",
+			"generate-manifest",
+			"--use-qos-version",
+			"2",
+			"--help",
+		]);
+		let dispatch = QosVersionDispatch::from_args(&mut args).unwrap();
+		assert!(matches!(dispatch, QosVersionDispatch::Versioned));
+		assert_eq!(args[3], "2");
+	}
+
+	#[test]
+	fn dispatch_rejects_malformed_version_flag() {
+		let mut args = strings(&["qos_client", "--use-qos-version"]);
+		assert!(QosVersionDispatch::from_args(&mut args).is_err());
+
+		let mut args = strings(&["qos_client", "--use-qos-version", "two"]);
+		assert!(QosVersionDispatch::from_args(&mut args).is_err());
+	}
+
+	#[test]
+	fn parses_all_legacy_commands() {
+		let cases: &[(&[&str], Command)] = &[
+			(
+				&[
+					"qos_client",
+					"host-health",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3000",
+				],
+				Command::HostHealth,
+			),
+			(
+				&[
+					"qos_client",
+					"enclave-status",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3000",
+				],
+				Command::EnclaveStatus,
+			),
+			(
+				&[
+					"qos_client",
+					"generate-file-key",
+					"--master-seed-path",
+					"seed",
+					"--pub-path",
+					"pub",
+				],
+				Command::GenerateFileKey,
+			),
+			(
+				&[
+					"qos_client",
+					"boot-genesis",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3000",
+					"--namespace-dir",
+					"ns",
+					"--share-set-dir",
+					"share",
+					"--pcr3-preimage-path",
+					"pcr3",
+					"--qos-release-dir",
+					"release",
+				],
+				Command::BootGenesis,
+			),
+			(
+				&[
+					"qos_client",
+					"after-genesis",
+					"--secret-path",
+					"secret",
+					"--share-path",
+					"share",
+					"--alias",
+					"alice",
+					"--namespace-dir",
+					"ns",
+					"--qos-release-dir",
+					"release",
+					"--pcr3-preimage-path",
+					"pcr3",
+				],
+				Command::AfterGenesis,
+			),
+			(
+				&[
+					"qos_client",
+					"verify-genesis",
+					"--namespace-dir",
+					"ns",
+					"--master-seed-path",
+					"seed",
+				],
+				Command::VerifyGenesis,
+			),
+			(
+				&[
+					"qos_client",
+					"generate-manifest",
+					"--nonce",
+					"1",
+					"--namespace",
+					"ns",
+					"--pivot-hash-path",
+					"pivot.hash",
+					"--restart-policy",
+					"never",
+					"--qos-release-dir",
+					"release",
+					"--pcr3-preimage-path",
+					"pcr3",
+					"--manifest-path",
+					"manifest",
+					"--manifest-set-dir",
+					"manifest-set",
+					"--share-set-dir",
+					"share-set",
+					"--patch-set-dir",
+					"patch-set",
+					"--quorum-key-path",
+					"quorum.pub",
+				],
+				Command::GenerateManifest,
+			),
+			(
+				&[
+					"qos_client",
+					"approve-manifest",
+					"--secret-path",
+					"secret",
+					"--manifest-path",
+					"manifest",
+					"--manifest-approvals-dir",
+					"approvals",
+					"--qos-release-dir",
+					"release",
+					"--pcr3-preimage-path",
+					"pcr3",
+					"--pivot-hash-path",
+					"pivot.hash",
+					"--alias",
+					"alice",
+					"--quorum-key-path",
+					"quorum.pub",
+					"--manifest-set-dir",
+					"manifest-set",
+					"--share-set-dir",
+					"share-set",
+					"--patch-set-dir",
+					"patch-set",
+				],
+				Command::ApproveManifest,
+			),
+			(
+				&[
+					"qos_client",
+					"boot-standard",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3000",
+					"--pivot-path",
+					"pivot",
+					"--manifest-envelope-path",
+					"envelope",
+					"--pcr3-preimage-path",
+					"pcr3",
+				],
+				Command::BootStandard,
+			),
+			(
+				&[
+					"qos_client",
+					"get-attestation-doc",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3000",
+					"--attestation-doc-path",
+					"doc",
+					"--manifest-envelope-path",
+					"envelope",
+				],
+				Command::GetAttestationDoc,
+			),
+			(
+				&[
+					"qos_client",
+					"get-ephemeral-key-hex",
+					"--attestation-doc-path",
+					"doc",
+					"--ephemeral-key-path",
+					"eph",
+				],
+				Command::GetEphemeralKeyHex,
+			),
+			(
+				&[
+					"qos_client",
+					"proxy-re-encrypt-share",
+					"--secret-path",
+					"secret",
+					"--share-path",
+					"share",
+					"--approval-path",
+					"approval",
+					"--eph-wrapped-share-path",
+					"wrapped",
+					"--attestation-doc-path",
+					"doc",
+					"--pcr3-preimage-path",
+					"pcr3",
+					"--manifest-set-dir",
+					"manifest-set",
+					"--manifest-envelope-path",
+					"envelope",
+					"--alias",
+					"alice",
+				],
+				Command::ProxyReEncryptShare,
+			),
+			(
+				&[
+					"qos_client",
+					"post-share",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3000",
+					"--approval-path",
+					"approval",
+					"--eph-wrapped-share-path",
+					"wrapped",
+				],
+				Command::PostShare,
+			),
+			(
+				&[
+					"qos_client",
+					"generate-manifest-envelope",
+					"--manifest-approvals-dir",
+					"approvals",
+					"--manifest-path",
+					"manifest",
+				],
+				Command::GenerateManifestEnvelope,
+			),
+			(
+				&[
+					"qos_client",
+					"dangerous-dev-boot",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3000",
+					"--pivot-path",
+					"pivot",
+					"--restart-policy",
+					"never",
+				],
+				Command::DangerousDevBoot,
+			),
+			(
+				&[
+					"qos_client",
+					"provision-yubikey",
+					"--pub-path",
+					"pub",
+					"--yubikey",
+				],
+				Command::ProvisionYubiKey,
+			),
+			(
+				&[
+					"qos_client",
+					"advanced-provision-yubikey",
+					"--master-seed-path",
+					"seed",
+				],
+				Command::AdvancedProvisionYubiKey,
+			),
+			(
+				&[
+					"qos_client",
+					"pivot-hash",
+					"--output-path",
+					"hash",
+					"--pivot-path",
+					"pivot",
+				],
+				Command::PivotHash,
+			),
+			(
+				&[
+					"qos_client",
+					"shamir-split",
+					"--secret-path",
+					"secret",
+					"--total-shares",
+					"3",
+					"--threshold",
+					"2",
+					"--output-dir",
+					"out",
+				],
+				Command::ShamirSplit,
+			),
+			(
+				&[
+					"qos_client",
+					"shamir-reconstruct",
+					"--share",
+					"a",
+					"--share",
+					"b",
+					"--output-path",
+					"secret",
+				],
+				Command::ShamirReconstruct,
+			),
+			(
+				&["qos_client", "yubikey-sign", "--payload", "deadbeef"],
+				Command::YubiKeySign,
+			),
+			(&["qos_client", "yubikey-public"], Command::YubiKeyPublic),
+			(&["qos_client", "yubikey-piv-reset"], Command::YubiKeyPivReset),
+			(
+				&["qos_client", "yubikey-change-pin", "--new-pin-path", "new"],
+				Command::YubiKeyChangePin,
+			),
+			(
+				&[
+					"qos_client",
+					"display",
+					"--file-path",
+					"file",
+					"--display-type",
+					"manifest",
+				],
+				Command::Display,
+			),
+			(
+				&[
+					"qos_client",
+					"json-to-borsh",
+					"--file-path",
+					"json",
+					"--display-type",
+					"manifest",
+					"--output-path",
+					"borsh",
+				],
+				Command::JsonToBorsh,
+			),
+			(
+				&[
+					"qos_client",
+					"boot-key-fwd",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3000",
+					"--manifest-envelope-path",
+					"envelope",
+					"--pivot-path",
+					"pivot",
+					"--attestation-doc-path",
+					"doc",
+				],
+				Command::BootKeyFwd,
+			),
+			(
+				&[
+					"qos_client",
+					"export-key",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3000",
+					"--manifest-envelope-path",
+					"envelope",
+					"--attestation-doc-path",
+					"doc",
+					"--encrypted-quorum-key-path",
+					"key",
+				],
+				Command::ExportKey,
+			),
+			(
+				&[
+					"qos_client",
+					"inject-key",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3000",
+					"--encrypted-quorum-key-path",
+					"key",
+				],
+				Command::InjectKey,
+			),
+			(
+				&[
+					"qos_client",
+					"p256-verify",
+					"--payload-path",
+					"payload",
+					"--signature-path",
+					"sig",
+					"--pub-path",
+					"pub",
+				],
+				Command::P256Verify,
+			),
+			(
+				&[
+					"qos_client",
+					"p256-sign",
+					"--payload-path",
+					"payload",
+					"--signature-path",
+					"sig",
+					"--master-seed-path",
+					"seed",
+				],
+				Command::P256Sign,
+			),
+			(
+				&[
+					"qos_client",
+					"p256-asymmetric-encrypt",
+					"--plaintext-path",
+					"plain",
+					"--ciphertext-path",
+					"cipher",
+					"--pub-path",
+					"pub",
+				],
+				Command::P256AsymmetricEncrypt,
+			),
+			(
+				&[
+					"qos_client",
+					"p256-asymmetric-decrypt",
+					"--plaintext-path",
+					"plain",
+					"--ciphertext-path",
+					"cipher",
+					"--master-seed-path",
+					"seed",
+				],
+				Command::P256AsymmetricDecrypt,
+			),
+		];
+
+		for (args, expected) in cases {
+			let runner = parse(args);
+			assert_eq!(&runner.cmd, expected, "args: {args:?}");
+		}
+	}
+
+	#[test]
+	fn legacy_defaults_are_preserved() {
+		let runner = parse(&[
+			"qos_client",
+			"generate-manifest",
+			"--nonce",
+			"1",
+			"--namespace",
+			"ns",
+			"--pivot-hash-path",
+			"pivot.hash",
+			"--restart-policy",
+			"never",
+			"--qos-release-dir",
+			"release",
+			"--pcr3-preimage-path",
+			"pcr3",
+			"--manifest-path",
+			"manifest",
+			"--manifest-set-dir",
+			"manifest-set",
+			"--share-set-dir",
+			"share-set",
+			"--patch-set-dir",
+			"patch-set",
+			"--quorum-key-path",
+			"quorum.pub",
+		]);
+
+		assert_eq!(runner.opts.pivot_args(), Vec::<String>::new());
+		assert!(!runner.opts.debug_mode());
+		assert!(runner.opts.bridge_config().is_empty());
+
+		let runner = parse(&[
+			"qos_client",
+			"host-health",
+			"--host-ip",
+			"127.0.0.1",
+			"--host-port",
+			"3000",
+		]);
+		assert_eq!(
+			runner.opts.path_message(),
+			"http://127.0.0.1:3000/qos/message"
+		);
+	}
+
+	#[test]
+	fn versioned_clap_parses_generate_manifest() {
+		let args = VersionedCli::parse_from(strings(&[
+			"qos_client",
+			"generate-manifest",
+			"--use-qos-version",
+			"2",
+			"--nonce",
+			"1",
+			"--namespace",
+			"ns",
+			"--pivot-hash-path",
+			"pivot.hash",
+			"--restart-policy",
+			"never",
+			"--qos-release-dir",
+			"release",
+			"--pcr3-preimage-path",
+			"pcr3",
+			"--manifest-path",
+			"manifest",
+			"--manifest-set-dir",
+			"manifest-set",
+			"--share-set-dir",
+			"share-set",
+			"--patch-set-dir",
+			"patch-set",
+			"--quorum-key-path",
+			"quorum.pub",
+		]));
+
+		assert_eq!(args.use_qos_version, 2);
+		assert!(matches!(args.command, VersionedCommand::GenerateManifest(_)));
 	}
 }

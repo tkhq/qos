@@ -24,27 +24,30 @@ async fn vsock_to_tcp_bridge_works() {
 		.unwrap()
 		.into();
 
+	// Wait for pivot to bind before the bridge starts accepting connections.
+	// The bridge readiness probe opens a stream, and the bridge immediately
+	// tries to connect that stream to the TCP pivot.
+	wait_for_tcp_sock(&format!("127.0.0.1:{port}")).await;
+
 	HostBridge::new(pool, host_addr).vsock_to_tcp();
 	wait_for_usock(APP_USOCK).await;
 	wait_until_port_is_bound(port);
 
 	let mut stream = Stream::new(&SocketAddress::new_unix(APP_USOCK));
 	let mut stream2 = Stream::new(&SocketAddress::new_unix(APP_USOCK));
-	// Wait for pivot to bind. This needs to be ready before the streams try
-	// to connect
-	wait_for_tcp_sock(&format!("127.0.0.1:{port}")).await;
 	stream.connect().await.unwrap();
 	stream2.connect().await.unwrap();
 
 	// send b"hello" and expect it back
 	assert_eq!(5, stream.write(b"hello").await.unwrap());
 
-	// send b"done" and expect it back with pivot exiting
-	assert_eq!(4, stream2.write(b"done").await.unwrap());
-
 	// Read hello
 	let mut buf = [0u8; 5];
 	assert_eq!(5, stream.read(&mut buf).await.unwrap());
+
+	// send b"done" and expect it back with pivot exiting
+	assert_eq!(4, stream2.write(b"done").await.unwrap());
+
 	// Read done
 	let mut buf = [0u8; 4];
 	assert_eq!(4, stream2.read(&mut buf).await.unwrap());

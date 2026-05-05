@@ -65,6 +65,7 @@ aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
 axum = { version = "0.6.20", features = ["http1", "tokio", "json"], default-features = false }
 borsh = { version = "1.0", features = ["std", "derive"], default-features = false }
 chunked_transfer = { version = "1.5.0", default-features = false }
+clap = { version = "4.5", features = ["derive"] }
 futures = { version = "0.3.30" }
 der = { version = "0.7", default-features = false }
 hex-literal = "0.4.0"

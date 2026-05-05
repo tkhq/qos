@@ -144,3 +144,62 @@ impl Cli {
 		}
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	fn strings(args: &[&str]) -> Vec<String> {
+		args.iter().map(|arg| (*arg).to_string()).collect()
+	}
+
+	#[test]
+	fn parse_usock_control_url_and_override() {
+		let mut args = strings(&[
+			"qos_bridge",
+			"--control-url",
+			"http://localhost:3001/qos",
+			"--usock",
+			"dev.sock",
+			"--host-port-override",
+			"4000",
+		]);
+		let opts = HostOpts::new(&mut args);
+
+		assert_eq!(opts.control_url(), "http://localhost:3001/qos");
+		assert_eq!(opts.host_port_override(), Some(4000));
+		assert_eq!(
+			args,
+			strings(&[
+				"--control-url",
+				"http://localhost:3001/qos",
+				"--usock",
+				"dev.sock",
+				"--host-port-override",
+				"4000",
+			])
+		);
+	}
+
+	#[test]
+	#[should_panic = "Entered invalid CLI args: MissingInput(\"control-url\")"]
+	fn rejects_missing_control_url() {
+		let mut args = strings(&["qos_bridge", "--usock", "dev.sock"]);
+		let _opts = HostOpts::new(&mut args);
+	}
+
+	#[test]
+	#[should_panic = "Entered invalid CLI args: MutuallyExclusiveInput(\"cid\", \"usock\")"]
+	fn rejects_cid_and_usock_together() {
+		let mut args = strings(&[
+			"qos_bridge",
+			"--control-url",
+			"http://localhost:3001/qos",
+			"--cid",
+			"16",
+			"--usock",
+			"dev.sock",
+		]);
+		let _opts = HostOpts::new(&mut args);
+	}
+}

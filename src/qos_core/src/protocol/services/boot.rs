@@ -11,10 +11,12 @@ use crate::protocol::{
 };
 
 pub mod env;
+pub mod manifest;
 pub use env::{
 	PivotEnv, PivotEnvValue, PivotEnvVarName, MAX_PIVOT_ENV_NAME_LEN,
 	MAX_PIVOT_ENV_VALUE_LEN, MAX_PIVOT_ENV_VARS,
 };
+pub use manifest::{ManifestVersion, VersionedManifest};
 
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
@@ -112,6 +114,7 @@ impl TryFrom<String> for RestartPolicy {
 #[derive(
 	PartialEq,
 	Eq,
+	Debug,
 	Clone,
 	serde::Serialize,
 	serde::Deserialize,
@@ -191,15 +194,6 @@ pub struct PivotConfig {
 	/// Arguments to invoke the binary with. Leave this empty if none are
 	/// needed.
 	pub args: Vec<String>,
-	/// Environment variables to inject into the pivot process.
-	///
-	/// Variable names must match `[A-Za-z_][A-Za-z0-9_]*` and be at most
-	/// [`MAX_PIVOT_ENV_NAME_LEN`] bytes long. Values may contain any UTF-8
-	/// except NUL bytes and must be at most [`MAX_PIVOT_ENV_VALUE_LEN`] bytes
-	/// long. A manifest may contain at most [`MAX_PIVOT_ENV_VARS`] variables.
-	/// Values are not restricted to ASCII.
-	#[serde(default, skip_serializing_if = "PivotEnv::is_empty")]
-	pub env: PivotEnv,
 }
 
 /// Pivot binary configuration, original version (V0)
@@ -234,20 +228,16 @@ impl From<PivotConfigV0> for PivotConfig {
 			args: value.args,
 			debug_mode: false,
 			bridge_config: Vec::new(),
-			env: PivotEnv::new(),
 		}
 	}
 }
 
 impl fmt::Debug for PivotConfig {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let Self { hash, restart, bridge_config: _, debug_mode: _, args, env } =
-			self;
 		f.debug_struct("PivotConfig")
-			.field("hash", &qos_hex::encode(hash))
-			.field("restart", restart)
-			.field("args", &args.join(" "))
-			.field("env", env)
+			.field("hash", &qos_hex::encode(&self.hash))
+			.field("restart", &self.restart)
+			.field("args", &self.args.join(" "))
 			.finish()
 	}
 }
@@ -454,7 +444,13 @@ pub struct Manifest {
 // TODO: remove this once json is the default manifest format
 /// The Manifest for the enclave, backwards compatible version 0
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize, serde::Deserialize,
+	PartialEq,
+	Eq,
+	Debug,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Deserialize,
 )]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
@@ -800,23 +796,6 @@ mod test {
 	}
 
 	#[test]
-	fn manifest_hash_changes_when_env_changes() {
-		let (manifest, _members, _pivot) = get_manifest();
-		let mut manifest_with_env = manifest.clone();
-		manifest_with_env
-			.pivot
-			.env
-			.insert(
-				PivotEnvVarName::new("FOO".to_string()).unwrap(),
-				PivotEnvValue::plain("bar".to_string()).unwrap(),
-			)
-			.unwrap();
-
-		assert_ne!(manifest.qos_hash(), manifest_with_env.qos_hash());
-		assert_eq!(manifest.pivot.hash, manifest_with_env.pivot.hash);
-	}
-
-	#[test]
 	fn boot_standard_accepts_approved_manifest() {
 		let (manifest, members, pivot) = get_manifest();
 
@@ -1102,6 +1081,40 @@ mod test {
 
 		assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
 		assert_eq!(manifest.pivot.bridge_config.len(), 0);
-		assert!(manifest.pivot.env.is_empty());
+	}
+
+	#[test]
+	fn versioned_manifest_reads_v2_json_and_hashes_with_json() {
+		let (manifest, ..) = get_manifest();
+		let mut env = PivotEnv::new();
+		env.insert(
+			PivotEnvVarName::new("FOO".to_string()).unwrap(),
+			PivotEnvValue::plain("bar".to_string()).unwrap(),
+		)
+		.unwrap();
+		let v2 = crate::protocol::services::boot::manifest::v2::Manifest {
+			version: ManifestVersion::V2,
+			namespace: manifest.namespace,
+			pivot: crate::protocol::services::boot::manifest::v2::PivotConfig {
+				hash: manifest.pivot.hash,
+				restart: manifest.pivot.restart,
+				bridge_config: manifest.pivot.bridge_config,
+				debug_mode: manifest.pivot.debug_mode,
+				args: manifest.pivot.args,
+				env,
+			},
+			manifest_set: manifest.manifest_set,
+			share_set: manifest.share_set,
+			enclave: manifest.enclave,
+			patch_set: manifest.patch_set,
+		};
+		let bytes = qos_json::to_vec(&v2).unwrap();
+		let decoded = VersionedManifest::try_from_slice_compat(&bytes).unwrap();
+
+		assert!(matches!(decoded, VersionedManifest::V2(_)));
+		assert_eq!(
+			decoded.qos_hash(),
+			qos_crypto::sha_256(&qos_json::to_vec(&v2).unwrap())
+		);
 	}
 }

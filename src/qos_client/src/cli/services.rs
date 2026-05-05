@@ -801,7 +801,6 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
-			env: PivotEnv::new(),
 			bridge_config,
 			debug_mode,
 		},
@@ -814,6 +813,65 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 	write_with_msg(
 		manifest_path.as_ref(),
 		&serde_json::to_vec(&manifest).expect("failed to serialize manifest"),
+		"Manifest",
+	);
+
+	Ok(())
+}
+
+pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
+	args: GenerateManifestArgs<P>,
+) -> Result<(), Error> {
+	let GenerateManifestArgs {
+		nonce,
+		namespace,
+		pivot_hash_path,
+		restart_policy,
+		qos_release_dir_path,
+		pcr3_preimage_path,
+		manifest_set_dir,
+		share_set_dir,
+		patch_set_dir,
+		quorum_key_path,
+		manifest_path,
+		pivot_args,
+		bridge_config,
+		debug_mode,
+	} = args;
+
+	let nitro_config =
+		extract_nitro_config(qos_release_dir_path, pcr3_preimage_path);
+	let pivot_hash = extract_pivot_hash(pivot_hash_path);
+	let manifest_set = get_manifest_set(manifest_set_dir);
+	let share_set = get_share_set(share_set_dir);
+	let patch_set = get_patch_set(patch_set_dir);
+	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
+		.map_err(Error::FailedToReadQuorumPublicKey)?;
+
+	let manifest = qos_core::protocol::services::boot::manifest::v2::Manifest {
+		version: qos_core::protocol::services::boot::ManifestVersion::V2,
+		namespace: Namespace {
+			name: namespace,
+			nonce,
+			quorum_key: quorum_key.to_bytes(),
+		},
+		pivot: qos_core::protocol::services::boot::manifest::v2::PivotConfig {
+			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
+			restart: restart_policy,
+			args: pivot_args,
+			env: PivotEnv::new(),
+			bridge_config,
+			debug_mode,
+		},
+		manifest_set,
+		share_set,
+		patch_set,
+		enclave: nitro_config,
+	};
+
+	write_with_msg(
+		manifest_path.as_ref(),
+		&qos_json::to_vec(&manifest).expect("failed to serialize manifest"),
 		"Manifest",
 	);
 
@@ -1739,7 +1797,6 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			hash: sha_256(&pivot),
 			restart,
 			args,
-			env: PivotEnv::new(),
 			bridge_config: host_config,
 			debug_mode: false,
 		},
@@ -2096,6 +2153,14 @@ fn find_approvals<P: AsRef<Path>>(
 
 fn read_manifest<P: AsRef<Path>>(file: P) -> Result<Manifest, Error> {
 	let bytes = fs::read(file).map_err(Error::FailedToReadManifestFile)?;
+
+	if serde_json::from_slice::<
+		qos_core::protocol::services::boot::manifest::v2::Manifest,
+	>(&bytes)
+	.is_ok()
+	{
+		return Err(Error::FileDidNotHaveValidManifest);
+	}
 
 	// try getting Manifest from json
 	let result = serde_json::from_slice::<Manifest>(&bytes);
@@ -3197,6 +3262,42 @@ mod tests {
 
 			// Cleanup
 			let _ = fs::remove_file(&json_path);
+		}
+
+		#[test]
+		fn rejects_v2_json_manifest() {
+			let Setup { manifest, .. } = setup();
+			let temp_dir = std::env::temp_dir();
+			let json_path = temp_dir.join("test_manifest_v2.json");
+			let borsh_path = temp_dir.join("test_manifest_v2.borsh");
+			let v2 =
+				qos_core::protocol::services::boot::manifest::v2::Manifest {
+					version: qos_core::protocol::services::boot::ManifestVersion::V2,
+					namespace: manifest.namespace,
+					pivot: qos_core::protocol::services::boot::manifest::v2::PivotConfig {
+						hash: manifest.pivot.hash,
+						restart: manifest.pivot.restart,
+						bridge_config: manifest.pivot.bridge_config,
+						debug_mode: manifest.pivot.debug_mode,
+						args: manifest.pivot.args,
+						env: qos_core::protocol::services::boot::PivotEnv::new(),
+					},
+					manifest_set: manifest.manifest_set,
+					share_set: manifest.share_set,
+					enclave: manifest.enclave,
+					patch_set: manifest.patch_set,
+				};
+			fs::write(&json_path, qos_json::to_vec(&v2).unwrap()).unwrap();
+
+			let result = super::super::json_to_borsh(
+				&DisplayType::Manifest,
+				&json_path,
+				&borsh_path,
+			);
+
+			assert!(result.is_err());
+			let _ = fs::remove_file(&json_path);
+			let _ = fs::remove_file(&borsh_path);
 		}
 	}
 
