@@ -3,7 +3,11 @@ name = "qos_json"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish = false
+license.workspace = true
+description = "Canonical JSON encoding for deterministic JSON"
+repository = "https://github.com/tkhq/qos"
+keywords = ["quorumos", "serde", "encoding"]
+categories = ["encoding"]
 
 [lints]
 workspace = true

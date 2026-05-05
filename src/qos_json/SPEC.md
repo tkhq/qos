@@ -12,9 +12,7 @@ all JSON number tokens.
 - Implementations MUST NOT hash or sign raw inbound JSON bytes. Equivalent JSON
   documents can differ in whitespace or field order.
 - Implementations that serialize typed values for hashing or signing MUST use
-  the same canonical JSON encoder used for parsed JSON values.
-- JSON used only for non-signed, non-hashed application messages MAY use normal
-  JSON serialization.
+  the same canonical JSON encoding scheme used for parsed JSON values.
 - QOS normalization treats object members with `null` values as unset fields
   and MUST omit those object members before canonicalization. This means typed
   optional fields that serialize as `null` are omitted by the canonical encoder.
@@ -24,7 +22,7 @@ all JSON number tokens.
   names encoded as UTF-16 code units, as specified by RFC 8785 section 3.2.3.
   This matters for non-ASCII names: for example, the RFC 8785 sample order is
   carriage return, `1`, U+0080, `ö`, `€`, grinning-face emoji, and U+FB33.
-- JSON number tokens MUST NOT appear in signed, hashed, or verified JSON.
+- JSON number tokens MUST NOT appear in JSON canonical to this spec.
   Implementations MUST terminate canonical serialization if a JSON number token
   is encountered.
 
@@ -39,19 +37,31 @@ all JSON number tokens.
 - Unset optional object fields are omitted by QOS canonicalization when they
   serialize as `null`. Rust schemas SHOULD use `#[serde(default)]` on optional
   fields that readers must accept when absent.
-- A signing object schema MAY specify that empty map/object fields are omitted
-  with type-specific serialization rules.
+- QOS canonicalization preserves empty arrays and empty objects. A signing
+  object schema MAY specify type-specific serialization rules that omit an empty
+  map/object field before canonicalization.
 - New fields SHOULD be optional unless every deployed reader can tolerate the
   field. Append-friendly schemas rely on canonical null-member omission so older
   and newer writers produce the same payload until the new field is populated.
 - Binary values SHOULD be lowercase hex strings unless the signing object schema
-  explicitly specifies another representation.
+  explicitly specifies another representation. Rust schemas SHOULD use
+  `#[serde(with = "qos_hex::serde")]` for byte fields represented this way.
 - Enums SHOULD use serde's externally tagged representation unless the signing
   object schema explicitly specifies another representation.
-- Numeric domain values MUST be represented as decimal strings.
+- Numeric values MUST be represented as decimal strings. Rust schemas
+  SHOULD use `#[serde(with = "qos_json::string_number")]` for integer fields
+  represented this way.
 - Floating point values MUST NOT be introduced into QOS signing payloads.
 
 ## Test Vectors
+
+These vectors show the relevant schema pattern, canonical JSON, and SHA-256
+hash. The Rust unit tests in `src/qos_json/src/lib.rs` exercise these vectors
+and additional edge cases for null omission, array preservation, string
+escaping, UTF-16 property ordering, typed/raw hash equivalence, and rejected
+JSON number tokens.
+
+Schema: no fields.
 
 ```json
 {}
@@ -60,12 +70,34 @@ all JSON number tokens.
 SHA-256:
 `44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a`
 
+Schema:
+
+```rust
+#[derive(serde::Serialize)]
+struct Example {
+    version: String,
+    name: String,
+    #[serde(with = "qos_json::string_number")]
+    threshold: u32,
+}
+```
+
 ```json
 {"name":"test","threshold":"3","version":"1"}
 ```
 
 SHA-256:
 `898eaf2263b3ca34a9fb0b59615a16e5819b43c53fabc44396f92128f72ccc7e`
+
+Schema:
+
+```rust
+#[derive(serde::Serialize)]
+struct Example {
+    #[serde(with = "qos_hex::serde")]
+    data: Vec<u8>,
+}
+```
 
 ```json
 {"data":"deadbeef"}

@@ -13,15 +13,11 @@ pub type Hash256 = [u8; 32];
 /// canonicalized. This matches the inbound JSON hashing path, where bytes are
 /// parsed and re-encoded before hashing.
 ///
-/// # Panics
-///
-/// Panics if the value contains a JSON number. QOS canonical JSON requires
-/// numeric domain values to be encoded as decimal strings.
-///
 /// # Errors
 ///
 /// Returns an error if serde serialization or canonical JSON serialization
-/// fails.
+/// fails, including if the value contains a JSON number. QOS canonical JSON
+/// requires numeric values to be encoded as decimal strings.
 pub fn to_vec<T: Serialize>(value: &T) -> serde_json::Result<Vec<u8>> {
 	let value = serde_json::to_value(value)?;
 	to_vec_value(&value)
@@ -29,15 +25,11 @@ pub fn to_vec<T: Serialize>(value: &T) -> serde_json::Result<Vec<u8>> {
 
 /// Serialize a value as a QOS canonical JSON string.
 ///
-/// # Panics
-///
-/// Panics if the value contains a JSON number. QOS canonical JSON requires
-/// numeric domain values to be encoded as decimal strings.
-///
 /// # Errors
 ///
 /// Returns an error if serde serialization or canonical JSON serialization
-/// fails.
+/// fails, including if the value contains a JSON number. QOS canonical JSON
+/// requires numeric values to be encoded as decimal strings.
 pub fn to_string<T: Serialize>(value: &T) -> serde_json::Result<String> {
 	let value = serde_json::to_value(value)?;
 	to_string_value(&value)
@@ -45,14 +37,11 @@ pub fn to_string<T: Serialize>(value: &T) -> serde_json::Result<String> {
 
 /// Parse JSON bytes and re-encode them as QOS canonical JSON bytes.
 ///
-/// # Panics
-///
-/// Panics if the parsed value contains a JSON number. QOS canonical JSON
-/// requires numeric domain values to be encoded as decimal strings.
-///
 /// # Errors
 ///
-/// Returns an error if parsing or canonicalization fails.
+/// Returns an error if parsing or canonicalization fails, including if the
+/// parsed value contains a JSON number. QOS canonical JSON requires numeric
+/// values to be encoded as decimal strings.
 pub fn canonicalize_slice(bytes: &[u8]) -> serde_json::Result<Vec<u8>> {
 	let value: serde_json::Value = serde_json::from_slice(bytes)?;
 	to_vec_value(&value)
@@ -60,14 +49,11 @@ pub fn canonicalize_slice(bytes: &[u8]) -> serde_json::Result<Vec<u8>> {
 
 /// Parse a JSON string and re-encode it as a QOS canonical JSON string.
 ///
-/// # Panics
-///
-/// Panics if the parsed value contains a JSON number. QOS canonical JSON
-/// requires numeric domain values to be encoded as decimal strings.
-///
 /// # Errors
 ///
-/// Returns an error if parsing or canonicalization fails.
+/// Returns an error if parsing or canonicalization fails, including if the
+/// parsed value contains a JSON number. QOS canonical JSON requires numeric
+/// values to be encoded as decimal strings.
 pub fn canonicalize_str(json: &str) -> serde_json::Result<String> {
 	let value: serde_json::Value = serde_json::from_str(json)?;
 	to_string_value(&value)
@@ -84,14 +70,11 @@ pub fn from_slice<T: DeserializeOwned>(bytes: &[u8]) -> serde_json::Result<T> {
 
 /// Hash a typed value after QOS canonical JSON serialization.
 ///
-/// # Panics
-///
-/// Panics if the value contains a JSON number. QOS canonical JSON requires
-/// numeric domain values to be encoded as decimal strings.
-///
 /// # Errors
 ///
-/// Returns an error if serialization or canonicalization fails.
+/// Returns an error if serialization or canonicalization fails, including if
+/// the value contains a JSON number. QOS canonical JSON requires numeric values
+/// to be encoded as decimal strings.
 pub fn hash<T: Serialize>(value: &T) -> serde_json::Result<Hash256> {
 	let canonical = to_vec(value)?;
 	Ok(sha_256(&canonical))
@@ -99,14 +82,11 @@ pub fn hash<T: Serialize>(value: &T) -> serde_json::Result<Hash256> {
 
 /// Hash inbound JSON after parsing and QOS re-canonicalization.
 ///
-/// # Panics
-///
-/// Panics if the parsed value contains a JSON number. QOS canonical JSON
-/// requires numeric domain values to be encoded as decimal strings.
-///
 /// # Errors
 ///
-/// Returns an error if parsing or canonicalization fails.
+/// Returns an error if parsing or canonicalization fails, including if the
+/// parsed value contains a JSON number. QOS canonical JSON requires numeric
+/// values to be encoded as decimal strings.
 pub fn hash_json_slice(bytes: &[u8]) -> serde_json::Result<Hash256> {
 	let canonical = canonicalize_slice(bytes)?;
 	Ok(sha_256(&canonical))
@@ -114,14 +94,11 @@ pub fn hash_json_slice(bytes: &[u8]) -> serde_json::Result<Hash256> {
 
 /// Hash a typed value and return the lowercase hex digest.
 ///
-/// # Panics
-///
-/// Panics if the value contains a JSON number. QOS canonical JSON requires
-/// numeric domain values to be encoded as decimal strings.
-///
 /// # Errors
 ///
-/// Returns an error if serialization or canonicalization fails.
+/// Returns an error if serialization or canonicalization fails, including if
+/// the value contains a JSON number. QOS canonical JSON requires numeric values
+/// to be encoded as decimal strings.
 pub fn hash_hex<T: Serialize>(value: &T) -> serde_json::Result<String> {
 	hash(value).map(|hash| qos_hex::encode(&hash))
 }
@@ -163,9 +140,10 @@ where
 		serde_json::Value::Null => writer.write_all(b"null"),
 		serde_json::Value::Bool(true) => writer.write_all(b"true"),
 		serde_json::Value::Bool(false) => writer.write_all(b"false"),
-		serde_json::Value::Number(_) => {
-			panic!("QOS canonical JSON forbids JSON numbers");
-		}
+		serde_json::Value::Number(_) => Err(io::Error::new(
+			io::ErrorKind::InvalidData,
+			"QOS canonical JSON forbids JSON numbers",
+		)),
 		serde_json::Value::String(value) => write_string(writer, value),
 		serde_json::Value::Array(values) => write_array(writer, values),
 		serde_json::Value::Object(map) => write_object(writer, map),
@@ -430,7 +408,7 @@ pub mod string_number {
 mod tests {
 	use super::*;
 	use serde::{Deserialize, Serialize};
-	use std::{collections::BTreeSet, panic};
+	use std::collections::BTreeSet;
 
 	#[test]
 	fn canonicalizes_key_order_before_hashing() {
@@ -542,38 +520,57 @@ mod tests {
 	}
 
 	#[test]
-	fn panics_on_integer_json_numbers() {
-		assert_qos_number_panic(|| {
-			canonicalize_str(r#"{"n":1}"#).unwrap();
-		});
-		assert_qos_number_panic(|| {
-			canonicalize_str(r#"{"n":-9007199254740991}"#).unwrap();
-		});
+	fn object_null_members_are_omitted_but_array_nulls_remain() {
+		assert_eq!(
+			canonicalize_str(
+				r#"{"empty":null,"items":[null,{"drop":null,"keep":"yes"},null]}"#
+			)
+			.unwrap(),
+			r#"{"items":[null,{"keep":"yes"},null]}"#
+		);
 	}
 
 	#[test]
-	fn panics_on_floating_point_json_numbers() {
-		assert_qos_number_panic(|| {
-			canonicalize_str(r#"{"n":1.0}"#).unwrap();
-		});
-		assert_qos_number_panic(|| {
-			canonicalize_str(r#"{"n":1e0}"#).unwrap();
-		});
-		assert_qos_number_panic(|| {
-			canonicalize_str(r#"{"n":-1.25}"#).unwrap();
-		});
+	fn typed_optional_none_serializes_like_absent_field() {
+		#[derive(Serialize)]
+		struct Example {
+			name: &'static str,
+			#[serde(default)]
+			comment: Option<&'static str>,
+		}
+
+		assert_eq!(
+			to_string(&Example { name: "alice", comment: None }).unwrap(),
+			canonicalize_str(r#"{"name":"alice"}"#).unwrap()
+		);
+		assert_eq!(
+			to_string(&Example { name: "alice", comment: Some("ready") })
+				.unwrap(),
+			r#"{"comment":"ready","name":"alice"}"#
+		);
 	}
 
 	#[test]
-	fn panics_on_typed_numeric_fields() {
+	fn errors_on_integer_json_numbers() {
+		assert_qos_number_error(canonicalize_str(r#"{"n":1}"#));
+		assert_qos_number_error(canonicalize_str(r#"{"n":-9007199254740991}"#));
+	}
+
+	#[test]
+	fn errors_on_floating_point_json_numbers() {
+		assert_qos_number_error(canonicalize_str(r#"{"n":1.0}"#));
+		assert_qos_number_error(canonicalize_str(r#"{"n":1e0}"#));
+		assert_qos_number_error(canonicalize_str(r#"{"n":-1.25}"#));
+	}
+
+	#[test]
+	fn errors_on_typed_numeric_fields() {
 		#[derive(Serialize)]
 		struct Example {
 			count: u32,
 		}
 
-		assert_qos_number_panic(|| {
-			to_string(&Example { count: 42 }).unwrap();
-		});
+		assert_qos_number_error(to_string(&Example { count: 42 }));
 	}
 
 	#[test]
@@ -605,6 +602,10 @@ mod tests {
 			let position = canonical[last_position..].find(value).unwrap();
 			last_position += position + value.len();
 		}
+		assert_eq!(
+			canonical,
+			"{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\u{80}\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}"
+		);
 	}
 
 	#[test]
@@ -630,6 +631,28 @@ mod tests {
 	}
 
 	#[test]
+	fn escapes_string_values_canonically() {
+		assert_eq!(
+			canonicalize_str(
+				"{\"quote\":\"\\\"\",\"slash\":\"/\",\"control\":\"\\u0001\",\"line\":\"a\\nb\",\"unicode\":\"€\"}"
+			)
+			.unwrap(),
+			"{\"control\":\"\\u0001\",\"line\":\"a\\nb\",\"quote\":\"\\\"\",\"slash\":\"/\",\"unicode\":\"€\"}"
+		);
+	}
+
+	#[test]
+	fn canonicalizes_raw_json_whitespace_and_order() {
+		assert_eq!(
+			canonicalize_str(
+				"{\n  \"z\": [ true, false, null ],\n  \"a\": { \"b\": \"2\", \"a\": \"1\" }\n}"
+			)
+			.unwrap(),
+			r#"{"a":{"a":"1","b":"2"},"z":[true,false,null]}"#
+		);
+	}
+
+	#[test]
 	fn supports_external_enums_and_decimal_string_numbers() {
 		#[derive(Serialize)]
 		#[serde(rename_all = "camelCase")]
@@ -643,6 +666,57 @@ mod tests {
 		assert_eq!(
 			to_string(&Example::Request { count: 42 }).unwrap(),
 			r#"{"request":{"count":"42"}}"#
+		);
+	}
+
+	#[test]
+	fn string_number_supports_signed_and_collection_values() {
+		#[derive(Serialize)]
+		struct Example {
+			#[serde(with = "string_number")]
+			offset: i32,
+			#[serde(with = "string_number")]
+			indexes: BTreeSet<u8>,
+		}
+
+		assert_eq!(
+			to_string(&Example {
+				offset: -7,
+				indexes: BTreeSet::from([2, 10]),
+			})
+			.unwrap(),
+			r#"{"indexes":["2","10"],"offset":"-7"}"#
+		);
+	}
+
+	#[test]
+	fn typed_and_raw_inputs_produce_same_hash() {
+		#[derive(Serialize)]
+		struct Example {
+			#[serde(with = "string_number")]
+			threshold: u32,
+			name: &'static str,
+		}
+
+		let typed = Example { threshold: 3, name: "test" };
+		let raw = br#"{"threshold":"3","name":"test","unused":null}"#;
+		assert_eq!(
+			to_string(&typed).unwrap(),
+			canonicalize_slice(raw)
+				.map(|bytes| String::from_utf8(bytes).unwrap())
+				.unwrap()
+		);
+		assert_eq!(hash(&typed).unwrap(), hash_json_slice(raw).unwrap());
+	}
+
+	#[test]
+	fn empty_arrays_and_objects_are_preserved() {
+		assert_eq!(
+			canonicalize_str(
+				r#"{"empty_object":{},"empty_array":[],"null_member":null}"#
+			)
+			.unwrap(),
+			r#"{"empty_array":[],"empty_object":{}}"#
 		);
 	}
 
@@ -696,13 +770,11 @@ mod tests {
 		.is_err());
 	}
 
-	fn assert_qos_number_panic(action: impl FnOnce() + panic::UnwindSafe) {
-		let panic = panic::catch_unwind(action).unwrap_err();
-		let message = panic
-			.downcast_ref::<String>()
-			.map(String::as_str)
-			.or_else(|| panic.downcast_ref::<&str>().copied())
-			.unwrap_or("");
-		assert_eq!(message, "QOS canonical JSON forbids JSON numbers");
+	fn assert_qos_number_error<T>(result: serde_json::Result<T>) {
+		let err = match result {
+			Ok(_) => panic!("expected QOS number error"),
+			Err(err) => err,
+		};
+		assert_eq!(err.to_string(), "QOS canonical JSON forbids JSON numbers");
 	}
 }
