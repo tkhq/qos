@@ -279,6 +279,8 @@ async fn standard_boot_e2e() {
 				LOCAL_HOST,
 				"--usock",
 				&*usock,
+				"--socket-timeout",
+				"15000",
 			])
 			.spawn()
 			.unwrap()
