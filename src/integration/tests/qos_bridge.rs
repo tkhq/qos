@@ -297,6 +297,8 @@ async fn qos_bridge_works() {
 				LOCAL_HOST,
 				"--usock",
 				&*usock,
+				"--socket-timeout",
+				"15000",
 			])
 			.spawn()
 			.unwrap()

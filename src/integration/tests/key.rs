@@ -101,6 +101,8 @@ async fn key_fwd_e2e() {
 				LOCAL_HOST,
 				"--usock",
 				new_usock,
+				"--socket-timeout",
+				"15000",
 			])
 			.spawn()
 			.unwrap()
@@ -285,6 +287,8 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 				LOCAL_HOST,
 				"--usock",
 				old_usock,
+				"--socket-timeout",
+				"15000",
 			])
 			.spawn()
 			.unwrap()
