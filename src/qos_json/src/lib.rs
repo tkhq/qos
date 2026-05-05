@@ -137,6 +137,11 @@ where
 	W: ?Sized + Write,
 {
 	match value {
+		// Preserve null values outside object fields. A top-level `null` is a
+		// complete JSON value, and array nulls are positional data: `[null,"1"]`
+		// must not canonicalize to `["1"]`. Dynamic array positions do not provide
+		// the same domain separation as object field names. We do drop null object
+		// fields in `write_object`, where field-name domain separation makes it safe.
 		serde_json::Value::Null => writer.write_all(b"null"),
 		serde_json::Value::Bool(true) => writer.write_all(b"true"),
 		serde_json::Value::Bool(false) => writer.write_all(b"false"),
@@ -174,6 +179,10 @@ fn write_object<W>(
 where
 	W: ?Sized + Write,
 {
+	// Drop null object fields before writing the object. This is safe because
+	// the field name provides domain separation for each value:
+	// `{"a":null,"b":"1"}` canonicalizes to `{"b":"1"}`. Arrays are not
+	// filtered this way because array indexes are dynamic positions.
 	let mut entries =
 		map.iter().filter(|(_, value)| !value.is_null()).collect::<Vec<_>>();
 	entries.sort_by(|(left, _), (right, _)| {
