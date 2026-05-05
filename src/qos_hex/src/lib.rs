@@ -299,6 +299,10 @@ pub mod serde {
 	/// A type that can be serialized as a hex string.
 	pub trait HexSerialize {
 		/// Serialize the type as a hex string.
+		///
+		/// # Errors
+		///
+		/// Returns the serializer's error type if serialization fails.
 		fn serialize_hex<S>(self, serializer: S) -> Result<S::Ok, S::Error>
 		where
 			S: Serializer;
@@ -344,6 +348,11 @@ pub mod serde {
 	/// A type that can be deserialized from a hex string.
 	pub trait HexDeserialize<'de>: Sized {
 		/// Deserialize the type from a hex string.
+		///
+		/// # Errors
+		///
+		/// Returns the deserializer's error type if the input is not a valid
+		/// hex string.
 		fn deserialize_hex<D>(deserializer: D) -> Result<Self, D::Error>
 		where
 			D: Deserializer<'de>;

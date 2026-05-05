@@ -168,6 +168,11 @@ impl ProtocolMsg {
 	}
 
 	/// Decode a protocol message from JSON bytes.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the bytes are not valid JSON for a protocol
+	/// message.
 	pub fn from_json_slice(bytes: &[u8]) -> serde_json::Result<Self> {
 		serde_json::from_slice(bytes)
 	}

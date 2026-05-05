@@ -241,6 +241,10 @@ pub mod string_number {
 	use std::{collections::BTreeSet, fmt::Display, str::FromStr};
 
 	/// Serialize a number as a base-10 string.
+	///
+	/// # Errors
+	///
+	/// Returns the serializer's error type if serialization fails.
 	pub fn serialize<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
@@ -250,6 +254,11 @@ pub mod string_number {
 	}
 
 	/// Deserialize a base-10 string as a number.
+	///
+	/// # Errors
+	///
+	/// Returns the deserializer's error type if the input is not a valid
+	/// base-10 string for the target type.
 	pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 	where
 		D: Deserializer<'de>,
@@ -261,6 +270,10 @@ pub mod string_number {
 	/// A type that can be serialized as one or more base-10 strings.
 	pub trait StringNumberSerialize {
 		/// Serialize the type as base-10 string JSON.
+		///
+		/// # Errors
+		///
+		/// Returns the serializer's error type if serialization fails.
 		fn serialize_string_number<S>(
 			self,
 			serializer: S,
@@ -327,6 +340,11 @@ pub mod string_number {
 	/// A type that can be deserialized from one or more base-10 strings.
 	pub trait StringNumberDeserialize<'de>: Sized {
 		/// Deserialize the type from base-10 string JSON.
+		///
+		/// # Errors
+		///
+		/// Returns the deserializer's error type if the input is not a valid
+		/// base-10 string for the target type.
 		fn deserialize_string_number<D>(
 			deserializer: D,
 		) -> Result<Self, D::Error>
