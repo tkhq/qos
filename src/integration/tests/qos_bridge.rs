@@ -149,7 +149,6 @@ async fn qos_bridge_works() {
 			port: app_host_port,
 			host: "0.0.0.0".into(),
 		}],
-		..Default::default()
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
