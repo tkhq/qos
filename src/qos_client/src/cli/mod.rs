@@ -1525,4 +1525,563 @@ mod test {
 		};
 		assert_eq!(host.path_message(), "http://127.0.0.1:3000/custom/message");
 	}
+
+	mod mono_compat {
+		use super::*;
+
+		const BRIDGE_CONFIG: &str =
+			r#"[{"type":"server","port":"3000","host":"0.0.0.0"}]"#;
+
+		fn assert_default_version(cli: &Cli) {
+			assert_eq!(cli.use_qos_version, None);
+		}
+
+		#[test]
+		fn parses_display_and_json_to_borsh_commands() {
+			// ../mono/src/go/tkinfra/pkg/enclave/manifest.go
+			let cli = parse(&[
+				"qos_client",
+				"display",
+				"--display-type",
+				"manifest",
+				"--file-path",
+				"/etc/manifest/manifest",
+				"--json",
+			]);
+			assert_default_version(&cli);
+			match cli.command {
+				Command::Display(opts) => {
+					assert!(matches!(opts.display_type, DisplayType::Manifest));
+					assert_eq!(opts.file_path, "/etc/manifest/manifest");
+					assert!(opts.json);
+				}
+				other => panic!("unexpected command: {other:?}"),
+			}
+
+			let cli = parse(&[
+				"qos_client",
+				"json-to-borsh",
+				"--file-path",
+				"/tmp/manifest.json",
+				"--display-type",
+				"manifest-envelope",
+				"--output-path",
+				"/tmp/manifest.borsh",
+			]);
+			match cli.command {
+				Command::JsonToBorsh(opts) => {
+					assert!(matches!(
+						opts.display_type,
+						DisplayType::ManifestEnvelope
+					));
+					assert_eq!(opts.file_path, "/tmp/manifest.json");
+					assert_eq!(opts.output_path, "/tmp/manifest.borsh");
+				}
+				other => panic!("unexpected command: {other:?}"),
+			}
+		}
+
+		#[test]
+		fn parses_generate_manifest_like_mono() {
+			// ../mono/src/go/tkinfra/internal/enclave/manifest.go
+			for (debug_value, expected) in [("false", false), ("true", true)] {
+				let cli = parse(&[
+					"qos_client",
+					"generate-manifest",
+					"--nonce",
+					"20260201",
+					"--namespace",
+					"production/signer",
+					"--restart-policy",
+					"always",
+					"--manifest-path",
+					"/etc/manifest/manifest",
+					"--pivot-hash-path",
+					"/etc/enclave/enclave_app.digest",
+					"--qos-release-dir",
+					"/etc/enclave",
+					"--pcr3-preimage-path",
+					"/etc/enclave/pcr3_preimage",
+					"--pivot-args",
+					"[--config,/etc/config.json]",
+					"--manifest-set-dir",
+					"/etc/enclave-sets/manifest",
+					"--share-set-dir",
+					"/etc/enclave-sets/share",
+					"--patch-set-dir",
+					"/etc/enclave-sets/manifest",
+					"--quorum-key-path",
+					"/etc/enclave/quorum_key.pub",
+					"--debug-mode",
+					debug_value,
+					"--bridge-config",
+					BRIDGE_CONFIG,
+				]);
+				assert_default_version(&cli);
+				match cli.command {
+					Command::GenerateManifest(opts) => {
+						assert_eq!(opts.nonce, 20_260_201);
+						assert_eq!(opts.namespace, "production/signer");
+						assert_eq!(opts.restart_policy, "always");
+						assert_eq!(
+							opts.pivot_args,
+							"[--config,/etc/config.json]"
+						);
+						assert_eq!(
+							opts.bridge_config.as_deref(),
+							Some(BRIDGE_CONFIG)
+						);
+						assert_eq!(opts.debug_mode, expected);
+					}
+					other => panic!("unexpected command: {other:?}"),
+				}
+			}
+		}
+
+		#[test]
+		fn parses_manifest_envelope_and_approval_commands() {
+			// ../mono/src/go/tkinfra/internal/enclave/manifest.go
+			let cli = parse(&[
+				"qos_client",
+				"generate-manifest-envelope",
+				"--manifest-approvals-dir",
+				"/etc/manifest",
+				"--manifest-path",
+				"/etc/manifest/manifest",
+			]);
+			match cli.command {
+				Command::GenerateManifestEnvelope(opts) => {
+					assert_eq!(opts.manifest_approvals_dir, "/etc/manifest");
+					assert_eq!(opts.manifest_path, "/etc/manifest/manifest");
+					assert_eq!(opts.manifest_envelope_path, None);
+				}
+				other => panic!("unexpected command: {other:?}"),
+			}
+
+			for signing_arg in ["--secret-path", "--yubikey"] {
+				let mut args = vec![
+					"qos_client",
+					"approve-manifest",
+					"--alias",
+					"1",
+					"--manifest-approvals-dir",
+					"/etc/manifest",
+					"--manifest-path",
+					"/etc/manifest/manifest",
+					"--manifest-set-dir",
+					"/etc/enclave-sets/manifest",
+					"--patch-set-dir",
+					"/etc/enclave-sets/manifest",
+					"--share-set-dir",
+					"/etc/enclave-sets/share",
+					"--pcr3-preimage-path",
+					"/etc/enclave/pcr3_preimage",
+					"--pivot-hash-path",
+					"/etc/enclave/enclave_app.digest",
+					"--qos-release-dir",
+					"/etc/enclave",
+					"--quorum-key-path",
+					"/etc/enclave/quorum_key.pub",
+					"--unsafe-auto-confirm",
+				];
+				if signing_arg == "--secret-path" {
+					args.extend([
+						signing_arg,
+						"/etc/enclave-sets/manifest/1.secret",
+					]);
+				} else {
+					args.push(signing_arg);
+				}
+
+				let cli = parse(&args);
+				match cli.command {
+					Command::ApproveManifest(opts) => {
+						assert_eq!(opts.alias, "1");
+						assert!(opts.unsafe_auto_confirm);
+						assert_eq!(opts.yubikey, signing_arg == "--yubikey");
+						assert_eq!(
+							opts.secret_path.as_deref(),
+							(signing_arg == "--secret-path").then_some(
+								"/etc/enclave-sets/manifest/1.secret"
+							)
+						);
+					}
+					other => panic!("unexpected command: {other:?}"),
+				}
+			}
+		}
+
+		#[test]
+		fn parses_proxy_re_encrypt_share_variants() {
+			// ../mono/src/go/tkinfra/internal/enclave/reencrypt.go and
+			// ../mono/playbooks/scripts/offline/encrypt-share
+			let cli = parse(&[
+				"qos_client",
+				"proxy-re-encrypt-share",
+				"--share-path",
+				"/airgap/share",
+				"--secret-path",
+				"/airgap/operator.secret",
+				"--attestation-doc-path",
+				"/airgap/attestation_doc",
+				"--eph-wrapped-share-path",
+				"/airgap/eph_wrapped_share",
+				"--approval-path",
+				"/airgap/approval",
+				"--manifest-envelope-path",
+				"/airgap/manifest_envelope",
+				"--pcr3-preimage-path",
+				"/airgap/pcr3_preimage",
+				"--manifest-set-dir",
+				"/airgap/manifest-set",
+				"--alias",
+				"1",
+				"--unsafe-auto-confirm",
+				"--unsafe-skip-attestation",
+				"--unsafe-eph-path-override",
+				"/airgap/eph.secret",
+			]);
+			match cli.command {
+				Command::ProxyReEncryptShare(opts) => {
+					assert_eq!(
+						opts.secret_path.as_deref(),
+						Some("/airgap/operator.secret")
+					);
+					assert!(!opts.yubikey);
+					assert!(opts.unsafe_auto_confirm);
+					assert!(opts.unsafe_skip_attestation);
+					assert_eq!(
+						opts.unsafe_eph_path_override.as_deref(),
+						Some("/airgap/eph.secret")
+					);
+				}
+				other => panic!("unexpected command: {other:?}"),
+			}
+
+			let cli = parse(&[
+				"qos_client",
+				"proxy-re-encrypt-share",
+				"--share-path",
+				"/airgap/share",
+				"--yubikey",
+				"--current-pin-path",
+				"/dev/fd/3",
+				"--attestation-doc-path",
+				"/airgap/attestation_doc",
+				"--eph-wrapped-share-path",
+				"/airgap/eph_wrapped_share",
+				"--approval-path",
+				"/airgap/approval",
+				"--manifest-envelope-path",
+				"/airgap/manifest_envelope",
+				"--pcr3-preimage-path",
+				"/airgap/pcr3_preimage",
+				"--manifest-set-dir",
+				"/airgap/manifest-set",
+				"--alias",
+				"1",
+				"--unsafe-auto-confirm",
+			]);
+			match cli.command {
+				Command::ProxyReEncryptShare(opts) => {
+					assert!(opts.yubikey);
+					assert_eq!(opts.secret_path, None);
+					assert_eq!(
+						opts.current_pin_path.as_deref(),
+						Some("/dev/fd/3")
+					);
+				}
+				other => panic!("unexpected command: {other:?}"),
+			}
+		}
+
+		#[test]
+		fn parses_boot_attestation_share_and_key_commands() {
+			// ../mono/src/go/tkinfra/internal/enclave/{boot,attestation,key}.go
+			assert!(matches!(
+				parse(&[
+					"qos_client",
+					"boot-standard",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3001",
+					"--pcr3-preimage-path",
+					"/etc/enclave/pcr3_preimage",
+					"--manifest-envelope-path",
+					"/etc/manifest/manifest_envelope",
+					"--pivot-path",
+					"/enclave_app",
+					"--unsafe-skip-attestation",
+				])
+				.command,
+				Command::BootStandard(_)
+			));
+
+			assert!(matches!(
+				parse(&[
+					"qos_client",
+					"boot-genesis",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3001",
+					"--share-set-dir",
+					"/genesis/share-set",
+					"--pcr3-preimage-path",
+					"/genesis/pcr3_preimage",
+					"--qos-release-dir",
+					"/genesis",
+					"--namespace-dir",
+					"/genesis",
+					"--dr-key-path",
+					"/genesis/dr.pub",
+				])
+				.command,
+				Command::BootGenesis(_)
+			));
+
+			assert!(matches!(
+				parse(&[
+					"qos_client",
+					"boot-key-fwd",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3001",
+					"--attestation-doc-path",
+					"/tmp/attestation_doc",
+					"--manifest-envelope-path",
+					"/etc/manifest/manifest_envelope",
+					"--pivot-path",
+					"/enclave_app",
+				])
+				.command,
+				Command::BootKeyFwd(_)
+			));
+
+			assert!(matches!(
+				parse(&[
+					"qos_client",
+					"post-share",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3001",
+					"--eph-wrapped-share-path",
+					"/tmp/eph_wrapped_share",
+					"--approval-path",
+					"/tmp/approval",
+				])
+				.command,
+				Command::PostShare(_)
+			));
+
+			assert!(matches!(
+				parse(&[
+					"qos_client",
+					"get-attestation-doc",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3001",
+					"--manifest-envelope-path",
+					"/etc/manifest/manifest_envelope",
+					"--attestation-doc-path",
+					"/tmp/attestation_doc",
+				])
+				.command,
+				Command::GetAttestationDoc(_)
+			));
+
+			assert!(matches!(
+				parse(&[
+					"qos_client",
+					"get-ephemeral-key-hex",
+					"--attestation-doc-path",
+					"/tmp/attestation_doc",
+					"--ephemeral-key-path",
+					"/tmp/eph.pub",
+				])
+				.command,
+				Command::GetEphemeralKeyHex(_)
+			));
+
+			assert!(matches!(
+				parse(&[
+					"qos_client",
+					"export-key",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3001",
+					"--encrypted-quorum-key-path",
+					"/tmp/encrypted_quorum_key",
+					"--manifest-envelope-path",
+					"/etc/manifest/manifest_envelope",
+					"--attestation-doc-path",
+					"/tmp/attestation_doc",
+				])
+				.command,
+				Command::ExportKey(_)
+			));
+
+			assert!(matches!(
+				parse(&[
+					"qos_client",
+					"inject-key",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3001",
+					"--encrypted-quorum-key-path",
+					"/tmp/encrypted_quorum_key",
+				])
+				.command,
+				Command::InjectKey(_)
+			));
+		}
+
+		#[test]
+		fn parses_local_genesis_key_and_yubikey_script_commands() {
+			// ../mono/src/go/tkinfra/internal/enclave/genesis.go and
+			// ../mono/playbooks/{p256-provision,qos-operator-key}/scripts
+			let cli = parse(&[
+				"qos_client",
+				"after-genesis",
+				"--pcr3-preimage-path",
+				"/genesis/pcr3_preimage",
+				"--share-path",
+				"/genesis/1.share",
+				"--namespace-dir",
+				"/genesis",
+				"--secret-path",
+				"/genesis/1.secret",
+				"--qos-release-dir",
+				"/genesis",
+				"--alias",
+				"1",
+				"--unsafe-skip-attestation",
+			]);
+			match cli.command {
+				Command::AfterGenesis(opts) => {
+					assert_eq!(
+						opts.secret_path.as_deref(),
+						Some("/genesis/1.secret")
+					);
+					assert!(opts.unsafe_skip_attestation);
+				}
+				other => panic!("unexpected command: {other:?}"),
+			}
+
+			assert!(matches!(
+				parse(&[
+					"qos_client",
+					"pivot-hash",
+					"--output-path",
+					"/tmp/pivot.hash",
+					"--pivot-path",
+					"/tmp/pivot",
+				])
+				.command,
+				Command::PivotHash(_)
+			));
+
+			assert!(matches!(
+				parse(&[
+					"qos_client",
+					"generate-file-key",
+					"--master-seed-path",
+					"/tmp/master.secret",
+					"--pub-path",
+					"/tmp/key.pub",
+				])
+				.command,
+				Command::GenerateFileKey(_)
+			));
+
+			let cli = parse(&[
+				"qos_client",
+				"advanced-provision-yubikey",
+				"--master-seed-path",
+				"/tmp/master.secret",
+				"--current-pin-path",
+				"/dev/fd/3",
+			]);
+			match cli.command {
+				Command::AdvancedProvisionYubikey(opts) => {
+					assert_eq!(
+						opts.current_pin_path.as_deref(),
+						Some("/dev/fd/3")
+					);
+				}
+				other => panic!("unexpected command: {other:?}"),
+			}
+
+			let cli = parse(&[
+				"qos_client",
+				"yubikey-change-pin",
+				"--current-pin-path",
+				"/dev/fd/3",
+				"--new-pin-path",
+				"/dev/fd/4",
+			]);
+			match cli.command {
+				Command::YubikeyChangePin(opts) => {
+					assert_eq!(
+						opts.current_pin_path.as_deref(),
+						Some("/dev/fd/3")
+					);
+					assert_eq!(opts.new_pin_path, "/dev/fd/4");
+				}
+				other => panic!("unexpected command: {other:?}"),
+			}
+
+			assert!(matches!(
+				parse(&["qos_client", "yubikey-piv-reset"]).command,
+				Command::YubikeyPivReset
+			));
+			assert!(matches!(
+				parse(&["qos_client", "yubikey-public"]).command,
+				Command::YubikeyPublic
+			));
+			assert!(matches!(
+				parse(&[
+					"qos_client",
+					"enclave-status",
+					"--host-ip",
+					"127.0.0.1",
+					"--host-port",
+					"3001",
+				])
+				.command,
+				Command::EnclaveStatus(_)
+			));
+		}
+
+		#[test]
+		fn rejects_qos_client_pin_flag_and_keeps_qos_version_optional() {
+			// ../mono/playbooks/p256-provision/scripts/provision uses
+			// `--pin` only with `ykman`, not with `qos_client`.
+			assert!(Cli::try_parse_from([
+				"qos_client",
+				"advanced-provision-yubikey",
+				"--master-seed-path",
+				"/tmp/master.secret",
+				"--pin",
+				"12345678",
+			])
+			.is_err());
+
+			let cli = parse(&[
+				"qos_client",
+				"generate-file-key",
+				"--master-seed-path",
+				"/tmp/master.secret",
+				"--pub-path",
+				"/tmp/key.pub",
+			]);
+			assert_default_version(&cli);
+		}
+	}
 }
