@@ -50,10 +50,13 @@ pub mod request {
 			},
 		)?;
 
-		let decoded_response =
-			ProtocolMsg::try_from_slice(&buf).map_err(|e| {
-				format!("http_post error: deserialization error: {e:?}")
-			})?;
+		let decoded_response = ProtocolMsg::try_from_slice(&buf).map_err(|e| {
+			let body_prefix =
+				String::from_utf8_lossy(&buf[..std::cmp::min(buf.len(), 256)]);
+			format!(
+				"http_post error: deserialization error: {e:?}; body prefix: {body_prefix:?}"
+			)
+		})?;
 
 		Ok(decoded_response)
 	}
