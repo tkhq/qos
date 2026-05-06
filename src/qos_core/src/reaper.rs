@@ -22,7 +22,7 @@ use crate::{
 	io::{HostBridge, IOError, SocketAddress, StreamPool},
 	protocol::{
 		processor::ProtocolProcessor,
-		services::boot::{BridgeConfig, PivotConfig, RestartPolicy},
+		services::boot::{BridgeConfig, PivotConfigV1, RestartPolicy},
 		ProtocolPhase, ProtocolState,
 	},
 	server::SocketServer,
@@ -190,7 +190,7 @@ impl Reaper {
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest;
-		let PivotConfig { args, restart, bridge_config: host_config, .. } =
+		let PivotConfigV1 { args, restart, bridge_config: host_config, .. } =
 			manifest.pivot;
 
 		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task

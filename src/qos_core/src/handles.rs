@@ -8,7 +8,7 @@ use std::{
 
 use qos_p256::P256Pair;
 
-use crate::protocol::{services::boot::ManifestEnvelope, ProtocolError};
+use crate::protocol::{services::boot::ManifestEnvelopeV1, ProtocolError};
 
 /// Handle for accessing the quorum key.
 #[derive(Debug, Clone)]
@@ -73,7 +73,7 @@ pub struct Handles {
 	ephemeral: EphemeralKeyHandle,
 	/// Path to the file containing the PEM encoded Quorum Key.
 	quorum: QuorumKeyHandle,
-	/// Path to the file containing the Borsh encoded [`ManifestEnvelope`].
+	/// Path to the file containing the Borsh encoded [`ManifestEnvelopeV1`].
 	manifest: String,
 	/// Path to the file containing the pivot.
 	pivot: String,
@@ -182,7 +182,7 @@ impl Handles {
 	/// Errors if the Manifest has not been put.
 	pub fn get_manifest_envelope(
 		&self,
-	) -> Result<ManifestEnvelope, ProtocolError> {
+	) -> Result<ManifestEnvelopeV1, ProtocolError> {
 		let contents = fs::read(&self.manifest)
 			.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)?;
 		let manifest = serde_json::from_slice(&contents)
@@ -198,7 +198,7 @@ impl Handles {
 	/// Errors if the Manifest has already been put.
 	pub fn put_manifest_envelope(
 		&self,
-		manifest_envelope: &ManifestEnvelope,
+		manifest_envelope: &ManifestEnvelopeV1,
 	) -> Result<(), ProtocolError> {
 		Self::write_as_read_only(
 			&self.manifest,
@@ -213,7 +213,7 @@ impl Handles {
 	/// **Warning**: This should not be used after pivoting. It is only meant to
 	/// be used when updating the manifest envelope while provisioning.
 	pub(crate) fn mutate_manifest_envelope<
-		F: FnOnce(ManifestEnvelope) -> ManifestEnvelope,
+		F: FnOnce(ManifestEnvelopeV1) -> ManifestEnvelopeV1,
 	>(
 		&self,
 		mutate: F,
@@ -327,8 +327,8 @@ mod test {
 
 	use super::*;
 	use crate::protocol::services::boot::{
-		Manifest, ManifestSet, Namespace, NitroConfig, PatchSet, PivotConfig,
-		RestartPolicy, ShareSet,
+		ManifestSet, ManifestV1, Namespace, NitroConfig, PatchSet,
+		PivotConfigV1, RestartPolicy, ShareSet,
 	};
 
 	#[test]
@@ -434,7 +434,7 @@ mod test {
 
 		let pivot = b"this is a pivot binary".to_vec();
 
-		let manifest = Manifest {
+		let manifest = ManifestV1 {
 			namespace: Namespace {
 				nonce: 420,
 				name: "vape lord".to_string(),
@@ -451,7 +451,7 @@ mod test {
 				aws_root_certificate: b"cert lord".to_vec(),
 				qos_commit: "mock qos commit".to_string(),
 			},
-			pivot: PivotConfig {
+			pivot: PivotConfigV1 {
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
@@ -462,7 +462,7 @@ mod test {
 			patch_set: PatchSet::default(),
 		};
 
-		let manifest_envelope = ManifestEnvelope {
+		let manifest_envelope = ManifestEnvelopeV1 {
 			manifest,
 			manifest_set_approvals: vec![],
 			share_set_approvals: vec![],

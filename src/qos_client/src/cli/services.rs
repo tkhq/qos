@@ -11,8 +11,8 @@ use qos_core::protocol::{
 	msg::ProtocolMsg,
 	services::{
 		boot::{
-			Approval, BridgeConfig, Manifest, ManifestEnvelope, ManifestSet,
-			MemberPubKey, Namespace, NitroConfig, PatchSet, PivotConfig,
+			Approval, BridgeConfig, ManifestEnvelopeV1, ManifestSet, ManifestV1,
+			MemberPubKey, Namespace, NitroConfig, PatchSet, PivotConfigV1,
 			PivotEnv, QuorumMember, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisOutput, GenesisSet},
@@ -91,6 +91,9 @@ pub enum Error {
 	FailedToReadManifestFile(std::io::Error),
 	/// Error deserializing manifest.
 	FileDidNotHaveValidManifest,
+	/// File contains a v2 JSON manifest, which cannot be converted to Borsh.
+	/// Borsh is a v0/v1-only encoding; v2 manifests stay in canonical JSON.
+	ManifestV2NotConvertibleToBorsh,
 	/// Error trying to read a file that is supposed to have a manifest
 	/// envelope.
 	FailedToReadManifestEnvelopeFile(std::io::Error),
@@ -791,13 +794,13 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
-	let manifest = Manifest {
+	let manifest = ManifestV1 {
 		namespace: Namespace {
 			name: namespace,
 			nonce,
 			quorum_key: quorum_key.to_bytes(),
 		},
-		pivot: PivotConfig {
+		pivot: PivotConfigV1 {
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
@@ -848,14 +851,14 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
-	let manifest = qos_core::protocol::services::boot::manifest::v2::Manifest {
+	let manifest = qos_core::protocol::services::boot::manifest::v2::ManifestV2 {
 		version: qos_core::protocol::services::boot::ManifestVersion::V2,
 		namespace: Namespace {
 			name: namespace,
 			nonce,
 			quorum_key: quorum_key.to_bytes(),
 		},
-		pivot: qos_core::protocol::services::boot::manifest::v2::PivotConfig {
+		pivot: qos_core::protocol::services::boot::manifest::v2::PivotConfigV2 {
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
@@ -984,7 +987,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 }
 
 fn approve_manifest_programmatic_verifications(
-	manifest: &Manifest,
+	manifest: &ManifestV1,
 	manifest_set: &ManifestSet,
 	share_set: &ShareSet,
 	patch_set: &PatchSet,
@@ -1032,7 +1035,7 @@ fn approve_manifest_programmatic_verifications(
 }
 
 fn approve_manifest_human_verifications<R, W>(
-	manifest: &Manifest,
+	manifest: &ManifestV1,
 	prompter: &mut Prompter<R, W>,
 ) -> bool
 where
@@ -1095,7 +1098,7 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	let approvals = find_approvals(&manifest_approvals_dir, &manifest);
 
 	// Create manifest envelope
-	let manifest_envelope = ManifestEnvelope {
+	let manifest_envelope = ManifestEnvelopeV1 {
 		manifest,
 		manifest_set_approvals: approvals,
 		share_set_approvals: vec![],
@@ -1437,7 +1440,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 }
 
 fn proxy_re_encrypt_share_programmatic_verifications(
-	manifest_envelope: &ManifestEnvelope,
+	manifest_envelope: &ManifestEnvelopeV1,
 	manifest_set: &ManifestSet,
 	member: &QuorumMember,
 ) -> bool {
@@ -1462,7 +1465,7 @@ fn proxy_re_encrypt_share_programmatic_verifications(
 }
 
 fn proxy_re_encrypt_share_human_verifications<R, W>(
-	manifest_envelope: &ManifestEnvelope,
+	manifest_envelope: &ManifestEnvelopeV1,
 	pcr3_preimage: &str,
 	prompter: &mut Prompter<R, W>,
 ) -> bool
@@ -1779,7 +1782,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	let mock_pcr = vec![0; 48];
 	// Create a manifest with manifest set of 1
 	// everything below is hardcoded except pivot config
-	let manifest = Manifest {
+	let manifest = ManifestV1 {
 		namespace: Namespace {
 			name: DANGEROUS_DEV_BOOT_NAMESPACE.to_string(),
 			nonce: u32::MAX,
@@ -1793,7 +1796,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 			qos_commit: "mock-qos-commit-ref".to_string(),
 			aws_root_certificate: cert_from_pem(AWS_ROOT_CERT_PEM).unwrap(),
 		},
-		pivot: PivotConfig {
+		pivot: PivotConfigV1 {
 			hash: sha_256(&pivot),
 			restart,
 			args,
@@ -1817,7 +1820,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	let manifest_envelope = {
 		let signature =
 			quorum_pair.sign(&manifest.qos_hash()).expect("Failed to sign");
-		Box::new(ManifestEnvelope {
+		Box::new(ManifestEnvelopeV1 {
 			manifest,
 			manifest_set_approvals: vec![Approval { signature, member }],
 			share_set_approvals: vec![],
@@ -2109,7 +2112,7 @@ fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
 
 fn find_approvals<P: AsRef<Path>>(
 	boot_dir: P,
-	manifest: &Manifest,
+	manifest: &ManifestV1,
 ) -> Vec<Approval> {
 	let approvals: Vec<_> = find_file_paths(&boot_dir)
 		.iter()
@@ -2151,22 +2154,22 @@ fn find_approvals<P: AsRef<Path>>(
 	approvals
 }
 
-fn read_manifest<P: AsRef<Path>>(file: P) -> Result<Manifest, Error> {
+fn read_manifest<P: AsRef<Path>>(file: P) -> Result<ManifestV1, Error> {
 	let bytes = fs::read(file).map_err(Error::FailedToReadManifestFile)?;
 
 	if serde_json::from_slice::<
-		qos_core::protocol::services::boot::manifest::v2::Manifest,
+		qos_core::protocol::services::boot::manifest::v2::ManifestV2,
 	>(&bytes)
 	.is_ok()
 	{
-		return Err(Error::FileDidNotHaveValidManifest);
+		return Err(Error::ManifestV2NotConvertibleToBorsh);
 	}
 
 	// try getting Manifest from json
-	let result = serde_json::from_slice::<Manifest>(&bytes);
+	let result = serde_json::from_slice::<ManifestV1>(&bytes);
 	if result.is_err() {
 		// if not try the old formats
-		Manifest::try_from_slice_compat(&bytes).map_err(Error::from)
+		ManifestV1::try_from_slice_compat(&bytes).map_err(Error::from)
 	} else {
 		result.map_err(Error::from)
 	}
@@ -2188,14 +2191,14 @@ fn read_attestation_doc<P: AsRef<Path>>(
 
 fn read_manifest_envelope<P: AsRef<Path>>(
 	file: P,
-) -> Result<ManifestEnvelope, Error> {
+) -> Result<ManifestEnvelopeV1, Error> {
 	let bytes = fs::read(file).map_err(Error::FailedToReadManifestFile)?;
 
 	// try getting Manifest from json
-	let result = serde_json::from_slice::<ManifestEnvelope>(&bytes);
+	let result = serde_json::from_slice::<ManifestEnvelopeV1>(&bytes);
 	if result.is_err() {
 		// if not try the old borsh format
-		ManifestEnvelope::try_from_slice_compat(&bytes).map_err(Error::from)
+		ManifestEnvelopeV1::try_from_slice_compat(&bytes).map_err(Error::from)
 	} else {
 		result.map_err(Error::from)
 	}
@@ -2389,8 +2392,8 @@ mod tests {
 
 	use qos_core::protocol::{
 		services::boot::{
-			Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
-			Namespace, NitroConfig, PatchSet, PivotConfig, QuorumMember,
+			Approval, ManifestEnvelopeV1, ManifestSet, ManifestV1, MemberPubKey,
+			Namespace, NitroConfig, PatchSet, PivotConfigV1, QuorumMember,
 			RestartPolicy, ShareSet,
 		},
 		QosHash,
@@ -2406,13 +2409,13 @@ mod tests {
 	};
 
 	struct Setup {
-		manifest: Manifest,
+		manifest: ManifestV1,
 		manifest_set: ManifestSet,
 		share_set: ShareSet,
 		nitro_config: NitroConfig,
 		pivot_hash: Vec<u8>,
 		quorum_key: P256Public,
-		manifest_envelope: ManifestEnvelope,
+		manifest_envelope: ManifestEnvelopeV1,
 		patch_set: PatchSet,
 	}
 	fn setup() -> Setup {
@@ -2448,13 +2451,13 @@ mod tests {
 		let pivot_hash = vec![5; 32];
 		let quorum_key: P256Public = P256Pair::generate().unwrap().public_key();
 
-		let manifest = Manifest {
+		let manifest = ManifestV1 {
 			namespace: Namespace {
 				name: "test-namespace".to_string(),
 				nonce: 2,
 				quorum_key: quorum_key.to_bytes(),
 			},
-			pivot: PivotConfig {
+			pivot: PivotConfigV1 {
 				hash: pivot_hash.clone().try_into().unwrap(),
 				restart: RestartPolicy::Never,
 				args: ["--option1", "argument"]
@@ -2469,7 +2472,7 @@ mod tests {
 			enclave: nitro_config.clone(),
 		};
 
-		let manifest_envelope = ManifestEnvelope {
+		let manifest_envelope = ManifestEnvelopeV1 {
 			manifest: manifest.clone(),
 			manifest_set_approvals: std::iter::zip(
 				pairs[..2].iter(),
@@ -3204,7 +3207,7 @@ mod tests {
 
 			// Read back and verify
 			let borsh_bytes = fs::read(&borsh_path).unwrap();
-			let decoded = Manifest::try_from_slice(&borsh_bytes).unwrap();
+			let decoded = ManifestV1::try_from_slice(&borsh_bytes).unwrap();
 			assert_eq!(decoded, manifest);
 
 			// Cleanup
@@ -3235,7 +3238,7 @@ mod tests {
 			// Read back and verify
 			let borsh_bytes = fs::read(&borsh_path).unwrap();
 			let decoded =
-				ManifestEnvelope::try_from_slice(&borsh_bytes).unwrap();
+				ManifestEnvelopeV1::try_from_slice(&borsh_bytes).unwrap();
 			assert_eq!(decoded, manifest_envelope);
 
 			// Cleanup
@@ -3271,10 +3274,10 @@ mod tests {
 			let json_path = temp_dir.join("test_manifest_v2.json");
 			let borsh_path = temp_dir.join("test_manifest_v2.borsh");
 			let v2 =
-				qos_core::protocol::services::boot::manifest::v2::Manifest {
+				qos_core::protocol::services::boot::manifest::v2::ManifestV2 {
 					version: qos_core::protocol::services::boot::ManifestVersion::V2,
 					namespace: manifest.namespace,
-					pivot: qos_core::protocol::services::boot::manifest::v2::PivotConfig {
+					pivot: qos_core::protocol::services::boot::manifest::v2::PivotConfigV2 {
 						hash: manifest.pivot.hash,
 						restart: manifest.pivot.restart,
 						bridge_config: manifest.pivot.bridge_config,
@@ -3295,7 +3298,10 @@ mod tests {
 				&borsh_path,
 			);
 
-			assert!(result.is_err());
+			assert!(matches!(
+				result,
+				Err(super::super::Error::ManifestV2NotConvertibleToBorsh)
+			));
 			let _ = fs::remove_file(&json_path);
 			let _ = fs::remove_file(&borsh_path);
 		}

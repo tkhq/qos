@@ -9,7 +9,7 @@ use qos_p256::{P256Pair, P256Public};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
-	services::boot::{put_manifest_and_pivot, ManifestEnvelope},
+	services::boot::{put_manifest_and_pivot, ManifestEnvelopeV1},
 	ProtocolError, ProtocolState, QosHash,
 };
 
@@ -30,7 +30,7 @@ pub(in crate::protocol) fn inject_key(
 	let manifest_envelope = state.handles.get_manifest_envelope()?;
 
 	// 1. Verify the signature over the `encrypted_quorum_key` against the
-	// Quorum Key specified in the New Manifest.
+	// Quorum Key specified in the New ManifestV1.
 	let quorum_public = P256Public::from_bytes(
 		&manifest_envelope.manifest.namespace.quorum_key,
 	)?;
@@ -49,7 +49,7 @@ pub(in crate::protocol) fn inject_key(
 	};
 
 	// 3. Check that the decrypted Quorum Key public key matches the one
-	// specified in the New Manifest.
+	// specified in the New ManifestV1.
 	let decrypted_quorum_pair = P256Pair::from_master_seed(&quorum_master_seed)
 		.map_err(|_| ProtocolError::InvalidQuorumSecret)?;
 	if decrypted_quorum_pair.public_key() != quorum_public {
@@ -72,7 +72,7 @@ pub(in crate::protocol) fn inject_key(
 
 pub(in crate::protocol) fn boot_key_forward(
 	state: &mut ProtocolState,
-	manifest_envelope: &ManifestEnvelope,
+	manifest_envelope: &ManifestEnvelopeV1,
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	let nsm_response = put_manifest_and_pivot(state, manifest_envelope, pivot)?;
@@ -81,7 +81,7 @@ pub(in crate::protocol) fn boot_key_forward(
 
 pub(in crate::protocol) fn export_key(
 	state: &mut ProtocolState,
-	new_manifest_envelope: &ManifestEnvelope,
+	new_manifest_envelope: &ManifestEnvelopeV1,
 	cose_sign1_attestation_document: &[u8],
 ) -> Result<EncryptedQuorumKey, ProtocolError> {
 	// 1. Check the basic validity of the attestation doc (cert chain etc).
@@ -98,7 +98,7 @@ pub(in crate::protocol) fn export_key(
 // Primary logic of `export_key` pulled out so it can be unit tested.
 fn export_key_internal(
 	state: &mut ProtocolState,
-	new_manifest_envelope: &ManifestEnvelope,
+	new_manifest_envelope: &ManifestEnvelopeV1,
 	attestation_doc: &AttestationDoc,
 ) -> Result<EncryptedQuorumKey, ProtocolError> {
 	let old_manifest_envelope = state.handles.get_manifest_envelope()?;
@@ -138,22 +138,22 @@ fn export_key_internal(
 	Ok(EncryptedQuorumKey { encrypted_quorum_key, signature })
 }
 
-/// Manifest validation logic. Extracted to make unit testing easier.
+/// `ManifestV1` validation logic. Extracted to make unit testing easier.
 fn validate_manifest(
-	new_manifest_envelope: &ManifestEnvelope,
-	old_manifest_envelope: &ManifestEnvelope,
+	new_manifest_envelope: &ManifestEnvelopeV1,
+	old_manifest_envelope: &ManifestEnvelopeV1,
 	#[allow(unused_variables)] attestation_doc: &AttestationDoc,
 ) -> Result<(), ProtocolError> {
-	// 2. Check the signatures over the New Manifest. Ensures that K Manifest
-	// Set Members approved the New Manifest.
+	// 2. Check the signatures over the New ManifestV1. Ensures that K Manifest
+	// Set Members approved the New ManifestV1.
 	new_manifest_envelope.check_approvals()?;
 
 	if !new_manifest_envelope.share_set_approvals.is_empty() {
 		return Err(ProtocolError::BadShareSetApprovals);
 	}
 
-	// 3. Check that the Quorum Key of the Local Manifest matches the Quorum Key
-	// of the New Manifest. This ensures the request is for the correct Quorum
+	// 3. Check that the Quorum Key of the Local ManifestV1 matches the Quorum Key
+	// of the New ManifestV1. This ensures the request is for the correct Quorum
 	// Key.
 	if old_manifest_envelope.manifest.namespace.quorum_key
 		!= new_manifest_envelope.manifest.namespace.quorum_key
@@ -168,13 +168,13 @@ fn validate_manifest(
 		});
 	}
 
-	// 4. Check that the Manifest Set of the New Manifest matches the Manifest
-	// Set of the Local Manifest. Ensures that the signatures are from a trusted
-	// Manifest Set. Note that there is still a vulnerability here if we have
-	// try to retire a Manifest Set because a critical threshold of it was
-	// compromised - that malicious Manifest Set could boot off of an Original
+	// 4. Check that the ManifestV1 Set of the New ManifestV1 matches the Manifest
+	// Set of the Local ManifestV1. Ensures that the signatures are from a trusted
+	// ManifestV1 Set. Note that there is still a vulnerability here if we have
+	// try to retire a ManifestV1 Set because a critical threshold of it was
+	// compromised - that malicious ManifestV1 Set could boot off of an Original
 	// Node - thus it's important to retire all Original Nodes ASAP that use
-	// compromised Manifest Sets.
+	// compromised ManifestV1 Sets.
 	{
 		let mut new_manifest = new_manifest_envelope.manifest.clone();
 		let mut old_manifest = old_manifest_envelope.manifest.clone();
@@ -190,8 +190,8 @@ fn validate_manifest(
 		}
 	}
 
-	// 5. Check that the Namespace of the Local Manifest matches the namespace
-	// of the New Manifest. Namespaces are a social construct, but we only want
+	// 5. Check that the Namespace of the Local ManifestV1 matches the namespace
+	// of the New ManifestV1. Namespaces are a social construct, but we only want
 	// to allow forwarding a Quorum Key to Nodes in the same Namespace to help
 	// ensure that the nonce is not abused.
 	if old_manifest_envelope.manifest.namespace.name
@@ -203,12 +203,12 @@ fn validate_manifest(
 		});
 	}
 
-	// 6. Check that the nonce of the New Manifest is greater than or equal to
-	// the nonce of the Local Manifest. If they have the same nonce, we check
-	// that the Local Manifest has the same hash as an extra measure. Note that
+	// 6. Check that the nonce of the New ManifestV1 is greater than or equal to
+	// the nonce of the Local ManifestV1. If they have the same nonce, we check
+	// that the Local ManifestV1 has the same hash as an extra measure. Note that
 	// while the nonce is verified programmatically in this routine, its
 	// maintenance relative to other manifests in the namespace is a social
-	// coordination problem and is meant to be solved by the Manifest Set
+	// coordination problem and is meant to be solved by the ManifestV1 Set
 	// Members approving the manifest. In other words, we rely on the Manifest
 	// Set Members to correctly increment the nonce when any change is made to
 	// the latest manifest for a namespace.
@@ -236,10 +236,10 @@ fn validate_manifest(
 	// the attestation doc.
 	//
 	// 8. Check that PCR0, PCR1, PCR2, and PCR3 in the New
-	// Manifest match the PCRs in the attestation document. This ensures the New
-	// Manifest was used against a Nitro enclave booted with the intended
+	// ManifestV1 match the PCRs in the attestation document. This ensures the New
+	// ManifestV1 was used against a Nitro enclave booted with the intended
 	// version of QOS. Note that we assume the values for PCR{0, 1 , 2}
-	// correspond to a desired version of QOS because the Manifest Set Members
+	// correspond to a desired version of QOS because the ManifestV1 Set Members
 	// had K approvals.
 	#[cfg(not(feature = "mock"))]
 	{
@@ -253,7 +253,7 @@ fn validate_manifest(
 		)?;
 	}
 
-	// 9. Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is
+	// 9. Check that PCR3 in the New ManifestV1 is in the Local Manifests. PCR3 is
 	// the IAM role assigned to the EC2 host of the enclave. An IAM role
 	// contains an AWS organization's unique ID. By only using the approved PCR3
 	// value we ensure that we only ever send the Quorum Key to an enclave that
@@ -305,8 +305,8 @@ mod test {
 		protocol::{
 			services::{
 				boot::{
-					Approval, Manifest, ManifestEnvelope, ManifestSet,
-					Namespace, NitroConfig, PivotConfig, QuorumMember,
+					Approval, ManifestV1, ManifestEnvelopeV1, ManifestSet,
+					Namespace, NitroConfig, PivotConfigV1, QuorumMember,
 					RestartPolicy, ShareSet,
 				},
 				key::{inject_key, EncryptedQuorumKey},
@@ -316,7 +316,7 @@ mod test {
 	};
 
 	struct TestArgs {
-		manifest_envelope: ManifestEnvelope,
+		manifest_envelope: ManifestEnvelopeV1,
 		#[allow(dead_code)]
 		members_with_keys: Vec<(P256Pair, QuorumMember)>,
 		att_doc: AttestationDoc,
@@ -358,7 +358,7 @@ mod test {
 		let pcr1 = vec![3; 32];
 		let pcr2 = vec![2; 32];
 		let pcr3 = vec![1; 32];
-		let manifest = Manifest {
+		let manifest = ManifestV1 {
 			namespace: Namespace {
 				nonce: 420,
 				name: "mock namespace".to_string(),
@@ -372,7 +372,7 @@ mod test {
 				aws_root_certificate: b"mock cert".to_vec(),
 				qos_commit: "mock qos commit".to_string(),
 			},
-			pivot: PivotConfig {
+			pivot: PivotConfigV1 {
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
@@ -414,7 +414,7 @@ mod test {
 			certificate: ByteBuf::default(),
 		};
 
-		let manifest_envelope = ManifestEnvelope {
+		let manifest_envelope = ManifestEnvelopeV1 {
 			manifest,
 			manifest_set_approvals,
 			share_set_approvals: Vec::default(),

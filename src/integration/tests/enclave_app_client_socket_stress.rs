@@ -10,8 +10,8 @@ use qos_core::{
 	io::{IOError, SocketAddress, StreamPool},
 	protocol::{
 		services::boot::{
-			Manifest, ManifestEnvelope, ManifestSet, Namespace, NitroConfig,
-			PivotConfig, RestartPolicy, ShareSet,
+			ManifestV1, ManifestEnvelopeV1, ManifestSet, Namespace, NitroConfig,
+			PivotConfigV1, RestartPolicy, ShareSet,
 		},
 		ProtocolPhase,
 	},
@@ -30,13 +30,13 @@ async fn enclave_app_client_socket_stress() {
 	let _: PathWrapper = TEST_TMP.into();
 	std::fs::create_dir_all(TEST_TMP).unwrap();
 
-	let manifest = Manifest {
+	let manifest = ManifestV1 {
 		namespace: Namespace {
 			name: String::default(),
 			nonce: 0,
 			quorum_key: vec![],
 		},
-		pivot: PivotConfig {
+		pivot: PivotConfigV1 {
 			hash: [1; 32],
 			restart: RestartPolicy::Always,
 			args: vec![APP_SOCK.to_string()],
@@ -55,7 +55,7 @@ async fn enclave_app_client_socket_stress() {
 		..Default::default()
 	};
 
-	let manifest_envelope = ManifestEnvelope {
+	let manifest_envelope = ManifestEnvelopeV1 {
 		manifest,
 		manifest_set_approvals: vec![],
 		share_set_approvals: vec![],

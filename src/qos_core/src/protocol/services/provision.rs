@@ -137,8 +137,8 @@ mod test {
 		protocol::{
 			services::{
 				boot::{
-					Approval, Manifest, ManifestEnvelope, ManifestSet,
-					Namespace, NitroConfig, PatchSet, PivotConfig,
+					Approval, ManifestV1, ManifestEnvelopeV1, ManifestSet,
+					Namespace, NitroConfig, PatchSet, PivotConfigV1,
 					QuorumMember, RestartPolicy, ShareSet,
 				},
 				provision::provision,
@@ -183,7 +183,7 @@ mod test {
 			})
 			.collect();
 
-		let manifest = Manifest {
+		let manifest = ManifestV1 {
 			namespace: Namespace {
 				nonce: 420,
 				name: "vape-space".to_string(),
@@ -197,7 +197,7 @@ mod test {
 				aws_root_certificate: b"cert lord".to_vec(),
 				qos_commit: "mock qos commit".to_string(),
 			},
-			pivot: PivotConfig {
+			pivot: PivotConfigV1 {
 				hash: sha_256(pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
@@ -228,7 +228,7 @@ mod test {
 			})
 			.collect();
 
-		let manifest_envelope = ManifestEnvelope {
+		let manifest_envelope = ManifestEnvelopeV1 {
 			manifest,
 			manifest_set_approvals: vec![],
 			share_set_approvals: vec![],

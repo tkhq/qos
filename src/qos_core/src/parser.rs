@@ -466,11 +466,10 @@ impl TokenMap {
 				// Find the value
 				let value = if iter
 					.peek()
-					.filter(|i| !i.starts_with(INPUT_PREFIX))
-					.is_some()
+					.is_some_and(|i| !i.starts_with(INPUT_PREFIX))
 				{
 					// Advance the iterator since we only peaked above
-					iter.next().unwrap().to_string()
+					iter.next().unwrap().clone()
 				} else if let Some(ref d) = token.default_value {
 					// Couldn't find a value, so take the default
 					d.to_string()
@@ -515,7 +514,7 @@ impl TokenMap {
 		for token in self.tokens.values() {
 			// Check if a value is required for the token
 			if token.required && token.user_value.is_none() {
-				Err(ParserError::MissingInput(token.name.to_string()))?;
+				Err(ParserError::MissingInput(token.name.clone()))?;
 			}
 
 			if token.user_value.is_some() {
@@ -523,7 +522,7 @@ impl TokenMap {
 				if let Some(ref other_name) = token.requires {
 					if !inputs.contains(&(format!("--{other_name}"))) {
 						return Err(ParserError::MissingInput(
-							other_name.to_string(),
+							other_name.clone(),
 						));
 					}
 				}
@@ -533,8 +532,8 @@ impl TokenMap {
 				for other_name in &token.forbids {
 					if inputs.contains(&(format!("--{other_name}"))) {
 						Err(ParserError::MutuallyExclusiveInput(
-							token.name.to_string(),
-							other_name.to_string(),
+							token.name.clone(),
+							other_name.clone(),
 						))?;
 					}
 				}

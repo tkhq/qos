@@ -1,13 +1,13 @@
 //! Standard boot logic and types.
 
-use std::{collections::HashSet, fmt};
+use std::fmt;
 
 use qos_crypto::sha_256;
 use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
-	services::attestation, Hash256, ProtocolError, ProtocolState, QosHash,
+	services::attestation, ProtocolError, ProtocolState, QosHash,
 };
 
 pub mod env;
@@ -16,6 +16,9 @@ pub use env::{
 	PivotEnv, PivotEnvValue, PivotEnvVarName, MAX_PIVOT_ENV_NAME_LEN,
 	MAX_PIVOT_ENV_VALUE_LEN, MAX_PIVOT_ENV_VARS,
 };
+pub use manifest::v0::{ManifestEnvelopeV0, ManifestV0, PivotConfigV0};
+pub use manifest::v1::{ManifestEnvelopeV1, ManifestV1, PivotConfigV1};
+pub use manifest::v2::{ManifestEnvelopeV2, ManifestV2, PivotConfigV2};
 pub use manifest::{ManifestVersion, VersionedManifest};
 
 /// Enclave configuration specific to AWS Nitro.
@@ -74,8 +77,10 @@ impl fmt::Debug for NitroConfig {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub enum RestartPolicy {
 	/// Never restart the pivot application
+	#[cfg_attr(any(feature = "mock", test), default)]
 	Never,
 	/// Always restart the pivot application
 	Always,
@@ -88,13 +93,6 @@ impl fmt::Debug for RestartPolicy {
 			Self::Always => write!(f, "RestartPolicy::Always")?,
 		}
 		Ok(())
-	}
-}
-
-#[cfg(any(feature = "mock", test))]
-impl Default for RestartPolicy {
-	fn default() -> Self {
-		Self::Never
 	}
 }
 
@@ -163,82 +161,6 @@ impl BridgeConfig {
 				*port
 			}
 		}
-	}
-}
-
-/// Pivot binary configuration
-#[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct PivotConfig {
-	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
-	#[serde(with = "qos_hex::serde")]
-	pub hash: Hash256,
-	/// Restart policy for running the pivot binary.
-	pub restart: RestartPolicy,
-	/// Bridge host configuration for the pivot is a set of per-port rules.
-	/// If set the pivot will service TCP with the provided ports and a bridge will provide the TCP -> VSOCK -> TCP streams.
-	/// If not set the pivot will service VSOCK and the host side needs to be provided manually.
-	pub bridge_config: Vec<BridgeConfig>,
-	/// Whether we're invoking the enclave and pivot in DEBUG mode. This controls output piping.
-	/// *NOTE*: this requires `DEBUG` and `LOGS` env var to be set to `true` when `qos_enclave` is running.
-	pub debug_mode: bool,
-	/// Arguments to invoke the binary with. Leave this empty if none are
-	/// needed.
-	pub args: Vec<String>,
-}
-
-/// Pivot binary configuration, original version (V0)
-#[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	Debug,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct PivotConfigV0 {
-	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
-	#[serde(with = "qos_hex::serde")]
-	pub hash: Hash256,
-	/// Restart policy for running the pivot binary.
-	pub restart: RestartPolicy,
-	/// Arguments to invoke the binary with. Leave this empty if none are
-	/// needed.
-	pub args: Vec<String>,
-}
-
-impl From<PivotConfigV0> for PivotConfig {
-	fn from(value: PivotConfigV0) -> Self {
-		Self {
-			hash: value.hash,
-			restart: value.restart,
-			args: value.args,
-			debug_mode: false,
-			bridge_config: Vec::new(),
-		}
-	}
-}
-
-impl fmt::Debug for PivotConfig {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("PivotConfig")
-			.field("hash", &qos_hex::encode(&self.hash))
-			.field("restart", &self.restart)
-			.field("args", &self.args.join(" "))
-			.finish()
 	}
 }
 
@@ -410,113 +332,6 @@ pub const DEFAULT_APP_HOST_PORT: u16 = 3000;
 /// Default host ip string for host bridge in server mode
 pub const DEFAULT_APP_HOST_IP: &str = "0.0.0.0";
 
-/// The Manifest for the enclave.
-/// NOTE: we currently use JSON format for storing this value.
-/// Since we don't have any `HashMap` inside the `Manifest` it works out of the box.
-/// If we ever do need a map inside, we should use a `BTreeMap` to ensure keys are sorted.
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct Manifest {
-	/// Namespace this manifest belongs too.
-	pub namespace: Namespace,
-	/// Pivot binary configuration and verifiable values.
-	pub pivot: PivotConfig,
-	/// Manifest Set members and threshold.
-	pub manifest_set: ManifestSet,
-	/// Share Set members and threshold
-	pub share_set: ShareSet,
-	/// Configuration and verifiable values for the enclave hardware.
-	pub enclave: NitroConfig,
-	/// Patch set members and threshold
-	pub patch_set: PatchSet,
-}
-
-// TODO: remove this once json is the default manifest format
-/// The Manifest for the enclave, backwards compatible version 0
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct ManifestV0 {
-	/// Namespace this manifest belongs too.
-	pub namespace: Namespace,
-	/// Pivot binary configuration and verifiable values.
-	pub pivot: PivotConfigV0,
-	/// Manifest Set members and threshold.
-	pub manifest_set: ManifestSet,
-	/// Share Set members and threshold
-	pub share_set: ShareSet,
-	/// Configuration and verifiable values for the enclave hardware.
-	pub enclave: NitroConfig,
-	/// Patch set members and threshold
-	pub patch_set: PatchSet,
-}
-
-impl From<ManifestV0> for Manifest {
-	fn from(old: ManifestV0) -> Self {
-		Self {
-			namespace: old.namespace,
-			pivot: old.pivot.into(),
-			manifest_set: old.manifest_set,
-			share_set: old.share_set,
-			enclave: old.enclave,
-			patch_set: old.patch_set,
-		}
-	}
-}
-
-impl Manifest {
-	/// Read a `Manifest` in a backwards compatible way.
-	///
-	/// Callers should only use this after trying to parse the current JSON
-	/// schema first. This helper attempts `ManifestV0` JSON before the current
-	/// type, so direct use on current JSON can silently drop newer `pivot`
-	/// fields that `ManifestV0` ignores. In-tree callers avoid that by going
-	/// through `read_manifest`, which tries the current `Manifest` JSON parse
-	/// before falling back here.
-	///
-	/// # Errors
-	///
-	/// Returns [`borsh::io::Error`] if deserialization fails for both the
-	/// current and legacy formats.
-	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
-		use borsh::BorshDeserialize;
-
-		// try old version with json format
-		if let Ok(v0) = serde_json::from_slice::<ManifestV0>(buf) {
-			return Ok(v0.into());
-		}
-
-		let result = Self::try_from_slice(buf);
-
-		// try loading the old version with borsh format
-		if result.is_err() {
-			let old = ManifestV0::try_from_slice(buf)?;
-
-			Ok(old.into())
-		} else {
-			result
-		}
-	}
-}
-
 /// An approval by a Quorum Member.
 #[derive(
 	PartialEq,
@@ -559,121 +374,9 @@ impl Approval {
 	}
 }
 
-/// [`Manifest`] with accompanying [`Approval`]s.
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct ManifestEnvelope {
-	/// Encapsulated manifest.
-	pub manifest: Manifest,
-	/// Approvals for [`Self::manifest`] from the manifest set.
-	pub manifest_set_approvals: Vec<Approval>,
-	///  Approvals for [`Self::manifest`] from the share set. This is primarily
-	/// used to audit what share holders provisioned the quorum key.
-	pub share_set_approvals: Vec<Approval>,
-}
-
-/// [`ManifestV0`] with accompanying [`Approval`]s.
-#[derive(PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize)]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct ManifestEnvelopeV0 {
-	/// Encapsulated manifest.
-	pub manifest: ManifestV0,
-	/// Approvals for [`Self::manifest`] from the manifest set.
-	pub manifest_set_approvals: Vec<Approval>,
-	///  Approvals for [`Self::manifest`] from the share set. This is primarily
-	/// used to audit what share holders provisioned the quorum key.
-	pub share_set_approvals: Vec<Approval>,
-}
-
-impl ManifestEnvelope {
-	/// Check if the encapsulated manifest has K valid approvals from the
-	/// manifest approval set.
-	///
-	/// # Errors
-	///
-	/// Returns [`ProtocolError::InvalidManifestApproval`] if a signature is
-	/// invalid, [`ProtocolError::NotManifestSetMember`] if an approver is
-	/// not in the manifest set, [`ProtocolError::DuplicateApproval`] if a
-	/// member has more than one approval, or
-	/// [`ProtocolError::NotEnoughApprovals`] if fewer than the threshold
-	/// number of members approved.
-	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
-		let mut uniq_members = HashSet::new();
-		for approval in &self.manifest_set_approvals {
-			let member_pub_key =
-				P256Public::from_bytes(&approval.member.pub_key)?;
-
-			// Ensure that this is a valid signature from the member
-			let is_valid_signature = member_pub_key
-				.verify(&self.manifest.qos_hash(), &approval.signature)
-				.is_ok();
-			if !is_valid_signature {
-				return Err(ProtocolError::InvalidManifestApproval(
-					approval.clone(),
-				));
-			}
-
-			// Ensure that this member belongs to the manifest set
-			if !self.manifest.manifest_set.members.contains(&approval.member) {
-				return Err(ProtocolError::NotManifestSetMember);
-			}
-
-			// Ensure that the member only has 1 approval. Note that we don't
-			// include the signature in this check because the signature is
-			// malleable. i.e. there could be two different signatures per
-			// member.
-			if !uniq_members.insert(approval.member.qos_hash()) {
-				return Err(ProtocolError::DuplicateApproval);
-			}
-		}
-
-		// Ensure that there are at least threshold unique members who approved
-		if uniq_members.len() < self.manifest.manifest_set.threshold as usize {
-			return Err(ProtocolError::NotEnoughApprovals);
-		}
-
-		Ok(())
-	}
-	/// Read a `ManifestEnvelope` from a `u8` buffer, in a backwards
-	/// compatible way.
-	///
-	/// # Errors
-	///
-	/// Returns [`borsh::io::Error`] if deserialization fails for both the
-	/// current and legacy formats.
-	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
-		use borsh::BorshDeserialize;
-
-		let result = Self::try_from_slice(buf);
-
-		// try loading the old version of manifest
-		if result.is_err() {
-			let old = ManifestEnvelopeV0::try_from_slice(buf)?;
-
-			Ok(Self {
-				manifest: Manifest::from(old.manifest),
-				manifest_set_approvals: old.manifest_set_approvals,
-				share_set_approvals: old.share_set_approvals,
-			})
-		} else {
-			result
-		}
-	}
-}
-
 pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	state: &mut ProtocolState,
-	manifest_envelope: &ManifestEnvelope,
+	manifest_envelope: &ManifestEnvelopeV1,
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	// 1. Check signatures over the manifest envelope.
@@ -712,7 +415,7 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 
 pub(in crate::protocol) fn boot_standard(
 	state: &mut ProtocolState,
-	manifest_envelope: &ManifestEnvelope,
+	manifest_envelope: &ManifestEnvelopeV1,
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	let nsm_response = put_manifest_and_pivot(state, manifest_envelope, pivot)?;
@@ -729,7 +432,7 @@ mod test {
 	use super::*;
 	use crate::handles::Handles;
 
-	fn get_manifest() -> (Manifest, Vec<(P256Pair, QuorumMember)>, Vec<u8>) {
+	fn get_manifest() -> (ManifestV1, Vec<(P256Pair, QuorumMember)>, Vec<u8>) {
 		let quorum_pair = P256Pair::generate().unwrap();
 		let member1_pair = P256Pair::generate().unwrap();
 		let member2_pair = P256Pair::generate().unwrap();
@@ -758,7 +461,7 @@ mod test {
 			(member3_pair, quorum_members.get(2).unwrap().clone()),
 		];
 
-		let manifest = Manifest {
+		let manifest = ManifestV1 {
 			namespace: Namespace {
 				nonce: 420,
 				name: "vape lord".to_string(),
@@ -772,7 +475,7 @@ mod test {
 				aws_root_certificate: b"cert lord".to_vec(),
 				qos_commit: "mock qos commit".to_string(),
 			},
-			pivot: PivotConfig {
+			pivot: PivotConfigV1 {
 				hash: sha_256(&pivot),
 				restart: RestartPolicy::Always,
 				args: vec![],
@@ -809,7 +512,7 @@ mod test {
 				})
 				.collect();
 
-			ManifestEnvelope {
+			ManifestEnvelopeV1 {
 				manifest,
 				manifest_set_approvals: approvals,
 				share_set_approvals: vec![],
@@ -860,7 +563,7 @@ mod test {
 				})
 				.collect();
 
-			ManifestEnvelope {
+			ManifestEnvelopeV1 {
 				manifest,
 				manifest_set_approvals: approvals,
 				share_set_approvals: vec![],
@@ -907,7 +610,7 @@ mod test {
 				})
 				.collect();
 
-			ManifestEnvelope {
+			ManifestEnvelopeV1 {
 				manifest,
 				manifest_set_approvals: approvals,
 				share_set_approvals: vec![],
@@ -952,7 +655,7 @@ mod test {
 				})
 				.collect();
 
-			ManifestEnvelope {
+			ManifestEnvelopeV1 {
 				manifest,
 				manifest_set_approvals: approvals.clone(),
 				share_set_approvals: vec![approvals.remove(0)],
@@ -1007,7 +710,7 @@ mod test {
 			approval.member.pub_key = pair.public_key().to_bytes();
 			approval.signature = pair.sign(&manifest.qos_hash()).unwrap();
 
-			ManifestEnvelope {
+			ManifestEnvelopeV1 {
 				manifest,
 				manifest_set_approvals: approvals.clone(),
 				share_set_approvals: vec![],
@@ -1062,7 +765,7 @@ mod test {
 			let duplicate_approval = approvals[0].clone();
 			approvals.push(duplicate_approval);
 
-			ManifestEnvelope {
+			ManifestEnvelopeV1 {
 				manifest,
 				manifest_set_approvals: approvals.clone(),
 				share_set_approvals: vec![],
@@ -1077,10 +780,61 @@ mod test {
 	fn try_from_slice_compat_works() {
 		let bytes = std::fs::read("./fixtures/old_manifest").unwrap();
 
-		let manifest = Manifest::try_from_slice_compat(&bytes).unwrap();
+		let manifest = ManifestV1::try_from_slice_compat(&bytes).unwrap();
 
 		assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
 		assert_eq!(manifest.pivot.bridge_config.len(), 0);
+	}
+
+	#[test]
+	fn versioned_manifest_v0_fixture_decodes_and_hashes_via_borsh() {
+		let bytes = std::fs::read("./fixtures/old_manifest").unwrap();
+
+		let decoded = VersionedManifest::try_from_slice_compat(&bytes).unwrap();
+		match &decoded {
+			VersionedManifest::V0(m) => {
+				assert_eq!(m.namespace.name, "quit-coding-to-vape");
+			}
+			other => panic!("expected V0, got {other:?}"),
+		}
+
+		// v0 hashes via Borsh of the v0 type, not via re-encoding.
+		match decoded {
+			VersionedManifest::V0(m) => {
+				let expected = qos_crypto::sha_256(&borsh::to_vec(&m).unwrap());
+				assert_eq!(
+					VersionedManifest::V0(m.clone()).qos_hash(),
+					expected
+				);
+			}
+			_ => unreachable!(),
+		}
+	}
+
+	#[test]
+	fn versioned_manifest_v1_borsh_round_trips_and_hashes_via_borsh() {
+		use borsh::BorshDeserialize;
+
+		let (manifest, ..) = get_manifest();
+		let bytes = borsh::to_vec(&manifest).unwrap();
+		let decoded = VersionedManifest::try_from_slice_compat(&bytes).unwrap();
+
+		assert!(matches!(decoded, VersionedManifest::V1(_)));
+		// Hashes via Borsh, equal to direct ManifestV1 borsh hash.
+		assert_eq!(decoded.qos_hash(), manifest.qos_hash());
+		// And to a freshly-decoded ManifestV1 borsh hash.
+		let direct = ManifestV1::try_from_slice(&bytes).unwrap();
+		assert_eq!(direct.qos_hash(), manifest.qos_hash());
+	}
+
+	#[test]
+	fn versioned_manifest_v1_json_round_trips_and_hashes_via_borsh() {
+		let (manifest, ..) = get_manifest();
+		let bytes = serde_json::to_vec(&manifest).unwrap();
+		let decoded = VersionedManifest::try_from_slice_compat(&bytes).unwrap();
+
+		assert!(matches!(decoded, VersionedManifest::V1(_)));
+		assert_eq!(decoded.qos_hash(), manifest.qos_hash());
 	}
 
 	#[test]
@@ -1092,10 +846,10 @@ mod test {
 			PivotEnvValue::plain("bar".to_string()).unwrap(),
 		)
 		.unwrap();
-		let v2 = crate::protocol::services::boot::manifest::v2::Manifest {
+		let v2 = ManifestV2 {
 			version: ManifestVersion::V2,
 			namespace: manifest.namespace,
-			pivot: crate::protocol::services::boot::manifest::v2::PivotConfig {
+			pivot: PivotConfigV2 {
 				hash: manifest.pivot.hash,
 				restart: manifest.pivot.restart,
 				bridge_config: manifest.pivot.bridge_config,

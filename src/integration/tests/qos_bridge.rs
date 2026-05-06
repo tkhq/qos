@@ -12,8 +12,8 @@ use integration::{
 use qos_core::protocol::{
 	services::{
 		boot::{
-			Approval, BridgeConfig, Manifest, ManifestSet, Namespace,
-			PivotConfig, RestartPolicy, ShareSet,
+			Approval, BridgeConfig, ManifestV1, ManifestSet, Namespace,
+			PivotConfigV1, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
@@ -116,7 +116,7 @@ async fn qos_bridge_works() {
 		.success());
 
 	// Check the manifest written to file
-	let manifest: Manifest =
+	let manifest: ManifestV1 =
 		serde_json::from_slice(&fs::read(&cli_manifest_path).unwrap()).unwrap();
 
 	let genesis_output = {
@@ -140,7 +140,7 @@ async fn qos_bridge_works() {
 		quorum_key: genesis_output.quorum_key,
 	};
 	assert_eq!(manifest.namespace, namespace_field);
-	let pivot = PivotConfig {
+	let pivot = PivotConfigV1 {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
 		args: vec![pivot_app_sock_path.to_string()],
@@ -149,7 +149,6 @@ async fn qos_bridge_works() {
 			port: app_host_port,
 			host: "0.0.0.0".into(),
 		}],
-		..Default::default()
 	};
 	assert_eq!(manifest.pivot, pivot);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };

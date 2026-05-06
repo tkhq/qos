@@ -13,7 +13,7 @@ use integration::{
 use qos_core::protocol::{
 	services::{
 		boot::{
-			Approval, Manifest, ManifestSet, Namespace, PivotConfig,
+			Approval, ManifestV1, ManifestSet, Namespace, PivotConfigV1,
 			RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisMemberOutput, GenesisOutput},
@@ -103,7 +103,7 @@ async fn standard_boot_e2e() {
 		.success());
 
 	// Check the manifest written to file
-	let manifest: Manifest =
+	let manifest: ManifestV1 =
 		serde_json::from_slice(&fs::read(&cli_manifest_path).unwrap()).unwrap();
 
 	let genesis_output = {
@@ -127,7 +127,7 @@ async fn standard_boot_e2e() {
 		quorum_key: genesis_output.quorum_key,
 	};
 	assert_eq!(manifest.namespace, namespace_field);
-	let pivot = PivotConfig {
+	let pivot = PivotConfigV1 {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
 		args: vec!["--msg".to_string(), msg.to_string()],

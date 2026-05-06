@@ -11,7 +11,7 @@ use borsh::BorshDeserialize;
 use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
 use qos_core::protocol::{
 	services::{
-		boot::{Approval, Manifest, ManifestSet, Namespace, ShareSet},
+		boot::{Approval, ManifestV1, ManifestSet, Namespace, ShareSet},
 		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
 	ProtocolPhase, QosHash,
@@ -109,7 +109,7 @@ async fn main() {
 		.success());
 
 	// Check the manifest written to file
-	let manifest: Manifest =
+	let manifest: ManifestV1 =
 		serde_json::from_slice(&fs::read(&cli_manifest_path).unwrap()).unwrap();
 
 	let genesis_output = {

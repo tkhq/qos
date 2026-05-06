@@ -4,7 +4,7 @@ use qos_nsm::types::NsmResponse;
 
 use crate::protocol::{
 	services::{
-		boot::{Approval, ManifestEnvelope},
+		boot::{Approval, ManifestEnvelopeV1},
 		genesis::{GenesisOutput, GenesisSet},
 	},
 	ProtocolError,
@@ -24,8 +24,8 @@ pub enum ProtocolMsg {
 
 	/// Execute Standard Boot.
 	BootStandardRequest {
-		/// Manifest with approvals
-		manifest_envelope: Box<ManifestEnvelope>,
+		/// `ManifestV1` with approvals
+		manifest_envelope: Box<ManifestEnvelopeV1>,
 		/// Pivot binary
 		#[serde(with = "qos_hex::serde")]
 		pivot: Vec<u8>,
@@ -90,15 +90,15 @@ pub enum ProtocolMsg {
 	LiveAttestationDocResponse {
 		/// COSE SIGN1 structure with Attestation Doc
 		nsm_response: NsmResponse,
-		/// Manifest Envelope, if it exists, otherwise None.
+		/// `ManifestV1` Envelope, if it exists, otherwise None.
 		#[serde(default)]
-		manifest_envelope: Option<Box<ManifestEnvelope>>,
+		manifest_envelope: Option<Box<ManifestEnvelopeV1>>,
 	},
 
 	/// Execute a key forward attestation request
 	BootKeyForwardRequest {
-		/// Manifest with approvals
-		manifest_envelope: Box<ManifestEnvelope>,
+		/// `ManifestV1` with approvals
+		manifest_envelope: Box<ManifestEnvelopeV1>,
 		/// Pivot binary
 		#[serde(with = "qos_hex::serde")]
 		pivot: Vec<u8>,
@@ -111,8 +111,8 @@ pub enum ProtocolMsg {
 
 	/// Request a quorum key as part of the "key forwarding" flow.
 	ExportKeyRequest {
-		/// Manifest of the enclave requesting the quorum key.
-		manifest_envelope: Box<ManifestEnvelope>,
+		/// `ManifestV1` of the enclave requesting the quorum key.
+		manifest_envelope: Box<ManifestEnvelopeV1>,
 		/// Attestation document from the enclave requesting the quorum key. We
 		/// assume this attestation document contains a hash of the given
 		/// manifest in the user data field.
@@ -150,7 +150,7 @@ pub enum ProtocolMsg {
 		/// The manifest envelope used to boot the enclave. This will be `None`
 		/// if the manifest envelope does not exist.
 		#[serde(default)]
-		manifest_envelope: Box<Option<ManifestEnvelope>>,
+		manifest_envelope: Box<Option<ManifestEnvelopeV1>>,
 	},
 }
 

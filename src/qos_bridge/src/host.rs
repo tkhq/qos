@@ -34,9 +34,11 @@ impl BridgeServer {
 	/// Start the host side of the bridge, taking configuration from the enclave
 	pub async fn serve(&self) {
 		loop {
-			match tokio::task::block_in_place(|| {
+			#[allow(clippy::result_large_err)]
+			let result = tokio::task::block_in_place(|| {
 				ureq::get(&self.info_url).timeout(Duration::from_secs(1)).call()
-			}) {
+			});
+			match result {
 				Ok(info) => {
 					if let Some(me) = info
 						.into_json::<EnclaveInfo>()

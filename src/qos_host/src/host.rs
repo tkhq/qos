@@ -27,7 +27,7 @@ use qos_core::{
 	client::{ClientError, SocketClient},
 	io::SocketAddress,
 	protocol::{
-		msg::ProtocolMsg, services::boot::ManifestEnvelope, ProtocolError,
+		msg::ProtocolMsg, services::boot::ManifestEnvelopeV1, ProtocolError,
 		ProtocolPhase,
 	},
 };
@@ -271,7 +271,7 @@ async fn get_eph_key_from_attestation_doc(
 // try to get the manifest envelope from the enclave, used for restart handling of qos_host
 async fn get_manifest_envelope(
 	enclave_client: &SocketClient,
-) -> Result<Option<ManifestEnvelope>, ClientError> {
+) -> Result<Option<ManifestEnvelopeV1>, ClientError> {
 	let enc_manifest_envelope_req =
 		ProtocolMsg::ManifestEnvelopeRequest.to_canonical_json_vec();
 	let enc_manifest_envelope_resp =

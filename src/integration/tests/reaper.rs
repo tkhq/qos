@@ -7,10 +7,14 @@ use integration::{
 	wait_for_tcp_sock, wait_for_usock, PIVOT_ABORT_PATH, PIVOT_OK_PATH,
 	PIVOT_PANIC_PATH, PIVOT_TCP_PATH,
 };
+// TODO(qos-v2): re-enable once the v2 boot path injects manifest env into the
+// pivot. The imports below are referenced only by the disabled test.
+#[allow(unused_imports)]
+use integration::{PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE};
 use qos_core::{
 	handles::Handles,
 	io::{HostBridge, SocketAddress, StreamPool},
-	protocol::services::boot::{BridgeConfig, ManifestEnvelope},
+	protocol::services::boot::{BridgeConfig, ManifestEnvelopeV1},
 	reaper::{Reaper, REAPER_EXIT_DELAY},
 };
 use qos_nsm::mock::MockNsm;
@@ -39,7 +43,7 @@ async fn reaper_works() {
 
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key
-	let mut manifest_envelope = ManifestEnvelope::default();
+	let mut manifest_envelope = ManifestEnvelopeV1::default();
 	manifest_envelope.manifest.pivot.args =
 		vec!["--msg".to_string(), msg.to_string()];
 
@@ -70,6 +74,87 @@ async fn reaper_works() {
 	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
 	assert!(fs::remove_file(integration::PIVOT_OK_SUCCESS_FILE).is_ok());
 }
+
+// TODO(qos-v2): the v1 boot path no longer carries `pivot.env` (rolled back
+// from the breaking change in 3743f395). Re-enable this test against the v2
+// boot path once the reaper consumes `v2::PivotConfigV2::env` and the manifest
+// pipeline plumbs a `v2::ManifestEnvelopeV2` through to the reaper. The v2 boot
+// wiring is still TBD; this test is preserved here so it ships with the v2
+// path rather than as a follow-up.
+//
+// Expected shape (paraphrased from the pre-rollback test):
+//
+// #[tokio::test]
+// async fn reaper_injects_manifest_env_and_clears_host_env_v2() {
+//     use qos_core::protocol::services::boot::manifest::v2;
+//     use qos_core::protocol::services::boot::{PivotEnvValue, PivotEnvVarName};
+//
+//     let secret_path: PathWrapper =
+//         "/tmp/reaper_injects_manifest_env_v2.secret".into();
+//     let usock: PathWrapper = "/tmp/reaper_injects_manifest_env_v2.sock".into();
+//     let manifest_path: PathWrapper =
+//         "/tmp/reaper_injects_manifest_env_v2.manifest".into();
+//     let msg = "manifest-env:";
+//     let manifest_env_key = "QOS_TEST_MANIFEST_ENV";
+//     let host_only_env_key = "QOS_TEST_HOST_ONLY_ENV";
+//     let manifest_env_value = "available";
+//
+//     drop(fs::remove_file(&*secret_path));
+//     std::env::set_var(host_only_env_key, "must-not-leak");
+//
+//     let handles = Handles::new(
+//         "reaper_injects_manifest_env_v2.eph".to_string(),
+//         (*secret_path).to_string(),
+//         (*manifest_path).to_string(),
+//         PIVOT_OK2_PATH.to_string(),
+//     );
+//
+//     // Build a v2 manifest envelope with env populated. The exact envelope
+//     // type and `Handles` API for v2 will be set when the v2 boot path
+//     // lands; adapt this construction at that point.
+//     let mut envelope: v2::ManifestEnvelopeV2 = Default::default();
+//     envelope.manifest.pivot.args = vec![
+//         "--msg".to_string(),
+//         msg.to_string(),
+//         "--env-key".to_string(),
+//         manifest_env_key.to_string(),
+//         "--missing-env-key".to_string(),
+//         host_only_env_key.to_string(),
+//     ];
+//     envelope
+//         .manifest
+//         .pivot
+//         .env
+//         .insert(
+//             PivotEnvVarName::new(manifest_env_key.to_string()).unwrap(),
+//             PivotEnvValue::plain(manifest_env_value.to_string()).unwrap(),
+//         )
+//         .unwrap();
+//
+//     // TODO(qos-v2): replace with the v2 envelope writer once it exists.
+//     // handles.put_manifest_envelope_v2(&envelope).unwrap();
+//     assert!(handles.pivot_exists());
+//
+//     let enclave_socket = SocketAddress::new_unix(&usock);
+//     let reaper_handle = tokio::spawn(async move {
+//         Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
+//             .await;
+//     });
+//
+//     wait_for_usock(&usock).await;
+//     assert!(!reaper_handle.is_finished());
+//
+//     fs::write(&*secret_path, b"test secret material").unwrap();
+//
+//     reaper_handle.await.unwrap();
+//     let contents = fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
+//     assert_eq!(
+//         std::str::from_utf8(&contents).unwrap(),
+//         format!("{msg}{manifest_env_value}")
+//     );
+//     assert!(fs::remove_file(PIVOT_OK2_SUCCESS_FILE).is_ok());
+//     std::env::remove_var(host_only_env_key);
+// }
 
 #[tokio::test]
 async fn reaper_handles_non_zero_exits() {
@@ -196,7 +281,7 @@ async fn reaper_handles_bridge() {
 
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key
-	let mut manifest_envelope = ManifestEnvelope::default();
+	let mut manifest_envelope = ManifestEnvelopeV1::default();
 	manifest_envelope.manifest.pivot.args = vec![format!("{pivot_port}")];
 	manifest_envelope.manifest.pivot.bridge_config =
 		vec![BridgeConfig::Server {

@@ -1,11 +1,11 @@
-//! Explicitly versioned JSON manifest schema.
+//! Explicitly versioned JSON manifest schema (v2).
 
 use crate::protocol::{services::boot, Hash256};
 
-/// JSON-only pivot binary configuration.
+/// JSON-only pivot binary configuration (v2).
 #[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PivotConfig {
+pub struct PivotConfigV2 {
 	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
 	#[serde(with = "qos_hex::serde")]
 	pub hash: Hash256,
@@ -22,16 +22,16 @@ pub struct PivotConfig {
 	pub env: boot::PivotEnv,
 }
 
-/// Explicitly versioned JSON manifest.
+/// Explicitly versioned JSON manifest (v2).
 #[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Manifest {
+pub struct ManifestV2 {
 	/// Manifest schema version.
 	pub version: super::ManifestVersion,
 	/// Namespace this manifest belongs too.
 	pub namespace: boot::Namespace,
 	/// Pivot binary configuration and verifiable values.
-	pub pivot: PivotConfig,
+	pub pivot: PivotConfigV2,
 	/// Manifest Set members and threshold.
 	pub manifest_set: boot::ManifestSet,
 	/// Share Set members and threshold.
@@ -42,12 +42,12 @@ pub struct Manifest {
 	pub patch_set: boot::PatchSet,
 }
 
-/// Explicitly versioned JSON manifest envelope.
+/// Explicitly versioned JSON manifest envelope (v2).
 #[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ManifestEnvelope {
+pub struct ManifestEnvelopeV2 {
 	/// Encapsulated manifest.
-	pub manifest: Manifest,
+	pub manifest: ManifestV2,
 	/// Approvals for [`Self::manifest`] from the manifest set.
 	pub manifest_set_approvals: Vec<boot::Approval>,
 	/// Approvals for [`Self::manifest`] from the share set.

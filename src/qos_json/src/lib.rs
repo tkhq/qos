@@ -780,9 +780,8 @@ mod tests {
 	}
 
 	fn assert_qos_number_error<T>(result: serde_json::Result<T>) {
-		let err = match result {
-			Ok(_) => panic!("expected QOS number error"),
-			Err(err) => err,
+		let Err(err) = result else {
+			panic!("expected QOS number error");
 		};
 		assert_eq!(err.to_string(), "QOS canonical JSON forbids JSON numbers");
 	}
