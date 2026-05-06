@@ -367,11 +367,12 @@ mod handlers {
 		if let ProtocolMsg::BootStandardRequest { manifest_envelope, pivot } =
 			req
 		{
-			let result = boot::boot_standard(state, manifest_envelope, pivot)
-				.map(|nsm_response| ProtocolMsg::BootStandardResponse {
-					nsm_response,
-				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+			let result =
+				boot::boot_standard(state, manifest_envelope.as_ref(), pivot)
+					.map(|nsm_response| ProtocolMsg::BootStandardResponse {
+						nsm_response,
+					})
+					.map_err(ProtocolMsg::ProtocolErrorResponse);
 
 			Some(result)
 		} else {
@@ -428,11 +429,12 @@ mod handlers {
 		if let ProtocolMsg::BootKeyForwardRequest { manifest_envelope, pivot } =
 			req
 		{
-			let result = key::boot_key_forward(state, manifest_envelope, pivot)
-				.map(|nsm_response| ProtocolMsg::BootKeyForwardResponse {
-					nsm_response,
-				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+			let result =
+				key::boot_key_forward(state, manifest_envelope.as_ref(), pivot)
+					.map(|nsm_response| ProtocolMsg::BootKeyForwardResponse {
+						nsm_response,
+					})
+					.map_err(ProtocolMsg::ProtocolErrorResponse);
 
 			Some(result)
 		} else {
@@ -451,7 +453,7 @@ mod handlers {
 		{
 			let result = key::export_key(
 				state,
-				manifest_envelope,
+				manifest_envelope.as_ref(),
 				cose_sign1_attestation_doc,
 			)
 			.map(|key| {

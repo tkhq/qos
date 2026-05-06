@@ -10,8 +10,8 @@ use qos_core::{
 	io::{IOError, SocketAddress, StreamPool},
 	protocol::{
 		services::boot::{
-			ManifestV1, ManifestEnvelopeV1, ManifestSet, Namespace, NitroConfig,
-			PivotConfigV1, RestartPolicy, ShareSet,
+			ManifestEnvelopeV1, ManifestSet, ManifestV1, Namespace,
+			NitroConfig, PivotConfigV1, RestartPolicy, ShareSet,
 		},
 		ProtocolPhase,
 	},

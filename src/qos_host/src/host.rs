@@ -27,8 +27,8 @@ use qos_core::{
 	client::{ClientError, SocketClient},
 	io::SocketAddress,
 	protocol::{
-		msg::ProtocolMsg, services::boot::ManifestEnvelopeV1, ProtocolError,
-		ProtocolPhase,
+		msg::ProtocolMsg, services::boot::VersionedManifestEnvelope,
+		ProtocolError, ProtocolPhase,
 	},
 };
 use qos_nsm::types::NsmResponse;
@@ -195,13 +195,14 @@ impl HostServer {
 			get_eph_key_from_attestation_doc(&state.enclave_client).await;
 
 		let vitals_log = if let Some(m) = manifest_envelope.as_ref() {
+			let manifest = m.manifest();
 			serde_json::to_string(&EnclaveVitalStats {
 				phase,
-				namespace: m.manifest.namespace.name.clone(),
-				nonce: m.manifest.namespace.nonce,
-				pivot_hash: m.manifest.pivot.hash,
-				pcr0: m.manifest.enclave.pcr0.clone(),
-				pivot_args: m.manifest.pivot.args.clone(),
+				namespace: manifest.namespace().name.clone(),
+				nonce: manifest.namespace().nonce,
+				pivot_hash: *manifest.pivot_hash(),
+				pcr0: manifest.enclave().pcr0.clone(),
+				pivot_args: manifest.args().to_vec(),
 				ephemeral_key: ephemeral_key.clone(),
 			})
 			.expect("always valid json. qed.")
@@ -271,7 +272,7 @@ async fn get_eph_key_from_attestation_doc(
 // try to get the manifest envelope from the enclave, used for restart handling of qos_host
 async fn get_manifest_envelope(
 	enclave_client: &SocketClient,
-) -> Result<Option<ManifestEnvelopeV1>, ClientError> {
+) -> Result<Option<VersionedManifestEnvelope>, ClientError> {
 	let enc_manifest_envelope_req =
 		ProtocolMsg::ManifestEnvelopeRequest.to_canonical_json_vec();
 	let enc_manifest_envelope_resp =

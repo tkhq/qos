@@ -40,6 +40,7 @@ pub struct PivotConfigV0 {
 	Clone,
 	borsh::BorshSerialize,
 	borsh::BorshDeserialize,
+	serde::Serialize,
 	serde::Deserialize,
 )]
 #[serde(rename_all = "camelCase")]
@@ -60,7 +61,17 @@ pub struct ManifestV0 {
 }
 
 /// [`ManifestV0`] with accompanying [`Approval`]s.
-#[derive(PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq,
+	Eq,
+	Debug,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestEnvelopeV0 {
 	/// Encapsulated manifest.

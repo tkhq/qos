@@ -6,9 +6,7 @@ use qos_crypto::sha_256;
 use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Pair, P256Public};
 
-use crate::protocol::{
-	services::attestation, ProtocolError, ProtocolState, QosHash,
-};
+use crate::protocol::{services::attestation, ProtocolError, ProtocolState};
 
 pub mod env;
 pub mod manifest;
@@ -19,7 +17,9 @@ pub use env::{
 pub use manifest::v0::{ManifestEnvelopeV0, ManifestV0, PivotConfigV0};
 pub use manifest::v1::{ManifestEnvelopeV1, ManifestV1, PivotConfigV1};
 pub use manifest::v2::{ManifestEnvelopeV2, ManifestV2, PivotConfigV2};
-pub use manifest::{ManifestVersion, VersionedManifest};
+pub use manifest::{
+	ManifestVersion, VersionedManifest, VersionedManifestEnvelope,
+};
 
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
@@ -376,16 +376,16 @@ impl Approval {
 
 pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	state: &mut ProtocolState,
-	manifest_envelope: &ManifestEnvelopeV1,
+	manifest_envelope: &VersionedManifestEnvelope,
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	// 1. Check signatures over the manifest envelope.
 	manifest_envelope.check_approvals()?;
-	if !manifest_envelope.share_set_approvals.is_empty() {
+	if !manifest_envelope.share_set_approvals().is_empty() {
 		return Err(ProtocolError::BadShareSetApprovals);
 	}
 	let actual_hash = sha_256(pivot);
-	let expected_hash = manifest_envelope.manifest.pivot.hash;
+	let expected_hash = manifest_envelope.manifest().pivot_hash().to_owned();
 	if actual_hash != expected_hash {
 		return Err(ProtocolError::InvalidPivotHash {
 			expected: qos_hex::encode(&expected_hash),
@@ -405,7 +405,7 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	let nsm_response = attestation::get_post_boot_attestation_doc(
 		&*state.attestor,
 		ephemeral_key.public_key().to_bytes(),
-		manifest_envelope.manifest.qos_hash().to_vec(),
+		manifest_envelope.qos_hash().to_vec(),
 	);
 
 	// 4. Return the NSM Response containing COSE Sign1 encoded attestation
@@ -413,12 +413,17 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	Ok(nsm_response)
 }
 
-pub(in crate::protocol) fn boot_standard(
+pub(in crate::protocol) fn boot_standard<E>(
 	state: &mut ProtocolState,
-	manifest_envelope: &ManifestEnvelopeV1,
+	manifest_envelope: E,
 	pivot: &[u8],
-) -> Result<NsmResponse, ProtocolError> {
-	let nsm_response = put_manifest_and_pivot(state, manifest_envelope, pivot)?;
+) -> Result<NsmResponse, ProtocolError>
+where
+	E: Into<VersionedManifestEnvelope>,
+{
+	let manifest_envelope = manifest_envelope.into();
+	let nsm_response =
+		put_manifest_and_pivot(state, &manifest_envelope, pivot)?;
 	Ok(nsm_response)
 }
 
@@ -430,7 +435,7 @@ mod test {
 	use qos_test_primitives::PathWrapper;
 
 	use super::*;
-	use crate::handles::Handles;
+	use crate::{handles::Handles, protocol::QosHash};
 
 	fn get_manifest() -> (ManifestV1, Vec<(P256Pair, QuorumMember)>, Vec<u8>) {
 		let quorum_pair = P256Pair::generate().unwrap();
@@ -541,7 +546,10 @@ mod test {
 		assert!(Path::new(&pivot_file).exists());
 		assert!(Path::new(&ephemeral_file).exists());
 
-		assert_eq!(handles.get_manifest_envelope().unwrap(), manifest_envelope);
+		assert_eq!(
+			handles.get_manifest_envelope().unwrap(),
+			VersionedManifestEnvelope::V1(manifest_envelope)
+		);
 
 		std::fs::remove_file(pivot_file).unwrap();
 		std::fs::remove_file(ephemeral_file).unwrap();
@@ -870,5 +878,82 @@ mod test {
 			decoded.qos_hash(),
 			qos_crypto::sha_256(&qos_json::to_vec(&v2).unwrap())
 		);
+	}
+
+	#[test]
+	fn versioned_manifest_envelope_reads_v1_json_before_borsh_fallbacks() {
+		let (manifest, members, _) = get_manifest();
+		let manifest_hash = manifest.qos_hash();
+		let approvals = members
+			.into_iter()
+			.take(2)
+			.map(|(pair, member)| Approval {
+				signature: pair.sign(&manifest_hash).unwrap(),
+				member,
+			})
+			.collect();
+		let envelope = ManifestEnvelopeV1 {
+			manifest,
+			manifest_set_approvals: approvals,
+			share_set_approvals: vec![],
+		};
+
+		let json_bytes = serde_json::to_vec(&envelope).unwrap();
+		let decoded =
+			VersionedManifestEnvelope::try_from_slice_compat(&json_bytes)
+				.unwrap();
+		assert!(matches!(decoded, VersionedManifestEnvelope::V1(_)));
+		decoded.check_approvals().unwrap();
+
+		let borsh_bytes = borsh::to_vec(&envelope).unwrap();
+		let decoded =
+			VersionedManifestEnvelope::try_from_slice_compat(&borsh_bytes)
+				.unwrap();
+		assert!(matches!(decoded, VersionedManifestEnvelope::V1(_)));
+		decoded.check_approvals().unwrap();
+	}
+
+	#[test]
+	fn versioned_manifest_envelope_reads_v2_json_and_hashes_with_json() {
+		let (manifest, members, _) = get_manifest();
+		let v2 = ManifestV2 {
+			version: ManifestVersion::V2,
+			namespace: manifest.namespace,
+			pivot: PivotConfigV2 {
+				hash: manifest.pivot.hash,
+				restart: manifest.pivot.restart,
+				bridge_config: manifest.pivot.bridge_config,
+				debug_mode: manifest.pivot.debug_mode,
+				args: manifest.pivot.args,
+				env: PivotEnv::new(),
+			},
+			manifest_set: manifest.manifest_set,
+			share_set: manifest.share_set,
+			enclave: manifest.enclave,
+			patch_set: manifest.patch_set,
+		};
+		let manifest_hash =
+			qos_crypto::sha_256(&qos_json::to_vec(&v2).unwrap());
+		let approvals = members
+			.into_iter()
+			.take(2)
+			.map(|(pair, member)| Approval {
+				signature: pair.sign(&manifest_hash).unwrap(),
+				member,
+			})
+			.collect();
+		let envelope = ManifestEnvelopeV2 {
+			manifest: v2,
+			manifest_set_approvals: approvals,
+			share_set_approvals: vec![],
+		};
+		let bytes = qos_json::to_vec(&envelope).unwrap();
+		let decoded =
+			VersionedManifestEnvelope::try_from_slice_compat(&bytes).unwrap();
+
+		assert!(matches!(decoded, VersionedManifestEnvelope::V2(_)));
+		assert_eq!(decoded.qos_hash(), manifest_hash);
+		decoded.check_approvals().unwrap();
+		assert_eq!(decoded.to_storage_vec().unwrap(), bytes);
 	}
 }

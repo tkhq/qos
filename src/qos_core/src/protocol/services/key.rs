@@ -9,7 +9,7 @@ use qos_p256::{P256Pair, P256Public};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
-	services::boot::{put_manifest_and_pivot, ManifestEnvelopeV1},
+	services::boot::{put_manifest_and_pivot, VersionedManifestEnvelope},
 	ProtocolError, ProtocolState, QosHash,
 };
 
@@ -28,12 +28,12 @@ pub(in crate::protocol) fn inject_key(
 	EncryptedQuorumKey { encrypted_quorum_key, signature }: EncryptedQuorumKey,
 ) -> Result<(), ProtocolError> {
 	let manifest_envelope = state.handles.get_manifest_envelope()?;
+	let manifest = manifest_envelope.manifest();
 
 	// 1. Verify the signature over the `encrypted_quorum_key` against the
 	// Quorum Key specified in the New ManifestV1.
-	let quorum_public = P256Public::from_bytes(
-		&manifest_envelope.manifest.namespace.quorum_key,
-	)?;
+	let quorum_public =
+		P256Public::from_bytes(&manifest.namespace().quorum_key)?;
 	quorum_public
 		.verify(&encrypted_quorum_key, &signature)
 		.map_err(|_| ProtocolError::InvalidEncryptedQuorumKeySignature)?;
@@ -70,20 +70,29 @@ pub(in crate::protocol) fn inject_key(
 	Ok(())
 }
 
-pub(in crate::protocol) fn boot_key_forward(
+pub(in crate::protocol) fn boot_key_forward<E>(
 	state: &mut ProtocolState,
-	manifest_envelope: &ManifestEnvelopeV1,
+	manifest_envelope: E,
 	pivot: &[u8],
-) -> Result<NsmResponse, ProtocolError> {
-	let nsm_response = put_manifest_and_pivot(state, manifest_envelope, pivot)?;
+) -> Result<NsmResponse, ProtocolError>
+where
+	E: Into<VersionedManifestEnvelope>,
+{
+	let manifest_envelope = manifest_envelope.into();
+	let nsm_response =
+		put_manifest_and_pivot(state, &manifest_envelope, pivot)?;
 	Ok(nsm_response)
 }
 
-pub(in crate::protocol) fn export_key(
+pub(in crate::protocol) fn export_key<E>(
 	state: &mut ProtocolState,
-	new_manifest_envelope: &ManifestEnvelopeV1,
+	new_manifest_envelope: E,
 	cose_sign1_attestation_document: &[u8],
-) -> Result<EncryptedQuorumKey, ProtocolError> {
+) -> Result<EncryptedQuorumKey, ProtocolError>
+where
+	E: Into<VersionedManifestEnvelope>,
+{
+	let new_manifest_envelope = new_manifest_envelope.into();
 	// 1. Check the basic validity of the attestation doc (cert chain etc).
 	// Ensures that the attestation document is actually from an AWS controlled
 	// NSM module and the document's timestamp was recent.
@@ -92,19 +101,23 @@ pub(in crate::protocol) fn export_key(
 		&*state.attestor,
 	)?;
 
-	export_key_internal(state, new_manifest_envelope, &attestation_doc)
+	export_key_internal(state, &new_manifest_envelope, &attestation_doc)
 }
 
 // Primary logic of `export_key` pulled out so it can be unit tested.
-fn export_key_internal(
+fn export_key_internal<E>(
 	state: &mut ProtocolState,
-	new_manifest_envelope: &ManifestEnvelopeV1,
+	new_manifest_envelope: E,
 	attestation_doc: &AttestationDoc,
-) -> Result<EncryptedQuorumKey, ProtocolError> {
+) -> Result<EncryptedQuorumKey, ProtocolError>
+where
+	E: Into<VersionedManifestEnvelope>,
+{
+	let new_manifest_envelope = new_manifest_envelope.into();
 	let old_manifest_envelope = state.handles.get_manifest_envelope()?;
 	// steps 2 through 9
 	validate_manifest(
-		new_manifest_envelope,
+		&new_manifest_envelope,
 		&old_manifest_envelope,
 		attestation_doc,
 	)?;
@@ -139,32 +152,36 @@ fn export_key_internal(
 }
 
 /// `ManifestV1` validation logic. Extracted to make unit testing easier.
-fn validate_manifest(
-	new_manifest_envelope: &ManifestEnvelopeV1,
-	old_manifest_envelope: &ManifestEnvelopeV1,
+fn validate_manifest<N, O>(
+	new_manifest_envelope: N,
+	old_manifest_envelope: O,
 	#[allow(unused_variables)] attestation_doc: &AttestationDoc,
-) -> Result<(), ProtocolError> {
+) -> Result<(), ProtocolError>
+where
+	N: Into<VersionedManifestEnvelope>,
+	O: Into<VersionedManifestEnvelope>,
+{
+	let new_manifest_envelope = new_manifest_envelope.into();
+	let old_manifest_envelope = old_manifest_envelope.into();
 	// 2. Check the signatures over the New ManifestV1. Ensures that K Manifest
 	// Set Members approved the New ManifestV1.
 	new_manifest_envelope.check_approvals()?;
 
-	if !new_manifest_envelope.share_set_approvals.is_empty() {
+	if !new_manifest_envelope.share_set_approvals().is_empty() {
 		return Err(ProtocolError::BadShareSetApprovals);
 	}
+	let old_manifest = old_manifest_envelope.manifest();
+	let new_manifest = new_manifest_envelope.manifest();
 
 	// 3. Check that the Quorum Key of the Local ManifestV1 matches the Quorum Key
 	// of the New ManifestV1. This ensures the request is for the correct Quorum
 	// Key.
-	if old_manifest_envelope.manifest.namespace.quorum_key
-		!= new_manifest_envelope.manifest.namespace.quorum_key
+	if old_manifest.namespace().quorum_key
+		!= new_manifest.namespace().quorum_key
 	{
 		return Err(ProtocolError::DifferentQuorumKey {
-			expected: qos_hex::encode(
-				&old_manifest_envelope.manifest.namespace.quorum_key,
-			),
-			actual: qos_hex::encode(
-				&new_manifest_envelope.manifest.namespace.quorum_key,
-			),
+			expected: qos_hex::encode(&old_manifest.namespace().quorum_key),
+			actual: qos_hex::encode(&new_manifest.namespace().quorum_key),
 		});
 	}
 
@@ -176,16 +193,14 @@ fn validate_manifest(
 	// Node - thus it's important to retire all Original Nodes ASAP that use
 	// compromised ManifestV1 Sets.
 	{
-		let mut new_manifest = new_manifest_envelope.manifest.clone();
-		let mut old_manifest = old_manifest_envelope.manifest.clone();
-		new_manifest.manifest_set.members.sort();
-		old_manifest.manifest_set.members.sort();
-		if old_manifest.manifest_set != new_manifest.manifest_set {
+		let mut new_manifest_set = new_manifest.manifest_set().clone();
+		let mut old_manifest_set = old_manifest.manifest_set().clone();
+		new_manifest_set.members.sort();
+		old_manifest_set.members.sort();
+		if old_manifest_set != new_manifest_set {
 			return Err(ProtocolError::DifferentManifestSet {
-				expected: qos_hex::encode(
-					&old_manifest.manifest_set.qos_hash(),
-				),
-				actual: qos_hex::encode(&new_manifest.manifest_set.qos_hash()),
+				expected: qos_hex::encode(&old_manifest_set.qos_hash()),
+				actual: qos_hex::encode(&new_manifest_set.qos_hash()),
 			});
 		}
 	}
@@ -194,12 +209,10 @@ fn validate_manifest(
 	// of the New ManifestV1. Namespaces are a social construct, but we only want
 	// to allow forwarding a Quorum Key to Nodes in the same Namespace to help
 	// ensure that the nonce is not abused.
-	if old_manifest_envelope.manifest.namespace.name
-		!= new_manifest_envelope.manifest.namespace.name
-	{
+	if old_manifest.namespace().name != new_manifest.namespace().name {
 		return Err(ProtocolError::DifferentNamespaceName {
-			expected: old_manifest_envelope.manifest.namespace.name.clone(),
-			actual: new_manifest_envelope.manifest.namespace.name.clone(),
+			expected: old_manifest.namespace().name.clone(),
+			actual: new_manifest.namespace().name.clone(),
 		});
 	}
 
@@ -212,23 +225,17 @@ fn validate_manifest(
 	// Members approving the manifest. In other words, we rely on the Manifest
 	// Set Members to correctly increment the nonce when any change is made to
 	// the latest manifest for a namespace.
-	if old_manifest_envelope.manifest.namespace.nonce
-		> new_manifest_envelope.manifest.namespace.nonce
-	{
+	if old_manifest.namespace().nonce > new_manifest.namespace().nonce {
 		return Err(ProtocolError::LowNonce {
-			expected: old_manifest_envelope.manifest.namespace.nonce,
-			actual: new_manifest_envelope.manifest.namespace.nonce,
+			expected: old_manifest.namespace().nonce,
+			actual: new_manifest.namespace().nonce,
 		});
-	} else if old_manifest_envelope.manifest.namespace.nonce
-		== new_manifest_envelope.manifest.namespace.nonce
-		&& old_manifest_envelope.manifest.qos_hash()
-			!= new_manifest_envelope.manifest.qos_hash()
+	} else if old_manifest.namespace().nonce == new_manifest.namespace().nonce
+		&& old_manifest.qos_hash() != new_manifest.qos_hash()
 	{
 		return Err(ProtocolError::DifferentManifest {
-			expected: qos_hex::encode(
-				&old_manifest_envelope.manifest.qos_hash(),
-			),
-			actual: qos_hex::encode(&new_manifest_envelope.manifest.qos_hash()),
+			expected: qos_hex::encode(&old_manifest.qos_hash()),
+			actual: qos_hex::encode(&new_manifest.qos_hash()),
 		});
 	}
 
@@ -245,11 +252,11 @@ fn validate_manifest(
 	{
 		qos_nsm::nitro::verify_attestation_doc_against_user_input(
 			attestation_doc,
-			&new_manifest_envelope.manifest.qos_hash(),
-			&new_manifest_envelope.manifest.enclave.pcr0,
-			&new_manifest_envelope.manifest.enclave.pcr1,
-			&new_manifest_envelope.manifest.enclave.pcr2,
-			&new_manifest_envelope.manifest.enclave.pcr3,
+			&new_manifest.qos_hash(),
+			&new_manifest.enclave().pcr0,
+			&new_manifest.enclave().pcr1,
+			&new_manifest.enclave().pcr2,
+			&new_manifest.enclave().pcr3,
 		)?;
 	}
 
@@ -260,16 +267,10 @@ fn validate_manifest(
 	// is controlled by the operator, not an enclave that some malicious entity
 	// runs that otherwise configured identically to one of the operator's
 	// enclaves.
-	if old_manifest_envelope.manifest.enclave.pcr3
-		!= new_manifest_envelope.manifest.enclave.pcr3
-	{
+	if old_manifest.enclave().pcr3 != new_manifest.enclave().pcr3 {
 		return Err(ProtocolError::DifferentPcr3 {
-			expected: qos_hex::encode(
-				&old_manifest_envelope.manifest.enclave.pcr3,
-			),
-			actual: qos_hex::encode(
-				&new_manifest_envelope.manifest.enclave.pcr3,
-			),
+			expected: qos_hex::encode(&old_manifest.enclave().pcr3),
+			actual: qos_hex::encode(&new_manifest.enclave().pcr3),
 		});
 	}
 
@@ -305,9 +306,9 @@ mod test {
 		protocol::{
 			services::{
 				boot::{
-					Approval, ManifestV1, ManifestEnvelopeV1, ManifestSet,
+					Approval, ManifestEnvelopeV1, ManifestSet, ManifestV1,
 					Namespace, NitroConfig, PivotConfigV1, QuorumMember,
-					RestartPolicy, ShareSet,
+					RestartPolicy, ShareSet, VersionedManifestEnvelope,
 				},
 				key::{inject_key, EncryptedQuorumKey},
 			},
@@ -465,7 +466,7 @@ mod test {
 			assert!(handles.pivot_exists());
 			assert_eq!(
 				handles.get_manifest_envelope().unwrap(),
-				manifest_envelope
+				VersionedManifestEnvelope::V1(manifest_envelope)
 			);
 
 			handles.get_ephemeral_key().unwrap();

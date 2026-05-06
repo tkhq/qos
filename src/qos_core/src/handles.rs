@@ -8,7 +8,9 @@ use std::{
 
 use qos_p256::P256Pair;
 
-use crate::protocol::{services::boot::ManifestEnvelopeV1, ProtocolError};
+use crate::protocol::{
+	services::boot::VersionedManifestEnvelope, ProtocolError,
+};
 
 /// Handle for accessing the quorum key.
 #[derive(Debug, Clone)]
@@ -73,7 +75,7 @@ pub struct Handles {
 	ephemeral: EphemeralKeyHandle,
 	/// Path to the file containing the PEM encoded Quorum Key.
 	quorum: QuorumKeyHandle,
-	/// Path to the file containing the Borsh encoded [`ManifestEnvelopeV1`].
+	/// Path to the file containing the manifest envelope.
 	manifest: String,
 	/// Path to the file containing the pivot.
 	pivot: String,
@@ -182,11 +184,12 @@ impl Handles {
 	/// Errors if the Manifest has not been put.
 	pub fn get_manifest_envelope(
 		&self,
-	) -> Result<ManifestEnvelopeV1, ProtocolError> {
+	) -> Result<VersionedManifestEnvelope, ProtocolError> {
 		let contents = fs::read(&self.manifest)
 			.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)?;
-		let manifest = serde_json::from_slice(&contents)
-			.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)?;
+		let manifest =
+			VersionedManifestEnvelope::try_from_slice_compat(&contents)
+				.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)?;
 
 		Ok(manifest)
 	}
@@ -196,13 +199,18 @@ impl Handles {
 	/// # Errors
 	///
 	/// Errors if the Manifest has already been put.
-	pub fn put_manifest_envelope(
+	pub fn put_manifest_envelope<E>(
 		&self,
-		manifest_envelope: &ManifestEnvelopeV1,
-	) -> Result<(), ProtocolError> {
+		manifest_envelope: E,
+	) -> Result<(), ProtocolError>
+	where
+		E: Into<VersionedManifestEnvelope>,
+	{
+		let manifest_envelope = manifest_envelope.into();
 		Self::write_as_read_only(
 			&self.manifest,
-			&serde_json::to_vec(manifest_envelope)
+			&manifest_envelope
+				.to_storage_vec()
 				.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?,
 			ProtocolError::FailedToPutManifestEnvelope,
 		)
@@ -213,7 +221,7 @@ impl Handles {
 	/// **Warning**: This should not be used after pivoting. It is only meant to
 	/// be used when updating the manifest envelope while provisioning.
 	pub(crate) fn mutate_manifest_envelope<
-		F: FnOnce(ManifestEnvelopeV1) -> ManifestEnvelopeV1,
+		F: FnOnce(VersionedManifestEnvelope) -> VersionedManifestEnvelope,
 	>(
 		&self,
 		mutate: F,
@@ -229,7 +237,8 @@ impl Handles {
 		)?;
 		fs::write(
 			&self.manifest,
-			serde_json::to_vec(&manifest_envelope)
+			manifest_envelope
+				.to_storage_vec()
 				.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?,
 		)
 		.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?;
@@ -327,8 +336,8 @@ mod test {
 
 	use super::*;
 	use crate::protocol::services::boot::{
-		ManifestSet, ManifestV1, Namespace, NitroConfig, PatchSet,
-		PivotConfigV1, RestartPolicy, ShareSet,
+		ManifestEnvelopeV1, ManifestSet, ManifestV1, Namespace, NitroConfig,
+		PatchSet, PivotConfigV1, RestartPolicy, ShareSet,
 	};
 
 	#[test]
@@ -468,6 +477,9 @@ mod test {
 			share_set_approvals: vec![],
 		};
 
+		let manifest_envelope =
+			VersionedManifestEnvelope::V1(manifest_envelope);
+
 		let result = handles.put_manifest_envelope(&manifest_envelope);
 		let error =
 			handles.put_manifest_envelope(&manifest_envelope).unwrap_err();
@@ -475,6 +487,6 @@ mod test {
 		assert!(result.is_ok());
 		assert_eq!(error, ProtocolError::CannotModifyPostPivotStatic);
 		assert!(handles.manifest_envelope_exists());
-		assert!(handles.get_manifest_envelope().unwrap() == manifest_envelope);
+		assert_eq!(handles.get_manifest_envelope().unwrap(), manifest_envelope);
 	}
 }

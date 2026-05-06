@@ -21,6 +21,7 @@ use qos_test_primitives::PathWrapper;
 use yubikey::{MgmKey, TouchPolicy, YubiKey};
 
 const DATA: &[u8] = b"test data";
+const QOS_CLIENT: &str = env!("CARGO_BIN_EXE_qos_client");
 
 /// CAREFUL: Only run these tests when a test Yubikey is plugged in.
 /// This will perform multiple FACTORY RESETS on the Yubikey PIV component!
@@ -203,7 +204,7 @@ fn provision_yubikey_works() {
 	// Create the temporary directory where we write the yubikey
 	std::fs::create_dir(&*tmp_dir).unwrap();
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(QOS_CLIENT)
 		.arg("provision-yubikey")
 		.arg("--pub-path")
 		.arg(&*pub_path)
@@ -232,7 +233,7 @@ fn advanced_provision_yubikey_works() {
 	// Create the temporary directory where we write the yubikey
 	std::fs::create_dir(&*tmp_dir).unwrap();
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(QOS_CLIENT)
 		.arg("generate-file-key")
 		.arg("--master-seed-path")
 		.arg(&*master_seed_path)
@@ -244,7 +245,7 @@ fn advanced_provision_yubikey_works() {
 		.unwrap()
 		.success());
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(QOS_CLIENT)
 		.arg("advanced-provision-yubikey")
 		.arg("--master-seed-path")
 		.arg(&*master_seed_path)
@@ -280,7 +281,7 @@ fn provision_sign_and_verify() {
 	let signature_path = "/tmp/provision_sign_and_verify/signature";
 	let payload_path = "/tmp/provision_sign_and_verify/payload";
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(QOS_CLIENT)
 		.arg("provision-yubikey")
 		.arg("--pub-path")
 		.arg(&*pub_path)
@@ -291,7 +292,7 @@ fn provision_sign_and_verify() {
 		.success());
 
 	let data_hex = qos_hex::encode(DATA);
-	let mut child = Command::new("../target/debug/qos_client")
+	let mut child = Command::new(QOS_CLIENT)
 		.arg("yubikey-sign")
 		.arg("--payload")
 		.arg(&data_hex)
@@ -312,7 +313,7 @@ fn provision_sign_and_verify() {
 	std::fs::write(payload_path, DATA).unwrap();
 	std::fs::write(signature_path, signature).unwrap();
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(QOS_CLIENT)
 		.arg("p256-verify")
 		.arg("--payload-path")
 		.arg(payload_path)

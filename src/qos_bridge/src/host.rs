@@ -45,8 +45,8 @@ impl BridgeServer {
 						.expect("unable to parse enclave info response")
 						.manifest_envelope
 					{
-						break self
-							.run_bridges(&me.manifest.pivot.bridge_config);
+						let manifest = me.manifest();
+						break self.run_bridges(manifest.bridge_config());
 					}
 				}
 				Err(err) => eprintln!("unable to query enclave: {err}"),
@@ -62,7 +62,7 @@ impl BridgeServer {
 		self.host_port_override.unwrap_or(port)
 	}
 
-	fn run_bridges(&self, configs: &Vec<BridgeConfig>) {
+	fn run_bridges(&self, configs: &[BridgeConfig]) {
 		for config in configs {
 			let (host_port, host_ip_str) = match config {
 				BridgeConfig::Client { port: _, host: _ } => {

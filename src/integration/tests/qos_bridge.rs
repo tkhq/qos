@@ -12,7 +12,7 @@ use integration::{
 use qos_core::protocol::{
 	services::{
 		boot::{
-			Approval, BridgeConfig, ManifestV1, ManifestSet, Namespace,
+			Approval, BridgeConfig, ManifestSet, ManifestV1, Namespace,
 			PivotConfigV1, RestartPolicy, ShareSet,
 		},
 		genesis::{GenesisMemberOutput, GenesisOutput},

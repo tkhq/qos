@@ -51,8 +51,9 @@ pub trait QosHashJson: Serialize {
 		Self: Sized,
 	{
 		sha_256(
-			&qos_json::to_vec(self)
-				.expect("Implements serde serialize in a QOS JSON compatible way"),
+			&qos_json::to_vec(self).expect(
+				"Implements serde serialize in a QOS JSON compatible way",
+			),
 		)
 	}
 }

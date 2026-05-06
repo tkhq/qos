@@ -323,6 +323,13 @@ impl PivotEnv {
 		self.0.get(name)
 	}
 
+	/// Iterate over environment variables in canonical key order.
+	pub fn iter(
+		&self,
+	) -> impl Iterator<Item = (&PivotEnvVarName, &PivotEnvValue)> {
+		self.0.iter()
+	}
+
 	fn check_limits(&self) -> Result<(), ProtocolError> {
 		if self.len() > MAX_PIVOT_ENV_VARS {
 			return Err(ProtocolError::InvalidPivotEnv(format!(

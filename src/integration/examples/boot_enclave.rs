@@ -11,7 +11,7 @@ use borsh::BorshDeserialize;
 use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
 use qos_core::protocol::{
 	services::{
-		boot::{Approval, ManifestV1, ManifestSet, Namespace, ShareSet},
+		boot::{Approval, ManifestSet, ManifestV1, Namespace, ShareSet},
 		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
 	ProtocolPhase, QosHash,

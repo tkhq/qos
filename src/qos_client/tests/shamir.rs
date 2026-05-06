@@ -5,6 +5,7 @@ use std::process::Command;
 use qos_test_primitives::PathWrapper;
 
 const SECRET: &[u8] = b"our little secret :)";
+const QOS_CLIENT: &str = env!("CARGO_BIN_EXE_qos_client");
 
 #[test]
 fn shamir_commands_work() {
@@ -17,7 +18,7 @@ fn shamir_commands_work() {
 	std::fs::create_dir_all(shares_dir).unwrap();
 	std::fs::write(secret_path, SECRET).unwrap();
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(QOS_CLIENT)
 		.arg("shamir-split")
 		.arg("--secret-path")
 		.arg(secret_path)
@@ -44,7 +45,7 @@ fn shamir_commands_work() {
 	assert!(!std::fs::read(share3).unwrap().is_empty());
 	assert!(!std::fs::read(share4).unwrap().is_empty());
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(QOS_CLIENT)
 		.arg("shamir-reconstruct")
 		.arg("--share")
 		.arg(share1)
