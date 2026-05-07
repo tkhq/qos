@@ -12,6 +12,7 @@ pub mod request {
 	use qos_core::protocol::msg::ProtocolMsg;
 
 	const MAX_SIZE: u64 = u32::MAX as u64;
+	const ERROR_BODY_PREFIX_LIMIT: usize = 256;
 
 	/// Post a [`qos_core::protocol::msg::ProtocolMsg`] to the given host `url`.
 	///
@@ -50,10 +51,14 @@ pub mod request {
 			},
 		)?;
 
-		let decoded_response =
-			ProtocolMsg::try_from_slice(&buf).map_err(|e| {
-				format!("http_post error: deserialization error: {e:?}")
-			})?;
+		let decoded_response = ProtocolMsg::try_from_slice(&buf).map_err(|e| {
+			let body_prefix = String::from_utf8_lossy(
+				&buf[..std::cmp::min(buf.len(), ERROR_BODY_PREFIX_LIMIT)],
+			);
+			format!(
+				"http_post error: deserialization error: {e:?}; body prefix: {body_prefix:?}"
+			)
+		})?;
 
 		Ok(decoded_response)
 	}

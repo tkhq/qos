@@ -189,15 +189,6 @@ pub struct PivotConfig {
 	/// Arguments to invoke the binary with. Leave this empty if none are
 	/// needed.
 	pub args: Vec<String>,
-	/// Environment variables to inject into the pivot process.
-	///
-	/// Variable names must match `[A-Za-z_][A-Za-z0-9_]*` and be at most
-	/// [`MAX_PIVOT_ENV_NAME_LEN`] bytes long. Values may contain any UTF-8
-	/// except NUL bytes and must be at most [`MAX_PIVOT_ENV_VALUE_LEN`] bytes
-	/// long. A manifest may contain at most [`MAX_PIVOT_ENV_VARS`] variables.
-	/// Values are not restricted to ASCII.
-	#[serde(default, skip_serializing_if = "PivotEnv::is_empty")]
-	pub env: PivotEnv,
 }
 
 /// Pivot binary configuration, original version (V0)
@@ -232,20 +223,18 @@ impl From<PivotConfigV0> for PivotConfig {
 			args: value.args,
 			debug_mode: false,
 			bridge_config: Vec::new(),
-			env: PivotEnv::new(),
 		}
 	}
 }
 
 impl fmt::Debug for PivotConfig {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let Self { hash, restart, bridge_config: _, debug_mode: _, args, env } =
+		let Self { hash, restart, bridge_config: _, debug_mode: _, args } =
 			self;
 		f.debug_struct("PivotConfig")
 			.field("hash", &qos_hex::encode(hash))
 			.field("restart", restart)
 			.field("args", &args.join(" "))
-			.field("env", env)
 			.finish()
 	}
 }
@@ -448,7 +437,13 @@ pub struct Manifest {
 // TODO: remove this once json is the default manifest format
 /// The Manifest for the enclave, backwards compatible version 0
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize, serde::Deserialize,
+	PartialEq,
+	Eq,
+	Debug,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Deserialize,
 )]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
@@ -581,7 +576,9 @@ pub struct ManifestEnvelope {
 }
 
 /// [`ManifestV0`] with accompanying [`Approval`]s.
-#[derive(PartialEq, Eq, Debug, Clone, borsh::BorshDeserialize)]
+#[derive(
+	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestEnvelopeV0 {
 	/// Encapsulated manifest.
@@ -784,6 +781,87 @@ mod test {
 		(manifest, member_with_keys, pivot)
 	}
 
+	fn stable_quorum_member(alias: &str, byte: u8) -> QuorumMember {
+		QuorumMember { alias: alias.to_string(), pub_key: vec![byte; 33] }
+	}
+
+	fn stable_pivot_config_v0() -> PivotConfigV0 {
+		PivotConfigV0 {
+			hash: [2; 32],
+			restart: RestartPolicy::Always,
+			args: vec!["--flag".to_string(), "value".to_string()],
+		}
+	}
+
+	fn stable_pivot_config() -> PivotConfig {
+		PivotConfig {
+			hash: [2; 32],
+			restart: RestartPolicy::Always,
+			bridge_config: vec![BridgeConfig::Server {
+				port: 3000,
+				host: "127.0.0.1".to_string(),
+			}],
+			debug_mode: true,
+			args: vec!["--flag".to_string(), "value".to_string()],
+		}
+	}
+
+	fn stable_manifest_v0() -> ManifestV0 {
+		ManifestV0 {
+			namespace: Namespace {
+				nonce: 7,
+				name: "stable-namespace".to_string(),
+				quorum_key: vec![1; 33],
+			},
+			pivot: stable_pivot_config_v0(),
+			manifest_set: ManifestSet {
+				threshold: 2,
+				members: vec![
+					stable_quorum_member("manifest-a", 3),
+					stable_quorum_member("manifest-b", 4),
+				],
+			},
+			share_set: ShareSet {
+				threshold: 1,
+				members: vec![stable_quorum_member("share-a", 5)],
+			},
+			enclave: NitroConfig {
+				pcr0: vec![6; 48],
+				pcr1: vec![7; 48],
+				pcr2: vec![8; 48],
+				pcr3: vec![9; 48],
+				aws_root_certificate: b"stable-aws-root".to_vec(),
+				qos_commit: "stable-qos-commit".to_string(),
+			},
+			patch_set: PatchSet {
+				threshold: 1,
+				members: vec![MemberPubKey { pub_key: vec![10; 33] }],
+			},
+		}
+	}
+
+	fn stable_manifest() -> Manifest {
+		stable_manifest_v0().into()
+	}
+
+	fn stable_approval(alias: &str, key_byte: u8, sig_byte: u8) -> Approval {
+		Approval {
+			signature: vec![sig_byte; 64],
+			member: stable_quorum_member(alias, key_byte),
+		}
+	}
+
+	fn assert_borsh_encoding(
+		value: &impl borsh::BorshSerialize,
+		expected_len: usize,
+		expected_sha256: &str,
+	) {
+		let bytes = borsh::to_vec(value).unwrap();
+
+		assert_eq!(bytes.len(), expected_len);
+		assert_eq!(qos_hex::encode(&sha_256(&bytes)), expected_sha256);
+	}
+
 	#[test]
 	fn manifest_hash() {
 		let (manifest, _members, _pivot) = get_manifest();
@@ -794,20 +872,69 @@ mod test {
 	}
 
 	#[test]
-	fn manifest_hash_changes_when_env_changes() {
-		let (manifest, _members, _pivot) = get_manifest();
-		let mut manifest_with_env = manifest.clone();
-		manifest_with_env
-			.pivot
-			.env
-			.insert(
-				PivotEnvVarName::new("FOO".to_string()).unwrap(),
-				PivotEnvValue::plain("bar".to_string()).unwrap(),
-			)
-			.unwrap();
+	fn manifest_v0_borsh_encoding_is_stable() {
+		assert_borsh_encoding(
+			&stable_manifest_v0(),
+			576,
+			"02dd10dd6ac1fd1da5543b37b0284e110b0e1848346900c42081187375112e16",
+		);
+	}
 
-		assert_ne!(manifest.qos_hash(), manifest_with_env.qos_hash());
-		assert_eq!(manifest.pivot.hash, manifest_with_env.pivot.hash);
+	#[test]
+	fn pivot_config_v0_borsh_encoding_is_stable() {
+		assert_borsh_encoding(
+			&stable_pivot_config_v0(),
+			56,
+			"e1caec9ed88847524e5eaec24fa822b7171f06d5962245fe8e3bcfbe39e373e3",
+		);
+	}
+
+	#[test]
+	fn pivot_config_borsh_encoding_is_stable() {
+		assert_borsh_encoding(
+			&stable_pivot_config(),
+			77,
+			"b0926ecb535f6113d439a83e6df930f6e87bf30bb29c142815ee2949390aa424",
+		);
+	}
+
+	#[test]
+	fn manifest_borsh_encoding_is_stable() {
+		assert_borsh_encoding(
+			&stable_manifest(),
+			581,
+			"742855f098e7019ae4240d598eb43559bf50c7516191a4c97d492a38dab81944",
+		);
+	}
+
+	#[test]
+	fn manifest_envelope_v0_borsh_encoding_is_stable() {
+		let envelope = ManifestEnvelopeV0 {
+			manifest: stable_manifest_v0(),
+			manifest_set_approvals: vec![stable_approval("manifest-a", 3, 11)],
+			share_set_approvals: vec![stable_approval("share-a", 5, 12)],
+		};
+
+		assert_borsh_encoding(
+			&envelope,
+			819,
+			"ef6b23a2f7b5c4cb34176b50073dd751459d2e4d2cf6c51c9f3c4c1aecef623b",
+		);
+	}
+
+	#[test]
+	fn manifest_envelope_borsh_encoding_is_stable() {
+		let envelope = ManifestEnvelope {
+			manifest: stable_manifest(),
+			manifest_set_approvals: vec![stable_approval("manifest-a", 3, 11)],
+			share_set_approvals: vec![stable_approval("share-a", 5, 12)],
+		};
+
+		assert_borsh_encoding(
+			&envelope,
+			824,
+			"96d19327512720fb33c0c737d7ba068de7e234749f222c1d92529dc23e993a67",
+		);
 	}
 
 	#[test]
@@ -1096,6 +1223,5 @@ mod test {
 
 		assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
 		assert_eq!(manifest.pivot.bridge_config.len(), 0);
-		assert!(manifest.pivot.env.is_empty());
 	}
 }
