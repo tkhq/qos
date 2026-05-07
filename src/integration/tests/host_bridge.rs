@@ -46,5 +46,5 @@ async fn vsock_to_tcp_bridge_works() {
 	let mut buf = [0u8; 4];
 	assert_eq!(4, stream2.read(&mut buf).await.unwrap());
 
-	assert!(pivot.0.wait().unwrap().success());
+	assert!(pivot.wait().unwrap().success());
 }

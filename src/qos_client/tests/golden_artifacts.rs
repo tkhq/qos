@@ -216,7 +216,7 @@ const EXPECTED_MANIFEST_V0_JSON: &str = concat!(
 );
 
 struct Fixture {
-	_tmp: PathWrapper<'static>,
+	_tmp: PathWrapper<PathBuf>,
 	manifest_set: PathBuf,
 	share_set: PathBuf,
 	patch_set: PathBuf,
@@ -245,7 +245,7 @@ impl Fixture {
 			std::process::id(),
 			nanos
 		));
-		let tmp: PathWrapper<'static> = root.display().to_string().into();
+		let root = PathWrapper::from(root);
 
 		let manifest_set = root.join("manifest-set");
 		let share_set = root.join("share-set");
@@ -297,7 +297,7 @@ impl Fixture {
 		std::fs::write(&pivot_path, PIVOT_BYTES).unwrap();
 
 		Self {
-			_tmp: tmp,
+			_tmp: root,
 			manifest_set,
 			share_set,
 			patch_set,

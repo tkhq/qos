@@ -155,11 +155,15 @@ mod test {
 		approvals: Vec<Approval>,
 	}
 
-	fn setup(eph_file: &str, quorum_file: &str, manifest_file: &str) -> Setup {
+	fn setup(
+		eph_file: &Path,
+		quorum_file: &Path,
+		manifest_file: &Path,
+	) -> Setup {
 		let handles = Handles::new(
-			eph_file.to_string(),
-			quorum_file.to_string(),
-			manifest_file.to_string(),
+			eph_file.to_str().map(ToString::to_string).unwrap(),
+			quorum_file.to_str().map(ToString::to_string).unwrap(),
+			manifest_file.to_str().map(ToString::to_string).unwrap(),
 			"pivot".to_string(),
 		);
 		// 1) Create and write eph key
@@ -244,9 +248,9 @@ mod test {
 
 	#[test]
 	fn provision_works() {
-		let quorum_file: PathWrapper = "./provision_works.quorum.key".into();
-		let eph_file: PathWrapper = "./provision_works.eph.key".into();
-		let manifest_file: PathWrapper = "./provision_works.manifest".into();
+		let quorum_file = PathWrapper::from("./provision_works.quorum.key");
+		let eph_file = PathWrapper::from("./provision_works.eph.key");
+		let manifest_file = PathWrapper::from("./provision_works.manifest");
 
 		let Setup { quorum_pair, eph_pair, threshold, mut state, approvals } =
 			setup(&eph_file, &quorum_file, &manifest_file);
@@ -304,12 +308,12 @@ mod test {
 
 	#[test]
 	fn provision_rejects_the_wrong_key() {
-		let eph_file: PathWrapper =
-			"./provision_rejects_the_wrong_key.eph.key".into();
-		let quorum_file: PathWrapper =
-			"./provision_rejects_the_wrong_key.quorum.key".into();
-		let manifest_file: PathWrapper =
-			"./provision_rejects_the_wrong_key.manifest".into();
+		let eph_file =
+			PathWrapper::from("./provision_rejects_the_wrong_key.eph.key");
+		let quorum_file =
+			PathWrapper::from("./provision_rejects_the_wrong_key.quorum.key");
+		let manifest_file =
+			PathWrapper::from("./provision_rejects_the_wrong_key.manifest");
 
 		let Setup { eph_pair, threshold, mut state, approvals, .. } =
 			setup(&eph_file, &quorum_file, &manifest_file);
@@ -350,12 +354,15 @@ mod test {
 
 	#[test]
 	fn provision_rejects_if_a_shard_is_invalid() {
-		let eph_file: PathWrapper =
-			"./provision_rejects_if_a_shard_is_invalid.eph.key".into();
-		let quorum_file: PathWrapper =
-			"./provision_rejects_if_a_shard_is_invalid.quorum.key".into();
-		let manifest_file: PathWrapper =
-			"./provision_rejects_if_a_shard_is_invalid.manifest".into();
+		let eph_file = PathWrapper::from(
+			"./provision_rejects_if_a_shard_is_invalid.eph.key",
+		);
+		let quorum_file = PathWrapper::from(
+			"./provision_rejects_if_a_shard_is_invalid.quorum.key",
+		);
+		let manifest_file = PathWrapper::from(
+			"./provision_rejects_if_a_shard_is_invalid.manifest",
+		);
 		let Setup { quorum_pair, eph_pair, threshold, mut state, approvals } =
 			setup(&eph_file, &quorum_file, &manifest_file);
 
@@ -397,12 +404,15 @@ mod test {
 
 	#[test]
 	fn provisions_rejects_if_an_approval_is_invalid() {
-		let eph_file: PathWrapper =
-			"./provisions_rejects_if_an_approval_is_invalid.eph.key".into();
-		let quorum_file: PathWrapper =
-			"./provisions_rejects_if_an_approval_is_invalid.quorum.key".into();
-		let manifest_file: PathWrapper =
-			"./provisions_rejects_if_an_approval_is_invalid.manifest".into();
+		let eph_file = PathWrapper::from(
+			"./provisions_rejects_if_an_approval_is_invalid.eph.key",
+		);
+		let quorum_file = PathWrapper::from(
+			"./provisions_rejects_if_an_approval_is_invalid.quorum.key",
+		);
+		let manifest_file = PathWrapper::from(
+			"./provisions_rejects_if_an_approval_is_invalid.manifest",
+		);
 
 		let Setup {
 			quorum_pair,
@@ -434,12 +444,12 @@ mod test {
 
 	#[test]
 	fn provision_rejects_if_approval_is_not_from_share_set_member() {
-		let eph_file: PathWrapper =
-			"./provision_rejects_if_approval_is_not_from_share_set_member.eph.key".into();
-		let quorum_file: PathWrapper =
-			"./provision_rejects_if_approval_is_not_from_share_set_member.quorum.key".into();
-		let manifest_file: PathWrapper =
-			"./provision_rejects_if_approval_is_not_from_share_set_member.manifest".into();
+		let eph_file = PathWrapper::from(
+			"./provision_rejects_if_approval_is_not_from_share_set_member.eph.key");
+		let quorum_file = PathWrapper::from(
+			"./provision_rejects_if_approval_is_not_from_share_set_member.quorum.key");
+		let manifest_file = PathWrapper::from(
+			"./provision_rejects_if_approval_is_not_from_share_set_member.manifest");
 
 		let Setup {
 			quorum_pair,
@@ -477,12 +487,12 @@ mod test {
 	#[test]
 	fn provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature(
 	) {
-		let eph_file: PathWrapper =
-			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.eph.key".into();
-		let quorum_file: PathWrapper =
-			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.quorum.key".into();
-		let manifest_file: PathWrapper =
-			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.manifest".into();
+		let eph_file = PathWrapper::from(
+			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.eph.key");
+		let quorum_file = PathWrapper::from(
+			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.quorum.key");
+		let manifest_file = PathWrapper::from(
+			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.manifest");
 
 		let Setup {
 			quorum_pair,

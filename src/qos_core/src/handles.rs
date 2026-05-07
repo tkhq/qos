@@ -333,20 +333,22 @@ mod test {
 
 	#[test]
 	fn put_ephemeral_key_is_read_only_write() {
-		let pivot_file: PathWrapper =
-			"put_ephemeral_key_is_read_only_write.pivot".into();
-		let ephemeral_file: PathWrapper =
-			"put_ephemeral_key_is_read_only_write_eph.secret".into();
-		let quorum_file: PathWrapper =
-			"put_ephemeral_key_is_read_only_write_quor.secret".into();
-		let manifest_file: PathWrapper =
-			"put_ephemeral_key_is_read_only_write.manifest".into();
+		let pivot_file =
+			PathWrapper::from("put_ephemeral_key_is_read_only_write.pivot");
+		let ephemeral_file = PathWrapper::from(
+			"put_ephemeral_key_is_read_only_write_eph.secret",
+		);
+		let quorum_file = PathWrapper::from(
+			"put_ephemeral_key_is_read_only_write_quor.secret",
+		);
+		let manifest_file =
+			PathWrapper::from("put_ephemeral_key_is_read_only_write.manifest");
 
 		let handles = Handles::new(
-			(*ephemeral_file).to_string(),
-			(*quorum_file).to_string(),
-			(*manifest_file).to_string(),
-			(*pivot_file).to_string(),
+			ephemeral_file.to_str().map(ToString::to_string).unwrap(),
+			quorum_file.to_str().map(ToString::to_string).unwrap(),
+			manifest_file.to_str().map(ToString::to_string).unwrap(),
+			pivot_file.to_str().map(ToString::to_string).unwrap(),
 		);
 
 		let ephemeral_key = P256Pair::generate().unwrap();
@@ -360,20 +362,20 @@ mod test {
 
 	#[test]
 	fn put_quorum_key_is_read_only_write() {
-		let pivot_file: PathWrapper =
-			"put_quorum_key_is_read_only_write.pivot".into();
-		let ephemeral_file: PathWrapper =
-			"put_quorum_key_is_read_only_write_eph.secret".into();
-		let quorum_file: PathWrapper =
-			"put_quorum_key_is_read_only_write_quor.secret".into();
-		let manifest_file: PathWrapper =
-			"put_quorum_key_is_read_only_write.manifest".into();
+		let pivot_file =
+			PathWrapper::from("put_quorum_key_is_read_only_write.pivot");
+		let ephemeral_file =
+			PathWrapper::from("put_quorum_key_is_read_only_write_eph.secret");
+		let quorum_file =
+			PathWrapper::from("put_quorum_key_is_read_only_write_quor.secret");
+		let manifest_file =
+			PathWrapper::from("put_quorum_key_is_read_only_write.manifest");
 
 		let handles = Handles::new(
-			(*ephemeral_file).to_string(),
-			(*quorum_file).to_string(),
-			(*manifest_file).to_string(),
-			(*pivot_file).to_string(),
+			ephemeral_file.to_str().map(ToString::to_string).unwrap(),
+			quorum_file.to_str().map(ToString::to_string).unwrap(),
+			manifest_file.to_str().map(ToString::to_string).unwrap(),
+			pivot_file.to_str().map(ToString::to_string).unwrap(),
 		);
 
 		let quorum_key = P256Pair::generate().unwrap();
@@ -388,21 +390,21 @@ mod test {
 
 	#[test]
 	fn put_pivot_is_read_only_write() {
-		let pivot_file: PathWrapper =
-			"put_pivot_is_read_only_write.pivot".into();
-		let ephemeral_file: PathWrapper =
-			"put_pivot_is_read_only_write_eph.secret".into();
-		let quorum_file: PathWrapper =
-			"put_pivot_is_read_only_write_quor.secret".into();
+		let pivot_file =
+			PathWrapper::from("put_pivot_is_read_only_write.pivot");
+		let ephemeral_file =
+			PathWrapper::from("put_pivot_is_read_only_write_eph.secret");
+		let quorum_file =
+			PathWrapper::from("put_pivot_is_read_only_write_quor.secret");
 
-		let manifest_file: PathWrapper =
-			"put_pivot_is_read_only_write.manifest".into();
+		let manifest_file =
+			PathWrapper::from("put_pivot_is_read_only_write.manifest");
 
 		let handles = Handles::new(
-			(*ephemeral_file).to_string(),
-			(*quorum_file).to_string(),
-			(*manifest_file).to_string(),
-			(*pivot_file).to_string(),
+			ephemeral_file.to_str().map(ToString::to_string).unwrap(),
+			quorum_file.to_str().map(ToString::to_string).unwrap(),
+			manifest_file.to_str().map(ToString::to_string).unwrap(),
+			pivot_file.to_str().map(ToString::to_string).unwrap(),
 		);
 
 		let pivot = b"this is a pivot binary".to_vec();
@@ -416,20 +418,20 @@ mod test {
 
 	#[test]
 	fn put_manifest_is_read_only_write() {
-		let pivot_file: PathWrapper =
-			"put_manifest_is_read_only_write.pivot".into();
-		let ephemeral_file: PathWrapper =
-			"put_manifest_is_read_only_write_eph.secret".into();
-		let quorum_file: PathWrapper =
-			"put_manifest_is_read_only_write_quor.secret".into();
-		let manifest_file: PathWrapper =
-			"put_manifest_is_read_only_write.manifest".into();
+		let pivot_file =
+			PathWrapper::from("put_manifest_is_read_only_write.pivot");
+		let ephemeral_file =
+			PathWrapper::from("put_manifest_is_read_only_write_eph.secret");
+		let quorum_file =
+			PathWrapper::from("put_manifest_is_read_only_write_quor.secret");
+		let manifest_file =
+			PathWrapper::from("put_manifest_is_read_only_write.manifest");
 
 		let handles = Handles::new(
-			(*ephemeral_file).to_string(),
-			(*quorum_file).to_string(),
-			(*manifest_file).to_string(),
-			(*pivot_file).to_string(),
+			ephemeral_file.to_str().map(ToString::to_string).unwrap(),
+			quorum_file.to_str().map(ToString::to_string).unwrap(),
+			manifest_file.to_str().map(ToString::to_string).unwrap(),
+			pivot_file.to_str().map(ToString::to_string).unwrap(),
 		);
 
 		let pivot = b"this is a pivot binary".to_vec();

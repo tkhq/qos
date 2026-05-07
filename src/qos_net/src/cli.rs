@@ -70,7 +70,7 @@ impl ProxyOpts {
 				StreamPool::new(address, pool_size)
 			}
 			(None, None, Some(u)) => {
-				let address = SocketAddress::new_unix(u);
+				let address = SocketAddress::new_unix(u.as_str());
 
 				StreamPool::new(address, pool_size)
 			}

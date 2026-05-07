@@ -6,8 +6,8 @@ use qos_core::{
 	io::{SocketAddress, StreamPool},
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
-use std::time::Duration;
-use tokio::net::TcpStream;
+use std::{path::Path, time::Duration};
+use tokio::net::{TcpStream, ToSocketAddrs};
 
 /// Path to the file `pivot_ok` writes on success for tests.
 pub const PIVOT_OK_SUCCESS_FILE: &str = "./pivot_ok_works";
@@ -157,7 +157,8 @@ pub struct AdditionProofPayload {
 ///
 /// # Panics
 /// Panics if `fs::exists` errors.
-pub async fn wait_for_usock(path: &str) {
+pub async fn wait_for_usock<P: AsRef<Path>>(path: P) {
+	let path = path.as_ref();
 	let addr = SocketAddress::new_unix(path);
 	let pool = StreamPool::single(addr).unwrap().shared();
 	let client = SocketClient::new(pool, Duration::from_millis(50));
@@ -170,17 +171,23 @@ pub async fn wait_for_usock(path: &str) {
 
 		tokio::time::sleep(Duration::from_millis(100)).await;
 	}
+
+	eprintln!("warning: no usock found at path: {}", path.display())
 }
 
-pub async fn wait_for_tcp_sock(host_addr: &str) {
+pub async fn wait_for_tcp_sock<Addr>(host_addr: &Addr)
+where
+	Addr: ToSocketAddrs + std::fmt::Debug,
+{
 	// Some integration flows start the listener only after a few control-loop
 	// iterations, so give the socket enough time to appear before failing.
 	let mut attempts = 0;
 	loop {
-		if let Ok(_stream) = TcpStream::connect(&host_addr).await {
+		if let Ok(_stream) = TcpStream::connect(host_addr).await {
 			return;
 		}
-		assert!((attempts <= 99), "unable to connect to {host_addr}");
+
+		assert!((attempts <= 99), "unable to connect to {host_addr:?}");
 		attempts += 1;
 		tokio::time::sleep(Duration::from_millis(100)).await;
 	}

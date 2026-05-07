@@ -86,6 +86,14 @@ impl ProtocolRoute {
 		)
 	}
 
+	pub fn version(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::version),
+			current_phase,
+			current_phase,
+		)
+	}
+
 	pub fn manifest_envelope(current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::manifest_envelope),
@@ -217,16 +225,21 @@ impl ProtocolState {
 			ProtocolPhase::UnrecoverableError => {
 				vec![
 					ProtocolRoute::status(self.phase),
+					ProtocolRoute::version(self.phase),
 					ProtocolRoute::manifest_envelope(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
 				]
 			}
 			ProtocolPhase::GenesisBooted => {
-				vec![ProtocolRoute::status(self.phase)]
+				vec![
+					ProtocolRoute::status(self.phase),
+					ProtocolRoute::version(self.phase),
+				]
 			}
 			ProtocolPhase::WaitingForBootInstruction => vec![
 				// baseline routes
 				ProtocolRoute::status(self.phase),
+				ProtocolRoute::version(self.phase),
 				ProtocolRoute::manifest_envelope(self.phase),
 				// phase specific routes
 				ProtocolRoute::boot_genesis(self.phase),
@@ -237,6 +250,7 @@ impl ProtocolState {
 				vec![
 					// baseline routes
 					ProtocolRoute::status(self.phase),
+					ProtocolRoute::version(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
 					ProtocolRoute::manifest_envelope(self.phase),
 					// phase specific routes
@@ -247,6 +261,7 @@ impl ProtocolState {
 				vec![
 					// baseline routes
 					ProtocolRoute::status(self.phase),
+					ProtocolRoute::version(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
 					ProtocolRoute::manifest_envelope(self.phase),
 					// phase specific routes
@@ -257,6 +272,7 @@ impl ProtocolState {
 				vec![
 					// baseline routes
 					ProtocolRoute::status(self.phase),
+					ProtocolRoute::version(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
 					ProtocolRoute::manifest_envelope(self.phase),
 					// phase specific routes
@@ -332,6 +348,23 @@ mod handlers {
 	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::StatusRequest = req {
 			Some(Ok(ProtocolMsg::StatusResponse(state.get_phase())))
+		} else {
+			None
+		}
+	}
+
+	/// QOS version and git commit of the running enclave. Captured at
+	/// compile time — `CARGO_PKG_VERSION` for the version, and the
+	/// `QOS_GIT_COMMIT` env var (set by `build.rs`) for the commit.
+	pub(super) fn version(
+		req: &ProtocolMsg,
+		_state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::VersionRequest = req {
+			Some(Ok(ProtocolMsg::VersionResponse {
+				version: env!("CARGO_PKG_VERSION").to_string(),
+				commit: env!("QOS_GIT_COMMIT").to_string(),
+			}))
 		} else {
 			None
 		}

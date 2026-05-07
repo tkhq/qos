@@ -25,7 +25,7 @@ qos_p256 = { workspace = true, features = ["mock"] }
 qos_test_primitives = { workspace = true }
 
 futures = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs"] }
 borsh = { workspace = true }
 nix = { workspace = true }
 rustls = { workspace = true }

@@ -27,7 +27,7 @@ const QUORUM_KEY_PUB_PATH: &str =
 #[tokio::test(flavor = "multi_thread")]
 async fn key_fwd_e2e() {
 	// Make sure everything in the temp dir gets dropped
-	let _: PathWrapper = TMP_DIR.into();
+	let _ = PathWrapper::from(TMP_DIR);
 	fs::create_dir_all(BOOT_DIR).unwrap();
 	let old_host_port = qos_test_primitives::find_free_port().unwrap();
 	let new_host_port = qos_test_primitives::find_free_port().unwrap();
@@ -351,10 +351,10 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 	for user in &USERS[0..2] {
 		let share_path = format!("{}/{}.share", &personal_dir(user), user);
 		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
-		let eph_wrapped_share_path: PathWrapper =
-			format!("{TMP_DIR}/{user}.eph_wrapped.share").into();
-		let approval_path: PathWrapper =
-			format!("{TMP_DIR}/{user}.attestation.approval").into();
+		let eph_wrapped_share_path =
+			PathWrapper::from(format!("{TMP_DIR}/{user}.eph_wrapped.share"));
+		let approval_path =
+			PathWrapper::from(format!("{TMP_DIR}/{user}.attestation.approval"));
 		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"proxy-re-encrypt-share",
@@ -365,9 +365,9 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 				"--attestation-doc-path",
 				ATTESTATION_DOC_PATH,
 				"--eph-wrapped-share-path",
-				&eph_wrapped_share_path,
+				eph_wrapped_share_path.to_str().unwrap(),
 				"--approval-path",
-				&approval_path,
+				approval_path.to_str().unwrap(),
 				"--manifest-envelope-path",
 				MANIFEST_ENVELOPE_PATH,
 				"--pcr3-preimage-path",
@@ -395,9 +395,9 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 				"--host-ip",
 				LOCAL_HOST,
 				"--eph-wrapped-share-path",
-				&eph_wrapped_share_path,
+				eph_wrapped_share_path.to_str().unwrap(),
 				"--approval-path",
-				&approval_path,
+				approval_path.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()

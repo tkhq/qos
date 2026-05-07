@@ -14,7 +14,7 @@ const EXPECTED_SIGNATURE: &str = "36c7f22c3831a32b8c8a9e823641e7df591c6e92848e7b
 
 #[test]
 fn p256_sign_verify_roundtrip() {
-	let tmp: PathWrapper = "/tmp/p256_sign_verify_roundtrip".into();
+	let tmp = PathWrapper::from("/tmp/p256_sign_verify_roundtrip");
 	std::fs::create_dir_all(&*tmp).unwrap();
 
 	let payload_path = "/tmp/p256_sign_verify_roundtrip/payload";
@@ -58,8 +58,8 @@ fn p256_sign_verify_roundtrip() {
 
 #[test]
 fn p256_asymmetric_encrypt_decrypt_roundtrip() {
-	let tmp: PathWrapper =
-		"/tmp/p256_asymmetric_encrypt_decrypt_roundtrip".into();
+	let tmp =
+		PathWrapper::from("/tmp/p256_asymmetric_encrypt_decrypt_roundtrip");
 	std::fs::create_dir_all(&*tmp).unwrap();
 
 	let plaintext_input_path =

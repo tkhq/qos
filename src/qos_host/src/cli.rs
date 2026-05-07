@@ -141,7 +141,7 @@ impl HostOpts {
 
 				Ok(SocketAddress::new_vsock(c, p, self.to_host_flag()))
 			}
-			(None, None, Some(u)) => Ok(SocketAddress::new_unix(u)),
+			(None, None, Some(u)) => Ok(SocketAddress::new_unix(u.as_str())),
 
 			_ => panic!("Invalid socket opts"),
 		}

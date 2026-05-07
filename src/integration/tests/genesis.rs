@@ -20,28 +20,24 @@ const DR_KEY_PRIVATE_PATH: &str = "./mock/mock_p256_dr.secret.keep";
 #[tokio::test(flavor = "multi_thread")]
 async fn genesis_e2e() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
-	let tmp: PathWrapper = "/tmp/genesis-e2e".into();
-	fs::create_dir_all(&*tmp).unwrap();
-	let tmp_dir =
-		|file: &str| -> PathWrapper { format!("{}/{file}", &*tmp).into() };
+	let tmp_dir = PathWrapper::from("/tmp/genesis-e2e");
+	fs::create_dir_all(&*tmp_dir).unwrap();
 
-	let usock = tmp_dir("genesis_e2e.sock");
-	let secret_path = tmp_dir("genesis_e2e.secret");
-	let pivot_path = tmp_dir("genesis_e2e.pivot");
-	let manifest_path = tmp_dir("manifest.manifest");
+	let usock = tmp_dir.join("genesis_e2e.sock");
+	let secret_path = tmp_dir.join("genesis_e2e.secret");
+	let pivot_path = tmp_dir.join("genesis_e2e.pivot");
+	let manifest_path = tmp_dir.join("manifest.manifest");
 
-	let all_personal_dir = tmp_dir("all-personal-dir");
-	let genesis_dir = tmp_dir("genesis-dir");
+	let all_personal_dir = tmp_dir.join("all-personal-dir");
+	let genesis_dir = tmp_dir.join("genesis-dir");
 
-	let attestation_doc_path =
-		format!("{}/genesis_attestation_doc", &*genesis_dir);
-	let genesis_output_path = format!("{}/genesis_output", &*genesis_dir);
-	let dr_wrapped_quorum_key_path =
-		format!("{}/dr_wrapped_quorum_key", &*genesis_dir);
-	let dr_artifacts_path = format!("{}/genesis_dr_artifacts", &*genesis_dir);
+	let attestation_doc_path = genesis_dir.join("genesis_attestation_doc");
+	let genesis_output_path = genesis_dir.join("genesis_output");
+	let dr_wrapped_quorum_key_path = genesis_dir.join("dr_wrapped_quorum_key");
+	let dr_artifacts_path = genesis_dir.join("genesis_dr_artifacts");
 
 	let personal_dir =
-		|user: &str| format!("{}/{}-dir", &*all_personal_dir, user);
+		|user: &str| all_personal_dir.join(format!("{user}-dir"));
 	let get_key_paths =
 		|user: &str| (format!("{user}.secret"), format!("{user}.pub"));
 
@@ -66,15 +62,15 @@ async fn genesis_e2e() {
 		(&user3, &user3_private_share_key, &user3_public_share_key),
 	] {
 		fs::create_dir_all(personal_dir(user)).unwrap();
-		let master_seed_path = format!("{}/{}", personal_dir(user), private);
-		let public_path = format!("{}/{}", personal_dir(user), public);
+		let master_seed_path = personal_dir(user).join(private);
+		let public_path = personal_dir(user).join(public);
 		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"generate-file-key",
 				"--master-seed-path",
-				&master_seed_path,
+				master_seed_path.to_str().unwrap(),
 				"--pub-path",
-				&public_path,
+				public_path.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()
@@ -106,14 +102,14 @@ async fn genesis_e2e() {
 		Command::new(integration::QOS_CORE_PATH)
 			.args([
 				"--usock",
-				&*usock,
+				usock.to_str().unwrap(),
 				"--quorum-file",
-				&*secret_path,
+				secret_path.to_str().unwrap(),
 				"--pivot-file",
-				&*pivot_path,
+				pivot_path.to_str().unwrap(),
 				"--mock",
 				"--manifest-file",
-				&*manifest_path,
+				manifest_path.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()
@@ -128,7 +124,7 @@ async fn genesis_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				&*usock,
+				usock.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()
@@ -143,9 +139,9 @@ async fn genesis_e2e() {
 		.args([
 			"boot-genesis",
 			"--share-set-dir",
-			&*genesis_dir,
+			genesis_dir.to_str().unwrap(),
 			"--namespace-dir",
-			&*genesis_dir,
+			genesis_dir.to_str().unwrap(),
 			"--host-ip",
 			LOCAL_HOST,
 			"--host-port",
@@ -212,19 +208,19 @@ async fn genesis_e2e() {
 	// -- CLIENT make sure each user can run `after-genesis` against their
 	// member output and decrypt their share with their share key.
 	for user in [&user1, &user2, &user3] {
-		let share_path = format!("{}/{}.share", &personal_dir(user), user);
-		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
+		let share_path = personal_dir(user).join(format!("{user}.share"));
+		let secret_path = personal_dir(user).join(format!("{user}.secret"));
 		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"after-genesis",
 				"--secret-path",
-				&secret_path,
+				secret_path.to_str().unwrap(),
 				"--share-path",
-				&share_path,
+				share_path.to_str().unwrap(),
 				"--alias",
 				user,
 				"--namespace-dir",
-				&genesis_dir,
+				genesis_dir.to_str().unwrap(),
 				"--qos-release-dir",
 				QOS_DIST_DIR,
 				"--pcr3-preimage-path",
@@ -267,14 +263,15 @@ async fn genesis_e2e() {
 	assert_eq!(io::BufReader::new(dr_artifacts_contents).lines().count(), 4);
 
 	// Check that we can verify the dr artifacts.
-	let reconstructed_path = tmp_dir("reconstructed_quorum_master_seed_hex");
-	reconstructed.to_hex_file(&*reconstructed_path).unwrap();
+	let reconstructed_path =
+		tmp_dir.join("reconstructed_quorum_master_seed_hex");
+	reconstructed.to_hex_file(&reconstructed_path).unwrap();
 	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.arg("verify-genesis")
 		.arg("--namespace-dir")
-		.arg(&*genesis_dir)
+		.arg(genesis_dir)
 		.arg("--master-seed-path")
-		.arg(&*reconstructed_path)
+		.arg(reconstructed_path)
 		.spawn()
 		.unwrap()
 		.wait()
