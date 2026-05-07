@@ -73,8 +73,8 @@ async fn reaper_works() {
 
 #[tokio::test]
 async fn reaper_clears_host_env() {
-	let secret_path: PathWrapper = "/tmp/reaper_clears_host_env.secret".into();
-	let usock: PathWrapper = "/tmp/reaper_clears_host_env.sock".into();
+	let secret_path = PathWrapper::from("/tmp/reaper_clears_host_env.secret");
+	let usock = PathWrapper::from("/tmp/reaper_clears_host_env.sock");
 	let manifest_path: PathWrapper =
 		"/tmp/reaper_clears_host_env.manifest".into();
 	let msg = "host-env-cleared";
