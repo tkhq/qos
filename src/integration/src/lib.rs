@@ -20,28 +20,52 @@ pub const PIVOT_POOL_SIZE_SUCCESS_FILE: &str = "./pivot_pool_size_works";
 /// Path to the file `pivot_tcp` writes on success for tests.
 pub const PIVOT_TCP_SUCCESS_FILE: &str = "./pivot_tcp_works";
 /// Path to `pivot_ok` bin for tests.
-pub const PIVOT_OK_PATH: &str = "../target/debug/pivot_ok";
+pub const PIVOT_OK_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/pivot_ok");
 /// Path to `pivot_ok2` bin for tests.
-pub const PIVOT_OK2_PATH: &str = "../target/debug/pivot_ok2";
+pub const PIVOT_OK2_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/pivot_ok2");
 /// Path to `pivot_ok3` bin for tests.
-pub const PIVOT_OK3_PATH: &str = "../target/debug/pivot_ok3";
+pub const PIVOT_OK3_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/pivot_ok3");
 /// Path to `pivot_tcp` bin for tests.
-pub const PIVOT_TCP_PATH: &str = "../target/debug/pivot_tcp";
+pub const PIVOT_TCP_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/pivot_tcp");
 /// Path to pivot loop bin for tests.
-pub const PIVOT_LOOP_PATH: &str = "../target/debug/pivot_loop";
+pub const PIVOT_LOOP_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/pivot_loop");
 /// Path to `pivot_abort` bin for tests.
-pub const PIVOT_ABORT_PATH: &str = "../target/debug/pivot_abort";
+pub const PIVOT_ABORT_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/pivot_abort");
 /// Path to pivot panic for tests.
-pub const PIVOT_PANIC_PATH: &str = "../target/debug/pivot_panic";
+pub const PIVOT_PANIC_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/pivot_panic");
 /// Path to an enclave app that has routes to test remote connection features.
-pub const PIVOT_REMOTE_TLS_PATH: &str = "../target/debug/pivot_remote_tls";
+pub const PIVOT_REMOTE_TLS_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/pivot_remote_tls");
 /// Path to an enclave app that has routes to test remote connection features.
-pub const QOS_NET_PATH: &str = "../target/debug/qos_net";
+pub const QOS_NET_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/qos_net");
 /// Path to an enclave app that has routes to stress our socket.
-pub const PIVOT_SOCKET_STRESS_PATH: &str =
-	"../target/debug/pivot_socket_stress";
+pub const PIVOT_SOCKET_STRESS_PATH: &str = concat!(
+	env!("CARGO_MANIFEST_DIR"),
+	"/../../target/debug/pivot_socket_stress"
+);
 /// Path to an enclave app that has routes to fetch app proofs.
-pub const PIVOT_PROOF_PATH: &str = "../target/debug/pivot_proof";
+pub const PIVOT_PROOF_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/pivot_proof");
+/// Path to `qos_bridge` bin for tests.
+pub const QOS_BRIDGE_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/qos_bridge");
+/// Path to `qos_client` bin for tests.
+pub const QOS_CLIENT_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/qos_client");
+/// Path to `qos_core` bin for tests.
+pub const QOS_CORE_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/qos_core");
+/// Path to `qos_host` bin for tests.
+pub const QOS_HOST_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/qos_host");
 /// Local host IP address.
 pub const LOCAL_HOST: &str = "127.0.0.1";
 /// PCR3 image associated with the preimage in `./mock/pcr3-preimage.txt`.

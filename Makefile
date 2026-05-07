@@ -1,6 +1,7 @@
 include src/macros.mk
 
 REGISTRY := local
+CARGO_WORKSPACE_FILES := Cargo.toml Cargo.lock
 .DEFAULT_GOAL :=
 .PHONY: default
 default: \
@@ -11,15 +12,15 @@ default: \
 
 .PHONY: test
 test: out/.common-loaded
-	$(call run,make test)
+	$(call run,make -C src test)
 
 .PHONY: lint
 lint: out/.common-loaded
-	$(call run,make lint)
+	$(call run,make -C src lint)
 
 .PHONY: format
 format: out/.common-loaded
-	$(call run,make fmt)
+	$(call run,make -C src fmt)
 
 .PHONY: docs
 docs: out/.common-loaded
@@ -27,7 +28,7 @@ docs: out/.common-loaded
 
 .PHONY: build-linux-only
 build-linux-only: out/.common-loaded
-	$(call run,make build-linux-only)
+	$(call run,make -C src build-linux-only)
 
 .PHONY: shell
 shell: out/.common-loaded
@@ -41,10 +42,11 @@ shell: out/.common-loaded
 		/bin/bash
 
 out/nitro.pcrs: out/qos_enclave.tar
-	@$(call run,/src/scripts/extract_oci_file.sh qos_enclave.tar nitro.pcrs)
+	@$(call run,/qos/src/scripts/extract_oci_file.sh qos_enclave.tar nitro.pcrs)
 
 out/qos_enclave/index.json: \
 	out/common/index.json \
+	$(CARGO_WORKSPACE_FILES) \
 	src/images/qos_enclave/Containerfile \
 	$(shell git ls-files \
 		src/init \
@@ -57,6 +59,7 @@ out/qos_enclave/index.json: \
 
 out/qos_host/index.json: \
 	out/common/index.json \
+	$(CARGO_WORKSPACE_FILES) \
 	src/images/qos_host/Containerfile \
 	$(shell git ls-files \
 		src/qos_host \
@@ -66,6 +69,7 @@ out/qos_host/index.json: \
 
 out/qos_client/index.json: \
 	out/common/index.json \
+	$(CARGO_WORKSPACE_FILES) \
 	src/images/qos_client/Containerfile \
 	$(shell git ls-files \
 		src/qos_client \
@@ -79,6 +83,7 @@ out/qos_client/index.json: \
 
 out/qos_bridge/index.json: \
 	out/common/index.json \
+	$(CARGO_WORKSPACE_FILES) \
 	src/images/qos_bridge/Containerfile \
 	$(shell git ls-files \
 		src/qos_bridge \

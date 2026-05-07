@@ -9,7 +9,7 @@ async fn connects_and_gets_info() {
 	std::fs::create_dir_all("/tmp/qos_host_test").unwrap();
 
 	const TEST_ENCLAVE_SOCKET: &str = "/tmp/qos_host_test/enclave.sock";
-	let _qos_host: ChildWrapper = Command::new("../target/debug/qos_host")
+	let _qos_host: ChildWrapper = Command::new(integration::QOS_HOST_PATH)
 		.arg("--usock")
 		.arg(TEST_ENCLAVE_SOCKET)
 		.arg("--host-ip")
@@ -37,7 +37,7 @@ async fn connects_and_gets_info() {
 	drop(std::fs::remove_file(&enclave_socket));
 
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_core")
+		Command::new(integration::QOS_CORE_PATH)
 			.args([
 				"--usock",
 				TEST_ENCLAVE_SOCKET,

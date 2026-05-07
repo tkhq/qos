@@ -1,41 +1,41 @@
 [workspace]
 members = [
-  "integration",
-  "qos_bridge",
-  "qos_client",
-  "qos_core",
-  "qos_crypto",
-  "qos_host",
-  "qos_hex",
-  "qos_net",
-  "qos_test_primitives",
-  "qos_p256",
-  "qos_nsm",
+  "src/integration",
+  "src/qos_bridge",
+  "src/qos_client",
+  "src/qos_core",
+  "src/qos_crypto",
+  "src/qos_host",
+  "src/qos_hex",
+  "src/qos_net",
+  "src/qos_test_primitives",
+  "src/qos_p256",
+  "src/qos_nsm",
   # special members that are not default-members
-  "qos_crypto/fuzz",
-  "qos_net/fuzz",
-  "qos_nsm/fuzz",
-  "qos_p256/fuzz",
+  "src/qos_crypto/fuzz",
+  "src/qos_net/fuzz",
+  "src/qos_nsm/fuzz",
+  "src/qos_p256/fuzz",
 ]
 default-members = [
-  "integration",
-  "qos_bridge",
-  "qos_client",
-  "qos_core",
-  "qos_crypto",
-  "qos_host",
-  "qos_hex",
-  "qos_net",
-  "qos_test_primitives",
-  "qos_p256",
-  "qos_nsm",
+  "src/integration",
+  "src/qos_bridge",
+  "src/qos_client",
+  "src/qos_core",
+  "src/qos_crypto",
+  "src/qos_host",
+  "src/qos_hex",
+  "src/qos_net",
+  "src/qos_test_primitives",
+  "src/qos_p256",
+  "src/qos_nsm",
 ]
 
 exclude = [
-  "init",
-  "qos_aws",
-  "qos_system",
-  "qos_enclave",
+  "src/init",
+  "src/qos_aws",
+  "src/qos_system",
+  "src/qos_enclave",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.
@@ -99,16 +99,16 @@ yubikey = { version = "0.8", features = ["untested"], default-features = false }
 zeroize = { version = "1.8", default-features = false }
 
 # Internal workspace dependencies
-integration = { path = "integration" }
-qos_host = { path = "qos_host", default-features = false }
-qos_client = { path = "qos_client", version = "0.7.0", default-features = false }
-qos_core = { path = "qos_core", version = "0.7.0", default-features = false }
-qos_crypto = { path = "qos_crypto", version = "0.7.0", default-features = false }
-qos_hex = { path = "qos_hex", version = "0.7.0", default-features = false }
-qos_net = { path = "qos_net", version = "0.7.0", default-features = false }
-qos_nsm = { path = "qos_nsm", version = "0.7.0", default-features = false }
-qos_p256 = { path = "qos_p256", version = "0.7.0" }
-qos_test_primitives = { path = "qos_test_primitives", version = "0.7.0" }
+integration = { path = "src/integration" }
+qos_host = { path = "src/qos_host", default-features = false }
+qos_client = { path = "src/qos_client", version = "0.7.0", default-features = false }
+qos_core = { path = "src/qos_core", version = "0.7.0", default-features = false }
+qos_crypto = { path = "src/qos_crypto", version = "0.7.0", default-features = false }
+qos_hex = { path = "src/qos_hex", version = "0.7.0", default-features = false }
+qos_net = { path = "src/qos_net", version = "0.7.0", default-features = false }
+qos_nsm = { path = "src/qos_nsm", version = "0.7.0", default-features = false }
+qos_p256 = { path = "src/qos_p256", version = "0.7.0" }
+qos_test_primitives = { path = "src/qos_test_primitives", version = "0.7.0" }
 
 # Option for the future: build all QOS applications with additional runtime checks
 # to intentionally panic on integer overflows instead of continuing execution

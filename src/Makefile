@@ -1,4 +1,7 @@
-ROOT := $(shell git rev-parse --show-toplevel)
+# Resolve repo root from this file's location instead of git metadata, so
+# containerized CI remains stable even if git ownership checks fail.
+ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
+export CARGO_TARGET_DIR := $(ROOT)/target
 
 REGISTRY := 339735964233.dkr.ecr.us-east-1.amazonaws.com
 BUCKET := tkhq-development-qos_resources
@@ -32,7 +35,7 @@ local-dangerous-dev-boot:
 		--host-port 3000 \
 		--restart-policy never \
 		--unsafe-eph-path-override $(LOCAL_EPH_PATH) \
-		--pivot-path ./target/debug/sample_app
+		--pivot-path $(CARGO_TARGET_DIR)/debug/sample_app
 
 .PHONY: vm-enclave
 vm-enclave:

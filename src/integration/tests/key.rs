@@ -71,7 +71,7 @@ async fn key_fwd_e2e() {
 
 	// -- ENCLAVE start new enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_core")
+		Command::new(integration::QOS_CORE_PATH)
 			.args([
 				"--usock",
 				new_usock,
@@ -93,7 +93,7 @@ async fn key_fwd_e2e() {
 
 	// -- HOST start new host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_host")
+		Command::new(integration::QOS_HOST_PATH)
 			.args([
 				"--host-port",
 				&new_host_port.to_string(),
@@ -110,7 +110,7 @@ async fn key_fwd_e2e() {
 	qos_test_primitives::wait_until_port_is_bound(new_host_port);
 
 	// -- CLIENT broadcast boot key fwd instruction
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"boot-key-fwd",
 			"--manifest-envelope-path",
@@ -131,7 +131,7 @@ async fn key_fwd_e2e() {
 		.success());
 
 	// -- CLIENT broadcast key request to the old enclave
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"export-key",
 			"--manifest-envelope-path",
@@ -152,7 +152,7 @@ async fn key_fwd_e2e() {
 		.success());
 
 	// -- CLIENT broadcast encrypted quorum to the new enclave
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"inject-key",
 			"--encrypted-quorum-key-path",
@@ -176,7 +176,7 @@ async fn key_fwd_e2e() {
 
 fn generate_manifest_envelope() {
 	let pivot_args = format!("[--msg,{TEST_MSG}]");
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"generate-manifest",
 			"--nonce",
@@ -214,7 +214,7 @@ fn generate_manifest_envelope() {
 	for alias in USERS {
 		let secret_path = format!("{}/{}.secret", &personal_dir(alias), alias);
 
-		assert!(Command::new("../target/debug/qos_client")
+		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"approve-manifest",
 				"--secret-path",
@@ -257,7 +257,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 
 	// -- ENCLAVE start old enclave
 	let enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_core")
+		Command::new(integration::QOS_CORE_PATH)
 			.args([
 				"--usock",
 				old_usock,
@@ -277,7 +277,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 
 	// -- HOST start old host
 	let host_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_host")
+		Command::new(integration::QOS_HOST_PATH)
 			.args([
 				"--host-port",
 				&old_host_port.to_string(),
@@ -294,7 +294,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 	qos_test_primitives::wait_until_port_is_bound(old_host_port);
 
 	// -- CLIENT generate the manifest envelope
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"generate-manifest-envelope",
 			"--manifest-approvals-dir",
@@ -309,7 +309,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 		.success());
 
 	// -- CLIENT broadcast boot standard instruction
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"boot-standard",
 			"--manifest-envelope-path",
@@ -330,7 +330,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 		.unwrap()
 		.success());
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"get-attestation-doc",
 			"--host-port",
@@ -355,7 +355,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 			format!("{TMP_DIR}/{user}.eph_wrapped.share").into();
 		let approval_path: PathWrapper =
 			format!("{TMP_DIR}/{user}.attestation.approval").into();
-		assert!(Command::new("../target/debug/qos_client")
+		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"proxy-re-encrypt-share",
 				"--share-path",
@@ -387,7 +387,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 			.unwrap()
 			.success());
 
-		assert!(Command::new("../target/debug/qos_client")
+		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"post-share",
 				"--host-port",

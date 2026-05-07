@@ -79,7 +79,7 @@ async fn qos_bridge_works() {
 	let pivot_args = format!("[{pivot_app_sock_path}]");
 	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"generate-manifest",
 			"--nonce",
@@ -166,7 +166,7 @@ async fn qos_bridge_works() {
 
 		let secret_path = format!("{}/{}.secret", &personal_dir(alias), alias);
 
-		let mut child = Command::new("../target/debug/qos_client")
+		let mut child = Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"approve-manifest",
 				"--secret-path",
@@ -269,7 +269,7 @@ async fn qos_bridge_works() {
 
 	// -- ENCLAVE start enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_core")
+		Command::new(integration::QOS_CORE_PATH)
 			.args([
 				"--usock",
 				&*usock,
@@ -289,7 +289,7 @@ async fn qos_bridge_works() {
 
 	// -- HOST start host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_host")
+		Command::new(integration::QOS_HOST_PATH)
 			.args([
 				"--host-port",
 				&host_port.to_string(),
@@ -308,7 +308,7 @@ async fn qos_bridge_works() {
 	let control_url = format!("http://localhost:{host_port}/qos");
 	// -- BRIDGE start bridge
 	let mut bridge_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_bridge")
+		Command::new(integration::QOS_BRIDGE_PATH)
 			.args([
 				"--host-port-override",
 				&app_host_port_override.to_string(),
@@ -322,7 +322,7 @@ async fn qos_bridge_works() {
 			.into();
 
 	// -- CLIENT generate the manifest envelope
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"generate-manifest-envelope",
 			"--manifest-approvals-dir",
@@ -338,7 +338,7 @@ async fn qos_bridge_works() {
 
 	// -- CLIENT broadcast boot standard instruction
 	let manifest_envelope_path = format!("{}/manifest_envelope", &*boot_dir,);
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"boot-standard",
 			"--manifest-envelope-path",
@@ -362,7 +362,7 @@ async fn qos_bridge_works() {
 	// For each user, post a share,
 	for user in [&user1, &user2] {
 		// Get attestation doc and manifest
-		assert!(Command::new("../target/debug/qos_client")
+		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"get-attestation-doc",
 				"--host-port",
@@ -387,7 +387,7 @@ async fn qos_bridge_works() {
 		let approval_path: PathWrapper =
 			format!("{}/{}.attestation.approval", &*tmp, user).into();
 		// Encrypt share to ephemeral key
-		let mut child = Command::new("../target/debug/qos_client")
+		let mut child = Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"proxy-re-encrypt-share",
 				"--share-path",
@@ -457,7 +457,7 @@ async fn qos_bridge_works() {
 		assert!(child.wait().unwrap().success());
 
 		// Post the encrypted share
-		assert!(Command::new("../target/debug/qos_client")
+		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"post-share",
 				"--host-port",
@@ -524,7 +524,7 @@ async fn qos_bridge_works() {
 
 	// -- BRIDGE restart bridge
 	let _bridge_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_bridge")
+		Command::new(integration::QOS_BRIDGE_PATH)
 			.args([
 				"--host-port-override",
 				&app_host_port_override.to_string(),

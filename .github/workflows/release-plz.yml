@@ -47,7 +47,6 @@ jobs:
         uses: release-plz/action@f708778669256143d984cce4b23592637532e040 # v0.5.127
         with:
           command: release
-          manifest_path: src/Cargo.toml
           config: src/release-plz.toml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
