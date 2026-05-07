@@ -9,10 +9,14 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Setup Docker
-        uses: ./.github/actions/docker-setup
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+      - name: Install Linux deps
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libpcsclite-dev
       - name: Run tests
-        run: make test
+        run: make -C src test
 
   test-vm:
     name: test-vm
@@ -29,10 +33,15 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Setup Docker
-        uses: ./.github/actions/docker-setup
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+          components: clippy,rustfmt
+      - name: Install Linux deps
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libpcsclite-dev
       - name: Run linting
-        run: make lint
+        run: make -C src lint
 
   build-linux-only-crates:
     name: build-linux-only-crates
