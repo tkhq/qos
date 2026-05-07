@@ -53,6 +53,7 @@ license = "AGPL-3.0-only"
 [workspace.lints.rust]
 missing_docs = "warn"
 unsafe_code = "deny"
+warnings = "deny"
 
 [workspace.lints.clippy]
 pedantic = "deny"

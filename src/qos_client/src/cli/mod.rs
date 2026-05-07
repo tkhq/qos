@@ -1796,6 +1796,7 @@ mod test {
 		}
 
 		#[test]
+		#[allow(clippy::too_many_lines)]
 		fn parses_boot_attestation_share_and_key_commands() {
 			// ../mono/src/go/tkinfra/internal/enclave/{boot,attestation,key}.go
 			assert!(matches!(
@@ -1943,6 +1944,7 @@ mod test {
 		}
 
 		#[test]
+		#[allow(clippy::too_many_lines)]
 		fn parses_local_genesis_key_and_yubikey_script_commands() {
 			// ../mono/src/go/tkinfra/internal/enclave/genesis.go and
 			// ../mono/playbooks/{p256-provision,qos-operator-key}/scripts

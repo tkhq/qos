@@ -113,7 +113,7 @@ impl Fixture {
 	fn generate_manifest(&self) {
 		let bridge_config =
 			r#"[{"type":"server","port":"3000","host":"0.0.0.0"}]"#;
-		assert_success(run_qos_client([
+		assert_success(&run_qos_client([
 			"generate-manifest",
 			"--nonce",
 			"31",
@@ -147,7 +147,7 @@ impl Fixture {
 	}
 
 	fn approve_manifest(&self) {
-		assert_success(run_qos_client([
+		assert_success(&run_qos_client([
 			"approve-manifest",
 			"--alias",
 			"dev",
@@ -180,7 +180,7 @@ fn run_qos_client<const N: usize>(args: [&str; N]) -> Output {
 	Command::new(QOS_CLIENT).args(args).output().unwrap()
 }
 
-fn assert_success(output: Output) {
+fn assert_success(output: &Output) {
 	assert!(
 		output.status.success(),
 		"qos_client failed\nstatus: {:?}\nstdout:\n{}\nstderr:\n{}",
@@ -232,7 +232,7 @@ fn mono_compat_pivot_hash_writes_expected_sha256_hex() {
 	let fixture = Fixture::new("pivot_hash");
 	let output_path = fixture.root.join("pivot_hash_output");
 
-	assert_success(run_qos_client([
+	assert_success(&run_qos_client([
 		"pivot-hash",
 		"--output-path",
 		output_path.to_str().unwrap(),
@@ -278,7 +278,7 @@ fn mono_compat_json_to_borsh_manifest_round_trips_display_json() {
 	fixture.generate_manifest();
 
 	let json_manifest = display_manifest_json(&fixture.manifest_path);
-	assert_success(run_qos_client([
+	assert_success(&run_qos_client([
 		"json-to-borsh",
 		"--file-path",
 		fixture.manifest_path.to_str().unwrap(),
@@ -323,7 +323,7 @@ fn mono_compat_generate_manifest_envelope_uses_default_output_path() {
 	fixture.approve_manifest();
 
 	assert!(!fixture.envelope_path.exists());
-	assert_success(run_qos_client([
+	assert_success(&run_qos_client([
 		"generate-manifest-envelope",
 		"--manifest-approvals-dir",
 		fixture.approvals_dir.to_str().unwrap(),
