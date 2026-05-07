@@ -1,5 +1,6 @@
 //! Explicitly versioned JSON manifest schema (v2).
 
+use super::shared;
 use crate::protocol::{services::boot, Hash256};
 
 /// JSON-only pivot binary configuration (v2).
@@ -43,13 +44,4 @@ pub struct ManifestV2 {
 }
 
 /// Explicitly versioned JSON manifest envelope (v2).
-#[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ManifestEnvelopeV2 {
-	/// Encapsulated manifest.
-	pub manifest: ManifestV2,
-	/// Approvals for [`Self::manifest`] from the manifest set.
-	pub manifest_set_approvals: Vec<boot::Approval>,
-	/// Approvals for [`Self::manifest`] from the share set.
-	pub share_set_approvals: Vec<boot::Approval>,
-}
+pub type ManifestEnvelopeV2 = shared::ManifestEnvelope<ManifestV2>;

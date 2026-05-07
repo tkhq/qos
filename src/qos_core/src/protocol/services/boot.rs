@@ -494,6 +494,25 @@ mod test {
 		(manifest, member_with_keys, pivot)
 	}
 
+	fn manifest_v2_from_v1(manifest: ManifestV1, env: PivotEnv) -> ManifestV2 {
+		ManifestV2 {
+			version: ManifestVersion::V2,
+			namespace: manifest.namespace,
+			pivot: PivotConfigV2 {
+				hash: manifest.pivot.hash,
+				restart: manifest.pivot.restart,
+				bridge_config: manifest.pivot.bridge_config,
+				debug_mode: manifest.pivot.debug_mode,
+				args: manifest.pivot.args,
+				env,
+			},
+			manifest_set: manifest.manifest_set,
+			share_set: manifest.share_set,
+			enclave: manifest.enclave,
+			patch_set: manifest.patch_set,
+		}
+	}
+
 	#[test]
 	fn manifest_hash() {
 		let (manifest, _members, _pivot) = get_manifest();
@@ -854,22 +873,7 @@ mod test {
 			PivotEnvValue::plain("bar".to_string()).unwrap(),
 		)
 		.unwrap();
-		let v2 = ManifestV2 {
-			version: ManifestVersion::V2,
-			namespace: manifest.namespace,
-			pivot: PivotConfigV2 {
-				hash: manifest.pivot.hash,
-				restart: manifest.pivot.restart,
-				bridge_config: manifest.pivot.bridge_config,
-				debug_mode: manifest.pivot.debug_mode,
-				args: manifest.pivot.args,
-				env,
-			},
-			manifest_set: manifest.manifest_set,
-			share_set: manifest.share_set,
-			enclave: manifest.enclave,
-			patch_set: manifest.patch_set,
-		};
+		let v2 = manifest_v2_from_v1(manifest, env);
 		let bytes = qos_json::to_vec(&v2).unwrap();
 		let decoded = VersionedManifest::try_from_slice_compat(&bytes).unwrap();
 
@@ -916,22 +920,7 @@ mod test {
 	#[test]
 	fn versioned_manifest_envelope_reads_v2_json_and_hashes_with_json() {
 		let (manifest, members, _) = get_manifest();
-		let v2 = ManifestV2 {
-			version: ManifestVersion::V2,
-			namespace: manifest.namespace,
-			pivot: PivotConfigV2 {
-				hash: manifest.pivot.hash,
-				restart: manifest.pivot.restart,
-				bridge_config: manifest.pivot.bridge_config,
-				debug_mode: manifest.pivot.debug_mode,
-				args: manifest.pivot.args,
-				env: PivotEnv::new(),
-			},
-			manifest_set: manifest.manifest_set,
-			share_set: manifest.share_set,
-			enclave: manifest.enclave,
-			patch_set: manifest.patch_set,
-		};
+		let v2 = manifest_v2_from_v1(manifest, PivotEnv::new());
 		let manifest_hash =
 			qos_crypto::sha_256(&qos_json::to_vec(&v2).unwrap());
 		let approvals = members

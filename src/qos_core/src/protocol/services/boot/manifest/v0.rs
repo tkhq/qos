@@ -2,11 +2,12 @@
 
 use crate::protocol::{
 	services::boot::{
-		Approval, ManifestSet, Namespace, NitroConfig, PatchSet, RestartPolicy,
-		ShareSet,
+		ManifestSet, Namespace, NitroConfig, PatchSet, RestartPolicy, ShareSet,
 	},
 	Hash256,
 };
+
+use super::shared;
 
 /// Pivot binary configuration, original version (v0).
 #[derive(
@@ -61,23 +62,4 @@ pub struct ManifestV0 {
 }
 
 /// [`ManifestV0`] with accompanying [`Approval`]s.
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct ManifestEnvelopeV0 {
-	/// Encapsulated manifest.
-	pub manifest: ManifestV0,
-	/// Approvals for [`Self::manifest`] from the manifest set.
-	pub manifest_set_approvals: Vec<Approval>,
-	/// Approvals for [`Self::manifest`] from the share set.
-	pub share_set_approvals: Vec<Approval>,
-}
+pub type ManifestEnvelopeV0 = shared::ManifestEnvelope<ManifestV0>;

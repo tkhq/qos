@@ -4,10 +4,11 @@ use std::{collections::HashSet, fmt};
 
 use qos_p256::P256Public;
 
+use super::shared;
 use super::v0::{ManifestEnvelopeV0, ManifestV0, PivotConfigV0};
 use crate::protocol::{
 	services::boot::{
-		Approval, BridgeConfig, ManifestSet, Namespace, NitroConfig, PatchSet,
+		BridgeConfig, ManifestSet, Namespace, NitroConfig, PatchSet,
 		RestartPolicy, ShareSet,
 	},
 	Hash256, ProtocolError, QosHash,
@@ -152,27 +153,7 @@ impl ManifestV1 {
 }
 
 /// [`ManifestV1`] with accompanying [`Approval`]s.
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct ManifestEnvelopeV1 {
-	/// Encapsulated manifest.
-	pub manifest: ManifestV1,
-	/// Approvals for [`Self::manifest`] from the manifest set.
-	pub manifest_set_approvals: Vec<Approval>,
-	/// Approvals for [`Self::manifest`] from the share set. This is primarily
-	/// used to audit what share holders provisioned the quorum key.
-	pub share_set_approvals: Vec<Approval>,
-}
+pub type ManifestEnvelopeV1 = shared::ManifestEnvelope<ManifestV1>;
 
 impl ManifestEnvelopeV1 {
 	/// Check if the encapsulated manifest has K valid approvals from the
