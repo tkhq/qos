@@ -68,7 +68,7 @@ async fn standard_boot_e2e() {
 	let pivot_args = format!("[--msg,{msg}]");
 	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"generate-manifest",
 			"--nonce",
@@ -148,7 +148,7 @@ async fn standard_boot_e2e() {
 
 		let secret_path = format!("{}/{}.secret", &personal_dir(alias), alias);
 
-		let mut child = Command::new("../target/debug/qos_client")
+		let mut child = Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"approve-manifest",
 				"--secret-path",
@@ -251,7 +251,7 @@ async fn standard_boot_e2e() {
 
 	// -- ENCLAVE start enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_core")
+		Command::new(integration::QOS_CORE_PATH)
 			.args([
 				"--usock",
 				&*usock,
@@ -271,7 +271,7 @@ async fn standard_boot_e2e() {
 
 	// -- HOST start host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_host")
+		Command::new(integration::QOS_HOST_PATH)
 			.args([
 				"--host-port",
 				&host_port.to_string(),
@@ -290,7 +290,7 @@ async fn standard_boot_e2e() {
 	qos_test_primitives::wait_until_port_is_bound(host_port);
 
 	// -- CLIENT generate the manifest envelope
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"generate-manifest-envelope",
 			"--manifest-approvals-dir",
@@ -306,7 +306,7 @@ async fn standard_boot_e2e() {
 
 	// -- CLIENT broadcast boot standard instruction
 	let manifest_envelope_path = format!("{}/manifest_envelope", &*boot_dir,);
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"boot-standard",
 			"--manifest-envelope-path",
@@ -332,7 +332,7 @@ async fn standard_boot_e2e() {
 	assert!(!Path::new(PIVOT_OK2_SUCCESS_FILE).exists());
 	for user in [&user1, &user2] {
 		// Get attestation doc and manifest
-		assert!(Command::new("../target/debug/qos_client")
+		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"get-attestation-doc",
 				"--host-port",
@@ -357,7 +357,7 @@ async fn standard_boot_e2e() {
 		let approval_path: PathWrapper =
 			format!("{}/{}.attestation.approval", &*tmp, user).into();
 		// Encrypt share to ephemeral key
-		let mut child = Command::new("../target/debug/qos_client")
+		let mut child = Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"proxy-re-encrypt-share",
 				"--share-path",
@@ -427,7 +427,7 @@ async fn standard_boot_e2e() {
 		assert!(child.wait().unwrap().success());
 
 		// Post the encrypted share
-		assert!(Command::new("../target/debug/qos_client")
+		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"post-share",
 				"--host-port",

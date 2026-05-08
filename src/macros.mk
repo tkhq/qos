@@ -1,10 +1,13 @@
 define run
 	docker run \
 		--interactive \
-		--volume ./src/:/src \
+		--volume ./src/:/qos/src \
+		--volume ./Cargo.toml:/qos/Cargo.toml:ro \
+		--volume ./Cargo.lock:/qos/Cargo.lock:ro \
+		--volume ./rustfmt.toml:/qos/rustfmt.toml:ro \
 		--volume ./out/:/out \
 		--volume ./cache/cargo/:/.cargo \
-		--workdir /src \
+		--workdir /qos \
 		--env RUSTFLAGS="" \
 		--env CARGOFLAGS="--locked" \
 		--env PATH=/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
@@ -48,5 +51,5 @@ define build
 			$(if $(filter tar,$(TYPE)),dest=$@") \
 			$(if $(filter dir,$(TYPE)),dest=out/$(NAME)") \
 		-f src/images/$(NAME)/Containerfile \
-		src/
+		.
 endef

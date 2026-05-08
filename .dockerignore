@@ -1,0 +1,6 @@
+**/target/*
+**/cache/*
+.git
+out/*
+dist/*
+.DS_Store

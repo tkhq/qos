@@ -58,7 +58,7 @@ fn preprod_reshard_ceremony() {
 
 		let master_seed_path = format!("{}/{}", user_dir(user), private);
 		let public_path = format!("{}/{}", user_dir(user), public);
-		assert!(Command::new("../target/debug/qos_client")
+		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"generate-file-key",
 				"--master-seed-path",
