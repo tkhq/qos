@@ -199,7 +199,12 @@ impl Reaper {
 		let mut pivot = Command::new(handles.pivot_path());
 		pivot.env_clear();
 		pivot.args(&args[..]);
-		pivot.stdout(Stdio::piped()).stderr(Stdio::piped());
+		// Only pipe pivot output when it will be drained below.
+		if manifest.pivot.debug_mode {
+			pivot.stdout(Stdio::piped()).stderr(Stdio::piped());
+		} else {
+			pivot.stdout(Stdio::null()).stderr(Stdio::null());
+		}
 
 		loop {
 			let mut child = pivot.spawn().expect("Failed to spawn pivot");
