@@ -18,7 +18,6 @@ Provided a bridge configuration of
 }
 ```
 
-`cargo run -- --control-url http://localhost:3001/qos --usock /tmp/enclave-example/example.sock --
-host-port-override 4000`
+`cargo run -- --control-url http://localhost:3001/qos --usock /tmp/enclave-example/example.sock --host-port-override 4000`
 
 The pivot app will be available on `localhost:4000` via the bridge, and `localhost:3000` directly.
