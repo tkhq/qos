@@ -449,10 +449,10 @@ mod test {
 			);
 
 			let handles = Handles::new(
-				ephemeral_file.to_str().map(ToString::to_string).unwrap(),
+				ephemeral_file.display().to_string(),
 				"qorum".to_string(),
-				manifest_file.to_str().map(ToString::to_string).unwrap(),
-				pivot_file.to_str().map(ToString::to_string).unwrap(),
+				manifest_file.display().to_string(),
+				pivot_file.display().to_string(),
 			);
 			let mut state =
 				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
@@ -489,10 +489,10 @@ mod test {
 				"/tmp/boot_key_rejects_manifest_if_not_enough_approvals.manifest");
 
 			let handles = Handles::new(
-				ephemeral_file.to_str().map(ToString::to_string).unwrap(),
+				ephemeral_file.display().to_string(),
 				"qorum".to_string(),
-				manifest_file.to_str().map(ToString::to_string).unwrap(),
-				pivot_file.to_str().map(ToString::to_string).unwrap(),
+				manifest_file.display().to_string(),
+				pivot_file.display().to_string(),
 			);
 			let mut state =
 				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
@@ -527,10 +527,10 @@ mod test {
 			);
 
 			let handles = Handles::new(
-				ephemeral_file.to_str().map(ToString::to_string).unwrap(),
+				ephemeral_file.display().to_string(),
 				"qorum".to_string(),
-				manifest_file.to_str().map(ToString::to_string).unwrap(),
-				pivot_file.to_str().map(ToString::to_string).unwrap(),
+				manifest_file.display().to_string(),
+				pivot_file.display().to_string(),
 			);
 			let mut state =
 				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
@@ -569,10 +569,10 @@ mod test {
 			);
 
 			let handles = Handles::new(
-				ephemeral_file.to_str().map(ToString::to_string).unwrap(),
+				ephemeral_file.display().to_string(),
 				"quorum".to_string(),
-				manifest_file.to_str().map(ToString::to_string).unwrap(),
-				pivot_file.to_str().map(ToString::to_string).unwrap(),
+				manifest_file.display().to_string(),
+				pivot_file.display().to_string(),
 			);
 			let mut state =
 				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
@@ -622,10 +622,10 @@ mod test {
 				"/tmp/boot_key_reject_manifest_with_approval_from_non_membermanifest");
 
 			let handles = Handles::new(
-				ephemeral_file.to_str().map(ToString::to_string).unwrap(),
+				ephemeral_file.display().to_string(),
 				"quorum".to_string(),
-				manifest_file.to_str().map(ToString::to_string).unwrap(),
-				pivot_file.to_str().map(ToString::to_string).unwrap(),
+				manifest_file.display().to_string(),
+				pivot_file.display().to_string(),
 			);
 			let mut state =
 				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
@@ -1102,9 +1102,9 @@ mod test {
 			)
 			.unwrap();
 			let handles = Handles::new(
-				ephemeral_file.to_str().map(ToString::to_string).unwrap(),
-				quorum_file.to_str().map(ToString::to_string).unwrap(),
-				manifest_file.to_str().map(ToString::to_string).unwrap(),
+				ephemeral_file.display().to_string(),
+				quorum_file.display().to_string(),
+				manifest_file.display().to_string(),
 				"pivot".to_string(),
 			);
 
@@ -1164,9 +1164,9 @@ mod test {
 			let signature = quorum_pair.sign(&encrypted_quorum_key).unwrap();
 
 			let handles = Handles::new(
-				ephemeral_file.to_str().map(ToString::to_string).unwrap(),
-				quorum_file.to_str().map(ToString::to_string).unwrap(),
-				manifest_file.to_str().map(ToString::to_string).unwrap(),
+				ephemeral_file.display().to_string(),
+				quorum_file.display().to_string(),
+				manifest_file.display().to_string(),
 				"pivot".to_string(),
 			);
 			let mut protocol_state =
@@ -1222,9 +1222,9 @@ mod test {
 			let signature = quorum_pair.sign(&encrypted_quorum_key).unwrap();
 
 			let handles = Handles::new(
-				ephemeral_file.to_str().map(ToString::to_string).unwrap(),
-				quorum_file.to_str().map(ToString::to_string).unwrap(),
-				manifest_file.to_str().map(ToString::to_string).unwrap(),
+				ephemeral_file.display().to_string(),
+				quorum_file.display().to_string(),
+				manifest_file.display().to_string(),
 				"pivot".to_string(),
 			);
 			let mut protocol_state =
@@ -1276,9 +1276,9 @@ mod test {
 			let signature = wrong_key.sign(&encrypted_quorum_key).unwrap();
 
 			let handles = Handles::new(
-				ephemeral_file.to_str().map(ToString::to_string).unwrap(),
-				quorum_file.to_str().map(ToString::to_string).unwrap(),
-				manifest_file.to_str().map(ToString::to_string).unwrap(),
+				ephemeral_file.display().to_string(),
+				quorum_file.display().to_string(),
+				manifest_file.display().to_string(),
 				"pivot".to_string(),
 			);
 			let mut protocol_state =
@@ -1330,9 +1330,9 @@ mod test {
 				quorum_pair.sign(&invalid_encrypted_quorum_key).unwrap();
 
 			let handles = Handles::new(
-				ephemeral_file.to_str().map(ToString::to_string).unwrap(),
-				quorum_file.to_str().map(ToString::to_string).unwrap(),
-				manifest_file.to_str().map(ToString::to_string).unwrap(),
+				ephemeral_file.display().to_string(),
+				quorum_file.display().to_string(),
+				manifest_file.display().to_string(),
 				"pivot".to_string(),
 			);
 			let mut protocol_state =

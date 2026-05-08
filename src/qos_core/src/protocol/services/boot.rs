@@ -1109,10 +1109,10 @@ mod test {
 			"boot_standard_rejects_manifest_envelope_with_share_set_approvals.manifest");
 
 		let handles = Handles::new(
-			ephemeral_file.to_str().map(ToString::to_string).unwrap(),
+			ephemeral_file.display().to_string(),
 			"quorum_key".to_string(),
-			manifest_file.to_str().map(ToString::to_string).unwrap(),
-			pivot_file.to_str().map(ToString::to_string).unwrap(),
+			manifest_file.display().to_string(),
+			pivot_file.display().to_string(),
 		);
 		let mut protocol_state =
 			ProtocolState::new(Box::new(MockNsm), handles, None);
@@ -1165,10 +1165,10 @@ mod test {
 			"boot_standard_rejects_approval_from_non_manifest_set_member.manifest");
 
 		let handles = Handles::new(
-			ephemeral_file.to_str().map(ToString::to_string).unwrap(),
+			ephemeral_file.display().to_string(),
 			"quorum_key".to_string(),
-			manifest_file.to_str().map(ToString::to_string).unwrap(),
-			pivot_file.to_str().map(ToString::to_string).unwrap(),
+			manifest_file.display().to_string(),
+			pivot_file.display().to_string(),
 		);
 		let mut protocol_state =
 			ProtocolState::new(Box::new(MockNsm), handles, None);

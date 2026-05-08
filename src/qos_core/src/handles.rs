@@ -345,10 +345,10 @@ mod test {
 			PathWrapper::from("put_ephemeral_key_is_read_only_write.manifest");
 
 		let handles = Handles::new(
-			ephemeral_file.to_str().map(ToString::to_string).unwrap(),
-			quorum_file.to_str().map(ToString::to_string).unwrap(),
-			manifest_file.to_str().map(ToString::to_string).unwrap(),
-			pivot_file.to_str().map(ToString::to_string).unwrap(),
+			ephemeral_file.display().to_string(),
+			quorum_file.display().to_string(),
+			manifest_file.display().to_string(),
+			pivot_file.display().to_string(),
 		);
 
 		let ephemeral_key = P256Pair::generate().unwrap();
@@ -372,10 +372,10 @@ mod test {
 			PathWrapper::from("put_quorum_key_is_read_only_write.manifest");
 
 		let handles = Handles::new(
-			ephemeral_file.to_str().map(ToString::to_string).unwrap(),
-			quorum_file.to_str().map(ToString::to_string).unwrap(),
-			manifest_file.to_str().map(ToString::to_string).unwrap(),
-			pivot_file.to_str().map(ToString::to_string).unwrap(),
+			ephemeral_file.display().to_string(),
+			quorum_file.display().to_string(),
+			manifest_file.display().to_string(),
+			pivot_file.display().to_string(),
 		);
 
 		let quorum_key = P256Pair::generate().unwrap();
@@ -401,10 +401,10 @@ mod test {
 			PathWrapper::from("put_pivot_is_read_only_write.manifest");
 
 		let handles = Handles::new(
-			ephemeral_file.to_str().map(ToString::to_string).unwrap(),
-			quorum_file.to_str().map(ToString::to_string).unwrap(),
-			manifest_file.to_str().map(ToString::to_string).unwrap(),
-			pivot_file.to_str().map(ToString::to_string).unwrap(),
+			ephemeral_file.display().to_string(),
+			quorum_file.display().to_string(),
+			manifest_file.display().to_string(),
+			pivot_file.display().to_string(),
 		);
 
 		let pivot = b"this is a pivot binary".to_vec();
@@ -428,10 +428,10 @@ mod test {
 			PathWrapper::from("put_manifest_is_read_only_write.manifest");
 
 		let handles = Handles::new(
-			ephemeral_file.to_str().map(ToString::to_string).unwrap(),
-			quorum_file.to_str().map(ToString::to_string).unwrap(),
-			manifest_file.to_str().map(ToString::to_string).unwrap(),
-			pivot_file.to_str().map(ToString::to_string).unwrap(),
+			ephemeral_file.display().to_string(),
+			quorum_file.display().to_string(),
+			manifest_file.display().to_string(),
+			pivot_file.display().to_string(),
 		);
 
 		let pivot = b"this is a pivot binary".to_vec();
