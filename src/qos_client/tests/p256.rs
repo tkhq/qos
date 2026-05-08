@@ -7,6 +7,8 @@ use qos_test_primitives::PathWrapper;
 const DATA: &str = "test data";
 const MOCK_PRIMARY_SEED_PATH: &str = "./tests/mock/primary.secret.keep";
 const MOCK_PRIMARY_PUB_PATH: &str = "./tests/mock/primary.pub";
+const QOS_CLIENT_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/qos_client");
 // If this is updated there is a breaking change to the commands api
 const EXPECTED_SIGNATURE: &str = "36c7f22c3831a32b8c8a9e823641e7df591c6e92848e7baa54f66d65963d15eaf02abbf5f01f99a8dddfe7a35453a4df486a708ffa3ef2d8159d4d0763f5ee89";
 
@@ -22,7 +24,7 @@ fn p256_sign_verify_roundtrip() {
 	// Sanity check the signature output doesn't already exist
 	assert!(!PathBuf::from(signature_path).exists());
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(QOS_CLIENT_PATH)
 		.arg("p256-sign")
 		.arg("--payload-path")
 		.arg(payload_path)
@@ -39,7 +41,7 @@ fn p256_sign_verify_roundtrip() {
 	let signature = std::fs::read_to_string(signature_path).unwrap();
 	assert_eq!(EXPECTED_SIGNATURE, signature);
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(QOS_CLIENT_PATH)
 		.arg("p256-verify")
 		.arg("--payload-path")
 		.arg(payload_path)
@@ -68,7 +70,7 @@ fn p256_asymmetric_encrypt_decrypt_roundtrip() {
 	// Sanity check the ciphertext output doesn't already exist
 	assert!(!PathBuf::from(ciphertext_path).exists());
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(QOS_CLIENT_PATH)
 		.arg("p256-asymmetric-encrypt")
 		.arg("--plaintext-path")
 		.arg(plaintext_input_path)
@@ -86,7 +88,7 @@ fn p256_asymmetric_encrypt_decrypt_roundtrip() {
 		"/tmp/p256_asymmetric_encrypt_decrypt_roundtrip/plaintext_output";
 	assert!(!PathBuf::from(plaintext_output_path).exists());
 
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(QOS_CLIENT_PATH)
 		.arg("p256-asymmetric-decrypt")
 		.arg("--plaintext-path")
 		.arg(plaintext_output_path)
@@ -105,7 +107,7 @@ fn p256_asymmetric_encrypt_decrypt_roundtrip() {
 
 	let hex_plaintext_output_path =
 		"/tmp/p256_asymmetric_encrypt_decrypt_roundtrip/plaintext_output";
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(QOS_CLIENT_PATH)
 		.arg("p256-asymmetric-decrypt")
 		.arg("--plaintext-path")
 		.arg(hex_plaintext_output_path)

@@ -68,7 +68,7 @@ async fn genesis_e2e() {
 		fs::create_dir_all(personal_dir(user)).unwrap();
 		let master_seed_path = format!("{}/{}", personal_dir(user), private);
 		let public_path = format!("{}/{}", personal_dir(user), public);
-		assert!(Command::new("../target/debug/qos_client")
+		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"generate-file-key",
 				"--master-seed-path",
@@ -103,7 +103,7 @@ async fn genesis_e2e() {
 
 	// -- ENCLAVE start enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_core")
+		Command::new(integration::QOS_CORE_PATH)
 			.args([
 				"--usock",
 				&*usock,
@@ -121,7 +121,7 @@ async fn genesis_e2e() {
 
 	// -- HOST start host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_host")
+		Command::new(integration::QOS_HOST_PATH)
 			.args([
 				"--host-port",
 				&*host_port.to_string(),
@@ -139,7 +139,7 @@ async fn genesis_e2e() {
 
 	// -- CLIENT Run boot genesis, creating a genesis set from the setup keys in
 	// the genesis dir
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"boot-genesis",
 			"--share-set-dir",
@@ -214,7 +214,7 @@ async fn genesis_e2e() {
 	for user in [&user1, &user2, &user3] {
 		let share_path = format!("{}/{}.share", &personal_dir(user), user);
 		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
-		assert!(Command::new("../target/debug/qos_client")
+		assert!(Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"after-genesis",
 				"--secret-path",
@@ -269,7 +269,7 @@ async fn genesis_e2e() {
 	// Check that we can verify the dr artifacts.
 	let reconstructed_path = tmp_dir("reconstructed_quorum_master_seed_hex");
 	reconstructed.to_hex_file(&*reconstructed_path).unwrap();
-	assert!(Command::new("../target/debug/qos_client")
+	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.arg("verify-genesis")
 		.arg("--namespace-dir")
 		.arg(&*genesis_dir)

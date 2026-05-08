@@ -4,11 +4,11 @@ FROM stagex/linux-nitro:sx2024.03.0@sha256:073c4603686e3bdc0ed6755fee3203f6f6f15
 
 FROM common AS base
 
-RUN mkdir -p /qos/src
-ADD . /qos/src
+RUN mkdir -p /qos
+ADD . /qos
 
 # pre-fetch all QOS deps
-RUN cd /qos/src && cargo fetch
+RUN cd /qos && cargo fetch
 
 # pre-fetch all QOS deps even for crates excluded from the workspace
 # these dependencies are needed when building qos_enclave

@@ -19,7 +19,7 @@ async fn dev_boot_e2e() {
 
 	// Start Enclave
 	let mut _enclave_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_core")
+		Command::new(integration::QOS_CORE_PATH)
 			.args([
 				"--usock",
 				&*usock,
@@ -39,7 +39,7 @@ async fn dev_boot_e2e() {
 
 	// Start Host
 	let mut _host_child_process: ChildWrapper =
-		Command::new("../target/debug/qos_host")
+		Command::new(integration::QOS_HOST_PATH)
 			.args([
 				"--host-port",
 				&host_port.to_string(),
@@ -55,7 +55,7 @@ async fn dev_boot_e2e() {
 	qos_test_primitives::wait_until_port_is_bound(host_port);
 
 	// Run `dangerous-dev-boot`
-	let res = Command::new("../target/debug/qos_client")
+	let res = Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"dangerous-dev-boot",
 			"--host-port",
