@@ -65,7 +65,7 @@ impl HostOpts {
 		self.parsed
 			.single(CONTROL_URL)
 			.expect("no control-url provided")
-			.to_string()
+			.clone()
 	}
 
 	/// overrides the host portion of the bridge with given port, ignoring the manifest value

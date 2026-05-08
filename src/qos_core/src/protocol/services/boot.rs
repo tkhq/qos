@@ -71,9 +71,11 @@ impl fmt::Debug for NitroConfig {
 	borsh::BorshDeserialize,
 	serde::Serialize,
 	serde::Deserialize,
+	Default,
 )]
 pub enum RestartPolicy {
 	/// Never restart the pivot application
+	#[default]
 	Never,
 	/// Always restart the pivot application
 	Always,
@@ -86,13 +88,6 @@ impl fmt::Debug for RestartPolicy {
 			Self::Always => write!(f, "RestartPolicy::Always")?,
 		}
 		Ok(())
-	}
-}
-
-#[cfg(any(feature = "mock", test))]
-impl Default for RestartPolicy {
-	fn default() -> Self {
-		Self::Never
 	}
 }
 

@@ -151,7 +151,7 @@ impl StreamPool {
 	///
 	/// # Panics
 	/// Panics if list of addresses provided was empty.
-	pub async fn get(&self) -> PoolGuard {
+	pub async fn get(&self) -> PoolGuard<'_> {
 		// TODO: make this into an error
 		assert!(
 			!self.handles.is_empty(),
