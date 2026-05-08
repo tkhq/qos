@@ -12,6 +12,7 @@ members = [
   "qos_p256",
   "qos_nsm",
   # special members that are not default-members
+  "xtask",
   "qos_crypto/fuzz",
   "qos_net/fuzz",
   "qos_nsm/fuzz",
@@ -36,6 +37,9 @@ exclude = [
   "qos_aws",
   "qos_system",
   "qos_enclave",
+  "integration/wasm_rt",
+  "integration/wasm_policy",
+  "integration/wasm_program",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.

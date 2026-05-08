@@ -1,0 +1,17 @@
+[workspace]
+
+[package]
+name = "wasm_policy"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+wasm_rt = { path = "../wasm_rt" }
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = "s"
+lto = true

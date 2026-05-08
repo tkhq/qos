@@ -24,6 +24,7 @@ qos_hex = { workspace = true }
 qos_p256 = { workspace = true, features = ["mock"] }
 qos_test_primitives = { workspace = true }
 
+wasmtime = { version = "29", default-features = false, features = ["cranelift", "runtime"] }
 futures = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 borsh = { workspace = true }

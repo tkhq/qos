@@ -1,0 +1,11 @@
+[workspace]
+
+[package]
+name = "wasm_rt"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[profile.release]
+opt-level = "s"
+lto = true
