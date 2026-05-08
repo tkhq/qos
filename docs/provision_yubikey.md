@@ -71,7 +71,7 @@ Note: Do not write the PIN to a file on disk. The process substitution syntax `<
 qos_client provision-yubikey --pub-path ~/path/to/output.pub
 ```
 
-When prompted, enter the PIN you set in Phase 2.
+When prompted, enter the PIN you set in step 2.
 
 The file at `--pub-path` will contain the hex-encoded public key. Share this `.pub` file with the ceremony coordinator — never share the PIN or the device itself.
 

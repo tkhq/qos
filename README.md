@@ -125,19 +125,19 @@ If something goes wrong during a release and you want to retry, you can open a P
 ### Enclave
 
 - houses server for listening to the Host
-- contains logic for quorum key genesis, booting, and running a Enclave App
+- contains logic for quorum key genesis, booting, and running an Enclave App
 - see crate [`qos_core`](./src/qos_core/)
 
 ### Host
 
 - EC2 instance housing the nitro enclave
-- has client for talking to nitro enclave
-- has server for incoming request from outside world
+- has a client for talking to nitro enclave
+- has a server for incoming requests from outside world
 - see crate [`qos_host`](./src/qos_host/)
 
 #### Client
 
-- anything making request to host
+- anything making requests to host
 - see crate [`qos_client`](./src/qos_client/)
 
 ## Key Terms
@@ -160,7 +160,7 @@ The collection of members who can approve a manifest. In the typical instance pr
 
 ### Share Set
 
-The collection of members who each hold shares of the Quorum Key and thus provision an enclave by attesting and then posting their shares. When posting shares, these members will also provide a signature of the manifest. The signature is recorded in manifest envelope in order to leave an audit trail. This way, third parties can check which share set members actually participated in provisioning the quorum key
+The collection of members who each hold shares of the Quorum Key and thus provision an enclave by attesting and then posting their shares. When posting shares, these members will also provide a signature of the manifest. The signature is recorded in the manifest envelope in order to leave an audit trail. This way, third parties can check which share set members actually participated in provisioning the quorum key
 
 ### Ephemeral Key
 
@@ -180,14 +180,14 @@ A group of QuorumOS Nodes running the same Enclave App and using the same Quorum
 
 ### Pivot / Enclave App
 
-The application QuorumOS pivots to once it finishes booting. This applications binary hash and CLI arguments are specified in the Manifest file.
+The application QuorumOS pivots to once it finishes booting. This application's binary hash and CLI arguments are specified in the Manifest file.
 
 ## Provisioning
 
 There are two modes for provisioning:
 
 - [Boot Standard](docs/boot_standard.md): mode for provisioning an enclave with quorum key shares. This is commonly used if there is no instance from the same namespace to key forward from or if there is any change to the QuorumOS verification API that breaks Key Forwarding. Boot Standard is also required if the manifest set or share set change.
-- [Key Forward](docs/key_forward.md): mode for provisioning an enclave from an already provisionedq enclave of the same namespace. This allows QuorumOS to support horizontal scaling cloud workloads. Effectively, a pre-existing enclave will verify attestation and manifest for a new enclave and then forward its quorum key to the new enclave.
+- [Key Forward](docs/key_forward.md): mode for provisioning an enclave from an already provisioned enclave of the same namespace. This allows QuorumOS to support horizontal scaling cloud workloads. Effectively, a pre-existing enclave will verify attestation and manifest for a new enclave and then forward its quorum key to the new enclave.
 
 ### Remote Attestation
 

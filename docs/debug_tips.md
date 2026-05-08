@@ -43,7 +43,7 @@
     sudo chmod -R g+w /var/log/nitro_enclaves /run/nitro_enclaves /etc/nitro_enclaves
     sudo chown -R :admin /var/log/nitro_enclaves /run/nitro_enclaves /etc/nitro_enclaves
     sudo cp build/nitro_cli/x86_64-unknown-linux-musl/release/nitro-cli /usr/local/bin/
-    sudo cp bootstrapnitro-enclaves-allocator /usr/local/bin/
+    sudo cp bootstrap/nitro-enclaves-allocator /usr/local/bin/
     sudo cp bootstrap/allocator.yaml /etc/
     sed -i 's|/usr/bin|/usr/local/bin|g' bootstrap/nitro-enclaves-allocator.service
     sudo cp bootstrap/nitro-enclaves-allocator.service /etc/systemd/system/
