@@ -64,8 +64,11 @@ impl ProxyOpts {
 				let c = c.parse::<u32>().unwrap();
 				let p = p.parse::<u32>().unwrap();
 
-				let address =
-					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS);
+				let address = SocketAddress::new_vsock(
+					c,
+					p,
+					qos_core::io::VMADDR_NO_FLAGS,
+				);
 
 				StreamPool::new(address, pool_size)
 			}
@@ -248,12 +251,10 @@ mod test {
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let opts = EnclaveOpts::new(&mut args);
+		let opts = ProxyOpts::new(&mut args);
 
-		assert_eq!(
-			opts.addr(),
-			SocketAddress::new_vsock(6, 3999, crate::io::VMADDR_NO_FLAGS)
-		);
+		let pool = opts.async_pool().unwrap();
+		assert_eq!(pool.len(), 1);
 	}
 
 	#[test]
