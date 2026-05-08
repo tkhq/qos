@@ -6,9 +6,11 @@ use std::{
 };
 
 use hickory_resolver::{
+	config::{
+		ConnectionConfig, NameServerConfig, ResolverConfig, ResolverOpts,
+	},
+	net::runtime::TokioRuntimeProvider,
 	TokioResolver,
-	config::{NameServerConfigGroup, ResolverConfig, ResolverOpts},
-	name_server::TokioConnectionProvider,
 };
 use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt},
@@ -116,15 +118,20 @@ pub async fn resolve_hostname(
 		})
 		.collect::<Result<Vec<IpAddr>, AddrParseError>>()?;
 
-	let resolver_config = ResolverConfig::from_parts(
-		None,
-		vec![],
-		NameServerConfigGroup::from_ips_clear(
-			&resolver_parsed_addrs,
-			port,
-			true,
-		),
-	);
+	let name_servers = resolver_parsed_addrs
+		.into_iter()
+		.map(|ip| {
+			let mut udp = ConnectionConfig::udp();
+			udp.port = port;
+			let mut tcp = ConnectionConfig::tcp();
+			tcp.port = port;
+
+			NameServerConfig::new(ip, true, vec![udp, tcp])
+		})
+		.collect();
+
+	let resolver_config =
+		ResolverConfig::from_parts(None, vec![], name_servers);
 
 	// ensure the resolve call will be < 5s for our socket timeout (so we return a meaningful error and don't hog the socket)
 	// this means attempts * timeout < 5s
@@ -134,10 +141,11 @@ pub async fn resolve_hostname(
 
 	let resolver = TokioResolver::builder_with_config(
 		resolver_config,
-		TokioConnectionProvider::default(),
+		TokioRuntimeProvider::default(),
 	)
 	.with_options(resolver_opts)
-	.build();
+	.build()
+	.map_err(QosNetError::from)?;
 
 	let response =
 		resolver.lookup_ip(&hostname).await.map_err(QosNetError::from)?;
@@ -203,5 +211,18 @@ mod test {
 		let response_text = std::str::from_utf8(&response_bytes).unwrap();
 		assert!(response_text.contains("HTTP/1.1 200 OK"));
 		assert!(response_text.contains("currentTime"));
+	}
+
+	#[tokio::test]
+	async fn invalid_dns_resolver_address_returns_parse_error() {
+		let err = resolve_hostname(
+			"api.turnkey.com".to_string(),
+			vec!["not-an-ip-address".to_string()],
+			53,
+		)
+		.await
+		.unwrap_err();
+
+		assert!(matches!(err, QosNetError::ParseError(_)));
 	}
 }
