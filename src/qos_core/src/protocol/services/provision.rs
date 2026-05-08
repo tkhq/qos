@@ -161,9 +161,9 @@ mod test {
 		manifest_file: &Path,
 	) -> Setup {
 		let handles = Handles::new(
-			eph_file.to_str().map(ToString::to_string).unwrap(),
-			quorum_file.to_str().map(ToString::to_string).unwrap(),
-			manifest_file.to_str().map(ToString::to_string).unwrap(),
+			eph_file.display().to_string(),
+			quorum_file.display().to_string(),
+			manifest_file.display().to_string(),
 			"pivot".to_string(),
 		);
 		// 1) Create and write eph key

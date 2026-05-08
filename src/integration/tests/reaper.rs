@@ -32,8 +32,8 @@ async fn reaper_works() {
 
 	let handles = Handles::new(
 		"eph_path".to_string(),
-		secret_path.to_str().map(ToString::to_string).unwrap(),
-		manifest_path.to_str().map(ToString::to_string).unwrap(),
+		secret_path.display().to_string(),
+		manifest_path.display().to_string(),
 		PIVOT_OK_PATH.to_string(),
 	);
 
@@ -85,8 +85,8 @@ async fn reaper_clears_host_env() {
 
 	let handles = Handles::new(
 		"reaper_clears_host_env.eph".to_string(),
-		secret_path.to_str().map(ToString::to_string).unwrap(),
-		manifest_path.to_str().map(ToString::to_string).unwrap(),
+		secret_path.display().to_string(),
+		manifest_path.display().to_string(),
 		PIVOT_OK2_PATH.to_string(),
 	);
 
@@ -200,8 +200,8 @@ async fn reaper_handles_non_zero_exits() {
 
 	let handles = Handles::new(
 		"eph_path".to_string(),
-		secret_path.to_str().map(ToString::to_string).unwrap(),
-		manifest_path.to_str().map(ToString::to_string).unwrap(),
+		secret_path.display().to_string(),
+		manifest_path.display().to_string(),
 		PIVOT_ABORT_PATH.to_string(),
 	);
 
@@ -247,8 +247,8 @@ async fn reaper_handles_panic() {
 
 	let handles = Handles::new(
 		"eph_path".to_string(),
-		secret_path.to_str().map(ToString::to_string).unwrap(),
-		manifest_path.to_str().map(ToString::to_string).unwrap(),
+		secret_path.display().to_string(),
+		manifest_path.display().to_string(),
 		PIVOT_PANIC_PATH.to_string(),
 	);
 
@@ -299,8 +299,8 @@ async fn reaper_handles_bridge() {
 
 	let handles = Handles::new(
 		"eph_path".to_string(),
-		secret_path.to_str().map(ToString::to_string).unwrap(),
-		manifest_path.to_str().map(ToString::to_string).unwrap(),
+		secret_path.display().to_string(),
+		manifest_path.display().to_string(),
 		PIVOT_TCP_PATH.to_string(),
 	);
 
