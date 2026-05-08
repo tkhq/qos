@@ -40,7 +40,7 @@ The details for how QOS nodes communicate with each other can vary, but for the 
         }
         ```
 
-3) The Original Node gets a `ExportKeyRequest` from the the Client.
+3) The Original Node gets a `ExportKeyRequest` from the Client.
 
     ```rust
     struct ExportKeyRequest {
@@ -53,12 +53,12 @@ The details for how QOS nodes communicate with each other can vary, but for the 
     1) Check the basic validity of the attestation doc (cert chain etc). Ensures that the attestation document is actually from an AWS controlled NSM module and the document's timestamp was recent.
     1) Check the signatures over the New Manifest. Ensures that K Manifest Set Members approved the New Manifest.
     1) Check that the Quorum Key of the Local Manifest matches the Quorum Key of the New Manifest. This ensures the request is for the correct Quorum Key.
-    1) Check that the Manifest Set of the New Manifest matches the Manifest Set of the Local Manifest. Ensures that the signatures are from a trusted Manifest Set. Note that there is still a vulnerability here if we have try to retire a Manifest Set because a critical threshold of it was compromised - that malicious Manifest Set could boot off of an Original Node - thus it's important to retire all Original Nodes ASAP that use compromised Manifest Sets.
+    1) Check that the Manifest Set of the New Manifest matches the Manifest Set of the Local Manifest. Ensures that the signatures are from a trusted Manifest Set. Note that there is still a vulnerability here if we try to retire a Manifest Set because a critical threshold of it was compromised - that malicious Manifest Set could boot off of an Original Node - thus it's important to retire all Original Nodes ASAP that use compromised Manifest Sets.
     1) Check that the Namespace of the Local Manifest matches the namespace of the New Manifest. Namespaces are a social construct, but we only want to allow forwarding a Quorum Key to Nodes in the same Namespace to help ensure that the nonce is not abused.
     1) Check that the nonce of the New Manifest is greater than or equal to the nonce of the Local Manifest. If they have the same nonce, we check that the Local Manifest has the same hash as an extra measure. Note that while the nonce is verified programmatically in this routine, its maintenance relative to other manifests in the namespace is a social coordination problem and is meant to be solved by the Manifest Set Members approving the manifest. In other words, we rely on the Manifest Set Members to correctly increment the nonce when any change is made to the latest manifest for a namespace.
     1) Check that the hash of the new manifest is in the `user_data` field of the attestation doc.
-    1) Check that PCR0, PCR1, PCR2, and PCR3 in the New Manifest match the PCRs in the attestation document. This ensures the New Manifest was used against a Nitro enclave booted with the intended version of QOS. Note that we assume the values for PCR{0, 1 , 2} correspond to a desired version of QOS because the Manifest Set Members had K approvals.
-    1) Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is the IAM role assigned to the EC2 host of the enclave. An IAM role contains an AWS organization's unique ID. By only using the approved PCR3 value we ensure that we only ever send the Quorum Key to an enclave that is controlled by the operator, not an enclave that some malicious entity runs that otherwise configured identically to one of the operator's enclaves.
+    1) Check that PCR0, PCR1, PCR2, and PCR3 in the New Manifest match the PCRs in the attestation document. This ensures the New Manifest was used against a Nitro enclave booted with the intended version of QOS. Note that we assume the values for PCR{0, 1, 2} correspond to a desired version of QOS because the Manifest Set Members had K approvals.
+    1) Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is the IAM role assigned to the EC2 host of the enclave. An IAM role contains an AWS organization's unique ID. By only using the approved PCR3 value we ensure that we only ever send the Quorum Key to an enclave that is controlled by the operator, not an enclave that some malicious entity runs that is otherwise configured identically to one of the operator's enclaves.
     1) Return the Quorum Key encrypted to the New Node's Ephemeral Key extracted from the attestation document and a signature over the encrypted payload. The Original Node uses its Quorum Key to create the signature.
 
         ```rust
