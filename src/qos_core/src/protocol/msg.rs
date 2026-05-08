@@ -138,6 +138,20 @@ pub enum ProtocolMsg {
 		/// if the manifest envelope does not exist.
 		manifest_envelope: Box<Option<ManifestEnvelope>>,
 	},
+
+	/// Request the QOS version and git commit of the running enclave.
+	VersionRequest,
+	/// Response for [`Self::VersionRequest`].
+	VersionResponse {
+		/// `qos_core` crate semver, captured at compile time from
+		/// `CARGO_PKG_VERSION`.
+		version: String,
+		/// Git commit captured at build time. Sourced from the
+		/// `QOS_GIT_COMMIT` env var (set by the build caller) with a
+		/// `git rev-parse --short HEAD` fallback. May be `"unknown"` if
+		/// neither was available at build time.
+		commit: String,
+	},
 }
 
 impl std::fmt::Display for ProtocolMsg {
@@ -219,6 +233,13 @@ impl std::fmt::Display for ProtocolMsg {
 			Self::ManifestEnvelopeResponse { .. } => {
 				write!(f, "ManifestEnvelopeResponse")
 			}
+			Self::VersionRequest => write!(f, "VersionRequest"),
+			Self::VersionResponse { version, commit } => {
+				write!(
+					f,
+					"VersionResponse{{ version: {version}, commit: {commit} }}"
+				)
+			}
 		}
 	}
 }
@@ -256,5 +277,28 @@ mod test {
 		let test = ProtocolMsg::try_from_slice(&vec).unwrap();
 
 		assert_eq!(test, genesis_response);
+	}
+
+	#[test]
+	fn version_response_round_trip() {
+		let msg = ProtocolMsg::VersionResponse {
+			version: "0.5.0".to_string(),
+			commit: "abc1234".to_string(),
+		};
+
+		let vec = borsh::to_vec(&msg).unwrap();
+		let decoded = ProtocolMsg::try_from_slice(&vec).unwrap();
+
+		assert_eq!(msg, decoded);
+	}
+
+	#[test]
+	fn version_request_round_trip() {
+		let msg = ProtocolMsg::VersionRequest;
+
+		let vec = borsh::to_vec(&msg).unwrap();
+		let decoded = ProtocolMsg::try_from_slice(&vec).unwrap();
+
+		assert_eq!(msg, decoded);
 	}
 }

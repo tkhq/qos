@@ -28,11 +28,11 @@ async fn connects_and_gets_info() {
 	assert!(r.is_err()); // expect 500 here
 
 	let enclave_socket = format!("{TEST_ENCLAVE_SOCKET}_0"); // manually pick the 1st one
-	let secret_path: PathWrapper = "/tmp/qos_host_test.secret".into();
-	let manifest_path: PathWrapper = "/tmp/qos_host_test.manifest".into();
+	let secret_path = PathWrapper::from("/tmp/qos_host_test.secret");
+	let manifest_path = PathWrapper::from("/tmp/qos_host_test.manifest");
 
 	// For our sanity, ensure the secret does not yet exist
-	drop(std::fs::remove_file(&*secret_path));
+	drop(std::fs::remove_file(&secret_path));
 	// Remove the socket file if it exists as well, in case of bad crashes
 	drop(std::fs::remove_file(&enclave_socket));
 
@@ -42,14 +42,14 @@ async fn connects_and_gets_info() {
 				"--usock",
 				TEST_ENCLAVE_SOCKET,
 				"--quorum-file",
-				&*secret_path,
+				secret_path.to_str().unwrap(),
 				"--pivot-file",
 				PIVOT_OK_PATH,
 				"--ephemeral-file",
 				"eph_path",
 				"--mock",
 				"--manifest-file",
-				&*manifest_path,
+				manifest_path.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()

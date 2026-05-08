@@ -5,15 +5,14 @@ use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn dev_boot_e2e() {
-	let tmp: PathWrapper = "/tmp/dev-boot-e2e-tmp".into();
+	let tmp = PathWrapper::from("/tmp/dev-boot-e2e-tmp");
 	drop(fs::create_dir_all(&*tmp));
-	let _: PathWrapper = PIVOT_OK3_SUCCESS_FILE.into();
-	let usock: PathWrapper = "/tmp/dev-boot-e2e-tmp/sock.sock".into();
-	let secret_path: PathWrapper = "/tmp/dev-boot-e2e-tmp/quorum.secret".into();
-	let pivot_path: PathWrapper = "/tmp/dev-boot-e2e-tmp/pivot.pivot".into();
-	let manifest_path: PathWrapper =
-		"/tmp/dev-boot-e2e-tmp/manifest.manifest".into();
-	let eph_path: PathWrapper = "/tmp/dev-boot-e2e-tmp/eph.secret".into();
+	let _ = PathWrapper::from(PIVOT_OK3_SUCCESS_FILE);
+	let usock = tmp.join("sock.sock");
+	let secret_path = tmp.join("quorum.secret");
+	let pivot_path = tmp.join("pivot.pivot");
+	let manifest_path = tmp.join("manifest.manifest");
+	let eph_path = tmp.join("eph.secret");
 
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 
@@ -22,16 +21,16 @@ async fn dev_boot_e2e() {
 		Command::new(integration::QOS_CORE_PATH)
 			.args([
 				"--usock",
-				&*usock,
+				usock.to_str().unwrap(),
 				"--quorum-file",
-				&*secret_path,
+				secret_path.to_str().unwrap(),
 				"--pivot-file",
-				&*pivot_path,
+				pivot_path.to_str().unwrap(),
 				"--ephemeral-file",
-				&*eph_path,
+				eph_path.to_str().unwrap(),
 				"--mock",
 				"--manifest-file",
-				&*manifest_path,
+				manifest_path.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()
@@ -46,7 +45,7 @@ async fn dev_boot_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				&*usock,
+				usock.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()
@@ -69,7 +68,7 @@ async fn dev_boot_e2e() {
 			"--pivot-args",
 			"[--msg,vapers-only]",
 			"--unsafe-eph-path-override",
-			&*eph_path,
+			eph_path.to_str().unwrap(),
 		])
 		.spawn()
 		.unwrap()

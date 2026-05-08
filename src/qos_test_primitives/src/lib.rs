@@ -2,7 +2,9 @@
 
 use std::{
 	net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream},
-	ops::Deref,
+	ops::{Deref, DerefMut},
+	path::Path,
+	process::Child,
 	thread,
 	time::Duration,
 };
@@ -16,11 +18,25 @@ const EXIT_DELAY: Duration = Duration::from_millis(50);
 
 /// Wrapper type for [`std::process::Child`] that kills the process on drop.
 #[derive(Debug)]
-pub struct ChildWrapper(pub std::process::Child);
+pub struct ChildWrapper(Child);
 
-impl From<std::process::Child> for ChildWrapper {
-	fn from(child: std::process::Child) -> Self {
+impl From<Child> for ChildWrapper {
+	fn from(child: Child) -> Self {
 		Self(child)
+	}
+}
+
+impl Deref for ChildWrapper {
+	type Target = Child;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl DerefMut for ChildWrapper {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
 	}
 }
 
@@ -44,51 +60,36 @@ impl Drop for ChildWrapper {
 	}
 }
 
-#[derive(Debug)]
-enum Internal<'a> {
-	String(String),
-	Str(&'a str),
-}
-
-/// Wrapper type for [`std::path::Path`] that attempts to remove a file or
+/// Generic wrapper type for anything that implements [`std::convert::AsRef<std::path::Path>`] that attempts to remove a file or
 /// directory at the path on drop.
 #[derive(Debug)]
-pub struct PathWrapper<'a>(Internal<'a>);
+pub struct PathWrapper<P: AsRef<Path>>(P);
 
-impl<'a> From<&'a str> for PathWrapper<'a> {
-	fn from(path: &'a str) -> Self {
-		Self(Internal::Str(path))
+impl<P: AsRef<Path>> From<P> for PathWrapper<P> {
+	fn from(value: P) -> Self {
+		Self(value)
 	}
 }
 
-impl From<String> for PathWrapper<'_> {
-	fn from(path: String) -> Self {
-		Self(Internal::String(path))
-	}
-}
-
-impl Drop for PathWrapper<'_> {
+impl<P: AsRef<Path>> Drop for PathWrapper<P> {
 	fn drop(&mut self) {
-		let path = match &self.0 {
-			Internal::String(i) => i,
-			Internal::Str(i) => *i,
-		};
-
-		// Try removing it both as a file and as a directory. One of these
 		// will always fail
-		drop(std::fs::remove_dir_all(path));
-		drop(std::fs::remove_file(path));
+		drop(std::fs::remove_dir_all(&self.0));
+		drop(std::fs::remove_file(&self.0));
 	}
 }
 
-impl Deref for PathWrapper<'_> {
-	type Target = str;
+impl<P: AsRef<Path>> Deref for PathWrapper<P> {
+	type Target = Path;
 
 	fn deref(&self) -> &Self::Target {
-		match &self.0 {
-			Internal::String(i) => i,
-			Internal::Str(i) => i,
-		}
+		self.as_ref()
+	}
+}
+
+impl<P: AsRef<Path>> AsRef<Path> for PathWrapper<P> {
+	fn as_ref(&self) -> &Path {
+		self.0.as_ref()
 	}
 }
 

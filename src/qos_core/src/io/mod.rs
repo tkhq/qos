@@ -6,6 +6,8 @@
 mod host_bridge;
 mod pool;
 mod stream;
+use std::path::Path;
+
 pub use host_bridge::*;
 pub use pool::*;
 pub use stream::*;
@@ -93,8 +95,8 @@ impl SocketAddress {
 	///
 	/// Panics if `nix::sys::socket::UnixAddr::new` panics.
 	#[must_use]
-	pub fn new_unix(path: &str) -> Self {
-		let addr = UnixAddr::new(path).unwrap();
+	pub fn new_unix<P: AsRef<Path>>(path: P) -> Self {
+		let addr = UnixAddr::new(path.as_ref()).unwrap();
 		Self::Unix(addr)
 	}
 

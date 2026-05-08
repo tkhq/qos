@@ -198,9 +198,9 @@ fn import_key_agreement_works(yubikey: &mut YubiKey) {
 }
 
 fn provision_yubikey_works() {
-	let tmp_dir: PathWrapper = "/tmp/provision_yubikey_works".into();
-	let pub_path: PathWrapper =
-		"/tmp/provision_yubikey_works/yubikey.pub".into();
+	let tmp_dir = PathWrapper::from("/tmp/provision_yubikey_works");
+	let pub_path =
+		PathWrapper::from("/tmp/provision_yubikey_works/yubikey.pub");
 
 	// Create the temporary directory where we write the yubikey
 	std::fs::create_dir(&*tmp_dir).unwrap();
@@ -225,11 +225,12 @@ fn provision_yubikey_works() {
 }
 
 fn advanced_provision_yubikey_works() {
-	let tmp_dir: PathWrapper = "/tmp/advanced_provision_yubikey_works".into();
-	let master_seed_path: PathWrapper =
-		"/tmp/advanced_provision_yubikey_works/yubikey.master.secret".into();
-	let pub_path: PathWrapper =
-		"/tmp/advanced_provision_yubikey_works/yubikey.pub".into();
+	let tmp_dir = PathWrapper::from("/tmp/advanced_provision_yubikey_works");
+	let master_seed_path = PathWrapper::from(
+		"/tmp/advanced_provision_yubikey_works/yubikey.master.secret",
+	);
+	let pub_path =
+		PathWrapper::from("/tmp/advanced_provision_yubikey_works/yubikey.pub");
 
 	// Create the temporary directory where we write the yubikey
 	std::fs::create_dir(&*tmp_dir).unwrap();
@@ -275,10 +276,10 @@ fn advanced_provision_yubikey_works() {
 }
 
 fn provision_sign_and_verify() {
-	let tmp_dir: PathWrapper = "/tmp/provision_sign_and_verify".into();
+	let tmp_dir = PathWrapper::from("/tmp/provision_sign_and_verify");
 	create_dir_all(&*tmp_dir).unwrap();
-	let pub_path: PathWrapper =
-		"/tmp/provision_sign_and_verify/yubikey.pub".into();
+	let pub_path =
+		PathWrapper::from("/tmp/provision_sign_and_verify/yubikey.pub");
 	let signature_path = "/tmp/provision_sign_and_verify/signature";
 	let payload_path = "/tmp/provision_sign_and_verify/payload";
 

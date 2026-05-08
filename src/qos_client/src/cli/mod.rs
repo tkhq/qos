@@ -110,6 +110,8 @@ pub enum Command {
 	HostHealth,
 	/// Query the status of the enclave.
 	EnclaveStatus,
+	/// Query the QOS version and git commit of the running enclave.
+	EnclaveVersion,
 	/// Generate a Setup Key for use in the Genesis ceremony.
 	GenerateFileKey,
 	/// Run the the Boot Genesis logic to generate and shard a Quorum Key
@@ -230,6 +232,7 @@ impl From<&str> for Command {
 		match s {
 			"host-health" => Self::HostHealth,
 			"enclave-status" => Self::EnclaveStatus,
+			"enclave-version" => Self::EnclaveVersion,
 			"generate-file-key" => Self::GenerateFileKey,
 			"generate-manifest-envelope" => Self::GenerateManifestEnvelope,
 			"boot-genesis" => Self::BootGenesis,
@@ -862,7 +865,9 @@ impl Command {
 impl GetParserForCommand for Command {
 	fn parser(&self) -> Parser {
 		match self {
-			Self::HostHealth | Self::EnclaveStatus => Self::base(),
+			Self::HostHealth | Self::EnclaveStatus | Self::EnclaveVersion => {
+				Self::base()
+			}
 			Self::GenerateFileKey => Self::generate_file_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
@@ -1299,6 +1304,9 @@ impl ClientRunner {
 			match self.cmd {
 				Command::HostHealth => handlers::host_health(&self.opts),
 				Command::EnclaveStatus => handlers::enclave_status(&self.opts),
+				Command::EnclaveVersion => {
+					handlers::enclave_version(&self.opts);
+				}
 				Command::GenerateFileKey => {
 					handlers::generate_file_key(&self.opts);
 				}
@@ -1430,6 +1438,22 @@ mod handlers {
 		match response {
 			ProtocolMsg::StatusResponse(phase) => {
 				println!("Enclave phase: {phase:?}");
+			}
+			other => panic!("Unexpected response {other:?}"),
+		}
+	}
+
+	pub(super) fn enclave_version(opts: &ClientOpts) {
+		let path = &opts.path_message();
+
+		let response = request::post(path, &ProtocolMsg::VersionRequest)
+			.map_err(|e| println!("{e:?}"))
+			.expect("Enclave request failed");
+
+		match response {
+			ProtocolMsg::VersionResponse { version, commit } => {
+				println!("QOS version: {version}");
+				println!("Git commit:  {commit}");
 			}
 			other => panic!("Unexpected response {other:?}"),
 		}

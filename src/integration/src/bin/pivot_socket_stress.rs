@@ -52,12 +52,13 @@ impl RequestProcessor for Processor {
 
 #[tokio::main]
 async fn main() {
-	let args: Vec<String> = std::env::args().collect();
-	let socket_path = &args[1];
+	let mut args = std::env::args().skip(1);
+	let socket_path = args.next().unwrap();
 	// 2nd arg should be "--pool-size" for Reaper compatibility
-	let pool_size_str: &str = args.get(3).map_or("1", String::as_str);
-	let pool_size =
-		pool_size_str.parse().expect("Unable to parse pool size argument");
+	let pool_size = args
+		.nth(1)
+		.map(|s| s.parse().expect("Unable to parse pool size argument"))
+		.unwrap_or(1u8);
 
 	let app_pool =
 		StreamPool::new(SocketAddress::new_unix(socket_path), pool_size)

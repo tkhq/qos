@@ -63,7 +63,7 @@ impl EnclaveOpts {
 					p.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
 				Ok(SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS))
 			}
-			(None, None, Some(u)) => Ok(SocketAddress::new_unix(u)),
+			(None, None, Some(u)) => Ok(SocketAddress::new_unix(u.as_str())),
 			_ => panic!("Invalid socket opts"),
 		}
 	}

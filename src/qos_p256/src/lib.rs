@@ -86,7 +86,7 @@ impl From<qos_hex::HexError> for P256Error {
 			qos_hex::HexError::InvalidUtf8(_) => {
 				P256Error::MasterSeedInvalidUtf8
 			}
-			_ => Self::QosHex(format!("{err:?}")),
+			err => Self::QosHex(format!("{err:?}")),
 		}
 	}
 }
@@ -527,8 +527,8 @@ mod test {
 
 	#[test]
 	fn public_key_to_file_roundtrip() {
-		let path: PathWrapper =
-			"/tmp/public_key_to_file_roundtrip.secret".into();
+		let path =
+			PathWrapper::from("/tmp/public_key_to_file_roundtrip.secret");
 		let alice_pair = P256Pair::generate().unwrap();
 		let alice_public = alice_pair.public_key();
 
@@ -566,8 +566,8 @@ mod test {
 
 	#[test]
 	fn master_seed_to_file_round_trip() {
-		let path: PathWrapper =
-			"/tmp/master_seed_to_file_round_trip.secret".into();
+		let path =
+			PathWrapper::from("/tmp/master_seed_to_file_round_trip.secret");
 
 		let alice_pair = P256Pair::generate().unwrap();
 		alice_pair.to_hex_file(&*path).unwrap();

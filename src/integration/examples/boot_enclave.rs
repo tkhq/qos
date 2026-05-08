@@ -4,6 +4,7 @@
 use std::{
 	fs,
 	io::{BufRead, BufReader, Write},
+	path::PathBuf,
 	process::{Command, Stdio},
 };
 
@@ -29,30 +30,28 @@ async fn main() {
 	const PIVOT_HASH_PATH: &str = "/tmp/enclave-example-pivot-hash.txt";
 
 	let host_port = 3001;
-	let tmp: PathWrapper = "/tmp/enclave-example".into();
-	let _: PathWrapper = PIVOT_HASH_PATH.into();
-	fs::create_dir_all(&*tmp).unwrap();
+	let tmp = PathWrapper::from("/tmp/enclave-example");
+	let _ = PathWrapper::from(PIVOT_HASH_PATH);
+	fs::create_dir_all(&tmp).unwrap();
 
-	let usock: PathWrapper = "/tmp/enclave-example/example.sock".into();
-	let secret_path: PathWrapper = "/tmp/enclave-example/example.secret".into();
-	let pivot_path: PathWrapper = "/tmp/enclave-example/example.pivot".into();
-	let manifest_path: PathWrapper =
-		"/tmp/enclave-example/example.manifest".into();
-	let eph_path: PathWrapper =
-		"/tmp/enclave-example/ephemeral_key.secret".into();
+	let usock = tmp.join("example.sock");
+	let secret_path = tmp.join("example.secret");
+	let pivot_path = tmp.join("example.pivot");
+	let manifest_path = tmp.join("example.manifest");
+	let eph_path = tmp.join("ephemeral_key.secret");
 
-	let boot_dir: PathWrapper = "/tmp/enclave-example/boot-dir".into();
-	fs::create_dir_all(&*boot_dir).unwrap();
-	let attestation_dir: PathWrapper =
-		"/tmp/enclave-example/attestation-dir".into();
-	fs::create_dir_all(&*attestation_dir).unwrap();
-	let attestation_doc_path = format!("{}/attestation_doc", &*attestation_dir);
+	let boot_dir = PathWrapper::from("boot-dir");
+	fs::create_dir_all(&boot_dir).unwrap();
+	let attestation_dir = PathWrapper::from("attestation-dir");
+	fs::create_dir_all(&attestation_dir).unwrap();
+	let attestation_doc_path = attestation_dir.join("attestation_doc");
 
-	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
+	let all_personal_dir = PathBuf::from("./mock/boot-e2e/all-personal-dir");
 
 	let namespace = "quit-coding-to-vape";
 
-	let personal_dir = |user: &str| format!("{all_personal_dir}/{user}-dir");
+	let personal_dir =
+		|user: &str| all_personal_dir.join(format!("{user}-dir"));
 
 	let user1 = "user1";
 	let user2 = "user2";
@@ -67,7 +66,7 @@ async fn main() {
 	// -- CLIENT create manifest.
 	let pivot_args = std::env::args().nth(2).expect("No pivot args provided");
 	let pivot_env = "pivot_env_var=will be set";
-	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
+	let cli_manifest_path = boot_dir.join("manifest");
 	let app_host_port = 3000;
 
 	assert!(Command::new(integration::QOS_CLIENT_PATH)
@@ -86,7 +85,7 @@ async fn main() {
 			"--pcr3-preimage-path",
 			PCR3_PRE_IMAGE_PATH,
 			"--manifest-path",
-			&cli_manifest_path,
+			cli_manifest_path.to_str().unwrap(),
 			"--pivot-args",
 			&pivot_args,
 			"--pivot-env",
@@ -141,22 +140,22 @@ async fn main() {
 
 	// -- CLIENT make sure each user can run `approve-manifest`
 	for alias in [user1, user2, user3] {
-		let approval_path = format!(
-			"{}/{}-{}-{}.approval",
-			&*boot_dir, alias, namespace, manifest.namespace.nonce,
-		);
+		let approval_path = boot_dir.join(format!(
+			"{}-{}-{}.approval",
+			alias, namespace, manifest.namespace.nonce,
+		));
 
-		let secret_path = format!("{}/{}.secret", &personal_dir(alias), alias);
+		let secret_path = personal_dir(alias).join(format!("{alias}.secret"));
 
 		let mut child = Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"approve-manifest",
 				"--secret-path",
-				&*secret_path,
+				secret_path.to_str().unwrap(),
 				"--manifest-path",
-				&cli_manifest_path,
+				cli_manifest_path.to_str().unwrap(),
 				"--manifest-approvals-dir",
-				&*boot_dir,
+				boot_dir.to_str().unwrap(),
 				"--pcr3-preimage-path",
 				PCR3_PRE_IMAGE_PATH,
 				"--pivot-hash-path",
@@ -240,11 +239,9 @@ async fn main() {
 		// Read in the generated approval to check it was created correctly
 		let approval: Approval =
 			serde_json::from_slice(&fs::read(approval_path).unwrap()).unwrap();
-		let personal_pair = P256Pair::from_hex_file(format!(
-			"{}/{}.secret",
-			personal_dir(alias),
-			alias,
-		))
+		let personal_pair = P256Pair::from_hex_file(
+			personal_dir(alias).join(format!("{alias}.secret")),
+		)
 		.unwrap();
 
 		let signature = personal_pair.sign(&manifest.qos_hash()).unwrap();
@@ -262,16 +259,16 @@ async fn main() {
 		Command::new(integration::QOS_CORE_PATH)
 			.args([
 				"--usock",
-				&*usock,
+				usock.to_str().unwrap(),
 				"--quorum-file",
-				&*secret_path,
+				secret_path.to_str().unwrap(),
 				"--pivot-file",
-				&*pivot_path,
+				pivot_path.to_str().unwrap(),
 				"--ephemeral-file",
-				&*eph_path,
+				eph_path.to_str().unwrap(),
 				"--mock",
 				"--manifest-file",
-				&*manifest_path,
+				manifest_path.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()
@@ -286,7 +283,7 @@ async fn main() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				&*usock,
+				usock.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()
@@ -300,9 +297,9 @@ async fn main() {
 		.args([
 			"generate-manifest-envelope",
 			"--manifest-approvals-dir",
-			&*boot_dir,
+			boot_dir.to_str().unwrap(),
 			"--manifest-path",
-			&cli_manifest_path,
+			cli_manifest_path.to_str().unwrap(),
 		])
 		.spawn()
 		.unwrap()
@@ -311,12 +308,12 @@ async fn main() {
 		.success());
 
 	// -- CLIENT broadcast boot standard instruction
-	let manifest_envelope_path = format!("{}/manifest_envelope", &*boot_dir,);
+	let manifest_envelope_path = boot_dir.join("manifest_envelope");
 	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"boot-standard",
 			"--manifest-envelope-path",
-			&manifest_envelope_path,
+			manifest_envelope_path.to_str().unwrap(),
 			"--pivot-path",
 			&pivot_file_path,
 			"--host-port",
@@ -343,7 +340,7 @@ async fn main() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--attestation-doc-path",
-				&*attestation_doc_path,
+				attestation_doc_path.to_str().unwrap(),
 				"--manifest-envelope-path",
 				"/tmp/dont_care"
 			])
@@ -353,28 +350,28 @@ async fn main() {
 			.unwrap()
 			.success());
 
-		let share_path = format!("{}/{}.share", &personal_dir(user), user);
-		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
-		let eph_wrapped_share_path: PathWrapper =
-			format!("{}/{}.eph_wrapped.share", &*tmp, user).into();
-		let approval_path: PathWrapper =
-			format!("{}/{}.attestation.approval", &*tmp, user).into();
+		let share_path = personal_dir(user).join(format!("{user}.share"));
+		let secret_path = personal_dir(user).join(format!("{user}.secret"));
+		let eph_wrapped_share_path =
+			PathWrapper::from(tmp.join(format!("{user}.eph_wrapped.share")));
+		let approval_path =
+			PathWrapper::from(tmp.join(format!("{user}.attestation.approval")));
 		// Encrypt share to ephemeral key
 		let mut child = Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"proxy-re-encrypt-share",
 				"--share-path",
-				&share_path,
+				share_path.to_str().unwrap(),
 				"--secret-path",
-				&secret_path,
+				secret_path.to_str().unwrap(),
 				"--attestation-doc-path",
-				&*attestation_doc_path,
+				attestation_doc_path.to_str().unwrap(),
 				"--eph-wrapped-share-path",
-				&eph_wrapped_share_path,
+				eph_wrapped_share_path.to_str().unwrap(),
 				"--approval-path",
-				&approval_path,
+				approval_path.to_str().unwrap(),
 				"--manifest-envelope-path",
-				&manifest_envelope_path,
+				manifest_envelope_path.to_str().unwrap(),
 				"--pcr3-preimage-path",
 				PCR3_PRE_IMAGE_PATH,
 				"--manifest-set-dir",
@@ -383,7 +380,7 @@ async fn main() {
 				user,
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
-				&*eph_path,
+				eph_path.to_str().unwrap(),
 			])
 			.stdin(Stdio::piped())
 			.stdout(Stdio::piped())
@@ -438,9 +435,9 @@ async fn main() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--eph-wrapped-share-path",
-				&eph_wrapped_share_path,
+				eph_wrapped_share_path.to_str().unwrap(),
 				"--approval-path",
-				&approval_path,
+				approval_path.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()
