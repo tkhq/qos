@@ -141,10 +141,10 @@ pub enum ProtocolError {
 	/// The manifest has a lower nonce then the current manifest.
 	LowNonce {
 		/// Expected minimum nonce value.
-		#[serde(with = "qos_json::string_number")]
+		#[serde(with = "qos_json::string_or_numeric")]
 		expected: u32,
 		/// Actual nonce value.
-		#[serde(with = "qos_json::string_number")]
+		#[serde(with = "qos_json::string_or_numeric")]
 		actual: u32,
 	},
 	/// The manifests have different PCR3 values.

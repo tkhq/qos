@@ -102,7 +102,7 @@ mod tests {
 		#[derive(serde::Serialize)]
 		struct Example {
 			name: &'static str,
-			#[serde(with = "qos_json::string_number")]
+			#[serde(with = "qos_json::string_or_numeric")]
 			threshold: u32,
 			version: &'static str,
 		}
@@ -128,9 +128,9 @@ mod tests {
 	fn qos_hash_json_sorts_keys_alphabetically() {
 		#[derive(serde::Serialize)]
 		struct Data {
-			#[serde(with = "qos_json::string_number")]
+			#[serde(with = "qos_json::string_or_numeric")]
 			z: u32,
-			#[serde(with = "qos_json::string_number")]
+			#[serde(with = "qos_json::string_or_numeric")]
 			a: u32,
 		}
 

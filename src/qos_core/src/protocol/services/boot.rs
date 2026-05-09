@@ -1,10 +1,8 @@
 //! Standard boot logic and types.
 
-use std::fmt;
-
 use qos_crypto::sha_256;
 use qos_nsm::types::NsmResponse;
-use qos_p256::{P256Pair, P256Public};
+use qos_p256::P256Pair;
 
 use crate::protocol::{services::attestation, ProtocolError, ProtocolState};
 
@@ -14,365 +12,19 @@ pub use env::{
 	PivotEnv, PivotEnvValue, PivotEnvVarName, MAX_PIVOT_ENV_NAME_LEN,
 	MAX_PIVOT_ENV_VALUE_LEN, MAX_PIVOT_ENV_VARS,
 };
-pub use manifest::v0::{ManifestEnvelopeV0, ManifestV0, PivotConfigV0};
-pub use manifest::v1::{ManifestEnvelopeV1, ManifestV1, PivotConfigV1};
+pub use manifest::v0::{
+	Approval, ManifestEnvelopeV0, ManifestSet, ManifestV0, MemberPubKey,
+	Namespace, NitroConfig, PatchSet, PivotConfigV0, QuorumMember,
+	RestartPolicy, ShareSet,
+};
+pub use manifest::v1::{
+	BridgeConfig, ManifestEnvelopeV1, ManifestV1, PivotConfigV1,
+	DEFAULT_APP_HOST_IP, DEFAULT_APP_HOST_PORT,
+};
 pub use manifest::v2::{ManifestEnvelopeV2, ManifestV2, PivotConfigV2};
 pub use manifest::{
 	ManifestVersion, VersionedManifest, VersionedManifestEnvelope,
 };
-
-/// Enclave configuration specific to AWS Nitro.
-#[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct NitroConfig {
-	/// The hash of the enclave image file
-	#[serde(with = "qos_hex::serde")]
-	pub pcr0: Vec<u8>,
-	/// The hash of the Linux kernel and bootstrap
-	#[serde(with = "qos_hex::serde")]
-	pub pcr1: Vec<u8>,
-	/// The hash of the application
-	#[serde(with = "qos_hex::serde")]
-	pub pcr2: Vec<u8>,
-	/// The hash of the Amazon resource name (ARN) of the IAM role that's
-	/// associated with the EC2 instance.
-	#[serde(with = "qos_hex::serde")]
-	pub pcr3: Vec<u8>,
-	/// DER encoded X509 AWS root certificate
-	#[serde(with = "qos_hex::serde")]
-	pub aws_root_certificate: Vec<u8>,
-	/// Reference to the commit QOS was built off of.
-	pub qos_commit: String,
-}
-
-impl fmt::Debug for NitroConfig {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("NitroConfig")
-			.field("pcr0", &qos_hex::encode(&self.pcr0))
-			.field("pcr1", &qos_hex::encode(&self.pcr1))
-			.field("pcr2", &qos_hex::encode(&self.pcr2))
-			.field("pcr3", &qos_hex::encode(&self.pcr3))
-			.field("qos_commit", &self.qos_commit)
-			.finish_non_exhaustive()
-	}
-}
-
-/// Policy for restarting the pivot binary.
-#[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	Copy,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub enum RestartPolicy {
-	/// Never restart the pivot application
-	#[cfg_attr(any(feature = "mock", test), default)]
-	Never,
-	/// Always restart the pivot application
-	Always,
-}
-
-impl fmt::Debug for RestartPolicy {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Self::Never => write!(f, "RestartPolicy::Never")?,
-			Self::Always => write!(f, "RestartPolicy::Always")?,
-		}
-		Ok(())
-	}
-}
-
-impl TryFrom<String> for RestartPolicy {
-	type Error = ProtocolError;
-
-	fn try_from(s: String) -> Result<RestartPolicy, Self::Error> {
-		match s.to_ascii_lowercase().as_str() {
-			"never" => Ok(Self::Never),
-			"always" => Ok(Self::Always),
-			_ => Err(ProtocolError::FailedToParseFromString),
-		}
-	}
-}
-
-/// Pivot bridge host configuration, ipv4 only
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	serde::Serialize,
-	serde::Deserialize,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[serde(tag = "type")]
-pub enum BridgeConfig {
-	/// Server hosting bridge, connections go INTO the enclave app on given port and host binding
-	Server {
-		/// The port to listen on, matching on host and app sides
-		#[serde(with = "qos_json::string_number")]
-		port: u16,
-		/// The host ip to listen on, use `0.0.0.0` for any
-		host: String,
-	},
-	/// Client connecting bridge, connections go OUT of the enclave app via given port, connecting
-	/// to the provided hostname. If `None` it will use the transparent protocol.
-	/// *NOTE*: currently **unimplemented** and results in boot panic if set.
-	Client {
-		/// Port to connect to when app initiates outgoing connections.
-		#[serde(with = "qos_json::string_number")]
-		port: u16,
-		/// Host name to connect to when app initiates outgoing connections.
-		/// If `None` an internal protocol is used to determine the destination (**unimplemented**)
-		host: Option<String>,
-	},
-}
-
-impl Default for BridgeConfig {
-	fn default() -> Self {
-		Self::Server {
-			port: DEFAULT_APP_HOST_PORT,
-			host: DEFAULT_APP_HOST_IP.into(),
-		}
-	}
-}
-
-impl BridgeConfig {
-	/// Helper to extract port from either variant
-	#[must_use]
-	pub fn port(&self) -> u16 {
-		match self {
-			Self::Server { port, host: _ } | Self::Client { port, host: _ } => {
-				*port
-			}
-		}
-	}
-}
-
-/// A quorum member's alias and public key.
-#[derive(
-	PartialEq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	Eq,
-	PartialOrd,
-	Ord,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct QuorumMember {
-	/// A human readable alias to identify the member. The alias is not
-	/// cryptographically guaranteed and thus should not be trusted without
-	/// verification.
-	pub alias: String,
-	/// `P256Public` as bytes
-	#[serde(with = "qos_hex::serde")]
-	pub pub_key: Vec<u8>,
-}
-
-impl fmt::Debug for QuorumMember {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("QuorumMember")
-			.field("alias", &self.alias)
-			.field("pub_key", &qos_hex::encode(&self.pub_key))
-			.finish()
-	}
-}
-
-/// The Manifest Set.
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct ManifestSet {
-	/// The threshold, K, of signatures necessary to have quorum.
-	#[serde(with = "qos_json::string_number")]
-	pub threshold: u32,
-	/// Members composing the set. The length of this, N, must be gte to the
-	/// `threshold`, K.
-	pub members: Vec<QuorumMember>,
-}
-
-/// The set of share keys that can post shares.
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct ShareSet {
-	/// The threshold, K, of signatures necessary to have quorum.
-	#[serde(with = "qos_json::string_number")]
-	pub threshold: u32,
-	/// Members composing the set. The length of this, N, must be gte to the
-	/// `threshold`, K.
-	pub members: Vec<QuorumMember>,
-}
-
-/// A member of a quorum set identified solely by their public key.
-#[derive(
-	PartialEq,
-	PartialOrd,
-	Ord,
-	Eq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-pub struct MemberPubKey {
-	/// Public key of the member
-	#[serde(with = "qos_hex::serde")]
-	pub pub_key: Vec<u8>,
-}
-
-impl fmt::Debug for MemberPubKey {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("MemberPubKey")
-			.field("pub_key", &qos_hex::encode(&self.pub_key))
-			.finish()
-	}
-}
-
-/// The set of share keys that can post shares.
-#[derive(
-	PartialEq,
-	Eq,
-	Debug,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct PatchSet {
-	/// The threshold, K, of signatures necessary to have quorum.
-	#[serde(with = "qos_json::string_number")]
-	pub threshold: u32,
-	/// Public keys of members composing the set. The length of this, N, must
-	/// be gte to the `threshold`, K.
-	pub members: Vec<MemberPubKey>,
-}
-
-/// A Namespace and its relative nonce.
-#[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct Namespace {
-	/// The namespace. This should be unique relative to other namespaces the
-	/// organization running `QuorumOs` has.
-	pub name: String,
-	/// A monotonically increasing value, used to identify the order in which
-	/// manifests for this namespace have been created. This is used to prevent
-	/// downgrade attacks - quorum members should only approve a manifest that
-	/// has the highest nonce.
-	#[serde(with = "qos_json::string_number")]
-	pub nonce: u32,
-	/// Quorum Key
-	#[serde(with = "qos_hex::serde")]
-	pub quorum_key: Vec<u8>,
-}
-
-impl fmt::Debug for Namespace {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("Namespace")
-			.field("name", &self.name)
-			.field("nonce", &self.nonce)
-			.field("quorum_key", &qos_hex::encode(&self.quorum_key))
-			.finish()
-	}
-}
-
-/// Default port to use for host bridge in server mode
-pub const DEFAULT_APP_HOST_PORT: u16 = 3000;
-/// Default host ip string for host bridge in server mode
-pub const DEFAULT_APP_HOST_IP: &str = "0.0.0.0";
-
-/// An approval by a Quorum Member.
-#[derive(
-	PartialEq,
-	Eq,
-	Clone,
-	borsh::BorshSerialize,
-	borsh::BorshDeserialize,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(any(feature = "mock", test), derive(Default))]
-pub struct Approval {
-	/// Quorum Member's signature.
-	#[serde(with = "qos_hex::serde")]
-	pub signature: Vec<u8>,
-	/// Description of the Quorum Member
-	pub member: QuorumMember,
-}
-
-impl fmt::Debug for Approval {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("Approval")
-			.field("signature", &qos_hex::encode(&self.signature))
-			.field("member", &self.member)
-			.finish()
-	}
-}
-
-impl Approval {
-	/// Verify that the approval is a valid a signature for the given `msg`.
-	pub(crate) fn verify(&self, msg: &[u8]) -> Result<(), ProtocolError> {
-		let pub_key = P256Public::from_bytes(&self.member.pub_key)?;
-
-		if pub_key.verify(msg, &self.signature).is_ok() {
-			Ok(())
-		} else {
-			Err(ProtocolError::CouldNotVerifyApproval)
-		}
-	}
-}
 
 pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	state: &mut ProtocolState,
@@ -433,6 +85,7 @@ mod test {
 
 	use qos_nsm::mock::MockNsm;
 	use qos_test_primitives::PathWrapper;
+	use serde_json::Value;
 
 	use super::*;
 	use crate::{handles::Handles, protocol::QosHash};
@@ -511,6 +164,75 @@ mod test {
 			enclave: manifest.enclave,
 			patch_set: manifest.patch_set,
 		}
+	}
+
+	fn numericize_field(obj: &mut Value, path: &[&str]) {
+		let mut current = obj;
+		for key in &path[..path.len() - 1] {
+			current = current.get_mut(*key).unwrap_or_else(|| {
+				panic!("missing key {key} in path {path:?}")
+			});
+		}
+
+		let leaf = current
+			.get_mut(path[path.len() - 1])
+			.unwrap_or_else(|| panic!("missing leaf in path {path:?}"));
+		let num = match leaf {
+			Value::String(s) => s.parse::<u64>().unwrap_or_else(|_| {
+				panic!("leaf is not a decimal string: {s}")
+			}),
+			Value::Number(n) => n.as_u64().unwrap_or_else(|| {
+				panic!("leaf is not an unsigned number: {n}")
+			}),
+			other => {
+				panic!("leaf is not a string for path {path:?}: {other:?}")
+			}
+		};
+		*leaf = Value::Number(num.into());
+	}
+
+	fn numericize_manifest_json(manifest: &mut Value) {
+		for path in [
+			["namespace", "nonce"],
+			["manifestSet", "threshold"],
+			["shareSet", "threshold"],
+			["patchSet", "threshold"],
+		] {
+			numericize_field(manifest, &path);
+		}
+
+		for bridge in manifest["pivot"]["bridgeConfig"]
+			.as_array_mut()
+			.expect("pivot.bridgeConfig should be an array")
+		{
+			numericize_field(bridge, &["port"]);
+		}
+	}
+
+	fn assert_json_number(obj: &Value, path: &[&str]) {
+		let mut current = obj;
+		for key in path {
+			current = match current {
+				Value::Object(map) => map.get(*key).unwrap_or_else(|| {
+					panic!("missing key {key} in path {path:?}")
+				}),
+				Value::Array(values) => {
+					let index = key.parse::<usize>().unwrap_or_else(|_| {
+						panic!("invalid array index {key} in path {path:?}")
+					});
+					values.get(index).unwrap_or_else(|| {
+						panic!("missing index {index} in path {path:?}")
+					})
+				}
+				other => {
+					panic!("cannot descend into non-container value {other:?}")
+				}
+			};
+		}
+		assert!(
+			current.is_number(),
+			"expected JSON number at {path:?}, got {current:?}"
+		);
 	}
 
 	#[test]
@@ -865,6 +587,29 @@ mod test {
 	}
 
 	#[test]
+	fn versioned_manifest_reads_legacy_v1_numeric_json() {
+		let (mut manifest, ..) = get_manifest();
+		manifest.pivot.bridge_config = vec![BridgeConfig::Server {
+			port: 3000,
+			host: "0.0.0.0".to_string(),
+		}];
+		manifest.pivot.debug_mode = true;
+		manifest.pivot.args = vec!["--foo".to_string(), "bar".to_string()];
+
+		let mut json = serde_json::to_value(&manifest).unwrap();
+		numericize_manifest_json(&mut json);
+		let bytes = serde_json::to_vec(&json).unwrap();
+
+		let decoded = VersionedManifest::try_from_slice_compat(&bytes).unwrap();
+		match decoded {
+			VersionedManifest::V1(decoded) => assert_eq!(decoded, manifest),
+			other => {
+				panic!("expected V1 for legacy numeric JSON, got {other:?}")
+			}
+		}
+	}
+
+	#[test]
 	fn versioned_manifest_reads_v2_json_and_hashes_with_json() {
 		let (manifest, ..) = get_manifest();
 		let mut env = PivotEnv::new();
@@ -915,6 +660,105 @@ mod test {
 				.unwrap();
 		assert!(matches!(decoded, VersionedManifestEnvelope::V1(_)));
 		decoded.check_approvals().unwrap();
+	}
+
+	#[test]
+	fn versioned_manifest_envelope_reads_legacy_v1_numeric_json() {
+		let (mut manifest, members, _) = get_manifest();
+		manifest.pivot.bridge_config = vec![BridgeConfig::Server {
+			port: 3000,
+			host: "0.0.0.0".to_string(),
+		}];
+		let manifest_hash = manifest.qos_hash();
+		let approvals = members
+			.into_iter()
+			.take(2)
+			.map(|(pair, member)| Approval {
+				signature: pair.sign(&manifest_hash).unwrap(),
+				member,
+			})
+			.collect();
+		let envelope = ManifestEnvelopeV1 {
+			manifest,
+			manifest_set_approvals: approvals,
+			share_set_approvals: vec![],
+		};
+
+		let mut json = serde_json::to_value(&envelope).unwrap();
+		numericize_manifest_json(
+			json.get_mut("manifest")
+				.expect("envelope should have manifest field"),
+		);
+		let bytes = serde_json::to_vec(&json).unwrap();
+
+		let decoded = VersionedManifestEnvelope::try_from_slice_compat(&bytes)
+			.expect("legacy numeric envelope JSON should decode");
+		match decoded {
+			VersionedManifestEnvelope::V1(decoded) => {
+				assert_eq!(decoded, envelope);
+			}
+			other => {
+				panic!("expected V1 for legacy numeric JSON, got {other:?}")
+			}
+		}
+	}
+
+	#[test]
+	fn versioned_manifest_envelope_v1_storage_uses_legacy_json_numbers() {
+		let (mut manifest, members, _) = get_manifest();
+		manifest.pivot.bridge_config = vec![BridgeConfig::Server {
+			port: 3000,
+			host: "0.0.0.0".to_string(),
+		}];
+		let manifest_hash = manifest.qos_hash();
+		let approvals = members
+			.into_iter()
+			.take(2)
+			.map(|(pair, member)| Approval {
+				signature: pair.sign(&manifest_hash).unwrap(),
+				member,
+			})
+			.collect();
+		let envelope = ManifestEnvelopeV1 {
+			manifest,
+			manifest_set_approvals: approvals,
+			share_set_approvals: vec![],
+		};
+
+		let bytes =
+			VersionedManifestEnvelope::V1(envelope).to_storage_vec().unwrap();
+		let json: Value = serde_json::from_slice(&bytes).unwrap();
+		assert_json_number(&json, &["manifest", "namespace", "nonce"]);
+		assert_json_number(&json, &["manifest", "manifestSet", "threshold"]);
+		assert_json_number(&json, &["manifest", "shareSet", "threshold"]);
+		assert_json_number(&json, &["manifest", "patchSet", "threshold"]);
+		assert_json_number(
+			&json,
+			&["manifest", "pivot", "bridgeConfig", "0", "port"],
+		);
+	}
+
+	#[test]
+	fn versioned_manifest_envelope_v0_storage_uses_legacy_json_numbers() {
+		let bytes = std::fs::read("./fixtures/old_manifest").unwrap();
+		let manifest =
+			match VersionedManifest::try_from_slice_compat(&bytes).unwrap() {
+				VersionedManifest::V0(manifest) => manifest,
+				other => panic!("expected v0 fixture decode, got {other:?}"),
+			};
+		let envelope = ManifestEnvelopeV0 {
+			manifest,
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		};
+
+		let bytes =
+			VersionedManifestEnvelope::V0(envelope).to_storage_vec().unwrap();
+		let json: Value = serde_json::from_slice(&bytes).unwrap();
+		assert_json_number(&json, &["manifest", "namespace", "nonce"]);
+		assert_json_number(&json, &["manifest", "manifestSet", "threshold"]);
+		assert_json_number(&json, &["manifest", "shareSet", "threshold"]);
+		assert_json_number(&json, &["manifest", "patchSet", "threshold"]);
 	}
 
 	#[test]

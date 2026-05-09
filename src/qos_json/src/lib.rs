@@ -16,8 +16,8 @@ pub type Hash256 = [u8; 32];
 /// # Errors
 ///
 /// Returns an error if serde serialization or canonical JSON serialization
-/// fails, including if the value contains a JSON number. QOS canonical JSON
-/// requires numeric values to be encoded as decimal strings.
+/// fails, including if the value contains a non-integer JSON number. QOS
+/// canonical JSON normalizes integer numbers to decimal strings.
 pub fn to_vec<T: Serialize>(value: &T) -> serde_json::Result<Vec<u8>> {
 	let value = serde_json::to_value(value)?;
 	to_vec_value(&value)
@@ -28,8 +28,8 @@ pub fn to_vec<T: Serialize>(value: &T) -> serde_json::Result<Vec<u8>> {
 /// # Errors
 ///
 /// Returns an error if serde serialization or canonical JSON serialization
-/// fails, including if the value contains a JSON number. QOS canonical JSON
-/// requires numeric values to be encoded as decimal strings.
+/// fails, including if the value contains a non-integer JSON number. QOS
+/// canonical JSON normalizes integer numbers to decimal strings.
 pub fn to_string<T: Serialize>(value: &T) -> serde_json::Result<String> {
 	let value = serde_json::to_value(value)?;
 	to_string_value(&value)
@@ -40,8 +40,8 @@ pub fn to_string<T: Serialize>(value: &T) -> serde_json::Result<String> {
 /// # Errors
 ///
 /// Returns an error if parsing or canonicalization fails, including if the
-/// parsed value contains a JSON number. QOS canonical JSON requires numeric
-/// values to be encoded as decimal strings.
+/// parsed value contains a non-integer JSON number. QOS canonical JSON
+/// normalizes integer numbers to decimal strings.
 pub fn canonicalize_slice(bytes: &[u8]) -> serde_json::Result<Vec<u8>> {
 	let value: serde_json::Value = serde_json::from_slice(bytes)?;
 	to_vec_value(&value)
@@ -52,8 +52,8 @@ pub fn canonicalize_slice(bytes: &[u8]) -> serde_json::Result<Vec<u8>> {
 /// # Errors
 ///
 /// Returns an error if parsing or canonicalization fails, including if the
-/// parsed value contains a JSON number. QOS canonical JSON requires numeric
-/// values to be encoded as decimal strings.
+/// parsed value contains a non-integer JSON number. QOS canonical JSON
+/// normalizes integer numbers to decimal strings.
 pub fn canonicalize_str(json: &str) -> serde_json::Result<String> {
 	let value: serde_json::Value = serde_json::from_str(json)?;
 	to_string_value(&value)
@@ -72,9 +72,9 @@ pub fn from_slice<T: DeserializeOwned>(bytes: &[u8]) -> serde_json::Result<T> {
 ///
 /// # Errors
 ///
-/// Returns an error if serialization or canonicalization fails, including if
-/// the value contains a JSON number. QOS canonical JSON requires numeric values
-/// to be encoded as decimal strings.
+/// Returns an error if serialization or canonicalization fails, including if the
+/// value contains a non-integer JSON number. QOS canonical JSON normalizes
+/// integer numbers to decimal strings.
 pub fn hash<T: Serialize>(value: &T) -> serde_json::Result<Hash256> {
 	let canonical = to_vec(value)?;
 	Ok(sha_256(&canonical))
@@ -85,8 +85,8 @@ pub fn hash<T: Serialize>(value: &T) -> serde_json::Result<Hash256> {
 /// # Errors
 ///
 /// Returns an error if parsing or canonicalization fails, including if the
-/// parsed value contains a JSON number. QOS canonical JSON requires numeric
-/// values to be encoded as decimal strings.
+/// parsed value contains a non-integer JSON number. QOS canonical JSON
+/// normalizes integer numbers to decimal strings.
 pub fn hash_json_slice(bytes: &[u8]) -> serde_json::Result<Hash256> {
 	let canonical = canonicalize_slice(bytes)?;
 	Ok(sha_256(&canonical))
@@ -96,9 +96,9 @@ pub fn hash_json_slice(bytes: &[u8]) -> serde_json::Result<Hash256> {
 ///
 /// # Errors
 ///
-/// Returns an error if serialization or canonicalization fails, including if
-/// the value contains a JSON number. QOS canonical JSON requires numeric values
-/// to be encoded as decimal strings.
+/// Returns an error if serialization or canonicalization fails, including if the
+/// value contains a non-integer JSON number. QOS canonical JSON normalizes
+/// integer numbers to decimal strings.
 pub fn hash_hex<T: Serialize>(value: &T) -> serde_json::Result<String> {
 	hash(value).map(|hash| qos_hex::encode(&hash))
 }
@@ -145,9 +145,14 @@ where
 		serde_json::Value::Null => writer.write_all(b"null"),
 		serde_json::Value::Bool(true) => writer.write_all(b"true"),
 		serde_json::Value::Bool(false) => writer.write_all(b"false"),
+		serde_json::Value::Number(number)
+			if number.is_u64() || number.is_i64() =>
+		{
+			write_string(writer, &number.to_string())
+		}
 		serde_json::Value::Number(_) => Err(io::Error::new(
 			io::ErrorKind::InvalidData,
-			"QOS canonical JSON forbids JSON numbers",
+			"QOS canonical JSON forbids non-integer JSON numbers",
 		)),
 		serde_json::Value::String(value) => write_string(writer, value),
 		serde_json::Value::Array(values) => write_array(writer, values),
@@ -216,18 +221,21 @@ where
 {
 	match value {
 		serde_json::Value::String(s) => Ok(s),
-		other => {
-			Err(E::custom(format!("expected decimal string, got {other}")))
+		serde_json::Value::Number(n) if n.is_u64() || n.is_i64() => {
+			Ok(n.to_string())
 		}
+		other => Err(E::custom(format!(
+			"expected decimal string or integer, got {other}"
+		))),
 	}
 }
 
-/// Serde serialization helpers for numbers as strings.
-pub mod string_number {
+/// Serde helpers that tolerate numeric input as either string or integer.
+pub mod string_or_numeric {
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
 	use std::{collections::BTreeSet, fmt::Display, str::FromStr};
 
-	/// Serialize a number as a base-10 string.
+	/// Serialize using default serde behavior for the field type.
 	///
 	/// # Errors
 	///
@@ -235,162 +243,93 @@ pub mod string_number {
 	pub fn serialize<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
-		for<'a> &'a T: StringNumberSerialize,
+		T: Serialize,
 	{
-		value.serialize_string_number(serializer)
+		value.serialize(serializer)
 	}
 
-	/// Deserialize a base-10 string as a number.
+	/// Deserialize from either decimal string or integer JSON number.
 	///
 	/// # Errors
 	///
-	/// Returns the deserializer's error type if the input is not a valid
-	/// base-10 string for the target type.
+	/// Returns the deserializer's error type if the input is not a valid decimal
+	/// string/integer for the target type.
 	pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 	where
 		D: Deserializer<'de>,
-		T: StringNumberDeserialize<'de>,
+		T: StringOrNumericDeserialize<'de>,
 	{
-		T::deserialize_string_number(deserializer)
+		T::deserialize_string_or_numeric(deserializer)
 	}
 
-	/// A type that can be serialized as one or more base-10 strings.
-	pub trait StringNumberSerialize {
-		/// Serialize the type as base-10 string JSON.
+	/// A type that can be deserialized from one or more decimal string/integer
+	/// JSON values.
+	pub trait StringOrNumericDeserialize<'de>: Sized {
+		/// Deserialize from decimal string/integer JSON.
 		///
 		/// # Errors
 		///
-		/// Returns the serializer's error type if serialization fails.
-		fn serialize_string_number<S>(
-			self,
-			serializer: S,
-		) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer;
-	}
-
-	macro_rules! impl_string_number_serialize {
-		($($ty:ty),+ $(,)?) => {$(
-			impl StringNumberSerialize for &$ty {
-				fn serialize_string_number<S>(
-					self,
-					serializer: S,
-				) -> Result<S::Ok, S::Error>
-				where
-					S: Serializer,
-				{
-					serializer.serialize_str(&self.to_string())
-				}
-			}
-		)+};
-	}
-
-	impl_string_number_serialize!(
-		u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize
-	);
-
-	impl<T> StringNumberSerialize for &Option<T>
-	where
-		T: Display,
-	{
-		fn serialize_string_number<S>(
-			self,
-			serializer: S,
-		) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer,
-		{
-			match self {
-				Some(value) => serializer.serialize_some(&value.to_string()),
-				None => serializer.serialize_none(),
-			}
-		}
-	}
-
-	impl<T> StringNumberSerialize for &BTreeSet<T>
-	where
-		T: Display,
-	{
-		fn serialize_string_number<S>(
-			self,
-			serializer: S,
-		) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer,
-		{
-			let strings =
-				self.iter().map(ToString::to_string).collect::<Vec<_>>();
-			strings.serialize(serializer)
-		}
-	}
-
-	/// A type that can be deserialized from one or more base-10 strings.
-	pub trait StringNumberDeserialize<'de>: Sized {
-		/// Deserialize the type from base-10 string JSON.
-		///
-		/// # Errors
-		///
-		/// Returns the deserializer's error type if the input is not a valid
-		/// base-10 string for the target type.
-		fn deserialize_string_number<D>(
+		/// Returns the deserializer's error type if the input is not valid for
+		/// the target type.
+		fn deserialize_string_or_numeric<D>(
 			deserializer: D,
 		) -> Result<Self, D::Error>
 		where
 			D: Deserializer<'de>;
 	}
 
-	macro_rules! impl_string_number_deserialize {
+	macro_rules! impl_string_or_numeric_deserialize {
 		($($ty:ty),+ $(,)?) => {$(
-			impl<'de> StringNumberDeserialize<'de> for $ty {
-				fn deserialize_string_number<D>(
+			impl<'de> StringOrNumericDeserialize<'de> for $ty {
+				fn deserialize_string_or_numeric<D>(
 					deserializer: D,
 				) -> Result<Self, D::Error>
 				where
 					D: Deserializer<'de>,
 				{
-					deserialize_string_number_value(deserializer)
+					deserialize_string_or_numeric_value(deserializer)
 				}
 			}
 		)+};
 	}
 
-	impl_string_number_deserialize!(
+	impl_string_or_numeric_deserialize!(
 		u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize
 	);
 
-	impl<'de, T> StringNumberDeserialize<'de> for Option<T>
+	impl<'de, T> StringOrNumericDeserialize<'de> for Option<T>
 	where
 		T: FromStr,
 		T::Err: Display,
 	{
-		fn deserialize_string_number<D>(
+		fn deserialize_string_or_numeric<D>(
 			deserializer: D,
 		) -> Result<Self, D::Error>
 		where
 			D: Deserializer<'de>,
 		{
 			let opt = Option::<serde_json::Value>::deserialize(deserializer)?;
-			opt.map(parse_string_number_value).transpose()
+			opt.map(parse_string_or_numeric_value).transpose()
 		}
 	}
 
-	impl<'de, T> StringNumberDeserialize<'de> for BTreeSet<T>
+	impl<'de, T> StringOrNumericDeserialize<'de> for BTreeSet<T>
 	where
 		T: FromStr + Ord,
 		T::Err: Display,
 	{
-		fn deserialize_string_number<D>(
+		fn deserialize_string_or_numeric<D>(
 			deserializer: D,
 		) -> Result<Self, D::Error>
 		where
 			D: Deserializer<'de>,
 		{
 			let values = Vec::<serde_json::Value>::deserialize(deserializer)?;
-			values.into_iter().map(parse_string_number_value).collect()
+			values.into_iter().map(parse_string_or_numeric_value).collect()
 		}
 	}
 
-	fn deserialize_string_number_value<'de, D, T>(
+	fn deserialize_string_or_numeric_value<'de, D, T>(
 		deserializer: D,
 	) -> Result<T, D::Error>
 	where
@@ -399,10 +338,12 @@ pub mod string_number {
 		T::Err: Display,
 	{
 		let value = serde_json::Value::deserialize(deserializer)?;
-		parse_string_number_value(value)
+		parse_string_or_numeric_value(value)
 	}
 
-	fn parse_string_number_value<E, T>(value: serde_json::Value) -> Result<T, E>
+	fn parse_string_or_numeric_value<E, T>(
+		value: serde_json::Value,
+	) -> Result<T, E>
 	where
 		E: serde::de::Error,
 		T: FromStr,
@@ -560,9 +501,12 @@ mod tests {
 	}
 
 	#[test]
-	fn errors_on_integer_json_numbers() {
-		assert_qos_number_error(canonicalize_str(r#"{"n":1}"#));
-		assert_qos_number_error(canonicalize_str(r#"{"n":-9007199254740991}"#));
+	fn normalizes_integer_json_numbers_to_decimal_strings() {
+		assert_eq!(canonicalize_str(r#"{"n":1}"#).unwrap(), r#"{"n":"1"}"#);
+		assert_eq!(
+			canonicalize_str(r#"{"n":-9007199254740991}"#).unwrap(),
+			r#"{"n":"-9007199254740991"}"#
+		);
 	}
 
 	#[test]
@@ -573,13 +517,16 @@ mod tests {
 	}
 
 	#[test]
-	fn errors_on_typed_numeric_fields() {
+	fn normalizes_typed_numeric_fields_to_decimal_strings() {
 		#[derive(Serialize)]
 		struct Example {
 			count: u32,
 		}
 
-		assert_qos_number_error(to_string(&Example { count: 42 }));
+		assert_eq!(
+			to_string(&Example { count: 42 }).unwrap(),
+			r#"{"count":"42"}"#
+		);
 	}
 
 	#[test]
@@ -662,12 +609,12 @@ mod tests {
 	}
 
 	#[test]
-	fn supports_external_enums_and_decimal_string_numbers() {
+	fn supports_external_enums_and_decimal_number_strings() {
 		#[derive(Serialize)]
 		#[serde(rename_all = "camelCase")]
 		enum Example {
 			Request {
-				#[serde(with = "string_number")]
+				#[serde(with = "string_or_numeric")]
 				count: u32,
 			},
 		}
@@ -679,12 +626,12 @@ mod tests {
 	}
 
 	#[test]
-	fn string_number_supports_signed_and_collection_values() {
+	fn string_or_numeric_supports_signed_and_collection_values() {
 		#[derive(Serialize)]
 		struct Example {
-			#[serde(with = "string_number")]
+			#[serde(with = "string_or_numeric")]
 			offset: i32,
-			#[serde(with = "string_number")]
+			#[serde(with = "string_or_numeric")]
 			indexes: BTreeSet<u8>,
 		}
 
@@ -702,7 +649,7 @@ mod tests {
 	fn typed_and_raw_inputs_produce_same_hash() {
 		#[derive(Serialize)]
 		struct Example {
-			#[serde(with = "string_number")]
+			#[serde(with = "string_or_numeric")]
 			threshold: u32,
 			name: &'static str,
 		}
@@ -730,12 +677,12 @@ mod tests {
 	}
 
 	#[test]
-	fn string_number_round_trips() {
+	fn string_or_numeric_round_trips() {
 		#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 		struct Example {
-			#[serde(with = "string_number")]
+			#[serde(with = "string_or_numeric")]
 			count: u32,
-			#[serde(default, with = "string_number")]
+			#[serde(default, with = "string_or_numeric")]
 			limit: Option<u64>,
 		}
 
@@ -746,14 +693,14 @@ mod tests {
 	}
 
 	#[test]
-	fn string_number_helpers_reject_json_numbers() {
+	fn string_or_numeric_helpers_accept_json_numbers_and_strings() {
 		#[derive(Debug, PartialEq, Eq, Deserialize)]
 		struct Example {
-			#[serde(with = "string_number")]
+			#[serde(with = "string_or_numeric")]
 			count: u32,
-			#[serde(default, with = "string_number")]
+			#[serde(default, with = "string_or_numeric")]
 			limit: Option<u64>,
-			#[serde(with = "string_number")]
+			#[serde(with = "string_or_numeric")]
 			indexes: BTreeSet<u8>,
 		}
 
@@ -765,16 +712,26 @@ mod tests {
 		assert_eq!(parsed.limit, Some(7));
 		assert_eq!(parsed.indexes, BTreeSet::from([1, 2]));
 
-		assert!(from_slice::<Example>(
-			br#"{"count":42,"limit":"7","indexes":["1"]}"#
+		let parsed = from_slice::<Example>(
+			br#"{"count":42,"limit":"7","indexes":["1"]}"#,
 		)
-		.is_err());
-		assert!(from_slice::<Example>(
-			br#"{"count":"42","limit":7,"indexes":["1"]}"#
+		.unwrap();
+		assert_eq!(parsed.count, 42);
+
+		let parsed = from_slice::<Example>(
+			br#"{"count":"42","limit":7,"indexes":["1"]}"#,
 		)
-		.is_err());
+		.unwrap();
+		assert_eq!(parsed.limit, Some(7));
+
+		let parsed = from_slice::<Example>(
+			br#"{"count":"42","limit":"7","indexes":[1]}"#,
+		)
+		.unwrap();
+		assert_eq!(parsed.indexes, BTreeSet::from([1]));
+
 		assert!(from_slice::<Example>(
-			br#"{"count":"42","limit":"7","indexes":[1]}"#
+			br#"{"count":42.5,"limit":"7","indexes":["1"]}"#
 		)
 		.is_err());
 	}
@@ -783,6 +740,9 @@ mod tests {
 		let Err(err) = result else {
 			panic!("expected QOS number error");
 		};
-		assert_eq!(err.to_string(), "QOS canonical JSON forbids JSON numbers");
+		assert_eq!(
+			err.to_string(),
+			"QOS canonical JSON forbids non-integer JSON numbers"
+		);
 	}
 }

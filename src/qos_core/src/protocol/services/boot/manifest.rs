@@ -84,6 +84,25 @@ impl From<&VersionedManifest> for VersionedManifest {
 }
 
 impl VersionedManifest {
+	/// Serialize using the manifest's storage-compatible JSON format.
+	///
+	/// v2 uses canonical QOS JSON. v0 and v1 use deployed legacy JSON with
+	/// numeric fields encoded as JSON numbers.
+	///
+	/// # Errors
+	///
+	/// Returns an error if serialization fails.
+	pub fn to_storage_vec(&self) -> Result<Vec<u8>, borsh::io::Error> {
+		match self {
+			Self::V2(manifest) => qos_json::to_vec(manifest)
+				.map_err(|e| borsh::io::Error::other(e.to_string())),
+			Self::V1(manifest) => serde_json::to_vec(manifest)
+				.map_err(|e| borsh::io::Error::other(e.to_string())),
+			Self::V0(manifest) => serde_json::to_vec(manifest)
+				.map_err(|e| borsh::io::Error::other(e.to_string())),
+		}
+	}
+
 	/// Hash the manifest according to its versioned signing rules.
 	///
 	/// v0 and v1 hash Borsh bytes; v2 hashes canonical QOS JSON bytes.
@@ -221,12 +240,6 @@ impl VersionedManifest {
 	/// Read order: versioned JSON v2 → unversioned JSON v1 → unversioned JSON
 	/// v0 → Borsh v1 → Borsh v0.
 	///
-	/// v2 JSON is unambiguous because the `version` field is required. v0
-	/// JSON is a hypothetical (v0 is a Borsh legacy type) and may classify as
-	/// v1 if it satisfies v1's serde defaults; this is acceptable because
-	/// neither v0 nor v1 carries a discriminator and v0-on-disk JSON is not
-	/// produced by any in-tree code path.
-	///
 	/// # Errors
 	///
 	/// Returns a Borsh error if all known formats fail.
@@ -326,8 +339,8 @@ impl VersionedManifestEnvelope {
 
 	/// Serialize using the envelope's native storage format.
 	///
-	/// v2 uses canonical QOS JSON. v0 and v1 use Borsh because those are the
-	/// Borsh-compatible protocol versions.
+	/// v2 uses canonical QOS JSON. v0 and v1 use deployed legacy JSON with
+	/// numeric fields encoded as JSON numbers.
 	///
 	/// # Errors
 	///
@@ -336,8 +349,10 @@ impl VersionedManifestEnvelope {
 		match self {
 			Self::V2(envelope) => qos_json::to_vec(envelope)
 				.map_err(|e| borsh::io::Error::other(e.to_string())),
-			Self::V1(envelope) => borsh::to_vec(envelope),
-			Self::V0(envelope) => borsh::to_vec(envelope),
+			Self::V1(envelope) => serde_json::to_vec(envelope)
+				.map_err(|e| borsh::io::Error::other(e.to_string())),
+			Self::V0(envelope) => serde_json::to_vec(envelope)
+				.map_err(|e| borsh::io::Error::other(e.to_string())),
 		}
 	}
 

@@ -6,13 +6,84 @@ use qos_p256::P256Public;
 
 use super::shared;
 use super::v0::{ManifestEnvelopeV0, ManifestV0, PivotConfigV0};
-use crate::protocol::{
-	services::boot::{
-		BridgeConfig, ManifestSet, Namespace, NitroConfig, PatchSet,
-		RestartPolicy, ShareSet,
+use crate::protocol::{Hash256, ProtocolError, QosHash};
+
+/// v1 uses the v0 restart policy unchanged.
+pub type RestartPolicy = super::v0::RestartPolicy;
+/// v1 uses the v0 quorum member shape unchanged.
+pub type QuorumMember = super::v0::QuorumMember;
+/// v1 uses the v0 manifest set shape unchanged.
+pub type ManifestSet = super::v0::ManifestSet;
+/// v1 uses the v0 share set shape unchanged.
+pub type ShareSet = super::v0::ShareSet;
+/// v1 uses the v0 patch member shape unchanged.
+pub type MemberPubKey = super::v0::MemberPubKey;
+/// v1 uses the v0 patch set shape unchanged.
+pub type PatchSet = super::v0::PatchSet;
+/// v1 uses the v0 namespace shape unchanged.
+pub type Namespace = super::v0::Namespace;
+/// v1 uses the v0 nitro config shape unchanged.
+pub type NitroConfig = super::v0::NitroConfig;
+/// v1 uses the v0 approval shape unchanged.
+pub type Approval = super::v0::Approval;
+
+/// Default port to use for host bridge in server mode.
+pub const DEFAULT_APP_HOST_PORT: u16 = 3000;
+/// Default host ip string for host bridge in server mode.
+pub const DEFAULT_APP_HOST_IP: &str = "0.0.0.0";
+
+/// Pivot bridge host configuration, ipv4 only.
+#[derive(
+	PartialEq,
+	Eq,
+	Debug,
+	Clone,
+	serde::Serialize,
+	serde::Deserialize,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
+pub enum BridgeConfig {
+	/// Server hosting bridge, connections go INTO the enclave app on given port and host binding
+	Server {
+		/// The port to listen on, matching on host and app sides
+		#[serde(with = "qos_json::string_or_numeric")]
+		port: u16,
+		/// The host ip to listen on, use `0.0.0.0` for any
+		host: String,
 	},
-	Hash256, ProtocolError, QosHash,
-};
+	/// Client connecting bridge, connections go OUT of the enclave app via given port.
+	Client {
+		/// Port to connect to when app initiates outgoing connections.
+		#[serde(with = "qos_json::string_or_numeric")]
+		port: u16,
+		/// Host name to connect to when app initiates outgoing connections.
+		host: Option<String>,
+	},
+}
+
+impl Default for BridgeConfig {
+	fn default() -> Self {
+		Self::Server {
+			port: DEFAULT_APP_HOST_PORT,
+			host: DEFAULT_APP_HOST_IP.into(),
+		}
+	}
+}
+
+impl BridgeConfig {
+	/// Helper to extract port from either variant.
+	#[must_use]
+	pub fn port(&self) -> u16 {
+		match self {
+			Self::Server { port, host: _ } | Self::Client { port, host: _ } => {
+				*port
+			}
+		}
+	}
+}
 
 /// Pivot binary configuration (v1).
 #[derive(
@@ -134,21 +205,17 @@ impl ManifestV1 {
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
 		use borsh::BorshDeserialize;
 
-		// try old version with json format
+		if let Ok(v1) = serde_json::from_slice::<Self>(buf) {
+			return Ok(v1);
+		}
 		if let Ok(v0) = serde_json::from_slice::<ManifestV0>(buf) {
 			return Ok(v0.into());
 		}
-
-		let result = Self::try_from_slice(buf);
-
-		// try loading the old version with borsh format
-		if result.is_err() {
-			let old = ManifestV0::try_from_slice(buf)?;
-
-			Ok(old.into())
-		} else {
-			result
+		if let Ok(v1) = Self::try_from_slice(buf) {
+			return Ok(v1);
 		}
+		let old = ManifestV0::try_from_slice(buf)?;
+		Ok(old.into())
 	}
 }
 
@@ -208,18 +275,24 @@ impl ManifestEnvelopeV1 {
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
 		use borsh::BorshDeserialize;
 
-		let result = Self::try_from_slice(buf);
-
-		if result.is_err() {
-			let old = ManifestEnvelopeV0::try_from_slice(buf)?;
-
-			Ok(Self {
-				manifest: ManifestV1::from(old.manifest),
-				manifest_set_approvals: old.manifest_set_approvals,
-				share_set_approvals: old.share_set_approvals,
-			})
-		} else {
-			result
+		if let Ok(v1) = serde_json::from_slice::<Self>(buf) {
+			return Ok(v1);
 		}
+		if let Ok(v0) = serde_json::from_slice::<ManifestEnvelopeV0>(buf) {
+			return Ok(Self {
+				manifest: ManifestV1::from(v0.manifest),
+				manifest_set_approvals: v0.manifest_set_approvals,
+				share_set_approvals: v0.share_set_approvals,
+			});
+		}
+		if let Ok(v1) = Self::try_from_slice(buf) {
+			return Ok(v1);
+		}
+		let old = ManifestEnvelopeV0::try_from_slice(buf)?;
+		Ok(Self {
+			manifest: ManifestV1::from(old.manifest),
+			manifest_set_approvals: old.manifest_set_approvals,
+			share_set_approvals: old.share_set_approvals,
+		})
 	}
 }

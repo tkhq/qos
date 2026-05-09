@@ -813,10 +813,11 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		patch_set,
 		enclave: nitro_config,
 	};
+	let manifest = VersionedManifest::V1(manifest);
 
 	write_with_msg(
 		manifest_path.as_ref(),
-		&serde_json::to_vec(&manifest).expect("failed to serialize manifest"),
+		&manifest.to_storage_vec().expect("failed to serialize manifest"),
 		"Manifest",
 	);
 
@@ -2198,6 +2199,15 @@ fn find_approvals<P: AsRef<Path>>(
 	approvals
 }
 
+/// Read a manifest using the long-lived CLI compatibility behavior.
+///
+/// This intentionally coerces legacy v0 bytes into a v1-shaped manifest by
+/// delegating to `ManifestV1::try_from_slice_compat` in the final fallback
+/// path. That mirrors the deployed pre-v2 client behavior where manifest bytes
+/// were normalized to v1 before downstream approval/signing workflows.
+///
+/// Do not replace this with `VersionedManifest::try_from_slice_compat` unless
+/// migrating all workflows that depend on this deployed CLI compatibility path.
 fn read_manifest_compat<P: AsRef<Path>>(
 	file: P,
 ) -> Result<VersionedManifest, Error> {
@@ -3419,6 +3429,30 @@ mod tests {
 			));
 			let _ = fs::remove_file(&json_path);
 			let _ = fs::remove_file(&borsh_path);
+		}
+
+		#[test]
+		fn read_manifest_compat_coerces_legacy_v0_fixture_to_v1() {
+			let fixture_path =
+				std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+					.join("../qos_core/fixtures/old_manifest");
+
+			let decoded = super::super::read_manifest_compat(&fixture_path)
+				.expect("fixture should deserialize");
+
+			match decoded {
+				qos_core::protocol::services::boot::VersionedManifest::V1(
+					manifest,
+				) => {
+					assert_eq!(manifest.namespace.name, "quit-coding-to-vape");
+					assert_eq!(manifest.namespace.nonce, 2);
+					assert!(!manifest.pivot.debug_mode);
+					assert!(manifest.pivot.bridge_config.is_empty());
+				}
+				other => panic!(
+					"expected v1 coercion for deployed CLI compatibility, got: {other:?}"
+				),
+			}
 		}
 	}
 

@@ -57,13 +57,54 @@ fn parse_pivot_args(value: &str) -> Vec<String> {
 	}
 }
 
+fn parse_bridge_port(value: &serde_json::Value) -> Option<u16> {
+	match value {
+		serde_json::Value::Number(number) => {
+			number.as_u64().and_then(|port| u16::try_from(port).ok())
+		}
+		serde_json::Value::String(number) => number.parse::<u16>().ok(),
+		_ => None,
+	}
+}
+
 fn parse_bridge_config(json: Option<&str>) -> Vec<BridgeConfig> {
 	let Some(json_str) = json else {
 		return Vec::new();
 	};
 
-	let result: Vec<BridgeConfig> = serde_json::from_str(json_str)
+	let bridge_config: Vec<serde_json::Value> = serde_json::from_str(json_str)
 		.expect("invalid bridge configuration json");
+	let result: Vec<BridgeConfig> = bridge_config
+		.into_iter()
+		.map(|cfg| {
+			let cfg =
+				cfg.as_object().expect("invalid bridge configuration json");
+			let port = cfg
+				.get("port")
+				.and_then(parse_bridge_port)
+				.expect("invalid bridge configuration json");
+			let host =
+				cfg.get("host").cloned().unwrap_or(serde_json::Value::Null);
+			match cfg
+				.get("type")
+				.and_then(serde_json::Value::as_str)
+				.expect("invalid bridge configuration json")
+			{
+				"server" => BridgeConfig::Server {
+					port,
+					host: host
+						.as_str()
+						.expect("invalid bridge configuration json")
+						.to_string(),
+				},
+				"client" => BridgeConfig::Client {
+					port,
+					host: host.as_str().map(str::to_string),
+				},
+				_ => panic!("invalid bridge configuration json"),
+			}
+		})
+		.collect();
 	let mut ports = HashSet::new();
 	for bc in &result {
 		assert!(
@@ -1216,6 +1257,42 @@ mod test {
 		Cli::try_parse_from(args.iter().copied()).unwrap_or_else(|e| {
 			panic!("parse failed for {args:?}: {e}");
 		})
+	}
+
+	#[test]
+	fn parse_bridge_config_accepts_numeric_and_string_ports() {
+		let bridge_config = parse_bridge_config(Some(concat!(
+			"[",
+			r#"{"type":"server","port":3000,"host":"0.0.0.0"}"#,
+			",",
+			r#"{"type":"client","port":"3001","host":"example.com"}"#,
+			"]"
+		)));
+
+		assert_eq!(bridge_config.len(), 2);
+		let BridgeConfig::Server { port, host } = &bridge_config[0] else {
+			panic!("unexpected bridge config: {:?}", bridge_config[0]);
+		};
+		assert_eq!(*port, 3000);
+		assert_eq!(host, "0.0.0.0");
+
+		let BridgeConfig::Client { port, host } = &bridge_config[1] else {
+			panic!("unexpected bridge config: {:?}", bridge_config[1]);
+		};
+		assert_eq!(*port, 3001);
+		assert_eq!(host.as_deref(), Some("example.com"));
+	}
+
+	#[test]
+	#[should_panic(expected = "duplicate bridge port")]
+	fn parse_bridge_config_rejects_duplicate_ports() {
+		let _ = parse_bridge_config(Some(concat!(
+			"[",
+			r#"{"type":"server","port":3000,"host":"0.0.0.0"}"#,
+			",",
+			r#"{"type":"client","port":"3000","host":"example.com"}"#,
+			"]"
+		)));
 	}
 
 	#[test]

@@ -2,8 +2,9 @@
 
 QOS uses JSON for protocol messages and signing payloads. Any JSON bytes that
 are hashed, signed, or verified MUST be canonicalized using QOS-normalized RFC
-8785-style canonical JSON. QOS intentionally differs from RFC 8785 by banning
-all JSON number tokens.
+8785-style canonical JSON. QOS intentionally differs from RFC 8785 by
+normalizing integer JSON numbers to decimal strings and rejecting non-integer
+numbers.
 
 ## Canonicalization
 
@@ -22,9 +23,9 @@ all JSON number tokens.
   names encoded as UTF-16 code units, as specified by RFC 8785 section 3.2.3.
   This matters for non-ASCII names: for example, the RFC 8785 sample order is
   carriage return, `1`, U+0080, `ö`, `€`, grinning-face emoji, and U+FB33.
-- JSON number tokens MUST NOT appear in JSON canonical to this spec.
-  Implementations MUST terminate canonical serialization if a JSON number token
-  is encountered.
+- Integer JSON number tokens MUST canonicalize as decimal JSON strings.
+- Non-integer JSON number tokens (for example `1.0`, `1e3`, `-0.5`) MUST be
+  rejected during canonical serialization.
 
 ## Signing Object Schemas
 
@@ -48,9 +49,11 @@ all JSON number tokens.
   `#[serde(with = "qos_hex::serde")]` for byte fields represented this way.
 - Enums SHOULD use serde's externally tagged representation unless the signing
   object schema explicitly specifies another representation.
-- Numeric values MUST be represented as decimal strings. Rust schemas
-  SHOULD use `#[serde(with = "qos_json::string_number")]` for integer fields
-  represented this way.
+- Numeric values MUST be represented as decimal strings in canonical output.
+- Rust schemas MAY use plain integer fields and rely on canonicalization to
+  normalize integer numbers to decimal strings.
+- Rust schemas SHOULD use `#[serde(with = "qos_json::string_or_numeric")]`
+  where readers must accept either string or integer JSON for compatibility.
 - Floating point values MUST NOT be introduced into QOS signing payloads.
 
 ## Test Vectors
@@ -58,8 +61,8 @@ all JSON number tokens.
 These vectors show the relevant schema pattern, canonical JSON, and SHA-256
 hash. The Rust unit tests in `src/qos_json/src/lib.rs` exercise these vectors
 and additional edge cases for null omission, array preservation, string
-escaping, UTF-16 property ordering, typed/raw hash equivalence, and rejected
-JSON number tokens.
+escaping, UTF-16 property ordering, typed/raw hash equivalence, numeric
+normalization, and rejected non-integer JSON number tokens.
 
 Schema: no fields.
 
@@ -77,7 +80,7 @@ Schema:
 struct Example {
     version: String,
     name: String,
-    #[serde(with = "qos_json::string_number")]
+    #[serde(with = "qos_json::string_or_numeric")]
     threshold: u32,
 }
 ```
