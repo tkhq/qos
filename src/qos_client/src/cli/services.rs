@@ -14,6 +14,7 @@ use qos_core::protocol::{
 			Approval, BridgeConfig, ManifestEnvelopeV1, ManifestSet,
 			ManifestV1, MemberPubKey, Namespace, NitroConfig, PatchSet,
 			PivotConfigV1, PivotEnv, QuorumMember, RestartPolicy, ShareSet,
+			manifest::v0::ManifestEnvelopeV0,
 			VersionedManifest, VersionedManifestEnvelope,
 		},
 		genesis::{GenesisOutput, GenesisSet},
@@ -864,7 +865,7 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
-			env: PivotEnv::new(),
+			env: PivotEnv::default(),
 			bridge_config,
 			debug_mode,
 		},
@@ -1124,13 +1125,11 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 			})
 		}
 		VersionedManifest::V0(manifest) => {
-			VersionedManifestEnvelope::V0(
-				qos_core::protocol::services::boot::manifest::v0::ManifestEnvelopeV0 {
-					manifest,
-					manifest_set_approvals: approvals,
-					share_set_approvals: vec![],
-				},
-			)
+			VersionedManifestEnvelope::V0(ManifestEnvelopeV0 {
+				manifest,
+				manifest_set_approvals: approvals,
+				share_set_approvals: vec![],
+			})
 		}
 	};
 

@@ -332,4 +332,35 @@ mod test {
 			br#"{"proxyRequest":{"data":"dead"}}"#
 		);
 	}
+
+	#[test]
+	fn version_response_round_trip() {
+		let msg = ProtocolMsg::VersionResponse {
+			version: "0.5.0".to_string(),
+			commit: "abc1234".to_string(),
+		};
+		let vec = msg.to_canonical_json_vec();
+		let decoded = ProtocolMsg::from_json_slice(&vec).unwrap();
+		assert_eq!(msg, decoded);
+	}
+
+	#[test]
+	fn version_request_round_trip() {
+		let msg = ProtocolMsg::VersionRequest;
+		let vec = msg.to_canonical_json_vec();
+		let decoded = ProtocolMsg::from_json_slice(&vec).unwrap();
+		assert_eq!(msg, decoded);
+	}
+
+	#[test]
+	fn manifest_envelope_response_backcompat_with_missing_field() {
+		let raw = br#"{"manifestEnvelopeResponse":{}}"#;
+		let decoded: ProtocolMsg = serde_json::from_slice(raw).unwrap();
+		match decoded {
+			ProtocolMsg::ManifestEnvelopeResponse { manifest_envelope } => {
+				assert_eq!(*manifest_envelope, None);
+			}
+			other => panic!("unexpected decoded message: {other:?}"),
+		}
+	}
 }

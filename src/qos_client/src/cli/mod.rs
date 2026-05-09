@@ -37,6 +37,9 @@ fn parse_qos_version(s: &str) -> Result<u32, String> {
 	Ok(v)
 }
 
+// Compatibility: legacy CLI accepted a bracket-wrapped, comma-delimited
+// single string for pivot args (e.g. "[--usock,dev.sock]"). Keep parsing this
+// shape to avoid breaking existing scripts.
 fn parse_pivot_args(value: &str) -> Vec<String> {
 	let mut chars = value.chars();
 	assert_eq!(
@@ -67,6 +70,9 @@ fn parse_bridge_port(value: &serde_json::Value) -> Option<u16> {
 	}
 }
 
+// Compatibility: legacy CLI accepted bridge `port` values as either numbers
+// or numeric strings. `BridgeConfig` deserialization alone is stricter, so we
+// preserve both forms and keep duplicate-port validation.
 fn parse_bridge_config(json: Option<&str>) -> Vec<BridgeConfig> {
 	let Some(json_str) = json else {
 		return Vec::new();
@@ -204,13 +210,13 @@ enum Command {
 #[derive(Args, Debug)]
 struct HostOpts {
 	/// IP address this server should listen on.
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	host_ip: String,
 	/// Port this server should listen on.
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	host_port: String,
 	/// Base path for all endpoints. e.g. <BASE>/enclave-health
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	endpoint_base_path: Option<String>,
 }
 
@@ -239,9 +245,9 @@ struct EnclaveStatusOpts {
 
 #[derive(Args, Debug)]
 struct GenerateFileKeyOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	master_seed_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pub_path: String,
 }
 
@@ -249,15 +255,15 @@ struct GenerateFileKeyOpts {
 struct BootGenesisOpts {
 	#[command(flatten)]
 	host: HostOpts,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	namespace_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	share_set_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pcr3_preimage_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	qos_release_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	dr_key_path: Option<String>,
 	#[arg(long)]
 	unsafe_skip_attestation: bool,
@@ -267,21 +273,21 @@ struct BootGenesisOpts {
 struct AfterGenesisOpts {
 	#[arg(long)]
 	yubikey: bool,
-	#[arg(long, conflicts_with = "yubikey", allow_hyphen_values = true)]
+	#[arg(long, conflicts_with = "yubikey")]
 	secret_path: Option<String>,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	share_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	alias: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	namespace_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	qos_release_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pcr3_preimage_path: String,
 	#[arg(long)]
 	unsafe_skip_attestation: bool,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	current_pin_path: Option<String>,
 	#[arg(long)]
 	validation_time_override: Option<u64>,
@@ -289,9 +295,9 @@ struct AfterGenesisOpts {
 
 #[derive(Args, Debug)]
 struct VerifyGenesisOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	namespace_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	master_seed_path: String,
 }
 
@@ -299,25 +305,25 @@ struct VerifyGenesisOpts {
 struct GenerateManifestOpts {
 	#[arg(long)]
 	nonce: u32,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	namespace: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pivot_hash_path: String,
-	#[arg(long, allow_hyphen_values = true)]
-	restart_policy: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
+	restart_policy: RestartPolicy,
+	#[arg(long)]
 	qos_release_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pcr3_preimage_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_set_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	share_set_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	patch_set_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	quorum_key_path: String,
 	#[arg(
 		long,
@@ -326,7 +332,7 @@ struct GenerateManifestOpts {
 		default_missing_value = "[]"
 	)]
 	pivot_args: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	bridge_config: Option<String>,
 	#[arg(
 		long,
@@ -341,27 +347,27 @@ struct GenerateManifestOpts {
 struct ApproveManifestOpts {
 	#[arg(long)]
 	yubikey: bool,
-	#[arg(long, conflicts_with = "yubikey", allow_hyphen_values = true)]
+	#[arg(long, conflicts_with = "yubikey")]
 	secret_path: Option<String>,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_approvals_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	qos_release_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pcr3_preimage_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pivot_hash_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	alias: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	quorum_key_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_set_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	share_set_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	patch_set_dir: String,
 	#[arg(long)]
 	unsafe_auto_confirm: bool,
@@ -371,11 +377,11 @@ struct ApproveManifestOpts {
 struct BootStandardOpts {
 	#[command(flatten)]
 	host: HostOpts,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pivot_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_envelope_path: Option<String>,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pcr3_preimage_path: String,
 	#[arg(long)]
 	unsafe_skip_attestation: bool,
@@ -385,17 +391,17 @@ struct BootStandardOpts {
 struct GetAttestationDocOpts {
 	#[command(flatten)]
 	host: HostOpts,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	attestation_doc_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_envelope_path: Option<String>,
 }
 
 #[derive(Args, Debug)]
 struct GetEphemeralKeyHexOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	attestation_doc_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	ephemeral_key_path: String,
 }
 
@@ -403,31 +409,31 @@ struct GetEphemeralKeyHexOpts {
 struct ProxyReEncryptShareOpts {
 	#[arg(long)]
 	yubikey: bool,
-	#[arg(long, conflicts_with = "yubikey", allow_hyphen_values = true)]
+	#[arg(long, conflicts_with = "yubikey")]
 	secret_path: Option<String>,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	share_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	approval_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	eph_wrapped_share_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	attestation_doc_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pcr3_preimage_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_set_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_envelope_path: Option<String>,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	alias: String,
 	#[arg(long)]
 	unsafe_skip_attestation: bool,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	unsafe_eph_path_override: Option<String>,
 	#[arg(long)]
 	unsafe_auto_confirm: bool,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	current_pin_path: Option<String>,
 }
 
@@ -435,20 +441,20 @@ struct ProxyReEncryptShareOpts {
 struct PostShareOpts {
 	#[command(flatten)]
 	host: HostOpts,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	approval_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	eph_wrapped_share_path: String,
 }
 
 #[derive(Args, Debug)]
 #[allow(clippy::struct_field_names)]
 struct GenerateManifestEnvelopeOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_approvals_dir: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_envelope_path: Option<String>,
 }
 
@@ -456,10 +462,10 @@ struct GenerateManifestEnvelopeOpts {
 struct DangerousDevBootOpts {
 	#[command(flatten)]
 	host: HostOpts,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pivot_path: String,
-	#[arg(long, allow_hyphen_values = true)]
-	restart_policy: String,
+	#[arg(long)]
+	restart_policy: RestartPolicy,
 	#[arg(
 		long,
 		num_args = 0..=1,
@@ -467,13 +473,13 @@ struct DangerousDevBootOpts {
 		default_missing_value = "[]"
 	)]
 	pivot_args: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	unsafe_eph_path_override: Option<String>,
 }
 
 #[derive(Args, Debug)]
 struct ProvisionYubikeyOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pub_path: String,
 	#[arg(long)]
 	yubikey: bool,
@@ -481,57 +487,57 @@ struct ProvisionYubikeyOpts {
 
 #[derive(Args, Debug)]
 struct AdvancedProvisionYubikeyOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	master_seed_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	current_pin_path: Option<String>,
 }
 
 #[derive(Args, Debug)]
 struct PivotHashOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	output_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pivot_path: String,
 }
 
 #[derive(Args, Debug)]
 struct ShamirSplitOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	secret_path: String,
 	#[arg(long)]
 	total_shares: usize,
 	#[arg(long)]
 	threshold: usize,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	output_dir: String,
 }
 
 #[derive(Args, Debug)]
 struct ShamirReconstructOpts {
-	#[arg(long, action = clap::ArgAction::Append, required = true, allow_hyphen_values = true)]
+	#[arg(long, action = clap::ArgAction::Append, required = true)]
 	share: Vec<String>,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	output_path: String,
 }
 
 #[derive(Args, Debug)]
 struct YubikeySignOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	payload: String,
 }
 
 #[derive(Args, Debug)]
 struct YubikeyChangePinOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	current_pin_path: Option<String>,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	new_pin_path: String,
 }
 
 #[derive(Args, Debug)]
 struct DisplayOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	file_path: String,
 	#[arg(long)]
 	display_type: DisplayType,
@@ -541,11 +547,11 @@ struct DisplayOpts {
 
 #[derive(Args, Debug)]
 struct JsonToBorshOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	file_path: String,
 	#[arg(long)]
 	display_type: DisplayType,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	output_path: String,
 }
 
@@ -553,11 +559,11 @@ struct JsonToBorshOpts {
 struct BootKeyFwdOpts {
 	#[command(flatten)]
 	host: HostOpts,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_envelope_path: Option<String>,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pivot_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	attestation_doc_path: String,
 }
 
@@ -565,11 +571,11 @@ struct BootKeyFwdOpts {
 struct ExportKeyOpts {
 	#[command(flatten)]
 	host: HostOpts,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	manifest_envelope_path: Option<String>,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	attestation_doc_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	encrypted_quorum_key_path: String,
 }
 
@@ -577,51 +583,51 @@ struct ExportKeyOpts {
 struct InjectKeyOpts {
 	#[command(flatten)]
 	host: HostOpts,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	encrypted_quorum_key_path: String,
 }
 
 #[derive(Args, Debug)]
 #[allow(clippy::struct_field_names)]
 struct P256VerifyOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	payload_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	signature_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pub_path: String,
 }
 
 #[derive(Args, Debug)]
 #[allow(clippy::struct_field_names)]
 struct P256SignOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	payload_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	signature_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	master_seed_path: String,
 }
 
 #[derive(Args, Debug)]
 #[allow(clippy::struct_field_names)]
 struct P256AsymmetricEncryptOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	plaintext_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	ciphertext_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	pub_path: String,
 }
 
 #[derive(Args, Debug)]
 #[allow(clippy::struct_field_names)]
 struct P256AsymmetricDecryptOpts {
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	plaintext_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	ciphertext_path: String,
-	#[arg(long, allow_hyphen_values = true)]
+	#[arg(long)]
 	master_seed_path: String,
 	#[arg(long)]
 	output_hex: bool,
@@ -714,11 +720,6 @@ mod handlers {
 		YubikeyChangePinOpts, YubikeySignOpts,
 	};
 	use crate::request;
-
-	fn parse_restart(value: &str) -> RestartPolicy {
-		RestartPolicy::try_from(value.to_string())
-			.expect("Could not parse `--restart-policy`")
-	}
 
 	pub(super) fn pivot_hash(opts: &PivotHashOpts) {
 		let pivot = std::fs::read(&opts.pivot_path).unwrap_or_else(|e| {
@@ -948,7 +949,7 @@ mod handlers {
 	pub(super) fn generate_manifest(opts: GenerateManifestOpts) {
 		let pivot_args = parse_pivot_args(&opts.pivot_args);
 		let bridge_config = parse_bridge_config(opts.bridge_config.as_deref());
-		let restart_policy = parse_restart(&opts.restart_policy);
+		let restart_policy = opts.restart_policy;
 
 		if let Err(e) =
 			services::generate_manifest(services::GenerateManifestArgs {
@@ -975,7 +976,7 @@ mod handlers {
 	pub(super) fn generate_manifest_v2(opts: GenerateManifestOpts) {
 		let pivot_args = parse_pivot_args(&opts.pivot_args);
 		let bridge_config = parse_bridge_config(opts.bridge_config.as_deref());
-		let restart_policy = parse_restart(&opts.restart_policy);
+		let restart_policy = opts.restart_policy;
 
 		if let Err(e) =
 			services::generate_manifest_v2(services::GenerateManifestArgs {
@@ -1137,7 +1138,7 @@ mod handlers {
 
 	pub(super) fn dangerous_dev_boot(opts: DangerousDevBootOpts) {
 		let pivot_args = parse_pivot_args(&opts.pivot_args);
-		let restart_policy = parse_restart(&opts.restart_policy);
+		let restart_policy = opts.restart_policy;
 		services::dangerous_dev_boot(
 			&opts.host.path_message(),
 			opts.pivot_path,

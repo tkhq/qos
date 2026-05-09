@@ -138,4 +138,17 @@ mod tests {
 		let canonical = qos_json::to_string(&data).unwrap();
 		assert_eq!(canonical, r#"{"a":"1","z":"2"}"#);
 	}
+
+	#[test]
+	fn qos_hash_json_omits_null_fields() {
+		#[derive(serde::Serialize)]
+		struct Data {
+			name: &'static str,
+			optional: Option<&'static str>,
+		}
+
+		let data = Data { name: "test", optional: None };
+		let canonical = qos_json::to_string(&data).unwrap();
+		assert_eq!(canonical, r#"{"name":"test"}"#);
+	}
 }
