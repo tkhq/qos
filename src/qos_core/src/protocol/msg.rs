@@ -1,6 +1,10 @@
 //! Enclave executor message types.
 
+use std::ops::{Deref, DerefMut};
+
+use borsh::{BorshDeserialize, BorshSerialize};
 use qos_nsm::types::NsmResponse;
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::protocol::{
 	services::{
@@ -9,6 +13,66 @@ use crate::protocol::{
 	},
 	ProtocolError,
 };
+
+/// Borsh wrapper that carries a Rust value as JSON bytes on the wire.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct JsonBytes<T>(T);
+
+impl<T> JsonBytes<T> {
+	/// Wrap a value for JSON-byte Borsh transport.
+	#[must_use]
+	pub fn new(value: T) -> Self {
+		Self(value)
+	}
+
+	/// Consume the wrapper and return the inner value.
+	#[must_use]
+	pub fn into_inner(self) -> T {
+		self.0
+	}
+}
+
+impl<T> Deref for JsonBytes<T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl<T> DerefMut for JsonBytes<T> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
+impl<T> BorshSerialize for JsonBytes<T>
+where
+	T: Serialize,
+{
+	fn serialize<W: borsh::io::Write>(
+		&self,
+		writer: &mut W,
+	) -> borsh::io::Result<()> {
+		let bytes =
+			serde_json::to_vec(&self.0).map_err(borsh::io::Error::other)?;
+		BorshSerialize::serialize(&bytes, writer)
+	}
+}
+
+impl<T> BorshDeserialize for JsonBytes<T>
+where
+	T: DeserializeOwned,
+{
+	fn deserialize_reader<R: borsh::io::Read>(
+		reader: &mut R,
+	) -> borsh::io::Result<Self> {
+		let bytes = Vec::<u8>::deserialize_reader(reader)?;
+		let value =
+			serde_json::from_slice(&bytes).map_err(borsh::io::Error::other)?;
+		Ok(Self(value))
+	}
+}
 
 /// Encoding used for a protocol message on the host/enclave wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -186,6 +250,16 @@ pub enum ProtocolMsg {
 		/// neither was available at build time.
 		commit: String,
 	},
+
+	/// Borsh-only standard boot request with a JSON/storage-encoded manifest
+	/// envelope and raw pivot bytes.
+	#[serde(skip)]
+	BootStandardJsonEnvelopeRequest {
+		/// Manifest envelope encoded as JSON bytes in Borsh.
+		manifest_envelope: Box<JsonBytes<VersionedManifestEnvelope>>,
+		/// Pivot binary.
+		pivot: Vec<u8>,
+	},
 }
 
 impl ProtocolMsg {
@@ -276,6 +350,9 @@ impl std::fmt::Display for ProtocolMsg {
 			}
 			Self::BootStandardRequest { .. } => {
 				write!(f, "BootStandardRequest")
+			}
+			Self::BootStandardJsonEnvelopeRequest { .. } => {
+				write!(f, "BootStandardJsonEnvelopeRequest")
 			}
 			Self::BootStandardResponse { .. } => {
 				write!(f, "BootStandardResponse")
@@ -495,5 +572,50 @@ mod test {
 		assert_eq!(encoding, ProtocolMsgEncoding::Json);
 		assert_eq!(decoded, msg);
 		assert!(msg.to_borsh_wire().is_err());
+	}
+
+	#[test]
+	fn boot_standard_json_envelope_request_is_borsh_only() {
+		let envelope = VersionedManifestEnvelope::V2(ManifestEnvelopeV2 {
+			manifest: ManifestV2 {
+				version: ManifestVersion::V2,
+				namespace: Namespace {
+					name: "test".to_string(),
+					nonce: 1,
+					quorum_key: vec![7; 33],
+				},
+				pivot: PivotConfigV2 {
+					hash: [9; 32],
+					restart: RestartPolicy::Never,
+					bridge_config: vec![],
+					debug_mode: false,
+					args: vec![],
+					env: PivotEnv::new(),
+				},
+				manifest_set: ManifestSet { threshold: 1, members: vec![] },
+				share_set: ShareSet { threshold: 1, members: vec![] },
+				enclave: NitroConfig {
+					pcr0: vec![0; 48],
+					pcr1: vec![1; 48],
+					pcr2: vec![2; 48],
+					pcr3: vec![3; 48],
+					aws_root_certificate: vec![],
+					qos_commit: "commit".to_string(),
+				},
+			},
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		});
+		let msg = ProtocolMsg::BootStandardJsonEnvelopeRequest {
+			manifest_envelope: Box::new(JsonBytes::new(envelope)),
+			pivot: vec![1, 2, 3, 4],
+		};
+
+		let encoded = msg.to_borsh_wire().unwrap();
+		let (decoded, encoding) = ProtocolMsg::from_wire(&encoded).unwrap();
+
+		assert_eq!(encoding, ProtocolMsgEncoding::Borsh);
+		assert_eq!(decoded, msg);
+		assert!(msg.to_json_wire().is_err());
 	}
 }

@@ -8,7 +8,7 @@ use std::{
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::BorshDeserialize;
 use qos_core::protocol::{
-	msg::ProtocolMsg,
+	msg::{JsonBytes, ProtocolMsg},
 	services::{
 		boot::{
 			Approval, BridgeConfig, Manifest as ManifestV1,
@@ -1279,6 +1279,35 @@ pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
 	pub unsafe_skip_attestation: bool,
 }
 
+fn boot_standard_attestation_doc_with_fallback(
+	uri: &str,
+	manifest_envelope: VersionedManifestEnvelope,
+	pivot: Vec<u8>,
+) -> Result<Vec<u8>, Error> {
+	let req = ProtocolMsg::BootStandardJsonEnvelopeRequest {
+		manifest_envelope: Box::new(JsonBytes::new(manifest_envelope.clone())),
+		pivot: pivot.clone(),
+	};
+	if let Ok(ProtocolMsg::BootStandardResponse {
+		nsm_response: NsmResponse::Attestation { document },
+	}) = request::post_borsh(uri, &req)
+	{
+		return Ok(document);
+	}
+
+	let req = ProtocolMsg::BootStandardRequest {
+		manifest_envelope: Box::new(manifest_envelope),
+		pivot,
+	};
+	match request::post_borsh(uri, &req) {
+		Ok(ProtocolMsg::BootStandardResponse {
+			nsm_response: NsmResponse::Attestation { document },
+		}) => Ok(document),
+		Ok(r) => Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}"))),
+		Err(err) => Err(Error::UnexpectedProtocolMsgResponse(err)),
+	}
+}
+
 pub(crate) fn boot_standard<P: AsRef<Path>>(
 	BootStandardArgs {
 		uri,
@@ -1297,18 +1326,13 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		read_manifest_envelope_compat(manifest_envelope_path)?;
 	let manifest = manifest_envelope.clone().manifest();
 
-	let req = ProtocolMsg::BootStandardRequest {
-		manifest_envelope: Box::new(manifest_envelope),
-		pivot,
-	};
 	// Broadcast boot standard instruction and extract the attestation doc from
 	// the response.
-	let cose_sign1 = match request::post(&uri, &req).unwrap() {
-		ProtocolMsg::BootStandardResponse {
-			nsm_response: NsmResponse::Attestation { document },
-		} => document,
-		r => panic!("Unexpected response: {r:?}"),
-	};
+	let cose_sign1 = boot_standard_attestation_doc_with_fallback(
+		&uri,
+		manifest_envelope,
+		pivot,
+	)?;
 
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation, None);
@@ -1891,16 +1915,13 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 		}))
 	};
 
-	let req = ProtocolMsg::BootStandardRequest {
-		manifest_envelope: manifest_envelope.clone(),
+	let document = boot_standard_attestation_doc_with_fallback(
+		uri,
+		manifest_envelope.as_ref().clone(),
 		pivot,
-	};
-	let attestation_doc = match request::post(uri, &req).unwrap() {
-		ProtocolMsg::BootStandardResponse {
-			nsm_response: NsmResponse::Attestation { document },
-		} => extract_attestation_doc(&document, true, None),
-		r => panic!("Unexpected response: {r:?}"),
-	};
+	)
+	.unwrap();
+	let attestation_doc = extract_attestation_doc(&document, true, None);
 
 	// Pull out the ephemeral key or use the override
 	let eph_pub: P256Public = if let Some(eph_path) = unsafe_eph_path_override {

@@ -424,19 +424,24 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::BootStandardRequest { manifest_envelope, pivot } =
-			req
-		{
-			let result = boot::boot_standard(state, manifest_envelope, pivot)
-				.map(|nsm_response| ProtocolMsg::BootStandardResponse {
-					nsm_response,
-				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+		let (manifest_envelope, pivot) = match req {
+			ProtocolMsg::BootStandardRequest { manifest_envelope, pivot } => {
+				((**manifest_envelope).clone(), pivot)
+			}
+			ProtocolMsg::BootStandardJsonEnvelopeRequest {
+				manifest_envelope,
+				pivot,
+			} => (manifest_envelope.as_ref().clone().into_inner(), pivot),
+			_ => return None,
+		};
 
-			Some(result)
-		} else {
-			None
-		}
+		let result = boot::boot_standard(state, manifest_envelope, pivot)
+			.map(|nsm_response| ProtocolMsg::BootStandardResponse {
+				nsm_response,
+			})
+			.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+		Some(result)
 	}
 
 	pub(super) fn boot_genesis(

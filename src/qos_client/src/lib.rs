@@ -8,7 +8,7 @@ pub mod yubikey;
 pub mod request {
 	use std::io::Read;
 
-	use qos_core::protocol::msg::ProtocolMsg;
+	use qos_core::protocol::msg::{ProtocolMsg, ProtocolMsgEncoding};
 
 	const MAX_SIZE: u64 = u32::MAX as u64;
 	const ERROR_BODY_PREFIX_LIMIT: usize = 256;
@@ -21,10 +21,32 @@ pub mod request {
 	/// cannot be read, or deserialization fails.
 	///
 	pub fn post(url: &str, msg: &ProtocolMsg) -> Result<ProtocolMsg, String> {
+		post_wire(url, msg, ProtocolMsgEncoding::Json)
+	}
+
+	/// Post a [`qos_core::protocol::msg::ProtocolMsg`] using legacy Borsh
+	/// wire encoding.
+	///
+	/// # Errors
+	///
+	/// Returns an error string if the HTTP request fails, the response
+	/// cannot be read, or deserialization fails.
+	pub fn post_borsh(
+		url: &str,
+		msg: &ProtocolMsg,
+	) -> Result<ProtocolMsg, String> {
+		post_wire(url, msg, ProtocolMsgEncoding::Borsh)
+	}
+
+	fn post_wire(
+		url: &str,
+		msg: &ProtocolMsg,
+		encoding: ProtocolMsgEncoding,
+	) -> Result<ProtocolMsg, String> {
 		let mut buf: Vec<u8> = vec![];
 
 		let response = ureq::post(url)
-			.send_bytes(&msg.to_json_wire().map_err(|e| {
+			.send_bytes(&msg.to_wire(encoding).map_err(|e| {
 				format!("protocol message serialization error: {e:?}")
 			})?)
 			.map_err(|e| match e {
