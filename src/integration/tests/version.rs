@@ -1,4 +1,3 @@
-use borsh::BorshDeserialize;
 use integration::{wait_for_tcp_sock, wait_for_usock, PIVOT_OK_PATH};
 use qos_core::{
 	handles::Handles, io::SocketAddress, protocol::msg::ProtocolMsg,
@@ -92,12 +91,12 @@ async fn version_request_returns_version_and_commit() -> Result<(), io::Error> {
 	}
 
 	let url = format!("http://127.0.0.1:{HOST_PORT}/qos/message");
-	let req_bytes = borsh::to_vec(&ProtocolMsg::VersionRequest).unwrap();
+	let req_bytes = ProtocolMsg::VersionRequest.to_canonical_json_vec();
 	let response = ureq::post(&url).send_bytes(&req_bytes).unwrap();
 
 	let mut buf = Vec::new();
 	response.into_reader().read_to_end(&mut buf).unwrap();
-	let decoded = ProtocolMsg::try_from_slice(&buf).unwrap();
+	let decoded = ProtocolMsg::from_json_slice(&buf).unwrap();
 
 	match decoded {
 		ProtocolMsg::VersionResponse { version, commit } => {

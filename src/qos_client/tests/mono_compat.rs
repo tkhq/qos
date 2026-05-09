@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 const QOS_CLIENT: &str = env!("CARGO_BIN_EXE_qos_client");
 
 struct Fixture {
-	_tmp: PathWrapper<'static>,
+	_tmp: PathWrapper<String>,
 	root: PathBuf,
 	manifest_set: PathBuf,
 	share_set: PathBuf,
@@ -38,7 +38,7 @@ impl Fixture {
 			std::process::id(),
 			nanos
 		));
-		let tmp: PathWrapper<'static> = root.display().to_string().into();
+		let tmp: PathWrapper<String> = root.display().to_string().into();
 
 		let manifest_set = root.join("manifest-set");
 		let share_set = root.join("share-set");
@@ -312,7 +312,7 @@ fn mono_compat_generate_manifest_defaults_to_v1_without_env() {
 	assert_eq!(manifest["pivot"]["debugMode"], true);
 	assert_eq!(
 		manifest["pivot"]["bridgeConfig"],
-		json!([{ "type": "server", "port": "3000", "host": "0.0.0.0" }])
+		json!([{ "type": "server", "port": 3000, "host": "0.0.0.0" }])
 	);
 }
 

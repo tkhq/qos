@@ -209,7 +209,7 @@ impl Reaper {
 		}
 		pivot.args(&args[..]);
 		// Only pipe pivot output when it will be drained below.
-		if manifest.pivot.debug_mode {
+		if debug_mode {
 			pivot.stdout(Stdio::piped()).stderr(Stdio::piped());
 		} else {
 			pivot.stdout(Stdio::null()).stderr(Stdio::null());

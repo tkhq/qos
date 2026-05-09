@@ -45,7 +45,7 @@ async fn dev_boot_e2e() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				&*usock,
+				usock.to_str().unwrap(),
 				"--socket-timeout",
 				"15000",
 			])

@@ -76,11 +76,11 @@ async fn reaper_works() {
 
 #[tokio::test]
 async fn reaper_injects_v2_manifest_env_and_clears_host_env() {
-	let secret_path: PathWrapper =
-		"/tmp/reaper_injects_manifest_env_v2.secret".into();
-	let usock: PathWrapper = "/tmp/reaper_injects_manifest_env_v2.sock".into();
-	let manifest_path: PathWrapper =
-		"/tmp/reaper_injects_manifest_env_v2.manifest".into();
+	let secret_path =
+		PathWrapper::from("/tmp/reaper_injects_manifest_env_v2.secret");
+	let usock = PathWrapper::from("/tmp/reaper_injects_manifest_env_v2.sock");
+	let manifest_path =
+		PathWrapper::from("/tmp/reaper_injects_manifest_env_v2.manifest");
 	let msg = "manifest-env:";
 	let manifest_env_key = "QOS_TEST_MANIFEST_ENV";
 	let host_only_env_key = "QOS_TEST_HOST_ONLY_ENV";
@@ -92,8 +92,8 @@ async fn reaper_injects_v2_manifest_env_and_clears_host_env() {
 
 	let handles = Handles::new(
 		"reaper_injects_manifest_env_v2.eph".to_string(),
-		(*secret_path).to_string(),
-		(*manifest_path).to_string(),
+		secret_path.display().to_string(),
+		manifest_path.display().to_string(),
 		PIVOT_OK2_PATH.to_string(),
 	);
 

@@ -295,7 +295,7 @@ async fn qos_bridge_works() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--usock",
-				&*usock,
+				usock.to_str().unwrap(),
 				"--socket-timeout",
 				"15000",
 			])
