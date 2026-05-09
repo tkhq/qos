@@ -99,10 +99,10 @@ async fn main() {
 	// Parse args:
 	// - first argument is the socket to bind to (normal server server)
 	// - second argument is the socket to use for remote proxying
-	let args: Vec<String> = std::env::args().collect();
+	let mut args = std::env::args().skip(1);
 
-	let socket_path: &String = &args[1];
-	let proxy_path: &String = &args[2];
+	let socket_path = args.next().unwrap();
+	let proxy_path = args.next().unwrap();
 
 	let enclave_pool = StreamPool::new(SocketAddress::new_unix(socket_path), 1)
 		.expect("unable to create async stream pool");

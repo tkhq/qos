@@ -411,18 +411,18 @@ mod test {
 			}
 		};
 
-		let pivot_file: PathWrapper =
-			"boot_standard_rejects_manifest_envelope_with_share_set_approvals.pivot".into();
-		let ephemeral_file: PathWrapper =
-			"boot_standard_rejects_manifest_envelope_with_share_set_approvals_eph.secret".into();
-		let manifest_file: PathWrapper =
-			"boot_standard_rejects_manifest_envelope_with_share_set_approvals.manifest".into();
+		let pivot_file = PathWrapper::from(
+			"boot_standard_rejects_manifest_envelope_with_share_set_approvals.pivot");
+		let ephemeral_file = PathWrapper::from(
+			"boot_standard_rejects_manifest_envelope_with_share_set_approvals_eph.secret");
+		let manifest_file = PathWrapper::from(
+			"boot_standard_rejects_manifest_envelope_with_share_set_approvals.manifest");
 
 		let handles = Handles::new(
-			(*ephemeral_file).to_string(),
+			ephemeral_file.display().to_string(),
 			"quorum_key".to_string(),
-			(*manifest_file).to_string(),
-			(*pivot_file).to_string(),
+			manifest_file.display().to_string(),
+			pivot_file.display().to_string(),
 		);
 		let mut protocol_state =
 			ProtocolState::new(Box::new(MockNsm), handles, None);
@@ -466,19 +466,19 @@ mod test {
 			}
 		};
 
-		let pivot_file: PathWrapper =
-			"boot_standard_rejects_approval_from_non_manifest_set_member.pivot"
-				.into();
-		let ephemeral_file: PathWrapper =
-			"boot_standard_rejects_approval_from_non_manifest_set_member.secret".into();
-		let manifest_file: PathWrapper =
-			"boot_standard_rejects_approval_from_non_manifest_set_member.manifest".into();
+		let pivot_file = PathWrapper::from(
+			"boot_standard_rejects_approval_from_non_manifest_set_member.pivot",
+		);
+		let ephemeral_file = PathWrapper::from(
+			"boot_standard_rejects_approval_from_non_manifest_set_member.secret");
+		let manifest_file = PathWrapper::from(
+			"boot_standard_rejects_approval_from_non_manifest_set_member.manifest");
 
 		let handles = Handles::new(
-			(*ephemeral_file).to_string(),
+			ephemeral_file.display().to_string(),
 			"quorum_key".to_string(),
-			(*manifest_file).to_string(),
-			(*pivot_file).to_string(),
+			manifest_file.display().to_string(),
+			pivot_file.display().to_string(),
 		);
 		let mut protocol_state =
 			ProtocolState::new(Box::new(MockNsm), handles, None);

@@ -27,7 +27,7 @@ const APP_SOCK: &str = "/tmp/enclave_app_client_socket_stress/app.sock";
 
 #[tokio::test(flavor = "multi_thread")]
 async fn enclave_app_client_socket_stress() {
-	let _: PathWrapper = TEST_TMP.into();
+	let _ = PathWrapper::from(TEST_TMP);
 	std::fs::create_dir_all(TEST_TMP).unwrap();
 
 	let manifest = ManifestV1 {

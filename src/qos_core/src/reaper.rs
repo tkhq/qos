@@ -143,7 +143,6 @@ impl Reaper {
 	///
 	/// - If spawning the pivot errors.
 	/// - If waiting for the pivot errors.
-	#[allow(dead_code)]
 	pub async fn execute(
 		handles: &Handles,
 		nsm: Box<dyn NsmProvider + Send>,
@@ -209,7 +208,12 @@ impl Reaper {
 			}
 		}
 		pivot.args(&args[..]);
-		pivot.stdout(Stdio::piped()).stderr(Stdio::piped());
+		// Only pipe pivot output when it will be drained below.
+		if manifest.pivot.debug_mode {
+			pivot.stdout(Stdio::piped()).stderr(Stdio::piped());
+		} else {
+			pivot.stdout(Stdio::null()).stderr(Stdio::null());
+		}
 
 		loop {
 			let mut child = pivot.spawn().expect("Failed to spawn pivot");

@@ -152,6 +152,20 @@ pub enum ProtocolMsg {
 		#[serde(default)]
 		manifest_envelope: Box<Option<VersionedManifestEnvelope>>,
 	},
+
+	/// Request the QOS version and git commit of the running enclave.
+	VersionRequest,
+	/// Response for [`Self::VersionRequest`].
+	VersionResponse {
+		/// `qos_core` crate semver, captured at compile time from
+		/// `CARGO_PKG_VERSION`.
+		version: String,
+		/// Git commit captured at build time. Sourced from the
+		/// `QOS_GIT_COMMIT` env var (set by the build caller) with a
+		/// `git rev-parse --short HEAD` fallback. May be `"unknown"` if
+		/// neither was available at build time.
+		commit: String,
+	},
 }
 
 impl ProtocolMsg {
@@ -256,6 +270,13 @@ impl std::fmt::Display for ProtocolMsg {
 			}
 			Self::ManifestEnvelopeResponse { .. } => {
 				write!(f, "ManifestEnvelopeResponse")
+			}
+			Self::VersionRequest => write!(f, "VersionRequest"),
+			Self::VersionResponse { version, commit } => {
+				write!(
+					f,
+					"VersionResponse{{ version: {version}, commit: {commit} }}"
+				)
 			}
 		}
 	}

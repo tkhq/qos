@@ -25,9 +25,9 @@ use tokio::{
 
 #[tokio::test(flavor = "multi_thread")]
 async fn reaper_works() {
-	let secret_path: PathWrapper = "/tmp/reaper_works.secret".into();
-	let usock: PathWrapper = "/tmp/reaper_works.sock".into();
-	let manifest_path: PathWrapper = "/tmp/reaper_works.manifest".into();
+	let secret_path = PathWrapper::from("/tmp/reaper_works.secret");
+	let usock = PathWrapper::from("/tmp/reaper_works.sock");
+	let manifest_path = PathWrapper::from("/tmp/reaper_works.manifest");
 	let msg = "durp-a-durp";
 
 	// For our sanity, ensure the secret does not yet exist
@@ -35,8 +35,8 @@ async fn reaper_works() {
 
 	let handles = Handles::new(
 		"eph_path".to_string(),
-		(*secret_path).to_string(),
-		(*manifest_path).to_string(),
+		secret_path.display().to_string(),
+		manifest_path.display().to_string(),
 		PIVOT_OK_PATH.to_string(),
 	);
 
@@ -158,19 +158,19 @@ async fn reaper_injects_v2_manifest_env_and_clears_host_env() {
 
 #[tokio::test]
 async fn reaper_handles_non_zero_exits() {
-	let secret_path: PathWrapper =
-		"/tmp/reaper_handles_non_zero_exits.secret".into();
-	let usock: PathWrapper = "/tmp/reaper_handles_non_zero_exits.sock".into();
-	let manifest_path: PathWrapper =
-		"/tmp/reaper_handles_non_zero_exits.manifest".into();
+	let secret_path =
+		PathWrapper::from("/tmp/reaper_handles_non_zero_exits.secret");
+	let usock = PathWrapper::from("/tmp/reaper_handles_non_zero_exits.sock");
+	let manifest_path =
+		PathWrapper::from("/tmp/reaper_handles_non_zero_exits.manifest");
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(fs::remove_file(&*secret_path));
 
 	let handles = Handles::new(
 		"eph_path".to_string(),
-		(*secret_path).to_string(),
-		(*manifest_path).to_string(),
+		secret_path.display().to_string(),
+		manifest_path.display().to_string(),
 		PIVOT_ABORT_PATH.to_string(),
 	);
 
@@ -206,18 +206,18 @@ async fn reaper_handles_non_zero_exits() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn reaper_handles_panic() {
-	let secret_path: PathWrapper = "/tmp/reaper_handles_panics.secret".into();
-	let usock: PathWrapper = "/tmp/reaper_handles_panics.sock".into();
-	let manifest_path: PathWrapper =
-		"/tmp/reaper_handles_panics.manifest".into();
+	let secret_path = PathWrapper::from("/tmp/reaper_handles_panics.secret");
+	let usock = PathWrapper::from("/tmp/reaper_handles_panics.sock");
+	let manifest_path =
+		PathWrapper::from("/tmp/reaper_handles_panics.manifest");
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(fs::remove_file(&*secret_path));
 
 	let handles = Handles::new(
 		"eph_path".to_string(),
-		secret_path.to_string(),
-		manifest_path.to_string(),
+		secret_path.display().to_string(),
+		manifest_path.display().to_string(),
 		PIVOT_PANIC_PATH.to_string(),
 	);
 
@@ -255,20 +255,21 @@ async fn reaper_handles_panic() {
 async fn reaper_handles_bridge() {
 	let pivot_port = find_free_port().unwrap();
 	let host_port = find_free_port().unwrap();
-	let secret_path: PathWrapper = "/tmp/reaper_handles_bridge.secret".into();
-	let usock: PathWrapper = "/tmp/reaper_handles_bridge.sock".into();
-	let app_usock: PathWrapper =
-		format!("/tmp/reaper_handles_bridge.sock.{pivot_port}.appsock").into();
-	let manifest_path: PathWrapper =
-		"/tmp/reaper_handles_bridge.manifest".into();
+	let secret_path = PathWrapper::from("/tmp/reaper_handles_bridge.secret");
+	let usock = PathWrapper::from("/tmp/reaper_handles_bridge.sock");
+	let app_usock = PathWrapper::from(format!(
+		"/tmp/reaper_handles_bridge.sock.{pivot_port}.appsock"
+	));
+	let manifest_path =
+		PathWrapper::from("/tmp/reaper_handles_bridge.manifest");
 
 	// For our sanity, ensure the secret does not yet exist
 	drop(fs::remove_file(&*secret_path));
 
 	let handles = Handles::new(
 		"eph_path".to_string(),
-		(*secret_path).to_string(),
-		(*manifest_path).to_string(),
+		secret_path.display().to_string(),
+		manifest_path.display().to_string(),
 		PIVOT_TCP_PATH.to_string(),
 	);
 

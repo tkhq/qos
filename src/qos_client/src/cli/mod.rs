@@ -135,6 +135,8 @@ enum Command {
 	HostHealth(HostHealthOpts),
 	/// Query the status of the enclave.
 	EnclaveStatus(EnclaveStatusOpts),
+	/// Query the QOS version and git commit of the running enclave.
+	EnclaveVersion(EnclaveStatusOpts),
 	/// Generate a Setup Key for use in the Genesis ceremony.
 	GenerateFileKey(GenerateFileKeyOpts),
 	/// Run the Boot Genesis logic to generate and shard a Quorum Key.
@@ -641,6 +643,7 @@ fn dispatch(cli: Cli) {
 	match cli.command {
 		Command::HostHealth(opts) => handlers::host_health(&opts),
 		Command::EnclaveStatus(opts) => handlers::enclave_status(&opts),
+		Command::EnclaveVersion(opts) => handlers::enclave_version(&opts),
 		Command::GenerateFileKey(opts) => handlers::generate_file_key(&opts),
 		Command::BootGenesis(opts) => handlers::boot_genesis(&opts),
 		Command::AfterGenesis(opts) => handlers::after_genesis(opts),
@@ -757,6 +760,22 @@ mod handlers {
 		match response {
 			ProtocolMsg::StatusResponse(phase) => {
 				println!("Enclave phase: {phase:?}");
+			}
+			other => panic!("Unexpected response {other:?}"),
+		}
+	}
+
+	pub(super) fn enclave_version(opts: &EnclaveStatusOpts) {
+		let path = opts.host.path_message();
+
+		let response = request::post(&path, &ProtocolMsg::VersionRequest)
+			.map_err(|e| println!("{e:?}"))
+			.expect("Enclave request failed");
+
+		match response {
+			ProtocolMsg::VersionResponse { version, commit } => {
+				println!("QOS version: {version}");
+				println!("Git commit:  {commit}");
 			}
 			other => panic!("Unexpected response {other:?}"),
 		}

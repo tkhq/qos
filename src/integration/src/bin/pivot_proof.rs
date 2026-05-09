@@ -57,8 +57,8 @@ impl RequestProcessor for Processor {
 
 #[tokio::main]
 async fn main() {
-	let args: Vec<String> = std::env::args().collect();
-	let socket_path: &String = &args[1];
+	let mut args = std::env::args().skip(1);
+	let socket_path = args.next().unwrap();
 
 	let app_pool = StreamPool::new(SocketAddress::new_unix(socket_path), 1)
 		.expect("unable to create app pool");

@@ -291,7 +291,7 @@ fn verify_and_extract_attestation_doc_from_der(
 
 #[cfg(test)]
 mod test {
-	use std::{collections::BTreeMap, ops::Deref};
+	use std::collections::BTreeMap;
 
 	use aws_nitro_enclaves_nsm_api::api::{AttestationDoc, Digest};
 	use qos_crypto::sha_256;
@@ -438,18 +438,21 @@ mod test {
 		fn accepts_approved_manifest() {
 			let TestArgs { manifest_envelope, pivot, .. } = get_test_args();
 
-			let pivot_file: PathWrapper =
-				"/tmp/boot_key_forward_accepts_approved_manifest.pivot".into();
-			let ephemeral_file: PathWrapper =
-				"/tmp/boot_key_accepts_approved_manifest.eph.secret".into();
-			let manifest_file: PathWrapper =
-				"/tmp/boot_key_accepts_approved_manifest.manifest".into();
+			let pivot_file = PathWrapper::from(
+				"/tmp/boot_key_forward_accepts_approved_manifest.pivot",
+			);
+			let ephemeral_file = PathWrapper::from(
+				"/tmp/boot_key_accepts_approved_manifest.eph.secret",
+			);
+			let manifest_file = PathWrapper::from(
+				"/tmp/boot_key_accepts_approved_manifest.manifest",
+			);
 
 			let handles = Handles::new(
-				ephemeral_file.deref().to_string(),
+				ephemeral_file.display().to_string(),
 				"qorum".to_string(),
-				manifest_file.deref().to_string(),
-				pivot_file.deref().to_string(),
+				manifest_file.display().to_string(),
+				pivot_file.display().to_string(),
 			);
 			let mut state =
 				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
@@ -476,20 +479,20 @@ mod test {
 		fn rejects_manifest_if_not_enough_approvals() {
 			let TestArgs { mut manifest_envelope, pivot, .. } = get_test_args();
 
-			let pivot_file: PathWrapper =
-				"/tmp/boot_key_rejects_manifest_if_not_enough_approvals.pivot"
-					.into();
-			let ephemeral_file: PathWrapper =
-				"/tmp/boot_key_rejects_manifest_if_not_enough_approvals.secret"
-					.into();
-			let manifest_file: PathWrapper =
-				"/tmp/boot_key_rejects_manifest_if_not_enough_approvals.manifest".into();
+			let pivot_file = PathWrapper::from(
+				"/tmp/boot_key_rejects_manifest_if_not_enough_approvals.pivot",
+			);
+			let ephemeral_file = PathWrapper::from(
+				"/tmp/boot_key_rejects_manifest_if_not_enough_approvals.secret",
+			);
+			let manifest_file = PathWrapper::from(
+				"/tmp/boot_key_rejects_manifest_if_not_enough_approvals.manifest");
 
 			let handles = Handles::new(
-				ephemeral_file.deref().to_string(),
+				ephemeral_file.display().to_string(),
 				"qorum".to_string(),
-				manifest_file.deref().to_string(),
-				pivot_file.deref().to_string(),
+				manifest_file.display().to_string(),
+				pivot_file.display().to_string(),
 			);
 			let mut state =
 				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
@@ -513,21 +516,21 @@ mod test {
 		fn rejects_manifest_if_wrong_pivot_hash() {
 			let TestArgs { manifest_envelope, .. } = get_test_args();
 
-			let pivot_file: PathWrapper =
-				"/tmp/boot_key_rejects_manifest_if_wrong_pivot_hash.pivot"
-					.into();
-			let ephemeral_file: PathWrapper =
-				"/tmp/boot_key_rejects_manifest_if_wrong_pivot_hash.secret"
-					.into();
-			let manifest_file: PathWrapper =
-				"/tmp/boot_key_rejects_manifest_if_wrong_pivot_hash.manifest"
-					.into();
+			let pivot_file = PathWrapper::from(
+				"/tmp/boot_key_rejects_manifest_if_wrong_pivot_hash.pivot",
+			);
+			let ephemeral_file = PathWrapper::from(
+				"/tmp/boot_key_rejects_manifest_if_wrong_pivot_hash.secret",
+			);
+			let manifest_file = PathWrapper::from(
+				"/tmp/boot_key_rejects_manifest_if_wrong_pivot_hash.manifest",
+			);
 
 			let handles = Handles::new(
-				ephemeral_file.deref().to_string(),
+				ephemeral_file.display().to_string(),
 				"qorum".to_string(),
-				manifest_file.deref().to_string(),
-				pivot_file.deref().to_string(),
+				manifest_file.display().to_string(),
+				pivot_file.display().to_string(),
 			);
 			let mut state =
 				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
@@ -555,19 +558,21 @@ mod test {
 		fn rejects_manifest_with_bad_approval_signature() {
 			let TestArgs { mut manifest_envelope, pivot, .. } = get_test_args();
 
-			let pivot_file: PathWrapper =
-				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.pivot".into();
-			let ephemeral_file: PathWrapper =
-				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.secret".into();
-			let manifest_file: PathWrapper =
+			let pivot_file = PathWrapper::from(
+				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.pivot"
+			);
+			let ephemeral_file = PathWrapper::from(
+				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.secret"
+			);
+			let manifest_file = PathWrapper::from(
 				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.manifest"
-					.into();
+			);
 
 			let handles = Handles::new(
-				ephemeral_file.deref().to_string(),
+				ephemeral_file.display().to_string(),
 				"quorum".to_string(),
-				manifest_file.deref().to_string(),
-				pivot_file.deref().to_string(),
+				manifest_file.display().to_string(),
+				pivot_file.display().to_string(),
 			);
 			let mut state =
 				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
@@ -609,18 +614,18 @@ mod test {
 				member: non_member,
 			};
 
-			let pivot_file: PathWrapper =
-				"/tmp/boot_key_reject_manifest_with_approval_from_non_memberpivot".into();
-			let ephemeral_file: PathWrapper =
-				"/tmp/boot_key_reject_manifest_with_approval_from_non_membersecret".into();
-			let manifest_file: PathWrapper =
-				"/tmp/boot_key_reject_manifest_with_approval_from_non_membermanifest".into();
+			let pivot_file = PathWrapper::from(
+				"/tmp/boot_key_reject_manifest_with_approval_from_non_memberpivot");
+			let ephemeral_file = PathWrapper::from(
+				"/tmp/boot_key_reject_manifest_with_approval_from_non_membersecret");
+			let manifest_file = PathWrapper::from(
+				"/tmp/boot_key_reject_manifest_with_approval_from_non_membermanifest");
 
 			let handles = Handles::new(
-				ephemeral_file.deref().to_string(),
+				ephemeral_file.display().to_string(),
 				"quorum".to_string(),
-				manifest_file.deref().to_string(),
-				pivot_file.deref().to_string(),
+				manifest_file.display().to_string(),
+				pivot_file.display().to_string(),
 			);
 			let mut state =
 				ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
@@ -1080,15 +1085,15 @@ mod test {
 				..
 			} = get_test_args();
 
-			let ephemeral_file: PathWrapper =
-				"export_key_inner_works.eph.secret".into();
+			let ephemeral_file =
+				PathWrapper::from("export_key_inner_works.eph.secret");
 			eph_pair.to_hex_file(&*ephemeral_file).unwrap();
 
-			let manifest_file: PathWrapper =
-				"export_key_inner_works.manifest".into();
+			let manifest_file =
+				PathWrapper::from("export_key_inner_works.manifest");
 
-			let quorum_file: PathWrapper =
-				"export_key_inner_works.quorum.secret".into();
+			let quorum_file =
+				PathWrapper::from("export_key_inner_works.quorum.secret");
 			quorum_pair.to_hex_file(&*quorum_file).unwrap();
 
 			std::fs::write(
@@ -1097,9 +1102,9 @@ mod test {
 			)
 			.unwrap();
 			let handles = Handles::new(
-				ephemeral_file.deref().to_string(),
-				quorum_file.deref().to_string(),
-				manifest_file.deref().to_string(),
+				ephemeral_file.display().to_string(),
+				quorum_file.display().to_string(),
+				manifest_file.display().to_string(),
 				"pivot".to_string(),
 			);
 
@@ -1140,12 +1145,12 @@ mod test {
 			let TestArgs { manifest_envelope, eph_pair, quorum_pair, .. } =
 				get_test_args();
 
-			let ephemeral_file: PathWrapper =
-				"inject_key_works.eph.secret".into();
+			let ephemeral_file =
+				PathWrapper::from("inject_key_works.eph.secret");
 			eph_pair.to_hex_file(&*ephemeral_file).unwrap();
-			let manifest_file: PathWrapper = "inject_key_works.manifest".into();
-			let quorum_file: PathWrapper =
-				"inject_key_works.quorum.secret".into();
+			let manifest_file = PathWrapper::from("inject_key_works.manifest");
+			let quorum_file =
+				PathWrapper::from("inject_key_works.quorum.secret");
 			std::fs::write(
 				&*manifest_file,
 				serde_json::to_vec(&manifest_envelope).unwrap(),
@@ -1159,9 +1164,9 @@ mod test {
 			let signature = quorum_pair.sign(&encrypted_quorum_key).unwrap();
 
 			let handles = Handles::new(
-				ephemeral_file.deref().to_string(),
-				quorum_file.deref().to_string(),
-				manifest_file.deref().to_string(),
+				ephemeral_file.display().to_string(),
+				quorum_file.display().to_string(),
+				manifest_file.display().to_string(),
 				"pivot".to_string(),
 			);
 			let mut protocol_state =
@@ -1196,13 +1201,13 @@ mod test {
 			let TestArgs { manifest_envelope, eph_pair, quorum_pair, .. } =
 				get_test_args();
 
-			let ephemeral_file: PathWrapper =
-				"inject_rejects_bad_signature.eph.secret".into();
+			let ephemeral_file =
+				PathWrapper::from("inject_rejects_bad_signature.eph.secret");
 			eph_pair.to_hex_file(&*ephemeral_file).unwrap();
-			let manifest_file: PathWrapper =
-				"inject_rejects_bad_signature.manifest".into();
-			let quorum_file: PathWrapper =
-				"inject_rejects_bad_signature.quorum.secret".into();
+			let manifest_file =
+				PathWrapper::from("inject_rejects_bad_signature.manifest");
+			let quorum_file =
+				PathWrapper::from("inject_rejects_bad_signature.quorum.secret");
 			std::fs::write(
 				&*manifest_file,
 				serde_json::to_vec(&manifest_envelope).unwrap(),
@@ -1217,9 +1222,9 @@ mod test {
 			let signature = quorum_pair.sign(&encrypted_quorum_key).unwrap();
 
 			let handles = Handles::new(
-				ephemeral_file.deref().to_string(),
-				quorum_file.deref().to_string(),
-				manifest_file.deref().to_string(),
+				ephemeral_file.display().to_string(),
+				quorum_file.display().to_string(),
+				manifest_file.display().to_string(),
 				"pivot".to_string(),
 			);
 			let mut protocol_state =
@@ -1247,13 +1252,16 @@ mod test {
 			let TestArgs { manifest_envelope, eph_pair, quorum_pair, .. } =
 				get_test_args();
 
-			let ephemeral_file: PathWrapper =
-				"inject_key_rejects_wrong_quorum_key.eph.secret".into();
+			let ephemeral_file = PathWrapper::from(
+				"inject_key_rejects_wrong_quorum_key.eph.secret",
+			);
 			eph_pair.to_hex_file(&*ephemeral_file).unwrap();
-			let manifest_file: PathWrapper =
-				"inject_key_rejects_wrong_quorum_key.manifest".into();
-			let quorum_file: PathWrapper =
-				"inject_key_rejects_wrong_quorum_key.quorum.secret".into();
+			let manifest_file = PathWrapper::from(
+				"inject_key_rejects_wrong_quorum_key.manifest",
+			);
+			let quorum_file = PathWrapper::from(
+				"inject_key_rejects_wrong_quorum_key.quorum.secret",
+			);
 			std::fs::write(
 				&*manifest_file,
 				serde_json::to_vec(&manifest_envelope).unwrap(),
@@ -1268,9 +1276,9 @@ mod test {
 			let signature = wrong_key.sign(&encrypted_quorum_key).unwrap();
 
 			let handles = Handles::new(
-				ephemeral_file.deref().to_string(),
-				quorum_file.deref().to_string(),
-				manifest_file.deref().to_string(),
+				ephemeral_file.display().to_string(),
+				quorum_file.display().to_string(),
+				manifest_file.display().to_string(),
 				"pivot".to_string(),
 			);
 			let mut protocol_state =
@@ -1298,13 +1306,16 @@ mod test {
 			let TestArgs { manifest_envelope, eph_pair, quorum_pair, .. } =
 				get_test_args();
 
-			let ephemeral_file: PathWrapper =
-				"inject_key_rejects_invalid_quorum_key.eph.secret".into();
+			let ephemeral_file = PathWrapper::from(
+				"inject_key_rejects_invalid_quorum_key.eph.secret",
+			);
 			eph_pair.to_hex_file(&*ephemeral_file).unwrap();
-			let manifest_file: PathWrapper =
-				"inject_key_rejects_invalid_quorum_key.manifest".into();
-			let quorum_file: PathWrapper =
-				"inject_key_rejects_invalid_quorum_key.quorum.secret".into();
+			let manifest_file = PathWrapper::from(
+				"inject_key_rejects_invalid_quorum_key.manifest",
+			);
+			let quorum_file = PathWrapper::from(
+				"inject_key_rejects_invalid_quorum_key.quorum.secret",
+			);
 			std::fs::write(
 				&*manifest_file,
 				serde_json::to_vec(&manifest_envelope).unwrap(),
@@ -1319,9 +1330,9 @@ mod test {
 				quorum_pair.sign(&invalid_encrypted_quorum_key).unwrap();
 
 			let handles = Handles::new(
-				ephemeral_file.deref().to_string(),
-				quorum_file.deref().to_string(),
-				manifest_file.deref().to_string(),
+				ephemeral_file.display().to_string(),
+				quorum_file.display().to_string(),
+				manifest_file.display().to_string(),
 				"pivot".to_string(),
 			);
 			let mut protocol_state =

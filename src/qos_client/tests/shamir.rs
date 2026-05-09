@@ -9,7 +9,7 @@ const QOS_CLIENT: &str = env!("CARGO_BIN_EXE_qos_client");
 
 #[test]
 fn shamir_commands_work() {
-	let _tmp: PathWrapper = "/tmp/shamir_commands_works".into();
+	let _tmp = PathWrapper::from("/tmp/shamir_commands_works");
 	let secret_path: &str = "/tmp/shamir_commands_works/secret";
 	let shares_dir: &str = "/tmp/shamir_commands_works/shares";
 	let reconstructed_secret_path: &str =

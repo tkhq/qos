@@ -1,6 +1,7 @@
 use std::{
 	fs,
 	io::{BufRead, BufReader, Write},
+	path::PathBuf,
 	process::{Command, Stdio},
 };
 
@@ -35,33 +36,34 @@ async fn qos_bridge_works() {
 	let host_port = qos_test_primitives::find_free_port().unwrap();
 	let app_host_port = qos_test_primitives::find_free_port().unwrap();
 	let app_host_port_override = qos_test_primitives::find_free_port().unwrap();
-	let tmp: PathWrapper = "/tmp/qos_host_bridge".into();
-	let _: PathWrapper = PIVOT_HASH_PATH.into();
-	fs::create_dir_all(&*tmp).unwrap();
+	let tmp = PathWrapper::from("/tmp/qos_host_bridge");
+	let _ = PathWrapper::from(PIVOT_HASH_PATH);
+	fs::create_dir_all(&tmp).unwrap();
 
 	let usock_path = "/tmp/qos_host_bridge/qos_host_bridge.sock".to_owned();
-	let usock: PathWrapper = usock_path.clone().into();
-	let secret_path: PathWrapper =
-		"/tmp/qos_host_bridge/qos_host_bridge.secret".into();
-	let pivot_path: PathWrapper =
-		"/tmp/qos_host_bridge/qos_host_bridge.pivot".into();
-	let manifest_path: PathWrapper =
-		"/tmp/qos_host_bridge/qos_host_bridge.manifest".into();
-	let eph_path: PathWrapper =
-		"/tmp/qos_host_bridge/ephemeral_key.secret".into();
+	let usock = PathWrapper::from(usock_path.clone());
+	let secret_path =
+		PathWrapper::from("/tmp/qos_host_bridge/qos_host_bridge.secret");
+	let pivot_path =
+		PathWrapper::from("/tmp/qos_host_bridge/qos_host_bridge.pivot");
+	let manifest_path =
+		PathWrapper::from("/tmp/qos_host_bridge/qos_host_bridge.manifest");
+	let eph_path =
+		PathWrapper::from("/tmp/qos_host_bridge/ephemeral_key.secret");
 
-	let boot_dir: PathWrapper = "/tmp/qos_host_bridge/boot-dir".into();
-	fs::create_dir_all(&*boot_dir).unwrap();
-	let attestation_dir: PathWrapper =
-		"/tmp/qos_host_bridge/attestation-dir".into();
-	fs::create_dir_all(&*attestation_dir).unwrap();
-	let attestation_doc_path = format!("{}/attestation_doc", &*attestation_dir);
+	let boot_dir = PathWrapper::from("/tmp/qos_host_bridge/boot-dir");
+	fs::create_dir_all(&boot_dir).unwrap();
+	let attestation_dir =
+		PathWrapper::from("/tmp/qos_host_bridge/attestation-dir");
+	fs::create_dir_all(&attestation_dir).unwrap();
+	let attestation_doc_path = attestation_dir.join("attestation_doc");
 
-	let all_personal_dir = "./mock/boot-e2e/all-personal-dir";
+	let all_personal_dir = PathBuf::from("./mock/boot-e2e/all-personal-dir");
 
 	let namespace = "quit-coding-to-vape";
 
-	let personal_dir = |user: &str| format!("{all_personal_dir}/{user}-dir");
+	let personal_dir =
+		|user: &str| all_personal_dir.join(format!("{user}-dir"));
 
 	let user1 = "user1";
 	let user2 = "user2";
@@ -77,7 +79,7 @@ async fn qos_bridge_works() {
 	let pivot_app_sock_path =
 		usock_path + "." + &app_host_port.to_string() + ".appsock";
 	let pivot_args = format!("[{pivot_app_sock_path}]");
-	let cli_manifest_path = format!("{}/manifest", &*boot_dir);
+	let cli_manifest_path = boot_dir.join("manifest");
 
 	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
@@ -95,7 +97,7 @@ async fn qos_bridge_works() {
 			"--pcr3-preimage-path",
 			PCR3_PRE_IMAGE_PATH,
 			"--manifest-path",
-			&cli_manifest_path,
+			cli_manifest_path.to_str().unwrap(),
 			"--pivot-args",
 			&pivot_args,
 			"--manifest-set-dir",
@@ -158,22 +160,22 @@ async fn qos_bridge_works() {
 
 	// -- CLIENT make sure each user can run `approve-manifest`
 	for alias in [user1, user2, user3] {
-		let approval_path = format!(
-			"{}/{}-{}-{}.approval",
-			&*boot_dir, alias, namespace, manifest.namespace.nonce,
-		);
+		let approval_path = boot_dir.join(format!(
+			"{}-{}-{}.approval",
+			alias, namespace, manifest.namespace.nonce,
+		));
 
-		let secret_path = format!("{}/{}.secret", &personal_dir(alias), alias);
+		let secret_path = personal_dir(alias).join(format!("{alias}.secret"));
 
 		let mut child = Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"approve-manifest",
 				"--secret-path",
-				&*secret_path,
+				secret_path.to_str().unwrap(),
 				"--manifest-path",
-				&cli_manifest_path,
+				cli_manifest_path.to_str().unwrap(),
 				"--manifest-approvals-dir",
-				&*boot_dir,
+				boot_dir.to_str().unwrap(),
 				"--pcr3-preimage-path",
 				PCR3_PRE_IMAGE_PATH,
 				"--pivot-hash-path",
@@ -249,11 +251,9 @@ async fn qos_bridge_works() {
 		// Read in the generated approval to check it was created correctly
 		let approval: Approval =
 			serde_json::from_slice(&fs::read(approval_path).unwrap()).unwrap();
-		let personal_pair = P256Pair::from_hex_file(format!(
-			"{}/{}.secret",
-			personal_dir(alias),
-			alias,
-		))
+		let personal_pair = P256Pair::from_hex_file(
+			personal_dir(alias).join(format!("{alias}.secret",)),
+		)
 		.unwrap();
 
 		let signature = personal_pair.sign(&manifest.qos_hash()).unwrap();
@@ -271,16 +271,16 @@ async fn qos_bridge_works() {
 		Command::new(integration::QOS_CORE_PATH)
 			.args([
 				"--usock",
-				&*usock,
+				usock.to_str().unwrap(),
 				"--quorum-file",
-				&*secret_path,
+				secret_path.to_str().unwrap(),
 				"--pivot-file",
-				&*pivot_path,
+				pivot_path.to_str().unwrap(),
 				"--ephemeral-file",
-				&*eph_path,
+				eph_path.to_str().unwrap(),
 				"--mock",
 				"--manifest-file",
-				&*manifest_path,
+				manifest_path.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()
@@ -314,7 +314,7 @@ async fn qos_bridge_works() {
 				"--host-port-override",
 				&app_host_port_override.to_string(),
 				"--usock",
-				&*usock,
+				usock.to_str().unwrap(),
 				"--control-url",
 				&control_url,
 			])
@@ -327,9 +327,9 @@ async fn qos_bridge_works() {
 		.args([
 			"generate-manifest-envelope",
 			"--manifest-approvals-dir",
-			&*boot_dir,
+			boot_dir.to_str().unwrap(),
 			"--manifest-path",
-			&cli_manifest_path,
+			cli_manifest_path.to_str().unwrap(),
 		])
 		.spawn()
 		.unwrap()
@@ -338,12 +338,12 @@ async fn qos_bridge_works() {
 		.success());
 
 	// -- CLIENT broadcast boot standard instruction
-	let manifest_envelope_path = format!("{}/manifest_envelope", &*boot_dir,);
+	let manifest_envelope_path = boot_dir.join("manifest_envelope");
 	assert!(Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"boot-standard",
 			"--manifest-envelope-path",
-			&manifest_envelope_path,
+			manifest_envelope_path.to_str().unwrap(),
 			"--pivot-path",
 			PIVOT_SOCKET_STRESS_PATH,
 			"--host-port",
@@ -371,7 +371,7 @@ async fn qos_bridge_works() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--attestation-doc-path",
-				&*attestation_doc_path,
+				attestation_doc_path.to_str().unwrap(),
 				"--manifest-envelope-path",
 				"/tmp/dont_care"
 			])
@@ -381,28 +381,29 @@ async fn qos_bridge_works() {
 			.unwrap()
 			.success());
 
-		let share_path = format!("{}/{}.share", &personal_dir(user), user);
-		let secret_path = format!("{}/{}.secret", &personal_dir(user), user);
-		let eph_wrapped_share_path: PathWrapper =
-			format!("{}/{}.eph_wrapped.share", &*tmp, user).into();
-		let approval_path: PathWrapper =
-			format!("{}/{}.attestation.approval", &*tmp, user).into();
+		let share_path = personal_dir(user).join(format!("{user}.share"));
+		let secret_path = personal_dir(user).join(format!("{user}.secret"));
+		let eph_wrapped_share_path =
+			PathWrapper::from(tmp.join(format!("{user}.eph_wrapped.share")));
+		let approval_path = PathWrapper::from(
+			tmp.join(format!("{user}.attestation.approval",)),
+		);
 		// Encrypt share to ephemeral key
 		let mut child = Command::new(integration::QOS_CLIENT_PATH)
 			.args([
 				"proxy-re-encrypt-share",
 				"--share-path",
-				&share_path,
+				share_path.to_str().unwrap(),
 				"--secret-path",
-				&secret_path,
+				secret_path.to_str().unwrap(),
 				"--attestation-doc-path",
-				&*attestation_doc_path,
+				attestation_doc_path.to_str().unwrap(),
 				"--eph-wrapped-share-path",
-				&eph_wrapped_share_path,
+				eph_wrapped_share_path.to_str().unwrap(),
 				"--approval-path",
-				&approval_path,
+				approval_path.to_str().unwrap(),
 				"--manifest-envelope-path",
-				&manifest_envelope_path,
+				manifest_envelope_path.to_str().unwrap(),
 				"--pcr3-preimage-path",
 				PCR3_PRE_IMAGE_PATH,
 				"--manifest-set-dir",
@@ -411,7 +412,7 @@ async fn qos_bridge_works() {
 				user,
 				"--unsafe-skip-attestation",
 				"--unsafe-eph-path-override",
-				&*eph_path,
+				eph_path.to_str().unwrap(),
 			])
 			.stdin(Stdio::piped())
 			.stdout(Stdio::piped())
@@ -466,9 +467,9 @@ async fn qos_bridge_works() {
 				"--host-ip",
 				LOCAL_HOST,
 				"--eph-wrapped-share-path",
-				&eph_wrapped_share_path,
+				eph_wrapped_share_path.to_str().unwrap(),
 				"--approval-path",
-				&approval_path,
+				approval_path.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()
@@ -520,7 +521,7 @@ async fn qos_bridge_works() {
 	}
 
 	// test qos_bridge restart after enclave is up
-	bridge_child_process.0.kill().expect("unable to kill qos_host");
+	bridge_child_process.kill().expect("unable to kill qos_host");
 	drop(bridge_child_process);
 
 	// -- BRIDGE restart bridge
@@ -530,7 +531,7 @@ async fn qos_bridge_works() {
 				"--host-port-override",
 				&app_host_port_override.to_string(),
 				"--usock",
-				&*usock,
+				usock.to_str().unwrap(),
 				"--control-url",
 				&control_url,
 			])
