@@ -76,6 +76,7 @@ const PLAINTEXT_PATH: &str = "plaintext-path";
 const OUTPUT_HEX: &str = "output-hex";
 const VALIDATION_TIME_OVERRIDE: &str = "validation-time-override";
 const JSON: &str = "json";
+const USE_MANIFEST_VERSION: &str = "use-manifest-version";
 
 pub(crate) enum DisplayType {
 	Manifest,
@@ -361,13 +362,19 @@ impl Command {
 		.takes_value(true)
 		.required(true)
 	}
-	fn patch_set_dir_token() -> Token {
+	fn patch_set_dir_optional_token() -> Token {
 		Token::new(
 			PATCH_SET_DIR,
 			"Director with public keys for members of the patch set.",
 		)
 		.takes_value(true)
-		.required(true)
+	}
+	fn use_manifest_version_token() -> Token {
+		Token::new(
+			USE_MANIFEST_VERSION,
+			"Manifest version for generate-manifest. Defaults to 1.",
+		)
+		.takes_value(true)
 	}
 	fn namespace_dir_token() -> Token {
 		Token::new(
@@ -680,11 +687,12 @@ impl Command {
 			.token(Self::manifest_path_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
-			.token(Self::patch_set_dir_token())
+			.token(Self::patch_set_dir_optional_token())
 			.token(Self::quorum_key_path_token())
 			.token(Self::pivot_args_token())
 			.token(Self::bridge_config_token())
 			.token(Self::debug_mode_token())
+			.token(Self::use_manifest_version_token())
 	}
 
 	fn approve_manifest() -> Parser {
@@ -700,7 +708,7 @@ impl Command {
 			.token(Self::quorum_key_path_token())
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
-			.token(Self::patch_set_dir_token())
+			.token(Self::patch_set_dir_optional_token())
 			.token(Self::unsafe_auto_confirm_token())
 	}
 
@@ -978,11 +986,16 @@ impl ClientOpts {
 			.to_string()
 	}
 
-	fn patch_set_dir(&self) -> String {
+	fn patch_set_dir(&self) -> Option<String> {
+		self.parsed.single(PATCH_SET_DIR).map(ToString::to_string)
+	}
+
+	fn use_manifest_version(&self) -> u32 {
 		self.parsed
-			.single(PATCH_SET_DIR)
-			.expect("`--patch-set-dir` is a required arg")
-			.to_string()
+			.single(USE_MANIFEST_VERSION)
+			.map_or("1", String::as_str)
+			.parse::<u32>()
+			.expect("Could not parse `--use-manifest-version` as u32")
 	}
 
 	fn namespace_dir(&self) -> String {
@@ -1608,7 +1621,7 @@ mod handlers {
 	}
 
 	pub(super) fn generate_manifest(opts: &ClientOpts) {
-		if let Err(e) = services::generate_manifest(GenerateManifestArgs {
+		let args = GenerateManifestArgs {
 			nonce: opts.nonce(),
 			namespace: opts.namespace(),
 			restart_policy: opts.restart_policy(),
@@ -1623,7 +1636,18 @@ mod handlers {
 			quorum_key_path: opts.quorum_key_path(),
 			bridge_config: opts.bridge_config(),
 			debug_mode: opts.debug_mode(),
-		}) {
+		};
+		let result = match opts.use_manifest_version() {
+			1 => services::generate_manifest(args),
+			2 => services::generate_manifest_v2(args),
+			version => {
+				eprintln!(
+					"Error: unsupported manifest version {version}; expected 1 or 2"
+				);
+				std::process::exit(1);
+			}
+		};
+		if let Err(e) = result {
 			println!("Error: {e:?}");
 			std::process::exit(1);
 		}
@@ -1869,5 +1893,69 @@ mod handlers {
 			eprintln!("Error: {e:?}");
 			std::process::exit(1);
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use qos_core::parser::CommandParser;
+
+	use super::{ClientOpts, Command};
+
+	fn generate_manifest_args() -> Vec<String> {
+		vec![
+			"qos_client".to_string(),
+			"generate-manifest".to_string(),
+			"--nonce".to_string(),
+			"1".to_string(),
+			"--namespace".to_string(),
+			"ns".to_string(),
+			"--pivot-hash-path".to_string(),
+			"/tmp/pivot-hash".to_string(),
+			"--restart-policy".to_string(),
+			"never".to_string(),
+			"--qos-release-dir".to_string(),
+			"/tmp/qos-release".to_string(),
+			"--pcr3-preimage-path".to_string(),
+			"/tmp/pcr3".to_string(),
+			"--manifest-path".to_string(),
+			"/tmp/manifest".to_string(),
+			"--manifest-set-dir".to_string(),
+			"/tmp/manifest-set".to_string(),
+			"--share-set-dir".to_string(),
+			"/tmp/share-set".to_string(),
+			"--quorum-key-path".to_string(),
+			"/tmp/quorum-key".to_string(),
+			"--pivot-args".to_string(),
+			"[]".to_string(),
+		]
+	}
+
+	#[test]
+	fn generate_manifest_defaults_to_manifest_version_1() {
+		let mut args = generate_manifest_args();
+		let (cmd, parsed) = CommandParser::<Command>::parse(&mut args).unwrap();
+
+		assert_eq!(cmd, Command::GenerateManifest);
+		let opts = ClientOpts { parsed };
+		assert_eq!(opts.use_manifest_version(), 1);
+		assert_eq!(opts.patch_set_dir(), None);
+	}
+
+	#[test]
+	fn generate_manifest_parses_manifest_version_2() {
+		let mut args = generate_manifest_args();
+		args.extend([
+			"--use-manifest-version".to_string(),
+			"2".to_string(),
+			"--patch-set-dir".to_string(),
+			"/tmp/patch-set".to_string(),
+		]);
+		let (cmd, parsed) = CommandParser::<Command>::parse(&mut args).unwrap();
+
+		assert_eq!(cmd, Command::GenerateManifest);
+		let opts = ClientOpts { parsed };
+		assert_eq!(opts.use_manifest_version(), 2);
+		assert_eq!(opts.patch_set_dir().as_deref(), Some("/tmp/patch-set"));
 	}
 }

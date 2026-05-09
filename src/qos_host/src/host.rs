@@ -23,13 +23,12 @@ use axum::{
 	routing::{get, post},
 	Json, Router,
 };
-use borsh::BorshDeserialize;
 use qos_core::{
 	client::{ClientError, SocketClient},
 	io::SocketAddress,
 	protocol::{
-		msg::ProtocolMsg, services::boot::ManifestEnvelope, ProtocolError,
-		ProtocolPhase,
+		msg::ProtocolMsg, services::boot::VersionedManifestEnvelope,
+		ProtocolError, ProtocolPhase,
 	},
 };
 use qos_nsm::types::NsmResponse;
@@ -118,7 +117,8 @@ impl HostServer {
 	) -> impl IntoResponse {
 		println!("Enclave health...");
 
-		let encoded_request = borsh::to_vec(&ProtocolMsg::StatusRequest)
+		let encoded_request = ProtocolMsg::StatusRequest
+			.to_json_wire()
 			.expect("ProtocolMsg can always serialize. qed.");
 		let encoded_response = match state
 			.enclave_client
@@ -133,7 +133,7 @@ impl HostServer {
 			}
 		};
 
-		let response = match ProtocolMsg::try_from_slice(&encoded_response) {
+		let response = match ProtocolMsg::from_wire_any(&encoded_response) {
 			Ok(r) => r,
 			Err(e) => {
 				let msg = format!("Error deserializing response from enclave, make sure qos_host version match qos_core: {e}");
@@ -169,14 +169,15 @@ impl HostServer {
 	) -> Result<Json<EnclaveInfo>, Error> {
 		println!("Enclave info...");
 
-		let enc_status_req = borsh::to_vec(&ProtocolMsg::StatusRequest)
+		let enc_status_req = ProtocolMsg::StatusRequest
+			.to_json_wire()
 			.expect("ProtocolMsg can always serialize. qed.");
 		let enc_status_resp =
 			state.enclave_client.call(&enc_status_req).await.map_err(|e| {
 				Error(format!("error sending status request to enclave: {e:?}"))
 			})?;
 
-		let status_resp = match ProtocolMsg::try_from_slice(&enc_status_resp) {
+		let status_resp = match ProtocolMsg::from_wire_any(&enc_status_resp) {
 			Ok(status_resp) => status_resp,
 			Err(e) => {
 				return Err(Error(format!("error deserializing status response from enclave, make sure qos_host version match qos_core: {e:?}")));
@@ -196,13 +197,14 @@ impl HostServer {
 		let ephemeral_key =
 			get_eph_key_from_attestation_doc(&state.enclave_client).await;
 		let vitals_log = if let Some(m) = manifest_envelope.as_ref() {
+			let manifest = m.clone().manifest();
 			serde_json::to_string(&EnclaveVitalStats {
 				phase,
-				namespace: m.manifest.namespace.name.clone(),
-				nonce: m.manifest.namespace.nonce,
-				pivot_hash: m.manifest.pivot.hash,
-				pcr0: m.manifest.enclave.pcr0.clone(),
-				pivot_args: m.manifest.pivot.args.clone(),
+				namespace: manifest.namespace().name.clone(),
+				nonce: manifest.namespace().nonce,
+				pivot_hash: *manifest.pivot_hash(),
+				pcr0: manifest.enclave().pcr0.clone(),
+				pivot_args: manifest.args().to_vec(),
 				ephemeral_key: ephemeral_key.clone(),
 			})
 			.expect("always valid json. qed.")
@@ -229,10 +231,9 @@ impl HostServer {
 		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
 			return (
 				StatusCode::BAD_REQUEST,
-				borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
-					ProtocolError::OversizeMsg,
-				))
-				.expect("ProtocolMsg can always serialize. qed."),
+				ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg)
+					.to_json_wire()
+					.expect("ProtocolMsg can always serialize. qed."),
 			);
 		}
 
@@ -244,9 +245,10 @@ impl HostServer {
 
 				(
 					StatusCode::INTERNAL_SERVER_ERROR,
-					borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(
+					ProtocolMsg::ProtocolErrorResponse(
 						ProtocolError::EnclaveClient,
-					))
+					)
+					.to_json_wire()
 					.expect("ProtocolMsg can always serialize. qed."),
 				)
 			}
@@ -259,9 +261,9 @@ async fn get_eph_key_from_attestation_doc(
 ) -> Option<String> {
 	use ProtocolMsg::LiveAttestationDocResponse;
 
-	let req = borsh::to_vec(&ProtocolMsg::LiveAttestationDocRequest).ok()?;
+	let req = ProtocolMsg::LiveAttestationDocRequest.to_json_wire().ok()?;
 	let resp_bytes = enclave_client.call(&req).await.ok()?;
-	let resp = ProtocolMsg::try_from_slice(&resp_bytes).ok()?;
+	let resp = ProtocolMsg::from_wire_any(&resp_bytes).ok()?;
 
 	let LiveAttestationDocResponse { nsm_response, .. } = resp else {
 		return None;
@@ -279,15 +281,16 @@ async fn get_eph_key_from_attestation_doc(
 // try to get the manifest denvelope from the enclave, used for restart handling of qos_host
 async fn get_manifest_envelope(
 	enclave_client: &SocketClient,
-) -> Result<Option<ManifestEnvelope>, ClientError> {
-	let enc_manifest_envelope_req =
-		borsh::to_vec(&ProtocolMsg::ManifestEnvelopeRequest)
-			.expect("ProtocolMsg can always serialize. qed.");
+) -> Result<Option<VersionedManifestEnvelope>, ClientError> {
+	let enc_manifest_envelope_req = ProtocolMsg::ManifestEnvelopeRequest
+		.to_json_wire()
+		.expect("ProtocolMsg can always serialize. qed.");
 	let enc_manifest_envelope_resp =
 		enclave_client.call(&enc_manifest_envelope_req).await?;
 
 	let manifest_envelope_resp =
-		ProtocolMsg::try_from_slice(&enc_manifest_envelope_resp)?;
+		ProtocolMsg::from_wire_any(&enc_manifest_envelope_resp)
+			.map_err(|_| ClientError::ResponseMismatch)?;
 
 	let manifest_envelope = match manifest_envelope_resp {
 		ProtocolMsg::ManifestEnvelopeResponse { manifest_envelope } => {

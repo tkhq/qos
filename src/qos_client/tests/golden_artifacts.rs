@@ -410,6 +410,16 @@ fn assert_success(output: &Output) {
 	);
 }
 
+fn assert_failure(output: &Output) {
+	assert!(
+		!output.status.success(),
+		"qos_client unexpectedly succeeded\nstatus: {:?}\nstdout:\n{}\nstderr:\n{}",
+		output.status.code(),
+		String::from_utf8_lossy(&output.stdout),
+		String::from_utf8_lossy(&output.stderr),
+	);
+}
+
 fn assert_file_json_exact(path: &std::path::Path, expected: &str) {
 	let actual = std::fs::read_to_string(path).unwrap();
 	assert_eq!(actual, expected);
@@ -494,4 +504,263 @@ fn golden_manifest_approval_and_envelope_raw_bytes() {
 		MANIFEST_V0_BORSH_LEN,
 		MANIFEST_V0_BORSH_SHA256_HEX,
 	);
+}
+
+#[test]
+fn v2_commands_generate_approve_and_envelope_use_json_hash() {
+	use qos_core::protocol::services::boot::{
+		Approval, ManifestEnvelopeV2, ManifestV2, ManifestVersion,
+	};
+	use qos_p256::P256Public;
+
+	let fixture = Fixture::new("v2_commands");
+
+	assert_success(&run_qos_client([
+		"pivot-hash",
+		"--output-path",
+		fixture.pivot_hash_path.to_str().unwrap(),
+		"--pivot-path",
+		fixture.pivot_path.to_str().unwrap(),
+	]));
+
+	assert_success(&run_qos_client([
+		"generate-manifest",
+		"--use-manifest-version",
+		"2",
+		"--nonce",
+		"31",
+		"--namespace",
+		"production/signer",
+		"--restart-policy",
+		"always",
+		"--manifest-path",
+		fixture.manifest_path.to_str().unwrap(),
+		"--pivot-hash-path",
+		fixture.pivot_hash_path.to_str().unwrap(),
+		"--qos-release-dir",
+		fixture.qos_release_dir.to_str().unwrap(),
+		"--pcr3-preimage-path",
+		fixture.pcr3_preimage_path.to_str().unwrap(),
+		"--pivot-args",
+		"[--config,/etc/config.json]",
+		"--manifest-set-dir",
+		fixture.manifest_set.to_str().unwrap(),
+		"--share-set-dir",
+		fixture.share_set.to_str().unwrap(),
+		"--quorum-key-path",
+		fixture.quorum_key_path.to_str().unwrap(),
+		"--debug-mode",
+		"true",
+		"--bridge-config",
+		"[{\"type\":\"server\",\"port\":3000,\"host\":\"0.0.0.0\"}]",
+	]));
+
+	let manifest_json: serde_json::Value =
+		serde_json::from_slice(&std::fs::read(&fixture.manifest_path).unwrap())
+			.unwrap();
+	assert_eq!(manifest_json["version"], "v2");
+	assert!(manifest_json.get("patchSet").is_none());
+
+	let manifest: ManifestV2 =
+		serde_json::from_value(manifest_json.clone()).unwrap();
+	assert_eq!(manifest.version, ManifestVersion::V2);
+	let manifest_hash = qos_json::hash(&manifest).unwrap();
+
+	assert_success(&run_qos_client([
+		"approve-manifest",
+		"--alias",
+		"dev",
+		"--manifest-approvals-dir",
+		fixture.approvals_dir.to_str().unwrap(),
+		"--manifest-path",
+		fixture.manifest_path.to_str().unwrap(),
+		"--manifest-set-dir",
+		fixture.manifest_set.to_str().unwrap(),
+		"--share-set-dir",
+		fixture.share_set.to_str().unwrap(),
+		"--pcr3-preimage-path",
+		fixture.pcr3_preimage_path.to_str().unwrap(),
+		"--pivot-hash-path",
+		fixture.pivot_hash_path.to_str().unwrap(),
+		"--qos-release-dir",
+		fixture.qos_release_dir.to_str().unwrap(),
+		"--quorum-key-path",
+		fixture.quorum_key_path.to_str().unwrap(),
+		"--secret-path",
+		fixture.secret_path.to_str().unwrap(),
+		"--unsafe-auto-confirm",
+	]));
+
+	let approval: Approval =
+		serde_json::from_slice(&std::fs::read(&fixture.approval_path).unwrap())
+			.unwrap();
+	let pub_key = P256Public::from_bytes(&approval.member.pub_key).unwrap();
+	assert!(pub_key.verify(&manifest_hash, &approval.signature).is_ok());
+
+	assert_success(&run_qos_client([
+		"generate-manifest-envelope",
+		"--manifest-approvals-dir",
+		fixture.approvals_dir.to_str().unwrap(),
+		"--manifest-path",
+		fixture.manifest_path.to_str().unwrap(),
+	]));
+
+	let envelope: ManifestEnvelopeV2 =
+		serde_json::from_slice(&std::fs::read(&fixture.envelope_path).unwrap())
+			.unwrap();
+	assert_eq!(envelope.manifest.version, ManifestVersion::V2);
+	assert_eq!(envelope.manifest_set_approvals.len(), 1);
+	assert!(P256Public::from_bytes(
+		&envelope.manifest_set_approvals[0].member.pub_key
+	)
+	.unwrap()
+	.verify(&manifest_hash, &envelope.manifest_set_approvals[0].signature)
+	.is_ok());
+}
+
+#[test]
+fn v2_commands_json_to_borsh_rejected() {
+	let fixture = Fixture::new("v2_json_to_borsh_rejected");
+
+	assert_success(&run_qos_client([
+		"pivot-hash",
+		"--output-path",
+		fixture.pivot_hash_path.to_str().unwrap(),
+		"--pivot-path",
+		fixture.pivot_path.to_str().unwrap(),
+	]));
+
+	assert_success(&run_qos_client([
+		"generate-manifest",
+		"--use-manifest-version",
+		"2",
+		"--nonce",
+		"31",
+		"--namespace",
+		"production/signer",
+		"--restart-policy",
+		"always",
+		"--manifest-path",
+		fixture.manifest_path.to_str().unwrap(),
+		"--pivot-hash-path",
+		fixture.pivot_hash_path.to_str().unwrap(),
+		"--qos-release-dir",
+		fixture.qos_release_dir.to_str().unwrap(),
+		"--pcr3-preimage-path",
+		fixture.pcr3_preimage_path.to_str().unwrap(),
+		"--pivot-args",
+		"[--config,/etc/config.json]",
+		"--manifest-set-dir",
+		fixture.manifest_set.to_str().unwrap(),
+		"--share-set-dir",
+		fixture.share_set.to_str().unwrap(),
+		"--quorum-key-path",
+		fixture.quorum_key_path.to_str().unwrap(),
+		"--debug-mode",
+		"true",
+		"--bridge-config",
+		"[{\"type\":\"server\",\"port\":3000,\"host\":\"0.0.0.0\"}]",
+	]));
+
+	assert_success(&run_qos_client([
+		"approve-manifest",
+		"--alias",
+		"dev",
+		"--manifest-approvals-dir",
+		fixture.approvals_dir.to_str().unwrap(),
+		"--manifest-path",
+		fixture.manifest_path.to_str().unwrap(),
+		"--manifest-set-dir",
+		fixture.manifest_set.to_str().unwrap(),
+		"--share-set-dir",
+		fixture.share_set.to_str().unwrap(),
+		"--pcr3-preimage-path",
+		fixture.pcr3_preimage_path.to_str().unwrap(),
+		"--pivot-hash-path",
+		fixture.pivot_hash_path.to_str().unwrap(),
+		"--qos-release-dir",
+		fixture.qos_release_dir.to_str().unwrap(),
+		"--quorum-key-path",
+		fixture.quorum_key_path.to_str().unwrap(),
+		"--secret-path",
+		fixture.secret_path.to_str().unwrap(),
+		"--unsafe-auto-confirm",
+	]));
+
+	assert_success(&run_qos_client([
+		"generate-manifest-envelope",
+		"--manifest-approvals-dir",
+		fixture.approvals_dir.to_str().unwrap(),
+		"--manifest-path",
+		fixture.manifest_path.to_str().unwrap(),
+	]));
+
+	let manifest_out = run_qos_client([
+		"json-to-borsh",
+		"--display-type",
+		"manifest",
+		"--file-path",
+		fixture.manifest_path.to_str().unwrap(),
+		"--output-path",
+		fixture.manifest_borsh_path.to_str().unwrap(),
+	]);
+	assert_failure(&manifest_out);
+
+	let envelope_out = run_qos_client([
+		"json-to-borsh",
+		"--display-type",
+		"manifest-envelope",
+		"--file-path",
+		fixture.envelope_path.to_str().unwrap(),
+		"--output-path",
+		fixture.envelope_borsh_path.to_str().unwrap(),
+	]);
+	assert_failure(&envelope_out);
+}
+
+#[test]
+fn v1_generate_manifest_without_patch_set_fails_cleanly() {
+	let fixture = Fixture::new("v1_missing_patch_set");
+
+	assert_success(&run_qos_client([
+		"pivot-hash",
+		"--output-path",
+		fixture.pivot_hash_path.to_str().unwrap(),
+		"--pivot-path",
+		fixture.pivot_path.to_str().unwrap(),
+	]));
+
+	let output = run_qos_client([
+		"generate-manifest",
+		"--nonce",
+		"31",
+		"--namespace",
+		"production/signer",
+		"--restart-policy",
+		"always",
+		"--manifest-path",
+		fixture.manifest_path.to_str().unwrap(),
+		"--pivot-hash-path",
+		fixture.pivot_hash_path.to_str().unwrap(),
+		"--qos-release-dir",
+		fixture.qos_release_dir.to_str().unwrap(),
+		"--pcr3-preimage-path",
+		fixture.pcr3_preimage_path.to_str().unwrap(),
+		"--pivot-args",
+		"[]",
+		"--manifest-set-dir",
+		fixture.manifest_set.to_str().unwrap(),
+		"--share-set-dir",
+		fixture.share_set.to_str().unwrap(),
+		"--quorum-key-path",
+		fixture.quorum_key_path.to_str().unwrap(),
+	]);
+
+	assert_failure(&output);
+	let combined = format!(
+		"{}{}",
+		String::from_utf8_lossy(&output.stdout),
+		String::from_utf8_lossy(&output.stderr)
+	);
+	assert!(combined.contains("ManifestV1RequiresPatchSet"));
 }

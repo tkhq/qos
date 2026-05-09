@@ -207,7 +207,7 @@ async fn reaper_handles_non_zero_exits() {
 
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key
-	handles.put_manifest_envelope(&Default::default()).unwrap();
+	handles.put_manifest_envelope(ManifestEnvelope::default()).unwrap();
 	assert!(handles.pivot_exists());
 
 	let enclave_socket = SocketAddress::new_unix(&usock);
@@ -254,7 +254,7 @@ async fn reaper_handles_panic() {
 
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key
-	handles.put_manifest_envelope(&Default::default()).unwrap();
+	handles.put_manifest_envelope(ManifestEnvelope::default()).unwrap();
 	assert!(handles.pivot_exists());
 
 	let enclave_socket = SocketAddress::new_unix(&usock);

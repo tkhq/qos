@@ -1,0 +1,22 @@
+[package]
+name = "qos_json"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Canonical JSON encoding for deterministic JSON"
+repository = "https://github.com/tkhq/qos"
+keywords = ["quorumos", "serde", "encoding"]
+categories = ["encoding"]
+
+[lints]
+workspace = true
+
+[dependencies]
+qos_hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+qos_hex = { workspace = true, features = ["serde"] }

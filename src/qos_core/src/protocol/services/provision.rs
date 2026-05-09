@@ -2,7 +2,8 @@
 use qos_p256::P256Pair;
 
 use crate::protocol::{
-	services::boot::Approval, ProtocolError, ProtocolState, QosHash,
+	services::boot::{Approval, VersionedManifestEnvelope},
+	ProtocolError, ProtocolState,
 };
 
 type Secret = Vec<u8>;
@@ -61,20 +62,31 @@ pub(in crate::protocol) fn provision(
 	state: &mut ProtocolState,
 ) -> Result<bool, ProtocolError> {
 	let manifest_envelope = state.handles.get_manifest_envelope()?;
+	let manifest = manifest_envelope.manifest();
+	let manifest_hash = manifest.manifest_hash();
 
 	// Check that the approval is valid
 	// 1) the signature is valid. Note that we want to check signature before
 	// interacting with data
-	approval.verify(&manifest_envelope.manifest.qos_hash())?;
+	approval.verify(&manifest_hash)?;
 	// 2) the approver belongs to the share set
-	if !manifest_envelope.manifest.share_set.members.contains(&approval.member)
-	{
+	if !manifest.share_set().members.contains(&approval.member) {
 		return Err(ProtocolError::NotShareSetMember);
 	}
 
 	// Record the share set approval
 	state.handles.mutate_manifest_envelope(|mut envelope| {
-		envelope.share_set_approvals.push(approval);
+		match &mut envelope {
+			VersionedManifestEnvelope::V2(inner) => {
+				inner.share_set_approvals.push(approval);
+			}
+			VersionedManifestEnvelope::V1(inner) => {
+				inner.share_set_approvals.push(approval);
+			}
+			VersionedManifestEnvelope::V0(inner) => {
+				inner.share_set_approvals.push(approval);
+			}
+		}
 		envelope
 	})?;
 
@@ -86,8 +98,7 @@ pub(in crate::protocol) fn provision(
 
 	state.provisioner.add_share(share)?;
 
-	let quorum_threshold =
-		manifest_envelope.manifest.share_set.threshold as usize;
+	let quorum_threshold = manifest.share_set().threshold as usize;
 	if state.provisioner.count() < quorum_threshold {
 		// Nothing else to do if we don't have the threshold to reconstruct
 		return Ok(false);
@@ -103,7 +114,7 @@ pub(in crate::protocol) fn provision(
 	let pair = qos_p256::P256Pair::from_master_seed(&master_seed)?;
 	let public_key_bytes = pair.public_key().to_bytes();
 
-	if public_key_bytes != manifest_envelope.manifest.namespace.quorum_key {
+	if public_key_bytes != manifest.namespace().quorum_key {
 		// We did not construct the intended key
 		return Err(ProtocolError::ReconstructionErrorIncorrectPubKey);
 	}
@@ -300,7 +311,7 @@ mod test {
 				.handles
 				.get_manifest_envelope()
 				.unwrap()
-				.share_set_approvals
+				.share_set_approvals()
 				.len(),
 			threshold
 		);
@@ -467,7 +478,8 @@ mod test {
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
 				.collect();
 
-		let manifest = state.handles.get_manifest_envelope().unwrap().manifest;
+		let manifest =
+			state.handles.get_manifest_envelope().unwrap().manifest();
 		let mut approval = approvals.remove(0);
 		let pair = P256Pair::generate().unwrap();
 

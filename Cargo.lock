@@ -1898,6 +1898,7 @@ dependencies = [
  "qos_core",
  "qos_crypto",
  "qos_hex",
+ "qos_json",
  "qos_nsm",
  "qos_p256",
  "qos_test_primitives",
@@ -1921,6 +1922,7 @@ dependencies = [
  "nix 0.30.1",
  "qos_crypto",
  "qos_hex",
+ "qos_json",
  "qos_nsm",
  "qos_p256",
  "qos_test_primitives",
@@ -1975,6 +1977,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_json"
+version = "0.7.0"
+dependencies = [
+ "qos_hex",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "qos_net"
 version = "0.7.0"
 dependencies = [
@@ -2013,6 +2025,8 @@ dependencies = [
  "hex-literal",
  "p384",
  "qos_hex",
+ "qos_json",
+ "serde",
  "serde_bytes",
  "sha2",
  "webpki",
@@ -2039,6 +2053,7 @@ dependencies = [
  "p256",
  "qos_hex",
  "qos_test_primitives",
+ "serde",
  "sha2",
  "zeroize",
 ]

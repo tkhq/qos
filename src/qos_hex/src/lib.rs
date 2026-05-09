@@ -265,7 +265,7 @@ from_hex_array_impl! {
 pub mod serde {
 	use core::{fmt, marker::PhantomData};
 
-	use serde::{de::Visitor, Deserializer, Serializer};
+	use serde::{de::Visitor, Deserialize, Deserializer, Serializer};
 
 	use super::{encode, FromHex};
 
@@ -327,6 +327,51 @@ pub mod serde {
 		}
 
 		deserializer.deserialize_str(StrVisitor(PhantomData))
+	}
+
+	/// Serde support for `Option<T>` where `T` is hex-encoded bytes.
+	pub mod option {
+		use super::{encode, Deserialize, Deserializer, FromHex, Serializer};
+		use serde::Serialize;
+
+		/// Serialize optional bytes as an optional hex string.
+		///
+		/// # Errors
+		///
+		/// Returns the serializer's error type if serialization fails.
+		pub fn serialize<T, S>(
+			value: &Option<T>,
+			serializer: S,
+		) -> Result<S::Ok, S::Error>
+		where
+			T: AsRef<[u8]>,
+			S: Serializer,
+		{
+			let maybe_hex = value.as_ref().map(|bytes| encode(bytes.as_ref()));
+			maybe_hex.serialize(serializer)
+		}
+
+		/// Deserialize an optional hex string into optional bytes.
+		///
+		/// # Errors
+		///
+		/// Returns the deserializer's error type if the input is not `null`
+		/// or a valid hex string.
+		pub fn deserialize<'de, D, T>(
+			deserializer: D,
+		) -> Result<Option<T>, D::Error>
+		where
+			D: Deserializer<'de>,
+			T: FromHex,
+		{
+			let maybe_hex = Option::<String>::deserialize(deserializer)?;
+			maybe_hex
+				.map(|hex| {
+					FromHex::from_hex(&hex)
+						.map_err(|e| serde::de::Error::custom(format!("{e:?}")))
+				})
+				.transpose()
+		}
 	}
 }
 

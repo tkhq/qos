@@ -1,7 +1,12 @@
 use borsh::BorshDeserialize;
 use integration::{wait_for_tcp_sock, wait_for_usock, PIVOT_OK_PATH};
 use qos_core::{
-	handles::Handles, io::SocketAddress, protocol::msg::ProtocolMsg,
+	handles::Handles,
+	io::SocketAddress,
+	protocol::{
+		msg::{ProtocolMsg, ProtocolMsgEncoding},
+		ProtocolPhase,
+	},
 	reaper::Reaper,
 };
 use qos_host::host::HostServer;
@@ -16,6 +21,47 @@ use tokio::{
 	fs::{create_dir_all, remove_dir_all},
 	join, select,
 };
+
+#[derive(Clone, Copy)]
+enum TestEncoding {
+	Json,
+	Borsh,
+}
+
+fn encode_msg(msg: &ProtocolMsg, encoding: TestEncoding) -> Vec<u8> {
+	match encoding {
+		TestEncoding::Json => msg.to_json_wire().unwrap(),
+		TestEncoding::Borsh => msg.to_borsh_wire().unwrap(),
+	}
+}
+
+fn decode_msg(bytes: &[u8], encoding: TestEncoding) -> ProtocolMsg {
+	match encoding {
+		TestEncoding::Json => {
+			let (msg, detected) = ProtocolMsg::from_wire(bytes).unwrap();
+			assert_eq!(detected, ProtocolMsgEncoding::Json);
+			msg
+		}
+		TestEncoding::Borsh => ProtocolMsg::try_from_slice(bytes).unwrap(),
+	}
+}
+
+fn assert_version_response(msg: ProtocolMsg) {
+	match msg {
+		ProtocolMsg::VersionResponse { version, commit } => {
+			assert_eq!(version, env!("CARGO_PKG_VERSION"));
+			assert!(!commit.is_empty(), "commit should not be empty");
+		}
+		other => panic!("unexpected response: {other:?}"),
+	}
+}
+
+fn assert_status_response(msg: ProtocolMsg) {
+	assert_eq!(
+		msg,
+		ProtocolMsg::StatusResponse(ProtocolPhase::WaitingForBootInstruction)
+	);
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn version_request_returns_version_and_commit() -> Result<(), io::Error> {
@@ -92,19 +138,26 @@ async fn version_request_returns_version_and_commit() -> Result<(), io::Error> {
 	}
 
 	let url = format!("http://127.0.0.1:{HOST_PORT}/qos/message");
-	let req_bytes = borsh::to_vec(&ProtocolMsg::VersionRequest).unwrap();
-	let response = ureq::post(&url).send_bytes(&req_bytes).unwrap();
+	for encoding in [TestEncoding::Json, TestEncoding::Borsh] {
+		let req_bytes = encode_msg(&ProtocolMsg::VersionRequest, encoding);
+		let response = ureq::post(&url).send_bytes(&req_bytes).unwrap();
 
-	let mut buf = Vec::new();
-	response.into_reader().read_to_end(&mut buf).unwrap();
-	let decoded = ProtocolMsg::try_from_slice(&buf).unwrap();
+		let mut buf = Vec::new();
+		response.into_reader().read_to_end(&mut buf).unwrap();
+		let decoded = decode_msg(&buf, encoding);
 
-	match decoded {
-		ProtocolMsg::VersionResponse { version, commit } => {
-			assert_eq!(version, env!("CARGO_PKG_VERSION"));
-			assert!(!commit.is_empty(), "commit should not be empty");
-		}
-		other => panic!("unexpected response: {other:?}"),
+		assert_version_response(decoded);
+	}
+
+	for encoding in [TestEncoding::Json, TestEncoding::Borsh] {
+		let req_bytes = encode_msg(&ProtocolMsg::StatusRequest, encoding);
+		let response = ureq::post(&url).send_bytes(&req_bytes).unwrap();
+
+		let mut buf = Vec::new();
+		response.into_reader().read_to_end(&mut buf).unwrap();
+		let decoded = decode_msg(&buf, encoding);
+
+		assert_status_response(decoded);
 	}
 
 	qos_host_task.abort();
