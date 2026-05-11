@@ -26,6 +26,7 @@ src/integration/mock/pivot-build-fingerprints.txt
 src/integration/pivot_ok2_works
 src/integration/pivot_ok_works
 src/integration/pivot_ok3_works
+src/integration/pivot_tcp_works
 
 local-enclave/ls
 

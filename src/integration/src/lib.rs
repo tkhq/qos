@@ -166,13 +166,13 @@ pub async fn wait_for_usock<P: AsRef<Path>>(path: P) {
 	for _ in 0..50 {
 		if std::fs::exists(path).unwrap() && client.try_connect().await.is_ok()
 		{
-			break;
+			return;
 		}
 
 		tokio::time::sleep(Duration::from_millis(100)).await;
 	}
 
-	eprintln!("warning: no usock found at path: {}", path.display())
+	panic!("unable to connect to usock at path: {}", path.display())
 }
 
 pub async fn wait_for_tcp_sock<Addr>(host_addr: &Addr)
