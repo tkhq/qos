@@ -1,19 +1,19 @@
 # QOS Canonical JSON
 
-QOS uses JSON for protocol messages and signing payloads. Any JSON bytes that
-are hashed, signed, or verified MUST be canonicalized using QOS-normalized RFC
-8785-style canonical JSON. QOS intentionally differs from RFC 8785 by
-normalizing integer JSON numbers to decimal strings and rejecting non-integer
-numbers.
+QOS uses JSON for protocol messages and signing payloads. QOS JSON is primarily
+a canonicalization format for hashing/signing and verification, not a transport
+format. Any JSON bytes that are hashed, signed, or verified MUST be
+canonicalized using QOS-normalized RFC 8785-style canonical JSON. QOS
+intentionally differs from RFC 8785 by normalizing integer JSON numbers to
+base-10 integer strings and rejecting non-integer numbers.
 
 ## Canonicalization
 
-- Implementations MUST parse JSON into a JSON value and re-encode that value as
-  QOS-normalized RFC 8785-style canonical JSON before hashing or signing.
-- Implementations MUST NOT hash or sign raw inbound JSON bytes. Equivalent JSON
-  documents can differ in whitespace or field order.
-- Implementations that serialize typed values for hashing or signing MUST use
-  the same canonical JSON encoding scheme used for parsed JSON values.
+- Implementations MUST NOT hash or sign inbound JSON bytes directly.
+- Inbound JSON used for hashing/signing MUST be parsed into the target schema
+  type, then serialized with QOS canonical JSON.
+- Semantically equivalent payloads MUST produce identical canonical bytes after
+  deserialize-to-schema then serialize-to-QOS-JSON.
 - QOS normalization treats object members with `null` values as unset fields
   and MUST omit those object members before canonicalization. This means typed
   optional fields that serialize as `null` are omitted by the canonical encoder.
@@ -23,7 +23,7 @@ numbers.
   names encoded as UTF-16 code units, as specified by RFC 8785 section 3.2.3.
   This matters for non-ASCII names: for example, the RFC 8785 sample order is
   carriage return, `1`, U+0080, `ö`, `€`, grinning-face emoji, and U+FB33.
-- Integer JSON number tokens MUST canonicalize as decimal JSON strings.
+- Integer JSON number tokens MUST canonicalize as base-10 integer JSON strings.
 - Non-integer JSON number tokens (for example `1.0`, `1e3`, `-0.5`) MUST be
   rejected during canonical serialization.
 
@@ -35,6 +35,8 @@ numbers.
 - The schema for each signing object MUST specify object field names, enum
   representations, binary encodings, numeric encodings, and which fields are
   optional.
+- Hashing/signing pipelines MUST be schema-first: deserialize inbound JSON to
+  the schema type, then serialize with QOS JSON.
 - Unset optional object fields are omitted by QOS canonicalization when they
   serialize as `null`. Rust schemas SHOULD use `#[serde(default)]` on optional
   fields that readers must accept when absent.
@@ -52,7 +54,7 @@ numbers.
   `#[serde(with = "qos_hex::serde")]` for byte fields represented this way.
 - Enums SHOULD use serde's externally tagged representation unless the signing
   object schema explicitly specifies another representation.
-- Numeric values in QOS JSON are specified as decimal strings.
+- Numeric values in QOS JSON are specified as base-10 integer strings.
 - Rust integer fields in QOS JSON structs SHOULD use
   `#[serde(with = "qos_json::string_or_numeric")]` to support decoding both
   string and numeric inputs.

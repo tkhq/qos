@@ -1958,4 +1958,16 @@ mod tests {
 		assert_eq!(opts.use_manifest_version(), 2);
 		assert_eq!(opts.patch_set_dir().as_deref(), Some("/tmp/patch-set"));
 	}
+
+	#[test]
+	fn generate_manifest_parses_manifest_version_1_explicitly() {
+		let mut args = generate_manifest_args();
+		args.extend(["--use-manifest-version".to_string(), "1".to_string()]);
+		let (cmd, parsed) = CommandParser::<Command>::parse(&mut args).unwrap();
+
+		assert_eq!(cmd, Command::GenerateManifest);
+		let opts = ClientOpts { parsed };
+		assert_eq!(opts.use_manifest_version(), 1);
+		assert_eq!(opts.patch_set_dir(), None);
+	}
 }

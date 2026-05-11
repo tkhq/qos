@@ -438,9 +438,9 @@ mod test {
 
 	use super::*;
 	use crate::protocol::services::boot::{
-		ManifestEnvelopeV2, ManifestSet, ManifestV2, ManifestVersion,
-		Namespace, NitroConfig, PivotConfigV2, PivotEnv, RestartPolicy,
-		ShareSet,
+		Manifest, ManifestEnvelope, ManifestEnvelopeV2, ManifestSet,
+		ManifestV2, ManifestVersion, Namespace, NitroConfig, PatchSet,
+		PivotConfig, PivotConfigV2, PivotEnv, RestartPolicy, ShareSet,
 	};
 
 	#[test]
@@ -617,5 +617,49 @@ mod test {
 		assert_eq!(encoding, ProtocolMsgEncoding::Borsh);
 		assert_eq!(decoded, msg);
 		assert!(msg.to_json_wire().is_err());
+	}
+
+	#[test]
+	fn borsh_variant_discriminants_preserve_legacy_boot_standard_request() {
+		let msg = ProtocolMsg::BootStandardRequest {
+			manifest_envelope: Box::new(VersionedManifestEnvelope::V1(
+				ManifestEnvelope {
+					manifest: Manifest {
+						namespace: Namespace {
+							name: "test".to_string(),
+							nonce: 1,
+							quorum_key: vec![7; 33],
+						},
+						pivot: PivotConfig {
+							hash: [9; 32],
+							restart: RestartPolicy::Never,
+							args: vec![],
+							bridge_config: vec![],
+							debug_mode: false,
+						},
+						enclave: NitroConfig {
+							pcr0: vec![0; 48],
+							pcr1: vec![1; 48],
+							pcr2: vec![2; 48],
+							pcr3: vec![3; 48],
+							aws_root_certificate: vec![],
+							qos_commit: "commit".to_string(),
+						},
+						manifest_set: ManifestSet {
+							threshold: 1,
+							members: vec![],
+						},
+						share_set: ShareSet { threshold: 1, members: vec![] },
+						patch_set: PatchSet { threshold: 0, members: vec![] },
+					},
+					manifest_set_approvals: vec![],
+					share_set_approvals: vec![],
+				},
+			)),
+			pivot: vec![1, 2, 3, 4],
+		};
+
+		let encoded = msg.to_borsh_wire().unwrap();
+		assert_eq!(encoded.first().copied(), Some(3));
 	}
 }

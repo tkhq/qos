@@ -17,7 +17,7 @@ pub type Hash256 = [u8; 32];
 ///
 /// Returns an error if serde serialization or canonical JSON serialization
 /// fails, including if the value contains a non-integer JSON number. QOS
-/// canonical JSON normalizes integer numbers to decimal strings.
+/// canonical JSON normalizes integer numbers to base-10 integer strings.
 pub fn to_vec<T: Serialize>(value: &T) -> serde_json::Result<Vec<u8>> {
 	let value = serde_json::to_value(value)?;
 	to_vec_value(&value)
@@ -29,33 +29,9 @@ pub fn to_vec<T: Serialize>(value: &T) -> serde_json::Result<Vec<u8>> {
 ///
 /// Returns an error if serde serialization or canonical JSON serialization
 /// fails, including if the value contains a non-integer JSON number. QOS
-/// canonical JSON normalizes integer numbers to decimal strings.
+/// canonical JSON normalizes integer numbers to base-10 integer strings.
 pub fn to_string<T: Serialize>(value: &T) -> serde_json::Result<String> {
 	let value = serde_json::to_value(value)?;
-	to_string_value(&value)
-}
-
-/// Parse JSON bytes and re-encode them as QOS canonical JSON bytes.
-///
-/// # Errors
-///
-/// Returns an error if parsing or canonicalization fails, including if the
-/// parsed value contains a non-integer JSON number. QOS canonical JSON
-/// normalizes integer numbers to decimal strings.
-pub fn canonicalize_slice(bytes: &[u8]) -> serde_json::Result<Vec<u8>> {
-	let value: serde_json::Value = serde_json::from_slice(bytes)?;
-	to_vec_value(&value)
-}
-
-/// Parse a JSON string and re-encode it as a QOS canonical JSON string.
-///
-/// # Errors
-///
-/// Returns an error if parsing or canonicalization fails, including if the
-/// parsed value contains a non-integer JSON number. QOS canonical JSON
-/// normalizes integer numbers to decimal strings.
-pub fn canonicalize_str(json: &str) -> serde_json::Result<String> {
-	let value: serde_json::Value = serde_json::from_str(json)?;
 	to_string_value(&value)
 }
 
@@ -74,21 +50,9 @@ pub fn from_slice<T: DeserializeOwned>(bytes: &[u8]) -> serde_json::Result<T> {
 ///
 /// Returns an error if serialization or canonicalization fails, including if the
 /// value contains a non-integer JSON number. QOS canonical JSON normalizes
-/// integer numbers to decimal strings.
+/// integer numbers to base-10 integer strings.
 pub fn hash<T: Serialize>(value: &T) -> serde_json::Result<Hash256> {
 	let canonical = to_vec(value)?;
-	Ok(sha_256(&canonical))
-}
-
-/// Hash inbound JSON after parsing and QOS re-canonicalization.
-///
-/// # Errors
-///
-/// Returns an error if parsing or canonicalization fails, including if the
-/// parsed value contains a non-integer JSON number. QOS canonical JSON
-/// normalizes integer numbers to decimal strings.
-pub fn hash_json_slice(bytes: &[u8]) -> serde_json::Result<Hash256> {
-	let canonical = canonicalize_slice(bytes)?;
 	Ok(sha_256(&canonical))
 }
 
@@ -98,7 +62,7 @@ pub fn hash_json_slice(bytes: &[u8]) -> serde_json::Result<Hash256> {
 ///
 /// Returns an error if serialization or canonicalization fails, including if the
 /// value contains a non-integer JSON number. QOS canonical JSON normalizes
-/// integer numbers to decimal strings.
+/// integer numbers to base-10 integer strings.
 pub fn hash_hex<T: Serialize>(value: &T) -> serde_json::Result<String> {
 	hash(value).map(|hash| qos_hex::encode(&hash))
 }
@@ -360,6 +324,24 @@ mod tests {
 	use serde::{Deserialize, Serialize};
 	use std::collections::BTreeSet;
 
+	// Spec note: schema-less canonicalization is not allowed in production.
+	// These helpers exist only in tests to validate low-level normalization
+	// behavior and typed-vs-raw equivalence for known-good fixtures.
+	fn canonicalize_raw_slice(bytes: &[u8]) -> serde_json::Result<Vec<u8>> {
+		let value: serde_json::Value = serde_json::from_slice(bytes)?;
+		to_vec_value(&value)
+	}
+
+	fn canonicalize_raw_str(json: &str) -> serde_json::Result<String> {
+		let value: serde_json::Value = serde_json::from_str(json)?;
+		to_string_value(&value)
+	}
+
+	fn hash_raw_json_slice(bytes: &[u8]) -> serde_json::Result<Hash256> {
+		let canonical = canonicalize_raw_slice(bytes)?;
+		Ok(sha_256(&canonical))
+	}
+
 	#[test]
 	fn canonicalizes_key_order_before_hashing() {
 		let a = br#"{"version":"1","name":"test","threshold":"3"}"#;
@@ -370,12 +352,15 @@ mod tests {
 		}"#;
 
 		assert_eq!(
-			canonicalize_slice(a).unwrap(),
-			canonicalize_slice(b).unwrap()
+			canonicalize_raw_slice(a).unwrap(),
+			canonicalize_raw_slice(b).unwrap()
 		);
-		assert_eq!(hash_json_slice(a).unwrap(), hash_json_slice(b).unwrap());
 		assert_eq!(
-			qos_hex::encode(&hash_json_slice(a).unwrap()),
+			hash_raw_json_slice(a).unwrap(),
+			hash_raw_json_slice(b).unwrap()
+		);
+		assert_eq!(
+			qos_hex::encode(&hash_raw_json_slice(a).unwrap()),
 			"898eaf2263b3ca34a9fb0b59615a16e5819b43c53fabc44396f92128f72ccc7e"
 		);
 	}
@@ -460,19 +445,19 @@ mod tests {
 	#[test]
 	fn object_null_members_are_omitted() {
 		assert_eq!(
-			canonicalize_str(r#"{"b":null,"a":"1","nested":{"z":null,"y":"2"},"items":[null,{"x":null,"y":true}]}"#).unwrap(),
+			canonicalize_raw_str(r#"{"b":null,"a":"1","nested":{"z":null,"y":"2"},"items":[null,{"x":null,"y":true}]}"#).unwrap(),
 			r#"{"a":"1","items":[null,{"y":true}],"nested":{"y":"2"}}"#
 		);
 		assert_eq!(
-			hash_json_slice(br#"{"a":"1","b":null}"#).unwrap(),
-			hash_json_slice(br#"{"a":"1"}"#).unwrap()
+			hash_raw_json_slice(br#"{"a":"1","b":null}"#).unwrap(),
+			hash_raw_json_slice(br#"{"a":"1"}"#).unwrap()
 		);
 	}
 
 	#[test]
 	fn object_null_members_are_omitted_but_array_nulls_remain() {
 		assert_eq!(
-			canonicalize_str(
+			canonicalize_raw_str(
 				r#"{"empty":null,"items":[null,{"drop":null,"keep":"yes"},null]}"#
 			)
 			.unwrap(),
@@ -491,7 +476,7 @@ mod tests {
 
 		assert_eq!(
 			to_string(&Example { name: "alice", comment: None }).unwrap(),
-			canonicalize_str(r#"{"name":"alice"}"#).unwrap()
+			canonicalize_raw_str(r#"{"name":"alice"}"#).unwrap()
 		);
 		assert_eq!(
 			to_string(&Example { name: "alice", comment: Some("ready") })
@@ -502,18 +487,18 @@ mod tests {
 
 	#[test]
 	fn normalizes_integer_json_numbers_to_decimal_strings() {
-		assert_eq!(canonicalize_str(r#"{"n":1}"#).unwrap(), r#"{"n":"1"}"#);
+		assert_eq!(canonicalize_raw_str(r#"{"n":1}"#).unwrap(), r#"{"n":"1"}"#);
 		assert_eq!(
-			canonicalize_str(r#"{"n":-9007199254740991}"#).unwrap(),
+			canonicalize_raw_str(r#"{"n":-9007199254740991}"#).unwrap(),
 			r#"{"n":"-9007199254740991"}"#
 		);
 	}
 
 	#[test]
 	fn errors_on_floating_point_json_numbers() {
-		assert_qos_number_error(canonicalize_str(r#"{"n":1.0}"#));
-		assert_qos_number_error(canonicalize_str(r#"{"n":1e0}"#));
-		assert_qos_number_error(canonicalize_str(r#"{"n":-1.25}"#));
+		assert_qos_number_error(canonicalize_raw_str(r#"{"n":1.0}"#));
+		assert_qos_number_error(canonicalize_raw_str(r#"{"n":1e0}"#));
+		assert_qos_number_error(canonicalize_raw_str(r#"{"n":-1.25}"#));
 	}
 
 	#[test]
@@ -531,7 +516,7 @@ mod tests {
 
 	#[test]
 	fn sorts_object_keys_by_utf16_code_units() {
-		let canonical = canonicalize_str(
+		let canonical = canonicalize_raw_str(
 			r#"{
 				"\u20ac": "Euro Sign",
 				"\r": "Carriage Return",
@@ -567,7 +552,7 @@ mod tests {
 	#[test]
 	fn recursively_sorts_objects_without_reordering_arrays() {
 		assert_eq!(
-			canonicalize_str(
+			canonicalize_raw_str(
 				r#"{"z":{"b":"2","a":"1"},"a":[{"d":"4","c":"3"},"second",{"b":"2","a":"1"}]}"#
 			)
 			.unwrap(),
@@ -578,7 +563,7 @@ mod tests {
 	#[test]
 	fn escaped_object_keys_sort_by_raw_key_and_remain_escaped() {
 		assert_eq!(
-			canonicalize_str(
+			canonicalize_raw_str(
 				"{\"b\":\"plain\",\"\\n\":\"line feed\",\"\\r\":\"carriage return\",\"\\u0001\":\"control\"}"
 			)
 			.unwrap(),
@@ -589,18 +574,18 @@ mod tests {
 	#[test]
 	fn escapes_string_values_canonically() {
 		assert_eq!(
-			canonicalize_str(
-				"{\"quote\":\"\\\"\",\"slash\":\"/\",\"control\":\"\\u0001\",\"line\":\"a\\nb\",\"unicode\":\"€\"}"
+			canonicalize_raw_str(
+				"{\"quote\":\"\\\"\",\"slash\":\"/\",\"control\":\"\\u0001\",\"line\":\"a\\nb\",\"unicode\":\"€\",\"poop\":\"💩\"}"
 			)
 			.unwrap(),
-			"{\"control\":\"\\u0001\",\"line\":\"a\\nb\",\"quote\":\"\\\"\",\"slash\":\"/\",\"unicode\":\"€\"}"
+			"{\"control\":\"\\u0001\",\"line\":\"a\\nb\",\"poop\":\"💩\",\"quote\":\"\\\"\",\"slash\":\"/\",\"unicode\":\"€\"}"
 		);
 	}
 
 	#[test]
 	fn canonicalizes_raw_json_whitespace_and_order() {
 		assert_eq!(
-			canonicalize_str(
+			canonicalize_raw_str(
 				"{\n  \"z\": [ true, false, null ],\n  \"a\": { \"b\": \"2\", \"a\": \"1\" }\n}"
 			)
 			.unwrap(),
@@ -658,17 +643,17 @@ mod tests {
 		let raw = br#"{"threshold":"3","name":"test","unused":null}"#;
 		assert_eq!(
 			to_string(&typed).unwrap(),
-			canonicalize_slice(raw)
+			canonicalize_raw_slice(raw)
 				.map(|bytes| String::from_utf8(bytes).unwrap())
 				.unwrap()
 		);
-		assert_eq!(hash(&typed).unwrap(), hash_json_slice(raw).unwrap());
+		assert_eq!(hash(&typed).unwrap(), hash_raw_json_slice(raw).unwrap());
 	}
 
 	#[test]
 	fn empty_arrays_and_objects_are_preserved() {
 		assert_eq!(
-			canonicalize_str(
+			canonicalize_raw_str(
 				r#"{"empty_object":{},"empty_array":[],"null_member":null}"#
 			)
 			.unwrap(),
