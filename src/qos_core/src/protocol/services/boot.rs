@@ -71,11 +71,11 @@ impl fmt::Debug for NitroConfig {
 	borsh::BorshDeserialize,
 	serde::Serialize,
 	serde::Deserialize,
-	Default,
 )]
+#[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub enum RestartPolicy {
 	/// Never restart the pivot application
-	#[default]
+	#[cfg_attr(any(feature = "mock", test), default)]
 	Never,
 	/// Always restart the pivot application
 	Always,
