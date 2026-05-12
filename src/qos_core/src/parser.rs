@@ -530,13 +530,12 @@ impl TokenMap {
 
 			if token.user_value.is_some() {
 				// Check if this token requires the presence of another token
-				if let Some(ref other_name) = token.requires {
-					if !inputs.contains(&(format!("--{other_name}"))) {
+				if let Some(ref other_name) = token.requires
+					&& !inputs.contains(&(format!("--{other_name}"))) {
 						return Err(ParserError::MissingInput(
 							other_name.clone(),
 						));
 					}
-				}
 
 				// Check if there already exists a token that is mutually
 				// exclusive of this token.

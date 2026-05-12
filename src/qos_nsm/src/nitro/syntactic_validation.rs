@@ -99,11 +99,10 @@ fn validate_public_key(pub_key: Option<&ByteBuf>) -> Result<(), AttestError> {
 }
 
 fn validate_bytes_512(val: Option<&ByteBuf>) -> Result<(), AttestError> {
-	if let Some(val) = val {
-		if val.len() > 512 {
+	if let Some(val) = val
+		&& val.len() > 512 {
 			return Err(AttestError::InvalidBytes);
 		}
-	}
 
 	Ok(())
 }

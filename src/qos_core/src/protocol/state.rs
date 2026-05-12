@@ -54,11 +54,9 @@ impl ProtocolRoute {
 
 		// ignore transitions in special cases
 		if let Some(Ok(ProtocolMsg::ProvisionResponse { reconstructed })) = resp
-		{
-			if !reconstructed {
+			&& !reconstructed {
 				return resp;
 			}
-		}
 
 		// handle state transitions
 		let transition = match resp {
@@ -69,11 +67,10 @@ impl ProtocolRoute {
 			},
 		};
 
-		if let Some(phase) = transition {
-			if let Err(e) = state.transition(phase) {
+		if let Some(phase) = transition
+			&& let Err(e) = state.transition(phase) {
 				return Some(Err(ProtocolMsg::ProtocolErrorResponse(e)));
 			}
-		}
 
 		resp
 	}

@@ -266,12 +266,11 @@ impl Handles {
 			Err(ProtocolError::CannotModifyPostPivotStatic)?;
 		}
 
-		if let Some(parent) = Path::new(&self.pivot).parent() {
-			if !parent.exists() {
+		if let Some(parent) = Path::new(&self.pivot).parent()
+			&& !parent.exists() {
 				fs::create_dir_all(parent)
 					.map_err(|_| ProtocolError::FailedToPutPivot)?;
 			}
-		}
 
 		fs::write(&self.pivot, pivot)
 			.map_err(|_| ProtocolError::FailedToPutPivot)?;
@@ -299,11 +298,10 @@ impl Handles {
 			Err(ProtocolError::CannotModifyPostPivotStatic)?;
 		}
 
-		if let Some(parent) = path.as_ref().parent() {
-			if !parent.exists() {
+		if let Some(parent) = path.as_ref().parent()
+			&& !parent.exists() {
 				fs::create_dir_all(parent).map_err(|_| err.clone())?;
 			}
-		}
 
 		let tmp_path = PathBuf::from(path.as_ref()).with_extension("tmp");
 
