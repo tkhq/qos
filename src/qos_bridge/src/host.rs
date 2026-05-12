@@ -9,7 +9,7 @@ use qos_core::{
 	io::{HostBridge, SocketAddress, StreamPool},
 	protocol::services::boot::BridgeConfig,
 };
-use qos_host::{EnclaveInfo, ENCLAVE_INFO};
+use qos_host::{ENCLAVE_INFO, EnclaveInfo};
 
 /// Host server implementation using `HostBridge::tcp_to_vsock`
 pub struct BridgeServer {
@@ -82,7 +82,9 @@ impl BridgeServer {
 			{
 				Ok(value) => value,
 				Err(err) => {
-					eprintln!("unable to derive app socket from enclave socket: {err:?}, tcp to vsock bridge will not start");
+					eprintln!(
+						"unable to derive app socket from enclave socket: {err:?}, tcp to vsock bridge will not start"
+					);
 					return;
 				}
 			};
@@ -90,13 +92,17 @@ impl BridgeServer {
 			let app_pool = match StreamPool::single(app_socket) {
 				Ok(value) => value,
 				Err(err) => {
-					eprintln!("unable to create new app socket pool: {err:?}, tcp to vsock bridge will not start");
+					eprintln!(
+						"unable to create new app socket pool: {err:?}, tcp to vsock bridge will not start"
+					);
 					return;
 				}
 			};
 
 			let Ok(host_ip) = host_ip_str.parse::<Ipv4Addr>() else {
-				eprintln!("unable to parse host ip for bridge configuration: {host_ip_str}");
+				eprintln!(
+					"unable to parse host ip for bridge configuration: {host_ip_str}"
+				);
 				return;
 			};
 			let host_addr = SocketAddr::new(host_ip.into(), host_port);

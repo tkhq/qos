@@ -2,14 +2,14 @@
 //! Document.
 
 use aws_nitro_enclaves_cose::{
+	CoseSign1,
 	crypto::{Hash, MessageDigest, SignatureAlgorithm, SigningPublicKey},
 	error::CoseError,
-	CoseSign1,
 };
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use p384::{
-	ecdsa::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey},
 	PublicKey,
+	ecdsa::{Signature, VerifyingKey, signature::hazmat::PrehashVerifier},
 };
 use serde_bytes::ByteBuf;
 
@@ -346,7 +346,7 @@ mod test {
 	use aws_nitro_enclaves_cose::{
 		crypto::SigningPrivateKey, header_map::HeaderMap,
 	};
-	use p384::{ecdsa::SigningKey, SecretKey};
+	use p384::{SecretKey, ecdsa::SigningKey};
 
 	use super::*;
 	use crate::mock::{
@@ -452,24 +452,30 @@ mod test {
 			SecretKey::random(&mut p384::elliptic_curve::rand_core::OsRng);
 		let random_public = random_private.public_key();
 
-		assert!(cose_doc
-			.verify_signature::<Sha2>(&P384PubKey(random_public))
-			.is_err());
+		assert!(
+			cose_doc
+				.verify_signature::<Sha2>(&P384PubKey(random_public))
+				.is_err()
+		);
 
-		assert!(cose_doc
-			.get_payload::<Sha2>(Some(&P384PubKey(random_public)))
-			.is_err());
+		assert!(
+			cose_doc
+				.get_payload::<Sha2>(Some(&P384PubKey(random_public)))
+				.is_err()
+		);
 	}
 
 	#[test]
 	fn attestation_doc_from_der_works_with_valid_payload() {
 		let root_cert = cert_from_pem(AWS_ROOT_CERT_PEM).unwrap();
-		assert!(attestation_doc_from_der(
-			MOCK_NSM_ATTESTATION_DOCUMENT,
-			&root_cert[..],
-			MOCK_SECONDS_SINCE_EPOCH,
-		)
-		.is_ok());
+		assert!(
+			attestation_doc_from_der(
+				MOCK_NSM_ATTESTATION_DOCUMENT,
+				&root_cert[..],
+				MOCK_SECONDS_SINCE_EPOCH,
+			)
+			.is_ok()
+		);
 	}
 
 	#[test]
@@ -669,15 +675,18 @@ mod test {
 			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
 				.unwrap();
 		// Accepts valid inputs
-		assert!(verify_attestation_doc_against_user_input(
-			&attestation_doc,
-			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
-			&qos_hex::decode(MOCK_PCR0).unwrap(),
-			&qos_hex::decode(MOCK_PCR1).unwrap(),
-			&qos_hex::decode(MOCK_PCR2).unwrap(),
-			&qos_hex::decode(MOCK_PCR3).unwrap(),
-		)
-		.is_ok());
+		assert!(
+			verify_attestation_doc_against_user_input(
+				&attestation_doc,
+				&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT)
+					.unwrap(),
+				&qos_hex::decode(MOCK_PCR0).unwrap(),
+				&qos_hex::decode(MOCK_PCR1).unwrap(),
+				&qos_hex::decode(MOCK_PCR2).unwrap(),
+				&qos_hex::decode(MOCK_PCR3).unwrap(),
+			)
+			.is_ok()
+		);
 	}
 
 	#[test]

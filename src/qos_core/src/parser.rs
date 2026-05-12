@@ -26,18 +26,28 @@ pub enum ParserError {
 impl fmt::Display for ParserError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Self::UnexpectedInput(u) => write!(f, "found {u}, which was not an expected argument"),
+			Self::UnexpectedInput(u) => {
+				write!(f, "found {u}, which was not an expected argument")
+			}
 			Self::DuplicateInput(i) => {
-				write!(f, "found argument {i} more then once, but only one instance was expected")
+				write!(
+					f,
+					"found argument {i} more then once, but only one instance was expected"
+				)
 			}
 			Self::MutuallyExclusiveInput(y, z) => write!(
 				f,
 				"arguments {y} and {z} are mutually exclusive and cannot be used at the same time"
 			),
 			Self::MissingValue(i) => {
-				write!(f, "found argument {i}, which requires a value, but no value was given")
+				write!(
+					f,
+					"found argument {i}, which requires a value, but no value was given"
+				)
 			}
-			Self::MissingInput(i) => write!(f, "argument {i} is required but was not found"),
+			Self::MissingInput(i) => {
+				write!(f, "argument {i} is required but was not found")
+			}
 		}
 	}
 }

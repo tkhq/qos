@@ -110,63 +110,69 @@ async fn key_fwd_e2e() {
 	qos_test_primitives::wait_until_port_is_bound(new_host_port);
 
 	// -- CLIENT broadcast boot key fwd instruction
-	assert!(Command::new(integration::QOS_CLIENT_PATH)
-		.args([
-			"boot-key-fwd",
-			"--manifest-envelope-path",
-			MANIFEST_ENVELOPE_PATH,
-			"--pivot-path",
-			PIVOT_LOOP_PATH,
-			"--attestation-doc-path",
-			NEW_ATTESTATION_DOC_PATH,
-			"--host-port",
-			&new_host_port.to_string(),
-			"--host-ip",
-			LOCAL_HOST,
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(integration::QOS_CLIENT_PATH)
+			.args([
+				"boot-key-fwd",
+				"--manifest-envelope-path",
+				MANIFEST_ENVELOPE_PATH,
+				"--pivot-path",
+				PIVOT_LOOP_PATH,
+				"--attestation-doc-path",
+				NEW_ATTESTATION_DOC_PATH,
+				"--host-port",
+				&new_host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	// -- CLIENT broadcast key request to the old enclave
-	assert!(Command::new(integration::QOS_CLIENT_PATH)
-		.args([
-			"export-key",
-			"--manifest-envelope-path",
-			MANIFEST_ENVELOPE_PATH,
-			"--attestation-doc-path",
-			NEW_ATTESTATION_DOC_PATH,
-			"--encrypted-quorum-key-path",
-			ENCRYPTED_QUORUM_KEY_PATH,
-			"--host-port",
-			&old_host_port.to_string(),
-			"--host-ip",
-			LOCAL_HOST,
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(integration::QOS_CLIENT_PATH)
+			.args([
+				"export-key",
+				"--manifest-envelope-path",
+				MANIFEST_ENVELOPE_PATH,
+				"--attestation-doc-path",
+				NEW_ATTESTATION_DOC_PATH,
+				"--encrypted-quorum-key-path",
+				ENCRYPTED_QUORUM_KEY_PATH,
+				"--host-port",
+				&old_host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	// -- CLIENT broadcast encrypted quorum to the new enclave
-	assert!(Command::new(integration::QOS_CLIENT_PATH)
-		.args([
-			"inject-key",
-			"--encrypted-quorum-key-path",
-			ENCRYPTED_QUORUM_KEY_PATH,
-			"--host-port",
-			&new_host_port.to_string(),
-			"--host-ip",
-			LOCAL_HOST,
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(integration::QOS_CLIENT_PATH)
+			.args([
+				"inject-key",
+				"--encrypted-quorum-key-path",
+				ENCRYPTED_QUORUM_KEY_PATH,
+				"--host-port",
+				&new_host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	// Check that the quorum key got written
 	let quorum_pair = P256Pair::from_hex_file(new_secret_path).unwrap();
@@ -176,59 +182,26 @@ async fn key_fwd_e2e() {
 
 fn generate_manifest_envelope() {
 	let pivot_args = format!("[--msg,{TEST_MSG}]");
-	assert!(Command::new(integration::QOS_CLIENT_PATH)
-		.args([
-			"generate-manifest",
-			"--nonce",
-			"2",
-			"--namespace",
-			NAMESPACE,
-			"--restart-policy",
-			"always",
-			"--pcr3-preimage-path",
-			PCR3_PRE_IMAGE_PATH,
-			"--pivot-hash-path",
-			PIVOT_HASH_PATH,
-			"--qos-release-dir",
-			QOS_DIST_DIR,
-			"--manifest-path",
-			CLI_MANIFEST_PATH,
-			"--pivot-args",
-			&pivot_args,
-			"--manifest-set-dir",
-			"./mock/keys/manifest-set",
-			"--share-set-dir",
-			"./mock/keys/share-set",
-			"--patch-set-dir",
-			"./mock/keys/manifest-set",
-			"--quorum-key-path",
-			QUORUM_KEY_PUB_PATH
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
-
-	// -- CLIENT make sure each user can run `approve-manifest`
-	for alias in USERS {
-		let secret_path = format!("{}/{}.secret", &personal_dir(alias), alias);
-
-		assert!(Command::new(integration::QOS_CLIENT_PATH)
+	assert!(
+		Command::new(integration::QOS_CLIENT_PATH)
 			.args([
-				"approve-manifest",
-				"--secret-path",
-				&*secret_path,
-				"--manifest-path",
-				CLI_MANIFEST_PATH,
-				"--manifest-approvals-dir",
-				BOOT_DIR,
+				"generate-manifest",
+				"--nonce",
+				"2",
+				"--namespace",
+				NAMESPACE,
+				"--restart-policy",
+				"always",
 				"--pcr3-preimage-path",
 				PCR3_PRE_IMAGE_PATH,
 				"--pivot-hash-path",
 				PIVOT_HASH_PATH,
 				"--qos-release-dir",
 				QOS_DIST_DIR,
+				"--manifest-path",
+				CLI_MANIFEST_PATH,
+				"--pivot-args",
+				&pivot_args,
 				"--manifest-set-dir",
 				"./mock/keys/manifest-set",
 				"--share-set-dir",
@@ -236,16 +209,53 @@ fn generate_manifest_envelope() {
 				"--patch-set-dir",
 				"./mock/keys/manifest-set",
 				"--quorum-key-path",
-				QUORUM_KEY_PUB_PATH,
-				"--alias",
-				alias,
-				"--unsafe-auto-confirm",
+				QUORUM_KEY_PUB_PATH
 			])
 			.spawn()
 			.unwrap()
 			.wait()
 			.unwrap()
-			.success());
+			.success()
+	);
+
+	// -- CLIENT make sure each user can run `approve-manifest`
+	for alias in USERS {
+		let secret_path = format!("{}/{}.secret", &personal_dir(alias), alias);
+
+		assert!(
+			Command::new(integration::QOS_CLIENT_PATH)
+				.args([
+					"approve-manifest",
+					"--secret-path",
+					&*secret_path,
+					"--manifest-path",
+					CLI_MANIFEST_PATH,
+					"--manifest-approvals-dir",
+					BOOT_DIR,
+					"--pcr3-preimage-path",
+					PCR3_PRE_IMAGE_PATH,
+					"--pivot-hash-path",
+					PIVOT_HASH_PATH,
+					"--qos-release-dir",
+					QOS_DIST_DIR,
+					"--manifest-set-dir",
+					"./mock/keys/manifest-set",
+					"--share-set-dir",
+					"./mock/keys/share-set",
+					"--patch-set-dir",
+					"./mock/keys/manifest-set",
+					"--quorum-key-path",
+					QUORUM_KEY_PUB_PATH,
+					"--alias",
+					alias,
+					"--unsafe-auto-confirm",
+				])
+				.spawn()
+				.unwrap()
+				.wait()
+				.unwrap()
+				.success()
+		);
 	}
 }
 
@@ -294,59 +304,65 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 	qos_test_primitives::wait_until_port_is_bound(old_host_port);
 
 	// -- CLIENT generate the manifest envelope
-	assert!(Command::new(integration::QOS_CLIENT_PATH)
-		.args([
-			"generate-manifest-envelope",
-			"--manifest-approvals-dir",
-			BOOT_DIR,
-			"--manifest-path",
-			CLI_MANIFEST_PATH,
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(integration::QOS_CLIENT_PATH)
+			.args([
+				"generate-manifest-envelope",
+				"--manifest-approvals-dir",
+				BOOT_DIR,
+				"--manifest-path",
+				CLI_MANIFEST_PATH,
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	// -- CLIENT broadcast boot standard instruction
-	assert!(Command::new(integration::QOS_CLIENT_PATH)
-		.args([
-			"boot-standard",
-			"--manifest-envelope-path",
-			MANIFEST_ENVELOPE_PATH,
-			"--pivot-path",
-			PIVOT_LOOP_PATH,
-			"--host-port",
-			&old_host_port.to_string(),
-			"--host-ip",
-			LOCAL_HOST,
-			"--pcr3-preimage-path",
-			PCR3_PRE_IMAGE_PATH,
-			"--unsafe-skip-attestation",
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(integration::QOS_CLIENT_PATH)
+			.args([
+				"boot-standard",
+				"--manifest-envelope-path",
+				MANIFEST_ENVELOPE_PATH,
+				"--pivot-path",
+				PIVOT_LOOP_PATH,
+				"--host-port",
+				&old_host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--pcr3-preimage-path",
+				PCR3_PRE_IMAGE_PATH,
+				"--unsafe-skip-attestation",
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
-	assert!(Command::new(integration::QOS_CLIENT_PATH)
-		.args([
-			"get-attestation-doc",
-			"--host-port",
-			&old_host_port.to_string(),
-			"--host-ip",
-			LOCAL_HOST,
-			"--attestation-doc-path",
-			ATTESTATION_DOC_PATH,
-			"--manifest-envelope-path",
-			"/tmp/dont_care"
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(integration::QOS_CLIENT_PATH)
+			.args([
+				"get-attestation-doc",
+				"--host-port",
+				&old_host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--attestation-doc-path",
+				ATTESTATION_DOC_PATH,
+				"--manifest-envelope-path",
+				"/tmp/dont_care"
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	for user in &USERS[0..2] {
 		let share_path = format!("{}/{}.share", &personal_dir(user), user);
@@ -355,55 +371,59 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 			PathWrapper::from(format!("{TMP_DIR}/{user}.eph_wrapped.share"));
 		let approval_path =
 			PathWrapper::from(format!("{TMP_DIR}/{user}.attestation.approval"));
-		assert!(Command::new(integration::QOS_CLIENT_PATH)
-			.args([
-				"proxy-re-encrypt-share",
-				"--share-path",
-				&share_path,
-				"--secret-path",
-				&secret_path,
-				"--attestation-doc-path",
-				ATTESTATION_DOC_PATH,
-				"--eph-wrapped-share-path",
-				eph_wrapped_share_path.to_str().unwrap(),
-				"--approval-path",
-				approval_path.to_str().unwrap(),
-				"--manifest-envelope-path",
-				MANIFEST_ENVELOPE_PATH,
-				"--pcr3-preimage-path",
-				PCR3_PRE_IMAGE_PATH,
-				"--manifest-set-dir",
-				"./mock/keys/manifest-set",
-				"--alias",
-				user,
-				"--unsafe-skip-attestation",
-				"--unsafe-eph-path-override",
-				SHARED_EPH_PATH,
-				"--unsafe-auto-confirm",
-			])
-			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
+		assert!(
+			Command::new(integration::QOS_CLIENT_PATH)
+				.args([
+					"proxy-re-encrypt-share",
+					"--share-path",
+					&share_path,
+					"--secret-path",
+					&secret_path,
+					"--attestation-doc-path",
+					ATTESTATION_DOC_PATH,
+					"--eph-wrapped-share-path",
+					eph_wrapped_share_path.to_str().unwrap(),
+					"--approval-path",
+					approval_path.to_str().unwrap(),
+					"--manifest-envelope-path",
+					MANIFEST_ENVELOPE_PATH,
+					"--pcr3-preimage-path",
+					PCR3_PRE_IMAGE_PATH,
+					"--manifest-set-dir",
+					"./mock/keys/manifest-set",
+					"--alias",
+					user,
+					"--unsafe-skip-attestation",
+					"--unsafe-eph-path-override",
+					SHARED_EPH_PATH,
+					"--unsafe-auto-confirm",
+				])
+				.spawn()
+				.unwrap()
+				.wait()
+				.unwrap()
+				.success()
+		);
 
-		assert!(Command::new(integration::QOS_CLIENT_PATH)
-			.args([
-				"post-share",
-				"--host-port",
-				&old_host_port.to_string(),
-				"--host-ip",
-				LOCAL_HOST,
-				"--eph-wrapped-share-path",
-				eph_wrapped_share_path.to_str().unwrap(),
-				"--approval-path",
-				approval_path.to_str().unwrap(),
-			])
-			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
+		assert!(
+			Command::new(integration::QOS_CLIENT_PATH)
+				.args([
+					"post-share",
+					"--host-port",
+					&old_host_port.to_string(),
+					"--host-ip",
+					LOCAL_HOST,
+					"--eph-wrapped-share-path",
+					eph_wrapped_share_path.to_str().unwrap(),
+					"--approval-path",
+					approval_path.to_str().unwrap(),
+				])
+				.spawn()
+				.unwrap()
+				.wait()
+				.unwrap()
+				.success()
+		);
 	}
 
 	// Check that the enclave wrote its quorum key

@@ -5,11 +5,11 @@ use std::env;
 use qos_nsm::{Nsm, NsmProvider};
 
 use crate::{
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE,
 	handles::Handles,
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 	reaper::Reaper,
-	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE,
 };
 
 use crate::io::IOError;

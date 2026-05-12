@@ -1,7 +1,7 @@
 use std::{process::Command, str};
 
 use borsh::BorshDeserialize;
-use integration::{wait_for_usock, PivotProofMsg, PIVOT_PROOF_PATH};
+use integration::{PIVOT_PROOF_PATH, PivotProofMsg, wait_for_usock};
 use qos_core::{
 	client::SocketClient,
 	io::{SocketAddress, StreamPool},
@@ -39,12 +39,14 @@ async fn fetch_and_verify_app_proof() {
 		PivotProofMsg::AdditionResponse { result, proof } => {
 			let ephemeral_public_key =
 				P256Public::from_bytes(&proof.public_key).unwrap();
-			assert!(ephemeral_public_key
-				.verify(
-					&borsh::to_vec(&proof.payload).unwrap(),
-					&proof.signature
-				)
-				.is_ok());
+			assert!(
+				ephemeral_public_key
+					.verify(
+						&borsh::to_vec(&proof.payload).unwrap(),
+						&proof.signature
+					)
+					.is_ok()
+			);
 
 			assert_eq!(proof.payload.a, 2);
 			assert_eq!(proof.payload.b, 2);

@@ -3,9 +3,9 @@ use std::{
 	process::Command,
 };
 
-use integration::{wait_for_tcp_sock, wait_for_usock, PIVOT_TCP_PATH};
+use integration::{PIVOT_TCP_PATH, wait_for_tcp_sock, wait_for_usock};
 use qos_core::io::{HostBridge, SocketAddress, Stream, StreamPool};
-use qos_test_primitives::{find_free_port, ChildWrapper};
+use qos_test_primitives::{ChildWrapper, find_free_port};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::test(flavor = "multi_thread")]

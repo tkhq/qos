@@ -8,6 +8,7 @@ use std::{
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::BorshDeserialize;
 use qos_core::protocol::{
+	QosHash,
 	msg::ProtocolMsg,
 	services::{
 		boot::{
@@ -18,14 +19,13 @@ use qos_core::protocol::{
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
 	},
-	QosHash,
 };
 use qos_crypto::{sha_256, sha_384, sha_512};
 use qos_nsm::{
 	nitro::{
-		attestation_doc_from_der, cert_from_pem,
+		AWS_ROOT_CERT_PEM, attestation_doc_from_der, cert_from_pem,
 		unsafe_attestation_doc_from_der,
-		verify_attestation_doc_against_user_input, AWS_ROOT_CERT_PEM,
+		verify_attestation_doc_against_user_input,
 	},
 	types::NsmResponse,
 };
@@ -50,8 +50,7 @@ const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 	"DANGEROUS_DEV_BOOT_MEMBER_NAMESPACE";
 
 #[cfg(not(feature = "smartcard"))]
-pub(crate) const SMARTCARD_FEAT_DISABLED_MSG: &str =
-	"The \"smartcard\" feature must be enabled to use YubiKey related functionality.";
+pub(crate) const SMARTCARD_FEAT_DISABLED_MSG: &str = "The \"smartcard\" feature must be enabled to use YubiKey related functionality.";
 
 const ENTER_PIN_PROMPT: &str = "Enter your pin: ";
 const TAP_MSG: &str = "Tap your YubiKey";
@@ -625,7 +624,9 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	if expected_signature != genesis_output.test_message_signature {
 		return Err(Error::CouldNotReproduceSignature);
 	}
-	println!("Quorum key signature over test message was deterministically reproduced");
+	println!(
+		"Quorum key signature over test message was deterministically reproduced"
+	);
 
 	// check test_message_ciphertext
 	let plaintext = pair.decrypt(&genesis_output.test_message_ciphertext)?;
@@ -1080,7 +1081,7 @@ pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
 			nsm_response: NsmResponse::Attestation { document },
 		} => document,
 		r => {
-			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")))
+			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")));
 		}
 	};
 
@@ -1113,7 +1114,7 @@ pub(crate) fn export_key<P: AsRef<Path>>(
 			EncryptedQuorumKey { encrypted_quorum_key, signature }
 		}
 		r => {
-			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")))
+			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")));
 		}
 	};
 
@@ -1145,7 +1146,7 @@ pub(crate) fn inject_key<P: AsRef<Path>>(
 	match request::post(uri, &req).unwrap() {
 		ProtocolMsg::InjectKeyResponse => println!("Successful key injection!"),
 		r => {
-			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")))
+			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")));
 		}
 	}
 
@@ -1222,20 +1223,22 @@ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
 	attestation_doc_path: P,
 	manifest_envelope_path: P,
 ) {
-	let (cose_sign1, manifest_envelope) =
-		match request::post(uri, &ProtocolMsg::LiveAttestationDocRequest) {
-			Ok(ProtocolMsg::LiveAttestationDocResponse {
-				nsm_response: NsmResponse::Attestation { document },
-				manifest_envelope: Some(manifest_envelope),
-			}) => (document, manifest_envelope),
-			Ok(ProtocolMsg::LiveAttestationDocResponse {
-				nsm_response: _,
-				manifest_envelope: None,
-			}) => panic!(
-				"ManifestEnvelope does not exist in enclave - likely waiting for boot instruction"
-			),
-			r => panic!("Unexpected response: {r:?}"),
-		};
+	let (cose_sign1, manifest_envelope) = match request::post(
+		uri,
+		&ProtocolMsg::LiveAttestationDocRequest,
+	) {
+		Ok(ProtocolMsg::LiveAttestationDocResponse {
+			nsm_response: NsmResponse::Attestation { document },
+			manifest_envelope: Some(manifest_envelope),
+		}) => (document, manifest_envelope),
+		Ok(ProtocolMsg::LiveAttestationDocResponse {
+			nsm_response: _,
+			manifest_envelope: None,
+		}) => panic!(
+			"ManifestEnvelope does not exist in enclave - likely waiting for boot instruction"
+		),
+		r => panic!("Unexpected response: {r:?}"),
+	};
 
 	write_with_msg(
 		attestation_doc_path.as_ref(),
@@ -1395,7 +1398,9 @@ fn proxy_re_encrypt_share_programmatic_verifications(
 	}
 
 	if !manifest_envelope.manifest.share_set.members.contains(member) {
-		eprintln!("The provided share set key and alias are not part of the Share Set");
+		eprintln!(
+			"The provided share set key and alias are not part of the Share Set"
+		);
 		return false;
 	}
 
@@ -1779,7 +1784,11 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	// Pull out the ephemeral key or use the override
 	let eph_pub: P256Public = if let Some(eph_path) = unsafe_eph_path_override {
 		P256Pair::from_hex_file(eph_path)
-			.unwrap_or_else(|e| panic!("dangerous_dev_boot: Could not read ephemeral key from {eph_path:?}: {e:?}"))
+			.unwrap_or_else(|e| {
+				panic!(
+					"dangerous_dev_boot: Could not read ephemeral key from {eph_path:?}: {e:?}"
+				)
+			})
 			.public_key()
 	} else {
 		P256Public::from_bytes(&attestation_doc.public_key.expect(
@@ -1977,7 +1986,10 @@ fn get_manifest_set<P: AsRef<Path>>(dir: P) -> ManifestSet {
 			}
 
 			let public = P256Public::from_hex_file(path).unwrap_or_else(|e| {
-				panic!("get_manifest_set: Could not read public key from {}: {e:?}", path.display())
+				panic!(
+					"get_manifest_set: Could not read public key from {}: {e:?}",
+					path.display()
+				)
 			});
 			Some(QuorumMember {
 				alias: mem::take(&mut file_name[0]),
@@ -2063,10 +2075,16 @@ fn find_approvals<P: AsRef<Path>>(
 
 			let approval: Approval =
 				serde_json::from_slice(&fs::read(path).unwrap_or_else(|e| {
-					panic!("find_approvals: Could not read approval from {}: {e}", path.display())
+					panic!(
+						"find_approvals: Could not read approval from {}: {e}",
+						path.display()
+					)
 				}))
 				.unwrap_or_else(|e| {
-					panic!("find_approvals: Could not deserialize approval from {}: {e}", path.display())
+					panic!(
+						"find_approvals: Could not deserialize approval from {}: {e}",
+						path.display()
+					)
 				});
 
 			assert!(
@@ -2321,21 +2339,21 @@ mod tests {
 	use std::vec;
 
 	use qos_core::protocol::{
+		QosHash,
 		services::boot::{
 			Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
 			Namespace, NitroConfig, PatchSet, PivotConfig, QuorumMember,
 			RestartPolicy, ShareSet,
 		},
-		QosHash,
 	};
-	use qos_nsm::nitro::{cert_from_pem, AWS_ROOT_CERT_PEM};
+	use qos_nsm::nitro::{AWS_ROOT_CERT_PEM, cert_from_pem};
 	use qos_p256::{P256Pair, P256Public};
 
 	use super::{
-		approve_manifest_human_verifications,
+		Prompter, approve_manifest_human_verifications,
 		approve_manifest_programmatic_verifications,
 		proxy_re_encrypt_share_human_verifications,
-		proxy_re_encrypt_share_programmatic_verifications, Prompter,
+		proxy_re_encrypt_share_programmatic_verifications,
 	};
 
 	struct Setup {
@@ -2964,16 +2982,16 @@ mod tests {
 			assert_eq!(
 				output,
 				vec![
-				"Is this the correct namespace name: test-namespace? (y/n)",
-				"Is this the correct namespace nonce: 2? (y/n)",
-				"Does this AWS IAM role belong to the intended organization: pr3? (y/n)",
-				"Please answer with either \"yes\" (y) or \"no\" (n)",
-				"Please answer with either \"yes\" (y) or \"no\" (n)",
-				"The following manifest set members approved:",
-				"\talias: 0",
-				"\talias: 1",
-				"Is this ok? (y/n)",
-			]
+					"Is this the correct namespace name: test-namespace? (y/n)",
+					"Is this the correct namespace nonce: 2? (y/n)",
+					"Does this AWS IAM role belong to the intended organization: pr3? (y/n)",
+					"Please answer with either \"yes\" (y) or \"no\" (n)",
+					"Please answer with either \"yes\" (y) or \"no\" (n)",
+					"The following manifest set members approved:",
+					"\talias: 0",
+					"\talias: 1",
+					"Is this ok? (y/n)",
+				]
 			);
 		}
 

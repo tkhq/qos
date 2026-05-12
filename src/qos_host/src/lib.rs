@@ -14,12 +14,12 @@
 //! * Responding with error: <https://github.com/tokio-rs/axum/blob/main/axum/src/docs/error_handling.md/>
 
 use axum::{
+	Json,
 	http::StatusCode,
 	response::{IntoResponse, Response},
-	Json,
 };
 use qos_core::protocol::{
-	services::boot::ManifestEnvelope, Hash256, ProtocolPhase,
+	Hash256, ProtocolPhase, services::boot::ManifestEnvelope,
 };
 
 pub mod cli;

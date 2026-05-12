@@ -64,19 +64,21 @@ async fn genesis_e2e() {
 		fs::create_dir_all(personal_dir(user)).unwrap();
 		let master_seed_path = personal_dir(user).join(private);
 		let public_path = personal_dir(user).join(public);
-		assert!(Command::new(integration::QOS_CLIENT_PATH)
-			.args([
-				"generate-file-key",
-				"--master-seed-path",
-				master_seed_path.to_str().unwrap(),
-				"--pub-path",
-				public_path.to_str().unwrap(),
-			])
-			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
+		assert!(
+			Command::new(integration::QOS_CLIENT_PATH)
+				.args([
+					"generate-file-key",
+					"--master-seed-path",
+					master_seed_path.to_str().unwrap(),
+					"--pub-path",
+					public_path.to_str().unwrap(),
+				])
+				.spawn()
+				.unwrap()
+				.wait()
+				.unwrap()
+				.success()
+		);
 		assert!(Path::new(&*personal_dir(user)).join(public).is_file());
 		assert!(Path::new(&*personal_dir(user)).join(private).is_file());
 	}
@@ -135,30 +137,32 @@ async fn genesis_e2e() {
 
 	// -- CLIENT Run boot genesis, creating a genesis set from the setup keys in
 	// the genesis dir
-	assert!(Command::new(integration::QOS_CLIENT_PATH)
-		.args([
-			"boot-genesis",
-			"--share-set-dir",
-			genesis_dir.to_str().unwrap(),
-			"--namespace-dir",
-			genesis_dir.to_str().unwrap(),
-			"--host-ip",
-			LOCAL_HOST,
-			"--host-port",
-			&*host_port.to_string(),
-			"--qos-release-dir",
-			QOS_DIST_DIR,
-			"--pcr3-preimage-path",
-			PCR3_PRE_IMAGE_PATH,
-			"--dr-key-path",
-			DR_KEY_PUBLIC_PATH,
-			"--unsafe-skip-attestation"
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(integration::QOS_CLIENT_PATH)
+			.args([
+				"boot-genesis",
+				"--share-set-dir",
+				genesis_dir.to_str().unwrap(),
+				"--namespace-dir",
+				genesis_dir.to_str().unwrap(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--host-port",
+				&*host_port.to_string(),
+				"--qos-release-dir",
+				QOS_DIST_DIR,
+				"--pcr3-preimage-path",
+				PCR3_PRE_IMAGE_PATH,
+				"--dr-key-path",
+				DR_KEY_PUBLIC_PATH,
+				"--unsafe-skip-attestation"
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	// -- Check files generated from the genesis boot
 	drop(unsafe_attestation_doc_from_der(
@@ -210,28 +214,30 @@ async fn genesis_e2e() {
 	for user in [&user1, &user2, &user3] {
 		let share_path = personal_dir(user).join(format!("{user}.share"));
 		let secret_path = personal_dir(user).join(format!("{user}.secret"));
-		assert!(Command::new(integration::QOS_CLIENT_PATH)
-			.args([
-				"after-genesis",
-				"--secret-path",
-				secret_path.to_str().unwrap(),
-				"--share-path",
-				share_path.to_str().unwrap(),
-				"--alias",
-				user,
-				"--namespace-dir",
-				genesis_dir.to_str().unwrap(),
-				"--qos-release-dir",
-				QOS_DIST_DIR,
-				"--pcr3-preimage-path",
-				"./mock/pcr3-preimage.txt",
-				"--unsafe-skip-attestation"
-			])
-			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
+		assert!(
+			Command::new(integration::QOS_CLIENT_PATH)
+				.args([
+					"after-genesis",
+					"--secret-path",
+					secret_path.to_str().unwrap(),
+					"--share-path",
+					share_path.to_str().unwrap(),
+					"--alias",
+					user,
+					"--namespace-dir",
+					genesis_dir.to_str().unwrap(),
+					"--qos-release-dir",
+					QOS_DIST_DIR,
+					"--pcr3-preimage-path",
+					"./mock/pcr3-preimage.txt",
+					"--unsafe-skip-attestation"
+				])
+				.spawn()
+				.unwrap()
+				.wait()
+				.unwrap()
+				.success()
+		);
 
 		let share_key_path =
 			Path::new(&personal_dir(user)).join(format!("{user}.secret"));
@@ -266,15 +272,17 @@ async fn genesis_e2e() {
 	let reconstructed_path =
 		tmp_dir.join("reconstructed_quorum_master_seed_hex");
 	reconstructed.to_hex_file(&reconstructed_path).unwrap();
-	assert!(Command::new(integration::QOS_CLIENT_PATH)
-		.arg("verify-genesis")
-		.arg("--namespace-dir")
-		.arg(genesis_dir)
-		.arg("--master-seed-path")
-		.arg(reconstructed_path)
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(integration::QOS_CLIENT_PATH)
+			.arg("verify-genesis")
+			.arg("--namespace-dir")
+			.arg(genesis_dir)
+			.arg("--master-seed-path")
+			.arg(reconstructed_path)
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 }

@@ -47,11 +47,7 @@ pub(super) fn validate_attestation_doc(
 
 /// Mandatory field
 fn validate_module_id(id: &str) -> Result<(), AttestError> {
-	if id.is_empty() {
-		Err(AttestError::InvalidModuleId)
-	} else {
-		Ok(())
-	}
+	if id.is_empty() { Err(AttestError::InvalidModuleId) } else { Ok(()) }
 }
 /// Mandatory field
 fn validate_pcrs(pcrs: &BTreeMap<usize, ByteBuf>) -> Result<(), AttestError> {
@@ -85,19 +81,11 @@ fn validate_cabundle(cabundle: &[ByteBuf]) -> Result<(), AttestError> {
 }
 /// Mandatory field
 fn validate_digest(d: Digest) -> Result<(), AttestError> {
-	if d == Digest::SHA384 {
-		Ok(())
-	} else {
-		Err(AttestError::InvalidDigest)
-	}
+	if d == Digest::SHA384 { Ok(()) } else { Err(AttestError::InvalidDigest) }
 }
 /// Mandatory field
 fn validate_timestamp(t: u64) -> Result<(), AttestError> {
-	if t == 0 {
-		Err(AttestError::InvalidTimeStamp)
-	} else {
-		Ok(())
-	}
+	if t == 0 { Err(AttestError::InvalidTimeStamp) } else { Ok(()) }
 }
 /// Optional field
 fn validate_public_key(pub_key: Option<&ByteBuf>) -> Result<(), AttestError> {
@@ -136,11 +124,13 @@ mod tests {
 	fn bytes_512_works() {
 		assert!(validate_bytes_512(None).is_ok());
 		assert!(validate_bytes_512(Some(ByteBuf::new()).as_ref()).is_ok());
-		assert!(validate_bytes_512(
-			Some(ByteBuf::from((0..513).map(|_| 42u8).collect::<Vec<_>>()))
-				.as_ref()
-		)
-		.is_err());
+		assert!(
+			validate_bytes_512(
+				Some(ByteBuf::from((0..513).map(|_| 42u8).collect::<Vec<_>>()))
+					.as_ref()
+			)
+			.is_err()
+		);
 	}
 
 	#[test]

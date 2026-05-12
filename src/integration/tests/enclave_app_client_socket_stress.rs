@@ -2,18 +2,18 @@ use std::time::Duration;
 
 use borsh::BorshDeserialize;
 use integration::{
-	wait_for_usock, PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH,
+	PIVOT_SOCKET_STRESS_PATH, PivotSocketStressMsg, wait_for_usock,
 };
 use qos_core::{
 	client::{ClientError, SocketClient},
 	handles::Handles,
 	io::{IOError, SocketAddress, StreamPool},
 	protocol::{
+		ProtocolPhase,
 		services::boot::{
 			Manifest, ManifestEnvelope, ManifestSet, Namespace, NitroConfig,
 			PivotConfig, RestartPolicy, ShareSet,
 		},
-		ProtocolPhase,
 	},
 	reaper::Reaper,
 };

@@ -2,7 +2,7 @@
 use qos_p256::P256Pair;
 
 use crate::protocol::{
-	services::boot::Approval, ProtocolError, ProtocolState, QosHash,
+	ProtocolError, ProtocolState, QosHash, services::boot::Approval,
 };
 
 type Secret = Vec<u8>;
@@ -135,6 +135,7 @@ mod test {
 	use crate::{
 		handles::Handles,
 		protocol::{
+			ProtocolError, ProtocolPhase, ProtocolState, QosHash,
 			services::{
 				boot::{
 					Approval, Manifest, ManifestEnvelope, ManifestSet,
@@ -143,7 +144,6 @@ mod test {
 				},
 				provision::provision,
 			},
-			ProtocolError, ProtocolPhase, ProtocolState, QosHash,
 		},
 	};
 
@@ -445,11 +445,14 @@ mod test {
 	#[test]
 	fn provision_rejects_if_approval_is_not_from_share_set_member() {
 		let eph_file = PathWrapper::from(
-			"./provision_rejects_if_approval_is_not_from_share_set_member.eph.key");
+			"./provision_rejects_if_approval_is_not_from_share_set_member.eph.key",
+		);
 		let quorum_file = PathWrapper::from(
-			"./provision_rejects_if_approval_is_not_from_share_set_member.quorum.key");
+			"./provision_rejects_if_approval_is_not_from_share_set_member.quorum.key",
+		);
 		let manifest_file = PathWrapper::from(
-			"./provision_rejects_if_approval_is_not_from_share_set_member.manifest");
+			"./provision_rejects_if_approval_is_not_from_share_set_member.manifest",
+		);
 
 		let Setup {
 			quorum_pair,
@@ -485,14 +488,17 @@ mod test {
 	}
 
 	#[test]
-	fn provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature(
-	) {
+	fn provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature()
+	 {
 		let eph_file = PathWrapper::from(
-			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.eph.key");
+			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.eph.key",
+		);
 		let quorum_file = PathWrapper::from(
-			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.quorum.key");
+			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.quorum.key",
+		);
 		let manifest_file = PathWrapper::from(
-			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.manifest");
+			"./provision_rejects_with_signature_error_if_approval_is_not_from_share_set_member_and_bad_signature.manifest",
+		);
 
 		let Setup {
 			quorum_pair,

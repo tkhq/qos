@@ -7,13 +7,13 @@ use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
-	services::attestation, Hash256, ProtocolError, ProtocolState, QosHash,
+	Hash256, ProtocolError, ProtocolState, QosHash, services::attestation,
 };
 
 pub mod env;
 pub use env::{
-	PivotEnv, PivotEnvValue, PivotEnvVarName, MAX_PIVOT_ENV_NAME_LEN,
-	MAX_PIVOT_ENV_VALUE_LEN, MAX_PIVOT_ENV_VARS,
+	MAX_PIVOT_ENV_NAME_LEN, MAX_PIVOT_ENV_VALUE_LEN, MAX_PIVOT_ENV_VARS,
+	PivotEnv, PivotEnvValue, PivotEnvVarName,
 };
 
 /// Enclave configuration specific to AWS Nitro.
@@ -1097,11 +1097,14 @@ mod test {
 		};
 
 		let pivot_file = PathWrapper::from(
-			"boot_standard_rejects_manifest_envelope_with_share_set_approvals.pivot");
+			"boot_standard_rejects_manifest_envelope_with_share_set_approvals.pivot",
+		);
 		let ephemeral_file = PathWrapper::from(
-			"boot_standard_rejects_manifest_envelope_with_share_set_approvals_eph.secret");
+			"boot_standard_rejects_manifest_envelope_with_share_set_approvals_eph.secret",
+		);
 		let manifest_file = PathWrapper::from(
-			"boot_standard_rejects_manifest_envelope_with_share_set_approvals.manifest");
+			"boot_standard_rejects_manifest_envelope_with_share_set_approvals.manifest",
+		);
 
 		let handles = Handles::new(
 			ephemeral_file.display().to_string(),
@@ -1155,9 +1158,11 @@ mod test {
 			"boot_standard_rejects_approval_from_non_manifest_set_member.pivot",
 		);
 		let ephemeral_file = PathWrapper::from(
-			"boot_standard_rejects_approval_from_non_manifest_set_member.secret");
+			"boot_standard_rejects_approval_from_non_manifest_set_member.secret",
+		);
 		let manifest_file = PathWrapper::from(
-			"boot_standard_rejects_approval_from_non_manifest_set_member.manifest");
+			"boot_standard_rejects_approval_from_non_manifest_set_member.manifest",
+		);
 
 		let handles = Handles::new(
 			ephemeral_file.display().to_string(),

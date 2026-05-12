@@ -4,17 +4,17 @@ use std::{
 };
 
 use integration::{
-	wait_for_tcp_sock, wait_for_usock, PIVOT_ABORT_PATH, PIVOT_OK2_PATH,
-	PIVOT_OK2_SUCCESS_FILE, PIVOT_OK_PATH, PIVOT_PANIC_PATH, PIVOT_TCP_PATH,
+	PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE,
+	PIVOT_PANIC_PATH, PIVOT_TCP_PATH, wait_for_tcp_sock, wait_for_usock,
 };
 use qos_core::{
 	handles::Handles,
 	io::{HostBridge, SocketAddress, StreamPool},
 	protocol::services::boot::{BridgeConfig, ManifestEnvelope},
-	reaper::{Reaper, REAPER_EXIT_DELAY},
+	reaper::{REAPER_EXIT_DELAY, Reaper},
 };
 use qos_nsm::mock::MockNsm;
-use qos_test_primitives::{find_free_port, PathWrapper};
+use qos_test_primitives::{PathWrapper, find_free_port};
 use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt},
 	net::TcpStream,

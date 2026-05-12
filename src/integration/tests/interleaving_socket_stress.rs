@@ -2,7 +2,7 @@ use std::process::Command;
 
 use borsh::BorshDeserialize;
 use integration::{
-	wait_for_usock, PivotSocketStressMsg, PIVOT_SOCKET_STRESS_PATH,
+	PIVOT_SOCKET_STRESS_PATH, PivotSocketStressMsg, wait_for_usock,
 };
 use qos_core::{
 	client::{ClientError, SocketClient},
