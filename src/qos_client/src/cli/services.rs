@@ -248,11 +248,11 @@ impl PairOrYubi {
 	pub fn sign(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
-			Self::Yubi((ref mut yubi, ref pin)) => {
+			Self::Yubi((yubi, pin)) => {
 				println!("{TAP_MSG}");
 				crate::yubikey::sign_data(yubi, data, pin).map_err(Into::into)
 			}
-			Self::Pair(ref pair) => pair.sign(data).map_err(Into::into),
+			Self::Pair(pair) => pair.sign(data).map_err(Into::into),
 		}
 	}
 
@@ -264,7 +264,7 @@ impl PairOrYubi {
 	pub fn decrypt(&mut self, payload: &[u8]) -> Result<Vec<u8>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
-			Self::Yubi((ref mut yubi, ref pin)) => {
+			Self::Yubi((yubi, pin)) => {
 				println!("{TAP_MSG}");
 				let shared_secret =
 					crate::yubikey::shared_secret(yubi, payload, pin)?;
@@ -277,7 +277,7 @@ impl PairOrYubi {
 					.decrypt_from_shared_secret(payload, &shared_secret)
 					.map_err(Into::into)
 			}
-			Self::Pair(ref pair) => pair.decrypt(payload).map_err(Into::into),
+			Self::Pair(pair) => pair.decrypt(payload).map_err(Into::into),
 		}
 	}
 
@@ -289,10 +289,10 @@ impl PairOrYubi {
 	pub fn public_key_bytes(&mut self) -> Result<Vec<u8>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
-			Self::Yubi((ref mut yubi, _)) => {
+			Self::Yubi((yubi, _)) => {
 				crate::yubikey::pair_public_key(yubi).map_err(Into::into)
 			}
-			Self::Pair(ref pair) => Ok(pair.public_key().to_bytes()),
+			Self::Pair(pair) => Ok(pair.public_key().to_bytes()),
 		}
 	}
 }

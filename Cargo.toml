@@ -44,7 +44,7 @@ resolver = "2"
 [workspace.package]
 rust-version = "1.94"
 version = "0.7.0"
-edition = "2021"
+edition = "2024"
 license = "AGPL-3.0-only"
 
 [workspace.lints.rust]

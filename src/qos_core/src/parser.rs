@@ -377,7 +377,7 @@ impl TokenType {
 
 	fn push_val(&mut self, val: &str) -> Result<(), ParserError> {
 		match self {
-			TokenType::Multiple(ref mut v) => {
+			TokenType::Multiple(v) => {
 				v.push(val.to_string());
 				Ok(())
 			}

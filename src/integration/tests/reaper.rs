@@ -81,7 +81,11 @@ async fn reaper_clears_host_env() {
 	let host_only_env_key = "QOS_TEST_REAPER_HOST_ONLY_ENV";
 
 	drop(fs::remove_file(&*secret_path));
-	std::env::set_var(host_only_env_key, "must-not-leak");
+	// SAFETY: Test runs single-threaded with respect to env access.
+	#[allow(unsafe_code)]
+	unsafe {
+		std::env::set_var(host_only_env_key, "must-not-leak");
+	}
 
 	let handles = Handles::new(
 		"reaper_clears_host_env.eph".to_string(),
@@ -116,7 +120,11 @@ async fn reaper_clears_host_env() {
 	let contents = fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
 	assert_eq!(std::str::from_utf8(&contents).unwrap(), msg);
 	assert!(fs::remove_file(PIVOT_OK2_SUCCESS_FILE).is_ok());
-	std::env::remove_var(host_only_env_key);
+	// SAFETY: Test runs single-threaded with respect to env access.
+	#[allow(unsafe_code)]
+	unsafe {
+		std::env::remove_var(host_only_env_key);
+	}
 }
 
 // TODO(json-pr): restore this manifest env test when the JSON manifest PR
