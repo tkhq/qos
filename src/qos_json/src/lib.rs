@@ -20,7 +20,7 @@ pub type Hash256 = [u8; 32];
 /// canonical JSON normalizes integer numbers to base-10 integer strings.
 pub fn to_vec<T: Serialize>(value: &T) -> serde_json::Result<Vec<u8>> {
 	let value = serde_json::to_value(value)?;
-	to_vec_value(&value)
+	value_to_vec(&value)
 }
 
 /// Serialize a value as a QOS canonical JSON string.
@@ -32,7 +32,7 @@ pub fn to_vec<T: Serialize>(value: &T) -> serde_json::Result<Vec<u8>> {
 /// canonical JSON normalizes integer numbers to base-10 integer strings.
 pub fn to_string<T: Serialize>(value: &T) -> serde_json::Result<String> {
 	let value = serde_json::to_value(value)?;
-	to_string_value(&value)
+	value_to_string(&value)
 }
 
 /// Deserialize JSON bytes as `T`.
@@ -56,37 +56,26 @@ pub fn hash<T: Serialize>(value: &T) -> serde_json::Result<Hash256> {
 	Ok(sha_256(&canonical))
 }
 
-/// Hash a typed value and return the lowercase hex digest.
-///
-/// # Errors
-///
-/// Returns an error if serialization or canonicalization fails, including if the
-/// value contains a non-integer JSON number. QOS canonical JSON normalizes
-/// integer numbers to base-10 integer strings.
-pub fn hash_hex<T: Serialize>(value: &T) -> serde_json::Result<String> {
-	hash(value).map(|hash| qos_hex::encode(&hash))
-}
-
 fn sha_256(bytes: &[u8]) -> Hash256 {
 	let mut hasher = Sha256::new();
 	hasher.update(bytes);
 	hasher.finalize().into()
 }
 
-fn to_vec_value(value: &serde_json::Value) -> serde_json::Result<Vec<u8>> {
+fn value_to_vec(value: &serde_json::Value) -> serde_json::Result<Vec<u8>> {
 	let mut bytes = Vec::new();
-	to_writer_value(&mut bytes, value)?;
+	value_to_writer(&mut bytes, value)?;
 	Ok(bytes)
 }
 
-fn to_string_value(value: &serde_json::Value) -> serde_json::Result<String> {
-	let bytes = to_vec_value(value)?;
+fn value_to_string(value: &serde_json::Value) -> serde_json::Result<String> {
+	let bytes = value_to_vec(value)?;
 	String::from_utf8(bytes).map_err(|err| {
 		serde_json::Error::io(io::Error::new(io::ErrorKind::InvalidData, err))
 	})
 }
 
-fn to_writer_value<W>(
+fn value_to_writer<W>(
 	writer: &mut W,
 	value: &serde_json::Value,
 ) -> serde_json::Result<()>
@@ -177,26 +166,10 @@ where
 	serde_json::to_writer(writer, value).map_err(io::Error::other)
 }
 
-fn decimal_string_from_json_value<E>(
-	value: serde_json::Value,
-) -> Result<String, E>
-where
-	E: serde::de::Error,
-{
-	match value {
-		serde_json::Value::String(s) => Ok(s),
-		serde_json::Value::Number(n) if n.is_u64() || n.is_i64() => {
-			Ok(n.to_string())
-		}
-		other => Err(E::custom(format!(
-			"expected decimal string or integer, got {other}"
-		))),
-	}
-}
-
 /// Serde helpers that tolerate numeric input as either string or integer.
 pub mod string_or_numeric {
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
+	use serde_json::value::RawValue;
 	use std::{collections::BTreeSet, fmt::Display, str::FromStr};
 
 	/// Serialize using default serde behavior for the field type.
@@ -228,7 +201,7 @@ pub mod string_or_numeric {
 
 	/// A type that can be deserialized from one or more decimal string/integer
 	/// JSON values.
-	pub trait StringOrNumericDeserialize<'de>: Sized {
+	pub trait StringOrNumericDeserialize<'de>: sealed::Sealed + Sized {
 		/// Deserialize from decimal string/integer JSON.
 		///
 		/// # Errors
@@ -242,8 +215,14 @@ pub mod string_or_numeric {
 			D: Deserializer<'de>;
 	}
 
+	mod sealed {
+		pub trait Sealed {}
+	}
+
 	macro_rules! impl_string_or_numeric_deserialize {
 		($($ty:ty),+ $(,)?) => {$(
+			impl sealed::Sealed for $ty {}
+
 			impl<'de> StringOrNumericDeserialize<'de> for $ty {
 				fn deserialize_string_or_numeric<D>(
 					deserializer: D,
@@ -261,6 +240,13 @@ pub mod string_or_numeric {
 		u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize
 	);
 
+	impl<T> sealed::Sealed for Option<T>
+	where
+		T: FromStr,
+		T::Err: Display,
+	{
+	}
+
 	impl<'de, T> StringOrNumericDeserialize<'de> for Option<T>
 	where
 		T: FromStr,
@@ -272,9 +258,16 @@ pub mod string_or_numeric {
 		where
 			D: Deserializer<'de>,
 		{
-			let opt = Option::<serde_json::Value>::deserialize(deserializer)?;
-			opt.map(parse_string_or_numeric_value).transpose()
+			let opt = Option::<Box<RawValue>>::deserialize(deserializer)?;
+			opt.as_deref().map(parse_string_or_numeric_raw).transpose()
 		}
+	}
+
+	impl<T> sealed::Sealed for BTreeSet<T>
+	where
+		T: FromStr + Ord,
+		T::Err: Display,
+	{
 	}
 
 	impl<'de, T> StringOrNumericDeserialize<'de> for BTreeSet<T>
@@ -288,8 +281,11 @@ pub mod string_or_numeric {
 		where
 			D: Deserializer<'de>,
 		{
-			let values = Vec::<serde_json::Value>::deserialize(deserializer)?;
-			values.into_iter().map(parse_string_or_numeric_value).collect()
+			let values = Vec::<Box<RawValue>>::deserialize(deserializer)?;
+			values
+				.iter()
+				.map(|value| parse_string_or_numeric_raw(value))
+				.collect()
 		}
 	}
 
@@ -301,20 +297,22 @@ pub mod string_or_numeric {
 		T: FromStr,
 		T::Err: Display,
 	{
-		let value = serde_json::Value::deserialize(deserializer)?;
-		parse_string_or_numeric_value(value)
+		let value = <Box<RawValue>>::deserialize(deserializer)?;
+		parse_string_or_numeric_raw(&value)
 	}
 
-	fn parse_string_or_numeric_value<E, T>(
-		value: serde_json::Value,
-	) -> Result<T, E>
+	fn parse_string_or_numeric_raw<E, T>(value: &RawValue) -> Result<T, E>
 	where
 		E: serde::de::Error,
 		T: FromStr,
 		T::Err: Display,
 	{
-		let s = super::decimal_string_from_json_value::<E>(value)?;
-		s.parse().map_err(serde::de::Error::custom)
+		let raw = value.get();
+		if let Some(s) = raw.strip_prefix('"').and_then(|s| s.strip_suffix('"'))
+		{
+			return s.parse().map_err(E::custom);
+		}
+		raw.parse().map_err(E::custom)
 	}
 }
 
@@ -329,12 +327,12 @@ mod tests {
 	// behavior and typed-vs-raw equivalence for known-good fixtures.
 	fn canonicalize_raw_slice(bytes: &[u8]) -> serde_json::Result<Vec<u8>> {
 		let value: serde_json::Value = serde_json::from_slice(bytes)?;
-		to_vec_value(&value)
+		value_to_vec(&value)
 	}
 
 	fn canonicalize_raw_str(json: &str) -> serde_json::Result<String> {
 		let value: serde_json::Value = serde_json::from_str(json)?;
-		to_string_value(&value)
+		value_to_string(&value)
 	}
 
 	fn hash_raw_json_slice(bytes: &[u8]) -> serde_json::Result<Hash256> {
@@ -380,7 +378,7 @@ mod tests {
 			r#"{"name":"test","threshold":"3","version":"1"}"#
 		);
 		assert_eq!(
-			hash_hex(&example).unwrap(),
+			hash(&example).as_ref().map(|hash| qos_hex::encode(hash)).unwrap(),
 			"898eaf2263b3ca34a9fb0b59615a16e5819b43c53fabc44396f92128f72ccc7e"
 		);
 	}
@@ -396,7 +394,7 @@ mod tests {
 		let example = Example { data: vec![0xde, 0xad, 0xbe, 0xef] };
 		assert_eq!(to_string(&example).unwrap(), r#"{"data":"deadbeef"}"#);
 		assert_eq!(
-			hash_hex(&example).unwrap(),
+			hash(&example).as_ref().map(|hash| qos_hex::encode(hash)).unwrap(),
 			"03fe564ceddcb54a7a742bd7a4db57318a068cecd22ae44435ce68d35e754e13"
 		);
 	}
@@ -717,6 +715,10 @@ mod tests {
 
 		assert!(from_slice::<Example>(
 			br#"{"count":42.5,"limit":"7","indexes":["1"]}"#
+		)
+		.is_err());
+		assert!(from_slice::<Example>(
+			br#"{"count":"\u0034\u0032","limit":"7","indexes":["1"]}"#
 		)
 		.is_err());
 	}

@@ -37,7 +37,7 @@ pub fn canonical_json_hash<T: serde::Serialize>(value: &T) -> Hash256 {
 }
 
 /// A manifest decoded with schema version preserved.
-#[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Eq, Debug, Clone, serde::Serialize)]
 #[serde(untagged)]
 pub enum VersionedManifest {
 	/// Explicitly versioned JSON manifest schema.
@@ -46,6 +46,34 @@ pub enum VersionedManifest {
 	V1(Manifest),
 	/// Legacy original manifest schema.
 	V0(ManifestV0),
+}
+
+impl<'de> serde::Deserialize<'de> for VersionedManifest {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		// Do not use serde's derived `untagged` deserializer here. It replays a
+		// buffered content representation for each variant, which cannot drive
+		// `serde_json::value::RawValue` used by QOS JSON numeric helpers.
+		let raw =
+			<Box<serde_json::value::RawValue>>::deserialize(deserializer)?;
+		let bytes = raw.get().as_bytes();
+
+		if let Ok(manifest) = serde_json::from_slice::<ManifestV2>(bytes) {
+			return Ok(Self::V2(manifest));
+		}
+		if let Ok(manifest) = serde_json::from_slice::<Manifest>(bytes) {
+			return Ok(Self::V1(manifest));
+		}
+		if let Ok(manifest) = serde_json::from_slice::<ManifestV0>(bytes) {
+			return Ok(Self::V0(manifest));
+		}
+
+		Err(serde::de::Error::custom(
+			"data did not match any versioned manifest schema",
+		))
+	}
 }
 
 impl From<ManifestV2> for VersionedManifest {
@@ -99,8 +127,8 @@ impl BorshDeserialize for VersionedManifest {
 	}
 }
 
-#[allow(missing_docs)]
 impl VersionedManifest {
+	/// Return the manifest hash using the encoding for the embedded schema.
 	#[must_use]
 	pub fn manifest_hash(&self) -> Hash256 {
 		match self {
@@ -110,6 +138,7 @@ impl VersionedManifest {
 		}
 	}
 
+	/// Return the manifest namespace.
 	#[must_use]
 	pub fn namespace(&self) -> &Namespace {
 		match self {
@@ -119,6 +148,7 @@ impl VersionedManifest {
 		}
 	}
 
+	/// Return the manifest set authorized to approve manifest changes.
 	#[must_use]
 	pub fn manifest_set(&self) -> &ManifestSet {
 		match self {
@@ -128,6 +158,7 @@ impl VersionedManifest {
 		}
 	}
 
+	/// Return the share set authorized to approve share material.
 	#[must_use]
 	pub fn share_set(&self) -> &ShareSet {
 		match self {
@@ -137,6 +168,7 @@ impl VersionedManifest {
 		}
 	}
 
+	/// Return the enclave configuration.
 	#[must_use]
 	pub fn enclave(&self) -> &NitroConfig {
 		match self {
@@ -146,6 +178,7 @@ impl VersionedManifest {
 		}
 	}
 
+	/// Return the expected pivot binary hash.
 	#[must_use]
 	pub fn pivot_hash(&self) -> &Hash256 {
 		match self {
@@ -155,6 +188,7 @@ impl VersionedManifest {
 		}
 	}
 
+	/// Return the pivot restart policy.
 	#[must_use]
 	pub fn restart(&self) -> RestartPolicy {
 		match self {
@@ -164,6 +198,7 @@ impl VersionedManifest {
 		}
 	}
 
+	/// Return the pivot command-line arguments.
 	#[must_use]
 	pub fn args(&self) -> &[String] {
 		match self {
@@ -173,6 +208,7 @@ impl VersionedManifest {
 		}
 	}
 
+	/// Return bridge configuration entries, or an empty slice for v0 manifests.
 	#[must_use]
 	pub fn bridge_config(&self) -> &[BridgeConfig] {
 		match self {
@@ -182,6 +218,7 @@ impl VersionedManifest {
 		}
 	}
 
+	/// Return whether pivot debug mode is enabled.
 	#[must_use]
 	pub fn debug_mode(&self) -> bool {
 		match self {
@@ -234,7 +271,7 @@ impl VersionedManifest {
 }
 
 /// A manifest envelope decoded with schema version preserved.
-#[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Eq, Debug, Clone, serde::Serialize)]
 #[serde(untagged)]
 pub enum VersionedManifestEnvelope {
 	/// Explicitly versioned JSON manifest envelope schema.
@@ -243,6 +280,39 @@ pub enum VersionedManifestEnvelope {
 	V1(ManifestEnvelope),
 	/// Legacy original manifest envelope schema.
 	V0(ManifestEnvelopeV0),
+}
+
+impl<'de> serde::Deserialize<'de> for VersionedManifestEnvelope {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		// Do not use serde's derived `untagged` deserializer here. It replays a
+		// buffered content representation for each variant, which cannot drive
+		// `serde_json::value::RawValue` used by QOS JSON numeric helpers.
+		let raw =
+			<Box<serde_json::value::RawValue>>::deserialize(deserializer)?;
+		let bytes = raw.get().as_bytes();
+
+		if let Ok(envelope) =
+			serde_json::from_slice::<ManifestEnvelopeV2>(bytes)
+		{
+			return Ok(Self::V2(envelope));
+		}
+		if let Ok(envelope) = serde_json::from_slice::<ManifestEnvelope>(bytes)
+		{
+			return Ok(Self::V1(envelope));
+		}
+		if let Ok(envelope) =
+			serde_json::from_slice::<ManifestEnvelopeV0>(bytes)
+		{
+			return Ok(Self::V0(envelope));
+		}
+
+		Err(serde::de::Error::custom(
+			"data did not match any versioned manifest envelope schema",
+		))
+	}
 }
 
 impl From<ManifestEnvelopeV2> for VersionedManifestEnvelope {
@@ -289,7 +359,9 @@ impl BorshSerialize for VersionedManifestEnvelope {
 		writer: &mut W,
 	) -> borsh::io::Result<()> {
 		match self {
-			Self::V2(_) => Err(borsh::io::Error::other("manifest envelope v2 is json-only and cannot be borsh serialized")),
+			Self::V2(_) => Err(borsh::io::Error::other(
+				"manifest envelope v2 is json-only and cannot be borsh serialized",
+			)),
 			Self::V1(envelope) => envelope.serialize(writer),
 			Self::V0(envelope) => envelope.serialize(writer),
 		}
@@ -314,8 +386,8 @@ impl BorshDeserialize for VersionedManifestEnvelope {
 	}
 }
 
-#[allow(missing_docs)]
 impl VersionedManifestEnvelope {
+	/// Consume the envelope and return its embedded manifest.
 	#[must_use]
 	pub fn manifest(self) -> VersionedManifest {
 		match self {
@@ -325,6 +397,7 @@ impl VersionedManifestEnvelope {
 		}
 	}
 
+	/// Return approvals from manifest set members.
 	#[must_use]
 	pub fn manifest_set_approvals(&self) -> &[Approval] {
 		match self {
@@ -334,6 +407,7 @@ impl VersionedManifestEnvelope {
 		}
 	}
 
+	/// Return approvals from share set members.
 	#[must_use]
 	pub fn share_set_approvals(&self) -> &[Approval] {
 		match self {
@@ -343,6 +417,7 @@ impl VersionedManifestEnvelope {
 		}
 	}
 
+	/// Return the embedded manifest hash using its schema-specific encoding.
 	#[must_use]
 	pub fn manifest_hash(&self) -> Hash256 {
 		match self {
@@ -352,6 +427,7 @@ impl VersionedManifestEnvelope {
 		}
 	}
 
+	/// Return the embedded manifest set.
 	#[must_use]
 	pub fn manifest_set(&self) -> &ManifestSet {
 		match self {
@@ -361,6 +437,7 @@ impl VersionedManifestEnvelope {
 		}
 	}
 
+	/// Return the expected pivot binary hash from the embedded manifest.
 	#[must_use]
 	pub fn pivot_hash(&self) -> &Hash256 {
 		match self {

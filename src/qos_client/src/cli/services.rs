@@ -1285,8 +1285,8 @@ fn boot_standard_attestation_doc_with_fallback(
 	pivot: Vec<u8>,
 ) -> Result<Vec<u8>, Error> {
 	let req = ProtocolMsg::BootStandardJsonEnvelopeRequest {
-		manifest_envelope: Box::new(JsonBytes::new(manifest_envelope.clone())),
-		pivot: pivot.clone(),
+		manifest_envelope: Box::new(JsonBytes::new(manifest_envelope)),
+		pivot,
 	};
 	if let Ok(ProtocolMsg::BootStandardResponse {
 		nsm_response: NsmResponse::Attestation { document },
@@ -1295,8 +1295,17 @@ fn boot_standard_attestation_doc_with_fallback(
 		return Ok(document);
 	}
 
+	let ProtocolMsg::BootStandardJsonEnvelopeRequest {
+		manifest_envelope,
+		pivot,
+	} = req
+	else {
+		unreachable!(
+			"request was constructed as BootStandardJsonEnvelopeRequest"
+		)
+	};
 	let req = ProtocolMsg::BootStandardRequest {
-		manifest_envelope: Box::new(manifest_envelope),
+		manifest_envelope: Box::new(manifest_envelope.into_inner()),
 		pivot,
 	};
 	match request::post_borsh(uri, &req) {
@@ -2594,6 +2603,11 @@ mod tests {
 		}
 	}
 
+	/// Return the v1 manifest for tests that intentionally build v1 fixtures.
+	///
+	/// # Panics
+	///
+	/// Panics if the fixture is not a v1 manifest.
 	fn v1_manifest(manifest: &VersionedManifest) -> &Manifest {
 		match manifest {
 			VersionedManifest::V1(manifest) => manifest,
@@ -2601,6 +2615,11 @@ mod tests {
 		}
 	}
 
+	/// Return the v1 manifest envelope for tests that intentionally build v1 fixtures.
+	///
+	/// # Panics
+	///
+	/// Panics if the fixture is not a v1 manifest envelope.
 	fn v1_manifest_envelope(
 		envelope: &VersionedManifestEnvelope,
 	) -> &ManifestEnvelope {
@@ -2610,6 +2629,12 @@ mod tests {
 		}
 	}
 
+	/// Return a mutable v1 manifest envelope for tests that intentionally build
+	/// v1 fixtures.
+	///
+	/// # Panics
+	///
+	/// Panics if the fixture is not a v1 manifest envelope.
 	fn v1_manifest_envelope_mut(
 		envelope: &mut VersionedManifestEnvelope,
 	) -> &mut ManifestEnvelope {

@@ -347,8 +347,10 @@ pub mod serde {
 			T: AsRef<[u8]>,
 			S: Serializer,
 		{
-			let maybe_hex = value.as_ref().map(|bytes| encode(bytes.as_ref()));
-			maybe_hex.serialize(serializer)
+			value
+				.as_ref()
+				.map(|bytes| encode(bytes.as_ref()))
+				.serialize(serializer)
 		}
 
 		/// Deserialize an optional hex string into optional bytes.
@@ -364,11 +366,11 @@ pub mod serde {
 			D: Deserializer<'de>,
 			T: FromHex,
 		{
-			let maybe_hex = Option::<String>::deserialize(deserializer)?;
-			maybe_hex
-				.map(|hex| {
-					FromHex::from_hex(&hex)
-						.map_err(|e| serde::de::Error::custom(format!("{e:?}")))
+			Option::<String>::deserialize(deserializer)?
+				.as_deref()
+				.map(FromHex::from_hex)
+				.map(|res| {
+					res.map_err(|e| serde::de::Error::custom(format!("{e:?}")))
 				})
 				.transpose()
 		}
