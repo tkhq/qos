@@ -169,7 +169,7 @@ where
 /// Serde helpers that tolerate numeric input as either string or integer.
 pub mod string_or_numeric {
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
-	use serde_json::value::RawValue;
+	use serde_json::Value;
 	use std::{collections::BTreeSet, fmt::Display, str::FromStr};
 
 	/// Serialize using default serde behavior for the field type.
@@ -258,8 +258,8 @@ pub mod string_or_numeric {
 		where
 			D: Deserializer<'de>,
 		{
-			let opt = Option::<Box<RawValue>>::deserialize(deserializer)?;
-			opt.as_deref().map(parse_string_or_numeric_raw).transpose()
+			let opt = Option::<Value>::deserialize(deserializer)?;
+			opt.as_ref().map(parse_string_or_numeric_raw).transpose()
 		}
 	}
 
@@ -281,7 +281,7 @@ pub mod string_or_numeric {
 		where
 			D: Deserializer<'de>,
 		{
-			let values = Vec::<Box<RawValue>>::deserialize(deserializer)?;
+			let values = Vec::<Value>::deserialize(deserializer)?;
 			values
 				.iter()
 				.map(|value| parse_string_or_numeric_raw(value))
@@ -297,22 +297,21 @@ pub mod string_or_numeric {
 		T: FromStr,
 		T::Err: Display,
 	{
-		let value = <Box<RawValue>>::deserialize(deserializer)?;
+		let value = Value::deserialize(deserializer)?;
 		parse_string_or_numeric_raw(&value)
 	}
 
-	fn parse_string_or_numeric_raw<E, T>(value: &RawValue) -> Result<T, E>
+	fn parse_string_or_numeric_raw<E, T>(value: &Value) -> Result<T, E>
 	where
 		E: serde::de::Error,
 		T: FromStr,
 		T::Err: Display,
 	{
-		let raw = value.get();
-		if let Some(s) = raw.strip_prefix('"').and_then(|s| s.strip_suffix('"'))
-		{
-			return s.parse().map_err(E::custom);
+		match value {
+			Value::String(s) => s.parse().map_err(E::custom),
+			Value::Number(n) => n.to_string().parse().map_err(E::custom),
+			_ => Err(E::custom("expected string or integer")),
 		}
-		raw.parse().map_err(E::custom)
 	}
 }
 

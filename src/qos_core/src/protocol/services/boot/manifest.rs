@@ -37,7 +37,7 @@ pub fn canonical_json_hash<T: serde::Serialize>(value: &T) -> Hash256 {
 }
 
 /// A manifest decoded with schema version preserved.
-#[derive(PartialEq, Eq, Debug, Clone, serde::Serialize)]
+#[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum VersionedManifest {
 	/// Explicitly versioned JSON manifest schema.
@@ -46,34 +46,6 @@ pub enum VersionedManifest {
 	V1(Manifest),
 	/// Legacy original manifest schema.
 	V0(ManifestV0),
-}
-
-impl<'de> serde::Deserialize<'de> for VersionedManifest {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		// Do not use serde's derived `untagged` deserializer here. It replays a
-		// buffered content representation for each variant, which cannot drive
-		// `serde_json::value::RawValue` used by QOS JSON numeric helpers.
-		let raw =
-			<Box<serde_json::value::RawValue>>::deserialize(deserializer)?;
-		let bytes = raw.get().as_bytes();
-
-		if let Ok(manifest) = serde_json::from_slice::<ManifestV2>(bytes) {
-			return Ok(Self::V2(manifest));
-		}
-		if let Ok(manifest) = serde_json::from_slice::<Manifest>(bytes) {
-			return Ok(Self::V1(manifest));
-		}
-		if let Ok(manifest) = serde_json::from_slice::<ManifestV0>(bytes) {
-			return Ok(Self::V0(manifest));
-		}
-
-		Err(serde::de::Error::custom(
-			"data did not match any versioned manifest schema",
-		))
-	}
 }
 
 impl From<ManifestV2> for VersionedManifest {
@@ -271,7 +243,7 @@ impl VersionedManifest {
 }
 
 /// A manifest envelope decoded with schema version preserved.
-#[derive(PartialEq, Eq, Debug, Clone, serde::Serialize)]
+#[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum VersionedManifestEnvelope {
 	/// Explicitly versioned JSON manifest envelope schema.
@@ -280,39 +252,6 @@ pub enum VersionedManifestEnvelope {
 	V1(ManifestEnvelope),
 	/// Legacy original manifest envelope schema.
 	V0(ManifestEnvelopeV0),
-}
-
-impl<'de> serde::Deserialize<'de> for VersionedManifestEnvelope {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		// Do not use serde's derived `untagged` deserializer here. It replays a
-		// buffered content representation for each variant, which cannot drive
-		// `serde_json::value::RawValue` used by QOS JSON numeric helpers.
-		let raw =
-			<Box<serde_json::value::RawValue>>::deserialize(deserializer)?;
-		let bytes = raw.get().as_bytes();
-
-		if let Ok(envelope) =
-			serde_json::from_slice::<ManifestEnvelopeV2>(bytes)
-		{
-			return Ok(Self::V2(envelope));
-		}
-		if let Ok(envelope) = serde_json::from_slice::<ManifestEnvelope>(bytes)
-		{
-			return Ok(Self::V1(envelope));
-		}
-		if let Ok(envelope) =
-			serde_json::from_slice::<ManifestEnvelopeV0>(bytes)
-		{
-			return Ok(Self::V0(envelope));
-		}
-
-		Err(serde::de::Error::custom(
-			"data did not match any versioned manifest envelope schema",
-		))
-	}
 }
 
 impl From<ManifestEnvelopeV2> for VersionedManifestEnvelope {
