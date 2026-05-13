@@ -92,6 +92,7 @@ pub enum ProtocolMsgEncoding {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub enum ProtocolMsg {
 	/// A error from executing the protocol.
 	ProtocolErrorResponse(ProtocolError),
