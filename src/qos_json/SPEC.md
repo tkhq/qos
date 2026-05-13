@@ -53,9 +53,16 @@ base-10 integer strings and rejecting non-integer numbers.
   map/object field before canonicalization.
 - New fields SHOULD be optional unless every deployed reader can tolerate the
   field.
-- Binary values SHOULD be lowercase hex strings unless the signing object schema
-  explicitly specifies another representation. Rust schemas SHOULD use
-  `#[serde(with = "qos_hex::serde")]` for byte fields represented this way.
+- Public keys SHOULD be encoded as lowercase hex strings. This keeps key
+  material more readable during review/audit and avoids introducing extra
+  alphabet/format dependencies (for example SS58) into all implementations.
+- Other binary values SHOULD be encoded as either lowercase hex strings or
+  base64 strings, as specified by each signing object schema.
+- Each signing object schema MUST explicitly specify the binary encoding used
+  by each byte field and keep it stable for compatibility.
+- Rust schemas SHOULD use `#[serde(with = "qos_hex::serde")]` for byte fields
+  represented as hex. Base64-encoded byte fields SHOULD use an explicit serde
+  adapter chosen by that schema.
 - Enums SHOULD use serde's
   [externally tagged representation](https://serde.rs/enum-representations.html)
   unless the signing object schema explicitly specifies another representation.

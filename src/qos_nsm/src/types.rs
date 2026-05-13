@@ -243,9 +243,9 @@ impl From<NsmRequest> for Request {
 	Eq,
 	Clone,
 )]
+#[serde(rename_all = "camelCase")]
 pub enum NsmResponse {
 	/// returns the current `PlatformConfigurationRegister` state
-	#[serde(alias = "describePCR", alias = "describepcr")]
 	DescribePCR {
 		/// true if the PCR is read-only, false otherwise
 		lock: bool,
@@ -255,7 +255,6 @@ pub enum NsmResponse {
 	},
 	/// returned if `PlatformConfigurationRegister` has been successfully
 	/// extended
-	#[serde(alias = "extendPCR", alias = "extendpcr")]
 	ExtendPCR {
 		/// The new value of the PCR after extending the data into the
 		/// register.
@@ -263,14 +262,11 @@ pub enum NsmResponse {
 		data: Vec<u8>,
 	},
 	/// returned if `PlatformConfigurationRegister` has been successfully locked
-	#[serde(alias = "lockPCR", alias = "lockpcr")]
 	LockPCR,
 	/// returned if `PlatformConfigurationRegisters` have been successfully
 	/// locked
-	#[serde(alias = "lockPCRs", alias = "lockpcrs")]
 	LockPCRs,
 	/// returns the runtime configuration of the `NitroSecureModule`
-	#[serde(alias = "describeNSM", alias = "describensm")]
 	DescribeNSM {
 		/// Breaking API changes are denoted by `major_version`
 		#[serde(with = "qos_json::string_or_numeric")]
@@ -297,7 +293,6 @@ pub enum NsmResponse {
 	/// A response to an Attestation Request containing the CBOR-encoded
 	/// `AttestationDoc` and the signature generated from the doc by the
 	/// `NitroSecureModule`
-	#[serde(alias = "attestation")]
 	Attestation {
 		/// A signed COSE structure containing a CBOR-encoded
 		/// `AttestationDocument` as the payload.
@@ -305,7 +300,6 @@ pub enum NsmResponse {
 		document: Vec<u8>,
 	},
 	/// A response containing a number of bytes of entropy.
-	#[serde(alias = "getRandom", alias = "getrandom")]
 	GetRandom {
 		/// The random bytes.
 		#[serde(with = "qos_hex::serde")]
@@ -313,7 +307,6 @@ pub enum NsmResponse {
 	},
 	/// An error has occured, and the `NitroSecureModule` could not successfully
 	/// complete the operation
-	#[serde(alias = "error")]
 	Error(NsmErrorCode),
 }
 
