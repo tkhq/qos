@@ -11,9 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
 	ProtocolError, ProtocolState, QosHash,
-	services::boot::{
-		VersionedManifestEnvelope, put_manifest_and_pivot,
-	},
+	services::boot::{VersionedManifestEnvelope, put_manifest_and_pivot},
 };
 
 /// An encrypted quorum key along with a signature over the encrypted payload
