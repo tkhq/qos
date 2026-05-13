@@ -929,18 +929,18 @@ impl ClientOpts {
 	}
 
 	fn alias(&self) -> String {
-		self.parsed.single(ALIAS).expect("required arg").to_string()
+		self.parsed.single(ALIAS).expect("required arg").clone()
 	}
 
 	fn namespace(&self) -> String {
-		self.parsed.single(NAMESPACE).expect("required arg").to_string()
+		self.parsed.single(NAMESPACE).expect("required arg").clone()
 	}
 
 	fn pcr3_preimage_path(&self) -> String {
 		self.parsed
 			.single(PCR3_PREIMAGE_PATH)
 			.expect("`--pcr3-preimage-path` is a required arg")
-			.to_string()
+			.clone()
 	}
 
 	fn nonce(&self) -> u32 {
@@ -955,62 +955,62 @@ impl ClientOpts {
 		self.parsed
 			.single(RESTART_POLICY)
 			.expect("required arg")
-			.to_string()
+			.clone()
 			.try_into()
 			.expect("Could not parse `--restart-policy`")
 	}
 
 	fn pivot_path(&self) -> String {
-		self.parsed.single(PIVOT_PATH).expect("required arg").to_string()
+		self.parsed.single(PIVOT_PATH).expect("required arg").clone()
 	}
 
 	fn manifest_set_dir(&self) -> String {
 		self.parsed
 			.single(MANIFEST_SET_DIR)
 			.expect("`--manifest-set-dir` is a required arg")
-			.to_string()
+			.clone()
 	}
 
 	fn share_set_dir(&self) -> String {
 		self.parsed
 			.single(SHARE_SET_DIR)
 			.expect("`--share-set-dir` is a required arg")
-			.to_string()
+			.clone()
 	}
 
 	fn patch_set_dir(&self) -> String {
 		self.parsed
 			.single(PATCH_SET_DIR)
 			.expect("`--patch-set-dir` is a required arg")
-			.to_string()
+			.clone()
 	}
 
 	fn namespace_dir(&self) -> String {
 		self.parsed
 			.single(NAMESPACE_DIR)
 			.expect("`--namespace-dir` is a required arg")
-			.to_string()
+			.clone()
 	}
 
 	fn manifest_approvals_dir(&self) -> String {
 		self.parsed
 			.single(MANIFEST_APPROVALS_DIR)
 			.expect("`--manifest-approval-dir` is a required arg")
-			.to_string()
+			.clone()
 	}
 
 	fn qos_release_dir(&self) -> String {
 		self.parsed
 			.single(QOS_REALEASE_DIR)
 			.expect("qos-release-dir is a required arg")
-			.to_string()
+			.clone()
 	}
 
 	fn pivot_hash_path(&self) -> String {
 		self.parsed
 			.single(PIVOT_HASH_PATH)
 			.expect("pivot-hash is a required arg")
-			.to_string()
+			.clone()
 	}
 
 	fn pivot_args(&self) -> Vec<String> {
@@ -1065,7 +1065,7 @@ impl ClientOpts {
 	}
 
 	fn pub_path(&self) -> String {
-		self.parsed.single(PUB_PATH).expect("Missing `--pub-path`").to_string()
+		self.parsed.single(PUB_PATH).expect("Missing `--pub-path`").clone()
 	}
 
 	fn secret_path(&self) -> Option<String> {
@@ -1073,38 +1073,35 @@ impl ClientOpts {
 	}
 
 	fn share_path(&self) -> String {
-		self.parsed
-			.single(SHARE_PATH)
-			.expect("Missing `--share-path`")
-			.to_string()
+		self.parsed.single(SHARE_PATH).expect("Missing `--share-path`").clone()
 	}
 
 	fn output_path(&self) -> String {
 		self.parsed
 			.single(OUTPUT_PATH)
 			.expect("Missing `--output-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn quorum_key_path(&self) -> String {
 		self.parsed
 			.single(QUORUM_KEY_PATH)
 			.expect("Missing `--quorum-key-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn manifest_path(&self) -> String {
 		self.parsed
 			.single(MANIFEST_PATH)
 			.expect("Missing `--manifest-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn manifest_envelope_path(&self) -> String {
 		self.parsed
 			.single(MANIFEST_ENVELOPE_PATH)
 			.expect("Missing `--manifest-envelope-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn maybe_manifest_envelope_path(&self) -> Option<String> {
@@ -1115,35 +1112,32 @@ impl ClientOpts {
 		self.parsed
 			.single(APPROVAL_PATH)
 			.expect("Missing `--approval-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn eph_wrapped_share_path(&self) -> String {
 		self.parsed
 			.single(EPH_WRAPPED_SHARE_PATH)
 			.expect("Missing `--eph-wrapped-share-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn attestation_doc_path(&self) -> String {
 		self.parsed
 			.single(ATTESTATION_DOC_PATH)
 			.expect("Missing `--attestation-doc-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn master_seed_path(&self) -> String {
 		self.parsed
 			.single(MASTER_SEED_PATH)
 			.expect("Missing `--master-seed-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn output_dir(&self) -> String {
-		self.parsed
-			.single(OUTPUT_DIR)
-			.expect("Missing `--output-dir`")
-			.to_string()
+		self.parsed.single(OUTPUT_DIR).expect("Missing `--output-dir`").clone()
 	}
 
 	fn shares(&self) -> Vec<String> {
@@ -1167,35 +1161,32 @@ impl ClientOpts {
 	}
 
 	fn payload(&self) -> String {
-		self.parsed.single(PAYLOAD).expect("Missing `--payload`").to_string()
+		self.parsed.single(PAYLOAD).expect("Missing `--payload`").clone()
 	}
 
 	fn payload_path(&self) -> String {
 		self.parsed
 			.single(PAYLOAD_PATH)
 			.expect("Missing `--payload-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn signature_path(&self) -> String {
 		self.parsed
 			.single(SIGNATURE_PATH)
 			.expect("Missing `--signature-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn ephemeral_key_path(&self) -> String {
 		self.parsed
 			.single(EPHEMERAL_KEY_PATH)
 			.expect("Missing `--ephemeral-key-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn file_path(&self) -> String {
-		self.parsed
-			.single(FILE_PATH)
-			.expect("Missing `--file-path`")
-			.to_string()
+		self.parsed.single(FILE_PATH).expect("Missing `--file-path`").clone()
 	}
 
 	fn display_type(&self) -> DisplayType {
@@ -1214,7 +1205,7 @@ impl ClientOpts {
 		self.parsed
 			.single(NEW_PIN_PATH)
 			.expect("Missing `--new-pin-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn current_pin_path(&self) -> Option<String> {
@@ -1231,21 +1222,21 @@ impl ClientOpts {
 		self.parsed
 			.single(ENCRYPTED_QUORUM_KEY_PATH)
 			.expect("Missing `--encrypted-quorum-key-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn plaintext_path(&self) -> String {
 		self.parsed
 			.single(PLAINTEXT_PATH)
 			.expect("Missing `--plaintext-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn ciphertext_path(&self) -> String {
 		self.parsed
 			.single(CIPHERTEXT_PATH)
 			.expect("Missing `--ciphertext-path`")
-			.to_string()
+			.clone()
 	}
 
 	fn yubikey(&self) -> bool {

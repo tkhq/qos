@@ -1,6 +1,8 @@
 FROM stagex/eif_build:0.2.2@sha256:9d086a2743f9df4eddf934c7b68c9dee4a7fb131b6465a24237a67f6c359dfb0 AS eif_build
 FROM stagex/gen_initramfs:6.8@sha256:f5b9271cca6003e952cbbb9ef041ffa92ba328894f563d1d77942e6b5cdeac1a AS gen_initramfs
 FROM stagex/linux-nitro:sx2024.03.0@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eaea8866b002b04264 AS linux-nitro
+FROM stagex/core-gcc:15.2.0@sha256:ceae6035d43fe3653e142e638fd78d72950cd51e7a5dba4755d1db081c54de77 AS gcc
+FROM stagex/core-libunwind:1.7.2@sha256:eb66122d8fc543f5e2f335bb1616f8c3a471604383e2c0a9df4a8e278505d3bc AS libunwind
 
 FROM common AS base
 
@@ -30,6 +32,8 @@ RUN file /init | grep "static-pie"
 FROM base AS build-eif
 WORKDIR /build_cpio
 COPY --from=eif_build . /
+COPY --from=gcc . /
+COPY --from=libunwind . /
 COPY --from=gen_initramfs . /
 COPY --from=build-init /init .
 COPY --from=linux-nitro /nsm.ko .
