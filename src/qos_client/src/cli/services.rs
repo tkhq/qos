@@ -8,8 +8,8 @@ use std::{
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::BorshDeserialize;
 use qos_core::protocol::{
-	msg::{JsonBytes, ProtocolMsg},
 	QosHash,
+	msg::{JsonBytes, ProtocolMsg},
 	services::{
 		boot::{
 			Approval, BridgeConfig, Manifest as ManifestV1,
@@ -1555,7 +1555,9 @@ fn proxy_re_encrypt_share_programmatic_verifications(
 	}
 
 	if !manifest.share_set().members.contains(member) {
-		eprintln!("The provided share set key and alias are not part of the Share Set");
+		eprintln!(
+			"The provided share set key and alias are not part of the Share Set"
+		);
 		return false;
 	}
 
@@ -2251,9 +2253,7 @@ fn find_approvals<P: AsRef<Path>>(
 			let pub_key = P256Public::from_bytes(&approval.member.pub_key)
 				.expect("Failed to interpret pub key");
 			assert!(
-				pub_key
-					.verify(&manifest_hash, &approval.signature)
-					.is_ok(),
+				pub_key.verify(&manifest_hash, &approval.signature).is_ok(),
 				"Approval signature could not be verified against manifest"
 			);
 

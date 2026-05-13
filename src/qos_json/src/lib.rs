@@ -1,6 +1,6 @@
 #![doc = include_str!("../SPEC.md")]
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256};
 use std::io::{self, Write};
 
@@ -712,10 +712,12 @@ mod tests {
 		.unwrap();
 		assert_eq!(parsed.indexes, BTreeSet::from([1]));
 
-		assert!(from_slice::<Example>(
-			br#"{"count":42.5,"limit":"7","indexes":["1"]}"#
-		)
-		.is_err());
+		assert!(
+			from_slice::<Example>(
+				br#"{"count":42.5,"limit":"7","indexes":["1"]}"#
+			)
+			.is_err()
+		);
 		let parsed = from_slice::<Example>(
 			br#"{"count":"\u0034\u0032","limit":"7","indexes":["1"]}"#,
 		)

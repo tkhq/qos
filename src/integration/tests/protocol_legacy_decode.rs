@@ -2,6 +2,7 @@
 
 use borsh::BorshDeserialize;
 use qos_core::protocol::{
+	ProtocolError, ProtocolPhase,
 	msg::ProtocolMsg as CurrentProtocolMsg,
 	services::{
 		boot::{
@@ -11,7 +12,6 @@ use qos_core::protocol::{
 		},
 		genesis::{GenesisOutput, GenesisSet},
 	},
-	ProtocolError, ProtocolPhase,
 };
 use qos_core_legacy::protocol::{
 	msg::ProtocolMsg as LegacyProtocolMsg,
@@ -95,8 +95,8 @@ fn sample_manifest_v0() -> qos_core::protocol::services::boot::ManifestV0 {
 	}
 }
 
-fn sample_manifest_envelope_v0(
-) -> qos_core::protocol::services::boot::ManifestEnvelopeV0 {
+fn sample_manifest_envelope_v0()
+-> qos_core::protocol::services::boot::ManifestEnvelopeV0 {
 	qos_core::protocol::services::boot::ManifestEnvelopeV0 {
 		manifest: sample_manifest_v0(),
 		manifest_set_approvals: vec![sample_approval()],

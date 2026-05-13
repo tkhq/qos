@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::protocol::{
 	ProtocolError, ProtocolState, QosHash,
 	services::boot::{
-		ManifestEnvelope, VersionedManifestEnvelope, put_manifest_and_pivot,
+		VersionedManifestEnvelope, put_manifest_and_pivot,
 	},
 };
 

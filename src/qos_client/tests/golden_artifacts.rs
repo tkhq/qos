@@ -507,6 +507,7 @@ fn golden_manifest_approval_and_envelope_raw_bytes() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn v2_commands_generate_approve_and_envelope_use_json_hash() {
 	use qos_core::protocol::services::boot::{
 		Approval, ManifestEnvelopeV2, ManifestV2, ManifestVersion,
@@ -610,12 +611,14 @@ fn v2_commands_generate_approve_and_envelope_use_json_hash() {
 			.unwrap();
 	assert_eq!(envelope.manifest.version, ManifestVersion::V2);
 	assert_eq!(envelope.manifest_set_approvals.len(), 1);
-	assert!(P256Public::from_bytes(
-		&envelope.manifest_set_approvals[0].member.pub_key
-	)
-	.unwrap()
-	.verify(&manifest_hash, &envelope.manifest_set_approvals[0].signature)
-	.is_ok());
+	assert!(
+		P256Public::from_bytes(
+			&envelope.manifest_set_approvals[0].member.pub_key
+		)
+		.unwrap()
+		.verify(&manifest_hash, &envelope.manifest_set_approvals[0].signature)
+		.is_ok()
+	);
 }
 
 #[test]

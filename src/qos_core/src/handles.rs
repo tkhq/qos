@@ -8,7 +8,9 @@ use std::{
 
 use qos_p256::P256Pair;
 
-use crate::protocol::{ProtocolError, services::boot::VersionedManifestEnvelope};
+use crate::protocol::{
+	ProtocolError, services::boot::VersionedManifestEnvelope,
+};
 
 /// Handle for accessing the quorum key.
 #[derive(Debug, Clone)]

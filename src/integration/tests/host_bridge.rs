@@ -4,7 +4,7 @@ use std::{
 	time::Duration,
 };
 
-use integration::{wait_for_tcp_sock, PIVOT_TCP_PATH};
+use integration::{PIVOT_TCP_PATH, wait_for_tcp_sock};
 use qos_core::io::{HostBridge, SocketAddress, Stream, StreamPool};
 use qos_test_primitives::{ChildWrapper, find_free_port};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

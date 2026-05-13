@@ -4,7 +4,7 @@ use std::ops::{Deref, DerefMut};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_nsm::types::NsmResponse;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 use crate::protocol::{
 	ProtocolError,

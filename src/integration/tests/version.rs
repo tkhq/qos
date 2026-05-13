@@ -4,8 +4,8 @@ use qos_core::{
 	handles::Handles,
 	io::SocketAddress,
 	protocol::{
-		msg::{ProtocolMsg, ProtocolMsgEncoding},
 		ProtocolPhase,
+		msg::{ProtocolMsg, ProtocolMsgEncoding},
 	},
 	reaper::Reaper,
 };

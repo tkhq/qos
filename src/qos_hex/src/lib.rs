@@ -333,8 +333,8 @@ pub mod serde {
 
 	/// Serde support for `Option<T>` where `T` is hex-encoded bytes.
 	pub mod option {
-		use super::{encode, Deserialize, Deserializer, FromHex, Serializer};
-		use serde::Serialize;
+		use super::{Deserializer, FromHex, Serializer, encode};
+		use serde::{Deserialize, Serialize};
 
 		/// Serialize optional bytes as an optional hex string.
 		///

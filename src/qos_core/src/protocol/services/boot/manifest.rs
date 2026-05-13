@@ -473,11 +473,11 @@ mod tests {
 
 	use super::*;
 	use crate::protocol::{
+		QosHash,
 		services::boot::{
 			MemberPubKey, PatchSet, PivotConfig, PivotConfigV0, PivotEnv,
 			QuorumMember,
 		},
-		QosHash,
 	};
 
 	fn sample_member(pair: &P256Pair) -> QuorumMember {

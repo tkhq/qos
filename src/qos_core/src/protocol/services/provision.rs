@@ -2,8 +2,8 @@
 use qos_p256::P256Pair;
 
 use crate::protocol::{
-	services::boot::{Approval, VersionedManifestEnvelope},
 	ProtocolError, ProtocolState,
+	services::boot::{Approval, VersionedManifestEnvelope},
 };
 
 type Secret = Vec<u8>;

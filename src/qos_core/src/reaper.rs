@@ -21,9 +21,9 @@ use crate::{
 	handles::Handles,
 	io::{HostBridge, IOError, SocketAddress, StreamPool},
 	protocol::{
-		services::boot::{BridgeConfig, RestartPolicy},
 		ProtocolPhase, ProtocolState,
 		processor::ProtocolProcessor,
+		services::boot::{BridgeConfig, RestartPolicy},
 	},
 	server::SocketServer,
 };

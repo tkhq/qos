@@ -1,11 +1,11 @@
 //! Explicitly versioned JSON manifest schema (v2).
 
 use crate::protocol::{
+	Hash256,
 	services::boot::{
 		Approval, BridgeConfig, ManifestSet, Namespace, NitroConfig, PivotEnv,
 		RestartPolicy, ShareSet,
 	},
-	Hash256,
 };
 
 use super::ManifestVersion;
