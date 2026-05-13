@@ -1277,7 +1277,9 @@ impl ClientRunner {
 		if let Ok((cmd, parsed)) = result {
 			Self { cmd, opts: ClientOpts { parsed } }
 		} else {
-			println!("Invalid input, try using --help with any of the following commands");
+			println!(
+				"Invalid input, try using --help with any of the following commands"
+			);
 			Command::print_all();
 
 			std::process::exit(1);
@@ -1389,8 +1391,8 @@ mod handlers {
 	use super::services::{ApproveManifestArgs, ProxyReEncryptShareArgs};
 	use crate::{
 		cli::{
-			services::{self, GenerateManifestArgs, PairOrYubi},
 			ClientOpts, ProtocolMsg,
+			services::{self, GenerateManifestArgs, PairOrYubi},
 		},
 		request,
 	};
@@ -1398,7 +1400,9 @@ mod handlers {
 	pub(super) fn pivot_hash(opts: &ClientOpts) {
 		let pivot_path = opts.pivot_path();
 		let pivot = std::fs::read(&pivot_path).unwrap_or_else(|e| {
-			panic!("pivot_hash: Could not read pivot file from {pivot_path:?}: {e}")
+			panic!(
+				"pivot_hash: Could not read pivot file from {pivot_path:?}: {e}"
+			)
 		});
 
 		let hash = qos_crypto::sha_256(&pivot);
@@ -1406,7 +1410,9 @@ mod handlers {
 
 		let output_path = opts.output_path();
 		std::fs::write(&output_path, hex_hash.as_bytes()).unwrap_or_else(|e| {
-			panic!("pivot_hash: Could not write pivot hash to {output_path:?}: {e}")
+			panic!(
+				"pivot_hash: Could not write pivot hash to {output_path:?}: {e}"
+			)
 		});
 	}
 

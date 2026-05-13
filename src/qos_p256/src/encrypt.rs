@@ -1,20 +1,20 @@
 //! Abstractions for encryption.
 
 use aes_gcm::{
-	aead::{Aead, KeyInit, Payload},
 	Aes256Gcm, Nonce,
+	aead::{Aead, KeyInit, Payload},
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use hmac::{Hmac, Mac};
 use p256::elliptic_curve::rand_core::OsRng;
 use p256::{
-	ecdh::diffie_hellman, elliptic_curve::sec1::ToEncodedPoint, PublicKey,
-	SecretKey,
+	PublicKey, SecretKey, ecdh::diffie_hellman,
+	elliptic_curve::sec1::ToEncodedPoint,
 };
 use sha2::Sha512;
 use zeroize::ZeroizeOnDrop;
 
-use crate::{bytes_os_rng, P256Error, PUB_KEY_LEN_UNCOMPRESSED};
+use crate::{P256Error, PUB_KEY_LEN_UNCOMPRESSED, bytes_os_rng};
 
 const AES256_KEY_LEN: usize = 32;
 const BITS_96_AS_BYTES: u8 = 12;

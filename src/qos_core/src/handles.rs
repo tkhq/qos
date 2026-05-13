@@ -8,7 +8,7 @@ use std::{
 
 use qos_p256::P256Pair;
 
-use crate::protocol::{services::boot::ManifestEnvelope, ProtocolError};
+use crate::protocol::{ProtocolError, services::boot::ManifestEnvelope};
 
 /// Handle for accessing the quorum key.
 #[derive(Debug, Clone)]
@@ -266,11 +266,11 @@ impl Handles {
 			Err(ProtocolError::CannotModifyPostPivotStatic)?;
 		}
 
-		if let Some(parent) = Path::new(&self.pivot).parent() {
-			if !parent.exists() {
-				fs::create_dir_all(parent)
-					.map_err(|_| ProtocolError::FailedToPutPivot)?;
-			}
+		if let Some(parent) = Path::new(&self.pivot).parent()
+			&& !parent.exists()
+		{
+			fs::create_dir_all(parent)
+				.map_err(|_| ProtocolError::FailedToPutPivot)?;
 		}
 
 		fs::write(&self.pivot, pivot)
@@ -299,10 +299,10 @@ impl Handles {
 			Err(ProtocolError::CannotModifyPostPivotStatic)?;
 		}
 
-		if let Some(parent) = path.as_ref().parent() {
-			if !parent.exists() {
-				fs::create_dir_all(parent).map_err(|_| err.clone())?;
-			}
+		if let Some(parent) = path.as_ref().parent()
+			&& !parent.exists()
+		{
+			fs::create_dir_all(parent).map_err(|_| err.clone())?;
 		}
 
 		let tmp_path = PathBuf::from(path.as_ref()).with_extension("tmp");
@@ -477,6 +477,6 @@ mod test {
 		assert!(result.is_ok());
 		assert_eq!(error, ProtocolError::CannotModifyPostPivotStatic);
 		assert!(handles.manifest_envelope_exists());
-		assert!(handles.get_manifest_envelope().unwrap() == manifest_envelope);
+		assert_eq!(handles.get_manifest_envelope().unwrap(), manifest_envelope);
 	}
 }

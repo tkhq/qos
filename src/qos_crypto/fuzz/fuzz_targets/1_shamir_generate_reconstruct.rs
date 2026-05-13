@@ -61,7 +61,9 @@ fuzz_target!(|fuzzerdata: FuzzShamirStruct| {
 					// if we managed to reconstruct the secret with less than the minimum number of shares
 					// the something is wrong, or we have a random collision
 					if reconstructed == secret.to_vec() {
-						panic!("reconstructed the secret with less than k shares, this should not happen")
+						panic!(
+							"reconstructed the secret with less than k shares, this should not happen"
+						)
 					}
 				}
 			}

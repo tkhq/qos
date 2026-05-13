@@ -3,8 +3,8 @@
 use borsh::BorshDeserialize;
 
 use super::{
-	error::ProtocolError, msg::ProtocolMsg, SharedProtocolState,
-	MAX_ENCODED_MSG_LEN,
+	MAX_ENCODED_MSG_LEN, SharedProtocolState, error::ProtocolError,
+	msg::ProtocolMsg,
 };
 use crate::server::RequestProcessor;
 

@@ -66,11 +66,7 @@ fn expected_combinations_count(n: usize, k: usize) -> usize {
 }
 
 fn factorial(n: usize) -> usize {
-	if n == 0 || n == 1 {
-		1
-	} else {
-		(2..=n).product()
-	}
+	if n == 0 || n == 1 { 1 } else { (2..=n).product() }
 }
 
 #[cfg(test)]

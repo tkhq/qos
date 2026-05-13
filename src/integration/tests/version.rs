@@ -1,5 +1,5 @@
 use borsh::BorshDeserialize;
-use integration::{wait_for_tcp_sock, wait_for_usock, PIVOT_OK_PATH};
+use integration::{PIVOT_OK_PATH, wait_for_tcp_sock, wait_for_usock};
 use qos_core::{
 	handles::Handles, io::SocketAddress, protocol::msg::ProtocolMsg,
 	reaper::Reaper,

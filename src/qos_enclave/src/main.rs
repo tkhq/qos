@@ -1,7 +1,7 @@
 use std::{
 	fs::create_dir_all,
-	io::stdout,
 	io::Write,
+	io::stdout,
 	mem::MaybeUninit,
 	net::{Shutdown, TcpListener},
 	os::unix::net::UnixStream,
@@ -11,16 +11,17 @@ use std::{
 };
 
 use libc::{
-	c_int, sigaddset, sigemptyset, sigprocmask, sigset_t, sigwaitinfo, SIGINT,
-	SIGTERM, SIG_BLOCK,
+	SIG_BLOCK, SIGINT, SIGTERM, c_int, sigaddset, sigemptyset, sigprocmask,
+	sigset_t, sigwaitinfo,
 };
 use nitro_cli::{
+	CID_TO_CONSOLE_PORT_OFFSET, VMADDR_CID_HYPERVISOR,
 	common::{
+		EnclaveProcessCommandType, ExitGracefully,
 		commands_parser::{DescribeEnclavesArgs, EmptyArgs, RunEnclavesArgs},
 		enclave_proc_command_send_single,
 		json_output::{EnclaveDescribeInfo, EnclaveRunInfo},
 		logger::init_logger,
-		EnclaveProcessCommandType, ExitGracefully,
 	},
 	enclave_proc_comm::{
 		enclave_proc_command_send_all, enclave_proc_connect_to_single,
@@ -28,7 +29,6 @@ use nitro_cli::{
 	},
 	get_id_by_name,
 	utils::Console,
-	CID_TO_CONSOLE_PORT_OFFSET, VMADDR_CID_HYPERVISOR,
 };
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";

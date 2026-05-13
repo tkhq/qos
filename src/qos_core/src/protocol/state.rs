@@ -54,10 +54,9 @@ impl ProtocolRoute {
 
 		// ignore transitions in special cases
 		if let Some(Ok(ProtocolMsg::ProvisionResponse { reconstructed })) = resp
+			&& !reconstructed
 		{
-			if !reconstructed {
-				return resp;
-			}
+			return resp;
 		}
 
 		// handle state transitions
@@ -69,10 +68,10 @@ impl ProtocolRoute {
 			},
 		};
 
-		if let Some(phase) = transition {
-			if let Err(e) = state.transition(phase) {
-				return Some(Err(ProtocolMsg::ProtocolErrorResponse(e)));
-			}
+		if let Some(phase) = transition
+			&& let Err(e) = state.transition(phase)
+		{
+			return Some(Err(ProtocolMsg::ProtocolErrorResponse(e)));
 		}
 
 		resp
@@ -207,7 +206,7 @@ impl ProtocolState {
 					Ok(msg_resp) | Err(msg_resp) => {
 						return borsh::to_vec(&msg_resp).expect(
 							"ProtocolMsg can always be serialized. qed.",
-						)
+						);
 					}
 				},
 			}
@@ -333,11 +332,11 @@ impl ProtocolState {
 mod handlers {
 	use super::ProtocolRouteResponse;
 	use crate::protocol::{
+		ProtocolState,
 		msg::ProtocolMsg,
 		services::{
 			attestation, boot, genesis, key, key::EncryptedQuorumKey, provision,
 		},
-		ProtocolState,
 	};
 
 	// TODO: Add tests for this in the middle of some integration tests

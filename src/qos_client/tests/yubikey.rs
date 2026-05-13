@@ -8,14 +8,13 @@ use std::{
 
 use borsh::BorshDeserialize;
 use qos_client::yubikey::{
-	generate_signed_certificate, import_key_and_generate_signed_certificate,
-	key_agreement, sign_data, DEFAULT_PIN, KEY_AGREEMENT_SLOT, SIGNING_SLOT,
+	DEFAULT_PIN, KEY_AGREEMENT_SLOT, SIGNING_SLOT, generate_signed_certificate,
+	import_key_and_generate_signed_certificate, key_agreement, sign_data,
 };
 use qos_p256::{
-	bytes_os_rng,
+	P256_SECRET_LEN, P256Pair, P256Public, bytes_os_rng,
 	encrypt::{Envelope, P256EncryptPair, P256EncryptPublic},
 	sign::{P256SignPair, P256SignPublic},
-	P256Pair, P256Public, P256_SECRET_LEN,
 };
 use qos_test_primitives::PathWrapper;
 use yubikey::{MgmKey, TouchPolicy, YubiKey};
@@ -205,15 +204,17 @@ fn provision_yubikey_works() {
 	// Create the temporary directory where we write the yubikey
 	std::fs::create_dir(&*tmp_dir).unwrap();
 
-	assert!(Command::new(QOS_CLIENT_PATH)
-		.arg("provision-yubikey")
-		.arg("--pub-path")
-		.arg(&*pub_path)
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(QOS_CLIENT_PATH)
+			.arg("provision-yubikey")
+			.arg("--pub-path")
+			.arg(&*pub_path)
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	// Check that public keys where written
 	{
@@ -235,27 +236,31 @@ fn advanced_provision_yubikey_works() {
 	// Create the temporary directory where we write the yubikey
 	std::fs::create_dir(&*tmp_dir).unwrap();
 
-	assert!(Command::new(QOS_CLIENT_PATH)
-		.arg("generate-file-key")
-		.arg("--master-seed-path")
-		.arg(&*master_seed_path)
-		.arg("--pub-path")
-		.arg(&*pub_path)
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(QOS_CLIENT_PATH)
+			.arg("generate-file-key")
+			.arg("--master-seed-path")
+			.arg(&*master_seed_path)
+			.arg("--pub-path")
+			.arg(&*pub_path)
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
-	assert!(Command::new(QOS_CLIENT_PATH)
-		.arg("advanced-provision-yubikey")
-		.arg("--master-seed-path")
-		.arg(&*master_seed_path)
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(QOS_CLIENT_PATH)
+			.arg("advanced-provision-yubikey")
+			.arg("--master-seed-path")
+			.arg(&*master_seed_path)
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	// Check that public keys where written
 	let public = {
@@ -283,15 +288,17 @@ fn provision_sign_and_verify() {
 	let signature_path = "/tmp/provision_sign_and_verify/signature";
 	let payload_path = "/tmp/provision_sign_and_verify/payload";
 
-	assert!(Command::new(QOS_CLIENT_PATH)
-		.arg("provision-yubikey")
-		.arg("--pub-path")
-		.arg(&*pub_path)
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(QOS_CLIENT_PATH)
+			.arg("provision-yubikey")
+			.arg("--pub-path")
+			.arg(&*pub_path)
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	let data_hex = qos_hex::encode(DATA);
 	let mut child = Command::new(QOS_CLIENT_PATH)
@@ -315,19 +322,21 @@ fn provision_sign_and_verify() {
 	std::fs::write(payload_path, DATA).unwrap();
 	std::fs::write(signature_path, signature).unwrap();
 
-	assert!(Command::new(QOS_CLIENT_PATH)
-		.arg("p256-verify")
-		.arg("--payload-path")
-		.arg(payload_path)
-		.arg("--signature-path")
-		.arg(signature_path)
-		.arg("--pub-path")
-		.arg(&*pub_path)
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(QOS_CLIENT_PATH)
+			.arg("p256-verify")
+			.arg("--payload-path")
+			.arg(payload_path)
+			.arg("--signature-path")
+			.arg(signature_path)
+			.arg("--pub-path")
+			.arg(&*pub_path)
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 }
 
 /// Similar to [`qos_client::yubikey::yubikey_piv_reset`], but does not open a new connection
