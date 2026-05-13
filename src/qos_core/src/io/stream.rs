@@ -102,11 +102,11 @@ impl Stream {
 		let addr = self.address()?.clone();
 
 		match &mut self.inner_mut()? {
-			InnerStream::Unix(ref mut s) => {
+			InnerStream::Unix(s) => {
 				*s = unix_connect(&addr).await?;
 			}
 			#[cfg(feature = "vm")]
-			InnerStream::Vsock(ref mut s) => {
+			InnerStream::Vsock(s) => {
 				*s = vsock_connect(&addr).await?;
 			}
 		}
@@ -121,9 +121,9 @@ impl Stream {
 	/// fails.
 	pub async fn send(&mut self, buf: &[u8]) -> Result<(), IOError> {
 		match &mut self.inner_mut()? {
-			InnerStream::Unix(ref mut s) => send(s, buf).await,
+			InnerStream::Unix(s) => send(s, buf).await,
 			#[cfg(feature = "vm")]
-			InnerStream::Vsock(ref mut s) => send(s, buf).await,
+			InnerStream::Vsock(s) => send(s, buf).await,
 		}
 	}
 
@@ -134,9 +134,9 @@ impl Stream {
 	/// Returns [`IOError`] if the stream is disconnected or the read fails.
 	pub async fn recv(&mut self) -> Result<Vec<u8>, IOError> {
 		match &mut self.inner_mut()? {
-			InnerStream::Unix(ref mut s) => recv(s).await,
+			InnerStream::Unix(s) => recv(s).await,
 			#[cfg(feature = "vm")]
-			InnerStream::Vsock(ref mut s) => recv(s).await,
+			InnerStream::Vsock(s) => recv(s).await,
 		}
 	}
 
@@ -268,9 +268,9 @@ impl AsyncRead for Stream {
 		buf: &mut tokio::io::ReadBuf<'_>,
 	) -> std::task::Poll<std::io::Result<()>> {
 		match &mut self.inner_mut()? {
-			InnerStream::Unix(ref mut s) => Pin::new(s).poll_read(cx, buf),
+			InnerStream::Unix(s) => Pin::new(s).poll_read(cx, buf),
 			#[cfg(feature = "vm")]
-			InnerStream::Vsock(ref mut s) => Pin::new(s).poll_read(cx, buf),
+			InnerStream::Vsock(s) => Pin::new(s).poll_read(cx, buf),
 		}
 	}
 }
@@ -282,9 +282,9 @@ impl AsyncWrite for Stream {
 		buf: &[u8],
 	) -> std::task::Poll<Result<usize, std::io::Error>> {
 		match &mut self.inner_mut()? {
-			InnerStream::Unix(ref mut s) => Pin::new(s).poll_write(cx, buf),
+			InnerStream::Unix(s) => Pin::new(s).poll_write(cx, buf),
 			#[cfg(feature = "vm")]
-			InnerStream::Vsock(ref mut s) => Pin::new(s).poll_write(cx, buf),
+			InnerStream::Vsock(s) => Pin::new(s).poll_write(cx, buf),
 		}
 	}
 
@@ -293,9 +293,9 @@ impl AsyncWrite for Stream {
 		cx: &mut std::task::Context<'_>,
 	) -> std::task::Poll<Result<(), std::io::Error>> {
 		match &mut self.inner_mut()? {
-			InnerStream::Unix(ref mut s) => Pin::new(s).poll_flush(cx),
+			InnerStream::Unix(s) => Pin::new(s).poll_flush(cx),
 			#[cfg(feature = "vm")]
-			InnerStream::Vsock(ref mut s) => Pin::new(s).poll_flush(cx),
+			InnerStream::Vsock(s) => Pin::new(s).poll_flush(cx),
 		}
 	}
 
@@ -304,9 +304,9 @@ impl AsyncWrite for Stream {
 		cx: &mut std::task::Context<'_>,
 	) -> std::task::Poll<Result<(), std::io::Error>> {
 		match &mut self.inner_mut()? {
-			InnerStream::Unix(ref mut s) => Pin::new(s).poll_shutdown(cx),
+			InnerStream::Unix(s) => Pin::new(s).poll_shutdown(cx),
 			#[cfg(feature = "vm")]
-			InnerStream::Vsock(ref mut s) => Pin::new(s).poll_shutdown(cx),
+			InnerStream::Vsock(s) => Pin::new(s).poll_shutdown(cx),
 		}
 	}
 }

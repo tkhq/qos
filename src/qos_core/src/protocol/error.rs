@@ -5,7 +5,7 @@ use qos_p256::P256Error;
 use crate::{
 	client::ClientError,
 	io::IOError,
-	protocol::{services::boot, ProtocolPhase},
+	protocol::{ProtocolPhase, services::boot},
 };
 
 /// A error from protocol execution.
@@ -344,7 +344,10 @@ impl std::fmt::Display for ProtocolError {
 				)
 			}
 			Self::LowNonce { expected, actual } => {
-				write!(f, "manifest nonce too low: expected >= {expected}, got {actual}")
+				write!(
+					f,
+					"manifest nonce too low: expected >= {expected}, got {actual}"
+				)
 			}
 			Self::DifferentPcr3 { expected, actual } => {
 				write!(f, "different PCR3: expected {expected}, got {actual}")

@@ -3,11 +3,11 @@
 use qos_nsm::types::NsmResponse;
 
 use crate::protocol::{
+	ProtocolError,
 	services::{
 		boot::{Approval, ManifestEnvelope},
 		genesis::{GenesisOutput, GenesisSet},
 	},
-	ProtocolError,
 };
 
 /// Message types for communicating with protocol executor.

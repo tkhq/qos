@@ -101,7 +101,7 @@ pub fn find_free_port() -> Option<u16> {
 	for _ in 0..MAX_FIND_FREE_PORT_ATTEMPTS {
 		match TcpListener::bind(("127.0.0.1", 0)) {
 			Ok(listener) => {
-				return listener.local_addr().ok().map(|addr| addr.port())
+				return listener.local_addr().ok().map(|addr| addr.port());
 			}
 			Err(err) => {
 				last_err = Some(err);

@@ -6,9 +6,9 @@ use std::{
 };
 
 use hickory_resolver::{
+	TokioResolver,
 	config::{NameServerConfigGroup, ResolverConfig, ResolverOpts},
 	name_server::TokioConnectionProvider,
-	TokioResolver,
 };
 use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt},

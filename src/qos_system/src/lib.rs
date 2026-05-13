@@ -25,7 +25,7 @@ pub fn dmesg(message: String) {
 
 /// Dmesg formatted seconds since boot
 pub fn boot_time() -> String {
-	use libc::{clock_gettime, timespec, CLOCK_BOOTTIME};
+	use libc::{CLOCK_BOOTTIME, clock_gettime, timespec};
 	let mut t = timespec { tv_sec: 0, tv_nsec: 0 };
 	unsafe {
 		clock_gettime(CLOCK_BOOTTIME, &mut t as *mut timespec);
@@ -35,7 +35,7 @@ pub fn boot_time() -> String {
 
 /// Unconditionally reboot the system now
 pub fn reboot() {
-	use libc::{reboot, RB_AUTOBOOT};
+	use libc::{RB_AUTOBOOT, reboot};
 	unsafe {
 		reboot(RB_AUTOBOOT);
 	}
@@ -43,7 +43,7 @@ pub fn reboot() {
 
 /// Unconditionally halt the system now
 pub fn poweroff() {
-	use libc::{reboot, RB_POWER_OFF};
+	use libc::{RB_POWER_OFF, reboot};
 	unsafe {
 		reboot(RB_POWER_OFF);
 	}
@@ -106,7 +106,7 @@ pub fn freopen(
 
 /// Insert kernel module into memory
 pub fn insmod(path: &str) -> Result<(), SystemError> {
-	use libc::{syscall, SYS_finit_module};
+	use libc::{SYS_finit_module, syscall};
 	let file = File::open(path).unwrap();
 	let fd = file.as_raw_fd();
 	let finit_module_result =
@@ -126,7 +126,7 @@ pub fn socket_connect(
 	port: u32,
 	cid: u32,
 ) -> Result<c_int, SystemError> {
-	use libc::{connect, sockaddr, sockaddr_vm, socket, SOCK_STREAM};
+	use libc::{SOCK_STREAM, connect, sockaddr, sockaddr_vm, socket};
 	let fd = unsafe { socket(family, SOCK_STREAM, 0) };
 	let connect_result = unsafe {
 		let mut sa: sockaddr_vm = zeroed();
@@ -182,7 +182,7 @@ pub fn get_local_cid() -> Result<u32, SystemError> {
 		Err(_e) => {
 			return Err(SystemError {
 				message: "Failed to open /dev/vsock".to_string(),
-			})
+			});
 		}
 	};
 

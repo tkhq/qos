@@ -2,7 +2,7 @@ use std::process::Command;
 
 use borsh::BorshDeserialize;
 use integration::{
-	wait_for_usock, PivotRemoteTlsMsg, PIVOT_REMOTE_TLS_PATH, QOS_NET_PATH,
+	PIVOT_REMOTE_TLS_PATH, PivotRemoteTlsMsg, QOS_NET_PATH, wait_for_usock,
 };
 use qos_core::{
 	client::SocketClient,

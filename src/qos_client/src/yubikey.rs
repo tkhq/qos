@@ -3,9 +3,9 @@
 use borsh::BorshDeserialize;
 use der::{asn1::BitStringRef, referenced::OwnedToRef};
 use p256::{
-	ecdsa::{signature::Verifier, Signature, VerifyingKey},
-	pkcs8::SubjectPublicKeyInfo,
 	SecretKey,
+	ecdsa::{Signature, VerifyingKey, signature::Verifier},
+	pkcs8::SubjectPublicKeyInfo,
 };
 use qos_p256::encrypt::Envelope;
 use rand_core::{OsRng, TryRngCore};
@@ -14,9 +14,9 @@ use x509_cert::{
 	name::RdnSequence, serial_number::SerialNumber, time::Validity,
 };
 use yubikey::{
+	MgmKey, PinPolicy, TouchPolicy, YubiKey,
 	certificate::Certificate,
 	piv::{self, AlgorithmId, SlotId},
-	MgmKey, PinPolicy, TouchPolicy, YubiKey,
 };
 use zeroize::Zeroizing;
 

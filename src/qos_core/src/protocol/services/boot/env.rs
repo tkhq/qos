@@ -416,11 +416,15 @@ mod test {
 		assert!(PivotEnvVarName::new("BAD NAME".to_string()).is_err());
 		assert!(PivotEnvVarName::new("BAD/NAME".to_string()).is_err());
 		assert!(PivotEnvVarName::new("BAD+NAME".to_string()).is_err());
-		assert!(PivotEnvVarName::new("A".repeat(MAX_PIVOT_ENV_NAME_LEN + 1))
-			.is_err());
+		assert!(
+			PivotEnvVarName::new("A".repeat(MAX_PIVOT_ENV_NAME_LEN + 1))
+				.is_err()
+		);
 		assert!(PivotEnvValue::plain("bad\0value".to_string()).is_err());
-		assert!(PivotEnvValue::plain("A".repeat(MAX_PIVOT_ENV_VALUE_LEN + 1))
-			.is_err());
+		assert!(
+			PivotEnvValue::plain("A".repeat(MAX_PIVOT_ENV_VALUE_LEN + 1))
+				.is_err()
+		);
 
 		let mut env = BTreeMap::new();
 		for i in 0..=MAX_PIVOT_ENV_VARS {

@@ -26,18 +26,28 @@ pub enum ParserError {
 impl fmt::Display for ParserError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Self::UnexpectedInput(u) => write!(f, "found {u}, which was not an expected argument"),
+			Self::UnexpectedInput(u) => {
+				write!(f, "found {u}, which was not an expected argument")
+			}
 			Self::DuplicateInput(i) => {
-				write!(f, "found argument {i} more then once, but only one instance was expected")
+				write!(
+					f,
+					"found argument {i} more then once, but only one instance was expected"
+				)
 			}
 			Self::MutuallyExclusiveInput(y, z) => write!(
 				f,
 				"arguments {y} and {z} are mutually exclusive and cannot be used at the same time"
 			),
 			Self::MissingValue(i) => {
-				write!(f, "found argument {i}, which requires a value, but no value was given")
+				write!(
+					f,
+					"found argument {i}, which requires a value, but no value was given"
+				)
 			}
-			Self::MissingInput(i) => write!(f, "argument {i} is required but was not found"),
+			Self::MissingInput(i) => {
+				write!(f, "argument {i} is required but was not found")
+			}
 		}
 	}
 }
@@ -377,7 +387,7 @@ impl TokenType {
 
 	fn push_val(&mut self, val: &str) -> Result<(), ParserError> {
 		match self {
-			TokenType::Multiple(ref mut v) => {
+			TokenType::Multiple(v) => {
 				v.push(val.to_string());
 				Ok(())
 			}
@@ -466,8 +476,8 @@ impl TokenMap {
 				// Find the value
 				let value = if iter
 					.peek()
-					.filter(|i| !i.starts_with(INPUT_PREFIX))
-					.is_some()
+					.as_ref()
+					.is_some_and(|i| !i.starts_with(INPUT_PREFIX))
 				{
 					// Advance the iterator since we only peaked above
 					iter.next().unwrap().clone()
@@ -520,12 +530,10 @@ impl TokenMap {
 
 			if token.user_value.is_some() {
 				// Check if this token requires the presence of another token
-				if let Some(ref other_name) = token.requires {
-					if !inputs.contains(&(format!("--{other_name}"))) {
-						return Err(ParserError::MissingInput(
-							other_name.clone(),
-						));
-					}
+				if let Some(ref other_name) = token.requires
+					&& !inputs.contains(&(format!("--{other_name}")))
+				{
+					return Err(ParserError::MissingInput(other_name.clone()));
 				}
 
 				// Check if there already exists a token that is mutually

@@ -1,8 +1,8 @@
 use std::ffi::c_void;
 
 use nix::libc::{
-	close, htonl, ifreq, memcpy, sockaddr, sockaddr_in, socket, AF_INET,
-	IFF_UP, SIOCGIFFLAGS, SIOCSIFADDR, SIOCSIFFLAGS, SOCK_DGRAM,
+	AF_INET, IFF_UP, SIOCGIFFLAGS, SIOCSIFADDR, SIOCSIFFLAGS, SOCK_DGRAM,
+	close, htonl, ifreq, memcpy, sockaddr, sockaddr_in, socket,
 };
 use nix::{errno::Errno, ioctl_read_bad, ioctl_write_ptr_bad};
 

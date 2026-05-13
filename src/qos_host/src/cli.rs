@@ -167,7 +167,9 @@ impl HostOpts {
 			.as_ref()
 			.map(|s| s.parse())
 			.map(|r| {
-				r.expect("could not parse `--vsock-to-host`. Valid args are true or false")
+				r.expect(
+					"could not parse `--vsock-to-host`. Valid args are true or false",
+				)
 			})
 			.unwrap_or(false);
 

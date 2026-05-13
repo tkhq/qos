@@ -24,36 +24,40 @@ fn p256_sign_verify_roundtrip() {
 	// Sanity check the signature output doesn't already exist
 	assert!(!PathBuf::from(signature_path).exists());
 
-	assert!(Command::new(QOS_CLIENT_PATH)
-		.arg("p256-sign")
-		.arg("--payload-path")
-		.arg(payload_path)
-		.arg("--signature-path")
-		.arg(signature_path)
-		.arg("--master-seed-path")
-		.arg(MOCK_PRIMARY_SEED_PATH)
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(QOS_CLIENT_PATH)
+			.arg("p256-sign")
+			.arg("--payload-path")
+			.arg(payload_path)
+			.arg("--signature-path")
+			.arg(signature_path)
+			.arg("--master-seed-path")
+			.arg(MOCK_PRIMARY_SEED_PATH)
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	let signature = std::fs::read_to_string(signature_path).unwrap();
 	assert_eq!(EXPECTED_SIGNATURE, signature);
 
-	assert!(Command::new(QOS_CLIENT_PATH)
-		.arg("p256-verify")
-		.arg("--payload-path")
-		.arg(payload_path)
-		.arg("--signature-path")
-		.arg(signature_path)
-		.arg("--pub-path")
-		.arg(MOCK_PRIMARY_PUB_PATH)
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(QOS_CLIENT_PATH)
+			.arg("p256-verify")
+			.arg("--payload-path")
+			.arg(payload_path)
+			.arg("--signature-path")
+			.arg(signature_path)
+			.arg("--pub-path")
+			.arg(MOCK_PRIMARY_PUB_PATH)
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 }
 
 #[test]
@@ -70,57 +74,63 @@ fn p256_asymmetric_encrypt_decrypt_roundtrip() {
 	// Sanity check the ciphertext output doesn't already exist
 	assert!(!PathBuf::from(ciphertext_path).exists());
 
-	assert!(Command::new(QOS_CLIENT_PATH)
-		.arg("p256-asymmetric-encrypt")
-		.arg("--plaintext-path")
-		.arg(plaintext_input_path)
-		.arg("--ciphertext-path")
-		.arg(ciphertext_path)
-		.arg("--pub-path")
-		.arg(MOCK_PRIMARY_PUB_PATH)
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(QOS_CLIENT_PATH)
+			.arg("p256-asymmetric-encrypt")
+			.arg("--plaintext-path")
+			.arg(plaintext_input_path)
+			.arg("--ciphertext-path")
+			.arg(ciphertext_path)
+			.arg("--pub-path")
+			.arg(MOCK_PRIMARY_PUB_PATH)
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	let plaintext_output_path =
 		"/tmp/p256_asymmetric_encrypt_decrypt_roundtrip/plaintext_output";
 	assert!(!PathBuf::from(plaintext_output_path).exists());
 
-	assert!(Command::new(QOS_CLIENT_PATH)
-		.arg("p256-asymmetric-decrypt")
-		.arg("--plaintext-path")
-		.arg(plaintext_output_path)
-		.arg("--ciphertext-path")
-		.arg(ciphertext_path)
-		.arg("--master-seed-path")
-		.arg(MOCK_PRIMARY_SEED_PATH)
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(QOS_CLIENT_PATH)
+			.arg("p256-asymmetric-decrypt")
+			.arg("--plaintext-path")
+			.arg(plaintext_output_path)
+			.arg("--ciphertext-path")
+			.arg(ciphertext_path)
+			.arg("--master-seed-path")
+			.arg(MOCK_PRIMARY_SEED_PATH)
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	let decrypted_bytes = std::fs::read(plaintext_output_path).unwrap();
 	assert_eq!(decrypted_bytes, DATA.as_bytes());
 
 	let hex_plaintext_output_path =
 		"/tmp/p256_asymmetric_encrypt_decrypt_roundtrip/plaintext_output";
-	assert!(Command::new(QOS_CLIENT_PATH)
-		.arg("p256-asymmetric-decrypt")
-		.arg("--plaintext-path")
-		.arg(hex_plaintext_output_path)
-		.arg("--ciphertext-path")
-		.arg(ciphertext_path)
-		.arg("--master-seed-path")
-		.arg(MOCK_PRIMARY_SEED_PATH)
-		.arg("--output-hex")
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
+	assert!(
+		Command::new(QOS_CLIENT_PATH)
+			.arg("p256-asymmetric-decrypt")
+			.arg("--plaintext-path")
+			.arg(hex_plaintext_output_path)
+			.arg("--ciphertext-path")
+			.arg(ciphertext_path)
+			.arg("--master-seed-path")
+			.arg(MOCK_PRIMARY_SEED_PATH)
+			.arg("--output-hex")
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
 
 	let hex_plaintext = std::fs::read_to_string(plaintext_output_path).unwrap();
 

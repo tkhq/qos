@@ -26,9 +26,5 @@ fn git_short_sha() -> Option<String> {
 		return None;
 	}
 	let s = String::from_utf8(out.stdout).ok()?.trim().to_string();
-	if s.is_empty() {
-		None
-	} else {
-		Some(s)
-	}
+	if s.is_empty() { None } else { Some(s) }
 }

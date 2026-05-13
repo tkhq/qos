@@ -1,8 +1,8 @@
 use qos_core::{
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE,
 	handles::Handles,
 	io::{SocketAddress, VMADDR_NO_FLAGS},
 	reaper::Reaper,
-	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE,
 };
 use qos_nsm::Nsm;
 use qos_system::{dmesg, freopen, get_local_cid, mount, reboot};

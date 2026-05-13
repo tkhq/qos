@@ -180,8 +180,8 @@ impl From<Request> for NsmRequest {
 
 impl From<NsmRequest> for Request {
 	fn from(req: NsmRequest) -> Self {
-		use serde_bytes::ByteBuf;
 		use NsmRequest as R;
+		use serde_bytes::ByteBuf;
 		match req {
 			R::DescribePCR { index } => Self::DescribePCR { index },
 			R::ExtendPCR { index, data } => Self::ExtendPCR { index, data },

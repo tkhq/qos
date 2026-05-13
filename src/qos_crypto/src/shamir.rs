@@ -1,6 +1,6 @@
 //! Shamir Secret Sharing module. We use the [`vsss-rs`](https://crates.io/crates/vsss-rs)
-use vsss_rs::elliptic_curve::rand_core::OsRng;
 use vsss_rs::Gf256;
+use vsss_rs::elliptic_curve::rand_core::OsRng;
 
 use crate::QosCryptoError;
 
@@ -60,8 +60,8 @@ mod test {
 		let shares = &all_shares[..(k - 1)];
 		let reconstructed = shares_reconstruct(shares).unwrap();
 		let old_reconstructed = shares_reconstruct(shares).unwrap();
-		assert!(secret.to_vec() != reconstructed);
-		assert!(secret.to_vec() != old_reconstructed);
+		assert_ne!(secret.to_vec(), reconstructed);
+		assert_ne!(secret.to_vec(), old_reconstructed);
 
 		// Reconstruct with enough shuffled shares
 		let mut shares = all_shares.clone()[..k].to_vec();
