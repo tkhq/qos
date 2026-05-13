@@ -32,7 +32,6 @@ default-members = [
   "src/qos_p256",
   "src/qos_nsm",
 ]
-
 exclude = [
   "src/init",
   "src/qos_aws",
@@ -45,7 +44,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-rust-version = "1.88"
+rust-version = "1.94"
 version = "0.7.0"
 edition = "2021"
 license = "AGPL-3.0-only"

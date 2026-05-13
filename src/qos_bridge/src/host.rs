@@ -35,7 +35,10 @@ impl BridgeServer {
 	pub async fn serve(&self) {
 		loop {
 			match tokio::task::block_in_place(|| {
-				ureq::get(&self.info_url).timeout(Duration::from_secs(1)).call()
+				ureq::get(&self.info_url)
+					.timeout(Duration::from_secs(1))
+					.call()
+					.map_err(Box::new)
 			}) {
 				Ok(info) => {
 					if let Some(me) = info
