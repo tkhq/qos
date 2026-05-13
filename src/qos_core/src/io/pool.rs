@@ -335,7 +335,7 @@ mod test {
 		let server_task = tokio::task::spawn(async move {
 			let _stream = server.accept().await.unwrap();
 			// give the call time to connect and hang
-			tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+			tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 		});
 
 		let pool = StreamPool::new(server_addr, 1).unwrap().shared();

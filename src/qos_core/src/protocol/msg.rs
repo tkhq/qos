@@ -7,11 +7,11 @@ use qos_nsm::types::NsmResponse;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::protocol::{
+	ProtocolError,
 	services::{
 		boot::{Approval, VersionedManifestEnvelope},
 		genesis::{GenesisOutput, GenesisSet},
 	},
-	ProtocolError,
 };
 
 /// Borsh wrapper that carries a Rust value as JSON bytes on the wire.

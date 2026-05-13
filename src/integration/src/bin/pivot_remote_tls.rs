@@ -56,8 +56,9 @@ impl RequestProcessor for Processor {
 					.await
 					.expect("tls unable to establish connection");
 
-				let http_request =
-					format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n");
+				let http_request = format!(
+					"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+				);
 
 				tls.write_all(http_request.as_bytes()).await.unwrap();
 

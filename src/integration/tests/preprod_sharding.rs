@@ -10,7 +10,7 @@ use std::{
 
 use qos_crypto::shamir::shares_generate;
 use qos_p256::{
-	derive_secret, encrypt::P256EncryptPair, P256Pair, P256_ENCRYPT_DERIVE_PATH,
+	P256_ENCRYPT_DERIVE_PATH, P256Pair, derive_secret, encrypt::P256EncryptPair,
 };
 
 // Note: the dev secret can also be found in our keys repo
@@ -58,19 +58,21 @@ fn preprod_reshard_ceremony() {
 
 		let master_seed_path = format!("{}/{}", user_dir(user), private);
 		let public_path = format!("{}/{}", user_dir(user), public);
-		assert!(Command::new(integration::QOS_CLIENT_PATH)
-			.args([
-				"generate-file-key",
-				"--master-seed-path",
-				&master_seed_path,
-				"--pub-path",
-				&public_path,
-			])
-			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
+		assert!(
+			Command::new(integration::QOS_CLIENT_PATH)
+				.args([
+					"generate-file-key",
+					"--master-seed-path",
+					&master_seed_path,
+					"--pub-path",
+					&public_path,
+				])
+				.spawn()
+				.unwrap()
+				.wait()
+				.unwrap()
+				.success()
+		);
 
 		// Assert both public and private key paths now exist
 		assert!(Path::new(&*user_dir(user)).join(public).is_file());

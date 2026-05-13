@@ -3,15 +3,17 @@
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_nsm::{
-	nitro::{attestation_doc_from_der, cert_from_pem, AWS_ROOT_CERT_PEM},
+	nitro::{AWS_ROOT_CERT_PEM, attestation_doc_from_der, cert_from_pem},
 	types::NsmResponse,
 };
 use qos_p256::{P256Pair, P256Public};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
-	services::boot::{put_manifest_and_pivot, VersionedManifestEnvelope},
 	ProtocolError, ProtocolState, QosHash,
+	services::boot::{
+		ManifestEnvelope, VersionedManifestEnvelope, put_manifest_and_pivot,
+	},
 };
 
 /// An encrypted quorum key along with a signature over the encrypted payload
@@ -306,15 +308,15 @@ mod test {
 	use crate::{
 		handles::Handles,
 		protocol::{
+			ProtocolError, ProtocolPhase, ProtocolState, QosHash,
 			services::{
 				boot::{
 					Approval, Manifest, ManifestEnvelope, ManifestSet,
 					Namespace, NitroConfig, PivotConfig, QuorumMember,
 					RestartPolicy, ShareSet,
 				},
-				key::{inject_key, EncryptedQuorumKey},
+				key::{EncryptedQuorumKey, inject_key},
 			},
-			ProtocolError, ProtocolPhase, ProtocolState, QosHash,
 		},
 	};
 
@@ -490,7 +492,8 @@ mod test {
 				"/tmp/boot_key_rejects_manifest_if_not_enough_approvals.secret",
 			);
 			let manifest_file = PathWrapper::from(
-				"/tmp/boot_key_rejects_manifest_if_not_enough_approvals.manifest");
+				"/tmp/boot_key_rejects_manifest_if_not_enough_approvals.manifest",
+			);
 
 			let handles = Handles::new(
 				ephemeral_file.display().to_string(),
@@ -563,13 +566,13 @@ mod test {
 			let TestArgs { mut manifest_envelope, pivot, .. } = get_test_args();
 
 			let pivot_file = PathWrapper::from(
-				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.pivot"
+				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.pivot",
 			);
 			let ephemeral_file = PathWrapper::from(
-				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.secret"
+				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.secret",
 			);
 			let manifest_file = PathWrapper::from(
-				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.manifest"
+				"/tmp/boot_key_rejects_rejects_manifest_with_bad_approval_signature.manifest",
 			);
 
 			let handles = Handles::new(
@@ -619,11 +622,14 @@ mod test {
 			};
 
 			let pivot_file = PathWrapper::from(
-				"/tmp/boot_key_reject_manifest_with_approval_from_non_memberpivot");
+				"/tmp/boot_key_reject_manifest_with_approval_from_non_memberpivot",
+			);
 			let ephemeral_file = PathWrapper::from(
-				"/tmp/boot_key_reject_manifest_with_approval_from_non_membersecret");
+				"/tmp/boot_key_reject_manifest_with_approval_from_non_membersecret",
+			);
 			let manifest_file = PathWrapper::from(
-				"/tmp/boot_key_reject_manifest_with_approval_from_non_membermanifest");
+				"/tmp/boot_key_reject_manifest_with_approval_from_non_membermanifest",
+			);
 
 			let handles = Handles::new(
 				ephemeral_file.display().to_string(),
@@ -656,12 +662,14 @@ mod test {
 		#[test]
 		fn accepts_matching_manifests() {
 			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
-			assert!(validate_manifest(
-				&manifest_envelope,
-				&manifest_envelope,
-				&att_doc
-			)
-			.is_ok());
+			assert!(
+				validate_manifest(
+					&manifest_envelope,
+					&manifest_envelope,
+					&att_doc
+				)
+				.is_ok()
+			);
 		}
 
 		#[test]
@@ -670,12 +678,14 @@ mod test {
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.namespace.nonce -= 1;
 
-			assert!(validate_manifest(
-				&manifest_envelope,
-				&old_manifest_envelope,
-				&att_doc
-			)
-			.is_ok());
+			assert!(
+				validate_manifest(
+					&manifest_envelope,
+					&old_manifest_envelope,
+					&att_doc
+				)
+				.is_ok()
+			);
 		}
 
 		#[test]
@@ -771,12 +781,14 @@ mod test {
 
 			old_manifest_envelope.manifest.namespace.nonce -= 1;
 
-			assert!(validate_manifest(
-				&manifest_envelope,
-				&old_manifest_envelope,
-				&att_doc
-			)
-			.is_ok(),);
+			assert!(
+				validate_manifest(
+					&manifest_envelope,
+					&old_manifest_envelope,
+					&att_doc
+				)
+				.is_ok(),
+			);
 		}
 
 		#[test]
@@ -1123,10 +1135,12 @@ mod test {
 				.unwrap();
 
 			// quorum key signature over payload is valid
-			assert!(quorum_pair
-				.public_key()
-				.verify(&encrypted_quorum_key, &signature)
-				.is_ok());
+			assert!(
+				quorum_pair
+					.public_key()
+					.verify(&encrypted_quorum_key, &signature)
+					.is_ok()
+			);
 
 			let decrypted_quorum_secret =
 				eph_pair.decrypt(&encrypted_quorum_key).unwrap();

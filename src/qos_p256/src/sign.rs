@@ -1,8 +1,8 @@
 //! Abstractions for sign and signature verification
 
 use p256::ecdsa::{
-	signature::{Signer, Verifier},
 	Signature, SigningKey, VerifyingKey,
+	signature::{Signer, Verifier},
 };
 use p256::elliptic_curve::rand_core::OsRng;
 use zeroize::ZeroizeOnDrop;

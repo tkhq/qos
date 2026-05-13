@@ -8,7 +8,7 @@ use qos_p256::{P256Pair, P256Public};
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
-	services::boot::QuorumMember, ProtocolError, ProtocolState, QosHash,
+	ProtocolError, ProtocolState, QosHash, services::boot::QuorumMember,
 };
 
 const QOS_TEST_MESSAGE: &[u8] = b"qos-test-message";

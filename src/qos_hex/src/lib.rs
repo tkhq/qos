@@ -121,7 +121,9 @@ pub fn decode(raw_s: &str) -> Result<Vec<u8>, HexError> {
 					verify_ascii(sanitized_s_bytes[i + 1])?;
 
 					let s = std::str::from_utf8(&sanitized_s_bytes[i..i + 2])
-						.expect("We ensure that input slice represents ASCII above. qed.");
+						.expect(
+							"We ensure that input slice represents ASCII above. qed.",
+						);
 					u8::from_str_radix(s, 16).map_err(Into::into)
 				})
 				.collect()
@@ -265,9 +267,9 @@ from_hex_array_impl! {
 pub mod serde {
 	use core::{fmt, marker::PhantomData};
 
-	use serde::{de::Visitor, Deserialize, Deserializer, Serializer};
+	use serde::{Deserializer, Serializer, de::Visitor};
 
-	use super::{encode, FromHex};
+	use super::{FromHex, encode};
 
 	/// Serialize bytes as a hex string.
 	///

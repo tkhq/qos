@@ -52,7 +52,9 @@ pub mod request {
 			.map_err(|e| match e {
 				ureq::Error::Status(code, r) => {
 					let body = r.into_string();
-					format!("http_post error: [url: {url}, status: {code}, body: {body:?}]")
+					format!(
+						"http_post error: [url: {url}, status: {code}, body: {body:?}]"
+					)
 				}
 				ureq::Error::Transport(e) => {
 					format!("http_post error: transport error: {e}")

@@ -2,7 +2,7 @@ use qos_system::{check_hwrng, dmesg, poweroff};
 
 /// Signal to Nitro hypervisor that booting was successful
 fn nitro_heartbeat() {
-	use libc::{close, read, write, AF_VSOCK};
+	use libc::{AF_VSOCK, close, read, write};
 	use qos_system::socket_connect;
 	let mut buf: [u8; 1] = [0; 1];
 	buf[0] = 0xB7; // AWS Nitro heartbeat value

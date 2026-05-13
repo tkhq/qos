@@ -16,25 +16,25 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
+	Json, Router,
 	body::Bytes,
 	extract::{DefaultBodyLimit, State},
 	http::StatusCode,
 	response::{Html, IntoResponse},
 	routing::{get, post},
-	Json, Router,
 };
 use qos_core::{
 	client::{ClientError, SocketClient},
 	io::SocketAddress,
 	protocol::{
-		msg::ProtocolMsg, services::boot::VersionedManifestEnvelope,
-		ProtocolError, ProtocolPhase,
+		ProtocolError, ProtocolPhase, msg::ProtocolMsg,
+		services::boot::VersionedManifestEnvelope,
 	},
 };
 use qos_nsm::types::NsmResponse;
 
 use crate::{
-	EnclaveInfo, EnclaveVitalStats, Error, ENCLAVE_HEALTH, ENCLAVE_INFO,
+	ENCLAVE_HEALTH, ENCLAVE_INFO, EnclaveInfo, EnclaveVitalStats, Error,
 	HOST_HEALTH, MAX_ENCODED_MSG_LEN, MESSAGE,
 };
 
@@ -120,23 +120,24 @@ impl HostServer {
 		let encoded_request = ProtocolMsg::StatusRequest
 			.to_json_wire()
 			.expect("ProtocolMsg can always serialize. qed.");
-		let encoded_response = match state
-			.enclave_client
-			.call(&encoded_request)
-			.await
-		{
-			Ok(encoded_response) => encoded_response,
-			Err(e) => {
-				let msg = format!("Error while trying to send socket request to enclave: {e:?}");
-				eprintln!("{msg}");
-				return (StatusCode::INTERNAL_SERVER_ERROR, Html(msg));
-			}
-		};
+		let encoded_response =
+			match state.enclave_client.call(&encoded_request).await {
+				Ok(encoded_response) => encoded_response,
+				Err(e) => {
+					let msg = format!(
+						"Error while trying to send socket request to enclave: {e:?}"
+					);
+					eprintln!("{msg}");
+					return (StatusCode::INTERNAL_SERVER_ERROR, Html(msg));
+				}
+			};
 
 		let response = match ProtocolMsg::from_wire_any(&encoded_response) {
 			Ok(r) => r,
 			Err(e) => {
-				let msg = format!("Error deserializing response from enclave, make sure qos_host version match qos_core: {e}");
+				let msg = format!(
+					"Error deserializing response from enclave, make sure qos_host version match qos_core: {e}"
+				);
 				eprintln!("{msg}");
 				return (StatusCode::INTERNAL_SERVER_ERROR, Html(msg));
 			}
@@ -157,7 +158,9 @@ impl HostServer {
 				(status, Html(inner))
 			}
 			other => {
-				let msg = format!("Unexpected response: Expected a ProtocolMsg::StatusResponse, but got: {other:?}");
+				let msg = format!(
+					"Unexpected response: Expected a ProtocolMsg::StatusResponse, but got: {other:?}"
+				);
 				eprintln!("{msg}");
 				(StatusCode::INTERNAL_SERVER_ERROR, Html(msg))
 			}
@@ -180,13 +183,17 @@ impl HostServer {
 		let status_resp = match ProtocolMsg::from_wire_any(&enc_status_resp) {
 			Ok(status_resp) => status_resp,
 			Err(e) => {
-				return Err(Error(format!("error deserializing status response from enclave, make sure qos_host version match qos_core: {e:?}")));
+				return Err(Error(format!(
+					"error deserializing status response from enclave, make sure qos_host version match qos_core: {e:?}"
+				)));
 			}
 		};
 		let phase = match status_resp {
 			ProtocolMsg::StatusResponse(phase) => phase,
 			other => {
-				return Err(Error(format!("unexpected response: expected a ProtocolMsg::StatusResponse, but got: {other:?}")));
+				return Err(Error(format!(
+					"unexpected response: expected a ProtocolMsg::StatusResponse, but got: {other:?}"
+				)));
 			}
 		};
 
@@ -241,7 +248,9 @@ impl HostServer {
 			Ok(encoded_response) => (StatusCode::OK, encoded_response),
 
 			Err(e) => {
-				eprintln!("Error while trying to send request over socket to enclave: {e:?}");
+				eprintln!(
+					"Error while trying to send request over socket to enclave: {e:?}"
+				);
 
 				(
 					StatusCode::INTERNAL_SERVER_ERROR,

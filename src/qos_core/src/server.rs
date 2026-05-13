@@ -226,14 +226,18 @@ where
 						match stream.send(&response).await {
 							Ok(()) => {}
 							Err(err) => {
-								eprintln!("SocketServer: error sending reply {err:?}, re-accepting");
+								eprintln!(
+									"SocketServer: error sending reply {err:?}, re-accepting"
+								);
 								break;
 							}
 						}
 					}
 					Err(IOError::RecvConnectionClosed) => break,
 					Err(err) => {
-						eprintln!("SocketServer: error receiving request {err:?}, re-accepting");
+						eprintln!(
+							"SocketServer: error receiving request {err:?}, re-accepting"
+						);
 						break;
 					}
 				}

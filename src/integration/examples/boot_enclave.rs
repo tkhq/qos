@@ -11,11 +11,11 @@ use std::{
 use borsh::BorshDeserialize;
 use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
 use qos_core::protocol::{
+	ProtocolPhase, QosHash,
 	services::{
 		boot::{Approval, Manifest, ManifestSet, Namespace, ShareSet},
 		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
-	ProtocolPhase, QosHash,
 };
 use qos_crypto::sha_256;
 use qos_host::EnclaveInfo;
@@ -293,62 +293,68 @@ async fn main() {
 	qos_test_primitives::wait_until_port_is_bound(host_port);
 
 	// -- CLIENT generate the manifest envelope
-	assert!(Command::new(integration::QOS_CLIENT_PATH)
-		.args([
-			"generate-manifest-envelope",
-			"--manifest-approvals-dir",
-			boot_dir.to_str().unwrap(),
-			"--manifest-path",
-			cli_manifest_path.to_str().unwrap(),
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
-
-	// -- CLIENT broadcast boot standard instruction
-	let manifest_envelope_path = boot_dir.join("manifest_envelope");
-	assert!(Command::new(integration::QOS_CLIENT_PATH)
-		.args([
-			"boot-standard",
-			"--manifest-envelope-path",
-			manifest_envelope_path.to_str().unwrap(),
-			"--pivot-path",
-			&pivot_file_path,
-			"--host-port",
-			&host_port.to_string(),
-			"--host-ip",
-			LOCAL_HOST,
-			"--pcr3-preimage-path",
-			"./mock/pcr3-preimage.txt",
-			"--unsafe-skip-attestation",
-		])
-		.spawn()
-		.unwrap()
-		.wait()
-		.unwrap()
-		.success());
-
-	for user in [&user1, &user2] {
-		// Get attestation doc and manifest
-		assert!(Command::new(integration::QOS_CLIENT_PATH)
+	assert!(
+		Command::new(integration::QOS_CLIENT_PATH)
 			.args([
-				"get-attestation-doc",
-				"--host-port",
-				&host_port.to_string(),
-				"--host-ip",
-				LOCAL_HOST,
-				"--attestation-doc-path",
-				attestation_doc_path.to_str().unwrap(),
-				"--manifest-envelope-path",
-				"/tmp/dont_care"
+				"generate-manifest-envelope",
+				"--manifest-approvals-dir",
+				boot_dir.to_str().unwrap(),
+				"--manifest-path",
+				cli_manifest_path.to_str().unwrap(),
 			])
 			.spawn()
 			.unwrap()
 			.wait()
 			.unwrap()
-			.success());
+			.success()
+	);
+
+	// -- CLIENT broadcast boot standard instruction
+	let manifest_envelope_path = boot_dir.join("manifest_envelope");
+	assert!(
+		Command::new(integration::QOS_CLIENT_PATH)
+			.args([
+				"boot-standard",
+				"--manifest-envelope-path",
+				manifest_envelope_path.to_str().unwrap(),
+				"--pivot-path",
+				&pivot_file_path,
+				"--host-port",
+				&host_port.to_string(),
+				"--host-ip",
+				LOCAL_HOST,
+				"--pcr3-preimage-path",
+				"./mock/pcr3-preimage.txt",
+				"--unsafe-skip-attestation",
+			])
+			.spawn()
+			.unwrap()
+			.wait()
+			.unwrap()
+			.success()
+	);
+
+	for user in [&user1, &user2] {
+		// Get attestation doc and manifest
+		assert!(
+			Command::new(integration::QOS_CLIENT_PATH)
+				.args([
+					"get-attestation-doc",
+					"--host-port",
+					&host_port.to_string(),
+					"--host-ip",
+					LOCAL_HOST,
+					"--attestation-doc-path",
+					attestation_doc_path.to_str().unwrap(),
+					"--manifest-envelope-path",
+					"/tmp/dont_care"
+				])
+				.spawn()
+				.unwrap()
+				.wait()
+				.unwrap()
+				.success()
+		);
 
 		let share_path = personal_dir(user).join(format!("{user}.share"));
 		let secret_path = personal_dir(user).join(format!("{user}.secret"));
@@ -412,9 +418,9 @@ async fn main() {
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
 		assert_eq!(
-				&stdout.next().unwrap().unwrap(),
-				"Does this AWS IAM role belong to the intended organization: arn:aws:iam::123456789012:role/Webserver? (y/n)"
-			);
+			&stdout.next().unwrap().unwrap(),
+			"Does this AWS IAM role belong to the intended organization: arn:aws:iam::123456789012:role/Webserver? (y/n)"
+		);
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
 		assert_eq!(
@@ -427,23 +433,25 @@ async fn main() {
 		assert!(child.wait().unwrap().success());
 
 		// Post the encrypted share
-		assert!(Command::new(integration::QOS_CLIENT_PATH)
-			.args([
-				"post-share",
-				"--host-port",
-				&host_port.to_string(),
-				"--host-ip",
-				LOCAL_HOST,
-				"--eph-wrapped-share-path",
-				eph_wrapped_share_path.to_str().unwrap(),
-				"--approval-path",
-				approval_path.to_str().unwrap(),
-			])
-			.spawn()
-			.unwrap()
-			.wait()
-			.unwrap()
-			.success());
+		assert!(
+			Command::new(integration::QOS_CLIENT_PATH)
+				.args([
+					"post-share",
+					"--host-port",
+					&host_port.to_string(),
+					"--host-ip",
+					LOCAL_HOST,
+					"--eph-wrapped-share-path",
+					eph_wrapped_share_path.to_str().unwrap(),
+					"--approval-path",
+					approval_path.to_str().unwrap(),
+				])
+				.spawn()
+				.unwrap()
+				.wait()
+				.unwrap()
+				.success()
+		);
 	}
 
 	// Give the enclave time to start the pivot

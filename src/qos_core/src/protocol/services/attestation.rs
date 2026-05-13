@@ -1,6 +1,6 @@
 use qos_nsm::{
-	types::{NsmRequest, NsmResponse},
 	NsmProvider,
+	types::{NsmRequest, NsmResponse},
 };
 
 use crate::protocol::{ProtocolError, ProtocolState};
