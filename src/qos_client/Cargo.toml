@@ -21,6 +21,7 @@ qos_nsm = { workspace = true, default-features = false }
 qos_json = { workspace = true }
 
 # Third party
+anyhow = "1"
 ureq = { workspace = true }
 aws-nitro-enclaves-nsm-api = { workspace = true }
 borsh = { workspace = true}

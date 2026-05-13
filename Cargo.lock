@@ -95,6 +95,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.102"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+
+[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1891,6 +1897,7 @@ dependencies = [
 name = "qos_client"
 version = "0.7.0"
 dependencies = [
+ "anyhow",
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "der",

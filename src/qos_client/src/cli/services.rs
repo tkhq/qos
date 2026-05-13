@@ -5,6 +5,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 
+use anyhow::{Context, bail};
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::BorshDeserialize;
 use qos_core::protocol::{
@@ -194,6 +195,20 @@ impl From<qos_nsm::nitro::AttestError> for Error {
 		let msg = format!("{err:?}");
 		Error::QosAttest(msg)
 	}
+}
+
+/// Bridge from `anyhow::Error` back into the legacy [`Error`] enum during the
+/// incremental migration to `anyhow` in this crate. The full source chain is
+/// flattened via `{:#}` so context added with `.with_context(...)` is
+/// preserved.
+///
+/// TODO: remove once all callers in `services.rs` themselves return
+/// `anyhow::Result<_>`.
+// The conversion takes `err` by value because it is used as `.map_err(...)`
+// and we consume the error to build the legacy variant; no reason to borrow.
+#[allow(clippy::needless_pass_by_value)]
+fn anyhow_to_error(err: anyhow::Error) -> Error {
+	Error::FailedToRead { path: String::new(), error: format!("{err:#}") }
 }
 
 /// Use a P256 key pair or Yubikey for signing operations.
@@ -949,7 +964,8 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		unsafe_auto_confirm,
 	} = args;
 
-	let manifest = read_manifest_compat(&manifest_path)?;
+	let manifest =
+		read_manifest_compat(&manifest_path).map_err(anyhow_to_error)?;
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 	let patch_set = match (&manifest, patch_set_dir) {
@@ -1131,7 +1147,8 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	manifest_path: P,
 	maybe_manifest_envelope_path: Option<String>,
 ) -> Result<(), Error> {
-	let manifest = read_manifest_compat(&manifest_path)?;
+	let manifest =
+		read_manifest_compat(&manifest_path).map_err(anyhow_to_error)?;
 	let approvals = find_approvals(&manifest_approvals_dir, &manifest);
 
 	// Create manifest envelope
@@ -1188,7 +1205,8 @@ pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
 	let pivot =
 		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
 	let manifest_envelope =
-		read_manifest_envelope_compat(manifest_envelope_path)?;
+		read_manifest_envelope_compat(manifest_envelope_path)
+			.map_err(anyhow_to_error)?;
 
 	let req = ProtocolMsg::BootKeyForwardRequest {
 		manifest_envelope: Box::new(manifest_envelope),
@@ -1219,7 +1237,8 @@ pub(crate) fn export_key<P: AsRef<Path>>(
 	encrypted_quorum_key_path: P,
 ) -> Result<(), Error> {
 	let manifest_envelope =
-		read_manifest_envelope_compat(manifest_envelope_path)?;
+		read_manifest_envelope_compat(manifest_envelope_path)
+			.map_err(anyhow_to_error)?;
 	let cose_sign1_attestation_doc = fs::read(attestation_doc_path.as_ref())
 		.map_err(Error::FailedToReadAttestationDoc)?;
 
@@ -1333,7 +1352,8 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 
 	// Create manifest envelope
 	let manifest_envelope =
-		read_manifest_envelope_compat(manifest_envelope_path)?;
+		read_manifest_envelope_compat(manifest_envelope_path)
+			.map_err(anyhow_to_error)?;
 	let manifest = manifest_envelope.clone().manifest();
 
 	// Broadcast boot standard instruction and extract the attestation doc from
@@ -1443,9 +1463,11 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	}: ProxyReEncryptShareArgs<P>,
 ) -> Result<(), Error> {
 	let manifest_envelope =
-		read_manifest_envelope_compat(&manifest_envelope_path)?;
+		read_manifest_envelope_compat(&manifest_envelope_path)
+			.map_err(anyhow_to_error)?;
 	let attestation_doc =
-		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
+		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)
+			.map_err(anyhow_to_error)?;
 	let encrypted_share = std::fs::read(share_path)
 		.map_err(|e| Error::ReadShare(e.to_string()))?;
 
@@ -1638,7 +1660,8 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	// Get the ephemeral key wrapped share
 	let share = fs::read(eph_wrapped_share_path)
 		.map_err(Error::FailedToReadEphWrappedShare)?;
-	let approval = read_attestation_approval(&approval_path)?;
+	let approval = read_attestation_approval(&approval_path)
+		.map_err(anyhow_to_error)?;
 
 	let req = ProtocolMsg::ProvisionRequest { share, approval };
 	let is_reconstructed = match request::post(uri, &req).unwrap() {
@@ -1782,7 +1805,8 @@ pub(crate) fn display<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	match *display_type {
 		DisplayType::Manifest => {
-			let decoded = read_manifest_compat(file_path)?;
+			let decoded =
+				read_manifest_compat(file_path).map_err(anyhow_to_error)?;
 
 			if json {
 				println!("{}", serde_json::to_string(&decoded).unwrap());
@@ -1791,7 +1815,8 @@ pub(crate) fn display<P: AsRef<Path>>(
 			}
 		}
 		DisplayType::ManifestEnvelope => {
-			let decoded = read_manifest_envelope_compat(file_path)?;
+			let decoded = read_manifest_envelope_compat(file_path)
+				.map_err(anyhow_to_error)?;
 
 			if json {
 				println!("{}", serde_json::to_string(&decoded).unwrap());
@@ -1816,7 +1841,8 @@ pub(crate) fn json_to_borsh<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	match *display_type {
 		DisplayType::Manifest => {
-			let manifest = read_manifest_v1_compat(&file_path)?;
+			let manifest = read_manifest_v1_compat(&file_path)
+				.map_err(anyhow_to_error)?;
 			let borsh_bytes = borsh::to_vec(&manifest)?;
 			fs::write(&output_path, borsh_bytes).map_err(|e| {
 				Error::FailedToWrite {
@@ -1826,7 +1852,8 @@ pub(crate) fn json_to_borsh<P: AsRef<Path>>(
 			})?;
 		}
 		DisplayType::ManifestEnvelope => {
-			let envelope = read_manifest_envelope_v1_compat(&file_path)?;
+			let envelope = read_manifest_envelope_v1_compat(&file_path)
+				.map_err(anyhow_to_error)?;
 			let borsh_bytes = borsh::to_vec(&envelope)?;
 			fs::write(&output_path, borsh_bytes).map_err(|e| {
 				Error::FailedToWrite {
@@ -2267,16 +2294,25 @@ fn find_approvals<P: AsRef<Path>>(
 
 fn read_manifest_compat<P: AsRef<Path>>(
 	file: P,
-) -> Result<VersionedManifest, Error> {
-	let bytes = fs::read(file).map_err(Error::FailedToReadManifestFile)?;
-	VersionedManifest::try_from_slice_compat(&bytes).map_err(Error::from)
+) -> anyhow::Result<VersionedManifest> {
+	let path = file.as_ref();
+	let bytes = fs::read(path).with_context(|| {
+		format!("failed to read manifest file {}", path.display())
+	})?;
+	VersionedManifest::try_from_slice_compat(&bytes).with_context(|| {
+		format!("failed to deserialize manifest at {}", path.display())
+	})
 }
 
 fn read_manifest_v1_compat<P: AsRef<Path>>(
 	file: P,
-) -> Result<ManifestV1, Error> {
-	match read_manifest_compat(file)? {
-		VersionedManifest::V2(_) => Err(Error::ManifestV2NotConvertibleToBorsh),
+) -> anyhow::Result<ManifestV1> {
+	let path = file.as_ref();
+	match read_manifest_compat(path)? {
+		VersionedManifest::V2(_) => bail!(
+			"manifest at {} is v2; v2 manifests cannot be represented in borsh",
+			path.display()
+		),
 		VersionedManifest::V1(manifest) => Ok(manifest),
 		VersionedManifest::V0(manifest) => Ok(manifest.into()),
 	}
@@ -2285,9 +2321,11 @@ fn read_manifest_v1_compat<P: AsRef<Path>>(
 fn read_attestation_doc<P: AsRef<Path>>(
 	path: P,
 	unsafe_skip_attestation: bool,
-) -> Result<AttestationDoc, Error> {
-	let cose_sign1_der =
-		fs::read(path).map_err(Error::FailedToReadAttestationDoc)?;
+) -> anyhow::Result<AttestationDoc> {
+	let path_ref = path.as_ref();
+	let cose_sign1_der = fs::read(path_ref).with_context(|| {
+		format!("failed to read attestation doc at {}", path_ref.display())
+	})?;
 
 	Ok(extract_attestation_doc(
 		cose_sign1_der.as_ref(),
@@ -2298,20 +2336,31 @@ fn read_attestation_doc<P: AsRef<Path>>(
 
 fn read_manifest_envelope_compat<P: AsRef<Path>>(
 	file: P,
-) -> Result<VersionedManifestEnvelope, Error> {
-	let bytes = fs::read(file).map_err(Error::FailedToReadManifestFile)?;
+) -> anyhow::Result<VersionedManifestEnvelope> {
+	let path = file.as_ref();
+	let bytes = fs::read(path).with_context(|| {
+		format!("failed to read manifest envelope file {}", path.display())
+	})?;
 
-	VersionedManifestEnvelope::try_from_slice_compat(&bytes)
-		.map_err(Error::from)
+	VersionedManifestEnvelope::try_from_slice_compat(&bytes).with_context(
+		|| {
+			format!(
+				"failed to deserialize manifest envelope at {}",
+				path.display()
+			)
+		},
+	)
 }
 
 fn read_manifest_envelope_v1_compat<P: AsRef<Path>>(
 	file: P,
-) -> Result<ManifestEnvelopeV1, Error> {
-	match read_manifest_envelope_compat(file)? {
-		VersionedManifestEnvelope::V2(_) => {
-			Err(Error::ManifestV2NotConvertibleToBorsh)
-		}
+) -> anyhow::Result<ManifestEnvelopeV1> {
+	let path = file.as_ref();
+	match read_manifest_envelope_compat(path)? {
+		VersionedManifestEnvelope::V2(_) => bail!(
+			"manifest envelope at {} is v2; v2 manifests cannot be represented in borsh",
+			path.display()
+		),
 		VersionedManifestEnvelope::V1(envelope) => Ok(envelope),
 		VersionedManifestEnvelope::V0(envelope) => Ok(ManifestEnvelopeV1 {
 			manifest: envelope.manifest.into(),
@@ -2323,12 +2372,21 @@ fn read_manifest_envelope_v1_compat<P: AsRef<Path>>(
 
 fn read_attestation_approval<P: AsRef<Path>>(
 	path: P,
-) -> Result<Approval, Error> {
-	let manifest_envelope =
-		fs::read(path).map_err(Error::FailedToReadAttestationApproval)?;
+) -> anyhow::Result<Approval> {
+	let path_ref = path.as_ref();
+	let manifest_envelope = fs::read(path_ref).with_context(|| {
+		format!(
+			"failed to read attestation approval at {}",
+			path_ref.display()
+		)
+	})?;
 
-	serde_json::from_slice(&manifest_envelope)
-		.map_err(|_| Error::FileDidNotHaveValidAttestationApproval)
+	serde_json::from_slice(&manifest_envelope).with_context(|| {
+		format!(
+			"file at {} did not contain a valid attestation approval",
+			path_ref.display()
+		)
+	})
 }
 
 fn lines_to_entries<P: AsRef<Path>>(path: P) -> Vec<[String; 2]> {
@@ -3468,10 +3526,19 @@ mod tests {
 				&borsh_path,
 			);
 
-			assert!(matches!(
-				result,
-				Err(super::super::Error::ManifestV2NotConvertibleToBorsh)
-			));
+			// `read_manifest_v1_compat` now returns an `anyhow::Error` that
+			// the `json_to_borsh` caller bridges into `Error::FailedToRead`
+			// (see `anyhow_to_error`). The v2-rejection context is preserved
+			// in the embedded `error` string.
+			match result {
+				Err(super::super::Error::FailedToRead { error, .. }) => {
+					assert!(
+						error.contains("v2"),
+						"expected v2 rejection context, got: {error}"
+					);
+				}
+				other => panic!("expected FailedToRead, got {other:?}"),
+			}
 		}
 
 		#[test]
@@ -3519,10 +3586,16 @@ mod tests {
 				&borsh_path,
 			);
 
-			assert!(matches!(
-				result,
-				Err(super::super::Error::ManifestV2NotConvertibleToBorsh)
-			));
+			// See sibling test `rejects_v2_json_manifest` for rationale.
+			match result {
+				Err(super::super::Error::FailedToRead { error, .. }) => {
+					assert!(
+						error.contains("v2"),
+						"expected v2 rejection context, got: {error}"
+					);
+				}
+				other => panic!("expected FailedToRead, got {other:?}"),
+			}
 		}
 	}
 
