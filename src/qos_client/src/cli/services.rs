@@ -1660,8 +1660,8 @@ pub(crate) fn post_share<P: AsRef<Path>>(
 	// Get the ephemeral key wrapped share
 	let share = fs::read(eph_wrapped_share_path)
 		.map_err(Error::FailedToReadEphWrappedShare)?;
-	let approval = read_attestation_approval(&approval_path)
-		.map_err(anyhow_to_error)?;
+	let approval =
+		read_attestation_approval(&approval_path).map_err(anyhow_to_error)?;
 
 	let req = ProtocolMsg::ProvisionRequest { share, approval };
 	let is_reconstructed = match request::post(uri, &req).unwrap() {
@@ -1841,8 +1841,8 @@ pub(crate) fn json_to_borsh<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	match *display_type {
 		DisplayType::Manifest => {
-			let manifest = read_manifest_v1_compat(&file_path)
-				.map_err(anyhow_to_error)?;
+			let manifest =
+				read_manifest_v1_compat(&file_path).map_err(anyhow_to_error)?;
 			let borsh_bytes = borsh::to_vec(&manifest)?;
 			fs::write(&output_path, borsh_bytes).map_err(|e| {
 				Error::FailedToWrite {
@@ -2375,10 +2375,7 @@ fn read_attestation_approval<P: AsRef<Path>>(
 ) -> anyhow::Result<Approval> {
 	let path_ref = path.as_ref();
 	let manifest_envelope = fs::read(path_ref).with_context(|| {
-		format!(
-			"failed to read attestation approval at {}",
-			path_ref.display()
-		)
+		format!("failed to read attestation approval at {}", path_ref.display())
 	})?;
 
 	serde_json::from_slice(&manifest_envelope).with_context(|| {
