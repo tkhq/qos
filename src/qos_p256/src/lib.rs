@@ -31,7 +31,14 @@ pub mod sign;
 
 /// Errors for qos P256.
 #[derive(
-	Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize,
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 pub enum P256Error {
 	/// Hex encoding error.

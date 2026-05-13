@@ -17,6 +17,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pkg-config libpcsclite-dev
       - name: Run tests
         run: make -C src test
+      - name: Run legacy protocol compat tests
+        run: cargo test -p integration --features legacy-protocol-compat --test protocol_legacy_decode
 
   test-vm:
     name: test-vm

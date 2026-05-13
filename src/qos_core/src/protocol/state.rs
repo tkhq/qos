@@ -19,17 +19,34 @@ use crate::handles::Handles;
 	serde::Deserialize,
 )]
 pub enum ProtocolPhase {
+	// Keep legacy PascalCase wire values for backward compatibility with
+	// existing clients, while accepting camelCase aliases during decode.
 	/// The state machine cannot recover. The enclave must be rebooted.
+	#[serde(rename = "UnrecoverableError", alias = "unrecoverableError")]
 	UnrecoverableError,
 	/// Waiting to receive a boot instruction.
+	#[serde(
+		rename = "WaitingForBootInstruction",
+		alias = "waitingForBootInstruction"
+	)]
 	WaitingForBootInstruction,
 	/// Genesis service has been booted. No further actions.
+	#[serde(rename = "GenesisBooted", alias = "genesisBooted")]
 	GenesisBooted,
 	/// Waiting to receive K quorum shards
+	#[serde(
+		rename = "WaitingForQuorumShards",
+		alias = "waitingForQuorumShards"
+	)]
 	WaitingForQuorumShards,
 	/// The enclave has successfully provisioned its quorum key.
+	#[serde(rename = "QuorumKeyProvisioned", alias = "quorumKeyProvisioned")]
 	QuorumKeyProvisioned,
 	/// Waiting for a forwarded key to be injected
+	#[serde(
+		rename = "WaitingForForwardedKey",
+		alias = "waitingForForwardedKey"
+	)]
 	WaitingForForwardedKey,
 }
 
@@ -198,23 +215,23 @@ impl ProtocolState {
 		self.phase
 	}
 
-	pub fn handle_msg(&mut self, msg_req: &ProtocolMsg) -> Vec<u8> {
+	pub fn handle_msg_response(
+		&mut self,
+		msg_req: &ProtocolMsg,
+	) -> ProtocolMsg {
 		for route in &self.routes() {
 			match route.try_msg(msg_req, self) {
 				None => (),
 				Some(result) => match result {
 					Ok(msg_resp) | Err(msg_resp) => {
-						return borsh::to_vec(&msg_resp).expect(
-							"ProtocolMsg can always be serialized. qed.",
-						);
+						return msg_resp;
 					}
 				},
 			}
 		}
 
 		let err = ProtocolError::NoMatchingRoute(self.phase);
-		borsh::to_vec(&ProtocolMsg::ProtocolErrorResponse(err))
-			.expect("ProtocolMsg can always be serialized. qed.")
+		ProtocolMsg::ProtocolErrorResponse(err)
 	}
 
 	#[allow(clippy::too_many_lines)]
@@ -406,19 +423,24 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
-		if let ProtocolMsg::BootStandardRequest { manifest_envelope, pivot } =
-			req
-		{
-			let result = boot::boot_standard(state, manifest_envelope, pivot)
-				.map(|nsm_response| ProtocolMsg::BootStandardResponse {
-					nsm_response,
-				})
-				.map_err(ProtocolMsg::ProtocolErrorResponse);
+		let (manifest_envelope, pivot) = match req {
+			ProtocolMsg::BootStandardRequest { manifest_envelope, pivot } => {
+				((**manifest_envelope).clone(), pivot)
+			}
+			ProtocolMsg::BootStandardJsonEnvelopeRequest {
+				manifest_envelope,
+				pivot,
+			} => (manifest_envelope.as_ref().clone().into_inner(), pivot),
+			_ => return None,
+		};
 
-			Some(result)
-		} else {
-			None
-		}
+		let result = boot::boot_standard(state, manifest_envelope, pivot)
+			.map(|nsm_response| ProtocolMsg::BootStandardResponse {
+				nsm_response,
+			})
+			.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+		Some(result)
 	}
 
 	pub(super) fn boot_genesis(

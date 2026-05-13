@@ -11,9 +11,14 @@ use crate::protocol::{
 };
 
 pub mod env;
+pub mod manifest;
 pub use env::{
 	MAX_PIVOT_ENV_NAME_LEN, MAX_PIVOT_ENV_VALUE_LEN, MAX_PIVOT_ENV_VARS,
 	PivotEnv, PivotEnvValue, PivotEnvVarName,
+};
+pub use manifest::v2::{ManifestEnvelopeV2, ManifestV2, PivotConfigV2};
+pub use manifest::{
+	ManifestVersion, VersionedManifest, VersionedManifestEnvelope,
 };
 
 /// Enclave configuration specific to AWS Nitro.
@@ -107,6 +112,7 @@ impl TryFrom<String> for RestartPolicy {
 #[derive(
 	PartialEq,
 	Eq,
+	Debug,
 	Clone,
 	serde::Serialize,
 	serde::Deserialize,
@@ -119,6 +125,7 @@ pub enum BridgeConfig {
 	/// Server hosting bridge, connections go INTO the enclave app on given port and host binding
 	Server {
 		/// The port to listen on, matching on host and app sides
+		#[serde(with = "qos_json::string_or_numeric")]
 		port: u16,
 		/// The host ip to listen on, use `0.0.0.0` for any
 		host: String,
@@ -128,9 +135,11 @@ pub enum BridgeConfig {
 	/// *NOTE*: currently **unimplemented** and results in boot panic if set.
 	Client {
 		/// Port to connect to when app initiates outgoing connections.
+		#[serde(with = "qos_json::string_or_numeric")]
 		port: u16,
 		/// Host name to connect to when app initiates outgoing connections.
 		/// If `None` an internal protocol is used to determine the destination (**unimplemented**)
+		#[serde(default, skip_serializing_if = "Option::is_none")]
 		host: Option<String>,
 	},
 }
@@ -282,6 +291,7 @@ impl fmt::Debug for QuorumMember {
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestSet {
 	/// The threshold, K, of signatures necessary to have quorum.
+	#[serde(with = "qos_json::string_or_numeric")]
 	pub threshold: u32,
 	/// Members composing the set. The length of this, N, must be gte to the
 	/// `threshold`, K.
@@ -303,6 +313,7 @@ pub struct ManifestSet {
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ShareSet {
 	/// The threshold, K, of signatures necessary to have quorum.
+	#[serde(with = "qos_json::string_or_numeric")]
 	pub threshold: u32,
 	/// Members composing the set. The length of this, N, must be gte to the
 	/// `threshold`, K.
@@ -351,6 +362,7 @@ impl fmt::Debug for MemberPubKey {
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PatchSet {
 	/// The threshold, K, of signatures necessary to have quorum.
+	#[serde(with = "qos_json::string_or_numeric")]
 	pub threshold: u32,
 	/// Public keys of members composing the set. The length of this, N, must
 	/// be gte to the `threshold`, K.
@@ -377,6 +389,7 @@ pub struct Namespace {
 	/// manifests for this namespace have been created. This is used to prevent
 	/// downgrade attacks - quorum members should only approve a manifest that
 	/// has the highest nonce.
+	#[serde(with = "qos_json::string_or_numeric")]
 	pub nonce: u32,
 	/// Quorum Key
 	#[serde(with = "qos_hex::serde")]
@@ -438,6 +451,7 @@ pub struct Manifest {
 	Clone,
 	borsh::BorshSerialize,
 	borsh::BorshDeserialize,
+	serde::Serialize,
 	serde::Deserialize,
 )]
 #[serde(rename_all = "camelCase")]
@@ -572,7 +586,14 @@ pub struct ManifestEnvelope {
 
 /// [`ManifestV0`] with accompanying [`Approval`]s.
 #[derive(
-	PartialEq, Eq, Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize,
+	PartialEq,
+	Eq,
+	Debug,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct ManifestEnvelopeV0 {
@@ -598,6 +619,7 @@ impl ManifestEnvelope {
 	/// [`ProtocolError::NotEnoughApprovals`] if fewer than the threshold
 	/// number of members approved.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
+		let manifest_hash = self.manifest.qos_hash();
 		let mut uniq_members = HashSet::new();
 		for approval in &self.manifest_set_approvals {
 			let member_pub_key =
@@ -605,7 +627,7 @@ impl ManifestEnvelope {
 
 			// Ensure that this is a valid signature from the member
 			let is_valid_signature = member_pub_key
-				.verify(&self.manifest.qos_hash(), &approval.signature)
+				.verify(&manifest_hash, &approval.signature)
 				.is_ok();
 			if !is_valid_signature {
 				return Err(ProtocolError::InvalidManifestApproval(
@@ -663,16 +685,16 @@ impl ManifestEnvelope {
 
 pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	state: &mut ProtocolState,
-	manifest_envelope: &ManifestEnvelope,
+	manifest_envelope: &VersionedManifestEnvelope,
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
 	// 1. Check signatures over the manifest envelope.
 	manifest_envelope.check_approvals()?;
-	if !manifest_envelope.share_set_approvals.is_empty() {
+	if !manifest_envelope.share_set_approvals().is_empty() {
 		return Err(ProtocolError::BadShareSetApprovals);
 	}
 	let actual_hash = sha_256(pivot);
-	let expected_hash = manifest_envelope.manifest.pivot.hash;
+	let expected_hash = *manifest_envelope.pivot_hash();
 	if actual_hash != expected_hash {
 		return Err(ProtocolError::InvalidPivotHash {
 			expected: qos_hex::encode(&expected_hash),
@@ -692,7 +714,7 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	let nsm_response = attestation::get_post_boot_attestation_doc(
 		&*state.attestor,
 		ephemeral_key.public_key().to_bytes(),
-		manifest_envelope.manifest.qos_hash().to_vec(),
+		manifest_envelope.manifest_hash().to_vec(),
 	);
 
 	// 4. Return the NSM Response containing COSE Sign1 encoded attestation
@@ -702,10 +724,12 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 
 pub(in crate::protocol) fn boot_standard(
 	state: &mut ProtocolState,
-	manifest_envelope: &ManifestEnvelope,
+	manifest_envelope: impl Into<VersionedManifestEnvelope>,
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
-	let nsm_response = put_manifest_and_pivot(state, manifest_envelope, pivot)?;
+	let manifest_envelope = manifest_envelope.into();
+	let nsm_response =
+		put_manifest_and_pivot(state, &manifest_envelope, pivot)?;
 	Ok(nsm_response)
 }
 
@@ -975,7 +999,10 @@ mod test {
 		assert!(Path::new(&pivot_file).exists());
 		assert!(Path::new(&ephemeral_file).exists());
 
-		assert_eq!(handles.get_manifest_envelope().unwrap(), manifest_envelope);
+		assert_eq!(
+			handles.get_manifest_envelope().unwrap(),
+			VersionedManifestEnvelope::V1(manifest_envelope)
+		);
 
 		std::fs::remove_file(pivot_file).unwrap();
 		std::fs::remove_file(ephemeral_file).unwrap();

@@ -9,7 +9,14 @@ use nsm::api::{Digest, ErrorCode, Request, Response};
 
 /// Possible error codes from the Nitro Secure Module API.
 #[derive(
-	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Eq, Clone,
+	Debug,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
+	PartialEq,
+	Eq,
+	Clone,
 )]
 pub enum NsmErrorCode {
 	/// No errors
@@ -72,6 +79,8 @@ impl From<NsmErrorCode> for ErrorCode {
 	Debug,
 	borsh::BorshSerialize,
 	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
 	Copy,
 	Clone,
 	PartialEq,
@@ -110,7 +119,14 @@ impl From<NsmDigest> for Digest {
 
 /// Request type for the Nitro Secure Module API.
 #[derive(
-	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Eq, Clone,
+	Debug,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
+	PartialEq,
+	Eq,
+	Clone,
 )]
 pub enum NsmRequest {
 	/// Read data from `PlatformConfigurationRegister` at `index`
@@ -123,6 +139,7 @@ pub enum NsmRequest {
 		/// index the PCR to extend
 		index: u16,
 		/// data to extend it with
+		#[serde(with = "qos_hex::serde")]
 		data: Vec<u8>,
 	},
 	/// Lock `PlatformConfigurationRegister` at `index` from further
@@ -146,10 +163,25 @@ pub enum NsmRequest {
 	/// private key to ensure authenticity.
 	Attestation {
 		/// Includes additional user data in the `AttestationDoc`.
+		#[serde(
+			default,
+			skip_serializing_if = "Option::is_none",
+			with = "qos_hex::serde::option"
+		)]
 		user_data: Option<Vec<u8>>,
 		/// Includes an additional nonce in the `AttestationDoc`.
+		#[serde(
+			default,
+			skip_serializing_if = "Option::is_none",
+			with = "qos_hex::serde::option"
+		)]
 		nonce: Option<Vec<u8>>,
 		/// Includes a user provided public key in the `AttestationDoc`.
+		#[serde(
+			default,
+			skip_serializing_if = "Option::is_none",
+			with = "qos_hex::serde::option"
+		)]
 		public_key: Option<Vec<u8>>,
 	},
 	/// Requests entropy from the NSM side.
@@ -202,14 +234,23 @@ impl From<NsmRequest> for Request {
 
 /// Response type for the Nitro Secure Module API.
 #[derive(
-	Debug, borsh::BorshSerialize, borsh::BorshDeserialize, PartialEq, Eq, Clone,
+	Debug,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
+	PartialEq,
+	Eq,
+	Clone,
 )]
+#[serde(rename_all = "camelCase")]
 pub enum NsmResponse {
 	/// returns the current `PlatformConfigurationRegister` state
 	DescribePCR {
 		/// true if the PCR is read-only, false otherwise
 		lock: bool,
 		/// the current value of the PCR
+		#[serde(with = "qos_hex::serde")]
 		data: Vec<u8>,
 	},
 	/// returned if `PlatformConfigurationRegister` has been successfully
@@ -217,6 +258,7 @@ pub enum NsmResponse {
 	ExtendPCR {
 		/// The new value of the PCR after extending the data into the
 		/// register.
+		#[serde(with = "qos_hex::serde")]
 		data: Vec<u8>,
 	},
 	/// returned if `PlatformConfigurationRegister` has been successfully locked
@@ -227,18 +269,23 @@ pub enum NsmResponse {
 	/// returns the runtime configuration of the `NitroSecureModule`
 	DescribeNSM {
 		/// Breaking API changes are denoted by `major_version`
+		#[serde(with = "qos_json::string_or_numeric")]
 		version_major: u16,
 		/// Minor API changes are denoted by `minor_version`. Minor versions
 		/// should be backwards compatible.
+		#[serde(with = "qos_json::string_or_numeric")]
 		version_minor: u16,
 		/// Patch version. These are security and stability updates and do not
 		/// affect API.
+		#[serde(with = "qos_json::string_or_numeric")]
 		version_patch: u16,
 		/// `module_id` is an identifier for a singular `NitroSecureModule`
 		module_id: String,
 		/// The maximum number of PCRs exposed by the `NitroSecureModule`.
+		#[serde(with = "qos_json::string_or_numeric")]
 		max_pcrs: u16,
 		/// The PCRs that are read-only.
+		#[serde(with = "qos_json::string_or_numeric")]
 		locked_pcrs: BTreeSet<u16>,
 		/// The digest of the PCR Bank
 		digest: NsmDigest,
@@ -249,11 +296,13 @@ pub enum NsmResponse {
 	Attestation {
 		/// A signed COSE structure containing a CBOR-encoded
 		/// `AttestationDocument` as the payload.
+		#[serde(with = "qos_hex::serde")]
 		document: Vec<u8>,
 	},
 	/// A response containing a number of bytes of entropy.
 	GetRandom {
 		/// The random bytes.
+		#[serde(with = "qos_hex::serde")]
 		random: Vec<u8>,
 	},
 	/// An error has occured, and the `NitroSecureModule` could not successfully

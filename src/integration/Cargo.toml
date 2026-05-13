@@ -14,6 +14,9 @@ unsafe_code = "deny"
 missing_errors_doc = "allow"
 module_name_repetitions = "allow"
 
+[features]
+legacy-protocol-compat = []
+
 [dependencies]
 qos_core = { workspace = true, features = ["mock"], default-features = false }
 qos_nsm = { workspace = true, features = ["mock"], default-features = false }
@@ -36,3 +39,4 @@ tokio-rustls = { workspace = true }
 [dev-dependencies]
 rand = { workspace = true, features = ["thread_rng"] }
 ureq = { workspace = true, features = ["json"] }
+qos_core_legacy = { package = "qos_core", version = "0.7", default-features = false }

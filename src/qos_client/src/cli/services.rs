@@ -9,12 +9,16 @@ use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::BorshDeserialize;
 use qos_core::protocol::{
 	QosHash,
-	msg::ProtocolMsg,
+	msg::{JsonBytes, ProtocolMsg},
 	services::{
 		boot::{
-			Approval, BridgeConfig, Manifest, ManifestEnvelope, ManifestSet,
-			MemberPubKey, Namespace, NitroConfig, PatchSet, PivotConfig,
-			QuorumMember, RestartPolicy, ShareSet,
+			Approval, BridgeConfig, Manifest as ManifestV1,
+			ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
+			ManifestEnvelopeV2, ManifestSet, ManifestV2, ManifestVersion,
+			MemberPubKey, Namespace, NitroConfig, PatchSet,
+			PivotConfig as PivotConfigV1, PivotConfigV2, PivotEnv,
+			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
+			VersionedManifestEnvelope,
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
@@ -54,6 +58,10 @@ pub(crate) const SMARTCARD_FEAT_DISABLED_MSG: &str = "The \"smartcard\" feature 
 
 const ENTER_PIN_PROMPT: &str = "Enter your pin: ";
 const TAP_MSG: &str = "Tap your YubiKey";
+
+type Manifest = ManifestV1;
+type ManifestEnvelope = ManifestEnvelopeV1;
+type PivotConfig = PivotConfigV1;
 
 /// Client errors.
 #[derive(Debug)]
@@ -142,6 +150,12 @@ pub enum Error {
 	/// Given quorum key seed does not match the hash of the expected quorum
 	/// key seed.
 	SecretDoesNotMatch,
+	/// v2 manifests cannot be represented in borsh.
+	ManifestV2NotConvertibleToBorsh,
+	/// v2 manifests do not support patch sets.
+	ManifestV2DoesNotSupportPatchSet,
+	/// v1/v0 manifests require patch sets.
+	ManifestV1RequiresPatchSet,
 }
 
 impl From<serde_json::Error> for Error {
@@ -751,7 +765,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub pcr3_preimage_path: P,
 	pub share_set_dir: P,
 	pub manifest_set_dir: P,
-	pub patch_set_dir: P,
+	pub patch_set_dir: Option<P>,
 	pub quorum_key_path: P,
 	pub manifest_path: P,
 	pub pivot_args: Vec<String>,
@@ -787,18 +801,21 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 	let manifest_set = get_manifest_set(manifest_set_dir);
 	// Get share set keys & threshold
 	let share_set = get_share_set(share_set_dir);
+	let Some(patch_set_dir) = patch_set_dir else {
+		return Err(Error::ManifestV1RequiresPatchSet);
+	};
 	let patch_set = get_patch_set(patch_set_dir);
 	// Get quorum key from namespaces dir
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
-	let manifest = Manifest {
+	let manifest = ManifestV1 {
 		namespace: Namespace {
 			name: namespace,
 			nonce,
 			quorum_key: quorum_key.to_bytes(),
 		},
-		pivot: PivotConfig {
+		pivot: PivotConfigV1 {
 			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
 			restart: restart_policy,
 			args: pivot_args,
@@ -811,9 +828,71 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		enclave: nitro_config,
 	};
 
+	let manifest = VersionedManifest::V1(manifest);
 	write_with_msg(
 		manifest_path.as_ref(),
-		&serde_json::to_vec(&manifest).expect("failed to serialize manifest"),
+		&manifest.to_storage_vec().expect("failed to serialize manifest"),
+		"Manifest",
+	);
+
+	Ok(())
+}
+
+pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
+	args: GenerateManifestArgs<P>,
+) -> Result<(), Error> {
+	let GenerateManifestArgs {
+		nonce,
+		namespace,
+		pivot_hash_path,
+		restart_policy,
+		qos_release_dir_path,
+		pcr3_preimage_path,
+		manifest_set_dir,
+		share_set_dir,
+		patch_set_dir,
+		quorum_key_path,
+		manifest_path,
+		pivot_args,
+		bridge_config,
+		debug_mode,
+	} = args;
+
+	if patch_set_dir.is_some() {
+		return Err(Error::ManifestV2DoesNotSupportPatchSet);
+	}
+
+	let nitro_config =
+		extract_nitro_config(qos_release_dir_path, pcr3_preimage_path);
+	let pivot_hash = extract_pivot_hash(pivot_hash_path);
+	let manifest_set = get_manifest_set(manifest_set_dir);
+	let share_set = get_share_set(share_set_dir);
+	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
+		.map_err(Error::FailedToReadQuorumPublicKey)?;
+
+	let manifest = ManifestV2 {
+		version: ManifestVersion::V2,
+		namespace: Namespace {
+			name: namespace,
+			nonce,
+			quorum_key: quorum_key.to_bytes(),
+		},
+		pivot: PivotConfigV2 {
+			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
+			restart: restart_policy,
+			args: pivot_args,
+			env: PivotEnv::default(),
+			bridge_config,
+			debug_mode,
+		},
+		manifest_set,
+		share_set,
+		enclave: nitro_config,
+	};
+
+	write_with_msg(
+		manifest_path.as_ref(),
+		&qos_json::to_vec(&manifest).expect("failed to serialize manifest"),
 		"Manifest",
 	);
 
@@ -847,7 +926,7 @@ pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
 	pub quorum_key_path: P,
 	pub manifest_set_dir: P,
 	pub share_set_dir: P,
-	pub patch_set_dir: P,
+	pub patch_set_dir: Option<P>,
 	pub alias: String,
 	pub unsafe_auto_confirm: bool,
 }
@@ -870,15 +949,23 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		unsafe_auto_confirm,
 	} = args;
 
-	let manifest = read_manifest(&manifest_path)?;
+	let manifest = read_manifest_compat(&manifest_path)?;
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
+	let patch_set = match (&manifest, patch_set_dir) {
+		(VersionedManifest::V2(_), Some(_)) => {
+			return Err(Error::ManifestV2DoesNotSupportPatchSet);
+		}
+		(VersionedManifest::V2(_), None) => None,
+		(_, Some(patch_set_dir)) => Some(get_patch_set(patch_set_dir)),
+		(_, None) => return Err(Error::ManifestV1RequiresPatchSet),
+	};
 
 	if !approve_manifest_programmatic_verifications(
 		&manifest,
 		&get_manifest_set(manifest_set_dir),
 		&get_share_set(share_set_dir),
-		&get_patch_set(patch_set_dir),
+		patch_set.as_ref(),
 		&extract_nitro_config(qos_release_dir_path, pcr3_preimage_path),
 		&extract_pivot_hash(pivot_hash_path),
 		&quorum_key,
@@ -900,7 +987,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	}
 
 	let approval = Approval {
-		signature: pair.sign(&manifest.qos_hash())?,
+		signature: pair.sign(&manifest.manifest_hash())?,
 		member: QuorumMember {
 			pub_key: pair.public_key_bytes()?,
 			alias: alias.clone(),
@@ -910,8 +997,8 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	let approval_path = manifest_approvals_dir.as_ref().join(format!(
 		"{}-{}-{}.{}",
 		alias,
-		manifest.namespace.name.replace('/', "-"),
-		manifest.namespace.nonce,
+		manifest.namespace().name.replace('/', "-"),
+		manifest.namespace().nonce,
 		APPROVAL_EXT
 	));
 	write_with_msg(
@@ -926,46 +1013,57 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 }
 
 fn approve_manifest_programmatic_verifications(
-	manifest: &Manifest,
+	manifest: &VersionedManifest,
 	manifest_set: &ManifestSet,
 	share_set: &ShareSet,
-	patch_set: &PatchSet,
+	patch_set: Option<&PatchSet>,
 	nitro_config: &NitroConfig,
 	pivot_hash: &[u8],
 	quorum_key: &P256Public,
 ) -> bool {
 	// Verify manifest set composition
-	if manifest.manifest_set != *manifest_set {
+	if manifest.manifest_set() != manifest_set {
 		eprintln!("Manifest Set composition does not match");
 		return false;
 	}
 
 	// Verify share set composition
-	if manifest.share_set != *share_set {
+	if manifest.share_set() != share_set {
 		eprintln!("Share Set composition does not match");
 		return false;
 	}
 
 	// Verify share set composition
-	if manifest.patch_set != *patch_set {
-		eprintln!("Share Set composition does not match");
-		return false;
+	match manifest {
+		VersionedManifest::V2(_) => {}
+		VersionedManifest::V1(manifest) => {
+			if Some(&manifest.patch_set) != patch_set {
+				eprintln!("Patch Set composition does not match");
+				return false;
+			}
+		}
+		VersionedManifest::V0(manifest) => {
+			if Some(&manifest.patch_set) != patch_set {
+				eprintln!("Patch Set composition does not match");
+				return false;
+			}
+		}
 	}
 
 	// Verify pcrs 0, 1, 2, 3.
-	if manifest.enclave != *nitro_config {
+	if manifest.enclave() != nitro_config {
 		eprintln!("Nitro configuration does not match");
 		return false;
 	}
 
 	// Verify the pivot could be built deterministically
-	if manifest.pivot.hash != pivot_hash {
+	if manifest.pivot_hash().as_slice() != pivot_hash {
 		eprintln!("Pivot hash does not match");
 		return false;
 	}
 
 	// Verify the intended Quorum Key is being used
-	if manifest.namespace.quorum_key != quorum_key.to_bytes() {
+	if manifest.namespace().quorum_key != quorum_key.to_bytes() {
 		eprintln!("Quorum public key does not match");
 		return false;
 	}
@@ -974,7 +1072,7 @@ fn approve_manifest_programmatic_verifications(
 }
 
 fn approve_manifest_human_verifications<R, W>(
-	manifest: &Manifest,
+	manifest: &VersionedManifest,
 	prompter: &mut Prompter<R, W>,
 ) -> bool
 where
@@ -985,7 +1083,7 @@ where
 	{
 		let prompt = format!(
 			"Is this the correct namespace name: {}? (y/n)",
-			manifest.namespace.name
+			manifest.namespace().name
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -996,7 +1094,7 @@ where
 	{
 		let prompt = format!(
 			"Is this the correct namespace nonce: {}? (y/n)",
-			manifest.namespace.nonce
+			manifest.namespace().nonce
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1007,7 +1105,7 @@ where
 	{
 		let prompt = format!(
 			"Is this the correct pivot restart policy: {:?}? (y/n)",
-			manifest.pivot.restart
+			manifest.restart()
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1018,7 +1116,7 @@ where
 	{
 		let prompt = format!(
 			"Are these the correct pivot args:\n{:?}?\n(y/n)",
-			manifest.pivot.args
+			manifest.args()
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1033,14 +1131,32 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	manifest_path: P,
 	maybe_manifest_envelope_path: Option<String>,
 ) -> Result<(), Error> {
-	let manifest = read_manifest(&manifest_path)?;
+	let manifest = read_manifest_compat(&manifest_path)?;
 	let approvals = find_approvals(&manifest_approvals_dir, &manifest);
 
 	// Create manifest envelope
-	let manifest_envelope = ManifestEnvelope {
-		manifest,
-		manifest_set_approvals: approvals,
-		share_set_approvals: vec![],
+	let manifest_envelope = match manifest {
+		VersionedManifest::V2(manifest) => {
+			VersionedManifestEnvelope::V2(ManifestEnvelopeV2 {
+				manifest,
+				manifest_set_approvals: approvals,
+				share_set_approvals: vec![],
+			})
+		}
+		VersionedManifest::V1(manifest) => {
+			VersionedManifestEnvelope::V1(ManifestEnvelopeV1 {
+				manifest,
+				manifest_set_approvals: approvals,
+				share_set_approvals: vec![],
+			})
+		}
+		VersionedManifest::V0(manifest) => {
+			VersionedManifestEnvelope::V0(ManifestEnvelopeV0 {
+				manifest,
+				manifest_set_approvals: approvals,
+				share_set_approvals: vec![],
+			})
+		}
 	};
 
 	if let Err(e) = manifest_envelope.check_approvals() {
@@ -1054,7 +1170,8 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	);
 	write_with_msg(
 		&path,
-		&serde_json::to_vec(&manifest_envelope)
+		&manifest_envelope
+			.to_storage_vec()
 			.expect("Failed to serialize manifest envelope"),
 		"Manifest Envelope",
 	);
@@ -1070,7 +1187,8 @@ pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	let pivot =
 		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
-	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;
+	let manifest_envelope =
+		read_manifest_envelope_compat(manifest_envelope_path)?;
 
 	let req = ProtocolMsg::BootKeyForwardRequest {
 		manifest_envelope: Box::new(manifest_envelope),
@@ -1100,7 +1218,8 @@ pub(crate) fn export_key<P: AsRef<Path>>(
 	attestation_doc_path: P,
 	encrypted_quorum_key_path: P,
 ) -> Result<(), Error> {
-	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;
+	let manifest_envelope =
+		read_manifest_envelope_compat(manifest_envelope_path)?;
 	let cose_sign1_attestation_doc = fs::read(attestation_doc_path.as_ref())
 		.map_err(Error::FailedToReadAttestationDoc)?;
 
@@ -1161,6 +1280,44 @@ pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
 	pub unsafe_skip_attestation: bool,
 }
 
+fn boot_standard_attestation_doc_with_fallback(
+	uri: &str,
+	manifest_envelope: VersionedManifestEnvelope,
+	pivot: Vec<u8>,
+) -> Result<Vec<u8>, Error> {
+	let req = ProtocolMsg::BootStandardJsonEnvelopeRequest {
+		manifest_envelope: Box::new(JsonBytes::new(manifest_envelope)),
+		pivot,
+	};
+	if let Ok(ProtocolMsg::BootStandardResponse {
+		nsm_response: NsmResponse::Attestation { document },
+	}) = request::post_borsh(uri, &req)
+	{
+		return Ok(document);
+	}
+
+	let ProtocolMsg::BootStandardJsonEnvelopeRequest {
+		manifest_envelope,
+		pivot,
+	} = req
+	else {
+		unreachable!(
+			"request was constructed as BootStandardJsonEnvelopeRequest"
+		)
+	};
+	let req = ProtocolMsg::BootStandardRequest {
+		manifest_envelope: Box::new(manifest_envelope.into_inner()),
+		pivot,
+	};
+	match request::post_borsh(uri, &req) {
+		Ok(ProtocolMsg::BootStandardResponse {
+			nsm_response: NsmResponse::Attestation { document },
+		}) => Ok(document),
+		Ok(r) => Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}"))),
+		Err(err) => Err(Error::UnexpectedProtocolMsgResponse(err)),
+	}
+}
+
 pub(crate) fn boot_standard<P: AsRef<Path>>(
 	BootStandardArgs {
 		uri,
@@ -1175,21 +1332,17 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
 
 	// Create manifest envelope
-	let manifest_envelope = read_manifest_envelope(manifest_envelope_path)?;
-	let manifest = manifest_envelope.manifest.clone();
+	let manifest_envelope =
+		read_manifest_envelope_compat(manifest_envelope_path)?;
+	let manifest = manifest_envelope.clone().manifest();
 
-	let req = ProtocolMsg::BootStandardRequest {
-		manifest_envelope: Box::new(manifest_envelope),
-		pivot,
-	};
 	// Broadcast boot standard instruction and extract the attestation doc from
 	// the response.
-	let cose_sign1 = match request::post(&uri, &req).unwrap() {
-		ProtocolMsg::BootStandardResponse {
-			nsm_response: NsmResponse::Attestation { document },
-		} => document,
-		r => panic!("Unexpected response: {r:?}"),
-	};
+	let cose_sign1 = boot_standard_attestation_doc_with_fallback(
+		&uri,
+		manifest_envelope,
+		pivot,
+	)?;
 
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation, None);
@@ -1200,10 +1353,10 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	} else {
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
-			&manifest.qos_hash(),
-			&manifest.enclave.pcr0,
-			&manifest.enclave.pcr1,
-			&manifest.enclave.pcr2,
+			&manifest.manifest_hash(),
+			&manifest.enclave().pcr0,
+			&manifest.enclave().pcr1,
+			&manifest.enclave().pcr2,
 			&extract_pcr3(pcr3_preimage_path),
 		)?;
 
@@ -1289,13 +1442,15 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 		unsafe_auto_confirm,
 	}: ProxyReEncryptShareArgs<P>,
 ) -> Result<(), Error> {
-	let manifest_envelope = read_manifest_envelope(&manifest_envelope_path)?;
+	let manifest_envelope =
+		read_manifest_envelope_compat(&manifest_envelope_path)?;
 	let attestation_doc =
 		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
 	let encrypted_share = std::fs::read(share_path)
 		.map_err(|e| Error::ReadShare(e.to_string()))?;
 
 	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
+	let manifest = manifest_envelope.clone().manifest();
 
 	// Verify the attestation doc matches up with the pcrs in the manifest
 	if unsafe_skip_attestation {
@@ -1303,10 +1458,10 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	} else {
 		verify_attestation_doc_against_user_input(
 			&attestation_doc,
-			&manifest_envelope.manifest.qos_hash(),
-			&manifest_envelope.manifest.enclave.pcr0,
-			&manifest_envelope.manifest.enclave.pcr1,
-			&manifest_envelope.manifest.enclave.pcr2,
+			&manifest_envelope.manifest_hash(),
+			&manifest.enclave().pcr0,
+			&manifest.enclave().pcr1,
+			&manifest.enclave().pcr2,
 			&extract_pcr3(pcr3_preimage_path),
 		)?;
 	}
@@ -1361,7 +1516,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 
 	let approval = serde_json::to_vec(&Approval {
 		signature: pair
-			.sign(&manifest_envelope.manifest.qos_hash())
+			.sign(&manifest_envelope.manifest_hash())
 			.expect("Failed to sign"),
 		member,
 	})
@@ -1381,23 +1536,25 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 }
 
 fn proxy_re_encrypt_share_programmatic_verifications(
-	manifest_envelope: &ManifestEnvelope,
+	manifest_envelope: &VersionedManifestEnvelope,
 	manifest_set: &ManifestSet,
 	member: &QuorumMember,
 ) -> bool {
+	let manifest = manifest_envelope.clone().manifest();
+
 	if let Err(e) = manifest_envelope.check_approvals() {
 		eprintln!("Manifest envelope did not have valid approvals: {e:?}");
 		return false;
 	}
 
-	if manifest_envelope.manifest.manifest_set != *manifest_set {
+	if *manifest.manifest_set() != *manifest_set {
 		eprintln!(
 			"Manifest's manifest set does not match locally found Manifest Set"
 		);
 		return false;
 	}
 
-	if !manifest_envelope.manifest.share_set.members.contains(member) {
+	if !manifest.share_set().members.contains(member) {
 		eprintln!(
 			"The provided share set key and alias are not part of the Share Set"
 		);
@@ -1408,7 +1565,7 @@ fn proxy_re_encrypt_share_programmatic_verifications(
 }
 
 fn proxy_re_encrypt_share_human_verifications<R, W>(
-	manifest_envelope: &ManifestEnvelope,
+	manifest_envelope: &VersionedManifestEnvelope,
 	pcr3_preimage: &str,
 	prompter: &mut Prompter<R, W>,
 ) -> bool
@@ -1416,11 +1573,13 @@ where
 	R: BufRead,
 	W: Write,
 {
+	let manifest = manifest_envelope.clone().manifest();
+
 	// Check the namespace name
 	{
 		let prompt = format!(
 			"Is this the correct namespace name: {}? (y/n)",
-			manifest_envelope.manifest.namespace.name
+			manifest.namespace().name
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1431,7 +1590,7 @@ where
 	{
 		let prompt = format!(
 			"Is this the correct namespace nonce: {}? (y/n)",
-			manifest_envelope.manifest.namespace.nonce
+			manifest.namespace().nonce
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1450,7 +1609,7 @@ where
 
 	{
 		let mut approvers = manifest_envelope
-			.manifest_set_approvals
+			.manifest_set_approvals()
 			.iter()
 			.cloned()
 			.map(|m| m.member.alias)
@@ -1623,7 +1782,7 @@ pub(crate) fn display<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	match *display_type {
 		DisplayType::Manifest => {
-			let decoded = read_manifest(file_path)?;
+			let decoded = read_manifest_compat(file_path)?;
 
 			if json {
 				println!("{}", serde_json::to_string(&decoded).unwrap());
@@ -1632,7 +1791,7 @@ pub(crate) fn display<P: AsRef<Path>>(
 			}
 		}
 		DisplayType::ManifestEnvelope => {
-			let decoded = read_manifest_envelope(file_path)?;
+			let decoded = read_manifest_envelope_compat(file_path)?;
 
 			if json {
 				println!("{}", serde_json::to_string(&decoded).unwrap());
@@ -1657,7 +1816,7 @@ pub(crate) fn json_to_borsh<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	match *display_type {
 		DisplayType::Manifest => {
-			let manifest = read_manifest(&file_path)?;
+			let manifest = read_manifest_v1_compat(&file_path)?;
 			let borsh_bytes = borsh::to_vec(&manifest)?;
 			fs::write(&output_path, borsh_bytes).map_err(|e| {
 				Error::FailedToWrite {
@@ -1667,7 +1826,7 @@ pub(crate) fn json_to_borsh<P: AsRef<Path>>(
 			})?;
 		}
 		DisplayType::ManifestEnvelope => {
-			let envelope = read_manifest_envelope(&file_path)?;
+			let envelope = read_manifest_envelope_v1_compat(&file_path)?;
 			let borsh_bytes = borsh::to_vec(&envelope)?;
 			fs::write(&output_path, borsh_bytes).map_err(|e| {
 				Error::FailedToWrite {
@@ -1763,23 +1922,20 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	let manifest_envelope = {
 		let signature =
 			quorum_pair.sign(&manifest.qos_hash()).expect("Failed to sign");
-		Box::new(ManifestEnvelope {
+		Box::new(VersionedManifestEnvelope::V1(ManifestEnvelope {
 			manifest,
 			manifest_set_approvals: vec![Approval { signature, member }],
 			share_set_approvals: vec![],
-		})
+		}))
 	};
 
-	let req = ProtocolMsg::BootStandardRequest {
-		manifest_envelope: manifest_envelope.clone(),
+	let document = boot_standard_attestation_doc_with_fallback(
+		uri,
+		manifest_envelope.as_ref().clone(),
 		pivot,
-	};
-	let attestation_doc = match request::post(uri, &req).unwrap() {
-		ProtocolMsg::BootStandardResponse {
-			nsm_response: NsmResponse::Attestation { document },
-		} => extract_attestation_doc(&document, true, None),
-		r => panic!("Unexpected response: {r:?}"),
-	};
+	)
+	.unwrap();
+	let attestation_doc = extract_attestation_doc(&document, true, None);
 
 	// Pull out the ephemeral key or use the override
 	let eph_pub: P256Public = if let Some(eph_path) = unsafe_eph_path_override {
@@ -1800,7 +1956,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	// Create ShareSet approval
 	let approval = Approval {
 		signature: quorum_pair
-			.sign(&manifest_envelope.manifest.qos_hash())
+			.sign(&manifest_envelope.manifest_hash())
 			.expect("Failed to sign"),
 		member: QuorumMember {
 			pub_key: quorum_pair.public_key().to_bytes(),
@@ -2062,8 +2218,9 @@ fn get_genesis_set<P: AsRef<Path>>(dir: P) -> GenesisSet {
 
 fn find_approvals<P: AsRef<Path>>(
 	boot_dir: P,
-	manifest: &Manifest,
+	manifest: &VersionedManifest,
 ) -> Vec<Approval> {
+	let manifest_hash = manifest.manifest_hash();
 	let approvals: Vec<_> = find_file_paths(&boot_dir)
 		.iter()
 		.filter_map(|path| {
@@ -2088,7 +2245,7 @@ fn find_approvals<P: AsRef<Path>>(
 				});
 
 			assert!(
-				manifest.manifest_set.members.contains(&approval.member),
+				manifest.manifest_set().members.contains(&approval.member),
 				"Found approval from member ({:?}) not included in the Manifest Set",
 				approval.member.alias
 			);
@@ -2096,30 +2253,32 @@ fn find_approvals<P: AsRef<Path>>(
 			let pub_key = P256Public::from_bytes(&approval.member.pub_key)
 				.expect("Failed to interpret pub key");
 			assert!(
-				pub_key
-					.verify(&manifest.qos_hash(), &approval.signature)
-					.is_ok(),
+				pub_key.verify(&manifest_hash, &approval.signature).is_ok(),
 				"Approval signature could not be verified against manifest"
 			);
 
 			Some(approval)
 		})
 		.collect();
-	assert!(approvals.len() >= manifest.manifest_set.threshold as usize);
+	assert!(approvals.len() >= manifest.manifest_set().threshold as usize);
 
 	approvals
 }
 
-fn read_manifest<P: AsRef<Path>>(file: P) -> Result<Manifest, Error> {
+fn read_manifest_compat<P: AsRef<Path>>(
+	file: P,
+) -> Result<VersionedManifest, Error> {
 	let bytes = fs::read(file).map_err(Error::FailedToReadManifestFile)?;
+	VersionedManifest::try_from_slice_compat(&bytes).map_err(Error::from)
+}
 
-	// try getting Manifest from json
-	let result = serde_json::from_slice::<Manifest>(&bytes);
-	if result.is_err() {
-		// if not try the old formats
-		Manifest::try_from_slice_compat(&bytes).map_err(Error::from)
-	} else {
-		result.map_err(Error::from)
+fn read_manifest_v1_compat<P: AsRef<Path>>(
+	file: P,
+) -> Result<ManifestV1, Error> {
+	match read_manifest_compat(file)? {
+		VersionedManifest::V2(_) => Err(Error::ManifestV2NotConvertibleToBorsh),
+		VersionedManifest::V1(manifest) => Ok(manifest),
+		VersionedManifest::V0(manifest) => Ok(manifest.into()),
 	}
 }
 
@@ -2137,18 +2296,28 @@ fn read_attestation_doc<P: AsRef<Path>>(
 	))
 }
 
-fn read_manifest_envelope<P: AsRef<Path>>(
+fn read_manifest_envelope_compat<P: AsRef<Path>>(
 	file: P,
-) -> Result<ManifestEnvelope, Error> {
+) -> Result<VersionedManifestEnvelope, Error> {
 	let bytes = fs::read(file).map_err(Error::FailedToReadManifestFile)?;
 
-	// try getting Manifest from json
-	let result = serde_json::from_slice::<ManifestEnvelope>(&bytes);
-	if result.is_err() {
-		// if not try the old borsh format
-		ManifestEnvelope::try_from_slice_compat(&bytes).map_err(Error::from)
-	} else {
-		result.map_err(Error::from)
+	VersionedManifestEnvelope::try_from_slice_compat(&bytes)
+		.map_err(Error::from)
+}
+
+fn read_manifest_envelope_v1_compat<P: AsRef<Path>>(
+	file: P,
+) -> Result<ManifestEnvelopeV1, Error> {
+	match read_manifest_envelope_compat(file)? {
+		VersionedManifestEnvelope::V2(_) => {
+			Err(Error::ManifestV2NotConvertibleToBorsh)
+		}
+		VersionedManifestEnvelope::V1(envelope) => Ok(envelope),
+		VersionedManifestEnvelope::V0(envelope) => Ok(ManifestEnvelopeV1 {
+			manifest: envelope.manifest.into(),
+			manifest_set_approvals: envelope.manifest_set_approvals,
+			share_set_approvals: envelope.share_set_approvals,
+		}),
 	}
 }
 
@@ -2343,11 +2512,13 @@ mod tests {
 		services::boot::{
 			Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
 			Namespace, NitroConfig, PatchSet, PivotConfig, QuorumMember,
-			RestartPolicy, ShareSet,
+			RestartPolicy, ShareSet, VersionedManifest,
+			VersionedManifestEnvelope,
 		},
 	};
 	use qos_nsm::nitro::{AWS_ROOT_CERT_PEM, cert_from_pem};
 	use qos_p256::{P256Pair, P256Public};
+	use qos_test_primitives::PathWrapper;
 
 	use super::{
 		Prompter, approve_manifest_human_verifications,
@@ -2357,13 +2528,13 @@ mod tests {
 	};
 
 	struct Setup {
-		manifest: Manifest,
+		manifest: VersionedManifest,
 		manifest_set: ManifestSet,
 		share_set: ShareSet,
 		nitro_config: NitroConfig,
 		pivot_hash: Vec<u8>,
 		quorum_key: P256Public,
-		manifest_envelope: ManifestEnvelope,
+		manifest_envelope: VersionedManifestEnvelope,
 		patch_set: PatchSet,
 	}
 	fn setup() -> Setup {
@@ -2399,7 +2570,7 @@ mod tests {
 		let pivot_hash = vec![5; 32];
 		let quorum_key: P256Public = P256Pair::generate().unwrap().public_key();
 
-		let manifest = Manifest {
+		let manifest_v1 = Manifest {
 			namespace: Namespace {
 				name: "test-namespace".to_string(),
 				nonce: 2,
@@ -2419,20 +2590,22 @@ mod tests {
 			patch_set: patch_set.clone(),
 			enclave: nitro_config.clone(),
 		};
+		let manifest = VersionedManifest::V1(manifest_v1.clone());
 
-		let manifest_envelope = ManifestEnvelope {
-			manifest: manifest.clone(),
-			manifest_set_approvals: std::iter::zip(
-				pairs[..2].iter(),
-				members.iter(),
-			)
-			.map(|(pair, member)| Approval {
-				signature: pair.sign(&manifest.qos_hash()).unwrap(),
-				member: member.clone(),
-			})
-			.collect(),
-			share_set_approvals: vec![],
-		};
+		let manifest_envelope =
+			VersionedManifestEnvelope::V1(ManifestEnvelope {
+				manifest: manifest_v1.clone(),
+				manifest_set_approvals: std::iter::zip(
+					pairs[..2].iter(),
+					members.iter(),
+				)
+				.map(|(pair, member)| Approval {
+					signature: pair.sign(&manifest_v1.qos_hash()).unwrap(),
+					member: member.clone(),
+				})
+				.collect(),
+				share_set_approvals: vec![],
+			});
 
 		Setup {
 			manifest,
@@ -2443,6 +2616,47 @@ mod tests {
 			quorum_key,
 			manifest_envelope,
 			patch_set,
+		}
+	}
+
+	/// Return the v1 manifest for tests that intentionally build v1 fixtures.
+	///
+	/// # Panics
+	///
+	/// Panics if the fixture is not a v1 manifest.
+	fn v1_manifest(manifest: &VersionedManifest) -> &Manifest {
+		match manifest {
+			VersionedManifest::V1(manifest) => manifest,
+			_ => panic!("expected v1 manifest in test setup"),
+		}
+	}
+
+	/// Return the v1 manifest envelope for tests that intentionally build v1 fixtures.
+	///
+	/// # Panics
+	///
+	/// Panics if the fixture is not a v1 manifest envelope.
+	fn v1_manifest_envelope(
+		envelope: &VersionedManifestEnvelope,
+	) -> &ManifestEnvelope {
+		match envelope {
+			VersionedManifestEnvelope::V1(envelope) => envelope,
+			_ => panic!("expected v1 manifest envelope in test setup"),
+		}
+	}
+
+	/// Return a mutable v1 manifest envelope for tests that intentionally build
+	/// v1 fixtures.
+	///
+	/// # Panics
+	///
+	/// Panics if the fixture is not a v1 manifest envelope.
+	fn v1_manifest_envelope_mut(
+		envelope: &mut VersionedManifestEnvelope,
+	) -> &mut ManifestEnvelope {
+		match envelope {
+			VersionedManifestEnvelope::V1(envelope) => envelope,
+			_ => panic!("expected v1 manifest envelope in test setup"),
 		}
 	}
 
@@ -2466,7 +2680,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
-				&patch_set,
+				Some(&patch_set),
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2493,7 +2707,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
-				&patch_set,
+				Some(&patch_set),
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2520,7 +2734,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
-				&patch_set,
+				Some(&patch_set),
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2546,7 +2760,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
-				&patch_set,
+				Some(&patch_set),
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2572,7 +2786,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
-				&patch_set,
+				Some(&patch_set),
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2598,7 +2812,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
-				&patch_set,
+				Some(&patch_set),
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2624,7 +2838,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
-				&patch_set,
+				Some(&patch_set),
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2650,7 +2864,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
-				&patch_set,
+				Some(&patch_set),
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2676,7 +2890,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
-				&patch_set,
+				Some(&patch_set),
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2702,7 +2916,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
-				&patch_set,
+				Some(&patch_set),
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2728,7 +2942,7 @@ mod tests {
 				&manifest,
 				&manifest_set,
 				&share_set,
-				&patch_set,
+				Some(&patch_set),
 				&nitro_config,
 				&pivot_hash,
 				&quorum_key,
@@ -2870,7 +3084,7 @@ mod tests {
 				manifest_set, share_set, mut manifest_envelope, ..
 			} = setup();
 
-			manifest_envelope
+			v1_manifest_envelope_mut(&mut manifest_envelope)
 				.manifest_set_approvals
 				.get_mut(0)
 				.unwrap()
@@ -2890,7 +3104,7 @@ mod tests {
 				manifest_set, share_set, mut manifest_envelope, ..
 			} = setup();
 
-			manifest_envelope
+			v1_manifest_envelope_mut(&mut manifest_envelope)
 				.manifest_set_approvals
 				.get_mut(0)
 				.unwrap()
@@ -2911,7 +3125,10 @@ mod tests {
 				manifest_set, share_set, mut manifest_envelope, ..
 			} = setup();
 
-			manifest_envelope.manifest_set_approvals.pop().unwrap();
+			v1_manifest_envelope_mut(&mut manifest_envelope)
+				.manifest_set_approvals
+				.pop()
+				.unwrap();
 
 			let member = share_set.members[0].clone();
 			assert!(!proxy_re_encrypt_share_programmatic_verifications(
@@ -3129,6 +3346,10 @@ mod tests {
 		use std::fs;
 
 		use borsh::BorshDeserialize;
+		use qos_core::protocol::services::boot::{
+			ManifestEnvelopeV2, ManifestV2, ManifestVersion, PivotConfigV2,
+			PivotEnv,
+		};
 
 		use super::*;
 		use crate::cli::DisplayType;
@@ -3156,7 +3377,7 @@ mod tests {
 			// Read back and verify
 			let borsh_bytes = fs::read(&borsh_path).unwrap();
 			let decoded = Manifest::try_from_slice(&borsh_bytes).unwrap();
-			assert_eq!(decoded, manifest);
+			assert_eq!(decoded, *v1_manifest(&manifest));
 
 			// Cleanup
 			let _ = fs::remove_file(&json_path);
@@ -3187,7 +3408,7 @@ mod tests {
 			let borsh_bytes = fs::read(&borsh_path).unwrap();
 			let decoded =
 				ManifestEnvelope::try_from_slice(&borsh_bytes).unwrap();
-			assert_eq!(decoded, manifest_envelope);
+			assert_eq!(decoded, *v1_manifest_envelope(&manifest_envelope));
 
 			// Cleanup
 			let _ = fs::remove_file(&json_path);
@@ -3213,6 +3434,95 @@ mod tests {
 
 			// Cleanup
 			let _ = fs::remove_file(&json_path);
+		}
+
+		#[test]
+		fn rejects_v2_json_manifest() {
+			let Setup { manifest, .. } = setup();
+			let manifest = v1_manifest(&manifest).clone();
+			let temp_dir = std::env::temp_dir();
+			let json_path =
+				PathWrapper::from(temp_dir.join("test_manifest_v2.json"));
+			let borsh_path =
+				PathWrapper::from(temp_dir.join("test_manifest_v2.borsh"));
+			let v2 = ManifestV2 {
+				version: ManifestVersion::V2,
+				namespace: manifest.namespace,
+				pivot: PivotConfigV2 {
+					hash: manifest.pivot.hash,
+					restart: manifest.pivot.restart,
+					bridge_config: manifest.pivot.bridge_config,
+					debug_mode: manifest.pivot.debug_mode,
+					args: manifest.pivot.args,
+					env: PivotEnv::new(),
+				},
+				manifest_set: manifest.manifest_set,
+				share_set: manifest.share_set,
+				enclave: manifest.enclave,
+			};
+			fs::write(&json_path, qos_json::to_vec(&v2).unwrap()).unwrap();
+
+			let result = super::super::json_to_borsh(
+				&DisplayType::Manifest,
+				&json_path,
+				&borsh_path,
+			);
+
+			assert!(matches!(
+				result,
+				Err(super::super::Error::ManifestV2NotConvertibleToBorsh)
+			));
+		}
+
+		#[test]
+		fn rejects_v2_json_manifest_envelope() {
+			let Setup { manifest_envelope, .. } = setup();
+			let manifest_envelope = v1_manifest_envelope(&manifest_envelope);
+			let manifest = manifest_envelope.manifest.clone();
+			let temp_dir = std::env::temp_dir();
+			let json_path = PathWrapper::from(
+				temp_dir.join("test_manifest_envelope_v2.json"),
+			);
+			let borsh_path = PathWrapper::from(
+				temp_dir.join("test_manifest_envelope_v2.borsh"),
+			);
+			let v2_manifest = ManifestV2 {
+				version: ManifestVersion::V2,
+				namespace: manifest.namespace,
+				pivot: PivotConfigV2 {
+					hash: manifest.pivot.hash,
+					restart: manifest.pivot.restart,
+					bridge_config: manifest.pivot.bridge_config,
+					debug_mode: manifest.pivot.debug_mode,
+					args: manifest.pivot.args,
+					env: PivotEnv::new(),
+				},
+				manifest_set: manifest.manifest_set,
+				share_set: manifest.share_set,
+				enclave: manifest.enclave,
+			};
+			let v2_envelope = ManifestEnvelopeV2 {
+				manifest: v2_manifest,
+				manifest_set_approvals: manifest_envelope
+					.manifest_set_approvals
+					.clone(),
+				share_set_approvals: manifest_envelope
+					.share_set_approvals
+					.clone(),
+			};
+			fs::write(&json_path, qos_json::to_vec(&v2_envelope).unwrap())
+				.unwrap();
+
+			let result = super::super::json_to_borsh(
+				&DisplayType::ManifestEnvelope,
+				&json_path,
+				&borsh_path,
+			);
+
+			assert!(matches!(
+				result,
+				Err(super::super::Error::ManifestV2NotConvertibleToBorsh)
+			));
 		}
 	}
 

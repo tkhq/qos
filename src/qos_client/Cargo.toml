@@ -18,6 +18,7 @@ qos_crypto = { workspace = true, default-features = false }
 qos_hex = { workspace = true }
 qos_p256 = { workspace = true }
 qos_nsm = { workspace = true, default-features = false }
+qos_json = { workspace = true }
 
 # Third party
 ureq = { workspace = true }

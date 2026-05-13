@@ -1246,13 +1246,14 @@ dependencies = [
  "borsh",
  "futures",
  "nix 0.30.1",
- "qos_core",
- "qos_crypto",
- "qos_hex",
+ "qos_core 0.7.0",
+ "qos_core 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "qos_crypto 0.7.0",
+ "qos_hex 0.7.0",
  "qos_host",
  "qos_net",
- "qos_nsm",
- "qos_p256",
+ "qos_nsm 0.7.0",
+ "qos_p256 0.7.0",
  "qos_test_primitives",
  "rand 0.9.4",
  "rustls",
@@ -1876,10 +1877,10 @@ dependencies = [
 name = "qos_bridge"
 version = "0.7.0"
 dependencies = [
- "qos_core",
- "qos_hex",
+ "qos_core 0.7.0",
+ "qos_hex 0.7.0",
  "qos_host",
- "qos_nsm",
+ "qos_nsm 0.7.0",
  "serde",
  "serde_json",
  "tokio",
@@ -1895,11 +1896,12 @@ dependencies = [
  "der",
  "lazy_static",
  "p256",
- "qos_core",
- "qos_crypto",
- "qos_hex",
- "qos_nsm",
- "qos_p256",
+ "qos_core 0.7.0",
+ "qos_crypto 0.7.0",
+ "qos_hex 0.7.0",
+ "qos_json",
+ "qos_nsm 0.7.0",
+ "qos_p256 0.7.0",
  "qos_test_primitives",
  "rand_core 0.9.3",
  "rpassword",
@@ -1919,10 +1921,11 @@ dependencies = [
  "futures",
  "libc",
  "nix 0.30.1",
- "qos_crypto",
- "qos_hex",
- "qos_nsm",
- "qos_p256",
+ "qos_crypto 0.7.0",
+ "qos_hex 0.7.0",
+ "qos_json",
+ "qos_nsm 0.7.0",
+ "qos_p256 0.7.0",
  "qos_test_primitives",
  "rustls",
  "serde",
@@ -1934,10 +1937,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_core"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "017f157e548e79837959754020270d5e42e9d1af089f0f3269a40bae9a39d0c1"
+dependencies = [
+ "aws-nitro-enclaves-nsm-api",
+ "borsh",
+ "futures",
+ "libc",
+ "nix 0.30.1",
+ "qos_crypto 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "qos_hex 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "qos_nsm 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "qos_p256 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "tokio",
+ "tokio-vsock",
+]
+
+[[package]]
 name = "qos_crypto"
 version = "0.7.0"
 dependencies = [
- "qos_hex",
+ "qos_hex 0.7.0",
+ "rand 0.9.4",
+ "sha2",
+ "thiserror 2.0.17",
+ "vsss-rs",
+]
+
+[[package]]
+name = "qos_crypto"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12bdf9f905ae4429bdcd97deb73a00fe6d2a896480a92fa9d92ff93ef1307f3c"
+dependencies = [
  "rand 0.9.4",
  "sha2",
  "thiserror 2.0.17",
@@ -1950,7 +1987,7 @@ version = "0.0.0"
 dependencies = [
  "arbitrary",
  "libfuzzer-sys",
- "qos_crypto",
+ "qos_crypto 0.7.0",
 ]
 
 [[package]]
@@ -1961,17 +1998,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_hex"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7657a5e191e7f3c46876d54648a405e9ff5364124874daf7756372903c64a562"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "qos_host"
 version = "0.7.0"
 dependencies = [
  "axum",
  "borsh",
- "qos_core",
- "qos_hex",
- "qos_nsm",
+ "qos_core 0.7.0",
+ "qos_hex 0.7.0",
+ "qos_nsm 0.7.0",
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "qos_json"
+version = "0.7.0"
+dependencies = [
+ "qos_hex 0.7.0",
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -1983,7 +2039,7 @@ dependencies = [
  "futures",
  "hickory-resolver",
  "httparse",
- "qos_core",
+ "qos_core 0.7.0",
  "qos_test_primitives",
  "rand 0.9.4",
  "rustls",
@@ -2012,7 +2068,26 @@ dependencies = [
  "borsh",
  "hex-literal",
  "p384",
- "qos_hex",
+ "qos_hex 0.7.0",
+ "qos_json",
+ "serde",
+ "serde_bytes",
+ "sha2",
+ "webpki",
+ "x509-cert",
+]
+
+[[package]]
+name = "qos_nsm"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5ad7a2674c158d01ebba18ea1c381fcf4b66a6a196a7583b7b66eecf4c7e78e"
+dependencies = [
+ "aws-nitro-enclaves-cose",
+ "aws-nitro-enclaves-nsm-api",
+ "borsh",
+ "p384",
+ "qos_hex 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_bytes",
  "sha2",
  "webpki",
@@ -2024,8 +2099,8 @@ name = "qos_nsm_fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
- "qos_hex",
- "qos_nsm",
+ "qos_hex 0.7.0",
+ "qos_nsm 0.7.0",
 ]
 
 [[package]]
@@ -2037,8 +2112,25 @@ dependencies = [
  "hkdf",
  "hmac",
  "p256",
- "qos_hex",
+ "qos_hex 0.7.0",
  "qos_test_primitives",
+ "serde",
+ "sha2",
+ "zeroize",
+]
+
+[[package]]
+name = "qos_p256"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf0ea50dbb89ece72cbc4821f0bb6e80a53575fef32a2f3dc3a99a8b99059844"
+dependencies = [
+ "aes-gcm",
+ "borsh",
+ "hkdf",
+ "hmac",
+ "p256",
+ "qos_hex 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha2",
  "zeroize",
 ]
@@ -2049,7 +2141,7 @@ version = "0.0.0"
 dependencies = [
  "arbitrary",
  "libfuzzer-sys",
- "qos_p256",
+ "qos_p256 0.7.0",
 ]
 
 [[package]]

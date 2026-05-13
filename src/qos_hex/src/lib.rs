@@ -330,6 +330,53 @@ pub mod serde {
 
 		deserializer.deserialize_str(StrVisitor(PhantomData))
 	}
+
+	/// Serde support for `Option<T>` where `T` is hex-encoded bytes.
+	pub mod option {
+		use super::{Deserializer, FromHex, Serializer, encode};
+		use serde::{Deserialize, Serialize};
+
+		/// Serialize optional bytes as an optional hex string.
+		///
+		/// # Errors
+		///
+		/// Returns the serializer's error type if serialization fails.
+		pub fn serialize<T, S>(
+			value: &Option<T>,
+			serializer: S,
+		) -> Result<S::Ok, S::Error>
+		where
+			T: AsRef<[u8]>,
+			S: Serializer,
+		{
+			value
+				.as_ref()
+				.map(|bytes| encode(bytes.as_ref()))
+				.serialize(serializer)
+		}
+
+		/// Deserialize an optional hex string into optional bytes.
+		///
+		/// # Errors
+		///
+		/// Returns the deserializer's error type if the input is not `null`
+		/// or a valid hex string.
+		pub fn deserialize<'de, D, T>(
+			deserializer: D,
+		) -> Result<Option<T>, D::Error>
+		where
+			D: Deserializer<'de>,
+			T: FromHex,
+		{
+			Option::<String>::deserialize(deserializer)?
+				.as_deref()
+				.map(FromHex::from_hex)
+				.map(|res| {
+					res.map_err(|e| serde::de::Error::custom(format!("{e:?}")))
+				})
+				.transpose()
+		}
+	}
 }
 
 #[cfg(test)]

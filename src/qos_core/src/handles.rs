@@ -8,7 +8,9 @@ use std::{
 
 use qos_p256::P256Pair;
 
-use crate::protocol::{ProtocolError, services::boot::ManifestEnvelope};
+use crate::protocol::{
+	ProtocolError, services::boot::VersionedManifestEnvelope,
+};
 
 /// Handle for accessing the quorum key.
 #[derive(Debug, Clone)]
@@ -182,11 +184,12 @@ impl Handles {
 	/// Errors if the Manifest has not been put.
 	pub fn get_manifest_envelope(
 		&self,
-	) -> Result<ManifestEnvelope, ProtocolError> {
+	) -> Result<VersionedManifestEnvelope, ProtocolError> {
 		let contents = fs::read(&self.manifest)
 			.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)?;
-		let manifest = serde_json::from_slice(&contents)
-			.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)?;
+		let manifest =
+			VersionedManifestEnvelope::try_from_slice_compat(&contents)
+				.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)?;
 
 		Ok(manifest)
 	}
@@ -196,13 +199,18 @@ impl Handles {
 	/// # Errors
 	///
 	/// Errors if the Manifest has already been put.
-	pub fn put_manifest_envelope(
+	pub fn put_manifest_envelope<E>(
 		&self,
-		manifest_envelope: &ManifestEnvelope,
-	) -> Result<(), ProtocolError> {
+		manifest_envelope: E,
+	) -> Result<(), ProtocolError>
+	where
+		E: Into<VersionedManifestEnvelope>,
+	{
+		let manifest_envelope = manifest_envelope.into();
 		Self::write_as_read_only(
 			&self.manifest,
-			&serde_json::to_vec(manifest_envelope)
+			&manifest_envelope
+				.to_storage_vec()
 				.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?,
 			ProtocolError::FailedToPutManifestEnvelope,
 		)
@@ -213,7 +221,7 @@ impl Handles {
 	/// **Warning**: This should not be used after pivoting. It is only meant to
 	/// be used when updating the manifest envelope while provisioning.
 	pub(crate) fn mutate_manifest_envelope<
-		F: FnOnce(ManifestEnvelope) -> ManifestEnvelope,
+		F: FnOnce(VersionedManifestEnvelope) -> VersionedManifestEnvelope,
 	>(
 		&self,
 		mutate: F,
@@ -229,7 +237,8 @@ impl Handles {
 		)?;
 		fs::write(
 			&self.manifest,
-			serde_json::to_vec(&manifest_envelope)
+			manifest_envelope
+				.to_storage_vec()
 				.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?,
 		)
 		.map_err(|_| ProtocolError::FailedToPutManifestEnvelope)?;
@@ -327,8 +336,8 @@ mod test {
 
 	use super::*;
 	use crate::protocol::services::boot::{
-		Manifest, ManifestSet, Namespace, NitroConfig, PatchSet, PivotConfig,
-		RestartPolicy, ShareSet,
+		Manifest, ManifestEnvelope, ManifestSet, Namespace, NitroConfig,
+		PatchSet, PivotConfig, RestartPolicy, ShareSet,
 	};
 
 	#[test]
@@ -464,11 +473,12 @@ mod test {
 			patch_set: PatchSet::default(),
 		};
 
-		let manifest_envelope = ManifestEnvelope {
-			manifest,
-			manifest_set_approvals: vec![],
-			share_set_approvals: vec![],
-		};
+		let manifest_envelope =
+			VersionedManifestEnvelope::V1(ManifestEnvelope {
+				manifest,
+				manifest_set_approvals: vec![],
+				share_set_approvals: vec![],
+			});
 
 		let result = handles.put_manifest_envelope(&manifest_envelope);
 		let error =

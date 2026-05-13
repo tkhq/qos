@@ -23,7 +23,7 @@ use crate::{
 	protocol::{
 		ProtocolPhase, ProtocolState,
 		processor::ProtocolProcessor,
-		services::boot::{BridgeConfig, PivotConfig, RestartPolicy},
+		services::boot::{BridgeConfig, RestartPolicy},
 	},
 	server::SocketServer,
 };
@@ -188,9 +188,10 @@ impl Reaper {
 		let manifest = handles
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
-			.manifest;
-		let PivotConfig { args, restart, bridge_config: host_config, .. } =
-			manifest.pivot;
+			.manifest();
+		let args = manifest.args().to_vec();
+		let restart = manifest.restart();
+		let host_config = manifest.bridge_config().to_vec();
 
 		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task
 		run_vsock_to_tcp_bridge(&core_socket, &host_config)
@@ -200,7 +201,7 @@ impl Reaper {
 		pivot.env_clear();
 		pivot.args(&args[..]);
 		// Only pipe pivot output when it will be drained below.
-		if manifest.pivot.debug_mode {
+		if manifest.debug_mode() {
 			pivot.stdout(Stdio::piped()).stderr(Stdio::piped());
 		} else {
 			pivot.stdout(Stdio::null()).stderr(Stdio::null());
@@ -210,7 +211,7 @@ impl Reaper {
 			let mut child = pivot.spawn().expect("Failed to spawn pivot");
 			// print pivot stderr and stdout if in debug mode
 			// *NOTE*: this requires `DEBUG` and `LOGS` env vars set when booting the enclave itself. If not, nothing will be visible
-			if manifest.pivot.debug_mode {
+			if manifest.debug_mode() {
 				reprint_pivot_output(&mut child);
 			}
 
