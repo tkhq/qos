@@ -83,6 +83,23 @@ All tests must pass.
 
 PRs also need to pass the `build-linux-only` job (part of the `pr` workflow). There are 3 crates excluded from the Rust workspace: `qos_system`, `qos_aws`, and `init`. These crates are excluded because they only build on Linux. If you are not working directly with these crates they generally only need to be updated if the dependencies for `qos_core` change. The linux only crates each have their own lockfile and that will need to be up to date for deterministic builds to work. To update the locks files you will need a linux build environment. Once in a linux build environment you can run `make build-linux-only`, which updates lock files if necessary; any updated lock files should then be committed.
 
+### Running in qemu
+
+NOTE: this has only been tested on a linux x86_64 host.
+Some additional dependencies are needed in order to run `qos` in the `nitro-enclave` machine in `qemu`.
+
+1. [vhost-device-vsock](https://github.com/rust-vmm/vhost-device/blob/main/vhost-device-vsock/README.md) is required to provide the hypervisor link for the vsock
+2. [qemu](https://www.qemu.org/) itself needs to be installed, `v11.0.0` or later
+
+#### Bare bones qos
+
+Run `make qemu` to start a bare-bones qos instance that will await boot instructions.
+This initiates local vsock on cid `1` and port `9001` and starts the enclave. The unix socket connector is at `/tmp/vhost4.socket`.
+
+You can follow up by running `qos_host` and pointing to the right vsock and sending in the boot instructions via `qos_client` afterwards.
+
+To stop the enclave and qemu run `make qemu-stop`.
+
 ## Releases
 
 This project uses [`release-plz`](https://github.com/release-plz/release-plz). Install it with:
