@@ -12,11 +12,15 @@ use crate::protocol::{
 
 pub mod env;
 pub mod manifest;
+pub mod oci;
 pub use env::{
 	MAX_PIVOT_ENV_NAME_LEN, MAX_PIVOT_ENV_VALUE_LEN, MAX_PIVOT_ENV_VARS,
 	PivotEnv, PivotEnvValue, PivotEnvVarName,
 };
-pub use manifest::v2::{ManifestEnvelopeV2, ManifestV2, PivotConfigV2};
+pub use manifest::v2::{
+	ManifestEnvelopeV2, ManifestV2, OciDigest, OciPlatform, OciRuntimeLimits,
+	PivotBinaryConfigV2, PivotConfigV2, PivotKind, PivotOciImageConfigV2,
+};
 pub use manifest::{
 	ManifestVersion, VersionedManifest, VersionedManifestEnvelope,
 };
@@ -693,8 +697,13 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	if !manifest_envelope.share_set_approvals().is_empty() {
 		return Err(ProtocolError::BadShareSetApprovals);
 	}
+	if !manifest_envelope.is_binary_pivot() {
+		return Err(ProtocolError::InvalidPivotMode);
+	}
 	let actual_hash = sha_256(pivot);
-	let expected_hash = *manifest_envelope.pivot_hash();
+	let expected_hash = *manifest_envelope
+		.pivot_binary_hash()
+		.ok_or(ProtocolError::InvalidPivotMode)?;
 	if actual_hash != expected_hash {
 		return Err(ProtocolError::InvalidPivotHash {
 			expected: qos_hex::encode(&expected_hash),
@@ -722,6 +731,32 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	Ok(nsm_response)
 }
 
+pub(in crate::protocol::services) fn put_manifest_and_oci_layout(
+	state: &mut ProtocolState,
+	manifest_envelope: &VersionedManifestEnvelope,
+	oci_layout: &[u8],
+) -> Result<NsmResponse, ProtocolError> {
+	manifest_envelope.check_approvals()?;
+	if !manifest_envelope.share_set_approvals().is_empty() {
+		return Err(ProtocolError::BadShareSetApprovals);
+	}
+	let oci_image =
+		manifest_envelope.oci_image().ok_or(ProtocolError::InvalidPivotMode)?;
+	oci::import_oci_layout_archive(&state.handles, oci_image, oci_layout)?;
+
+	let ephemeral_key = P256Pair::generate()?;
+	state.handles.put_ephemeral_key(&ephemeral_key)?;
+	state.handles.put_manifest_envelope(manifest_envelope)?;
+
+	let nsm_response = attestation::get_post_boot_attestation_doc(
+		&*state.attestor,
+		ephemeral_key.public_key().to_bytes(),
+		manifest_envelope.manifest_hash().to_vec(),
+	);
+
+	Ok(nsm_response)
+}
+
 pub(in crate::protocol) fn boot_standard(
 	state: &mut ProtocolState,
 	manifest_envelope: impl Into<VersionedManifestEnvelope>,
@@ -730,6 +765,17 @@ pub(in crate::protocol) fn boot_standard(
 	let manifest_envelope = manifest_envelope.into();
 	let nsm_response =
 		put_manifest_and_pivot(state, &manifest_envelope, pivot)?;
+	Ok(nsm_response)
+}
+
+pub(in crate::protocol) fn boot_standard_image(
+	state: &mut ProtocolState,
+	manifest_envelope: impl Into<VersionedManifestEnvelope>,
+	oci_layout: &[u8],
+) -> Result<NsmResponse, ProtocolError> {
+	let manifest_envelope = manifest_envelope.into();
+	let nsm_response =
+		put_manifest_and_oci_layout(state, &manifest_envelope, oci_layout)?;
 	Ok(nsm_response)
 }
 

@@ -76,7 +76,8 @@ hmac = { version = "0.12", default-features = false }
 httparse = { version = "1.9.4", default-features = false }
 lazy_static = "1.4"
 libc = "=0.2.174"
-nix = { version = "0.30.1", features = ["socket"], default-features = false }
+nix = { version = "0.30.1", features = ["fs", "mount", "socket"], default-features = false }
+oci-spec = { version = "0.9", features = ["image"], default-features = false }
 p256 = { version = "0.13.2", default-features = false }
 p384 = { version = "0.13", features = ["ecdsa", "std"], default-features = false }
 rand = "0.9"
@@ -87,6 +88,7 @@ serde = { version = "1", features = ["derive"], default-features = false }
 serde_bytes = { version = "0.11.10", default-features = false }
 serde_json = { version = "1" }
 sha2 = { version = "0.10", default-features = false }
+tar = { version = "0.4", default-features = false }
 thiserror = { version = "2.0.12", features = ["std"], default-features = false }
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"], default-features = false }
 tokio-rustls = { version = "0.26.2" }
@@ -98,6 +100,7 @@ webpki-roots = { version = "1.0.2" }
 x509-cert = { version = "0.2.5", features = ["pem"], default-features = false }
 yubikey = { version = "0.8", features = ["untested"], default-features = false }
 zeroize = { version = "1.8", default-features = false }
+flate2 = { version = "1.1", features = ["miniz_oxide"], default-features = false }
 
 # Internal workspace dependencies
 integration = { path = "src/integration" }

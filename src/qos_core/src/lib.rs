@@ -51,6 +51,13 @@ pub const MANIFEST_FILE: &str = "./local-enclave/qos.manifest";
 #[cfg(feature = "vm")]
 pub const MANIFEST_FILE: &str = "/qos.manifest";
 
+/// Path to OCI runtime state.
+#[cfg(not(feature = "vm"))]
+pub const OCI_DIR: &str = "./local-enclave/qos-oci";
+/// Path to OCI runtime state.
+#[cfg(feature = "vm")]
+pub const OCI_DIR: &str = "/run/qos/oci";
+
 /// Default socket for enclave <-> secure app communication.
 #[cfg(not(feature = "vm"))]
 pub const SEC_APP_SOCK: &str = "./local-enclave/sec_app.sock";

@@ -5,6 +5,7 @@
 //! The pivot is an executable the enclave runs to initialize the secure
 //! applications.
 use std::{
+	env,
 	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
 	process::Stdio,
 	sync::{Arc, RwLock},
@@ -22,6 +23,7 @@ use crate::{
 	io::{HostBridge, IOError, SocketAddress, StreamPool},
 	protocol::{
 		ProtocolPhase, ProtocolState,
+		msg::WorkloadStatus,
 		processor::ProtocolProcessor,
 		services::boot::{BridgeConfig, RestartPolicy},
 	},
@@ -170,25 +172,106 @@ impl Reaper {
 				std::process::exit(1);
 			}
 
-			if handles.quorum_key_exists()
-				&& handles.pivot_exists()
-				&& handles.manifest_envelope_exists()
+			if handles.quorum_key_exists() && handles.manifest_envelope_exists()
 			{
-				// The state required to pivot exists, so we can break this
-				// holding pattern and start the pivot.
-				break;
+				let manifest = handles
+					.get_manifest_envelope()
+					.expect("Checked above that the manifest exists.")
+					.manifest();
+				if manifest.is_oci_image()
+					|| (manifest.is_binary_pivot() && handles.pivot_exists())
+				{
+					// The state required to pivot exists, so we can break this
+					// holding pattern and start the workload.
+					break;
+				}
 			}
 
-			eprintln!("Reaper::execute waiting for pivot and manifest");
+			eprintln!("Reaper::execute waiting for workload and manifest");
 			tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
 		}
 
-		println!("Reaper::execute about to spawn pivot");
+		println!("Reaper::execute about to spawn workload");
 
 		let manifest = handles
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest();
+		if let Some(oci_image) = manifest.oci_image() {
+			let verified =
+				crate::protocol::services::boot::oci::inspect_stored_oci_image(
+					handles, oci_image,
+				)
+				.expect("failed to inspect OCI image");
+			let bundle =
+				crate::protocol::services::boot::oci::prepare_oci_runtime_bundle(
+					handles, oci_image,
+				)
+				.expect("failed to prepare OCI runtime bundle");
+			let mut workload_status = WorkloadStatus {
+				kind: "ociImage".to_string(),
+				digest: Some(oci_image.digest.as_str().to_string()),
+				resolved: true,
+				unpacked: true,
+				running: false,
+				exposed_ports: verified.exposed_ports,
+				volumes: verified.volumes,
+				last_exit_status: None,
+				last_error: None,
+			};
+			if let Err(err) = handles.put_workload_status(&workload_status) {
+				eprintln!("failed to write OCI workload status: {err}");
+			}
+			let launch_spec =
+				crate::protocol::services::boot::oci::write_oci_launch_spec(
+					&bundle,
+				)
+				.expect("failed to write OCI launch spec");
+			let launcher = env::current_exe()
+				.expect("failed to resolve QOS core launcher path");
+			let restart = manifest.restart();
+			let mut command = Command::new(launcher);
+			command.arg("--oci-launch-spec").arg(&launch_spec);
+			if manifest.debug_mode() {
+				command.stdout(Stdio::piped()).stderr(Stdio::piped());
+			} else {
+				command.stdout(Stdio::null()).stderr(Stdio::null());
+			}
+
+			loop {
+				workload_status.running = true;
+				workload_status.last_error = None;
+				if let Err(err) = handles.put_workload_status(&workload_status)
+				{
+					eprintln!("failed to write OCI workload status: {err}");
+				}
+				let mut child =
+					command.spawn().expect("Failed to spawn OCI workload");
+				if manifest.debug_mode() {
+					reprint_pivot_output(&mut child);
+				}
+				let status = child
+					.wait()
+					.await
+					.expect("OCI workload executable never started...");
+
+				println!("OCI workload exited: {status}");
+				workload_status.running = false;
+				workload_status.last_exit_status = status.code();
+				if let Err(err) = handles.put_workload_status(&workload_status)
+				{
+					eprintln!("failed to write OCI workload status: {err}");
+				}
+				if restart == RestartPolicy::Never {
+					tokio::time::sleep(REAPER_EXIT_DELAY).await;
+					break;
+				}
+				tokio::time::sleep(REAPER_RESTART_DELAY).await;
+			}
+			*inter_state.write().unwrap() = InterState::Quitting;
+			server_worker.abort();
+			return;
+		}
 		let args = manifest.args().to_vec();
 		let restart = manifest.restart();
 		let host_config = manifest.bridge_config().to_vec();
@@ -207,7 +290,27 @@ impl Reaper {
 			pivot.stdout(Stdio::null()).stderr(Stdio::null());
 		}
 
+		let mut workload_status = WorkloadStatus {
+			kind: "binaryPivot".to_string(),
+			digest: None,
+			resolved: true,
+			unpacked: false,
+			running: false,
+			exposed_ports: vec![],
+			volumes: vec![],
+			last_exit_status: None,
+			last_error: None,
+		};
+		if let Err(err) = handles.put_workload_status(&workload_status) {
+			eprintln!("failed to write pivot workload status: {err}");
+		}
+
 		loop {
+			workload_status.running = true;
+			workload_status.last_error = None;
+			if let Err(err) = handles.put_workload_status(&workload_status) {
+				eprintln!("failed to write pivot workload status: {err}");
+			}
 			let mut child = pivot.spawn().expect("Failed to spawn pivot");
 			// print pivot stderr and stdout if in debug mode
 			// *NOTE*: this requires `DEBUG` and `LOGS` env vars set when booting the enclave itself. If not, nothing will be visible
@@ -219,6 +322,11 @@ impl Reaper {
 				child.wait().await.expect("Pivot executable never started...");
 
 			println!("Pivot exited with status: {status}");
+			workload_status.running = false;
+			workload_status.last_exit_status = status.code();
+			if let Err(err) = handles.put_workload_status(&workload_status) {
+				eprintln!("failed to write pivot workload status: {err}");
+			}
 			// pause to ensure OS has enough time to clean up resources
 			// before restarting
 			tokio::time::sleep(REAPER_RESTART_DELAY).await;

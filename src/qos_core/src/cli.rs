@@ -9,6 +9,7 @@ use crate::{
 	handles::Handles,
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
+	protocol::services::boot::oci,
 	reaper::Reaper,
 };
 
@@ -125,6 +126,18 @@ impl CLI {
 	/// If the socket pools cannot be created
 	pub async fn execute() {
 		let mut args: Vec<String> = env::args().collect();
+		if args.get(1).map(String::as_str) == Some("--oci-launch-spec") {
+			let spec_path = args
+				.get(2)
+				.expect("--oci-launch-spec requires a launch spec path");
+			match oci::launch_from_spec_path(std::path::Path::new(spec_path)) {
+				Ok(code) => std::process::exit(code),
+				Err(e) => {
+					eprintln!("OCI launcher failed: {e}");
+					std::process::exit(1);
+				}
+			}
+		}
 		let opts = EnclaveOpts::new(&mut args);
 
 		if opts.parsed.version() {

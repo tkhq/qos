@@ -188,6 +188,7 @@ There are two modes for provisioning:
 
 - [Boot Standard](docs/boot_standard.md): mode for provisioning an enclave with quorum key shares. This is commonly used if there is no instance from the same namespace to key forward from or if there is any change to the QuorumOS verification API that breaks Key Forwarding. Boot Standard is also required if the manifest set or share set change.
 - [Key Forward](docs/key_forward.md): mode for provisioning an enclave from an already provisioned enclave of the same namespace. This allows QuorumOS to support horizontal scaling cloud workloads. Effectively, a pre-existing enclave will verify attestation and manifest for a new enclave and then forward its quorum key to the new enclave.
+- [OCI Image Boot](docs/oci_image_boot.md): specification for approving an OCI image digest in the manifest and having QOS verify, unpack, mount, and launch the image from RAM-backed storage.
 
 ### Remote Attestation
 

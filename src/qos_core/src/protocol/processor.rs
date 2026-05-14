@@ -110,4 +110,21 @@ mod tests {
 			)
 		);
 	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn workload_status_reports_none_before_boot() {
+		let processor = ProtocolProcessor::new(test_state());
+		let req = ProtocolMsg::WorkloadStatusRequest.to_json_wire().unwrap();
+		let resp = processor.process(&req).await;
+
+		let (msg, encoding) = ProtocolMsg::from_wire(&resp).unwrap();
+		assert_eq!(encoding, super::super::msg::ProtocolMsgEncoding::Json);
+		let ProtocolMsg::WorkloadStatusResponse(status) = msg else {
+			panic!("expected workload status response");
+		};
+		assert_eq!(status.kind, "none");
+		assert!(!status.resolved);
+		assert!(!status.unpacked);
+		assert!(!status.running);
+	}
 }

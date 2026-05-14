@@ -8,8 +8,10 @@ use std::{
 
 use qos_p256::P256Pair;
 
+use crate::OCI_DIR;
 use crate::protocol::{
-	ProtocolError, services::boot::VersionedManifestEnvelope,
+	ProtocolError, msg::WorkloadStatus,
+	services::boot::VersionedManifestEnvelope,
 };
 
 /// Handle for accessing the quorum key.
@@ -79,6 +81,8 @@ pub struct Handles {
 	manifest: String,
 	/// Path to the file containing the pivot.
 	pivot: String,
+	/// Path to OCI runtime state.
+	oci_dir: PathBuf,
 }
 
 impl Handles {
@@ -95,6 +99,25 @@ impl Handles {
 			quorum: QuorumKeyHandle::new(quorum),
 			manifest,
 			pivot,
+			oci_dir: PathBuf::from(OCI_DIR),
+		}
+	}
+
+	/// Create a new instance of [`Self`] with an explicit OCI runtime directory.
+	#[must_use]
+	pub fn new_with_oci_dir(
+		ephemeral: String,
+		quorum: String,
+		manifest: String,
+		pivot: String,
+		oci_dir: PathBuf,
+	) -> Self {
+		Self {
+			ephemeral: EphemeralKeyHandle::new(ephemeral),
+			quorum: QuorumKeyHandle::new(quorum),
+			manifest,
+			pivot,
+			oci_dir,
 		}
 	}
 
@@ -296,6 +319,196 @@ impl Handles {
 	#[must_use]
 	pub fn pivot_exists(&self) -> bool {
 		Path::new(&self.pivot).exists()
+	}
+
+	/// Return the root directory for OCI runtime state.
+	#[must_use]
+	pub fn oci_dir(&self) -> PathBuf {
+		self.oci_dir.clone()
+	}
+
+	/// Return the directory for verified OCI content blobs.
+	#[must_use]
+	pub fn oci_content_dir(&self) -> PathBuf {
+		self.oci_dir().join("content").join("blobs").join("sha256")
+	}
+
+	/// Return the path for a verified OCI blob by lowercase SHA-256 hex.
+	#[must_use]
+	pub fn oci_blob_path(&self, hex: &str) -> PathBuf {
+		self.oci_content_dir().join(hex)
+	}
+
+	/// Put a verified OCI content blob.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError`] if the blob cannot be written.
+	pub fn put_oci_blob(
+		&self,
+		hex: &str,
+		blob: &[u8],
+	) -> Result<(), ProtocolError> {
+		let path = self.oci_blob_path(hex);
+		if path.exists() {
+			return Ok(());
+		}
+		if let Some(parent) = path.parent()
+			&& !parent.exists()
+		{
+			fs::create_dir_all(parent).map_err(|_| {
+				ProtocolError::InvalidOciImage(
+					"failed to create OCI content directory".to_string(),
+				)
+			})?;
+		}
+		let tmp_path = path.with_extension("tmp");
+		fs::write(&tmp_path, blob).map_err(|_| {
+			ProtocolError::InvalidOciImage(
+				"failed to write OCI blob".to_string(),
+			)
+		})?;
+		fs::rename(&tmp_path, &path).map_err(|_| {
+			ProtocolError::InvalidOciImage(
+				"failed to commit OCI blob".to_string(),
+			)
+		})?;
+		fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).map_err(
+			|_| {
+				ProtocolError::InvalidOciImage(
+					"failed to make OCI blob read-only".to_string(),
+				)
+			},
+		)?;
+		Ok(())
+	}
+
+	/// Return true if a verified OCI blob exists.
+	#[must_use]
+	pub fn oci_blob_exists(&self, hex: &str) -> bool {
+		self.oci_blob_path(hex).exists()
+	}
+
+	/// Read a verified OCI content blob by lowercase SHA-256 hex.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError`] when the blob cannot be read.
+	pub fn get_oci_blob(&self, hex: &str) -> Result<Vec<u8>, ProtocolError> {
+		fs::read(self.oci_blob_path(hex)).map_err(|_| {
+			ProtocolError::InvalidOciImage(
+				"failed to read OCI blob".to_string(),
+			)
+		})
+	}
+
+	/// Return the directory containing OCI runtime bundles.
+	#[must_use]
+	pub fn oci_bundles_dir(&self) -> PathBuf {
+		self.oci_dir().join("bundles")
+	}
+
+	/// Return the rootfs path for an OCI image digest.
+	#[must_use]
+	pub fn oci_rootfs_dir(&self, manifest_hex: &str) -> PathBuf {
+		self.oci_bundles_dir().join(manifest_hex).join("rootfs")
+	}
+
+	/// Return the path to the workload status file.
+	#[must_use]
+	pub fn workload_status_path(&self) -> PathBuf {
+		self.oci_dir().join("workload_status.json")
+	}
+
+	/// Write workload status, replacing any previous status.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError`] if the status cannot be serialized or written.
+	pub fn put_workload_status(
+		&self,
+		status: &WorkloadStatus,
+	) -> Result<(), ProtocolError> {
+		let path = self.workload_status_path();
+		if let Some(parent) = path.parent()
+			&& !parent.exists()
+		{
+			fs::create_dir_all(parent).map_err(|_| {
+				ProtocolError::InvalidOciImage(
+					"failed to create workload status directory".to_string(),
+				)
+			})?;
+		}
+		let bytes = serde_json::to_vec(status).map_err(|_| {
+			ProtocolError::InvalidOciImage(
+				"failed to encode workload status".to_string(),
+			)
+		})?;
+		let tmp_path = path.with_extension("tmp");
+		fs::write(&tmp_path, bytes).map_err(|_| {
+			ProtocolError::InvalidOciImage(
+				"failed to write workload status".to_string(),
+			)
+		})?;
+		fs::rename(&tmp_path, &path).map_err(|_| {
+			ProtocolError::InvalidOciImage(
+				"failed to commit workload status".to_string(),
+			)
+		})
+	}
+
+	/// Read workload status, if present.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError`] if the status file is present but invalid.
+	pub fn get_workload_status(
+		&self,
+	) -> Result<Option<WorkloadStatus>, ProtocolError> {
+		let path = self.workload_status_path();
+		if !path.exists() {
+			return Ok(None);
+		}
+		let bytes = fs::read(path).map_err(|_| {
+			ProtocolError::InvalidOciImage(
+				"failed to read workload status".to_string(),
+			)
+		})?;
+		serde_json::from_slice(&bytes).map(Some).map_err(|_| {
+			ProtocolError::InvalidOciImage(
+				"failed to decode workload status".to_string(),
+			)
+		})
+	}
+
+	/// Read the raw ephemeral key file bytes.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError`] when the file cannot be read.
+	pub fn ephemeral_key_bytes(&self) -> Result<Vec<u8>, ProtocolError> {
+		fs::read(&self.ephemeral.ephemeral_key_path)
+			.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)
+	}
+
+	/// Read the raw quorum key file bytes.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError`] when the file cannot be read.
+	pub fn quorum_key_bytes(&self) -> Result<Vec<u8>, ProtocolError> {
+		fs::read(&self.quorum.quorum)
+			.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)
+	}
+
+	/// Read the raw manifest envelope file bytes.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError`] when the file cannot be read.
+	pub fn manifest_envelope_bytes(&self) -> Result<Vec<u8>, ProtocolError> {
+		fs::read(&self.manifest)
+			.map_err(|_| ProtocolError::FailedToGetManifestEnvelope)
 	}
 
 	/// Helper function for ready only writes that also ensures full write atomicity by renaming at the end.

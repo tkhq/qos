@@ -83,6 +83,42 @@ pub enum ProtocolMsgEncoding {
 	Borsh,
 }
 
+/// Workload metadata exposed for operator status.
+#[derive(
+	Debug,
+	PartialEq,
+	Eq,
+	Clone,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkloadStatus {
+	/// Workload kind, e.g. `binaryPivot` or `ociImage`.
+	pub kind: String,
+	/// Approved OCI image digest, when the workload is an OCI image.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub digest: Option<String>,
+	/// Whether the approved image content has been resolved/imported.
+	pub resolved: bool,
+	/// Whether the runtime rootfs exists.
+	pub unpacked: bool,
+	/// Whether QOS currently knows the workload to be running.
+	pub running: bool,
+	/// Verified OCI image exposed ports. Informational only.
+	pub exposed_ports: Vec<String>,
+	/// Verified OCI image volumes.
+	pub volumes: Vec<String>,
+	/// Last observed exit code, if tracked.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub last_exit_status: Option<i32>,
+	/// Last workload error, if available.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub last_error: Option<String>,
+}
+
 /// Message types for communicating with protocol executor.
 #[derive(
 	Debug,
@@ -260,6 +296,29 @@ pub enum ProtocolMsg {
 		/// Pivot binary.
 		pivot: Vec<u8>,
 	},
+
+	/// Execute Standard Boot for an OCI image workload.
+	BootStandardImageRequest {
+		/// Manifest with approvals.
+		manifest_envelope: Box<VersionedManifestEnvelope>,
+		/// Tar archive containing an OCI image layout.
+		#[serde(with = "qos_hex::serde")]
+		oci_layout: Vec<u8>,
+	},
+
+	/// Execute a key forward attestation request for an OCI image workload.
+	BootKeyForwardImageRequest {
+		/// Manifest with approvals.
+		manifest_envelope: Box<VersionedManifestEnvelope>,
+		/// Tar archive containing an OCI image layout.
+		#[serde(with = "qos_hex::serde")]
+		oci_layout: Vec<u8>,
+	},
+
+	/// Request workload status.
+	WorkloadStatusRequest,
+	/// Response for [`Self::WorkloadStatusRequest`].
+	WorkloadStatusResponse(WorkloadStatus),
 }
 
 impl ProtocolMsg {
@@ -314,6 +373,13 @@ impl ProtocolMsg {
 				qos_json::to_vec(self).map_err(|_| ProtocolError::InvalidMsg)
 			}
 			ProtocolMsgEncoding::Borsh => {
+				if matches!(
+					self,
+					Self::BootStandardImageRequest { .. }
+						| Self::BootKeyForwardImageRequest { .. }
+				) {
+					return Err(ProtocolError::InvalidMsg);
+				}
 				borsh::to_vec(self).map_err(|_| ProtocolError::InvalidMsg)
 			}
 		}
@@ -348,8 +414,15 @@ impl std::fmt::Display for ProtocolMsg {
 			Self::StatusResponse(_) => {
 				write!(f, "StatusResponse")
 			}
+			Self::WorkloadStatusRequest => write!(f, "WorkloadStatusRequest"),
+			Self::WorkloadStatusResponse(_) => {
+				write!(f, "WorkloadStatusResponse")
+			}
 			Self::BootStandardRequest { .. } => {
 				write!(f, "BootStandardRequest")
+			}
+			Self::BootStandardImageRequest { .. } => {
+				write!(f, "BootStandardImageRequest")
 			}
 			Self::BootStandardJsonEnvelopeRequest { .. } => {
 				write!(f, "BootStandardJsonEnvelopeRequest")
@@ -386,6 +459,9 @@ impl std::fmt::Display for ProtocolMsg {
 			}
 			Self::BootKeyForwardRequest { .. } => {
 				write!(f, "BootKeyForwardRequest")
+			}
+			Self::BootKeyForwardImageRequest { .. } => {
+				write!(f, "BootKeyForwardImageRequest")
 			}
 			Self::BootKeyForwardResponse { nsm_response } => match nsm_response
 			{
@@ -440,7 +516,8 @@ mod test {
 	use crate::protocol::services::boot::{
 		Manifest, ManifestEnvelope, ManifestEnvelopeV2, ManifestSet,
 		ManifestV2, ManifestVersion, Namespace, NitroConfig, PatchSet,
-		PivotConfig, PivotConfigV2, PivotEnv, RestartPolicy, ShareSet,
+		PivotBinaryConfigV2, PivotConfig, PivotConfigV2, PivotEnv,
+		RestartPolicy, ShareSet,
 	};
 
 	#[test]
@@ -536,14 +613,14 @@ mod test {
 				nonce: 1,
 				quorum_key: vec![7; 33],
 			},
-			pivot: PivotConfigV2 {
+			pivot: PivotConfigV2::Binary(PivotBinaryConfigV2 {
 				hash: [9; 32],
 				restart: RestartPolicy::Never,
 				bridge_config: vec![],
 				debug_mode: false,
 				args: vec![],
 				env: PivotEnv::new(),
-			},
+			}),
 			manifest_set: ManifestSet { threshold: 1, members: vec![] },
 			share_set: ShareSet { threshold: 1, members: vec![] },
 			enclave: NitroConfig {
@@ -584,14 +661,14 @@ mod test {
 					nonce: 1,
 					quorum_key: vec![7; 33],
 				},
-				pivot: PivotConfigV2 {
+				pivot: PivotConfigV2::Binary(PivotBinaryConfigV2 {
 					hash: [9; 32],
 					restart: RestartPolicy::Never,
 					bridge_config: vec![],
 					debug_mode: false,
 					args: vec![],
 					env: PivotEnv::new(),
-				},
+				}),
 				manifest_set: ManifestSet { threshold: 1, members: vec![] },
 				share_set: ShareSet { threshold: 1, members: vec![] },
 				enclave: NitroConfig {

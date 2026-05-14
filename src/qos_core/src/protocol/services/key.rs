@@ -11,7 +11,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
 	ProtocolError, ProtocolState, QosHash,
-	services::boot::{VersionedManifestEnvelope, put_manifest_and_pivot},
+	services::boot::{
+		VersionedManifestEnvelope, put_manifest_and_oci_layout,
+		put_manifest_and_pivot,
+	},
 };
 
 /// An encrypted quorum key along with a signature over the encrypted payload
@@ -81,6 +84,17 @@ pub(in crate::protocol) fn boot_key_forward(
 	let manifest_envelope = manifest_envelope.into();
 	let nsm_response =
 		put_manifest_and_pivot(state, &manifest_envelope, pivot)?;
+	Ok(nsm_response)
+}
+
+pub(in crate::protocol) fn boot_key_forward_image(
+	state: &mut ProtocolState,
+	manifest_envelope: impl Into<VersionedManifestEnvelope>,
+	oci_layout: &[u8],
+) -> Result<NsmResponse, ProtocolError> {
+	let manifest_envelope = manifest_envelope.into();
+	let nsm_response =
+		put_manifest_and_oci_layout(state, &manifest_envelope, oci_layout)?;
 	Ok(nsm_response)
 }
 

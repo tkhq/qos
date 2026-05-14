@@ -22,6 +22,9 @@ qos_nsm = { workspace = true, default-features = false }
 nix = { workspace = true }
 libc = { workspace = true }
 borsh = { workspace = true }
+oci-spec = { workspace = true }
+tar = { workspace = true }
+flate2 = { workspace = true }
 
 # For AWS Nitro
 aws-nitro-enclaves-nsm-api = { workspace = true }

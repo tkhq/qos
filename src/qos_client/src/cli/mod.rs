@@ -30,7 +30,13 @@ const NAMESPACE: &str = "namespace";
 const NONCE: &str = "nonce";
 const RESTART_POLICY: &str = "restart-policy";
 const PIVOT_PATH: &str = "pivot-path";
+const OCI_LAYOUT_PATH: &str = "oci-layout-path";
+const OCI_IMAGE_DIGEST: &str = "oci-image-digest";
+const OCI_MAX_COMPRESSED_BYTES: &str = "oci-max-compressed-bytes";
+const OCI_MAX_UNPACKED_BYTES: &str = "oci-max-unpacked-bytes";
+const OCI_MAX_ENTRIES: &str = "oci-max-entries";
 const PIVOT_ARGS: &str = "pivot-args";
+const PIVOT_ENV: &str = "pivot-env";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
 const ENDPOINT_BASE_PATH: &str = "endpoint-base-path";
@@ -154,6 +160,8 @@ pub enum Command {
 	/// This will output the COSE Sign1 structure with an embedded
 	/// `AttestationDoc`.
 	BootStandard,
+	/// Start booting an enclave with an OCI image workload.
+	BootStandardImage,
 	/// Get the attestation document from an enclave. Will also get the
 	/// manifest envelope if it exists.
 	GetAttestationDoc,
@@ -213,6 +221,8 @@ pub enum Command {
 	/// Send the boot instruction for the enclave to start the key forwarding
 	/// process.
 	BootKeyFwd,
+	/// Send the boot instruction for the enclave to start OCI key forwarding.
+	BootKeyFwdImage,
 	/// Request a quorum key from a fully provisioned enclave as part of the
 	/// key forwarding flow.
 	ExportKey,
@@ -242,6 +252,7 @@ impl From<&str> for Command {
 			"generate-manifest" => Self::GenerateManifest,
 			"approve-manifest" => Self::ApproveManifest,
 			"boot-standard" => Self::BootStandard,
+			"boot-standard-image" => Self::BootStandardImage,
 			"get-attestation-doc" => Self::GetAttestationDoc,
 			"get-ephemeral-key-hex" => Self::GetEphemeralKeyHex,
 			"proxy-re-encrypt-share" => Self::ProxyReEncryptShare,
@@ -259,6 +270,7 @@ impl From<&str> for Command {
 			"display" => Self::Display,
 			"json-to-borsh" => Self::JsonToBorsh,
 			"boot-key-fwd" => Self::BootKeyFwd,
+			"boot-key-fwd-image" => Self::BootKeyFwdImage,
 			"export-key" => Self::ExportKey,
 			"inject-key" => Self::InjectKey,
 			"p256-verify" => Self::P256Verify,
@@ -281,7 +293,7 @@ impl From<String> for Command {
 impl Command {
 	fn print_all() {
 		println!(
-			"\thost-health, enclave-status, generate-file-key, generate-manifest-envelope, boot-genesis,\n\tafter-genesis, verify-genesis, generate-manifest, approve-manifest, boot-standard, get-attestation-doc,\n\tget-ephemeral-key-hex, proxy-re-encrypt-share, post-share, dangerous-dev-boot,\n\tprovision-yubikey, advanced-provision-yubikey, pivot-hash, shamir-split, shamir-reconstruct,\n\tyubikey-sign, yubikey-public, yubikey-piv-reset, yubikey-change-pin, display, json-to-borsh,\n\tboot-key-fwd, export-key, inject-key, p256-verify, p256-sign, p256-asymmetric-encrypt, p256-asymmetric-decrypt"
+			"\thost-health, enclave-status, generate-file-key, generate-manifest-envelope, boot-genesis,\n\tafter-genesis, verify-genesis, generate-manifest, approve-manifest, boot-standard, boot-standard-image,\n\tget-attestation-doc, get-ephemeral-key-hex, proxy-re-encrypt-share, post-share, dangerous-dev-boot,\n\tprovision-yubikey, advanced-provision-yubikey, pivot-hash, shamir-split, shamir-reconstruct,\n\tyubikey-sign, yubikey-public, yubikey-piv-reset, yubikey-change-pin, display, json-to-borsh,\n\tboot-key-fwd, boot-key-fwd-image, export-key, inject-key, p256-verify, p256-sign,\n\tp256-asymmetric-encrypt, p256-asymmetric-decrypt"
 		);
 	}
 
@@ -294,6 +306,18 @@ impl Command {
 		Token::new(PIVOT_PATH, "Path to the pivot binary.")
 			.takes_value(true)
 			.required(true)
+	}
+	fn oci_layout_path_token() -> Token {
+		Token::new(OCI_LAYOUT_PATH, "Path to an OCI image-layout tar archive.")
+			.takes_value(true)
+			.required(true)
+	}
+	fn optional_oci_layout_path_token() -> Token {
+		Token::new(
+			OCI_LAYOUT_PATH,
+			"Optional path to an OCI image-layout tar archive for approval display of image Volumes and ExposedPorts.",
+		)
+		.takes_value(true)
 	}
 	fn restart_policy_token() -> Token {
 		Token::new(RESTART_POLICY, "One of: `never`, `always`.")
@@ -341,10 +365,40 @@ impl Command {
 	fn pivot_hash_path_token() -> Token {
 		Token::new(
 			PIVOT_HASH_PATH,
-			"Path to file with Pivot build fingerprints.",
+			"Path to file with Pivot build fingerprints. Required for binary pivot manifests.",
 		)
 		.takes_value(true)
-		.required(true)
+	}
+	fn oci_image_digest_token() -> Token {
+		Token::new(
+			OCI_IMAGE_DIGEST,
+			"OCI image manifest digest for a v2 OCI image manifest, e.g. sha256:<64 lowercase hex>.",
+		)
+		.takes_value(true)
+	}
+	fn oci_max_compressed_bytes_token() -> Token {
+		Token::new(
+			OCI_MAX_COMPRESSED_BYTES,
+			"Maximum imported/compressed OCI bytes. Used with --oci-image-digest.",
+		)
+		.takes_value(true)
+		.default_value("268435456")
+	}
+	fn oci_max_unpacked_bytes_token() -> Token {
+		Token::new(
+			OCI_MAX_UNPACKED_BYTES,
+			"Maximum unpacked OCI rootfs and tmpfs bytes. Used with --oci-image-digest.",
+		)
+		.takes_value(true)
+		.default_value("1073741824")
+	}
+	fn oci_max_entries_token() -> Token {
+		Token::new(
+			OCI_MAX_ENTRIES,
+			"Maximum OCI filesystem entries. Used with --oci-image-digest.",
+		)
+		.takes_value(true)
+		.default_value("200000")
 	}
 	fn manifest_set_dir_token() -> Token {
 		Token::new(
@@ -606,6 +660,16 @@ impl Command {
 			.takes_value(true)
 	}
 
+	fn pivot_env_token() -> Token {
+		Token::new(
+			PIVOT_ENV,
+			"Pivot env override JSON, e.g. {\"FOO\":{\"plain\":{\"value\":\"bar\"}}}.",
+		)
+		.required(false)
+		.default_value("{}")
+		.takes_value(true)
+	}
+
 	fn base() -> Parser {
 		Parser::new()
 			.token(
@@ -681,6 +745,10 @@ impl Command {
 			)
 			.token(Self::namespace_token())
 			.token(Self::pivot_hash_path_token())
+			.token(Self::oci_image_digest_token())
+			.token(Self::oci_max_compressed_bytes_token())
+			.token(Self::oci_max_unpacked_bytes_token())
+			.token(Self::oci_max_entries_token())
 			.token(Self::restart_policy_token())
 			.token(Self::qos_release_dir_token())
 			.token(Self::pcr3_preimage_path_token())
@@ -690,6 +758,7 @@ impl Command {
 			.token(Self::patch_set_dir_optional_token())
 			.token(Self::quorum_key_path_token())
 			.token(Self::pivot_args_token())
+			.token(Self::pivot_env_token())
 			.token(Self::bridge_config_token())
 			.token(Self::debug_mode_token())
 			.token(Self::use_manifest_version_token())
@@ -704,6 +773,8 @@ impl Command {
 			.token(Self::qos_release_dir_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::pivot_hash_path_token())
+			.token(Self::oci_image_digest_token())
+			.token(Self::optional_oci_layout_path_token())
 			.token(Self::alias_token())
 			.token(Self::quorum_key_path_token())
 			.token(Self::manifest_set_dir_token())
@@ -715,6 +786,14 @@ impl Command {
 	fn boot_standard() -> Parser {
 		Self::base()
 			.token(Self::pivot_path_token())
+			.token(Self::manifest_envelope_path_token())
+			.token(Self::pcr3_preimage_path_token())
+			.token(Self::unsafe_skip_attestation_token())
+	}
+
+	fn boot_standard_image() -> Parser {
+		Self::base()
+			.token(Self::oci_layout_path_token())
 			.token(Self::manifest_envelope_path_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
@@ -829,6 +908,13 @@ impl Command {
 			.token(Self::attestation_doc_path_token())
 	}
 
+	fn boot_key_fwd_image() -> Parser {
+		Self::base()
+			.token(Self::manifest_envelope_path_token())
+			.token(Self::oci_layout_path_token())
+			.token(Self::attestation_doc_path_token())
+	}
+
 	fn export_key() -> Parser {
 		Self::base()
 			.token(Self::manifest_envelope_path_token())
@@ -883,6 +969,7 @@ impl GetParserForCommand for Command {
 			Self::GenerateManifest => Self::generate_manifest(),
 			Self::ApproveManifest => Self::approve_manifest(),
 			Self::BootStandard => Self::boot_standard(),
+			Self::BootStandardImage => Self::boot_standard_image(),
 			Self::GetAttestationDoc => Self::get_attestation_doc(),
 			Self::ProxyReEncryptShare => Self::proxy_re_encrypt_share(),
 			Self::GetEphemeralKeyHex => Self::get_ephemeral_key_hex(),
@@ -905,6 +992,7 @@ impl GetParserForCommand for Command {
 			Self::Display => Self::display(),
 			Self::JsonToBorsh => Self::json_to_borsh(),
 			Self::BootKeyFwd => Self::boot_key_fwd(),
+			Self::BootKeyFwdImage => Self::boot_key_fwd_image(),
 			Self::ExportKey => Self::export_key(),
 			Self::InjectKey => Self::inject_key(),
 			Self::P256Verify => Self::p256_verify(),
@@ -972,6 +1060,42 @@ impl ClientOpts {
 		self.parsed.single(PIVOT_PATH).expect("required arg").clone()
 	}
 
+	fn oci_layout_path(&self) -> String {
+		self.parsed.single(OCI_LAYOUT_PATH).expect("required arg").clone()
+	}
+
+	fn maybe_oci_layout_path(&self) -> Option<String> {
+		self.parsed.single(OCI_LAYOUT_PATH).cloned()
+	}
+
+	fn oci_image_digest(&self) -> Option<String> {
+		self.parsed.single(OCI_IMAGE_DIGEST).cloned()
+	}
+
+	fn oci_max_compressed_bytes(&self) -> u64 {
+		self.parsed
+			.single(OCI_MAX_COMPRESSED_BYTES)
+			.expect("has default")
+			.parse()
+			.expect("invalid `--oci-max-compressed-bytes`")
+	}
+
+	fn oci_max_unpacked_bytes(&self) -> u64 {
+		self.parsed
+			.single(OCI_MAX_UNPACKED_BYTES)
+			.expect("has default")
+			.parse()
+			.expect("invalid `--oci-max-unpacked-bytes`")
+	}
+
+	fn oci_max_entries(&self) -> u64 {
+		self.parsed
+			.single(OCI_MAX_ENTRIES)
+			.expect("has default")
+			.parse()
+			.expect("invalid `--oci-max-entries`")
+	}
+
 	fn manifest_set_dir(&self) -> String {
 		self.parsed
 			.single(MANIFEST_SET_DIR)
@@ -1019,11 +1143,8 @@ impl ClientOpts {
 			.clone()
 	}
 
-	fn pivot_hash_path(&self) -> String {
-		self.parsed
-			.single(PIVOT_HASH_PATH)
-			.expect("pivot-hash is a required arg")
-			.clone()
+	fn maybe_pivot_hash_path(&self) -> Option<String> {
+		self.parsed.single(PIVOT_HASH_PATH).cloned()
 	}
 
 	fn pivot_args(&self) -> Vec<String> {
@@ -1046,6 +1167,11 @@ impl ClientOpts {
 		} else {
 			vec![]
 		}
+	}
+
+	fn pivot_env(&self) -> boot::PivotEnv {
+		let json = self.parsed.single(PIVOT_ENV).expect("has default");
+		serde_json::from_str(json).expect("invalid `--pivot-env` json")
 	}
 
 	fn bridge_config(&self) -> Vec<BridgeConfig> {
@@ -1334,6 +1460,9 @@ impl ClientRunner {
 					handlers::approve_manifest(&self.opts);
 				}
 				Command::BootStandard => handlers::boot_standard(&self.opts),
+				Command::BootStandardImage => {
+					handlers::boot_standard_image(&self.opts);
+				}
 				Command::GetAttestationDoc => {
 					handlers::get_attestation_doc(&self.opts);
 				}
@@ -1372,6 +1501,9 @@ impl ClientRunner {
 					handlers::json_to_borsh(&self.opts);
 				}
 				Command::BootKeyFwd => handlers::boot_key_fwd(&self.opts),
+				Command::BootKeyFwdImage => {
+					handlers::boot_key_fwd_image(&self.opts);
+				}
 				Command::ExportKey => handlers::export_key(&self.opts),
 				Command::InjectKey => handlers::inject_key(&self.opts),
 				Command::P256Verify => handlers::p256_verify(&self.opts),
@@ -1448,6 +1580,32 @@ mod handlers {
 		match response {
 			ProtocolMsg::StatusResponse(phase) => {
 				println!("Enclave phase: {phase:?}");
+			}
+			other => panic!("Unexpected response {other:?}"),
+		}
+
+		let response = request::post(path, &ProtocolMsg::WorkloadStatusRequest)
+			.map_err(|e| println!("{e:?}"))
+			.expect("Enclave workload status request failed");
+
+		match response {
+			ProtocolMsg::WorkloadStatusResponse(status) => {
+				println!("Workload kind: {}", status.kind);
+				if let Some(digest) = status.digest {
+					println!("OCI digest: {digest}");
+				}
+				println!("Resolved: {}", status.resolved);
+				println!("Unpacked: {}", status.unpacked);
+				println!("Running: {}", status.running);
+				if !status.volumes.is_empty() {
+					println!("Volumes: {:?}", status.volumes);
+				}
+				if !status.exposed_ports.is_empty() {
+					println!("Exposed ports: {:?}", status.exposed_ports);
+				}
+				if let Some(last_error) = status.last_error {
+					println!("Last error: {last_error}");
+				}
 			}
 			other => panic!("Unexpected response {other:?}"),
 		}
@@ -1622,11 +1780,16 @@ mod handlers {
 			nonce: opts.nonce(),
 			namespace: opts.namespace(),
 			restart_policy: opts.restart_policy(),
-			pivot_hash_path: opts.pivot_hash_path(),
+			pivot_hash_path: opts.maybe_pivot_hash_path(),
+			oci_image_digest: opts.oci_image_digest(),
+			oci_max_compressed_bytes: opts.oci_max_compressed_bytes(),
+			oci_max_unpacked_bytes: opts.oci_max_unpacked_bytes(),
+			oci_max_entries: opts.oci_max_entries(),
 			qos_release_dir_path: opts.qos_release_dir(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			manifest_path: opts.manifest_path(),
 			pivot_args: opts.pivot_args(),
+			pivot_env: opts.pivot_env(),
 			share_set_dir: opts.share_set_dir(),
 			manifest_set_dir: opts.manifest_set_dir(),
 			patch_set_dir: opts.patch_set_dir(),
@@ -1659,7 +1822,9 @@ mod handlers {
 			manifest_approvals_dir: opts.manifest_approvals_dir(),
 			qos_release_dir_path: opts.qos_release_dir(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
-			pivot_hash_path: opts.pivot_hash_path(),
+			pivot_hash_path: opts.maybe_pivot_hash_path(),
+			oci_image_digest: opts.oci_image_digest(),
+			oci_layout_path: opts.maybe_oci_layout_path(),
 			quorum_key_path: opts.quorum_key_path(),
 			manifest_set_dir: opts.manifest_set_dir(),
 			share_set_dir: opts.share_set_dir(),
@@ -1680,6 +1845,20 @@ mod handlers {
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
 		}) {
+			println!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn boot_standard_image(opts: &ClientOpts) {
+		if let Err(e) =
+			services::boot_standard_image(services::BootStandardImageArgs {
+				uri: opts.path_message(),
+				oci_layout_path: opts.oci_layout_path(),
+				manifest_envelope_path: opts.manifest_envelope_path(),
+				pcr3_preimage_path: opts.pcr3_preimage_path(),
+				unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+			}) {
 			println!("Error: {e:?}");
 			std::process::exit(1);
 		}
@@ -1818,6 +1997,18 @@ mod handlers {
 			&opts.path_message(),
 			opts.manifest_envelope_path(),
 			opts.pivot_path(),
+			opts.attestation_doc_path(),
+		) {
+			println!("Error: {e:?}");
+			std::process::exit(1);
+		}
+	}
+
+	pub(super) fn boot_key_fwd_image(opts: &ClientOpts) {
+		if let Err(e) = services::boot_key_fwd_image(
+			&opts.path_message(),
+			opts.manifest_envelope_path(),
+			opts.oci_layout_path(),
 			opts.attestation_doc_path(),
 		) {
 			println!("Error: {e:?}");

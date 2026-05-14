@@ -8,7 +8,8 @@ use crate::protocol::{Hash256, ProtocolError, QosHash};
 
 use super::{
 	Approval, BridgeConfig, Manifest, ManifestEnvelope, ManifestEnvelopeV0,
-	ManifestSet, ManifestV0, Namespace, NitroConfig, RestartPolicy, ShareSet,
+	ManifestSet, ManifestV0, Namespace, NitroConfig, OciDigest, PivotKind,
+	PivotOciImageConfigV2, RestartPolicy, ShareSet,
 };
 
 pub mod v2;
@@ -150,13 +151,72 @@ impl VersionedManifest {
 		}
 	}
 
+	/// Return the pivot workload kind.
+	#[must_use]
+	pub fn pivot_kind(&self) -> PivotKind {
+		match self {
+			Self::V2(manifest) => manifest.pivot.kind(),
+			Self::V1(_) | Self::V0(_) => PivotKind::Binary,
+		}
+	}
+
+	/// Return the expected pivot binary hash when the manifest is a binary pivot.
+	#[must_use]
+	pub fn pivot_binary_hash(&self) -> Option<&Hash256> {
+		match self {
+			Self::V2(manifest) => manifest.pivot.binary().map(|p| &p.hash),
+			Self::V1(manifest) => Some(&manifest.pivot.hash),
+			Self::V0(manifest) => Some(&manifest.pivot.hash),
+		}
+	}
+
 	/// Return the expected pivot binary hash.
+	///
+	/// # Panics
+	///
+	/// Panics if called for an OCI image pivot manifest.
 	#[must_use]
 	pub fn pivot_hash(&self) -> &Hash256 {
+		self.pivot_binary_hash()
+			.expect("pivot_hash called for non-binary pivot manifest")
+	}
+
+	/// Return the OCI image configuration when present.
+	#[must_use]
+	pub fn oci_image(&self) -> Option<&PivotOciImageConfigV2> {
 		match self {
-			Self::V2(manifest) => &manifest.pivot.hash,
-			Self::V1(manifest) => &manifest.pivot.hash,
-			Self::V0(manifest) => &manifest.pivot.hash,
+			Self::V2(manifest) => manifest.pivot.oci_image(),
+			Self::V1(_) | Self::V0(_) => None,
+		}
+	}
+
+	/// Return the OCI image digest when present.
+	#[must_use]
+	pub fn oci_image_digest(&self) -> Option<&OciDigest> {
+		self.oci_image().map(|image| &image.digest)
+	}
+
+	/// Return true if the manifest describes an OCI image workload.
+	#[must_use]
+	pub fn is_oci_image(&self) -> bool {
+		self.pivot_kind() == PivotKind::OciImage
+	}
+
+	/// Return true if the manifest describes a binary pivot workload.
+	#[must_use]
+	pub fn is_binary_pivot(&self) -> bool {
+		self.pivot_kind() == PivotKind::Binary
+	}
+
+	/// Return manifest argv override for OCI image pivots.
+	#[must_use]
+	pub fn args_override(&self) -> Option<&[String]> {
+		match self {
+			Self::V2(manifest) => manifest
+				.pivot
+				.oci_image()
+				.and_then(|image| image.args.as_deref()),
+			Self::V1(_) | Self::V0(_) => None,
 		}
 	}
 
@@ -164,7 +224,7 @@ impl VersionedManifest {
 	#[must_use]
 	pub fn restart(&self) -> RestartPolicy {
 		match self {
-			Self::V2(manifest) => manifest.pivot.restart,
+			Self::V2(manifest) => manifest.pivot.restart(),
 			Self::V1(manifest) => manifest.pivot.restart,
 			Self::V0(manifest) => manifest.pivot.restart,
 		}
@@ -174,7 +234,7 @@ impl VersionedManifest {
 	#[must_use]
 	pub fn args(&self) -> &[String] {
 		match self {
-			Self::V2(manifest) => &manifest.pivot.args,
+			Self::V2(manifest) => manifest.pivot.args(),
 			Self::V1(manifest) => &manifest.pivot.args,
 			Self::V0(manifest) => &manifest.pivot.args,
 		}
@@ -184,7 +244,7 @@ impl VersionedManifest {
 	#[must_use]
 	pub fn bridge_config(&self) -> &[BridgeConfig] {
 		match self {
-			Self::V2(manifest) => &manifest.pivot.bridge_config,
+			Self::V2(manifest) => manifest.pivot.bridge_config(),
 			Self::V1(manifest) => &manifest.pivot.bridge_config,
 			Self::V0(_) => &[],
 		}
@@ -194,7 +254,7 @@ impl VersionedManifest {
 	#[must_use]
 	pub fn debug_mode(&self) -> bool {
 		match self {
-			Self::V2(manifest) => manifest.pivot.debug_mode,
+			Self::V2(manifest) => manifest.pivot.debug_mode(),
 			Self::V1(manifest) => manifest.pivot.debug_mode,
 			Self::V0(_) => false,
 		}
@@ -376,13 +436,72 @@ impl VersionedManifestEnvelope {
 		}
 	}
 
+	/// Return the embedded pivot workload kind.
+	#[must_use]
+	pub fn pivot_kind(&self) -> PivotKind {
+		match self {
+			Self::V2(envelope) => envelope.manifest.pivot.kind(),
+			Self::V1(_) | Self::V0(_) => PivotKind::Binary,
+		}
+	}
+
 	/// Return the expected pivot binary hash from the embedded manifest.
 	#[must_use]
-	pub fn pivot_hash(&self) -> &Hash256 {
+	pub fn pivot_binary_hash(&self) -> Option<&Hash256> {
 		match self {
-			Self::V2(envelope) => &envelope.manifest.pivot.hash,
-			Self::V1(envelope) => &envelope.manifest.pivot.hash,
-			Self::V0(envelope) => &envelope.manifest.pivot.hash,
+			Self::V2(envelope) => {
+				envelope.manifest.pivot.binary().map(|p| &p.hash)
+			}
+			Self::V1(envelope) => Some(&envelope.manifest.pivot.hash),
+			Self::V0(envelope) => Some(&envelope.manifest.pivot.hash),
+		}
+	}
+
+	/// Return the expected pivot binary hash from the embedded manifest.
+	///
+	/// # Panics
+	///
+	/// Panics if called for an OCI image pivot manifest.
+	#[must_use]
+	pub fn pivot_hash(&self) -> &Hash256 {
+		self.pivot_binary_hash()
+			.expect("pivot_hash called for non-binary pivot manifest")
+	}
+
+	/// Return the embedded OCI image configuration when present.
+	#[must_use]
+	pub fn oci_image(&self) -> Option<&PivotOciImageConfigV2> {
+		match self {
+			Self::V2(envelope) => envelope.manifest.pivot.oci_image(),
+			Self::V1(_) | Self::V0(_) => None,
+		}
+	}
+
+	/// Return true if the embedded manifest is an OCI image workload.
+	#[must_use]
+	pub fn is_oci_image(&self) -> bool {
+		self.pivot_kind() == PivotKind::OciImage
+	}
+
+	/// Return true if the embedded manifest is a binary pivot workload.
+	#[must_use]
+	pub fn is_binary_pivot(&self) -> bool {
+		self.pivot_kind() == PivotKind::Binary
+	}
+
+	/// Return the embedded OCI image digest when present.
+	#[must_use]
+	pub fn oci_image_digest(&self) -> Option<&OciDigest> {
+		self.oci_image().map(|image| &image.digest)
+	}
+
+	/// Return the embedded restart policy.
+	#[must_use]
+	pub fn restart(&self) -> RestartPolicy {
+		match self {
+			Self::V2(envelope) => envelope.manifest.pivot.restart(),
+			Self::V1(envelope) => envelope.manifest.pivot.restart,
+			Self::V0(envelope) => envelope.manifest.pivot.restart,
 		}
 	}
 
@@ -495,14 +614,14 @@ mod tests {
 				nonce: 42,
 				quorum_key: vec![7; 33],
 			},
-			pivot: v2::PivotConfigV2 {
+			pivot: v2::PivotConfigV2::Binary(v2::PivotBinaryConfigV2 {
 				hash: [9; 32],
 				restart: RestartPolicy::Never,
 				bridge_config: vec![],
 				debug_mode: false,
 				args: vec!["--foo".to_string()],
 				env: PivotEnv::new(),
-			},
+			}),
 			manifest_set: ManifestSet {
 				threshold: 1,
 				members: vec![member.clone()],

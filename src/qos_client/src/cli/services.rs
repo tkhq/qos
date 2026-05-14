@@ -7,21 +7,25 @@ use std::{
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::BorshDeserialize;
-use qos_core::protocol::{
-	QosHash,
-	msg::{JsonBytes, ProtocolMsg},
-	services::{
-		boot::{
-			Approval, BridgeConfig, Manifest as ManifestV1,
-			ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
-			ManifestEnvelopeV2, ManifestSet, ManifestV2, ManifestVersion,
-			MemberPubKey, Namespace, NitroConfig, PatchSet,
-			PivotConfig as PivotConfigV1, PivotConfigV2, PivotEnv,
-			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
-			VersionedManifestEnvelope,
+use qos_core::{
+	handles::Handles,
+	protocol::{
+		QosHash,
+		msg::{JsonBytes, ProtocolMsg},
+		services::{
+			boot::{
+				Approval, BridgeConfig, Manifest as ManifestV1,
+				ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
+				ManifestEnvelopeV2, ManifestSet, ManifestV2, ManifestVersion,
+				MemberPubKey, Namespace, NitroConfig, OciDigest, OciPlatform,
+				OciRuntimeLimits, PatchSet, PivotBinaryConfigV2,
+				PivotConfig as PivotConfigV1, PivotConfigV2, PivotEnv,
+				PivotKind, PivotOciImageConfigV2, QuorumMember, RestartPolicy,
+				ShareSet, VersionedManifest, VersionedManifestEnvelope,
+			},
+			genesis::{GenesisOutput, GenesisSet},
+			key::EncryptedQuorumKey,
 		},
-		genesis::{GenesisOutput, GenesisSet},
-		key::EncryptedQuorumKey,
 	},
 };
 use qos_crypto::{sha_256, sha_384, sha_512};
@@ -131,6 +135,12 @@ pub enum Error {
 	QosAttest(String),
 	/// Pivot file
 	FailedToReadPivot(std::io::Error),
+	/// OCI image-layout archive file
+	FailedToReadOciLayout(std::io::Error),
+	/// Required binary pivot hash path was not supplied.
+	MissingPivotHashPath,
+	/// OCI image digest was invalid.
+	InvalidOciDigest(String),
 	/// Unexpected response from a request to the enclave - likely an error.
 	UnexpectedProtocolMsgResponse(String),
 	/// Could not read the file that should contain the encrypted quorum key.
@@ -154,6 +164,8 @@ pub enum Error {
 	ManifestV2NotConvertibleToBorsh,
 	/// v2 manifests do not support patch sets.
 	ManifestV2DoesNotSupportPatchSet,
+	/// OCI image manifests require manifest v2.
+	ManifestV2Only,
 	/// v1/v0 manifests require patch sets.
 	ManifestV1RequiresPatchSet,
 }
@@ -760,7 +772,11 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub nonce: u32,
 	pub namespace: String,
 	pub restart_policy: RestartPolicy,
-	pub pivot_hash_path: P,
+	pub pivot_hash_path: Option<P>,
+	pub oci_image_digest: Option<String>,
+	pub oci_max_compressed_bytes: u64,
+	pub oci_max_unpacked_bytes: u64,
+	pub oci_max_entries: u64,
 	pub qos_release_dir_path: P,
 	pub pcr3_preimage_path: P,
 	pub share_set_dir: P,
@@ -769,6 +785,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub quorum_key_path: P,
 	pub manifest_path: P,
 	pub pivot_args: Vec<String>,
+	pub pivot_env: PivotEnv,
 	pub bridge_config: Vec<BridgeConfig>,
 	pub debug_mode: bool,
 }
@@ -780,6 +797,10 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		nonce,
 		namespace,
 		pivot_hash_path,
+		oci_image_digest,
+		oci_max_compressed_bytes: _,
+		oci_max_unpacked_bytes: _,
+		oci_max_entries: _,
 		restart_policy,
 		qos_release_dir_path,
 		pcr3_preimage_path,
@@ -789,13 +810,18 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		quorum_key_path,
 		manifest_path,
 		pivot_args,
+		pivot_env: _,
 		bridge_config,
 		debug_mode,
 	} = args;
+	if oci_image_digest.is_some() {
+		return Err(Error::ManifestV2Only);
+	}
 
 	let nitro_config =
 		extract_nitro_config(qos_release_dir_path, pcr3_preimage_path);
-	let pivot_hash = extract_pivot_hash(pivot_hash_path);
+	let pivot_hash =
+		extract_pivot_hash(pivot_hash_path.ok_or(Error::MissingPivotHashPath)?);
 
 	// Get manifest set keys & threshold
 	let manifest_set = get_manifest_set(manifest_set_dir);
@@ -845,6 +871,10 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 		nonce,
 		namespace,
 		pivot_hash_path,
+		oci_image_digest,
+		oci_max_compressed_bytes,
+		oci_max_unpacked_bytes,
+		oci_max_entries,
 		restart_policy,
 		qos_release_dir_path,
 		pcr3_preimage_path,
@@ -854,6 +884,7 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 		quorum_key_path,
 		manifest_path,
 		pivot_args,
+		pivot_env,
 		bridge_config,
 		debug_mode,
 	} = args;
@@ -864,11 +895,48 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 
 	let nitro_config =
 		extract_nitro_config(qos_release_dir_path, pcr3_preimage_path);
-	let pivot_hash = extract_pivot_hash(pivot_hash_path);
 	let manifest_set = get_manifest_set(manifest_set_dir);
 	let share_set = get_share_set(share_set_dir);
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
+	let pivot = if let Some(oci_image_digest) = oci_image_digest {
+		if !bridge_config.is_empty() {
+			return Err(Error::InvalidOciDigest(
+				"OCI image manifests do not support bridge config".to_string(),
+			));
+		}
+		PivotConfigV2::OciImage(PivotOciImageConfigV2 {
+			r#type: PivotKind::OciImage,
+			digest: OciDigest::new(oci_image_digest)
+				.map_err(Error::InvalidOciDigest)?,
+			platform: OciPlatform {
+				os: "linux".to_string(),
+				architecture: "amd64".to_string(),
+			},
+			restart: restart_policy,
+			args: Some(pivot_args).filter(|args| !args.is_empty()),
+			env: pivot_env,
+			debug_mode,
+			bridge_config,
+			limits: OciRuntimeLimits {
+				max_compressed_bytes: oci_max_compressed_bytes,
+				max_unpacked_bytes: oci_max_unpacked_bytes,
+				max_entries: oci_max_entries,
+			},
+		})
+	} else {
+		let pivot_hash = extract_pivot_hash(
+			pivot_hash_path.ok_or(Error::MissingPivotHashPath)?,
+		);
+		PivotConfigV2::Binary(PivotBinaryConfigV2 {
+			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
+			restart: restart_policy,
+			args: pivot_args,
+			env: pivot_env,
+			bridge_config,
+			debug_mode,
+		})
+	};
 
 	let manifest = ManifestV2 {
 		version: ManifestVersion::V2,
@@ -877,14 +945,7 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 			nonce,
 			quorum_key: quorum_key.to_bytes(),
 		},
-		pivot: PivotConfigV2 {
-			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
-			restart: restart_policy,
-			args: pivot_args,
-			env: PivotEnv::default(),
-			bridge_config,
-			debug_mode,
-		},
+		pivot,
 		manifest_set,
 		share_set,
 		enclave: nitro_config,
@@ -922,7 +983,9 @@ pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
 	pub manifest_approvals_dir: P,
 	pub qos_release_dir_path: P,
 	pub pcr3_preimage_path: P,
-	pub pivot_hash_path: P,
+	pub pivot_hash_path: Option<P>,
+	pub oci_image_digest: Option<String>,
+	pub oci_layout_path: Option<P>,
 	pub quorum_key_path: P,
 	pub manifest_set_dir: P,
 	pub share_set_dir: P,
@@ -941,6 +1004,8 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		qos_release_dir_path,
 		pcr3_preimage_path,
 		pivot_hash_path,
+		oci_image_digest,
+		oci_layout_path,
 		quorum_key_path,
 		manifest_set_dir,
 		share_set_dir,
@@ -967,7 +1032,12 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		&get_share_set(share_set_dir),
 		patch_set.as_ref(),
 		&extract_nitro_config(qos_release_dir_path, pcr3_preimage_path),
-		&extract_pivot_hash(pivot_hash_path),
+		pivot_hash_path.as_ref().map(extract_pivot_hash),
+		oci_image_digest
+			.map(OciDigest::new)
+			.transpose()
+			.map_err(Error::InvalidOciDigest)?
+			.as_ref(),
 		&quorum_key,
 	) {
 		eprintln!("Exiting early without approving manifest");
@@ -979,7 +1049,15 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		let stdin_locked = stdin.lock();
 		let mut prompter =
 			Prompter { reader: stdin_locked, writer: io::stdout() };
-		if !approve_manifest_human_verifications(&manifest, &mut prompter) {
+		let oci_metadata = oci_layout_path
+			.as_ref()
+			.map(|path| oci_approval_metadata(&manifest, path))
+			.transpose()?;
+		if !approve_manifest_human_verifications(
+			&manifest,
+			oci_metadata.as_ref(),
+			&mut prompter,
+		) {
 			eprintln!("Exiting early without approving manifest");
 			std::process::exit(1);
 		}
@@ -1018,7 +1096,8 @@ fn approve_manifest_programmatic_verifications(
 	share_set: &ShareSet,
 	patch_set: Option<&PatchSet>,
 	nitro_config: &NitroConfig,
-	pivot_hash: &[u8],
+	pivot_hash: Option<Vec<u8>>,
+	oci_image_digest: Option<&OciDigest>,
 	quorum_key: &P256Public,
 ) -> bool {
 	// Verify manifest set composition
@@ -1056,10 +1135,39 @@ fn approve_manifest_programmatic_verifications(
 		return false;
 	}
 
-	// Verify the pivot could be built deterministically
-	if manifest.pivot_hash().as_slice() != pivot_hash {
-		eprintln!("Pivot hash does not match");
-		return false;
+	match manifest {
+		VersionedManifest::V2(manifest) => match &manifest.pivot {
+			PivotConfigV2::OciImage(pivot) => {
+				if Some(&pivot.digest) != oci_image_digest {
+					eprintln!("OCI image digest does not match");
+					return false;
+				}
+			}
+			PivotConfigV2::Binary(_) => {
+				let Some(pivot_hash) = pivot_hash else {
+					eprintln!(
+						"Pivot hash is required for binary pivot manifests"
+					);
+					return false;
+				};
+				if manifest.pivot.binary().expect("binary").hash.as_slice()
+					!= pivot_hash
+				{
+					eprintln!("Pivot hash does not match");
+					return false;
+				}
+			}
+		},
+		VersionedManifest::V1(_) | VersionedManifest::V0(_) => {
+			let Some(pivot_hash) = pivot_hash else {
+				eprintln!("Pivot hash is required for binary pivot manifests");
+				return false;
+			};
+			if manifest.pivot_hash().as_slice() != pivot_hash {
+				eprintln!("Pivot hash does not match");
+				return false;
+			}
+		}
 	}
 
 	// Verify the intended Quorum Key is being used
@@ -1071,8 +1179,51 @@ fn approve_manifest_programmatic_verifications(
 	true
 }
 
+struct OciApprovalMetadata {
+	volumes: Vec<String>,
+	exposed_ports: Vec<String>,
+}
+
+fn oci_approval_metadata<P: AsRef<Path>>(
+	manifest: &VersionedManifest,
+	oci_layout_path: P,
+) -> Result<OciApprovalMetadata, Error> {
+	let Some(oci_image) = manifest.oci_image() else {
+		return Ok(OciApprovalMetadata {
+			volumes: vec![],
+			exposed_ports: vec![],
+		});
+	};
+	let oci_layout =
+		fs::read(oci_layout_path).map_err(Error::FailedToReadOciLayout)?;
+	let root = std::env::temp_dir().join(format!(
+		"qos-client-oci-approval-{}-{}",
+		std::process::id(),
+		oci_image.digest.hex()
+	));
+	let handles = Handles::new_with_oci_dir(
+		root.join("ephemeral").to_string_lossy().into_owned(),
+		root.join("quorum").to_string_lossy().into_owned(),
+		root.join("manifest").to_string_lossy().into_owned(),
+		root.join("pivot").to_string_lossy().into_owned(),
+		root.join("oci"),
+	);
+	let verified =
+		qos_core::protocol::services::boot::oci::import_oci_layout_archive(
+			&handles,
+			oci_image,
+			&oci_layout,
+		)
+		.map_err(|e| Error::InvalidOciDigest(e.to_string()))?;
+	Ok(OciApprovalMetadata {
+		volumes: verified.volumes,
+		exposed_ports: verified.exposed_ports,
+	})
+}
+
 fn approve_manifest_human_verifications<R, W>(
 	manifest: &VersionedManifest,
+	oci_metadata: Option<&OciApprovalMetadata>,
 	prompter: &mut Prompter<R, W>,
 ) -> bool
 where
@@ -1098,6 +1249,60 @@ where
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
+		}
+	}
+
+	if let Some(oci_image) = manifest.oci_image() {
+		let prompt = format!(
+			"Is this the correct OCI image digest: {}? (y/n)",
+			oci_image.digest.as_str()
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+
+		let prompt = format!(
+			"Is this the correct OCI platform: {}/{}? (y/n)",
+			oci_image.platform.os, oci_image.platform.architecture
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+
+		let prompt = format!(
+			"Are these the correct OCI runtime limits: compressed={}, unpacked={}, entries={}? (y/n)",
+			oci_image.limits.max_compressed_bytes,
+			oci_image.limits.max_unpacked_bytes,
+			oci_image.limits.max_entries
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+
+		let prompt = format!(
+			"Are these the correct OCI env overrides:\n{:?}?\n(y/n)",
+			oci_image.env
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+
+		if let Some(metadata) = oci_metadata {
+			let prompt = format!(
+				"Are these the correct OCI image volumes:\n{:?}?\n(y/n)",
+				metadata.volumes
+			);
+			if !prompter.prompt_is_yes(&prompt) {
+				return false;
+			}
+
+			let prompt = format!(
+				"Are these the correct OCI exposed ports:\n{:?}?\n(y/n)",
+				metadata.exposed_ports
+			);
+			if !prompter.prompt_is_yes(&prompt) {
+				return false;
+			}
 		}
 	}
 
@@ -1212,6 +1417,39 @@ pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
 	Ok(())
 }
 
+pub(crate) fn boot_key_fwd_image<P: AsRef<Path>>(
+	uri: &str,
+	manifest_envelope_path: P,
+	oci_layout_path: P,
+	attestation_doc_path: P,
+) -> Result<(), Error> {
+	let oci_layout = fs::read(oci_layout_path.as_ref())
+		.map_err(Error::FailedToReadOciLayout)?;
+	let manifest_envelope =
+		read_manifest_envelope_compat(manifest_envelope_path)?;
+
+	let req = ProtocolMsg::BootKeyForwardImageRequest {
+		manifest_envelope: Box::new(manifest_envelope),
+		oci_layout,
+	};
+	let cose_sign1 = match request::post(uri, &req).unwrap() {
+		ProtocolMsg::BootKeyForwardResponse {
+			nsm_response: NsmResponse::Attestation { document },
+		} => document,
+		r => {
+			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")));
+		}
+	};
+
+	write_with_msg(
+		attestation_doc_path.as_ref(),
+		&cose_sign1,
+		"COSE Sign1 Attestation Doc",
+	);
+
+	Ok(())
+}
+
 pub(crate) fn export_key<P: AsRef<Path>>(
 	uri: &str,
 	manifest_envelope_path: P,
@@ -1275,6 +1513,14 @@ pub(crate) fn inject_key<P: AsRef<Path>>(
 pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
 	pub uri: String,
 	pub pivot_path: P,
+	pub manifest_envelope_path: P,
+	pub pcr3_preimage_path: P,
+	pub unsafe_skip_attestation: bool,
+}
+
+pub(crate) struct BootStandardImageArgs<P: AsRef<Path>> {
+	pub uri: String,
+	pub oci_layout_path: P,
 	pub manifest_envelope_path: P,
 	pub pcr3_preimage_path: P,
 	pub unsafe_skip_attestation: bool,
@@ -1361,6 +1607,58 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		)?;
 
 		// Sanity check the ephemeral key is valid
+		let eph_pub_bytes = attestation_doc
+			.public_key
+			.expect("No ephemeral key in the attestation doc");
+		P256Public::from_bytes(&eph_pub_bytes)
+			.expect("Ephemeral key not valid public key");
+	}
+
+	Ok(())
+}
+
+pub(crate) fn boot_standard_image<P: AsRef<Path>>(
+	BootStandardImageArgs {
+		uri,
+		oci_layout_path,
+		manifest_envelope_path,
+		pcr3_preimage_path,
+		unsafe_skip_attestation,
+	}: BootStandardImageArgs<P>,
+) -> Result<(), Error> {
+	let oci_layout = fs::read(oci_layout_path.as_ref())
+		.map_err(Error::FailedToReadOciLayout)?;
+	let manifest_envelope =
+		read_manifest_envelope_compat(manifest_envelope_path)?;
+	let manifest = manifest_envelope.clone().manifest();
+
+	let req = ProtocolMsg::BootStandardImageRequest {
+		manifest_envelope: Box::new(manifest_envelope),
+		oci_layout,
+	};
+	let cose_sign1 = match request::post(&uri, &req) {
+		Ok(ProtocolMsg::BootStandardResponse {
+			nsm_response: NsmResponse::Attestation { document },
+		}) => document,
+		Ok(r) => {
+			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")));
+		}
+		Err(err) => return Err(Error::UnexpectedProtocolMsgResponse(err)),
+	};
+
+	let attestation_doc =
+		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation, None);
+	if unsafe_skip_attestation {
+		println!("**WARNING:** Skipping attestation document verification.");
+	} else {
+		verify_attestation_doc_against_user_input(
+			&attestation_doc,
+			&manifest.manifest_hash(),
+			&manifest.enclave().pcr0,
+			&manifest.enclave().pcr1,
+			&manifest.enclave().pcr2,
+			&extract_pcr3(pcr3_preimage_path),
+		)?;
 		let eph_pub_bytes = attestation_doc
 			.public_key
 			.expect("No ephemeral key in the attestation doc");
@@ -2505,14 +2803,16 @@ where
 
 #[cfg(test)]
 mod tests {
-	use std::vec;
+	use std::{fs, vec};
 
 	use qos_core::protocol::{
 		QosHash,
 		services::boot::{
-			Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
-			Namespace, NitroConfig, PatchSet, PivotConfig, QuorumMember,
-			RestartPolicy, ShareSet, VersionedManifest,
+			Approval, Manifest, ManifestEnvelope, ManifestSet, ManifestV2,
+			ManifestVersion, MemberPubKey, Namespace, NitroConfig, OciDigest,
+			OciPlatform, OciRuntimeLimits, PatchSet, PivotConfig,
+			PivotConfigV2, PivotEnv, PivotKind, PivotOciImageConfigV2,
+			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
 			VersionedManifestEnvelope,
 		},
 	};
@@ -2521,8 +2821,9 @@ mod tests {
 	use qos_test_primitives::PathWrapper;
 
 	use super::{
-		Prompter, approve_manifest_human_verifications,
-		approve_manifest_programmatic_verifications,
+		GenerateManifestArgs, OciApprovalMetadata, Prompter,
+		approve_manifest_human_verifications,
+		approve_manifest_programmatic_verifications, generate_manifest_v2,
 		proxy_re_encrypt_share_human_verifications,
 		proxy_re_encrypt_share_programmatic_verifications,
 	};
@@ -2619,6 +2920,44 @@ mod tests {
 		}
 	}
 
+	fn oci_manifest(setup: &Setup, digest: OciDigest) -> VersionedManifest {
+		VersionedManifest::V2(ManifestV2 {
+			version: ManifestVersion::V2,
+			namespace: Namespace {
+				name: "test-namespace".to_string(),
+				nonce: 2,
+				quorum_key: setup.quorum_key.to_bytes(),
+			},
+			pivot: PivotConfigV2::OciImage(PivotOciImageConfigV2 {
+				r#type: PivotKind::OciImage,
+				digest,
+				platform: OciPlatform {
+					os: "linux".to_string(),
+					architecture: "amd64".to_string(),
+				},
+				restart: RestartPolicy::Never,
+				args: Some(vec!["/app".to_string()]),
+				env: PivotEnv::new(),
+				debug_mode: false,
+				bridge_config: vec![],
+				limits: OciRuntimeLimits {
+					max_compressed_bytes: 10,
+					max_unpacked_bytes: 20,
+					max_entries: 30,
+				},
+			}),
+			manifest_set: setup.manifest_set.clone(),
+			share_set: setup.share_set.clone(),
+			enclave: setup.nitro_config.clone(),
+		})
+	}
+
+	fn write_key_set(dir: &std::path::Path, name: &str, pair: &P256Pair) {
+		fs::create_dir_all(dir).unwrap();
+		fs::write(dir.join("quorum_threshold"), b"1").unwrap();
+		pair.public_key().to_hex_file(dir.join(format!("{name}.pub"))).unwrap();
+	}
+
 	/// Return the v1 manifest for tests that intentionally build v1 fixtures.
 	///
 	/// # Panics
@@ -2682,7 +3021,8 @@ mod tests {
 				&share_set,
 				Some(&patch_set),
 				&nitro_config,
-				&pivot_hash,
+				Some(pivot_hash.clone()),
+				None,
 				&quorum_key,
 			));
 		}
@@ -2709,7 +3049,8 @@ mod tests {
 				&share_set,
 				Some(&patch_set),
 				&nitro_config,
-				&pivot_hash,
+				Some(pivot_hash.clone()),
+				None,
 				&quorum_key,
 			));
 		}
@@ -2736,7 +3077,8 @@ mod tests {
 				&share_set,
 				Some(&patch_set),
 				&nitro_config,
-				&pivot_hash,
+				Some(pivot_hash.clone()),
+				None,
 				&quorum_key,
 			));
 		}
@@ -2762,7 +3104,8 @@ mod tests {
 				&share_set,
 				Some(&patch_set),
 				&nitro_config,
-				&pivot_hash,
+				Some(pivot_hash.clone()),
+				None,
 				&quorum_key,
 			));
 		}
@@ -2788,7 +3131,8 @@ mod tests {
 				&share_set,
 				Some(&patch_set),
 				&nitro_config,
-				&pivot_hash,
+				Some(pivot_hash.clone()),
+				None,
 				&quorum_key,
 			));
 		}
@@ -2814,7 +3158,8 @@ mod tests {
 				&share_set,
 				Some(&patch_set),
 				&nitro_config,
-				&pivot_hash,
+				Some(pivot_hash.clone()),
+				None,
 				&quorum_key,
 			));
 		}
@@ -2840,7 +3185,8 @@ mod tests {
 				&share_set,
 				Some(&patch_set),
 				&nitro_config,
-				&pivot_hash,
+				Some(pivot_hash.clone()),
+				None,
 				&quorum_key,
 			));
 		}
@@ -2866,7 +3212,8 @@ mod tests {
 				&share_set,
 				Some(&patch_set),
 				&nitro_config,
-				&pivot_hash,
+				Some(pivot_hash.clone()),
+				None,
 				&quorum_key,
 			));
 		}
@@ -2892,7 +3239,8 @@ mod tests {
 				&share_set,
 				Some(&patch_set),
 				&nitro_config,
-				&pivot_hash,
+				Some(pivot_hash.clone()),
+				None,
 				&quorum_key,
 			));
 		}
@@ -2918,7 +3266,8 @@ mod tests {
 				&share_set,
 				Some(&patch_set),
 				&nitro_config,
-				&pivot_hash,
+				Some(pivot_hash.clone()),
+				None,
 				&quorum_key,
 			));
 		}
@@ -2944,9 +3293,128 @@ mod tests {
 				&share_set,
 				Some(&patch_set),
 				&nitro_config,
-				&pivot_hash,
+				Some(pivot_hash.clone()),
+				None,
 				&quorum_key,
 			));
+		}
+
+		#[test]
+		fn accepts_matching_oci_image_digest() {
+			let setup = setup();
+			let digest =
+				OciDigest::new(format!("sha256:{}", "1".repeat(64))).unwrap();
+			let manifest = oci_manifest(&setup, digest.clone());
+
+			assert!(approve_manifest_programmatic_verifications(
+				&manifest,
+				&setup.manifest_set,
+				&setup.share_set,
+				None,
+				&setup.nitro_config,
+				None,
+				Some(&digest),
+				&setup.quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_oci_image_digest() {
+			let setup = setup();
+			let digest =
+				OciDigest::new(format!("sha256:{}", "1".repeat(64))).unwrap();
+			let manifest = oci_manifest(&setup, digest);
+			let other =
+				OciDigest::new(format!("sha256:{}", "2".repeat(64))).unwrap();
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&setup.manifest_set,
+				&setup.share_set,
+				None,
+				&setup.nitro_config,
+				None,
+				Some(&other),
+				&setup.quorum_key,
+			));
+		}
+	}
+
+	mod generate_manifest {
+		use super::*;
+
+		#[test]
+		fn v2_can_generate_oci_image_manifest() {
+			let root = PathWrapper::from(std::env::temp_dir().join(format!(
+				"qos-client-oci-manifest-{}",
+				std::process::id()
+			)));
+			let root_path = root.as_ref();
+			fs::create_dir_all(root_path).unwrap();
+			let manifest_set_dir = root_path.join("manifest-set");
+			let share_set_dir = root_path.join("share-set");
+			let qos_release_dir = root_path.join("qos-release");
+			fs::create_dir_all(&qos_release_dir).unwrap();
+			let pcr3_preimage_path = root_path.join("pcr3");
+			let manifest_path = root_path.join("manifest.json");
+			let quorum_key_path = root_path.join("quorum.pub");
+
+			let manifest_pair = P256Pair::generate().unwrap();
+			let share_pair = P256Pair::generate().unwrap();
+			let quorum_pair = P256Pair::generate().unwrap();
+			write_key_set(&manifest_set_dir, "manifest", &manifest_pair);
+			write_key_set(&share_set_dir, "share", &share_pair);
+			quorum_pair.public_key().to_hex_file(&quorum_key_path).unwrap();
+			fs::write(
+				qos_release_dir.join("aws-x86_64.pcrs"),
+				format!(
+					"{} PCR0\n{} PCR1\n{} PCR2\n",
+					qos_hex::encode(&[1_u8; 48]),
+					qos_hex::encode(&[2_u8; 48]),
+					qos_hex::encode(&[3_u8; 48])
+				),
+			)
+			.unwrap();
+			fs::write(&pcr3_preimage_path, b"arn:aws:iam::1:role/test\n")
+				.unwrap();
+			let digest = format!("sha256:{}", "a".repeat(64));
+
+			generate_manifest_v2(GenerateManifestArgs {
+				nonce: 7,
+				namespace: "oci-namespace".to_string(),
+				restart_policy: RestartPolicy::Never,
+				pivot_hash_path: None,
+				oci_image_digest: Some(digest.clone()),
+				oci_max_compressed_bytes: 11,
+				oci_max_unpacked_bytes: 22,
+				oci_max_entries: 33,
+				qos_release_dir_path: qos_release_dir.clone(),
+				pcr3_preimage_path: pcr3_preimage_path.clone(),
+				share_set_dir: share_set_dir.clone(),
+				manifest_set_dir: manifest_set_dir.clone(),
+				patch_set_dir: None,
+				quorum_key_path: quorum_key_path.clone(),
+				manifest_path: manifest_path.clone(),
+				pivot_args: vec!["/app".to_string()],
+				pivot_env: PivotEnv::new(),
+				bridge_config: vec![],
+				debug_mode: false,
+			})
+			.unwrap();
+
+			let manifest: ManifestV2 =
+				qos_json::from_slice(&fs::read(manifest_path).unwrap())
+					.unwrap();
+			let PivotConfigV2::OciImage(pivot) = manifest.pivot else {
+				panic!("expected OCI image pivot");
+			};
+			assert_eq!(pivot.digest.as_str(), digest);
+			assert_eq!(pivot.platform.os, "linux");
+			assert_eq!(pivot.platform.architecture, "amd64");
+			assert_eq!(pivot.limits.max_compressed_bytes, 11);
+			assert_eq!(pivot.limits.max_unpacked_bytes, 22);
+			assert_eq!(pivot.limits.max_entries, 33);
+			assert_eq!(pivot.args, Some(vec!["/app".to_string()]));
 		}
 	}
 
@@ -2964,8 +3432,44 @@ mod tests {
 
 			assert!(approve_manifest_human_verifications(
 				&manifest,
+				None,
 				&mut prompter
 			));
+		}
+
+		#[test]
+		fn oci_human_verification_includes_image_fields() {
+			let setup = setup();
+			let digest =
+				OciDigest::new(format!("sha256:{}", "1".repeat(64))).unwrap();
+			let manifest = oci_manifest(&setup, digest.clone());
+			let metadata = OciApprovalMetadata {
+				volumes: vec!["/tmp/data".to_string()],
+				exposed_ports: vec!["8080/tcp".to_string()],
+			};
+			let mut vec_out = Vec::<u8>::new();
+			let vec_in =
+				"yes\nyes\nyes\nyes\nyes\nyes\nyes\nyes\nyes\nyes\n".as_bytes();
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(approve_manifest_human_verifications(
+				&manifest,
+				Some(&metadata),
+				&mut prompter,
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			assert!(output.contains(&format!(
+				"Is this the correct OCI image digest: {}? (y/n)",
+				digest.as_str()
+			)));
+			assert!(
+				output.contains("Are these the correct OCI image volumes:")
+			);
+			assert!(
+				output.contains("Are these the correct OCI exposed ports:")
+			);
 		}
 
 		#[test]
@@ -2980,6 +3484,7 @@ mod tests {
 
 			assert!(!super::approve_manifest_human_verifications(
 				&manifest,
+				None,
 				&mut prompter
 			));
 
@@ -3002,6 +3507,7 @@ mod tests {
 
 			assert!(!super::approve_manifest_human_verifications(
 				&manifest,
+				None,
 				&mut prompter
 			));
 
@@ -3026,6 +3532,7 @@ mod tests {
 
 			assert!(!super::approve_manifest_human_verifications(
 				&manifest,
+				None,
 				&mut prompter
 			));
 
@@ -3050,6 +3557,7 @@ mod tests {
 
 			assert!(!super::approve_manifest_human_verifications(
 				&manifest,
+				None,
 				&mut prompter
 			));
 
@@ -3347,8 +3855,8 @@ mod tests {
 
 		use borsh::BorshDeserialize;
 		use qos_core::protocol::services::boot::{
-			ManifestEnvelopeV2, ManifestV2, ManifestVersion, PivotConfigV2,
-			PivotEnv,
+			ManifestEnvelopeV2, ManifestV2, ManifestVersion,
+			PivotBinaryConfigV2, PivotConfigV2, PivotEnv,
 		};
 
 		use super::*;
@@ -3448,14 +3956,14 @@ mod tests {
 			let v2 = ManifestV2 {
 				version: ManifestVersion::V2,
 				namespace: manifest.namespace,
-				pivot: PivotConfigV2 {
+				pivot: PivotConfigV2::Binary(PivotBinaryConfigV2 {
 					hash: manifest.pivot.hash,
 					restart: manifest.pivot.restart,
 					bridge_config: manifest.pivot.bridge_config,
 					debug_mode: manifest.pivot.debug_mode,
 					args: manifest.pivot.args,
 					env: PivotEnv::new(),
-				},
+				}),
 				manifest_set: manifest.manifest_set,
 				share_set: manifest.share_set,
 				enclave: manifest.enclave,
@@ -3489,14 +3997,14 @@ mod tests {
 			let v2_manifest = ManifestV2 {
 				version: ManifestVersion::V2,
 				namespace: manifest.namespace,
-				pivot: PivotConfigV2 {
+				pivot: PivotConfigV2::Binary(PivotBinaryConfigV2 {
 					hash: manifest.pivot.hash,
 					restart: manifest.pivot.restart,
 					bridge_config: manifest.pivot.bridge_config,
 					debug_mode: manifest.pivot.debug_mode,
 					args: manifest.pivot.args,
 					env: PivotEnv::new(),
-				},
+				}),
 				manifest_set: manifest.manifest_set,
 				share_set: manifest.share_set,
 				enclave: manifest.enclave,

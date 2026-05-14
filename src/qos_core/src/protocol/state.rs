@@ -102,6 +102,14 @@ impl ProtocolRoute {
 		)
 	}
 
+	pub fn workload_status(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::workload_status),
+			current_phase,
+			current_phase,
+		)
+	}
+
 	pub fn version(current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::version),
@@ -142,9 +150,25 @@ impl ProtocolRoute {
 		)
 	}
 
+	pub fn boot_standard_image(_current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::boot_standard_image),
+			ProtocolPhase::WaitingForQuorumShards,
+			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
 	pub fn boot_key_forward(_current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::boot_key_forward),
+			ProtocolPhase::WaitingForForwardedKey,
+			ProtocolPhase::UnrecoverableError,
+		)
+	}
+
+	pub fn boot_key_forward_image(_current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::boot_key_forward_image),
 			ProtocolPhase::WaitingForForwardedKey,
 			ProtocolPhase::UnrecoverableError,
 		)
@@ -241,6 +265,7 @@ impl ProtocolState {
 			ProtocolPhase::UnrecoverableError => {
 				vec![
 					ProtocolRoute::status(self.phase),
+					ProtocolRoute::workload_status(self.phase),
 					ProtocolRoute::version(self.phase),
 					ProtocolRoute::manifest_envelope(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
@@ -249,23 +274,28 @@ impl ProtocolState {
 			ProtocolPhase::GenesisBooted => {
 				vec![
 					ProtocolRoute::status(self.phase),
+					ProtocolRoute::workload_status(self.phase),
 					ProtocolRoute::version(self.phase),
 				]
 			}
 			ProtocolPhase::WaitingForBootInstruction => vec![
 				// baseline routes
 				ProtocolRoute::status(self.phase),
+				ProtocolRoute::workload_status(self.phase),
 				ProtocolRoute::version(self.phase),
 				ProtocolRoute::manifest_envelope(self.phase),
 				// phase specific routes
 				ProtocolRoute::boot_genesis(self.phase),
 				ProtocolRoute::boot_standard(self.phase),
+				ProtocolRoute::boot_standard_image(self.phase),
 				ProtocolRoute::boot_key_forward(self.phase),
+				ProtocolRoute::boot_key_forward_image(self.phase),
 			],
 			ProtocolPhase::WaitingForQuorumShards => {
 				vec![
 					// baseline routes
 					ProtocolRoute::status(self.phase),
+					ProtocolRoute::workload_status(self.phase),
 					ProtocolRoute::version(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
 					ProtocolRoute::manifest_envelope(self.phase),
@@ -277,6 +307,7 @@ impl ProtocolState {
 				vec![
 					// baseline routes
 					ProtocolRoute::status(self.phase),
+					ProtocolRoute::workload_status(self.phase),
 					ProtocolRoute::version(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
 					ProtocolRoute::manifest_envelope(self.phase),
@@ -288,6 +319,7 @@ impl ProtocolState {
 				vec![
 					// baseline routes
 					ProtocolRoute::status(self.phase),
+					ProtocolRoute::workload_status(self.phase),
 					ProtocolRoute::version(self.phase),
 					ProtocolRoute::live_attestation_doc(self.phase),
 					ProtocolRoute::manifest_envelope(self.phase),
@@ -350,7 +382,7 @@ mod handlers {
 	use super::ProtocolRouteResponse;
 	use crate::protocol::{
 		ProtocolState,
-		msg::ProtocolMsg,
+		msg::{ProtocolMsg, WorkloadStatus},
 		services::{
 			attestation, boot, genesis, key, key::EncryptedQuorumKey, provision,
 		},
@@ -367,6 +399,104 @@ mod handlers {
 		} else {
 			None
 		}
+	}
+
+	/// Status of the configured workload.
+	pub(super) fn workload_status(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		let ProtocolMsg::WorkloadStatusRequest = req else {
+			return None;
+		};
+
+		if let Some(status) = match state.handles.get_workload_status() {
+			Ok(status) => status,
+			Err(e) => return Some(Err(ProtocolMsg::ProtocolErrorResponse(e))),
+		} {
+			return Some(Ok(ProtocolMsg::WorkloadStatusResponse(status)));
+		}
+
+		let status = if state.handles.manifest_envelope_exists() {
+			match state.handles.get_manifest_envelope() {
+				Ok(envelope) => {
+					let manifest = envelope.manifest();
+					if let Some(oci_image) = manifest.oci_image() {
+						let rootfs = state
+							.handles
+							.oci_rootfs_dir(oci_image.digest.hex());
+						match boot::oci::inspect_stored_oci_image(
+							&state.handles,
+							oci_image,
+						) {
+							Ok(verified) => WorkloadStatus {
+								kind: "ociImage".to_string(),
+								digest: Some(
+									oci_image.digest.as_str().to_string(),
+								),
+								resolved: true,
+								unpacked: rootfs.exists(),
+								running: false,
+								exposed_ports: verified.exposed_ports,
+								volumes: verified.volumes,
+								last_exit_status: None,
+								last_error: None,
+							},
+							Err(e) => WorkloadStatus {
+								kind: "ociImage".to_string(),
+								digest: Some(
+									oci_image.digest.as_str().to_string(),
+								),
+								resolved: false,
+								unpacked: rootfs.exists(),
+								running: false,
+								exposed_ports: vec![],
+								volumes: vec![],
+								last_exit_status: None,
+								last_error: Some(e.to_string()),
+							},
+						}
+					} else {
+						WorkloadStatus {
+							kind: "binaryPivot".to_string(),
+							digest: None,
+							resolved: state.handles.pivot_exists(),
+							unpacked: false,
+							running: false,
+							exposed_ports: vec![],
+							volumes: vec![],
+							last_exit_status: None,
+							last_error: None,
+						}
+					}
+				}
+				Err(e) => WorkloadStatus {
+					kind: "unknown".to_string(),
+					digest: None,
+					resolved: false,
+					unpacked: false,
+					running: false,
+					exposed_ports: vec![],
+					volumes: vec![],
+					last_exit_status: None,
+					last_error: Some(e.to_string()),
+				},
+			}
+		} else {
+			WorkloadStatus {
+				kind: "none".to_string(),
+				digest: None,
+				resolved: false,
+				unpacked: false,
+				running: false,
+				exposed_ports: vec![],
+				volumes: vec![],
+				last_exit_status: None,
+				last_error: None,
+			}
+		};
+
+		Some(Ok(ProtocolMsg::WorkloadStatusResponse(status)))
 	}
 
 	/// QOS version and git commit of the running enclave. Captured at
@@ -443,6 +573,30 @@ mod handlers {
 		Some(result)
 	}
 
+	/// Handle `ProtocolMsg::BootStandardImageRequest`.
+	pub(super) fn boot_standard_image(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		let ProtocolMsg::BootStandardImageRequest {
+			manifest_envelope,
+			oci_layout,
+		} = req
+		else {
+			return None;
+		};
+
+		let result = boot::boot_standard_image(
+			state,
+			(**manifest_envelope).clone(),
+			oci_layout,
+		)
+		.map(|nsm_response| ProtocolMsg::BootStandardResponse { nsm_response })
+		.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+		Some(result)
+	}
+
 	pub(super) fn boot_genesis(
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
@@ -497,6 +651,31 @@ mod handlers {
 					nsm_response,
 				})
 				.map_err(ProtocolMsg::ProtocolErrorResponse);
+
+			Some(result)
+		} else {
+			None
+		}
+	}
+
+	pub(super) fn boot_key_forward_image(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::BootKeyForwardImageRequest {
+			manifest_envelope,
+			oci_layout,
+		} = req
+		{
+			let result = key::boot_key_forward_image(
+				state,
+				(**manifest_envelope).clone(),
+				oci_layout,
+			)
+			.map(|nsm_response| ProtocolMsg::BootKeyForwardResponse {
+				nsm_response,
+			})
+			.map_err(ProtocolMsg::ProtocolErrorResponse);
 
 			Some(result)
 		} else {

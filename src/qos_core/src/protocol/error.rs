@@ -44,6 +44,10 @@ pub enum ProtocolError {
 		/// Actual hash as hex string.
 		actual: String,
 	},
+	/// The request and manifest pivot modes do not match.
+	InvalidPivotMode,
+	/// OCI image input or metadata was invalid.
+	InvalidOciImage(String),
 	/// Pivot environment variables are invalid.
 	InvalidPivotEnv(String),
 	/// The message is too large.
@@ -264,6 +268,8 @@ impl std::fmt::Display for ProtocolError {
 					"invalid pivot hash: expected {expected}, got {actual}"
 				)
 			}
+			Self::InvalidPivotMode => write!(f, "invalid pivot mode"),
+			Self::InvalidOciImage(e) => write!(f, "invalid OCI image: {e}"),
 			Self::InvalidPivotEnv(e) => write!(f, "invalid pivot env: {e}"),
 			Self::OversizeMsg => write!(f, "message too large"),
 			Self::InvalidMsg => write!(f, "invalid message"),
