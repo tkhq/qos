@@ -41,8 +41,23 @@ shell: out/.common-loaded
 		qos-local/common:latest \
 		/bin/bash
 
-out/nitro.pcrs: out/qos_enclave.tar
-	@$(call run,/qos/src/scripts/extract_oci_file.sh qos_enclave.tar nitro.pcrs)
+qemu: out/nitro.eif
+	qemu-system-x86_64 -M nitro-enclave,vsock=c,id=hello-world -kernel out/nitro.eif -nographic -m 4G --enable-kvm -cpu host -chardev socket,id=c,path=/tmp/vhost4.socket
+
+.PHONY: qemu-stop
+qemu-stop:
+	-killall qemu-system-x86_64
+	-killall vhost-device-vsock
+	rm -f /tmp/vhost4.socket
+
+/tmp/vhost4.socket:
+	vhost-device-vsock --vm guest-cid=4,forward-cid=1,forward-listen=9001,socket=/tmp/vhost4.socket &
+
+out/nitro.tar: Containerfile.qemu src/init/* /tmp/vhost4.socket
+	docker build -t brickit -f Containerfile.qemu . --output type=tar,dest=out/nitro.tar
+
+out/nitro.eif: out/nitro.tar
+	tar -xf out/nitro.tar -C out
 
 out/qos_enclave/index.json: \
 	out/common/index.json \
