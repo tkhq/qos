@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 libc = "=0.2.174"
-nix = { version = "0.30.1", features = ["ioctl"]}
+nix = { version = "0.31.0", features = ["ioctl"]}
 qos_aws = { path = "../qos_aws"}
 qos_system = { path = "../qos_system"}
 qos_core = { path = "../qos_core", features = ["vm"], default-features = false }
