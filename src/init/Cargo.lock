@@ -836,9 +836,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.174"
+version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776"
+checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
 name = "lock_api"
@@ -1169,6 +1169,7 @@ dependencies = [
  "nix 0.30.1",
  "qos_crypto",
  "qos_hex",
+ "qos_json",
  "qos_nsm",
  "qos_p256",
  "serde",
@@ -1196,6 +1197,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_json"
+version = "0.7.0"
+dependencies = [
+ "qos_hex",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "qos_nsm"
 version = "0.7.0"
 dependencies = [
@@ -1204,6 +1215,8 @@ dependencies = [
  "borsh",
  "p384",
  "qos_hex",
+ "qos_json",
+ "serde",
  "serde_bytes",
  "sha2",
  "webpki",
@@ -1220,6 +1233,7 @@ dependencies = [
  "hmac",
  "p256",
  "qos_hex",
+ "serde",
  "sha2",
  "zeroize",
 ]
