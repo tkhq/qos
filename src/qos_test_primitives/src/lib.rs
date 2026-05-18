@@ -122,7 +122,7 @@ pub fn find_free_port() -> Option<u16> {
 ///
 /// # Panics
 ///
-/// Panics if the the port is not bound to within `MAX_PORT_BIND_WAIT_TIME`.
+/// Panics if the port is not bound to within `MAX_PORT_BIND_WAIT_TIME`.
 pub fn wait_until_port_is_bound(port: u16) {
 	let mut wait_time = PORT_BIND_WAIT_TIME_INCREMENT;
 

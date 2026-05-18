@@ -5,7 +5,7 @@
 //! # IMPLEMENTERS NOTE
 //!
 //! The host HTTP server is currently implemented using the `axum` framework.
-//! This may be swapped out in the the future in favor of a lighter package in
+//! This may be swapped out in the future in favor of a lighter package in
 //! order to slim the dependency tree. In the mean time, these resources can
 //! help familiarize you with the abstractions:
 //!

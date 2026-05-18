@@ -185,7 +185,7 @@ pub fn unsafe_attestation_doc_from_der(
 }
 
 /// Extract the DER encoded `AttestationDoc` from the nitro secure module
-/// (nsm) provided COSE Sign1 structure. This function will verify the the
+/// (nsm) provided COSE Sign1 structure. This function will verify the
 /// root certificate authority via the CA bundle and verify that the end
 /// entity certificate signed the COSE Sign1 structure.
 ///
