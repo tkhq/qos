@@ -5,7 +5,7 @@ use p256::ecdsa::{
 	signature::{Signer, Verifier},
 };
 use p256::elliptic_curve::rand_core::OsRng;
-use zeroize::ZeroizeOnDrop;
+use zeroize::{ZeroizeOnDrop, Zeroizing};
 
 use crate::{P256Error, PUB_KEY_LEN_UNCOMPRESSED};
 
@@ -57,8 +57,8 @@ impl P256SignPair {
 
 	/// Serialize key to raw scalar byte slice.
 	#[must_use]
-	pub fn to_bytes(&self) -> Vec<u8> {
-		self.private.to_bytes().to_vec()
+	pub fn to_bytes(&self) -> Zeroizing<Vec<u8>> {
+		Zeroizing::new(self.private.to_bytes().to_vec())
 	}
 }
 
@@ -183,6 +183,17 @@ mod tests {
 		let raw_secret2 = pair2.to_bytes();
 
 		assert_eq!(raw_secret1, raw_secret2);
+	}
+
+	#[test]
+	fn private_key_bytes_are_zeroizing() {
+		let pair = P256SignPair::generate();
+		let raw_secret = pair.to_bytes();
+
+		assert!(
+			std::any::type_name_of_val(&raw_secret)
+				.starts_with("zeroize::Zeroizing<")
+		);
 	}
 
 	#[test]

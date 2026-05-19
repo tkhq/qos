@@ -282,7 +282,7 @@ mod test {
 
 				assert_eq!(sha_512(decrypted_share), output.share_hash);
 
-				decrypted_share.clone()
+				decrypted_share.to_vec()
 			})
 			.collect();
 
@@ -311,7 +311,7 @@ mod test {
 		let test_message_plaintext = reconstructed_quorum_key
 			.decrypt(&output.test_message_ciphertext)
 			.unwrap();
-		assert_eq!(test_message_plaintext, QOS_TEST_MESSAGE);
+		assert_eq!(&test_message_plaintext[..], QOS_TEST_MESSAGE);
 		quorum_public_key
 			.verify(QOS_TEST_MESSAGE, &output.test_message_signature)
 			.unwrap();

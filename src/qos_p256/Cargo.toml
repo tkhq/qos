@@ -16,7 +16,7 @@ workspace = true
 qos_hex = { workspace = true }
 
 borsh = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["alloc"] }
 
 sha2 = { workspace = true }
 # as of 0.13.0, the p256 crate "ecdsa" feature enables "sha384", some "ecdsa-core", and others
@@ -24,7 +24,7 @@ p256 = { workspace = true, features = ["ecdh", "ecdsa", "std"] }
 aes-gcm = { workspace = true }
 hmac = { workspace = true }
 hkdf = { workspace = true }
-zeroize = { workspace = true, features = ["derive"] }
+zeroize = { workspace = true, features = ["alloc", "derive"] }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }

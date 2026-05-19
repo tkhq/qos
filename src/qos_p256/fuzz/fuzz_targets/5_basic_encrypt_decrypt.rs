@@ -34,5 +34,5 @@ fuzz_target!(|input: FuzzKeyDataStruct| {
 	let decrypted_data = key_pair.decrypt(&serialized_envelope).unwrap();
 
 	// check roundtrip data consistency, assert should always hold
-	assert_eq!(decrypted_data, data);
+	assert_eq!(&decrypted_data[..], data);
 });

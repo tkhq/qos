@@ -112,7 +112,7 @@ fn preprod_reshard_ceremony() {
 		assert_eq!(removed_byte, 1);
 
 		let pk = P256Pair::from_master_seed(
-			&decrypted_dev_share.clone().try_into().unwrap(),
+			&decrypted_dev_share[..].try_into().unwrap(),
 		)
 		.unwrap()
 		.public_key();
@@ -169,6 +169,7 @@ fn assert_can_decrypt(user_secret_path: String, sharepath: String) {
 		P256_ENCRYPT_DERIVE_PATH,
 	)
 	.unwrap();
-	let pair = P256EncryptPair::from_bytes(&encryption_pair_secret).unwrap();
+	let pair =
+		P256EncryptPair::from_bytes(&encryption_pair_secret[..]).unwrap();
 	assert!(pair.decrypt(&share).is_ok());
 }
