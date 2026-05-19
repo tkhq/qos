@@ -174,17 +174,32 @@ fn boot() -> (String, Option<Console>) {
 fn shutdown(enclave_id: String, sig_num: i32) {
 	println!("Got signal: {}", sig_num);
 	println!("Shutting down Enclave");
-	let mut comm = enclave_proc_connect_to_single(&enclave_id)
-		.map_err(|_| "Failed to send command to Enclave")
-		.unwrap();
 
-	// TODO: Replicate output of old CLI on invalid enclave IDs.
-	let _ = enclave_proc_command_send_single::<EmptyArgs>(
-		EnclaveProcessCommandType::Terminate,
-		None,
-		&mut comm,
-	)
-	.map_err(|_| "Unable to terminate Enclave");
+	// Best-effort graceful Terminate: if the EnclaveProc IPC socket is
+	// unreachable (e.g. the proc has already exited, or the socket is
+	// momentarily stalled while the kernel sends SIGTERM during a kubelet-
+	// initiated shutdown), don't escalate to a panic. Panicking here turns a
+	// graceful stop request into an abnormal exit (SIGABRT / non-zero status),
+	// which obscures the real reason the orchestrator is shutting us down and
+	// can cause container runtimes to flag the pod as crashed instead of
+	// terminated.
+	match enclave_proc_connect_to_single(&enclave_id) {
+		Ok(mut comm) => {
+			// TODO: Replicate output of old CLI on invalid enclave IDs.
+			let _ = enclave_proc_command_send_single::<EmptyArgs>(
+				EnclaveProcessCommandType::Terminate,
+				None,
+				&mut comm,
+			)
+			.map_err(|_| "Unable to terminate Enclave");
+		}
+		Err(_) => {
+			eprintln!(
+				"Failed to connect to EnclaveProc for {}; skipping graceful Terminate",
+				enclave_id
+			);
+		}
+	}
 
 	exit(0);
 }
