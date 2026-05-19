@@ -46,7 +46,7 @@ pub(in crate::protocol) fn inject_key(
 	let quorum_master_seed = {
 		let ephemeral_pair = state.handles.get_ephemeral_key()?;
 		let bytes = ephemeral_pair.decrypt(&encrypted_quorum_key)?;
-		bytes
+		bytes[..]
 			.try_into()
 			.map_err(|_| ProtocolError::EncryptedQuorumKeyInvalidLen)?
 	};
@@ -139,7 +139,8 @@ fn export_key_internal(
 	// extracted from the attestation document and a signature over the
 	// encrypted payload. The Original Node uses its Quorum Key to create the
 	// signature.
-	let encrypted_quorum_key = eph_key.encrypt(quorum_key.to_master_seed())?;
+	let encrypted_quorum_key =
+		eph_key.encrypt(&quorum_key.to_master_seed()[..])?;
 	let signature = quorum_key.sign(&encrypted_quorum_key)?;
 
 	Ok(EncryptedQuorumKey { encrypted_quorum_key, signature })
@@ -1143,7 +1144,7 @@ mod test {
 			let decrypted_quorum_secret =
 				eph_pair.decrypt(&encrypted_quorum_key).unwrap();
 			let reconstructed_quorum_pair = P256Pair::from_master_seed(
-				&decrypted_quorum_secret.try_into().unwrap(),
+				&decrypted_quorum_secret[..].try_into().unwrap(),
 			)
 			.unwrap();
 			assert!(quorum_pair == reconstructed_quorum_pair);
@@ -1175,7 +1176,7 @@ mod test {
 
 			let encrypted_quorum_key = eph_pair
 				.public_key()
-				.encrypt(quorum_pair.to_master_seed())
+				.encrypt(&quorum_pair.to_master_seed()[..])
 				.unwrap();
 			let signature = quorum_pair.sign(&encrypted_quorum_key).unwrap();
 
@@ -1233,7 +1234,7 @@ mod test {
 			let wrong_key = P256Pair::generate().unwrap();
 			let encrypted_quorum_key = eph_pair
 				.public_key()
-				.encrypt(wrong_key.to_master_seed())
+				.encrypt(&wrong_key.to_master_seed()[..])
 				.unwrap();
 			let signature = quorum_pair.sign(&encrypted_quorum_key).unwrap();
 
@@ -1287,7 +1288,7 @@ mod test {
 			let wrong_key = P256Pair::generate().unwrap();
 			let encrypted_quorum_key = eph_pair
 				.public_key()
-				.encrypt(quorum_pair.to_master_seed())
+				.encrypt(&quorum_pair.to_master_seed()[..])
 				.unwrap();
 			let signature = wrong_key.sign(&encrypted_quorum_key).unwrap();
 

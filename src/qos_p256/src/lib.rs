@@ -6,7 +6,7 @@ use encrypt::AesGcm256Secret;
 use hkdf::Hkdf;
 use p256::elliptic_curve::rand_core::{OsRng, RngCore};
 use sha2::Sha512;
-use zeroize::ZeroizeOnDrop;
+use zeroize::{ZeroizeOnDrop, Zeroizing};
 
 use crate::{
 	encrypt::{P256EncryptPair, P256EncryptPublic},
@@ -82,6 +82,8 @@ pub enum P256Error {
 	MasterSeedInvalidUtf8,
 	/// Master seed was not the correct length.
 	MasterSeedInvalidLength,
+	/// Master seed file contents were invalid.
+	InvalidMasterSeed,
 	/// Failed to convert a len (usize) to a u8. This is an internal error and
 	/// the code has a bug.
 	CannotCoerceLenToU8,
@@ -106,22 +108,22 @@ impl From<qos_hex::HexError> for P256Error {
 pub fn derive_secret(
 	seed: &[u8; MASTER_SEED_LEN],
 	derive_path: &[u8],
-) -> Result<[u8; P256_SECRET_LEN], P256Error> {
+) -> Result<Zeroizing<[u8; P256_SECRET_LEN]>, P256Error> {
 	let hk = Hkdf::<Sha512>::new(Some(derive_path), seed);
 
-	let mut buf = [0u8; P256_SECRET_LEN];
-	hk.expand(&[], &mut buf).map_err(|_| P256Error::HkdfExpansionFailed)?;
+	let mut buf = Zeroizing::new([0u8; P256_SECRET_LEN]);
+	hk.expand(&[], &mut *buf).map_err(|_| P256Error::HkdfExpansionFailed)?;
 
 	Ok(buf)
 }
 
 /// Helper function to generate a `N` length byte buffer.
 #[must_use]
-pub fn bytes_os_rng<const N: usize>() -> [u8; N] {
+pub fn bytes_os_rng<const N: usize>() -> Zeroizing<[u8; N]> {
 	let mut key = [0u8; N];
 	OsRng.fill_bytes(&mut key);
 
-	key
+	Zeroizing::new(key)
 }
 
 /// P256 private key pair for signing and encryption. Internally this uses a
@@ -131,7 +133,7 @@ pub fn bytes_os_rng<const N: usize>() -> [u8; N] {
 pub struct P256Pair {
 	p256_encrypt_private: P256EncryptPair,
 	sign_private: P256SignPair,
-	master_seed: [u8; MASTER_SEED_LEN],
+	master_seed: Zeroizing<[u8; MASTER_SEED_LEN]>,
 	aes_gcm_256_secret: AesGcm256Secret,
 }
 
@@ -152,11 +154,11 @@ impl P256Pair {
 
 		Ok(Self {
 			p256_encrypt_private: P256EncryptPair::from_bytes(
-				&p256_encrypt_secret,
+				&p256_encrypt_secret[..],
 			)?,
-			sign_private: P256SignPair::from_bytes(&p256_sign_secret)?,
+			sign_private: P256SignPair::from_bytes(&p256_sign_secret[..])?,
 			master_seed,
-			aes_gcm_256_secret: AesGcm256Secret::from_bytes(aes_gcm_secret)?,
+			aes_gcm_256_secret: AesGcm256Secret::from_bytes(*aes_gcm_secret)?,
 		})
 	}
 
@@ -180,7 +182,7 @@ impl P256Pair {
 	pub fn aes_gcm_256_decrypt(
 		&self,
 		serialized_envelope: &[u8],
-	) -> Result<Vec<u8>, P256Error> {
+	) -> Result<Zeroizing<Vec<u8>>, P256Error> {
 		self.aes_gcm_256_secret.decrypt(serialized_envelope)
 	}
 
@@ -192,7 +194,7 @@ impl P256Pair {
 	pub fn decrypt(
 		&self,
 		serialized_envelope: &[u8],
-	) -> Result<Vec<u8>, P256Error> {
+	) -> Result<Zeroizing<Vec<u8>>, P256Error> {
 		self.p256_encrypt_private.decrypt(serialized_envelope)
 	}
 
@@ -228,11 +230,13 @@ impl P256Pair {
 		let aes_gcm_256_encrypt = derive_secret(master_seed, AES_GCM_256_PATH)?;
 
 		Ok(Self {
-			p256_encrypt_private: P256EncryptPair::from_bytes(&encrypt_secret)?,
-			sign_private: P256SignPair::from_bytes(&sign_secret)?,
-			master_seed: *master_seed,
+			p256_encrypt_private: P256EncryptPair::from_bytes(
+				&encrypt_secret[..],
+			)?,
+			sign_private: P256SignPair::from_bytes(&sign_secret[..])?,
+			master_seed: Zeroizing::new(*master_seed),
 			aes_gcm_256_secret: AesGcm256Secret::from_bytes(
-				aes_gcm_256_encrypt,
+				*aes_gcm_256_encrypt,
 			)?,
 		})
 	}
@@ -240,15 +244,15 @@ impl P256Pair {
 	/// Get the raw master seed used to create this pair.
 	/// CAUTION: this is secret material and should be used with care.
 	#[must_use]
-	pub fn to_master_seed(&self) -> &[u8; MASTER_SEED_LEN] {
+	pub fn to_master_seed(&self) -> &Zeroizing<[u8; MASTER_SEED_LEN]> {
 		&self.master_seed
 	}
 
 	/// Convert to hex bytes.
 	/// CAUTION: this is secret material and should be used with care.
 	#[must_use]
-	pub fn to_master_seed_hex(&self) -> Vec<u8> {
-		qos_hex::encode_to_vec(&self.master_seed)
+	pub fn to_master_seed_hex(&self) -> Zeroizing<Vec<u8>> {
+		Zeroizing::new(qos_hex::encode_to_vec(&self.master_seed[..]))
 	}
 
 	/// Write the raw master seed to file as hex encoded.
@@ -260,7 +264,7 @@ impl P256Pair {
 		&self,
 		path: P,
 	) -> Result<(), P256Error> {
-		let hex_string = qos_hex::encode(&self.master_seed);
+		let hex_string = Zeroizing::new(qos_hex::encode(&self.master_seed[..]));
 		std::fs::write(&path, hex_string.as_bytes()).map_err(|e| {
 			P256Error::IOError(format!(
 				"failed to write master secret to {}: {e}",
@@ -276,18 +280,18 @@ impl P256Pair {
 	/// Returns [`P256Error`] if the file cannot be read, the hex is invalid,
 	/// or the seed length is wrong.
 	pub fn from_hex_file<P: AsRef<Path>>(path: P) -> Result<Self, P256Error> {
-		let hex_bytes = std::fs::read(&path).map_err(|e| {
+		let hex_bytes = Zeroizing::new(std::fs::read(&path).map_err(|e| {
 			P256Error::IOError(format!(
 				"failed to read master seed from {}: {e}",
 				path.as_ref().display()
 			))
-		})?;
+		})?);
 
-		let master_seed =
-			qos_hex::decode_from_vec(hex_bytes).map_err(P256Error::from)?;
-		let master_seed: [u8; MASTER_SEED_LEN] = master_seed
-			.try_into()
-			.map_err(|_| P256Error::MasterSeedInvalidLength)?;
+		let hex_str = std::str::from_utf8(&hex_bytes)
+			.map_err(|_| P256Error::InvalidMasterSeed)?;
+		let mut master_seed = Zeroizing::new([0u8; MASTER_SEED_LEN]);
+		qos_hex::decode_to_buf(hex_str.trim(), &mut *master_seed)
+			.map_err(|_| P256Error::InvalidMasterSeed)?;
 		Self::from_master_seed(&master_seed)
 	}
 
@@ -307,6 +311,14 @@ impl P256Pair {
 	#[must_use]
 	pub fn encryption_key(&self) -> &p256::SecretKey {
 		&self.p256_encrypt_private.private
+	}
+
+	/// Get a reference to the underlying AES-GCM-256 secret.
+	///
+	/// CAUTION: this is secret material and should be used with care.
+	#[must_use]
+	pub fn aes_gcm_256_secret(&self) -> &Zeroizing<[u8; 32]> {
+		self.aes_gcm_256_secret.to_bytes()
 	}
 }
 
@@ -488,7 +500,11 @@ mod test {
 		let serialized_envelope = alice_public.encrypt(plaintext).unwrap();
 
 		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
-		assert_eq!(decrypted, plaintext);
+		assert_eq!(&decrypted[..], plaintext);
+		assert!(
+			std::any::type_name_of_val(&decrypted)
+				.starts_with("zeroize::Zeroizing<")
+		);
 	}
 
 	#[test]
@@ -525,7 +541,7 @@ mod test {
 		let plaintext = b"rust test message";
 		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
 		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
-		assert_eq!(decrypted, plaintext);
+		assert_eq!(&decrypted[..], plaintext);
 
 		let message = b"a message to authenticate";
 		let signature = alice_pair.sign(message).unwrap();
@@ -546,7 +562,7 @@ mod test {
 		let plaintext = b"rust test message";
 		let serialized_envelope = alice_public2.encrypt(plaintext).unwrap();
 		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
-		assert_eq!(decrypted, plaintext);
+		assert_eq!(&decrypted[..], plaintext);
 
 		let message = b"a message to authenticate";
 		let signature = alice_pair.sign(message).unwrap();
@@ -564,11 +580,58 @@ mod test {
 		let plaintext = b"rust test message";
 		let serialized_envelope = public_key.encrypt(plaintext).unwrap();
 		let decrypted = alice_pair2.decrypt(&serialized_envelope).unwrap();
-		assert_eq!(decrypted, plaintext);
+		assert_eq!(&decrypted[..], plaintext);
 
 		let message = b"a message to authenticate";
 		let signature = alice_pair2.sign(message).unwrap();
 		assert!(public_key.verify(message, &signature).is_ok());
+	}
+
+	#[test]
+	fn generated_and_derived_secrets_are_zeroizing() {
+		let master_seed = bytes_os_rng::<MASTER_SEED_LEN>();
+		let derived_secret =
+			derive_secret(&master_seed, P256_ENCRYPT_DERIVE_PATH).unwrap();
+		let hex_master_seed = P256Pair::from_master_seed(&master_seed)
+			.unwrap()
+			.to_master_seed_hex();
+
+		assert!(
+			std::any::type_name_of_val(&master_seed)
+				.starts_with("zeroize::Zeroizing<")
+		);
+		assert!(
+			std::any::type_name_of_val(
+				P256Pair::from_master_seed(&master_seed)
+					.unwrap()
+					.to_master_seed()
+			)
+			.starts_with("zeroize::Zeroizing<")
+		);
+		assert!(
+			std::any::type_name_of_val(&derived_secret)
+				.starts_with("zeroize::Zeroizing<")
+		);
+		assert!(
+			std::any::type_name_of_val(&hex_master_seed)
+				.starts_with("zeroize::Zeroizing<")
+		);
+	}
+
+	#[test]
+	fn aes_gcm_256_secret_accessor_returns_underlying_zeroizing_secret() {
+		let master_seed = bytes_os_rng::<MASTER_SEED_LEN>();
+		let pair = P256Pair::from_master_seed(&master_seed).unwrap();
+		let expected_secret =
+			derive_secret(&master_seed, AES_GCM_256_PATH).unwrap();
+
+		let aes_gcm_256_secret = pair.aes_gcm_256_secret();
+
+		assert_eq!(&aes_gcm_256_secret[..], &expected_secret[..]);
+		assert!(
+			std::any::type_name_of_val(aes_gcm_256_secret)
+				.starts_with("zeroize::Zeroizing<")
+		);
 	}
 
 	#[test]
@@ -585,11 +648,24 @@ mod test {
 		let serialized_envelope =
 			alice_pair.public_key().encrypt(plaintext).unwrap();
 		let decrypted = alice_pair2.decrypt(&serialized_envelope).unwrap();
-		assert_eq!(decrypted, plaintext);
+		assert_eq!(&decrypted[..], plaintext);
 
 		let message = b"a message to authenticate";
 		let signature = alice_pair2.sign(message).unwrap();
 		assert!(alice_pair.public_key().verify(message, &signature).is_ok());
+	}
+
+	#[test]
+	fn from_hex_file_returns_opaque_error_for_invalid_master_seed() {
+		let path = PathWrapper::from(
+			"/tmp/from_hex_file_returns_opaque_error_for_invalid_master_seed.secret",
+		);
+		std::fs::write(&*path, b"not a valid seed").unwrap();
+
+		assert!(matches!(
+			P256Pair::from_hex_file(&*path),
+			Err(P256Error::InvalidMasterSeed)
+		));
 	}
 
 	mod aes_gcm_256 {
@@ -604,7 +680,11 @@ mod test {
 			let envelope = key.aes_gcm_256_encrypt(plaintext).unwrap();
 			let result = key.aes_gcm_256_decrypt(&envelope).unwrap();
 
-			assert_eq!(result, plaintext);
+			assert_eq!(&result[..], plaintext);
+			assert!(
+				std::any::type_name_of_val(&result)
+					.starts_with("zeroize::Zeroizing<")
+			);
 		}
 
 		#[test]

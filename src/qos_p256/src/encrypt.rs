@@ -12,7 +12,7 @@ use p256::{
 	elliptic_curve::sec1::ToEncodedPoint,
 };
 use sha2::Sha512;
-use zeroize::ZeroizeOnDrop;
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::{P256Error, PUB_KEY_LEN_UNCOMPRESSED, bytes_os_rng};
 
@@ -57,7 +57,7 @@ impl P256EncryptPair {
 	pub fn decrypt(
 		&self,
 		serialized_envelope: &[u8],
-	) -> Result<Vec<u8>, P256Error> {
+	) -> Result<Zeroizing<Vec<u8>>, P256Error> {
 		let Envelope {
 			nonce,
 			ephemeral_sender_public: ephemeral_sender_public_bytes,
@@ -93,6 +93,7 @@ impl P256EncryptPair {
 
 		cipher
 			.decrypt(nonce, payload)
+			.map(Zeroizing::new)
 			.map_err(|_| P256Error::AesGcm256DecryptError)
 	}
 
@@ -117,8 +118,8 @@ impl P256EncryptPair {
 
 	/// Serialize key to raw scalar byte slice.
 	#[must_use]
-	pub fn to_bytes(&self) -> Vec<u8> {
-		self.private.to_bytes().to_vec()
+	pub fn to_bytes(&self) -> Zeroizing<Vec<u8>> {
+		Zeroizing::new(self.private.to_bytes().to_vec())
 	}
 }
 
@@ -163,7 +164,7 @@ impl P256EncryptPublic {
 		let nonce = {
 			let random_bytes =
 				crate::bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
-			*Nonce::from_slice(&random_bytes)
+			*Nonce::from_slice(&random_bytes[..])
 		};
 
 		let aad = create_additional_associated_data(
@@ -283,7 +284,7 @@ fn create_cipher(
 	ephemeral_sender_public: &SenderPublic,
 	receiver_public: &ReceiverPublic,
 ) -> Result<Aes256Gcm, P256Error> {
-	let shared_secret = match shared_secret {
+	let shared_secret = Zeroizing::new(match shared_secret {
 		PrivPubOrSharedSecret::PrivPub { private, public } => {
 			diffie_hellman(private.to_nonzero_scalar(), public.as_affine())
 				.raw_secret_bytes()
@@ -292,23 +293,25 @@ fn create_cipher(
 		PrivPubOrSharedSecret::SharedSecret { shared_secret } => {
 			shared_secret.to_vec()
 		}
-	};
+	});
 
 	// To help with entropy and add domain context, we do
 	// `sender_public||receiver_public||shared_secret` as the pre-image for the
 	// shared key.
-	let pre_image: Vec<u8> = ephemeral_sender_public
-		.0
-		.iter()
-		.chain(receiver_public.0)
-		.chain(shared_secret.iter())
-		.copied()
-		.collect();
+	let pre_image: Zeroizing<Vec<u8>> = Zeroizing::new(
+		ephemeral_sender_public
+			.0
+			.iter()
+			.chain(receiver_public.0)
+			.chain(shared_secret.iter())
+			.copied()
+			.collect(),
+	);
 
 	let mut mac = <HmacSha512 as KeyInit>::new_from_slice(&pre_image[..])
 		.expect("hmac can take a key of any size");
 	mac.update(QOS_ENCRYPTION_HMAC_MESSAGE);
-	let shared_key = mac.finalize().into_bytes();
+	let shared_key = Zeroizing::new(mac.finalize().into_bytes());
 
 	Aes256Gcm::new_from_slice(&shared_key[..AES256_KEY_LEN])
 		.map_err(|_| P256Error::FailedToCreateAes256GcmCipher)
@@ -362,10 +365,15 @@ pub struct SymmetricEnvelope {
 }
 
 /// Secret for performing encryption and decryption using a AES GCM 256 Cipher.
-#[derive(ZeroizeOnDrop)]
 #[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct AesGcm256Secret {
-	secret: [u8; AES256_KEY_LEN],
+	secret: Zeroizing<[u8; AES256_KEY_LEN]>,
+}
+
+impl Zeroize for AesGcm256Secret {
+	fn zeroize(&mut self) {
+		self.secret.zeroize();
+	}
 }
 
 impl AesGcm256Secret {
@@ -377,7 +385,7 @@ impl AesGcm256Secret {
 
 	/// The secret as bytes.
 	#[must_use]
-	pub fn to_bytes(&self) -> &[u8; AES256_KEY_LEN] {
+	pub fn to_bytes(&self) -> &Zeroizing<[u8; AES256_KEY_LEN]> {
 		&self.secret
 	}
 
@@ -388,7 +396,7 @@ impl AesGcm256Secret {
 	/// Returns [`P256Error::FailedToCreateAes256GcmCipher`] if the key is
 	/// invalid.
 	pub fn from_bytes(bytes: [u8; AES256_KEY_LEN]) -> Result<Self, P256Error> {
-		Ok(Self { secret: bytes })
+		Ok(Self { secret: Zeroizing::new(bytes) })
 	}
 
 	/// Encrypt the given `msg`.
@@ -405,11 +413,11 @@ impl AesGcm256Secret {
 	pub fn encrypt(&self, msg: &[u8]) -> Result<Vec<u8>, P256Error> {
 		let nonce = {
 			let random_bytes = bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
-			*Nonce::from_slice(&random_bytes)
+			*Nonce::from_slice(&random_bytes[..])
 		};
 		let payload = Payload { aad: AES_GCM_256_HMAC_SHA512_TAG, msg };
 
-		let cipher = Aes256Gcm::new_from_slice(&self.secret)
+		let cipher = Aes256Gcm::new_from_slice(&self.secret[..])
 			.expect("secret is a valid aes256 key len. qed.");
 		let encrypted_message = cipher
 			.encrypt(&nonce, payload)
@@ -435,7 +443,7 @@ impl AesGcm256Secret {
 	pub fn decrypt(
 		&self,
 		serialized_envelope: &[u8],
-	) -> Result<Vec<u8>, P256Error> {
+	) -> Result<Zeroizing<Vec<u8>>, P256Error> {
 		let SymmetricEnvelope { nonce, encrypted_message } =
 			SymmetricEnvelope::try_from_slice(serialized_envelope)
 				.map_err(|_| P256Error::FailedToDeserializeEnvelope)?;
@@ -446,10 +454,11 @@ impl AesGcm256Secret {
 			msg: &encrypted_message,
 		};
 
-		let cipher = Aes256Gcm::new_from_slice(&self.secret)
+		let cipher = Aes256Gcm::new_from_slice(&self.secret[..])
 			.expect("secret is a valid aes256 key len. qed.");
 		cipher
 			.decrypt(nonce, payload)
+			.map(Zeroizing::new)
 			.map_err(|_| P256Error::AesGcm256DecryptError)
 	}
 }
@@ -469,7 +478,7 @@ mod test_asymmetric {
 
 		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
 
-		assert_eq!(decrypted, plaintext);
+		assert_eq!(&decrypted[..], plaintext);
 	}
 
 	#[test]
@@ -595,7 +604,7 @@ mod test_asymmetric {
 
 		let decrypted = alice_pair.decrypt(&serialized_envelope).unwrap();
 
-		assert_eq!(decrypted, plaintext);
+		assert_eq!(&decrypted[..], plaintext);
 	}
 
 	#[test]
@@ -632,6 +641,17 @@ mod test_asymmetric {
 
 		assert_eq!(raw_secret1, raw_secret2);
 	}
+
+	#[test]
+	fn private_key_bytes_are_zeroizing() {
+		let pair = P256EncryptPair::generate();
+		let raw_secret = pair.to_bytes();
+
+		assert!(
+			std::any::type_name_of_val(&raw_secret)
+				.starts_with("zeroize::Zeroizing<")
+		);
+	}
 }
 
 #[cfg(test)]
@@ -647,7 +667,7 @@ mod test_symmetric {
 		let envelope = key.encrypt(plaintext).unwrap();
 		let result = key.decrypt(&envelope).unwrap();
 
-		assert_eq!(result, plaintext);
+		assert_eq!(&result[..], plaintext);
 	}
 
 	#[test]
@@ -656,7 +676,7 @@ mod test_symmetric {
 		let bytes_original = key_original.to_bytes();
 
 		let key_reconstructed =
-			AesGcm256Secret::from_bytes(*bytes_original).unwrap();
+			AesGcm256Secret::from_bytes(**bytes_original).unwrap();
 		let bytes_reconstructed = key_reconstructed.to_bytes();
 
 		assert!(key_original == key_reconstructed);

@@ -33,7 +33,7 @@ fuzz_target!(|input: FuzzKeyDataStruct| {
 	// expected to always succeed
 	let decrypted_data = random_key.decrypt(&encrypted_envelope).unwrap();
 	// check roundtrip data consistency, assert should always hold
-	assert_eq!(decrypted_data, data);
+	assert_eq!(&decrypted_data[..], data);
 
 	let mut corrupted_encrypted_envelope = encrypted_envelope.clone();
 	let last_element_index_envelope = corrupted_encrypted_envelope.len() - 1;

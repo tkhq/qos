@@ -274,7 +274,10 @@ impl PairOrYubi {
 	/// # Errors
 	///
 	/// Returns [`Error`] if decryption fails.
-	pub fn decrypt(&mut self, payload: &[u8]) -> Result<Vec<u8>, Error> {
+	pub fn decrypt(
+		&mut self,
+		payload: &[u8],
+	) -> Result<Zeroizing<Vec<u8>>, Error> {
 		match self {
 			#[cfg(feature = "smartcard")]
 			Self::Yubi((yubi, pin)) => {
@@ -288,6 +291,7 @@ impl PairOrYubi {
 
 				public
 					.decrypt_from_shared_secret(payload, &shared_secret)
+					.map(Zeroizing::new)
 					.map_err(Into::into)
 			}
 			Self::Pair(pair) => pair.decrypt(payload).map_err(Into::into),
@@ -426,7 +430,7 @@ pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 
 	crate::yubikey::import_key_and_generate_signed_certificate(
 		&mut yubikey,
-		&sign_secret,
+		&sign_secret[..],
 		crate::yubikey::SIGNING_SLOT,
 		&pin,
 		yubikey::MgmKey::default(),
@@ -436,7 +440,7 @@ pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 
 	crate::yubikey::import_key_and_generate_signed_certificate(
 		&mut yubikey,
-		&encrypt_secret,
+		&encrypt_secret[..],
 		crate::yubikey::KEY_AGREEMENT_SLOT,
 		&pin,
 		yubikey::MgmKey::default(),
@@ -616,7 +620,7 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	});
 
 	// sanity check our logic to read in master seed
-	if pair.to_master_seed_hex() != master_seed_hex.as_bytes() {
+	if pair.to_master_seed_hex().as_slice() != master_seed_hex.as_bytes() {
 		return Err(Error::ErrorReadingSeed);
 	}
 
@@ -644,7 +648,7 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 
 	// check test_message_ciphertext
 	let plaintext = pair.decrypt(&genesis_output.test_message_ciphertext)?;
-	if plaintext != genesis_output.test_message {
+	if plaintext[..] != genesis_output.test_message {
 		return Err(Error::BadDecryption);
 	}
 	println!("Successfully decrypted test message ciphertext");
@@ -1748,8 +1752,11 @@ pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 	let ciphertext = std::fs::read(ciphertext_path.as_ref())?;
 
 	let plaintext = pair.decrypt(&ciphertext)?;
-	let file_contents =
-		if output_hex { qos_hex::encode_to_vec(&plaintext) } else { plaintext };
+	let file_contents = if output_hex {
+		qos_hex::encode_to_vec(&plaintext)
+	} else {
+		plaintext.to_vec()
+	};
 
 	write_with_msg(plaintext_path.as_ref(), &file_contents, "Plaintext");
 
@@ -1863,9 +1870,12 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
 	};
 
 	// Shard it with N=2, K=2
-	let shares =
-		qos_crypto::shamir::shares_generate(quorum_pair.to_master_seed(), 2, 2)
-			.unwrap();
+	let shares = qos_crypto::shamir::shares_generate(
+		&quorum_pair.to_master_seed()[..],
+		2,
+		2,
+	)
+	.unwrap();
 	assert_eq!(
 		shares.len(),
 		2,

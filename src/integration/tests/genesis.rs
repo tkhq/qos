@@ -192,7 +192,7 @@ async fn genesis_e2e() {
 
 			assert_eq!(sha_512(&plain_text_share), member.share_hash);
 
-			plain_text_share
+			plain_text_share.to_vec()
 		})
 		.collect();
 
@@ -250,7 +250,11 @@ async fn genesis_e2e() {
 			share_key_pair.decrypt(&fs::read(share_path).unwrap()).unwrap();
 		// Cross check that the share belongs `decrypted_shares`, which we
 		// created out of band in this test.
-		assert!(decrypted_shares.contains(&share));
+		assert!(
+			decrypted_shares
+				.iter()
+				.any(|decrypted_share| decrypted_share.as_slice() == &share[..])
+		);
 	}
 
 	// Check that we can use the DR key to decrypt the quorum key
@@ -260,6 +264,7 @@ async fn genesis_e2e() {
 	let master_seed: [u8; 32] = dr_key_pair
 		.decrypt(&dr_wrapped_quorum_key)
 		.unwrap()
+		.to_vec()
 		.try_into()
 		.unwrap();
 	let pair = P256Pair::from_master_seed(&master_seed).unwrap();

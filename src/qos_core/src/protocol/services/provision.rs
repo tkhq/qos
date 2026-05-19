@@ -96,7 +96,7 @@ pub(in crate::protocol) fn provision(
 		.decrypt(encrypted_share)
 		.map_err(|_| ProtocolError::DecryptionFailed)?;
 
-	state.provisioner.add_share(share)?;
+	state.provisioner.add_share(share.to_vec())?;
 
 	let quorum_threshold = manifest.share_set().threshold as usize;
 	if state.provisioner.count() < quorum_threshold {
@@ -269,7 +269,7 @@ mod test {
 		// 4) Create shards and encrypt them to eph key
 		let quorum_key = quorum_pair.to_master_seed();
 		let encrypted_shares: Vec<_> =
-			shares_generate(quorum_key, 4, threshold)
+			shares_generate(&quorum_key[..], 4, threshold)
 				.unwrap()
 				.iter()
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
@@ -296,7 +296,7 @@ mod test {
 		assert_eq!(provision(share, approval, &mut state), Ok(true));
 		let quorum_key = std::fs::read(&*quorum_file).unwrap();
 
-		assert_eq!(quorum_key, quorum_pair.to_master_seed_hex());
+		assert_eq!(quorum_key, quorum_pair.to_master_seed_hex().as_slice());
 
 		// Make sure the EK is persisted
 		assert!(Path::new(&*eph_file).exists());
@@ -381,7 +381,7 @@ mod test {
 		let quorum_key = quorum_pair.to_master_seed();
 
 		let encrypted_shares: Vec<_> =
-			shares_generate(quorum_key, 4, threshold)
+			shares_generate(&quorum_key[..], 4, threshold)
 				.unwrap()
 				.iter()
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
@@ -435,7 +435,7 @@ mod test {
 
 		let quorum_key = quorum_pair.to_master_seed();
 		let mut encrypted_shares: Vec<_> =
-			shares_generate(quorum_key, 4, threshold)
+			shares_generate(&quorum_key[..], 4, threshold)
 				.unwrap()
 				.iter()
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
@@ -475,7 +475,7 @@ mod test {
 
 		let quorum_key = quorum_pair.to_master_seed();
 		let mut encrypted_shares: Vec<_> =
-			shares_generate(quorum_key, 4, threshold)
+			shares_generate(&quorum_key[..], 4, threshold)
 				.unwrap()
 				.iter()
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
@@ -522,7 +522,7 @@ mod test {
 
 		let quorum_key = quorum_pair.to_master_seed();
 		let mut encrypted_shares: Vec<_> =
-			shares_generate(quorum_key, 4, threshold)
+			shares_generate(&quorum_key[..], 4, threshold)
 				.unwrap()
 				.iter()
 				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
