@@ -70,6 +70,12 @@ publish = true
 changelog_update = true
 version_group = "qos"
 
+[[package]]
+name = "qos_json"
+publish = true
+changelog_update = true
+version_group = "qos"
+
 # Unpublished packages
 
 [[package]]
