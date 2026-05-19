@@ -7,6 +7,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.8.0](https://github.com/tkhq/qos/compare/qos_client-v0.7.0...qos_client-v0.8.0) - 2026-05-19
+
+### Added
+- add qos json manifest v2 and protocol msg
+- [**breaking**] add VersionRequest/VersionResponse protocol messages (SYS-43)
+- [**breaking**] Support passing env vars to pivot apps
+
+### Fixed
+- fix lints
+- Add BootStandardJsonEnvelopeRequest to fix slowdown
+
+### Other
+- *(qos_p256)* ensure all sensitivie accessors return zeroize types
+- Merge branch 'main' of github.com:tkhq/qos into avi/json-manifest-v2
+- Merge branch 'main' of github.com:tkhq/qos into avi/json-manifest-v2
+- Address review
+- Address review
+- Merge pull request #686 from tkhq/avi/move-cargo-root
+- move cargo workspace Cargo.toml to root of repo
+- Add ignore-test comment
+- Fix markdown rendering of inline docs
+- Fix needless_pass_by_value
+- Fix unecessary_debug_formatting on paths.
+- Add remainder of missing error docs
+
+## `qos_test_primitives` - [0.8.0](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.7.0...qos_test_primitives-v0.8.0) - 2026-05-19
+
+### Added
+- [**breaking**] add VersionRequest/VersionResponse protocol messages (SYS-43)
+
+### Fixed
+- test port logic not working on macos
+
+### Other
+- fix duplicate 'the' in code comments
+- upgrade all crates to Rust edition 2024
+
+## `qos_net` - [0.8.0](https://github.com/tkhq/qos/compare/qos_net-v0.7.0...qos_net-v0.8.0) - 2026-05-19
+
+### Added
+- [**breaking**] add VersionRequest/VersionResponse protocol messages (SYS-43)
+
+### Other
+- upgrade all crates to Rust edition 2024
+- Fix doc-link lint
+- Fix similar_names lint
+- Add missing panic docs
+- Add remainder of missing error docs
+
+## `qos_core` - [0.8.0](https://github.com/tkhq/qos/compare/qos_core-v0.7.0...qos_core-v0.8.0) - 2026-05-19
+
+### Added
+- add qos json manifest v2 and protocol msg
+- [**breaking**] add VersionRequest/VersionResponse protocol messages (SYS-43)
+- [**breaking**] Support passing env vars to pivot apps
+
+### Fixed
+- fix lints
+- remove all usage of serde_json::RawValue It's broken
+- Add BootStandardJsonEnvelopeRequest to fix slowdown
+- increase socket timeout to account for pivot app bin hex
+- [**breaking**] revert breaking env changes to manifest and add more tests
+
+### Other
+- *(qos_p256)* ensure all sensitivie accessors return zeroize types
+- cargo fmt
+- Merge branch 'main' of github.com:tkhq/qos into avi/json-manifest-v2
+- Make ProtocolMsg camelCase again
+- cleanup
+- Merge branch 'main' of github.com:tkhq/qos into avi/json-manifest-v2
+- Address review
+- Address review
+- Merge pull request #695 from tkhq/richard/pathwrapper-display-impl
+- normalize PathWrapper to string
+- Merge pull request #676 from tkhq/rp/sys-12
+- key-fwd to docs; add boot-std doc; standardize lowercase md file names
+- Address review
+- Address review comments
+- Merge pull request #671 from tkhq/avi/fix-blocking-tokio
+- cover vm feature gated tests
+
+## `qos_p256` - [0.8.0](https://github.com/tkhq/qos/compare/qos_p256-v0.7.0...qos_p256-v0.8.0) - 2026-05-19
+
+### Added
+- [**breaking**] add VersionRequest/VersionResponse protocol messages (SYS-43)
+
+### Other
+- *(qos_p256)* ensure all sensitivie accessors return zeroize types
+- Merge branch 'main' of github.com:tkhq/qos into avi/json-manifest-v2
+- upgrade all crates to Rust edition 2024
+- Add more missing error docs
+- Add more missing error docs
+- Add missing error docs to qos_p256
+
+## `qos_nsm` - [0.8.0](https://github.com/tkhq/qos/compare/qos_nsm-v0.7.0...qos_nsm-v0.8.0) - 2026-05-19
+
+### Added
+- add qos json manifest v2 and protocol msg
+
+### Other
+- fix duplicate 'the' in code comments
+- Merge branch 'main' of github.com:tkhq/qos into avi/json-manifest-v2
+- cleanup
+- improve test name
+- Fix final lints
+- Improve attestation-doc validation
+- Add missing error docs to qos_nsm
+
 ## `qos_client` - [0.8.0](https://github.com/tkhq/qos/compare/qos_client-v0.7.0...qos_client-v0.8.0) - 2026-05-17
 
 ### Added
