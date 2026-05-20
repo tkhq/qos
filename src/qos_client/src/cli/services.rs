@@ -389,11 +389,6 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 
 pub(crate) fn pin_from_path<P: AsRef<Path>>(path: P) -> Zeroizing<Vec<u8>> {
 	let file = File::open(path).expect("Failed to open current pin path");
-	// Read the first line as the PIN. We collect the bytes directly into a
-	// `Zeroizing<Vec<u8>>` so the PIN is wiped on drop instead of living in a
-	// plain `Vec<u8>`. Note: the intermediate `String` produced by `BufReader::lines`
-	// is still subject to its own lifetime; replacing the line-reader with a
-	// zeroize-aware prompt is a follow-up (see SYS-94 follow-ups).
 	let line = BufReader::new(file)
 		.lines()
 		.next()
@@ -1761,10 +1756,6 @@ pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 	let ciphertext = std::fs::read(ciphertext_path.as_ref())?;
 
 	let plaintext = pair.decrypt(&ciphertext)?;
-	// Keep the plaintext in a `Zeroizing<Vec<u8>>` until it is written to disk
-	// so the in-memory copy is wiped on drop. For hex output we still need an
-	// owned `Vec<u8>` (`qos_hex::encode_to_vec` returns one), but we wrap it
-	// in `Zeroizing` so it doesn't outlive the secret unscrubbed.
 	let file_contents: Zeroizing<Vec<u8>> = if output_hex {
 		Zeroizing::new(qos_hex::encode_to_vec(&plaintext))
 	} else {
@@ -2025,8 +2016,6 @@ pub(crate) fn shamir_split(
 	threshold: usize,
 	output_dir: &str,
 ) -> Result<(), Error> {
-	// `fs::read` returns a plain `Vec<u8>`. Wrap it in `Zeroizing` so the
-	// in-memory secret is wiped after sharding completes.
 	let secret = Zeroizing::new(fs::read(&secret_path).map_err(|e| {
 		Error::FailedToRead { path: secret_path, error: e.to_string() }
 	})?);

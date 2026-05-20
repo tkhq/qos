@@ -186,10 +186,7 @@ async fn genesis_e2e() {
 
 			let share_pair = P256Pair::from_hex_file(share_key_path).unwrap();
 
-			// Decrypt the share with the personal key. `decrypt` returns a
-			// `Zeroizing<Vec<u8>>`, which we propagate through `shares_reconstruct`
-			// so the share bytes are wiped on drop instead of leaking into a
-			// plain `Vec<u8>`.
+			// Decrypt the share with the personal key
 			let plain_text_share =
 				share_pair.decrypt(&member.encrypted_quorum_key_share).unwrap();
 

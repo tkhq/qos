@@ -7,10 +7,6 @@ use crate::QosCryptoError;
 
 /// Generate `share_count` shares requiring `threshold` shares to reconstruct.
 ///
-/// Each share is returned wrapped in [`Zeroizing`] so that share bytes are
-/// wiped from memory on drop. The outer `Vec` is not secret material (it just
-/// holds owning handles to the shares).
-///
 /// Known limitations:
 /// threshold >= 2
 /// `share_count` <= 255
@@ -31,22 +27,12 @@ pub fn shares_generate(
 
 /// Reconstruct our secret from the given `shares`.
 ///
-/// The returned secret bytes are wrapped in [`Zeroizing`] so they are wiped on
-/// drop. Accepts any input convertible to a slice of `Zeroizing<Vec<u8>>`
-/// (e.g. `&[Zeroizing<Vec<u8>>]`, `Vec<Zeroizing<Vec<u8>>>`) so callers do not
-/// have to strip the zeroize guarantee from individual shares.
-///
 /// # Errors
 ///
 /// Returns [`QosCryptoError::Vsss`] if share reconstruction fails.
 pub fn shares_reconstruct<B: AsRef<[Zeroizing<Vec<u8>>]>>(
 	shares: B,
 ) -> Result<Zeroizing<Vec<u8>>, QosCryptoError> {
-	// `vsss_rs::Gf256::combine_array` wants `AsRef<[Vec<u8>]>`. We have to
-	// materialize an owned `Vec<Vec<u8>>` of share bytes to satisfy the bound,
-	// but we wrap the whole thing in `Zeroizing` so the temporary copies are
-	// wiped on drop. The inner `Vec<u8>`s are short-lived and dropped along
-	// with the wrapper at the end of this function.
 	let share_clones: Zeroizing<Vec<Vec<u8>>> = Zeroizing::new(
 		shares.as_ref().iter().map(|s| (**s).clone()).collect(),
 	);
