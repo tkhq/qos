@@ -13,7 +13,7 @@ categories = ["cryptography"]
 workspace = true
 
 [dependencies]
-qos_hex = { workspace = true, features = ["serde"] }
+qos_hex = { workspace = true }
 qos_json = { workspace = true }
 borsh = { workspace = true }
 serde = { workspace = true }
