@@ -6,11 +6,11 @@ use std::{
 };
 
 use hickory_resolver::{
+	TokioResolver,
 	config::{
 		ConnectionConfig, NameServerConfig, ResolverConfig, ResolverOpts,
 	},
 	net::runtime::TokioRuntimeProvider,
-	TokioResolver,
 };
 use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt},
