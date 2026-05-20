@@ -26,6 +26,7 @@ qos_crypto = { workspace = true }
 qos_hex = { workspace = true }
 qos_p256 = { workspace = true, features = ["mock"] }
 qos_test_primitives = { workspace = true }
+zeroize = { workspace = true }
 
 futures = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs"] }

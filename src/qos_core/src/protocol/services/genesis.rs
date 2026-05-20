@@ -286,13 +286,15 @@ mod test {
 			})
 			.collect();
 
-		let reconstructed: [u8; MASTER_SEED_LEN] =
-			qos_crypto::shamir::shares_reconstruct(
-				&shares[0..threshold as usize],
-			)
-			.unwrap()[..]
-				.try_into()
-				.unwrap();
+		let reconstructed: zeroize::Zeroizing<[u8; MASTER_SEED_LEN]> =
+			zeroize::Zeroizing::new(
+				qos_crypto::shamir::shares_reconstruct(
+					&shares[0..threshold as usize],
+				)
+				.unwrap()[..]
+					.try_into()
+					.unwrap(),
+			);
 		let reconstructed_quorum_key =
 			P256Pair::from_master_seed(&reconstructed).unwrap();
 
@@ -317,7 +319,7 @@ mod test {
 			.unwrap();
 
 		let quorum_key_hash =
-			sha_512(qos_hex::encode(&reconstructed).as_bytes());
+			sha_512(qos_hex::encode(&reconstructed[..]).as_bytes());
 		assert_eq!(quorum_key_hash, output.quorum_key_hash);
 	}
 }

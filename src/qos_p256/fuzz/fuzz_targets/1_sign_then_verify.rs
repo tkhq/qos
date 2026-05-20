@@ -2,6 +2,7 @@
 
 use libfuzzer_sys::fuzz_target;
 use qos_p256::P256Pair;
+use zeroize::Zeroizing;
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct FuzzKeyDataStruct {
@@ -14,7 +15,7 @@ pub struct FuzzKeyDataStruct {
 fuzz_target!(|input: FuzzKeyDataStruct| {
 	// let the fuzzer control the key and data that is going to be signed
 
-	let keypair = match P256Pair::from_master_seed(&input.key) {
+	let keypair = match P256Pair::from_master_seed(&Zeroizing::new(input.key)) {
 		Ok(pair) => pair,
 		Err(_err) => {
 			return;

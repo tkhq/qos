@@ -43,12 +43,16 @@ pub(in crate::protocol) fn inject_key(
 
 	// 2. Decrypt the encrypted Quorum Key in the request with the Ephemeral
 	// Key.
-	let quorum_master_seed = {
+	let quorum_master_seed: zeroize::Zeroizing<
+		[u8; qos_p256::MASTER_SEED_LEN],
+	> = {
 		let ephemeral_pair = state.handles.get_ephemeral_key()?;
 		let bytes = ephemeral_pair.decrypt(&encrypted_quorum_key)?;
-		bytes[..]
-			.try_into()
-			.map_err(|_| ProtocolError::EncryptedQuorumKeyInvalidLen)?
+		zeroize::Zeroizing::new(
+			bytes[..]
+				.try_into()
+				.map_err(|_| ProtocolError::EncryptedQuorumKeyInvalidLen)?,
+		)
 	};
 
 	// 3. Check that the decrypted Quorum Key public key matches the one
@@ -1143,10 +1147,11 @@ mod test {
 
 			let decrypted_quorum_secret =
 				eph_pair.decrypt(&encrypted_quorum_key).unwrap();
-			let reconstructed_quorum_pair = P256Pair::from_master_seed(
-				&decrypted_quorum_secret[..].try_into().unwrap(),
-			)
-			.unwrap();
+			let reconstructed_quorum_pair =
+				P256Pair::from_master_seed(&zeroize::Zeroizing::new(
+					decrypted_quorum_secret[..].try_into().unwrap(),
+				))
+				.unwrap();
 			assert!(quorum_pair == reconstructed_quorum_pair);
 		}
 	}

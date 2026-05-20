@@ -1262,6 +1262,7 @@ dependencies = [
  "tokio-rustls",
  "ureq",
  "webpki-roots",
+ "zeroize",
 ]
 
 [[package]]
@@ -2145,6 +2146,7 @@ dependencies = [
  "arbitrary",
  "libfuzzer-sys",
  "qos_p256 0.8.0",
+ "zeroize",
 ]
 
 [[package]]

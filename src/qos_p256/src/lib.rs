@@ -222,7 +222,7 @@ impl P256Pair {
 	///
 	/// Returns [`P256Error`] if key derivation or construction fails.
 	pub fn from_master_seed(
-		master_seed: &[u8; MASTER_SEED_LEN],
+		master_seed: &Zeroizing<[u8; MASTER_SEED_LEN]>,
 	) -> Result<Self, P256Error> {
 		let encrypt_secret =
 			derive_secret(master_seed, P256_ENCRYPT_DERIVE_PATH)?;
@@ -234,7 +234,7 @@ impl P256Pair {
 				&encrypt_secret[..],
 			)?,
 			sign_private: P256SignPair::from_bytes(&sign_secret[..])?,
-			master_seed: Zeroizing::new(*master_seed),
+			master_seed: master_seed.clone(),
 			aes_gcm_256_secret: AesGcm256Secret::from_bytes(
 				*aes_gcm_256_encrypt,
 			)?,
