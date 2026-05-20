@@ -338,9 +338,7 @@ mod test {
 			shares_generate(&random_key, 4, threshold)
 				.unwrap()
 				.iter()
-				.map(|shard| {
-					eph_pair.public_key().encrypt(&shard[..]).unwrap()
-				})
+				.map(|shard| eph_pair.public_key().encrypt(&shard[..]).unwrap())
 				.collect();
 
 		// 5) For K-1 shards call provision, make sure returns false and doesn't

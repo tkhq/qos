@@ -199,8 +199,7 @@ async fn genesis_e2e() {
 	// Try recovering from a random permutation
 	decrypted_shares.shuffle(&mut rng());
 	let master_secret: [u8; qos_p256::MASTER_SEED_LEN] =
-		shares_reconstruct(&decrypted_shares[0..threshold])
-			.unwrap()[..]
+		shares_reconstruct(&decrypted_shares[0..threshold]).unwrap()[..]
 			.try_into()
 			.unwrap();
 	let reconstructed = P256Pair::from_master_seed(&master_secret).unwrap();
@@ -261,11 +260,10 @@ async fn genesis_e2e() {
 	let dr_key_pair = P256Pair::from_hex_file(DR_KEY_PRIVATE_PATH).unwrap();
 
 	let dr_wrapped_quorum_key = fs::read(dr_wrapped_quorum_key_path).unwrap();
-	let master_seed: [u8; 32] = dr_key_pair
-		.decrypt(&dr_wrapped_quorum_key)
-		.unwrap()[..]
-		.try_into()
-		.unwrap();
+	let master_seed: [u8; 32] =
+		dr_key_pair.decrypt(&dr_wrapped_quorum_key).unwrap()[..]
+			.try_into()
+			.unwrap();
 	let pair = P256Pair::from_master_seed(&master_seed).unwrap();
 	assert!(pair == reconstructed);
 

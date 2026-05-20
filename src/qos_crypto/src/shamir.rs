@@ -33,9 +33,8 @@ pub fn shares_generate(
 pub fn shares_reconstruct<B: AsRef<[Zeroizing<Vec<u8>>]>>(
 	shares: B,
 ) -> Result<Zeroizing<Vec<u8>>, QosCryptoError> {
-	let share_clones: Zeroizing<Vec<Vec<u8>>> = Zeroizing::new(
-		shares.as_ref().iter().map(|s| (**s).clone()).collect(),
-	);
+	let share_clones: Zeroizing<Vec<Vec<u8>>> =
+		Zeroizing::new(shares.as_ref().iter().map(|s| (**s).clone()).collect());
 	let secret = Gf256::combine_array(share_clones.as_slice())
 		.map_err(QosCryptoError::Vsss)?;
 	Ok(Zeroizing::new(secret))

@@ -2039,12 +2039,10 @@ pub(crate) fn shamir_reconstruct(
 	let shares = shares
 		.into_iter()
 		.map(|p| {
-			fs::read(&p)
-				.map(Zeroizing::new)
-				.map_err(|e| Error::FailedToRead {
-					path: p,
-					error: e.to_string(),
-				})
+			fs::read(&p).map(Zeroizing::new).map_err(|e| Error::FailedToRead {
+				path: p,
+				error: e.to_string(),
+			})
 		})
 		.collect::<Result<Vec<Zeroizing<Vec<u8>>>, Error>>()?;
 

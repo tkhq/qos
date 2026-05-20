@@ -291,8 +291,8 @@ mod test {
 				&shares[0..threshold as usize],
 			)
 			.unwrap()[..]
-			.try_into()
-			.unwrap();
+				.try_into()
+				.unwrap();
 		let reconstructed_quorum_key =
 			P256Pair::from_master_seed(&reconstructed).unwrap();
 

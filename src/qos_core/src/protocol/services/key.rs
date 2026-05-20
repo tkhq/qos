@@ -1339,9 +1339,8 @@ mod test {
 			)
 			.unwrap();
 
-			let mut invalid_master_seed = zeroize::Zeroizing::new(
-				quorum_pair.to_master_seed().to_vec(),
-			);
+			let mut invalid_master_seed =
+				zeroize::Zeroizing::new(quorum_pair.to_master_seed().to_vec());
 			invalid_master_seed.remove(0);
 			let invalid_encrypted_quorum_key =
 				eph_pair.public_key().encrypt(&invalid_master_seed).unwrap();
