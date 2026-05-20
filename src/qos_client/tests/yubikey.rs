@@ -141,7 +141,9 @@ fn signing_works(yubikey: &mut YubiKey) {
 
 fn import_signing_works(yubikey: &mut YubiKey) {
 	let secret = bytes_os_rng::<P256_SECRET_LEN>();
-	let pair = P256SignPair::from_bytes(&secret[..]).unwrap();
+	let pair =
+		P256SignPair::from_bytes(&zeroize::Zeroizing::new(secret.to_vec()))
+			.unwrap();
 	let public = pair.public_key();
 
 	import_key_and_generate_signed_certificate(
@@ -161,7 +163,9 @@ fn import_signing_works(yubikey: &mut YubiKey) {
 
 fn import_key_agreement_works(yubikey: &mut YubiKey) {
 	let secret = bytes_os_rng::<32>();
-	let pair = P256EncryptPair::from_bytes(&secret[..]).unwrap();
+	let pair =
+		P256EncryptPair::from_bytes(&zeroize::Zeroizing::new(secret.to_vec()))
+			.unwrap();
 	let public = pair.public_key();
 
 	import_key_and_generate_signed_certificate(

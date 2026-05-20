@@ -15,7 +15,9 @@ pub struct FuzzKeyDataStruct {
 
 fuzz_target!(|input: FuzzKeyDataStruct| {
 	// Let the fuzzer pick a P256 key
-	let keypair = match P256SignPair::from_bytes(&input.key) {
+	let keypair = match P256SignPair::from_bytes(&zeroize::Zeroizing::new(
+		input.key.to_vec(),
+	)) {
 		Ok(pair) => pair,
 		Err(_err) => {
 			return;

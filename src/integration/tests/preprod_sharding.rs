@@ -165,11 +165,13 @@ fn assert_can_decrypt(user_secret_path: String, sharepath: String) {
 	let master_seed_utf8 = std::str::from_utf8(&master_seed_hex_bytes).unwrap();
 	let master_seed = qos_hex::decode(master_seed_utf8).unwrap();
 	let encryption_pair_secret = derive_secret(
-		&master_seed.try_into().unwrap(),
+		&zeroize::Zeroizing::new(master_seed.try_into().unwrap()),
 		P256_ENCRYPT_DERIVE_PATH,
 	)
 	.unwrap();
-	let pair =
-		P256EncryptPair::from_bytes(&encryption_pair_secret[..]).unwrap();
+	let pair = P256EncryptPair::from_bytes(&zeroize::Zeroizing::new(
+		encryption_pair_secret.to_vec(),
+	))
+	.unwrap();
 	assert!(pair.decrypt(&share).is_ok());
 }
