@@ -36,7 +36,7 @@ fuzz_target!(|fuzzerdata: FuzzShamirStruct| {
 			let reconstructed =
 				shares_reconstruct(&shares).expect("should succeed");
 			// expect the reconstruction to work
-			assert_eq!(secret.to_vec(), reconstructed);
+			assert_eq!(&reconstructed[..], &secret[..]);
 
 			// Reconstruct with enough shares
 			let shares = &all_shares[..k];
@@ -44,7 +44,7 @@ fuzz_target!(|fuzzerdata: FuzzShamirStruct| {
 				shares_reconstruct(shares).expect("should succeed");
 
 			// expect the reconstruction to work
-			assert_eq!(secret.to_vec(), reconstructed);
+			assert_eq!(&reconstructed[..], &secret[..]);
 
 			// Reconstruct with not enough shares
 			let shares = &all_shares[..(k - 1)];
@@ -60,7 +60,7 @@ fuzz_target!(|fuzzerdata: FuzzShamirStruct| {
 				Ok(reconstructed) => {
 					// if we managed to reconstruct the secret with less than the minimum number of shares
 					// the something is wrong, or we have a random collision
-					if reconstructed == secret.to_vec() {
+					if &reconstructed[..] == &secret[..] {
 						panic!(
 							"reconstructed the secret with less than k shares, this should not happen"
 						)

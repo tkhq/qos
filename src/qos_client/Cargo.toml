@@ -26,7 +26,7 @@ aws-nitro-enclaves-nsm-api = { workspace = true }
 borsh = { workspace = true}
 p256 = { workspace = true }
 rand_core = { workspace = true, features = ["os_rng"] }
-zeroize = { workspace = true }
+zeroize = { workspace = true, features = ["alloc"] }
 rpassword = { workspace = true }
 serde_json = { workspace = true }
 

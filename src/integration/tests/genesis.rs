@@ -186,13 +186,16 @@ async fn genesis_e2e() {
 
 			let share_pair = P256Pair::from_hex_file(share_key_path).unwrap();
 
-			// Decrypt the share with the personal key
+			// Decrypt the share with the personal key. `decrypt` returns a
+			// `Zeroizing<Vec<u8>>`, which we propagate through `shares_reconstruct`
+			// so the share bytes are wiped on drop instead of leaking into a
+			// plain `Vec<u8>`.
 			let plain_text_share =
 				share_pair.decrypt(&member.encrypted_quorum_key_share).unwrap();
 
-			assert_eq!(sha_512(&plain_text_share), member.share_hash);
+			assert_eq!(sha_512(&plain_text_share[..]), member.share_hash);
 
-			plain_text_share.to_vec()
+			plain_text_share
 		})
 		.collect();
 
@@ -200,7 +203,7 @@ async fn genesis_e2e() {
 	decrypted_shares.shuffle(&mut rng());
 	let master_secret: [u8; qos_p256::MASTER_SEED_LEN] =
 		shares_reconstruct(&decrypted_shares[0..threshold])
-			.unwrap()
+			.unwrap()[..]
 			.try_into()
 			.unwrap();
 	let reconstructed = P256Pair::from_master_seed(&master_secret).unwrap();
@@ -263,8 +266,7 @@ async fn genesis_e2e() {
 	let dr_wrapped_quorum_key = fs::read(dr_wrapped_quorum_key_path).unwrap();
 	let master_seed: [u8; 32] = dr_key_pair
 		.decrypt(&dr_wrapped_quorum_key)
-		.unwrap()
-		.to_vec()
+		.unwrap()[..]
 		.try_into()
 		.unwrap();
 	let pair = P256Pair::from_master_seed(&master_seed).unwrap();

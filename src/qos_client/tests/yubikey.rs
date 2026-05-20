@@ -117,7 +117,7 @@ fn key_agreement_works(yubikey: &mut YubiKey) {
 		.unwrap();
 
 	// confirm the output is correct
-	assert_eq!(decrypted, DATA);
+	assert_eq!(&decrypted[..], DATA);
 }
 
 fn signing_works(yubikey: &mut YubiKey) {
@@ -193,7 +193,7 @@ fn import_key_agreement_works(yubikey: &mut YubiKey) {
 		.unwrap();
 
 	// confirm the output is correct
-	assert_eq!(decrypted, DATA);
+	assert_eq!(&decrypted[..], DATA);
 }
 
 fn provision_yubikey_works() {

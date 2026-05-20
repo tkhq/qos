@@ -184,12 +184,12 @@ pub(in crate::protocol) fn boot_genesis(
 		.map(|(share, share_set_member)| -> Result<GenesisMemberOutput, ProtocolError> {
 			// 1) encrypt the share to quorum key
 			let personal_pub = P256Public::from_bytes(&share_set_member.pub_key)?;
-			let encrypted_quorum_key_share = personal_pub.encrypt(&share)?;
+			let encrypted_quorum_key_share = personal_pub.encrypt(&share[..])?;
 
 			Ok(GenesisMemberOutput {
 				share_set_member,
 				encrypted_quorum_key_share,
-				share_hash: sha_512(&share),
+				share_hash: sha_512(&share[..]),
 			})
 		})
 		.collect();
@@ -275,14 +275,14 @@ mod test {
 		let (output, _nsm_response) =
 			boot_genesis(&mut protocol_state, &genesis_set, None).unwrap();
 		let zipped = std::iter::zip(output.member_outputs, member_pairs);
-		let shares: Vec<Vec<u8>> = zipped
+		let shares: Vec<zeroize::Zeroizing<Vec<u8>>> = zipped
 			.map(|(output, pair)| {
 				let decrypted_share =
-					&pair.decrypt(&output.encrypted_quorum_key_share).unwrap();
+					pair.decrypt(&output.encrypted_quorum_key_share).unwrap();
 
-				assert_eq!(sha_512(decrypted_share), output.share_hash);
+				assert_eq!(sha_512(&decrypted_share[..]), output.share_hash);
 
-				decrypted_share.to_vec()
+				decrypted_share
 			})
 			.collect();
 
@@ -290,7 +290,7 @@ mod test {
 			qos_crypto::shamir::shares_reconstruct(
 				&shares[0..threshold as usize],
 			)
-			.unwrap()
+			.unwrap()[..]
 			.try_into()
 			.unwrap();
 		let reconstructed_quorum_key =

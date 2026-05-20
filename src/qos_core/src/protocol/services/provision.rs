@@ -1,13 +1,14 @@
 //! Quorum Key provisioning logic and types.
 use qos_p256::P256Pair;
+use zeroize::Zeroizing;
 
 use crate::protocol::{
 	ProtocolError, ProtocolState,
 	services::boot::{Approval, VersionedManifestEnvelope},
 };
 
-type Secret = Vec<u8>;
-type Share = Vec<u8>;
+type Secret = Zeroizing<Vec<u8>>;
+type Share = Zeroizing<Vec<u8>>;
 type Shares = Vec<Share>;
 
 /// Shamir Secret builder.
@@ -96,7 +97,7 @@ pub(in crate::protocol) fn provision(
 		.decrypt(encrypted_share)
 		.map_err(|_| ProtocolError::DecryptionFailed)?;
 
-	state.provisioner.add_share(share.to_vec())?;
+	state.provisioner.add_share(share)?;
 
 	let quorum_threshold = manifest.share_set().threshold as usize;
 	if state.provisioner.count() < quorum_threshold {
@@ -107,10 +108,9 @@ pub(in crate::protocol) fn provision(
 	let master_seed = state.provisioner.build()?;
 	state.provisioner.clear();
 
-	let master_seed: [u8; qos_p256::MASTER_SEED_LEN] =
-		master_seed
-			.try_into()
-			.map_err(|_| ProtocolError::IncorrectSecretLen)?;
+	let master_seed: [u8; qos_p256::MASTER_SEED_LEN] = master_seed[..]
+		.try_into()
+		.map_err(|_| ProtocolError::IncorrectSecretLen)?;
 	let pair = qos_p256::P256Pair::from_master_seed(&master_seed)?;
 	let public_key_bytes = pair.public_key().to_bytes();
 
@@ -142,6 +142,7 @@ mod test {
 	use qos_nsm::mock::MockNsm;
 	use qos_p256::P256Pair;
 	use qos_test_primitives::PathWrapper;
+	use zeroize::Zeroizing;
 
 	use crate::{
 		handles::Handles,
@@ -330,13 +331,16 @@ mod test {
 			setup(&eph_file, &quorum_file, &manifest_file);
 
 		// 4) Create shards of a RANDOM KEY and encrypt them to eph key
-		let random_key =
-			P256Pair::generate().unwrap().to_master_seed().to_vec();
+		let random_key = Zeroizing::new(
+			P256Pair::generate().unwrap().to_master_seed().to_vec(),
+		);
 		let encrypted_shares: Vec<_> =
 			shares_generate(&random_key, 4, threshold)
 				.unwrap()
 				.iter()
-				.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
+				.map(|shard| {
+					eph_pair.public_key().encrypt(&shard[..]).unwrap()
+				})
 				.collect();
 
 		// 5) For K-1 shards call provision, make sure returns false and doesn't
