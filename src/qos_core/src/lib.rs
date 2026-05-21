@@ -7,15 +7,17 @@
 //! This crate should have as minimal dependencies as possible to decrease
 //! supply chain attack vectors and audit burden
 
-pub mod client;
-pub mod server;
-
 pub mod cli;
+pub mod client;
 pub mod handles;
 pub mod io;
 pub mod parser;
 pub mod protocol;
 pub mod reaper;
+pub mod server;
+
+#[cfg(feature = "egress")]
+pub mod egress;
 
 /// Path to Quorum Key secret.
 pub const QUORUM_FILE: &str = "/qos.quorum.key";

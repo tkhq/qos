@@ -66,18 +66,21 @@ async fn run_server(
 	println!("Reaper::server shutdown");
 }
 
-// runs the VSOCK -> TCP bridge so that apps can use any TCP based protocol without worrying about VSOCK
+// runs configured bridges based on `BridgeConfig` so that apps can use any TCP based protocol without worrying about VSOCK
 // communication. This is started if `PivotConfig::bridge_config` has any members defined.
-// uses the enclave core socket and given pivot host port to constuct the VSOCK to TCP bridge.
-fn run_vsock_to_tcp_bridge(
+// uses the enclave core socket and given pivot host port to construct the VSOCK to TCP bridge for server side
+// and opens a fully transparent egress if client side is set.
+fn run_bridges(
 	core_socket: &SocketAddress,
-	bridges: &Vec<BridgeConfig>,
+	bridges: &[BridgeConfig],
 ) -> Result<(), IOError> {
 	// do nothing if we're not asked to provide bridging
 	if bridges.is_empty() {
 		println!("skipping host bridge, not configured");
 		return Ok(());
 	}
+
+	let mut egress_enabled = false;
 
 	for bc in bridges {
 		match bc {
@@ -91,12 +94,36 @@ fn run_vsock_to_tcp_bridge(
 				bridge.vsock_to_tcp();
 			}
 			BridgeConfig::Client { port: _, host: _ } => {
-				panic!("client bridge unimplemented")
-			} // TODO: implement
+				// only run one instance as it covers ALL ports, the others are for firewalls
+				if !egress_enabled {
+					egress_enabled = true;
+					run_egress_bridge(core_socket);
+				}
+			}
 		}
 	}
 
 	Ok(())
+}
+
+// dummy placeholder
+#[cfg(target_os = "macos")]
+fn run_egress_bridge(_core_socket: &SocketAddress) {
+	panic!("unable to run egress without vm feature and vsock support");
+}
+
+// run the transparent host egress
+#[cfg(not(target_os = "macos"))]
+fn run_egress_bridge(core_socket: &SocketAddress) {
+	const EGRESS_PORT: u32 = 1000; // reserved range so user ports don't interfere
+	let vsock = core_socket.vsock();
+	let cid = vsock.cid();
+	let flags = crate::io::vsock_svm_flags(vsock); // ensure we copy the flags as set
+
+	tokio::task::spawn_blocking(move || {
+		println!("reaper: starting transparent egress host side");
+		crate::egress::enclave_egress(cid, EGRESS_PORT, flags);
+	});
 }
 
 fn reprint_pivot_output(child: &mut Child) {
@@ -194,8 +221,8 @@ impl Reaper {
 		let host_config = manifest.bridge_config().to_vec();
 
 		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task
-		run_vsock_to_tcp_bridge(&core_socket, &host_config)
-			.expect("failed to run VSOCK -> TCP socket bridge");
+		run_bridges(&core_socket, &host_config)
+			.expect("failed to run ingress/egress bridges");
 
 		let mut pivot = Command::new(handles.pivot_path());
 		pivot.env_clear();

@@ -19,6 +19,7 @@ qos_json = { workspace = true }
 qos_p256 = { workspace = true }
 qos_nsm = { workspace = true, default-features = false }
 
+etherparse = { workspace = true, optional = true }
 nix = { workspace = true }
 libc = { workspace = true }
 borsh = { workspace = true }
@@ -43,5 +44,7 @@ rustls = { workspace = true }
 webpki-roots = { workspace = true }
 
 [features]
+# Support for egress
+egress = ["etherparse"]
 # Never use in production - support for mock NSM
 mock = ["qos_nsm/mock"]

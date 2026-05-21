@@ -208,7 +208,7 @@ impl SocketAddress {
 			Self::Vsock(vsa) => Ok(Self::new_vsock(
 				vsa.cid(),
 				port.into(),
-				vsock_svm_flags(*vsa),
+				vsock_svm_flags(vsa),
 			)),
 			Self::Unix(ua) => {
 				let mut path = ua
@@ -252,29 +252,31 @@ impl std::fmt::Display for SocketAddress {
 
 /// Extract `svm_flags` field value from existing VSOCK.
 #[cfg(not(target_os = "macos"))]
-#[allow(unsafe_code)]
 #[must_use]
-pub fn vsock_svm_flags(vsock: VsockAddr) -> u8 {
-	// SAFETY: `SockAddrVm` is `repr(C)` and laid out identically to the
-	// kernel `sockaddr_vm` structure that backs `nix`'s `VsockAddr`, so the
-	// reinterpret is well-defined for the purpose of reading the
-	// `svm_flags` byte.
+#[allow(unsafe_code)]
+pub fn vsock_svm_flags(vsock: &VsockAddr) -> u8 {
 	unsafe {
-		let cast: SockAddrVm = std::mem::transmute(vsock);
+		let cast: SockAddrVm = std::mem::transmute(*vsock);
 		cast.svm_flags
 	}
 }
 
+/// `sockaddr_vm` representation that contains the new `svm_flags` since `libc` currently still does not
 #[cfg(not(target_os = "macos"))]
 #[repr(C)]
 #[allow(clippy::struct_field_names)]
-struct SockAddrVm {
-	svm_family: libc::sa_family_t,
-	svm_reserved1: libc::c_ushort,
-	svm_port: libc::c_uint,
-	svm_cid: libc::c_uint,
-	// Field added [here](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6)
-	// but not yet in a version of libc we can use.
-	svm_flags: u8,
-	svm_zero: [u8; 3],
+pub(crate) struct SockAddrVm {
+	/// Family
+	pub(crate) svm_family: libc::sa_family_t,
+	/// Kernel reserved
+	pub(crate) svm_reserved1: libc::c_ushort,
+	/// Port
+	pub(crate) svm_port: libc::c_uint,
+	/// Cid
+	pub(crate) svm_cid: libc::c_uint,
+	/// Field added [here](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6)
+	/// but not yet in a version of libc we can use.
+	pub(crate) svm_flags: u8,
+	/// Zero padding
+	pub(crate) svm_zero: [u8; 3],
 }
