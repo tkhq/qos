@@ -1,6 +1,7 @@
 //! Shamir Secret Sharing module. We use the [`vsss-rs`](https://crates.io/crates/vsss-rs)
 use vsss_rs::Gf256;
 use vsss_rs::elliptic_curve::rand_core::OsRng;
+use zeroize::Zeroizing;
 
 use crate::QosCryptoError;
 
@@ -17,9 +18,11 @@ pub fn shares_generate(
 	secret: &[u8],
 	share_count: usize,
 	threshold: usize,
-) -> Result<Vec<Vec<u8>>, QosCryptoError> {
-	Gf256::split_array(threshold, share_count, secret, OsRng)
-		.map_err(QosCryptoError::Vsss)
+) -> Result<Vec<Zeroizing<Vec<u8>>>, QosCryptoError> {
+	let shares: Vec<Vec<u8>> =
+		Gf256::split_array(threshold, share_count, secret, OsRng)
+			.map_err(QosCryptoError::Vsss)?;
+	Ok(shares.into_iter().map(Zeroizing::new).collect())
 }
 
 /// Reconstruct our secret from the given `shares`.
@@ -27,15 +30,20 @@ pub fn shares_generate(
 /// # Errors
 ///
 /// Returns [`QosCryptoError::Vsss`] if share reconstruction fails.
-pub fn shares_reconstruct<B: AsRef<[Vec<u8>]>>(
+pub fn shares_reconstruct<B: AsRef<[Zeroizing<Vec<u8>>]>>(
 	shares: B,
-) -> Result<Vec<u8>, QosCryptoError> {
-	Gf256::combine_array(shares).map_err(QosCryptoError::Vsss)
+) -> Result<Zeroizing<Vec<u8>>, QosCryptoError> {
+	let share_clones: Zeroizing<Vec<Vec<u8>>> =
+		Zeroizing::new(shares.as_ref().iter().map(|s| (**s).clone()).collect());
+	let secret = Gf256::combine_array(share_clones.as_slice())
+		.map_err(QosCryptoError::Vsss)?;
+	Ok(Zeroizing::new(secret))
 }
 
 #[cfg(test)]
 mod test {
 	use rand::prelude::SliceRandom;
+	use zeroize::Zeroizing;
 
 	use super::*;
 
@@ -49,29 +57,29 @@ mod test {
 		// Reconstruct with all the shares
 		let shares = all_shares.clone();
 		let reconstructed = shares_reconstruct(shares).unwrap();
-		assert_eq!(secret.to_vec(), reconstructed);
+		assert_eq!(&reconstructed[..], secret);
 
 		// Reconstruct with enough shares
 		let shares = &all_shares[..k];
 		let reconstructed = shares_reconstruct(shares).unwrap();
-		assert_eq!(secret.to_vec(), reconstructed);
+		assert_eq!(&reconstructed[..], secret);
 
 		// Reconstruct with not enough shares
 		let shares = &all_shares[..(k - 1)];
 		let reconstructed = shares_reconstruct(shares).unwrap();
 		let old_reconstructed = shares_reconstruct(shares).unwrap();
-		assert_ne!(secret.to_vec(), reconstructed);
-		assert_ne!(secret.to_vec(), old_reconstructed);
+		assert_ne!(&reconstructed[..], secret);
+		assert_ne!(&old_reconstructed[..], secret);
 
 		// Reconstruct with enough shuffled shares
 		let mut shares = all_shares.clone()[..k].to_vec();
 		shares.shuffle(&mut rand::rng());
 		let reconstructed = shares_reconstruct(&shares).unwrap();
-		assert_eq!(secret.to_vec(), reconstructed);
+		assert_eq!(&reconstructed[..], secret);
 
 		for combo in crate::n_choose_k::combinations(&all_shares, k) {
 			let reconstructed = shares_reconstruct(&combo).unwrap();
-			assert_eq!(secret.to_vec(), reconstructed);
+			assert_eq!(&reconstructed[..], secret);
 		}
 	}
 
@@ -99,12 +107,18 @@ mod test {
 		//      }
 		//  }
 		let shares = [
-			qos_hex::decode("01661fc0cc265daa4e7bde354c281dcc23a80c590249")
-				.unwrap(),
-			qos_hex::decode("027bb5fb26d326e0fc421cf604e495e3d3e4bd24ab0e")
-				.unwrap(),
-			qos_hex::decode("0370d31b89800f2f9255abb73ca0ed0f8329d20fcc33")
-				.unwrap(),
+			Zeroizing::new(
+				qos_hex::decode("01661fc0cc265daa4e7bde354c281dcc23a80c590249")
+					.unwrap(),
+			),
+			Zeroizing::new(
+				qos_hex::decode("027bb5fb26d326e0fc421cf604e495e3d3e4bd24ab0e")
+					.unwrap(),
+			),
+			Zeroizing::new(
+				qos_hex::decode("0370d31b89800f2f9255abb73ca0ed0f8329d20fcc33")
+					.unwrap(),
+			),
 		];
 
 		// Setting is 2-out-of-3. Let's try 3 ways.
@@ -120,8 +134,8 @@ mod test {
 
 		// Regardless of the combination we should get the same secret
 		let expected_secret = b"my cute little secret";
-		assert_eq!(reconstructed1, expected_secret);
-		assert_eq!(reconstructed2, expected_secret);
-		assert_eq!(reconstructed3, expected_secret);
+		assert_eq!(&reconstructed1[..], expected_secret);
+		assert_eq!(&reconstructed2[..], expected_secret);
+		assert_eq!(&reconstructed3[..], expected_secret);
 	}
 }

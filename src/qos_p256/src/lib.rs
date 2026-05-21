@@ -106,10 +106,10 @@ impl From<qos_hex::HexError> for P256Error {
 ///
 /// Returns [`P256Error::HkdfExpansionFailed`] if HKDF expansion fails.
 pub fn derive_secret(
-	seed: &[u8; MASTER_SEED_LEN],
+	seed: &Zeroizing<[u8; MASTER_SEED_LEN]>,
 	derive_path: &[u8],
 ) -> Result<Zeroizing<[u8; P256_SECRET_LEN]>, P256Error> {
-	let hk = Hkdf::<Sha512>::new(Some(derive_path), seed);
+	let hk = Hkdf::<Sha512>::new(Some(derive_path), &seed[..]);
 
 	let mut buf = Zeroizing::new([0u8; P256_SECRET_LEN]);
 	hk.expand(&[], &mut *buf).map_err(|_| P256Error::HkdfExpansionFailed)?;
@@ -154,9 +154,11 @@ impl P256Pair {
 
 		Ok(Self {
 			p256_encrypt_private: P256EncryptPair::from_bytes(
-				&p256_encrypt_secret[..],
+				&Zeroizing::new(p256_encrypt_secret.to_vec()),
 			)?,
-			sign_private: P256SignPair::from_bytes(&p256_sign_secret[..])?,
+			sign_private: P256SignPair::from_bytes(&Zeroizing::new(
+				p256_sign_secret.to_vec(),
+			))?,
 			master_seed,
 			aes_gcm_256_secret: AesGcm256Secret::from_bytes(*aes_gcm_secret)?,
 		})
@@ -222,7 +224,7 @@ impl P256Pair {
 	///
 	/// Returns [`P256Error`] if key derivation or construction fails.
 	pub fn from_master_seed(
-		master_seed: &[u8; MASTER_SEED_LEN],
+		master_seed: &Zeroizing<[u8; MASTER_SEED_LEN]>,
 	) -> Result<Self, P256Error> {
 		let encrypt_secret =
 			derive_secret(master_seed, P256_ENCRYPT_DERIVE_PATH)?;
@@ -231,10 +233,12 @@ impl P256Pair {
 
 		Ok(Self {
 			p256_encrypt_private: P256EncryptPair::from_bytes(
-				&encrypt_secret[..],
+				&Zeroizing::new(encrypt_secret.to_vec()),
 			)?,
-			sign_private: P256SignPair::from_bytes(&sign_secret[..])?,
-			master_seed: Zeroizing::new(*master_seed),
+			sign_private: P256SignPair::from_bytes(&Zeroizing::new(
+				sign_secret.to_vec(),
+			))?,
+			master_seed: master_seed.clone(),
 			aes_gcm_256_secret: AesGcm256Secret::from_bytes(
 				*aes_gcm_256_encrypt,
 			)?,

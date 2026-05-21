@@ -17,6 +17,7 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 vsss-rs = { workspace = true }
 rand = { workspace = true, features = ["std", "std_rng"] }
+zeroize = { workspace = true, features = ["alloc"] }
 
 
 [dev-dependencies]

@@ -84,9 +84,9 @@ fn preprod_reshard_ceremony() {
 	let dev_secret_hex_bytes =
 		qos_hex::decode(std::str::from_utf8(&dev_secret_utf8_bytes).unwrap())
 			.unwrap();
-	let dev_key = P256Pair::from_master_seed(
-		&dev_secret_hex_bytes.clone().try_into().unwrap(),
-	)
+	let dev_key = P256Pair::from_master_seed(&zeroize::Zeroizing::new(
+		dev_secret_hex_bytes.clone().try_into().unwrap(),
+	))
 	.unwrap();
 
 	// For each of the enclaves...
@@ -111,9 +111,9 @@ fn preprod_reshard_ceremony() {
 		let removed_byte = decrypted_dev_share.remove(0);
 		assert_eq!(removed_byte, 1);
 
-		let pk = P256Pair::from_master_seed(
-			&decrypted_dev_share[..].try_into().unwrap(),
-		)
+		let pk = P256Pair::from_master_seed(&zeroize::Zeroizing::new(
+			decrypted_dev_share[..].try_into().unwrap(),
+		))
 		.unwrap()
 		.public_key();
 		let expected_quorum_public_key = fs::read(format!(
@@ -165,11 +165,13 @@ fn assert_can_decrypt(user_secret_path: String, sharepath: String) {
 	let master_seed_utf8 = std::str::from_utf8(&master_seed_hex_bytes).unwrap();
 	let master_seed = qos_hex::decode(master_seed_utf8).unwrap();
 	let encryption_pair_secret = derive_secret(
-		&master_seed.try_into().unwrap(),
+		&zeroize::Zeroizing::new(master_seed.try_into().unwrap()),
 		P256_ENCRYPT_DERIVE_PATH,
 	)
 	.unwrap();
-	let pair =
-		P256EncryptPair::from_bytes(&encryption_pair_secret[..]).unwrap();
+	let pair = P256EncryptPair::from_bytes(&zeroize::Zeroizing::new(
+		encryption_pair_secret.to_vec(),
+	))
+	.unwrap();
 	assert!(pair.decrypt(&share).is_ok());
 }

@@ -190,19 +190,20 @@ async fn genesis_e2e() {
 			let plain_text_share =
 				share_pair.decrypt(&member.encrypted_quorum_key_share).unwrap();
 
-			assert_eq!(sha_512(&plain_text_share), member.share_hash);
+			assert_eq!(sha_512(&plain_text_share[..]), member.share_hash);
 
-			plain_text_share.to_vec()
+			plain_text_share
 		})
 		.collect();
 
 	// Try recovering from a random permutation
 	decrypted_shares.shuffle(&mut rng());
-	let master_secret: [u8; qos_p256::MASTER_SEED_LEN] =
-		shares_reconstruct(&decrypted_shares[0..threshold])
-			.unwrap()
-			.try_into()
-			.unwrap();
+	let master_secret: zeroize::Zeroizing<[u8; qos_p256::MASTER_SEED_LEN]> =
+		zeroize::Zeroizing::new(
+			shares_reconstruct(&decrypted_shares[0..threshold]).unwrap()[..]
+				.try_into()
+				.unwrap(),
+		);
 	let reconstructed = P256Pair::from_master_seed(&master_secret).unwrap();
 	assert!(
 		reconstructed.public_key()
@@ -261,12 +262,11 @@ async fn genesis_e2e() {
 	let dr_key_pair = P256Pair::from_hex_file(DR_KEY_PRIVATE_PATH).unwrap();
 
 	let dr_wrapped_quorum_key = fs::read(dr_wrapped_quorum_key_path).unwrap();
-	let master_seed: [u8; 32] = dr_key_pair
-		.decrypt(&dr_wrapped_quorum_key)
-		.unwrap()
-		.to_vec()
-		.try_into()
-		.unwrap();
+	let master_seed: zeroize::Zeroizing<[u8; 32]> = zeroize::Zeroizing::new(
+		dr_key_pair.decrypt(&dr_wrapped_quorum_key).unwrap()[..]
+			.try_into()
+			.unwrap(),
+	);
 	let pair = P256Pair::from_master_seed(&master_seed).unwrap();
 	assert!(pair == reconstructed);
 

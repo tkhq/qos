@@ -200,7 +200,7 @@ impl From<qos_nsm::nitro::AttestError> for Error {
 pub enum PairOrYubi {
 	/// Yubikey
 	#[cfg(feature = "smartcard")]
-	Yubi((yubikey::YubiKey, Vec<u8>)),
+	Yubi((yubikey::YubiKey, Zeroizing<Vec<u8>>)),
 	/// P256 keypair
 	Pair(P256Pair),
 }
@@ -227,10 +227,12 @@ impl PairOrYubi {
 					let pin = if let Some(pin_path) = maybe_pin_path {
 						pin_from_path(pin_path)
 					} else {
-						rpassword::prompt_password(ENTER_PIN_PROMPT)
-							.map_err(Error::PinEntryError)?
-							.as_bytes()
-							.to_vec()
+						Zeroizing::new(
+							rpassword::prompt_password(ENTER_PIN_PROMPT)
+								.map_err(Error::PinEntryError)?
+								.as_bytes()
+								.to_vec(),
+						)
 					};
 
 					PairOrYubi::Yubi((yubi, pin))
@@ -291,7 +293,6 @@ impl PairOrYubi {
 
 				public
 					.decrypt_from_shared_secret(payload, &shared_secret)
-					.map(Zeroizing::new)
 					.map_err(Into::into)
 			}
 			Self::Pair(pair) => pair.decrypt(payload).map_err(Into::into),
@@ -345,10 +346,12 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	let mut yubikey =
 		yubikey::YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
 
-	let pin = rpassword::prompt_password(ENTER_PIN_PROMPT)
-		.map_err(Error::PinEntryError)?
-		.as_bytes()
-		.to_vec();
+	let pin = Zeroizing::new(
+		rpassword::prompt_password(ENTER_PIN_PROMPT)
+			.map_err(Error::PinEntryError)?
+			.as_bytes()
+			.to_vec(),
+	);
 
 	let _sign_public_key_bytes = crate::yubikey::generate_signed_certificate(
 		&mut yubikey,
@@ -384,15 +387,14 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	Ok(())
 }
 
-pub(crate) fn pin_from_path<P: AsRef<Path>>(path: P) -> Vec<u8> {
+pub(crate) fn pin_from_path<P: AsRef<Path>>(path: P) -> Zeroizing<Vec<u8>> {
 	let file = File::open(path).expect("Failed to open current pin path");
-	BufReader::new(file)
+	let line = BufReader::new(file)
 		.lines()
 		.next()
 		.expect("First line missing from current pin file")
-		.expect("Error reading first line")
-		.as_bytes()
-		.to_vec()
+		.expect("Error reading first line");
+	Zeroizing::new(line.as_bytes().to_vec())
 }
 
 /// Provision a yubikey from a pre-generated master seed.
@@ -412,10 +414,12 @@ pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 	let pin = if let Some(pin_path) = maybe_pin_path {
 		pin_from_path(pin_path)
 	} else {
-		rpassword::prompt_password(ENTER_PIN_PROMPT)
-			.map_err(Error::PinEntryError)?
-			.as_bytes()
-			.to_vec()
+		Zeroizing::new(
+			rpassword::prompt_password(ENTER_PIN_PROMPT)
+				.map_err(Error::PinEntryError)?
+				.as_bytes()
+				.to_vec(),
+		)
 	};
 
 	let pair = P256Pair::from_hex_file(master_seed_path)?;
@@ -1752,10 +1756,10 @@ pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 	let ciphertext = std::fs::read(ciphertext_path.as_ref())?;
 
 	let plaintext = pair.decrypt(&ciphertext)?;
-	let file_contents = if output_hex {
-		qos_hex::encode_to_vec(&plaintext)
+	let file_contents: Zeroizing<Vec<u8>> = if output_hex {
+		Zeroizing::new(qos_hex::encode_to_vec(&plaintext))
 	} else {
-		plaintext.to_vec()
+		plaintext
 	};
 
 	write_with_msg(plaintext_path.as_ref(), &file_contents, "Plaintext");
@@ -2012,10 +2016,9 @@ pub(crate) fn shamir_split(
 	threshold: usize,
 	output_dir: &str,
 ) -> Result<(), Error> {
-	let secret = fs::read(&secret_path).map_err(|e| Error::FailedToRead {
-		path: secret_path,
-		error: e.to_string(),
-	})?;
+	let secret = Zeroizing::new(fs::read(&secret_path).map_err(|e| {
+		Error::FailedToRead { path: secret_path, error: e.to_string() }
+	})?);
 	let shares =
 		qos_crypto::shamir::shares_generate(&secret, total_shares, threshold)
 			.unwrap();
@@ -2023,7 +2026,7 @@ pub(crate) fn shamir_split(
 	for (i, share) in shares.iter().enumerate() {
 		let file_name = format!("{}.share", i + 1);
 		let file_path = PathBuf::from(&output_dir).join(&file_name);
-		write_with_msg(&file_path, share, &file_name);
+		write_with_msg(&file_path, &share[..], &file_name);
 	}
 
 	Ok(())
@@ -2036,15 +2039,14 @@ pub(crate) fn shamir_reconstruct(
 	let shares = shares
 		.into_iter()
 		.map(|p| {
-			fs::read(&p).map_err(|e| Error::FailedToRead {
+			fs::read(&p).map(Zeroizing::new).map_err(|e| Error::FailedToRead {
 				path: p,
 				error: e.to_string(),
 			})
 		})
-		.collect::<Result<Vec<Vec<u8>>, Error>>()?;
+		.collect::<Result<Vec<Zeroizing<Vec<u8>>>, Error>>()?;
 
-	let secret =
-		Zeroizing::new(qos_crypto::shamir::shares_reconstruct(shares).unwrap());
+	let secret = qos_crypto::shamir::shares_reconstruct(shares).unwrap();
 
 	write_with_msg(output_path.as_ref(), &secret, "Reconstructed secret");
 

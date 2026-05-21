@@ -1262,6 +1262,7 @@ dependencies = [
  "tokio-rustls",
  "ureq",
  "webpki-roots",
+ "zeroize",
 ]
 
 [[package]]
@@ -1956,6 +1957,7 @@ dependencies = [
  "tokio",
  "tokio-vsock",
  "webpki-roots",
+ "zeroize",
 ]
 
 [[package]]
@@ -1979,6 +1981,7 @@ dependencies = [
  "sha2",
  "thiserror 2.0.17",
  "vsss-rs",
+ "zeroize",
 ]
 
 [[package]]
@@ -1988,6 +1991,7 @@ dependencies = [
  "arbitrary",
  "libfuzzer-sys",
  "qos_crypto 0.8.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -2142,6 +2146,7 @@ dependencies = [
  "arbitrary",
  "libfuzzer-sys",
  "qos_p256 0.8.0",
+ "zeroize",
 ]
 
 [[package]]

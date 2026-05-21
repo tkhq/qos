@@ -48,7 +48,7 @@ impl P256SignPair {
 	///
 	/// Returns [`P256Error::FailedToReadSecret`] if the bytes are not a
 	/// valid P256 scalar.
-	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+	pub fn from_bytes(bytes: &Zeroizing<Vec<u8>>) -> Result<Self, P256Error> {
 		Ok(Self {
 			private: SigningKey::from_slice(bytes)
 				.map_err(|_| P256Error::FailedToReadSecret)?,

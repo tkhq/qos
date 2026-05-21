@@ -109,7 +109,7 @@ impl P256EncryptPair {
 	///
 	/// Returns [`P256Error::FailedToReadSecret`] if the bytes are not a
 	/// valid P256 scalar.
-	pub fn from_bytes(bytes: &[u8]) -> Result<Self, P256Error> {
+	pub fn from_bytes(bytes: &Zeroizing<Vec<u8>>) -> Result<Self, P256Error> {
 		Ok(Self {
 			private: SecretKey::from_slice(bytes)
 				.map_err(|_| P256Error::FailedToReadSecret)?,
@@ -199,7 +199,7 @@ impl P256EncryptPublic {
 		&self,
 		serialized_envelope: &[u8],
 		shared_secret: &[u8],
-	) -> Result<Vec<u8>, P256Error> {
+	) -> Result<Zeroizing<Vec<u8>>, P256Error> {
 		let Envelope {
 			nonce,
 			ephemeral_sender_public: ephemeral_sender_public_bytes,
@@ -228,6 +228,7 @@ impl P256EncryptPublic {
 
 		cipher
 			.decrypt(nonce, payload)
+			.map(Zeroizing::new)
 			.map_err(|_| P256Error::AesGcm256DecryptError)
 	}
 

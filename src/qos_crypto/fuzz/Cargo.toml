@@ -11,6 +11,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
+zeroize = { version = "1.8", default-features = false, features = ["alloc"] }
 
 qos_crypto = { path = ".." }
 
