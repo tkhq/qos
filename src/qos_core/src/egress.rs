@@ -18,14 +18,15 @@ use nix::{
 	unistd::{read, write},
 };
 
+/// egress vsock port used both in and out of the enclave to provide transparent egress data transfer
+pub const EGRESS_VSOCK_PORT: u32 = 1000; // reserved range so user ports don't interfere
+
 /// sets up required tuntap interfaces using the `ip` binary
 /// opens enclave side egress bridging using given cid and port blocking forever
 /// # Panics
 /// panics on socket errors of any kind
 #[allow(unsafe_code)]
 pub fn enclave_egress(cid: u32, port: u32, flags: u8) {
-	setup_enclave_tunnel();
-
 	let addr = SocketAddress::new_vsock_raw(cid, port, flags);
 	let core_socket =
 		create_core_socket().expect("unable to create core socket");
@@ -65,9 +66,11 @@ pub fn host_egress(cid: u32, port: u32, flags: u8) {
 	copy_bidirectional(sock_fd, proxy_fd);
 }
 
-// sets up new tuntap tun interface `enclave_egress` with localhost routing using `10.0.0.1/32` mask
-// and default gw
-fn setup_enclave_tunnel() {
+/// sets up new tuntap tun interface `enclave_egress` with localhost routing using `10.0.0.1/32` mask and default gw
+/// expects `/usr/sbin/ip` and `/lib/ld-musl-x86` to be present
+/// # Panics
+/// panics if the program executions fail
+pub fn init_egress_tun() {
 	run_ip("tuntap add enclave_egress mode tun", "tuntap add failed");
 	run_ip("link set lo up", "unable to bring up lo");
 	run_ip("address add 10.0.0.1/32 dev lo", "ip assign to lo failed");
@@ -128,12 +131,12 @@ pub fn create_tun_socket(if_name: &str) -> Result<OwnedFd, Box<dyn Error>> {
 
 /// Copies traffic in both directions between two sockets using threads, never returns
 /// # Panics
-/// Panics if any read/write operation panics
+/// Panics if any read/write operation fails
 fn copy_bidirectional(rsock: OwnedFd, vsock: OwnedFd) {
 	std::thread::scope(|s| {
 		let sfd = rsock.as_fd();
 		let tfd = vsock.as_fd();
-		std::thread::Builder::new()
+		let raw_to_vsock = std::thread::Builder::new()
 			.name("raw_to_vsock".to_owned())
 			.spawn_scoped(s, move || {
 				pipe_all(sfd, tfd).expect("error piping from raw to vsock");
@@ -142,13 +145,28 @@ fn copy_bidirectional(rsock: OwnedFd, vsock: OwnedFd) {
 
 		let sfd = rsock.as_fd();
 		let tfd = vsock.as_fd();
-		std::thread::Builder::new()
+		let vsock_to_raw = std::thread::Builder::new()
 			.name("vsock_to_raw".to_owned())
 			.spawn_scoped(s, move || {
 				// pipe_all(tfd, sfd, TrafficDirection::VsockToRaw(debug))
 				pipe_frames(tfd, sfd).expect("error piping from vsock to raw");
 			})
 			.expect("unable to run scoped thread");
+
+		// see if any of the threads have paniced and if so, propagate the error and panic the main process
+		loop {
+			if raw_to_vsock.is_finished() {
+				raw_to_vsock.join().expect("raw_to_vsock worker error");
+				panic!("raw_to_vsock exit");
+			}
+
+			if vsock_to_raw.is_finished() {
+				vsock_to_raw.join().expect("vsock_to_raw worker error");
+				panic!("vsock_to_raw exit");
+			}
+
+			std::thread::sleep(Duration::from_millis(200));
+		}
 	});
 
 	// mostly for lint, we want to consume here on purpose as copy_bidirectional is supposed to be a terminal function
