@@ -13,15 +13,17 @@ compile_error!(
 	"feature \"vm\" and feature \"mock\" cannot be enabled at the same time"
 );
 
-pub mod client;
-pub mod server;
-
 pub mod cli;
+pub mod client;
 pub mod handles;
 pub mod io;
 pub mod parser;
 pub mod protocol;
 pub mod reaper;
+pub mod server;
+
+#[cfg(feature = "vm")]
+pub mod egress;
 
 /// Path to Quorum Key secret.
 #[cfg(not(feature = "vm"))]

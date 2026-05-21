@@ -82,7 +82,7 @@ impl Stream {
 			}
 			#[cfg(feature = "vm")]
 			SocketAddress::Vsock(_vaddr) => {
-				let inner = vsock_connect(&addr).await?;
+				let inner = vsock_connect(addr).await?;
 
 				self.inner = Some(InnerStream::Vsock(inner));
 			}

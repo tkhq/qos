@@ -99,12 +99,11 @@ impl HostOpts {
 			.single(VSOCK_TO_HOST)
 			.as_ref()
 			.map(|s| s.parse())
-			.map(|r| {
+			.is_none_or(|r| {
 				r.expect(
 					"could not parse `--vsock-to-host`. Valid args are true or false",
 				)
-			})
-			.unwrap_or(true);
+			});
 
 		if include {
 			println!("Configuring vsock with VMADDR_FLAG_TO_HOST.");

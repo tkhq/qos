@@ -64,50 +64,88 @@ impl BridgeServer {
 	}
 
 	fn run_bridges(&self, configs: &[BridgeConfig]) {
+		let mut egress_enabled = false;
+
 		for config in configs {
-			let (host_port, host_ip_str) = match config {
+			match config {
 				BridgeConfig::Client { port: _, host: _ } => {
-					unimplemented!("client support pending")
+					// NOTE: we ignore the host and port here as they are meant for firewall rules
+					// TODO: figure out how to actually handle the firewall rules, see TVC-25
+
+					// only run one instance as it covers ALL ports, the others are for firewalls
+					if !egress_enabled {
+						egress_enabled = true;
+						self.run_egress_host_bridge();
+					}
 				}
 				BridgeConfig::Server { port, host } => {
-					(self.host_port(*port), host)
-				}
-			};
-
-			// derive the app socket, for vsock just use the app host port with same CID as the enclave socket,
-			// with usock just add "<port>.appsock" suffix
-			let app_socket = match self
-				.socket_placeholder
-				.with_port(config.port())
-			{
-				Ok(value) => value,
-				Err(err) => {
-					eprintln!(
-						"unable to derive app socket from enclave socket: {err:?}, tcp to vsock bridge will not start"
+					self.run_ingress_bridge(
+						config.port(),
+						self.host_port(*port),
+						host,
 					);
-					return;
 				}
-			};
+			}
+		}
+	}
 
-			let app_pool = match StreamPool::single(app_socket) {
-				Ok(value) => value,
-				Err(err) => {
-					eprintln!(
-						"unable to create new app socket pool: {err:?}, tcp to vsock bridge will not start"
-					);
-					return;
-				}
-			};
+	// dummy placeholder
+	#[cfg(not(feature = "vm"))]
+	#[allow(clippy::unused_self)]
+	fn run_egress_host_bridge(&self) {
+		panic!("unable to run egress without vm feature and vsock support");
+	}
 
-			let Ok(host_ip) = host_ip_str.parse::<Ipv4Addr>() else {
+	// run the transparent host egress
+	#[cfg(feature = "vm")]
+	fn run_egress_host_bridge(&self) {
+		const EGRESS_PORT: u32 = 1000; // reserved range so user ports don't interfere
+		let vsock = self.socket_placeholder.vsock();
+		let cid = vsock.cid();
+		let flags = qos_core::io::vsock_svm_flags(vsock); // ensure we copy the flags as set
+
+		tokio::task::spawn_blocking(move || {
+			println!("qos_bridge: starting transparent egress host side");
+			qos_core::egress::host_egress(cid, EGRESS_PORT, flags);
+		});
+	}
+
+	fn run_ingress_bridge(
+		&self,
+		core_port: u16,
+		host_port: u16,
+		host_ip_str: &str,
+	) {
+		// derive the app socket, for vsock just use the app host port with same CID as the enclave socket,
+		// with usock just add "<port>.appsock" suffix
+		let app_socket = match self.socket_placeholder.with_port(core_port) {
+			Ok(value) => value,
+			Err(err) => {
 				eprintln!(
-					"unable to parse host ip for bridge configuration: {host_ip_str}"
+					"unable to derive app socket from enclave socket: {err:?}, tcp to vsock bridge will not start"
 				);
 				return;
-			};
-			let host_addr = SocketAddr::new(host_ip.into(), host_port);
+			}
+		};
 
-			HostBridge::new(app_pool, host_addr).tcp_to_vsock();
-		}
+		let app_pool = match StreamPool::single(app_socket) {
+			Ok(value) => value,
+			Err(err) => {
+				eprintln!(
+					"unable to create new app socket pool: {err:?}, tcp to vsock bridge will not start"
+				);
+				return;
+			}
+		};
+
+		let Ok(host_ip) = host_ip_str.parse::<Ipv4Addr>() else {
+			eprintln!(
+				"unable to parse host ip for bridge configuration: {host_ip_str}"
+			);
+			return;
+		};
+		let host_addr = SocketAddr::new(host_ip.into(), host_port);
+
+		HostBridge::new(app_pool, host_addr).tcp_to_vsock();
 	}
 }

@@ -104,15 +104,19 @@ impl SocketAddress {
 	///
 	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>).
 	#[cfg(feature = "vm")]
+	#[must_use]
 	pub fn new_vsock(cid: u32, port: u32, flags: u8) -> Self {
 		Self::Vsock(Self::new_vsock_raw(cid, port, flags))
 	}
 
-	/// Create a new raw VsockAddr.
+	/// Create a new raw `VsockAddr`.
 	///
 	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>).
+	/// # Panics
+	/// Panics if addr length mismatches
 	#[cfg(feature = "vm")]
-	#[allow(unsafe_code)]
+	#[must_use]
+	#[allow(unsafe_code, clippy::cast_possible_truncation)]
 	pub fn new_vsock_raw(cid: u32, port: u32, flags: u8) -> VsockAddr {
 		let vsock_addr = SockAddrVm {
 			svm_family: AddressFamily::Vsock as libc::sa_family_t,
@@ -123,14 +127,13 @@ impl SocketAddress {
 			svm_zero: [0; 3],
 		};
 		let vsock_addr_len = size_of::<SockAddrVm>() as libc::socklen_t;
-		let addr = unsafe {
+		unsafe {
 			VsockAddr::from_raw(
-				&vsock_addr as *const SockAddrVm as *const libc::sockaddr,
+				(&raw const vsock_addr).cast::<libc::sockaddr>(),
 				Some(vsock_addr_len),
 			)
 			.unwrap()
-		};
-		addr
+		}
 	}
 
 	/// Get the `AddressFamily` of the socket.
@@ -154,22 +157,26 @@ impl SocketAddress {
 	}
 
 	/// Returns the `UnixAddr` if this is a USOCK `SocketAddress`, panics otherwise
+	/// # Panics
+	/// Panics if this is a vsock
 	#[must_use]
 	pub fn usock(&self) -> &UnixAddr {
 		match self {
 			Self::Unix(usock) => usock,
 			#[cfg(feature = "vm")]
-			_ => panic!("invalid socket address requested"),
+			Self::Vsock(_) => panic!("invalid socket address requested"),
 		}
 	}
 
 	/// Returns the `UnixAddr` if this is a USOCK `SocketAddress`, panics otherwise
+	/// # Panics
+	/// Panics if this is a unix socket
 	#[must_use]
 	#[cfg(feature = "vm")]
 	pub fn vsock(&self) -> &VsockAddr {
 		match self {
 			Self::Vsock(vsock) => vsock,
-			_ => panic!("invalid socket address requested"),
+			Self::Unix(_) => panic!("invalid socket address requested"),
 		}
 	}
 
@@ -188,7 +195,7 @@ impl SocketAddress {
 			Self::Vsock(vsa) => Ok(Self::new_vsock(
 				vsa.cid(),
 				port.into(),
-				vsock_svm_flags(*vsa),
+				vsock_svm_flags(vsa),
 			)),
 			Self::Unix(ua) => {
 				let mut path = ua
@@ -230,25 +237,33 @@ impl std::fmt::Display for SocketAddress {
 	}
 }
 
-/// Extract svm_flags field value from existing VSOCK.
+/// Extract `svm_flags` field value from existing VSOCK.
 #[cfg(feature = "vm")]
+#[must_use]
 #[allow(unsafe_code)]
-pub fn vsock_svm_flags(vsock: VsockAddr) -> u8 {
+pub fn vsock_svm_flags(vsock: &VsockAddr) -> u8 {
 	unsafe {
-		let cast: SockAddrVm = std::mem::transmute(vsock);
+		let cast: SockAddrVm = std::mem::transmute(*vsock);
 		cast.svm_flags
 	}
 }
 
+/// `sockaddr_vm` representation that contains the new `svm_flags` since `libc` currently still does not
 #[cfg(feature = "vm")]
 #[repr(C)]
-struct SockAddrVm {
-	svm_family: libc::sa_family_t,
-	svm_reserved1: libc::c_ushort,
-	svm_port: libc::c_uint,
-	svm_cid: libc::c_uint,
-	// Field added [here](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6)
-	// but not yet in a version of libc we can use.
-	svm_flags: u8,
-	svm_zero: [u8; 3],
+#[allow(clippy::struct_field_names)]
+pub(crate) struct SockAddrVm {
+	/// Family
+	pub(crate) svm_family: libc::sa_family_t,
+	/// Kernel reserved
+	pub(crate) svm_reserved1: libc::c_ushort,
+	/// Port
+	pub(crate) svm_port: libc::c_uint,
+	/// Cid
+	pub(crate) svm_cid: libc::c_uint,
+	/// Field added [here](https://github.com/torvalds/linux/commit/3a9c049a81f6bd7c78436d7f85f8a7b97b0821e6)
+	/// but not yet in a version of libc we can use.
+	pub(crate) svm_flags: u8,
+	/// Zero padding
+	pub(crate) svm_zero: [u8; 3],
 }
