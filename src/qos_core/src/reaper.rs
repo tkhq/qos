@@ -115,14 +115,15 @@ fn run_egress_bridge(_core_socket: &SocketAddress) {
 // run the transparent host egress
 #[cfg(feature = "vm")]
 fn run_egress_bridge(core_socket: &SocketAddress) {
-	const EGRESS_PORT: u32 = 1000; // reserved range so user ports don't interfere
 	let vsock = core_socket.vsock();
 	let cid = vsock.cid();
 	let flags = crate::io::vsock_svm_flags(vsock); // ensure we copy the flags as set
 
 	tokio::task::spawn_blocking(move || {
+		use crate::egress::EGRESS_VSOCK_PORT;
+
 		println!("reaper: starting transparent egress enclave side");
-		crate::egress::enclave_egress(cid, EGRESS_PORT, flags);
+		crate::egress::enclave_egress(cid, EGRESS_VSOCK_PORT, flags);
 	});
 }
 

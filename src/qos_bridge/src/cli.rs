@@ -11,7 +11,6 @@ use qos_core::{
 const CONTROL_URL: &str = "control-url";
 const HOST_PORT_OVERRIDE: &str = "host-port-override";
 const VSOCK_TO_HOST: &str = "vsock-to-host";
-const ENCLAVE_EGRESS: &str = "enclave-egress";
 
 struct HostParser;
 impl GetParserForOptions for HostParser {
@@ -44,10 +43,6 @@ impl GetParserForOptions for HostParser {
 					.required(false)
 					.forbids(vec![USOCK])
 			)
-			.token(
-				Token::new(ENCLAVE_EGRESS, "start in enclave egress mode")
-					.takes_value(false)
-			)
 	}
 }
 
@@ -77,15 +72,6 @@ impl HostOpts {
 	/// NOTE: used for localhost testing, since we can't bind the same port twice
 	pub fn host_port_override(&self) -> Option<u16> {
 		self.parsed.single(HOST_PORT_OVERRIDE).and_then(|v| v.parse().ok())
-	}
-
-	/// sets the bridge in "inside enclave" egress mode to be run directly by `Reaper` as a separate binary
-	pub fn enclave_egress(&self) -> bool {
-		self.parsed
-			.single(ENCLAVE_EGRESS)
-			.unwrap_or(&"false".to_string())
-			.parse()
-			.expect("unable to parse enclave-egress bool")
 	}
 
 	/// Create a new `StreamPool` using the list of `SocketAddress` for the qos host.
@@ -143,12 +129,6 @@ impl Cli {
 			println!("version: {}", env!("CARGO_PKG_VERSION"));
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
-		} else if options.enclave_egress() {
-			run_egress_bridge(
-				&options
-					.enclave_socket()
-					.expect("failed to create enclave socket"),
-			);
 		} else {
 			crate::host::BridgeServer::new(
 				options
@@ -164,24 +144,4 @@ impl Cli {
 			let _ = tokio::signal::ctrl_c().await;
 		}
 	}
-}
-// dummy placeholder
-#[cfg(not(feature = "vm"))]
-fn run_egress_bridge(_core_socket: &SocketAddress) {
-	panic!("unable to run egress without vm feature and vsock support");
-}
-
-// run the transparent host egress
-#[cfg(feature = "vm")]
-fn run_egress_bridge(core_socket: &SocketAddress) {
-	let vsock = core_socket.vsock();
-	let cid = vsock.cid();
-	let flags = qos_core::io::vsock_svm_flags(vsock); // ensure we copy the flags as set
-
-	tokio::task::spawn_blocking(move || {
-		use qos_core::egress::EGRESS_VSOCK_PORT;
-
-		println!("reaper: starting transparent egress host side");
-		qos_core::egress::enclave_egress(cid, EGRESS_VSOCK_PORT, flags);
-	});
 }
