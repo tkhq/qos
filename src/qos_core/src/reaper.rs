@@ -122,8 +122,23 @@ fn run_egress_bridge(core_socket: &SocketAddress) {
 	tokio::task::spawn_blocking(move || {
 		use crate::egress::EGRESS_VSOCK_PORT;
 
-		println!("reaper: starting transparent egress enclave side");
-		crate::egress::enclave_egress(cid, EGRESS_VSOCK_PORT, flags);
+		loop {
+			let egress_worker = std::thread::spawn(move || {
+				println!("reaper: starting transparent egress enclave side");
+				crate::egress::enclave_egress(cid, EGRESS_VSOCK_PORT, flags);
+			});
+
+			match egress_worker.join() {
+				Ok(_) => {
+					eprintln!("egress worker stopped without error, restarting")
+				}
+				Err(err) => {
+					eprintln!("egress worker error: {err:?}, restarting")
+				}
+			}
+
+			std::thread::sleep(Duration::from_millis(200));
+		}
 	});
 }
 
