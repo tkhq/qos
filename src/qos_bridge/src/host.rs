@@ -99,14 +99,15 @@ impl BridgeServer {
 	// run the transparent host egress
 	#[cfg(not(target_os = "macos"))]
 	fn run_egress_host_bridge(&self) {
-		const EGRESS_PORT: u32 = 1000; // reserved range so user ports don't interfere
 		let vsock = self.socket_placeholder.vsock();
 		let cid = vsock.cid();
 		let flags = qos_core::io::vsock_svm_flags(vsock); // ensure we copy the flags as set
 
 		tokio::task::spawn_blocking(move || {
+			use qos_core::egress::EGRESS_VSOCK_PORT;
+
 			println!("qos_bridge: starting transparent egress host side");
-			qos_core::egress::host_egress(cid, EGRESS_PORT, flags);
+			qos_core::egress::host_egress(cid, EGRESS_VSOCK_PORT, flags);
 		});
 	}
 

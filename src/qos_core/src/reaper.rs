@@ -121,7 +121,7 @@ fn run_egress_bridge(core_socket: &SocketAddress) {
 	let flags = crate::io::vsock_svm_flags(vsock); // ensure we copy the flags as set
 
 	tokio::task::spawn_blocking(move || {
-		println!("reaper: starting transparent egress host side");
+		println!("reaper: starting transparent egress enclave side");
 		crate::egress::enclave_egress(cid, EGRESS_PORT, flags);
 	});
 }
