@@ -1,8 +1,9 @@
 use qos_core::{
-	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE,
+	egress::init_egress_tun,
 	handles::Handles,
 	io::{SocketAddress, VMADDR_NO_FLAGS},
 	reaper::Reaper,
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE,
 };
 use qos_nsm::Nsm;
 use qos_system::{dmesg, freopen, get_local_cid, mount, reboot};
@@ -56,6 +57,7 @@ fn boot() {
 	init_console();
 	init_platform();
 	init_localhost();
+	init_egress_tun();
 }
 
 #[tokio::main]

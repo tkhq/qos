@@ -86,6 +86,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arrayvec"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
+
+[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -458,6 +464,15 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "etherparse"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ac016aaf11dfe643edcd088a166234bfcb72e7f06691abfcf21e9af524037f4"
+dependencies = [
+ "arrayvec",
+]
 
 [[package]]
 name = "ff"
@@ -1160,15 +1175,17 @@ dependencies = [
 
 [[package]]
 name = "qos_core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
+ "etherparse",
  "futures",
  "libc",
  "nix 0.30.1",
  "qos_crypto",
  "qos_hex",
+ "qos_json",
  "qos_nsm",
  "qos_p256",
  "serde",
@@ -1180,7 +1197,7 @@ dependencies = [
 
 [[package]]
 name = "qos_crypto"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "rand 0.9.4",
  "sha2",
@@ -1190,20 +1207,32 @@ dependencies = [
 
 [[package]]
 name = "qos_hex"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
+name = "qos_json"
+version = "0.8.0"
+dependencies = [
+ "qos_hex",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "qos_nsm"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "aws-nitro-enclaves-cose",
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "p384",
  "qos_hex",
+ "qos_json",
+ "serde",
  "serde_bytes",
  "sha2",
  "webpki",
@@ -1212,7 +1241,7 @@ dependencies = [
 
 [[package]]
 name = "qos_p256"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "aes-gcm",
  "borsh",
@@ -1220,6 +1249,7 @@ dependencies = [
  "hmac",
  "p256",
  "qos_hex",
+ "serde",
  "sha2",
  "zeroize",
 ]
