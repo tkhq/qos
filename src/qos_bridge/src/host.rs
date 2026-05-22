@@ -9,7 +9,7 @@ use qos_core::{
 	io::{HostBridge, SocketAddress, StreamPool},
 	protocol::services::boot::BridgeConfig,
 };
-use qos_host::{ENCLAVE_INFO, EnclaveInfo};
+use qos_host::{EnclaveInfo, ENCLAVE_INFO};
 
 /// Host server implementation using `HostBridge::tcp_to_vsock`
 pub struct BridgeServer {
@@ -106,8 +106,25 @@ impl BridgeServer {
 		tokio::task::spawn_blocking(move || {
 			use qos_core::egress::EGRESS_VSOCK_PORT;
 
-			println!("qos_bridge: starting transparent egress host side");
-			qos_core::egress::host_egress(cid, EGRESS_VSOCK_PORT, flags);
+			loop {
+				// Restart from the top of host_egress so errors drop the entire
+				// session and recreate the vsock fd before reconnecting.
+				println!("qos_bridge: starting transparent egress host side");
+				match qos_core::egress::host_egress(
+					cid,
+					EGRESS_VSOCK_PORT,
+					flags,
+				) {
+					Ok(()) => eprintln!(
+						"qos_bridge: egress host side stopped without error, restarting"
+					),
+					Err(err) => eprintln!(
+						"qos_bridge: egress host side error: {err:?}, restarting"
+					),
+				}
+
+				std::thread::sleep(Duration::from_millis(200));
+			}
 		});
 	}
 

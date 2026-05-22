@@ -21,9 +21,9 @@ use crate::{
 	handles::Handles,
 	io::{HostBridge, IOError, SocketAddress, StreamPool},
 	protocol::{
-		ProtocolPhase, ProtocolState,
 		processor::ProtocolProcessor,
 		services::boot::{BridgeConfig, RestartPolicy},
+		ProtocolPhase, ProtocolState,
 	},
 	server::SocketServer,
 };
@@ -123,13 +123,11 @@ fn run_egress_bridge(core_socket: &SocketAddress) {
 		use crate::egress::EGRESS_VSOCK_PORT;
 
 		loop {
-			let egress_worker = std::thread::spawn(move || {
-				println!("reaper: starting transparent egress enclave side");
-				crate::egress::enclave_egress(cid, EGRESS_VSOCK_PORT, flags);
-			});
-
-			match egress_worker.join() {
-				Ok(_) => {
+			// Restart from the top of enclave_egress so errors drop the entire
+			// session and recreate the vsock fd before accepting again.
+			println!("reaper: starting transparent egress enclave side");
+			match crate::egress::enclave_egress(cid, EGRESS_VSOCK_PORT, flags) {
+				Ok(()) => {
 					eprintln!("egress worker stopped without error, restarting")
 				}
 				Err(err) => {
