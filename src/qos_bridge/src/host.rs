@@ -9,7 +9,7 @@ use qos_core::{
 	io::{HostBridge, SocketAddress, StreamPool},
 	protocol::services::boot::BridgeConfig,
 };
-use qos_host::{EnclaveInfo, ENCLAVE_INFO};
+use qos_host::{ENCLAVE_INFO, EnclaveInfo};
 
 /// Host server implementation using `HostBridge::tcp_to_vsock`
 pub struct BridgeServer {

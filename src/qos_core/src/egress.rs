@@ -10,14 +10,14 @@ use std::{
 
 use crate::io::SocketAddress;
 use nix::{
+	NixPath,
 	errno::Errno,
 	libc,
 	sys::socket::{
-		accept, bind, connect, listen, socket, AddressFamily, Backlog,
-		SockFlag, SockType,
+		AddressFamily, Backlog, SockFlag, SockType, accept, bind, connect,
+		listen, socket,
 	},
 	unistd::{read, write},
-	NixPath,
 };
 
 /// egress vsock port used both in and out of the enclave to provide transparent egress data transfer
@@ -295,11 +295,7 @@ fn next_frame(buf: &[u8]) -> Result<Option<usize>, EgressError> {
 	}
 	.into();
 
-	if buf.len() < size {
-		Ok(None)
-	} else {
-		Ok(Some(size))
-	}
+	if buf.len() < size { Ok(None) } else { Ok(Some(size)) }
 }
 
 // sends all traffic from fd_from to fd_to byte by ip frames waiting for completion on reads
@@ -572,13 +568,13 @@ mod tests {
 		os::fd::OwnedFd,
 		os::unix::net::UnixStream,
 		sync::{
-			atomic::{AtomicBool, Ordering},
 			Arc,
+			atomic::{AtomicBool, Ordering},
 		},
 		time::{Duration, Instant},
 	};
 
-	use super::{copy_bidirectional, EgressError};
+	use super::{EgressError, copy_bidirectional};
 
 	#[test]
 	fn copy_bidirectional_returns_when_one_side_disconnects() {
