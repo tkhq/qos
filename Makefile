@@ -100,6 +100,8 @@ out/qos_bridge/index.json: \
 	out/common/index.json \
 	$(CARGO_WORKSPACE_FILES) \
 	src/images/qos_bridge/Containerfile \
+	src/images/qos_bridge/enclave_egress_interfaces.sh \
+	src/images/qos_bridge/entrypoint.sh \
 	$(shell git ls-files \
 		src/qos_bridge \
 		src/qos_host \

@@ -1,3 +1,8 @@
+FROM stagex/busybox:sx2024.11.0@sha256:3d128909dbc8e7b6c4b8c3c31f4583f01a307907ea179934bb42c4ef056c7efd AS busybox
+FROM stagex/iproute2:sx2024.11.0@sha256:65da03aa94d17dd6310b022f426a6cc8b3c55bb267e4bac1697bc57d6c850570 AS iproute2
+FROM stagex/iptables:sx2024.11.0@sha256:185773114afa78f26e77a88b452894b805200594fe7d3d0e08b804bc7beb7517 AS iptables
+FROM stagex/musl:sx2024.11.0@sha256:d7f6c365f5724c65cadb2b96d9f594e46132ceb366174c89dbf7554897f2bc53 AS musl
+
 FROM common AS base
 ADD . /src
 
@@ -11,9 +16,22 @@ EOF
 
 FROM base AS install
 WORKDIR /rootfs
+COPY --from=busybox . .
+COPY --from=iproute2 . .
+COPY --from=iptables . .
+COPY --from=musl . .
 COPY --from=build /qos_bridge .
-RUN find . -exec touch -hcd "@0" "{}" +
+COPY --chmod=755 src/images/qos_bridge/enclave_egress_interfaces.sh .
+COPY --chmod=755 src/images/qos_bridge/entrypoint.sh .
+RUN <<-EOF
+	set -eu
+	mkdir -p dev/net run tmp
+	chmod 1777 tmp
+	find . -exec touch -hcd "@0" "{}" +
+EOF
 
 FROM scratch AS package
 COPY --from=install /rootfs .
-ENTRYPOINT ["/qos_bridge"]
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+USER 0:0
+ENTRYPOINT ["/entrypoint.sh"]
