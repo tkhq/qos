@@ -10,14 +10,19 @@ LOCAL_EPH_PATH := ./local-enclave/qos.ephemeral.key
 
 .PHONY: local-enclave
 local-enclave:
-	@# Remove the directory where we default to setting up the enclave file system
+	@# Remove the directory where we set up the local enclave file system
 	rm -rf ./local-enclave
+	mkdir -p ./local-enclave
 	@# Start the enclave with mock feature and mock flag so we can use the MockNSM
 	cargo run --bin qos_core \
 		--features mock \
 		-- \
 		--usock ./dev.sock \
-		--mock
+		--mock \
+		--quorum-file ./local-enclave/qos.quorum.key \
+		--pivot-file ./local-enclave/qos.pivot.bin \
+		--ephemeral-file ./local-enclave/qos.ephemeral.key \
+		--manifest-file ./local-enclave/qos.manifest
 
 .PHONY: sample-app-dangerous-dev-boot
 local-dangerous-dev-boot:
@@ -41,7 +46,6 @@ local-dangerous-dev-boot:
 vm-enclave:
 	OPENSSL_DIR=/usr cargo run \
 		--bin qos_core \
-		--features vm \
 		-- \
 		--cid 16 \
 		--port 6969
@@ -58,7 +62,6 @@ local-host:
 vm-host:
 	OPENSSL_DIR=/usr cargo run \
 		--bin qos_host \
-		--features vm \
 		-- \
 		--host-ip 127.0.0.1 \
 		--host-port 3000 \
@@ -169,10 +172,6 @@ test:
 	@# by itself.
 	cargo test -p qos_core
 
-.PHONY: test-vm
-test-vm:
-	cargo test -p qos_core -p qos_net -p qos_net -p qos_host -p qos_bridge --features vm --no-default-features
-
 .PHONY: build-linux-only
 build-linux-only: qos_system qos_aws init qos_enclave qos_bridge
 
@@ -194,4 +193,4 @@ qos_enclave:
 
 .PHONY: qos_bridge
 qos_bridge:
-	cargo build --manifest-path ./qos_bridge/Cargo.toml --features vm
+	cargo build --manifest-path ./qos_bridge/Cargo.toml

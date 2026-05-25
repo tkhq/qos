@@ -12,7 +12,7 @@ pub use host_bridge::*;
 pub use pool::*;
 pub use stream::*;
 
-#[cfg(feature = "vm")]
+#[cfg(not(target_os = "macos"))]
 use nix::sys::socket::VsockAddr;
 use nix::sys::socket::{AddressFamily, SockaddrLike, UnixAddr};
 pub use nix::sys::time::{TimeVal, TimeValLike};
@@ -77,7 +77,7 @@ impl From<PoolError> for IOError {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SocketAddress {
 	/// VSOCK address.
-	#[cfg(feature = "vm")]
+	#[cfg(not(target_os = "macos"))]
 	Vsock(VsockAddr),
 	/// Unix address.
 	Unix(UnixAddr),
@@ -103,16 +103,24 @@ impl SocketAddress {
 	/// Create a new Vsock socket.
 	///
 	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>).
-	#[cfg(feature = "vm")]
+	#[cfg(not(target_os = "macos"))]
+	#[must_use]
 	pub fn new_vsock(cid: u32, port: u32, flags: u8) -> Self {
 		Self::Vsock(Self::new_vsock_raw(cid, port, flags))
 	}
 
-	/// Create a new raw VsockAddr.
+	/// Create a new raw `VsockAddr`.
 	///
 	/// For flags see: [Add flags field in the vsock address](<https://lkml.org/lkml/2020/12/11/249>).
-	#[cfg(feature = "vm")]
+	///
+	/// # Panics
+	///
+	/// Panics if `VsockAddr::from_raw` cannot construct a valid address from
+	/// the provided fields (should be unreachable for well-formed `cid` /
+	/// `port` / `flags`).
+	#[cfg(not(target_os = "macos"))]
 	#[allow(unsafe_code)]
+	#[must_use]
 	pub fn new_vsock_raw(cid: u32, port: u32, flags: u8) -> VsockAddr {
 		let vsock_addr = SockAddrVm {
 			svm_family: AddressFamily::Vsock as libc::sa_family_t,
@@ -122,22 +130,26 @@ impl SocketAddress {
 			svm_flags: flags,
 			svm_zero: [0; 3],
 		};
-		let vsock_addr_len = size_of::<SockAddrVm>() as libc::socklen_t;
-		let addr = unsafe {
+		let vsock_addr_len = libc::socklen_t::try_from(size_of::<SockAddrVm>())
+			.expect("SockAddrVm size fits in socklen_t");
+		// SAFETY: `vsock_addr` is a valid, fully-initialized `SockAddrVm`
+		// (the layout-compatible struct corresponding to a vsock sockaddr),
+		// and we pass the matching size. `VsockAddr::from_raw` returns
+		// `Some` iff the address family is `AF_VSOCK`, which we set above.
+		unsafe {
 			VsockAddr::from_raw(
-				&vsock_addr as *const SockAddrVm as *const libc::sockaddr,
+				std::ptr::from_ref(&vsock_addr).cast::<libc::sockaddr>(),
 				Some(vsock_addr_len),
 			)
-			.unwrap()
-		};
-		addr
+			.expect("constructed vsock sockaddr is valid")
+		}
 	}
 
 	/// Get the `AddressFamily` of the socket.
 	#[must_use]
 	pub fn family(&self) -> AddressFamily {
 		match *self {
-			#[cfg(feature = "vm")]
+			#[cfg(not(target_os = "macos"))]
 			Self::Vsock(_) => AddressFamily::Vsock,
 			Self::Unix(_) => AddressFamily::Unix,
 		}
@@ -147,29 +159,37 @@ impl SocketAddress {
 	#[must_use]
 	pub fn addr(&self) -> Box<dyn SockaddrLike> {
 		match *self {
-			#[cfg(feature = "vm")]
+			#[cfg(not(target_os = "macos"))]
 			Self::Vsock(vsa) => Box::new(vsa),
 			Self::Unix(ua) => Box::new(ua),
 		}
 	}
 
 	/// Returns the `UnixAddr` if this is a USOCK `SocketAddress`, panics otherwise
+	///
+	/// # Panics
+	///
+	/// Panics if the underlying `SocketAddress` is not a `Unix` variant.
 	#[must_use]
 	pub fn usock(&self) -> &UnixAddr {
 		match self {
 			Self::Unix(usock) => usock,
-			#[cfg(feature = "vm")]
-			_ => panic!("invalid socket address requested"),
+			#[cfg(not(target_os = "macos"))]
+			Self::Vsock(_) => panic!("invalid socket address requested"),
 		}
 	}
 
-	/// Returns the `UnixAddr` if this is a USOCK `SocketAddress`, panics otherwise
+	/// Returns the `VsockAddr` if this is a VSOCK `SocketAddress`, panics otherwise
+	///
+	/// # Panics
+	///
+	/// Panics if the underlying `SocketAddress` is not a `Vsock` variant.
 	#[must_use]
-	#[cfg(feature = "vm")]
+	#[cfg(not(target_os = "macos"))]
 	pub fn vsock(&self) -> &VsockAddr {
 		match self {
 			Self::Vsock(vsock) => vsock,
-			_ => panic!("invalid socket address requested"),
+			Self::Unix(_) => panic!("invalid socket address requested"),
 		}
 	}
 
@@ -184,7 +204,7 @@ impl SocketAddress {
 	#[allow(unused)]
 	pub fn with_port(&self, port: u16) -> Result<SocketAddress, IOError> {
 		match self {
-			#[cfg(feature = "vm")]
+			#[cfg(not(target_os = "macos"))]
 			Self::Vsock(vsa) => Ok(Self::new_vsock(
 				vsa.cid(),
 				port.into(),
@@ -210,7 +230,7 @@ impl SocketAddress {
 impl std::fmt::Display for SocketAddress {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			#[cfg(feature = "vm")]
+			#[cfg(not(target_os = "macos"))]
 			Self::Vsock(vsock) => {
 				write!(f, "vsock cid: {} port: {}", vsock.cid(), vsock.port())
 			}
@@ -230,18 +250,24 @@ impl std::fmt::Display for SocketAddress {
 	}
 }
 
-/// Extract svm_flags field value from existing VSOCK.
-#[cfg(feature = "vm")]
+/// Extract `svm_flags` field value from existing VSOCK.
+#[cfg(not(target_os = "macos"))]
 #[allow(unsafe_code)]
+#[must_use]
 pub fn vsock_svm_flags(vsock: VsockAddr) -> u8 {
+	// SAFETY: `SockAddrVm` is `repr(C)` and laid out identically to the
+	// kernel `sockaddr_vm` structure that backs `nix`'s `VsockAddr`, so the
+	// reinterpret is well-defined for the purpose of reading the
+	// `svm_flags` byte.
 	unsafe {
 		let cast: SockAddrVm = std::mem::transmute(vsock);
 		cast.svm_flags
 	}
 }
 
-#[cfg(feature = "vm")]
+#[cfg(not(target_os = "macos"))]
 #[repr(C)]
+#[allow(clippy::struct_field_names)]
 struct SockAddrVm {
 	svm_family: libc::sa_family_t,
 	svm_reserved1: libc::c_ushort,

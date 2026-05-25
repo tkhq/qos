@@ -75,10 +75,10 @@ impl HostOpts {
 	}
 
 	/// Create a new `StreamPool` using the list of `SocketAddress` for the qos host.
-	#[cfg_attr(not(feature = "vm"), allow(clippy::unnecessary_wraps))]
+	#[cfg_attr(target_os = "macos", allow(clippy::unnecessary_wraps))]
 	pub(crate) fn enclave_socket(&self) -> Result<SocketAddress, IOError> {
 		match (self.parsed.single(CID), self.parsed.single(USOCK)) {
-			#[cfg(feature = "vm")]
+			#[cfg(not(target_os = "macos"))]
 			(Some(c), None) => {
 				let c =
 					c.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
@@ -92,19 +92,18 @@ impl HostOpts {
 		}
 	}
 
-	#[cfg(feature = "vm")]
+	#[cfg(not(target_os = "macos"))]
 	fn to_host_flag(&self) -> u8 {
 		let include = self
 			.parsed
 			.single(VSOCK_TO_HOST)
 			.as_ref()
 			.map(|s| s.parse())
-			.map(|r| {
+			.is_none_or(|r| {
 				r.expect(
 					"could not parse `--vsock-to-host`. Valid args are true or false",
 				)
-			})
-			.unwrap_or(true);
+			});
 
 		if include {
 			println!("Configuring vsock with VMADDR_FLAG_TO_HOST.");
