@@ -113,6 +113,11 @@ qos_nsm = { path = "src/qos_nsm", version = "0.10.0", default-features = false }
 qos_p256 = { path = "src/qos_p256", version = "0.10.0" }
 qos_test_primitives = { path = "src/qos_test_primitives", version = "0.10.0" }
 
+# custom profile for qos_bridge so we can abort in case of failures in any thread
+[profile.qos-bridge]
+inherits = "release"
+panic = "abort"
+
 # Option for the future: build all QOS applications with additional runtime checks
 # to intentionally panic on integer overflows instead of continuing execution
 # with unexpected values.
