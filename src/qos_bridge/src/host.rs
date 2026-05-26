@@ -90,14 +90,14 @@ impl BridgeServer {
 	}
 
 	// dummy placeholder
-	#[cfg(target_os = "macos")]
+	#[cfg(not(feature = "egress"))]
 	#[allow(clippy::unused_self)]
 	fn run_egress_host_bridge(&self) {
 		panic!("unable to run egress without vm feature and vsock support");
 	}
 
 	// run the transparent host egress
-	#[cfg(not(target_os = "macos"))]
+	#[cfg(feature = "egress")]
 	fn run_egress_host_bridge(&self) {
 		let vsock = self.socket_placeholder.vsock();
 		let cid = vsock.cid();

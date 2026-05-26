@@ -21,7 +21,6 @@ use nix::{
 /// egress vsock port used both in and out of the enclave to provide transparent egress data transfer
 pub const EGRESS_VSOCK_PORT: u32 = 1000; // reserved range so user ports don't interfere
 
-/// sets up required tuntap interfaces using the `ip` binary
 /// opens enclave side egress bridging using given cid and port blocking forever
 /// # Panics
 /// panics on socket errors of any kind

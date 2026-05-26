@@ -107,39 +107,20 @@ fn run_bridges(
 }
 
 // dummy placeholder
-#[cfg(target_os = "macos")]
+#[cfg(not(feature = "egress"))]
 fn run_egress_bridge(_core_socket: &SocketAddress) {
-	panic!("unable to run egress without vm feature and vsock support");
+	panic!("unable to run egress without vsock support");
 }
 
 // run the transparent host egress
-#[cfg(not(target_os = "macos"))]
+#[cfg(feature = "egress")]
 fn run_egress_bridge(core_socket: &SocketAddress) {
-	let vsock = core_socket.vsock();
-	let cid = vsock.cid();
-	let flags = crate::io::vsock_svm_flags(vsock); // ensure we copy the flags as set
+	let cid = core_socket.vsock().cid();
 
-	tokio::task::spawn_blocking(move || {
-		use crate::egress::EGRESS_VSOCK_PORT;
-
-		loop {
-			let egress_worker = std::thread::spawn(move || {
-				println!("reaper: starting transparent egress enclave side");
-				crate::egress::enclave_egress(cid, EGRESS_VSOCK_PORT, flags);
-			});
-
-			match egress_worker.join() {
-				Ok(_) => {
-					eprintln!("egress worker stopped without error, restarting")
-				}
-				Err(err) => {
-					eprintln!("egress worker error: {err:?}, restarting")
-				}
-			}
-
-			std::thread::sleep(Duration::from_millis(200));
-		}
-	});
+	crate::egress::run_looping(
+		"/qos_bridge",
+		&format!("--cid {cid} --enclave-egress"),
+	);
 }
 
 fn reprint_pivot_output(child: &mut Child) {

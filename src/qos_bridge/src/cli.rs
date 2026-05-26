@@ -11,6 +11,7 @@ use qos_core::{
 const CONTROL_URL: &str = "control-url";
 const HOST_PORT_OVERRIDE: &str = "host-port-override";
 const VSOCK_TO_HOST: &str = "vsock-to-host";
+const ENCLAVE_EGRESS: &str = "enclave-egress";
 
 struct HostParser;
 impl GetParserForOptions for HostParser {
@@ -21,7 +22,7 @@ impl GetParserForOptions for HostParser {
 				"full url of qos-host to get manifest information from, including the base path, e.g. http://localhost:3001/qos",
 			)
 			.takes_value(true)
-			.required(true),
+			.required(false),
 		)
 			.token(
 				Token::new(CID, "context identifier for the enclave socket (only for VSOCK)")
@@ -42,6 +43,10 @@ impl GetParserForOptions for HostParser {
 					.takes_value(true)
 					.required(false)
 					.forbids(vec![USOCK])
+			)
+			.token(
+				Token::new(ENCLAVE_EGRESS, "run in enclave egress mode (within enclave)")
+					.takes_value(false)
 			)
 	}
 }
@@ -68,6 +73,11 @@ impl HostOpts {
 			.clone()
 	}
 
+	/// Wether to run in enclave-egress mode (e.g. in enclave egress bridge)
+	pub fn enclave_egress(&self) -> bool {
+		self.parsed.flag(ENCLAVE_EGRESS).unwrap_or(false)
+	}
+
 	/// overrides the host portion of the bridge with given port, ignoring the manifest value
 	/// NOTE: used for localhost testing, since we can't bind the same port twice
 	pub fn host_port_override(&self) -> Option<u16> {
@@ -90,6 +100,15 @@ impl HostOpts {
 
 			_ => panic!("Invalid socket opts"),
 		}
+	}
+
+	#[cfg(feature = "egress")]
+	fn cid(&self) -> u32 {
+		self.parsed
+			.single(CID)
+			.expect("no cid provided")
+			.parse()
+			.expect("unable to parse cid")
 	}
 
 	#[cfg(not(target_os = "macos"))]
@@ -129,6 +148,18 @@ impl Cli {
 			println!("version: {}", env!("CARGO_PKG_VERSION"));
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
+		} else if options.enclave_egress() {
+			#[cfg(feature = "egress")]
+			qos_core::egress::enclave_egress(
+				options.cid(),
+				qos_core::egress::EGRESS_VSOCK_PORT,
+				options.to_host_flag(),
+			);
+
+			#[cfg(not(feature = "egress"))]
+			panic!(
+				"unable to run enclave-egress without egress feature enabled"
+			);
 		} else {
 			crate::host::BridgeServer::new(
 				options

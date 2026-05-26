@@ -31,6 +31,12 @@ RUN --network=none cargo build ${CARGOFLAGS}
 RUN cp target/x86_64-unknown-linux-musl/release/init /
 RUN file /init | grep "static-pie"
 
+FROM base AS build-qos-bridge
+WORKDIR /qos/src/qos_bridge
+RUN --network=none cargo build --features vm ${CARGOFLAGS}
+RUN cp ../../target/x86_64-unknown-linux-musl/release/qos_bridge /
+RUN file /qos_bridge | grep "static-pie"
+
 FROM base AS build-eif
 WORKDIR /build_cpio
 COPY --from=eif_build . /
@@ -39,6 +45,7 @@ COPY --from=libunwind . /
 COPY --from=gen_initramfs . /
 COPY --from=build-init /init .
 COPY --from=linux-nitro /nsm.ko .
+COPY --from=build-qos-bridge /qos_bridge .
 COPY <<-EOF initramfs.list
 	file /init     init    0755 0 0
 	file /nsm.ko   nsm.ko  0755 0 0
@@ -58,6 +65,7 @@ COPY <<-EOF initramfs.list
 	dir  /dev/pts          0755 0 0
 	nod  /dev/console      0600 0 0 c 5 1
 	file /usr/sbin/ip      /usr/sbin/ip     0700 0 0
+	file /qos_bridge       /qos_bridge      0700 0 0
 	file /lib/ld-musl-x86  /usr/lib/ld-musl-x86_64.so.1                   0700 0 0
 	file /usr/lib/libc.musl-x86_64.so.1 /usr/lib/libc.musl-x86_64.so.1    0644 0 0
 EOF
