@@ -270,21 +270,15 @@ pub fn run_ip(args: &str, fail_str: &str) {
 	assert!(ip_exit.success(), "{}", fail_str);
 }
 
-/// run a statically linked program and return the `Child` handle
-/// # Errors
-/// returns `std::io::Error` in case of process creation problems
-pub fn run_static(cmd_path: &str, args: &str) -> std::io::Result<Child> {
-	Command::new(cmd_path).env_clear().args(args.split(' ')).spawn()
-}
-
 /// run a statically linked program in a loop
 pub fn run_looping(cmd_path: &str, args: &str) {
 	let cmd_path = cmd_path.to_owned();
-	let args = args.to_owned();
+	let args: Vec<String> =
+		args.split_whitespace().map(str::to_string).collect();
 
 	std::thread::spawn(move || {
 		loop {
-			match run_static(&cmd_path, &args) {
+			match Command::new(&cmd_path).env_clear().args(&args).spawn() {
 				Ok(mut child) => {
 					let exit = child.wait(); // try to wait, restart  in any case
 					eprintln!("process {cmd_path} exit {exit:?}");
