@@ -11,7 +11,7 @@ use qos_core::{
 const CONTROL_URL: &str = "control-url";
 const HOST_PORT_OVERRIDE: &str = "host-port-override";
 const VSOCK_TO_HOST: &str = "vsock-to-host";
-const ENCLAVE_EGRESS: &str = "enclave-egress";
+const EGRESS_HOST: &str = "egress-host";
 
 struct HostParser;
 impl GetParserForOptions for HostParser {
@@ -45,7 +45,7 @@ impl GetParserForOptions for HostParser {
 					.forbids(vec![USOCK])
 			)
 			.token(
-				Token::new(ENCLAVE_EGRESS, "run in enclave egress mode (within enclave)")
+				Token::new(EGRESS_HOST, "run in enclave egress in host mode")
 					.takes_value(false)
 			)
 	}
@@ -58,6 +58,7 @@ pub struct HostOpts {
 }
 
 impl HostOpts {
+	#[must_use]
 	fn new(args: &mut Vec<String>) -> Self {
 		let parsed = OptionsParser::<HostParser>::parse(args)
 			.expect("Entered invalid CLI args");
@@ -66,6 +67,9 @@ impl HostOpts {
 	}
 
 	/// The qos-host URL
+	/// # Panics
+	/// Panics if no control-url is provided
+	#[must_use]
 	pub fn control_url(&self) -> String {
 		self.parsed
 			.single(CONTROL_URL)
@@ -73,13 +77,15 @@ impl HostOpts {
 			.clone()
 	}
 
-	/// Wether to run in enclave-egress mode (e.g. in enclave egress bridge)
-	pub fn enclave_egress(&self) -> bool {
-		self.parsed.flag(ENCLAVE_EGRESS).unwrap_or(false)
+	/// Wether to run in egress host mode (e.g. in qos bridge on the host)
+	#[must_use]
+	pub fn egress_host(&self) -> bool {
+		self.parsed.flag(EGRESS_HOST).unwrap_or(false)
 	}
 
 	/// overrides the host portion of the bridge with given port, ignoring the manifest value
 	/// NOTE: used for localhost testing, since we can't bind the same port twice
+	#[must_use]
 	pub fn host_port_override(&self) -> Option<u16> {
 		self.parsed.single(HOST_PORT_OVERRIDE).and_then(|v| v.parse().ok())
 	}
@@ -102,7 +108,7 @@ impl HostOpts {
 		}
 	}
 
-	#[cfg(feature = "egress")]
+	#[allow(unused)]
 	fn cid(&self) -> u32 {
 		self.parsed
 			.single(CID)
@@ -137,10 +143,10 @@ impl HostOpts {
 /// Host server command line interface.
 pub struct Cli;
 impl Cli {
-	/// Execute the command line interface.
+	/// Execute the commandline interface for `qos_bridge` egress
 	/// # Panics
-	/// If pool creation fails
-	pub async fn execute() {
+	/// panics on socket errors on wrong cli input
+	pub fn execute_egress() {
 		let mut args: Vec<String> = env::args().collect();
 		let options = HostOpts::new(&mut args);
 
@@ -148,7 +154,19 @@ impl Cli {
 			println!("version: {}", env!("CARGO_PKG_VERSION"));
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
-		} else if options.enclave_egress() {
+		} else if options.egress_host() {
+			#[cfg(feature = "egress")]
+			qos_core::egress::host_egress(
+				options.cid(),
+				qos_core::egress::EGRESS_VSOCK_PORT,
+				options.to_host_flag(),
+			);
+
+			#[cfg(not(feature = "egress"))]
+			panic!(
+				"unable to run enclave-egress without egress feature support"
+			);
+		} else {
 			#[cfg(feature = "egress")]
 			qos_core::egress::enclave_egress(
 				options.cid(),
@@ -158,8 +176,22 @@ impl Cli {
 
 			#[cfg(not(feature = "egress"))]
 			panic!(
-				"unable to run enclave-egress without egress feature enabled"
+				"unable to run enclave-egress without egress feature support"
 			);
+		}
+	}
+
+	/// Execute the command line interface for `qos_bridge` ingress host
+	/// # Panics
+	/// If pool creation fails, cli errors or if manifest parsing fails
+	pub async fn execute_ingress() {
+		let mut args: Vec<String> = env::args().collect();
+		let options = HostOpts::new(&mut args);
+
+		if options.parsed.version() {
+			println!("version: {}", env!("CARGO_PKG_VERSION"));
+		} else if options.parsed.help() {
+			println!("{}", options.parsed.info());
 		} else {
 			crate::host::BridgeServer::new(
 				options

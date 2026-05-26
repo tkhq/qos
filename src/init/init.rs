@@ -1,5 +1,4 @@
 use qos_core::{
-	egress::init_egress_tun,
 	handles::Handles,
 	io::{SocketAddress, VMADDR_NO_FLAGS},
 	reaper::Reaper,
@@ -57,7 +56,8 @@ fn boot() {
 	init_console();
 	init_platform();
 	init_localhost();
-	init_egress_tun();
+	#[cfg(feature = "egress")]
+	qos_core::egress::init_egress_tun();
 }
 
 #[tokio::main]

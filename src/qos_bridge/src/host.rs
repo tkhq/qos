@@ -19,6 +19,8 @@ pub struct BridgeServer {
 }
 
 impl BridgeServer {
+	/// Create a new `BridgeServer` with  the given core socket placeholder, `control_url` and override port for local running
+	#[must_use]
 	pub fn new(
 		socket_placeholder: SocketAddress,
 		control_url: String,
@@ -32,6 +34,8 @@ impl BridgeServer {
 	}
 
 	/// Start the host side of the bridge, taking configuration from the enclave
+	/// # Panics
+	/// Panics if enclave info response fails to parse
 	pub async fn serve(&self) {
 		loop {
 			match tokio::task::block_in_place(|| {

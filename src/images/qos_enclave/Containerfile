@@ -31,11 +31,11 @@ RUN --network=none cargo build ${CARGOFLAGS}
 RUN cp target/x86_64-unknown-linux-musl/release/init /
 RUN file /init | grep "static-pie"
 
-FROM base AS build-qos-bridge
+FROM base AS build-egress
 WORKDIR /qos/src/qos_bridge
-RUN --network=none cargo build --features vm ${CARGOFLAGS}
-RUN cp ../../target/x86_64-unknown-linux-musl/release/qos_bridge /
-RUN file /qos_bridge | grep "static-pie"
+RUN --network=none cargo build --features egress ${CARGOFLAGS} --bin egress
+RUN cp ../../target/x86_64-unknown-linux-musl/release/egress /egress
+RUN file /egress | grep "static-pie"
 
 FROM base AS build-eif
 WORKDIR /build_cpio
@@ -47,7 +47,7 @@ COPY --from=build-init /init .
 COPY --from=linux-nitro /nsm.ko .
 COPY --from=iproute2 . /
 COPY --from=musl . /
-COPY --from=build-qos-bridge /qos_bridge .
+COPY --from=build-egress /egress .
 COPY <<-EOF initramfs.list
 	file /init     init    0755 0 0
 	file /nsm.ko   nsm.ko  0755 0 0
@@ -66,7 +66,7 @@ COPY <<-EOF initramfs.list
 	dir  /dev/shm          0755 0 0
 	dir  /dev/pts          0755 0 0
 	nod  /dev/console      0600 0 0 c 5 1
-	file /qos_bridge       /qos_bridge      0700 0 0
+	file /egress           /egress          0700 0 0
 	file /usr/sbin/ip      /usr/sbin/ip     0700 0 0
 	file /lib/ld-musl-x86  /usr/lib/ld-musl-x86_64.so.1                   0700 0 0
 EOF

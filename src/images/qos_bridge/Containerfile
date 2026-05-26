@@ -4,8 +4,8 @@ ADD . /src
 FROM base AS build
 RUN <<-EOF
 	set -eux
-	cd /src && cargo build ${CARGOFLAGS} -p qos_bridge
-	cp /src/target/${TARGET}/release/qos_bridge /
+	cd /src && cargo build ${CARGOFLAGS} --features egress -p qos_bridge --bin ingress
+	cp /src/target/${TARGET}/release/ingress /qos_bridge
 	file /qos_bridge | grep "static-pie"
 EOF
 
