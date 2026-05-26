@@ -45,6 +45,8 @@ COPY --from=libunwind . /
 COPY --from=gen_initramfs . /
 COPY --from=build-init /init .
 COPY --from=linux-nitro /nsm.ko .
+COPY --from=iproute2 . /
+COPY --from=musl . /
 COPY --from=build-qos-bridge /qos_bridge .
 COPY <<-EOF initramfs.list
 	file /init     init    0755 0 0
@@ -64,10 +66,9 @@ COPY <<-EOF initramfs.list
 	dir  /dev/shm          0755 0 0
 	dir  /dev/pts          0755 0 0
 	nod  /dev/console      0600 0 0 c 5 1
-	file /usr/sbin/ip      /usr/sbin/ip     0700 0 0
 	file /qos_bridge       /qos_bridge      0700 0 0
+	file /usr/sbin/ip      /usr/sbin/ip     0700 0 0
 	file /lib/ld-musl-x86  /usr/lib/ld-musl-x86_64.so.1                   0700 0 0
-	file /usr/lib/libc.musl-x86_64.so.1 /usr/lib/libc.musl-x86_64.so.1    0644 0 0
 EOF
 ENV CPIO_TIMESTAMP=1
 ENV KBUILD_BUILD_TIMESTAMP=1

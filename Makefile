@@ -53,7 +53,7 @@ qemu-stop:
 /tmp/vhost4.socket:
 	vhost-device-vsock --vm guest-cid=4,forward-cid=1,forward-listen=9001,socket=/tmp/vhost4.socket &
 
-out/nitro.tar: Containerfile.qemu src/init/* /tmp/vhost4.socket
+out/nitro.tar: Containerfile.qemu src/init/* src/qos_core/Cargo.toml src/qos_core/src/**/*.rs /tmp/vhost4.socket
 	docker build -t qos-qemu-base -f Containerfile.qemu . --output type=tar,dest=out/nitro.tar
 
 out/nitro.eif: out/nitro.tar

@@ -5,6 +5,8 @@ FROM stagex/gen_initramfs:6.8@sha256:f5b9271cca6003e952cbbb9ef041ffa92ba328894f5
 #FROM stagex/linux-nitro:5.19.6@sha256:e6c8a861f9b18edfad56b1aa130feb822a25987c71e2b2932b020750dd7325bc AS linux-nitro
 FROM stagex/linux-nitro:sx2024.03.0@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eaea8866b002b04264 AS linux-nitro
 FROM stagex/core-libunwind:1.7.2@sha256:eb66122d8fc543f5e2f335bb1616f8c3a471604383e2c0a9df4a8e278505d3bc AS libunwind
+FROM stagex/iproute2:sx2024.11.0@sha256:65da03aa94d17dd6310b022f426a6cc8b3c55bb267e4bac1697bc57d6c850570 AS iproute2
+FROM stagex/musl:sx2024.11.0@sha256:d7f6c365f5724c65cadb2b96d9f594e46132ceb366174c89dbf7554897f2bc53 AS musl
 
 FROM ghcr.io/tkhq/base/rust:sha-bfaaeb25fd43e17468e6583208166fc7c4313226@sha256:9868bdab0b602a487ec9ea42995992ac0a381d7fc34d5ba9c41d14c18be716d2 AS build
 ADD . /src/
@@ -19,6 +21,12 @@ RUN cargo build ${CARGOFLAGS}
 RUN cp target/x86_64-unknown-linux-musl/release/init /
 RUN file /init | grep "static-pie"
 
+FROM build AS build-qos-bridge
+WORKDIR /src/src/qos_bridge
+RUN cargo build --features vm ${CARGOFLAGS}
+RUN cp ../../target/x86_64-unknown-linux-musl/release/qos_bridge /
+RUN file /qos_bridge | grep "static-pie"
+
 FROM build AS build-eif
 WORKDIR /build_cpio
 COPY --from=eif_build . /
@@ -26,6 +34,9 @@ COPY --from=gen_initramfs . /
 COPY --from=libunwind . /
 COPY --from=build-init /init .
 COPY --from=linux-nitro /nsm.ko .
+COPY --from=iproute2 . /
+COPY --from=musl . /
+COPY --from=build-qos-bridge /qos_bridge .
 COPY <<-EOF initramfs.list
 	file /init     init    0700 0 0
 	file /nsm.ko   nsm.ko  0600 0 0
@@ -45,6 +56,9 @@ COPY <<-EOF initramfs.list
 	dir  /dev/shm          0755 0 0
 	dir  /dev/pts          0755 0 0
 	nod  /dev/console      0600 0 0 c 5 1
+	file /qos_bridge       /qos_bridge      0700 0 0
+	file /usr/sbin/ip      /usr/sbin/ip     0700 0 0
+	file /lib/ld-musl-x86  /usr/lib/ld-musl-x86_64.so.1                   0700 0 0
 EOF
 ENV CPIO_TIMESTAMP=1
 ENV KBUILD_BUILD_TIMESTAMP=1
