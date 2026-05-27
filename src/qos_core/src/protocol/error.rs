@@ -44,8 +44,6 @@ pub enum ProtocolError {
 		/// Actual hash as hex string.
 		actual: String,
 	},
-	/// Pivot environment variables are invalid.
-	InvalidPivotEnv(String),
 	/// The message is too large.
 	OversizeMsg,
 	/// Message could not be deserialized
@@ -191,6 +189,8 @@ pub enum ProtocolError {
 	QosCrypto(String),
 	/// Error during expanding the `StreamPool`.
 	PoolExpandError,
+	/// Pivot environment variables are invalid.
+	InvalidPivotEnv(String),
 }
 
 impl From<std::io::Error> for ProtocolError {
