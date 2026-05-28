@@ -19,9 +19,9 @@ if ! ip link show dev host_egress >/dev/null 2>&1; then
 	ip tuntap add host_egress mode tun
 fi
 
-# assign 10.0.0.2/28 to host_egress to mask the martians
-if ! ip address show dev host_egress | grep -q "10.0.0.2/28"; then
-	ip address add 10.0.0.2/28 dev host_egress
+# assign 172.29.107.66/28 to host_egress to mask the martians
+if ! ip address show dev host_egress | grep -q "172.29.107.66/28"; then
+	ip address add 172.29.107.66/28 dev host_egress
 fi
 
 # bring the interface up
@@ -29,11 +29,10 @@ ip link set host_egress up
 
 # ensure forwarding is going to go through
 printf '1\n' > /proc/sys/net/ipv4/ip_forward
-iptables -P FORWARD ACCEPT
 
 # masquerade nat for egress
-if ! iptables -t nat -C POSTROUTING -s 10.0.0.1 -o "$DEFINT" -j MASQUERADE 2>/dev/null; then
-	iptables -t nat -I POSTROUTING -s 10.0.0.1 -o "$DEFINT" -j MASQUERADE
+if ! iptables -t nat -C POSTROUTING -s 172.29.107.65 -o eth0 -j MASQUERADE 2>/dev/null; then
+	iptables -t nat -I POSTROUTING -s 172.29.107.65 -o eth0 -j MASQUERADE
 fi
 
 # check it
