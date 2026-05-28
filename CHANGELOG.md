@@ -10,42 +10,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## `qos_client` - [0.8.1](https://github.com/tkhq/qos/compare/qos_client-v0.8.0...qos_client-v0.8.1) - 2026-05-28
 
 ### Fixed
-- *(qos_client)* use borsh by default when key forwarding with v1
+- Restored compatibility for key-forwarding and key-export flows that use v0/v1 manifest envelopes by trying the legacy Borsh protocol encoding first, then falling back to JSON. v2 manifest envelopes remain JSON-only. ([#718](https://github.com/tkhq/qos/pull/718))
 
-### Other
-- Merge pull-request #718
+### Security
+- Zeroized YubiKey PINs, Shamir split/reconstruct inputs, and decrypted plaintext handled by the CLI to reduce the lifetime of sensitive material in memory. ([#711](https://github.com/tkhq/qos/pull/711))
 
 ## `qos_core` - [0.8.1](https://github.com/tkhq/qos/compare/qos_core-v0.8.0...qos_core-v0.8.1) - 2026-05-28
 
 ### Fixed
-- *(qos_client)* use borsh by default when key forwarding with v1
+- Preserved the legacy Borsh discriminant for `ProtocolError::ProtocolMsgDeserialization` by moving the newer `InvalidPivotEnv` variant to the end of the enum. ([#718](https://github.com/tkhq/qos/pull/718))
 
-### Other
-- Merge pull-request #718
+### Security
+- Zeroized quorum key material, decrypted key shares, and reconstructed Shamir secrets during genesis, provisioning, and key-injection flows. ([#711](https://github.com/tkhq/qos/pull/711))
 
 ## `qos_p256` - [0.8.1](https://github.com/tkhq/qos/compare/qos_p256-v0.8.0...qos_p256-v0.8.1) - 2026-05-28
 
-### Other
-- *(qos_p256)* derive_secret + EncryptPair/SignPair from_bytes take Zeroize wrappers
-- *(qos_p256)* from_master_seed takes &Zeroizing<[u8; MASTER_SEED_LEN]>
-- *(qos)* use zeroize wrappers in function signatures (SYS-94)
+### Changed
+- Updated P256 secret-handling APIs to accept or return `Zeroizing` wrappers for master seeds, derived signing/encryption secrets, and decrypted plaintext. ([#711](https://github.com/tkhq/qos/pull/711))
 
 ## `qos_crypto` - [0.8.1](https://github.com/tkhq/qos/compare/qos_crypto-v0.8.0...qos_crypto-v0.8.1) - 2026-05-28
 
+### Changed
+- Updated Shamir secret-sharing helpers so generated shares and reconstructed secrets are wrapped in `Zeroizing`, while retaining compatibility with existing share data. ([#711](https://github.com/tkhq/qos/pull/711))
+
+## `qos_hex` - [0.8.1](https://github.com/tkhq/qos/compare/qos_hex-v0.8.0...qos_hex-v0.8.1) - 2026-05-28
+
 ### Other
-- *(qos)* cargo fmt
-- *(qos)* remove added comments per review
-- *(qos)* use zeroize wrappers in function signatures (SYS-94)
+- No user-facing changes; released as part of the coordinated `0.8.1` workspace version.
 
-## `qos_client` - [0.8.1](https://github.com/tkhq/qos/compare/qos_client-v0.8.0...qos_client-v0.8.1) - 2026-05-27
+## `qos_net` - [0.8.1](https://github.com/tkhq/qos/compare/qos_net-v0.8.0...qos_net-v0.8.1) - 2026-05-28
 
-### Fixed
-- Prefer legacy Borsh wire encoding for key-forwarding and key-export requests with v0/v1 manifest envelopes, falling back to JSON while keeping v2 manifest envelopes JSON-only.
+### Other
+- No user-facing changes; released as part of the coordinated `0.8.1` workspace version.
 
-## `qos_core` - [0.8.1](https://github.com/tkhq/qos/compare/qos_core-v0.8.0...qos_core-v0.8.1) - 2026-05-27
+## `qos_nsm` - [0.8.1](https://github.com/tkhq/qos/compare/qos_nsm-v0.8.0...qos_nsm-v0.8.1) - 2026-05-28
 
-### Fixed
-- Preserved the legacy Borsh discriminant for `ProtocolError::ProtocolMsgDeserialization` by moving the newer `InvalidPivotEnv` variant to the end of the enum.
+### Other
+- No user-facing changes; released as part of the coordinated `0.8.1` workspace version.
+
+## `qos_test_primitives` - [0.8.1](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.8.0...qos_test_primitives-v0.8.1) - 2026-05-28
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.8.1` workspace version.
+
+## `qos_json` - [0.8.1](https://github.com/tkhq/qos/compare/qos_json-v0.8.0...qos_json-v0.8.1) - 2026-05-28
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.8.1` workspace version.
 
 ## `qos_client` - [0.8.0](https://github.com/tkhq/qos/compare/qos_client-v0.7.0...qos_client-v0.8.0) - 2026-05-17
 
