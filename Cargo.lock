@@ -1241,19 +1241,19 @@ dependencies = [
 
 [[package]]
 name = "integration"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "borsh",
  "futures",
  "nix 0.30.1",
  "qos_core 0.7.0",
- "qos_core 0.8.0",
- "qos_crypto 0.8.0",
- "qos_hex 0.8.0",
+ "qos_core 0.8.1",
+ "qos_crypto 0.8.1",
+ "qos_hex 0.8.1",
  "qos_host",
  "qos_net",
- "qos_nsm 0.8.0",
- "qos_p256 0.8.0",
+ "qos_nsm 0.8.1",
+ "qos_p256 0.8.1",
  "qos_test_primitives",
  "rand 0.9.4",
  "rustls",
@@ -1876,12 +1876,12 @@ dependencies = [
 
 [[package]]
 name = "qos_bridge"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
- "qos_core 0.8.0",
- "qos_hex 0.8.0",
+ "qos_core 0.8.1",
+ "qos_hex 0.8.1",
  "qos_host",
- "qos_nsm 0.8.0",
+ "qos_nsm 0.8.1",
  "serde",
  "serde_json",
  "tokio",
@@ -1890,19 +1890,19 @@ dependencies = [
 
 [[package]]
 name = "qos_client"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "der",
  "lazy_static",
  "p256",
- "qos_core 0.8.0",
- "qos_crypto 0.8.0",
- "qos_hex 0.8.0",
+ "qos_core 0.8.1",
+ "qos_crypto 0.8.1",
+ "qos_hex 0.8.1",
  "qos_json",
- "qos_nsm 0.8.0",
- "qos_p256 0.8.0",
+ "qos_nsm 0.8.1",
+ "qos_p256 0.8.1",
  "qos_test_primitives",
  "rand_core 0.9.3",
  "rpassword",
@@ -1937,18 +1937,18 @@ dependencies = [
 
 [[package]]
 name = "qos_core"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "futures",
  "libc",
  "nix 0.30.1",
- "qos_crypto 0.8.0",
- "qos_hex 0.8.0",
+ "qos_crypto 0.8.1",
+ "qos_hex 0.8.1",
  "qos_json",
- "qos_nsm 0.8.0",
- "qos_p256 0.8.0",
+ "qos_nsm 0.8.1",
+ "qos_p256 0.8.1",
  "qos_test_primitives",
  "rustls",
  "serde",
@@ -1974,9 +1974,9 @@ dependencies = [
 
 [[package]]
 name = "qos_crypto"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
- "qos_hex 0.8.0",
+ "qos_hex 0.8.1",
  "rand 0.9.4",
  "sha2",
  "thiserror 2.0.17",
@@ -1990,7 +1990,7 @@ version = "0.0.0"
 dependencies = [
  "arbitrary",
  "libfuzzer-sys",
- "qos_crypto 0.8.0",
+ "qos_crypto 0.8.1",
  "zeroize",
 ]
 
@@ -2005,20 +2005,20 @@ dependencies = [
 
 [[package]]
 name = "qos_hex"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "qos_host"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "axum",
  "borsh",
- "qos_core 0.8.0",
- "qos_hex 0.8.0",
- "qos_nsm 0.8.0",
+ "qos_core 0.8.1",
+ "qos_hex 0.8.1",
+ "qos_nsm 0.8.1",
  "serde",
  "serde_json",
  "tokio",
@@ -2026,9 +2026,9 @@ dependencies = [
 
 [[package]]
 name = "qos_json"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
- "qos_hex 0.8.0",
+ "qos_hex 0.8.1",
  "serde",
  "serde_json",
  "sha2",
@@ -2036,14 +2036,14 @@ dependencies = [
 
 [[package]]
 name = "qos_net"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "borsh",
  "chunked_transfer",
  "futures",
  "hickory-resolver",
  "httparse",
- "qos_core 0.8.0",
+ "qos_core 0.8.1",
  "qos_test_primitives",
  "rand 0.9.4",
  "rustls",
@@ -2082,14 +2082,14 @@ dependencies = [
 
 [[package]]
 name = "qos_nsm"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "aws-nitro-enclaves-cose",
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "hex-literal",
  "p384",
- "qos_hex 0.8.0",
+ "qos_hex 0.8.1",
  "qos_json",
  "serde",
  "serde_bytes",
@@ -2103,8 +2103,8 @@ name = "qos_nsm_fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
- "qos_hex 0.8.0",
- "qos_nsm 0.8.0",
+ "qos_hex 0.8.1",
+ "qos_nsm 0.8.1",
 ]
 
 [[package]]
@@ -2125,14 +2125,14 @@ dependencies = [
 
 [[package]]
 name = "qos_p256"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "aes-gcm",
  "borsh",
  "hkdf",
  "hmac",
  "p256",
- "qos_hex 0.8.0",
+ "qos_hex 0.8.1",
  "qos_test_primitives",
  "serde",
  "sha2",
@@ -2145,13 +2145,13 @@ version = "0.0.0"
 dependencies = [
  "arbitrary",
  "libfuzzer-sys",
- "qos_p256 0.8.0",
+ "qos_p256 0.8.1",
  "zeroize",
 ]
 
 [[package]]
 name = "qos_test_primitives"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "nix 0.30.1",
  "rand 0.9.4",

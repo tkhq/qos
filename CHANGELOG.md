@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.8.1](https://github.com/tkhq/qos/compare/qos_client-v0.8.0...qos_client-v0.8.1) - 2026-05-28
+
+### Fixed
+- *(qos_client)* use borsh by default when key forwarding with v1
+
+### Other
+- Merge pull-request #718
+
+## `qos_core` - [0.8.1](https://github.com/tkhq/qos/compare/qos_core-v0.8.0...qos_core-v0.8.1) - 2026-05-28
+
+### Fixed
+- *(qos_client)* use borsh by default when key forwarding with v1
+
+### Other
+- Merge pull-request #718
+
+## `qos_p256` - [0.8.1](https://github.com/tkhq/qos/compare/qos_p256-v0.8.0...qos_p256-v0.8.1) - 2026-05-28
+
+### Other
+- *(qos_p256)* derive_secret + EncryptPair/SignPair from_bytes take Zeroize wrappers
+- *(qos_p256)* from_master_seed takes &Zeroizing<[u8; MASTER_SEED_LEN]>
+- *(qos)* use zeroize wrappers in function signatures (SYS-94)
+
+## `qos_crypto` - [0.8.1](https://github.com/tkhq/qos/compare/qos_crypto-v0.8.0...qos_crypto-v0.8.1) - 2026-05-28
+
+### Other
+- *(qos)* cargo fmt
+- *(qos)* remove added comments per review
+- *(qos)* use zeroize wrappers in function signatures (SYS-94)
+
 ## `qos_client` - [0.8.1](https://github.com/tkhq/qos/compare/qos_client-v0.8.0...qos_client-v0.8.1) - 2026-05-27
 
 ### Fixed
