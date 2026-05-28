@@ -14,6 +14,7 @@ use qos_core::protocol::{
 	},
 };
 use qos_core_legacy::protocol::{
+	ProtocolError as LegacyProtocolError,
 	msg::ProtocolMsg as LegacyProtocolMsg,
 	services::boot::{
 		Manifest as LegacyManifest, ManifestEnvelope as LegacyManifestEnvelope,
@@ -139,6 +140,22 @@ fn legacy_protocol_error_response_decodes() {
 		ProtocolError::InvalidMsg,
 	));
 	assert!(matches!(decoded, LegacyProtocolMsg::ProtocolErrorResponse(_)));
+}
+
+#[test]
+fn legacy_protocol_msg_deserialization_discriminant_is_stable() {
+	let legacy = LegacyProtocolMsg::ProtocolErrorResponse(
+		LegacyProtocolError::ProtocolMsgDeserialization,
+	);
+	let bytes = borsh::to_vec(&legacy).unwrap();
+	let decoded = CurrentProtocolMsg::try_from_slice(&bytes).unwrap();
+
+	assert!(matches!(
+		decoded,
+		CurrentProtocolMsg::ProtocolErrorResponse(
+			ProtocolError::ProtocolMsgDeserialization
+		)
+	));
 }
 
 #[test]

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.8.1](https://github.com/tkhq/qos/compare/qos_client-v0.8.0...qos_client-v0.8.1) - 2026-05-27
+
+### Fixed
+- Prefer legacy Borsh wire encoding for key-forwarding and key-export requests with v0/v1 manifest envelopes, falling back to JSON while keeping v2 manifest envelopes JSON-only.
+
+## `qos_core` - [0.8.1](https://github.com/tkhq/qos/compare/qos_core-v0.8.0...qos_core-v0.8.1) - 2026-05-27
+
+### Fixed
+- Preserved the legacy Borsh discriminant for `ProtocolError::ProtocolMsgDeserialization` by moving the newer `InvalidPivotEnv` variant to the end of the enum.
+
 ## `qos_client` - [0.8.0](https://github.com/tkhq/qos/compare/qos_client-v0.7.0...qos_client-v0.8.0) - 2026-05-17
 
 ### Added

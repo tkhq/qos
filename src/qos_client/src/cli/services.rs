@@ -9,7 +9,7 @@ use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::BorshDeserialize;
 use qos_core::protocol::{
 	QosHash,
-	msg::{JsonBytes, ProtocolMsg},
+	msg::{JsonBytes, ProtocolMsg, ProtocolMsgEncoding},
 	services::{
 		boot::{
 			Approval, BridgeConfig, Manifest as ManifestV1,
@@ -1197,19 +1197,22 @@ pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
 		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
 	let manifest_envelope =
 		read_manifest_envelope_compat(manifest_envelope_path)?;
+	let encodings = manifest_envelope_protocol_encodings(&manifest_envelope);
 
 	let req = ProtocolMsg::BootKeyForwardRequest {
 		manifest_envelope: Box::new(manifest_envelope),
 		pivot,
 	};
-	let cose_sign1 = match request::post(uri, &req).unwrap() {
-		ProtocolMsg::BootKeyForwardResponse {
-			nsm_response: NsmResponse::Attestation { document },
-		} => document,
-		r => {
-			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")));
-		}
-	};
+	let cose_sign1 =
+		post_request_with_encoding_fallback(uri, &req, encodings, |resp| {
+			match resp {
+				ProtocolMsg::BootKeyForwardResponse {
+					nsm_response: NsmResponse::Attestation { document },
+				} => Ok(document),
+				r => Err(format!("{r:?}")),
+			}
+		})
+		.map_err(Error::UnexpectedProtocolMsgResponse)?;
 
 	write_with_msg(
 		attestation_doc_path.as_ref(),
@@ -1228,6 +1231,7 @@ pub(crate) fn export_key<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	let manifest_envelope =
 		read_manifest_envelope_compat(manifest_envelope_path)?;
+	let encodings = manifest_envelope_protocol_encodings(&manifest_envelope);
 	let cose_sign1_attestation_doc = fs::read(attestation_doc_path.as_ref())
 		.map_err(Error::FailedToReadAttestationDoc)?;
 
@@ -1236,14 +1240,17 @@ pub(crate) fn export_key<P: AsRef<Path>>(
 		cose_sign1_attestation_doc,
 	};
 
-	let encrypted_quorum_key = match request::post(uri, &req).unwrap() {
-		ProtocolMsg::ExportKeyResponse { encrypted_quorum_key, signature } => {
-			EncryptedQuorumKey { encrypted_quorum_key, signature }
-		}
-		r => {
-			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")));
-		}
-	};
+	let encrypted_quorum_key =
+		post_request_with_encoding_fallback(uri, &req, encodings, |resp| {
+			match resp {
+				ProtocolMsg::ExportKeyResponse {
+					encrypted_quorum_key,
+					signature,
+				} => Ok(EncryptedQuorumKey { encrypted_quorum_key, signature }),
+				r => Err(format!("{r:?}")),
+			}
+		})
+		.map_err(Error::UnexpectedProtocolMsgResponse)?;
 
 	write_with_msg(
 		encrypted_quorum_key_path.as_ref(),
@@ -1252,6 +1259,53 @@ pub(crate) fn export_key<P: AsRef<Path>>(
 	);
 
 	Ok(())
+}
+
+fn post_request_with_encoding_fallback<T, F>(
+	uri: &str,
+	req: &ProtocolMsg,
+	encodings: &[ProtocolMsgEncoding],
+	parse: F,
+) -> Result<T, String>
+where
+	F: Fn(ProtocolMsg) -> Result<T, String>,
+{
+	let mut errors = vec![];
+
+	for &encoding in encodings {
+		match post_request_with_encoding(uri, req, encoding) {
+			Ok(resp) => match parse(resp) {
+				Ok(value) => return Ok(value),
+				Err(err) => errors
+					.push(format!("{encoding:?}: unexpected response {err}")),
+			},
+			Err(err) => errors.push(format!("{encoding:?}: {err}")),
+		}
+	}
+
+	Err(errors.join("; "))
+}
+
+fn post_request_with_encoding(
+	uri: &str,
+	req: &ProtocolMsg,
+	encoding: ProtocolMsgEncoding,
+) -> Result<ProtocolMsg, String> {
+	match encoding {
+		ProtocolMsgEncoding::Borsh => request::post_borsh(uri, req),
+		ProtocolMsgEncoding::Json => request::post(uri, req),
+	}
+}
+
+fn manifest_envelope_protocol_encodings(
+	manifest_envelope: &VersionedManifestEnvelope,
+) -> &'static [ProtocolMsgEncoding] {
+	match manifest_envelope {
+		VersionedManifestEnvelope::V2(_) => &[ProtocolMsgEncoding::Json],
+		VersionedManifestEnvelope::V1(_) | VersionedManifestEnvelope::V0(_) => {
+			&[ProtocolMsgEncoding::Borsh, ProtocolMsgEncoding::Json]
+		}
+	}
 }
 
 pub(crate) fn inject_key<P: AsRef<Path>>(
@@ -2521,10 +2575,12 @@ mod tests {
 
 	use qos_core::protocol::{
 		QosHash,
+		msg::ProtocolMsgEncoding,
 		services::boot::{
-			Approval, Manifest, ManifestEnvelope, ManifestSet, MemberPubKey,
-			Namespace, NitroConfig, PatchSet, PivotConfig, QuorumMember,
-			RestartPolicy, ShareSet, VersionedManifest,
+			Approval, Manifest, ManifestEnvelope, ManifestEnvelopeV2,
+			ManifestSet, ManifestV2, ManifestVersion, MemberPubKey, Namespace,
+			NitroConfig, PatchSet, PivotConfig, PivotConfigV2, PivotEnv,
+			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
 			VersionedManifestEnvelope,
 		},
 	};
@@ -2670,6 +2726,43 @@ mod tests {
 			VersionedManifestEnvelope::V1(envelope) => envelope,
 			_ => panic!("expected v1 manifest envelope in test setup"),
 		}
+	}
+
+	#[test]
+	fn manifest_envelope_protocol_encodings_try_v1_borsh_first() {
+		let Setup { manifest_envelope, .. } = setup();
+		let manifest =
+			v1_manifest_envelope(&manifest_envelope).manifest.clone();
+
+		assert_eq!(
+			super::manifest_envelope_protocol_encodings(&manifest_envelope),
+			[ProtocolMsgEncoding::Borsh, ProtocolMsgEncoding::Json]
+		);
+
+		let v2_envelope = VersionedManifestEnvelope::V2(ManifestEnvelopeV2 {
+			manifest: ManifestV2 {
+				version: ManifestVersion::V2,
+				namespace: manifest.namespace,
+				pivot: PivotConfigV2 {
+					hash: manifest.pivot.hash,
+					restart: manifest.pivot.restart,
+					bridge_config: manifest.pivot.bridge_config,
+					debug_mode: manifest.pivot.debug_mode,
+					args: manifest.pivot.args,
+					env: PivotEnv::new(),
+				},
+				manifest_set: manifest.manifest_set,
+				share_set: manifest.share_set,
+				enclave: manifest.enclave,
+			},
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		});
+
+		assert_eq!(
+			super::manifest_envelope_protocol_encodings(&v2_envelope),
+			[ProtocolMsgEncoding::Json]
+		);
 	}
 
 	mod approve_manifest_programmatic_verifications {
