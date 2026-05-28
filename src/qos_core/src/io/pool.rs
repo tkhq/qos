@@ -282,7 +282,7 @@ impl SocketAddress {
 					Err(IOError::PoolError(PoolError::InvalidSourceAddress))
 				}
 			},
-			#[cfg(feature = "vm")]
+			#[cfg(not(target_os = "macos"))]
 			Self::Vsock(vsock) => Ok(Self::new_vsock(
 				vsock.cid(),
 				vsock.port() + 1,

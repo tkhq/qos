@@ -59,13 +59,16 @@ impl ProxyOpts {
 			self.parsed.single(PORT),
 			self.parsed.single(USOCK),
 		) {
-			#[cfg(feature = "vm")]
+			#[cfg(not(target_os = "macos"))]
 			(Some(c), Some(p), None) => {
 				let c = c.parse::<u32>().unwrap();
 				let p = p.parse::<u32>().unwrap();
 
-				let address =
-					SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS);
+				let address = SocketAddress::new_vsock(
+					c,
+					p,
+					qos_core::io::VMADDR_NO_FLAGS,
+				);
 
 				StreamPool::new(address, pool_size)
 			}
@@ -242,18 +245,16 @@ mod test {
 	}
 
 	#[test]
-	#[cfg(feature = "vm")]
+	#[cfg(not(target_os = "macos"))]
 	fn build_vsock() {
 		let mut args: Vec<_> = vec!["binary", "--cid", "6", "--port", "3999"]
 			.into_iter()
 			.map(String::from)
 			.collect();
-		let opts = EnclaveOpts::new(&mut args);
+		let opts = ProxyOpts::new(&mut args);
 
-		assert_eq!(
-			opts.addr(),
-			SocketAddress::new_vsock(6, 3999, crate::io::VMADDR_NO_FLAGS)
-		);
+		let pool = opts.async_pool().unwrap();
+		assert_eq!(pool.len(), 1);
 	}
 
 	#[test]

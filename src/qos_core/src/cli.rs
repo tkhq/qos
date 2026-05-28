@@ -48,14 +48,14 @@ impl EnclaveOpts {
 	}
 
 	/// Create a new `StreamSocket` for the qos host.
-	#[cfg_attr(not(feature = "vm"), allow(clippy::unnecessary_wraps))]
+	#[cfg_attr(target_os = "macos", allow(clippy::unnecessary_wraps))]
 	fn enclave_socket(&self) -> Result<SocketAddress, IOError> {
 		match (
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
 			self.parsed.single(USOCK),
 		) {
-			#[cfg(feature = "vm")]
+			#[cfg(not(target_os = "macos"))]
 			(Some(c), Some(p), None) => {
 				let c =
 					c.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
@@ -331,7 +331,7 @@ mod test {
 	}
 
 	#[test]
-	#[cfg(feature = "vm")]
+	#[cfg(not(target_os = "macos"))]
 	fn build_vsock() {
 		let mut args: Vec<_> = vec!["binary", "--cid", "6", "--port", "3999"]
 			.into_iter()

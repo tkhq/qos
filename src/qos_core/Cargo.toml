@@ -43,7 +43,5 @@ rustls = { workspace = true }
 webpki-roots = { workspace = true }
 
 [features]
-# Support for VSOCK
-vm = []
 # Never use in production - support for mock NSM
 mock = ["qos_nsm/mock"]
