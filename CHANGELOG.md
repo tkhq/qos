@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## `qos_core` - [0.9.0](https://github.com/tkhq/qos/compare/qos_core-v0.8.0...qos_core-v0.9.0) - 2026-05-28
 
+### Changed
+- [**breaking**] Removed the `vm` Cargo feature flag and now select vsock-vs-Unix-socket behavior from the compile target: macOS builds use Unix sockets and non-macOS builds use vsock. ([#714](https://github.com/tkhq/qos/pull/714))
+
 ### Fixed
 - Preserved the legacy Borsh discriminant for `ProtocolError::ProtocolMsgDeserialization` by moving the newer `InvalidPivotEnv` variant to the end of the enum. ([#718](https://github.com/tkhq/qos/pull/718))
 
@@ -40,8 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## `qos_net` - [0.9.0](https://github.com/tkhq/qos/compare/qos_net-v0.8.0...qos_net-v0.9.0) - 2026-05-28
 
-### Other
-- No user-facing changes; released as part of the coordinated `0.9.0` workspace version.
+### Changed
+- [**breaking**] Removed the `vm` Cargo feature flag and now select macOS-compatible local socket behavior from `target_os = "macos"` at compile time. ([#714](https://github.com/tkhq/qos/pull/714))
 
 ## `qos_nsm` - [0.9.0](https://github.com/tkhq/qos/compare/qos_nsm-v0.8.0...qos_nsm-v0.9.0) - 2026-05-28
 
