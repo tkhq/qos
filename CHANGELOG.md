@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## `qos_client` - [0.8.1](https://github.com/tkhq/qos/compare/qos_client-v0.8.0...qos_client-v0.8.1) - 2026-05-28
+## `qos_client` - [0.9.0](https://github.com/tkhq/qos/compare/qos_client-v0.8.0...qos_client-v0.9.0) - 2026-05-28
 
 ### Fixed
 - Restored compatibility for key-forwarding and key-export flows that use v0/v1 manifest envelopes by trying the legacy Borsh protocol encoding first, then falling back to JSON. v2 manifest envelopes remain JSON-only. ([#718](https://github.com/tkhq/qos/pull/718))
@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - Zeroized YubiKey PINs, Shamir split/reconstruct inputs, and decrypted plaintext handled by the CLI to reduce the lifetime of sensitive material in memory. ([#711](https://github.com/tkhq/qos/pull/711))
 
-## `qos_core` - [0.8.1](https://github.com/tkhq/qos/compare/qos_core-v0.8.0...qos_core-v0.8.1) - 2026-05-28
+## `qos_core` - [0.9.0](https://github.com/tkhq/qos/compare/qos_core-v0.8.0...qos_core-v0.9.0) - 2026-05-28
 
 ### Fixed
 - Preserved the legacy Borsh discriminant for `ProtocolError::ProtocolMsgDeserialization` by moving the newer `InvalidPivotEnv` variant to the end of the enum. ([#718](https://github.com/tkhq/qos/pull/718))
@@ -23,40 +23,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - Zeroized quorum key material, decrypted key shares, and reconstructed Shamir secrets during genesis, provisioning, and key-injection flows. ([#711](https://github.com/tkhq/qos/pull/711))
 
-## `qos_p256` - [0.8.1](https://github.com/tkhq/qos/compare/qos_p256-v0.8.0...qos_p256-v0.8.1) - 2026-05-28
+## `qos_p256` - [0.9.0](https://github.com/tkhq/qos/compare/qos_p256-v0.8.0...qos_p256-v0.9.0) - 2026-05-28
 
 ### Changed
 - Updated P256 secret-handling APIs to accept or return `Zeroizing` wrappers for master seeds, derived signing/encryption secrets, and decrypted plaintext. ([#711](https://github.com/tkhq/qos/pull/711))
 
-## `qos_crypto` - [0.8.1](https://github.com/tkhq/qos/compare/qos_crypto-v0.8.0...qos_crypto-v0.8.1) - 2026-05-28
+## `qos_crypto` - [0.9.0](https://github.com/tkhq/qos/compare/qos_crypto-v0.8.0...qos_crypto-v0.9.0) - 2026-05-28
 
 ### Changed
 - Updated Shamir secret-sharing helpers so generated shares and reconstructed secrets are wrapped in `Zeroizing`, while retaining compatibility with existing share data. ([#711](https://github.com/tkhq/qos/pull/711))
 
-## `qos_hex` - [0.8.1](https://github.com/tkhq/qos/compare/qos_hex-v0.8.0...qos_hex-v0.8.1) - 2026-05-28
+## `qos_hex` - [0.9.0](https://github.com/tkhq/qos/compare/qos_hex-v0.8.0...qos_hex-v0.9.0) - 2026-05-28
 
 ### Other
-- No user-facing changes; released as part of the coordinated `0.8.1` workspace version.
+- No user-facing changes; released as part of the coordinated `0.9.0` workspace version.
 
-## `qos_net` - [0.8.1](https://github.com/tkhq/qos/compare/qos_net-v0.8.0...qos_net-v0.8.1) - 2026-05-28
-
-### Other
-- No user-facing changes; released as part of the coordinated `0.8.1` workspace version.
-
-## `qos_nsm` - [0.8.1](https://github.com/tkhq/qos/compare/qos_nsm-v0.8.0...qos_nsm-v0.8.1) - 2026-05-28
+## `qos_net` - [0.9.0](https://github.com/tkhq/qos/compare/qos_net-v0.8.0...qos_net-v0.9.0) - 2026-05-28
 
 ### Other
-- No user-facing changes; released as part of the coordinated `0.8.1` workspace version.
+- No user-facing changes; released as part of the coordinated `0.9.0` workspace version.
 
-## `qos_test_primitives` - [0.8.1](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.8.0...qos_test_primitives-v0.8.1) - 2026-05-28
-
-### Other
-- No user-facing changes; released as part of the coordinated `0.8.1` workspace version.
-
-## `qos_json` - [0.8.1](https://github.com/tkhq/qos/compare/qos_json-v0.8.0...qos_json-v0.8.1) - 2026-05-28
+## `qos_nsm` - [0.9.0](https://github.com/tkhq/qos/compare/qos_nsm-v0.8.0...qos_nsm-v0.9.0) - 2026-05-28
 
 ### Other
-- No user-facing changes; released as part of the coordinated `0.8.1` workspace version.
+- No user-facing changes; released as part of the coordinated `0.9.0` workspace version.
+
+## `qos_test_primitives` - [0.9.0](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.8.0...qos_test_primitives-v0.9.0) - 2026-05-28
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.9.0` workspace version.
+
+## `qos_json` - [0.9.0](https://github.com/tkhq/qos/compare/qos_json-v0.8.0...qos_json-v0.9.0) - 2026-05-28
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.9.0` workspace version.
 
 ## `qos_client` - [0.8.0](https://github.com/tkhq/qos/compare/qos_client-v0.7.0...qos_client-v0.8.0) - 2026-05-17
 
