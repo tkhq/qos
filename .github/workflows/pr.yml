@@ -18,7 +18,7 @@ jobs:
       - name: Run tests
         run: make -C src test
       - name: Run legacy protocol compat tests
-        run: cargo test -p integration --features legacy-protocol-compat --test protocol_legacy_decode
+        run: cargo test --locked -p integration --features legacy-protocol-compat --test protocol_legacy_decode
 
   lint:
     name: lint
@@ -64,7 +64,7 @@ jobs:
       - name: Check publishable crates standalone
         # Check one selected package at a time so unrelated workspace members
         # cannot hide missing direct dependency features through unification.
-        run: cargo check -p ${{ matrix.package }}
+        run: cargo check --locked -p ${{ matrix.package }}
 
   build-linux-only-crates:
     name: build-linux-only-crates
