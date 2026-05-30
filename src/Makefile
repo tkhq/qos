@@ -166,9 +166,7 @@ test:
 	@# we build all the workspace targets.
 	@# --locked makes Cargo.lock drift fail the build instead of being silently
 	@# auto-repaired in the workspace (so CI cannot pass green on a broken
-	@# lockfile). --locked (not --frozen) still allows registry/network access,
-	@# so CI does not need a pre-warmed offline crate cache. Mirrors
-	@# tkhq/rust-sdk#148.
+	@# lockfile).
 	cargo build --locked --all
 	@# Run tests
 	cargo test --locked
