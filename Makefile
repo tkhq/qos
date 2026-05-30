@@ -12,7 +12,8 @@ default: \
 	out/qos_enclave/index.json \
 	out/qos_bridge/index.json \
 	out/qos_enclave_egress/index.json \
-	out/qos_bridge_egress/index.json
+	out/qos_bridge_egress/index.json \
+	out/signed_echo/index.json
 
 .PHONY: test
 test: out/.common-loaded
@@ -176,6 +177,17 @@ out/qos_bridge_egress/index.json: \
 		src/qos_nsm \
 	)
 	$(call build,qos_bridge_egress)
+
+out/signed_echo/index.json: \
+	out/common/index.json \
+	$(CARGO_WORKSPACE_FILES) \
+	src/images/signed_echo/Containerfile \
+	$(shell git ls-files \
+		src/signed_echo \
+		src/qos_p256 \
+		src/qos_hex \
+	)
+	$(call build,signed_echo)
 
 out/common/index.json: \
 	src/images/common/Containerfile

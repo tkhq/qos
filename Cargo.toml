@@ -12,6 +12,7 @@ members = [
   "src/qos_test_primitives",
   "src/qos_p256",
   "src/qos_nsm",
+  "src/signed_echo",
   # special members that are not default-members
   "src/qos_crypto/fuzz",
   "src/qos_net/fuzz",
@@ -31,6 +32,7 @@ default-members = [
   "src/qos_test_primitives",
   "src/qos_p256",
   "src/qos_nsm",
+  "src/signed_echo",
 ]
 exclude = [
   "src/init",
