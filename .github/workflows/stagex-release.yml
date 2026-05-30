@@ -59,7 +59,7 @@ jobs:
         run: |
           # Extract version from tag (e.g. "qos_core-v0.5.0" -> "v0.5.0")
           version="${release_tag#qos_core-}"
-          for name in qos_client qos_host qos_enclave qos_bridge; do
+          for name in qos_client qos_host qos_enclave qos_bridge signed_echo; do
             env -C out/${name} tar -cf - . | docker load
             docker tag "qos-local/${name}:latest" "ghcr.io/tkhq/${name}:${version}"
             docker tag "qos-local/${name}:latest" "ghcr.io/tkhq/${name}:latest"
