@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.10.1](https://github.com/tkhq/qos/compare/qos_client-v0.10.0...qos_client-v0.10.1) - 2026-06-01
+
+### Other
+- update Cargo.lock dependencies
+
+## `qos_net` - [0.10.1](https://github.com/tkhq/qos/compare/qos_net-v0.9.0...qos_net-v0.10.1) - 2026-06-01
+
+### Other
+- replace VM feature flag with macOS arch check
+
+## `qos_core` - [0.10.1](https://github.com/tkhq/qos/compare/qos_core-v0.9.0...qos_core-v0.10.1) - 2026-06-01
+
+### Other
+- Merge pull-request #714
+
 ## `qos_net` - [0.10.0](https://github.com/tkhq/qos/compare/qos_net-v0.9.0...qos_net-v0.10.0) - 2026-06-01
 
 ### Changed
