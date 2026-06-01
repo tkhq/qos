@@ -150,7 +150,7 @@ lint:
 
 .PHONY: clippy
 clippy:
-	cargo clippy --all-targets -- -D warnings
+	cargo clippy --locked --all-targets -- -D warnings
 
 .PHONY: clippy-fix
 clippy-fix:
@@ -164,13 +164,16 @@ fmt:
 test:
 	@# The integration tests rely on binaries from other crates being built, so
 	@# we build all the workspace targets.
-	cargo build --all
+	@# --locked makes Cargo.lock drift fail the build instead of being silently
+	@# auto-repaired in the workspace (so CI cannot pass green on a broken
+	@# lockfile).
+	cargo build --locked --all
 	@# Run tests
-	cargo test
+	cargo test --locked
 	@# When we build the workspace it resolves with the qos_core mock feature
 	@# enabled. However some tests require it disable, so we test just qos_core
 	@# by itself.
-	cargo test -p qos_core
+	cargo test --locked -p qos_core
 
 .PHONY: build-linux-only
 build-linux-only: qos_system qos_aws init qos_enclave qos_bridge
