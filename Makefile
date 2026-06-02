@@ -53,16 +53,15 @@ qemu-stop:
 /tmp/vhost4.socket:
 	vhost-device-vsock --vm guest-cid=4,forward-cid=1,forward-listen=9001,socket=/tmp/vhost4.socket &
 
-out/nitro.tar: \
-	Containerfile.qemu \
+out/nitro.eif: \
+	src/images/qemu/Containerfile \
 	Cargo.toml \
 	Cargo.lock \
 	$(shell git ls-files src/init src/qos_core src/qos_bridge) \
 	/tmp/vhost4.socket
-	docker build -t qos-qemu-base -f Containerfile.qemu . --output type=tar,dest=out/nitro.tar
-
-out/nitro.eif: out/nitro.tar
+	docker build -t qos-qemu-base -f src/images/qemu/Containerfile . --output type=tar,dest=out/nitro.tar
 	tar -xf out/nitro.tar -C out
+	rm -f out/nitro.tar
 
 out/qos_enclave/index.json: \
 	out/common/index.json \
