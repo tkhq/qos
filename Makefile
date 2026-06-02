@@ -60,8 +60,7 @@ out/nitro.eif: \
 	$(shell git ls-files src/init src/qos_core src/qos_bridge) \
 	/tmp/vhost4.socket
 	docker build -t qos-qemu-base -f src/images/qemu/Containerfile . --output type=tar,dest=out/nitro.tar
-	tar -xf out/nitro.tar -C out
-	rm -f out/nitro.tar
+	tar -xf out/nitro.tar -C out && rm -f out/nitro.tar
 
 out/qos_enclave/index.json: \
 	out/common/index.json \

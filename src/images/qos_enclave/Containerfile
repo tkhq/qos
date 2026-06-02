@@ -27,14 +27,15 @@ RUN file /qos_enclave | grep "static-pie"
 
 FROM base AS build-init
 WORKDIR /qos/src/init
-RUN --network=none cargo build ${CARGOFLAGS}
+RUN --network=none cargo build --features egress ${CARGOFLAGS}
 RUN cp target/x86_64-unknown-linux-musl/release/init /
 RUN file /init | grep "static-pie"
 
 FROM base AS build-egress
+ENV CARGOFLAGS="--locked --no-default-features --profile release-panic-abort --target ${TARGET}"
 WORKDIR /qos/src/qos_bridge
 RUN --network=none cargo build --features egress ${CARGOFLAGS} --bin egress
-RUN cp ../../target/x86_64-unknown-linux-musl/release/egress /egress
+RUN cp ../../target/x86_64-unknown-linux-musl/release-panic-abort/egress /egress
 RUN file /egress | grep "static-pie"
 
 FROM base AS build-eif

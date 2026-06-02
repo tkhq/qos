@@ -26,6 +26,7 @@ pub const EGRESS_VSOCK_PORT: u32 = 1000; // reserved range so user ports don't i
 /// panics on socket errors of any kind
 #[allow(unsafe_code)]
 pub fn enclave_egress(cid: u32, port: u32, flags: u8) {
+	eprintln!("qos_bridge: enclave egress running");
 	let addr = SocketAddress::new_vsock_raw(cid, port, flags);
 	let core_socket =
 		create_core_socket().expect("unable to create core socket");
@@ -48,6 +49,7 @@ pub fn enclave_egress(cid: u32, port: u32, flags: u8) {
 /// # Panics
 /// panics on socket errors of any kind
 pub fn host_egress(cid: u32, port: u32, flags: u8) {
+	eprintln!("qos_bridge: host egress running");
 	// NOTE: it's important we don't loop just connect here as that seems to cause EPIPE errors after it does connect
 	let proxy_fd = loop {
 		let addr = SocketAddress::new_vsock_raw(cid, port, flags);

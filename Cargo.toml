@@ -113,8 +113,8 @@ qos_nsm = { path = "src/qos_nsm", version = "0.10.0", default-features = false }
 qos_p256 = { path = "src/qos_p256", version = "0.10.0" }
 qos_test_primitives = { path = "src/qos_test_primitives", version = "0.10.0" }
 
-# custom profile for qos_bridge so we can abort in case of failures in any thread
-[profile.qos-bridge]
+# custom profile for qos_bridge/egress so we can abort in case of failures in any thread if using egress
+[profile.release-panic-abort]
 inherits = "release"
 panic = "abort"
 

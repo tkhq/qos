@@ -57,7 +57,10 @@ fn boot() {
 	init_platform();
 	init_localhost();
 	#[cfg(feature = "egress")]
-	qos_core::egress::init_egress_tun();
+	{
+		dmesg("initializing egress tunnel interface".to_string());
+		qos_core::egress::init_egress_tun();
+	}
 }
 
 #[tokio::main]
