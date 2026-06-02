@@ -100,19 +100,20 @@ impl BridgeServer {
 		panic!("unable to run egress without vm feature and vsock support");
 	}
 
-	// run the transparent host egress
+	// run the transparent host egress as separate binary, non-blocking
 	#[cfg(feature = "egress")]
 	fn run_egress_host_bridge(&self) {
 		let vsock = self.socket_placeholder.vsock();
 		let cid = vsock.cid();
 		let flags = qos_core::io::vsock_svm_flags(vsock); // ensure we copy the flags as set
+		let vsock_to_host = flags == qos_core::io::VMADDR_FLAG_TO_HOST;
 
-		tokio::task::spawn_blocking(move || {
-			use qos_core::egress::EGRESS_VSOCK_PORT;
-
-			println!("qos_bridge: starting transparent egress host side");
-			qos_core::egress::host_egress(cid, EGRESS_VSOCK_PORT, flags);
-		});
+		qos_core::egress::run_looping(
+			"/qos_egress",
+			&format!(
+				"--egress-host --cid {cid} --vsock-to-host {vsock_to_host}",
+			),
+		);
 	}
 
 	fn run_ingress_bridge(

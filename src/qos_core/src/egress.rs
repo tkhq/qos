@@ -272,7 +272,7 @@ pub fn run_ip(args: &str, fail_str: &str) {
 	assert!(ip_exit.success(), "{}", fail_str);
 }
 
-/// run a statically linked program in a loop
+/// run a statically linked program in a loop in a separate thread (not blocking)
 pub fn run_looping(cmd_path: &str, args: &str) {
 	let cmd_path = cmd_path.to_owned();
 	let args: Vec<String> =
