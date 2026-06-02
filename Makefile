@@ -75,6 +75,19 @@ out/qos_enclave/index.json: \
 	)
 	$(call build,qos_enclave)
 
+out/qos_enclave_egress/index.json: \
+	out/common/index.json \
+	$(CARGO_WORKSPACE_FILES) \
+	src/images/qos_enclave_egress/Containerfile \
+	$(shell git ls-files \
+		src/init \
+		src/qos_enclave \
+		src/qos_core \
+		src/qos_aws \
+		src/qos_system \
+	)
+	$(call build,qos_enclave_egress)
+
 out/qos_host/index.json: \
 	out/common/index.json \
 	$(CARGO_WORKSPACE_FILES) \
@@ -111,6 +124,19 @@ out/qos_bridge/index.json: \
 		src/qos_nsm \
 	)
 	$(call build,qos_bridge)
+
+out/qos_bridge_egress/index.json: \
+	out/common/index.json \
+	$(CARGO_WORKSPACE_FILES) \
+	src/images/qos_bridge_egress/Containerfile \
+	$(shell git ls-files \
+		src/qos_bridge \
+		src/qos_host \
+		src/qos_core \
+		src/qos_hex \
+		src/qos_nsm \
+	)
+	$(call build,qos_bridge_egress)
 
 out/common/index.json: \
 	src/images/common/Containerfile

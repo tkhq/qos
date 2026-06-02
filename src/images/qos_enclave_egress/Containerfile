@@ -3,6 +3,8 @@ FROM stagex/gen_initramfs:6.8@sha256:f5b9271cca6003e952cbbb9ef041ffa92ba328894f5
 FROM stagex/linux-nitro:sx2024.03.0@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eaea8866b002b04264 AS linux-nitro
 FROM stagex/core-gcc:15.2.0@sha256:ceae6035d43fe3653e142e638fd78d72950cd51e7a5dba4755d1db081c54de77 AS gcc
 FROM stagex/core-libunwind:1.7.2@sha256:eb66122d8fc543f5e2f335bb1616f8c3a471604383e2c0a9df4a8e278505d3bc AS libunwind
+FROM stagex/iproute2:sx2024.11.0@sha256:65da03aa94d17dd6310b022f426a6cc8b3c55bb267e4bac1697bc57d6c850570 AS iproute2
+FROM stagex/musl:sx2024.11.0@sha256:d7f6c365f5724c65cadb2b96d9f594e46132ceb366174c89dbf7554897f2bc53 AS musl
 
 FROM common AS base
 
@@ -25,9 +27,16 @@ RUN file /qos_enclave | grep "static-pie"
 
 FROM base AS build-init
 WORKDIR /qos/src/init
-RUN --network=none cargo build ${CARGOFLAGS}
+RUN --network=none cargo build --features egress ${CARGOFLAGS}
 RUN cp target/x86_64-unknown-linux-musl/release/init /
 RUN file /init | grep "static-pie"
+
+FROM base AS build-egress
+ENV CARGOFLAGS="--locked --no-default-features --profile release-panic-abort --target ${TARGET}"
+WORKDIR /qos/src/qos_bridge
+RUN --network=none cargo build --features egress ${CARGOFLAGS} --bin egress
+RUN cp ../../target/x86_64-unknown-linux-musl/release-panic-abort/egress /egress
+RUN file /egress | grep "static-pie"
 
 FROM base AS build-eif
 WORKDIR /build_cpio
@@ -37,6 +46,9 @@ COPY --from=libunwind . /
 COPY --from=gen_initramfs . /
 COPY --from=build-init /init .
 COPY --from=linux-nitro /nsm.ko .
+COPY --from=iproute2 . /
+COPY --from=musl . /
+COPY --from=build-egress /egress .
 COPY <<-EOF initramfs.list
 	file /init     init    0755 0 0
 	file /nsm.ko   nsm.ko  0755 0 0
@@ -55,6 +67,9 @@ COPY <<-EOF initramfs.list
 	dir  /dev/shm          0755 0 0
 	dir  /dev/pts          0755 0 0
 	nod  /dev/console      0600 0 0 c 5 1
+	file /egress           /egress          0700 0 0
+	file /usr/sbin/ip      /usr/sbin/ip     0700 0 0
+	file /lib/ld-musl-x86  /usr/lib/ld-musl-x86_64.so.1                   0700 0 0
 EOF
 ENV CPIO_TIMESTAMP=1
 ENV KBUILD_BUILD_TIMESTAMP=1
