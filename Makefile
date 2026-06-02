@@ -8,7 +8,9 @@ default: \
 	out/qos_client/index.json \
 	out/qos_host/index.json \
 	out/qos_enclave/index.json \
-	out/qos_bridge/index.json
+	out/qos_bridge/index.json \
+	out/qos_enclave_egress/index.json \
+	out/qos_bridge_egress/index.json
 
 .PHONY: test
 test: out/.common-loaded
@@ -70,6 +72,7 @@ out/qos_enclave/index.json: \
 		src/init \
 		src/qos_enclave \
 		src/qos_core \
+		src/qos_bridge \
 		src/qos_aws \
 		src/qos_system \
 	)

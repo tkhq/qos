@@ -16,6 +16,7 @@ EOF
 FROM base AS install
 WORKDIR /rootfs
 COPY --from=build /qos_bridge .
+COPY --from=build /qos_egress .
 RUN find . -exec touch -hcd "@0" "{}" +
 
 FROM scratch AS package

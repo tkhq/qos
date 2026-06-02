@@ -60,6 +60,7 @@ COPY <<-EOF initramfs.list
 	dir  /proc             0755 0 0
 	dir  /sys              0755 0 0
 	dir  /usr              0755 0 0
+	dir  /lib              0755 0 0
 	dir  /usr/bin          0755 0 0
 	dir  /usr/sbin         0755 0 0
 	dir  /usr/lib          0755 0 0

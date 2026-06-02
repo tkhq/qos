@@ -50,7 +50,6 @@ COPY <<-EOF initramfs.list
 	dir  /usr              0755 0 0
 	dir  /usr/bin          0755 0 0
 	dir  /usr/sbin         0755 0 0
-	dir  /usr/lib          0755 0 0
 	dir  /dev              0755 0 0
 	dir  /dev/shm          0755 0 0
 	dir  /dev/pts          0755 0 0
