@@ -46,8 +46,8 @@ shell: out/.common-loaded
 qemu: out/nitro.eif /tmp/vhost4.socket
 	qemu-system-x86_64 -M nitro-enclave,vsock=c,id=hello-world -kernel out/nitro.eif -nographic -m 4G --enable-kvm -cpu host -chardev socket,id=c,path=/tmp/vhost4.socket
 
-.PHONY: qemu-stop
-qemu-stop:
+.PHONY: stop
+stop:
 	-killall qemu-system-x86_64
 	-killall vhost-device-vsock
 	rm -f /tmp/vhost4.socket
@@ -57,7 +57,7 @@ qemu-stop:
 
 .PHONY: host
 host:
-	cargo run -p qos_host -- \
+	cargo run -p qos_host --features qemu -- \
 		--host-ip 0.0.0.0 \
 		--host-port 3001 \
 		--cid 1 \

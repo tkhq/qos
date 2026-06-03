@@ -19,4 +19,7 @@ name = "init"
 path = "init.rs"
 
 [features]
+# Support for egress
 egress = ["qos_core/egress"]
+# Support for localhost qemu setup without forcing host to use root
+qemu = ["qos_core/qemu"]

@@ -57,11 +57,13 @@ COPY <<-EOF initramfs.list
 EOF
 ENV CPIO_TIMESTAMP=1
 ENV KBUILD_BUILD_TIMESTAMP=1
+ENV INITRD_SIZE=3228672
 RUN <<-EOF
 	find . -exec touch -hcd "@0" "{}" +
 	mkdir /build_eif
 	gen_init_cpio -t 1 initramfs.list > /build_eif/rootfs.cpio
 	touch -hcd "@0" rootfs.cpio
+	INITRD_SIZE=$(stat -c %s rootfs.cpio)
 EOF
 WORKDIR /build_eif
 COPY --from=linux-nitro /bzImage .

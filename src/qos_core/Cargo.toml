@@ -46,5 +46,7 @@ webpki-roots = { workspace = true }
 [features]
 # Support for egress
 egress = ["etherparse"]
+# Support for localhost qemu setup without forcing host to use root
+qemu = []
 # Never use in production - support for mock NSM
 mock = ["qos_nsm/mock"]
