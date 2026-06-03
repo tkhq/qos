@@ -43,7 +43,7 @@ shell: out/.common-loaded
 		qos-local/common:latest \
 		/bin/bash
 
-qemu: out/nitro.eif
+qemu: out/nitro.eif /tmp/vhost4.socket
 	qemu-system-x86_64 -M nitro-enclave,vsock=c,id=hello-world -kernel out/nitro.eif -nographic -m 4G --enable-kvm -cpu host -chardev socket,id=c,path=/tmp/vhost4.socket
 
 .PHONY: qemu-stop
@@ -55,12 +55,19 @@ qemu-stop:
 /tmp/vhost4.socket:
 	vhost-device-vsock --vm guest-cid=4,forward-cid=1,forward-listen=9001,socket=/tmp/vhost4.socket &
 
+.PHONY: host
+host:
+	cargo run -p qos_host -- \
+		--host-ip 0.0.0.0 \
+		--host-port 3001 \
+		--cid 1 \
+		--port 9001
+
 out/nitro.eif: \
 	src/images/qemu/Containerfile \
 	Cargo.toml \
 	Cargo.lock \
-	$(shell git ls-files src/init src/qos_core src/qos_bridge) \
-	/tmp/vhost4.socket
+	$(shell git ls-files src/init src/qos_core src/qos_bridge)
 	docker build -t qos-qemu-base -f src/images/qemu/Containerfile . --output type=tar,dest=out/nitro.tar
 	tar -xf out/nitro.tar -C out && rm -f out/nitro.tar
 
