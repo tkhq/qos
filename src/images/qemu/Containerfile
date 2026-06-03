@@ -67,7 +67,7 @@ RUN <<-EOF
 	find . -exec touch -hcd "@0" "{}" +
     mkdir /build_eif
 	gen_init_cpio -t 1 initramfs.list > /build_eif/rootfs.cpio
-	touch -hcd "@0" rootfs.cpio
+	touch -hcd "@0" /build_eif/rootfs.cpio
 EOF
 WORKDIR /build_eif
 COPY --from=linux-nitro /bzImage .
@@ -78,7 +78,7 @@ RUN eif_build \
 	--kernel_config linux.config \
 	--pcrs_output /nitro.pcrs \
 	--output /nitro.eif \
-	--cmdline 'reboot=k initrd=0x2000000,3228672 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd'
+	--cmdline "reboot=k initrd=0x2000000 root=/dev/ram0 panic=1 pci=off nomodules console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd"
 
 # Starting "FROM scratch" is important here given this interacts with the nitro enclave to boot it
 # No shell, no access to "core", just the bare minimum.
