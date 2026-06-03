@@ -16,6 +16,8 @@ pub struct BridgeServer {
 	socket_placeholder: SocketAddress,
 	info_url: String,
 	host_port_override: Option<u16>,
+	#[allow(unused)]
+	egress_bin_path: Option<String>,
 }
 
 impl BridgeServer {
@@ -25,11 +27,13 @@ impl BridgeServer {
 		socket_placeholder: SocketAddress,
 		control_url: String,
 		host_port_override: Option<u16>,
+		egress_bin_path: Option<String>,
 	) -> Self {
 		Self {
 			socket_placeholder,
 			info_url: control_url + ENCLAVE_INFO,
 			host_port_override,
+			egress_bin_path,
 		}
 	}
 
@@ -107,9 +111,11 @@ impl BridgeServer {
 		let cid = vsock.cid();
 		let flags = qos_core::io::vsock_svm_flags(vsock); // ensure we copy the flags as set
 		let vsock_to_host = flags == qos_core::io::VMADDR_FLAG_TO_HOST;
+		let egress_bin_path: &str =
+			self.egress_bin_path.as_deref().unwrap_or("/qos_egress");
 
 		qos_core::egress::run_looping(
-			"/qos_egress",
+			egress_bin_path,
 			&format!(
 				"--egress-host --cid {cid} --vsock-to-host {vsock_to_host}",
 			),

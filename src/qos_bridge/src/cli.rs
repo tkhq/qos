@@ -12,6 +12,7 @@ const CONTROL_URL: &str = "control-url";
 const HOST_PORT_OVERRIDE: &str = "host-port-override";
 const VSOCK_TO_HOST: &str = "vsock-to-host";
 const EGRESS_HOST: &str = "egress-host";
+const EGRESS_BIN_PATH: &str = "egress-bin-path";
 
 struct HostParser;
 impl GetParserForOptions for HostParser {
@@ -48,6 +49,10 @@ impl GetParserForOptions for HostParser {
 				Token::new(EGRESS_HOST, "run in enclave egress in host mode")
 					.takes_value(false)
 			)
+			.token(
+				Token::new(EGRESS_BIN_PATH, "path to the egress binary")
+					.takes_value(true)
+			)
 	}
 }
 
@@ -81,6 +86,12 @@ impl HostOpts {
 	#[must_use]
 	pub fn egress_host(&self) -> bool {
 		self.parsed.flag(EGRESS_HOST).unwrap_or(false)
+	}
+
+	/// Wether to run in egress host mode (e.g. in qos bridge on the host)
+	#[must_use]
+	pub fn egress_bin_path(&self) -> Option<String> {
+		self.parsed.single(EGRESS_BIN_PATH).cloned()
 	}
 
 	/// overrides the host portion of the bridge with given port, ignoring the manifest value
@@ -199,6 +210,7 @@ impl Cli {
 					.expect("failed to create enclave socket placeholder"),
 				options.control_url(),
 				options.host_port_override(),
+				options.egress_bin_path(),
 			)
 			.serve()
 			.await;
