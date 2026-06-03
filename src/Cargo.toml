@@ -13,6 +13,8 @@ members = [
   "qos_nsm",
   # special members that are not default-members
   "xtask",
+  "integration/wasm_sdk",
+  "integration/wasm_sdk_macros",
   "qos_crypto/fuzz",
   "qos_net/fuzz",
   "qos_nsm/fuzz",
@@ -40,6 +42,10 @@ exclude = [
   "integration/wasm_rt",
   "integration/wasm_policy",
   "integration/wasm_program",
+  "integration/wasm_examples/functions/reverse",
+  "integration/wasm_examples/functions/sha256",
+  "integration/wasm_examples/policies/allow_hashlist",
+  "integration/wasm_examples/policies/max_input_len",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.

@@ -9,6 +9,16 @@ use qos_core::{
 use std::time::Duration;
 use tokio::net::TcpStream;
 
+pub mod pivot_wasm;
+
+pub use pivot_wasm::protocol::{
+	PivotWasmArtifact, PivotWasmArtifactEnvelope, PivotWasmArtifactKind,
+	PivotWasmExecuteRequest, PivotWasmExecuteResponse,
+	PivotWasmExecutionAttestation, PivotWasmExecutionAttestationPayload,
+	PivotWasmGovernance, PivotWasmMsg, PivotWasmRegisterArtifactRequest,
+	PivotWasmRegisterArtifactResponse, PivotWasmRegisteredArtifact,
+};
+
 /// Path to the file `pivot_ok` writes on success for tests.
 pub const PIVOT_OK_SUCCESS_FILE: &str = "./pivot_ok_works";
 /// Path to the file `pivot_ok2` writes on success for tests.
@@ -127,74 +137,6 @@ pub struct AdditionProofPayload {
 	pub b: usize,
 	/// Result of the addition
 	pub result: usize,
-}
-
-/// Request/Response messages for the WASM pivot app.
-#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
-pub enum PivotWasmMsg {
-	/// Request execution of a policy-gated WASM program.
-	ExecuteRequest(PivotWasmExecuteRequest),
-	/// Successful execution response with attestation.
-	ExecuteResponse(PivotWasmExecuteResponse),
-	/// The policy WASM denied execution.
-	PolicyDenied,
-	/// The policy signature failed verification.
-	InvalidSignature,
-	/// A runtime error occurred.
-	RuntimeError {
-		/// Error message.
-		message: String,
-	},
-}
-
-impl From<String> for PivotWasmMsg {
-	fn from(message: String) -> Self {
-		match message.as_str() {
-			"policy denied" => PivotWasmMsg::PolicyDenied,
-			"invalid signature" => PivotWasmMsg::InvalidSignature,
-			_ => PivotWasmMsg::RuntimeError { message },
-		}
-	}
-}
-
-/// Request wasm execution details
-#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
-pub struct PivotWasmExecuteRequest {
-	/// The WASM policy module binary (signed by owner).
-	pub policy_wasm: Vec<u8>,
-	/// Signature of `sha256(policy_wasm)` by the owner key.
-	pub policy_signature: Vec<u8>,
-	/// The WASM program module binary (unsigned).
-	pub program_wasm: Vec<u8>,
-	/// Arbitrary input data.
-	pub input: Vec<u8>,
-}
-
-/// Execution output and attestation.
-#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
-pub struct PivotWasmExecuteResponse {
-	/// Output bytes from the program.
-	pub output: Vec<u8>,
-	/// Attestation binding the output to the computation.
-	pub attestation: PivotWasmExecutionAttestation,
-}
-
-/// Attestation that binds an output to the specific policy, program, and input
-/// that produced it, signed by the enclave's ephemeral key.
-#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
-pub struct PivotWasmExecutionAttestation {
-	/// SHA-256 of the policy WASM binary.
-	pub policy_hash: [u8; 32],
-	/// SHA-256 of the program WASM binary.
-	pub program_hash: [u8; 32],
-	/// SHA-256 of the input data.
-	pub input_hash: [u8; 32],
-	/// SHA-256 of the output data.
-	pub output_hash: [u8; 32],
-	/// Ephemeral key signature over the borsh-serialized attestation fields above.
-	pub signature: Vec<u8>,
-	/// Ephemeral public key bytes.
-	pub public_key: Vec<u8>,
 }
 
 /// Wait for a given usock file to exist and be connectible with a timeout of 5s.

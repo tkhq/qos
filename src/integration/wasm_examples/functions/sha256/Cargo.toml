@@ -1,0 +1,19 @@
+[workspace]
+
+[package]
+name = "sha256_function"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+qos_wasm_sdk = { path = "../../../wasm_sdk" }
+qos_wasm_sdk_macros = { path = "../../../wasm_sdk_macros" }
+sha2 = { version = "0.10", default-features = false }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+opt-level = "s"
+lto = true

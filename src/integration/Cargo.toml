@@ -23,6 +23,7 @@ qos_crypto = { workspace = true }
 qos_hex = { workspace = true }
 qos_p256 = { workspace = true, features = ["mock"] }
 qos_test_primitives = { workspace = true }
+qos_wasm_sdk = { path = "wasm_sdk" }
 
 wasmtime = { version = "29", default-features = false, features = ["cranelift", "runtime"] }
 futures = { workspace = true }
