@@ -43,6 +43,10 @@ shell: out/.common-loaded
 		qos-local/common:latest \
 		/bin/bash
 
+.PHONY: build
+build:
+	cargo build --all-features --locked
+
 qemu: out/nitro.eif /tmp/vhost4.socket
 	qemu-system-x86_64 -M nitro-enclave,vsock=c,id=hello-world -kernel out/nitro.eif -nographic -m 4G --enable-kvm -cpu host -chardev socket,id=c,path=/tmp/vhost4.socket
 
@@ -62,6 +66,13 @@ host:
 		--host-port 3001 \
 		--cid 1 \
 		--port 9001
+
+.PHONY: bridge
+bridge:
+	cargo run -p qos_bridge --bin ingress --features egress -- \
+		--cid 1 \
+		--control-url http://127.0.0.1:3001/qos \
+		--egress-bin-path ./target/debug/
 
 out/nitro.eif: \
 	src/images/qemu/Containerfile \
