@@ -1,0 +1,53 @@
+name: signed-echo image publish
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/signed-echo-image.yml"
+      - "src/images/signed_echo/**"
+      - "src/signed_echo/**"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: publish signed_echo image
+    runs-on: ubicloud-standard-16
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 #v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build signed_echo image
+        shell: 'script -q -e -c "bash {0}"'
+        run: make out/signed_echo/index.json
+
+      - name: Push signed_echo image to GHCR
+        run: |
+          image="ghcr.io/tkhq/qos/examples/signed_echo"
+          sha_tag="sha-${GITHUB_SHA}"
+
+          env -C out/signed_echo tar -cf - . | docker load
+          docker tag "qos-local/signed_echo:latest" "${image}:${sha_tag}"
+          docker push "${image}:${sha_tag}"
+
+          current_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [ "${current_main}" = "${GITHUB_SHA}" ]; then
+            docker tag "qos-local/signed_echo:latest" "${image}:main"
+            docker push "${image}:main"
+          else
+            echo "Skipping ${image}:main because ${GITHUB_SHA} is no longer main"
+          fi
