@@ -10,22 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## `qos_client` - [0.10.1](https://github.com/tkhq/qos/compare/qos_client-v0.10.0...qos_client-v0.10.1) - 2026-06-04
 
 ### Other
-- update Cargo.lock dependencies
+- No user-facing changes; released to pick up updated dependencies. ([#724](https://github.com/tkhq/qos/pull/724))
 
 ## `qos_net` - [0.10.1](https://github.com/tkhq/qos/compare/qos_net-v0.10.0...qos_net-v0.10.1) - 2026-06-04
 
 ### Other
-- update Cargo.lock dependencies
+- No user-facing changes; released to pick up updated dependencies. ([#724](https://github.com/tkhq/qos/pull/724))
 
 ## `qos_core` - [0.10.1](https://github.com/tkhq/qos/compare/qos_core-v0.10.0...qos_core-v0.10.1) - 2026-06-04
 
 ### Other
-- update Cargo.lock dependencies
+- No user-facing changes; released to pick up updated dependencies. ([#724](https://github.com/tkhq/qos/pull/724))
 
 ## `qos_crypto` - [0.10.1](https://github.com/tkhq/qos/compare/qos_crypto-v0.10.0...qos_crypto-v0.10.1) - 2026-06-04
 
 ### Other
-- update Cargo.toml dependencies
+- No user-facing changes; released to pick up updated dependencies. ([#724](https://github.com/tkhq/qos/pull/724))
 
 ## `qos_net` - [0.10.0](https://github.com/tkhq/qos/compare/qos_net-v0.9.0...qos_net-v0.10.0) - 2026-06-01
 
