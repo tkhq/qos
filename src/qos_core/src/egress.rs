@@ -129,7 +129,7 @@ pub fn create_tun_socket(if_name: &str) -> Result<OwnedFd, Box<dyn Error>> {
 
 		// Set flags to IFF_TUN
 		// Using libc directly for the ioctl is common when nix lacks the specific macro:
-		let ret = nix::libc::ioctl(fd, 0x4004_54ca, &raw const ifr);
+		let ret = nix::libc::ioctl(fd, 0x4004_54ca, &raw mut ifr);
 		if ret < 0 {
 			libc::close(fd);
 			return Err(Box::new(std::io::Error::last_os_error()));
@@ -252,7 +252,7 @@ fn pipe_frames(
 			}
 
 			if let Some(size) = next_frame(&buf[sent..received]) {
-				assert!(sent + size < buf.len(), "frame buffer overflow"); // should be impossible as MTU is 1500
+				assert!(sent + size <= buf.len(), "frame buffer overflow"); // should be impossible as MTU is 1500
 				frame_size = sent + size;
 			} else {
 				let tail_size = received - sent;
