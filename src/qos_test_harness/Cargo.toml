@@ -7,6 +7,14 @@ license.workspace = true
 description = "Shared runner-agnostic tests for QuorumOS applications"
 repository = "https://github.com/tkhq/qos"
 
+[features]
+nested-parent-init = ["dep:qos_system"]
+
+[[bin]]
+name = "nested_parent_init"
+path = "src/bin/nested_parent_init.rs"
+required-features = ["nested-parent-init"]
+
 [lints.rust]
 missing_docs = "allow"
 unsafe_code = "deny"
@@ -18,6 +26,7 @@ module_name_repetitions = "allow"
 [dependencies]
 qos_hex = { workspace = true }
 qos_p256 = { workspace = true }
+qos_system = { path = "../qos_system", optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

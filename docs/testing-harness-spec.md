@@ -44,6 +44,10 @@ The important split is:
 - Reproducible Plain QEMU: high-fidelity local QEMU runner that boots a
   StageX-built rootfs/pivot package with a normal QEMU kernel and user-networked
   TCP forwarding.
+- Nested Nitro QEMU: experimental macOS-compatible composition that boots an
+  aarch64 Linux parent VM under QEMU/HVF, then runs Linux/aarch64
+  `qemu-system-x86_64 -M nitro-enclave`, `vhost-device-vsock`, and QoS host
+  binaries inside that parent VM.
 - Lightweight QEMU: QEMU runner that avoids StageX and uses local,
   non-reproducible cross-compiled artifacts for developer speed.
 - Docker runner: runner that uses Docker for the app/enclave side, or optionally
@@ -114,6 +118,7 @@ app.
 | --- | --- | --- | --- | --- |
 | Reproducible Plain QEMU | StageX reproducible builder | Plain QEMU rootfs/kernel | Native host by default | Highest-fidelity local/CI test without Nitro-specific QEMU |
 | Lightweight QEMU | Local cross-compile builder | Lightweight QEMU package | Native host by default | Fast dev loop without StageX |
+| Nested Nitro QEMU | StageX EIF plus local cross-compile builder | `nitro-enclave` QEMU inside a parent Linux QEMU VM | QEMU parent VM | Experimental local EIF/vsock path for macOS arm64 |
 | Docker | Docker/local builder | Docker app runtime | Native or Docker host | Cheap Linux process/container test |
 | Vivo/TVC | Digest/image selector or publisher | TVC deployment | Native TVC CLI/gateway probe | External platform E2E |
 
@@ -301,6 +306,51 @@ Expected properties:
 - Non-reproducible by design.
 - Still enforces local freshness through build keys and content hashes.
 - Uses separate output dirs from the full QEMU runner.
+
+## Nested Nitro QEMU Runner
+
+The nested Nitro runner is an experimental escape hatch for macOS arm64 when we
+want to exercise an EIF with QEMU's emulated `nitro-enclave` machine type but do
+not have a native macOS QEMU build that exposes that machine.
+
+The composition is:
+
+1. The Rust test process runs on macOS.
+2. Outer `qemu-system-aarch64` boots a Linux/aarch64 parent VM, using HVF when
+   configured and available.
+3. The parent VM mounts a 9p rootfs that contains:
+   - a Linux/aarch64 `qemu-system-x86_64` with `nitro-enclave` support,
+   - a Linux/aarch64 `vhost-device-vsock`,
+   - Linux/aarch64 `qos_host`, `qos_client`, and `qos_bridge`,
+   - the StageX-built `nitro.eif`,
+   - the x86_64 Linux signed-echo pivot.
+4. Parent `/init` starts `vhost-device-vsock` with a guest CID and
+   `forward-listen` ports for the QoS core port and app port.
+5. Parent `/init` starts inner `qemu-system-x86_64 -M
+   nitro-enclave,vsock=c,id=... -kernel /work/nitro.eif -chardev
+   socket,id=c,path=...`.
+6. Parent `/init` starts `qos_host` against CID `1` by default, matching QEMU's
+   documented vhost-user-vsock forwarding model.
+7. Parent `/init` runs `qos_client dangerous-dev-boot`, then starts
+   `qos_bridge`.
+8. The macOS test process probes the signed-echo app through outer QEMU user
+   networking.
+
+This runner requires an explicit parent overlay. The repo builds the parent
+init and QoS binaries, but it does not currently build or vendor Linux/aarch64
+QEMU and `vhost-device-vsock`. The overlay is configured with
+`QOS_TEST_QEMU_NESTED_NITRO_PARENT_OVERLAY` and should place those tools at
+`/tools/qemu-system-x86_64` and `/tools/vhost-device-vsock` unless overridden.
+
+Important limitations:
+
+- It is not a replacement for the plain QEMU runner.
+- It is expected to be slower because the inner x86_64 Nitro VM runs under TCG
+  inside the Linux/aarch64 parent.
+- QEMU's emulated `nitro-enclave` machine is useful for local EIF/vsock testing,
+  but it does not provide AWS-signed production attestation.
+- The local parent overlay is part of the build key, so changing QEMU,
+  `vhost-device-vsock`, or supporting libraries invalidates the staged rootfs.
 
 ## Docker Runner
 

@@ -2150,11 +2150,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_system"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "qos_test_harness"
 version = "0.10.0"
 dependencies = [
  "qos_hex 0.10.0",
  "qos_p256 0.10.0",
+ "qos_system",
  "serde",
  "serde_json",
  "sha2",

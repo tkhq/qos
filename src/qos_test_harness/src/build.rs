@@ -25,6 +25,7 @@ pub enum RunnerKind {
 	Docker,
 	LightQemu,
 	ReproducibleQemu,
+	NestedNitroQemu,
 	Tvc,
 }
 
