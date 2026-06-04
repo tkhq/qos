@@ -113,13 +113,12 @@ impl BridgeServer {
 		let vsock_to_host = flags == qos_core::io::VMADDR_FLAG_TO_HOST;
 		let egress_bin_path: &str =
 			self.egress_bin_path.as_deref().unwrap_or("/qos_egress");
-
-		qos_core::egress::run_looping(
-			egress_bin_path,
-			&format!(
-				"--egress-host --cid {cid} --vsock-to-host {vsock_to_host}",
-			),
+		let args = &format!(
+			"--egress-host --cid {cid} --vsock-to-host {vsock_to_host}",
 		);
+
+		println!("running egress bridge binary: {egress_bin_path} {args}");
+		qos_core::egress::run_looping(egress_bin_path, &args);
 	}
 
 	fn run_ingress_bridge(

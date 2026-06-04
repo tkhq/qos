@@ -19,14 +19,21 @@ use nix::{
 };
 
 /// egress vsock port used both in and out of the enclave to provide transparent egress data transfer
+#[cfg(not(feature = "qemu"))]
 pub const EGRESS_VSOCK_PORT: u32 = 1000; // reserved range so user ports don't interfere
+
+/// egress vsock port used both in and out of the enclave to provide transparent egress data transfer
+#[cfg(feature = "qemu")]
+pub const EGRESS_VSOCK_PORT: u32 = 9002; // open range for qemu local debug
 
 /// opens enclave side egress bridging using given cid and port blocking forever
 /// # Panics
 /// panics on socket errors of any kind
 #[allow(unsafe_code)]
 pub fn enclave_egress(cid: u32, port: u32, flags: u8) {
-	eprintln!("qos_bridge: enclave egress running");
+	eprintln!(
+		"qos_bridge: enclave egress running cid: {cid} port: {port} flags: {flags:02x}"
+	);
 	let addr = SocketAddress::new_vsock_raw(cid, port, flags);
 	let core_socket =
 		create_core_socket().expect("unable to create core socket");
@@ -49,7 +56,9 @@ pub fn enclave_egress(cid: u32, port: u32, flags: u8) {
 /// # Panics
 /// panics on socket errors of any kind
 pub fn host_egress(cid: u32, port: u32, flags: u8) {
-	eprintln!("qos_bridge: host egress running");
+	eprintln!(
+		"qos_bridge: host egress running cid: {cid} port: {port} flags: {flags:02x}"
+	);
 	// NOTE: it's important we don't loop just connect here as that seems to cause EPIPE errors after it does connect
 	let proxy_fd = loop {
 		let addr = SocketAddress::new_vsock_raw(cid, port, flags);

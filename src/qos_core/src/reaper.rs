@@ -117,7 +117,10 @@ fn run_egress_bridge(_core_socket: &SocketAddress) {
 fn run_egress_bridge(core_socket: &SocketAddress) {
 	let cid = core_socket.vsock().cid();
 
-	crate::egress::run_looping("/egress", &format!("--cid {cid}"));
+	crate::egress::run_looping(
+		"/egress",
+		&format!("--cid {cid} --vsock-to-host false"),
+	);
 }
 
 fn reprint_pivot_output(child: &mut Child) {

@@ -158,6 +158,7 @@ impl Cli {
 	/// # Panics
 	/// panics on socket errors on wrong cli input
 	pub fn execute_egress() {
+		println!("here");
 		let mut args: Vec<String> = env::args().collect();
 		let options = HostOpts::new(&mut args);
 
@@ -166,6 +167,7 @@ impl Cli {
 		} else if options.parsed.help() {
 			println!("{}", options.parsed.info());
 		} else if options.egress_host() {
+			println!("running in host egress mode");
 			#[cfg(feature = "egress")]
 			qos_core::egress::host_egress(
 				options.cid(),
@@ -178,6 +180,7 @@ impl Cli {
 				"unable to run enclave-egress without egress feature support"
 			);
 		} else {
+			println!("running in enclave egress mode");
 			#[cfg(feature = "egress")]
 			qos_core::egress::enclave_egress(
 				options.cid(),

@@ -21,4 +21,5 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 ureq = { workspace = true, features = ["json"] }
 
 [features]
+qemu = ["qos_core/qemu"]
 egress = ["qos_core/egress"]
