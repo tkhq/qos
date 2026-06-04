@@ -10,6 +10,7 @@ members = [
   "src/qos_json",
   "src/qos_net",
   "src/qos_test_primitives",
+  "src/qos_test_harness",
   "src/qos_p256",
   "src/qos_nsm",
   # special members that are not default-members
@@ -29,6 +30,7 @@ default-members = [
   "src/qos_json",
   "src/qos_net",
   "src/qos_test_primitives",
+  "src/qos_test_harness",
   "src/qos_p256",
   "src/qos_nsm",
 ]
@@ -110,6 +112,7 @@ qos_json = { path = "src/qos_json", version = "0.10.0" }
 qos_net = { path = "src/qos_net", version = "0.10.0", default-features = false }
 qos_nsm = { path = "src/qos_nsm", version = "0.10.0", default-features = false }
 qos_p256 = { path = "src/qos_p256", version = "0.10.0" }
+qos_test_harness = { path = "src/qos_test_harness", version = "0.10.0" }
 qos_test_primitives = { path = "src/qos_test_primitives", version = "0.10.0" }
 
 # Option for the future: build all QOS applications with additional runtime checks

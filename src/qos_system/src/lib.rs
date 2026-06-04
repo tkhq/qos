@@ -6,7 +6,7 @@ use std::{
 	os::unix::io::AsRawFd,
 };
 
-use libc::{c_int, c_ulong, c_void};
+use libc::{c_char, c_int, c_ulong, c_void};
 
 #[derive(Debug)]
 pub struct SystemError {
@@ -94,7 +94,7 @@ pub fn freopen(
 			mode_cs.as_ptr(),
 			// TODO clippy says the pointer casting is unecessary
 			// is this true for all configurations and platforms?
-			fdopen(file, mode_cs.as_ptr() as *const i8),
+			fdopen(file, mode_cs.as_ptr() as *const c_char),
 		)
 	};
 	if freopen_result.is_null() {

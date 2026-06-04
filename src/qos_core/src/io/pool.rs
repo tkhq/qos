@@ -282,6 +282,10 @@ impl SocketAddress {
 					Err(IOError::PoolError(PoolError::InvalidSourceAddress))
 				}
 			},
+			Self::Tcp(addr) => Ok(Self::Tcp(std::net::SocketAddr::new(
+				addr.ip(),
+				addr.port() + 1,
+			))),
 			#[cfg(not(target_os = "macos"))]
 			Self::Vsock(vsock) => Ok(Self::new_vsock(
 				vsock.cid(),

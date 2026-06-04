@@ -1,6 +1,6 @@
 //! CLI for running an enclave binary.
 
-use std::env;
+use std::{env, net::IpAddr, str::FromStr};
 
 use qos_nsm::{Nsm, NsmProvider};
 
@@ -20,6 +20,10 @@ pub const CID: &str = "cid";
 pub const PORT: &str = "port";
 /// "usock"
 pub const USOCK: &str = "usock";
+/// "tcp-host"
+pub const TCP_HOST: &str = "tcp-host";
+/// "tcp-port"
+pub const TCP_PORT: &str = "tcp-port";
 const MOCK: &str = "mock";
 /// Name for the option to specify the quorum key file.
 pub const QUORUM_FILE_OPT: &str = "quorum-file";
@@ -54,16 +58,27 @@ impl EnclaveOpts {
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
 			self.parsed.single(USOCK),
+			self.parsed.single(TCP_HOST),
+			self.parsed.single(TCP_PORT),
 		) {
 			#[cfg(not(target_os = "macos"))]
-			(Some(c), Some(p), None) => {
+			(Some(c), Some(p), None, None, None) => {
 				let c =
 					c.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
 				let p =
 					p.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
 				Ok(SocketAddress::new_vsock(c, p, crate::io::VMADDR_NO_FLAGS))
 			}
-			(None, None, Some(u)) => Ok(SocketAddress::new_unix(u.as_str())),
+			(None, None, Some(u), None, None) => {
+				Ok(SocketAddress::new_unix(u.as_str()))
+			}
+			(None, None, None, Some(host), Some(port)) => {
+				let ip = IpAddr::from_str(host)
+					.map_err(|_| IOError::ConnectAddressInvalid)?;
+				let port =
+					port.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
+				Ok(SocketAddress::new_tcp(ip, port))
+			}
 			_ => panic!("Invalid socket opts"),
 		}
 	}
@@ -163,19 +178,31 @@ impl GetParserForOptions for EnclaveParser {
 			.token(
 				Token::new(CID, "cid of the VSOCK the enclave should listen on.")
 					.takes_value(true)
-					.forbids(vec![USOCK])
+					.forbids(vec![USOCK, TCP_HOST, TCP_PORT])
 					.requires(PORT),
 			)
 			.token(
 				Token::new(PORT, "port of the VSOCK the enclave should listen on.")
 					.takes_value(true)
-					.forbids(vec![USOCK])
+					.forbids(vec![USOCK, TCP_HOST, TCP_PORT])
 					.requires(CID),
 			)
 			.token(
 				Token::new(USOCK, "unix socket (`.sock`) to listen on.")
 					.takes_value(true)
-					.forbids(vec!["port", "cid"]),
+					.forbids(vec![PORT, CID, TCP_HOST, TCP_PORT]),
+			)
+			.token(
+				Token::new(TCP_HOST, "TCP IP address to listen on.")
+					.takes_value(true)
+					.forbids(vec![CID, PORT, USOCK])
+					.requires(TCP_PORT),
+			)
+			.token(
+				Token::new(TCP_PORT, "TCP port to listen on.")
+					.takes_value(true)
+					.forbids(vec![CID, PORT, USOCK])
+					.requires(TCP_HOST),
 			)
 			.token(
 				Token::new(MOCK, "include to use the mock Nitro Secure Module; helpful for local dev.")

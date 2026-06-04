@@ -2,7 +2,7 @@ use std::ffi::c_void;
 
 use nix::libc::{
 	AF_INET, IFF_UP, SIOCGIFFLAGS, SIOCSIFADDR, SIOCSIFFLAGS, SOCK_DGRAM,
-	close, htonl, ifreq, memcpy, sockaddr, sockaddr_in, socket,
+	c_char, close, htonl, ifreq, memcpy, sockaddr, sockaddr_in, socket,
 };
 use nix::{errno::Errno, ioctl_read_bad, ioctl_write_ptr_bad};
 
@@ -23,8 +23,8 @@ pub fn init_localhost() {
 		sin_zero: [0u8; 8],
 	};
 
-	// interface name b"lo" as [i16; 16] for ioctl purposes
-	let ifr_name: [i8; 16] =
+	// interface name b"lo" as [c_char; 16] for ioctl purposes
+	let ifr_name: [c_char; 16] =
 		[108, 111, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
 	let mut ifr: ifreq = unsafe { std::mem::zeroed() };

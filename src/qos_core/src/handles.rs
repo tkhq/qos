@@ -286,7 +286,7 @@ impl Handles {
 			.map_err(|_| ProtocolError::FailedToPutPivot)?;
 		fs::set_permissions(
 			&self.pivot,
-			std::fs::Permissions::from_mode(0o111),
+			std::fs::Permissions::from_mode(0o555),
 		)
 		.map_err(|_| ProtocolError::FailedToPutPivot)?;
 		Ok(())

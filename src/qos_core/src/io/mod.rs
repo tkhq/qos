@@ -6,7 +6,10 @@
 mod host_bridge;
 mod pool;
 mod stream;
-use std::path::Path;
+use std::{
+	net::{IpAddr, SocketAddr},
+	path::Path,
+};
 
 pub use host_bridge::*;
 pub use pool::*;
@@ -81,6 +84,8 @@ pub enum SocketAddress {
 	Vsock(VsockAddr),
 	/// Unix address.
 	Unix(UnixAddr),
+	/// TCP address.
+	Tcp(SocketAddr),
 }
 
 /// VSOCK flag for talking to host if we deploy multiple enclave "horizontally" on the same VM.
@@ -98,6 +103,12 @@ impl SocketAddress {
 	pub fn new_unix<P: AsRef<Path>>(path: P) -> Self {
 		let addr = UnixAddr::new(path.as_ref()).unwrap();
 		Self::Unix(addr)
+	}
+
+	/// Create a new TCP socket.
+	#[must_use]
+	pub fn new_tcp(ip: IpAddr, port: u16) -> Self {
+		Self::Tcp(SocketAddr::new(ip, port))
 	}
 
 	/// Create a new Vsock socket.
@@ -152,16 +163,31 @@ impl SocketAddress {
 			#[cfg(not(target_os = "macos"))]
 			Self::Vsock(_) => AddressFamily::Vsock,
 			Self::Unix(_) => AddressFamily::Unix,
+			Self::Tcp(addr) => {
+				if addr.is_ipv4() {
+					AddressFamily::Inet
+				} else {
+					AddressFamily::Inet6
+				}
+			}
 		}
 	}
 
-	/// Convenience method for accessing the wrapped address
+	/// Convenience method for accessing the wrapped address.
+	///
+	/// # Panics
+	///
+	/// Panics for TCP addresses, which are handled by Tokio directly and do
+	/// not have a nix [`SockaddrLike`] wrapper in this API.
 	#[must_use]
 	pub fn addr(&self) -> Box<dyn SockaddrLike> {
 		match *self {
 			#[cfg(not(target_os = "macos"))]
 			Self::Vsock(vsa) => Box::new(vsa),
 			Self::Unix(ua) => Box::new(ua),
+			Self::Tcp(_) => {
+				panic!("tcp addresses do not expose a nix sockaddr accessor")
+			}
 		}
 	}
 
@@ -176,6 +202,7 @@ impl SocketAddress {
 			Self::Unix(usock) => usock,
 			#[cfg(not(target_os = "macos"))]
 			Self::Vsock(_) => panic!("invalid socket address requested"),
+			Self::Tcp(_) => panic!("invalid socket address requested"),
 		}
 	}
 
@@ -189,6 +216,26 @@ impl SocketAddress {
 	pub fn vsock(&self) -> &VsockAddr {
 		match self {
 			Self::Vsock(vsock) => vsock,
+			Self::Unix(_) | Self::Tcp(_) => {
+				panic!("invalid socket address requested")
+			}
+		}
+	}
+
+	/// Returns the TCP address if this is a TCP `SocketAddress`, panics otherwise.
+	///
+	/// # Panics
+	///
+	/// Panics if the underlying `SocketAddress` is not a `Tcp` variant.
+	#[must_use]
+	pub fn tcp(&self) -> SocketAddr {
+		match self {
+			Self::Tcp(addr) => *addr,
+			#[cfg(not(target_os = "macos"))]
+			Self::Vsock(_) | Self::Unix(_) => {
+				panic!("invalid socket address requested")
+			}
+			#[cfg(target_os = "macos")]
 			Self::Unix(_) => panic!("invalid socket address requested"),
 		}
 	}
@@ -223,6 +270,7 @@ impl SocketAddress {
 					path.to_str().ok_or(IOError::ConnectAddressInvalid)?,
 				))
 			}
+			Self::Tcp(addr) => Ok(Self::Tcp(SocketAddr::new(addr.ip(), port))),
 		}
 	}
 }
@@ -245,6 +293,9 @@ impl std::fmt::Display for SocketAddress {
 						.to_str()
 						.unwrap_or("unable to procure")
 				)
+			}
+			Self::Tcp(addr) => {
+				write!(f, "tcp addr: {addr}")
 			}
 		}
 	}

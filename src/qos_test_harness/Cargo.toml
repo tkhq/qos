@@ -1,0 +1,27 @@
+[package]
+name = "qos_test_harness"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Shared runner-agnostic tests for QuorumOS applications"
+repository = "https://github.com/tkhq/qos"
+
+[lints.rust]
+missing_docs = "allow"
+unsafe_code = "deny"
+
+[lints.clippy]
+missing_errors_doc = "allow"
+module_name_repetitions = "allow"
+
+[dependencies]
+qos_hex = { workspace = true }
+qos_p256 = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

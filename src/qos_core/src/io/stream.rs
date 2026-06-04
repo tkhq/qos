@@ -4,7 +4,7 @@ use std::{io::ErrorKind, pin::Pin};
 
 use tokio::{
 	io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-	net::{UnixListener, UnixSocket, UnixStream},
+	net::{TcpListener, TcpStream, UnixListener, UnixSocket, UnixStream},
 };
 #[cfg(not(target_os = "macos"))]
 use tokio_vsock::{VsockListener, VsockStream};
@@ -20,6 +20,7 @@ pub const MAX_PAYLOAD_SIZE: usize = 128 * MIB;
 #[derive(Debug)]
 enum InnerListener {
 	Unix(UnixListener),
+	Tcp(TcpListener),
 	#[cfg(not(target_os = "macos"))]
 	Vsock(VsockListener),
 }
@@ -27,6 +28,7 @@ enum InnerListener {
 #[derive(Debug)]
 enum InnerStream {
 	Unix(UnixStream),
+	Tcp(TcpStream),
 	#[cfg(not(target_os = "macos"))]
 	Vsock(VsockStream),
 }
@@ -49,6 +51,10 @@ impl Stream {
 	// accept a new connection, used by server side
 	fn unix_accepted(stream: UnixStream) -> Self {
 		Self { address: None, inner: Some(InnerStream::Unix(stream)) }
+	}
+
+	fn tcp_accepted(stream: TcpStream) -> Self {
+		Self { address: None, inner: Some(InnerStream::Tcp(stream)) }
 	}
 
 	// accept a new connection, used by server side
@@ -80,6 +86,11 @@ impl Stream {
 
 				self.inner = Some(InnerStream::Unix(inner));
 			}
+			SocketAddress::Tcp(_addr) => {
+				let inner = tcp_connect(addr).await?;
+
+				self.inner = Some(InnerStream::Tcp(inner));
+			}
 			#[cfg(not(target_os = "macos"))]
 			SocketAddress::Vsock(_vaddr) => {
 				let inner = vsock_connect(addr).await?;
@@ -105,6 +116,9 @@ impl Stream {
 			InnerStream::Unix(s) => {
 				*s = unix_connect(&addr).await?;
 			}
+			InnerStream::Tcp(s) => {
+				*s = tcp_connect(&addr).await?;
+			}
 			#[cfg(not(target_os = "macos"))]
 			InnerStream::Vsock(s) => {
 				*s = vsock_connect(&addr).await?;
@@ -122,6 +136,7 @@ impl Stream {
 	pub async fn send(&mut self, buf: &[u8]) -> Result<(), IOError> {
 		match &mut self.inner_mut()? {
 			InnerStream::Unix(s) => send(s, buf).await,
+			InnerStream::Tcp(s) => send(s, buf).await,
 			#[cfg(not(target_os = "macos"))]
 			InnerStream::Vsock(s) => send(s, buf).await,
 		}
@@ -135,6 +150,7 @@ impl Stream {
 	pub async fn recv(&mut self) -> Result<Vec<u8>, IOError> {
 		match &mut self.inner_mut()? {
 			InnerStream::Unix(s) => recv(s).await,
+			InnerStream::Tcp(s) => recv(s).await,
 			#[cfg(not(target_os = "macos"))]
 			InnerStream::Vsock(s) => recv(s).await,
 		}
@@ -269,6 +285,7 @@ impl AsyncRead for Stream {
 	) -> std::task::Poll<std::io::Result<()>> {
 		match &mut self.inner_mut()? {
 			InnerStream::Unix(s) => Pin::new(s).poll_read(cx, buf),
+			InnerStream::Tcp(s) => Pin::new(s).poll_read(cx, buf),
 			#[cfg(not(target_os = "macos"))]
 			InnerStream::Vsock(s) => Pin::new(s).poll_read(cx, buf),
 		}
@@ -283,6 +300,7 @@ impl AsyncWrite for Stream {
 	) -> std::task::Poll<Result<usize, std::io::Error>> {
 		match &mut self.inner_mut()? {
 			InnerStream::Unix(s) => Pin::new(s).poll_write(cx, buf),
+			InnerStream::Tcp(s) => Pin::new(s).poll_write(cx, buf),
 			#[cfg(not(target_os = "macos"))]
 			InnerStream::Vsock(s) => Pin::new(s).poll_write(cx, buf),
 		}
@@ -294,6 +312,7 @@ impl AsyncWrite for Stream {
 	) -> std::task::Poll<Result<(), std::io::Error>> {
 		match &mut self.inner_mut()? {
 			InnerStream::Unix(s) => Pin::new(s).poll_flush(cx),
+			InnerStream::Tcp(s) => Pin::new(s).poll_flush(cx),
 			#[cfg(not(target_os = "macos"))]
 			InnerStream::Vsock(s) => Pin::new(s).poll_flush(cx),
 		}
@@ -305,6 +324,7 @@ impl AsyncWrite for Stream {
 	) -> std::task::Poll<Result<(), std::io::Error>> {
 		match &mut self.inner_mut()? {
 			InnerStream::Unix(s) => Pin::new(s).poll_shutdown(cx),
+			InnerStream::Tcp(s) => Pin::new(s).poll_shutdown(cx),
 			#[cfg(not(target_os = "macos"))]
 			InnerStream::Vsock(s) => Pin::new(s).poll_shutdown(cx),
 		}
@@ -331,6 +351,13 @@ impl Listener {
 				let inner = InnerListener::Unix(UnixListener::bind(path)?);
 				Self { inner, addr: addr.clone() }
 			}
+			SocketAddress::Tcp(taddr) => {
+				let listener = std::net::TcpListener::bind(taddr)?;
+				listener.set_nonblocking(true)?;
+				let inner =
+					InnerListener::Tcp(TcpListener::from_std(listener)?);
+				Self { inner, addr: addr.clone() }
+			}
 			#[cfg(not(target_os = "macos"))]
 			SocketAddress::Vsock(vaddr) => {
 				let inner = InnerListener::Vsock(VsockListener::bind(vaddr)?);
@@ -351,6 +378,10 @@ impl Listener {
 			InnerListener::Unix(l) => {
 				let (s, _) = l.accept().await?;
 				Stream::unix_accepted(s)
+			}
+			InnerListener::Tcp(l) => {
+				let (s, _) = l.accept().await?;
+				Stream::tcp_accepted(s)
 			}
 			#[cfg(not(target_os = "macos"))]
 			InnerListener::Vsock(l) => {
@@ -381,6 +412,7 @@ impl Drop for Listener {
 				}
 				Err(e) => eprintln!("{e}"), // do not crash in Drop
 			},
+			InnerListener::Tcp(_) => {}
 			#[cfg(not(target_os = "macos"))]
 			InnerListener::Vsock(_vsock) => {} // vsock's drop will clear this
 		}
@@ -395,6 +427,12 @@ async fn unix_connect(
 
 	let socket = UnixSocket::new_stream()?;
 	socket.connect(path).await
+}
+
+async fn tcp_connect(
+	addr: &SocketAddress,
+) -> Result<TcpStream, std::io::Error> {
+	TcpStream::connect(addr.tcp()).await
 }
 
 // raw vsock socket connect

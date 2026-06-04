@@ -761,6 +761,7 @@ impl Command {
 			.token(Self::pivot_path_token())
 			.token(Self::restart_policy_token())
 			.token(Self::pivot_args_token())
+			.token(Self::bridge_config_token())
 			.token(Self::unsafe_eph_path_override_token())
 	}
 

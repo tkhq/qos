@@ -29,15 +29,21 @@ The important split is:
 - Shared test: runner-agnostic Rust test logic. It can request an app, probe
   returned endpoints, verify responses, and report pass/fail.
 - Builder: component that produces or locates host binaries, pivot binaries,
-  EIFs, container images, and metadata. It owns freshness and cache checks.
+  rootfs/kernel inputs, container images, and metadata. It owns freshness and
+  cache checks.
 - Host runner: component that runs host-side code such as `qos_host`, boot
   client logic, and HTTP probing.
 - Enclave runner: component that runs the enclave/app side, such as QEMU,
   Docker, or TVC.
+- Runtime socket: the control-plane transport between a host runner and an
+  enclave runner. Supported shapes are vsock, Unix socket, TCP, or an external
+  control URL. Unix sockets only apply when both sides share the same kernel;
+  QEMU guests and macOS hosts require vsock or an explicit TCP proxy/forward.
 - Top-level runner: implementation of the shared test runner trait. It composes
   one builder, one host runner, and one enclave runner.
-- Full QEMU EIF: high-fidelity QEMU runner that boots a StageX-built
-  Nitro-style EIF/init path.
+- Reproducible Plain QEMU: high-fidelity local QEMU runner that boots a
+  StageX-built rootfs/pivot package with a normal QEMU kernel and user-networked
+  TCP forwarding.
 - Lightweight QEMU: QEMU runner that avoids StageX and uses local,
   non-reproducible cross-compiled artifacts for developer speed.
 - Docker runner: runner that uses Docker for the app/enclave side, or optionally
@@ -78,7 +84,7 @@ The shared test library should define small interfaces and data types:
 - `ArtifactRequest`: high-level app request, initially `SignedEcho`.
 - `BuildPlan`: normalized build request created from an `ArtifactRequest` and
   runner config.
-- `BuildOutput`: host binaries, pivot bytes/path, image/EIF identity, hashes,
+- `BuildOutput`: host binaries, pivot bytes/path, image/rootfs/kernel identity, hashes,
   and builder metadata.
 - `HostRunner`: starts/stops `qos_host` and boot/client orchestration.
 - `EnclaveRunner`: starts/stops QEMU, Docker, or external app runtime.
@@ -106,14 +112,14 @@ app.
 
 | Top-level runner | Builder | Enclave runner | Host runner | Purpose |
 | --- | --- | --- | --- | --- |
-| Full QEMU EIF | StageX reproducible builder | QEMU EIF/init | Native host by default | Highest-fidelity local/CI test |
+| Reproducible Plain QEMU | StageX reproducible builder | Plain QEMU rootfs/kernel | Native host by default | Highest-fidelity local/CI test without Nitro-specific QEMU |
 | Lightweight QEMU | Local cross-compile builder | Lightweight QEMU package | Native host by default | Fast dev loop without StageX |
 | Docker | Docker/local builder | Docker app runtime | Native or Docker host | Cheap Linux process/container test |
 | Vivo/TVC | Digest/image selector or publisher | TVC deployment | Native TVC CLI/gateway probe | External platform E2E |
 
-These runners are deliberately not equivalent. The full QEMU runner catches
-packaging, init, vsock, and Nitro-like boot failures. Lightweight QEMU and Docker
-are faster but lower fidelity.
+These runners are deliberately not equivalent. The reproducible QEMU runner
+catches StageX packaging, init, rootfs, QEMU boot, control-plane, and pivot
+execution failures. Lightweight QEMU and Docker are faster but lower fidelity.
 
 ## Builder Interface
 
@@ -144,7 +150,7 @@ Builder implementations:
 - Cross-compile builder: uses Cargo with explicit target triples and isolated
   target dirs for enclave-side binaries.
 - StageX reproducible builder: uses pinned StageX/container inputs and records
-  EIF/image identity.
+  rootfs/kernel/pivot identity.
 - Docker builder: builds or loads Docker images and records image IDs/digests.
 - TVC image builder/selector: either publishes an image by digest or validates a
   configured digest.
@@ -180,7 +186,8 @@ Enclave runners control the app/enclave execution environment.
 
 Enclave runner variants:
 
-- Full QEMU EIF runner: boots the StageX-built Nitro-style EIF/init path.
+- Reproducible Plain QEMU runner: boots the StageX-built rootfs/pivot package
+  with a normal QEMU machine.
 - Lightweight QEMU runner: boots a non-StageX local QEMU package.
 - Docker enclave runner: runs the app/enclave approximation in Docker.
 - TVC enclave runner: deploys the app through TVC.
@@ -210,28 +217,49 @@ Alternative policy:
 This gives macOS users a possible path even when the desired QEMU/vsock setup is
 Linux-only, without making host execution ambiguous.
 
-## Full QEMU EIF Runner
+## Runtime Transports
 
-The full QEMU runner is the high-fidelity runner. It should exercise the same
-class of artifacts used by Nitro-style boot:
+The runner interfaces should model transport explicitly instead of assuming a
+single local socket shape:
 
-1. StageX builder produces a fresh or cached EIF and signed-echo pivot.
+- Vsock: useful for future QEMU compositions that need to exercise a
+  host/enclave control boundary close to production.
+- TCP: acceptable for lightweight QEMU and Docker compositions where the app
+  runtime is behind QEMU user networking or container port publishing.
+- Unix socket: acceptable only for same-kernel local execution, such as a native
+  local core or a same-container/same-VM composition.
+- External URL: used by TVC or any service that exposes the control plane
+  through a gateway/API.
+
+The QEMU runners may use TCP host forwarding even when the host runner is
+native. That is a deliberate local emulation transport for the first harness
+implementation.
+
+## Reproducible Plain QEMU Runner
+
+The reproducible QEMU runner is the high-fidelity local runner for this harness.
+It avoids Nitro-specific QEMU machine support and instead boots a normal QEMU
+guest with a StageX-built rootfs and pivot:
+
+1. StageX builder produces a fresh or cached plain QEMU package and signed-echo
+   pivot.
 2. Host builder produces native host binaries or confirms cached binaries.
-3. QEMU EIF enclave runner starts the Nitro-enclave machine with the EIF.
-4. Host runner starts `qos_host` and connects to the QEMU/enclave vsock endpoint.
-5. Host runner boots the enclave with a manifest whose pivot hash matches the
+3. QEMU enclave runner starts a normal QEMU machine with a pinned kernel and the
+   built rootfs.
+4. Host runner starts `qos_host` and connects to the QEMU guest through TCP host
+   forwarding.
+5. Host runner boots the guest with a manifest whose pivot hash matches the
    built signed-echo pivot.
 6. Top-level runner returns endpoint URLs to the shared signed-echo test.
-7. Cleanup stops host, QEMU, vsock helpers, temp dirs, and logs according to the
-   outcome.
+7. Cleanup stops host, QEMU, temp dirs, and logs according to the outcome.
 
 Expected properties:
 
-- Best signal for initramfs, `/init`, Nitro-like boot, NSM integration, vsock,
-  `qos_core`, `qos_host`, boot protocol, bridge config, and pivot execution.
+- Best signal for StageX-built guest binaries, rootfs packaging, `/init`,
+  `qos_core`, `qos_host`, boot protocol, and pivot execution under QEMU.
 - Slowest runner.
-- Requires pinned StageX inputs and records StageX/EIF identity.
-- May need Linux-only features depending on the chosen QEMU/vsock path.
+- Requires pinned StageX inputs and records StageX rootfs/kernel/pivot identity.
+- Does not require a QEMU build with Nitro-enclave machine support.
 
 For v1, `dangerous-dev-boot` is acceptable because the test is about runner/app
 lifecycle, not quorum ceremony correctness. Standard boot can become a separate
@@ -252,6 +280,20 @@ It should:
 4. Host runner starts `qos_host` and boots using the same manifest/pivot hash
    logic as the full runner.
 
+The lightweight package can be an initramfs or a writable development rootfs,
+depending on the available kernel. On macOS, a practical tested composition is:
+
+- an aarch64 QEMU `virt` guest,
+- a local non-StageX cross-compiled `qos_core` and `light_init`,
+- a 9p-mounted rootfs when the selected kernel does not honor the generated
+  initramfs,
+- QEMU user networking with TCP host forwarding for the native host-to-core
+  control plane and for the signed-echo app port.
+
+That 9p/TCP composition is intentionally a fast development runner. It can prove
+the shared test, local build freshness, boot orchestration, and pivot execution,
+but it does not prove StageX reproducibility.
+
 Expected properties:
 
 - Faster than full QEMU.
@@ -271,7 +313,7 @@ Supported compositions:
 
 The second option is useful for macOS or CI compatibility, but it should be
 clearly labeled as lower fidelity than native-host QEMU. Docker results should
-not be treated as evidence that EIF/init/vsock behavior is correct.
+not be treated as evidence that QEMU rootfs/init behavior is correct.
 
 ## Vivo/TVC Runner
 
@@ -332,13 +374,13 @@ Recommended build record:
 - output file paths,
 - SHA-256 of host binaries,
 - SHA-256 of pivot bytes,
-- EIF/image/rootfs digest if applicable,
+- image/kernel/rootfs digest if applicable,
 - StageX base image digests if applicable,
 - timestamp for diagnostics only, not identity.
 
 Cargo freshness is useful but insufficient. Cargo tracks compiled binaries;
-builders also package binaries into rootfs trees, initramfs, EIFs, Docker layers,
-or TVC deployments. Those packaging outputs need their own cache keys and hash
+builders also package binaries into rootfs trees, initramfs, Docker layers, or
+TVC deployments. Those packaging outputs need their own cache keys and hash
 validation.
 
 ## Build Freshness By Builder
@@ -349,14 +391,13 @@ Must rebuild or validate:
 
 - native host binaries if this builder also owns them,
 - signed-echo pivot,
-- StageX-based EIF,
-- QEMU launch inputs,
-- vsock helper inputs.
+- StageX-built plain QEMU package/rootfs,
+- QEMU kernel and launch inputs.
 
-The EIF packaging step must depend on all source files that affect the EIF, not
-only the Dockerfile. A generated build fingerprint is acceptable if it captures
-the same inputs. Clean git commit keys can be used for cache lookup; dirty trees
-need diff/untracked-source fingerprints or no cache reuse.
+The package/rootfs step must depend on all source files that affect the guest,
+not only the Dockerfile. A generated build fingerprint is acceptable if it
+captures the same inputs. Clean git commit keys can be used for cache lookup;
+dirty trees need diff/untracked-source fingerprints or no cache reuse.
 
 ### Local Cross-Compile Builder
 
@@ -434,7 +475,7 @@ Local cross builder:
 QEMU enclave runner:
 
 - QEMU binary available,
-- selected machine/vsock path supported,
+- selected machine, kernel, rootfs mode, and network device supported,
 - KVM or non-KVM mode explicitly configured,
 - required ports/socket paths available.
 
@@ -473,8 +514,8 @@ On fail:
 - stop resources unless configured to keep them,
 - preserve logs, build records, command lines, artifact hashes, endpoint URLs,
   and runner-specific IDs,
-- include enough data to reproduce which exact host binaries, pivot bytes, EIF,
-  image, rootfs, or TVC deployment was used.
+- include enough data to reproduce which exact host binaries, pivot bytes,
+  kernel, image, rootfs, or TVC deployment was used.
 
 Cleanup errors should not hide the original test error. The final error should
 include both.
@@ -487,7 +528,7 @@ include both.
 3. Add a repo-local signed-echo pivot binary.
 4. Implement the local cross builder and lightweight QEMU runner first for dev
    velocity.
-5. Implement the StageX builder and full QEMU EIF runner using the same
+5. Implement the StageX builder and reproducible plain QEMU runner using the same
    top-level runner shape.
 6. Add Docker host/enclave runner variants once QEMU boundaries are stable.
 7. Implement Vivo/TVC runner outside this repo against the same shared test
@@ -501,7 +542,8 @@ include both.
   prove cache validity.
 - QEMU enclave runners run enclave/app code under QEMU.
 - Host execution mode is explicit: native, Docker, QEMU, or TVC.
-- Full QEMU runner records StageX/EIF identity and does not reuse stale EIFs.
+- Reproducible QEMU runner records StageX rootfs/kernel identity and does not
+  reuse stale packages.
 - Lightweight QEMU runner avoids StageX and records non-reproducible local
   artifact identity.
 - Every runner records the exact pivot hash used in the boot manifest.

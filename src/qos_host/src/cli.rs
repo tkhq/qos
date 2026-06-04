@@ -8,7 +8,7 @@ use std::{
 };
 
 use qos_core::{
-	cli::{CID, PORT, USOCK},
+	cli::{CID, PORT, TCP_HOST, TCP_PORT, USOCK},
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
@@ -26,19 +26,31 @@ impl GetParserForOptions for HostParser {
 			.token(
 				Token::new(CID, "context identifier for the enclave socket (only for VSOCK)")
 					.takes_value(true)
-					.forbids(vec![USOCK])
+					.forbids(vec![USOCK, TCP_HOST, TCP_PORT])
 					.requires(PORT),
 			)
 			.token(
 				Token::new(PORT, "the port the enclave socket is listening on (only for VSOCK)")
 					.takes_value(true)
-					.forbids(vec![USOCK])
+					.forbids(vec![USOCK, TCP_HOST, TCP_PORT])
 					.requires(CID),
 			)
 			.token(
 				Token::new(USOCK, "name of the socket file (ex: `dev.sock`) (only for unix sockets)")
 					.takes_value(true)
-					.forbids(vec![PORT, CID])
+					.forbids(vec![PORT, CID, TCP_HOST, TCP_PORT])
+			)
+			.token(
+				Token::new(TCP_HOST, "TCP IP address where qos_core is listening")
+					.takes_value(true)
+					.forbids(vec![CID, PORT, USOCK])
+					.requires(TCP_PORT)
+			)
+			.token(
+				Token::new(TCP_PORT, "TCP port where qos_core is listening")
+					.takes_value(true)
+					.forbids(vec![CID, PORT, USOCK])
+					.requires(TCP_HOST)
 			)
 			.token(
 				Token::new(HOST_IP, "IP address this server should listen on")
@@ -63,7 +75,7 @@ impl GetParserForOptions for HostParser {
 				Token::new(VSOCK_TO_HOST, "whether to add the to-host svm flag to the enclave vsock connection. Valid options are `true` or `false`")
 					.takes_value(true)
 					.required(false)
-					.forbids(vec![USOCK])
+					.forbids(vec![USOCK, TCP_HOST, TCP_PORT])
 			)
 	}
 }
@@ -129,9 +141,11 @@ impl HostOpts {
 			self.parsed.single(CID),
 			self.parsed.single(PORT),
 			self.parsed.single(USOCK),
+			self.parsed.single(TCP_HOST),
+			self.parsed.single(TCP_PORT),
 		) {
 			#[cfg(not(target_os = "macos"))]
-			(Some(c), Some(p), None) => {
+			(Some(c), Some(p), None, None, None) => {
 				let c = c.parse().map_err(|_| {
 					qos_core::io::IOError::ConnectAddressInvalid
 				})?;
@@ -141,7 +155,18 @@ impl HostOpts {
 
 				Ok(SocketAddress::new_vsock(c, p, self.to_host_flag()))
 			}
-			(None, None, Some(u)) => Ok(SocketAddress::new_unix(u.as_str())),
+			(None, None, Some(u), None, None) => {
+				Ok(SocketAddress::new_unix(u.as_str()))
+			}
+			(None, None, None, Some(host), Some(port)) => {
+				let ip = IpAddr::from_str(host).map_err(|_| {
+					qos_core::io::IOError::ConnectAddressInvalid
+				})?;
+				let port = port.parse().map_err(|_| {
+					qos_core::io::IOError::ConnectAddressInvalid
+				})?;
+				Ok(SocketAddress::new_tcp(ip, port))
+			}
 
 			_ => panic!("Invalid socket opts"),
 		}
