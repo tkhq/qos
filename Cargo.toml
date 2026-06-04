@@ -45,7 +45,7 @@ resolver = "2"
 
 [workspace.package]
 rust-version = "1.94"
-version = "0.10.0"
+version = "0.10.1"
 edition = "2024"
 license = "AGPL-3.0-only"
 
@@ -102,15 +102,15 @@ zeroize = { version = "1.8", default-features = false }
 # Internal workspace dependencies
 integration = { path = "src/integration" }
 qos_host = { path = "src/qos_host", default-features = false }
-qos_client = { path = "src/qos_client", version = "0.10.0", default-features = false }
-qos_core = { path = "src/qos_core", version = "0.10.0", default-features = false }
-qos_crypto = { path = "src/qos_crypto", version = "0.10.0", default-features = false }
-qos_hex = { path = "src/qos_hex", version = "0.10.0", default-features = false }
-qos_json = { path = "src/qos_json", version = "0.10.0" }
-qos_net = { path = "src/qos_net", version = "0.10.0", default-features = false }
-qos_nsm = { path = "src/qos_nsm", version = "0.10.0", default-features = false }
-qos_p256 = { path = "src/qos_p256", version = "0.10.0" }
-qos_test_primitives = { path = "src/qos_test_primitives", version = "0.10.0" }
+qos_client = { path = "src/qos_client", version = "0.10.1", default-features = false }
+qos_core = { path = "src/qos_core", version = "0.10.1", default-features = false }
+qos_crypto = { path = "src/qos_crypto", version = "0.10.1", default-features = false }
+qos_hex = { path = "src/qos_hex", version = "0.10.1", default-features = false }
+qos_json = { path = "src/qos_json", version = "0.10.1" }
+qos_net = { path = "src/qos_net", version = "0.10.1", default-features = false }
+qos_nsm = { path = "src/qos_nsm", version = "0.10.1", default-features = false }
+qos_p256 = { path = "src/qos_p256", version = "0.10.1" }
+qos_test_primitives = { path = "src/qos_test_primitives", version = "0.10.1" }
 
 # Option for the future: build all QOS applications with additional runtime checks
 # to intentionally panic on integer overflows instead of continuing execution
