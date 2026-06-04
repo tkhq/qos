@@ -1,5 +1,7 @@
 include src/macros.mk
 
+PIVOT_BIN ?= pivot_download
+PIVOT_ARGS ?= [http://objdump.katona.me/program.bin,109.123.250.238:0]
 REGISTRY := local
 CARGO_WORKSPACE_FILES := Cargo.toml Cargo.lock
 .DEFAULT_GOAL :=
@@ -43,10 +45,6 @@ shell: out/.common-loaded
 		qos-local/common:latest \
 		/bin/bash
 
-.PHONY: build
-build:
-	cargo build --all-features --locked
-
 qemu: out/nitro.eif /tmp/vhost4.socket
 	qemu-system-x86_64 -M nitro-enclave,vsock=c,id=hello-world -kernel out/nitro.eif -nographic -m 4G --enable-kvm -cpu host -chardev socket,id=c,path=/tmp/vhost4.socket
 
@@ -57,22 +55,42 @@ stop:
 	rm -f /tmp/vhost4.socket
 
 /tmp/vhost4.socket:
-	vhost-device-vsock --vm guest-cid=4,forward-cid=1,forward-listen=9001,socket=/tmp/vhost4.socket &
+	vhost-device-vsock --vm guest-cid=4,forward-cid=1,forward-listen=3000+9001+9002,socket=/tmp/vhost4.socket &
 
 .PHONY: host
 host:
-	cargo run -p qos_host --features qemu -- \
+	cargo run --locked -p qos_host --features qemu -- \
 		--host-ip 0.0.0.0 \
 		--host-port 3001 \
 		--cid 1 \
 		--port 9001
 
 .PHONY: bridge
-bridge:
-	cargo run -p qos_bridge --bin ingress --features egress -- \
+bridge: target/x86_64-unknown-linux-musl/release-panic-abort/egress
+	cargo run -p qos_bridge --locked --bin ingress --features egress,qemu -- \
 		--cid 1 \
 		--control-url http://127.0.0.1:3001/qos \
-		--egress-bin-path ./target/debug/
+		--vsock-to-host false \
+		--egress-bin-path target/x86_64-unknown-linux-musl/release-panic-abort/egress
+
+.PHONY: boot
+boot:
+	cd src/integration && cargo run --locked -p integration --example boot_enclave -- ../../target/x86_64-unknown-linux-musl/release/examples/$(PIVOT_BIN) $(PIVOT_ARGS)
+
+# used for egress testing as our pivot, expects a single http url for file download
+target/x86_64-unknown-linux-musl/release/examples/pivot_download: \
+	src/integration/examples/pivot_download.rs \
+	src/integration/Cargo.toml \
+	Cargo.toml
+	cargo build --release --locked --target x86_64-unknown-linux-musl -p integration --example pivot_download
+
+# used for egress testing as our separate egress host proxy
+target/x86_64-unknown-linux-musl/release-panic-abort/egress: \
+	src/qos_bridge/Cargo.toml \
+	src/qos_bridge/src/bin/egress.rs \
+	src/qos_bridge/src/*.rs \
+	Cargo.toml
+	cargo build --profile release-panic-abort --features egress,qemu --locked --target x86_64-unknown-linux-musl -p qos_bridge --bin egress
 
 out/nitro.eif: \
 	src/images/qemu/Containerfile \

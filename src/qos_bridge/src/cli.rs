@@ -158,7 +158,6 @@ impl Cli {
 	/// # Panics
 	/// panics on socket errors on wrong cli input
 	pub fn execute_egress() {
-		println!("here");
 		let mut args: Vec<String> = env::args().collect();
 		let options = HostOpts::new(&mut args);
 
