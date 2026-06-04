@@ -6,7 +6,14 @@ on:
       - main
     paths:
       - ".github/workflows/signed-echo-image.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "Makefile"
+      - "src/macros.mk"
+      - "src/images/common/**"
       - "src/images/signed_echo/**"
+      - "src/qos_hex/**"
+      - "src/qos_p256/**"
       - "src/signed_echo/**"
   workflow_dispatch:
 
