@@ -10,17 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## `qos_client` - [0.10.1](https://github.com/tkhq/qos/compare/qos_client-v0.10.0...qos_client-v0.10.1) - 2026-06-01
 
 ### Other
-- update Cargo.lock dependencies
+- Updated dependency lockfile for the coordinated 0.10.1 release ([#714](https://github.com/tkhq/qos/pull/714))
 
 ## `qos_net` - [0.10.1](https://github.com/tkhq/qos/compare/qos_net-v0.9.0...qos_net-v0.10.1) - 2026-06-01
 
-### Other
-- replace VM feature flag with macOS arch check
+### Changed
+- Builds now automatically select macOS-compatible local socket behavior at compile time, removing the manual `vm` feature flag ([#714](https://github.com/tkhq/qos/pull/714))
 
 ## `qos_core` - [0.10.1](https://github.com/tkhq/qos/compare/qos_core-v0.9.0...qos_core-v0.10.1) - 2026-06-01
 
-### Other
-- Merge pull-request #714
+### Changed
+- Builds now automatically select vsock (Linux) vs Unix-socket (macOS) behavior at compile time, removing the manual `vm` feature flag ([#714](https://github.com/tkhq/qos/pull/714))
 
 ## `qos_net` - [0.10.0](https://github.com/tkhq/qos/compare/qos_net-v0.9.0...qos_net-v0.10.0) - 2026-06-01
 
