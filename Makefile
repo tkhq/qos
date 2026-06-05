@@ -30,6 +30,10 @@ docs: out/.common-loaded
 build-linux-only: out/.common-loaded
 	$(call run,make -C src build-linux-only)
 
+.PHONY: nested-nitro-rawhide-parent
+nested-nitro-rawhide-parent:
+	./src/qos_test_harness/scripts/build_nested_nitro_rawhide_parent.sh
+
 .PHONY: shell
 shell: out/.common-loaded
 	docker run \

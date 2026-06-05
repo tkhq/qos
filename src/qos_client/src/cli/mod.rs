@@ -21,7 +21,9 @@ use qos_core::{
 mod services;
 
 pub use services::PairOrYubi;
-pub use services::{advanced_provision_yubikey, generate_file_key};
+#[cfg(feature = "smartcard")]
+pub use services::advanced_provision_yubikey;
+pub use services::generate_file_key;
 
 const HOST_IP: &str = "host-ip";
 const HOST_PORT: &str = "host-port";
@@ -1174,6 +1176,7 @@ impl ClientOpts {
 			.expect("threshold not valid integer.")
 	}
 
+	#[cfg(feature = "smartcard")]
 	fn payload(&self) -> String {
 		self.parsed.single(PAYLOAD).expect("Missing `--payload`").clone()
 	}
@@ -1215,6 +1218,7 @@ impl ClientOpts {
 		self.parsed.single(DR_KEY_PATH).map(Into::into)
 	}
 
+	#[cfg(feature = "smartcard")]
 	fn new_pin_path(&self) -> String {
 		self.parsed
 			.single(NEW_PIN_PATH)
@@ -1477,6 +1481,7 @@ mod handlers {
 	pub(super) fn provision_yubikey(opts: &ClientOpts) {
 		#[cfg(not(feature = "smartcard"))]
 		{
+			let _ = opts;
 			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
 		}
 
@@ -1492,6 +1497,7 @@ mod handlers {
 	pub(super) fn advanced_provision_yubikey(opts: &ClientOpts) {
 		#[cfg(not(feature = "smartcard"))]
 		{
+			let _ = opts;
 			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
 		}
 
@@ -1510,6 +1516,7 @@ mod handlers {
 	pub(super) fn yubikey_sign(opts: &ClientOpts) {
 		#[cfg(not(feature = "smartcard"))]
 		{
+			let _ = opts;
 			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
 		}
 
@@ -1555,6 +1562,7 @@ mod handlers {
 	pub(super) fn yubikey_change_pin(opts: &ClientOpts) {
 		#[cfg(not(feature = "smartcard"))]
 		{
+			let _ = opts;
 			panic!("{}", services::SMARTCARD_FEAT_DISABLED_MSG)
 		}
 

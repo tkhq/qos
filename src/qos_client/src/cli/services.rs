@@ -1,6 +1,6 @@
 use std::{
 	fs::{self, File},
-	io::{self, BufRead, BufReader, Write},
+	io::{self, BufRead, Write},
 	mem,
 	path::{Path, PathBuf},
 };
@@ -56,6 +56,7 @@ const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
 #[cfg(not(feature = "smartcard"))]
 pub(crate) const SMARTCARD_FEAT_DISABLED_MSG: &str = "The \"smartcard\" feature must be enabled to use YubiKey related functionality.";
 
+#[cfg(feature = "smartcard")]
 const ENTER_PIN_PROMPT: &str = "Enter your pin: ";
 const TAP_MSG: &str = "Tap your YubiKey";
 
@@ -218,6 +219,9 @@ impl PairOrYubi {
 		secret_path: Option<String>,
 		maybe_pin_path: Option<String>,
 	) -> Result<Self, Error> {
+		#[cfg(not(feature = "smartcard"))]
+		drop(maybe_pin_path);
+
 		let result = match (yubikey_flag, secret_path) {
 			(true, None) => {
 				#[cfg(feature = "smartcard")]
@@ -387,9 +391,10 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	Ok(())
 }
 
+#[cfg(feature = "smartcard")]
 pub(crate) fn pin_from_path<P: AsRef<Path>>(path: P) -> Zeroizing<Vec<u8>> {
 	let file = File::open(path).expect("Failed to open current pin path");
-	let line = BufReader::new(file)
+	let line = std::io::BufReader::new(file)
 		.lines()
 		.next()
 		.expect("First line missing from current pin file")

@@ -44,10 +44,10 @@ The important split is:
 - Reproducible Plain QEMU: high-fidelity local QEMU runner that boots a
   StageX-built rootfs/pivot package with a normal QEMU kernel and user-networked
   TCP forwarding.
-- Nested Nitro QEMU: experimental macOS-compatible composition that boots an
-  aarch64 Linux parent VM under QEMU/HVF, then runs Linux/aarch64
-  `qemu-system-x86_64 -M nitro-enclave`, `vhost-device-vsock`, and QoS host
-  binaries inside that parent VM.
+- Nested Nitro QEMU: experimental composition that boots an x86_64 Linux parent
+  VM under QEMU, then runs Linux/x86_64 `qemu-system-x86_64 -M
+  nitro-enclave`, `vhost-device-vsock`, and QoS host binaries inside that
+  parent VM.
 - Lightweight QEMU: QEMU runner that avoids StageX and uses local,
   non-reproducible cross-compiled artifacts for developer speed.
 - Docker runner: runner that uses Docker for the app/enclave side, or optionally
@@ -118,7 +118,7 @@ app.
 | --- | --- | --- | --- | --- |
 | Reproducible Plain QEMU | StageX reproducible builder | Plain QEMU rootfs/kernel | Native host by default | Highest-fidelity local/CI test without Nitro-specific QEMU |
 | Lightweight QEMU | Local cross-compile builder | Lightweight QEMU package | Native host by default | Fast dev loop without StageX |
-| Nested Nitro QEMU | StageX EIF plus local cross-compile builder | `nitro-enclave` QEMU inside a parent Linux QEMU VM | QEMU parent VM | Experimental local EIF/vsock path for macOS arm64 |
+| Nested Nitro QEMU | StageX or local cross-compile builder plus Rawhide parent bundle | `nitro-enclave` QEMU inside an x86_64 parent Linux QEMU VM | QEMU parent VM | Experimental local EIF/vsock path |
 | Docker | Docker/local builder | Docker app runtime | Native or Docker host | Cheap Linux process/container test |
 | Vivo/TVC | Digest/image selector or publisher | TVC deployment | Native TVC CLI/gateway probe | External platform E2E |
 
@@ -309,48 +309,93 @@ Expected properties:
 
 ## Nested Nitro QEMU Runner
 
-The nested Nitro runner is an experimental escape hatch for macOS arm64 when we
-want to exercise an EIF with QEMU's emulated `nitro-enclave` machine type but do
-not have a native macOS QEMU build that exposes that machine.
+The nested Nitro runner is an experimental local path for exercising an EIF with
+QEMU's emulated `nitro-enclave` machine type. For now it only supports an
+x86_64 parent VM and an x86_64 Nitro enclave guest. On non-x86 hosts, such as
+macOS arm64, this runs through QEMU TCG rather than hardware acceleration.
 
 The composition is:
 
-1. The Rust test process runs on macOS.
-2. Outer `qemu-system-aarch64` boots a Linux/aarch64 parent VM, using HVF when
-   configured and available.
-3. The parent VM mounts a 9p rootfs that contains:
-   - a Linux/aarch64 `qemu-system-x86_64` with `nitro-enclave` support,
-   - a Linux/aarch64 `vhost-device-vsock`,
-   - Linux/aarch64 `qos_host`, `qos_client`, and `qos_bridge`,
+1. The Rust test process runs on the developer or CI host.
+2. Outer `qemu-system-x86_64` boots a Linux/x86_64 parent VM.
+3. The parent VM boots a Fedora Rawhide root image containing:
+   - the matching Rawhide kernel/initramfs used by outer QEMU,
+   - Rawhide `qemu-system-x86_64` with `nitro-enclave` support,
+   - Rawhide `vhost-device-vsock`,
+   - `/init`, which mounts the harness 9p work share.
+4. The harness 9p work share contains:
+   - Linux/x86_64 `nested_parent_init`, `qos_host`, `qos_client`, and
+     `qos_bridge`,
    - the StageX-built `nitro.eif`,
    - the x86_64 Linux signed-echo pivot.
-4. Parent `/init` starts `vhost-device-vsock` with a guest CID and
+5. Parent `/init` execs `nested_parent_init`, which starts
+   `vhost-device-vsock` with a guest CID and
    `forward-listen` ports for the QoS core port and app port.
-5. Parent `/init` starts inner `qemu-system-x86_64 -M
+6. Parent init starts inner `qemu-system-x86_64 -M
    nitro-enclave,vsock=c,id=... -kernel /work/nitro.eif -chardev
    socket,id=c,path=...`.
-6. Parent `/init` starts `qos_host` against CID `1` by default, matching QEMU's
+7. Parent init starts `qos_host` against CID `1` by default, matching QEMU's
    documented vhost-user-vsock forwarding model.
-7. Parent `/init` runs `qos_client dangerous-dev-boot`, then starts
-   `qos_bridge`.
-8. The macOS test process probes the signed-echo app through outer QEMU user
+8. Parent init runs `qos_client dangerous-dev-boot`, then starts `qos_bridge`.
+9. The host test process probes the signed-echo app through outer QEMU user
    networking.
 
-This runner requires an explicit parent overlay. The repo builds the parent
-init and QoS binaries, but it does not currently build or vendor Linux/aarch64
-QEMU and `vhost-device-vsock`. The overlay is configured with
-`QOS_TEST_QEMU_NESTED_NITRO_PARENT_OVERLAY` and should place those tools at
-`/tools/qemu-system-x86_64` and `/tools/vhost-device-vsock` unless overridden.
+This runner requires an explicit Fedora Rawhide parent bundle. The repo builds
+the parent init and QoS binaries, while the bundle supplies the parent VM root
+image, Rawhide kernel, Rawhide initramfs, QEMU, and `vhost-device-vsock`. The
+bundle is configured with `QOS_TEST_QEMU_NESTED_NITRO_PARENT_BUNDLE` and must
+contain `rootfs.ext4`, `vmlinuz`, and `initramfs.img`.
+
+A developer can build the Rawhide parent bundle with:
+
+```sh
+make nested-nitro-rawhide-parent
+export QOS_TEST_QEMU_NESTED_NITRO_PARENT_BUNDLE="$PWD/target/qos-test-harness/nested-nitro/rawhide-parent"
+```
+
+The helper runs an amd64 Fedora Rawhide container, installs Rawhide
+`kernel-core`, `kernel-modules-core`, `qemu-system-x86-core`, and
+`vhost-device-vsock`, forces dracut to include the virtio, 9p, and vsock modules
+needed by this topology, then packages a bootable ext4 parent root image. It
+verifies that `qemu-system-x86_64 -machine help` lists `nitro-enclave` and that
+`vhost-device-vsock --help` exposes `--forward-cid`.
+
+Useful overrides:
+
+- `QOS_NESTED_NITRO_RAWHIDE_IMAGE`, default `fedora:rawhide`.
+- `QOS_NESTED_NITRO_RAWHIDE_ROOTFS_SIZE`, default `2G`.
+- `QOS_NESTED_NITRO_RAWHIDE_PARENT_DIR` or
+  `QOS_TEST_QEMU_NESTED_NITRO_PARENT_BUNDLE`, to choose the output directory.
+- `QOS_NESTED_NITRO_RAWHIDE_QEMU_PACKAGES`, default
+  `qemu-system-x86-core`.
+
+`QOS_TEST_QEMU_NESTED_NITRO_OUTER_KERNEL` and
+`QOS_TEST_QEMU_NESTED_NITRO_OUTER_INITRD` remain escape-hatch overrides, but the
+normal path uses `vmlinuz` and `initramfs.img` from the Rawhide bundle.
+
+Two builder styles are supported:
+
+- StageX: builds the EIF via the existing StageX-style `Containerfile.qemu`,
+  stages the x86_64 parent work directory, and records StageX as the builder
+  kind.
+- Local cross compile: builds `nested_parent_init`, `qos_host`, `qos_client`,
+  `qos_bridge`, and `signed_echo` for `x86_64-unknown-linux-musl`, stages the
+  same parent work directory, uses the existing EIF packaging step as a runtime
+  input, and records local cross compile as the builder kind.
+
+The builder is selected with `QOS_TEST_QEMU_NESTED_NITRO_BUILDER=stagex|cross`.
+The default is `stagex`.
 
 Important limitations:
 
 - It is not a replacement for the plain QEMU runner.
-- It is expected to be slower because the inner x86_64 Nitro VM runs under TCG
-  inside the Linux/aarch64 parent.
+- It is expected to be slow on non-x86 hosts because both QEMU layers may run
+  under TCG.
 - QEMU's emulated `nitro-enclave` machine is useful for local EIF/vsock testing,
   but it does not provide AWS-signed production attestation.
-- The local parent overlay is part of the build key, so changing QEMU,
-  `vhost-device-vsock`, or supporting libraries invalidates the staged rootfs.
+- The Rawhide parent bundle is part of the build key, so changing its root
+  image, kernel, initramfs, QEMU, or `vhost-device-vsock` invalidates the staged
+  work directory.
 
 ## Docker Runner
 

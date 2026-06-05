@@ -2,7 +2,7 @@ use std::{
 	collections::BTreeMap,
 	fs::{self, File},
 	io::Write,
-	os::unix::fs::{PermissionsExt, symlink},
+	os::unix::fs::PermissionsExt,
 	path::{Path, PathBuf},
 	process::{Child, Command, Stdio},
 	thread,
@@ -24,31 +24,75 @@ const NESTED_PARENT_INIT_BIN: &str = "nested_parent_init";
 const QOS_HOST_BIN: &str = "qos_host";
 const QOS_CLIENT_BIN: &str = "qos_client";
 const QOS_BRIDGE_BIN: &str = "qos_bridge";
+const X86_64_LINUX_MUSL_TARGET: &str = "x86_64-unknown-linux-musl";
 const DEFAULT_PARENT_CONTROL_PORT: u16 = 3001;
 const DEFAULT_PARENT_APP_PORT: u16 = 3000;
 const DEFAULT_NESTED_GUEST_CID: u32 = 4;
 const DEFAULT_NESTED_FORWARD_CID: u32 = 1;
 const DEFAULT_NESTED_CORE_PORT: u32 = 3;
-const DEFAULT_OUTER_KERNEL_CMDLINE: &str = "console=ttyAMA0 panic=1 reboot=k root=qosparent rootfstype=9p rootflags=trans=virtio,version=9p2000.L rw init=/init";
+const DEFAULT_OUTER_KERNEL_CMDLINE: &str =
+	"console=ttyS0 panic=1 reboot=k root=/dev/vda rw init=/init";
 const DEFAULT_OUTER_NET_DEVICE: &str = "virtio-net-pci,netdev=parentnet";
 const DEFAULT_PARENT_QEMU_PATH: &str = "/tools/qemu-system-x86_64";
 const DEFAULT_PARENT_VHOST_VSOCK_PATH: &str = "/tools/vhost-device-vsock";
 const DEFAULT_VHOST_SOCKET_PATH: &str = "/tmp/qos-nitro-vhost.socket";
 const DEFAULT_INNER_QEMU_ID: &str = "qos-test-harness";
 const NESTED_NITRO_CONTAINERFILE: &str = "Containerfile.qemu";
-const PARENT_ROOTFS_DIR_METADATA: &str = "parent_rootfs_dir";
+const PARENT_WORK_DIR_METADATA: &str = "parent_work_dir";
+const PARENT_ROOT_IMAGE_PATH_METADATA: &str = "parent_root_image_path";
+const PARENT_ROOT_IMAGE_SHA256_METADATA: &str = "parent_root_image_sha256";
 const OUTER_KERNEL_PATH_METADATA: &str = "outer_kernel_path";
 const OUTER_KERNEL_SHA256_METADATA: &str = "outer_kernel_sha256";
-const PARENT_OVERLAY_DIR_METADATA: &str = "parent_overlay_dir";
-const PARENT_OVERLAY_FINGERPRINT_METADATA: &str = "parent_overlay_fingerprint";
-const PARENT_ROOTFS_LAYOUT_VERSION: u32 = 1;
+const OUTER_INITRD_PATH_METADATA: &str = "outer_initrd_path";
+const OUTER_INITRD_SHA256_METADATA: &str = "outer_initrd_sha256";
+const PARENT_BUNDLE_DIR_METADATA: &str = "parent_bundle_dir";
+const PARENT_BUNDLE_FINGERPRINT_METADATA: &str = "parent_bundle_fingerprint";
+const PARENT_WORK_LAYOUT_VERSION: u32 = 2;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NestedNitroBuildFlavor {
+	StageX,
+	LocalCrossCompile,
+}
+
+impl NestedNitroBuildFlavor {
+	#[must_use]
+	pub fn builder_kind(self) -> BuilderKind {
+		match self {
+			Self::StageX => BuilderKind::StageX,
+			Self::LocalCrossCompile => BuilderKind::LocalCrossCompile,
+		}
+	}
+
+	#[must_use]
+	pub fn name(self) -> &'static str {
+		match self {
+			Self::StageX => "stagex",
+			Self::LocalCrossCompile => "cross",
+		}
+	}
+
+	pub fn parse(value: &str) -> Result<Self, String> {
+		match value {
+			"stagex" | "StageX" | "STAGEX" => Ok(Self::StageX),
+			"cross" | "local-cross" | "local_cross" | "LocalCrossCompile" => {
+				Ok(Self::LocalCrossCompile)
+			}
+			_ => Err(format!(
+				"invalid nested Nitro builder `{value}`; expected `stagex` or `cross`"
+			)),
+		}
+	}
+}
 
 #[derive(Debug, Clone)]
 pub struct NestedNitroQemuConfig {
 	pub workspace_root: PathBuf,
 	pub output_dir: PathBuf,
+	pub build_flavor: NestedNitroBuildFlavor,
 	pub outer_qemu_bin: PathBuf,
 	pub outer_kernel_path: Option<PathBuf>,
+	pub outer_initrd_path: Option<PathBuf>,
 	pub outer_kernel_cmdline: String,
 	pub outer_machine: String,
 	pub outer_accel: Option<String>,
@@ -65,7 +109,7 @@ pub struct NestedNitroQemuConfig {
 	pub enclave_target_linker: Option<String>,
 	pub outer_memory: String,
 	pub inner_memory: String,
-	pub parent_overlay_dir: Option<PathBuf>,
+	pub parent_bundle_dir: Option<PathBuf>,
 	pub parent_qemu_path: String,
 	pub parent_vhost_vsock_path: String,
 	pub vhost_socket_path: String,
@@ -84,35 +128,31 @@ impl NestedNitroQemuConfig {
 		let workspace_root = workspace_root.into();
 		let output_dir =
 			workspace_root.join("target/qos-test-harness/nested-nitro");
-		let (outer_accel, outer_cpu) =
-			if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-				(Some("hvf".to_string()), Some("host".to_string()))
-			} else {
-				(None, None)
-			};
 
 		Self {
 			output_dir,
 			workspace_root,
-			outer_qemu_bin: PathBuf::from("qemu-system-aarch64"),
+			build_flavor: NestedNitroBuildFlavor::StageX,
+			outer_qemu_bin: PathBuf::from("qemu-system-x86_64"),
 			outer_kernel_path: None,
+			outer_initrd_path: None,
 			outer_kernel_cmdline: DEFAULT_OUTER_KERNEL_CMDLINE.to_string(),
-			outer_machine: "virt".to_string(),
-			outer_accel,
-			outer_cpu,
+			outer_machine: "pc".to_string(),
+			outer_accel: None,
+			outer_cpu: None,
 			outer_net_device: DEFAULT_OUTER_NET_DEVICE.to_string(),
 			host: "127.0.0.1".to_string(),
 			app_host_port,
 			parent_control_port: DEFAULT_PARENT_CONTROL_PORT,
 			parent_app_port: DEFAULT_PARENT_APP_PORT,
 			profile: BuildProfile::Release,
-			parent_target_triple: "aarch64-unknown-linux-musl".to_string(),
-			parent_target_linker: Some("aarch64-linux-musl-gcc".to_string()),
-			enclave_target_triple: "x86_64-unknown-linux-musl".to_string(),
+			parent_target_triple: X86_64_LINUX_MUSL_TARGET.to_string(),
+			parent_target_linker: Some("x86_64-linux-musl-gcc".to_string()),
+			enclave_target_triple: X86_64_LINUX_MUSL_TARGET.to_string(),
 			enclave_target_linker: Some("x86_64-linux-musl-gcc".to_string()),
 			outer_memory: "6G".to_string(),
 			inner_memory: "4G".to_string(),
-			parent_overlay_dir: None,
+			parent_bundle_dir: None,
 			parent_qemu_path: DEFAULT_PARENT_QEMU_PATH.to_string(),
 			parent_vhost_vsock_path: DEFAULT_PARENT_VHOST_VSOCK_PATH
 				.to_string(),
@@ -125,6 +165,22 @@ impl NestedNitroQemuConfig {
 			bridge_vsock_to_host: false,
 			keep_on_failure: false,
 		}
+	}
+
+	fn validate_x86_only(&self) -> Result<(), String> {
+		if self.parent_target_triple != X86_64_LINUX_MUSL_TARGET {
+			return Err(format!(
+				"nested Nitro parent target must be {X86_64_LINUX_MUSL_TARGET}, got {}",
+				self.parent_target_triple
+			));
+		}
+		if self.enclave_target_triple != X86_64_LINUX_MUSL_TARGET {
+			return Err(format!(
+				"nested Nitro enclave target must be {X86_64_LINUX_MUSL_TARGET}, got {}",
+				self.enclave_target_triple
+			));
+		}
+		Ok(())
 	}
 }
 
@@ -155,8 +211,8 @@ impl NestedNitroQemuBuilder {
 		self.config.output_dir.join("eif-package")
 	}
 
-	fn parent_rootfs_dir(&self) -> PathBuf {
-		self.config.output_dir.join("parent-rootfs-dir")
+	fn parent_work_dir(&self) -> PathBuf {
+		self.config.output_dir.join("parent-work-dir")
 	}
 
 	fn parent_binary_path(&self, bin: &str) -> PathBuf {
@@ -178,6 +234,7 @@ impl NestedNitroQemuBuilder {
 		package: &str,
 		bin: &str,
 		features: &[&str],
+		no_default_features: bool,
 	) -> Result<BuildArtifact, BuildError> {
 		let mut command = Command::new("cargo");
 		command
@@ -192,6 +249,9 @@ impl NestedNitroQemuBuilder {
 			.arg("--target-dir")
 			.arg(self.parent_target_dir())
 			.current_dir(&self.config.workspace_root);
+		if no_default_features {
+			command.arg("--no-default-features");
+		}
 		for feature in features {
 			command.arg("--features").arg(feature);
 		}
@@ -210,19 +270,25 @@ impl NestedNitroQemuBuilder {
 
 	fn build_parent_binaries(&self) -> Result<Vec<HostBinary>, BuildError> {
 		let mut binaries = Vec::new();
-		for (package, bin, features) in [
+		for (package, bin, features, no_default_features) in [
 			(
 				"qos_test_harness",
 				NESTED_PARENT_INIT_BIN,
 				&["nested-parent-init"][..],
+				false,
 			),
-			(QOS_HOST_BIN, QOS_HOST_BIN, &[][..]),
-			(QOS_CLIENT_BIN, QOS_CLIENT_BIN, &[][..]),
-			(QOS_BRIDGE_BIN, QOS_BRIDGE_BIN, &[][..]),
+			(QOS_HOST_BIN, QOS_HOST_BIN, &[][..], false),
+			(QOS_CLIENT_BIN, QOS_CLIENT_BIN, &[][..], true),
+			(QOS_BRIDGE_BIN, QOS_BRIDGE_BIN, &[][..], false),
 		] {
 			binaries.push(HostBinary {
 				name: bin.to_string(),
-				artifact: self.build_parent_binary(package, bin, features)?,
+				artifact: self.build_parent_binary(
+					package,
+					bin,
+					features,
+					no_default_features,
+				)?,
 			});
 		}
 		Ok(binaries)
@@ -288,76 +354,57 @@ impl NestedNitroQemuBuilder {
 		artifact_for_path(&package_dir.join("nitro.eif"))
 	}
 
-	fn stage_parent_rootfs(
+	fn stage_parent_work_dir(
 		&self,
 		host_binaries: &[HostBinary],
 		pivot: &BuildArtifact,
 		eif: &BuildArtifact,
 	) -> Result<(), BuildError> {
-		let root = self.parent_rootfs_dir();
-		if root.exists() {
-			fs::remove_dir_all(&root)?;
+		let work = self.parent_work_dir();
+		if work.exists() {
+			fs::remove_dir_all(&work)?;
 		}
-		fs::create_dir_all(&root)?;
-
-		let overlay = self.parent_overlay_dir()?;
-		copy_tree(&overlay, &root)?;
-
-		for dir in [
-			"dev",
-			"proc",
-			"sys",
-			"tmp",
-			"run",
-			"work",
-			"dev/pts",
-			"dev/shm",
-			"sys/fs/cgroup",
-		] {
-			fs::create_dir_all(root.join(dir))?;
-		}
-		fs::set_permissions(
-			root.join("tmp"),
-			fs::Permissions::from_mode(0o1777),
-		)?;
-		File::create(root.join("dev/null"))?;
-		fs::set_permissions(
-			root.join("dev/null"),
-			fs::Permissions::from_mode(0o666),
-		)?;
+		fs::create_dir_all(&work)?;
 
 		copy_executable(
 			&find_host_binary(host_binaries, NESTED_PARENT_INIT_BIN)?.path,
-			&root.join("init"),
+			&work.join(NESTED_PARENT_INIT_BIN),
 		)?;
 		for name in [QOS_HOST_BIN, QOS_CLIENT_BIN, QOS_BRIDGE_BIN] {
 			copy_executable(
 				&find_host_binary(host_binaries, name)?.path,
-				&root.join("work").join(name),
+				&work.join(name),
 			)?;
 		}
-		copy_executable(&pivot.path, &root.join("work").join(SIGNED_ECHO_BIN))?;
-		copy_executable(&eif.path, &root.join("work/nitro.eif"))?;
+		copy_executable(&pivot.path, &work.join(SIGNED_ECHO_BIN))?;
+		copy_executable(&eif.path, &work.join("nitro.eif"))?;
 		Ok(())
 	}
 
-	fn parent_overlay_dir(&self) -> Result<PathBuf, BuildError> {
-		let overlay =
-			self.config.parent_overlay_dir.clone().ok_or_else(|| {
+	fn parent_bundle_dir(&self) -> Result<PathBuf, BuildError> {
+		let bundle =
+			self.config.parent_bundle_dir.clone().ok_or_else(|| {
 				BuildError::InvalidOutput(
-					"nested Nitro QEMU requires parent_overlay_dir".to_string(),
+					"nested Nitro QEMU requires parent_bundle_dir".to_string(),
 				)
 			})?;
-		if !overlay.is_dir() {
+		if !bundle.is_dir() {
 			return Err(BuildError::MissingArtifact(
-				overlay.display().to_string(),
+				bundle.display().to_string(),
 			));
 		}
-		Ok(overlay)
+		Ok(bundle)
 	}
 
-	fn overlay_fingerprint(&self) -> Result<String, BuildError> {
-		directory_fingerprint(&self.parent_overlay_dir()?)
+	fn parent_bundle_artifact(
+		&self,
+		name: &str,
+	) -> Result<BuildArtifact, BuildError> {
+		artifact_for_path(&self.parent_bundle_dir()?.join(name))
+	}
+
+	fn parent_bundle_fingerprint(&self) -> Result<String, BuildError> {
+		directory_fingerprint(&self.parent_bundle_dir()?)
 	}
 }
 
@@ -366,11 +413,13 @@ impl ArtifactBuilder for NestedNitroQemuBuilder {
 		&self,
 		plan: &ArtifactBuildPlan,
 	) -> Result<BuildKey, BuildError> {
-		let overlay_fingerprint = self.overlay_fingerprint()?;
+		self.config.validate_x86_only().map_err(BuildError::InvalidOutput)?;
+		let bundle_fingerprint = self.parent_bundle_fingerprint()?;
 		let workspace = workspace_state(&plan.workspace_root);
 		let raw = serde_json::json!({
 			"workspace": workspace,
-			"builder": plan.builder,
+			"builder": self.config.build_flavor.builder_kind(),
+			"nested_build_flavor": self.config.build_flavor.name(),
 			"runner": plan.request.runner,
 			"host_runner": plan.request.host_runner,
 			"profile": plan.profile,
@@ -381,10 +430,11 @@ impl ArtifactBuilder for NestedNitroQemuBuilder {
 			"package": plan.package,
 			"bin": plan.bin,
 			"containerfile": NESTED_NITRO_CONTAINERFILE,
-			"parent_rootfs_layout_version": PARENT_ROOTFS_LAYOUT_VERSION,
-			"parent_overlay_dir": self.config.parent_overlay_dir,
-			"parent_overlay_fingerprint": overlay_fingerprint,
+			"parent_work_layout_version": PARENT_WORK_LAYOUT_VERSION,
+			"parent_bundle_dir": self.config.parent_bundle_dir,
+			"parent_bundle_fingerprint": bundle_fingerprint,
 			"outer_kernel_path": self.config.outer_kernel_path,
+			"outer_initrd_path": self.config.outer_initrd_path,
 			"outer_kernel_cmdline": self.config.outer_kernel_cmdline,
 			"outer_machine": self.config.outer_machine,
 			"outer_accel": self.config.outer_accel,
@@ -417,12 +467,25 @@ impl ArtifactBuilder for NestedNitroQemuBuilder {
 		let host_binaries = self.build_parent_binaries()?;
 		let pivot = self.build_pivot()?;
 		let eif = self.build_eif(&key)?;
-		self.stage_parent_rootfs(&host_binaries, &pivot, &eif)?;
+		self.stage_parent_work_dir(&host_binaries, &pivot, &eif)?;
 
 		let mut metadata = BTreeMap::new();
 		metadata.insert(
-			PARENT_ROOTFS_DIR_METADATA.to_string(),
-			self.parent_rootfs_dir().display().to_string(),
+			"nested_build_flavor".to_string(),
+			self.config.build_flavor.name().to_string(),
+		);
+		metadata.insert(
+			PARENT_WORK_DIR_METADATA.to_string(),
+			self.parent_work_dir().display().to_string(),
+		);
+		let root_image = self.parent_root_image_artifact()?;
+		metadata.insert(
+			PARENT_ROOT_IMAGE_PATH_METADATA.to_string(),
+			root_image.path.display().to_string(),
+		);
+		metadata.insert(
+			PARENT_ROOT_IMAGE_SHA256_METADATA.to_string(),
+			root_image.sha256_hex.clone(),
 		);
 		let kernel = self.outer_kernel_artifact()?;
 		metadata.insert(
@@ -433,19 +496,28 @@ impl ArtifactBuilder for NestedNitroQemuBuilder {
 			OUTER_KERNEL_SHA256_METADATA.to_string(),
 			kernel.sha256_hex.clone(),
 		);
-		let overlay = self.parent_overlay_dir()?;
+		let initrd = self.outer_initrd_artifact()?;
 		metadata.insert(
-			PARENT_OVERLAY_DIR_METADATA.to_string(),
-			overlay.display().to_string(),
+			OUTER_INITRD_PATH_METADATA.to_string(),
+			initrd.path.display().to_string(),
 		);
 		metadata.insert(
-			PARENT_OVERLAY_FINGERPRINT_METADATA.to_string(),
-			self.overlay_fingerprint()?,
+			OUTER_INITRD_SHA256_METADATA.to_string(),
+			initrd.sha256_hex.clone(),
+		);
+		let bundle = self.parent_bundle_dir()?;
+		metadata.insert(
+			PARENT_BUNDLE_DIR_METADATA.to_string(),
+			bundle.display().to_string(),
+		);
+		metadata.insert(
+			PARENT_BUNDLE_FINGERPRINT_METADATA.to_string(),
+			self.parent_bundle_fingerprint()?,
 		);
 
 		let output = BuildOutput {
 			key: key.clone(),
-			builder: BuilderKind::StageX,
+			builder: self.config.build_flavor.builder_kind(),
 			runner: RunnerKind::NestedNitroQemu,
 			host_runner: HostRunnerKind::Qemu,
 			workspace: workspace_state(&plan.workspace_root),
@@ -480,31 +552,35 @@ impl ArtifactBuilder for NestedNitroQemuBuilder {
 		for host_binary in &output.host_binaries {
 			validate_artifact(&host_binary.artifact)?;
 		}
-		let rootfs_dir = output
-			.metadata
-			.get(PARENT_ROOTFS_DIR_METADATA)
-			.ok_or_else(|| {
+		let work_dir =
+			output.metadata.get(PARENT_WORK_DIR_METADATA).ok_or_else(|| {
 				BuildError::MissingArtifact(
-					PARENT_ROOTFS_DIR_METADATA.to_string(),
+					PARENT_WORK_DIR_METADATA.to_string(),
 				)
 			})?;
-		let rootfs_dir = PathBuf::from(rootfs_dir);
-		if !rootfs_dir.is_dir() {
+		let work_dir = PathBuf::from(work_dir);
+		if !work_dir.is_dir() {
 			return Err(BuildError::MissingArtifact(
-				rootfs_dir.display().to_string(),
+				work_dir.display().to_string(),
 			));
 		}
-		for tool_path in [
-			&self.config.parent_qemu_path,
-			&self.config.parent_vhost_vsock_path,
+		for staged_name in [
+			NESTED_PARENT_INIT_BIN,
+			QOS_HOST_BIN,
+			QOS_CLIENT_BIN,
+			QOS_BRIDGE_BIN,
+			SIGNED_ECHO_BIN,
+			"nitro.eif",
 		] {
-			let staged = rootfs_dir.join(tool_path.trim_start_matches('/'));
-			if !staged.exists() {
-				return Err(BuildError::MissingArtifact(
-					staged.display().to_string(),
-				));
-			}
+			let staged = work_dir.join(staged_name);
+			validate_path_exists(&staged)?;
 		}
+		let root_image = metadata_artifact(
+			output,
+			PARENT_ROOT_IMAGE_PATH_METADATA,
+			PARENT_ROOT_IMAGE_SHA256_METADATA,
+		)?;
+		validate_artifact(&root_image)?;
 		let kernel_path = output
 			.metadata
 			.get(OUTER_KERNEL_PATH_METADATA)
@@ -525,19 +601,33 @@ impl ArtifactBuilder for NestedNitroQemuBuilder {
 					)
 				})?,
 		};
-		validate_artifact(&kernel)
+		validate_artifact(&kernel)?;
+		let initrd = metadata_artifact(
+			output,
+			OUTER_INITRD_PATH_METADATA,
+			OUTER_INITRD_SHA256_METADATA,
+		)?;
+		validate_artifact(&initrd)
 	}
 }
 
 impl NestedNitroQemuBuilder {
+	fn parent_root_image_artifact(&self) -> Result<BuildArtifact, BuildError> {
+		self.parent_bundle_artifact("rootfs.ext4")
+	}
+
 	fn outer_kernel_artifact(&self) -> Result<BuildArtifact, BuildError> {
-		let kernel =
-			self.config.outer_kernel_path.as_ref().ok_or_else(|| {
-				BuildError::MissingArtifact(
-					"outer_kernel_path for nested Nitro QEMU".to_string(),
-				)
-			})?;
-		artifact_for_path(kernel)
+		if let Some(kernel) = self.config.outer_kernel_path.as_ref() {
+			return artifact_for_path(kernel);
+		}
+		self.parent_bundle_artifact("vmlinuz")
+	}
+
+	fn outer_initrd_artifact(&self) -> Result<BuildArtifact, BuildError> {
+		if let Some(initrd) = self.config.outer_initrd_path.as_ref() {
+			return artifact_for_path(initrd);
+		}
+		self.parent_bundle_artifact("initramfs.img")
 	}
 }
 
@@ -557,6 +647,7 @@ impl NestedNitroQemuRunner {
 	}
 
 	pub fn preflight(&self) -> Result<(), RunnerError> {
+		self.config.validate_x86_only().map_err(RunnerError::new)?;
 		command_exists(&self.config.outer_qemu_bin)?;
 		if let Some(linker) = self.config.parent_target_linker.as_ref() {
 			command_exists(Path::new(linker))?;
@@ -564,38 +655,38 @@ impl NestedNitroQemuRunner {
 		if let Some(linker) = self.config.enclave_target_linker.as_ref() {
 			command_exists(Path::new(linker))?;
 		}
-		let kernel = self.config.outer_kernel_path.as_ref().ok_or_else(|| {
+		let bundle = self.config.parent_bundle_dir.as_ref().ok_or_else(|| {
 			RunnerError::new(
-				"set QOS_TEST_QEMU_NESTED_NITRO_OUTER_KERNEL for the parent Linux VM kernel",
+				"set QOS_TEST_QEMU_NESTED_NITRO_PARENT_BUNDLE to a Rawhide parent bundle; build one with ./src/qos_test_harness/scripts/build_nested_nitro_rawhide_parent.sh",
 			)
 		})?;
-		if !kernel.exists() {
+		if !bundle.is_dir() {
 			return Err(RunnerError::new(format!(
-				"outer kernel does not exist: {}",
-				kernel.display()
+				"parent bundle does not exist: {}",
+				bundle.display()
 			)));
 		}
-		let overlay = self.config.parent_overlay_dir.as_ref().ok_or_else(|| {
-			RunnerError::new(
-				"set QOS_TEST_QEMU_NESTED_NITRO_PARENT_OVERLAY to a Linux/aarch64 rootfs overlay containing qemu-system-x86_64 and vhost-device-vsock",
-			)
-		})?;
-		if !overlay.is_dir() {
-			return Err(RunnerError::new(format!(
-				"parent overlay does not exist: {}",
-				overlay.display()
-			)));
-		}
-		for tool_path in [
-			&self.config.parent_qemu_path,
-			&self.config.parent_vhost_vsock_path,
-		] {
-			let overlay_tool = overlay.join(tool_path.trim_start_matches('/'));
-			if !overlay_tool.exists() {
+		for file in ["rootfs.ext4", "vmlinuz", "initramfs.img"] {
+			let path = bundle.join(file);
+			if !path.exists() {
 				return Err(RunnerError::new(format!(
-					"parent overlay missing {} at {}",
-					tool_path,
-					overlay_tool.display()
+					"parent bundle missing {} at {}",
+					file,
+					path.display()
+				)));
+			}
+		}
+		for path in [
+			self.config.outer_kernel_path.as_ref(),
+			self.config.outer_initrd_path.as_ref(),
+		]
+		.into_iter()
+		.flatten()
+		{
+			if !path.exists() {
+				return Err(RunnerError::new(format!(
+					"outer boot artifact does not exist: {}",
+					path.display()
 				)));
 			}
 		}
@@ -613,7 +704,7 @@ impl NestedNitroQemuRunner {
 			},
 			workspace_root: self.config.workspace_root.clone(),
 			output_dir: self.config.output_dir.clone(),
-			builder: BuilderKind::StageX,
+			builder: self.config.build_flavor.builder_kind(),
 			profile: self.config.profile.clone(),
 			target_triple: Some(self.config.enclave_target_triple.clone()),
 			package: "qos_test_harness".to_string(),
@@ -659,8 +750,16 @@ impl NestedNitroQemuRunner {
 			self.outer_kernel_for_start()?.display().to_string(),
 		);
 		metadata.insert(
-			"parent_rootfs_dir".to_string(),
-			self.parent_rootfs_dir_for_start()?.display().to_string(),
+			"outer_initrd".to_string(),
+			self.outer_initrd_for_start()?.display().to_string(),
+		);
+		metadata.insert(
+			"parent_root_image".to_string(),
+			self.parent_root_image_for_start()?.display().to_string(),
+		);
+		metadata.insert(
+			"parent_work_dir".to_string(),
+			self.parent_work_dir_for_start()?.display().to_string(),
 		);
 		Ok(RunningApp { id: run_id.to_string(), metadata })
 	}
@@ -690,8 +789,8 @@ impl NestedNitroQemuRunner {
 		&self,
 		spec: &StartAppSpec,
 	) -> Result<(), RunnerError> {
-		let rootfs = self.parent_rootfs_dir_for_start()?;
-		let config_path = rootfs.join("work/nested-parent.env");
+		let work = self.parent_work_dir_for_start()?;
+		let config_path = work.join("nested-parent.env");
 		let mut file = File::create(&config_path).map_err(io_error)?;
 		let pivot_args = encode_pivot_args(&spec.pivot_args)?;
 		let bridge_config = format!(
@@ -753,13 +852,17 @@ impl NestedNitroQemuRunner {
 
 	fn start_outer_qemu(&mut self, run_dir: &Path) -> Result<(), RunnerError> {
 		let kernel = self.outer_kernel_for_start()?;
-		let rootfs_dir = self.parent_rootfs_dir_for_start()?;
+		let initrd = self.outer_initrd_for_start()?;
+		let root_image = self.parent_root_image_for_start()?;
+		let work_dir = self.parent_work_dir_for_start()?;
 		let mut command = Command::new(&self.config.outer_qemu_bin);
 		command
 			.arg("-machine")
 			.arg(&self.config.outer_machine)
 			.arg("-kernel")
 			.arg(&kernel)
+			.arg("-initrd")
+			.arg(&initrd)
 			.arg("-append")
 			.arg(&self.config.outer_kernel_cmdline)
 			.arg("-nographic")
@@ -774,10 +877,15 @@ impl NestedNitroQemuRunner {
 			))
 			.arg("-device")
 			.arg(&self.config.outer_net_device)
+			.arg("-drive")
+			.arg(format!(
+				"file={},format=raw,if=virtio,snapshot=on",
+				root_image.display()
+			))
 			.arg("-virtfs")
 			.arg(format!(
-				"local,path={},mount_tag=qosparent,security_model=none",
-				rootfs_dir.display()
+				"local,path={},mount_tag=qoswork,security_model=none",
+				work_dir.display()
 			));
 		if let Some(accel) = self.config.outer_accel.as_ref() {
 			command.arg("-accel").arg(accel);
@@ -807,21 +915,52 @@ impl NestedNitroQemuRunner {
 		Ok(PathBuf::from(path))
 	}
 
-	fn parent_rootfs_dir_for_start(&self) -> Result<PathBuf, RunnerError> {
+	fn outer_initrd_for_start(&self) -> Result<PathBuf, RunnerError> {
+		if let Some(initrd) = self.config.outer_initrd_path.as_ref() {
+			return Ok(initrd.clone());
+		}
 		let output = self.build_output.as_ref().ok_or_else(|| {
 			RunnerError::new("prepare_artifact must run before start_app")
 		})?;
-		let path = output.metadata.get(PARENT_ROOTFS_DIR_METADATA).ok_or_else(
+		let path = output.metadata.get(OUTER_INITRD_PATH_METADATA).ok_or_else(
 			|| {
 				RunnerError::new(
-					"nested Nitro builder returned no parent rootfs dir",
+					"nested Nitro builder returned no outer initrd",
 				)
 			},
 		)?;
+		Ok(PathBuf::from(path))
+	}
+
+	fn parent_root_image_for_start(&self) -> Result<PathBuf, RunnerError> {
+		let output = self.build_output.as_ref().ok_or_else(|| {
+			RunnerError::new("prepare_artifact must run before start_app")
+		})?;
+		let path = output
+			.metadata
+			.get(PARENT_ROOT_IMAGE_PATH_METADATA)
+			.ok_or_else(|| {
+				RunnerError::new(
+					"nested Nitro builder returned no parent root image",
+				)
+			})?;
+		Ok(PathBuf::from(path))
+	}
+
+	fn parent_work_dir_for_start(&self) -> Result<PathBuf, RunnerError> {
+		let output = self.build_output.as_ref().ok_or_else(|| {
+			RunnerError::new("prepare_artifact must run before start_app")
+		})?;
+		let path =
+			output.metadata.get(PARENT_WORK_DIR_METADATA).ok_or_else(|| {
+				RunnerError::new(
+					"nested Nitro builder returned no parent work dir",
+				)
+			})?;
 		let path = PathBuf::from(path);
 		if !path.is_dir() {
 			return Err(RunnerError::new(format!(
-				"parent rootfs dir does not exist: {}",
+				"parent work dir does not exist: {}",
 				path.display()
 			)));
 		}
@@ -922,6 +1061,29 @@ fn artifact_for_path(path: &Path) -> Result<BuildArtifact, BuildError> {
 	Ok(BuildArtifact { sha256_hex: sha256_file_hex(path)?, path: path.into() })
 }
 
+fn metadata_artifact(
+	output: &BuildOutput,
+	path_key: &str,
+	sha256_key: &str,
+) -> Result<BuildArtifact, BuildError> {
+	let path = output
+		.metadata
+		.get(path_key)
+		.ok_or_else(|| BuildError::MissingArtifact(path_key.to_string()))?;
+	let sha256_hex =
+		output.metadata.get(sha256_key).cloned().ok_or_else(|| {
+			BuildError::MissingArtifact(sha256_key.to_string())
+		})?;
+	Ok(BuildArtifact { path: PathBuf::from(path), sha256_hex })
+}
+
+fn validate_path_exists(path: &Path) -> Result<(), BuildError> {
+	if !path.exists() {
+		return Err(BuildError::MissingArtifact(path.display().to_string()));
+	}
+	Ok(())
+}
+
 fn validate_artifact(artifact: &BuildArtifact) -> Result<(), BuildError> {
 	if !artifact.path.exists() {
 		return Err(BuildError::MissingArtifact(
@@ -973,30 +1135,6 @@ fn copy_executable(source: &Path, dest: &Path) -> Result<(), BuildError> {
 	}
 	fs::copy(source, dest)?;
 	fs::set_permissions(dest, fs::Permissions::from_mode(0o755))?;
-	Ok(())
-}
-
-fn copy_tree(source: &Path, dest: &Path) -> Result<(), BuildError> {
-	for entry in fs::read_dir(source)? {
-		let entry = entry?;
-		let source_path = entry.path();
-		let dest_path = dest.join(entry.file_name());
-		let file_type = entry.file_type()?;
-		if file_type.is_dir() {
-			fs::create_dir_all(&dest_path)?;
-			copy_tree(&source_path, &dest_path)?;
-		} else if file_type.is_symlink() {
-			let target = fs::read_link(&source_path)?;
-			symlink(target, dest_path)?;
-		} else if file_type.is_file() {
-			if let Some(parent) = dest_path.parent() {
-				fs::create_dir_all(parent)?;
-			}
-			fs::copy(&source_path, &dest_path)?;
-			let permissions = fs::metadata(&source_path)?.permissions();
-			fs::set_permissions(&dest_path, permissions)?;
-		}
-	}
 	Ok(())
 }
 

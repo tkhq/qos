@@ -8,6 +8,7 @@ use qos_test_harness::{
 	BuildProfile, BuilderKind, HostRunnerKind, RunnerKind,
 	SignedEchoTestConfig, runners::docker::DockerRunnerConfig,
 	runners::docker::DockerTestRunner,
+	runners::nested_nitro::NestedNitroBuildFlavor,
 	runners::nested_nitro::NestedNitroQemuBuilder,
 	runners::nested_nitro::NestedNitroQemuConfig,
 	runners::nested_nitro::NestedNitroQemuRunner,
@@ -105,6 +106,21 @@ async fn nested_nitro_qemu_signed_echo_e2e() {
 	signed_echo_startup_shutdown(&mut runner, SignedEchoTestConfig::default())
 		.await
 		.unwrap();
+}
+
+#[test]
+fn nested_nitro_qemu_defaults_are_x86_only() {
+	let config = NestedNitroQemuConfig::new(workspace_root(), 39_350);
+	assert_eq!(config.outer_qemu_bin, PathBuf::from("qemu-system-x86_64"));
+	assert_eq!(config.outer_machine, "pc");
+	assert_eq!(config.outer_accel, None);
+	assert_eq!(config.outer_cpu, None);
+	assert_eq!(config.outer_kernel_path, None);
+	assert_eq!(config.outer_initrd_path, None);
+	assert_eq!(config.parent_bundle_dir, None);
+	assert_eq!(config.parent_target_triple, "x86_64-unknown-linux-musl");
+	assert_eq!(config.enclave_target_triple, "x86_64-unknown-linux-musl");
+	assert_eq!(config.build_flavor, NestedNitroBuildFlavor::StageX);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -207,7 +223,7 @@ async fn reproducible_qemu_builder_builds_plain_package() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn nested_nitro_qemu_builder_stages_parent_rootfs() {
+async fn nested_nitro_qemu_builder_stages_parent_work_dir() {
 	if !enabled("QOS_TEST_QEMU_NESTED_NITRO_BUILD") {
 		eprintln!(
 			"skipping nested Nitro qemu build; set QOS_TEST_QEMU_NESTED_NITRO_BUILD=1 to run"
@@ -228,11 +244,11 @@ async fn nested_nitro_qemu_builder_stages_parent_rootfs() {
 				runner: RunnerKind::NestedNitroQemu,
 				host_runner: HostRunnerKind::Qemu,
 			},
-			workspace_root: config.workspace_root,
-			output_dir: config.output_dir,
-			builder: BuilderKind::StageX,
+			workspace_root: config.workspace_root.clone(),
+			output_dir: config.output_dir.clone(),
+			builder: config.build_flavor.builder_kind(),
 			profile: BuildProfile::Release,
-			target_triple: Some(config.enclave_target_triple),
+			target_triple: Some(config.enclave_target_triple.clone()),
 			package: "qos_test_harness".to_string(),
 			bin: "signed_echo".to_string(),
 			extra_inputs: std::collections::BTreeMap::new(),
@@ -242,9 +258,22 @@ async fn nested_nitro_qemu_builder_stages_parent_rootfs() {
 
 	assert!(output.pivot.is_some(), "signed_echo pivot must be built");
 	assert!(output.eif.is_some(), "nitro EIF must be built");
+	assert_eq!(output.builder, config.build_flavor.builder_kind());
 	assert!(
-		output.metadata.contains_key("parent_rootfs_dir"),
-		"parent rootfs dir must be recorded"
+		output.metadata.contains_key("parent_work_dir"),
+		"parent work dir must be recorded"
+	);
+	assert!(
+		output.metadata.contains_key("parent_root_image_path"),
+		"parent Rawhide root image must be recorded"
+	);
+	assert!(
+		output.metadata.contains_key("outer_kernel_path"),
+		"parent Rawhide kernel must be recorded"
+	);
+	assert!(
+		output.metadata.contains_key("outer_initrd_path"),
+		"parent Rawhide initramfs must be recorded"
 	);
 	for name in ["nested_parent_init", "qos_host", "qos_client", "qos_bridge"] {
 		assert!(
@@ -321,6 +350,10 @@ fn apply_qemu_env(config: &mut QemuRunnerConfig, prefix: &str) {
 }
 
 fn apply_nested_nitro_env(config: &mut NestedNitroQemuConfig, prefix: &str) {
+	if let Ok(builder) = std::env::var(format!("{prefix}_BUILDER")) {
+		config.build_flavor = NestedNitroBuildFlavor::parse(&builder)
+			.expect("invalid nested Nitro builder");
+	}
 	if let Some(path) = env_path(&format!("{prefix}_OUTER_QEMU_BIN")) {
 		config.outer_qemu_bin = path;
 	}
@@ -333,22 +366,20 @@ fn apply_nested_nitro_env(config: &mut NestedNitroQemuConfig, prefix: &str) {
 	if let Some(path) = env_path(&format!("{prefix}_KERNEL")) {
 		config.outer_kernel_path = Some(path);
 	}
-	if let Some(path) = env_path(&format!("{prefix}_PARENT_OVERLAY")) {
-		config.parent_overlay_dir = Some(path);
+	if let Some(path) = env_path(&format!("{prefix}_OUTER_INITRD")) {
+		config.outer_initrd_path = Some(path);
+	}
+	if let Some(path) = env_path(&format!("{prefix}_INITRD")) {
+		config.outer_initrd_path = Some(path);
+	}
+	if let Some(path) = env_path(&format!("{prefix}_PARENT_BUNDLE")) {
+		config.parent_bundle_dir = Some(path);
 	}
 	if let Some(path) = env_path(&format!("{prefix}_PARENT_TARGET_LINKER")) {
 		config.parent_target_linker = Some(path.display().to_string());
 	}
 	if let Some(path) = env_path(&format!("{prefix}_ENCLAVE_TARGET_LINKER")) {
 		config.enclave_target_linker = Some(path.display().to_string());
-	}
-	if let Ok(target) = std::env::var(format!("{prefix}_PARENT_TARGET_TRIPLE"))
-	{
-		config.parent_target_triple = target;
-	}
-	if let Ok(target) = std::env::var(format!("{prefix}_ENCLAVE_TARGET_TRIPLE"))
-	{
-		config.enclave_target_triple = target;
 	}
 	if let Ok(cmdline) = std::env::var(format!("{prefix}_OUTER_KERNEL_CMDLINE"))
 	{
