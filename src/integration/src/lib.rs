@@ -54,9 +54,9 @@ pub const PIVOT_SOCKET_STRESS_PATH: &str = concat!(
 /// Path to an enclave app that has routes to fetch app proofs.
 pub const PIVOT_PROOF_PATH: &str =
 	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/pivot_proof");
-/// Path to `qos_bridge` bin for tests.
+/// Path to `qos_bridge` ingress bin for tests.
 pub const QOS_BRIDGE_PATH: &str =
-	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/qos_bridge");
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/ingress");
 /// Path to `qos_client` bin for tests.
 pub const QOS_CLIENT_PATH: &str =
 	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/qos_client");

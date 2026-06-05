@@ -24,6 +24,7 @@ const NESTED_PARENT_INIT_BIN: &str = "nested_parent_init";
 const QOS_HOST_BIN: &str = "qos_host";
 const QOS_CLIENT_BIN: &str = "qos_client";
 const QOS_BRIDGE_BIN: &str = "qos_bridge";
+const QOS_BRIDGE_INGRESS_BIN: &str = "ingress";
 const X86_64_LINUX_MUSL_TARGET: &str = "x86_64-unknown-linux-musl";
 const DEFAULT_PARENT_CONTROL_PORT: u16 = 3001;
 const DEFAULT_PARENT_APP_PORT: u16 = 3000;
@@ -37,7 +38,7 @@ const DEFAULT_PARENT_QEMU_PATH: &str = "/tools/qemu-system-x86_64";
 const DEFAULT_PARENT_VHOST_VSOCK_PATH: &str = "/tools/vhost-device-vsock";
 const DEFAULT_VHOST_SOCKET_PATH: &str = "/tmp/qos-nitro-vhost.socket";
 const DEFAULT_INNER_QEMU_ID: &str = "qos-test-harness";
-const NESTED_NITRO_CONTAINERFILE: &str = "Containerfile.qemu";
+const NESTED_NITRO_CONTAINERFILE: &str = "src/images/qemu/Containerfile";
 const PARENT_WORK_DIR_METADATA: &str = "parent_work_dir";
 const PARENT_ROOT_IMAGE_PATH_METADATA: &str = "parent_root_image_path";
 const PARENT_ROOT_IMAGE_SHA256_METADATA: &str = "parent_root_image_sha256";
@@ -270,19 +271,26 @@ impl NestedNitroQemuBuilder {
 
 	fn build_parent_binaries(&self) -> Result<Vec<HostBinary>, BuildError> {
 		let mut binaries = Vec::new();
-		for (package, bin, features, no_default_features) in [
+		for (name, package, bin, features, no_default_features) in [
 			(
+				NESTED_PARENT_INIT_BIN,
 				"qos_test_harness",
 				NESTED_PARENT_INIT_BIN,
 				&["nested-parent-init"][..],
 				false,
 			),
-			(QOS_HOST_BIN, QOS_HOST_BIN, &[][..], false),
-			(QOS_CLIENT_BIN, QOS_CLIENT_BIN, &[][..], true),
-			(QOS_BRIDGE_BIN, QOS_BRIDGE_BIN, &[][..], false),
+			(QOS_HOST_BIN, QOS_HOST_BIN, QOS_HOST_BIN, &[][..], false),
+			(QOS_CLIENT_BIN, QOS_CLIENT_BIN, QOS_CLIENT_BIN, &[][..], true),
+			(
+				QOS_BRIDGE_BIN,
+				QOS_BRIDGE_BIN,
+				QOS_BRIDGE_INGRESS_BIN,
+				&[][..],
+				false,
+			),
 		] {
 			binaries.push(HostBinary {
-				name: bin.to_string(),
+				name: name.to_string(),
 				artifact: self.build_parent_binary(
 					package,
 					bin,

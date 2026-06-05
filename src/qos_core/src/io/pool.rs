@@ -290,7 +290,7 @@ impl SocketAddress {
 			Self::Vsock(vsock) => Ok(Self::new_vsock(
 				vsock.cid(),
 				vsock.port() + 1,
-				super::vsock_svm_flags(*vsock),
+				super::vsock_svm_flags(vsock),
 			)),
 		}
 	}

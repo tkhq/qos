@@ -1,15 +1,14 @@
-//! QOS bridge binary entry point.
+//! QOS bridge binary entry point for ingress bridge.
 
-mod cli;
-mod host;
+use qos_bridge::cli;
 
 #[tokio::main]
 async fn main() {
 	// Development quick start
 	// ```
-	// cargo run --bin qos_bridge -- \
+	// cargo run --bin ingress -- \
 	//      --usock /tmp/usock.sock \
 	//      --control-url http://localhost:3001/qos
 	// ```
-	cli::Cli::execute().await;
+	cli::Cli::execute_ingress().await;
 }

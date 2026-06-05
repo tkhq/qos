@@ -375,9 +375,9 @@ normal path uses `vmlinuz` and `initramfs.img` from the Rawhide bundle.
 
 Two builder styles are supported:
 
-- StageX: builds the EIF via the existing StageX-style `Containerfile.qemu`,
-  stages the x86_64 parent work directory, and records StageX as the builder
-  kind.
+- StageX: builds the EIF via the existing StageX-style
+  `src/images/qemu/Containerfile`, stages the x86_64 parent work directory, and
+  records StageX as the builder kind.
 - Local cross compile: builds `nested_parent_init`, `qos_host`, `qos_client`,
   `qos_bridge`, and the requested pivot Cargo binary for
   `x86_64-unknown-linux-musl`, stages the same parent work directory, uses the

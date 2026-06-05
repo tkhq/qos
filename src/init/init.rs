@@ -1,8 +1,8 @@
 use qos_core::{
-	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE,
 	handles::Handles,
 	io::{SocketAddress, VMADDR_NO_FLAGS},
 	reaper::Reaper,
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE, PIVOT_FILE, QUORUM_FILE,
 };
 use qos_nsm::Nsm;
 use qos_system::{dmesg, freopen, get_local_cid, mount, reboot};
@@ -56,6 +56,11 @@ fn boot() {
 	init_console();
 	init_platform();
 	init_localhost();
+	#[cfg(feature = "egress")]
+	{
+		dmesg("initializing egress tunnel interface".to_string());
+		qos_core::egress::init_egress_tun();
+	}
 }
 
 #[tokio::main]
@@ -73,6 +78,9 @@ async fn main() {
 		PIVOT_FILE.to_string(),
 	);
 
+	#[cfg(feature = "qemu")]
+	const START_PORT: u32 = 9001; // avoid root level ports since we match on local host
+	#[cfg(not(feature = "qemu"))]
 	const START_PORT: u32 = 3;
 	let core_socket =
 		SocketAddress::new_vsock(cid, START_PORT, VMADDR_NO_FLAGS);

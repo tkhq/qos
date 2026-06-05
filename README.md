@@ -85,20 +85,33 @@ PRs also need to pass the `build-linux-only` job (part of the `pr` workflow). Th
 
 ### Running in qemu
 
-NOTE: this has only been tested on a linux x86_64 host.
+NOTE: this has only been tested on a linux x86_64 host
+
+#### Dependencies
+
 Some additional dependencies are needed in order to run `qos` in the `nitro-enclave` machine in `qemu`.
 
 1. [vhost-device-vsock](https://github.com/rust-vmm/vhost-device/blob/main/vhost-device-vsock/README.md) is required to provide the hypervisor link for the vsock
 2. [qemu](https://www.qemu.org/) itself needs to be installed, `v11.0.0` or later
 
-#### Bare bones qos
+#### Egress support on host
+
+To setup the egress tunnel you need root priviledges on the host machine and know your main internet route interface.
+Run `src/scripts/enclave_egress_interfaces.sh <interface>` after each boot to provide the egress tunnel setup.
+
+#### Running
 
 Run `make qemu` to start a bare-bones qos instance that will await boot instructions.
-This initiates local vsock on cid `1` and port `9001` and starts the enclave. The unix socket connector is at `/tmp/vhost4.socket`.
+This initiates local vsock on cid `1` and port `9001` for control and `9002` for egress and starts the enclave. The unix socket connector is at `/tmp/vhost4.socket`.
 
-You can follow up by running `qos_host` and pointing to the right vsock and sending in the boot instructions via `qos_client` afterwards.
+You can follow up by running `make host` and booting up the enclave.
+You can also run the bridges by running `make bridge` which expects port `3000` to be used for the app host port.
+Egress is enabled by default for the qemu setup and should start provided the manifest has egress defined.
 
-To stop the enclave and qemu run `make qemu-stop`.
+
+To do a boot standard without needing manual steps, run `make boot`. You can override the pivot binary and arguments used for this by providing them in the `PIVOT_BIN` and `PIVOT_ARGS` env vars (don't forget that pivot args are in the format of `[arg1,arg2]`). The default program will attempt a download of a ~1MB file.
+
+To stop the enclave and qemu run `make stop`.
 
 ## Releases
 

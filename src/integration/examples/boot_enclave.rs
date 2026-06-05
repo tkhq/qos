@@ -20,7 +20,7 @@ use qos_core::protocol::{
 use qos_crypto::sha_256;
 use qos_host::EnclaveInfo;
 use qos_p256::P256Pair;
-use qos_test_primitives::{ChildWrapper, PathWrapper};
+use qos_test_primitives::PathWrapper;
 
 #[tokio::main]
 async fn main() {
@@ -33,12 +33,6 @@ async fn main() {
 	let tmp = PathWrapper::from("/tmp/enclave-example");
 	let _ = PathWrapper::from(PIVOT_HASH_PATH);
 	fs::create_dir_all(&tmp).unwrap();
-
-	let usock = tmp.join("example.sock");
-	let secret_path = tmp.join("example.secret");
-	let pivot_path = tmp.join("example.pivot");
-	let manifest_path = tmp.join("example.manifest");
-	let eph_path = tmp.join("ephemeral_key.secret");
 
 	let boot_dir = PathWrapper::from("boot-dir");
 	fs::create_dir_all(&boot_dir).unwrap();
@@ -65,11 +59,11 @@ async fn main() {
 
 	// -- CLIENT create manifest.
 	let pivot_args = std::env::args().nth(2).expect("No pivot args provided");
-	let pivot_env = "pivot_env_var=will be set";
 	let cli_manifest_path = boot_dir.join("manifest");
 	let app_host_port = 3000;
 
-	assert!(Command::new(integration::QOS_CLIENT_PATH)
+	assert!(
+		Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"generate-manifest",
 			"--nonce",
@@ -88,8 +82,6 @@ async fn main() {
 			cli_manifest_path.to_str().unwrap(),
 			"--pivot-args",
 			&pivot_args,
-			"--pivot-env",
-			pivot_env,
 			"--manifest-set-dir",
 			"./mock/keys/manifest-set",
 			"--share-set-dir",
@@ -98,8 +90,10 @@ async fn main() {
 			"./mock/keys/manifest-set",
 			"--quorum-key-path",
 			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
+			"--debug-mode",
+			"true",
 			"--bridge-config",
-			&format!("[{{\"type\": \"server\", \"port\": {app_host_port}, \"host\": \"0.0.0.0\"}}]"),
+			&format!("[{{\"type\": \"server\", \"port\": {app_host_port}, \"host\": \"0.0.0.0\"}},{{\"type\": \"client\", \"port\": 0}}]"),
 		])
 		.spawn()
 		.unwrap()
@@ -222,17 +216,6 @@ async fn main() {
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 
-		assert_eq!(
-			&stdout.next().unwrap().unwrap(),
-			"Are these the correct pivot env vars:"
-		);
-		assert_eq!(
-			&stdout.next().unwrap().unwrap(),
-			"{\"pivot_env_var\": Plain { value: \"will be set\" }}?"
-		);
-		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
-		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
-
 		// Wait for the command to write the approval and exit
 		assert!(child.wait().unwrap().success());
 
@@ -253,44 +236,6 @@ async fn main() {
 			personal_pair.public_key().to_bytes(),
 		);
 	}
-
-	// -- ENCLAVE start enclave
-	let mut _enclave_child_process: ChildWrapper =
-		Command::new(integration::QOS_CORE_PATH)
-			.args([
-				"--usock",
-				usock.to_str().unwrap(),
-				"--quorum-file",
-				secret_path.to_str().unwrap(),
-				"--pivot-file",
-				pivot_path.to_str().unwrap(),
-				"--ephemeral-file",
-				eph_path.to_str().unwrap(),
-				"--mock",
-				"--manifest-file",
-				manifest_path.to_str().unwrap(),
-			])
-			.spawn()
-			.unwrap()
-			.into();
-
-	// -- HOST start host
-	let mut _host_child_process: ChildWrapper =
-		Command::new(integration::QOS_HOST_PATH)
-			.args([
-				"--host-port",
-				&host_port.to_string(),
-				"--host-ip",
-				LOCAL_HOST,
-				"--usock",
-				usock.to_str().unwrap(),
-			])
-			.spawn()
-			.unwrap()
-			.into();
-
-	// -- Make sure the enclave and host have time to boot
-	qos_test_primitives::wait_until_port_is_bound(host_port);
 
 	// -- CLIENT generate the manifest envelope
 	assert!(
@@ -385,8 +330,6 @@ async fn main() {
 				"--alias",
 				user,
 				"--unsafe-skip-attestation",
-				"--unsafe-eph-path-override",
-				eph_path.to_str().unwrap(),
 			])
 			.stdin(Stdio::piped())
 			.stdout(Stdio::piped())
@@ -464,10 +407,4 @@ async fn main() {
 	assert_eq!(enclave_info.phase, ProtocolPhase::QuorumKeyProvisioned);
 
 	println!("=========ENCLAVE READY WITH PIVOT RUNNING!!==========");
-	println!("press ctrl+c to quit");
-
-	match tokio::signal::ctrl_c().await {
-		Ok(()) => {}
-		Err(err) => panic!("{err}"),
-	}
 }

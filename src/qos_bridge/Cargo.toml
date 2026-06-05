@@ -13,9 +13,13 @@ qos_host = { workspace = true, default-features = false }
 qos_core = { workspace = true, default-features = false }
 qos_hex = { workspace = true, features = ["serde"], default-features = false }
 qos_nsm = { workspace = true, default-features = false }
-ureq = { workspace = true, features = ["json"] }
 
 # Third party
 serde_json = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+ureq = { workspace = true, features = ["json"] }
+
+[features]
+qemu = ["qos_core/qemu"]
+egress = ["qos_core/egress"]

@@ -26,6 +26,7 @@ const LIGHT_INIT_BIN: &str = "light_init";
 const QOS_HOST_BIN: &str = "qos_host";
 const QOS_CLIENT_BIN: &str = "qos_client";
 const QOS_BRIDGE_BIN: &str = "qos_bridge";
+const QOS_BRIDGE_INGRESS_BIN: &str = "ingress";
 const DEFAULT_APP_PORT: u16 = 3000;
 const DEFAULT_LIGHT_GUEST_CONTROL_PORT: u16 = 3001;
 const DEFAULT_INITRD_KERNEL_CMDLINE: &str =
@@ -249,13 +250,17 @@ impl CargoPivotBuilder {
 
 	fn build_host_binaries(&self) -> Result<Vec<HostBinary>, BuildError> {
 		let mut binaries = Vec::new();
-		for bin in [QOS_HOST_BIN, QOS_CLIENT_BIN, QOS_BRIDGE_BIN] {
+		for (name, package, bin) in [
+			(QOS_HOST_BIN, QOS_HOST_BIN, QOS_HOST_BIN),
+			(QOS_CLIENT_BIN, QOS_CLIENT_BIN, QOS_CLIENT_BIN),
+			(QOS_BRIDGE_BIN, QOS_BRIDGE_BIN, QOS_BRIDGE_INGRESS_BIN),
+		] {
 			let mut command = Command::new("cargo");
 			command
 				.arg("build")
 				.arg("--locked")
 				.arg("-p")
-				.arg(bin)
+				.arg(package)
 				.arg("--bin")
 				.arg(bin)
 				.arg("--target-dir")
@@ -273,7 +278,7 @@ impl CargoPivotBuilder {
 				));
 			}
 			binaries.push(HostBinary {
-				name: bin.to_string(),
+				name: name.to_string(),
 				artifact: BuildArtifact {
 					sha256_hex: sha256_file_hex(&path)?,
 					path,
