@@ -11,7 +11,7 @@ fn main() {
 			&tcp_port,
 			"--mock",
 			"--quorum-file",
-			"/tmp/qos.quorum.key",
+			"/qos.quorum.key",
 			"--pivot-file",
 			"/tmp/qos.pivot.bin",
 			"--ephemeral-file",

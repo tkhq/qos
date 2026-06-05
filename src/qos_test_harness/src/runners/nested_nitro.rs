@@ -14,12 +14,12 @@ use crate::{
 	ArtifactBuilder, ArtifactRequest, BuildArtifact, BuildError, BuildKey,
 	BuildOutput, BuildProfile, BuildRecord, BuilderKind, HostBinary,
 	HostRunnerKind, HttpResponse, RunnerError, RunnerKind, RunningApp,
-	StartAppSpec, TestOutcome, TestRunner, http_get, http_post,
+	StartAppSpec, TestOutcome, TestRunner, endpoint_for_routes,
+	endpoint_from_metadata, http_get, http_post, insert_endpoint_metadata,
 	read_build_record, run_command, sha256_file_hex, sha256_hex,
 	workspace_state, write_build_record,
 };
 
-const SIGNED_ECHO_BIN: &str = "signed_echo";
 const NESTED_PARENT_INIT_BIN: &str = "nested_parent_init";
 const QOS_HOST_BIN: &str = "qos_host";
 const QOS_CLIENT_BIN: &str = "qos_client";
@@ -294,15 +294,18 @@ impl NestedNitroQemuBuilder {
 		Ok(binaries)
 	}
 
-	fn build_pivot(&self) -> Result<BuildArtifact, BuildError> {
+	fn build_pivot(
+		&self,
+		request: &ArtifactRequest,
+	) -> Result<BuildArtifact, BuildError> {
 		let mut command = Command::new("cargo");
 		command
 			.arg("build")
 			.arg("--locked")
 			.arg("-p")
-			.arg("qos_test_harness")
+			.arg(request.package())
 			.arg("--bin")
-			.arg(SIGNED_ECHO_BIN)
+			.arg(request.bin())
 			.arg("--target")
 			.arg(&self.config.enclave_target_triple)
 			.arg("--target-dir")
@@ -318,7 +321,7 @@ impl NestedNitroQemuBuilder {
 		}
 		run_command(&mut command)?;
 
-		artifact_for_path(&self.enclave_binary_path(SIGNED_ECHO_BIN))
+		artifact_for_path(&self.enclave_binary_path(request.bin()))
 	}
 
 	fn build_eif(&self, key: &BuildKey) -> Result<BuildArtifact, BuildError> {
@@ -358,6 +361,7 @@ impl NestedNitroQemuBuilder {
 		&self,
 		host_binaries: &[HostBinary],
 		pivot: &BuildArtifact,
+		pivot_bin: &str,
 		eif: &BuildArtifact,
 	) -> Result<(), BuildError> {
 		let work = self.parent_work_dir();
@@ -376,7 +380,7 @@ impl NestedNitroQemuBuilder {
 				&work.join(name),
 			)?;
 		}
-		copy_executable(&pivot.path, &work.join(SIGNED_ECHO_BIN))?;
+		copy_executable(&pivot.path, &work.join(pivot_bin))?;
 		copy_executable(&eif.path, &work.join("nitro.eif"))?;
 		Ok(())
 	}
@@ -427,8 +431,7 @@ impl ArtifactBuilder for NestedNitroQemuBuilder {
 			"parent_target_linker": self.config.parent_target_linker,
 			"enclave_target": self.config.enclave_target_triple,
 			"enclave_target_linker": self.config.enclave_target_linker,
-			"package": plan.package,
-			"bin": plan.bin,
+			"artifact": plan.request.artifact,
 			"containerfile": NESTED_NITRO_CONTAINERFILE,
 			"parent_work_layout_version": PARENT_WORK_LAYOUT_VERSION,
 			"parent_bundle_dir": self.config.parent_bundle_dir,
@@ -465,9 +468,14 @@ impl ArtifactBuilder for NestedNitroQemuBuilder {
 		}
 
 		let host_binaries = self.build_parent_binaries()?;
-		let pivot = self.build_pivot()?;
+		let pivot = self.build_pivot(&plan.request.artifact)?;
 		let eif = self.build_eif(&key)?;
-		self.stage_parent_work_dir(&host_binaries, &pivot, &eif)?;
+		self.stage_parent_work_dir(
+			&host_binaries,
+			&pivot,
+			plan.request.artifact.bin(),
+			&eif,
+		)?;
 
 		let mut metadata = BTreeMap::new();
 		metadata.insert(
@@ -569,12 +577,21 @@ impl ArtifactBuilder for NestedNitroQemuBuilder {
 			QOS_HOST_BIN,
 			QOS_CLIENT_BIN,
 			QOS_BRIDGE_BIN,
-			SIGNED_ECHO_BIN,
-			"nitro.eif",
 		] {
 			let staged = work_dir.join(staged_name);
 			validate_path_exists(&staged)?;
 		}
+		let pivot_staged_name =
+			pivot.path.file_name().and_then(|name| name.to_str()).ok_or_else(
+				|| {
+					BuildError::InvalidOutput(format!(
+						"pivot artifact has no file name: {}",
+						pivot.path.display()
+					))
+				},
+			)?;
+		validate_path_exists(&work_dir.join(pivot_staged_name))?;
+		validate_path_exists(&work_dir.join("nitro.eif"))?;
 		let root_image = metadata_artifact(
 			output,
 			PARENT_ROOT_IMAGE_PATH_METADATA,
@@ -707,38 +724,43 @@ impl NestedNitroQemuRunner {
 			builder: self.config.build_flavor.builder_kind(),
 			profile: self.config.profile.clone(),
 			target_triple: Some(self.config.enclave_target_triple.clone()),
-			package: "qos_test_harness".to_string(),
-			bin: SIGNED_ECHO_BIN.to_string(),
 			extra_inputs: BTreeMap::new(),
 		}
 	}
 
-	fn endpoint(&self) -> AppEndpoint {
+	fn endpoint(&self, spec: &StartAppSpec) -> AppEndpoint {
 		let base_url = format!(
 			"http://{}:{}",
 			self.config.host, self.config.app_host_port
 		);
-		AppEndpoint {
-			base_url: Some(base_url.clone()),
-			health_url: format!("{base_url}/health"),
-			signed_echo_url: format!("{base_url}/echo"),
-			metadata: BTreeMap::new(),
-		}
+		endpoint_for_routes(
+			base_url,
+			&spec.health_check.path,
+			&spec.public_routes,
+		)
 	}
 
 	fn start_app_inner(
 		&mut self,
 		spec: StartAppSpec,
 	) -> Result<RunningApp, RunnerError> {
+		if !spec.runtime_files.is_empty() {
+			return Err(RunnerError::new(
+				"nested Nitro QEMU runner does not support runtime files",
+			));
+		}
 		self.verify_app_artifact(&spec.artifact)?;
+		let pivot_bin = pivot_bin_for_artifact(&spec.artifact)?;
 		let run_id = timestamp_millis();
 		let run_dir =
 			self.config.output_dir.join("run").join(run_id.to_string());
 		fs::create_dir_all(&run_dir).map_err(io_error)?;
-		self.write_parent_config(&spec)?;
+		self.write_parent_config(&spec, &pivot_bin)?;
 		self.start_outer_qemu(&run_dir)?;
 
-		let mut metadata = BTreeMap::new();
+		let endpoint = self.endpoint(&spec);
+		let mut metadata = spec.metadata.clone();
+		insert_endpoint_metadata(&mut metadata, &endpoint);
 		metadata.insert("run_dir".to_string(), run_dir.display().to_string());
 		metadata.insert("runner".to_string(), "nested_nitro_qemu".to_string());
 		metadata.insert(
@@ -788,11 +810,13 @@ impl NestedNitroQemuRunner {
 	fn write_parent_config(
 		&self,
 		spec: &StartAppSpec,
+		pivot_bin: &str,
 	) -> Result<(), RunnerError> {
 		let work = self.parent_work_dir_for_start()?;
 		let config_path = work.join("nested-parent.env");
 		let mut file = File::create(&config_path).map_err(io_error)?;
 		let pivot_args = encode_pivot_args(&spec.pivot_args)?;
+		let pivot_path = format!("/work/{pivot_bin}");
 		let bridge_config = format!(
 			"[{{\"type\":\"server\",\"port\":{},\"host\":\"0.0.0.0\"}}]",
 			self.config.parent_app_port
@@ -813,7 +837,7 @@ impl NestedNitroQemuRunner {
 			("QOS_BRIDGE", "/work/qos_bridge"),
 			("QOS_PARENT_HOST", "0.0.0.0"),
 			("QOS_PARENT_CONTROL_HOST", "127.0.0.1"),
-			("PIVOT_PATH", "/work/signed_echo"),
+			("PIVOT_PATH", pivot_path.as_str()),
 			("RESTART_POLICY", "never"),
 		] {
 			write_config_line(&mut file, key, value)?;
@@ -1020,10 +1044,10 @@ impl TestRunner for NestedNitroQemuRunner {
 
 	async fn wait_ready(
 		&mut self,
-		_app: &RunningApp,
+		app: &RunningApp,
 		timeout: Duration,
 	) -> Result<AppEndpoint, RunnerError> {
-		let endpoint = self.endpoint();
+		let endpoint = endpoint_from_metadata(&app.metadata)?;
 		wait_for_http_ok(&endpoint.health_url, timeout, &mut self.children)?;
 		Ok(endpoint)
 	}
@@ -1126,6 +1150,25 @@ fn find_host_binary<'a>(
 		.map(|binary| &binary.artifact)
 		.ok_or_else(|| {
 			BuildError::MissingArtifact(format!("host binary `{name}`"))
+		})
+}
+
+fn pivot_bin_for_artifact(
+	artifact: &AppArtifact,
+) -> Result<String, RunnerError> {
+	let AppArtifact::LocalBinary { path, .. } = artifact else {
+		return Err(RunnerError::new(
+			"nested Nitro QEMU runner requires a local pivot binary",
+		));
+	};
+	path.file_name()
+		.and_then(|name| name.to_str())
+		.map(ToString::to_string)
+		.ok_or_else(|| {
+			RunnerError::new(format!(
+				"pivot artifact has no file name: {}",
+				path.display()
+			))
 		})
 }
 

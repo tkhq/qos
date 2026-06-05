@@ -10,11 +10,14 @@ use crate::{
 	ArtifactBuilder, ArtifactRequest, BuildError, BuildKey, BuildOutput,
 	BuildProfile, BuildRecord, BuilderKind, HostRunnerKind, HttpResponse,
 	RunnerError, RunnerKind, RunningApp, StartAppSpec, TestOutcome, TestRunner,
-	http_get, http_post, read_build_record, run_command, sha256_hex,
+	endpoint_for_routes, endpoint_from_metadata, http_get, http_post,
+	insert_endpoint_metadata, read_build_record, run_command, sha256_hex,
 	workspace_state, write_build_record,
 };
 
 const DEFAULT_CONTAINER_PORT: u16 = 3000;
+const CARGO_BIN_CONTAINERFILE: &str =
+	"src/qos_test_harness/docker/cargo_bin.Containerfile";
 
 #[derive(Debug, Clone)]
 pub struct DockerRunnerConfig {
@@ -37,18 +40,18 @@ impl DockerRunnerConfig {
 			host: "127.0.0.1".to_string(),
 			host_port,
 			container_port: DEFAULT_CONTAINER_PORT,
-			image_tag: "qos-test-harness/signed_echo:local".to_string(),
+			image_tag: "qos-test-harness/cargo-bin:local".to_string(),
 			keep_on_failure: false,
 		}
 	}
 }
 
 #[derive(Debug)]
-pub struct DockerSignedEchoBuilder {
+pub struct DockerCargoBinBuilder {
 	config: DockerRunnerConfig,
 }
 
-impl DockerSignedEchoBuilder {
+impl DockerCargoBinBuilder {
 	#[must_use]
 	pub fn new(config: DockerRunnerConfig) -> Self {
 		Self { config }
@@ -58,7 +61,10 @@ impl DockerSignedEchoBuilder {
 		self.config.output_dir.join(format!("{}.json", key.0))
 	}
 
-	fn build_image(&self) -> Result<String, BuildError> {
+	fn build_image(
+		&self,
+		request: &ArtifactRequest,
+	) -> Result<String, BuildError> {
 		run_command(
 			Command::new("make")
 				.arg("out/.common-loaded")
@@ -70,7 +76,11 @@ impl DockerSignedEchoBuilder {
 				.arg("--platform")
 				.arg("linux/amd64")
 				.arg("-f")
-				.arg("src/qos_test_harness/docker/signed_echo.Containerfile")
+				.arg(CARGO_BIN_CONTAINERFILE)
+				.arg("--build-arg")
+				.arg(format!("APPLICATION_PACKAGE={}", request.package()))
+				.arg("--build-arg")
+				.arg(format!("APPLICATION_BIN={}", request.bin()))
 				.arg("-t")
 				.arg(&self.config.image_tag)
 				.arg(".")
@@ -89,7 +99,7 @@ impl DockerSignedEchoBuilder {
 	}
 }
 
-impl ArtifactBuilder for DockerSignedEchoBuilder {
+impl ArtifactBuilder for DockerCargoBinBuilder {
 	fn build_key(
 		&self,
 		plan: &ArtifactBuildPlan,
@@ -102,10 +112,9 @@ impl ArtifactBuilder for DockerSignedEchoBuilder {
 			"host_runner": plan.request.host_runner,
 			"profile": plan.profile,
 			"target": plan.target_triple,
-			"package": plan.package,
-			"bin": plan.bin,
+			"artifact": plan.request.artifact,
 			"image_tag": self.config.image_tag,
-			"containerfile": "src/qos_test_harness/docker/signed_echo.Containerfile",
+			"containerfile": CARGO_BIN_CONTAINERFILE,
 			"extra": plan.extra_inputs,
 		});
 		Ok(BuildKey(sha256_hex(raw.to_string().as_bytes())))
@@ -123,7 +132,7 @@ impl ArtifactBuilder for DockerSignedEchoBuilder {
 			return Ok(record.output);
 		}
 
-		let image_id = self.build_image()?;
+		let image_id = self.build_image(&plan.request.artifact)?;
 		let output = BuildOutput {
 			key: key.clone(),
 			builder: BuilderKind::Docker,
@@ -175,14 +184,14 @@ impl ArtifactBuilder for DockerSignedEchoBuilder {
 #[derive(Debug)]
 pub struct DockerTestRunner {
 	config: DockerRunnerConfig,
-	builder: DockerSignedEchoBuilder,
+	builder: DockerCargoBinBuilder,
 	build_output: Option<BuildOutput>,
 }
 
 impl DockerTestRunner {
 	#[must_use]
 	pub fn new(config: DockerRunnerConfig) -> Self {
-		let builder = DockerSignedEchoBuilder::new(config.clone());
+		let builder = DockerCargoBinBuilder::new(config.clone());
 		Self { config, builder, build_output: None }
 	}
 
@@ -204,21 +213,18 @@ impl DockerTestRunner {
 			builder: BuilderKind::Docker,
 			profile: BuildProfile::Release,
 			target_triple: Some("x86_64-unknown-linux-gnu".to_string()),
-			package: "qos_test_harness".to_string(),
-			bin: "signed_echo".to_string(),
 			extra_inputs: BTreeMap::new(),
 		}
 	}
 
-	fn endpoint(&self) -> AppEndpoint {
+	fn endpoint(&self, spec: &StartAppSpec) -> AppEndpoint {
 		let base_url =
 			format!("http://{}:{}", self.config.host, self.config.host_port);
-		AppEndpoint {
-			base_url: Some(base_url.clone()),
-			health_url: format!("{base_url}/health"),
-			signed_echo_url: format!("{base_url}/echo"),
-			metadata: BTreeMap::new(),
-		}
+		endpoint_for_routes(
+			base_url,
+			&spec.health_check.path,
+			&spec.public_routes,
+		)
 	}
 }
 
@@ -245,7 +251,7 @@ impl TestRunner for DockerTestRunner {
 		&mut self,
 		spec: StartAppSpec,
 	) -> Result<RunningApp, RunnerError> {
-		let AppArtifact::OciImage { image_ref, .. } = spec.artifact else {
+		let AppArtifact::OciImage { image_ref, .. } = &spec.artifact else {
 			return Err(RunnerError::new(
 				"docker runner requires an OCI image",
 			));
@@ -254,36 +260,54 @@ impl TestRunner for DockerTestRunner {
 			.duration_since(UNIX_EPOCH)
 			.expect("system clock before unix epoch")
 			.as_millis();
-		let name = format!("qos-signed-echo-{unique}");
-		run_command(
-			Command::new("docker")
-				.arg("run")
-				.arg("--detach")
-				.arg("--rm")
-				.arg("--name")
-				.arg(&name)
-				.arg("--publish")
-				.arg(format!(
-					"{}:{}:{}",
-					self.config.host,
-					self.config.host_port,
-					self.config.container_port
-				))
-				.arg(&image_ref)
-				.arg("--host")
-				.arg("0.0.0.0")
-				.arg("--port")
-				.arg(self.config.container_port.to_string()),
-		)?;
-		Ok(RunningApp { id: name, metadata: BTreeMap::new() })
+		let name = format!("qos-app-{unique}");
+		let endpoint = self.endpoint(&spec);
+		let mut command = Command::new("docker");
+		command
+			.arg("run")
+			.arg("--detach")
+			.arg("--rm")
+			.arg("--name")
+			.arg(&name)
+			.arg("--publish")
+			.arg(format!(
+				"{}:{}:{}",
+				self.config.host,
+				self.config.host_port,
+				self.config.container_port
+			));
+		for runtime_file in &spec.runtime_files {
+			if !runtime_file.host_path.exists() {
+				return Err(RunnerError::new(format!(
+					"runtime file does not exist: {}",
+					runtime_file.host_path.display()
+				)));
+			}
+			let mut mount = format!(
+				"type=bind,source={},target={}",
+				runtime_file.host_path.display(),
+				runtime_file.guest_path.display()
+			);
+			if runtime_file.read_only {
+				mount.push_str(",readonly");
+			}
+			command.arg("--mount").arg(mount);
+		}
+		command.arg(image_ref).args(&spec.pivot_args);
+		run_command(&mut command)?;
+
+		let mut metadata = spec.metadata.clone();
+		insert_endpoint_metadata(&mut metadata, &endpoint);
+		metadata.insert("image_ref".to_string(), image_ref.clone());
+		Ok(RunningApp { id: name, metadata })
 	}
 
 	async fn wait_ready(
 		&mut self,
-		_app: &RunningApp,
+		app: &RunningApp,
 		timeout: Duration,
 	) -> Result<AppEndpoint, RunnerError> {
-		let endpoint = self.endpoint();
+		let endpoint = endpoint_from_metadata(&app.metadata)?;
 		let start = std::time::Instant::now();
 		while start.elapsed() < timeout {
 			if let Ok(response) = http_get(&endpoint.health_url)

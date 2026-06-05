@@ -6,7 +6,31 @@ use crate::RunnerError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ArtifactRequest {
-	SignedEcho,
+	CargoBin { package: String, bin: String },
+}
+
+impl ArtifactRequest {
+	#[must_use]
+	pub fn cargo_bin(
+		package: impl Into<String>,
+		bin: impl Into<String>,
+	) -> Self {
+		Self::CargoBin { package: package.into(), bin: bin.into() }
+	}
+
+	#[must_use]
+	pub fn package(&self) -> &str {
+		match self {
+			Self::CargoBin { package, .. } => package,
+		}
+	}
+
+	#[must_use]
+	pub fn bin(&self) -> &str {
+		match self {
+			Self::CargoBin { bin, .. } => bin,
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +44,27 @@ pub enum AppArtifact {
 		pivot_path: Option<String>,
 		expected_digest: Option<String>,
 	},
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeFile {
+	pub host_path: PathBuf,
+	pub guest_path: PathBuf,
+	pub read_only: bool,
+}
+
+impl RuntimeFile {
+	#[must_use]
+	pub fn read_only(
+		host_path: impl Into<PathBuf>,
+		guest_path: impl Into<PathBuf>,
+	) -> Self {
+		Self {
+			host_path: host_path.into(),
+			guest_path: guest_path.into(),
+			read_only: true,
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +92,7 @@ pub struct StartAppSpec {
 	pub qos_version: Option<String>,
 	pub pivot_path: Option<String>,
 	pub pivot_args: Vec<String>,
+	pub runtime_files: Vec<RuntimeFile>,
 	pub health_check: HttpRouteSpec,
 	pub public_routes: Vec<HttpRouteSpec>,
 	pub metadata: BTreeMap<String, String>,
@@ -62,8 +108,72 @@ pub struct RunningApp {
 pub struct AppEndpoint {
 	pub base_url: Option<String>,
 	pub health_url: String,
-	pub signed_echo_url: String,
+	pub public_urls: BTreeMap<String, String>,
 	pub metadata: BTreeMap<String, String>,
+}
+
+const ENDPOINT_BASE_URL_METADATA: &str = "endpoint_base_url";
+const ENDPOINT_HEALTH_URL_METADATA: &str = "endpoint_health_url";
+const ENDPOINT_PUBLIC_URL_PREFIX: &str = "endpoint_public_url.";
+
+pub(crate) fn endpoint_for_routes(
+	base_url: String,
+	health_path: &str,
+	public_routes: &[HttpRouteSpec],
+) -> AppEndpoint {
+	let public_urls = public_routes
+		.iter()
+		.map(|route| {
+			(route.name.clone(), format!("{}{}", base_url, route.path))
+		})
+		.collect();
+	AppEndpoint {
+		base_url: Some(base_url.clone()),
+		health_url: format!("{base_url}{health_path}"),
+		public_urls,
+		metadata: BTreeMap::new(),
+	}
+}
+
+pub(crate) fn insert_endpoint_metadata(
+	metadata: &mut BTreeMap<String, String>,
+	endpoint: &AppEndpoint,
+) {
+	if let Some(base_url) = endpoint.base_url.as_ref() {
+		metadata
+			.insert(ENDPOINT_BASE_URL_METADATA.to_string(), base_url.clone());
+	}
+	metadata.insert(
+		ENDPOINT_HEALTH_URL_METADATA.to_string(),
+		endpoint.health_url.clone(),
+	);
+	for (name, url) in &endpoint.public_urls {
+		metadata
+			.insert(format!("{ENDPOINT_PUBLIC_URL_PREFIX}{name}"), url.clone());
+	}
+}
+
+pub(crate) fn endpoint_from_metadata(
+	metadata: &BTreeMap<String, String>,
+) -> Result<AppEndpoint, RunnerError> {
+	let health_url = metadata
+		.get(ENDPOINT_HEALTH_URL_METADATA)
+		.cloned()
+		.ok_or_else(|| RunnerError::new("running app has no health URL"))?;
+	let base_url = metadata.get(ENDPOINT_BASE_URL_METADATA).cloned();
+	let public_urls = metadata
+		.iter()
+		.filter_map(|(key, value)| {
+			key.strip_prefix(ENDPOINT_PUBLIC_URL_PREFIX)
+				.map(|name| (name.to_string(), value.clone()))
+		})
+		.collect();
+	Ok(AppEndpoint {
+		base_url,
+		health_url,
+		public_urls,
+		metadata: metadata.clone(),
+	})
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

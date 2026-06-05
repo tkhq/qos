@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
 	AppEndpoint, ArtifactRequest, HttpResponse, HttpRouteSpec, RunningApp,
-	StartAppSpec, TestError, TestOutcome, TestRunner,
+	RuntimeFile, StartAppSpec, TestError, TestOutcome, TestRunner,
 };
 
 const DEFAULT_APP_NAME: &str = "signed-echo";
@@ -13,7 +13,10 @@ const DEFAULT_ECHO_MESSAGE: &str = "vivosuite signed echo";
 const DEFAULT_HEALTH_PATH: &str = "/health";
 const DEFAULT_ECHO_PATH: &str = "/echo";
 const DEFAULT_PIVOT_PATH: &str = "/tvc_app";
+const DEFAULT_QUORUM_KEY_PATH: &str = "/qos.quorum.key";
 const DEFAULT_APP_PORT: u16 = 3000;
+const SIGNED_ECHO_PACKAGE: &str = "signed_echo";
+const SIGNED_ECHO_BIN: &str = "signed_echo";
 const SIGNED_ECHO_ROUTE_NAME: &str = "signed_echo";
 const HEALTH_ROUTE_NAME: &str = "health";
 const SIGNED_ECHO_PAYLOAD_PREFIX: &[u8] = b"echo app signed at";
@@ -21,6 +24,7 @@ const SIGNED_ECHO_SIGNATURE_LEN: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignedEchoTestConfig {
+	pub artifact: ArtifactRequest,
 	pub app_name: String,
 	pub readiness_timeout: Duration,
 	pub health_path: String,
@@ -29,6 +33,7 @@ pub struct SignedEchoTestConfig {
 	pub qos_version: Option<String>,
 	pub pivot_path: Option<String>,
 	pub pivot_args: Vec<String>,
+	pub runtime_files: Vec<RuntimeFile>,
 	pub health_check_port: Option<u16>,
 	pub public_ingress_port: Option<u16>,
 	pub metadata: BTreeMap<String, String>,
@@ -37,6 +42,10 @@ pub struct SignedEchoTestConfig {
 impl Default for SignedEchoTestConfig {
 	fn default() -> Self {
 		Self {
+			artifact: ArtifactRequest::cargo_bin(
+				SIGNED_ECHO_PACKAGE,
+				SIGNED_ECHO_BIN,
+			),
 			app_name: DEFAULT_APP_NAME.to_string(),
 			readiness_timeout: Duration::from_secs(240),
 			health_path: DEFAULT_HEALTH_PATH.to_string(),
@@ -49,7 +58,10 @@ impl Default for SignedEchoTestConfig {
 				"0.0.0.0".to_string(),
 				"--port".to_string(),
 				DEFAULT_APP_PORT.to_string(),
+				"--quorum-file".to_string(),
+				DEFAULT_QUORUM_KEY_PATH.to_string(),
 			],
+			runtime_files: Vec::new(),
 			health_check_port: Some(DEFAULT_APP_PORT),
 			public_ingress_port: Some(DEFAULT_APP_PORT),
 			metadata: BTreeMap::new(),
@@ -61,11 +73,10 @@ pub async fn signed_echo_startup_shutdown<R: TestRunner>(
 	runner: &mut R,
 	cfg: SignedEchoTestConfig,
 ) -> Result<(), TestError> {
-	let artifact =
-		runner
-			.prepare_artifact(ArtifactRequest::SignedEcho)
-			.await
-			.map_err(|source| TestError::runner("prepare_artifact", source))?;
+	let artifact = runner
+		.prepare_artifact(cfg.artifact.clone())
+		.await
+		.map_err(|source| TestError::runner("prepare_artifact", source))?;
 
 	let app = runner
 		.start_app(StartAppSpec {
@@ -74,6 +85,7 @@ pub async fn signed_echo_startup_shutdown<R: TestRunner>(
 			qos_version: cfg.qos_version.clone(),
 			pivot_path: cfg.pivot_path.clone(),
 			pivot_args: cfg.pivot_args.clone(),
+			runtime_files: cfg.runtime_files.clone(),
 			health_check: HttpRouteSpec::new(
 				HEALTH_ROUTE_NAME,
 				cfg.health_check_port,
@@ -143,12 +155,18 @@ async fn assert_signed_echo<R: TestRunner>(
 	endpoint: &AppEndpoint,
 	message: &str,
 ) -> Result<(), TestError> {
+	let signed_echo_url =
+		endpoint.public_urls.get(SIGNED_ECHO_ROUTE_NAME).ok_or_else(|| {
+			TestError::assertion(format!(
+				"missing public route {SIGNED_ECHO_ROUTE_NAME}"
+			))
+		})?;
 	let echo = runner
-		.http_post(&endpoint.signed_echo_url, message.as_bytes())
+		.http_post(signed_echo_url, message.as_bytes())
 		.await
 		.map_err(|source| TestError::runner("http_post signed_echo", source))?;
 
-	expect_status_ok("POST", &endpoint.signed_echo_url, &echo)?;
+	expect_status_ok("POST", signed_echo_url, &echo)?;
 	verify_signed_echo_response(&echo.body, message)?;
 
 	Ok(())

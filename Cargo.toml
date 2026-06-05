@@ -13,6 +13,7 @@ members = [
   "src/qos_test_harness",
   "src/qos_p256",
   "src/qos_nsm",
+  "src/signed_echo",
   # special members that are not default-members
   "src/qos_crypto/fuzz",
   "src/qos_net/fuzz",
@@ -33,6 +34,7 @@ default-members = [
   "src/qos_test_harness",
   "src/qos_p256",
   "src/qos_nsm",
+  "src/signed_echo",
 ]
 exclude = [
   "src/init",
@@ -94,7 +96,7 @@ tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"], default-
 tokio-rustls = { version = "0.26.2" }
 tokio-vsock = { version = "0.7.2" }
 ureq = { version = "2.9", default-features = false }
-vsss-rs = { version = "5.1", default-features = false, features = ["std", "zeroize"] }
+vsss-rs = { version = "5.4", default-features = false, features = ["std", "zeroize"] }
 webpki = { version = "0.22.4", default-features = false }
 webpki-roots = { version = "1.0.2" }
 x509-cert = { version = "0.2.5", features = ["pem"], default-features = false }

@@ -379,9 +379,10 @@ Two builder styles are supported:
   stages the x86_64 parent work directory, and records StageX as the builder
   kind.
 - Local cross compile: builds `nested_parent_init`, `qos_host`, `qos_client`,
-  `qos_bridge`, and `signed_echo` for `x86_64-unknown-linux-musl`, stages the
-  same parent work directory, uses the existing EIF packaging step as a runtime
-  input, and records local cross compile as the builder kind.
+  `qos_bridge`, and the requested pivot Cargo binary for
+  `x86_64-unknown-linux-musl`, stages the same parent work directory, uses the
+  existing EIF packaging step as a runtime input, and records local cross
+  compile as the builder kind.
 
 The builder is selected with `QOS_TEST_QEMU_NESTED_NITRO_BUILDER=stagex|cross`.
 The default is `stagex`.
@@ -430,8 +431,8 @@ artifacts, or Docker/QEMU-specific metadata.
 ## Build Freshness And Caching
 
 Freshness is a builder responsibility. The shared test asks for
-`ArtifactRequest::SignedEcho`; the selected builder must produce a valid
-`BuildOutput`.
+`ArtifactRequest::CargoBin { package, bin }`; the selected builder must produce
+a valid `BuildOutput`.
 
 General rules:
 

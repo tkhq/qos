@@ -14,12 +14,12 @@ use crate::{
 	ArtifactBuilder, ArtifactRequest, BuildArtifact, BuildError, BuildKey,
 	BuildOutput, BuildProfile, BuildRecord, BuilderKind, EnclaveBinary,
 	HostBinary, HostRunnerKind, HttpResponse, RunnerError, RunnerKind,
-	RunningApp, StartAppSpec, TestOutcome, TestRunner, http_get, http_post,
+	RunningApp, StartAppSpec, TestOutcome, TestRunner, endpoint_for_routes,
+	endpoint_from_metadata, http_get, http_post, insert_endpoint_metadata,
 	read_build_record, run_command, sha256_file_hex, sha256_hex,
 	workspace_state, write_build_record,
 };
 
-const SIGNED_ECHO_BIN: &str = "signed_echo";
 const QOS_CORE_BIN: &str = "qos_core";
 const INIT_BIN: &str = "init";
 const LIGHT_INIT_BIN: &str = "light_init";
@@ -142,7 +142,7 @@ impl QemuRunnerConfig {
 }
 
 #[derive(Debug)]
-pub struct CargoSignedEchoBuilder {
+pub struct CargoPivotBuilder {
 	config: QemuRunnerConfig,
 	flavor: QemuFlavor,
 }
@@ -153,7 +153,7 @@ struct PlainQemuPackage {
 	rootfs: BuildArtifact,
 }
 
-impl CargoSignedEchoBuilder {
+impl CargoPivotBuilder {
 	#[must_use]
 	pub fn new(config: QemuRunnerConfig, flavor: QemuFlavor) -> Self {
 		Self { config, flavor }
@@ -201,13 +201,6 @@ impl CargoSignedEchoBuilder {
 		self.flavor_dir().join("linuxkit-kernel")
 	}
 
-	fn pivot_path(&self) -> PathBuf {
-		self.enclave_target_dir()
-			.join(&self.config.target_triple)
-			.join(self.config.profile.target_dir_segment())
-			.join(SIGNED_ECHO_BIN)
-	}
-
 	fn host_binary_path(&self, bin: &str) -> PathBuf {
 		self.host_target_dir()
 			.join(self.config.profile.target_dir_segment())
@@ -221,16 +214,19 @@ impl CargoSignedEchoBuilder {
 			.join(bin)
 	}
 
-	fn build_pivot(&self) -> Result<BuildArtifact, BuildError> {
+	fn build_pivot(
+		&self,
+		request: &ArtifactRequest,
+	) -> Result<BuildArtifact, BuildError> {
 		let target_dir = self.enclave_target_dir();
 		let mut command = Command::new("cargo");
 		command
 			.arg("build")
 			.arg("--locked")
 			.arg("-p")
-			.arg("qos_test_harness")
+			.arg(request.package())
 			.arg("--bin")
-			.arg(SIGNED_ECHO_BIN)
+			.arg(request.bin())
 			.arg("--target")
 			.arg(&self.config.target_triple)
 			.arg("--target-dir")
@@ -242,7 +238,7 @@ impl CargoSignedEchoBuilder {
 		}
 		run_command(&mut command)?;
 
-		let path = self.pivot_path();
+		let path = self.enclave_binary_path(request.bin());
 		if !path.exists() {
 			return Err(BuildError::MissingArtifact(
 				path.display().to_string(),
@@ -413,6 +409,7 @@ impl CargoSignedEchoBuilder {
 	fn build_reproducible_plain_package(
 		&self,
 		key: &BuildKey,
+		request: &ArtifactRequest,
 	) -> Result<PlainQemuPackage, BuildError> {
 		if self.flavor != QemuFlavor::Reproducible {
 			return Err(BuildError::InvalidOutput(
@@ -444,6 +441,10 @@ impl CargoSignedEchoBuilder {
 				.arg(DEFAULT_REPRODUCIBLE_KERNEL_PLATFORM)
 				.arg("-t")
 				.arg(image_tag)
+				.arg("--build-arg")
+				.arg(format!("APPLICATION_PACKAGE={}", request.package()))
+				.arg("--build-arg")
+				.arg(format!("APPLICATION_BIN={}", request.bin()))
 				.arg("-f")
 				.arg(PLAIN_QEMU_CONTAINERFILE)
 				.arg(".")
@@ -459,7 +460,7 @@ impl CargoSignedEchoBuilder {
 				.arg(&package_dir),
 		)?;
 
-		let pivot = artifact_for_path(&package_dir.join(SIGNED_ECHO_BIN))?;
+		let pivot = artifact_for_path(&package_dir.join(request.bin()))?;
 		let qos_core = artifact_for_path(&package_dir.join(QOS_CORE_BIN))?;
 		let init = artifact_for_path(&package_dir.join(INIT_BIN))?;
 		let rootfs_path = self.rootfs_path();
@@ -523,7 +524,7 @@ impl CargoSignedEchoBuilder {
 	}
 }
 
-impl ArtifactBuilder for CargoSignedEchoBuilder {
+impl ArtifactBuilder for CargoPivotBuilder {
 	fn build_key(
 		&self,
 		plan: &ArtifactBuildPlan,
@@ -537,8 +538,7 @@ impl ArtifactBuilder for CargoSignedEchoBuilder {
 			"profile": plan.profile,
 			"target": plan.target_triple,
 			"target_linker": self.config.target_linker,
-			"package": plan.package,
-			"bin": plan.bin,
+			"artifact": plan.request.artifact,
 			"qemu_flavor": format!("{:?}", self.flavor),
 			"rootfs_layout_version": ROOTFS_LAYOUT_VERSION,
 			"plain_qemu_containerfile": PLAIN_QEMU_CONTAINERFILE,
@@ -571,13 +571,16 @@ impl ArtifactBuilder for CargoSignedEchoBuilder {
 		let host_binaries = self.build_host_binaries()?;
 		let (pivot, enclave_binaries, rootfs) = match self.flavor {
 			QemuFlavor::Light => {
-				let pivot = self.build_pivot()?;
+				let pivot = self.build_pivot(&plan.request.artifact)?;
 				let enclave_binaries = self.build_light_enclave_binaries()?;
 				let rootfs = self.package_light_initramfs(&enclave_binaries)?;
 				(pivot, enclave_binaries, rootfs)
 			}
 			QemuFlavor::Reproducible => {
-				let package = self.build_reproducible_plain_package(&key)?;
+				let package = self.build_reproducible_plain_package(
+					&key,
+					&plan.request.artifact,
+				)?;
 				(package.pivot, package.enclave_binaries, Some(package.rootfs))
 			}
 		};
@@ -895,7 +898,7 @@ fn pad_newc(out: &mut File, len: usize) -> Result<(), BuildError> {
 pub struct QemuTestRunner {
 	config: QemuRunnerConfig,
 	flavor: QemuFlavor,
-	builder: CargoSignedEchoBuilder,
+	builder: CargoPivotBuilder,
 	build_output: Option<BuildOutput>,
 	children: Vec<ManagedChild>,
 }
@@ -919,7 +922,7 @@ impl QemuTestRunner {
 	}
 
 	fn new(config: QemuRunnerConfig, flavor: QemuFlavor) -> Self {
-		let builder = CargoSignedEchoBuilder::new(config.clone(), flavor);
+		let builder = CargoPivotBuilder::new(config.clone(), flavor);
 		Self { config, flavor, builder, build_output: None, children: vec![] }
 	}
 
@@ -977,23 +980,20 @@ impl QemuTestRunner {
 			builder: self.flavor.builder_kind(),
 			profile: self.config.profile.clone(),
 			target_triple: Some(self.config.target_triple.clone()),
-			package: "qos_test_harness".to_string(),
-			bin: SIGNED_ECHO_BIN.to_string(),
 			extra_inputs: BTreeMap::new(),
 		}
 	}
 
-	fn endpoint(&self) -> AppEndpoint {
+	fn endpoint(&self, spec: &StartAppSpec) -> AppEndpoint {
 		let base_url = format!(
 			"http://{}:{}",
 			self.config.host, self.config.app_host_port
 		);
-		AppEndpoint {
-			base_url: Some(base_url.clone()),
-			health_url: format!("{base_url}/health"),
-			signed_echo_url: format!("{base_url}/echo"),
-			metadata: BTreeMap::new(),
-		}
+		endpoint_for_routes(
+			base_url,
+			&spec.health_check.path,
+			&spec.public_routes,
+		)
 	}
 
 	fn uses_plain_qemu(&self) -> bool {
@@ -1006,6 +1006,11 @@ impl QemuTestRunner {
 		&mut self,
 		spec: StartAppSpec,
 	) -> Result<RunningApp, RunnerError> {
+		if !spec.runtime_files.is_empty() {
+			return Err(RunnerError::new(
+				"qemu runner does not support runtime files",
+			));
+		}
 		let (path, sha256_hex) = match &spec.artifact {
 			AppArtifact::LocalBinary { path, sha256_hex } => {
 				(path.clone(), sha256_hex.clone())
@@ -1035,7 +1040,9 @@ impl QemuTestRunner {
 			.join(run_id.to_string());
 		fs::create_dir_all(&run_dir).map_err(io_error)?;
 
+		let endpoint = self.endpoint(&spec);
 		let mut metadata = BTreeMap::new();
+		insert_endpoint_metadata(&mut metadata, &endpoint);
 		let rootfs = self.rootfs_for_start()?;
 		self.start_plain_qemu(&run_dir, &rootfs.path)?;
 		metadata.insert("rootfs_sha256".to_string(), rootfs.sha256_hex);
@@ -1295,10 +1302,10 @@ impl TestRunner for QemuTestRunner {
 
 	async fn wait_ready(
 		&mut self,
-		_app: &RunningApp,
+		app: &RunningApp,
 		timeout: Duration,
 	) -> Result<AppEndpoint, RunnerError> {
-		let endpoint = self.endpoint();
+		let endpoint = endpoint_from_metadata(&app.metadata)?;
 		wait_for_http_ok(&endpoint.health_url, timeout, &mut self.children)?;
 		Ok(endpoint)
 	}

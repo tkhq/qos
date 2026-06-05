@@ -76,8 +76,6 @@ pub struct ArtifactBuildPlan {
 	pub builder: BuilderKind,
 	pub profile: BuildProfile,
 	pub target_triple: Option<String>,
-	pub package: String,
-	pub bin: String,
 	pub extra_inputs: BTreeMap<String, String>,
 }
 

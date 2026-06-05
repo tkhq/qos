@@ -145,7 +145,7 @@ fn qos_client_command(config: &Config) -> Result<Command, String> {
 		.arg("--host-port")
 		.arg(config.get("QOS_PARENT_CONTROL_PORT", "3001"))
 		.arg("--pivot-path")
-		.arg(config.get("PIVOT_PATH", "/work/signed_echo"))
+		.arg(config.get("PIVOT_PATH", "/work/pivot"))
 		.arg("--restart-policy")
 		.arg(config.get("RESTART_POLICY", "never"))
 		.arg("--pivot-args")

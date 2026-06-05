@@ -1,18 +1,20 @@
 use std::{
+	fs,
 	net::TcpListener,
 	path::{Path, PathBuf},
 };
 
+use qos_p256::P256Pair;
 use qos_test_harness::{
 	ArtifactBuildPlan, ArtifactBuildRequest, ArtifactBuilder, ArtifactRequest,
-	BuildProfile, BuilderKind, HostRunnerKind, RunnerKind,
+	BuildProfile, BuilderKind, HostRunnerKind, RunnerKind, RuntimeFile,
 	SignedEchoTestConfig, runners::docker::DockerRunnerConfig,
 	runners::docker::DockerTestRunner,
 	runners::nested_nitro::NestedNitroBuildFlavor,
 	runners::nested_nitro::NestedNitroQemuBuilder,
 	runners::nested_nitro::NestedNitroQemuConfig,
 	runners::nested_nitro::NestedNitroQemuRunner,
-	runners::qemu::CargoSignedEchoBuilder, runners::qemu::QemuFlavor,
+	runners::qemu::CargoPivotBuilder, runners::qemu::QemuFlavor,
 	runners::qemu::QemuRunnerConfig, runners::qemu::QemuTestRunner,
 	signed_echo_startup_shutdown,
 };
@@ -28,9 +30,12 @@ async fn docker_signed_echo_e2e() {
 		workspace_root(),
 		port("QOS_TEST_DOCKER_PORT", 39_300),
 	));
-	signed_echo_startup_shutdown(&mut runner, SignedEchoTestConfig::default())
-		.await
-		.unwrap();
+	let mut cfg = SignedEchoTestConfig::default();
+	cfg.runtime_files.push(RuntimeFile::read_only(
+		write_dev_quorum_key("docker"),
+		"/qos.quorum.key",
+	));
+	signed_echo_startup_shutdown(&mut runner, cfg).await.unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -111,6 +116,10 @@ async fn nested_nitro_qemu_signed_echo_e2e() {
 #[test]
 fn nested_nitro_qemu_defaults_are_x86_only() {
 	let config = NestedNitroQemuConfig::new(workspace_root(), 39_350);
+	assert_eq!(
+		SignedEchoTestConfig::default().artifact,
+		signed_echo_artifact()
+	);
 	assert_eq!(config.outer_qemu_bin, PathBuf::from("qemu-system-x86_64"));
 	assert_eq!(config.outer_machine, "pc");
 	assert_eq!(config.outer_accel, None);
@@ -136,12 +145,11 @@ async fn light_qemu_builder_cross_compiles_package() {
 		workspace_root(),
 		port("QOS_TEST_QEMU_LIGHT_BUILD_APP_PORT", 39_330),
 	);
-	let builder =
-		CargoSignedEchoBuilder::new(config.clone(), QemuFlavor::Light);
+	let builder = CargoPivotBuilder::new(config.clone(), QemuFlavor::Light);
 	let output = builder
 		.build(&ArtifactBuildPlan {
 			request: ArtifactBuildRequest {
-				artifact: ArtifactRequest::SignedEcho,
+				artifact: signed_echo_artifact(),
 				runner: RunnerKind::LightQemu,
 				host_runner: HostRunnerKind::Native,
 			},
@@ -150,8 +158,6 @@ async fn light_qemu_builder_cross_compiles_package() {
 			builder: BuilderKind::LocalCrossCompile,
 			profile: BuildProfile::Release,
 			target_triple: Some(config.target_triple),
-			package: "qos_test_harness".to_string(),
-			bin: "signed_echo".to_string(),
 			extra_inputs: std::collections::BTreeMap::new(),
 		})
 		.await
@@ -182,11 +188,11 @@ async fn reproducible_qemu_builder_builds_plain_package() {
 	);
 	apply_qemu_env(&mut config, "QOS_TEST_QEMU_REPRODUCIBLE_BUILD");
 	let builder =
-		CargoSignedEchoBuilder::new(config.clone(), QemuFlavor::Reproducible);
+		CargoPivotBuilder::new(config.clone(), QemuFlavor::Reproducible);
 	let output = builder
 		.build(&ArtifactBuildPlan {
 			request: ArtifactBuildRequest {
-				artifact: ArtifactRequest::SignedEcho,
+				artifact: signed_echo_artifact(),
 				runner: RunnerKind::ReproducibleQemu,
 				host_runner: HostRunnerKind::Native,
 			},
@@ -195,8 +201,6 @@ async fn reproducible_qemu_builder_builds_plain_package() {
 			builder: BuilderKind::StageX,
 			profile: BuildProfile::Release,
 			target_triple: Some(config.target_triple),
-			package: "qos_test_harness".to_string(),
-			bin: "signed_echo".to_string(),
 			extra_inputs: std::collections::BTreeMap::new(),
 		})
 		.await
@@ -240,7 +244,7 @@ async fn nested_nitro_qemu_builder_stages_parent_work_dir() {
 	let output = builder
 		.build(&ArtifactBuildPlan {
 			request: ArtifactBuildRequest {
-				artifact: ArtifactRequest::SignedEcho,
+				artifact: signed_echo_artifact(),
 				runner: RunnerKind::NestedNitroQemu,
 				host_runner: HostRunnerKind::Qemu,
 			},
@@ -249,8 +253,6 @@ async fn nested_nitro_qemu_builder_stages_parent_work_dir() {
 			builder: config.build_flavor.builder_kind(),
 			profile: BuildProfile::Release,
 			target_triple: Some(config.enclave_target_triple.clone()),
-			package: "qos_test_harness".to_string(),
-			bin: "signed_echo".to_string(),
 			extra_inputs: std::collections::BTreeMap::new(),
 		})
 		.await
@@ -468,6 +470,24 @@ fn workspace_root() -> PathBuf {
 		.join("../..")
 		.canonicalize()
 		.expect("workspace root should resolve")
+}
+
+fn signed_echo_artifact() -> ArtifactRequest {
+	ArtifactRequest::cargo_bin("signed_echo", "signed_echo")
+}
+
+fn write_dev_quorum_key(test_name: &str) -> PathBuf {
+	let key_path = workspace_root()
+		.join("target/qos-test-harness/runtime-files")
+		.join(test_name)
+		.join("qos.quorum.key");
+	fs::create_dir_all(key_path.parent().expect("key path has parent"))
+		.expect("failed to create runtime file dir");
+	P256Pair::generate()
+		.expect("failed to generate dev quorum key")
+		.to_hex_file(&key_path)
+		.expect("failed to write dev quorum key");
+	key_path
 }
 
 fn env_path(name: &str) -> Option<PathBuf> {

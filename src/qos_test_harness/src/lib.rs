@@ -19,8 +19,11 @@ pub use http::{HttpClientError, http_get, http_post};
 pub use runner::{
 	AppArtifact, AppEndpoint, ArtifactRequest, EnclaveRunner, EnclaveStartSpec,
 	HostRunner, HostStartSpec, HttpResponse, HttpRouteSpec, RunningApp,
-	RunningEnclave, RunningHost, RuntimeSocket, StartAppSpec, TestOutcome,
-	TestRunner,
+	RunningEnclave, RunningHost, RuntimeFile, RuntimeSocket, StartAppSpec,
+	TestOutcome, TestRunner,
+};
+pub(crate) use runner::{
+	endpoint_for_routes, endpoint_from_metadata, insert_endpoint_metadata,
 };
 pub use signed_echo::{
 	SignedEchoResponse, SignedEchoTestConfig, signed_echo_payload,
