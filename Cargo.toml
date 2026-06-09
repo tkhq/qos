@@ -115,7 +115,6 @@ qos_test_primitives = { path = "src/qos_test_primitives", version = "0.10.0" }
 
 # used for pivot_download integration/example only
 url = { version = "2.5.7", default-features = false }
-reqwest = { version = "0.13.4", default-features = false }
 
 # custom profile for qos_bridge/egress so we can abort in case of failures in any thread if using egress
 [profile.release-panic-abort]
