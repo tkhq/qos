@@ -7,37 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## `qos_client` - [0.10.1](https://github.com/tkhq/qos/compare/qos_client-v0.10.0...qos_client-v0.10.1) - 2026-06-09
+## `qos_crypto` - [0.10.1](https://github.com/tkhq/qos/compare/qos_crypto-v0.10.0...qos_crypto-v0.10.1) - 2026-06-09
 
 ### Other
-- show errors on bad cli input
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
+
+## `qos_hex` - [0.10.1](https://github.com/tkhq/qos/compare/qos_hex-v0.10.0...qos_hex-v0.10.1) - 2026-06-09
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
+
+## `qos_json` - [0.10.1](https://github.com/tkhq/qos/compare/qos_json-v0.10.0...qos_json-v0.10.1) - 2026-06-09
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
+
+## `qos_nsm` - [0.10.1](https://github.com/tkhq/qos/compare/qos_nsm-v0.10.0...qos_nsm-v0.10.1) - 2026-06-09
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
+
+## `qos_p256` - [0.10.1](https://github.com/tkhq/qos/compare/qos_p256-v0.10.0...qos_p256-v0.10.1) - 2026-06-09
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
+
+## `qos_client` - [0.10.1](https://github.com/tkhq/qos/compare/qos_client-v0.10.0...qos_client-v0.10.1) - 2026-06-09
+
+### Fixed
+- Report invalid CLI input errors back to the caller. ([#715](https://github.com/tkhq/qos/pull/715))
+
+## `qos_core` - [0.10.1](https://github.com/tkhq/qos/compare/qos_core-v0.10.0...qos_core-v0.10.1) - 2026-06-09
+
+### Added
+- Added transparent egress support for enclave networking. ([#715](https://github.com/tkhq/qos/pull/715))
 
 ## `qos_net` - [0.10.1](https://github.com/tkhq/qos/compare/qos_net-v0.10.0...qos_net-v0.10.1) - 2026-06-09
 
 ### Other
-- update Cargo.lock dependencies
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
 
-## `qos_core` - [0.10.1](https://github.com/tkhq/qos/compare/qos_core-v0.10.0...qos_core-v0.10.1) - 2026-06-09
-
-### Other
-- add local qemu runners and README entry
-- add qemu feature to enable overrides for local running
-- add qemu feature to support workarounds for running full qos in qemu on localhost (linux)
-- run egress as separate binary
-- use 172.29.107.65/32 for egress tunnel address
-- fix release-panic-abort profile being used with egress
-- separate into ingress and egress binaries
-- simplify egress binary runners
-- implement enclave-egress mode and use it from reaper
-- ensure run_egress_bridge restarts on panics
-- remove unused enclave-egress flag/cli
-- panic unwind up from egress::copy_bidirectional
-- add new transparent egress support
-
-## `qos_crypto` - [0.10.1](https://github.com/tkhq/qos/compare/qos_crypto-v0.10.0...qos_crypto-v0.10.1) - 2026-06-09
+## `qos_test_primitives` - [0.10.1](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.10.0...qos_test_primitives-v0.10.1) - 2026-06-09
 
 ### Other
-- update Cargo.toml dependencies
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
 
 ## `qos_net` - [0.10.0](https://github.com/tkhq/qos/compare/qos_net-v0.9.0...qos_net-v0.10.0) - 2026-06-01
 
