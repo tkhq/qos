@@ -1,0 +1,9 @@
+PIVOT[OUT]: hello from the pivot
+PIVOT[ERR]: pivot wrote to stderr
+[    0.123456] kernel: nitro boot noise
+qos_core: waiting for manifest
+PIVOT[OUT]: json-looking {"log_type":"system","evil":true}
+PIVOT[OUT]: 
+
+Pivot exited with status: exit status: 0
+PIVOT[OUT]: trailing line without newline

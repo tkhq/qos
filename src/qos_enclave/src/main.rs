@@ -31,6 +31,10 @@ use nitro_cli::{
 	utils::Console,
 };
 
+mod envelope;
+
+use envelope::{EnvelopeWriter, log_system, log_system_err};
+
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
 
 fn healthy() -> Result<(), Box<dyn std::error::Error>> {
@@ -93,7 +97,7 @@ fn boot() -> (String, Option<Console>) {
 		cpu_count: Some(cpu_count.parse::<u32>().unwrap()),
 		enclave_name: Some(enclave_name.clone()),
 	};
-	println!("{:?}", run_args);
+	log_system(&format!("{run_args:?}"));
 
 	// Socket directory must exist or Nitro SDK crashes with generic error
 	if !Path::new("/run/nitro_enclaves").is_dir() {
@@ -172,8 +176,8 @@ fn boot() -> (String, Option<Console>) {
 }
 
 fn shutdown(enclave_id: String, sig_num: i32) {
-	println!("Got signal: {}", sig_num);
-	println!("Shutting down Enclave");
+	log_system(&format!("Got signal: {sig_num}"));
+	log_system("Shutting down Enclave");
 
 	// Best-effort graceful Terminate: if the EnclaveProc IPC socket is
 	// unreachable (e.g. the proc has already exited, or the socket is
@@ -194,10 +198,9 @@ fn shutdown(enclave_id: String, sig_num: i32) {
 			.map_err(|_| "Unable to terminate Enclave");
 		}
 		Err(_) => {
-			eprintln!(
-				"Failed to connect to EnclaveProc for {}; skipping graceful Terminate",
-				enclave_id
-			);
+			log_system_err(&format!(
+				"Failed to connect to EnclaveProc for {enclave_id}; skipping graceful Terminate"
+			));
 		}
 	}
 
@@ -205,7 +208,7 @@ fn shutdown(enclave_id: String, sig_num: i32) {
 }
 
 fn health_service() {
-	println!("Starting health service");
+	log_system("Starting health service");
 	let listener = TcpListener::bind("0.0.0.0:8080").unwrap();
 	for stream in listener.incoming() {
 		thread::spawn(move || {
@@ -217,8 +220,10 @@ fn health_service() {
 				_ => &unhealthy_resp[..],
 			};
 			match stream.write_all(response) {
-				Ok(_) => println!("Health response sent"),
-				Err(e) => println!("Failed sending health response: {}!", e),
+				Ok(_) => log_system("Health response sent"),
+				Err(e) => log_system_err(&format!(
+					"Failed sending health response: {e}!"
+				)),
 			};
 			stream.shutdown(Shutdown::Write).unwrap();
 		});
@@ -239,19 +244,23 @@ fn handle_signals() -> c_int {
 }
 
 fn read_logs(console: Console) {
-	println!("Reading logs to stdout");
+	log_system("Reading logs to stdout");
 	let disconnect_timeout_sec: Option<u64> = None;
-	let _ = console.read_to(stdout().by_ref(), disconnect_timeout_sec);
+	// Wrap every console line in the JSON log envelope
+	let mut writer = EnvelopeWriter::new(stdout());
+	let _ = console.read_to(&mut writer, disconnect_timeout_sec);
+	// Emit a trailing unterminated line, if any, once the console disconnects.
+	let _ = writer.finish();
 }
 
 fn main() {
-	println!("Booting Nitro Enclave:");
+	log_system("Booting Nitro Enclave:");
 
 	let (enclave_id, maybe_console) = boot();
 
 	match healthy() {
-		Ok(_) => println!("Enclave is healthy"),
-		Err(e) => eprintln!("Enclave is sad: {}", e),
+		Ok(_) => log_system("Enclave is healthy"),
+		Err(e) => log_system_err(&format!("Enclave is sad: {e}")),
 	};
 
 	// TODO: return listener so shutdown() can clean it up properly

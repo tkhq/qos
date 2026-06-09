@@ -2200,6 +2200,7 @@ version = "1.2.0"
 dependencies = [
  "libc",
  "nitro-cli",
+ "serde_json",
 ]
 
 [[package]]

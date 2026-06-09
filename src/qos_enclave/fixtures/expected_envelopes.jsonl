@@ -1,0 +1,9 @@
+{"v":1,"log_type":"app","stream":"stdout","ts":"2026-05-28T20:26:40.000Z","msg":"hello from the pivot"}
+{"v":1,"log_type":"app","stream":"stderr","ts":"2026-05-28T20:26:40.000Z","msg":"pivot wrote to stderr"}
+{"v":1,"log_type":"system","ts":"2026-05-28T20:26:40.000Z","msg":"[    0.123456] kernel: nitro boot noise"}
+{"v":1,"log_type":"system","ts":"2026-05-28T20:26:40.000Z","msg":"qos_core: waiting for manifest"}
+{"v":1,"log_type":"app","stream":"stdout","ts":"2026-05-28T20:26:40.000Z","msg":"json-looking {\"log_type\":\"system\",\"evil\":true}"}
+{"v":1,"log_type":"app","stream":"stdout","ts":"2026-05-28T20:26:40.000Z","msg":""}
+{"v":1,"log_type":"system","ts":"2026-05-28T20:26:40.000Z","msg":""}
+{"v":1,"log_type":"system","ts":"2026-05-28T20:26:40.000Z","msg":"Pivot exited with status: exit status: 0"}
+{"v":1,"log_type":"app","stream":"stdout","ts":"2026-05-28T20:26:40.000Z","msg":"trailing line without newline"}

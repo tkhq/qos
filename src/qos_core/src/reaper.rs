@@ -123,6 +123,12 @@ fn run_egress_bridge(core_socket: &SocketAddress) {
 	);
 }
 
+// LOAD-BEARING CONTRACT: the "PIVOT[OUT]: " / "PIVOT[ERR]: " prefixes below
+// are how qos_enclave's log envelope writer (qos_enclave/src/envelope.rs)
+// discriminates customer app output from system logs on the enclave console.
+// Because every pivot line is re-printed here with a prefix, the pivot can
+// never produce an unprefixed (system-looking) console line. Change these
+// prefixes only in lockstep with qos_enclave's PIVOT_*_PREFIX constants.
 fn reprint_pivot_output(child: &mut Child) {
 	let stdout = child.stdout.take().expect("failed to get pivot stdout");
 	let stderr = child.stderr.take().expect("failed to get pivot stderr");
