@@ -41,3 +41,6 @@ tokio-rustls = { workspace = true }
 rand = { workspace = true, features = ["thread_rng"] }
 ureq = { workspace = true, features = ["json"] }
 qos_core_legacy = { package = "qos_core", version = "0.7", default-features = false }
+# src/bin/pivot_download.rs to test egress
+sha2 = { workspace = true }
+url = { workspace = true }

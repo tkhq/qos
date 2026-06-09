@@ -59,7 +59,7 @@ jobs:
         run: |
           # Extract version from tag (e.g. "qos_core-v0.5.0" -> "v0.5.0")
           version="${release_tag#qos_core-}"
-          for name in qos_client qos_host qos_enclave qos_bridge; do
+          for name in qos_client qos_host qos_enclave qos_enclave_egress qos_bridge qos_bridge_egress; do
             env -C out/${name} tar -cf - . | docker load
             docker tag "qos-local/${name}:latest" "ghcr.io/tkhq/${name}:${version}"
             docker tag "qos-local/${name}:latest" "ghcr.io/tkhq/${name}:latest"
@@ -67,13 +67,13 @@ jobs:
             docker push "ghcr.io/tkhq/${name}:latest"
           done
 
-      - name: Extract PCRs
+      - name: Extract PCRs (qos_enclave)
         run: |
           id=$(docker create "qos-local/qos_enclave:latest")
           docker cp "${id}:/nitro.pcrs" out/nitro.pcrs
           docker rm "${id}"
 
-      - name: Upload PCRs to GitHub release
+      - name: Upload PCRs to GitHub release (qos_enclave)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # upload to qos_core release tag

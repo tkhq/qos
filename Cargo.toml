@@ -67,6 +67,7 @@ aws-nitro-enclaves-nsm-api = { version = "0.4", default-features = false }
 axum = { version = "0.6.20", features = ["http1", "tokio", "json"], default-features = false }
 borsh = { version = "1.0", features = ["std", "derive"], default-features = false }
 chunked_transfer = { version = "1.5.0", default-features = false }
+etherparse = { version = "0.20.1", default-features = false }
 futures = { version = "0.3.30" }
 der = { version = "0.7", default-features = false }
 hex-literal = "0.4.0"
@@ -111,6 +112,14 @@ qos_net = { path = "src/qos_net", version = "0.10.0", default-features = false }
 qos_nsm = { path = "src/qos_nsm", version = "0.10.0", default-features = false }
 qos_p256 = { path = "src/qos_p256", version = "0.10.0" }
 qos_test_primitives = { path = "src/qos_test_primitives", version = "0.10.0" }
+
+# used for pivot_download integration/example only
+url = { version = "2.5.7", default-features = false }
+
+# custom profile for qos_bridge/egress so we can abort in case of failures in any thread if using egress
+[profile.release-panic-abort]
+inherits = "release"
+panic = "abort"
 
 # Option for the future: build all QOS applications with additional runtime checks
 # to intentionally panic on integer overflows instead of continuing execution
