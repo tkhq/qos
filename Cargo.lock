@@ -2663,12 +2663,12 @@ dependencies = [
 
 [[package]]
 name = "signed_echo"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "axum",
- "qos_hex 0.10.0",
+ "qos_hex 0.10.1",
  "qos_json",
- "qos_p256 0.10.0",
+ "qos_p256 0.10.1",
  "serde",
  "tokio",
 ]
