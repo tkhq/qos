@@ -1293,7 +1293,7 @@ fn post_request_with_encoding(
 ) -> Result<ProtocolMsg, String> {
 	match encoding {
 		ProtocolMsgEncoding::Borsh => request::post_borsh(uri, req),
-		ProtocolMsgEncoding::Json => request::post(uri, req),
+		ProtocolMsgEncoding::Json => request::post_json(uri, req),
 	}
 }
 
