@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added DNS resolver configuration to the QEMU and egress enclave images so egress-enabled enclaves can resolve hostnames. ([#730](https://github.com/tkhq/qos/pull/730))
 
 ### Other
+- Added a `signed_echo` example pivot app and published image for testing QOS bridge ingress and egress flows. ([#720](https://github.com/tkhq/qos/pull/720))
 - Documented when app authors should use the enclave Ephemeral Key versus the namespace Quorum Key. ([#731](https://github.com/tkhq/qos/pull/731))
 
 ## `qos_crypto` - [0.10.2](https://github.com/tkhq/qos/compare/qos_crypto-v0.10.1...qos_crypto-v0.10.2) - 2026-06-15
