@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added transparent egress support for enclave networking, including automatic bridge startup, separate host/enclave egress binaries, and local QEMU runner support. ([#715](https://github.com/tkhq/qos/pull/715))
+- Added DNS resolver configuration to the QEMU and egress enclave images so egress-enabled enclaves can resolve hostnames. ([#730](https://github.com/tkhq/qos/pull/730))
+
+### Other
+- Documented when app authors should use the enclave Ephemeral Key versus the namespace Quorum Key. ([#731](https://github.com/tkhq/qos/pull/731))
 
 ## `qos_crypto` - [0.10.2](https://github.com/tkhq/qos/compare/qos_crypto-v0.10.1...qos_crypto-v0.10.2) - 2026-06-15
 
