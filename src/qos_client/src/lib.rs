@@ -8,7 +8,10 @@ pub mod yubikey;
 pub mod request {
 	use std::io::Read;
 
-	use qos_core::protocol::msg::{ProtocolMsg, ProtocolMsgEncoding};
+	use qos_core::protocol::{
+		ProtocolError,
+		msg::{ProtocolMsg, ProtocolMsgEncoding},
+	};
 
 	const MAX_SIZE: u64 = u32::MAX as u64;
 	const ERROR_BODY_PREFIX_LIMIT: usize = 256;
@@ -21,6 +24,25 @@ pub mod request {
 	/// cannot be read, or deserialization fails.
 	///
 	pub fn post(url: &str, msg: &ProtocolMsg) -> Result<ProtocolMsg, String> {
+		match post_json(url, msg) {
+			Ok(ProtocolMsg::ProtocolErrorResponse(
+				ProtocolError::ProtocolMsgDeserialization,
+			)) => post_borsh(url, msg),
+			result => result,
+		}
+	}
+
+	/// Post a [`qos_core::protocol::msg::ProtocolMsg`] using JSON wire
+	/// encoding.
+	///
+	/// # Errors
+	///
+	/// Returns an error string if the HTTP request fails, the response
+	/// cannot be read, or deserialization fails.
+	pub(crate) fn post_json(
+		url: &str,
+		msg: &ProtocolMsg,
+	) -> Result<ProtocolMsg, String> {
 		post_wire(url, msg, ProtocolMsgEncoding::Json)
 	}
 
