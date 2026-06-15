@@ -9,35 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## `qos_client` - [0.10.2](https://github.com/tkhq/qos/compare/qos_client-v0.10.0...qos_client-v0.10.2) - 2026-06-15
 
-### Other
-- show errors on bad cli input
+### Fixed
+- Report invalid CLI input errors back to the caller. ([#715](https://github.com/tkhq/qos/pull/715))
 
 ## `qos_net` - [0.10.2](https://github.com/tkhq/qos/compare/qos_net-v0.10.1...qos_net-v0.10.2) - 2026-06-15
 
 ### Other
-- update Cargo.lock dependencies
+- No user-facing changes; released as part of the coordinated `0.10.2` workspace version. ([#732](https://github.com/tkhq/qos/pull/732))
 
 ## `qos_core` - [0.10.2](https://github.com/tkhq/qos/compare/qos_core-v0.10.0...qos_core-v0.10.2) - 2026-06-15
 
-### Other
-- add local qemu runners and README entry
-- add qemu feature to enable overrides for local running
-- add qemu feature to support workarounds for running full qos in qemu on localhost (linux)
-- run egress as separate binary
-- use 172.29.107.65/32 for egress tunnel address
-- fix release-panic-abort profile being used with egress
-- separate into ingress and egress binaries
-- simplify egress binary runners
-- implement enclave-egress mode and use it from reaper
-- ensure run_egress_bridge restarts on panics
-- remove unused enclave-egress flag/cli
-- panic unwind up from egress::copy_bidirectional
-- add new transparent egress support
+### Added
+- Added transparent egress support for enclave networking, including automatic bridge startup, separate host/enclave egress binaries, and local QEMU runner support. ([#715](https://github.com/tkhq/qos/pull/715))
 
 ## `qos_crypto` - [0.10.2](https://github.com/tkhq/qos/compare/qos_crypto-v0.10.1...qos_crypto-v0.10.2) - 2026-06-15
 
 ### Other
-- update Cargo.toml dependencies
+- No user-facing changes; released to pick up the `vsss-rs` 5.4 dependency update. ([#723](https://github.com/tkhq/qos/pull/723))
 
 ## `qos_crypto` - [0.10.1](https://github.com/tkhq/qos/compare/qos_crypto-v0.10.0...qos_crypto-v0.10.1) - 2026-06-09
 
