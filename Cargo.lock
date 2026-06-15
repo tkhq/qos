@@ -2662,6 +2662,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "signed_echo"
+version = "0.10.1"
+dependencies = [
+ "axum",
+ "qos_hex 0.10.1",
+ "qos_json",
+ "qos_p256 0.10.1",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

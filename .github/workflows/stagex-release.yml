@@ -59,12 +59,16 @@ jobs:
         run: |
           # Extract version from tag (e.g. "qos_core-v0.5.0" -> "v0.5.0")
           version="${release_tag#qos_core-}"
-          for name in qos_client qos_host qos_enclave qos_enclave_egress qos_bridge qos_bridge_egress; do
+          for name in qos_client qos_host qos_enclave qos_enclave_egress qos_bridge qos_bridge_egress signed_echo; do
+            image="ghcr.io/tkhq/${name}"
+            if [ "${name}" = "signed_echo" ]; then
+              image="ghcr.io/tkhq/qos/examples/signed_echo"
+            fi
             env -C out/${name} tar -cf - . | docker load
-            docker tag "qos-local/${name}:latest" "ghcr.io/tkhq/${name}:${version}"
-            docker tag "qos-local/${name}:latest" "ghcr.io/tkhq/${name}:latest"
-            docker push "ghcr.io/tkhq/${name}:${version}"
-            docker push "ghcr.io/tkhq/${name}:latest"
+            docker tag "qos-local/${name}:latest" "${image}:${version}"
+            docker tag "qos-local/${name}:latest" "${image}:latest"
+            docker push "${image}:${version}"
+            docker push "${image}:latest"
           done
 
       - name: Extract PCRs (qos_enclave)
