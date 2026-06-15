@@ -6,18 +6,13 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
-[lints.rust]
-missing_docs = "warn"
-unsafe_code = "deny"
-
-[lints.clippy]
-pedantic = "deny"
-missing_errors_doc = "allow"
-module_name_repetitions = "allow"
+[lints]
+workspace = true
 
 [dependencies]
 axum = { workspace = true, features = ["http1", "tokio", "json"], default-features = false }
 qos_hex = { workspace = true }
+qos_json = { workspace = true }
 qos_p256 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal"] }
