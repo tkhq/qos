@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.10.2](https://github.com/tkhq/qos/compare/qos_client-v0.10.1...qos_client-v0.10.2) - 2026-06-15
+
+### Fixed
+- Added a general Borsh fallback for JSON protocol deserialization errors so legacy-format service responses continue to work across all CLI service calls. ([#733](https://github.com/tkhq/qos/pull/733))
+
+## `qos_core` - [0.10.2](https://github.com/tkhq/qos/compare/qos_core-v0.10.1...qos_core-v0.10.2) - 2026-06-15
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.2` workspace version.
+
+## `qos_crypto` - [0.10.2](https://github.com/tkhq/qos/compare/qos_crypto-v0.10.1...qos_crypto-v0.10.2) - 2026-06-15
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.2` workspace version.
+
+## `qos_hex` - [0.10.2](https://github.com/tkhq/qos/compare/qos_hex-v0.10.1...qos_hex-v0.10.2) - 2026-06-15
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.2` workspace version.
+
+## `qos_net` - [0.10.2](https://github.com/tkhq/qos/compare/qos_net-v0.10.1...qos_net-v0.10.2) - 2026-06-15
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.2` workspace version.
+
+## `qos_p256` - [0.10.2](https://github.com/tkhq/qos/compare/qos_p256-v0.10.1...qos_p256-v0.10.2) - 2026-06-15
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.2` workspace version.
+
+## `qos_nsm` - [0.10.2](https://github.com/tkhq/qos/compare/qos_nsm-v0.10.1...qos_nsm-v0.10.2) - 2026-06-15
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.2` workspace version.
+
+## `qos_test_primitives` - [0.10.2](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.10.1...qos_test_primitives-v0.10.2) - 2026-06-15
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.2` workspace version.
+
+## `qos_json` - [0.10.2](https://github.com/tkhq/qos/compare/qos_json-v0.10.1...qos_json-v0.10.2) - 2026-06-15
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.2` workspace version.
+
+## Repository - 2026-06-15
+
+### Added
+- Added a `signed_echo` test application, container image, and image-publishing workflow for egress testing. ([#720](https://github.com/tkhq/qos/pull/720))
+- Added DNS resolver configuration to the QEMU and `qos_enclave_egress` images so egress-enabled enclaves can resolve hostnames. ([#730](https://github.com/tkhq/qos/pull/730))
+
+### Documentation
+- Documented enclave ephemeral keys, quorum keys, and their roles in QOS boot and verification flows. ([#731](https://github.com/tkhq/qos/pull/731))
+
 ## `qos_crypto` - [0.10.1](https://github.com/tkhq/qos/compare/qos_crypto-v0.10.0...qos_crypto-v0.10.1) - 2026-06-09
 
 ### Other
