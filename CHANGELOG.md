@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Report invalid CLI input errors back to the caller. ([#715](https://github.com/tkhq/qos/pull/715))
+- Fall back to the legacy Borsh protocol encoding when JSON protocol requests receive a deserialization error from the enclave. ([#733](https://github.com/tkhq/qos/pull/733))
 
 ## `qos_net` - [0.10.2](https://github.com/tkhq/qos/compare/qos_net-v0.10.1...qos_net-v0.10.2) - 2026-06-15
 
