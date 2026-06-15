@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_crypto` - [0.10.1](https://github.com/tkhq/qos/compare/qos_crypto-v0.10.0...qos_crypto-v0.10.1) - 2026-06-09
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
+
+## `qos_hex` - [0.10.1](https://github.com/tkhq/qos/compare/qos_hex-v0.10.0...qos_hex-v0.10.1) - 2026-06-09
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
+
+## `qos_json` - [0.10.1](https://github.com/tkhq/qos/compare/qos_json-v0.10.0...qos_json-v0.10.1) - 2026-06-09
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
+
+## `qos_nsm` - [0.10.1](https://github.com/tkhq/qos/compare/qos_nsm-v0.10.0...qos_nsm-v0.10.1) - 2026-06-09
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
+
+## `qos_p256` - [0.10.1](https://github.com/tkhq/qos/compare/qos_p256-v0.10.0...qos_p256-v0.10.1) - 2026-06-09
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
+
+## `qos_client` - [0.10.1](https://github.com/tkhq/qos/compare/qos_client-v0.10.0...qos_client-v0.10.1) - 2026-06-09
+
+### Fixed
+- Report invalid CLI input errors back to the caller. ([#715](https://github.com/tkhq/qos/pull/715))
+
+## `qos_core` - [0.10.1](https://github.com/tkhq/qos/compare/qos_core-v0.10.0...qos_core-v0.10.1) - 2026-06-09
+
+### Added
+- Added transparent egress support for enclave networking. ([#715](https://github.com/tkhq/qos/pull/715))
+
+## `qos_net` - [0.10.1](https://github.com/tkhq/qos/compare/qos_net-v0.10.0...qos_net-v0.10.1) - 2026-06-09
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
+
+## `qos_test_primitives` - [0.10.1](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.10.0...qos_test_primitives-v0.10.1) - 2026-06-09
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.1` workspace version.
+
 ## `qos_net` - [0.10.0](https://github.com/tkhq/qos/compare/qos_net-v0.9.0...qos_net-v0.10.0) - 2026-06-01
 
 ### Changed
