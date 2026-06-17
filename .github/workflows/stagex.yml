@@ -1,4 +1,9 @@
-name: stagex-build CI # build check for PR and main
+name: stagex-build CI # build check for PR and main; push PR images to GHCR/ECR
+
+# Cancel superseded runs for a given PR or branch
+concurrency:
+  cancel-in-progress: true
+  group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
 
 on:
   push:
@@ -12,16 +17,48 @@ jobs:
     runs-on: ubicloud-standard-16
     permissions:
       contents: read
-      packages: read
+      packages: write   # needed for pushing PR images to GHCR
+      id-token: write   # needed for OIDC auth to assume the AWS role for ECR
     steps:
       - name: Checkout sources
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      # Only authenticate to GHCR/ECR for PRs, since main is build-only.
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
         with:
-          ghcr: ${{ secrets.GITHUB_TOKEN }}
+          ghcr: ${{ github.event_name == 'pull_request' && secrets.GITHUB_TOKEN || '' }}
+          awsRegion: us-east-1
+          awsRole: ${{ github.event_name == 'pull_request' && 'arn:aws:iam::799078726966:role/github-qos' || '' }}
 
       - name: Run `make`
         shell: 'script -q -e -c "bash {0}"'
         run: make -j$(nproc)
+
+      # Publish PR images so they can be deployed for testing; main is build-only.
+      - name: Push PR images to GHCR and ECR
+        if: github.event_name == 'pull_request'
+        run: |
+          tag="pr-${{ github.event.number }}"
+          ecr_registry="799078726966.dkr.ecr.us-east-1.amazonaws.com"
+          for name in qos_client qos_host qos_enclave qos_enclave_egress qos_bridge qos_bridge_egress signed_echo; do
+            image="ghcr.io/tkhq/${name}"
+            if [ "${name}" = "signed_echo" ]; then
+              image="ghcr.io/tkhq/qos/examples/signed_echo"
+            fi
+            env -C out/${name} tar -cf - . | docker load
+            docker tag "qos-local/${name}:latest" "${image}:${tag}"
+
+            # Push to GHCR
+            docker push "${image}:${tag}"
+
+            # signed_echo is an example image with no ECR repository; GHCR only.
+            if [ "${name}" = "signed_echo" ]; then
+              continue
+            fi
+            ecr_image="${ecr_registry}/tkhq/${name}"
+            docker tag "qos-local/${name}:latest" "${ecr_image}:${tag}"
+
+            # Push to ECR
+            docker push "${ecr_image}:${tag}"
+          done

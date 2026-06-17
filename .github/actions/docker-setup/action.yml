@@ -1,6 +1,9 @@
 name: "Set up Docker"
 description: "Ensure Docker is installed and configured correctly"
 inputs:
+  ghcr:
+    description: GitHub token for GHCR login (enables GHCR login when set)
+    required: false
   awsRegion:
     description: AWS region for ECR login
     required: false
@@ -38,6 +41,12 @@ runs:
         apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
         systemctl restart docker
         docker buildx create --driver docker-container --bootstrap --name build --use
+
+    - name: Login to GHCR
+      if: ${{ inputs.ghcr != '' }}
+      shell: 'script -q -e -c "bash {0}"'
+      run: |
+        echo "${{ inputs.ghcr }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
     - name: Configure AWS credentials
       if: ${{ inputs.awsRole != '' }}
