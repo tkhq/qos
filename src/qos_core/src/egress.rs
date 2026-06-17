@@ -18,13 +18,8 @@ use nix::{
 	unistd::{read, write},
 };
 
-/// egress vsock port used both in and out of the enclave to provide transparent egress data transfer
-#[cfg(not(feature = "qemu"))]
-pub const EGRESS_VSOCK_PORT: u32 = 1000; // reserved range so user ports don't interfere
-
-/// egress vsock port used both in and out of the enclave to provide transparent egress data transfer
-#[cfg(feature = "qemu")]
-pub const EGRESS_VSOCK_PORT: u32 = 9002; // open range for qemu local debug
+/// Vsock port used to connect enclave egress to host egress
+pub const EGRESS_VSOCK_PORT: u32 = 2001;
 
 /// opens enclave side egress bridging using given cid and port blocking forever
 /// # Panics

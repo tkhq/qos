@@ -29,7 +29,7 @@ async fn main() {
 
 	const PIVOT_HASH_PATH: &str = "/tmp/enclave-example-pivot-hash.txt";
 
-	let host_port = 3001;
+	let host_port = 2000;
 	let tmp = PathWrapper::from("/tmp/enclave-example");
 	let _ = PathWrapper::from(PIVOT_HASH_PATH);
 	fs::create_dir_all(&tmp).unwrap();
