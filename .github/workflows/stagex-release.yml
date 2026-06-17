@@ -23,6 +23,7 @@ jobs:
     permissions:
       contents: write   # needed for uploading release assets
       packages: write   # needed for pushing to GHCR
+      id-token: write   # needed for OIDC auth to assume the AWS role for ECR
     env:
       release_tag: ${{ inputs.release_tag }}
     steps:
@@ -43,6 +44,9 @@ jobs:
 
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
+        with:
+          awsRegion: us-east-1
+          awsRole: arn:aws:iam::799078726966:role/github-qos
 
       - name: Login to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 #v3
@@ -55,10 +59,11 @@ jobs:
         shell: 'script -q -e -c "bash {0}"'
         run: make -j$(nproc)
 
-      - name: Push images to GHCR
+      - name: Push images to GHCR and ECR
         run: |
           # Extract version from tag (e.g. "qos_core-v0.5.0" -> "v0.5.0")
           version="${release_tag#qos_core-}"
+          ecr_registry="799078726966.dkr.ecr.us-east-1.amazonaws.com"
           for name in qos_client qos_host qos_enclave qos_enclave_egress qos_bridge qos_bridge_egress signed_echo; do
             image="ghcr.io/tkhq/${name}"
             if [ "${name}" = "signed_echo" ]; then
@@ -67,8 +72,20 @@ jobs:
             env -C out/${name} tar -cf - . | docker load
             docker tag "qos-local/${name}:latest" "${image}:${version}"
             docker tag "qos-local/${name}:latest" "${image}:latest"
+
+            # Push to GHCR
             docker push "${image}:${version}"
             docker push "${image}:latest"
+
+            # signed_echo is an example image with no ECR repository; GHCR only.
+            if [ "${name}" = "signed_echo" ]; then
+              continue
+            fi
+            ecr_image="${ecr_registry}/tkhq/${name}"
+            docker tag "qos-local/${name}:latest" "${ecr_image}:${version}"
+
+            # Push to ECR
+            docker push "${ecr_image}:${version}"
           done
 
       - name: Extract PCRs (qos_enclave)

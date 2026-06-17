@@ -3,9 +3,6 @@
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
 export CARGO_TARGET_DIR := $(ROOT)/target
 
-REGISTRY := 339735964233.dkr.ecr.us-east-1.amazonaws.com
-BUCKET := tkhq-development-qos_resources
-
 LOCAL_EPH_PATH := ./local-enclave/qos.ephemeral.key
 
 .PHONY: local-enclave
@@ -68,80 +65,9 @@ vm-host:
 		--cid 16 \
 		--port 6969
 
-.PHONY: all
-all: host client core
-
 .PHONY: clean
 clean:
 	cargo clean
-
-.PHONY: host
-host: clean build-host push-host
-
-.PHONY: build-host
-build-host:
-	docker build \
-		--file images/host/Dockerfile \
-		--tag $(REGISTRY)/qos/host \
-		$(PWD)
-
-.PHONY: push-host
-push-host:
-	docker push $(REGISTRY)/qos/host
-
-.PHONY: client
-client: clean build-client push-client
-
-.PHONY: build-client
-build-client:
-	docker build \
-		--file images/client/Dockerfile \
-		--tag $(REGISTRY)/qos/client \
-		$(PWD)
-
-.PHONY: push-client
-push-client:
-	docker push $(REGISTRY)/qos/client
-
-.PHONY: core
-core: clean build-core push-core
-
-.PHONY: build-core
-build-core:
-	docker build \
-		--file images/core/Dockerfile \
-		--tag $(REGISTRY)/qos/core \
-		$(PWD)
-
-.PHONY: push-core
-push-core:
-	docker push $(REGISTRY)/qos/core
-
-.PHONY: sample-app
-sample-app: clean clean-sample-app build-sample-app push-sample-app
-
-.PHONY: clean-sample-app
-clean-sample-app:
-	rm -f ./pivot.executable
-
-.PHONY: build-sample-app
-build-sample-app:
-	docker build \
-		--file images/sample-app/Dockerfile \
-		--tag $(REGISTRY)/qos/sample-app \
-		$(PWD); \
-	docker rm -f qos_sample-app; \
-	docker create \
-		--name qos_sample-app \
-		$(REGISTRY)/qos/sample-app; \
-	docker cp qos_sample-app:/usr/local/bin/sample-app ./pivot.executable
-
-.PHONY: push-sample-app
-push-sample-app:
-	PIVOT_HASH=0x$(shell shasum -a256 "./pivot.executable" | cut -d ' ' -f1); \
-	BUCKET="tkhq-development-qos_resources" ; \
-	echo $$PIVOT_HASH; \
-	aws s3 cp ./pivot.executable s3://$${BUCKET}/$${PIVOT_HASH}/pivot.executable
 
 .PHONY: lint
 lint:

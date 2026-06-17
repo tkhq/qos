@@ -86,4 +86,5 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write # propagate OIDC token scope to the reusable workflow for ECR
     secrets: inherit
