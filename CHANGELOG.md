@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_core` - [0.10.3](https://github.com/tkhq/qos/compare/qos_core-v0.10.2...qos_core-v0.10.3) - 2026-06-18
+
+### Other
+- set egress tunnel MTU size to 1320
+- ensure qemu workarounds also work on ingress
+
 ## `qos_client` - [0.10.2](https://github.com/tkhq/qos/compare/qos_client-v0.10.1...qos_client-v0.10.2) - 2026-06-15
 
 ### Fixed
