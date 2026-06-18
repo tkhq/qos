@@ -1,5 +1,15 @@
 name: "Set up Docker"
 description: "Ensure Docker is installed and configured correctly"
+inputs:
+  ghcr:
+    description: GitHub token for GHCR login (enables GHCR login when set)
+    required: false
+  awsRegion:
+    description: AWS region for ECR login
+    required: false
+  awsRole:
+    description: AWS IAM role to assume (enables ECR login when set)
+    required: false
 runs:
   using: "composite"
   steps:
@@ -31,3 +41,20 @@ runs:
         apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
         systemctl restart docker
         docker buildx create --driver docker-container --bootstrap --name build --use
+
+    - name: Login to GHCR
+      if: ${{ inputs.ghcr != '' }}
+      shell: 'script -q -e -c "bash {0}"'
+      run: |
+        echo "${{ inputs.ghcr }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+    - name: Configure AWS credentials
+      if: ${{ inputs.awsRole != '' }}
+      uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+      with:
+        aws-region: ${{ inputs.awsRegion }}
+        role-to-assume: ${{ inputs.awsRole }}
+
+    - name: Login to Amazon ECR
+      if: ${{ inputs.awsRole != '' }}
+      uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1

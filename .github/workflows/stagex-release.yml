@@ -16,13 +16,50 @@ on:
 
 jobs:
   build:
-    name: build artifacts
+    name: build ${{ matrix.name }}
     runs-on: ubicloud-standard-16
+    strategy:
+      # One job per image so builds/pushes run in parallel. Don't cancel the
+      # other images if one fails.
+      fail-fast: false
+      matrix:
+        name:
+          - qos_client
+          - qos_host
+          - qos_enclave
+          - qos_enclave_egress
+          - qos_bridge
+          - qos_bridge_egress
+          - signed_echo
+        include:
+          - name: qos_client
+            ghcr: ghcr.io/tkhq/qos_client
+            ecr: true
+          - name: qos_host
+            ghcr: ghcr.io/tkhq/qos_host
+            ecr: true
+          - name: qos_enclave
+            ghcr: ghcr.io/tkhq/qos_enclave
+            ecr: true
+          - name: qos_enclave_egress
+            ghcr: ghcr.io/tkhq/qos_enclave_egress
+            ecr: true
+          - name: qos_bridge
+            ghcr: ghcr.io/tkhq/qos_bridge
+            ecr: true
+          - name: qos_bridge_egress
+            ghcr: ghcr.io/tkhq/qos_bridge_egress
+            ecr: true
+          # signed_echo is an example image with no ECR repository; GHCR only.
+          - name: signed_echo
+            ghcr: ghcr.io/tkhq/qos/examples/signed_echo
+            ecr: false
     environment:
       name: release
     permissions:
       contents: write   # needed for uploading release assets
       packages: write   # needed for pushing to GHCR
+      id-token: write   # needed for OIDC auth to assume the AWS role for ECR
     env:
       release_tag: ${{ inputs.release_tag }}
     steps:
@@ -43,6 +80,9 @@ jobs:
 
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
+        with:
+          awsRegion: us-east-1
+          awsRole: arn:aws:iam::799078726966:role/github-qos
 
       - name: Login to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 #v3
@@ -51,33 +91,67 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Build only this matrix image (the `common` base is built as a dependency).
       - name: Run `make`
         shell: 'script -q -e -c "bash {0}"'
-        run: make -j$(nproc)
+        run: make -j$(nproc) "out/${{ matrix.name }}/index.json"
 
-      - name: Push images to GHCR
+      - name: Push image to GHCR and ECR
+        env:
+          name: ${{ matrix.name }}
+          ghcr_image: ${{ matrix.ghcr }}
+          push_ecr: ${{ matrix.ecr }}
         run: |
+          set -euo pipefail
           # Extract version from tag (e.g. "qos_core-v0.5.0" -> "v0.5.0")
           version="${release_tag#qos_core-}"
-          for name in qos_client qos_host qos_enclave qos_enclave_egress qos_bridge qos_bridge_egress signed_echo; do
-            image="ghcr.io/tkhq/${name}"
-            if [ "${name}" = "signed_echo" ]; then
-              image="ghcr.io/tkhq/qos/examples/signed_echo"
-            fi
-            env -C out/${name} tar -cf - . | docker load
-            docker tag "qos-local/${name}:latest" "${image}:${version}"
-            docker tag "qos-local/${name}:latest" "${image}:latest"
-            docker push "${image}:${version}"
-            docker push "${image}:latest"
-          done
+          ecr_registry="799078726966.dkr.ecr.us-east-1.amazonaws.com"
+
+          # Load the freshly built OCI image into the local docker daemon.
+          env -C "out/${name}" tar -cf - . | docker load
+
+          pushed=()
+          push_image() {
+            # Push image:tag, stream the output, and record the immutable
+            # registry URL (ref@sha256:digest).
+            local ref="$1"
+            docker push "${ref}" | tee /tmp/push.out
+            local digest
+            digest="$(sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\).*/\1/p' /tmp/push.out | tail -1)"
+            pushed+=("${ref}@${digest}")
+          }
+
+          # Push to GHCR (versioned + latest)
+          docker tag "qos-local/${name}:latest" "${ghcr_image}:${version}"
+          docker tag "qos-local/${name}:latest" "${ghcr_image}:latest"
+          push_image "${ghcr_image}:${version}"
+          push_image "${ghcr_image}:latest"
+
+          # Push to ECR (versioned)
+          if [ "${push_ecr}" = "true" ]; then
+            ecr_image="${ecr_registry}/tkhq/${name}"
+            docker tag "qos-local/${name}:latest" "${ecr_image}:${version}"
+            push_image "${ecr_image}:${version}"
+          fi
+
+          # Print the full image URL (with digest) for every repository pushed to.
+          {
+            echo "### Pushed \`${name}\` images"
+            echo ""
+            for ref in "${pushed[@]}"; do
+              echo "- \`${ref}\`"
+            done
+          } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
       - name: Extract PCRs (qos_enclave)
+        if: matrix.name == 'qos_enclave'
         run: |
           id=$(docker create "qos-local/qos_enclave:latest")
           docker cp "${id}:/nitro.pcrs" out/nitro.pcrs
           docker rm "${id}"
 
       - name: Upload PCRs to GitHub release (qos_enclave)
+        if: matrix.name == 'qos_enclave'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # upload to qos_core release tag
