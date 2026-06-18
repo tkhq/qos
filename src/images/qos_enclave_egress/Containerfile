@@ -69,7 +69,7 @@ COPY <<-EOF initramfs.list
 	dir  /dev/shm          0755 0 0
 	dir  /dev/pts          0755 0 0
 	nod  /dev/console      0600 0 0 c 5 1
-	file /egress           /egress          0700 0 0
+	file /egress           egress           0700 0 0
 	file /usr/sbin/ip      /usr/sbin/ip     0700 0 0
 	file /lib/ld-musl-x86  /usr/lib/ld-musl-x86_64.so.1                   0700 0 0
 	file /etc/resolv.conf  resolv.conf      0644 0 0

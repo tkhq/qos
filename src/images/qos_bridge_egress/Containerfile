@@ -5,7 +5,7 @@ FROM base AS build
 RUN <<-EOF
 	set -eux
 	cd /src && \
-		cargo build ${CARGOFLAGS} -p qos_bridge --bin ingress &&
+		cargo build ${CARGOFLAGS} -p qos_bridge --bin ingress --features egress &&
 		cargo build ${CARGOFLAGS} -p qos_bridge --bin egress --features egress
 	cp /src/target/${TARGET}/release/ingress /qos_bridge
 	cp /src/target/${TARGET}/release/egress /qos_egress
