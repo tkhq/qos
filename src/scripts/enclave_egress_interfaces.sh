@@ -11,6 +11,9 @@ sudo ip tuntap add host_egress mode tun
 # assign 10.0.0.2/28 to host_egress to mask the martians
 sudo ip address add 172.29.107.66/28 dev host_egress
 
+# set MTU size to match calico limits in prod
+sudo ip link set mtu 1320 dev host_egress
+
 # bring the interface up
 sudo ip link set host_egress up
 
