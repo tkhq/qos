@@ -151,8 +151,9 @@ impl Stream {
 		if self.inner.is_none() {
 			self.connect().await?;
 
+			// see https://github.com/rust-vmm/vhost-device/issues/963
 			#[cfg(feature = "qemu")]
-			tokio::time::sleep(std::time::Duration::from_millis(50)).await; // see https://github.com/rust-vmm/vhost-device/issues/963
+			tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 		} else {
 			eprintln!("SocketStream already connected, call proceeding");
 		}

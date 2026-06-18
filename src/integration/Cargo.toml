@@ -28,13 +28,15 @@ qos_p256 = { workspace = true, features = ["mock"] }
 qos_test_primitives = { workspace = true }
 zeroize = { workspace = true }
 
+axum = { workspace = true, default-features = false, features = ["http1", "json"] }
 futures = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs"] }
 borsh = { workspace = true }
 nix = { workspace = true }
 rustls = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 webpki-roots = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs"] }
 tokio-rustls = { workspace = true }
 
 [dev-dependencies]

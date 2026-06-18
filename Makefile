@@ -1,7 +1,7 @@
 include src/macros.mk
 
 PIVOT_BIN ?= pivot_download
-PIVOT_ARGS ?= [http://objdump.katona.me/program.bin]
+PIVOT_ARGS ?= []
 REGISTRY := local
 CARGO_WORKSPACE_FILES := Cargo.toml Cargo.lock
 .DEFAULT_GOAL :=
