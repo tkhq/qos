@@ -9,9 +9,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## `qos_core` - [0.10.3](https://github.com/tkhq/qos/compare/qos_core-v0.10.2...qos_core-v0.10.3) - 2026-06-18
 
+### Changed
+- Set the egress tunnel MTU to 1320 to avoid oversized packets in egress-enabled enclaves. ([#741](https://github.com/tkhq/qos/pull/741))
+- Applied the QEMU local-run workarounds to ingress bridge streams as well as egress streams. ([#737](https://github.com/tkhq/qos/pull/737))
+
+## `qos_client` - [0.10.3](https://github.com/tkhq/qos/compare/qos_client-v0.10.2...qos_client-v0.10.3) - 2026-06-18
+
 ### Other
-- set egress tunnel MTU size to 1320
-- ensure qemu workarounds also work on ingress
+- No user-facing changes; released as part of the coordinated `0.10.3` workspace version.
+
+## `qos_crypto` - [0.10.3](https://github.com/tkhq/qos/compare/qos_crypto-v0.10.2...qos_crypto-v0.10.3) - 2026-06-18
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.3` workspace version.
+
+## `qos_hex` - [0.10.3](https://github.com/tkhq/qos/compare/qos_hex-v0.10.2...qos_hex-v0.10.3) - 2026-06-18
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.3` workspace version.
+
+## `qos_net` - [0.10.3](https://github.com/tkhq/qos/compare/qos_net-v0.10.2...qos_net-v0.10.3) - 2026-06-18
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.3` workspace version.
+
+## `qos_p256` - [0.10.3](https://github.com/tkhq/qos/compare/qos_p256-v0.10.2...qos_p256-v0.10.3) - 2026-06-18
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.3` workspace version.
+
+## `qos_nsm` - [0.10.3](https://github.com/tkhq/qos/compare/qos_nsm-v0.10.2...qos_nsm-v0.10.3) - 2026-06-18
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.3` workspace version.
+
+## `qos_test_primitives` - [0.10.3](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.10.2...qos_test_primitives-v0.10.3) - 2026-06-18
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.3` workspace version.
+
+## `qos_json` - [0.10.3](https://github.com/tkhq/qos/compare/qos_json-v0.10.2...qos_json-v0.10.3) - 2026-06-18
+
+### Other
+- No user-facing changes; released as part of the coordinated `0.10.3` workspace version.
 
 ## `qos_client` - [0.10.2](https://github.com/tkhq/qos/compare/qos_client-v0.10.1...qos_client-v0.10.2) - 2026-06-15
 
