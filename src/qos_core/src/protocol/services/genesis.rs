@@ -247,7 +247,7 @@ mod test {
 			"PIV".to_string(),
 		);
 		let mut protocol_state =
-			ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
+			ProtocolState::new(Box::new(MockNsm::new()), handles.clone(), None);
 		let member1_pair = P256Pair::generate().unwrap();
 		let member2_pair = P256Pair::generate().unwrap();
 		let member3_pair = P256Pair::generate().unwrap();

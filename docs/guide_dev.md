@@ -98,7 +98,7 @@ The mock NSM:
 
 ### Why --unsafe-eph-path-override?
 
-The boot flow requires the enclave side to have the ephemeral private key and the client side to have the associated public key. We typically embed the ephemeral public key in the attestation document: clients are expected to verify the attestation document before using the ephemeral public key. Locally, we cannot generate attestation documents, so we return a hardcoded mock attestation document. The mock attestation document contains an **invalid** ephemeral public key, and even if it was valid we would not have access to the associated private key.
+The boot flow requires the enclave side to have the setup ephemeral private key and the client side to have the associated public key. In production, the setup public key is carried in the attestation document and checked against PCR16 before clients encrypt quorum shares to it. Locally, we cannot generate real attestation documents, so we return a hardcoded mock attestation document. The mock attestation document contains an **invalid** ephemeral public key, and even if it was valid we would not have access to the associated private key.
 
 The `--unsafe-eph-path-override` flag tells the client to:
 1. **Ignore** the public key from the attestation document
@@ -106,12 +106,12 @@ The `--unsafe-eph-path-override` flag tells the client to:
 3. **Use** that key for encrypting quorum shares
 
 **The flow:**
-1. qos_core generates a fresh ephemeral key during `BootStandardRequest`
-2. qos_core writes private key to `./local-enclave/qos.ephemeral.key`
+1. qos_core generates fresh setup and live ephemeral keys during `BootStandardRequest`
+2. qos_core writes the setup private key to `./local-enclave/qos.ephemeral.key`
 3. qos_core returns the (broken) mock attestation document
 4. Client reads `./local-enclave/qos.ephemeral.key` for the real public key
 5. Client encrypts shares correctly
-6. Decryption succeeds
+6. Decryption succeeds, and qos_core rotates to the live key before pivot start
 
 ### Alternative: Skip the Override
 
@@ -185,9 +185,9 @@ Mock mode differs significantly from production:
 | Aspect | Mock Mode | Production |
 |--------|-----------|------------|
 | Attestation | Hardcoded document | Real AWS Nitro attestation |
-| PCR Values | All zeros or mock values | Real enclave measurements |
-| Ephemeral Key | Generated fresh each boot | Generated fresh each boot |
-| Verification | None | Full cryptographic verification |
+| PCR Values | Mock PCR state | Real enclave measurements plus PCR16/PCR17 commitments |
+| Ephemeral Key | Setup/live keys generated fresh each boot | Setup/live keys generated fresh each boot |
+| Verification | None | Full cryptographic verification, including setup PCR16 or live PCR17 as appropriate |
 | Security | **INSECURE** | Secure enclave isolation |
 
 **Never deploy with the `mock` feature enabled in production environments.**

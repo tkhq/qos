@@ -68,7 +68,7 @@ mod tests {
 		));
 		std::fs::create_dir_all(&root).unwrap();
 		ProtocolState::new(
-			Box::new(MockNsm),
+			Box::new(MockNsm::new()),
 			Handles::new(
 				root.join("ephemeral").to_string_lossy().into_owned(),
 				root.join("quorum").to_string_lossy().into_owned(),

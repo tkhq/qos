@@ -82,7 +82,7 @@ async fn enclave_app_client_socket_stress() {
 	tokio::spawn(async move {
 		Reaper::execute(
 			&handles,
-			Box::new(MockNsm),
+			Box::new(MockNsm::new()),
 			enclave_socket,
 			// Force the phase to quorum key provisioned so message proxy-ing
 			// works

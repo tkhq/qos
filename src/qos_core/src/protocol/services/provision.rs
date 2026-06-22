@@ -1,5 +1,4 @@
 //! Quorum Key provisioning logic and types.
-use qos_p256::P256Pair;
 use zeroize::Zeroizing;
 
 use crate::protocol::{
@@ -125,8 +124,8 @@ pub(in crate::protocol) fn provision(
 	// Rotate the ephemeral key so it's safe for apps to use it independently
 	// of boot-related operations, which use the pre-boot ephemeral key as
 	// an encryption target (boot standard flow encrypts quorum key shares to it.)
-	let new_ephemeral_key = P256Pair::generate()?;
-	state.handles.rotate_ephemeral_key(&new_ephemeral_key)?;
+	let live_ephemeral_key = state.take_pending_live_ephemeral_key()?;
+	state.handles.rotate_ephemeral_key(&live_ephemeral_key)?;
 
 	// Write the quorum key to the file system.
 	// Note: it's important to do this _last_, because the enclave will
@@ -165,6 +164,7 @@ mod test {
 	struct Setup {
 		quorum_pair: P256Pair,
 		eph_pair: P256Pair,
+		live_eph_pair: P256Pair,
 		threshold: usize,
 		state: ProtocolState,
 		approvals: Vec<Approval>,
@@ -183,6 +183,7 @@ mod test {
 		);
 		// 1) Create and write eph key
 		let eph_pair = P256Pair::generate().unwrap();
+		let live_eph_pair = P256Pair::generate().unwrap();
 		handles.put_ephemeral_key(&eph_pair).unwrap();
 		// 2) Create and write manifest with threshold and quorum key
 		let quorum_pair = P256Pair::generate().unwrap();
@@ -255,10 +256,19 @@ mod test {
 		handles.put_manifest_envelope(&manifest_envelope).unwrap();
 
 		// 3) Create state with eph key and manifest
-		let mut state = ProtocolState::new(Box::new(MockNsm), handles, None);
+		let mut state =
+			ProtocolState::new(Box::new(MockNsm::new()), handles, None);
+		state.set_pending_live_ephemeral_key(live_eph_pair.clone());
 		state.transition(ProtocolPhase::WaitingForQuorumShards).unwrap();
 
-		Setup { quorum_pair, eph_pair, threshold, state, approvals }
+		Setup {
+			quorum_pair,
+			eph_pair,
+			live_eph_pair,
+			threshold,
+			state,
+			approvals,
+		}
 	}
 
 	#[test]
@@ -267,8 +277,14 @@ mod test {
 		let eph_file = PathWrapper::from("./provision_works.eph.key");
 		let manifest_file = PathWrapper::from("./provision_works.manifest");
 
-		let Setup { quorum_pair, eph_pair, threshold, mut state, approvals } =
-			setup(&eph_file, &quorum_file, &manifest_file);
+		let Setup {
+			quorum_pair,
+			eph_pair,
+			live_eph_pair,
+			threshold,
+			mut state,
+			approvals,
+		} = setup(&eph_file, &quorum_file, &manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
 		let quorum_key = quorum_pair.to_master_seed();
@@ -308,6 +324,7 @@ mod test {
 		// Make sure the EK rotation happened, post-boot
 		let new_eph_key = std::fs::read(&*eph_file).unwrap();
 		assert_ne!(new_eph_key, boot_eph_key);
+		assert_eq!(new_eph_key, live_eph_pair.to_master_seed_hex().as_slice());
 
 		// The share set approvals were recorded in the manifest envelope
 		assert_eq!(
@@ -379,8 +396,14 @@ mod test {
 		let manifest_file = PathWrapper::from(
 			"./provision_rejects_if_a_shard_is_invalid.manifest",
 		);
-		let Setup { quorum_pair, eph_pair, threshold, mut state, approvals } =
-			setup(&eph_file, &quorum_file, &manifest_file);
+		let Setup {
+			quorum_pair,
+			eph_pair,
+			threshold,
+			mut state,
+			approvals,
+			..
+		} = setup(&eph_file, &quorum_file, &manifest_file);
 
 		// 4) Create shards and encrypt them to eph key
 		let quorum_key = quorum_pair.to_master_seed();
@@ -436,6 +459,7 @@ mod test {
 			threshold,
 			mut state,
 			mut approvals,
+			..
 		} = setup(&eph_file, &quorum_file, &manifest_file);
 
 		let quorum_key = quorum_pair.to_master_seed();
@@ -476,6 +500,7 @@ mod test {
 			threshold,
 			mut state,
 			mut approvals,
+			..
 		} = setup(&eph_file, &quorum_file, &manifest_file);
 
 		let quorum_key = quorum_pair.to_master_seed();
@@ -523,6 +548,7 @@ mod test {
 			threshold,
 			mut state,
 			mut approvals,
+			..
 		} = setup(&eph_file, &quorum_file, &manifest_file);
 
 		let quorum_key = quorum_pair.to_master_seed();

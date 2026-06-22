@@ -27,8 +27,9 @@ use qos_core::protocol::{
 use qos_crypto::{sha_256, sha_384, sha_512};
 use qos_nsm::{
 	nitro::{
-		AWS_ROOT_CERT_PEM, attestation_doc_from_der, cert_from_pem,
-		unsafe_attestation_doc_from_der,
+		AWS_ROOT_CERT_PEM, ManifestAttestationInput, attestation_doc_from_der,
+		cert_from_pem, unsafe_attestation_doc_from_der,
+		verify_attestation_doc_against_manifest_setup,
 		verify_attestation_doc_against_user_input,
 	},
 	types::NsmResponse,
@@ -1413,13 +1414,15 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	if unsafe_skip_attestation {
 		println!("**WARNING:** Skipping attestation document verification.");
 	} else {
-		verify_attestation_doc_against_user_input(
+		verify_attestation_doc_against_manifest_setup(
 			&attestation_doc,
-			&manifest.manifest_hash(),
-			&manifest.enclave().pcr0,
-			&manifest.enclave().pcr1,
-			&manifest.enclave().pcr2,
-			&extract_pcr3(pcr3_preimage_path),
+			ManifestAttestationInput {
+				manifest_hash: &manifest.manifest_hash(),
+				pcr0: &manifest.enclave().pcr0,
+				pcr1: &manifest.enclave().pcr1,
+				pcr2: &manifest.enclave().pcr2,
+				pcr3: &extract_pcr3(pcr3_preimage_path),
+			},
 		)?;
 
 		// Sanity check the ephemeral key is valid
@@ -1518,13 +1521,15 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	if unsafe_skip_attestation {
 		println!("**WARNING:** Skipping attestation document verification.");
 	} else {
-		verify_attestation_doc_against_user_input(
+		verify_attestation_doc_against_manifest_setup(
 			&attestation_doc,
-			&manifest_envelope.manifest_hash(),
-			&manifest.enclave().pcr0,
-			&manifest.enclave().pcr1,
-			&manifest.enclave().pcr2,
-			&extract_pcr3(pcr3_preimage_path),
+			ManifestAttestationInput {
+				manifest_hash: &manifest_envelope.manifest_hash(),
+				pcr0: &manifest.enclave().pcr0,
+				pcr1: &manifest.enclave().pcr1,
+				pcr2: &manifest.enclave().pcr2,
+				pcr3: &extract_pcr3(pcr3_preimage_path),
+			},
 		)?;
 	}
 

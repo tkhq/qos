@@ -191,6 +191,8 @@ pub enum ProtocolError {
 	PoolExpandError,
 	/// Pivot environment variables are invalid.
 	InvalidPivotEnv(String),
+	/// The precommitted live ephemeral key is missing from protocol state.
+	MissingLiveEphemeralKey,
 }
 
 impl From<std::io::Error> for ProtocolError {
@@ -364,6 +366,9 @@ impl std::fmt::Display for ProtocolError {
 				write!(f, "different PCR3: expected {expected}, got {actual}")
 			}
 			Self::MissingEphemeralKey => write!(f, "missing ephemeral key"),
+			Self::MissingLiveEphemeralKey => {
+				write!(f, "missing precommitted live ephemeral key")
+			}
 			Self::InvalidEphemeralKey => write!(f, "invalid ephemeral key"),
 			Self::InvalidEncryptedQuorumKeySignature => {
 				write!(f, "invalid encrypted quorum key signature")

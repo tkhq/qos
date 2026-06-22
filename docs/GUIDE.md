@@ -78,7 +78,7 @@ echo "arn:aws:iam::YOUR_AWS_ACCOUNT_ID:role/YOUR_ENCLAVE_ROLE" > genesis-dir/pcr
 
 ### 1.5 Build and Hash Your Application
 
-**What this does**: Compiles your application as a statically-linked binary and calculates its SHA-256 hash. This hash will be written into the manifest and measured in PCR4 by the Nitro enclave. When provisioning, the enclave verifies the binary matches this hash before executing it, ensuring code integrity.
+**What this does**: Compiles your application as a statically-linked binary and calculates its SHA-256 hash. This hash will be written into the manifest as the pivot hash. During boot, QOS verifies the submitted pivot binary matches this hash before publishing the pivot file that can later be executed.
 
 ```bash
 # Build your application as a static binary (adjust path to your app)
@@ -93,7 +93,7 @@ sha256sum your_app | awk '{print $1}' > manifest-dir/pivot-hash.txt
 
 ### 1.6 Create QOS Release Directory
 
-**What this does**: Defines the expected PCR0/1/2 values from your QuorumOS build. These measurements uniquely identify which version of the QuorumOS system is running. During boot and provisioning, these values are verified against the live attestation to confirm you're deploying to the correct QuorumOS version.
+**What this does**: Defines the expected PCR0/1/2 values from your QuorumOS build. These measurements uniquely identify which version of the QuorumOS system is running and are checked during attestation verification.
 ```bash
 mkdir -p qos-release-dir
 cat > qos-release-dir/aws-x86_64.pcrs << 'EOF'
@@ -329,7 +329,7 @@ rm -f /tmp/qos-production*
 
 ### 5.2 Execute Boot Standard
 
-**What this does**: Sends the manifest envelope and pivot binary to the fresh enclave. The enclave cryptographically verifies K=2 manifest approvals, validates the pivot hash, generates a fresh ephemeral keypair, and returns an attestation document. The ephemeral public key is embedded in the attestation for members to encrypt shares to.
+**What this does**: Sends the manifest envelope and pivot binary to the fresh enclave. The enclave verifies K=2 manifest approvals, validates the pivot hash, prepares setup and live attestation state, and returns a setup attestation document. The setup ephemeral public key is embedded in the attestation for members to encrypt shares to.
 ```bash
 qos_client boot-standard \
   --manifest-envelope-path manifest-dir/manifest_envelope \
@@ -342,19 +342,20 @@ qos_client boot-standard \
 **What Happens**:
 - Validates manifest envelope approvals (K=2 signatures)
 - Verifies pivot hash matches your application binary
-- Generates ephemeral key in enclave
-- Returns attestation document
+- Generates setup and live ephemeral keys in enclave
+- Locks attestation PCRs for setup and live verification
+- Returns setup attestation document
 - Enclave enters "WaitingForQuorumShards" phase
 
 ---
 
 ## Phase 6: Share Provisioning 
 
-**What this phase does**: Each member decrypts their share (encrypted to their personal key), verifies the enclave attestation, and re-encrypts the share to the enclave's ephemeral public key. When K=2 shares are posted, the enclave reconstructs the quorum key using Shamir Secret Sharing and launches the pivot application.
+**What this phase does**: Each member decrypts their share (encrypted to their personal key), verifies the enclave setup attestation, and re-encrypts the share to the enclave's setup ephemeral public key. When K=2 shares are posted, the enclave reconstructs the quorum key using Shamir Secret Sharing, rotates to the precommitted live ephemeral key, and launches the pivot application.
 
 ### 6.1 Get Attestation Document
 
-**What this does**: Retrieves the COSE-signed attestation document from the running enclave. This document contains PCR measurements, the ephemeral public key, and the manifest hash. Members use this to verify they're provisioning to the correct enclave instance before revealing their shares.
+**What this does**: Retrieves the COSE-signed setup attestation document from the running enclave. This document contains PCR measurements, the setup ephemeral public key, and the manifest hash. Members verify it before revealing their shares.
 
 ```bash
 qos_client get-attestation-doc \
@@ -366,7 +367,7 @@ qos_client get-attestation-doc \
 
 ### 6.2 Member 1: Re-encrypt Share to Ephemeral Key
 
-**What this does**: Member 1 decrypts their share (using their personal private key), verifies attestation PCRs and manifest, then re-encrypts the share to the enclave's ephemeral public key. The plaintext share only exists briefly in Member 1's local memory. An approval signature proves Member 1 authorized provisioning to this specific manifest.
+**What this does**: Member 1 decrypts their share (using their personal private key), verifies the setup attestation PCRs and manifest, then re-encrypts the share to the enclave's setup ephemeral public key. The plaintext share only exists briefly in Member 1's local memory. An approval signature proves Member 1 authorized provisioning to this specific manifest.
 ```bash
 qos_client proxy-re-encrypt-share \
   --share-path member1-dir/member1.share \
@@ -390,7 +391,7 @@ qos_client proxy-re-encrypt-share \
 
 ### 6.3 Member 1: Post Share
 
-**What this does**: Sends Member 1's ephemeral-encrypted share and approval signature to the enclave. The enclave verifies the approval signature, decrypts the share with its ephemeral private key, and stores it. Since K=2 and this is the first share, reconstruction doesn't happen yet—the enclave waits for one more share.
+**What this does**: Sends Member 1's setup-key-encrypted share and approval signature to the enclave. The enclave verifies the approval signature, decrypts the share with its setup ephemeral private key, and stores it. Since K=2 and this is the first share, reconstruction doesn't happen yet—the enclave waits for one more share.
 
 ```bash
 qos_client post-share \
@@ -404,7 +405,7 @@ qos_client post-share \
 
 ### 6.4 Member 2: Re-encrypt Share
 
-**What this does**: Member 2 independently performs the same re-encryption process. They decrypt their personal-key-encrypted share, verify attestation, and re-encrypt to the ephemeral key. This is the second of K=2 required shares.
+**What this does**: Member 2 independently performs the same re-encryption process. They decrypt their personal-key-encrypted share, verify setup attestation, and re-encrypt to the setup ephemeral key. This is the second of K=2 required shares.
 ```bash
 qos_client proxy-re-encrypt-share \
   --share-path member2-dir/member2.share \
@@ -420,7 +421,7 @@ qos_client proxy-re-encrypt-share \
 
 ### 6.5 Member 2: Post Share (Triggers Reconstruction)
 
-**What this does**: Posts the second share, meeting the K=2 threshold. The enclave now has 2 decrypted shares, so it runs Shamir reconstruction to recover the original master seed. It verifies the reconstructed quorum key matches the public key in the manifest, writes the key to `/qos.quorum.key`, rotates the ephemeral key for security, and **launches your pivot binary**. The enclave transitions to QuorumKeyProvisioned state.
+**What this does**: Posts the second share, meeting the K=2 threshold. The enclave now has 2 decrypted shares, so it runs Shamir reconstruction to recover the original master seed. It verifies the reconstructed quorum key matches the public key in the manifest, rotates `/qos.ephemeral.key` to the PCR17-committed live key, writes the quorum key to `/qos.quorum.key`, and **launches your pivot binary**. The enclave transitions to QuorumKeyProvisioned state.
 
 ```bash
 qos_client post-share \
@@ -591,7 +592,7 @@ rm -f /tmp/qos-production*
 
 ### 8.6 Boot with Updated Manifest
 
-**What this does**: Boots the fresh enclave with your new manifest envelope and updated application binary. The enclave validates approvals, generates a new ephemeral key, and waits for quorum key reconstruction.
+**What this does**: Boots the fresh enclave with your new manifest envelope and updated application binary. The enclave validates approvals, generates setup and live ephemeral keys, and waits for quorum key reconstruction.
 
 ```bash
 qos_client boot-standard \
@@ -605,12 +606,12 @@ qos_client boot-standard \
 **What Happens**:
 - Validates new manifest envelope approvals (K=2 signatures)
 - Verifies new pivot hash matches your updated application binary
-- Generates fresh ephemeral key for this instance
+- Generates fresh setup and live ephemeral keys for this instance
 - Enclave enters "WaitingForQuorumShards" phase
 
 ### 8.7 Re-provision Shares (Same Quorum Key)
 
-**What this does**: Members re-provision their shares to the new enclave instance. The shares are the same as before (from genesis), but they're re-encrypted to the new ephemeral key. When K=2 shares are posted, the same quorum key is reconstructed and your updated application launches.
+**What this does**: Members re-provision their shares to the new enclave instance. The shares are the same as before (from genesis), but they're re-encrypted to the new setup ephemeral key after verifying the setup attestation and PCR16. When K=2 shares are posted, the same quorum key is reconstructed, QOS rotates to the PCR17-committed live key, and your updated application launches.
 
 Follow the exact same process as Phase 6 (Share Provisioning):
 
@@ -634,7 +635,7 @@ The quorum key reconstructs to the same value, but now your updated application 
 - ✓ Application binary (new version)
 - ✓ Pivot hash in manifest (new binary hash)
 - ✓ Manifest nonce (incremented for anti-downgrade)
-- ✓ Ephemeral key (newly generated per boot)
+- ✓ Setup and live ephemeral keys (newly generated per boot)
 - ✓ Manifest approvals (K=2 signatures on new manifest)
 
 **What Stays the Same**:
@@ -642,7 +643,7 @@ The quorum key reconstructs to the same value, but now your updated application 
 - ✓ Namespace (same logical grouping)
 - ✓ Member shares (same encrypted shares)
 - ✓ Manifest Set / Share Set / Patch Set composition
-- ✓ PCR values (unless QuorumOS version changes)
+- ✓ Manifest PCR0/PCR1/PCR2/PCR3 values (unless QuorumOS version or AWS identity changes)
 
 **The Nonce Mechanism**: The monotonically increasing nonce prevents rollback attacks. Members should only approve manifests with nonces higher than the current deployment, ensuring adversaries cannot force downgrades to vulnerable versions.
 

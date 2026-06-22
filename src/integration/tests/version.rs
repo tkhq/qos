@@ -91,7 +91,7 @@ async fn version_request_returns_version_and_commit() -> Result<(), io::Error> {
 	let mut qos_core_task = tokio::spawn(async move {
 		Reaper::execute(
 			&qos_core_handles,
-			Box::new(MockNsm),
+			Box::new(MockNsm::new()),
 			qos_core_socket,
 			None,
 		)

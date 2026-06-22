@@ -702,22 +702,37 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 		});
 	}
 
-	// 2. Generate an Ephemeral Key.
-	let ephemeral_key = P256Pair::generate()?;
-	state.handles.put_ephemeral_key(&ephemeral_key)?;
+	// 2. Generate the setup key and the post-provision live key.
+	let setup_ephemeral_key = P256Pair::generate()?;
+	let live_ephemeral_key = P256Pair::generate()?;
+	let setup_ephemeral_public_key =
+		setup_ephemeral_key.public_key().to_bytes();
+	let live_ephemeral_public_key = live_ephemeral_key.public_key().to_bytes();
+	let manifest_hash = manifest_envelope.manifest_hash().to_vec();
+
+	// 3. Finalize PCR state before publishing boot files.
+	attestation::lock_manifest_commitment_pcr_bank(
+		&*state.attestor,
+		&manifest_hash,
+		&setup_ephemeral_public_key,
+		&live_ephemeral_public_key,
+	)?;
+
+	state.set_pending_live_ephemeral_key(live_ephemeral_key);
+	state.handles.put_ephemeral_key(&setup_ephemeral_key)?;
 	state.handles.put_pivot(pivot)?;
 	state.handles.put_manifest_envelope(manifest_envelope)?;
 
-	// 3. Make an attestation request, placing the manifest hash in the
+	// 4. Make an attestation request, placing the manifest hash in the
 	// `user_data` field and the Ephemeral Key public key in the `public_key`
 	// field.
 	let nsm_response = attestation::get_post_boot_attestation_doc(
 		&*state.attestor,
-		ephemeral_key.public_key().to_bytes(),
-		manifest_envelope.manifest_hash().to_vec(),
+		setup_ephemeral_public_key,
+		manifest_hash,
 	);
 
-	// 4. Return the NSM Response containing COSE Sign1 encoded attestation
+	// 5. Return the NSM Response containing COSE Sign1 encoded attestation
 	// document.
 	Ok(nsm_response)
 }
@@ -737,11 +752,46 @@ pub(in crate::protocol) fn boot_standard(
 mod test {
 	use std::path::Path;
 
-	use qos_nsm::mock::MockNsm;
+	use qos_nsm::{
+		NsmProvider,
+		mock::MockNsm,
+		nitro::AttestError,
+		types::{NsmRequest, NsmResponse},
+	};
 	use qos_test_primitives::PathWrapper;
 
 	use super::*;
 	use crate::handles::Handles;
+
+	struct RaceCheckingNsm {
+		inner: MockNsm,
+		handles: Handles,
+	}
+
+	impl RaceCheckingNsm {
+		fn new(handles: Handles) -> Self {
+			Self { inner: MockNsm::new(), handles }
+		}
+	}
+
+	impl NsmProvider for RaceCheckingNsm {
+		fn nsm_process_request(&self, request: NsmRequest) -> NsmResponse {
+			if matches!(
+				request,
+				NsmRequest::ExtendPCR { .. } | NsmRequest::LockPCRs { .. }
+			) {
+				assert!(self.handles.quorum_key_exists());
+				assert!(!self.handles.pivot_exists());
+				assert!(!self.handles.manifest_envelope_exists());
+			}
+
+			self.inner.nsm_process_request(request)
+		}
+
+		fn timestamp_ms(&self) -> Result<u64, AttestError> {
+			self.inner.timestamp_ms()
+		}
+	}
 
 	fn get_manifest() -> (Manifest, Vec<(P256Pair, QuorumMember)>, Vec<u8>) {
 		let quorum_pair = P256Pair::generate().unwrap();
@@ -990,7 +1040,7 @@ mod test {
 			pivot_file.clone(),
 		);
 		let mut protocol_state =
-			ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
+			ProtocolState::new(Box::new(MockNsm::new()), handles.clone(), None);
 
 		let _nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
@@ -1007,6 +1057,57 @@ mod test {
 		std::fs::remove_file(pivot_file).unwrap();
 		std::fs::remove_file(ephemeral_file).unwrap();
 		std::fs::remove_file(manifest_file).unwrap();
+	}
+
+	#[test]
+	fn boot_standard_locks_pcrs_before_publishing_pivot_start_files() {
+		let (manifest, members, pivot) = get_manifest();
+
+		let manifest_envelope = {
+			let manifest_hash = manifest.qos_hash();
+			let approvals = members
+				.into_iter()
+				.map(|(pair, member)| Approval {
+					signature: pair.sign(&manifest_hash).unwrap(),
+					member,
+				})
+				.collect();
+
+			ManifestEnvelope {
+				manifest,
+				manifest_set_approvals: approvals,
+				share_set_approvals: vec![],
+			}
+		};
+
+		let pivot_file = PathWrapper::from(
+			"boot_standard_locks_pcrs_before_publishing.pivot",
+		);
+		let ephemeral_file = PathWrapper::from(
+			"boot_standard_locks_pcrs_before_publishing_eph.secret",
+		);
+		let quorum_file = PathWrapper::from(
+			"boot_standard_locks_pcrs_before_publishing_quorum.secret",
+		);
+		let manifest_file = PathWrapper::from(
+			"boot_standard_locks_pcrs_before_publishing.manifest",
+		);
+		let handles = Handles::new(
+			ephemeral_file.display().to_string(),
+			quorum_file.display().to_string(),
+			manifest_file.display().to_string(),
+			pivot_file.display().to_string(),
+		);
+		handles.put_quorum_key(&P256Pair::generate().unwrap()).unwrap();
+
+		let attestor = RaceCheckingNsm::new(handles.clone());
+		let mut protocol_state =
+			ProtocolState::new(Box::new(attestor), handles.clone(), None);
+
+		boot_standard(&mut protocol_state, &manifest_envelope, &pivot).unwrap();
+
+		assert!(handles.pivot_exists());
+		assert!(handles.manifest_envelope_exists());
 	}
 
 	#[test]
@@ -1047,7 +1148,7 @@ mod test {
 			pivot_file,
 		);
 		let mut protocol_state =
-			ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
+			ProtocolState::new(Box::new(MockNsm::new()), handles.clone(), None);
 
 		let nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
@@ -1091,7 +1192,7 @@ mod test {
 			pivot_file,
 		);
 		let mut protocol_state =
-			ProtocolState::new(Box::new(MockNsm), handles.clone(), None);
+			ProtocolState::new(Box::new(MockNsm::new()), handles.clone(), None);
 
 		let nsm_resposne =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot);
@@ -1140,7 +1241,7 @@ mod test {
 			pivot_file.display().to_string(),
 		);
 		let mut protocol_state =
-			ProtocolState::new(Box::new(MockNsm), handles, None);
+			ProtocolState::new(Box::new(MockNsm::new()), handles, None);
 
 		let error =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)
@@ -1198,7 +1299,7 @@ mod test {
 			pivot_file.display().to_string(),
 		);
 		let mut protocol_state =
-			ProtocolState::new(Box::new(MockNsm), handles, None);
+			ProtocolState::new(Box::new(MockNsm::new()), handles, None);
 
 		let error =
 			boot_standard(&mut protocol_state, &manifest_envelope, &pivot)

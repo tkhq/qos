@@ -49,8 +49,13 @@ async fn reaper_works() {
 	let enclave_socket = SocketAddress::new_unix(&usock);
 
 	let reaper_handle = tokio::spawn(async move {
-		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
-			.await;
+		Reaper::execute(
+			&handles,
+			Box::new(MockNsm::new()),
+			enclave_socket,
+			None,
+		)
+		.await;
 	});
 
 	// Give the enclave server time to bind to the socket
@@ -106,8 +111,13 @@ async fn reaper_clears_host_env() {
 
 	let enclave_socket = SocketAddress::new_unix(&usock);
 	let reaper_handle = tokio::spawn(async move {
-		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
-			.await;
+		Reaper::execute(
+			&handles,
+			Box::new(MockNsm::new()),
+			enclave_socket,
+			None,
+		)
+		.await;
 	});
 
 	wait_for_usock(&usock).await;
@@ -172,7 +182,7 @@ async fn reaper_clears_host_env() {
 //
 // 	let enclave_socket = SocketAddress::new_unix(&usock);
 // 	let reaper_handle = tokio::spawn(async move {
-// 		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
+// 		Reaper::execute(&handles, Box::new(MockNsm::new()), enclave_socket, None)
 // 			.await;
 // 	});
 //
@@ -217,8 +227,13 @@ async fn reaper_handles_non_zero_exits() {
 	let enclave_socket = SocketAddress::new_unix(&usock);
 
 	let reaper_handle = tokio::spawn(async move {
-		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
-			.await;
+		Reaper::execute(
+			&handles,
+			Box::new(MockNsm::new()),
+			enclave_socket,
+			None,
+		)
+		.await;
 	});
 
 	// Give the enclave server time to bind to the socket
@@ -264,8 +279,13 @@ async fn reaper_handles_panic() {
 	let enclave_socket = SocketAddress::new_unix(&usock);
 
 	let reaper_handle = tokio::spawn(async move {
-		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
-			.await;
+		Reaper::execute(
+			&handles,
+			Box::new(MockNsm::new()),
+			enclave_socket,
+			None,
+		)
+		.await;
 	});
 
 	// Give the enclave server time to bind to the socket
@@ -331,8 +351,13 @@ async fn reaper_handles_bridge() {
 	let enclave_socket = SocketAddress::new_unix(&usock);
 
 	let reaper_handle = tokio::spawn(async move {
-		Reaper::execute(&handles, Box::new(MockNsm), enclave_socket, None)
-			.await;
+		Reaper::execute(
+			&handles,
+			Box::new(MockNsm::new()),
+			enclave_socket,
+			None,
+		)
+		.await;
 	});
 
 	// wait for enclave to listen

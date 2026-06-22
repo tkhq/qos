@@ -1,5 +1,6 @@
 //! Quorum protocol state machine
 use qos_nsm::NsmProvider;
+use qos_p256::P256Pair;
 
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
@@ -188,6 +189,7 @@ pub(crate) struct ProtocolState {
 	pub provisioner: SecretBuilder,
 	pub attestor: Box<dyn NsmProvider>,
 	pub handles: Handles,
+	pending_live_ephemeral_key: Option<P256Pair>,
 	phase: ProtocolPhase,
 }
 
@@ -208,11 +210,29 @@ impl ProtocolState {
 		#[cfg(not(any(feature = "mock", test)))]
 		let init_phase = ProtocolPhase::WaitingForBootInstruction;
 
-		Self { attestor, provisioner, phase: init_phase, handles }
+		Self {
+			attestor,
+			provisioner,
+			pending_live_ephemeral_key: None,
+			phase: init_phase,
+			handles,
+		}
 	}
 
 	pub fn get_phase(&self) -> ProtocolPhase {
 		self.phase
+	}
+
+	pub(crate) fn set_pending_live_ephemeral_key(&mut self, key: P256Pair) {
+		self.pending_live_ephemeral_key = Some(key);
+	}
+
+	pub(crate) fn take_pending_live_ephemeral_key(
+		&mut self,
+	) -> Result<P256Pair, ProtocolError> {
+		self.pending_live_ephemeral_key
+			.take()
+			.ok_or(ProtocolError::MissingLiveEphemeralKey)
 	}
 
 	pub fn handle_msg_response(
