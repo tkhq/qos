@@ -65,6 +65,19 @@ pub const MOCK_PCR3: &str = "000000000000000000000000000000000000000000000000000
 pub const MOCK_NSM_ATTESTATION_DOCUMENT: &[u8] =
 	include_bytes!("./static/mock_attestation_doc");
 
+/// Mock root CA certificate DER for `DynamicMockNsm` certificate-chain tests.
+pub const MOCK_ROOT_CERT_DER: &[u8] =
+	include_bytes!("./static/mock_pki/root.der");
+/// Mock intermediate CA certificate DER for `DynamicMockNsm` certificate-chain tests.
+pub const MOCK_INTERMEDIATE_CERT_DER: &[u8] =
+	include_bytes!("./static/mock_pki/intermediate.der");
+/// Mock leaf certificate DER for `DynamicMockNsm` certificate-chain tests.
+pub const MOCK_LEAF_CERT_DER: &[u8] =
+	include_bytes!("./static/mock_pki/leaf.der");
+
+const MOCK_LEAF_P384_SECRET_HEX: &str =
+	include_str!("./static/mock_pki/leaf_p384_secret.hex");
+
 const DYNAMIC_MOCK_MODULE_ID: &str = "dynamic_mock_module_id";
 const DYNAMIC_MOCK_CERTIFICATE: &[u8] = b"dynamic mock certificate";
 const DYNAMIC_MOCK_CA_BUNDLE: &[u8] = b"dynamic mock ca bundle";
@@ -82,6 +95,14 @@ pub struct DynamicMockNsm {
 	timestamp_ms: u64,
 	pcrs: BTreeMap<usize, ByteBuf>,
 	signing_key: [u8; 48],
+	certificate: Vec<u8>,
+	cabundle: Vec<Vec<u8>>,
+}
+
+/// Return the mock root CA certificate DER.
+#[must_use]
+pub fn mock_root_certificate_der() -> &'static [u8] {
+	MOCK_ROOT_CERT_DER
 }
 
 impl DynamicMockNsm {
@@ -102,6 +123,8 @@ impl DynamicMockNsm {
 				(3, ByteBuf::from(qos_hex::decode(MOCK_PCR3).unwrap())),
 			]),
 			signing_key: *DYNAMIC_MOCK_P384_SECRET,
+			certificate: DYNAMIC_MOCK_CERTIFICATE.to_vec(),
+			cabundle: vec![DYNAMIC_MOCK_CA_BUNDLE.to_vec()],
 		}
 	}
 
@@ -126,6 +149,26 @@ impl DynamicMockNsm {
 		self
 	}
 
+	/// Use the deterministic mock certificate chain for generated documents.
+	///
+	/// # Panics
+	///
+	/// Panics if this crate's hardcoded mock leaf private key fixture is invalid.
+	#[must_use]
+	pub fn with_mock_certificate_chain(mut self) -> Self {
+		let secret = qos_hex::decode(MOCK_LEAF_P384_SECRET_HEX.trim())
+			.expect("mock leaf secret fixture is valid hex");
+		self.signing_key = secret
+			.try_into()
+			.expect("mock leaf secret fixture is a P-384 scalar");
+		self.certificate = MOCK_LEAF_CERT_DER.to_vec();
+		self.cabundle = vec![
+			MOCK_ROOT_CERT_DER.to_vec(),
+			MOCK_INTERMEDIATE_CERT_DER.to_vec(),
+		];
+		self
+	}
+
 	fn attestation_document(
 		&self,
 		user_data: Option<Vec<u8>>,
@@ -137,8 +180,13 @@ impl DynamicMockNsm {
 			digest: Digest::SHA384,
 			timestamp: self.timestamp_ms,
 			pcrs: self.pcrs.clone(),
-			certificate: ByteBuf::from(DYNAMIC_MOCK_CERTIFICATE.to_vec()),
-			cabundle: vec![ByteBuf::from(DYNAMIC_MOCK_CA_BUNDLE.to_vec())],
+			certificate: ByteBuf::from(self.certificate.clone()),
+			cabundle: self
+				.cabundle
+				.iter()
+				.cloned()
+				.map(ByteBuf::from)
+				.collect(),
 			public_key: public_key.map(ByteBuf::from),
 			user_data: user_data.map(ByteBuf::from),
 			nonce: nonce.map(ByteBuf::from),
@@ -319,6 +367,9 @@ mod dynamic_mock_nsm_tests {
 	use serde_bytes::ByteBuf;
 
 	use super::*;
+	use crate::nitro::{
+		AWS_ROOT_CERT_PEM, attestation_doc_from_der, cert_from_pem,
+	};
 
 	#[test]
 	fn dynamic_mock_nsm_embeds_attestation_request_fields() {
@@ -370,5 +421,58 @@ mod dynamic_mock_nsm_tests {
 			&hex_pcr(MOCK_PCR3),
 		)
 		.unwrap();
+	}
+
+	#[test]
+	fn dynamic_mock_nsm_mock_certificate_chain_verifies_request_fields() {
+		let user_data = vec![1, 2, 3];
+		let nonce = vec![4, 5, 6];
+		let public_key = vec![7; 65];
+		let nsm = DynamicMockNsm::new().with_mock_certificate_chain();
+
+		let response = nsm.nsm_process_request(NsmRequest::Attestation {
+			user_data: Some(user_data.clone()),
+			nonce: Some(nonce.clone()),
+			public_key: Some(public_key.clone()),
+		});
+
+		let NsmResponse::Attestation { document } = response else {
+			panic!("expected attestation response");
+		};
+
+		let doc = attestation_doc_from_der(
+			&document,
+			mock_root_certificate_der(),
+			MOCK_SECONDS_SINCE_EPOCH,
+		)
+		.unwrap();
+		assert_eq!(doc.user_data, Some(ByteBuf::from(user_data)));
+		assert_eq!(doc.nonce, Some(ByteBuf::from(nonce)));
+		assert_eq!(doc.public_key, Some(ByteBuf::from(public_key)));
+	}
+
+	#[test]
+	fn dynamic_mock_nsm_mock_certificate_chain_fails_against_aws_root() {
+		let nsm = DynamicMockNsm::new().with_mock_certificate_chain();
+
+		let response = nsm.nsm_process_request(NsmRequest::Attestation {
+			user_data: None,
+			nonce: None,
+			public_key: None,
+		});
+
+		let NsmResponse::Attestation { document } = response else {
+			panic!("expected attestation response");
+		};
+		let aws_root = cert_from_pem(AWS_ROOT_CERT_PEM).unwrap();
+
+		assert!(
+			attestation_doc_from_der(
+				&document,
+				&aws_root,
+				MOCK_SECONDS_SINCE_EPOCH,
+			)
+			.is_err()
+		);
 	}
 }

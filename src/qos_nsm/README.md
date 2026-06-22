@@ -39,3 +39,21 @@ Mock providers are only for local development and tests. In particular,
 `DynamicMockNsm` creates documents that are useful for checking QOS protocol
 fields such as manifest hash, PCRs, nonce, and ephemeral public key, but it does
 not produce AWS Nitro PKI-signed documents.
+
+## Mock Certificate Chain
+
+`DynamicMockNsm::new()` defaults to parseable-only documents that are useful for
+local field checks but do not pass certificate-chain validation. Tests that need
+the full Nitro verifier can opt into a deterministic mock certificate chain:
+
+```rust
+use qos_nsm::mock::{mock_root_certificate_der, DynamicMockNsm};
+use qos_nsm::nitro::attestation_doc_from_der;
+
+let nsm = DynamicMockNsm::new().with_mock_certificate_chain();
+// Request an attestation document from `nsm`, then verify it with:
+// attestation_doc_from_der(&document, mock_root_certificate_der(), now_seconds)?;
+```
+
+The mock root is not trusted by production code. Production verification must use
+the AWS Nitro root CA unless a caller explicitly opts into a local test override.
