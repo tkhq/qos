@@ -4,7 +4,7 @@ This guide explains how to run QOS locally in mock mode for development and debu
 
 ## Overview
 
-Mock mode allows you to run QOS locally without an AWS Nitro enclave. It uses a mock NSM (Nitro Secure Module) that returns hardcoded attestation documents, making it ideal for rapid development and testing.
+Mock mode allows you to run QOS locally without an AWS Nitro enclave. It uses a mock NSM (Nitro Secure Module) that returns parseable attestation documents, making it ideal for rapid development and testing.
 
 ## Prerequisites
 
@@ -91,14 +91,15 @@ The `dangerous-dev-boot` command is a development shortcut that automates the en
 ### Mock NSM Behavior
 
 The mock NSM:
-- Returns a **hardcoded** attestation document (from `qos_nsm/src/static/mock_attestation_doc`)
-- Uses **hardcoded PCR values** (all defined in `qos_nsm/src/mock.rs`)
+- Returns a fresh, parseable attestation document for each request
+- Preserves request `user_data`, `nonce`, and `public_key` fields in the document
+- Uses deterministic mock PCR values (all defined in `qos_nsm/src/mock.rs`)
 - Uses a **fixed timestamp** (unless `mock_realtime` feature is enabled)
-- Does not perform real cryptographic attestation
+- Does not produce AWS Nitro PKI-signed attestation documents
 
 ### Why --unsafe-eph-path-override?
 
-The boot flow requires the enclave side to have the ephemeral private key and the client side to have the associated public key. We typically embed the ephemeral public key in the attestation document: clients are expected to verify the attestation document before using the ephemeral public key. Locally, we cannot generate attestation documents, so we return a hardcoded mock attestation document. The mock attestation document contains an **invalid** ephemeral public key, and even if it was valid we would not have access to the associated private key.
+The boot flow requires the enclave side to have the ephemeral private key and the client side to have the associated public key. We typically embed the ephemeral public key in the attestation document: clients are expected to verify the attestation document before using the ephemeral public key. Locally, `DynamicMockNsm` embeds the request public key in a parseable mock attestation document, but the document is not AWS-root-verifiable.
 
 The `--unsafe-eph-path-override` flag tells the client to:
 1. **Ignore** the public key from the attestation document
@@ -115,7 +116,7 @@ The `--unsafe-eph-path-override` flag tells the client to:
 
 ### Alternative: Skip the Override
 
-If you prefer not to use `--unsafe-eph-path-override`, you can omit it entirely. The client will attempt to extract the public key from the attestation document. However, this may fail due to the PEM encoding issue.
+If you prefer not to use `--unsafe-eph-path-override`, you can omit it entirely. The client can extract the request public key from the dynamic mock attestation document, but local development still must not treat mock documents as AWS Nitro attestations.
 
 ## File System Layout
 
@@ -144,7 +145,7 @@ When running in mock mode, qos_core creates a `./local-enclave/` directory with:
 
 **Symptom:** `Ephemeral key not valid public key: EncodedPublicKeyTooLong`
 
-**Cause:** The mock attestation document has a PEM-encoded public key (800 bytes) instead of DER format.
+**Cause:** An old static fixture document has a PEM-encoded public key (800 bytes) instead of DER format. Runtime `--mock` mode uses `DynamicMockNsm`, which embeds the request public key instead.
 
 **Solution:** Use `--unsafe-eph-path-override ./local-enclave/qos.ephemeral.key`
 
@@ -184,7 +185,7 @@ Mock mode differs significantly from production:
 
 | Aspect | Mock Mode | Production |
 |--------|-----------|------------|
-| Attestation | Hardcoded document | Real AWS Nitro attestation |
+| Attestation | Parseable mock document | Real AWS Nitro attestation |
 | PCR Values | All zeros or mock values | Real enclave measurements |
 | Ephemeral Key | Generated fresh each boot | Generated fresh each boot |
 | Verification | None | Full cryptographic verification |

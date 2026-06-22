@@ -73,11 +73,13 @@ impl EnclaveOpts {
 		if self.parsed.flag(MOCK).unwrap_or(false) {
 			#[cfg(feature = "mock")]
 			{
-				Box::new(qos_nsm::mock::MockNsm)
+				Box::new(qos_nsm::mock::DynamicMockNsm::new())
 			}
 			#[cfg(not(feature = "mock"))]
 			{
-				panic!("\"mock\" feature must be enabled to use `MockNsm`")
+				panic!(
+					"\"mock\" feature must be enabled to use `DynamicMockNsm`"
+				)
 			}
 		} else {
 			Box::new(Nsm)
@@ -306,6 +308,35 @@ mod test {
 		let opts = EnclaveOpts::new(&mut args);
 
 		assert_eq!(opts.manifest_file(), "brawndo".to_string());
+	}
+
+	#[test]
+	#[cfg(feature = "mock")]
+	fn mock_nsm_embeds_attestation_request_public_key() {
+		let mut args: Vec<_> =
+			vec!["binary", "--usock", "./test.sock", "--mock"]
+				.into_iter()
+				.map(String::from)
+				.collect();
+		let opts = EnclaveOpts::new(&mut args);
+		let public_key = vec![9; 65];
+
+		let response = opts.nsm().nsm_process_request(
+			qos_nsm::types::NsmRequest::Attestation {
+				user_data: None,
+				nonce: None,
+				public_key: Some(public_key.clone()),
+			},
+		);
+
+		let qos_nsm::types::NsmResponse::Attestation { document } = response
+		else {
+			panic!("expected attestation response");
+		};
+		let doc =
+			qos_nsm::nitro::unsafe_attestation_doc_from_der(&document).unwrap();
+
+		assert_eq!(doc.public_key.unwrap().into_vec(), public_key);
 	}
 
 	#[test]
