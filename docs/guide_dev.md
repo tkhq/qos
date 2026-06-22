@@ -91,16 +91,19 @@ The `dangerous-dev-boot` command is a development shortcut that automates the en
 ### Mock NSM Behavior
 
 The mock NSM:
-- Returns a **hardcoded** attestation document (from `qos_nsm/src/static/mock_attestation_doc`)
+- Returns dynamically generated, parseable attestation documents for live
+  attestation requests
+- Embeds the requested `user_data`, `nonce`, and public key in the generated
+  attestation document
 - Uses **hardcoded PCR values** (all defined in `qos_nsm/src/mock.rs`)
 - Uses a **fixed timestamp** (unless `mock_realtime` feature is enabled)
-- Does not perform real cryptographic attestation
+- Does not produce AWS Nitro PKI-signed attestation documents
 
 ### Why --unsafe-eph-path-override?
 
-The boot flow requires the enclave side to have the ephemeral private key and the client side to have the associated public key. We typically embed the ephemeral public key in the attestation document: clients are expected to verify the attestation document before using the ephemeral public key. Locally, we cannot generate attestation documents, so we return a hardcoded mock attestation document. The mock attestation document contains an **invalid** ephemeral public key, and even if it was valid we would not have access to the associated private key.
+The boot flow requires the enclave side to have the ephemeral private key and the client side to have the associated public key. We typically embed the ephemeral public key in the attestation document: clients are expected to verify the attestation document before using the ephemeral public key. In mock mode, `qos_core` passes the ephemeral public key in the attestation request, and the mock NSM embeds that request value in live attestation documents.
 
-The `--unsafe-eph-path-override` flag tells the client to:
+The `--unsafe-eph-path-override` flag remains useful when your local client and local `qos_core` configuration use a non-production key path. It tells the client to:
 1. **Ignore** the public key from the attestation document
 2. **Read** the actual ephemeral key from the filesystem
 3. **Use** that key for encrypting quorum shares
@@ -108,14 +111,14 @@ The `--unsafe-eph-path-override` flag tells the client to:
 **The flow:**
 1. qos_core generates a fresh ephemeral key during `BootStandardRequest`
 2. qos_core writes private key to `./local-enclave/qos.ephemeral.key`
-3. qos_core returns the (broken) mock attestation document
-4. Client reads `./local-enclave/qos.ephemeral.key` for the real public key
+3. qos_core requests a mock attestation document with the ephemeral public key
+4. Client reads `./local-enclave/qos.ephemeral.key` for the real public key when the override is configured
 5. Client encrypts shares correctly
 6. Decryption succeeds
 
 ### Alternative: Skip the Override
 
-If you prefer not to use `--unsafe-eph-path-override`, you can omit it entirely. The client will attempt to extract the public key from the attestation document. However, this may fail due to the PEM encoding issue.
+If you prefer not to use `--unsafe-eph-path-override`, you can omit it entirely. The client will attempt to extract the public key from the attestation document.
 
 ## File System Layout
 
@@ -139,14 +142,6 @@ When running in mock mode, qos_core creates a `./local-enclave/` directory with:
 
 **Solution:**
 - Use `--unsafe-eph-path-override ./local-enclave/qos.ephemeral.key`
-
-### EncodedPublicKeyTooLong Error
-
-**Symptom:** `Ephemeral key not valid public key: EncodedPublicKeyTooLong`
-
-**Cause:** The mock attestation document has a PEM-encoded public key (800 bytes) instead of DER format.
-
-**Solution:** Use `--unsafe-eph-path-override ./local-enclave/qos.ephemeral.key`
 
 ### Socket Connection Refused
 
