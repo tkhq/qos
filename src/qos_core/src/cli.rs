@@ -1,6 +1,6 @@
 //! CLI for running an enclave binary.
 
-use std::env;
+use std::{env, fs};
 
 use qos_nsm::{Nsm, NsmProvider};
 
@@ -9,6 +9,7 @@ use crate::{
 	handles::Handles,
 	io::SocketAddress,
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
+	protocol::AttestationVerifierConfig,
 	reaper::Reaper,
 };
 
@@ -31,6 +32,7 @@ pub const EPHEMERAL_FILE_OPT: &str = "ephemeral-file";
 pub const MANIFEST_FILE_OPT: &str = "manifest-file";
 /// Name for the option to specify the maximum `StreamPool` size.
 pub const POOL_SIZE: &str = "pool-size";
+const UNSAFE_ATTESTATION_ROOT_CA_DER: &str = "unsafe-attestation-root-ca-der";
 
 /// CLI options for starting up the enclave server.
 #[derive(Default, Clone, Debug, PartialEq)]
@@ -73,7 +75,10 @@ impl EnclaveOpts {
 		if self.parsed.flag(MOCK).unwrap_or(false) {
 			#[cfg(feature = "mock")]
 			{
-				Box::new(qos_nsm::mock::DynamicMockNsm::new())
+				Box::new(
+					qos_nsm::mock::DynamicMockNsm::new()
+						.with_mock_certificate_chain(),
+				)
 			}
 			#[cfg(not(feature = "mock"))]
 			{
@@ -116,6 +121,20 @@ impl EnclaveOpts {
 			.expect("has a default value.")
 			.clone()
 	}
+
+	fn attestation_verifier_config(&self) -> AttestationVerifierConfig {
+		self.parsed.single(UNSAFE_ATTESTATION_ROOT_CA_DER).map_or_else(
+			AttestationVerifierConfig::aws_nitro,
+			|path| {
+				let root_der = fs::read(path).unwrap_or_else(|err| {
+					panic!(
+						"failed to read unsafe attestation root CA DER at {path}: {err}"
+					)
+				});
+				AttestationVerifierConfig::from_trusted_root_der(root_der)
+			},
+		)
+	}
 }
 
 /// Enclave server CLI.
@@ -134,9 +153,10 @@ impl CLI {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
+			let attestation_verifier = opts.attestation_verifier_config();
 			// start reaper in a task so we can terminate on ctrl+c properly
 			tokio::spawn(async move {
-				Reaper::execute(
+				Reaper::execute_with_attestation_verifier(
 					&Handles::new(
 						opts.ephemeral_file(),
 						opts.quorum_file(),
@@ -147,6 +167,7 @@ impl CLI {
 					opts.enclave_socket()
 						.expect("Unable to create enclave socket"),
 					None,
+					attestation_verifier,
 				)
 				.await;
 			});
@@ -201,6 +222,10 @@ impl GetParserForOptions for EnclaveParser {
 				Token::new(MANIFEST_FILE_OPT, "path to file where the Manifest should be written. Use default for production")
 					.takes_value(true)
 					.default_value(MANIFEST_FILE)
+			)
+			.token(
+				Token::new(UNSAFE_ATTESTATION_ROOT_CA_DER, "UNSAFE: path to a DER root CA for local attestation verification override. Production defaults to AWS Nitro root.")
+					.takes_value(true)
 			)
 	}
 }
@@ -308,6 +333,44 @@ mod test {
 		let opts = EnclaveOpts::new(&mut args);
 
 		assert_eq!(opts.manifest_file(), "brawndo".to_string());
+	}
+
+	#[test]
+	fn parse_unsafe_attestation_root_ca_der() {
+		let mut args: Vec<_> = vec![
+			"binary",
+			"--usock",
+			"./test.sock",
+			"--unsafe-attestation-root-ca-der",
+			"./root.der",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+		let opts = EnclaveOpts::new(&mut args);
+
+		assert_eq!(
+			opts.parsed.single(UNSAFE_ATTESTATION_ROOT_CA_DER).unwrap(),
+			"./root.der"
+		);
+	}
+
+	#[test]
+	#[should_panic = "failed to read unsafe attestation root CA DER at ./missing-root.der"]
+	fn panic_on_missing_unsafe_attestation_root_ca_der() {
+		let mut args: Vec<_> = vec![
+			"binary",
+			"--usock",
+			"./test.sock",
+			"--unsafe-attestation-root-ca-der",
+			"./missing-root.der",
+		]
+		.into_iter()
+		.map(String::from)
+		.collect();
+		let opts = EnclaveOpts::new(&mut args);
+
+		let _ = opts.attestation_verifier_config();
 	}
 
 	#[test]

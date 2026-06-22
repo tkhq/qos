@@ -21,7 +21,7 @@ use crate::{
 	handles::Handles,
 	io::{HostBridge, IOError, SocketAddress, StreamPool},
 	protocol::{
-		ProtocolPhase, ProtocolState,
+		AttestationVerifierConfig, ProtocolPhase, ProtocolState,
 		processor::ProtocolProcessor,
 		services::boot::{BridgeConfig, RestartPolicy},
 	},
@@ -44,10 +44,15 @@ async fn run_server(
 	nsm: Box<dyn NsmProvider + Send>,
 	core_socket: SocketAddress,
 	test_only_init_phase_override: Option<ProtocolPhase>,
+	attestation_verifier: AttestationVerifierConfig,
 ) {
-	let protocol_state =
-		ProtocolState::new(nsm, handles.clone(), test_only_init_phase_override)
-			.shared();
+	let protocol_state = ProtocolState::new_with_attestation_verifier(
+		nsm,
+		handles.clone(),
+		test_only_init_phase_override,
+		attestation_verifier,
+	)
+	.shared();
 	let core_pool = StreamPool::single(core_socket)
 		.expect("unable to create single socket core pool");
 	// send a shared version of state and the async pool to each processor
@@ -173,6 +178,30 @@ impl Reaper {
 		core_socket: SocketAddress,
 		test_only_init_phase_override: Option<ProtocolPhase>,
 	) {
+		Self::execute_with_attestation_verifier(
+			handles,
+			nsm,
+			core_socket,
+			test_only_init_phase_override,
+			AttestationVerifierConfig::aws_nitro(),
+		)
+		.await;
+	}
+
+	/// Run the Reaper with an explicit attestation verifier configuration.
+	///
+	/// # Panics
+	///
+	/// - If spawning the pivot errors.
+	/// - If waiting for the pivot errors.
+	/// - If the internal server state lock is poisoned.
+	pub async fn execute_with_attestation_verifier(
+		handles: &Handles,
+		nsm: Box<dyn NsmProvider + Send>,
+		core_socket: SocketAddress,
+		test_only_init_phase_override: Option<ProtocolPhase>,
+		attestation_verifier: AttestationVerifierConfig,
+	) {
 		// state switch to communicate between pivot run task (here) and run_server task
 		// we need to establish
 		let inter_state = Arc::new(RwLock::new(InterState::Booting));
@@ -184,6 +213,7 @@ impl Reaper {
 			nsm,
 			core_socket.clone(),
 			test_only_init_phase_override,
+			attestation_verifier,
 		));
 
 		loop {

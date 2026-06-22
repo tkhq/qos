@@ -11,8 +11,8 @@ pub mod services;
 mod state;
 
 pub use error::ProtocolError;
-pub use state::ProtocolPhase;
 pub(crate) use state::ProtocolState;
+pub use state::{AttestationVerifierConfig, ProtocolPhase};
 
 pub(crate) mod processor;
 use tokio::sync::RwLock;

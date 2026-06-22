@@ -4,6 +4,7 @@ use integration::{
 	LOCAL_HOST, PCR3_PRE_IMAGE_PATH, PIVOT_LOOP_PATH, QOS_DIST_DIR,
 };
 use qos_crypto::sha_256;
+use qos_nsm::mock::mock_root_certificate_der;
 use qos_p256::{P256Pair, P256Public};
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
@@ -20,7 +21,9 @@ const USERS: &[&str] = &["user1", "user2", "user3"];
 const TEST_MSG: &str = "test-msg";
 const NEW_ATTESTATION_DOC_PATH: &str = "/tmp/key-fwd-e2e/new_attestation_doc";
 const ENCRYPTED_QUORUM_KEY_PATH: &str = "/tmp/key-fwd-e2e/encrypted_quorum_key";
-const SHARED_EPH_PATH: &str = "/tmp/key-fwd-e2e/shared_eph.secret";
+const OLD_EPH_PATH: &str = "/tmp/key-fwd-e2e/old_eph.secret";
+const NEW_EPH_PATH: &str = "/tmp/key-fwd-e2e/new_eph.secret";
+const MOCK_ROOT_CA_DER_PATH: &str = "/tmp/key-fwd-e2e/mock_root_ca.der";
 const QUORUM_KEY_PUB_PATH: &str =
 	"./mock/namespaces/quit-coding-to-vape/quorum_key.pub";
 
@@ -29,6 +32,7 @@ async fn key_fwd_e2e() {
 	// Make sure everything in the temp dir gets dropped
 	let _ = PathWrapper::from(TMP_DIR);
 	fs::create_dir_all(BOOT_DIR).unwrap();
+	fs::write(MOCK_ROOT_CA_DER_PATH, mock_root_certificate_der()).unwrap();
 	let old_host_port = qos_test_primitives::find_free_port().unwrap();
 	let new_host_port = qos_test_primitives::find_free_port().unwrap();
 
@@ -36,32 +40,6 @@ async fn key_fwd_e2e() {
 	generate_manifest_envelope();
 	let (_enclave_child_wrapper, _host_child_wrapper) =
 		boot_old_enclave(old_host_port);
-
-	// We manually remove the ephemeral key file because if we didn't, we'd get a failure from the
-	// NEW enclave: as it comes up it'd try to write its ephemeral key at `SHARED_EPH_PATH` and fail
-	// to write because the file already exists.
-	// Why does the file already exist? Because the OLD enclave already persisted its ephemeral key
-	// there (and why is this a problem you ask? Well, that's just the semantics of `write_as_read_only`
-	// -- for security reasons, we want to avoid silently/accidentally overriding key material)
-	//
-	// Another question you might ask is: why do we need to share this ephemeral key path at all?
-	// Can't we just give OLD and NEW enclaves their own ephemeral path and be done?
-	// That's a nice thought, but unfortunately we can't quite do that. To perform a key-forward boot,
-	// in normal conditions, the OLD enclave encrypts its quorum key to the NEW enclave's ephemeral
-	// public key. The "transport" mechanism for this public key is the AWS attestation (`public_key` field).
-	// Which means we'd need to produce AWS attestations dynamically. And unfortunately, that's just a pain
-	// in the rear to mock/produce in testing. So here we are.
-	//
-	// The solution we've found is to share the ephemeral key between OLD and NEW enclave AND have
-	// a special case: when `qos_core` is compiled with the `mock` feature, the OLD enclave encrypts its
-	// quorum key to its _own_ ephemeral public key (rather than the AWS attestation `public_key` field.)
-	// See `export_key_internal` for details.
-	//
-	// Because the OLD and NEW enclave share the ephemeral key path, the NEW enclave can trivially decrypt
-	// the encrypted quorum key that is injected, and the integration test works.
-	//
-	// This is obviously a test-only quirk: in a real situation enclaves have their own filesystems..!
-	fs::remove_file(SHARED_EPH_PATH).unwrap();
 
 	// start up new enclave
 	let new_secret_path = "/tmp/key-fwd-e2e/new_secret.secret";
@@ -80,10 +58,10 @@ async fn key_fwd_e2e() {
 				"--pivot-file",
 				new_pivot_path,
 				"--ephemeral-file",
-				SHARED_EPH_PATH, /* this is shared so the old enclave can
-				                  * encrypt to this key. See `extract_key`
-				                  * logic */
+				NEW_EPH_PATH,
 				"--mock",
+				"--unsafe-attestation-root-ca-der",
+				MOCK_ROOT_CA_DER_PATH,
 				"--manifest-file",
 				new_manifest_path,
 			])
@@ -276,8 +254,10 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 				"--pivot-file",
 				old_pivot_path,
 				"--ephemeral-file",
-				SHARED_EPH_PATH,
+				OLD_EPH_PATH,
 				"--mock",
+				"--unsafe-attestation-root-ca-der",
+				MOCK_ROOT_CA_DER_PATH,
 				"--manifest-file",
 				old_manifest_path,
 			])
@@ -395,7 +375,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 					user,
 					"--unsafe-skip-attestation",
 					"--unsafe-eph-path-override",
-					SHARED_EPH_PATH,
+					OLD_EPH_PATH,
 					"--unsafe-auto-confirm",
 				])
 				.spawn()

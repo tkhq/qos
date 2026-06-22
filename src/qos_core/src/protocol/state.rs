@@ -1,5 +1,8 @@
 //! Quorum protocol state machine
-use qos_nsm::NsmProvider;
+use qos_nsm::{
+	NsmProvider,
+	nitro::{AWS_ROOT_CERT_PEM, cert_from_pem},
+};
 
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
@@ -187,15 +190,73 @@ impl ProtocolRoute {
 pub(crate) struct ProtocolState {
 	pub provisioner: SecretBuilder,
 	pub attestor: Box<dyn NsmProvider>,
+	pub attestation_verifier: AttestationVerifierConfig,
 	pub handles: Handles,
 	phase: ProtocolPhase,
 }
 
+/// Configuration for attestation document certificate-chain verification.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AttestationVerifierConfig {
+	trusted_root_der: Vec<u8>,
+}
+
+impl AttestationVerifierConfig {
+	/// Use the AWS Nitro root CA for production attestation verification.
+	///
+	/// # Panics
+	///
+	/// Panics if this crate's hardcoded AWS Nitro root certificate is invalid.
+	#[must_use]
+	pub fn aws_nitro() -> Self {
+		Self::from_trusted_root_der(
+			cert_from_pem(AWS_ROOT_CERT_PEM)
+				.expect("hardcoded AWS Nitro root certificate is valid"),
+		)
+	}
+
+	/// Use the provided DER root CA for attestation verification.
+	#[must_use]
+	pub fn from_trusted_root_der(trusted_root_der: Vec<u8>) -> Self {
+		Self { trusted_root_der }
+	}
+
+	/// Use the `qos_nsm` mock root CA for local tests.
+	#[cfg(any(test, feature = "mock"))]
+	#[must_use]
+	pub fn mock_nsm() -> Self {
+		Self::from_trusted_root_der(
+			qos_nsm::mock::mock_root_certificate_der().to_vec(),
+		)
+	}
+
+	/// Return the trusted root CA DER.
+	#[must_use]
+	pub fn trusted_root_der(&self) -> &[u8] {
+		&self.trusted_root_der
+	}
+}
+
 impl ProtocolState {
+	#[allow(dead_code)]
 	pub fn new(
 		attestor: Box<dyn NsmProvider>,
 		handles: Handles,
 		#[allow(unused)] test_only_init_phase_override: Option<ProtocolPhase>,
+	) -> Self {
+		Self::new_with_attestation_verifier(
+			attestor,
+			handles,
+			test_only_init_phase_override,
+			AttestationVerifierConfig::aws_nitro(),
+		)
+	}
+
+	pub fn new_with_attestation_verifier(
+		attestor: Box<dyn NsmProvider>,
+		handles: Handles,
+		#[allow(unused)] test_only_init_phase_override: Option<ProtocolPhase>,
+		attestation_verifier: AttestationVerifierConfig,
 	) -> Self {
 		let provisioner = SecretBuilder::new();
 
@@ -208,7 +269,13 @@ impl ProtocolState {
 		#[cfg(not(any(feature = "mock", test)))]
 		let init_phase = ProtocolPhase::WaitingForBootInstruction;
 
-		Self { attestor, provisioner, phase: init_phase, handles }
+		Self {
+			attestor,
+			attestation_verifier,
+			provisioner,
+			phase: init_phase,
+			handles,
+		}
 	}
 
 	pub fn get_phase(&self) -> ProtocolPhase {

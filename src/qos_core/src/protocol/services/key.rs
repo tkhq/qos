@@ -2,10 +2,7 @@
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
-use qos_nsm::{
-	nitro::{AWS_ROOT_CERT_PEM, attestation_doc_from_der, cert_from_pem},
-	types::NsmResponse,
-};
+use qos_nsm::{nitro::attestation_doc_from_der, types::NsmResponse};
 use qos_p256::{P256Pair, P256Public};
 use serde::{Deserialize, Serialize};
 
@@ -100,6 +97,7 @@ pub(in crate::protocol) fn export_key(
 	let attestation_doc = verify_and_extract_attestation_doc_from_der(
 		cose_sign1_attestation_document,
 		&*state.attestor,
+		&state.attestation_verifier,
 	)?;
 
 	export_key_internal(state, &new_manifest_envelope, &attestation_doc)
@@ -120,23 +118,12 @@ fn export_key_internal(
 		attestation_doc,
 	)?;
 
-	let eph_key = {
-		#[cfg(not(feature = "mock"))]
-		{
-			let eph_key_bytes = attestation_doc
-				.public_key
-				.as_ref()
-				.ok_or(ProtocolError::MissingEphemeralKey)?;
-			P256Public::from_bytes(eph_key_bytes)
-				.map_err(|_| ProtocolError::InvalidEphemeralKey)?
-		}
-		#[cfg(feature = "mock")]
-		{
-			// For testing, the old enclave and new enclave will need to share
-			// an ephemeral key for this to work
-			state.handles.get_ephemeral_key()?.public_key()
-		}
-	};
+	let eph_key_bytes = attestation_doc
+		.public_key
+		.as_ref()
+		.ok_or(ProtocolError::MissingEphemeralKey)?;
+	let eph_key = P256Public::from_bytes(eph_key_bytes)
+		.map_err(|_| ProtocolError::InvalidEphemeralKey)?;
 
 	let quorum_key = state.handles.get_quorum_key()?;
 	// 10. Return the Quorum Key encrypted to the New Node's Ephemeral Key
@@ -255,17 +242,14 @@ fn validate_manifest(
 	// version of QOS. Note that we assume the values for PCR{0, 1 , 2}
 	// correspond to a desired version of QOS because the Manifest Set Members
 	// had K approvals.
-	#[cfg(not(feature = "mock"))]
-	{
-		qos_nsm::nitro::verify_attestation_doc_against_user_input(
-			attestation_doc,
-			&new_manifest.manifest_hash(),
-			&new_manifest.enclave().pcr0,
-			&new_manifest.enclave().pcr1,
-			&new_manifest.enclave().pcr2,
-			&new_manifest.enclave().pcr3,
-		)?;
-	}
+	qos_nsm::nitro::verify_attestation_doc_against_user_input(
+		attestation_doc,
+		&new_manifest.manifest_hash(),
+		&new_manifest.enclave().pcr0,
+		&new_manifest.enclave().pcr1,
+		&new_manifest.enclave().pcr2,
+		&new_manifest.enclave().pcr3,
+	)?;
 
 	// 9. Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is
 	// the IAM role assigned to the EC2 host of the enclave. An IAM role
@@ -287,13 +271,16 @@ fn validate_manifest(
 fn verify_and_extract_attestation_doc_from_der(
 	cose_sign1_der: &[u8],
 	nsm: &dyn qos_nsm::NsmProvider,
+	verifier: &crate::protocol::AttestationVerifierConfig,
 ) -> Result<AttestationDoc, ProtocolError> {
 	let current_time_milliseconds = nsm.timestamp_ms()?;
 	let current_time_seconds = current_time_milliseconds / 1_000;
-	let der_cert = cert_from_pem(AWS_ROOT_CERT_PEM)
-		.expect("hardcoded cert is valid. qed.");
-	attestation_doc_from_der(cose_sign1_der, &der_cert, current_time_seconds)
-		.map_err(Into::into)
+	attestation_doc_from_der(
+		cose_sign1_der,
+		verifier.trusted_root_der(),
+		current_time_seconds,
+	)
+	.map_err(Into::into)
 }
 
 #[cfg(test)]
@@ -302,16 +289,23 @@ mod test {
 
 	use aws_nitro_enclaves_nsm_api::api::{AttestationDoc, Digest};
 	use qos_crypto::sha_256;
-	use qos_nsm::{mock::MockNsm, types::NsmResponse};
+	use qos_nsm::{
+		NsmProvider,
+		mock::{DynamicMockNsm, MockNsm},
+		types::{NsmRequest, NsmResponse},
+	};
 	use qos_p256::P256Pair;
 	use qos_test_primitives::PathWrapper;
 	use serde_bytes::ByteBuf;
 
-	use super::{boot_key_forward, export_key_internal, validate_manifest};
+	use super::{
+		boot_key_forward, export_key, export_key_internal, validate_manifest,
+	};
 	use crate::{
 		handles::Handles,
 		protocol::{
-			ProtocolError, ProtocolPhase, ProtocolState, QosHash,
+			AttestationVerifierConfig, ProtocolError, ProtocolPhase,
+			ProtocolState, QosHash,
 			services::{
 				boot::{
 					Approval, Manifest, ManifestEnvelope, ManifestSet,
@@ -1094,6 +1088,59 @@ mod test {
 		use super::*;
 		use crate::protocol::services::key::EncryptedQuorumKey;
 
+		fn setup_export_key_handles(
+			name: &str,
+			manifest_envelope: &ManifestEnvelope,
+			quorum_pair: &P256Pair,
+		) -> Handles {
+			let ephemeral_file = format!("/tmp/{name}.eph.secret");
+			let manifest_file = format!("/tmp/{name}.manifest");
+			let quorum_file = format!("/tmp/{name}.quorum.secret");
+			let _ = std::fs::remove_file(&ephemeral_file);
+			let _ = std::fs::remove_file(&manifest_file);
+			let _ = std::fs::remove_file(&quorum_file);
+
+			P256Pair::generate().unwrap().to_hex_file(&ephemeral_file).unwrap();
+
+			quorum_pair.to_hex_file(&quorum_file).unwrap();
+			std::fs::write(
+				&manifest_file,
+				serde_json::to_vec(manifest_envelope).unwrap(),
+			)
+			.unwrap();
+
+			Handles::new(
+				ephemeral_file,
+				quorum_file,
+				manifest_file,
+				"pivot".to_string(),
+			)
+		}
+
+		fn dynamic_mock_document(
+			manifest_envelope: &ManifestEnvelope,
+			eph_pair: &P256Pair,
+		) -> Vec<u8> {
+			let manifest = &manifest_envelope.manifest;
+			let nsm = DynamicMockNsm::new()
+				.with_mock_certificate_chain()
+				.with_pcr(0, manifest.enclave.pcr0.clone())
+				.with_pcr(1, manifest.enclave.pcr1.clone())
+				.with_pcr(2, manifest.enclave.pcr2.clone())
+				.with_pcr(3, manifest.enclave.pcr3.clone());
+
+			let NsmResponse::Attestation { document } = nsm
+				.nsm_process_request(NsmRequest::Attestation {
+					user_data: Some(manifest.qos_hash().to_vec()),
+					nonce: None,
+					public_key: Some(eph_pair.public_key().to_bytes()),
+				})
+			else {
+				panic!("expected attestation response");
+			};
+			document
+		}
+
 		#[test]
 		fn works() {
 			let TestArgs {
@@ -1145,6 +1192,71 @@ mod test {
 					.is_ok()
 			);
 
+			let decrypted_quorum_secret =
+				eph_pair.decrypt(&encrypted_quorum_key).unwrap();
+			let reconstructed_quorum_pair =
+				P256Pair::from_master_seed(&zeroize::Zeroizing::new(
+					decrypted_quorum_secret[..].try_into().unwrap(),
+				))
+				.unwrap();
+			assert!(quorum_pair == reconstructed_quorum_pair);
+		}
+
+		#[test]
+		fn export_key_rejects_mock_chain_without_root_override() {
+			let TestArgs { manifest_envelope, eph_pair, quorum_pair, .. } =
+				get_test_args();
+			let handles = setup_export_key_handles(
+				"export_key_rejects_mock_chain_without_root_override",
+				&manifest_envelope,
+				&quorum_pair,
+			);
+			let mut protocol_state = ProtocolState::new(
+				Box::new(DynamicMockNsm::new().with_mock_certificate_chain()),
+				handles,
+				None,
+			);
+			let document = dynamic_mock_document(&manifest_envelope, &eph_pair);
+
+			let Err(err) =
+				export_key(&mut protocol_state, &manifest_envelope, &document)
+			else {
+				panic!("expected mock chain to fail without root override");
+			};
+
+			assert!(matches!(err, ProtocolError::QosAttestError(_)));
+		}
+
+		#[test]
+		fn export_key_accepts_mock_chain_with_root_override() {
+			let TestArgs { manifest_envelope, eph_pair, quorum_pair, .. } =
+				get_test_args();
+			let handles = setup_export_key_handles(
+				"export_key_accepts_mock_chain_with_root_override",
+				&manifest_envelope,
+				&quorum_pair,
+			);
+			let mut protocol_state =
+				ProtocolState::new_with_attestation_verifier(
+					Box::new(
+						DynamicMockNsm::new().with_mock_certificate_chain(),
+					),
+					handles,
+					None,
+					AttestationVerifierConfig::mock_nsm(),
+				);
+			let document = dynamic_mock_document(&manifest_envelope, &eph_pair);
+
+			let EncryptedQuorumKey { encrypted_quorum_key, signature } =
+				export_key(&mut protocol_state, &manifest_envelope, &document)
+					.unwrap();
+
+			assert!(
+				quorum_pair
+					.public_key()
+					.verify(&encrypted_quorum_key, &signature)
+					.is_ok()
+			);
 			let decrypted_quorum_secret =
 				eph_pair.decrypt(&encrypted_quorum_key).unwrap();
 			let reconstructed_quorum_pair =

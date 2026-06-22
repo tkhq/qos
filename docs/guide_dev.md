@@ -95,11 +95,16 @@ The mock NSM:
 - Preserves request `user_data`, `nonce`, and `public_key` fields in the document
 - Uses deterministic mock PCR values (all defined in `qos_nsm/src/mock.rs`)
 - Uses a **fixed timestamp** (unless `mock_realtime` feature is enabled)
-- Does not produce AWS Nitro PKI-signed attestation documents
+- Uses a deterministic mock certificate chain, not the AWS Nitro PKI
+
+Production verification defaults to the AWS Nitro root CA. Local tests that need
+full mock-chain verification must pass `--unsafe-attestation-root-ca-der` with
+the mock root DER. This override is unsafe and should never be used in
+production.
 
 ### Why --unsafe-eph-path-override?
 
-The boot flow requires the enclave side to have the ephemeral private key and the client side to have the associated public key. We typically embed the ephemeral public key in the attestation document: clients are expected to verify the attestation document before using the ephemeral public key. Locally, `DynamicMockNsm` embeds the request public key in a parseable mock attestation document, but the document is not AWS-root-verifiable.
+The boot flow requires the enclave side to have the ephemeral private key and the client side to have the associated public key. We typically embed the ephemeral public key in the attestation document: clients are expected to verify the attestation document before using the ephemeral public key. Locally, `DynamicMockNsm` embeds the request public key in a parseable mock attestation document. Full local verification requires the explicit unsafe mock-root override.
 
 The `--unsafe-eph-path-override` flag tells the client to:
 1. **Ignore** the public key from the attestation document
@@ -109,7 +114,7 @@ The `--unsafe-eph-path-override` flag tells the client to:
 **The flow:**
 1. qos_core generates a fresh ephemeral key during `BootStandardRequest`
 2. qos_core writes private key to `./local-enclave/qos.ephemeral.key`
-3. qos_core returns the (broken) mock attestation document
+3. qos_core returns the mock attestation document
 4. Client reads `./local-enclave/qos.ephemeral.key` for the real public key
 5. Client encrypts shares correctly
 6. Decryption succeeds
@@ -188,7 +193,7 @@ Mock mode differs significantly from production:
 | Attestation | Parseable mock document | Real AWS Nitro attestation |
 | PCR Values | All zeros or mock values | Real enclave measurements |
 | Ephemeral Key | Generated fresh each boot | Generated fresh each boot |
-| Verification | None | Full cryptographic verification |
+| Verification | Explicit mock-root override | AWS Nitro root CA |
 | Security | **INSECURE** | Secure enclave isolation |
 
 **Never deploy with the `mock` feature enabled in production environments.**

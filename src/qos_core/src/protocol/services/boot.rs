@@ -4,6 +4,8 @@ use std::{collections::HashSet, fmt};
 
 use qos_crypto::sha_256;
 use qos_nsm::types::NsmResponse;
+#[cfg(feature = "mock")]
+use qos_nsm::{NsmProvider, types::NsmRequest};
 use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
@@ -711,10 +713,36 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	// 3. Make an attestation request, placing the manifest hash in the
 	// `user_data` field and the Ephemeral Key public key in the `public_key`
 	// field.
+	let public_key = ephemeral_key.public_key().to_bytes();
+	let user_data = manifest_envelope.manifest_hash().to_vec();
+	#[cfg(feature = "mock")]
+	let nsm_response = if state.attestation_verifier
+		== crate::protocol::AttestationVerifierConfig::mock_nsm()
+	{
+		let manifest = manifest_envelope.clone().manifest();
+		qos_nsm::mock::DynamicMockNsm::new()
+			.with_mock_certificate_chain()
+			.with_pcr(0, manifest.enclave().pcr0.clone())
+			.with_pcr(1, manifest.enclave().pcr1.clone())
+			.with_pcr(2, manifest.enclave().pcr2.clone())
+			.with_pcr(3, manifest.enclave().pcr3.clone())
+			.nsm_process_request(NsmRequest::Attestation {
+				user_data: Some(user_data),
+				nonce: None,
+				public_key: Some(public_key),
+			})
+	} else {
+		attestation::get_post_boot_attestation_doc(
+			&*state.attestor,
+			public_key,
+			user_data,
+		)
+	};
+	#[cfg(not(feature = "mock"))]
 	let nsm_response = attestation::get_post_boot_attestation_doc(
 		&*state.attestor,
-		ephemeral_key.public_key().to_bytes(),
-		manifest_envelope.manifest_hash().to_vec(),
+		public_key,
+		user_data,
 	);
 
 	// 4. Return the NSM Response containing COSE Sign1 encoded attestation

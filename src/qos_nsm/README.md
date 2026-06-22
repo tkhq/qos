@@ -55,5 +55,6 @@ let nsm = DynamicMockNsm::new().with_mock_certificate_chain();
 // attestation_doc_from_der(&document, mock_root_certificate_der(), now_seconds)?;
 ```
 
-The mock root is not trusted by production code. Production verification must use
-the AWS Nitro root CA unless a caller explicitly opts into a local test override.
+The mock root is not trusted by production code. Production verification defaults
+to the AWS Nitro root CA unless a caller explicitly opts into a local test
+override such as `qos_core --unsafe-attestation-root-ca-der <path>`.
