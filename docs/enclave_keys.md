@@ -28,15 +28,17 @@ flowchart TB
     end
 
     subgraph Evidence["verifier evidence"]
-        BootEvidence["boot evidence<br/>attestation doc<br/>QOS manifest<br/>ephemeral pubkey"]
-        AppEvidence["app evidence<br/>app payload<br/>ephemeral key sig"]
-        FullVerification["full verification<br/>same ephemeral<br/>public key"]
+        SetupEvidence["setup evidence<br/>attestation doc<br/>manifest<br/>setup pubkey<br/>PCR16"]
+        LiveEvidence["live evidence<br/>attestation doc<br/>manifest<br/>live pubkey<br/>PCR17"]
+        AppEvidence["app evidence<br/>app payload<br/>live key sig"]
+        AppVerification["app verification<br/>app key matches<br/>PCR17 pubkey"]
 
-        BootEvidence --> FullVerification
-        AppEvidence --> FullVerification
+        LiveEvidence --> AppVerification
+        AppEvidence --> AppVerification
     end
 
-    Reaper -->|"exposes"| BootEvidence
+    Reaper -->|"exposes"| SetupEvidence
+    Reaper -->|"exposes"| LiveEvidence
     Pivot -->|"returns"| AppEvidence
 ```
 
@@ -52,11 +54,18 @@ finished provisioning key material.
 | `/qos.ephemeral.key` | The current enclave Ephemeral Key. | Sign enclave results, create App Proofs, and decrypt data encrypted to this specific enclave. |
 | `/qos.quorum.key` | The namespace Quorum Key. | Encrypt long-lived state and, when exact enclave attribution is not required, sign long-lived data. |
 
-During standard boot and key forwarding, QOS first creates an Ephemeral Key that
-is used as the encryption target for provisioning. After the Quorum Key is
-reconstructed or injected, QOS rotates `/qos.ephemeral.key` before starting the
-pivot app. That lets application-level uses of the Ephemeral Key stay separate
-from boot-time key transport.
+During standard boot and key forwarding, QOS creates both a setup Ephemeral Key
+and a live Ephemeral Key. PCR16 commits the setup key and manifest hash for
+provisioning and key-forwarding. PCR17 commits the live key and manifest hash
+for app-level attestations. QOS locks the full attestable PCR range before
+publishing the boot files that allow the pivot app to start.
+
+The setup key is written to `/qos.ephemeral.key` during boot and remains the
+current Ephemeral Key while QOS processes provisioning or key injection. After
+the Quorum Key is reconstructed or injected, QOS rotates `/qos.ephemeral.key` to
+the precommitted live key before starting the pivot app. That keeps
+application-level uses of the Ephemeral Key separate from setup-time key
+transport.
 
 ## Quorum Key
 
@@ -72,9 +81,23 @@ instances, restarts, horizontal scaling, and application upgrades. Common uses:
 
 ## Ephemeral Key
 
-The Ephemeral Key is specific to an enclave instance. Its public key can be
-bound into an attestation document together with the QOS manifest hash and Nitro
-PCR measurements.
+The Ephemeral Key is specific to an enclave instance. QOS uses two
+stage-specific Ephemeral Keys:
+
+- the setup key, verified with PCR16, for provisioning and key-forwarding;
+- the live key, verified with PCR17, for app proofs and other post-provision
+  uses.
+
+The attestation document carries the selected key in `public_key` and the
+manifest hash in `user_data`. Verifiers check PCR0 through PCR3 from the
+manifest, require the release-pinned PCR range to be present, and recompute
+PCR16 or PCR17 for the attestation stage they are verifying.
+
+Most App Proof consumers only need the live/app check: verify the live
+attestation against PCR17 and require the App Proof signature key to match the
+attested live public key. PCR16 is for setup-time provisioning and key
+forwarding; it is only needed by verifiers that also want to tie an App Proof
+back to the setup/QK-delivery event.
 
 Use the Ephemeral Key when the output needs to be tied to a specific attested
 enclave and the code/configuration identified by its manifest. Common uses:

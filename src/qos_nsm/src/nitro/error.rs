@@ -88,6 +88,22 @@ pub enum AttestError {
 		/// Actual value as hex string.
 		actual: String,
 	},
+	/// The attestation doc does not contain a public key.
+	MissingPubKey,
+	/// The attestation doc does not contain the requested PCR.
+	MissingPcr {
+		/// Missing PCR index.
+		index: u16,
+	},
+	/// The requested PCR in the attestation doc does not match.
+	DifferentPcr {
+		/// PCR index.
+		index: u16,
+		/// Expected value as hex string.
+		expected: String,
+		/// Actual value as hex string.
+		actual: String,
+	},
 }
 
 impl From<webpki::Error> for AttestError {
@@ -171,6 +187,18 @@ impl std::fmt::Display for AttestError {
 			}
 			Self::DifferentPcr3 { expected, actual } => {
 				write!(f, "different PCR3: expected {expected}, got {actual}")
+			}
+			Self::MissingPubKey => {
+				write!(f, "public key missing in attestation document")
+			}
+			Self::MissingPcr { index } => {
+				write!(f, "PCR{index} missing in attestation document")
+			}
+			Self::DifferentPcr { index, expected, actual } => {
+				write!(
+					f,
+					"different PCR{index}: expected {expected}, got {actual}"
+				)
 			}
 		}
 	}

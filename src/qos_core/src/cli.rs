@@ -73,7 +73,7 @@ impl EnclaveOpts {
 		if self.parsed.flag(MOCK).unwrap_or(false) {
 			#[cfg(feature = "mock")]
 			{
-				Box::new(qos_nsm::mock::MockNsm)
+				Box::new(qos_nsm::mock::MockNsm::new())
 			}
 			#[cfg(not(feature = "mock"))]
 			{

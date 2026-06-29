@@ -9,6 +9,8 @@ Boot new QOS nodes without manually submitting Quorum Key shares to new nodes. I
 * **Client**: An entity that can make arbitrary requests to QOS nodes. For the sake of having a concrete mental model in the below descriptions, we can think of the client as a script that takes as inputs a manifest and the IP address of the New Node + Original Node, and makes the necessary requests to complete the key forwarding process.
 * **New Manifest**: The manifest used to boot the New Node.
 * **Local Manifest**: The manifest used to boot the Original Node. It is local relative to the Original Node.
+* **Setup Ephemeral Key**: The New Node key used as the encryption target for the forwarded Quorum Key. Setup attestations commit this key and the New Manifest hash in PCR16.
+* **Live Ephemeral Key**: The New Node key installed after key injection. Live/app attestations commit this key and the New Manifest hash in PCR17.
 
 ## Other relevant terms
 
@@ -30,8 +32,11 @@ The details for how QOS nodes communicate with each other can vary, but for the 
 
 2) The New Node processes the request by performing the following steps:
     1) Check signatures over the manifest envelope.
-    1) Generate an Ephemeral Key.
-    1) Make an attestation request, placing the manifest hash in the `user_data` field and the Ephemeral Key public key in the `public_key` field.
+    1) Check that the submitted Pivot App binary matches the pivot hash in the New Manifest.
+    1) Generate the setup Ephemeral Key and live Ephemeral Key.
+    1) Extend PCR16 with the setup manifest/key commitment and PCR17 with the live manifest/key commitment, then lock the full attestable PCR range before publishing pivot start files.
+    1) Write the setup Ephemeral Key, Pivot App binary, and New Manifest Envelope to the New Node's filesystem.
+    1) Make a setup attestation request, placing the New Manifest hash in the `user_data` field and the setup Ephemeral Key public key in the `public_key` field.
     1) Return the NSM Response containing COSE Sign1 encoded attestation document.
 
         ```rust
@@ -58,8 +63,10 @@ The details for how QOS nodes communicate with each other can vary, but for the 
     1) Check that the nonce of the New Manifest is greater than or equal to the nonce of the Local Manifest. If they have the same nonce, we check that the Local Manifest has the same hash as an extra measure. Note that while the nonce is verified programmatically in this routine, its maintenance relative to other manifests in the namespace is a social coordination problem and is meant to be solved by the Manifest Set Members approving the manifest. In other words, we rely on the Manifest Set Members to correctly increment the nonce when any change is made to the latest manifest for a namespace.
     1) Check that the hash of the new manifest is in the `user_data` field of the attestation doc.
     1) Check that PCR0, PCR1, PCR2, and PCR3 in the New Manifest match the PCRs in the attestation document. This ensures the New Manifest was used against a Nitro enclave booted with the intended version of QOS. Note that we assume the values for PCR{0, 1, 2} correspond to a desired version of QOS because the Manifest Set Members had K approvals.
+    1) Check that every PCR in the release-pinned attestable range is present in the attestation document.
+    1) Recompute the setup manifest/key commitment from the New Manifest hash and the attested `public_key`, then check that it matches PCR16.
     1) Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is the IAM role assigned to the EC2 host of the enclave. An IAM role contains an AWS organization's unique ID. By only using the approved PCR3 value we ensure that we only ever send the Quorum Key to an enclave that is controlled by the operator, not an enclave that some malicious entity runs that is otherwise configured identically to one of the operator's enclaves.
-    1) Return the Quorum Key encrypted to the New Node's Ephemeral Key extracted from the attestation document and a signature over the encrypted payload. The Original Node uses its Quorum Key to create the signature.
+    1) Return the Quorum Key encrypted to the New Node's setup Ephemeral Key extracted from the attestation document and a signature over the encrypted payload. The Original Node uses its Quorum Key to create the signature.
 
         ```rust
           struct ExportKeyResponse {
@@ -79,7 +86,8 @@ The details for how QOS nodes communicate with each other can vary, but for the 
 
 6) The New Node processes the request by performing the following steps:
     1) Verify the signature over the `encrypted_quorum_key` against the Quorum Key specified in the New Manifest.
-    1) Decrypt the encrypted Quorum Key in the request with the Ephemeral Key.
+    1) Decrypt the encrypted Quorum Key in the request with the setup Ephemeral Key.
     1) Check that the decrypted Quorum Key public key matches the one specified in the New Manifest.
+    1) Rotate to the precommitted live Ephemeral Key so app-level uses do not reuse the setup key that protected key injection. Later live/app attestations are verified by recomputing PCR17 from the New Manifest hash and the attested live `public_key`.
     1) Write the Quorum Key to the file system, at which point New Node will automatically pivot to running the Pivot App.
     1) Return `InjectKeyResponse { }` (an empty struct) to signify that it was successful.

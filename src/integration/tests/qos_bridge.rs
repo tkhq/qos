@@ -29,6 +29,42 @@ use tokio::{
 	net::TcpStream,
 };
 
+async fn bridge_roundtrip(
+	bridge_addr: &str,
+) -> Result<PivotSocketStressMsg, String> {
+	let mut tcp_stream =
+		TcpStream::connect(bridge_addr).await.map_err(|e| e.to_string())?;
+
+	let msg = PivotSocketStressMsg::OkRequest(42);
+	let msg_bytes = borsh::to_vec(&msg).map_err(|e| e.to_string())?;
+	let mut header = (msg_bytes.len() as u64).to_le_bytes();
+
+	tcp_stream.write_all(&header).await.map_err(|e| e.to_string())?;
+	tcp_stream.write_all(&msg_bytes).await.map_err(|e| e.to_string())?;
+
+	tcp_stream.read_exact(&mut header).await.map_err(|e| e.to_string())?;
+	let reply_size = usize::from_le_bytes(header);
+	let mut reply_bytes = vec![0u8; reply_size];
+	tcp_stream.read_exact(&mut reply_bytes).await.map_err(|e| e.to_string())?;
+
+	borsh::from_slice(&reply_bytes).map_err(|e| e.to_string())
+}
+
+async fn wait_for_bridge_roundtrip(bridge_addr: &str) {
+	let mut last_err = String::new();
+	for _ in 0..100 {
+		match bridge_roundtrip(bridge_addr).await {
+			Ok(PivotSocketStressMsg::OkResponse(42)) => return,
+			Ok(reply) => panic!("invalid pivot response: {reply:?}"),
+			Err(err) => last_err = err,
+		}
+
+		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+	}
+
+	panic!("unable to complete bridge roundtrip via {bridge_addr}: {last_err}");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn qos_bridge_works() {
 	const PIVOT_HASH_PATH: &str = "/tmp/qos_host_bridge-pivot-hash.txt";
@@ -499,34 +535,7 @@ async fn qos_bridge_works() {
 	let bridge_addr = format!("127.0.0.1:{app_host_port_override}");
 	wait_for_tcp_sock(&bridge_addr).await;
 
-	// send a PivotSocketStressMsg to check if the  bridge works all the way
-	let mut tcp_stream = TcpStream::connect(&bridge_addr).await.unwrap();
-
-	let msg = PivotSocketStressMsg::OkRequest(42);
-	let msg_bytes = borsh::to_vec(&msg).unwrap();
-	let mut header = (msg_bytes.len() as u64).to_le_bytes();
-
-	// send the header/length
-	tcp_stream.write_all(&header).await.unwrap();
-	// send the msg
-	tcp_stream.write_all(&msg_bytes).await.unwrap();
-
-	// receive the reply header
-	assert_eq!(8, tcp_stream.read_exact(&mut header).await.unwrap());
-	let reply_size = usize::from_le_bytes(header);
-	let mut reply_bytes = vec![0u8; reply_size];
-	// receive the reply msg
-	assert_eq!(
-		reply_size,
-		tcp_stream.read_exact(&mut reply_bytes).await.unwrap()
-	);
-	// decode the reply msg
-	let reply: PivotSocketStressMsg = borsh::from_slice(&reply_bytes).unwrap();
-
-	match reply {
-		PivotSocketStressMsg::OkResponse(val) => assert_eq!(val, 42),
-		_ => panic!("invalid pivot response"),
-	}
+	wait_for_bridge_roundtrip(&bridge_addr).await;
 
 	// test qos_bridge restart after enclave is up
 	bridge_child_process.kill().expect("unable to kill qos_host");
@@ -551,32 +560,5 @@ async fn qos_bridge_works() {
 	let bridge_addr = format!("127.0.0.1:{app_host_port_override}");
 	wait_for_tcp_sock(&bridge_addr).await;
 
-	// send a PivotSocketStressMsg to check if the  bridge works all the way
-	let mut tcp_stream = TcpStream::connect(&bridge_addr).await.unwrap();
-
-	let msg = PivotSocketStressMsg::OkRequest(42);
-	let msg_bytes = borsh::to_vec(&msg).unwrap();
-	let mut header = (msg_bytes.len() as u64).to_le_bytes();
-
-	// send the header/length
-	tcp_stream.write_all(&header).await.unwrap();
-	// send the msg
-	tcp_stream.write_all(&msg_bytes).await.unwrap();
-
-	// receive the reply header
-	assert_eq!(8, tcp_stream.read_exact(&mut header).await.unwrap());
-	let reply_size = usize::from_le_bytes(header);
-	let mut reply_bytes = vec![0u8; reply_size];
-	// receive the reply msg
-	assert_eq!(
-		reply_size,
-		tcp_stream.read_exact(&mut reply_bytes).await.unwrap()
-	);
-	// decode the reply msg
-	let reply: PivotSocketStressMsg = borsh::from_slice(&reply_bytes).unwrap();
-
-	match reply {
-		PivotSocketStressMsg::OkResponse(val) => assert_eq!(val, 42),
-		_ => panic!("invalid pivot response"),
-	}
+	wait_for_bridge_roundtrip(&bridge_addr).await;
 }

@@ -168,7 +168,9 @@ pub enum ProtocolMsg {
 	},
 
 	/// Request an attestation document that includes references to the
-	/// manifest (in `user_data`) and the ephemeral key (`public_key`).
+	/// manifest (in `user_data`) and current ephemeral key (`public_key`).
+	/// Setup attestations are verified against PCR16; live/app attestations
+	/// are verified against PCR17.
 	LiveAttestationDocRequest,
 	/// Response to live attestation document request.
 	LiveAttestationDocResponse {
@@ -197,15 +199,16 @@ pub enum ProtocolMsg {
 	ExportKeyRequest {
 		/// Manifest of the enclave requesting the quorum key.
 		manifest_envelope: Box<VersionedManifestEnvelope>,
-		/// Attestation document from the enclave requesting the quorum key. We
-		/// assume this attestation document contains a hash of the given
-		/// manifest in the user data field.
+		/// Setup attestation document from the enclave requesting the quorum
+		/// key. Verification checks the given manifest hash in `user_data`,
+		/// manifest PCR0 through PCR3, and the setup manifest/key commitment in
+		/// PCR16.
 		#[serde(with = "qos_hex::serde")]
 		cose_sign1_attestation_doc: Vec<u8>,
 	},
 	/// Response to [`Self::ExportKeyRequest`]
 	ExportKeyResponse {
-		/// Quorum key encrypted to the Ephemeral Key from the submitted
+		/// Quorum key encrypted to the setup Ephemeral Key from the submitted
 		/// attestation document.
 		#[serde(with = "qos_hex::serde")]
 		encrypted_quorum_key: Vec<u8>,
