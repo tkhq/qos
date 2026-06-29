@@ -4,6 +4,7 @@ use crate::types;
 
 /// Attestation error.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum AttestError {
 	/// `webpki::Error` wrapper.
 	WebPki(webpki::Error),
