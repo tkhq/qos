@@ -19,6 +19,7 @@ use crate::{
 	serde::Serialize,
 	serde::Deserialize,
 )]
+#[non_exhaustive]
 pub enum ProtocolError {
 	/// A encrypted quorum key share sent to the enclave was invalid.
 	InvalidShare,
