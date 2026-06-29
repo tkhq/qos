@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.11.1](https://github.com/tkhq/qos/compare/qos_client-v0.10.2...qos_client-v0.11.1) - 2026-06-29
+
+### Added
+- [**breaking**] add new pcrs
+
+## `qos_net` - [0.11.1](https://github.com/tkhq/qos/compare/qos_net-v0.11.0...qos_net-v0.11.1) - 2026-06-29
+
+### Other
+- update Cargo.lock dependencies
+
+## `qos_core` - [0.11.1](https://github.com/tkhq/qos/compare/qos_core-v0.10.2...qos_core-v0.11.1) - 2026-06-29
+
+### Added
+- [**breaking**] add new pcrs
+
+### Other
+- mark error enums non exhaustive
+- set egress tunnel MTU size to 1320
+- ensure qemu workarounds also work on ingress
+
+## `qos_nsm` - [0.11.1](https://github.com/tkhq/qos/compare/qos_nsm-v0.10.2...qos_nsm-v0.11.1) - 2026-06-29
+
+### Added
+- [**breaking**] add new pcrs
+
+### Other
+- mark error enums non exhaustive
+
 ## `qos_client` - [0.11.0](https://github.com/tkhq/qos/compare/qos_client-v0.10.2...qos_client-v0.11.0) - 2026-06-29
 
 ### Added
