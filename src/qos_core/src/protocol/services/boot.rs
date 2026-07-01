@@ -16,7 +16,9 @@ pub use env::{
 	MAX_PIVOT_ENV_NAME_LEN, MAX_PIVOT_ENV_VALUE_LEN, MAX_PIVOT_ENV_VARS,
 	PivotEnv, PivotEnvValue, PivotEnvVarName,
 };
-pub use manifest::v2::{ManifestEnvelopeV2, ManifestV2, PivotConfigV2};
+pub use manifest::v2::{
+	DnsConfig, ManifestEnvelopeV2, ManifestV2, PivotConfigV2,
+};
 pub use manifest::{
 	ManifestVersion, VersionedManifest, VersionedManifestEnvelope,
 };

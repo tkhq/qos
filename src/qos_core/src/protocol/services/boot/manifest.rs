@@ -5,6 +5,8 @@ use std::io::Error;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::protocol::{Hash256, ProtocolError, QosHash};
+#[cfg(test)]
+use std::net::IpAddr;
 
 use super::{
 	Approval, BridgeConfig, Manifest, ManifestEnvelope, ManifestEnvelopeV0,
@@ -13,7 +15,7 @@ use super::{
 
 pub mod v2;
 
-pub use v2::{ManifestEnvelopeV2, ManifestV2};
+pub use v2::{DnsConfig, ManifestEnvelopeV2, ManifestV2};
 
 /// Schema marker included only in v2 manifests.
 #[derive(
@@ -197,6 +199,15 @@ impl VersionedManifest {
 			Self::V2(manifest) => manifest.pivot.debug_mode,
 			Self::V1(manifest) => manifest.pivot.debug_mode,
 			Self::V0(_) => false,
+		}
+	}
+
+	/// Return DNS resolver configuration for v2 manifests.
+	#[must_use]
+	pub fn dns_config(&self) -> Option<&DnsConfig> {
+		match self {
+			Self::V2(manifest) => manifest.dns.as_ref(),
+			Self::V1(_) | Self::V0(_) => None,
 		}
 	}
 
@@ -516,6 +527,7 @@ mod tests {
 				aws_root_certificate: vec![],
 				qos_commit: "commit".to_string(),
 			},
+			dns: None,
 		}
 	}
 
@@ -583,6 +595,71 @@ mod tests {
 				members: vec![MemberPubKey { pub_key: member.pub_key }],
 			},
 		}
+	}
+
+	#[test]
+	fn v2_manifest_omits_dns_when_absent() {
+		let pair = P256Pair::generate().unwrap();
+		let manifest = sample_v2_manifest(sample_member(&pair));
+		let value = serde_json::to_value(&manifest).unwrap();
+
+		assert!(value.get("dns").is_none());
+	}
+
+	#[test]
+	fn v2_manifest_round_trips_dns_resolvers() {
+		let pair = P256Pair::generate().unwrap();
+		let mut manifest = sample_v2_manifest(sample_member(&pair));
+		manifest.dns = Some(DnsConfig {
+			resolvers: vec![
+				"1.1.1.1".parse().unwrap(),
+				"2606:4700:4700::1111".parse().unwrap(),
+			],
+		});
+
+		let value = serde_json::to_value(&manifest).unwrap();
+		assert_eq!(value["dns"]["resolvers"][0], "1.1.1.1");
+		assert_eq!(value["dns"]["resolvers"][1], "2606:4700:4700::1111");
+
+		let decoded: ManifestV2 = serde_json::from_value(value).unwrap();
+		assert_eq!(decoded.dns, manifest.dns);
+	}
+
+	#[test]
+	fn v2_manifest_rejects_invalid_dns_resolver() {
+		let pair = P256Pair::generate().unwrap();
+		let mut value =
+			serde_json::to_value(sample_v2_manifest(sample_member(&pair)))
+				.unwrap();
+		value["dns"] = serde_json::json!({
+			"resolvers": ["not-an-ip"]
+		});
+
+		assert!(serde_json::from_value::<ManifestV2>(value).is_err());
+	}
+
+	#[test]
+	fn versioned_manifest_dns_config_is_v2_only() {
+		let pair = P256Pair::generate().unwrap();
+		let member = sample_member(&pair);
+		let mut v2 = sample_v2_manifest(member.clone());
+		v2.dns =
+			Some(DnsConfig { resolvers: vec!["1.1.1.1".parse().unwrap()] });
+
+		assert_eq!(
+			VersionedManifest::V2(v2).dns_config().unwrap().resolvers,
+			vec!["1.1.1.1".parse::<IpAddr>().unwrap()]
+		);
+		assert!(
+			VersionedManifest::V1(sample_v1_manifest(member.clone()))
+				.dns_config()
+				.is_none()
+		);
+		assert!(
+			VersionedManifest::V0(sample_v0_manifest(member))
+				.dns_config()
+				.is_none()
+		);
 	}
 
 	#[test]

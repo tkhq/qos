@@ -2,6 +2,7 @@ use std::{
 	fs::{self, File},
 	io::{self, BufRead, BufReader, Write},
 	mem,
+	net::IpAddr,
 	path::{Path, PathBuf},
 };
 
@@ -12,7 +13,7 @@ use qos_core::protocol::{
 	msg::{JsonBytes, ProtocolMsg, ProtocolMsgEncoding},
 	services::{
 		boot::{
-			Approval, BridgeConfig, Manifest as ManifestV1,
+			Approval, BridgeConfig, DnsConfig, Manifest as ManifestV1,
 			ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
 			ManifestEnvelopeV2, ManifestSet, ManifestV2, ManifestVersion,
 			MemberPubKey, Namespace, NitroConfig, PatchSet,
@@ -157,6 +158,8 @@ pub enum Error {
 	ManifestV2DoesNotSupportPatchSet,
 	/// v1/v0 manifests require patch sets.
 	ManifestV1RequiresPatchSet,
+	/// v1/v0 manifests do not support DNS resolver configuration.
+	ManifestV1DoesNotSupportDnsConfig,
 }
 
 impl From<serde_json::Error> for Error {
@@ -779,6 +782,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub manifest_path: P,
 	pub pivot_args: Vec<String>,
 	pub bridge_config: Vec<BridgeConfig>,
+	pub dns_resolvers: Option<Vec<IpAddr>>,
 	pub debug_mode: bool,
 }
 
@@ -799,8 +803,13 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		manifest_path,
 		pivot_args,
 		bridge_config,
+		dns_resolvers,
 		debug_mode,
 	} = args;
+
+	if dns_resolvers.is_some() {
+		return Err(Error::ManifestV1DoesNotSupportDnsConfig);
+	}
 
 	let nitro_config =
 		extract_nitro_config(qos_release_dir_path, pcr3_preimage_path);
@@ -864,6 +873,7 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 		manifest_path,
 		pivot_args,
 		bridge_config,
+		dns_resolvers,
 		debug_mode,
 	} = args;
 
@@ -897,6 +907,7 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 		manifest_set,
 		share_set,
 		enclave: nitro_config,
+		dns: dns_resolvers.map(|resolvers| DnsConfig { resolvers }),
 	};
 
 	write_with_msg(
@@ -2759,6 +2770,7 @@ mod tests {
 				manifest_set: manifest.manifest_set,
 				share_set: manifest.share_set,
 				enclave: manifest.enclave,
+				dns: None,
 			},
 			manifest_set_approvals: vec![],
 			share_set_approvals: vec![],
@@ -3569,6 +3581,7 @@ mod tests {
 				manifest_set: manifest.manifest_set,
 				share_set: manifest.share_set,
 				enclave: manifest.enclave,
+				dns: None,
 			};
 			fs::write(&json_path, qos_json::to_vec(&v2).unwrap()).unwrap();
 
@@ -3610,6 +3623,7 @@ mod tests {
 				manifest_set: manifest.manifest_set,
 				share_set: manifest.share_set,
 				enclave: manifest.enclave,
+				dns: None,
 			};
 			let v2_envelope = ManifestEnvelopeV2 {
 				manifest: v2_manifest,
