@@ -157,28 +157,18 @@ fn reprint_pivot_output(child: &mut Child) {
 	});
 }
 
-fn resolv_conf_with_nameservers(current: &str, resolvers: &[IpAddr]) -> String {
+fn resolv_conf_with_nameservers(resolvers: &[IpAddr]) -> String {
 	let mut output = String::new();
 	for resolver in resolvers {
 		output.push_str("nameserver ");
 		output.push_str(&resolver.to_string());
 		output.push('\n');
 	}
-	for line in current.lines() {
-		if line.split_whitespace().next() != Some("nameserver") {
-			output.push_str(line);
-			output.push('\n');
-		}
-	}
 	output
 }
 
 fn write_resolv_conf(resolvers: &[IpAddr]) -> std::io::Result<()> {
-	let current = fs::read_to_string(RESOLV_CONF_PATH).unwrap_or_default();
-	fs::write(
-		RESOLV_CONF_PATH,
-		resolv_conf_with_nameservers(&current, resolvers),
-	)
+	fs::write(RESOLV_CONF_PATH, resolv_conf_with_nameservers(resolvers))
 }
 
 /// Primary entry point for running the enclave. Coordinates spawning the server
@@ -312,31 +302,21 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn resolv_conf_rewrite_replaces_nameservers_and_preserves_options() {
+	fn resolv_conf_write_uses_configured_nameservers() {
 		let resolvers = ["1.1.1.1", "2606:4700:4700::1111"]
 			.into_iter()
 			.map(|resolver| resolver.parse().unwrap())
 			.collect::<Vec<IpAddr>>();
-		let current = "# comment\nnameserver 8.8.4.4\noptions edns0 trust-ad\n";
 
 		assert_eq!(
-			resolv_conf_with_nameservers(current, &resolvers),
-			"nameserver 1.1.1.1\nnameserver 2606:4700:4700::1111\n# comment\noptions edns0 trust-ad\n"
+			resolv_conf_with_nameservers(&resolvers),
+			"nameserver 1.1.1.1\nnameserver 2606:4700:4700::1111\n"
 		);
 	}
 
 	#[test]
-	fn resolv_conf_rewrite_preserves_non_nameserver_lines_only() {
-		let resolvers = ["9.9.9.9"]
-			.into_iter()
-			.map(|resolver| resolver.parse().unwrap())
-			.collect::<Vec<IpAddr>>();
-		let current = "  nameserver 8.8.8.8\nsearch example.com\n";
-
-		assert_eq!(
-			resolv_conf_with_nameservers(current, &resolvers),
-			"nameserver 9.9.9.9\nsearch example.com\n"
-		);
+	fn resolv_conf_write_supports_empty_resolver_list() {
+		assert_eq!(resolv_conf_with_nameservers(&[]), "");
 	}
 }
 
