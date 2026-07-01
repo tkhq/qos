@@ -78,10 +78,7 @@ async fn main() {
 		PIVOT_FILE.to_string(),
 	);
 
-	#[cfg(feature = "qemu")]
-	const START_PORT: u32 = 9001; // avoid root level ports since we match on local host
-	#[cfg(not(feature = "qemu"))]
-	const START_PORT: u32 = 3;
+	const START_PORT: u32 = 2000;
 	let core_socket =
 		SocketAddress::new_vsock(cid, START_PORT, VMADDR_NO_FLAGS);
 
