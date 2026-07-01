@@ -11,9 +11,9 @@ use std::{
 use borsh::BorshDeserialize;
 use integration::{LOCAL_HOST, PCR3_PRE_IMAGE_PATH, QOS_DIST_DIR};
 use qos_core::protocol::{
-	ProtocolPhase, QosHash,
+	ProtocolPhase,
 	services::{
-		boot::{Approval, Manifest, ManifestSet, Namespace, ShareSet},
+		boot::{Approval, ManifestSet, Namespace, ShareSet, VersionedManifest},
 		genesis::{GenesisMemberOutput, GenesisOutput},
 	},
 };
@@ -66,6 +66,8 @@ async fn main() {
 		Command::new(integration::QOS_CLIENT_PATH)
 		.args([
 			"generate-manifest",
+			"--use-manifest-version",
+			"2",
 			"--nonce",
 			"2",
 			"--namespace",
@@ -86,14 +88,14 @@ async fn main() {
 			"./mock/keys/manifest-set",
 			"--share-set-dir",
 			"./mock/keys/share-set",
-			"--patch-set-dir",
-			"./mock/keys/manifest-set",
 			"--quorum-key-path",
 			"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
 			"--debug-mode",
 			"true",
 			"--bridge-config",
 			&format!("[{{\"type\": \"server\", \"port\": {app_host_port}, \"host\": \"0.0.0.0\"}},{{\"type\": \"client\", \"port\": 0}}]"),
+			"--dns-resolvers",
+			"[8.8.4.4]",
 		])
 		.spawn()
 		.unwrap()
@@ -102,7 +104,7 @@ async fn main() {
 		.success());
 
 	// Check the manifest written to file
-	let manifest: Manifest =
+	let manifest: VersionedManifest =
 		serde_json::from_slice(&fs::read(&cli_manifest_path).unwrap()).unwrap();
 
 	let genesis_output = {
@@ -126,17 +128,19 @@ async fn main() {
 		nonce: 2,
 		quorum_key: genesis_output.quorum_key,
 	};
-	assert_eq!(manifest.namespace, namespace_field);
+	assert_eq!(*manifest.namespace(), namespace_field);
 	let manifest_set = ManifestSet { threshold: 2, members: members.clone() };
-	assert_eq!(manifest.manifest_set, manifest_set);
+	assert_eq!(*manifest.manifest_set(), manifest_set);
 	let share_set = ShareSet { threshold: 2, members };
-	assert_eq!(manifest.share_set, share_set);
+	assert_eq!(*manifest.share_set(), share_set);
 
 	// -- CLIENT make sure each user can run `approve-manifest`
 	for alias in [user1, user2, user3] {
 		let approval_path = boot_dir.join(format!(
 			"{}-{}-{}.approval",
-			alias, namespace, manifest.namespace.nonce,
+			alias,
+			namespace,
+			manifest.namespace().nonce,
 		));
 
 		let secret_path = personal_dir(alias).join(format!("{alias}.secret"));
@@ -160,8 +164,6 @@ async fn main() {
 				"./mock/keys/manifest-set",
 				"--share-set-dir",
 				"./mock/keys/share-set",
-				"--patch-set-dir",
-				"./mock/keys/manifest-set",
 				"--quorum-key-path",
 				"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
 				"--alias",
@@ -227,7 +229,7 @@ async fn main() {
 		)
 		.unwrap();
 
-		let signature = personal_pair.sign(&manifest.qos_hash()).unwrap();
+		let signature = personal_pair.sign(&manifest.manifest_hash()).unwrap();
 		assert_eq!(approval.signature, signature);
 
 		assert_eq!(approval.member.alias, alias);

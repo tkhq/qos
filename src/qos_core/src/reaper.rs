@@ -5,7 +5,8 @@
 //! The pivot is an executable the enclave runs to initialize the secure
 //! applications.
 use std::{
-	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+	fs,
+	net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
 	process::Stdio,
 	sync::{Arc, RwLock},
 	time::Duration,
@@ -35,6 +36,7 @@ pub const REAPER_RESTART_DELAY: Duration = Duration::from_millis(50);
 pub const REAPER_EXIT_DELAY: Duration = Duration::from_secs(3);
 
 const REAPER_STATE_CHECK_DELAY: Duration = Duration::from_millis(100);
+const RESOLV_CONF_PATH: &str = "/etc/resolv.conf";
 
 // runs the enclave vsock setup server for qos_host communication, waiting for manifest/pivot
 // executed as a task from `Reaper::execute`
@@ -155,6 +157,20 @@ fn reprint_pivot_output(child: &mut Child) {
 	});
 }
 
+fn resolv_conf_with_nameservers(resolvers: &[IpAddr]) -> String {
+	let mut output = String::new();
+	for resolver in resolvers {
+		output.push_str("nameserver ");
+		output.push_str(&resolver.to_string());
+		output.push('\n');
+	}
+	output
+}
+
+fn write_resolv_conf(resolvers: &[IpAddr]) -> std::io::Result<()> {
+	fs::write(RESOLV_CONF_PATH, resolv_conf_with_nameservers(resolvers))
+}
+
 /// Primary entry point for running the enclave. Coordinates spawning the server
 /// and pivot binary.
 pub struct Reaper;
@@ -216,6 +232,12 @@ impl Reaper {
 		let args = manifest.args().to_vec();
 		let restart = manifest.restart();
 		let host_config = manifest.bridge_config().to_vec();
+		let dns_config = manifest.dns_config().cloned();
+
+		if let Some(dns_config) = dns_config {
+			write_resolv_conf(&dns_config.resolvers)
+				.expect("failed to write /etc/resolv.conf");
+		}
 
 		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task
 		run_bridges(&core_socket, &host_config)
@@ -273,6 +295,29 @@ enum InterState {
 	Booting,
 	// We're quitting (ctrl+c for tests and such)
 	Quitting,
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn resolv_conf_write_uses_configured_nameservers() {
+		let resolvers = ["1.1.1.1", "2606:4700:4700::1111"]
+			.into_iter()
+			.map(|resolver| resolver.parse().unwrap())
+			.collect::<Vec<IpAddr>>();
+
+		assert_eq!(
+			resolv_conf_with_nameservers(&resolvers),
+			"nameserver 1.1.1.1\nnameserver 2606:4700:4700::1111\n"
+		);
+	}
+
+	#[test]
+	fn resolv_conf_write_supports_empty_resolver_list() {
+		assert_eq!(resolv_conf_with_nameservers(&[]), "");
+	}
 }
 
 // See qos_test/tests/async_reaper for more tests

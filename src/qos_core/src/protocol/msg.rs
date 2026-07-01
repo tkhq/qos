@@ -557,6 +557,7 @@ mod test {
 				aws_root_certificate: vec![],
 				qos_commit: "commit".to_string(),
 			},
+			dns: None,
 		};
 		let msg = ProtocolMsg::BootStandardRequest {
 			manifest_envelope: Box::new(VersionedManifestEnvelope::V2(
@@ -605,6 +606,7 @@ mod test {
 					aws_root_certificate: vec![],
 					qos_commit: "commit".to_string(),
 				},
+				dns: None,
 			},
 			manifest_set_approvals: vec![],
 			share_set_approvals: vec![],

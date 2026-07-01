@@ -8,7 +8,7 @@
 //! cargo run --bin qos_client <command-name> --help
 //! ```
 
-use std::{collections::HashSet, env};
+use std::{collections::HashSet, env, net::IpAddr};
 
 use qos_core::{
 	parser::{CommandParser, GetParserForCommand, Parser, Token},
@@ -45,6 +45,7 @@ const UNSAFE_AUTO_CONFIRM: &str = "unsafe-auto-confirm";
 const PUB_PATH: &str = "pub-path";
 const DEBUG_MODE: &str = "debug-mode";
 const BRIDGE_CONFIG: &str = "bridge-config";
+const DNS_RESOLVERS: &str = "dns-resolvers";
 const YUBIKEY: &str = "yubikey";
 const SECRET_PATH: &str = "secret-path";
 const SHARE_PATH: &str = "share-path";
@@ -600,6 +601,15 @@ impl Command {
 			.takes_value(true)
 	}
 
+	fn dns_resolvers_token() -> Token {
+		Token::new(
+			DNS_RESOLVERS,
+			"Comma separated, [] wrapped DNS resolver IPs for manifest v2. e.g. `[1.1.1.1,8.8.8.8]`",
+		)
+		.required(false)
+		.takes_value(true)
+	}
+
 	fn base() -> Parser {
 		Parser::new()
 			.token(
@@ -685,6 +695,7 @@ impl Command {
 			.token(Self::quorum_key_path_token())
 			.token(Self::pivot_args_token())
 			.token(Self::bridge_config_token())
+			.token(Self::dns_resolvers_token())
 			.token(Self::debug_mode_token())
 			.token(Self::use_manifest_version_token())
 	}
@@ -1061,6 +1072,37 @@ impl ClientOpts {
 		} else {
 			Vec::new()
 		}
+	}
+
+	fn dns_resolvers(&self) -> Option<Vec<IpAddr>> {
+		self.parsed.single(DNS_RESOLVERS).map(|v| {
+			let mut chars = v.chars();
+
+			assert_eq!(
+				chars.next().unwrap(),
+				'[',
+				"DNS resolvers must start with a \"[\""
+			);
+			assert_eq!(
+				chars.next_back().unwrap(),
+				']',
+				"DNS resolvers must end with a \"]\""
+			);
+
+			if chars.clone().count() > 0 {
+				chars
+					.as_str()
+					.split(',')
+					.map(|resolver| {
+						resolver.parse().expect(
+							"Could not parse DNS resolver as IP address",
+						)
+					})
+					.collect()
+			} else {
+				vec![]
+			}
+		})
 	}
 
 	fn debug_mode(&self) -> bool {
@@ -1624,6 +1666,7 @@ mod handlers {
 			patch_set_dir: opts.patch_set_dir(),
 			quorum_key_path: opts.quorum_key_path(),
 			bridge_config: opts.bridge_config(),
+			dns_resolvers: opts.dns_resolvers(),
 			debug_mode: opts.debug_mode(),
 		};
 		let result = match opts.use_manifest_version() {

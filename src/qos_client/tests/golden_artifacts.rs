@@ -554,6 +554,8 @@ fn v2_commands_generate_approve_and_envelope_use_json_hash() {
 		"true",
 		"--bridge-config",
 		"[{\"type\":\"server\",\"port\":3000,\"host\":\"0.0.0.0\"}]",
+		"--dns-resolvers",
+		"[1.1.1.1,2606:4700:4700::1111]",
 	]));
 
 	let manifest_json: serde_json::Value =
@@ -561,6 +563,8 @@ fn v2_commands_generate_approve_and_envelope_use_json_hash() {
 			.unwrap();
 	assert_eq!(manifest_json["version"], "v2");
 	assert!(manifest_json.get("patchSet").is_none());
+	assert_eq!(manifest_json["dns"]["resolvers"][0], "1.1.1.1");
+	assert_eq!(manifest_json["dns"]["resolvers"][1], "2606:4700:4700::1111");
 
 	let manifest: ManifestV2 =
 		serde_json::from_value(manifest_json.clone()).unwrap();
@@ -766,4 +770,53 @@ fn v1_generate_manifest_without_patch_set_fails_cleanly() {
 		String::from_utf8_lossy(&output.stderr)
 	);
 	assert!(combined.contains("ManifestV1RequiresPatchSet"));
+}
+
+#[test]
+fn v1_generate_manifest_with_dns_resolvers_fails_cleanly() {
+	let fixture = Fixture::new("v1_dns_resolvers");
+
+	assert_success(&run_qos_client([
+		"pivot-hash",
+		"--output-path",
+		fixture.pivot_hash_path.to_str().unwrap(),
+		"--pivot-path",
+		fixture.pivot_path.to_str().unwrap(),
+	]));
+
+	let output = run_qos_client([
+		"generate-manifest",
+		"--nonce",
+		"31",
+		"--namespace",
+		"production/signer",
+		"--restart-policy",
+		"always",
+		"--manifest-path",
+		fixture.manifest_path.to_str().unwrap(),
+		"--pivot-hash-path",
+		fixture.pivot_hash_path.to_str().unwrap(),
+		"--qos-release-dir",
+		fixture.qos_release_dir.to_str().unwrap(),
+		"--pcr3-preimage-path",
+		fixture.pcr3_preimage_path.to_str().unwrap(),
+		"--pivot-args",
+		"[]",
+		"--manifest-set-dir",
+		fixture.manifest_set.to_str().unwrap(),
+		"--share-set-dir",
+		fixture.share_set.to_str().unwrap(),
+		"--quorum-key-path",
+		fixture.quorum_key_path.to_str().unwrap(),
+		"--dns-resolvers",
+		"[1.1.1.1]",
+	]);
+
+	assert_failure(&output);
+	let combined = format!(
+		"{}{}",
+		String::from_utf8_lossy(&output.stdout),
+		String::from_utf8_lossy(&output.stderr)
+	);
+	assert!(combined.contains("ManifestV1DoesNotSupportDnsConfig"));
 }
