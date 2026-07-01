@@ -72,6 +72,15 @@ jobs:
         shell: 'script -q -e -c "bash {0}"'
         run: make -j$(nproc) "out/${{ matrix.name }}/index.json"
 
+      - name: Print PCRs
+        if: matrix.name == 'qos_enclave' || matrix.name == 'qos_enclave_egress'
+        run: |
+          id=$(docker create "qos-local/${{ matrix.name }}:latest")
+          docker cp "${id}:/nitro.pcrs" out/nitro.pcrs
+          docker rm "${id}"
+          echo "PCRs for ${{ matrix.name }} are:"
+          cat out/nitro.pcrs
+
       # Publish PR images so they can be deployed for testing; main is build-only.
       - name: Push PR image to GHCR and ECR
         if: github.event_name == 'pull_request'
