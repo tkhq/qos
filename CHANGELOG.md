@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.12.1](https://github.com/tkhq/qos/compare/qos_client-v0.11.0...qos_client-v0.12.1) - 2026-07-02
+
+### Added
+- add dns config to manifest v2
+
+## `qos_net` - [0.12.1](https://github.com/tkhq/qos/compare/qos_net-v0.12.0...qos_net-v0.12.1) - 2026-07-02
+
+### Other
+- update Cargo.lock dependencies
+
+## `qos_core` - [0.12.1](https://github.com/tkhq/qos/compare/qos_core-v0.11.0...qos_core-v0.12.1) - 2026-07-02
+
+### Added
+- add dns config to manifest v2
+
+### Other
+- address review
+- use link local egress tunnel addresses
+
 ## `qos_client` - [0.12.0](https://github.com/tkhq/qos/compare/qos_client-v0.11.0...qos_client-v0.12.0) - 2026-07-01
 
 ### Added
