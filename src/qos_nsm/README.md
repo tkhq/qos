@@ -1,3 +1,3 @@
-# qos_nsm
+# `qos_nsm`
 
-AWS Nitro Secure Module attestation endpoints and types for QuorumOS.
+AWS Nitro Secure Module attestation endpoints and types for `QuorumOS`.

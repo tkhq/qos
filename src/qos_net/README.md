@@ -1,3 +1,3 @@
-# qos_net
+# `qos_net`
 
-Socket-to-TCP proxy utilities for QuorumOS enclave network access.
+Socket-to-TCP proxy utilities for `QuorumOS` enclave network access.

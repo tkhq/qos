@@ -1,3 +1,3 @@
-# qos_client
+# `qos_client`
 
-Multipurpose CLI client for interacting with QuorumOS enclaves and related operations.
+Multipurpose CLI client for interacting with `QuorumOS` enclaves and related operations.

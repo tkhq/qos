@@ -1,6 +1,6 @@
-# qos_hex
+# `qos_hex`
 
-Utilities for encoding and decoding hex strings in QuorumOS crates.
+Utilities for encoding and decoding hex strings in `QuorumOS` crates.
 
 Use `encode` and `encode_to_vec` to produce lowercase hex, and `decode`, `decode_to_buf`, `decode_from_vec`, or `FromHex` to decode hex into byte buffers, arrays, or vectors.
 

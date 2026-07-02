@@ -1,3 +1,3 @@
-# qos_json
+# `qos_json`
 
-Canonical JSON encoding for deterministic JSON used by QuorumOS.
+Canonical JSON encoding for deterministic JSON used by `QuorumOS`.

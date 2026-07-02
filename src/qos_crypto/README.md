@@ -1,3 +1,3 @@
-# qos_crypto
+# `qos_crypto`
 
-Cryptographic primitives used by QuorumOS crates.
+Cryptographic primitives used by `QuorumOS` crates.

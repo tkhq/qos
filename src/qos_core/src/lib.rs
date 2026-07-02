@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+#![allow(clippy::doc_markdown)]
 
 pub mod cli;
 pub mod client;
