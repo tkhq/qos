@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.12.0](https://github.com/tkhq/qos/compare/qos_client-v0.11.0...qos_client-v0.12.0) - 2026-07-01
+
+### Added
+- add dns config to manifest v2
+
+## `qos_core` - [0.12.0](https://github.com/tkhq/qos/compare/qos_core-v0.11.0...qos_core-v0.12.0) - 2026-07-01
+
+### Added
+- add dns config to manifest v2
+
 ## `qos_client` - [0.11.0](https://github.com/tkhq/qos/compare/qos_client-v0.10.2...qos_client-v0.11.0) - 2026-06-29
 
 ### Added
