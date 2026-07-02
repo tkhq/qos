@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 //! Primitive types for test setup.
 
 use std::{

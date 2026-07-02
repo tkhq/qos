@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 //! This crate contains a simple proxy server which binds to a local socket and
 //! opens TCP connection.
 //! It exposes a simple protocol for remote clients who

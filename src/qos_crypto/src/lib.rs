@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 //! Cryptographic primitves for use with `QuorumOS`.
 
 use std::fmt;

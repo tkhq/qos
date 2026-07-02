@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 //! Utilities for encoding and decoding hex strings.
 //!
 //! To encode a `&[u8]` you can use:

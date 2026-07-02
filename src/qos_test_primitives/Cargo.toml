@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 description = "Test utilities and helper primitives for QuorumOS crates"
 repository = "https://github.com/tkhq/qos"
+readme = "README.md"
 
 # Override workspace lints for this test crate
 [lints.rust]

@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 //! Endpoints and types for an enclaves attestation flow.
 
 pub mod nitro;

@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 //! Core components and logic for QOS. This contains both the logic for the
 //! process running in the enclave and exports for use by secure apps and QOS
 //! clients
