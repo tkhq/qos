@@ -1,7 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-//! CLI Client for interacting with `QuorumOS` enclave and host.
-
 pub mod cli;
 #[cfg(feature = "smartcard")]
 pub mod yubikey;

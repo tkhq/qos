@@ -1,7 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-//! Primitive types for test setup.
-
 use std::{
 	net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream},
 	ops::{Deref, DerefMut},

@@ -1,14 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-//! Core components and logic for QOS. This contains both the logic for the
-//! process running in the enclave and exports for use by secure apps and QOS
-//! clients
-//!
-//! # Maintainers Notes
-//!
-//! This crate should have as minimal dependencies as possible to decrease
-//! supply chain attack vectors and audit burden
-
 pub mod cli;
 pub mod client;
 pub mod handles;

@@ -1,28 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-//! Utilities for encoding and decoding hex strings.
-//!
-//! To encode a `&[u8]` you can use:
-//!
-//! - [`encode`]
-//! - [`encode_to_vec`]
-//!
-//! To decode you can use:
-//!
-//! - [`decode`] for `&str`
-//! - [`decode_from_vec`] for `Vec<u8>`
-//! - [`FromHex::from_hex`] for `Vec<u8>` and some `u8` array sizes.
-//! - [`decode_to_buf`] for decoding a `&str` into a `&mut [u8]` with the exact
-//!   size.
-//!
-//! # Features
-//!
-//! ## `serde`
-//!
-//! With the serde feature enabled you can use [`crate::serde`] to serialize any
-//! `u8` array or `Vec<u8>` to hex and deserialize hex string to a `Vec<u8>` and
-//! a fixed selection of `u8` arrays.
-
 use std::{convert::Into, num::ParseIntError, string::FromUtf8Error};
 
 const MEGABYTE: usize = 1024 * 1024;

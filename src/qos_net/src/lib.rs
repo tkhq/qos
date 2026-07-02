@@ -1,10 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-//! This crate contains a simple proxy server which binds to a local socket and
-//! opens TCP connection.
-//! It exposes a simple protocol for remote clients who
-//! connect to let them manipulate these connections (read/write/flush)
-
 /// Error types for the qos_net crate.
 pub mod error;
 /// Protocol messages for the proxy.
