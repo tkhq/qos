@@ -55,7 +55,7 @@ The details for how QOS nodes communicate with each other can vary, but for the 
     ```
 
 4) The Original Node processes the request by performing the following steps:
-    1) Check the basic validity of the attestation doc (cert chain etc). Ensures that the attestation document is actually from an AWS controlled NSM module and the document's timestamp was recent.
+    1) Check the basic validity of the attestation doc (cert chain etc) against the trust root reported by the NSM provider: the AWS Nitro root CA in production. This ensures that the attestation document is actually from an AWS controlled NSM module and the document's timestamp was recent. (Mock enclaves report the mock root CA instead, so local tests exercise this same verification path.)
     1) Check the signatures over the New Manifest. Ensures that K Manifest Set Members approved the New Manifest.
     1) Check that the Quorum Key of the Local Manifest matches the Quorum Key of the New Manifest. This ensures the request is for the correct Quorum Key.
     1) Check that the Manifest Set of the New Manifest matches the Manifest Set of the Local Manifest. Ensures that the signatures are from a trusted Manifest Set. Note that there is still a vulnerability here if we try to retire a Manifest Set because a critical threshold of it was compromised - that malicious Manifest Set could boot off of an Original Node - thus it's important to retire all Original Nodes ASAP that use compromised Manifest Sets.
