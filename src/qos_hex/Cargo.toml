@@ -16,7 +16,4 @@ workspace = true
 serde = { workspace = true, optional = true }
 
 [features]
-# serde/alloc is required for the String impls used by our serializers; without
-# it, building with only `--features serde` (no unification from other
-# workspace crates enabling serde/std) fails.
 serde = ["dep:serde", "serde/alloc"]
