@@ -70,12 +70,6 @@ jobs:
         with:
           tool: cargo-hack
       - name: Check feature combinations
-        # Catches feature-gate bugs (e.g. cfg-gated items re-exported
-        # unconditionally, see PR #758): checks every feature combination
-        # of each publishable crate standalone, including no-default-features.
-        # --no-dev-deps temporarily strips dev-dependencies from Cargo.toml,
-        # which is incompatible with --locked; `cargo fetch --locked` +
-        # --offline pins dependency versions to the lock file instead.
         run: |
           cargo fetch --locked
           cargo hack check --offline --feature-powerset --no-dev-deps -p ${{ matrix.package }}
