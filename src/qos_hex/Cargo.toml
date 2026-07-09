@@ -16,4 +16,4 @@ workspace = true
 serde = { workspace = true, optional = true }
 
 [features]
-serde = ["dep:serde"]
+serde = ["dep:serde", "serde/alloc"]
