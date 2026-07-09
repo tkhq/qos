@@ -1,4 +1,4 @@
-//! Primitive types for test setup.
+#![doc = include_str!("../README.md")]
 
 use std::{
 	net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream},

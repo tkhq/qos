@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 #![doc = include_str!("../SPEC.md")]
 
 use std::path::Path;
