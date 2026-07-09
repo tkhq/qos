@@ -1,5 +1,7 @@
 //! Integration tests.
 
+pub mod vfaas;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::SocketClient,
@@ -151,6 +153,132 @@ pub struct AdditionProofPayload {
 	pub b: usize,
 	/// Result of the addition
 	pub result: usize,
+}
+
+/// Domain separator prepended to program WASM hashes before owner signing.
+/// Prevents reusing a program signature as a policy signature.
+pub const VFAAS_PROGRAM_DOMAIN: &[u8] = b"vfaas-program-v1";
+/// Domain separator prepended to policy WASM hashes before owner signing.
+pub const VFAAS_POLICY_DOMAIN: &[u8] = b"vfaas-policy-v1";
+
+/// Host-side mirror of `vfaas_sdk::PolicyRequest`. The host serializes this
+/// with Borsh and passes the bytes as the single argument to the policy
+/// `__vfaas_evaluate` export. Structural compatibility with the SDK type
+/// is enforced by sharing the field order and Borsh layout.
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq, Clone)]
+pub struct VfaasPolicyRequest {
+	/// The full bytes of the program WASM module about to run.
+	pub program: Vec<u8>,
+	/// The input bytes the program will receive.
+	pub input: Vec<u8>,
+}
+
+/// Request/Response messages for the `pivot_vfaas` app.
+///
+/// The pivot maintains in-memory registries of owner-signed program and policy
+/// WASM blobs. Clients register a blob with a signature over
+/// `DOMAIN || sha256(wasm)`; the pivot verifies against the owner public key
+/// it was launched with. Execute selects a registered program + policy pair,
+/// runs the policy first (which can inspect the program bytes + input), and
+/// runs the program iff the policy returns `Allow`. The pivot signs the
+/// resulting `ExecutionAttestation` with its ephemeral key.
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq)]
+pub enum VfaasMsg {
+	/// Register a program WASM blob with an owner signature.
+	RegisterProgramRequest {
+		/// The WASM module bytes.
+		wasm: Vec<u8>,
+		/// Owner signature over `VFAAS_PROGRAM_DOMAIN || sha256(wasm)`.
+		signature: Vec<u8>,
+	},
+	/// Register a policy WASM blob with an owner signature.
+	RegisterPolicyRequest {
+		/// The WASM module bytes.
+		wasm: Vec<u8>,
+		/// Owner signature over `VFAAS_POLICY_DOMAIN || sha256(wasm)`.
+		signature: Vec<u8>,
+	},
+	/// List the hashes of registered programs.
+	ListProgramsRequest,
+	/// List the hashes of registered policies.
+	ListPoliciesRequest,
+	/// Execute a registered program gated by a registered policy.
+	ExecuteRequest {
+		/// SHA-256 of the program WASM bytes.
+		program_hash: [u8; 32],
+		/// SHA-256 of the policy WASM bytes.
+		policy_hash: [u8; 32],
+		/// Untyped input bytes; the program decodes them.
+		input: Vec<u8>,
+	},
+	/// Response to [`Self::RegisterProgramRequest`].
+	RegisterProgramResponse {
+		/// SHA-256 of the registered program WASM.
+		hash: [u8; 32],
+	},
+	/// Response to [`Self::RegisterPolicyRequest`].
+	RegisterPolicyResponse {
+		/// SHA-256 of the registered policy WASM.
+		hash: [u8; 32],
+	},
+	/// Response to [`Self::ListProgramsRequest`].
+	ListProgramsResponse {
+		/// Hashes of all currently registered programs.
+		hashes: Vec<[u8; 32]>,
+	},
+	/// Response to [`Self::ListPoliciesRequest`].
+	ListPoliciesResponse {
+		/// Hashes of all currently registered policies.
+		hashes: Vec<[u8; 32]>,
+	},
+	/// Response to [`Self::ExecuteRequest`].
+	ExecuteResponse {
+		/// Policy decision.
+		decision: Decision,
+		/// Program output bytes when `decision = Allow`; `None` otherwise.
+		output: Option<Vec<u8>>,
+		/// Enclave-signed attestation binding hashes to the decision.
+		attestation: SignedExecutionAttestation,
+	},
+	/// Error response. Carries a human-readable reason.
+	Error(String),
+}
+
+/// Outcome of a policy evaluation.
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq, Clone)]
+pub enum Decision {
+	/// Program execution is permitted.
+	Allow,
+	/// Program execution is denied with a human-readable reason.
+	Deny(String),
+}
+
+/// Unsigned record of an execution attempt.
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq, Clone)]
+pub struct ExecutionAttestation {
+	/// SHA-256 of the program WASM.
+	pub program_hash: [u8; 32],
+	/// SHA-256 of the policy WASM.
+	pub policy_hash: [u8; 32],
+	/// SHA-256 of the input bytes.
+	pub input_hash: [u8; 32],
+	/// SHA-256 of the output bytes; `None` when no output was produced.
+	pub output_hash: Option<[u8; 32]>,
+	/// Policy decision.
+	pub decision: Decision,
+	/// Monotonic per-pivot request counter; orders executions.
+	pub request_id: u64,
+}
+
+/// [`ExecutionAttestation`] signed by the enclave ephemeral key.
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq, Eq, Clone)]
+pub struct SignedExecutionAttestation {
+	/// The attestation payload (Borsh-serialized when signing).
+	pub attestation: ExecutionAttestation,
+	/// Signature of the ephemeral key over `borsh::to_vec(&attestation)`.
+	pub signature: Vec<u8>,
+	/// Ephemeral public key bytes (SEC1 encrypt_public || sign_public).
+	pub ephemeral_public_key: Vec<u8>,
 }
 
 /// Wait for a given usock file to exist and be connectible with a timeout of 5s.

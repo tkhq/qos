@@ -17,6 +17,7 @@ members = [
   "src/qos_net/fuzz",
   "src/qos_nsm/fuzz",
   "src/qos_p256/fuzz",
+  "src/xtask",
 ]
 default-members = [
   "src/integration",
@@ -37,6 +38,10 @@ exclude = [
   "src/qos_aws",
   "src/qos_system",
   "src/qos_enclave",
+  "src/vfaas/sdk",
+  "src/vfaas/sdk-macros",
+  "src/vfaas/examples/reverse",
+  "src/vfaas/examples/allow-small-input",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.
