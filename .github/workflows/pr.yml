@@ -65,6 +65,14 @@ jobs:
         # Check one selected package at a time so unrelated workspace members
         # cannot hide missing direct dependency features through unification.
         run: cargo check --locked -p ${{ matrix.package }}
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@50414676f9f5d50a65992c6dd2ed02641263226c # v2.82.10
+        with:
+          tool: cargo-hack
+      - name: Check feature combinations
+        run: |
+          cargo fetch --locked
+          cargo hack check --offline --feature-powerset --no-dev-deps -p ${{ matrix.package }}
 
   build-linux-only-crates:
     name: build-linux-only-crates

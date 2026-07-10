@@ -1126,12 +1126,19 @@ mod test {
 			manifest_envelope: &ManifestEnvelope,
 			quorum_pair: &P256Pair,
 		) -> Handles {
-			let ephemeral_file = format!("/tmp/{name}.eph.secret");
-			let quorum_file = format!("/tmp/{name}.quorum.secret");
-			let manifest_file = format!("/tmp/{name}.manifest");
-			for file in [&ephemeral_file, &quorum_file, &manifest_file] {
-				let _ = std::fs::remove_file(file);
-			}
+			let temp_dir = std::env::temp_dir();
+			let ephemeral_file = temp_dir
+				.join(format!("{name}.eph.secret"))
+				.to_string_lossy()
+				.into_owned();
+			let quorum_file = temp_dir
+				.join(format!("{name}.quorum.secret"))
+				.to_string_lossy()
+				.into_owned();
+			let manifest_file = temp_dir
+				.join(format!("{name}.manifest"))
+				.to_string_lossy()
+				.into_owned();
 
 			P256Pair::generate().unwrap().to_hex_file(&ephemeral_file).unwrap();
 			quorum_pair.to_hex_file(&quorum_file).unwrap();

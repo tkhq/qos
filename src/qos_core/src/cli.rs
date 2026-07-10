@@ -404,11 +404,12 @@ mod test {
 	#[test]
 	#[cfg(feature = "mock")]
 	fn mock_pcrs_seed_the_mock_nsm() {
-		let pcrs_file = "/tmp/cli_mock_pcrs_seed_the_mock_nsm.pcrs";
+		let temp_dir = std::env::temp_dir();
+		let pcrs_file = temp_dir.join("cli_mock_pcrs_seed_the_mock_nsm.pcrs");
 		let pcr0 = vec![7u8; 48];
 		let pcr3 = vec![9u8; 48];
 		std::fs::write(
-			pcrs_file,
+			pcrs_file.to_str().unwrap(),
 			format!(
 				"{} PCR0\n{} PCR3\n",
 				qos_hex::encode(&pcr0),
@@ -423,7 +424,7 @@ mod test {
 			"./test.sock",
 			"--mock",
 			"--mock-pcrs",
-			pcrs_file,
+			pcrs_file.to_str().unwrap(),
 		]
 		.into_iter()
 		.map(String::from)

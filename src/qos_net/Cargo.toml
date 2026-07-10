@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 description = "Socket to TCP proxy for QuorumOS enclave network access"
 repository = "https://github.com/tkhq/qos"
+readme = "README.md"
 keywords = ["quorumos", "enclave", "nitro", "proxy", "vsock"]
 categories = ["network-programming"]
 

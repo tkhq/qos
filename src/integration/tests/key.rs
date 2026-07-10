@@ -22,7 +22,6 @@ const NEW_ATTESTATION_DOC_PATH: &str = "/tmp/key-fwd-e2e/new_attestation_doc";
 const ENCRYPTED_QUORUM_KEY_PATH: &str = "/tmp/key-fwd-e2e/encrypted_quorum_key";
 const OLD_EPH_PATH: &str = "/tmp/key-fwd-e2e/old_eph.secret";
 const NEW_EPH_PATH: &str = "/tmp/key-fwd-e2e/new_eph.secret";
-const MOCK_PCRS_PATH: &str = "/tmp/key-fwd-e2e/mock.pcrs";
 const QUORUM_KEY_PUB_PATH: &str =
 	"./mock/namespaces/quit-coding-to-vape/quorum_key.pub";
 
@@ -35,14 +34,15 @@ async fn key_fwd_e2e() {
 	// OLD enclave can fully verify the NEW enclave's attestation document
 	// during key export. This is the mock analog of both enclaves running
 	// the image measured by the manifest.
-	write_mock_pcrs();
+	let mock_pcrs_file = write_mock_pcrs();
+	let mock_pcrs_path = mock_pcrs_file.to_str().unwrap();
 	let old_host_port = qos_test_primitives::find_free_port().unwrap();
 	let new_host_port = qos_test_primitives::find_free_port().unwrap();
 
 	build_pivot_fingerprints();
 	generate_manifest_envelope();
 	let (_enclave_child_wrapper, _host_child_wrapper) =
-		boot_old_enclave(old_host_port);
+		boot_old_enclave(old_host_port, mock_pcrs_path);
 
 	// start up new enclave
 	let new_secret_path = "/tmp/key-fwd-e2e/new_secret.secret";
@@ -64,7 +64,7 @@ async fn key_fwd_e2e() {
 				NEW_EPH_PATH,
 				"--mock",
 				"--mock-pcrs",
-				MOCK_PCRS_PATH,
+				mock_pcrs_path,
 				"--manifest-file",
 				new_manifest_path,
 			])
@@ -164,7 +164,7 @@ async fn key_fwd_e2e() {
 /// Write a `--mock-pcrs` seed file with the same PCR{0, 1, 2, 3} values the
 /// manifest is generated against: PCR{0, 1, 2} from the QOS dist dir and
 /// PCR3 derived from the PCR3 pre-image (the IAM role arn).
-fn write_mock_pcrs() {
+fn write_mock_pcrs() -> PathWrapper<std::path::PathBuf> {
 	let mut pcrs =
 		fs::read_to_string(format!("{QOS_DIST_DIR}/aws-x86_64.pcrs")).unwrap();
 	if !pcrs.ends_with('\n') {
@@ -182,7 +182,10 @@ fn write_mock_pcrs() {
 	let pcr3 = sha_384(&pcr3_preimage);
 	pcrs.push_str(&format!("{} PCR3\n", qos_hex::encode(&pcr3)));
 
-	fs::write(MOCK_PCRS_PATH, pcrs).unwrap();
+	let pcrs_path = std::env::temp_dir()
+		.join(format!("key-fwd-e2e-mock-pcrs-{}.pcrs", std::process::id()));
+	fs::write(&pcrs_path, pcrs).unwrap();
+	PathWrapper::from(pcrs_path)
 }
 
 fn generate_manifest_envelope() {
@@ -264,7 +267,10 @@ fn generate_manifest_envelope() {
 	}
 }
 
-fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
+fn boot_old_enclave(
+	old_host_port: u16,
+	mock_pcrs_path: &str,
+) -> (ChildWrapper, ChildWrapper) {
 	let old_secret_path = "/tmp/key-fwd-e2e/old_secret.secret";
 	let old_pivot_path = "/tmp/key-fwd-e2e/old_pivot.pivot";
 	let old_manifest_path = "/tmp/key-fwd-e2e/old_manifest.manifest";
@@ -284,7 +290,7 @@ fn boot_old_enclave(old_host_port: u16) -> (ChildWrapper, ChildWrapper) {
 				OLD_EPH_PATH,
 				"--mock",
 				"--mock-pcrs",
-				MOCK_PCRS_PATH,
+				mock_pcrs_path,
 				"--manifest-file",
 				old_manifest_path,
 			])

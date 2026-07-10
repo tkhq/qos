@@ -1,4 +1,4 @@
-//! CLI Client for interacting with `QuorumOS` enclave and host.
+#![doc = include_str!("../README.md")]
 
 pub mod cli;
 #[cfg(feature = "smartcard")]

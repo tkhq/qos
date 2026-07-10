@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.12.1](https://github.com/tkhq/qos/compare/qos_client-v0.12.0...qos_client-v0.12.1) - 2026-07-09
+
+### Fixed
+- *(qos_client)* gate advanced_provision_yubikey re-export behind smartcard
+
+### Other
+- Merge pull request #756 from tkhq/swag/crate-readme-docs
+
+## `qos_test_primitives` - [0.12.1](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.12.0...qos_test_primitives-v0.12.1) - 2026-07-09
+
+### Other
+- satisfy readme lint
+- rely on crate readmes for root docs
+- add readmes for published crates
+
+## `qos_net` - [0.12.1](https://github.com/tkhq/qos/compare/qos_net-v0.12.0...qos_net-v0.12.1) - 2026-07-09
+
+### Other
+- Merge pull request #756 from tkhq/swag/crate-readme-docs
+- *(qos_net)* cargo fmt
+- *(qos_net)* use new hickory resolver api
+
+## `qos_core` - [0.12.1](https://github.com/tkhq/qos/compare/qos_core-v0.12.0...qos_core-v0.12.1) - 2026-07-09
+
+### Other
+- satisfy readme lint
+- address crate readme feedback
+- rely on crate readmes for root docs
+- add readmes for published crates
+
+## `qos_p256` - [0.12.1](https://github.com/tkhq/qos/compare/qos_p256-v0.12.0...qos_p256-v0.12.1) - 2026-07-09
+
+### Other
+- satisfy readme lint
+- add readmes for published crates
+
+## `qos_nsm` - [0.12.1](https://github.com/tkhq/qos/compare/qos_nsm-v0.12.0...qos_nsm-v0.12.1) - 2026-07-09
+
+### Other
+- satisfy readme lint
+- rely on crate readmes for root docs
+- add readmes for published crates
+
+## `qos_json` - [0.12.1](https://github.com/tkhq/qos/compare/qos_json-v0.12.0...qos_json-v0.12.1) - 2026-07-09
+
+### Other
+- satisfy readme lint
+- add readmes for published crates
+
+## `qos_hex` - [0.12.1](https://github.com/tkhq/qos/compare/qos_hex-v0.12.0...qos_hex-v0.12.1) - 2026-07-09
+
+### Fixed
+- *(qos_hex)* enable serde/alloc from the serde feature
+
+### Other
+- Merge pull request #756 from tkhq/swag/crate-readme-docs
+- remove qos_hex comment
+
+## `qos_crypto` - [0.12.1](https://github.com/tkhq/qos/compare/qos_crypto-v0.12.0...qos_crypto-v0.12.1) - 2026-07-09
+
+### Other
+- satisfy readme lint
+- rely on crate readmes for root docs
+- add readmes for published crates
+
 ## `qos_client` - [0.12.0](https://github.com/tkhq/qos/compare/qos_client-v0.11.0...qos_client-v0.12.0) - 2026-07-01
 
 ### Added
