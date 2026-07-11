@@ -1,7 +1,9 @@
 //! Contains logic for remote connection establishment: DNS resolution and TCP
 //! connection.
 use std::{
+	collections::HashMap,
 	net::{AddrParseError, IpAddr, SocketAddr},
+	sync::{Arc, Mutex, OnceLock},
 	time::Duration,
 };
 
@@ -18,6 +20,11 @@ use tokio::{
 };
 
 use crate::error::QosNetError;
+
+type ResolverKey = (Vec<IpAddr>, u16);
+
+static RESOLVERS: OnceLock<Mutex<HashMap<ResolverKey, Arc<TokioResolver>>>> =
+	OnceLock::new();
 
 /// Struct representing a TCP connection held on our proxy
 pub struct ProxyConnection {
@@ -118,8 +125,55 @@ pub async fn resolve_hostname(
 		})
 		.collect::<Result<Vec<IpAddr>, AddrParseError>>()?;
 
+	let resolver = cached_resolver(resolver_parsed_addrs, port)?;
+	let response =
+		resolver.lookup_ip(&hostname).await.map_err(QosNetError::from)?;
+	response.iter().next().ok_or_else(|| {
+		QosNetError::DNSResolutionError(format!(
+			"Empty response when querying for host {hostname}"
+		))
+	})
+}
+
+fn resolver_cache() -> &'static Mutex<HashMap<ResolverKey, Arc<TokioResolver>>>
+{
+	RESOLVERS.get_or_init(Default::default)
+}
+
+fn cached_resolver(
+	resolver_parsed_addrs: Vec<IpAddr>,
+	port: u16,
+) -> Result<Arc<TokioResolver>, QosNetError> {
+	let key = (resolver_parsed_addrs, port);
+	if let Some(resolver) = resolver_cache()
+		.lock()
+		.map_err(|_| {
+			QosNetError::DNSResolutionError(
+				"Resolver cache lock poisoned".to_string(),
+			)
+		})?
+		.get(&key)
+		.cloned()
+	{
+		return Ok(resolver);
+	}
+
+	let resolver = Arc::new(build_resolver(&key.0, key.1)?);
+	let mut resolvers = resolver_cache().lock().map_err(|_| {
+		QosNetError::DNSResolutionError(
+			"Resolver cache lock poisoned".to_string(),
+		)
+	})?;
+	Ok(resolvers.entry(key).or_insert(resolver).clone())
+}
+
+fn build_resolver(
+	resolver_parsed_addrs: &[IpAddr],
+	port: u16,
+) -> Result<TokioResolver, QosNetError> {
 	let name_servers = resolver_parsed_addrs
-		.into_iter()
+		.iter()
+		.copied()
 		.map(|ip| {
 			let mut udp = ConnectionConfig::udp();
 			udp.port = port;
@@ -133,27 +187,20 @@ pub async fn resolve_hostname(
 	let resolver_config =
 		ResolverConfig::from_parts(None, vec![], name_servers);
 
-	// ensure the resolve call will be < 5s for our socket timeout (so we return a meaningful error and don't hog the socket)
-	// this means attempts * timeout < 5s
 	let mut resolver_opts = ResolverOpts::default();
+	// Keep attempts * timeout below the proxy socket budget.
 	resolver_opts.timeout = Duration::from_secs(1);
 	resolver_opts.attempts = 1;
+	// Clamp long-lived records so cached answers do not stay stale too long.
+	resolver_opts.positive_max_ttl = Some(Duration::from_secs(300));
 
-	let resolver = TokioResolver::builder_with_config(
+	TokioResolver::builder_with_config(
 		resolver_config,
 		TokioRuntimeProvider::default(),
 	)
 	.with_options(resolver_opts)
 	.build()
-	.map_err(QosNetError::from)?;
-
-	let response =
-		resolver.lookup_ip(&hostname).await.map_err(QosNetError::from)?;
-	response.iter().next().ok_or_else(|| {
-		QosNetError::DNSResolutionError(format!(
-			"Empty response when querying for host {hostname}"
-		))
-	})
+	.map_err(QosNetError::from)
 }
 
 #[cfg(test)]
@@ -224,5 +271,21 @@ mod test {
 		.unwrap_err();
 
 		assert!(matches!(err, QosNetError::ParseError(_)));
+	}
+
+	#[test]
+	fn cached_resolver_reuses_resolver_for_same_dns_config() {
+		let resolver_addrs = vec!["127.0.0.1".parse().unwrap()];
+		let first = cached_resolver(resolver_addrs.clone(), 53).unwrap();
+		let second = cached_resolver(resolver_addrs.clone(), 53).unwrap();
+		let different_port = cached_resolver(resolver_addrs, 54).unwrap();
+
+		assert!(Arc::ptr_eq(&first, &second));
+		assert!(!Arc::ptr_eq(&first, &different_port));
+
+		let opts = first.options();
+		assert_eq!(opts.timeout, Duration::from_secs(1));
+		assert_eq!(opts.attempts, 1);
+		assert_eq!(opts.positive_max_ttl, Some(Duration::from_secs(300)));
 	}
 }
