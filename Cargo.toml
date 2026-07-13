@@ -13,11 +13,13 @@ members = [
   "src/qos_p256",
   "src/qos_nsm",
   "src/signed_echo",
+  "src/vfaas/abi",
   # special members that are not default-members
   "src/qos_crypto/fuzz",
   "src/qos_net/fuzz",
   "src/qos_nsm/fuzz",
   "src/qos_p256/fuzz",
+  "src/xtask",
 ]
 default-members = [
   "src/integration",
@@ -33,12 +35,21 @@ default-members = [
   "src/qos_p256",
   "src/qos_nsm",
   "src/signed_echo",
+  "src/vfaas/abi",
 ]
 exclude = [
   "src/init",
   "src/qos_aws",
   "src/qos_system",
   "src/qos_enclave",
+  # wasm32-facing crates build outside the workspace so host-only workspace
+  # settings and feature unification never leak into guest builds
+  "src/vfaas/sdk",
+  "src/vfaas/sdk-macros",
+  "src/vfaas/examples/reverse",
+  "src/vfaas/examples/fee-calculator",
+  "src/vfaas/examples/allow-small-input",
+  "src/vfaas/examples/allow-hashlist",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.
@@ -114,6 +125,7 @@ qos_net = { path = "src/qos_net", version = "0.12.1", default-features = false }
 qos_nsm = { path = "src/qos_nsm", version = "0.12.1", default-features = false }
 qos_p256 = { path = "src/qos_p256", version = "0.12.1" }
 qos_test_primitives = { path = "src/qos_test_primitives", version = "0.12.1" }
+vfaas-abi = { path = "src/vfaas/abi" }
 
 # used for pivot_download integration/example only
 url = { version = "2.5.7", default-features = false }

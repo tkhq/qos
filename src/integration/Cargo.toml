@@ -26,6 +26,7 @@ qos_crypto = { workspace = true }
 qos_hex = { workspace = true }
 qos_p256 = { workspace = true, features = ["mock"] }
 qos_test_primitives = { workspace = true }
+vfaas-abi = { workspace = true }
 zeroize = { workspace = true }
 
 axum = { workspace = true, default-features = false, features = ["http1", "json"] }
@@ -38,9 +39,13 @@ serde_json = { workspace = true }
 webpki-roots = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs"] }
 tokio-rustls = { workspace = true }
+wasmtime = { version = "30", default-features = false, features = ["cranelift", "runtime"] }
 
 [dev-dependencies]
 rand = { workspace = true, features = ["thread_rng"] }
+# hand-written WAT fixtures for tests/vfaas.rs; the pivot itself only
+# accepts binary wasm
+wat = "1"
 ureq = { workspace = true, features = ["json"] }
 qos_core_legacy = { package = "qos_core", version = "0.7", default-features = false }
 # src/bin/pivot_download.rs to test egress

@@ -1,5 +1,7 @@
 //! Integration tests.
 
+pub mod vfaas;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::{
 	client::SocketClient,
@@ -54,6 +56,9 @@ pub const PIVOT_SOCKET_STRESS_PATH: &str = concat!(
 /// Path to an enclave app that has routes to fetch app proofs.
 pub const PIVOT_PROOF_PATH: &str =
 	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/pivot_proof");
+/// Path to the vfaas (verifiable functions) pivot bin for tests.
+pub const PIVOT_VFAAS_PATH: &str =
+	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/pivot_vfaas");
 /// Path to `qos_bridge` ingress bin for tests.
 pub const QOS_BRIDGE_PATH: &str =
 	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/ingress");

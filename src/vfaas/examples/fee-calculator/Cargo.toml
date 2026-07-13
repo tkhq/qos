@@ -1,0 +1,20 @@
+[workspace]
+
+[package]
+name = "vfaas_fee_calculator"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+vfaas-sdk = { path = "../../sdk" }
+borsh = { version = "1.5", features = ["std", "derive"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
