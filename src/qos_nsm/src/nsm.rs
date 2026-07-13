@@ -27,6 +27,21 @@ pub trait NsmProvider: Send + Sync {
 	/// Returns [`nitro::AttestError`] if the attestation request fails or
 	/// the timestamp cannot be extracted.
 	fn timestamp_ms(&self) -> Result<u64, nitro::AttestError>;
+
+	/// The DER encoded root certificate authority to trust when verifying
+	/// *peer* enclave attestation documents (e.g. during key forwarding).
+	///
+	/// Defaults to the AWS Nitro root CA: attestation documents produced by
+	/// real NSM devices chain up to it. Mock providers override this with
+	/// the mock root CA so documents they sign can be verified with the
+	/// exact same code path used in production. The trust anchor always
+	/// follows the provider; production code cannot end up trusting a mock
+	/// root because mock providers are only compiled with the `mock`
+	/// feature.
+	fn attestation_root_ca_der(&self) -> Vec<u8> {
+		nitro::cert_from_pem(nitro::AWS_ROOT_CERT_PEM)
+			.expect("hardcoded AWS Nitro root certificate is valid PEM. qed.")
+	}
 }
 
 /// Nitro Secure Module endpoints.

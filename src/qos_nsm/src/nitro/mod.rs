@@ -577,7 +577,7 @@ impl SigningPublicKey for P384PubKey {
 	}
 }
 
-struct Sha2;
+pub(crate) struct Sha2;
 impl Hash for Sha2 {
 	fn hash(digest: MessageDigest, data: &[u8]) -> Result<Vec<u8>, CoseError> {
 		use sha2::Digest as _;
