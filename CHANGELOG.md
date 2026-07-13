@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_net` - [0.12.2](https://github.com/tkhq/qos/compare/qos_net-v0.12.1...qos_net-v0.12.2) - 2026-07-13
+
+### Other
+- reuse DNS resolver instances
+- remove duplicate README file
+
+## `qos_core` - [0.12.2](https://github.com/tkhq/qos/compare/qos_core-v0.12.1...qos_core-v0.12.2) - 2026-07-13
+
+### Other
+- Merge origin/main into zeke/mock-nsm-attestation
+- sign mock attestation docs; qos_core: fully verify key export
+
+## `qos_nsm` - [0.12.2](https://github.com/tkhq/qos/compare/qos_nsm-v0.12.1...qos_nsm-v0.12.2) - 2026-07-13
+
+### Other
+- Merge origin/main into zeke/mock-nsm-attestation
+- sign mock attestation docs; qos_core: fully verify key export
+
 ## `qos_client` - [0.12.1](https://github.com/tkhq/qos/compare/qos_client-v0.12.0...qos_client-v0.12.1) - 2026-07-09
 
 ### Fixed
