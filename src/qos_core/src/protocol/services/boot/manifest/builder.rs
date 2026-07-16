@@ -1,7 +1,5 @@
 //! Builder for v2 manifests.
 
-use std::{error::Error, fmt};
-
 use crate::protocol::{
 	Hash256,
 	services::boot::{
@@ -13,59 +11,36 @@ use crate::protocol::{
 use super::{DnsConfig, ManifestV2, ManifestVersion, VersionedManifest};
 
 /// An error returned when a required manifest value was not provided.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ManifestBuilderError {
 	/// The manifest namespace was not provided.
+	#[error("missing required manifest field: namespace")]
 	MissingNamespace,
 	/// The pivot binary hash was not provided.
+	#[error("missing required manifest field: pivot hash")]
 	MissingPivotHash,
 	/// The manifest approval set was not provided.
+	#[error("missing required manifest field: manifest set")]
 	MissingManifestSet,
 	/// The share approval set was not provided.
+	#[error("missing required manifest field: share set")]
 	MissingShareSet,
 	/// The enclave configuration was not provided.
+	#[error("missing required manifest field: enclave configuration")]
 	MissingEnclave,
 	/// The patch approval set was not provided for a v1 manifest.
+	#[error("missing required manifest field: patch set")]
 	MissingPatchSet,
 	/// A v1 manifest cannot contain pivot environment configuration.
+	#[error("manifest v1 does not support pivot environment configuration")]
 	V1DoesNotSupportPivotEnv,
 	/// A v1 manifest cannot contain DNS configuration.
+	#[error("manifest v1 does not support DNS configuration")]
 	V1DoesNotSupportDns,
 	/// A v2 manifest cannot contain a patch approval set.
+	#[error("manifest v2 does not support a patch set")]
 	V2DoesNotSupportPatchSet,
 }
-
-impl fmt::Display for ManifestBuilderError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let field = match self {
-			Self::MissingNamespace => "namespace",
-			Self::MissingPivotHash => "pivot hash",
-			Self::MissingManifestSet => "manifest set",
-			Self::MissingShareSet => "share set",
-			Self::MissingEnclave => "enclave configuration",
-			Self::MissingPatchSet => "patch set",
-			Self::V1DoesNotSupportPivotEnv => {
-				return write!(
-					f,
-					"manifest v1 does not support pivot environment configuration"
-				);
-			}
-			Self::V1DoesNotSupportDns => {
-				return write!(
-					f,
-					"manifest v1 does not support DNS configuration"
-				);
-			}
-			Self::V2DoesNotSupportPatchSet => {
-				return write!(f, "manifest v2 does not support a patch set");
-			}
-		};
-
-		write!(f, "missing required manifest field: {field}")
-	}
-}
-
-impl Error for ManifestBuilderError {}
 
 /// Builds a versioned manifest using either the v1 or v2 schema.
 ///
@@ -115,6 +90,18 @@ impl ManifestBuilder {
 			patch_set: None,
 			dns: None,
 		}
+	}
+
+	/// Create an empty v1 manifest builder.
+	#[must_use]
+	pub fn v1() -> Self {
+		Self::new().with_version(ManifestVersion::V1)
+	}
+
+	/// Create an empty v2 manifest builder.
+	#[must_use]
+	pub fn v2() -> Self {
+		Self::new().with_version(ManifestVersion::V2)
 	}
 
 	/// Select the manifest schema version to build.
