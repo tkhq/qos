@@ -1,4 +1,5 @@
-//! Artifact governance: quorum approval of WASM artifacts.
+//! Artifact governance: quorum approval of WASM artifacts and of the
+//! program→policy bindings ([`Ruleset`]) that gate them.
 //!
 //! Reuses the real QOS quorum primitives ([`ManifestSet`], [`Approval`],
 //! `QuorumMember`) so approving a WASM artifact works exactly like approving
@@ -13,7 +14,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use qos_core::protocol::services::boot::{Approval, ManifestSet, QuorumMember};
 use qos_crypto::sha_256;
 use qos_p256::{P256Pair, P256Public};
-use vfaas_abi::VFAAS_ABI_VERSION;
+use vfaas_abi::{PolicyHash, ProgramHash, VFAAS_ABI_VERSION};
 
 /// What kind of artifact a descriptor describes. The kind is part of the
 /// signed descriptor, so a blob approved as a policy can never be invoked
@@ -90,6 +91,49 @@ pub struct ArtifactEnvelope {
 	pub approvals: Vec<Approval>,
 }
 
+/// Domain-separation prefix for ruleset approval payloads, so a member's
+/// signature over a ruleset can never double as a signature over an
+/// artifact descriptor (whose payload is the bare descriptor hash), or vice
+/// versa.
+const RULESET_APPROVAL_DOMAIN: &[u8] = b"vfaas-ruleset-v1";
+
+/// A binding of a program to the policy that gates every execution of it.
+///
+/// Like an [`Artifact`] descriptor, the binding itself is what quorum
+/// members sign: which policy governs which program is a quorum decision
+/// made at registration, never a caller choice made at execute time.
+/// Rebinding a program to a different policy takes a fresh quorum-approved
+/// ruleset.
+#[derive(
+	BorshDeserialize, BorshSerialize, Debug, Clone, Copy, PartialEq, Eq,
+)]
+pub struct Ruleset {
+	/// The program being bound.
+	pub program: ProgramHash,
+	/// The policy that gates the program.
+	pub policy: PolicyHash,
+}
+
+impl Ruleset {
+	/// The message quorum members sign: SHA-256 of the domain-prefixed
+	/// Borsh-serialized binding.
+	#[must_use]
+	pub fn approval_payload_hash(&self) -> [u8; 32] {
+		let mut bytes = RULESET_APPROVAL_DOMAIN.to_vec();
+		bytes.extend(borsh::to_vec(self).expect("ruleset serializes"));
+		sha_256(&bytes)
+	}
+}
+
+/// A ruleset plus the quorum approvals over it.
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
+pub struct RulesetEnvelope {
+	/// The approved binding.
+	pub ruleset: Ruleset,
+	/// Quorum member signatures over [`Ruleset::approval_payload_hash`].
+	pub approvals: Vec<Approval>,
+}
+
 /// Why envelope verification failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GovernanceError {
@@ -161,14 +205,44 @@ pub fn verify_artifact_envelope(
 	envelope: &ArtifactEnvelope,
 	artifact_set: &ManifestSet,
 ) -> Result<(), GovernanceError> {
+	verify_approvals(
+		&envelope.artifact.approval_payload_hash(),
+		&envelope.approvals,
+		artifact_set,
+	)
+}
+
+/// Verify that `envelope` carries at least `artifact_set.threshold` distinct,
+/// valid member approvals over the program→policy binding.
+///
+/// # Errors
+///
+/// Returns a [`GovernanceError`] describing the first check that failed.
+pub fn verify_ruleset_envelope(
+	envelope: &RulesetEnvelope,
+	artifact_set: &ManifestSet,
+) -> Result<(), GovernanceError> {
+	verify_approvals(
+		&envelope.ruleset.approval_payload_hash(),
+		&envelope.approvals,
+		artifact_set,
+	)
+}
+
+/// The shared K-of-N check: membership, signature over `payload_hash`,
+/// duplicate rejection, threshold.
+fn verify_approvals(
+	payload_hash: &[u8; 32],
+	approvals: &[Approval],
+	artifact_set: &ManifestSet,
+) -> Result<(), GovernanceError> {
 	if artifact_set.threshold == 0 {
 		return Err(GovernanceError::ZeroThreshold);
 	}
 
-	let payload_hash = envelope.artifact.approval_payload_hash();
 	let mut unique_approvers = HashSet::new();
 
-	for approval in &envelope.approvals {
+	for approval in approvals {
 		if !artifact_set.members.contains(&approval.member) {
 			return Err(GovernanceError::NotAMember {
 				alias: approval.member.alias.clone(),
@@ -180,7 +254,7 @@ pub fn verify_artifact_envelope(
 				alias: approval.member.alias.clone(),
 			})?;
 
-		public_key.verify(&payload_hash, &approval.signature).map_err(
+		public_key.verify(payload_hash, &approval.signature).map_err(
 			|_| GovernanceError::InvalidSignature {
 				alias: approval.member.alias.clone(),
 			},
@@ -218,6 +292,27 @@ pub fn approve_artifact(
 	Approval {
 		signature: pair
 			.sign(&artifact.approval_payload_hash())
+			.expect("P256 signing is infallible with a valid pair"),
+		member,
+	}
+}
+
+/// Sign a program→policy binding as `member`, producing an [`Approval`] for
+/// its [`RulesetEnvelope`]. Used by tooling and tests; the pivot only ever
+/// verifies.
+///
+/// # Panics
+///
+/// Panics if signing fails, which indicates an unusable key pair.
+#[must_use]
+pub fn approve_ruleset(
+	ruleset: &Ruleset,
+	pair: &P256Pair,
+	member: QuorumMember,
+) -> Approval {
+	Approval {
+		signature: pair
+			.sign(&ruleset.approval_payload_hash())
 			.expect("P256 signing is infallible with a valid pair"),
 		member,
 	}
@@ -360,6 +455,96 @@ mod tests {
 		assert_eq!(
 			verify_artifact_envelope(&envelope, &set),
 			Err(GovernanceError::ZeroThreshold)
+		);
+	}
+
+	fn test_ruleset() -> Ruleset {
+		Ruleset {
+			program: ProgramHash::new([1u8; 32]),
+			policy: PolicyHash::new([2u8; 32]),
+		}
+	}
+
+	#[test]
+	fn ruleset_threshold_approvals_verify() {
+		let pair1 = P256Pair::generate().unwrap();
+		let pair2 = P256Pair::generate().unwrap();
+		let member1 = member("user1", &pair1);
+		let member2 = member("user2", &pair2);
+		let set = ManifestSet {
+			threshold: 2,
+			members: vec![member1.clone(), member2.clone()],
+		};
+		let ruleset = test_ruleset();
+		let envelope = RulesetEnvelope {
+			ruleset,
+			approvals: vec![
+				approve_ruleset(&ruleset, &pair1, member1),
+				approve_ruleset(&ruleset, &pair2, member2),
+			],
+		};
+
+		assert_eq!(verify_ruleset_envelope(&envelope, &set), Ok(()));
+	}
+
+	#[test]
+	fn ruleset_insufficient_approvals_are_rejected() {
+		let pair1 = P256Pair::generate().unwrap();
+		let pair2 = P256Pair::generate().unwrap();
+		let member1 = member("user1", &pair1);
+		let member2 = member("user2", &pair2);
+		let set = ManifestSet {
+			threshold: 2,
+			members: vec![member1.clone(), member2],
+		};
+		let ruleset = test_ruleset();
+		let envelope = RulesetEnvelope {
+			ruleset,
+			approvals: vec![approve_ruleset(&ruleset, &pair1, member1)],
+		};
+
+		assert_eq!(
+			verify_ruleset_envelope(&envelope, &set),
+			Err(GovernanceError::InsufficientApprovals { got: 1, need: 2 })
+		);
+	}
+
+	#[test]
+	fn ruleset_approval_binds_both_hashes() {
+		let pair = P256Pair::generate().unwrap();
+		let member1 = member("user1", &pair);
+		let set = ManifestSet { threshold: 1, members: vec![member1.clone()] };
+		// Approve a binding to one policy, then present the approval for a
+		// binding to a different policy.
+		let approved = test_ruleset();
+		let presented =
+			Ruleset { policy: PolicyHash::new([9u8; 32]), ..approved };
+		let envelope = RulesetEnvelope {
+			ruleset: presented,
+			approvals: vec![approve_ruleset(&approved, &pair, member1)],
+		};
+
+		assert_eq!(
+			verify_ruleset_envelope(&envelope, &set),
+			Err(GovernanceError::InvalidSignature { alias: "user1".into() })
+		);
+	}
+
+	#[test]
+	fn artifact_approval_is_not_a_ruleset_approval() {
+		// Same signer, but artifact and ruleset payloads are domain-separated
+		// — an artifact approval presented for a ruleset must fail.
+		let pair = P256Pair::generate().unwrap();
+		let member1 = member("user1", &pair);
+		let set = ManifestSet { threshold: 1, members: vec![member1.clone()] };
+		let envelope = RulesetEnvelope {
+			ruleset: test_ruleset(),
+			approvals: vec![approve_artifact(&test_artifact(), &pair, member1)],
+		};
+
+		assert_eq!(
+			verify_ruleset_envelope(&envelope, &set),
+			Err(GovernanceError::InvalidSignature { alias: "user1".into() })
 		);
 	}
 }

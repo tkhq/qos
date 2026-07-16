@@ -3,15 +3,18 @@
 //! Holds an in-memory registry of quorum-approved WASM artifacts (programs
 //! and policies). Registration requires an `ArtifactEnvelope` whose
 //! approvals verify against the `ManifestSet` this pivot was launched with
-//! — the same K-of-N quorum machinery QOS uses for manifests. The WASM
-//! module is compiled at registration time (a garbage blob fails to
-//! register, not to execute) and the compiled module is cached; per-call
-//! cost is a fresh `Store` + instantiation.
+//! — the same K-of-N quorum machinery QOS uses for manifests. A program is
+//! additionally registered with a quorum-approved `RulesetEnvelope` binding
+//! it to an already-registered policy: which policy gates which program is
+//! a quorum decision, never a caller choice. The WASM module is compiled at
+//! registration time (a garbage blob fails to register, not to execute)
+//! and the compiled module is cached; per-call cost is a fresh `Store` +
+//! instantiation.
 //!
-//! Execute selects a registered (program, policy) pair, evaluates the
-//! policy first, and runs the program only on `Decision::Allow`. Every
-//! attempt — allowed, denied, or failed — produces an
-//! `ExecutionAttestationPayload` signed by the enclave ephemeral key, so
+//! Execute names a registered program; the pivot resolves its bound policy,
+//! evaluates the policy first, and runs the program only on
+//! `Decision::Allow`. Every attempt — allowed, denied, or failed — produces
+//! an `ExecutionAttestationPayload` signed by the enclave ephemeral key, so
 //! denials and crashes are as auditable as successes.
 //!
 //! Args: `<usock_path> <manifest_set_path> <ephemeral_key_path>` where
@@ -29,7 +32,8 @@ use borsh::BorshDeserialize;
 use integration::vfaas::{
 	DEFAULT_FUEL_PER_CALL, RegisteredArtifact, VfaasMsg, engine_id,
 	governance::{
-		Artifact, ArtifactEnvelope, ArtifactKind, verify_artifact_envelope,
+		Artifact, ArtifactEnvelope, ArtifactKind, RulesetEnvelope,
+		verify_artifact_envelope, verify_ruleset_envelope,
 	},
 };
 use qos_core::{
@@ -51,12 +55,15 @@ use wasmtime::{Config, Engine, Linker, Memory, Module, Store, TypedFunc};
 const SERVER_CONCURRENCY: usize = 16;
 
 /// A registered artifact: the approved envelope, the raw blob (policies
-/// receive the program bytes), and the module compiled at registration.
+/// receive the program bytes), the module compiled at registration, and —
+/// for programs — the quorum-approved binding to the policy gating it.
 #[derive(Clone)]
 struct StoredArtifact {
 	envelope: ArtifactEnvelope,
 	wasm: Arc<Vec<u8>>,
 	module: Module,
+	/// `Some` iff the artifact is a `Function`; enforced at registration.
+	ruleset: Option<RulesetEnvelope>,
 }
 
 impl StoredArtifact {
@@ -95,12 +102,12 @@ impl Processor {
 
 	async fn handle(&self, msg: VfaasMsg) -> VfaasMsg {
 		match msg {
-			VfaasMsg::RegisterArtifactRequest { envelope, wasm } => {
-				self.register(envelope, wasm).await
+			VfaasMsg::RegisterArtifactRequest { envelope, wasm, ruleset } => {
+				self.register(envelope, wasm, ruleset).await
 			}
 			VfaasMsg::ListArtifactsRequest => self.list().await,
-			VfaasMsg::ExecuteRequest { program, policy, input } => {
-				self.execute(program, policy, input).await
+			VfaasMsg::ExecuteRequest { program, input } => {
+				self.execute(program, input).await
 			}
 			VfaasMsg::RegisterArtifactResponse { .. }
 			| VfaasMsg::ListArtifactsResponse { .. }
@@ -115,6 +122,7 @@ impl Processor {
 		&self,
 		envelope: ArtifactEnvelope,
 		wasm: Vec<u8>,
+		ruleset: Option<RulesetEnvelope>,
 	) -> VfaasMsg {
 		if sha_256(&wasm) != envelope.artifact.wasm_hash {
 			return VfaasMsg::Error(format!(
@@ -131,6 +139,53 @@ impl Processor {
 		if let Err(e) = verify_artifact_envelope(&envelope, &self.artifact_set)
 		{
 			return VfaasMsg::Error(format!("approval verification failed: {e}"));
+		}
+
+		// A program registers with — and only ever runs under — a
+		// quorum-approved policy binding.
+		match (envelope.artifact.kind, &ruleset) {
+			(ArtifactKind::Function, None) => {
+				return VfaasMsg::Error(format!(
+					"program {} cannot be registered without a \
+					 quorum-approved policy ruleset",
+					envelope.artifact.name
+				));
+			}
+			(ArtifactKind::Policy, Some(_)) => {
+				return VfaasMsg::Error(format!(
+					"policy {} cannot carry a ruleset; rulesets bind programs",
+					envelope.artifact.name
+				));
+			}
+			(ArtifactKind::Function, Some(rs)) => {
+				if rs.ruleset.program
+					!= ProgramHash::new(envelope.artifact.wasm_hash)
+				{
+					return VfaasMsg::Error(format!(
+						"ruleset binds program {}, not {} ({})",
+						rs.ruleset.program,
+						envelope.artifact.name,
+						qos_hex::encode(&envelope.artifact.wasm_hash),
+					));
+				}
+				if let Err(e) =
+					verify_ruleset_envelope(rs, &self.artifact_set)
+				{
+					return VfaasMsg::Error(format!(
+						"ruleset approval verification failed: {e}"
+					));
+				}
+				if let Err(e) = self
+					.lookup(*rs.ruleset.policy.as_bytes(), ArtifactKind::Policy)
+					.await
+				{
+					return VfaasMsg::Error(format!(
+						"ruleset for {} names an unusable policy: {e}",
+						envelope.artifact.name
+					));
+				}
+			}
+			(ArtifactKind::Policy, None) => {}
 		}
 
 		// Compile at registration: an invalid blob is rejected here, with
@@ -159,7 +214,7 @@ impl Processor {
 		let artifact = envelope.artifact.clone();
 		self.artifacts.write().await.insert(
 			artifact.wasm_hash,
-			StoredArtifact { envelope, wasm: Arc::new(wasm), module },
+			StoredArtifact { envelope, wasm: Arc::new(wasm), module, ruleset },
 		);
 		VfaasMsg::RegisterArtifactResponse { artifact }
 	}
@@ -176,6 +231,10 @@ impl Processor {
 					stored.envelope.approvals.len(),
 				)
 				.unwrap_or(u32::MAX),
+				bound_policy: stored
+					.ruleset
+					.as_ref()
+					.map(|rs| rs.ruleset.policy),
 			})
 			.collect();
 		artifacts.sort_by(|a, b| {
@@ -211,18 +270,24 @@ impl Processor {
 		Ok(stored)
 	}
 
-	async fn execute(
-		&self,
-		program: ProgramHash,
-		policy: PolicyHash,
-		input: Vec<u8>,
-	) -> VfaasMsg {
+	async fn execute(&self, program: ProgramHash, input: Vec<u8>) -> VfaasMsg {
 		let program_artifact =
 			match self.lookup(*program.as_bytes(), ArtifactKind::Function).await
 			{
 				Ok(stored) => stored,
 				Err(e) => return VfaasMsg::Error(e),
 			};
+		// The gating policy comes from the registered ruleset, never the
+		// request. Registration guarantees a function carries a binding, so
+		// a miss here is a pivot bug.
+		let Some(policy) =
+			program_artifact.ruleset.as_ref().map(|rs| rs.ruleset.policy)
+		else {
+			return VfaasMsg::Error(format!(
+				"program {} has no bound policy",
+				program_artifact.artifact().name
+			));
+		};
 		let policy_artifact =
 			match self.lookup(*policy.as_bytes(), ArtifactKind::Policy).await {
 				Ok(stored) => stored,

@@ -15,7 +15,8 @@ use integration::{
 	vfaas::{
 		DEFAULT_FUEL_PER_CALL, VfaasMsg, engine_id,
 		governance::{
-			Artifact, ArtifactEnvelope, ArtifactKind, approve_artifact,
+			Artifact, ArtifactEnvelope, ArtifactKind, Ruleset,
+			RulesetEnvelope, approve_artifact, approve_ruleset,
 		},
 		verify_execution_attestation,
 	},
@@ -220,6 +221,33 @@ impl TestQuorum {
 			],
 		}
 	}
+
+	fn ruleset_approval(&self, ruleset: &Ruleset, index: usize) -> Approval {
+		approve_ruleset(
+			ruleset,
+			&self.pairs[index],
+			self.members[index].clone(),
+		)
+	}
+
+	/// A 2-of-3 approved program→policy binding.
+	fn ruleset_envelope(
+		&self,
+		program: [u8; 32],
+		policy: [u8; 32],
+	) -> RulesetEnvelope {
+		let ruleset = Ruleset {
+			program: ProgramHash::new(program),
+			policy: PolicyHash::new(policy),
+		};
+		RulesetEnvelope {
+			ruleset,
+			approvals: vec![
+				self.ruleset_approval(&ruleset, 0),
+				self.ruleset_approval(&ruleset, 1),
+			],
+		}
+	}
 }
 
 /// Boot a pivot on `socket` with a fresh quorum. Returns handles that clean
@@ -279,11 +307,16 @@ impl TestPivot {
 		name: &str,
 		wasm: Vec<u8>,
 		fuel_budget: Option<u64>,
+		ruleset: Option<RulesetEnvelope>,
 	) -> [u8; 32] {
 		let envelope = self.quorum.envelope(kind, name, &wasm, fuel_budget);
 		let hash = envelope.artifact.wasm_hash;
 		let response = self
-			.call(&VfaasMsg::RegisterArtifactRequest { envelope, wasm })
+			.call(&VfaasMsg::RegisterArtifactRequest {
+				envelope,
+				wasm,
+				ruleset,
+			})
 			.await;
 		match response {
 			VfaasMsg::RegisterArtifactResponse { artifact } => {
@@ -294,15 +327,34 @@ impl TestPivot {
 		}
 	}
 
-	async fn execute(
+	async fn register_policy(&self, name: &str, wasm: Vec<u8>) -> [u8; 32] {
+		self.register(ArtifactKind::Policy, name, wasm, None, None).await
+	}
+
+	/// Register a program bound to `policy`. Registering the same wasm again
+	/// with a different ruleset is how a quorum rotates a program's policy.
+	async fn register_program(
 		&self,
-		program: [u8; 32],
+		name: &str,
+		wasm: Vec<u8>,
+		fuel_budget: Option<u64>,
 		policy: [u8; 32],
-		input: Vec<u8>,
-	) -> VfaasMsg {
+	) -> [u8; 32] {
+		let ruleset =
+			self.quorum.ruleset_envelope(sha_256(&wasm), policy);
+		self.register(
+			ArtifactKind::Function,
+			name,
+			wasm,
+			fuel_budget,
+			Some(ruleset),
+		)
+		.await
+	}
+
+	async fn execute(&self, program: [u8; 32], input: Vec<u8>) -> VfaasMsg {
 		self.call(&VfaasMsg::ExecuteRequest {
 			program: ProgramHash::new(program),
-			policy: PolicyHash::new(policy),
 			input,
 		})
 		.await
@@ -338,11 +390,16 @@ fn wasm(wat_text: &str) -> Vec<u8> {
 async fn vfaas_register_rejections() {
 	let pivot = TestPivot::boot("reg").await;
 	let echo = wasm(ECHO_PROGRAM_WAT);
-
-	// A well-formed 2-of-3 envelope registers.
-	pivot
-		.register(ArtifactKind::Function, "echo", echo.clone(), None)
+	let allow_all = pivot
+		.register_policy("allow-all", wasm(ALLOW_ALL_POLICY_WAT))
 		.await;
+
+	// A well-formed 2-of-3 envelope with a well-formed binding registers.
+	let echo_hash = pivot
+		.register_program("echo", echo.clone(), None, allow_all)
+		.await;
+	let echo_ruleset =
+		|| pivot.quorum.ruleset_envelope(echo_hash, allow_all);
 
 	// Tampered blob: envelope approves `echo`, different bytes arrive.
 	let envelope = pivot.quorum.envelope(
@@ -355,6 +412,7 @@ async fn vfaas_register_rejections() {
 		.call(&VfaasMsg::RegisterArtifactRequest {
 			envelope,
 			wasm: wasm(TRAPPING_PROGRAM_WAT),
+			ruleset: Some(echo_ruleset()),
 		})
 		.await;
 	let VfaasMsg::Error(reason) = response else {
@@ -379,6 +437,7 @@ async fn vfaas_register_rejections() {
 		.call(&VfaasMsg::RegisterArtifactRequest {
 			envelope,
 			wasm: echo.clone(),
+			ruleset: Some(echo_ruleset()),
 		})
 		.await;
 	let VfaasMsg::Error(reason) = response else {
@@ -398,6 +457,7 @@ async fn vfaas_register_rejections() {
 		.call(&VfaasMsg::RegisterArtifactRequest {
 			envelope,
 			wasm: echo.clone(),
+			ruleset: Some(echo_ruleset()),
 		})
 		.await;
 	let VfaasMsg::Error(reason) = response else {
@@ -425,6 +485,7 @@ async fn vfaas_register_rejections() {
 		.call(&VfaasMsg::RegisterArtifactRequest {
 			envelope,
 			wasm: echo.clone(),
+			ruleset: Some(echo_ruleset()),
 		})
 		.await;
 	let VfaasMsg::Error(reason) = response else {
@@ -432,8 +493,141 @@ async fn vfaas_register_rejections() {
 	};
 	assert!(reason.contains("non-member"), "{reason}");
 
-	// Garbage blob with a fully valid quorum envelope: rejected at
-	// registration (module compilation), never at execute time.
+	// A program without a ruleset cannot register, no matter how well its
+	// own envelope is approved.
+	let envelope = pivot.quorum.envelope(
+		ArtifactKind::Function,
+		"echo",
+		&echo,
+		None,
+	);
+	let response = pivot
+		.call(&VfaasMsg::RegisterArtifactRequest {
+			envelope,
+			wasm: echo.clone(),
+			ruleset: None,
+		})
+		.await;
+	let VfaasMsg::Error(reason) = response else {
+		panic!("unbound program must be rejected, got {response:?}");
+	};
+	assert!(reason.contains("without a quorum-approved policy"), "{reason}");
+
+	// A policy cannot carry a ruleset; bindings gate programs.
+	let deny_wasm = wasm(DENY_ALL_POLICY_WAT);
+	let envelope = pivot.quorum.envelope(
+		ArtifactKind::Policy,
+		"deny-all",
+		&deny_wasm,
+		None,
+	);
+	let response = pivot
+		.call(&VfaasMsg::RegisterArtifactRequest {
+			envelope,
+			wasm: deny_wasm,
+			ruleset: Some(echo_ruleset()),
+		})
+		.await;
+	let VfaasMsg::Error(reason) = response else {
+		panic!("policy with ruleset must be rejected, got {response:?}");
+	};
+	assert!(reason.contains("cannot carry a ruleset"), "{reason}");
+
+	// The ruleset must bind the program being registered, not another one.
+	let trapping = wasm(TRAPPING_PROGRAM_WAT);
+	let envelope = pivot.quorum.envelope(
+		ArtifactKind::Function,
+		"trap",
+		&trapping,
+		None,
+	);
+	let response = pivot
+		.call(&VfaasMsg::RegisterArtifactRequest {
+			envelope,
+			wasm: trapping.clone(),
+			ruleset: Some(echo_ruleset()),
+		})
+		.await;
+	let VfaasMsg::Error(reason) = response else {
+		panic!("mismatched ruleset must be rejected, got {response:?}");
+	};
+	assert!(reason.contains("ruleset binds program"), "{reason}");
+
+	// The ruleset itself needs threshold approvals: 1-of-2 is refused.
+	let ruleset = Ruleset {
+		program: ProgramHash::new(sha_256(&trapping)),
+		policy: PolicyHash::new(allow_all),
+	};
+	let underapproved = RulesetEnvelope {
+		ruleset,
+		approvals: vec![pivot.quorum.ruleset_approval(&ruleset, 0)],
+	};
+	let envelope = pivot.quorum.envelope(
+		ArtifactKind::Function,
+		"trap",
+		&trapping,
+		None,
+	);
+	let response = pivot
+		.call(&VfaasMsg::RegisterArtifactRequest {
+			envelope,
+			wasm: trapping.clone(),
+			ruleset: Some(underapproved),
+		})
+		.await;
+	let VfaasMsg::Error(reason) = response else {
+		panic!("underapproved ruleset must be rejected, got {response:?}");
+	};
+	assert!(
+		reason.contains("ruleset approval") && reason.contains("not enough"),
+		"{reason}"
+	);
+
+	// The bound policy must already be registered...
+	let envelope = pivot.quorum.envelope(
+		ArtifactKind::Function,
+		"trap",
+		&trapping,
+		None,
+	);
+	let unregistered_policy = pivot
+		.quorum
+		.ruleset_envelope(sha_256(&trapping), [7u8; 32]);
+	let response = pivot
+		.call(&VfaasMsg::RegisterArtifactRequest {
+			envelope,
+			wasm: trapping.clone(),
+			ruleset: Some(unregistered_policy),
+		})
+		.await;
+	let VfaasMsg::Error(reason) = response else {
+		panic!("unknown bound policy must be rejected, got {response:?}");
+	};
+	assert!(reason.contains("not registered"), "{reason}");
+
+	// ...and must actually be a policy, not another program.
+	let envelope = pivot.quorum.envelope(
+		ArtifactKind::Function,
+		"trap",
+		&trapping,
+		None,
+	);
+	let bound_to_program =
+		pivot.quorum.ruleset_envelope(sha_256(&trapping), echo_hash);
+	let response = pivot
+		.call(&VfaasMsg::RegisterArtifactRequest {
+			envelope,
+			wasm: trapping,
+			ruleset: Some(bound_to_program),
+		})
+		.await;
+	let VfaasMsg::Error(reason) = response else {
+		panic!("function-as-policy binding must be rejected, got {response:?}");
+	};
+	assert!(reason.contains("expected a Policy"), "{reason}");
+
+	// Garbage blob with a fully valid quorum envelope and binding: rejected
+	// at registration (module compilation), never at execute time.
 	let garbage = b"definitely not wasm".to_vec();
 	let envelope = pivot.quorum.envelope(
 		ArtifactKind::Function,
@@ -441,8 +635,14 @@ async fn vfaas_register_rejections() {
 		&garbage,
 		None,
 	);
+	let ruleset =
+		pivot.quorum.ruleset_envelope(sha_256(&garbage), allow_all);
 	let response = pivot
-		.call(&VfaasMsg::RegisterArtifactRequest { envelope, wasm: garbage })
+		.call(&VfaasMsg::RegisterArtifactRequest {
+			envelope,
+			wasm: garbage,
+			ruleset: Some(ruleset),
+		})
 		.await;
 	let VfaasMsg::Error(reason) = response else {
 		panic!("garbage blob must be rejected, got {response:?}");
@@ -467,7 +667,11 @@ async fn vfaas_register_rejections() {
 		],
 	};
 	let response = pivot
-		.call(&VfaasMsg::RegisterArtifactRequest { envelope, wasm: echo })
+		.call(&VfaasMsg::RegisterArtifactRequest {
+			envelope,
+			wasm: echo,
+			ruleset: Some(echo_ruleset()),
+		})
 		.await;
 	let VfaasMsg::Error(reason) = response else {
 		panic!("future-ABI artifact must be rejected, got {response:?}");
@@ -479,58 +683,27 @@ async fn vfaas_register_rejections() {
 async fn vfaas_execute_flows() {
 	let pivot = TestPivot::boot("exec").await;
 
+	let allow_all = pivot
+		.register_policy("allow-all", wasm(ALLOW_ALL_POLICY_WAT))
+		.await;
+	let deny_all =
+		pivot.register_policy("deny-all", wasm(DENY_ALL_POLICY_WAT)).await;
+	let trapping_policy = pivot
+		.register_policy("trap-policy", wasm(TRAPPING_POLICY_WAT))
+		.await;
+
+	let echo_wasm = wasm(ECHO_PROGRAM_WAT);
 	let echo = pivot
-		.register(
-			ArtifactKind::Function,
-			"echo",
-			wasm(ECHO_PROGRAM_WAT),
-			None,
-		)
+		.register_program("echo", echo_wasm.clone(), None, allow_all)
 		.await;
 	let trapping_program = pivot
-		.register(
-			ArtifactKind::Function,
-			"trap",
-			wasm(TRAPPING_PROGRAM_WAT),
-			None,
-		)
-		.await;
-	let allow_all = pivot
-		.register(
-			ArtifactKind::Policy,
-			"allow-all",
-			wasm(ALLOW_ALL_POLICY_WAT),
-			None,
-		)
-		.await;
-	let deny_all = pivot
-		.register(
-			ArtifactKind::Policy,
-			"deny-all",
-			wasm(DENY_ALL_POLICY_WAT),
-			None,
-		)
-		.await;
-	let trapping_policy = pivot
-		.register(
-			ArtifactKind::Policy,
-			"trap-policy",
-			wasm(TRAPPING_POLICY_WAT),
-			None,
-		)
+		.register_program("trap", wasm(TRAPPING_PROGRAM_WAT), None, allow_all)
 		.await;
 
-	// List reflects every registration with its approval count.
-	let response = pivot.call(&VfaasMsg::ListArtifactsRequest).await;
-	let VfaasMsg::ListArtifactsResponse { artifacts } = response else {
-		panic!("expected ListArtifactsResponse, got {response:?}");
-	};
-	assert_eq!(artifacts.len(), 5);
-	assert!(artifacts.iter().all(|a| a.approval_count == 2));
-
-	// Allow path: policy passes, program echoes, output hash is bound.
+	// Allow path: the bound policy passes, program echoes, output hash is
+	// bound. The caller names only the program.
 	let input = b"attest me".to_vec();
-	let response = pivot.execute(echo, allow_all, input.clone()).await;
+	let response = pivot.execute(echo, input.clone()).await;
 	let (output, attestation) = verified(response, echo, allow_all, &input);
 	assert_eq!(output, Some(input.clone()));
 	assert_eq!(
@@ -539,8 +712,12 @@ async fn vfaas_execute_flows() {
 	);
 	let first_request_id = attestation.payload.request_id;
 
-	// Deny path: no output, and the denial itself is signed.
-	let response = pivot.execute(echo, deny_all, input.clone()).await;
+	// Deny path via rebinding: a fresh quorum-approved ruleset rotates
+	// echo's policy to deny-all — same program bytes, new binding — and the
+	// attestation now names the new policy. No output, and the denial
+	// itself is signed.
+	pivot.register_program("echo", echo_wasm.clone(), None, deny_all).await;
+	let response = pivot.execute(echo, input.clone()).await;
 	let (output, attestation) = verified(response, echo, deny_all, &input);
 	assert_eq!(output, None);
 	assert_eq!(
@@ -549,9 +726,12 @@ async fn vfaas_execute_flows() {
 	);
 	assert!(attestation.payload.request_id > first_request_id);
 
-	// Failed path, policy stage: the trap is attested as Failed, not
-	// misreported as a denial.
-	let response = pivot.execute(echo, trapping_policy, input.clone()).await;
+	// Failed path, policy stage (rebind again): the trap is attested as
+	// Failed, not misreported as a denial.
+	pivot
+		.register_program("echo", echo_wasm.clone(), None, trapping_policy)
+		.await;
+	let response = pivot.execute(echo, input.clone()).await;
 	let (output, attestation) =
 		verified(response, echo, trapping_policy, &input);
 	assert_eq!(output, None);
@@ -563,8 +743,7 @@ async fn vfaas_execute_flows() {
 	assert!(reason.contains("trap"), "{reason}");
 
 	// Failed path, program stage: policy allowed, program trapped.
-	let response =
-		pivot.execute(trapping_program, allow_all, input.clone()).await;
+	let response = pivot.execute(trapping_program, input.clone()).await;
 	let (output, attestation) =
 		verified(response, trapping_program, allow_all, &input);
 	assert_eq!(output, None);
@@ -577,15 +756,14 @@ async fn vfaas_execute_flows() {
 
 	// Fuel: under the default budget the hungry program starves...
 	let hungry_default = pivot
-		.register(
-			ArtifactKind::Function,
+		.register_program(
 			"hungry-default",
 			wasm(&fuel_hungry_program_wat("\\2a")),
 			None,
+			allow_all,
 		)
 		.await;
-	let response =
-		pivot.execute(hungry_default, allow_all, input.clone()).await;
+	let response = pivot.execute(hungry_default, input.clone()).await;
 	let (output, attestation) =
 		verified(response, hungry_default, allow_all, &input);
 	assert_eq!(output, None);
@@ -600,15 +778,14 @@ async fn vfaas_execute_flows() {
 	const HUNGRY_FUEL_BUDGET: u64 = 100_000_000;
 	const { assert!(DEFAULT_FUEL_PER_CALL < HUNGRY_FUEL_BUDGET) };
 	let hungry_budgeted = pivot
-		.register(
-			ArtifactKind::Function,
+		.register_program(
 			"hungry-budgeted",
 			wasm(&fuel_hungry_program_wat("\\2b")),
 			Some(HUNGRY_FUEL_BUDGET),
+			allow_all,
 		)
 		.await;
-	let response =
-		pivot.execute(hungry_budgeted, allow_all, input.clone()).await;
+	let response = pivot.execute(hungry_budgeted, input.clone()).await;
 	let (output, attestation) =
 		verified(response, hungry_budgeted, allow_all, &input);
 	assert_eq!(output, Some(vec![0x2b]));
@@ -617,15 +794,35 @@ async fn vfaas_execute_flows() {
 		ExecutionOutcome::Allowed { .. }
 	));
 
+	// List reflects every registration: approval counts, and the binding —
+	// functions carry their (current) bound policy, policies carry none.
+	let response = pivot.call(&VfaasMsg::ListArtifactsRequest).await;
+	let VfaasMsg::ListArtifactsResponse { artifacts } = response else {
+		panic!("expected ListArtifactsResponse, got {response:?}");
+	};
+	assert_eq!(artifacts.len(), 7);
+	assert!(artifacts.iter().all(|a| a.approval_count == 2));
+	let bound = |hash: [u8; 32]| {
+		artifacts
+			.iter()
+			.find(|a| a.artifact.wasm_hash == hash)
+			.expect("artifact is listed")
+			.bound_policy
+	};
+	// The list shows echo's binding as rotated by the last ruleset.
+	assert_eq!(bound(echo), Some(PolicyHash::new(trapping_policy)));
+	assert_eq!(bound(trapping_program), Some(PolicyHash::new(allow_all)));
+	assert_eq!(bound(allow_all), None);
+
 	// Kind confusion is a request error: a policy can't run as a program.
-	let response = pivot.execute(allow_all, allow_all, input.clone()).await;
+	let response = pivot.execute(allow_all, input.clone()).await;
 	let VfaasMsg::Error(reason) = response else {
 		panic!("kind confusion must error, got {response:?}");
 	};
 	assert!(reason.contains("expected a Function"), "{reason}");
 
 	// Unknown artifacts are request errors too — nothing to attest.
-	let response = pivot.execute([9u8; 32], allow_all, input).await;
+	let response = pivot.execute([9u8; 32], input).await;
 	let VfaasMsg::Error(reason) = response else {
 		panic!("unknown program must error, got {response:?}");
 	};

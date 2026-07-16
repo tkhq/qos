@@ -4,9 +4,12 @@
 //! The pivot holds an in-memory registry of quorum-approved WASM artifacts
 //! (programs and policies). Registering an artifact requires an
 //! [`governance::ArtifactEnvelope`] that verifies against the `ManifestSet`
-//! the pivot was launched with. Execute runs the policy first and the
-//! program only on `Allow`, and signs an [`ExecutionAttestation`] with the
-//! enclave ephemeral key on every path — allowed, denied, or failed.
+//! the pivot was launched with; registering a program additionally requires
+//! a quorum-approved [`governance::RulesetEnvelope`] binding it to an
+//! already-registered policy. Execute names only the program: the bound
+//! policy runs first and the program only on `Allow`, and the pivot signs
+//! an [`ExecutionAttestation`] with the enclave ephemeral key on every path
+//! — allowed, denied, or failed.
 //!
 //! Guest/host shared types live in the `vfaas-abi` crate; this module owns
 //! the socket protocol and the client-side verification helpers.
@@ -20,7 +23,7 @@ use vfaas_abi::{
 	ExecutionAttestation, PolicyHash, ProgramHash, VFAAS_ABI_VERSION,
 };
 
-use governance::{Artifact, ArtifactEnvelope};
+use governance::{Artifact, ArtifactEnvelope, RulesetEnvelope};
 
 /// Default fuel budget for one WASM call when the artifact descriptor does
 /// not carry its own [`governance::Artifact::fuel_budget`].
@@ -40,6 +43,9 @@ pub struct RegisteredArtifact {
 	pub artifact: Artifact,
 	/// How many approvals the registered envelope carried.
 	pub approval_count: u32,
+	/// For functions: the policy quorum-bound to gate this program. Always
+	/// `Some` for functions, `None` for policies.
+	pub bound_policy: Option<PolicyHash>,
 }
 
 /// Request/response messages for the `pivot_vfaas` app.
@@ -57,6 +63,10 @@ pub enum VfaasMsg {
 		envelope: ArtifactEnvelope,
 		/// The WASM blob; must hash to `envelope.artifact.wasm_hash`.
 		wasm: Vec<u8>,
+		/// For a `Function` artifact: the quorum-approved binding to the
+		/// policy gating it, which must already be registered. A program
+		/// cannot be registered unbound. Must be `None` for policies.
+		ruleset: Option<RulesetEnvelope>,
 	},
 	/// Success response to [`Self::RegisterArtifactRequest`].
 	RegisterArtifactResponse {
@@ -70,12 +80,12 @@ pub enum VfaasMsg {
 		/// Registered artifacts, sorted by name then version.
 		artifacts: Vec<RegisteredArtifact>,
 	},
-	/// Execute a registered program gated by a registered policy.
+	/// Execute a registered program under its quorum-bound policy. Which
+	/// policy gates the run was fixed by the registered ruleset; the caller
+	/// cannot choose or override it.
 	ExecuteRequest {
 		/// Hash of the program artifact to run.
 		program: ProgramHash,
-		/// Hash of the policy artifact gating the run.
-		policy: PolicyHash,
 		/// Borsh encoding of the program's typed input.
 		input: Vec<u8>,
 	},
