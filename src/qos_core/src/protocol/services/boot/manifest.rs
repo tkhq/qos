@@ -13,17 +13,30 @@ use super::{
 	ManifestSet, ManifestV0, Namespace, NitroConfig, RestartPolicy, ShareSet,
 };
 
+mod builder;
 pub mod v2;
 
+pub use builder::{ManifestBuilder, ManifestBuilderError};
 pub use v2::{DnsConfig, ManifestEnvelopeV2, ManifestV2};
 
-/// Schema marker included only in v2 manifests.
+/// Schema version used by versioned manifest tooling.
 #[derive(
-	PartialEq, Eq, Debug, Clone, Copy, serde::Serialize, serde::Deserialize,
+	PartialEq,
+	Eq,
+	Debug,
+	Clone,
+	Copy,
+	Default,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 #[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub enum ManifestVersion {
+	/// Backwards-compatible manifest schema.
+	V1,
 	/// Explicitly versioned JSON manifest schema.
+	#[default]
 	V2,
 }
 
@@ -41,6 +54,7 @@ pub fn canonical_json_hash<T: serde::Serialize>(value: &T) -> Hash256 {
 /// A manifest decoded with schema version preserved.
 #[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
+#[non_exhaustive]
 pub enum VersionedManifest {
 	/// Explicitly versioned JSON manifest schema.
 	V2(ManifestV2),
