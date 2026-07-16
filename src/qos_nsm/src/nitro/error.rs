@@ -53,6 +53,15 @@ pub enum AttestError {
 	},
 	/// The attestation doc has a nonce when none was expected.
 	UnexpectedAttestationDocNonce,
+	/// The attestation doc does not have the expected nonce.
+	MissingAttestationDocNonce,
+	/// The attestation doc nonce does not match the expected value.
+	DifferentAttestationDocNonce {
+		/// Expected value as a hex string.
+		expected: String,
+		/// Actual value as a hex string.
+		actual: String,
+	},
 	/// The attestation doc does not contain a pcr0.
 	MissingPcr0,
 	/// The pcr0 in the attestation doc does not match.
@@ -164,6 +173,12 @@ impl std::fmt::Display for AttestError {
 			}
 			Self::UnexpectedAttestationDocNonce => {
 				write!(f, "unexpected nonce in attestation document")
+			}
+			Self::MissingAttestationDocNonce => {
+				write!(f, "nonce missing in attestation document")
+			}
+			Self::DifferentAttestationDocNonce { expected, actual } => {
+				write!(f, "different nonce: expected {expected}, got {actual}")
 			}
 			Self::MissingPcr0 => {
 				write!(f, "PCR0 missing in attestation document")
