@@ -86,7 +86,7 @@ pub fn init_egress_tun() {
 	run_ip("address add 169.254.0.1/32 dev lo", "ip assign to lo failed"); // use link-local ip
 	run_ip("link set mtu 1320 dev enclave_egress", "unable to set MTU size"); // MTU 1340 is max for calico wg-v6-cali so we need <= to that
 	run_ip("link set enclave_egress up", "unable to bring up egress");
-	run_ip("route add default dev enclave_egress", "unable to route");
+	run_ip("route replace default dev enclave_egress", "unable to route");
 }
 
 /// Create core vsock socket in streaming mode
