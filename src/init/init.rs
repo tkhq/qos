@@ -51,9 +51,23 @@ fn init_console() {
 	}
 }
 
+#[cfg(feature = "qemu")]
+fn disable_ipv6() {
+	for path in [
+		"/proc/sys/net/ipv6/conf/all/disable_ipv6",
+		"/proc/sys/net/ipv6/conf/default/disable_ipv6",
+	] {
+		std::fs::write(path, b"1").unwrap_or_else(|err| {
+			panic!("failed to disable IPv6 through {path}: {err}")
+		});
+	}
+}
+
 fn boot() {
 	init_rootfs();
 	init_console();
+	#[cfg(feature = "qemu")]
+	disable_ipv6();
 	init_platform();
 	init_localhost();
 	#[cfg(feature = "egress")]

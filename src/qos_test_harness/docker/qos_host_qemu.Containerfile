@@ -1,0 +1,20 @@
+# syntax=docker/dockerfile:1
+FROM common AS base
+ADD . /src
+
+FROM base AS build
+RUN --mount=type=cache,target=/src/target --mount=type=cache,target=/.cargo <<-EOF
+	set -eux
+	cd /src && cargo build ${CARGOFLAGS} -p qos_host --features qemu
+	cp /src/target/${TARGET}/release/qos_host /
+	file /qos_host | grep "static-pie"
+EOF
+
+FROM base AS install
+WORKDIR /rootfs
+COPY --from=build /qos_host .
+RUN find . -exec touch -hcd "@0" "{}" +
+
+FROM scratch AS package
+COPY --from=install /rootfs .
+ENTRYPOINT ["/qos_host"]

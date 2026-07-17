@@ -205,6 +205,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_path_to_error",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tower",
@@ -1388,7 +1389,7 @@ dependencies = [
  "tokio-rustls",
  "ureq",
  "url",
- "webpki-roots",
+ "webpki-roots 1.0.2",
  "zeroize",
 ]
 
@@ -2179,7 +2180,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-vsock",
- "webpki-roots",
+ "webpki-roots 1.0.2",
  "zeroize",
 ]
 
@@ -2274,7 +2275,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-rustls",
- "webpki-roots",
+ "webpki-roots 1.0.2",
 ]
 
 [[package]]
@@ -2370,6 +2371,23 @@ dependencies = [
  "libfuzzer-sys",
  "qos_p256 0.13.0",
  "zeroize",
+]
+
+[[package]]
+name = "qos_test_harness"
+version = "0.12.2"
+dependencies = [
+ "qos_core 0.12.2",
+ "qos_crypto 0.12.2",
+ "qos_hex 0.12.2",
+ "qos_nsm 0.12.2",
+ "qos_p256 0.12.2",
+ "serde",
+ "serde_json",
+ "signed_echo",
+ "thiserror 2.0.17",
+ "tokio",
+ "ureq",
 ]
 
 [[package]]
@@ -2593,6 +2611,7 @@ dependencies = [
  "aws-lc-rs",
  "log",
  "once_cell",
+ "ring",
  "rustls-pki-types",
  "rustls-webpki",
  "subtle",
@@ -2765,6 +2784,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_urlencoded"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3491c14715ca2294c4d6a88f15e84739788c1d030eed8c110436aafdaa2f3fd"
+dependencies = [
+ "form_urlencoded",
+ "itoa",
+ "ryu",
+ "serde",
+]
+
+[[package]]
 name = "serde_with"
 version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2879,7 +2910,9 @@ dependencies = [
  "qos_json",
  "qos_p256 0.13.0",
  "serde",
+ "serde_json",
  "tokio",
+ "ureq",
 ]
 
 [[package]]
@@ -3338,9 +3371,12 @@ dependencies = [
  "base64",
  "log",
  "once_cell",
+ "rustls",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "url",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -3565,6 +3601,15 @@ checksum = "ed63aea5ce73d0ff405984102c42de94fc55a6b75765d621c65262469b3c9b53"
 dependencies = [
  "ring",
  "untrusted",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.26.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
+dependencies = [
+ "webpki-roots 1.0.2",
 ]
 
 [[package]]
