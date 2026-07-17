@@ -20,7 +20,8 @@ pub use manifest::v2::{
 	DnsConfig, ManifestEnvelopeV2, ManifestV2, PivotConfigV2,
 };
 pub use manifest::{
-	ManifestVersion, VersionedManifest, VersionedManifestEnvelope,
+	ManifestBuilder, ManifestBuilderError, ManifestVersion, VersionedManifest,
+	VersionedManifestEnvelope,
 };
 
 /// Enclave configuration specific to AWS Nitro.

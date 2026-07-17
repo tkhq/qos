@@ -14,10 +14,10 @@ use qos_core::protocol::{
 	services::{
 		boot::{
 			Approval, BridgeConfig, DnsConfig, Manifest as ManifestV1,
+			ManifestBuilder, ManifestBuilderError,
 			ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
-			ManifestEnvelopeV2, ManifestSet, ManifestV2, ManifestVersion,
-			MemberPubKey, Namespace, NitroConfig, PatchSet,
-			PivotConfig as PivotConfigV1, PivotConfigV2, PivotEnv,
+			ManifestEnvelopeV2, ManifestSet, ManifestVersion, MemberPubKey,
+			Namespace, NitroConfig, PatchSet, PivotConfig as PivotConfigV1,
 			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
 			VersionedManifestEnvelope,
 		},
@@ -160,6 +160,10 @@ pub enum Error {
 	ManifestV1RequiresPatchSet,
 	/// v1/v0 manifests do not support DNS resolver configuration.
 	ManifestV1DoesNotSupportDnsConfig,
+	/// Failed to construct a manifest from the supplied configuration.
+	ManifestBuilder(ManifestBuilderError),
+	/// The manifest schema is not supported by this client operation.
+	UnsupportedManifestVersion,
 }
 
 impl From<serde_json::Error> for Error {
@@ -171,6 +175,12 @@ impl From<serde_json::Error> for Error {
 impl From<borsh::io::Error> for Error {
 	fn from(err: borsh::io::Error) -> Self {
 		Self::Deserialize(err.to_string())
+	}
+}
+
+impl From<ManifestBuilderError> for Error {
+	fn from(err: ManifestBuilderError) -> Self {
+		Self::ManifestBuilder(err)
 	}
 }
 
@@ -827,26 +837,23 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
-	let manifest = ManifestV1 {
-		namespace: Namespace {
+	let manifest = ManifestBuilder::new()
+		.with_version(ManifestVersion::V1)
+		.namespace(Namespace {
 			name: namespace,
 			nonce,
 			quorum_key: quorum_key.to_bytes(),
-		},
-		pivot: PivotConfigV1 {
-			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
-			restart: restart_policy,
-			args: pivot_args,
-			bridge_config,
-			debug_mode,
-		},
-		manifest_set,
-		share_set,
-		patch_set,
-		enclave: nitro_config,
-	};
-
-	let manifest = VersionedManifest::V1(manifest);
+		})
+		.pivot_hash(pivot_hash.try_into().expect("pivot hash was not 256 bits"))
+		.restart_policy(restart_policy)
+		.pivot_args(pivot_args)
+		.bridge_config(bridge_config)
+		.debug_mode(debug_mode)
+		.manifest_set(manifest_set)
+		.share_set(share_set)
+		.patch_set(patch_set)
+		.enclave(nitro_config)
+		.build()?;
 	write_with_msg(
 		manifest_path.as_ref(),
 		&manifest.to_storage_vec().expect("failed to serialize manifest"),
@@ -889,26 +896,26 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 
-	let manifest = ManifestV2 {
-		version: ManifestVersion::V2,
-		namespace: Namespace {
+	let manifest = ManifestBuilder::new()
+		.with_version(ManifestVersion::V2)
+		.namespace(Namespace {
 			name: namespace,
 			nonce,
 			quorum_key: quorum_key.to_bytes(),
-		},
-		pivot: PivotConfigV2 {
-			hash: pivot_hash.try_into().expect("pivot hash was not 256 bits"),
-			restart: restart_policy,
-			args: pivot_args,
-			env: PivotEnv::default(),
-			bridge_config,
-			debug_mode,
-		},
-		manifest_set,
-		share_set,
-		enclave: nitro_config,
-		dns: dns_resolvers.map(|resolvers| DnsConfig { resolvers }),
-	};
+		})
+		.pivot_hash(pivot_hash.try_into().expect("pivot hash was not 256 bits"))
+		.restart_policy(restart_policy)
+		.pivot_args(pivot_args)
+		.bridge_config(bridge_config)
+		.debug_mode(debug_mode)
+		.manifest_set(manifest_set)
+		.share_set(share_set)
+		.enclave(nitro_config);
+	let manifest = match dns_resolvers {
+		Some(resolvers) => manifest.dns(DnsConfig { resolvers }),
+		None => manifest,
+	}
+	.build()?;
 
 	write_with_msg(
 		manifest_path.as_ref(),
@@ -1068,6 +1075,10 @@ fn approve_manifest_programmatic_verifications(
 				return false;
 			}
 		}
+		_ => {
+			eprintln!("Manifest version is not supported");
+			return false;
+		}
 	}
 
 	// Verify pcrs 0, 1, 2, 3.
@@ -1177,6 +1188,7 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 				share_set_approvals: vec![],
 			})
 		}
+		_ => return Err(Error::UnsupportedManifestVersion),
 	};
 
 	if let Err(e) = manifest_envelope.check_approvals() {
@@ -2361,6 +2373,7 @@ fn read_manifest_v1_compat<P: AsRef<Path>>(
 		VersionedManifest::V2(_) => Err(Error::ManifestV2NotConvertibleToBorsh),
 		VersionedManifest::V1(manifest) => Ok(manifest),
 		VersionedManifest::V0(manifest) => Ok(manifest.into()),
+		_ => Err(Error::UnsupportedManifestVersion),
 	}
 }
 

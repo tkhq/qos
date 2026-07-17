@@ -31,6 +31,7 @@ aws-nitro-enclaves-nsm-api = { workspace = true }
 serde_bytes = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
+thiserror = { workspace = true }
 zeroize = { workspace = true, features = ["alloc"] }
 
 futures = { workspace = true }
