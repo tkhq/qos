@@ -674,41 +674,6 @@ impl DockerHostQemuNitroRunner {
 		])
 	}
 
-	fn egress_dns_docker_args(
-		&self,
-		name: &str,
-		netns_name: &str,
-	) -> Result<Vec<OsString>, RunnerError> {
-		let image =
-			self.spec.qemu.egress_setup_image.as_ref().ok_or_else(|| {
-				RunnerError::InvalidConfig(
-					"qemu.egress_setup_image is required for client egress bridge config"
-						.to_string(),
-				)
-			})?;
-		Ok(vec![
-			"run".into(),
-			"--rm".into(),
-			"--name".into(),
-			name.into(),
-			"--network".into(),
-			format!("container:{netns_name}").into(),
-			image.as_str().into(),
-			"dnsmasq".into(),
-			"--keep-in-foreground".into(),
-			"--user=root".into(),
-			"--no-resolv".into(),
-			"--no-hosts".into(),
-			"--port=53".into(),
-			"--listen-address=172.29.107.66".into(),
-			"--bind-interfaces".into(),
-			"--filter-AAAA".into(),
-			"--server=1.1.1.1".into(),
-			"--log-queries".into(),
-			"--log-facility=-".into(),
-		])
-	}
-
 	fn docker_path(&self, path: &Path) -> PathBuf {
 		self.spec
 			.client_run
@@ -1363,13 +1328,6 @@ impl TestRunner for DockerHostQemuNitroRunner {
 				self.run_docker_args(
 					self.egress_setup_docker_args(&netns_name)?,
 				)?;
-				let dns_name = format!("{container_prefix}-egress-dns");
-				self.spawn_docker_runtime(
-					"egress_dns",
-					dns_name.clone(),
-					self.egress_dns_docker_args(&dns_name, &netns_name)?,
-				)?;
-				self.wait_for_docker_container(&dns_name).await?;
 				let checksum_name =
 					format!("{container_prefix}-egress-checksum");
 				self.spawn_docker_runtime(

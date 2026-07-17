@@ -13,12 +13,11 @@
 #include <libnetfilter_queue/libnetfilter_queue.h>
 
 /*
- * Docker Desktop can hand the QEMU egress namespace inbound TCP packets whose
+ * Docker Desktop can hand the QEMU egress namespace TCP or UDP packets whose
  * bytes still depend on checksum-offload metadata that is not present on a TUN
  * read. QOS production code should not learn about that Docker artifact. This
  * harness-only NFQUEUE helper sits in the Docker forwarding path and rewrites
- * ordinary IPv4/TCP checksum bytes before host_egress reads the packet from
- * the host_egress TUN interface.
+ * ordinary IPv4 transport checksum bytes at the Docker forwarding boundary.
  */
 
 static uint16_t read_be16(const unsigned char *bytes) {
@@ -56,28 +55,29 @@ static uint16_t checksum16(const unsigned char *bytes, size_t len) {
 	return checksum_finish(checksum_add_bytes(0, bytes, len));
 }
 
-static uint16_t tcp_checksum_ipv4(
+static uint16_t transport_checksum_ipv4(
 	const unsigned char *packet,
-	const unsigned char *tcp,
-	size_t tcp_len
+	const unsigned char *transport,
+	size_t transport_len,
+	unsigned char protocol
 ) {
 	uint32_t sum = 0;
 
 	/*
-	 * The TCP checksum covers the TCP segment plus the IPv4 pseudo-header.
-	 * The pseudo-header prevents a valid TCP segment from being accepted if
+	 * TCP and UDP checksums cover the transport segment plus the IPv4
+	 * pseudo-header. The pseudo-header prevents a valid segment from being accepted if
 	 * it was delivered for a different IPv4 source/destination/protocol.
 	 */
 	sum = checksum_add_bytes(sum, &packet[12], 4);
 	sum = checksum_add_bytes(sum, &packet[16], 4);
-	sum += IPPROTO_TCP;
-	sum += (uint32_t)tcp_len;
-	sum = checksum_add_bytes(sum, tcp, tcp_len);
+	sum += protocol;
+	sum += (uint32_t)transport_len;
+	sum = checksum_add_bytes(sum, transport, transport_len);
 
 	return checksum_finish(sum);
 }
 
-static int repair_ipv4_tcp_packet(unsigned char *packet, int len) {
+static int repair_ipv4_transport_packet(unsigned char *packet, int len) {
 	if (len < 20 || (packet[0] >> 4) != 4) {
 		return 0;
 	}
@@ -104,14 +104,27 @@ static int repair_ipv4_tcp_packet(unsigned char *packet, int len) {
 
 	uint16_t flags_fragment = read_be16(&packet[6]);
 	int is_fragmented = (flags_fragment & 0x3fff) != 0;
-	if (is_fragmented || packet[9] != IPPROTO_TCP || total_len < ihl + 20) {
+	if (is_fragmented || total_len < ihl + 8) {
 		return 1;
 	}
 
-	unsigned char *tcp = &packet[ihl];
-	size_t tcp_len = total_len - ihl;
-	size_t tcp_header_len = (size_t)(tcp[12] >> 4) * 4;
-	if (tcp_header_len < 20 || tcp_len < tcp_header_len) {
+	unsigned char *transport = &packet[ihl];
+	size_t transport_len = total_len - ihl;
+	unsigned char protocol = packet[9];
+	size_t checksum_offset;
+	if (protocol == IPPROTO_TCP) {
+		size_t tcp_header_len = (size_t)(transport[12] >> 4) * 4;
+		if (tcp_header_len < 20 || transport_len < tcp_header_len) {
+			return 1;
+		}
+		checksum_offset = 16;
+	} else if (protocol == IPPROTO_UDP) {
+		uint16_t udp_len = read_be16(&transport[4]);
+		if (udp_len < 8 || udp_len != transport_len) {
+			return 1;
+		}
+		checksum_offset = 6;
+	} else {
 		return 1;
 	}
 
@@ -119,11 +132,21 @@ static int repair_ipv4_tcp_packet(unsigned char *packet, int len) {
 	 * The kernel has already decided this forwarded packet is acceptable in
 	 * the Docker namespace. The problem is that the raw bytes reaching TUN do
 	 * not carry the kernel's checksum/offload metadata. Always materialize the
-	 * TCP checksum bytes so the guest receives a self-contained IP packet.
+	 * transport checksum bytes so subsequent networking layers receive a
+	 * self-contained IP packet.
 	 */
-	tcp[16] = 0;
-	tcp[17] = 0;
-	write_be16(&tcp[16], tcp_checksum_ipv4(packet, tcp, tcp_len));
+	transport[checksum_offset] = 0;
+	transport[checksum_offset + 1] = 0;
+	uint16_t checksum = transport_checksum_ipv4(
+		packet,
+		transport,
+		transport_len,
+		protocol
+	);
+	if (protocol == IPPROTO_UDP && checksum == 0) {
+		checksum = 0xffff;
+	}
+	write_be16(&transport[checksum_offset], checksum);
 
 	return 1;
 }
@@ -155,7 +178,7 @@ static int queue_callback(
 		return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 	}
 	memcpy(packet, payload, (size_t)payload_len);
-	repair_ipv4_tcp_packet(packet, payload_len);
+	repair_ipv4_transport_packet(packet, payload_len);
 
 	int rc = nfq_set_verdict(
 		qh,
@@ -177,13 +200,31 @@ static int self_test(void) {
 		0x50, 0x12, 0x72, 0x10, 0x12, 0x34, 0x00, 0x00,
 	};
 
-	repair_ipv4_tcp_packet(packet, (int)sizeof(packet));
+	repair_ipv4_transport_packet(packet, (int)sizeof(packet));
 	if (checksum16(packet, 20) != 0) {
 		fprintf(stderr, "self-test: IPv4 checksum is invalid\n");
 		return 1;
 	}
-	if (tcp_checksum_ipv4(packet, &packet[20], 20) != 0) {
+	if (transport_checksum_ipv4(packet, &packet[20], 20, IPPROTO_TCP) != 0) {
 		fprintf(stderr, "self-test: TCP checksum is invalid\n");
+		return 1;
+	}
+
+	unsigned char udp_packet[28] = {
+		0x45, 0x00, 0x00, 0x1c, 0x12, 0x34, 0x40, 0x00,
+		0x40, 0x11, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01,
+		0xa9, 0xfe, 0x00, 0x01, 0x00, 0x35, 0xd4, 0x31,
+		0x00, 0x08, 0x12, 0x34,
+	};
+	repair_ipv4_transport_packet(udp_packet, (int)sizeof(udp_packet));
+	uint32_t udp_sum = 0;
+	udp_sum = checksum_add_bytes(udp_sum, &udp_packet[12], 4);
+	udp_sum = checksum_add_bytes(udp_sum, &udp_packet[16], 4);
+	udp_sum += IPPROTO_UDP;
+	udp_sum += 8;
+	udp_sum = checksum_add_bytes(udp_sum, &udp_packet[20], 8);
+	if (checksum_finish(udp_sum) != 0) {
+		fprintf(stderr, "self-test: UDP checksum is invalid\n");
 		return 1;
 	}
 

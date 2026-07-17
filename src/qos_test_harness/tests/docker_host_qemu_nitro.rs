@@ -76,7 +76,7 @@ async fn signed_echo_egress_get_url() {
 				host: Some("example.com".to_string()),
 			},
 		])
-		.dns(DnsConfig { resolvers: vec!["172.29.107.66".parse().unwrap()] })
+		.dns(DnsConfig { resolvers: vec!["1.1.1.1".parse().unwrap()] })
 		.build()
 		.unwrap();
 	let mut runner = prepared.runner;
