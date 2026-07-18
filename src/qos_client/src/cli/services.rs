@@ -900,11 +900,6 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 	let pivot = if let Some(oci_image_digest) = oci_image_digest {
-		if !bridge_config.is_empty() {
-			return Err(Error::InvalidOciDigest(
-				"OCI image manifests do not support bridge config".to_string(),
-			));
-		}
 		PivotConfigV2::OciImage(PivotOciImageConfigV2 {
 			r#type: PivotKind::OciImage,
 			digest: OciDigest::new(oci_image_digest)
@@ -923,6 +918,7 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 				max_unpacked_bytes: oci_max_unpacked_bytes,
 				max_entries: oci_max_entries,
 			},
+			runtime: None,
 		})
 	} else {
 		let pivot_hash = extract_pivot_hash(
@@ -2945,6 +2941,7 @@ mod tests {
 					max_unpacked_bytes: 20,
 					max_entries: 30,
 				},
+				runtime: None,
 			}),
 			manifest_set: setup.manifest_set.clone(),
 			share_set: setup.share_set.clone(),

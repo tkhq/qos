@@ -238,10 +238,15 @@ pub struct PivotOciImageConfigV2 {
 	pub env: PivotEnv,
 	/// Whether QOS should pipe workload stdout/stderr to enclave logs.
 	pub debug_mode: bool,
-	/// Must be empty while networking is out of scope.
+	/// VSOCK/TCP bridge rules exposed to the OCI workload.
 	pub bridge_config: Vec<BridgeConfig>,
 	/// Runtime limits for RAM-backed image handling.
 	pub limits: OciRuntimeLimits,
+	/// Optional complete OCI runtime configuration. QOS always replaces its
+	/// root and process image-derived fields, while preserving namespaces,
+	/// mounts, capabilities, cgroups, hooks, and other runtime fields.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub runtime: Option<oci_spec::runtime::Spec>,
 }
 
 /// Explicitly versioned JSON manifest (v2).

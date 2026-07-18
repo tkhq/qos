@@ -5,7 +5,6 @@
 //! The pivot is an executable the enclave runs to initialize the secure
 //! applications.
 use std::{
-	env,
 	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
 	process::Stdio,
 	sync::{Arc, RwLock},
@@ -198,6 +197,8 @@ impl Reaper {
 			.expect("Checked above that the manifest exists.")
 			.manifest();
 		if let Some(oci_image) = manifest.oci_image() {
+			run_vsock_to_tcp_bridge(&core_socket, &oci_image.bridge_config)
+				.expect("failed to run OCI VSOCK/TCP bridge");
 			let verified =
 				crate::protocol::services::boot::oci::inspect_stored_oci_image(
 					handles, oci_image,
@@ -222,21 +223,10 @@ impl Reaper {
 			if let Err(err) = handles.put_workload_status(&workload_status) {
 				eprintln!("failed to write OCI workload status: {err}");
 			}
-			let launch_spec =
-				crate::protocol::services::boot::oci::write_oci_launch_spec(
-					&bundle,
-				)
-				.expect("failed to write OCI launch spec");
-			let launcher = env::current_exe()
-				.expect("failed to resolve QOS core launcher path");
 			let restart = manifest.restart();
-			let mut command = Command::new(launcher);
-			command.arg("--oci-launch-spec").arg(&launch_spec);
-			if manifest.debug_mode() {
-				command.stdout(Stdio::piped()).stderr(Stdio::piped());
-			} else {
-				command.stdout(Stdio::null()).stderr(Stdio::null());
-			}
+			let debug = manifest.debug_mode();
+			let bundle_dir = bundle.bundle_dir.clone();
+			let state_root = bundle_dir.join("state");
 
 			loop {
 				workload_status.running = true;
@@ -245,19 +235,30 @@ impl Reaper {
 				{
 					eprintln!("failed to write OCI workload status: {err}");
 				}
-				let mut child =
-					command.spawn().expect("Failed to spawn OCI workload");
-				if manifest.debug_mode() {
-					reprint_pivot_output(&mut child);
-				}
-				let status = child
-					.wait()
-					.await
-					.expect("OCI workload executable never started...");
+				let run_bundle = bundle_dir.clone();
+				let run_state = state_root.clone();
+				let result = tokio::task::spawn_blocking(move || {
+					crate::oci_runtime::run(
+						&run_bundle,
+						&run_state,
+						"qos-workload",
+						debug,
+					)
+				})
+				.await
+				.expect("libcontainer worker panicked");
+				let exit_code = match result {
+					Ok(code) => code,
+					Err(error) => {
+						eprintln!("OCI workload failed: {error}");
+						workload_status.last_error = Some(error);
+						1
+					}
+				};
 
-				println!("OCI workload exited: {status}");
+				println!("OCI workload exited with status: {exit_code}");
 				workload_status.running = false;
-				workload_status.last_exit_status = status.code();
+				workload_status.last_exit_status = Some(exit_code);
 				if let Err(err) = handles.put_workload_status(&workload_status)
 				{
 					eprintln!("failed to write OCI workload status: {err}");

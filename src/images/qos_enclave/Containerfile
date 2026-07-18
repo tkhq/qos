@@ -47,6 +47,8 @@ COPY <<-EOF initramfs.list
 	dir  /sbin             0755 0 0
 	dir  /proc             0755 0 0
 	dir  /sys              0755 0 0
+	dir  /sys/fs           0755 0 0
+	dir  /sys/fs/cgroup    0755 0 0
 	dir  /usr              0755 0 0
 	dir  /usr/bin          0755 0 0
 	dir  /usr/sbin         0755 0 0

@@ -49,3 +49,6 @@ webpki-roots = { workspace = true }
 vm = []
 # Never use in production - support for mock NSM
 mock = ["qos_nsm/mock"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libcontainer = { workspace = true }

@@ -26,7 +26,7 @@ fn init_rootfs() {
 		("tmpfs", "/run", "tmpfs", no_dse, "mode=0755"),
 		("tmpfs", "/tmp", "tmpfs", no_dse, ""),
 		("sysfs", "/sys", "sysfs", no_dse, ""),
-		("cgroup_root", "/sys/fs/cgroup", "tmpfs", no_dse, "mode=0755"),
+		("cgroup2", "/sys/fs/cgroup", "cgroup2", no_dse, "nsdelegate"),
 	];
 	for (src, target, fstype, flags, data) in args {
 		match mount(src, target, fstype, flags, data) {

@@ -6,14 +6,15 @@ use std::{
 	io::{Cursor, Read},
 	os::unix::fs::{PermissionsExt, symlink},
 	path::{Component, Path, PathBuf},
-	process::Stdio,
 };
 
 use flate2::read::GzDecoder;
 use oci_spec::image::{
 	Descriptor, ImageConfiguration, ImageManifest, MediaType,
 };
-use serde::{Deserialize, Serialize};
+use oci_spec::runtime::{
+	LinuxNamespaceType, MountBuilder, Process, RootBuilder, Spec, User,
+};
 
 use crate::{
 	handles::Handles,
@@ -47,6 +48,8 @@ pub struct VerifiedOciImage {
 	pub env: Vec<String>,
 	/// Working directory from image config.
 	pub working_dir: String,
+	/// User requested by the image config.
+	pub user: String,
 	/// Verified volume mount targets from image config.
 	pub volumes: Vec<String>,
 	/// Verified exposed ports from image config.
@@ -65,6 +68,8 @@ pub struct VerifiedLayer {
 /// Runtime bundle prepared from a verified OCI image.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OciRuntimeBundle {
+	/// OCI bundle directory containing `config.json` and `rootfs`.
+	pub bundle_dir: PathBuf,
 	/// Root filesystem directory.
 	pub rootfs: PathBuf,
 	/// Process argv.
@@ -73,20 +78,8 @@ pub struct OciRuntimeBundle {
 	pub env: Vec<(String, String)>,
 	/// Process working directory inside rootfs.
 	pub cwd: String,
-}
-
-/// Launcher input written by the reaper and consumed by the QOS core helper
-/// process that performs `chroot` before starting the workload.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct OciLaunchSpec {
-	/// Root filesystem directory.
-	pub rootfs: PathBuf,
-	/// Process argv.
-	pub argv: Vec<String>,
-	/// Process environment.
-	pub env: Vec<(String, String)>,
-	/// Process working directory inside rootfs.
-	pub cwd: String,
+	/// Full OCI runtime spec consumed by `libcontainer`.
+	pub spec: Spec,
 }
 
 /// Verify a protocol-supplied OCI image-layout archive and import reachable
@@ -114,9 +107,6 @@ pub fn import_oci_layout_archive(
 	}
 	if !pivot.platform.is_supported() {
 		return Err(invalid("unsupported manifest OCI platform"));
-	}
-	if !pivot.bridge_config.is_empty() {
-		return Err(invalid("OCI image bridge_config must be empty"));
 	}
 
 	let archive =
@@ -153,7 +143,6 @@ pub fn prepare_oci_runtime_bundle(
 	}
 	fs::create_dir_all(&rootfs)
 		.map_err(|_| invalid("failed to create OCI rootfs"))?;
-	mount_runtime_tmpfs(&rootfs, pivot.limits.max_unpacked_bytes, true)?;
 
 	let mut unpacked_bytes = 0_u64;
 	let mut entries = 0_u64;
@@ -179,12 +168,21 @@ pub fn prepare_oci_runtime_bundle(
 		)?;
 	}
 
-	create_runtime_mounts(&rootfs, &verified, pivot.limits.max_unpacked_bytes)?;
+	create_runtime_mount_points(&rootfs, &verified)?;
 	materialize_qos_files(handles, &rootfs)?;
 
 	let argv = derive_argv(pivot, &verified)?;
 	let env = derive_env(pivot, &verified)?;
-	Ok(OciRuntimeBundle { rootfs, argv, env, cwd: verified.working_dir })
+	let cwd = derive_cwd(pivot, &verified)?;
+	let bundle_dir = rootfs
+		.parent()
+		.ok_or_else(|| invalid("OCI rootfs has no bundle directory"))?
+		.to_path_buf();
+	let spec =
+		build_runtime_spec(pivot, &verified, &rootfs, &argv, &env, &cwd)?;
+	spec.save(bundle_dir.join("config.json"))
+		.map_err(|_| invalid("failed to write OCI runtime config"))?;
+	Ok(OciRuntimeBundle { bundle_dir, rootfs, argv, env, cwd, spec })
 }
 
 /// Verify stored OCI content and return image metadata without unpacking it.
@@ -225,73 +223,6 @@ fn inspect_stored_oci_image_with_blobs(
 
 	let verified = verify_descriptor_graph(&blobs, pivot)?;
 	Ok((verified, blobs))
-}
-
-/// Write an OCI launch spec into the bundle state directory.
-///
-/// # Errors
-///
-/// Returns [`ProtocolError`] if the launch spec cannot be serialized or
-/// written.
-pub fn write_oci_launch_spec(
-	bundle: &OciRuntimeBundle,
-) -> Result<PathBuf, ProtocolError> {
-	let bundle_dir = bundle
-		.rootfs
-		.parent()
-		.ok_or_else(|| invalid("OCI rootfs has no bundle directory"))?;
-	let state_dir = bundle_dir.join("state");
-	fs::create_dir_all(&state_dir)
-		.map_err(|_| invalid("failed to create OCI bundle state directory"))?;
-	let spec = OciLaunchSpec {
-		rootfs: bundle.rootfs.clone(),
-		argv: bundle.argv.clone(),
-		env: bundle.env.clone(),
-		cwd: bundle.cwd.clone(),
-	};
-	let bytes = serde_json::to_vec(&spec)
-		.map_err(|_| invalid("failed to encode OCI launch spec"))?;
-	let spec_path = state_dir.join("launch.json");
-	fs::write(&spec_path, bytes)
-		.map_err(|_| invalid("failed to write OCI launch spec"))?;
-	fs::set_permissions(&spec_path, fs::Permissions::from_mode(0o444))
-		.map_err(|_| invalid("failed to set OCI launch spec mode"))?;
-	Ok(spec_path)
-}
-
-/// Execute an OCI workload from a launch spec. This is intended to run in a
-/// short-lived helper process spawned by the reaper.
-///
-/// # Errors
-///
-/// Returns [`ProtocolError`] if the launch spec is invalid or the process
-/// cannot be started.
-pub fn launch_from_spec_path(spec_path: &Path) -> Result<i32, ProtocolError> {
-	let bytes = fs::read(spec_path)
-		.map_err(|_| invalid("failed to read OCI launch spec"))?;
-	let spec: OciLaunchSpec = serde_json::from_slice(&bytes)
-		.map_err(|_| invalid("failed to decode OCI launch spec"))?;
-	if spec.argv.is_empty() {
-		return Err(invalid("OCI launch spec argv is empty"));
-	}
-	validate_absolute_rootfs_path(&spec.cwd)?;
-
-	nix::unistd::chroot(&spec.rootfs)
-		.map_err(|_| invalid("failed to chroot into OCI rootfs"))?;
-	nix::unistd::chdir(spec.cwd.as_str())
-		.map_err(|_| invalid("failed to chdir inside OCI rootfs"))?;
-
-	let mut command = std::process::Command::new(&spec.argv[0]);
-	command.args(&spec.argv[1..]);
-	command.env_clear();
-	for (name, value) in &spec.env {
-		command.env(name, value);
-	}
-	command.stdin(Stdio::null());
-	let status = command
-		.status()
-		.map_err(|_| invalid("failed to spawn OCI workload"))?;
-	Ok(status.code().unwrap_or(1))
 }
 
 impl VerifiedOciImage {
@@ -612,6 +543,10 @@ fn verify_descriptor_graph(
 		config.and_then(|c| c.entrypoint().clone()).unwrap_or_default();
 	let cmd = config.and_then(|c| c.cmd().clone()).unwrap_or_default();
 	let env = config.and_then(|c| c.env().clone()).unwrap_or_default();
+	let user = config
+		.and_then(|c| c.user().clone())
+		.filter(|user| !user.is_empty())
+		.unwrap_or_else(|| "0".to_string());
 	let working_dir = config
 		.and_then(|c| c.working_dir().clone())
 		.filter(|dir| !dir.is_empty())
@@ -629,6 +564,7 @@ fn verify_descriptor_graph(
 		cmd,
 		env,
 		working_dir,
+		user,
 		volumes,
 		exposed_ports,
 	})
@@ -655,13 +591,6 @@ fn validate_image_config(
 	}
 
 	if let Some(config) = image_config.config() {
-		if let Some(user) = config.user()
-			&& !user.is_empty()
-			&& user != "0"
-			&& user != "root"
-		{
-			return Err(invalid("OCI image config user must be root"));
-		}
 		if let Some(working_dir) = config.working_dir()
 			&& !working_dir.is_empty()
 		{
@@ -868,10 +797,9 @@ fn validate_symlink_target(target: &Path) -> Result<(), ProtocolError> {
 	Ok(())
 }
 
-fn create_runtime_mounts(
+fn create_runtime_mount_points(
 	rootfs: &Path,
 	verified: &VerifiedOciImage,
-	max_unpacked_bytes: u64,
 ) -> Result<(), ProtocolError> {
 	let mut mounts = BTreeSet::new();
 	for dir in ["/tmp", "/run", "/dev/shm"] {
@@ -888,7 +816,6 @@ fn create_runtime_mounts(
 		fs::set_permissions(&path, fs::Permissions::from_mode(0o777)).map_err(
 			|_| invalid("failed to set builtin OCI tmpfs path mode"),
 		)?;
-		mount_runtime_tmpfs(&path, max_unpacked_bytes, false)?;
 	}
 	Ok(())
 }
@@ -919,33 +846,6 @@ fn reject_unsupported_pax<R: Read>(
 	Ok(())
 }
 
-#[cfg(all(target_os = "linux", feature = "vm"))]
-fn mount_runtime_tmpfs(
-	target: &Path,
-	max_unpacked_bytes: u64,
-	allow_exec: bool,
-) -> Result<(), ProtocolError> {
-	use nix::mount::{MsFlags, mount};
-
-	let mut flags = MsFlags::MS_NOSUID | MsFlags::MS_NODEV;
-	if !allow_exec {
-		flags |= MsFlags::MS_NOEXEC;
-	}
-	let mode = if allow_exec { "0755" } else { "1777" };
-	let data = format!("size={max_unpacked_bytes},mode={mode}");
-	mount(Some("tmpfs"), target, Some("tmpfs"), flags, Some(data.as_str()))
-		.map_err(|_| invalid("failed to mount OCI tmpfs"))
-}
-
-#[cfg(not(all(target_os = "linux", feature = "vm")))]
-fn mount_runtime_tmpfs(
-	_target: &Path,
-	_max_unpacked_bytes: u64,
-	_allow_exec: bool,
-) -> Result<(), ProtocolError> {
-	Ok(())
-}
-
 fn materialize_qos_files(
 	handles: &Handles,
 	rootfs: &Path,
@@ -968,17 +868,172 @@ fn materialize_qos_files(
 	Ok(())
 }
 
+fn build_runtime_spec(
+	pivot: &PivotOciImageConfigV2,
+	verified: &VerifiedOciImage,
+	rootfs: &Path,
+	argv: &[String],
+	env: &[(String, String)],
+	cwd: &str,
+) -> Result<Spec, ProtocolError> {
+	let mut spec = pivot.runtime.clone().unwrap_or_default();
+	if spec.linux().as_ref().is_some_and(|linux| linux.seccomp().is_some()) {
+		return Err(invalid(
+			"OCI seccomp profiles are unavailable in the static enclave runtime",
+		));
+	}
+	// An enclave is already a network boundary. Keep its network namespace by
+	// default so loopback and the VSOCK/TCP bridge work; an approved runtime
+	// spec can explicitly request a separate network namespace.
+	if pivot.runtime.is_none()
+		&& let Some(linux) = spec.linux_mut().as_mut()
+		&& let Some(namespaces) = linux.namespaces_mut().as_mut()
+	{
+		namespaces
+			.retain(|namespace| namespace.typ() != LinuxNamespaceType::Network);
+	}
+	let readonly = pivot
+		.runtime
+		.as_ref()
+		.and_then(|runtime| runtime.root().as_ref())
+		.and_then(|root| root.readonly())
+		.unwrap_or(false);
+	let root = RootBuilder::default()
+		.path(rootfs)
+		.readonly(readonly)
+		.build()
+		.map_err(|_| invalid("failed to configure OCI rootfs"))?;
+	spec.set_root(Some(root));
+
+	let mut process: Process = spec.process().clone().unwrap_or_default();
+	if pivot.runtime.is_none() {
+		process.set_user(resolve_image_user(rootfs, &verified.user)?);
+	}
+	process.set_args(Some(argv.to_vec()));
+	process.set_env(Some(
+		env.iter().map(|(name, value)| format!("{name}={value}")).collect(),
+	));
+	process.set_cwd(PathBuf::from(cwd));
+	spec.set_process(Some(process));
+
+	let mut mounts = spec.mounts().clone().unwrap_or_default();
+	let mut destinations = mounts
+		.iter()
+		.map(|mount| mount.destination().clone())
+		.collect::<BTreeSet<_>>();
+	for destination in ["/tmp", "/run", "/dev/shm"]
+		.into_iter()
+		.chain(verified.volumes.iter().map(String::as_str))
+	{
+		let destination = PathBuf::from(destination);
+		if destinations.insert(destination.clone()) {
+			let mount = MountBuilder::default()
+				.destination(destination)
+				.typ("tmpfs")
+				.source("tmpfs")
+				.options(vec![
+					"nosuid".to_string(),
+					"nodev".to_string(),
+					"noexec".to_string(),
+					"mode=1777".to_string(),
+					format!("size={}", pivot.limits.max_unpacked_bytes),
+				])
+				.build()
+				.map_err(|_| invalid("failed to configure OCI tmpfs mount"))?;
+			mounts.push(mount);
+		}
+	}
+	spec.set_mounts(Some(mounts));
+	Ok(spec)
+}
+
+fn resolve_image_user(
+	rootfs: &Path,
+	value: &str,
+) -> Result<User, ProtocolError> {
+	let (user_value, group_value) = value
+		.split_once(':')
+		.map_or((value, None), |(user, group)| (user, Some(group)));
+	let passwd =
+		fs::read_to_string(rootfs.join("etc/passwd")).unwrap_or_default();
+	let groups =
+		fs::read_to_string(rootfs.join("etc/group")).unwrap_or_default();
+
+	let (uid, default_gid, username) =
+		if let Ok(uid) = user_value.parse::<u32>() {
+			(uid, 0, None)
+		} else if user_value == "root" {
+			(0, 0, Some("root".to_string()))
+		} else {
+			let (uid, gid) = passwd
+				.lines()
+				.find_map(|line| {
+					let mut fields = line.split(':');
+					let name = fields.next()?;
+					fields.next()?;
+					let uid = fields.next()?.parse::<u32>().ok()?;
+					let gid = fields.next()?.parse::<u32>().ok()?;
+					(name == user_value).then_some((uid, gid))
+				})
+				.ok_or_else(|| {
+					invalid("OCI image user is missing from /etc/passwd")
+				})?;
+			(uid, gid, Some(user_value.to_string()))
+		};
+
+	let gid = match group_value {
+		None | Some("") => default_gid,
+		Some(group) => {
+			if let Ok(gid) = group.parse::<u32>() {
+				gid
+			} else if group == "root" {
+				0
+			} else {
+				groups
+					.lines()
+					.find_map(|line| {
+						let mut fields = line.split(':');
+						let name = fields.next()?;
+						fields.next()?;
+						let gid = fields.next()?.parse::<u32>().ok()?;
+						(name == group).then_some(gid)
+					})
+					.ok_or_else(|| {
+						invalid("OCI image group is missing from /etc/group")
+					})?
+			}
+		}
+	};
+
+	let mut user = User::default();
+	user.set_uid(uid);
+	user.set_gid(gid);
+	user.set_username(username);
+	Ok(user)
+}
+
 fn derive_argv(
 	pivot: &PivotOciImageConfigV2,
 	verified: &VerifiedOciImage,
 ) -> Result<Vec<String>, ProtocolError> {
-	let argv = pivot.args.clone().unwrap_or_else(|| {
-		let mut argv =
-			Vec::with_capacity(verified.entrypoint.len() + verified.cmd.len());
-		argv.extend(verified.entrypoint.clone());
-		argv.extend(verified.cmd.clone());
-		argv
-	});
+	let argv = pivot
+		.args
+		.clone()
+		.or_else(|| {
+			pivot.runtime.as_ref().and_then(|spec| {
+				spec.process()
+					.as_ref()
+					.and_then(|process| process.args().clone())
+			})
+		})
+		.unwrap_or_else(|| {
+			let mut argv = Vec::with_capacity(
+				verified.entrypoint.len() + verified.cmd.len(),
+			);
+			argv.extend(verified.entrypoint.clone());
+			argv.extend(verified.cmd.clone());
+			argv
+		});
 	if argv.is_empty() {
 		return Err(invalid("OCI image does not define argv"));
 	}
@@ -996,6 +1051,19 @@ fn derive_env(
 		};
 		env.insert(name.to_string(), value.to_string());
 	}
+	if let Some(runtime_env) = pivot
+		.runtime
+		.as_ref()
+		.and_then(|spec| spec.process().as_ref())
+		.and_then(|process| process.env().as_ref())
+	{
+		for entry in runtime_env {
+			let Some((name, value)) = entry.split_once('=') else {
+				return Err(invalid("OCI runtime env entry is missing '='"));
+			};
+			env.insert(name.to_string(), value.to_string());
+		}
+	}
 	for (name, value) in pivot.env.iter() {
 		let Some(value) = value.as_plain_value() else {
 			return Err(ProtocolError::InvalidPivotEnv(
@@ -1005,6 +1073,20 @@ fn derive_env(
 		env.insert(name.to_string(), value.to_string());
 	}
 	Ok(env.into_iter().collect())
+}
+
+fn derive_cwd(
+	pivot: &PivotOciImageConfigV2,
+	verified: &VerifiedOciImage,
+) -> Result<String, ProtocolError> {
+	let cwd = pivot
+		.runtime
+		.as_ref()
+		.and_then(|spec| spec.process().as_ref())
+		.map(|process| process.cwd().to_string_lossy().into_owned())
+		.unwrap_or_else(|| verified.working_dir.clone());
+	validate_absolute_rootfs_path(&cwd)?;
+	Ok(cwd)
 }
 
 fn invalid(message: impl Into<String>) -> ProtocolError {
@@ -1159,6 +1241,7 @@ mod tests {
 				max_unpacked_bytes: 1024 * 1024,
 				max_entries: 1024,
 			},
+			runtime: None,
 		};
 
 		Fixture { archive, pivot, manifest_hex, config_hex, layer_hex }
@@ -1232,13 +1315,58 @@ mod tests {
 		assert!(bundle.rootfs.join("qos.ephemeral.key").exists());
 		assert!(bundle.rootfs.join("qos.manifest").exists());
 
-		let spec_path = write_oci_launch_spec(&bundle).unwrap();
-		let spec: OciLaunchSpec =
-			serde_json::from_slice(&fs::read(spec_path).unwrap()).unwrap();
-		assert_eq!(spec.rootfs, bundle.rootfs);
-		assert_eq!(spec.argv, bundle.argv);
-		assert_eq!(spec.env, bundle.env);
-		assert_eq!(spec.cwd, bundle.cwd);
+		let spec = Spec::load(bundle.bundle_dir.join("config.json")).unwrap();
+		assert_eq!(spec, bundle.spec);
+		assert_eq!(spec.root().as_ref().unwrap().path(), &bundle.rootfs);
+	}
+
+	#[test]
+	fn preserves_approved_runtime_configuration() {
+		let Fixture { archive, mut pivot, .. } = fixture();
+		let handles = test_handles();
+		let verified =
+			import_oci_layout_archive(&handles, &pivot, &archive).unwrap();
+		let mut runtime = Spec::default();
+		runtime.set_hostname(Some("approved-hostname".to_string()));
+		let process = runtime.process_mut().as_mut().unwrap();
+		process.set_args(Some(vec!["/runtime-app".to_string()]));
+		process.set_env(Some(vec!["RUNTIME=yes".to_string()]));
+		process.set_cwd(PathBuf::from("/runtime"));
+		pivot.runtime = Some(runtime);
+
+		let rootfs = handles.oci_rootfs_dir(pivot.digest.hex());
+		fs::create_dir_all(&rootfs).unwrap();
+		let argv = derive_argv(&pivot, &verified).unwrap();
+		let env = derive_env(&pivot, &verified).unwrap();
+		let cwd = derive_cwd(&pivot, &verified).unwrap();
+		let spec =
+			build_runtime_spec(&pivot, &verified, &rootfs, &argv, &env, &cwd)
+				.unwrap();
+
+		assert_eq!(spec.hostname().as_deref(), Some("approved-hostname"));
+		assert_eq!(argv, vec!["/runtime-app"]);
+		assert!(env.contains(&("RUNTIME".to_string(), "yes".to_string())));
+		assert_eq!(cwd, "/runtime");
+		assert_eq!(spec.root().as_ref().unwrap().path(), &rootfs);
+	}
+
+	#[test]
+	fn resolves_named_image_users_and_groups() {
+		let handles = test_handles();
+		let rootfs = handles.oci_rootfs_dir("users");
+		fs::create_dir_all(rootfs.join("etc")).unwrap();
+		fs::write(
+			rootfs.join("etc/passwd"),
+			"root:x:0:0:root:/root:/bin/sh\napp:x:1001:1002::/app:/bin/sh\n",
+		)
+		.unwrap();
+		fs::write(rootfs.join("etc/group"), "root:x:0:\nappgroup:x:1003:\n")
+			.unwrap();
+
+		let user = resolve_image_user(&rootfs, "app:appgroup").unwrap();
+		assert_eq!(user.uid(), 1001);
+		assert_eq!(user.gid(), 1003);
+		assert_eq!(user.username().as_deref(), Some("app"));
 	}
 
 	#[test]

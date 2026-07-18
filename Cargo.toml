@@ -75,9 +75,10 @@ hkdf = { version = "0.12", default-features = false }
 hmac = { version = "0.12", default-features = false }
 httparse = { version = "1.9.4", default-features = false }
 lazy_static = "1.4"
-libc = "=0.2.174"
-nix = { version = "0.30.1", features = ["fs", "mount", "socket"], default-features = false }
-oci-spec = { version = "0.9", features = ["image"], default-features = false }
+libc = "0.2.180"
+nix = { version = "0.30.1", features = ["fs", "mount", "process", "signal", "socket"], default-features = false }
+oci-spec = { version = "0.9", features = ["image", "runtime"], default-features = false }
+libcontainer = { version = "0.6", default-features = false, features = ["v1", "v2"] }
 p256 = { version = "0.13.2", default-features = false }
 p384 = { version = "0.13", features = ["ecdsa", "std"], default-features = false }
 rand = "0.9"

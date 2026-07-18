@@ -19,6 +19,7 @@ pub mod server;
 pub mod cli;
 pub mod handles;
 pub mod io;
+mod oci_runtime;
 pub mod parser;
 pub mod protocol;
 pub mod reaper;
