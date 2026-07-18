@@ -18,6 +18,7 @@ module_name_repetitions = "allow"
 [features]
 impure-builder = []
 qemu-e2e = []
+qemu-ci = ["qemu-e2e"]
 
 [dependencies]
 qos_hex = { workspace = true }

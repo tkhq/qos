@@ -27,6 +27,28 @@ pub(crate) struct DockerHostQemuNitroPreparation {
 	pub(crate) docker_bin: PathBuf,
 	/// Artifact build mode.
 	pub(crate) build_mode: BuildMode,
+	/// Images supplied by CI instead of built from the repository checkout.
+	pub(crate) ci_images: Option<QemuCiImages>,
+}
+
+/// PR-built images consumed by the `qemu-ci` test mode.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct QemuCiImages {
+	pub(crate) host: ImageRef,
+	pub(crate) bridge: ImageRef,
+	pub(crate) client: ImageRef,
+	pub(crate) pivot: ImageRef,
+}
+
+impl QemuCiImages {
+	pub(crate) fn from_env() -> Result<Self, PreparationError> {
+		Ok(Self {
+			host: required_image_env("QOS_TEST_QEMU_HOST_IMAGE")?,
+			bridge: required_image_env("QOS_TEST_QEMU_BRIDGE_IMAGE")?,
+			client: required_image_env("QOS_TEST_QEMU_CLIENT_IMAGE")?,
+			pivot: required_image_env("QOS_TEST_QEMU_PIVOT_IMAGE")?,
+		})
+	}
 }
 
 /// Prepared Docker/QEMU runtime with an exclusive harness session.
@@ -108,7 +130,20 @@ impl DockerHostQemuNitroPreparation {
 			ingress_port,
 		};
 
-		let pivot = {
+		let (pivot, runner_spec) = if let Some(images) = &self.ci_images {
+			let pivot =
+				prepare_ci_artifacts(&self, &session.work_dir, &images.pivot)
+					.await?;
+			let runner_spec = repo_defaults::docker_host_qemu_nitro_spec(
+				defaults,
+				repo_defaults::DockerHostQemuNitroImages {
+					host: images.host.clone(),
+					bridge: images.bridge.clone(),
+					client: images.client.clone(),
+				},
+			)?;
+			(pivot, runner_spec)
+		} else {
 			let selector = BuildSelector {
 				mode: self.build_mode,
 				slow: RepositoryArtifactsBuilder {
@@ -120,16 +155,17 @@ impl DockerHostQemuNitroPreparation {
 					work_dir: &session.work_dir,
 				},
 			};
-			selector.build().await?
-		};
-
-		let runner_spec = match self.build_mode {
-			BuildMode::Slow => {
-				repo_defaults::docker_host_qemu_nitro_spec(defaults)?
-			}
-			BuildMode::Fast => {
-				repo_defaults::docker_host_qemu_nitro_fast_spec(defaults)?
-			}
+			let pivot = selector.build().await?;
+			let runner_spec = match self.build_mode {
+				BuildMode::Slow => repo_defaults::docker_host_qemu_nitro_spec(
+					defaults,
+					repo_defaults::local_qemu_images()?,
+				)?,
+				BuildMode::Fast => {
+					repo_defaults::docker_host_qemu_nitro_fast_spec(defaults)?
+				}
+			};
+			(pivot, runner_spec)
 		};
 
 		Ok(PreparedDockerHostQemuNitro {
@@ -246,8 +282,8 @@ async fn prepare_repository_artifacts(
 		&preparation.root,
 		[
 			"out/nitro.eif",
-			"out/qos_host/index.json",
-			"out/qos_bridge/index.json",
+			"out/qos_host_qemu/index.json",
+			"out/qos_bridge_qemu/index.json",
 			"out/qos_client/index.json",
 			"out/signed_echo/index.json",
 		],
@@ -255,31 +291,42 @@ async fn prepare_repository_artifacts(
 	.build()
 	.await?;
 
-	for (containerfile, image) in [
-		(
-			"src/qos_test_harness/docker/qos_host_qemu.Containerfile",
-			repo_defaults::qemu_image("qos_host")?,
-		),
-		(
-			"src/qos_test_harness/docker/qos_bridge_qemu.Containerfile",
-			repo_defaults::qemu_image("qos_bridge")?,
-		),
-	] {
-		build_qemu_runtime_image(preparation, containerfile, &image)?;
+	for name in
+		["qos_host_qemu", "qos_bridge_qemu", "qos_client", "signed_echo"]
+	{
+		OciLayoutLoadBuilder::new(preparation.root.join("out").join(name))?
+			.with_docker_bin(&preparation.docker_bin)
+			.build()
+			.await?;
 	}
+	extract_pivot(
+		preparation,
+		work_dir,
+		&repo_defaults::local_image("signed_echo")?,
+	)
+	.await
+}
 
-	OciLayoutLoadBuilder::new(preparation.root.join("out/qos_client"))?
-		.with_docker_bin(&preparation.docker_bin)
+async fn prepare_ci_artifacts(
+	preparation: &DockerHostQemuNitroPreparation,
+	work_dir: &Path,
+	pivot_image: &ImageRef,
+) -> Result<Pivot, PreparationError> {
+	MakeTargetBuilder::new(&preparation.root, ["out/nitro.eif"])?
 		.build()
 		.await?;
-	OciLayoutLoadBuilder::new(preparation.root.join("out/signed_echo"))?
-		.with_docker_bin(&preparation.docker_bin)
-		.build()
-		.await?;
+	extract_pivot(preparation, work_dir, pivot_image).await
+}
+
+async fn extract_pivot(
+	preparation: &DockerHostQemuNitroPreparation,
+	work_dir: &Path,
+	image: &ImageRef,
+) -> Result<Pivot, PreparationError> {
 	let artifacts_dir = work_dir.join("artifacts");
 	std::fs::create_dir_all(&artifacts_dir)?;
 	ImageFileExtractBuilder::new(
-		repo_defaults::local_image("signed_echo")?,
+		image.clone(),
 		"/tvc_app",
 		artifacts_dir.join("signed_echo"),
 	)?
@@ -287,31 +334,6 @@ async fn prepare_repository_artifacts(
 	.build()
 	.await
 	.map_err(PreparationError::from)
-}
-
-fn build_qemu_runtime_image(
-	preparation: &DockerHostQemuNitroPreparation,
-	containerfile: &str,
-	image: &ImageRef,
-) -> Result<(), PreparationError> {
-	run_checked(
-		Command::new(&preparation.docker_bin)
-			.current_dir(&preparation.root)
-			.env("DOCKER_BUILDKIT", "1")
-			.args([
-				"build",
-				"--platform",
-				"linux/amd64",
-				"--build-context",
-				"common=oci-layout://./out/common",
-				"--file",
-				containerfile,
-				"--tag",
-				image.as_str(),
-				".",
-			]),
-		&format!("build {image}"),
-	)
 }
 
 async fn prepare_fast_artifacts(
@@ -399,6 +421,17 @@ fn unused_local_port_pair() -> Result<(u16, u16), std::io::Error> {
 fn fast_builder(builder: CargoBinaryBuilder) -> CargoBinaryBuilder {
 	builder
 		.with_env("CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER", "rust-lld")
+}
+
+fn required_image_env(
+	name: &'static str,
+) -> Result<ImageRef, PreparationError> {
+	let value = std::env::var(name).map_err(|_| {
+		PreparationError::Command(format!(
+			"{name} must be set when the qemu-ci feature is enabled"
+		))
+	})?;
+	ImageRef::new(value).map_err(PreparationError::from)
 }
 
 fn run_checked(

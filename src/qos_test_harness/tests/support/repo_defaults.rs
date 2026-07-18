@@ -35,6 +35,14 @@ pub(super) struct DockerHostQemuNitroDefaults {
 	pub(super) ingress_port: u16,
 }
 
+/// Runtime images used by the Docker-host/QEMU-Nitro runner.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct DockerHostQemuNitroImages {
+	pub(super) host: ImageRef,
+	pub(super) bridge: ImageRef,
+	pub(super) client: ImageRef,
+}
+
 /// Create a v2 manifest builder with the standard Docker/QEMU test fixtures.
 ///
 /// Tests add their pivot arguments and bridge configuration before calling
@@ -228,6 +236,7 @@ fn boot_client_fixture(root: &Path) -> Result<BootClientFixture, BuildError> {
 /// Build the repo-local Docker-host/QEMU-Nitro runner spec.
 pub(super) fn docker_host_qemu_nitro_spec(
 	defaults: DockerHostQemuNitroDefaults,
+	images: DockerHostQemuNitroImages,
 ) -> Result<DockerHostQemuNitroSpec, RunnerError> {
 	let root = defaults.root;
 	let work_mount = DockerMount {
@@ -242,27 +251,18 @@ pub(super) fn docker_host_qemu_nitro_spec(
 	};
 	Ok(DockerHostQemuNitroSpec {
 		eif: Eif { path: root.join("out/nitro.eif"), pcrs_path: None },
-		host_program: DockerProgram::ImageEntrypoint {
-			image: qemu_image("qos_host")
-				.map_err(build_error_to_runner_error)?,
-		},
+		host_program: DockerProgram::ImageEntrypoint { image: images.host },
 		host_run: DockerRunSpec {
 			privileged: true,
 			..DockerRunSpec::default()
 		},
-		bridge_program: DockerProgram::ImageEntrypoint {
-			image: qemu_image("qos_bridge")
-				.map_err(build_error_to_runner_error)?,
-		},
+		bridge_program: DockerProgram::ImageEntrypoint { image: images.bridge },
 		bridge_run: DockerRunSpec {
 			privileged: true,
 			..DockerRunSpec::default()
 		},
 		bridge_egress_bin_path: None,
-		client_program: DockerProgram::ImageEntrypoint {
-			image: local_image("qos_client")
-				.map_err(build_error_to_runner_error)?,
-		},
+		client_program: DockerProgram::ImageEntrypoint { image: images.client },
 		client_run: DockerRunSpec {
 			mounts: vec![work_mount],
 			privileged: false,
@@ -446,9 +446,14 @@ pub(super) fn local_image(name: &str) -> Result<ImageRef, BuildError> {
 	ImageRef::new(format!("qos-local/{name}:latest"))
 }
 
-/// Repo-local QEMU feature image name.
-pub(super) fn qemu_image(name: &str) -> Result<ImageRef, BuildError> {
-	ImageRef::new(format!("qos-local/{name}_qemu:latest"))
+/// Repo-local images produced by the slow QEMU build.
+pub(super) fn local_qemu_images()
+-> Result<DockerHostQemuNitroImages, BuildError> {
+	Ok(DockerHostQemuNitroImages {
+		host: local_image("qos_host_qemu")?,
+		bridge: local_image("qos_bridge_qemu")?,
+		client: local_image("qos_client")?,
+	})
 }
 
 const FAST_QEMU_TARGET: &str = "x86_64-unknown-linux-musl";

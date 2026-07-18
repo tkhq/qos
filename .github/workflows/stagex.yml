@@ -23,9 +23,11 @@ jobs:
         name:
           - qos_client
           - qos_host
+          - qos_host_qemu
           - qos_enclave
           - qos_enclave_egress
           - qos_bridge
+          - qos_bridge_qemu
           - qos_bridge_egress
           - signed_echo
         include:
@@ -35,6 +37,9 @@ jobs:
           - name: qos_host
             ghcr: ghcr.io/tkhq/qos_host
             ecr: true
+          - name: qos_host_qemu
+            ghcr: ghcr.io/tkhq/qos_host_qemu
+            ecr: false
           - name: qos_enclave
             ghcr: ghcr.io/tkhq/qos_enclave
             ecr: true
@@ -44,6 +49,9 @@ jobs:
           - name: qos_bridge
             ghcr: ghcr.io/tkhq/qos_bridge
             ecr: true
+          - name: qos_bridge_qemu
+            ghcr: ghcr.io/tkhq/qos_bridge_qemu
+            ecr: false
           - name: qos_bridge_egress
             ghcr: ghcr.io/tkhq/qos_bridge_egress
             ecr: true
@@ -133,3 +141,46 @@ jobs:
             echo "One or more image build jobs did not succeed (result: ${result})" >&2
             exit 1
           fi
+
+  qemu-e2e:
+    name: QEMU e2e with PR images
+    if: github.event_name == 'pull_request'
+    needs: build-artifacts
+    runs-on: ubicloud-standard-16
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
+        with:
+          ghcr: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull PR images
+        env:
+          QOS_TEST_QEMU_HOST_IMAGE: ghcr.io/tkhq/qos_host_qemu:pr-${{ github.event.number }}
+          QOS_TEST_QEMU_BRIDGE_IMAGE: ghcr.io/tkhq/qos_bridge_qemu:pr-${{ github.event.number }}
+          QOS_TEST_QEMU_CLIENT_IMAGE: ghcr.io/tkhq/qos_client:pr-${{ github.event.number }}
+          QOS_TEST_QEMU_PIVOT_IMAGE: ghcr.io/tkhq/qos/examples/signed_echo:pr-${{ github.event.number }}
+        run: |
+          docker pull "${QOS_TEST_QEMU_HOST_IMAGE}"
+          docker pull "${QOS_TEST_QEMU_BRIDGE_IMAGE}"
+          docker pull "${QOS_TEST_QEMU_CLIENT_IMAGE}"
+          docker pull "${QOS_TEST_QEMU_PIVOT_IMAGE}"
+
+      - name: Run QEMU end-to-end tests
+        env:
+          QOS_TEST_QEMU_HOST_IMAGE: ghcr.io/tkhq/qos_host_qemu:pr-${{ github.event.number }}
+          QOS_TEST_QEMU_BRIDGE_IMAGE: ghcr.io/tkhq/qos_bridge_qemu:pr-${{ github.event.number }}
+          QOS_TEST_QEMU_CLIENT_IMAGE: ghcr.io/tkhq/qos_client:pr-${{ github.event.number }}
+          QOS_TEST_QEMU_PIVOT_IMAGE: ghcr.io/tkhq/qos/examples/signed_echo:pr-${{ github.event.number }}
+        run: >-
+          cargo test --locked -p qos_test_harness --features qemu-ci
+          --test docker_host_qemu_nitro -- --nocapture --test-threads=1

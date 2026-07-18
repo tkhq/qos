@@ -8,8 +8,11 @@ use qos_test_harness::{
 	TestRunner,
 };
 use support::preparation::{
-	DockerHostQemuNitroPreparation, PreparedDockerHostQemuNitro,
+	DockerHostQemuNitroPreparation, PreparedDockerHostQemuNitro, QemuCiImages,
 };
+
+#[cfg(all(feature = "qemu-ci", feature = "impure-builder"))]
+compile_error!("qemu-ci and impure-builder select different artifact sources");
 
 const APP_ARGS: [&str; 4] = ["--host", "0.0.0.0", "--port", "3000"];
 const HEALTH_PATH: &str = "/health";
@@ -128,6 +131,11 @@ async fn signed_echo_egress_get_url() {
 
 async fn prepare() -> (PreparedDockerHostQemuNitro, Pivot) {
 	let root = workspace_root();
+	let ci_images = if cfg!(feature = "qemu-ci") {
+		Some(QemuCiImages::from_env().unwrap())
+	} else {
+		None
+	};
 	let build_mode = if cfg!(feature = "impure-builder") {
 		BuildMode::Fast
 	} else {
@@ -137,6 +145,7 @@ async fn prepare() -> (PreparedDockerHostQemuNitro, Pivot) {
 		root: root.clone(),
 		docker_bin: PathBuf::from("docker"),
 		build_mode,
+		ci_images,
 	}
 	.prepare()
 	.await

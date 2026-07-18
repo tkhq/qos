@@ -138,6 +138,16 @@ out/qos_host/index.json: \
 	)
 	$(call build,qos_host)
 
+out/qos_host_qemu/index.json: \
+	out/common/index.json \
+	$(CARGO_WORKSPACE_FILES) \
+	src/images/qos_host_qemu/Containerfile \
+	$(shell git ls-files \
+		src/qos_host \
+		src/qos_core \
+	)
+	$(call build,qos_host_qemu)
+
 out/qos_client/index.json: \
 	out/common/index.json \
 	$(CARGO_WORKSPACE_FILES) \
@@ -164,6 +174,19 @@ out/qos_bridge/index.json: \
 		src/qos_nsm \
 	)
 	$(call build,qos_bridge)
+
+out/qos_bridge_qemu/index.json: \
+	out/common/index.json \
+	$(CARGO_WORKSPACE_FILES) \
+	src/images/qos_bridge_qemu/Containerfile \
+	$(shell git ls-files \
+		src/qos_bridge \
+		src/qos_host \
+		src/qos_core \
+		src/qos_hex \
+		src/qos_nsm \
+	)
+	$(call build,qos_bridge_qemu)
 
 out/qos_bridge_egress/index.json: \
 	out/common/index.json \
