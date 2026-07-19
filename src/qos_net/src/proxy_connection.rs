@@ -236,7 +236,12 @@ mod test {
 
 		let server_name: rustls::pki_types::ServerName<'_> =
 			host.try_into().unwrap();
-		let config: rustls::ClientConfig = rustls::ClientConfig::builder()
+		let config: rustls::ClientConfig =
+			rustls::ClientConfig::builder_with_provider(Arc::new(
+				rustls::crypto::aws_lc_rs::default_provider(),
+			))
+			.with_safe_default_protocol_versions()
+			.unwrap()
 			.with_root_certificates(root_store)
 			.with_no_client_auth();
 		let conn = TlsConnector::from(Arc::new(config));
