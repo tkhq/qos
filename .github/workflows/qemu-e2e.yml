@@ -3,6 +3,10 @@ name: QEMU e2e
 on:
   workflow_call:
     inputs:
+      enclave_image:
+        description: QOS enclave egress image containing the EIF to boot.
+        required: true
+        type: string
       host_image:
         description: QEMU-compatible QOS host image to run.
         required: true
@@ -44,11 +48,13 @@ jobs:
 
       - name: Pull supplied images
         env:
+          QOS_TEST_QEMU_ENCLAVE_IMAGE: ${{ inputs.enclave_image }}
           QOS_TEST_QEMU_HOST_IMAGE: ${{ inputs.host_image }}
           QOS_TEST_QEMU_BRIDGE_IMAGE: ${{ inputs.bridge_image }}
           QOS_TEST_QEMU_CLIENT_IMAGE: ${{ inputs.client_image }}
           QOS_TEST_QEMU_PIVOT_IMAGE: ${{ inputs.pivot_image }}
         run: |
+          docker pull "${QOS_TEST_QEMU_ENCLAVE_IMAGE}"
           docker pull "${QOS_TEST_QEMU_HOST_IMAGE}"
           docker pull "${QOS_TEST_QEMU_BRIDGE_IMAGE}"
           docker pull "${QOS_TEST_QEMU_CLIENT_IMAGE}"
@@ -56,6 +62,7 @@ jobs:
 
       - name: Run QEMU end-to-end tests
         env:
+          QOS_TEST_QEMU_ENCLAVE_IMAGE: ${{ inputs.enclave_image }}
           QOS_TEST_QEMU_HOST_IMAGE: ${{ inputs.host_image }}
           QOS_TEST_QEMU_BRIDGE_IMAGE: ${{ inputs.bridge_image }}
           QOS_TEST_QEMU_CLIENT_IMAGE: ${{ inputs.client_image }}

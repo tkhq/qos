@@ -46,9 +46,6 @@ shell: out/.common-loaded
 		qos-local/common:latest \
 		/bin/bash
 
-qemu: out/nitro.eif /tmp/vhost4.socket
-	qemu-system-x86_64 -M nitro-enclave,vsock=c,id=hello-world -kernel out/nitro.eif -nographic -m 4G --enable-kvm -cpu host -chardev socket,id=c,path=/tmp/vhost4.socket
-
 .PHONY: stop
 stop:
 	-killall qemu-system-x86_64
@@ -92,14 +89,6 @@ target/x86_64-unknown-linux-musl/release-panic-abort/egress: \
 	src/qos_bridge/src/*.rs \
 	Cargo.toml
 	cargo build --profile release-panic-abort --features egress,qemu --locked --target x86_64-unknown-linux-musl -p qos_bridge --bin egress
-
-out/nitro.eif: \
-	src/images/qemu/Containerfile \
-	Cargo.toml \
-	Cargo.lock \
-	$(shell git ls-files src/init src/qos_core src/qos_bridge)
-	docker build -t qos-qemu-base -f src/images/qemu/Containerfile . --output type=tar,dest=out/nitro.tar
-	tar -xf out/nitro.tar -C out && rm -f out/nitro.tar
 
 out/qos_enclave/index.json: \
 	out/common/index.json \

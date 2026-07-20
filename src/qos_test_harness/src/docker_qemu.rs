@@ -726,10 +726,10 @@ impl DockerHostQemuNitroRunner {
 
 	fn vhost_forward_ports(&self, bridge_config: &[BridgeConfig]) -> Vec<u16> {
 		let qemu = &self.spec.qemu;
-		let mut ports = vec![
-			qemu.control_vsock_port,
-			qemu.control_vsock_port.saturating_add(1),
-		];
+		let egress_port = qos_core::EGRESS_VSOCK_PORT
+			.try_into()
+			.expect("QOS egress VSOCK port must fit in u16");
+		let mut ports = vec![qemu.control_vsock_port, egress_port];
 		for bridge in bridge_config {
 			if let BridgeConfig::Server { port, host: _ } = bridge {
 				ports.push(*port);

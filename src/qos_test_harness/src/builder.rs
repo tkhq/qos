@@ -7,7 +7,7 @@ use std::{
 	process::{Command, Stdio},
 };
 
-use crate::{BinaryArtifact, Eif, ImageRef, Pivot};
+use crate::{BinaryArtifact, Eif, ImageRef};
 
 /// Generic builder that produces a typed artifact.
 #[allow(async_fn_in_trait)]
@@ -437,10 +437,8 @@ impl ImageFileExtractBuilder {
 		self.docker_bin = docker_bin.into();
 		self
 	}
-}
 
-impl Builder<Pivot> for ImageFileExtractBuilder {
-	async fn build(&self) -> Result<Pivot, BuildError> {
+	async fn extract(&self) -> Result<PathBuf, BuildError> {
 		let cleanup = DockerContainerCleanup {
 			docker_bin: self.docker_bin.clone(),
 			name: self.container_name.clone(),
@@ -462,7 +460,13 @@ impl Builder<Pivot> for ImageFileExtractBuilder {
 				.arg(source)
 				.arg(&self.output_path),
 		)?;
-		Ok(Pivot { path: self.output_path.clone() })
+		Ok(self.output_path.clone())
+	}
+}
+
+impl Builder<PathBuf> for ImageFileExtractBuilder {
+	async fn build(&self) -> Result<PathBuf, BuildError> {
+		self.extract().await
 	}
 }
 
@@ -580,10 +584,6 @@ impl PrebuiltQemuEifBuilder {
 		std::fs::create_dir_all(&context_dir)?;
 		std::fs::copy(&self.init.path, context_dir.join("init"))?;
 		std::fs::copy(&self.egress.path, context_dir.join("egress"))?;
-		std::fs::write(
-			context_dir.join("resolv.conf"),
-			b"nameserver 1.1.1.1\n",
-		)?;
 		Ok(context_dir)
 	}
 

@@ -148,6 +148,7 @@ jobs:
     needs: build-artifacts
     uses: ./.github/workflows/qemu-e2e.yml
     with:
+      enclave_image: ghcr.io/tkhq/qos_enclave_egress:pr-${{ github.event.number }}
       host_image: ghcr.io/tkhq/qos_host_qemu:pr-${{ github.event.number }}
       bridge_image: ghcr.io/tkhq/qos_bridge_qemu:pr-${{ github.event.number }}
       client_image: ghcr.io/tkhq/qos_client:pr-${{ github.event.number }}

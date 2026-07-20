@@ -34,6 +34,7 @@ pub(crate) struct DockerHostQemuNitroPreparation {
 /// PR-built images consumed by the `qemu-ci` test mode.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct QemuCiImages {
+	pub(crate) enclave: ImageRef,
 	pub(crate) host: ImageRef,
 	pub(crate) bridge: ImageRef,
 	pub(crate) client: ImageRef,
@@ -43,6 +44,7 @@ pub(crate) struct QemuCiImages {
 impl QemuCiImages {
 	pub(crate) fn from_env() -> Result<Self, PreparationError> {
 		Ok(Self {
+			enclave: required_image_env("QOS_TEST_QEMU_ENCLAVE_IMAGE")?,
 			host: required_image_env("QOS_TEST_QEMU_HOST_IMAGE")?,
 			bridge: required_image_env("QOS_TEST_QEMU_BRIDGE_IMAGE")?,
 			client: required_image_env("QOS_TEST_QEMU_CLIENT_IMAGE")?,
@@ -131,9 +133,13 @@ impl DockerHostQemuNitroPreparation {
 		};
 
 		let (pivot, runner_spec) = if let Some(images) = &self.ci_images {
-			let pivot =
-				prepare_ci_artifacts(&self, &session.work_dir, &images.pivot)
-					.await?;
+			let pivot = prepare_ci_artifacts(
+				&self,
+				&session.work_dir,
+				&images.enclave,
+				&images.pivot,
+			)
+			.await?;
 			let runner_spec = repo_defaults::docker_host_qemu_nitro_spec(
 				defaults,
 				repo_defaults::DockerHostQemuNitroImages {
@@ -281,7 +287,7 @@ async fn prepare_repository_artifacts(
 	MakeTargetBuilder::new(
 		&preparation.root,
 		[
-			"out/nitro.eif",
+			"out/qos_enclave_egress/index.json",
 			"out/qos_host_qemu/index.json",
 			"out/qos_bridge_qemu/index.json",
 			"out/qos_client/index.json",
@@ -291,14 +297,23 @@ async fn prepare_repository_artifacts(
 	.build()
 	.await?;
 
-	for name in
-		["qos_host_qemu", "qos_bridge_qemu", "qos_client", "signed_echo"]
-	{
+	for name in [
+		"qos_enclave_egress",
+		"qos_host_qemu",
+		"qos_bridge_qemu",
+		"qos_client",
+		"signed_echo",
+	] {
 		OciLayoutLoadBuilder::new(preparation.root.join("out").join(name))?
 			.with_docker_bin(&preparation.docker_bin)
 			.build()
 			.await?;
 	}
+	extract_eif(
+		preparation,
+		&repo_defaults::local_image("qos_enclave_egress")?,
+	)
+	.await?;
 	extract_pivot(
 		preparation,
 		work_dir,
@@ -310,12 +325,27 @@ async fn prepare_repository_artifacts(
 async fn prepare_ci_artifacts(
 	preparation: &DockerHostQemuNitroPreparation,
 	work_dir: &Path,
+	enclave_image: &ImageRef,
 	pivot_image: &ImageRef,
 ) -> Result<Pivot, PreparationError> {
-	MakeTargetBuilder::new(&preparation.root, ["out/nitro.eif"])?
-		.build()
-		.await?;
+	extract_eif(preparation, enclave_image).await?;
 	extract_pivot(preparation, work_dir, pivot_image).await
+}
+
+async fn extract_eif(
+	preparation: &DockerHostQemuNitroPreparation,
+	image: &ImageRef,
+) -> Result<(), PreparationError> {
+	std::fs::create_dir_all(preparation.root.join("out"))?;
+	ImageFileExtractBuilder::new(
+		image.clone(),
+		"/nitro.eif",
+		preparation.root.join("out/nitro.eif"),
+	)?
+	.with_docker_bin(&preparation.docker_bin)
+	.build()
+	.await?;
+	Ok(())
 }
 
 async fn extract_pivot(
@@ -325,7 +355,7 @@ async fn extract_pivot(
 ) -> Result<Pivot, PreparationError> {
 	let artifacts_dir = work_dir.join("artifacts");
 	std::fs::create_dir_all(&artifacts_dir)?;
-	ImageFileExtractBuilder::new(
+	let path = ImageFileExtractBuilder::new(
 		image.clone(),
 		"/tvc_app",
 		artifacts_dir.join("signed_echo"),
@@ -333,7 +363,8 @@ async fn extract_pivot(
 	.with_docker_bin(&preparation.docker_bin)
 	.build()
 	.await
-	.map_err(PreparationError::from)
+	.map_err(PreparationError::from)?;
+	Ok(Pivot { path })
 }
 
 async fn prepare_fast_artifacts(
@@ -349,7 +380,7 @@ async fn prepare_fast_artifacts(
 	)?)
 	.with_manifest_path(root.join("src/init/Cargo.toml"))
 	.with_target_dir(root.join("target"))
-	.with_features(["egress", "qemu"])
+	.with_features(["egress"])
 	.build()
 	.await?;
 	let egress = fast_builder(CargoBinaryBuilder::new(
@@ -359,7 +390,7 @@ async fn prepare_fast_artifacts(
 		CargoProfile::Named("release-panic-abort".to_string()),
 	)?)
 	.with_bin("egress")
-	.with_features(["egress", "qemu"])
+	.with_features(["egress"])
 	.with_no_default_features()
 	.build()
 	.await?;

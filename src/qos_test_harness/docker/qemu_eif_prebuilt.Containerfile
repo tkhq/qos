@@ -17,7 +17,6 @@ FROM ${MUSL_IMAGE} AS musl
 FROM scratch AS prebuilt
 COPY init /init
 COPY egress /egress
-COPY resolv.conf /resolv.conf
 
 FROM ${BUILD_IMAGE} AS build_eif
 WORKDIR /build_cpio
@@ -29,7 +28,6 @@ COPY --from=linux_nitro /nsm.ko .
 COPY --from=iproute2 . /
 COPY --from=musl . /
 COPY --from=prebuilt /egress .
-COPY --from=prebuilt /resolv.conf resolv.conf
 COPY <<-EOF initramfs.list
 	file /init     init    0700 0 0
 	file /nsm.ko   nsm.ko  0600 0 0
@@ -52,7 +50,6 @@ COPY <<-EOF initramfs.list
 	file /egress   egress 0700 0 0
 	file /usr/sbin/ip      /usr/sbin/ip     0700 0 0
 	file /lib/ld-musl-x86  /usr/lib/ld-musl-x86_64.so.1 0700 0 0
-	file /etc/resolv.conf  resolv.conf      0644 0 0
 EOF
 ENV CPIO_TIMESTAMP=1
 ENV KBUILD_BUILD_TIMESTAMP=1
