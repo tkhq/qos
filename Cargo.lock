@@ -2375,13 +2375,13 @@ dependencies = [
 
 [[package]]
 name = "qos_test_harness"
-version = "0.12.2"
+version = "0.13.0"
 dependencies = [
- "qos_core 0.12.2",
- "qos_crypto 0.12.2",
- "qos_hex 0.12.2",
- "qos_nsm 0.12.2",
- "qos_p256 0.12.2",
+ "qos_core 0.13.0",
+ "qos_crypto 0.13.0",
+ "qos_hex 0.13.0",
+ "qos_nsm 0.13.0",
+ "qos_p256 0.13.0",
  "serde",
  "serde_json",
  "signed_echo",
