@@ -146,43 +146,10 @@ jobs:
     name: QEMU e2e with PR images
     if: github.event_name == 'pull_request'
     needs: build-artifacts
-    runs-on: ubicloud-standard-16
-    timeout-minutes: 45
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
-        with:
-          toolchain: "1.94"
-
-      - name: Setup Docker
-        uses: ./.github/actions/docker-setup
-        with:
-          ghcr: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull PR images
-        env:
-          QOS_TEST_QEMU_HOST_IMAGE: ghcr.io/tkhq/qos_host_qemu:pr-${{ github.event.number }}
-          QOS_TEST_QEMU_BRIDGE_IMAGE: ghcr.io/tkhq/qos_bridge_qemu:pr-${{ github.event.number }}
-          QOS_TEST_QEMU_CLIENT_IMAGE: ghcr.io/tkhq/qos_client:pr-${{ github.event.number }}
-          QOS_TEST_QEMU_PIVOT_IMAGE: ghcr.io/tkhq/qos/examples/signed_echo:pr-${{ github.event.number }}
-        run: |
-          docker pull "${QOS_TEST_QEMU_HOST_IMAGE}"
-          docker pull "${QOS_TEST_QEMU_BRIDGE_IMAGE}"
-          docker pull "${QOS_TEST_QEMU_CLIENT_IMAGE}"
-          docker pull "${QOS_TEST_QEMU_PIVOT_IMAGE}"
-
-      - name: Run QEMU end-to-end tests
-        env:
-          QOS_TEST_QEMU_HOST_IMAGE: ghcr.io/tkhq/qos_host_qemu:pr-${{ github.event.number }}
-          QOS_TEST_QEMU_BRIDGE_IMAGE: ghcr.io/tkhq/qos_bridge_qemu:pr-${{ github.event.number }}
-          QOS_TEST_QEMU_CLIENT_IMAGE: ghcr.io/tkhq/qos_client:pr-${{ github.event.number }}
-          QOS_TEST_QEMU_PIVOT_IMAGE: ghcr.io/tkhq/qos/examples/signed_echo:pr-${{ github.event.number }}
-        run: >-
-          cargo test --locked -p qos_test_harness --features qemu-ci
-          --test docker_host_qemu_nitro -- --nocapture --test-threads=1
+    uses: ./.github/workflows/qemu-e2e.yml
+    with:
+      host_image: ghcr.io/tkhq/qos_host_qemu:pr-${{ github.event.number }}
+      bridge_image: ghcr.io/tkhq/qos_bridge_qemu:pr-${{ github.event.number }}
+      client_image: ghcr.io/tkhq/qos_client:pr-${{ github.event.number }}
+      pivot_image: ghcr.io/tkhq/qos/examples/signed_echo:pr-${{ github.event.number }}
+    secrets: inherit

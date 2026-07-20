@@ -25,7 +25,7 @@ ENV RUSTFLAGS='-C target-feature=+crt-static'
 FROM build AS build_init
 ARG TARGET
 WORKDIR /src/src/init
-RUN cargo build --features egress,qemu ${CARGOFLAGS}
+RUN cargo build --locked --features egress,qemu ${CARGOFLAGS}
 RUN cp target/${TARGET}/release/init /
 RUN file /init | grep "static-pie"
 
