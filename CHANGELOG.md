@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.13.0](https://github.com/tkhq/qos/compare/qos_client-v0.12.2...qos_client-v0.13.0) - 2026-07-20
+
+### Added
+- [**breaking**] A small qos manifest builder api
+
+## `qos_net` - [0.13.0](https://github.com/tkhq/qos/compare/qos_net-v0.12.2...qos_net-v0.13.0) - 2026-07-20
+
+### Fixed
+- *(qos_net)* pin LookupIpStrategy to Ipv4thenIpv6
+
+## `qos_core` - [0.13.0](https://github.com/tkhq/qos/compare/qos_core-v0.12.2...qos_core-v0.13.0) - 2026-07-20
+
+### Added
+- [**breaking**] A small qos manifest builder api
+
+### Other
+- Address Review
+
 ## `qos_net` - [0.12.2](https://github.com/tkhq/qos/compare/qos_net-v0.12.1...qos_net-v0.12.2) - 2026-07-13
 
 ### Other
