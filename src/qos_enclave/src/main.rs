@@ -1,7 +1,6 @@
 use std::{
 	fs::create_dir_all,
-	io::Write,
-	io::stdout,
+	io::{self, Write},
 	mem::MaybeUninit,
 	net::{Shutdown, TcpListener},
 	os::unix::net::UnixStream,
@@ -30,8 +29,64 @@ use nitro_cli::{
 	get_id_by_name,
 	utils::Console,
 };
+use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
+
+fn init_tracing() {
+	let env_filter = EnvFilter::try_from_default_env()
+		.unwrap_or_else(|_| EnvFilter::new("info"));
+	tracing_subscriber::fmt()
+		.json()
+		.with_env_filter(env_filter)
+		.with_writer(io::stdout)
+		.init();
+}
+
+#[derive(Default)]
+struct TracingLogWriter {
+	buffer: Vec<u8>,
+}
+
+impl TracingLogWriter {
+	fn emit_line(line: &[u8]) {
+		let line = String::from_utf8_lossy(line);
+		let line = line.trim_end_matches('\r');
+		if !line.is_empty() {
+			info!(target: "qos_enclave::console", "{}", line);
+		}
+	}
+}
+
+impl Write for TracingLogWriter {
+	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+		self.buffer.extend_from_slice(buf);
+
+		let mut consumed = 0;
+		while let Some(newline_offset) =
+			self.buffer[consumed..].iter().position(|byte| *byte == b'\n')
+		{
+			let newline_index = consumed + newline_offset;
+			Self::emit_line(&self.buffer[consumed..newline_index]);
+			consumed = newline_index + 1;
+		}
+
+		if consumed > 0 {
+			self.buffer.drain(..consumed);
+		}
+
+		Ok(buf.len())
+	}
+
+	fn flush(&mut self) -> io::Result<()> {
+		if !self.buffer.is_empty() {
+			Self::emit_line(&self.buffer);
+			self.buffer.clear();
+		}
+		Ok(())
+	}
+}
 
 fn healthy() -> Result<(), Box<dyn std::error::Error>> {
 	let mut replies: Vec<UnixStream> = vec![];
@@ -93,7 +148,7 @@ fn boot() -> (String, Option<Console>) {
 		cpu_count: Some(cpu_count.parse::<u32>().unwrap()),
 		enclave_name: Some(enclave_name.clone()),
 	};
-	println!("{:?}", run_args);
+	info!(?run_args, "Run enclave arguments");
 
 	// Socket directory must exist or Nitro SDK crashes with generic error
 	if !Path::new("/run/nitro_enclaves").is_dir() {
@@ -172,8 +227,8 @@ fn boot() -> (String, Option<Console>) {
 }
 
 fn shutdown(enclave_id: String, sig_num: i32) {
-	println!("Got signal: {}", sig_num);
-	println!("Shutting down Enclave");
+	info!(sig_num, "Got signal");
+	info!("Shutting down Enclave");
 
 	// Best-effort graceful Terminate: if the EnclaveProc IPC socket is
 	// unreachable (e.g. the proc has already exited, or the socket is
@@ -194,9 +249,9 @@ fn shutdown(enclave_id: String, sig_num: i32) {
 			.map_err(|_| "Unable to terminate Enclave");
 		}
 		Err(_) => {
-			eprintln!(
-				"Failed to connect to EnclaveProc for {}; skipping graceful Terminate",
-				enclave_id
+			error!(
+				%enclave_id,
+				"Failed to connect to EnclaveProc; skipping graceful Terminate",
 			);
 		}
 	}
@@ -205,7 +260,7 @@ fn shutdown(enclave_id: String, sig_num: i32) {
 }
 
 fn health_service() {
-	println!("Starting health service");
+	info!("Starting health service");
 	let listener = TcpListener::bind("0.0.0.0:8080").unwrap();
 	for stream in listener.incoming() {
 		thread::spawn(move || {
@@ -217,8 +272,8 @@ fn health_service() {
 				_ => &unhealthy_resp[..],
 			};
 			match stream.write_all(response) {
-				Ok(_) => println!("Health response sent"),
-				Err(e) => println!("Failed sending health response: {}!", e),
+				Ok(_) => info!("Health response sent"),
+				Err(e) => error!(error = %e, "Failed sending health response"),
 			};
 			stream.shutdown(Shutdown::Write).unwrap();
 		});
@@ -239,19 +294,22 @@ fn handle_signals() -> c_int {
 }
 
 fn read_logs(console: Console) {
-	println!("Reading logs to stdout");
+	info!("Reading logs to stdout");
 	let disconnect_timeout_sec: Option<u64> = None;
-	let _ = console.read_to(stdout().by_ref(), disconnect_timeout_sec);
+	let mut writer = TracingLogWriter::default();
+	let _ = console.read_to(&mut writer, disconnect_timeout_sec);
+	let _ = writer.flush();
 }
 
 fn main() {
-	println!("Booting Nitro Enclave:");
+	init_tracing();
+	info!("Booting Nitro Enclave");
 
 	let (enclave_id, maybe_console) = boot();
 
 	match healthy() {
-		Ok(_) => println!("Enclave is healthy"),
-		Err(e) => eprintln!("Enclave is sad: {}", e),
+		Ok(_) => info!("Enclave is healthy"),
+		Err(e) => error!(error = %e, "Enclave is sad"),
 	};
 
 	// TODO: return listener so shutdown() can clean it up properly
@@ -268,4 +326,118 @@ fn main() {
 	let sig_num = handle_signals();
 
 	shutdown(enclave_id.clone(), sig_num);
+}
+
+#[cfg(test)]
+mod tests {
+	use std::{
+		io::{self, Write},
+		sync::{Arc, Mutex},
+	};
+
+	use serde_json::Value;
+	use tracing_subscriber::{EnvFilter, fmt::MakeWriter};
+
+	#[derive(Clone, Default)]
+	struct CapturedOutput(Arc<Mutex<Vec<u8>>>);
+
+	impl Write for CapturedOutput {
+		fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+			self.0.lock().unwrap().write(buf)
+		}
+
+		fn flush(&mut self) -> io::Result<()> {
+			self.0.lock().unwrap().flush()
+		}
+	}
+
+	impl<'writer> MakeWriter<'writer> for CapturedOutput {
+		type Writer = CapturedOutput;
+
+		fn make_writer(&'writer self) -> Self::Writer {
+			self.clone()
+		}
+	}
+
+	fn capture_console_logs(chunks: &[&[u8]], flush: bool) -> Vec<Value> {
+		let writer = CapturedOutput::default();
+		let subscriber = tracing_subscriber::fmt()
+			.json()
+			.with_env_filter(EnvFilter::new("info"))
+			.with_writer(writer.clone())
+			.finish();
+
+		tracing::subscriber::with_default(subscriber, || {
+			let mut console_writer = super::TracingLogWriter::default();
+			for chunk in chunks {
+				console_writer.write_all(chunk).unwrap();
+			}
+			if flush {
+				console_writer.flush().unwrap();
+			}
+		});
+
+		let output =
+			String::from_utf8(writer.0.lock().unwrap().clone()).unwrap();
+		output
+			.lines()
+			.map(|line| serde_json::from_str::<Value>(line).unwrap())
+			.collect()
+	}
+
+	fn messages(logs: &[Value]) -> Vec<&str> {
+		logs.iter()
+			.map(|log| log["fields"]["message"].as_str().unwrap())
+			.collect()
+	}
+
+	#[test]
+	fn tracing_subscriber_emits_json_logs() {
+		let writer = CapturedOutput::default();
+		let subscriber = tracing_subscriber::fmt()
+			.json()
+			.with_env_filter(EnvFilter::new("info"))
+			.with_writer(writer.clone())
+			.finish();
+
+		tracing::subscriber::with_default(subscriber, || {
+			tracing::info!(enclave_id = "nitro", "Enclave is healthy");
+		});
+
+		let output =
+			String::from_utf8(writer.0.lock().unwrap().clone()).unwrap();
+		let log: Value = serde_json::from_str(output.trim()).unwrap();
+
+		assert_eq!(log["level"], "INFO");
+		assert_eq!(log["fields"]["message"], "Enclave is healthy");
+		assert_eq!(log["fields"]["enclave_id"], "nitro");
+	}
+
+	#[test]
+	fn console_log_writer_emits_one_json_log_per_line() {
+		let logs = capture_console_logs(&[b"first\nsecond\n"], false);
+
+		assert_eq!(logs.len(), 2);
+		assert_eq!(logs[0]["fields"]["message"], "first");
+		assert_eq!(logs[1]["fields"]["message"], "second");
+	}
+
+	#[test]
+	fn console_log_writer_handles_arbitrary_write_boundaries() {
+		let input = b"first\nsecond\r\n\nthird";
+
+		for chunk_size in 1..=input.len() {
+			let chunks = input.chunks(chunk_size).collect::<Vec<_>>();
+			let logs = capture_console_logs(&chunks, true);
+			assert_eq!(messages(&logs), ["first", "second", "third"]);
+		}
+	}
+
+	#[test]
+	fn console_log_writer_buffers_incomplete_line_until_flush() {
+		assert!(capture_console_logs(&[b"partial"], false).is_empty());
+
+		let logs = capture_console_logs(&[b"partial"], true);
+		assert_eq!(messages(&logs), ["partial"]);
+	}
 }
