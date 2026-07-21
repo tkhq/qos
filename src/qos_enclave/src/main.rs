@@ -30,28 +30,18 @@ use nitro_cli::{
 	utils::Console,
 };
 use tracing::{error, info};
-use tracing_subscriber::{EnvFilter, fmt::MakeWriter, util::SubscriberInitExt};
+use tracing_subscriber::EnvFilter;
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
-
-fn json_log_subscriber<W>(
-	writer: W,
-	env_filter: EnvFilter,
-) -> impl tracing::Subscriber + Send + Sync
-where
-	W: for<'writer> MakeWriter<'writer> + Send + Sync + 'static,
-{
-	tracing_subscriber::fmt()
-		.json()
-		.with_env_filter(env_filter)
-		.with_writer(writer)
-		.finish()
-}
 
 fn init_tracing() {
 	let env_filter = EnvFilter::try_from_default_env()
 		.unwrap_or_else(|_| EnvFilter::new("info"));
-	json_log_subscriber(io::stdout, env_filter).init();
+	tracing_subscriber::fmt()
+		.json()
+		.with_env_filter(env_filter)
+		.with_writer(io::stdout)
+		.init();
 }
 
 #[derive(Default)]
@@ -365,8 +355,11 @@ mod tests {
 	#[test]
 	fn tracing_subscriber_emits_json_logs() {
 		let writer = TestWriter::default();
-		let subscriber =
-			super::json_log_subscriber(writer.clone(), EnvFilter::new("info"));
+		let subscriber = tracing_subscriber::fmt()
+			.json()
+			.with_env_filter(EnvFilter::new("info"))
+			.with_writer(writer.clone())
+			.finish();
 
 		tracing::subscriber::with_default(subscriber, || {
 			tracing::info!(enclave_id = "nitro", "Enclave is healthy");
@@ -384,8 +377,11 @@ mod tests {
 	#[test]
 	fn console_log_writer_emits_one_json_log_per_line() {
 		let writer = TestWriter::default();
-		let subscriber =
-			super::json_log_subscriber(writer.clone(), EnvFilter::new("info"));
+		let subscriber = tracing_subscriber::fmt()
+			.json()
+			.with_env_filter(EnvFilter::new("info"))
+			.with_writer(writer.clone())
+			.finish();
 
 		tracing::subscriber::with_default(subscriber, || {
 			let mut console_writer = super::TracingLogWriter::default();
