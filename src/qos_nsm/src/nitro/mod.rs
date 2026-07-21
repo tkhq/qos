@@ -713,6 +713,57 @@ mod test {
 	}
 
 	#[test]
+	fn manifest_commitment_pcr_test_vectors() {
+		// Test vectors documented in docs/attestation_verification.md.
+		let manifest_hash = [1u8; 32];
+		let public_key = [3u8; 65];
+
+		let setup_commitment = manifest_pcr_commitment(
+			ManifestCommitmentKind::Setup,
+			&manifest_hash,
+			&public_key,
+		);
+		assert_eq!(
+			qos_hex::encode(&setup_commitment),
+			"e5997907ea1b7204c7a8890ae76d8d70b05f37d3bdda729d6b4c1febc55c7f3ecae51ce4746f136c07527c00b1298876"
+		);
+		let setup_pcr = expected_manifest_commitment_pcr(
+			ManifestCommitmentKind::Setup,
+			&manifest_hash,
+			&public_key,
+		)
+		.unwrap();
+		assert_eq!(
+			qos_hex::encode(&setup_pcr),
+			"f3e7209964e7d8f4915cc6038ec22d6dcdfcbea625b98f8a1a338e24407f122803f79be43ab65a4c4ad32a52b2c6ab4e"
+		);
+
+		let live_commitment = manifest_pcr_commitment(
+			ManifestCommitmentKind::Live,
+			&manifest_hash,
+			&public_key,
+		);
+		assert_eq!(
+			qos_hex::encode(&live_commitment),
+			"47a6e41fa6bbd0e9f46829dbcaf359829934b4fdbbcce099e508aab4127332c5812f385a4e9133ec3db812aa00be2b3f"
+		);
+		let live_pcr = expected_manifest_commitment_pcr(
+			ManifestCommitmentKind::Live,
+			&manifest_hash,
+			&public_key,
+		)
+		.unwrap();
+		assert_eq!(
+			qos_hex::encode(&live_pcr),
+			"afb56dbbe66008a5b6f190b81cf4e63603e15bf24bc6a93a135b82f8b1bb72ac4d3a0a191a20b3fd77e5b9333677b7fc"
+		);
+
+		assert_eq!(ManifestCommitmentKind::Setup.pcr_index(), 16);
+		assert_eq!(ManifestCommitmentKind::Live.pcr_index(), 17);
+		assert_eq!(MANIFEST_COMMITMENT_INITIAL_PCR, [0u8; 48]);
+	}
+
+	#[test]
 	fn verify_attestation_doc_manifest_commitment_works() {
 		let manifest_hash = [1u8; 32];
 		let public_key = [3u8; 65];
