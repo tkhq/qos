@@ -2529,13 +2529,13 @@ dependencies = [
 
 [[package]]
 name = "rpassword"
-version = "7.3.1"
+version = "7.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80472be3c897911d0137b2d2b9055faf6eeac5b14e324073d83bc17b191d7e3f"
+checksum = "f3bc4a3dd492cd6974dd3f32d6626ba9f36e5122e3df3b083474b104aebd139b"
 dependencies = [
  "libc",
  "rtoolbox",
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3727,6 +3727,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.61.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
+dependencies = [
+ "windows-link 0.2.1",
 ]
 
 [[package]]
