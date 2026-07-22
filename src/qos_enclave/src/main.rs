@@ -44,12 +44,29 @@ fn init_tracing() {
 		.init();
 }
 
+/// A [`Write`] sink that adapts the enclave's serial console output into the
+/// host's structured JSON log stream.
+///
+/// Unlike `qos_enclave`'s own `info!`/`error!` events (emitted straight to JSON
+/// by the subscriber, see [`init_tracing`]), this handles a *foreign* source:
+/// the raw plain-text bytes read off the Nitro serial console via
+/// `Console::read_to` — kernel/init/NSM/app output. It only runs when `LOGS`
+/// attaches the console, and Nitro only emits console output in debug mode
+/// (`DEBUG`), so this is a diagnostics path, not a production-hot one.
+///
+/// We re-emit each console line as a JSON event (`target: "qos_enclave::console"`)
+/// rather than forwarding raw bytes, which would interleave non-JSON text with
+/// the host's JSON events and break Grafana's parser. Framing is line-based
+/// because the newline is the **only** delimiter a raw console stream offers (a
+/// multi-line message thus fragments into several events, as with any log
+/// shipper). Bytes without a trailing newline are buffered until the next
+/// `write` completes the line, or until `flush` emits the remainder.
 #[derive(Default)]
-struct TracingLogWriter {
+struct EnclaveConsoleWriter {
 	buffer: Vec<u8>,
 }
 
-impl TracingLogWriter {
+impl EnclaveConsoleWriter {
 	fn emit_line(line: &[u8]) {
 		let line = String::from_utf8_lossy(line);
 		let line = line.trim_end_matches('\r');
@@ -59,7 +76,7 @@ impl TracingLogWriter {
 	}
 }
 
-impl Write for TracingLogWriter {
+impl Write for EnclaveConsoleWriter {
 	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
 		self.buffer.extend_from_slice(buf);
 
@@ -296,7 +313,7 @@ fn handle_signals() -> c_int {
 fn read_logs(console: Console) {
 	info!("Reading logs to stdout");
 	let disconnect_timeout_sec: Option<u64> = None;
-	let mut writer = TracingLogWriter::default();
+	let mut writer = EnclaveConsoleWriter::default();
 	let _ = console.read_to(&mut writer, disconnect_timeout_sec);
 	let _ = writer.flush();
 }
@@ -368,7 +385,7 @@ mod tests {
 			.finish();
 
 		tracing::subscriber::with_default(subscriber, || {
-			let mut console_writer = super::TracingLogWriter::default();
+			let mut console_writer = super::EnclaveConsoleWriter::default();
 			for chunk in chunks {
 				console_writer.write_all(chunk).unwrap();
 			}
