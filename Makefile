@@ -55,22 +55,23 @@ stop:
 	-killall vhost-device-vsock
 	rm -f /tmp/vhost4.socket
 
+# ports are control port 2000, egress bridge port 2001 and user/pivot ingress port 3000
 /tmp/vhost4.socket:
-	vhost-device-vsock --vm guest-cid=4,forward-cid=1,forward-listen=3000+9001+9002,socket=/tmp/vhost4.socket &
+	vhost-device-vsock --vm guest-cid=4,forward-cid=1,forward-listen=2000+2001+3000,socket=/tmp/vhost4.socket &
 
 .PHONY: host
 host:
 	cargo run --locked -p qos_host --features qemu -- \
 		--host-ip 0.0.0.0 \
-		--host-port 3001 \
+		--host-port 2000 \
 		--cid 1 \
-		--port 9001
+		--port 2000
 
 .PHONY: bridge
 bridge: target/x86_64-unknown-linux-musl/release-panic-abort/egress
 	cargo run -p qos_bridge --locked --bin ingress --features egress,qemu -- \
 		--cid 1 \
-		--control-url http://127.0.0.1:3001/qos \
+		--control-url http://127.0.0.1:2000/qos \
 		--vsock-to-host false \
 		--egress-bin-path target/x86_64-unknown-linux-musl/release-panic-abort/egress
 
@@ -90,6 +91,8 @@ target/x86_64-unknown-linux-musl/release-panic-abort/egress: \
 	src/qos_bridge/Cargo.toml \
 	src/qos_bridge/src/bin/egress.rs \
 	src/qos_bridge/src/*.rs \
+	src/qos_core/src/**/*.rs \
+	src/qos_core/Cargo.toml \
 	Cargo.toml
 	cargo build --profile release-panic-abort --features egress,qemu --locked --target x86_64-unknown-linux-musl -p qos_bridge --bin egress
 
