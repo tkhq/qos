@@ -62,12 +62,20 @@ impl TracingLogWriter {
 impl Write for TracingLogWriter {
 	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
 		self.buffer.extend_from_slice(buf);
-		while let Some(newline_index) =
-			self.buffer.iter().position(|byte| *byte == b'\n')
+
+		let mut consumed = 0;
+		while let Some(newline_offset) =
+			self.buffer[consumed..].iter().position(|byte| *byte == b'\n')
 		{
-			let line = self.buffer.drain(..=newline_index).collect::<Vec<_>>();
-			Self::emit_line(&line[..line.len() - 1]);
+			let newline_index = consumed + newline_offset;
+			Self::emit_line(&self.buffer[consumed..newline_index]);
+			consumed = newline_index + 1;
 		}
+
+		if consumed > 0 {
+			self.buffer.drain(..consumed);
+		}
+
 		Ok(buf.len())
 	}
 
@@ -242,9 +250,8 @@ fn shutdown(enclave_id: String, sig_num: i32) {
 		}
 		Err(_) => {
 			error!(
-				enclave_id,
-				"Failed to connect to EnclaveProc for {}; skipping graceful Terminate",
-				enclave_id
+				%enclave_id,
+				"Failed to connect to EnclaveProc; skipping graceful Terminate",
 			);
 		}
 	}
@@ -332,9 +339,9 @@ mod tests {
 	use tracing_subscriber::{EnvFilter, fmt::MakeWriter};
 
 	#[derive(Clone, Default)]
-	struct TestWriter(Arc<Mutex<Vec<u8>>>);
+	struct CapturedOutput(Arc<Mutex<Vec<u8>>>);
 
-	impl Write for TestWriter {
+	impl Write for CapturedOutput {
 		fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
 			self.0.lock().unwrap().write(buf)
 		}
@@ -344,17 +351,49 @@ mod tests {
 		}
 	}
 
-	impl<'writer> MakeWriter<'writer> for TestWriter {
-		type Writer = TestWriter;
+	impl<'writer> MakeWriter<'writer> for CapturedOutput {
+		type Writer = CapturedOutput;
 
 		fn make_writer(&'writer self) -> Self::Writer {
 			self.clone()
 		}
 	}
 
+	fn capture_console_logs(chunks: &[&[u8]], flush: bool) -> Vec<Value> {
+		let writer = CapturedOutput::default();
+		let subscriber = tracing_subscriber::fmt()
+			.json()
+			.with_env_filter(EnvFilter::new("info"))
+			.with_writer(writer.clone())
+			.finish();
+
+		tracing::subscriber::with_default(subscriber, || {
+			let mut console_writer = super::TracingLogWriter::default();
+			for chunk in chunks {
+				console_writer.write_all(chunk).unwrap();
+			}
+			if flush {
+				console_writer.flush().unwrap();
+			}
+		});
+
+		let output =
+			String::from_utf8(writer.0.lock().unwrap().clone()).unwrap();
+		output
+			.lines()
+			.map(|line| serde_json::from_str::<Value>(line).unwrap())
+			.collect()
+	}
+
+	fn messages(logs: &[Value]) -> Vec<&str> {
+		logs.iter()
+			.map(|log| log["fields"]["message"].as_str().unwrap())
+			.collect()
+	}
+
 	#[test]
 	fn tracing_subscriber_emits_json_logs() {
-		let writer = TestWriter::default();
+		let writer = CapturedOutput::default();
 		let subscriber = tracing_subscriber::fmt()
 			.json()
 			.with_env_filter(EnvFilter::new("info"))
@@ -376,27 +415,29 @@ mod tests {
 
 	#[test]
 	fn console_log_writer_emits_one_json_log_per_line() {
-		let writer = TestWriter::default();
-		let subscriber = tracing_subscriber::fmt()
-			.json()
-			.with_env_filter(EnvFilter::new("info"))
-			.with_writer(writer.clone())
-			.finish();
-
-		tracing::subscriber::with_default(subscriber, || {
-			let mut console_writer = super::TracingLogWriter::default();
-			console_writer.write_all(b"first\nsecond\n").unwrap();
-		});
-
-		let output =
-			String::from_utf8(writer.0.lock().unwrap().clone()).unwrap();
-		let logs = output
-			.lines()
-			.map(|line| serde_json::from_str::<Value>(line).unwrap())
-			.collect::<Vec<_>>();
+		let logs = capture_console_logs(&[b"first\nsecond\n"], false);
 
 		assert_eq!(logs.len(), 2);
 		assert_eq!(logs[0]["fields"]["message"], "first");
 		assert_eq!(logs[1]["fields"]["message"], "second");
+	}
+
+	#[test]
+	fn console_log_writer_handles_arbitrary_write_boundaries() {
+		let input = b"first\nsecond\r\n\nthird";
+
+		for chunk_size in 1..=input.len() {
+			let chunks = input.chunks(chunk_size).collect::<Vec<_>>();
+			let logs = capture_console_logs(&chunks, true);
+			assert_eq!(messages(&logs), ["first", "second", "third"]);
+		}
+	}
+
+	#[test]
+	fn console_log_writer_buffers_incomplete_line_until_flush() {
+		assert!(capture_console_logs(&[b"partial"], false).is_empty());
+
+		let logs = capture_console_logs(&[b"partial"], true);
+		assert_eq!(messages(&logs), ["partial"]);
 	}
 }
