@@ -450,6 +450,23 @@ fn verify_attestation_and_manifest_at_time(
 	})
 }
 
+#[cfg(test)]
+pub(crate) fn verify_attestation_and_manifest_at_time_for_test(
+	attestation_doc: &[u8],
+	manifest: &VersionedManifest,
+	attestation_policy: &AttestationPolicy<'_>,
+	manifest_policy: &dyn ManifestPolicy,
+	current_time: Duration,
+) -> Result<VerifiedManifestAttestation, VerifyError> {
+	verify_attestation_and_manifest_at_time(
+		attestation_doc,
+		manifest,
+		attestation_policy,
+		manifest_policy,
+		current_time,
+	)
+}
+
 /// Verify an in-memory manifest envelope and attestation document.
 ///
 /// The embedded manifest must first match the caller-owned `trust` anchor.

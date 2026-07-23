@@ -4,33 +4,40 @@ use std::{
 	mem,
 	net::IpAddr,
 	path::{Path, PathBuf},
+	time::Duration,
 };
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::BorshDeserialize;
-use qos_core::protocol::{
-	QosHash,
-	msg::{JsonBytes, ProtocolMsg, ProtocolMsgEncoding},
-	services::{
-		boot::{
-			Approval, BridgeConfig, DnsConfig, Manifest as ManifestV1,
-			ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
-			ManifestEnvelopeV2, ManifestSet, ManifestV2, ManifestVersion,
-			MemberPubKey, Namespace, NitroConfig, PatchSet,
-			PivotConfig as PivotConfigV1, PivotConfigV2, PivotEnv,
-			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
-			VersionedManifestEnvelope,
+use qos_core::{
+	protocol::{
+		QosHash,
+		msg::{JsonBytes, ProtocolMsg, ProtocolMsgEncoding},
+		services::{
+			boot::{
+				Approval, BridgeConfig, DnsConfig, Manifest as ManifestV1,
+				ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
+				ManifestEnvelopeV2, ManifestSet, ManifestV2, ManifestVersion,
+				MemberPubKey, Namespace, NitroConfig, PatchSet,
+				PivotConfig as PivotConfigV1, PivotConfigV2, PivotEnv,
+				QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
+				VersionedManifestEnvelope,
+			},
+			genesis::{GenesisOutput, GenesisSet},
+			key::EncryptedQuorumKey,
 		},
-		genesis::{GenesisOutput, GenesisSet},
-		key::EncryptedQuorumKey,
+	},
+	verify::{
+		AttestationPolicy, ManifestCommitmentKind, ManifestEnvelopeTrust,
+		VerificationExpectations, VerifyError, verify_attestation_and_manifest,
+		verify_attestation_and_manifest_envelope,
 	},
 };
 use qos_crypto::{sha_256, sha_384, sha_512};
 use qos_nsm::{
 	nitro::{
-		AWS_ROOT_CERT_PEM, ManifestAttestationInput, attestation_doc_from_der,
-		cert_from_pem, unsafe_attestation_doc_from_der,
-		verify_attestation_doc_against_manifest_setup,
+		AWS_ROOT_CERT_PEM, attestation_doc_from_der, cert_from_pem,
+		unsafe_attestation_doc_from_der,
 		verify_attestation_doc_against_user_input,
 	},
 	types::NsmResponse,
@@ -50,6 +57,7 @@ const QUORUM_THRESHOLD_FILE: &str = "quorum_threshold";
 const DR_WRAPPED_QUORUM_KEY: &str = "dr_wrapped_quorum_key";
 const PCRS_PATH: &str = "aws-x86_64.pcrs";
 const GENESIS_DR_ARTIFACTS: &str = "genesis_dr_artifacts";
+const ATTESTATION_MAX_AGE: Duration = Duration::from_secs(5 * 60);
 
 const DANGEROUS_DEV_BOOT_MEMBER: &str = "DANGEROUS_DEV_BOOT_MEMBER";
 const DANGEROUS_DEV_BOOT_NAMESPACE: &str =
@@ -197,6 +205,12 @@ impl From<qos_nsm::nitro::AttestError> for Error {
 	fn from(err: qos_nsm::nitro::AttestError) -> Error {
 		let msg = format!("{err:?}");
 		Error::QosAttest(msg)
+	}
+}
+
+impl From<VerifyError> for Error {
+	fn from(err: VerifyError) -> Self {
+		Self::QosAttest(err.to_string())
 	}
 }
 
@@ -1418,30 +1432,22 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		pivot,
 	)?;
 
-	let attestation_doc =
-		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation, None);
-
 	// Verify attestation document
 	if unsafe_skip_attestation {
 		println!("**WARNING:** Skipping attestation document verification.");
 	} else {
-		verify_attestation_doc_against_manifest_setup(
-			&attestation_doc,
-			ManifestAttestationInput {
-				manifest_hash: &manifest.manifest_hash(),
-				pcr0: &manifest.enclave().pcr0,
-				pcr1: &manifest.enclave().pcr1,
-				pcr2: &manifest.enclave().pcr2,
-				pcr3: &extract_pcr3(pcr3_preimage_path),
-			},
+		let root_ca = cert_from_pem(AWS_ROOT_CERT_PEM)?;
+		verify_attestation_and_manifest(
+			&cose_sign1,
+			&manifest,
+			&AttestationPolicy::new(
+				&root_ca,
+				ATTESTATION_MAX_AGE,
+				ManifestCommitmentKind::Setup,
+			),
+			&VerificationExpectations::new()
+				.pcr3(extract_pcr3(pcr3_preimage_path)),
 		)?;
-
-		// Sanity check the ephemeral key is valid
-		let eph_pub_bytes = attestation_doc
-			.public_key
-			.expect("No ephemeral key in the attestation doc");
-		P256Public::from_bytes(&eph_pub_bytes)
-			.expect("Ephemeral key not valid public key");
 	}
 
 	Ok(())
@@ -1520,51 +1526,59 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 ) -> Result<(), Error> {
 	let manifest_envelope =
 		read_manifest_envelope_compat(&manifest_envelope_path)?;
-	let attestation_doc =
-		read_attestation_doc(&attestation_doc_path, unsafe_skip_attestation)?;
+	let attestation_doc = fs::read(&attestation_doc_path)
+		.map_err(Error::FailedToReadAttestationDoc)?;
 	let encrypted_share = std::fs::read(share_path)
 		.map_err(|e| Error::ReadShare(e.to_string()))?;
 
 	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
 	let manifest = manifest_envelope.clone().manifest();
+	let manifest_set = get_manifest_set(manifest_set_dir);
 
-	// Verify the attestation doc matches up with the pcrs in the manifest
-	if unsafe_skip_attestation {
+	let verified_eph = if unsafe_skip_attestation {
 		println!("**WARNING:** Skipping attestation document verification.");
+		None
 	} else {
-		verify_attestation_doc_against_manifest_setup(
-			&attestation_doc,
-			ManifestAttestationInput {
-				manifest_hash: &manifest_envelope.manifest_hash(),
-				pcr0: &manifest.enclave().pcr0,
-				pcr1: &manifest.enclave().pcr1,
-				pcr2: &manifest.enclave().pcr2,
-				pcr3: &extract_pcr3(pcr3_preimage_path),
-			},
-		)?;
-	}
+		let root_ca = cert_from_pem(AWS_ROOT_CERT_PEM)?;
+		Some(
+			verify_attestation_and_manifest_envelope(
+				&attestation_doc,
+				&manifest_envelope,
+				ManifestEnvelopeTrust::ManifestSet(&manifest_set),
+				&AttestationPolicy::new(
+					&root_ca,
+					ATTESTATION_MAX_AGE,
+					ManifestCommitmentKind::Setup,
+				),
+				&VerificationExpectations::new()
+					.pcr3(extract_pcr3(pcr3_preimage_path)),
+			)?
+			.ephemeral_key,
+		)
+	};
 
-	// Pull out the ephemeral key or use the override
-	let eph_pub: P256Public = if let Some(ref eph_path) =
-		unsafe_eph_path_override
-	{
+	// Pull out the verified ephemeral key or use an explicit unsafe source.
+	let eph_pub = if let Some(ref eph_path) = unsafe_eph_path_override {
 		P256Pair::from_hex_file(eph_path)
 			.unwrap_or_else(|e| panic!("proxy_re_encrypt_share: Could not read ephemeral key from {eph_path:?}: {e:?}"))
 			.public_key()
+	} else if let Some(eph_pub) = verified_eph {
+		eph_pub
 	} else {
-		P256Public::from_bytes(&attestation_doc.public_key.expect(
-			"proxy_re_encrypt_share: No ephemeral key in the attestation doc",
-		))
-		.expect("proxy_re_encrypt_share: Ephemeral key not valid public key")
+		let unsafe_doc = unsafe_attestation_doc_from_der(&attestation_doc)?;
+		P256Public::from_bytes(&unsafe_doc.public_key.ok_or_else(|| {
+			Error::QosAttest(
+				"proxy_re_encrypt_share: no ephemeral key in attestation document"
+					.to_string(),
+			)
+		})?)?
 	};
 
 	let member = QuorumMember { pub_key: pair.public_key_bytes()?, alias };
-
-	if !proxy_re_encrypt_share_programmatic_verifications(
-		&manifest_envelope,
-		&get_manifest_set(manifest_set_dir),
-		&member,
-	) {
+	if !manifest.share_set().members.contains(&member) {
+		eprintln!(
+			"The provided share set key and alias are not part of the Share Set"
+		);
 		eprintln!("Exiting early without re-encrypting / approving");
 		std::process::exit(1);
 	}
@@ -1611,35 +1625,6 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	drop(pair);
 
 	Ok(())
-}
-
-fn proxy_re_encrypt_share_programmatic_verifications(
-	manifest_envelope: &VersionedManifestEnvelope,
-	manifest_set: &ManifestSet,
-	member: &QuorumMember,
-) -> bool {
-	let manifest = manifest_envelope.clone().manifest();
-
-	if let Err(e) = manifest_envelope.check_approvals() {
-		eprintln!("Manifest envelope did not have valid approvals: {e:?}");
-		return false;
-	}
-
-	if *manifest.manifest_set() != *manifest_set {
-		eprintln!(
-			"Manifest's manifest set does not match locally found Manifest Set"
-		);
-		return false;
-	}
-
-	if !manifest.share_set().members.contains(member) {
-		eprintln!(
-			"The provided share set key and alias are not part of the Share Set"
-		);
-		return false;
-	}
-
-	true
 }
 
 fn proxy_re_encrypt_share_human_verifications<R, W>(
@@ -2364,20 +2349,6 @@ fn read_manifest_v1_compat<P: AsRef<Path>>(
 	}
 }
 
-fn read_attestation_doc<P: AsRef<Path>>(
-	path: P,
-	unsafe_skip_attestation: bool,
-) -> Result<AttestationDoc, Error> {
-	let cose_sign1_der =
-		fs::read(path).map_err(Error::FailedToReadAttestationDoc)?;
-
-	Ok(extract_attestation_doc(
-		cose_sign1_der.as_ref(),
-		unsafe_skip_attestation,
-		None,
-	))
-}
-
 fn read_manifest_envelope_compat<P: AsRef<Path>>(
 	file: P,
 ) -> Result<VersionedManifestEnvelope, Error> {
@@ -2608,7 +2579,6 @@ mod tests {
 		Prompter, approve_manifest_human_verifications,
 		approve_manifest_programmatic_verifications,
 		proxy_re_encrypt_share_human_verifications,
-		proxy_re_encrypt_share_programmatic_verifications,
 	};
 
 	struct Setup {
@@ -2723,21 +2693,6 @@ mod tests {
 	fn v1_manifest_envelope(
 		envelope: &VersionedManifestEnvelope,
 	) -> &ManifestEnvelope {
-		match envelope {
-			VersionedManifestEnvelope::V1(envelope) => envelope,
-			_ => panic!("expected v1 manifest envelope in test setup"),
-		}
-	}
-
-	/// Return a mutable v1 manifest envelope for tests that intentionally build
-	/// v1 fixtures.
-	///
-	/// # Panics
-	///
-	/// Panics if the fixture is not a v1 manifest envelope.
-	fn v1_manifest_envelope_mut(
-		envelope: &mut VersionedManifestEnvelope,
-	) -> &mut ManifestEnvelope {
 		match envelope {
 			VersionedManifestEnvelope::V1(envelope) => envelope,
 			_ => panic!("expected v1 manifest envelope in test setup"),
@@ -3181,102 +3136,6 @@ mod tests {
 			assert_eq!(output[3], "Are these the correct pivot args:");
 			assert_eq!(output[4], "[\"--option1\", \"argument\"]?");
 			assert_eq!(output[5], "(y/n)");
-		}
-	}
-
-	mod proxy_re_encrypt_share_programmatic_verifications {
-		use super::*;
-
-		#[test]
-		fn accepts_valid() {
-			let Setup { manifest_set, share_set, manifest_envelope, .. } =
-				setup();
-
-			let member = share_set.members[0].clone();
-			assert!(proxy_re_encrypt_share_programmatic_verifications(
-				&manifest_envelope,
-				&manifest_set,
-				&member
-			));
-		}
-
-		#[test]
-		fn rejects_invalid_approval() {
-			let Setup {
-				manifest_set, share_set, mut manifest_envelope, ..
-			} = setup();
-
-			v1_manifest_envelope_mut(&mut manifest_envelope)
-				.manifest_set_approvals
-				.get_mut(0)
-				.unwrap()
-				.signature = vec![0; 32];
-
-			let member = share_set.members[0].clone();
-			assert!(!proxy_re_encrypt_share_programmatic_verifications(
-				&manifest_envelope,
-				&manifest_set,
-				&member
-			));
-		}
-
-		#[test]
-		fn rejects_approval_from_member_not_part_of_manifest_set() {
-			let Setup {
-				manifest_set, share_set, mut manifest_envelope, ..
-			} = setup();
-
-			v1_manifest_envelope_mut(&mut manifest_envelope)
-				.manifest_set_approvals
-				.get_mut(0)
-				.unwrap()
-				.member
-				.alias = "not-a-member".to_string();
-
-			let member = share_set.members[0].clone();
-			assert!(!proxy_re_encrypt_share_programmatic_verifications(
-				&manifest_envelope,
-				&manifest_set,
-				&member
-			));
-		}
-
-		#[test]
-		fn rejects_if_not_enough_approvals() {
-			let Setup {
-				manifest_set, share_set, mut manifest_envelope, ..
-			} = setup();
-
-			v1_manifest_envelope_mut(&mut manifest_envelope)
-				.manifest_set_approvals
-				.pop()
-				.unwrap();
-
-			let member = share_set.members[0].clone();
-			assert!(!proxy_re_encrypt_share_programmatic_verifications(
-				&manifest_envelope,
-				&manifest_set,
-				&member
-			));
-		}
-
-		#[test]
-		fn rejects_mismatched_manifest_sets() {
-			let Setup {
-				mut manifest_set, share_set, manifest_envelope, ..
-			} = setup();
-
-			manifest_set.members.push(QuorumMember {
-				alias: "got what plants need".to_string(),
-				pub_key: P256Pair::generate().unwrap().public_key().to_bytes(),
-			});
-
-			let member = share_set.members[0].clone();
-			assert!(!proxy_re_encrypt_share_programmatic_verifications(
-				&manifest_envelope,
-				&manifest_set,
-				&member
-			));
 		}
 	}
 

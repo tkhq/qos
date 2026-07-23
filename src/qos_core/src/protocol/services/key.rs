@@ -1,15 +1,23 @@
 //! The services involved in the key forwarding flow.
 
-use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::{BorshDeserialize, BorshSerialize};
-use qos_nsm::{nitro::attestation_doc_from_der, types::NsmResponse};
+use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Pair, P256Public};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
-use crate::protocol::{
-	ProtocolError, ProtocolState, QosHash,
-	services::boot::{VersionedManifestEnvelope, put_manifest_and_pivot},
+use crate::{
+	protocol::{
+		ProtocolError, ProtocolState, QosHash,
+		services::boot::{VersionedManifestEnvelope, put_manifest_and_pivot},
+	},
+	verify::{
+		AttestationPolicy, ManifestCommitmentKind, VerificationExpectations,
+		verify_attestation_and_manifest,
+	},
 };
+
+const ATTESTATION_MAX_AGE: Duration = Duration::from_secs(5 * 60);
 
 /// An encrypted quorum key along with a signature over the encrypted payload
 /// from the sender.
@@ -91,39 +99,60 @@ pub(in crate::protocol) fn export_key(
 	cose_sign1_attestation_document: &[u8],
 ) -> Result<EncryptedQuorumKey, ProtocolError> {
 	let new_manifest_envelope = new_manifest_envelope.into();
-	// 1. Check the basic validity of the attestation doc (cert chain etc).
-	// Ensures that the attestation document is actually from an AWS controlled
-	// NSM module and the document's timestamp was recent.
-	let attestation_doc = verify_and_extract_attestation_doc_from_der(
-		cose_sign1_attestation_document,
-		&*state.attestor,
-	)?;
+	let old_manifest_envelope = state.handles.get_manifest_envelope()?;
+	validate_manifest(&new_manifest_envelope, &old_manifest_envelope)?;
+	let new_manifest = new_manifest_envelope.manifest();
 
-	export_key_internal(state, &new_manifest_envelope, &attestation_doc)
+	let root_ca = state.attestor.attestation_root_ca_der();
+	let verified = verify_attestation_and_manifest(
+		cose_sign1_attestation_document,
+		&new_manifest,
+		&AttestationPolicy::new(
+			&root_ca,
+			ATTESTATION_MAX_AGE,
+			ManifestCommitmentKind::Setup,
+		),
+		&VerificationExpectations::new(),
+	)
+	.map_err(|err| ProtocolError::QosAttestError(err.to_string()))?;
+
+	export_key_internal(state, &verified.ephemeral_key)
 }
 
-// Primary logic of `export_key` pulled out so it can be unit tested.
-fn export_key_internal(
+#[cfg(test)]
+fn export_key_at_time(
 	state: &mut ProtocolState,
 	new_manifest_envelope: impl Into<VersionedManifestEnvelope>,
-	attestation_doc: &AttestationDoc,
+	cose_sign1_attestation_document: &[u8],
+	current_time: Duration,
 ) -> Result<EncryptedQuorumKey, ProtocolError> {
 	let new_manifest_envelope = new_manifest_envelope.into();
 	let old_manifest_envelope = state.handles.get_manifest_envelope()?;
-	// steps 2 through 9
-	validate_manifest(
-		&new_manifest_envelope,
-		&old_manifest_envelope,
-		attestation_doc,
-	)?;
+	validate_manifest(&new_manifest_envelope, &old_manifest_envelope)?;
+	let new_manifest = new_manifest_envelope.manifest();
 
-	let eph_key_bytes = attestation_doc
-		.public_key
-		.as_ref()
-		.ok_or(ProtocolError::MissingEphemeralKey)?;
-	let eph_key = P256Public::from_bytes(eph_key_bytes)
-		.map_err(|_| ProtocolError::InvalidEphemeralKey)?;
+	let root_ca = state.attestor.attestation_root_ca_der();
+	let verified =
+		crate::verify::verify_attestation_and_manifest_at_time_for_test(
+			cose_sign1_attestation_document,
+			&new_manifest,
+			&AttestationPolicy::new(
+				&root_ca,
+				ATTESTATION_MAX_AGE,
+				ManifestCommitmentKind::Setup,
+			),
+			&VerificationExpectations::new(),
+			current_time,
+		)
+		.map_err(|err| ProtocolError::QosAttestError(err.to_string()))?;
 
+	export_key_internal(state, &verified.ephemeral_key)
+}
+
+fn export_key_internal(
+	state: &mut ProtocolState,
+	eph_key: &P256Public,
+) -> Result<EncryptedQuorumKey, ProtocolError> {
 	let quorum_key = state.handles.get_quorum_key()?;
 	// 10. Return the Quorum Key encrypted to the New Node's Ephemeral Key
 	// extracted from the attestation document and a signature over the
@@ -140,7 +169,6 @@ fn export_key_internal(
 fn validate_manifest(
 	new_manifest_envelope: impl Into<VersionedManifestEnvelope>,
 	old_manifest_envelope: impl Into<VersionedManifestEnvelope>,
-	attestation_doc: &AttestationDoc,
 ) -> Result<(), ProtocolError> {
 	let new_manifest_envelope = new_manifest_envelope.into();
 	let old_manifest_envelope = old_manifest_envelope.into();
@@ -232,26 +260,7 @@ fn validate_manifest(
 		});
 	}
 
-	// 7. Verify the setup attestation against the New Manifest.
-	// This checks that the new manifest hash is in `user_data`, PCR0 through
-	// PCR3 match the New Manifest, every release-pinned PCR is present, and
-	// PCR16 matches the setup manifest/key commitment for the attested public
-	// key. This ensures the New Manifest was used against a Nitro enclave
-	// booted with the intended version of QOS. Note that we assume the values
-	// for PCR{0, 1, 2} correspond to a desired version of QOS because the
-	// Manifest Set Members had K approvals.
-	qos_nsm::nitro::verify_attestation_doc_against_manifest_setup(
-		attestation_doc,
-		qos_nsm::nitro::ManifestAttestationInput {
-			manifest_hash: &new_manifest.manifest_hash(),
-			pcr0: &new_manifest.enclave().pcr0,
-			pcr1: &new_manifest.enclave().pcr1,
-			pcr2: &new_manifest.enclave().pcr2,
-			pcr3: &new_manifest.enclave().pcr3,
-		},
-	)?;
-
-	// 9. Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is
+	// 7. Check that PCR3 in the New Manifest is in the Local Manifests. PCR3 is
 	// the IAM role assigned to the EC2 host of the enclave. An IAM role
 	// contains an AWS organization's unique ID. By only using the approved PCR3
 	// value we ensure that we only ever send the Quorum Key to an enclave that
@@ -268,37 +277,23 @@ fn validate_manifest(
 	Ok(())
 }
 
-fn verify_and_extract_attestation_doc_from_der(
-	cose_sign1_der: &[u8],
-	nsm: &dyn qos_nsm::NsmProvider,
-) -> Result<AttestationDoc, ProtocolError> {
-	let current_time_milliseconds = nsm.timestamp_ms()?;
-	let current_time_seconds = current_time_milliseconds / 1_000;
-	// The trust anchor follows the NSM provider: the AWS Nitro root CA in
-	// production, or the mock root CA when running with a mock provider.
-	let der_cert = nsm.attestation_root_ca_der();
-	attestation_doc_from_der(cose_sign1_der, &der_cert, current_time_seconds)
-		.map_err(Into::into)
-}
-
 #[cfg(test)]
 mod test {
-	use std::collections::BTreeMap;
+	use std::time::Duration;
 
-	use aws_nitro_enclaves_nsm_api::api::{AttestationDoc, Digest};
 	use qos_crypto::sha_256;
 	use qos_nsm::{
 		NsmProvider,
-		mock::MockNsm,
+		mock::{MOCK_SECONDS_SINCE_EPOCH, MockNsm},
 		nitro,
 		types::{NsmRequest, NsmResponse},
 	};
 	use qos_p256::P256Pair;
 	use qos_test_primitives::PathWrapper;
-	use serde_bytes::ByteBuf;
 
 	use super::{
-		boot_key_forward, export_key, export_key_internal, validate_manifest,
+		boot_key_forward, export_key_at_time, export_key_internal,
+		validate_manifest,
 	};
 	use crate::{
 		handles::Handles,
@@ -317,9 +312,6 @@ mod test {
 
 	struct TestArgs {
 		manifest_envelope: ManifestEnvelope,
-		#[allow(dead_code)]
-		members_with_keys: Vec<(P256Pair, QuorumMember)>,
-		att_doc: AttestationDoc,
 		eph_pair: P256Pair,
 		quorum_pair: P256Pair,
 		pivot: Vec<u8>,
@@ -349,7 +341,7 @@ mod test {
 			},
 		];
 
-		let members_with_keys = vec![
+		let members_with_keys = [
 			(member1_pair, quorum_members.first().unwrap().clone()),
 			(member2_pair, quorum_members.get(1).unwrap().clone()),
 			(member3_pair, quorum_members.get(2).unwrap().clone()),
@@ -395,43 +387,6 @@ mod test {
 			.collect();
 
 		let eph_pair = P256Pair::generate().unwrap();
-		let eph_pub_key = eph_pair.public_key().to_bytes();
-
-		let mut pcr_map = BTreeMap::new();
-		for idx in 0..nitro::ATTESTABLE_PCR_COUNT {
-			pcr_map.insert(
-				usize::from(idx),
-				ByteBuf::from(vec![0u8; nitro::PCR_SHA384_LEN]),
-			);
-		}
-		pcr_map.insert(0, ByteBuf::from(pcr0));
-		pcr_map.insert(1, ByteBuf::from(pcr1));
-		pcr_map.insert(2, ByteBuf::from(pcr2));
-		pcr_map.insert(3, ByteBuf::from(pcr3));
-		pcr_map.insert(
-			usize::from(nitro::SETUP_MANIFEST_COMMITMENT_PCR_INDEX),
-			ByteBuf::from(
-				nitro::expected_manifest_commitment_pcr(
-					nitro::ManifestCommitmentKind::Setup,
-					&manifest.qos_hash(),
-					&eph_pub_key,
-				)
-				.unwrap()
-				.to_vec(),
-			),
-		);
-
-		let att_doc = AttestationDoc {
-			module_id: String::default(),
-			cabundle: Vec::default(),
-			pcrs: pcr_map,
-			timestamp: u64::default(),
-			nonce: None,
-			public_key: Some(ByteBuf::from(eph_pub_key)),
-			user_data: Some(ByteBuf::from(manifest.qos_hash())),
-			digest: Digest::SHA384,
-			certificate: ByteBuf::default(),
-		};
 
 		let manifest_envelope = ManifestEnvelope {
 			manifest,
@@ -439,14 +394,7 @@ mod test {
 			share_set_approvals: Vec::default(),
 		};
 
-		TestArgs {
-			manifest_envelope,
-			members_with_keys,
-			att_doc,
-			eph_pair,
-			quorum_pair,
-			pivot,
-		}
+		TestArgs { manifest_envelope, eph_pair, quorum_pair, pivot }
 	}
 
 	mod boot_key_forward {
@@ -690,68 +638,52 @@ mod test {
 		use super::*;
 		#[test]
 		fn accepts_matching_manifests() {
-			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let TestArgs { manifest_envelope, .. } = get_test_args();
 			assert!(
-				validate_manifest(
-					&manifest_envelope,
-					&manifest_envelope,
-					&att_doc
-				)
-				.is_ok()
+				validate_manifest(&manifest_envelope, &manifest_envelope,)
+					.is_ok()
 			);
 		}
 
 		#[test]
 		fn accepts_manifest_with_greater_nonce() {
-			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let TestArgs { manifest_envelope, .. } = get_test_args();
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.namespace.nonce -= 1;
 
 			assert!(
-				validate_manifest(
-					&manifest_envelope,
-					&old_manifest_envelope,
-					&att_doc
-				)
-				.is_ok()
+				validate_manifest(&manifest_envelope, &old_manifest_envelope,)
+					.is_ok()
 			);
 		}
 
 		#[test]
 		fn rejects_manifest_with_lower_nonce() {
-			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let TestArgs { manifest_envelope, .. } = get_test_args();
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.namespace.nonce += 1;
 
 			assert!(matches!(
-				validate_manifest(
-					&manifest_envelope,
-					&old_manifest_envelope,
-					&att_doc
-				),
+				validate_manifest(&manifest_envelope, &old_manifest_envelope,),
 				Err(ProtocolError::LowNonce { .. })
 			));
 		}
 
 		#[test]
 		fn rejects_manifest_with_matching_nonce_different_hash() {
-			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let TestArgs { manifest_envelope, .. } = get_test_args();
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.enclave.pcr0 = vec![128; 32];
 
 			assert!(matches!(
-				validate_manifest(
-					&manifest_envelope,
-					&old_manifest_envelope,
-					&att_doc
-				),
+				validate_manifest(&manifest_envelope, &old_manifest_envelope,),
 				Err(ProtocolError::DifferentManifest { .. })
 			));
 		}
 
 		#[test]
 		fn rejects_manifest_with_different_quorum_key() {
-			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let TestArgs { manifest_envelope, .. } = get_test_args();
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			let different_quorum_key =
 				P256Pair::generate().unwrap().public_key().to_bytes();
@@ -759,46 +691,34 @@ mod test {
 				different_quorum_key;
 
 			assert!(matches!(
-				validate_manifest(
-					&manifest_envelope,
-					&old_manifest_envelope,
-					&att_doc
-				),
+				validate_manifest(&manifest_envelope, &old_manifest_envelope,),
 				Err(ProtocolError::DifferentQuorumKey { .. })
 			));
 		}
 
 		#[test]
 		fn does_not_accept_manifest_with_different_manifest_set() {
-			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let TestArgs { manifest_envelope, .. } = get_test_args();
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.manifest_set.members.pop();
 			old_manifest_envelope.manifest.namespace.nonce -= 1;
 
 			assert!(matches!(
-				validate_manifest(
-					&manifest_envelope,
-					&old_manifest_envelope,
-					&att_doc
-				),
+				validate_manifest(&manifest_envelope, &old_manifest_envelope,),
 				Err(ProtocolError::DifferentManifestSet { .. })
 			));
 
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.manifest_set.threshold = 1;
 			assert!(matches!(
-				validate_manifest(
-					&manifest_envelope,
-					&old_manifest_envelope,
-					&att_doc
-				),
+				validate_manifest(&manifest_envelope, &old_manifest_envelope,),
 				Err(ProtocolError::DifferentManifestSet { .. })
 			));
 		}
 
 		#[test]
 		fn accepts_manifest_with_different_ordered_manifest_set_members() {
-			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let TestArgs { manifest_envelope, .. } = get_test_args();
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			let last_member =
 				old_manifest_envelope.manifest.manifest_set.members.remove(2);
@@ -811,68 +731,52 @@ mod test {
 			old_manifest_envelope.manifest.namespace.nonce -= 1;
 
 			assert!(
-				validate_manifest(
-					&manifest_envelope,
-					&old_manifest_envelope,
-					&att_doc
-				)
-				.is_ok(),
+				validate_manifest(&manifest_envelope, &old_manifest_envelope,)
+					.is_ok(),
 			);
 		}
 
 		#[test]
 		fn rejects_manifest_with_different_namespace_name() {
-			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let TestArgs { manifest_envelope, .. } = get_test_args();
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.namespace.name =
 				"other namespace".to_string();
 
 			assert!(matches!(
-				validate_manifest(
-					&manifest_envelope,
-					&old_manifest_envelope,
-					&att_doc
-				),
+				validate_manifest(&manifest_envelope, &old_manifest_envelope,),
 				Err(ProtocolError::DifferentNamespaceName { .. }),
 			));
 		}
 
 		#[test]
 		fn reject_manifest_with_different_pcr3() {
-			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let TestArgs { manifest_envelope, .. } = get_test_args();
 			let mut old_manifest_envelope = manifest_envelope.clone();
 			old_manifest_envelope.manifest.enclave.pcr3 = vec![128; 32];
 			old_manifest_envelope.manifest.namespace.nonce -= 1;
 
 			assert!(matches!(
-				validate_manifest(
-					&manifest_envelope,
-					&old_manifest_envelope,
-					&att_doc
-				),
+				validate_manifest(&manifest_envelope, &old_manifest_envelope,),
 				Err(ProtocolError::DifferentPcr3 { .. }),
 			));
 		}
 
 		#[test]
 		fn errors_with_two_few_manifest_approvals() {
-			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let TestArgs { manifest_envelope, .. } = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
 
 			new_manifest_envelope.manifest_set_approvals.pop().unwrap();
 			assert_eq!(
-				validate_manifest(
-					&new_manifest_envelope,
-					&manifest_envelope,
-					&att_doc
-				),
+				validate_manifest(&new_manifest_envelope, &manifest_envelope,),
 				Err(ProtocolError::NotEnoughApprovals)
 			);
 		}
 
 		#[test]
 		fn rejects_manifest_with_bad_approval_signature() {
-			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let TestArgs { manifest_envelope, .. } = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
 
 			new_manifest_envelope.manifest_set_approvals[0].signature =
@@ -881,18 +785,14 @@ mod test {
 				new_manifest_envelope.manifest_set_approvals[0].clone();
 
 			assert_eq!(
-				validate_manifest(
-					&new_manifest_envelope,
-					&manifest_envelope,
-					&att_doc
-				),
+				validate_manifest(&new_manifest_envelope, &manifest_envelope,),
 				Err(ProtocolError::InvalidManifestApproval(bad_approval))
 			);
 		}
 
 		#[test]
 		fn rejects_manifest_with_approval_from_non_member() {
-			let TestArgs { manifest_envelope, att_doc, .. } = get_test_args();
+			let TestArgs { manifest_envelope, .. } = get_test_args();
 			let mut new_manifest_envelope = manifest_envelope.clone();
 			let non_member_pair = P256Pair::generate().unwrap();
 
@@ -912,209 +812,12 @@ mod test {
 				.push(non_member_approval);
 
 			assert_eq!(
-				validate_manifest(
-					&new_manifest_envelope,
-					&manifest_envelope,
-					&att_doc
-				),
+				validate_manifest(&new_manifest_envelope, &manifest_envelope,),
 				Err(ProtocolError::NotManifestSetMember)
 			);
 		}
 	}
 
-	mod validate_manifest_attestation_tests {
-		use super::*;
-		#[test]
-		fn errors_if_pcr0_does_match_attestation_doc() {
-			let TestArgs {
-				manifest_envelope,
-				mut att_doc,
-				members_with_keys,
-				..
-			} = get_test_args();
-			let mut new_manifest_envelope = manifest_envelope.clone();
-			new_manifest_envelope.manifest.namespace.nonce += 1;
-			new_manifest_envelope.manifest.enclave.pcr0 = vec![128; 32];
-
-			let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
-			att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));
-
-			let manifest_set_approvals = (0..2)
-				.map(|i| {
-					let (pair, member) = &members_with_keys[i];
-					Approval {
-						signature: pair.sign(&new_manifest_hash).unwrap(),
-						member: member.clone(),
-					}
-				})
-				.collect();
-			new_manifest_envelope.manifest_set_approvals =
-				manifest_set_approvals;
-
-			assert_eq!(
-				validate_manifest(
-					&new_manifest_envelope,
-					&manifest_envelope,
-					&att_doc
-				),
-				Err(ProtocolError::QosAttestError(
-					"DifferentPcr0 { expected: \"8080808080808080808080808080808080808080808080808080808080808080\", actual: \"0404040404040404040404040404040404040404040404040404040404040404\" }".to_string()
-				))
-			);
-		}
-
-		#[test]
-		fn errors_if_pcr1_does_match_attestation_doc() {
-			let TestArgs {
-				manifest_envelope,
-				mut att_doc,
-				members_with_keys,
-				..
-			} = get_test_args();
-			let mut new_manifest_envelope = manifest_envelope.clone();
-			new_manifest_envelope.manifest.namespace.nonce += 1;
-			new_manifest_envelope.manifest.enclave.pcr1 = vec![128; 32];
-
-			let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
-			att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));
-
-			let manifest_set_approvals = (0..2)
-				.map(|i| {
-					let (pair, member) = &members_with_keys[i];
-					Approval {
-						signature: pair.sign(&new_manifest_hash).unwrap(),
-						member: member.clone(),
-					}
-				})
-				.collect();
-			new_manifest_envelope.manifest_set_approvals =
-				manifest_set_approvals;
-
-			assert_eq!(
-				validate_manifest(
-					&new_manifest_envelope,
-					&manifest_envelope,
-					&att_doc
-				),
-				Err(ProtocolError::QosAttestError(
-					"DifferentPcr1 { expected: \"8080808080808080808080808080808080808080808080808080808080808080\", actual: \"0303030303030303030303030303030303030303030303030303030303030303\" }".to_string()
-				))
-			);
-		}
-
-		#[test]
-		fn errors_if_pcr2_does_match_attesation_doc() {
-			let TestArgs {
-				manifest_envelope,
-				mut att_doc,
-				members_with_keys,
-				..
-			} = get_test_args();
-			let mut new_manifest_envelope = manifest_envelope.clone();
-			new_manifest_envelope.manifest.namespace.nonce += 1;
-			new_manifest_envelope.manifest.enclave.pcr2 = vec![128; 32];
-
-			let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
-			att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));
-
-			let manifest_set_approvals = (0..2)
-				.map(|i| {
-					let (pair, member) = &members_with_keys[i];
-					Approval {
-						signature: pair.sign(&new_manifest_hash).unwrap(),
-						member: member.clone(),
-					}
-				})
-				.collect();
-			new_manifest_envelope.manifest_set_approvals =
-				manifest_set_approvals;
-
-			assert_eq!(
-				validate_manifest(
-					&new_manifest_envelope,
-					&manifest_envelope,
-					&att_doc
-				),
-				Err(ProtocolError::QosAttestError(
-					"DifferentPcr2 { expected: \"8080808080808080808080808080808080808080808080808080808080808080\", actual: \"0202020202020202020202020202020202020202020202020202020202020202\" }".to_string()
-				))
-			);
-		}
-
-		#[test]
-		fn errors_if_pcr3_does_match_attestation_doc() {
-			let TestArgs {
-				manifest_envelope,
-				mut att_doc,
-				members_with_keys,
-				..
-			} = get_test_args();
-			let mut new_manifest_envelope = manifest_envelope.clone();
-			new_manifest_envelope.manifest.namespace.nonce += 1;
-			new_manifest_envelope.manifest.enclave.pcr3 = vec![128; 32];
-
-			let new_manifest_hash = new_manifest_envelope.manifest.qos_hash();
-			att_doc.user_data = Some(ByteBuf::from(new_manifest_hash));
-
-			let manifest_set_approvals = (0..2)
-				.map(|i| {
-					let (pair, member) = &members_with_keys[i];
-					Approval {
-						signature: pair.sign(&new_manifest_hash).unwrap(),
-						member: member.clone(),
-					}
-				})
-				.collect();
-			new_manifest_envelope.manifest_set_approvals =
-				manifest_set_approvals;
-
-			assert_eq!(
-				validate_manifest(
-					&new_manifest_envelope,
-					&manifest_envelope,
-					&att_doc
-				),
-				Err(ProtocolError::QosAttestError(
-					"DifferentPcr3 { expected: \"8080808080808080808080808080808080808080808080808080808080808080\", actual: \"0101010101010101010101010101010101010101010101010101010101010101\" }".to_string()
-				))
-			);
-		}
-
-		#[test]
-		fn errors_if_manifest_hash_does_not_match_attestation_doc() {
-			let TestArgs {
-				manifest_envelope, att_doc, members_with_keys, ..
-			} = get_test_args();
-			let mut new_manifest_envelope = manifest_envelope.clone();
-			new_manifest_envelope.manifest.namespace.nonce += 1;
-
-			let manifest_set_approvals = (0..2)
-				.map(|i| {
-					let (pair, member) = &members_with_keys[i];
-					Approval {
-						signature: pair
-							.sign(&new_manifest_envelope.manifest.qos_hash())
-							.unwrap(),
-						member: member.clone(),
-					}
-				})
-				.collect();
-			new_manifest_envelope.manifest_set_approvals =
-				manifest_set_approvals;
-
-			// Don't update the manifest hash in the attestation doc
-
-			let err = validate_manifest(
-				&new_manifest_envelope,
-				&manifest_envelope,
-				&att_doc,
-			);
-			// The hash values are dynamically generated, so we check the error format
-			assert!(
-				matches!(&err, Err(ProtocolError::QosAttestError(msg)) if msg.starts_with("DifferentUserData {"))
-			);
-		}
-	}
 	mod export_key_inner {
 		use super::*;
 		use crate::protocol::services::key::EncryptedQuorumKey;
@@ -1222,7 +925,13 @@ mod test {
 
 			let mut state = ProtocolState::new(Box::new(nsm), handles, None);
 			let EncryptedQuorumKey { encrypted_quorum_key, signature } =
-				export_key(&mut state, &manifest_envelope, &document).unwrap();
+				export_key_at_time(
+					&mut state,
+					&manifest_envelope,
+					&document,
+					Duration::from_secs(MOCK_SECONDS_SINCE_EPOCH),
+				)
+				.unwrap();
 
 			// quorum key signature over payload is valid
 			assert!(
@@ -1281,9 +990,12 @@ mod test {
 				handles,
 				None,
 			);
-			let Err(err) =
-				export_key(&mut state, &manifest_envelope, &document)
-			else {
+			let Err(err) = export_key_at_time(
+				&mut state,
+				&manifest_envelope,
+				&document,
+				Duration::from_secs(MOCK_SECONDS_SINCE_EPOCH),
+			) else {
 				panic!("expected export_key to reject the document");
 			};
 
@@ -1310,9 +1022,12 @@ mod test {
 			);
 
 			let mut state = ProtocolState::new(Box::new(nsm), handles, None);
-			let Err(err) =
-				export_key(&mut state, &manifest_envelope, &document)
-			else {
+			let Err(err) = export_key_at_time(
+				&mut state,
+				&manifest_envelope,
+				&document,
+				Duration::from_secs(MOCK_SECONDS_SINCE_EPOCH),
+			) else {
 				panic!("expected export_key to reject the document");
 			};
 
@@ -1321,13 +1036,8 @@ mod test {
 
 		#[test]
 		fn works() {
-			let TestArgs {
-				manifest_envelope,
-				att_doc,
-				eph_pair,
-				quorum_pair,
-				..
-			} = get_test_args();
+			let TestArgs { manifest_envelope, eph_pair, quorum_pair, .. } =
+				get_test_args();
 
 			let ephemeral_file =
 				PathWrapper::from("export_key_inner_works.eph.secret");
@@ -1357,8 +1067,7 @@ mod test {
 			let EncryptedQuorumKey { encrypted_quorum_key, signature } =
 				export_key_internal(
 					&mut protocol_state,
-					&manifest_envelope,
-					&att_doc,
+					&eph_pair.public_key(),
 				)
 				.unwrap();
 
