@@ -77,6 +77,88 @@ static uint16_t transport_checksum_ipv4(
 	return checksum_finish(sum);
 }
 
+/*
+ * Docker Desktop loses one reply when musl sends A and AAAA DNS requests from
+ * the same UDP source port. Keep the DNS request and resolver unchanged, but
+ * put AAAA traffic on a second host-side flow while it crosses Docker's
+ * network. The same involution restores the guest's original port on replies.
+ */
+#define DNS_PORT 53
+#define DNS_TYPE_AAAA 28
+#define DNS_AAAA_PORT_MASK 0x4000
+
+static int dns_question_type(
+	const unsigned char *dns,
+	size_t dns_len,
+	uint16_t *question_type
+) {
+	if (dns_len < 12 || read_be16(&dns[4]) == 0) {
+		return 0;
+	}
+
+	size_t offset = 12;
+	while (offset < dns_len) {
+		unsigned char label_len = dns[offset++];
+		if (label_len == 0) {
+			break;
+		}
+		if ((label_len & 0xc0) != 0 || label_len > 63
+			|| offset + label_len > dns_len) {
+			return 0;
+		}
+		offset += label_len;
+	}
+	if (offset + 4 > dns_len) {
+		return 0;
+	}
+
+	*question_type = read_be16(&dns[offset]);
+	return 1;
+}
+
+static int split_aaaa_dns_flow(unsigned char *packet, int len) {
+	if (len < 28 || (packet[0] >> 4) != 4) {
+		return 0;
+	}
+
+	size_t ihl = (size_t)(packet[0] & 0x0f) * 4;
+	size_t total_len = read_be16(&packet[2]);
+	if (ihl < 20 || total_len < ihl + 8 || (size_t)len < total_len
+		|| packet[9] != IPPROTO_UDP) {
+		return 0;
+	}
+
+	unsigned char *udp = &packet[ihl];
+	size_t udp_len = read_be16(&udp[4]);
+	if (udp_len < 8 || udp_len != total_len - ihl) {
+		return 0;
+	}
+
+	uint16_t source_port = read_be16(&udp[0]);
+	uint16_t destination_port = read_be16(&udp[2]);
+	if (source_port != DNS_PORT && destination_port != DNS_PORT) {
+		return 0;
+	}
+
+	const unsigned char *dns = &udp[8];
+	size_t dns_len = udp_len - 8;
+	uint16_t question_type = 0;
+	if (!dns_question_type(dns, dns_len, &question_type)
+		|| question_type != DNS_TYPE_AAAA) {
+		return 0;
+	}
+
+	if (destination_port == DNS_PORT && (dns[2] & 0x80) == 0) {
+		write_be16(&udp[0], source_port ^ DNS_AAAA_PORT_MASK);
+		return 1;
+	}
+	if (source_port == DNS_PORT && (dns[2] & 0x80) != 0) {
+		write_be16(&udp[2], destination_port ^ DNS_AAAA_PORT_MASK);
+		return 1;
+	}
+	return 0;
+}
+
 static int repair_ipv4_transport_packet(unsigned char *packet, int len) {
 	if (len < 20 || (packet[0] >> 4) != 4) {
 		return 0;
@@ -178,6 +260,7 @@ static int queue_callback(
 		return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 	}
 	memcpy(packet, payload, (size_t)payload_len);
+	split_aaaa_dns_flow(packet, payload_len);
 	repair_ipv4_transport_packet(packet, payload_len);
 
 	int rc = nfq_set_verdict(
@@ -225,6 +308,30 @@ static int self_test(void) {
 	udp_sum = checksum_add_bytes(udp_sum, &udp_packet[20], 8);
 	if (checksum_finish(udp_sum) != 0) {
 		fprintf(stderr, "self-test: UDP checksum is invalid\n");
+		return 1;
+	}
+
+	unsigned char dns_query[57] = {
+		0x45, 0x00, 0x00, 0x39, 0x12, 0x34, 0x40, 0x00,
+		0x40, 0x11, 0x00, 0x00, 0xa9, 0xfe, 0x00, 0x01,
+		0x01, 0x01, 0x01, 0x01, 0x91, 0xb5, 0x00, 0x35,
+		0x00, 0x25, 0x00, 0x00, 0xb6, 0xae, 0x01, 0x00,
+		0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x07, 'e', 'x', 'a', 'm', 'p', 'l', 'e',
+		0x03, 'c', 'o', 'm', 0x00, 0x00, 0x1c, 0x00,
+		0x01,
+	};
+	if (!split_aaaa_dns_flow(dns_query, (int)sizeof(dns_query))
+		|| read_be16(&dns_query[20]) != (uint16_t)(0x91b5 ^ 0x4000)) {
+		fprintf(stderr, "self-test: AAAA query flow was not split\n");
+		return 1;
+	}
+	dns_query[30] |= 0x80;
+	write_be16(&dns_query[20], DNS_PORT);
+	write_be16(&dns_query[22], (uint16_t)(0x91b5 ^ 0x4000));
+	if (!split_aaaa_dns_flow(dns_query, (int)sizeof(dns_query))
+		|| read_be16(&dns_query[22]) != 0x91b5) {
+		fprintf(stderr, "self-test: AAAA response port was not restored\n");
 		return 1;
 	}
 

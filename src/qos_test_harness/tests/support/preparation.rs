@@ -400,14 +400,14 @@ async fn prepare_fast_artifacts(
 			root,
 			"qos_host",
 			FAST_TARGET,
-			CargoProfile::Release,
+			CargoProfile::Dev,
 		)?)
 		.with_features(["qemu"]),
 		fast_builder(CargoBinaryBuilder::new(
 			root,
 			"qos_bridge",
 			FAST_TARGET,
-			CargoProfile::Release,
+			CargoProfile::Dev,
 		)?)
 		.with_bin("ingress")
 		.with_features(["egress", "qemu"]),
@@ -415,7 +415,7 @@ async fn prepare_fast_artifacts(
 			root,
 			"qos_client",
 			FAST_TARGET,
-			CargoProfile::Release,
+			CargoProfile::Dev,
 		)?)
 		.with_no_default_features(),
 	] {
@@ -425,7 +425,7 @@ async fn prepare_fast_artifacts(
 		root,
 		"signed_echo",
 		FAST_TARGET,
-		CargoProfile::Release,
+		CargoProfile::Dev,
 	)?)
 	.build()
 	.await?;

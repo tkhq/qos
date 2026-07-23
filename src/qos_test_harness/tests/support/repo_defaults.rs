@@ -340,7 +340,7 @@ pub(super) fn docker_host_qemu_nitro_fast_spec(
 		},
 		host_program: DockerProgram::MountedBinary {
 			image: runtime_image.clone(),
-			path: fast_container_binary_path("release", "qos_host"),
+			path: fast_container_binary_path("debug", "qos_host"),
 		},
 		host_run: DockerRunSpec {
 			mounts: vec![artifact_mount.clone()],
@@ -348,7 +348,7 @@ pub(super) fn docker_host_qemu_nitro_fast_spec(
 		},
 		bridge_program: DockerProgram::MountedBinary {
 			image: runtime_image.clone(),
-			path: fast_container_binary_path("release", "ingress"),
+			path: fast_container_binary_path("debug", "ingress"),
 		},
 		bridge_run: DockerRunSpec {
 			mounts: vec![artifact_mount.clone()],
@@ -360,7 +360,7 @@ pub(super) fn docker_host_qemu_nitro_fast_spec(
 		)),
 		client_program: DockerProgram::MountedBinary {
 			image: runtime_image,
-			path: fast_container_binary_path("release", "qos_client"),
+			path: fast_container_binary_path("debug", "qos_client"),
 		},
 		client_run: DockerRunSpec {
 			mounts: vec![artifact_mount, work_mount.clone()],

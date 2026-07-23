@@ -52,6 +52,8 @@ where
 /// Cargo build profile.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CargoProfile {
+	/// Cargo development profile.
+	Dev,
 	/// Cargo release profile.
 	Release,
 	/// Named cargo profile.
@@ -61,6 +63,7 @@ pub enum CargoProfile {
 impl CargoProfile {
 	fn build_args(&self) -> Vec<OsString> {
 		match self {
+			Self::Dev => Vec::new(),
 			Self::Release => vec!["--release".into()],
 			Self::Named(profile) => vec!["--profile".into(), profile.into()],
 		}
@@ -68,6 +71,7 @@ impl CargoProfile {
 
 	fn output_dir(&self) -> &str {
 		match self {
+			Self::Dev => "debug",
 			Self::Release => "release",
 			Self::Named(profile) => profile,
 		}

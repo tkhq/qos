@@ -13,7 +13,7 @@ use axum::{
 	routing::{get, post},
 };
 use qos_p256::P256Pair;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 /// Default path where QOS writes the quorum-key secret for pivot apps.
 pub const DEFAULT_QUORUM_KEY_PATH: &str = "/qos.quorum.key";
@@ -73,12 +73,12 @@ pub struct SignedGetUrlPayload {
 	/// URL fetched by the app.
 	pub url: String,
 	/// HTTP status returned by the fetched URL.
-	#[serde(deserialize_with = "deserialize_u16")]
+	#[serde(with = "qos_json::string_or_numeric")]
 	pub status: u16,
 	/// Response body returned by the fetched URL.
 	pub body: String,
 	/// Unix timestamp when the response was signed.
-	#[serde(deserialize_with = "deserialize_u64")]
+	#[serde(with = "qos_json::string_or_numeric")]
 	pub time: u64,
 }
 
@@ -180,39 +180,6 @@ fn fetch(url: &str) -> Result<FetchedUrl, AppError> {
 		.into_string()
 		.map_err(|err| AppError::FetchRead(err.to_string()))?;
 	Ok(FetchedUrl { status, body })
-}
-
-fn deserialize_u16<'de, D>(deserializer: D) -> Result<u16, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	let value = serde_json::Value::deserialize(deserializer)?;
-	match value {
-		serde_json::Value::Number(number) => number
-			.as_u64()
-			.and_then(|value| u16::try_from(value).ok())
-			.ok_or_else(|| serde::de::Error::custom("invalid u16")),
-		serde_json::Value::String(value) => {
-			value.parse().map_err(serde::de::Error::custom)
-		}
-		_ => Err(serde::de::Error::custom("expected u16")),
-	}
-}
-
-fn deserialize_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	let value = serde_json::Value::deserialize(deserializer)?;
-	match value {
-		serde_json::Value::Number(number) => number
-			.as_u64()
-			.ok_or_else(|| serde::de::Error::custom("invalid u64")),
-		serde_json::Value::String(value) => {
-			value.parse().map_err(serde::de::Error::custom)
-		}
-		_ => Err(serde::de::Error::custom("expected u64")),
-	}
 }
 
 #[derive(Debug)]
