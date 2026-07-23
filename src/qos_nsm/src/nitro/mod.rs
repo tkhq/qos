@@ -238,13 +238,36 @@ pub fn verify_attestation_doc_against_manifest(
 	attestation_doc: &AttestationDoc,
 	expected: ManifestAttestationInput<'_>,
 ) -> Result<(), AttestError> {
-	verify_attestation_doc_against_user_input(
+	verify_attestation_doc_against_manifest_with_nonce(
+		kind,
+		attestation_doc,
+		expected,
+		None,
+	)
+}
+
+/// Verify a standard QOS attestation document and its nonce.
+///
+/// `expected_nonce` is `None` when the document must not carry a nonce and
+/// `Some` when it must carry exactly the supplied bytes.
+///
+/// # Errors
+///
+/// Returns [`AttestError`] if validation fails.
+pub fn verify_attestation_doc_against_manifest_with_nonce(
+	kind: ManifestCommitmentKind,
+	attestation_doc: &AttestationDoc,
+	expected: ManifestAttestationInput<'_>,
+	expected_nonce: Option<&[u8]>,
+) -> Result<(), AttestError> {
+	verify_attestation_doc_against_user_input_with_nonce(
 		attestation_doc,
 		expected.manifest_hash,
 		expected.pcr0,
 		expected.pcr1,
 		expected.pcr2,
 		expected.pcr3,
+		expected_nonce,
 	)?;
 	verify_attestation_doc_manifest_commitment(
 		attestation_doc,
@@ -328,6 +351,26 @@ pub fn verify_attestation_doc_against_user_input(
 	pcr2: &[u8],
 	pcr3: &[u8],
 ) -> Result<(), AttestError> {
+	verify_attestation_doc_against_user_input_with_nonce(
+		attestation_doc,
+		user_data,
+		pcr0,
+		pcr1,
+		pcr2,
+		pcr3,
+		None,
+	)
+}
+
+fn verify_attestation_doc_against_user_input_with_nonce(
+	attestation_doc: &AttestationDoc,
+	user_data: &[u8],
+	pcr0: &[u8],
+	pcr1: &[u8],
+	pcr2: &[u8],
+	pcr3: &[u8],
+	expected_nonce: Option<&[u8]>,
+) -> Result<(), AttestError> {
 	let doc_user_data = attestation_doc
 		.user_data
 		.as_ref()
@@ -340,9 +383,20 @@ pub fn verify_attestation_doc_against_user_input(
 		});
 	}
 
-	// nonce is none
-	if attestation_doc.nonce.is_some() {
-		return Err(AttestError::UnexpectedAttestationDocNonce);
+	match (expected_nonce, attestation_doc.nonce.as_deref()) {
+		(None, Some(_)) => {
+			return Err(AttestError::UnexpectedAttestationDocNonce);
+		}
+		(Some(_), None) => {
+			return Err(AttestError::MissingAttestationDocNonce);
+		}
+		(Some(expected), Some(actual)) if expected != actual => {
+			return Err(AttestError::DifferentAttestationDocNonce {
+				expected: qos_hex::encode(expected),
+				actual: qos_hex::encode(actual),
+			});
+		}
+		(None, None) | (Some(_), Some(_)) => {}
 	}
 
 	let doc_pcr0 = attestation_doc
@@ -1236,6 +1290,70 @@ mod test {
 		.unwrap_err();
 
 		assert!(matches!(err, AttestError::UnexpectedAttestationDocNonce));
+	}
+
+	#[test]
+	fn verify_attestation_doc_against_user_input_accepts_expected_nonce() {
+		let mut attestation_doc =
+			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
+				.unwrap();
+		let nonce = [1, 2, 3];
+		attestation_doc.nonce = Some(ByteBuf::from(nonce.to_vec()));
+
+		verify_attestation_doc_against_user_input_with_nonce(
+			&attestation_doc,
+			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&qos_hex::decode(MOCK_PCR0).unwrap(),
+			&qos_hex::decode(MOCK_PCR1).unwrap(),
+			&qos_hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_PCR3).unwrap(),
+			Some(&nonce),
+		)
+		.expect("the expected nonce should verify");
+	}
+
+	#[test]
+	fn verify_attestation_doc_against_user_input_rejects_wrong_nonce() {
+		let mut attestation_doc =
+			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
+				.unwrap();
+		attestation_doc.nonce = Some(ByteBuf::from(vec![1, 2, 3]));
+
+		let err = verify_attestation_doc_against_user_input_with_nonce(
+			&attestation_doc,
+			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&qos_hex::decode(MOCK_PCR0).unwrap(),
+			&qos_hex::decode(MOCK_PCR1).unwrap(),
+			&qos_hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_PCR3).unwrap(),
+			Some(&[4, 5, 6]),
+		)
+		.expect_err("a different nonce should fail");
+
+		assert!(matches!(
+			err,
+			AttestError::DifferentAttestationDocNonce { .. }
+		));
+	}
+
+	#[test]
+	fn verify_attestation_doc_against_user_input_rejects_missing_nonce() {
+		let attestation_doc =
+			unsafe_attestation_doc_from_der(MOCK_NSM_ATTESTATION_DOCUMENT)
+				.unwrap();
+
+		let err = verify_attestation_doc_against_user_input_with_nonce(
+			&attestation_doc,
+			&qos_hex::decode(MOCK_USER_DATA_NSM_ATTESTATION_DOCUMENT).unwrap(),
+			&qos_hex::decode(MOCK_PCR0).unwrap(),
+			&qos_hex::decode(MOCK_PCR1).unwrap(),
+			&qos_hex::decode(MOCK_PCR2).unwrap(),
+			&qos_hex::decode(MOCK_PCR3).unwrap(),
+			Some(&[1, 2, 3]),
+		)
+		.expect_err("a missing expected nonce should fail");
+
+		assert!(matches!(err, AttestError::MissingAttestationDocNonce));
 	}
 
 	#[test]

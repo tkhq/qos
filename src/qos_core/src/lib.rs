@@ -9,6 +9,7 @@ pub mod parser;
 pub mod protocol;
 pub mod reaper;
 pub mod server;
+pub mod verify;
 
 #[cfg(feature = "egress")]
 pub mod egress;
