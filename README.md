@@ -218,7 +218,7 @@ The application QuorumOS pivots to once it finishes booting. This application's 
 
 There are two modes for provisioning:
 
-- [Boot Standard](docs/boot_standard.md): mode for provisioning an enclave with quorum key shares. This is commonly used if there is no instance from the same namespace to key forward from or if there is any change to the QuorumOS verification API that breaks Key Forwarding. Boot Standard is also required if the manifest set or share set change.
+- [Boot Standard](docs/boot_standard.md): mode for provisioning an enclave with quorum key shares. This is required when there is no provisioned instance in the namespace to key forward from (first boot after genesis, or all nodes lost), when the manifest set or PCR3 (host IAM role) changes, or when a QuorumOS change breaks Key Forwarding itself. See [When Is Boot Standard Required?](docs/boot_standard.md#when-is-boot-standard-required) for the full decision rule.
 - [Key Forward](docs/key_forward.md): mode for provisioning an enclave from an already provisioned enclave of the same namespace. This allows QuorumOS to support horizontal scaling cloud workloads. Effectively, a pre-existing enclave will verify attestation and manifest for a new enclave and then forward its quorum key to the new enclave.
 
 ### Remote Attestation

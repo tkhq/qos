@@ -647,7 +647,7 @@ The quorum key reconstructs to the same value, but now your updated application 
 
 **The Nonce Mechanism**: The monotonically increasing nonce prevents rollback attacks. Members should only approve manifests with nonces higher than the current deployment, ensuring adversaries cannot force downgrades to vulnerable versions.
 
-**Note**: if we had two nitro enclaves running simultaneously targeting the same application but different versions, we could use the already provisioned enclave to key forward off of, removing the need to post shares. This is helpful for HA production setups that require horizontally scalable workloads with no human intervention. Key forwarding is not covered in this guide, but you can find some information [here](https://github.com/tkhq/qos/blob/main/src/qos_core/KEY_FORWARDING.MD).
+**Note**: if we had two nitro enclaves running simultaneously targeting the same application but different versions, we could use the already provisioned enclave to key forward off of, removing the need to post shares. This is helpful for HA production setups that require horizontally scalable workloads with no human intervention. Key forwarding is not covered in this guide, but you can find some information in [Key Forward](key_forward.md) and [When Is Boot Standard Required?](boot_standard.md#when-is-boot-standard-required).
 
 ---
 
