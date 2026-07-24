@@ -77,6 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let addr = cli.addr()?;
 	let app = signed_echo::router(cli.config());
 
+	eprintln!("signed_echo listening on {addr}");
 	axum::Server::bind(&addr).serve(app.into_make_service()).await?;
 	Ok(())
 }

@@ -1,0 +1,41 @@
+[package]
+name = "qos_test_harness"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+# Override workspace lints for this test crate.
+[lints.rust]
+missing_docs = "allow"
+unsafe_code = "deny"
+
+[lints.clippy]
+missing_errors_doc = "allow"
+module_name_repetitions = "allow"
+
+[features]
+impure-builder = []
+qemu-e2e = []
+qemu-ci = ["qemu-e2e"]
+
+[dependencies]
+qos_hex = { workspace = true }
+qos_core = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+
+[dev-dependencies]
+qos_crypto = { workspace = true }
+qos_nsm = { workspace = true }
+qos_p256 = { workspace = true }
+serde_json = { workspace = true }
+signed_echo = { path = "../signed_echo" }
+ureq = { workspace = true, features = ["json"] }
+
+[[test]]
+name = "docker_host_qemu_nitro"
+path = "tests/docker_host_qemu_nitro.rs"
+required-features = ["qemu-e2e"]

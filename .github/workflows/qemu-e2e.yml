@@ -1,0 +1,72 @@
+name: QEMU e2e
+
+on:
+  workflow_call:
+    inputs:
+      enclave_image:
+        description: QOS enclave egress image containing the EIF to boot.
+        required: true
+        type: string
+      host_image:
+        description: QEMU-compatible QOS host image to run.
+        required: true
+        type: string
+      bridge_image:
+        description: QEMU-compatible QOS bridge image to run.
+        required: true
+        type: string
+      client_image:
+        description: QOS client image to run.
+        required: true
+        type: string
+      pivot_image:
+        description: Signed-echo pivot image to run.
+        required: true
+        type: string
+
+jobs:
+  qemu-e2e:
+    name: QEMU e2e
+    runs-on: ubicloud-standard-16
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: "1.94"
+
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
+        with:
+          ghcr: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull supplied images
+        env:
+          QOS_TEST_QEMU_ENCLAVE_IMAGE: ${{ inputs.enclave_image }}
+          QOS_TEST_QEMU_HOST_IMAGE: ${{ inputs.host_image }}
+          QOS_TEST_QEMU_BRIDGE_IMAGE: ${{ inputs.bridge_image }}
+          QOS_TEST_QEMU_CLIENT_IMAGE: ${{ inputs.client_image }}
+          QOS_TEST_QEMU_PIVOT_IMAGE: ${{ inputs.pivot_image }}
+        run: |
+          docker pull "${QOS_TEST_QEMU_ENCLAVE_IMAGE}"
+          docker pull "${QOS_TEST_QEMU_HOST_IMAGE}"
+          docker pull "${QOS_TEST_QEMU_BRIDGE_IMAGE}"
+          docker pull "${QOS_TEST_QEMU_CLIENT_IMAGE}"
+          docker pull "${QOS_TEST_QEMU_PIVOT_IMAGE}"
+
+      - name: Run QEMU end-to-end tests
+        env:
+          QOS_TEST_QEMU_ENCLAVE_IMAGE: ${{ inputs.enclave_image }}
+          QOS_TEST_QEMU_HOST_IMAGE: ${{ inputs.host_image }}
+          QOS_TEST_QEMU_BRIDGE_IMAGE: ${{ inputs.bridge_image }}
+          QOS_TEST_QEMU_CLIENT_IMAGE: ${{ inputs.client_image }}
+          QOS_TEST_QEMU_PIVOT_IMAGE: ${{ inputs.pivot_image }}
+        run: >-
+          cargo test --locked -p qos_test_harness --features qemu-ci
+          --test docker_host_qemu_nitro -- --nocapture --test-threads=1

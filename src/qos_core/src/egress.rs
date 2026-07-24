@@ -18,13 +18,7 @@ use nix::{
 	unistd::{read, write},
 };
 
-/// egress vsock port used both in and out of the enclave to provide transparent egress data transfer
-#[cfg(not(feature = "qemu"))]
-pub const EGRESS_VSOCK_PORT: u32 = 1000; // reserved range so user ports don't interfere
-
-/// egress vsock port used both in and out of the enclave to provide transparent egress data transfer
-#[cfg(feature = "qemu")]
-pub const EGRESS_VSOCK_PORT: u32 = 9002; // open range for qemu local debug
+pub use crate::EGRESS_VSOCK_PORT;
 
 /// opens enclave side egress bridging using given cid and port blocking forever
 /// # Panics
@@ -86,7 +80,7 @@ pub fn init_egress_tun() {
 	run_ip("address add 169.254.0.1/32 dev lo", "ip assign to lo failed"); // use link-local ip
 	run_ip("link set mtu 1320 dev enclave_egress", "unable to set MTU size"); // MTU 1340 is max for calico wg-v6-cali so we need <= to that
 	run_ip("link set enclave_egress up", "unable to bring up egress");
-	run_ip("route add default dev enclave_egress", "unable to route");
+	run_ip("route replace default dev enclave_egress", "unable to route");
 }
 
 /// Create core vsock socket in streaming mode

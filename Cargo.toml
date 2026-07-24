@@ -9,6 +9,7 @@ members = [
   "src/qos_hex",
   "src/qos_json",
   "src/qos_net",
+  "src/qos_test_harness",
   "src/qos_test_primitives",
   "src/qos_p256",
   "src/qos_nsm",
@@ -29,6 +30,7 @@ default-members = [
   "src/qos_hex",
   "src/qos_json",
   "src/qos_net",
+  "src/qos_test_harness",
   "src/qos_test_primitives",
   "src/qos_p256",
   "src/qos_nsm",
@@ -111,6 +113,7 @@ qos_crypto = { path = "src/qos_crypto", version = "0.13.0", default-features = f
 qos_hex = { path = "src/qos_hex", version = "0.13.0", default-features = false }
 qos_json = { path = "src/qos_json", version = "0.13.0" }
 qos_net = { path = "src/qos_net", version = "0.13.0", default-features = false }
+qos_test_harness = { path = "src/qos_test_harness", version = "0.13.0" }
 qos_nsm = { path = "src/qos_nsm", version = "0.13.0", default-features = false }
 qos_p256 = { path = "src/qos_p256", version = "0.13.0" }
 qos_test_primitives = { path = "src/qos_test_primitives", version = "0.13.0" }

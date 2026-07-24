@@ -141,7 +141,7 @@ async fn tcp_to_vsock(
 
 			// see https://github.com/rust-vmm/vhost-device/issues/963
 			#[cfg(feature = "qemu")]
-			tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+			tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
 			if let Err(err) =
 				copy_bidirectional(&mut tcp_stream, &mut stream).await

@@ -23,9 +23,11 @@ jobs:
         name:
           - qos_client
           - qos_host
+          - qos_host_qemu
           - qos_enclave
           - qos_enclave_egress
           - qos_bridge
+          - qos_bridge_qemu
           - qos_bridge_egress
           - signed_echo
         include:
@@ -35,6 +37,9 @@ jobs:
           - name: qos_host
             ghcr: ghcr.io/tkhq/qos_host
             ecr: true
+          - name: qos_host_qemu
+            ghcr: ghcr.io/tkhq/qos_host_qemu
+            ecr: false
           - name: qos_enclave
             ghcr: ghcr.io/tkhq/qos_enclave
             ecr: true
@@ -44,6 +49,9 @@ jobs:
           - name: qos_bridge
             ghcr: ghcr.io/tkhq/qos_bridge
             ecr: true
+          - name: qos_bridge_qemu
+            ghcr: ghcr.io/tkhq/qos_bridge_qemu
+            ecr: false
           - name: qos_bridge_egress
             ghcr: ghcr.io/tkhq/qos_bridge_egress
             ecr: true
@@ -133,3 +141,16 @@ jobs:
             echo "One or more image build jobs did not succeed (result: ${result})" >&2
             exit 1
           fi
+
+  qemu-e2e:
+    name: QEMU e2e with PR images
+    if: github.event_name == 'pull_request'
+    needs: build-artifacts
+    uses: ./.github/workflows/qemu-e2e.yml
+    with:
+      enclave_image: ghcr.io/tkhq/qos_enclave_egress:pr-${{ github.event.number }}
+      host_image: ghcr.io/tkhq/qos_host_qemu:pr-${{ github.event.number }}
+      bridge_image: ghcr.io/tkhq/qos_bridge_qemu:pr-${{ github.event.number }}
+      client_image: ghcr.io/tkhq/qos_client:pr-${{ github.event.number }}
+      pivot_image: ghcr.io/tkhq/qos/examples/signed_echo:pr-${{ github.event.number }}
+    secrets: inherit
