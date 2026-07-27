@@ -8,48 +8,48 @@ provision the node with quorum key shares. Share set members verify the node's a
 Boot Standard is the provisioning mode where Share Holders post Quorum Key
 shares to a freshly booted node after verifying its setup attestation. The
 alternative, [Key Forward](key_forward.md), lets an already provisioned node in
-the same namespace export the Quorum Key to a fresh node with no human
-involvement.
+the same namespace (the source node) export the Quorum Key to a fresh node with
+no human involvement.
 
 Every change deployed to an enclave — new pivot app, new QOS image, new
 manifest configuration — is shipped by booting a fresh node with a new
 Manifest-Set-approved manifest. The only question is whether that fresh node
 can be provisioned by Key Forward or needs a Boot Standard share ceremony. The
-boundary is enforced by the donor node in
-[`export_key`](../src/qos_core/src/protocol/services/key.rs): it refuses to
+answer depends on the source node:
+[`export_key`](../src/qos_core/src/protocol/services/key.rs) refuses to
 forward the Quorum Key unless the new manifest passes its checks. Boot Standard
-is required exactly when no node can (or may) act as a donor.
+is required exactly when no node can (or may) act as the source.
 
 Changes that do **not** require Boot Standard — Key Forward works, as long as
-at least one provisioned node in the namespace is up to act as the donor:
+at least one provisioned node in the namespace is able to act as the source:
 
 * Pivot App updates (new pivot hash) and pivot configuration changes (args,
   env, restart policy, socket pool size), via a new approved manifest with an
   incremented nonce. This is the common update flow.
-* QOS image updates (new PCR0/PCR1/PCR2). The donor checks the new manifest's
+* QOS image updates (new PCR0/PCR1/PCR2). The source node checks the new manifest's
   PCRs against the *new node's* attestation document, not against its own
   measurements; the Manifest Set's threshold approvals are what vouch for the
   new QOS version.
 * Adding capacity or replacing instances with an unchanged manifest (equal
   nonce is accepted when the manifest hash is identical).
 
-Changes that **do** require Boot Standard — the donor refuses to export, or no
-donor exists:
+Changes that **do** require Boot Standard — the source node refuses to export,
+or no source node exists:
 
 * First boot of a namespace after genesis: no provisioned node exists yet.
 * Loss of every provisioned node in the namespace (disaster recovery).
-* Manifest Set changes, members or threshold (`DifferentManifestSet`): a donor
-  only trusts approvals from its own Manifest Set, so rotating the set requires
-  re-provisioning by the Share Set.
+* Manifest Set changes, members or threshold (`DifferentManifestSet`): a source
+  node only trusts approvals from its own Manifest Set, so rotating the set
+  requires re-provisioning by the Share Set.
 * PCR3 changes, i.e. a new host IAM role or AWS account (`DifferentPcr3`).
 * Namespace name changes (`DifferentNamespaceName`).
-* A manifest nonce lower than the donor's, or an equal nonce with a different
-  manifest hash (`LowNonce`, `DifferentManifest`). A rollback can only be
-  key-forwarded from a donor whose own nonce is low enough.
+* A manifest nonce lower than the source node's, or an equal nonce with a
+  different manifest hash (`LowNonce`, `DifferentManifest`). A rollback can only
+  be key-forwarded from a source node whose own nonce is low enough.
 * A different Quorum Key (`DifferentQuorumKey`) — in practice a new namespace,
   starting with its own genesis ceremony.
-* QOS releases that break the key-forward protocol itself: if a donor on the
-  old release cannot decode the new node's request or verify its attestation
+* QOS releases that break the key-forward protocol itself: if a source node on
+  the old release cannot decode the new node's request or verify its attestation
   document, the first node on the new release must be Boot Standard
   provisioned. Wire compatibility is normally maintained to avoid this, so
   treat any breaking change to `ProtocolMsg`, manifest encoding, or attestation
