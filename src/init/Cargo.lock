@@ -1213,6 +1213,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "thiserror",
  "tokio",
  "tokio-vsock",
  "thiserror",
