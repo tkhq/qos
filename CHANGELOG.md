@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.13.1](https://github.com/tkhq/qos/compare/qos_client-v0.13.0...qos_client-v0.13.1) - 2026-08-03
+
+### Other
+- update Cargo.lock dependencies
+
+## `qos_net` - [0.13.1](https://github.com/tkhq/qos/compare/qos_net-v0.13.0...qos_net-v0.13.1) - 2026-08-03
+
+### Fixed
+- fix tests
+
+## `qos_core` - [0.13.1](https://github.com/tkhq/qos/compare/qos_core-v0.13.0...qos_core-v0.13.1) - 2026-08-03
+
+### Added
+- *(test-harness)* add Docker QEMU integration harness
+
+### Fixed
+- *(qos-core)* replace existing egress default route
+
+### Other
+- *(qemu)* use the production enclave EIF in end-to-end tests
+
+## `qos_nsm` - [0.13.1](https://github.com/tkhq/qos/compare/qos_nsm-v0.13.0...qos_nsm-v0.13.1) - 2026-08-03
+
+### Other
+- attestation doc + manifest verification spec
+
 ## `qos_client` - [0.13.0](https://github.com/tkhq/qos/compare/qos_client-v0.12.2...qos_client-v0.13.0) - 2026-07-20
 
 ### Added
