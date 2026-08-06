@@ -226,6 +226,10 @@ async fn qos_bridge_works() {
 				"./mock/keys/manifest-set",
 				"--quorum-key-path",
 				"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
+				"--restart-policy",
+				"never",
+				"--bridge-config",
+				&format!("[{{\"type\": \"server\", \"port\": {app_host_port}, \"host\": \"0.0.0.0\"}}]"),
 				"--alias",
 				alias,
 			])
@@ -241,6 +245,12 @@ async fn qos_bridge_works() {
 			let stdout_reader = BufReader::new(stdout);
 			stdout_reader.lines()
 		};
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct manifest schema version: v1? (y/n)"
+		);
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
@@ -278,6 +288,25 @@ async fn qos_bridge_works() {
 			&stdout.next().unwrap().unwrap(),
 			&format!(
 				"[\"/tmp/qos_host_bridge/qos_host_bridge.sock.{app_host_port}.appsock\"]?"
+			)
+		);
+		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct pivot debug mode: false? (y/n)"
+		);
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct pivot bridge configuration:"
+		);
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			&format!(
+				"[Server {{ port: {app_host_port}, host: \"0.0.0.0\" }}]?"
 			)
 		);
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");

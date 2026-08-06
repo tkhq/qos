@@ -254,6 +254,8 @@ fn generate_manifest_envelope() {
 					"./mock/keys/manifest-set",
 					"--quorum-key-path",
 					QUORUM_KEY_PUB_PATH,
+					"--restart-policy",
+					"never",
 					"--alias",
 					alias,
 					"--unsafe-auto-confirm",

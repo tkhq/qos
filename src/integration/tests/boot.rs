@@ -174,6 +174,8 @@ async fn standard_boot_e2e() {
 				"./mock/keys/manifest-set",
 				"--quorum-key-path",
 				"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
+				"--restart-policy",
+				"never",
 				"--alias",
 				alias,
 			])
@@ -189,6 +191,12 @@ async fn standard_boot_e2e() {
 			let stdout_reader = BufReader::new(stdout);
 			stdout_reader.lines()
 		};
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct manifest schema version: v1? (y/n)"
+		);
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
@@ -226,6 +234,20 @@ async fn standard_boot_e2e() {
 			&stdout.next().unwrap().unwrap(),
 			"[\"--msg\", \"testing420\"]?"
 		);
+		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct pivot debug mode: false? (y/n)"
+		);
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct pivot bridge configuration:"
+		);
+		assert_eq!(&stdout.next().unwrap().unwrap(), "[]?");
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 
