@@ -2,7 +2,7 @@
 
 use std::{fmt, iter::zip};
 
-use qos_crypto::sha_512;
+use qos_crypto::{sha_256, sha_512};
 use qos_nsm::types::{NsmRequest, NsmResponse};
 use qos_p256::{P256Pair, P256Public};
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,37 @@ use crate::protocol::{
 };
 
 const QOS_TEST_MESSAGE: &[u8] = b"qos-test-message";
+
+/// Domain separation tag for [`genesis_request_commitment`].
+const GENESIS_REQUEST_COMMITMENT_DOMAIN: &[u8] =
+	b"qos::genesis-request-commitment::v1";
+
+/// Compute the domain separated commitment over the exact genesis boot
+/// request: the [`GenesisSet`] (members, member order, and threshold) and the
+/// optional DR key.
+///
+/// The enclave computes this over the request it actually received and embeds
+/// it in [`GenesisOutput::request_commitment`], which is bound into the
+/// attested output hash. Clients recompute it from the request they sent and
+/// fail closed on mismatch, preventing a host from substituting members,
+/// threshold, or DR key in the request.
+///
+/// # Panics
+///
+/// Panics if borsh serialization fails, which is not expected to ever happen
+/// when serializing to an in-memory buffer.
+#[must_use]
+pub fn genesis_request_commitment(
+	set: &GenesisSet,
+	dr_key: Option<&[u8]>,
+) -> [u8; 32] {
+	let mut buf = GENESIS_REQUEST_COMMITMENT_DOMAIN.to_vec();
+	borsh::to_writer(&mut buf, set)
+		.expect("`GenesisSet` implements borsh serialize. qed.");
+	borsh::to_writer(&mut buf, &dr_key)
+		.expect("`Option<&[u8]>` implements borsh serialize. qed.");
+	sha_256(&buf)
+}
 
 /// Configuration for sharding a Quorum Key created in the Genesis flow.
 #[derive(
@@ -150,6 +181,14 @@ pub struct GenesisOutput {
 	/// and [`Self::test_message_ciphertext`]
 	#[serde(with = "qos_hex::serde")]
 	pub test_message: Vec<u8>,
+	/// Domain separated commitment over the exact genesis boot request the
+	/// enclave received. See [`genesis_request_commitment`].
+	///
+	/// Note: this field intentionally has no serde/borsh default. Peers or
+	/// persisted `GenesisOutput`s from before this field existed fail closed
+	/// on (de)serialization instead of silently skipping verification.
+	#[serde(with = "qos_hex::serde")]
+	pub request_commitment: [u8; 32],
 }
 
 impl fmt::Debug for GenesisOutput {
@@ -170,6 +209,11 @@ pub(in crate::protocol) fn boot_genesis(
 	genesis_set: &GenesisSet,
 	maybe_dr_key: Option<Vec<u8>>,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
+	// Commit to the exact request the enclave received so clients can detect
+	// a host substituting the genesis set or DR key.
+	let request_commitment =
+		genesis_request_commitment(genesis_set, maybe_dr_key.as_deref());
+
 	let quorum_pair = P256Pair::generate()?;
 	let master_seed = &quorum_pair.to_master_seed()[..];
 
@@ -216,6 +260,7 @@ pub(in crate::protocol) fn boot_genesis(
 			.encrypt(QOS_TEST_MESSAGE)?,
 		test_message_signature: quorum_pair.sign(QOS_TEST_MESSAGE)?,
 		test_message: QOS_TEST_MESSAGE.to_vec(),
+		request_commitment,
 	};
 
 	let nsm_response = {
@@ -321,5 +366,128 @@ mod test {
 		let quorum_key_hash =
 			sha_512(qos_hex::encode(&reconstructed[..]).as_bytes());
 		assert_eq!(quorum_key_hash, output.quorum_key_hash);
+	}
+
+	fn test_member(alias: &str, key_byte: u8) -> QuorumMember {
+		QuorumMember { alias: alias.to_string(), pub_key: vec![key_byte; 33] }
+	}
+
+	fn test_set() -> GenesisSet {
+		GenesisSet {
+			members: vec![test_member("a", 1), test_member("b", 2)],
+			threshold: 2,
+		}
+	}
+
+	#[test]
+	fn genesis_request_commitment_binds_the_genesis_set() {
+		let base = test_set();
+		let base_commitment = genesis_request_commitment(&base, None);
+
+		// Deterministic for the exact same request.
+		assert_eq!(genesis_request_commitment(&base, None), base_commitment);
+
+		// Altered threshold.
+		let mut altered = base.clone();
+		altered.threshold = 1;
+		assert_ne!(genesis_request_commitment(&altered, None), base_commitment);
+
+		// Substituted member public key.
+		let mut altered = base.clone();
+		altered.members[1] = test_member("b", 3);
+		assert_ne!(genesis_request_commitment(&altered, None), base_commitment);
+
+		// Substituted member alias.
+		let mut altered = base.clone();
+		altered.members[1] = test_member("c", 2);
+		assert_ne!(genesis_request_commitment(&altered, None), base_commitment);
+
+		// Reordered members.
+		let mut altered = base.clone();
+		altered.members.reverse();
+		assert_ne!(genesis_request_commitment(&altered, None), base_commitment);
+
+		// A member replaced with a duplicate of another member (same
+		// member count).
+		let mut altered = base.clone();
+		altered.members[1] = altered.members[0].clone();
+		assert_ne!(genesis_request_commitment(&altered, None), base_commitment);
+
+		// Added member.
+		let mut altered = base.clone();
+		altered.members.push(test_member("c", 3));
+		assert_ne!(genesis_request_commitment(&altered, None), base_commitment);
+
+		// Removed member.
+		let mut altered = base.clone();
+		altered.members.pop();
+		assert_ne!(genesis_request_commitment(&altered, None), base_commitment);
+	}
+
+	#[test]
+	fn genesis_request_commitment_binds_the_dr_key_option() {
+		let set = test_set();
+
+		let none = genesis_request_commitment(&set, None);
+		let some_a = genesis_request_commitment(&set, Some(&[7; 65]));
+		let some_b = genesis_request_commitment(&set, Some(&[8; 65]));
+
+		// None vs Some, and Some(a) vs Some(b), must all differ.
+		assert_ne!(none, some_a);
+		assert_ne!(none, some_b);
+		assert_ne!(some_a, some_b);
+
+		// Some with an empty key is not the same as no key.
+		assert_ne!(genesis_request_commitment(&set, Some(&[])), none);
+
+		// Deterministic for the exact same request.
+		assert_eq!(genesis_request_commitment(&set, None), none);
+		assert_eq!(genesis_request_commitment(&set, Some(&[7; 65])), some_a);
+	}
+
+	#[test]
+	fn boot_genesis_output_commits_to_the_exact_request() {
+		let handles = Handles::new(
+			"EPH".to_string(),
+			"QUO".to_string(),
+			"MAN".to_string(),
+			"PIV".to_string(),
+		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm::new()), handles, None);
+
+		let members = (1..=3)
+			.map(|i| QuorumMember {
+				alias: format!("member{i}"),
+				pub_key: P256Pair::generate().unwrap().public_key().to_bytes(),
+			})
+			.collect();
+		let genesis_set = GenesisSet { members, threshold: 2 };
+		let dr_key = P256Pair::generate().unwrap().public_key().to_bytes();
+
+		// With a DR key.
+		let (output, _) = boot_genesis(
+			&mut protocol_state,
+			&genesis_set,
+			Some(dr_key.clone()),
+		)
+		.unwrap();
+		assert_eq!(
+			output.request_commitment,
+			genesis_request_commitment(&genesis_set, Some(&dr_key))
+		);
+
+		// The commitment is bound into the attested output hash.
+		let mut tampered = output.clone();
+		tampered.request_commitment = [0; 32];
+		assert_ne!(tampered.qos_hash(), output.qos_hash());
+
+		// Without a DR key.
+		let (output, _) =
+			boot_genesis(&mut protocol_state, &genesis_set, None).unwrap();
+		assert_eq!(
+			output.request_commitment,
+			genesis_request_commitment(&genesis_set, None)
+		);
 	}
 }

@@ -466,6 +466,7 @@ mod test {
 				test_message_ciphertext: vec![],
 				test_message_signature: vec![],
 				test_message: vec![],
+				request_commitment: [11; 32],
 			}),
 		};
 
@@ -520,6 +521,7 @@ mod test {
 				test_message_ciphertext: vec![],
 				test_message_signature: vec![],
 				test_message: vec![],
+				request_commitment: [11; 32],
 			}),
 		};
 
