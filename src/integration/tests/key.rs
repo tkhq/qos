@@ -255,7 +255,7 @@ fn generate_manifest_envelope() {
 					"--quorum-key-path",
 					QUORUM_KEY_PUB_PATH,
 					"--restart-policy",
-					"never",
+					"always",
 					"--alias",
 					alias,
 					"--unsafe-auto-confirm",
