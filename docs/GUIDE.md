@@ -262,15 +262,21 @@ qos_client approve-manifest \
   --share-set-dir manifest-dir/share-set \
   --patch-set-dir manifest-dir/manifest-set \
   --quorum-key-path genesis-dir/quorum_key.pub \
+  --restart-policy never \
+  --pivot-args '[]' \
+  --bridge-config '[]' \
+  --debug-mode false \
   --alias member1
 ```
 
 **Prompts** (answer 'y' to each):
+- Is this the correct manifest schema version: v1?
 - Is this the correct namespace name: production-v1?
 - Is this the correct namespace nonce: 1?
 - Is this the correct pivot restart policy: RestartPolicy::Never?
 - Are these the correct pivot args: []?
-- Is this the correct socket pool size: 1?
+- Is this the correct pivot debug mode: false?
+- Is this the correct pivot bridge configuration: []?
 
 **Output**: `member1-production-v1-1.approval`
 
@@ -290,6 +296,10 @@ qos_client approve-manifest \
   --share-set-dir manifest-dir/share-set \
   --patch-set-dir manifest-dir/manifest-set \
   --quorum-key-path genesis-dir/quorum_key.pub \
+  --restart-policy never \
+  --pivot-args '[]' \
+  --bridge-config '[]' \
+  --debug-mode false \
   --alias member2
 ```
 
@@ -531,15 +541,21 @@ qos_client approve-manifest \
   --share-set-dir manifest-dir/share-set \
   --patch-set-dir manifest-dir/manifest-set \
   --quorum-key-path genesis-dir/quorum_key.pub \
+  --restart-policy never \
+  --pivot-args '[]' \
+  --bridge-config '[]' \
+  --debug-mode false \
   --alias member1
 ```
 
 **Prompts** (answer 'y' to each):
+- Is this the correct manifest schema version: v1?
 - Is this the correct namespace name: production-v1?
 - Is this the correct namespace nonce: 2?
 - Is this the correct pivot restart policy: RestartPolicy::Never?
 - Are these the correct pivot args: []?
-- Is this the correct socket pool size: 1?
+- Is this the correct pivot debug mode: false?
+- Is this the correct pivot bridge configuration: []?
 
 **Output**: `member1-production-v1-2.approval`
 
@@ -556,6 +572,10 @@ qos_client approve-manifest \
   --share-set-dir manifest-dir/share-set \
   --patch-set-dir manifest-dir/manifest-set \
   --quorum-key-path genesis-dir/quorum_key.pub \
+  --restart-policy never \
+  --pivot-args '[]' \
+  --bridge-config '[]' \
+  --debug-mode false \
   --alias member2
 ```
 

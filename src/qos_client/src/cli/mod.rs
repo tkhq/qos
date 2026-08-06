@@ -716,6 +716,11 @@ impl Command {
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
 			.token(Self::patch_set_dir_optional_token())
+			.token(Self::restart_policy_token())
+			.token(Self::pivot_args_token())
+			.token(Self::bridge_config_token())
+			.token(Self::dns_resolvers_token())
+			.token(Self::debug_mode_token())
 			.token(Self::unsafe_auto_confirm_token())
 	}
 
@@ -1035,6 +1040,9 @@ impl ClientOpts {
 
 	fn pivot_args(&self) -> Vec<String> {
 		let v = self.parsed.single(PIVOT_ARGS).expect("required arg");
+		if let Ok(args) = serde_json::from_str::<Vec<String>>(v) {
+			return args;
+		}
 		let mut chars = v.chars();
 
 		assert_eq!(
@@ -1701,6 +1709,11 @@ mod handlers {
 			manifest_set_dir: opts.manifest_set_dir(),
 			share_set_dir: opts.share_set_dir(),
 			patch_set_dir: opts.patch_set_dir(),
+			restart_policy: opts.restart_policy(),
+			pivot_args: opts.pivot_args(),
+			bridge_config: opts.bridge_config(),
+			dns_resolvers: opts.dns_resolvers(),
+			debug_mode: opts.debug_mode(),
 			alias: opts.alias(),
 			unsafe_auto_confirm: opts.unsafe_auto_confirm(),
 		}) {
@@ -2003,5 +2016,44 @@ mod tests {
 		let opts = ClientOpts { parsed };
 		assert_eq!(opts.use_manifest_version(), 1);
 		assert_eq!(opts.patch_set_dir(), None);
+	}
+
+	#[test]
+	fn pivot_args_parses_json_array_with_comma() {
+		let mut args = generate_manifest_args();
+		let value =
+			args.iter().position(|arg| arg == "--pivot-args").unwrap() + 1;
+		args[value] = r#"["--hosts","a,b"]"#.to_string();
+		let (_, parsed) = CommandParser::<Command>::parse(&mut args).unwrap();
+
+		assert_eq!(
+			ClientOpts { parsed }.pivot_args(),
+			vec!["--hosts".to_string(), "a,b".to_string()]
+		);
+	}
+
+	#[test]
+	fn pivot_args_parses_json_array_with_empty_argument() {
+		let mut args = generate_manifest_args();
+		let value =
+			args.iter().position(|arg| arg == "--pivot-args").unwrap() + 1;
+		args[value] = r#"[""]"#.to_string();
+		let (_, parsed) = CommandParser::<Command>::parse(&mut args).unwrap();
+
+		assert_eq!(ClientOpts { parsed }.pivot_args(), vec![String::new()]);
+	}
+
+	#[test]
+	fn pivot_args_preserves_legacy_comma_syntax() {
+		let mut args = generate_manifest_args();
+		let value =
+			args.iter().position(|arg| arg == "--pivot-args").unwrap() + 1;
+		args[value] = "[--host,0.0.0.0]".to_string();
+		let (_, parsed) = CommandParser::<Command>::parse(&mut args).unwrap();
+
+		assert_eq!(
+			ClientOpts { parsed }.pivot_args(),
+			vec!["--host".to_string(), "0.0.0.0".to_string()]
+		);
 	}
 }

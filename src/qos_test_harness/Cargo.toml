@@ -24,6 +24,7 @@ qemu-ci = ["qemu-e2e"]
 qos_hex = { workspace = true }
 qos_core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 
@@ -31,7 +32,6 @@ tokio = { workspace = true, features = ["time"] }
 qos_crypto = { workspace = true }
 qos_nsm = { workspace = true }
 qos_p256 = { workspace = true }
-serde_json = { workspace = true }
 signed_echo = { path = "../signed_echo" }
 ureq = { workspace = true, features = ["json"] }
 
