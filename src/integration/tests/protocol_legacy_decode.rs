@@ -16,10 +16,14 @@ use qos_core::protocol::{
 use qos_core_legacy::protocol::{
 	ProtocolError as LegacyProtocolError,
 	msg::ProtocolMsg as LegacyProtocolMsg,
-	services::boot::{
-		Manifest as LegacyManifest, ManifestEnvelope as LegacyManifestEnvelope,
-		ManifestEnvelopeV0 as LegacyManifestEnvelopeV0,
-		ManifestV0 as LegacyManifestV0,
+	services::{
+		boot::{
+			Manifest as LegacyManifest,
+			ManifestEnvelope as LegacyManifestEnvelope,
+			ManifestEnvelopeV0 as LegacyManifestEnvelopeV0,
+			ManifestV0 as LegacyManifestV0,
+		},
+		genesis::GenesisOutput as LegacyGenesisOutput,
 	},
 };
 use qos_nsm::types::NsmResponse;
@@ -202,6 +206,40 @@ fn legacy_boot_genesis_variants_decode() {
 	.to_borsh_wire()
 	.unwrap();
 	assert!(LegacyProtocolMsg::try_from_slice(&resp_bytes).is_err());
+}
+
+#[test]
+fn legacy_boot_genesis_response_fails_closed_in_current_decoder() {
+	let legacy_nsm_response =
+		borsh::from_slice(&borsh::to_vec(&NsmResponse::LockPCR).unwrap())
+			.unwrap();
+	let legacy_output = LegacyGenesisOutput {
+		quorum_key: vec![3, 2, 1],
+		member_outputs: vec![],
+		recovery_permutations: vec![],
+		threshold: 2,
+		dr_key_wrapped_quorum_key: None,
+		quorum_key_hash: [22; 64],
+		test_message_ciphertext: vec![5; 8],
+		test_message_signature: vec![6; 8],
+		test_message: vec![7; 8],
+	};
+
+	// Persisted pre-commitment GenesisOutput bytes must not decode as the
+	// current type.
+	let legacy_output_bytes = borsh::to_vec(&legacy_output).unwrap();
+	assert!(GenesisOutput::try_from_slice(&legacy_output_bytes).is_err());
+
+	// Likewise, a complete response emitted by a legacy peer must fail current
+	// protocol decoding rather than silently accepting an unbound output.
+	let legacy_response = LegacyProtocolMsg::BootGenesisResponse {
+		nsm_response: legacy_nsm_response,
+		genesis_output: Box::new(legacy_output),
+	};
+	let legacy_response_bytes = borsh::to_vec(&legacy_response).unwrap();
+	assert!(
+		CurrentProtocolMsg::try_from_slice(&legacy_response_bytes).is_err()
+	);
 }
 
 #[test]
