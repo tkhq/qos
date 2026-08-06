@@ -21,7 +21,7 @@ use qos_core::protocol::{
 			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
 			VersionedManifestEnvelope,
 		},
-		genesis::{GenesisOutput, GenesisSet},
+		genesis::{GenesisOutput, GenesisSet, genesis_request_commitment},
 		key::EncryptedQuorumKey,
 	},
 };
@@ -508,8 +508,10 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		None
 	};
 
-	let req =
-		ProtocolMsg::BootGenesisRequest { set: genesis_set.clone(), dr_key };
+	let req = ProtocolMsg::BootGenesisRequest {
+		set: genesis_set.clone(),
+		dr_key: dr_key.clone(),
+	};
 	let (cose_sign1, genesis_output) = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::BootGenesisResponse {
 			nsm_response: NsmResponse::Attestation { document },
@@ -524,16 +526,14 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 
 	let qos_pcrs = extract_qos_pcrs(qos_release_dir_path);
 
-	// Sanity check the genesis output
+	// Check the genesis output against the exact request we sent.
 	assert!(
-		genesis_set.members.len() == genesis_output.member_outputs.len(),
-		"Output of genesis ceremony does not have same members as Genesis Set"
-	);
-	assert!(
-		genesis_output.member_outputs.iter().all(|member_out| genesis_set
-			.members
-			.contains(&member_out.share_set_member)),
-		"Output of genesis ceremony does not have same members as Genesis Set"
+		boot_genesis_programmatic_verifications(
+			&genesis_set,
+			dr_key.as_deref(),
+			&genesis_output,
+		),
+		"Output of genesis ceremony does not match the boot genesis request"
 	);
 
 	// Check the attestation document
@@ -606,6 +606,60 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	}
 
 	Ok(())
+}
+
+/// Programmatic verifications of a [`GenesisOutput`] against the exact boot
+/// genesis request (the [`GenesisSet`] and optional DR key) the caller sent.
+fn boot_genesis_programmatic_verifications(
+	genesis_set: &GenesisSet,
+	dr_key: Option<&[u8]>,
+	genesis_output: &GenesisOutput,
+) -> bool {
+	// The enclave commits to the exact request it received. Recompute the
+	// commitment from the request we sent and fail closed on mismatch. Since
+	// the commitment is bound into the attested output hash, this prevents a
+	// host from substituting the genesis set or DR key in the request.
+	if genesis_request_commitment(genesis_set, dr_key)
+		!= genesis_output.request_commitment
+	{
+		eprintln!(
+			"Genesis output request commitment does not match the boot genesis request"
+		);
+		return false;
+	}
+
+	// Defense in depth: the request fields echoed in the output must exactly
+	// match the request.
+	if genesis_output.threshold != genesis_set.threshold {
+		eprintln!(
+			"Genesis output threshold does not match the Genesis Set threshold"
+		);
+		return false;
+	}
+
+	// Exact member equality, including order.
+	if !genesis_output
+		.member_outputs
+		.iter()
+		.map(|member_out| &member_out.share_set_member)
+		.eq(genesis_set.members.iter())
+	{
+		eprintln!(
+			"Output of genesis ceremony does not have the exact members of the Genesis Set"
+		);
+		return false;
+	}
+
+	// A DR key wrapped quorum key must be present exactly when a DR key was
+	// requested.
+	if genesis_output.dr_key_wrapped_quorum_key.is_some() != dr_key.is_some() {
+		eprintln!(
+			"Genesis output DR key wrapped quorum key presence does not match the boot genesis request"
+		);
+		return false;
+	}
+
+	true
 }
 
 pub(crate) fn verify_genesis<P: AsRef<Path>>(
@@ -2623,6 +2677,215 @@ mod tests {
 		proxy_re_encrypt_share_human_verifications,
 		proxy_re_encrypt_share_programmatic_verifications,
 	};
+
+	mod boot_genesis_programmatic_verifications {
+		use qos_core::protocol::services::{
+			boot::QuorumMember,
+			genesis::{
+				GenesisMemberOutput, GenesisOutput, GenesisSet,
+				genesis_request_commitment,
+			},
+		};
+
+		use crate::cli::services::boot_genesis_programmatic_verifications;
+
+		const DR_KEY: &[u8] = &[9; 65];
+
+		fn test_set() -> GenesisSet {
+			let members = (1..=3u8)
+				.map(|i| QuorumMember {
+					alias: format!("member{i}"),
+					pub_key: vec![i; 33],
+				})
+				.collect();
+			GenesisSet { members, threshold: 2 }
+		}
+
+		/// Build the output an honest enclave would produce for the given
+		/// request (modulo cryptographic material, which is not checked by
+		/// the programmatic verifications).
+		fn output_for(
+			set: &GenesisSet,
+			dr_key: Option<&[u8]>,
+		) -> GenesisOutput {
+			GenesisOutput {
+				quorum_key: vec![1; 65],
+				member_outputs: set
+					.members
+					.iter()
+					.map(|member| GenesisMemberOutput {
+						share_set_member: member.clone(),
+						encrypted_quorum_key_share: vec![1, 2, 3],
+						share_hash: [1; 64],
+					})
+					.collect(),
+				recovery_permutations: vec![],
+				threshold: set.threshold,
+				dr_key_wrapped_quorum_key: dr_key.map(|_| vec![4; 32]),
+				quorum_key_hash: [2; 64],
+				test_message_ciphertext: vec![],
+				test_message_signature: vec![],
+				test_message: vec![],
+				request_commitment: genesis_request_commitment(set, dr_key),
+			}
+		}
+
+		#[test]
+		fn accepts_output_matching_the_request() {
+			let set = test_set();
+
+			let output = output_for(&set, None);
+			assert!(boot_genesis_programmatic_verifications(
+				&set, None, &output
+			));
+
+			let output = output_for(&set, Some(DR_KEY));
+			assert!(boot_genesis_programmatic_verifications(
+				&set,
+				Some(DR_KEY),
+				&output
+			));
+		}
+
+		#[test]
+		fn rejects_output_for_an_altered_threshold() {
+			// The host lowered the threshold in the request; the enclave
+			// honestly executed the altered request.
+			let set = test_set();
+			let mut altered = set.clone();
+			altered.threshold = 1;
+
+			let output = output_for(&altered, None);
+			assert!(!boot_genesis_programmatic_verifications(
+				&set, None, &output
+			));
+		}
+
+		#[test]
+		fn rejects_tampered_output_threshold() {
+			let set = test_set();
+			let mut output = output_for(&set, None);
+			output.threshold = 1;
+
+			assert!(!boot_genesis_programmatic_verifications(
+				&set, None, &output
+			));
+		}
+
+		#[test]
+		fn rejects_output_for_a_duplicate_member_substitution() {
+			// The host replaced a member with a duplicate of another member,
+			// keeping the member count the same; the enclave honestly
+			// executed the altered request.
+			let set = test_set();
+			let mut altered = set.clone();
+			altered.members[1] = altered.members[0].clone();
+
+			let output = output_for(&altered, None);
+			assert!(!boot_genesis_programmatic_verifications(
+				&set, None, &output
+			));
+		}
+
+		#[test]
+		fn rejects_output_for_a_substituted_member() {
+			let set = test_set();
+			let mut altered = set.clone();
+			altered.members[1] = QuorumMember {
+				alias: "attacker".to_string(),
+				pub_key: vec![66; 33],
+			};
+
+			let output = output_for(&altered, None);
+			assert!(!boot_genesis_programmatic_verifications(
+				&set, None, &output
+			));
+		}
+
+		#[test]
+		fn rejects_reordered_member_outputs() {
+			let set = test_set();
+			let mut output = output_for(&set, None);
+			output.member_outputs.swap(0, 1);
+
+			assert!(!boot_genesis_programmatic_verifications(
+				&set, None, &output
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_request_commitment() {
+			let set = test_set();
+			let mut output = output_for(&set, None);
+			output.request_commitment[0] ^= 1;
+
+			assert!(!boot_genesis_programmatic_verifications(
+				&set, None, &output
+			));
+		}
+
+		#[test]
+		fn rejects_output_for_a_stripped_dr_key() {
+			// The caller requested a DR key but the host stripped it from
+			// the request; the enclave honestly executed the altered
+			// request.
+			let set = test_set();
+			let output = output_for(&set, None);
+
+			assert!(!boot_genesis_programmatic_verifications(
+				&set,
+				Some(DR_KEY),
+				&output
+			));
+		}
+
+		#[test]
+		fn rejects_output_for_an_injected_dr_key() {
+			// The caller requested no DR key but the host injected one into
+			// the request; the enclave honestly executed the altered
+			// request.
+			let set = test_set();
+			let output = output_for(&set, Some(DR_KEY));
+
+			assert!(!boot_genesis_programmatic_verifications(
+				&set, None, &output
+			));
+		}
+
+		#[test]
+		fn rejects_output_for_a_swapped_dr_key() {
+			// The host swapped the requested DR key for its own.
+			let set = test_set();
+			let output = output_for(&set, Some(&[13; 65]));
+
+			assert!(!boot_genesis_programmatic_verifications(
+				&set,
+				Some(DR_KEY),
+				&output
+			));
+		}
+
+		#[test]
+		fn rejects_dr_wrapped_quorum_key_presence_mismatch() {
+			// Output tampered so the wrapped key presence does not match
+			// what was requested, while the commitment still matches.
+			let set = test_set();
+
+			let mut output = output_for(&set, None);
+			output.dr_key_wrapped_quorum_key = Some(vec![4; 32]);
+			assert!(!boot_genesis_programmatic_verifications(
+				&set, None, &output
+			));
+
+			let mut output = output_for(&set, Some(DR_KEY));
+			output.dr_key_wrapped_quorum_key = None;
+			assert!(!boot_genesis_programmatic_verifications(
+				&set,
+				Some(DR_KEY),
+				&output
+			));
+		}
+	}
 
 	struct Setup {
 		manifest: VersionedManifest,
