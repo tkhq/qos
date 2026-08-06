@@ -176,6 +176,8 @@ async fn standard_boot_e2e() {
 				"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
 				"--restart-policy",
 				"never",
+				"--pivot-args",
+				"[--msg,testing420]",
 				"--alias",
 				alias,
 			])

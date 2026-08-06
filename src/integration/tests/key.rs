@@ -256,6 +256,8 @@ fn generate_manifest_envelope() {
 					QUORUM_KEY_PUB_PATH,
 					"--restart-policy",
 					"always",
+					"--pivot-args",
+					&pivot_args,
 					"--alias",
 					alias,
 					"--unsafe-auto-confirm",

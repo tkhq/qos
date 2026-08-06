@@ -717,6 +717,7 @@ impl Command {
 			.token(Self::share_set_dir_token())
 			.token(Self::patch_set_dir_optional_token())
 			.token(Self::restart_policy_token())
+			.token(Self::pivot_args_token())
 			.token(Self::bridge_config_token())
 			.token(Self::dns_resolvers_token())
 			.token(Self::debug_mode_token())
@@ -1706,6 +1707,7 @@ mod handlers {
 			share_set_dir: opts.share_set_dir(),
 			patch_set_dir: opts.patch_set_dir(),
 			restart_policy: opts.restart_policy(),
+			pivot_args: opts.pivot_args(),
 			bridge_config: opts.bridge_config(),
 			dns_resolvers: opts.dns_resolvers(),
 			debug_mode: opts.debug_mode(),

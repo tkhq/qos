@@ -228,6 +228,8 @@ async fn qos_bridge_works() {
 				"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
 				"--restart-policy",
 				"never",
+				"--pivot-args",
+				&pivot_args,
 				"--bridge-config",
 				&format!("[{{\"type\": \"server\", \"port\": {app_host_port}, \"host\": \"0.0.0.0\"}}]"),
 				"--alias",

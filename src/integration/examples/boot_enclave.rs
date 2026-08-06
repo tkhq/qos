@@ -168,6 +168,8 @@ async fn main() {
 				"./mock/namespaces/quit-coding-to-vape/quorum_key.pub",
 				"--restart-policy",
 				"never",
+				"--pivot-args",
+				&pivot_args,
 				"--debug-mode",
 				"true",
 				"--bridge-config",

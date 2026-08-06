@@ -955,6 +955,7 @@ pub(crate) struct ApproveManifestArgs<P: AsRef<Path>> {
 	pub share_set_dir: P,
 	pub patch_set_dir: Option<P>,
 	pub restart_policy: RestartPolicy,
+	pub pivot_args: Vec<String>,
 	pub bridge_config: Vec<BridgeConfig>,
 	pub dns_resolvers: Option<Vec<IpAddr>>,
 	pub debug_mode: bool,
@@ -969,6 +970,8 @@ pub(crate) struct RuntimeExpectations {
 	pub pivot_hash: Vec<u8>,
 	/// Expected pivot restart policy.
 	pub restart_policy: RestartPolicy,
+	/// Expected pivot command-line arguments, in order.
+	pub pivot_args: Vec<String>,
 	/// Expected pivot bridge configuration.
 	pub bridge_config: Vec<BridgeConfig>,
 	/// Expected DNS resolvers; `None` when the manifest is expected to have
@@ -993,6 +996,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		share_set_dir,
 		patch_set_dir,
 		restart_policy,
+		pivot_args,
 		bridge_config,
 		dns_resolvers,
 		debug_mode,
@@ -1021,6 +1025,7 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		&RuntimeExpectations {
 			pivot_hash: extract_pivot_hash(pivot_hash_path),
 			restart_policy,
+			pivot_args,
 			bridge_config,
 			dns_resolvers,
 			debug_mode,
@@ -1126,6 +1131,12 @@ fn approve_manifest_programmatic_verifications(
 	// Verify the pivot restart policy
 	if manifest.restart() != runtime.restart_policy {
 		eprintln!("Restart policy does not match");
+		return false;
+	}
+
+	// Verify the ordered pivot command-line arguments
+	if manifest.args() != runtime.pivot_args {
+		eprintln!("Pivot arguments do not match");
 		return false;
 	}
 
@@ -2733,6 +2744,7 @@ mod tests {
 		RuntimeExpectations {
 			pivot_hash: pivot_hash.to_vec(),
 			restart_policy: RestartPolicy::Never,
+			pivot_args: vec!["--option1".into(), "argument".into()],
 			bridge_config: vec![],
 			debug_mode: false,
 			dns_resolvers: None,
@@ -3243,6 +3255,33 @@ mod tests {
 
 			let mut runtime = matching_runtime(&pivot_hash);
 			runtime.restart_policy = RestartPolicy::Always;
+
+			assert!(!approve_manifest_programmatic_verifications(
+				&manifest,
+				&manifest_set,
+				&share_set,
+				Some(&patch_set),
+				&nitro_config,
+				&runtime,
+				&quorum_key,
+			));
+		}
+
+		#[test]
+		fn rejects_mismatched_pivot_args() {
+			let Setup {
+				manifest,
+				manifest_set,
+				share_set,
+				patch_set,
+				nitro_config,
+				pivot_hash,
+				quorum_key,
+				..
+			} = setup();
+
+			let mut runtime = matching_runtime(&pivot_hash);
+			runtime.pivot_args = vec!["argument".into(), "--option1".into()];
 
 			assert!(!approve_manifest_programmatic_verifications(
 				&manifest,
