@@ -1256,14 +1256,17 @@ where
 
 	// Check DNS resolvers for manifests that support DNS configuration
 	if let VersionedManifest::V2(v2_manifest) = manifest {
-		let resolvers = v2_manifest
-			.dns
-			.as_ref()
-			.map(|dns| dns.resolvers.clone())
-			.unwrap_or_default();
-		let prompt = format!(
-			"Are these the correct DNS resolvers:\n{resolvers:?}?\n(y/n)"
-		);
+		let prompt = match &v2_manifest.dns {
+			None =>
+				"Is this the correct DNS configuration: absent? (y/n)".to_string(),
+			Some(dns) if dns.resolvers.is_empty() =>
+				"Is this the correct DNS configuration: configured with no resolvers? (y/n)"
+					.to_string(),
+			Some(dns) => format!(
+				"Are these the correct DNS resolvers:\n{:?}?\n(y/n)",
+				dns.resolvers
+			),
+		};
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
 		}
@@ -3654,6 +3657,55 @@ mod tests {
 			assert_eq!(output[11], "Are these the correct DNS resolvers:");
 			assert_eq!(output[12], "[1.1.1.1]?");
 			assert_eq!(output[13], "(y/n)");
+		}
+
+		#[test]
+		fn prompts_absent_dns_configuration_for_v2_manifest() {
+			let Setup { manifest, .. } = setup();
+			let manifest = v2_manifest_from(&manifest, None);
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nyes\nyes\nyes\nyes\nyes\nyes\nno".as_bytes();
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(!approve_manifest_human_verifications(
+				&manifest,
+				&mut prompter
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.split('\n').collect();
+			assert_eq!(
+				output[11],
+				"Is this the correct DNS configuration: absent? (y/n)"
+			);
+		}
+
+		#[test]
+		fn prompts_configured_empty_dns_for_v2_manifest() {
+			let Setup { manifest, .. } = setup();
+			let manifest = v2_manifest_from(
+				&manifest,
+				Some(DnsConfig { resolvers: vec![] }),
+			);
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nyes\nyes\nyes\nyes\nyes\nyes\nno".as_bytes();
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(!approve_manifest_human_verifications(
+				&manifest,
+				&mut prompter
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.split('\n').collect();
+			assert_eq!(
+				output[11],
+				"Is this the correct DNS configuration: configured with no resolvers? (y/n)"
+			);
 		}
 
 		#[test]
