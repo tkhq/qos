@@ -716,6 +716,10 @@ impl Command {
 			.token(Self::manifest_set_dir_token())
 			.token(Self::share_set_dir_token())
 			.token(Self::patch_set_dir_optional_token())
+			.token(Self::restart_policy_token())
+			.token(Self::bridge_config_token())
+			.token(Self::dns_resolvers_token())
+			.token(Self::debug_mode_token())
 			.token(Self::unsafe_auto_confirm_token())
 	}
 
@@ -1701,6 +1705,10 @@ mod handlers {
 			manifest_set_dir: opts.manifest_set_dir(),
 			share_set_dir: opts.share_set_dir(),
 			patch_set_dir: opts.patch_set_dir(),
+			restart_policy: opts.restart_policy(),
+			bridge_config: opts.bridge_config(),
+			dns_resolvers: opts.dns_resolvers(),
+			debug_mode: opts.debug_mode(),
 			alias: opts.alias(),
 			unsafe_auto_confirm: opts.unsafe_auto_confirm(),
 		}) {

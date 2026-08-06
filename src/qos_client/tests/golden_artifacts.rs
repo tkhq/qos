@@ -383,6 +383,12 @@ impl Fixture {
 			self.quorum_key_path.to_str().unwrap(),
 			"--secret-path",
 			self.secret_path.to_str().unwrap(),
+			"--restart-policy",
+			"always",
+			"--debug-mode",
+			"true",
+			"--bridge-config",
+			"[{\"type\":\"server\",\"port\":3000,\"host\":\"0.0.0.0\"}]",
 			"--unsafe-auto-confirm",
 		]));
 
@@ -593,6 +599,14 @@ fn v2_commands_generate_approve_and_envelope_use_json_hash() {
 		fixture.quorum_key_path.to_str().unwrap(),
 		"--secret-path",
 		fixture.secret_path.to_str().unwrap(),
+		"--restart-policy",
+		"always",
+		"--debug-mode",
+		"true",
+		"--bridge-config",
+		"[{\"type\":\"server\",\"port\":3000,\"host\":\"0.0.0.0\"}]",
+		"--dns-resolvers",
+		"[1.1.1.1,2606:4700:4700::1111]",
 		"--unsafe-auto-confirm",
 	]));
 
@@ -691,6 +705,12 @@ fn v2_commands_json_to_borsh_rejected() {
 		fixture.quorum_key_path.to_str().unwrap(),
 		"--secret-path",
 		fixture.secret_path.to_str().unwrap(),
+		"--restart-policy",
+		"always",
+		"--debug-mode",
+		"true",
+		"--bridge-config",
+		"[{\"type\":\"server\",\"port\":3000,\"host\":\"0.0.0.0\"}]",
 		"--unsafe-auto-confirm",
 	]));
 
