@@ -242,6 +242,13 @@ impl VersionedManifest {
 	/// Returns an [`std::io::Error`] when the bytes cannot be decoded as any
 	/// supported manifest schema or encoding.
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, Error> {
+		if let Ok(value) = serde_json::from_slice::<serde_json::Value>(buf)
+			&& value.get("version").is_some()
+		{
+			return serde_json::from_value::<ManifestV2>(value)
+				.map(Self::V2)
+				.map_err(|e| Error::other(e.to_string()));
+		}
 		if let Ok(manifest) = serde_json::from_slice::<ManifestV2>(buf) {
 			return Ok(Self::V2(manifest));
 		}
@@ -465,6 +472,16 @@ impl VersionedManifestEnvelope {
 	/// Returns an [`std::io::Error`] when the bytes cannot be decoded as any
 	/// supported manifest envelope schema or encoding.
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, Error> {
+		if let Ok(value) = serde_json::from_slice::<serde_json::Value>(buf)
+			&& value
+				.get("manifest")
+				.and_then(|manifest| manifest.get("version"))
+				.is_some()
+		{
+			return serde_json::from_value::<ManifestEnvelopeV2>(value)
+				.map(Self::V2)
+				.map_err(|e| Error::other(e.to_string()));
+		}
 		if let Ok(envelope) = serde_json::from_slice::<ManifestEnvelopeV2>(buf)
 		{
 			return Ok(Self::V2(envelope));
@@ -723,10 +740,12 @@ mod tests {
 	#[test]
 	fn v2_manifest_with_non_v2_version_tag_is_rejected() {
 		let pair = P256Pair::generate().unwrap();
+		let member = sample_member(&pair);
 		let mut value =
-			serde_json::to_value(sample_v2_manifest(sample_member(&pair)))
-				.unwrap();
+			serde_json::to_value(sample_v2_manifest(member.clone())).unwrap();
 		value["version"] = serde_json::json!("v1");
+		value["patchSet"] =
+			serde_json::to_value(sample_v1_manifest(member).patch_set).unwrap();
 
 		assert!(serde_json::from_value::<ManifestV2>(value.clone()).is_err());
 
@@ -737,13 +756,16 @@ mod tests {
 	#[test]
 	fn v2_envelope_with_non_v2_version_tag_is_rejected() {
 		let pair = P256Pair::generate().unwrap();
+		let member = sample_member(&pair);
 		let envelope = ManifestEnvelopeV2 {
-			manifest: sample_v2_manifest(sample_member(&pair)),
+			manifest: sample_v2_manifest(member.clone()),
 			manifest_set_approvals: vec![],
 			share_set_approvals: vec![],
 		};
 		let mut value = serde_json::to_value(&envelope).unwrap();
 		value["manifest"]["version"] = serde_json::json!("v1");
+		value["manifest"]["patchSet"] =
+			serde_json::to_value(sample_v1_manifest(member).patch_set).unwrap();
 
 		assert!(
 			serde_json::from_value::<ManifestEnvelopeV2>(value.clone())
