@@ -519,22 +519,15 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		} => (document, genesis_output),
 		r => panic!("Unexpected response: {r:?}"),
 	};
-	let quorum_key =
-		P256Public::from_bytes(&genesis_output.quorum_key).unwrap();
+	let quorum_key = validate_boot_genesis_output(
+		&genesis_set,
+		dr_key.as_deref(),
+		&genesis_output,
+	);
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation, None);
 
 	let qos_pcrs = extract_qos_pcrs(qos_release_dir_path);
-
-	// Check the genesis output against the exact request we sent.
-	assert!(
-		boot_genesis_programmatic_verifications(
-			&genesis_set,
-			dr_key.as_deref(),
-			&genesis_output,
-		),
-		"Output of genesis ceremony does not match the boot genesis request"
-	);
 
 	// Check the attestation document
 	if unsafe_skip_attestation {
@@ -606,6 +599,23 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 	}
 
 	Ok(())
+}
+
+fn validate_boot_genesis_output(
+	genesis_set: &GenesisSet,
+	dr_key: Option<&[u8]>,
+	genesis_output: &GenesisOutput,
+) -> P256Public {
+	assert!(
+		boot_genesis_programmatic_verifications(
+			genesis_set,
+			dr_key,
+			genesis_output,
+		),
+		"Output of genesis ceremony does not match the boot genesis request"
+	);
+
+	P256Public::from_bytes(&genesis_output.quorum_key).unwrap()
 }
 
 /// Programmatic verifications of a [`GenesisOutput`] against the exact boot
@@ -2687,7 +2697,10 @@ mod tests {
 			},
 		};
 
-		use crate::cli::services::boot_genesis_programmatic_verifications;
+		use crate::cli::services::{
+			boot_genesis_programmatic_verifications,
+			validate_boot_genesis_output,
+		};
 
 		const DR_KEY: &[u8] = &[9; 65];
 
@@ -2745,6 +2758,19 @@ mod tests {
 				Some(DR_KEY),
 				&output
 			));
+		}
+
+		#[test]
+		#[should_panic(
+			expected = "Output of genesis ceremony does not match the boot genesis request"
+		)]
+		fn rejects_request_mismatch_before_parsing_untrusted_quorum_key() {
+			let set = test_set();
+			let mut output = output_for(&set, None);
+			output.request_commitment[0] ^= 1;
+			output.quorum_key = vec![0];
+
+			validate_boot_genesis_output(&set, None, &output);
 		}
 
 		#[test]
