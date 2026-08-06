@@ -164,6 +164,14 @@ pub enum Error {
 	ManifestBuilder(ManifestBuilderError),
 	/// The manifest schema is not supported by this client operation.
 	UnsupportedManifestVersion,
+	/// The PCR3 derived from the local PCR3 preimage file does not match the
+	/// PCR3 committed to in the manifest.
+	Pcr3PreimageDoesNotMatchManifest {
+		/// Hex encoded PCR3 from the manifest.
+		manifest_pcr3: String,
+		/// Hex encoded PCR3 derived from the local preimage file.
+		preimage_pcr3: String,
+	},
 }
 
 impl From<serde_json::Error> for Error {
@@ -1437,6 +1445,14 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	if unsafe_skip_attestation {
 		println!("**WARNING:** Skipping attestation document verification.");
 	} else {
+		// Read the PCR3 preimage file exactly once and check that the PCR3
+		// it derives matches the PCR3 committed to in the manifest. The
+		// manifest is the trust anchor for attestation verification below.
+		check_pcr3_preimage_against_manifest(
+			&find_pcr3(&pcr3_preimage_path),
+			&manifest.enclave().pcr3,
+		)?;
+
 		verify_attestation_doc_against_manifest_setup(
 			&attestation_doc,
 			ManifestAttestationInput {
@@ -1444,7 +1460,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 				pcr0: &manifest.enclave().pcr0,
 				pcr1: &manifest.enclave().pcr1,
 				pcr2: &manifest.enclave().pcr2,
-				pcr3: &extract_pcr3(pcr3_preimage_path),
+				pcr3: &manifest.enclave().pcr3,
 			},
 		)?;
 
@@ -1537,8 +1553,19 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 	let encrypted_share = std::fs::read(share_path)
 		.map_err(|e| Error::ReadShare(e.to_string()))?;
 
+	// Read the PCR3 preimage file exactly once; the same value is used for
+	// the check against the manifest here and the human verification prompts
+	// below so the two cannot diverge.
 	let pcr3_preimage = find_pcr3(&pcr3_preimage_path);
 	let manifest = manifest_envelope.clone().manifest();
+
+	// Check that the PCR3 derived from the preimage file matches the PCR3
+	// committed to in the manifest. The manifest, whose approvals are
+	// verified below, is the trust anchor for attestation verification.
+	check_pcr3_preimage_against_manifest(
+		&pcr3_preimage,
+		&manifest.enclave().pcr3,
+	)?;
 
 	// Verify the attestation doc matches up with the pcrs in the manifest
 	if unsafe_skip_attestation {
@@ -1551,7 +1578,7 @@ pub(crate) fn proxy_re_encrypt_share<P: AsRef<Path>>(
 				pcr0: &manifest.enclave().pcr0,
 				pcr1: &manifest.enclave().pcr1,
 				pcr2: &manifest.enclave().pcr2,
-				pcr3: &extract_pcr3(pcr3_preimage_path),
+				pcr3: &manifest.enclave().pcr3,
 			},
 		)?;
 	}
@@ -2481,9 +2508,8 @@ fn find_pcr3<P: AsRef<Path>>(file_path: P) -> String {
 	lines.remove(0)
 }
 
-fn extract_pcr3<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
-	let role_arn = find_pcr3(file_path);
-
+/// Derive PCR3 from an IAM role ARN preimage.
+fn pcr3_from_preimage(role_arn: &str) -> Vec<u8> {
 	let preimage = {
 		// Pad preimage with 48 bytes
 		let mut preimage = [0u8; 48].to_vec();
@@ -2492,6 +2518,27 @@ fn extract_pcr3<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
 	};
 
 	sha_384(&preimage).to_vec()
+}
+
+fn extract_pcr3<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
+	pcr3_from_preimage(&find_pcr3(file_path))
+}
+
+/// Check that the PCR3 derived from `pcr3_preimage` matches the PCR3
+/// committed to in the manifest. Fails closed on mismatch.
+fn check_pcr3_preimage_against_manifest(
+	pcr3_preimage: &str,
+	manifest_pcr3: &[u8],
+) -> Result<(), Error> {
+	let preimage_pcr3 = pcr3_from_preimage(pcr3_preimage);
+	if preimage_pcr3 != manifest_pcr3 {
+		return Err(Error::Pcr3PreimageDoesNotMatchManifest {
+			manifest_pcr3: qos_hex::encode(manifest_pcr3),
+			preimage_pcr3: qos_hex::encode(&preimage_pcr3),
+		});
+	}
+
+	Ok(())
 }
 
 fn extract_pivot_hash<P: AsRef<Path>>(file_path: P) -> Vec<u8> {
@@ -3474,6 +3521,47 @@ mod tests {
 					"Please answer with either \"yes\" (y) or \"no\" (n)",
 				]
 			);
+		}
+	}
+
+	mod pcr3_preimage_verification {
+		/// Role ARN in `integration/mock/namespaces/pcr3-preimage.txt`.
+		const ROLE_ARN: &str = "arn:aws:iam::123456789012:role/Webserver";
+		/// PCR3 corresponding to [`ROLE_ARN`] (`integration::PCR3`).
+		const EXPECTED_PCR3_HEX: &str = "78fce75db17cd4e0a3fb8dad3ad128ca5e77edbb2b2c7f75329dccd99aa5f6ef4fc1f1a452e315b9e98f9e312e6921e6";
+
+		#[test]
+		fn pcr3_from_preimage_derives_expected_pcr3() {
+			assert_eq!(
+				super::super::pcr3_from_preimage(ROLE_ARN),
+				qos_hex::decode(EXPECTED_PCR3_HEX).unwrap()
+			);
+		}
+
+		#[test]
+		fn check_pcr3_preimage_against_manifest_accepts_match() {
+			let manifest_pcr3 = super::super::pcr3_from_preimage(ROLE_ARN);
+			assert!(
+				super::super::check_pcr3_preimage_against_manifest(
+					ROLE_ARN,
+					&manifest_pcr3
+				)
+				.is_ok()
+			);
+		}
+
+		#[test]
+		fn check_pcr3_preimage_against_manifest_rejects_mismatch() {
+			let manifest_pcr3 = vec![4u8; 48];
+			let err = super::super::check_pcr3_preimage_against_manifest(
+				ROLE_ARN,
+				&manifest_pcr3,
+			)
+			.unwrap_err();
+			assert!(matches!(
+				err,
+				super::super::Error::Pcr3PreimageDoesNotMatchManifest { .. }
+			));
 		}
 	}
 
