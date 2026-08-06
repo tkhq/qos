@@ -116,6 +116,7 @@ fn sample_genesis_output() -> GenesisOutput {
 		test_message_ciphertext: vec![5; 8],
 		test_message_signature: vec![6; 8],
 		test_message: vec![7; 8],
+		request_commitment: [8; 32],
 	}
 }
 
@@ -191,11 +192,16 @@ fn legacy_boot_genesis_variants_decode() {
 	});
 	assert!(matches!(req, LegacyProtocolMsg::BootGenesisRequest { .. }));
 
-	let resp = decode_legacy(CurrentProtocolMsg::BootGenesisResponse {
+	// `GenesisOutput` gained a request commitment field: legacy peers must
+	// fail closed when decoding current genesis responses instead of
+	// silently accepting an output they cannot fully verify.
+	let resp_bytes = CurrentProtocolMsg::BootGenesisResponse {
 		nsm_response: NsmResponse::LockPCR,
 		genesis_output: Box::new(sample_genesis_output()),
-	});
-	assert!(matches!(resp, LegacyProtocolMsg::BootGenesisResponse { .. }));
+	}
+	.to_borsh_wire()
+	.unwrap();
+	assert!(LegacyProtocolMsg::try_from_slice(&resp_bytes).is_err());
 }
 
 #[test]
