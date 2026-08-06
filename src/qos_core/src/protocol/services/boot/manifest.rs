@@ -225,6 +225,16 @@ impl VersionedManifest {
 		}
 	}
 
+	/// Return the human readable schema version label for this manifest.
+	#[must_use]
+	pub const fn version_label(&self) -> &'static str {
+		match self {
+			Self::V2(_) => "v2",
+			Self::V1(_) => "v1",
+			Self::V0(_) => "v0",
+		}
+	}
+
 	/// Read a manifest while preserving the recognized schema version.
 	///
 	/// # Errors
@@ -708,6 +718,63 @@ mod tests {
 		assert!(matches!(decoded, VersionedManifestEnvelope::V2(_)));
 		assert_eq!(decoded.manifest_hash(), manifest_hash);
 		assert!(decoded.check_approvals().is_ok());
+	}
+
+	#[test]
+	fn v2_manifest_with_non_v2_version_tag_is_rejected() {
+		let pair = P256Pair::generate().unwrap();
+		let mut value =
+			serde_json::to_value(sample_v2_manifest(sample_member(&pair)))
+				.unwrap();
+		value["version"] = serde_json::json!("v1");
+
+		assert!(serde_json::from_value::<ManifestV2>(value.clone()).is_err());
+
+		let bytes = serde_json::to_vec(&value).unwrap();
+		assert!(VersionedManifest::try_from_slice_compat(&bytes).is_err());
+	}
+
+	#[test]
+	fn v2_envelope_with_non_v2_version_tag_is_rejected() {
+		let pair = P256Pair::generate().unwrap();
+		let envelope = ManifestEnvelopeV2 {
+			manifest: sample_v2_manifest(sample_member(&pair)),
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		};
+		let mut value = serde_json::to_value(&envelope).unwrap();
+		value["manifest"]["version"] = serde_json::json!("v1");
+
+		assert!(
+			serde_json::from_value::<ManifestEnvelopeV2>(value.clone())
+				.is_err()
+		);
+
+		let bytes = serde_json::to_vec(&value).unwrap();
+		assert!(
+			VersionedManifestEnvelope::try_from_slice_compat(&bytes).is_err()
+		);
+	}
+
+	#[test]
+	fn version_label_reports_embedded_schema() {
+		let pair = P256Pair::generate().unwrap();
+		let member = sample_member(&pair);
+
+		assert_eq!(
+			VersionedManifest::V2(sample_v2_manifest(member.clone()))
+				.version_label(),
+			"v2"
+		);
+		assert_eq!(
+			VersionedManifest::V1(sample_v1_manifest(member.clone()))
+				.version_label(),
+			"v1"
+		);
+		assert_eq!(
+			VersionedManifest::V0(sample_v0_manifest(member)).version_label(),
+			"v0"
+		);
 	}
 
 	#[test]

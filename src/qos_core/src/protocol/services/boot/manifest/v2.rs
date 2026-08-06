@@ -12,6 +12,25 @@ use crate::protocol::{
 
 use super::ManifestVersion;
 
+/// Deserialize the embedded schema version, rejecting anything other than
+/// [`ManifestVersion::V2`] so v2-shaped payloads with a different version tag
+/// cannot be classified as v2.
+fn deserialize_v2_version<'de, D>(
+	deserializer: D,
+) -> Result<ManifestVersion, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let version =
+		<ManifestVersion as serde::Deserialize>::deserialize(deserializer)?;
+	if version != ManifestVersion::V2 {
+		return Err(<D::Error as serde::de::Error>::custom(
+			"manifest v2 requires version \"v2\"",
+		));
+	}
+	Ok(version)
+}
+
 /// DNS resolver configuration (v2).
 #[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,6 +65,7 @@ pub struct PivotConfigV2 {
 #[serde(rename_all = "camelCase")]
 pub struct ManifestV2 {
 	/// Manifest schema version.
+	#[serde(deserialize_with = "deserialize_v2_version")]
 	pub version: ManifestVersion,
 	/// Namespace this manifest belongs too.
 	pub namespace: Namespace,
