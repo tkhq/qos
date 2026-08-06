@@ -1571,6 +1571,29 @@ fn manifest_approval_runtime_args(
 	args
 }
 
+fn command_with_args(bin: &Path, args: Vec<OsString>) -> Command {
+	let mut command = Command::new(bin);
+	command.args(args);
+	command
+}
+
+fn run_runner_command(
+	bin: &Path,
+	args: Vec<OsString>,
+) -> Result<(), RunnerError> {
+	let mut command = command_with_args(bin, args);
+	let debug = format!("{command:?}");
+	let output = command.output()?;
+	if output.status.success() {
+		return Ok(());
+	}
+	Err(RunnerError::Command(format!(
+		"command failed: {debug}; status: {}; stderr: {}",
+		output.status,
+		String::from_utf8_lossy(&output.stderr)
+	)))
+}
+
 #[cfg(test)]
 mod tests {
 	use qos_core::protocol::services::boot::{
@@ -1656,27 +1679,4 @@ mod tests {
 			.map(OsString::from)
 		);
 	}
-}
-
-fn command_with_args(bin: &Path, args: Vec<OsString>) -> Command {
-	let mut command = Command::new(bin);
-	command.args(args);
-	command
-}
-
-fn run_runner_command(
-	bin: &Path,
-	args: Vec<OsString>,
-) -> Result<(), RunnerError> {
-	let mut command = command_with_args(bin, args);
-	let debug = format!("{command:?}");
-	let output = command.output()?;
-	if output.status.success() {
-		return Ok(());
-	}
-	Err(RunnerError::Command(format!(
-		"command failed: {debug}; status: {}; stderr: {}",
-		output.status,
-		String::from_utf8_lossy(&output.stderr)
-	)))
 }
