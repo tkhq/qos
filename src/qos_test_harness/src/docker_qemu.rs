@@ -1546,7 +1546,9 @@ fn manifest_approval_runtime_args(
 		"--restart-policy".into(),
 		restart.into(),
 		"--pivot-args".into(),
-		format!("[{}]", manifest.args().join(",")).into(),
+		serde_json::to_string(manifest.args())
+			.expect("pivot arguments are JSON serializable")
+			.into(),
 		"--bridge-config".into(),
 		serde_json::to_string(manifest.bridge_config())
 			.expect("bridge configuration is JSON serializable")
@@ -1614,7 +1616,7 @@ mod tests {
 			})
 			.pivot_hash([1; 32])
 			.restart_policy(RestartPolicy::Always)
-			.pivot_args(vec!["--host".into(), "0.0.0.0".into()])
+			.pivot_args(vec!["--hosts".into(), "a,b".into(), String::new()])
 			.bridge_config(vec![BridgeConfig::Server {
 				port: 3000,
 				host: "0.0.0.0".into(),
@@ -1645,13 +1647,24 @@ mod tests {
 				"--restart-policy",
 				"always",
 				"--pivot-args",
-				"[--host,0.0.0.0]",
+				r#"["--hosts","a,b",""]"#,
 				"--bridge-config",
 				"[{\"type\":\"server\",\"port\":3000,\"host\":\"0.0.0.0\"}]",
 				"--debug-mode",
 				"true",
 			]
 			.map(OsString::from)
+		);
+		let pivot_args = manifest_approval_runtime_args(&manifest);
+		let value =
+			pivot_args.iter().position(|arg| arg == "--pivot-args").unwrap()
+				+ 1;
+		assert_eq!(
+			serde_json::from_str::<Vec<String>>(
+				pivot_args[value].to_str().unwrap()
+			)
+			.unwrap(),
+			manifest.args()
 		);
 	}
 
@@ -1668,7 +1681,7 @@ mod tests {
 				"--restart-policy",
 				"always",
 				"--pivot-args",
-				"[--host,0.0.0.0]",
+				r#"["--hosts","a,b",""]"#,
 				"--bridge-config",
 				"[{\"type\":\"server\",\"port\":3000,\"host\":\"0.0.0.0\"}]",
 				"--debug-mode",
@@ -1677,6 +1690,17 @@ mod tests {
 				"[1.1.1.1]",
 			]
 			.map(OsString::from)
+		);
+		let pivot_args = manifest_approval_runtime_args(&manifest);
+		let value =
+			pivot_args.iter().position(|arg| arg == "--pivot-args").unwrap()
+				+ 1;
+		assert_eq!(
+			serde_json::from_str::<Vec<String>>(
+				pivot_args[value].to_str().unwrap()
+			)
+			.unwrap(),
+			manifest.args()
 		);
 	}
 }
