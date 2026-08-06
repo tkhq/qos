@@ -7,6 +7,8 @@ use std::{
 	time::Duration,
 };
 
+use qos_core::protocol::services::boot::RestartPolicy;
+
 use crate::{
 	ApprovingUserMaterial, BootClientFixture, BridgeConfig, DockerProgram,
 	DockerRunSpec, DockerVolumeSocket, Eif, ImageRef, MaterialFile, Pivot,
@@ -363,6 +365,7 @@ impl DockerHostQemuNitroRunner {
 		&self,
 		user: &ApprovingUserMaterial,
 		workspace: &BootWorkspace,
+		manifest: &VersionedManifest,
 	) -> Vec<OsString> {
 		let boot = &self.spec.boot_fixture;
 		let mut args = self.qos_client_docker_prefix();
@@ -390,6 +393,7 @@ impl DockerHostQemuNitroRunner {
 			"--alias".into(),
 			user.alias.clone().into(),
 		]);
+		args.extend(manifest_approval_runtime_args(manifest));
 		if boot.unsafe_auto_confirm {
 			args.push("--unsafe-auto-confirm".into());
 		}
@@ -1291,9 +1295,11 @@ impl TestRunner for DockerHostQemuNitroRunner {
 			)
 			.await?;
 			for user in &self.spec.boot_fixture.approving_users {
-				self.run_docker_args(
-					self.approve_manifest_docker_args(user, &workspace),
-				)?;
+				self.run_docker_args(self.approve_manifest_docker_args(
+					user,
+					&workspace,
+					&spec.manifest,
+				))?;
 			}
 			self.run_docker_args(
 				self.generate_manifest_envelope_docker_args(&workspace),
@@ -1527,6 +1533,129 @@ fn write_manifest(
 		RunnerError::InvalidConfig(format!("serialize manifest: {err}"))
 	})?;
 	write_file(path, &bytes)
+}
+
+fn manifest_approval_runtime_args(
+	manifest: &VersionedManifest,
+) -> Vec<OsString> {
+	let restart = match manifest.restart() {
+		RestartPolicy::Never => "never",
+		RestartPolicy::Always => "always",
+	};
+	let mut args = vec![
+		"--restart-policy".into(),
+		restart.into(),
+		"--pivot-args".into(),
+		format!("[{}]", manifest.args().join(",")).into(),
+		"--bridge-config".into(),
+		serde_json::to_string(manifest.bridge_config())
+			.expect("bridge configuration is JSON serializable")
+			.into(),
+		"--debug-mode".into(),
+		manifest.debug_mode().to_string().into(),
+	];
+	if let Some(dns) = manifest.dns_config() {
+		args.extend([
+			"--dns-resolvers".into(),
+			format!(
+				"[{}]",
+				dns.resolvers
+					.iter()
+					.map(ToString::to_string)
+					.collect::<Vec<_>>()
+					.join(",")
+			)
+			.into(),
+		]);
+	}
+	args
+}
+
+#[cfg(test)]
+mod tests {
+	use qos_core::protocol::services::boot::{
+		ManifestSet, ManifestVersion, Namespace, NitroConfig, PatchSet,
+		RestartPolicy, ShareSet,
+	};
+
+	use super::*;
+	use crate::{DnsConfig, ManifestBuilder};
+
+	fn manifest(version: ManifestVersion) -> ManifestBuilder {
+		ManifestBuilder::new()
+			.with_version(version)
+			.namespace(Namespace {
+				name: "test".into(),
+				nonce: 1,
+				quorum_key: vec![],
+			})
+			.pivot_hash([1; 32])
+			.restart_policy(RestartPolicy::Always)
+			.pivot_args(vec!["--host".into(), "0.0.0.0".into()])
+			.bridge_config(vec![BridgeConfig::Server {
+				port: 3000,
+				host: "0.0.0.0".into(),
+			}])
+			.debug_mode(true)
+			.manifest_set(ManifestSet { threshold: 0, members: vec![] })
+			.share_set(ShareSet { threshold: 0, members: vec![] })
+			.enclave(NitroConfig {
+				pcr0: vec![],
+				pcr1: vec![],
+				pcr2: vec![],
+				pcr3: vec![],
+				aws_root_certificate: vec![],
+				qos_commit: String::new(),
+			})
+	}
+
+	#[test]
+	fn v1_approval_runtime_args_match_manifest() {
+		let manifest = manifest(ManifestVersion::V1)
+			.patch_set(PatchSet { threshold: 0, members: vec![] })
+			.build()
+			.unwrap();
+
+		assert_eq!(
+			manifest_approval_runtime_args(&manifest),
+			[
+				"--restart-policy",
+				"always",
+				"--pivot-args",
+				"[--host,0.0.0.0]",
+				"--bridge-config",
+				"[{\"type\":\"server\",\"port\":3000,\"host\":\"0.0.0.0\"}]",
+				"--debug-mode",
+				"true",
+			]
+			.map(OsString::from)
+		);
+	}
+
+	#[test]
+	fn v2_approval_runtime_args_include_dns() {
+		let manifest = manifest(ManifestVersion::V2)
+			.dns(DnsConfig { resolvers: vec!["1.1.1.1".parse().unwrap()] })
+			.build()
+			.unwrap();
+
+		assert_eq!(
+			manifest_approval_runtime_args(&manifest),
+			[
+				"--restart-policy",
+				"always",
+				"--pivot-args",
+				"[--host,0.0.0.0]",
+				"--bridge-config",
+				"[{\"type\":\"server\",\"port\":3000,\"host\":\"0.0.0.0\"}]",
+				"--debug-mode",
+				"true",
+				"--dns-resolvers",
+				"[1.1.1.1]",
+			]
+			.map(OsString::from)
+		);
+	}
 }
 
 fn command_with_args(bin: &Path, args: Vec<OsString>) -> Command {
