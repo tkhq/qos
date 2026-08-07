@@ -436,7 +436,9 @@ impl VersionedManifestEnvelope {
 			if !self.manifest_set().members.contains(&approval.member) {
 				return Err(ProtocolError::NotManifestSetMember);
 			}
-			if !uniq_members.insert(approval.member.qos_hash()) {
+			// Key on the signing public component because that is the
+			// identity verified by the signature.
+			if !uniq_members.insert(member_pub_key.signing_public_key_bytes()) {
 				return Err(ProtocolError::DuplicateApproval);
 			}
 		}
@@ -510,6 +512,21 @@ mod tests {
 			alias: "member-1".to_string(),
 			pub_key: pair.public_key().to_bytes(),
 		}
+	}
+
+	fn mixed_public_key(
+		encryption_pair: &P256Pair,
+		signing_pair: &P256Pair,
+	) -> Vec<u8> {
+		let encryption_key = encryption_pair.public_key().to_bytes();
+		let signing_key = signing_pair.public_key().to_bytes();
+		let component_len = encryption_key.len() / 2;
+
+		encryption_key[..component_len]
+			.iter()
+			.chain(&signing_key[component_len..])
+			.copied()
+			.collect()
 	}
 
 	fn sample_v2_manifest(member: QuorumMember) -> ManifestV2 {
@@ -708,6 +725,73 @@ mod tests {
 		assert!(matches!(decoded, VersionedManifestEnvelope::V2(_)));
 		assert_eq!(decoded.manifest_hash(), manifest_hash);
 		assert!(decoded.check_approvals().is_ok());
+	}
+
+	#[test]
+	fn versioned_check_approvals_rejects_same_key_under_different_aliases() {
+		let pair = P256Pair::generate().unwrap();
+		let alias_a = QuorumMember {
+			alias: "alias-a".to_string(),
+			pub_key: pair.public_key().to_bytes(),
+		};
+		let alias_b = QuorumMember {
+			alias: "alias-b".to_string(),
+			pub_key: pair.public_key().to_bytes(),
+		};
+
+		let mut manifest = sample_v2_manifest(alias_a.clone());
+		manifest.manifest_set = ManifestSet {
+			threshold: 2,
+			members: vec![alias_a.clone(), alias_b.clone()],
+		};
+
+		let manifest_hash = canonical_json_hash(&manifest);
+		let signature = pair.sign(&manifest_hash).unwrap();
+		let envelope = VersionedManifestEnvelope::V2(ManifestEnvelopeV2 {
+			manifest,
+			manifest_set_approvals: vec![
+				Approval { signature: signature.clone(), member: alias_a },
+				Approval { signature, member: alias_b },
+			],
+			share_set_approvals: vec![],
+		});
+
+		let err = envelope.check_approvals().unwrap_err();
+		assert_eq!(err, ProtocolError::DuplicateApproval);
+	}
+
+	#[test]
+	fn versioned_check_approvals_rejects_duplicate_signing_identity() {
+		let signing_pair = P256Pair::generate().unwrap();
+		let encryption_pair_a = P256Pair::generate().unwrap();
+		let encryption_pair_b = P256Pair::generate().unwrap();
+		let member_a = QuorumMember {
+			alias: "member-a".to_string(),
+			pub_key: mixed_public_key(&encryption_pair_a, &signing_pair),
+		};
+		let member_b = QuorumMember {
+			alias: "member-b".to_string(),
+			pub_key: mixed_public_key(&encryption_pair_b, &signing_pair),
+		};
+
+		let mut manifest = sample_v2_manifest(member_a.clone());
+		manifest.manifest_set = ManifestSet {
+			threshold: 2,
+			members: vec![member_a.clone(), member_b.clone()],
+		};
+		let signature =
+			signing_pair.sign(&canonical_json_hash(&manifest)).unwrap();
+		let envelope = VersionedManifestEnvelope::V2(ManifestEnvelopeV2 {
+			manifest,
+			manifest_set_approvals: vec![
+				Approval { signature: signature.clone(), member: member_a },
+				Approval { signature, member: member_b },
+			],
+			share_set_approvals: vec![],
+		});
+
+		let err = envelope.check_approvals().unwrap_err();
+		assert_eq!(err, ProtocolError::DuplicateApproval);
 	}
 
 	#[test]

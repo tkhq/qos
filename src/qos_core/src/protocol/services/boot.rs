@@ -643,11 +643,13 @@ impl ManifestEnvelope {
 				return Err(ProtocolError::NotManifestSetMember);
 			}
 
-			// Ensure that the member only has 1 approval. Note that we don't
-			// include the signature in this check because the signature is
+			// Ensure that the member only has 1 approval. We key on the
+			// signing public component because that is the identity verified
+			// by the signature. Note that we don't include the signature in
+			// this check because the signature is
 			// malleable. i.e. there could be two different signatures per
 			// member.
-			if !uniq_members.insert(approval.member.qos_hash()) {
+			if !uniq_members.insert(member_pub_key.signing_public_key_bytes()) {
 				return Err(ProtocolError::DuplicateApproval);
 			}
 		}
@@ -855,6 +857,21 @@ mod test {
 
 	fn stable_quorum_member(alias: &str, byte: u8) -> QuorumMember {
 		QuorumMember { alias: alias.to_string(), pub_key: vec![byte; 33] }
+	}
+
+	fn mixed_public_key(
+		encryption_pair: &P256Pair,
+		signing_pair: &P256Pair,
+	) -> Vec<u8> {
+		let encryption_key = encryption_pair.public_key().to_bytes();
+		let signing_key = signing_pair.public_key().to_bytes();
+		let component_len = encryption_key.len() / 2;
+
+		encryption_key[..component_len]
+			.iter()
+			.chain(&signing_key[component_len..])
+			.copied()
+			.collect()
 	}
 
 	fn stable_pivot_config_v0() -> PivotConfigV0 {
@@ -1344,6 +1361,108 @@ mod test {
 
 		let err = manifest_envelope.check_approvals().unwrap_err();
 		assert_eq!(err, ProtocolError::DuplicateApproval);
+	}
+
+	#[test]
+	fn check_approvals_rejects_same_key_under_different_aliases() {
+		let (mut manifest, members, ..) = get_manifest();
+
+		let (pair, member) = &members[0];
+		let alias_a = QuorumMember {
+			alias: "alias-a".to_string(),
+			pub_key: member.pub_key.clone(),
+		};
+		let alias_b = QuorumMember {
+			alias: "alias-b".to_string(),
+			pub_key: member.pub_key.clone(),
+		};
+		manifest.manifest_set = ManifestSet {
+			threshold: 2,
+			members: vec![alias_a.clone(), alias_b.clone()],
+		};
+
+		let manifest_hash = manifest.qos_hash();
+		let signature = pair.sign(&manifest_hash).unwrap();
+
+		let manifest_envelope = ManifestEnvelope {
+			manifest,
+			manifest_set_approvals: vec![
+				Approval { signature: signature.clone(), member: alias_a },
+				Approval { signature, member: alias_b },
+			],
+			share_set_approvals: vec![],
+		};
+
+		let err = manifest_envelope.check_approvals().unwrap_err();
+		assert_eq!(err, ProtocolError::DuplicateApproval);
+	}
+
+	#[test]
+	fn check_approvals_rejects_duplicate_signing_identity() {
+		let (mut manifest, ..) = get_manifest();
+		let signing_pair = P256Pair::generate().unwrap();
+		let encryption_pair_a = P256Pair::generate().unwrap();
+		let encryption_pair_b = P256Pair::generate().unwrap();
+		let member_a = QuorumMember {
+			alias: "member-a".to_string(),
+			pub_key: mixed_public_key(&encryption_pair_a, &signing_pair),
+		};
+		let member_b = QuorumMember {
+			alias: "member-b".to_string(),
+			pub_key: mixed_public_key(&encryption_pair_b, &signing_pair),
+		};
+		manifest.manifest_set = ManifestSet {
+			threshold: 2,
+			members: vec![member_a.clone(), member_b.clone()],
+		};
+
+		let signature = signing_pair.sign(&manifest.qos_hash()).unwrap();
+		let manifest_envelope = ManifestEnvelope {
+			manifest,
+			manifest_set_approvals: vec![
+				Approval { signature: signature.clone(), member: member_a },
+				Approval { signature, member: member_b },
+			],
+			share_set_approvals: vec![],
+		};
+
+		let err = manifest_envelope.check_approvals().unwrap_err();
+		assert_eq!(err, ProtocolError::DuplicateApproval);
+	}
+
+	#[test]
+	fn check_approvals_counts_distinct_keys_with_same_alias() {
+		let (mut manifest, members, ..) = get_manifest();
+
+		let mut approvals = Vec::new();
+		let mut set_members = Vec::new();
+		for (pair, member) in &members[..2] {
+			let member = QuorumMember {
+				alias: "same-alias".to_string(),
+				pub_key: member.pub_key.clone(),
+			};
+			set_members.push(member.clone());
+			approvals.push((pair, member));
+		}
+		manifest.manifest_set =
+			ManifestSet { threshold: 2, members: set_members };
+
+		let manifest_hash = manifest.qos_hash();
+		let manifest_set_approvals = approvals
+			.into_iter()
+			.map(|(pair, member)| Approval {
+				signature: pair.sign(&manifest_hash).unwrap(),
+				member,
+			})
+			.collect();
+
+		let manifest_envelope = ManifestEnvelope {
+			manifest,
+			manifest_set_approvals,
+			share_set_approvals: vec![],
+		};
+
+		assert!(manifest_envelope.check_approvals().is_ok());
 	}
 
 	#[test]
