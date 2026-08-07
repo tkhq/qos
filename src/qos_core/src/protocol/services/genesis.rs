@@ -170,14 +170,16 @@ pub(in crate::protocol) fn boot_genesis(
 	genesis_set: &GenesisSet,
 	maybe_dr_key: Option<Vec<u8>>,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
-	// Each share is encrypted to a member's public key. The alias is not
-	// cryptographically guaranteed, so reject sets that list the same public
-	// key more than once before generating any shares; otherwise a single key
-	// would hold multiple shares and count multiple times towards the
-	// reconstruction threshold.
+	// Each share is encrypted to a member's encryption public component.
+	// Reject duplicate encryption identities before generating any shares;
+	// otherwise a single key could hold multiple shares and count multiple
+	// times towards the reconstruction threshold.
 	let mut uniq_member_keys = std::collections::HashSet::new();
 	for member in &genesis_set.members {
-		if !uniq_member_keys.insert(member.pub_key.clone()) {
+		let member_pub_key = P256Public::from_bytes(&member.pub_key)?;
+		if !uniq_member_keys
+			.insert(member_pub_key.encryption_public_key_bytes())
+		{
 			return Err(ProtocolError::DuplicateMemberPubKey);
 		}
 	}
@@ -249,6 +251,21 @@ mod test {
 
 	use super::*;
 	use crate::handles::Handles;
+
+	fn mixed_public_key(
+		encryption_pair: &P256Pair,
+		signing_pair: &P256Pair,
+	) -> Vec<u8> {
+		let encryption_key = encryption_pair.public_key().to_bytes();
+		let signing_key = signing_pair.public_key().to_bytes();
+		let component_len = encryption_key.len() / 2;
+
+		encryption_key[..component_len]
+			.iter()
+			.chain(&signing_key[component_len..])
+			.copied()
+			.collect()
+	}
 
 	#[test]
 	fn boot_genesis_works() {
@@ -389,5 +406,43 @@ mod test {
 		let (output, _nsm_response) =
 			boot_genesis(&mut protocol_state, &genesis_set, None).unwrap();
 		assert_eq!(output.member_outputs.len(), 2);
+	}
+
+	#[test]
+	fn boot_genesis_rejects_duplicate_encryption_identity() {
+		let handles = Handles::new(
+			"EPH3".to_string(),
+			"QUO3".to_string(),
+			"MAN3".to_string(),
+			"PIV3".to_string(),
+		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm::new()), handles, None);
+		let encryption_pair = P256Pair::generate().unwrap();
+		let signing_pair_a = P256Pair::generate().unwrap();
+		let signing_pair_b = P256Pair::generate().unwrap();
+		let genesis_set = GenesisSet {
+			members: vec![
+				QuorumMember {
+					alias: "member-a".to_string(),
+					pub_key: mixed_public_key(
+						&encryption_pair,
+						&signing_pair_a,
+					),
+				},
+				QuorumMember {
+					alias: "member-b".to_string(),
+					pub_key: mixed_public_key(
+						&encryption_pair,
+						&signing_pair_b,
+					),
+				},
+			],
+			threshold: 2,
+		};
+
+		let err =
+			boot_genesis(&mut protocol_state, &genesis_set, None).unwrap_err();
+		assert_eq!(err, ProtocolError::DuplicateMemberPubKey);
 	}
 }

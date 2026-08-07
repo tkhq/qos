@@ -194,7 +194,8 @@ pub enum ProtocolError {
 	InvalidPivotEnv(String),
 	/// The precommitted live ephemeral key is missing from protocol state.
 	MissingLiveEphemeralKey,
-	/// A set of quorum members contains the same public key more than once.
+	/// A set of quorum members contains the same relevant public key component
+	/// more than once.
 	DuplicateMemberPubKey,
 }
 
