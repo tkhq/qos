@@ -170,6 +170,18 @@ pub(in crate::protocol) fn boot_genesis(
 	genesis_set: &GenesisSet,
 	maybe_dr_key: Option<Vec<u8>>,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
+	// Each share is encrypted to a member's public key. The alias is not
+	// cryptographically guaranteed, so reject sets that list the same public
+	// key more than once before generating any shares; otherwise a single key
+	// would hold multiple shares and count multiple times towards the
+	// reconstruction threshold.
+	let mut uniq_member_keys = std::collections::HashSet::new();
+	for member in &genesis_set.members {
+		if !uniq_member_keys.insert(member.pub_key.clone()) {
+			return Err(ProtocolError::DuplicateMemberPubKey);
+		}
+	}
+
 	let quorum_pair = P256Pair::generate()?;
 	let master_seed = &quorum_pair.to_master_seed()[..];
 
@@ -321,5 +333,61 @@ mod test {
 		let quorum_key_hash =
 			sha_512(qos_hex::encode(&reconstructed[..]).as_bytes());
 		assert_eq!(quorum_key_hash, output.quorum_key_hash);
+	}
+
+	#[test]
+	fn boot_genesis_rejects_duplicate_member_pub_keys() {
+		let handles = Handles::new(
+			"EPH2".to_string(),
+			"QUO2".to_string(),
+			"MAN2".to_string(),
+			"PIV2".to_string(),
+		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm::new()), handles, None);
+		let member1_pair = P256Pair::generate().unwrap();
+		let member2_pair = P256Pair::generate().unwrap();
+
+		// The same public key under two different aliases must be rejected.
+		let genesis_set = GenesisSet {
+			members: vec![
+				QuorumMember {
+					alias: "alias-a".to_string(),
+					pub_key: member1_pair.public_key().to_bytes(),
+				},
+				QuorumMember {
+					alias: "alias-b".to_string(),
+					pub_key: member1_pair.public_key().to_bytes(),
+				},
+				QuorumMember {
+					alias: "member2".to_string(),
+					pub_key: member2_pair.public_key().to_bytes(),
+				},
+			],
+			threshold: 2,
+		};
+
+		let err =
+			boot_genesis(&mut protocol_state, &genesis_set, None).unwrap_err();
+		assert_eq!(err, ProtocolError::DuplicateMemberPubKey);
+
+		// Distinct public keys sharing an alias are still accepted.
+		let genesis_set = GenesisSet {
+			members: vec![
+				QuorumMember {
+					alias: "same-alias".to_string(),
+					pub_key: member1_pair.public_key().to_bytes(),
+				},
+				QuorumMember {
+					alias: "same-alias".to_string(),
+					pub_key: member2_pair.public_key().to_bytes(),
+				},
+			],
+			threshold: 2,
+		};
+
+		let (output, _nsm_response) =
+			boot_genesis(&mut protocol_state, &genesis_set, None).unwrap();
+		assert_eq!(output.member_outputs.len(), 2);
 	}
 }
