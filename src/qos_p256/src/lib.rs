@@ -374,6 +374,18 @@ impl P256Public {
 			.collect()
 	}
 
+	/// Serialize the encryption public key as an uncompressed SEC1 point.
+	#[must_use]
+	pub fn encryption_public_key_bytes(&self) -> Box<[u8]> {
+		self.encrypt_public.to_bytes()
+	}
+
+	/// Serialize the signing public key as an uncompressed SEC1 point.
+	#[must_use]
+	pub fn signing_public_key_bytes(&self) -> Box<[u8]> {
+		self.sign_public.to_bytes()
+	}
+
 	/// Deserialize each public key from a SEC1 encoded point, not compressed.
 	/// Expects encoding as `encrypt_public||sign_public`.
 	///
@@ -457,6 +469,19 @@ mod test {
 	use qos_test_primitives::PathWrapper;
 
 	use super::*;
+
+	#[test]
+	fn public_key_component_bytes_match_combined_encoding() {
+		let public_key = P256Pair::generate().unwrap().public_key();
+		let component_bytes: Vec<_> = public_key
+			.encryption_public_key_bytes()
+			.iter()
+			.chain(public_key.signing_public_key_bytes().iter())
+			.copied()
+			.collect();
+
+		assert_eq!(component_bytes, public_key.to_bytes());
+	}
 
 	#[test]
 	fn signatures_are_deterministic() {

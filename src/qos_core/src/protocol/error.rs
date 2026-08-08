@@ -194,6 +194,9 @@ pub enum ProtocolError {
 	InvalidPivotEnv(String),
 	/// The precommitted live ephemeral key is missing from protocol state.
 	MissingLiveEphemeralKey,
+	/// A set of quorum members contains the same alias, signing public key,
+	/// or encryption public key more than once.
+	DuplicateQuorumMember,
 }
 
 impl From<std::io::Error> for ProtocolError {
@@ -391,6 +394,12 @@ impl std::fmt::Display for ProtocolError {
 			}
 			Self::QosCrypto(e) => write!(f, "crypto error: {e}"),
 			Self::PoolExpandError => write!(f, "pool expand error"),
+			Self::DuplicateQuorumMember => {
+				write!(
+					f,
+					"duplicate quorum member alias or public key component"
+				)
+			}
 		}
 	}
 }
