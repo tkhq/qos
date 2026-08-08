@@ -21,7 +21,7 @@ use qos_core::protocol::{
 			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
 			VersionedManifestEnvelope,
 		},
-		genesis::{GenesisOutput, GenesisSet},
+		genesis::{GenesisOutput, GenesisSet, genesis_request_commitment},
 		key::EncryptedQuorumKey,
 	},
 };
@@ -152,6 +152,9 @@ pub enum Error {
 	/// Given quorum key seed does not match the hash of the expected quorum
 	/// key seed.
 	SecretDoesNotMatch,
+	/// The genesis output does not match the boot genesis request it is
+	/// supposed to be based on.
+	GenesisOutputDoesNotMatchRequest,
 	/// v2 manifests cannot be represented in borsh.
 	ManifestV2NotConvertibleToBorsh,
 	/// v2 manifests do not support patch sets.
@@ -508,8 +511,10 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		None
 	};
 
-	let req =
-		ProtocolMsg::BootGenesisRequest { set: genesis_set.clone(), dr_key };
+	let req = ProtocolMsg::BootGenesisRequest {
+		set: genesis_set.clone(),
+		dr_key: dr_key.clone(),
+	};
 	let (cose_sign1, genesis_output) = match request::post(uri, &req).unwrap() {
 		ProtocolMsg::BootGenesisResponse {
 			nsm_response: NsmResponse::Attestation { document },
@@ -517,6 +522,11 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		} => (document, genesis_output),
 		r => panic!("Unexpected response: {r:?}"),
 	};
+	if genesis_request_commitment(&genesis_set, dr_key.as_deref())
+		!= genesis_output.request_commitment
+	{
+		return Err(Error::GenesisOutputDoesNotMatchRequest);
+	}
 	let quorum_key =
 		P256Public::from_bytes(&genesis_output.quorum_key).unwrap();
 	let attestation_doc =
