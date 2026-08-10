@@ -419,6 +419,8 @@ impl VersionedManifestEnvelope {
 	/// Returns a [`ProtocolError`] when signatures are invalid, members are
 	/// unauthorized, duplicate approvals exist, or the threshold is not met.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
+		super::ensure_unique_members(&self.manifest_set().members)?;
+
 		let manifest_hash = self.manifest_hash();
 		let mut uniq_members = std::collections::HashSet::new();
 
@@ -436,6 +438,9 @@ impl VersionedManifestEnvelope {
 			if !self.manifest_set().members.contains(&approval.member) {
 				return Err(ProtocolError::NotManifestSetMember);
 			}
+			// Ensure that the member only has 1 approval. We already checked
+			// at the top of this function that each member has a unique
+			// signing key, so hashing the full member record is sufficient.
 			if !uniq_members.insert(approval.member.qos_hash()) {
 				return Err(ProtocolError::DuplicateApproval);
 			}
@@ -708,6 +713,39 @@ mod tests {
 		assert!(matches!(decoded, VersionedManifestEnvelope::V2(_)));
 		assert_eq!(decoded.manifest_hash(), manifest_hash);
 		assert!(decoded.check_approvals().is_ok());
+	}
+
+	#[test]
+	fn versioned_check_approvals_rejects_same_key_under_different_aliases() {
+		let pair = P256Pair::generate().unwrap();
+		let alias_a = QuorumMember {
+			alias: "alias-a".to_string(),
+			pub_key: pair.public_key().to_bytes(),
+		};
+		let alias_b = QuorumMember {
+			alias: "alias-b".to_string(),
+			pub_key: pair.public_key().to_bytes(),
+		};
+
+		let mut manifest = sample_v2_manifest(alias_a.clone());
+		manifest.manifest_set = ManifestSet {
+			threshold: 2,
+			members: vec![alias_a.clone(), alias_b.clone()],
+		};
+
+		let manifest_hash = canonical_json_hash(&manifest);
+		let signature = pair.sign(&manifest_hash).unwrap();
+		let envelope = VersionedManifestEnvelope::V2(ManifestEnvelopeV2 {
+			manifest,
+			manifest_set_approvals: vec![
+				Approval { signature: signature.clone(), member: alias_a },
+				Approval { signature, member: alias_b },
+			],
+			share_set_approvals: vec![],
+		});
+
+		let err = envelope.check_approvals().unwrap_err();
+		assert_eq!(err, ProtocolError::DuplicateQuorumMember);
 	}
 
 	#[test]

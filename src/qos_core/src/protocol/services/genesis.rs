@@ -170,6 +170,8 @@ pub(in crate::protocol) fn boot_genesis(
 	genesis_set: &GenesisSet,
 	maybe_dr_key: Option<Vec<u8>>,
 ) -> Result<(GenesisOutput, NsmResponse), ProtocolError> {
+	super::boot::ensure_unique_members(&genesis_set.members)?;
+
 	let quorum_pair = P256Pair::generate()?;
 	let master_seed = &quorum_pair.to_master_seed()[..];
 
@@ -321,5 +323,37 @@ mod test {
 		let quorum_key_hash =
 			sha_512(qos_hex::encode(&reconstructed[..]).as_bytes());
 		assert_eq!(quorum_key_hash, output.quorum_key_hash);
+	}
+
+	#[test]
+	fn boot_genesis_rejects_duplicate_members() {
+		let handles = Handles::new(
+			"EPH2".to_string(),
+			"QUO2".to_string(),
+			"MAN2".to_string(),
+			"PIV2".to_string(),
+		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm::new()), handles, None);
+		let member_pair = P256Pair::generate().unwrap();
+
+		// The same public key under two different aliases must be rejected.
+		let genesis_set = GenesisSet {
+			members: vec![
+				QuorumMember {
+					alias: "alias-a".to_string(),
+					pub_key: member_pair.public_key().to_bytes(),
+				},
+				QuorumMember {
+					alias: "alias-b".to_string(),
+					pub_key: member_pair.public_key().to_bytes(),
+				},
+			],
+			threshold: 2,
+		};
+
+		let err =
+			boot_genesis(&mut protocol_state, &genesis_set, None).unwrap_err();
+		assert_eq!(err, ProtocolError::DuplicateQuorumMember);
 	}
 }

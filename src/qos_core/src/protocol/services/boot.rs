@@ -279,6 +279,33 @@ impl fmt::Debug for QuorumMember {
 	}
 }
 
+/// Ensure that every member has a unique alias, signing public key, and
+/// encryption public key. A duplicate of any of these is a red flag that a
+/// single party controls multiple members.
+///
+/// # Errors
+///
+/// Returns [`ProtocolError::DuplicateQuorumMember`] if any alias or public
+/// key component appears more than once, or an error if a member's public
+/// key cannot be decoded.
+pub(crate) fn ensure_unique_members(
+	members: &[QuorumMember],
+) -> Result<(), ProtocolError> {
+	let mut aliases = HashSet::new();
+	let mut signing_keys = HashSet::new();
+	let mut encryption_keys = HashSet::new();
+	for member in members {
+		let pub_key = P256Public::from_bytes(&member.pub_key)?;
+		if !aliases.insert(&member.alias)
+			|| !signing_keys.insert(pub_key.signing_public_key_bytes())
+			|| !encryption_keys.insert(pub_key.encryption_public_key_bytes())
+		{
+			return Err(ProtocolError::DuplicateQuorumMember);
+		}
+	}
+	Ok(())
+}
+
 /// The Manifest Set.
 #[derive(
 	PartialEq,
@@ -622,6 +649,8 @@ impl ManifestEnvelope {
 	/// [`ProtocolError::NotEnoughApprovals`] if fewer than the threshold
 	/// number of members approved.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
+		ensure_unique_members(&self.manifest.manifest_set.members)?;
+
 		let manifest_hash = self.manifest.qos_hash();
 		let mut uniq_members = HashSet::new();
 		for approval in &self.manifest_set_approvals {
@@ -643,10 +672,12 @@ impl ManifestEnvelope {
 				return Err(ProtocolError::NotManifestSetMember);
 			}
 
-			// Ensure that the member only has 1 approval. Note that we don't
-			// include the signature in this check because the signature is
-			// malleable. i.e. there could be two different signatures per
-			// member.
+			// Ensure that the member only has 1 approval. We already checked
+			// at the top of this function that each member has a unique
+			// signing key, so hashing the full member record is sufficient.
+			// Note that we don't include the signature in this check because
+			// the signature is malleable. i.e. there could be two different
+			// signatures per member.
 			if !uniq_members.insert(approval.member.qos_hash()) {
 				return Err(ProtocolError::DuplicateApproval);
 			}
@@ -855,6 +886,21 @@ mod test {
 
 	fn stable_quorum_member(alias: &str, byte: u8) -> QuorumMember {
 		QuorumMember { alias: alias.to_string(), pub_key: vec![byte; 33] }
+	}
+
+	fn mixed_public_key(
+		encryption_pair: &P256Pair,
+		signing_pair: &P256Pair,
+	) -> Vec<u8> {
+		let encryption_key = encryption_pair.public_key().to_bytes();
+		let signing_key = signing_pair.public_key().to_bytes();
+		let component_len = encryption_key.len() / 2;
+
+		encryption_key[..component_len]
+			.iter()
+			.chain(&signing_key[component_len..])
+			.copied()
+			.collect()
 	}
 
 	fn stable_pivot_config_v0() -> PivotConfigV0 {
@@ -1344,6 +1390,86 @@ mod test {
 
 		let err = manifest_envelope.check_approvals().unwrap_err();
 		assert_eq!(err, ProtocolError::DuplicateApproval);
+	}
+
+	#[test]
+	fn ensure_unique_members_rejects_shared_components() {
+		let pair_a = P256Pair::generate().unwrap();
+		let pair_b = P256Pair::generate().unwrap();
+		let pair_c = P256Pair::generate().unwrap();
+		let member = |alias: &str, pub_key: Vec<u8>| QuorumMember {
+			alias: alias.to_string(),
+			pub_key,
+		};
+
+		let distinct = vec![
+			member("a", pair_a.public_key().to_bytes()),
+			member("b", pair_b.public_key().to_bytes()),
+		];
+		assert!(ensure_unique_members(&distinct).is_ok());
+
+		let duplicate_sets = [
+			// Same alias
+			vec![
+				member("a", pair_a.public_key().to_bytes()),
+				member("a", pair_b.public_key().to_bytes()),
+			],
+			// Same public key under different aliases
+			vec![
+				member("a", pair_a.public_key().to_bytes()),
+				member("b", pair_a.public_key().to_bytes()),
+			],
+			// Same signing component
+			vec![
+				member("a", mixed_public_key(&pair_b, &pair_a)),
+				member("b", mixed_public_key(&pair_c, &pair_a)),
+			],
+			// Same encryption component
+			vec![
+				member("a", mixed_public_key(&pair_a, &pair_b)),
+				member("b", mixed_public_key(&pair_a, &pair_c)),
+			],
+		];
+		for members in duplicate_sets {
+			assert_eq!(
+				ensure_unique_members(&members).unwrap_err(),
+				ProtocolError::DuplicateQuorumMember
+			);
+		}
+	}
+
+	#[test]
+	fn check_approvals_rejects_same_key_under_different_aliases() {
+		let (mut manifest, members, ..) = get_manifest();
+
+		let (pair, member) = &members[0];
+		let alias_a = QuorumMember {
+			alias: "alias-a".to_string(),
+			pub_key: member.pub_key.clone(),
+		};
+		let alias_b = QuorumMember {
+			alias: "alias-b".to_string(),
+			pub_key: member.pub_key.clone(),
+		};
+		manifest.manifest_set = ManifestSet {
+			threshold: 2,
+			members: vec![alias_a.clone(), alias_b.clone()],
+		};
+
+		let manifest_hash = manifest.qos_hash();
+		let signature = pair.sign(&manifest_hash).unwrap();
+
+		let manifest_envelope = ManifestEnvelope {
+			manifest,
+			manifest_set_approvals: vec![
+				Approval { signature: signature.clone(), member: alias_a },
+				Approval { signature, member: alias_b },
+			],
+			share_set_approvals: vec![],
+		};
+
+		let err = manifest_envelope.check_approvals().unwrap_err();
+		assert_eq!(err, ProtocolError::DuplicateQuorumMember);
 	}
 
 	#[test]
