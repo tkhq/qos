@@ -21,7 +21,7 @@ use qos_core::protocol::{
 			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
 			VersionedManifestEnvelope,
 		},
-		genesis::{GenesisOutput, GenesisSet, genesis_request_commitment},
+		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
 	},
 };
@@ -515,16 +515,17 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		set: genesis_set.clone(),
 		dr_key: dr_key.clone(),
 	};
-	let (cose_sign1, genesis_output) = match request::post(uri, &req).unwrap() {
-		ProtocolMsg::BootGenesisResponse {
-			nsm_response: NsmResponse::Attestation { document },
-			genesis_output,
-		} => (document, genesis_output),
-		r => panic!("Unexpected response: {r:?}"),
-	};
-	if genesis_request_commitment(&genesis_set, dr_key.as_deref())
-		!= genesis_output.request_commitment
-	{
+	// Genesis is only supported on the canonical JSON wire encoding; there is
+	// intentionally no legacy Borsh fallback here.
+	let (cose_sign1, genesis_output) =
+		match request::post_json(uri, &req).unwrap() {
+			ProtocolMsg::BootGenesisResponse {
+				nsm_response: NsmResponse::Attestation { document },
+				genesis_output,
+			} => (document, genesis_output),
+			r => panic!("Unexpected response: {r:?}"),
+		};
+	if genesis_output.set != genesis_set || genesis_output.dr_key != dr_key {
 		return Err(Error::GenesisOutputDoesNotMatchRequest);
 	}
 	let quorum_key =

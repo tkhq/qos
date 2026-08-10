@@ -266,16 +266,28 @@ pub enum ProtocolMsg {
 }
 
 impl ProtocolMsg {
+	/// Whether this message is part of the genesis flow. Genesis messages are
+	/// only supported on the canonical JSON wire encoding.
+	fn is_genesis(&self) -> bool {
+		matches!(
+			self,
+			Self::BootGenesisRequest { .. } | Self::BootGenesisResponse { .. }
+		)
+	}
+
 	/// Decode a protocol message from canonical JSON or legacy Borsh bytes.
 	///
 	/// JSON is attempted first because it is the preferred wire format and it
 	/// can represent v2 manifests. Borsh remains accepted for backwards
-	/// compatibility with existing hosts and clients.
+	/// compatibility with existing hosts and clients, except for genesis
+	/// messages, which are JSON only.
 	///
 	/// # Errors
 	///
 	/// Returns [`ProtocolError::ProtocolMsgDeserialization`] when `bytes`
-	/// cannot be decoded as either canonical JSON or legacy Borsh.
+	/// cannot be decoded as either canonical JSON or legacy Borsh, and
+	/// [`ProtocolError::LegacyGenesisNotSupported`] when `bytes` is a Borsh
+	/// encoded genesis message.
 	pub fn from_wire(
 		bytes: &[u8],
 	) -> Result<(Self, ProtocolMsgEncoding), ProtocolError> {
@@ -283,9 +295,13 @@ impl ProtocolMsg {
 			return Ok((msg, ProtocolMsgEncoding::Json));
 		}
 
-		<Self as borsh::BorshDeserialize>::try_from_slice(bytes)
-			.map(|msg| (msg, ProtocolMsgEncoding::Borsh))
-			.map_err(|_| ProtocolError::ProtocolMsgDeserialization)
+		let msg = <Self as borsh::BorshDeserialize>::try_from_slice(bytes)
+			.map_err(|_| ProtocolError::ProtocolMsgDeserialization)?;
+		if msg.is_genesis() {
+			return Err(ProtocolError::LegacyGenesisNotSupported);
+		}
+
+		Ok((msg, ProtocolMsgEncoding::Borsh))
 	}
 
 	/// Decode a protocol message from canonical JSON or legacy Borsh bytes,
@@ -301,13 +317,15 @@ impl ProtocolMsg {
 
 	/// Encode this message in the requested wire format.
 	///
-	/// Legacy Borsh encoding cannot represent v2 manifests and returns an
-	/// error for messages that contain them.
+	/// Legacy Borsh encoding cannot represent v2 manifests or genesis
+	/// messages and returns an error for messages that contain them.
 	///
 	/// # Errors
 	///
 	/// Returns [`ProtocolError::InvalidMsg`] when the message cannot be
-	/// encoded in the requested wire format.
+	/// encoded in the requested wire format and
+	/// [`ProtocolError::LegacyGenesisNotSupported`] for genesis messages
+	/// with the legacy Borsh encoding.
 	pub fn to_wire(
 		&self,
 		encoding: ProtocolMsgEncoding,
@@ -317,6 +335,9 @@ impl ProtocolMsg {
 				qos_json::to_vec(self).map_err(|_| ProtocolError::InvalidMsg)
 			}
 			ProtocolMsgEncoding::Borsh => {
+				if self.is_genesis() {
+					return Err(ProtocolError::LegacyGenesisNotSupported);
+				}
 				borsh::to_vec(self).map_err(|_| ProtocolError::InvalidMsg)
 			}
 		}
@@ -446,34 +467,52 @@ mod test {
 		PivotConfig, PivotConfigV2, PivotEnv, RestartPolicy, ShareSet,
 	};
 
+	fn sample_genesis_output() -> GenesisOutput {
+		GenesisOutput {
+			set: GenesisSet { members: vec![], threshold: 2 },
+			dr_key: None,
+			quorum_key: vec![3, 2, 1],
+			member_outputs: vec![],
+			recovery_permutations: vec![],
+			dr_key_wrapped_quorum_key: None,
+			quorum_key_hash: [22; 64],
+			test_message_ciphertext: vec![],
+			test_message_signature: vec![],
+			test_message: vec![],
+		}
+	}
+
 	#[test]
-	fn boot_genesis_response_deserialize() {
-		let nsm_response = NsmResponse::LockPCR;
-
-		let vec = borsh::to_vec(&nsm_response).unwrap();
-		let test = NsmResponse::try_from_slice(&vec).unwrap();
-		assert_eq!(nsm_response, test);
-
-		let genesis_response = ProtocolMsg::BootGenesisResponse {
-			nsm_response,
-			genesis_output: Box::new(GenesisOutput {
-				quorum_key: vec![3, 2, 1],
-				member_outputs: vec![],
-				recovery_permutations: vec![],
-				threshold: 2,
-				dr_key_wrapped_quorum_key: None,
-				quorum_key_hash: [22; 64],
-				test_message_ciphertext: vec![],
-				test_message_signature: vec![],
-				test_message: vec![],
-				request_commitment: [11; 32],
-			}),
+	fn genesis_messages_are_json_wire_only() {
+		let request = ProtocolMsg::BootGenesisRequest {
+			set: GenesisSet { members: vec![], threshold: 2 },
+			dr_key: None,
+		};
+		let response = ProtocolMsg::BootGenesisResponse {
+			nsm_response: NsmResponse::LockPCR,
+			genesis_output: Box::new(sample_genesis_output()),
 		};
 
-		let vec = borsh::to_vec(&genesis_response).unwrap();
-		let test = ProtocolMsg::try_from_slice(&vec).unwrap();
+		for msg in [&request, &response] {
+			// Encoding to the legacy Borsh wire is refused.
+			assert_eq!(
+				msg.to_wire(ProtocolMsgEncoding::Borsh).unwrap_err(),
+				ProtocolError::LegacyGenesisNotSupported
+			);
 
-		assert_eq!(test, genesis_response);
+			// Raw Borsh bytes are refused at decode.
+			let bytes = borsh::to_vec(msg).unwrap();
+			assert_eq!(
+				ProtocolMsg::from_wire(&bytes).unwrap_err(),
+				ProtocolError::LegacyGenesisNotSupported
+			);
+
+			// The canonical JSON wire round trips.
+			let encoded = msg.to_json_wire().unwrap();
+			let (decoded, encoding) = ProtocolMsg::from_wire(&encoded).unwrap();
+			assert_eq!(encoding, ProtocolMsgEncoding::Json);
+			assert_eq!(&decoded, msg);
+		}
 	}
 
 	#[test]
@@ -511,18 +550,7 @@ mod test {
 				locked_pcrs: BTreeSet::from([0, 1, 2]),
 				digest: qos_nsm::types::NsmDigest::SHA384,
 			},
-			genesis_output: Box::new(GenesisOutput {
-				quorum_key: vec![3, 2, 1],
-				member_outputs: vec![],
-				recovery_permutations: vec![],
-				threshold: 2,
-				dr_key_wrapped_quorum_key: None,
-				quorum_key_hash: [22; 64],
-				test_message_ciphertext: vec![],
-				test_message_signature: vec![],
-				test_message: vec![],
-				request_commitment: [11; 32],
-			}),
+			genesis_output: Box::new(sample_genesis_output()),
 		};
 
 		let encoded = msg.to_json_wire().unwrap();
