@@ -152,6 +152,9 @@ pub enum Error {
 	/// Given quorum key seed does not match the hash of the expected quorum
 	/// key seed.
 	SecretDoesNotMatch,
+	/// The genesis output does not match the boot genesis request it is
+	/// supposed to be based on.
+	GenesisOutputDoesNotMatchRequest,
 	/// v2 manifests cannot be represented in borsh.
 	ManifestV2NotConvertibleToBorsh,
 	/// v2 manifests do not support patch sets.
@@ -508,15 +511,23 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
 		None
 	};
 
-	let req =
-		ProtocolMsg::BootGenesisRequest { set: genesis_set.clone(), dr_key };
-	let (cose_sign1, genesis_output) = match request::post(uri, &req).unwrap() {
-		ProtocolMsg::BootGenesisResponse {
-			nsm_response: NsmResponse::Attestation { document },
-			genesis_output,
-		} => (document, genesis_output),
-		r => panic!("Unexpected response: {r:?}"),
+	let req = ProtocolMsg::BootGenesisRequest {
+		set: genesis_set.clone(),
+		dr_key: dr_key.clone(),
 	};
+	// Genesis is only supported on the canonical JSON wire encoding; there is
+	// intentionally no legacy Borsh fallback here.
+	let (cose_sign1, genesis_output) =
+		match request::post_json(uri, &req).unwrap() {
+			ProtocolMsg::BootGenesisResponse {
+				nsm_response: NsmResponse::Attestation { document },
+				genesis_output,
+			} => (document, genesis_output),
+			r => panic!("Unexpected response: {r:?}"),
+		};
+	if genesis_output.set != genesis_set || genesis_output.dr_key != dr_key {
+		return Err(Error::GenesisOutputDoesNotMatchRequest);
+	}
 	let quorum_key =
 		P256Public::from_bytes(&genesis_output.quorum_key).unwrap();
 	let attestation_doc =

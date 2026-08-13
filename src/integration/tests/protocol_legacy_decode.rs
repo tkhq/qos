@@ -16,10 +16,14 @@ use qos_core::protocol::{
 use qos_core_legacy::protocol::{
 	ProtocolError as LegacyProtocolError,
 	msg::ProtocolMsg as LegacyProtocolMsg,
-	services::boot::{
-		Manifest as LegacyManifest, ManifestEnvelope as LegacyManifestEnvelope,
-		ManifestEnvelopeV0 as LegacyManifestEnvelopeV0,
-		ManifestV0 as LegacyManifestV0,
+	services::{
+		boot::{
+			Manifest as LegacyManifest,
+			ManifestEnvelope as LegacyManifestEnvelope,
+			ManifestEnvelopeV0 as LegacyManifestEnvelopeV0,
+			ManifestV0 as LegacyManifestV0,
+		},
+		genesis::GenesisOutput as LegacyGenesisOutput,
 	},
 };
 use qos_nsm::types::NsmResponse;
@@ -107,10 +111,11 @@ fn sample_manifest_envelope_v0()
 
 fn sample_genesis_output() -> GenesisOutput {
 	GenesisOutput {
+		set: sample_genesis_set(),
+		dr_key: None,
 		quorum_key: vec![3, 2, 1],
 		member_outputs: vec![],
 		recovery_permutations: vec![],
-		threshold: 2,
 		dr_key_wrapped_quorum_key: None,
 		quorum_key_hash: [22; 64],
 		test_message_ciphertext: vec![5; 8],
@@ -184,18 +189,60 @@ fn legacy_boot_standard_variants_decode() {
 }
 
 #[test]
-fn legacy_boot_genesis_variants_decode() {
-	let req = decode_legacy(CurrentProtocolMsg::BootGenesisRequest {
+fn borsh_genesis_messages_are_rejected() {
+	let request = CurrentProtocolMsg::BootGenesisRequest {
 		set: sample_genesis_set(),
 		dr_key: Some(vec![5; 33]),
-	});
-	assert!(matches!(req, LegacyProtocolMsg::BootGenesisRequest { .. }));
-
-	let resp = decode_legacy(CurrentProtocolMsg::BootGenesisResponse {
+	};
+	let response = CurrentProtocolMsg::BootGenesisResponse {
 		nsm_response: NsmResponse::LockPCR,
 		genesis_output: Box::new(sample_genesis_output()),
-	});
-	assert!(matches!(resp, LegacyProtocolMsg::BootGenesisResponse { .. }));
+	};
+
+	for msg in [&request, &response] {
+		// Genesis messages cannot be encoded to the legacy Borsh wire.
+		assert_eq!(
+			msg.to_borsh_wire().unwrap_err(),
+			ProtocolError::LegacyGenesisNotSupported
+		);
+
+		// Raw Borsh encoded genesis messages are rejected at decode.
+		let bytes = borsh::to_vec(msg).unwrap();
+		assert_eq!(
+			CurrentProtocolMsg::from_wire(&bytes).unwrap_err(),
+			ProtocolError::LegacyGenesisNotSupported
+		);
+	}
+}
+
+#[test]
+fn legacy_boot_genesis_response_fails_closed_in_current_decoder() {
+	let legacy_nsm_response =
+		borsh::from_slice(&borsh::to_vec(&NsmResponse::LockPCR).unwrap())
+			.unwrap();
+	let legacy_output = LegacyGenesisOutput {
+		quorum_key: vec![3, 2, 1],
+		member_outputs: vec![],
+		recovery_permutations: vec![],
+		threshold: 2,
+		dr_key_wrapped_quorum_key: None,
+		quorum_key_hash: [22; 64],
+		test_message_ciphertext: vec![5; 8],
+		test_message_signature: vec![6; 8],
+		test_message: vec![7; 8],
+	};
+
+	let legacy_output_bytes = borsh::to_vec(&legacy_output).unwrap();
+	assert!(GenesisOutput::try_from_slice(&legacy_output_bytes).is_err());
+
+	let legacy_response = LegacyProtocolMsg::BootGenesisResponse {
+		nsm_response: legacy_nsm_response,
+		genesis_output: Box::new(legacy_output),
+	};
+	let legacy_response_bytes = borsh::to_vec(&legacy_response).unwrap();
+	assert!(
+		CurrentProtocolMsg::try_from_slice(&legacy_response_bytes).is_err()
+	);
 }
 
 #[test]

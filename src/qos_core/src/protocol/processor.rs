@@ -30,12 +30,13 @@ impl RequestProcessor for ProtocolProcessor {
 			.expect("ProtocolMsg can always serialize to JSON. qed.");
 		}
 
-		let Ok((msg_req, encoding)) = ProtocolMsg::from_wire(req_bytes) else {
-			return ProtocolMsg::ProtocolErrorResponse(
-				ProtocolError::ProtocolMsgDeserialization,
-			)
-			.to_json_wire()
-			.expect("ProtocolMsg can always serialize to JSON. qed.");
+		let (msg_req, encoding) = match ProtocolMsg::from_wire(req_bytes) {
+			Ok(decoded) => decoded,
+			Err(e) => {
+				return ProtocolMsg::ProtocolErrorResponse(e)
+					.to_json_wire()
+					.expect("ProtocolMsg can always serialize to JSON. qed.");
+			}
 		};
 
 		let mut state = self.state.write().await;
@@ -92,6 +93,28 @@ mod tests {
 			msg,
 			ProtocolMsg::StatusResponse(
 				ProtocolPhase::WaitingForBootInstruction
+			)
+		);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn borsh_genesis_request_is_rejected() {
+		use crate::protocol::services::genesis::GenesisSet;
+
+		let processor = ProtocolProcessor::new(test_state());
+		let req = borsh::to_vec(&ProtocolMsg::BootGenesisRequest {
+			set: GenesisSet { members: vec![], threshold: 1 },
+			dr_key: None,
+		})
+		.unwrap();
+		let resp = processor.process(&req).await;
+
+		let (msg, encoding) = ProtocolMsg::from_wire(&resp).unwrap();
+		assert_eq!(encoding, super::super::msg::ProtocolMsgEncoding::Json);
+		assert_eq!(
+			msg,
+			ProtocolMsg::ProtocolErrorResponse(
+				ProtocolError::LegacyGenesisNotSupported
 			)
 		);
 	}

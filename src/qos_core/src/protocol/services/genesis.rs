@@ -119,6 +119,17 @@ impl fmt::Debug for GenesisMemberOutput {
 	Deserialize,
 )]
 pub struct GenesisOutput {
+	/// The exact [`GenesisSet`] from the boot genesis request this output was
+	/// generated for. Intentionally has no serde/borsh default so
+	/// pre-request-echo peers and outputs fail closed on decode.
+	pub set: GenesisSet,
+	/// The exact DR key from the boot genesis request, if one was provided.
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "qos_hex::serde::option"
+	)]
+	pub dr_key: Option<Vec<u8>>,
 	/// Public Quorum Key, DER encoded.
 	#[serde(with = "qos_hex::serde")]
 	pub quorum_key: Vec<u8>,
@@ -127,9 +138,6 @@ pub struct GenesisOutput {
 	/// All successfully `RecoveredPermutation`s completed during the genesis
 	/// process.
 	pub recovery_permutations: Vec<RecoveredPermutation>,
-	/// The threshold, K, used to generate the shards.
-	#[serde(with = "qos_json::string_or_numeric")]
-	pub threshold: u32,
 	/// The quorum key encrypted to the DR key. None if no DR Key was provided
 	#[serde(
 		default,
@@ -155,8 +163,8 @@ pub struct GenesisOutput {
 impl fmt::Debug for GenesisOutput {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("GenesisOutput")
+			.field("set", &self.set)
 			.field("quorum_key", &qos_hex::encode(&self.quorum_key))
-			.field("threshold", &self.threshold)
 			.field("member_outputs", &self.member_outputs)
 			.field("recovery_permutations", &self.recovery_permutations)
 			.finish_non_exhaustive()
@@ -196,8 +204,8 @@ pub(in crate::protocol) fn boot_genesis(
 		})
 		.collect();
 
-	let dr_key_wrapped_quorum_key = if let Some(dr_key) = maybe_dr_key {
-		let dr_public = P256Public::from_bytes(&dr_key)
+	let dr_key_wrapped_quorum_key = if let Some(dr_key) = &maybe_dr_key {
+		let dr_public = P256Public::from_bytes(dr_key)
 			.map_err(ProtocolError::InvalidP256DRKey)?;
 		Some(dr_public.encrypt(master_seed)?)
 	} else {
@@ -206,9 +214,10 @@ pub(in crate::protocol) fn boot_genesis(
 
 	let hex_master_seed = qos_hex::encode(master_seed);
 	let genesis_output = GenesisOutput {
+		set: genesis_set.clone(),
+		dr_key: maybe_dr_key,
 		member_outputs: member_outputs?,
 		quorum_key: quorum_pair.public_key().to_bytes(),
-		threshold: genesis_set.threshold,
 		// TODO: generate N choose K recovery permutations
 		recovery_permutations: vec![],
 		dr_key_wrapped_quorum_key,
@@ -355,5 +364,50 @@ mod test {
 		let err =
 			boot_genesis(&mut protocol_state, &genesis_set, None).unwrap_err();
 		assert_eq!(err, ProtocolError::DuplicateQuorumMember);
+	}
+
+	#[test]
+	fn boot_genesis_output_echoes_the_exact_request() {
+		let handles = Handles::new(
+			"EPH".to_string(),
+			"QUO".to_string(),
+			"MAN".to_string(),
+			"PIV".to_string(),
+		);
+		let mut protocol_state =
+			ProtocolState::new(Box::new(MockNsm::new()), handles, None);
+
+		let members = (1..=3)
+			.map(|i| QuorumMember {
+				alias: format!("member{i}"),
+				pub_key: P256Pair::generate().unwrap().public_key().to_bytes(),
+			})
+			.collect();
+		let genesis_set = GenesisSet { members, threshold: 2 };
+		let dr_key = P256Pair::generate().unwrap().public_key().to_bytes();
+
+		let (output, _) = boot_genesis(
+			&mut protocol_state,
+			&genesis_set,
+			Some(dr_key.clone()),
+		)
+		.unwrap();
+		assert_eq!(output.set, genesis_set);
+		assert_eq!(output.dr_key, Some(dr_key));
+
+		// The echoed request is part of the attested-to output hash, so
+		// tampering with it is detectable.
+		let mut tampered = output.clone();
+		tampered.set.threshold = 1;
+		assert_ne!(tampered.qos_hash(), output.qos_hash());
+
+		let mut tampered = output.clone();
+		tampered.dr_key = None;
+		assert_ne!(tampered.qos_hash(), output.qos_hash());
+
+		let (output, _) =
+			boot_genesis(&mut protocol_state, &genesis_set, None).unwrap();
+		assert_eq!(output.set, genesis_set);
+		assert_eq!(output.dr_key, None);
 	}
 }

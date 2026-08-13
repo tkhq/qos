@@ -197,6 +197,9 @@ pub enum ProtocolError {
 	/// A set of quorum members contains the same alias, signing public key,
 	/// or encryption public key more than once.
 	DuplicateQuorumMember,
+	/// Genesis messages are only supported on the canonical JSON wire
+	/// encoding; legacy Borsh genesis is not supported.
+	LegacyGenesisNotSupported,
 }
 
 impl From<std::io::Error> for ProtocolError {
@@ -398,6 +401,12 @@ impl std::fmt::Display for ProtocolError {
 				write!(
 					f,
 					"duplicate quorum member alias or public key component"
+				)
+			}
+			Self::LegacyGenesisNotSupported => {
+				write!(
+					f,
+					"genesis messages are only supported on the JSON wire encoding"
 				)
 			}
 		}
