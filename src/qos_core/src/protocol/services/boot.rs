@@ -24,6 +24,25 @@ pub use manifest::{
 	VersionedManifestEnvelope,
 };
 
+fn decode_borsh<T, U, V>(
+	buf: &[u8],
+	current: impl FnOnce(T) -> V,
+	legacy: impl FnOnce(U) -> V,
+) -> Result<V, borsh::io::Error>
+where
+	T: borsh::BorshDeserialize,
+	U: borsh::BorshDeserialize,
+{
+	match (T::try_from_slice(buf), U::try_from_slice(buf)) {
+		(Ok(_), Ok(_)) => {
+			Err(borsh::io::Error::other("ambiguous borsh encoding"))
+		}
+		(Ok(value), Err(_)) => Ok(current(value)),
+		(Err(_), Ok(value)) => Ok(legacy(value)),
+		(Err(error), Err(_)) => Err(error),
+	}
+}
+
 /// Enclave configuration specific to AWS Nitro.
 #[derive(
 	PartialEq,
@@ -529,23 +548,16 @@ impl Manifest {
 	/// Returns [`borsh::io::Error`] if deserialization fails for both the
 	/// current and legacy formats.
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
-		use borsh::BorshDeserialize;
-
 		// try old version with json format
 		if let Ok(v0) = serde_json::from_slice::<ManifestV0>(buf) {
 			return Ok(v0.into());
 		}
 
-		let result = Self::try_from_slice(buf);
-
-		// try loading the old version with borsh format
-		if result.is_err() {
-			let old = ManifestV0::try_from_slice(buf)?;
-
-			Ok(old.into())
-		} else {
-			result
-		}
+		decode_borsh(
+			buf,
+			|manifest| manifest,
+			|manifest: ManifestV0| manifest.into(),
+		)
 	}
 }
 
@@ -698,22 +710,15 @@ impl ManifestEnvelope {
 	/// Returns [`borsh::io::Error`] if deserialization fails for both the
 	/// current and legacy formats.
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, borsh::io::Error> {
-		use borsh::BorshDeserialize;
-
-		let result = Self::try_from_slice(buf);
-
-		// try loading the old version of manifest
-		if result.is_err() {
-			let old = ManifestEnvelopeV0::try_from_slice(buf)?;
-
-			Ok(Self {
+		decode_borsh(
+			buf,
+			|envelope| envelope,
+			|old: ManifestEnvelopeV0| Self {
 				manifest: Manifest::from(old.manifest),
 				manifest_set_approvals: old.manifest_set_approvals,
 				share_set_approvals: old.share_set_approvals,
-			})
-		} else {
-			result
-		}
+			},
+		)
 	}
 }
 
