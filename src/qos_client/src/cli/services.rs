@@ -1121,6 +1121,17 @@ where
 	R: BufRead,
 	W: Write,
 {
+	// Check the manifest schema version
+	{
+		let prompt = format!(
+			"Is this the correct manifest schema version: {}? (y/n)",
+			manifest.version_label()
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
+
 	// Check the namespace name
 	{
 		let prompt = format!(
@@ -1160,6 +1171,46 @@ where
 			"Are these the correct pivot args:\n{:?}?\n(y/n)",
 			manifest.args()
 		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
+
+	// Check pivot debug mode
+	{
+		let prompt = format!(
+			"Is this the correct pivot debug mode: {}? (y/n)",
+			manifest.debug_mode()
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
+
+	// Check pivot bridge configuration
+	{
+		let prompt = format!(
+			"Is this the correct pivot bridge configuration:\n{:?}?\n(y/n)",
+			manifest.bridge_config()
+		);
+		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+	}
+
+	// Check DNS resolvers for manifests that support DNS configuration
+	if let VersionedManifest::V2(v2_manifest) = manifest {
+		let prompt = match &v2_manifest.dns {
+			None =>
+				"Is this the correct DNS configuration: absent? (y/n)".to_string(),
+			Some(dns) if dns.resolvers.is_empty() =>
+				"Is this the correct DNS configuration: configured with no resolvers? (y/n)"
+					.to_string(),
+			Some(dns) => format!(
+				"Are these the correct DNS resolvers:\n{:?}?\n(y/n)",
+				dns.resolvers
+			),
+		};
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
 		}
@@ -2617,11 +2668,11 @@ mod tests {
 		QosHash,
 		msg::ProtocolMsgEncoding,
 		services::boot::{
-			Approval, Manifest, ManifestEnvelope, ManifestEnvelopeV2,
-			ManifestSet, ManifestV2, ManifestVersion, MemberPubKey, Namespace,
-			NitroConfig, PatchSet, PivotConfig, PivotConfigV2, PivotEnv,
-			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
-			VersionedManifestEnvelope,
+			Approval, DnsConfig, Manifest, ManifestEnvelope,
+			ManifestEnvelopeV2, ManifestSet, ManifestV2, ManifestVersion,
+			MemberPubKey, Namespace, NitroConfig, PatchSet, PivotConfig,
+			PivotConfigV2, PivotEnv, QuorumMember, RestartPolicy, ShareSet,
+			VersionedManifest, VersionedManifestEnvelope,
 		},
 	};
 	use qos_nsm::nitro::{AWS_ROOT_CERT_PEM, cert_from_pem};
@@ -2737,6 +2788,35 @@ mod tests {
 			VersionedManifest::V1(manifest) => manifest,
 			_ => panic!("expected v1 manifest in test setup"),
 		}
+	}
+
+	/// Build a v2 manifest mirroring the v1 test fixture, with optional DNS
+	/// resolver configuration.
+	///
+	/// # Panics
+	///
+	/// Panics if the fixture is not a v1 manifest.
+	fn v2_manifest_from(
+		manifest: &VersionedManifest,
+		dns: Option<DnsConfig>,
+	) -> VersionedManifest {
+		let manifest = v1_manifest(manifest).clone();
+		VersionedManifest::V2(ManifestV2 {
+			version: ManifestVersion::V2,
+			namespace: manifest.namespace,
+			pivot: PivotConfigV2 {
+				hash: manifest.pivot.hash,
+				restart: manifest.pivot.restart,
+				bridge_config: manifest.pivot.bridge_config,
+				debug_mode: manifest.pivot.debug_mode,
+				args: manifest.pivot.args,
+				env: PivotEnv::new(),
+			},
+			manifest_set: manifest.manifest_set,
+			share_set: manifest.share_set,
+			enclave: manifest.enclave,
+			dns,
+		})
 	}
 
 	/// Return the v1 manifest envelope for tests that intentionally build v1 fixtures.
@@ -3103,7 +3183,7 @@ mod tests {
 			let Setup { manifest, .. } = setup();
 
 			let mut vec_out = Vec::<u8>::new();
-			let vec_in = "yes\nyes\nyes\nyes\nyes\n".as_bytes();
+			let vec_in = "yes\nyes\nyes\nyes\nyes\nyes\nyes\n".as_bytes();
 
 			let mut prompter =
 				Prompter { reader: vec_in, writer: &mut vec_out };
@@ -3119,29 +3199,7 @@ mod tests {
 			let Setup { manifest, .. } = setup();
 
 			let mut vec_out: Vec<u8> = vec![];
-			let vec_in = "No\n".as_bytes();
-
-			let mut prompter =
-				Prompter { reader: vec_in, writer: &mut vec_out };
-
-			assert!(!super::approve_manifest_human_verifications(
-				&manifest,
-				&mut prompter
-			));
-
-			let output = String::from_utf8(vec_out).unwrap();
-			assert_eq!(
-				&output,
-				"Is this the correct namespace name: test-namespace? (y/n)\n"
-			);
-		}
-
-		#[test]
-		fn exits_early_with_bad_namespace_nonce() {
-			let Setup { manifest, .. } = setup();
-
-			let mut vec_out: Vec<u8> = vec![];
-			let vec_in = "yes\nye".as_bytes();
+			let vec_in = "yes\nNo\n".as_bytes();
 
 			let mut prompter =
 				Prompter { reader: vec_in, writer: &mut vec_out };
@@ -3156,16 +3214,16 @@ mod tests {
 
 			assert_eq!(
 				output[1],
-				"Is this the correct namespace nonce: 2? (y/n)"
+				"Is this the correct namespace name: test-namespace? (y/n)"
 			);
 		}
 
 		#[test]
-		fn exits_early_with_bad_restart_policy() {
+		fn exits_early_with_bad_namespace_nonce() {
 			let Setup { manifest, .. } = setup();
 
 			let mut vec_out: Vec<u8> = vec![];
-			let vec_in = "yes\nyes\ny".as_bytes();
+			let vec_in = "yes\nyes\nye".as_bytes();
 
 			let mut prompter =
 				Prompter { reader: vec_in, writer: &mut vec_out };
@@ -3180,12 +3238,12 @@ mod tests {
 
 			assert_eq!(
 				output[2],
-				"Is this the correct pivot restart policy: RestartPolicy::Never? (y/n)"
+				"Is this the correct namespace nonce: 2? (y/n)"
 			);
 		}
 
 		#[test]
-		fn exits_early_with_bad_pivot_args() {
+		fn exits_early_with_bad_restart_policy() {
 			let Setup { manifest, .. } = setup();
 
 			let mut vec_out: Vec<u8> = vec![];
@@ -3202,9 +3260,145 @@ mod tests {
 			let output = String::from_utf8(vec_out).unwrap();
 			let output: Vec<_> = output.split('\n').collect();
 
-			assert_eq!(output[3], "Are these the correct pivot args:");
-			assert_eq!(output[4], "[\"--option1\", \"argument\"]?");
-			assert_eq!(output[5], "(y/n)");
+			assert_eq!(
+				output[3],
+				"Is this the correct pivot restart policy: RestartPolicy::Never? (y/n)"
+			);
+		}
+
+		#[test]
+		fn exits_early_with_bad_pivot_args() {
+			let Setup { manifest, .. } = setup();
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nyes\nyes\nyes\nno".as_bytes();
+
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(!super::approve_manifest_human_verifications(
+				&manifest,
+				&mut prompter
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.split('\n').collect();
+
+			assert_eq!(output[4], "Are these the correct pivot args:");
+			assert_eq!(output[5], "[\"--option1\", \"argument\"]?");
+			assert_eq!(output[6], "(y/n)");
+		}
+
+		#[test]
+		fn exits_early_with_bad_manifest_schema_version() {
+			let Setup { manifest, .. } = setup();
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "no\n".as_bytes();
+
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(!super::approve_manifest_human_verifications(
+				&manifest,
+				&mut prompter
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.split('\n').collect();
+
+			assert_eq!(
+				output[0],
+				"Is this the correct manifest schema version: v1? (y/n)"
+			);
+		}
+
+		#[test]
+		fn exits_early_with_bad_debug_mode() {
+			let Setup { manifest, .. } = setup();
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nyes\nyes\nyes\nyes\nno".as_bytes();
+
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(!super::approve_manifest_human_verifications(
+				&manifest,
+				&mut prompter
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.split('\n').collect();
+
+			assert_eq!(
+				output[7],
+				"Is this the correct pivot debug mode: false? (y/n)"
+			);
+		}
+
+		#[test]
+		fn exits_early_with_bad_bridge_config() {
+			let Setup { manifest, .. } = setup();
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nyes\nyes\nyes\nyes\nyes\nno".as_bytes();
+
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(!super::approve_manifest_human_verifications(
+				&manifest,
+				&mut prompter
+			));
+
+			let output = String::from_utf8(vec_out).unwrap();
+			let output: Vec<_> = output.split('\n').collect();
+
+			assert_eq!(
+				output[8],
+				"Is this the correct pivot bridge configuration:"
+			);
+			assert_eq!(output[9], "[]?");
+			assert_eq!(output[10], "(y/n)");
+		}
+
+		#[test]
+		fn prompts_each_v2_dns_configuration() {
+			for (dns, expected) in [
+				(None, "Is this the correct DNS configuration: absent? (y/n)"),
+				(
+					Some(DnsConfig { resolvers: vec![] }),
+					"Is this the correct DNS configuration: configured with no resolvers? (y/n)",
+				),
+				(
+					Some(DnsConfig {
+						resolvers: vec!["1.1.1.1".parse().unwrap()],
+					}),
+					"Are these the correct DNS resolvers:",
+				),
+			] {
+				let Setup { manifest, .. } = setup();
+				let manifest = v2_manifest_from(&manifest, dns);
+
+				let mut vec_out: Vec<u8> = vec![];
+				let vec_in = "yes\nyes\nyes\nyes\nyes\nyes\nyes\nno".as_bytes();
+				let mut prompter =
+					Prompter { reader: vec_in, writer: &mut vec_out };
+
+				assert!(!approve_manifest_human_verifications(
+					&manifest,
+					&mut prompter
+				));
+
+				let output = String::from_utf8(vec_out).unwrap();
+				let output: Vec<_> = output.split('\n').collect();
+				assert_eq!(
+					output[0],
+					"Is this the correct manifest schema version: v2? (y/n)"
+				);
+				assert_eq!(output[11], expected);
+			}
 		}
 	}
 

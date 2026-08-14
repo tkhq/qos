@@ -184,6 +184,12 @@ async fn main() {
 
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
+			"Is this the correct manifest schema version: v2? (y/n)"
+		);
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
 			"Is this the correct namespace name: quit-coding-to-vape? (y/n)"
 		);
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
@@ -215,6 +221,28 @@ async fn main() {
 			"Are these the correct pivot args:"
 		);
 		stdout.next().unwrap().unwrap(); // pivot args confirm msg
+		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct pivot debug mode: true? (y/n)"
+		);
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Is this the correct pivot bridge configuration:"
+		);
+		stdout.next().unwrap().unwrap(); // bridge config confirm msg
+		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
+		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
+
+		assert_eq!(
+			&stdout.next().unwrap().unwrap(),
+			"Are these the correct DNS resolvers:"
+		);
+		assert_eq!(&stdout.next().unwrap().unwrap(), "[8.8.4.4]?");
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 

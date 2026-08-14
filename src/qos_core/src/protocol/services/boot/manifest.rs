@@ -241,6 +241,16 @@ impl VersionedManifest {
 		}
 	}
 
+	/// Return the human readable schema version label for this manifest.
+	#[must_use]
+	pub const fn version_label(&self) -> &'static str {
+		match self {
+			Self::V2(_) => "v2",
+			Self::V1(_) => "v1",
+			Self::V0(_) => "v0",
+		}
+	}
+
 	/// Read a manifest while preserving the recognized schema version.
 	///
 	/// The older schemas are recognized by shape, so a manifest that declares
