@@ -216,9 +216,6 @@ impl Cli {
 			)
 			.serve()
 			.await;
-
-			eprintln!("qos_bridge: bridge running, press ctrl+c to quit");
-			let _ = tokio::signal::ctrl_c().await;
 		}
 	}
 }
