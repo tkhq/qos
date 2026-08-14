@@ -342,7 +342,7 @@ pub fn generate_file_key<P: AsRef<Path>>(
 		P256Pair::generate().expect("unable to generate P256 keypair");
 
 	// Write the personal key secret
-	write_with_msg(
+	write_secret_with_msg(
 		master_secret_path.as_ref(),
 		&share_key_pair.to_master_seed_hex(),
 		"Master Seed",
@@ -1855,7 +1855,7 @@ pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 		plaintext
 	};
 
-	write_with_msg(plaintext_path.as_ref(), &file_contents, "Plaintext");
+	write_secret_with_msg(plaintext_path.as_ref(), &file_contents, "Plaintext");
 
 	Ok(())
 }
@@ -2119,7 +2119,7 @@ pub(crate) fn shamir_split(
 	for (i, share) in shares.iter().enumerate() {
 		let file_name = format!("{}.share", i + 1);
 		let file_path = PathBuf::from(&output_dir).join(&file_name);
-		write_with_msg(&file_path, &share[..], &file_name);
+		write_secret_with_msg(&file_path, &share[..], &file_name);
 	}
 
 	Ok(())
@@ -2141,7 +2141,11 @@ pub(crate) fn shamir_reconstruct(
 
 	let secret = qos_crypto::shamir::shares_reconstruct(shares).unwrap();
 
-	write_with_msg(output_path.as_ref(), &secret, "Reconstructed secret");
+	write_secret_with_msg(
+		output_path.as_ref(),
+		&secret,
+		"Reconstructed secret",
+	);
 
 	Ok(())
 }
@@ -2565,6 +2569,26 @@ fn write_with_msg(path: &Path, buf: &[u8], item_name: &str) {
 	fs::write(path, buf).unwrap_or_else(|e| {
 		panic!("Failed writing {} to file: {:?}", path_str.clone(), e)
 	});
+	println!("{item_name} written to: {path_str}");
+}
+
+fn write_secret_with_msg(path: &Path, buf: &[u8], item_name: &str) {
+	use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
+
+	let path_str = path.as_os_str().to_string_lossy();
+	fs::OpenOptions::new()
+		.write(true)
+		.create(true)
+		.truncate(true)
+		.mode(0o600)
+		.open(path)
+		.and_then(|mut file| {
+			file.set_permissions(fs::Permissions::from_mode(0o600))?;
+			file.write_all(buf)
+		})
+		.unwrap_or_else(|e| {
+			panic!("Failed writing {} to file: {:?}", path_str.clone(), e)
+		});
 	println!("{item_name} written to: {path_str}");
 }
 
