@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.14.0](https://github.com/tkhq/qos/compare/qos_client-v0.13.0...qos_client-v0.14.0) - 2026-08-14
+
+### Other
+- Merge pull request #777 from tkhq/zeke/pcr3-verification
+- anchor PCR3 verification to the manifest
+- don't allow legacy genesis messages
+- Commit GenesisOutput to the exact boot genesis request and verify it in qos_client
+
+## `qos_net` - [0.14.0](https://github.com/tkhq/qos/compare/qos_net-v0.13.0...qos_net-v0.14.0) - 2026-08-14
+
+### Fixed
+- fix tests
+
+## `qos_core` - [0.14.0](https://github.com/tkhq/qos/compare/qos_core-v0.13.0...qos_core-v0.14.0) - 2026-08-14
+
+### Added
+- *(qos_client)* review schema version, debug mode, bridges, and DNS when approving a manifest
+- *(test-harness)* add Docker QEMU integration harness
+
+### Fixed
+- *(qos_core)* reject manifests whose declared version contradicts their schema
+- *(qos_core)* reject quorum member sets with duplicate aliases, signing keys, or encryption keys
+- *(qos-core)* replace existing egress default route
+
+### Other
+- Improve manifest compatibility handling
+- don't allow legacy genesis messages
+- Commit GenesisOutput to the exact boot genesis request and verify it in qos_client
+- *(qemu)* use the production enclave EIF in end-to-end tests
+
+## `qos_p256` - [0.14.0](https://github.com/tkhq/qos/compare/qos_p256-v0.13.0...qos_p256-v0.14.0) - 2026-08-14
+
+### Fixed
+- *(qos_core)* reject quorum member sets with duplicate aliases, signing keys, or encryption keys
+
+### Other
+- Set owner-only mode on secret file outputs
+
+## `qos_nsm` - [0.14.0](https://github.com/tkhq/qos/compare/qos_nsm-v0.13.0...qos_nsm-v0.14.0) - 2026-08-14
+
+### Other
+- attestation doc + manifest verification spec
+
 ## `qos_client` - [0.13.0](https://github.com/tkhq/qos/compare/qos_client-v0.12.2...qos_client-v0.13.0) - 2026-07-20
 
 ### Added
