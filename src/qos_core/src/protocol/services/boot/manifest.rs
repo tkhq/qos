@@ -51,6 +51,22 @@ pub fn canonical_json_hash<T: serde::Serialize>(value: &T) -> Hash256 {
 	qos_json::hash(value).expect("Implements serde serialize")
 }
 
+/// Whether `buf` is a JSON object carrying a top-level `version` key.
+fn declares_a_version(buf: &[u8]) -> bool {
+	serde_json::from_slice::<serde_json::Value>(buf)
+		.ok()
+		.and_then(|value| value.get("version").cloned())
+		.is_some()
+}
+
+/// Whether `buf` is a JSON envelope whose `manifest` declares a `version`.
+fn enveloped_manifest_declares_a_version(buf: &[u8]) -> bool {
+	serde_json::from_slice::<serde_json::Value>(buf)
+		.ok()
+		.and_then(|value| value.get("manifest")?.get("version").cloned())
+		.is_some()
+}
+
 /// A manifest decoded with schema version preserved.
 #[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
@@ -227,13 +243,20 @@ impl VersionedManifest {
 
 	/// Read a manifest while preserving the recognized schema version.
 	///
+	/// The older schemas are recognized by shape, so a manifest that declares
+	/// a `version` must decode as [`ManifestV2`] rather than fall back to one
+	/// of them.
+	///
 	/// # Errors
 	///
 	/// Returns an [`std::io::Error`] when the bytes cannot be decoded as any
-	/// supported manifest schema or encoding.
+	/// supported manifest schema or encoding, or when a manifest declares a
+	/// `version` that does not match the schema it is written in.
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, Error> {
-		if let Ok(manifest) = serde_json::from_slice::<ManifestV2>(buf) {
-			return Ok(Self::V2(manifest));
+		if declares_a_version(buf) {
+			return serde_json::from_slice::<ManifestV2>(buf)
+				.map(Self::V2)
+				.map_err(|e| Error::other(e.to_string()));
 		}
 		if let Ok(manifest) = serde_json::from_slice::<Manifest>(buf) {
 			return Ok(Self::V1(manifest));
@@ -455,14 +478,19 @@ impl VersionedManifestEnvelope {
 
 	/// Read a manifest envelope while preserving the recognized schema version.
 	///
+	/// As with [`VersionedManifest::try_from_slice_compat`], an envelope whose
+	/// manifest declares a `version` must decode as [`ManifestEnvelopeV2`].
+	///
 	/// # Errors
 	///
 	/// Returns an [`std::io::Error`] when the bytes cannot be decoded as any
-	/// supported manifest envelope schema or encoding.
+	/// supported manifest envelope schema or encoding, or when the enveloped
+	/// manifest declares a `version` that does not match its schema.
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, Error> {
-		if let Ok(envelope) = serde_json::from_slice::<ManifestEnvelopeV2>(buf)
-		{
-			return Ok(Self::V2(envelope));
+		if enveloped_manifest_declares_a_version(buf) {
+			return serde_json::from_slice::<ManifestEnvelopeV2>(buf)
+				.map(Self::V2)
+				.map_err(|e| Error::other(e.to_string()));
 		}
 		if let Ok(envelope) = serde_json::from_slice::<ManifestEnvelope>(buf) {
 			return Ok(Self::V1(envelope));
@@ -655,6 +683,96 @@ mod tests {
 		});
 
 		assert!(serde_json::from_value::<ManifestV2>(value).is_err());
+	}
+
+	#[test]
+	fn v2_manifest_rejects_a_version_other_than_v2() {
+		let pair = P256Pair::generate().unwrap();
+		let manifest = sample_v2_manifest(sample_member(&pair));
+		let mut value = serde_json::to_value(&manifest).unwrap();
+
+		for version in [
+			serde_json::json!("v1"),
+			serde_json::json!("v3"),
+			serde_json::json!(2),
+		] {
+			value["version"] = version.clone();
+			assert!(
+				serde_json::from_value::<ManifestV2>(value.clone()).is_err(),
+				"version {version} should not decode as a v2 manifest"
+			);
+		}
+
+		value["version"] = serde_json::json!("v2");
+		assert_eq!(
+			serde_json::from_value::<ManifestV2>(value).unwrap(),
+			manifest
+		);
+	}
+
+	#[test]
+	fn declared_version_never_falls_back_to_an_older_schema() {
+		let pair = P256Pair::generate().unwrap();
+		let member = sample_member(&pair);
+
+		let mut v1 =
+			serde_json::to_value(sample_v1_manifest(member.clone())).unwrap();
+		v1["version"] = serde_json::json!("v2");
+		let error = VersionedManifest::try_from_slice_compat(
+			&serde_json::to_vec(&v1).unwrap(),
+		)
+		.unwrap_err();
+		assert!(error.to_string().contains("patchSet"), "{error}");
+
+		let mut v0 =
+			serde_json::to_value(sample_v0_manifest(member.clone())).unwrap();
+		v0["version"] = serde_json::json!("v1");
+		assert!(
+			VersionedManifest::try_from_slice_compat(
+				&serde_json::to_vec(&v0).unwrap()
+			)
+			.is_err()
+		);
+
+		// Undeclared manifests still resolve by shape.
+		let v1 =
+			serde_json::to_vec(&sample_v1_manifest(member.clone())).unwrap();
+		assert!(matches!(
+			VersionedManifest::try_from_slice_compat(&v1).unwrap(),
+			VersionedManifest::V1(_)
+		));
+		let v0 = serde_json::to_vec(&sample_v0_manifest(member)).unwrap();
+		assert!(matches!(
+			VersionedManifest::try_from_slice_compat(&v0).unwrap(),
+			VersionedManifest::V0(_)
+		));
+	}
+
+	#[test]
+	fn enveloped_declared_version_never_falls_back_to_an_older_schema() {
+		let pair = P256Pair::generate().unwrap();
+		let member = sample_member(&pair);
+
+		let envelope = ManifestEnvelope {
+			manifest: sample_v1_manifest(member.clone()),
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		};
+		let mut value = serde_json::to_value(&envelope).unwrap();
+		value["manifest"]["version"] = serde_json::json!("v2");
+		assert!(
+			VersionedManifestEnvelope::try_from_slice_compat(
+				&serde_json::to_vec(&value).unwrap()
+			)
+			.is_err()
+		);
+
+		let undeclared = serde_json::to_vec(&envelope).unwrap();
+		assert!(matches!(
+			VersionedManifestEnvelope::try_from_slice_compat(&undeclared)
+				.unwrap(),
+			VersionedManifestEnvelope::V1(_)
+		));
 	}
 
 	#[test]
