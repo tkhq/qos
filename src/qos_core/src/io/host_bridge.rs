@@ -34,24 +34,29 @@ impl HostBridge {
 	}
 
 	/// Create a TCP to VSOCK bridge using the provided `StreamPool` and `SocketAddr` from constructor.
-	/// This consumes the `HostBridge` instance and starts background tasks that only return on unrecoverable errors.
-	/// NOTE: this spawns a standalone tasks and *DOES NOT WAIT* for completion.
-	pub fn tcp_to_vsock(self) {
+	/// This consumes the `HostBridge` instance and starts a background task that only returns on unrecoverable errors.
+	/// NOTE: this spawns a standalone task and *DOES NOT WAIT* for completion.
+	#[must_use]
+	pub fn tcp_to_vsock(self) -> JoinHandle<()> {
 		println!("starting tcp to vsock host bridge @ {}", self.host_addr);
 		tokio::spawn(async move {
 			let streams = self.stream_pool.to_streams();
-			let mut tasks = Vec::new();
+			let mut bridges = Vec::new();
 			let mut host_addr = self.host_addr;
 
 			for stream in streams {
 				println!("tcp to vsock bridge listening on {host_addr}");
-				tasks.push(tokio::spawn(tcp_to_vsock(stream, host_addr)));
+				bridges.push(tcp_to_vsock(stream, host_addr));
 				// bump port by 1 for next listener
 				host_addr.set_port(host_addr.port() + 1);
 			}
 
-			await_all(tasks).await;
-		});
+			for result in join_all(bridges).await {
+				if let Err(err) = result {
+					eprintln!("error in task: {err:?}");
+				}
+			}
+		})
 	}
 
 	/// Create a VSOCK to TCP bridge using the provided `StreamPool` and

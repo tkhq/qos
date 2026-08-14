@@ -10,6 +10,7 @@ use qos_core::{
 	protocol::services::boot::BridgeConfig,
 };
 use qos_host::{ENCLAVE_INFO, EnclaveInfo};
+use tokio::task::JoinHandle;
 
 /// Host server implementation using `HostBridge::tcp_to_vsock`
 pub struct BridgeServer {
@@ -37,10 +38,16 @@ impl BridgeServer {
 		}
 	}
 
-	/// Start the host side of the bridge, taking configuration from the enclave
+	/// Start the host side of the bridge, taking configuration from the enclave.
+	/// Keeps polling the enclave and reconciles ingress listeners whenever the
+	/// approved manifest's bridge configuration changes.
 	/// # Panics
 	/// Panics if enclave info response fails to parse
 	pub async fn serve(&self) {
+		let mut egress_enabled = false;
+		let mut active_servers = Vec::new();
+		let mut server_handles = Vec::new();
+
 		loop {
 			match tokio::task::block_in_place(|| {
 				ureq::get(&self.info_url)
@@ -49,19 +56,31 @@ impl BridgeServer {
 					.map_err(Box::new)
 			}) {
 				Ok(info) => {
-					if let Some(me) = info
+					let configs = info
 						.into_json::<EnclaveInfo>()
 						.expect("unable to parse enclave info response")
 						.manifest_envelope
-					{
-						let manifest = me.manifest();
-						break self.run_bridges(manifest.bridge_config());
+						.map(|me| me.manifest().bridge_config().to_vec())
+						.unwrap_or_default();
+
+					if !egress_enabled
+						&& configs.iter().any(|config| {
+							matches!(config, BridgeConfig::Client { .. })
+						}) {
+						egress_enabled = true;
+						self.run_egress_host_bridge();
 					}
+
+					self.reconcile_ingress(
+						&configs,
+						&mut active_servers,
+						&mut server_handles,
+					)
+					.await;
 				}
 				Err(err) => eprintln!("unable to query enclave: {err}"),
 			}
 
-			println!("retrying enclave info query in 5s");
 			tokio::time::sleep(Duration::from_secs(5)).await;
 		}
 	}
@@ -71,30 +90,37 @@ impl BridgeServer {
 		self.host_port_override.unwrap_or(port)
 	}
 
-	fn run_bridges(&self, configs: &[BridgeConfig]) {
-		let mut egress_enabled = false;
+	async fn reconcile_ingress(
+		&self,
+		configs: &[BridgeConfig],
+		active: &mut Vec<BridgeConfig>,
+		handles: &mut Vec<JoinHandle<()>>,
+	) {
+		let servers: Vec<BridgeConfig> = configs
+			.iter()
+			.filter(|config| matches!(config, BridgeConfig::Server { .. }))
+			.cloned()
+			.collect();
 
-		for config in configs {
-			match config {
-				BridgeConfig::Client { port: _, host: _ } => {
-					// NOTE: we ignore the host and port here as they are meant for firewall rules
-					// TODO: figure out how to actually handle the firewall rules, see TVC-25
+		if servers == *active {
+			return;
+		}
 
-					// only run one instance as it covers ALL ports, the others are for firewalls
-					if !egress_enabled {
-						egress_enabled = true;
-						self.run_egress_host_bridge();
-					}
-				}
-				BridgeConfig::Server { port, host } => {
-					self.run_ingress_bridge(
-						config.port(),
-						self.host_port(*port),
-						host,
-					);
-				}
+		for handle in handles.drain(..) {
+			handle.abort();
+			let _ = handle.await;
+		}
+
+		for config in &servers {
+			if let BridgeConfig::Server { port, host } = config
+				&& let Some(handle) =
+					self.run_ingress_bridge(*port, self.host_port(*port), host)
+			{
+				handles.push(handle);
 			}
 		}
+
+		*active = servers;
 	}
 
 	// dummy placeholder
@@ -126,7 +152,7 @@ impl BridgeServer {
 		core_port: u16,
 		host_port: u16,
 		host_ip_str: &str,
-	) {
+	) -> Option<JoinHandle<()>> {
 		// derive the app socket, for vsock just use the app host port with same CID as the enclave socket,
 		// with usock just add "<port>.appsock" suffix
 		let app_socket = match self.socket_placeholder.with_port(core_port) {
@@ -135,7 +161,7 @@ impl BridgeServer {
 				eprintln!(
 					"unable to derive app socket from enclave socket: {err:?}, tcp to vsock bridge will not start"
 				);
-				return;
+				return None;
 			}
 		};
 
@@ -145,7 +171,7 @@ impl BridgeServer {
 				eprintln!(
 					"unable to create new app socket pool: {err:?}, tcp to vsock bridge will not start"
 				);
-				return;
+				return None;
 			}
 		};
 
@@ -153,10 +179,91 @@ impl BridgeServer {
 			eprintln!(
 				"unable to parse host ip for bridge configuration: {host_ip_str}"
 			);
-			return;
+			return None;
 		};
 		let host_addr = SocketAddr::new(host_ip.into(), host_port);
 
-		HostBridge::new(app_pool, host_addr).tcp_to_vsock();
+		Some(HostBridge::new(app_pool, host_addr).tcp_to_vsock())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use tokio::net::TcpStream;
+
+	use super::*;
+
+	fn free_port() -> u16 {
+		std::net::TcpListener::bind("127.0.0.1:0")
+			.unwrap()
+			.local_addr()
+			.unwrap()
+			.port()
+	}
+
+	fn server_config(port: u16, host: &str) -> BridgeConfig {
+		BridgeConfig::Server { port, host: host.to_string() }
+	}
+
+	async fn assert_connectable(port: u16) {
+		for _ in 0..100 {
+			if TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+				return;
+			}
+			tokio::time::sleep(Duration::from_millis(10)).await;
+		}
+		panic!("unable to connect to 127.0.0.1:{port}");
+	}
+
+	async fn assert_not_connectable(port: u16) {
+		assert!(TcpStream::connect(("127.0.0.1", port)).await.is_err());
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn reconcile_ingress_tracks_config_changes() {
+		let bridge = BridgeServer::new(
+			SocketAddress::new_unix(
+				"/tmp/reconcile_ingress_tracks_config_changes.sock",
+			),
+			String::new(),
+			None,
+			None,
+		);
+		let mut active = Vec::new();
+		let mut handles = Vec::new();
+
+		let port_a = free_port();
+		let port_b = free_port();
+
+		bridge
+			.reconcile_ingress(
+				&[server_config(port_a, "0.0.0.0")],
+				&mut active,
+				&mut handles,
+			)
+			.await;
+		assert_connectable(port_a).await;
+
+		bridge
+			.reconcile_ingress(
+				&[server_config(port_a, "127.0.0.1")],
+				&mut active,
+				&mut handles,
+			)
+			.await;
+		assert_connectable(port_a).await;
+
+		bridge
+			.reconcile_ingress(
+				&[server_config(port_b, "127.0.0.1")],
+				&mut active,
+				&mut handles,
+			)
+			.await;
+		assert_not_connectable(port_a).await;
+		assert_connectable(port_b).await;
+
+		bridge.reconcile_ingress(&[], &mut active, &mut handles).await;
+		assert_not_connectable(port_b).await;
 	}
 }
