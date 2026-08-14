@@ -14,7 +14,7 @@ use super::ManifestVersion;
 
 /// DNS resolver configuration (v2).
 #[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DnsConfig {
 	/// Resolver IP addresses to write as `nameserver` entries.
 	pub resolvers: Vec<IpAddr>,
@@ -22,7 +22,7 @@ pub struct DnsConfig {
 
 /// JSON-only pivot binary configuration (v2).
 #[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(any(feature = "mock", test), derive(Default))]
 pub struct PivotConfigV2 {
 	/// Hash of the pivot binary, taken from the binary as a `Vec<u8>`.
@@ -43,9 +43,11 @@ pub struct PivotConfigV2 {
 
 /// Explicitly versioned JSON manifest (v2).
 #[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ManifestV2 {
-	/// Manifest schema version.
+	/// Manifest schema version. Always [`ManifestVersion::V2`]; any other
+	/// value fails to deserialize.
+	#[serde(deserialize_with = "deserialize_v2_version")]
 	pub version: ManifestVersion,
 	/// Namespace this manifest belongs too.
 	pub namespace: Namespace,
@@ -62,9 +64,28 @@ pub struct ManifestV2 {
 	pub dns: Option<DnsConfig>,
 }
 
+/// Accept only `"v2"`. [`ManifestVersion`] doubles as the schema selector for
+/// [`super::ManifestBuilder`], so it carries variants a [`ManifestV2`] can
+/// never legitimately hold.
+fn deserialize_v2_version<'de, D>(
+	deserializer: D,
+) -> Result<ManifestVersion, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	use serde::{Deserialize, de::Error};
+
+	match ManifestVersion::deserialize(deserializer)? {
+		ManifestVersion::V2 => Ok(ManifestVersion::V2),
+		other => Err(D::Error::custom(format!(
+			"manifest v2 requires version \"v2\", got {other:?}"
+		))),
+	}
+}
+
 /// Explicitly versioned JSON manifest envelope (v2).
 #[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ManifestEnvelopeV2 {
 	/// Encapsulated manifest.
 	pub manifest: ManifestV2,
