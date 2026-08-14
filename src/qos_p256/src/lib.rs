@@ -118,6 +118,22 @@ pub fn derive_secret(
 	Ok(buf)
 }
 
+fn write_owner_only(path: &Path, buf: &[u8]) -> std::io::Result<()> {
+	use std::{
+		io::Write as _,
+		os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _},
+	};
+
+	let mut file = std::fs::OpenOptions::new()
+		.write(true)
+		.create(true)
+		.truncate(true)
+		.mode(0o600)
+		.open(path)?;
+	file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+	file.write_all(buf)
+}
+
 /// Helper function to generate a `N` length byte buffer.
 #[must_use]
 pub fn bytes_os_rng<const N: usize>() -> Zeroizing<[u8; N]> {
@@ -270,7 +286,7 @@ impl P256Pair {
 		path: P,
 	) -> Result<(), P256Error> {
 		let hex_string = Zeroizing::new(qos_hex::encode(&self.master_seed[..]));
-		std::fs::write(&path, hex_string.as_bytes()).map_err(|e| {
+		write_owner_only(path.as_ref(), hex_string.as_bytes()).map_err(|e| {
 			P256Error::IOError(format!(
 				"failed to write master secret to {}: {e}",
 				path.as_ref().display()
@@ -683,6 +699,31 @@ mod test {
 		let message = b"a message to authenticate";
 		let signature = alice_pair2.sign(message).unwrap();
 		assert!(alice_pair.public_key().verify(message, &signature).is_ok());
+	}
+
+	#[test]
+	fn master_seed_to_file_is_owner_only() {
+		use std::os::unix::fs::PermissionsExt as _;
+
+		let path = PathWrapper::from(
+			std::env::temp_dir().join("qos_seed_mode.secret"),
+		);
+		std::fs::write(&*path, b"stale").unwrap();
+		std::fs::set_permissions(
+			&*path,
+			std::fs::Permissions::from_mode(0o644),
+		)
+		.unwrap();
+
+		let pair = P256Pair::generate().unwrap();
+		pair.to_hex_file(&*path).unwrap();
+
+		let mode =
+			std::fs::metadata(&*path).unwrap().permissions().mode() & 0o777;
+		assert_eq!(mode, 0o600);
+
+		let pair2 = P256Pair::from_hex_file(&*path).unwrap();
+		assert_eq!(pair.to_master_seed(), pair2.to_master_seed());
 	}
 
 	#[test]
