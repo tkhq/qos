@@ -121,13 +121,7 @@ impl BorshDeserialize for VersionedManifest {
 	) -> borsh::io::Result<Self> {
 		let mut buf = vec![];
 		reader.read_to_end(&mut buf)?;
-		if let Ok(manifest) = Manifest::try_from_slice(&buf) {
-			return Ok(Self::V1(manifest));
-		}
-		if let Ok(manifest) = ManifestV0::try_from_slice(&buf) {
-			return Ok(Self::V0(manifest));
-		}
-		Err(borsh::io::Error::other("failed to decode borsh manifest as v1/v0"))
+		super::decode_borsh(&buf, Self::V1, Self::V0)
 	}
 }
 
@@ -274,13 +268,7 @@ impl VersionedManifest {
 		if let Ok(manifest) = serde_json::from_slice::<ManifestV0>(buf) {
 			return Ok(Self::V0(manifest));
 		}
-		if let Ok(manifest) = Manifest::try_from_slice(buf) {
-			return Ok(Self::V1(manifest));
-		}
-
-		ManifestV0::try_from_slice(buf)
-			.map(Self::V0)
-			.map_err(|e| Error::other(e.to_string()))
+		super::decode_borsh(buf, Self::V1, Self::V0)
 	}
 
 	/// Serialize this manifest using its storage encoding.
@@ -371,15 +359,7 @@ impl BorshDeserialize for VersionedManifestEnvelope {
 	) -> borsh::io::Result<Self> {
 		let mut buf = vec![];
 		reader.read_to_end(&mut buf)?;
-		if let Ok(envelope) = ManifestEnvelope::try_from_slice(&buf) {
-			return Ok(Self::V1(envelope));
-		}
-		if let Ok(envelope) = ManifestEnvelopeV0::try_from_slice(&buf) {
-			return Ok(Self::V0(envelope));
-		}
-		Err(borsh::io::Error::other(
-			"failed to decode borsh manifest envelope as v1/v0",
-		))
+		super::decode_borsh(&buf, Self::V1, Self::V0)
 	}
 }
 
@@ -509,13 +489,7 @@ impl VersionedManifestEnvelope {
 		{
 			return Ok(Self::V0(envelope));
 		}
-		if let Ok(envelope) = ManifestEnvelope::try_from_slice(buf) {
-			return Ok(Self::V1(envelope));
-		}
-
-		ManifestEnvelopeV0::try_from_slice(buf)
-			.map(Self::V0)
-			.map_err(|e| Error::other(e.to_string()))
+		super::decode_borsh(buf, Self::V1, Self::V0)
 	}
 
 	/// Serialize this manifest envelope using its storage encoding.
@@ -908,5 +882,28 @@ mod tests {
 		assert!(
 			borsh::to_vec(&VersionedManifestEnvelope::V2(v2_envelope)).is_err()
 		);
+	}
+
+	#[test]
+	fn ambiguous_borsh_manifest_is_rejected() {
+		let mut manifest = ManifestV0::default();
+		manifest.pivot.args = vec!["\u{1}".to_string(), "\0\0\0\0".to_string()];
+		let envelope = ManifestEnvelopeV0 {
+			manifest: manifest.clone(),
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		};
+		let envelope_bytes = borsh::to_vec(&envelope).unwrap();
+		let bytes = borsh::to_vec(&manifest).unwrap();
+
+		assert!(ManifestEnvelope::try_from_slice(&envelope_bytes).is_ok());
+		assert!(ManifestEnvelopeV0::try_from_slice(&envelope_bytes).is_ok());
+		assert!(
+			VersionedManifestEnvelope::try_from_slice_compat(&envelope_bytes)
+				.is_err()
+		);
+		assert!(Manifest::try_from_slice(&bytes).is_ok());
+		assert!(ManifestV0::try_from_slice(&bytes).is_ok());
+		assert!(VersionedManifest::try_from_slice_compat(&bytes).is_err());
 	}
 }
