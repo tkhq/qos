@@ -12,7 +12,7 @@ use std::{
 };
 
 use crate::io::SocketAddress;
-use etherparse::{LaxNetSlice, LaxSlicedPacket, TransportSlice};
+use etherparse::{LaxNetSlice, LaxSlicedPacket, TransportSlice, ip_number};
 use nix::{
 	NixPath, libc,
 	sys::socket::{
@@ -207,18 +207,14 @@ fn flow_key(frame: &[u8], inbound: bool) -> Option<FlowKey> {
 		LaxNetSlice::Arp(_) => return None,
 	};
 	let (protocol, src_port, dst_port) = match packet.transport.as_ref()? {
-		TransportSlice::Tcp(tcp) => (
-			etherparse::ip_number::TCP,
-			tcp.source_port(),
-			tcp.destination_port(),
-		),
-		TransportSlice::Udp(udp) => (
-			etherparse::ip_number::UDP,
-			udp.source_port(),
-			udp.destination_port(),
-		),
-		TransportSlice::Icmpv4(_) => (etherparse::ip_number::ICMP, 0, 0),
-		TransportSlice::Icmpv6(_) => (etherparse::ip_number::IPV6_ICMP, 0, 0),
+		TransportSlice::Tcp(tcp) => {
+			(ip_number::TCP, tcp.source_port(), tcp.destination_port())
+		}
+		TransportSlice::Udp(udp) => {
+			(ip_number::UDP, udp.source_port(), udp.destination_port())
+		}
+		TransportSlice::Icmpv4(_) => (ip_number::ICMP, 0, 0),
+		TransportSlice::Icmpv6(_) => (ip_number::IPV6_ICMP, 0, 0),
 	};
 	Some(if inbound {
 		FlowKey {
@@ -420,7 +416,7 @@ pub fn run_with_ld(cmd_path: &str, args: &str) -> std::io::Result<Child> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use etherparse::{Ipv4Header, TcpHeader, UdpHeader, ip_number};
+	use etherparse::{Ipv4Header, TcpHeader, UdpHeader};
 
 	const ENCLAVE_IP: [u8; 4] = [169, 254, 0, 1];
 	const REMOTE_IP: [u8; 4] = [93, 184, 216, 34];
