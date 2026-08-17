@@ -1,0 +1,12 @@
++trait ProtocolTransport {
++    fn send(&self, endpoint: &Endpoint, request: &ProtocolMsg,
++            encoding: ProtocolMsgEncoding) -> Result<ProtocolMsg, String>;
++}
+
++struct ProtocolClient {
++    endpoint: Endpoint,
++    transport: Box<dyn ProtocolTransport>,
++}
++struct HttpTransport;
+
+ // Workflows receive &ProtocolClient; ureq exists only in HttpTransport.

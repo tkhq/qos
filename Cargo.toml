@@ -41,6 +41,7 @@ exclude = [
   "src/qos_aws",
   "src/qos_system",
   "src/qos_enclave",
+  "talk",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.

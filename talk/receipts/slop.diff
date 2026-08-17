@@ -1,0 +1,18 @@
+ handlers::boot_genesis(opts)
+-  services::boot_genesis(BootGenesisArgs { uri, ... })
++  services::boot_genesis(BootGenesisArgs { uri, transcript, ... })
+
+ services::boot_genesis(args)
+-  request::post_json(uri, &req)
++  request::post_json(uri, &req, transcript)
+
+ services::boot_standard(args)
+-  request::post_borsh(uri, &req)
++  request::post_borsh(uri, &req, transcript)
+
+ services::export_key(...)
+-  post_request_with_encoding_fallback(uri, &req, encodings, parse)
++  post_request_with_encoding_fallback(uri, &req, encodings, transcript, parse)
+
+ // ...the same option continues through status, version, key forwarding,
+ // provisioning, injection, attestation, and dangerous-dev-boot.

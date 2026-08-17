@@ -1,0 +1,898 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 084c0cd6..626fe227 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -2130,6 +2130,7 @@ dependencies = [
+  "rpassword",
+  "serde_json",
+  "ureq",
++ "url",
+  "x509-cert",
+  "yubikey",
+  "zeroize",
+diff --git a/src/qos_client/Cargo.toml b/src/qos_client/Cargo.toml
+index 9fe8741f..7de67f30 100644
+--- a/src/qos_client/Cargo.toml
++++ b/src/qos_client/Cargo.toml
+@@ -30,6 +30,7 @@ rand_core = { workspace = true, features = ["os_rng"] }
+ zeroize = { workspace = true, features = ["alloc"] }
+ rpassword = { workspace = true }
+ serde_json = { workspace = true }
++url = { workspace = true }
+ 
+ der = { workspace = true, optional = true }
+ x509-cert = { workspace = true, optional = true }
+diff --git a/src/qos_client/src/cli/mod.rs b/src/qos_client/src/cli/mod.rs
+index 3b560f55..52f10f9c 100644
+--- a/src/qos_client/src/cli/mod.rs
++++ b/src/qos_client/src/cli/mod.rs
+@@ -18,6 +18,8 @@ use qos_core::{
+ 	},
+ };
+ 
++use crate::request::{Endpoint, HttpTransport, ProtocolClient};
++
+ mod services;
+ 
+ pub use services::PairOrYubi;
+@@ -1337,6 +1339,26 @@ impl ClientRunner {
+ 
+ 	/// Run the given command.
+ 	pub fn run(self) {
++		let protocol_client = matches!(
++			&self.cmd,
++			Command::EnclaveStatus
++				| Command::EnclaveVersion
++				| Command::BootGenesis
++				| Command::BootStandard
++				| Command::GetAttestationDoc
++				| Command::PostShare
++				| Command::DangerousDevBoot
++				| Command::BootKeyFwd
++				| Command::ExportKey
++				| Command::InjectKey
++		)
++		.then(|| {
++			let endpoint = Endpoint::try_from(self.opts.path_message()).expect(
++				"qos_client should construct a valid protocol endpoint",
++			);
++			ProtocolClient::new(endpoint, Box::new(HttpTransport))
++		});
++
+ 		if self.opts.parsed.version() {
+ 			println!("version: {}", env!("CARGO_PKG_VERSION"));
+ 		} else if self.opts.parsed.help() {
+@@ -1345,9 +1367,15 @@ impl ClientRunner {
+ 		} else {
+ 			match self.cmd {
+ 				Command::HostHealth => handlers::host_health(&self.opts),
+-				Command::EnclaveStatus => handlers::enclave_status(&self.opts),
++				Command::EnclaveStatus => handlers::enclave_status(
++					&self.opts,
++					protocol_client.as_ref().expect("protocol command"),
++				),
+ 				Command::EnclaveVersion => {
+-					handlers::enclave_version(&self.opts);
++					handlers::enclave_version(
++						&self.opts,
++						protocol_client.as_ref().expect("protocol command"),
++					);
+ 				}
+ 				Command::GenerateFileKey => {
+ 					handlers::generate_file_key(&self.opts);
+@@ -1358,7 +1386,10 @@ impl ClientRunner {
+ 				Command::AdvancedProvisionYubiKey => {
+ 					handlers::advanced_provision_yubikey(&self.opts);
+ 				}
+-				Command::BootGenesis => handlers::boot_genesis(&self.opts),
++				Command::BootGenesis => handlers::boot_genesis(
++					&self.opts,
++					protocol_client.as_ref().expect("protocol command"),
++				),
+ 				Command::AfterGenesis => handlers::after_genesis(&self.opts),
+ 				Command::VerifyGenesis => {
+ 					handlers::verify_genesis(&self.opts);
+@@ -1369,9 +1400,15 @@ impl ClientRunner {
+ 				Command::ApproveManifest => {
+ 					handlers::approve_manifest(&self.opts);
+ 				}
+-				Command::BootStandard => handlers::boot_standard(&self.opts),
++				Command::BootStandard => handlers::boot_standard(
++					&self.opts,
++					protocol_client.as_ref().expect("protocol command"),
++				),
+ 				Command::GetAttestationDoc => {
+-					handlers::get_attestation_doc(&self.opts);
++					handlers::get_attestation_doc(
++						&self.opts,
++						protocol_client.as_ref().expect("protocol command"),
++					);
+ 				}
+ 				Command::ProxyReEncryptShare => {
+ 					handlers::proxy_re_encrypt_share(&self.opts);
+@@ -1379,9 +1416,15 @@ impl ClientRunner {
+ 				Command::GetEphemeralKeyHex => {
+ 					handlers::get_ephemeral_key_hex(&self.opts);
+ 				}
+-				Command::PostShare => handlers::post_share(&self.opts),
++				Command::PostShare => handlers::post_share(
++					&self.opts,
++					protocol_client.as_ref().expect("protocol command"),
++				),
+ 				Command::DangerousDevBoot => {
+-					handlers::dangerous_dev_boot(&self.opts);
++					handlers::dangerous_dev_boot(
++						&self.opts,
++						protocol_client.as_ref().expect("protocol command"),
++					);
+ 				}
+ 				Command::GenerateManifestEnvelope => {
+ 					handlers::generate_manifest_envelope(&self.opts);
+@@ -1407,9 +1450,18 @@ impl ClientRunner {
+ 				Command::JsonToBorsh => {
+ 					handlers::json_to_borsh(&self.opts);
+ 				}
+-				Command::BootKeyFwd => handlers::boot_key_fwd(&self.opts),
+-				Command::ExportKey => handlers::export_key(&self.opts),
+-				Command::InjectKey => handlers::inject_key(&self.opts),
++				Command::BootKeyFwd => handlers::boot_key_fwd(
++					&self.opts,
++					protocol_client.as_ref().expect("protocol command"),
++				),
++				Command::ExportKey => handlers::export_key(
++					&self.opts,
++					protocol_client.as_ref().expect("protocol command"),
++				),
++				Command::InjectKey => handlers::inject_key(
++					&self.opts,
++					protocol_client.as_ref().expect("protocol command"),
++				),
+ 				Command::P256Verify => handlers::p256_verify(&self.opts),
+ 				Command::P256Sign => handlers::p256_sign(&self.opts),
+ 				Command::P256AsymmetricEncrypt => {
+@@ -1443,7 +1495,7 @@ mod handlers {
+ 			ClientOpts, ProtocolMsg,
+ 			services::{self, GenerateManifestArgs, PairOrYubi},
+ 		},
+-		request,
++		request::{self, ProtocolClient},
+ 	};
+ 
+ 	pub(super) fn pivot_hash(opts: &ClientOpts) {
+@@ -1474,10 +1526,9 @@ mod handlers {
+ 		}
+ 	}
+ 
+-	pub(super) fn enclave_status(opts: &ClientOpts) {
+-		let path = &opts.path_message();
+-
+-		let response = request::post(path, &ProtocolMsg::StatusRequest)
++	pub(super) fn enclave_status(_opts: &ClientOpts, client: &ProtocolClient) {
++		let response = client
++			.post(&ProtocolMsg::StatusRequest)
+ 			.map_err(|e| println!("{e:?}"))
+ 			.expect("Enclave request failed");
+ 
+@@ -1489,10 +1540,9 @@ mod handlers {
+ 		}
+ 	}
+ 
+-	pub(super) fn enclave_version(opts: &ClientOpts) {
+-		let path = &opts.path_message();
+-
+-		let response = request::post(path, &ProtocolMsg::VersionRequest)
++	pub(super) fn enclave_version(_opts: &ClientOpts, client: &ProtocolClient) {
++		let response = client
++			.post(&ProtocolMsg::VersionRequest)
+ 			.map_err(|e| println!("{e:?}"))
+ 			.expect("Enclave request failed");
+ 
+@@ -1611,16 +1661,18 @@ mod handlers {
+ 		}
+ 	}
+ 
+-	pub(super) fn boot_genesis(opts: &ClientOpts) {
+-		if let Err(e) = services::boot_genesis(services::BootGenesisArgs {
+-			uri: &opts.path_message(),
+-			namespace_dir: opts.namespace_dir(),
+-			share_set_dir: opts.share_set_dir(),
+-			qos_release_dir_path: opts.qos_release_dir(),
+-			pcr3_preimage_path: opts.pcr3_preimage_path(),
+-			dr_key_path: opts.dr_key_path(),
+-			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+-		}) {
++	pub(super) fn boot_genesis(opts: &ClientOpts, client: &ProtocolClient) {
++		if let Err(e) = services::boot_genesis(
++			client,
++			services::BootGenesisArgs {
++				namespace_dir: opts.namespace_dir(),
++				share_set_dir: opts.share_set_dir(),
++				qos_release_dir_path: opts.qos_release_dir(),
++				pcr3_preimage_path: opts.pcr3_preimage_path(),
++				dr_key_path: opts.dr_key_path(),
++				unsafe_skip_attestation: opts.unsafe_skip_attestation(),
++			},
++		) {
+ 			println!("Error: {e:?}");
+ 			std::process::exit(1);
+ 		}
+@@ -1709,22 +1761,27 @@ mod handlers {
+ 		}
+ 	}
+ 
+-	pub(super) fn boot_standard(opts: &ClientOpts) {
+-		if let Err(e) = services::boot_standard(services::BootStandardArgs {
+-			uri: opts.path_message(),
+-			pivot_path: opts.pivot_path(),
+-			manifest_envelope_path: opts.manifest_envelope_path(),
+-			pcr3_preimage_path: opts.pcr3_preimage_path(),
+-			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
+-		}) {
++	pub(super) fn boot_standard(opts: &ClientOpts, client: &ProtocolClient) {
++		if let Err(e) = services::boot_standard(
++			client,
++			services::BootStandardArgs {
++				pivot_path: opts.pivot_path(),
++				manifest_envelope_path: opts.manifest_envelope_path(),
++				pcr3_preimage_path: opts.pcr3_preimage_path(),
++				unsafe_skip_attestation: opts.unsafe_skip_attestation(),
++			},
++		) {
+ 			println!("Error: {e:?}");
+ 			std::process::exit(1);
+ 		}
+ 	}
+ 
+-	pub(super) fn get_attestation_doc(opts: &ClientOpts) {
++	pub(super) fn get_attestation_doc(
++		opts: &ClientOpts,
++		client: &ProtocolClient,
++	) {
+ 		services::get_attestation_doc(
+-			&opts.path_message(),
++			client,
+ 			opts.attestation_doc_path(),
+ 			opts.manifest_envelope_path(),
+ 		);
+@@ -1760,9 +1817,9 @@ mod handlers {
+ 		}
+ 	}
+ 
+-	pub(super) fn post_share(opts: &ClientOpts) {
++	pub(super) fn post_share(opts: &ClientOpts, client: &ProtocolClient) {
+ 		if let Err(e) = services::post_share(
+-			&opts.path_message(),
++			client,
+ 			opts.eph_wrapped_share_path(),
+ 			opts.approval_path(),
+ 		) {
+@@ -1793,9 +1850,12 @@ mod handlers {
+ 		}
+ 	}
+ 
+-	pub(super) fn dangerous_dev_boot(opts: &ClientOpts) {
++	pub(super) fn dangerous_dev_boot(
++		opts: &ClientOpts,
++		client: &ProtocolClient,
++	) {
+ 		services::dangerous_dev_boot(
+-			&opts.path_message(),
++			client,
+ 			opts.pivot_path(),
+ 			opts.restart_policy(),
+ 			opts.pivot_args(),
+@@ -1850,9 +1910,9 @@ mod handlers {
+ 		}
+ 	}
+ 
+-	pub(super) fn boot_key_fwd(opts: &ClientOpts) {
++	pub(super) fn boot_key_fwd(opts: &ClientOpts, client: &ProtocolClient) {
+ 		if let Err(e) = services::boot_key_fwd(
+-			&opts.path_message(),
++			client,
+ 			opts.manifest_envelope_path(),
+ 			opts.pivot_path(),
+ 			opts.attestation_doc_path(),
+@@ -1862,9 +1922,9 @@ mod handlers {
+ 		}
+ 	}
+ 
+-	pub(super) fn export_key(opts: &ClientOpts) {
++	pub(super) fn export_key(opts: &ClientOpts, client: &ProtocolClient) {
+ 		if let Err(e) = services::export_key(
+-			&opts.path_message(),
++			client,
+ 			opts.manifest_envelope_path(),
+ 			opts.attestation_doc_path(),
+ 			opts.encrypted_quorum_key_path(),
+@@ -1874,11 +1934,10 @@ mod handlers {
+ 		}
+ 	}
+ 
+-	pub(super) fn inject_key(opts: &ClientOpts) {
+-		if let Err(e) = services::inject_key(
+-			&opts.path_message(),
+-			opts.encrypted_quorum_key_path(),
+-		) {
++	pub(super) fn inject_key(opts: &ClientOpts, client: &ProtocolClient) {
++		if let Err(e) =
++			services::inject_key(client, opts.encrypted_quorum_key_path())
++		{
+ 			println!("Error: {e:?}");
+ 			std::process::exit(1);
+ 		}
+diff --git a/src/qos_client/src/cli/services.rs b/src/qos_client/src/cli/services.rs
+index 9fa9de54..32fabdfa 100644
+--- a/src/qos_client/src/cli/services.rs
++++ b/src/qos_client/src/cli/services.rs
+@@ -39,7 +39,7 @@ use qos_p256::{P256Error, P256Pair, P256Public};
+ use zeroize::Zeroizing;
+ 
+ use super::DisplayType;
+-use crate::request;
++use crate::request::ProtocolClient;
+ 
+ const PUB_EXT: &str = "pub";
+ const GENESIS_ATTESTATION_DOC_FILE: &str = "genesis_attestation_doc";
+@@ -481,8 +481,7 @@ pub fn advanced_provision_yubikey<P: AsRef<Path>>(
+ 	Ok(())
+ }
+ 
+-pub(crate) struct BootGenesisArgs<'a, P: AsRef<Path>> {
+-	pub uri: &'a str,
++pub(crate) struct BootGenesisArgs<P: AsRef<Path>> {
+ 	pub namespace_dir: P,
+ 	pub share_set_dir: P,
+ 	pub qos_release_dir_path: P,
+@@ -492,8 +491,8 @@ pub(crate) struct BootGenesisArgs<'a, P: AsRef<Path>> {
+ }
+ 
+ pub(crate) fn boot_genesis<P: AsRef<Path>>(
++	client: &ProtocolClient,
+ 	BootGenesisArgs {
+-		uri,
+ 		namespace_dir,
+ 		share_set_dir,
+ 		qos_release_dir_path,
+@@ -517,14 +516,13 @@ pub(crate) fn boot_genesis<P: AsRef<Path>>(
+ 	};
+ 	// Genesis is only supported on the canonical JSON wire encoding; there is
+ 	// intentionally no legacy Borsh fallback here.
+-	let (cose_sign1, genesis_output) =
+-		match request::post_json(uri, &req).unwrap() {
+-			ProtocolMsg::BootGenesisResponse {
+-				nsm_response: NsmResponse::Attestation { document },
+-				genesis_output,
+-			} => (document, genesis_output),
+-			r => panic!("Unexpected response: {r:?}"),
+-		};
++	let (cose_sign1, genesis_output) = match client.post_json(&req).unwrap() {
++		ProtocolMsg::BootGenesisResponse {
++			nsm_response: NsmResponse::Attestation { document },
++			genesis_output,
++		} => (document, genesis_output),
++		r => panic!("Unexpected response: {r:?}"),
++	};
+ 	if genesis_output.set != genesis_set || genesis_output.dr_key != dr_key {
+ 		return Err(Error::GenesisOutputDoesNotMatchRequest);
+ 	}
+@@ -1223,7 +1221,7 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
+ }
+ 
+ pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
+-	uri: &str,
++	client: &ProtocolClient,
+ 	manifest_envelope_path: P,
+ 	pivot_path: P,
+ 	attestation_doc_path: P,
+@@ -1239,7 +1237,7 @@ pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
+ 		pivot,
+ 	};
+ 	let cose_sign1 =
+-		post_request_with_encoding_fallback(uri, &req, encodings, |resp| {
++		post_request_with_encoding_fallback(client, &req, encodings, |resp| {
+ 			match resp {
+ 				ProtocolMsg::BootKeyForwardResponse {
+ 					nsm_response: NsmResponse::Attestation { document },
+@@ -1259,7 +1257,7 @@ pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
+ }
+ 
+ pub(crate) fn export_key<P: AsRef<Path>>(
+-	uri: &str,
++	client: &ProtocolClient,
+ 	manifest_envelope_path: P,
+ 	attestation_doc_path: P,
+ 	encrypted_quorum_key_path: P,
+@@ -1276,7 +1274,7 @@ pub(crate) fn export_key<P: AsRef<Path>>(
+ 	};
+ 
+ 	let encrypted_quorum_key =
+-		post_request_with_encoding_fallback(uri, &req, encodings, |resp| {
++		post_request_with_encoding_fallback(client, &req, encodings, |resp| {
+ 			match resp {
+ 				ProtocolMsg::ExportKeyResponse {
+ 					encrypted_quorum_key,
+@@ -1297,7 +1295,7 @@ pub(crate) fn export_key<P: AsRef<Path>>(
+ }
+ 
+ fn post_request_with_encoding_fallback<T, F>(
+-	uri: &str,
++	client: &ProtocolClient,
+ 	req: &ProtocolMsg,
+ 	encodings: &[ProtocolMsgEncoding],
+ 	parse: F,
+@@ -1308,7 +1306,7 @@ where
+ 	let mut errors = vec![];
+ 
+ 	for &encoding in encodings {
+-		match post_request_with_encoding(uri, req, encoding) {
++		match client.post_with_encoding(req, encoding) {
+ 			Ok(resp) => match parse(resp) {
+ 				Ok(value) => return Ok(value),
+ 				Err(err) => errors
+@@ -1321,17 +1319,6 @@ where
+ 	Err(errors.join("; "))
+ }
+ 
+-fn post_request_with_encoding(
+-	uri: &str,
+-	req: &ProtocolMsg,
+-	encoding: ProtocolMsgEncoding,
+-) -> Result<ProtocolMsg, String> {
+-	match encoding {
+-		ProtocolMsgEncoding::Borsh => request::post_borsh(uri, req),
+-		ProtocolMsgEncoding::Json => request::post_json(uri, req),
+-	}
+-}
+-
+ fn manifest_envelope_protocol_encodings(
+ 	manifest_envelope: &VersionedManifestEnvelope,
+ ) -> &'static [ProtocolMsgEncoding] {
+@@ -1344,7 +1331,7 @@ fn manifest_envelope_protocol_encodings(
+ }
+ 
+ pub(crate) fn inject_key<P: AsRef<Path>>(
+-	uri: &str,
++	client: &ProtocolClient,
+ 	encrypted_quorum_key_path: P,
+ ) -> Result<(), Error> {
+ 	let encrypted_quorum_key: EncryptedQuorumKey = {
+@@ -1359,7 +1346,7 @@ pub(crate) fn inject_key<P: AsRef<Path>>(
+ 		signature: encrypted_quorum_key.signature,
+ 	};
+ 
+-	match request::post(uri, &req).unwrap() {
++	match client.post(&req).unwrap() {
+ 		ProtocolMsg::InjectKeyResponse => println!("Successful key injection!"),
+ 		r => {
+ 			return Err(Error::UnexpectedProtocolMsgResponse(format!("{r:?}")));
+@@ -1370,7 +1357,6 @@ pub(crate) fn inject_key<P: AsRef<Path>>(
+ }
+ 
+ pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
+-	pub uri: String,
+ 	pub pivot_path: P,
+ 	pub manifest_envelope_path: P,
+ 	pub pcr3_preimage_path: P,
+@@ -1378,7 +1364,7 @@ pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
+ }
+ 
+ fn boot_standard_attestation_doc_with_fallback(
+-	uri: &str,
++	client: &ProtocolClient,
+ 	manifest_envelope: VersionedManifestEnvelope,
+ 	pivot: Vec<u8>,
+ ) -> Result<Vec<u8>, Error> {
+@@ -1388,7 +1374,7 @@ fn boot_standard_attestation_doc_with_fallback(
+ 	};
+ 	if let Ok(ProtocolMsg::BootStandardResponse {
+ 		nsm_response: NsmResponse::Attestation { document },
+-	}) = request::post_borsh(uri, &req)
++	}) = client.post_borsh(&req)
+ 	{
+ 		return Ok(document);
+ 	}
+@@ -1406,7 +1392,7 @@ fn boot_standard_attestation_doc_with_fallback(
+ 		manifest_envelope: Box::new(manifest_envelope.into_inner()),
+ 		pivot,
+ 	};
+-	match request::post_borsh(uri, &req) {
++	match client.post_borsh(&req) {
+ 		Ok(ProtocolMsg::BootStandardResponse {
+ 			nsm_response: NsmResponse::Attestation { document },
+ 		}) => Ok(document),
+@@ -1416,8 +1402,8 @@ fn boot_standard_attestation_doc_with_fallback(
+ }
+ 
+ pub(crate) fn boot_standard<P: AsRef<Path>>(
++	client: &ProtocolClient,
+ 	BootStandardArgs {
+-		uri,
+ 		pivot_path,
+ 		manifest_envelope_path,
+ 		pcr3_preimage_path,
+@@ -1436,7 +1422,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
+ 	// Broadcast boot standard instruction and extract the attestation doc from
+ 	// the response.
+ 	let cose_sign1 = boot_standard_attestation_doc_with_fallback(
+-		&uri,
++		client,
+ 		manifest_envelope,
+ 		pivot,
+ 	)?;
+@@ -1471,14 +1457,13 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
+ }
+ 
+ pub(crate) fn get_attestation_doc<P: AsRef<Path>>(
+-	uri: &str,
++	client: &ProtocolClient,
+ 	attestation_doc_path: P,
+ 	manifest_envelope_path: P,
+ ) {
+-	let (cose_sign1, manifest_envelope) = match request::post(
+-		uri,
+-		&ProtocolMsg::LiveAttestationDocRequest,
+-	) {
++	let (cose_sign1, manifest_envelope) = match client
++		.post(&ProtocolMsg::LiveAttestationDocRequest)
++	{
+ 		Ok(ProtocolMsg::LiveAttestationDocResponse {
+ 			nsm_response: NsmResponse::Attestation { document },
+ 			manifest_envelope: Some(manifest_envelope),
+@@ -1732,7 +1717,7 @@ where
+ }
+ 
+ pub(crate) fn post_share<P: AsRef<Path>>(
+-	uri: &str,
++	client: &ProtocolClient,
+ 	eph_wrapped_share_path: P,
+ 	approval_path: P,
+ ) -> Result<(), Error> {
+@@ -1742,7 +1727,7 @@ pub(crate) fn post_share<P: AsRef<Path>>(
+ 	let approval = read_attestation_approval(&approval_path)?;
+ 
+ 	let req = ProtocolMsg::ProvisionRequest { share, approval };
+-	let is_reconstructed = match request::post(uri, &req).unwrap() {
++	let is_reconstructed = match client.post(&req).unwrap() {
+ 		ProtocolMsg::ProvisionResponse { reconstructed } => reconstructed,
+ 		r => panic!("Unexpected response: {r:?}"),
+ 	};
+@@ -1951,7 +1936,7 @@ pub(crate) fn json_to_borsh<P: AsRef<Path>>(
+ 
+ #[allow(clippy::too_many_lines)]
+ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
+-	uri: &str,
++	client: &ProtocolClient,
+ 	pivot_path: P,
+ 	restart: RestartPolicy,
+ 	args: Vec<String>,
+@@ -2037,7 +2022,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
+ 	};
+ 
+ 	let document = boot_standard_attestation_doc_with_fallback(
+-		uri,
++		client,
+ 		manifest_envelope.as_ref().clone(),
+ 		pivot,
+ 	)
+@@ -2078,7 +2063,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
+ 			.expect("Failed to encrypt share to eph key."),
+ 		approval: approval.clone(),
+ 	};
+-	let resp1 = request::post(uri, &req1).unwrap();
++	let resp1 = client.post(&req1).unwrap();
+ 	assert!(
+ 		matches!(
+ 			resp1,
+@@ -2094,7 +2079,7 @@ pub(crate) fn dangerous_dev_boot<P: AsRef<Path>>(
+ 			.expect("Failed to encrypt share to eph key."),
+ 		approval,
+ 	};
+-	let resp2 = request::post(uri, &req2).unwrap();
++	let resp2 = client.post(&req2).unwrap();
+ 	assert!(matches!(
+ 		resp2,
+ 		ProtocolMsg::ProvisionResponse { reconstructed: true }
+diff --git a/src/qos_client/src/lib.rs b/src/qos_client/src/lib.rs
+index 18ee92cb..b6a6e05c 100644
+--- a/src/qos_client/src/lib.rs
++++ b/src/qos_client/src/lib.rs
+@@ -16,91 +16,160 @@ pub mod request {
+ 	const MAX_SIZE: u64 = u32::MAX as u64;
+ 	const ERROR_BODY_PREFIX_LIMIT: usize = 256;
+ 
+-	/// Post a [`qos_core::protocol::msg::ProtocolMsg`] to the given host `url`.
+-	///
+-	/// # Errors
+-	///
+-	/// Returns an error string if the HTTP request fails, the response
+-	/// cannot be read, or deserialization fails.
+-	///
+-	pub fn post(url: &str, msg: &ProtocolMsg) -> Result<ProtocolMsg, String> {
+-		match post_json(url, msg) {
+-			Ok(ProtocolMsg::ProtocolErrorResponse(
+-				ProtocolError::ProtocolMsgDeserialization,
+-			)) => post_borsh(url, msg),
+-			result => result,
++	/// A parsed enclave protocol endpoint.
++	#[derive(Clone, Debug, PartialEq, Eq)]
++	pub struct Endpoint(url::Url);
++
++	impl Endpoint {
++		/// Return the endpoint as a URL string.
++		#[must_use]
++		pub fn as_str(&self) -> &str {
++			self.0.as_str()
+ 		}
+ 	}
+ 
+-	/// Post a [`qos_core::protocol::msg::ProtocolMsg`] using JSON wire
+-	/// encoding.
+-	///
+-	/// # Errors
+-	///
+-	/// Returns an error string if the HTTP request fails, the response
+-	/// cannot be read, or deserialization fails.
+-	pub(crate) fn post_json(
+-		url: &str,
+-		msg: &ProtocolMsg,
+-	) -> Result<ProtocolMsg, String> {
+-		post_wire(url, msg, ProtocolMsgEncoding::Json)
++	impl TryFrom<String> for Endpoint {
++		type Error = url::ParseError;
++
++		fn try_from(value: String) -> Result<Self, Self::Error> {
++			url::Url::parse(&value).map(Self)
++		}
+ 	}
+ 
+-	/// Post a [`qos_core::protocol::msg::ProtocolMsg`] using legacy Borsh
+-	/// wire encoding.
+-	///
+-	/// # Errors
+-	///
+-	/// Returns an error string if the HTTP request fails, the response
+-	/// cannot be read, or deserialization fails.
+-	pub fn post_borsh(
+-		url: &str,
+-		msg: &ProtocolMsg,
+-	) -> Result<ProtocolMsg, String> {
+-		post_wire(url, msg, ProtocolMsgEncoding::Borsh)
++	/// Sends one encoded protocol message and decodes its response.
++	pub trait ProtocolTransport: Send + Sync {
++		/// Perform one wire attempt with the requested encoding.
++		///
++		/// # Errors
++		///
++		/// Returns an error if the request, response read, or response decode
++		/// fails.
++		fn send(
++			&self,
++			endpoint: &Endpoint,
++			msg: &ProtocolMsg,
++			encoding: ProtocolMsgEncoding,
++		) -> Result<ProtocolMsg, String>;
+ 	}
+ 
+-	fn post_wire(
+-		url: &str,
+-		msg: &ProtocolMsg,
+-		encoding: ProtocolMsgEncoding,
+-	) -> Result<ProtocolMsg, String> {
+-		let mut buf: Vec<u8> = vec![];
+-
+-		let response = ureq::post(url)
+-			.send_bytes(&msg.to_wire(encoding).map_err(|e| {
+-				format!("protocol message serialization error: {e:?}")
+-			})?)
+-			.map_err(|e| match e {
+-				ureq::Error::Status(code, r) => {
+-					let body = r.into_string();
++	/// The HTTP adapter for enclave protocol messages.
++	#[derive(Clone, Copy, Debug, Default)]
++	pub struct HttpTransport;
++
++	impl ProtocolTransport for HttpTransport {
++		fn send(
++			&self,
++			endpoint: &Endpoint,
++			msg: &ProtocolMsg,
++			encoding: ProtocolMsgEncoding,
++		) -> Result<ProtocolMsg, String> {
++			let url = endpoint.as_str();
++			let mut buf = vec![];
++
++			let response = ureq::post(url)
++				.send_bytes(&msg.to_wire(encoding).map_err(|e| {
++					format!("protocol message serialization error: {e:?}")
++				})?)
++				.map_err(|e| match e {
++					ureq::Error::Status(code, r) => {
++						let body = r.into_string();
++						format!(
++							"http_post error: [url: {url}, status: {code}, body: {body:?}]"
++						)
++					}
++					ureq::Error::Transport(e) => {
++						format!("http_post error: transport error: {e}")
++					}
++				})?;
++
++			response
++				.into_reader()
++				.take(MAX_SIZE)
++				.read_to_end(&mut buf)
++				.map_err(|e| {
+ 					format!(
+-						"http_post error: [url: {url}, status: {code}, body: {body:?}]"
++						"http_post error: failed to read response to buffer {e:?}"
+ 					)
+-				}
+-				ureq::Error::Transport(e) => {
+-					format!("http_post error: transport error: {e}")
+-				}
+-			})?;
+-
+-		response.into_reader().take(MAX_SIZE).read_to_end(&mut buf).map_err(
+-			|e| {
++				})?;
++
++			ProtocolMsg::from_wire_any(&buf).map_err(|e| {
++				let body_prefix = String::from_utf8_lossy(
++					&buf[..std::cmp::min(buf.len(), ERROR_BODY_PREFIX_LIMIT)],
++				);
+ 				format!(
+-					"http_post error: failed to read response to buffer {e:?}"
++					"http_post error: deserialization error: {e:?}; body prefix: {body_prefix:?}"
+ 				)
+-			},
+-		)?;
++			})
++		}
++	}
+ 
+-		let decoded_response = ProtocolMsg::from_wire_any(&buf).map_err(|e| {
+-			let body_prefix = String::from_utf8_lossy(
+-				&buf[..std::cmp::min(buf.len(), ERROR_BODY_PREFIX_LIMIT)],
+-			);
+-			format!(
+-				"http_post error: deserialization error: {e:?}; body prefix: {body_prefix:?}"
+-			)
+-		})?;
++	/// Owns protocol encoding policy for one enclave endpoint.
++	pub struct ProtocolClient {
++		endpoint: Endpoint,
++		transport: Box<dyn ProtocolTransport>,
++	}
+ 
+-		Ok(decoded_response)
++	impl ProtocolClient {
++		/// Create a client from an endpoint and transport adapter.
++		#[must_use]
++		pub fn new(
++			endpoint: Endpoint,
++			transport: Box<dyn ProtocolTransport>,
++		) -> Self {
++			Self { endpoint, transport }
++		}
++
++		/// Send with canonical JSON encoding and retry legacy Borsh when the
++		/// peer reports that it could not deserialize the message.
++		///
++		/// # Errors
++		///
++		/// Returns the transport error from either attempt.
++		pub fn post(&self, msg: &ProtocolMsg) -> Result<ProtocolMsg, String> {
++			match self.post_json(msg) {
++				Ok(ProtocolMsg::ProtocolErrorResponse(
++					ProtocolError::ProtocolMsgDeserialization,
++				)) => self.post_borsh(msg),
++				result => result,
++			}
++		}
++
++		/// Send one canonical JSON wire attempt.
++		///
++		/// # Errors
++		///
++		/// Returns the transport error from the attempt.
++		pub fn post_json(
++			&self,
++			msg: &ProtocolMsg,
++		) -> Result<ProtocolMsg, String> {
++			self.post_with_encoding(msg, ProtocolMsgEncoding::Json)
++		}
++
++		/// Send one legacy Borsh wire attempt.
++		///
++		/// # Errors
++		///
++		/// Returns the transport error from the attempt.
++		pub fn post_borsh(
++			&self,
++			msg: &ProtocolMsg,
++		) -> Result<ProtocolMsg, String> {
++			self.post_with_encoding(msg, ProtocolMsgEncoding::Borsh)
++		}
++
++		/// Send one wire attempt with an explicit encoding.
++		///
++		/// # Errors
++		///
++		/// Returns the transport error from the attempt.
++		pub fn post_with_encoding(
++			&self,
++			msg: &ProtocolMsg,
++			encoding: ProtocolMsgEncoding,
++		) -> Result<ProtocolMsg, String> {
++			self.transport.send(&self.endpoint, msg, encoding)
++		}
+ 	}
+ 
+ 	/// Get the resource at the given host `url`.
+@@ -119,4 +188,65 @@ pub mod request {
+ 			.into_string()
+ 			.map_err(|_| format!("GET `{url:?}` failed"))
+ 	}
++
++	#[cfg(test)]
++	mod tests {
++		use std::{
++			collections::VecDeque,
++			sync::{Arc, Mutex},
++		};
++
++		use qos_core::protocol::{
++			ProtocolError,
++			msg::{ProtocolMsg, ProtocolMsgEncoding},
++		};
++
++		use super::{Endpoint, ProtocolClient, ProtocolTransport};
++
++		struct FakeTransport {
++			attempts: Arc<Mutex<Vec<ProtocolMsgEncoding>>>,
++			responses: Mutex<VecDeque<Result<ProtocolMsg, String>>>,
++		}
++
++		impl ProtocolTransport for FakeTransport {
++			fn send(
++				&self,
++				_endpoint: &Endpoint,
++				_msg: &ProtocolMsg,
++				encoding: ProtocolMsgEncoding,
++			) -> Result<ProtocolMsg, String> {
++				self.attempts.lock().unwrap().push(encoding);
++				self.responses.lock().unwrap().pop_front().unwrap()
++			}
++		}
++
++		#[test]
++		fn retries_borsh_when_peer_rejects_json_encoding() {
++			let attempts = Arc::new(Mutex::new(vec![]));
++			let transport = FakeTransport {
++				attempts: attempts.clone(),
++				responses: Mutex::new(VecDeque::from([
++					Ok(ProtocolMsg::ProtocolErrorResponse(
++						ProtocolError::ProtocolMsgDeserialization,
++					)),
++					Ok(ProtocolMsg::StatusResponse(
++						qos_core::protocol::ProtocolPhase::WaitingForBootInstruction,
++					)),
++				])),
++			};
++			let endpoint = Endpoint::try_from(
++				"http://127.0.0.1:8080/qos/message".to_string(),
++			)
++			.unwrap();
++			let client = ProtocolClient::new(endpoint, Box::new(transport));
++
++			let response = client.post(&ProtocolMsg::StatusRequest).unwrap();
++
++			assert!(matches!(response, ProtocolMsg::StatusResponse(_)));
++			assert_eq!(
++				*attempts.lock().unwrap(),
++				[ProtocolMsgEncoding::Json, ProtocolMsgEncoding::Borsh]
++			);
++		}
++	}
+ }

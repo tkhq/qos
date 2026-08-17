@@ -1,0 +1,243 @@
+diff --git a/src/qos_client/src/cli/mod.rs b/src/qos_client/src/cli/mod.rs
+index 52f10f9c..c77b89e1 100644
+--- a/src/qos_client/src/cli/mod.rs
++++ b/src/qos_client/src/cli/mod.rs
+@@ -18,7 +18,10 @@ use qos_core::{
+ 	},
+ };
+ 
+-use crate::request::{Endpoint, HttpTransport, ProtocolClient};
++use crate::request::{
++	Endpoint, HttpTransport, ProtocolClient, ProtocolTransport,
++	RecordingTransport,
++};
+ 
+ mod services;
+ 
+@@ -82,6 +85,7 @@ const OUTPUT_HEX: &str = "output-hex";
+ const VALIDATION_TIME_OVERRIDE: &str = "validation-time-override";
+ const JSON: &str = "json";
+ const USE_MANIFEST_VERSION: &str = "use-manifest-version";
++const PROTOCOL_TRANSCRIPT: &str = "protocol-transcript";
+ 
+ pub(crate) enum DisplayType {
+ 	Manifest,
+@@ -586,6 +590,14 @@ impl Command {
+ 		.takes_value(true)
+ 	}
+ 
++	fn protocol_transcript_token() -> Token {
++		Token::new(
++			PROTOCOL_TRANSCRIPT,
++			"Append every enclave protocol wire attempt to this JSON Lines file.",
++		)
++		.takes_value(true)
++	}
++
+ 	fn json_token() -> Token {
+ 		Token::new(JSON, "Include to format the output in json")
+ 			.required(false)
+@@ -633,6 +645,7 @@ impl Command {
+ 				)
+ 				.takes_value(true),
+ 			)
++			.token(Self::protocol_transcript_token())
+ 	}
+ 
+ 	fn pivot_build_fingerprints() -> Parser {
+@@ -945,6 +958,10 @@ impl ClientOpts {
+ 		self.path("message")
+ 	}
+ 
++	fn protocol_transcript(&self) -> Option<std::path::PathBuf> {
++		self.parsed.single(PROTOCOL_TRANSCRIPT).map(Into::into)
++	}
++
+ 	fn alias(&self) -> String {
+ 		self.parsed.single(ALIAS).expect("required arg").clone()
+ 	}
+@@ -1356,7 +1373,19 @@ impl ClientRunner {
+ 			let endpoint = Endpoint::try_from(self.opts.path_message()).expect(
+ 				"qos_client should construct a valid protocol endpoint",
+ 			);
+-			ProtocolClient::new(endpoint, Box::new(HttpTransport))
++			let transport: Box<dyn ProtocolTransport> =
++				self.opts.protocol_transcript().map_or_else(
++					|| Box::new(HttpTransport) as Box<dyn ProtocolTransport>,
++					|path| {
++						Box::new(
++							RecordingTransport::new(HttpTransport, path)
++								.expect(
++									"protocol transcript should be writable",
++								),
++						)
++					},
++				);
++			ProtocolClient::new(endpoint, transport)
+ 		});
+ 
+ 		if self.opts.parsed.version() {
+diff --git a/src/qos_client/src/lib.rs b/src/qos_client/src/lib.rs
+index b6a6e05c..80b5b3dc 100644
+--- a/src/qos_client/src/lib.rs
++++ b/src/qos_client/src/lib.rs
+@@ -6,7 +6,12 @@ pub mod yubikey;
+ 
+ /// Host HTTP request helpers.
+ pub mod request {
+-	use std::io::Read;
++	use std::{
++		fs::OpenOptions,
++		io::{Read, Write},
++		path::Path,
++		sync::Mutex,
++	};
+ 
+ 	use qos_core::protocol::{
+ 		ProtocolError,
+@@ -103,6 +108,76 @@ pub mod request {
+ 		}
+ 	}
+ 
++	/// A transport adapter that records each request and response as JSON
++	/// Lines before delegating to another transport.
++	pub struct RecordingTransport<T> {
++		inner: T,
++		writer: Mutex<Box<dyn Write + Send>>,
++	}
++
++	impl<T> RecordingTransport<T> {
++		/// Append transcript records to `path`.
++		///
++		/// # Errors
++		///
++		/// Returns an error if the transcript file cannot be opened.
++		pub fn new(inner: T, path: impl AsRef<Path>) -> std::io::Result<Self> {
++			let file =
++				OpenOptions::new().create(true).append(true).open(path)?;
++
++			Ok(Self { inner, writer: Mutex::new(Box::new(file)) })
++		}
++
++		fn record(
++			&self,
++			endpoint: &Endpoint,
++			encoding: ProtocolMsgEncoding,
++			direction: &str,
++			payload: &ProtocolMsg,
++		) -> Result<(), String> {
++			let encoding = match encoding {
++				ProtocolMsgEncoding::Json => "json",
++				ProtocolMsgEncoding::Borsh => "borsh",
++			};
++			let mut writer = self.writer.lock().map_err(|error| {
++				format!("protocol transcript lock error: {error}")
++			})?;
++
++			serde_json::to_writer(
++				&mut *writer,
++				&serde_json::json!({
++					"endpoint": endpoint.as_str(),
++					"encoding": encoding,
++					"direction": direction,
++					"payload": payload,
++				}),
++			)
++			.map_err(|error| {
++				format!("protocol transcript serialization error: {error}")
++			})?;
++			writer.write_all(b"\n").map_err(|error| {
++				format!("protocol transcript write error: {error}")
++			})
++		}
++	}
++
++	impl<T: ProtocolTransport> ProtocolTransport for RecordingTransport<T> {
++		fn send(
++			&self,
++			endpoint: &Endpoint,
++			msg: &ProtocolMsg,
++			encoding: ProtocolMsgEncoding,
++		) -> Result<ProtocolMsg, String> {
++			self.record(endpoint, encoding, "request", msg)?;
++
++			let response = self.inner.send(endpoint, msg, encoding)?;
++
++			self.record(endpoint, encoding, "response", &response)?;
++
++			Ok(response)
++		}
++	}
++
+ 	/// Owns protocol encoding policy for one enclave endpoint.
+ 	pub struct ProtocolClient {
+ 		endpoint: Endpoint,
+@@ -201,13 +276,31 @@ pub mod request {
+ 			msg::{ProtocolMsg, ProtocolMsgEncoding},
+ 		};
+ 
+-		use super::{Endpoint, ProtocolClient, ProtocolTransport};
++		use std::io::Write;
++
++		use super::{
++			Endpoint, ProtocolClient, ProtocolTransport, RecordingTransport,
++		};
+ 
+ 		struct FakeTransport {
+ 			attempts: Arc<Mutex<Vec<ProtocolMsgEncoding>>>,
+ 			responses: Mutex<VecDeque<Result<ProtocolMsg, String>>>,
+ 		}
+ 
++		#[derive(Clone)]
++		struct SharedWriter(Arc<Mutex<Vec<u8>>>);
++
++		impl Write for SharedWriter {
++			fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
++				self.0.lock().unwrap().extend_from_slice(buf);
++				Ok(buf.len())
++			}
++
++			fn flush(&mut self) -> std::io::Result<()> {
++				Ok(())
++			}
++		}
++
+ 		impl ProtocolTransport for FakeTransport {
+ 			fn send(
+ 				&self,
+@@ -248,5 +341,35 @@ pub mod request {
+ 				[ProtocolMsgEncoding::Json, ProtocolMsgEncoding::Borsh]
+ 			);
+ 		}
++
++		#[test]
++		fn recording_adapter_writes_request_and_response() {
++			let output = Arc::new(Mutex::new(vec![]));
++			let transport = RecordingTransport {
++				inner: FakeTransport {
++					attempts: Arc::new(Mutex::new(vec![])),
++					responses: Mutex::new(VecDeque::from([Ok(
++						ProtocolMsg::StatusResponse(
++							qos_core::protocol::ProtocolPhase::WaitingForBootInstruction,
++						),
++					)])),
++				},
++				writer: Mutex::new(Box::new(SharedWriter(output.clone()))),
++			};
++			let endpoint = Endpoint::try_from(
++				"http://127.0.0.1:8080/qos/message".to_string(),
++			)
++			.unwrap();
++			let client = ProtocolClient::new(endpoint, Box::new(transport));
++
++			client.post_json(&ProtocolMsg::StatusRequest).unwrap();
++
++			let transcript =
++				String::from_utf8(output.lock().unwrap().clone()).unwrap();
++			let records = transcript.lines().collect::<Vec<_>>();
++			assert_eq!(records.len(), 2);
++			assert!(records[0].contains("\"direction\":\"request\""));
++			assert!(records[1].contains("\"direction\":\"response\""));
++		}
+ 	}
+ }

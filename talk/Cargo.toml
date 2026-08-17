@@ -1,0 +1,18 @@
+[package]
+name = "hexagonal-age-of-slop-talk"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[dependencies]
+tokio = { version = "1.51.1", features = ["macros", "rt-multi-thread"] }
+topcoat = "0.5.0"
+
+[workspace]
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+pedantic = "warn"

@@ -1,0 +1,12 @@
++let transport: Box<dyn ProtocolTransport> =
++    opts.protocol_transcript().map_or_else(
++        || Box::new(HttpTransport),
++        |path| Box::new(RecordingTransport::new(HttpTransport, path).expect("writable")),
++    );
++let client = ProtocolClient::new(endpoint, transport);
+
++impl<T: ProtocolTransport> ProtocolTransport for RecordingTransport<T> {
++    // record request → delegate → record response
++}
+
+ // Zero existing workflow changes.
