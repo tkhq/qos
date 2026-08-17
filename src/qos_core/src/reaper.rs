@@ -16,11 +16,15 @@ use qos_nsm::NsmProvider;
 use tokio::{
 	io::{AsyncBufReadExt, BufReader},
 	process::{Child, Command},
+	task::JoinHandle,
 };
 
 use crate::{
 	handles::Handles,
-	io::{HostBridge, IOError, SocketAddress, StreamPool},
+	io::{
+		BRIDGE_CONTROL_VSOCK_PORT, HostBridge, IOError, SocketAddress,
+		StreamPool, ingress_policy_hash, serve_bridge_control,
+	},
 	protocol::{
 		ProtocolPhase, ProtocolState,
 		processor::ProtocolProcessor,
@@ -75,25 +79,45 @@ async fn run_server(
 fn run_bridges(
 	core_socket: &SocketAddress,
 	bridges: &[BridgeConfig],
-) -> Result<(), IOError> {
-	// do nothing if we're not asked to provide bridging
-	if bridges.is_empty() {
-		println!("skipping host bridge, not configured");
-		return Ok(());
-	}
+) -> Result<Vec<JoinHandle<Result<(), IOError>>>, IOError> {
+	let server_bridges: Vec<BridgeConfig> = bridges
+		.iter()
+		.filter(|config| matches!(config, BridgeConfig::Server { .. }))
+		.cloned()
+		.collect();
+	let policy_hash = ingress_policy_hash(&server_bridges)
+		.map_err(|_| IOError::UnknownError)?;
+	let mut workers = Vec::new();
 
 	let mut egress_enabled = false;
 
 	for bc in bridges {
 		match bc {
 			BridgeConfig::Server { port, host: _ } => {
-				let app_socket = core_socket.with_port(*port)?;
+				let app_socket = match core_socket.with_port(*port) {
+					Ok(socket) => socket,
+					Err(err) => {
+						abort_workers(&workers);
+						return Err(err);
+					}
+				};
 				let host_addr: SocketAddr =
 					SocketAddrV4::new(Ipv4Addr::LOCALHOST, *port).into();
-				let app_pool = StreamPool::single(app_socket)?;
+				let app_pool = match StreamPool::single(app_socket) {
+					Ok(pool) => pool,
+					Err(err) => {
+						abort_workers(&workers);
+						return Err(err);
+					}
+				};
 				let bridge = HostBridge::new(app_pool, host_addr);
-
-				bridge.vsock_to_tcp();
+				match bridge.vsock_to_tcp_admitted(policy_hash) {
+					Ok(worker) => workers.push(worker),
+					Err(err) => {
+						abort_workers(&workers);
+						return Err(err);
+					}
+				}
 			}
 			BridgeConfig::Client { port: _, host: _ } => {
 				// only run one instance as it covers ALL ports, the others are for firewalls
@@ -105,7 +129,33 @@ fn run_bridges(
 		}
 	}
 
-	Ok(())
+	let control_address =
+		match core_socket.with_system_port(BRIDGE_CONTROL_VSOCK_PORT) {
+			Ok(address) => address,
+			Err(err) => {
+				abort_workers(&workers);
+				return Err(err);
+			}
+		};
+	match serve_bridge_control(
+		&control_address,
+		&server_bridges,
+		egress_enabled,
+	) {
+		Ok(worker) => workers.push(worker),
+		Err(err) => {
+			abort_workers(&workers);
+			return Err(err);
+		}
+	}
+
+	Ok(workers)
+}
+
+fn abort_workers(workers: &[JoinHandle<Result<(), IOError>>]) {
+	for worker in workers {
+		worker.abort();
+	}
 }
 
 // dummy placeholder
@@ -240,7 +290,7 @@ impl Reaper {
 		}
 
 		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task
-		run_bridges(&core_socket, &host_config)
+		let bridge_workers = run_bridges(&core_socket, &host_config)
 			.expect("failed to run ingress/egress bridges");
 
 		let mut pivot = Command::new(handles.pivot_path());
@@ -282,6 +332,11 @@ impl Reaper {
 
 		if let Err(err) = server_worker.await {
 			eprintln!("Reaper::execute server_worker join error: {err:?}");
+		}
+
+		abort_workers(&bridge_workers);
+		for worker in bridge_workers {
+			let _ = worker.await;
 		}
 
 		println!("Reaper exiting ... ");

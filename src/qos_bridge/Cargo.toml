@@ -9,16 +9,10 @@ publish = false
 workspace = true
 
 [dependencies]
-qos_host = { workspace = true, default-features = false }
 qos_core = { workspace = true, default-features = false }
-qos_hex = { workspace = true, features = ["serde"], default-features = false }
-qos_nsm = { workspace = true, default-features = false }
 
 # Third party
-serde_json = { workspace = true }
-serde = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-ureq = { workspace = true, features = ["json"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 
 [features]
 qemu = ["qos_core/qemu"]

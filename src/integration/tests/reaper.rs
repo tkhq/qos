@@ -328,22 +328,28 @@ async fn reaper_handles_bridge() {
 		PIVOT_TCP_PATH.to_string(),
 	);
 
-	// start the tcp -> vsock bridge on host_port
-	let host_addr: SocketAddr =
-		SocketAddrV4::new(Ipv4Addr::LOCALHOST, host_port).into();
-	let app_pool =
-		StreamPool::single(SocketAddress::new_unix(&app_usock)).unwrap();
-	HostBridge::new(app_pool, host_addr).tcp_to_vsock();
-
 	// Make sure we have written everything necessary to pivot, except the
 	// quorum key
 	let mut manifest_envelope = ManifestEnvelope::default();
 	manifest_envelope.manifest.pivot.args = vec![format!("{pivot_port}")];
-	manifest_envelope.manifest.pivot.bridge_config =
-		vec![BridgeConfig::Server {
-			port: pivot_port,
-			host: "127.0.0.1".into(),
-		}];
+	let bridge_config = vec![BridgeConfig::Server {
+		port: pivot_port,
+		host: "127.0.0.1".into(),
+	}];
+	manifest_envelope.manifest.pivot.bridge_config = bridge_config.clone();
+
+	// Start the admitted TCP -> VSOCK bridge on host_port.
+	let host_addr: SocketAddr =
+		SocketAddrV4::new(Ipv4Addr::LOCALHOST, host_port).into();
+	let app_pool =
+		StreamPool::single(SocketAddress::new_unix(&app_usock)).unwrap();
+	let policy_hash =
+		qos_core::io::ingress_policy_hash(&bridge_config).unwrap();
+	let (stale_tx, _stale_rx) = tokio::sync::mpsc::unbounded_channel();
+	let host_bridge = HostBridge::new(app_pool, host_addr)
+		.tcp_to_vsock(policy_hash, stale_tx)
+		.await
+		.unwrap();
 
 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
 	assert!(handles.pivot_exists());
@@ -421,4 +427,5 @@ async fn reaper_handles_bridge() {
 	let contents = fs::read(integration::PIVOT_TCP_SUCCESS_FILE).unwrap();
 	assert_eq!(&contents, b"finished"); // expects the finished msg
 	assert!(fs::remove_file(integration::PIVOT_TCP_SUCCESS_FILE).is_ok());
+	host_bridge.abort();
 }

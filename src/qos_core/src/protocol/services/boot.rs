@@ -115,6 +115,8 @@ impl TryFrom<String> for RestartPolicy {
 #[derive(
 	PartialEq,
 	Eq,
+	PartialOrd,
+	Ord,
 	Debug,
 	Clone,
 	serde::Serialize,

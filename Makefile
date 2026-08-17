@@ -53,7 +53,7 @@ stop:
 	rm -f /tmp/vhost4.socket
 
 /tmp/vhost4.socket:
-	vhost-device-vsock --vm guest-cid=4,forward-cid=1,forward-listen=3000+9001+9002,socket=/tmp/vhost4.socket &
+	vhost-device-vsock --vm guest-cid=4,forward-cid=1,forward-listen=3000+9001+9002+65536,socket=/tmp/vhost4.socket &
 
 .PHONY: host
 host:
@@ -67,7 +67,6 @@ host:
 bridge: target/x86_64-unknown-linux-musl/release-panic-abort/egress
 	cargo run -p qos_bridge --locked --bin ingress --features egress,qemu -- \
 		--cid 1 \
-		--control-url http://127.0.0.1:3001/qos \
 		--vsock-to-host false \
 		--egress-bin-path target/x86_64-unknown-linux-musl/release-panic-abort/egress
 

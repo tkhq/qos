@@ -7,8 +7,8 @@ use std::{
 
 use borsh::de::BorshDeserialize;
 use integration::{
-	LOCAL_HOST, PCR3_PRE_IMAGE_PATH, PIVOT_SOCKET_STRESS_PATH,
-	PivotSocketStressMsg, QOS_DIST_DIR, wait_for_tcp_sock,
+	LOCAL_HOST, PCR3_PRE_IMAGE_PATH, PIVOT_TCP_PATH, QOS_DIST_DIR,
+	wait_for_tcp_sock,
 };
 use qos_core::protocol::{
 	ProtocolPhase, QosHash,
@@ -29,33 +29,29 @@ use tokio::{
 	net::TcpStream,
 };
 
-async fn bridge_roundtrip(
-	bridge_addr: &str,
-) -> Result<PivotSocketStressMsg, String> {
+const BRIDGE_ROUNDTRIP_MESSAGE: &[u8] = b"bridge roundtrip";
+
+async fn bridge_roundtrip(bridge_addr: &str) -> Result<(), String> {
 	let mut tcp_stream =
 		TcpStream::connect(bridge_addr).await.map_err(|e| e.to_string())?;
-
-	let msg = PivotSocketStressMsg::OkRequest(42);
-	let msg_bytes = borsh::to_vec(&msg).map_err(|e| e.to_string())?;
-	let mut header = (msg_bytes.len() as u64).to_le_bytes();
-
-	tcp_stream.write_all(&header).await.map_err(|e| e.to_string())?;
-	tcp_stream.write_all(&msg_bytes).await.map_err(|e| e.to_string())?;
-
-	tcp_stream.read_exact(&mut header).await.map_err(|e| e.to_string())?;
-	let reply_size = usize::from_le_bytes(header);
-	let mut reply_bytes = vec![0u8; reply_size];
-	tcp_stream.read_exact(&mut reply_bytes).await.map_err(|e| e.to_string())?;
-
-	borsh::from_slice(&reply_bytes).map_err(|e| e.to_string())
+	tcp_stream
+		.write_all(BRIDGE_ROUNDTRIP_MESSAGE)
+		.await
+		.map_err(|e| e.to_string())?;
+	let mut reply = vec![0; BRIDGE_ROUNDTRIP_MESSAGE.len()];
+	tcp_stream.read_exact(&mut reply).await.map_err(|e| e.to_string())?;
+	if reply == BRIDGE_ROUNDTRIP_MESSAGE {
+		Ok(())
+	} else {
+		Err("invalid pivot reply".into())
+	}
 }
 
 async fn wait_for_bridge_roundtrip(bridge_addr: &str) {
 	let mut last_err = String::new();
 	for _ in 0..100 {
 		match bridge_roundtrip(bridge_addr).await {
-			Ok(PivotSocketStressMsg::OkResponse(42)) => return,
-			Ok(reply) => panic!("invalid pivot response: {reply:?}"),
+			Ok(()) => return,
 			Err(err) => last_err = err,
 		}
 
@@ -106,15 +102,13 @@ async fn qos_bridge_works() {
 	let user3 = "user3";
 
 	// -- Create pivot-build-fingerprints.txt
-	let pivot = fs::read(PIVOT_SOCKET_STRESS_PATH).unwrap();
+	let pivot = fs::read(PIVOT_TCP_PATH).unwrap();
 	let mock_pivot_hash = sha_256(&pivot);
 	let pivot_hash = qos_hex::encode_to_vec(&mock_pivot_hash);
 	std::fs::write(PIVOT_HASH_PATH, pivot_hash).unwrap();
 
 	// -- CLIENT create manifest.
-	let pivot_app_sock_path =
-		usock_path + "." + &app_host_port.to_string() + ".appsock";
-	let pivot_args = format!("[{pivot_app_sock_path}]");
+	let pivot_args = format!("[{app_host_port}]");
 	let cli_manifest_path = boot_dir.join("manifest");
 
 	assert!(Command::new(integration::QOS_CLIENT_PATH)
@@ -181,7 +175,7 @@ async fn qos_bridge_works() {
 	let pivot = PivotConfig {
 		hash: mock_pivot_hash,
 		restart: RestartPolicy::Never,
-		args: vec![pivot_app_sock_path.to_string()],
+		args: vec![app_host_port.to_string()],
 		debug_mode: false,
 		bridge_config: vec![BridgeConfig::Server {
 			port: app_host_port,
@@ -276,9 +270,7 @@ async fn qos_bridge_works() {
 		);
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
-			&format!(
-				"[\"/tmp/qos_host_bridge/qos_host_bridge.sock.{app_host_port}.appsock\"]?"
-			)
+			&format!("[\"{app_host_port}\"]?")
 		);
 		assert_eq!(&stdout.next().unwrap().unwrap(), "(y/n)");
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
@@ -342,7 +334,6 @@ async fn qos_bridge_works() {
 	// -- Make sure the enclave and host have time to boot
 	qos_test_primitives::wait_until_port_is_bound(host_port);
 
-	let control_url = format!("http://localhost:{host_port}/qos");
 	// -- BRIDGE start bridge
 	let mut bridge_child_process: ChildWrapper =
 		Command::new(integration::QOS_BRIDGE_PATH)
@@ -351,8 +342,6 @@ async fn qos_bridge_works() {
 				&app_host_port_override.to_string(),
 				"--usock",
 				usock.to_str().unwrap(),
-				"--control-url",
-				&control_url,
 			])
 			.spawn()
 			.unwrap()
@@ -384,7 +373,7 @@ async fn qos_bridge_works() {
 				"--manifest-envelope-path",
 				manifest_envelope_path.to_str().unwrap(),
 				"--pivot-path",
-				PIVOT_SOCKET_STRESS_PATH,
+				PIVOT_TCP_PATH,
 				"--host-port",
 				&host_port.to_string(),
 				"--host-ip",
@@ -549,8 +538,6 @@ async fn qos_bridge_works() {
 				&app_host_port_override.to_string(),
 				"--usock",
 				usock.to_str().unwrap(),
-				"--control-url",
-				&control_url,
 			])
 			.spawn()
 			.unwrap()

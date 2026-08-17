@@ -3,11 +3,13 @@
 //! NOTE TO MAINTAINERS: Interaction with any sys calls should be contained
 //! within this module.
 
+mod bridge_protocol;
 mod host_bridge;
 mod pool;
 mod stream;
 use std::path::Path;
 
+pub use bridge_protocol::*;
 pub use host_bridge::*;
 pub use pool::*;
 pub use stream::*;
@@ -219,6 +221,39 @@ impl SocketAddress {
 
 				path.push(format!(".{port}.appsock"));
 
+				Ok(Self::new_unix(
+					path.to_str().ok_or(IOError::ConnectAddressInvalid)?,
+				))
+			}
+		}
+	}
+
+	/// Return the reserved system socket address for `port`.
+	///
+	/// VSOCK system ports retain the source CID and flags. Unix test sockets
+	/// use a distinct `systemsock` suffix so they cannot collide with app
+	/// sockets derived by [`Self::with_port`].
+	///
+	/// # Errors
+	///
+	/// Returns [`IOError::ConnectAddressInvalid`] if a Unix socket path cannot
+	/// be resolved.
+	pub fn with_system_port(
+		&self,
+		port: u32,
+	) -> Result<SocketAddress, IOError> {
+		match self {
+			#[cfg(not(target_os = "macos"))]
+			Self::Vsock(vsa) => {
+				Ok(Self::new_vsock(vsa.cid(), port, vsock_svm_flags(vsa)))
+			}
+			Self::Unix(ua) => {
+				let mut path = ua
+					.path()
+					.ok_or(IOError::ConnectAddressInvalid)?
+					.as_os_str()
+					.to_owned();
+				path.push(format!(".{port}.systemsock"));
 				Ok(Self::new_unix(
 					path.to_str().ok_or(IOError::ConnectAddressInvalid)?,
 				))

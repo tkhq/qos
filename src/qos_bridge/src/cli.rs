@@ -8,7 +8,6 @@ use qos_core::{
 	parser::{GetParserForOptions, OptionsParser, Parser, Token},
 };
 
-const CONTROL_URL: &str = "control-url";
 const HOST_PORT_OVERRIDE: &str = "host-port-override";
 const VSOCK_TO_HOST: &str = "vsock-to-host";
 const EGRESS_HOST: &str = "egress-host";
@@ -17,41 +16,46 @@ const EGRESS_BIN_PATH: &str = "egress-bin-path";
 struct HostParser;
 impl GetParserForOptions for HostParser {
 	fn parser() -> Parser {
-		Parser::new().token(
-			Token::new(
-				CONTROL_URL,
-				"full url of qos-host to get manifest information from, including the base path, e.g. http://localhost:3001/qos",
-			)
-			.takes_value(true)
-			.required(false),
-		)
+		Parser::new()
 			.token(
-				Token::new(CID, "context identifier for the enclave socket (only for VSOCK)")
-					.takes_value(true)
-					.forbids(vec![USOCK])
+				Token::new(
+					CID,
+					"context identifier for the enclave socket (only for VSOCK)",
+				)
+				.takes_value(true)
+				.forbids(vec![USOCK]),
 			)
 			.token(
-				Token::new(USOCK, "name of the socket file (ex: `dev.sock`) (only for unix sockets)")
-					.takes_value(true)
-					.forbids(vec![CID])
+				Token::new(
+					USOCK,
+					"name of the socket file (ex: `dev.sock`) (only for unix sockets)",
+				)
+				.takes_value(true)
+				.forbids(vec![CID]),
 			)
 			.token(
-				Token::new(HOST_PORT_OVERRIDE, "override for manifest value of host port, mostly for localhost testing")
-					.takes_value(true)
+				Token::new(
+					HOST_PORT_OVERRIDE,
+					"override for manifest value of host port, mostly for localhost testing",
+				)
+				.takes_value(true),
 			)
 			.token(
-				Token::new(VSOCK_TO_HOST, "override for manifest value of host port, mostly for localhost testing")
-					.takes_value(true)
-					.required(false)
-					.forbids(vec![USOCK])
+				Token::new(
+					VSOCK_TO_HOST,
+					"override for manifest value of host port, mostly for localhost testing",
+				)
+				.takes_value(true)
+				.required(false)
+				.forbids(vec![USOCK]),
 			)
 			.token(
 				Token::new(EGRESS_HOST, "run in enclave egress in host mode")
-					.takes_value(false)
+					.takes_value(false),
 			)
 			.token(
 				Token::new(EGRESS_BIN_PATH, "path to the egress binary")
-					.takes_value(true)
+					.takes_value(true),
 			)
 	}
 }
@@ -69,17 +73,6 @@ impl HostOpts {
 			.expect("Entered invalid CLI args");
 
 		Self { parsed }
-	}
-
-	/// The qos-host URL
-	/// # Panics
-	/// Panics if no control-url is provided
-	#[must_use]
-	pub fn control_url(&self) -> String {
-		self.parsed
-			.single(CONTROL_URL)
-			.expect("no control-url provided")
-			.clone()
 	}
 
 	/// Wether to run in egress host mode (e.g. in qos bridge on the host)
@@ -109,7 +102,7 @@ impl HostOpts {
 			(Some(c), None) => {
 				let c =
 					c.parse().map_err(|_| IOError::ConnectAddressInvalid)?;
-				let p = 3001; // placeholder port, overridden when we read the manifest
+				let p = 3001; // placeholder port; the control port is derived separately
 
 				Ok(SocketAddress::new_vsock(c, p, self.to_host_flag()))
 			}
@@ -210,15 +203,11 @@ impl Cli {
 				options
 					.enclave_socket()
 					.expect("failed to create enclave socket placeholder"),
-				options.control_url(),
 				options.host_port_override(),
 				options.egress_bin_path(),
 			)
 			.serve()
 			.await;
-
-			eprintln!("qos_bridge: bridge running, press ctrl+c to quit");
-			let _ = tokio::signal::ctrl_c().await;
 		}
 	}
 }

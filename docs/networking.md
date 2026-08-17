@@ -120,11 +120,19 @@ flowchart LR
     Localhost --> App
 ```
 
-The bridge is deliberately protocol-agnostic. Once both sides have connected,
-QOS uses `tokio::io::copy_bidirectional` to pipe bytes in both directions. The
-bridge does not inspect, wrap, unwrap, or multiplex application messages. The
-kernel creates a separate stream for each accepted connection, so one VSOCK port
-can support multiple simultaneous connection streams.
+Before carrying application data, the bridge performs a QOS admission
+exchange. The host sends an `Open` message containing the hash of the approved
+server-bridge policy. The in-enclave QOS bridge sends `Accepted` only when that
+hash matches its policy, and includes the same hash in the response. The host
+requires that exact acknowledgment before it starts copying application bytes.
+A timeout, malformed response, `Rejected` response, or mismatched
+acknowledgment closes the connection without forwarding data.
+
+After admission, the bridge is protocol-agnostic. QOS uses
+`tokio::io::copy_bidirectional` to pipe bytes in both directions and does not
+inspect, wrap, unwrap, or multiplex application messages. The kernel creates a
+separate stream for each accepted connection, so one VSOCK port can support
+multiple simultaneous connection streams.
 
 This is the main difference from the older internal-app model, where an app host
 translated an external protocol into QOS-specific messages and the app had to
@@ -163,6 +171,13 @@ into the app's VSOCK protocol and translate responses back to the caller.
 Without that host-side process, callers will not have a normal HTTP, HTTPS, or
 gRPC endpoint to talk to.
 
+Direct-VSOCK applications must not send the bridge `Accepted` message. That
+message is reserved for the QOS ingress bridge. If a stale host bridge connects
+to a direct-VSOCK application, the application should not acknowledge the
+bridge admission exchange; the host then fails closed and does not forward the
+external connection's application bytes. TLS or another app protocol may begin
+normally after an application-specific direct-VSOCK connection is established.
+
 ## Bridge Configuration
 
 Bridge configuration lives in the manifest under `pivot.bridge_config`. The
@@ -187,13 +202,12 @@ The `port` is used on both sides by default:
 The `host` field is only the host-side bind address. Inside the enclave, the
 reaper currently connects to `127.0.0.1:<port>`.
 
-`qos_bridge` learns this configuration from `qos_host`. It polls the
-`/qos/enclave-info` endpoint until the enclave has a manifest, reads the
-manifest envelope, and starts the configured host-side bridges.
+`qos_bridge` receives the server-bridge policy from the enclave over the
+bridge-control VSOCK connection, hashes it with QOS JSON, and starts the
+configured host-side bridges only after the policy is received.
 
 ```bash
 qos_bridge \
-  --control-url http://127.0.0.1:3001/qos \
   --cid 16
 ```
 
@@ -201,7 +215,6 @@ For local development, use `--usock` instead of `--cid`.
 
 ```bash
 qos_bridge \
-  --control-url http://127.0.0.1:3001/qos \
   --usock /tmp/enclave-example/example.sock
 ```
 

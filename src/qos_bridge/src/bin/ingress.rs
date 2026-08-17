@@ -8,7 +8,6 @@ async fn main() {
 	// ```
 	// cargo run --bin ingress -- \
 	//      --usock /tmp/usock.sock \
-	//      --control-url http://localhost:3001/qos
 	// ```
 	cli::Cli::execute_ingress().await;
 }

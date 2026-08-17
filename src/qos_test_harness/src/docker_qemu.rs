@@ -269,9 +269,6 @@ impl DockerHostQemuNitroRunner {
 		let mut args = self.docker_run_prefix(&self.spec.bridge_run);
 		self.spec.bridge_program.append_program_args(&mut args);
 		args.extend([
-			"--control-url".into(),
-			format!("http://{}:{}/qos", qemu.host_connect_ip, qemu.host_port)
-				.into(),
 			"--cid".into(),
 			qemu.host_cid.to_string().into(),
 			"--host-port-override".into(),
@@ -536,9 +533,6 @@ impl DockerHostQemuNitroRunner {
 	fn append_qos_bridge_args(&self, args: &mut Vec<OsString>) {
 		let qemu = &self.spec.qemu;
 		args.extend([
-			"--control-url".into(),
-			format!("http://{}:{}/qos", qemu.host_connect_ip, qemu.host_port)
-				.into(),
 			"--cid".into(),
 			qemu.host_cid.to_string().into(),
 			"--host-port-override".into(),
@@ -724,15 +718,16 @@ impl DockerHostQemuNitroRunner {
 		]
 	}
 
-	fn vhost_forward_ports(&self, bridge_config: &[BridgeConfig]) -> Vec<u16> {
+	fn vhost_forward_ports(&self, bridge_config: &[BridgeConfig]) -> Vec<u32> {
 		let qemu = &self.spec.qemu;
-		let egress_port = qos_core::EGRESS_VSOCK_PORT
-			.try_into()
-			.expect("QOS egress VSOCK port must fit in u16");
-		let mut ports = vec![qemu.control_vsock_port, egress_port];
+		let mut ports = vec![
+			u32::from(qemu.control_vsock_port),
+			qos_core::EGRESS_VSOCK_PORT,
+			qos_core::io::BRIDGE_CONTROL_VSOCK_PORT,
+		];
 		for bridge in bridge_config {
 			if let BridgeConfig::Server { port, host: _ } = bridge {
-				ports.push(*port);
+				ports.push(u32::from(*port));
 			}
 		}
 		ports.sort_unstable();
@@ -1430,8 +1425,8 @@ const HOST_EGRESS_NFQUEUE_NUM: u16 = 100;
 const HOST_EGRESS_SETUP_SCRIPT: &str =
 	include_str!("../docker/host_egress_setup.sh");
 
-fn format_forward_ports(ports: &[u16]) -> String {
-	ports.iter().map(u16::to_string).collect::<Vec<_>>().join("+")
+fn format_forward_ports(ports: &[u32]) -> String {
+	ports.iter().map(u32::to_string).collect::<Vec<_>>().join("+")
 }
 
 fn sanitize_name(name: &str) -> String {

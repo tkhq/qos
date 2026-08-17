@@ -2101,13 +2101,7 @@ name = "qos_bridge"
 version = "0.13.0"
 dependencies = [
  "qos_core 0.13.0",
- "qos_hex 0.13.0",
- "qos_host",
- "qos_nsm 0.13.0",
- "serde",
- "serde_json",
  "tokio",
- "ureq",
 ]
 
 [[package]]
