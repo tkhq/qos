@@ -473,6 +473,11 @@ At this point your pivot binary is running inside the enclave with access to the
 
 **What this phase does**: Updates your running enclave application to a new version without redoing the genesis ceremony. The quorum key remains the same - only the manifest changes with a new app hash and incremented nonce. This is the standard flow for deploying application updates while maintaining the same cryptographic identity.
 
+The deployer must ensure that each enclave and all associated host services are
+bound to a single approved manifest. This binding must remain unchanged for the
+workload's lifetime. A different approved manifest requires a new enclave and
+new host services.
+
 ### 8.1 Build Updated Application
 
 **What this does**: Compiles your new application version and calculates its hash. This new hash will be used in the updated manifest to specify which binary should run in the enclave.
