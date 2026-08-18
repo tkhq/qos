@@ -2,6 +2,13 @@
 
 QOS Host Bridge bridges TCP traffic from the host to the enclave's application by establishing a TCP → VSOCK connection. It fetches the enclave's manifest via qos_host and constructs the host-side bridge according to the configuration specified by the manifest. The enclave independently constructs the corresponding VSOCK → TCP half from the same manifest, completing the full bridge.
 
+## Manifest Lifecycle
+
+The deployer must ensure that each enclave and all associated host services are
+bound to a single approved manifest. This binding must remain unchanged for the
+workload's lifetime. A different approved manifest requires a new enclave and
+new host services.
+
 ## Local Dev
 
 To use on local, separate ports are required since we cannot bind the two sides of the bridge on the same port.

@@ -191,6 +191,13 @@ reaper currently connects to `127.0.0.1:<port>`.
 `/qos/enclave-info` endpoint until the enclave has a manifest, reads the
 manifest envelope, and starts the configured host-side bridges.
 
+### Manifest Lifecycle
+
+The deployer must ensure that each enclave and all associated host services are
+bound to a single approved manifest. This binding must remain unchanged for the
+workload's lifetime. A different approved manifest requires a new enclave and
+new host services.
+
 ```bash
 qos_bridge \
   --control-url http://127.0.0.1:3001/qos \
