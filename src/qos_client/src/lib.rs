@@ -4,6 +4,11 @@ pub mod cli;
 #[cfg(feature = "smartcard")]
 pub mod yubikey;
 
+/// Re-export of the [`yubikey`](::yubikey) crate so downstream users can
+/// name its types without a separate, version-matched dependency.
+#[cfg(feature = "smartcard")]
+pub use ::yubikey as yubikey_crate;
+
 /// Host HTTP request helpers.
 pub mod request {
 	use std::io::Read;
