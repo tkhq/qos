@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.14.1](https://github.com/tkhq/qos/compare/qos_client-v0.14.0...qos_client-v0.14.1) - 2026-08-26
+
+### Added
+- *(qos_client)* re-export the yubikey crate as yubikey_crate
+
 ## `qos_client` - [0.14.0](https://github.com/tkhq/qos/compare/qos_client-v0.13.0...qos_client-v0.14.0) - 2026-08-14
 
 ### Other
