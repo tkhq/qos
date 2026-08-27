@@ -1524,8 +1524,6 @@ dependencies = [
 [[package]]
 name = "libcontainer"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c0d145abd052d4f374d5b9fb8beaa7c817a691ef0143260353b69761a96dd6a"
 dependencies = [
  "caps",
  "chrono",

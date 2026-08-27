@@ -333,6 +333,7 @@ fn uncompress_layer(blob: &[u8], gzip: bool) -> Result<Vec<u8>, ProtocolError> {
 	Ok(out)
 }
 
+#[allow(clippy::too_many_lines)]
 fn apply_layer(
 	rootfs: &Path,
 	layer: &[u8],
@@ -369,6 +370,20 @@ fn apply_layer(
 			.header()
 			.mode()
 			.map_err(|_| invalid("invalid OCI layer entry mode"))?;
+		let uid = u32::try_from(
+			entry
+				.header()
+				.uid()
+				.map_err(|_| invalid("invalid OCI layer entry uid"))?,
+		)
+		.map_err(|_| invalid("OCI layer entry uid is out of range"))?;
+		let gid = u32::try_from(
+			entry
+				.header()
+				.gid()
+				.map_err(|_| invalid("invalid OCI layer entry gid"))?,
+		)
+		.map_err(|_| invalid("OCI layer entry gid is out of range"))?;
 		if mode & 0o6000 != 0 {
 			return Err(invalid("OCI layer entry has setuid/setgid bits"));
 		}
@@ -387,6 +402,7 @@ fn apply_layer(
 				fs::Permissions::from_mode(mode & 0o777),
 			)
 			.map_err(|_| invalid("failed to set OCI directory mode"))?;
+			set_oci_ownership(&target, uid, gid)?;
 		} else if entry_type.is_file() {
 			if let Some(parent) = target.parent() {
 				fs::create_dir_all(parent)
@@ -409,13 +425,14 @@ fn apply_layer(
 				fs::Permissions::from_mode(mode & 0o777),
 			)
 			.map_err(|_| invalid("failed to set OCI file mode"))?;
+			set_oci_ownership(&target, uid, gid)?;
 		} else if entry_type.is_symlink() {
 			let link_name = entry
 				.link_name()
 				.map_err(|_| invalid("invalid OCI symlink target"))?
 				.ok_or_else(|| invalid("missing OCI symlink target"))?
 				.into_owned();
-			validate_symlink_target(&link_name)?;
+			validate_symlink_target(&path, &link_name)?;
 			if let Some(parent) = target.parent() {
 				fs::create_dir_all(parent).map_err(|_| {
 					invalid("failed to create OCI symlink parent")
@@ -424,6 +441,7 @@ fn apply_layer(
 			let _ = fs::remove_file(&target);
 			symlink(&link_name, &target)
 				.map_err(|_| invalid("failed to create OCI symlink"))?;
+			set_oci_ownership(&target, uid, gid)?;
 		} else if entry_type.is_hard_link() {
 			let link_name = entry
 				.link_name()
@@ -438,12 +456,44 @@ fn apply_layer(
 					invalid("failed to create OCI hardlink parent")
 				})?;
 			}
-			fs::hard_link(link_target, target)
+			fs::hard_link(link_target, &target)
 				.map_err(|_| invalid("failed to create OCI hardlink"))?;
+			set_oci_ownership(&target, uid, gid)?;
 		} else {
 			return Err(invalid("unsupported OCI layer entry type"));
 		}
 	}
+	Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn set_oci_ownership(
+	path: &Path,
+	uid: u32,
+	gid: u32,
+) -> Result<(), ProtocolError> {
+	// Bundle materialization is a privileged enclave operation. Keep unit tests
+	// and inspection tools usable when they intentionally run without root.
+	if !nix::unistd::geteuid().is_root() {
+		return Ok(());
+	}
+	nix::unistd::fchownat(
+		nix::fcntl::AT_FDCWD,
+		path,
+		Some(nix::unistd::Uid::from_raw(uid)),
+		Some(nix::unistd::Gid::from_raw(gid)),
+		nix::fcntl::AtFlags::AT_SYMLINK_NOFOLLOW,
+	)
+	.map_err(|_| invalid("failed to set OCI entry ownership"))
+}
+
+#[cfg(not(target_os = "linux"))]
+#[allow(clippy::unnecessary_wraps)]
+fn set_oci_ownership(
+	_path: &Path,
+	_uid: u32,
+	_gid: u32,
+) -> Result<(), ProtocolError> {
 	Ok(())
 }
 
@@ -780,16 +830,24 @@ fn ensure_parent_inside_rootfs(
 	Ok(())
 }
 
-fn validate_symlink_target(target: &Path) -> Result<(), ProtocolError> {
-	if target.is_absolute() {
-		return Err(invalid("OCI symlink target is absolute"));
-	}
+fn validate_symlink_target(
+	link_path: &Path,
+	target: &Path,
+) -> Result<(), ProtocolError> {
+	// Absolute links are rooted at the container root once pivoted. Relative
+	// links may contain `..` as long as resolving them from the link's parent
+	// does not walk above that root.
+	let mut depth = if target.is_absolute() {
+		0
+	} else {
+		link_path.parent().map_or(0, |parent| parent.components().count())
+	};
 	for component in target.components() {
 		match component {
-			Component::Normal(_) | Component::CurDir => {}
-			Component::ParentDir
-			| Component::RootDir
-			| Component::Prefix(_) => {
+			Component::Normal(_) => depth += 1,
+			Component::CurDir | Component::RootDir => {}
+			Component::ParentDir if depth > 0 => depth -= 1,
+			Component::ParentDir | Component::Prefix(_) => {
 				return Err(invalid("OCI symlink target escapes rootfs"));
 			}
 		}
@@ -1144,6 +1202,8 @@ mod tests {
 		let mut header = Header::new_gnu();
 		header.set_size(data.len() as u64);
 		header.set_mode(0o444);
+		header.set_uid(0);
+		header.set_gid(0);
 		header.set_cksum();
 		builder.append_data(&mut header, path, Cursor::new(data)).unwrap();
 	}
@@ -1475,6 +1535,30 @@ mod tests {
 		assert!(!rootfs.join("dir/old").exists());
 		assert!(rootfs.join("dir/keep").exists());
 		assert_eq!(fs::read(rootfs.join("dir/new")).unwrap(), b"new");
+	}
+
+	#[test]
+	fn accepts_container_rooted_and_safe_parent_symlinks() {
+		validate_symlink_target(
+			Path::new("usr/lib/libexample.so"),
+			Path::new("../../lib/libexample.so.1"),
+		)
+		.unwrap();
+		validate_symlink_target(
+			Path::new("lib/libc.so"),
+			Path::new("/lib/libc.so.6"),
+		)
+		.unwrap();
+	}
+
+	#[test]
+	fn rejects_symlinks_that_walk_above_container_root() {
+		let error = validate_symlink_target(
+			Path::new("lib/libexample.so"),
+			Path::new("../../../../host"),
+		)
+		.unwrap_err();
+		assert!(matches!(error, ProtocolError::InvalidOciImage(_)));
 	}
 
 	#[test]

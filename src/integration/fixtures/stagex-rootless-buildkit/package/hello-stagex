@@ -1,0 +1,2 @@
+#!/usr/bin/busybox sh
+echo "hello from a StageX package built inside QOS"

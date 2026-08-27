@@ -1,0 +1,4 @@
+FROM scratch
+COPY busybox /usr/bin/busybox
+COPY hello-stagex /usr/bin/hello-stagex
+ENTRYPOINT ["/usr/bin/busybox", "sh", "/usr/bin/hello-stagex"]

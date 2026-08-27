@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+buildkitd \
+	--rootless \
+	--addr "$BUILDKIT_HOST" \
+	--oci-worker-binary /usr/bin/buildkit-runc \
+	--oci-worker-snapshotter native \
+	--oci-worker-no-process-sandbox &
+buildkit_pid=$!
+trap 'kill "$buildkit_pid" 2>/dev/null || true' EXIT
+
+attempt=0
+until buildctl --addr "$BUILDKIT_HOST" debug workers >/dev/null 2>&1; do
+	attempt=$((attempt + 1))
+	if [ "$attempt" -ge 200 ]; then
+		echo "rootless BuildKit did not become ready" >&2
+		exit 1
+	fi
+	sleep 0.1
+done
+
+buildctl --addr "$BUILDKIT_HOST" build \
+	--frontend dockerfile.v0 \
+	--opt filename=Containerfile \
+	--local context=/stagex-package \
+	--local dockerfile=/stagex-package \
+	--output type=local,dest=/output
+
+result=$(/output/usr/bin/busybox sh /output/usr/bin/hello-stagex)
+test "$result" = "hello from a StageX package built inside QOS"
+echo "QOS_STAGEX_PACKAGE_BUILT_OK"

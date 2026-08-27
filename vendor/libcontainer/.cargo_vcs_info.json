@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "32bdb58331e35d3b1f4d86250127c52960aa158d"
+  },
+  "path_in_vcs": "crates/libcontainer"
+}

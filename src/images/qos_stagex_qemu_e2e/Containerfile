@@ -1,0 +1,85 @@
+FROM stagex/gen_initramfs:6.8@sha256:f5b9271cca6003e952cbbb9ef041ffa92ba328894f563d1d77942e6b5cdeac1a AS gen_initramfs
+FROM stagex/linux-nitro:sx2024.03.0@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eaea8866b002b04264 AS linux-nitro
+FROM stagex/pcsc-lite:sx2024.03.0@sha256:e720e1795706c7c8c1db14bf730b10521e3ff42e4bed90addc590f7446aac8af AS pcsc-lite
+FROM stagex/pallet-rust:1.94.0@sha256:2fbe7b164dd92edb9c1096152f6d27592d8a69b1b8eb2fc907b5fadea7d11668 AS rust
+FROM stagex/user-file:5.45@sha256:07ebef1a7d375c785c2268c5532b473a7130e4fbcf9807cc8f7b5d61e3b84b74 AS file
+FROM stagex/core-make:4.4@sha256:a47d8f67f8fd74905f724fdc5f0d18e29df96391751754947bdeaba9bef8f7d8 AS make
+FROM stagex AS stagex-artifacts
+
+FROM scratch AS base
+COPY --from=pcsc-lite . /
+COPY --from=rust . /
+COPY --from=file . /
+COPY --from=make . /
+COPY --chmod=644 <<-EOF /etc/passwd
+	root:x:0:0:root:/root:/bin/sh
+	user:x:1000:1000::/home/user:/bin/sh
+EOF
+COPY --chmod=644 <<-EOF /etc/group
+	root:x:0:
+	user:x:1000:
+EOF
+COPY --chmod=755 <<-EOF /usr/bin/getconf
+	#!/bin/sh
+	echo 4096
+EOF
+ENV TZ=UTC
+ENV LANG=C.UTF-8
+ENV LC_ALL=C
+ENV USER=root
+ENV HOME=/root
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV TARGET=x86_64-unknown-linux-musl
+ENV RUSTFLAGS="-C target-feature=+crt-static"
+WORKDIR /qos
+ADD . /qos
+RUN --mount=type=cache,target=/root/.cargo/registry cargo fetch
+RUN --mount=type=cache,target=/root/.cargo/registry \
+	cd src/init && cargo fetch
+
+FROM base AS build-init
+WORKDIR /qos/src/init
+RUN --mount=type=cache,target=/root/.cargo/registry \
+	--mount=type=cache,target=/qos/src/init/target \
+	--network=none cargo build \
+	--locked \
+	--no-default-features \
+	--release \
+	--target x86_64-unknown-linux-musl \
+	--features qemu-stagex-e2e \
+	&& cp target/x86_64-unknown-linux-musl/release/init /init
+RUN file /init | grep "static-pie"
+
+FROM base AS initramfs
+COPY --from=gen_initramfs . /
+COPY --from=build-init /init /build/init
+COPY --from=stagex-artifacts /stagex.oci.tar /build/stagex.oci.tar
+COPY --from=stagex-artifacts /stagex.digest /build/stagex.digest
+WORKDIR /build
+COPY <<-EOF initramfs.list
+	file /init             init             0755 0 0
+	file /stagex.oci.tar   stagex.oci.tar   0444 0 0
+	file /stagex.digest    stagex.digest    0444 0 0
+	dir  /run                              0755 0 0
+	dir  /tmp                              0755 0 0
+	dir  /etc                              0755 0 0
+	dir  /bin                              0755 0 0
+	dir  /sbin                             0755 0 0
+	dir  /proc                             0755 0 0
+	dir  /sys                              0755 0 0
+	dir  /sys/fs                           0755 0 0
+	dir  /sys/fs/cgroup                    0755 0 0
+	dir  /usr                              0755 0 0
+	dir  /usr/bin                          0755 0 0
+	dir  /usr/sbin                         0755 0 0
+	dir  /dev                              0755 0 0
+	dir  /dev/shm                          0755 0 0
+	dir  /dev/pts                          0755 0 0
+	nod  /dev/console                      0600 0 0 c 5 1
+EOF
+RUN gen_init_cpio -t 1 initramfs.list > /rootfs.cpio
+
+FROM scratch AS package
+COPY --from=linux-nitro /bzImage /
+COPY --from=linux-nitro /linux.config /
+COPY --from=initramfs /rootfs.cpio /

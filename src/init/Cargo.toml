@@ -13,7 +13,14 @@ qos_system = { path = "../qos_system"}
 qos_core = { path = "../qos_core", features = ["vm"], default-features = false }
 qos_nsm = { path = "../qos_nsm", default-features = false }
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"], default-features = false }
+oci-spec = { version = "0.9", features = ["runtime"], default-features = false, optional = true }
+
+[features]
+qemu-stagex-e2e = ["dep:oci-spec"]
 
 [[bin]]
 name = "init"
 path = "init.rs"
+
+[patch.crates-io]
+libcontainer = { path = "../../vendor/libcontainer" }

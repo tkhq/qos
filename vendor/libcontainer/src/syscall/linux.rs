@@ -1,0 +1,1090 @@
+//! Implements Command trait for Linux systems
+use std::any::Any;
+use std::ffi::{CStr, CString, OsStr};
+use std::os::fd::{BorrowedFd, FromRawFd, RawFd};
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::symlink;
+use std::os::unix::io::{AsRawFd, OwnedFd};
+use std::path::Path;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::{mem, ptr};
+
+use caps::{CapSet, CapsHashSet};
+use libc::{c_char, setdomainname, uid_t};
+use nix::dir::Dir;
+use nix::fcntl;
+use nix::fcntl::{OFlag, open};
+use nix::mount::{MntFlags, MsFlags, mount, umount2};
+use nix::sched::{CloneFlags, unshare};
+use nix::sys::stat::{Mode, SFlag, mknod};
+use nix::unistd::{Gid, Uid, chown, chroot, close, fchdir, pivot_root, sethostname};
+use oci_spec::runtime::PosixRlimit;
+use pathrs::flags::OpenFlags;
+use pathrs::procfs::{ProcfsBase, ProcfsHandle};
+
+use super::{Result, Syscall, SyscallError};
+use crate::capabilities;
+use crate::config::PersonalityDomain;
+
+// Flags used in mount_setattr(2).
+// see https://man7.org/linux/man-pages/man2/mount_setattr.2.html.
+pub const AT_RECURSIVE: u32 = 0x00008000; // Change the mount properties of the entire mount tree.
+pub const AT_EMPTY_PATH: u32 = 0x00001000;
+#[allow(non_upper_case_globals)]
+pub const MOUNT_ATTR__ATIME: u64 = 0x00000070; // Setting on how atime should be updated.
+pub const MOUNT_ATTR_RDONLY: u64 = 0x00000001;
+pub const MOUNT_ATTR_NOSUID: u64 = 0x00000002;
+pub const MOUNT_ATTR_NODEV: u64 = 0x00000004;
+pub const MOUNT_ATTR_NOEXEC: u64 = 0x00000008;
+pub const MOUNT_ATTR_RELATIME: u64 = 0x00000000;
+pub const MOUNT_ATTR_NOATIME: u64 = 0x00000010;
+pub const MOUNT_ATTR_STRICTATIME: u64 = 0x00000020;
+pub const MOUNT_ATTR_NODIRATIME: u64 = 0x00000080;
+pub const MOUNT_ATTR_NOSYMFOLLOW: u64 = 0x00200000;
+pub const MOVE_MOUNT_F_EMPTY_PATH: u32 = 0x00000004;
+pub const MOVE_MOUNT_T_EMPTY_PATH: u32 = 0x00000040;
+
+// The type of fsconfig() call made.
+pub const FSCONFIG_SET_FLAG: u64 = 0;
+pub const FSCONFIG_SET_STRING: u64 = 1;
+pub const FSCONFIG_SET_BINARY: u64 = 2;
+pub const FSCONFIG_SET_PATH: u64 = 3;
+pub const FSCONFIG_SET_PATH_EMPTY: u64 = 4;
+pub const FSCONFIG_SET_FD: u64 = 5;
+pub const FSCONFIG_CMD_CREATE: u64 = 6;
+pub const FSCONFIG_CMD_RECONFIGURE: u64 = 7;
+pub const FSCONFIG_CMD_CREATE_EXCL: u64 = 8;
+
+/// Constants used by mount(2).
+pub enum MountOption {
+    Defaults(bool, MsFlags),
+    Ro(bool, MsFlags),
+    Rw(bool, MsFlags),
+    Suid(bool, MsFlags),
+    Nosuid(bool, MsFlags),
+    Dev(bool, MsFlags),
+    Nodev(bool, MsFlags),
+    Exec(bool, MsFlags),
+    Noexec(bool, MsFlags),
+    Sync(bool, MsFlags),
+    Async(bool, MsFlags),
+    Dirsync(bool, MsFlags),
+    Remount(bool, MsFlags),
+    Mand(bool, MsFlags),
+    Nomand(bool, MsFlags),
+    Atime(bool, MsFlags),
+    Noatime(bool, MsFlags),
+    Diratime(bool, MsFlags),
+    Nodiratime(bool, MsFlags),
+    Bind(bool, MsFlags),
+    Rbind(bool, MsFlags),
+    Unbindable(bool, MsFlags),
+    Runbindable(bool, MsFlags),
+    Private(bool, MsFlags),
+    Rprivate(bool, MsFlags),
+    Shared(bool, MsFlags),
+    Rshared(bool, MsFlags),
+    Slave(bool, MsFlags),
+    Rslave(bool, MsFlags),
+    Relatime(bool, MsFlags),
+    Norelatime(bool, MsFlags),
+    Strictatime(bool, MsFlags),
+    Nostrictatime(bool, MsFlags),
+}
+
+impl MountOption {
+    // Return all possible mount options
+    pub fn known_options() -> Vec<String> {
+        [
+            "defaults",
+            "ro",
+            "rw",
+            "suid",
+            "nosuid",
+            "dev",
+            "nodev",
+            "exec",
+            "noexec",
+            "sync",
+            "async",
+            "dirsync",
+            "remount",
+            "mand",
+            "nomand",
+            "atime",
+            "noatime",
+            "diratime",
+            "nodiratime",
+            "bind",
+            "rbind",
+            "unbindable",
+            "runbindable",
+            "private",
+            "rprivate",
+            "shared",
+            "rshared",
+            "slave",
+            "rslave",
+            "relatime",
+            "norelatime",
+            "strictatime",
+            "nostrictatime",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+    }
+}
+
+impl FromStr for MountOption {
+    type Err = String;
+
+    fn from_str(option: &str) -> std::result::Result<Self, Self::Err> {
+        match option {
+            "defaults" => Ok(MountOption::Defaults(false, MsFlags::empty())),
+            "ro" => Ok(MountOption::Ro(false, MsFlags::MS_RDONLY)),
+            "rw" => Ok(MountOption::Rw(true, MsFlags::MS_RDONLY)),
+            "suid" => Ok(MountOption::Suid(true, MsFlags::MS_NOSUID)),
+            "nosuid" => Ok(MountOption::Nosuid(false, MsFlags::MS_NOSUID)),
+            "dev" => Ok(MountOption::Dev(true, MsFlags::MS_NODEV)),
+            "nodev" => Ok(MountOption::Nodev(false, MsFlags::MS_NODEV)),
+            "exec" => Ok(MountOption::Exec(true, MsFlags::MS_NOEXEC)),
+            "noexec" => Ok(MountOption::Noexec(false, MsFlags::MS_NOEXEC)),
+            "sync" => Ok(MountOption::Sync(false, MsFlags::MS_SYNCHRONOUS)),
+            "async" => Ok(MountOption::Async(true, MsFlags::MS_SYNCHRONOUS)),
+            "dirsync" => Ok(MountOption::Dirsync(false, MsFlags::MS_DIRSYNC)),
+            "remount" => Ok(MountOption::Remount(false, MsFlags::MS_REMOUNT)),
+            "mand" => Ok(MountOption::Mand(false, MsFlags::MS_MANDLOCK)),
+            "nomand" => Ok(MountOption::Nomand(true, MsFlags::MS_MANDLOCK)),
+            "atime" => Ok(MountOption::Atime(true, MsFlags::MS_NOATIME)),
+            "noatime" => Ok(MountOption::Noatime(false, MsFlags::MS_NOATIME)),
+            "diratime" => Ok(MountOption::Diratime(true, MsFlags::MS_NODIRATIME)),
+            "nodiratime" => Ok(MountOption::Nodiratime(false, MsFlags::MS_NODIRATIME)),
+            "bind" => Ok(MountOption::Bind(false, MsFlags::MS_BIND)),
+            "rbind" => Ok(MountOption::Rbind(
+                false,
+                MsFlags::MS_BIND | MsFlags::MS_REC,
+            )),
+            "unbindable" => Ok(MountOption::Unbindable(false, MsFlags::MS_UNBINDABLE)),
+            "runbindable" => Ok(MountOption::Runbindable(
+                false,
+                MsFlags::MS_UNBINDABLE | MsFlags::MS_REC,
+            )),
+            "private" => Ok(MountOption::Private(true, MsFlags::MS_PRIVATE)),
+            "rprivate" => Ok(MountOption::Rprivate(
+                true,
+                MsFlags::MS_PRIVATE | MsFlags::MS_REC,
+            )),
+            "shared" => Ok(MountOption::Shared(true, MsFlags::MS_SHARED)),
+            "rshared" => Ok(MountOption::Rshared(
+                true,
+                MsFlags::MS_SHARED | MsFlags::MS_REC,
+            )),
+            "slave" => Ok(MountOption::Slave(true, MsFlags::MS_SLAVE)),
+            "rslave" => Ok(MountOption::Rslave(
+                true,
+                MsFlags::MS_SLAVE | MsFlags::MS_REC,
+            )),
+            "relatime" => Ok(MountOption::Relatime(false, MsFlags::MS_RELATIME)),
+            "norelatime" => Ok(MountOption::Norelatime(true, MsFlags::MS_RELATIME)),
+            "strictatime" => Ok(MountOption::Strictatime(false, MsFlags::MS_STRICTATIME)),
+            "nostrictatime" => Ok(MountOption::Nostrictatime(true, MsFlags::MS_STRICTATIME)),
+            _ => Err(option.to_string()),
+        }
+    }
+}
+
+/// Constants used by mount_setattr(2).
+pub enum MountRecursive {
+    /// Mount read-only.
+    Rdonly(bool, u64),
+
+    /// Ignore suid and sgid bits.
+    Nosuid(bool, u64),
+
+    /// Disallow access to device special files.
+    Nodev(bool, u64),
+
+    /// Disallow program execution.
+    Noexec(bool, u64),
+
+    /// Setting on how atime should be updated.
+    Atime(bool, u64),
+
+    /// Update atime relative to mtime/ctime.
+    Relatime(bool, u64),
+
+    /// Do not update access times.
+    Noatime(bool, u64),
+
+    /// Always perform atime updates.
+    StrictAtime(bool, u64),
+
+    /// Do not update directory access times.
+    NoDiratime(bool, u64),
+
+    /// Prevents following symbolic links.
+    Nosymfollow(bool, u64),
+}
+
+impl FromStr for MountRecursive {
+    type Err = SyscallError;
+
+    fn from_str(option: &str) -> std::result::Result<Self, Self::Err> {
+        match option {
+            "rro" => Ok(MountRecursive::Rdonly(false, MOUNT_ATTR_RDONLY)),
+            "rrw" => Ok(MountRecursive::Rdonly(true, MOUNT_ATTR_RDONLY)),
+            "rnosuid" => Ok(MountRecursive::Nosuid(false, MOUNT_ATTR_NOSUID)),
+            "rsuid" => Ok(MountRecursive::Nosuid(true, MOUNT_ATTR_NOSUID)),
+            "rnodev" => Ok(MountRecursive::Nodev(false, MOUNT_ATTR_NODEV)),
+            "rdev" => Ok(MountRecursive::Nodev(true, MOUNT_ATTR_NODEV)),
+            "rnoexec" => Ok(MountRecursive::Noexec(false, MOUNT_ATTR_NOEXEC)),
+            "rexec" => Ok(MountRecursive::Noexec(true, MOUNT_ATTR_NOEXEC)),
+            "rnodiratime" => Ok(MountRecursive::NoDiratime(false, MOUNT_ATTR_NODIRATIME)),
+            "rdiratime" => Ok(MountRecursive::NoDiratime(true, MOUNT_ATTR_NODIRATIME)),
+            "rrelatime" => Ok(MountRecursive::Relatime(false, MOUNT_ATTR_RELATIME)),
+            "rnorelatime" => Ok(MountRecursive::Relatime(true, MOUNT_ATTR_RELATIME)),
+            "rnoatime" => Ok(MountRecursive::Noatime(false, MOUNT_ATTR_NOATIME)),
+            "ratime" => Ok(MountRecursive::Noatime(true, MOUNT_ATTR_NOATIME)),
+            "rstrictatime" => Ok(MountRecursive::StrictAtime(false, MOUNT_ATTR_STRICTATIME)),
+            "rnostrictatime" => Ok(MountRecursive::StrictAtime(true, MOUNT_ATTR_STRICTATIME)),
+            "rnosymfollow" => Ok(MountRecursive::Nosymfollow(false, MOUNT_ATTR_NOSYMFOLLOW)),
+            "rsymfollow" => Ok(MountRecursive::Nosymfollow(true, MOUNT_ATTR_NOSYMFOLLOW)),
+            // No support for MOUNT_ATTR_IDMAP yet (needs UserNS FD)
+            _ => Err(SyscallError::UnexpectedMountRecursiveOption(
+                option.to_string(),
+            )),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// A structure used as te third argument of mount_setattr(2).
+pub struct MountAttr {
+    /// Mount properties to set.
+    pub attr_set: u64,
+
+    /// Mount properties to clear.
+    pub attr_clr: u64,
+
+    /// Mount propagation type.
+    pub propagation: u64,
+
+    /// User namespace file descriptor.
+    pub userns_fd: u64,
+}
+
+impl MountAttr {
+    /// Return MountAttr with the flag raised.
+    /// This function is used in test code.
+    pub fn all() -> Self {
+        MountAttr {
+            attr_set: MOUNT_ATTR_RDONLY
+                | MOUNT_ATTR_NOSUID
+                | MOUNT_ATTR_NODEV
+                | MOUNT_ATTR_NOEXEC
+                | MOUNT_ATTR_NODIRATIME
+                | MOUNT_ATTR_RELATIME
+                | MOUNT_ATTR_NOATIME
+                | MOUNT_ATTR_STRICTATIME
+                | MOUNT_ATTR_NOSYMFOLLOW,
+            attr_clr: MOUNT_ATTR_RDONLY
+                | MOUNT_ATTR_NOSUID
+                | MOUNT_ATTR_NODEV
+                | MOUNT_ATTR_NOEXEC
+                | MOUNT_ATTR_NODIRATIME
+                | MOUNT_ATTR_RELATIME
+                | MOUNT_ATTR_NOATIME
+                | MOUNT_ATTR_STRICTATIME
+                | MOUNT_ATTR_NOSYMFOLLOW
+                | MOUNT_ATTR__ATIME,
+            propagation: 0,
+            userns_fd: 0,
+        }
+    }
+}
+
+/// Empty structure to implement Command trait for
+#[derive(Clone)]
+pub struct LinuxSyscall;
+
+impl LinuxSyscall {
+    unsafe fn from_raw_buf<'a, T>(p: *const c_char) -> T
+    where
+        T: From<&'a OsStr>,
+    {
+        unsafe { T::from(OsStr::from_bytes(CStr::from_ptr(p).to_bytes())) }
+    }
+
+    /// Reads data from the `c_passwd` and returns it as a `User`.
+    unsafe fn passwd_to_user(passwd: libc::passwd) -> Arc<OsStr> {
+        let name: Arc<OsStr> = unsafe { Self::from_raw_buf(passwd.pw_name) };
+        name
+    }
+
+    fn emulate_close_range(preserve_fds: i32) -> Result<()> {
+        let open_fds = Self::get_open_fds()?;
+        // Include stdin, stdout, and stderr for fd 0, 1, and 2 respectively.
+        let min_fd = preserve_fds + 3;
+        let to_be_cleaned_up_fds: Vec<i32> = open_fds
+            .iter()
+            .filter_map(|&fd| if fd >= min_fd { Some(fd) } else { None })
+            .collect();
+
+        to_be_cleaned_up_fds.iter().for_each(|&fd| {
+            // Intentionally ignore errors here -- the cases where this might fail
+            // are basically file descriptors that have already been closed.
+            let _ = fcntl::fcntl(fd, fcntl::F_SETFD(fcntl::FdFlag::FD_CLOEXEC));
+        });
+
+        Ok(())
+    }
+
+    // Get a list of open fds for the calling process.
+    fn get_open_fds() -> Result<Vec<i32>> {
+        let dir = ProcfsHandle::new()?.open(
+            ProcfsBase::ProcSelf,
+            Path::new("fd"),
+            OpenFlags::O_DIRECTORY | OpenFlags::O_CLOEXEC,
+        )?;
+
+        let fds = Dir::from(dir)?
+            .into_iter()
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| {
+                // Convert the file name from string into i32. Since we are looking
+                // at /proc/<pid>/fd, anything that's not a number (i32) can be
+                // ignored. We are only interested in opened fds.
+                entry
+                    .file_name()
+                    .to_str()
+                    .ok()
+                    .and_then(|name| name.parse::<i32>().ok())
+            })
+            .collect();
+
+        Ok(fds)
+    }
+}
+
+impl Syscall for LinuxSyscall {
+    /// To enable dynamic typing,
+    /// see <https://doc.rust-lang.org/std/any/index.html> for more information
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    /// Function to set given path as root path inside process
+    fn pivot_rootfs(&self, path: &Path) -> Result<()> {
+        // open the path as directory and read only
+        let newroot = open(
+            path,
+            OFlag::O_DIRECTORY | OFlag::O_RDONLY | OFlag::O_CLOEXEC,
+            Mode::empty(),
+        )
+        .inspect_err(|errno| {
+            tracing::error!(?errno, ?path, "failed to open the new root for pivot root");
+        })?;
+
+        // make the given path as the root directory for the container
+        // see https://man7.org/linux/man-pages/man2/pivot_root.2.html, specially the notes
+        // pivot root usually changes the root directory to first argument, and then mounts the original root
+        // directory at second argument. Giving same path for both stacks mapping of the original root directory
+        // above the new directory at the same path, then the call to umount unmounts the original root directory from
+        // this path. This is done, as otherwise, we will need to create a separate temporary directory under the new root path
+        // so we can move the original root there, and then unmount that. This way saves the creation of the temporary
+        // directory to put original root directory.
+        pivot_root(path, path).inspect_err(|errno| {
+            tracing::error!(?errno, ?path, "failed to pivot root to");
+        })?;
+
+        // Make the original root directory rslave to avoid propagating unmount event to the host mount namespace.
+        // We should use MS_SLAVE not MS_PRIVATE according to https://github.com/opencontainers/runc/pull/1500.
+        mount(
+            None::<&str>,
+            "/",
+            None::<&str>,
+            MsFlags::MS_SLAVE | MsFlags::MS_REC,
+            None::<&str>,
+        )
+        .inspect_err(|errno| {
+            tracing::error!(?errno, "failed to make original root directory rslave");
+        })?;
+
+        // Unmount the original root directory which was stacked on top of new root directory
+        // MNT_DETACH makes the mount point unavailable to new accesses, but waits till the original mount point
+        // to be free of activity to actually unmount
+        // see https://man7.org/linux/man-pages/man2/umount2.2.html for more information
+        umount2("/", MntFlags::MNT_DETACH).inspect_err(|errno| {
+            tracing::error!(?errno, "failed to unmount old root directory");
+        })?;
+        // Change directory to the new root
+        fchdir(newroot).inspect_err(|errno| {
+            tracing::error!(?errno, ?newroot, "failed to change directory to new root");
+        })?;
+
+        close(newroot).inspect_err(|errno| {
+            tracing::error!(?errno, ?newroot, "failed to close new root directory");
+        })?;
+
+        Ok(())
+    }
+
+    /// Set namespace for process
+    fn set_ns(&self, rawfd: i32, nstype: CloneFlags) -> Result<()> {
+        let fd = unsafe { BorrowedFd::borrow_raw(rawfd) };
+        nix::sched::setns(fd, nstype)?;
+        Ok(())
+    }
+
+    /// set uid and gid for process
+    fn set_id(&self, uid: Uid, gid: Gid) -> Result<()> {
+        prctl::set_keep_capabilities(true).map_err(|errno| {
+            tracing::error!(?errno, "failed to set keep capabilities to true");
+            nix::errno::Errno::from_raw(errno)
+        })?;
+        // args : real *id, effective *id, saved set *id respectively
+
+        // This is safe because at this point we have only
+        // one thread in the process
+        if unsafe { libc::syscall(libc::SYS_setresgid, gid, gid, gid) } == -1 {
+            let err = nix::errno::Errno::last();
+            tracing::error!(
+                ?err,
+                ?gid,
+                "failed to set real, effective and saved set gid"
+            );
+            return Err(err.into());
+        }
+
+        // This is safe because at this point we have only
+        // one thread in the process
+        if unsafe { libc::syscall(libc::SYS_setresuid, uid, uid, uid) } == -1 {
+            let err = nix::errno::Errno::last();
+            tracing::error!(
+                ?err,
+                ?uid,
+                "failed to set real, effective and saved set uid"
+            );
+            return Err(err.into());
+        }
+
+        // if not the root user, reset capabilities to effective capabilities,
+        // which are used by kernel to perform checks
+        // see https://man7.org/linux/man-pages/man7/capabilities.7.html for more information
+        if uid != Uid::from_raw(0) {
+            capabilities::reset_effective(self)?;
+        }
+        prctl::set_keep_capabilities(false).map_err(|errno| {
+            tracing::error!(?errno, "failed to set keep capabilities to false");
+            nix::errno::Errno::from_raw(errno)
+        })?;
+        Ok(())
+    }
+
+    /// Disassociate parts of execution context
+    // see https://man7.org/linux/man-pages/man2/unshare.2.html for more information
+    fn unshare(&self, flags: CloneFlags) -> Result<()> {
+        unshare(flags)?;
+
+        Ok(())
+    }
+    /// Set capabilities for container process
+    fn set_capability(&self, cset: CapSet, value: &CapsHashSet) -> Result<()> {
+        match cset {
+            // caps::set cannot set capabilities in bounding set,
+            // so we do it differently
+            CapSet::Bounding => {
+                // get all capabilities
+                let all = caps::read(None, CapSet::Bounding)?;
+                // the difference will give capabilities
+                // which are to be unset
+                // for each such =, drop that capability
+                // after this, only those which are to be set will remain set
+                for c in all.difference(value) {
+                    caps::drop(None, CapSet::Bounding, *c)?
+                }
+            }
+            CapSet::Ambient => {
+                // check specifically for ambient, as those might not always be available
+                //
+                // Ambient capabilities are applied from an unordered HashSet, and if any
+                // set_capability() call fails, Youki stops applying the rest. This causes
+                // inconsistent CapAmb results between runs and diverges from runc, which
+                // continues applying all ambient caps even after a failure. The same flawed
+                // ambient-cap logic also causes exec-path capability test failures.
+                caps::clear(None, CapSet::Ambient)?;
+                for c in value {
+                    if let Err(e) = caps::raise(None, CapSet::Ambient, *c) {
+                        tracing::warn!(?e, ?c, "can't raise ambient capability");
+                    }
+                }
+            }
+            _ => {
+                caps::set(None, cset, value)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Sets hostname for process
+    fn set_hostname(&self, hostname: &str) -> Result<()> {
+        sethostname(hostname)?;
+        Ok(())
+    }
+
+    /// Sets domainname for process (see
+    /// [setdomainname(2)](https://man7.org/linux/man-pages/man2/setdomainname.2.html)).
+    fn set_domainname(&self, domainname: &str) -> Result<()> {
+        let ptr = domainname.as_bytes().as_ptr() as *const c_char;
+        let len = domainname.len();
+        match unsafe { setdomainname(ptr, len) } {
+            0 => Ok(()),
+            -1 => Err(nix::Error::last()),
+
+            _ => Err(nix::Error::UnknownErrno),
+        }?;
+
+        Ok(())
+    }
+
+    /// Sets resource limit for process
+    fn set_rlimit(&self, rlimit: &PosixRlimit) -> Result<()> {
+        let rlim = &libc::rlimit {
+            rlim_cur: rlimit.soft(),
+            rlim_max: rlimit.hard(),
+        };
+
+        // Change for musl libc based on seccomp needs
+        #[cfg(not(target_env = "musl"))]
+        let res = unsafe { libc::setrlimit(rlimit.typ() as u32, rlim) };
+        #[cfg(target_env = "musl")]
+        let res = unsafe { libc::setrlimit(rlimit.typ() as i32, rlim) };
+
+        match res {
+            0 => Ok(()),
+            -1 => Err(SyscallError::Nix(nix::Error::last())),
+            _ => Err(SyscallError::Nix(nix::Error::UnknownErrno)),
+        }?;
+
+        Ok(())
+    }
+
+    // taken from https://crates.io/crates/users
+    fn get_pwuid(&self, uid: uid_t) -> Option<Arc<OsStr>> {
+        let mut passwd = unsafe { mem::zeroed::<libc::passwd>() };
+        let mut buf = vec![0; 2048];
+        let mut result = ptr::null_mut::<libc::passwd>();
+
+        loop {
+            let r = unsafe {
+                libc::getpwuid_r(uid, &mut passwd, buf.as_mut_ptr(), buf.len(), &mut result)
+            };
+
+            if r != libc::ERANGE {
+                break;
+            }
+
+            let newsize = buf.len().checked_mul(2)?;
+            buf.resize(newsize, 0);
+        }
+
+        if result.is_null() {
+            // There is no such user, or an error has occurred.
+            // errno gets set if there's an error.
+            return None;
+        }
+
+        if result != &mut passwd {
+            // The result of getpwuid_r should be its input passwd.
+            return None;
+        }
+
+        let user = unsafe { Self::passwd_to_user(result.read()) };
+        Some(user)
+    }
+
+    fn chroot(&self, path: &Path) -> Result<()> {
+        chroot(path)?;
+
+        Ok(())
+    }
+
+    fn mount(
+        &self,
+        source: Option<&Path>,
+        target: &Path,
+        fstype: Option<&str>,
+        flags: MsFlags,
+        data: Option<&str>,
+    ) -> Result<()> {
+        mount(source, target, fstype, flags, data)?;
+        Ok(())
+    }
+
+    fn mount_from_fd(&self, source_fd: &OwnedFd, target: &Path) -> Result<()> {
+        let parent = target.parent().ok_or_else(|| {
+            tracing::error!(?target, "target has no parent");
+            SyscallError::Nix(nix::Error::EINVAL)
+        })?;
+        let name = target.file_name().ok_or_else(|| {
+            tracing::error!(?target, "target has no file name");
+            SyscallError::Nix(nix::Error::EINVAL)
+        })?;
+
+        let parent_fd = unsafe {
+            OwnedFd::from_raw_fd(open(
+                parent,
+                OFlag::O_PATH | OFlag::O_CLOEXEC | OFlag::O_DIRECTORY,
+                Mode::empty(),
+            )?)
+        };
+
+        let open_tree_flags: libc::c_uint = (libc::OPEN_TREE_CLOEXEC as libc::c_uint)
+            | (libc::OPEN_TREE_CLONE as libc::c_uint)
+            | (libc::AT_EMPTY_PATH as libc::c_uint);
+
+        const EMPTY_PATH: [libc::c_char; 1] = [0];
+
+        let mount_fd_raw = unsafe {
+            libc::syscall(
+                libc::SYS_open_tree,
+                source_fd.as_raw_fd(),
+                EMPTY_PATH.as_ptr(),
+                open_tree_flags,
+            )
+        };
+
+        if mount_fd_raw < 0 {
+            let err = nix::errno::Errno::last();
+            tracing::error!(?err, "open_tree from fd failed");
+            return Err(SyscallError::Nix(err));
+        }
+        let mount_fd = unsafe { OwnedFd::from_raw_fd(mount_fd_raw as RawFd) };
+
+        let name_cstr = CString::new(name.as_bytes()).map_err(|err| {
+            tracing::error!(?target, ?err, "failed to convert file name to cstring");
+            SyscallError::Nix(nix::Error::EINVAL)
+        })?;
+
+        let res = unsafe {
+            libc::syscall(
+                libc::SYS_move_mount,
+                mount_fd.as_raw_fd(),
+                EMPTY_PATH.as_ptr(),
+                parent_fd.as_raw_fd(),
+                name_cstr.as_ptr(),
+                MOVE_MOUNT_F_EMPTY_PATH as libc::c_uint,
+            )
+        };
+
+        if res < 0 {
+            let err = nix::errno::Errno::last();
+            tracing::error!(?target, ?err, "move_mount failed");
+            return Err(SyscallError::Nix(err));
+        }
+
+        Ok(())
+    }
+
+    fn move_mount(
+        &self,
+        from_dirfd: BorrowedFd<'_>,
+        from_path: Option<&str>,
+        to_dirfd: BorrowedFd<'_>,
+        to_path: Option<&str>,
+        flags: u32,
+    ) -> Result<()> {
+        const EMPTY_PATH: [libc::c_char; 1] = [0];
+
+        let from_cstr: Option<CString> = from_path
+            .and_then(|s| if s.is_empty() { None } else { Some(s) })
+            .map(|s| CString::new(s).map_err(|_| nix::Error::EINVAL))
+            .transpose()?;
+        let from_ptr = from_cstr
+            .as_ref()
+            .map_or(EMPTY_PATH.as_ptr(), |c| c.as_ptr());
+
+        let to_cstr: Option<CString> = to_path
+            .and_then(|s| if s.is_empty() { None } else { Some(s) })
+            .map(|s| CString::new(s).map_err(|_| nix::Error::EINVAL))
+            .transpose()?;
+        let to_ptr = to_cstr.as_ref().map_or(EMPTY_PATH.as_ptr(), |c| c.as_ptr());
+
+        let rc = unsafe {
+            libc::syscall(
+                libc::SYS_move_mount,
+                from_dirfd,
+                from_ptr,
+                to_dirfd,
+                to_ptr,
+                flags as libc::c_uint,
+            )
+        };
+
+        match rc {
+            0 => Ok(()),
+            -1 => Err(nix::Error::last().into()),
+            _ => Err(nix::Error::UnknownErrno.into()),
+        }
+    }
+
+    fn fsopen(&self, fstype: Option<&str>, flags: u32) -> Result<OwnedFd> {
+        let t_cstr: Option<CString> = fstype
+            .map(|t| CString::new(t).map_err(|_| SyscallError::Nix(nix::errno::Errno::EINVAL)))
+            .transpose()?;
+
+        let t_ptr = t_cstr.as_ref().map_or(std::ptr::null(), |c| c.as_ptr());
+
+        let fd =
+            unsafe { libc::syscall(libc::SYS_fsopen, t_ptr, flags as libc::c_uint) } as libc::c_int;
+        if fd < 0 {
+            return Err(SyscallError::Nix(nix::Error::last()));
+        }
+        Ok(unsafe { OwnedFd::from_raw_fd(fd) })
+    }
+
+    fn fsconfig(
+        &self,
+        fsfd: BorrowedFd<'_>,
+        cmd: u32,
+        key: Option<&str>,
+        val: Option<&str>,
+        aux: libc::c_int,
+    ) -> Result<()> {
+        let k_cstr: Option<CString> = key
+            .map(|k| CString::new(k).map_err(|_| SyscallError::Nix(nix::errno::Errno::EINVAL)))
+            .transpose()?;
+        let k_ptr = k_cstr.as_ref().map_or(std::ptr::null(), |k| k.as_ptr());
+
+        let v_cstr: Option<CString> = val
+            .map(|v| CString::new(v).map_err(|_| SyscallError::Nix(nix::errno::Errno::EINVAL)))
+            .transpose()?;
+        let v_ptr = v_cstr
+            .as_ref()
+            .map_or(std::ptr::null(), |v| v.as_ptr() as *const libc::c_void);
+
+        let rc = unsafe {
+            libc::syscall(
+                libc::SYS_fsconfig,
+                fsfd.as_raw_fd() as libc::c_int,
+                cmd as libc::c_uint,
+                k_ptr,
+                v_ptr,
+                aux,
+            )
+        };
+        if rc == -1 {
+            return Err(SyscallError::Nix(nix::Error::last()));
+        }
+        Ok(())
+    }
+
+    fn fsmount(
+        &self,
+        fsfd: BorrowedFd<'_>,
+        flags: u32,
+        attr_flags: Option<u64>,
+    ) -> Result<OwnedFd> {
+        let attr = attr_flags.unwrap_or(0);
+
+        let ret = unsafe {
+            libc::syscall(
+                libc::SYS_fsmount,
+                fsfd.as_raw_fd() as libc::c_int,
+                flags as libc::c_uint,
+                attr as libc::c_ulong,
+            )
+        } as libc::c_int;
+
+        if ret < 0 {
+            return Err(SyscallError::Nix(nix::Error::last()));
+        }
+        Ok(unsafe { std::os::fd::OwnedFd::from_raw_fd(ret) })
+    }
+
+    //dirfd is RawFd because we need to pass AT_FDCWD
+    fn open_tree(&self, dirfd: RawFd, path: Option<&str>, flags: u32) -> Result<OwnedFd> {
+        static EMPTY: [libc::c_char; 1] = [0];
+        let path_cstr: Option<CString> = path
+            .map(|s| CString::new(s).map_err(|_| SyscallError::Nix(nix::errno::Errno::EINVAL)))
+            .transpose()?;
+        let c_path: *const c_char = match path_cstr.as_ref() {
+            Some(cs) => cs.as_ptr(),
+            None => EMPTY.as_ptr(),
+        };
+
+        let fd = unsafe {
+            libc::syscall(
+                libc::SYS_open_tree,
+                dirfd as libc::c_int,
+                c_path,
+                flags as libc::c_uint,
+            )
+        } as libc::c_int;
+
+        if fd < 0 {
+            return Err(SyscallError::Nix(nix::Error::last()));
+        }
+        Ok(unsafe { OwnedFd::from_raw_fd(fd) })
+    }
+
+    fn symlink(&self, original: &Path, link: &Path) -> Result<()> {
+        symlink(original, link)?;
+
+        Ok(())
+    }
+
+    fn mknod(&self, path: &Path, kind: SFlag, perm: Mode, dev: u64) -> Result<()> {
+        mknod(path, kind, perm, dev)?;
+
+        Ok(())
+    }
+
+    fn chown(&self, path: &Path, owner: Option<Uid>, group: Option<Gid>) -> Result<()> {
+        chown(path, owner, group)?;
+
+        Ok(())
+    }
+
+    fn set_groups(&self, groups: &[Gid]) -> Result<()> {
+        let n_groups = groups.len() as libc::size_t;
+        let groups_ptr = groups.as_ptr() as *const libc::gid_t;
+
+        // This is safe because at this point we have only
+        // one thread in the process
+        if unsafe { libc::syscall(libc::SYS_setgroups, n_groups, groups_ptr) } == -1 {
+            let err = nix::errno::Errno::last();
+            tracing::error!(?err, ?groups, "failed to set groups");
+            return Err(err.into());
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn close_range(&self, preserve_fds: i32) -> Result<()> {
+        match unsafe {
+            libc::syscall(
+                libc::SYS_close_range,
+                3 + preserve_fds,
+                libc::c_int::MAX,
+                libc::CLOSE_RANGE_CLOEXEC,
+            )
+        } {
+            0 => Ok(()),
+            -1 => {
+                match nix::errno::Errno::last() {
+                    nix::errno::Errno::ENOSYS | nix::errno::Errno::EINVAL => {
+                        // close_range was introduced in kernel 5.9 and CLOSEEXEC was introduced in
+                        // kernel 5.11. If the kernel is older we emulate close_range in userspace.
+                        Self::emulate_close_range(preserve_fds)
+                    }
+                    e => Err(SyscallError::Nix(e)),
+                }
+            }
+            _ => Err(SyscallError::Nix(nix::errno::Errno::UnknownErrno)),
+        }?;
+
+        Ok(())
+    }
+
+    fn mount_setattr(
+        &self,
+        dirfd: BorrowedFd<'_>,
+        pathname: &Path,
+        flags: u32,
+        mount_attr: &MountAttr,
+        size: libc::size_t,
+    ) -> Result<()> {
+        let path_c_string = pathname
+            .to_path_buf()
+            .to_str()
+            .map(CString::new)
+            .ok_or_else(|| {
+                tracing::error!(path = ?pathname, "failed to convert path to string");
+                nix::Error::EINVAL
+            })?
+            .map_err(|err| {
+                tracing::error!(path = ?pathname, ?err, "failed to convert path to string");
+                nix::Error::EINVAL
+            })?;
+
+        match unsafe {
+            libc::syscall(
+                libc::SYS_mount_setattr,
+                dirfd,
+                path_c_string.as_ptr(),
+                flags,
+                mount_attr as *const MountAttr,
+                size,
+            )
+        } {
+            0 => Ok(()),
+            -1 => Err(nix::Error::last()),
+            _ => Err(nix::Error::UnknownErrno),
+        }?;
+        Ok(())
+    }
+
+    fn set_io_priority(&self, class: i64, priority: i64) -> Result<()> {
+        let ioprio_who_progress: libc::c_int = 1;
+        let ioprio_who_pid = 0;
+        let iop = (class << 13) | priority;
+        match unsafe {
+            libc::syscall(
+                libc::SYS_ioprio_set,
+                ioprio_who_progress,
+                ioprio_who_pid,
+                iop as libc::c_ulong,
+            )
+        } {
+            0 => Ok(()),
+            -1 => Err(nix::Error::last()),
+            _ => Err(nix::Error::UnknownErrno),
+        }?;
+        Ok(())
+    }
+
+    fn set_mempolicy(&self, mode: i32, nodemask: &[libc::c_ulong], maxnode: u64) -> Result<()> {
+        // Convert Rust types to libc types
+        let libc_nodemask = if nodemask.is_empty() {
+            std::ptr::null()
+        } else {
+            nodemask.as_ptr()
+        };
+        let libc_maxnode = maxnode as libc::c_ulong;
+
+        match unsafe {
+            libc::syscall(
+                libc::SYS_set_mempolicy,
+                mode as libc::c_long,
+                libc_nodemask,
+                libc_maxnode,
+            )
+        } {
+            0 => Ok(()),
+            -1 => Err(SyscallError::Nix(nix::Error::last())),
+            _ => Err(SyscallError::Nix(nix::Error::UnknownErrno)),
+        }
+    }
+
+    fn umount2(&self, target: &Path, flags: MntFlags) -> Result<()> {
+        umount2(target, flags)?;
+        Ok(())
+    }
+
+    fn get_uid(&self) -> Uid {
+        nix::unistd::getuid()
+    }
+
+    fn get_gid(&self) -> Gid {
+        nix::unistd::getgid()
+    }
+
+    fn get_euid(&self) -> Uid {
+        nix::unistd::geteuid()
+    }
+
+    fn get_egid(&self) -> Gid {
+        nix::unistd::getegid()
+    }
+
+    fn personality(&self, domain: PersonalityDomain) -> Result<()> {
+        let domain = nix::sys::personality::Persona::from_bits_retain(domain as i32);
+        nix::sys::personality::set(domain)
+            .map(|_| ())
+            .map_err(|e| e.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // Note: We have to run these tests here as serial. The main issue is that
+    // these tests has a dependency on the system state. The
+    // cleanup_file_descriptors test is especially evil when running with other
+    // tests because it would ran around close down different fds.
+
+    use std::fs;
+    use std::os::unix::prelude::AsRawFd;
+    use std::str::FromStr;
+
+    use anyhow::{Context, Result, bail};
+    use nix::{fcntl, sys, unistd};
+    use serial_test::serial;
+
+    use super::{LinuxSyscall, MountOption};
+    use crate::syscall::Syscall;
+
+    #[test]
+    #[serial]
+    fn test_get_open_fds() -> Result<()> {
+        let file = fs::File::open("/dev/null")?;
+        let fd = file.as_raw_fd();
+        let open_fds = LinuxSyscall::get_open_fds()?;
+
+        if !open_fds.contains(&fd) {
+            bail!("failed to find the opened dev null fds: {:?}", open_fds);
+        }
+
+        // explicitly close the file before the test case returns.
+        drop(file);
+
+        // The stdio fds should also be contained in the list of opened fds.
+        if ![0, 1, 2]
+            .iter()
+            .all(|&stdio_fd| open_fds.contains(&stdio_fd))
+        {
+            bail!("failed to find the stdio fds: {:?}", open_fds);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_close_range_userspace() -> Result<()> {
+        // Open a fd without the CLOEXEC flag. Rust automatically adds the flag,
+        // so we use fcntl::open here for more control.
+        let fd = fcntl::open("/dev/null", fcntl::OFlag::O_RDWR, sys::stat::Mode::empty())?;
+        LinuxSyscall::emulate_close_range(0).context("failed to clean up the fds")?;
+
+        let fd_flag = fcntl::fcntl(fd, fcntl::F_GETFD)?;
+        if (fd_flag & fcntl::FdFlag::FD_CLOEXEC.bits()) == 0 {
+            bail!("CLOEXEC flag is not set correctly");
+        }
+
+        unistd::close(fd)?;
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_close_range_native() -> Result<()> {
+        let fd = fcntl::open("/dev/null", fcntl::OFlag::O_RDWR, sys::stat::Mode::empty())?;
+        let syscall = LinuxSyscall {};
+        syscall
+            .close_range(0)
+            .context("failed to clean up the fds")?;
+
+        let fd_flag = fcntl::fcntl(fd, fcntl::F_GETFD)?;
+        if (fd_flag & fcntl::FdFlag::FD_CLOEXEC.bits()) == 0 {
+            bail!("CLOEXEC flag is not set correctly");
+        }
+
+        unistd::close(fd)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_known_mount_options_implemented() -> Result<()> {
+        for option in MountOption::known_options() {
+            match MountOption::from_str(&option) {
+                Ok(_) => {}
+                Err(e) => bail!("failed to parse mount option: {}", e),
+            }
+        }
+        Ok(())
+    }
+}

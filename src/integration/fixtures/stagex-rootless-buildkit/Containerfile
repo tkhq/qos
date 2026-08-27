@@ -1,0 +1,32 @@
+FROM moby/buildkit:rootless@sha256:0eeb84626c0cd01aecae7848c5ed8f095aec279dd936d0cdb5a64110f42ca65b AS rootless
+FROM stagex/user-buildkit:0.30.0@sha256:86032a2d6875d02d8c2754d60b9ec753080a99c8fad88b5a62f44529686e5fc8 AS buildkit
+FROM stagex/core-musl@sha256:42fd2ed18ac4d6336f08f1b6345e0bb7bc5570450a40e7255b6da79868bd2d6b AS musl
+FROM stagex/core-busybox@sha256:e4a30addc8939c8e232472de904d1d9e97fc2e735fca9a9701ce49db04c6c181 AS busybox
+
+FROM busybox
+USER root
+COPY --from=musl / /
+COPY --from=buildkit /usr/bin/buildctl /usr/bin/buildctl
+COPY --from=buildkit /usr/bin/buildkitd /usr/bin/buildkitd
+COPY --from=rootless /usr/bin/buildkit-runc /usr/bin/buildkit-runc
+COPY package /stagex-package
+COPY --from=busybox /usr/bin/busybox /stagex-package/busybox
+COPY qos-stagex-build /usr/bin/qos-stagex-build
+RUN mkdir -p \
+	/home/user/.local/share/buildkit \
+	/home/user/.local/tmp \
+	/run/user/1000 \
+	/output \
+	&& chown -R 1000:1000 \
+	/home/user \
+	/run/user/1000 \
+	/output \
+	/stagex-package \
+	&& chmod 0755 /usr/bin/qos-stagex-build
+USER 1000:1000
+ENV HOME=/home/user
+ENV USER=user
+ENV TMPDIR=/home/user/.local/tmp
+ENV XDG_RUNTIME_DIR=/run/user/1000
+ENV BUILDKIT_HOST=unix:///run/user/1000/buildkit/buildkitd.sock
+ENTRYPOINT ["/usr/bin/qos-stagex-build"]

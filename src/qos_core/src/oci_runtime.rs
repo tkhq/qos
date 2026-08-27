@@ -17,8 +17,13 @@ use nix::{
 };
 
 /// Create, start, wait for, and tear down one OCI container.
+///
+/// # Errors
+///
+/// Returns an error when bundle validation, container lifecycle operations, or
+/// waiting for the container init process fails.
 #[cfg(target_os = "linux")]
-pub(crate) fn run(
+pub fn run(
 	bundle: &Path,
 	state_root: &Path,
 	container_id: &str,
@@ -47,9 +52,13 @@ pub(crate) fn run(
 	let mut container = builder
 		.as_init(bundle)
 		.with_systemd(false)
+		// The enclave boots directly from an initramfs. Linux rejects
+		// pivot_root(2) from that root with EINVAL, so use libcontainer's
+		// mount-move + chroot jail inside the dedicated mount namespace.
+		.with_no_pivot(true)
 		.with_detach(true)
 		.build()
-		.map_err(|error| format!("failed to create container: {error}"))?;
+		.map_err(|error| format!("failed to create container: {error:?}"))?;
 	if let Err(error) = container.start() {
 		let _ = container.delete(true);
 		return Err(format!("failed to start container: {error}"));
@@ -113,8 +122,12 @@ fn wait_for_init(pid: Pid) -> Result<i32, String> {
 }
 
 /// Container execution is only available in the Linux enclave.
+///
+/// # Errors
+///
+/// Always returns an error on non-Linux targets.
 #[cfg(not(target_os = "linux"))]
-pub(crate) fn run(
+pub fn run(
 	_bundle: &Path,
 	_state_root: &Path,
 	_container_id: &str,

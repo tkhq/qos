@@ -14,6 +14,10 @@ default: \
 test: out/.common-loaded
 	$(call run,make -C src test)
 
+.PHONY: test-qemu-stagex-buildkit
+test-qemu-stagex-buildkit:
+	./src/scripts/qemu_stagex_buildkit_e2e.sh
+
 .PHONY: lint
 lint: out/.common-loaded
 	$(call run,make -C src lint)
