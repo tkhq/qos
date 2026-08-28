@@ -510,6 +510,8 @@ pub struct QemuEifBaseImages {
 	pub linux_nitro: ImageRef,
 	/// Image containing libunwind runtime files.
 	pub libunwind: ImageRef,
+	/// Image containing the GCC unwinder runtime.
+	pub libgcc: ImageRef,
 	/// Image containing `ip`.
 	pub iproute2: ImageRef,
 	/// Image containing the musl loader/runtime.
@@ -598,6 +600,7 @@ impl PrebuiltQemuEifBuilder {
 			("GEN_INITRAMFS_IMAGE", &self.base_images.gen_initramfs),
 			("LINUX_NITRO_IMAGE", &self.base_images.linux_nitro),
 			("LIBUNWIND_IMAGE", &self.base_images.libunwind),
+			("LIBGCC_IMAGE", &self.base_images.libgcc),
 			("IPROUTE2_IMAGE", &self.base_images.iproute2),
 			("MUSL_IMAGE", &self.base_images.musl),
 		] {

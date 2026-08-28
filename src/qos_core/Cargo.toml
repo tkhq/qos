@@ -35,8 +35,14 @@ thiserror = { workspace = true }
 zeroize = { workspace = true, features = ["alloc"] }
 
 futures = { workspace = true }
+flate2 = { workspace = true }
+tar = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "time", "signal", "process"], default-features = false }
 tokio-vsock = { workspace = true }
+zstd = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libcontainer = { workspace = true }
 
 [dev-dependencies]
 qos_test_primitives = { path = "../qos_test_primitives" }
@@ -52,3 +58,5 @@ egress = ["etherparse"]
 qemu = []
 # Never use in production - support for mock NSM
 mock = ["qos_nsm/mock"]
+# Enforce the fixed cgroup-v2 device allowlist in production enclave builds.
+oci-devices = []

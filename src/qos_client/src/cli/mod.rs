@@ -32,6 +32,7 @@ const NAMESPACE: &str = "namespace";
 const NONCE: &str = "nonce";
 const RESTART_POLICY: &str = "restart-policy";
 const PIVOT_PATH: &str = "pivot-path";
+const OCI_LAYOUT_ARCHIVE: &str = "oci-layout-archive";
 const PIVOT_ARGS: &str = "pivot-args";
 const UNSAFE_SKIP_ATTESTATION: &str = "unsafe-skip-attestation";
 const UNSAFE_EPH_PATH_OVERRIDE: &str = "unsafe-eph-path-override";
@@ -291,6 +292,21 @@ impl Command {
 		Token::new(PIVOT_PATH, "Path to the pivot binary.")
 			.takes_value(true)
 			.required(true)
+	}
+	fn pivot_path_optional_token() -> Token {
+		Token::new(
+			PIVOT_PATH,
+			"Path to the pivot binary (Manifest V0-V2 only).",
+		)
+		.takes_value(true)
+	}
+	fn oci_layout_archive_token() -> Token {
+		Token::new(
+			OCI_LAYOUT_ARCHIVE,
+			"Path to an OCI image-layout tar; repeat once per distinct Manifest V3 image digest.",
+		)
+		.takes_value(true)
+		.allow_multiple(true)
 	}
 	fn restart_policy_token() -> Token {
 		Token::new(RESTART_POLICY, "One of: `never`, `always`.")
@@ -721,7 +737,8 @@ impl Command {
 
 	fn boot_standard() -> Parser {
 		Self::base()
-			.token(Self::pivot_path_token())
+			.token(Self::pivot_path_optional_token())
+			.token(Self::oci_layout_archive_token())
 			.token(Self::manifest_envelope_path_token())
 			.token(Self::pcr3_preimage_path_token())
 			.token(Self::unsafe_skip_attestation_token())
@@ -832,7 +849,8 @@ impl Command {
 	fn boot_key_fwd() -> Parser {
 		Self::base()
 			.token(Self::manifest_envelope_path_token())
-			.token(Self::pivot_path_token())
+			.token(Self::pivot_path_optional_token())
+			.token(Self::oci_layout_archive_token())
 			.token(Self::attestation_doc_path_token())
 	}
 
@@ -977,6 +995,16 @@ impl ClientOpts {
 
 	fn pivot_path(&self) -> String {
 		self.parsed.single(PIVOT_PATH).expect("required arg").clone()
+	}
+
+	fn optional_pivot_path(&self) -> Option<String> {
+		self.parsed.single(PIVOT_PATH).cloned()
+	}
+
+	fn oci_layout_archives(&self) -> Vec<String> {
+		self.parsed
+			.multiple(OCI_LAYOUT_ARCHIVE)
+			.map_or_else(Vec::new, <[String]>::to_vec)
 	}
 
 	fn manifest_set_dir(&self) -> String {
@@ -1487,6 +1515,20 @@ mod handlers {
 			}
 			other => panic!("Unexpected response {other:?}"),
 		}
+
+		let response = request::post(path, &ProtocolMsg::OciStatusRequest)
+			.map_err(|e| println!("{e:?}"))
+			.expect("OCI status request failed");
+		match response {
+			ProtocolMsg::OciStatusResponse(status) if !status.is_empty() => {
+				println!(
+					"OCI workloads: {}",
+					qos_json::to_string(&status).unwrap()
+				);
+			}
+			ProtocolMsg::OciStatusResponse(_) => {}
+			other => panic!("Unexpected OCI status response {other:?}"),
+		}
 	}
 
 	pub(super) fn enclave_version(opts: &ClientOpts) {
@@ -1712,7 +1754,8 @@ mod handlers {
 	pub(super) fn boot_standard(opts: &ClientOpts) {
 		if let Err(e) = services::boot_standard(services::BootStandardArgs {
 			uri: opts.path_message(),
-			pivot_path: opts.pivot_path(),
+			pivot_path: opts.optional_pivot_path(),
+			oci_layout_archives: opts.oci_layout_archives(),
 			manifest_envelope_path: opts.manifest_envelope_path(),
 			pcr3_preimage_path: opts.pcr3_preimage_path(),
 			unsafe_skip_attestation: opts.unsafe_skip_attestation(),
@@ -1851,12 +1894,13 @@ mod handlers {
 	}
 
 	pub(super) fn boot_key_fwd(opts: &ClientOpts) {
-		if let Err(e) = services::boot_key_fwd(
-			&opts.path_message(),
-			opts.manifest_envelope_path(),
-			opts.pivot_path(),
-			opts.attestation_doc_path(),
-		) {
+		if let Err(e) = services::boot_key_fwd(services::BootKeyForwardArgs {
+			uri: opts.path_message(),
+			manifest_envelope_path: opts.manifest_envelope_path(),
+			pivot_path: opts.optional_pivot_path(),
+			oci_layout_archives: opts.oci_layout_archives(),
+			attestation_doc_path: opts.attestation_doc_path(),
+		}) {
 			println!("Error: {e:?}");
 			std::process::exit(1);
 		}
