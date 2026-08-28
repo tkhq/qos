@@ -418,7 +418,7 @@ pub(super) fn docker_host_qemu_nitro_fast_spec(
 pub(super) fn qemu_eif_base_images() -> Result<QemuEifBaseImages, BuildError> {
 	Ok(QemuEifBaseImages {
 		build: ImageRef::new(
-			"ghcr.io/tkhq/base/rust:sha-bfaaeb25fd43e17468e6583208166fc7c4313226@sha256:9868bdab0b602a487ec9ea42995992ac0a381d7fc34d5ba9c41d14c18be716d2",
+			"stagex/pallet-rust:1.94.0@sha256:2fbe7b164dd92edb9c1096152f6d27592d8a69b1b8eb2fc907b5fadea7d11668",
 		)?,
 		eif_build: ImageRef::new(
 			"stagex/eif_build:0.2.2@sha256:291653f1ca528af48fd05858749c443300f6b24d2ffefa7f5a3a06c27c774566",
@@ -431,6 +431,9 @@ pub(super) fn qemu_eif_base_images() -> Result<QemuEifBaseImages, BuildError> {
 		)?,
 		libunwind: ImageRef::new(
 			"stagex/core-libunwind:1.7.2@sha256:eb66122d8fc543f5e2f335bb1616f8c3a471604383e2c0a9df4a8e278505d3bc",
+		)?,
+		libgcc: ImageRef::new(
+			"stagex/core-gcc:sx2024.12.0@sha256:4543e3018e4274585bf7623528151eff63c197315e8c2f2cb8aa210df6ea0dbc",
 		)?,
 		iproute2: ImageRef::new(
 			"stagex/iproute2:sx2024.11.0@sha256:65da03aa94d17dd6310b022f426a6cc8b3c55bb267e4bac1697bc57d6c850570",

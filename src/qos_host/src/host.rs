@@ -209,9 +209,11 @@ impl HostServer {
 				phase,
 				namespace: manifest.namespace().name.clone(),
 				nonce: manifest.namespace().nonce,
-				pivot_hash: *manifest.pivot_hash(),
+				pivot_hash: manifest
+					.pivot_hash()
+					.map(|hash| qos_hex::encode(hash)),
 				pcr0: manifest.enclave().pcr0.clone(),
-				pivot_args: manifest.args().to_vec(),
+				pivot_args: manifest.args().map(<[String]>::to_vec),
 				ephemeral_key: ephemeral_key.clone(),
 			})
 			.expect("always valid json. qed.")

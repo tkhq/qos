@@ -2,6 +2,7 @@
 
 use std::{
 	fs::{File, OpenOptions},
+	io::Read,
 	net::TcpListener,
 	path::{Path, PathBuf},
 	process::Command,
@@ -11,7 +12,8 @@ use qos_test_harness::{
 	BinaryArtifact, BuildError, BuildMode, BuildSelector, Builder,
 	CargoBinaryBuilder, CargoProfile, DockerHostQemuNitroRunner,
 	ImageFileExtractBuilder, ImageRef, MakeTargetBuilder, ManifestBuilder,
-	OciLayoutLoadBuilder, Pivot, PrebuiltQemuEifBuilder, RunnerError,
+	OciImageArtifact, OciLayoutLoadBuilder, Pivot, PrebuiltQemuEifBuilder,
+	RunnerError,
 };
 
 use super::repo_defaults;
@@ -72,6 +74,64 @@ impl PreparedDockerHostQemuNitro {
 		pivot: &Pivot,
 	) -> Result<ManifestBuilder, BuildError> {
 		repo_defaults::test_manifest_template(&self.root, pivot)
+	}
+
+	/// Build the PostgreSQL self-test as a linux/amd64 OCI image-layout tar.
+	pub(crate) fn postgres_smoke_image(
+		&self,
+	) -> Result<OciImageArtifact, PreparationError> {
+		let output =
+			self._session.work_dir.join("artifacts/postgres-smoke.oci.tar");
+		std::fs::create_dir_all(output.parent().unwrap())?;
+		let context = self
+			.root
+			.join("src/qos_test_harness/tests/fixtures/postgres-smoke");
+		run_checked(
+			Command::new("docker")
+				.current_dir(&context)
+				.args([
+					"buildx",
+					"build",
+					"--platform",
+					"linux/amd64",
+					"--provenance=false",
+					"--file",
+					"Containerfile",
+				])
+				.arg("--output")
+				.arg(format!("type=oci,dest={}", output.display()))
+				.arg("."),
+			"build PostgreSQL OCI smoke image",
+		)?;
+		let mut archive = tar::Archive::new(File::open(&output)?);
+		let mut index = None;
+		for entry in archive.entries()? {
+			let mut entry = entry?;
+			if entry.path()?.as_ref() == Path::new("index.json") {
+				let mut bytes = Vec::new();
+				entry.read_to_end(&mut bytes)?;
+				index = Some(bytes);
+				break;
+			}
+		}
+		let index: serde_json::Value =
+			serde_json::from_slice(&index.ok_or_else(|| {
+				PreparationError::Command(
+					"PostgreSQL OCI output has no index.json".into(),
+				)
+			})?)
+			.map_err(|error| PreparationError::Command(error.to_string()))?;
+		let digest = index["manifests"][0]["digest"]
+			.as_str()
+			.ok_or_else(|| {
+				PreparationError::Command(
+					"PostgreSQL OCI index has no image digest".into(),
+				)
+			})?
+			.to_string()
+			.try_into()
+			.map_err(PreparationError::Command)?;
+		Ok(OciImageArtifact { path: output, digest })
 	}
 }
 

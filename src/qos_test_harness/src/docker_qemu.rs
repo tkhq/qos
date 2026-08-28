@@ -9,10 +9,32 @@ use std::{
 
 use crate::{
 	ApprovingUserMaterial, BootClientFixture, BridgeConfig, DockerProgram,
-	DockerRunSpec, DockerVolumeSocket, Eif, ImageRef, MaterialFile, Pivot,
-	RunnerError, RunningApp, RunningAppGuard, StartAppSpec, TestRunner,
-	VersionedManifest,
+	DockerRunSpec, DockerVolumeSocket, Eif, ImageRef, MaterialFile,
+	OciImageArtifact, Pivot, RunnerError, RunningApp, RunningAppGuard,
+	StartAppSpec, TestRunner, VersionedManifest,
 };
+
+/// OCI workload state that the QEMU harness must observe before returning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OciStartCondition {
+	/// Workload process is running.
+	Running,
+	/// Non-restarting workload terminated with exit code zero.
+	ExitSuccess,
+}
+
+/// One-image Manifest V3 QEMU start request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OciStartSpec {
+	/// Stable test name.
+	pub name: String,
+	/// Signed OCI artifact.
+	pub artifact: OciImageArtifact,
+	/// Manifest V3.
+	pub manifest: VersionedManifest,
+	/// Required observable workload state.
+	pub condition: OciStartCondition,
+}
 
 /// Runner spec for Docker host + QEMU Nitro guest.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1049,6 +1071,23 @@ impl DockerHostQemuNitroRunner {
 		run_runner_command(&self.spec.qemu.docker_bin, args)
 	}
 
+	fn run_docker_args_output(
+		&self,
+		args: Vec<OsString>,
+	) -> Result<String, RunnerError> {
+		let mut command = command_with_args(&self.spec.qemu.docker_bin, args);
+		let debug = format!("{command:?}");
+		let output = command.output()?;
+		if output.status.success() {
+			return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
+		}
+		Err(RunnerError::Command(format!(
+			"command failed: {debug}; status: {}; stderr: {}",
+			output.status,
+			String::from_utf8_lossy(&output.stderr)
+		)))
+	}
+
 	async fn run_docker_args_with_retry(
 		&mut self,
 		label: &str,
@@ -1132,6 +1171,48 @@ impl DockerHostQemuNitroRunner {
 		self.wait_for_qos_client_command("host-health").await
 	}
 
+	async fn wait_for_oci_condition(
+		&mut self,
+		artifact: &OciImageArtifact,
+		condition: OciStartCondition,
+	) -> Result<(), RunnerError> {
+		let expected = match condition {
+			OciStartCondition::Running => r#""state":"running""#,
+			OciStartCondition::ExitSuccess => r#""state":"terminated""#,
+		};
+		let start = std::time::Instant::now();
+		let mut last = String::new();
+		while start.elapsed() < self.spec.qemu.readiness_timeout {
+			self.fail_if_children_exited()?;
+			match self.run_docker_args_output(
+				self.qos_client_health_docker_args("enclave-status"),
+			) {
+				Ok(output)
+					if output.contains(artifact.digest.as_str())
+						&& output.contains(expected)
+						&& (condition != OciStartCondition::ExitSuccess
+							|| output.contains(
+								r#""termination":{"type":"exitCode","value":"0"}"#,
+							)) =>
+				{
+					return Ok(());
+				}
+				Ok(output) if output.contains("WaitingForBootInstruction") => {
+					return Err(RunnerError::Command(
+						"enclave rebooted while starting OCI workloads".into(),
+					));
+				}
+				Ok(output) => last = output,
+				Err(error) => last = error.to_string(),
+			}
+			tokio::time::sleep(Duration::from_millis(250)).await;
+		}
+		Err(RunnerError::Command(format!(
+			"timed out waiting for OCI image {} status {condition:?}; last response: {last}",
+			artifact.digest.as_str()
+		)))
+	}
+
 	async fn wait_for_qos_client_command(
 		&mut self,
 		command: &str,
@@ -1170,6 +1251,124 @@ impl DockerHostQemuNitroRunner {
 			}
 		}
 		Ok(())
+	}
+
+	fn prepare_boot_workspace(
+		&self,
+		name: &str,
+		manifest: &VersionedManifest,
+		pivot_hash: &[u8],
+	) -> Result<BootWorkspace, RunnerError> {
+		let workspace = BootWorkspace::under(
+			self.spec.qemu.work_dir.join(sanitize_name(name)),
+		);
+		for path in [
+			&workspace.input_dir,
+			&workspace.boot_dir,
+			&workspace.attestation_dir,
+		] {
+			drop(std::fs::remove_dir_all(path));
+			std::fs::create_dir_all(path)?;
+		}
+		stage_boot_material(&self.spec.boot_fixture, &workspace)?;
+		write_manifest(manifest, &workspace.manifest_path)?;
+		write_file(&workspace.pivot_hash_path, pivot_hash)?;
+		Ok(workspace)
+	}
+
+	async fn run_boot_ceremony(
+		&mut self,
+		workspace: &BootWorkspace,
+		label: &str,
+		boot_args: Vec<OsString>,
+	) -> Result<(), RunnerError> {
+		for user in &self.spec.boot_fixture.approving_users {
+			self.run_docker_args(
+				self.approve_manifest_docker_args(user, workspace),
+			)?;
+		}
+		self.run_docker_args(
+			self.generate_manifest_envelope_docker_args(workspace),
+		)?;
+		self.run_docker_args_with_retry(label, boot_args).await?;
+		self.run_docker_args(self.get_attestation_doc_docker_args(workspace))?;
+		for user in &self.spec.boot_fixture.approving_users {
+			self.run_docker_args(
+				self.proxy_re_encrypt_share_docker_args(user, workspace),
+			)?;
+			self.run_docker_args(self.post_share_docker_args(user, workspace))?;
+		}
+		Ok(())
+	}
+
+	fn finish_start(
+		&mut self,
+		result: Result<RunningApp, RunnerError>,
+		context: &str,
+	) -> Result<DockerHostQemuNitroRunningApp, RunnerError> {
+		match result {
+			Ok(app) => Ok(DockerHostQemuNitroRunningApp {
+				app,
+				children: std::mem::take(&mut self.children),
+			}),
+			Err(error) => match self.cleanup_children() {
+				Ok(()) => Err(error),
+				Err(cleanup) => Err(RunnerError::Command(format!(
+					"{context} startup failed: {error}; cleanup failed: {cleanup}"
+				))),
+			},
+		}
+	}
+
+	/// Boot one-image Manifest V3 through the normal QEMU control path.
+	pub async fn start_oci(
+		&mut self,
+		spec: OciStartSpec,
+	) -> Result<DockerHostQemuNitroRunningApp, RunnerError> {
+		let result: Result<RunningApp, RunnerError> = async {
+			self.validate_spec()?;
+			let qos_core::protocol::services::boot::VersionedManifest::V3(
+				manifest,
+			) = &spec.manifest
+			else {
+				return Err(RunnerError::InvalidConfig(
+					"OCI QEMU start requires Manifest V3".into(),
+				));
+			};
+			if manifest.workloads.iter().any(|workload| {
+				workload.image().digest() != &spec.artifact.digest
+			}) {
+				return Err(RunnerError::InvalidConfig(
+					"OCI artifact does not satisfy every workload digest"
+						.into(),
+				));
+			}
+
+			let workspace =
+				self.prepare_boot_workspace(&spec.name, &spec.manifest, b"")?;
+
+			let container_prefix = self.container_prefix(&spec.name);
+			self.start_qemu_guest_runtime(&container_prefix, &[]).await?;
+			let mut boot_args = self.boot_standard_docker_args(
+				&Pivot { path: workspace.pivot_hash_path.clone() },
+				&workspace,
+			);
+			boot_args.extend([
+				"--oci-layout-archive".into(),
+				self.docker_path(&spec.artifact.path).into_os_string(),
+			]);
+			self.run_boot_ceremony(
+				&workspace,
+				"qos_client boot-standard OCI",
+				boot_args,
+			)
+			.await?;
+			self.wait_for_oci_condition(&spec.artifact, spec.condition).await?;
+			Ok(RunningApp { id: spec.name, ingress_url: String::new() })
+		}
+		.await;
+
+		self.finish_start(result, "OCI")
 	}
 
 	fn cleanup_children(&mut self) -> Result<(), RunnerError> {
@@ -1268,20 +1467,15 @@ impl TestRunner for DockerHostQemuNitroRunner {
 			self.validate_spec()?;
 			validate_qemu_bridge_config(spec.manifest.bridge_config())?;
 
-			let workspace = BootWorkspace::under(
-				self.spec.qemu.work_dir.join(sanitize_name(&spec.name)),
+			let pivot_hash = qos_hex::encode(
+				spec.manifest
+					.pivot_hash()
+					.expect("QEMU pivot runner requires a pivot manifest"),
 			);
-			drop(std::fs::remove_dir_all(&workspace.input_dir));
-			drop(std::fs::remove_dir_all(&workspace.boot_dir));
-			drop(std::fs::remove_dir_all(&workspace.attestation_dir));
-			std::fs::create_dir_all(&workspace.input_dir)?;
-			std::fs::create_dir_all(&workspace.boot_dir)?;
-			std::fs::create_dir_all(&workspace.attestation_dir)?;
-			stage_boot_material(&self.spec.boot_fixture, &workspace)?;
-			write_manifest(&spec.manifest, &workspace.manifest_path)?;
-			write_file(
-				&workspace.pivot_hash_path,
-				qos_hex::encode(spec.manifest.pivot_hash()).as_bytes(),
+			let workspace = self.prepare_boot_workspace(
+				&spec.name,
+				&spec.manifest,
+				pivot_hash.as_bytes(),
 			)?;
 
 			let container_prefix = self.container_prefix(&spec.name);
@@ -1290,30 +1484,14 @@ impl TestRunner for DockerHostQemuNitroRunner {
 				spec.manifest.bridge_config(),
 			)
 			.await?;
-			for user in &self.spec.boot_fixture.approving_users {
-				self.run_docker_args(
-					self.approve_manifest_docker_args(user, &workspace),
-				)?;
-			}
-			self.run_docker_args(
-				self.generate_manifest_envelope_docker_args(&workspace),
-			)?;
-			self.run_docker_args_with_retry(
+			let boot_args =
+				self.boot_standard_docker_args(&spec.artifact, &workspace);
+			self.run_boot_ceremony(
+				&workspace,
 				"qos_client boot-standard",
-				self.boot_standard_docker_args(&spec.artifact, &workspace),
+				boot_args,
 			)
 			.await?;
-			self.run_docker_args(
-				self.get_attestation_doc_docker_args(&workspace),
-			)?;
-			for user in &self.spec.boot_fixture.approving_users {
-				self.run_docker_args(
-					self.proxy_re_encrypt_share_docker_args(user, &workspace),
-				)?;
-				self.run_docker_args(
-					self.post_share_docker_args(user, &workspace),
-				)?;
-			}
 			tokio::time::sleep(self.spec.qemu.startup_delay).await;
 			self.fail_if_children_exited()?;
 			let bridge_name = format!("{container_prefix}-bridge");
@@ -1367,18 +1545,7 @@ impl TestRunner for DockerHostQemuNitroRunner {
 		}
 		.await;
 
-		match result {
-			Ok(app) => Ok(DockerHostQemuNitroRunningApp {
-				app,
-				children: std::mem::take(&mut self.children),
-			}),
-			Err(start_error) => match self.cleanup_children() {
-				Ok(()) => Err(start_error),
-				Err(cleanup_error) => Err(RunnerError::Command(format!(
-					"app startup failed: {start_error}; startup cleanup failed: {cleanup_error}"
-				))),
-			},
-		}
+		self.finish_start(result, "app")
 	}
 }
 

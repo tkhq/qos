@@ -19,7 +19,7 @@ use axum::{
 	response::{IntoResponse, Response},
 };
 use qos_core::protocol::{
-	Hash256, ProtocolPhase, services::boot::VersionedManifestEnvelope,
+	ProtocolPhase, services::boot::VersionedManifestEnvelope,
 };
 
 pub mod cli;
@@ -72,11 +72,10 @@ pub struct EnclaveVitalStats {
 	phase: ProtocolPhase,
 	namespace: String,
 	nonce: u32,
-	#[serde(with = "qos_hex::serde")]
-	pivot_hash: Hash256,
+	pivot_hash: Option<String>,
 	#[serde(with = "qos_hex::serde")]
 	pcr0: Vec<u8>,
-	pivot_args: Vec<String>,
+	pivot_args: Option<Vec<String>>,
 	/// Ephemeral public key from the live attestation doc.
 	pub ephemeral_key: Option<String>,
 }

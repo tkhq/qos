@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 
+use qos_core::protocol::services::boot::OciDigest;
+
 use crate::BuildError;
 
 /// OCI image reference.
@@ -45,6 +47,15 @@ pub struct Eif {
 pub struct Pivot {
 	/// Path to the pivot binary.
 	pub path: PathBuf,
+}
+
+/// OCI image-layout archive selected by its signed manifest digest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OciImageArtifact {
+	/// Image-layout tar path.
+	pub path: PathBuf,
+	/// Selected image-manifest digest.
+	pub digest: OciDigest,
 }
 
 /// Local executable artifact.
