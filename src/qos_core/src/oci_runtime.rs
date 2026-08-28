@@ -5,13 +5,16 @@ use std::{
 	ffi::c_void,
 	fs::{self, File},
 	io::{BufRead, BufReader, Read},
-	os::fd::{AsRawFd, FromRawFd, OwnedFd},
+	os::fd::OwnedFd,
 	os::unix::fs::PermissionsExt,
 	os::unix::net::UnixStream,
 	path::{Path, PathBuf},
 	thread,
 	time::Duration,
 };
+
+#[cfg(feature = "oci-devices")]
+use std::os::fd::{AsRawFd, FromRawFd};
 
 use libcontainer::{
 	container::{Container, builder::ContainerBuilder},
@@ -32,6 +35,11 @@ const SANDBOX_ID: &str = "qos-sandbox";
 const SANDBOX_ARG: &str = "--qos-oci-sandbox";
 const SANDBOX_READY: &str = "/qos-sandbox-ready";
 const MAX_LOG_CHUNK_BYTES: u64 = 16 * 1024;
+
+#[cfg(target_env = "musl")]
+type IoctlRequest = libc::c_int;
+#[cfg(not(target_env = "musl"))]
+type IoctlRequest = libc::c_ulong;
 
 /// Error returned by QOS-owned bundle or container lifecycle operations.
 #[derive(Debug, thiserror::Error)]
@@ -1074,13 +1082,13 @@ fn configure_loopback() -> Result<(), std::io::Error> {
 	let family = u16::try_from(AF_INET).map_err(|_| {
 		std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid AF_INET")
 	})?;
-	let get_flags = libc::c_int::try_from(SIOCGIFFLAGS).map_err(|_| {
+	let get_flags = IoctlRequest::try_from(SIOCGIFFLAGS).map_err(|_| {
 		std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid ioctl")
 	})?;
-	let set_flags = libc::c_int::try_from(SIOCSIFFLAGS).map_err(|_| {
+	let set_flags = IoctlRequest::try_from(SIOCSIFFLAGS).map_err(|_| {
 		std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid ioctl")
 	})?;
-	let set_address = libc::c_int::try_from(SIOCSIFADDR).map_err(|_| {
+	let set_address = IoctlRequest::try_from(SIOCSIFADDR).map_err(|_| {
 		std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid ioctl")
 	})?;
 	let result = unsafe {
