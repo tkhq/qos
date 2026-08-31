@@ -1,6 +1,7 @@
 #![allow(missing_docs)]
 
 use std::{
+	error::Error,
 	fs::create_dir_all,
 	io::{BufRead, BufReader},
 	process::{Command, Stdio},
@@ -8,7 +9,8 @@ use std::{
 
 use borsh::BorshDeserialize;
 use qos_client::yubikey::{
-	DEFAULT_PIN, KEY_AGREEMENT_SLOT, SIGNING_SLOT, generate_signed_certificate,
+	CERTIFICATE_DISTINGUISHED_NAME, DEFAULT_PIN, KEY_AGREEMENT_SLOT,
+	SIGNING_SLOT, YubiKeyError, generate_signed_certificate,
 	import_key_and_generate_signed_certificate, key_agreement, sign_data,
 };
 use qos_p256::{
@@ -22,6 +24,38 @@ use yubikey::{MgmKey, TouchPolicy, YubiKey};
 const DATA: &[u8] = b"test data";
 const QOS_CLIENT_PATH: &str =
 	concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/debug/qos_client");
+
+#[test]
+fn certificate_distinguished_name_is_public() {
+	assert_eq!(CERTIFICATE_DISTINGUISHED_NAME, "CN=QuorumOS");
+}
+
+#[test]
+fn yubikey_error_is_human_readable() {
+	assert_eq!(
+		YubiKeyError::FailedToGenerateSelfSignedCert.to_string(),
+		"failed to generate a self-signed certificate"
+	);
+	assert_eq!(
+		YubiKeyError::FailedToVerifyPin(yubikey::Error::AuthenticationError)
+			.to_string(),
+		"failed to verify the YubiKey PIN"
+	);
+}
+
+#[test]
+fn yubikey_error_preserves_sources() {
+	let errors = [
+		YubiKeyError::FailedToVerifyPin(yubikey::Error::AuthenticationError),
+		YubiKeyError::SigningFailed(yubikey::Error::GenericError),
+		YubiKeyError::Connection(yubikey::Error::NotFound),
+	];
+
+	for error in &errors {
+		let error: &dyn Error = error;
+		assert!(error.source().is_some());
+	}
+}
 
 /// CAREFUL: Only run these tests when a test Yubikey is plugged in.
 /// This will perform multiple FACTORY RESETS on the Yubikey PIV component!
