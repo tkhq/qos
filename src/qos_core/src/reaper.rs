@@ -125,32 +125,33 @@ fn run_egress_bridge(core_socket: &SocketAddress) {
 	);
 }
 
-fn reprint_pivot_output(child: &mut Child) {
+fn drain_pivot_output(child: &mut Child) {
 	let stdout = child.stdout.take().expect("failed to get pivot stdout");
 	let stderr = child.stderr.take().expect("failed to get pivot stderr");
 
-	let stdout_reader = BufReader::new(stdout);
-	let stderr_reader = BufReader::new(stderr);
+	tokio::spawn(async move {
+		let mut lines = BufReader::new(stdout).lines();
+		loop {
+			match lines.next_line().await {
+				Ok(Some(line)) => println!("PIVOT[OUT]: {line}"),
+				Ok(None) => break,
+				Err(e) => {
+					eprintln!("error reading pivot stdout: {e}");
+					break;
+				}
+			}
+		}
+	});
 
 	tokio::spawn(async move {
-		let mut stdout_lines = stdout_reader.lines();
-		let mut stderr_lines = stderr_reader.lines();
-
+		let mut lines = BufReader::new(stderr).lines();
 		loop {
-			tokio::select! {
-				line = stdout_lines.next_line() => {
-					match line {
-						Ok(Some(line)) => println!("PIVOT[OUT]: {line}"),
-						Ok(None) => break, // process exit
-						Err(e) => eprintln!("error reading pivot stdout: {e}"),
-					}
-				}
-				line = stderr_lines.next_line() => {
-					match line {
-						Ok(Some(line)) => eprintln!("PIVOT[ERR]: {line}"),
-						Ok(None) => break, // process exit
-						Err(e) => eprintln!("error reading pivot stderr: {e}"),
-					}
+			match lines.next_line().await {
+				Ok(Some(line)) => eprintln!("PIVOT[ERR]: {line}"),
+				Ok(None) => break,
+				Err(e) => {
+					eprintln!("error reading pivot stderr: {e}");
+					break;
 				}
 			}
 		}
@@ -258,7 +259,7 @@ impl Reaper {
 			// print pivot stderr and stdout if in debug mode
 			// *NOTE*: this requires `DEBUG` and `LOGS` env vars set when booting the enclave itself. If not, nothing will be visible
 			if manifest.debug_mode() {
-				reprint_pivot_output(&mut child);
+				drain_pivot_output(&mut child);
 			}
 
 			let status =
