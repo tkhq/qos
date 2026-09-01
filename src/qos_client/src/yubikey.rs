@@ -9,7 +9,7 @@ use p256::{
 };
 use qos_p256::encrypt::Envelope;
 use rand_core::{OsRng, TryRngCore};
-use std::{str::FromStr, time::Duration};
+use std::{error::Error, fmt, str::FromStr, time::Duration};
 use x509_cert::{
 	name::RdnSequence, serial_number::SerialNumber, time::Validity,
 };
@@ -33,8 +33,8 @@ const ALGO: AlgorithmId = AlgorithmId::EccP256;
 /// Equivalent to about 10 years
 /// Chosen arbitrarily as a long certificate validity
 const CERTIFICATE_VALIDITY_SECS: u32 = 10 * 60 * 60 * 24 * 365;
-/// Generic information for newly generated local certificates
-const CERTIFICATE_DISTINGUISHED_NAME: &str = "CN=QuorumOS";
+/// Distinguished name used as the subject for generated certificates.
+pub const CERTIFICATE_DISTINGUISHED_NAME: &str = "CN=QuorumOS";
 
 /// Errors for yubikey interaction
 #[derive(Debug, PartialEq, Eq)]
@@ -78,6 +78,75 @@ pub enum YubiKeyError {
 	DerError(String),
 	/// Problem extracting the public key data
 	EmptyPublicKeyInfo,
+}
+
+impl fmt::Display for YubiKeyError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Self::FailedToGenerateKey => {
+				f.write_str("failed to generate a key")
+			}
+			Self::FailedToAuthWithMGM => f.write_str(
+				"failed to authenticate with the YubiKey management key",
+			),
+			Self::FailedToVerifyPin(_) => {
+				f.write_str("failed to verify the YubiKey PIN")
+			}
+			Self::FailedToGenerateSelfSignedCert => {
+				f.write_str("failed to generate a self-signed certificate")
+			}
+			Self::WillNotOverwriteSlot => f.write_str(
+				"refusing to overwrite a YubiKey slot that already contains a certificate",
+			),
+			Self::CannotFindSigningKey => {
+				f.write_str("could not find a key in the YubiKey signing slot")
+			}
+			Self::CannotFindKeyAgree => f.write_str(
+				"could not find a key in the YubiKey key management slot",
+			),
+			Self::FoundNonP256Key => f.write_str(
+				"found a non-P-256 key where a P-256 key was expected",
+			),
+			Self::CouldNotDeserializePublic => {
+				f.write_str("could not deserialize the public key")
+			}
+			Self::SigningFailed(_) => f.write_str("YubiKey signing failed"),
+			Self::FailedToVerifyYubiKeySignature => {
+				f.write_str("failed to verify the YubiKey signature")
+			}
+			Self::KeyAgreementFailed => {
+				f.write_str("YubiKey key agreement failed")
+			}
+			Self::Connection(_) => {
+				f.write_str("failed to connect to the YubiKey")
+			}
+			Self::EnvelopeDeserialize => {
+				f.write_str("failed to deserialize the encryption envelope")
+			}
+			Self::FailedToLoadKey => {
+				f.write_str("failed to load key data onto the YubiKey")
+			}
+			Self::InvalidSecret => f.write_str("the secret is invalid"),
+			Self::FailedToChangePin => {
+				f.write_str("failed to change the YubiKey PIN")
+			}
+			Self::DerError(error) => write!(f, "DER error: {error}"),
+			Self::EmptyPublicKeyInfo => {
+				f.write_str("the certificate public key information is empty")
+			}
+		}
+	}
+}
+
+impl Error for YubiKeyError {
+	fn source(&self) -> Option<&(dyn Error + 'static)> {
+		match self {
+			Self::FailedToVerifyPin(source)
+			| Self::SigningFailed(source)
+			| Self::Connection(source) => Some(source),
+			_ => None,
+		}
+	}
 }
 
 impl From<der::Error> for YubiKeyError {
