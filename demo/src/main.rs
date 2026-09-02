@@ -37,7 +37,17 @@ const WATCHED_ADDRESS: &str = "0x3333333333333333333333333333333333333333";
 
 #[tokio::main]
 async fn main() {
-	topcoat::start(
+	// topcoat::start defaults to port 3000, which is where the pivot's HTTP
+	// front listens locally — bind 4400 by default instead. HOST/PORT env
+	// still override.
+	let host =
+		std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+	let port = std::env::var("PORT").unwrap_or_else(|_| "4400".to_string());
+	let listener = tokio::net::TcpListener::bind(format!("{host}:{port}"))
+		.await
+		.unwrap();
+	topcoat::serve(
+		listener,
 		Router::builder()
 			.assets(AssetBundle::load().unwrap())
 			.layout(deck)

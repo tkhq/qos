@@ -1231,6 +1231,9 @@ async fn demo(socket: &Path) -> Result<(), String> {
 		return Err("cargo build --bin pivot_vfaas failed".to_string());
 	}
 
+	// A dead pivot leaves its socket file behind; wait_for_usock would see
+	// it and let registration race the fresh pivot's boot.
+	let _ = std::fs::remove_file(socket);
 	let pivot = Command::new(repo_root().join("target/debug/pivot_vfaas"))
 		.arg("--usock")
 		.arg(socket)
