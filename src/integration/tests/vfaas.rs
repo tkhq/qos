@@ -18,21 +18,24 @@ use integration::{
 			Artifact, ArtifactEnvelope, ArtifactKind, Ruleset, RulesetEnvelope,
 			approve_artifact, approve_ruleset,
 		},
-		verify_execution_attestation,
+		http, verify_execution_attestation,
 	},
 	wait_for_usock,
 };
 use qos_core::{
 	client::SocketClient,
 	io::{SocketAddress, StreamPool},
-	protocol::services::boot::{Approval, ManifestSet, QuorumMember},
+	protocol::services::boot::{
+		Approval, Manifest, ManifestEnvelope, ManifestSet, QuorumMember,
+		VersionedManifestEnvelope,
+	},
 };
 use qos_crypto::sha_256;
 use qos_p256::P256Pair;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 use vfaas_abi::{
-	ExecutionAttestation, ExecutionOutcome, PolicyHash, ProgramHash, Stage,
-	VFAAS_ABI_VERSION,
+	ExecutionAttestation, ExecutionAttestationPayload, ExecutionOutcome,
+	PolicyHash, ProgramHash, Stage, VFAAS_ABI_VERSION,
 };
 
 /// Policy that returns Borsh `Decision::Allow` (`[0x00]`, staged in the
@@ -263,20 +266,50 @@ struct TestPivot {
 
 impl TestPivot {
 	async fn boot(tag: &str) -> Self {
+		let quorum = TestQuorum::generate();
+		let quorum_bytes = borsh::to_vec(&quorum.set).unwrap();
+		Self::boot_inner(tag, "--manifest-set", quorum_bytes, quorum).await
+	}
+
+	/// Boot from the TVC layout: the artifact quorum arrives inside the
+	/// enclave's own JSON manifest envelope (`/qos.manifest`, written with
+	/// `to_storage_vec`) rather than as a bare Borsh `ManifestSet`.
+	async fn boot_from_manifest_envelope(tag: &str) -> Self {
+		let quorum = TestQuorum::generate();
+		let manifest = Manifest {
+			manifest_set: quorum.set.clone(),
+			..Manifest::default()
+		};
+		let envelope = ManifestEnvelope {
+			manifest,
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		};
+		let quorum_bytes = VersionedManifestEnvelope::V1(envelope)
+			.to_storage_vec()
+			.expect("manifest envelope serializes");
+		Self::boot_inner(tag, "--manifest-envelope", quorum_bytes, quorum)
+			.await
+	}
+
+	async fn boot_inner(
+		tag: &str,
+		quorum_flag: &str,
+		quorum_bytes: Vec<u8>,
+		quorum: TestQuorum,
+	) -> Self {
 		let socket = format!("/tmp/vfaas_test_{tag}.sock");
 		let manifest_path = format!("/tmp/vfaas_test_{tag}.manifest");
 		let ephemeral_path = format!("/tmp/vfaas_test_{tag}.eph");
 
-		let quorum = TestQuorum::generate();
-		std::fs::write(&manifest_path, borsh::to_vec(&quorum.set).unwrap())
-			.unwrap();
+		std::fs::write(&manifest_path, quorum_bytes).unwrap();
 		P256Pair::generate().unwrap().to_hex_file(&ephemeral_path).unwrap();
 
 		// `--port 0`: each test pivot takes an OS-assigned HTTP port so
 		// parallel tests never collide; these tests speak the usock side.
 		let pivot: ChildWrapper = Command::new(PIVOT_VFAAS_PATH)
 			.args(["--usock", &socket])
-			.args(["--manifest-set", &manifest_path])
+			.args([quorum_flag, &manifest_path])
 			.args(["--ephemeral-key", &ephemeral_path])
 			.args(["--port", "0"])
 			.spawn()
@@ -798,4 +831,184 @@ async fn vfaas_execute_flows() {
 		panic!("unknown program must error, got {response:?}");
 	};
 	assert!(reason.contains("not registered"), "{reason}");
+}
+
+/// The TVC deployment hands the pivot `/qos.manifest` (a JSON
+/// `VersionedManifestEnvelope`), not a bare Borsh `ManifestSet`. Prove the
+/// quorum extracted from the envelope verifies registrations and gates
+/// execution exactly like the bare-set path.
+#[tokio::test(flavor = "multi_thread")]
+async fn vfaas_boots_from_manifest_envelope() {
+	let pivot = TestPivot::boot_from_manifest_envelope("envelope").await;
+
+	let allow_all = pivot
+		.register_policy("allow-all", wasm(ALLOW_ALL_POLICY_WAT))
+		.await;
+	let echo = pivot
+		.register_program("echo", wasm(ECHO_PROGRAM_WAT), None, allow_all)
+		.await;
+
+	let input = b"tvc layout".to_vec();
+	let response = pivot.execute(echo, input.clone()).await;
+	let (output, attestation) = verified(response, echo, allow_all, &input);
+	assert_eq!(output, Some(input.clone()));
+	assert_eq!(
+		attestation.payload.outcome,
+		ExecutionOutcome::Allowed { output_hash: sha_256(&input) }
+	);
+}
+
+/// Bind an ephemeral port and release it for the pivot to take.
+fn free_port() -> u16 {
+	std::net::TcpListener::bind("127.0.0.1:0")
+		.unwrap()
+		.local_addr()
+		.unwrap()
+		.port()
+}
+
+fn wait_for_http_health(base: &str) -> http::Health {
+	for _ in 0..100 {
+		if let Ok(response) = ureq::get(&format!("{base}/health")).call() {
+			return response.into_json().expect("health is json");
+		}
+		std::thread::sleep(Duration::from_millis(100));
+	}
+	panic!("pivot HTTP front never became healthy at {base}");
+}
+
+/// Smoke test for the HTTP front: health, registration, content-addressed
+/// execution, attestation verification from the JSON encoding, and the
+/// 404/400 request-error mappings.
+#[test]
+fn vfaas_http_front() {
+	let port = free_port();
+	let manifest_path = "/tmp/vfaas_test_http.manifest".to_string();
+	let ephemeral_path = "/tmp/vfaas_test_http.eph".to_string();
+
+	let quorum = TestQuorum::generate();
+	std::fs::write(&manifest_path, borsh::to_vec(&quorum.set).unwrap())
+		.unwrap();
+	P256Pair::generate().unwrap().to_hex_file(&ephemeral_path).unwrap();
+	let _manifest_guard: PathWrapper<String> = manifest_path.clone().into();
+	let _ephemeral_guard: PathWrapper<String> = ephemeral_path.clone().into();
+
+	let _pivot: ChildWrapper = Command::new(PIVOT_VFAAS_PATH)
+		.args(["--host", "127.0.0.1", "--port", &port.to_string()])
+		.args(["--manifest-set", &manifest_path])
+		.args(["--ephemeral-key", &ephemeral_path])
+		.spawn()
+		.unwrap()
+		.into();
+
+	let base = format!("http://127.0.0.1:{port}");
+	let health = wait_for_http_health(&base);
+	assert_eq!(health.status, "healthy");
+	let replica = health.replica.expect("ephemeral key is readable");
+	assert_eq!(replica.len(), 8, "replica is the first 8 hex chars");
+
+	// Register a policy, then a function bound to it. Signed governance
+	// blobs travel as hex Borsh — the exact bytes the quorum approved.
+	let allow_all_wasm = wasm(ALLOW_ALL_POLICY_WAT);
+	let policy_envelope = quorum.envelope(
+		ArtifactKind::Policy,
+		"allow-all",
+		&allow_all_wasm,
+		None,
+	);
+	let allow_all = policy_envelope.artifact.wasm_hash;
+	let registered: http::Registered =
+		ureq::post(&format!("{base}/artifacts"))
+			.send_json(http::RegisterRequest {
+				envelope: qos_hex::encode(
+					&borsh::to_vec(&policy_envelope).unwrap(),
+				),
+				wasm: qos_hex::encode(&allow_all_wasm),
+				ruleset: None,
+			})
+			.expect("policy registers over http")
+			.into_json()
+			.unwrap();
+	assert_eq!(registered.wasm_hash, qos_hex::encode(&allow_all));
+	assert_eq!(registered.replica, Some(replica));
+
+	let echo_wasm = wasm(ECHO_PROGRAM_WAT);
+	let echo_envelope =
+		quorum.envelope(ArtifactKind::Function, "echo", &echo_wasm, None);
+	let echo = echo_envelope.artifact.wasm_hash;
+	let ruleset = quorum.ruleset_envelope(echo, allow_all);
+	let _: http::Registered = ureq::post(&format!("{base}/artifacts"))
+		.send_json(http::RegisterRequest {
+			envelope: qos_hex::encode(&borsh::to_vec(&echo_envelope).unwrap()),
+			wasm: qos_hex::encode(&echo_wasm),
+			ruleset: Some(qos_hex::encode(&borsh::to_vec(&ruleset).unwrap())),
+		})
+		.expect("function registers over http")
+		.into_json()
+		.unwrap();
+
+	// The listing shows both artifacts and the function's binding.
+	let listing: http::Artifacts = ureq::get(&format!("{base}/artifacts"))
+		.call()
+		.expect("artifacts listing")
+		.into_json()
+		.unwrap();
+	assert_eq!(listing.artifacts.len(), 2);
+	let echo_summary =
+		listing.artifacts.iter().find(|a| a.name == "echo").unwrap();
+	assert_eq!(echo_summary.kind, "function");
+	assert_eq!(echo_summary.bound_policy, Some(qos_hex::encode(&allow_all)));
+
+	// Content-addressed execution: POST /f/<program hash>.
+	let input = b"http attest".to_vec();
+	let execution: http::Execution =
+		ureq::post(&format!("{base}/f/{}", qos_hex::encode(&echo)))
+			.send_json(http::ExecuteRequest {
+				input: qos_hex::encode(&input),
+			})
+			.expect("execution succeeds")
+			.into_json()
+			.unwrap();
+	assert_eq!(execution.output, Some(qos_hex::encode(&input)));
+
+	// `payload_borsh` is the exact signed byte string: reconstruct the
+	// attestation from it and verify without trusting the decoded view.
+	let att = &execution.attestation;
+	let payload_bytes = qos_hex::decode(&att.payload_borsh).unwrap();
+	let signed = ExecutionAttestation {
+		payload: ExecutionAttestationPayload::try_from_slice(&payload_bytes)
+			.unwrap(),
+		signature: qos_hex::decode(&att.signature).unwrap(),
+		ephemeral_public_key: qos_hex::decode(&att.ephemeral_public_key)
+			.unwrap(),
+	};
+	verify_execution_attestation(&signed).expect("attestation verifies");
+	assert_eq!(signed.payload.program_hash, ProgramHash::new(echo));
+	assert_eq!(signed.payload.policy_hash, PolicyHash::new(allow_all));
+	assert_eq!(
+		signed.payload.outcome,
+		ExecutionOutcome::Allowed { output_hash: sha_256(&input) }
+	);
+	// ...and the decoded JSON view agrees with the signed bytes.
+	assert_eq!(att.payload.request_id, signed.payload.request_id);
+	assert!(matches!(
+		&att.payload.outcome,
+		http::Outcome::Allowed { output_hash }
+			if *output_hash == qos_hex::encode(&sha_256(&input))
+	));
+
+	// Unknown content address: 404, nothing attested.
+	let miss = ureq::post(&format!("{base}/f/{}", "9".repeat(64)))
+		.send_json(http::ExecuteRequest { input: qos_hex::encode(&input) });
+	assert!(matches!(miss, Err(ureq::Error::Status(404, _))), "{miss:?}");
+
+	// Malformed registration: 400 before anything reaches the processor.
+	let bad = ureq::post(&format!("{base}/artifacts")).send_json(
+		http::RegisterRequest {
+			envelope: "not-hex".to_string(),
+			wasm: String::new(),
+			ruleset: None,
+		},
+	);
+	assert!(matches!(bad, Err(ureq::Error::Status(400, _))), "{bad:?}");
 }
