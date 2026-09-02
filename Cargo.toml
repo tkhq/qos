@@ -50,6 +50,11 @@ exclude = [
   "src/vfaas/examples/fee-calculator",
   "src/vfaas/examples/allow-small-input",
   "src/vfaas/examples/allow-hashlist",
+  "src/vfaas/examples/sanctions-screening",
+  "src/vfaas/examples/screening-rules",
+  # the lightning-talk slideshow app; standalone so its web-framework deps
+  # never touch the workspace
+  "demo",
 ]
 # We need this to avoid issues with the mock feature uinintentionally being
 # enabled just because some tests need it.

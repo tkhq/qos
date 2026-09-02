@@ -31,10 +31,7 @@ pub extern "C" fn alloc(len: u32) -> u32 {
 	let mut buf = Vec::<u8>::with_capacity(len as usize);
 	let ptr = buf.as_mut_ptr() as u32;
 	core::mem::forget(buf);
-	allocations()
-		.lock()
-		.expect("vfaas: ALLOCATIONS poisoned")
-		.insert(ptr, len);
+	allocations().lock().expect("vfaas: ALLOCATIONS poisoned").insert(ptr, len);
 	ptr
 }
 

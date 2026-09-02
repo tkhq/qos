@@ -1,0 +1,11 @@
+[workspace]
+
+[package]
+name = "vfaas-demo"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process"] }
+topcoat = "0.5"

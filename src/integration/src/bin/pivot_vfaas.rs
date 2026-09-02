@@ -17,17 +17,33 @@
 //! an `ExecutionAttestationPayload` signed by the enclave ephemeral key, so
 //! denials and crashes are as auditable as successes.
 //!
-//! Args: `<usock_path> <manifest_set_path> <ephemeral_key_path>` where
-//! `manifest_set_path` is a Borsh-serialized `ManifestSet`.
+//! The primary surface is HTTP/1 on `--host`/`--port` (TVC's ingress bridge
+//! connects to it inside the enclave): `GET /health`, `GET /artifacts`,
+//! `POST /artifacts`, and the content-addressed `POST /f/{wasmHash}` — the
+//! path names the exact program you are invoking. `--usock` additionally
+//! serves the Borsh `VfaasMsg` protocol for local tooling and tests.
+//!
+//! The artifact-approval quorum comes from `--manifest-envelope` (the
+//! enclave's own `/qos.manifest`, the TVC default: the quorum that approved
+//! the enclave approves its functions) or `--manifest-set` (a bare Borsh
+//! `ManifestSet` for local development).
 
 use std::{
 	collections::HashMap,
+	net::SocketAddr,
 	sync::{
 		Arc,
 		atomic::{AtomicU64, Ordering},
 	},
 };
 
+use axum::{
+	Json, Router,
+	extract::{DefaultBodyLimit, Path, State},
+	http::StatusCode,
+	response::{IntoResponse, Response},
+	routing::{get, post},
+};
 use borsh::BorshDeserialize;
 use integration::vfaas::{
 	DEFAULT_FUEL_PER_CALL, RegisteredArtifact, VfaasMsg, engine_id,
@@ -35,11 +51,13 @@ use integration::vfaas::{
 		Artifact, ArtifactEnvelope, ArtifactKind, RulesetEnvelope,
 		verify_artifact_envelope, verify_ruleset_envelope,
 	},
+	http,
 };
 use qos_core::{
+	EPHEMERAL_KEY_FILE, MANIFEST_FILE,
 	handles::EphemeralKeyHandle,
 	io::{SocketAddress, StreamPool},
-	protocol::services::boot::ManifestSet,
+	protocol::services::boot::{ManifestSet, VersionedManifestEnvelope},
 	server::{RequestProcessor, SocketServer},
 };
 use qos_crypto::sha_256;
@@ -138,7 +156,9 @@ impl Processor {
 		}
 		if let Err(e) = verify_artifact_envelope(&envelope, &self.artifact_set)
 		{
-			return VfaasMsg::Error(format!("approval verification failed: {e}"));
+			return VfaasMsg::Error(format!(
+				"approval verification failed: {e}"
+			));
 		}
 
 		// A program registers with — and only ever runs under — a
@@ -168,8 +188,7 @@ impl Processor {
 						qos_hex::encode(&envelope.artifact.wasm_hash),
 					));
 				}
-				if let Err(e) =
-					verify_ruleset_envelope(rs, &self.artifact_set)
+				if let Err(e) = verify_ruleset_envelope(rs, &self.artifact_set)
 				{
 					return VfaasMsg::Error(format!(
 						"ruleset approval verification failed: {e}"
@@ -192,10 +211,9 @@ impl Processor {
 		// the registrant, instead of surfacing at execution time.
 		let engine = self.engine.clone();
 		let blob = wasm.clone();
-		let compiled = tokio::task::spawn_blocking(move || {
-			Module::new(&engine, &blob)
-		})
-		.await;
+		let compiled =
+			tokio::task::spawn_blocking(move || Module::new(&engine, &blob))
+				.await;
 		let module = match compiled {
 			Ok(Ok(module)) => module,
 			Ok(Err(e)) => {
@@ -227,10 +245,8 @@ impl Processor {
 			.values()
 			.map(|stored| RegisteredArtifact {
 				artifact: stored.artifact().clone(),
-				approval_count: u32::try_from(
-					stored.envelope.approvals.len(),
-				)
-				.unwrap_or(u32::MAX),
+				approval_count: u32::try_from(stored.envelope.approvals.len())
+					.unwrap_or(u32::MAX),
 				bound_policy: stored
 					.ruleset
 					.as_ref()
@@ -271,12 +287,13 @@ impl Processor {
 	}
 
 	async fn execute(&self, program: ProgramHash, input: Vec<u8>) -> VfaasMsg {
-		let program_artifact =
-			match self.lookup(*program.as_bytes(), ArtifactKind::Function).await
-			{
-				Ok(stored) => stored,
-				Err(e) => return VfaasMsg::Error(e),
-			};
+		let program_artifact = match self
+			.lookup(*program.as_bytes(), ArtifactKind::Function)
+			.await
+		{
+			Ok(stored) => stored,
+			Err(e) => return VfaasMsg::Error(e),
+		};
 		// The gating policy comes from the registered ruleset, never the
 		// request. Registration guarantees a function carries a binding, so
 		// a miss here is a pivot bug.
@@ -297,7 +314,9 @@ impl Processor {
 		let input_hash = sha_256(&input);
 		let request_id = self.request_id.fetch_add(1, Ordering::SeqCst);
 		let attest = |outcome: ExecutionOutcome, output: Option<Vec<u8>>| {
-			self.attest(program, policy, input_hash, outcome, request_id, output)
+			self.attest(
+				program, policy, input_hash, outcome, request_id, output,
+			)
 		};
 
 		// Policy first. It sees the program hash and bytes plus the input.
@@ -417,6 +436,16 @@ impl Processor {
 		}
 	}
 
+	/// This replica's identity: the first 8 hex chars of the ephemeral
+	/// public key, unique per enclave. Clients registering an artifact on
+	/// every replica count distinct values of this.
+	fn replica(&self) -> Option<String> {
+		let key = self.ephemeral_key_handle.get_ephemeral_key().ok()?;
+		let mut fingerprint = qos_hex::encode(&key.public_key().to_bytes());
+		fingerprint.truncate(8);
+		Some(fingerprint)
+	}
+
 	fn sign(
 		&self,
 		payload: ExecutionAttestationPayload,
@@ -514,36 +543,267 @@ impl RequestProcessor for Processor {
 	}
 }
 
+/// Where the artifact-approval quorum comes from.
+enum QuorumSource {
+	/// The enclave's own signed manifest (`/qos.manifest`, the TVC layout):
+	/// the manifest set that approved this enclave approves its artifacts.
+	ManifestEnvelope(String),
+	/// A bare Borsh `ManifestSet` file, for local development and tests.
+	ManifestSet(String),
+}
+
+struct Cli {
+	host: String,
+	port: u16,
+	quorum: QuorumSource,
+	ephemeral_key_path: String,
+	usock: Option<String>,
+}
+
+impl Default for Cli {
+	fn default() -> Self {
+		Self {
+			host: "127.0.0.1".to_string(),
+			port: 3000,
+			quorum: QuorumSource::ManifestEnvelope(MANIFEST_FILE.to_string()),
+			ephemeral_key_path: EPHEMERAL_KEY_FILE.to_string(),
+			usock: None,
+		}
+	}
+}
+
+impl Cli {
+	fn parse(args: impl IntoIterator<Item = String>) -> Result<Self, String> {
+		let mut cli = Self::default();
+		let mut args = args.into_iter();
+		let mut quorum = None;
+
+		while let Some(arg) = args.next() {
+			match arg.as_str() {
+				"--host" => cli.host = next_value(&mut args, "--host")?,
+				"--port" => {
+					cli.port = next_value(&mut args, "--port")?
+						.parse()
+						.map_err(|e| format!("invalid --port value: {e}"))?;
+				}
+				"--manifest-envelope" => set_quorum(
+					&mut quorum,
+					QuorumSource::ManifestEnvelope(next_value(
+						&mut args,
+						"--manifest-envelope",
+					)?),
+				)?,
+				"--manifest-set" => set_quorum(
+					&mut quorum,
+					QuorumSource::ManifestSet(next_value(
+						&mut args,
+						"--manifest-set",
+					)?),
+				)?,
+				"--ephemeral-key" => {
+					cli.ephemeral_key_path =
+						next_value(&mut args, "--ephemeral-key")?;
+				}
+				"--usock" => {
+					cli.usock = Some(next_value(&mut args, "--usock")?);
+				}
+				_ => return Err(format!("unknown argument: {arg}")),
+			}
+		}
+
+		if let Some(quorum) = quorum {
+			cli.quorum = quorum;
+		}
+
+		Ok(cli)
+	}
+}
+
+fn next_value(
+	args: &mut impl Iterator<Item = String>,
+	name: &str,
+) -> Result<String, String> {
+	args.next().ok_or_else(|| format!("missing value for {name}"))
+}
+
+fn set_quorum(
+	slot: &mut Option<QuorumSource>,
+	source: QuorumSource,
+) -> Result<(), String> {
+	if slot.replace(source).is_some() {
+		return Err("pass exactly one of --manifest-envelope / --manifest-set"
+			.to_string());
+	}
+
+	Ok(())
+}
+
+async fn health(State(processor): State<Processor>) -> Json<http::Health> {
+	Json(http::Health {
+		status: "healthy".to_string(),
+		replica: processor.replica(),
+	})
+}
+
+async fn list_artifacts(State(processor): State<Processor>) -> Response {
+	match processor.handle(VfaasMsg::ListArtifactsRequest).await {
+		VfaasMsg::ListArtifactsResponse { artifacts } => {
+			Json(http::Artifacts {
+				replica: processor.replica(),
+				artifacts: artifacts
+					.iter()
+					.map(http::ArtifactSummary::from)
+					.collect(),
+			})
+			.into_response()
+		}
+		other => error_response(&other),
+	}
+}
+
+async fn register_artifact(
+	State(processor): State<Processor>,
+	Json(request): Json<http::RegisterRequest>,
+) -> Response {
+	let msg = match request.into_msg() {
+		Ok(msg) => msg,
+		Err(error) => {
+			return (StatusCode::BAD_REQUEST, Json(http::Error { error }))
+				.into_response();
+		}
+	};
+
+	match processor.handle(msg).await {
+		VfaasMsg::RegisterArtifactResponse { artifact } => {
+			Json(http::Registered {
+				replica: processor.replica(),
+				name: artifact.name,
+				version: artifact.version,
+				wasm_hash: qos_hex::encode(&artifact.wasm_hash),
+			})
+			.into_response()
+		}
+		other => error_response(&other),
+	}
+}
+
+async fn execute_program(
+	State(processor): State<Processor>,
+	Path(program): Path<String>,
+	Json(request): Json<http::ExecuteRequest>,
+) -> Response {
+	let parsed = qos_hex::decode(&program)
+		.map_err(|e| format!("program address is not hex: {e:?}"))
+		.and_then(|bytes| {
+			<[u8; 32]>::try_from(bytes).map_err(|bytes| {
+				format!("program address must be 32 bytes, got {}", bytes.len())
+			})
+		});
+	let program = match parsed {
+		Ok(hash) => ProgramHash::new(hash),
+		Err(error) => {
+			return (StatusCode::BAD_REQUEST, Json(http::Error { error }))
+				.into_response();
+		}
+	};
+	let input = match qos_hex::decode(&request.input) {
+		Ok(input) => input,
+		Err(e) => {
+			return (
+				StatusCode::BAD_REQUEST,
+				Json(http::Error { error: format!("input is not hex: {e:?}") }),
+			)
+				.into_response();
+		}
+	};
+
+	match processor.handle(VfaasMsg::ExecuteRequest { program, input }).await {
+		VfaasMsg::ExecuteResponse { output, attestation } => {
+			Json(http::Execution {
+				output: output.map(|bytes| qos_hex::encode(&bytes)),
+				attestation: http::Attestation::from(&attestation),
+			})
+			.into_response()
+		}
+		other => error_response(&other),
+	}
+}
+
+/// Map a pivot rejection to an HTTP status. Attested denials and failures
+/// never reach here — they are 200s carrying an attestation; this is only
+/// for request-level errors where nothing was attested.
+fn error_response(msg: &VfaasMsg) -> Response {
+	let (status, error) = match msg {
+		VfaasMsg::Error(e) => {
+			// `lookup` misses are the only not-found shape the processor
+			// produces; everything else it rejects is a bad request.
+			let status = if e.starts_with("artifact not registered") {
+				StatusCode::NOT_FOUND
+			} else {
+				StatusCode::BAD_REQUEST
+			};
+			(status, e.clone())
+		}
+		other => (
+			StatusCode::INTERNAL_SERVER_ERROR,
+			format!("unexpected pivot response: {other:?}"),
+		),
+	};
+	(status, Json(http::Error { error })).into_response()
+}
+
 #[tokio::main]
 async fn main() {
-	let mut args = std::env::args().skip(1);
-	let socket_path = args.next().expect("missing arg 1: <usock_path>");
-	let manifest_set_path =
-		args.next().expect("missing arg 2: <manifest_set_path>");
-	let ephemeral_key_path =
-		args.next().expect("missing arg 3: <ephemeral_key_path>");
+	let cli =
+		Cli::parse(std::env::args().skip(1)).unwrap_or_else(|e| panic!("{e}"));
 
-	let manifest_set_bytes = std::fs::read(&manifest_set_path)
-		.expect("unable to read manifest set file");
-	let artifact_set = ManifestSet::try_from_slice(&manifest_set_bytes)
-		.expect("manifest set file is not a Borsh ManifestSet");
+	let artifact_set = match &cli.quorum {
+		QuorumSource::ManifestEnvelope(path) => {
+			let bytes = std::fs::read(path)
+				.expect("unable to read manifest envelope file");
+			VersionedManifestEnvelope::try_from_slice_compat(&bytes)
+				.expect("file is not a manifest envelope")
+				.manifest_set()
+				.clone()
+		}
+		QuorumSource::ManifestSet(path) => {
+			let bytes =
+				std::fs::read(path).expect("unable to read manifest set file");
+			ManifestSet::try_from_slice(&bytes)
+				.expect("manifest set file is not a Borsh ManifestSet")
+		}
+	};
 
 	let mut config = Config::new();
 	config.consume_fuel(true);
 	let engine =
 		Engine::new(&config).expect("unable to construct wasmtime engine");
 
-	let pool = StreamPool::new(SocketAddress::new_unix(socket_path), 1)
-		.expect("unable to create vfaas pivot pool");
-
 	let processor = Processor::new(
 		engine,
 		artifact_set,
-		EphemeralKeyHandle::new(ephemeral_key_path),
+		EphemeralKeyHandle::new(cli.ephemeral_key_path.clone()),
 	);
 
-	let _server = SocketServer::listen_all(pool, processor, SERVER_CONCURRENCY)
-		.expect("unable to start vfaas pivot server");
+	let _usock_server = cli.usock.as_ref().map(|path| {
+		let pool = StreamPool::new(SocketAddress::new_unix(path), 1)
+			.expect("unable to create vfaas pivot pool");
+		SocketServer::listen_all(pool, processor.clone(), SERVER_CONCURRENCY)
+			.expect("unable to start vfaas usock server")
+	});
 
-	tokio::signal::ctrl_c().await.expect("failed to wait for ctrl_c");
+	let addr: SocketAddr = format!("{}:{}", cli.host, cli.port)
+		.parse()
+		.expect("invalid --host/--port combination");
+	let router = Router::new()
+		.route("/health", get(health))
+		.route("/artifacts", get(list_artifacts).post(register_artifact))
+		.route("/f/:program", post(execute_program))
+		.layer(DefaultBodyLimit::max(16 * 1024 * 1024))
+		.with_state(processor);
+
+	axum::Server::bind(&addr)
+		.serve(router.into_make_service())
+		.await
+		.expect("http server failed");
 }

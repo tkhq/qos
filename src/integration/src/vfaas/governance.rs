@@ -172,7 +172,10 @@ impl fmt::Display for GovernanceError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::ZeroThreshold => {
-				write!(f, "artifact approval threshold must be greater than zero")
+				write!(
+					f,
+					"artifact approval threshold must be greater than zero"
+				)
 			}
 			Self::NotAMember { alias } => {
 				write!(f, "approval from non-member {alias}")
@@ -187,7 +190,10 @@ impl fmt::Display for GovernanceError {
 				write!(f, "duplicate approval from {alias}")
 			}
 			Self::InsufficientApprovals { got, need } => {
-				write!(f, "not enough artifact approvals: got {got}, need {need}")
+				write!(
+					f,
+					"not enough artifact approvals: got {got}, need {need}"
+				)
 			}
 		}
 	}
@@ -254,11 +260,11 @@ fn verify_approvals(
 				alias: approval.member.alias.clone(),
 			})?;
 
-		public_key.verify(payload_hash, &approval.signature).map_err(
-			|_| GovernanceError::InvalidSignature {
+		public_key.verify(payload_hash, &approval.signature).map_err(|_| {
+			GovernanceError::InvalidSignature {
 				alias: approval.member.alias.clone(),
-			},
-		)?;
+			}
+		})?;
 
 		if !unique_approvers.insert(approval.member.pub_key.clone()) {
 			return Err(GovernanceError::DuplicateApprover {

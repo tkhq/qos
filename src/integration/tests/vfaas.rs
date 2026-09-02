@@ -15,8 +15,8 @@ use integration::{
 	vfaas::{
 		DEFAULT_FUEL_PER_CALL, VfaasMsg, engine_id,
 		governance::{
-			Artifact, ArtifactEnvelope, ArtifactKind, Ruleset,
-			RulesetEnvelope, approve_artifact, approve_ruleset,
+			Artifact, ArtifactEnvelope, ArtifactKind, Ruleset, RulesetEnvelope,
+			approve_artifact, approve_ruleset,
 		},
 		verify_execution_attestation,
 	},
@@ -272,10 +272,13 @@ impl TestPivot {
 			.unwrap();
 		P256Pair::generate().unwrap().to_hex_file(&ephemeral_path).unwrap();
 
+		// `--port 0`: each test pivot takes an OS-assigned HTTP port so
+		// parallel tests never collide; these tests speak the usock side.
 		let pivot: ChildWrapper = Command::new(PIVOT_VFAAS_PATH)
-			.arg(&socket)
-			.arg(&manifest_path)
-			.arg(&ephemeral_path)
+			.args(["--usock", &socket])
+			.args(["--manifest-set", &manifest_path])
+			.args(["--ephemeral-key", &ephemeral_path])
+			.args(["--port", "0"])
 			.spawn()
 			.unwrap()
 			.into();
@@ -283,8 +286,7 @@ impl TestPivot {
 
 		let pool =
 			StreamPool::single(SocketAddress::new_unix(&socket)).unwrap();
-		let client =
-			SocketClient::new(pool.shared(), Duration::from_secs(10));
+		let client = SocketClient::new(pool.shared(), Duration::from_secs(10));
 
 		Self {
 			quorum,
@@ -297,7 +299,8 @@ impl TestPivot {
 	}
 
 	async fn call(&self, msg: &VfaasMsg) -> VfaasMsg {
-		let bytes = self.client.call(&borsh::to_vec(msg).unwrap()).await.unwrap();
+		let bytes =
+			self.client.call(&borsh::to_vec(msg).unwrap()).await.unwrap();
 		VfaasMsg::try_from_slice(&bytes).unwrap()
 	}
 
@@ -340,8 +343,7 @@ impl TestPivot {
 		fuel_budget: Option<u64>,
 		policy: [u8; 32],
 	) -> [u8; 32] {
-		let ruleset =
-			self.quorum.ruleset_envelope(sha_256(&wasm), policy);
+		let ruleset = self.quorum.ruleset_envelope(sha_256(&wasm), policy);
 		self.register(
 			ArtifactKind::Function,
 			name,
@@ -390,24 +392,17 @@ fn wasm(wat_text: &str) -> Vec<u8> {
 async fn vfaas_register_rejections() {
 	let pivot = TestPivot::boot("reg").await;
 	let echo = wasm(ECHO_PROGRAM_WAT);
-	let allow_all = pivot
-		.register_policy("allow-all", wasm(ALLOW_ALL_POLICY_WAT))
-		.await;
+	let allow_all =
+		pivot.register_policy("allow-all", wasm(ALLOW_ALL_POLICY_WAT)).await;
 
 	// A well-formed 2-of-3 envelope with a well-formed binding registers.
-	let echo_hash = pivot
-		.register_program("echo", echo.clone(), None, allow_all)
-		.await;
-	let echo_ruleset =
-		|| pivot.quorum.ruleset_envelope(echo_hash, allow_all);
+	let echo_hash =
+		pivot.register_program("echo", echo.clone(), None, allow_all).await;
+	let echo_ruleset = || pivot.quorum.ruleset_envelope(echo_hash, allow_all);
 
 	// Tampered blob: envelope approves `echo`, different bytes arrive.
-	let envelope = pivot.quorum.envelope(
-		ArtifactKind::Function,
-		"echo",
-		&echo,
-		None,
-	);
+	let envelope =
+		pivot.quorum.envelope(ArtifactKind::Function, "echo", &echo, None);
 	let response = pivot
 		.call(&VfaasMsg::RegisterArtifactRequest {
 			envelope,
@@ -495,12 +490,8 @@ async fn vfaas_register_rejections() {
 
 	// A program without a ruleset cannot register, no matter how well its
 	// own envelope is approved.
-	let envelope = pivot.quorum.envelope(
-		ArtifactKind::Function,
-		"echo",
-		&echo,
-		None,
-	);
+	let envelope =
+		pivot.quorum.envelope(ArtifactKind::Function, "echo", &echo, None);
 	let response = pivot
 		.call(&VfaasMsg::RegisterArtifactRequest {
 			envelope,
@@ -535,12 +526,8 @@ async fn vfaas_register_rejections() {
 
 	// The ruleset must bind the program being registered, not another one.
 	let trapping = wasm(TRAPPING_PROGRAM_WAT);
-	let envelope = pivot.quorum.envelope(
-		ArtifactKind::Function,
-		"trap",
-		&trapping,
-		None,
-	);
+	let envelope =
+		pivot.quorum.envelope(ArtifactKind::Function, "trap", &trapping, None);
 	let response = pivot
 		.call(&VfaasMsg::RegisterArtifactRequest {
 			envelope,
@@ -562,12 +549,8 @@ async fn vfaas_register_rejections() {
 		ruleset,
 		approvals: vec![pivot.quorum.ruleset_approval(&ruleset, 0)],
 	};
-	let envelope = pivot.quorum.envelope(
-		ArtifactKind::Function,
-		"trap",
-		&trapping,
-		None,
-	);
+	let envelope =
+		pivot.quorum.envelope(ArtifactKind::Function, "trap", &trapping, None);
 	let response = pivot
 		.call(&VfaasMsg::RegisterArtifactRequest {
 			envelope,
@@ -584,15 +567,10 @@ async fn vfaas_register_rejections() {
 	);
 
 	// The bound policy must already be registered...
-	let envelope = pivot.quorum.envelope(
-		ArtifactKind::Function,
-		"trap",
-		&trapping,
-		None,
-	);
-	let unregistered_policy = pivot
-		.quorum
-		.ruleset_envelope(sha_256(&trapping), [7u8; 32]);
+	let envelope =
+		pivot.quorum.envelope(ArtifactKind::Function, "trap", &trapping, None);
+	let unregistered_policy =
+		pivot.quorum.ruleset_envelope(sha_256(&trapping), [7u8; 32]);
 	let response = pivot
 		.call(&VfaasMsg::RegisterArtifactRequest {
 			envelope,
@@ -606,12 +584,8 @@ async fn vfaas_register_rejections() {
 	assert!(reason.contains("not registered"), "{reason}");
 
 	// ...and must actually be a policy, not another program.
-	let envelope = pivot.quorum.envelope(
-		ArtifactKind::Function,
-		"trap",
-		&trapping,
-		None,
-	);
+	let envelope =
+		pivot.quorum.envelope(ArtifactKind::Function, "trap", &trapping, None);
 	let bound_to_program =
 		pivot.quorum.ruleset_envelope(sha_256(&trapping), echo_hash);
 	let response = pivot
@@ -635,8 +609,7 @@ async fn vfaas_register_rejections() {
 		&garbage,
 		None,
 	);
-	let ruleset =
-		pivot.quorum.ruleset_envelope(sha_256(&garbage), allow_all);
+	let ruleset = pivot.quorum.ruleset_envelope(sha_256(&garbage), allow_all);
 	let response = pivot
 		.call(&VfaasMsg::RegisterArtifactRequest {
 			envelope,
@@ -683,14 +656,12 @@ async fn vfaas_register_rejections() {
 async fn vfaas_execute_flows() {
 	let pivot = TestPivot::boot("exec").await;
 
-	let allow_all = pivot
-		.register_policy("allow-all", wasm(ALLOW_ALL_POLICY_WAT))
-		.await;
+	let allow_all =
+		pivot.register_policy("allow-all", wasm(ALLOW_ALL_POLICY_WAT)).await;
 	let deny_all =
 		pivot.register_policy("deny-all", wasm(DENY_ALL_POLICY_WAT)).await;
-	let trapping_policy = pivot
-		.register_policy("trap-policy", wasm(TRAPPING_POLICY_WAT))
-		.await;
+	let trapping_policy =
+		pivot.register_policy("trap-policy", wasm(TRAPPING_POLICY_WAT)).await;
 
 	let echo_wasm = wasm(ECHO_PROGRAM_WAT);
 	let echo = pivot

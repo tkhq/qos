@@ -87,7 +87,9 @@ pub enum Decision {
 }
 
 /// Which stage of an execution attempt failed.
-#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+	BorshDeserialize, BorshSerialize, Clone, Copy, Debug, PartialEq, Eq,
+)]
 pub enum Stage {
 	/// The policy evaluation stage.
 	Policy,

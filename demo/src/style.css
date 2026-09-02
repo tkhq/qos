@@ -1,0 +1,164 @@
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	background: #0d1117;
+	color: #e6edf3;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	min-height: 100vh;
+	padding: 4rem 6rem;
+}
+
+section.slide {
+	max-width: 72rem;
+	margin: 0 auto;
+}
+
+h1 {
+	font-size: 3.2rem;
+	margin-bottom: 2rem;
+	color: #f0f6fc;
+}
+
+h2 {
+	font-size: 2.2rem;
+	margin-bottom: 1.5rem;
+	color: #f0f6fc;
+}
+
+p, li {
+	font-size: 1.3rem;
+	line-height: 1.6;
+	margin-bottom: 0.8rem;
+}
+
+ul {
+	margin: 0 0 1rem 2rem;
+}
+
+pre {
+	background: #161b22;
+	border: 1px solid #30363d;
+	border-radius: 8px;
+	padding: 1rem 1.2rem;
+	overflow-x: auto;
+	font-size: 1.0rem;
+	line-height: 1.45;
+	margin-bottom: 1rem;
+	white-space: pre-wrap;
+}
+
+pre.source {
+	font-size: 0.95rem;
+	max-height: 70vh;
+	overflow-y: auto;
+}
+
+pre.out {
+	background: #010409;
+	color: #7ee787;
+	min-height: 3rem;
+}
+
+code.cmdline {
+	display: block;
+	background: #161b22;
+	border-left: 4px solid #58a6ff;
+	padding: 0.6rem 1rem;
+	margin-bottom: 0.8rem;
+	font-size: 1.1rem;
+	color: #79c0ff;
+}
+
+.panel {
+	border: 1px solid #30363d;
+	border-radius: 8px;
+	padding: 1.2rem;
+	margin-bottom: 1.5rem;
+}
+
+.panel p.help {
+	color: #8b949e;
+	font-size: 1.05rem;
+	white-space: pre-wrap;
+}
+
+button {
+	background: #238636;
+	color: #ffffff;
+	border: 0;
+	border-radius: 6px;
+	font: inherit;
+	font-size: 1.1rem;
+	padding: 0.5rem 1.4rem;
+	cursor: pointer;
+	margin: 0.4rem 0.6rem 0.8rem 0;
+}
+
+button:hover {
+	background: #2ea043;
+}
+
+input {
+	background: #0d1117;
+	color: #e6edf3;
+	border: 1px solid #30363d;
+	border-radius: 6px;
+	font: inherit;
+	font-size: 1.05rem;
+	padding: 0.5rem 0.8rem;
+	width: 34rem;
+	max-width: 100%;
+	margin: 0.4rem 0.6rem 0.8rem 0;
+}
+
+.contrast {
+	display: flex;
+	gap: 2rem;
+	margin-top: 1rem;
+}
+
+.contrast > div {
+	flex: 1;
+	border: 1px solid #30363d;
+	border-radius: 8px;
+	padding: 1.2rem;
+}
+
+.contrast .today {
+	border-color: #f85149;
+}
+
+.contrast .vfaas {
+	border-color: #3fb950;
+}
+
+.contrast h3 {
+	font-size: 1.4rem;
+	margin-bottom: 1rem;
+}
+
+.contrast ol {
+	margin-left: 1.6rem;
+	font-size: 1.15rem;
+	line-height: 1.7;
+}
+
+.dim {
+	color: #8b949e;
+}
+
+.big {
+	font-size: 1.8rem;
+}
+
+footer.nav-hint {
+	position: fixed;
+	bottom: 1rem;
+	right: 1.5rem;
+	color: #484f58;
+	font-size: 0.9rem;
+}

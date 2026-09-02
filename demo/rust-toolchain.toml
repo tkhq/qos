@@ -1,0 +1,6 @@
+# topcoat 0.5 needs rustc 1.95; the demo is workspace-excluded, so this
+# override never touches the enclave toolchain pin at the repo root.
+[toolchain]
+channel = "1.95"
+components = ["rustfmt", "cargo", "clippy"]
+profile = "minimal"

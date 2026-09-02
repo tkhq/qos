@@ -15,6 +15,7 @@
 //! the socket protocol and the client-side verification helpers.
 
 pub mod governance;
+pub mod http;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use qos_crypto::sha_256;

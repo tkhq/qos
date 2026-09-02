@@ -1677,7 +1677,7 @@ dependencies = [
  "vfaas-abi",
  "wasmtime",
  "wat",
- "webpki-roots",
+ "webpki-roots 1.0.2",
  "zeroize",
 ]
 
@@ -2575,7 +2575,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-vsock",
- "webpki-roots",
+ "webpki-roots 1.0.2",
  "zeroize",
 ]
 
@@ -2670,7 +2670,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-rustls",
- "webpki-roots",
+ "webpki-roots 1.0.2",
 ]
 
 [[package]]
@@ -3035,6 +3035,7 @@ dependencies = [
  "aws-lc-rs",
  "log",
  "once_cell",
+ "ring",
  "rustls-pki-types",
  "rustls-webpki",
  "subtle",
@@ -3810,9 +3811,12 @@ dependencies = [
  "base64",
  "log",
  "once_cell",
+ "rustls",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "url",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -3887,6 +3891,14 @@ dependencies = [
 
 [[package]]
 name = "vfaas_fee_calculator"
+version = "0.1.0"
+dependencies = [
+ "borsh",
+ "vfaas-sdk",
+]
+
+[[package]]
+name = "vfaas_sanctions_screening"
 version = "0.1.0"
 dependencies = [
  "borsh",
@@ -4285,6 +4297,15 @@ checksum = "ed63aea5ce73d0ff405984102c42de94fc55a6b75765d621c65262469b3c9b53"
 dependencies = [
  "ring",
  "untrusted",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.26.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
+dependencies = [
+ "webpki-roots 1.0.2",
 ]
 
 [[package]]
@@ -4731,9 +4752,13 @@ dependencies = [
  "qos_crypto 0.12.1",
  "qos_hex 0.12.1",
  "qos_p256 0.12.1",
+ "serde",
+ "serde_json",
  "tokio",
+ "ureq",
  "vfaas-abi",
  "vfaas_fee_calculator",
+ "vfaas_sanctions_screening",
 ]
 
 [[package]]

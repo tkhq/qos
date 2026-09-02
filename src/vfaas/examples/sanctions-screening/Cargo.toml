@@ -1,0 +1,26 @@
+[workspace]
+
+[package]
+name = "vfaas_sanctions_screening"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# The upgrade-demo feature: adds one address to the denylist and bumps
+# LIST_VERSION. A different wasm hash — a different content address — is
+# the whole point.
+list-v2 = []
+
+[dependencies]
+vfaas-sdk = { path = "../../sdk" }
+borsh = { version = "1.5", features = ["std", "derive"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

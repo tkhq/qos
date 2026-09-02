@@ -189,6 +189,24 @@ out/signed_echo/index.json: \
 	)
 	$(call build,signed_echo)
 
+out/pivot_vfaas/index.json: \
+	out/common/index.json \
+	$(CARGO_WORKSPACE_FILES) \
+	src/images/pivot_vfaas/Containerfile \
+	$(shell git ls-files \
+		src/integration \
+		src/vfaas/abi \
+		src/qos_core \
+		src/qos_nsm \
+		src/qos_host \
+		src/qos_net \
+		src/qos_crypto \
+		src/qos_hex \
+		src/qos_p256 \
+		src/qos_test_primitives \
+	)
+	$(call build,pivot_vfaas)
+
 out/common/index.json: \
 	src/images/common/Containerfile
 	$(call build,common)
