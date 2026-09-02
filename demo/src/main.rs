@@ -18,8 +18,10 @@ use topcoat::{
 	context::Cx,
 	router::{Router, layout, page},
 	runtime::{Event, procedure, shard},
-	view::{component, view},
+	view::{Unescaped, component, view},
 };
+
+mod highlight;
 
 /// Repo root: `demo/` sits directly under it.
 const REPO_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
@@ -162,10 +164,13 @@ async fn ceremony() -> Result {
 
 #[page("/3")]
 async fn policy() -> Result {
+	// The sources are compiled into the binary and highlighted server-side;
+	// the output is our own markup over escaped text, safe to unescape.
+	let source = Unescaped::new_unchecked(highlight::rust(POLICY_SOURCE));
 	view! {
 		<section class="slide">
 			<h2>"a policy is one plain Rust function"</h2>
-			<pre class="source">(POLICY_SOURCE)</pre>
+			<pre class="source">(source)</pre>
 		</section>
 	}
 }
@@ -180,7 +185,9 @@ async fn program() -> Result {
 				 of enclave and WASM plumbing — it tests with plain cargo \
 				 test, no wasm toolchain"
 			</p>
-			<pre class="source">(PROGRAM_SOURCE)</pre>
+			<pre class="source">
+				(Unescaped::new_unchecked(highlight::rust(PROGRAM_SOURCE)))
+			</pre>
 		</section>
 	}
 }

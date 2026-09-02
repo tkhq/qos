@@ -57,6 +57,18 @@ pre.source {
 	overflow-y: auto;
 }
 
+/* Server-side Rust highlighting (highlight.rs), GitHub-dark palette to
+ * match the rest of the deck. */
+pre.source .hl-kw { color: #ff7b72; }
+pre.source .hl-str { color: #a5d6ff; }
+pre.source .hl-com { color: #8b949e; font-style: italic; }
+pre.source .hl-ty { color: #ffa657; }
+pre.source .hl-mac { color: #d2a8ff; }
+pre.source .hl-attr { color: #d2a8ff; }
+pre.source .hl-fn { color: #d2a8ff; }
+pre.source .hl-num { color: #79c0ff; }
+pre.source .hl-life { color: #ff7b72; }
+
 pre.out {
 	background: #010409;
 	color: #7ee787;
