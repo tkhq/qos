@@ -17,7 +17,7 @@ use topcoat::{
 	asset::{Asset, AssetBundle, RouterBuilderAssetExt, asset},
 	context::Cx,
 	router::{Router, layout, page},
-	runtime::{Event, procedure, shard},
+	runtime::{Event, RouterBuilderProcedureExt, procedure, shard},
 	view::{Unescaped, component, view},
 };
 
@@ -62,6 +62,9 @@ async fn main() {
 			.page(live_upgrade)
 			.page(close)
 			.page(appendix)
+			// The live slides' Run buttons call this over the wire; without
+			// registering it the POST /_topcoat/procedures/… route 404s.
+			.procedure(run_xtask_on_server)
 			.build(),
 	)
 	.await
