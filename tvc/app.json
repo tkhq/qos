@@ -1,0 +1,20 @@
+{
+  "name": "vfaas-demo-1",
+  "quorumPublicKey": "04451028fc9d42cef6d8f2a3ebe17d65783c470dbc6f04663d500c12009930cf9b209e733f6ac6103cc28f07ecde2dbb55095738b828d6b7a55caf4ddf9d67f2ae047827dcd2325b8d58694c2ea14e8f1e1f8a36c84438d291ff9b1b067debdb3e2ba3822984cde8bed4de2c237bd323526da4961d368bcc63cbd2d37d00e936683e",
+  "enableEgress": false,
+  "manifestSetId": null,
+  "manifestSetParams": {
+    "name": "local-operator",
+    "threshold": 1,
+    "newOperators": [
+      {
+        "name": "operator-1",
+        "publicKey": "0482b60ce8790925c15b343102066d01293c3571b434f637b728e7c52eb43dbdf161103ab1998738f94cacf201b7a0a978ef5c99ca33e157b705eb3afccb1d60d30432fd1e415ad6fa9e2c4d3f33cbd3c534f29b5a6bbda497f00632c2849327f977d7f60637902b03e816fd41cf7930851ced5ebee3e6c31e426db602f12d2d8b4a"
+      }
+    ],
+    "existingOperatorIds": []
+  },
+  "shareSetId": null,
+  "shareSetParams": null,
+  "dangerousEnableDebugModeDeployments": false
+}

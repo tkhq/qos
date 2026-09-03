@@ -1,0 +1,13 @@
+{
+  "appId": "921d566e-c1eb-4209-8b3c-e3a85c6a5d4f",
+  "qosVersion": "0.12.1",
+  "pivotContainerImageUrl": "ghcr.io/richardpringle/pivot_vfaas:demo@sha256:03893a51a982c41c4eb2d3efbbe735b5b5fc7821565321dfe33c4f79e59e29c4",
+  "pivotPath": "/tvc_app",
+  "pivotArgs": ["--host", "0.0.0.0"],
+  "expectedPivotDigest": "b6a10adacc4a54630842bef437b6536d9ad1cdc74a88e7fff5fc7037bc1f82c0",
+  "dangerousDeployDebugMode": false,
+  "healthCheckType": "TVC_HEALTH_CHECK_TYPE_HTTP",
+  "healthCheckPort": 3000,
+  "publicIngressPort": 3000,
+  "replicas": 1
+}
