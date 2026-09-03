@@ -1,6 +1,7 @@
 use std::{process::Command, time::Duration};
 
 use integration::PIVOT_OK_PATH;
+use qos_core::io::MAX_PAYLOAD_SIZE;
 use qos_test_primitives::{ChildWrapper, PathWrapper};
 
 #[tokio::test(flavor = "multi_thread")]
@@ -26,6 +27,15 @@ async fn connects_and_gets_info() {
 
 	let r = ureq::get("http://127.0.0.1:3323/qos/enclave-info").call();
 	assert!(r.is_err()); // expect 500 here
+
+	let url = "http://127.0.0.1:3323/qos/message";
+	for (len, status) in [(MAX_PAYLOAD_SIZE, 500), (MAX_PAYLOAD_SIZE + 1, 413)]
+	{
+		match ureq::post(url).send_bytes(&vec![0u8; len]) {
+			Err(ureq::Error::Status(s, _)) if s == status => (),
+			other => panic!("unexpected result for {len} byte body: {other:?}"),
+		}
+	}
 
 	let enclave_socket = format!("{TEST_ENCLAVE_SOCKET}_0"); // manually pick the 1st one
 	let secret_path = PathWrapper::from("/tmp/qos_host_test.secret");
