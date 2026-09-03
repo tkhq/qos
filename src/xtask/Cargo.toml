@@ -20,6 +20,7 @@ qos_core = { workspace = true, features = ["mock"], default-features = false }
 qos_p256 = { workspace = true, features = ["mock"] }
 qos_crypto = { workspace = true }
 qos_hex = { workspace = true }
+zeroize = { workspace = true }
 vfaas-abi = { workspace = true }
 # The typed contracts for the demo functions: the client encodes requests
 # against the exact crates the enclave runs.

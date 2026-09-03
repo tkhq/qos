@@ -43,6 +43,7 @@ use vfaas_abi::{
 };
 use vfaas_fee_calculator::{FeeQuote, FeeRequest, Tier};
 use vfaas_sanctions_screening::{Screen, Status, Verdict};
+use zeroize::Zeroizing;
 
 /// Repo root, resolved at compile time so xtask works from any cwd.
 const REPO_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
@@ -220,13 +221,16 @@ enum Cmd {
 		/// Example name; omit to build all.
 		name: Option<String>,
 	},
-	/// Sign artifact descriptors into 2-of-3 approved envelopes.
+	/// Sign artifact descriptors and program→policy bindings as a manifest
+	/// operator.
 	///
-	/// Members sign the whole descriptor — name, version, kind, wasm hash,
-	/// ABI version, fuel budget — not just the blob. For functions this
-	/// also signs the program→policy ruleset binding: which policy gates
-	/// which program is a quorum decision, never a caller choice, and a
-	/// program cannot register without one.
+	/// The signature covers the whole descriptor — name, version, kind, wasm
+	/// hash, ABI version, fuel budget — and, for functions, the
+	/// program→policy ruleset binding: which policy gates which program is a
+	/// quorum decision, never a caller choice, and a program cannot register
+	/// without one. The signing member's identity (alias and public key) is
+	/// taken from the manifest, so the approval verifies against the exact
+	/// set the enclave enforces.
 	Approve {
 		/// Example name; omit to approve all.
 		name: Option<String>,
@@ -234,17 +238,19 @@ enum Cmd {
 		/// declared policy. Requires a single example name.
 		#[arg(long)]
 		policy: Option<String>,
-		/// Signing key file of a quorum member; repeat for each approver.
-		/// The member alias is the file name up to the first dot (e.g.
-		/// user1.secret.keep → user1). Defaults to the bootstrap-generated
-		/// user1 and user2 keys.
-		#[arg(long = "member-secret")]
-		member_secrets: Vec<PathBuf>,
+		/// Path to the operator key JSON (a tvc `StoredQosOperatorKey`): its
+		/// master seed signs the approvals.
+		#[arg(long)]
+		operator: PathBuf,
+		/// QOS manifest JSON whose `manifestSet` is the approval quorum.
+		/// Defaults to `tvc/manifest.json` at the repo root.
+		#[arg(long)]
+		manifest: Option<PathBuf>,
 	},
 	/// Register approved artifacts with the running pivot.
 	///
 	/// Sends the exact signed envelope bytes plus the wasm blob; the pivot
-	/// re-verifies the 2-of-3 approvals against its manifest set before
+	/// re-verifies the quorum approvals against its manifest set before
 	/// accepting. Policies register before functions (a program's bound
 	/// policy must already be registered). Over --url, registration
 	/// repeats until every replica has acknowledged — each replica reports
@@ -369,9 +375,12 @@ async fn main() {
 		Cmd::Bootstrap => bootstrap(),
 		Cmd::Pubkeys => pubkeys(),
 		Cmd::Build { name } => for_each_spec(name.as_deref(), build_wasm),
-		Cmd::Approve { name, policy, member_secrets } => {
-			approve_cmd(name.as_deref(), policy.as_deref(), &member_secrets)
-		}
+		Cmd::Approve { name, policy, operator, manifest } => approve_cmd(
+			name.as_deref(),
+			policy.as_deref(),
+			&operator,
+			manifest.as_deref(),
+		),
 		Cmd::Register { name, endpoint } => {
 			register(name.as_deref(), &endpoint.into()).await
 		}
@@ -585,7 +594,8 @@ fn build_wasm(spec: &ExampleSpec) -> Result<(), String> {
 fn approve_cmd(
 	name: Option<&str>,
 	policy_override: Option<&str>,
-	member_secrets: &[PathBuf],
+	operator_path: &Path,
+	manifest_path: Option<&Path>,
 ) -> Result<(), String> {
 	if policy_override.is_some() && name.is_none() {
 		return Err(
@@ -593,7 +603,9 @@ fn approve_cmd(
 		);
 	}
 
-	let approvers = load_approvers(member_secrets)?;
+	let manifest_path = manifest_path
+		.map_or_else(|| repo_root().join("tvc/manifest.json"), Path::to_path_buf);
+	let approvers = load_operator_approver(operator_path, &manifest_path)?;
 	for_each_spec(name, |spec| approve(spec, policy_override, &approvers))
 }
 
@@ -759,6 +771,96 @@ fn load_member(
 	})?;
 	let member = QuorumMember { alias, pub_key: pair.public_key().to_bytes() };
 	Ok((pair, member))
+}
+
+// --- operator + manifest (live enclave) --------------------------------------
+
+/// Minimal view of a tvc `StoredQosOperatorKey` JSON document. Only the master
+/// seed is needed to reconstruct the signing pair; the member identity comes
+/// from the manifest, not this file.
+#[derive(serde::Deserialize)]
+struct OperatorKeyFile {
+	/// Hex-encoded 32-byte qos_p256 master seed (optional `0x` prefix).
+	private_key: String,
+}
+
+/// Minimal view of a QOS manifest JSON document: the artifact-approval quorum
+/// is the enclave's own `manifestSet`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ManifestDoc {
+	manifest_set: ManifestSet,
+}
+
+/// Reconstruct the operator's signing pair from its stored key JSON.
+fn load_operator_pair(path: &Path) -> Result<P256Pair, String> {
+	let text = std::fs::read_to_string(path)
+		.map_err(|e| format!("read operator key {}: {e}", path.display()))?;
+	let key: OperatorKeyFile = serde_json::from_str(&text)
+		.map_err(|e| format!("parse operator key {}: {e}", path.display()))?;
+	let hex = key.private_key.trim();
+	let hex = hex.strip_prefix("0x").unwrap_or(hex);
+	let bytes = qos_hex::decode(hex)
+		.map_err(|e| format!("operator private_key is not hex: {e:?}"))?;
+	let seed: [u8; 32] = bytes.as_slice().try_into().map_err(|_| {
+		format!("operator private_key must be 32 bytes, got {}", bytes.len())
+	})?;
+	P256Pair::from_master_seed(&Zeroizing::new(seed))
+		.map_err(|e| format!("derive operator pair: {e:?}"))
+}
+
+/// Read the `manifestSet` out of a QOS manifest JSON document.
+fn load_manifest_set(path: &Path) -> Result<ManifestSet, String> {
+	let text = std::fs::read_to_string(path)
+		.map_err(|e| format!("read manifest {}: {e}", path.display()))?;
+	let doc: ManifestDoc = serde_json::from_str(&text)
+		.map_err(|e| format!("parse manifest {}: {e}", path.display()))?;
+	Ok(doc.manifest_set)
+}
+
+/// Build the approver from an operator key and the enclave's manifest.
+///
+/// The signing key comes from the operator file; the [`QuorumMember`] identity
+/// (alias and composite public key) is taken verbatim from the manifest set,
+/// so the approval matches what the pivot verifies against — nothing is
+/// guessed. Errors if the operator's key is not one of the set's members.
+fn load_operator_approver(
+	operator_path: &Path,
+	manifest_path: &Path,
+) -> Result<Vec<(P256Pair, QuorumMember)>, String> {
+	let manifest_set = load_manifest_set(manifest_path)?;
+	let pair = load_operator_pair(operator_path)?;
+	let composite = pair.public_key().to_bytes();
+
+	let member = manifest_set
+		.members
+		.iter()
+		.find(|m| m.pub_key == composite)
+		.cloned()
+		.ok_or_else(|| {
+			format!(
+				"operator key {} is not in the manifest set at {} (derived \
+				 composite {} matches no member)",
+				operator_path.display(),
+				manifest_path.display(),
+				qos_hex::encode(&composite),
+			)
+		})?;
+
+	if usize::try_from(manifest_set.threshold).unwrap_or(usize::MAX) > 1 {
+		eprintln!(
+			"warning: manifest set threshold is {t}, but only one operator \
+			 key was supplied; the pivot will reject until {t} distinct \
+			 members approve",
+			t = manifest_set.threshold,
+		);
+	}
+
+	println!(
+		"approving as manifest-set member {:?} (threshold {})",
+		member.alias, manifest_set.threshold,
+	);
+	Ok(vec![(pair, member)])
 }
 
 // --- endpoint ---------------------------------------------------------------

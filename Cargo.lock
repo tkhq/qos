@@ -4759,6 +4759,7 @@ dependencies = [
  "vfaas-abi",
  "vfaas_fee_calculator",
  "vfaas_sanctions_screening",
+ "zeroize",
 ]
 
 [[package]]
