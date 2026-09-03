@@ -25,7 +25,7 @@ use axum::{
 };
 use qos_core::{
 	client::{ClientError, SocketClient},
-	io::SocketAddress,
+	io::{MAX_PAYLOAD_SIZE, SocketAddress},
 	protocol::{
 		ProtocolError, ProtocolPhase, msg::ProtocolMsg,
 		services::boot::VersionedManifestEnvelope,
@@ -35,7 +35,7 @@ use qos_nsm::types::NsmResponse;
 
 use crate::{
 	ENCLAVE_HEALTH, ENCLAVE_INFO, EnclaveInfo, EnclaveVitalStats, Error,
-	HOST_HEALTH, MAX_ENCODED_MSG_LEN, MESSAGE,
+	HOST_HEALTH, MESSAGE,
 };
 
 /// Resource shared across tasks in the `HostServer`.
@@ -93,7 +93,7 @@ impl HostServer {
 			.route(&self.path(ENCLAVE_HEALTH), get(Self::enclave_health))
 			.route(&self.path(MESSAGE), post(Self::message))
 			.route(&self.path(ENCLAVE_INFO), get(Self::enclave_info))
-			.layer(DefaultBodyLimit::disable())
+			.layer(DefaultBodyLimit::max(MAX_PAYLOAD_SIZE))
 			.with_state(state);
 
 		println!("HostServer listening on {}", self.addr);
@@ -235,7 +235,7 @@ impl HostServer {
 		State(state): State<Arc<QosHostState>>,
 		encoded_request: Bytes,
 	) -> impl IntoResponse {
-		if encoded_request.len() > MAX_ENCODED_MSG_LEN {
+		if encoded_request.len() > MAX_PAYLOAD_SIZE {
 			return (
 				StatusCode::BAD_REQUEST,
 				ProtocolMsg::ProtocolErrorResponse(ProtocolError::OversizeMsg)

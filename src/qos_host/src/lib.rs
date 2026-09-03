@@ -25,9 +25,6 @@ use qos_core::protocol::{
 pub mod cli;
 pub mod host;
 
-const MEGABYTE: usize = 1024 * 1024;
-const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
-
 /// Simple error that implements [`IntoResponse`] so it can
 /// be returned from handlers as an http response (and not get silently
 /// dropped).
