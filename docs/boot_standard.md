@@ -20,6 +20,11 @@ answer depends on the source node:
 forward the Quorum Key unless the new manifest passes its checks. Boot Standard
 is required exactly when no node can (or may) act as the source.
 
+The deployer must ensure that each enclave and all associated host services are
+bound to a single approved manifest. This binding must remain unchanged for the
+workload's lifetime. A different approved manifest requires a new enclave and
+new host services.
+
 Changes that do **not** require Boot Standard — Key Forward works, as long as
 at least one provisioned node in the namespace is able to act as the source:
 
