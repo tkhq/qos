@@ -8,4 +8,4 @@ publish = false
 
 [dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process"] }
-topcoat = "0.5"
+topcoat = "0.6.2"

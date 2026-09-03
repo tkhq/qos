@@ -17,7 +17,10 @@ use topcoat::{
 	asset::{Asset, AssetBundle, RouterBuilderAssetExt, asset},
 	context::Cx,
 	router::{Router, layout, page},
-	runtime::{Event, RouterBuilderProcedureExt, procedure, shard},
+	runtime::{
+		Event, RouterBuilderProcedureExt, RouterBuilderShardExt, procedure,
+		shard,
+	},
 	view::{Unescaped, component, view},
 };
 
@@ -65,6 +68,10 @@ async fn main() {
 			// The live slides' Run buttons call this over the wire; without
 			// registering it the POST /_topcoat/procedures/… route 404s.
 			.procedure(run_xtask_on_server)
+			// The output panel is a shard that re-renders after each run; it
+			// has its own POST /_topcoat/shards/… endpoint that 404s unless
+			// registered here too.
+			.shard(xtask_output)
 			.build(),
 	)
 	.await
