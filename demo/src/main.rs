@@ -6,10 +6,10 @@
 //! hand — the deck adds nothing to the trust story, it just projects the
 //! CLI.
 //!
-//! Endpoint config (read per command): `VFAAS_URL` sends commands to a
-//! pivot's HTTP front (e.g. the TVC app URL); otherwise `VFAAS_SOCKET`
-//! (default `/tmp/pivot_vfaas.sock`) drives a local pivot — the stage
-//! fallback is flipping one environment variable.
+//! Endpoint config (read per command): by default the deck drives the live
+//! TVC enclave over HTTPS (`DEFAULT_URL`). `VFAAS_URL` overrides that host;
+//! set `VFAAS_SOCKET` to drive a local pivot over its unix socket instead —
+//! the stage fallback is flipping one environment variable.
 
 use tokio::process::Command;
 use topcoat::{
@@ -388,15 +388,20 @@ fn command_line(id: &str, address: &str) -> String {
 	format!("cargo xtask {args} {}", endpoint_flags().join(" "))
 }
 
+/// The live TVC deployment the deck drives by default. Override the host
+/// with the `VFAAS_URL` env var, or set `VFAAS_SOCKET` to drive a local
+/// pivot instead.
+const DEFAULT_URL: &str =
+	"https://app-921d566e-c1eb-4209-8b3c-e3a85c6a5d4f.apps.tvc-dev.turnkey.engineering";
+
 fn endpoint_flags() -> Vec<String> {
-	match std::env::var("VFAAS_URL") {
-		Ok(url) => vec!["--url".to_string(), url],
-		Err(_) => vec![
-			"--socket".to_string(),
-			std::env::var("VFAAS_SOCKET")
-				.unwrap_or_else(|_| "/tmp/pivot_vfaas.sock".to_string()),
-		],
+	if let Ok(url) = std::env::var("VFAAS_URL") {
+		return vec!["--url".to_string(), url];
 	}
+	if let Ok(socket) = std::env::var("VFAAS_SOCKET") {
+		return vec!["--socket".to_string(), socket];
+	}
+	vec!["--url".to_string(), DEFAULT_URL.to_string()]
 }
 
 fn endpoint_description() -> String {
