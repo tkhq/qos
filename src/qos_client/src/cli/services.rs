@@ -252,12 +252,7 @@ impl PairOrYubi {
 					let pin = if let Some(pin_path) = maybe_pin_path {
 						pin_from_path(pin_path)
 					} else {
-						Zeroizing::new(
-							rpassword::prompt_password(ENTER_PIN_PROMPT)
-								.map_err(Error::PinEntryError)?
-								.as_bytes()
-								.to_vec(),
-						)
+						prompt_pin()?
 					};
 
 					PairOrYubi::Yubi((yubi, pin))
@@ -371,12 +366,7 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	let mut yubikey =
 		yubikey::YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
 
-	let pin = Zeroizing::new(
-		rpassword::prompt_password(ENTER_PIN_PROMPT)
-			.map_err(Error::PinEntryError)?
-			.as_bytes()
-			.to_vec(),
-	);
+	let pin = prompt_pin()?;
 
 	let _sign_public_key_bytes = crate::yubikey::generate_signed_certificate(
 		&mut yubikey,
@@ -419,7 +409,14 @@ pub(crate) fn pin_from_path<P: AsRef<Path>>(path: P) -> Zeroizing<Vec<u8>> {
 		.next()
 		.expect("First line missing from current pin file")
 		.expect("Error reading first line");
-	Zeroizing::new(line.as_bytes().to_vec())
+	Zeroizing::new(line.into_bytes())
+}
+
+#[cfg(feature = "smartcard")]
+fn prompt_pin() -> Result<Zeroizing<Vec<u8>>, Error> {
+	let pin = rpassword::prompt_password(ENTER_PIN_PROMPT)
+		.map_err(Error::PinEntryError)?;
+	Ok(Zeroizing::new(pin.into_bytes()))
 }
 
 /// Provision a yubikey from a pre-generated master seed.
@@ -439,12 +436,7 @@ pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 	let pin = if let Some(pin_path) = maybe_pin_path {
 		pin_from_path(pin_path)
 	} else {
-		Zeroizing::new(
-			rpassword::prompt_password(ENTER_PIN_PROMPT)
-				.map_err(Error::PinEntryError)?
-				.as_bytes()
-				.to_vec(),
-		)
+		prompt_pin()?
 	};
 
 	let pair = P256Pair::from_hex_file(master_seed_path)?;
@@ -642,13 +634,14 @@ pub(crate) fn verify_genesis<P: AsRef<Path>>(
 	);
 
 	let master_seed_path = master_seed_path.as_ref();
-	let master_seed_hex =
+	let master_seed_hex = Zeroizing::new(
 		fs::read_to_string(master_seed_path).unwrap_or_else(|e| {
 			panic!(
 				"verify_genesis: Could not read master seed from {}: {e}",
 				master_seed_path.display()
 			)
-		});
+		}),
+	);
 	let pair = P256Pair::from_hex_file(master_seed_path).unwrap_or_else(|e| {
 		panic!(
 			"verify_genesis: Could not parse master seed from {}: {e:?}",

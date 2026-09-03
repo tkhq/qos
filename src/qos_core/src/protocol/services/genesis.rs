@@ -212,7 +212,7 @@ pub(in crate::protocol) fn boot_genesis(
 		None
 	};
 
-	let hex_master_seed = qos_hex::encode(master_seed);
+	let hex_master_seed = zeroize::Zeroizing::new(qos_hex::encode(master_seed));
 	let genesis_output = GenesisOutput {
 		set: genesis_set.clone(),
 		dr_key: maybe_dr_key,
