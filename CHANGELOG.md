@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.14.2](https://github.com/tkhq/qos/compare/qos_client-v0.14.1...qos_client-v0.14.2) - 2026-09-04
+
+### Other
+- Improve key material handling
+- expose the YubiKey certificate subject and error sources
+
+## `qos_core` - [0.14.2](https://github.com/tkhq/qos/compare/qos_core-v0.14.1...qos_core-v0.14.2) - 2026-09-04
+
+### Other
+- Improve key material handling
+
 ## `qos_client` - [0.14.1](https://github.com/tkhq/qos/compare/qos_client-v0.14.0...qos_client-v0.14.1) - 2026-08-26
 
 ### Added
