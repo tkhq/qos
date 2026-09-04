@@ -3,6 +3,7 @@ ARG EIF_BUILD_IMAGE
 ARG GEN_INITRAMFS_IMAGE
 ARG LINUX_NITRO_IMAGE
 ARG LIBUNWIND_IMAGE
+ARG LIBGCC_IMAGE
 ARG IPROUTE2_IMAGE
 ARG MUSL_IMAGE
 ARG BUILD_IMAGE
@@ -11,6 +12,7 @@ FROM ${EIF_BUILD_IMAGE} AS eif_build
 FROM ${GEN_INITRAMFS_IMAGE} AS gen_initramfs
 FROM ${LINUX_NITRO_IMAGE} AS linux_nitro
 FROM ${LIBUNWIND_IMAGE} AS libunwind
+FROM ${LIBGCC_IMAGE} AS libgcc
 FROM ${IPROUTE2_IMAGE} AS iproute2
 FROM ${MUSL_IMAGE} AS musl
 
@@ -19,10 +21,12 @@ COPY init /init
 COPY egress /egress
 
 FROM ${BUILD_IMAGE} AS build_eif
+USER 0
 WORKDIR /build_cpio
 COPY --from=eif_build . /
 COPY --from=gen_initramfs . /
 COPY --from=libunwind . /
+COPY --from=libgcc . /
 COPY --from=prebuilt /init .
 COPY --from=linux_nitro /nsm.ko .
 COPY --from=iproute2 . /

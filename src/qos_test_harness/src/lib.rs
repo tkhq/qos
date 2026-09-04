@@ -7,7 +7,7 @@ mod docker;
 mod docker_qemu;
 mod runner;
 
-pub use artifact::{BinaryArtifact, Eif, ImageRef, Pivot};
+pub use artifact::{BinaryArtifact, Eif, ImageRef, OciImageArtifact, Pivot};
 pub use boot::{
 	ApprovingUserMaterial, BootClientFixture, BootMaterial, KeySetMaterial,
 	MaterialFile, QosReleaseMaterial,
@@ -22,7 +22,7 @@ pub use docker::{
 };
 pub use docker_qemu::{
 	DockerHostQemuNitroRunner, DockerHostQemuNitroRunningApp,
-	DockerHostQemuNitroSpec, QemuRuntimeSpec,
+	DockerHostQemuNitroSpec, OciStartCondition, OciStartSpec, QemuRuntimeSpec,
 };
 pub use qos_core::protocol::services::boot::manifest::{
 	ManifestBuilder, ManifestBuilderError, VersionedManifest,

@@ -2,10 +2,16 @@
 use qos_nsm::NsmProvider;
 use qos_p256::P256Pair;
 
+use std::{
+	collections::BTreeMap,
+	sync::{Arc, RwLock},
+};
+
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
 };
 use crate::handles::Handles;
+use crate::protocol::oci_status::SharedOciStatus;
 
 /// Enclave phase
 #[derive(
@@ -191,13 +197,30 @@ pub(crate) struct ProtocolState {
 	pub handles: Handles,
 	pending_live_ephemeral_key: Option<P256Pair>,
 	phase: ProtocolPhase,
+	oci_status: SharedOciStatus,
 }
 
 impl ProtocolState {
+	#[allow(dead_code)]
 	pub fn new(
 		attestor: Box<dyn NsmProvider>,
 		handles: Handles,
 		#[allow(unused)] test_only_init_phase_override: Option<ProtocolPhase>,
+	) -> Self {
+		Self::new_with_oci_status(
+			attestor,
+			handles,
+			test_only_init_phase_override,
+			Arc::new(RwLock::new(BTreeMap::new())),
+		)
+	}
+
+	/// Construct protocol state with shared Manifest V3 workload status.
+	pub fn new_with_oci_status(
+		attestor: Box<dyn NsmProvider>,
+		handles: Handles,
+		#[allow(unused)] test_only_init_phase_override: Option<ProtocolPhase>,
+		oci_status: SharedOciStatus,
 	) -> Self {
 		let provisioner = SecretBuilder::new();
 
@@ -216,6 +239,7 @@ impl ProtocolState {
 			pending_live_ephemeral_key: None,
 			phase: init_phase,
 			handles,
+			oci_status,
 		}
 	}
 
@@ -384,6 +408,10 @@ mod handlers {
 	) -> ProtocolRouteResponse {
 		if let ProtocolMsg::StatusRequest = req {
 			Some(Ok(ProtocolMsg::StatusResponse(state.get_phase())))
+		} else if let ProtocolMsg::OciStatusRequest = req {
+			Some(Ok(ProtocolMsg::OciStatusResponse(
+				state.oci_status.read().unwrap().values().cloned().collect(),
+			)))
 		} else {
 			None
 		}
@@ -443,6 +471,14 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::BootStandardOciRequest { payload } = req {
+			let result = boot::boot_oci(state, payload)
+				.map(|nsm_response| ProtocolMsg::BootStandardResponse {
+					nsm_response,
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+			return Some(result);
+		}
 		let (manifest_envelope, pivot) = match req {
 			ProtocolMsg::BootStandardRequest { manifest_envelope, pivot } => {
 				((**manifest_envelope).clone(), pivot)
@@ -509,6 +545,14 @@ mod handlers {
 		req: &ProtocolMsg,
 		state: &mut ProtocolState,
 	) -> ProtocolRouteResponse {
+		if let ProtocolMsg::BootKeyForwardOciRequest { payload } = req {
+			let result = boot::boot_oci(state, payload)
+				.map(|nsm_response| ProtocolMsg::BootKeyForwardResponse {
+					nsm_response,
+				})
+				.map_err(ProtocolMsg::ProtocolErrorResponse);
+			return Some(result);
+		}
 		if let ProtocolMsg::BootKeyForwardRequest { manifest_envelope, pivot } =
 			req
 		{

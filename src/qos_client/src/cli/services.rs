@@ -1,4 +1,5 @@
 use std::{
+	collections::BTreeSet,
 	fs::{self, File},
 	io::{self, BufRead, BufReader, Write},
 	mem,
@@ -11,15 +12,19 @@ use borsh::BorshDeserialize;
 use qos_core::protocol::{
 	QosHash,
 	msg::{JsonBytes, ProtocolMsg, ProtocolMsgEncoding},
+	oci::{
+		ManifestEnvelopeBytes, OciArtifactV3, OciBootPayloadV3,
+		OciLayoutArchive,
+	},
 	services::{
 		boot::{
 			Approval, BridgeConfig, DnsConfig, Manifest as ManifestV1,
 			ManifestBuilder, ManifestBuilderError,
 			ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
-			ManifestEnvelopeV2, ManifestSet, ManifestVersion, MemberPubKey,
-			Namespace, NitroConfig, PatchSet, PivotConfig as PivotConfigV1,
-			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
-			VersionedManifestEnvelope,
+			ManifestEnvelopeV2, ManifestEnvelopeV3, ManifestSet,
+			ManifestVersion, MemberPubKey, Namespace, NitroConfig, PatchSet,
+			PivotConfig as PivotConfigV1, QuorumMember, RestartPolicy,
+			ShareSet, VersionedManifest, VersionedManifestEnvelope,
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
@@ -992,10 +997,10 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 	let patch_set = match (&manifest, patch_set_dir) {
-		(VersionedManifest::V2(_), Some(_)) => {
+		(VersionedManifest::V2(_) | VersionedManifest::V3(_), Some(_)) => {
 			return Err(Error::ManifestV2DoesNotSupportPatchSet);
 		}
-		(VersionedManifest::V2(_), None) => None,
+		(VersionedManifest::V2(_) | VersionedManifest::V3(_), None) => None,
 		(_, Some(patch_set_dir)) => Some(get_patch_set(patch_set_dir)),
 		(_, None) => return Err(Error::ManifestV1RequiresPatchSet),
 	};
@@ -1006,7 +1011,11 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		&get_share_set(share_set_dir),
 		patch_set.as_ref(),
 		&extract_nitro_config(qos_release_dir_path, pcr3_preimage_path),
-		&extract_pivot_hash(pivot_hash_path),
+		&if matches!(manifest, VersionedManifest::V3(_)) {
+			Vec::new()
+		} else {
+			extract_pivot_hash(pivot_hash_path)
+		},
 		&quorum_key,
 	) {
 		eprintln!("Exiting early without approving manifest");
@@ -1074,7 +1083,7 @@ fn approve_manifest_programmatic_verifications(
 
 	// Verify share set composition
 	match manifest {
-		VersionedManifest::V2(_) => {}
+		VersionedManifest::V2(_) | VersionedManifest::V3(_) => {}
 		VersionedManifest::V1(manifest) => {
 			if Some(&manifest.patch_set) != patch_set {
 				eprintln!("Patch Set composition does not match");
@@ -1094,15 +1103,21 @@ fn approve_manifest_programmatic_verifications(
 	}
 
 	// Verify pcrs 0, 1, 2, 3.
-	if manifest.enclave() != nitro_config {
+	if manifest.enclave().as_ref() != nitro_config {
 		eprintln!("Nitro configuration does not match");
 		return false;
 	}
 
 	// Verify the pivot could be built deterministically
-	if manifest.pivot_hash().as_slice() != pivot_hash {
-		eprintln!("Pivot hash does not match");
-		return false;
+	if !matches!(manifest, VersionedManifest::V3(_)) {
+		let Some(manifest_pivot_hash) = manifest.pivot_hash() else {
+			eprintln!("Manifest has no pivot hash");
+			return false;
+		};
+		if manifest_pivot_hash.as_slice() != pivot_hash {
+			eprintln!("Pivot hash does not match");
+			return false;
+		}
 	}
 
 	// Verify the intended Quorum Key is being used
@@ -1156,10 +1171,9 @@ where
 	}
 
 	// Check pivot restart policy
-	{
+	if let Some(restart) = manifest.restart() {
 		let prompt = format!(
-			"Is this the correct pivot restart policy: {:?}? (y/n)",
-			manifest.restart()
+			"Is this the correct pivot restart policy: {restart:?}? (y/n)"
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1167,11 +1181,9 @@ where
 	}
 
 	// Check pivot arguments
-	{
-		let prompt = format!(
-			"Are these the correct pivot args:\n{:?}?\n(y/n)",
-			manifest.args()
-		);
+	if let Some(args) = manifest.args() {
+		let prompt =
+			format!("Are these the correct pivot args:\n{args:?}?\n(y/n)");
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
 		}
@@ -1230,6 +1242,13 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 
 	// Create manifest envelope
 	let manifest_envelope = match manifest {
+		VersionedManifest::V3(manifest) => {
+			VersionedManifestEnvelope::V3(ManifestEnvelopeV3 {
+				manifest,
+				manifest_set_approvals: approvals,
+				share_set_approvals: vec![],
+			})
+		}
 		VersionedManifest::V2(manifest) => {
 			VersionedManifestEnvelope::V2(ManifestEnvelopeV2 {
 				manifest,
@@ -1274,35 +1293,77 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	Ok(())
 }
 
-pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
-	uri: &str,
-	manifest_envelope_path: P,
-	pivot_path: P,
-	attestation_doc_path: P,
-) -> Result<(), Error> {
-	let pivot =
-		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
-	let manifest_envelope =
-		read_manifest_envelope_compat(manifest_envelope_path)?;
-	let encodings = manifest_envelope_protocol_encodings(&manifest_envelope);
+pub(crate) struct BootKeyForwardArgs<P: AsRef<Path>> {
+	pub uri: String,
+	pub manifest_envelope_path: P,
+	pub pivot_path: Option<P>,
+	pub oci_layout_archives: Vec<P>,
+	pub attestation_doc_path: P,
+}
 
-	let req = ProtocolMsg::BootKeyForwardRequest {
-		manifest_envelope: Box::new(manifest_envelope),
-		pivot,
-	};
-	let cose_sign1 =
-		post_request_with_encoding_fallback(uri, &req, encodings, |resp| {
-			match resp {
+fn post_borsh_attestation(
+	uri: &str,
+	request_msg: &ProtocolMsg,
+	extract: impl FnOnce(ProtocolMsg) -> Result<Vec<u8>, ProtocolMsg>,
+) -> Result<Vec<u8>, Error> {
+	let response = request::post_borsh(uri, request_msg)
+		.map_err(Error::UnexpectedProtocolMsgResponse)?;
+	extract(response).map_err(|response| {
+		Error::UnexpectedProtocolMsgResponse(format!("{response:?}"))
+	})
+}
+
+pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
+	args: BootKeyForwardArgs<P>,
+) -> Result<(), Error> {
+	let manifest_envelope =
+		read_manifest_envelope_compat(&args.manifest_envelope_path)?;
+	let cose_sign1 = if let VersionedManifestEnvelope::V3(envelope) =
+		&manifest_envelope
+	{
+		let payload = oci_boot_payload(
+			&args.manifest_envelope_path,
+			envelope,
+			args.oci_layout_archives,
+		)?;
+		post_borsh_attestation(
+			&args.uri,
+			&ProtocolMsg::BootKeyForwardOciRequest { payload },
+			|response| match response {
+				ProtocolMsg::BootKeyForwardResponse {
+					nsm_response: NsmResponse::Attestation { document },
+				} => Ok(document),
+				response => Err(response),
+			},
+		)?
+	} else {
+		let pivot_path = args.pivot_path.ok_or_else(|| {
+			Error::Deserialize("legacy manifest requires --pivot-path".into())
+		})?;
+		let pivot =
+			fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
+		let encodings =
+			manifest_envelope_protocol_encodings(&manifest_envelope);
+		let req = ProtocolMsg::BootKeyForwardRequest {
+			manifest_envelope: Box::new(manifest_envelope),
+			pivot,
+		};
+		post_request_with_encoding_fallback(
+			&args.uri,
+			&req,
+			encodings,
+			|resp| match resp {
 				ProtocolMsg::BootKeyForwardResponse {
 					nsm_response: NsmResponse::Attestation { document },
 				} => Ok(document),
 				r => Err(format!("{r:?}")),
-			}
-		})
-		.map_err(Error::UnexpectedProtocolMsgResponse)?;
+			},
+		)
+		.map_err(Error::UnexpectedProtocolMsgResponse)?
+	};
 
 	write_with_msg(
-		attestation_doc_path.as_ref(),
+		args.attestation_doc_path.as_ref(),
 		&cose_sign1,
 		"COSE Sign1 Attestation Doc",
 	);
@@ -1388,7 +1449,9 @@ fn manifest_envelope_protocol_encodings(
 	manifest_envelope: &VersionedManifestEnvelope,
 ) -> &'static [ProtocolMsgEncoding] {
 	match manifest_envelope {
-		VersionedManifestEnvelope::V2(_) => &[ProtocolMsgEncoding::Json],
+		VersionedManifestEnvelope::V3(_) | VersionedManifestEnvelope::V2(_) => {
+			&[ProtocolMsgEncoding::Json]
+		}
 		VersionedManifestEnvelope::V1(_) | VersionedManifestEnvelope::V0(_) => {
 			&[ProtocolMsgEncoding::Borsh, ProtocolMsgEncoding::Json]
 		}
@@ -1423,10 +1486,55 @@ pub(crate) fn inject_key<P: AsRef<Path>>(
 
 pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
 	pub uri: String,
-	pub pivot_path: P,
+	pub pivot_path: Option<P>,
+	pub oci_layout_archives: Vec<P>,
 	pub manifest_envelope_path: P,
 	pub pcr3_preimage_path: P,
 	pub unsafe_skip_attestation: bool,
+}
+
+fn oci_boot_payload<P: AsRef<Path>>(
+	manifest_envelope_path: &P,
+	envelope: &ManifestEnvelopeV3,
+	oci_layout_archives: Vec<P>,
+) -> Result<OciBootPayloadV3, Error> {
+	let digests: BTreeSet<_> = envelope
+		.manifest
+		.workloads
+		.iter()
+		.map(|workload| workload.image().digest().clone())
+		.collect();
+	if digests.len() != oci_layout_archives.len() {
+		return Err(Error::Deserialize(format!(
+			"Manifest V3 requires {} distinct OCI archives, got {}",
+			digests.len(),
+			oci_layout_archives.len()
+		)));
+	}
+	let artifacts = digests
+		.into_iter()
+		.zip(oci_layout_archives)
+		.map(|(digest, path)| {
+			let bytes = fs::read(path.as_ref()).map_err(|error| {
+				Error::FailedToRead {
+					path: path.as_ref().display().to_string(),
+					error: error.to_string(),
+				}
+			})?;
+			Ok(OciArtifactV3 {
+				digest,
+				oci_layout_archive: OciLayoutArchive::new(bytes)
+					.map_err(|error| Error::Deserialize(error.into()))?,
+			})
+		})
+		.collect::<Result<Vec<_>, Error>>()?;
+	let envelope_bytes = fs::read(manifest_envelope_path.as_ref())
+		.map_err(Error::FailedToReadManifestEnvelopeFile)?;
+	Ok(OciBootPayloadV3 {
+		manifest_envelope: ManifestEnvelopeBytes::new(envelope_bytes)
+			.map_err(|error| Error::Deserialize(error.into()))?,
+		artifacts,
+	})
 }
 
 fn boot_standard_attestation_doc_with_fallback(
@@ -1471,27 +1579,49 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	BootStandardArgs {
 		uri,
 		pivot_path,
+		oci_layout_archives,
 		manifest_envelope_path,
 		pcr3_preimage_path,
 		unsafe_skip_attestation,
 	}: BootStandardArgs<P>,
 ) -> Result<(), Error> {
-	// Read in pivot binary
-	let pivot =
-		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
-
 	// Create manifest envelope
 	let manifest_envelope =
-		read_manifest_envelope_compat(manifest_envelope_path)?;
+		read_manifest_envelope_compat(&manifest_envelope_path)?;
 	let manifest = manifest_envelope.clone().manifest();
 
 	// Broadcast boot standard instruction and extract the attestation doc from
 	// the response.
-	let cose_sign1 = boot_standard_attestation_doc_with_fallback(
-		&uri,
-		manifest_envelope,
-		pivot,
-	)?;
+	let cose_sign1 = if let VersionedManifestEnvelope::V3(envelope) =
+		&manifest_envelope
+	{
+		let payload = oci_boot_payload(
+			&manifest_envelope_path,
+			envelope,
+			oci_layout_archives,
+		)?;
+		post_borsh_attestation(
+			&uri,
+			&ProtocolMsg::BootStandardOciRequest { payload },
+			|response| match response {
+				ProtocolMsg::BootStandardResponse {
+					nsm_response: NsmResponse::Attestation { document },
+				} => Ok(document),
+				response => Err(response),
+			},
+		)?
+	} else {
+		let pivot_path = pivot_path.ok_or_else(|| {
+			Error::Deserialize("legacy manifest requires --pivot-path".into())
+		})?;
+		let pivot =
+			fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
+		boot_standard_attestation_doc_with_fallback(
+			&uri,
+			manifest_envelope,
+			pivot,
+		)?
+	};
 
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation, None);
@@ -2481,6 +2611,9 @@ fn read_manifest_envelope_v1_compat<P: AsRef<Path>>(
 	file: P,
 ) -> Result<ManifestEnvelopeV1, Error> {
 	match read_manifest_envelope_compat(file)? {
+		VersionedManifestEnvelope::V3(_) => {
+			Err(Error::UnsupportedManifestVersion)
+		}
 		VersionedManifestEnvelope::V2(_) => {
 			Err(Error::ManifestV2NotConvertibleToBorsh)
 		}

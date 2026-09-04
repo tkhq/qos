@@ -1,0 +1,5 @@
+FROM postgres:16-alpine
+ENV POSTGRES_HOST_AUTH_METHOD=trust POSTGRES_DB=qos_test
+COPY --chmod=755 smoke.sh /usr/local/bin/qos-postgres-smoke
+ENTRYPOINT ["/usr/local/bin/qos-postgres-smoke"]
+CMD []

@@ -5,10 +5,14 @@
 //! The pivot is an executable the enclave runs to initialize the secure
 //! applications.
 use std::{
+	collections::BTreeMap,
 	fs,
 	net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
 	process::Stdio,
-	sync::{Arc, RwLock},
+	sync::{
+		Arc, RwLock,
+		atomic::{AtomicBool, Ordering},
+	},
 	time::Duration,
 };
 
@@ -23,8 +27,10 @@ use crate::{
 	io::{HostBridge, IOError, SocketAddress, StreamPool},
 	protocol::{
 		ProtocolPhase, ProtocolState,
+		oci_status::{OciWorkloadStatus, SharedOciStatus},
 		processor::ProtocolProcessor,
 		services::boot::{BridgeConfig, RestartPolicy},
+		services::boot::{ManifestV3, VersionedManifest},
 	},
 	server::SocketServer,
 };
@@ -34,6 +40,8 @@ pub const REAPER_RESTART_DELAY: Duration = Duration::from_millis(50);
 /// Delay until the reaper exits after pivot app with a Never restart policy
 /// exits.
 pub const REAPER_EXIT_DELAY: Duration = Duration::from_secs(3);
+const OCI_STATUS_EXIT_DELAY: Duration = Duration::from_secs(10);
+const CORE_MAX_CONNECTIONS: usize = 4;
 
 const REAPER_STATE_CHECK_DELAY: Duration = Duration::from_millis(100);
 const RESOLV_CONF_PATH: &str = "/etc/resolv.conf";
@@ -46,19 +54,27 @@ async fn run_server(
 	nsm: Box<dyn NsmProvider + Send>,
 	core_socket: SocketAddress,
 	test_only_init_phase_override: Option<ProtocolPhase>,
+	oci_status: SharedOciStatus,
 ) {
-	let protocol_state =
-		ProtocolState::new(nsm, handles.clone(), test_only_init_phase_override)
-			.shared();
+	let protocol_state = ProtocolState::new_with_oci_status(
+		nsm,
+		handles.clone(),
+		test_only_init_phase_override,
+		oci_status,
+	)
+	.shared();
 	let core_pool = StreamPool::single(core_socket)
 		.expect("unable to create single socket core pool");
 	// send a shared version of state and the async pool to each processor
 	let protocol_processor = ProtocolProcessor::new(protocol_state);
 
 	// listen on the protocol server
-	let _protocol_server =
-		SocketServer::listen_all(core_pool, protocol_processor, 1)
-			.expect("unable to get listen task list for protocol server");
+	let _protocol_server = SocketServer::listen_all(
+		core_pool,
+		protocol_processor,
+		CORE_MAX_CONNECTIONS,
+	)
+	.expect("unable to get listen task list for protocol server");
 
 	println!("Reaper::server running");
 	while *server_state.read().unwrap() != InterState::Quitting {
@@ -66,6 +82,71 @@ async fn run_server(
 	}
 
 	println!("Reaper::server shutdown");
+}
+
+async fn run_oci_workload_group(
+	handles: &Handles,
+	manifest: ManifestV3,
+	status: &SharedOciStatus,
+) {
+	status.write().unwrap().extend(manifest.workloads.iter().map(|workload| {
+		let name = workload.name().clone();
+		(
+			name.clone(),
+			OciWorkloadStatus::pending(name, workload.image().digest().clone()),
+		)
+	}));
+	println!("Reaper::execute about to start OCI workloads");
+	let handles = handles.clone();
+	let status = Arc::clone(status);
+	let shutdown = Arc::new(AtomicBool::new(false));
+	let worker_shutdown = Arc::clone(&shutdown);
+	let mut worker = tokio::task::spawn_blocking(move || {
+		#[cfg(target_os = "linux")]
+		{
+			crate::oci_manager::run_oci_workloads(
+				&handles,
+				&manifest,
+				&status,
+				&worker_shutdown,
+			)
+			.map_err(|error| error.to_string())
+		}
+		#[cfg(not(target_os = "linux"))]
+		{
+			let _ = (handles, manifest, status, worker_shutdown);
+			Err("OCI workloads require Linux".to_owned())
+		}
+	});
+	let result = tokio::select! {
+		result = &mut worker => result,
+		() = oci_shutdown_signal() => {
+			shutdown.store(true, Ordering::Release);
+			worker.await
+		}
+	};
+	match result {
+		Ok(Ok(())) => println!("all OCI workloads stopped"),
+		Ok(Err(error)) => eprintln!("OCI workload group failed: {error}"),
+		Err(error) => eprintln!("OCI workload monitor join failed: {error}"),
+	}
+}
+
+#[cfg(unix)]
+async fn oci_shutdown_signal() {
+	let mut terminate = tokio::signal::unix::signal(
+		tokio::signal::unix::SignalKind::terminate(),
+	)
+	.expect("failed to install SIGTERM handler");
+	tokio::select! {
+		_ = tokio::signal::ctrl_c() => {}
+		_ = terminate.recv() => {}
+	}
+}
+
+#[cfg(not(unix))]
+async fn oci_shutdown_signal() {
+	let _ = tokio::signal::ctrl_c().await;
 }
 
 // runs configured bridges based on `BridgeConfig` so that apps can use any TCP based protocol without worrying about VSOCK
@@ -193,6 +274,8 @@ impl Reaper {
 		// we need to establish
 		let inter_state = Arc::new(RwLock::new(InterState::Booting));
 		let server_state = inter_state.clone();
+		let oci_status: SharedOciStatus =
+			Arc::new(RwLock::new(BTreeMap::new()));
 
 		let server_worker = tokio::spawn(run_server(
 			server_state,
@@ -200,6 +283,7 @@ impl Reaper {
 			nsm,
 			core_socket.clone(),
 			test_only_init_phase_override,
+			Arc::clone(&oci_status),
 		));
 
 		loop {
@@ -210,10 +294,13 @@ impl Reaper {
 				std::process::exit(1);
 			}
 
-			if handles.quorum_key_exists()
-				&& handles.pivot_exists()
+			let ready = handles.quorum_key_exists()
 				&& handles.manifest_envelope_exists()
-			{
+				&& handles.get_manifest_envelope().is_ok_and(|envelope| {
+					matches!(envelope.manifest(), VersionedManifest::V3(_))
+						|| handles.pivot_exists()
+				});
+			if ready {
 				// The state required to pivot exists, so we can break this
 				// holding pattern and start the pivot.
 				break;
@@ -223,14 +310,31 @@ impl Reaper {
 			tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
 		}
 
-		println!("Reaper::execute about to spawn pivot");
-
 		let manifest = handles
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest();
-		let args = manifest.args().to_vec();
-		let restart = manifest.restart();
+		if let VersionedManifest::V3(oci_manifest) = manifest {
+			run_oci_workload_group(handles, oci_manifest, &oci_status).await;
+			tokio::time::sleep(OCI_STATUS_EXIT_DELAY).await;
+			*inter_state.write().unwrap() = InterState::Quitting;
+			if let Err(error) = server_worker.await {
+				eprintln!(
+					"Reaper::execute server_worker join error: {error:?}"
+				);
+			}
+			println!("Reaper exiting ... ");
+			return;
+		}
+
+		println!("Reaper::execute about to spawn pivot");
+		let (Some(args), Some(restart)) = (manifest.args(), manifest.restart())
+		else {
+			eprintln!("Manifest V3 requires the OCI runtime");
+			server_worker.abort();
+			return;
+		};
+		let args = args.to_vec();
 		let host_config = manifest.bridge_config().to_vec();
 		let dns_config = manifest.dns_config().cloned();
 

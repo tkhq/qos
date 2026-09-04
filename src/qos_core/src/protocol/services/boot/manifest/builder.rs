@@ -40,6 +40,9 @@ pub enum ManifestBuilderError {
 	/// A v2 manifest cannot contain a patch approval set.
 	#[error("manifest v2 does not support a patch set")]
 	V2DoesNotSupportPatchSet,
+	/// OCI manifests use their dedicated typed constructor.
+	#[error("the pivot manifest builder does not support manifest v3")]
+	V3NotSupported,
 }
 
 /// Builds a versioned manifest using either the v1 or v2 schema.
@@ -268,6 +271,7 @@ impl ManifestBuilder {
 					dns: self.dns,
 				}))
 			}
+			ManifestVersion::V3 => Err(ManifestBuilderError::V3NotSupported),
 		}
 	}
 }
