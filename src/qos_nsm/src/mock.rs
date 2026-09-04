@@ -92,6 +92,7 @@ impl Default for MockNsmState {
 		for index in [
 			nitro::SETUP_MANIFEST_COMMITMENT_PCR_INDEX,
 			nitro::LIVE_MANIFEST_COMMITMENT_PCR_INDEX,
+			nitro::MANIFEST_ONLY_COMMITMENT_PCR_INDEX,
 		] {
 			pcrs.insert(index, nitro::MANIFEST_COMMITMENT_INITIAL_PCR.to_vec());
 		}

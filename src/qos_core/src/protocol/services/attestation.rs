@@ -71,6 +71,12 @@ pub(in crate::protocol::services) fn lock_manifest_commitment_pcr_bank(
 		manifest_hash,
 		live_ephemeral_public_key,
 	)?;
+	let expected_manifest_only_pcr = extend_manifest_only_commitment_pcr(
+		attestor,
+		max_pcrs,
+		&locked_pcrs,
+		manifest_hash,
+	)?;
 
 	match attestor.nsm_process_request(NsmRequest::LockPCRs { range: max_pcrs })
 	{
@@ -87,15 +93,20 @@ pub(in crate::protocol::services) fn lock_manifest_commitment_pcr_bank(
 	}
 	require_all_pcrs_locked(max_pcrs, &post_lock_locked_pcrs)?;
 
-	verify_locked_manifest_commitment_pcr(
+	verify_locked_commitment_pcr(
 		attestor,
-		nitro::ManifestCommitmentKind::Setup,
+		nitro::ManifestCommitmentKind::Setup.pcr_index(),
 		&expected_setup_pcr,
 	)?;
-	verify_locked_manifest_commitment_pcr(
+	verify_locked_commitment_pcr(
 		attestor,
-		nitro::ManifestCommitmentKind::Live,
+		nitro::ManifestCommitmentKind::Live.pcr_index(),
 		&expected_live_pcr,
+	)?;
+	verify_locked_commitment_pcr(
+		attestor,
+		nitro::MANIFEST_ONLY_COMMITMENT_PCR_INDEX,
+		&expected_manifest_only_pcr,
 	)?;
 
 	Ok(())
@@ -109,7 +120,45 @@ fn extend_manifest_commitment_pcr(
 	manifest_hash: &[u8],
 	ephemeral_public_key: &[u8],
 ) -> Result<[u8; nitro::PCR_SHA384_LEN], ProtocolError> {
-	let pcr_index = kind.pcr_index();
+	let commitment = nitro::manifest_pcr_commitment(
+		kind,
+		manifest_hash,
+		ephemeral_public_key,
+	);
+
+	extend_commitment_pcr(
+		attestor,
+		kind.pcr_index(),
+		max_pcrs,
+		locked_pcrs,
+		&commitment,
+	)
+}
+
+fn extend_manifest_only_commitment_pcr(
+	attestor: &dyn NsmProvider,
+	max_pcrs: u16,
+	locked_pcrs: &BTreeSet<u16>,
+	manifest_hash: &[u8],
+) -> Result<[u8; nitro::PCR_SHA384_LEN], ProtocolError> {
+	let commitment = nitro::manifest_only_pcr_commitment(manifest_hash);
+
+	extend_commitment_pcr(
+		attestor,
+		nitro::MANIFEST_ONLY_COMMITMENT_PCR_INDEX,
+		max_pcrs,
+		locked_pcrs,
+		&commitment,
+	)
+}
+
+fn extend_commitment_pcr(
+	attestor: &dyn NsmProvider,
+	pcr_index: u16,
+	max_pcrs: u16,
+	locked_pcrs: &BTreeSet<u16>,
+	commitment: &[u8; nitro::PCR_SHA384_LEN],
+) -> Result<[u8; nitro::PCR_SHA384_LEN], ProtocolError> {
 	if pcr_index >= max_pcrs {
 		return Err(attest_error(format!(
 			"PCR{pcr_index} is not supported by NSM max_pcrs {max_pcrs}"
@@ -133,12 +182,7 @@ fn extend_manifest_commitment_pcr(
 		)));
 	}
 
-	let commitment = nitro::manifest_pcr_commitment(
-		kind,
-		manifest_hash,
-		ephemeral_public_key,
-	);
-	let expected_pcr = nitro::pcr_extend_sha384(&initial_pcr, &commitment)?;
+	let expected_pcr = nitro::pcr_extend_sha384(&initial_pcr, commitment)?;
 	match attestor.nsm_process_request(NsmRequest::ExtendPCR {
 		index: pcr_index,
 		data: commitment.to_vec(),
@@ -158,12 +202,11 @@ fn extend_manifest_commitment_pcr(
 	Ok(expected_pcr)
 }
 
-fn verify_locked_manifest_commitment_pcr(
+fn verify_locked_commitment_pcr(
 	attestor: &dyn NsmProvider,
-	kind: nitro::ManifestCommitmentKind,
+	pcr_index: u16,
 	expected_pcr: &[u8],
 ) -> Result<(), ProtocolError> {
-	let pcr_index = kind.pcr_index();
 	let (post_lock, post_lock_pcr) = describe_pcr(attestor, pcr_index)?;
 	if !post_lock {
 		return Err(attest_error(format!(
@@ -231,12 +274,24 @@ mod tests {
 		mock::MockNsm,
 		nitro::{
 			self, LIVE_MANIFEST_COMMITMENT_PCR_INDEX,
+			MANIFEST_ONLY_COMMITMENT_PCR_INDEX,
 			SETUP_MANIFEST_COMMITMENT_PCR_INDEX,
 		},
 		types::{NsmRequest, NsmResponse},
 	};
 
 	use super::lock_manifest_commitment_pcr_bank;
+
+	fn locked_pcr(attestor: &MockNsm, index: u16) -> Vec<u8> {
+		let NsmResponse::DescribePCR { lock, data } =
+			attestor.nsm_process_request(NsmRequest::DescribePCR { index })
+		else {
+			panic!("unexpected DescribePCR response");
+		};
+		assert!(lock);
+
+		data
+	}
 
 	#[test]
 	fn lock_manifest_commitment_pcr_bank_locks_all_mock_pcrs() {
@@ -260,31 +315,17 @@ mod tests {
 		};
 		assert!((0..max_pcrs).all(|idx| locked_pcrs.contains(&idx)));
 
-		let NsmResponse::DescribePCR { lock, data } = attestor
-			.nsm_process_request(NsmRequest::DescribePCR {
-				index: SETUP_MANIFEST_COMMITMENT_PCR_INDEX,
-			})
-		else {
-			panic!("unexpected DescribePCR response");
-		};
-		assert!(lock);
-
 		let expected = nitro::expected_manifest_commitment_pcr(
 			nitro::ManifestCommitmentKind::Setup,
 			&manifest_hash,
 			&setup_ephemeral_public_key,
 		)
 		.unwrap();
-		assert_eq!(data.as_slice(), expected.as_slice());
-
-		let NsmResponse::DescribePCR { lock, data } = attestor
-			.nsm_process_request(NsmRequest::DescribePCR {
-				index: LIVE_MANIFEST_COMMITMENT_PCR_INDEX,
-			})
-		else {
-			panic!("unexpected DescribePCR response");
-		};
-		assert!(lock);
+		assert_eq!(
+			locked_pcr(&attestor, SETUP_MANIFEST_COMMITMENT_PCR_INDEX)
+				.as_slice(),
+			expected.as_slice()
+		);
 
 		let expected = nitro::expected_manifest_commitment_pcr(
 			nitro::ManifestCommitmentKind::Live,
@@ -292,6 +333,77 @@ mod tests {
 			&live_ephemeral_public_key,
 		)
 		.unwrap();
-		assert_eq!(data.as_slice(), expected.as_slice());
+		assert_eq!(
+			locked_pcr(&attestor, LIVE_MANIFEST_COMMITMENT_PCR_INDEX)
+				.as_slice(),
+			expected.as_slice()
+		);
+
+		let expected =
+			nitro::expected_manifest_only_commitment_pcr(&manifest_hash)
+				.unwrap();
+		assert_eq!(
+			locked_pcr(&attestor, MANIFEST_ONLY_COMMITMENT_PCR_INDEX)
+				.as_slice(),
+			expected.as_slice()
+		);
+	}
+
+	#[test]
+	fn lock_manifest_commitment_pcr_bank_pcr18_survives_a_key_rotation() {
+		// The property PCR18 exists for: two boots of the same manifest with
+		// different ephemeral keys agree on PCR18 while PCR16 and PCR17 differ.
+		let manifest_hash = [1u8; 32];
+
+		let first = MockNsm::new();
+		lock_manifest_commitment_pcr_bank(
+			&first,
+			&manifest_hash,
+			&[2u8; 65],
+			&[3u8; 65],
+		)
+		.unwrap();
+
+		let second = MockNsm::new();
+		lock_manifest_commitment_pcr_bank(
+			&second,
+			&manifest_hash,
+			&[4u8; 65],
+			&[5u8; 65],
+		)
+		.unwrap();
+
+		assert_eq!(
+			locked_pcr(&first, MANIFEST_ONLY_COMMITMENT_PCR_INDEX),
+			locked_pcr(&second, MANIFEST_ONLY_COMMITMENT_PCR_INDEX)
+		);
+		assert_ne!(
+			locked_pcr(&first, SETUP_MANIFEST_COMMITMENT_PCR_INDEX),
+			locked_pcr(&second, SETUP_MANIFEST_COMMITMENT_PCR_INDEX)
+		);
+		assert_ne!(
+			locked_pcr(&first, LIVE_MANIFEST_COMMITMENT_PCR_INDEX),
+			locked_pcr(&second, LIVE_MANIFEST_COMMITMENT_PCR_INDEX)
+		);
+	}
+
+	#[test]
+	fn lock_manifest_commitment_pcr_bank_pcr18_tracks_the_manifest_hash() {
+		let first = MockNsm::new();
+		lock_manifest_commitment_pcr_bank(
+			&first, &[1u8; 32], &[2u8; 65], &[3u8; 65],
+		)
+		.unwrap();
+
+		let second = MockNsm::new();
+		lock_manifest_commitment_pcr_bank(
+			&second, &[9u8; 32], &[2u8; 65], &[3u8; 65],
+		)
+		.unwrap();
+
+		assert_ne!(
+			locked_pcr(&first, MANIFEST_ONLY_COMMITMENT_PCR_INDEX),
+			locked_pcr(&second, MANIFEST_ONLY_COMMITMENT_PCR_INDEX)
+		);
 	}
 }
