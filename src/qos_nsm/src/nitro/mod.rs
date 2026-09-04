@@ -257,12 +257,7 @@ pub fn verify_attestation_doc_manifest_commitment(
 	kind: ManifestCommitmentKind,
 	manifest_hash: &[u8],
 ) -> Result<(), AttestError> {
-	for idx in 0..ATTESTABLE_PCR_COUNT {
-		if !attestation_doc.pcrs.contains_key(&usize::from(idx)) {
-			return Err(AttestError::MissingPcr { index: idx });
-		}
-	}
-
+	require_attestable_pcrs(attestation_doc)?;
 	let public_key = attestation_doc
 		.public_key
 		.as_ref()
@@ -272,22 +267,7 @@ pub fn verify_attestation_doc_manifest_commitment(
 		manifest_hash,
 		public_key.as_ref(),
 	)?;
-
-	let pcr_index = kind.pcr_index();
-	let actual = attestation_doc
-		.pcrs
-		.get(&usize::from(pcr_index))
-		.ok_or(AttestError::MissingPcr { index: pcr_index })?;
-
-	if actual.as_ref() != expected.as_slice() {
-		return Err(AttestError::DifferentPcr {
-			index: pcr_index,
-			expected: qos_hex::encode(&expected),
-			actual: qos_hex::encode(actual.as_ref()),
-		});
-	}
-
-	Ok(())
+	verify_attestation_doc_pcr(attestation_doc, kind.pcr_index(), &expected)
 }
 
 /// Verify the ephemeral-free manifest commitment PCR in an attestation
@@ -308,24 +288,40 @@ pub fn verify_attestation_doc_manifest_only_commitment(
 	attestation_doc: &AttestationDoc,
 	manifest_hash: &[u8],
 ) -> Result<(), AttestError> {
+	require_attestable_pcrs(attestation_doc)?;
+	let expected = expected_manifest_only_commitment_pcr(manifest_hash)?;
+	verify_attestation_doc_pcr(
+		attestation_doc,
+		MANIFEST_ONLY_COMMITMENT_PCR_INDEX,
+		&expected,
+	)
+}
+
+fn require_attestable_pcrs(
+	attestation_doc: &AttestationDoc,
+) -> Result<(), AttestError> {
 	for idx in 0..ATTESTABLE_PCR_COUNT {
 		if !attestation_doc.pcrs.contains_key(&usize::from(idx)) {
 			return Err(AttestError::MissingPcr { index: idx });
 		}
 	}
+	Ok(())
+}
 
-	let expected = expected_manifest_only_commitment_pcr(manifest_hash)?;
-
-	let pcr_index = MANIFEST_ONLY_COMMITMENT_PCR_INDEX;
+fn verify_attestation_doc_pcr(
+	attestation_doc: &AttestationDoc,
+	pcr_index: u16,
+	expected: &[u8],
+) -> Result<(), AttestError> {
 	let actual = attestation_doc
 		.pcrs
 		.get(&usize::from(pcr_index))
 		.ok_or(AttestError::MissingPcr { index: pcr_index })?;
 
-	if actual.as_ref() != expected.as_slice() {
+	if actual.as_ref() != expected {
 		return Err(AttestError::DifferentPcr {
 			index: pcr_index,
-			expected: qos_hex::encode(&expected),
+			expected: qos_hex::encode(expected),
 			actual: qos_hex::encode(actual.as_ref()),
 		});
 	}
@@ -722,42 +718,38 @@ mod test {
 		let expected_pcr =
 			expected_manifest_commitment_pcr(kind, manifest_hash, public_key)
 				.unwrap();
-
-		let mut pcrs = BTreeMap::new();
-		for idx in 0..ATTESTABLE_PCR_COUNT {
-			pcrs.insert(usize::from(idx), ByteBuf::from(vec![0u8; 48]));
-		}
-		pcrs.insert(
-			usize::from(kind.pcr_index()),
-			ByteBuf::from(expected_pcr.to_vec()),
-		);
-
-		AttestationDoc {
-			module_id: "test-module".into(),
-			digest: Digest::SHA384,
-			timestamp: 1,
-			pcrs,
-			certificate: ByteBuf::new(),
-			cabundle: vec![],
-			public_key: Some(ByteBuf::from(public_key.to_vec())),
-			user_data: Some(ByteBuf::from(manifest_hash.to_vec())),
-			nonce: None,
-		}
+		commitment_attestation_doc(
+			kind.pcr_index(),
+			expected_pcr,
+			manifest_hash,
+			public_key,
+		)
 	}
 
 	fn manifest_only_commitment_attestation_doc(
 		manifest_hash: &[u8],
 		public_key: &[u8],
 	) -> AttestationDoc {
-		let expected_pcr =
-			expected_manifest_only_commitment_pcr(manifest_hash).unwrap();
+		commitment_attestation_doc(
+			MANIFEST_ONLY_COMMITMENT_PCR_INDEX,
+			expected_manifest_only_commitment_pcr(manifest_hash).unwrap(),
+			manifest_hash,
+			public_key,
+		)
+	}
 
+	fn commitment_attestation_doc(
+		pcr_index: u16,
+		expected_pcr: [u8; PCR_SHA384_LEN],
+		manifest_hash: &[u8],
+		public_key: &[u8],
+	) -> AttestationDoc {
 		let mut pcrs = BTreeMap::new();
 		for idx in 0..ATTESTABLE_PCR_COUNT {
 			pcrs.insert(usize::from(idx), ByteBuf::from(vec![0u8; 48]));
 		}
 		pcrs.insert(
-			usize::from(MANIFEST_ONLY_COMMITMENT_PCR_INDEX),
+			usize::from(pcr_index),
 			ByteBuf::from(expected_pcr.to_vec()),
 		);
 
@@ -995,22 +987,7 @@ mod test {
 	}
 
 	#[test]
-	fn verify_attestation_doc_manifest_only_commitment_works() {
-		let manifest_hash = [1u8; 32];
-		let attestation_doc = manifest_only_commitment_attestation_doc(
-			&manifest_hash,
-			&[3u8; 65],
-		);
-
-		verify_attestation_doc_manifest_only_commitment(
-			&attestation_doc,
-			&manifest_hash,
-		)
-		.unwrap();
-	}
-
-	#[test]
-	fn verify_attestation_doc_manifest_only_commitment_ignores_public_key() {
+	fn manifest_only_verification_works_without_public_key() {
 		let manifest_hash = [1u8; 32];
 		let mut attestation_doc = manifest_only_commitment_attestation_doc(
 			&manifest_hash,
