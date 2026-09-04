@@ -43,6 +43,13 @@ provisioning document, or **live** for a post-provision app document.
    from `manifest_hash` and `public_key` as defined below. Verify it equals PCR16
    for setup documents or PCR17 for live documents.
 
+9. **Verify the ephemeral-free manifest commitment PCR.** Reconstruct the
+   expected commitment from `manifest_hash` alone as defined below and verify it
+   equals PCR18. Unlike PCR16 and PCR17 this value is the same for every
+   instance and every boot of one deployment, so a verifier that can only
+   compare a PCR against a value fixed ahead of time can pin it. It identifies
+   the manifest, not the boot; it is not a substitute for step 8.
+
 ## Constants
 
 | Item | Value |
@@ -54,6 +61,7 @@ provisioning document, or **live** for a post-provision app document.
 | Attestable PCR indexes | 0 through 31 |
 | Setup commitment | PCR16, domain `qos-setup-manifest-pcr-commitment-v1` |
 | Live commitment | PCR17, domain `qos-live-manifest-pcr-commitment-v1` |
+| Manifest-only commitment | PCR18, domain `qos-manifest-pcr-commitment-v1` |
 | Commitment PCR initial value | 48 zero bytes |
 | Commitment hex | Lowercase, no `0x` prefix |
 | Ephemeral public key | `encrypt_public || sign_public`, 65 + 65 bytes |
@@ -106,6 +114,32 @@ its encoding and output vectors are in
 and
 [`manifest_commitment_pcr_test_vectors`](https://github.com/tkhq/qos/blob/1cf9b652a4616fc081948328e2b9ad57675c1395/src/qos_nsm/src/nitro/mod.rs#L716-L764).
 
+### Ephemeral-free manifest commitment PCR
+
+PCR18 commits to the manifest hash alone. Encode this UTF-8 canonical JSON with
+exactly the shown fields and no whitespace:
+
+```json
+{"domain":"qos-manifest-pcr-commitment-v1","manifestHash":"<lowercase hex>"}
+```
+
+Then compute, exactly as for PCR16 and PCR17:
+
+```text
+commitment  = SHA384(preimage)
+expectedPcr = SHA384((0x00 * 48) || commitment)
+```
+
+Compare `expectedPcr` with PCR18. The reference implementation is
+[`expected_manifest_only_commitment_pcr`](../src/qos_nsm/src/nitro/mod.rs); its
+encoding and output vectors are in
+`manifest_only_pcr_commitment_preimage_uses_qos_json` and
+`manifest_only_commitment_pcr_test_vectors` in the same file.
+
+The preimage omits `ephemeralPublicKey`; it does not carry it empty. The domain
+also differs from the PCR16 and PCR17 domains, so no manifest hash can produce
+the same commitment in two registers.
+
 ## Pitfalls
 
 - Pin Root-G1 out of band; never trust `cabundle[0]` as a trust anchor.
@@ -118,6 +152,11 @@ and
 - Preserve the two commitment hash layers:
   `SHA384(zeros48 || SHA384(preimage))`.
 - Do not mix setup PCR16/domain with live PCR17/domain.
+- Do not treat PCR18 as evidence about the ephemeral key. It commits to the
+  manifest only, so it says nothing about which key this boot generated; PCR16
+  and PCR17 are what bind a key to the manifest.
+- Do not add an empty `ephemeralPublicKey` field to the PCR18 preimage. The
+  field is absent, and an empty one hashes to a different value.
 - Treat COSE signatures as raw `r || s`; many APIs expect DER instead.
 
 ## Reference
@@ -132,6 +171,8 @@ and
   [`verify_attestation_doc_against_user_input`](https://github.com/tkhq/qos/blob/1cf9b652a4616fc081948328e2b9ad57675c1395/src/qos_nsm/src/nitro/mod.rs#L323-L404)
   and
   [`verify_attestation_doc_manifest_commitment`](https://github.com/tkhq/qos/blob/1cf9b652a4616fc081948328e2b9ad57675c1395/src/qos_nsm/src/nitro/mod.rs#L193-L229)
+- Ephemeral-free manifest commitment:
+  [`verify_attestation_doc_manifest_only_commitment`](../src/qos_nsm/src/nitro/mod.rs)
 - Manifest hashing:
   [`VersionedManifest::manifest_hash`](https://github.com/tkhq/qos/blob/1cf9b652a4616fc081948328e2b9ad57675c1395/src/qos_core/src/protocol/services/boot/manifest.rs#L121-L127)
   and [QOS canonical JSON](https://github.com/tkhq/qos/blob/1cf9b652a4616fc081948328e2b9ad57675c1395/src/qos_json/SPEC.md)
