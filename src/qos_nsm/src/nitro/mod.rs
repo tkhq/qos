@@ -49,6 +49,21 @@ pub const SETUP_MANIFEST_COMMITMENT_PCR_INDEX: u16 = 16;
 /// PCR index QOS uses for the live manifest/key commitment.
 pub const LIVE_MANIFEST_COMMITMENT_PCR_INDEX: u16 = 17;
 
+/// PCR index QOS uses for the ephemeral-free manifest commitment.
+///
+/// PCR16 and PCR17 both fold the boot's ephemeral public key into their
+/// commitment, so their values differ for every instance and every boot. That
+/// is correct for what they prove — this boot's keys are the ones the manifest
+/// authorized — but it leaves them unusable to a verifier that can only compare
+/// a PCR against a value fixed ahead of time.
+///
+/// This register commits to the manifest hash alone, so it is identical across
+/// every instance and every boot of one deployment and changes only when the
+/// manifest does. QOS extends it before the pivot runs, exactly like PCR16 and
+/// PCR17, so it carries the same weight as those rather than the weight of
+/// something the payload asserted about itself.
+pub const MANIFEST_ONLY_COMMITMENT_PCR_INDEX: u16 = 18;
+
 /// Current Nitro attestation documents allow PCR indexes 0 through 31.
 pub const ATTESTABLE_PCR_COUNT: u16 = 32;
 
@@ -63,6 +78,8 @@ const SETUP_MANIFEST_PCR_COMMITMENT_DOMAIN: &str =
 	"qos-setup-manifest-pcr-commitment-v1";
 const LIVE_MANIFEST_PCR_COMMITMENT_DOMAIN: &str =
 	"qos-live-manifest-pcr-commitment-v1";
+const MANIFEST_ONLY_PCR_COMMITMENT_DOMAIN: &str =
+	"qos-manifest-pcr-commitment-v1";
 
 /// Which manifest/key PCR commitment a verifier expects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,6 +163,38 @@ pub fn manifest_pcr_commitment(
 	hasher.finalize().into()
 }
 
+/// Preimage for the ephemeral-free manifest commitment.
+///
+/// Deliberately a separate type rather than [`ManifestPcrCommitmentPreimage`]
+/// with an empty key: an absent field and a zero-length one serialize
+/// differently, and a reader should not have to know which was meant.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ManifestOnlyPcrCommitmentPreimage<'a> {
+	domain: &'static str,
+	#[serde(with = "qos_hex::serde")]
+	manifest_hash: &'a [u8],
+}
+
+fn manifest_only_pcr_commitment_preimage(manifest_hash: &[u8]) -> Vec<u8> {
+	qos_json::to_vec(&ManifestOnlyPcrCommitmentPreimage {
+		domain: MANIFEST_ONLY_PCR_COMMITMENT_DOMAIN,
+		manifest_hash,
+	})
+	.expect("manifest PCR commitment preimage only contains strings")
+}
+
+/// Compute the domain-separated, ephemeral-free manifest PCR commitment input.
+#[must_use]
+pub fn manifest_only_pcr_commitment(
+	manifest_hash: &[u8],
+) -> [u8; PCR_SHA384_LEN] {
+	let preimage = manifest_only_pcr_commitment_preimage(manifest_hash);
+	let mut hasher = Sha384::new();
+	hasher.update(preimage);
+	hasher.finalize().into()
+}
+
 /// Compute the SHA384 PCR extension value.
 ///
 /// Nitro PCR3/PCR4 documentation models PCR extension as hashing the
@@ -185,6 +234,19 @@ pub fn expected_manifest_commitment_pcr(
 	pcr_extend_sha384(&MANIFEST_COMMITMENT_INITIAL_PCR, &commitment)
 }
 
+/// Compute the expected ephemeral-free manifest commitment PCR value.
+///
+/// # Errors
+///
+/// Returns [`AttestError::InvalidPcr`] if the pinned initial PCR value is
+/// malformed.
+pub fn expected_manifest_only_commitment_pcr(
+	manifest_hash: &[u8],
+) -> Result<[u8; PCR_SHA384_LEN], AttestError> {
+	let commitment = manifest_only_pcr_commitment(manifest_hash);
+	pcr_extend_sha384(&MANIFEST_COMMITMENT_INITIAL_PCR, &commitment)
+}
+
 /// Verify QOS PCR state in an attestation document.
 ///
 /// # Errors
@@ -212,6 +274,49 @@ pub fn verify_attestation_doc_manifest_commitment(
 	)?;
 
 	let pcr_index = kind.pcr_index();
+	let actual = attestation_doc
+		.pcrs
+		.get(&usize::from(pcr_index))
+		.ok_or(AttestError::MissingPcr { index: pcr_index })?;
+
+	if actual.as_ref() != expected.as_slice() {
+		return Err(AttestError::DifferentPcr {
+			index: pcr_index,
+			expected: qos_hex::encode(&expected),
+			actual: qos_hex::encode(actual.as_ref()),
+		});
+	}
+
+	Ok(())
+}
+
+/// Verify the ephemeral-free manifest commitment PCR in an attestation
+/// document.
+///
+/// Takes no ephemeral public key, which is the point: the expected value is a
+/// function of the manifest hash alone, so a verifier can fix it ahead of time.
+///
+/// Deliberately not called by [`verify_attestation_doc_against_manifest`]. A
+/// document produced before this register existed carries PCR18 at its initial
+/// value, so requiring it there would reject documents the existing path
+/// accepts today.
+///
+/// # Errors
+///
+/// Returns [`AttestError`] if validation fails.
+pub fn verify_attestation_doc_manifest_only_commitment(
+	attestation_doc: &AttestationDoc,
+	manifest_hash: &[u8],
+) -> Result<(), AttestError> {
+	for idx in 0..ATTESTABLE_PCR_COUNT {
+		if !attestation_doc.pcrs.contains_key(&usize::from(idx)) {
+			return Err(AttestError::MissingPcr { index: idx });
+		}
+	}
+
+	let expected = expected_manifest_only_commitment_pcr(manifest_hash)?;
+
+	let pcr_index = MANIFEST_ONLY_COMMITMENT_PCR_INDEX;
 	let actual = attestation_doc
 		.pcrs
 		.get(&usize::from(pcr_index))
@@ -640,6 +745,35 @@ mod test {
 		}
 	}
 
+	fn manifest_only_commitment_attestation_doc(
+		manifest_hash: &[u8],
+		public_key: &[u8],
+	) -> AttestationDoc {
+		let expected_pcr =
+			expected_manifest_only_commitment_pcr(manifest_hash).unwrap();
+
+		let mut pcrs = BTreeMap::new();
+		for idx in 0..ATTESTABLE_PCR_COUNT {
+			pcrs.insert(usize::from(idx), ByteBuf::from(vec![0u8; 48]));
+		}
+		pcrs.insert(
+			usize::from(MANIFEST_ONLY_COMMITMENT_PCR_INDEX),
+			ByteBuf::from(expected_pcr.to_vec()),
+		);
+
+		AttestationDoc {
+			module_id: "test-module".into(),
+			digest: Digest::SHA384,
+			timestamp: 1,
+			pcrs,
+			certificate: ByteBuf::new(),
+			cabundle: vec![],
+			public_key: Some(ByteBuf::from(public_key.to_vec())),
+			user_data: Some(ByteBuf::from(manifest_hash.to_vec())),
+			nonce: None,
+		}
+	}
+
 	struct P384PrivateKey(p384::SecretKey);
 	impl SigningPrivateKey for P384PrivateKey {
 		fn sign(&self, digest: &[u8]) -> Result<Vec<u8>, CoseError> {
@@ -698,6 +832,16 @@ mod test {
 		assert_eq!(
 			String::from_utf8(preimage).unwrap(),
 			r#"{"domain":"qos-setup-manifest-pcr-commitment-v1","ephemeralPublicKey":"0304","manifestHash":"0102"}"#
+		);
+	}
+
+	#[test]
+	fn manifest_only_pcr_commitment_preimage_uses_qos_json() {
+		let preimage = manifest_only_pcr_commitment_preimage(&[1, 2]);
+
+		assert_eq!(
+			String::from_utf8(preimage).unwrap(),
+			r#"{"domain":"qos-manifest-pcr-commitment-v1","manifestHash":"0102"}"#
 		);
 	}
 
@@ -761,6 +905,160 @@ mod test {
 		assert_eq!(ManifestCommitmentKind::Setup.pcr_index(), 16);
 		assert_eq!(ManifestCommitmentKind::Live.pcr_index(), 17);
 		assert_eq!(MANIFEST_COMMITMENT_INITIAL_PCR, [0u8; 48]);
+	}
+
+	#[test]
+	fn manifest_only_commitment_pcr_test_vectors() {
+		// Test vectors documented in docs/attestation_verification.md.
+		let manifest_hash = [1u8; 32];
+
+		let commitment = manifest_only_pcr_commitment(&manifest_hash);
+		assert_eq!(
+			qos_hex::encode(&commitment),
+			"74b12fb2cc4590289fa6616a740ded4dc71385f146732a4ddd6145da0d6dcda5b44ac453b03b02e405449bd499292f3a"
+		);
+		let pcr =
+			expected_manifest_only_commitment_pcr(&manifest_hash).unwrap();
+		assert_eq!(
+			qos_hex::encode(&pcr),
+			"1bfb05bb6997f6af32495386dc8f24851579ed18997c47b01636d6376cb9347d7c394b1b539b599068983410531c6adf"
+		);
+
+		assert_eq!(MANIFEST_ONLY_COMMITMENT_PCR_INDEX, 18);
+	}
+
+	#[test]
+	fn manifest_only_commitment_is_independent_of_the_ephemeral_key() {
+		// The property the register exists for: two documents that differ only
+		// in their ephemeral key carry the same PCR18 and verify against one
+		// fixed expectation, while PCR16 moves with the key.
+		let manifest_hash = [1u8; 32];
+		let first = manifest_only_commitment_attestation_doc(
+			&manifest_hash,
+			&[3u8; 65],
+		);
+		let second = manifest_only_commitment_attestation_doc(
+			&manifest_hash,
+			&[4u8; 65],
+		);
+
+		let index = usize::from(MANIFEST_ONLY_COMMITMENT_PCR_INDEX);
+		assert_eq!(first.pcrs[&index], second.pcrs[&index]);
+		for doc in [&first, &second] {
+			verify_attestation_doc_manifest_only_commitment(
+				doc,
+				&manifest_hash,
+			)
+			.unwrap();
+		}
+
+		assert_ne!(
+			expected_manifest_commitment_pcr(
+				ManifestCommitmentKind::Setup,
+				&manifest_hash,
+				&[3u8; 65],
+			)
+			.unwrap(),
+			expected_manifest_commitment_pcr(
+				ManifestCommitmentKind::Setup,
+				&manifest_hash,
+				&[4u8; 65],
+			)
+			.unwrap()
+		);
+	}
+
+	#[test]
+	fn manifest_only_commitment_changes_with_the_manifest_hash() {
+		let first = expected_manifest_only_commitment_pcr(&[1u8; 32]).unwrap();
+		let second = expected_manifest_only_commitment_pcr(&[2u8; 32]).unwrap();
+
+		assert_ne!(first, second);
+	}
+
+	#[test]
+	fn manifest_only_commitment_is_domain_separated_from_pcr16_and_pcr17() {
+		let manifest_hash = [1u8; 32];
+
+		// An empty ephemeral key is the closest an ephemeral-bound commitment
+		// can get to this one; the domain separator has to keep them apart
+		// regardless.
+		let manifest_only = manifest_only_pcr_commitment(&manifest_hash);
+		for kind in
+			[ManifestCommitmentKind::Setup, ManifestCommitmentKind::Live]
+		{
+			assert_ne!(
+				manifest_only,
+				manifest_pcr_commitment(kind, &manifest_hash, &[])
+			);
+		}
+	}
+
+	#[test]
+	fn verify_attestation_doc_manifest_only_commitment_works() {
+		let manifest_hash = [1u8; 32];
+		let attestation_doc = manifest_only_commitment_attestation_doc(
+			&manifest_hash,
+			&[3u8; 65],
+		);
+
+		verify_attestation_doc_manifest_only_commitment(
+			&attestation_doc,
+			&manifest_hash,
+		)
+		.unwrap();
+	}
+
+	#[test]
+	fn verify_attestation_doc_manifest_only_commitment_ignores_public_key() {
+		let manifest_hash = [1u8; 32];
+		let mut attestation_doc = manifest_only_commitment_attestation_doc(
+			&manifest_hash,
+			&[3u8; 65],
+		);
+		attestation_doc.public_key = None;
+
+		verify_attestation_doc_manifest_only_commitment(
+			&attestation_doc,
+			&manifest_hash,
+		)
+		.unwrap();
+	}
+
+	#[test]
+	fn verify_attestation_doc_manifest_only_commitment_rejects_wrong_manifest()
+	{
+		let attestation_doc =
+			manifest_only_commitment_attestation_doc(&[1u8; 32], &[3u8; 65]);
+
+		let err = verify_attestation_doc_manifest_only_commitment(
+			&attestation_doc,
+			&[2u8; 32],
+		)
+		.unwrap_err();
+
+		assert!(
+			matches!(err, AttestError::DifferentPcr { index, .. } if index == MANIFEST_ONLY_COMMITMENT_PCR_INDEX)
+		);
+	}
+
+	#[test]
+	fn verify_attestation_doc_manifest_only_commitment_requires_the_pcr_range()
+	{
+		let manifest_hash = [1u8; 32];
+		let mut attestation_doc = manifest_only_commitment_attestation_doc(
+			&manifest_hash,
+			&[3u8; 65],
+		);
+		attestation_doc.pcrs.remove(&5);
+
+		let err = verify_attestation_doc_manifest_only_commitment(
+			&attestation_doc,
+			&manifest_hash,
+		)
+		.unwrap_err();
+
+		assert!(matches!(err, AttestError::MissingPcr { index } if index == 5));
 	}
 
 	#[test]
