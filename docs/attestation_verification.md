@@ -44,8 +44,7 @@ provisioning document, or **live** for a post-provision app document.
    for setup documents or PCR17 for live documents.
 
 9. **Verify the manifest-only commitment.** Reconstruct PCR18 from
-   `manifest_hash` as defined below. It identifies the manifest, not the boot,
-   and does not replace the key binding in step 8.
+   `manifest_hash` as below; this does not replace step 8's key binding.
 
 ## Constants
 
@@ -113,17 +112,14 @@ and
 
 ### Manifest-only commitment PCR
 
-PCR18 uses this exact UTF-8 canonical JSON:
+PCR18 applies the same two hashes to this canonical JSON:
 
 ```json
 {"domain":"qos-manifest-pcr-commitment-v1","manifestHash":"<lowercase hex>"}
 ```
 
-Apply the same two hashes shown above and compare the result with PCR18. The
-`ephemeralPublicKey` field is absent, not empty, and the distinct domain
-separates PCR18 from PCR16 and PCR17. See
-[`expected_manifest_only_commitment_pcr`](../src/qos_nsm/src/nitro/mod.rs) and
-its test vectors in the same file.
+The key field is absent, not empty; the distinct domain separates PCR18 from
+PCR16 and PCR17.
 
 ## Pitfalls
 
@@ -137,8 +133,6 @@ its test vectors in the same file.
 - Preserve the two commitment hash layers:
   `SHA384(zeros48 || SHA384(preimage))`.
 - Do not mix setup PCR16/domain with live PCR17/domain.
-- PCR18 does not bind an ephemeral key; PCR16 and PCR17 do. Its preimage omits
-  `ephemeralPublicKey` entirely rather than encoding an empty value.
 - Treat COSE signatures as raw `r || s`; many APIs expect DER instead.
 
 ## Reference
@@ -153,8 +147,6 @@ its test vectors in the same file.
   [`verify_attestation_doc_against_user_input`](https://github.com/tkhq/qos/blob/1cf9b652a4616fc081948328e2b9ad57675c1395/src/qos_nsm/src/nitro/mod.rs#L323-L404)
   and
   [`verify_attestation_doc_manifest_commitment`](https://github.com/tkhq/qos/blob/1cf9b652a4616fc081948328e2b9ad57675c1395/src/qos_nsm/src/nitro/mod.rs#L193-L229)
-- Ephemeral-free manifest commitment:
-  [`verify_attestation_doc_manifest_only_commitment`](../src/qos_nsm/src/nitro/mod.rs)
 - Manifest hashing:
   [`VersionedManifest::manifest_hash`](https://github.com/tkhq/qos/blob/1cf9b652a4616fc081948328e2b9ad57675c1395/src/qos_core/src/protocol/services/boot/manifest.rs#L121-L127)
   and [QOS canonical JSON](https://github.com/tkhq/qos/blob/1cf9b652a4616fc081948328e2b9ad57675c1395/src/qos_json/SPEC.md)

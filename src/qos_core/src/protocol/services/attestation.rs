@@ -337,8 +337,6 @@ mod tests {
 
 	#[test]
 	fn lock_manifest_commitment_pcr_bank_pcr18_survives_a_key_rotation() {
-		// The property PCR18 exists for: two boots of the same manifest with
-		// different ephemeral keys agree on PCR18 while PCR16 and PCR17 differ.
 		let manifest_hash = [1u8; 32];
 
 		let first = MockNsm::new();
