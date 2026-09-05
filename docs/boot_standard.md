@@ -117,7 +117,7 @@ Node is reachable through `qos_host`.
     1) Reject the request if the Manifest Envelope already contains Share Set approvals. Share Set approvals are recorded as shares are posted during provisioning, not during the initial boot instruction.
     1) Hash the submitted Pivot App binary and check that it matches `manifest_envelope.manifest.pivot.hash`.
     1) Generate the setup Ephemeral Key and live Ephemeral Key.
-    1) Extend PCR16 with the setup manifest/key commitment and PCR17 with the live manifest/key commitment, then lock the full attestable PCR range before publishing pivot start files.
+    1) Extend PCR16 with the setup manifest/key commitment, PCR17 with the live manifest/key commitment and PCR18 with the ephemeral-free manifest commitment, then lock the full attestable PCR range before publishing pivot start files.
     1) Write the setup Ephemeral Key, Pivot App binary, and Manifest Envelope to the Node's filesystem.
     1) Make a setup attestation request, placing the manifest hash in the `user_data` field and the setup Ephemeral Key public key in the `public_key` field.
     1) Return the NSM Response containing the COSE Sign1 encoded attestation document.

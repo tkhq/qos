@@ -43,6 +43,9 @@ provisioning document, or **live** for a post-provision app document.
    from `manifest_hash` and `public_key` as defined below. Verify it equals PCR16
    for setup documents or PCR17 for live documents.
 
+9. **Verify the manifest-only commitment.** Reconstruct PCR18 from
+   `manifest_hash` as below; this does not replace step 8's key binding.
+
 ## Constants
 
 | Item | Value |
@@ -54,6 +57,7 @@ provisioning document, or **live** for a post-provision app document.
 | Attestable PCR indexes | 0 through 31 |
 | Setup commitment | PCR16, domain `qos-setup-manifest-pcr-commitment-v1` |
 | Live commitment | PCR17, domain `qos-live-manifest-pcr-commitment-v1` |
+| Manifest-only commitment | PCR18, domain `qos-manifest-pcr-commitment-v1` |
 | Commitment PCR initial value | 48 zero bytes |
 | Commitment hex | Lowercase, no `0x` prefix |
 | Ephemeral public key | `encrypt_public || sign_public`, 65 + 65 bytes |
@@ -105,6 +109,17 @@ its encoding and output vectors are in
 [`manifest_pcr_commitment_preimage_uses_qos_json`](https://github.com/tkhq/qos/blob/1cf9b652a4616fc081948328e2b9ad57675c1395/src/qos_nsm/src/nitro/mod.rs#L691-L702)
 and
 [`manifest_commitment_pcr_test_vectors`](https://github.com/tkhq/qos/blob/1cf9b652a4616fc081948328e2b9ad57675c1395/src/qos_nsm/src/nitro/mod.rs#L716-L764).
+
+### Manifest-only commitment PCR
+
+PCR18 applies the same two hashes to this canonical JSON:
+
+```json
+{"domain":"qos-manifest-pcr-commitment-v1","manifestHash":"<lowercase hex>"}
+```
+
+The key field is absent, not empty; the distinct domain separates PCR18 from
+PCR16 and PCR17.
 
 ## Pitfalls
 

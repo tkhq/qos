@@ -57,8 +57,9 @@ finished provisioning key material.
 During standard boot and key forwarding, QOS creates both a setup Ephemeral Key
 and a live Ephemeral Key. PCR16 commits the setup key and manifest hash for
 provisioning and key-forwarding. PCR17 commits the live key and manifest hash
-for app-level attestations. QOS locks the full attestable PCR range before
-publishing the boot files that allow the pivot app to start.
+for app-level attestations. PCR18 commits only the manifest hash and is stable
+across a deployment's instances and boots. QOS locks the full attestable PCR
+range before publishing the boot files that allow the pivot app to start.
 
 The setup key is written to `/qos.ephemeral.key` during boot and remains the
 current Ephemeral Key while QOS processes provisioning or key injection. After

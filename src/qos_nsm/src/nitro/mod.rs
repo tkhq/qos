@@ -49,6 +49,9 @@ pub const SETUP_MANIFEST_COMMITMENT_PCR_INDEX: u16 = 16;
 /// PCR index QOS uses for the live manifest/key commitment.
 pub const LIVE_MANIFEST_COMMITMENT_PCR_INDEX: u16 = 17;
 
+/// PCR index for the manifest-only commitment.
+pub const MANIFEST_ONLY_COMMITMENT_PCR_INDEX: u16 = 18;
+
 /// Current Nitro attestation documents allow PCR indexes 0 through 31.
 pub const ATTESTABLE_PCR_COUNT: u16 = 32;
 
@@ -63,6 +66,8 @@ const SETUP_MANIFEST_PCR_COMMITMENT_DOMAIN: &str =
 	"qos-setup-manifest-pcr-commitment-v1";
 const LIVE_MANIFEST_PCR_COMMITMENT_DOMAIN: &str =
 	"qos-live-manifest-pcr-commitment-v1";
+const MANIFEST_ONLY_PCR_COMMITMENT_DOMAIN: &str =
+	"qos-manifest-pcr-commitment-v1";
 
 /// Which manifest/key PCR commitment a verifier expects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,6 +151,33 @@ pub fn manifest_pcr_commitment(
 	hasher.finalize().into()
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ManifestOnlyPcrCommitmentPreimage<'a> {
+	domain: &'static str,
+	#[serde(with = "qos_hex::serde")]
+	manifest_hash: &'a [u8],
+}
+
+fn manifest_only_pcr_commitment_preimage(manifest_hash: &[u8]) -> Vec<u8> {
+	qos_json::to_vec(&ManifestOnlyPcrCommitmentPreimage {
+		domain: MANIFEST_ONLY_PCR_COMMITMENT_DOMAIN,
+		manifest_hash,
+	})
+	.expect("manifest PCR commitment preimage only contains strings")
+}
+
+/// Compute the domain-separated, ephemeral-free manifest PCR commitment input.
+#[must_use]
+pub fn manifest_only_pcr_commitment(
+	manifest_hash: &[u8],
+) -> [u8; PCR_SHA384_LEN] {
+	let preimage = manifest_only_pcr_commitment_preimage(manifest_hash);
+	let mut hasher = Sha384::new();
+	hasher.update(preimage);
+	hasher.finalize().into()
+}
+
 /// Compute the SHA384 PCR extension value.
 ///
 /// Nitro PCR3/PCR4 documentation models PCR extension as hashing the
@@ -185,6 +217,17 @@ pub fn expected_manifest_commitment_pcr(
 	pcr_extend_sha384(&MANIFEST_COMMITMENT_INITIAL_PCR, &commitment)
 }
 
+/// Compute the expected manifest-only commitment PCR value.
+///
+/// # Errors
+/// Returns [`AttestError::InvalidPcr`] for a malformed initial PCR.
+pub fn expected_manifest_only_commitment_pcr(
+	manifest_hash: &[u8],
+) -> Result<[u8; PCR_SHA384_LEN], AttestError> {
+	let commitment = manifest_only_pcr_commitment(manifest_hash);
+	pcr_extend_sha384(&MANIFEST_COMMITMENT_INITIAL_PCR, &commitment)
+}
+
 /// Verify QOS PCR state in an attestation document.
 ///
 /// # Errors
@@ -195,12 +238,7 @@ pub fn verify_attestation_doc_manifest_commitment(
 	kind: ManifestCommitmentKind,
 	manifest_hash: &[u8],
 ) -> Result<(), AttestError> {
-	for idx in 0..ATTESTABLE_PCR_COUNT {
-		if !attestation_doc.pcrs.contains_key(&usize::from(idx)) {
-			return Err(AttestError::MissingPcr { index: idx });
-		}
-	}
-
+	require_attestable_pcrs(attestation_doc)?;
 	let public_key = attestation_doc
 		.public_key
 		.as_ref()
@@ -210,17 +248,54 @@ pub fn verify_attestation_doc_manifest_commitment(
 		manifest_hash,
 		public_key.as_ref(),
 	)?;
+	verify_attestation_doc_pcr(attestation_doc, kind.pcr_index(), &expected)
+}
 
-	let pcr_index = kind.pcr_index();
+/// Verify the manifest-only PCR18 commitment.
+///
+/// Kept separate from [`verify_attestation_doc_against_manifest`] for documents
+/// produced before PCR18 existed.
+///
+/// # Errors
+/// Returns [`AttestError`] if validation fails.
+pub fn verify_attestation_doc_manifest_only_commitment(
+	attestation_doc: &AttestationDoc,
+	manifest_hash: &[u8],
+) -> Result<(), AttestError> {
+	require_attestable_pcrs(attestation_doc)?;
+	let expected = expected_manifest_only_commitment_pcr(manifest_hash)?;
+	verify_attestation_doc_pcr(
+		attestation_doc,
+		MANIFEST_ONLY_COMMITMENT_PCR_INDEX,
+		&expected,
+	)
+}
+
+fn require_attestable_pcrs(
+	attestation_doc: &AttestationDoc,
+) -> Result<(), AttestError> {
+	for idx in 0..ATTESTABLE_PCR_COUNT {
+		if !attestation_doc.pcrs.contains_key(&usize::from(idx)) {
+			return Err(AttestError::MissingPcr { index: idx });
+		}
+	}
+	Ok(())
+}
+
+fn verify_attestation_doc_pcr(
+	attestation_doc: &AttestationDoc,
+	pcr_index: u16,
+	expected: &[u8],
+) -> Result<(), AttestError> {
 	let actual = attestation_doc
 		.pcrs
 		.get(&usize::from(pcr_index))
 		.ok_or(AttestError::MissingPcr { index: pcr_index })?;
 
-	if actual.as_ref() != expected.as_slice() {
+	if actual.as_ref() != expected {
 		return Err(AttestError::DifferentPcr {
 			index: pcr_index,
-			expected: qos_hex::encode(&expected),
+			expected: qos_hex::encode(expected),
 			actual: qos_hex::encode(actual.as_ref()),
 		});
 	}
@@ -617,13 +692,38 @@ mod test {
 		let expected_pcr =
 			expected_manifest_commitment_pcr(kind, manifest_hash, public_key)
 				.unwrap();
+		commitment_attestation_doc(
+			kind.pcr_index(),
+			expected_pcr,
+			manifest_hash,
+			public_key,
+		)
+	}
 
+	fn manifest_only_commitment_attestation_doc(
+		manifest_hash: &[u8],
+		public_key: &[u8],
+	) -> AttestationDoc {
+		commitment_attestation_doc(
+			MANIFEST_ONLY_COMMITMENT_PCR_INDEX,
+			expected_manifest_only_commitment_pcr(manifest_hash).unwrap(),
+			manifest_hash,
+			public_key,
+		)
+	}
+
+	fn commitment_attestation_doc(
+		pcr_index: u16,
+		expected_pcr: [u8; PCR_SHA384_LEN],
+		manifest_hash: &[u8],
+		public_key: &[u8],
+	) -> AttestationDoc {
 		let mut pcrs = BTreeMap::new();
 		for idx in 0..ATTESTABLE_PCR_COUNT {
 			pcrs.insert(usize::from(idx), ByteBuf::from(vec![0u8; 48]));
 		}
 		pcrs.insert(
-			usize::from(kind.pcr_index()),
+			usize::from(pcr_index),
 			ByteBuf::from(expected_pcr.to_vec()),
 		);
 
@@ -702,6 +802,16 @@ mod test {
 	}
 
 	#[test]
+	fn manifest_only_pcr_commitment_preimage_uses_qos_json() {
+		let preimage = manifest_only_pcr_commitment_preimage(&[1, 2]);
+
+		assert_eq!(
+			String::from_utf8(preimage).unwrap(),
+			r#"{"domain":"qos-manifest-pcr-commitment-v1","manifestHash":"0102"}"#
+		);
+	}
+
+	#[test]
 	fn pcr_extend_sha384_matches_aws_pcr3_example() {
 		let role_arn = b"arn:aws:iam::123456789012:role/Webserver";
 		let pcr = pcr_extend_sha384(&[0u8; 48], role_arn).unwrap();
@@ -761,6 +871,78 @@ mod test {
 		assert_eq!(ManifestCommitmentKind::Setup.pcr_index(), 16);
 		assert_eq!(ManifestCommitmentKind::Live.pcr_index(), 17);
 		assert_eq!(MANIFEST_COMMITMENT_INITIAL_PCR, [0u8; 48]);
+	}
+
+	#[test]
+	fn manifest_only_commitment_pcr_test_vectors() {
+		let manifest_hash = [1u8; 32];
+
+		let commitment = manifest_only_pcr_commitment(&manifest_hash);
+		assert_eq!(
+			qos_hex::encode(&commitment),
+			"74b12fb2cc4590289fa6616a740ded4dc71385f146732a4ddd6145da0d6dcda5b44ac453b03b02e405449bd499292f3a"
+		);
+		let pcr =
+			expected_manifest_only_commitment_pcr(&manifest_hash).unwrap();
+		assert_eq!(
+			qos_hex::encode(&pcr),
+			"1bfb05bb6997f6af32495386dc8f24851579ed18997c47b01636d6376cb9347d7c394b1b539b599068983410531c6adf"
+		);
+
+		assert_eq!(MANIFEST_ONLY_COMMITMENT_PCR_INDEX, 18);
+		assert_ne!(
+			pcr,
+			expected_manifest_only_commitment_pcr(&[2u8; 32]).unwrap()
+		);
+		for kind in
+			[ManifestCommitmentKind::Setup, ManifestCommitmentKind::Live]
+		{
+			assert_ne!(
+				commitment,
+				manifest_pcr_commitment(kind, &manifest_hash, &[])
+			);
+		}
+	}
+
+	#[test]
+	fn manifest_only_verification_works_without_public_key() {
+		let manifest_hash = [1u8; 32];
+		let mut attestation_doc = manifest_only_commitment_attestation_doc(
+			&manifest_hash,
+			&[3u8; 65],
+		);
+		attestation_doc.public_key = None;
+
+		verify_attestation_doc_manifest_only_commitment(
+			&attestation_doc,
+			&manifest_hash,
+		)
+		.unwrap();
+	}
+
+	#[test]
+	fn verify_attestation_doc_manifest_only_commitment_rejects_invalid_input() {
+		let mut attestation_doc =
+			manifest_only_commitment_attestation_doc(&[1u8; 32], &[3u8; 65]);
+
+		let err = verify_attestation_doc_manifest_only_commitment(
+			&attestation_doc,
+			&[2u8; 32],
+		)
+		.unwrap_err();
+
+		assert!(
+			matches!(err, AttestError::DifferentPcr { index, .. } if index == MANIFEST_ONLY_COMMITMENT_PCR_INDEX)
+		);
+		attestation_doc.pcrs.remove(&5);
+
+		let err = verify_attestation_doc_manifest_only_commitment(
+			&attestation_doc,
+			&[1u8; 32],
+		)
+		.unwrap_err();
+
+		assert!(matches!(err, AttestError::MissingPcr { index } if index == 5));
 	}
 
 	#[test]
