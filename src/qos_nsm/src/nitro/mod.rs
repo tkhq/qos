@@ -49,19 +49,8 @@ pub const SETUP_MANIFEST_COMMITMENT_PCR_INDEX: u16 = 16;
 /// PCR index QOS uses for the live manifest/key commitment.
 pub const LIVE_MANIFEST_COMMITMENT_PCR_INDEX: u16 = 17;
 
-/// PCR index QOS uses for the ephemeral-free manifest commitment.
-///
-/// PCR16 and PCR17 both fold the boot's ephemeral public key into their
-/// commitment, so their values differ for every instance and every boot. That
-/// is correct for what they prove — this boot's keys are the ones the manifest
-/// authorized — but it leaves them unusable to a verifier that can only compare
-/// a PCR against a value fixed ahead of time.
-///
-/// This register commits to the manifest hash alone, so it is identical across
-/// every instance and every boot of one deployment and changes only when the
-/// manifest does. QOS extends it before the pivot runs, exactly like PCR16 and
-/// PCR17, so it carries the same weight as those rather than the weight of
-/// something the payload asserted about itself.
+/// PCR index for the manifest-only commitment, stable across boots of the same
+/// manifest and extended and locked before the pivot runs.
 pub const MANIFEST_ONLY_COMMITMENT_PCR_INDEX: u16 = 18;
 
 /// Current Nitro attestation documents allow PCR indexes 0 through 31.
@@ -163,11 +152,7 @@ pub fn manifest_pcr_commitment(
 	hasher.finalize().into()
 }
 
-/// Preimage for the ephemeral-free manifest commitment.
-///
-/// Deliberately a separate type rather than [`ManifestPcrCommitmentPreimage`]
-/// with an empty key: an absent field and a zero-length one serialize
-/// differently, and a reader should not have to know which was meant.
+/// Separate type so the manifest-only preimage omits the ephemeral key field.
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ManifestOnlyPcrCommitmentPreimage<'a> {
@@ -234,7 +219,7 @@ pub fn expected_manifest_commitment_pcr(
 	pcr_extend_sha384(&MANIFEST_COMMITMENT_INITIAL_PCR, &commitment)
 }
 
-/// Compute the expected ephemeral-free manifest commitment PCR value.
+/// Compute the expected manifest-only commitment PCR value.
 ///
 /// # Errors
 ///
@@ -270,16 +255,10 @@ pub fn verify_attestation_doc_manifest_commitment(
 	verify_attestation_doc_pcr(attestation_doc, kind.pcr_index(), &expected)
 }
 
-/// Verify the ephemeral-free manifest commitment PCR in an attestation
-/// document.
+/// Verify the manifest-only PCR18 commitment.
 ///
-/// Takes no ephemeral public key, which is the point: the expected value is a
-/// function of the manifest hash alone, so a verifier can fix it ahead of time.
-///
-/// Deliberately not called by [`verify_attestation_doc_against_manifest`]. A
-/// document produced before this register existed carries PCR18 at its initial
-/// value, so requiring it there would reject documents the existing path
-/// accepts today.
+/// This remains separate from [`verify_attestation_doc_against_manifest`] so
+/// that function continues to accept documents produced before PCR18 existed.
 ///
 /// # Errors
 ///
