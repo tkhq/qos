@@ -278,6 +278,8 @@ impl DockerHostQemuNitroRunner {
 			qemu.host_cid.to_string().into(),
 			"--port".into(),
 			qemu.control_vsock_port.to_string().into(),
+			"--socket-timeout".into(),
+			qemu.readiness_timeout.as_millis().to_string().into(),
 			"--vsock-to-host".into(),
 			"false".into(),
 		]);
@@ -523,6 +525,8 @@ impl DockerHostQemuNitroRunner {
 			qemu.host_cid.to_string().into(),
 			"--port".into(),
 			qemu.control_vsock_port.to_string().into(),
+			"--socket-timeout".into(),
+			qemu.readiness_timeout.as_millis().to_string().into(),
 			"--vsock-to-host".into(),
 			"false".into(),
 		]);
