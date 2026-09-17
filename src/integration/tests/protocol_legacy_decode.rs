@@ -3,9 +3,10 @@
 use qos_core::protocol::{ProtocolError, ProtocolPhase, msg::ProtocolMsg};
 use qos_nsm::types::NsmResponse;
 
-/// Protocol v0.7 used these exact Borsh enum tags. This golden test avoids a
-/// second, resolver-incompatible copy of old `qos_core` while still preventing
-/// insertion or reordering of legacy wire variants.
+/// Protocol v0.7 used these exact Borsh enum tags. It cannot be linked into
+/// this workspace because it pins libc 0.2.174 while libcontainer requires
+/// libc 0.2.186 or newer. These golden tags still prevent insertion or
+/// reordering of legacy wire variants.
 #[test]
 fn legacy_borsh_discriminants_remain_stable() {
 	let cases = [
@@ -52,7 +53,7 @@ fn legacy_borsh_discriminants_remain_stable() {
 	];
 
 	for (message, expected) in cases {
-		assert_eq!(borsh::to_vec(&message).unwrap()[0], expected);
+		assert_eq!(message.to_borsh_wire().unwrap()[0], expected);
 	}
 }
 

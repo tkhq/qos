@@ -709,6 +709,7 @@ fn raise_memlock_limit() -> Result<(), OciRuntimeError> {
 }
 
 #[cfg(not(feature = "oci-devices"))]
+#[allow(clippy::unnecessary_wraps)]
 fn apply_device_policy(_: &str) -> Result<(), OciRuntimeError> {
 	Ok(())
 }
