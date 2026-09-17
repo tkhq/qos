@@ -33,6 +33,7 @@ qos_nsm = { workspace = true }
 qos_p256 = { workspace = true }
 serde_json = { workspace = true }
 signed_echo = { path = "../signed_echo" }
+tar = { workspace = true }
 ureq = { workspace = true, features = ["json"] }
 
 [[test]]

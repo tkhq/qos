@@ -205,16 +205,29 @@ impl HostServer {
 			get_eph_key_from_attestation_doc(&state.enclave_client).await;
 		let vitals_log = if let Some(m) = manifest_envelope.as_ref() {
 			let manifest = m.clone().manifest();
-			serde_json::to_string(&EnclaveVitalStats {
-				phase,
-				namespace: manifest.namespace().name.clone(),
-				nonce: manifest.namespace().nonce,
-				pivot_hash: *manifest.pivot_hash(),
-				pcr0: manifest.enclave().pcr0.clone(),
-				pivot_args: manifest.args().to_vec(),
-				ephemeral_key: ephemeral_key.clone(),
-			})
-			.expect("always valid json. qed.")
+			if let (Some(pivot_hash), Some(pivot_args)) =
+				(manifest.pivot_hash(), manifest.args())
+			{
+				serde_json::to_string(&EnclaveVitalStats {
+					phase,
+					namespace: manifest.namespace().name.clone(),
+					nonce: manifest.namespace().nonce,
+					pivot_hash: *pivot_hash,
+					pcr0: manifest.enclave().pcr0.clone(),
+					pivot_args: pivot_args.to_vec(),
+					ephemeral_key: ephemeral_key.clone(),
+				})
+				.expect("always valid json. qed.")
+			} else {
+				serde_json::json!({
+					"phase": phase,
+					"namespace": manifest.namespace().name.clone(),
+					"nonce": manifest.namespace().nonce,
+					"pcr0": qos_hex::encode(&manifest.enclave().pcr0),
+					"ephemeralKey": ephemeral_key.clone(),
+				})
+				.to_string()
+			}
 		} else {
 			let info = serde_json::json!({
 				"phase": phase,

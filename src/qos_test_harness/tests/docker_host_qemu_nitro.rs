@@ -1,11 +1,15 @@
 mod support;
 
-use std::{path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 
+use qos_core::protocol::services::boot::{
+	EnclaveV3, ManifestV3, ManifestVersion, OciImageRef, OciName,
+	OciRestartPolicy, WorkloadV3,
+};
 use qos_p256::P256Public;
 use qos_test_harness::{
-	BridgeConfig, BuildMode, DnsConfig, Pivot, RunningAppGuard, StartAppSpec,
-	TestRunner,
+	BridgeConfig, BuildMode, DnsConfig, OciStartCondition, OciStartSpec, Pivot,
+	RunningAppGuard, StartAppSpec, TestRunner, VersionedManifest,
 };
 use support::preparation::{
 	DockerHostQemuNitroPreparation, PreparedDockerHostQemuNitro, QemuCiImages,
@@ -127,6 +131,52 @@ async fn signed_echo_egress_get_url() {
 
 	assert!(result.is_ok(), "egress assertion failed: {result:?}");
 	cleanup.unwrap();
+}
+
+#[tokio::test]
+async fn postgres_oci_smoke_on_qemu() {
+	let (prepared, _) = prepare().await;
+	let image = prepared.postgres_smoke_image().unwrap();
+	let base =
+		prepared.manifest_template(&prepared.pivot).unwrap().build().unwrap();
+	let VersionedManifest::V2(base) = base else {
+		panic!("test manifest template must be V2");
+	};
+	let enclave = EnclaveV3::Nitro {
+		pcr0: base.enclave.pcr0,
+		pcr1: base.enclave.pcr1,
+		pcr2: base.enclave.pcr2,
+		pcr3: base.enclave.pcr3,
+		aws_root_certificate: base.enclave.aws_root_certificate,
+		qos_commit: base.enclave.qos_commit,
+	};
+	let manifest = ManifestV3 {
+		version: ManifestVersion::V3,
+		namespace: base.namespace,
+		manifest_set: base.manifest_set,
+		share_set: base.share_set,
+		enclave,
+		workloads: vec![WorkloadV3::Oci {
+			name: OciName::try_from("postgres-smoke".to_string()).unwrap(),
+			image: OciImageRef::OciManifest { digest: image.digest.clone() },
+			restart: OciRestartPolicy::Never,
+			mounts: vec![],
+		}],
+		volumes: BTreeMap::new(),
+		dns: None,
+	};
+	manifest.validate().unwrap();
+	let mut runner = prepared.runner;
+	let app = runner
+		.start_oci(OciStartSpec {
+			name: "postgres_oci_smoke".into(),
+			artifact: image,
+			manifest: VersionedManifest::V3(manifest),
+			condition: OciStartCondition::ExitSuccess,
+		})
+		.await
+		.unwrap();
+	app.stop().await.unwrap();
 }
 
 async fn prepare() -> (PreparedDockerHostQemuNitro, Pivot) {

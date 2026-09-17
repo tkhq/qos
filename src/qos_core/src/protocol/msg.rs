@@ -8,6 +8,8 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::protocol::{
 	ProtocolError,
+	oci::OciBootPayloadV3,
+	oci_status::OciWorkloadStatus,
 	services::{
 		boot::{Approval, VersionedManifestEnvelope},
 		genesis::{GenesisOutput, GenesisSet},
@@ -263,6 +265,22 @@ pub enum ProtocolMsg {
 		/// Pivot binary.
 		pivot: Vec<u8>,
 	},
+	/// Borsh-only standard boot carrying a signed Manifest V3 and OCI images.
+	#[serde(skip)]
+	BootStandardOciRequest {
+		/// Bounded raw manifest envelope and image artifacts.
+		payload: OciBootPayloadV3,
+	},
+	/// Borsh-only key-forward boot carrying Manifest V3 and OCI images.
+	#[serde(skip)]
+	BootKeyForwardOciRequest {
+		/// Bounded raw manifest envelope and image artifacts.
+		payload: OciBootPayloadV3,
+	},
+	/// Request Manifest V3 workload status records.
+	OciStatusRequest,
+	/// Current Manifest V3 workload status records, ordered by name.
+	OciStatusResponse(Vec<OciWorkloadStatus>),
 }
 
 impl ProtocolMsg {
@@ -372,11 +390,16 @@ impl std::fmt::Display for ProtocolMsg {
 			Self::StatusResponse(_) => {
 				write!(f, "StatusResponse")
 			}
+			Self::OciStatusRequest => write!(f, "OciStatusRequest"),
+			Self::OciStatusResponse(_) => write!(f, "OciStatusResponse"),
 			Self::BootStandardRequest { .. } => {
 				write!(f, "BootStandardRequest")
 			}
 			Self::BootStandardJsonEnvelopeRequest { .. } => {
 				write!(f, "BootStandardJsonEnvelopeRequest")
+			}
+			Self::BootStandardOciRequest { .. } => {
+				write!(f, "BootStandardOciRequest")
 			}
 			Self::BootStandardResponse { .. } => {
 				write!(f, "BootStandardResponse")
@@ -410,6 +433,9 @@ impl std::fmt::Display for ProtocolMsg {
 			}
 			Self::BootKeyForwardRequest { .. } => {
 				write!(f, "BootKeyForwardRequest")
+			}
+			Self::BootKeyForwardOciRequest { .. } => {
+				write!(f, "BootKeyForwardOciRequest")
 			}
 			Self::BootKeyForwardResponse { nsm_response } => match nsm_response
 			{

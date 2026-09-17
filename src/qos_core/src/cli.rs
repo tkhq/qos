@@ -187,8 +187,9 @@ impl CLI {
 		} else if opts.parsed.help() {
 			println!("{}", opts.parsed.info());
 		} else {
-			// start reaper in a task so we can terminate on ctrl+c properly
-			tokio::spawn(async move {
+			// Keep the process alive while Reaper owns runtime cleanup. OCI Reaper
+			// observes the same signal and gets its full graceful-stop window.
+			let mut reaper = tokio::spawn(async move {
 				Reaper::execute(
 					&Handles::new(
 						opts.ephemeral_file(),
@@ -205,7 +206,17 @@ impl CLI {
 			});
 
 			eprintln!("qos_core: Reaper running, press ctrl+c to quit");
-			let _ = tokio::signal::ctrl_c().await;
+			tokio::select! {
+				_ = &mut reaper => {}
+				_ = tokio::signal::ctrl_c() => {
+					if tokio::time::timeout(
+						std::time::Duration::from_secs(15),
+						&mut reaper,
+					).await.is_err() {
+						reaper.abort();
+					}
+				}
+			}
 		}
 	}
 }

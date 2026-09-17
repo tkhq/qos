@@ -7,6 +7,8 @@ use qos_crypto::sha_256;
 
 mod error;
 pub mod msg;
+pub mod oci;
+pub mod oci_status;
 pub mod services;
 mod state;
 
