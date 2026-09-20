@@ -22,12 +22,21 @@ impl SecretBuilder {
 	}
 
 	/// Add a share to later be used to reconstruct.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError::InvalidShare`] for an empty share and
+	/// [`ProtocolError::DuplicateShare`] if the same share was already added,
+	/// so a replayed provision request cannot count towards the threshold.
 	pub(crate) fn add_share(
 		&mut self,
 		share: Share,
 	) -> Result<(), ProtocolError> {
 		if share.is_empty() {
 			return Err(ProtocolError::InvalidShare);
+		}
+		if self.shares.iter().any(|existing| **existing == *share) {
+			return Err(ProtocolError::DuplicateShare);
 		}
 
 		self.shares.push(share);
@@ -74,7 +83,17 @@ pub(in crate::protocol) fn provision(
 		return Err(ProtocolError::NotShareSetMember);
 	}
 
-	// Record the share set approval
+	let ephemeral_key = state.handles.get_ephemeral_key()?;
+
+	let share = ephemeral_key
+		.decrypt(encrypted_share)
+		.map_err(|_| ProtocolError::DecryptionFailed)?;
+
+	// Rejects empty and replayed shares.
+	state.provisioner.add_share(share)?;
+
+	// Record the share set approval only once the share it accompanies has
+	// been accepted, so a rejected request leaves no approval behind.
 	state.handles.mutate_manifest_envelope(|mut envelope| {
 		match &mut envelope {
 			VersionedManifestEnvelope::V2(inner) => {
@@ -89,14 +108,6 @@ pub(in crate::protocol) fn provision(
 		}
 		envelope
 	})?;
-
-	let ephemeral_key = state.handles.get_ephemeral_key()?;
-
-	let share = ephemeral_key
-		.decrypt(encrypted_share)
-		.map_err(|_| ProtocolError::DecryptionFailed)?;
-
-	state.provisioner.add_share(share)?;
 
 	let quorum_threshold = manifest.share_set().threshold as usize;
 	if state.provisioner.count() < quorum_threshold {
@@ -335,6 +346,103 @@ mod test {
 				.share_set_approvals()
 				.len(),
 			threshold
+		);
+	}
+
+	#[test]
+	fn provision_rejects_replayed_share() {
+		let quorum_file =
+			PathWrapper::from("./provision_rejects_replayed_share.quorum.key");
+		let eph_file =
+			PathWrapper::from("./provision_rejects_replayed_share.eph.key");
+		let manifest_file =
+			PathWrapper::from("./provision_rejects_replayed_share.manifest");
+
+		let Setup {
+			quorum_pair,
+			eph_pair,
+			threshold,
+			mut state,
+			approvals,
+			..
+		} = setup(&eph_file, &quorum_file, &manifest_file);
+
+		let quorum_key = quorum_pair.to_master_seed();
+		let shares = shares_generate(&quorum_key[..], 4, threshold).unwrap();
+		let encrypted_shares: Vec<_> = shares
+			.iter()
+			.map(|shard| eph_pair.public_key().encrypt(shard).unwrap())
+			.collect();
+
+		// K-1 members post their shares.
+		for (i, share) in encrypted_shares[..threshold - 1].iter().enumerate() {
+			let approval = approvals[i].clone();
+			assert_eq!(provision(share, approval, &mut state), Ok(false));
+		}
+
+		// The host replays the last request verbatim, and then re-posts the
+		// same share under a fresh encryption. Neither may count towards the
+		// threshold or leave an extra approval behind.
+		let replayed = &encrypted_shares[threshold - 2];
+		let re_encrypted =
+			eph_pair.public_key().encrypt(&shares[threshold - 2]).unwrap();
+		for share in [replayed, &re_encrypted] {
+			let approval = approvals[threshold - 2].clone();
+			assert_eq!(
+				provision(share, approval, &mut state),
+				Err(ProtocolError::DuplicateShare)
+			);
+		}
+		assert_eq!(state.provisioner.count(), threshold - 1);
+		assert_eq!(
+			state
+				.handles
+				.get_manifest_envelope()
+				.unwrap()
+				.share_set_approvals()
+				.len(),
+			threshold - 1
+		);
+		assert!(!Path::new(&*quorum_file).exists());
+
+		// A genuinely new share still completes provisioning.
+		let share = &encrypted_shares[threshold];
+		let approval = approvals[threshold].clone();
+		assert_eq!(provision(share, approval, &mut state), Ok(true));
+		assert!(Path::new(&*quorum_file).exists());
+	}
+
+	#[test]
+	fn provision_does_not_record_approval_for_a_rejected_share() {
+		let quorum_file = PathWrapper::from(
+			"./provision_does_not_record_approval_for_a_rejected_share.quorum.key",
+		);
+		let eph_file = PathWrapper::from(
+			"./provision_does_not_record_approval_for_a_rejected_share.eph.key",
+		);
+		let manifest_file = PathWrapper::from(
+			"./provision_does_not_record_approval_for_a_rejected_share.manifest",
+		);
+
+		let Setup { mut state, approvals, .. } =
+			setup(&eph_file, &quorum_file, &manifest_file);
+
+		// Valid approval, but a ciphertext this enclave cannot decrypt.
+		let other_pair = P256Pair::generate().unwrap();
+		let undecryptable_share =
+			other_pair.public_key().encrypt(b"not for this enclave").unwrap();
+		assert_eq!(
+			provision(&undecryptable_share, approvals[0].clone(), &mut state),
+			Err(ProtocolError::DecryptionFailed)
+		);
+		assert_eq!(state.provisioner.count(), 0);
+		assert!(
+			state
+				.handles
+				.get_manifest_envelope()
+				.unwrap()
+				.share_set_approvals()
+				.is_empty()
 		);
 	}
 
