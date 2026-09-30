@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.15.1](https://github.com/tkhq/qos/compare/qos_client-v0.14.1...qos_client-v0.15.1) - 2026-09-30
+
+### Other
+- Improve key material handling
+- expose the YubiKey certificate subject and error sources
+
+## `qos_net` - [0.15.1](https://github.com/tkhq/qos/compare/qos_net-v0.15.0...qos_net-v0.15.1) - 2026-09-30
+
+### Other
+- update Cargo.lock dependencies
+
+## `qos_core` - [0.15.1](https://github.com/tkhq/qos/compare/qos_core-v0.14.1...qos_core-v0.15.1) - 2026-09-30
+
+### Other
+- Add manifest hash PCR
+- Improve key material handling
+
+## `qos_nsm` - [0.15.1](https://github.com/tkhq/qos/compare/qos_nsm-v0.14.1...qos_nsm-v0.15.1) - 2026-09-30
+
+### Other
+- Add manifest hash PCR
+
 ## `qos_client` - [0.15.0](https://github.com/tkhq/qos/compare/qos_client-v0.14.1...qos_client-v0.15.0) - 2026-09-30
 
 ### Other
