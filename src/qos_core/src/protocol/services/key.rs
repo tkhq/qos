@@ -411,8 +411,7 @@ mod test {
 		pcr_map.insert(
 			usize::from(nitro::SETUP_MANIFEST_COMMITMENT_PCR_INDEX),
 			ByteBuf::from(
-				nitro::expected_manifest_commitment_pcr(
-					nitro::ManifestCommitmentKind::Setup,
+				nitro::expected_manifest_commitment_pcr::<nitro::Setup>(
 					&manifest.qos_hash(),
 					&eph_pub_key,
 				)
@@ -1164,12 +1163,12 @@ mod test {
 			eph_pair: &P256Pair,
 		) -> MockNsm {
 			let manifest = &manifest_envelope.manifest;
-			let setup_commitment_pcr = nitro::expected_manifest_commitment_pcr(
-				nitro::ManifestCommitmentKind::Setup,
-				&manifest.qos_hash(),
-				&eph_pair.public_key().to_bytes(),
-			)
-			.unwrap();
+			let setup_commitment_pcr =
+				nitro::expected_manifest_commitment_pcr::<nitro::Setup>(
+					&manifest.qos_hash(),
+					&eph_pair.public_key().to_bytes(),
+				)
+				.unwrap();
 
 			MockNsm::new()
 				.with_pcr(0, manifest.enclave.pcr0.clone())

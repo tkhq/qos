@@ -34,7 +34,7 @@ The details for how QOS nodes communicate with each other can vary, but for the 
     1) Check signatures over the manifest envelope.
     1) Check that the submitted Pivot App binary matches the pivot hash in the New Manifest.
     1) Generate the setup Ephemeral Key and live Ephemeral Key.
-    1) Extend PCR16 with the setup manifest/key commitment and PCR17 with the live manifest/key commitment, then lock the full attestable PCR range before publishing pivot start files.
+    1) Extend PCR16 with the setup manifest/key commitment, PCR17 with the live manifest/key commitment and PCR18 with the ephemeral-free manifest commitment, then lock the full attestable PCR range before publishing pivot start files.
     1) Write the setup Ephemeral Key, Pivot App binary, and New Manifest Envelope to the New Node's filesystem.
     1) Make a setup attestation request, placing the New Manifest hash in the `user_data` field and the setup Ephemeral Key public key in the `public_key` field.
     1) Return the NSM Response containing COSE Sign1 encoded attestation document.
