@@ -325,6 +325,24 @@ pub(crate) fn ensure_unique_members(
 	Ok(())
 }
 
+/// Ensure a threshold can be met, and cannot be met vacuously.
+///
+/// # Errors
+///
+/// Returns [`ProtocolError::InvalidThreshold`] if the threshold is zero, in
+/// which case no approval at all would satisfy it, or if it is larger than
+/// the set, in which case it can never be satisfied.
+pub(crate) fn ensure_valid_threshold(
+	threshold: u32,
+	members: &[QuorumMember],
+) -> Result<(), ProtocolError> {
+	if threshold == 0 || threshold as usize > members.len() {
+		return Err(ProtocolError::InvalidThreshold);
+	}
+
+	Ok(())
+}
+
 /// The Manifest Set.
 #[derive(
 	PartialEq,
@@ -662,6 +680,10 @@ impl ManifestEnvelope {
 	/// number of members approved.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
 		ensure_unique_members(&self.manifest.manifest_set.members)?;
+		ensure_valid_threshold(
+			self.manifest.manifest_set.threshold,
+			&self.manifest.manifest_set.members,
+		)?;
 
 		let manifest_hash = self.manifest.qos_hash();
 		let mut uniq_members = HashSet::new();
@@ -1364,6 +1386,51 @@ mod test {
 		assert!(!Path::new(&*pivot_file).exists());
 		assert!(!Path::new(&*ephemeral_file).exists());
 		assert!(!Path::new(&*manifest_file).exists());
+	}
+
+	#[test]
+	fn check_approvals_rejects_a_zero_threshold() {
+		let (mut manifest, ..) = get_manifest();
+		// No member would have to approve for `0` approvals to satisfy a
+		// threshold of `0`.
+		manifest.manifest_set.threshold = 0;
+		manifest.manifest_set.members = vec![];
+
+		let manifest_envelope = ManifestEnvelope {
+			manifest,
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		};
+
+		let err = manifest_envelope.check_approvals().unwrap_err();
+		assert_eq!(err, ProtocolError::InvalidThreshold);
+	}
+
+	#[test]
+	fn check_approvals_rejects_an_unsatisfiable_threshold() {
+		let (mut manifest, members, ..) = get_manifest();
+		let threshold =
+			u32::try_from(manifest.manifest_set.members.len()).unwrap() + 1;
+		manifest.manifest_set.threshold = threshold;
+
+		let manifest_hash = manifest.qos_hash();
+		let approvals: Vec<_> = members
+			.iter()
+			.cloned()
+			.map(|(pair, member)| Approval {
+				signature: pair.sign(&manifest_hash).unwrap(),
+				member,
+			})
+			.collect();
+
+		let manifest_envelope = ManifestEnvelope {
+			manifest,
+			manifest_set_approvals: approvals,
+			share_set_approvals: vec![],
+		};
+
+		let err = manifest_envelope.check_approvals().unwrap_err();
+		assert_eq!(err, ProtocolError::InvalidThreshold);
 	}
 
 	#[test]

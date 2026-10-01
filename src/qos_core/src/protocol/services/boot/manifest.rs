@@ -433,6 +433,10 @@ impl VersionedManifestEnvelope {
 	/// unauthorized, duplicate approvals exist, or the threshold is not met.
 	pub fn check_approvals(&self) -> Result<(), ProtocolError> {
 		super::ensure_unique_members(&self.manifest_set().members)?;
+		super::ensure_valid_threshold(
+			self.manifest_set().threshold,
+			&self.manifest_set().members,
+		)?;
 
 		let manifest_hash = self.manifest_hash();
 		let mut uniq_members = std::collections::HashSet::new();
@@ -815,6 +819,46 @@ mod tests {
 		assert!(matches!(decoded, VersionedManifestEnvelope::V2(_)));
 		assert_eq!(decoded.manifest_hash(), manifest_hash);
 		assert!(decoded.check_approvals().is_ok());
+	}
+
+	#[test]
+	fn versioned_check_approvals_rejects_a_zero_threshold() {
+		let pair = P256Pair::generate().unwrap();
+		let mut manifest = sample_v2_manifest(sample_member(&pair));
+		// Without a lower bound, an empty manifest set with a threshold of
+		// `0` is satisfied by `0` approvals.
+		manifest.manifest_set = ManifestSet { threshold: 0, members: vec![] };
+
+		let envelope = VersionedManifestEnvelope::V2(ManifestEnvelopeV2 {
+			manifest,
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		});
+
+		let err = envelope.check_approvals().unwrap_err();
+		assert_eq!(err, ProtocolError::InvalidThreshold);
+	}
+
+	#[test]
+	fn versioned_check_approvals_rejects_an_unsatisfiable_threshold() {
+		let pair = P256Pair::generate().unwrap();
+		let member = sample_member(&pair);
+		let mut manifest = sample_v2_manifest(member.clone());
+		manifest.manifest_set =
+			ManifestSet { threshold: 2, members: vec![member.clone()] };
+
+		let manifest_hash = canonical_json_hash(&manifest);
+		let envelope = VersionedManifestEnvelope::V2(ManifestEnvelopeV2 {
+			manifest,
+			manifest_set_approvals: vec![Approval {
+				signature: pair.sign(&manifest_hash).unwrap(),
+				member,
+			}],
+			share_set_approvals: vec![],
+		});
+
+		let err = envelope.check_approvals().unwrap_err();
+		assert_eq!(err, ProtocolError::InvalidThreshold);
 	}
 
 	#[test]
