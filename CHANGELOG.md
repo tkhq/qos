@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_core` - [0.15.1](https://github.com/tkhq/qos/compare/qos_core-v0.15.0...qos_core-v0.15.1) - 2026-10-06
+
+### Other
+- fix comment on host bridge error logic
+
 ## `qos_client` - [0.15.0](https://github.com/tkhq/qos/compare/qos_client-v0.14.1...qos_client-v0.15.0) - 2026-09-30
 
 ### Other
