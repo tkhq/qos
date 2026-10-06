@@ -1,7 +1,7 @@
 //! Streaming socket based server for use in an enclave. Listens for connections
 //! from [`crate::client::Client`].
 
-use std::{future::Future, ops::Deref, sync::Arc};
+use std::{future::Future, ops::Deref, sync::Arc, time::Duration};
 
 use tokio::{
 	sync::{OwnedSemaphorePermit, Semaphore},
@@ -9,6 +9,11 @@ use tokio::{
 };
 
 use crate::io::{IOError, Listener, Stream, StreamPool};
+
+/// How long to wait before re-accepting after an `accept` error, so a
+/// persistent error (e.g. hitting the file descriptor limit) cannot spin
+/// the accept loop at 100% CPU and starve the runtime.
+const ACCEPT_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
 
 /// Error variants for [`SocketServer`]
 #[derive(Debug)]
@@ -205,15 +210,21 @@ where
 {
 	let connections = Arc::new(Semaphore::const_new(max_connections));
 	loop {
-		let mut stream =
-			match PermittedStream::accept(&listener, connections.clone()).await
-			{
-				Ok(stream) => stream,
-				Err(err) => {
-					eprintln!("SocketServer: error on accept {err:?}");
-					continue;
-				}
-			};
+		let mut stream = match PermittedStream::accept(
+			&listener,
+			connections.clone(),
+		)
+		.await
+		{
+			Ok(stream) => stream,
+			Err(err) => {
+				eprintln!(
+					"SocketServer: error on accept {err:?}, retrying in {ACCEPT_ERROR_RETRY_DELAY:?}"
+				);
+				tokio::time::sleep(ACCEPT_ERROR_RETRY_DELAY).await;
+				continue;
+			}
+		};
 
 		let processor = processor.clone();
 

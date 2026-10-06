@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 
 use futures::future::join_all;
 use tokio::{
@@ -10,6 +10,11 @@ use tokio::{
 use crate::io::SocketAddress;
 
 use super::{IOError, Listener, Stream, StreamPool};
+
+/// How long to wait before re-accepting after an `accept` error, so a
+/// persistent error (e.g. hitting the file descriptor limit) cannot spin
+/// the accept loop at 100% CPU and starve the runtime.
+const ACCEPT_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
 
 /// A bridge implementing streaming connectivity TCP -> VSOCK -> TCP in either direction
 pub struct HostBridge {
@@ -121,8 +126,9 @@ async fn tcp_to_vsock(
 			Ok((value, _)) => value,
 			Err(err) => {
 				eprintln!(
-					"error accepting connection on tcp addr {host_addr}: {err:?}"
+					"error accepting connection on tcp addr {host_addr}: {err:?}, retrying in {ACCEPT_ERROR_RETRY_DELAY:?}"
 				);
+				tokio::time::sleep(ACCEPT_ERROR_RETRY_DELAY).await;
 				continue;
 			}
 		};
@@ -161,7 +167,10 @@ async fn vsock_to_tcp(
 		let mut enclave_stream = match enclave_listener.accept().await {
 			Ok(value) => value,
 			Err(err) => {
-				eprintln!("error accepting connection on vsock: {err:?}");
+				eprintln!(
+					"error accepting connection on vsock: {err:?}, retrying in {ACCEPT_ERROR_RETRY_DELAY:?}"
+				);
+				tokio::time::sleep(ACCEPT_ERROR_RETRY_DELAY).await;
 				continue;
 			}
 		};
