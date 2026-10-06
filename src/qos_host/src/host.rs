@@ -93,7 +93,7 @@ impl HostServer {
 			.route(&self.path(ENCLAVE_HEALTH), get(Self::enclave_health))
 			.route(&self.path(MESSAGE), post(Self::message))
 			.route(&self.path(ENCLAVE_INFO), get(Self::enclave_info))
-			.layer(DefaultBodyLimit::disable())
+			.layer(DefaultBodyLimit::max(MAX_ENCODED_MSG_LEN))
 			.with_state(state);
 
 		println!("HostServer listening on {}", self.addr);
