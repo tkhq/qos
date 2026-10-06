@@ -43,8 +43,11 @@ provisioning document, or **live** for a post-provision app document.
    from `manifest_hash` and `public_key` as defined below. Verify it equals PCR16
    for setup documents or PCR17 for live documents.
 
-9. **Verify the manifest-only commitment.** Reconstruct PCR18 from
-   `manifest_hash` as below; this does not replace step 8's key binding.
+9. **Verify PCR18 when required by your trusted QOS release policy.** Reconstruct
+   PCR18 from `manifest_hash` as below. The setup/live verification wrappers omit
+   this check for compatibility with older releases; call
+   `verify_attestation_doc_manifest_only_commitment` explicitly. This does not
+   replace step 8's key binding.
 
 ## Constants
 
