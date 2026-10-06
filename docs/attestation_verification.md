@@ -43,11 +43,11 @@ provisioning document, or **live** for a post-provision app document.
    from `manifest_hash` and `public_key` as defined below. Verify it equals PCR16
    for setup documents or PCR17 for live documents.
 
-9. **Verify PCR18 when required by your trusted QOS release policy.** Reconstruct
-   PCR18 from `manifest_hash` as below. The setup/live verification wrappers omit
-   this check for compatibility with older releases; call
-   `verify_attestation_doc_manifest_only_commitment` explicitly. This does not
-   replace step 8's key binding.
+9. **Optional: verify PCR18.** Use it to check that multiple enclaves have the
+   same manifest (manifest group), or to verify an enclave's manifest without
+   knowing its ephemeral key. It does not replace any existing PCR checks. The
+   setup/live verification wrappers omit PCR18; to check it against
+   `manifest_hash`, call `verify_attestation_doc_manifest_only_commitment`.
 
 ## Constants
 
