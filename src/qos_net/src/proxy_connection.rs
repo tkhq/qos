@@ -27,6 +27,14 @@ type ResolverKey = (Vec<IpAddr>, u16);
 static RESOLVERS: OnceLock<Mutex<HashMap<ResolverKey, Arc<TokioResolver>>>> =
 	OnceLock::new();
 
+/// How many distinct DNS configurations the resolver cache keeps.
+///
+/// The resolver addresses and port arrive with every `ConnectByName`
+/// request, so an app that varies them would otherwise grow this cache for
+/// the lifetime of the proxy process. Past the bound a resolver is built per
+/// request instead of being cached.
+const MAX_CACHED_RESOLVERS: usize = 32;
+
 /// Struct representing a TCP connection held on our proxy
 pub struct ProxyConnection {
 	/// IP address of the remote host
@@ -165,7 +173,22 @@ fn cached_resolver(
 			"Resolver cache lock poisoned".to_string(),
 		)
 	})?;
-	Ok(resolvers.entry(key).or_insert(resolver).clone())
+	Ok(cache_resolver(&mut resolvers, key, resolver))
+}
+
+/// Cache `resolver` under `key` while the cache is below its bound, and
+/// return the resolver to use.
+fn cache_resolver(
+	resolvers: &mut HashMap<ResolverKey, Arc<TokioResolver>>,
+	key: ResolverKey,
+	resolver: Arc<TokioResolver>,
+) -> Arc<TokioResolver> {
+	if resolvers.len() >= MAX_CACHED_RESOLVERS && !resolvers.contains_key(&key)
+	{
+		return resolver;
+	}
+
+	resolvers.entry(key).or_insert(resolver).clone()
 }
 
 fn build_resolver(
@@ -216,6 +239,27 @@ mod test {
 	use tokio_rustls::TlsConnector;
 
 	use super::*;
+
+	fn resolver_for(last_octet: u8) -> (ResolverKey, Arc<TokioResolver>) {
+		let addrs = vec![IpAddr::from([127, 0, 0, last_octet])];
+		let resolver = Arc::new(build_resolver(&addrs, 53).unwrap());
+
+		((addrs, 53), resolver)
+	}
+
+	#[test]
+	fn resolver_cache_is_bounded() {
+		let mut resolvers = HashMap::new();
+
+		// A request supplying a fresh DNS configuration every time must not
+		// grow the cache past its bound.
+		for i in 0..u8::try_from(MAX_CACHED_RESOLVERS).unwrap() + 10 {
+			let (key, resolver) = resolver_for(i);
+			cache_resolver(&mut resolvers, key, resolver);
+		}
+
+		assert_eq!(resolvers.len(), MAX_CACHED_RESOLVERS);
+	}
 
 	#[tokio::test]
 	async fn can_fetch_tls_content_with_proxy_connection() {
