@@ -47,8 +47,8 @@ with no other content:
 2001:db8::1
 ```
 
-The file appears on the first update. Each update replaces it by rename, so
-readers always see a complete list. It lives on tmpfs: pivot restarts keep it,
+The file appears on the first update. Each update rewrites it in place, so a
+reader that races an update can see a partial list and should re-read. It lives on tmpfs: pivot restarts keep it,
 and an enclave restart clears it. Pivots must treat it as read-only.
 
 The list has no ports. The application decides how to reach an address.
