@@ -160,7 +160,6 @@ impl GetParserForOptions for ProxyParser {
 					"the pool size to use with all socket types.",
 				)
 				.takes_value(true)
-				.forbids(vec!["port", "cid"])
 				.default_value("1"),
 			)
 	}
@@ -207,6 +206,22 @@ mod test {
 
 		let pool = opts.async_pool().unwrap();
 		assert_eq!(pool.len(), 7);
+	}
+
+	#[test]
+	fn parse_pool_size_with_vsock() {
+		let mut args: Vec<_> =
+			vec!["binary", "--cid", "6", "--port", "3999", "--pool-size", "4"]
+				.into_iter()
+				.map(String::from)
+				.collect();
+		let opts = ProxyOpts::new(&mut args);
+
+		assert_eq!(*opts.parsed.single(CID).unwrap(), "6".to_string());
+		assert_eq!(*opts.parsed.single(POOL_SIZE).unwrap(), "4".to_string());
+
+		#[cfg(not(target_os = "macos"))]
+		assert_eq!(opts.async_pool().unwrap().len(), 4);
 	}
 
 	#[test]
