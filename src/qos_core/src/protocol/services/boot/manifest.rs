@@ -17,7 +17,7 @@ mod builder;
 pub mod v2;
 
 pub use builder::{ManifestBuilder, ManifestBuilderError};
-pub use v2::{DnsConfig, ManifestEnvelopeV2, ManifestV2};
+pub use v2::{DnsConfig, ManifestEnvelopeV2, ManifestV2, PeerDiscoveryConfig};
 
 /// Schema version used by versioned manifest tooling.
 #[derive(
@@ -232,6 +232,17 @@ impl VersionedManifest {
 		match self {
 			Self::V2(manifest) => manifest.dns.as_ref(),
 			Self::V1(_) | Self::V0(_) => None,
+		}
+	}
+
+	/// Whether peer discovery is enabled. Only Manifest V2 can enable it.
+	#[must_use]
+	pub fn peer_discovery_enabled(&self) -> bool {
+		match self {
+			Self::V2(manifest) => {
+				manifest.peer_discovery.as_ref().is_some_and(|c| c.enabled)
+			}
+			Self::V1(_) | Self::V0(_) => false,
 		}
 	}
 
@@ -559,6 +570,7 @@ mod tests {
 				qos_commit: "commit".to_string(),
 			},
 			dns: None,
+			peer_discovery: None,
 		}
 	}
 

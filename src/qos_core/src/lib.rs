@@ -6,6 +6,7 @@ pub mod client;
 pub mod handles;
 pub mod io;
 pub mod parser;
+pub mod peer_discovery;
 pub mod protocol;
 pub mod reaper;
 pub mod server;

@@ -167,6 +167,14 @@ impl ProtocolRoute {
 		)
 	}
 
+	pub fn peers(current_phase: ProtocolPhase) -> Self {
+		ProtocolRoute::new(
+			Box::new(handlers::peers),
+			current_phase,
+			current_phase,
+		)
+	}
+
 	pub fn inject_key(_current_phase: ProtocolPhase) -> Self {
 		ProtocolRoute::new(
 			Box::new(handlers::inject_key),
@@ -188,6 +196,7 @@ impl ProtocolRoute {
 pub(crate) struct ProtocolState {
 	pub provisioner: SecretBuilder,
 	pub attestor: Box<dyn NsmProvider>,
+	pub peers: crate::peer_discovery::Peers,
 	pub handles: Handles,
 	pending_live_ephemeral_key: Option<P256Pair>,
 	phase: ProtocolPhase,
@@ -212,6 +221,9 @@ impl ProtocolState {
 
 		Self {
 			attestor,
+			peers: crate::peer_discovery::Peers::new(
+				crate::peer_discovery::UNTRUSTED_PEERS_FILE.into(),
+			),
 			provisioner,
 			pending_live_ephemeral_key: None,
 			phase: init_phase,
@@ -302,6 +314,7 @@ impl ProtocolState {
 					ProtocolRoute::manifest_envelope(self.phase),
 					// phase specific routes
 					ProtocolRoute::export_key(self.phase),
+					ProtocolRoute::peers(self.phase),
 				]
 			}
 			ProtocolPhase::WaitingForForwardedKey => {
@@ -461,6 +474,31 @@ mod handlers {
 			.map_err(ProtocolMsg::ProtocolErrorResponse);
 
 		Some(result)
+	}
+
+	/// Update the untrusted host-provided peer list if the manifest enables it.
+	pub(super) fn peers(
+		req: &ProtocolMsg,
+		state: &mut ProtocolState,
+	) -> ProtocolRouteResponse {
+		let enabled = || {
+			state.handles.get_manifest_envelope().is_ok_and(|envelope| {
+				envelope.manifest().peer_discovery_enabled()
+			})
+		};
+		let result = match req {
+			ProtocolMsg::AddPeersRequest { ips } if enabled() => state
+				.peers
+				.update(|peers| peers.extend(ips))
+				.map(|()| ProtocolMsg::AddPeersResponse),
+			ProtocolMsg::RemovePeersRequest { ips } if enabled() => state
+				.peers
+				.update(|peers| peers.retain(|ip| !ips.contains(ip)))
+				.map(|()| ProtocolMsg::RemovePeersResponse),
+			_ => return None,
+		};
+
+		Some(result.map_err(|e| ProtocolMsg::ProtocolErrorResponse(e.into())))
 	}
 
 	pub(super) fn boot_genesis(
