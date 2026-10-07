@@ -1,95 +1,72 @@
 # Peer Discovery
 
-Status: Draft target specification
+QOS can give a pivot a list of peer IP addresses supplied by the host. The list
+is untrusted advice. The guest checks nothing about the peers and never
+contacts them.
 
-QOS peer discovery maintains an enclave-local list of peers whose attestation
-the guest has verified. The host supplies untrusted candidate addresses. A
-guest worker contacts those addresses and publishes one file per verified peer
-under `/run/qos/peers/`. Pivots can read these files directly in any language.
+## Configuration
 
-Peer discovery requires egress and manifest opt-in, available in Manifest V2
-and later versions. The worker runs independently of application requests.
-Periodic refresh is optional; failed contacts use exponential backoff.
+Manifest V2 has an optional `peerDiscovery` object:
 
-This directory defines the target contract. The peer discovery worker,
-manifest configuration, host advice messages, and file publisher are not yet
-implemented.
+```json
+"peerDiscovery": {"enabled": true}
+```
 
-## Normative language
+Discovery is disabled when the field is absent or `enabled` is `false`.
+Manifest V0 and V1 do not support it. `qos_client generate-manifest
+--use-manifest-version 2 --peer-discovery true` writes the field, and manifest
+approval displays the setting.
 
-The words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, and MAY are normative
-when they use uppercase letters.
+## Control messages
 
-## Advice and attestation
+The host sends these over the existing control channel, for example through
+QOS Host's `POST /qos/message`:
 
-Host input is untrusted, nondeterministic routing advice. Discovery's security
-guarantee is that the guest validates attestation before publishing a peer.
-The contact address, advice order, completeness, and availability are not
-trusted. Denial of service by the host is outside the QOS security model;
-advice authentication is not required.
+```json
+{"addPeersRequest": {"ips": ["192.0.2.42", "2001:db8::1"]}}
+{"removePeersRequest": {"ips": ["192.0.2.42"]}}
+```
 
-The guest MUST verify the signed attestation and its binding to the reported
-manifest and live ephemeral public key. Attestation validation does not
-establish local approval of the peer's software. Manifest relationship is a
-hash comparison; pivots apply their own application trust policy.
+Adding a listed address or removing an unlisted one changes nothing. The guest
+responds `"addPeersResponse"` or `"removePeersResponse"` after the peer file is
+updated. On failure it returns a `ProtocolErrorResponse` and the list is
+unchanged. The guest accepts these messages only after the quorum key is
+provisioned and only if the manifest enables discovery. They never change the
+protocol phase.
 
-The contact address remains routing advice. The proof does not bind the HTTP
-connection or IP address to the live key. A pivot authenticates an application
-connection using the attested key when needed.
+The guest does not expire or limit entries. Keeping the list current is up to
+the host.
 
-Discovery is an observation service. File presence records a successful
-verification at `lastContactedAt`; it does not guarantee that a peer is still
-reachable or that its application is healthy.
+## Peer file
 
-## Document map
+`/run/qos/untrusted_host_provided_peers.json` holds the list as a JSON array of
+address strings:
 
-- [Configuration](configuration.md) defines manifest opt-in and compatibility.
-- [Candidate advice](control_protocol.md) defines host-to-guest messages and
-  advice updates.
-- [Verification](verification.md) defines proof retrieval and peer identity.
-- [Runtime](runtime.md) defines host advice, scheduling, removal, and retry.
-- [Peer files](peer_files.md) defines the guest-facing API and publication.
-- [Conformance](conformance.md) defines the required behavior checks.
+```json
+["192.0.2.42", "2001:db8::1"]
+```
 
-## Evolution
+The file appears on the first update. Each update replaces it by rename, so
+readers always see a complete list. It lives on tmpfs: pivot restarts keep it,
+and an enclave restart clears it. Pivots must treat it as read-only.
 
-These files are the living specification for peer discovery. Changes to its
-contract MUST update the relevant specification and conformance requirements
-in the same repository as the implementation.
+The list has no ports. The application decides how to reach an address.
 
-The initial proof transport is `POST /qos/message`. A later specification MAY
-replace that transport without changing the peer file contract.
+## Trust
 
-Peer file version `v1` has the meaning defined in [Peer files](peer_files.md).
-An incompatible record change MUST use a new version. An additive field MUST
-define its meaning when absent.
+An entry means only that the host asked for it. Before trusting a listed peer,
+a pivot must verify the peer itself. For example, it can fetch the peer's live
+attestation over the application's own protocol, check it against its own
+policy, and then authenticate later messages with the attested key.
 
-## Initial contract
+The host can already deny service, so controlling the list gives it no new
+power.
 
-Manifest V2 and later versions use the optional `peerDiscovery` object.
-Discovery accepts peers whose live attestations validate. It labels their
-manifest hashes `sameManifest` or `otherManifest` relative to the local
-manifest. These labels do not express approval.
+## Rejected alternative: guest-verified peers
 
-The guest excludes its own live public key from the peer list.
-
-The host suggests addresses to contact. The guest verifies new addresses and
-maintains known peers independently of later advice changes. Contacts already
-in progress can publish valid results even if their addresses are omitted from
-new advice. The initial runtime has hardcoded limits of 1,000 suggested
-addresses per list and 1,000 published peers.
-
-Initial networking supports IPv4. Address types and file readers MUST support
-both IPv4 and IPv6 so IPv6 networking can be added without changing the wire
-or file schemas.
-
-Refresh defaults to 10 minutes. Evidence can be at most 10 minutes old or
-1 minute ahead of local NSM time. With periodic refresh enabled, a peer becomes
-stale after 30 minutes without a successful contact and its file is removed.
-HTTP requests time out after 30 seconds.
-Retries use a 30-second base and 10-minute cap with jitter. The worker permits
-32 concurrent contacts.
-
-Peer files contain compact metadata. They omit full attestation documents and
-manifest envelopes. Consumers can obtain evidence from the contact endpoint;
-a later specification MAY add evidence to the files.
+We considered having the guest verify each peer's attestation and list only
+peers in the same application. "Same application" is a policy: the same
+Manifest Set, quorum key, QOS measurements, or some combination, and each of
+these changes across upgrades. Verification also would not authenticate the
+address or later messages, so pivots would still have to verify peers
+themselves. We left verification to them.

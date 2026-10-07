@@ -8,7 +8,10 @@ use crate::protocol::{
 	},
 };
 
-use super::{DnsConfig, ManifestV2, ManifestVersion, VersionedManifest};
+use super::{
+	DnsConfig, ManifestV2, ManifestVersion, PeerDiscoveryConfig,
+	VersionedManifest,
+};
 
 /// An error returned when a required manifest value was not provided.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -40,6 +43,9 @@ pub enum ManifestBuilderError {
 	/// A v2 manifest cannot contain a patch approval set.
 	#[error("manifest v2 does not support a patch set")]
 	V2DoesNotSupportPatchSet,
+	/// A v1 manifest cannot contain peer discovery configuration.
+	#[error("manifest v1 does not support peer discovery")]
+	V1DoesNotSupportPeerDiscovery,
 }
 
 /// Builds a versioned manifest using either the v1 or v2 schema.
@@ -63,6 +69,7 @@ pub struct ManifestBuilder {
 	enclave: Option<NitroConfig>,
 	patch_set: Option<PatchSet>,
 	dns: Option<DnsConfig>,
+	peer_discovery: Option<PeerDiscoveryConfig>,
 }
 
 impl Default for ManifestBuilder {
@@ -89,6 +96,7 @@ impl ManifestBuilder {
 			enclave: None,
 			patch_set: None,
 			dns: None,
+			peer_discovery: None,
 		}
 	}
 
@@ -195,6 +203,13 @@ impl ManifestBuilder {
 		self
 	}
 
+	/// Set peer discovery configuration.
+	#[must_use]
+	pub fn peer_discovery(mut self, config: PeerDiscoveryConfig) -> Self {
+		self.peer_discovery = Some(config);
+		self
+	}
+
 	/// Build the manifest in its version-preserving wrapper.
 	///
 	/// # Errors
@@ -226,6 +241,11 @@ impl ManifestBuilder {
 				}
 				if self.dns.is_some() {
 					return Err(ManifestBuilderError::V1DoesNotSupportDns);
+				}
+				if self.peer_discovery.is_some() {
+					return Err(
+						ManifestBuilderError::V1DoesNotSupportPeerDiscovery,
+					);
 				}
 				let patch_set = self
 					.patch_set
@@ -266,6 +286,7 @@ impl ManifestBuilder {
 					share_set,
 					enclave,
 					dns: self.dns,
+					peer_discovery: self.peer_discovery,
 				}))
 			}
 		}
