@@ -39,11 +39,12 @@ the host.
 
 ## Peer file
 
-`/run/qos/untrusted_host_provided_peers.json` holds the list as a JSON array of
-address strings:
+`/run/qos/untrusted_host_provided_peers` holds one IP address per line, sorted,
+with no other content:
 
-```json
-["192.0.2.42", "2001:db8::1"]
+```text
+192.0.2.42
+2001:db8::1
 ```
 
 The file appears on the first update. Each update replaces it by rename, so

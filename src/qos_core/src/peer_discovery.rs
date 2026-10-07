@@ -2,9 +2,8 @@
 
 use std::{collections::BTreeSet, fs, io, net::IpAddr, path::PathBuf};
 
-/// Guest file holding the peer IP addresses as a JSON array of strings.
-pub const UNTRUSTED_PEERS_FILE: &str =
-	"/run/qos/untrusted_host_provided_peers.json";
+/// Guest file holding the peer IP addresses as a newline-separated list.
+pub const UNTRUSTED_PEERS_FILE: &str = "/run/qos/untrusted_host_provided_peers";
 
 /// The published peer list.
 pub(crate) struct Peers {
@@ -28,10 +27,10 @@ impl Peers {
 			fs::create_dir_all(directory)?;
 		}
 		// Rename over the file so readers never see a partial list.
-		let temporary = self.path.with_extension("json.tmp");
+		let temporary = self.path.with_extension("tmp");
 		fs::write(
 			&temporary,
-			qos_json::to_vec(&ips).map_err(io::Error::other)?,
+			ips.iter().map(|ip| ip.to_string() + "\n").collect::<String>(),
 		)?;
 		fs::rename(temporary, &self.path)?;
 		self.ips = ips;
@@ -78,7 +77,7 @@ mod tests {
 			handles.clone(),
 			Some(ProtocolPhase::QuorumKeyProvisioned),
 		);
-		state.peers = Peers::new(root.join("peers.json"));
+		state.peers = Peers::new(root.join("peers"));
 		let processor = ProtocolProcessor::new(state.shared());
 		let send = async |request: &[u8]| {
 			ProtocolMsg::from_wire_any(&processor.process(request).await)
@@ -86,7 +85,7 @@ mod tests {
 		};
 		let add = br#"{"addPeersRequest":{"ips":["2001:db8::1","192.0.2.1","192.0.2.1"]}}"#;
 		let remove = br#"{"removePeersRequest":{"ips":["192.0.2.1"]}}"#;
-		let peers = || fs::read_to_string(root.join("peers.json")).unwrap();
+		let peers = || fs::read_to_string(root.join("peers")).unwrap();
 
 		assert!(matches!(
 			send(add).await,
@@ -128,11 +127,11 @@ mod tests {
 
 		for _ in 0..2 {
 			assert_eq!(send(add).await, ProtocolMsg::AddPeersResponse);
-			assert_eq!(peers(), r#"["192.0.2.1","2001:db8::1"]"#);
+			assert_eq!(peers(), "192.0.2.1\n2001:db8::1\n");
 		}
 		for _ in 0..2 {
 			assert_eq!(send(remove).await, ProtocolMsg::RemovePeersResponse);
-			assert_eq!(peers(), r#"["2001:db8::1"]"#);
+			assert_eq!(peers(), "2001:db8::1\n");
 		}
 	}
 }

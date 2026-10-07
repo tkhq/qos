@@ -152,10 +152,6 @@ If something goes wrong during a release and you want to retry, you can open a P
 
 ## Components
 
-Feature contracts live alongside the implementation. The
-[Peer Discovery specification](docs/peer_discovery/README.md) defines the
-guest's untrusted host-provided peer list and file API.
-
 ### Enclave
 
 - houses server for listening to the Host
