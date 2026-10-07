@@ -75,6 +75,20 @@ impl HostServer {
 		}
 	}
 
+	/// Build the router, limiting request bodies to `body_limit` bytes.
+	///
+	/// The limit is enforced by the framework while the body is read, so an
+	/// oversized request is rejected instead of being buffered in full.
+	fn router(&self, state: Arc<QosHostState>, body_limit: usize) -> Router {
+		Router::new()
+			.route(&self.path(HOST_HEALTH), get(Self::host_health))
+			.route(&self.path(ENCLAVE_HEALTH), get(Self::enclave_health))
+			.route(&self.path(MESSAGE), post(Self::message))
+			.route(&self.path(ENCLAVE_INFO), get(Self::enclave_info))
+			.layer(DefaultBodyLimit::max(body_limit))
+			.with_state(state)
+	}
+
 	/// Start the server, running indefinitely.
 	///
 	/// # Panics
@@ -88,13 +102,7 @@ impl HostServer {
 
 		let state = Arc::new(QosHostState { enclave_client });
 
-		let app = Router::new()
-			.route(&self.path(HOST_HEALTH), get(Self::host_health))
-			.route(&self.path(ENCLAVE_HEALTH), get(Self::enclave_health))
-			.route(&self.path(MESSAGE), post(Self::message))
-			.route(&self.path(ENCLAVE_INFO), get(Self::enclave_info))
-			.layer(DefaultBodyLimit::disable())
-			.with_state(state);
+		let app = self.router(state, MAX_ENCODED_MSG_LEN);
 
 		println!("HostServer listening on {}", self.addr);
 
@@ -309,4 +317,95 @@ async fn get_manifest_envelope(
 	};
 
 	Ok(manifest_envelope)
+}
+
+#[cfg(test)]
+mod test {
+	use std::{net::SocketAddr, sync::Arc, time::Duration};
+
+	use qos_core::{client::SocketClient, io::SocketAddress};
+	use tokio::{
+		io::{AsyncReadExt, AsyncWriteExt},
+		net::{TcpListener, TcpStream},
+	};
+
+	use super::{HostServer, QosHostState};
+
+	const BODY_LIMIT: usize = 1024;
+
+	/// Serve the host router with a small body limit and return its address.
+	async fn serve_with_body_limit() -> SocketAddr {
+		let server = HostServer::new(
+			// Never connected to in these tests.
+			SocketAddress::new_unix("./qos_host_body_limit_test.sock"),
+			Duration::from_millis(100),
+			"127.0.0.1:0".parse().unwrap(),
+			None,
+		);
+		let enclave_client = SocketClient::single(
+			server.enclave_address.clone(),
+			server.timeout,
+		)
+		.unwrap();
+		let app = server
+			.router(Arc::new(QosHostState { enclave_client }), BODY_LIMIT);
+
+		let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		tokio::spawn(async move {
+			axum::Server::from_tcp(listener.into_std().unwrap())
+				.unwrap()
+				.serve(app.into_make_service())
+				.await
+				.unwrap();
+		});
+
+		addr
+	}
+
+	/// POST `body` to `/qos/message` and return the response's status line.
+	async fn post_message(addr: SocketAddr, body: &[u8]) -> String {
+		let mut stream = TcpStream::connect(addr).await.unwrap();
+		let header = format!(
+			"POST /qos/message HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+			body.len()
+		);
+		stream.write_all(header.as_bytes()).await.unwrap();
+		stream.write_all(body).await.unwrap();
+
+		let mut response = Vec::new();
+		stream.read_to_end(&mut response).await.unwrap();
+
+		String::from_utf8_lossy(&response)
+			.lines()
+			.next()
+			.unwrap_or_default()
+			.to_string()
+	}
+
+	#[tokio::test]
+	async fn oversized_body_is_rejected_by_the_body_limit() {
+		let addr = serve_with_body_limit().await;
+
+		let status = post_message(addr, &vec![0u8; BODY_LIMIT + 1]).await;
+
+		assert!(
+			status.contains("413"),
+			"expected the body limit to reject the request, got: {status}"
+		);
+	}
+
+	#[tokio::test]
+	async fn body_within_the_limit_reaches_the_handler() {
+		let addr = serve_with_body_limit().await;
+
+		// There is no enclave behind the socket, so the handler answers with
+		// its own error rather than a transport level rejection.
+		let status = post_message(addr, &vec![0u8; BODY_LIMIT]).await;
+
+		assert!(
+			status.contains("500"),
+			"expected the request to reach the handler, got: {status}"
+		);
+	}
 }
