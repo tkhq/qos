@@ -10,7 +10,8 @@ use std::net::IpAddr;
 
 use super::{
 	Approval, BridgeConfig, Manifest, ManifestEnvelope, ManifestEnvelopeV0,
-	ManifestSet, ManifestV0, Namespace, NitroConfig, RestartPolicy, ShareSet,
+	ManifestSet, ManifestV0, Namespace, NitroConfig, PivotEnv, RestartPolicy,
+	ShareSet,
 };
 
 mod builder;
@@ -231,6 +232,16 @@ impl VersionedManifest {
 	pub fn dns_config(&self) -> Option<&DnsConfig> {
 		match self {
 			Self::V2(manifest) => manifest.dns.as_ref(),
+			Self::V1(_) | Self::V0(_) => None,
+		}
+	}
+
+	/// Return the environment variables to inject into the pivot process.
+	/// Only v2 manifests carry pivot env; v0/v1 manifests have none.
+	#[must_use]
+	pub fn env(&self) -> Option<&PivotEnv> {
+		match self {
+			Self::V2(manifest) => Some(&manifest.pivot.env),
 			Self::V1(_) | Self::V0(_) => None,
 		}
 	}
