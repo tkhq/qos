@@ -49,6 +49,10 @@ The path MUST be normalized and MUST NOT contain a NUL byte, repeated `/`, a
 The path MUST NOT overlap a QOS key path, manifest path, runtime-state path,
 OCI bundle path, or another QOS-owned system mount.
 
+Applying this overlap rule to the implicit `qos` volume's location depends on
+the open question about its layout. See
+[Reserved implicit `qos` volume](#reserved-implicit-qos-volume).
+
 Two top-level volume mount paths MUST NOT overlap.
 
 QOS MUST create each top-level volume once at its signed parent `mountPath`.
@@ -133,8 +137,7 @@ QOS MUST apply `readOnly` independently for each workload mount.
 QOS MUST reject a mount path that escapes the container root file system.
 
 QOS MUST reject duplicate or overlapping paths between two `volume` mount
-entries. The initial feature does not permit a nested relationship with
-another mount type.
+entries.
 
 QOS MUST resolve the workload target without following a symbolic link. If the
 target does not exist, QOS MUST create a directory with mode `0755`. If the

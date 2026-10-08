@@ -54,8 +54,10 @@ Conformance tests MUST cover:
 - missing enclave-type rejection;
 - unsupported enclave-type rejection;
 - missing and unsupported enclave-mode rejection;
-- missing, malformed, and wrong-length PCR rejection in both modes;
-- attested PCR comparison and rejection of mismatched or zero-PCR debug evidence;
+- missing, malformed, wrong-length, and uppercase PCR rejection in both modes;
+- parse-time rejection of an attested manifest with PCR0, PCR1, and PCR2 all zero;
+- attested PCR comparison and rejection of mismatched or debug evidence;
+- zero PCR3 alone does not classify evidence as debug evidence;
 - debug acceptance with four 96-zero PCRs and rejection of nonzero PCRs;
 - changing enclave mode changes the signed manifest hash;
 - evidence and enclave-type mismatch rejection;

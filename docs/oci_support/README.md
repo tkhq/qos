@@ -181,7 +181,8 @@ it.
 ## Approval boundary
 
 The signed manifest approves enclave type, mode, PCRs, workload names and
-types, pivot hashes and configuration, image-reference types and digests, volume grants, typed mount grants, and restart behavior.
+types, pivot hashes and configuration, image-reference types and digests,
+volume grants, typed mount grants, and restart behavior.
 
 The QOS Host transports content and storage. It is not a trust anchor.
 

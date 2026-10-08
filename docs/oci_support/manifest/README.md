@@ -25,8 +25,9 @@ Manifest V2 has one `pivot` field. Manifest V3 replaces `pivot` with a
 `workloads` object.
 
 Manifest V2 has an untagged Nitro `enclave` configuration. Manifest V3 adds a
-required `type` discriminator and signed `mode` to `enclave`. Enclave-wide
-mode replaces the V2 pivot debug flag.
+required `type` discriminator and signed `mode` to `enclave`. V3 signs the
+expected debug identity in the enclave configuration. It omits the V2 pivot
+debug flag from workload values.
 
 Manifest V1 and Manifest V2 remain unchanged.
 
@@ -71,16 +72,23 @@ For `nitro`, `mode` MUST be `attested` or `debug`. Both values are signed.
 QOS MUST reject a missing or unsupported mode.
 
 Both modes MUST contain `pcr0`, `pcr1`, `pcr2`, and `pcr3`.
-Each PCR MUST be a hexadecimal string encoding 48 bytes (96 hex characters).
+Each PCR MUST be a lowercase hexadecimal string encoding 48 bytes (96 hex
+characters). Canonical JSON preserves string case. Uppercase hex would change
+the manifest hash, so QOS MUST reject uppercase PCR values.
 The existing Nitro fields `awsRootCertificate` and `qosCommit` retain their
 Manifest V2 meaning and remain required.
 
 In `attested` mode, the PCRs specify the expected Nitro measurements. PCR0
 measures the enclave image. PCR1 measures the kernel and bootstrap. PCR2
 measures the application. PCR3 measures the associated EC2 instance IAM role.
-Verification MUST compare evidence against these approved PCR values using
-the existing Nitro verification rules. Attested verification MUST reject
-zero-PCR debug evidence.
+An `attested` manifest MUST NOT have PCR0, PCR1, and PCR2 all set to zero.
+QOS MUST reject such a manifest at parse time.
+
+Debug evidence means Nitro evidence whose PCR0, PCR1, and PCR2 are all zero.
+PCR3 measures the IAM role and does not determine this classification.
+Verification MUST compare evidence against the approved PCR values using the
+existing Nitro verification rules. Attested verification MUST reject debug
+evidence.
 
 In `debug` mode, every PCR value MUST contain exactly 96 hex zeros. QOS MUST
 reject a debug manifest with any nonzero PCR. Verification MUST compare
@@ -91,13 +99,23 @@ attested enclave. The signed mode distinguishes this
 debug identity from the approved measured configuration. Debug mode MUST NOT
 bypass manifest approval or workload-content verification.
 
-The Manifest V2 pivot debug flag controls whether the reaper pipes and
-reprints pivot output. Visible output also requires enclave logging settings.
-It does not select expected PCRs or bypass PCR comparison. See the
-[V2 pivot schema](../../../src/qos_core/src/protocol/services/boot/manifest/v2.rs)
+In V2, the host's `DEBUG` environment variable at enclave boot sets
+`RunEnclavesArgs.debug_mode`. When `DEBUG` is true, Nitro launches a debug
+enclave and makes the PCRs zero. `LOGS` selects console attachment. See
+[enclave launch](../../../src/qos_enclave/src/main.rs).
+
+The Manifest V2 pivot `debugMode` flag only selects pivot stdout and stderr
+handling. When true, the reaper pipes and reprints output. When false, it
+sends output to null. Visible pivot output also requires `DEBUG` and `LOGS`
+at enclave boot. The flag does not control Nitro launch or expected PCRs.
+It does not bypass PCR comparison. See the
+[V2 pivot schema](../../../src/qos_core/src/protocol/services/boot/manifest/v2.rs),
 [reaper](../../../src/qos_core/src/reaper.rs), and
 [Nitro PCR verification](../../../src/qos_nsm/src/nitro/mod.rs).
-V3 makes debug identity an enclave-wide decision instead of a per-pivot flag.
+
+V3 `enclave.mode` signs the expected enclave identity. It does not control
+Nitro launch. PCR comparison during verification MUST reject a mismatch
+between the launched enclave and the manifest's expected identity.
 Workload values MUST NOT contain a debug-mode field.
 
 Open question: Should V3 `enclave.mode` also select V2-style pivot output
