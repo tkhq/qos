@@ -2,22 +2,20 @@
 
 Status: Future normative addendum
 
-The initial `min-oci-support` feature MAY mount the quorum key or live
-ephemeral key into a named workload when that workload has an explicit
-`mounts` entry with `type: "file"`. These keys use the same parent-QOS
-file-mount mechanism as other regular files. This document defines the
-requirements for a future derived-key mode.
+The initial `min-oci-support` feature exposes the quorum key and live
+ephemeral key to an OCI workload through an explicit read-only volume mount
+with `source: "qos"`. This document defines requirements for a future
+derived-key mode.
 
 ## Manifest compatibility
 
-The signed workload `name` provides the stable identity that a later key
-derivation can use. No initial Manifest V3 file-mount field is reserved for the
+The signed object key in `workloads` provides the stable workload identity
+that a later key derivation can use. No initial manifest field selects
 derivation.
 
-The future extension MAY produce a workload-specific parent QOS file and mount
-that file through a `type: "file"` entry. It MAY instead add a new tagged mount
-type for derived material. It MUST define the exact schema before use. The
-existing `file` type MUST keep its initial direct-file meaning.
+The future extension MAY add a volume type or mount type for derived material.
+It MUST define the exact schema before use. It MUST preserve the existing
+direct-key meaning of `source: "qos"`.
 
 An implementation that does not support the requested derivation MUST reject
 the manifest. It MUST NOT mount the source key instead.

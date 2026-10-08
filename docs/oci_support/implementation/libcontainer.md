@@ -14,7 +14,7 @@ QOS-specific behavior MUST use public `libcontainer` APIs or QOS-owned code.
 The verified OCI image supplies application content and process defaults.
 
 Manifest V3 supplies approved workload identity, image identity, named volume
-mounts, parent-QOS file mounts, and restart behavior.
+mounts (including `qos`), and restart behavior.
 
 QOS supplies the fixed container hardening policy.
 
@@ -68,15 +68,13 @@ The generated Linux configuration MUST follow
 
 QOS MUST translate each `mounts` entry according to its `type`.
 
-For `type: "volume"`, QOS MUST bind-mount the resolved named top-level volume.
-
-For `type: "file"`, QOS MUST bind-mount the approved parent QOS regular file.
+For `type: "volume"`, QOS MUST bind-mount the resolved named volume. The source
+can be a declared top-level volume or the reserved implicit `qos` volume.
 
 QOS MUST create all mounts before the application can read their paths.
 
-QOS MUST order mounts so that fixed runtime mounts come first, declared volume
-mounts come second, and parent-QOS file mounts come last. Declared workload
-mount paths MUST NOT overlap.
+QOS MUST attach fixed runtime mounts before declared workload volume mounts.
+Declared workload mount paths MUST NOT overlap.
 
 QOS MUST make the runtime root path refer only to the verified workload root
 file system.
@@ -130,7 +128,7 @@ container PID namespace, and remove remaining runtime state.
 
 ## Cleanup
 
-QOS MUST unmount workload volume and file mounts during cleanup.
+QOS MUST unmount workload volume mounts during cleanup.
 
 QOS MUST remove the bundle root file system and generated configuration after
 the workload no longer needs them.

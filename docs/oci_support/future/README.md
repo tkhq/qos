@@ -21,8 +21,8 @@ extension's specification.
 - [Seccomp hardening](seccomp.md) adds an optional QOS-owned syscall policy.
 - [BuildKit and StageX](buildkit_stagex.md) add OCI image builds inside the
   enclave.
-- [Additional workload types](additional_workload_types.md) add workloads such
-  as pivots.
+- [Additional workload types](additional_workload_types.md) extend the initial
+  `pivot` and `oci` types.
 - [Workload key derivation](key_derivation.md) adds keys derived for a named workload.
 
 ## Manifest compatibility

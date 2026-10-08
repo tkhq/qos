@@ -54,9 +54,10 @@ layout after QOS has calculated the digest.
 
 Builder network access MUST be explicit. The specification MUST define whether a build has no network, limited network, or approved proxy access. It MUST NOT inherit an unrestricted host network path.
 
-Build secrets MUST use an explicit protected parent-QOS file mount. The builder
-MUST NOT write a secret into an image layer, cache record, build log, or
-attestation. Secret file mounts MUST be temporary and read-only.
+Build secrets MUST use an explicitly approved read-only volume mount. A later
+builder specification MUST define temporary secret-volume behavior and its
+manifest fields. The builder MUST NOT write a secret into an image layer,
+cache record, build log, or attestation.
 
 ## StageX requirements
 

@@ -46,20 +46,24 @@ mount shape:
 
 ```json
 {
-  "name": "postgres",
-  "type": "oci",
-  "image": {
-    "type": "ociManifest",
-    "digest": "sha256:..."
-  },
-  "mounts": [
-    {
-      "type": "volume",
-      "source": "database-data",
-      "mountPath": "/var/lib/postgresql/data",
-      "readOnly": false
+  "workloads": {
+    "postgres": {
+      "type": "oci",
+      "image": {
+        "type": "ociManifest",
+        "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "mounts": [
+        {
+          "type": "volume",
+          "source": "database-data",
+          "mountPath": "/var/lib/postgresql/data",
+          "readOnly": false
+        }
+      ],
+      "restart": "always"
     }
-  ]
+  }
 }
 ```
 
