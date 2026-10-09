@@ -37,29 +37,22 @@ To produce the `qos_enclave` OCI container image, run:
 make out/qos_enclave/index.json
 ```
 
-If you need to extract files from it, you can do so by using [docker](https://docs.docker.com/get-started/get-docker/) and [skopeo](https://github.com/containers/skopeo):
-
-```sh
-# Creates an archive called qos_enclave.tar, with a tag "qos-enclave:latest"
-skopeo copy oci:./out/qos_enclave:latest docker-archive:qos_enclave.tar:qos-enclave:latest
-
-# Load the tar into local docker
-docker load < qos_enclave.tar
-
-# Create the container without running it (outputs a container ID)
-docker create qos-enclave:latest
-
-# Copy files locally for inspection
-docker cp CONTAINER_ID:/nitro.pcrs nitro.pcrs
-
-# Look at the PCR values
-cat nitro.pcrs
+To reproduce the QOS build and print the associated PCR measurements, run:
+```
+make pcrs
 b26733f9... PCR0
 b26733f9... PCR1
 21b9efbc... PCR2
 ```
 
+This builds `out/qos_enclave` if needed, then reads `nitro.pcrs` from the OCI layout with `jq` and `tar`. Use `make pcrs-egress` for the egress variant (`out/qos_enclave_egress`).
+
 These PCR values can be referenced against the content of [AWS remote attestations](https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#pcr012).
+
+To extract any other file from a built OCI layout, use the `scripts/extract_oci_file.sh` helper directly:
+```sh
+sh src/scripts/extract_oci_file.sh out/qos_enclave nitro.eif > nitro.eif
+```
 
 ### Submitting a PR
 
