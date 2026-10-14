@@ -23,14 +23,18 @@ use nitro_cli::{
 		logger::init_logger,
 	},
 	enclave_proc_comm::{
-		enclave_proc_command_send_all, enclave_proc_connect_to_single,
-		enclave_proc_spawn, enclave_process_handle_all_replies,
+		enclave_proc_connect_to_single, enclave_proc_spawn,
+		enclave_process_handle_all_replies,
 	},
 	get_id_by_name,
 	utils::Console,
 };
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
+
+use crate::nitro_cli_compat::enclave_proc_command_send_all;
+
+mod nitro_cli_compat;
 
 const RUN_ENCLAVE_STR: &str = "Run Enclave";
 
