@@ -100,6 +100,9 @@ test:
 	@# enabled. However some tests require it disable, so we test just qos_core
 	@# by itself.
 	cargo test --locked -p qos_core
+ifeq ($(shell uname -s),Linux)
+	cargo test --locked -p qos_core --features egress
+endif
 
 .PHONY: build-linux-only
 build-linux-only: qos_system qos_aws init qos_enclave qos_bridge
