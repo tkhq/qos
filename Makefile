@@ -31,6 +31,14 @@ format: out/.common-loaded
 docs: out/.common-loaded
 	$(call run,cargo doc)
 
+.PHONY: pcrs
+pcrs: out/qos_enclave/index.json
+	@sh src/scripts/extract_oci_file.sh out/qos_enclave nitro.pcrs
+
+.PHONY: pcrs-egress
+pcrs-egress: out/qos_enclave_egress/index.json
+	@sh src/scripts/extract_oci_file.sh out/qos_enclave_egress nitro.pcrs
+
 .PHONY: build-linux-only
 build-linux-only: out/.common-loaded
 	$(call run,make -C src build-linux-only)
