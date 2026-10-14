@@ -813,6 +813,8 @@ impl Command {
 		Parser::new()
 			.token(Self::attestation_doc_path_token())
 			.token(Self::ephemeral_key_path_token())
+			.token(Self::unsafe_skip_attestation_token())
+			.token(Self::validation_time_override_token())
 	}
 
 	fn display() -> Parser {
@@ -1734,6 +1736,8 @@ mod handlers {
 		services::get_ephemeral_key_hex(
 			opts.attestation_doc_path(),
 			opts.ephemeral_key_path(),
+			opts.unsafe_skip_attestation(),
+			opts.validation_time_override(),
 		);
 	}
 
