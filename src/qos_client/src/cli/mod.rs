@@ -48,6 +48,7 @@ const PUB_PATH: &str = "pub-path";
 const DEBUG_MODE: &str = "debug-mode";
 const BRIDGE_CONFIG: &str = "bridge-config";
 const DNS_RESOLVERS: &str = "dns-resolvers";
+const PEER_DISCOVERY: &str = "peer-discovery";
 const YUBIKEY: &str = "yubikey";
 const SECRET_PATH: &str = "secret-path";
 const SHARE_PATH: &str = "share-path";
@@ -612,6 +613,16 @@ impl Command {
 		.takes_value(true)
 	}
 
+	fn peer_discovery_token() -> Token {
+		Token::new(
+			PEER_DISCOVERY,
+			"accept the untrusted host-provided peer list (manifest v2)",
+		)
+		.required(false)
+		.default_value("false")
+		.takes_value(true)
+	}
+
 	fn base() -> Parser {
 		Parser::new()
 			.token(
@@ -698,6 +709,7 @@ impl Command {
 			.token(Self::pivot_args_token())
 			.token(Self::bridge_config_token())
 			.token(Self::dns_resolvers_token())
+			.token(Self::peer_discovery_token())
 			.token(Self::debug_mode_token())
 			.token(Self::use_manifest_version_token())
 	}
@@ -1105,6 +1117,14 @@ impl ClientOpts {
 				vec![]
 			}
 		})
+	}
+
+	fn peer_discovery(&self) -> bool {
+		self.parsed
+			.single(PEER_DISCOVERY)
+			.map_or("false", String::as_str)
+			.parse()
+			.expect("invalid `--peer-discovery` flag value")
 	}
 
 	fn debug_mode(&self) -> bool {
@@ -1669,6 +1689,7 @@ mod handlers {
 			quorum_key_path: opts.quorum_key_path(),
 			bridge_config: opts.bridge_config(),
 			dns_resolvers: opts.dns_resolvers(),
+			peer_discovery: opts.peer_discovery(),
 			debug_mode: opts.debug_mode(),
 		};
 		let result = match opts.use_manifest_version() {

@@ -17,9 +17,9 @@ use qos_core::protocol::{
 			ManifestBuilder, ManifestBuilderError,
 			ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
 			ManifestEnvelopeV2, ManifestSet, ManifestVersion, MemberPubKey,
-			Namespace, NitroConfig, PatchSet, PivotConfig as PivotConfigV1,
-			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
-			VersionedManifestEnvelope,
+			Namespace, NitroConfig, PatchSet, PeerDiscoveryConfig,
+			PivotConfig as PivotConfigV1, QuorumMember, RestartPolicy,
+			ShareSet, VersionedManifest, VersionedManifestEnvelope,
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
@@ -805,6 +805,7 @@ pub(crate) struct GenerateManifestArgs<P: AsRef<Path>> {
 	pub pivot_args: Vec<String>,
 	pub bridge_config: Vec<BridgeConfig>,
 	pub dns_resolvers: Option<Vec<IpAddr>>,
+	pub peer_discovery: bool,
 	pub debug_mode: bool,
 }
 
@@ -826,9 +827,13 @@ pub(crate) fn generate_manifest<P: AsRef<Path>>(
 		pivot_args,
 		bridge_config,
 		dns_resolvers,
+		peer_discovery,
 		debug_mode,
 	} = args;
 
+	if peer_discovery {
+		return Err(ManifestBuilderError::V1DoesNotSupportPeerDiscovery.into());
+	}
 	if dns_resolvers.is_some() {
 		return Err(Error::ManifestV1DoesNotSupportDnsConfig);
 	}
@@ -893,6 +898,7 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 		pivot_args,
 		bridge_config,
 		dns_resolvers,
+		peer_discovery,
 		debug_mode,
 	} = args;
 
@@ -926,6 +932,11 @@ pub(crate) fn generate_manifest_v2<P: AsRef<Path>>(
 	let manifest = match dns_resolvers {
 		Some(resolvers) => manifest.dns(DnsConfig { resolvers }),
 		None => manifest,
+	};
+	let manifest = if peer_discovery {
+		manifest.peer_discovery(PeerDiscoveryConfig { enabled: true })
+	} else {
+		manifest
 	}
 	.build()?;
 
@@ -1213,6 +1224,17 @@ where
 			),
 		};
 		if !prompter.prompt_is_yes(&prompt) {
+			return false;
+		}
+
+		let setting = if manifest.peer_discovery_enabled() {
+			"enabled"
+		} else {
+			"disabled"
+		};
+		if !prompter.prompt_is_yes(&format!(
+			"Is this the correct peer discovery setting: {setting}? (y/n)"
+		)) {
 			return false;
 		}
 	}
@@ -2722,9 +2744,10 @@ mod tests {
 		services::boot::{
 			Approval, DnsConfig, Manifest, ManifestEnvelope,
 			ManifestEnvelopeV2, ManifestSet, ManifestV2, ManifestVersion,
-			MemberPubKey, Namespace, NitroConfig, PatchSet, PivotConfig,
-			PivotConfigV2, PivotEnv, QuorumMember, RestartPolicy, ShareSet,
-			VersionedManifest, VersionedManifestEnvelope,
+			MemberPubKey, Namespace, NitroConfig, PatchSet,
+			PeerDiscoveryConfig, PivotConfig, PivotConfigV2, PivotEnv,
+			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
+			VersionedManifestEnvelope,
 		},
 	};
 	use qos_nsm::nitro::{AWS_ROOT_CERT_PEM, cert_from_pem};
@@ -2868,6 +2891,7 @@ mod tests {
 			share_set: manifest.share_set,
 			enclave: manifest.enclave,
 			dns,
+			peer_discovery: None,
 		})
 	}
 
@@ -2927,6 +2951,7 @@ mod tests {
 				share_set: manifest.share_set,
 				enclave: manifest.enclave,
 				dns: None,
+				peer_discovery: None,
 			},
 			manifest_set_approvals: vec![],
 			share_set_approvals: vec![],
@@ -3452,6 +3477,35 @@ mod tests {
 				assert_eq!(output[11], expected);
 			}
 		}
+
+		#[test]
+		fn prompts_peer_discovery_before_approving_v2_manifest() {
+			for (config, expected) in [
+				(None, "disabled"),
+				(Some(PeerDiscoveryConfig { enabled: false }), "disabled"),
+				(Some(PeerDiscoveryConfig { enabled: true }), "enabled"),
+			] {
+				let Setup { manifest, .. } = setup();
+				let mut manifest = v2_manifest_from(&manifest, None);
+				let VersionedManifest::V2(v2) = &mut manifest else {
+					unreachable!()
+				};
+				v2.peer_discovery = config;
+				let mut output = Vec::new();
+				let mut prompter = Prompter {
+					reader: "yes\nyes\nyes\nyes\nyes\nyes\nyes\nyes\nno\n"
+						.as_bytes(),
+					writer: &mut output,
+				};
+				assert!(!approve_manifest_human_verifications(
+					&manifest,
+					&mut prompter
+				));
+				assert!(String::from_utf8(output).unwrap().contains(&format!(
+					"Is this the correct peer discovery setting: {expected}? (y/n)"
+				)));
+			}
+		}
 	}
 
 	mod proxy_re_encrypt_share_programmatic_verifications {
@@ -3888,6 +3942,7 @@ mod tests {
 				share_set: manifest.share_set,
 				enclave: manifest.enclave,
 				dns: None,
+				peer_discovery: None,
 			};
 			fs::write(&json_path, qos_json::to_vec(&v2).unwrap()).unwrap();
 
@@ -3930,6 +3985,7 @@ mod tests {
 				share_set: manifest.share_set,
 				enclave: manifest.enclave,
 				dns: None,
+				peer_discovery: None,
 			};
 			let v2_envelope = ManifestEnvelopeV2 {
 				manifest: v2_manifest,
