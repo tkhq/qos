@@ -34,9 +34,41 @@ jobs:
           toolchain: stable
           components: clippy,rustfmt
       - name: Run release-plz
+        id: release-plz
         uses: release-plz/action@064f4d1e36c843611ddf013be726beaa4ad804db # v0.5.129
         with:
           command: release-pr
           config: src/release-plz.toml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # release-plz doesn't update the excluded crates' lockfiles, so ask a human to.
+      - name: Comment if excluded crates' lockfiles are stale
+        if: steps.release-plz.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ fromJSON(steps.release-plz.outputs.pr).number }}
+          PR_BRANCH: ${{ fromJSON(steps.release-plz.outputs.pr).head_branch }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$PR_BRANCH"
+          git checkout --detach FETCH_HEAD
+          if make -C src check-lockfiles; then
+            exit 0
+          fi
+          marker="<!-- excluded-lockfiles -->"
+          if gh pr view "$PR_NUMBER" --json comments --jq '.comments[].body' | grep -qF "$marker"; then
+            exit 0
+          fi
+          gh pr comment "$PR_NUMBER" --body-file - <<EOF
+          $marker
+          The lockfiles of crates excluded from the workspace are stale, so the release images would fail to build. Refresh them on this branch right before merging:
+
+          \`\`\`bash
+          gh pr checkout $PR_NUMBER
+          make -C src lockfiles
+          git commit -am "chore: refresh excluded crates lockfiles"
+          git push
+          \`\`\`
+
+          If main moves first, release-plz replaces this PR and the refresh has to be redone on the new one. Whoever pushes the refresh can't be the approver.
+          EOF

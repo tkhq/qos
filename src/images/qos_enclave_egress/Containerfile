@@ -12,12 +12,12 @@ RUN mkdir -p /qos
 ADD . /qos
 
 # pre-fetch all QOS deps
-RUN cd /qos && cargo fetch
+RUN cd /qos && cargo fetch --locked
 
 # pre-fetch all QOS deps even for crates excluded from the workspace
 # these dependencies are needed when building qos_enclave
-RUN cd /qos/src/init && cargo fetch
-RUN cd /qos/src/qos_enclave && cargo fetch
+RUN cd /qos/src/init && cargo fetch --locked
+RUN cd /qos/src/qos_enclave && cargo fetch --locked
 
 FROM base AS build-qos_enclave
 WORKDIR /qos/src/qos_enclave
