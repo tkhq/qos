@@ -106,20 +106,20 @@ build-linux-only: qos_system qos_aws init qos_enclave qos_bridge
 
 .PHONY: qos_system
 qos_system:
-	cargo build --manifest-path ./qos_system/Cargo.toml
+	cargo build --locked --manifest-path ./qos_system/Cargo.toml
 
 .PHONY: qos_aws
 qos_aws:
-	cargo build --manifest-path ./qos_aws/Cargo.toml
+	cargo build --locked --manifest-path ./qos_aws/Cargo.toml
 
 .PHONY: init
 init:
-	cargo build --manifest-path ./init/Cargo.toml
+	cargo build --locked --manifest-path ./init/Cargo.toml
 
 .PHONY: qos_enclave
 qos_enclave:
-	cargo build --manifest-path ./qos_enclave/Cargo.toml
+	cargo build --locked --manifest-path ./qos_enclave/Cargo.toml
 
 .PHONY: qos_bridge
 qos_bridge:
-	cargo build --manifest-path ./qos_bridge/Cargo.toml
+	cargo build --locked --manifest-path ./qos_bridge/Cargo.toml
