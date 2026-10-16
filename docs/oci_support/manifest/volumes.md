@@ -16,7 +16,22 @@ and attaching it to each workload that needs it.
 
 The top-level `volumes` field MUST be an object.
 
-Each object key is the unique volume name.
+Each object key is the volume name. Raw JSON duplicate-member rejection
+applies as defined in [Manifest V3](README.md).
+
+A manifest MUST NOT declare a volume named `qos`. QOS reserves that name for
+the implicit volume defined below.
+
+```json
+{
+  "volumes": {
+    "shared-run": {
+      "type": "tmpfs",
+      "mountPath": "/mnt/qos/shared-run"
+    }
+  }
+}
+```
 
 The initial volume object MUST contain:
 
@@ -33,6 +48,10 @@ The path MUST be normalized and MUST NOT contain a NUL byte, repeated `/`, a
 
 The path MUST NOT overlap a QOS key path, manifest path, runtime-state path,
 OCI bundle path, or another QOS-owned system mount.
+
+Applying this overlap rule to the implicit `qos` volume's location depends on
+the open question about its layout. See
+[Reserved implicit `qos` volume](#reserved-implicit-qos-volume).
 
 Two top-level volume mount paths MUST NOT overlap.
 
@@ -52,10 +71,57 @@ workload creates in the volume.
 
 The initial schema does not set a per-volume memory limit.
 
-Pivot code and normal QOS processes can use the parent `mountPath`, subject to
+Normal QOS processes can use the parent `mountPath`, subject to
 normal parent-QOS file permissions.
 
 QOS MUST reject an unsupported volume type.
+
+## Reserved implicit `qos` volume
+
+QOS provides the implicit volume named `qos`. It does not appear in top-level
+`volumes`. An OCI workload references it with `source: "qos"`.
+
+The volume contains the approved manifest, quorum key, and live ephemeral key.
+QOS MUST NOT expose the setup ephemeral private key through this volume.
+QOS MUST make the volume available only after provisioning and the live-key
+transition.
+
+A `qos` mount MUST specify `readOnly: true`. QOS MUST reject a writable `qos`
+mount. Its files MUST be readable by processes in a workload that receives it.
+QOS MUST NOT include key bytes in generated runtime configuration or diagnostics.
+
+```json
+{
+  "type": "volume",
+  "source": "qos",
+  "mountPath": "/run/qos",
+  "readOnly": true
+}
+```
+
+This grant exposes the volume's contents together. The initial manifest does
+not grant individual QOS files or arbitrary parent paths to OCI workloads.
+The shared trust-domain rules still apply to every workload.
+
+Open question: Define the stable filenames and update behavior inside `qos`
+before V3 stabilizes with OCI. This specification does not define a new
+parent-QOS path or per-file mount mechanism.
+
+Provisional implementation: this tree creates the volume as a tmpfs under the
+QOS runtime root (`/run/qos-oci/qos`) only when some workload mounts it, with a
+`0755` root and `0444` files, and removes it when the workload group stops. It
+contains these files, whose names are provisional and not a stable interface:
+
+| File | Content |
+| --- | --- |
+| `manifest.json` | The approved Manifest V3 envelope (manifest and approvals), as QOS stored it. |
+| `quorum.key` | The quorum key, as QOS stores it (hex-encoded seed). |
+| `ephemeral.key` | The live ephemeral key, as QOS stores it (hex-encoded seed). |
+
+The files are a snapshot taken when the workload group starts. They are not
+updated while the group runs, and a workload restart reattaches the same
+volume. The volume is mounted `nodev`, `nosuid`, and `noexec`; a workload
+mount adds `nodev` and `nosuid` and the signed `readOnly: true`.
 
 ## Workload volume mounts
 
@@ -67,17 +133,19 @@ Each entry MUST contain:
 - `source`;
 - `mountPath`.
 
-Each entry MAY contain `readOnly`. The default value is `false`.
+Each entry MAY contain `readOnly`. The default value is `false`. A `qos`
+mount requires an explicit `readOnly: true`.
 
-The `source` MUST reference a declared top-level volume name.
+The `source` MUST reference a declared top-level volume name or `qos`.
+QOS MUST reject an unresolved source.
 
 The workload `mountPath` MUST be an absolute path inside the container root
 file system.
 
 The workload does not specify the parent QOS path. QOS resolves the named
-volume to its signed top-level `mountPath`.
+volume to its signed top-level `mountPath`, or to the QOS-provided `qos` volume.
 
-QOS MUST implement the entry as a bind mount from the top-level volume into
+QOS MUST implement the entry as a bind mount from the resolved volume into
 the workload mount namespace.
 
 QOS MUST apply `readOnly` independently for each workload mount.
@@ -85,8 +153,7 @@ QOS MUST apply `readOnly` independently for each workload mount.
 QOS MUST reject a mount path that escapes the container root file system.
 
 QOS MUST reject duplicate or overlapping paths between two `volume` mount
-entries. The initial feature does not permit a nested relationship with
-another mount type.
+entries.
 
 QOS MUST resolve the workload target without following a symbolic link. If the
 target does not exist, QOS MUST create a directory with mode `0755`. If the
@@ -138,7 +205,7 @@ changing the initial mount schema.
 | Concern | Initial support | Future support |
 | --- | --- | --- |
 | Top-level type | `tmpfs` | `persistent` and other tagged types |
-| Storage identity | Top-level volume name | Same |
+| Storage identity | Top-level volume name or reserved `qos` | Same |
 | Container attachment | `mounts[].source` with `type: "volume"` | Same |
 | Container path | `mounts[].mountPath` | Same |
 | Read-only selection | Per mount | Same |

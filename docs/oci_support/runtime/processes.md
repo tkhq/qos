@@ -2,7 +2,7 @@
 
 Status: Initial normative specification
 
-The initial manifest does not contain a `process` object. QOS gets process
+The initial OCI workload does not contain a `process` object. QOS gets process
 defaults from the verified OCI image configuration.
 
 ## Arguments
