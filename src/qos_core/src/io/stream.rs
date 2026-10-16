@@ -152,8 +152,9 @@ impl Stream {
 			self.connect().await?;
 
 			// see https://github.com/rust-vmm/vhost-device/issues/963
-			#[cfg(feature = "qemu")]
-			tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+			if super::qemu_vsock_workaround() {
+				tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+			}
 		} else {
 			eprintln!("SocketStream already connected, call proceeding");
 		}
