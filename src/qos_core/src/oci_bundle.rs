@@ -551,8 +551,14 @@ fn resolve_executable(
 			})
 			.collect::<Result<_, _>>()?
 	};
+	let search = !executable.contains('/');
 	for candidate in candidates {
-		let host = resolve_rootfs_path(rootfs, &candidate)?;
+		// Like execvp, a PATH entry that does not lead to the file is skipped.
+		let host = match resolve_rootfs_path(rootfs, &candidate) {
+			Ok(host) => host,
+			Err(_) if search => continue,
+			Err(error) => return Err(error),
+		};
 		if fs::symlink_metadata(&host).is_ok_and(|metadata| {
 			metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
 		}) {
@@ -805,4 +811,56 @@ fn parse_signal(value: Option<&str>) -> Result<i32, ProtocolError> {
 		return Err(invalid("invalid OCI stop signal"));
 	}
 	Ok(number)
+}
+
+#[cfg(test)]
+mod tests {
+	use std::os::unix::fs::PermissionsExt as _;
+
+	use super::*;
+
+	/// A rootfs with `/usr/local/bin/docker-entrypoint.sh`, the layout of
+	/// the official PostgreSQL image, and an empty `/usr/local/sbin`.
+	fn rootfs() -> PathBuf {
+		let root = std::env::temp_dir().join(format!(
+			"qos-oci-bundle-path-{}-{:?}",
+			std::process::id(),
+			std::thread::current().id()
+		));
+		drop(fs::remove_dir_all(&root));
+		fs::create_dir_all(root.join("usr/local/sbin")).unwrap();
+		fs::create_dir_all(root.join("usr/local/bin")).unwrap();
+		let script = root.join("usr/local/bin/docker-entrypoint.sh");
+		fs::write(&script, "#!/bin/sh\n").unwrap();
+		fs::set_permissions(&script, fs::Permissions::from_mode(0o755))
+			.unwrap();
+		root
+	}
+
+	#[test]
+	fn path_search_skips_entries_without_the_executable() {
+		let root = rootfs();
+		let env = vec![format!("PATH={DEFAULT_PATH}")];
+		let cwd = Path::new("/");
+		assert_eq!(
+			resolve_executable(&root, cwd, "docker-entrypoint.sh", &env)
+				.unwrap(),
+			"/usr/local/bin/docker-entrypoint.sh"
+		);
+		assert!(resolve_executable(&root, cwd, "missing", &env).is_err());
+		assert!(
+			resolve_executable(&root, cwd, "/usr/local/sbin/x", &env).is_err()
+		);
+		assert_eq!(
+			resolve_executable(
+				&root,
+				cwd,
+				"/usr/local/bin/docker-entrypoint.sh",
+				&env
+			)
+			.unwrap(),
+			"/usr/local/bin/docker-entrypoint.sh"
+		);
+		fs::remove_dir_all(root).unwrap();
+	}
 }
