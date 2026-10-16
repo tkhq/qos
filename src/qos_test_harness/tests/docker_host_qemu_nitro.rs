@@ -179,6 +179,7 @@ async fn postgres_oci_smoke_on_qemu() {
 			},
 		)]),
 		volumes: BTreeMap::new(),
+		bridge_config: vec![],
 		dns: None,
 	};
 	manifest.validate().unwrap();

@@ -8,7 +8,7 @@ use std::{
 use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
 use crate::protocol::services::boot::{
-	ManifestSet, Namespace, NitroConfig, ShareSet,
+	BridgeConfig, ManifestSet, Namespace, NitroConfig, ShareSet,
 };
 
 use super::{DnsConfig, ManifestVersion};
@@ -528,6 +528,12 @@ pub struct ManifestV3 {
 	/// Optional named volumes.
 	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub volumes: BTreeMap<OciName, VolumeV3>,
+	/// Ingress into the workload group, in the Manifest V2 pivot
+	/// `bridgeConfig` shape. Each `server` entry forwards host TCP `port`
+	/// over VSOCK `port` to `127.0.0.1:port` in the workloads' shared network
+	/// namespace. `client` (egress) entries are not supported yet.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub bridge_config: Vec<BridgeConfig>,
 	/// Existing parent-QOS DNS configuration.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub dns: Option<DnsConfig>,
@@ -540,10 +546,11 @@ impl ManifestV3 {
 	///
 	/// Returns a validation message for invalid counts, an enclave mode that
 	/// contradicts its PCRs, a declared `qos` volume, a missing volume
-	/// reference, a writable `qos` mount, or overlapping/protected mount
-	/// paths.
+	/// reference, a writable `qos` mount, unsupported bridge entries, or
+	/// overlapping/protected mount paths.
 	pub fn validate(&self) -> Result<(), String> {
 		self.enclave.validate()?;
+		self.validate_bridge_config()?;
 		if !(1..=MAX_WORKLOADS).contains(&self.workloads.len()) {
 			return Err(format!(
 				"workloads must contain 1-{MAX_WORKLOADS} entries"
@@ -611,6 +618,26 @@ impl ManifestV3 {
 				return Err(format!(
 					"overlapping top-level volume path: {}",
 					path.as_str()
+				));
+			}
+		}
+		Ok(())
+	}
+
+	/// Only distinct `server` entries.
+	fn validate_bridge_config(&self) -> Result<(), String> {
+		let mut ports = HashSet::new();
+		for bridge in &self.bridge_config {
+			let BridgeConfig::Server { port, .. } = bridge else {
+				return Err(
+					"bridgeConfig client (egress) entries are not yet \
+					 supported in manifest v3"
+						.into(),
+				);
+			};
+			if !ports.insert(*port) {
+				return Err(format!(
+					"duplicate bridgeConfig server port: {port}"
 				));
 			}
 		}
@@ -1076,6 +1103,51 @@ mod tests {
 		value["volumes"]["other"] =
 			serde_json::json!({"type": "tmpfs", "mountPath": "/mnt/qos"});
 		assert!(decode(&value).is_err(), "overlapping volumes");
+	}
+
+	#[test]
+	fn bridge_config_has_the_v2_shape() {
+		let mut value = documented();
+		value["bridgeConfig"] = serde_json::json!([{"type": "server", "port": 3000, "host": "0.0.0.0"}]);
+		let manifest = decode(&value).unwrap();
+		assert_eq!(
+			manifest.bridge_config,
+			[BridgeConfig::Server { port: 3000, host: "0.0.0.0".into() }]
+		);
+		let canonical = qos_json::to_string(&manifest).unwrap();
+		assert!(
+			canonical.contains(
+				r#""bridgeConfig":[{"host":"0.0.0.0","port":"3000","type":"server"}]"#
+			),
+			"{canonical}"
+		);
+		let versioned = super::super::VersionedManifest::V3(manifest);
+		assert_eq!(
+			versioned.bridge_config(),
+			[BridgeConfig::Server { port: 3000, host: "0.0.0.0".into() }]
+		);
+		// Absent or empty means no ingress and keeps the encoding.
+		value["bridgeConfig"] = serde_json::json!([]);
+		assert_eq!(
+			qos_json::to_string(&decode(&value).unwrap()).unwrap(),
+			GOLDEN_CANONICAL
+		);
+	}
+
+	#[test]
+	fn bridge_config_rejects_egress_and_port_clashes() {
+		let mut value = documented();
+		value["bridgeConfig"] = serde_json::json!([
+			{"type": "client", "port": 443, "host": "example.com"}
+		]);
+		let error = decode(&value).unwrap_err();
+		assert!(error.contains("not yet supported"), "{error}");
+		value["bridgeConfig"] = serde_json::json!([
+			{"type": "server", "port": 3000, "host": "0.0.0.0"},
+			{"type": "server", "port": 3000, "host": "127.0.0.1"}
+		]);
+		let error = decode(&value).unwrap_err();
+		assert!(error.contains("duplicate"), "{error}");
 	}
 
 	#[test]

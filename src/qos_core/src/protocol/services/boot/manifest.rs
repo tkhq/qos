@@ -233,13 +233,15 @@ impl VersionedManifest {
 		}
 	}
 
-	/// Return bridge configuration entries, or an empty slice for v0 manifests.
+	/// Return bridge configuration entries: the pivot's for v1 and v2, the
+	/// top-level workload-group ingress for v3, and none for v0.
 	#[must_use]
 	pub fn bridge_config(&self) -> &[BridgeConfig] {
 		match self {
+			Self::V3(manifest) => &manifest.bridge_config,
 			Self::V2(manifest) => &manifest.pivot.bridge_config,
 			Self::V1(manifest) => &manifest.pivot.bridge_config,
-			Self::V3(_) | Self::V0(_) => &[],
+			Self::V0(_) => &[],
 		}
 	}
 

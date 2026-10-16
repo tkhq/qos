@@ -285,6 +285,8 @@ impl PreparedWorkload {
 
 /// Run all required Manifest V3 workloads until every `never` workload has
 /// terminated. `always` workloads continue until the node is stopped.
+/// `sandbox_ready` runs once the shared namespace sandbox exists, before any
+/// workload starts, so ingress can attach to its network namespace.
 ///
 /// # Errors
 ///
@@ -299,6 +301,7 @@ pub fn run_oci_workloads(
 	manifest: &ManifestV3,
 	status: &SharedOciStatus,
 	shutdown: &Arc<AtomicBool>,
+	sandbox_ready: impl FnOnce(&SandboxNamespaces),
 ) -> Result<(), OciManagerError> {
 	let runtime_root = PathBuf::from(RUNTIME_ROOT);
 	if runtime_root.exists() {
@@ -340,6 +343,7 @@ pub fn run_oci_workloads(
 			);
 		}
 	};
+	sandbox_ready(&sandbox.namespaces);
 	let volume_paths = Arc::new(volume_paths);
 	let lifecycle = Lifecycle {
 		shutdown: Arc::clone(shutdown),

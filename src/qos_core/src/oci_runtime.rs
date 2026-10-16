@@ -363,6 +363,81 @@ fn cleanup_partial_sandbox(
 	}
 }
 
+/// Opens TCP connections from inside the workload sandbox's network
+/// namespace, for ingress into workloads that listen only there.
+///
+/// A socket keeps the network namespace it was created in, whichever thread
+/// later connects it. One dedicated thread joins the sandbox namespace once
+/// and creates every socket; callers connect it on their own runtime. This
+/// needs no veth pair, routing or NAT.
+pub struct SandboxTcpConnector {
+	requests: std::sync::mpsc::Sender<
+		tokio::sync::oneshot::Sender<std::io::Result<tokio::net::TcpSocket>>,
+	>,
+}
+
+impl SandboxTcpConnector {
+	/// Start the socket thread in the namespace `netns` refers to, for example
+	/// an open `/proc/<sandbox pid>/ns/net`.
+	///
+	/// # Errors
+	///
+	/// Returns an error when the thread cannot start or join the namespace.
+	pub fn new(netns: File) -> std::io::Result<Self> {
+		let (requests, incoming) = std::sync::mpsc::channel::<
+			tokio::sync::oneshot::Sender<
+				std::io::Result<tokio::net::TcpSocket>,
+			>,
+		>();
+		let (joined_tx, joined) = std::sync::mpsc::channel();
+		thread::Builder::new().name("qos-oci-ingress".into()).spawn(
+			move || {
+				let result = join_network_namespace(&netns);
+				drop(netns);
+				let failed = result.is_err();
+				let _ = joined_tx.send(result);
+				if failed {
+					return;
+				}
+				while let Ok(reply) = incoming.recv() {
+					let _ = reply.send(tokio::net::TcpSocket::new_v4());
+				}
+			},
+		)?;
+		joined.recv().map_err(|_| {
+			std::io::Error::other("sandbox network thread exited")
+		})??;
+		Ok(Self { requests })
+	}
+
+	/// Connect to `address` from the sandbox network namespace.
+	///
+	/// # Errors
+	///
+	/// Returns an error when the socket thread is gone or the connect fails.
+	pub async fn connect(
+		&self,
+		address: std::net::SocketAddr,
+	) -> std::io::Result<tokio::net::TcpStream> {
+		let gone = || std::io::Error::other("sandbox network thread exited");
+		let (reply, socket) = tokio::sync::oneshot::channel();
+		self.requests.send(reply).map_err(|_| gone())?;
+		socket.await.map_err(|_| gone())??.connect(address).await
+	}
+}
+
+#[allow(unsafe_code)]
+fn join_network_namespace(netns: &File) -> std::io::Result<()> {
+	use std::os::fd::AsRawFd as _;
+	// SAFETY: setns only reads the descriptor and flag. It moves the calling
+	// thread, not the process, into that network namespace.
+	if unsafe { libc::setns(netns.as_raw_fd(), libc::CLONE_NEWNET) } == 0 {
+		Ok(())
+	} else {
+		Err(std::io::Error::last_os_error())
+	}
+}
+
 /// Enter the internal sandbox process mode when requested by QOS.
 #[must_use]
 pub fn run_sandbox_if_requested() -> bool {
