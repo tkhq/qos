@@ -74,12 +74,10 @@ pub struct SandboxNamespaces {
 /// One QOS-resolved mount. No path or option comes from an OCI image.
 #[derive(Debug, Clone)]
 pub struct ResolvedMount {
-	/// Parent-QOS source path or pinned `/proc/self/fd` path.
+	/// Parent-QOS source directory.
 	pub source: PathBuf,
 	/// Absolute path inside the workload.
 	pub destination: PathBuf,
-	/// Whether this is a regular-file bind mount.
-	pub file: bool,
 	/// Whether the bind mount is read-only.
 	pub read_only: bool,
 }
@@ -843,16 +841,12 @@ fn runtime_mounts(
 		bind_mount(&sandbox.shm, Path::new("/dev/shm"), false, false),
 		mount("sysfs", "/sys", "sysfs", ["nosuid", "noexec", "nodev", "ro"]),
 	];
-	for declared in declared
-		.iter()
-		.filter(|mount| !mount.file)
-		.chain(declared.iter().filter(|mount| mount.file))
-	{
+	for declared in declared {
 		mounts.push(bind_mount(
 			&declared.source,
 			&declared.destination,
 			declared.read_only,
-			!declared.file,
+			true,
 		));
 	}
 	mounts.into_iter().collect()

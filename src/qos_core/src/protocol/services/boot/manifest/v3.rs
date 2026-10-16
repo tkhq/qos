@@ -16,6 +16,12 @@ use super::{DnsConfig, ManifestVersion};
 const MAX_WORKLOADS: usize = 16;
 const MAX_VOLUMES: usize = 16;
 const MAX_MOUNTS_PER_WORKLOAD: usize = 64;
+/// Hex characters in one Nitro PCR (48 bytes).
+const PCR_HEX_LEN: usize = 96;
+
+/// The reserved implicit volume exposing the approved manifest, quorum key and
+/// live ephemeral key. A manifest must not declare a volume with this name.
+pub const QOS_VOLUME_NAME: &str = "qos";
 
 macro_rules! validated_string_wire {
 	($name:ident, $valid_len:expr, $length_error:literal) => {
@@ -179,6 +185,9 @@ impl OciPath {
 		})
 	}
 
+	/// Whether this path equals, contains, or lies below a QOS-owned parent
+	/// path (runtime state, bundles, the implicit `qos` volume, key and
+	/// manifest files).
 	fn parent_owned(&self) -> bool {
 		[
 			"/run/qos-oci",
@@ -187,13 +196,7 @@ impl OciPath {
 			"/qos.manifest",
 		]
 		.iter()
-		.any(|root| {
-			self.0 == *root
-				|| self
-					.0
-					.strip_prefix(root)
-					.is_some_and(|tail| tail.starts_with('/'))
-		})
+		.any(|root| Self(String::from(*root)).overlaps(self))
 	}
 }
 
@@ -223,6 +226,50 @@ impl TryFrom<String> for OciPath {
 	}
 }
 
+/// Signed enclave-wide identity mode.
+#[derive(PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EnclaveMode {
+	/// The PCRs are the expected measurements of a production enclave.
+	Attested,
+	/// The enclave runs as a Nitro debug enclave: every PCR is zero.
+	Debug,
+}
+
+/// Serde for one Nitro PCR: exactly 96 lowercase hexadecimal characters.
+///
+/// Canonical JSON preserves string case, so accepting uppercase hex would let
+/// two spellings of one PCR produce different manifest hashes.
+mod pcr_hex {
+	use serde::{Deserialize, Deserializer, Serializer, de::Error as _};
+
+	use super::PCR_HEX_LEN;
+
+	pub fn serialize<S: Serializer>(
+		bytes: &[u8],
+		serializer: S,
+	) -> Result<S::Ok, S::Error> {
+		serializer.serialize_str(&qos_hex::encode(bytes))
+	}
+
+	pub fn deserialize<'de, D: Deserializer<'de>>(
+		deserializer: D,
+	) -> Result<Vec<u8>, D::Error> {
+		let text = String::deserialize(deserializer)?;
+		if text.len() != PCR_HEX_LEN
+			|| !text.bytes().all(|byte| {
+				byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)
+			}) {
+			return Err(D::Error::custom(format!(
+				"PCR must be {PCR_HEX_LEN} lowercase hexadecimal characters"
+			)));
+		}
+		qos_hex::decode(&text).map_err(|error| {
+			D::Error::custom(format!("invalid PCR: {error:?}"))
+		})
+	}
+}
+
 /// Nitro enclave settings in the tagged V3 form.
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 #[serde(
@@ -235,17 +282,19 @@ pub enum EnclaveV3 {
 	/// AWS Nitro enclave.
 	#[serde(rename = "nitro")]
 	Nitro {
+		/// Signed expected identity: measured or debug.
+		mode: EnclaveMode,
 		/// Enclave image hash.
-		#[serde(with = "qos_hex::serde")]
+		#[serde(with = "pcr_hex")]
 		pcr0: Vec<u8>,
 		/// Kernel/bootstrap hash.
-		#[serde(with = "qos_hex::serde")]
+		#[serde(with = "pcr_hex")]
 		pcr1: Vec<u8>,
 		/// Application hash.
-		#[serde(with = "qos_hex::serde")]
+		#[serde(with = "pcr_hex")]
 		pcr2: Vec<u8>,
 		/// IAM role hash.
-		#[serde(with = "qos_hex::serde")]
+		#[serde(with = "pcr_hex")]
 		pcr3: Vec<u8>,
 		/// AWS root certificate.
 		#[serde(with = "qos_hex::serde")]
@@ -267,6 +316,7 @@ impl EnclaveV3 {
 				pcr3,
 				aws_root_certificate,
 				qos_commit,
+				..
 			} => NitroConfig {
 				pcr0: pcr0.clone(),
 				pcr1: pcr1.clone(),
@@ -276,6 +326,42 @@ impl EnclaveV3 {
 				qos_commit: qos_commit.clone(),
 			},
 		}
+	}
+
+	/// Return the signed enclave mode.
+	#[must_use]
+	pub fn mode(&self) -> EnclaveMode {
+		match self {
+			Self::Nitro { mode, .. } => *mode,
+		}
+	}
+
+	/// Check the PCR rules of the signed mode: an `attested` manifest must not
+	/// have PCR0, PCR1 and PCR2 all zero, and a `debug` manifest must have
+	/// every PCR zero.
+	fn validate(&self) -> Result<(), String> {
+		let Self::Nitro { mode, pcr0, pcr1, pcr2, pcr3, .. } = self;
+		let zero = |pcr: &Vec<u8>| pcr.iter().all(|byte| *byte == 0);
+		match mode {
+			EnclaveMode::Attested => {
+				if zero(pcr0) && zero(pcr1) && zero(pcr2) {
+					return Err(
+						"attested enclave mode must not have PCR0, PCR1 and \
+						 PCR2 all zero"
+							.into(),
+					);
+				}
+			}
+			EnclaveMode::Debug => {
+				if !(zero(pcr0) && zero(pcr1) && zero(pcr2) && zero(pcr3)) {
+					return Err(
+						"debug enclave mode requires every PCR to be zero"
+							.into(),
+					);
+				}
+			}
+		}
+		Ok(())
 	}
 }
 
@@ -308,7 +394,7 @@ impl OciImageRef {
 
 /// OCI workload restart policy.
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "lowercase")]
 pub enum OciRestartPolicy {
 	/// Do not restart after process exit.
 	Never,
@@ -325,25 +411,15 @@ pub enum OciRestartPolicy {
 	deny_unknown_fields
 )]
 pub enum OciMount {
-	/// A named top-level volume.
+	/// A named top-level volume, or the reserved implicit `qos` volume.
 	#[serde(rename = "volume")]
 	Volume {
-		/// Top-level volume name.
+		/// Top-level volume name, or `qos`.
 		source: OciName,
 		/// Container target path.
 		mount_path: OciPath,
-		/// Whether the bind mount is read-only.
-		#[serde(default)]
-		read_only: bool,
-	},
-	/// An approved regular parent-QOS file.
-	#[serde(rename = "file")]
-	File {
-		/// Parent source path.
-		source: OciPath,
-		/// Container target path.
-		mount_path: OciPath,
-		/// Whether the bind mount is read-only.
+		/// Whether the bind mount is read-only. A `qos` mount must be
+		/// read-only.
 		#[serde(default)]
 		read_only: bool,
 	},
@@ -354,14 +430,21 @@ impl OciMount {
 	#[must_use]
 	pub fn mount_path(&self) -> &OciPath {
 		match self {
-			Self::Volume { mount_path, .. } | Self::File { mount_path, .. } => {
-				mount_path
-			}
+			Self::Volume { mount_path, .. } => mount_path,
+		}
+	}
+
+	/// Whether this mount attaches the reserved implicit `qos` volume.
+	#[must_use]
+	pub fn is_qos_volume(&self) -> bool {
+		match self {
+			Self::Volume { source, .. } => source.as_str() == QOS_VOLUME_NAME,
 		}
 	}
 }
 
-/// A Manifest V3 workload.
+/// A Manifest V3 workload. Its name is its key in
+/// [`ManifestV3::workloads`].
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 #[serde(
 	tag = "type",
@@ -373,8 +456,6 @@ pub enum WorkloadV3 {
 	/// An OCI container workload.
 	#[serde(rename = "oci")]
 	Oci {
-		/// Stable workload identity.
-		name: OciName,
 		/// Approved image.
 		image: OciImageRef,
 		/// Signed restart policy.
@@ -386,14 +467,6 @@ pub enum WorkloadV3 {
 }
 
 impl WorkloadV3 {
-	/// Return the stable workload name.
-	#[must_use]
-	pub fn name(&self) -> &OciName {
-		match self {
-			Self::Oci { name, .. } => name,
-		}
-	}
-
 	/// Return the approved image.
 	#[must_use]
 	pub fn image(&self) -> &OciImageRef {
@@ -449,8 +522,9 @@ pub struct ManifestV3 {
 	pub share_set: ShareSet,
 	/// Tagged enclave configuration.
 	pub enclave: EnclaveV3,
-	/// Required OCI workloads.
-	pub workloads: Vec<WorkloadV3>,
+	/// Required OCI workloads keyed by their signed name. Canonical JSON sorts
+	/// the keys, so member order does not affect the manifest hash.
+	pub workloads: BTreeMap<OciName, WorkloadV3>,
 	/// Optional named volumes.
 	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub volumes: BTreeMap<OciName, VolumeV3>,
@@ -464,9 +538,12 @@ impl ManifestV3 {
 	///
 	/// # Errors
 	///
-	/// Returns a validation message for invalid counts, duplicate names,
-	/// missing volume references, or overlapping/protected mount paths.
+	/// Returns a validation message for invalid counts, an enclave mode that
+	/// contradicts its PCRs, a declared `qos` volume, a missing volume
+	/// reference, a writable `qos` mount, or overlapping/protected mount
+	/// paths.
 	pub fn validate(&self) -> Result<(), String> {
+		self.enclave.validate()?;
 		if !(1..=MAX_WORKLOADS).contains(&self.workloads.len()) {
 			return Err(format!(
 				"workloads must contain 1-{MAX_WORKLOADS} entries"
@@ -477,18 +554,17 @@ impl ManifestV3 {
 				"volumes must contain at most {MAX_VOLUMES} entries"
 			));
 		}
-		let mut names = HashSet::new();
-		for workload in &self.workloads {
+		if self.volumes.keys().any(|name| name.as_str() == QOS_VOLUME_NAME) {
+			return Err(format!(
+				"volume name {QOS_VOLUME_NAME} is reserved for the implicit \
+				 QOS volume"
+			));
+		}
+		for (name, workload) in &self.workloads {
 			if workload.mounts().len() > MAX_MOUNTS_PER_WORKLOAD {
 				return Err(format!(
 					"workload {} has more than {MAX_MOUNTS_PER_WORKLOAD} mounts",
-					workload.name().as_str()
-				));
-			}
-			if !names.insert(workload.name()) {
-				return Err(format!(
-					"duplicate workload name: {}",
-					workload.name().as_str()
+					name.as_str()
 				));
 			}
 			let mut paths: Vec<&OciPath> = Vec::new();
@@ -506,32 +582,18 @@ impl ManifestV3 {
 						path.as_str()
 					));
 				}
-				if let OciMount::Volume { source, .. } = mount
-					&& !self.volumes.contains_key(source)
-				{
+				let OciMount::Volume { source, read_only, .. } = mount;
+				if mount.is_qos_volume() {
+					if !read_only {
+						return Err(format!(
+							"{QOS_VOLUME_NAME} volume mount must be read-only"
+						));
+					}
+				} else if !self.volumes.contains_key(source) {
 					return Err(format!(
 						"undeclared volume: {}",
 						source.as_str()
 					));
-				}
-				if let OciMount::File { source, read_only, .. } = mount {
-					if !matches!(
-						source.as_str(),
-						"/qos.quorum.key"
-							| "/qos.ephemeral.key"
-							| "/qos.manifest"
-					) {
-						return Err(format!(
-							"unsupported file source: {}",
-							source.as_str()
-						));
-					}
-					if !read_only {
-						return Err(format!(
-							"protected file must be read-only: {}",
-							source.as_str()
-						));
-					}
 				}
 				paths.push(path);
 			}
@@ -551,6 +613,100 @@ impl ManifestV3 {
 					path.as_str()
 				));
 			}
+		}
+		Ok(())
+	}
+}
+
+/// Reject a JSON document that repeats a member name in any object.
+///
+/// Serde maps keep only the last of repeated members, so this must run on the
+/// raw input before it is decoded: a decoded-map check cannot see the members
+/// that were overwritten. Members spelled with different JSON escapes for the
+/// same name (`"a"` and `"\u0061"`) are duplicates, because the parser
+/// unescapes names before they are compared.
+///
+/// # Errors
+///
+/// Returns an error naming the repeated member, or the JSON syntax error.
+pub fn reject_duplicate_json_members(buf: &[u8]) -> Result<(), String> {
+	let mut deserializer = serde_json::Deserializer::from_slice(buf);
+	Distinct::deserialize(&mut deserializer).map_err(|e| e.to_string())?;
+	deserializer.end().map_err(|e| e.to_string())
+}
+
+/// Visits any JSON value, failing on a repeated object member name.
+struct Distinct;
+
+impl<'de> Deserialize<'de> for Distinct {
+	fn deserialize<D: Deserializer<'de>>(
+		deserializer: D,
+	) -> Result<Self, D::Error> {
+		deserializer.deserialize_any(DistinctVisitor)?;
+		Ok(Self)
+	}
+}
+
+struct DistinctVisitor;
+
+impl<'de> serde::de::Visitor<'de> for DistinctVisitor {
+	type Value = ();
+
+	fn expecting(
+		&self,
+		formatter: &mut std::fmt::Formatter<'_>,
+	) -> std::fmt::Result {
+		formatter.write_str("any JSON value")
+	}
+
+	fn visit_bool<E>(self, _: bool) -> Result<(), E> {
+		Ok(())
+	}
+
+	fn visit_i64<E>(self, _: i64) -> Result<(), E> {
+		Ok(())
+	}
+
+	fn visit_u64<E>(self, _: u64) -> Result<(), E> {
+		Ok(())
+	}
+
+	fn visit_f64<E>(self, _: f64) -> Result<(), E> {
+		Ok(())
+	}
+
+	fn visit_str<E>(self, _: &str) -> Result<(), E> {
+		Ok(())
+	}
+
+	fn visit_none<E>(self) -> Result<(), E> {
+		Ok(())
+	}
+
+	fn visit_unit<E>(self) -> Result<(), E> {
+		Ok(())
+	}
+
+	fn visit_seq<A: serde::de::SeqAccess<'de>>(
+		self,
+		mut seq: A,
+	) -> Result<(), A::Error> {
+		while seq.next_element::<Distinct>()?.is_some() {}
+		Ok(())
+	}
+
+	fn visit_map<A: serde::de::MapAccess<'de>>(
+		self,
+		mut map: A,
+	) -> Result<(), A::Error> {
+		let mut seen = HashSet::new();
+		while let Some(key) = map.next_key::<String>()? {
+			if !seen.insert(key.clone()) {
+				return Err(A::Error::custom(format!(
+					"duplicate JSON member name: {key}"
+				)));
+			}
+			map.next_value::<Distinct>()?;
 		}
 		Ok(())
 	}
@@ -583,8 +739,11 @@ pub struct ManifestEnvelopeV3 {
 mod tests {
 	use super::*;
 
-	/// A V3 document written as `docs/oci_support` specifies it: every
-	/// multi-word field of a tagged object is camelCase.
+	const ZERO_PCR: &str = "000000000000000000000000000000000000000000000000\
+	                        000000000000000000000000000000000000000000000000";
+
+	/// A V3 document written as `docs/oci_support` specifies it: workloads
+	/// keyed by name, and every multi-word field of a tagged object camelCase.
 	const DOCUMENTED_JSON: &str = r#"{
 		"version": "v3",
 		"namespace": {"name": "golden", "nonce": 7, "quorumKey": "0a0b"},
@@ -592,39 +751,70 @@ mod tests {
 		"shareSet": {"threshold": 1, "members": [{"alias": "s", "pubKey": "02"}]},
 		"enclave": {
 			"type": "nitro",
-			"pcr0": "10", "pcr1": "11", "pcr2": "12", "pcr3": "13",
+			"mode": "attested",
+			"pcr0": "101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010",
+			"pcr1": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+			"pcr2": "121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212",
+			"pcr3": "131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313",
 			"awsRootCertificate": "ff",
 			"qosCommit": "abc123"
 		},
 		"volumes": {"shared": {"type": "tmpfs", "mountPath": "/mnt/qos/shared"}},
-		"workloads": [{
-			"type": "oci",
-			"name": "api",
-			"image": {
-				"type": "ociManifest",
-				"digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
-			},
-			"restart": "always",
-			"mounts": [
-				{"type": "volume", "source": "shared", "mountPath": "/run/shared", "readOnly": true},
-				{"type": "file", "source": "/qos.quorum.key", "mountPath": "/qos.quorum.key", "readOnly": true}
-			]
-		}]
+		"workloads": {
+			"api": {
+				"type": "oci",
+				"image": {
+					"type": "ociManifest",
+					"digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+				},
+				"restart": "always",
+				"mounts": [
+					{"type": "volume", "source": "shared", "mountPath": "/run/shared", "readOnly": true},
+					{"type": "volume", "source": "qos", "mountPath": "/run/qos", "readOnly": true}
+				]
+			}
+		}
 	}"#;
 
 	/// The canonical QOS JSON of [`DOCUMENTED_JSON`]: the signed bytes.
 	const GOLDEN_CANONICAL: &str = concat!(
-		r#"{"enclave":{"awsRootCertificate":"ff","pcr0":"10","pcr1":"11","pcr2":"12","pcr3":"13","qosCommit":"abc123","type":"nitro"},"#,
+		r#"{"enclave":{"awsRootCertificate":"ff","#,
+		r#""mode":"attested","#,
+		r#""pcr0":"101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010","#,
+		r#""pcr1":"111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111","#,
+		r#""pcr2":"121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212","#,
+		r#""pcr3":"131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313","#,
+		r#""qosCommit":"abc123","type":"nitro"},"#,
 		r#""manifestSet":{"members":[{"alias":"m","pubKey":"01"}],"threshold":"1"},"#,
 		r#""namespace":{"name":"golden","nonce":"7","quorumKey":"0a0b"},"#,
 		r#""shareSet":{"members":[{"alias":"s","pubKey":"02"}],"threshold":"1"},"#,
 		r#""version":"v3","#,
 		r#""volumes":{"shared":{"mountPath":"/mnt/qos/shared","type":"tmpfs"}},"#,
-		r#""workloads":[{"image":{"digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","type":"ociManifest"},"#,
+		r#""workloads":{"api":{"image":{"digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","type":"ociManifest"},"#,
 		r#""mounts":[{"mountPath":"/run/shared","readOnly":true,"source":"shared","type":"volume"},"#,
-		r#"{"mountPath":"/qos.quorum.key","readOnly":true,"source":"/qos.quorum.key","type":"file"}],"#,
-		r#""name":"api","restart":"always","type":"oci"}]}"#,
+		r#"{"mountPath":"/run/qos","readOnly":true,"source":"qos","type":"volume"}],"#,
+		r#""restart":"always","type":"oci"}}}"#,
 	);
+
+	fn documented() -> serde_json::Value {
+		serde_json::from_str(DOCUMENTED_JSON).unwrap()
+	}
+
+	/// Decode and validate like the production decoders do.
+	fn decode(value: &serde_json::Value) -> Result<ManifestV3, String> {
+		let bytes = serde_json::to_vec(value).unwrap();
+		let manifest =
+			super::super::VersionedManifest::try_from_slice_compat(&bytes)
+				.map_err(|error| error.to_string())?;
+		match manifest {
+			super::super::VersionedManifest::V3(manifest) => Ok(manifest),
+			_ => Err("not v3".into()),
+		}
+	}
+
+	fn api_mounts(value: &mut serde_json::Value) -> &mut serde_json::Value {
+		&mut value["workloads"]["api"]["mounts"]
+	}
 
 	#[test]
 	fn documented_camel_case_fields_are_the_signed_encoding() {
@@ -653,6 +843,289 @@ mod tests {
 				"{snake} must not be accepted"
 			);
 		}
+	}
+
+	#[test]
+	fn workload_order_does_not_change_the_hash_and_names_do() {
+		let image = r#"{"type":"oci","restart":"never","image":{"type":"ociManifest","digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111"}}"#;
+		let with = |members: &str| {
+			let mut value = documented();
+			value["workloads"] = serde_json::json!(0);
+			let text = serde_json::to_string(&value).unwrap().replace(
+				"\"workloads\":0",
+				&format!("\"workloads\":{{{members}}}"),
+			);
+			serde_json::from_str::<ManifestV3>(&text).unwrap()
+		};
+		let hash = |manifest: &ManifestV3| {
+			crate::protocol::services::boot::manifest::canonical_json_hash(
+				manifest,
+			)
+		};
+		let forward = with(&format!(r#""alpha":{image},"beta":{image}"#));
+		let backward = with(&format!(r#""beta":{image},"alpha":{image}"#));
+		let renamed = with(&format!(r#""alpha":{image},"gamma":{image}"#));
+		assert_eq!(hash(&forward), hash(&backward));
+		assert_eq!(
+			qos_json::to_vec(&forward).unwrap(),
+			qos_json::to_vec(&backward).unwrap()
+		);
+		assert_ne!(hash(&forward), hash(&renamed));
+	}
+
+	#[test]
+	fn workload_name_field_and_bad_names_are_rejected() {
+		let mut value = documented();
+		value["workloads"]["api"]["name"] = "api".into();
+		assert!(decode(&value).is_err());
+
+		for bad in ["", "Api", "-a", "a-", "a_b", &"a".repeat(64)] {
+			let mut value = documented();
+			let api = value["workloads"]["api"].clone();
+			value["workloads"] = serde_json::json!({ bad: api });
+			assert!(decode(&value).is_err(), "name {bad:?}");
+		}
+
+		let mut value = documented();
+		value["workloads"] = serde_json::json!({});
+		assert!(decode(&value).is_err());
+		// The array form of earlier drafts is gone.
+		value["workloads"] = serde_json::json!([]);
+		assert!(decode(&value).is_err());
+	}
+
+	#[test]
+	fn unsupported_workload_and_image_types_are_rejected() {
+		let mut value = documented();
+		value["workloads"]["api"]["type"] = "pivot".into();
+		assert!(decode(&value).is_err());
+		let mut value = documented();
+		value["workloads"]["api"]["image"]["type"] = "ociIndex".into();
+		assert!(decode(&value).is_err());
+		let mut value = documented();
+		value["workloads"]["api"]["extra"] = 1.into();
+		assert!(decode(&value).is_err());
+	}
+
+	#[test]
+	fn restart_values_are_lowercase() {
+		for ok in ["never", "always"] {
+			let mut value = documented();
+			value["workloads"]["api"]["restart"] = ok.into();
+			decode(&value).unwrap();
+		}
+		for bad in ["Never", "Always", "NEVER", "onFailure"] {
+			let mut value = documented();
+			value["workloads"]["api"]["restart"] = bad.into();
+			assert!(decode(&value).is_err(), "{bad}");
+		}
+	}
+
+	#[test]
+	fn enclave_mode_is_required_and_signed() {
+		let mut value = documented();
+		value["enclave"].as_object_mut().unwrap().remove("mode");
+		assert!(decode(&value).is_err());
+		for bad in ["Attested", "production", ""] {
+			let mut value = documented();
+			value["enclave"]["mode"] = bad.into();
+			assert!(decode(&value).is_err(), "{bad:?}");
+		}
+		let attested = decode(&documented()).unwrap();
+		let mut value = documented();
+		value["enclave"]["mode"] = "debug".into();
+		for pcr in ["pcr0", "pcr1", "pcr2", "pcr3"] {
+			value["enclave"][pcr] = ZERO_PCR.into();
+		}
+		let debug = decode(&value).unwrap();
+		assert_eq!(attested.enclave.mode(), EnclaveMode::Attested);
+		assert_eq!(debug.enclave.mode(), EnclaveMode::Debug);
+		assert_ne!(
+			qos_json::to_vec(&attested).unwrap(),
+			qos_json::to_vec(&debug).unwrap()
+		);
+	}
+
+	#[test]
+	fn pcrs_are_96_lowercase_hex_characters() {
+		for bad in [
+			"10".to_string(),
+			"1".repeat(95),
+			"1".repeat(97),
+			"A".repeat(96),
+			format!("0x{}", "1".repeat(94)),
+			"g".repeat(96),
+		] {
+			for pcr in ["pcr0", "pcr1", "pcr2", "pcr3"] {
+				let mut value = documented();
+				value["enclave"][pcr] = bad.clone().into();
+				assert!(decode(&value).is_err(), "{pcr} {bad}");
+			}
+		}
+	}
+
+	#[test]
+	fn attested_mode_rejects_all_zero_measurements() {
+		let mut value = documented();
+		for pcr in ["pcr0", "pcr1", "pcr2"] {
+			value["enclave"][pcr] = ZERO_PCR.into();
+		}
+		let error = decode(&value).unwrap_err();
+		assert!(error.contains("attested"), "{error}");
+		// One nonzero measurement among PCR0..2 is enough; PCR3 is not
+		// considered.
+		value["enclave"]["pcr2"] = documented()["enclave"]["pcr2"].clone();
+		decode(&value).unwrap();
+		let mut value = documented();
+		for pcr in ["pcr0", "pcr1", "pcr2"] {
+			value["enclave"][pcr] = ZERO_PCR.into();
+		}
+		value["enclave"]["pcr3"] = ZERO_PCR.into();
+		assert!(decode(&value).is_err());
+	}
+
+	#[test]
+	fn debug_mode_requires_every_pcr_zero() {
+		let mut value = documented();
+		value["enclave"]["mode"] = "debug".into();
+		// The documented PCRs are nonzero.
+		assert!(decode(&value).is_err());
+		for pcr in ["pcr0", "pcr1", "pcr2", "pcr3"] {
+			value["enclave"][pcr] = ZERO_PCR.into();
+		}
+		decode(&value).unwrap();
+		for pcr in ["pcr0", "pcr1", "pcr2", "pcr3"] {
+			let mut nonzero = value.clone();
+			nonzero["enclave"][pcr] = format!("{}01", &ZERO_PCR[..94]).into();
+			assert!(decode(&nonzero).is_err(), "{pcr}");
+		}
+	}
+
+	#[test]
+	fn file_mounts_are_gone() {
+		let mut value = documented();
+		api_mounts(&mut value).as_array_mut().unwrap().push(
+			serde_json::json!({
+				"type": "file",
+				"source": "/qos.quorum.key",
+				"mountPath": "/qos.quorum.key",
+				"readOnly": true
+			}),
+		);
+		assert!(decode(&value).is_err());
+	}
+
+	#[test]
+	fn qos_volume_is_reserved_implicit_and_read_only() {
+		// Declared by the manifest: rejected.
+		let mut value = documented();
+		value["volumes"]["qos"] =
+			serde_json::json!({"type": "tmpfs", "mountPath": "/mnt/qos/own"});
+		let error = decode(&value).unwrap_err();
+		assert!(error.contains("reserved"), "{error}");
+
+		// Writable, or readOnly absent (default false): rejected.
+		let mut value = documented();
+		api_mounts(&mut value)[1]["readOnly"] = false.into();
+		let error = decode(&value).unwrap_err();
+		assert!(error.contains("read-only"), "{error}");
+		let mut value = documented();
+		api_mounts(&mut value)[1].as_object_mut().unwrap().remove("readOnly");
+		assert!(decode(&value).is_err());
+
+		// A workload without a qos mount gets nothing; `qos` is mountable
+		// without a top-level declaration.
+		let mut value = documented();
+		api_mounts(&mut value).as_array_mut().unwrap().remove(1);
+		decode(&value).unwrap();
+		let mut value = documented();
+		value["volumes"] = serde_json::json!({});
+		api_mounts(&mut value).as_array_mut().unwrap().remove(0);
+		decode(&value).unwrap();
+
+		// Undeclared non-qos source is still rejected.
+		let mut value = documented();
+		api_mounts(&mut value)[0]["source"] = "other".into();
+		let error = decode(&value).unwrap_err();
+		assert!(error.contains("undeclared"), "{error}");
+	}
+
+	#[test]
+	fn volume_and_mount_paths_are_checked() {
+		for path in ["/proc/x", "/sys", "/dev/shm"] {
+			let mut value = documented();
+			api_mounts(&mut value)[0]["mountPath"] = path.into();
+			assert!(decode(&value).is_err(), "{path}");
+		}
+		let mut value = documented();
+		api_mounts(&mut value)[0]["mountPath"] = "/run".into();
+		assert!(decode(&value).is_err(), "overlap with /run/qos");
+		for path in [
+			"/run/qos-oci",
+			"/run/qos-oci/x",
+			"/run",
+			"/qos.manifest",
+			"/qos.quorum.key/x",
+			"/proc",
+		] {
+			let mut value = documented();
+			value["volumes"]["shared"]["mountPath"] = path.into();
+			assert!(decode(&value).is_err(), "{path}");
+		}
+		let mut value = documented();
+		value["volumes"]["other"] =
+			serde_json::json!({"type": "tmpfs", "mountPath": "/mnt/qos"});
+		assert!(decode(&value).is_err(), "overlapping volumes");
+	}
+
+	#[test]
+	fn duplicate_json_members_are_rejected_at_every_level() {
+		reject_duplicate_json_members(DOCUMENTED_JSON.as_bytes()).unwrap();
+		for bad in [
+			r#"{"a":1,"a":2}"#,
+			r#"{"a":{"b":1,"b":2}}"#,
+			r#"[{"a":1},{"b":[{"c":1,"c":1}]}]"#,
+			// Different escapes of the same name.
+			r#"{"a":1,"a":2}"#,
+			r#"{"ab":1,"ab":2}"#,
+		] {
+			assert!(reject_duplicate_json_members(bad.as_bytes()).is_err());
+		}
+		assert!(reject_duplicate_json_members(br#"{"a":1} x"#).is_err());
+		// The same name in different objects is fine.
+		reject_duplicate_json_members(br#"{"a":{"x":1},"b":{"x":1}}"#).unwrap();
+
+		let duplicated_workload = DOCUMENTED_JSON.replacen(
+			r#""workloads": {"#,
+			r#""workloads": {"api": {"type": "oci", "image": {"type": "ociManifest", "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"}, "restart": "never"},"#,
+			1,
+		);
+		// serde would silently keep the last `api`.
+		assert!(
+			serde_json::from_str::<ManifestV3>(&duplicated_workload).is_ok()
+		);
+		let error = super::super::VersionedManifest::try_from_slice_compat(
+			duplicated_workload.as_bytes(),
+		)
+		.unwrap_err();
+		assert!(error.to_string().contains("duplicate"), "{error}");
+		let envelope = format!(
+			r#"{{"manifest":{duplicated_workload},"manifestSetApprovals":[],"shareSetApprovals":[]}}"#
+		);
+		let error =
+			super::super::VersionedManifestEnvelope::try_from_slice_compat(
+				envelope.as_bytes(),
+			)
+			.unwrap_err();
+		assert!(error.to_string().contains("duplicate"), "{error}");
+		// The same bytes without the duplicate decode.
+		super::super::VersionedManifestEnvelope::try_from_slice_compat(
+			format!(
+				r#"{{"manifest":{DOCUMENTED_JSON},"manifestSetApprovals":[],"shareSetApprovals":[]}}"#
+			)
+			.as_bytes(),
+		)
+		.unwrap();
 	}
 
 	#[test]

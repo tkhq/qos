@@ -89,13 +89,17 @@ async fn run_oci_workload_group(
 	manifest: ManifestV3,
 	status: &SharedOciStatus,
 ) {
-	status.write().unwrap().extend(manifest.workloads.iter().map(|workload| {
-		let name = workload.name().clone();
-		(
-			name.clone(),
-			OciWorkloadStatus::pending(name, workload.image().digest().clone()),
-		)
-	}));
+	status.write().unwrap().extend(manifest.workloads.iter().map(
+		|(name, workload)| {
+			(
+				name.clone(),
+				OciWorkloadStatus::pending(
+					name.clone(),
+					workload.image().digest().clone(),
+				),
+			)
+		},
+	));
 	println!("Reaper::execute about to start OCI workloads");
 	let handles = handles.clone();
 	let status = Arc::clone(status);

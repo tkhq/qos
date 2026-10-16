@@ -13,6 +13,15 @@ use crate::protocol::{
 	services::boot::{OciDigest, VersionedManifestEnvelope},
 };
 
+/// File name of the approved manifest envelope inside the `qos` volume.
+///
+/// Provisional: the specification leaves the layout of the `qos` volume open.
+pub const QOS_VOLUME_MANIFEST_FILE: &str = "manifest.json";
+/// File name of the quorum key inside the `qos` volume (provisional).
+pub const QOS_VOLUME_QUORUM_KEY_FILE: &str = "quorum.key";
+/// File name of the live ephemeral key inside the `qos` volume (provisional).
+pub const QOS_VOLUME_EPHEMERAL_KEY_FILE: &str = "ephemeral.key";
+
 /// Handle for accessing the quorum key.
 #[derive(Debug, Clone)]
 pub struct QuorumKeyHandle {
@@ -148,6 +157,30 @@ impl Handles {
 			&new_pair.to_master_seed_hex(),
 			ProtocolError::FailedToPutEphemeralKey,
 		)
+	}
+
+	/// Read the files the implicit `qos` volume of a Manifest V3 exposes, as
+	/// `(file name, bytes)` pairs: the approved manifest envelope, the quorum
+	/// key and the live ephemeral key.
+	///
+	/// The file names are provisional; see
+	/// `docs/oci_support/manifest/volumes.md`.
+	///
+	/// # Errors
+	///
+	/// Errors if any of the three files cannot be read.
+	#[cfg(target_os = "linux")]
+	pub(crate) fn read_qos_volume_files(
+		&self,
+	) -> std::io::Result<[(&'static str, Vec<u8>); 3]> {
+		Ok([
+			(QOS_VOLUME_MANIFEST_FILE, fs::read(&self.manifest)?),
+			(QOS_VOLUME_QUORUM_KEY_FILE, fs::read(&self.quorum.quorum)?),
+			(
+				QOS_VOLUME_EPHEMERAL_KEY_FILE,
+				fs::read(&self.ephemeral.ephemeral_key_path)?,
+			),
+		])
 	}
 
 	/// Get the Quorum Key pair.

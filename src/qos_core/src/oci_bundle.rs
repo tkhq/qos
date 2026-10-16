@@ -96,33 +96,6 @@ pub fn prepare_directory_target(
 	}
 }
 
-/// Prepare a regular-file bind-mount target without following image symlinks.
-///
-/// # Errors
-///
-/// Returns an error when the target escapes the rootfs or is not regular.
-pub fn prepare_file_target(
-	rootfs: &Path,
-	container_path: &Path,
-) -> Result<(), ProtocolError> {
-	let relative = container_relative(container_path)?;
-	ensure_safe_parents(rootfs, &relative)?;
-	let target = rootfs.join(relative);
-	match fs::symlink_metadata(&target) {
-		Ok(metadata) if metadata.is_file() => Ok(()),
-		Ok(_) => Err(invalid("OCI file target is not a regular file")),
-		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-			OpenOptions::new()
-				.write(true)
-				.create_new(true)
-				.open(target)
-				.map(|_| ())
-				.map_err(|_| invalid("failed to create OCI file target"))
-		}
-		Err(_) => Err(invalid("failed to inspect OCI file target")),
-	}
-}
-
 fn container_relative(path: &Path) -> Result<PathBuf, ProtocolError> {
 	normalized_container_path(&path.to_string_lossy())?
 		.strip_prefix("/")

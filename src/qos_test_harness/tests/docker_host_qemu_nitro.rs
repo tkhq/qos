@@ -3,7 +3,7 @@ mod support;
 use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 
 use qos_core::protocol::services::boot::{
-	EnclaveV3, ManifestV3, ManifestVersion, OciImageRef, OciName,
+	EnclaveMode, EnclaveV3, ManifestV3, ManifestVersion, OciImageRef, OciName,
 	OciRestartPolicy, WorkloadV3,
 };
 use qos_p256::P256Public;
@@ -142,7 +142,19 @@ async fn postgres_oci_smoke_on_qemu() {
 	let VersionedManifest::V2(base) = base else {
 		panic!("test manifest template must be V2");
 	};
+	// The signed mode must agree with the PCRs the QEMU release carries: zero
+	// PCRs are the debug identity, anything else is attested.
+	let zero = |pcr: &[u8]| pcr.iter().all(|byte| *byte == 0);
+	let mode = if zero(&base.enclave.pcr0)
+		&& zero(&base.enclave.pcr1)
+		&& zero(&base.enclave.pcr2)
+	{
+		EnclaveMode::Debug
+	} else {
+		EnclaveMode::Attested
+	};
 	let enclave = EnclaveV3::Nitro {
+		mode,
 		pcr0: base.enclave.pcr0,
 		pcr1: base.enclave.pcr1,
 		pcr2: base.enclave.pcr2,
@@ -156,12 +168,16 @@ async fn postgres_oci_smoke_on_qemu() {
 		manifest_set: base.manifest_set,
 		share_set: base.share_set,
 		enclave,
-		workloads: vec![WorkloadV3::Oci {
-			name: OciName::try_from("postgres-smoke".to_string()).unwrap(),
-			image: OciImageRef::OciManifest { digest: image.digest.clone() },
-			restart: OciRestartPolicy::Never,
-			mounts: vec![],
-		}],
+		workloads: BTreeMap::from([(
+			OciName::try_from("postgres-smoke".to_string()).unwrap(),
+			WorkloadV3::Oci {
+				image: OciImageRef::OciManifest {
+					digest: image.digest.clone(),
+				},
+				restart: OciRestartPolicy::Never,
+				mounts: vec![],
+			},
+		)]),
 		volumes: BTreeMap::new(),
 		dns: None,
 	};

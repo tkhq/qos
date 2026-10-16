@@ -20,8 +20,9 @@ pub mod v3;
 pub use builder::{ManifestBuilder, ManifestBuilderError};
 pub use v2::{DnsConfig, ManifestEnvelopeV2, ManifestV2};
 pub use v3::{
-	EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDigest, OciImageRef,
-	OciMount, OciName, OciPath, OciRestartPolicy, VolumeV3, WorkloadV3,
+	EnclaveMode, EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDigest,
+	OciImageRef, OciMount, OciName, OciPath, OciRestartPolicy, QOS_VOLUME_NAME,
+	VolumeV3, WorkloadV3,
 };
 
 /// Schema version used by versioned manifest tooling.
@@ -291,7 +292,9 @@ impl VersionedManifest {
 					|value| value.get("version")?.as_str().map(str::to_owned),
 				);
 			return match version.as_deref() {
-				Some("v3") => serde_json::from_slice::<ManifestV3>(buf)
+				Some("v3") => v3::reject_duplicate_json_members(buf)
+					.map_err(serde::de::Error::custom)
+					.and_then(|()| serde_json::from_slice::<ManifestV3>(buf))
 					.and_then(|manifest| {
 						manifest
 							.validate()
@@ -548,7 +551,11 @@ impl VersionedManifestEnvelope {
 						.map(str::to_owned)
 				});
 			return match version.as_deref() {
-				Some("v3") => serde_json::from_slice::<ManifestEnvelopeV3>(buf)
+				Some("v3") => v3::reject_duplicate_json_members(buf)
+					.map_err(serde::de::Error::custom)
+					.and_then(|()| {
+						serde_json::from_slice::<ManifestEnvelopeV3>(buf)
+					})
 					.and_then(|envelope| {
 						envelope
 							.manifest

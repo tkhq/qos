@@ -1339,7 +1339,7 @@ impl DockerHostQemuNitroRunner {
 					"OCI QEMU start requires Manifest V3".into(),
 				));
 			};
-			if manifest.workloads.iter().any(|workload| {
+			if manifest.workloads.values().any(|workload| {
 				workload.image().digest() != &spec.artifact.digest
 			}) {
 				return Err(RunnerError::InvalidConfig(

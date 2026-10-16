@@ -24,7 +24,7 @@ use qos_core::protocol::{
 			ManifestEnvelopeV2, ManifestEnvelopeV3, ManifestSet,
 			ManifestVersion, MemberPubKey, Namespace, NitroConfig, PatchSet,
 			PivotConfig as PivotConfigV1, QuorumMember, RestartPolicy,
-			ShareSet, VersionedManifest, VersionedManifestEnvelope,
+			ShareSet, VersionedManifest, VersionedManifestEnvelope, WorkloadV3,
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
@@ -1229,6 +1229,31 @@ where
 		}
 	}
 
+	// Check the signed fields that only Manifest V3 has
+	if let VersionedManifest::V3(v3_manifest) = manifest {
+		let mut prompts = vec![format!(
+			"Is this the correct enclave mode: {:?}? (y/n)",
+			v3_manifest.enclave.mode()
+		)];
+		for (name, workload) in &v3_manifest.workloads {
+			let WorkloadV3::Oci { image, restart, mounts } = workload;
+			prompts.push(format!(
+				"Is this the correct OCI workload `{}`:\nimage {}\nrestart {restart:?}\nmounts {mounts:?}\n(y/n)",
+				name.as_str(),
+				image.digest().as_str(),
+			));
+		}
+		prompts.push(format!(
+			"Are these the correct top-level volumes:\n{:?}?\n(y/n)",
+			v3_manifest.volumes
+		));
+		for prompt in prompts {
+			if !prompter.prompt_is_yes(&prompt) {
+				return false;
+			}
+		}
+	}
+
 	true
 }
 
@@ -1501,7 +1526,7 @@ fn oci_boot_payload<P: AsRef<Path>>(
 	let digests: BTreeSet<_> = envelope
 		.manifest
 		.workloads
-		.iter()
+		.values()
 		.map(|workload| workload.image().digest().clone())
 		.collect();
 	if digests.len() != oci_layout_archives.len() {
