@@ -78,6 +78,19 @@ jobs:
           cargo fetch --locked
           cargo hack check --offline --feature-powerset --no-dev-deps -p ${{ matrix.package }}
 
+  lockfiles:
+    name: lockfiles
+    runs-on: ubicloud-standard-2
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+      - name: Check excluded crates' lockfiles
+        run: make -C src check-lockfiles
+
   build-linux-only-crates:
     name: build-linux-only-crates
     runs-on: ubicloud-standard-8

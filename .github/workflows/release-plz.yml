@@ -38,6 +38,9 @@ jobs:
         with:
           toolchain: stable
           components: clippy,rustfmt
+      # Stop before publishing or tagging, since the release images build with --locked.
+      - name: Check excluded crates' lockfiles
+        run: make -C src check-lockfiles
       - name: Update apt cache
         run: sudo apt-get update
       - name: Install PCSC deps
