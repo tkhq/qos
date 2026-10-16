@@ -225,7 +225,12 @@ impl TryFrom<String> for OciPath {
 
 /// Nitro enclave settings in the tagged V3 form.
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(
+	tag = "type",
+	rename_all = "camelCase",
+	rename_all_fields = "camelCase",
+	deny_unknown_fields
+)]
 pub enum EnclaveV3 {
 	/// AWS Nitro enclave.
 	#[serde(rename = "nitro")]
@@ -276,7 +281,12 @@ impl EnclaveV3 {
 
 /// An approved OCI image reference.
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(
+	tag = "type",
+	rename_all = "camelCase",
+	rename_all_fields = "camelCase",
+	deny_unknown_fields
+)]
 pub enum OciImageRef {
 	/// A platform-specific OCI image manifest.
 	#[serde(rename = "ociManifest")]
@@ -308,7 +318,12 @@ pub enum OciRestartPolicy {
 
 /// One declared attachment to an OCI workload.
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(
+	tag = "type",
+	rename_all = "camelCase",
+	rename_all_fields = "camelCase",
+	deny_unknown_fields
+)]
 pub enum OciMount {
 	/// A named top-level volume.
 	#[serde(rename = "volume")]
@@ -348,7 +363,12 @@ impl OciMount {
 
 /// A Manifest V3 workload.
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(
+	tag = "type",
+	rename_all = "camelCase",
+	rename_all_fields = "camelCase",
+	deny_unknown_fields
+)]
 pub enum WorkloadV3 {
 	/// An OCI container workload.
 	#[serde(rename = "oci")]
@@ -391,7 +411,12 @@ impl WorkloadV3 {
 
 /// A named top-level volume declaration.
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(
+	tag = "type",
+	rename_all = "camelCase",
+	rename_all_fields = "camelCase",
+	deny_unknown_fields
+)]
 pub enum VolumeV3 {
 	/// Volatile tmpfs storage.
 	#[serde(rename = "tmpfs")]
@@ -557,6 +582,78 @@ pub struct ManifestEnvelopeV3 {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// A V3 document written as `docs/oci_support` specifies it: every
+	/// multi-word field of a tagged object is camelCase.
+	const DOCUMENTED_JSON: &str = r#"{
+		"version": "v3",
+		"namespace": {"name": "golden", "nonce": 7, "quorumKey": "0a0b"},
+		"manifestSet": {"threshold": 1, "members": [{"alias": "m", "pubKey": "01"}]},
+		"shareSet": {"threshold": 1, "members": [{"alias": "s", "pubKey": "02"}]},
+		"enclave": {
+			"type": "nitro",
+			"pcr0": "10", "pcr1": "11", "pcr2": "12", "pcr3": "13",
+			"awsRootCertificate": "ff",
+			"qosCommit": "abc123"
+		},
+		"volumes": {"shared": {"type": "tmpfs", "mountPath": "/mnt/qos/shared"}},
+		"workloads": [{
+			"type": "oci",
+			"name": "api",
+			"image": {
+				"type": "ociManifest",
+				"digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+			},
+			"restart": "always",
+			"mounts": [
+				{"type": "volume", "source": "shared", "mountPath": "/run/shared", "readOnly": true},
+				{"type": "file", "source": "/qos.quorum.key", "mountPath": "/qos.quorum.key", "readOnly": true}
+			]
+		}]
+	}"#;
+
+	/// The canonical QOS JSON of [`DOCUMENTED_JSON`]: the signed bytes.
+	const GOLDEN_CANONICAL: &str = concat!(
+		r#"{"enclave":{"awsRootCertificate":"ff","pcr0":"10","pcr1":"11","pcr2":"12","pcr3":"13","qosCommit":"abc123","type":"nitro"},"#,
+		r#""manifestSet":{"members":[{"alias":"m","pubKey":"01"}],"threshold":"1"},"#,
+		r#""namespace":{"name":"golden","nonce":"7","quorumKey":"0a0b"},"#,
+		r#""shareSet":{"members":[{"alias":"s","pubKey":"02"}],"threshold":"1"},"#,
+		r#""version":"v3","#,
+		r#""volumes":{"shared":{"mountPath":"/mnt/qos/shared","type":"tmpfs"}},"#,
+		r#""workloads":[{"image":{"digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","type":"ociManifest"},"#,
+		r#""mounts":[{"mountPath":"/run/shared","readOnly":true,"source":"shared","type":"volume"},"#,
+		r#"{"mountPath":"/qos.quorum.key","readOnly":true,"source":"/qos.quorum.key","type":"file"}],"#,
+		r#""name":"api","restart":"always","type":"oci"}]}"#,
+	);
+
+	#[test]
+	fn documented_camel_case_fields_are_the_signed_encoding() {
+		let manifest: ManifestV3 =
+			serde_json::from_str(DOCUMENTED_JSON).unwrap();
+		manifest.validate().unwrap();
+		assert_eq!(qos_json::to_string(&manifest).unwrap(), GOLDEN_CANONICAL);
+		assert_eq!(
+			serde_json::from_str::<ManifestV3>(GOLDEN_CANONICAL).unwrap(),
+			manifest
+		);
+	}
+
+	#[test]
+	fn snake_case_fields_are_rejected() {
+		serde_json::from_str::<ManifestV3>(DOCUMENTED_JSON).unwrap();
+		for (camel, snake) in [
+			("mountPath", "mount_path"),
+			("readOnly", "read_only"),
+			("awsRootCertificate", "aws_root_certificate"),
+			("qosCommit", "qos_commit"),
+		] {
+			let json = DOCUMENTED_JSON.replace(camel, snake);
+			assert!(
+				serde_json::from_str::<ManifestV3>(&json).is_err(),
+				"{snake} must not be accepted"
+			);
+		}
+	}
 
 	#[test]
 	fn newtypes_reject_noncanonical_identity_and_paths() {
