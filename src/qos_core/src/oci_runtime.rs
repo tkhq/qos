@@ -74,12 +74,61 @@ pub struct SandboxNamespaces {
 /// One QOS-resolved mount. No path or option comes from an OCI image.
 #[derive(Debug, Clone)]
 pub struct ResolvedMount {
-	/// Parent-QOS source directory.
+	/// Parent-QOS source directory, or a pinned `/proc/self/fd` path to a
+	/// device node.
 	pub source: PathBuf,
 	/// Absolute path inside the workload.
 	pub destination: PathBuf,
 	/// Whether the bind mount is read-only.
 	pub read_only: bool,
+	/// Whether the source is a device node: mounted after the runtime's
+	/// `/dev` and without `nodev`.
+	pub device: bool,
+}
+
+/// A character device one workload may open beyond the fixed runtime
+/// devices, such as the NSM when its manifest mounts it. QOS reads the
+/// numbers from the pinned device node and allows them in that workload's
+/// device policy only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AllowedDevice {
+	/// Device major number.
+	pub major: u32,
+	/// Device minor number.
+	pub minor: u32,
+}
+
+/// Where a workload's standard output and error go. The manifest's enclave
+/// mode chooses for every workload what Manifest V2's pivot `debugMode`
+/// chooses for the pivot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkloadOutput {
+	/// `debug`: QOS reads each line and prints it, tagged with the workload.
+	Reprinted,
+	/// `attested`: `/dev/null`.
+	Discarded,
+}
+
+/// Character devices every container may open: null, zero, full, random,
+/// urandom, tty, ptmx, and every PTY (`136:*`).
+const BASE_DEVICES: [(u32, Option<u32>); 8] = [
+	(1, Some(3)),
+	(1, Some(5)),
+	(1, Some(7)),
+	(1, Some(8)),
+	(1, Some(9)),
+	(5, Some(0)),
+	(5, Some(2)),
+	(136, None),
+];
+
+/// [`BASE_DEVICES`] plus `extra`, each exactly.
+fn allowed_devices(
+	extra: &[AllowedDevice],
+) -> impl Iterator<Item = (u32, Option<u32>)> + '_ {
+	BASE_DEVICES
+		.into_iter()
+		.chain(extra.iter().map(|device| (device.major, Some(device.minor))))
 }
 
 /// Exact process termination representation required by Manifest V3 status.
@@ -98,7 +147,9 @@ pub struct RuntimeContainer {
 }
 
 impl RuntimeContainer {
-	/// Create a detached container from a QOS-generated bundle.
+	/// Create a detached container from a QOS-generated bundle. `devices`
+	/// are the workload's devices beyond the fixed ones, as passed to
+	/// [`write_config`].
 	///
 	/// # Errors
 	///
@@ -107,8 +158,17 @@ impl RuntimeContainer {
 		name: &OciName,
 		bundle: &Path,
 		state_root: &Path,
+		devices: &[AllowedDevice],
+		output: WorkloadOutput,
 	) -> Result<Self, OciRuntimeError> {
-		Self::create_id(name.as_str(), name.as_str(), bundle, state_root)
+		Self::create_id(
+			name.as_str(),
+			name.as_str(),
+			bundle,
+			state_root,
+			devices,
+			output,
+		)
 	}
 
 	fn create_id(
@@ -116,10 +176,26 @@ impl RuntimeContainer {
 		cgroup_name: &str,
 		bundle: &Path,
 		state_root: &Path,
+		devices: &[AllowedDevice],
+		output: WorkloadOutput,
 	) -> Result<Self, OciRuntimeError> {
 		fs::create_dir_all(state_root)?;
-		let (stdout_read, stdout_write) = pipe()?;
-		let (stderr_read, stderr_write) = pipe()?;
+		let (stdout_write, stderr_write, drains) = match output {
+			WorkloadOutput::Reprinted => {
+				let (stdout_read, stdout_write) = pipe()?;
+				let (stderr_read, stderr_write) = pipe()?;
+				(stdout_write, stderr_write, Some((stdout_read, stderr_read)))
+			}
+			WorkloadOutput::Discarded => {
+				let null = || {
+					fs::OpenOptions::new()
+						.write(true)
+						.open("/dev/null")
+						.map(OwnedFd::from)
+				};
+				(null()?, null()?, None)
+			}
+		};
 		let stdin = File::open("/dev/null")?;
 		let mut container =
 			ContainerBuilder::new(id.to_owned(), SyscallType::Linux)
@@ -136,7 +212,7 @@ impl RuntimeContainer {
 				.with_detach(true)
 				.build()
 				.map_err(runtime_error)?;
-		if let Err(error) = apply_device_policy(cgroup_name) {
+		if let Err(error) = apply_device_policy(cgroup_name, devices) {
 			return match container.delete(true) {
 				Ok(()) => Err(error),
 				Err(cleanup) => Err(OciRuntimeError::Cleanup(format!(
@@ -144,10 +220,9 @@ impl RuntimeContainer {
 				))),
 			};
 		}
-		let log_threads = vec![
-			drain_log(id, "OUT", stdout_read),
-			drain_log(id, "ERR", stderr_read),
-		];
+		let log_threads = drains.map_or_else(Vec::new, |(stdout, stderr)| {
+			vec![drain_log(id, "OUT", stdout), drain_log(id, "ERR", stderr)]
+		});
 		Ok(Self { container, log_threads })
 	}
 
@@ -259,8 +334,14 @@ impl RuntimeSandbox {
 		let spec = sandbox_spec(&rootfs, &executable, &shm)?;
 		spec.save(bundle.join("config.json"))
 			.map_err(|error| OciRuntimeError::Config(error.to_string()))?;
+		// The sandbox is QOS's own process: its output is QOS's.
 		let mut container = RuntimeContainer::create_id(
-			SANDBOX_ID, "sandbox", &bundle, &state,
+			SANDBOX_ID,
+			"sandbox",
+			&bundle,
+			&state,
+			&[],
+			WorkloadOutput::Reprinted,
 		)?;
 		let pid = match container.start() {
 			Ok(pid) => pid,
@@ -462,6 +543,7 @@ pub fn run_sandbox_if_requested() -> bool {
 }
 
 /// Write a complete QOS-owned `config.json` for one workload bundle.
+/// `devices` extend the fixed device allowlist for this workload only.
 ///
 /// # Errors
 ///
@@ -472,9 +554,10 @@ pub fn write_config(
 	process: &RuntimeProcess,
 	sandbox: &SandboxNamespaces,
 	mounts: &[ResolvedMount],
+	devices: &[AllowedDevice],
 	name: &OciName,
 ) -> Result<(), OciRuntimeError> {
-	let spec = workload_spec(rootfs, process, sandbox, mounts, name)?;
+	let spec = workload_spec(rootfs, process, sandbox, mounts, devices, name)?;
 	spec.save(bundle.join("config.json"))
 		.map_err(|error| OciRuntimeError::Config(error.to_string()))
 }
@@ -484,6 +567,7 @@ fn workload_spec(
 	process: &RuntimeProcess,
 	sandbox: &SandboxNamespaces,
 	declared_mounts: &[ResolvedMount],
+	devices: &[AllowedDevice],
 	name: &OciName,
 ) -> Result<Spec, OciRuntimeError> {
 	let user = UserBuilder::default()
@@ -511,7 +595,7 @@ fn workload_spec(
 		.map_err(config_error)?;
 	let linux = LinuxBuilder::default()
 		.namespaces(namespaces(sandbox)?)
-		.resources(device_resources()?)
+		.resources(device_resources(devices)?)
 		.cgroups_path(PathBuf::from("qos").join(name.as_str()))
 		.rootfs_propagation("private")
 		.masked_paths(get_default_maskedpaths())
@@ -574,7 +658,7 @@ fn sandbox_spec(
 	.collect::<Result<Vec<_>, _>>()?;
 	let linux = LinuxBuilder::default()
 		.namespaces(namespaces)
-		.resources(device_resources()?)
+		.resources(device_resources(&[])?)
 		.cgroups_path("qos/sandbox")
 		.rootfs_propagation("private")
 		.masked_paths(get_default_maskedpaths())
@@ -671,34 +755,37 @@ fn namespaces(
 	])
 }
 
-fn device_resources()
--> Result<libcontainer::oci_spec::runtime::LinuxResources, OciRuntimeError> {
+fn device_resources(
+	extra: &[AllowedDevice],
+) -> Result<libcontainer::oci_spec::runtime::LinuxResources, OciRuntimeError> {
 	LinuxResourcesBuilder::default()
-		.devices(device_rules()?)
+		.devices(device_rules(extra)?)
 		.build()
 		.map_err(config_error)
 }
 
-fn device_rules() -> Result<
+fn device_rules(
+	extra: &[AllowedDevice],
+) -> Result<
 	Vec<libcontainer::oci_spec::runtime::LinuxDeviceCgroup>,
 	OciRuntimeError,
 > {
-	let mut devices = Vec::new();
-	for (major, minor) in
-		[(1, 3), (1, 5), (1, 7), (1, 8), (1, 9), (5, 0), (5, 2)]
-	{
-		devices.push(device_rule(major, Some(minor))?);
-	}
-	devices.push(device_rule(136, None)?);
-	Ok(devices)
+	allowed_devices(extra)
+		.map(|(major, minor)| {
+			device_rule(i64::from(major), minor.map(i64::from))
+		})
+		.collect()
 }
 
 #[cfg(feature = "oci-devices")]
 #[allow(unsafe_code)]
-fn apply_device_policy(cgroup_name: &str) -> Result<(), OciRuntimeError> {
+fn apply_device_policy(
+	cgroup_name: &str,
+	extra: &[AllowedDevice],
+) -> Result<(), OciRuntimeError> {
 	let cgroup = File::open(Path::new("/sys/fs/cgroup/qos").join(cgroup_name))?;
 	raise_memlock_limit()?;
-	let instructions = device_program();
+	let instructions = device_program(extra)?;
 	let license = b"GPL\0";
 	let mut verifier_log = vec![0_u8; 64 * 1024];
 	let mut load = BpfProgLoad {
@@ -783,7 +870,10 @@ fn raise_memlock_limit() -> Result<(), OciRuntimeError> {
 
 #[cfg(not(feature = "oci-devices"))]
 #[allow(clippy::unnecessary_wraps)]
-fn apply_device_policy(_: &str) -> Result<(), OciRuntimeError> {
+fn apply_device_policy(
+	_: &str,
+	_: &[AllowedDevice],
+) -> Result<(), OciRuntimeError> {
 	Ok(())
 }
 
@@ -841,35 +931,37 @@ struct BpfProgAttach {
 	replace_bpf_fd: u32,
 }
 
+/// A `BPF_PROG_TYPE_CGROUP_DEVICE` program that allows exactly the
+/// character devices of [`allowed_devices`] and denies every other access.
 #[cfg(feature = "oci-devices")]
-fn device_program() -> Vec<BpfInsn> {
+fn device_program(
+	extra: &[AllowedDevice],
+) -> Result<Vec<BpfInsn>, OciRuntimeError> {
+	let immediate = |value: u32| {
+		i32::try_from(value).map_err(|_| {
+			OciRuntimeError::Config(format!(
+				"device number {value} is too large"
+			))
+		})
+	};
 	let mut program = vec![
 		BpfInsn::load(2, 0),
 		BpfInsn::new(0x54, 2, 0, 0xffff),
 		BpfInsn::load(4, 4),
 		BpfInsn::load(5, 8),
 	];
-	for (major, minor) in [
-		(1, Some(3)),
-		(1, Some(5)),
-		(1, Some(7)),
-		(1, Some(8)),
-		(1, Some(9)),
-		(5, Some(0)),
-		(5, Some(2)),
-		(136, None),
-	] {
+	for (major, minor) in allowed_devices(extra) {
 		let comparisons = if minor.is_some() { 3 } else { 2 };
 		program.push(BpfInsn::new(0x55, 2, comparisons + 1, 2));
-		program.push(BpfInsn::new(0x55, 4, comparisons, major));
+		program.push(BpfInsn::new(0x55, 4, comparisons, immediate(major)?));
 		if let Some(minor) = minor {
-			program.push(BpfInsn::new(0x55, 5, 2, minor));
+			program.push(BpfInsn::new(0x55, 5, 2, immediate(minor)?));
 		}
 		program
 			.extend([BpfInsn::new(0xb7, 0, 0, 1), BpfInsn::new(0x95, 0, 0, 0)]);
 	}
 	program.extend([BpfInsn::new(0xb7, 0, 0, 0), BpfInsn::new(0x95, 0, 0, 0)]);
-	program
+	Ok(program)
 }
 
 fn device_rule(
@@ -916,12 +1008,17 @@ fn runtime_mounts(
 		bind_mount(&sandbox.shm, Path::new("/dev/shm"), false, false),
 		mount("sysfs", "/sys", "sysfs", ["nosuid", "noexec", "nodev", "ro"]),
 	];
-	for declared in declared {
+	// Devices go last, over the runtime's `/dev`.
+	for declared in declared
+		.iter()
+		.filter(|mount| !mount.device)
+		.chain(declared.iter().filter(|mount| mount.device))
+	{
 		mounts.push(bind_mount(
 			&declared.source,
 			&declared.destination,
 			declared.read_only,
-			true,
+			!declared.device,
 		));
 	}
 	mounts.into_iter().collect()

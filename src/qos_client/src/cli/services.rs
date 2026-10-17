@@ -18,8 +18,8 @@ use qos_core::protocol::{
 	},
 	services::{
 		boot::{
-			Approval, BridgeConfig, DnsConfig, Manifest as ManifestV1,
-			ManifestBuilder, ManifestBuilderError,
+			Approval, BridgeConfig, DnsConfig, EnclaveMode,
+			Manifest as ManifestV1, ManifestBuilder, ManifestBuilderError,
 			ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
 			ManifestEnvelopeV2, ManifestEnvelopeV3, ManifestSet,
 			ManifestVersion, MemberPubKey, Namespace, NitroConfig, PatchSet,
@@ -1189,8 +1189,8 @@ where
 		}
 	}
 
-	// Check pivot debug mode
-	{
+	// Check pivot debug mode; a Manifest V3's is its enclave mode, below
+	if !matches!(manifest, VersionedManifest::V3(_)) {
 		let prompt = format!(
 			"Is this the correct pivot debug mode: {}? (y/n)",
 			manifest.debug_mode()
@@ -1232,8 +1232,12 @@ where
 	// Check the signed fields that only Manifest V3 has
 	if let VersionedManifest::V3(v3_manifest) = manifest {
 		let mut prompts = vec![format!(
-			"Is this the correct enclave mode: {:?}? (y/n)",
-			v3_manifest.enclave.mode()
+			"Is this the correct enclave mode: {}? (y/n)",
+			match v3_manifest.enclave.mode() {
+				EnclaveMode::Attested =>
+					"attested (workload output is discarded)",
+				EnclaveMode::Debug => "debug (workload output is printed)",
+			}
 		)];
 		for (name, workload) in &v3_manifest.workloads {
 			let WorkloadV3::Oci { image, restart, mounts } = workload;

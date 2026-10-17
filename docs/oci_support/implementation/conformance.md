@@ -54,10 +54,9 @@ Conformance tests MUST cover:
 - unsupported enclave-type rejection;
 - missing and unsupported enclave-mode rejection;
 - missing, malformed, wrong-length, and uppercase PCR rejection in both modes;
-- parse-time rejection of an attested manifest with PCR0, PCR1, and PCR2 all zero;
-- attested PCR comparison and rejection of mismatched or debug evidence;
-- zero PCR3 alone does not classify evidence as debug evidence;
-- debug acceptance with four 96-zero PCRs and rejection of nonzero PCRs;
+- either mode accepts any PCR values, as the V2 pivot `debugMode` does;
+- `debug` reprints every workload's output and `attested` discards it;
+- PCR comparison and rejection of mismatched evidence as for Manifest V2;
 - changing enclave mode changes the signed manifest hash;
 - evidence and enclave-type mismatch rejection;
 - rejection of every unknown Manifest V3 field;
@@ -114,6 +113,7 @@ Conformance tests MUST cover:
 - rejection of a host- or image-supplied seccomp profile;
 - fixed device policy without per-workload resource manifest fields;
 - fixed device allowlist and no arbitrary parent path or device access;
+- the NSM only for a workload that mounts it, at `/dev/nsm` only;
 - read-only `/sys` and fixed `/proc` restrictions;
 - no claim that container separation permits mutually untrusted workloads;
 - cleanup after partial create and workload exit.

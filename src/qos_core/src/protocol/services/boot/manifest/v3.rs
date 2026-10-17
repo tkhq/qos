@@ -226,13 +226,15 @@ impl TryFrom<String> for OciPath {
 	}
 }
 
-/// Signed enclave-wide identity mode.
+/// The signed enclave-wide debug mode: what Manifest V2's pivot `debugMode`
+/// is for its pivot, for every workload of the enclave. It changes neither
+/// the PCRs nor how they are checked.
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum EnclaveMode {
-	/// The PCRs are the expected measurements of a production enclave.
+	/// Workload output goes to `/dev/null` (V2 `debugMode: false`).
 	Attested,
-	/// The enclave runs as a Nitro debug enclave: every PCR is zero.
+	/// QOS reads and reprints every workload's output (V2 `debugMode: true`).
 	Debug,
 }
 
@@ -335,34 +337,6 @@ impl EnclaveV3 {
 			Self::Nitro { mode, .. } => *mode,
 		}
 	}
-
-	/// Check the PCR rules of the signed mode: an `attested` manifest must not
-	/// have PCR0, PCR1 and PCR2 all zero, and a `debug` manifest must have
-	/// every PCR zero.
-	fn validate(&self) -> Result<(), String> {
-		let Self::Nitro { mode, pcr0, pcr1, pcr2, pcr3, .. } = self;
-		let zero = |pcr: &Vec<u8>| pcr.iter().all(|byte| *byte == 0);
-		match mode {
-			EnclaveMode::Attested => {
-				if zero(pcr0) && zero(pcr1) && zero(pcr2) {
-					return Err(
-						"attested enclave mode must not have PCR0, PCR1 and \
-						 PCR2 all zero"
-							.into(),
-					);
-				}
-			}
-			EnclaveMode::Debug => {
-				if !(zero(pcr0) && zero(pcr1) && zero(pcr2) && zero(pcr3)) {
-					return Err(
-						"debug enclave mode requires every PCR to be zero"
-							.into(),
-					);
-				}
-			}
-		}
-		Ok(())
-	}
 }
 
 /// An approved OCI image reference.
@@ -402,6 +376,25 @@ pub enum OciRestartPolicy {
 	Always,
 }
 
+/// A device QOS can give a workload beyond the fixed runtime devices.
+#[derive(PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum OciDevice {
+	/// The Nitro Secure Module, which issues attestation documents.
+	#[serde(rename = "nsm")]
+	Nsm,
+}
+
+impl OciDevice {
+	/// The device node in the enclave, and the only path a workload may
+	/// mount it at.
+	#[must_use]
+	pub fn path(self) -> &'static str {
+		match self {
+			Self::Nsm => "/dev/nsm",
+		}
+	}
+}
+
 /// One declared attachment to an OCI workload.
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 #[serde(
@@ -423,6 +416,14 @@ pub enum OciMount {
 		#[serde(default)]
 		read_only: bool,
 	},
+	/// A device: this workload alone may open it.
+	#[serde(rename = "device")]
+	Device {
+		/// The device.
+		source: OciDevice,
+		/// Container target path: the device's own path.
+		mount_path: OciPath,
+	},
 }
 
 impl OciMount {
@@ -430,7 +431,8 @@ impl OciMount {
 	#[must_use]
 	pub fn mount_path(&self) -> &OciPath {
 		match self {
-			Self::Volume { mount_path, .. } => mount_path,
+			Self::Volume { mount_path, .. }
+			| Self::Device { mount_path, .. } => mount_path,
 		}
 	}
 
@@ -439,6 +441,7 @@ impl OciMount {
 	pub fn is_qos_volume(&self) -> bool {
 		match self {
 			Self::Volume { source, .. } => source.as_str() == QOS_VOLUME_NAME,
+			Self::Device { .. } => false,
 		}
 	}
 }
@@ -544,12 +547,11 @@ impl ManifestV3 {
 	///
 	/// # Errors
 	///
-	/// Returns a validation message for invalid counts, an enclave mode that
-	/// contradicts its PCRs, a declared `qos` volume, a missing volume
-	/// reference, a writable `qos` mount, unsupported bridge entries, or
+	/// Returns a validation message for invalid counts, a declared `qos`
+	/// volume, a missing volume reference, a writable `qos` mount, a device
+	/// mounted away from its own path, unsupported bridge entries, or
 	/// overlapping/protected mount paths.
 	pub fn validate(&self) -> Result<(), String> {
-		self.enclave.validate()?;
 		self.validate_bridge_config()?;
 		if !(1..=MAX_WORKLOADS).contains(&self.workloads.len()) {
 			return Err(format!(
@@ -577,30 +579,47 @@ impl ManifestV3 {
 			let mut paths: Vec<&OciPath> = Vec::new();
 			for mount in workload.mounts() {
 				let path = mount.mount_path();
-				if path.runtime_owned() {
-					return Err(format!(
-						"runtime-owned mount path: {}",
-						path.as_str()
-					));
-				}
 				if paths.iter().any(|other| path.overlaps(other)) {
 					return Err(format!(
 						"overlapping workload mount path: {}",
 						path.as_str()
 					));
 				}
-				let OciMount::Volume { source, read_only, .. } = mount;
-				if mount.is_qos_volume() {
-					if !read_only {
+				match mount {
+					// A device goes at its own path in the runtime-owned
+					// `/dev`, and nowhere else.
+					OciMount::Device { source, .. } => {
+						if path.as_str() != source.path() {
+							return Err(format!(
+								"device mount path must be {}",
+								source.path()
+							));
+						}
+					}
+					OciMount::Volume { .. } if path.runtime_owned() => {
 						return Err(format!(
-							"{QOS_VOLUME_NAME} volume mount must be read-only"
+							"runtime-owned mount path: {}",
+							path.as_str()
 						));
 					}
-				} else if !self.volumes.contains_key(source) {
-					return Err(format!(
-						"undeclared volume: {}",
-						source.as_str()
-					));
+					OciMount::Volume { read_only, .. }
+						if mount.is_qos_volume() =>
+					{
+						if !read_only {
+							return Err(format!(
+								"{QOS_VOLUME_NAME} volume mount must be \
+								 read-only"
+							));
+						}
+					}
+					OciMount::Volume { source, .. } => {
+						if !self.volumes.contains_key(source) {
+							return Err(format!(
+								"undeclared volume: {}",
+								source.as_str()
+							));
+						}
+					}
 				}
 				paths.push(path);
 			}
@@ -991,41 +1010,63 @@ mod tests {
 		}
 	}
 
+	/// As V2's pivot `debugMode`, the mode says nothing about the PCRs:
+	/// either mode takes any PCRs, zero or not.
 	#[test]
-	fn attested_mode_rejects_all_zero_measurements() {
-		let mut value = documented();
-		for pcr in ["pcr0", "pcr1", "pcr2"] {
-			value["enclave"][pcr] = ZERO_PCR.into();
+	fn the_mode_does_not_constrain_the_pcrs() {
+		for mode in ["attested", "debug"] {
+			let mut value = documented();
+			value["enclave"]["mode"] = mode.into();
+			decode(&value).unwrap();
+			for pcr in ["pcr0", "pcr1", "pcr2", "pcr3"] {
+				value["enclave"][pcr] = ZERO_PCR.into();
+			}
+			decode(&value).unwrap();
 		}
-		let error = decode(&value).unwrap_err();
-		assert!(error.contains("attested"), "{error}");
-		// One nonzero measurement among PCR0..2 is enough; PCR3 is not
-		// considered.
-		value["enclave"]["pcr2"] = documented()["enclave"]["pcr2"].clone();
-		decode(&value).unwrap();
-		let mut value = documented();
-		for pcr in ["pcr0", "pcr1", "pcr2"] {
-			value["enclave"][pcr] = ZERO_PCR.into();
-		}
-		value["enclave"]["pcr3"] = ZERO_PCR.into();
-		assert!(decode(&value).is_err());
 	}
 
+	/// A workload mounts the NSM like any other mount, at its own path only;
+	/// the only device is `nsm`, and a device mount has no other field.
 	#[test]
-	fn debug_mode_requires_every_pcr_zero() {
+	fn the_nsm_mounts_at_its_own_path() {
+		let nsm = serde_json::json!({
+			"type": "device",
+			"source": "nsm",
+			"mountPath": "/dev/nsm"
+		});
 		let mut value = documented();
-		value["enclave"]["mode"] = "debug".into();
-		// The documented PCRs are nonzero.
+		api_mounts(&mut value).as_array_mut().unwrap().push(nsm.clone());
+		let manifest = decode(&value).unwrap();
+		let WorkloadV3::Oci { mounts, .. } =
+			&manifest.workloads[&OciName::try_from("api".to_owned()).unwrap()];
+		assert!(mounts.contains(&OciMount::Device {
+			source: OciDevice::Nsm,
+			mount_path: OciPath::try_from("/dev/nsm".to_owned()).unwrap(),
+		}));
+		for (field, bad) in [
+			("mountPath", serde_json::json!("/mnt/nsm")),
+			("mountPath", serde_json::json!("/dev/other")),
+			("source", serde_json::json!("tpm")),
+			("source", serde_json::json!("/dev/nsm")),
+			("readOnly", serde_json::json!(true)),
+		] {
+			let mut mount = nsm.clone();
+			mount[field] = bad.clone();
+			let mut value = documented();
+			api_mounts(&mut value).as_array_mut().unwrap().push(mount);
+			assert!(decode(&value).is_err(), "{field} {bad}");
+		}
+		// Twice in one workload: the paths overlap.
+		let mut value = documented();
+		let mounts = api_mounts(&mut value).as_array_mut().unwrap();
+		mounts.push(nsm.clone());
+		mounts.push(nsm);
+		let error = decode(&value).unwrap_err();
+		assert!(error.contains("overlapping"), "{error}");
+		// A volume still may not go below `/dev`.
+		let mut value = documented();
+		api_mounts(&mut value)[0]["mountPath"] = "/dev/nsm".into();
 		assert!(decode(&value).is_err());
-		for pcr in ["pcr0", "pcr1", "pcr2", "pcr3"] {
-			value["enclave"][pcr] = ZERO_PCR.into();
-		}
-		decode(&value).unwrap();
-		for pcr in ["pcr0", "pcr1", "pcr2", "pcr3"] {
-			let mut nonzero = value.clone();
-			nonzero["enclave"][pcr] = format!("{}01", &ZERO_PCR[..94]).into();
-			assert!(decode(&nonzero).is_err(), "{pcr}");
-		}
 	}
 
 	#[test]

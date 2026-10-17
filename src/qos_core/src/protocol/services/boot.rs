@@ -24,9 +24,9 @@ pub use manifest::v2::{
 	DnsConfig, ManifestEnvelopeV2, ManifestV2, PivotConfigV2,
 };
 pub use manifest::v3::{
-	EnclaveMode, EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDigest,
-	OciImageRef, OciMount, OciName, OciPath, OciRestartPolicy, QOS_VOLUME_NAME,
-	VolumeV3, WorkloadV3,
+	EnclaveMode, EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDevice,
+	OciDigest, OciImageRef, OciMount, OciName, OciPath, OciRestartPolicy,
+	QOS_VOLUME_NAME, VolumeV3, WorkloadV3,
 };
 pub use manifest::{
 	ManifestBuilder, ManifestBuilderError, ManifestVersion, VersionedManifest,

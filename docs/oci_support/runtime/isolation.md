@@ -116,6 +116,9 @@ QOS MUST provide only these fixed runtime devices and interfaces:
 - `/dev/ptmx` and a runtime-owned `/dev/pts`;
 - the shared runtime-owned `/dev/shm`.
 
+A workload that declares a `device` mount ([mounts](../manifest/mounts.md))
+also receives that device, and only that workload.
+
 The QOS-generated device policy MUST deny access to another device even if a
 workload creates a device node with `CAP_MKNOD`.
 

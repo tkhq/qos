@@ -20,9 +20,9 @@ pub mod v3;
 pub use builder::{ManifestBuilder, ManifestBuilderError};
 pub use v2::{DnsConfig, ManifestEnvelopeV2, ManifestV2};
 pub use v3::{
-	EnclaveMode, EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDigest,
-	OciImageRef, OciMount, OciName, OciPath, OciRestartPolicy, QOS_VOLUME_NAME,
-	VolumeV3, WorkloadV3,
+	EnclaveMode, EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDevice,
+	OciDigest, OciImageRef, OciMount, OciName, OciPath, OciRestartPolicy,
+	QOS_VOLUME_NAME, VolumeV3, WorkloadV3,
 };
 
 /// Schema version used by versioned manifest tooling.
@@ -245,13 +245,15 @@ impl VersionedManifest {
 		}
 	}
 
-	/// Return whether pivot debug mode is enabled.
+	/// Return whether debug mode is enabled: the pivot's, or a Manifest V3's
+	/// enclave mode.
 	#[must_use]
 	pub fn debug_mode(&self) -> bool {
 		match self {
+			Self::V3(manifest) => manifest.enclave.mode() == EnclaveMode::Debug,
 			Self::V2(manifest) => manifest.pivot.debug_mode,
 			Self::V1(manifest) => manifest.pivot.debug_mode,
-			Self::V3(_) | Self::V0(_) => false,
+			Self::V0(_) => false,
 		}
 	}
 
