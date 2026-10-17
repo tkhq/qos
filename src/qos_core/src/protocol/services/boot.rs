@@ -20,7 +20,8 @@ pub use manifest::v2::{
 	DnsConfig, ManifestEnvelopeV2, ManifestV2, PivotConfigV2,
 };
 pub use manifest::{
-	ManifestBuilder, ManifestBuilderError, ManifestVersion, VersionedManifest,
+	BootProofBytesError, BootProofManifestBytes, ManifestBuilder,
+	ManifestBuilderError, ManifestVersion, VersionedManifest,
 	VersionedManifestEnvelope,
 };
 

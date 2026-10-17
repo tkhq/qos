@@ -2097,6 +2097,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_attestation"
+version = "0.15.0"
+dependencies = [
+ "aws-nitro-enclaves-cose",
+ "aws-nitro-enclaves-nsm-api",
+ "qos_core 0.15.0",
+ "qos_crypto 0.15.0",
+ "qos_nsm 0.15.0",
+ "qos_p256 0.15.0",
+ "qos_test_primitives",
+ "serde_bytes",
+ "sha2",
+ "thiserror 2.0.17",
+ "tokio",
+ "x509-cert",
+]
+
+[[package]]
 name = "qos_bridge"
 version = "0.15.0"
 dependencies = [

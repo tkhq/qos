@@ -100,6 +100,9 @@ test:
 	@# enabled. However some tests require it disable, so we test just qos_core
 	@# by itself.
 	cargo test --locked -p qos_core
+	@# The workspace build leaves qos_attestation's optional features off, so
+	@# test the cache and the QEMU verifier explicitly.
+	cargo test --locked -p qos_attestation --all-features
 
 .PHONY: build-linux-only
 build-linux-only: qos_system qos_aws init qos_enclave qos_bridge

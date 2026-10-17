@@ -507,6 +507,80 @@ impl VersionedManifestEnvelope {
 				.map_err(|e| Error::other(e.to_string())),
 		}
 	}
+
+	/// Encode the manifest and envelope for publishing in a boot proof.
+	///
+	/// The manifest bytes hash to [`Self::manifest_hash`], which is what the
+	/// enclave attests in `user_data`, so a verifier can check them directly.
+	/// For v2 the envelope bytes are the storage encoding QOS writes to the
+	/// manifest file; for v1 both are Borsh.
+	///
+	/// The output is public. It includes the pivot args and, for v2, the
+	/// pivot environment.
+	///
+	/// # Errors
+	///
+	/// Returns [`BootProofBytesError::UnsupportedManifestVersion`] for v0
+	/// manifests, and [`BootProofBytesError::Encoding`] when serialization
+	/// fails.
+	pub fn boot_proof_manifest_bytes(
+		&self,
+	) -> Result<BootProofManifestBytes, BootProofBytesError> {
+		// No wildcard arm: a new schema must choose its encoding here.
+		match self {
+			Self::V2(envelope) => Ok(BootProofManifestBytes {
+				manifest: qos_json::to_vec(&envelope.manifest)
+					.map_err(BootProofBytesError::encoding)?,
+				envelope: self
+					.to_storage_vec()
+					.map_err(BootProofBytesError::encoding)?,
+				version: "v2",
+			}),
+			Self::V1(envelope) => Ok(BootProofManifestBytes {
+				manifest: borsh::to_vec(&envelope.manifest)
+					.map_err(BootProofBytesError::encoding)?,
+				envelope: borsh::to_vec(envelope)
+					.map_err(BootProofBytesError::encoding)?,
+				version: "v1",
+			}),
+			// Tooling re-encodes v0 as v1, and those bytes don't hash to the
+			// v0 manifest hash, so a v0 boot proof could never verify.
+			Self::V0(_) => {
+				Err(BootProofBytesError::UnsupportedManifestVersion("v0"))
+			}
+		}
+	}
+}
+
+/// Manifest bytes to publish in a boot proof, from
+/// [`VersionedManifestEnvelope::boot_proof_manifest_bytes`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BootProofManifestBytes {
+	/// Encoded manifest. Its SHA-256 is the manifest hash.
+	pub manifest: Vec<u8>,
+	/// Encoded manifest envelope.
+	pub envelope: Vec<u8>,
+	/// Schema version label: `"v1"` or `"v2"`.
+	pub version: &'static str,
+}
+
+/// Errors from [`VersionedManifestEnvelope::boot_proof_manifest_bytes`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum BootProofBytesError {
+	/// The manifest schema has no boot-proof encoding.
+	#[error("manifest {0} is not supported in boot proofs")]
+	UnsupportedManifestVersion(&'static str),
+	/// The manifest or envelope could not be serialized.
+	#[error("failed to encode manifest for a boot proof: {0}")]
+	Encoding(String),
+}
+
+impl BootProofBytesError {
+	// Keep only the message, so serializer error types stay out of the API.
+	fn encoding(e: impl std::fmt::Display) -> Self {
+		Self::Encoding(e.to_string())
+	}
 }
 
 #[cfg(test)]
@@ -905,5 +979,72 @@ mod tests {
 		assert!(Manifest::try_from_slice(&bytes).is_ok());
 		assert!(ManifestV0::try_from_slice(&bytes).is_ok());
 		assert!(VersionedManifest::try_from_slice_compat(&bytes).is_err());
+	}
+
+	#[test]
+	fn boot_proof_bytes_v2_are_canonical_storage_bytes() {
+		let pair = P256Pair::generate().unwrap();
+		let manifest = sample_v2_manifest(sample_member(&pair));
+		let envelope = VersionedManifestEnvelope::V2(ManifestEnvelopeV2 {
+			manifest: manifest.clone(),
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		});
+
+		let bytes = envelope.boot_proof_manifest_bytes().unwrap();
+
+		assert_eq!(
+			qos_crypto::sha_256(&bytes.manifest),
+			envelope.manifest_hash()
+		);
+		assert_eq!(
+			bytes.manifest,
+			VersionedManifest::V2(manifest.clone()).to_storage_vec().unwrap()
+		);
+		assert_eq!(bytes.envelope, envelope.to_storage_vec().unwrap());
+		assert_eq!(
+			bytes.version,
+			VersionedManifest::V2(manifest).version_label()
+		);
+	}
+
+	#[test]
+	fn boot_proof_bytes_v1_are_borsh() {
+		let pair = P256Pair::generate().unwrap();
+		let manifest = sample_v1_manifest(sample_member(&pair));
+		let inner = ManifestEnvelope {
+			manifest: manifest.clone(),
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		};
+		let envelope = VersionedManifestEnvelope::V1(inner.clone());
+
+		let bytes = envelope.boot_proof_manifest_bytes().unwrap();
+
+		assert_eq!(bytes.manifest, borsh::to_vec(&manifest).unwrap());
+		assert_eq!(bytes.envelope, borsh::to_vec(&inner).unwrap());
+		assert_eq!(
+			qos_crypto::sha_256(&bytes.manifest),
+			envelope.manifest_hash()
+		);
+		assert_eq!(
+			bytes.version,
+			VersionedManifest::V1(manifest).version_label()
+		);
+	}
+
+	#[test]
+	fn boot_proof_bytes_reject_v0() {
+		let pair = P256Pair::generate().unwrap();
+		let envelope = VersionedManifestEnvelope::V0(ManifestEnvelopeV0 {
+			manifest: sample_v0_manifest(sample_member(&pair)),
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		});
+
+		assert_eq!(
+			envelope.boot_proof_manifest_bytes(),
+			Err(BootProofBytesError::UnsupportedManifestVersion("v0"))
+		);
 	}
 }
