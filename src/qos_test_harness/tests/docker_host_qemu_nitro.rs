@@ -3,8 +3,9 @@ mod support;
 use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 
 use qos_core::protocol::services::boot::{
-	EnclaveMode, EnclaveV3, ManifestV3, ManifestVersion, OciImageRef, OciName,
-	OciRestartPolicy, WorkloadV3,
+	EnclaveMode, EnclaveV3, ManifestV2, ManifestV3, ManifestVersion, OciDevice,
+	OciImageRef, OciMount, OciName, OciPath, OciRestartPolicy, VolumeV3,
+	WorkloadV3,
 };
 use qos_p256::P256Public;
 use qos_test_harness::{
@@ -133,56 +134,26 @@ async fn signed_echo_egress_get_url() {
 	cleanup.unwrap();
 }
 
+/// PostgreSQL runs to completion in an `attested` enclave, whose workload
+/// output goes to null as a V2 pivot's does without `debugMode`.
 #[tokio::test]
 async fn postgres_oci_smoke_on_qemu() {
 	let (prepared, _) = prepare().await;
 	let image = prepared.postgres_smoke_image().unwrap();
-	let base =
-		prepared.manifest_template(&prepared.pivot).unwrap().build().unwrap();
-	let VersionedManifest::V2(base) = base else {
-		panic!("test manifest template must be V2");
-	};
-	// The signed mode must agree with the PCRs the QEMU release carries: zero
-	// PCRs are the debug identity, anything else is attested.
-	let zero = |pcr: &[u8]| pcr.iter().all(|byte| *byte == 0);
-	let mode = if zero(&base.enclave.pcr0)
-		&& zero(&base.enclave.pcr1)
-		&& zero(&base.enclave.pcr2)
-	{
-		EnclaveMode::Debug
-	} else {
-		EnclaveMode::Attested
-	};
-	let enclave = EnclaveV3::Nitro {
-		mode,
-		pcr0: base.enclave.pcr0,
-		pcr1: base.enclave.pcr1,
-		pcr2: base.enclave.pcr2,
-		pcr3: base.enclave.pcr3,
-		aws_root_certificate: base.enclave.aws_root_certificate,
-		qos_commit: base.enclave.qos_commit,
-	};
-	let manifest = ManifestV3 {
-		version: ManifestVersion::V3,
-		namespace: base.namespace,
-		manifest_set: base.manifest_set,
-		share_set: base.share_set,
-		enclave,
-		workloads: BTreeMap::from([(
-			OciName::try_from("postgres-smoke".to_string()).unwrap(),
-			WorkloadV3::Oci {
-				image: OciImageRef::OciManifest {
-					digest: image.digest.clone(),
-				},
-				restart: OciRestartPolicy::Never,
-				mounts: vec![],
-			},
-		)]),
-		volumes: BTreeMap::new(),
-		bridge_config: vec![],
-		dns: None,
-	};
-	manifest.validate().unwrap();
+	let workloads = BTreeMap::from([(
+		name("postgres-smoke"),
+		WorkloadV3::Oci {
+			image: OciImageRef::OciManifest { digest: image.digest.clone() },
+			restart: OciRestartPolicy::Never,
+			mounts: vec![],
+		},
+	)]);
+	let manifest = v3_manifest(
+		&prepared,
+		EnclaveMode::Attested,
+		workloads,
+		BTreeMap::new(),
+	);
 	let mut runner = prepared.runner;
 	let app = runner
 		.start_oci(OciStartSpec {
@@ -193,7 +164,200 @@ async fn postgres_oci_smoke_on_qemu() {
 		})
 		.await
 		.unwrap();
-	app.stop().await.unwrap();
+	let console = app.docker_logs("qemu").unwrap();
+	let cleanup = app.stop().await;
+	assert!(console.contains("OCI[postgres-smoke] terminated"), "{console}");
+	assert!(
+		!console.contains("OCI[postgres-smoke][OUT]")
+			&& !console.contains("OCI[postgres-smoke][ERR]"),
+		"an attested enclave printed workload output:\n{console}"
+	);
+	cleanup.unwrap();
+}
+
+/// A workload that mounts the NSM opens it; one that does not finds no node,
+/// and its device policy refuses a node with the NSM's numbers. The
+/// enclave is in `debug` mode, so QOS reprints both workloads' output.
+#[tokio::test]
+async fn nsm_device_mount_on_qemu() {
+	let (prepared, _) = prepare().await;
+	let image = prepared.device_smoke_image().unwrap();
+	let shared = || OciMount::Volume {
+		source: name("shared"),
+		mount_path: path("/run/shared"),
+		read_only: false,
+	};
+	let workload = |mounts| WorkloadV3::Oci {
+		image: OciImageRef::OciManifest { digest: image.digest.clone() },
+		restart: OciRestartPolicy::Never,
+		mounts,
+	};
+	let workloads = BTreeMap::from([
+		(
+			name("granted"),
+			workload(vec![
+				shared(),
+				OciMount::Device {
+					source: OciDevice::Nsm,
+					mount_path: path("/dev/nsm"),
+				},
+			]),
+		),
+		(name("refused"), workload(vec![shared()])),
+	]);
+	let volumes = BTreeMap::from([(
+		name("shared"),
+		VolumeV3::Tmpfs { mount_path: path("/mnt/qos/device-smoke") },
+	)]);
+	let manifest =
+		v3_manifest(&prepared, EnclaveMode::Debug, workloads, volumes);
+	let mut runner = prepared.runner;
+	let app = runner
+		.start_oci(OciStartSpec {
+			name: "nsm_device_mount".into(),
+			artifact: image,
+			manifest: VersionedManifest::V3(manifest),
+			condition: OciStartCondition::ExitSuccess,
+		})
+		.await
+		.unwrap();
+	let console = app.docker_logs("qemu").unwrap();
+	let cleanup = app.stop().await;
+	// The policy refuses the node at mknod or, failing that, at open.
+	for expected in
+		["OCI[granted][OUT]: nsm opened", "OCI[refused][OUT]: nsm denied at "]
+	{
+		assert!(console.contains(expected), "no {expected:?}:\n{console}");
+	}
+	cleanup.unwrap();
+}
+
+/// A workload serves HTTP through the enclave's top-level `bridgeConfig`:
+/// a value written through the ingress bridge reads back through it.
+#[tokio::test]
+async fn kv_http_ingress_on_qemu() {
+	let (prepared, _) = prepare().await;
+	let image = prepared.kv_http_image().unwrap();
+	let workloads = BTreeMap::from([(
+		name("kv"),
+		WorkloadV3::Oci {
+			image: OciImageRef::OciManifest { digest: image.digest.clone() },
+			restart: OciRestartPolicy::Never,
+			mounts: vec![OciMount::Volume {
+				source: name("data"),
+				mount_path: path("/data"),
+				read_only: false,
+			}],
+		},
+	)]);
+	let volumes = BTreeMap::from([(
+		name("data"),
+		VolumeV3::Tmpfs { mount_path: path("/mnt/qos/kv") },
+	)]);
+	let mut manifest =
+		v3_manifest(&prepared, EnclaveMode::Debug, workloads, volumes);
+	manifest.bridge_config =
+		vec![BridgeConfig::Server { port: 3000, host: "0.0.0.0".to_string() }];
+	manifest.validate().unwrap();
+	let mut runner = prepared.runner;
+	let app = runner
+		.start_oci(OciStartSpec {
+			name: "kv_http_ingress".into(),
+			artifact: image,
+			manifest: VersionedManifest::V3(manifest),
+			condition: OciStartCondition::Running,
+		})
+		.await
+		.unwrap();
+	let base = app.app().ingress_url.clone();
+	let result = async {
+		let value = "a-value-through-ingress";
+		put_kv(&base, "ingress", value, PROBE_TIMEOUT).await?;
+		let (status, body) = response(
+			ureq::get(&url(&base, "/cgi-bin/kv?name=ingress"))
+				.timeout(PROBE_TIMEOUT)
+				.call(),
+		)?;
+		if (status, body.as_str()) != (200, value) {
+			return Err(format!("read back {status}: {body:?}"));
+		}
+		Ok(())
+	}
+	.await;
+	let cleanup = app.stop().await;
+	result.unwrap();
+	cleanup.unwrap();
+}
+
+/// Write `value` to `name` on the kv-http workload at `base`, retrying until
+/// the ingress bridge and the server answer.
+async fn put_kv(
+	base: &str,
+	name: &str,
+	value: &str,
+	timeout: Duration,
+) -> Result<(), String> {
+	let put = url(base, &format!("/cgi-bin/kv?name={name}"));
+	let start = std::time::Instant::now();
+	loop {
+		let last = match response(
+			ureq::post(&put)
+				.timeout(Duration::from_secs(10))
+				.send_string(value),
+		) {
+			Ok((200, _)) => return Ok(()),
+			Ok((status, body)) => format!("{put} returned {status}: {body}"),
+			Err(error) => error,
+		};
+		if start.elapsed() >= timeout {
+			return Err(last);
+		}
+		tokio::time::sleep(Duration::from_secs(1)).await;
+	}
+}
+
+/// A Manifest V3 with the fixture's namespace, sets and Nitro settings.
+fn v3_manifest(
+	prepared: &PreparedDockerHostQemuNitro,
+	mode: EnclaveMode,
+	workloads: BTreeMap<OciName, WorkloadV3>,
+	volumes: BTreeMap<OciName, VolumeV3>,
+) -> ManifestV3 {
+	let base =
+		prepared.manifest_template(&prepared.pivot).unwrap().build().unwrap();
+	let VersionedManifest::V2(base) = base else {
+		panic!("test manifest template must be V2");
+	};
+	let ManifestV2 { namespace, manifest_set, share_set, enclave, .. } = base;
+	let manifest = ManifestV3 {
+		version: ManifestVersion::V3,
+		namespace,
+		manifest_set,
+		share_set,
+		enclave: EnclaveV3::Nitro {
+			mode,
+			pcr0: enclave.pcr0,
+			pcr1: enclave.pcr1,
+			pcr2: enclave.pcr2,
+			pcr3: enclave.pcr3,
+			aws_root_certificate: enclave.aws_root_certificate,
+			qos_commit: enclave.qos_commit,
+		},
+		workloads,
+		volumes,
+		bridge_config: vec![],
+		dns: None,
+	};
+	manifest.validate().unwrap();
+	manifest
+}
+
+fn name(name: &str) -> OciName {
+	OciName::try_from(name.to_owned()).unwrap()
+}
+
+fn path(path: &str) -> OciPath {
+	OciPath::try_from(path.to_owned()).unwrap()
 }
 
 async fn prepare() -> (PreparedDockerHostQemuNitro, Pivot) {

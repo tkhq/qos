@@ -19,7 +19,7 @@ use crate::{
 pub enum OciStartCondition {
 	/// Workload process is running.
 	Running,
-	/// Non-restarting workload terminated with exit code zero.
+	/// Every workload is non-restarting and terminated with exit code zero.
 	ExitSuccess,
 }
 
@@ -1179,6 +1179,7 @@ impl DockerHostQemuNitroRunner {
 		&mut self,
 		artifact: &OciImageArtifact,
 		condition: OciStartCondition,
+		workloads: usize,
 	) -> Result<(), RunnerError> {
 		let expected = match condition {
 			OciStartCondition::Running => r#""state":"running""#,
@@ -1195,9 +1196,11 @@ impl DockerHostQemuNitroRunner {
 					if output.contains(artifact.digest.as_str())
 						&& output.contains(expected)
 						&& (condition != OciStartCondition::ExitSuccess
-							|| output.contains(
-								r#""termination":{"type":"exitCode","value":"0"}"#,
-							)) =>
+							|| output
+								.matches(
+									r#""termination":{"type":"exitCode","value":"0"}"#,
+								)
+								.count() == workloads) =>
 				{
 					return Ok(());
 				}
@@ -1351,8 +1354,16 @@ impl DockerHostQemuNitroRunner {
 			let workspace =
 				self.prepare_boot_workspace(&spec.name, &spec.manifest, b"")?;
 
+			// A V3 manifest's ingress is enclave-wide: one server bridge, as
+			// for a pivot.
+			let bridge_config = spec.manifest.bridge_config();
+			if !bridge_config.is_empty() {
+				validate_qemu_bridge_config(bridge_config)?;
+			}
+
 			let container_prefix = self.container_prefix(&spec.name);
-			self.start_qemu_guest_runtime(&container_prefix, &[]).await?;
+			self.start_qemu_guest_runtime(&container_prefix, bridge_config)
+				.await?;
 			let mut boot_args = self.boot_standard_docker_args(
 				&Pivot { path: workspace.pivot_hash_path.clone() },
 				&workspace,
@@ -1367,8 +1378,21 @@ impl DockerHostQemuNitroRunner {
 				boot_args,
 			)
 			.await?;
-			self.wait_for_oci_condition(&spec.artifact, spec.condition).await?;
-			Ok(RunningApp { id: spec.name, ingress_url: String::new() })
+			let ingress_url = if bridge_config.is_empty() {
+				String::new()
+			} else {
+				tokio::time::sleep(self.spec.qemu.startup_delay).await;
+				self.fail_if_children_exited()?;
+				self.start_bridge(&container_prefix, bridge_config).await?;
+				self.ingress_url()
+			};
+			self.wait_for_oci_condition(
+				&spec.artifact,
+				spec.condition,
+				manifest.workloads.len(),
+			)
+			.await?;
+			Ok(RunningApp { id: spec.name, ingress_url })
 		}
 		.await;
 
@@ -1437,6 +1461,45 @@ pub struct DockerHostQemuNitroRunningApp {
 	children: Vec<ManagedChild>,
 }
 
+impl DockerHostQemuNitroRunningApp {
+	/// Output so far of the runtime container with `role`, for example
+	/// `qemu`, the enclave's console.
+	///
+	/// # Errors
+	///
+	/// When no runtime container has that role, or `docker logs` fails.
+	pub fn docker_logs(&self, role: &str) -> Result<String, RunnerError> {
+		let child = self
+			.children
+			.iter()
+			.find(|child| child.name == role)
+			.ok_or_else(|| {
+				RunnerError::InvalidConfig(format!("no runtime process {role}"))
+			})?;
+		let (Some(docker_bin), Some(container)) =
+			(&child.docker_bin, &child.docker_container)
+		else {
+			return Err(RunnerError::InvalidConfig(format!(
+				"{role} does not run in a Docker container"
+			)));
+		};
+		let output =
+			Command::new(docker_bin).args(["logs", container]).output()?;
+		if !output.status.success() {
+			return Err(RunnerError::Command(format!(
+				"docker logs {container}: {}; {}",
+				output.status,
+				String::from_utf8_lossy(&output.stderr)
+			)));
+		}
+		Ok(format!(
+			"{}{}",
+			String::from_utf8_lossy(&output.stdout),
+			String::from_utf8_lossy(&output.stderr)
+		))
+	}
+}
+
 impl RunningAppGuard for DockerHostQemuNitroRunningApp {
 	fn app(&self) -> &RunningApp {
 		&self.app
@@ -1498,58 +1561,70 @@ impl TestRunner for DockerHostQemuNitroRunner {
 			.await?;
 			tokio::time::sleep(self.spec.qemu.startup_delay).await;
 			self.fail_if_children_exited()?;
-			let bridge_name = format!("{container_prefix}-bridge");
-			if Self::bridge_config_has_client(spec.manifest.bridge_config()) {
-				let netns_name = format!("{container_prefix}-egress-netns");
-				self.spawn_docker_runtime(
-					"egress_netns",
-					netns_name.clone(),
-					self.egress_netns_docker_args_with_name(&netns_name)?,
-				)?;
-				self.wait_for_docker_container(&netns_name).await?;
-				self.run_docker_args(
-					self.egress_setup_docker_args(&netns_name)?,
-				)?;
-				let checksum_name =
-					format!("{container_prefix}-egress-checksum");
-				self.spawn_docker_runtime(
-					"egress_checksum_shim",
-					checksum_name.clone(),
-					self.egress_checksum_shim_docker_args(
-						&checksum_name,
-						&netns_name,
-					)?,
-				)?;
-				self.wait_for_docker_container(&checksum_name).await?;
-				self.spawn_docker_runtime(
-					"qos_bridge",
-					bridge_name.clone(),
-					self.qos_bridge_docker_args_with_name_and_network(
-						&bridge_name,
-						Some(&netns_name),
-					),
-				)?;
-			} else {
-				self.spawn_docker_runtime(
-					"qos_bridge",
-					bridge_name.clone(),
-					self.qos_bridge_docker_args_with_name(&bridge_name),
-				)?;
-			}
-			tokio::time::sleep(self.spec.qemu.startup_delay).await;
-			self.fail_if_children_exited()?;
+			self.start_bridge(&container_prefix, spec.manifest.bridge_config())
+				.await?;
 
-			Ok(RunningApp {
-				id: spec.name,
-				ingress_url: format!(
-					"http://{}:{}",
-					self.spec.qemu.ingress_ip, self.spec.qemu.ingress_port
-				),
-			})
+			Ok(RunningApp { id: spec.name, ingress_url: self.ingress_url() })
 		}
 		.await;
 
 		self.finish_start(result, "app")
+	}
+}
+
+impl DockerHostQemuNitroRunner {
+	/// The URL tests reach the enclave's server bridge at.
+	fn ingress_url(&self) -> String {
+		format!(
+			"http://{}:{}",
+			self.spec.qemu.ingress_ip, self.spec.qemu.ingress_port
+		)
+	}
+
+	/// Run `qos_bridge` for the booted enclave, with the egress network
+	/// namespace when `bridge_config` has a client entry.
+	async fn start_bridge(
+		&mut self,
+		container_prefix: &str,
+		bridge_config: &[BridgeConfig],
+	) -> Result<(), RunnerError> {
+		let bridge_name = format!("{container_prefix}-bridge");
+		if Self::bridge_config_has_client(bridge_config) {
+			let netns_name = format!("{container_prefix}-egress-netns");
+			self.spawn_docker_runtime(
+				"egress_netns",
+				netns_name.clone(),
+				self.egress_netns_docker_args_with_name(&netns_name)?,
+			)?;
+			self.wait_for_docker_container(&netns_name).await?;
+			self.run_docker_args(self.egress_setup_docker_args(&netns_name)?)?;
+			let checksum_name = format!("{container_prefix}-egress-checksum");
+			self.spawn_docker_runtime(
+				"egress_checksum_shim",
+				checksum_name.clone(),
+				self.egress_checksum_shim_docker_args(
+					&checksum_name,
+					&netns_name,
+				)?,
+			)?;
+			self.wait_for_docker_container(&checksum_name).await?;
+			self.spawn_docker_runtime(
+				"qos_bridge",
+				bridge_name.clone(),
+				self.qos_bridge_docker_args_with_name_and_network(
+					&bridge_name,
+					Some(&netns_name),
+				),
+			)?;
+		} else {
+			self.spawn_docker_runtime(
+				"qos_bridge",
+				bridge_name.clone(),
+				self.qos_bridge_docker_args_with_name(&bridge_name),
+			)?;
+		}
+		tokio::time::sleep(self.spec.qemu.startup_delay).await;
+		self.fail_if_children_exited()
 	}
 }
 
