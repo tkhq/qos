@@ -14,13 +14,15 @@ use crate::protocol::{
 };
 
 /// File name of the approved manifest envelope inside the `qos` volume.
-///
-/// Provisional: the specification leaves the layout of the `qos` volume open.
 pub const QOS_VOLUME_MANIFEST_FILE: &str = "manifest.json";
-/// File name of the quorum key inside the `qos` volume (provisional).
+/// File name of the quorum key inside the `qos` volume.
 pub const QOS_VOLUME_QUORUM_KEY_FILE: &str = "quorum.key";
-/// File name of the live ephemeral key inside the `qos` volume (provisional).
+/// File name of the quorum public key inside the `qos` volume.
+pub const QOS_VOLUME_QUORUM_PUB_FILE: &str = "quorum.pub";
+/// File name of the live ephemeral key inside the `qos` volume.
 pub const QOS_VOLUME_EPHEMERAL_KEY_FILE: &str = "ephemeral.key";
+/// File name of the live ephemeral public key inside the `qos` volume.
+pub const QOS_VOLUME_EPHEMERAL_PUB_FILE: &str = "ephemeral.pub";
 
 /// Handle for accessing the quorum key.
 #[derive(Debug, Clone)]
@@ -161,25 +163,32 @@ impl Handles {
 
 	/// Read the files the implicit `qos` volume of a Manifest V3 exposes, as
 	/// `(file name, bytes)` pairs: the approved manifest envelope, the quorum
-	/// key and the live ephemeral key.
-	///
-	/// The file names are provisional; see
-	/// `docs/oci_support/manifest/volumes.md`.
+	/// key and the live ephemeral key as QOS stores them (hex master seeds),
+	/// and each key's public key as `P256Public` hex, the encoding of
+	/// `quorum_key.pub` files (`docs/oci_support/manifest/volumes.md`).
 	///
 	/// # Errors
 	///
-	/// Errors if any of the three files cannot be read.
+	/// Errors if any of the files cannot be read, or a key cannot be decoded.
 	#[cfg(target_os = "linux")]
 	pub(crate) fn read_qos_volume_files(
 		&self,
-	) -> std::io::Result<[(&'static str, Vec<u8>); 3]> {
+	) -> std::io::Result<[(&'static str, Vec<u8>); 5]> {
+		let public = |pair: Result<P256Pair, ProtocolError>| {
+			pair.map(|pair| {
+				qos_hex::encode(&pair.public_key().to_bytes()).into_bytes()
+			})
+			.map_err(|error| std::io::Error::other(format!("{error:?}")))
+		};
 		Ok([
 			(QOS_VOLUME_MANIFEST_FILE, fs::read(&self.manifest)?),
 			(QOS_VOLUME_QUORUM_KEY_FILE, fs::read(&self.quorum.quorum)?),
+			(QOS_VOLUME_QUORUM_PUB_FILE, public(self.get_quorum_key())?),
 			(
 				QOS_VOLUME_EPHEMERAL_KEY_FILE,
 				fs::read(&self.ephemeral.ephemeral_key_path)?,
 			),
+			(QOS_VOLUME_EPHEMERAL_PUB_FILE, public(self.get_ephemeral_key())?),
 		])
 	}
 

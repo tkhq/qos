@@ -104,8 +104,9 @@ One OCI workload MUST NOT receive another workload's mount or an undeclared
 mount.
 
 The initial schema does not define startup dependencies, health checks, or a
-global startup order. Workload object order does not create a dependency. A
-later optional field can add those features.
+global startup order. Workload object order does not create a dependency, and
+QOS MAY start workloads in any order. A later optional field can add those
+features.
 
 ## Process source
 

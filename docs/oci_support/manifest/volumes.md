@@ -49,8 +49,8 @@ The path MUST be normalized and MUST NOT contain a NUL byte, repeated `/`, a
 The path MUST NOT overlap a QOS key path, manifest path, runtime-state path,
 OCI bundle path, or another QOS-owned system mount.
 
-Applying this overlap rule to the implicit `qos` volume's location depends on
-the open question about its layout. See
+The implicit `qos` volume lives under the QOS runtime root `/run/qos-oci`, so
+the rule keeps top-level volumes off it too. See
 [Reserved implicit `qos` volume](#reserved-implicit-qos-volume).
 
 Two top-level volume mount paths MUST NOT overlap.
@@ -103,25 +103,25 @@ This grant exposes the volume's contents together. The initial manifest does
 not grant individual QOS files or arbitrary parent paths to OCI workloads.
 The shared trust-domain rules still apply to every workload.
 
-Open question: Define the stable filenames and update behavior inside `qos`
-before V3 stabilizes with OCI. This specification does not define a new
-parent-QOS path or per-file mount mechanism.
-
-Provisional implementation: this tree creates the volume as a tmpfs under the
-QOS runtime root (`/run/qos-oci/qos`) only when some workload mounts it, with a
-`0755` root and `0444` files, and removes it when the workload group stops. It
-contains these files, whose names are provisional and not a stable interface:
+QOS creates the volume as a tmpfs under the QOS runtime root
+(`/run/qos-oci/qos`) only when some workload mounts it, with a `0755` root and
+`0444` files, and removes it when the workload group stops. It contains these
+files:
 
 | File | Content |
 | --- | --- |
 | `manifest.json` | The approved Manifest V3 envelope (manifest and approvals), as QOS stored it. |
-| `quorum.key` | The quorum key, as QOS stores it (hex-encoded seed). |
-| `ephemeral.key` | The live ephemeral key, as QOS stores it (hex-encoded seed). |
+| `quorum.key` | The quorum key, as QOS stores it (hex-encoded master seed). |
+| `quorum.pub` | The quorum public key, hex-encoded as in a `quorum_key.pub` file. |
+| `ephemeral.key` | The live ephemeral key, as QOS stores it (hex-encoded master seed). |
+| `ephemeral.pub` | The live ephemeral public key, hex-encoded as `quorum.pub`. |
 
-The files are a snapshot taken when the workload group starts. They are not
-updated while the group runs, and a workload restart reattaches the same
-volume. The volume is mounted `nodev`, `nosuid`, and `noexec`; a workload
-mount adds `nodev` and `nosuid` and the signed `readOnly: true`.
+A workload that only names a key reads its `.pub` file. The volume never
+changes while a workload runs: the manifest and the quorum key are fixed
+once provisioned, and the live ephemeral key replaces the setup key before
+QOS starts any workload. A workload restart reattaches the same volume. The
+volume is mounted `nodev`, `nosuid`, and `noexec`; a workload mount adds
+`nodev` and `nosuid` and the signed `readOnly: true`.
 
 ## Workload volume mounts
 
