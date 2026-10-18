@@ -192,21 +192,28 @@ impl RuntimeContainer {
 			}
 		};
 		let stdin = File::open("/dev/null")?;
+		build_in_forked_child(
+			&state_root.join(format!("{id}.create-failed")),
+			|| {
+				ContainerBuilder::new(id.to_owned(), SyscallType::Linux)
+					.validate_id()
+					.map_err(runtime_error)?
+					.with_root_path(state_root)
+					.map_err(runtime_error)?
+					.with_stdin(OwnedFd::from(stdin))
+					.with_stdout(stdout_write)
+					.with_stderr(stderr_write)
+					.as_init(bundle)
+					.with_systemd(false)
+					.with_no_pivot(true)
+					.with_detach(true)
+					.build()
+					.map(drop)
+					.map_err(runtime_error)
+			},
+		)?;
 		let mut container =
-			ContainerBuilder::new(id.to_owned(), SyscallType::Linux)
-				.validate_id()
-				.map_err(runtime_error)?
-				.with_root_path(state_root)
-				.map_err(runtime_error)?
-				.with_stdin(OwnedFd::from(stdin))
-				.with_stdout(stdout_write)
-				.with_stderr(stderr_write)
-				.as_init(bundle)
-				.with_systemd(false)
-				.with_no_pivot(true)
-				.with_detach(true)
-				.build()
-				.map_err(runtime_error)?;
+			Container::load(state_root.join(id)).map_err(runtime_error)?;
 		if let Err(error) = apply_device_policy(id, devices) {
 			return match container.delete(true) {
 				Ok(()) => Err(error),
@@ -1053,6 +1060,54 @@ fn bind_mount(
 		.options(options)
 		.build()
 		.map_err(config_error)
+}
+
+/// Run `build`, which creates a container, in a forked child of this process.
+///
+/// `libcontainer` creates a container by cloning with the raw `clone3` system
+/// call, which skips the C library's fork handlers. QOS has many threads. A
+/// clone made while another of them holds a lock, such as the allocator's,
+/// leaves the child that lock for good: it waits for it before it does
+/// anything, and the creation never returns. `fork` takes the allocator's lock
+/// before forking and resets it in the child, which has one thread, so
+/// `libcontainer` clones from a process in which no other thread can hold a
+/// lock.
+///
+/// The container's init process waits for `start`, so the child exits once the
+/// container exists, and QOS, which runs as PID 1, adopts the init process.
+/// The child's failure is written to `failure` for the parent to report.
+#[allow(unsafe_code)]
+fn build_in_forked_child(
+	failure: &Path,
+	build: impl FnOnce() -> Result<(), OciRuntimeError>,
+) -> Result<(), OciRuntimeError> {
+	// SAFETY: the child only runs `build` and ends with `_exit`, which runs no
+	// exit handlers and flushes no buffer it shares with this process.
+	match unsafe { libc::fork() } {
+		-1 => Err(OciRuntimeError::Io(std::io::Error::last_os_error())),
+		0 => {
+			let code = match build() {
+				Ok(()) => 0,
+				Err(error) => {
+					let _ = fs::write(failure, error.to_string());
+					1
+				}
+			};
+			// SAFETY: _exit takes a scalar and does not return.
+			unsafe { libc::_exit(code) }
+		}
+		child => {
+			let ended = wait_pid(child)?;
+			if ended == Termination::ExitCode(0) {
+				return Ok(());
+			}
+			let reason = fs::read_to_string(failure).unwrap_or_else(|_| {
+				format!("the container's creation ended with {ended:?}")
+			});
+			let _ = fs::remove_file(failure);
+			Err(OciRuntimeError::Libcontainer(reason))
+		}
+	}
 }
 
 fn pipe() -> Result<(OwnedFd, OwnedFd), std::io::Error> {
