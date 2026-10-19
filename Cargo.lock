@@ -2986,12 +2986,17 @@ name = "signed_echo"
 version = "0.15.1"
 dependencies = [
  "axum",
+ "qos_attestation",
+ "qos_core 0.15.1",
+ "qos_crypto 0.15.1",
  "qos_hex 0.15.1",
  "qos_json",
+ "qos_nsm 0.15.1",
  "qos_p256 0.15.1",
  "serde",
  "serde_json",
  "tokio",
+ "tower",
  "ureq",
 ]
 
