@@ -424,6 +424,16 @@ impl VersionedManifestEnvelope {
 		}
 	}
 
+	/// Return the enclave configuration from the embedded manifest.
+	#[must_use]
+	pub fn enclave(&self) -> &NitroConfig {
+		match self {
+			Self::V2(e) => &e.manifest.enclave,
+			Self::V1(e) => &e.manifest.enclave,
+			Self::V0(e) => &e.manifest.enclave,
+		}
+	}
+
 	/// Verify manifest-set approvals against the embedded manifest hash and
 	/// threshold policy.
 	///
