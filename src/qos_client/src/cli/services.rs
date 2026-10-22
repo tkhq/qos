@@ -1129,6 +1129,7 @@ fn approve_manifest_programmatic_verifications(
 	true
 }
 
+#[allow(clippy::too_many_lines)]
 fn approve_manifest_human_verifications<R, W>(
 	manifest: &VersionedManifest,
 	prompter: &mut Prompter<R, W>,

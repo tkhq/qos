@@ -655,6 +655,7 @@ fn create_volumes(
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 fn prepare_workload(
 	name: &OciName,
 	workload: &WorkloadV3,
