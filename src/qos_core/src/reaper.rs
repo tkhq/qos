@@ -246,6 +246,15 @@ impl Reaper {
 		let mut pivot = Command::new(handles.pivot_path());
 		pivot.env_clear();
 		pivot.args(&args[..]);
+		if let Some(env) = manifest.env() {
+			for (name, value) in env.iter() {
+				let name: &str = name;
+				let plain_value = value
+					.as_plain_value()
+					.expect("pivot env was validated before pivot launch");
+				pivot.env(name, plain_value);
+			}
+		}
 		// Only pipe pivot output when it will be drained below.
 		if manifest.debug_mode() {
 			pivot.stdout(Stdio::piped()).stderr(Stdio::piped());
