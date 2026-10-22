@@ -101,25 +101,42 @@ test:
 	@# by itself.
 	cargo test --locked -p qos_core
 
+# Crates excluded from the workspace keep their own lockfiles, which release-plz
+# does not update.
+EXCLUDED_CRATES := init qos_aws qos_system qos_enclave
+
+.PHONY: lockfiles
+lockfiles:
+	for crate in $(EXCLUDED_CRATES); do \
+		cargo metadata --format-version 1 --manifest-path ./$$crate/Cargo.toml > /dev/null || exit 1; \
+	done
+
+.PHONY: check-lockfiles
+check-lockfiles:
+	for crate in $(EXCLUDED_CRATES); do \
+		cargo metadata --locked --format-version 1 --manifest-path ./$$crate/Cargo.toml > /dev/null \
+			|| { echo "src/$$crate/Cargo.lock is stale; run 'make -C src lockfiles' and commit the result"; exit 1; }; \
+	done
+
 .PHONY: build-linux-only
 build-linux-only: qos_system qos_aws init qos_enclave qos_bridge
 
 .PHONY: qos_system
 qos_system:
-	cargo build --manifest-path ./qos_system/Cargo.toml
+	cargo build --locked --manifest-path ./qos_system/Cargo.toml
 
 .PHONY: qos_aws
 qos_aws:
-	cargo build --manifest-path ./qos_aws/Cargo.toml
+	cargo build --locked --manifest-path ./qos_aws/Cargo.toml
 
 .PHONY: init
 init:
-	cargo build --manifest-path ./init/Cargo.toml
+	cargo build --locked --manifest-path ./init/Cargo.toml
 
 .PHONY: qos_enclave
 qos_enclave:
-	cargo build --manifest-path ./qos_enclave/Cargo.toml
+	cargo build --locked --manifest-path ./qos_enclave/Cargo.toml
 
 .PHONY: qos_bridge
 qos_bridge:
-	cargo build --manifest-path ./qos_bridge/Cargo.toml
+	cargo build --locked --manifest-path ./qos_bridge/Cargo.toml
