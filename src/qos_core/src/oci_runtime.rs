@@ -31,7 +31,10 @@ use libcontainer::{
 use crate::{oci_bundle::RuntimeProcess, protocol::services::boot::OciName};
 
 const OCI_RUNTIME_VERSION: &str = "1.0.2";
-const SANDBOX_ID: &str = "qos-sandbox";
+/// The sandbox's container ID, log label and cgroup name. Workload names, which
+/// QOS uses for the same three, cannot contain an underscore, so no workload
+/// can share any of them with the sandbox.
+const SANDBOX_ID: &str = "qos_sandbox";
 const SANDBOX_ARG: &str = "--qos-oci-sandbox";
 const SANDBOX_READY: &str = "/qos-sandbox-ready";
 const MAX_LOG_CHUNK_BYTES: u64 = 16 * 1024;
@@ -110,12 +113,11 @@ impl RuntimeContainer {
 		bundle: &Path,
 		state_root: &Path,
 	) -> Result<Self, OciRuntimeError> {
-		Self::create_id(name.as_str(), name.as_str(), bundle, state_root)
+		Self::create_id(name.as_str(), bundle, state_root)
 	}
 
 	fn create_id(
 		id: &str,
-		cgroup_name: &str,
 		bundle: &Path,
 		state_root: &Path,
 	) -> Result<Self, OciRuntimeError> {
@@ -138,7 +140,7 @@ impl RuntimeContainer {
 				.with_detach(true)
 				.build()
 				.map_err(runtime_error)?;
-		if let Err(error) = apply_device_policy(cgroup_name) {
+		if let Err(error) = apply_device_policy(id) {
 			return match container.delete(true) {
 				Ok(()) => Err(error),
 				Err(cleanup) => Err(OciRuntimeError::Cleanup(format!(
@@ -261,9 +263,8 @@ impl RuntimeSandbox {
 		let spec = sandbox_spec(&rootfs, &executable, &shm)?;
 		spec.save(bundle.join("config.json"))
 			.map_err(|error| OciRuntimeError::Config(error.to_string()))?;
-		let mut container = RuntimeContainer::create_id(
-			SANDBOX_ID, "sandbox", &bundle, &state,
-		)?;
+		let mut container =
+			RuntimeContainer::create_id(SANDBOX_ID, &bundle, &state)?;
 		let pid = match container.start() {
 			Ok(pid) => pid,
 			Err(error) => {
@@ -502,7 +503,7 @@ fn sandbox_spec(
 	let linux = LinuxBuilder::default()
 		.namespaces(namespaces)
 		.resources(device_resources()?)
-		.cgroups_path("qos/sandbox")
+		.cgroups_path(PathBuf::from("qos").join(SANDBOX_ID))
 		.rootfs_propagation("private")
 		.masked_paths(get_default_maskedpaths())
 		.readonly_paths(get_default_readonly_paths())
@@ -1121,4 +1122,14 @@ fn configure_loopback() -> Result<(), std::io::Error> {
 	let error = std::io::Error::last_os_error();
 	unsafe { libc::close(fd) };
 	if result < 0 { Err(error) } else { Ok(()) }
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn no_workload_can_take_the_sandbox_name() {
+		assert!(OciName::try_from(SANDBOX_ID.to_owned()).is_err());
+	}
 }

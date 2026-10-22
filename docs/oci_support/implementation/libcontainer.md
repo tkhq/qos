@@ -50,6 +50,9 @@ shared `/dev/shm` mount.
 The sandbox is QOS runtime state. It is not a Manifest V3 workload and does not
 run image code.
 
+The sandbox's container ID, log label, and cgroup name MUST NOT be valid
+workload names, so that no workload can share any of them.
+
 Each generated OCI configuration MUST join the sandbox network, IPC, and UTS
 namespaces by namespace path. It MUST request a new PID and mount namespace for
 the individual OCI workload.
