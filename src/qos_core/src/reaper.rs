@@ -389,6 +389,11 @@ impl Reaper {
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest();
+		// `dns` keeps its parent-QOS meaning in every manifest version.
+		if let Some(dns_config) = manifest.dns_config() {
+			write_resolv_conf(&dns_config.resolvers)
+				.expect("failed to write /etc/resolv.conf");
+		}
 		if let VersionedManifest::V3(oci_manifest) = manifest {
 			run_oci_workload_group(
 				handles,
@@ -417,12 +422,6 @@ impl Reaper {
 		};
 		let args = args.to_vec();
 		let host_config = manifest.bridge_config().to_vec();
-		let dns_config = manifest.dns_config().cloned();
-
-		if let Some(dns_config) = dns_config {
-			write_resolv_conf(&dns_config.resolvers)
-				.expect("failed to write /etc/resolv.conf");
-		}
 
 		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task
 		run_bridges(&core_socket, &host_config)
