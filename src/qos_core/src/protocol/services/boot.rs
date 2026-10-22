@@ -17,7 +17,8 @@ pub use env::{
 	PivotEnv, PivotEnvValue, PivotEnvVarName,
 };
 pub use manifest::v2::{
-	DnsConfig, ManifestEnvelopeV2, ManifestV2, PivotConfigV2,
+	DnsConfig, ManifestEnvelopeV2, ManifestV2, PeerDiscoveryConfig,
+	PivotConfigV2,
 };
 pub use manifest::{
 	ManifestBuilder, ManifestBuilderError, ManifestVersion, VersionedManifest,
