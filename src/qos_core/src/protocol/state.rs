@@ -2,16 +2,13 @@
 use qos_nsm::NsmProvider;
 use qos_p256::P256Pair;
 
-use std::{
-	collections::BTreeMap,
-	sync::{Arc, RwLock},
-};
-
 use super::{
 	error::ProtocolError, msg::ProtocolMsg, services::provision::SecretBuilder,
 };
 use crate::handles::Handles;
-use crate::protocol::oci_status::SharedOciStatus;
+use crate::protocol::{
+	oci_status::SharedOciStatus, services::boot::ManifestV3,
+};
 
 /// Enclave phase
 #[derive(
@@ -211,7 +208,7 @@ impl ProtocolState {
 			attestor,
 			handles,
 			test_only_init_phase_override,
-			Arc::new(RwLock::new(BTreeMap::new())),
+			SharedOciStatus::default(),
 		)
 	}
 
@@ -245,6 +242,11 @@ impl ProtocolState {
 
 	pub fn get_phase(&self) -> ProtocolPhase {
 		self.phase
+	}
+
+	/// Record an accepted Manifest V3 boot in the workload status.
+	pub(crate) fn begin_oci_status(&self, manifest: &ManifestV3) {
+		self.oci_status.write().unwrap().begin(manifest);
 	}
 
 	pub(crate) fn set_pending_live_ephemeral_key(&mut self, key: P256Pair) {
@@ -409,9 +411,11 @@ mod handlers {
 		if let ProtocolMsg::StatusRequest = req {
 			Some(Ok(ProtocolMsg::StatusResponse(state.get_phase())))
 		} else if let ProtocolMsg::OciStatusRequest = req {
-			Some(Ok(ProtocolMsg::OciStatusResponse(
-				state.oci_status.read().unwrap().values().cloned().collect(),
-			)))
+			let status = state.oci_status.read().unwrap();
+			Some(Ok(ProtocolMsg::OciStatusResponse {
+				startup: status.startup,
+				workloads: status.workloads.values().cloned().collect(),
+			}))
 		} else {
 			None
 		}

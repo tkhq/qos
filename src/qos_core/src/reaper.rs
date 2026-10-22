@@ -5,7 +5,6 @@
 //! The pivot is an executable the enclave runs to initialize the secure
 //! applications.
 use std::{
-	collections::BTreeMap,
 	fs,
 	net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
 	process::Stdio,
@@ -27,7 +26,7 @@ use crate::{
 	io::{HostBridge, IOError, SocketAddress, StreamPool},
 	protocol::{
 		ProtocolPhase, ProtocolState,
-		oci_status::{OciWorkloadStatus, SharedOciStatus},
+		oci_status::{OciStartup, SharedOciStatus},
 		processor::ProtocolProcessor,
 		services::boot::{BridgeConfig, RestartPolicy},
 		services::boot::{ManifestV3, VersionedManifest},
@@ -90,20 +89,12 @@ async fn run_oci_workload_group(
 	manifest: ManifestV3,
 	status: &SharedOciStatus,
 ) {
-	status.write().unwrap().extend(manifest.workloads.iter().map(
-		|(name, workload)| {
-			(
-				name.clone(),
-				OciWorkloadStatus::pending(
-					name.clone(),
-					workload.image().digest().clone(),
-				),
-			)
-		},
-	));
+	// The V3 boot route began the status already; this covers a manifest
+	// that was in place before this process started.
+	status.write().unwrap().begin(&manifest);
 	println!("Reaper::execute about to start OCI workloads");
 	let handles = handles.clone();
-	let status = Arc::clone(status);
+	let worker_status = Arc::clone(status);
 	let shutdown = Arc::new(AtomicBool::new(false));
 	let worker_shutdown = Arc::clone(&shutdown);
 	let (sandbox_ready, sandbox) =
@@ -118,7 +109,7 @@ async fn run_oci_workload_group(
 			crate::oci_manager::run_oci_workloads(
 				&handles,
 				&manifest,
-				&status,
+				&worker_status,
 				&worker_shutdown,
 				|namespaces| {
 					// The open handle keeps the namespace for the bridges.
@@ -130,7 +121,13 @@ async fn run_oci_workload_group(
 		}
 		#[cfg(not(target_os = "linux"))]
 		{
-			let _ = (handles, manifest, status, worker_shutdown, sandbox_ready);
+			let _ = (
+				handles,
+				manifest,
+				worker_status,
+				worker_shutdown,
+				sandbox_ready,
+			);
 			Err("OCI workloads require Linux".to_owned())
 		}
 	});
@@ -141,6 +138,12 @@ async fn run_oci_workload_group(
 			worker.await
 		}
 	};
+	{
+		let mut status = status.write().unwrap();
+		if status.startup != OciStartup::Started {
+			status.startup = OciStartup::Failed;
+		}
+	}
 	match result {
 		Ok(Ok(())) => println!("all OCI workloads stopped"),
 		Ok(Err(error)) => eprintln!("OCI workload group failed: {error}"),
@@ -340,8 +343,7 @@ impl Reaper {
 		// we need to establish
 		let inter_state = Arc::new(RwLock::new(InterState::Booting));
 		let server_state = inter_state.clone();
-		let oci_status: SharedOciStatus =
-			Arc::new(RwLock::new(BTreeMap::new()));
+		let oci_status = SharedOciStatus::default();
 
 		let server_worker = tokio::spawn(run_server(
 			server_state,

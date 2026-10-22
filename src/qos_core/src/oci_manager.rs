@@ -26,7 +26,7 @@ use crate::{
 		record_error, sandbox_alive, signal_pid, unmount_path, write_config,
 	},
 	protocol::oci_status::{
-		OciTermination, OciWorkloadStatus, SharedOciStatus,
+		OciStartup, OciTermination, OciWorkloadStatus, SharedOciStatus,
 	},
 	protocol::services::boot::{
 		EnclaveMode, ManifestV3, OciDigest, OciMount, OciName,
@@ -200,7 +200,9 @@ impl WorkloadRun {
 
 impl PreparedWorkload {
 	fn update_status(&self, update: impl FnOnce(&mut OciWorkloadStatus)) {
-		if let Some(status) = self.status.write().unwrap().get_mut(&self.name) {
+		if let Some(status) =
+			self.status.write().unwrap().workloads.get_mut(&self.name)
+		{
 			update(status);
 		}
 	}
@@ -358,13 +360,13 @@ pub fn run_oci_workloads(
 	let images = match load_images(handles, manifest) {
 		Ok(images) => images,
 		Err(error) => {
-			for entry in status.write().unwrap().values_mut() {
+			for entry in status.write().unwrap().workloads.values_mut() {
 				entry.failed(&error, true);
 			}
 			return cleanup_without_sandbox(error, Vec::new(), &runtime_root);
 		}
 	};
-	for entry in status.write().unwrap().values_mut() {
+	for entry in status.write().unwrap().workloads.values_mut() {
 		entry.verified();
 	}
 	let (volumes, volume_paths) =
@@ -422,9 +424,18 @@ pub fn run_oci_workloads(
 				status,
 				&lifecycle,
 			)
-			.map_err(|error| (error, Vec::new()))?;
-			let mut run =
-				prepared.create_run().map_err(|error| (error, Vec::new()))?;
+			.map_err(|error| {
+				if let Some(entry) =
+					status.write().unwrap().workloads.get_mut(name)
+				{
+					entry.failed(&error, false);
+				}
+				(error, Vec::new())
+			})?;
+			let mut run = prepared.create_run().map_err(|error| {
+				prepared.update_status(|status| status.failed(&error, false));
+				(error, Vec::new())
+			})?;
 			let pid = match run.container.start() {
 				Ok(pid) => pid,
 				Err(error) => {
@@ -438,7 +449,7 @@ pub fn run_oci_workloads(
 				}
 			};
 			register_process(&prepared, pid, run.stop_signal);
-			prepared.update_status(|status| status.running(pid));
+			prepared.update_status(|status| status.running(pid, 0));
 			println!(
 				"OCI[{}] running verified image {}",
 				prepared.name.as_str(),
@@ -458,6 +469,7 @@ pub fn run_oci_workloads(
 			&runtime_root,
 		);
 	}
+	status.write().unwrap().startup = OciStartup::Started;
 	println!("all OCI workloads started");
 	let done = Arc::new(AtomicBool::new(false));
 	let (sandbox_pid, sandbox_namespaces) = sandbox.health_handle();
@@ -522,13 +534,18 @@ fn monitor(
 		let stable = run.started.elapsed() >= STABLE_RUN_TIME;
 		println!("OCI[{}] terminated: {termination:?}", prepared.name.as_str());
 		run.cleanup()?;
-		if prepared.restart == OciRestartPolicy::Never
-			|| prepared.lifecycle.shutdown.load(Ordering::Acquire)
-		{
+		// The workload ends with this exit when it never restarts, or when
+		// the node shuts down, during a restart delay too.
+		let terminated = || {
 			prepared.update_status(|status| {
 				status.terminated(status_termination(termination));
 			});
-			return Ok(());
+			Ok(())
+		};
+		if prepared.restart == OciRestartPolicy::Never
+			|| prepared.lifecycle.shutdown.load(Ordering::Acquire)
+		{
+			return terminated();
 		}
 		if stable {
 			backoff = INITIAL_BACKOFF;
@@ -537,18 +554,20 @@ fn monitor(
 			status.restarting(restart_count, backoff);
 		});
 		if sleep_interruptible(backoff, &prepared.lifecycle.shutdown) {
-			return Ok(());
+			return terminated();
 		}
 		loop {
 			if prepared.lifecycle.shutdown.load(Ordering::Acquire) {
-				return Ok(());
+				return terminated();
 			}
 			restart_count += 1;
 			match prepared.create_run() {
 				Ok(mut next) => match next.container.start() {
 					Ok(pid) => {
 						register_process(prepared, pid, next.stop_signal);
-						prepared.update_status(|status| status.running(pid));
+						prepared.update_status(|status| {
+							status.running(pid, restart_count);
+						});
 						println!(
 							"OCI[{}] restarted ({restart_count})",
 							prepared.name.as_str()
@@ -583,7 +602,7 @@ fn monitor(
 				status.restarting(restart_count, backoff);
 			});
 			if sleep_interruptible(backoff, &prepared.lifecycle.shutdown) {
-				return Ok(());
+				return terminated();
 			}
 		}
 	}

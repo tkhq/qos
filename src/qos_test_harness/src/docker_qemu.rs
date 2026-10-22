@@ -1190,7 +1190,7 @@ impl DockerHostQemuNitroRunner {
 		while start.elapsed() < self.spec.qemu.readiness_timeout {
 			self.fail_if_children_exited()?;
 			match self.run_docker_args_output(
-				self.qos_client_health_docker_args("enclave-status"),
+				self.qos_client_health_docker_args("enclave-oci-status"),
 			) {
 				Ok(output)
 					if output.contains(artifact.digest.as_str())

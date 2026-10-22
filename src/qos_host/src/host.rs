@@ -27,7 +27,7 @@ use qos_core::{
 	client::{ClientError, SocketClient},
 	io::SocketAddress,
 	protocol::{
-		ProtocolError, ProtocolPhase, msg::ProtocolMsg,
+		ProtocolError, ProtocolPhase, msg::ProtocolMsg, oci_status::OciStartup,
 		services::boot::VersionedManifestEnvelope,
 	},
 };
@@ -146,16 +146,16 @@ impl HostServer {
 		match response {
 			ProtocolMsg::StatusResponse(phase) => {
 				let inner = format!("{phase:?}");
-				let status = match phase {
+				match phase {
 					ProtocolPhase::UnrecoverableError
 					| ProtocolPhase::WaitingForBootInstruction
 					| ProtocolPhase::WaitingForQuorumShards
-					| ProtocolPhase::WaitingForForwardedKey => StatusCode::SERVICE_UNAVAILABLE,
+					| ProtocolPhase::WaitingForForwardedKey => {
+						(StatusCode::SERVICE_UNAVAILABLE, Html(inner))
+					}
 					ProtocolPhase::QuorumKeyProvisioned
-					| ProtocolPhase::GenesisBooted => StatusCode::OK,
-				};
-
-				(status, Html(inner))
+					| ProtocolPhase::GenesisBooted => Self::oci_readiness(&state, inner).await,
+				}
 			}
 			other => {
 				let msg = format!(
@@ -164,6 +164,40 @@ impl HostServer {
 				eprintln!("{msg}");
 				(StatusCode::INTERNAL_SERVER_ERROR, Html(msg))
 			}
+		}
+	}
+
+	/// Health of a provisioned enclave. A Manifest V3 enclave is ready only
+	/// once every workload has started. An enclave that runs no OCI
+	/// workloads, or does not know the request, is ready as before.
+	async fn oci_readiness(
+		state: &QosHostState,
+		phase: String,
+	) -> (StatusCode, Html<String>) {
+		let encoded_request = ProtocolMsg::OciStatusRequest
+			.to_json_wire()
+			.expect("ProtocolMsg can always serialize. qed.");
+		let startup = match state.enclave_client.call(&encoded_request).await {
+			Ok(response) => match ProtocolMsg::from_wire_any(&response) {
+				Ok(ProtocolMsg::OciStatusResponse { startup, .. }) => startup,
+				_ => OciStartup::Inactive,
+			},
+			Err(e) => {
+				let msg = format!(
+					"Error while trying to send socket request to enclave: {e:?}"
+				);
+				eprintln!("{msg}");
+				return (StatusCode::INTERNAL_SERVER_ERROR, Html(msg));
+			}
+		};
+		match startup {
+			OciStartup::Inactive | OciStartup::Started => {
+				(StatusCode::OK, Html(phase))
+			}
+			OciStartup::Starting | OciStartup::Failed => (
+				StatusCode::SERVICE_UNAVAILABLE,
+				Html(format!("{phase}; OCI workloads {startup:?}")),
+			),
 		}
 	}
 

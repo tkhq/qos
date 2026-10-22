@@ -115,6 +115,8 @@ pub enum Command {
 	HostHealth,
 	/// Query the status of the enclave.
 	EnclaveStatus,
+	/// Query the status of the enclave and of its Manifest V3 workloads.
+	EnclaveOciStatus,
 	/// Query the QOS version and git commit of the running enclave.
 	EnclaveVersion,
 	/// Generate a Setup Key for use in the Genesis ceremony.
@@ -237,6 +239,7 @@ impl From<&str> for Command {
 		match s {
 			"host-health" => Self::HostHealth,
 			"enclave-status" => Self::EnclaveStatus,
+			"enclave-oci-status" => Self::EnclaveOciStatus,
 			"enclave-version" => Self::EnclaveVersion,
 			"generate-file-key" => Self::GenerateFileKey,
 			"generate-manifest-envelope" => Self::GenerateManifestEnvelope,
@@ -898,9 +901,10 @@ impl Command {
 impl GetParserForCommand for Command {
 	fn parser(&self) -> Parser {
 		match self {
-			Self::HostHealth | Self::EnclaveStatus | Self::EnclaveVersion => {
-				Self::base()
-			}
+			Self::HostHealth
+			| Self::EnclaveStatus
+			| Self::EnclaveOciStatus
+			| Self::EnclaveVersion => Self::base(),
 			Self::GenerateFileKey => Self::generate_file_key(),
 			Self::BootGenesis => Self::boot_genesis(),
 			Self::AfterGenesis => Self::after_genesis(),
@@ -1374,6 +1378,9 @@ impl ClientRunner {
 			match self.cmd {
 				Command::HostHealth => handlers::host_health(&self.opts),
 				Command::EnclaveStatus => handlers::enclave_status(&self.opts),
+				Command::EnclaveOciStatus => {
+					handlers::enclave_oci_status(&self.opts);
+				}
 				Command::EnclaveVersion => {
 					handlers::enclave_version(&self.opts);
 				}
@@ -1515,18 +1522,22 @@ mod handlers {
 			}
 			other => panic!("Unexpected response {other:?}"),
 		}
+	}
 
-		let response = request::post(path, &ProtocolMsg::OciStatusRequest)
-			.map_err(|e| println!("{e:?}"))
-			.expect("OCI status request failed");
+	pub(super) fn enclave_oci_status(opts: &ClientOpts) {
+		enclave_status(opts);
+		let response =
+			request::post(&opts.path_message(), &ProtocolMsg::OciStatusRequest)
+				.map_err(|e| println!("{e:?}"))
+				.expect("OCI status request failed");
 		match response {
-			ProtocolMsg::OciStatusResponse(status) if !status.is_empty() => {
+			ProtocolMsg::OciStatusResponse { startup, workloads } => {
+				println!("OCI startup: {startup:?}");
 				println!(
 					"OCI workloads: {}",
-					qos_json::to_string(&status).unwrap()
+					qos_json::to_string(&workloads).unwrap()
 				);
 			}
-			ProtocolMsg::OciStatusResponse(_) => {}
 			other => panic!("Unexpected OCI status response {other:?}"),
 		}
 	}

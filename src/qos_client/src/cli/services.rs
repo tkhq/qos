@@ -15,8 +15,8 @@ use qos_core::{
 		QosHash,
 		msg::{JsonBytes, ProtocolMsg, ProtocolMsgEncoding},
 		oci::{
-			ManifestEnvelopeBytes, OciArtifactV3, OciBootPayloadV3,
-			OciLayoutArchive,
+			MAX_OCI_TOTAL_ARCHIVE_BYTES, ManifestEnvelopeBytes, OciArtifactV3,
+			OciBootPayloadV3, OciLayoutArchive,
 		},
 		services::{
 			boot::{
@@ -1544,6 +1544,7 @@ fn oci_boot_payload<P: AsRef<Path>>(
 		.collect();
 	let mut given = BTreeSet::new();
 	let mut artifacts = Vec::with_capacity(oci_layout_archives.len());
+	let mut total = 0_usize;
 	for argument in oci_layout_archives {
 		let (digest, path) = parse_oci_layout_archive(argument)?;
 		if !required.contains(&digest) {
@@ -1562,6 +1563,13 @@ fn oci_boot_payload<P: AsRef<Path>>(
 			path: path.to_owned(),
 			error: error.to_string(),
 		})?;
+		total += bytes.len();
+		if total > MAX_OCI_TOTAL_ARCHIVE_BYTES {
+			return Err(Error::Deserialize(format!(
+				"the OCI layout archives exceed the {MAX_OCI_TOTAL_ARCHIVE_BYTES} \
+				 bytes one boot request can carry"
+			)));
+		}
 		check_oci_layout_digest(&digest, &bytes).map_err(|error| {
 			Error::Deserialize(format!(
 				"{path} does not hold image {}: {error:?}",
