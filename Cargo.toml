@@ -99,7 +99,7 @@ tokio-vsock = { version = "0.7.2" }
 ureq = { version = "2.9", default-features = false }
 vsss-rs = { version = "5.4", default-features = false, features = ["std", "zeroize"] }
 webpki = { version = "0.22.4", default-features = false }
-webpki-roots = { version = "1.0.2" }
+webpki-roots = { version = "1.0.10" }
 x509-cert = { version = "0.2.5", features = ["pem"], default-features = false }
 yubikey = { version = "0.8", features = ["untested"], default-features = false }
 zeroize = { version = "1.8", default-features = false }
