@@ -1368,10 +1368,10 @@ impl DockerHostQemuNitroRunner {
 				&Pivot { path: workspace.pivot_hash_path.clone() },
 				&workspace,
 			);
-			boot_args.extend([
-				"--oci-layout-archive".into(),
-				self.docker_path(&spec.artifact.path).into_os_string(),
-			]);
+			let mut archive =
+				OsString::from(format!("{}=", spec.artifact.digest.as_str()));
+			archive.push(self.docker_path(&spec.artifact.path));
+			boot_args.extend(["--oci-layout-archive".into(), archive]);
 			self.run_boot_ceremony(
 				&workspace,
 				"qos_client boot-standard OCI",

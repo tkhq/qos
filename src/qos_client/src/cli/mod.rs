@@ -303,7 +303,7 @@ impl Command {
 	fn oci_layout_archive_token() -> Token {
 		Token::new(
 			OCI_LAYOUT_ARCHIVE,
-			"Path to an OCI image-layout tar; repeat once per distinct Manifest V3 image digest.",
+			"`sha256:<hex>=<path>`: the OCI image-layout tar at `path` holds the Manifest V3 image with that digest; repeat once per distinct image digest, in any order.",
 		)
 		.takes_value(true)
 		.allow_multiple(true)
