@@ -23,7 +23,8 @@ use crate::{
 	oci_runtime::{
 		AllowedDevice, OciRuntimeError, ResolvedMount, RuntimeContainer,
 		RuntimeSandbox, SandboxNamespaces, WorkloadOutput, create_tmpfs,
-		record_error, sandbox_alive, signal_pid, unmount_path, write_config,
+		prepare_node, record_error, sandbox_alive, signal_pid, unmount_path,
+		write_config,
 	},
 	protocol::oci_status::{
 		OciStartup, OciTermination, OciWorkloadStatus, SharedOciStatus,
@@ -356,7 +357,17 @@ pub fn run_oci_workloads(
 			"OCI runtime root already exists".into(),
 		));
 	}
-	fs::create_dir_all(&runtime_root)?;
+	// Bundle root file systems below the runtime root must permit image
+	// executables; the rest of `/run` stays `noexec`.
+	if let Err(error) =
+		prepare_node().and_then(|()| create_tmpfs(&runtime_root, 0o755, false))
+	{
+		return cleanup_without_sandbox(
+			error.into(),
+			Vec::new(),
+			&runtime_root,
+		);
+	}
 	let images = match load_images(handles, manifest) {
 		Ok(images) => images,
 		Err(error) => {
@@ -852,6 +863,7 @@ fn cleanup_cause(
 
 fn remove_runtime_root(path: &Path) -> Result<(), OciManagerError> {
 	if path.exists() {
+		unmount_path(path)?;
 		fs::remove_dir_all(path)?;
 	}
 	Ok(())

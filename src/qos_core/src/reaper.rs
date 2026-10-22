@@ -40,7 +40,6 @@ pub const REAPER_RESTART_DELAY: Duration = Duration::from_millis(50);
 /// exits.
 pub const REAPER_EXIT_DELAY: Duration = Duration::from_secs(3);
 const OCI_STATUS_EXIT_DELAY: Duration = Duration::from_secs(10);
-const CORE_MAX_CONNECTIONS: usize = 4;
 
 const REAPER_STATE_CHECK_DELAY: Duration = Duration::from_millis(100);
 const RESOLV_CONF_PATH: &str = "/etc/resolv.conf";
@@ -68,12 +67,9 @@ async fn run_server(
 	let protocol_processor = ProtocolProcessor::new(protocol_state);
 
 	// listen on the protocol server
-	let _protocol_server = SocketServer::listen_all(
-		core_pool,
-		protocol_processor,
-		CORE_MAX_CONNECTIONS,
-	)
-	.expect("unable to get listen task list for protocol server");
+	let _protocol_server =
+		SocketServer::listen_all(core_pool, protocol_processor, 1)
+			.expect("unable to get listen task list for protocol server");
 
 	println!("Reaper::server running");
 	while *server_state.read().unwrap() != InterState::Quitting {
@@ -92,6 +88,7 @@ async fn run_oci_workload_group(
 	// The V3 boot route began the status already; this covers a manifest
 	// that was in place before this process started.
 	status.write().unwrap().begin(&manifest);
+	OCI_GROUP_RAN.store(true, Ordering::Release);
 	println!("Reaper::execute about to start OCI workloads");
 	let handles = handles.clone();
 	let worker_status = Arc::clone(status);
@@ -149,6 +146,16 @@ async fn run_oci_workload_group(
 		Ok(Err(error)) => eprintln!("OCI workload group failed: {error}"),
 		Err(error) => eprintln!("OCI workload monitor join failed: {error}"),
 	}
+}
+
+/// Set once this process starts a Manifest V3 workload group.
+static OCI_GROUP_RAN: AtomicBool = AtomicBool::new(false);
+
+/// Whether this process has started a Manifest V3 workload group. Such a
+/// group stops its workloads on ctrl+c or SIGTERM and needs time to do so.
+#[must_use]
+pub fn oci_group_ran() -> bool {
+	OCI_GROUP_RAN.load(Ordering::Acquire)
 }
 
 #[cfg(unix)]

@@ -1256,6 +1256,60 @@ pub(crate) fn create_tmpfs(
 	}
 }
 
+const NODE_MAX_PROCESSES: &str = "4096";
+const NODE_MAX_OPEN_FILES: &str = "65536";
+const NODE_PROCESS_RLIMIT: libc::rlim_t = 4096;
+const CGROUP_ROOT: &str = "/sys/fs/cgroup";
+
+/// Prepare the node for a Manifest V3 workload group: fixed node-wide process
+/// and file limits, inherited by every container QOS creates afterwards, and
+/// the cgroup v2 hierarchy libcontainer needs. A Manifest V2 boot never runs
+/// this, so it keeps the kernel defaults and init's mounts.
+///
+/// # Errors
+///
+/// Returns an error when a limit or the cgroup v2 mount cannot be applied.
+#[allow(unsafe_code)]
+pub(crate) fn prepare_node() -> Result<(), OciRuntimeError> {
+	fs::write("/proc/sys/kernel/pid_max", NODE_MAX_PROCESSES)?;
+	fs::write("/proc/sys/kernel/threads-max", NODE_MAX_PROCESSES)?;
+	fs::write("/proc/sys/fs/file-max", NODE_MAX_OPEN_FILES)?;
+	let limit = libc::rlimit {
+		rlim_cur: NODE_PROCESS_RLIMIT,
+		rlim_max: NODE_PROCESS_RLIMIT,
+	};
+	// SAFETY: the pointer references an initialized rlimit for the syscall.
+	if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &raw const limit) } < 0
+		|| unsafe { libc::setrlimit(libc::RLIMIT_NPROC, &raw const limit) } < 0
+	{
+		return Err(std::io::Error::last_os_error().into());
+	}
+	// init mounts an empty tmpfs here; cgroup v2 goes on top of it. A
+	// cgroup v2 root already present is used as it is.
+	if Path::new(CGROUP_ROOT).join("cgroup.controllers").exists() {
+		return Ok(());
+	}
+	let source = c"cgroup2";
+	let target =
+		std::ffi::CString::new(CGROUP_ROOT).expect("static string has no NUL");
+	let data = c"nsdelegate";
+	// SAFETY: all C strings live through the syscall and flags/data are valid.
+	if unsafe {
+		libc::mount(
+			source.as_ptr(),
+			target.as_ptr(),
+			source.as_ptr(),
+			libc::MS_NODEV | libc::MS_NOSUID | libc::MS_NOEXEC,
+			data.as_ptr().cast::<c_void>(),
+		)
+	} == 0
+	{
+		Ok(())
+	} else {
+		Err(OciRuntimeError::Io(std::io::Error::last_os_error()))
+	}
+}
+
 #[allow(unsafe_code)]
 pub(crate) fn unmount_path(path: &Path) -> Result<(), OciRuntimeError> {
 	let path = std::ffi::CString::new(path.as_os_str().as_encoded_bytes())
