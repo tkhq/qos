@@ -2540,6 +2540,7 @@ dependencies = [
  "rand_core 0.9.3",
  "rpassword",
  "serde_json",
+ "tar",
  "ureq",
  "x509-cert",
  "yubikey",

@@ -26,7 +26,7 @@ pub use manifest::v2::{
 pub use manifest::v3::{
 	EnclaveMode, EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDevice,
 	OciDigest, OciImageRef, OciMount, OciName, OciPath, OciRestartPolicy,
-	QOS_VOLUME_NAME, VolumeV3, WorkloadV3,
+	VolumeV3, WorkloadV3,
 };
 pub use manifest::{
 	ManifestBuilder, ManifestBuilderError, ManifestVersion, VersionedManifest,
@@ -833,10 +833,21 @@ pub(in crate::protocol) fn boot_oci(
 			));
 		}
 	}
-	if supplied.keys().cloned().collect::<BTreeSet<_>>() != required {
-		return Err(ProtocolError::InvalidOci(
-			"OCI artifacts do not exactly match manifest digests".into(),
-		));
+	if let Some(missing) =
+		required.iter().find(|digest| !supplied.contains_key(*digest))
+	{
+		return Err(ProtocolError::InvalidOci(format!(
+			"no OCI artifact for image {}",
+			missing.as_str()
+		)));
+	}
+	if let Some(unexpected) =
+		supplied.keys().find(|digest| !required.contains(*digest))
+	{
+		return Err(ProtocolError::InvalidOci(format!(
+			"no workload of the manifest runs image {}",
+			unexpected.as_str()
+		)));
 	}
 	for (digest, artifact) in &supplied {
 		crate::oci_image::verify_oci_layout(
@@ -851,7 +862,7 @@ pub(in crate::protocol) fn boot_oci(
 		})?;
 	}
 
-	commit_boot_state(state, &envelope, |handles| {
+	let nsm_response = commit_boot_state(state, &envelope, |handles| {
 		for (digest, artifact) in supplied {
 			handles.put_oci_archive(
 				&digest,
@@ -859,7 +870,9 @@ pub(in crate::protocol) fn boot_oci(
 			)?;
 		}
 		Ok(())
-	})
+	})?;
+	state.begin_oci_status(&v3.manifest);
+	Ok(nsm_response)
 }
 
 pub(in crate::protocol) fn boot_standard(
@@ -1197,6 +1210,59 @@ mod test {
 		std::fs::remove_file(pivot_file).unwrap();
 		std::fs::remove_file(ephemeral_file).unwrap();
 		std::fs::remove_file(manifest_file).unwrap();
+	}
+
+	#[test]
+	fn boot_oci_names_a_missing_or_unexpected_image() {
+		use crate::protocol::oci::{
+			ManifestEnvelopeBytes, OciArtifactV3, OciLayoutArchive,
+		};
+
+		let digest = |hex: &str| {
+			OciDigest::try_from(format!("sha256:{}", hex.repeat(64))).unwrap()
+		};
+		let (approved, other) = (digest("a"), digest("b"));
+		let envelope = ManifestEnvelopeV3 {
+			manifest: manifest::v3::minimal_manifest(&approved),
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		};
+		let payload = |digests: &[&OciDigest]| OciBootPayloadV3 {
+			manifest_envelope: ManifestEnvelopeBytes::new(
+				serde_json::to_vec(&envelope).unwrap(),
+			)
+			.unwrap(),
+			artifacts: digests
+				.iter()
+				.map(|digest| OciArtifactV3 {
+					digest: (*digest).clone(),
+					oci_layout_archive: OciLayoutArchive::new(vec![]).unwrap(),
+				})
+				.collect(),
+		};
+		let handles = Handles::new(
+			"boot_oci_names_a_missing_or_unexpected_image.eph".to_string(),
+			"boot_oci_names_a_missing_or_unexpected_image.quorum".to_string(),
+			"boot_oci_names_a_missing_or_unexpected_image.manifest".to_string(),
+			"boot_oci_names_a_missing_or_unexpected_image.pivot".to_string(),
+		);
+		let mut state =
+			ProtocolState::new(Box::new(MockNsm::new()), handles, None);
+
+		assert_eq!(
+			boot_oci(&mut state, &payload(&[])).unwrap_err(),
+			ProtocolError::InvalidOci(format!(
+				"no OCI artifact for image {}",
+				approved.as_str()
+			))
+		);
+		assert_eq!(
+			boot_oci(&mut state, &payload(&[&approved, &other])).unwrap_err(),
+			ProtocolError::InvalidOci(format!(
+				"no workload of the manifest runs image {}",
+				other.as_str()
+			))
+		);
 	}
 
 	#[test]

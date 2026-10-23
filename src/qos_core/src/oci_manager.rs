@@ -23,14 +23,15 @@ use crate::{
 	oci_runtime::{
 		AllowedDevice, OciRuntimeError, ResolvedMount, RuntimeContainer,
 		RuntimeSandbox, SandboxNamespaces, WorkloadOutput, create_tmpfs,
-		record_error, sandbox_alive, signal_pid, unmount_path, write_config,
+		prepare_node, record_error, sandbox_alive, signal_pid, unmount_path,
+		write_config,
 	},
 	protocol::oci_status::{
-		OciTermination, OciWorkloadStatus, SharedOciStatus,
+		OciStartup, OciTermination, OciWorkloadStatus, SharedOciStatus,
 	},
 	protocol::services::boot::{
 		EnclaveMode, ManifestV3, OciDigest, OciMount, OciName,
-		OciRestartPolicy, QOS_VOLUME_NAME, VolumeV3, WorkloadV3,
+		OciRestartPolicy, VolumeV3, WorkloadV3, manifest::v3::QOS_VOLUME_NAME,
 	},
 };
 
@@ -75,12 +76,10 @@ struct RunningProcess {
 
 type RunningProcesses = Arc<Mutex<BTreeMap<OciName, RunningProcess>>>;
 
-/// Shared by every workload of one group run.
 #[derive(Clone)]
 struct Lifecycle {
 	shutdown: Arc<AtomicBool>,
 	running: RunningProcesses,
-	/// Where every workload's output goes, by the enclave mode.
 	output: WorkloadOutput,
 }
 
@@ -105,13 +104,9 @@ impl Volume {
 		Ok(Self { path: path.to_owned() })
 	}
 
-	/// Create the reserved implicit `qos` volume: a tmpfs under the runtime
-	/// root holding world-readable copies of the approved manifest, the
-	/// quorum key and the live ephemeral key.
-	///
 	/// The reaper starts workloads only after provisioning, which writes the
-	/// live ephemeral key before the quorum key, so the copy never holds the
-	/// setup ephemeral key. The files are a snapshot taken once per boot.
+	/// live ephemeral key before the quorum key, so this volume never holds
+	/// the setup ephemeral key. The files are a snapshot taken once per boot.
 	fn create_qos(
 		handles: &Handles,
 		runtime_root: &Path,
@@ -176,10 +171,18 @@ struct WorkloadRun {
 }
 
 impl WorkloadRun {
-	fn stop(mut self) -> Result<(), OciManagerError> {
+	fn stop(
+		mut self,
+		prepared: &PreparedWorkload,
+	) -> Result<(), OciManagerError> {
 		let mut errors = Vec::new();
 		record_error(&mut errors, self.container.signal(libc::SIGKILL));
-		record_error(&mut errors, self.container.wait());
+		match self.container.wait() {
+			Ok(termination) => prepared.update_status(|status| {
+				status.terminated(status_termination(termination));
+			}),
+			Err(error) => errors.push(error.to_string()),
+		}
 		record_error(&mut errors, self.cleanup());
 		cleanup_result(&errors)
 	}
@@ -200,7 +203,9 @@ impl WorkloadRun {
 
 impl PreparedWorkload {
 	fn update_status(&self, update: impl FnOnce(&mut OciWorkloadStatus)) {
-		if let Some(status) = self.status.write().unwrap().get_mut(&self.name) {
+		if let Some(status) =
+			self.status.write().unwrap().workloads.get_mut(&self.name)
+		{
 			update(status);
 		}
 	}
@@ -320,8 +325,6 @@ impl PreparedWorkload {
 	}
 }
 
-/// One workload run's resolved mounts, the descriptors pinning their device
-/// nodes, and the devices its mounts grant.
 struct Resolved {
 	mounts: Vec<ResolvedMount>,
 	pinned: Vec<File>,
@@ -341,7 +344,7 @@ struct Resolved {
 ///
 /// Panics only if the shared status or lifecycle locks were poisoned.
 #[allow(clippy::too_many_lines)]
-pub fn run_oci_workloads(
+pub(crate) fn run_oci_workloads(
 	handles: &Handles,
 	manifest: &ManifestV3,
 	status: &SharedOciStatus,
@@ -354,17 +357,27 @@ pub fn run_oci_workloads(
 			"OCI runtime root already exists".into(),
 		));
 	}
-	fs::create_dir_all(&runtime_root)?;
+	// Bundle root file systems below the runtime root must permit image
+	// executables; the rest of `/run` stays `noexec`.
+	if let Err(error) =
+		prepare_node().and_then(|()| create_tmpfs(&runtime_root, 0o755, false))
+	{
+		return cleanup_without_sandbox(
+			error.into(),
+			Vec::new(),
+			&runtime_root,
+		);
+	}
 	let images = match load_images(handles, manifest) {
 		Ok(images) => images,
 		Err(error) => {
-			for entry in status.write().unwrap().values_mut() {
+			for entry in status.write().unwrap().workloads.values_mut() {
 				entry.failed(&error, true);
 			}
 			return cleanup_without_sandbox(error, Vec::new(), &runtime_root);
 		}
 	};
-	for entry in status.write().unwrap().values_mut() {
+	for entry in status.write().unwrap().workloads.values_mut() {
 		entry.verified();
 	}
 	let (volumes, volume_paths) =
@@ -423,8 +436,10 @@ pub fn run_oci_workloads(
 				&lifecycle,
 			)
 			.map_err(|error| (error, Vec::new()))?;
-			let mut run =
-				prepared.create_run().map_err(|error| (error, Vec::new()))?;
+			let mut run = prepared.create_run().map_err(|error| {
+				prepared.update_status(|status| status.failed(&error, false));
+				(error, Vec::new())
+			})?;
 			let pid = match run.container.start() {
 				Ok(pid) => pid,
 				Err(error) => {
@@ -438,7 +453,7 @@ pub fn run_oci_workloads(
 				}
 			};
 			register_process(&prepared, pid, run.stop_signal);
-			prepared.update_status(|status| status.running(pid));
+			prepared.update_status(|status| status.running(pid, 0));
 			println!(
 				"OCI[{}] running verified image {}",
 				prepared.name.as_str(),
@@ -458,6 +473,7 @@ pub fn run_oci_workloads(
 			&runtime_root,
 		);
 	}
+	status.write().unwrap().startup = OciStartup::Started;
 	println!("all OCI workloads started");
 	let done = Arc::new(AtomicBool::new(false));
 	let (sandbox_pid, sandbox_namespaces) = sandbox.health_handle();
@@ -521,14 +537,20 @@ fn monitor(
 		unregister_process(prepared, None);
 		let stable = run.started.elapsed() >= STABLE_RUN_TIME;
 		println!("OCI[{}] terminated: {termination:?}", prepared.name.as_str());
-		run.cleanup()?;
-		if prepared.restart == OciRestartPolicy::Never
-			|| prepared.lifecycle.shutdown.load(Ordering::Acquire)
-		{
+		let cleanup = run.cleanup();
+		let terminated = || {
 			prepared.update_status(|status| {
 				status.terminated(status_termination(termination));
 			});
-			return Ok(());
+			Ok(())
+		};
+		if cleanup.is_err() {
+			return terminated().and(cleanup);
+		}
+		if prepared.restart == OciRestartPolicy::Never
+			|| prepared.lifecycle.shutdown.load(Ordering::Acquire)
+		{
+			return terminated();
 		}
 		if stable {
 			backoff = INITIAL_BACKOFF;
@@ -537,18 +559,25 @@ fn monitor(
 			status.restarting(restart_count, backoff);
 		});
 		if sleep_interruptible(backoff, &prepared.lifecycle.shutdown) {
-			return Ok(());
+			return terminated();
 		}
 		loop {
 			if prepared.lifecycle.shutdown.load(Ordering::Acquire) {
-				return Ok(());
+				return terminated();
 			}
 			restart_count += 1;
 			match prepared.create_run() {
 				Ok(mut next) => match next.container.start() {
 					Ok(pid) => {
 						register_process(prepared, pid, next.stop_signal);
-						prepared.update_status(|status| status.running(pid));
+						// The supervisor's stop may already have taken its
+						// list of running processes, which lacks this one.
+						if prepared.lifecycle.shutdown.load(Ordering::Acquire) {
+							signal_pid(pid, libc::SIGKILL)?;
+						}
+						prepared.update_status(|status| {
+							status.running(pid, restart_count);
+						});
 						println!(
 							"OCI[{}] restarted ({restart_count})",
 							prepared.name.as_str()
@@ -565,7 +594,9 @@ fn monitor(
 							"OCI[{}] restart failed: {error}",
 							prepared.name.as_str()
 						);
-						next.cleanup()?;
+						if let Err(error) = next.cleanup() {
+							return terminated().and(Err(error));
+						}
 					}
 				},
 				Err(error) => {
@@ -583,7 +614,7 @@ fn monitor(
 				status.restarting(restart_count, backoff);
 			});
 			if sleep_interruptible(backoff, &prepared.lifecycle.shutdown) {
-				return Ok(());
+				return terminated();
 			}
 		}
 	}
@@ -625,7 +656,6 @@ fn create_volumes(
 			paths.insert(name.clone(), path);
 			volumes.push(volume);
 		}
-		// The reserved `qos` volume exists only when a workload mounts it.
 		let qos_used = manifest.workloads.values().any(|workload| {
 			let WorkloadV3::Oci { mounts, .. } = workload;
 			mounts.iter().any(OciMount::is_qos_volume)
@@ -641,21 +671,14 @@ fn create_volumes(
 	})();
 	match result {
 		Ok(()) => Ok((volumes, paths)),
-		Err(error) => {
-			let cleanup = cleanup_volumes(volumes);
-			if cleanup.is_empty() {
-				Err(error)
-			} else {
-				Err(OciManagerError::Cleanup(format!(
-					"{error}; {}",
-					cleanup.join("; ")
-				)))
-			}
-		}
+		Err(error) => Err(cleanup_cause(error, &cleanup_volumes(volumes))),
 	}
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+	clippy::too_many_arguments,
+	reason = "the workload, its image and volumes, and the group state it starts in"
+)]
 fn prepare_workload(
 	name: &OciName,
 	workload: &WorkloadV3,
@@ -803,11 +826,13 @@ fn cleanup_start_failure(
 	volumes: Vec<Volume>,
 	runtime_root: &Path,
 ) -> Result<(), OciManagerError> {
-	errors.extend(collect_cleanup_errors(runs, |(_, run)| run.stop()));
+	errors.extend(collect_cleanup_errors(runs, |(prepared, run)| {
+		run.stop(&prepared)
+	}));
 	record_error(&mut errors, sandbox.delete());
 	errors.extend(cleanup_volumes(volumes));
 	record_error(&mut errors, remove_runtime_root(runtime_root));
-	cleanup_cause(cause, &errors)
+	Err(cleanup_cause(cause, &errors))
 }
 
 fn cleanup_without_sandbox(
@@ -817,22 +842,20 @@ fn cleanup_without_sandbox(
 ) -> Result<(), OciManagerError> {
 	let mut errors = cleanup_volumes(volumes);
 	record_error(&mut errors, remove_runtime_root(runtime_root));
-	cleanup_cause(cause, &errors)
+	Err(cleanup_cause(cause, &errors))
 }
 
-fn cleanup_cause(
-	cause: OciManagerError,
-	errors: &[String],
-) -> Result<(), OciManagerError> {
+fn cleanup_cause(cause: OciManagerError, errors: &[String]) -> OciManagerError {
 	if errors.is_empty() {
-		Err(cause)
+		cause
 	} else {
-		Err(OciManagerError::Cleanup(format!("{cause}; {}", errors.join("; "))))
+		OciManagerError::Cleanup(format!("{cause}; {}", errors.join("; ")))
 	}
 }
 
 fn remove_runtime_root(path: &Path) -> Result<(), OciManagerError> {
 	if path.exists() {
+		unmount_path(path)?;
 		fs::remove_dir_all(path)?;
 	}
 	Ok(())
@@ -876,13 +899,11 @@ fn prepare_parent_directory(path: &Path) -> Result<(), OciManagerError> {
 	Ok(())
 }
 
-/// Pin the character device node at `path` with an `O_PATH` descriptor,
-/// which does not open the device, and return its numbers.
 fn pin_char_device(
 	path: &Path,
 ) -> Result<(File, AllowedDevice), OciManagerError> {
 	use std::os::unix::fs::FileTypeExt as _;
-	let node = open_beneath_root(path, libc::O_PATH)?;
+	let node = open_beneath_root(path)?;
 	let metadata = node.metadata()?;
 	if !metadata.file_type().is_char_device() {
 		return Err(OciManagerError::Mount(format!(
@@ -897,13 +918,8 @@ fn pin_char_device(
 	))
 }
 
-/// Open the normalized absolute `path` component by component without
-/// following a symbolic link, the last component with `flags`.
 #[allow(unsafe_code)]
-fn open_beneath_root(
-	path: &Path,
-	flags: libc::c_int,
-) -> Result<File, OciManagerError> {
+fn open_beneath_root(path: &Path) -> Result<File, OciManagerError> {
 	use std::os::unix::ffi::OsStrExt as _;
 	if !path.is_absolute()
 		|| path.components().any(|component| {
@@ -929,14 +945,10 @@ fn open_beneath_root(
 			OciManagerError::Mount("device source contains NUL".into())
 		})?;
 		let last = index + 1 == parts.len();
-		let flags = if last {
-			flags | libc::O_NOFOLLOW | libc::O_CLOEXEC
-		} else {
-			libc::O_PATH
-				| libc::O_DIRECTORY
-				| libc::O_NOFOLLOW
-				| libc::O_CLOEXEC
-		};
+		let flags = libc::O_PATH
+			| libc::O_NOFOLLOW
+			| libc::O_CLOEXEC
+			| if last { 0 } else { libc::O_DIRECTORY };
 		// SAFETY: directory and part remain valid through openat; ownership of a
 		// successful descriptor transfers immediately to OwnedFd.
 		let fd = unsafe {

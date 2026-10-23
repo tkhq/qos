@@ -14,6 +14,18 @@ pub const MAX_OCI_LAYOUT_ARCHIVE_BYTES: usize = 120 * MEBIBYTE;
 /// Maximum total image archive bytes in one boot request.
 pub const MAX_OCI_TOTAL_ARCHIVE_BYTES: usize = 120 * MEBIBYTE;
 
+/// A bounded field of an OCI boot payload exceeds its limit. Decoding reports
+/// it apart from malformed bytes.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub(crate) struct OciLimitExceeded(String);
+
+impl OciLimitExceeded {
+	pub(crate) fn find(error: &borsh::io::Error) -> Option<&Self> {
+		error.get_ref()?.downcast_ref()
+	}
+}
+
 fn read_len<R: borsh::io::Read>(
 	reader: &mut R,
 	max: usize,
@@ -23,7 +35,7 @@ fn read_len<R: borsh::io::Read>(
 	if len > max {
 		return Err(borsh::io::Error::new(
 			borsh::io::ErrorKind::InvalidData,
-			format!("{label} exceeds limit"),
+			OciLimitExceeded(format!("{label} exceeds limit")),
 		));
 	}
 	Ok(len)
@@ -151,6 +163,7 @@ impl BorshDeserialize for OciBootPayloadV3 {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::protocol::{ProtocolError, msg::ProtocolMsg};
 
 	#[test]
 	fn decoder_rejects_an_oversized_archive_before_reading_it() {
@@ -165,6 +178,22 @@ mod tests {
 		let oversized =
 			u32::try_from(MAX_OCI_LAYOUT_ARCHIVE_BYTES).unwrap() + 1;
 		encoded.extend_from_slice(&oversized.to_le_bytes());
-		assert!(OciBootPayloadV3::try_from_slice(&encoded).is_err());
+
+		let mut request = borsh::to_vec(&ProtocolMsg::BootStandardOciRequest {
+			payload: OciBootPayloadV3 {
+				manifest_envelope: ManifestEnvelopeBytes::new(vec![]).unwrap(),
+				artifacts: vec![],
+			},
+		})
+		.unwrap();
+		// Keep the variant tag; the payload is the oversized one.
+		request.truncate(1);
+		request.extend_from_slice(&encoded);
+		assert_eq!(
+			ProtocolMsg::from_wire(&request).unwrap_err(),
+			ProtocolError::InvalidOci(
+				"OCI layout archive exceeds limit".into()
+			)
+		);
 	}
 }

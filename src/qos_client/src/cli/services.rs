@@ -9,25 +9,29 @@ use std::{
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::BorshDeserialize;
-use qos_core::protocol::{
-	QosHash,
-	msg::{JsonBytes, ProtocolMsg, ProtocolMsgEncoding},
-	oci::{
-		ManifestEnvelopeBytes, OciArtifactV3, OciBootPayloadV3,
-		OciLayoutArchive,
-	},
-	services::{
-		boot::{
-			Approval, BridgeConfig, DnsConfig, EnclaveMode,
-			Manifest as ManifestV1, ManifestBuilder, ManifestBuilderError,
-			ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
-			ManifestEnvelopeV2, ManifestEnvelopeV3, ManifestSet,
-			ManifestVersion, MemberPubKey, Namespace, NitroConfig, PatchSet,
-			PivotConfig as PivotConfigV1, QuorumMember, RestartPolicy,
-			ShareSet, VersionedManifest, VersionedManifestEnvelope, WorkloadV3,
+use qos_core::{
+	oci_image::check_oci_layout_digest,
+	protocol::{
+		QosHash,
+		msg::{JsonBytes, ProtocolMsg, ProtocolMsgEncoding},
+		oci::{
+			MAX_OCI_TOTAL_ARCHIVE_BYTES, ManifestEnvelopeBytes, OciArtifactV3,
+			OciBootPayloadV3, OciLayoutArchive,
 		},
-		genesis::{GenesisOutput, GenesisSet},
-		key::EncryptedQuorumKey,
+		services::{
+			boot::{
+				Approval, BridgeConfig, DnsConfig, EnclaveMode,
+				Manifest as ManifestV1, ManifestBuilder, ManifestBuilderError,
+				ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
+				ManifestEnvelopeV2, ManifestEnvelopeV3, ManifestSet,
+				ManifestVersion, MemberPubKey, Namespace, NitroConfig,
+				OciDigest, PatchSet, PivotConfig as PivotConfigV1,
+				QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
+				VersionedManifestEnvelope, WorkloadV3,
+			},
+			genesis::{GenesisOutput, GenesisSet},
+			key::EncryptedQuorumKey,
+		},
 	},
 };
 use qos_crypto::{sha_256, sha_384, sha_512};
@@ -1129,7 +1133,10 @@ fn approve_manifest_programmatic_verifications(
 	true
 }
 
-#[allow(clippy::too_many_lines)]
+#[expect(
+	clippy::too_many_lines,
+	reason = "one prompt per manifest decision, in the order the approver reads them"
+)]
 fn approve_manifest_human_verifications<R, W>(
 	manifest: &VersionedManifest,
 	prompter: &mut Prompter<R, W>,
@@ -1213,8 +1220,8 @@ where
 	}
 
 	// Check DNS resolvers for manifests that support DNS configuration
-	if let VersionedManifest::V2(v2_manifest) = manifest {
-		let prompt = match &v2_manifest.dns {
+	if matches!(manifest, VersionedManifest::V2(_) | VersionedManifest::V3(_)) {
+		let prompt = match manifest.dns_config() {
 			None =>
 				"Is this the correct DNS configuration: absent? (y/n)".to_string(),
 			Some(dns) if dns.resolvers.is_empty() =>
@@ -1230,7 +1237,6 @@ where
 		}
 	}
 
-	// Check the signed fields that only Manifest V3 has
 	if let VersionedManifest::V3(v3_manifest) = manifest {
 		let mut prompts = vec![format!(
 			"Is this the correct enclave mode: {}? (y/n)",
@@ -1327,7 +1333,7 @@ pub(crate) struct BootKeyForwardArgs<P: AsRef<Path>> {
 	pub uri: String,
 	pub manifest_envelope_path: P,
 	pub pivot_path: Option<P>,
-	pub oci_layout_archives: Vec<P>,
+	pub oci_layout_archives: Vec<String>,
 	pub attestation_doc_path: P,
 }
 
@@ -1354,7 +1360,7 @@ pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
 		let payload = oci_boot_payload(
 			&args.manifest_envelope_path,
 			envelope,
-			args.oci_layout_archives,
+			&args.oci_layout_archives,
 		)?;
 		post_borsh_attestation(
 			&args.uri,
@@ -1517,7 +1523,7 @@ pub(crate) fn inject_key<P: AsRef<Path>>(
 pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
 	pub uri: String,
 	pub pivot_path: Option<P>,
-	pub oci_layout_archives: Vec<P>,
+	pub oci_layout_archives: Vec<String>,
 	pub manifest_envelope_path: P,
 	pub pcr3_preimage_path: P,
 	pub unsafe_skip_attestation: bool,
@@ -1526,38 +1532,60 @@ pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
 fn oci_boot_payload<P: AsRef<Path>>(
 	manifest_envelope_path: &P,
 	envelope: &ManifestEnvelopeV3,
-	oci_layout_archives: Vec<P>,
+	oci_layout_archives: &[String],
 ) -> Result<OciBootPayloadV3, Error> {
-	let digests: BTreeSet<_> = envelope
+	let required: BTreeSet<_> = envelope
 		.manifest
 		.workloads
 		.values()
 		.map(|workload| workload.image().digest().clone())
 		.collect();
-	if digests.len() != oci_layout_archives.len() {
+	let mut given = BTreeSet::new();
+	let mut artifacts = Vec::with_capacity(oci_layout_archives.len());
+	let mut total = 0_usize;
+	for argument in oci_layout_archives {
+		let (digest, path) = parse_oci_layout_archive(argument)?;
+		if !required.contains(&digest) {
+			return Err(Error::Deserialize(format!(
+				"no workload of the manifest runs image {}",
+				digest.as_str()
+			)));
+		}
+		if !given.insert(digest.clone()) {
+			return Err(Error::Deserialize(format!(
+				"image {} has more than one --oci-layout-archive",
+				digest.as_str()
+			)));
+		}
+		let bytes = fs::read(path).map_err(|error| Error::FailedToRead {
+			path: path.to_owned(),
+			error: error.to_string(),
+		})?;
+		total += bytes.len();
+		if total > MAX_OCI_TOTAL_ARCHIVE_BYTES {
+			return Err(Error::Deserialize(format!(
+				"the OCI layout archives exceed the {MAX_OCI_TOTAL_ARCHIVE_BYTES} \
+				 bytes one boot request can carry"
+			)));
+		}
+		check_oci_layout_digest(&digest, &bytes).map_err(|error| {
+			Error::Deserialize(format!(
+				"{path} does not hold image {}: {error:?}",
+				digest.as_str()
+			))
+		})?;
+		artifacts.push(OciArtifactV3 {
+			digest,
+			oci_layout_archive: OciLayoutArchive::new(bytes)
+				.map_err(|error| Error::Deserialize(error.into()))?,
+		});
+	}
+	if let Some(missing) = required.difference(&given).next() {
 		return Err(Error::Deserialize(format!(
-			"Manifest V3 requires {} distinct OCI archives, got {}",
-			digests.len(),
-			oci_layout_archives.len()
+			"no --oci-layout-archive for image {}",
+			missing.as_str()
 		)));
 	}
-	let artifacts = digests
-		.into_iter()
-		.zip(oci_layout_archives)
-		.map(|(digest, path)| {
-			let bytes = fs::read(path.as_ref()).map_err(|error| {
-				Error::FailedToRead {
-					path: path.as_ref().display().to_string(),
-					error: error.to_string(),
-				}
-			})?;
-			Ok(OciArtifactV3 {
-				digest,
-				oci_layout_archive: OciLayoutArchive::new(bytes)
-					.map_err(|error| Error::Deserialize(error.into()))?,
-			})
-		})
-		.collect::<Result<Vec<_>, Error>>()?;
 	let envelope_bytes = fs::read(manifest_envelope_path.as_ref())
 		.map_err(Error::FailedToReadManifestEnvelopeFile)?;
 	Ok(OciBootPayloadV3 {
@@ -1565,6 +1593,23 @@ fn oci_boot_payload<P: AsRef<Path>>(
 			.map_err(|error| Error::Deserialize(error.into()))?,
 		artifacts,
 	})
+}
+
+fn parse_oci_layout_archive(
+	argument: &str,
+) -> Result<(OciDigest, &str), Error> {
+	let invalid = |reason: String| {
+		Error::Deserialize(format!(
+			"--oci-layout-archive {argument:?} must be sha256:<hex>=<path>: {reason}"
+		))
+	};
+	let (digest, path) =
+		argument.split_once('=').ok_or_else(|| invalid("no `=`".into()))?;
+	if path.is_empty() {
+		return Err(invalid("no path".into()));
+	}
+	let digest = OciDigest::try_from(digest.to_owned()).map_err(invalid)?;
+	Ok((digest, path))
 }
 
 fn boot_standard_attestation_doc_with_fallback(
@@ -1628,7 +1673,7 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 		let payload = oci_boot_payload(
 			&manifest_envelope_path,
 			envelope,
-			oci_layout_archives,
+			&oci_layout_archives,
 		)?;
 		post_borsh_attestation(
 			&uri,
@@ -2901,6 +2946,193 @@ mod tests {
 		proxy_re_encrypt_share_programmatic_verifications,
 	};
 
+	mod oci_layout_archives {
+		use std::fs;
+
+		use qos_core::protocol::services::boot::ManifestEnvelopeV3;
+		use qos_test_primitives::PathWrapper;
+
+		use super::super::oci_boot_payload;
+
+		fn digest(bytes: &[u8]) -> String {
+			format!("sha256:{}", qos_hex::encode(&qos_crypto::sha_256(bytes)))
+		}
+
+		fn tar(files: &[(&str, &[u8])]) -> Vec<u8> {
+			let mut builder = tar::Builder::new(Vec::new());
+			for (path, data) in files {
+				let mut header = tar::Header::new_ustar();
+				header.set_entry_type(tar::EntryType::Regular);
+				header.set_mode(0o644);
+				header.set_size(data.len() as u64);
+				header.set_cksum();
+				builder.append_data(&mut header, path, *data).unwrap();
+			}
+			builder.into_inner().unwrap()
+		}
+
+		fn descriptor(media_type: &str, bytes: &[u8]) -> serde_json::Value {
+			serde_json::json!({
+				"mediaType": media_type,
+				"digest": digest(bytes),
+				"size": bytes.len(),
+			})
+		}
+
+		fn layout(file: &[u8]) -> (String, Vec<u8>) {
+			let layer = tar(&[("app", file)]);
+			// An enclave's platform, whatever machine runs the client.
+			let config = serde_json::to_vec(&serde_json::json!({
+				"architecture": "amd64",
+				"os": "linux",
+				"rootfs": {"type": "layers", "diff_ids": [digest(&layer)]},
+				"config": {"Cmd": ["/app"]},
+			}))
+			.unwrap();
+			let manifest = serde_json::to_vec(&serde_json::json!({
+				"schemaVersion": 2,
+				"mediaType": "application/vnd.oci.image.manifest.v1+json",
+				"config": descriptor(
+					"application/vnd.oci.image.config.v1+json",
+					&config
+				),
+				"layers": [descriptor(
+					"application/vnd.oci.image.layer.v1.tar",
+					&layer
+				)],
+			}))
+			.unwrap();
+			let index = serde_json::to_vec(&serde_json::json!({
+				"schemaVersion": 2,
+				"manifests": [descriptor(
+					"application/vnd.oci.image.manifest.v1+json",
+					&manifest
+				)],
+			}))
+			.unwrap();
+			let blob = |bytes: &[u8]| {
+				format!("blobs/sha256/{}", &digest(bytes)["sha256:".len()..])
+			};
+			let (layer_path, config_path, manifest_path) =
+				(blob(&layer), blob(&config), blob(&manifest));
+			let archive = tar(&[
+				("oci-layout", br#"{"imageLayoutVersion":"1.0.0"}"#),
+				("index.json", &index),
+				(&manifest_path, &manifest),
+				(&config_path, &config),
+				(&layer_path, &layer),
+			]);
+			(digest(&manifest), archive)
+		}
+
+		pub(super) fn envelope(digests: &[&str]) -> ManifestEnvelopeV3 {
+			let pcr = "00".repeat(48);
+			let workloads: serde_json::Map<_, _> = digests
+				.iter()
+				.enumerate()
+				.map(|(index, digest)| {
+					(
+						format!("w{index}"),
+						serde_json::json!({
+							"type": "oci",
+							"image": {"type": "ociManifest", "digest": digest},
+							"restart": "never",
+						}),
+					)
+				})
+				.collect();
+			serde_json::from_value(serde_json::json!({
+				"manifest": {
+					"version": "v3",
+					"namespace": {"name": "n", "nonce": 1, "quorumKey": "0a"},
+					"manifestSet": {"threshold": 1, "members": []},
+					"shareSet": {"threshold": 1, "members": []},
+					"enclave": {
+						"type": "nitro", "mode": "debug",
+						"pcr0": pcr, "pcr1": pcr, "pcr2": pcr, "pcr3": pcr,
+						"awsRootCertificate": "ff", "qosCommit": "c"
+					},
+					"workloads": workloads,
+				},
+				"manifestSetApprovals": [],
+				"shareSetApprovals": [],
+			}))
+			.unwrap()
+		}
+
+		#[test]
+		fn archives_name_their_digest_and_may_come_in_any_order() {
+			let (first, first_archive) = layout(b"first");
+			let (second, second_archive) = layout(b"second");
+			let temp_dir = std::env::temp_dir();
+			let first_path =
+				PathWrapper::from(temp_dir.join("qos_client_oci_first.tar"));
+			let second_path =
+				PathWrapper::from(temp_dir.join("qos_client_oci_second.tar"));
+			let envelope_path =
+				PathWrapper::from(temp_dir.join("qos_client_oci_envelope"));
+			fs::write(&*first_path, &first_archive).unwrap();
+			fs::write(&*second_path, &second_archive).unwrap();
+			fs::write(&*envelope_path, b"envelope").unwrap();
+			let envelope = envelope(&[&first, &second]);
+			let argument =
+				|digest: &str, path: &PathWrapper<std::path::PathBuf>| {
+					format!("{digest}={}", path.as_ref().display())
+				};
+
+			let payload = oci_boot_payload(
+				&envelope_path,
+				&envelope,
+				&[
+					argument(&second, &second_path),
+					argument(&first, &first_path),
+				],
+			)
+			.unwrap();
+			for artifact in &payload.artifacts {
+				let expected = if artifact.digest.as_str() == first {
+					&first_archive
+				} else {
+					&second_archive
+				};
+				assert_eq!(
+					artifact.oci_layout_archive.as_slice(),
+					&expected[..]
+				);
+			}
+
+			let fails = |arguments: &[String], reason: &str| {
+				let error =
+					oci_boot_payload(&envelope_path, &envelope, arguments)
+						.unwrap_err();
+				assert!(format!("{error:?}").contains(reason), "{error:?}");
+			};
+			fails(
+				&[
+					argument(&first, &second_path),
+					argument(&second, &first_path),
+				],
+				"does not hold image",
+			);
+			fails(&[argument(&first, &first_path)], "no --oci-layout-archive");
+			fails(
+				&[
+					argument(&first, &first_path),
+					argument(&first, &first_path),
+					argument(&second, &second_path),
+				],
+				"more than one",
+			);
+			fails(
+				&[argument(&digest(b"other"), &first_path)],
+				"no workload of the manifest",
+			);
+			fails(&[first_path.as_ref().display().to_string()], "no `=`");
+			fails(&[format!("{first}=")], "no path");
+			fails(&["sha256:00=/x".to_string()], "64 lowercase");
+		}
+	}
+
 	struct Setup {
 		manifest: VersionedManifest,
 		manifest_set: ManifestSet,
@@ -3613,6 +3845,50 @@ mod tests {
 					"Is this the correct manifest schema version: v2? (y/n)"
 				);
 				assert_eq!(output[11], expected);
+			}
+		}
+
+		#[test]
+		fn prompts_each_v3_dns_configuration() {
+			for (dns, expected) in [
+				(None, "Is this the correct DNS configuration: absent? (y/n)"),
+				(
+					Some(DnsConfig { resolvers: vec![] }),
+					"Is this the correct DNS configuration: configured with no resolvers? (y/n)",
+				),
+				(
+					Some(DnsConfig {
+						resolvers: vec!["1.1.1.1".parse().unwrap()],
+					}),
+					"Are these the correct DNS resolvers:",
+				),
+			] {
+				let mut manifest =
+					super::oci_layout_archives::envelope(&[&format!(
+						"sha256:{}",
+						"a".repeat(64)
+					)])
+					.manifest;
+				manifest.dns = dns;
+				let manifest = VersionedManifest::V3(manifest);
+
+				let mut vec_out: Vec<u8> = vec![];
+				let vec_in = "yes\n".repeat(32);
+				let mut prompter = Prompter {
+					reader: vec_in.as_bytes(),
+					writer: &mut vec_out,
+				};
+
+				assert!(approve_manifest_human_verifications(
+					&manifest,
+					&mut prompter
+				));
+
+				let output = String::from_utf8(vec_out).unwrap();
+				assert!(
+					output.split('\n').any(|line| line == expected),
+					"{output}"
+				);
 			}
 		}
 	}

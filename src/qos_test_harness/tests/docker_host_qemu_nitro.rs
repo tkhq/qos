@@ -134,12 +134,10 @@ async fn signed_echo_egress_get_url() {
 	cleanup.unwrap();
 }
 
-/// PostgreSQL runs to completion in an `attested` enclave, whose workload
-/// output goes to null as a V2 pivot's does without `debugMode`.
 #[tokio::test]
 async fn postgres_oci_smoke_on_qemu() {
 	let (prepared, _) = prepare().await;
-	let image = prepared.postgres_smoke_image().unwrap();
+	let image = prepared.fixture_image("postgres-smoke").unwrap();
 	let workloads = BTreeMap::from([(
 		name("postgres-smoke"),
 		WorkloadV3::Oci {
@@ -181,7 +179,7 @@ async fn postgres_oci_smoke_on_qemu() {
 #[tokio::test]
 async fn nsm_device_mount_on_qemu() {
 	let (prepared, _) = prepare().await;
-	let image = prepared.device_smoke_image().unwrap();
+	let image = prepared.fixture_image("device-smoke").unwrap();
 	let shared = || OciMount::Volume {
 		source: name("shared"),
 		mount_path: path("/run/shared"),
@@ -232,12 +230,10 @@ async fn nsm_device_mount_on_qemu() {
 	cleanup.unwrap();
 }
 
-/// A workload serves HTTP through the enclave's top-level `bridgeConfig`:
-/// a value written through the ingress bridge reads back through it.
 #[tokio::test]
 async fn kv_http_ingress_on_qemu() {
 	let (prepared, _) = prepare().await;
-	let image = prepared.kv_http_image().unwrap();
+	let image = prepared.fixture_image("kv-http").unwrap();
 	let workloads = BTreeMap::from([(
 		name("kv"),
 		WorkloadV3::Oci {
@@ -289,8 +285,6 @@ async fn kv_http_ingress_on_qemu() {
 	cleanup.unwrap();
 }
 
-/// Write `value` to `name` on the kv-http workload at `base`, retrying until
-/// the ingress bridge and the server answer.
 async fn put_kv(
 	base: &str,
 	name: &str,
@@ -316,7 +310,6 @@ async fn put_kv(
 	}
 }
 
-/// A Manifest V3 with the fixture's namespace, sets and Nitro settings.
 fn v3_manifest(
 	prepared: &PreparedDockerHostQemuNitro,
 	mode: EnclaveMode,

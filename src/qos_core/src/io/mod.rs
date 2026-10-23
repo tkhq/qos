@@ -23,10 +23,8 @@ pub use nix::sys::time::{TimeVal, TimeValLike};
 /// write, since `vhost-device-vsock` loses host bytes that arrive before the
 /// guest accepts (<https://github.com/rust-vmm/vhost-device/issues/963>).
 /// Unset, as on Nitro, nothing waits.
-pub const QEMU_VSOCK_WORKAROUND_ENV: &str = "QOS_QEMU_VSOCK_WORKAROUND";
+const QEMU_VSOCK_WORKAROUND_ENV: &str = "QOS_QEMU_VSOCK_WORKAROUND";
 
-/// Whether to wait after connecting before writing: the `qemu` feature, or
-/// [`QEMU_VSOCK_WORKAROUND_ENV`] set.
 fn qemu_vsock_workaround() -> bool {
 	static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
 	cfg!(feature = "qemu")

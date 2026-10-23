@@ -1,9 +1,6 @@
 //! Manifest V3 schema for OCI workloads.
 
-use std::{
-	collections::{BTreeMap, HashSet},
-	path::Path,
-};
+use std::collections::{BTreeMap, HashSet};
 
 use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
@@ -16,12 +13,11 @@ use super::{DnsConfig, ManifestVersion};
 const MAX_WORKLOADS: usize = 16;
 const MAX_VOLUMES: usize = 16;
 const MAX_MOUNTS_PER_WORKLOAD: usize = 64;
-/// Hex characters in one Nitro PCR (48 bytes).
 const PCR_HEX_LEN: usize = 96;
 
 /// The reserved implicit volume exposing the approved manifest, quorum key and
 /// live ephemeral key. A manifest must not declare a volume with this name.
-pub const QOS_VOLUME_NAME: &str = "qos";
+pub(crate) const QOS_VOLUME_NAME: &str = "qos";
 
 macro_rules! validated_string_wire {
 	($name:ident, $valid_len:expr, $length_error:literal) => {
@@ -185,9 +181,6 @@ impl OciPath {
 		})
 	}
 
-	/// Whether this path equals, contains, or lies below a QOS-owned parent
-	/// path (runtime state, bundles, the implicit `qos` volume, key and
-	/// manifest files).
 	fn parent_owned(&self) -> bool {
 		[
 			"/run/qos-oci",
@@ -214,12 +207,9 @@ impl TryFrom<String> for OciPath {
 				"path must be absolute, normalized, and non-root".into()
 			);
 		}
-		if Path::new(&value).components().any(|component| {
-			matches!(
-				component,
-				std::path::Component::CurDir | std::path::Component::ParentDir
-			)
-		}) {
+		// Path::components would drop an interior `.`, which the string
+		// comparisons of overlaps and parent_owned would then miss.
+		if value.split('/').any(|part| part == "." || part == "..") {
 			return Err("path must not contain . or .. components".into());
 		}
 		Ok(Self(value))
@@ -247,14 +237,14 @@ mod pcr_hex {
 
 	use super::PCR_HEX_LEN;
 
-	pub fn serialize<S: Serializer>(
+	pub(super) fn serialize<S: Serializer>(
 		bytes: &[u8],
 		serializer: S,
 	) -> Result<S::Ok, S::Error> {
 		serializer.serialize_str(&qos_hex::encode(bytes))
 	}
 
-	pub fn deserialize<'de, D: Deserializer<'de>>(
+	pub(super) fn deserialize<'de, D: Deserializer<'de>>(
 		deserializer: D,
 	) -> Result<Vec<u8>, D::Error> {
 		let text = String::deserialize(deserializer)?;
@@ -388,7 +378,7 @@ impl OciDevice {
 	/// The device node in the enclave, and the only path a workload may
 	/// mount it at.
 	#[must_use]
-	pub fn path(self) -> &'static str {
+	pub(crate) fn path(self) -> &'static str {
 		match self {
 			Self::Nsm => "/dev/nsm",
 		}
@@ -436,9 +426,8 @@ impl OciMount {
 		}
 	}
 
-	/// Whether this mount attaches the reserved implicit `qos` volume.
 	#[must_use]
-	pub fn is_qos_volume(&self) -> bool {
+	pub(crate) fn is_qos_volume(&self) -> bool {
 		match self {
 			Self::Volume { source, .. } => source.as_str() == QOS_VOLUME_NAME,
 			Self::Device { .. } => false,
@@ -643,7 +632,6 @@ impl ManifestV3 {
 		Ok(())
 	}
 
-	/// Only distinct `server` entries.
 	fn validate_bridge_config(&self) -> Result<(), String> {
 		let mut ports = HashSet::new();
 		for bridge in &self.bridge_config {
@@ -675,13 +663,12 @@ impl ManifestV3 {
 /// # Errors
 ///
 /// Returns an error naming the repeated member, or the JSON syntax error.
-pub fn reject_duplicate_json_members(buf: &[u8]) -> Result<(), String> {
+pub(super) fn reject_duplicate_json_members(buf: &[u8]) -> Result<(), String> {
 	let mut deserializer = serde_json::Deserializer::from_slice(buf);
 	Distinct::deserialize(&mut deserializer).map_err(|e| e.to_string())?;
 	deserializer.end().map_err(|e| e.to_string())
 }
 
-/// Visits any JSON value, failing on a repeated object member name.
 struct Distinct;
 
 impl<'de> Deserialize<'de> for Distinct {
@@ -725,10 +712,6 @@ impl<'de> serde::de::Visitor<'de> for DistinctVisitor {
 		Ok(())
 	}
 
-	fn visit_none<E>(self) -> Result<(), E> {
-		Ok(())
-	}
-
 	fn visit_unit<E>(self) -> Result<(), E> {
 		Ok(())
 	}
@@ -747,7 +730,7 @@ impl<'de> serde::de::Visitor<'de> for DistinctVisitor {
 	) -> Result<(), A::Error> {
 		let mut seen = HashSet::new();
 		while let Some(key) = map.next_key::<String>()? {
-			if !seen.insert(key.clone()) {
+			if let Some(key) = seen.replace(key) {
 				return Err(A::Error::custom(format!(
 					"duplicate JSON member name: {key}"
 				)));
@@ -779,6 +762,29 @@ pub struct ManifestEnvelopeV3 {
 	pub manifest_set_approvals: Vec<crate::protocol::services::boot::Approval>,
 	/// Share-set signatures.
 	pub share_set_approvals: Vec<crate::protocol::services::boot::Approval>,
+}
+
+/// A Manifest V3 with no approvers and one workload, `app`, that runs `image`.
+#[cfg(test)]
+pub(crate) fn minimal_manifest(image: &OciDigest) -> ManifestV3 {
+	let pcr = "00".repeat(48);
+	serde_json::from_value(serde_json::json!({
+		"version": "v3",
+		"namespace": {"name": "n", "nonce": 1, "quorumKey": "0a"},
+		"manifestSet": {"threshold": 0, "members": []},
+		"shareSet": {"threshold": 0, "members": []},
+		"enclave": {
+			"type": "nitro", "mode": "debug",
+			"pcr0": pcr, "pcr1": pcr, "pcr2": pcr, "pcr3": pcr,
+			"awsRootCertificate": "ff", "qosCommit": "c"
+		},
+		"workloads": {"app": {
+			"type": "oci",
+			"image": {"type": "ociManifest", "digest": image},
+			"restart": "never",
+		}},
+	}))
+	.unwrap()
 }
 
 #[cfg(test)]
@@ -846,7 +852,6 @@ mod tests {
 		serde_json::from_str(DOCUMENTED_JSON).unwrap()
 	}
 
-	/// Decode and validate like the production decoders do.
 	fn decode(value: &serde_json::Value) -> Result<ManifestV3, String> {
 		let bytes = serde_json::to_vec(value).unwrap();
 		let manifest =
@@ -935,7 +940,6 @@ mod tests {
 		let mut value = documented();
 		value["workloads"] = serde_json::json!({});
 		assert!(decode(&value).is_err());
-		// The array form of earlier drafts is gone.
 		value["workloads"] = serde_json::json!([]);
 		assert!(decode(&value).is_err());
 	}
@@ -1010,8 +1014,6 @@ mod tests {
 		}
 	}
 
-	/// As V2's pivot `debugMode`, the mode says nothing about the PCRs:
-	/// either mode takes any PCRs, zero or not.
 	#[test]
 	fn the_mode_does_not_constrain_the_pcrs() {
 		for mode in ["attested", "debug"] {
@@ -1025,8 +1027,6 @@ mod tests {
 		}
 	}
 
-	/// A workload mounts the NSM like any other mount, at its own path only;
-	/// the only device is `nsm`, and a device mount has no other field.
 	#[test]
 	fn the_nsm_mounts_at_its_own_path() {
 		let nsm = serde_json::json!({
@@ -1056,14 +1056,12 @@ mod tests {
 			api_mounts(&mut value).as_array_mut().unwrap().push(mount);
 			assert!(decode(&value).is_err(), "{field} {bad}");
 		}
-		// Twice in one workload: the paths overlap.
 		let mut value = documented();
 		let mounts = api_mounts(&mut value).as_array_mut().unwrap();
 		mounts.push(nsm.clone());
 		mounts.push(nsm);
 		let error = decode(&value).unwrap_err();
 		assert!(error.contains("overlapping"), "{error}");
-		// A volume still may not go below `/dev`.
 		let mut value = documented();
 		api_mounts(&mut value)[0]["mountPath"] = "/dev/nsm".into();
 		assert!(decode(&value).is_err());
@@ -1085,14 +1083,12 @@ mod tests {
 
 	#[test]
 	fn qos_volume_is_reserved_implicit_and_read_only() {
-		// Declared by the manifest: rejected.
 		let mut value = documented();
 		value["volumes"]["qos"] =
 			serde_json::json!({"type": "tmpfs", "mountPath": "/mnt/qos/own"});
 		let error = decode(&value).unwrap_err();
 		assert!(error.contains("reserved"), "{error}");
 
-		// Writable, or readOnly absent (default false): rejected.
 		let mut value = documented();
 		api_mounts(&mut value)[1]["readOnly"] = false.into();
 		let error = decode(&value).unwrap_err();
@@ -1101,8 +1097,6 @@ mod tests {
 		api_mounts(&mut value)[1].as_object_mut().unwrap().remove("readOnly");
 		assert!(decode(&value).is_err());
 
-		// A workload without a qos mount gets nothing; `qos` is mountable
-		// without a top-level declaration.
 		let mut value = documented();
 		api_mounts(&mut value).as_array_mut().unwrap().remove(1);
 		decode(&value).unwrap();
@@ -1111,7 +1105,6 @@ mod tests {
 		api_mounts(&mut value).as_array_mut().unwrap().remove(0);
 		decode(&value).unwrap();
 
-		// Undeclared non-qos source is still rejected.
 		let mut value = documented();
 		api_mounts(&mut value)[0]["source"] = "other".into();
 		let error = decode(&value).unwrap_err();
@@ -1167,7 +1160,6 @@ mod tests {
 			versioned.bridge_config(),
 			[BridgeConfig::Server { port: 3000, host: "0.0.0.0".into() }]
 		);
-		// Absent or empty means no ingress and keeps the encoding.
 		value["bridgeConfig"] = serde_json::json!([]);
 		assert_eq!(
 			qos_json::to_string(&decode(&value).unwrap()).unwrap(),
@@ -1199,13 +1191,14 @@ mod tests {
 			r#"{"a":{"b":1,"b":2}}"#,
 			r#"[{"a":1},{"b":[{"c":1,"c":1}]}]"#,
 			// Different escapes of the same name.
-			r#"{"a":1,"a":2}"#,
-			r#"{"ab":1,"ab":2}"#,
+			r#"{"a":1,"\u0061":2}"#,
+			r#"{"\u0061b":1,"a\u0062":2}"#,
 		] {
-			assert!(reject_duplicate_json_members(bad.as_bytes()).is_err());
+			let error =
+				reject_duplicate_json_members(bad.as_bytes()).unwrap_err();
+			assert!(error.contains("duplicate"), "{bad}: {error}");
 		}
 		assert!(reject_duplicate_json_members(br#"{"a":1} x"#).is_err());
-		// The same name in different objects is fine.
 		reject_duplicate_json_members(br#"{"a":{"x":1},"b":{"x":1}}"#).unwrap();
 
 		let duplicated_workload = DOCUMENTED_JSON.replacen(
@@ -1231,7 +1224,6 @@ mod tests {
 			)
 			.unwrap_err();
 		assert!(error.to_string().contains("duplicate"), "{error}");
-		// The same bytes without the duplicate decode.
 		super::super::VersionedManifestEnvelope::try_from_slice_compat(
 			format!(
 				r#"{{"manifest":{DOCUMENTED_JSON},"manifestSetApprovals":[],"shareSetApprovals":[]}}"#
@@ -1248,6 +1240,8 @@ mod tests {
 			OciDigest::try_from(format!("sha256:{}", "A".repeat(64))).is_err()
 		);
 		assert!(OciPath::try_from("/run/../key".to_string()).is_err());
+		assert!(OciPath::try_from("/run/./qos-oci".to_string()).is_err());
+		assert!(OciPath::try_from("/./dev".to_string()).is_err());
 		assert!(OciPath::try_from("/".to_string()).is_err());
 	}
 }

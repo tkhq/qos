@@ -119,17 +119,27 @@ struct RootFs {
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ImageProcess {
-	#[serde(default)]
+	#[serde(default, deserialize_with = "null_as_default")]
 	entrypoint: Vec<String>,
-	#[serde(default)]
+	#[serde(default, deserialize_with = "null_as_default")]
 	cmd: Vec<String>,
-	#[serde(default)]
+	#[serde(default, deserialize_with = "null_as_default")]
 	env: Vec<String>,
-	#[serde(default)]
+	#[serde(default, deserialize_with = "null_as_default")]
 	user: String,
-	#[serde(default)]
+	#[serde(default, deserialize_with = "null_as_default")]
 	working_dir: String,
 	stop_signal: Option<String>,
+}
+
+/// The OCI image configuration gives an optional property's JSON `null` the
+/// meaning of its absence.
+fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+	D: serde::Deserializer<'de>,
+	T: Default + Deserialize<'de>,
+{
+	Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 #[derive(Deserialize)]
@@ -151,22 +161,7 @@ pub fn verify_oci_layout(
 	archive: &[u8],
 ) -> Result<VerifiedOciImage, ProtocolError> {
 	let files = read_layout(archive)?;
-	let layout: ImageLayout = decode_required(&files, OCI_LAYOUT)?;
-	if layout.version != "1.0.0" {
-		return Err(invalid("unsupported OCI image-layout version"));
-	}
-	let index: ImageIndex = decode_required(&files, OCI_INDEX)?;
-	let root_descriptor = index.manifests.iter().find(|descriptor| {
-		&descriptor.digest == expected
-			&& descriptor.media_type == IMAGE_MANIFEST_MEDIA_TYPE
-	});
-	if index.schema_version != 2 {
-		return Err(invalid("index.json does not select the signed manifest"));
-	}
-	let root_descriptor = root_descriptor.ok_or_else(|| {
-		invalid("index.json does not select the signed manifest")
-	})?;
-	let manifest_bytes = verified_descriptor(&files, root_descriptor)?;
+	let manifest_bytes = root_manifest(&files, expected)?;
 	let manifest: ImageManifest = serde_json::from_slice(manifest_bytes)
 		.map_err(|_| invalid("root descriptor is not an OCI image manifest"))?;
 	if manifest.schema_version != 2
@@ -226,6 +221,45 @@ pub fn verify_oci_layout(
 	})
 }
 
+/// Check only that an OCI image-layout tar selects the image manifest with
+/// this digest, and holds it. Unlike [`verify_oci_layout`], this checks
+/// neither the platform nor the layers, so it can run on a machine of
+/// another architecture than the enclave's.
+///
+/// # Errors
+///
+/// Returns [`ProtocolError::InvalidOci`] for a malformed layout or one that
+/// does not hold the image manifest with this digest.
+pub fn check_oci_layout_digest(
+	expected: &OciDigest,
+	archive: &[u8],
+) -> Result<(), ProtocolError> {
+	root_manifest(&read_layout(archive)?, expected).map(|_| ())
+}
+
+fn root_manifest<'a>(
+	files: &'a BTreeMap<String, Vec<u8>>,
+	expected: &OciDigest,
+) -> Result<&'a [u8], ProtocolError> {
+	let layout: ImageLayout = decode_required(files, OCI_LAYOUT)?;
+	if layout.version != "1.0.0" {
+		return Err(invalid("unsupported OCI image-layout version"));
+	}
+	let index: ImageIndex = decode_required(files, OCI_INDEX)?;
+	let root_descriptor = index
+		.manifests
+		.iter()
+		.find(|descriptor| {
+			index.schema_version == 2
+				&& &descriptor.digest == expected
+				&& descriptor.media_type == IMAGE_MANIFEST_MEDIA_TYPE
+		})
+		.ok_or_else(|| {
+			invalid("index.json does not select the signed manifest")
+		})?;
+	verified_descriptor(files, root_descriptor)
+}
+
 fn read_layout(
 	archive: &[u8],
 ) -> Result<BTreeMap<String, Vec<u8>>, ProtocolError> {
@@ -256,10 +290,7 @@ fn read_layout(
 		if !entry_type.is_file() {
 			return Err(invalid("OCI layout contains a non-regular entry"));
 		}
-		let declared = entry
-			.header()
-			.size()
-			.map_err(|_| invalid("invalid OCI layout file size"))?;
+		let declared = entry.size();
 		if declared > archive.len() as u64 {
 			return Err(invalid("OCI layout file exceeds archive size"));
 		}
@@ -409,6 +440,110 @@ mod tests {
 			builder.finish().unwrap();
 		}
 		assert!(read_layout(&archive).is_err());
+	}
+
+	fn tar(files: &[(&str, &[u8])]) -> Vec<u8> {
+		let mut builder = tar::Builder::new(Vec::new());
+		for (path, data) in files {
+			let mut header = tar::Header::new_ustar();
+			header.set_entry_type(tar::EntryType::Regular);
+			header.set_mode(0o644);
+			header.set_size(data.len() as u64);
+			header.set_cksum();
+			builder.append_data(&mut header, path, *data).unwrap();
+		}
+		builder.into_inner().unwrap()
+	}
+
+	fn descriptor(media_type: &str, bytes: &[u8]) -> serde_json::Value {
+		serde_json::json!({
+			"mediaType": media_type,
+			"digest": digest(bytes).as_str(),
+			"size": bytes.len(),
+		})
+	}
+
+	fn layout(config: &serde_json::Value) -> (OciDigest, Vec<u8>) {
+		let layer = tar(&[("app", b"#!/bin/sh\n")]);
+		let architecture = match std::env::consts::ARCH {
+			"aarch64" => "arm64",
+			_ => "amd64",
+		};
+		let config = serde_json::to_vec(&serde_json::json!({
+			"architecture": architecture,
+			"os": "linux",
+			"rootfs": {"type": "layers", "diff_ids": [digest(&layer).as_str()]},
+			"config": config,
+		}))
+		.unwrap();
+		let manifest = serde_json::to_vec(&serde_json::json!({
+			"schemaVersion": 2,
+			"mediaType": IMAGE_MANIFEST_MEDIA_TYPE,
+			"config": descriptor(IMAGE_CONFIG_MEDIA_TYPE, &config),
+			"layers": [descriptor(LAYER_MEDIA_TYPE, &layer)],
+		}))
+		.unwrap();
+		let index = serde_json::to_vec(&serde_json::json!({
+			"schemaVersion": 2,
+			"manifests": [descriptor(IMAGE_MANIFEST_MEDIA_TYPE, &manifest)],
+		}))
+		.unwrap();
+		let blob =
+			|bytes: &[u8]| format!("blobs/sha256/{}", digest(bytes).hex());
+		let (layer_path, config_path, manifest_path) =
+			(blob(&layer), blob(&config), blob(&manifest));
+		let archive = tar(&[
+			(OCI_LAYOUT, br#"{"imageLayoutVersion":"1.0.0"}"#),
+			(OCI_INDEX, &index),
+			(&manifest_path, &manifest),
+			(&config_path, &config),
+			(&layer_path, &layer),
+		]);
+		(digest(&manifest), archive)
+	}
+
+	#[test]
+	fn null_optional_config_values_mean_absent() {
+		let (digest, archive) = layout(&serde_json::json!({
+			"Entrypoint": null,
+			"Cmd": ["/app"],
+			"Env": null,
+			"User": null,
+			"WorkingDir": null,
+			"StopSignal": null,
+		}));
+		let image = verify_oci_layout(&digest, &archive).unwrap();
+		assert!(image.process.entrypoint.is_empty());
+		assert_eq!(image.process.cmd, ["/app"]);
+		assert!(image.process.env.is_empty());
+		assert!(image.process.user.is_empty());
+		assert_eq!(image.process.working_dir, "/");
+		assert_eq!(image.process.stop_signal, None);
+		let (digest, archive) = layout(&serde_json::json!({"Cmd": "/app"}));
+		assert!(
+			verify_oci_layout(&digest, &archive).is_err(),
+			"a present value keeps its type"
+		);
+	}
+
+	#[test]
+	fn layout_entries_use_the_pax_size() {
+		let mut builder = tar::Builder::new(Vec::new());
+		let record = b"9 size=5\n";
+		let mut pax = tar::Header::new_ustar();
+		pax.set_entry_type(tar::EntryType::XHeader);
+		pax.set_size(record.len() as u64);
+		pax.set_cksum();
+		builder.append_data(&mut pax, "PaxHeaders/blob", &record[..]).unwrap();
+		let mut header = tar::Header::new_ustar();
+		header.set_entry_type(tar::EntryType::Regular);
+		header.set_path("blob").unwrap();
+		header.set_mode(0o644);
+		header.set_size(0);
+		header.set_cksum();
+		builder.append(&header, &b"hello"[..]).unwrap();
+		let files = read_layout(&builder.into_inner().unwrap()).unwrap();
+		assert_eq!(files["blob"], b"hello");
 	}
 
 	#[test]

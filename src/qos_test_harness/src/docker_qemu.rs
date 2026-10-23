@@ -1190,7 +1190,7 @@ impl DockerHostQemuNitroRunner {
 		while start.elapsed() < self.spec.qemu.readiness_timeout {
 			self.fail_if_children_exited()?;
 			match self.run_docker_args_output(
-				self.qos_client_health_docker_args("enclave-status"),
+				self.qos_client_health_docker_args("enclave-oci-status"),
 			) {
 				Ok(output)
 					if output.contains(artifact.digest.as_str())
@@ -1368,10 +1368,10 @@ impl DockerHostQemuNitroRunner {
 				&Pivot { path: workspace.pivot_hash_path.clone() },
 				&workspace,
 			);
-			boot_args.extend([
-				"--oci-layout-archive".into(),
-				self.docker_path(&spec.artifact.path).into_os_string(),
-			]);
+			let mut archive =
+				OsString::from(format!("{}=", spec.artifact.digest.as_str()));
+			archive.push(self.docker_path(&spec.artifact.path));
+			boot_args.extend(["--oci-layout-archive".into(), archive]);
 			self.run_boot_ceremony(
 				&workspace,
 				"qos_client boot-standard OCI",
@@ -1573,7 +1573,6 @@ impl TestRunner for DockerHostQemuNitroRunner {
 }
 
 impl DockerHostQemuNitroRunner {
-	/// The URL tests reach the enclave's server bridge at.
 	fn ingress_url(&self) -> String {
 		format!(
 			"http://{}:{}",
@@ -1581,8 +1580,6 @@ impl DockerHostQemuNitroRunner {
 		)
 	}
 
-	/// Run `qos_bridge` for the booted enclave, with the egress network
-	/// namespace when `bridge_config` has a client entry.
 	async fn start_bridge(
 		&mut self,
 		container_prefix: &str,

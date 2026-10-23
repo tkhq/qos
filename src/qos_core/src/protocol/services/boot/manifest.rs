@@ -22,7 +22,7 @@ pub use v2::{DnsConfig, ManifestEnvelopeV2, ManifestV2};
 pub use v3::{
 	EnclaveMode, EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDevice,
 	OciDigest, OciImageRef, OciMount, OciName, OciPath, OciRestartPolicy,
-	QOS_VOLUME_NAME, VolumeV3, WorkloadV3,
+	VolumeV3, WorkloadV3,
 };
 
 /// Schema version used by versioned manifest tooling.

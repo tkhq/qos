@@ -5,10 +5,67 @@ use std::{
 	sync::{Arc, RwLock},
 };
 
-use super::services::boot::{OciDigest, OciName};
+use super::services::boot::{ManifestV3, OciDigest, OciName};
 
-/// Status map shared by the protocol server and workload manager.
-pub type SharedOciStatus = Arc<RwLock<BTreeMap<OciName, OciWorkloadStatus>>>;
+/// Status shared by the protocol server and workload manager.
+pub(crate) type SharedOciStatus = Arc<RwLock<OciStatus>>;
+
+/// The initial start of the Manifest V3 workload group.
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	Default,
+	PartialEq,
+	Eq,
+	borsh::BorshSerialize,
+	borsh::BorshDeserialize,
+	serde::Serialize,
+	serde::Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
+pub enum OciStartup {
+	/// No Manifest V3 boot was accepted: the enclave runs no OCI workloads.
+	#[default]
+	Inactive,
+	/// A Manifest V3 boot was accepted, and not every workload has started.
+	Starting,
+	/// Every workload has started. The node is ready; later exits follow
+	/// each workload's restart policy.
+	Started,
+	/// A workload failed to prepare or start, so the node boot failed.
+	Failed,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct OciStatus {
+	pub(crate) startup: OciStartup,
+	pub(crate) workloads: BTreeMap<OciName, OciWorkloadStatus>,
+}
+
+impl OciStatus {
+	/// Record an accepted Manifest V3 boot: the group is starting, and each
+	/// workload waits for its verified image. Only the first call counts.
+	pub(crate) fn begin(&mut self, manifest: &ManifestV3) {
+		if self.startup != OciStartup::Inactive {
+			return;
+		}
+		self.startup = OciStartup::Starting;
+		self.workloads = manifest
+			.workloads
+			.iter()
+			.map(|(name, workload)| {
+				(
+					name.clone(),
+					OciWorkloadStatus::pending(
+						name.clone(),
+						workload.image().digest().clone(),
+					),
+				)
+			})
+			.collect();
+	}
+}
 
 /// Initial supported workload kind.
 #[derive(
@@ -153,9 +210,11 @@ impl OciWorkloadStatus {
 		self.image_verification = OciVerificationState::Verified;
 	}
 
-	/// Record a running process.
-	pub fn running(&mut self, pid: i32) {
+	/// Record a running process, started after `restart_count` restart
+	/// attempts.
+	pub fn running(&mut self, pid: i32, restart_count: u64) {
 		self.state = OciWorkloadState::Running;
+		self.restart_count = restart_count;
 		self.pid = Some(pid);
 		self.backoff = None;
 		self.termination = None;
@@ -194,6 +253,30 @@ impl OciWorkloadStatus {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::protocol::services::boot::manifest::v3::minimal_manifest;
+
+	#[test]
+	fn a_boot_begins_the_group_once() {
+		let digest: OciDigest =
+			format!("sha256:{}", "0".repeat(64)).try_into().unwrap();
+		let manifest = minimal_manifest(&digest);
+		let name: OciName = "app".to_owned().try_into().unwrap();
+
+		let mut status = OciStatus::default();
+		assert_eq!(status.startup, OciStartup::Inactive);
+		status.begin(&manifest);
+		assert_eq!(status.startup, OciStartup::Starting);
+		let pending = status.workloads[&name].clone();
+		assert_eq!(pending.state, OciWorkloadState::Waiting);
+		assert_eq!(pending.image_verification, OciVerificationState::Pending);
+
+		status.startup = OciStartup::Started;
+		status.workloads.get_mut(&name).unwrap().running(7, 2);
+		status.begin(&manifest);
+		assert_eq!(status.startup, OciStartup::Started);
+		let running = &status.workloads[&name];
+		assert_eq!((running.pid, running.restart_count), (Some(7), 2));
+	}
 
 	#[test]
 	fn canonical_json_status_roundtrip() {
