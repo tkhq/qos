@@ -715,18 +715,16 @@ fn find_rootfs_path(
 ) -> Result<Option<PathBuf>, ProtocolError> {
 	let normalized =
 		normalized_container_path(&container_path.to_string_lossy())?;
-	let mut pending: VecDeque<_> = normalized
-		.strip_prefix("/")
-		.expect("normalized path is absolute")
-		.components()
-		.filter_map(|component| match component {
-			Component::Normal(part) => Some(part.to_os_string()),
-			_ => None,
-		})
-		.collect();
+	let mut pending: VecDeque<_> = lookup_parts(&normalized).collect();
 	let mut resolved = PathBuf::new();
 	let mut links = 0;
 	while let Some(part) = pending.pop_front() {
+		// As the kernel does, `..` leaves the directory resolved so far, and
+		// stays at the root.
+		if part == ".." {
+			resolved.pop();
+			continue;
+		}
 		let candidate = rootfs.join(&resolved).join(&part);
 		let metadata = match fs::symlink_metadata(&candidate) {
 			Ok(metadata) => metadata,
@@ -744,23 +742,29 @@ fn find_rootfs_path(
 			}
 			let target = fs::read_link(&candidate)
 				.map_err(|_| invalid("failed to read OCI process symlink"))?;
-			let target =
-				normalized_link_target(&resolved.join(&part), &target, true)?;
-			let mut replacement: VecDeque<_> = target
-				.components()
-				.filter_map(|component| match component {
-					Component::Normal(part) => Some(part.to_os_string()),
-					_ => None,
-				})
-				.collect();
+			if target.is_absolute() {
+				resolved.clear();
+			}
+			let mut replacement: VecDeque<_> = lookup_parts(&target).collect();
 			replacement.append(&mut pending);
 			pending = replacement;
-			resolved.clear();
-		} else {
+		} else if metadata.is_dir() || pending.is_empty() {
 			resolved.push(part);
+		} else {
+			return Err(invalid("failed to inspect OCI process path"));
 		}
 	}
 	Ok(Some(rootfs.join(resolved)))
+}
+
+/// A path's names and `..`s in order. No name is `..`, which
+/// `Path::components` yields as `ParentDir`.
+fn lookup_parts(path: &Path) -> impl Iterator<Item = std::ffi::OsString> {
+	path.components().filter_map(|component| match component {
+		Component::Normal(part) => Some(part.to_os_string()),
+		Component::ParentDir => Some("..".into()),
+		Component::RootDir | Component::CurDir | Component::Prefix(_) => None,
+	})
 }
 
 fn normalized_container_path(value: &str) -> Result<PathBuf, ProtocolError> {
@@ -1302,6 +1306,34 @@ mod tests {
 		assert!(
 			resolve_identity(&root, "app").is_err(),
 			"a dangling link has no records"
+		);
+		fs::remove_dir_all(root).unwrap();
+	}
+
+	#[test]
+	fn a_link_target_follows_its_links_before_dot_dot() {
+		let root = scratch("identity-dot-dot");
+		fs::create_dir_all(root.join("etc")).unwrap();
+		fs::create_dir_all(root.join("meta/versions/v1/current")).unwrap();
+		fs::write(
+			root.join("meta/versions/v1/passwd"),
+			"app:x:1000:1000::/:/bin/sh\n",
+		)
+		.unwrap();
+		fs::write(root.join("meta/passwd"), "app:x:0:0::/:/bin/sh\n").unwrap();
+		std::os::unix::fs::symlink(
+			"versions/v1/current",
+			root.join("meta/active"),
+		)
+		.unwrap();
+		std::os::unix::fs::symlink(
+			"/meta/active/../passwd",
+			root.join("etc/passwd"),
+		)
+		.unwrap();
+		assert_eq!(
+			resolve_identity(&root, "app").unwrap(),
+			ProcessIdentity { uid: 1000, gid: 1000, additional_gids: vec![] }
 		);
 		fs::remove_dir_all(root).unwrap();
 	}
