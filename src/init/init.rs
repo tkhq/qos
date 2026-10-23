@@ -18,13 +18,14 @@ fn init_rootfs() {
 	use libc::{MS_NODEV, MS_NOEXEC, MS_NOSUID};
 	let no_dse = MS_NODEV | MS_NOSUID | MS_NOEXEC;
 	let no_se = MS_NOSUID | MS_NOEXEC;
+	let no_ds = MS_NODEV | MS_NOSUID;
 	let args = [
 		("devtmpfs", "/dev", "devtmpfs", no_se, "mode=0755"),
 		("devpts", "/dev/pts", "devpts", no_se, ""),
 		("shm", "/dev/shm", "tmpfs", no_dse, "mode=0755"),
 		("proc", "/proc", "proc", no_dse, "hidepid=2"),
 		("tmpfs", "/run", "tmpfs", no_dse, "mode=0755"),
-		("tmpfs", "/tmp", "tmpfs", no_dse, ""),
+		("tmpfs", "/tmp", "tmpfs", no_ds, ""),
 		("sysfs", "/sys", "sysfs", no_dse, ""),
 		("cgroup_root", "/sys/fs/cgroup", "tmpfs", no_dse, "mode=0755"),
 	];
