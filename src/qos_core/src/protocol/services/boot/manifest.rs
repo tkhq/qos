@@ -20,8 +20,9 @@ pub mod v3;
 pub use builder::{ManifestBuilder, ManifestBuilderError};
 pub use v2::{DnsConfig, ManifestEnvelopeV2, ManifestV2};
 pub use v3::{
-	EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDigest, OciImageRef,
-	OciMount, OciName, OciPath, OciRestartPolicy, VolumeV3, WorkloadV3,
+	EnclaveMode, EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDevice,
+	OciDigest, OciImageRef, OciMount, OciName, OciPath, OciRestartPolicy,
+	QOS_VOLUME_NAME, VolumeV3, WorkloadV3,
 };
 
 /// Schema version used by versioned manifest tooling.
@@ -232,23 +233,27 @@ impl VersionedManifest {
 		}
 	}
 
-	/// Return bridge configuration entries, or an empty slice for v0 manifests.
+	/// Return bridge configuration entries: the pivot's for v1 and v2, the
+	/// top-level workload-group ingress for v3, and none for v0.
 	#[must_use]
 	pub fn bridge_config(&self) -> &[BridgeConfig] {
 		match self {
+			Self::V3(manifest) => &manifest.bridge_config,
 			Self::V2(manifest) => &manifest.pivot.bridge_config,
 			Self::V1(manifest) => &manifest.pivot.bridge_config,
-			Self::V3(_) | Self::V0(_) => &[],
+			Self::V0(_) => &[],
 		}
 	}
 
-	/// Return whether pivot debug mode is enabled.
+	/// Return whether debug mode is enabled: the pivot's, or a Manifest V3's
+	/// enclave mode.
 	#[must_use]
 	pub fn debug_mode(&self) -> bool {
 		match self {
+			Self::V3(manifest) => manifest.enclave.mode() == EnclaveMode::Debug,
 			Self::V2(manifest) => manifest.pivot.debug_mode,
 			Self::V1(manifest) => manifest.pivot.debug_mode,
-			Self::V3(_) | Self::V0(_) => false,
+			Self::V0(_) => false,
 		}
 	}
 
@@ -291,7 +296,9 @@ impl VersionedManifest {
 					|value| value.get("version")?.as_str().map(str::to_owned),
 				);
 			return match version.as_deref() {
-				Some("v3") => serde_json::from_slice::<ManifestV3>(buf)
+				Some("v3") => v3::reject_duplicate_json_members(buf)
+					.map_err(serde::de::Error::custom)
+					.and_then(|()| serde_json::from_slice::<ManifestV3>(buf))
 					.and_then(|manifest| {
 						manifest
 							.validate()
@@ -548,7 +555,11 @@ impl VersionedManifestEnvelope {
 						.map(str::to_owned)
 				});
 			return match version.as_deref() {
-				Some("v3") => serde_json::from_slice::<ManifestEnvelopeV3>(buf)
+				Some("v3") => v3::reject_duplicate_json_members(buf)
+					.map_err(serde::de::Error::custom)
+					.and_then(|()| {
+						serde_json::from_slice::<ManifestEnvelopeV3>(buf)
+					})
 					.and_then(|envelope| {
 						envelope
 							.manifest

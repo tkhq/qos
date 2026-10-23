@@ -58,12 +58,11 @@ Each supported volume type and file system MUST state whether it supports the se
 
 A later extension MAY add group-based shared-volume policy, similar to a volume group setting. Such a field MUST be optional and MUST have precise ownership and permission rules. It is not part of this extension's initial manifest shape.
 
-## Parent QOS file mounts
+## Implicit `qos` volume
 
-QOS MUST map or idmap a parent-QOS file mount so that its source ownership is
-valid inside the workload. The manifest MUST NOT contain a parent UID or GID.
-If a later file-mount extension adds an owner, that owner MUST be
-container-relative.
+QOS MUST make the ownership of the implicit `qos` volume valid inside the
+workload. Its granted files MUST remain readable under the selected identity
+mechanism. The manifest MUST NOT contain a parent UID or GID.
 
 ## Runtime requirements
 

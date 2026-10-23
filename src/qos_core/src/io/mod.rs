@@ -17,6 +17,24 @@ use nix::sys::socket::VsockAddr;
 use nix::sys::socket::{AddressFamily, SockaddrLike, UnixAddr};
 pub use nix::sys::time::{TimeVal, TimeValLike};
 
+/// Set (to any value) to turn on the `qemu` feature's VSOCK workaround at
+/// runtime, so release binaries run against QEMU's `vhost-device-vsock`, as in
+/// the QEMU test harness: after connecting a stream, wait before the first
+/// write, since `vhost-device-vsock` loses host bytes that arrive before the
+/// guest accepts (<https://github.com/rust-vmm/vhost-device/issues/963>).
+/// Unset, as on Nitro, nothing waits.
+pub const QEMU_VSOCK_WORKAROUND_ENV: &str = "QOS_QEMU_VSOCK_WORKAROUND";
+
+/// Whether to wait after connecting before writing: the `qemu` feature, or
+/// [`QEMU_VSOCK_WORKAROUND_ENV`] set.
+fn qemu_vsock_workaround() -> bool {
+	static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+	cfg!(feature = "qemu")
+		|| *ENABLED.get_or_init(|| {
+			std::env::var_os(QEMU_VSOCK_WORKAROUND_ENV).is_some()
+		})
+}
+
 /// QOS I/O error
 #[derive(Debug)]
 pub enum IOError {

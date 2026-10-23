@@ -80,12 +80,34 @@ impl PreparedDockerHostQemuNitro {
 	pub(crate) fn postgres_smoke_image(
 		&self,
 	) -> Result<OciImageArtifact, PreparationError> {
+		self.fixture_image("postgres-smoke")
+	}
+
+	/// Build the HTTP file server as a linux/amd64 OCI image-layout tar.
+	pub(crate) fn kv_http_image(
+		&self,
+	) -> Result<OciImageArtifact, PreparationError> {
+		self.fixture_image("kv-http")
+	}
+
+	/// Build the device self-test as a linux/amd64 OCI image-layout tar.
+	pub(crate) fn device_smoke_image(
+		&self,
+	) -> Result<OciImageArtifact, PreparationError> {
+		self.fixture_image("device-smoke")
+	}
+
+	/// Build the fixture image `tests/fixtures/<name>` as a linux/amd64 OCI
+	/// image-layout tar.
+	fn fixture_image(
+		&self,
+		name: &str,
+	) -> Result<OciImageArtifact, PreparationError> {
 		let output =
-			self._session.work_dir.join("artifacts/postgres-smoke.oci.tar");
+			self._session.work_dir.join(format!("artifacts/{name}.oci.tar"));
 		std::fs::create_dir_all(output.parent().unwrap())?;
-		let context = self
-			.root
-			.join("src/qos_test_harness/tests/fixtures/postgres-smoke");
+		let context =
+			self.root.join("src/qos_test_harness/tests/fixtures").join(name);
 		run_checked(
 			Command::new("docker")
 				.current_dir(&context)
@@ -101,7 +123,7 @@ impl PreparedDockerHostQemuNitro {
 				.arg("--output")
 				.arg(format!("type=oci,dest={}", output.display()))
 				.arg("."),
-			"build PostgreSQL OCI smoke image",
+			&format!("build OCI fixture image {name}"),
 		)?;
 		let mut archive = tar::Archive::new(File::open(&output)?);
 		let mut index = None;
@@ -116,17 +138,17 @@ impl PreparedDockerHostQemuNitro {
 		}
 		let index: serde_json::Value =
 			serde_json::from_slice(&index.ok_or_else(|| {
-				PreparationError::Command(
-					"PostgreSQL OCI output has no index.json".into(),
-				)
+				PreparationError::Command(format!(
+					"{name} OCI output has no index.json"
+				))
 			})?)
 			.map_err(|error| PreparationError::Command(error.to_string()))?;
 		let digest = index["manifests"][0]["digest"]
 			.as_str()
 			.ok_or_else(|| {
-				PreparationError::Command(
-					"PostgreSQL OCI index has no image digest".into(),
-				)
+				PreparationError::Command(format!(
+					"{name} OCI index has no image digest"
+				))
 			})?
 			.to_string()
 			.try_into()

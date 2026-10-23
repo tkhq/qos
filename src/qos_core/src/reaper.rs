@@ -86,21 +86,32 @@ async fn run_server(
 
 async fn run_oci_workload_group(
 	handles: &Handles,
+	core_socket: &SocketAddress,
 	manifest: ManifestV3,
 	status: &SharedOciStatus,
 ) {
-	status.write().unwrap().extend(manifest.workloads.iter().map(|workload| {
-		let name = workload.name().clone();
-		(
-			name.clone(),
-			OciWorkloadStatus::pending(name, workload.image().digest().clone()),
-		)
-	}));
+	status.write().unwrap().extend(manifest.workloads.iter().map(
+		|(name, workload)| {
+			(
+				name.clone(),
+				OciWorkloadStatus::pending(
+					name.clone(),
+					workload.image().digest().clone(),
+				),
+			)
+		},
+	));
 	println!("Reaper::execute about to start OCI workloads");
 	let handles = handles.clone();
 	let status = Arc::clone(status);
 	let shutdown = Arc::new(AtomicBool::new(false));
 	let worker_shutdown = Arc::clone(&shutdown);
+	let (sandbox_ready, sandbox) =
+		tokio::sync::oneshot::channel::<std::io::Result<fs::File>>();
+	#[cfg(target_os = "linux")]
+	run_sandbox_bridges(core_socket, &manifest.bridge_config, sandbox);
+	#[cfg(not(target_os = "linux"))]
+	let _ = (core_socket, sandbox);
 	let mut worker = tokio::task::spawn_blocking(move || {
 		#[cfg(target_os = "linux")]
 		{
@@ -109,12 +120,17 @@ async fn run_oci_workload_group(
 				&manifest,
 				&status,
 				&worker_shutdown,
+				|namespaces| {
+					// The open handle keeps the namespace for the bridges.
+					let _ =
+						sandbox_ready.send(fs::File::open(&namespaces.network));
+				},
 			)
 			.map_err(|error| error.to_string())
 		}
 		#[cfg(not(target_os = "linux"))]
 		{
-			let _ = (handles, manifest, status, worker_shutdown);
+			let _ = (handles, manifest, status, worker_shutdown, sandbox_ready);
 			Err("OCI workloads require Linux".to_owned())
 		}
 	});
@@ -187,6 +203,56 @@ fn run_bridges(
 	}
 
 	Ok(())
+}
+
+/// Serve a Manifest V3 `bridgeConfig` once the workload sandbox exists
+/// (`sandbox` yields its open network namespace). Each `server` entry listens
+/// on VSOCK `port`, as a V2 pivot bridge does, and connects every stream to
+/// `127.0.0.1:port` from inside the sandbox network namespace, where the
+/// workloads listen. Validation admits only `server` entries.
+#[cfg(target_os = "linux")]
+fn run_sandbox_bridges(
+	core_socket: &SocketAddress,
+	bridges: &[BridgeConfig],
+	sandbox: tokio::sync::oneshot::Receiver<std::io::Result<fs::File>>,
+) {
+	if bridges.is_empty() {
+		println!("skipping OCI ingress bridge, not configured");
+		return;
+	}
+	let core_socket = core_socket.clone();
+	let bridges = bridges.to_vec();
+	tokio::spawn(async move {
+		// A group that fails before its sandbox exists drops the sender.
+		let Ok(netns) = sandbox.await else { return };
+		let result = (|| {
+			let connector =
+				Arc::new(crate::oci_runtime::SandboxTcpConnector::new(netns?)?);
+			for bridge in &bridges {
+				let BridgeConfig::Server { port, .. } = bridge else {
+					continue;
+				};
+				let app_pool =
+					StreamPool::single(core_socket.with_port(*port)?)?;
+				let target =
+					SocketAddrV4::new(Ipv4Addr::LOCALHOST, *port).into();
+				let connector = Arc::clone(&connector);
+				HostBridge::new(app_pool, target).vsock_to_tcp_via(
+					move |address| {
+						let connector = Arc::clone(&connector);
+						async move { connector.connect(address).await }
+					},
+				);
+				println!(
+					"OCI ingress: VSOCK port {port} to 127.0.0.1:{port} in the workload sandbox"
+				);
+			}
+			Ok::<(), IOError>(())
+		})();
+		if let Err(error) = result {
+			eprintln!("failed to run OCI ingress bridges: {error:?}");
+		}
+	});
 }
 
 // dummy placeholder
@@ -315,7 +381,13 @@ impl Reaper {
 			.expect("Checked above that the manifest exists.")
 			.manifest();
 		if let VersionedManifest::V3(oci_manifest) = manifest {
-			run_oci_workload_group(handles, oci_manifest, &oci_status).await;
+			run_oci_workload_group(
+				handles,
+				&core_socket,
+				oci_manifest,
+				&oci_status,
+			)
+			.await;
 			tokio::time::sleep(OCI_STATUS_EXIT_DELAY).await;
 			*inter_state.write().unwrap() = InterState::Quitting;
 			if let Err(error) = server_worker.await {

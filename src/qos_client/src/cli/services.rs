@@ -18,13 +18,13 @@ use qos_core::protocol::{
 	},
 	services::{
 		boot::{
-			Approval, BridgeConfig, DnsConfig, Manifest as ManifestV1,
-			ManifestBuilder, ManifestBuilderError,
+			Approval, BridgeConfig, DnsConfig, EnclaveMode,
+			Manifest as ManifestV1, ManifestBuilder, ManifestBuilderError,
 			ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
 			ManifestEnvelopeV2, ManifestEnvelopeV3, ManifestSet,
 			ManifestVersion, MemberPubKey, Namespace, NitroConfig, PatchSet,
 			PivotConfig as PivotConfigV1, QuorumMember, RestartPolicy,
-			ShareSet, VersionedManifest, VersionedManifestEnvelope,
+			ShareSet, VersionedManifest, VersionedManifestEnvelope, WorkloadV3,
 		},
 		genesis::{GenesisOutput, GenesisSet},
 		key::EncryptedQuorumKey,
@@ -1129,6 +1129,7 @@ fn approve_manifest_programmatic_verifications(
 	true
 }
 
+#[allow(clippy::too_many_lines)]
 fn approve_manifest_human_verifications<R, W>(
 	manifest: &VersionedManifest,
 	prompter: &mut Prompter<R, W>,
@@ -1189,8 +1190,8 @@ where
 		}
 	}
 
-	// Check pivot debug mode
-	{
+	// Check pivot debug mode; a Manifest V3's is its enclave mode, below
+	if !matches!(manifest, VersionedManifest::V3(_)) {
 		let prompt = format!(
 			"Is this the correct pivot debug mode: {}? (y/n)",
 			manifest.debug_mode()
@@ -1226,6 +1227,35 @@ where
 		};
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
+		}
+	}
+
+	// Check the signed fields that only Manifest V3 has
+	if let VersionedManifest::V3(v3_manifest) = manifest {
+		let mut prompts = vec![format!(
+			"Is this the correct enclave mode: {}? (y/n)",
+			match v3_manifest.enclave.mode() {
+				EnclaveMode::Attested =>
+					"attested (workload output is discarded)",
+				EnclaveMode::Debug => "debug (workload output is printed)",
+			}
+		)];
+		for (name, workload) in &v3_manifest.workloads {
+			let WorkloadV3::Oci { image, restart, mounts } = workload;
+			prompts.push(format!(
+				"Is this the correct OCI workload `{}`:\nimage {}\nrestart {restart:?}\nmounts {mounts:?}\n(y/n)",
+				name.as_str(),
+				image.digest().as_str(),
+			));
+		}
+		prompts.push(format!(
+			"Are these the correct top-level volumes:\n{:?}?\n(y/n)",
+			v3_manifest.volumes
+		));
+		for prompt in prompts {
+			if !prompter.prompt_is_yes(&prompt) {
+				return false;
+			}
 		}
 	}
 
@@ -1501,7 +1531,7 @@ fn oci_boot_payload<P: AsRef<Path>>(
 	let digests: BTreeSet<_> = envelope
 		.manifest
 		.workloads
-		.iter()
+		.values()
 		.map(|workload| workload.image().digest().clone())
 		.collect();
 	if digests.len() != oci_layout_archives.len() {

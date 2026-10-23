@@ -5,7 +5,6 @@ use std::{
 	ffi::CString,
 	fs::{self, File},
 	os::fd::{AsRawFd, FromRawFd, OwnedFd},
-	os::unix::ffi::OsStrExt,
 	os::unix::fs::MetadataExt,
 	panic::{AssertUnwindSafe, catch_unwind},
 	path::{Component, Path, PathBuf},
@@ -19,19 +18,19 @@ use std::{
 
 use crate::{
 	handles::Handles,
-	oci_bundle::{build_rootfs, prepare_directory_target, prepare_file_target},
+	oci_bundle::{build_rootfs, prepare_directory_target},
 	oci_image::{VerifiedOciImage, verify_oci_layout},
 	oci_runtime::{
-		OciRuntimeError, ResolvedMount, RuntimeContainer, RuntimeSandbox,
-		SandboxNamespaces, create_tmpfs, record_error, sandbox_alive,
-		signal_pid, unmount_path, write_config,
+		AllowedDevice, OciRuntimeError, ResolvedMount, RuntimeContainer,
+		RuntimeSandbox, SandboxNamespaces, WorkloadOutput, create_tmpfs,
+		record_error, sandbox_alive, signal_pid, unmount_path, write_config,
 	},
 	protocol::oci_status::{
 		OciTermination, OciWorkloadStatus, SharedOciStatus,
 	},
 	protocol::services::boot::{
-		ManifestV3, OciDigest, OciMount, OciName, OciRestartPolicy, VolumeV3,
-		WorkloadV3,
+		EnclaveMode, ManifestV3, OciDigest, OciMount, OciName,
+		OciRestartPolicy, QOS_VOLUME_NAME, VolumeV3, WorkloadV3,
 	},
 };
 
@@ -76,10 +75,13 @@ struct RunningProcess {
 
 type RunningProcesses = Arc<Mutex<BTreeMap<OciName, RunningProcess>>>;
 
+/// Shared by every workload of one group run.
 #[derive(Clone)]
 struct Lifecycle {
 	shutdown: Arc<AtomicBool>,
 	running: RunningProcesses,
+	/// Where every workload's output goes, by the enclave mode.
+	output: WorkloadOutput,
 }
 
 struct Volume {
@@ -101,6 +103,46 @@ impl Volume {
 		}
 		create_tmpfs(path, 0o1777, false)?;
 		Ok(Self { path: path.to_owned() })
+	}
+
+	/// Create the reserved implicit `qos` volume: a tmpfs under the runtime
+	/// root holding world-readable copies of the approved manifest, the
+	/// quorum key and the live ephemeral key.
+	///
+	/// The reaper starts workloads only after provisioning, which writes the
+	/// live ephemeral key before the quorum key, so the copy never holds the
+	/// setup ephemeral key. The files are a snapshot taken once per boot.
+	fn create_qos(
+		handles: &Handles,
+		runtime_root: &Path,
+	) -> Result<Self, OciManagerError> {
+		use std::{io::Write as _, os::unix::fs::OpenOptionsExt as _};
+
+		let files = handles.read_qos_volume_files()?;
+		let path = runtime_root.join(QOS_VOLUME_NAME);
+		fs::create_dir(&path)?;
+		create_tmpfs(&path, 0o755, true)?;
+		let volume = Self { path };
+		let written = (|| {
+			for (name, bytes) in &files {
+				let mut file = fs::OpenOptions::new()
+					.write(true)
+					.create_new(true)
+					.mode(0o444)
+					.open(volume.path.join(name))?;
+				file.write_all(bytes)?;
+			}
+			Ok::<(), std::io::Error>(())
+		})();
+		match written {
+			Ok(()) => Ok(volume),
+			Err(error) => match volume.delete() {
+				Ok(()) => Err(error.into()),
+				Err(cleanup) => {
+					Err(OciManagerError::Cleanup(format!("{error}; {cleanup}")))
+				}
+			},
+		}
 	}
 
 	fn delete(self) -> Result<(), OciManagerError> {
@@ -127,7 +169,8 @@ struct PreparedWorkload {
 struct WorkloadRun {
 	container: RuntimeContainer,
 	bundle: PathBuf,
-	pinned_files: Vec<File>,
+	/// Descriptors pinning the device nodes this run's mounts bind.
+	pinned: Vec<File>,
 	started: Instant,
 	stop_signal: i32,
 }
@@ -145,7 +188,7 @@ impl WorkloadRun {
 		let bundle = self.bundle.clone();
 		let mut errors = Vec::new();
 		record_error(&mut errors, self.container.delete());
-		drop(self.pinned_files);
+		drop(self.pinned);
 		if bundle.exists()
 			&& let Err(error) = fs::remove_dir_all(bundle)
 		{
@@ -177,21 +220,28 @@ impl PreparedWorkload {
 			fs::create_dir_all(&bundle)?;
 			let process = build_rootfs(&self.image, &rootfs)
 				.map_err(|error| OciManagerError::Image(error.to_string()))?;
-			let (mounts, pinned_files) = self.resolve_mounts(&rootfs)?;
+			let Resolved { mounts, pinned, devices } =
+				self.resolve_mounts(&rootfs)?;
 			write_config(
 				&bundle,
 				&rootfs,
 				&process,
 				&self.sandbox,
 				&mounts,
+				&devices,
 				&self.name,
 			)?;
-			let container =
-				RuntimeContainer::create(&self.name, &bundle, &state)?;
+			let container = RuntimeContainer::create(
+				&self.name,
+				&bundle,
+				&state,
+				&devices,
+				self.lifecycle.output,
+			)?;
 			Ok(WorkloadRun {
 				container,
 				bundle: bundle.clone(),
-				pinned_files,
+				pinned,
 				started: Instant::now(),
 				stop_signal: process.stop_signal,
 			})
@@ -225,9 +275,10 @@ impl PreparedWorkload {
 	fn resolve_mounts(
 		&self,
 		rootfs: &Path,
-	) -> Result<(Vec<ResolvedMount>, Vec<File>), OciManagerError> {
+	) -> Result<Resolved, OciManagerError> {
 		let mut resolved = Vec::with_capacity(self.mounts.len());
 		let mut pinned = Vec::new();
+		let mut devices = Vec::new();
 		for mount in &self.mounts {
 			match mount {
 				OciMount::Volume { source, mount_path, read_only } => {
@@ -241,38 +292,46 @@ impl PreparedWorkload {
 					resolved.push(ResolvedMount {
 						source: source.clone(),
 						destination,
-						file: false,
 						read_only: *read_only,
+						device: false,
 					});
 				}
-				OciMount::File { source, mount_path, read_only } => {
-					let file = pin_regular_file(
-						Path::new(source.as_str()),
-						!*read_only,
-					)?;
-					let destination = PathBuf::from(mount_path.as_str());
-					prepare_file_target(rootfs, &destination).map_err(
-						|error| OciManagerError::Mount(error.to_string()),
-					)?;
+				// The manifest validated the path: the device's own, in the
+				// workload's runtime-owned `/dev`, where libcontainer creates
+				// the target. Only this workload's device policy allows it.
+				OciMount::Device { source, mount_path } => {
+					let (node, device) =
+						pin_char_device(Path::new(source.path()))?;
 					resolved.push(ResolvedMount {
 						source: PathBuf::from(format!(
 							"/proc/self/fd/{}",
-							file.as_raw_fd()
+							node.as_raw_fd()
 						)),
-						destination,
-						file: true,
-						read_only: *read_only,
+						destination: PathBuf::from(mount_path.as_str()),
+						read_only: true,
+						device: true,
 					});
-					pinned.push(file);
+					pinned.push(node);
+					devices.push(device);
 				}
 			}
 		}
-		Ok((resolved, pinned))
+		Ok(Resolved { mounts: resolved, pinned, devices })
 	}
+}
+
+/// One workload run's resolved mounts, the descriptors pinning their device
+/// nodes, and the devices its mounts grant.
+struct Resolved {
+	mounts: Vec<ResolvedMount>,
+	pinned: Vec<File>,
+	devices: Vec<AllowedDevice>,
 }
 
 /// Run all required Manifest V3 workloads until every `never` workload has
 /// terminated. `always` workloads continue until the node is stopped.
+/// `sandbox_ready` runs once the shared namespace sandbox exists, before any
+/// workload starts, so ingress can attach to its network namespace.
 ///
 /// # Errors
 ///
@@ -287,6 +346,7 @@ pub fn run_oci_workloads(
 	manifest: &ManifestV3,
 	status: &SharedOciStatus,
 	shutdown: &Arc<AtomicBool>,
+	sandbox_ready: impl FnOnce(&SandboxNamespaces),
 ) -> Result<(), OciManagerError> {
 	let runtime_root = PathBuf::from(RUNTIME_ROOT);
 	if runtime_root.exists() {
@@ -307,12 +367,17 @@ pub fn run_oci_workloads(
 	for entry in status.write().unwrap().values_mut() {
 		entry.verified();
 	}
-	let (volumes, volume_paths) = match create_volumes(manifest) {
-		Ok(volumes) => volumes,
-		Err(error) => {
-			return cleanup_without_sandbox(error, Vec::new(), &runtime_root);
-		}
-	};
+	let (volumes, volume_paths) =
+		match create_volumes(handles, manifest, &runtime_root) {
+			Ok(volumes) => volumes,
+			Err(error) => {
+				return cleanup_without_sandbox(
+					error,
+					Vec::new(),
+					&runtime_root,
+				);
+			}
+		};
 	let sandbox = match RuntimeSandbox::create(&runtime_root) {
 		Ok(sandbox) => sandbox,
 		Err(error) => {
@@ -323,14 +388,19 @@ pub fn run_oci_workloads(
 			);
 		}
 	};
+	sandbox_ready(&sandbox.namespaces);
 	let volume_paths = Arc::new(volume_paths);
 	let lifecycle = Lifecycle {
 		shutdown: Arc::clone(shutdown),
 		running: Arc::new(Mutex::new(BTreeMap::new())),
+		output: match manifest.enclave.mode() {
+			EnclaveMode::Debug => WorkloadOutput::Reprinted,
+			EnclaveMode::Attested => WorkloadOutput::Discarded,
+		},
 	};
 	let mut runs = Vec::with_capacity(manifest.workloads.len());
 	let startup = (|| {
-		for workload in &manifest.workloads {
+		for (name, workload) in &manifest.workloads {
 			let sandbox_alive = sandbox.is_alive();
 			if shutdown.load(Ordering::Acquire) || !sandbox_alive {
 				let error = if sandbox_alive {
@@ -343,6 +413,7 @@ pub fn run_oci_workloads(
 				return Err((error, Vec::new()));
 			}
 			let prepared = prepare_workload(
+				name,
 				workload,
 				&images,
 				&volume_paths,
@@ -523,7 +594,7 @@ fn load_images(
 	manifest: &ManifestV3,
 ) -> Result<BTreeMap<OciDigest, Arc<VerifiedOciImage>>, OciManagerError> {
 	let mut images = BTreeMap::new();
-	for workload in &manifest.workloads {
+	for workload in manifest.workloads.values() {
 		let digest = workload.image().digest();
 		if images.contains_key(digest) {
 			continue;
@@ -540,35 +611,53 @@ fn load_images(
 }
 
 fn create_volumes(
+	handles: &Handles,
 	manifest: &ManifestV3,
+	runtime_root: &Path,
 ) -> Result<(Vec<Volume>, BTreeMap<OciName, PathBuf>), OciManagerError> {
 	let mut volumes = Vec::new();
 	let mut paths = BTreeMap::new();
-	for (name, volume) in &manifest.volumes {
-		let VolumeV3::Tmpfs { mount_path } = volume;
-		let path = PathBuf::from(mount_path.as_str());
-		match Volume::create(&path) {
-			Ok(volume) => {
-				paths.insert(name.clone(), path);
-				volumes.push(volume);
-			}
-			Err(error) => {
-				let cleanup = cleanup_volumes(volumes);
-				return if cleanup.is_empty() {
-					Err(error)
-				} else {
-					Err(OciManagerError::Cleanup(format!(
-						"{error}; {}",
-						cleanup.join("; ")
-					)))
-				};
+	let result = (|| {
+		for (name, volume) in &manifest.volumes {
+			let VolumeV3::Tmpfs { mount_path } = volume;
+			let path = PathBuf::from(mount_path.as_str());
+			let volume = Volume::create(&path)?;
+			paths.insert(name.clone(), path);
+			volumes.push(volume);
+		}
+		// The reserved `qos` volume exists only when a workload mounts it.
+		let qos_used = manifest.workloads.values().any(|workload| {
+			let WorkloadV3::Oci { mounts, .. } = workload;
+			mounts.iter().any(OciMount::is_qos_volume)
+		});
+		if qos_used {
+			let volume = Volume::create_qos(handles, runtime_root)?;
+			let name = OciName::try_from(QOS_VOLUME_NAME.to_owned())
+				.expect("the reserved volume name is a valid OCI name");
+			paths.insert(name, volume.path.clone());
+			volumes.push(volume);
+		}
+		Ok::<(), OciManagerError>(())
+	})();
+	match result {
+		Ok(()) => Ok((volumes, paths)),
+		Err(error) => {
+			let cleanup = cleanup_volumes(volumes);
+			if cleanup.is_empty() {
+				Err(error)
+			} else {
+				Err(OciManagerError::Cleanup(format!(
+					"{error}; {}",
+					cleanup.join("; ")
+				)))
 			}
 		}
 	}
-	Ok((volumes, paths))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn prepare_workload(
+	name: &OciName,
 	workload: &WorkloadV3,
 	images: &BTreeMap<OciDigest, Arc<VerifiedOciImage>>,
 	volumes: &Arc<BTreeMap<OciName, PathBuf>>,
@@ -577,7 +666,7 @@ fn prepare_workload(
 	status: &SharedOciStatus,
 	lifecycle: &Lifecycle,
 ) -> Result<PreparedWorkload, OciManagerError> {
-	let WorkloadV3::Oci { name, image, restart, mounts } = workload;
+	let WorkloadV3::Oci { image, restart, mounts } = workload;
 	let digest = image.digest().clone();
 	Ok(PreparedWorkload {
 		name: name.clone(),
@@ -787,17 +876,41 @@ fn prepare_parent_directory(path: &Path) -> Result<(), OciManagerError> {
 	Ok(())
 }
 
-#[allow(unsafe_code)]
-fn pin_regular_file(
+/// Pin the character device node at `path` with an `O_PATH` descriptor,
+/// which does not open the device, and return its numbers.
+fn pin_char_device(
 	path: &Path,
-	writable: bool,
+) -> Result<(File, AllowedDevice), OciManagerError> {
+	use std::os::unix::fs::FileTypeExt as _;
+	let node = open_beneath_root(path, libc::O_PATH)?;
+	let metadata = node.metadata()?;
+	if !metadata.file_type().is_char_device() {
+		return Err(OciManagerError::Mount(format!(
+			"{} is not a character device",
+			path.display()
+		)));
+	}
+	let rdev = metadata.rdev();
+	Ok((
+		node,
+		AllowedDevice { major: libc::major(rdev), minor: libc::minor(rdev) },
+	))
+}
+
+/// Open the normalized absolute `path` component by component without
+/// following a symbolic link, the last component with `flags`.
+#[allow(unsafe_code)]
+fn open_beneath_root(
+	path: &Path,
+	flags: libc::c_int,
 ) -> Result<File, OciManagerError> {
+	use std::os::unix::ffi::OsStrExt as _;
 	if !path.is_absolute()
 		|| path.components().any(|component| {
 			matches!(component, Component::CurDir | Component::ParentDir)
 		}) {
 		return Err(OciManagerError::Mount(
-			"file source is not a normalized absolute path".into(),
+			"device source is not a normalized absolute path".into(),
 		));
 	}
 	let mut directory = File::open("/")?;
@@ -809,17 +922,15 @@ fn pin_regular_file(
 		})
 		.collect();
 	if parts.is_empty() {
-		return Err(OciManagerError::Mount("file source is root".into()));
+		return Err(OciManagerError::Mount("device source is root".into()));
 	}
 	for (index, part) in parts.iter().enumerate() {
 		let part = CString::new(part.as_bytes()).map_err(|_| {
-			OciManagerError::Mount("file source contains NUL".into())
+			OciManagerError::Mount("device source contains NUL".into())
 		})?;
 		let last = index + 1 == parts.len();
 		let flags = if last {
-			(if writable { libc::O_RDWR } else { libc::O_RDONLY })
-				| libc::O_NOFOLLOW
-				| libc::O_CLOEXEC
+			flags | libc::O_NOFOLLOW | libc::O_CLOEXEC
 		} else {
 			libc::O_PATH
 				| libc::O_DIRECTORY
@@ -834,13 +945,9 @@ fn pin_regular_file(
 		if fd < 0 {
 			return Err(std::io::Error::last_os_error().into());
 		}
+		// SAFETY: openat returned a new descriptor this function owns.
 		let owned = unsafe { OwnedFd::from_raw_fd(fd) };
 		directory = File::from(owned);
-	}
-	if !directory.metadata()?.is_file() {
-		return Err(OciManagerError::Mount(
-			"file source is not a regular file".into(),
-		));
 	}
 	Ok(directory)
 }

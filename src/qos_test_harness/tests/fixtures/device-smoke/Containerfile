@@ -1,0 +1,4 @@
+FROM alpine:3.20
+COPY --chmod=755 smoke.sh /usr/local/bin/qos-device-smoke
+ENTRYPOINT ["/usr/local/bin/qos-device-smoke"]
+CMD []
