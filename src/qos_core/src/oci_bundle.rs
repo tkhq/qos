@@ -2,7 +2,7 @@
 
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
-	ffi::CString,
+	ffi::{CString, OsStr},
 	fs::{self, OpenOptions},
 	io::{Cursor, Read},
 	os::unix::{ffi::OsStrExt, fs::PermissionsExt},
@@ -126,10 +126,7 @@ fn apply_layer(root: &Path, bytes: &[u8]) -> Result<(), ProtocolError> {
 		archive.entries().map_err(|_| invalid("invalid OCI layer tar"))?;
 	let mut seen = HashSet::new();
 	let mut directories = Vec::new();
-	for (index, entry) in entries.enumerate() {
-		if index >= MAX_LAYER_ENTRIES {
-			return Err(invalid("OCI layer entry-count limit exceeded"));
-		}
+	for entry in entries {
 		let mut entry =
 			entry.map_err(|_| invalid("invalid OCI layer entry"))?;
 		let relative = layer_path(&entry)?;
@@ -146,11 +143,10 @@ fn apply_layer(root: &Path, bytes: &[u8]) -> Result<(), ProtocolError> {
 			if !kind.is_dir() {
 				return Err(invalid("OCI layer root entry is not a directory"));
 			}
-			directories.push(entry_metadata(
-				&mut entry,
-				root.to_path_buf(),
-				false,
-			)?);
+			directories.push((
+				relative,
+				entry_metadata(&mut entry, root.to_path_buf(), false)?,
+			));
 			continue;
 		}
 		ensure_safe_parents(root, &relative)?;
@@ -159,7 +155,7 @@ fn apply_layer(root: &Path, bytes: &[u8]) -> Result<(), ProtocolError> {
 			entry_metadata(&mut entry, destination.clone(), kind.is_symlink())?;
 		if kind.is_dir() {
 			ensure_layer_directory(&destination)?;
-			directories.push(metadata);
+			directories.push((relative, metadata));
 		} else if kind.is_file() {
 			remove_path_if_present(&destination)?;
 			let mut file = OpenOptions::new()
@@ -208,10 +204,17 @@ fn apply_layer(root: &Path, bytes: &[u8]) -> Result<(), ProtocolError> {
 	}
 	// Directory metadata is applied last so child creation cannot alter it or
 	// be blocked by its final permissions. Children precede parents.
-	directories.sort_by_cached_key(|metadata| {
-		std::cmp::Reverse(metadata.path.components().count())
+	directories.sort_by_cached_key(|(relative, _)| {
+		std::cmp::Reverse(relative.components().count())
 	});
-	for metadata in directories {
+	for (relative, metadata) in directories {
+		// A later entry of this layer may have replaced an ancestor with a
+		// symlink, which apply_metadata would follow out of the rootfs.
+		if lower_directory(root, &relative)?.is_none() {
+			return Err(invalid(
+				"OCI layer replaced a directory entry's parent",
+			));
+		}
 		apply_metadata(&metadata)?;
 	}
 	Ok(())
@@ -222,7 +225,10 @@ fn apply_whiteouts(root: &Path, bytes: &[u8]) -> Result<(), ProtocolError> {
 	let entries = archive
 		.entries_with_seek()
 		.map_err(|_| invalid("invalid OCI layer tar"))?;
-	for entry in entries {
+	for (index, entry) in entries.enumerate() {
+		if index >= MAX_LAYER_ENTRIES {
+			return Err(invalid("OCI layer entry-count limit exceeded"));
+		}
 		let entry = entry.map_err(|_| invalid("invalid OCI layer entry"))?;
 		let relative = layer_path(&entry)?;
 		if let Some(whiteout) = whiteout_name(&relative) {
@@ -348,8 +354,12 @@ fn ensure_safe_parents(
 	Ok(())
 }
 
-fn whiteout_name(relative: &Path) -> Option<&str> {
-	relative.file_name()?.to_str()?.strip_prefix(WHITEOUT_PREFIX)
+fn whiteout_name(relative: &Path) -> Option<&OsStr> {
+	relative
+		.file_name()?
+		.as_bytes()
+		.strip_prefix(WHITEOUT_PREFIX.as_bytes())
+		.map(OsStr::from_bytes)
 }
 
 /// Remove what one whiteout marker hides in the lower layers. A marker must be
@@ -360,7 +370,7 @@ fn whiteout_name(relative: &Path) -> Option<&str> {
 fn apply_whiteout<R: Read>(
 	root: &Path,
 	relative: &Path,
-	whiteout: &str,
+	whiteout: &OsStr,
 	entry: &tar::Entry<'_, R>,
 ) -> Result<(), ProtocolError> {
 	if !entry.header().entry_type().is_file() || entry.size() != 0 {
@@ -368,11 +378,12 @@ fn apply_whiteout<R: Read>(
 	}
 	let opaque =
 		relative.file_name().is_some_and(|name| name == OPAQUE_WHITEOUT);
+	let name = whiteout.as_bytes();
 	if !opaque
-		&& (whiteout.is_empty()
-			|| whiteout == "."
-			|| whiteout == ".."
-			|| whiteout.starts_with(WHITEOUT_PREFIX))
+		&& (name.is_empty()
+			|| name == b"."
+			|| name == b".."
+			|| name.starts_with(WHITEOUT_PREFIX.as_bytes()))
 	{
 		return Err(invalid("invalid OCI whiteout"));
 	}
@@ -852,6 +863,13 @@ fn read_identity_file(
 ) -> Result<String, ProtocolError> {
 	match find_rootfs_path(rootfs, Path::new(path))? {
 		None => Ok(String::new()),
+		// Reading a FIFO would block the boot forever.
+		Some(host)
+			if !fs::symlink_metadata(&host)
+				.is_ok_and(|found| found.is_file()) =>
+		{
+			Err(invalid(format!("image {path} is not a regular file")))
+		}
 		Some(host) => fs::read_to_string(host)
 			.map_err(|_| invalid(format!("failed to read image {path}"))),
 	}
@@ -989,6 +1007,7 @@ mod tests {
 	enum Entry<'a> {
 		File(&'a str, &'a [u8]),
 		Dir(&'a str),
+		Symlink(&'a str, &'a str),
 		Pax(Vec<(&'a str, &'a [u8])>),
 	}
 
@@ -1020,6 +1039,12 @@ mod tests {
 				Entry::Dir(path) => {
 					header.set_entry_type(tar::EntryType::Directory);
 					header.set_mode(0o750);
+					(path, Vec::new())
+				}
+				Entry::Symlink(path, target) => {
+					header.set_entry_type(tar::EntryType::Symlink);
+					header.set_mode(0o777);
+					header.set_link_name(target).unwrap();
 					(path, Vec::new())
 				}
 				Entry::Pax(records) => {
@@ -1107,6 +1132,67 @@ mod tests {
 		apply_layer(&rootfs, &layer(&[Entry::File("a/.wh..wh..opq", b"")]))
 			.unwrap();
 		assert_eq!(fs::read(root.join("elsewhere/x")).unwrap(), b"keep");
+		fs::remove_dir_all(root).unwrap();
+	}
+
+	#[test]
+	fn whiteouts_remove_lower_entries_whose_names_are_not_utf8() {
+		let root = scratch("whiteout-bytes");
+		let name = OsStr::from_bytes(b"\xff");
+		fs::create_dir(root.join("a")).unwrap();
+		fs::write(root.join("a").join(name), b"lower").unwrap();
+		let mut header = tar::Header::new_ustar();
+		header.set_entry_type(tar::EntryType::Regular);
+		header.set_mode(0o644);
+		header.set_path(OsStr::from_bytes(b"a/.wh.\xff")).unwrap();
+		header.set_size(0);
+		header.set_cksum();
+		let mut builder = tar::Builder::new(Vec::new());
+		builder.append(&header, &[][..]).unwrap();
+		apply_layer(&root, &builder.into_inner().unwrap()).unwrap();
+		assert!(!root.join("a").join(name).exists());
+		assert!(!root.join("a").join(OsStr::from_bytes(b".wh.\xff")).exists());
+		fs::remove_dir_all(root).unwrap();
+	}
+
+	#[test]
+	fn directory_metadata_does_not_follow_a_later_symlink() {
+		let root = scratch("late-symlink");
+		let rootfs = root.join("rootfs");
+		let elsewhere = root.join("elsewhere");
+		fs::create_dir_all(elsewhere.join("inside")).unwrap();
+		fs::set_permissions(
+			elsewhere.join("inside"),
+			fs::Permissions::from_mode(0o700),
+		)
+		.unwrap();
+		fs::create_dir(&rootfs).unwrap();
+		assert!(
+			apply_layer(
+				&rootfs,
+				&layer(&[
+					Entry::Dir("x/inside/"),
+					Entry::Symlink("x", elsewhere.to_str().unwrap()),
+				])
+			)
+			.is_err()
+		);
+		assert_eq!(
+			fs::metadata(elsewhere.join("inside"))
+				.unwrap()
+				.permissions()
+				.mode() & 0o777,
+			0o700
+		);
+		fs::remove_dir_all(root).unwrap();
+	}
+
+	#[test]
+	fn identity_files_must_be_regular_files() {
+		let root = scratch("fifo-passwd");
+		fs::create_dir(root.join("etc")).unwrap();
+		mkfifo(&root.join("etc/passwd"), 0o644).unwrap();
+		assert!(resolve_identity(&root, "app").is_err());
 		fs::remove_dir_all(root).unwrap();
 	}
 

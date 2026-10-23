@@ -88,7 +88,6 @@ async fn run_oci_workload_group(
 	// The V3 boot route began the status already; this covers a manifest
 	// that was in place before this process started.
 	status.write().unwrap().begin(&manifest);
-	OCI_GROUP_RAN.store(true, Ordering::Release);
 	println!("Reaper::execute about to start OCI workloads");
 	let handles = handles.clone();
 	let worker_status = Arc::clone(status);
@@ -146,16 +145,6 @@ async fn run_oci_workload_group(
 		Ok(Err(error)) => eprintln!("OCI workload group failed: {error}"),
 		Err(error) => eprintln!("OCI workload monitor join failed: {error}"),
 	}
-}
-
-/// Set once this process starts a Manifest V3 workload group.
-static OCI_GROUP_RAN: AtomicBool = AtomicBool::new(false);
-
-/// Whether this process has started a Manifest V3 workload group. Such a
-/// group stops its workloads on ctrl+c or SIGTERM and needs time to do so.
-#[must_use]
-pub fn oci_group_ran() -> bool {
-	OCI_GROUP_RAN.load(Ordering::Acquire)
 }
 
 #[cfg(unix)]

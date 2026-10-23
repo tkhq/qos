@@ -171,10 +171,18 @@ struct WorkloadRun {
 }
 
 impl WorkloadRun {
-	fn stop(mut self) -> Result<(), OciManagerError> {
+	fn stop(
+		mut self,
+		prepared: &PreparedWorkload,
+	) -> Result<(), OciManagerError> {
 		let mut errors = Vec::new();
 		record_error(&mut errors, self.container.signal(libc::SIGKILL));
-		record_error(&mut errors, self.container.wait());
+		match self.container.wait() {
+			Ok(termination) => prepared.update_status(|status| {
+				status.terminated(status_termination(termination));
+			}),
+			Err(error) => errors.push(error.to_string()),
+		}
 		record_error(&mut errors, self.cleanup());
 		cleanup_result(&errors)
 	}
@@ -529,13 +537,16 @@ fn monitor(
 		unregister_process(prepared, None);
 		let stable = run.started.elapsed() >= STABLE_RUN_TIME;
 		println!("OCI[{}] terminated: {termination:?}", prepared.name.as_str());
-		run.cleanup()?;
+		let cleanup = run.cleanup();
 		let terminated = || {
 			prepared.update_status(|status| {
 				status.terminated(status_termination(termination));
 			});
 			Ok(())
 		};
+		if cleanup.is_err() {
+			return terminated().and(cleanup);
+		}
 		if prepared.restart == OciRestartPolicy::Never
 			|| prepared.lifecycle.shutdown.load(Ordering::Acquire)
 		{
@@ -559,6 +570,11 @@ fn monitor(
 				Ok(mut next) => match next.container.start() {
 					Ok(pid) => {
 						register_process(prepared, pid, next.stop_signal);
+						// The supervisor's stop may already have taken its
+						// list of running processes, which lacks this one.
+						if prepared.lifecycle.shutdown.load(Ordering::Acquire) {
+							signal_pid(pid, libc::SIGKILL)?;
+						}
 						prepared.update_status(|status| {
 							status.running(pid, restart_count);
 						});
@@ -578,7 +594,9 @@ fn monitor(
 							"OCI[{}] restart failed: {error}",
 							prepared.name.as_str()
 						);
-						next.cleanup()?;
+						if let Err(error) = next.cleanup() {
+							return terminated().and(Err(error));
+						}
 					}
 				},
 				Err(error) => {
@@ -808,7 +826,9 @@ fn cleanup_start_failure(
 	volumes: Vec<Volume>,
 	runtime_root: &Path,
 ) -> Result<(), OciManagerError> {
-	errors.extend(collect_cleanup_errors(runs, |(_, run)| run.stop()));
+	errors.extend(collect_cleanup_errors(runs, |(prepared, run)| {
+		run.stop(&prepared)
+	}));
 	record_error(&mut errors, sandbox.delete());
 	errors.extend(cleanup_volumes(volumes));
 	record_error(&mut errors, remove_runtime_root(runtime_root));

@@ -1220,8 +1220,8 @@ where
 	}
 
 	// Check DNS resolvers for manifests that support DNS configuration
-	if let VersionedManifest::V2(v2_manifest) = manifest {
-		let prompt = match &v2_manifest.dns {
+	if matches!(manifest, VersionedManifest::V2(_) | VersionedManifest::V3(_)) {
+		let prompt = match manifest.dns_config() {
 			None =>
 				"Is this the correct DNS configuration: absent? (y/n)".to_string(),
 			Some(dns) if dns.resolvers.is_empty() =>
@@ -3025,7 +3025,7 @@ mod tests {
 			(digest(&manifest), archive)
 		}
 
-		fn envelope(digests: &[&str]) -> ManifestEnvelopeV3 {
+		pub(super) fn envelope(digests: &[&str]) -> ManifestEnvelopeV3 {
 			let pcr = "00".repeat(48);
 			let workloads: serde_json::Map<_, _> = digests
 				.iter()
@@ -3845,6 +3845,50 @@ mod tests {
 					"Is this the correct manifest schema version: v2? (y/n)"
 				);
 				assert_eq!(output[11], expected);
+			}
+		}
+
+		#[test]
+		fn prompts_each_v3_dns_configuration() {
+			for (dns, expected) in [
+				(None, "Is this the correct DNS configuration: absent? (y/n)"),
+				(
+					Some(DnsConfig { resolvers: vec![] }),
+					"Is this the correct DNS configuration: configured with no resolvers? (y/n)",
+				),
+				(
+					Some(DnsConfig {
+						resolvers: vec!["1.1.1.1".parse().unwrap()],
+					}),
+					"Are these the correct DNS resolvers:",
+				),
+			] {
+				let mut manifest =
+					super::oci_layout_archives::envelope(&[&format!(
+						"sha256:{}",
+						"a".repeat(64)
+					)])
+					.manifest;
+				manifest.dns = dns;
+				let manifest = VersionedManifest::V3(manifest);
+
+				let mut vec_out: Vec<u8> = vec![];
+				let vec_in = "yes\n".repeat(32);
+				let mut prompter = Prompter {
+					reader: vec_in.as_bytes(),
+					writer: &mut vec_out,
+				};
+
+				assert!(approve_manifest_human_verifications(
+					&manifest,
+					&mut prompter
+				));
+
+				let output = String::from_utf8(vec_out).unwrap();
+				assert!(
+					output.split('\n').any(|line| line == expected),
+					"{output}"
+				);
 			}
 		}
 	}

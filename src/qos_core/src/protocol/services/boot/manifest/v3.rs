@@ -1,9 +1,6 @@
 //! Manifest V3 schema for OCI workloads.
 
-use std::{
-	collections::{BTreeMap, HashSet},
-	path::Path,
-};
+use std::collections::{BTreeMap, HashSet};
 
 use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
@@ -210,12 +207,9 @@ impl TryFrom<String> for OciPath {
 				"path must be absolute, normalized, and non-root".into()
 			);
 		}
-		if Path::new(&value).components().any(|component| {
-			matches!(
-				component,
-				std::path::Component::CurDir | std::path::Component::ParentDir
-			)
-		}) {
+		// Path::components would drop an interior `.`, which the string
+		// comparisons of overlaps and parent_owned would then miss.
+		if value.split('/').any(|part| part == "." || part == "..") {
 			return Err("path must not contain . or .. components".into());
 		}
 		Ok(Self(value))
@@ -1246,6 +1240,8 @@ mod tests {
 			OciDigest::try_from(format!("sha256:{}", "A".repeat(64))).is_err()
 		);
 		assert!(OciPath::try_from("/run/../key".to_string()).is_err());
+		assert!(OciPath::try_from("/run/./qos-oci".to_string()).is_err());
+		assert!(OciPath::try_from("/./dev".to_string()).is_err());
 		assert!(OciPath::try_from("/".to_string()).is_err());
 	}
 }

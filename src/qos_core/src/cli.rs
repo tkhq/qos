@@ -188,7 +188,7 @@ impl CLI {
 			println!("{}", opts.parsed.info());
 		} else {
 			// start reaper in a task so we can terminate on ctrl+c properly
-			let reaper = tokio::spawn(async move {
+			tokio::spawn(async move {
 				Reaper::execute(
 					&Handles::new(
 						opts.ephemeral_file(),
@@ -206,15 +206,6 @@ impl CLI {
 
 			eprintln!("qos_core: Reaper running, press ctrl+c to quit");
 			let _ = tokio::signal::ctrl_c().await;
-			// A Manifest V3 workload group stops its workloads on the same
-			// signal: give it time to finish.
-			if crate::reaper::oci_group_ran() {
-				let _ = tokio::time::timeout(
-					std::time::Duration::from_secs(15),
-					reaper,
-				)
-				.await;
-			}
 		}
 	}
 }

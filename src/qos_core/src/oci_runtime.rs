@@ -1065,7 +1065,8 @@ fn bind_mount(
 /// lock.
 ///
 /// The container's init process waits for `start`, so the child exits once the
-/// container exists, and QOS, which runs as PID 1, adopts the init process.
+/// container exists, and QOS adopts the init process: it is PID 1 in the
+/// enclave and a child subreaper (`prepare_node`) elsewhere.
 /// The child's failure is written to `failure` for the parent to report.
 #[expect(unsafe_code, reason = "fork and _exit are libc calls")]
 fn build_in_forked_child(
@@ -1260,8 +1261,15 @@ const CGROUP_ROOT: &str = "/sys/fs/cgroup";
 /// # Errors
 ///
 /// Returns an error when a limit or the cgroup v2 mount cannot be applied.
-#[expect(unsafe_code, reason = "setrlimit and mount are libc calls")]
+#[expect(unsafe_code, reason = "prctl, setrlimit and mount are libc calls")]
 pub(crate) fn prepare_node() -> Result<(), OciRuntimeError> {
+	// Each container's init process outlives the forked child that creates
+	// it, so it moves to the nearest subreaper. Outside the enclave QOS is not
+	// PID 1, and only a subreaper can still wait for its workloads.
+	// SAFETY: PR_SET_CHILD_SUBREAPER takes integer arguments only.
+	if unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) } < 0 {
+		return Err(std::io::Error::last_os_error().into());
+	}
 	fs::write("/proc/sys/kernel/pid_max", NODE_MAX_PROCESSES)?;
 	fs::write("/proc/sys/kernel/threads-max", NODE_MAX_PROCESSES)?;
 	fs::write("/proc/sys/fs/file-max", NODE_MAX_OPEN_FILES)?;

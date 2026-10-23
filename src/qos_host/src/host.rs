@@ -177,15 +177,19 @@ impl HostServer {
 		let encoded_request = ProtocolMsg::OciStatusRequest
 			.to_json_wire()
 			.expect("ProtocolMsg can always serialize. qed.");
-		let startup = match state.enclave_client.call(&encoded_request).await {
-			Ok(response) => match ProtocolMsg::from_wire_any(&response) {
-				Ok(ProtocolMsg::OciStatusResponse { startup, .. }) => startup,
-				_ => OciStartup::Inactive,
-			},
-			Err(e) => {
-				let msg = format!(
+		let startup = match state
+			.enclave_client
+			.call(&encoded_request)
+			.await
+			.map_err(|e| {
+				format!(
 					"Error while trying to send socket request to enclave: {e:?}"
-				);
+				)
+			})
+			.and_then(|response| oci_startup(&response))
+		{
+			Ok(startup) => startup,
+			Err(msg) => {
 				eprintln!("{msg}");
 				return (StatusCode::INTERNAL_SERVER_ERROR, Html(msg));
 			}
@@ -356,4 +360,48 @@ async fn get_manifest_envelope(
 	};
 
 	Ok(manifest_envelope)
+}
+
+/// The OCI workload startup an enclave reports. An enclave that does not know
+/// the request runs no OCI workloads.
+fn oci_startup(response: &[u8]) -> Result<OciStartup, String> {
+	match ProtocolMsg::from_wire_any(response) {
+		Ok(ProtocolMsg::OciStatusResponse { startup, .. }) => Ok(startup),
+		Ok(ProtocolMsg::ProtocolErrorResponse(
+			ProtocolError::ProtocolMsgDeserialization,
+		)) => Ok(OciStartup::Inactive),
+		other => Err(format!(
+			"Unexpected response: Expected a ProtocolMsg::OciStatusResponse, but got: {other:?}"
+		)),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn only_an_enclave_that_does_not_know_the_request_has_no_oci_workloads() {
+		let response = |msg: ProtocolMsg| msg.to_json_wire().unwrap();
+		assert_eq!(
+			oci_startup(&response(ProtocolMsg::OciStatusResponse {
+				startup: OciStartup::Starting,
+				workloads: Vec::new(),
+			})),
+			Ok(OciStartup::Starting)
+		);
+		assert_eq!(
+			oci_startup(&response(ProtocolMsg::ProtocolErrorResponse(
+				ProtocolError::ProtocolMsgDeserialization
+			))),
+			Ok(OciStartup::Inactive)
+		);
+		assert!(
+			oci_startup(&response(ProtocolMsg::ProtocolErrorResponse(
+				ProtocolError::InvalidMsg
+			)))
+			.is_err()
+		);
+		assert!(oci_startup(b"not a protocol message").is_err());
+	}
 }
