@@ -1,30 +1,73 @@
 # Signed Echo
 
-`signed_echo` is a simple Axum pivot app for QOS bridge-based ingress. It
-listens on localhost TCP, accepts UTF-8 POST bodies, and returns the body with
-a quorum-key signature over the QOS JSON bytes of `signed_payload_json`:
+`signed_echo` is an Axum pivot app for QOS bridge ingress. `/echo` signs a UTF-8
+POST body with the quorum key; `/get_url` fetches a URL and signs its response.
+Signatures cover the QOS JSON bytes in `signed_payload_json`.
 
-```json
-{"domain":"echo app signed","message":"hello","time":"1700000000"}
-```
-
-## Run Locally
+## Run locally
 
 ```sh
 cargo run -p signed_echo -- \
   --host 127.0.0.1 \
   --port 3000 \
   --quorum-file /path/to/qos.quorum.key
-```
 
-```sh
 curl -X POST --data-binary 'hello' http://127.0.0.1:3000/echo
 ```
 
-## Defaults
+Defaults are `127.0.0.1:3000` and `/qos.quorum.key`.
 
-- host: `127.0.0.1`
-- port: `3000`
-- quorum key file: `/qos.quorum.key`
+## Cached boot proofs
 
-The POST handler is available at `/echo`.
+Boot proofs are off by default. Inside a Nitro enclave, opt in with:
+
+```sh
+signed_echo --boot-proof nsm
+```
+
+Use `RestartPolicy::Always` in the manifest. Startup failure or refresh-task
+termination exits the app so QOS can restart it.
+
+| Route | With boot proofs enabled |
+|---|---|
+| `/health` | Reports readiness while an unexpired document is available. |
+| `GET /boot_proof` | Returns the attestation, manifest, envelope, schema version, and live public key; byte fields are hex. |
+
+Both return 503 when no unexpired document is available. `/echo` and
+`/get_url` continue using the quorum key; this proof does not authenticate their
+signatures. Publishing supports v2 manifests only; QEMU's placeholder
+certificates cannot be used with this cache.
+
+## Use the cache in another app
+
+Enable the library feature:
+
+```toml
+qos_attestation = { workspace = true, features = ["cache"] }
+```
+
+[`BootProof::start`](src/lib.rs) loads and retains the boot inputs, then calls:
+
+```rust, norun
+let (cache, refresh_task) = AttestationCache::start(
+    nsm,
+    envelope.manifest_hash(),
+    ephemeral_public_key,
+).await?;
+```
+
+Request handlers borrow the cached bytes without another NSM call:
+
+```rust, norun
+let document = cache.latest().ok_or("attestation unavailable")?;
+let cose_bytes: &[u8] = &document;
+```
+
+[`main.rs`](src/main.rs) supervises `refresh_task` alongside the HTTP server
+and aborts refresh on server shutdown. Keep the matching manifest and public key
+in application state. See [qos_attestation](../qos_attestation/README.md) for the
+library's lifecycle and verification contracts.
+
+The cache trusts the local NSM. Clients must verify the proof against trusted
+boot inputs and a trusted root, and enforce current-time validity and freshness.
+Manifest arguments and environment variables are public; keep secrets out of them.

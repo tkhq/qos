@@ -11,10 +11,19 @@ workspace = true
 
 [dependencies]
 axum = { workspace = true, features = ["http1", "tokio", "json", "query"], default-features = false }
+qos_attestation = { workspace = true, features = ["cache"] }
+qos_core = { workspace = true }
 qos_hex = { workspace = true }
 qos_json = { workspace = true }
+qos_nsm = { workspace = true }
 qos_p256 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal"] }
 ureq = { workspace = true, features = ["tls"] }
+
+[dev-dependencies]
+qos_crypto = { workspace = true }
+qos_nsm = { workspace = true, features = ["mock"] }
+tokio = { workspace = true, features = ["test-util"] }
+tower = { version = "0.4", features = ["util"], default-features = false }
