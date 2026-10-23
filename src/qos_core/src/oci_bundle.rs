@@ -663,6 +663,10 @@ fn resolve_executable(
 	executable: &str,
 	env: &[String],
 ) -> Result<String, ProtocolError> {
+	// execve runs no path that must name a directory.
+	if matches!(executable.rsplit('/').next(), Some("" | "." | "..")) {
+		return Err(invalid("OCI executable was not found in rootfs"));
+	}
 	let candidates: Vec<PathBuf> = if executable.contains('/') {
 		vec![normalized_container_path(
 			&cwd.join(executable).to_string_lossy(),
@@ -720,9 +724,12 @@ fn find_rootfs_path(
 	let mut links = 0;
 	while let Some(part) = pending.pop_front() {
 		// As the kernel does, `..` leaves the directory resolved so far, and
-		// stays at the root.
+		// stays at the root. `.` only made the name before it a directory.
 		if part == ".." {
 			resolved.pop();
+			continue;
+		}
+		if part == "." {
 			continue;
 		}
 		let candidate = rootfs.join(&resolved).join(&part);
@@ -757,14 +764,17 @@ fn find_rootfs_path(
 	Ok(Some(rootfs.join(resolved)))
 }
 
-/// A path's names and `..`s in order. No name is `..`, which
-/// `Path::components` yields as `ParentDir`.
+/// A path's names and `..`s in order, then `.` if a trailing `/` or `/.`
+/// requires a directory. No name is `.` or `..`.
 fn lookup_parts(path: &Path) -> impl Iterator<Item = std::ffi::OsString> {
-	path.components().filter_map(|component| match component {
-		Component::Normal(part) => Some(part.to_os_string()),
-		Component::ParentDir => Some("..".into()),
-		Component::RootDir | Component::CurDir | Component::Prefix(_) => None,
-	})
+	let bytes = path.as_os_str().as_bytes();
+	let directory =
+		matches!(bytes.rsplit(|&byte| byte == b'/').next(), Some(b"" | b"."));
+	bytes
+		.split(|&byte| byte == b'/')
+		.filter(|part| !part.is_empty() && *part != b".")
+		.chain(directory.then_some(&b"."[..]))
+		.map(|part| OsStr::from_bytes(part).to_os_string())
 }
 
 fn normalized_container_path(value: &str) -> Result<PathBuf, ProtocolError> {
@@ -1366,6 +1376,78 @@ mod tests {
 			resolve_executable(&root, Path::new("/"), "../x", &env).is_err()
 		);
 		fs::remove_dir_all(root).unwrap();
+	}
+
+	#[test]
+	fn a_trailing_slash_or_dot_names_a_directory() {
+		for suffix in ["/", "/."] {
+			let root = scratch("trailing");
+			for directory in ["etc", "meta/dir", "first", "second", "payload"] {
+				fs::create_dir_all(root.join(directory)).unwrap();
+			}
+			fs::write(root.join("meta/passwd"), "app:x:0:0::/:/bin/sh\n")
+				.unwrap();
+			fs::write(
+				root.join("meta/dir/passwd"),
+				"app:x:1000:1000::/:/bin/sh\n",
+			)
+			.unwrap();
+			for file in ["payload/app", "second/app"] {
+				fs::write(root.join(file), "#!/bin/sh\n").unwrap();
+				fs::set_permissions(
+					root.join(file),
+					fs::Permissions::from_mode(0o755),
+				)
+				.unwrap();
+			}
+			let link = |target: &str, path: &str| {
+				std::os::unix::fs::symlink(
+					format!("{target}{suffix}"),
+					root.join(path),
+				)
+				.unwrap();
+			};
+			link("/meta/passwd", "etc/passwd");
+			link("/payload/app", "first/app");
+			link("/payload", "third");
+			assert!(resolve_identity(&root, "app").is_err(), "{suffix}");
+			let env = vec!["PATH=/first:/second:/third".to_string()];
+			let cwd = Path::new("/");
+			assert_eq!(
+				resolve_executable(&root, cwd, "app", &env).unwrap(),
+				"/second/app",
+				"{suffix}"
+			);
+			assert!(
+				resolve_executable(
+					&root,
+					cwd,
+					&format!("/payload/app{suffix}"),
+					&env
+				)
+				.is_err(),
+				"{suffix}"
+			);
+
+			fs::remove_dir_all(root.join("etc")).unwrap();
+			link("/meta/dir", "etc");
+			assert_eq!(
+				resolve_identity(&root, "app").unwrap(),
+				ProcessIdentity {
+					uid: 1000,
+					gid: 1000,
+					additional_gids: vec![]
+				},
+				"{suffix}"
+			);
+			fs::remove_file(root.join("second/app")).unwrap();
+			assert_eq!(
+				resolve_executable(&root, cwd, "app", &env).unwrap(),
+				"/third/app",
+				"{suffix}"
+			);
+			fs::remove_dir_all(root).unwrap();
+		}
 	}
 
 	#[test]
