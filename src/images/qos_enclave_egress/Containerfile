@@ -95,6 +95,8 @@ FROM scratch AS package
 COPY --from=build-eif /nitro.eif .
 COPY --from=build-eif /nitro.pcrs .
 COPY --from=build-qos_enclave /qos_enclave .
+COPY src/qos_enclave/LICENSES/Apache-2.0.txt /licenses/Apache-2.0.txt
+COPY src/qos_enclave/NOTICE /licenses/qos_enclave-NOTICE
 ENTRYPOINT ["/qos_enclave"]
 ENV EIF_PATH=/nitro.eif
 ENV ENCLAVE_NAME=qos
