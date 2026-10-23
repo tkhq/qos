@@ -244,7 +244,6 @@ impl ProtocolState {
 		self.phase
 	}
 
-	/// Record an accepted Manifest V3 boot in the workload status.
 	pub(crate) fn begin_oci_status(&self, manifest: &ManifestV3) {
 		self.oci_status.write().unwrap().begin(manifest);
 	}

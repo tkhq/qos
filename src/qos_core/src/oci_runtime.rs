@@ -31,9 +31,6 @@ use libcontainer::{
 use crate::{oci_bundle::RuntimeProcess, protocol::services::boot::OciName};
 
 const OCI_RUNTIME_VERSION: &str = "1.0.2";
-/// The sandbox's container ID, log label and cgroup name. Workload names, which
-/// QOS uses for the same three, cannot contain an underscore, so no workload
-/// can share any of them with the sandbox.
 const SANDBOX_ID: &str = "qos_sandbox";
 const SANDBOX_ARG: &str = "--qos-oci-sandbox";
 const SANDBOX_READY: &str = "/qos-sandbox-ready";
@@ -76,36 +73,34 @@ pub struct SandboxNamespaces {
 
 /// One QOS-resolved mount. No path or option comes from an OCI image.
 #[derive(Debug, Clone)]
-pub struct ResolvedMount {
+pub(crate) struct ResolvedMount {
 	/// Parent-QOS source directory, or a pinned `/proc/self/fd` path to a
 	/// device node.
-	pub source: PathBuf,
+	pub(crate) source: PathBuf,
 	/// Absolute path inside the workload.
-	pub destination: PathBuf,
+	pub(crate) destination: PathBuf,
 	/// Whether the bind mount is read-only.
-	pub read_only: bool,
+	pub(crate) read_only: bool,
 	/// Whether the source is a device node: mounted after the runtime's
 	/// `/dev` and without `nodev`.
-	pub device: bool,
+	pub(crate) device: bool,
 }
 
 /// A character device one workload may open beyond the fixed runtime
 /// devices, such as the NSM when its manifest mounts it. QOS reads the
 /// numbers from the pinned device node and allows them in that workload's
 /// device policy only.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AllowedDevice {
-	/// Device major number.
-	pub major: u32,
-	/// Device minor number.
-	pub minor: u32,
+#[derive(Debug)]
+pub(crate) struct AllowedDevice {
+	pub(crate) major: u32,
+	pub(crate) minor: u32,
 }
 
 /// Where a workload's standard output and error go. The manifest's enclave
 /// mode chooses for every workload what Manifest V2's pivot `debugMode`
 /// chooses for the pivot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorkloadOutput {
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum WorkloadOutput {
 	/// `debug`: QOS reads each line and prints it, tagged with the workload.
 	Reprinted,
 	/// `attested`: `/dev/null`.
@@ -125,7 +120,6 @@ const BASE_DEVICES: [(u32, Option<u32>); 8] = [
 	(136, None),
 ];
 
-/// [`BASE_DEVICES`] plus `extra`, each exactly.
 fn allowed_devices(
 	extra: &[AllowedDevice],
 ) -> impl Iterator<Item = (u32, Option<u32>)> + '_ {
@@ -157,7 +151,7 @@ impl RuntimeContainer {
 	/// # Errors
 	///
 	/// Returns an error when descriptors or the upstream container cannot be created.
-	pub fn create(
+	pub(crate) fn create(
 		name: &OciName,
 		bundle: &Path,
 		state_root: &Path,
@@ -452,7 +446,7 @@ fn cleanup_partial_sandbox(
 /// later connects it. One dedicated thread joins the sandbox namespace once
 /// and creates every socket; callers connect it on their own runtime. This
 /// needs no veth pair, routing or NAT.
-pub struct SandboxTcpConnector {
+pub(crate) struct SandboxTcpConnector {
 	requests: std::sync::mpsc::Sender<
 		tokio::sync::oneshot::Sender<std::io::Result<tokio::net::TcpSocket>>,
 	>,
@@ -465,7 +459,7 @@ impl SandboxTcpConnector {
 	/// # Errors
 	///
 	/// Returns an error when the thread cannot start or join the namespace.
-	pub fn new(netns: File) -> std::io::Result<Self> {
+	pub(crate) fn new(netns: File) -> std::io::Result<Self> {
 		let (requests, incoming) = std::sync::mpsc::channel::<
 			tokio::sync::oneshot::Sender<
 				std::io::Result<tokio::net::TcpSocket>,
@@ -497,7 +491,7 @@ impl SandboxTcpConnector {
 	/// # Errors
 	///
 	/// Returns an error when the socket thread is gone or the connect fails.
-	pub async fn connect(
+	pub(crate) async fn connect(
 		&self,
 		address: std::net::SocketAddr,
 	) -> std::io::Result<tokio::net::TcpStream> {
@@ -508,7 +502,7 @@ impl SandboxTcpConnector {
 	}
 }
 
-#[allow(unsafe_code)]
+#[expect(unsafe_code, reason = "setns is a libc call")]
 fn join_network_namespace(netns: &File) -> std::io::Result<()> {
 	use std::os::fd::AsRawFd as _;
 	// SAFETY: setns only reads the descriptor and flag. It moves the calling
@@ -549,7 +543,7 @@ pub fn run_sandbox_if_requested() -> bool {
 /// # Errors
 ///
 /// Returns an error when the configuration cannot be built or persisted.
-pub fn write_config(
+pub(crate) fn write_config(
 	bundle: &Path,
 	rootfs: &Path,
 	process: &RuntimeProcess,
@@ -932,8 +926,6 @@ struct BpfProgAttach {
 	replace_bpf_fd: u32,
 }
 
-/// A `BPF_PROG_TYPE_CGROUP_DEVICE` program that allows exactly the
-/// character devices of [`allowed_devices`] and denies every other access.
 #[cfg(feature = "oci-devices")]
 fn device_program(
 	extra: &[AllowedDevice],
@@ -1009,7 +1001,6 @@ fn runtime_mounts(
 		bind_mount(&sandbox.shm, Path::new("/dev/shm"), false, false),
 		mount("sysfs", "/sys", "sysfs", ["nosuid", "noexec", "nodev", "ro"]),
 	];
-	// Devices go last, over the runtime's `/dev`.
 	for declared in declared
 		.iter()
 		.filter(|mount| !mount.device)
@@ -1076,7 +1067,7 @@ fn bind_mount(
 /// The container's init process waits for `start`, so the child exits once the
 /// container exists, and QOS, which runs as PID 1, adopts the init process.
 /// The child's failure is written to `failure` for the parent to report.
-#[allow(unsafe_code)]
+#[expect(unsafe_code, reason = "fork and _exit are libc calls")]
 fn build_in_forked_child(
 	failure: &Path,
 	build: impl FnOnce() -> Result<(), OciRuntimeError>,
@@ -1269,7 +1260,7 @@ const CGROUP_ROOT: &str = "/sys/fs/cgroup";
 /// # Errors
 ///
 /// Returns an error when a limit or the cgroup v2 mount cannot be applied.
-#[allow(unsafe_code)]
+#[expect(unsafe_code, reason = "setrlimit and mount are libc calls")]
 pub(crate) fn prepare_node() -> Result<(), OciRuntimeError> {
 	fs::write("/proc/sys/kernel/pid_max", NODE_MAX_PROCESSES)?;
 	fs::write("/proc/sys/kernel/threads-max", NODE_MAX_PROCESSES)?;

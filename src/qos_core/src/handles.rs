@@ -13,17 +13,6 @@ use crate::protocol::{
 	services::boot::{OciDigest, VersionedManifestEnvelope},
 };
 
-/// File name of the approved manifest envelope inside the `qos` volume.
-pub const QOS_VOLUME_MANIFEST_FILE: &str = "manifest.json";
-/// File name of the quorum key inside the `qos` volume.
-pub const QOS_VOLUME_QUORUM_KEY_FILE: &str = "quorum.key";
-/// File name of the quorum public key inside the `qos` volume.
-pub const QOS_VOLUME_QUORUM_PUB_FILE: &str = "quorum.pub";
-/// File name of the live ephemeral key inside the `qos` volume.
-pub const QOS_VOLUME_EPHEMERAL_KEY_FILE: &str = "ephemeral.key";
-/// File name of the live ephemeral public key inside the `qos` volume.
-pub const QOS_VOLUME_EPHEMERAL_PUB_FILE: &str = "ephemeral.pub";
-
 /// Handle for accessing the quorum key.
 #[derive(Debug, Clone)]
 pub struct QuorumKeyHandle {
@@ -181,14 +170,11 @@ impl Handles {
 			.map_err(|error| std::io::Error::other(format!("{error:?}")))
 		};
 		Ok([
-			(QOS_VOLUME_MANIFEST_FILE, fs::read(&self.manifest)?),
-			(QOS_VOLUME_QUORUM_KEY_FILE, fs::read(&self.quorum.quorum)?),
-			(QOS_VOLUME_QUORUM_PUB_FILE, public(self.get_quorum_key())?),
-			(
-				QOS_VOLUME_EPHEMERAL_KEY_FILE,
-				fs::read(&self.ephemeral.ephemeral_key_path)?,
-			),
-			(QOS_VOLUME_EPHEMERAL_PUB_FILE, public(self.get_ephemeral_key())?),
+			("manifest.json", fs::read(&self.manifest)?),
+			("quorum.key", fs::read(&self.quorum.quorum)?),
+			("quorum.pub", public(self.get_quorum_key())?),
+			("ephemeral.key", fs::read(&self.ephemeral.ephemeral_key_path)?),
+			("ephemeral.pub", public(self.get_ephemeral_key())?),
 		])
 	}
 

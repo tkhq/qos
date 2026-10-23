@@ -26,7 +26,7 @@ pub use manifest::v2::{
 pub use manifest::v3::{
 	EnclaveMode, EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDevice,
 	OciDigest, OciImageRef, OciMount, OciName, OciPath, OciRestartPolicy,
-	QOS_VOLUME_NAME, VolumeV3, WorkloadV3,
+	VolumeV3, WorkloadV3,
 };
 pub use manifest::{
 	ManifestBuilder, ManifestBuilderError, ManifestVersion, VersionedManifest,
@@ -1222,29 +1222,11 @@ mod test {
 			OciDigest::try_from(format!("sha256:{}", hex.repeat(64))).unwrap()
 		};
 		let (approved, other) = (digest("a"), digest("b"));
-		let pcr = "00".repeat(48);
-		let envelope: ManifestEnvelopeV3 =
-			serde_json::from_value(serde_json::json!({
-				"manifest": {
-					"version": "v3",
-					"namespace": {"name": "n", "nonce": 1, "quorumKey": "0a"},
-					"manifestSet": {"threshold": 0, "members": []},
-					"shareSet": {"threshold": 0, "members": []},
-					"enclave": {
-						"type": "nitro", "mode": "debug",
-						"pcr0": pcr, "pcr1": pcr, "pcr2": pcr, "pcr3": pcr,
-						"awsRootCertificate": "ff", "qosCommit": "c"
-					},
-					"workloads": {"app": {
-						"type": "oci",
-						"image": {"type": "ociManifest", "digest": approved},
-						"restart": "never",
-					}},
-				},
-				"manifestSetApprovals": [],
-				"shareSetApprovals": [],
-			}))
-			.unwrap();
+		let envelope = ManifestEnvelopeV3 {
+			manifest: manifest::v3::minimal_manifest(&approved),
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		};
 		let payload = |digests: &[&OciDigest]| OciBootPayloadV3 {
 			manifest_envelope: ManifestEnvelopeBytes::new(
 				serde_json::to_vec(&envelope).unwrap(),

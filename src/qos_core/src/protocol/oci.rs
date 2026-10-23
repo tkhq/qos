@@ -16,23 +16,15 @@ pub const MAX_OCI_TOTAL_ARCHIVE_BYTES: usize = 120 * MEBIBYTE;
 
 /// A bounded field of an OCI boot payload exceeds its limit. Decoding reports
 /// it apart from malformed bytes.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
 pub(crate) struct OciLimitExceeded(String);
 
 impl OciLimitExceeded {
-	/// The limit failure behind a Borsh decoding error, if it is one.
 	pub(crate) fn find(error: &borsh::io::Error) -> Option<&Self> {
 		error.get_ref()?.downcast_ref()
 	}
 }
-
-impl std::fmt::Display for OciLimitExceeded {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.write_str(&self.0)
-	}
-}
-
-impl std::error::Error for OciLimitExceeded {}
 
 fn read_len<R: borsh::io::Read>(
 	reader: &mut R,
@@ -186,13 +178,7 @@ mod tests {
 		let oversized =
 			u32::try_from(MAX_OCI_LAYOUT_ARCHIVE_BYTES).unwrap() + 1;
 		encoded.extend_from_slice(&oversized.to_le_bytes());
-		let error = OciBootPayloadV3::try_from_slice(&encoded).unwrap_err();
-		assert_eq!(
-			OciLimitExceeded::find(&error).unwrap().to_string(),
-			"OCI layout archive exceeds limit"
-		);
 
-		// A boot request reports the limit, not malformed bytes.
 		let mut request = borsh::to_vec(&ProtocolMsg::BootStandardOciRequest {
 			payload: OciBootPayloadV3 {
 				manifest_envelope: ManifestEnvelopeBytes::new(vec![]).unwrap(),

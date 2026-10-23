@@ -414,13 +414,13 @@ impl Reaper {
 		}
 
 		println!("Reaper::execute about to spawn pivot");
-		let (Some(args), Some(restart)) = (manifest.args(), manifest.restart())
-		else {
-			eprintln!("Manifest V3 requires the OCI runtime");
-			server_worker.abort();
-			return;
-		};
-		let args = args.to_vec();
+		let args = manifest
+			.args()
+			.expect("V3 returned above; V0-V2 manifests have pivot args")
+			.to_vec();
+		let restart = manifest
+			.restart()
+			.expect("V3 returned above; V0-V2 manifests have a restart policy");
 		let host_config = manifest.bridge_config().to_vec();
 
 		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task

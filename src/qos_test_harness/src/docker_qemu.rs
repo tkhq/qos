@@ -1573,7 +1573,6 @@ impl TestRunner for DockerHostQemuNitroRunner {
 }
 
 impl DockerHostQemuNitroRunner {
-	/// The URL tests reach the enclave's server bridge at.
 	fn ingress_url(&self) -> String {
 		format!(
 			"http://{}:{}",
@@ -1581,8 +1580,6 @@ impl DockerHostQemuNitroRunner {
 		)
 	}
 
-	/// Run `qos_bridge` for the booted enclave, with the egress network
-	/// namespace when `bridge_config` has a client entry.
 	async fn start_bridge(
 		&mut self,
 		container_prefix: &str,

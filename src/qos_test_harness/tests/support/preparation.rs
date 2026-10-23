@@ -76,30 +76,9 @@ impl PreparedDockerHostQemuNitro {
 		repo_defaults::test_manifest_template(&self.root, pivot)
 	}
 
-	/// Build the PostgreSQL self-test as a linux/amd64 OCI image-layout tar.
-	pub(crate) fn postgres_smoke_image(
-		&self,
-	) -> Result<OciImageArtifact, PreparationError> {
-		self.fixture_image("postgres-smoke")
-	}
-
-	/// Build the HTTP file server as a linux/amd64 OCI image-layout tar.
-	pub(crate) fn kv_http_image(
-		&self,
-	) -> Result<OciImageArtifact, PreparationError> {
-		self.fixture_image("kv-http")
-	}
-
-	/// Build the device self-test as a linux/amd64 OCI image-layout tar.
-	pub(crate) fn device_smoke_image(
-		&self,
-	) -> Result<OciImageArtifact, PreparationError> {
-		self.fixture_image("device-smoke")
-	}
-
 	/// Build the fixture image `tests/fixtures/<name>` as a linux/amd64 OCI
 	/// image-layout tar.
-	fn fixture_image(
+	pub(crate) fn fixture_image(
 		&self,
 		name: &str,
 	) -> Result<OciImageArtifact, PreparationError> {

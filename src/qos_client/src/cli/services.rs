@@ -1133,7 +1133,10 @@ fn approve_manifest_programmatic_verifications(
 	true
 }
 
-#[allow(clippy::too_many_lines)]
+#[expect(
+	clippy::too_many_lines,
+	reason = "one prompt per manifest decision, in the order the approver reads them"
+)]
 fn approve_manifest_human_verifications<R, W>(
 	manifest: &VersionedManifest,
 	prompter: &mut Prompter<R, W>,
@@ -1234,7 +1237,6 @@ where
 		}
 	}
 
-	// Check the signed fields that only Manifest V3 has
 	if let VersionedManifest::V3(v3_manifest) = manifest {
 		let mut prompts = vec![format!(
 			"Is this the correct enclave mode: {}? (y/n)",
@@ -1527,10 +1529,6 @@ pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
 	pub unsafe_skip_attestation: bool,
 }
 
-/// Read each `--oci-layout-archive sha256:<hex>=<path>`: the archive at
-/// `path` holds the image with that digest. The archives may come in any
-/// order. Each is checked here to hold its image manifest, so a wrong archive
-/// fails before boot; the enclave verifies the rest of the image.
 fn oci_boot_payload<P: AsRef<Path>>(
 	manifest_envelope_path: &P,
 	envelope: &ManifestEnvelopeV3,
@@ -1597,7 +1595,6 @@ fn oci_boot_payload<P: AsRef<Path>>(
 	})
 }
 
-/// Split `sha256:<hex>=<path>` into the image digest and the archive path.
 fn parse_oci_layout_archive(
 	argument: &str,
 ) -> Result<(OciDigest, &str), Error> {
@@ -2982,7 +2979,6 @@ mod tests {
 			})
 		}
 
-		/// A one-layer OCI layout holding `file`, and its image digest.
 		fn layout(file: &[u8]) -> (String, Vec<u8>) {
 			let layer = tar(&[("app", file)]);
 			// An enclave's platform, whatever machine runs the client.
@@ -3084,7 +3080,6 @@ mod tests {
 					format!("{digest}={}", path.as_ref().display())
 				};
 
-			// Given in reverse, each archive still goes with its own digest.
 			let payload = oci_boot_payload(
 				&envelope_path,
 				&envelope,

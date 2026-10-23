@@ -237,8 +237,6 @@ pub fn check_oci_layout_digest(
 	root_manifest(&read_layout(archive)?, expected).map(|_| ())
 }
 
-/// The bytes of the image manifest with this digest that `index.json`
-/// selects.
 fn root_manifest<'a>(
 	files: &'a BTreeMap<String, Vec<u8>>,
 	expected: &OciDigest,
@@ -248,16 +246,17 @@ fn root_manifest<'a>(
 		return Err(invalid("unsupported OCI image-layout version"));
 	}
 	let index: ImageIndex = decode_required(files, OCI_INDEX)?;
-	let root_descriptor = index.manifests.iter().find(|descriptor| {
-		&descriptor.digest == expected
-			&& descriptor.media_type == IMAGE_MANIFEST_MEDIA_TYPE
-	});
-	if index.schema_version != 2 {
-		return Err(invalid("index.json does not select the signed manifest"));
-	}
-	let root_descriptor = root_descriptor.ok_or_else(|| {
-		invalid("index.json does not select the signed manifest")
-	})?;
+	let root_descriptor = index
+		.manifests
+		.iter()
+		.find(|descriptor| {
+			index.schema_version == 2
+				&& &descriptor.digest == expected
+				&& descriptor.media_type == IMAGE_MANIFEST_MEDIA_TYPE
+		})
+		.ok_or_else(|| {
+			invalid("index.json does not select the signed manifest")
+		})?;
 	verified_descriptor(files, root_descriptor)
 }
 
@@ -291,7 +290,6 @@ fn read_layout(
 		if !entry_type.is_file() {
 			return Err(invalid("OCI layout contains a non-regular entry"));
 		}
-		// The effective size, which a PAX `size` record overrides.
 		let declared = entry.size();
 		if declared > archive.len() as u64 {
 			return Err(invalid("OCI layout file exceeds archive size"));
@@ -465,8 +463,6 @@ mod tests {
 		})
 	}
 
-	/// A one-layer OCI layout whose image config has this `config` object,
-	/// and the digest of its image manifest.
 	fn layout(config: &serde_json::Value) -> (OciDigest, Vec<u8>) {
 		let layer = tar(&[("app", b"#!/bin/sh\n")]);
 		let architecture = match std::env::consts::ARCH {
@@ -532,7 +528,6 @@ mod tests {
 
 	#[test]
 	fn layout_entries_use_the_pax_size() {
-		// A PAX `size` record overrides the header's size field, which says 0.
 		let mut builder = tar::Builder::new(Vec::new());
 		let record = b"9 size=5\n";
 		let mut pax = tar::Header::new_ustar();

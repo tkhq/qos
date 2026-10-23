@@ -8,7 +8,7 @@ use std::{
 use super::services::boot::{ManifestV3, OciDigest, OciName};
 
 /// Status shared by the protocol server and workload manager.
-pub type SharedOciStatus = Arc<RwLock<OciStatus>>;
+pub(crate) type SharedOciStatus = Arc<RwLock<OciStatus>>;
 
 /// The initial start of the Manifest V3 workload group.
 #[derive(
@@ -37,20 +37,16 @@ pub enum OciStartup {
 	Failed,
 }
 
-/// The startup result of the workload group and the status of each of its
-/// workloads.
 #[derive(Debug, Default)]
-pub struct OciStatus {
-	/// The group's initial start.
-	pub startup: OciStartup,
-	/// Each workload's status, by name.
-	pub workloads: BTreeMap<OciName, OciWorkloadStatus>,
+pub(crate) struct OciStatus {
+	pub(crate) startup: OciStartup,
+	pub(crate) workloads: BTreeMap<OciName, OciWorkloadStatus>,
 }
 
 impl OciStatus {
 	/// Record an accepted Manifest V3 boot: the group is starting, and each
 	/// workload waits for its verified image. Only the first call counts.
-	pub fn begin(&mut self, manifest: &ManifestV3) {
+	pub(crate) fn begin(&mut self, manifest: &ManifestV3) {
 		if self.startup != OciStartup::Inactive {
 			return;
 		}
@@ -257,28 +253,13 @@ impl OciWorkloadStatus {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::protocol::services::boot::manifest::v3::minimal_manifest;
 
 	#[test]
 	fn a_boot_begins_the_group_once() {
-		let digest = format!("sha256:{}", "0".repeat(64));
-		let pcr = "00".repeat(48);
-		let manifest: ManifestV3 = serde_json::from_value(serde_json::json!({
-			"version": "v3",
-			"namespace": {"name": "n", "nonce": 1, "quorumKey": "0a"},
-			"manifestSet": {"threshold": 1, "members": []},
-			"shareSet": {"threshold": 1, "members": []},
-			"enclave": {
-				"type": "nitro", "mode": "debug",
-				"pcr0": pcr, "pcr1": pcr, "pcr2": pcr, "pcr3": pcr,
-				"awsRootCertificate": "ff", "qosCommit": "c"
-			},
-			"workloads": {"app": {
-				"type": "oci",
-				"image": {"type": "ociManifest", "digest": digest},
-				"restart": "always",
-			}},
-		}))
-		.unwrap();
+		let digest: OciDigest =
+			format!("sha256:{}", "0".repeat(64)).try_into().unwrap();
+		let manifest = minimal_manifest(&digest);
 		let name: OciName = "app".to_owned().try_into().unwrap();
 
 		let mut status = OciStatus::default();

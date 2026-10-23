@@ -1,4 +1,4 @@
-use std::{future::Future, net::SocketAddr};
+use std::net::SocketAddr;
 
 use futures::future::join_all;
 use tokio::{
@@ -75,7 +75,7 @@ impl HostBridge {
 	/// # Panics
 	///
 	/// Panics if the stream pool fails to bind its listeners.
-	pub fn vsock_to_tcp_via<C, F>(self, connect: C)
+	pub(crate) fn vsock_to_tcp_via<C, F>(self, connect: C)
 	where
 		C: Fn(SocketAddr) -> F + Clone + Send + Sync + 'static,
 		F: Future<Output = std::io::Result<TcpStream>> + Send + 'static,

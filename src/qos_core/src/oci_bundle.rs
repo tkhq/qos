@@ -115,15 +115,11 @@ struct Metadata {
 	symlink: bool,
 }
 
-/// An OCI whiteout marker's basename prefix, and the opaque marker.
 const WHITEOUT_PREFIX: &str = ".wh.";
 const OPAQUE_WHITEOUT: &str = ".wh..wh..opq";
 
-/// Apply one layer in two passes over its bytes. The first applies the
-/// layer's whiteouts, which remove only what lower layers made: none of this
-/// layer's own entries exist yet, so the result does not depend on where a
-/// marker sits in the tar. The second adds the layer's other entries.
 fn apply_layer(root: &Path, bytes: &[u8]) -> Result<(), ProtocolError> {
+	// No entry of this layer exists yet: whiteouts remove only lower layers'.
 	apply_whiteouts(root, bytes)?;
 	let mut archive = tar::Archive::new(Cursor::new(bytes));
 	let entries =
@@ -212,7 +208,7 @@ fn apply_layer(root: &Path, bytes: &[u8]) -> Result<(), ProtocolError> {
 	}
 	// Directory metadata is applied last so child creation cannot alter it or
 	// be blocked by its final permissions. Children precede parents.
-	directories.sort_by_key(|metadata| {
+	directories.sort_by_cached_key(|metadata| {
 		std::cmp::Reverse(metadata.path.components().count())
 	});
 	for metadata in directories {
@@ -221,11 +217,11 @@ fn apply_layer(root: &Path, bytes: &[u8]) -> Result<(), ProtocolError> {
 	Ok(())
 }
 
-/// The first pass of [`apply_layer`]: apply the layer's whiteouts.
 fn apply_whiteouts(root: &Path, bytes: &[u8]) -> Result<(), ProtocolError> {
 	let mut archive = tar::Archive::new(Cursor::new(bytes));
-	let entries =
-		archive.entries().map_err(|_| invalid("invalid OCI layer tar"))?;
+	let entries = archive
+		.entries_with_seek()
+		.map_err(|_| invalid("invalid OCI layer tar"))?;
 	for entry in entries {
 		let entry = entry.map_err(|_| invalid("invalid OCI layer entry"))?;
 		let relative = layer_path(&entry)?;
@@ -236,7 +232,6 @@ fn apply_whiteouts(root: &Path, bytes: &[u8]) -> Result<(), ProtocolError> {
 	Ok(())
 }
 
-/// Make `destination` a directory, replacing a lower layer's non-directory.
 fn ensure_layer_directory(destination: &Path) -> Result<(), ProtocolError> {
 	match fs::symlink_metadata(destination) {
 		Ok(found) if found.is_dir() => return Ok(()),
@@ -256,9 +251,6 @@ fn layer_path<R: Read>(
 	)
 }
 
-/// Normalize a layer entry path relative to the rootfs. Layers commonly name
-/// entries `./etc/...`, and the root directory itself `.` or `./`, which
-/// normalizes to an empty path.
 fn normalized_relative(path: &Path) -> Result<PathBuf, ProtocolError> {
 	if path.as_os_str().is_empty()
 		|| path.is_absolute()
@@ -356,7 +348,6 @@ fn ensure_safe_parents(
 	Ok(())
 }
 
-/// The part of a whiteout marker's basename after `.wh.`, if it is one.
 fn whiteout_name(relative: &Path) -> Option<&str> {
 	relative.file_name()?.to_str()?.strip_prefix(WHITEOUT_PREFIX)
 }
@@ -406,8 +397,6 @@ fn apply_whiteout<R: Read>(
 	}
 }
 
-/// The lower layers' directory at `relative`, if every component is a real
-/// directory.
 fn lower_directory(
 	root: &Path,
 	relative: &Path,
@@ -505,8 +494,6 @@ fn entry_metadata<R: Read>(
 const IGNORED_XATTRS: [&[u8]; 3] =
 	[b"security.selinux", b"security.ima", b"security.evm"];
 
-/// Parse a PAX time, decimal seconds with an optional fraction, into seconds
-/// and nanoseconds. Digits past nanoseconds are dropped.
 fn pax_time(value: &[u8]) -> Result<(i64, i64), ProtocolError> {
 	let unrepresentable = || invalid("unrepresentable layer PAX mtime");
 	let text = std::str::from_utf8(value).map_err(|_| unrepresentable())?;
@@ -518,13 +505,11 @@ fn pax_time(value: &[u8]) -> Result<(i64, i64), ProtocolError> {
 		return Err(unrepresentable());
 	}
 	let seconds: i64 = seconds.parse().map_err(|_| unrepresentable())?;
-	let digits = &fraction[..fraction.len().min(9)];
-	let nanos: i64 = if digits.is_empty() {
-		0
-	} else {
-		digits.parse::<i64>().map_err(|_| unrepresentable())?
-			* 10_i64.pow(9 - u32::try_from(digits.len()).expect("at most 9"))
-	};
+	let nanos = fraction
+		.bytes()
+		.chain(std::iter::repeat(b'0'))
+		.take(9)
+		.fold(0_i64, |nanos, digit| nanos * 10 + i64::from(digit - b'0'));
 	Ok(if !negative {
 		(seconds, nanos)
 	} else if nanos == 0 {
@@ -668,8 +653,6 @@ fn resolve_executable(
 	env: &[String],
 ) -> Result<String, ProtocolError> {
 	let candidates: Vec<PathBuf> = if executable.contains('/') {
-		// A relative path such as `./server` names a file below the working
-		// directory, as execve would find it.
 		vec![normalized_container_path(
 			&cwd.join(executable).to_string_lossy(),
 		)?]
@@ -691,7 +674,6 @@ fn resolve_executable(
 	};
 	let search = !executable.contains('/');
 	for candidate in candidates {
-		// Like execvp, a PATH entry that does not lead to the file is skipped.
 		let host = match resolve_rootfs_path(rootfs, &candidate) {
 			Ok(host) => host,
 			Err(_) if search => continue,
@@ -716,7 +698,6 @@ fn resolve_rootfs_path(
 		.ok_or_else(|| invalid("OCI process path does not exist"))
 }
 
-/// [`resolve_rootfs_path`], with `None` for a path that does not exist.
 fn find_rootfs_path(
 	rootfs: &Path,
 	container_path: &Path,
@@ -865,8 +846,6 @@ fn resolve_identity(
 	Ok(ProcessIdentity { uid, gid, additional_gids })
 }
 
-/// Read an image identity file through the image's own symlinks. An absent
-/// file has no records; one that exists must be readable.
 fn read_identity_file(
 	rootfs: &Path,
 	path: &str,
@@ -981,12 +960,8 @@ fn parse_signal(value: Option<&str>) -> Result<i32, ProtocolError> {
 
 #[cfg(test)]
 mod tests {
-	use std::os::unix::fs::PermissionsExt as _;
-
 	use super::*;
 
-	/// A rootfs with `/usr/local/bin/docker-entrypoint.sh`, the layout of
-	/// the official PostgreSQL image, and an empty `/usr/local/sbin`.
 	fn rootfs() -> PathBuf {
 		let root = std::env::temp_dir().join(format!(
 			"qos-oci-bundle-path-{}-{:?}",
@@ -1003,7 +978,6 @@ mod tests {
 		root
 	}
 
-	/// A fresh, empty directory for one test.
 	fn scratch(name: &str) -> PathBuf {
 		let root = std::env::temp_dir()
 			.join(format!("qos-oci-bundle-{name}-{}", std::process::id()));
@@ -1033,8 +1007,6 @@ mod tests {
 		record
 	}
 
-	/// A layer tar with exactly these entry names: `tar::Builder` would
-	/// normalize away a leading `./`.
 	fn layer(entries: &[Entry<'_>]) -> Vec<u8> {
 		let mut builder = tar::Builder::new(Vec::new());
 		for entry in entries {
@@ -1082,8 +1054,6 @@ mod tests {
 			]),
 		)
 		.unwrap();
-		// The opaque marker comes after the layer's own new file, and the
-		// explicit marker after the replacement of the file it hides.
 		apply_layer(
 			&root,
 			&layer(&[
@@ -1153,7 +1123,6 @@ mod tests {
 		)
 		.unwrap();
 		assert_eq!(fs::read(root.join("etc/app.conf")).unwrap(), b"conf");
-		// The root entry's metadata applies to the root itself.
 		assert_eq!(
 			fs::metadata(&root).unwrap().permissions().mode() & 0o777,
 			0o750
@@ -1229,7 +1198,6 @@ mod tests {
 		.unwrap();
 		fs::write(root.join("usr/share/group"), "app:x:1000:\nextra:x:7:app\n")
 			.unwrap();
-		// Absolute links name the image's own paths, not the parent's.
 		std::os::unix::fs::symlink(
 			"/usr/share/passwd",
 			root.join("etc/passwd"),
