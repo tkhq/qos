@@ -34,9 +34,12 @@ They share one port space and MUST coordinate port use.
 
 The shared UTS namespace MUST use the fixed hostname `qos`.
 
-The shared network namespace MUST contain loopback only. The initial feature
-does not provide network egress, network ingress, service-name DNS, or a host
-bridge for OCI workloads.
+The shared network namespace MUST contain loopback only. Ingress comes only
+from the manifest's top-level `bridgeConfig`
+([Ingress](../manifest/README.md#ingress)). QOS connects each forwarded stream
+to `127.0.0.1:port` inside this namespace, where the workload listening on that
+port receives it. The initial feature does not provide network egress or
+service-name DNS for OCI workloads.
 
 The existing top-level `dns` field retains its parent-QOS meaning. It does not
 add DNS or network access to an OCI workload. QOS MUST NOT mount the parent

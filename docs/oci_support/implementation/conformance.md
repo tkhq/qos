@@ -105,7 +105,7 @@ Conformance tests MUST cover:
 - one shared OCI-workload IPC, UTS, and network namespace;
 - inter-workload localhost and shared-memory communication;
 - shared sandbox persistence across one workload restart;
-- loopback-only networking with no external ingress or egress;
+- loopback-only networking, ingress only through `bridgeConfig`, no egress;
 - top-level `dns` does not add OCI workload networking;
 - `no_new_privileges` enforcement;
 - exact root and non-root capability policy enforcement;
