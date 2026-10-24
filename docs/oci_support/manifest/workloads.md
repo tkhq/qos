@@ -85,7 +85,8 @@ after the workload runs continuously for a fixed stability period. These values 
 runtime policy and are not Manifest V3 fields.
 
 Backoff delays restart attempts. It does not change `always` into a finite
-retry count. 
+retry count.
+
 ## Multiple workloads
 
 The requirements in this section define normal runtime behavior for trusted
