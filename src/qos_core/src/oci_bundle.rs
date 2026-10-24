@@ -1040,6 +1040,14 @@ mod tests {
 		record
 	}
 
+	/// The test process's own ids. Layer entries owned by them apply without
+	/// the privilege to chown, so these tests also pass when not run as root.
+	#[allow(unsafe_code)]
+	fn own_ids() -> (u64, u64) {
+		// SAFETY: geteuid and getegid always succeed and touch no memory.
+		unsafe { (u64::from(libc::geteuid()), u64::from(libc::getegid())) }
+	}
+
 	fn layer(entries: &[Entry<'_>]) -> Vec<u8> {
 		let mut builder = tar::Builder::new(Vec::new());
 		for entry in entries {
@@ -1072,8 +1080,9 @@ mod tests {
 			};
 			header.as_ustar_mut().unwrap().name[..name.len()]
 				.copy_from_slice(name.as_bytes());
-			header.set_uid(0);
-			header.set_gid(0);
+			let (uid, gid) = own_ids();
+			header.set_uid(uid);
+			header.set_gid(gid);
 			header.set_mtime(0);
 			header.set_size(data.len() as u64);
 			header.set_cksum();
