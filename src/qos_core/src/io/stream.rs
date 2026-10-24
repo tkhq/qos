@@ -13,9 +13,10 @@ use super::{IOError, SocketAddress};
 
 const MIB: usize = 1024 * 1024;
 
-/// Maximum payload size for a single recv / send call. We're being generous with 128MiB.
+/// Maximum payload size for a single recv / send call. An OCI boot request carries every image in one
+/// message, so this is the images' 1GiB plus 8MiB for the manifest envelope and framing.
 /// The goal here is to avoid server crashes if the payload size exceeds the available system memory.
-pub const MAX_PAYLOAD_SIZE: usize = 128 * MIB;
+pub const MAX_PAYLOAD_SIZE: usize = 1032 * MIB;
 
 #[derive(Debug)]
 enum InnerListener {
@@ -557,10 +558,10 @@ mod test {
 	}
 
 	#[tokio::test]
-	async fn limit_sized_payload() {
+	async fn payload_above_128_mib() {
 		// Ensure concurrent tests are not attempting to listen on the same socket
 		let unix_addr =
-			nix::sys::socket::UnixAddr::new("./limit_sized_payload.sock")
+			nix::sys::socket::UnixAddr::new("./payload_above_128_mib.sock")
 				.unwrap();
 		let addr = SocketAddress::Unix(unix_addr);
 
@@ -572,15 +573,18 @@ mod test {
 			}
 		});
 
-		// Sending a request that is exactly the max size should work
-		// (the response will be exactly max size)
+		// Sending a request above the old 128MiB limit should work
+		// (the response will be the same size). The echo holds four copies,
+		// so the test stops short of the max size.
 		let mut client = Stream::new(&addr);
 		client.connect().await.unwrap();
 
-		let req = vec![1u8; MAX_PAYLOAD_SIZE];
+		let len = 129 * MIB;
+		assert!(len <= MAX_PAYLOAD_SIZE);
+		let req = vec![1u8; len];
 		client.send(&req).await.unwrap();
 		let resp = client.recv().await.unwrap();
-		assert_eq!(resp.len(), MAX_PAYLOAD_SIZE);
+		assert_eq!(resp.len(), len);
 		handler.await.unwrap();
 	}
 
@@ -601,7 +605,7 @@ mod test {
 		client.connect().await.unwrap();
 
 		// Sending with the limit payload size + 1 will fail
-		let req = vec![1u8; MAX_PAYLOAD_SIZE + 1];
+		let req = vec![0u8; MAX_PAYLOAD_SIZE + 1];
 
 		match client.send(&req).await.unwrap_err() {
 			IOError::OversizedPayload(size) => {

@@ -5,14 +5,23 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use super::services::boot::OciDigest;
 
 const MEBIBYTE: usize = 1024 * 1024;
+const GIBIBYTE: usize = 1024 * MEBIBYTE;
 /// Maximum number of distinct OCI images in one boot request.
 pub const MAX_OCI_ARTIFACTS: usize = 16;
 /// Maximum encoded Manifest V3 envelope size.
 pub const MAX_OCI_MANIFEST_ENVELOPE_BYTES: usize = MEBIBYTE;
 /// Maximum size of one uncompressed OCI image-layout archive.
-pub const MAX_OCI_LAYOUT_ARCHIVE_BYTES: usize = 120 * MEBIBYTE;
+pub const MAX_OCI_LAYOUT_ARCHIVE_BYTES: usize = GIBIBYTE;
 /// Maximum total image archive bytes in one boot request.
-pub const MAX_OCI_TOTAL_ARCHIVE_BYTES: usize = 120 * MEBIBYTE;
+pub const MAX_OCI_TOTAL_ARCHIVE_BYTES: usize = GIBIBYTE;
+
+// One boot request is one message: the archives, the envelope and the framing must fit in a frame.
+const _: () = assert!(
+	MAX_OCI_TOTAL_ARCHIVE_BYTES
+		+ MAX_OCI_MANIFEST_ENVELOPE_BYTES
+		+ 4 * MEBIBYTE
+		<= crate::io::MAX_PAYLOAD_SIZE
+);
 
 /// A bounded field of an OCI boot payload exceeds its limit. Decoding reports
 /// it apart from malformed bytes.
@@ -164,6 +173,47 @@ impl BorshDeserialize for OciBootPayloadV3 {
 mod tests {
 	use super::*;
 	use crate::protocol::{ProtocolError, msg::ProtocolMsg};
+
+	#[test]
+	fn decoder_accepts_an_archive_above_the_old_120_mib_limit() {
+		let payload = OciBootPayloadV3 {
+			manifest_envelope: ManifestEnvelopeBytes::new(vec![]).unwrap(),
+			artifacts: vec![OciArtifactV3 {
+				digest: OciDigest::try_from(format!(
+					"sha256:{}",
+					"0".repeat(64)
+				))
+				.unwrap(),
+				oci_layout_archive: OciLayoutArchive::new(vec![
+					0;
+					121 * MEBIBYTE
+				])
+				.unwrap(),
+			}],
+		};
+
+		let encoded = borsh::to_vec(&payload).unwrap();
+		assert!(encoded.len() < crate::io::MAX_PAYLOAD_SIZE);
+		assert_eq!(
+			borsh::from_slice::<OciBootPayloadV3>(&encoded).unwrap(),
+			payload
+		);
+	}
+
+	#[test]
+	fn an_archive_larger_than_the_remaining_total_is_rejected_unread() {
+		let mut encoded = Vec::new();
+		OciDigest::try_from(format!("sha256:{}", "0".repeat(64)))
+			.unwrap()
+			.serialize(&mut encoded)
+			.unwrap();
+		// Declares 11 bytes, with none following, against 10 bytes remaining.
+		encoded.extend_from_slice(&11_u32.to_le_bytes());
+
+		let error = OciArtifactV3::read_with_limit(&mut encoded.as_slice(), 10)
+			.unwrap_err();
+		assert!(error.to_string().contains("exceeds limit"), "{error}");
+	}
 
 	#[test]
 	fn decoder_rejects_an_oversized_archive_before_reading_it() {

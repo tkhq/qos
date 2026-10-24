@@ -26,8 +26,8 @@ const LAYER_ZSTD_MEDIA_TYPE: &str =
 	"application/vnd.oci.image.layer.v1.tar+zstd";
 const MAX_LAYOUT_ENTRIES: usize = 16_384;
 const MAX_LAYOUT_PATH_BYTES: usize = 4_096;
-const MAX_LAYER_UNPACKED_BYTES: u64 = 512 * 1024 * 1024;
-const MAX_IMAGE_UNPACKED_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_LAYER_UNPACKED_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const MAX_IMAGE_UNPACKED_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 const MAX_LAYER_COMPRESSION_RATIO: u64 = 1_024;
 
 fn invalid(message: impl Into<String>) -> ProtocolError {

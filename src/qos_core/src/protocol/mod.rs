@@ -19,8 +19,7 @@ pub(crate) use state::ProtocolState;
 pub(crate) mod processor;
 use tokio::sync::RwLock;
 
-const MEGABYTE: usize = 1024 * 1024;
-const MAX_ENCODED_MSG_LEN: usize = 128 * MEGABYTE;
+const MAX_ENCODED_MSG_LEN: usize = crate::io::MAX_PAYLOAD_SIZE;
 
 /// Initial client timeout for the processor until the Manifest says otherwise, see reaper.rs
 pub const INITIAL_CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
