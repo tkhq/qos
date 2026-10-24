@@ -65,6 +65,21 @@ impl HostBridge {
 	///
 	/// Panics if the stream pool fails to bind its listeners.
 	pub fn vsock_to_tcp(self) {
+		self.vsock_to_tcp_via(TcpStream::connect::<SocketAddr>);
+	}
+
+	/// Like [`Self::vsock_to_tcp`], but every TCP connection to the target
+	/// address is opened by `connect`, for example from a socket created in
+	/// another network namespace.
+	///
+	/// # Panics
+	///
+	/// Panics if the stream pool fails to bind its listeners.
+	pub(crate) fn vsock_to_tcp_via<C, F>(self, connect: C)
+	where
+		C: Fn(SocketAddr) -> F + Clone + Send + Sync + 'static,
+		F: Future<Output = std::io::Result<TcpStream>> + Send + 'static,
+	{
 		println!("starting vsock to tcp host bridge @ {}", self.host_addr);
 		tokio::spawn(async move {
 			let listeners = self
@@ -80,7 +95,11 @@ impl HostBridge {
 					"vsock to tcp bridge listening on {}",
 					listener.addr()
 				);
-				tasks.push(tokio::spawn(vsock_to_tcp(listener, host_addr)));
+				tasks.push(tokio::spawn(vsock_to_tcp(
+					listener,
+					host_addr,
+					connect.clone(),
+				)));
 				// bump port by 1 for next listener
 				host_addr.set_port(host_addr.port() + 1);
 			}
@@ -140,8 +159,9 @@ async fn tcp_to_vsock(
 			}
 
 			// see https://github.com/rust-vmm/vhost-device/issues/963
-			#[cfg(feature = "qemu")]
-			tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+			if super::qemu_vsock_workaround() {
+				tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+			}
 
 			if let Err(err) =
 				copy_bidirectional(&mut tcp_stream, &mut stream).await
@@ -153,10 +173,15 @@ async fn tcp_to_vsock(
 }
 
 // bridge vsock_to_tcp in an endless loop with immediate retry on errors
-async fn vsock_to_tcp(
+async fn vsock_to_tcp<C, F>(
 	enclave_listener: Listener,
 	host_addr: SocketAddr,
-) -> Result<(), IOError> {
+	connect: C,
+) -> Result<(), IOError>
+where
+	C: Fn(SocketAddr) -> F + Send + Sync + 'static,
+	F: Future<Output = std::io::Result<TcpStream>> + Send + 'static,
+{
 	loop {
 		let mut enclave_stream = match enclave_listener.accept().await {
 			Ok(value) => value,
@@ -166,8 +191,9 @@ async fn vsock_to_tcp(
 			}
 		};
 
+		let connecting = connect(host_addr);
 		tokio::spawn(async move {
-			let mut tcp_stream = match TcpStream::connect(host_addr).await {
+			let mut tcp_stream = match connecting.await {
 				Ok(value) => value,
 				Err(err) => {
 					eprintln!(

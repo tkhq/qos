@@ -1,0 +1,4 @@
+FROM postgres:16-alpine
+COPY --chmod=755 smoke.sh /usr/local/bin/qos-postgres-smoke
+ENTRYPOINT ["/usr/local/bin/qos-postgres-smoke"]
+CMD []

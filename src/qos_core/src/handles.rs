@@ -9,7 +9,8 @@ use std::{
 use qos_p256::P256Pair;
 
 use crate::protocol::{
-	ProtocolError, services::boot::VersionedManifestEnvelope,
+	ProtocolError,
+	services::boot::{OciDigest, VersionedManifestEnvelope},
 };
 
 /// Handle for accessing the quorum key.
@@ -147,6 +148,34 @@ impl Handles {
 			&new_pair.to_master_seed_hex(),
 			ProtocolError::FailedToPutEphemeralKey,
 		)
+	}
+
+	/// Read the files the implicit `qos` volume of a Manifest V3 exposes, as
+	/// `(file name, bytes)` pairs: the approved manifest envelope, the quorum
+	/// key and the live ephemeral key as QOS stores them (hex master seeds),
+	/// and each key's public key as `P256Public` hex, the encoding of
+	/// `quorum_key.pub` files (`docs/oci_support/manifest/volumes.md`).
+	///
+	/// # Errors
+	///
+	/// Errors if any of the files cannot be read, or a key cannot be decoded.
+	#[cfg(target_os = "linux")]
+	pub(crate) fn read_qos_volume_files(
+		&self,
+	) -> std::io::Result<[(&'static str, Vec<u8>); 5]> {
+		let public = |pair: Result<P256Pair, ProtocolError>| {
+			pair.map(|pair| {
+				qos_hex::encode(&pair.public_key().to_bytes()).into_bytes()
+			})
+			.map_err(|error| std::io::Error::other(format!("{error:?}")))
+		};
+		Ok([
+			("manifest.json", fs::read(&self.manifest)?),
+			("quorum.key", fs::read(&self.quorum.quorum)?),
+			("quorum.pub", public(self.get_quorum_key())?),
+			("ephemeral.key", fs::read(&self.ephemeral.ephemeral_key_path)?),
+			("ephemeral.pub", public(self.get_ephemeral_key())?),
+		])
 	}
 
 	/// Get the Quorum Key pair.
@@ -296,6 +325,42 @@ impl Handles {
 	#[must_use]
 	pub fn pivot_exists(&self) -> bool {
 		Path::new(&self.pivot).exists()
+	}
+
+	fn oci_archive_path(&self, digest: &OciDigest) -> PathBuf {
+		Path::new(&self.manifest)
+			.parent()
+			.unwrap_or_else(|| Path::new("/"))
+			.join("qos.oci")
+			.join(format!("{}.tar", digest.hex()))
+	}
+
+	/// Persist one verified OCI layout archive as immutable enclave state.
+	pub(crate) fn put_oci_archive(
+		&self,
+		digest: &OciDigest,
+		archive: &[u8],
+	) -> Result<(), ProtocolError> {
+		Self::write_as_read_only(
+			self.oci_archive_path(digest),
+			archive,
+			ProtocolError::InvalidOci("failed to store OCI archive".into()),
+		)
+	}
+
+	/// Read a previously verified OCI layout archive for bundle creation.
+	///
+	/// # Errors
+	///
+	/// Returns [`ProtocolError::InvalidOci`] when the archive is absent or
+	/// unreadable.
+	pub fn get_oci_archive(
+		&self,
+		digest: &OciDigest,
+	) -> Result<Vec<u8>, ProtocolError> {
+		fs::read(self.oci_archive_path(digest)).map_err(|_| {
+			ProtocolError::InvalidOci("missing OCI archive".into())
+		})
 	}
 
 	/// Helper function for ready only writes that also ensures full write atomicity by renaming at the end.

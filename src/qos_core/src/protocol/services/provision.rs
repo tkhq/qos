@@ -77,6 +77,9 @@ pub(in crate::protocol) fn provision(
 	// Record the share set approval
 	state.handles.mutate_manifest_envelope(|mut envelope| {
 		match &mut envelope {
+			VersionedManifestEnvelope::V3(inner) => {
+				inner.share_set_approvals.push(approval);
+			}
 			VersionedManifestEnvelope::V2(inner) => {
 				inner.share_set_approvals.push(approval);
 			}

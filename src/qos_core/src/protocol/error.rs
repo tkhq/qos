@@ -200,6 +200,10 @@ pub enum ProtocolError {
 	/// Genesis messages are only supported on the canonical JSON wire
 	/// encoding; legacy Borsh genesis is not supported.
 	LegacyGenesisNotSupported,
+	/// A Manifest V3 was sent through a legacy pivot boot request.
+	ManifestRequiresOciBoot,
+	/// OCI input failed validation or preparation.
+	InvalidOci(String),
 }
 
 impl From<std::io::Error> for ProtocolError {
@@ -272,6 +276,12 @@ impl std::fmt::Display for ProtocolError {
 					f,
 					"invalid pivot hash: expected {expected}, got {actual}"
 				)
+			}
+			Self::ManifestRequiresOciBoot => {
+				write!(f, "manifest v3 requires an OCI boot request")
+			}
+			Self::InvalidOci(message) => {
+				write!(f, "invalid OCI input: {message}")
 			}
 			Self::InvalidPivotEnv(e) => write!(f, "invalid pivot env: {e}"),
 			Self::OversizeMsg => write!(f, "message too large"),

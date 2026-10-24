@@ -1,4 +1,5 @@
 use std::{
+	collections::BTreeSet,
 	fs::{self, File},
 	io::{self, BufRead, BufReader, Write},
 	mem,
@@ -8,21 +9,29 @@ use std::{
 
 use aws_nitro_enclaves_nsm_api::api::AttestationDoc;
 use borsh::BorshDeserialize;
-use qos_core::protocol::{
-	QosHash,
-	msg::{JsonBytes, ProtocolMsg, ProtocolMsgEncoding},
-	services::{
-		boot::{
-			Approval, BridgeConfig, DnsConfig, Manifest as ManifestV1,
-			ManifestBuilder, ManifestBuilderError,
-			ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
-			ManifestEnvelopeV2, ManifestSet, ManifestVersion, MemberPubKey,
-			Namespace, NitroConfig, PatchSet, PivotConfig as PivotConfigV1,
-			QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
-			VersionedManifestEnvelope,
+use qos_core::{
+	oci_image::check_oci_layout_digest,
+	protocol::{
+		QosHash,
+		msg::{JsonBytes, ProtocolMsg, ProtocolMsgEncoding},
+		oci::{
+			MAX_OCI_TOTAL_ARCHIVE_BYTES, ManifestEnvelopeBytes, OciArtifactV3,
+			OciBootPayloadV3, OciLayoutArchive,
 		},
-		genesis::{GenesisOutput, GenesisSet},
-		key::EncryptedQuorumKey,
+		services::{
+			boot::{
+				Approval, BridgeConfig, DnsConfig, EnclaveMode,
+				Manifest as ManifestV1, ManifestBuilder, ManifestBuilderError,
+				ManifestEnvelope as ManifestEnvelopeV1, ManifestEnvelopeV0,
+				ManifestEnvelopeV2, ManifestEnvelopeV3, ManifestSet,
+				ManifestVersion, MemberPubKey, Namespace, NitroConfig,
+				OciDigest, PatchSet, PivotConfig as PivotConfigV1,
+				QuorumMember, RestartPolicy, ShareSet, VersionedManifest,
+				VersionedManifestEnvelope, WorkloadV3,
+			},
+			genesis::{GenesisOutput, GenesisSet},
+			key::EncryptedQuorumKey,
+		},
 	},
 };
 use qos_crypto::{sha_256, sha_384, sha_512};
@@ -992,10 +1001,10 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 	let quorum_key = P256Public::from_hex_file(&quorum_key_path)
 		.map_err(Error::FailedToReadQuorumPublicKey)?;
 	let patch_set = match (&manifest, patch_set_dir) {
-		(VersionedManifest::V2(_), Some(_)) => {
+		(VersionedManifest::V2(_) | VersionedManifest::V3(_), Some(_)) => {
 			return Err(Error::ManifestV2DoesNotSupportPatchSet);
 		}
-		(VersionedManifest::V2(_), None) => None,
+		(VersionedManifest::V2(_) | VersionedManifest::V3(_), None) => None,
 		(_, Some(patch_set_dir)) => Some(get_patch_set(patch_set_dir)),
 		(_, None) => return Err(Error::ManifestV1RequiresPatchSet),
 	};
@@ -1006,7 +1015,11 @@ pub(crate) fn approve_manifest<P: AsRef<Path>>(
 		&get_share_set(share_set_dir),
 		patch_set.as_ref(),
 		&extract_nitro_config(qos_release_dir_path, pcr3_preimage_path),
-		&extract_pivot_hash(pivot_hash_path),
+		&if matches!(manifest, VersionedManifest::V3(_)) {
+			Vec::new()
+		} else {
+			extract_pivot_hash(pivot_hash_path)
+		},
 		&quorum_key,
 	) {
 		eprintln!("Exiting early without approving manifest");
@@ -1074,7 +1087,7 @@ fn approve_manifest_programmatic_verifications(
 
 	// Verify share set composition
 	match manifest {
-		VersionedManifest::V2(_) => {}
+		VersionedManifest::V2(_) | VersionedManifest::V3(_) => {}
 		VersionedManifest::V1(manifest) => {
 			if Some(&manifest.patch_set) != patch_set {
 				eprintln!("Patch Set composition does not match");
@@ -1094,15 +1107,21 @@ fn approve_manifest_programmatic_verifications(
 	}
 
 	// Verify pcrs 0, 1, 2, 3.
-	if manifest.enclave() != nitro_config {
+	if manifest.enclave().as_ref() != nitro_config {
 		eprintln!("Nitro configuration does not match");
 		return false;
 	}
 
 	// Verify the pivot could be built deterministically
-	if manifest.pivot_hash().as_slice() != pivot_hash {
-		eprintln!("Pivot hash does not match");
-		return false;
+	if !matches!(manifest, VersionedManifest::V3(_)) {
+		let Some(manifest_pivot_hash) = manifest.pivot_hash() else {
+			eprintln!("Manifest has no pivot hash");
+			return false;
+		};
+		if manifest_pivot_hash.as_slice() != pivot_hash {
+			eprintln!("Pivot hash does not match");
+			return false;
+		}
 	}
 
 	// Verify the intended Quorum Key is being used
@@ -1114,6 +1133,10 @@ fn approve_manifest_programmatic_verifications(
 	true
 }
 
+#[expect(
+	clippy::too_many_lines,
+	reason = "one prompt per manifest decision, in the order the approver reads them"
+)]
 fn approve_manifest_human_verifications<R, W>(
 	manifest: &VersionedManifest,
 	prompter: &mut Prompter<R, W>,
@@ -1156,10 +1179,9 @@ where
 	}
 
 	// Check pivot restart policy
-	{
+	if let Some(restart) = manifest.restart() {
 		let prompt = format!(
-			"Is this the correct pivot restart policy: {:?}? (y/n)",
-			manifest.restart()
+			"Is this the correct pivot restart policy: {restart:?}? (y/n)"
 		);
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
@@ -1167,18 +1189,16 @@ where
 	}
 
 	// Check pivot arguments
-	{
-		let prompt = format!(
-			"Are these the correct pivot args:\n{:?}?\n(y/n)",
-			manifest.args()
-		);
+	if let Some(args) = manifest.args() {
+		let prompt =
+			format!("Are these the correct pivot args:\n{args:?}?\n(y/n)");
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
 		}
 	}
 
-	// Check pivot debug mode
-	{
+	// Check pivot debug mode; a Manifest V3's is its enclave mode, below
+	if !matches!(manifest, VersionedManifest::V3(_)) {
 		let prompt = format!(
 			"Is this the correct pivot debug mode: {}? (y/n)",
 			manifest.debug_mode()
@@ -1200,8 +1220,8 @@ where
 	}
 
 	// Check DNS resolvers for manifests that support DNS configuration
-	if let VersionedManifest::V2(v2_manifest) = manifest {
-		let prompt = match &v2_manifest.dns {
+	if matches!(manifest, VersionedManifest::V2(_) | VersionedManifest::V3(_)) {
+		let prompt = match manifest.dns_config() {
 			None =>
 				"Is this the correct DNS configuration: absent? (y/n)".to_string(),
 			Some(dns) if dns.resolvers.is_empty() =>
@@ -1214,6 +1234,34 @@ where
 		};
 		if !prompter.prompt_is_yes(&prompt) {
 			return false;
+		}
+	}
+
+	if let VersionedManifest::V3(v3_manifest) = manifest {
+		let mut prompts = vec![format!(
+			"Is this the correct enclave mode: {}? (y/n)",
+			match v3_manifest.enclave.mode() {
+				EnclaveMode::Attested =>
+					"attested (workload output is discarded)",
+				EnclaveMode::Debug => "debug (workload output is printed)",
+			}
+		)];
+		for (name, workload) in &v3_manifest.workloads {
+			let WorkloadV3::Oci { image, restart, mounts } = workload;
+			prompts.push(format!(
+				"Is this the correct OCI workload `{}`:\nimage {}\nrestart {restart:?}\nmounts {mounts:?}\n(y/n)",
+				name.as_str(),
+				image.digest().as_str(),
+			));
+		}
+		prompts.push(format!(
+			"Are these the correct top-level volumes:\n{:?}?\n(y/n)",
+			v3_manifest.volumes
+		));
+		for prompt in prompts {
+			if !prompter.prompt_is_yes(&prompt) {
+				return false;
+			}
 		}
 	}
 
@@ -1230,6 +1278,13 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 
 	// Create manifest envelope
 	let manifest_envelope = match manifest {
+		VersionedManifest::V3(manifest) => {
+			VersionedManifestEnvelope::V3(ManifestEnvelopeV3 {
+				manifest,
+				manifest_set_approvals: approvals,
+				share_set_approvals: vec![],
+			})
+		}
 		VersionedManifest::V2(manifest) => {
 			VersionedManifestEnvelope::V2(ManifestEnvelopeV2 {
 				manifest,
@@ -1274,35 +1329,77 @@ pub(crate) fn generate_manifest_envelope<P: AsRef<Path>>(
 	Ok(())
 }
 
-pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
-	uri: &str,
-	manifest_envelope_path: P,
-	pivot_path: P,
-	attestation_doc_path: P,
-) -> Result<(), Error> {
-	let pivot =
-		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
-	let manifest_envelope =
-		read_manifest_envelope_compat(manifest_envelope_path)?;
-	let encodings = manifest_envelope_protocol_encodings(&manifest_envelope);
+pub(crate) struct BootKeyForwardArgs<P: AsRef<Path>> {
+	pub uri: String,
+	pub manifest_envelope_path: P,
+	pub pivot_path: Option<P>,
+	pub oci_layout_archives: Vec<String>,
+	pub attestation_doc_path: P,
+}
 
-	let req = ProtocolMsg::BootKeyForwardRequest {
-		manifest_envelope: Box::new(manifest_envelope),
-		pivot,
-	};
-	let cose_sign1 =
-		post_request_with_encoding_fallback(uri, &req, encodings, |resp| {
-			match resp {
+fn post_borsh_attestation(
+	uri: &str,
+	request_msg: &ProtocolMsg,
+	extract: impl FnOnce(ProtocolMsg) -> Result<Vec<u8>, ProtocolMsg>,
+) -> Result<Vec<u8>, Error> {
+	let response = request::post_borsh(uri, request_msg)
+		.map_err(Error::UnexpectedProtocolMsgResponse)?;
+	extract(response).map_err(|response| {
+		Error::UnexpectedProtocolMsgResponse(format!("{response:?}"))
+	})
+}
+
+pub(crate) fn boot_key_fwd<P: AsRef<Path>>(
+	args: BootKeyForwardArgs<P>,
+) -> Result<(), Error> {
+	let manifest_envelope =
+		read_manifest_envelope_compat(&args.manifest_envelope_path)?;
+	let cose_sign1 = if let VersionedManifestEnvelope::V3(envelope) =
+		&manifest_envelope
+	{
+		let payload = oci_boot_payload(
+			&args.manifest_envelope_path,
+			envelope,
+			&args.oci_layout_archives,
+		)?;
+		post_borsh_attestation(
+			&args.uri,
+			&ProtocolMsg::BootKeyForwardOciRequest { payload },
+			|response| match response {
+				ProtocolMsg::BootKeyForwardResponse {
+					nsm_response: NsmResponse::Attestation { document },
+				} => Ok(document),
+				response => Err(response),
+			},
+		)?
+	} else {
+		let pivot_path = args.pivot_path.ok_or_else(|| {
+			Error::Deserialize("legacy manifest requires --pivot-path".into())
+		})?;
+		let pivot =
+			fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
+		let encodings =
+			manifest_envelope_protocol_encodings(&manifest_envelope);
+		let req = ProtocolMsg::BootKeyForwardRequest {
+			manifest_envelope: Box::new(manifest_envelope),
+			pivot,
+		};
+		post_request_with_encoding_fallback(
+			&args.uri,
+			&req,
+			encodings,
+			|resp| match resp {
 				ProtocolMsg::BootKeyForwardResponse {
 					nsm_response: NsmResponse::Attestation { document },
 				} => Ok(document),
 				r => Err(format!("{r:?}")),
-			}
-		})
-		.map_err(Error::UnexpectedProtocolMsgResponse)?;
+			},
+		)
+		.map_err(Error::UnexpectedProtocolMsgResponse)?
+	};
 
 	write_with_msg(
-		attestation_doc_path.as_ref(),
+		args.attestation_doc_path.as_ref(),
 		&cose_sign1,
 		"COSE Sign1 Attestation Doc",
 	);
@@ -1388,7 +1485,9 @@ fn manifest_envelope_protocol_encodings(
 	manifest_envelope: &VersionedManifestEnvelope,
 ) -> &'static [ProtocolMsgEncoding] {
 	match manifest_envelope {
-		VersionedManifestEnvelope::V2(_) => &[ProtocolMsgEncoding::Json],
+		VersionedManifestEnvelope::V3(_) | VersionedManifestEnvelope::V2(_) => {
+			&[ProtocolMsgEncoding::Json]
+		}
 		VersionedManifestEnvelope::V1(_) | VersionedManifestEnvelope::V0(_) => {
 			&[ProtocolMsgEncoding::Borsh, ProtocolMsgEncoding::Json]
 		}
@@ -1423,10 +1522,94 @@ pub(crate) fn inject_key<P: AsRef<Path>>(
 
 pub(crate) struct BootStandardArgs<P: AsRef<Path>> {
 	pub uri: String,
-	pub pivot_path: P,
+	pub pivot_path: Option<P>,
+	pub oci_layout_archives: Vec<String>,
 	pub manifest_envelope_path: P,
 	pub pcr3_preimage_path: P,
 	pub unsafe_skip_attestation: bool,
+}
+
+fn oci_boot_payload<P: AsRef<Path>>(
+	manifest_envelope_path: &P,
+	envelope: &ManifestEnvelopeV3,
+	oci_layout_archives: &[String],
+) -> Result<OciBootPayloadV3, Error> {
+	let required: BTreeSet<_> = envelope
+		.manifest
+		.workloads
+		.values()
+		.map(|workload| workload.image().digest().clone())
+		.collect();
+	let mut given = BTreeSet::new();
+	let mut artifacts = Vec::with_capacity(oci_layout_archives.len());
+	let mut total = 0_usize;
+	for argument in oci_layout_archives {
+		let (digest, path) = parse_oci_layout_archive(argument)?;
+		if !required.contains(&digest) {
+			return Err(Error::Deserialize(format!(
+				"no workload of the manifest runs image {}",
+				digest.as_str()
+			)));
+		}
+		if !given.insert(digest.clone()) {
+			return Err(Error::Deserialize(format!(
+				"image {} has more than one --oci-layout-archive",
+				digest.as_str()
+			)));
+		}
+		let bytes = fs::read(path).map_err(|error| Error::FailedToRead {
+			path: path.to_owned(),
+			error: error.to_string(),
+		})?;
+		total += bytes.len();
+		if total > MAX_OCI_TOTAL_ARCHIVE_BYTES {
+			return Err(Error::Deserialize(format!(
+				"the OCI layout archives exceed the {MAX_OCI_TOTAL_ARCHIVE_BYTES} \
+				 bytes one boot request can carry"
+			)));
+		}
+		check_oci_layout_digest(&digest, &bytes).map_err(|error| {
+			Error::Deserialize(format!(
+				"{path} does not hold image {}: {error:?}",
+				digest.as_str()
+			))
+		})?;
+		artifacts.push(OciArtifactV3 {
+			digest,
+			oci_layout_archive: OciLayoutArchive::new(bytes)
+				.map_err(|error| Error::Deserialize(error.into()))?,
+		});
+	}
+	if let Some(missing) = required.difference(&given).next() {
+		return Err(Error::Deserialize(format!(
+			"no --oci-layout-archive for image {}",
+			missing.as_str()
+		)));
+	}
+	let envelope_bytes = fs::read(manifest_envelope_path.as_ref())
+		.map_err(Error::FailedToReadManifestEnvelopeFile)?;
+	Ok(OciBootPayloadV3 {
+		manifest_envelope: ManifestEnvelopeBytes::new(envelope_bytes)
+			.map_err(|error| Error::Deserialize(error.into()))?,
+		artifacts,
+	})
+}
+
+fn parse_oci_layout_archive(
+	argument: &str,
+) -> Result<(OciDigest, &str), Error> {
+	let invalid = |reason: String| {
+		Error::Deserialize(format!(
+			"--oci-layout-archive {argument:?} must be sha256:<hex>=<path>: {reason}"
+		))
+	};
+	let (digest, path) =
+		argument.split_once('=').ok_or_else(|| invalid("no `=`".into()))?;
+	if path.is_empty() {
+		return Err(invalid("no path".into()));
+	}
+	let digest = OciDigest::try_from(digest.to_owned()).map_err(invalid)?;
+	Ok((digest, path))
 }
 
 fn boot_standard_attestation_doc_with_fallback(
@@ -1471,27 +1654,49 @@ pub(crate) fn boot_standard<P: AsRef<Path>>(
 	BootStandardArgs {
 		uri,
 		pivot_path,
+		oci_layout_archives,
 		manifest_envelope_path,
 		pcr3_preimage_path,
 		unsafe_skip_attestation,
 	}: BootStandardArgs<P>,
 ) -> Result<(), Error> {
-	// Read in pivot binary
-	let pivot =
-		fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
-
 	// Create manifest envelope
 	let manifest_envelope =
-		read_manifest_envelope_compat(manifest_envelope_path)?;
+		read_manifest_envelope_compat(&manifest_envelope_path)?;
 	let manifest = manifest_envelope.clone().manifest();
 
 	// Broadcast boot standard instruction and extract the attestation doc from
 	// the response.
-	let cose_sign1 = boot_standard_attestation_doc_with_fallback(
-		&uri,
-		manifest_envelope,
-		pivot,
-	)?;
+	let cose_sign1 = if let VersionedManifestEnvelope::V3(envelope) =
+		&manifest_envelope
+	{
+		let payload = oci_boot_payload(
+			&manifest_envelope_path,
+			envelope,
+			&oci_layout_archives,
+		)?;
+		post_borsh_attestation(
+			&uri,
+			&ProtocolMsg::BootStandardOciRequest { payload },
+			|response| match response {
+				ProtocolMsg::BootStandardResponse {
+					nsm_response: NsmResponse::Attestation { document },
+				} => Ok(document),
+				response => Err(response),
+			},
+		)?
+	} else {
+		let pivot_path = pivot_path.ok_or_else(|| {
+			Error::Deserialize("legacy manifest requires --pivot-path".into())
+		})?;
+		let pivot =
+			fs::read(pivot_path.as_ref()).map_err(Error::FailedToReadPivot)?;
+		boot_standard_attestation_doc_with_fallback(
+			&uri,
+			manifest_envelope,
+			pivot,
+		)?
+	};
 
 	let attestation_doc =
 		extract_attestation_doc(&cose_sign1, unsafe_skip_attestation, None);
@@ -2481,6 +2686,9 @@ fn read_manifest_envelope_v1_compat<P: AsRef<Path>>(
 	file: P,
 ) -> Result<ManifestEnvelopeV1, Error> {
 	match read_manifest_envelope_compat(file)? {
+		VersionedManifestEnvelope::V3(_) => {
+			Err(Error::UnsupportedManifestVersion)
+		}
 		VersionedManifestEnvelope::V2(_) => {
 			Err(Error::ManifestV2NotConvertibleToBorsh)
 		}
@@ -2737,6 +2945,193 @@ mod tests {
 		proxy_re_encrypt_share_human_verifications,
 		proxy_re_encrypt_share_programmatic_verifications,
 	};
+
+	mod oci_layout_archives {
+		use std::fs;
+
+		use qos_core::protocol::services::boot::ManifestEnvelopeV3;
+		use qos_test_primitives::PathWrapper;
+
+		use super::super::oci_boot_payload;
+
+		fn digest(bytes: &[u8]) -> String {
+			format!("sha256:{}", qos_hex::encode(&qos_crypto::sha_256(bytes)))
+		}
+
+		fn tar(files: &[(&str, &[u8])]) -> Vec<u8> {
+			let mut builder = tar::Builder::new(Vec::new());
+			for (path, data) in files {
+				let mut header = tar::Header::new_ustar();
+				header.set_entry_type(tar::EntryType::Regular);
+				header.set_mode(0o644);
+				header.set_size(data.len() as u64);
+				header.set_cksum();
+				builder.append_data(&mut header, path, *data).unwrap();
+			}
+			builder.into_inner().unwrap()
+		}
+
+		fn descriptor(media_type: &str, bytes: &[u8]) -> serde_json::Value {
+			serde_json::json!({
+				"mediaType": media_type,
+				"digest": digest(bytes),
+				"size": bytes.len(),
+			})
+		}
+
+		fn layout(file: &[u8]) -> (String, Vec<u8>) {
+			let layer = tar(&[("app", file)]);
+			// An enclave's platform, whatever machine runs the client.
+			let config = serde_json::to_vec(&serde_json::json!({
+				"architecture": "amd64",
+				"os": "linux",
+				"rootfs": {"type": "layers", "diff_ids": [digest(&layer)]},
+				"config": {"Cmd": ["/app"]},
+			}))
+			.unwrap();
+			let manifest = serde_json::to_vec(&serde_json::json!({
+				"schemaVersion": 2,
+				"mediaType": "application/vnd.oci.image.manifest.v1+json",
+				"config": descriptor(
+					"application/vnd.oci.image.config.v1+json",
+					&config
+				),
+				"layers": [descriptor(
+					"application/vnd.oci.image.layer.v1.tar",
+					&layer
+				)],
+			}))
+			.unwrap();
+			let index = serde_json::to_vec(&serde_json::json!({
+				"schemaVersion": 2,
+				"manifests": [descriptor(
+					"application/vnd.oci.image.manifest.v1+json",
+					&manifest
+				)],
+			}))
+			.unwrap();
+			let blob = |bytes: &[u8]| {
+				format!("blobs/sha256/{}", &digest(bytes)["sha256:".len()..])
+			};
+			let (layer_path, config_path, manifest_path) =
+				(blob(&layer), blob(&config), blob(&manifest));
+			let archive = tar(&[
+				("oci-layout", br#"{"imageLayoutVersion":"1.0.0"}"#),
+				("index.json", &index),
+				(&manifest_path, &manifest),
+				(&config_path, &config),
+				(&layer_path, &layer),
+			]);
+			(digest(&manifest), archive)
+		}
+
+		pub(super) fn envelope(digests: &[&str]) -> ManifestEnvelopeV3 {
+			let pcr = "00".repeat(48);
+			let workloads: serde_json::Map<_, _> = digests
+				.iter()
+				.enumerate()
+				.map(|(index, digest)| {
+					(
+						format!("w{index}"),
+						serde_json::json!({
+							"type": "oci",
+							"image": {"type": "ociManifest", "digest": digest},
+							"restart": "never",
+						}),
+					)
+				})
+				.collect();
+			serde_json::from_value(serde_json::json!({
+				"manifest": {
+					"version": "v3",
+					"namespace": {"name": "n", "nonce": 1, "quorumKey": "0a"},
+					"manifestSet": {"threshold": 1, "members": []},
+					"shareSet": {"threshold": 1, "members": []},
+					"enclave": {
+						"type": "nitro", "mode": "debug",
+						"pcr0": pcr, "pcr1": pcr, "pcr2": pcr, "pcr3": pcr,
+						"awsRootCertificate": "ff", "qosCommit": "c"
+					},
+					"workloads": workloads,
+				},
+				"manifestSetApprovals": [],
+				"shareSetApprovals": [],
+			}))
+			.unwrap()
+		}
+
+		#[test]
+		fn archives_name_their_digest_and_may_come_in_any_order() {
+			let (first, first_archive) = layout(b"first");
+			let (second, second_archive) = layout(b"second");
+			let temp_dir = std::env::temp_dir();
+			let first_path =
+				PathWrapper::from(temp_dir.join("qos_client_oci_first.tar"));
+			let second_path =
+				PathWrapper::from(temp_dir.join("qos_client_oci_second.tar"));
+			let envelope_path =
+				PathWrapper::from(temp_dir.join("qos_client_oci_envelope"));
+			fs::write(&*first_path, &first_archive).unwrap();
+			fs::write(&*second_path, &second_archive).unwrap();
+			fs::write(&*envelope_path, b"envelope").unwrap();
+			let envelope = envelope(&[&first, &second]);
+			let argument =
+				|digest: &str, path: &PathWrapper<std::path::PathBuf>| {
+					format!("{digest}={}", path.as_ref().display())
+				};
+
+			let payload = oci_boot_payload(
+				&envelope_path,
+				&envelope,
+				&[
+					argument(&second, &second_path),
+					argument(&first, &first_path),
+				],
+			)
+			.unwrap();
+			for artifact in &payload.artifacts {
+				let expected = if artifact.digest.as_str() == first {
+					&first_archive
+				} else {
+					&second_archive
+				};
+				assert_eq!(
+					artifact.oci_layout_archive.as_slice(),
+					&expected[..]
+				);
+			}
+
+			let fails = |arguments: &[String], reason: &str| {
+				let error =
+					oci_boot_payload(&envelope_path, &envelope, arguments)
+						.unwrap_err();
+				assert!(format!("{error:?}").contains(reason), "{error:?}");
+			};
+			fails(
+				&[
+					argument(&first, &second_path),
+					argument(&second, &first_path),
+				],
+				"does not hold image",
+			);
+			fails(&[argument(&first, &first_path)], "no --oci-layout-archive");
+			fails(
+				&[
+					argument(&first, &first_path),
+					argument(&first, &first_path),
+					argument(&second, &second_path),
+				],
+				"more than one",
+			);
+			fails(
+				&[argument(&digest(b"other"), &first_path)],
+				"no workload of the manifest",
+			);
+			fails(&[first_path.as_ref().display().to_string()], "no `=`");
+			fails(&[format!("{first}=")], "no path");
+			fails(&["sha256:00=/x".to_string()], "64 lowercase");
+		}
+	}
 
 	struct Setup {
 		manifest: VersionedManifest,
@@ -3450,6 +3845,50 @@ mod tests {
 					"Is this the correct manifest schema version: v2? (y/n)"
 				);
 				assert_eq!(output[11], expected);
+			}
+		}
+
+		#[test]
+		fn prompts_each_v3_dns_configuration() {
+			for (dns, expected) in [
+				(None, "Is this the correct DNS configuration: absent? (y/n)"),
+				(
+					Some(DnsConfig { resolvers: vec![] }),
+					"Is this the correct DNS configuration: configured with no resolvers? (y/n)",
+				),
+				(
+					Some(DnsConfig {
+						resolvers: vec!["1.1.1.1".parse().unwrap()],
+					}),
+					"Are these the correct DNS resolvers:",
+				),
+			] {
+				let mut manifest =
+					super::oci_layout_archives::envelope(&[&format!(
+						"sha256:{}",
+						"a".repeat(64)
+					)])
+					.manifest;
+				manifest.dns = dns;
+				let manifest = VersionedManifest::V3(manifest);
+
+				let mut vec_out: Vec<u8> = vec![];
+				let vec_in = "yes\n".repeat(32);
+				let mut prompter = Prompter {
+					reader: vec_in.as_bytes(),
+					writer: &mut vec_out,
+				};
+
+				assert!(approve_manifest_human_verifications(
+					&manifest,
+					&mut prompter
+				));
+
+				let output = String::from_utf8(vec_out).unwrap();
+				assert!(
+					output.split('\n').any(|line| line == expected),
+					"{output}"
+				);
 			}
 		}
 	}

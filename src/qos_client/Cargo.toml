@@ -41,6 +41,7 @@ qos_core = { workspace = true, features = ["mock"], default-features = false }
 lazy_static = { workspace = true }
 qos_test_primitives = { path = "../qos_test_primitives" }
 qos_p256 = { workspace = true, features = ["mock"] }
+tar = { workspace = true }
 
 [features]
 default = ["smartcard"]

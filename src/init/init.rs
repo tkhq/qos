@@ -65,6 +65,9 @@ fn boot() {
 
 #[tokio::main]
 async fn main() {
+	if qos_core::oci_runtime::run_sandbox_if_requested() {
+		return;
+	}
 	boot();
 	dmesg("QuorumOS Booted".to_string());
 

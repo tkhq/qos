@@ -27,7 +27,7 @@ use qos_core::{
 	client::{ClientError, SocketClient},
 	io::SocketAddress,
 	protocol::{
-		ProtocolError, ProtocolPhase, msg::ProtocolMsg,
+		ProtocolError, ProtocolPhase, msg::ProtocolMsg, oci_status::OciStartup,
 		services::boot::VersionedManifestEnvelope,
 	},
 };
@@ -146,16 +146,16 @@ impl HostServer {
 		match response {
 			ProtocolMsg::StatusResponse(phase) => {
 				let inner = format!("{phase:?}");
-				let status = match phase {
+				match phase {
 					ProtocolPhase::UnrecoverableError
 					| ProtocolPhase::WaitingForBootInstruction
 					| ProtocolPhase::WaitingForQuorumShards
-					| ProtocolPhase::WaitingForForwardedKey => StatusCode::SERVICE_UNAVAILABLE,
+					| ProtocolPhase::WaitingForForwardedKey => {
+						(StatusCode::SERVICE_UNAVAILABLE, Html(inner))
+					}
 					ProtocolPhase::QuorumKeyProvisioned
-					| ProtocolPhase::GenesisBooted => StatusCode::OK,
-				};
-
-				(status, Html(inner))
+					| ProtocolPhase::GenesisBooted => Self::oci_readiness(&state, inner).await,
+				}
 			}
 			other => {
 				let msg = format!(
@@ -164,6 +164,44 @@ impl HostServer {
 				eprintln!("{msg}");
 				(StatusCode::INTERNAL_SERVER_ERROR, Html(msg))
 			}
+		}
+	}
+
+	/// Health of a provisioned enclave. A Manifest V3 enclave is ready only
+	/// once every workload has started. An enclave that runs no OCI
+	/// workloads, or does not know the request, is ready as before.
+	async fn oci_readiness(
+		state: &QosHostState,
+		phase: String,
+	) -> (StatusCode, Html<String>) {
+		let encoded_request = ProtocolMsg::OciStatusRequest
+			.to_json_wire()
+			.expect("ProtocolMsg can always serialize. qed.");
+		let startup = match state
+			.enclave_client
+			.call(&encoded_request)
+			.await
+			.map_err(|e| {
+				format!(
+					"Error while trying to send socket request to enclave: {e:?}"
+				)
+			})
+			.and_then(|response| oci_startup(&response))
+		{
+			Ok(startup) => startup,
+			Err(msg) => {
+				eprintln!("{msg}");
+				return (StatusCode::INTERNAL_SERVER_ERROR, Html(msg));
+			}
+		};
+		match startup {
+			OciStartup::Inactive | OciStartup::Started => {
+				(StatusCode::OK, Html(phase))
+			}
+			OciStartup::Starting | OciStartup::Failed => (
+				StatusCode::SERVICE_UNAVAILABLE,
+				Html(format!("{phase}; OCI workloads {startup:?}")),
+			),
 		}
 	}
 
@@ -205,16 +243,29 @@ impl HostServer {
 			get_eph_key_from_attestation_doc(&state.enclave_client).await;
 		let vitals_log = if let Some(m) = manifest_envelope.as_ref() {
 			let manifest = m.clone().manifest();
-			serde_json::to_string(&EnclaveVitalStats {
-				phase,
-				namespace: manifest.namespace().name.clone(),
-				nonce: manifest.namespace().nonce,
-				pivot_hash: *manifest.pivot_hash(),
-				pcr0: manifest.enclave().pcr0.clone(),
-				pivot_args: manifest.args().to_vec(),
-				ephemeral_key: ephemeral_key.clone(),
-			})
-			.expect("always valid json. qed.")
+			if let (Some(pivot_hash), Some(pivot_args)) =
+				(manifest.pivot_hash(), manifest.args())
+			{
+				serde_json::to_string(&EnclaveVitalStats {
+					phase,
+					namespace: manifest.namespace().name.clone(),
+					nonce: manifest.namespace().nonce,
+					pivot_hash: *pivot_hash,
+					pcr0: manifest.enclave().pcr0.clone(),
+					pivot_args: pivot_args.to_vec(),
+					ephemeral_key: ephemeral_key.clone(),
+				})
+				.expect("always valid json. qed.")
+			} else {
+				serde_json::json!({
+					"phase": phase,
+					"namespace": manifest.namespace().name.clone(),
+					"nonce": manifest.namespace().nonce,
+					"pcr0": qos_hex::encode(&manifest.enclave().pcr0),
+					"ephemeralKey": ephemeral_key.clone(),
+				})
+				.to_string()
+			}
 		} else {
 			let info = serde_json::json!({
 				"phase": phase,
@@ -309,4 +360,48 @@ async fn get_manifest_envelope(
 	};
 
 	Ok(manifest_envelope)
+}
+
+/// The OCI workload startup an enclave reports. An enclave that does not know
+/// the request runs no OCI workloads.
+fn oci_startup(response: &[u8]) -> Result<OciStartup, String> {
+	match ProtocolMsg::from_wire_any(response) {
+		Ok(ProtocolMsg::OciStatusResponse { startup, .. }) => Ok(startup),
+		Ok(ProtocolMsg::ProtocolErrorResponse(
+			ProtocolError::ProtocolMsgDeserialization,
+		)) => Ok(OciStartup::Inactive),
+		other => Err(format!(
+			"Unexpected response: Expected a ProtocolMsg::OciStatusResponse, but got: {other:?}"
+		)),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn only_an_enclave_that_does_not_know_the_request_has_no_oci_workloads() {
+		let response = |msg: ProtocolMsg| msg.to_json_wire().unwrap();
+		assert_eq!(
+			oci_startup(&response(ProtocolMsg::OciStatusResponse {
+				startup: OciStartup::Starting,
+				workloads: Vec::new(),
+			})),
+			Ok(OciStartup::Starting)
+		);
+		assert_eq!(
+			oci_startup(&response(ProtocolMsg::ProtocolErrorResponse(
+				ProtocolError::ProtocolMsgDeserialization
+			))),
+			Ok(OciStartup::Inactive)
+		);
+		assert!(
+			oci_startup(&response(ProtocolMsg::ProtocolErrorResponse(
+				ProtocolError::InvalidMsg
+			)))
+			.is_err()
+		);
+		assert!(oci_startup(b"not a protocol message").is_err());
+	}
 }

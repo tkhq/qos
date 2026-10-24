@@ -8,6 +8,8 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::protocol::{
 	ProtocolError,
+	oci::{OciBootPayloadV3, OciLimitExceeded},
+	oci_status::{OciStartup, OciWorkloadStatus},
 	services::{
 		boot::{Approval, VersionedManifestEnvelope},
 		genesis::{GenesisOutput, GenesisSet},
@@ -263,6 +265,28 @@ pub enum ProtocolMsg {
 		/// Pivot binary.
 		pivot: Vec<u8>,
 	},
+	/// Borsh-only standard boot carrying a signed Manifest V3 and OCI images.
+	#[serde(skip)]
+	BootStandardOciRequest {
+		/// Bounded raw manifest envelope and image artifacts.
+		payload: OciBootPayloadV3,
+	},
+	/// Borsh-only key-forward boot carrying Manifest V3 and OCI images.
+	#[serde(skip)]
+	BootKeyForwardOciRequest {
+		/// Bounded raw manifest envelope and image artifacts.
+		payload: OciBootPayloadV3,
+	},
+	/// Request Manifest V3 workload status records.
+	OciStatusRequest,
+	/// The Manifest V3 workload group's startup and its workload status
+	/// records, ordered by name.
+	OciStatusResponse {
+		/// The group's initial start.
+		startup: OciStartup,
+		/// Workload status records, ordered by name.
+		workloads: Vec<OciWorkloadStatus>,
+	},
 }
 
 impl ProtocolMsg {
@@ -285,9 +309,10 @@ impl ProtocolMsg {
 	/// # Errors
 	///
 	/// Returns [`ProtocolError::ProtocolMsgDeserialization`] when `bytes`
-	/// cannot be decoded as either canonical JSON or legacy Borsh, and
-	/// [`ProtocolError::LegacyGenesisNotSupported`] when `bytes` is a Borsh
-	/// encoded genesis message.
+	/// cannot be decoded as either canonical JSON or legacy Borsh,
+	/// [`ProtocolError::InvalidOci`] when an OCI boot payload exceeds a limit,
+	/// and [`ProtocolError::LegacyGenesisNotSupported`] when `bytes` is a
+	/// Borsh encoded genesis message.
 	pub fn from_wire(
 		bytes: &[u8],
 	) -> Result<(Self, ProtocolMsgEncoding), ProtocolError> {
@@ -296,7 +321,10 @@ impl ProtocolMsg {
 		}
 
 		let msg = <Self as borsh::BorshDeserialize>::try_from_slice(bytes)
-			.map_err(|_| ProtocolError::ProtocolMsgDeserialization)?;
+			.map_err(|error| match OciLimitExceeded::find(&error) {
+				Some(limit) => ProtocolError::InvalidOci(limit.to_string()),
+				None => ProtocolError::ProtocolMsgDeserialization,
+			})?;
 		if msg.is_genesis() {
 			return Err(ProtocolError::LegacyGenesisNotSupported);
 		}
@@ -372,11 +400,16 @@ impl std::fmt::Display for ProtocolMsg {
 			Self::StatusResponse(_) => {
 				write!(f, "StatusResponse")
 			}
+			Self::OciStatusRequest => write!(f, "OciStatusRequest"),
+			Self::OciStatusResponse { .. } => write!(f, "OciStatusResponse"),
 			Self::BootStandardRequest { .. } => {
 				write!(f, "BootStandardRequest")
 			}
 			Self::BootStandardJsonEnvelopeRequest { .. } => {
 				write!(f, "BootStandardJsonEnvelopeRequest")
+			}
+			Self::BootStandardOciRequest { .. } => {
+				write!(f, "BootStandardOciRequest")
 			}
 			Self::BootStandardResponse { .. } => {
 				write!(f, "BootStandardResponse")
@@ -410,6 +443,9 @@ impl std::fmt::Display for ProtocolMsg {
 			}
 			Self::BootKeyForwardRequest { .. } => {
 				write!(f, "BootKeyForwardRequest")
+			}
+			Self::BootKeyForwardOciRequest { .. } => {
+				write!(f, "BootKeyForwardOciRequest")
 			}
 			Self::BootKeyForwardResponse { nsm_response } => match nsm_response
 			{

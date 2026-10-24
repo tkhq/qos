@@ -1,0 +1,6 @@
+FROM alpine:3.20
+RUN apk add --no-cache busybox-extras
+COPY --chmod=755 serve.sh /usr/local/bin/qos-kv-http
+COPY --chmod=755 kv.sh /www/cgi-bin/kv
+ENTRYPOINT ["/usr/local/bin/qos-kv-http"]
+CMD []

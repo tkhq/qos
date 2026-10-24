@@ -38,7 +38,6 @@ impl RequestProcessor for ProtocolProcessor {
 					.expect("ProtocolMsg can always serialize to JSON. qed.");
 			}
 		};
-
 		let mut state = self.state.write().await;
 		let response =
 			tokio::task::block_in_place(|| state.handle_msg_response(&msg_req));

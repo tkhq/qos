@@ -1,13 +1,17 @@
 //! Standard boot logic and types.
 
-use std::{collections::HashSet, fmt};
+use std::{
+	collections::{BTreeMap, BTreeSet, HashSet},
+	fmt,
+};
 
 use qos_crypto::sha_256;
 use qos_nsm::types::NsmResponse;
 use qos_p256::{P256Pair, P256Public};
 
 use crate::protocol::{
-	Hash256, ProtocolError, ProtocolState, QosHash, services::attestation,
+	Hash256, ProtocolError, ProtocolState, QosHash, oci::OciBootPayloadV3,
+	services::attestation,
 };
 
 pub mod env;
@@ -18,6 +22,11 @@ pub use env::{
 };
 pub use manifest::v2::{
 	DnsConfig, ManifestEnvelopeV2, ManifestV2, PivotConfigV2,
+};
+pub use manifest::v3::{
+	EnclaveMode, EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDevice,
+	OciDigest, OciImageRef, OciMount, OciName, OciPath, OciRestartPolicy,
+	VolumeV3, WorkloadV3,
 };
 pub use manifest::{
 	ManifestBuilder, ManifestBuilderError, ManifestVersion, VersionedManifest,
@@ -727,13 +736,11 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 	manifest_envelope: &VersionedManifestEnvelope,
 	pivot: &[u8],
 ) -> Result<NsmResponse, ProtocolError> {
-	// 1. Check signatures over the manifest envelope.
-	manifest_envelope.check_approvals()?;
-	if !manifest_envelope.share_set_approvals().is_empty() {
-		return Err(ProtocolError::BadShareSetApprovals);
-	}
+	validate_boot_envelope(manifest_envelope)?;
 	let actual_hash = sha_256(pivot);
-	let expected_hash = *manifest_envelope.pivot_hash();
+	let expected_hash = *manifest_envelope
+		.pivot_hash()
+		.ok_or(ProtocolError::ManifestRequiresOciBoot)?;
 	if actual_hash != expected_hash {
 		return Err(ProtocolError::InvalidPivotHash {
 			expected: qos_hex::encode(&expected_hash),
@@ -741,7 +748,26 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 		});
 	}
 
-	// 2. Generate the setup key and the post-provision live key.
+	commit_boot_state(state, manifest_envelope, |handles| {
+		handles.put_pivot(pivot)
+	})
+}
+
+fn validate_boot_envelope(
+	manifest_envelope: &VersionedManifestEnvelope,
+) -> Result<(), ProtocolError> {
+	manifest_envelope.check_approvals()?;
+	if !manifest_envelope.share_set_approvals().is_empty() {
+		return Err(ProtocolError::BadShareSetApprovals);
+	}
+	Ok(())
+}
+
+fn commit_boot_state(
+	state: &mut ProtocolState,
+	manifest_envelope: &VersionedManifestEnvelope,
+	publish: impl FnOnce(&crate::handles::Handles) -> Result<(), ProtocolError>,
+) -> Result<NsmResponse, ProtocolError> {
 	let setup_ephemeral_key = P256Pair::generate()?;
 	let live_ephemeral_key = P256Pair::generate()?;
 	let setup_ephemeral_public_key =
@@ -759,7 +785,7 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 
 	state.set_pending_live_ephemeral_key(live_ephemeral_key);
 	state.handles.put_ephemeral_key(&setup_ephemeral_key)?;
-	state.handles.put_pivot(pivot)?;
+	publish(&state.handles)?;
 	state.handles.put_manifest_envelope(manifest_envelope)?;
 
 	// 4. Make an attestation request, placing the manifest hash in the
@@ -773,6 +799,79 @@ pub(in crate::protocol::services) fn put_manifest_and_pivot(
 
 	// 5. Return the NSM Response containing COSE Sign1 encoded attestation
 	// document.
+	Ok(nsm_response)
+}
+
+pub(in crate::protocol) fn boot_oci(
+	state: &mut ProtocolState,
+	payload: &OciBootPayloadV3,
+) -> Result<NsmResponse, ProtocolError> {
+	let envelope = VersionedManifestEnvelope::try_from_slice_compat(
+		payload.manifest_envelope.as_slice(),
+	)
+	.map_err(|_| {
+		ProtocolError::InvalidOci("invalid Manifest V3 envelope".into())
+	})?;
+	let VersionedManifestEnvelope::V3(v3) = &envelope else {
+		return Err(ProtocolError::InvalidOci(
+			"OCI boot requires a Manifest V3 envelope".into(),
+		));
+	};
+	validate_boot_envelope(&envelope)?;
+
+	let required: BTreeSet<_> = v3
+		.manifest
+		.workloads
+		.values()
+		.map(|workload| workload.image().digest().clone())
+		.collect();
+	let mut supplied = BTreeMap::new();
+	for artifact in &payload.artifacts {
+		if supplied.insert(artifact.digest.clone(), artifact).is_some() {
+			return Err(ProtocolError::InvalidOci(
+				"duplicate OCI artifact digest".into(),
+			));
+		}
+	}
+	if let Some(missing) =
+		required.iter().find(|digest| !supplied.contains_key(*digest))
+	{
+		return Err(ProtocolError::InvalidOci(format!(
+			"no OCI artifact for image {}",
+			missing.as_str()
+		)));
+	}
+	if let Some(unexpected) =
+		supplied.keys().find(|digest| !required.contains(*digest))
+	{
+		return Err(ProtocolError::InvalidOci(format!(
+			"no workload of the manifest runs image {}",
+			unexpected.as_str()
+		)));
+	}
+	for (digest, artifact) in &supplied {
+		crate::oci_image::verify_oci_layout(
+			digest,
+			artifact.oci_layout_archive.as_slice(),
+		)
+		.map_err(|error| {
+			ProtocolError::InvalidOci(format!(
+				"artifact {}: {error}",
+				digest.as_str()
+			))
+		})?;
+	}
+
+	let nsm_response = commit_boot_state(state, &envelope, |handles| {
+		for (digest, artifact) in supplied {
+			handles.put_oci_archive(
+				&digest,
+				artifact.oci_layout_archive.as_slice(),
+			)?;
+		}
+		Ok(())
+	})?;
+	state.begin_oci_status(&v3.manifest);
 	Ok(nsm_response)
 }
 
@@ -1111,6 +1210,59 @@ mod test {
 		std::fs::remove_file(pivot_file).unwrap();
 		std::fs::remove_file(ephemeral_file).unwrap();
 		std::fs::remove_file(manifest_file).unwrap();
+	}
+
+	#[test]
+	fn boot_oci_names_a_missing_or_unexpected_image() {
+		use crate::protocol::oci::{
+			ManifestEnvelopeBytes, OciArtifactV3, OciLayoutArchive,
+		};
+
+		let digest = |hex: &str| {
+			OciDigest::try_from(format!("sha256:{}", hex.repeat(64))).unwrap()
+		};
+		let (approved, other) = (digest("a"), digest("b"));
+		let envelope = ManifestEnvelopeV3 {
+			manifest: manifest::v3::minimal_manifest(&approved),
+			manifest_set_approvals: vec![],
+			share_set_approvals: vec![],
+		};
+		let payload = |digests: &[&OciDigest]| OciBootPayloadV3 {
+			manifest_envelope: ManifestEnvelopeBytes::new(
+				serde_json::to_vec(&envelope).unwrap(),
+			)
+			.unwrap(),
+			artifacts: digests
+				.iter()
+				.map(|digest| OciArtifactV3 {
+					digest: (*digest).clone(),
+					oci_layout_archive: OciLayoutArchive::new(vec![]).unwrap(),
+				})
+				.collect(),
+		};
+		let handles = Handles::new(
+			"boot_oci_names_a_missing_or_unexpected_image.eph".to_string(),
+			"boot_oci_names_a_missing_or_unexpected_image.quorum".to_string(),
+			"boot_oci_names_a_missing_or_unexpected_image.manifest".to_string(),
+			"boot_oci_names_a_missing_or_unexpected_image.pivot".to_string(),
+		);
+		let mut state =
+			ProtocolState::new(Box::new(MockNsm::new()), handles, None);
+
+		assert_eq!(
+			boot_oci(&mut state, &payload(&[])).unwrap_err(),
+			ProtocolError::InvalidOci(format!(
+				"no OCI artifact for image {}",
+				approved.as_str()
+			))
+		);
+		assert_eq!(
+			boot_oci(&mut state, &payload(&[&approved, &other])).unwrap_err(),
+			ProtocolError::InvalidOci(format!(
+				"no workload of the manifest runs image {}",
+				other.as_str()
+			))
+		);
 	}
 
 	#[test]
