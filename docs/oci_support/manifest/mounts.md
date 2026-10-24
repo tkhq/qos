@@ -2,8 +2,7 @@
 
 Status: Initial normative specification
 
-An OCI workload uses one tagged `mounts` list for every attachment from the
-parent QOS file-system environment.
+An OCI workload uses one tagged `mounts` list for its volume attachments.
 
 The mount `type` selects how QOS interprets `source`. This permits Manifest V3
 to add new mount kinds without changing existing mount objects.
@@ -16,12 +15,12 @@ Each mount MUST contain:
 - `source`;
 - `mountPath`.
 
-Each mount MAY contain `readOnly`. The default value is `false`.
+Each mount MAY contain `readOnly`. The default value is `false`. A `qos`
+mount MUST explicitly set `readOnly` to `true`.
 
-The initial mount types are:
-
-- `volume`, which mounts a named top-level volume;
-- `file`, which mounts a regular file from the parent QOS environment.
+The only initial mount type is `volume`. It mounts a declared top-level
+volume or the reserved implicit `qos` volume. The `type` discriminator remains
+required so later specifications can add mount types.
 
 QOS MUST reject an unsupported mount type.
 
@@ -39,11 +38,11 @@ overlapping `mountPath` values. The initial feature does not support mounting
 one declared workload mount inside another declared workload mount.
 
 The absence of `mounts` means that the workload receives no top-level volume
-and no parent QOS file.
+or implicit `qos` volume.
 
 ## Volume mount
 
-For `type: "volume"`, `source` is the name of a declared top-level volume.
+For `type: "volume"`, `source` names a declared top-level volume or `qos`.
 
 The top-level volume's own `type` selects its storage backend. A tmpfs volume
 and a future persistent volume both use mount `type: "volume"`; the workload
@@ -60,26 +59,9 @@ does not need a different attachment schema.
 
 The complete rules are in [Volumes](volumes.md).
 
-## File mount
-
-For `type: "file"`, `source` is an absolute path to a mountable regular file in
-the parent QOS environment.
-
-```json
-{
-  "type": "file",
-  "source": "/qos.quorum.key",
-  "mountPath": "/run/qos/quorum.key",
-  "readOnly": true
-}
-```
-
-The complete rules are in [Parent QOS file mounts](file_mounts.md).
-
 ## Ordering
 
-QOS MUST attach fixed runtime mounts first. It MUST attach `volume` mounts
-second and `file` mounts last.
+QOS MUST attach fixed runtime mounts first and declared volume mounts second.
 
 The order of entries in `mounts` MUST NOT change the effective mount order.
 
@@ -93,4 +75,4 @@ A later Manifest V3 specification MAY add another mount type. It MUST define
 the meaning of every common field, all type-specific fields, path conflicts,
 ownership, lifecycle, and behavior when `readOnly` is absent.
 
-A later mount type MUST NOT change the meaning of `volume` or `file`.
+A later mount type MUST NOT change the meaning of `volume`.

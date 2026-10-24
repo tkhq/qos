@@ -3,8 +3,8 @@
 Status: Initial normative specification
 
 Manifest V3 enables `min-oci-support`. It reuses the QOS control-plane model
-from Manifest V2 and replaces the single V2 pivot with a list of named
-workloads.
+from Manifest V2 and replaces the single V2 pivot with an object keyed by
+workload name. V3 is not stable until it is verified with OCI workloads.
 
 ## Relationship to Manifest V2
 
@@ -22,10 +22,12 @@ Manifest V3 MUST use the existing approval, quorum provisioning, key
 forwarding, and attestation rules unless this specification changes a rule.
 
 Manifest V2 has one `pivot` field. Manifest V3 replaces `pivot` with a
-`workloads` list.
+`workloads` object.
 
 Manifest V2 has an untagged Nitro `enclave` configuration. Manifest V3 adds a
-required `type` discriminator to `enclave`.
+required `type` discriminator and signed `mode` to `enclave`. V3 signs the
+expected debug identity in the enclave configuration. It omits the V2 pivot
+debug flag from workload values.
 
 Manifest V1 and Manifest V2 remain unchanged.
 
@@ -47,21 +49,77 @@ Manifest V3 MAY contain:
 
 The `version` value MUST be `v3`.
 
-The `workloads` list MUST contain at least one workload.
+The `workloads` field MUST be an object with at least one workload.
+
+Parsers MUST reject duplicate JSON member names at the raw input boundary,
+before decoding objects into maps. This applies to every Manifest V3 object.
+Member names that use different JSON escapes for the same name are duplicates.
+A decoded-map uniqueness check cannot recover overwritten input members.
+
+A QOS release MAY set a maximum workload count. It MUST reject a manifest
+that exceeds that limit before starting any workload.
 
 An absent `volumes` object means that the manifest declares no top-level
 volumes.
 
-## Enclave type
+## Enclave type and mode
 
-The `enclave` object MUST contain `type`.
+The `enclave` object MUST contain `type` and `mode`.
 
 Initial `min-oci-support` supports `type` equal to `nitro`.
 
-For `type` equal to `nitro`, the other fields retain their existing Nitro
-meaning.
+For `nitro`, `mode` MUST be `attested` or `debug`. Both values are signed.
+QOS MUST reject a missing or unsupported mode.
 
-The `type` value is part of the signed manifest.
+Both modes MUST contain `pcr0`, `pcr1`, `pcr2`, and `pcr3`.
+Each PCR MUST be a lowercase hexadecimal string encoding 48 bytes (96 hex
+characters). Canonical JSON preserves string case. Uppercase hex would change
+the manifest hash, so QOS MUST reject uppercase PCR values.
+The existing Nitro fields `awsRootCertificate` and `qosCommit` retain their
+Manifest V2 meaning and remain required.
+
+In `attested` mode, the PCRs specify the expected Nitro measurements. PCR0
+measures the enclave image. PCR1 measures the kernel and bootstrap. PCR2
+measures the application. PCR3 measures the associated EC2 instance IAM role.
+An `attested` manifest MUST NOT have PCR0, PCR1, and PCR2 all set to zero.
+QOS MUST reject such a manifest at parse time.
+
+Debug evidence means Nitro evidence whose PCR0, PCR1, and PCR2 are all zero.
+PCR3 measures the IAM role and does not determine this classification.
+Verification MUST compare evidence against the approved PCR values using the
+existing Nitro verification rules. Attested verification MUST reject debug
+evidence.
+
+In `debug` mode, every PCR value MUST contain exactly 96 hex zeros. QOS MUST
+reject a debug manifest with any nonzero PCR. Verification MUST compare
+evidence against the approved zero values using the existing Nitro rules.
+Nitro debug evidence has zero PCR0 through PCR3 values. These values do not
+establish the measured image, kernel, application, or IAM-role identity of an
+attested enclave. The signed mode distinguishes this
+debug identity from the approved measured configuration. Debug mode MUST NOT
+bypass manifest approval or workload-content verification.
+
+In V2, the host's `DEBUG` environment variable at enclave boot sets
+`RunEnclavesArgs.debug_mode`. When `DEBUG` is true, Nitro launches a debug
+enclave and makes the PCRs zero. `LOGS` selects console attachment. See
+[enclave launch](../../../src/qos_enclave/src/main.rs).
+
+The Manifest V2 pivot `debugMode` flag only selects pivot stdout and stderr
+handling. When true, the reaper pipes and reprints output. When false, it
+sends output to null. Visible pivot output also requires `DEBUG` and `LOGS`
+at enclave boot. The flag does not control Nitro launch or expected PCRs.
+It does not bypass PCR comparison. See the
+[V2 pivot schema](../../../src/qos_core/src/protocol/services/boot/manifest/v2.rs),
+[reaper](../../../src/qos_core/src/reaper.rs), and
+[Nitro PCR verification](../../../src/qos_nsm/src/nitro/mod.rs).
+
+V3 `enclave.mode` signs the expected enclave identity. It does not control
+Nitro launch. PCR comparison during verification MUST reject a mismatch
+between the launched enclave and the manifest's expected identity.
+Workload values MUST NOT contain a debug-mode field.
+
+Open question: Should V3 `enclave.mode` also select V2-style pivot output
+logging? This specification does not yet define that mapping.
 
 QOS MUST reject an enclave type that it does not support.
 
@@ -74,15 +132,15 @@ Manifest V4.
 
 ## Initial workload and volume fields
 
-The `workloads` list contains the objects defined in
-[OCI workloads](workloads.md).
+The `workloads` object maps signed workload names to the values defined in
+[Workloads](workloads.md). Workload values have no `name` field.
 
 The optional top-level `volumes` object contains the objects defined in
 [Volumes](volumes.md).
 
-Each initial workload has `type` equal to `oci`.
+Each initial workload has `type` equal to `pivot` or `oci`.
 
-Each initial workload MAY contain the tagged `mounts` list defined in
+Each OCI workload MAY contain the tagged `mounts` list defined in
 [Workload mounts](mounts.md).
 
 ## Tagged Manifest V3 objects
@@ -93,10 +151,10 @@ more than one semantic variant.
 | Object | Initial type values |
 | --- | --- |
 | `enclave` | `nitro` |
-| workload | `oci` |
+| workload | `pivot`, `oci` |
 | workload `image` | `ociManifest` |
 | top-level volume | `tmpfs` |
-| workload mount | `volume`, `file` |
+| workload mount | `volume` |
 
 Manifest V2 records that V3 reuses without a semantic change do not gain a
 `type` field.
@@ -104,7 +162,9 @@ Manifest V2 records that V3 reuses without a semantic change do not gain a
 ## Complete example
 
 This example uses the existing Manifest V2 control-plane fields without
-redefining their inner schemas.
+redefining their inner schemas. It uses the RFC's pivot and OCI workloads,
+shared tmpfs volume, and implicit `qos` volume. Certificate and key values are
+placeholders. The debug PCR values are written in full.
 
 ```json
 {
@@ -142,10 +202,11 @@ redefining their inner schemas.
   },
   "enclave": {
     "type": "nitro",
-    "pcr0": "...",
-    "pcr1": "...",
-    "pcr2": "...",
-    "pcr3": "...",
+    "mode": "debug",
+    "pcr0": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "pcr1": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "pcr2": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "pcr3": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
     "awsRootCertificate": "...",
     "qosCommit": "..."
   },
@@ -155,9 +216,15 @@ redefining their inner schemas.
       "mountPath": "/mnt/qos/shared-run"
     }
   },
-  "workloads": [
-    {
-      "name": "database",
+  "workloads": {
+    "control-service": {
+      "type": "pivot",
+      "hash": "6851e7d5d3200c971307b7f3d02c35dc685413215392f1b35fa5ecb53264d963",
+      "restart": "always",
+      "bridgeConfig": [],
+      "args": []
+    },
+    "api": {
       "type": "oci",
       "image": {
         "type": "ociManifest",
@@ -170,47 +237,44 @@ redefining their inner schemas.
           "source": "shared-run",
           "mountPath": "/run/shared",
           "readOnly": false
-        }
-      ]
-    },
-    {
-      "name": "api",
-      "type": "oci",
-      "image": {
-        "type": "ociManifest",
-        "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
-      },
-      "restart": "always",
-      "mounts": [
-        {
-          "type": "volume",
-          "source": "shared-run",
-          "mountPath": "/run/shared",
-          "readOnly": true
         },
         {
-          "type": "file",
-          "source": "/qos.quorum.key",
-          "mountPath": "/run/qos/quorum.key",
+          "type": "volume",
+          "source": "qos",
+          "mountPath": "/run/qos",
           "readOnly": true
         }
       ]
     }
-  ]
+  }
 }
 ```
 
 ## Signing and attestation
 
-The normal QOS manifest encoding and approval rules apply to Manifest V3.
+Manifest V3 uses QOS canonical JSON encoding and the existing approval rules.
+Canonical JSON sorts object keys. Reordering `workloads` members MUST NOT
+change the manifest hash. Renaming a workload MUST change the manifest hash.
 
-The signed manifest MUST cover every workload name, workload type, image
-reference type, image digest, restart value, top-level volume, and typed mount.
+An array of workload values was rejected because array order affects the hash
+and requires a separate workload-name uniqueness check.
+
+The signed manifest MUST cover enclave type, mode, PCRs, every workload name,
+pivot hash and configuration, workload type, image reference type, image
+digest, restart value, top-level volume, and typed mount.
 
 The QOS attestation document MUST bind the complete Manifest V3 hash.
 
 The normal QOS attestation does not prove that a workload is currently
-running. It proves the approved configuration and measured QOS environment.
+running. In attested mode, it binds the approved configuration to the measured
+QOS environment. Debug mode has the zero-PCR limitation described above.
+
+## Compatibility
+
+| QOS implementation | V1/V2 | V3 |
+| --- | --- | --- |
+| New V3-capable QOS | Accepts existing schemas | Accepts supported fields and types; rejects unknown fields and types |
+| Pre-V3 QOS | Existing support unchanged | Unsupported |
 
 ## Evolution
 

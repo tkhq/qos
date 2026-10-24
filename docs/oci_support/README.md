@@ -9,7 +9,12 @@ enables the feature. The feature is not named "OCI V3." The term "V3" refers
 only to the QOS manifest version.
 
 This specification defines the target design. An implementation can be
-incomplete while the design is under development.
+incomplete while the design is under development. Manifest V3 is not stable
+until it is verified with OCI workloads.
+
+The Manifest V3 RFC changes the signed manifest schema. It does not redefine
+OCI transport, extraction, runtime configuration, lifecycle, or isolation.
+The existing OCI support documents remain the baseline for those behaviors.
 
 ## Normative language
 
@@ -18,9 +23,9 @@ when they use uppercase letters.
 
 ## Overview
 
-A Manifest V3 contains a list of named workloads. Each initial workload names
-one approved OCI image by digest. QOS can run one or more OCI workloads in the
-same enclave.
+A Manifest V3 contains an object keyed by signed workload name. Workload
+values have type `pivot` or `oci`. Each OCI workload names one approved OCI
+image by digest. QOS can run pivot and OCI workloads in the same enclave.
 
 The QOS Host obtains the OCI image content. It sends the content to the enclave
 over the QOS control connection in a Borsh message. The enclave verifies the
@@ -36,9 +41,10 @@ a volume only through an explicit `mounts` entry with `type: "volume"`. This
 model uses the same separation between a named volume and a container volume
 mount that Kubernetes uses.
 
-QOS keys are not OCI image content. A workload MAY receive a key through an
-explicit `mounts` entry with `type: "file"`. The same mechanism can mount
-another approved regular file from the parent QOS environment.
+QOS keys are not OCI image content. An OCI workload MAY receive the approved
+manifest, quorum key, and live ephemeral key through an explicit read-only
+volume mount with `source: "qos"`. QOS provides this reserved implicit volume.
+The manifest MUST NOT declare a top-level volume named `qos`.
 
 The initial OCI workload group follows the Kubernetes Pod communication model.
 Its OCI workloads share localhost, IPC, a hostname, and `/dev/shm`. They keep
@@ -47,12 +53,12 @@ network connection outside the workload group.
 
 The initial OCI root file system is writable. A workload volume mount is also
 writable unless its `readOnly` value is `true`. Protected QOS files, including
-key files, are always mounted read-only.
+key files, are exposed through read-only `qos` volume mounts.
 
 ## Security and trust model
 
 The deployer MUST trust QOS and every workload approved by one Manifest V3.
-The workload list does not create separate trust domains.
+The workload object does not create separate trust domains.
 
 All workloads in one enclave share one Linux kernel. QOS does not claim
 adversarial isolation between these workloads or between a workload and the
@@ -81,15 +87,16 @@ unapproved external party remains a security violation.
 Initial `min-oci-support` includes:
 
 - Manifest V3 with existing Manifest V2 control-plane fields;
-- a required `enclave.type` discriminator;
-- one or more named OCI workloads;
+- a required `enclave.type` discriminator and signed enclave-wide `mode`;
+- one or more named pivot or OCI workloads;
 - OCI images approved by digest;
 - host delivery of OCI content with Borsh;
 - enclave verification of OCI content;
-- one runtime bundle and container lifecycle per workload;
+- one runtime bundle and container lifecycle per OCI workload;
+- direct pivot launch with the existing V2 binary and configuration fields;
 - named volatile volumes backed by tmpfs;
-- a tagged per-workload `mounts` list;
-- named volume mounts and explicit parent-QOS file mounts;
+- a tagged per-OCI-workload `mounts` list;
+- named volume mounts, including the reserved implicit `qos` volume;
 - a fixed QOS-owned namespace, capability, mount, and device policy.
 
 Initial `min-oci-support` does not include:
@@ -103,7 +110,7 @@ Initial `min-oci-support` does not include:
 - seccomp filtering;
 - host-supplied container settings;
 - BuildKit or StageX builds;
-- pivot workloads in the workload list;
+- individual QOS file mounts or arbitrary parent-QOS file mounts;
 - workload-name key derivation.
 
 The initial schema omits fields for these capabilities. Later Manifest V3
@@ -116,13 +123,11 @@ the meaning of an existing field.
 
 - [Manifest V3](manifest/README.md) defines the top-level schema, enclave type,
   compatibility rules, and complete example.
-- [OCI workloads](manifest/workloads.md) defines workload identity, image
+- [Workloads](manifest/workloads.md) defines workload identity, image
   selection, restart behavior, and process defaults.
 - [Mounts](manifest/mounts.md) defines the tagged workload mount list.
 - [Volumes](manifest/volumes.md) defines named top-level volumes and workload
   mounts with `type: "volume"`.
-- [File mounts](manifest/file_mounts.md) defines explicit parent-QOS file
-  mounts with `type: "file"`, including QOS key files.
 
 ### Runtime behavior
 
@@ -175,8 +180,9 @@ it.
 
 ## Approval boundary
 
-The signed manifest approves workload names and types, image-reference types
-and digests, volume grants, typed mount grants, and restart behavior.
+The signed manifest approves enclave type, mode, PCRs, workload names and
+types, pivot hashes and configuration, image-reference types and digests,
+volume grants, typed mount grants, and restart behavior.
 
 The QOS Host transports content and storage. It is not a trust anchor.
 
