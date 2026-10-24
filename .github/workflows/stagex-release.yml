@@ -145,10 +145,7 @@ jobs:
 
       - name: Extract PCRs (qos_enclave)
         if: matrix.name == 'qos_enclave'
-        run: |
-          id=$(docker create "qos-local/qos_enclave:latest")
-          docker cp "${id}:/nitro.pcrs" out/nitro.pcrs
-          docker rm "${id}"
+        run: sh src/scripts/extract_oci_file.sh out/qos_enclave nitro.pcrs > out/nitro.pcrs
 
       - name: Upload PCRs to GitHub release (qos_enclave)
         if: matrix.name == 'qos_enclave'
