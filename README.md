@@ -37,29 +37,22 @@ To produce the `qos_enclave` OCI container image, run:
 make out/qos_enclave/index.json
 ```
 
-If you need to extract files from it, you can do so by using [docker](https://docs.docker.com/get-started/get-docker/) and [skopeo](https://github.com/containers/skopeo):
-
-```sh
-# Creates an archive called qos_enclave.tar, with a tag "qos-enclave:latest"
-skopeo copy oci:./out/qos_enclave:latest docker-archive:qos_enclave.tar:qos-enclave:latest
-
-# Load the tar into local docker
-docker load < qos_enclave.tar
-
-# Create the container without running it (outputs a container ID)
-docker create qos-enclave:latest
-
-# Copy files locally for inspection
-docker cp CONTAINER_ID:/nitro.pcrs nitro.pcrs
-
-# Look at the PCR values
-cat nitro.pcrs
+To reproduce the QOS build and print the associated PCR measurements, run:
+```
+make pcrs
 b26733f9... PCR0
 b26733f9... PCR1
 21b9efbc... PCR2
 ```
 
+This builds `out/qos_enclave` if needed, then reads `nitro.pcrs` from the OCI layout with `jq` and `tar`. Use `make pcrs-egress` for the egress variant (`out/qos_enclave_egress`).
+
 These PCR values can be referenced against the content of [AWS remote attestations](https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#pcr012).
+
+To extract any other file from a built OCI layout, use the `scripts/extract_oci_file.sh` helper directly:
+```sh
+sh src/scripts/extract_oci_file.sh out/qos_enclave nitro.eif > nitro.eif
+```
 
 ### Submitting a PR
 
@@ -229,7 +222,7 @@ There are two modes for provisioning:
 ### Remote Attestation
 
 The purpose of remote attestation is to prove that an environment is running a particular piece of software. In the case of AWS Nitro Enclaves, an enclave can uniquely asks the Nitro Security Module (NSM) for an attestation document containing details of the enclave. This document is signed by the Nitro Attestation PKI and is tied back to the AWS Nitro Attestation PKI Root.
-As defined in the [AWS documentation](https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html) the instance can request the Nitro Security Module (NSM) to produce an attestation document on its behalf. QOS attestation requests carry the manifest hash in `user_data` and the relevant Ephemeral Key public key in `public_key`. Setup/provisioning attestations verify the setup key with PCR16; live/app attestations verify the live key with PCR17. Most App Proof verifiers only need the PCR17 live/app check, while PCR16 is for setup-time provisioning and key forwarding. Verifiers also check the AWS certificate chain, COSE signature, attestation freshness, expected nonce policy, and manifest PCR0 through PCR3.
+As defined in the [AWS documentation](https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html) the instance can request the Nitro Security Module (NSM) to produce an attestation document on its behalf. QOS attestation requests carry the manifest hash in `user_data` and the relevant Ephemeral Key public key in `public_key`. Setup/provisioning attestations verify the setup key with PCR16; live/app attestations verify the live key with PCR17. Most App Proof verifiers only need the PCR17 live/app check, while PCR16 is for setup-time provisioning and key forwarding. PCR18 commits to the manifest hash alone, so unlike PCR16 and PCR17 it is stable across instances and boots and can be pinned by a verifier that can only compare a PCR against a fixed value. Verifiers also check the AWS certificate chain, COSE signature, attestation freshness, expected nonce policy, and manifest PCR0 through PCR3.
 Before provisioning a namespace with the Quorum Key, a Share Set will use the output of the attestation process against the enclave to verify that the enclave is running the expected version of QuorumOS and that that instance is configured in the expected manner as to warrant being provisioned with that Quorum Key.
 
 Continued reading for attesting with nitro enclaves:

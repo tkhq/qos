@@ -106,7 +106,7 @@ async fn await_all(tasks: Vec<JoinHandle<Result<(), IOError>>>) {
 	}
 }
 
-// bridge tcp to vsock in an endless loop with 1s retry on errors
+// bridge tcp to vsock in an endless loop with immediate retry on errors
 async fn tcp_to_vsock(
 	enclave_stream: Stream,
 	host_addr: SocketAddr,
@@ -152,7 +152,7 @@ async fn tcp_to_vsock(
 	}
 }
 
-// bridge vsock to tcp in an endless loop with 1s retry on errors
+// bridge vsock_to_tcp in an endless loop with immediate retry on errors
 async fn vsock_to_tcp(
 	enclave_listener: Listener,
 	host_addr: SocketAddr,

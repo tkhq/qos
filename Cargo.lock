@@ -134,9 +134,9 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.16.2"
+version = "1.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a054912289d18629dc78375ba2c3726a3afe3ff71b4edba9dedfca0e3446d1fc"
+checksum = "faac5829c2b74c28f830747e7818ccfb684261b5f48a1118b1e2a13d36dfab13"
 dependencies = [
  "aws-lc-sys",
  "zeroize",
@@ -144,14 +144,15 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.39.0"
+version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa7e52a4c5c547c741610a2c6f123f3881e409b714cd27e6798ef020c514f0a"
+checksum = "f1622d8446a2d4b2ce0c7eefc73dd43a99779028d5ee5c2dd8073a658ba8a2bc"
 dependencies = [
  "cc",
  "cmake",
  "dunce",
  "fs_extra",
+ "pkg-config",
 ]
 
 [[package]]
@@ -320,6 +321,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bs58"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
+dependencies = [
+ "tinyvec",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -339,9 +349,9 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
 name = "cc"
-version = "1.2.39"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1354349954c6fc9cb0deab020f27f783cf0b604e8bb754dc4658ecf0d29c35f"
+checksum = "5d262e149917187838d5b42777c8253bcb64500067342904e7d429499a6f277e"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -526,9 +536,9 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.20.11"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc7f46116c46ff9ab3eb1597a45688b6715c6e628b5c133e288e709a29bcb4ee"
+checksum = "25ae13da2f202d56bd7f91c25fba009e7717a1e4a1cc98a76d844b65ae912e9d"
 dependencies = [
  "darling_core",
  "darling_macro",
@@ -536,11 +546,10 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.20.11"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e"
+checksum = "9865a50f7c335f53564bb694ef660825eb8610e0a53d3e11bf1b0d3df31e03b0"
 dependencies = [
- "fnv",
  "ident_case",
  "proc-macro2",
  "quote",
@@ -550,9 +559,9 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.20.11"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
+checksum = "ac3984ec7bd6cfa798e62b4a642426a5be0e68f9401cfc2a01e3fa9ea2fcdb8d"
 dependencies = [
  "darling_core",
  "quote",
@@ -649,6 +658,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
+name = "dyn-clone"
+version = "1.0.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
+
+[[package]]
 name = "ecdsa"
 version = "0.16.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -732,9 +747,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.2"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ced73b1dacfc750a6db6c0a0c3a3853c8b41997e2e2c563dc90804ae6867959"
+checksum = "26b73573e6edcd2af0cdf47bd6cb58f0b3839491263c314eaad1ccf24430e1de"
 
 [[package]]
 name = "flagset"
@@ -1033,9 +1048,9 @@ checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
 
 [[package]]
 name = "hickory-net"
-version = "0.26.1"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2295ed2f9c31e471e1428a8f88a3f0e1f4b27c15049592138d1eebe9c35b183"
+checksum = "084e7bd6a377435d568f652153e571b50970d7ccc1d1eeec0519f834632287e1"
 dependencies = [
  "async-trait",
  "bitflags 2.9.4",
@@ -1063,9 +1078,9 @@ dependencies = [
 
 [[package]]
 name = "hickory-proto"
-version = "0.26.1"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bab31817bfb44672a252e97fe81cd0c18d1b2cf892108922f6818820df8c643"
+checksum = "7e2da0694c15b44c6f68a6b05e0233617008c54080e31d6eb848d858a9c5b38d"
 dependencies = [
  "bitflags 2.9.4",
  "data-encoding",
@@ -1086,9 +1101,9 @@ dependencies = [
 
 [[package]]
 name = "hickory-resolver"
-version = "0.26.1"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0d58d28879ceecde6607729660c2667a081ccdc082e082675042793960f178c"
+checksum = "0e4f9f4603319422d482738f3f6fe5aac03157fdbfed1cd85a3ff45adb09072f"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -1365,20 +1380,20 @@ dependencies = [
 
 [[package]]
 name = "integration"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
  "axum",
  "borsh",
  "futures",
  "nix 0.30.1",
- "qos_core 0.14.1",
+ "qos_core 0.15.1",
  "qos_core 0.7.0",
- "qos_crypto 0.14.1",
- "qos_hex 0.14.1",
+ "qos_crypto 0.15.1",
+ "qos_hex 0.15.1",
  "qos_host",
  "qos_net",
- "qos_nsm 0.14.1",
- "qos_p256 0.14.1",
+ "qos_nsm 0.15.1",
+ "qos_p256 0.15.1",
  "qos_test_primitives",
  "rand 0.9.4",
  "rustls",
@@ -1389,7 +1404,7 @@ dependencies = [
  "tokio-rustls",
  "ureq",
  "url",
- "webpki-roots 1.0.2",
+ "webpki-roots 1.0.10",
  "zeroize",
 ]
 
@@ -2050,9 +2065,9 @@ dependencies = [
 
 [[package]]
 name = "prefix-trie"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90f561214012d3fc240a1f9c817cc4d57f5310910d066069c1b093f766bb5966"
+checksum = "4cf6e3177f0684016a5c209b00882e15f8bdd3f3bb48f0491df10cd102d0c6e7"
 dependencies = [
  "either",
  "ipnet",
@@ -2098,12 +2113,12 @@ dependencies = [
 
 [[package]]
 name = "qos_bridge"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
- "qos_core 0.14.1",
- "qos_hex 0.14.1",
+ "qos_core 0.15.1",
+ "qos_hex 0.15.1",
  "qos_host",
- "qos_nsm 0.14.1",
+ "qos_nsm 0.15.1",
  "serde",
  "serde_json",
  "tokio",
@@ -2112,19 +2127,19 @@ dependencies = [
 
 [[package]]
 name = "qos_client"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "der",
  "lazy_static",
  "p256",
- "qos_core 0.14.1",
- "qos_crypto 0.14.1",
- "qos_hex 0.14.1",
+ "qos_core 0.15.1",
+ "qos_crypto 0.15.1",
+ "qos_hex 0.15.1",
  "qos_json",
- "qos_nsm 0.14.1",
- "qos_p256 0.14.1",
+ "qos_nsm 0.15.1",
+ "qos_p256 0.15.1",
  "qos_test_primitives",
  "rand_core 0.9.3",
  "rpassword",
@@ -2159,7 +2174,7 @@ dependencies = [
 
 [[package]]
 name = "qos_core"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
@@ -2167,11 +2182,11 @@ dependencies = [
  "futures",
  "libc",
  "nix 0.30.1",
- "qos_crypto 0.14.1",
- "qos_hex 0.14.1",
+ "qos_crypto 0.15.1",
+ "qos_hex 0.15.1",
  "qos_json",
- "qos_nsm 0.14.1",
- "qos_p256 0.14.1",
+ "qos_nsm 0.15.1",
+ "qos_p256 0.15.1",
  "qos_test_primitives",
  "rustls",
  "serde",
@@ -2180,7 +2195,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-vsock",
- "webpki-roots 1.0.2",
+ "webpki-roots 1.0.10",
  "zeroize",
 ]
 
@@ -2198,9 +2213,9 @@ dependencies = [
 
 [[package]]
 name = "qos_crypto"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
- "qos_hex 0.14.1",
+ "qos_hex 0.15.1",
  "rand 0.9.4",
  "sha2",
  "thiserror 2.0.17",
@@ -2214,7 +2229,7 @@ version = "0.0.0"
 dependencies = [
  "arbitrary",
  "libfuzzer-sys",
- "qos_crypto 0.14.1",
+ "qos_crypto 0.15.1",
  "zeroize",
 ]
 
@@ -2229,20 +2244,20 @@ dependencies = [
 
 [[package]]
 name = "qos_hex"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "qos_host"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
  "axum",
  "borsh",
- "qos_core 0.14.1",
- "qos_hex 0.14.1",
- "qos_nsm 0.14.1",
+ "qos_core 0.15.1",
+ "qos_hex 0.15.1",
+ "qos_nsm 0.15.1",
  "serde",
  "serde_json",
  "tokio",
@@ -2250,9 +2265,9 @@ dependencies = [
 
 [[package]]
 name = "qos_json"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
- "qos_hex 0.14.1",
+ "qos_hex 0.15.1",
  "serde",
  "serde_json",
  "sha2",
@@ -2260,14 +2275,14 @@ dependencies = [
 
 [[package]]
 name = "qos_net"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
  "borsh",
  "chunked_transfer",
  "futures",
  "hickory-resolver",
  "httparse",
- "qos_core 0.14.1",
+ "qos_core 0.15.1",
  "qos_test_primitives",
  "rand 0.9.4",
  "rustls",
@@ -2275,7 +2290,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-rustls",
- "webpki-roots 1.0.2",
+ "webpki-roots 1.0.10",
 ]
 
 [[package]]
@@ -2306,14 +2321,14 @@ dependencies = [
 
 [[package]]
 name = "qos_nsm"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
  "aws-nitro-enclaves-cose",
  "aws-nitro-enclaves-nsm-api",
  "borsh",
  "hex-literal",
  "p384",
- "qos_hex 0.14.1",
+ "qos_hex 0.15.1",
  "qos_json",
  "serde",
  "serde_bytes",
@@ -2327,8 +2342,8 @@ name = "qos_nsm_fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
- "qos_hex 0.14.1",
- "qos_nsm 0.14.1",
+ "qos_hex 0.15.1",
+ "qos_nsm 0.15.1",
 ]
 
 [[package]]
@@ -2349,14 +2364,14 @@ dependencies = [
 
 [[package]]
 name = "qos_p256"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
  "aes-gcm",
  "borsh",
  "hkdf",
  "hmac",
  "p256",
- "qos_hex 0.14.1",
+ "qos_hex 0.15.1",
  "qos_test_primitives",
  "serde",
  "sha2",
@@ -2369,19 +2384,19 @@ version = "0.0.0"
 dependencies = [
  "arbitrary",
  "libfuzzer-sys",
- "qos_p256 0.14.1",
+ "qos_p256 0.15.1",
  "zeroize",
 ]
 
 [[package]]
 name = "qos_test_harness"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
- "qos_core 0.14.1",
- "qos_crypto 0.14.1",
- "qos_hex 0.14.1",
- "qos_nsm 0.14.1",
- "qos_p256 0.14.1",
+ "qos_core 0.15.1",
+ "qos_crypto 0.15.1",
+ "qos_hex 0.15.1",
+ "qos_nsm 0.15.1",
+ "qos_p256 0.15.1",
  "serde",
  "serde_json",
  "signed_echo",
@@ -2392,7 +2407,7 @@ dependencies = [
 
 [[package]]
 name = "qos_test_primitives"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
  "nix 0.30.1",
  "rand 0.9.4",
@@ -2505,6 +2520,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ref-cast"
+version = "1.0.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f354300ae66f76f1c85c5f84693f0ce81d747e2c3f21a45fef496d89c960bf7d"
+dependencies = [
+ "ref-cast-impl",
+]
+
+[[package]]
+name = "ref-cast-impl"
+version = "1.0.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7186006dcb21920990093f30e3dea63b7d6e977bf1256be20c3563a5db070da"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "regex-automata"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2604,9 +2639,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.37"
+version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "758025cb5fccfd3bc2fd74708fd4682be41d99e5dff73c377c0646c6012c73a4"
+checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
 dependencies = [
  "aws-lc-rs",
  "log",
@@ -2629,9 +2664,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.13"
+version = "0.103.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
+checksum = "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281"
 dependencies = [
  "aws-lc-rs",
  "ring",
@@ -2658,6 +2693,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "schemars"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cd191f9397d57d581cddd31014772520aa448f65ef991055d7f61582c65165f"
+dependencies = [
+ "dyn-clone",
+ "ref-cast",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "schemars"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2b42f36aa1cd011945615b92222f6bf73c599a102a300334cd7f8dbeec726cc"
+dependencies = [
+ "dyn-clone",
+ "ref-cast",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2752,14 +2811,15 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.143"
+version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d401abef1d108fbd9cbaebc3e46611f4b1021f714a0597a71f41ee463f5f4a5a"
+checksum = "402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c"
 dependencies = [
  "itoa",
  "memchr",
  "ryu",
  "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -2797,17 +2857,19 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.11.0"
+version = "3.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e28bdad6db2b8340e449f7108f020b3b092e8583a9e3fb82713e1d4e71fe817"
+checksum = "76a5c54c7310e7b8b9577c286d7e399ddd876c3e12b3ed917a8aabc4b96e9e8c"
 dependencies = [
  "base64",
+ "bs58",
  "chrono",
  "hex",
  "indexmap 1.9.3",
  "indexmap 2.11.4",
- "serde",
- "serde_derive",
+ "schemars 0.9.0",
+ "schemars 1.2.1",
+ "serde_core",
  "serde_json",
  "serde_with_macros",
  "time",
@@ -2815,9 +2877,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.11.0"
+version = "3.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d846214a9854ef724f3da161b426242d8de7c1fc7de2f89bb1efcb154dca79d"
+checksum = "84d57bc0c8b9a17920c178daa6bb924850d54a9c97ab45194bb8c17ad66bb660"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -2878,9 +2940,9 @@ dependencies = [
 
 [[package]]
 name = "shlex"
-version = "1.3.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "signal-hook-registry"
@@ -2903,12 +2965,12 @@ dependencies = [
 
 [[package]]
 name = "signed_echo"
-version = "0.14.1"
+version = "0.15.1"
 dependencies = [
  "axum",
- "qos_hex 0.14.1",
+ "qos_hex 0.15.1",
  "qos_json",
- "qos_p256 0.14.1",
+ "qos_p256 0.15.1",
  "serde",
  "serde_json",
  "tokio",
@@ -3142,9 +3204,9 @@ dependencies = [
 
 [[package]]
 name = "tinyvec"
-version = "1.10.0"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfa5fdc3bce6191a1dbc8c02d5c8bffcf557bafa17c124c5264a458f1b0613fa"
+checksum = "3e61e67053d25a4e82c844e8424039d9745781b3fc4f32b8d55ed50f5f667ef3"
 dependencies = [
  "tinyvec_macros",
 ]
@@ -3609,14 +3671,14 @@ version = "0.26.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
 dependencies = [
- "webpki-roots 1.0.2",
+ "webpki-roots 1.0.10",
 ]
 
 [[package]]
 name = "webpki-roots"
-version = "1.0.2"
+version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e8983c3ab33d6fb807cfcdad2491c4ea8cbc8ed839181c7dfd9c67c83e261b2"
+checksum = "1c1c8e20c8a38fc7d65abfe74eb7280e4aa667e8eec8bc84996d2874810748d9"
 dependencies = [
  "rustls-pki-types",
 ]
@@ -3627,7 +3689,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
