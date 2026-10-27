@@ -25,8 +25,11 @@ use qos_core::protocol::{
 pub mod cli;
 pub mod host;
 
-const MEGABYTE: usize = 1024 * 1024;
-const MAX_ENCODED_MSG_LEN: usize = 256 * MEGABYTE;
+/// Largest request body the host will accept and forward to the enclave.
+///
+/// Matches the enclave's own transport limit: anything larger can never be
+/// delivered over the enclave socket, so there is no reason to read it.
+const MAX_ENCODED_MSG_LEN: usize = qos_core::io::MAX_PAYLOAD_SIZE;
 
 /// Simple error that implements [`IntoResponse`] so it can
 /// be returned from handlers as an http response (and not get silently
