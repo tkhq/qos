@@ -29,23 +29,24 @@ key loaded at boot, start the cache in a Tokio runtime:
 
 ```rust
 use std::sync::Arc;
-use qos_attestation::{AttestationInputs, cache::AttestationCache};
+use qos_attestation::{AttestationInputs, cache::{attest, AttestationCache}};
 
-let (cache, refresh_task) = AttestationCache::start(
-    Arc::new(nsm),
-    AttestationInputs::new(live_key.public_key(), &envelope),
-).await?;
+let inputs = AttestationInputs::new(live_key.public_key(), &envelope);
+let initial = attest(Arc::new(nsm), inputs).await?;
+let cache = AttestationCache::new(initial);
+let reader = cache.reader();
+let refresh_task = cache.start();
 ```
 
-Keep `cache` in application state. In a request handler:
+Keep `reader` in application state. In a request handler:
 
 ```rust
-let document = cache.latest().ok_or("attestation unavailable")?;
+let document = reader.latest().ok_or("attestation unavailable")?;
 let cose_bytes: &[u8] = document.document();
 // Include these bytes with the retained manifest in the boot-proof response.
 ```
 
-Supervise `refresh_task`: treat startup failure or task termination
+Supervise `refresh_task`. Treat initial attestation failure or task termination
 as fatal, and abort the task on shutdown. The application must handle periods
 when no unexpired document is available. See [cache.rs](src/cache.rs) for the
 failure and panic contracts.

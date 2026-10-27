@@ -49,16 +49,19 @@ qos_attestation = { workspace = true, features = ["cache"] }
 [`BootProof::start`](src/lib.rs) loads and retains the boot inputs, then calls:
 
 ```rust,no_run
-use qos_attestation::{AttestationInputs, cache::AttestationCache};
+use qos_attestation::{AttestationInputs, cache::{attest, AttestationCache}};
 
 let inputs = AttestationInputs::new(ephemeral_public_key, &envelope);
-let (cache, refresh_task) = AttestationCache::start(nsm, inputs).await?;
+let initial = attest(nsm, inputs).await?;
+let cache = AttestationCache::new(initial);
+let reader = cache.reader();
+let refresh_task = cache.start();
 ```
 
 Request handlers borrow the cached bytes without another NSM call:
 
 ```rust,no_run
-let document = cache.latest().ok_or("attestation unavailable")?;
+let document = reader.latest().ok_or("attestation unavailable")?;
 let cose_bytes: &[u8] = document.document();
 ```
 
