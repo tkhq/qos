@@ -66,65 +66,15 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      # Only authenticate to GHCR/ECR for PRs, since main is build-only.
-      - name: Setup Docker
-        uses: ./.github/actions/docker-setup
+      - name: Build and publish image
+        uses: ./.github/actions/stagex-build
         with:
-          ghcr: ${{ github.event_name == 'pull_request' && secrets.GITHUB_TOKEN || '' }}
-          awsRegion: us-east-1
-          awsRole: ${{ github.event_name == 'pull_request' && 'arn:aws:iam::799078726966:role/github-qos' || '' }}
-
-      # Build only this matrix image (the `common` base is built as a dependency).
-      - name: Run `make`
-        shell: 'script -q -e -c "bash {0}"'
-        run: make -j$(nproc) "out/${{ matrix.name }}/index.json"
-
-      # Publish PR images so they can be deployed for testing; main is build-only.
-      - name: Push PR image to GHCR and ECR
-        if: github.event_name == 'pull_request'
-        env:
-          name: ${{ matrix.name }}
-          ghcr_image: ${{ matrix.ghcr }}
-          push_ecr: ${{ matrix.ecr }}
-        run: |
-          set -euo pipefail
-          tag="pr-${{ github.event.number }}"
-          ecr_registry="799078726966.dkr.ecr.us-east-1.amazonaws.com"
-
-          # Load the freshly built OCI image into the local docker daemon.
-          env -C "out/${name}" tar -cf - . | docker load
-
-          pushed=()
-          push_image() {
-            # Push image:tag, stream the output, and record the immutable
-            # registry URL (ref@sha256:digest).
-            local ref="$1"
-            docker push "${ref}" | tee /tmp/push.out
-            local digest
-            digest="$(sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\).*/\1/p' /tmp/push.out | tail -1)"
-            pushed+=("${ref}@${digest}")
-          }
-
-          # Push to GHCR
-          docker tag "qos-local/${name}:latest" "${ghcr_image}:${tag}"
-          push_image "${ghcr_image}:${tag}"
-
-          # Push to ECR
-          if [ "${push_ecr}" = "true" ]; then
-            ecr_image="${ecr_registry}/tkhq/${name}"
-            docker tag "qos-local/${name}:latest" "${ecr_image}:${tag}"
-            push_image "${ecr_image}:${tag}"
-          fi
-
-          # Print the full image URL (with digest) for every repository pushed to.
-          {
-            echo "### Pushed \`${name}\` images"
-            echo ""
-            for ref in "${pushed[@]}"; do
-              echo "- \`${ref}\`"
-            done
-          } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          image: ${{ matrix.name }}
+          ghcr: ${{ matrix.ghcr }}
+          ecr: ${{ matrix.ecr }}
+          publish: ${{ github.event_name == 'pull_request' }}
+          pr-number: ${{ github.event.pull_request.number }}
+          head-commit: ${{ github.event.pull_request.head.sha }}
 
   # Single aggregate check that branch protection can require (the matrix above
   # produces one check per image). Passes only if every image job succeeded.

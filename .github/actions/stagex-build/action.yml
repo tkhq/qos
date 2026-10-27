@@ -1,0 +1,113 @@
+name: Build and publish a stagex image
+description: Shared image build steps, with optional metadata publication
+inputs:
+  image:
+    description: Image build target
+    required: true
+  ghcr:
+    description: GHCR image repository
+    required: true
+  ecr:
+    description: Whether the image has an ECR repository
+    required: true
+  publish:
+    description: Whether to publish the built image
+    default: "false"
+  metadata:
+    description: Whether to publish build metadata and use a run-specific image tag
+    default: "false"
+  pr-number:
+    description: Source pull request number
+    default: ""
+  head-commit:
+    description: Source pull request head commit
+    default: ""
+  source-directory:
+    description: Directory containing the source to build
+    default: .
+runs:
+  using: composite
+  steps:
+    - name: Setup Docker
+      uses: ./.github/actions/docker-setup
+      with:
+        ghcr: ${{ inputs.publish == 'true' && github.token || '' }}
+        awsRegion: us-east-1
+        awsRole: ${{ inputs.publish == 'true' && 'arn:aws:iam::799078726966:role/github-qos' || '' }}
+
+    - name: Build image
+      shell: 'script -q -e -c "bash {0}"'
+      working-directory: ${{ inputs.source-directory }}
+      env:
+        IMAGE_NAME: ${{ inputs.image }}
+      run: make -j$(nproc) "out/${IMAGE_NAME}/index.json"
+
+    - name: Publish image
+      if: inputs.publish == 'true'
+      shell: bash
+      env:
+        IMAGE_NAME: ${{ inputs.image }}
+        GHCR_IMAGE: ${{ inputs.ghcr }}
+        PUSH_ECR: ${{ inputs.ecr }}
+        PUBLISH_METADATA: ${{ inputs.metadata }}
+        SOURCE_DIRECTORY: ${{ inputs.source-directory }}
+        QOS_PR_NUMBER: ${{ inputs.pr-number }}
+        QOS_HEAD_COMMIT: ${{ inputs.head-commit }}
+      run: |
+        set -euo pipefail
+        tag="pr-${QOS_PR_NUMBER}"
+        if [[ "${PUBLISH_METADATA}" == true ]]; then
+          tag="${tag}-run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+        fi
+        QOS_TESTED_COMMIT="$(git -C "${SOURCE_DIRECTORY}" rev-parse HEAD)"
+        export QOS_TESTED_COMMIT
+        ecr_registry="799078726966.dkr.ecr.us-east-1.amazonaws.com"
+
+        env -C "${SOURCE_DIRECTORY}/out/${IMAGE_NAME}" tar -cf - . | docker load
+        pushed=()
+        push_image() {
+          local ref="$1"
+          docker tag "qos-local/${IMAGE_NAME}:latest" "${ref}"
+          docker push "${ref}" | tee /tmp/push.out
+          digest="$(sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\).*/\1/p' /tmp/push.out | tail -1)"
+          [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "Missing image digest for ${ref}" >&2
+            return 1
+          }
+          pushed+=("${ref}@${digest}")
+        }
+
+        push_image "${GHCR_IMAGE}:${tag}"
+        ghcr_ref="${GHCR_IMAGE}:${tag}@${digest}"
+        if [[ "${PUSH_ECR}" == true ]]; then
+          ecr_image="${ecr_registry}/tkhq/${IMAGE_NAME}"
+          push_image "${ecr_image}:${tag}"
+          ecr_ref="${ecr_image}:${tag}@${digest}"
+
+          if [[ "${PUBLISH_METADATA}" == true ]]; then
+            pcr_args=()
+            if [[ "${IMAGE_NAME}" == qos_enclave || "${IMAGE_NAME}" == qos_enclave_egress ]]; then
+              sh src/scripts/extract_oci_file.sh "${SOURCE_DIRECTORY}/out/${IMAGE_NAME}" nitro.pcrs > /tmp/nitro.pcrs
+              pcr_args=(--pcrs-file /tmp/nitro.pcrs)
+            fi
+            bash src/scripts/build_descriptor.sh fragment \
+              --image "${IMAGE_NAME}" --ecr "${ecr_ref}" --ghcr "${ghcr_ref}" \
+              "${pcr_args[@]}" --output "out/build-metadata/${IMAGE_NAME}.json"
+          fi
+        fi
+
+        {
+          echo "### Published \`${IMAGE_NAME}\` images"
+          for ref in "${pushed[@]}"; do
+            echo "- \`${ref}\`"
+          done
+        } >> "${GITHUB_STEP_SUMMARY}"
+
+    - name: Upload image metadata
+      if: inputs.publish == 'true' && inputs.metadata == 'true' && inputs.ecr == 'true'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: qos-build-metadata-${{ github.run_id }}-${{ inputs.image }}
+        path: out/build-metadata/${{ inputs.image }}.json
+        if-no-files-found: error
+        overwrite: true
