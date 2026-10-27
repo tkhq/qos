@@ -250,7 +250,7 @@ async fn qos_bridge_works() {
 
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
-			"Is this the correct namespace name: quit-coding-to-vape? (y/n)"
+			"Is this the correct namespace name: \"quit-coding-to-vape\"? (y/n)"
 		);
 		stdin.write_all("y\n".as_bytes()).expect("Failed to write to stdin");
 
@@ -500,7 +500,7 @@ async fn qos_bridge_works() {
 		// Answer prompts with yes
 		assert_eq!(
 			&stdout.next().unwrap().unwrap(),
-			"Is this the correct namespace name: quit-coding-to-vape? (y/n)"
+			"Is this the correct namespace name: \"quit-coding-to-vape\"? (y/n)"
 		);
 		stdin.write_all("yes\n".as_bytes()).expect("Failed to write to stdin");
 
