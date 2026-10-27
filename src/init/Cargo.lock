@@ -1205,7 +1205,7 @@ dependencies = [
 
 [[package]]
 name = "qos_core"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "aws-nitro-enclaves-nsm-api",
  "borsh",
@@ -1229,7 +1229,7 @@ dependencies = [
 
 [[package]]
 name = "qos_crypto"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "rand 0.9.4",
  "sha2",
@@ -1240,14 +1240,14 @@ dependencies = [
 
 [[package]]
 name = "qos_hex"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "qos_json"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "qos_hex",
  "serde",
@@ -1257,7 +1257,7 @@ dependencies = [
 
 [[package]]
 name = "qos_nsm"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "aws-nitro-enclaves-cose",
  "aws-nitro-enclaves-nsm-api",
@@ -1274,7 +1274,7 @@ dependencies = [
 
 [[package]]
 name = "qos_p256"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "aes-gcm",
  "borsh",
