@@ -48,7 +48,6 @@ mutate() {
 	jq "$filter" "$pristine_dir/$name.json" > "$fragments_dir/$name.json"
 }
 
-# Exercise the public commands, including measurement parsing and exact JSON output.
 for image in "${images[@]}"; do
 	pcr_args=()
 	if [[ "$image" == qos_enclave || "$image" == qos_enclave_egress ]]; then
@@ -124,7 +123,6 @@ done
 cp "$pristine_dir/qos_enclave.json" "$fragments_dir/"
 echo "PASS: measurements, metadata fields and pinned image identities checked"
 
-# Reuse successful jobs from attempt 1, replacing the failed job with attempt 2.
 mutate qos_host '
   .source.runAttempt = 2 | .images.qos_host.buildAttempt = 2
   | .images.qos_host.ecr |= sub("run-12345-1@"; "run-12345-2@")
@@ -154,7 +152,6 @@ echo 'invalid PCR0' > "$test_dir/invalid.pcrs"
 expect_failure "invalid PCR line" fragment_with_pcrs "$test_dir/invalid.pcrs"
 echo "PASS: invalid and duplicate PCR lines rejected"
 
-# Exercise the same OCI-layout PCR extraction path used by CI.
 mkdir -p "$test_dir/layout/blobs/sha256" "$test_dir/root"
 cp "$pcrs_file" "$test_dir/root/nitro.pcrs"
 tar -czf "$test_dir/layout/blobs/sha256/layer" -C "$test_dir/root" nitro.pcrs

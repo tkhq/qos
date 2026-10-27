@@ -1,5 +1,4 @@
 #!/bin/bash
-# Collect digest-pinned image outputs from one QOS PR workflow run.
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "$0")" && pwd)

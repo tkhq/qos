@@ -1,4 +1,3 @@
-# Shared validation for fragments and the complete PR build descriptor.
 def ensure($condition; $message):
   if $condition then . else error($message) end;
 
