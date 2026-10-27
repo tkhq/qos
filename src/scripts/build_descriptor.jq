@@ -83,3 +83,12 @@ def assemble:
     )
   | ensure(keys == image_names; "incomplete build: missing required images")
   | {schemaVersion: 1, source: $source, supportedManifestVersions: ["v2"], images: .};
+
+def validate_descriptor:
+  source as $source
+  | ensure(keys == ["images", "schemaVersion", "source", "supportedManifestVersions"] and .schemaVersion == 1;
+      "unsupported build descriptor")
+  | ensure(.source == $source; "descriptor comes from a different build")
+  | ensure(.supportedManifestVersions == ["v2"]; "unsupported manifest versions")
+  | ensure(.images | keys == image_names; "incomplete build: missing required images")
+  | .images |= with_entries(.key as $name | .value |= validate_image($name; $source));

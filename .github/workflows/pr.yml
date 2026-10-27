@@ -14,7 +14,9 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Test build descriptor tooling
-        run: bash src/scripts/test_build_descriptor.sh
+        run: |
+          bash src/scripts/test_build_descriptor.sh
+          bash src/scripts/test_publish_build_descriptor.sh
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:

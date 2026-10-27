@@ -1,5 +1,5 @@
 name: Build and publish a stagex image
-description: Shared image build steps, with optional metadata publication
+description: Shared image build steps and metadata publication
 inputs:
   image:
     description: Image build target
@@ -14,7 +14,7 @@ inputs:
     description: Whether to publish the built image
     default: "false"
   metadata:
-    description: Whether to publish build metadata and use a run-specific image tag
+    description: Whether to publish build metadata and a run-specific image tag
     default: "false"
   pr-number:
     description: Source pull request number
@@ -55,7 +55,8 @@ runs:
         QOS_HEAD_COMMIT: ${{ inputs.head-commit }}
       run: |
         set -euo pipefail
-        tag="pr-${QOS_PR_NUMBER}"
+        pr_tag="pr-${QOS_PR_NUMBER}"
+        tag="${pr_tag}"
         if [[ "${PUBLISH_METADATA}" == true ]]; then
           tag="${tag}-run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
         fi
@@ -79,10 +80,16 @@ runs:
 
         push_image "${GHCR_IMAGE}:${tag}"
         ghcr_ref="${GHCR_IMAGE}:${tag}@${digest}"
+        if [[ "${PUBLISH_METADATA}" == true ]]; then
+          push_image "${GHCR_IMAGE}:${pr_tag}"
+        fi
         if [[ "${PUSH_ECR}" == true ]]; then
           ecr_image="${ecr_registry}/tkhq/${IMAGE_NAME}"
           push_image "${ecr_image}:${tag}"
           ecr_ref="${ecr_image}:${tag}@${digest}"
+          if [[ "${PUBLISH_METADATA}" == true ]]; then
+            push_image "${ecr_image}:${pr_tag}"
+          fi
 
           if [[ "${PUBLISH_METADATA}" == true ]]; then
             pcr_args=()
