@@ -272,6 +272,20 @@ then pipes bytes between the streams. If an app needs to restrict concurrency,
 for example to ensure only one customer secret is processed at a time, that
 should be enforced in the app, not assumed from the bridge.
 
+## Outbound TLS From Apps
+
+The host is untrusted, and all app traffic crosses it as raw bytes. A malicious
+host can see TLS record boundaries and close the TCP connection at any of them.
+QOS provides no HTTP or TLS layer, so each app must detect truncated responses
+itself.
+
+- Use a framing-aware HTTP client such as `ureq`, `reqwest`, or `hyper`. These
+  clients enforce `Content-Length` and chunked encoding, and they fail on a
+  truncated body.
+- Do not hand-roll HTTP over `rustls` with `read_to_end` and treat
+  `UnexpectedEof` as a complete response. If you do, the host can truncate
+  responses without detection.
+
 ## Current Gaps
 
 `BridgeConfig::Client` exists in the manifest type for egress-style client
