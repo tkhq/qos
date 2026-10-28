@@ -362,7 +362,7 @@ impl P256Public {
 	}
 
 	/// Verify a `signature` and `message` against this private key. Verifies
-	/// the SHA512 digest of the message.
+	/// the SHA-256 digest of the message.
 	///
 	/// Returns Ok if the signature is good.
 	///
