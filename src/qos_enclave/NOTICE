@@ -1,0 +1,5 @@
+qos_enclave includes code derived from aws-nitro-enclaves-cli v1.4.5:
+https://github.com/aws/aws-nitro-enclaves-cli/tree/v1.4.5
+
+aws-nitro-enclaves-cli
+Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
