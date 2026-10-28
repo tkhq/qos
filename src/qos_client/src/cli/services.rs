@@ -1925,11 +1925,20 @@ pub(crate) fn p256_asymmetric_decrypt<P: AsRef<Path>>(
 pub(crate) fn get_ephemeral_key_hex<P: AsRef<Path>>(
 	attestation_doc_path: P,
 	ephemeral_key_path: P,
+	unsafe_skip_attestation: bool,
+	validation_time_override: Option<u64>,
 ) {
+	if unsafe_skip_attestation {
+		println!("**WARNING:** Skipping attestation document verification.");
+	}
+
 	let bytes = fs::read(attestation_doc_path)
 		.unwrap_or_else(|e| panic!("Failed reading attestation doc: {e:?}"));
-	let attestation_doc: AttestationDoc =
-		extract_attestation_doc(bytes.as_ref(), true, None);
+	let attestation_doc: AttestationDoc = extract_attestation_doc(
+		bytes.as_ref(),
+		unsafe_skip_attestation,
+		validation_time_override,
+	);
 	let ephemeral_key = P256Public::from_bytes(
 		&attestation_doc
 			.public_key
@@ -2733,10 +2742,70 @@ mod tests {
 
 	use super::{
 		Prompter, approve_manifest_human_verifications,
-		approve_manifest_programmatic_verifications,
+		approve_manifest_programmatic_verifications, get_ephemeral_key_hex,
 		proxy_re_encrypt_share_human_verifications,
 		proxy_re_encrypt_share_programmatic_verifications,
 	};
+
+	mod get_ephemeral_key {
+		use qos_nsm::{
+			NsmProvider,
+			mock::MockNsm,
+			types::{NsmRequest, NsmResponse},
+		};
+
+		use super::*;
+
+		/// Write an attestation document that is correctly formed but signed
+		/// by the mock PKI rather than AWS, and return it with the path the
+		/// ephemeral key should be written to.
+		fn setup(
+			name: &str,
+		) -> (PathWrapper<String>, PathWrapper<String>, P256Public) {
+			let doc_path: PathWrapper<String> =
+				format!("./{name}.attestation").into();
+			let key_path: PathWrapper<String> =
+				format!("./{name}.eph.key").into();
+
+			let ephemeral_key = P256Pair::generate().unwrap().public_key();
+			let NsmResponse::Attestation { document } = MockNsm::new()
+				.nsm_process_request(NsmRequest::Attestation {
+					user_data: None,
+					nonce: None,
+					public_key: Some(ephemeral_key.to_bytes()),
+				})
+			else {
+				panic!("unexpected attestation response");
+			};
+			std::fs::write(&*doc_path, document).unwrap();
+
+			(doc_path, key_path, ephemeral_key)
+		}
+
+		#[test]
+		#[should_panic(
+			expected = "Failed to extract and verify attestation doc"
+		)]
+		fn rejects_an_attestation_doc_that_does_not_verify() {
+			let (doc_path, key_path, _) = setup("rejects_unverified");
+
+			// The document does not chain up to the AWS root, so the
+			// verifying path must refuse to hand out its ephemeral key.
+			get_ephemeral_key_hex(&*doc_path, &*key_path, false, None);
+		}
+
+		#[test]
+		fn skips_verification_when_explicitly_asked_to() {
+			let (doc_path, key_path, ephemeral_key) =
+				setup("skips_verification");
+
+			// The same document the verifying path rejects.
+			get_ephemeral_key_hex(&*doc_path, &*key_path, true, None);
+
+			let written = P256Public::from_hex_file(&*key_path).unwrap();
+			assert_eq!(written.to_bytes(), ephemeral_key.to_bytes());
+		}
+	}
 
 	struct Setup {
 		manifest: VersionedManifest,
