@@ -17,6 +17,7 @@ compile_error!("qemu-ci and impure-builder select different artifact sources");
 const APP_ARGS: [&str; 4] = ["--host", "0.0.0.0", "--port", "3000"];
 const HEALTH_PATH: &str = "/health";
 const ECHO_PATH: &str = "/echo";
+const BOOT_PROOF_PATH: &str = "/boot_proof";
 const GET_URL_PATH: &str = "/get_url";
 const EGRESS_URL: &str = "https://example.com/";
 const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -34,6 +35,7 @@ async fn signed_echo_ingress() {
 		}])
 		.build()
 		.unwrap();
+	let quorum_public_key = qos_hex::encode(&manifest.namespace().quorum_key);
 	let mut runner = prepared.runner;
 	let app = runner
 		.start_app(StartAppSpec {
@@ -46,8 +48,7 @@ async fn signed_echo_ingress() {
 	let ingress_url = app.app().ingress_url.clone();
 
 	let result = async {
-		wait_for_http_ok(&url(&ingress_url, HEALTH_PATH), PROBE_TIMEOUT)
-			.await?;
+		wait_for_health(&url(&ingress_url, HEALTH_PATH), PROBE_TIMEOUT).await?;
 
 		let (status, body) = response(
 			ureq::post(&url(&ingress_url, ECHO_PATH)).send_string("hello"),
@@ -55,7 +56,28 @@ async fn signed_echo_ingress() {
 		if status != 200 {
 			return Err(format!("echo returned status {status}: {body}"));
 		}
-		verify_echo_response(&body)?;
+		let echo = verify_echo_response(&body)?;
+		if echo.public_key_hex != quorum_public_key {
+			return Err(
+				"echo public key does not match the manifest quorum key"
+					.to_string(),
+			);
+		}
+		let payload: serde_json::Value =
+			serde_json::from_str(&echo.signed_payload_json)
+				.map_err(|err| format!("invalid signed echo payload: {err}"))?;
+		if payload["message"] != "hello"
+			|| payload["domain"] != "echo app signed"
+		{
+			return Err(format!("unexpected signed echo payload: {payload}"));
+		}
+		let (status, body) =
+			response(ureq::get(&url(&ingress_url, BOOT_PROOF_PATH)).call())?;
+		if status != 404 {
+			return Err(format!(
+				"boot proof must be off by default, got {status}: {body}"
+			));
+		}
 		Ok(())
 	}
 	.await;
@@ -71,7 +93,13 @@ async fn signed_echo_egress_get_url() {
 	let manifest = prepared
 		.manifest_template(&pivot)
 		.unwrap()
-		.pivot_args(APP_ARGS.into_iter().map(str::to_string).collect())
+		.pivot_args(
+			APP_ARGS
+				.into_iter()
+				.chain(["--boot-proof", "off"])
+				.map(str::to_string)
+				.collect(),
+		)
 		.bridge_config(vec![
 			BridgeConfig::Server { port: 3000, host: "0.0.0.0".to_string() },
 			BridgeConfig::Client {
@@ -82,6 +110,7 @@ async fn signed_echo_egress_get_url() {
 		.dns(DnsConfig { resolvers: vec!["1.1.1.1".parse().unwrap()] })
 		.build()
 		.unwrap();
+	let quorum_public_key = qos_hex::encode(&manifest.namespace().quorum_key);
 	let mut runner = prepared.runner;
 	let app = runner
 		.start_app(StartAppSpec {
@@ -94,8 +123,7 @@ async fn signed_echo_egress_get_url() {
 	let ingress_url = app.app().ingress_url.clone();
 
 	let result = async {
-		wait_for_http_ok(&url(&ingress_url, HEALTH_PATH), PROBE_TIMEOUT)
-			.await?;
+		wait_for_health(&url(&ingress_url, HEALTH_PATH), PROBE_TIMEOUT).await?;
 		let request_path = format!(
 			"{GET_URL_PATH}?url={}",
 			percent_encode_query_value(EGRESS_URL)
@@ -106,10 +134,21 @@ async fn signed_echo_egress_get_url() {
 		)
 		.await?;
 		let response = verify_echo_response(&body)?;
+		if response.public_key_hex != quorum_public_key {
+			return Err(
+				"get_url public key does not match the manifest quorum key"
+					.to_string(),
+			);
+		}
 		let payload: signed_echo::SignedGetUrlPayload = serde_json::from_str(
 			&response.signed_payload_json,
 		)
 		.map_err(|err| format!("invalid signed get_url payload: {err}"))?;
+		if payload.domain != "echo app signed" || payload.status != 200 {
+			return Err(format!(
+				"unexpected signed get_url payload: {payload:?}"
+			));
+		}
 		if payload.url != EGRESS_URL {
 			return Err(format!(
 				"signed get_url URL mismatch: expected {EGRESS_URL}, got {}",
@@ -154,12 +193,21 @@ async fn prepare() -> (PreparedDockerHostQemuNitro, Pivot) {
 	(prepared, pivot)
 }
 
-async fn wait_for_http_ok(url: &str, timeout: Duration) -> Result<(), String> {
+async fn wait_for_health(url: &str, timeout: Duration) -> Result<(), String> {
 	let start = std::time::Instant::now();
 	let mut last_error = None;
 	while start.elapsed() < timeout {
 		match response(ureq::get(url).call()) {
-			Ok((200, _)) => return Ok(()),
+			Ok((200, body)) => {
+				let health: serde_json::Value = serde_json::from_str(&body)
+					.map_err(|err| format!("invalid health response: {err}"))?;
+				if health != serde_json::json!({ "status": "healthy" }) {
+					return Err(format!(
+						"unexpected health response: {health}"
+					));
+				}
+				return Ok(());
+			}
 			Ok((status, body)) => {
 				last_error = Some(format!("{url} returned {status}: {body}"));
 			}

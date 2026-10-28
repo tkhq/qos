@@ -204,8 +204,12 @@ out/signed_echo/index.json: \
 	src/images/signed_echo/Containerfile \
 	$(shell git ls-files \
 		src/signed_echo \
-		src/qos_p256 \
+		src/qos_attestation \
+		src/qos_core \
 		src/qos_hex \
+		src/qos_json \
+		src/qos_nsm \
+		src/qos_p256 \
 	)
 	$(call build,signed_echo)
 
