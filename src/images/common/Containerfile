@@ -13,6 +13,13 @@ COPY --from=rust . /
 COPY --from=file . /
 COPY --from=make . /
 
+# libcontainer's nc dependency reads the target page size during its build.
+COPY --chmod=755 <<-'EOF' /usr/bin/getconf
+	#!/bin/sh
+	[ "$1" = PAGE_SIZE ] || exit 1
+	printf '4096\n'
+EOF
+
 COPY --chmod=644 <<-EOF /etc/passwd
 	root:x:0:0:root:/root:/bin/sh
 	user:x:1000:1000::/home/user:/bin/sh

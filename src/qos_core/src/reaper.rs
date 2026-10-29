@@ -8,7 +8,10 @@ use std::{
 	fs,
 	net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
 	process::Stdio,
-	sync::{Arc, RwLock},
+	sync::{
+		Arc, RwLock,
+		atomic::{AtomicBool, Ordering},
+	},
 	time::Duration,
 };
 
@@ -23,8 +26,10 @@ use crate::{
 	io::{HostBridge, IOError, SocketAddress, StreamPool},
 	protocol::{
 		ProtocolPhase, ProtocolState,
+		oci_status::{OciStartup, SharedOciStatus},
 		processor::ProtocolProcessor,
 		services::boot::{BridgeConfig, RestartPolicy},
+		services::boot::{ManifestV3, VersionedManifest},
 	},
 	server::SocketServer,
 };
@@ -34,6 +39,7 @@ pub const REAPER_RESTART_DELAY: Duration = Duration::from_millis(50);
 /// Delay until the reaper exits after pivot app with a Never restart policy
 /// exits.
 pub const REAPER_EXIT_DELAY: Duration = Duration::from_secs(3);
+const OCI_STATUS_EXIT_DELAY: Duration = Duration::from_secs(10);
 
 const REAPER_STATE_CHECK_DELAY: Duration = Duration::from_millis(100);
 const RESOLV_CONF_PATH: &str = "/etc/resolv.conf";
@@ -46,10 +52,15 @@ async fn run_server(
 	nsm: Box<dyn NsmProvider + Send>,
 	core_socket: SocketAddress,
 	test_only_init_phase_override: Option<ProtocolPhase>,
+	oci_status: SharedOciStatus,
 ) {
-	let protocol_state =
-		ProtocolState::new(nsm, handles.clone(), test_only_init_phase_override)
-			.shared();
+	let protocol_state = ProtocolState::new_with_oci_status(
+		nsm,
+		handles.clone(),
+		test_only_init_phase_override,
+		oci_status,
+	)
+	.shared();
 	let core_pool = StreamPool::single(core_socket)
 		.expect("unable to create single socket core pool");
 	// send a shared version of state and the async pool to each processor
@@ -66,6 +77,91 @@ async fn run_server(
 	}
 
 	println!("Reaper::server shutdown");
+}
+
+async fn run_oci_workload_group(
+	handles: &Handles,
+	core_socket: &SocketAddress,
+	manifest: ManifestV3,
+	status: &SharedOciStatus,
+) {
+	// The V3 boot route began the status already; this covers a manifest
+	// that was in place before this process started.
+	status.write().unwrap().begin(&manifest);
+	println!("Reaper::execute about to start OCI workloads");
+	let handles = handles.clone();
+	let worker_status = Arc::clone(status);
+	let shutdown = Arc::new(AtomicBool::new(false));
+	let worker_shutdown = Arc::clone(&shutdown);
+	let (sandbox_ready, sandbox) =
+		tokio::sync::oneshot::channel::<std::io::Result<fs::File>>();
+	#[cfg(target_os = "linux")]
+	run_sandbox_bridges(core_socket, &manifest.bridge_config, sandbox);
+	#[cfg(not(target_os = "linux"))]
+	let _ = (core_socket, sandbox);
+	let mut worker = tokio::task::spawn_blocking(move || {
+		#[cfg(target_os = "linux")]
+		{
+			crate::oci_manager::run_oci_workloads(
+				&handles,
+				&manifest,
+				&worker_status,
+				&worker_shutdown,
+				|namespaces| {
+					// The open handle keeps the namespace for the bridges.
+					let _ =
+						sandbox_ready.send(fs::File::open(&namespaces.network));
+				},
+			)
+			.map_err(|error| error.to_string())
+		}
+		#[cfg(not(target_os = "linux"))]
+		{
+			let _ = (
+				handles,
+				manifest,
+				worker_status,
+				worker_shutdown,
+				sandbox_ready,
+			);
+			Err("OCI workloads require Linux".to_owned())
+		}
+	});
+	let result = tokio::select! {
+		result = &mut worker => result,
+		() = oci_shutdown_signal() => {
+			shutdown.store(true, Ordering::Release);
+			worker.await
+		}
+	};
+	{
+		let mut status = status.write().unwrap();
+		if status.startup != OciStartup::Started {
+			status.startup = OciStartup::Failed;
+		}
+	}
+	match result {
+		Ok(Ok(())) => println!("all OCI workloads stopped"),
+		Ok(Err(error)) => eprintln!("OCI workload group failed: {error}"),
+		Err(error) => eprintln!("OCI workload monitor join failed: {error}"),
+	}
+}
+
+#[cfg(unix)]
+async fn oci_shutdown_signal() {
+	let mut terminate = tokio::signal::unix::signal(
+		tokio::signal::unix::SignalKind::terminate(),
+	)
+	.expect("failed to install SIGTERM handler");
+	tokio::select! {
+		_ = tokio::signal::ctrl_c() => {}
+		_ = terminate.recv() => {}
+	}
+}
+
+#[cfg(not(unix))]
+async fn oci_shutdown_signal() {
+	let _ = tokio::signal::ctrl_c().await;
 }
 
 // runs configured bridges based on `BridgeConfig` so that apps can use any TCP based protocol without worrying about VSOCK
@@ -106,6 +202,56 @@ fn run_bridges(
 	}
 
 	Ok(())
+}
+
+/// Serve a Manifest V3 `bridgeConfig` once the workload sandbox exists
+/// (`sandbox` yields its open network namespace). Each `server` entry listens
+/// on VSOCK `port`, as a V2 pivot bridge does, and connects every stream to
+/// `127.0.0.1:port` from inside the sandbox network namespace, where the
+/// workloads listen. Validation admits only `server` entries.
+#[cfg(target_os = "linux")]
+fn run_sandbox_bridges(
+	core_socket: &SocketAddress,
+	bridges: &[BridgeConfig],
+	sandbox: tokio::sync::oneshot::Receiver<std::io::Result<fs::File>>,
+) {
+	if bridges.is_empty() {
+		println!("skipping OCI ingress bridge, not configured");
+		return;
+	}
+	let core_socket = core_socket.clone();
+	let bridges = bridges.to_vec();
+	tokio::spawn(async move {
+		// A group that fails before its sandbox exists drops the sender.
+		let Ok(netns) = sandbox.await else { return };
+		let result = (|| {
+			let connector =
+				Arc::new(crate::oci_runtime::SandboxTcpConnector::new(netns?)?);
+			for bridge in &bridges {
+				let BridgeConfig::Server { port, .. } = bridge else {
+					continue;
+				};
+				let app_pool =
+					StreamPool::single(core_socket.with_port(*port)?)?;
+				let target =
+					SocketAddrV4::new(Ipv4Addr::LOCALHOST, *port).into();
+				let connector = Arc::clone(&connector);
+				HostBridge::new(app_pool, target).vsock_to_tcp_via(
+					move |address| {
+						let connector = Arc::clone(&connector);
+						async move { connector.connect(address).await }
+					},
+				);
+				println!(
+					"OCI ingress: VSOCK port {port} to 127.0.0.1:{port} in the workload sandbox"
+				);
+			}
+			Ok::<(), IOError>(())
+		})();
+		if let Err(error) = result {
+			eprintln!("failed to run OCI ingress bridges: {error:?}");
+		}
+	});
 }
 
 // dummy placeholder
@@ -193,6 +339,7 @@ impl Reaper {
 		// we need to establish
 		let inter_state = Arc::new(RwLock::new(InterState::Booting));
 		let server_state = inter_state.clone();
+		let oci_status = SharedOciStatus::default();
 
 		let server_worker = tokio::spawn(run_server(
 			server_state,
@@ -200,6 +347,7 @@ impl Reaper {
 			nsm,
 			core_socket.clone(),
 			test_only_init_phase_override,
+			Arc::clone(&oci_status),
 		));
 
 		loop {
@@ -210,10 +358,13 @@ impl Reaper {
 				std::process::exit(1);
 			}
 
-			if handles.quorum_key_exists()
-				&& handles.pivot_exists()
+			let ready = handles.quorum_key_exists()
 				&& handles.manifest_envelope_exists()
-			{
+				&& handles.get_manifest_envelope().is_ok_and(|envelope| {
+					matches!(envelope.manifest(), VersionedManifest::V3(_))
+						|| handles.pivot_exists()
+				});
+			if ready {
 				// The state required to pivot exists, so we can break this
 				// holding pattern and start the pivot.
 				break;
@@ -223,21 +374,43 @@ impl Reaper {
 			tokio::time::sleep(REAPER_STATE_CHECK_DELAY).await;
 		}
 
-		println!("Reaper::execute about to spawn pivot");
-
 		let manifest = handles
 			.get_manifest_envelope()
 			.expect("Checked above that the manifest exists.")
 			.manifest();
-		let args = manifest.args().to_vec();
-		let restart = manifest.restart();
-		let host_config = manifest.bridge_config().to_vec();
-		let dns_config = manifest.dns_config().cloned();
-
-		if let Some(dns_config) = dns_config {
+		// `dns` keeps its parent-QOS meaning in every manifest version.
+		if let Some(dns_config) = manifest.dns_config() {
 			write_resolv_conf(&dns_config.resolvers)
 				.expect("failed to write /etc/resolv.conf");
 		}
+		if let VersionedManifest::V3(oci_manifest) = manifest {
+			run_oci_workload_group(
+				handles,
+				&core_socket,
+				oci_manifest,
+				&oci_status,
+			)
+			.await;
+			tokio::time::sleep(OCI_STATUS_EXIT_DELAY).await;
+			*inter_state.write().unwrap() = InterState::Quitting;
+			if let Err(error) = server_worker.await {
+				eprintln!(
+					"Reaper::execute server_worker join error: {error:?}"
+				);
+			}
+			println!("Reaper exiting ... ");
+			return;
+		}
+
+		println!("Reaper::execute about to spawn pivot");
+		let args = manifest
+			.args()
+			.expect("V3 returned above; V0-V2 manifests have pivot args")
+			.to_vec();
+		let restart = manifest
+			.restart()
+			.expect("V3 returned above; V0-V2 manifests have a restart policy");
+		let host_config = manifest.bridge_config().to_vec();
 
 		// if the app indicates the need for the VSOCK -> TCP bridge, run it as another task
 		run_bridges(&core_socket, &host_config)

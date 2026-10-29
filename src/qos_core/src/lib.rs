@@ -5,6 +5,13 @@ pub mod cli;
 pub mod client;
 pub mod handles;
 pub mod io;
+#[cfg(target_os = "linux")]
+pub mod oci_bundle;
+pub mod oci_image;
+#[cfg(target_os = "linux")]
+pub mod oci_manager;
+#[cfg(target_os = "linux")]
+pub mod oci_runtime;
 pub mod parser;
 pub mod protocol;
 pub mod reaper;

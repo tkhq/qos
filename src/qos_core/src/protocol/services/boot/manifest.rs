@@ -1,6 +1,6 @@
 //! Versioned manifest helpers.
 
-use std::io::Error;
+use std::{borrow::Cow, io::Error};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -15,9 +15,15 @@ use super::{
 
 mod builder;
 pub mod v2;
+pub mod v3;
 
 pub use builder::{ManifestBuilder, ManifestBuilderError};
 pub use v2::{DnsConfig, ManifestEnvelopeV2, ManifestV2};
+pub use v3::{
+	EnclaveMode, EnclaveV3, ManifestEnvelopeV3, ManifestV3, OciDevice,
+	OciDigest, OciImageRef, OciMount, OciName, OciPath, OciRestartPolicy,
+	VolumeV3, WorkloadV3,
+};
 
 /// Schema version used by versioned manifest tooling.
 #[derive(
@@ -38,6 +44,8 @@ pub enum ManifestVersion {
 	/// Explicitly versioned JSON manifest schema.
 	#[default]
 	V2,
+	/// OCI workload manifest schema.
+	V3,
 }
 
 /// Hash a serde value using canonical QOS JSON.
@@ -72,12 +80,20 @@ fn enveloped_manifest_declares_a_version(buf: &[u8]) -> bool {
 #[serde(untagged)]
 #[non_exhaustive]
 pub enum VersionedManifest {
+	/// OCI workload manifest schema.
+	V3(ManifestV3),
 	/// Explicitly versioned JSON manifest schema.
 	V2(ManifestV2),
 	/// Backwards-compatible manifest schema.
 	V1(Manifest),
 	/// Legacy original manifest schema.
 	V0(ManifestV0),
+}
+
+impl From<ManifestV3> for VersionedManifest {
+	fn from(value: ManifestV3) -> Self {
+		Self::V3(value)
+	}
 }
 
 impl From<ManifestV2> for VersionedManifest {
@@ -106,6 +122,9 @@ impl BorshSerialize for VersionedManifest {
 		writer: &mut W,
 	) -> borsh::io::Result<()> {
 		match self {
+			Self::V3(_) => Err(borsh::io::Error::other(
+				"manifest v3 is json-only and cannot be borsh serialized",
+			)),
 			Self::V2(_) => Err(borsh::io::Error::other(
 				"manifest v2 is json-only and cannot be borsh serialized",
 			)),
@@ -130,6 +149,7 @@ impl VersionedManifest {
 	#[must_use]
 	pub fn manifest_hash(&self) -> Hash256 {
 		match self {
+			Self::V3(manifest) => canonical_json_hash(manifest),
 			Self::V2(manifest) => canonical_json_hash(manifest),
 			Self::V1(manifest) => manifest.qos_hash(),
 			Self::V0(manifest) => manifest.qos_hash(),
@@ -140,6 +160,7 @@ impl VersionedManifest {
 	#[must_use]
 	pub fn namespace(&self) -> &Namespace {
 		match self {
+			Self::V3(manifest) => &manifest.namespace,
 			Self::V2(manifest) => &manifest.namespace,
 			Self::V1(manifest) => &manifest.namespace,
 			Self::V0(manifest) => &manifest.namespace,
@@ -150,6 +171,7 @@ impl VersionedManifest {
 	#[must_use]
 	pub fn manifest_set(&self) -> &ManifestSet {
 		match self {
+			Self::V3(manifest) => &manifest.manifest_set,
 			Self::V2(manifest) => &manifest.manifest_set,
 			Self::V1(manifest) => &manifest.manifest_set,
 			Self::V0(manifest) => &manifest.manifest_set,
@@ -160,6 +182,7 @@ impl VersionedManifest {
 	#[must_use]
 	pub fn share_set(&self) -> &ShareSet {
 		match self {
+			Self::V3(manifest) => &manifest.share_set,
 			Self::V2(manifest) => &manifest.share_set,
 			Self::V1(manifest) => &manifest.share_set,
 			Self::V0(manifest) => &manifest.share_set,
@@ -168,58 +191,66 @@ impl VersionedManifest {
 
 	/// Return the enclave configuration.
 	#[must_use]
-	pub fn enclave(&self) -> &NitroConfig {
+	pub fn enclave(&self) -> Cow<'_, NitroConfig> {
 		match self {
-			Self::V2(manifest) => &manifest.enclave,
-			Self::V1(manifest) => &manifest.enclave,
-			Self::V0(manifest) => &manifest.enclave,
+			Self::V3(manifest) => Cow::Owned(manifest.enclave.nitro_config()),
+			Self::V2(manifest) => Cow::Borrowed(&manifest.enclave),
+			Self::V1(manifest) => Cow::Borrowed(&manifest.enclave),
+			Self::V0(manifest) => Cow::Borrowed(&manifest.enclave),
 		}
 	}
 
 	/// Return the expected pivot binary hash.
 	#[must_use]
-	pub fn pivot_hash(&self) -> &Hash256 {
+	pub fn pivot_hash(&self) -> Option<&Hash256> {
 		match self {
-			Self::V2(manifest) => &manifest.pivot.hash,
-			Self::V1(manifest) => &manifest.pivot.hash,
-			Self::V0(manifest) => &manifest.pivot.hash,
+			Self::V3(_) => None,
+			Self::V2(manifest) => Some(&manifest.pivot.hash),
+			Self::V1(manifest) => Some(&manifest.pivot.hash),
+			Self::V0(manifest) => Some(&manifest.pivot.hash),
 		}
 	}
 
 	/// Return the pivot restart policy.
 	#[must_use]
-	pub fn restart(&self) -> RestartPolicy {
+	pub fn restart(&self) -> Option<RestartPolicy> {
 		match self {
-			Self::V2(manifest) => manifest.pivot.restart,
-			Self::V1(manifest) => manifest.pivot.restart,
-			Self::V0(manifest) => manifest.pivot.restart,
+			Self::V3(_) => None,
+			Self::V2(manifest) => Some(manifest.pivot.restart),
+			Self::V1(manifest) => Some(manifest.pivot.restart),
+			Self::V0(manifest) => Some(manifest.pivot.restart),
 		}
 	}
 
 	/// Return the pivot command-line arguments.
 	#[must_use]
-	pub fn args(&self) -> &[String] {
+	pub fn args(&self) -> Option<&[String]> {
 		match self {
-			Self::V2(manifest) => &manifest.pivot.args,
-			Self::V1(manifest) => &manifest.pivot.args,
-			Self::V0(manifest) => &manifest.pivot.args,
+			Self::V3(_) => None,
+			Self::V2(manifest) => Some(&manifest.pivot.args),
+			Self::V1(manifest) => Some(&manifest.pivot.args),
+			Self::V0(manifest) => Some(&manifest.pivot.args),
 		}
 	}
 
-	/// Return bridge configuration entries, or an empty slice for v0 manifests.
+	/// Return bridge configuration entries: the pivot's for v1 and v2, the
+	/// top-level workload-group ingress for v3, and none for v0.
 	#[must_use]
 	pub fn bridge_config(&self) -> &[BridgeConfig] {
 		match self {
+			Self::V3(manifest) => &manifest.bridge_config,
 			Self::V2(manifest) => &manifest.pivot.bridge_config,
 			Self::V1(manifest) => &manifest.pivot.bridge_config,
 			Self::V0(_) => &[],
 		}
 	}
 
-	/// Return whether pivot debug mode is enabled.
+	/// Return whether debug mode is enabled: the pivot's, or a Manifest V3's
+	/// enclave mode.
 	#[must_use]
 	pub fn debug_mode(&self) -> bool {
 		match self {
+			Self::V3(manifest) => manifest.enclave.mode() == EnclaveMode::Debug,
 			Self::V2(manifest) => manifest.pivot.debug_mode,
 			Self::V1(manifest) => manifest.pivot.debug_mode,
 			Self::V0(_) => false,
@@ -230,6 +261,7 @@ impl VersionedManifest {
 	#[must_use]
 	pub fn dns_config(&self) -> Option<&DnsConfig> {
 		match self {
+			Self::V3(manifest) => manifest.dns.as_ref(),
 			Self::V2(manifest) => manifest.dns.as_ref(),
 			Self::V1(_) | Self::V0(_) => None,
 		}
@@ -239,6 +271,7 @@ impl VersionedManifest {
 	#[must_use]
 	pub const fn version_label(&self) -> &'static str {
 		match self {
+			Self::V3(_) => "v3",
 			Self::V2(_) => "v2",
 			Self::V1(_) => "v1",
 			Self::V0(_) => "v0",
@@ -258,9 +291,24 @@ impl VersionedManifest {
 	/// `version` that does not match the schema it is written in.
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, Error> {
 		if declares_a_version(buf) {
-			return serde_json::from_slice::<ManifestV2>(buf)
-				.map(Self::V2)
-				.map_err(|e| Error::other(e.to_string()));
+			let version =
+				serde_json::from_slice::<serde_json::Value>(buf).ok().and_then(
+					|value| value.get("version")?.as_str().map(str::to_owned),
+				);
+			return match version.as_deref() {
+				Some("v3") => v3::reject_duplicate_json_members(buf)
+					.map_err(serde::de::Error::custom)
+					.and_then(|()| serde_json::from_slice::<ManifestV3>(buf))
+					.and_then(|manifest| {
+						manifest
+							.validate()
+							.map_err(serde::de::Error::custom)?;
+						Ok(manifest)
+					})
+					.map(Self::V3),
+				_ => serde_json::from_slice::<ManifestV2>(buf).map(Self::V2),
+			}
+			.map_err(|e| Error::other(e.to_string()));
 		}
 		if let Ok(manifest) = serde_json::from_slice::<Manifest>(buf) {
 			return Ok(Self::V1(manifest));
@@ -278,6 +326,8 @@ impl VersionedManifest {
 	/// Returns an [`std::io::Error`] when serialization fails.
 	pub fn to_storage_vec(&self) -> Result<Vec<u8>, Error> {
 		match self {
+			Self::V3(manifest) => qos_json::to_vec(manifest)
+				.map_err(|e| Error::other(e.to_string())),
 			Self::V2(manifest) => qos_json::to_vec(manifest)
 				.map_err(|e| Error::other(e.to_string())),
 			Self::V1(manifest) => serde_json::to_vec(manifest)
@@ -292,12 +342,20 @@ impl VersionedManifest {
 #[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum VersionedManifestEnvelope {
+	/// Signed OCI workload manifest.
+	V3(ManifestEnvelopeV3),
 	/// Explicitly versioned JSON manifest envelope schema.
 	V2(ManifestEnvelopeV2),
 	/// Backwards-compatible manifest envelope schema.
 	V1(ManifestEnvelope),
 	/// Legacy original manifest envelope schema.
 	V0(ManifestEnvelopeV0),
+}
+
+impl From<ManifestEnvelopeV3> for VersionedManifestEnvelope {
+	fn from(value: ManifestEnvelopeV3) -> Self {
+		Self::V3(value)
+	}
 }
 
 impl From<ManifestEnvelopeV2> for VersionedManifestEnvelope {
@@ -344,6 +402,9 @@ impl BorshSerialize for VersionedManifestEnvelope {
 		writer: &mut W,
 	) -> borsh::io::Result<()> {
 		match self {
+			Self::V3(_) => Err(borsh::io::Error::other(
+				"manifest envelope v3 is json-only and cannot be borsh serialized",
+			)),
 			Self::V2(_) => Err(borsh::io::Error::other(
 				"manifest envelope v2 is json-only and cannot be borsh serialized",
 			)),
@@ -368,6 +429,7 @@ impl VersionedManifestEnvelope {
 	#[must_use]
 	pub fn manifest(self) -> VersionedManifest {
 		match self {
+			Self::V3(envelope) => VersionedManifest::V3(envelope.manifest),
 			Self::V2(envelope) => VersionedManifest::V2(envelope.manifest),
 			Self::V1(envelope) => VersionedManifest::V1(envelope.manifest),
 			Self::V0(envelope) => VersionedManifest::V0(envelope.manifest),
@@ -378,6 +440,7 @@ impl VersionedManifestEnvelope {
 	#[must_use]
 	pub fn manifest_set_approvals(&self) -> &[Approval] {
 		match self {
+			Self::V3(envelope) => &envelope.manifest_set_approvals,
 			Self::V2(envelope) => &envelope.manifest_set_approvals,
 			Self::V1(envelope) => &envelope.manifest_set_approvals,
 			Self::V0(envelope) => &envelope.manifest_set_approvals,
@@ -388,6 +451,7 @@ impl VersionedManifestEnvelope {
 	#[must_use]
 	pub fn share_set_approvals(&self) -> &[Approval] {
 		match self {
+			Self::V3(envelope) => &envelope.share_set_approvals,
 			Self::V2(envelope) => &envelope.share_set_approvals,
 			Self::V1(envelope) => &envelope.share_set_approvals,
 			Self::V0(envelope) => &envelope.share_set_approvals,
@@ -398,6 +462,7 @@ impl VersionedManifestEnvelope {
 	#[must_use]
 	pub fn manifest_hash(&self) -> Hash256 {
 		match self {
+			Self::V3(envelope) => canonical_json_hash(&envelope.manifest),
 			Self::V2(envelope) => canonical_json_hash(&envelope.manifest),
 			Self::V1(envelope) => envelope.manifest.qos_hash(),
 			Self::V0(envelope) => envelope.manifest.qos_hash(),
@@ -408,6 +473,7 @@ impl VersionedManifestEnvelope {
 	#[must_use]
 	pub fn manifest_set(&self) -> &ManifestSet {
 		match self {
+			Self::V3(envelope) => &envelope.manifest.manifest_set,
 			Self::V2(envelope) => &envelope.manifest.manifest_set,
 			Self::V1(envelope) => &envelope.manifest.manifest_set,
 			Self::V0(envelope) => &envelope.manifest.manifest_set,
@@ -416,11 +482,12 @@ impl VersionedManifestEnvelope {
 
 	/// Return the expected pivot binary hash from the embedded manifest.
 	#[must_use]
-	pub fn pivot_hash(&self) -> &Hash256 {
+	pub fn pivot_hash(&self) -> Option<&Hash256> {
 		match self {
-			Self::V2(envelope) => &envelope.manifest.pivot.hash,
-			Self::V1(envelope) => &envelope.manifest.pivot.hash,
-			Self::V0(envelope) => &envelope.manifest.pivot.hash,
+			Self::V3(_) => None,
+			Self::V2(envelope) => Some(&envelope.manifest.pivot.hash),
+			Self::V1(envelope) => Some(&envelope.manifest.pivot.hash),
+			Self::V0(envelope) => Some(&envelope.manifest.pivot.hash),
 		}
 	}
 
@@ -478,9 +545,33 @@ impl VersionedManifestEnvelope {
 	/// manifest declares a `version` that does not match its schema.
 	pub fn try_from_slice_compat(buf: &[u8]) -> Result<Self, Error> {
 		if enveloped_manifest_declares_a_version(buf) {
-			return serde_json::from_slice::<ManifestEnvelopeV2>(buf)
-				.map(Self::V2)
-				.map_err(|e| Error::other(e.to_string()));
+			let version = serde_json::from_slice::<serde_json::Value>(buf)
+				.ok()
+				.and_then(|value| {
+					value
+						.get("manifest")?
+						.get("version")?
+						.as_str()
+						.map(str::to_owned)
+				});
+			return match version.as_deref() {
+				Some("v3") => v3::reject_duplicate_json_members(buf)
+					.map_err(serde::de::Error::custom)
+					.and_then(|()| {
+						serde_json::from_slice::<ManifestEnvelopeV3>(buf)
+					})
+					.and_then(|envelope| {
+						envelope
+							.manifest
+							.validate()
+							.map_err(serde::de::Error::custom)?;
+						Ok(envelope)
+					})
+					.map(Self::V3),
+				_ => serde_json::from_slice::<ManifestEnvelopeV2>(buf)
+					.map(Self::V2),
+			}
+			.map_err(|e| Error::other(e.to_string()));
 		}
 		if let Ok(envelope) = serde_json::from_slice::<ManifestEnvelope>(buf) {
 			return Ok(Self::V1(envelope));
@@ -499,6 +590,8 @@ impl VersionedManifestEnvelope {
 	/// Returns an [`std::io::Error`] when serialization fails.
 	pub fn to_storage_vec(&self) -> Result<Vec<u8>, Error> {
 		match self {
+			Self::V3(envelope) => qos_json::to_vec(envelope)
+				.map_err(|e| Error::other(e.to_string())),
 			Self::V2(envelope) => qos_json::to_vec(envelope)
 				.map_err(|e| Error::other(e.to_string())),
 			Self::V1(envelope) => serde_json::to_vec(envelope)
