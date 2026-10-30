@@ -14,16 +14,59 @@ const LEAD: Duration = Duration::from_mins(30);
 const RETRY_RATIO: u32 = 4;
 const RETRY_FLOOR: Duration = Duration::from_secs(5);
 
-/// One set of boot inputs, with a document available until certificate expiry.
+/// An initial verified document and the fixed boot inputs used to refresh it.
+/// Create this value with [`attest`], then pass it to [`AttestationCache::new`].
+pub struct Attestation<P> {
+	entry: Entry,
+	inputs: RefreshInputs<P>,
+}
+
+struct RefreshInputs<P> {
+	nsm: Arc<P>,
+	inputs: Arc<AttestationInputs>,
+}
+
+/// The sole owner of a boot attestation's refresh task.
 ///
+/// Construction performs no NSM requests and starts no task. Obtain a serving
+/// handle with [`Self::reader`], then consume the owner with [`Self::start`].
 /// Every document is verified against the provider root and expected boot
-/// inputs, which are fixed for the cache lifetime.
-/// Requests use [`Self::latest`], which never waits on an NSM call.
+/// inputs, which remain fixed for all refreshes.
 ///
-/// Lock poisoning is fatal: access panics and the refresh task fails on its
-/// next lock access. Discard the cache; recover by restarting the application
-/// or creating a new cache, not by retrying access to this instance.
-pub struct AttestationCache {
+/// ```rust
+/// use std::sync::Arc;
+/// use qos_attestation::cache::{attest, AttestationCache};
+/// use qos_nsm::NsmProvider;
+/// use qos_attestation::AttestationInputs;
+///
+/// async fn run<P: NsmProvider + 'static>(
+///     nsm: Arc<P>, inputs: AttestationInputs,
+/// ) -> Result<(), qos_attestation::Error> {
+///     let initial = attest(nsm, inputs).await?;
+///     let cache = AttestationCache::new(initial);
+///     let reader = cache.reader();
+///     let refresh_task = cache.start();
+///     let document = reader.latest();
+///     refresh_task.abort();
+///     Ok(())
+/// }
+/// ```
+pub struct AttestationCache<P> {
+	reader: AttestationCacheReader,
+	inputs: RefreshInputs<P>,
+}
+
+/// A cloneable serving handle for one boot attestation.
+///
+/// Every document is verified against the fixed boot inputs and provider root.
+/// Requests use [`Self::latest`], which never waits on an NSM call. Every clone
+/// observes the same document and diagnostics.
+///
+/// Lock poisoning is fatal. Access panics and the refresh task fails on its
+/// next lock access. Discard all readers and restart the application or create
+/// a new cache rather than retrying access to this instance.
+#[derive(Clone)]
+pub struct AttestationCacheReader {
 	slot: Arc<RwLock<Entry>>,
 }
 
@@ -43,30 +86,78 @@ fn refresh_retry_delay(valid_until: Instant) -> Duration {
 	(time_remaining(valid_until) / RETRY_RATIO).max(RETRY_FLOOR)
 }
 
-impl AttestationCache {
-	/// Attest once, then spawn the only task that refreshes the document.
-	/// Requires a Tokio runtime with timers enabled.
-	///
-	/// The inputs supply the manifest hash, live public key and expected PCRs.
-	/// Requests use no nonce.
-	/// Consumers should exit if startup fails or the returned task resolves,
-	/// and use a supervisor (e.g. QOS's `RestartPolicy::Always`) to restart.
-	/// Dropping the handle detaches the task; abort it to stop refreshing.
-	///
-	/// # Errors
-	///
-	/// Returns an error if the first NSM request or verification fails, or
-	/// the first document expires before it can be served.
-	pub async fn start<P: NsmProvider + 'static>(
-		nsm: Arc<P>,
-		inputs: AttestationInputs,
-	) -> Result<(Self, JoinHandle<()>), Error> {
-		let inputs = Arc::new(inputs);
-		let first = attest(nsm.clone(), inputs.clone()).await?;
-		let cache = Self { slot: Arc::new(RwLock::new(first)) };
-		let refresh_cache = Self { slot: cache.slot.clone() };
+/// Request the initial document for a cache without starting refresh.
+///
+/// The inputs supply the manifest hash, live public key, and expected PCRs.
+/// Requests use no nonce. Every document is verified against these inputs and
+/// the provider root.
+///
+/// # Errors
+///
+/// Returns an error if the NSM request or verification fails, or the document
+/// expires before it can be served.
+///
+/// # Panics
+///
+/// Panics if polled outside a Tokio runtime.
+pub async fn attest<P: NsmProvider + 'static>(
+	nsm: Arc<P>,
+	inputs: AttestationInputs,
+) -> Result<Attestation<P>, Error> {
+	let inputs = RefreshInputs { nsm, inputs: Arc::new(inputs) };
+	let entry =
+		request_entry(inputs.nsm.clone(), inputs.inputs.clone()).await?;
+	Ok(Attestation { entry, inputs })
+}
 
-		let task = tokio::spawn(async move {
+impl<P: NsmProvider + 'static> AttestationCache<P> {
+	/// Construct a cache without I/O or a background task.
+	/// The initial document keeps its original serving deadline, even if it
+	/// expires before construction or refresh starts.
+	#[must_use]
+	pub fn new(initial: Attestation<P>) -> Self {
+		Self {
+			reader: AttestationCacheReader {
+				slot: Arc::new(RwLock::new(initial.entry)),
+			},
+			inputs: initial.inputs,
+		}
+	}
+
+	/// A serving handle that remains usable after [`Self::start`] consumes this
+	/// owner.
+	#[must_use]
+	pub fn reader(&self) -> AttestationCacheReader {
+		self.reader.clone()
+	}
+
+	/// Consume the owner and spawn its only refresh task.
+	///
+	/// Consumers should exit if the task resolves and use process supervision
+	/// such as QOS's `RestartPolicy::Always`. Dropping the handle detaches the
+	/// task. Abort it to stop future refreshes. An NSM request already in progress
+	/// may still finish.
+	///
+	/// The owner cannot start a second task.
+	///
+	/// ```compile_fail,E0382
+	/// use qos_attestation::cache::AttestationCache;
+	/// use qos_nsm::NsmProvider;
+	///
+	/// fn start_twice<P: NsmProvider + 'static>(cache: AttestationCache<P>) {
+	///     let first = cache.start();
+	///     let second = cache.start();
+	/// }
+	/// ```
+	///
+	/// # Panics
+	///
+	/// Panics if called outside a Tokio runtime.
+	#[must_use]
+	pub fn start(self) -> JoinHandle<()> {
+		let Self { reader: refresh_cache, inputs } = self;
+		let RefreshInputs { nsm, inputs } = inputs;
+		tokio::spawn(async move {
 			loop {
 				let (expiry, valid_until) = refresh_cache
 					.with(|entry| (entry.expiry_unix, entry.valid_until));
@@ -76,7 +167,7 @@ impl AttestationCache {
 						.await;
 					continue;
 				}
-				match attest(nsm.clone(), inputs.clone()).await {
+				match request_entry(nsm.clone(), inputs.clone()).await {
 					Ok(mut new) if new.expiry_unix > expiry => {
 						refresh_cache.with_mut(|entry| {
 							new.refreshes = entry.refreshes.saturating_add(1);
@@ -97,12 +188,14 @@ impl AttestationCache {
 				// Recalculate after the attempt: a slow NSM call consumes time too.
 				tokio::time::sleep(refresh_retry_delay(valid_until)).await;
 			}
-		});
-		Ok((cache, task))
+		})
 	}
+}
 
+impl AttestationCacheReader {
 	/// The current verified document, or `None` at or after its monotonic deadline.
-	/// Never loads files or waits on a refresh.
+	/// Never loads files or waits on a refresh. Previously returned documents
+	/// remain accessible after expiry.
 	///
 	/// # Panics
 	///
@@ -181,7 +274,7 @@ impl AttestationCache {
 	}
 }
 
-async fn attest<P: NsmProvider + 'static>(
+async fn request_entry<P: NsmProvider + 'static>(
 	nsm: Arc<P>,
 	inputs: Arc<AttestationInputs>,
 ) -> Result<Entry, Error> {
@@ -238,8 +331,8 @@ mod tests {
 	};
 
 	use crate::cache::{
-		AttestationCache, LEAD, RETRY_FLOOR, RETRY_RATIO, attest,
-		refresh_retry_delay,
+		AttestationCache, AttestationCacheReader, LEAD, RETRY_FLOOR,
+		RETRY_RATIO, attest, refresh_retry_delay,
 	};
 	use crate::{
 		Error, NsmProviderExt, VerifiedAttestationDocument,
@@ -378,7 +471,7 @@ mod tests {
 
 	// Aborting on drop keeps test tasks from surviving their assertions.
 	struct Running {
-		cache: AttestationCache,
+		cache: AttestationCacheReader,
 		task: JoinHandle<()>,
 	}
 
@@ -389,9 +482,11 @@ mod tests {
 	}
 
 	async fn start(nsm: &Arc<TestNsm>) -> Result<Running, Error> {
-		let (cache, task) =
-			AttestationCache::start(nsm.clone(), sample_inputs(8)).await?;
-		Ok(Running { cache, task })
+		let initial = attest(nsm.clone(), sample_inputs(8)).await?;
+		let cache = AttestationCache::new(initial);
+		let reader = cache.reader();
+		let task = cache.start();
+		Ok(Running { cache: reader, task })
 	}
 
 	async fn populated() -> (Arc<TestNsm>, Running) {
@@ -417,7 +512,7 @@ mod tests {
 	}
 
 	async fn next_error(
-		cache: &AttestationCache,
+		cache: &AttestationCacheReader,
 		previous: Option<&Arc<Error>>,
 	) {
 		wait_until(|| {
@@ -519,12 +614,11 @@ mod tests {
 			*nsm.clock.lock().unwrap() = ClockReply::Fixed(T0 * 1000 + millis);
 			let started = Instant::now();
 			let release = nsm.block_next();
-			let pending =
-				tokio::spawn(attest(nsm.clone(), Arc::new(sample_inputs(8))));
+			let pending = tokio::spawn(attest(nsm.clone(), sample_inputs(8)));
 			wait_until(|| nsm.calls() == 1).await;
 			advance(Duration::from_secs(2)).await;
 			release.send(()).unwrap();
-			let entry = pending.await.unwrap().unwrap();
+			let entry = pending.await.unwrap().unwrap().entry;
 			assert_eq!(entry.expiry_unix, T0 + 10);
 			assert_eq!(
 				entry.valid_until,
@@ -565,12 +659,11 @@ mod tests {
 		)));
 		let (send, recv) = mpsc::channel();
 		*nsm.clock_gate.lock().unwrap() = Some(recv);
-		let pending =
-			tokio::spawn(attest(nsm.clone(), Arc::new(sample_inputs(8))));
+		let pending = tokio::spawn(attest(nsm.clone(), sample_inputs(8)));
 		wait_until(|| nsm.clock_calls.load(Ordering::SeqCst) == 1).await;
 		advance(Duration::from_secs(4)).await;
 		send.send(()).unwrap();
-		let entry = pending.await.unwrap().unwrap();
+		let entry = pending.await.unwrap().unwrap().entry;
 		assert_eq!(entry.valid_until, nsm.epoch + Duration::from_secs(6));
 		assert_eq!(
 			entry.valid_until.duration_since(Instant::now()),
@@ -816,9 +909,62 @@ mod tests {
 	}
 
 	#[tokio::test(start_paused = true)]
+	async fn construction_is_synchronous_and_refresh_starts_explicitly() {
+		let nsm = TestNsm::new(Reply::Doc {
+			not_after: T0 + LIFETIME.as_secs(),
+			id: 1,
+		});
+		let initial = attest(nsm.clone(), sample_inputs(8)).await.unwrap();
+		let owner = std::thread::spawn(move || AttestationCache::new(initial))
+			.join()
+			.unwrap();
+		let cache = owner.reader();
+		let other = cache.clone();
+		let original = cache.latest().unwrap();
+		advance(UNTIL_REFRESH).await;
+		assert_eq!(nsm.calls(), 1);
+		assert_eq!(cache.refreshes(), 0);
+		assert!(Arc::ptr_eq(&original, &other.latest().unwrap()));
+		assert_eq!(cache.valid_for(), LEAD);
+
+		nsm.set(Reply::Doc { not_after: T0 + 2 * LIFETIME.as_secs(), id: 2 });
+		let running = Running { cache, task: owner.start() };
+		wait_until(|| running.cache.refreshes() == 1).await;
+		assert_eq!(nsm.calls(), 2);
+		assert!(!Arc::ptr_eq(&original, &other.latest().unwrap()));
+		assert!(Arc::ptr_eq(
+			&running.cache.latest().unwrap(),
+			&other.latest().unwrap(),
+		));
+		assert_eq!(other.expiry(), T0 + 2 * LIFETIME.as_secs());
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn delayed_construction_preserves_expiry_and_refresh_can_recover() {
+		let nsm = TestNsm::new(Reply::Doc {
+			not_after: T0 + LIFETIME.as_secs(),
+			id: 1,
+		});
+		let initial = attest(nsm.clone(), sample_inputs(8)).await.unwrap();
+		advance(LIFETIME).await;
+		let owner = AttestationCache::new(initial);
+		let cache = owner.reader();
+		assert_eq!(nsm.calls(), 1);
+		assert!(cache.latest().is_none());
+		assert_eq!(cache.valid_for(), Duration::ZERO);
+		assert_eq!(cache.expiry(), T0 + LIFETIME.as_secs());
+
+		nsm.set(Reply::Doc { not_after: T0 + 2 * LIFETIME.as_secs(), id: 2 });
+		let running = Running { cache, task: owner.start() };
+		wait_until(|| running.cache.refreshes() == 1).await;
+		assert!(running.cache.latest().is_some());
+		assert_eq!(running.cache.valid_for(), LIFETIME);
+	}
+
+	#[tokio::test(start_paused = true)]
 	async fn poisoned_cache_panics_on_read_and_stops_refresh() {
 		let (nsm, mut running) = populated().await;
-		let cache = AttestationCache { slot: running.cache.slot.clone() };
+		let cache = running.cache.clone();
 		let writer = tokio::task::spawn_blocking(move || {
 			cache.with_mut(|_| panic!("simulate cache writer panic"));
 		});
@@ -1155,7 +1301,7 @@ mod tests {
 			document: MOCK_NSM_ATTESTATION_DOCUMENT.to_vec(),
 		}));
 		assert!(matches!(
-			AttestationCache::start(nsm, sample_inputs(8)).await,
+			attest(nsm, sample_inputs(8)).await,
 			Err(Error::Binding(_))
 		));
 	}

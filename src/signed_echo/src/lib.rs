@@ -13,7 +13,10 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::{get, post},
 };
-use qos_attestation::{AttestationInputs, cache::AttestationCache};
+use qos_attestation::{
+	AttestationInputs,
+	cache::{AttestationCache, AttestationCacheReader, attest},
+};
 use qos_core::protocol::services::boot::{
 	ManifestEnvelopeV2, VersionedManifestEnvelope,
 };
@@ -111,7 +114,7 @@ pub struct BootProofResponse {
 
 /// Fixed boot inputs and the cache used to serve this enclave's boot proof.
 pub struct BootProof {
-	cache: AttestationCache,
+	cache: AttestationCacheReader,
 	manifest: Vec<u8>,
 	manifest_envelope: Vec<u8>,
 	ephemeral_public_key: P256Public,
@@ -149,18 +152,26 @@ impl BootProof {
 			ephemeral_public_key.clone(),
 			&VersionedManifestEnvelope::V2(envelope),
 		);
-		let (cache, task) = AttestationCache::start(nsm, inputs)
+		let initial = attest(nsm, inputs)
 			.await
 			.map_err(|e| format!("failed to start attestation cache: {e}"))?;
+		let cache = AttestationCache::new(initial);
+		let reader = cache.reader();
+		let task = cache.start();
 		Ok((
-			Self { cache, manifest, manifest_envelope, ephemeral_public_key },
+			Self {
+				cache: reader,
+				manifest,
+				manifest_envelope,
+				ephemeral_public_key,
+			},
 			task,
 		))
 	}
 
 	/// The cache, for readiness and expiry/error diagnostics.
 	#[must_use]
-	pub fn cache(&self) -> &AttestationCache {
+	pub fn cache(&self) -> &AttestationCacheReader {
 		&self.cache
 	}
 }
