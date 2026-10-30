@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_attestation` - [0.15.2](https://github.com/tkhq/qos/compare/qos_attestation-v0.15.1...qos_attestation-v0.15.2) - 2026-10-30
+
+### Added
+- *(qos_attestation)* add attestation crate
+
+## `qos_core` - [0.15.2](https://github.com/tkhq/qos/compare/qos_core-v0.15.1...qos_core-v0.15.2) - 2026-10-30
+
+### Added
+- *(qos_attestation)* add attestation crate
+
 ## `qos_client` - [0.15.1](https://github.com/tkhq/qos/compare/qos_client-v0.15.0...qos_client-v0.15.1) - 2026-10-22
 
 ### Other
