@@ -5,12 +5,17 @@ use std::{
 
 use integration::{
 	PIVOT_ABORT_PATH, PIVOT_OK_PATH, PIVOT_OK2_PATH, PIVOT_OK2_SUCCESS_FILE,
-	PIVOT_PANIC_PATH, PIVOT_TCP_PATH, wait_for_tcp_sock, wait_for_usock,
+	PIVOT_OK3_PATH, PIVOT_OK3_SUCCESS_FILE, PIVOT_PANIC_PATH, PIVOT_TCP_PATH,
+	wait_for_tcp_sock, wait_for_usock,
 };
 use qos_core::{
 	handles::Handles,
 	io::{HostBridge, SocketAddress, StreamPool},
-	protocol::services::boot::{BridgeConfig, ManifestEnvelope},
+	protocol::services::boot::{
+		BridgeConfig, ManifestEnvelope, ManifestEnvelopeV2, ManifestSet,
+		ManifestV2, ManifestVersion, Namespace, NitroConfig, PivotConfigV2,
+		PivotEnv, PivotEnvValue, PivotEnvVarName, ShareSet,
+	},
 	reaper::{REAPER_EXIT_DELAY, Reaper},
 };
 use qos_nsm::mock::MockNsm;
@@ -133,73 +138,94 @@ async fn reaper_clears_host_env() {
 	unsafe { std::env::remove_var(host_only_env_key) };
 }
 
-// TODO(json-pr): restore this manifest env test when the JSON manifest PR
-// carries pivot env through the reaper boot path again.
-//
-// #[tokio::test]
-// async fn reaper_injects_manifest_env_and_clears_host_env() {
-// 	let secret_path: PathWrapper =
-// 		"/tmp/reaper_injects_manifest_env.secret".into();
-// 	let usock: PathWrapper = "/tmp/reaper_injects_manifest_env.sock".into();
-// 	let manifest_path: PathWrapper =
-// 		"/tmp/reaper_injects_manifest_env.manifest".into();
-// 	let msg = "manifest-env:";
-// 	let manifest_env_key = "QOS_TEST_MANIFEST_ENV";
-// 	let host_only_env_key = "QOS_TEST_HOST_ONLY_ENV";
-// 	let manifest_env_value = "available";
-//
-// 	drop(fs::remove_file(&*secret_path));
-// 	std::env::set_var(host_only_env_key, "must-not-leak");
-//
-// 	let handles = Handles::new(
-// 		"reaper_injects_manifest_env.eph".to_string(),
-// 		(*secret_path).to_string(),
-// 		(*manifest_path).to_string(),
-// 		PIVOT_OK2_PATH.to_string(),
-// 	);
-//
-// 	let mut manifest_envelope = ManifestEnvelope::default();
-// 	manifest_envelope.manifest.pivot.args = vec![
-// 		"--msg".to_string(),
-// 		msg.to_string(),
-// 		"--env-key".to_string(),
-// 		manifest_env_key.to_string(),
-// 		"--missing-env-key".to_string(),
-// 		host_only_env_key.to_string(),
-// 	];
-// 	manifest_envelope
-// 		.manifest
-// 		.pivot
-// 		.env
-// 		.insert(
-// 			PivotEnvVarName::new(manifest_env_key.to_string()).unwrap(),
-// 			PivotEnvValue::plain(manifest_env_value.to_string()).unwrap(),
-// 		)
-// 		.unwrap();
-//
-// 	handles.put_manifest_envelope(&manifest_envelope).unwrap();
-// 	assert!(handles.pivot_exists());
-//
-// 	let enclave_socket = SocketAddress::new_unix(&usock);
-// 	let reaper_handle = tokio::spawn(async move {
-// 		Reaper::execute(&handles, Box::new(MockNsm::new()), enclave_socket, None)
-// 			.await;
-// 	});
-//
-// 	wait_for_usock(&usock).await;
-// 	assert!(!reaper_handle.is_finished());
-//
-// 	fs::write(&*secret_path, b"test secret material").unwrap();
-//
-// 	reaper_handle.await.unwrap();
-// 	let contents = fs::read(PIVOT_OK2_SUCCESS_FILE).unwrap();
-// 	assert_eq!(
-// 		std::str::from_utf8(&contents).unwrap(),
-// 		format!("{msg}{manifest_env_value}")
-// 	);
-// 	assert!(fs::remove_file(PIVOT_OK2_SUCCESS_FILE).is_ok());
-// 	std::env::remove_var(host_only_env_key);
-// }
+#[tokio::test]
+#[allow(unsafe_code)]
+async fn reaper_injects_manifest_env_and_clears_host_env() {
+	let secret_path =
+		PathWrapper::from("/tmp/reaper_injects_manifest_env.secret");
+	let usock = PathWrapper::from("/tmp/reaper_injects_manifest_env.sock");
+	let manifest_path =
+		PathWrapper::from("/tmp/reaper_injects_manifest_env.manifest");
+	let msg = "manifest-env:";
+	let manifest_env_key = "QOS_TEST_MANIFEST_ENV";
+	let host_only_env_key = "QOS_TEST_HOST_ONLY_ENV";
+	let manifest_env_value = "available";
+
+	drop(fs::remove_file(&*secret_path));
+	// SAFETY: This test is not marked multi_thread and no other thread
+	// reads this env var concurrently at this point.
+	unsafe { std::env::set_var(host_only_env_key, "must-not-leak") };
+
+	let handles = Handles::new(
+		"reaper_injects_manifest_env.eph".to_string(),
+		secret_path.display().to_string(),
+		manifest_path.display().to_string(),
+		PIVOT_OK3_PATH.to_string(),
+	);
+
+	// Use pivot_ok3 so this test does not race reaper_clears_host_env for
+	// the pivot_ok2 success file.
+	// Pivot env is only carried by v2 manifests.
+	let mut env = PivotEnv::new();
+	env.insert(
+		PivotEnvVarName::new(manifest_env_key.to_string()).unwrap(),
+		PivotEnvValue::plain(manifest_env_value.to_string()).unwrap(),
+	)
+	.unwrap();
+	let manifest_envelope = ManifestEnvelopeV2 {
+		manifest: ManifestV2 {
+			version: ManifestVersion::V2,
+			namespace: Namespace::default(),
+			pivot: PivotConfigV2 {
+				args: vec![
+					"--msg".to_string(),
+					msg.to_string(),
+					"--env-key".to_string(),
+					manifest_env_key.to_string(),
+					"--missing-env-key".to_string(),
+					host_only_env_key.to_string(),
+				],
+				env,
+				..PivotConfigV2::default()
+			},
+			manifest_set: ManifestSet::default(),
+			share_set: ShareSet::default(),
+			enclave: NitroConfig::default(),
+			dns: None,
+		},
+		manifest_set_approvals: vec![],
+		share_set_approvals: vec![],
+	};
+
+	handles.put_manifest_envelope(manifest_envelope).unwrap();
+	assert!(handles.pivot_exists());
+
+	let enclave_socket = SocketAddress::new_unix(&usock);
+	let reaper_handle = tokio::spawn(async move {
+		Reaper::execute(
+			&handles,
+			Box::new(MockNsm::new()),
+			enclave_socket,
+			None,
+		)
+		.await;
+	});
+
+	wait_for_usock(&usock).await;
+	assert!(!reaper_handle.is_finished());
+
+	fs::write(&*secret_path, b"test secret material").unwrap();
+
+	reaper_handle.await.unwrap();
+	let contents = fs::read(PIVOT_OK3_SUCCESS_FILE).unwrap();
+	assert_eq!(
+		std::str::from_utf8(&contents).unwrap(),
+		format!("{msg}{manifest_env_value}")
+	);
+	assert!(fs::remove_file(PIVOT_OK3_SUCCESS_FILE).is_ok());
+	// SAFETY: Matching the set_var above; test is single-threaded.
+	unsafe { std::env::remove_var(host_only_env_key) };
+}
 
 #[tokio::test]
 async fn reaper_handles_non_zero_exits() {
