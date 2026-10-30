@@ -2,6 +2,7 @@
 
 use std::{
 	path::{Path, PathBuf},
+	sync::Arc,
 	time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH},
 };
 
@@ -12,8 +13,14 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::{get, post},
 };
-use qos_p256::P256Pair;
+use qos_attestation::{AttestationInputs, cache::AttestationCache};
+use qos_core::protocol::services::boot::{
+	ManifestEnvelopeV2, VersionedManifestEnvelope,
+};
+use qos_nsm::NsmProvider;
+use qos_p256::{P256Pair, P256Public};
 use serde::{Deserialize, Serialize};
+use tokio::task::JoinHandle;
 
 /// Default path where QOS writes the quorum-key secret for pivot apps.
 pub const DEFAULT_QUORUM_KEY_PATH: &str = "/qos.quorum.key";
@@ -87,10 +94,93 @@ struct GetUrlQuery {
 	url: String,
 }
 
+/// A boot proof's parts, as served by `/boot_proof`. Byte fields are hex.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+pub struct BootProofResponse {
+	/// Original `COSE_Sign1` document from the NSM. Clients must verify it.
+	pub attestation_doc_hex: String,
+	/// Canonical JSON manifest bytes. Their SHA-256 is the document's `user_data`.
+	pub manifest_hex: String,
+	/// Canonical JSON manifest envelope bytes.
+	pub manifest_envelope_hex: String,
+	/// Manifest schema version: `"v2"`.
+	pub manifest_version: String,
+	/// The live ephemeral public key the document attests.
+	pub ephemeral_public_key_hex: String,
+}
+
+/// Fixed boot inputs and the cache used to serve this enclave's boot proof.
+pub struct BootProof {
+	cache: AttestationCache,
+	manifest: Vec<u8>,
+	manifest_envelope: Vec<u8>,
+	ephemeral_public_key: P256Public,
+}
+
+impl BootProof {
+	/// Load the live public key and v2 manifest, then start the cache.
+	///
+	/// The cache verifies documents against the boot inputs and NSM root.
+	/// The caller must supervise the returned task and exit if it resolves,
+	/// or abort it when shutting down.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the inputs cannot be loaded or encoded, or the first
+	/// attestation cannot be obtained, verified, or is already expired.
+	pub async fn start<P: NsmProvider + 'static>(
+		nsm: Arc<P>,
+		ephemeral_key_path: &Path,
+		manifest_path: &Path,
+	) -> Result<(Self, JoinHandle<()>), String> {
+		let ephemeral_public_key = P256Pair::from_hex_file(ephemeral_key_path)
+			.map_err(|e| format!("failed to read ephemeral key: {e:?}"))?
+			.public_key();
+		let manifest_bytes = std::fs::read(manifest_path)
+			.map_err(|e| format!("failed to read manifest: {e}"))?;
+		let envelope: ManifestEnvelopeV2 =
+			serde_json::from_slice(&manifest_bytes)
+				.map_err(|e| format!("failed to parse v2 manifest: {e}"))?;
+		let manifest = qos_json::to_vec(&envelope.manifest)
+			.map_err(|e| format!("failed to encode manifest: {e}"))?;
+		let manifest_envelope = qos_json::to_vec(&envelope)
+			.map_err(|e| format!("failed to encode manifest envelope: {e}"))?;
+		let inputs = AttestationInputs::new(
+			ephemeral_public_key.clone(),
+			&VersionedManifestEnvelope::V2(envelope),
+		);
+		let (cache, task) = AttestationCache::start(nsm, inputs)
+			.await
+			.map_err(|e| format!("failed to start attestation cache: {e}"))?;
+		Ok((
+			Self { cache, manifest, manifest_envelope, ephemeral_public_key },
+			task,
+		))
+	}
+
+	/// The cache, for readiness and expiry/error diagnostics.
+	#[must_use]
+	pub fn cache(&self) -> &AttestationCache {
+		&self.cache
+	}
+}
+
 /// Build the Axum router for signed echo.
 pub fn router(config: Config) -> Router {
+	quorum_routes(config).route("/health", get(health))
+}
+
+/// Add cached boot-proof serving and readiness to the signed echo router.
+pub fn router_with_boot_proof(config: Config, boot_proof: BootProof) -> Router {
+	let proof_routes = Router::new()
+		.route("/health", get(boot_proof_health))
+		.route("/boot_proof", get(boot_proof_route))
+		.with_state(Arc::new(boot_proof));
+	quorum_routes(config).merge(proof_routes)
+}
+
+fn quorum_routes(config: Config) -> Router {
 	Router::new()
-		.route("/health", get(health))
 		.route("/echo", post(signed_echo))
 		.route("/get_url", get(signed_get_url))
 		.with_state(config)
@@ -98,6 +188,33 @@ pub fn router(config: Config) -> Router {
 
 async fn health() -> impl IntoResponse {
 	(StatusCode::OK, Json(HealthResponse { status: "healthy" }))
+}
+
+async fn boot_proof_health(
+	State(boot_proof): State<Arc<BootProof>>,
+) -> Response {
+	if boot_proof.cache.has_unexpired_document() {
+		(StatusCode::OK, Json(HealthResponse { status: "healthy" }))
+			.into_response()
+	} else {
+		AppError::NoAttestation.into_response()
+	}
+}
+
+async fn boot_proof_route(
+	State(boot_proof): State<Arc<BootProof>>,
+) -> Result<Json<BootProofResponse>, AppError> {
+	let attestation =
+		boot_proof.cache.latest().ok_or(AppError::NoAttestation)?;
+	Ok(Json(BootProofResponse {
+		attestation_doc_hex: qos_hex::encode(attestation.document()),
+		manifest_hex: qos_hex::encode(&boot_proof.manifest),
+		manifest_envelope_hex: qos_hex::encode(&boot_proof.manifest_envelope),
+		manifest_version: "v2".to_string(),
+		ephemeral_public_key_hex: qos_hex::encode(
+			&boot_proof.ephemeral_public_key.to_bytes(),
+		),
+	}))
 }
 
 async fn signed_echo(
@@ -191,6 +308,7 @@ enum AppError {
 	Fetch(String),
 	FetchStatus(u16),
 	FetchRead(String),
+	NoAttestation,
 }
 
 impl From<SystemTimeError> for AppError {
@@ -205,6 +323,7 @@ impl IntoResponse for AppError {
 			Self::Fetch(_) | Self::FetchStatus(_) | Self::FetchRead(_) => {
 				StatusCode::BAD_GATEWAY
 			}
+			Self::NoAttestation => StatusCode::SERVICE_UNAVAILABLE,
 			_ => StatusCode::INTERNAL_SERVER_ERROR,
 		};
 		let error = match &self {
@@ -220,6 +339,9 @@ impl IntoResponse for AppError {
 			}
 			Self::FetchRead(err) => {
 				format!("failed to read fetched url response: {err}")
+			}
+			Self::NoAttestation => {
+				"no unexpired attestation document".to_string()
 			}
 		};
 		(status, Json(ErrorResponse { error })).into_response()
@@ -238,9 +360,18 @@ struct HealthResponse {
 
 #[cfg(test)]
 mod tests {
-	use qos_p256::P256Public;
+	use axum::{http::StatusCode, response::IntoResponse};
+	use qos_p256::{P256Pair, P256Public};
 
-	use super::*;
+	use crate::{
+		Config, SIGNED_PAYLOAD_DOMAIN, SignedGetUrlPayload, health,
+		sign_json_payload,
+	};
+
+	#[tokio::test]
+	async fn health_returns_ok() {
+		assert_eq!(health().await.into_response().status(), StatusCode::OK);
+	}
 
 	#[test]
 	fn signs_get_url_payload_shape() {

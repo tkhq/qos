@@ -2112,6 +2112,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "qos_attestation"
+version = "0.15.1"
+dependencies = [
+ "aws-nitro-enclaves-cose",
+ "aws-nitro-enclaves-nsm-api",
+ "p384",
+ "qos_core 0.15.1",
+ "qos_crypto 0.15.1",
+ "qos_nsm 0.15.1",
+ "qos_p256 0.15.1",
+ "serde_bytes",
+ "sha2",
+ "thiserror 2.0.17",
+ "tokio",
+ "x509-cert",
+]
+
+[[package]]
 name = "qos_bridge"
 version = "0.15.1"
 dependencies = [
@@ -2968,8 +2986,11 @@ name = "signed_echo"
 version = "0.15.1"
 dependencies = [
  "axum",
+ "qos_attestation",
+ "qos_core 0.15.1",
  "qos_hex 0.15.1",
  "qos_json",
+ "qos_nsm 0.15.1",
  "qos_p256 0.15.1",
  "serde",
  "serde_json",

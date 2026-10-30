@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "src/integration",
+  "src/qos_attestation",
   "src/qos_bridge",
   "src/qos_client",
   "src/qos_core",
@@ -22,6 +23,7 @@ members = [
 ]
 default-members = [
   "src/integration",
+  "src/qos_attestation",
   "src/qos_bridge",
   "src/qos_client",
   "src/qos_core",
@@ -107,6 +109,7 @@ zeroize = { version = "1.8", default-features = false }
 # Internal workspace dependencies
 integration = { path = "src/integration" }
 qos_host = { path = "src/qos_host", default-features = false }
+qos_attestation = { path = "src/qos_attestation", version = "0.15.1", default-features = false }
 qos_client = { path = "src/qos_client", version = "0.15.1", default-features = false }
 qos_core = { path = "src/qos_core", version = "0.15.1", default-features = false }
 qos_crypto = { path = "src/qos_crypto", version = "0.15.1", default-features = false }

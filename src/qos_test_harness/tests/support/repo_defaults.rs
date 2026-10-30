@@ -60,9 +60,7 @@ pub(super) fn test_manifest_template(
 			.join("quorum_key.pub"),
 	)
 	.map_err(|err| BuildError::Manifest(format!("read quorum key: {err:?}")))?;
-	let pivot_hash: [u8; 32] = sha_256(&std::fs::read(&pivot.path)?)
-		.try_into()
-		.expect("SHA-256 output is 32 bytes");
+	let pivot_hash = sha_256(&std::fs::read(&pivot.path)?);
 
 	Ok(ManifestBuilder::new()
 		.with_version(ManifestVersion::V2)
