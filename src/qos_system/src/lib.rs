@@ -104,22 +104,6 @@ pub fn freopen(
 	}
 }
 
-/// Insert kernel module into memory
-pub fn insmod(path: &str) -> Result<(), SystemError> {
-	use libc::{SYS_finit_module, syscall};
-	let file = File::open(path).unwrap();
-	let fd = file.as_raw_fd();
-	let finit_module_result =
-		unsafe { syscall(SYS_finit_module, fd, &[0u8; 1], 0) };
-	if finit_module_result < 0 {
-		Err(SystemError {
-			message: format!("Failed to insert kernel module: {}", path),
-		})
-	} else {
-		Ok(())
-	}
-}
-
 /// Instantiate a socket
 pub fn socket_connect(
 	family: c_int,

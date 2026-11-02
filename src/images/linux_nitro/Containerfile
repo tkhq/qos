@@ -1,0 +1,53 @@
+# Nitro Enclave kernel, built from kernel.org source with the StageX toolchain.
+# The steps and nitro.config follow StageX's linux-nitro package
+# (packages/user/linux in https://codeberg.org/stagex/stagex), so QoS can pick
+# the kernel version and config without waiting for a StageX release.
+#
+# The enclave images can use an upstream StageX kernel instead, see LINUX_NITRO
+# in the Makefile. Either way the kernel must build in the NSM driver
+# (CONFIG_NSM=y): init loads no kernel modules.
+FROM stagex/pallet-clang-gnu-busybox:sx2026.10.0@sha256:20f02219400b2b911fc687106c61090bf20879a5f74bf794c5589b7bd8acc2d2 AS pallet
+FROM stagex/core-xz:sx2026.10.0@sha256:89e995d7fd91256fe9501e64ba4ae7cb43e44889b84c0ae2c6d2fde19b9997b5 AS xz
+FROM stagex/core-openssl:sx2026.10.0@sha256:0ea25b654c044622a62c0a8707123a9ca5c87b6ef39dc178e3fe6d972c7e690d AS openssl
+FROM stagex/core-coreutils:sx2026.10.0@sha256:4941d68c446516fbe639dc711d6aad2c662f3899abf56aa5a936764f79da4d1f AS coreutils
+FROM stagex/core-diffutils:sx2026.10.0@sha256:41cd16b99eac8acae840912cefa728210bef1a759b7e2696c284382e75183e38 AS diffutils
+FROM stagex/core-findutils:sx2026.10.0@sha256:d13601b0ff403c44bc5a6504ebe1215302de88de95ba1a7a4fdaf3b4991c5350 AS findutils
+FROM stagex/core-binutils:sx2026.10.0@sha256:9dc813ba66d044748c731f1ff5259cc59ca199a675bb682b724529d500089767 AS binutils
+FROM stagex/user-elfutils:sx2026.10.0@sha256:5e9b6e2f3cad3c021ffa476ec867062657c525cfdc7f324669e74b466f6a63d4 AS elfutils
+
+FROM pallet AS build
+COPY --from=xz . /
+COPY --from=openssl . /
+COPY --from=coreutils . /
+COPY --from=diffutils . /
+COPY --from=findutils . /
+COPY --from=binutils . /
+COPY --from=elfutils . /
+
+# 7.2.14 includes the fix for CVE-2026-98432 (fixed in 7.2.10). The hash is
+# kernel.org's sha256sums.asc entry for this tarball.
+ADD --checksum=sha256:af105975e385e74987b97a470eb465d9d6503590e9954c6d6bdd1292a5951bf8 \
+	https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.14.tar.gz \
+	/linux.tar.gz
+RUN tar -xzf /linux.tar.gz -C / && rm /linux.tar.gz
+
+ENV SOURCE_DATE_EPOCH=1
+ENV KBUILD_BUILD_HOST=stagex
+ENV KBUILD_BUILD_USER=user
+ENV KBUILD_BUILD_TIMESTAMP="Thu Jan  1 12:00:00 AM GMT 1970"
+ENV LLVM=1
+ENV LOCALVERSION=
+
+WORKDIR /linux-7.2.14
+COPY src/images/linux_nitro/nitro.config .config
+RUN --network=none <<-EOF
+	set -eu
+	make olddefconfig
+	make -j"$(nproc)" bzImage
+	mkdir /rootfs
+	cp .config /rootfs/linux.config
+	cp arch/x86/boot/bzImage /rootfs/bzImage
+EOF
+
+FROM scratch AS package
+COPY --from=build /rootfs/ /

@@ -37,6 +37,11 @@ To produce the `qos_enclave` OCI container image, run:
 make out/qos_enclave/index.json
 ```
 
+The enclave kernel is built from source by [`linux_nitro`](./src/images/linux_nitro/Containerfile), following StageX's `linux-nitro` package. To use an upstream StageX kernel instead, name its image (it must build in the NSM driver, `CONFIG_NSM=y`):
+```
+make LINUX_NITRO=stagex/user-linux-nitro:<tag>@sha256:<digest> out/qos_enclave/index.json
+```
+
 To reproduce the QOS build and print the associated PCR measurements, run:
 ```
 make pcrs

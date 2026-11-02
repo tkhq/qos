@@ -4,6 +4,11 @@ PIVOT_BIN ?= pivot_download
 PIVOT_ARGS ?= []
 REGISTRY := local
 CARGO_WORKSPACE_FILES := Cargo.toml Cargo.lock
+# Kernel for the enclave images: built from src/images/linux_nitro by default,
+# or an upstream StageX image, e.g.
+# make LINUX_NITRO=stagex/user-linux-nitro:<tag>@sha256:<digest>
+LINUX_NITRO ?= linux_nitro
+LINUX_NITRO_INDEX := $(if $(filter linux_nitro,$(LINUX_NITRO)),out/linux_nitro/index.json)
 .DEFAULT_GOAL :=
 .PHONY: default
 default: \
@@ -100,6 +105,7 @@ target/x86_64-unknown-linux-musl/release-panic-abort/egress: \
 
 out/qos_enclave/index.json: \
 	out/common/index.json \
+	$(LINUX_NITRO_INDEX) \
 	$(CARGO_WORKSPACE_FILES) \
 	src/images/qos_enclave/Containerfile \
 	$(shell git ls-files \
@@ -110,10 +116,11 @@ out/qos_enclave/index.json: \
 		src/qos_aws \
 		src/qos_system \
 	)
-	$(call build,qos_enclave)
+	$(call build,qos_enclave,,--build-arg LINUX_NITRO=$(LINUX_NITRO))
 
 out/qos_enclave_egress/index.json: \
 	out/common/index.json \
+	$(LINUX_NITRO_INDEX) \
 	$(CARGO_WORKSPACE_FILES) \
 	src/images/qos_enclave_egress/Containerfile \
 	$(shell git ls-files \
@@ -123,7 +130,7 @@ out/qos_enclave_egress/index.json: \
 		src/qos_aws \
 		src/qos_system \
 	)
-	$(call build,qos_enclave_egress)
+	$(call build,qos_enclave_egress,,--build-arg LINUX_NITRO=$(LINUX_NITRO))
 
 out/qos_host/index.json: \
 	out/common/index.json \
@@ -216,6 +223,11 @@ out/signed_echo/index.json: \
 out/common/index.json: \
 	src/images/common/Containerfile
 	$(call build,common)
+
+out/linux_nitro/index.json: \
+	src/images/linux_nitro/Containerfile \
+	src/images/linux_nitro/nitro.config
+	$(call build,linux_nitro)
 
 out/.common-loaded: out/common/index.json
 	cd ./out/common && tar -cf - . | docker load
