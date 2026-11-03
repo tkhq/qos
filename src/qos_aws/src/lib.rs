@@ -23,13 +23,7 @@ fn nitro_heartbeat() {
 
 /// Initialize nitro device
 pub fn init_platform() {
-	use qos_system::insmod;
 	nitro_heartbeat();
-
-	match insmod("/nsm.ko") {
-		Ok(()) => dmesg("Loaded nsm.ko".to_string()),
-		Err(e) => eprintln!("{}", e),
-	};
 
 	match check_hwrng("nsm-hwrng") {
 		Ok(()) => dmesg("Validated entropy source is nsm-hwrng".to_string()),
