@@ -1,8 +1,7 @@
 # Enclave kernel hardening
 
-The enclave kernel uses Linux **6.18.60**, a kernel.org longterm release. See
-[kernel maintenance](./kernel_maintenance.md) for its projected support window,
-security-fix provenance, and upgrade procedure. Hardening does not replace timely
+The enclave kernel builds on Avi's PR #855, using Linux **7.3.1**. This stable
+series requires regular kernel upgrades. Hardening does not replace timely
 security updates.
 
 The baseline is the Kernel Self Protection Project's
@@ -44,6 +43,7 @@ and approve the enclave measurements before deployment.
 | GCC plugins for latent entropy, struct initialization, stack erasure | This build uses Clang. Use `INIT_STACK_ALL_ZERO`, Clang RANDSTRUCT, and the current `KSTACK_ERASE` implementation. The GCC latent-entropy plugin has no Clang equivalent. |
 | `AMD_IOMMU_V2` | Removed upstream; current AMD IOMMU support is enabled. PCI is disabled by the Nitro command line, so DMA/EFI/IOMMU controls have no exposed hardware to protect inside the enclave. They remain enabled where available. |
 | `EFI_DISABLE_PCI_DMA`, `RESET_ATTACK_MITIGATION` | Inapplicable: EFI is disabled. Nitro uses the Linux boot protocol and supplies no EFI firmware services. Adding EFI code would not protect an enclave's memory across a hypervisor-managed reboot. |
+| `RANDOM_KMALLOC_CACHES` | Renamed upstream; enforce `KMALLOC_PARTITION_CACHES` and `KMALLOC_PARTITION_RANDOM`. |
 | `CFI_CLANG` | Renamed upstream; enforce `CFI` with the existing Clang toolchain. |
 | `UBSAN_SANITIZE_ALL` | Removed upstream; enabling UBSAN instruments kernel objects by default, except explicit per-object/subdirectory exclusions in the kernel build. |
 | `RANDOM_TRUST_CPU`, `RANDOM_TRUST_BOOTLOADER` | Removed upstream; both now default on. Explicitly retain them with `random.trust_cpu=on random.trust_bootloader=on` boot arguments. |
