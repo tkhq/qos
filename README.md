@@ -37,6 +37,8 @@ To produce the `qos_enclave` OCI container image, run:
 make out/qos_enclave/index.json
 ```
 
+The enclave kernel is built from source by [`linux_nitro`](./src/images/linux_nitro/Containerfile), following StageX's `linux-nitro` package, with the kernel source and every build image pinned by hash.
+
 To reproduce the QOS build and print the associated PCR measurements, run:
 ```
 make pcrs

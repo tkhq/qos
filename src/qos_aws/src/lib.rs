@@ -21,15 +21,9 @@ fn nitro_heartbeat() {
 	dmesg("Sent NSM heartbeat".to_string());
 }
 
-/// Initialize nitro device
+/// Initialize nitro device. The kernel builds in the NSM driver.
 pub fn init_platform() {
-	use qos_system::insmod;
 	nitro_heartbeat();
-
-	match insmod("/nsm.ko") {
-		Ok(()) => dmesg("Loaded nsm.ko".to_string()),
-		Err(e) => eprintln!("{}", e),
-	};
 
 	match check_hwrng("nsm-hwrng") {
 		Ok(()) => dmesg("Validated entropy source is nsm-hwrng".to_string()),

@@ -24,13 +24,11 @@ COPY --from=eif_build . /
 COPY --from=gen_initramfs . /
 COPY --from=libunwind . /
 COPY --from=prebuilt /init .
-COPY --from=linux_nitro /nsm.ko .
 COPY --from=iproute2 . /
 COPY --from=musl . /
 COPY --from=prebuilt /egress .
 COPY <<-EOF initramfs.list
 	file /init     init    0700 0 0
-	file /nsm.ko   nsm.ko  0600 0 0
 	dir  /run              0755 0 0
 	dir  /tmp              0755 0 0
 	dir  /etc              0755 0 0
