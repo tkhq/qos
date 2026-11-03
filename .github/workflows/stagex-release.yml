@@ -24,6 +24,7 @@ jobs:
       fail-fast: false
       matrix:
         name:
+          - linux_nitro
           - qos_client
           - qos_host
           - qos_enclave
@@ -32,6 +33,11 @@ jobs:
           - qos_bridge_egress
           - signed_echo
         include:
+          # The enclave kernel, built from src/images/linux_nitro. It has no
+          # ECR repository; GHCR only.
+          - name: linux_nitro
+            ghcr: ghcr.io/tkhq/qos/linux_nitro
+            ecr: false
           - name: qos_client
             ghcr: ghcr.io/tkhq/qos_client
             ecr: true
