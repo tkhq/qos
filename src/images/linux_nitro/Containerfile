@@ -24,10 +24,11 @@ COPY --from=findutils . /
 COPY --from=binutils . /
 COPY --from=elfutils . /
 
-# 7.3.1 includes the fix for CVE-2026-98432 (fixed in 7.3). The hash is
+# 6.18.60 is a kernel.org longterm release and includes the fix for
+# CVE-2026-98432 (fixed in 6.18.56). The hash is
 # kernel.org's sha256sums.asc entry for this tarball.
-ADD --checksum=sha256:55c61cd30caede2ec01238367a13c2d21ba566d90cff43959a2175d72d715a22 \
-	https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.3.1.tar.gz \
+ADD --checksum=sha256:ed3acf7999cdc541941035c7da14f4aa914ce9b97a6c8315fc530b54ad489355 \
+	https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.60.tar.gz \
 	/linux.tar.gz
 RUN tar -xzf /linux.tar.gz -C / && rm /linux.tar.gz
 
@@ -38,7 +39,7 @@ ENV KBUILD_BUILD_TIMESTAMP="Thu Jan  1 12:00:00 AM GMT 1970"
 ENV LLVM=1
 ENV LOCALVERSION=
 
-WORKDIR /linux-7.3.1
+WORKDIR /linux-6.18.60
 COPY src/images/linux_nitro/nitro.config .config
 RUN --network=none <<-EOF
 	set -eu
