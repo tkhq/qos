@@ -1,8 +1,7 @@
 # Enclave kernel hardening
 
-The enclave kernel builds on Avi's PR #855, using Linux **7.3.1**. This stable
-series requires regular kernel upgrades. Hardening does not replace timely
-security updates.
+The enclave kernel uses Linux **7.3.1**. This stable series requires regular
+kernel upgrades. Hardening does not replace timely security updates.
 
 The baseline is the Kernel Self Protection Project's
 [recommended settings](https://github.com/KSPP/kspp.github.io/blob/04b2a2c36113730382a58eb46ee1f23adecaff41/Recommended_Settings.md),
