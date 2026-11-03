@@ -424,7 +424,6 @@ pub(super) fn qemu_eif_base_images() -> Result<QemuEifBaseImages, BuildError> {
 		gen_initramfs: ImageRef::new(
 			"stagex/gen_initramfs:6.8@sha256:f5b9271cca6003e952cbbb9ef041ffa92ba328894f563d1d77942e6b5cdeac1a",
 		)?,
-		// Loaded from `out/linux_nitro`, the kernel the enclave images ship.
 		linux_nitro: local_image("linux_nitro")?,
 		libunwind: ImageRef::new(
 			"stagex/core-libunwind:1.7.2@sha256:eb66122d8fc543f5e2f335bb1616f8c3a471604383e2c0a9df4a8e278505d3bc",

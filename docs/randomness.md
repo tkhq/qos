@@ -7,8 +7,9 @@ key shares, and application keys. All of them come from the kernel's CRNG.
 
 - **NSM.** The kernel builds in the NSM driver (`CONFIG_NSM=y`). It registers
   the `nsm-hwrng` hardware RNG with quality 1000 when the device is probed,
-  before init runs. The kernel selects the highest-quality hwrng and feeds its
-  output, with full entropy credit, into the input pool that seeds the CRNG.
+  before init runs. The kernel selects the highest-quality hwrng and mixes its
+  output into the input pool that seeds the CRNG. It counts each NSM byte as
+  1000/1024 of full entropy (about 7.8 of 8 bits).
 - **CPU and boot.** The kernel also mixes in RDRAND/RDSEED, interrupt timing,
   and jitter entropy, and trusts the CPU RNG by default.
 - **Other hwrng drivers.** virtio-rng and TPM drivers are compiled in, but

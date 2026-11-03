@@ -506,7 +506,7 @@ pub struct QemuEifBaseImages {
 	pub eif_build: ImageRef,
 	/// Image containing `gen_init_cpio`.
 	pub gen_initramfs: ImageRef,
-	/// Image containing Nitro-compatible kernel artifacts.
+	/// Image containing the enclave kernel (`/bzImage`, `/linux.config`).
 	pub linux_nitro: ImageRef,
 	/// Image containing libunwind runtime files.
 	pub libunwind: ImageRef,

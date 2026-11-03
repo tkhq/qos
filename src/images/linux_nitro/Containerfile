@@ -1,7 +1,6 @@
 # Nitro Enclave kernel, built like StageX's linux-nitro package
 # (https://codeberg.org/stagex/stagex) so QOS can pick the version and config.
 FROM stagex/pallet-clang-gnu-busybox:sx2026.10.0@sha256:20f02219400b2b911fc687106c61090bf20879a5f74bf794c5589b7bd8acc2d2 AS pallet
-FROM stagex/core-xz:sx2026.10.0@sha256:89e995d7fd91256fe9501e64ba4ae7cb43e44889b84c0ae2c6d2fde19b9997b5 AS xz
 FROM stagex/core-openssl:sx2026.10.0@sha256:0ea25b654c044622a62c0a8707123a9ca5c87b6ef39dc178e3fe6d972c7e690d AS openssl
 FROM stagex/core-coreutils:sx2026.10.0@sha256:4941d68c446516fbe639dc711d6aad2c662f3899abf56aa5a936764f79da4d1f AS coreutils
 FROM stagex/core-diffutils:sx2026.10.0@sha256:41cd16b99eac8acae840912cefa728210bef1a759b7e2696c284382e75183e38 AS diffutils
@@ -10,7 +9,6 @@ FROM stagex/core-binutils:sx2026.10.0@sha256:9dc813ba66d044748c731f1ff5259cc59ca
 FROM stagex/user-elfutils:sx2026.10.0@sha256:5e9b6e2f3cad3c021ffa476ec867062657c525cfdc7f324669e74b466f6a63d4 AS elfutils
 
 FROM pallet AS build
-COPY --from=xz . /
 COPY --from=openssl . /
 COPY --from=coreutils . /
 COPY --from=diffutils . /

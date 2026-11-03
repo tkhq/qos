@@ -32,6 +32,7 @@ jobs:
           - qos_bridge_egress
           - signed_echo
         include:
+          # Build input for the enclave images, not a deployable; namespaced like signed_echo.
           - name: linux_nitro
             ghcr: ghcr.io/tkhq/qos/linux_nitro
             ecr: false

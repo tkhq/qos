@@ -16,6 +16,8 @@ missing_errors_doc = "allow"
 module_name_repetitions = "allow"
 
 [features]
+# Build test binaries with local cargo. The first run also builds the enclave
+# kernel (out/linux_nitro), which takes several minutes; make caches it after.
 impure-builder = []
 qemu-e2e = []
 qemu-ci = ["qemu-e2e"]
