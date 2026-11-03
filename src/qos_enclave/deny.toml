@@ -1,0 +1,79 @@
+# cargo-deny policy for src/qos_enclave only.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = [
+  # Shared with the root policy; these crates are in this lockfile too.
+  { id = "RUSTSEC-2026-0387", reason = "crypto-bigint via p256/p384; fix requires the RustCrypto 0.14 line" },
+  { id = "RUSTSEC-2021-0127", reason = "serde_cbor is required by the AWS Nitro crates; no upstream replacement yet" },
+  { id = "RUSTSEC-2026-0386", reason = "tokio; the workspace cannot move past 1.50 until the libc pin of qos_core_legacy is lifted" },
+  # src/qos_enclave only: nitro-cli v1.4.5 pins aws-config <= 1.1, which drags in
+  # rustls 0.21, rustls-webpki 0.101, h2 0.3 and old aws-smithy crates. None of them
+  # run on qos_enclave's run/describe/terminate path; they serve nitro-cli's
+  # KMS EIF-signing command. Removing them means moving nitro-cli to v1.5.2.
+  { id = "RUSTSEC-2026-0346", reason = "rustls 0.21 in src/qos_enclave via nitro-cli v1.4.5; dead code on the launcher path" },
+  { id = "RUSTSEC-2026-0347", reason = "rustls 0.21 in src/qos_enclave via nitro-cli v1.4.5; dead code on the launcher path" },
+  { id = "RUSTSEC-2026-0348", reason = "rustls 0.21 in src/qos_enclave via nitro-cli v1.4.5; dead code on the launcher path" },
+  { id = "RUSTSEC-2026-0349", reason = "rustls 0.21 in src/qos_enclave via nitro-cli v1.4.5; dead code on the launcher path" },
+  { id = "RUSTSEC-2026-0098", reason = "rustls-webpki 0.101 in src/qos_enclave via nitro-cli v1.4.5; dead code on the launcher path" },
+  { id = "RUSTSEC-2026-0099", reason = "rustls-webpki 0.101 in src/qos_enclave via nitro-cli v1.4.5; dead code on the launcher path" },
+  { id = "RUSTSEC-2026-0104", reason = "rustls-webpki 0.101 in src/qos_enclave via nitro-cli v1.4.5; dead code on the launcher path" },
+  { id = "RUSTSEC-2026-0382", reason = "rustls-webpki 0.101 in src/qos_enclave via nitro-cli v1.4.5; dead code on the launcher path" },
+  { id = "RUSTSEC-2026-0258", reason = "h2 0.3 in src/qos_enclave via nitro-cli v1.4.5; dead code on the launcher path" },
+  { id = "RUSTSEC-2024-0320", reason = "yaml-rust via nitro-cli v1.4.5 (serde_yaml 0.8)" },
+  { id = "RUSTSEC-2025-0056", reason = "adler via nitro-cli v1.4.5 (miniz_oxide 0.7)" },
+  { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile via nitro-cli v1.4.5 (aws-smithy-http-client 1.1)" },
+]
+
+[licenses]
+version = 2
+allow = [
+  "0BSD",
+  "AGPL-3.0-only",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MIT-0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+private = { ignore = true }
+
+# Crates from the aws-nitro-enclaves-cli repository have no license field in
+# their manifests. The repository is Apache-2.0.
+[[licenses.clarify]]
+crate = "driver-bindings"
+expression = "Apache-2.0"
+license-files = []
+[[licenses.clarify]]
+crate = "eif_loader"
+expression = "Apache-2.0"
+license-files = []
+[[licenses.clarify]]
+crate = "enclave_build"
+expression = "Apache-2.0"
+license-files = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-git = [
+  "https://github.com/aws/aws-nitro-enclaves-cli",
+  "https://github.com/aws/aws-nitro-enclaves-image-format",
+]

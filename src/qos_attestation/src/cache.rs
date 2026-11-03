@@ -250,7 +250,7 @@ mod tests {
 	};
 
 	const T0: u64 = 1_800_000_000;
-	const LIFETIME: Duration = Duration::from_secs(3 * 60 * 60);
+	const LIFETIME: Duration = Duration::from_hours(3);
 	const UNTIL_REFRESH: Duration = LIFETIME.saturating_sub(LEAD);
 
 	#[derive(Clone)]
@@ -1145,7 +1145,7 @@ mod tests {
 			signed_certificate(MOCK_ROOT_CERT_DER, &root, &root, Some(T0 + 60));
 		let running = start(&nsm).await.unwrap();
 		assert_eq!(running.cache.expiry(), T0 + 60);
-		assert_eq!(running.cache.valid_for(), Duration::from_secs(60));
+		assert_eq!(running.cache.valid_for(), Duration::from_mins(1));
 		assert_eq!(running.cache.latest().unwrap().not_after_unix(), T0 + 60);
 	}
 

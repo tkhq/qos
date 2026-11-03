@@ -96,10 +96,8 @@ async fn enclave_app_client_socket_stress() {
 
 	let app_client_pool =
 		StreamPool::single(SocketAddress::new_unix(APP_SOCK)).unwrap();
-	let app_client = SocketClient::new(
-		app_client_pool.shared(),
-		Duration::from_millis(2000),
-	);
+	let app_client =
+		SocketClient::new(app_client_pool.shared(), Duration::from_secs(2));
 
 	let request = borsh::to_vec(&PivotSocketStressMsg::PanicRequest).unwrap();
 	let raw_response = app_client.call(&request).await.unwrap_err();

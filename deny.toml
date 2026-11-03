@@ -1,0 +1,60 @@
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = [
+  # crypto-bigint 0.5 (p256, p384, rsa) and 0.6 (vsss-rs): fixed only in 0.7.6.
+  # Needs the RustCrypto 0.14 migration of qos_p256 and friends.
+  { id = "RUSTSEC-2026-0387", reason = "fix requires the RustCrypto 0.14 line; tracked as a breaking qos_p256 release" },
+  # rsa via yubikey (qos_client smartcard feature). No fixed release exists and
+  # qos does not use RSA keys.
+  { id = "RUSTSEC-2023-0071", reason = "rsa is only linked through yubikey; qos uses P-256 and never calls rsa" },
+  # serde_cbor via aws-nitro-enclaves-cose and aws-nitro-enclaves-nsm-api.
+  { id = "RUSTSEC-2021-0127", reason = "serde_cbor is required by the AWS Nitro crates; no upstream replacement yet" },
+  # tokio AsyncFd I/O safety. Fixed in 1.51.6 / 1.53.3, which need libc >= 0.2.183;
+  # the qos_core 0.7 legacy dev dependency in src/integration pins libc = 0.2.174.
+  { id = "RUSTSEC-2026-0386", reason = "blocked by the libc pin of the qos_core_legacy dev dependency" },
+  # Fixed by the dependency updates in the next PR, which removes these entries.
+  { id = "RUSTSEC-2026-0346", reason = "rustls 0.23.45; fixed in 0.23.46" },
+  { id = "RUSTSEC-2026-0347", reason = "rustls 0.23.45; fixed in 0.23.46" },
+  { id = "RUSTSEC-2026-0348", reason = "rustls 0.23.45; fixed in 0.23.46" },
+  { id = "RUSTSEC-2026-0349", reason = "rustls 0.23.45; fixed in 0.23.46" },
+  { id = "RUSTSEC-2026-0204", reason = "crossbeam-epoch 0.9.18; fixed in 0.9.20" },
+  { crate = "chacha20@0.10.0", reason = "yanked; replaced by a non-yanked release in the next PR" },
+  { crate = "spin@0.9.8", reason = "yanked; replaced by a non-yanked release in the next PR" },
+]
+
+[licenses]
+version = 2
+allow = [
+  "0BSD",
+  "AGPL-3.0-only",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MIT-0",
+  "NCSA",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+# Crates with publish = false are our own; their license is the repository's.
+private = { ignore = true }
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Path dependencies between our own crates carry no version requirement.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

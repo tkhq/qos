@@ -40,6 +40,48 @@ jobs:
       - name: Run linting
         run: make -C src lint
 
+  cargo-deny:
+    name: cargo-deny (${{ matrix.manifest }})
+    runs-on: ubicloud-standard-2
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - manifest: Cargo.toml
+            config: deny.toml
+          - manifest: src/init/Cargo.toml
+            config: deny.toml
+          - manifest: src/qos_aws/Cargo.toml
+            config: deny.toml
+          - manifest: src/qos_system/Cargo.toml
+            config: deny.toml
+          - manifest: src/qos_enclave/Cargo.toml
+            config: src/qos_enclave/deny.toml
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check advisories, licenses, bans and sources
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check
+          manifest-path: ${{ matrix.manifest }}
+          arguments: --locked --config ${{ matrix.config }}
+
+  crate-age:
+    name: crate-age
+    # Release age only matters for what a pull request adds.
+    if: github.event_name == 'pull_request'
+    runs-on: ubicloud-standard-2
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Reject crates.io releases younger than 7 days
+        run: |
+          python3 .github/scripts/check_crate_age.py --base "origin/${{ github.base_ref }}" --days 7 \
+            Cargo.lock src/init/Cargo.lock src/qos_aws/Cargo.lock src/qos_system/Cargo.lock src/qos_enclave/Cargo.lock
+
   check-publishable-crates-standalone:
     name: check-publishable-crates-standalone (${{ matrix.package }})
     runs-on: ubicloud-standard-2
