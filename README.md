@@ -39,6 +39,9 @@ make out/qos_enclave/index.json
 
 The enclave kernel is built from source by [`linux_nitro`](./src/images/linux_nitro/Containerfile), following StageX's `linux-nitro` package, with the kernel source and every build image pinned by hash.
 
+See [enclave kernel hardening](./docs/kernel_hardening.md) for the KSPP baseline,
+enforced build and runtime settings, and validation requirements.
+
 To reproduce the QOS build and print the associated PCR measurements, run:
 ```
 make pcrs
