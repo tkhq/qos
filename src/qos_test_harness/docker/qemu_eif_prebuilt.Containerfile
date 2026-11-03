@@ -60,7 +60,7 @@ EOF
 WORKDIR /build_eif
 COPY --from=linux_nitro /bzImage .
 COPY --from=linux_nitro /linux.config .
-COPY linux.cmdline .
+COPY --from=linux_nitro /linux.cmdline .
 RUN eif_build \
 	--ramdisk rootfs.cpio \
 	--kernel bzImage \

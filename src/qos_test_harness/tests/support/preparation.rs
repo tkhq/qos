@@ -372,6 +372,13 @@ async fn prepare_fast_artifacts(
 	work_dir: &Path,
 ) -> Result<Pivot, PreparationError> {
 	let root = &preparation.root;
+	MakeTargetBuilder::new(root, ["out/linux_nitro/index.json"])?
+		.build()
+		.await?;
+	OciLayoutLoadBuilder::new(root.join("out/linux_nitro"))?
+		.with_docker_bin(&preparation.docker_bin)
+		.build()
+		.await?;
 	let init = fast_builder(CargoBinaryBuilder::new(
 		root,
 		"init",

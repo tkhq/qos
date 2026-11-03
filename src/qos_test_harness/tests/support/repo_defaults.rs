@@ -412,7 +412,7 @@ pub(super) fn docker_host_qemu_nitro_fast_spec(
 	})
 }
 
-/// StageX base images used to assemble a QEMU EIF.
+/// Base images used to assemble a QEMU EIF.
 pub(super) fn qemu_eif_base_images() -> Result<QemuEifBaseImages, BuildError> {
 	Ok(QemuEifBaseImages {
 		build: ImageRef::new(
@@ -424,10 +424,8 @@ pub(super) fn qemu_eif_base_images() -> Result<QemuEifBaseImages, BuildError> {
 		gen_initramfs: ImageRef::new(
 			"stagex/gen_initramfs:6.8@sha256:f5b9271cca6003e952cbbb9ef041ffa92ba328894f563d1d77942e6b5cdeac1a",
 		)?,
-		// StageX's build of src/images/linux_nitro/nitro.config (Linux 7.2).
-		linux_nitro: ImageRef::new(
-			"stagex/user-linux-nitro:sx2026.10.0@sha256:fa00898ee52d9c54b761287f05ed2968f88a06aa42b1b7a4b0bbc83ecb5a4f1c",
-		)?,
+		// Loaded from `out/linux_nitro`, the kernel the enclave images ship.
+		linux_nitro: local_image("linux_nitro")?,
 		libunwind: ImageRef::new(
 			"stagex/core-libunwind:1.7.2@sha256:eb66122d8fc543f5e2f335bb1616f8c3a471604383e2c0a9df4a8e278505d3bc",
 		)?,

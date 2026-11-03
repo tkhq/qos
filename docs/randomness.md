@@ -1,0 +1,51 @@
+# Enclave randomness
+
+QoS generates long-lived secrets inside the enclave: ephemeral keys, quorum
+key shares, and application keys. All of them come from the kernel's CRNG.
+
+## Entropy sources
+
+- **NSM.** The kernel builds in the NSM driver (`CONFIG_NSM=y`). It registers
+  the `nsm-hwrng` hardware RNG with quality 1000 when the device is probed,
+  before init runs. The kernel selects the highest-quality hwrng and feeds its
+  output, with full entropy credit, into the input pool that seeds the CRNG.
+- **CPU and boot.** The kernel also mixes in RDRAND/RDSEED, interrupt timing,
+  and jitter entropy, and trusts the CPU RNG by default.
+- **Other hwrng drivers.** virtio-rng and TPM drivers are compiled in, but
+  Nitro exposes neither device (`pci=off`), so NSM is the only hwrng.
+
+## What QoS checks
+
+During boot, `qos_aws::init_platform` calls `check_hwrng("nsm-hwrng")`. It
+reads `/sys/class/misc/hw_random/rng_current`. If it can't read the file, or
+the current hwrng is not `nsm-hwrng`, the enclave powers off. This check
+proves that NSM feeds the pool. It does not prove that the CRNG is seeded. The
+blocking behavior of `getrandom(2)` covers that.
+
+## Kernel behavior
+
+`getrandom(2)` blocks until the CRNG is initialized, then never blocks. The
+CRNG is seeded early in boot, long before QoS generates keys. Kernel
+hardening does not weaken the RNG.
+
+## Getting randomness in Rust
+
+Use `OsRng`, which calls `getrandom(2)`, for any secret:
+
+```rust
+use p256::elliptic_curve::rand_core::{OsRng, RngCore};
+
+let signing_key = p256::ecdsa::SigningKey::random(&mut OsRng);
+let mut seed = [0u8; 32];
+OsRng.fill_bytes(&mut seed);
+```
+
+- Treat an `OsRng` error as fatal. Never fall back to another source.
+- `rand::rng()` is a CSPRNG seeded from `OsRng`. It is fine for shuffles and
+  nonces, but use `OsRng` directly for keys.
+- Don't use seeded or non-cryptographic generators (`SmallRng`,
+  `StdRng::seed_from_u64`) for secrets, and don't seed from time or PIDs.
+- Don't call NSM `GetRandom` for key material. It bypasses kernel mixing, so
+  the key depends on a single source.
+- Don't open `/dev/random` or `/dev/urandom` directly. `getrandom(2)` needs no
+  file descriptor and can't read before the CRNG is seeded.
