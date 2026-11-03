@@ -39,7 +39,7 @@ and approve the enclave measurements before deployment.
 | `DEBUG_CREDENTIALS`, `REFCOUNT_FULL` | Removed upstream. Current reference-count protection is part of the kernel implementation rather than this old selectable option. |
 | `HARDENED_USERCOPY_FALLBACK`, `HARDENED_USERCOPY_PAGESPAN` | Historical options absent from this kernel; hardened usercopy remains required. |
 | `PAGE_POISONING_ZERO`, `page_poison=1`, `slub_debug=P` | KSPP's pre-5.3 alternatives; use `init_on_alloc=1`, `init_on_free=1` and their config defaults instead. `slub_debug=ZF` is retained separately. |
-| Module signing and its per-build key | Inapplicable: `MODULES` is disabled, NSM is built in, and init loads no modules. The inherited `nomodules` typo is corrected to `nomodule` as defense in depth, although module loading is compiled out. |
+| `MODULE_SIG`, `MODULE_SIG_FORCE`, `MODULE_SIG_ALL`, `MODULE_SIG_SHA512`, `MODULE_SIG_HASH`, `MODULE_SIG_KEY`, `STRICT_MODULE_RWX` | Inapplicable: `MODULES` is disabled, NSM is built in, and init loads no modules. No module-signing key is needed. The inherited `nomodules` typo is corrected to `nomodule` as defense in depth, although module loading is compiled out. |
 | GCC plugins for latent entropy, struct initialization, stack erasure | This build uses Clang. Use `INIT_STACK_ALL_ZERO`, Clang RANDSTRUCT, and the current `KSTACK_ERASE` implementation. The GCC latent-entropy plugin has no Clang equivalent. |
 | `AMD_IOMMU_V2` | Removed upstream; current AMD IOMMU support is enabled. PCI is disabled by the Nitro command line, so DMA/EFI/IOMMU controls have no exposed hardware to protect inside the enclave. They remain enabled where available. |
 | `EFI_DISABLE_PCI_DMA`, `RESET_ATTACK_MITIGATION` | Inapplicable: EFI is disabled. Nitro uses the Linux boot protocol and supplies no EFI firmware services. Adding EFI code would not protect an enclave's memory across a hypervisor-managed reboot. |
@@ -68,7 +68,7 @@ key forwarding, pivot execution/restarts, and network egress. On real hardware,
 verify that KASLR and hardware-dependent mitigations actually activate; config
 selection alone does not prove that they do. Measure throughput, latency, boot
 time, and memory use with SLUB validation, allocation wiping, KFENCE, CFI,
-RANDSTRUCT, and SMT disabled.
+and RANDSTRUCT enabled and SMT disabled.
 
 When upgrading, compare KSPP's recommendations with this pinned baseline, review
 new kernel defaults and removed symbols, and rerun the resolved-config checks.
