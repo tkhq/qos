@@ -3,9 +3,9 @@
 # (packages/user/linux in https://codeberg.org/stagex/stagex), so QoS can pick
 # the kernel version and config without waiting for a StageX release.
 #
-# The enclave images can use an upstream StageX kernel instead, see LINUX_NITRO
-# in the Makefile. Either way the kernel must build in the NSM driver
-# (CONFIG_NSM=y): init loads no kernel modules.
+# To use a StageX-built kernel instead, replace `FROM linux_nitro` in the
+# enclave Containerfiles with that image pinned by digest. Any kernel must build
+# in the NSM driver (CONFIG_NSM=y): init loads no kernel modules.
 FROM stagex/pallet-clang-gnu-busybox:sx2026.10.0@sha256:20f02219400b2b911fc687106c61090bf20879a5f74bf794c5589b7bd8acc2d2 AS pallet
 FROM stagex/core-xz:sx2026.10.0@sha256:89e995d7fd91256fe9501e64ba4ae7cb43e44889b84c0ae2c6d2fde19b9997b5 AS xz
 FROM stagex/core-openssl:sx2026.10.0@sha256:0ea25b654c044622a62c0a8707123a9ca5c87b6ef39dc178e3fe6d972c7e690d AS openssl

@@ -28,7 +28,6 @@ $$( \
 endef
 
 ,:=,
-# $(3): extra `docker build` arguments, e.g. --build-arg.
 define build
 	$(eval NAME := $(1))
 	$(eval TYPE := $(if $(2),$(2),dir))
@@ -41,7 +40,6 @@ define build
 		--tag $(REGISTRY)/$(NAME) \
 		--progress=plain \
 		--platform=$(PLATFORM) \
-		$(3) \
 		$(if $(filter common,$(NAME)),,$(call build_context,$(1))) \
 		$(if $(filter 1,$(NOCACHE)),--no-cache) \
 		--output "\
