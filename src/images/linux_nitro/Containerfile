@@ -1,5 +1,5 @@
 # Nitro Enclave kernel, built like StageX's linux-nitro package
-# (https://codeberg.org/stagex/stagex) so QoS can pick the version and config.
+# (https://codeberg.org/stagex/stagex) so QOS can pick the version and config.
 FROM stagex/pallet-clang-gnu-busybox:sx2026.10.0@sha256:20f02219400b2b911fc687106c61090bf20879a5f74bf794c5589b7bd8acc2d2 AS pallet
 FROM stagex/core-xz:sx2026.10.0@sha256:89e995d7fd91256fe9501e64ba4ae7cb43e44889b84c0ae2c6d2fde19b9997b5 AS xz
 FROM stagex/core-openssl:sx2026.10.0@sha256:0ea25b654c044622a62c0a8707123a9ca5c87b6ef39dc178e3fe6d972c7e690d AS openssl

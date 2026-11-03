@@ -1,6 +1,6 @@
 # Enclave randomness
 
-QoS generates long-lived secrets inside the enclave: ephemeral keys, quorum
+QOS generates long-lived secrets inside the enclave: ephemeral keys, quorum
 key shares, and application keys. All of them come from the kernel's CRNG.
 
 ## Entropy sources
@@ -14,7 +14,7 @@ key shares, and application keys. All of them come from the kernel's CRNG.
 - **Other hwrng drivers.** virtio-rng and TPM drivers are compiled in, but
   Nitro exposes neither device (`pci=off`), so NSM is the only hwrng.
 
-## What QoS checks
+## What QOS checks
 
 During boot, `qos_aws::init_platform` calls `check_hwrng("nsm-hwrng")`. It
 reads `/sys/class/misc/hw_random/rng_current`. If it can't read the file, or
@@ -25,7 +25,7 @@ blocking behavior of `getrandom(2)` covers that.
 ## Kernel behavior
 
 `getrandom(2)` blocks until the CRNG is initialized, then never blocks. The
-CRNG is seeded early in boot, long before QoS generates keys.
+CRNG is seeded early in boot, long before QOS generates keys.
 
 ## Getting randomness in Rust
 
