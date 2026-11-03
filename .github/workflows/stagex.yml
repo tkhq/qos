@@ -12,6 +12,31 @@ on:
   pull_request:
 
 jobs:
+  # Build the enclave kernel once; build-with-kernel reuses it.
+  kernel:
+    name: build linux_nitro kernel
+    runs-on: ubicloud-standard-16
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
+
+      - name: Run `make`
+        shell: 'script -q -e -c "bash {0}"'
+        run: make -j$(nproc) out/linux_nitro/index.json
+
+      - name: Upload kernel image
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux_nitro
+          path: out/linux_nitro
+          if-no-files-found: error
+          retention-days: 1
+
   build:
     name: build ${{ matrix.name }}
     runs-on: ubicloud-standard-16
@@ -21,21 +46,14 @@ jobs:
       fail-fast: false
       matrix:
         name:
-          - linux_nitro
           - qos_client
           - qos_host
           - qos_host_qemu
-          - qos_enclave
-          - qos_enclave_egress
           - qos_bridge
           - qos_bridge_qemu
           - qos_bridge_egress
           - signed_echo
         include:
-          # Build input for the enclave images, not a deployable; namespaced like signed_echo.
-          - name: linux_nitro
-            ghcr: ghcr.io/tkhq/qos/linux_nitro
-            ecr: false
           - name: qos_client
             ghcr: ghcr.io/tkhq/qos_client
             ecr: true
@@ -45,12 +63,6 @@ jobs:
           - name: qos_host_qemu
             ghcr: ghcr.io/tkhq/qos_host_qemu
             ecr: false
-          - name: qos_enclave
-            ghcr: ghcr.io/tkhq/qos_enclave
-            ecr: true
-          - name: qos_enclave_egress
-            ghcr: ghcr.io/tkhq/qos_enclave_egress
-            ecr: true
           - name: qos_bridge
             ghcr: ghcr.io/tkhq/qos_bridge
             ecr: true
@@ -64,13 +76,21 @@ jobs:
           - name: signed_echo
             ghcr: ghcr.io/tkhq/qos/examples/signed_echo
             ecr: false
-    permissions:
+    permissions: &build-permissions
       contents: read
       packages: write   # needed for pushing PR images to GHCR
       id-token: write   # needed for OIDC auth to assume the AWS role for ECR
-    steps:
+    steps: &build-steps
       - name: Checkout sources
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # After checkout, so make sees the kernel as newer than its sources.
+      - name: Download kernel image
+        if: contains(fromJSON('["linux_nitro", "qos_enclave", "qos_enclave_egress"]'), matrix.name)
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: linux_nitro
+          path: out/linux_nitro
 
       # Only authenticate to GHCR/ECR for PRs, since main is build-only.
       - name: Setup Docker
@@ -131,21 +151,43 @@ jobs:
             done
           } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
+  build-with-kernel:
+    name: build ${{ matrix.name }}
+    needs: kernel
+    runs-on: ubicloud-standard-16
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Build input for the enclave images, not a deployable; namespaced like signed_echo.
+          - name: linux_nitro
+            ghcr: ghcr.io/tkhq/qos/linux_nitro
+            ecr: false
+          - name: qos_enclave
+            ghcr: ghcr.io/tkhq/qos_enclave
+            ecr: true
+          - name: qos_enclave_egress
+            ghcr: ghcr.io/tkhq/qos_enclave_egress
+            ecr: true
+    permissions: *build-permissions
+    steps: *build-steps
+
   # Single aggregate check that branch protection can require (the matrix above
   # produces one check per image). Passes only if every image job succeeded.
   build-artifacts:
     name: build artifacts
-    needs: build
+    needs: [kernel, build, build-with-kernel]
     if: always()
     runs-on: ubicloud-standard-2
     steps:
       - name: Verify all image builds succeeded
         run: |
-          result="${{ needs.build.result }}"
-          if [ "${result}" != "success" ]; then
-            echo "One or more image build jobs did not succeed (result: ${result})" >&2
-            exit 1
-          fi
+          for result in "${{ needs.kernel.result }}" "${{ needs.build.result }}" "${{ needs.build-with-kernel.result }}"; do
+            if [ "${result}" != "success" ]; then
+              echo "One or more image build jobs did not succeed (result: ${result})" >&2
+              exit 1
+            fi
+          done
 
   qemu-e2e:
     name: QEMU e2e with PR images

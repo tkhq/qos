@@ -15,56 +15,12 @@ on:
         type: string
 
 jobs:
-  build:
-    name: build ${{ matrix.name }}
+  # Build the enclave kernel once; build-with-kernel reuses it.
+  kernel:
+    name: build linux_nitro kernel
     runs-on: ubicloud-standard-16
-    strategy:
-      # One job per image so builds/pushes run in parallel. Don't cancel the
-      # other images if one fails.
-      fail-fast: false
-      matrix:
-        name:
-          - linux_nitro
-          - qos_client
-          - qos_host
-          - qos_enclave
-          - qos_enclave_egress
-          - qos_bridge
-          - qos_bridge_egress
-          - signed_echo
-        include:
-          # Build input for the enclave images, not a deployable; namespaced like signed_echo.
-          - name: linux_nitro
-            ghcr: ghcr.io/tkhq/qos/linux_nitro
-            ecr: false
-          - name: qos_client
-            ghcr: ghcr.io/tkhq/qos_client
-            ecr: true
-          - name: qos_host
-            ghcr: ghcr.io/tkhq/qos_host
-            ecr: true
-          - name: qos_enclave
-            ghcr: ghcr.io/tkhq/qos_enclave
-            ecr: true
-          - name: qos_enclave_egress
-            ghcr: ghcr.io/tkhq/qos_enclave_egress
-            ecr: true
-          - name: qos_bridge
-            ghcr: ghcr.io/tkhq/qos_bridge
-            ecr: true
-          - name: qos_bridge_egress
-            ghcr: ghcr.io/tkhq/qos_bridge_egress
-            ecr: true
-          # signed_echo is an example image with no ECR repository; GHCR only.
-          - name: signed_echo
-            ghcr: ghcr.io/tkhq/qos/examples/signed_echo
-            ecr: false
-    environment:
-      name: release
     permissions:
-      contents: write   # needed for uploading release assets
-      packages: write   # needed for pushing to GHCR
-      id-token: write   # needed for OIDC auth to assume the AWS role for ECR
+      contents: read
     env:
       release_tag: ${{ inputs.release_tag }}
     steps:
@@ -82,6 +38,84 @@ jobs:
             echo "Expected tag $release_tag to resolve to $expected, but HEAD is $actual" >&2
             exit 1
           fi
+
+      - name: Setup Docker
+        uses: ./.github/actions/docker-setup
+
+      - name: Run `make`
+        shell: 'script -q -e -c "bash {0}"'
+        run: make -j$(nproc) out/linux_nitro/index.json
+
+      - name: Upload kernel image
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux_nitro
+          path: out/linux_nitro
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    name: build ${{ matrix.name }}
+    runs-on: ubicloud-standard-16
+    strategy:
+      # One job per image so builds/pushes run in parallel. Don't cancel the
+      # other images if one fails.
+      fail-fast: false
+      matrix:
+        name:
+          - qos_client
+          - qos_host
+          - qos_bridge
+          - qos_bridge_egress
+          - signed_echo
+        include:
+          - name: qos_client
+            ghcr: ghcr.io/tkhq/qos_client
+            ecr: true
+          - name: qos_host
+            ghcr: ghcr.io/tkhq/qos_host
+            ecr: true
+          - name: qos_bridge
+            ghcr: ghcr.io/tkhq/qos_bridge
+            ecr: true
+          - name: qos_bridge_egress
+            ghcr: ghcr.io/tkhq/qos_bridge_egress
+            ecr: true
+          # signed_echo is an example image with no ECR repository; GHCR only.
+          - name: signed_echo
+            ghcr: ghcr.io/tkhq/qos/examples/signed_echo
+            ecr: false
+    environment: &release-environment
+      name: release
+    permissions: &build-permissions
+      contents: write   # needed for uploading release assets
+      packages: write   # needed for pushing to GHCR
+      id-token: write   # needed for OIDC auth to assume the AWS role for ECR
+    env: &build-env
+      release_tag: ${{ inputs.release_tag }}
+    steps: &build-steps
+      - name: Checkout sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.release_tag }}
+
+      - name: Verify checkout matches requested release tag
+        run: |
+          expected="$(git rev-parse --verify "${release_tag}^{commit}")"
+          actual="$(git rev-parse HEAD)"
+          if [ "$expected" != "$actual" ]; then
+            echo "Expected tag $release_tag to resolve to $expected, but HEAD is $actual" >&2
+            exit 1
+          fi
+
+      # After checkout, so make sees the kernel as newer than its sources.
+      - name: Download kernel image
+        if: contains(fromJSON('["linux_nitro", "qos_enclave", "qos_enclave_egress"]'), matrix.name)
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: linux_nitro
+          path: out/linux_nitro
 
       - name: Setup Docker
         uses: ./.github/actions/docker-setup
@@ -158,3 +192,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # upload to qos_core release tag
         run: gh release upload "${release_tag}" out/nitro.pcrs --clobber
+
+  build-with-kernel:
+    name: build ${{ matrix.name }}
+    needs: kernel
+    runs-on: ubicloud-standard-16
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Build input for the enclave images, not a deployable; namespaced like signed_echo.
+          - name: linux_nitro
+            ghcr: ghcr.io/tkhq/qos/linux_nitro
+            ecr: false
+          - name: qos_enclave
+            ghcr: ghcr.io/tkhq/qos_enclave
+            ecr: true
+          - name: qos_enclave_egress
+            ghcr: ghcr.io/tkhq/qos_enclave_egress
+            ecr: true
+    environment: *release-environment
+    permissions: *build-permissions
+    env: *build-env
+    steps: *build-steps
