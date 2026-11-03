@@ -19,3 +19,7 @@ path = "fuzz_targets/1_new_from_ip.rs"
 test = false
 doc = false
 bench = false
+
+[package.metadata.cargo-machete]
+# The only fuzz target is stubbed out; keep the dependency so it can be re-enabled.
+ignored = ["qos_net"]

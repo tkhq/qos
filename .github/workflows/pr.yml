@@ -40,6 +40,20 @@ jobs:
       - name: Run linting
         run: make -C src lint
 
+  cargo-machete:
+    name: cargo-machete
+    runs-on: ubicloud-standard-2
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install cargo-machete
+        uses: taiki-e/install-action@50414676f9f5d50a65992c6dd2ed02641263226c # v2.82.10
+        with:
+          tool: cargo-machete@0.9.1
+      - name: Reject unused dependencies
+        # Scans every Cargo.toml in the repository, including crates outside the workspace.
+        run: cargo-machete
+
   check-publishable-crates-standalone:
     name: check-publishable-crates-standalone (${{ matrix.package }})
     runs-on: ubicloud-standard-2

@@ -31,7 +31,6 @@ zeroize = { workspace = true }
 axum = { workspace = true, default-features = false, features = ["http1", "json"] }
 futures = { workspace = true }
 borsh = { workspace = true }
-nix = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
