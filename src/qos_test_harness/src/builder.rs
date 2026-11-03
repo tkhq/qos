@@ -588,6 +588,12 @@ impl PrebuiltQemuEifBuilder {
 		std::fs::create_dir_all(&context_dir)?;
 		std::fs::copy(&self.init.path, context_dir.join("init"))?;
 		std::fs::copy(&self.egress.path, context_dir.join("egress"))?;
+		// The StageX kernel image does not export the QoS boot arguments.
+		std::fs::copy(
+			PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+				.join("../images/linux_nitro/hardening.cmdline"),
+			context_dir.join("linux.cmdline"),
+		)?;
 		Ok(context_dir)
 	}
 

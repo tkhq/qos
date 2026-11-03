@@ -42,7 +42,6 @@ WORKDIR /linux-7.3.1
 COPY src/images/linux_nitro/nitro.config .config
 COPY src/images/linux_nitro/hardening.config /hardening.config
 COPY src/images/linux_nitro/check-config.sh /check-config.sh
-COPY src/images/linux_nitro/gen-randstruct-seed.sh scripts/gen-randstruct-seed.sh
 RUN --network=none <<-EOF
 	set -eu
 	scripts/kconfig/merge_config.sh -m .config /hardening.config
