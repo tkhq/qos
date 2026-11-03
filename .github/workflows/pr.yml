@@ -40,6 +40,29 @@ jobs:
       - name: Run linting
         run: make -C src lint
 
+  cargo-deny:
+    name: cargo-deny (${{ matrix.manifest }})
+    runs-on: ubicloud-standard-2
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every lockfile in the repository. The last four crates are excluded
+        # from the workspace, so a single run at the root would not see them.
+        manifest:
+          - Cargo.toml
+          - src/init/Cargo.toml
+          - src/qos_aws/Cargo.toml
+          - src/qos_system/Cargo.toml
+          - src/qos_enclave/Cargo.toml
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check advisories, licenses, bans and sources
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check
+          arguments: --locked --config deny.toml --manifest-path ${{ matrix.manifest }}
+
   check-publishable-crates-standalone:
     name: check-publishable-crates-standalone (${{ matrix.package }})
     runs-on: ubicloud-standard-2
