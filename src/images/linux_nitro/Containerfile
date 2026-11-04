@@ -34,6 +34,8 @@ COPY src/images/linux_nitro/nitro.config .config
 RUN --network=none <<-EOF
 	set -eu
 	make olddefconfig
+	# init loads no kernel modules, so NSM must be built in.
+	grep -qx 'CONFIG_NSM=y' .config
 	make -j"$(nproc)" bzImage
 	mkdir /rootfs
 	cp .config /rootfs/linux.config
