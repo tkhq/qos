@@ -1,4 +1,4 @@
-FROM common AS base
+FROM qos.invalid/common AS base
 
 # Directory for Rust artifacts.
 ENV RELEASE_DIR=/src/target/${TARGET}/release

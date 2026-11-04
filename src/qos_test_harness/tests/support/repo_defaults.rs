@@ -439,7 +439,7 @@ pub(super) fn qemu_eif_base_images() -> Result<QemuEifBaseImages, BuildError> {
 
 /// Repo-local image name.
 pub(super) fn local_image(name: &str) -> Result<ImageRef, BuildError> {
-	ImageRef::new(format!("qos-local/{name}:latest"))
+	ImageRef::new(format!("qos.invalid/{name}:latest"))
 }
 
 /// Repo-local images produced by the slow QEMU build.

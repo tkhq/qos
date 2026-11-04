@@ -33,11 +33,10 @@ CRNG is seeded early in boot, long before QOS generates keys.
 Use `OsRng`, which calls `getrandom(2)`, for any secret:
 
 ```rust
-use p256::elliptic_curve::rand_core::{OsRng, RngCore};
+use rand_core::{OsRng, TryRngCore};
 
-let signing_key = p256::ecdsa::SigningKey::random(&mut OsRng);
 let mut seed = [0u8; 32];
-OsRng.fill_bytes(&mut seed);
+OsRng.try_fill_bytes(&mut seed).expect("OS randomness unavailable");
 ```
 
 - Treat an `OsRng` error as fatal. Never fall back to another source.

@@ -48,12 +48,12 @@ jobs:
           sha_tag="sha-${GITHUB_SHA}"
 
           env -C out/signed_echo tar -cf - . | docker load
-          docker tag "qos-local/signed_echo:latest" "${image}:${sha_tag}"
+          docker tag "qos.invalid/signed_echo:latest" "${image}:${sha_tag}"
           docker push "${image}:${sha_tag}"
 
           current_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           if [ "${current_main}" = "${GITHUB_SHA}" ]; then
-            docker tag "qos-local/signed_echo:latest" "${image}:main"
+            docker tag "qos.invalid/signed_echo:latest" "${image}:main"
             docker push "${image}:main"
           else
             echo "Skipping ${image}:main because ${GITHUB_SHA} is no longer main"

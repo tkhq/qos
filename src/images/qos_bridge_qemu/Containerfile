@@ -1,4 +1,4 @@
-FROM common AS base
+FROM qos.invalid/common AS base
 ADD . /src
 
 FROM base AS build
