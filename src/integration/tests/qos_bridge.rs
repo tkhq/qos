@@ -315,7 +315,7 @@ async fn qos_bridge_works() {
 		let approval: Approval =
 			serde_json::from_slice(&fs::read(approval_path).unwrap()).unwrap();
 		let personal_pair = P256Pair::from_hex_file(
-			personal_dir(alias).join(format!("{alias}.secret",)),
+			personal_dir(alias).join(format!("{alias}.secret")),
 		)
 		.unwrap();
 
@@ -452,9 +452,8 @@ async fn qos_bridge_works() {
 		let secret_path = personal_dir(user).join(format!("{user}.secret"));
 		let eph_wrapped_share_path =
 			PathWrapper::from(tmp.join(format!("{user}.eph_wrapped.share")));
-		let approval_path = PathWrapper::from(
-			tmp.join(format!("{user}.attestation.approval",)),
-		);
+		let approval_path =
+			PathWrapper::from(tmp.join(format!("{user}.attestation.approval")));
 		// Encrypt share to ephemeral key
 		let mut child = Command::new(integration::QOS_CLIENT_PATH)
 			.args([
