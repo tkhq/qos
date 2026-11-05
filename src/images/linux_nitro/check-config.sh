@@ -1,26 +1,33 @@
 #!/bin/sh
-# Check the resolved config, since Kconfig silently drops unmet dependencies.
+# Usage: check-config.sh POLICY CONFIG
+#
+# Fails if the final kernel CONFIG does not match every setting in POLICY.
+# Kconfig silently drops settings whose dependencies are not met, so the
+# build checks the final .config instead of trusting the merged fragment.
 set -eu
 policy=$1
-resolved=$2
+config=$2
 failed=0
-while IFS= read -r setting; do
-	case "$setting" in
-		CONFIG_*=*) ;;
-		'# CONFIG_'*' is not set') ;;
-		*) continue ;;
+
+while IFS= read -r line; do
+	case "$line" in
+	CONFIG_*)
+		# Enabled setting, like "CONFIG_FOO=y": CONFIG must contain this exact line.
+		if ! grep -qFx "$line" "$config"; then
+			echo "Kernel hardening setting missing: $line" >&2
+			failed=1
+		fi
+		;;
+	"# CONFIG_"*" is not set")
+		# Disabled setting, like "# CONFIG_FOO is not set": CONFIG must not set
+		# CONFIG_FOO. Kconfig can omit the symbol entirely, which also counts.
+		symbol=$(echo "$line" | cut -d ' ' -f 2)
+		if grep -q "^$symbol=" "$config"; then
+			echo "Kernel hardening setting must be disabled: $symbol" >&2
+			failed=1
+		fi
+		;;
 	esac
-	# A disabled symbol may be omitted entirely when its parent is disabled.
-	case "$setting" in
-		'# CONFIG_'*' is not set')
-			symbol=${setting#\# }
-			symbol=${symbol% is not set}
-			if ! grep -q "^${symbol}=" "$resolved"; then continue; fi
-			;;
-	esac
-	if ! grep -Fqx "$setting" "$resolved"; then
-		echo "Kernel hardening requirement not satisfied: $setting" >&2
-		failed=1
-	fi
 done < "$policy"
+
 exit "$failed"

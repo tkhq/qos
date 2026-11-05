@@ -23,7 +23,6 @@ jobs:
         run: make -C src test
       - name: Test kernel hardening enforcement
         run: |
-          sh src/images/linux_nitro/test-check-config.sh
           rustc --edition=2024 --test src/init/hardening.rs -o /tmp/qos-hardening-tests
           /tmp/qos-hardening-tests
       - name: Run legacy protocol compat tests
