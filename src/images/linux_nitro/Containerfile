@@ -46,4 +46,3 @@ EOF
 
 FROM scratch AS package
 COPY --from=build /rootfs/ /
-COPY src/images/linux_nitro/hardening.cmdline /linux.cmdline

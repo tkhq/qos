@@ -4,9 +4,8 @@ The enclave kernel follows the Kernel Self Protection Project's
 [recommended settings](https://github.com/KSPP/kspp.github.io/blob/04b2a2c36113730382a58eb46ee1f23adecaff41/Recommended_Settings.md)
 for common and x86-64 options:
 
-- `src/images/linux_nitro/hardening.config`: kernel config. The build fails if
-  Kconfig drops a setting.
-- `src/images/linux_nitro/hardening.cmdline`: boot arguments.
+- `src/images/linux_nitro/hardening.config`: kernel config and built-in boot
+  arguments. The build fails if Kconfig drops a setting.
 - `src/init/hardening.rs`: sysctls. Boot aborts if one does not apply.
 
 Changing any of these changes the enclave measurements.

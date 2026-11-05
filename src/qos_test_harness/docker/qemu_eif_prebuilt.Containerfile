@@ -60,14 +60,13 @@ EOF
 WORKDIR /build_eif
 COPY --from=linux_nitro /bzImage .
 COPY --from=linux_nitro /linux.config .
-COPY --from=linux_nitro /linux.cmdline .
 RUN eif_build \
 	--ramdisk rootfs.cpio \
 	--kernel bzImage \
 	--kernel_config linux.config \
 	--pcrs_output /nitro.pcrs \
 	--output /nitro.eif \
-	--cmdline "reboot=k initrd=0x2000000 root=/dev/ram0 pci=off console=ttyS0 $(cat linux.cmdline)"
+	--cmdline "reboot=k initrd=0x2000000 root=/dev/ram0 pci=off console=ttyS0"
 
 FROM scratch AS package
 COPY --from=build_eif /nitro.eif .

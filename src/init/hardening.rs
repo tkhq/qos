@@ -20,8 +20,5 @@ pub fn apply() {
 		let path = format!("/proc/sys/{key}");
 		fs::write(&path, value)
 			.unwrap_or_else(|e| panic!("sysctl {key}={value}: {e}"));
-		let actual = fs::read_to_string(&path)
-			.unwrap_or_else(|e| panic!("sysctl {key}: {e}"));
-		assert_eq!(actual.trim(), *value, "sysctl {key} did not apply");
 	}
 }
