@@ -31,11 +31,13 @@ ENV LOCALVERSION=
 
 WORKDIR /linux-7.3.1
 COPY src/images/linux_nitro/nitro.config .config
+COPY src/images/linux_nitro/hardening.config /hardening.config
+COPY src/images/linux_nitro/check-config.sh /check-config.sh
 RUN --network=none <<-EOF
 	set -eu
+	scripts/kconfig/merge_config.sh -m .config /hardening.config
 	make olddefconfig
-	# init loads no kernel modules, so NSM must be built in.
-	grep -qx 'CONFIG_NSM=y' .config
+	sh /check-config.sh /hardening.config .config
 	make -j"$(nproc)" bzImage
 	mkdir /rootfs
 	cp .config /rootfs/linux.config
@@ -44,3 +46,4 @@ EOF
 
 FROM scratch AS package
 COPY --from=build /rootfs/ /
+COPY src/images/linux_nitro/hardening.cmdline /linux.cmdline

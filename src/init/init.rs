@@ -10,6 +10,7 @@ use qos_system::{dmesg, freopen, get_local_cid, mount, reboot};
 //TODO: Feature flag
 use qos_aws::init_platform;
 
+mod hardening;
 mod setip;
 use setip::init_localhost;
 
@@ -54,6 +55,7 @@ fn init_console() {
 fn boot() {
 	init_rootfs();
 	init_console();
+	hardening::apply();
 	init_platform();
 	init_localhost();
 	#[cfg(feature = "egress")]

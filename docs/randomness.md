@@ -3,30 +3,53 @@
 QOS generates long-lived secrets inside the enclave: ephemeral keys, quorum
 key shares, and application keys. All of them come from the kernel's CRNG.
 
+## How the kernel CRNG works
+
+Every entropy source mixes its bytes into the kernel's input pool, and the
+kernel counts how many bits of entropy each source adds. When the pool has
+256 bits, the kernel seeds the CRNG, a ChaCha20 stream that `getrandom(2)`
+returns. Before that, `getrandom(2)` blocks. After that, it never blocks. The
+kernel then reseeds the CRNG from the pool, about every second at boot and
+every 60 seconds after about two minutes of uptime. Input that arrives after
+a seed reaches `getrandom(2)` output at the next reseed.
+
 ## Entropy sources
 
-- **NSM.** The kernel builds in the NSM driver (`CONFIG_NSM=y`). It registers
-  the `nsm-hwrng` hardware RNG with quality 1000 when the device is probed,
-  before init runs. The kernel selects the highest-quality hwrng and mixes its
-  output into the input pool that seeds the CRNG. It counts each NSM byte as
-  1000/1024 of full entropy (about 7.8 of 8 bits).
-- **CPU and boot.** The kernel also mixes in RDRAND/RDSEED, interrupt timing,
-  and jitter entropy, and trusts the CPU RNG by default.
-- **Other hwrng drivers.** virtio-rng and TPM drivers are compiled in, but
-  Nitro exposes neither device (`pci=off`), so NSM is the only hwrng.
+- **CPU.** Very early in boot, the kernel mixes 512 bits from RDSEED (or
+  RDRAND) into the pool, and it mixes in more at every reseed.
+  `random.trust_cpu=on` in `src/images/linux_nitro/hardening.cmdline` credits
+  that first input as entropy, as KSPP recommends. So the CPU RNG alone seeds
+  the CRNG, before any driver loads.
+- **NSM.** The NSM driver is built into the kernel (`CONFIG_NSM=y`). When the
+  kernel probes the NSM device, before init runs, the driver registers the
+  `nsm-hwrng` hardware RNG with quality 1000. A kernel thread then reads it
+  continuously and counts each byte as 1000/1024 of full entropy (about 7.8
+  of 8 bits). NSM output reaches the CRNG from the first reseed after it
+  arrives.
+- **Interrupts and timers.** The kernel mixes in interrupt timing. If
+  `getrandom(2)` would block, it also generates entropy from timer jitter.
 
-## What QOS checks
+Mixing more sources can't weaken the CRNG, even if one source is malicious.
+Crediting a source only decides when the CRNG is first seeded.
 
-During boot, `qos_aws::init_platform` calls `check_hwrng("nsm-hwrng")`. It
-reads `/sys/class/misc/hw_random/rng_current`. If it can't read the file, or
-the current hwrng is not `nsm-hwrng`, the enclave powers off. This check
-proves that NSM feeds the pool. It does not prove that the CRNG is seeded. The
-blocking behavior of `getrandom(2)` covers that.
+The Nitro hypervisor gives the enclave only vsock and NSM over virtio-mmio.
+`hardening.config` builds in no other hwrng or TPM driver, so NSM is the only
+hwrng. This matters because the kernel selects the hwrng with the highest
+quality, and drivers that set no quality default to 1024, which is higher
+than NSM's 1000.
 
-## Kernel behavior
+## What QOS enforces
 
-`getrandom(2)` blocks until the CRNG is initialized, then never blocks. The
-CRNG is seeded early in boot, long before QOS generates keys.
+- **At build time.** The `linux_nitro` build fails if the resolved config does
+  not build in NSM or enables the virtio-rng, Intel, AMD, VIA, or TPM RNG
+  drivers.
+- **At boot.** `qos_aws::init_platform` calls `check_hwrng("nsm-hwrng")`. It
+  reads `/sys/class/misc/hw_random/rng_current`. If it can't read the file,
+  or the current hwrng is not `nsm-hwrng`, the enclave powers off.
+
+The boot check proves that NSM is the selected hwrng, so the kernel's hwrng
+thread feeds NSM output into the input pool. With `random.trust_cpu=on`, it
+does not prove that NSM output is in the seed behind the first keys.
 
 ## Getting randomness in Rust
 
