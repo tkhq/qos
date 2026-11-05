@@ -255,7 +255,7 @@ fn certificate_validity(
 			|bounds, der| {
 				let cert = Certificate::from_der(der)
 					.map_err(|e| Error::Certificate(e.to_string()))?;
-				let validity = cert.tbs_certificate.validity;
+				let validity = cert.tbs_certificate().validity();
 				Ok(CertificateValidity {
 					not_before_unix: bounds
 						.not_before_unix
@@ -530,8 +530,8 @@ mod tests {
 		.unwrap();
 		let before = Certificate::from_der(MOCK_LEAF_CERT_DER)
 			.unwrap()
-			.tbs_certificate
-			.validity
+			.tbs_certificate()
+			.validity()
 			.not_before
 			.to_unix_duration()
 			.as_secs();
@@ -880,8 +880,8 @@ mod tests {
 	fn not_after_of(der: &[u8]) -> u64 {
 		Certificate::from_der(der)
 			.unwrap()
-			.tbs_certificate
-			.validity
+			.tbs_certificate()
+			.validity()
 			.not_after
 			.to_unix_duration()
 			.as_secs()

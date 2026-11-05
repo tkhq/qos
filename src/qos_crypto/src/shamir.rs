@@ -1,6 +1,6 @@
 //! Shamir Secret Sharing module. We use the [`vsss-rs`](https://crates.io/crates/vsss-rs)
+use getrandom::{SysRng, rand_core::UnwrapErr};
 use vsss_rs::Gf256;
-use vsss_rs::elliptic_curve::rand_core::OsRng;
 use zeroize::Zeroizing;
 
 use crate::QosCryptoError;
@@ -20,7 +20,7 @@ pub fn shares_generate(
 	threshold: usize,
 ) -> Result<Vec<Zeroizing<Vec<u8>>>, QosCryptoError> {
 	let shares: Vec<Vec<u8>> =
-		Gf256::split_array(threshold, share_count, secret, OsRng)
+		Gf256::split_array(threshold, share_count, secret, UnwrapErr(SysRng))
 			.map_err(QosCryptoError::Vsss)?;
 	Ok(shares.into_iter().map(Zeroizing::new).collect())
 }

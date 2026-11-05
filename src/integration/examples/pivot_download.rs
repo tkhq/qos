@@ -5,7 +5,7 @@ use std::{
 
 use axum::{Json, Router, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
-use sha2::Digest;
+use sha2::{Digest, Sha256};
 use ureq::Resolver;
 
 struct FixedResolver {
@@ -99,11 +99,11 @@ async fn download(
 		let bytes: Vec<u8> = dl.into_string().unwrap().bytes().collect();
 
 		let size = bytes.len();
-		let sha256sum = sha2::Sha256::digest(bytes);
+		let sha256sum = qos_hex::encode(&Sha256::digest(bytes));
 		let duration = SystemTime::now().duration_since(start).unwrap();
 
 		println!(
-			"download complete\n\tstatus: {}\n\tsize: {}\n\tduration: {:?}\n\tsha256sum:{:x}",
+			"download complete\n\tstatus: {}\n\tsize: {}\n\tduration: {:?}\n\tsha256sum:{}",
 			status,
 			size,
 			duration,
@@ -114,7 +114,7 @@ async fn download(
 			status,
 			size,
 			duration,
-			sha256sum: format!("{sha256sum:x}"),
+			sha256sum,
 			error: None,
 		})
 	}).await.expect("unable to join blocking task");

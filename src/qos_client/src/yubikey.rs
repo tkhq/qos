@@ -1,16 +1,15 @@
 //! Yubikey interfaces
 
 use borsh::BorshDeserialize;
-use der::{asn1::BitStringRef, referenced::OwnedToRef};
-use p256::{
-	SecretKey,
+use der_v07::{asn1::BitStringRef, referenced::OwnedToRef};
+use p256_v013::{
+	EncodedPoint, NistP256, SecretKey,
 	ecdsa::{Signature, VerifyingKey, signature::Verifier},
 	pkcs8::SubjectPublicKeyInfo,
 };
 use qos_p256::encrypt::Envelope;
-use rand_core::{OsRng, TryRngCore};
 use std::{error::Error, fmt, str::FromStr, time::Duration};
-use x509_cert::{
+use x509_cert_v02::{
 	name::RdnSequence, serial_number::SerialNumber, time::Validity,
 };
 use yubikey::{
@@ -74,7 +73,7 @@ pub enum YubiKeyError {
 	InvalidSecret,
 	/// The pin could not be changed.
 	FailedToChangePin,
-	/// See [`der::Error`] for inner string contents.
+	/// See [`der_v07::Error`] for inner string contents.
 	DerError(String),
 	/// Problem extracting the public key data
 	EmptyPublicKeyInfo,
@@ -149,8 +148,8 @@ impl Error for YubiKeyError {
 	}
 }
 
-impl From<der::Error> for YubiKeyError {
-	fn from(from: der::Error) -> Self {
+impl From<der_v07::Error> for YubiKeyError {
+	fn from(from: der_v07::Error) -> Self {
 		// add a debug-print of the inner error
 		Self::DerError(format!("{from:?}"))
 	}
@@ -196,7 +195,7 @@ pub fn generate_signed_certificate(
 	let serial = generate_random_rfc5280_serial();
 
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
-	Certificate::generate_self_signed::<_, p256::NistP256>(
+	Certificate::generate_self_signed::<_, NistP256>(
 		yubikey,
 		slot,
 		SerialNumber::new(&serial)?,
@@ -260,7 +259,7 @@ pub fn import_key_and_generate_signed_certificate(
 	let serial = generate_random_rfc5280_serial();
 
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
-	Certificate::generate_self_signed::<_, p256::NistP256>(
+	Certificate::generate_self_signed::<_, NistP256>(
 		yubikey,
 		slot,
 		SerialNumber::new(&serial)?,
@@ -454,10 +453,10 @@ pub fn yubikey_piv_reset() -> Result<(), YubiKeyError> {
 
 fn extract_encoded_point(
 	public_key_info: BitStringRef,
-) -> Result<p256::EncodedPoint, YubiKeyError> {
+) -> Result<EncodedPoint, YubiKeyError> {
 	public_key_info.as_bytes().ok_or(YubiKeyError::EmptyPublicKeyInfo).and_then(
 		|el| {
-			p256::EncodedPoint::from_bytes(el)
+			EncodedPoint::from_bytes(el)
 				.map_err(|_err| YubiKeyError::FoundNonP256Key)
 		},
 	)
@@ -471,8 +470,8 @@ fn extract_encoded_point(
 /// Panics if the RNG fails, which should never happen.
 fn generate_random_rfc5280_serial() -> [u8; 20] {
 	let mut serial = [0u8; 20];
-	OsRng.try_fill_bytes(&mut serial).expect(
-		"The OsRng was unable to provide data, which should never happen",
+	getrandom::fill(&mut serial).expect(
+		"getrandom was unable to provide data, which should never happen",
 	);
 	// RFC5280 requires the serial to fit into 20 bytes and represent a positive signed integer,
 	// which requires the most significant bit to be 0
@@ -486,11 +485,11 @@ fn generate_random_rfc5280_serial() -> [u8; 20] {
 #[cfg(test)]
 mod tests {
 	use crate::yubikey::generate_random_rfc5280_serial;
-	use x509_cert::serial_number::SerialNumber;
+	use x509_cert_v02::serial_number::SerialNumber;
 
 	#[test]
 	fn test_rfc5280_serial_generation_success() {
-		use x509_cert::certificate::Rfc5280;
+		use x509_cert_v02::certificate::Rfc5280;
 
 		// the generation behavior is non-deterministic by design, try it a few dozen times
 		const TEST_ITERATIONS: usize = 100;
