@@ -72,7 +72,7 @@ RUN eif_build \
 	--kernel_config linux.config \
 	--pcrs_output /nitro.pcrs \
 	--output /nitro.eif \
-	--cmdline "reboot=k initrd=0x2000000 root=/dev/ram0 panic=-1 pci=off console=ttyS0 i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd $(cat linux.cmdline)"
+	--cmdline "reboot=k initrd=0x2000000 root=/dev/ram0 pci=off console=ttyS0 $(cat linux.cmdline)"
 
 FROM scratch AS package
 COPY --from=build-eif /nitro.eif .

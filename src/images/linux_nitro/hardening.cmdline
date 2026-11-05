@@ -1,1 +1,1 @@
-page_alloc.shuffle=1 random.trust_cpu=on hash_pointers=always
+page_alloc.shuffle=1

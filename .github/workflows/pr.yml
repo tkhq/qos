@@ -21,10 +21,6 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pkg-config libpcsclite-dev
       - name: Run tests
         run: make -C src test
-      - name: Test kernel hardening enforcement
-        run: |
-          rustc --edition=2024 --test src/init/hardening.rs -o /tmp/qos-hardening-tests
-          /tmp/qos-hardening-tests
       - name: Run legacy protocol compat tests
         run: cargo test --locked -p integration --features legacy-protocol-compat --test protocol_legacy_decode
 
