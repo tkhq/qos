@@ -29,7 +29,7 @@ p384 = { workspace = true }
 qos_nsm = { workspace = true, features = ["mock"], default-features = false }
 serde_bytes = { workspace = true }
 sha2 = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "sync", "test-util", "time"], default-features = false }
+tokio = { workspace = true, features = ["macros", "rt", "test-util", "time"], default-features = false }
 
 [features]
 # Attestation cache with background refresh

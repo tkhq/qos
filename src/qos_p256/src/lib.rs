@@ -5,7 +5,6 @@ use std::path::Path;
 
 use encrypt::AesGcm256Secret;
 use hkdf::Hkdf;
-use p256::elliptic_curve::rand_core::{OsRng, RngCore};
 use sha2::Sha512;
 use zeroize::{ZeroizeOnDrop, Zeroizing};
 
@@ -135,12 +134,16 @@ fn write_owner_only(path: &Path, buf: &[u8]) -> std::io::Result<()> {
 }
 
 /// Helper function to generate a `N` length byte buffer.
+///
+/// # Panics
+///
+/// Panics if the operating system's random number generator fails.
 #[must_use]
 pub fn bytes_os_rng<const N: usize>() -> Zeroizing<[u8; N]> {
-	let mut key = [0u8; N];
-	OsRng.fill_bytes(&mut key);
+	let mut key = Zeroizing::new([0u8; N]);
+	getrandom::fill(&mut *key).expect("the OS random number generator failed");
 
-	Zeroizing::new(key)
+	key
 }
 
 /// P256 private key pair for signing and encryption. Internally this uses a
@@ -361,10 +364,7 @@ impl P256Public {
 		self.encrypt_public.encrypt(message)
 	}
 
-	/// Verify a `signature` and `message` against this private key. Verifies
-	/// the SHA512 digest of the message.
-	///
-	/// Returns Ok if the signature is good.
+	/// Verify a raw `r||s` `signature` over the SHA-256 digest of `message`.
 	///
 	/// # Errors
 	///
