@@ -1,36 +1,46 @@
 # Enclave randomness
 
-QOS generates long-lived secrets inside the enclave: ephemeral keys, quorum
-key shares, and application keys. All of them come from the kernel's CRNG.
+Every secret QOS creates in the enclave comes from the Linux kernel's random
+number generator (the CRNG). That includes ephemeral keys, quorum key shares,
+and application keys.
 
 ## Entropy sources
 
-- **NSM.** The kernel builds in the NSM driver (`CONFIG_NSM=y`). It registers
-  the `nsm-hwrng` hardware RNG with quality 1000 when the device is probed,
-  before init runs. The kernel selects the highest-quality hwrng and mixes its
-  output into the input pool that seeds the CRNG. It counts each NSM byte as
-  1000/1024 of full entropy (about 7.8 of 8 bits).
-- **CPU and boot.** The kernel also mixes in RDRAND/RDSEED, interrupt timing,
-  and jitter entropy, and trusts the CPU RNG by default.
-- **Other hwrng drivers.** virtio-rng and TPM drivers are compiled in, but
-  Nitro exposes neither device (`pci=off`), so NSM is the only hwrng.
+The kernel mixes several sources into one pool and seeds the CRNG from it:
 
-## What QOS checks
+- **NSM.** The Nitro Security Module has a hardware RNG. The NSM driver is
+  built into the kernel, so it is ready before init starts.
+- **The CPU.** The RDRAND and RDSEED instructions.
+- **Timing.** Interrupt timing and CPU jitter.
 
-During boot, `qos_aws::init_platform` calls `check_hwrng("nsm-hwrng")`. It
-reads `/sys/class/misc/hw_random/rng_current`. If it can't read the file, or
-the current hwrng is not `nsm-hwrng`, the enclave powers off. This check
-proves that NSM feeds the pool. It does not prove that the CRNG is seeded. The
-blocking behavior of `getrandom(2)` covers that.
+The kernel trusts the CPU's RNG by default. It can mark the CRNG ready from
+the CPU alone, before any NSM output reaches it. On its own, the kernel adds
+NSM output only at its next scheduled reseed. That is about a second away
+early in boot and up to a minute away later. QOS doesn't rely on that timing.
+Init forces the reseed at boot, as the next section describes.
 
-## Kernel behavior
+## Boot checks
 
-`getrandom(2)` blocks until the CRNG is initialized, then never blocks. The
-CRNG is seeded early in boot, long before QOS generates keys.
+QOS guarantees that NSM output is in the CRNG before QOS starts. At boot,
+init (`qos_aws::init_platform`) samples NSM directly, mixes the sample into
+the kernel pool, and forces a reseed. It does these steps before it sends the
+boot heartbeat to Nitro, and powers off the enclave if any step fails. A
+failure therefore shows up as a failed enclave boot.
 
-## Getting randomness in Rust
+1. Check that the kernel's active hardware RNG is `nsm-hwrng` and that the
+   kernel credits its output as entropy (quality 1000).
+2. Read two 64-byte samples from `/dev/hwrng`, each from a separate NSM
+   request. Check that they differ and are not one repeated byte. This
+   catches a broken or stuck device. It does not detect subtle bias.
+3. Wait for the CRNG to be ready, write the samples to `/dev/random`, and
+   force a reseed (`RNDRESEEDCRNG`).
 
-Use `OsRng`, which calls `getrandom(2)`, for any secret:
+After step 3, the CRNG includes NSM output, whatever the boot timing was.
+
+## Using randomness in Rust
+
+Use `OsRng` for keys and other secrets. It calls `getrandom(2)`, which reads
+from the CRNG.
 
 ```rust
 use rand_core::{OsRng, TryRngCore};
@@ -39,12 +49,8 @@ let mut seed = [0u8; 32];
 OsRng.try_fill_bytes(&mut seed).expect("OS randomness unavailable");
 ```
 
-- Treat an `OsRng` error as fatal. Never fall back to another source.
-- `rand::rng()` is a CSPRNG seeded from `OsRng`. It is fine for shuffles and
-  nonces, but use `OsRng` directly for keys.
-- Don't use seeded or non-cryptographic generators (`SmallRng`,
-  `StdRng::seed_from_u64`) for secrets, and don't seed from time or PIDs.
-- Don't call NSM `GetRandom` for key material. It bypasses kernel mixing, so
+- Treat an `OsRng` error as fatal. Don't fall back to another source.
+- Don't use seeded or non-cryptographic generators, such as `SmallRng` or
+  `StdRng::seed_from_u64`, for secrets.
+- Don't use NSM `GetRandom` directly for keys. It skips the kernel pool, so
   the key depends on a single source.
-- Don't open `/dev/random` or `/dev/urandom` directly. `getrandom(2)` needs no
-  file descriptor and can't read before the CRNG is seeded.
