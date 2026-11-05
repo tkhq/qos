@@ -193,7 +193,7 @@ fn build_resolver(
 	resolver_opts.timeout = Duration::from_secs(1);
 	resolver_opts.attempts = 1;
 	// Clamp long-lived records so cached answers do not stay stale too long.
-	resolver_opts.positive_max_ttl = Some(Duration::from_secs(300));
+	resolver_opts.positive_max_ttl = Some(Duration::from_mins(5));
 	// Currently we only check the first address and downstream code assumes its Ipv4;
 	// this setting ensures that the resolver always resolves an Ipv4 address first.
 	resolver_opts.ip_strategy = LookupIpStrategy::Ipv4thenIpv6;
@@ -295,7 +295,7 @@ mod test {
 		let opts = first.options();
 		assert_eq!(opts.timeout, Duration::from_secs(1));
 		assert_eq!(opts.attempts, 1);
-		assert_eq!(opts.positive_max_ttl, Some(Duration::from_secs(300)));
+		assert_eq!(opts.positive_max_ttl, Some(Duration::from_mins(5)));
 		assert_eq!(opts.ip_strategy, LookupIpStrategy::Ipv4thenIpv6);
 	}
 }
