@@ -27,6 +27,7 @@ other architectures are covered by their current equivalents or don't apply.
 | `kernel.warn_limit=1` | Deferred: one benign `WARN` would reboot the enclave. Revisit once production shows no warnings. |
 | `nosmt`, `SCHED_CORE` | Not applied: the enclave owns whole cores, so this would halve CPUs for no isolation gain. |
 | IOMMU options | Not applied: `pci=off`, and Nitro exposes no DMA-capable device. |
+| `pti=on` | Not applied: PTI stays on `auto`, which enables it on CPUs affected by Meltdown (such as Skylake in `m5`/`c5`) and skips it on CPUs that are not. |
 | `slub_debug=ZF` | Not applied: expensive and overlaps freelist hardening, KFENCE, and allocation wiping. |
 | SELinux, AppArmor, Landlock, etc. | Not enabled: the enclave has no policy for them to enforce. |
 | `HW_RANDOM_TPM` | Not enabled: Nitro has no TPM, and NSM must be the only [hwrng](randomness.md). |

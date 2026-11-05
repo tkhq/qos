@@ -9,17 +9,19 @@ Every entropy source mixes its bytes into the kernel's input pool, and the
 kernel counts how many bits of entropy each source adds. When the pool has
 256 bits, the kernel seeds the CRNG, a ChaCha20 stream that `getrandom(2)`
 returns. Before that, `getrandom(2)` blocks. After that, it never blocks. The
-kernel then reseeds the CRNG from the pool, about every second at boot and
-every 60 seconds after about two minutes of uptime. Input that arrives after
-a seed reaches `getrandom(2)` output at the next reseed.
+kernel then reseeds the CRNG from the pool when it is next used after an
+interval: half the uptime (at least one second) during the first two minutes,
+then 60 seconds. Input that arrives after a seed reaches `getrandom(2)` output
+at the next reseed.
 
 ## Entropy sources
 
 - **CPU.** Very early in boot, the kernel mixes 512 bits from RDSEED (or
   RDRAND) into the pool, and it mixes in more at every reseed.
-  `random.trust_cpu=on` in `src/images/linux_nitro/hardening.cmdline` credits
-  that first input as entropy, as KSPP recommends. So the CPU RNG alone seeds
-  the CRNG, before any driver loads.
+  The kernel credits that first input as entropy by default;
+  `src/images/linux_nitro/hardening.cmdline` sets `random.trust_cpu=on` to
+  make that choice explicit in the measured command line. So the CPU RNG alone
+  seeds the CRNG, before any driver loads.
 - **NSM.** The NSM driver is built into the kernel (`CONFIG_NSM=y`). When the
   kernel probes the NSM device, before init runs, the driver registers the
   `nsm-hwrng` hardware RNG with quality 1000. A kernel thread then reads it
