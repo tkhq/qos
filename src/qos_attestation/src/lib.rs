@@ -7,12 +7,13 @@
 //!
 //! The cache verifies every document against fixed boot inputs and the provider
 //! root. Consumers retain the manifest bytes in memory and serve the verified
-//! document's `.document()` bytes without calling the NSM per response. Its
-//! timestamp describes issuance, not the response carrying it. Call
+//! document's `.document()` bytes from `cache::AttestationCacheReader::latest`
+//! without calling the NSM per response. The timestamp describes issuance, not
+//! the response carrying it. Call
 //! [`qos_nsm::NsmProvider`] directly for fresh or nonce-bound documents.
 //!
-//! Consumers own logging and process supervision. They should exit if cache
-//! startup fails or the returned refresh task resolves, and arrange supervision
+//! Consumers own logging and process supervision. They should exit if initial
+//! attestation fails or the refresh task resolves, and arrange supervision
 //! such as QOS's `RestartPolicy::Always`. Poisoned cache locks panic; discard
 //! that cache instance rather than retrying access.
 //!
