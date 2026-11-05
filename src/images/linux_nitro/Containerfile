@@ -31,12 +31,14 @@ ENV LOCALVERSION=
 
 WORKDIR /linux-7.3.1
 COPY src/images/linux_nitro/nitro.config .config
+COPY src/images/linux_nitro/minimal.config /minimal.config
 COPY src/images/linux_nitro/hardening.config /hardening.config
 COPY src/images/linux_nitro/check-config.sh /check-config.sh
 RUN --network=none <<-EOF
 	set -eu
-	scripts/kconfig/merge_config.sh -m .config /hardening.config
+	scripts/kconfig/merge_config.sh -m .config /minimal.config /hardening.config
 	make olddefconfig
+	sh /check-config.sh /minimal.config .config
 	sh /check-config.sh /hardening.config .config
 	make -j"$(nproc)" bzImage
 	mkdir /rootfs
