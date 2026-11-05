@@ -15,7 +15,6 @@ qos_nsm = { workspace = true, default-features = false }
 
 # Third party
 axum = { workspace = true }
-borsh = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

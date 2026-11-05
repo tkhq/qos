@@ -18,5 +18,4 @@ missing_errors_doc = "allow"
 module_name_repetitions = "allow"
 
 [dependencies]
-rand = { workspace = true }
 nix = { workspace = true, default-features = false, features = ["signal"] }

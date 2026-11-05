@@ -23,7 +23,6 @@ qemu-ci = ["qemu-e2e"]
 [dependencies]
 qos_hex = { workspace = true }
 qos_core = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 
