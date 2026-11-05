@@ -112,13 +112,13 @@ jobs:
           }
 
           # Push to GHCR
-          docker tag "qos.invalid/${name}:latest" "${ghcr_image}:${tag}"
+          docker tag "qos.localhost/${name}:latest" "${ghcr_image}:${tag}"
           push_image "${ghcr_image}:${tag}"
 
           # Push to ECR
           if [ "${push_ecr}" = "true" ]; then
             ecr_image="${ecr_registry}/tkhq/${name}"
-            docker tag "qos.invalid/${name}:latest" "${ecr_image}:${tag}"
+            docker tag "qos.localhost/${name}:latest" "${ecr_image}:${tag}"
             push_image "${ecr_image}:${tag}"
           fi
 

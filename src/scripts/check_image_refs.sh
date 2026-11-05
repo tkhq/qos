@@ -7,7 +7,7 @@
 # Each FROM must name one of:
 # - scratch
 # - a stage defined earlier in the same file
-# - a local image under qos.invalid/, which never resolves to a registry
+# - a local image under qos.localhost/, which no public registry can serve
 # - an image pinned by @sha256 digest
 set -eu
 
@@ -24,7 +24,7 @@ awk '
 			if (toupper($j) == "AS") stages[$(j + 1)] = 1
 		}
 		if (image == "scratch" || image in stages) next
-		if (image ~ /^qos\.invalid\//) next
+		if (image ~ /^qos\.localhost\//) next
 		digest = substr(image, index(image, "@sha256:") + 8)
 		if (index(image, "@sha256:") && digest ~ /^[0-9a-f]+$/ && length(digest) == 64) next
 		printf "%s:%d: unpinned image %s\n", FILENAME, FNR, image

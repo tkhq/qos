@@ -1,4 +1,5 @@
-FROM qos.invalid/common AS base
+# Built locally from src/images/common; see src/macros.mk.
+FROM qos.localhost/common AS base
 ADD . /src
 
 FROM base AS build

@@ -16,10 +16,10 @@ define run
 		/bin/sh -c "set -eu; $(1)"
 endef
 
-# Images built in this repo are named under qos.invalid, a reserved domain
-# that never resolves (RFC 2606). A missing local image fails the build
-# instead of falling back to a registry pull.
-LOCAL_REGISTRY := qos.invalid
+# Images built in this repo are named under qos.localhost, a reserved name
+# (RFC 6761) that no public registry can serve. A missing local image fails
+# the build instead of falling back to a registry pull.
+LOCAL_REGISTRY := qos.localhost
 
 # Local images a Containerfile depends on, e.g. "common linux_nitro".
 define local_images
