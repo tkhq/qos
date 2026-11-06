@@ -298,7 +298,7 @@ mod tests {
 		time::Duration,
 	};
 
-	use p384::ecdsa::{Signature, SigningKey, signature::Signer};
+	use p384::ecdsa::SigningKey;
 	use qos_nsm::{
 		NsmProvider,
 		mock::{
@@ -313,10 +313,6 @@ mod tests {
 		sync::Notify,
 		task::JoinHandle,
 		time::{Instant, advance},
-	};
-	use x509_cert::{
-		Certificate,
-		der::{Decode, Encode},
 	};
 
 	use crate::cache::{
@@ -518,35 +514,127 @@ mod tests {
 		issuer: &SigningKey,
 		not_after: Option<u64>,
 	) -> Vec<u8> {
-		let mut cert = Certificate::from_der(template).unwrap();
-		cert.tbs_certificate.subject_public_key_info.subject_public_key =
-			x509_cert::der::asn1::BitString::from_bytes(
-				subject.verifying_key().to_encoded_point(false).as_bytes(),
-			)
-			.unwrap();
-		if let Some(extensions) = &mut cert.tbs_certificate.extensions {
-			extensions.retain(|extension| {
-				!matches!(
-					extension.extn_id.to_string().as_str(),
-					"2.5.29.14" | "2.5.29.35"
-				)
-			});
+		cert_der::resign(template, subject, issuer, None, not_after)
+	}
+
+	// Edits certificate DER directly, not via `x509_cert` certificate structs,
+	// so the fixtures build against more than one `x509-cert` release.
+	mod cert_der {
+		use std::time::Duration;
+
+		use p384::ecdsa::{Signature, SigningKey, signature::Signer};
+		use x509_cert::der::{Encode, asn1::GeneralizedTime};
+
+		const SEQUENCE: u8 = 0x30;
+		const BIT_STRING: u8 = 0x03;
+		const EXTENSIONS: u8 = 0xa3;
+		const SUBJECT_KEY_ID: &[u8] = &[0x06, 0x03, 0x55, 0x1d, 0x0e];
+		const AUTHORITY_KEY_ID: &[u8] = &[0x06, 0x03, 0x55, 0x1d, 0x23];
+
+		/// The contents of the DER element at the start of `der`, and the
+		/// bytes after it.
+		fn split(der: &[u8]) -> (&[u8], &[u8]) {
+			let (len, header) = if der[1] < 0x80 {
+				(usize::from(der[1]), 2)
+			} else {
+				let count = usize::from(der[1] & 0x7f);
+				let len = der[2..2 + count]
+					.iter()
+					.fold(0, |len, byte| (len << 8) | usize::from(*byte));
+				(len, 2 + count)
+			};
+			(&der[header..header + len], &der[header + len..])
 		}
-		if let Some(expiry) = not_after {
-			cert.tbs_certificate.validity.not_after =
-				x509_cert::der::asn1::GeneralizedTime::from_unix_duration(
-					Duration::from_secs(expiry),
-				)
+
+		fn contents(der: &[u8]) -> &[u8] {
+			split(der).0
+		}
+
+		/// The encoded elements inside a constructed element's contents.
+		fn elements(mut contents: &[u8]) -> Vec<Vec<u8>> {
+			let mut elements = Vec::new();
+			while !contents.is_empty() {
+				let rest = split(contents).1;
+				elements.push(contents[..contents.len() - rest.len()].to_vec());
+				contents = rest;
+			}
+			elements
+		}
+
+		fn encode(tag: u8, contents: &[u8]) -> Vec<u8> {
+			let mut der = vec![tag];
+			if contents.len() < 0x80 {
+				der.push(u8::try_from(contents.len()).unwrap());
+			} else {
+				let len: Vec<u8> = contents
+					.len()
+					.to_be_bytes()
+					.into_iter()
+					.skip_while(|byte| *byte == 0)
+					.collect();
+				der.push(0x80 | u8::try_from(len.len()).unwrap());
+				der.extend(len);
+			}
+			der.extend_from_slice(contents);
+			der
+		}
+
+		fn bit_string(bytes: &[u8]) -> Vec<u8> {
+			encode(BIT_STRING, &[&[0], bytes].concat())
+		}
+
+		fn generalized_time(unix: u64) -> Vec<u8> {
+			GeneralizedTime::from_unix_duration(Duration::from_secs(unix))
 				.unwrap()
-				.into();
+				.to_der()
+				.unwrap()
 		}
-		let signature: Signature =
-			issuer.sign(&cert.tbs_certificate.to_der().unwrap());
-		cert.signature = x509_cert::der::asn1::BitString::from_bytes(
-			signature.to_der().as_bytes(),
-		)
-		.unwrap();
-		cert.to_der().unwrap()
+
+		/// Re-sign `template` with `issuer` after setting its subject key to
+		/// `subject`, removing its key identifier extensions, and replacing
+		/// whichever validity bounds are given.
+		pub(super) fn resign(
+			template: &[u8],
+			subject: &SigningKey,
+			issuer: &SigningKey,
+			not_before: Option<u64>,
+			not_after: Option<u64>,
+		) -> Vec<u8> {
+			let certificate = elements(contents(template));
+			// TBSCertificate: version, serial, signature, issuer, validity,
+			// subject, subjectPublicKeyInfo, extensions.
+			let mut tbs = elements(contents(&certificate[0]));
+
+			let validity = elements(contents(&tbs[4]));
+			let not_before = not_before
+				.map_or_else(|| validity[0].clone(), generalized_time);
+			let not_after =
+				not_after.map_or_else(|| validity[1].clone(), generalized_time);
+			tbs[4] = encode(SEQUENCE, &[not_before, not_after].concat());
+
+			let algorithm = &elements(contents(&tbs[6]))[0];
+			let key = bit_string(&subject.verifying_key().to_sec1_bytes());
+			tbs[6] = encode(SEQUENCE, &[algorithm.clone(), key].concat());
+
+			for field in &mut tbs {
+				if field[0] == EXTENSIONS {
+					let kept: Vec<u8> = elements(contents(contents(field)))
+						.into_iter()
+						.filter(|extension| {
+							let id = &elements(contents(extension))[0];
+							id != SUBJECT_KEY_ID && id != AUTHORITY_KEY_ID
+						})
+						.flatten()
+						.collect();
+					*field = encode(EXTENSIONS, &encode(SEQUENCE, &kept));
+				}
+			}
+
+			let tbs = encode(SEQUENCE, &tbs.concat());
+			let signature: Signature = issuer.sign(&tbs);
+			let signature = bit_string(signature.to_der().as_bytes());
+			encode(SEQUENCE, &[tbs, certificate[1].clone(), signature].concat())
+		}
 	}
 
 	fn test_ca_bundle() -> &'static (Vec<u8>, Vec<u8>) {
@@ -1212,20 +1300,8 @@ mod tests {
 			Err(Error::Expired)
 		));
 
-		let mut later_root = Certificate::from_der(root).unwrap();
-		later_root.tbs_certificate.validity.not_before =
-			x509_cert::der::asn1::GeneralizedTime::from_unix_duration(
-				Duration::from_secs(T0 + 1),
-			)
-			.unwrap()
-			.into();
-		let signature: Signature =
-			root_key.sign(&later_root.tbs_certificate.to_der().unwrap());
-		later_root.signature = x509_cert::der::asn1::BitString::from_bytes(
-			signature.to_der().as_bytes(),
-		)
-		.unwrap();
-		let later_root = later_root.to_der().unwrap();
+		let later_root =
+			cert_der::resign(root, &root_key, &root_key, Some(T0 + 1), None);
 		for verification_time in [T0, T0 + 2] {
 			assert!(matches!(
 				VerifiedAttestationDocument::verify_at(
