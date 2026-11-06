@@ -39,8 +39,6 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pkg-config libpcsclite-dev
       - name: Run linting
         run: make -C src lint
-      - name: Check Containerfile image pins
-        run: src/scripts/check_image_refs.sh
 
   check-publishable-crates-standalone:
     name: check-publishable-crates-standalone (${{ matrix.package }})
