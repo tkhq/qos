@@ -98,10 +98,8 @@ impl HostServer {
 
 		println!("HostServer listening on {}", self.addr);
 
-		axum::Server::bind(&self.addr)
-			.serve(app.into_make_service())
-			.await
-			.unwrap();
+		let listener = tokio::net::TcpListener::bind(self.addr).await.unwrap();
+		axum::serve(listener, app).await.unwrap();
 	}
 
 	/// Health route handler.
