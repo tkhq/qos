@@ -1,0 +1,2 @@
+# Kconfig checks that kernel-hardening-checker reports as failing, with the
+# reason each is accepted. CI fails if this list and the checker's output differ.

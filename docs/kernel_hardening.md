@@ -8,6 +8,10 @@ for common and x86-64 options:
   arguments. The build fails if Kconfig drops a setting.
 - `src/init/hardening.rs`: sysctls. Boot aborts if one does not apply.
 
+CI also runs [kernel-hardening-checker](https://github.com/a13xp0p0v/kernel-hardening-checker)
+on the resolved config. Its failures must match the reviewed exceptions in
+`src/images/linux_nitro/kernel-hardening-checker.allow`.
+
 Changing any of these changes the enclave measurements.
 
 ## Skipped recommendations
