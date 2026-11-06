@@ -51,7 +51,7 @@ shell: out/.common-loaded
 		--volume .:/home/qos \
 		--workdir /home/qos \
 		--user $(shell id -u):$(shell id -g) \
-		$(LOCAL_REGISTRY)/common:latest \
+		qos-local/common:latest \
 		/bin/bash
 
 .PHONY: stop
