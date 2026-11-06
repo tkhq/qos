@@ -72,29 +72,35 @@ pub mod request {
 	) -> Result<ProtocolMsg, String> {
 		let mut buf: Vec<u8> = vec![];
 
+		let body = msg.to_wire(encoding).map_err(|e| {
+			format!("protocol message serialization error: {e:?}")
+		})?;
 		let response = ureq::post(url)
-			.send_bytes(&msg.to_wire(encoding).map_err(|e| {
-				format!("protocol message serialization error: {e:?}")
-			})?)
-			.map_err(|e| match e {
-				ureq::Error::Status(code, r) => {
-					let body = r.into_string();
-					format!(
-						"http_post error: [url: {url}, status: {code}, body: {body:?}]"
-					)
-				}
-				ureq::Error::Transport(e) => {
-					format!("http_post error: transport error: {e}")
-				}
-			})?;
+			.config()
+			.http_status_as_error(false)
+			.build()
+			.send(&body[..])
+			.map_err(|e| format!("http_post error: transport error: {e}"))?;
 
-		response.into_reader().take(MAX_SIZE).read_to_end(&mut buf).map_err(
-			|e| {
+		let status = response.status();
+		if status.is_client_error() || status.is_server_error() {
+			let body = response.into_body().read_to_string();
+			return Err(format!(
+				"http_post error: [url: {url}, status: {}, body: {body:?}]",
+				status.as_u16()
+			));
+		}
+
+		response
+			.into_body()
+			.into_reader()
+			.take(MAX_SIZE)
+			.read_to_end(&mut buf)
+			.map_err(|e| {
 				format!(
 					"http_post error: failed to read response to buffer {e:?}"
 				)
-			},
-		)?;
+			})?;
 
 		let decoded_response = ProtocolMsg::from_wire_any(&buf).map_err(|e| {
 			let body_prefix = String::from_utf8_lossy(
@@ -121,7 +127,8 @@ pub mod request {
 		ureq::get(url)
 			.call()
 			.unwrap()
-			.into_string()
+			.into_body()
+			.read_to_string()
 			.map_err(|_| format!("GET `{url:?}` failed"))
 	}
 }

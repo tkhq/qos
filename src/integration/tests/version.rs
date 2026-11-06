@@ -140,10 +140,10 @@ async fn version_request_returns_version_and_commit() -> Result<(), io::Error> {
 	let url = format!("http://127.0.0.1:{HOST_PORT}/qos/message");
 	for encoding in [TestEncoding::Json, TestEncoding::Borsh] {
 		let req_bytes = encode_msg(&ProtocolMsg::VersionRequest, encoding);
-		let response = ureq::post(&url).send_bytes(&req_bytes).unwrap();
+		let response = ureq::post(&url).send(&req_bytes[..]).unwrap();
 
 		let mut buf = Vec::new();
-		response.into_reader().read_to_end(&mut buf).unwrap();
+		response.into_body().into_reader().read_to_end(&mut buf).unwrap();
 		let decoded = decode_msg(&buf, encoding);
 
 		assert_version_response(decoded);
@@ -151,10 +151,10 @@ async fn version_request_returns_version_and_commit() -> Result<(), io::Error> {
 
 	for encoding in [TestEncoding::Json, TestEncoding::Borsh] {
 		let req_bytes = encode_msg(&ProtocolMsg::StatusRequest, encoding);
-		let response = ureq::post(&url).send_bytes(&req_bytes).unwrap();
+		let response = ureq::post(&url).send(&req_bytes[..]).unwrap();
 
 		let mut buf = Vec::new();
-		response.into_reader().read_to_end(&mut buf).unwrap();
+		response.into_body().into_reader().read_to_end(&mut buf).unwrap();
 		let decoded = decode_msg(&buf, encoding);
 
 		assert_status_response(decoded);

@@ -61,7 +61,7 @@ async fn connects_and_gets_info() {
 	let r = ureq::get("http://127.0.0.1:3323/qos/enclave-info").call();
 	assert!(r.is_ok()); // expect 200 here
 	assert_eq!(
-		r.unwrap().into_string().unwrap(),
+		r.unwrap().into_body().read_to_string().unwrap(),
 		"{\"phase\":\"WaitingForBootInstruction\",\"manifestEnvelope\":null,\"ephemeralKey\":null}"
 	);
 }

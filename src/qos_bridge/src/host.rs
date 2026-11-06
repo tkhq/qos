@@ -44,13 +44,16 @@ impl BridgeServer {
 		loop {
 			match tokio::task::block_in_place(|| {
 				ureq::get(&self.info_url)
-					.timeout(Duration::from_secs(1))
+					.config()
+					.timeout_global(Some(Duration::from_secs(1)))
+					.build()
 					.call()
 					.map_err(Box::new)
 			}) {
 				Ok(info) => {
 					if let Some(me) = info
-						.into_json::<EnclaveInfo>()
+						.into_body()
+						.read_json::<EnclaveInfo>()
 						.expect("unable to parse enclave info response")
 						.manifest_envelope
 					{
