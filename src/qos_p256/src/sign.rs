@@ -4,7 +4,7 @@ use p256::ecdsa::{
 	Signature, SigningKey, VerifyingKey,
 	signature::{Signer, Verifier},
 };
-use p256::elliptic_curve::rand_core::OsRng;
+use p256::elliptic_curve::Generate;
 use zeroize::{ZeroizeOnDrop, Zeroizing};
 
 use crate::{P256Error, PUB_KEY_LEN_UNCOMPRESSED};
@@ -21,11 +21,10 @@ impl P256SignPair {
 	/// Generate a new private key
 	#[must_use]
 	pub fn generate() -> Self {
-		Self { private: SigningKey::random(&mut OsRng) }
+		Self { private: SigningKey::generate() }
 	}
 
-	/// Sign the message and return the. Signs the SHA512 digest of
-	/// the message.
+	/// Sign the SHA-256 digest of `message`, returning a raw `r||s` signature.
 	///
 	/// # Errors
 	///
@@ -69,10 +68,7 @@ pub struct P256SignPublic {
 }
 
 impl P256SignPublic {
-	/// Verify a `signature` and `message` against this private key. Verifies
-	/// the SHA512 digest of the message.
-	///
-	/// Returns Ok if the signature is good.
+	/// Verify a raw `r||s` `signature` over the SHA-256 digest of `message`.
 	///
 	/// # Errors
 	///
@@ -84,7 +80,7 @@ impl P256SignPublic {
 		message: &[u8],
 		signature: &[u8],
 	) -> Result<(), P256Error> {
-		let signature = Signature::try_from(signature)
+		let signature = Signature::from_slice(signature)
 			.map_err(|_| P256Error::FailedToDeserializeSignature)?;
 
 		self.public
@@ -95,7 +91,7 @@ impl P256SignPublic {
 	/// Serialize to SEC1 encoded point, not compressed.
 	#[must_use]
 	pub fn to_bytes(&self) -> Box<[u8]> {
-		let sec1_encoded_point = self.public.to_encoded_point(false);
+		let sec1_encoded_point = self.public.to_sec1_point(false);
 		sec1_encoded_point.to_bytes()
 	}
 

@@ -6,10 +6,10 @@ use aes_gcm::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use hmac::{Hmac, Mac};
-use p256::elliptic_curve::rand_core::OsRng;
 use p256::{
-	PublicKey, SecretKey, ecdh::diffie_hellman,
-	elliptic_curve::sec1::ToEncodedPoint,
+	PublicKey, SecretKey,
+	ecdh::diffie_hellman,
+	elliptic_curve::{Generate, sec1::ToSec1Point},
 };
 use sha2::Sha512;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
@@ -45,7 +45,7 @@ impl P256EncryptPair {
 	/// Generate a new private key using the OS randomness source.
 	#[must_use]
 	pub fn generate() -> Self {
-		Self { private: SecretKey::random(&mut OsRng) }
+		Self { private: SecretKey::generate() }
 	}
 
 	/// Decrypt a message encoded to this pair's public key.
@@ -65,14 +65,14 @@ impl P256EncryptPair {
 		} = Envelope::try_from_slice(serialized_envelope)
 			.map_err(|_| P256Error::FailedToDeserializeEnvelope)?;
 
-		let nonce = Nonce::from_slice(&nonce);
+		let nonce = Nonce::from(nonce);
 		let ephemeral_sender_public =
 			PublicKey::from_sec1_bytes(&ephemeral_sender_public_bytes)
 				.map_err(|_| P256Error::FailedToDeserializePublicKey)?;
 
 		let sender_public_typed = SenderPublic(&ephemeral_sender_public_bytes);
 		let receiver_encoded_point =
-			self.private.public_key().to_encoded_point(false);
+			self.private.public_key().to_sec1_point(false);
 		let receiver_public_typed =
 			ReceiverPublic(receiver_encoded_point.as_ref());
 
@@ -92,7 +92,7 @@ impl P256EncryptPair {
 		let payload = Payload { aad: &aad, msg: &encrypted_message };
 
 		cipher
-			.decrypt(nonce, payload)
+			.decrypt(&nonce, payload)
 			.map(Zeroizing::new)
 			.map_err(|_| P256Error::AesGcm256DecryptError)
 	}
@@ -136,19 +136,15 @@ impl P256EncryptPublic {
 	///
 	/// Returns [`P256Error`] if encryption or envelope serialization fails.
 	pub fn encrypt(&self, message: &[u8]) -> Result<Vec<u8>, P256Error> {
-		let ephemeral_sender_private = SecretKey::random(&mut OsRng);
+		let ephemeral_sender_private = SecretKey::generate();
 		let ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED as usize] =
 			ephemeral_sender_private
 				.public_key()
-				.to_encoded_point(false)
-				.as_ref()
-				.try_into()
-				.map_err(|_| {
-					P256Error::FailedToCoercePublicKeyToIntendedLength
-				})?;
+				.to_uncompressed_point()
+				.into();
 
 		let sender_public_typed = SenderPublic(&ephemeral_sender_public);
-		let receiver_encoded_point = self.public.to_encoded_point(false);
+		let receiver_encoded_point = self.public.to_sec1_point(false);
 		let receiver_public_typed =
 			ReceiverPublic(receiver_encoded_point.as_ref());
 
@@ -161,11 +157,7 @@ impl P256EncryptPublic {
 			&receiver_public_typed,
 		)?;
 
-		let nonce = {
-			let random_bytes =
-				crate::bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
-			*Nonce::from_slice(&random_bytes[..])
-		};
+		let nonce = *bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
 
 		let aad = create_additional_associated_data(
 			&sender_public_typed,
@@ -174,10 +166,9 @@ impl P256EncryptPublic {
 		let payload = Payload { aad: &aad, msg: message };
 
 		let encrypted_message = cipher
-			.encrypt(&nonce, payload)
+			.encrypt(&Nonce::from(nonce), payload)
 			.map_err(|_| P256Error::AesGcm256EncryptError)?;
 
-		let nonce = nonce.into();
 		let envelope =
 			Envelope { nonce, ephemeral_sender_public, encrypted_message };
 
@@ -207,10 +198,10 @@ impl P256EncryptPublic {
 		} = Envelope::try_from_slice(serialized_envelope)
 			.map_err(|_| P256Error::FailedToDeserializeEnvelope)?;
 
-		let nonce = Nonce::from_slice(&nonce);
+		let nonce = Nonce::from(nonce);
 
 		let sender_public_typed = SenderPublic(&ephemeral_sender_public_bytes);
-		let receiver_encoded_point = self.public.to_encoded_point(false);
+		let receiver_encoded_point = self.public.to_sec1_point(false);
 		let receiver_public_typed =
 			ReceiverPublic(receiver_encoded_point.as_ref());
 
@@ -227,7 +218,7 @@ impl P256EncryptPublic {
 		let payload = Payload { aad: &aad, msg: &encrypted_message };
 
 		cipher
-			.decrypt(nonce, payload)
+			.decrypt(&nonce, payload)
 			.map(Zeroizing::new)
 			.map_err(|_| P256Error::AesGcm256DecryptError)
 	}
@@ -235,7 +226,7 @@ impl P256EncryptPublic {
 	/// Serialize to SEC1 encoded point, not compressed.
 	#[must_use]
 	pub fn to_bytes(&self) -> Box<[u8]> {
-		let sec1_encoded_point = self.public.to_encoded_point(false);
+		let sec1_encoded_point = self.public.to_sec1_point(false);
 		sec1_encoded_point.to_bytes()
 	}
 
@@ -407,24 +398,15 @@ impl AesGcm256Secret {
 	/// # Errors
 	///
 	/// Returns [`P256Error`] if encryption or envelope serialization fails.
-	///
-	/// # Panics
-	/// Panics if `self.secret` is an invalid AES256 secret. This should never
-	/// happen in practice.
 	pub fn encrypt(&self, msg: &[u8]) -> Result<Vec<u8>, P256Error> {
-		let nonce = {
-			let random_bytes = bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
-			*Nonce::from_slice(&random_bytes[..])
-		};
+		let nonce = *bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
 		let payload = Payload { aad: AES_GCM_256_HMAC_SHA512_TAG, msg };
 
-		let cipher = Aes256Gcm::new_from_slice(&self.secret[..])
-			.expect("secret is a valid aes256 key len. qed.");
+		let cipher = Aes256Gcm::new((&*self.secret).into());
 		let encrypted_message = cipher
-			.encrypt(&nonce, payload)
+			.encrypt(&Nonce::from(nonce), payload)
 			.map_err(|_| P256Error::AesGcm256EncryptError)?;
 
-		let nonce = nonce.into();
 		let envelope = SymmetricEnvelope { nonce, encrypted_message };
 		borsh::to_vec(&envelope)
 			.map_err(|_| P256Error::FailedToSerializeEnvelope)
@@ -438,9 +420,6 @@ impl AesGcm256Secret {
 	///
 	/// Returns [`P256Error`] if the envelope cannot be deserialized or
 	/// decryption fails.
-	///
-	/// # Panics
-	/// Panics if the secret is invalid. This should never happen in practice.
 	pub fn decrypt(
 		&self,
 		serialized_envelope: &[u8],
@@ -449,16 +428,15 @@ impl AesGcm256Secret {
 			SymmetricEnvelope::try_from_slice(serialized_envelope)
 				.map_err(|_| P256Error::FailedToDeserializeEnvelope)?;
 
-		let nonce = Nonce::from_slice(&nonce);
+		let nonce = Nonce::from(nonce);
 		let payload = Payload {
 			aad: AES_GCM_256_HMAC_SHA512_TAG,
 			msg: &encrypted_message,
 		};
 
-		let cipher = Aes256Gcm::new_from_slice(&self.secret[..])
-			.expect("secret is a valid aes256 key len. qed.");
+		let cipher = Aes256Gcm::new((&*self.secret).into());
 		cipher
-			.decrypt(nonce, payload)
+			.decrypt(&nonce, payload)
 			.map(Zeroizing::new)
 			.map_err(|_| P256Error::AesGcm256DecryptError)
 	}

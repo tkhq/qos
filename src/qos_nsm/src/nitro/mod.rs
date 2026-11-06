@@ -614,14 +614,16 @@ fn verify_cose_sign1_sig(
 	end_entity_certificate: &[u8],
 	cose_sign1: &CoseSign1,
 ) -> Result<(), AttestError> {
-	use x509_cert::der::Decode;
+	use x509_cert::{
+		certificate::{Certificate, Version},
+		der::Decode,
+	};
 
-	let ee_cert =
-		x509_cert::certificate::Certificate::from_der(end_entity_certificate)
-			.map_err(|_| AttestError::FailedToParseCert)?;
+	let ee_cert = Certificate::from_der(end_entity_certificate)
+		.map_err(|_| AttestError::FailedToParseCert)?;
 
 	// Expect v3
-	if ee_cert.tbs_certificate.version != x509_cert::certificate::Version::V3 {
+	if ee_cert.tbs_certificate().version() != Version::V3 {
 		return Err(AttestError::InvalidEndEntityCert);
 	}
 
@@ -634,8 +636,8 @@ fn verify_cose_sign1_sig(
 	// we can use `as_bytes()` which returns `None` if the underlying BitString has unused bits
 	// and treat that case as a decode failure
 	let pub_key = ee_cert
-		.tbs_certificate
-		.subject_public_key_info
+		.tbs_certificate()
+		.subject_public_key_info()
 		.subject_public_key
 		.as_bytes()
 		.ok_or(AttestError::FailedDecodeKeyFromCert)?;
@@ -670,7 +672,7 @@ impl SigningPublicKey for P384PubKey {
 		digest: &[u8],
 		signature: &[u8],
 	) -> Result<bool, CoseError> {
-		let signature_wrapped = Signature::try_from(signature)
+		let signature_wrapped = Signature::from_slice(signature)
 			.map_err(|e| CoseError::SignatureError(Box::new(e)))?;
 
 		let verifier = VerifyingKey::from(self.0);
@@ -701,7 +703,7 @@ mod test {
 		crypto::SigningPrivateKey, header_map::HeaderMap,
 	};
 	use aws_nitro_enclaves_nsm_api::api::Digest;
-	use p384::{SecretKey, ecdsa::SigningKey};
+	use p384::{SecretKey, ecdsa::SigningKey, elliptic_curve::Generate};
 
 	use super::*;
 	use crate::mock::{
@@ -792,14 +794,7 @@ mod test {
 			digest: &[u8],
 			signature: &[u8],
 		) -> Result<bool, CoseError> {
-			let signature_wrapped = Signature::try_from(signature)
-				.map_err(|e| CoseError::SignatureError(Box::new(e)))?;
-
-			let verifier = VerifyingKey::from(self.0.public_key());
-			verifier
-				.verify_prehash(digest, &signature_wrapped)
-				.map(|()| true)
-				.map_err(|e| CoseError::SignatureError(Box::new(e)))
+			P384PubKey(self.0.public_key()).verify(digest, signature)
 		}
 	}
 
@@ -1141,8 +1136,7 @@ mod test {
 		);
 
 		// Rejects incorrect key
-		let random_private =
-			SecretKey::random(&mut p384::elliptic_curve::rand_core::OsRng);
+		let random_private = SecretKey::generate();
 		let random_public = random_private.public_key();
 
 		assert!(
