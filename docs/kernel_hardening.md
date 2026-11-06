@@ -23,7 +23,6 @@ architectures are covered by their current equivalents or don't apply.
 | --- | --- |
 | `RANDSTRUCT_FULL` | Not enabled: reproducible builds publish the seed, so the layout is public. |
 | `kernel.perf_event_paranoid=3` | Left at the default `2`: `3` needs a distro patch. |
-| `kernel.warn_limit=1` | Deferred: one benign `WARN` would reboot the enclave. |
 | `nosmt`, `SCHED_CORE` | Not applied: the enclave owns whole cores, so this would halve CPUs for no isolation gain. |
 | IOMMU options | Not applied: `pci=off`, and Nitro exposes no DMA-capable device. |
 | `pti=on` | Not applied: `auto` enables PTI only on CPUs affected by Meltdown. |

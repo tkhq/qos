@@ -7,6 +7,7 @@ const SYSCTLS: &[(&str, &str)] = &[
 	("kernel/yama/ptrace_scope", "3"),
 	("kernel/unprivileged_bpf_disabled", "1"),
 	("kernel/oops_limit", "1"),
+	("kernel/warn_limit", "1"),
 	("net/core/bpf_jit_harden", "2"),
 	("fs/protected_symlinks", "1"),
 	("fs/protected_hardlinks", "1"),
