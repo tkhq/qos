@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 nitro-cli = { package = "aws-nitro-enclaves-cli", version = "1.5.2" }
-libc = "=0.2.174"
+libc = "=0.2.191"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "json", "fmt"] }
 
