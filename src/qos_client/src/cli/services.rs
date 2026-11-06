@@ -359,6 +359,16 @@ pub fn generate_file_key<P: AsRef<Path>>(
 	);
 }
 
+/// The factory default management key, whose algorithm depends on the
+/// `YubiKey` firmware version.
+#[cfg(feature = "smartcard")]
+fn default_mgm_key(
+	yubikey: &yubikey::YubiKey,
+) -> Result<yubikey::MgmKey, Error> {
+	yubikey::MgmKey::get_default(yubikey)
+		.map_err(|_| crate::yubikey::YubiKeyError::FailedToAuthWithMGM.into())
+}
+
 #[cfg(feature = "smartcard")]
 pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 	pub_path: P,
@@ -367,12 +377,13 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 		yubikey::YubiKey::open().map_err(Error::OpenSingleYubiKey)?;
 
 	let pin = prompt_pin()?;
+	let mgm_key = default_mgm_key(&yubikey)?;
 
 	let _sign_public_key_bytes = crate::yubikey::generate_signed_certificate(
 		&mut yubikey,
 		crate::yubikey::SIGNING_SLOT,
 		&pin,
-		yubikey::MgmKey::default(),
+		&mgm_key,
 		yubikey::TouchPolicy::Always,
 	)
 	.map_err(Error::GenerateSign)?;
@@ -382,7 +393,7 @@ pub(crate) fn provision_yubikey<P: AsRef<Path>>(
 			&mut yubikey,
 			crate::yubikey::KEY_AGREEMENT_SLOT,
 			&pin,
-			yubikey::MgmKey::default(),
+			&mgm_key,
 			yubikey::TouchPolicy::Always,
 		)
 		.map_err(Error::GenerateEncrypt)?;
@@ -440,6 +451,7 @@ pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 	};
 
 	let pair = P256Pair::from_hex_file(master_seed_path)?;
+	let mgm_key = default_mgm_key(&yubikey)?;
 
 	let master_seed = pair.to_master_seed();
 	let encrypt_secret = qos_p256::derive_secret(
@@ -454,7 +466,7 @@ pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 		&sign_secret[..],
 		crate::yubikey::SIGNING_SLOT,
 		&pin,
-		yubikey::MgmKey::default(),
+		&mgm_key,
 		yubikey::TouchPolicy::Always,
 	)
 	.map_err(Error::GenerateSign)?;
@@ -464,7 +476,7 @@ pub fn advanced_provision_yubikey<P: AsRef<Path>>(
 		&encrypt_secret[..],
 		crate::yubikey::KEY_AGREEMENT_SLOT,
 		&pin,
-		yubikey::MgmKey::default(),
+		&mgm_key,
 		yubikey::TouchPolicy::Always,
 	)
 	.map_err(Error::GenerateEncrypt)?;

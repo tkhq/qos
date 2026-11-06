@@ -75,7 +75,6 @@ borsh = { version = "1.0", features = ["std", "derive"], default-features = fals
 chunked_transfer = { version = "1.5.0", default-features = false }
 etherparse = { version = "0.20.1", default-features = false }
 futures = { version = "0.3.30" }
-der_v07 = { package = "der", version = "0.7.10", default-features = false }
 hex-literal = "0.4.0"
 hickory-resolver = { version = "0.26.2", features = ["tokio", "dnssec-ring"], default-features = false }
 hkdf = { version = "0.13.0", default-features = false }
@@ -85,7 +84,6 @@ lazy_static = "1.4"
 libc = "=0.2.174"
 nix = { version = "0.30.1", features = ["socket"], default-features = false }
 p256 = { version = "0.14.0", default-features = false }
-p256_v013 = { package = "p256", version = "0.13.2", default-features = false }
 p384 = { version = "0.14.0", features = ["ecdsa", "std"], default-features = false }
 rand = { version = "0.10.2", default-features = false }
 getrandom = { version = "0.4.1", default-features = false }
@@ -104,8 +102,7 @@ vsss-rs = { version = "6.0.1", default-features = false, features = ["std", "zer
 webpki = { version = "0.22.4", default-features = false }
 webpki-roots = { version = "1.0.10" }
 x509-cert = { version = "0.3.0", features = ["pem"], default-features = false }
-x509_cert_v02 = { package = "x509-cert", version = "0.2.5", features = ["pem"], default-features = false }
-yubikey = { version = "0.8", features = ["untested"], default-features = false }
+yubikey = { version = "0.9.0-rc.0", default-features = false }
 zeroize = { version = "1.9", default-features = false }
 
 # Internal workspace dependencies
