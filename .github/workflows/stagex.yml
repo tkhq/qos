@@ -21,6 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         name:
+          - linux_nitro
           - qos_client
           - qos_host
           - qos_host_qemu
@@ -31,6 +32,10 @@ jobs:
           - qos_bridge_egress
           - signed_echo
         include:
+          # Build input for the enclave images, not a deployable; namespaced like signed_echo.
+          - name: linux_nitro
+            ghcr: ghcr.io/tkhq/qos/linux_nitro
+            ecr: false
           - name: qos_client
             ghcr: ghcr.io/tkhq/qos_client
             ecr: true
@@ -107,13 +112,13 @@ jobs:
           }
 
           # Push to GHCR
-          docker tag "qos-local/${name}:latest" "${ghcr_image}:${tag}"
+          docker tag "qos.localhost/${name}:latest" "${ghcr_image}:${tag}"
           push_image "${ghcr_image}:${tag}"
 
           # Push to ECR
           if [ "${push_ecr}" = "true" ]; then
             ecr_image="${ecr_registry}/tkhq/${name}"
-            docker tag "qos-local/${name}:latest" "${ecr_image}:${tag}"
+            docker tag "qos.localhost/${name}:latest" "${ecr_image}:${tag}"
             push_image "${ecr_image}:${tag}"
           fi
 

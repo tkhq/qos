@@ -412,7 +412,7 @@ pub(super) fn docker_host_qemu_nitro_fast_spec(
 	})
 }
 
-/// StageX base images used to assemble a QEMU EIF.
+/// Base images used to assemble a QEMU EIF.
 pub(super) fn qemu_eif_base_images() -> Result<QemuEifBaseImages, BuildError> {
 	Ok(QemuEifBaseImages {
 		build: ImageRef::new(
@@ -424,9 +424,7 @@ pub(super) fn qemu_eif_base_images() -> Result<QemuEifBaseImages, BuildError> {
 		gen_initramfs: ImageRef::new(
 			"stagex/gen_initramfs:6.8@sha256:f5b9271cca6003e952cbbb9ef041ffa92ba328894f563d1d77942e6b5cdeac1a",
 		)?,
-		linux_nitro: ImageRef::new(
-			"stagex/linux-nitro:sx2024.03.0@sha256:073c4603686e3bdc0ed6755fee3203f6f6f1512e0ded09eaea8866b002b04264",
-		)?,
+		linux_nitro: local_image("linux_nitro")?,
 		libunwind: ImageRef::new(
 			"stagex/core-libunwind:1.7.2@sha256:eb66122d8fc543f5e2f335bb1616f8c3a471604383e2c0a9df4a8e278505d3bc",
 		)?,
@@ -441,7 +439,7 @@ pub(super) fn qemu_eif_base_images() -> Result<QemuEifBaseImages, BuildError> {
 
 /// Repo-local image name.
 pub(super) fn local_image(name: &str) -> Result<ImageRef, BuildError> {
-	ImageRef::new(format!("qos-local/{name}:latest"))
+	ImageRef::new(format!("qos.localhost/{name}:latest"))
 }
 
 /// Repo-local images produced by the slow QEMU build.

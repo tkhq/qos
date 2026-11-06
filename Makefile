@@ -51,7 +51,7 @@ shell: out/.common-loaded
 		--volume .:/home/qos \
 		--workdir /home/qos \
 		--user $(shell id -u):$(shell id -g) \
-		qos-local/common:latest \
+		qos.localhost/common:latest \
 		/bin/bash
 
 .PHONY: stop
@@ -100,6 +100,7 @@ target/x86_64-unknown-linux-musl/release-panic-abort/egress: \
 
 out/qos_enclave/index.json: \
 	out/common/index.json \
+	out/linux_nitro/index.json \
 	$(CARGO_WORKSPACE_FILES) \
 	src/images/qos_enclave/Containerfile \
 	$(shell git ls-files \
@@ -114,6 +115,7 @@ out/qos_enclave/index.json: \
 
 out/qos_enclave_egress/index.json: \
 	out/common/index.json \
+	out/linux_nitro/index.json \
 	$(CARGO_WORKSPACE_FILES) \
 	src/images/qos_enclave_egress/Containerfile \
 	$(shell git ls-files \
@@ -216,6 +218,11 @@ out/signed_echo/index.json: \
 out/common/index.json: \
 	src/images/common/Containerfile
 	$(call build,common)
+
+out/linux_nitro/index.json: \
+	src/images/linux_nitro/Containerfile \
+	src/images/linux_nitro/nitro.config
+	$(call build,linux_nitro)
 
 out/.common-loaded: out/common/index.json
 	cd ./out/common && tar -cf - . | docker load

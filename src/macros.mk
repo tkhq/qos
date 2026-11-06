@@ -12,7 +12,7 @@ define run
 		--env CARGOFLAGS="--locked" \
 		--env PATH=/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
 		$(2) \
-		qos-local/common \
+		qos.localhost/common \
 		/bin/sh -c "set -eu; $(1)"
 endef
 
@@ -22,7 +22,7 @@ $$( \
 	for each in $$(find out/*/index.json); do \
     	package=$$(basename $$(dirname $${each})); \
     	if [ "$${package}" = "$${self}" ]; then continue; fi; \
-    	printf -- ' --build-context %s=oci-layout://./out/%s' "$${package}" "$${package}"; \
+    	printf -- ' --build-context qos.localhost/%s=oci-layout://./out/%s' "$${package}" "$${package}"; \
 	done; \
 )
 endef
@@ -31,7 +31,7 @@ endef
 define build
 	$(eval NAME := $(1))
 	$(eval TYPE := $(if $(2),$(2),dir))
-	$(eval REGISTRY := qos-local)
+	$(eval REGISTRY := qos.localhost)
 	$(eval PLATFORM := linux/amd64)
 	DOCKER_BUILDKIT=1 \
 	SOURCE_DATE_EPOCH=1 \
