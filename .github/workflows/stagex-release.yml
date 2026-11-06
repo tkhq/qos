@@ -158,3 +158,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # upload to qos_core release tag
         run: gh release upload "${release_tag}" out/nitro.pcrs --clobber
+
+  # Publish the draft release after its PCRs are uploaded. Published releases are immutable.
+  publish-release:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+    permissions:
+      contents: write
+    steps:
+      - name: Publish draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          release_tag: ${{ inputs.release_tag }}
+        run: gh release edit "${release_tag}" --draft=false

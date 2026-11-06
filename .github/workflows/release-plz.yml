@@ -4,8 +4,9 @@ permissions:
   contents: write
 
 on:
-  pull_request: # trigger a release when the release PR is merged
-    types: [ closed ]
+  # Run on every push to main. With `release_always = false` in release-plz.toml,
+  # release-plz only publishes when the pushed commit comes from a merged release PR.
+  push:
     branches: [ main ]
 
 jobs:
@@ -14,18 +15,15 @@ jobs:
     name: Release-plz release
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # This environment releases crates and builds, and requires approval
-    environment: release 
-    # only trigger this job for a merged PR with a "release" label
-    if: >
-      github.repository_owner == 'tkhq' &&
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.merged == true &&
-      contains(github.event.pull_request.labels.*.name, 'release')
+    # This environment releases crates and builds
+    environment: release
+    if: github.repository_owner == 'tkhq'
     permissions:
       contents: write
       # Required for trusted publishing, see https://release-plz.dev/docs/github/quickstart#2-set-the-cargo_registry_token-secret
       id-token: write 
+    outputs:
+      release_tag: ${{ steps.tag.outputs.release_tag }}
     steps:
       - name: git checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -44,45 +42,29 @@ jobs:
         # for verification during cargo publish
         run: sudo apt-get install -y pkg-config libpcsclite-dev
       - name: Run release-plz
+        id: release-plz
         uses: release-plz/action@064f4d1e36c843611ddf013be726beaa4ad804db # v0.5.129
         with:
           command: release
           config: src/release-plz.toml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  
-  # On a release, build and publish the StageX images and extract the PCRs.
-  detect-release-tag:
-    name: Detect release tag
-    needs: release-plz-release
-    if: needs.release-plz-release.result == 'success'
-    runs-on: ubuntu-latest
-    outputs:
-      release_tag: ${{ steps.detect.outputs.release_tag }}
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          fetch-depth: 0
-          ref: main
-      - run: git fetch --tags --force
-      - id: detect
+      - name: Read qos_core release tag
+        id: tag
         env:
-          # check both PR head and merge SHAs for the tag in case of merge or squash commit
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          RELEASES: ${{ steps.release-plz.outputs.releases }}
         run: |
-          tag="$(git tag --points-at "$PR_HEAD_SHA" | grep -E '^qos_core-v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
-          if [ -z "$tag" ] && [ -n "$PR_MERGE_SHA" ]; then
-            tag="$(git tag --points-at "$PR_MERGE_SHA" | grep -E '^qos_core-v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
-          fi
+          tag=$(echo "$RELEASES" | jq -r '.[] | select(.package_name == "qos_core") | .tag')
           echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+
+  # On a release, build and publish the StageX images and extract the PCRs.
   stagex-release:
     name: Build/publish images for release
-    needs: detect-release-tag
-    if: needs.detect-release-tag.outputs.release_tag != ''
+    needs: release-plz-release
+    if: needs.release-plz-release.outputs.release_tag != ''
     uses: ./.github/workflows/stagex-release.yml
     with:
-      release_tag: ${{ needs.detect-release-tag.outputs.release_tag }}
+      release_tag: ${{ needs.release-plz-release.outputs.release_tag }}
     permissions:
       contents: write
       packages: write
