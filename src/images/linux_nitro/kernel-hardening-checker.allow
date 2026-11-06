@@ -1,2 +1,38 @@
 # Kconfig checks that kernel-hardening-checker reports as failing, with the
 # reason each is accepted. CI fails if this list and the checker's output differ.
+
+# The checker predates 7.x renames; the replacements are enabled.
+CONFIG_CFI_CLANG           # Renamed to CFI, which is set.
+CONFIG_CFI_PERMISSIVE      # Checked only together with CFI_CLANG.
+CONFIG_RANDOM_KMALLOC_CACHES  # Replaced by KMALLOC_PARTITION_CACHES, which is set.
+
+# Not applicable to a Clang-built Nitro enclave.
+CONFIG_GCC_PLUGIN_LATENT_ENTROPY  # GCC plugin; the kernel is built with Clang.
+CONFIG_HW_RANDOM_TPM       # No TPM; NSM must be the only hwrng (docs/randomness.md).
+CONFIG_AMD_IOMMU           # pci=off and Nitro exposes no DMA-capable device.
+CONFIG_INTEL_IOMMU
+CONFIG_INTEL_IOMMU_DEFAULT_ON
+CONFIG_INTEL_IOMMU_SVM
+CONFIG_IOMMU_DEFAULT_DMA_STRICT
+CONFIG_X86_MCE             # Off in the base Nitro config; not changed here.
+CONFIG_X86_MCE_AMD
+CONFIG_X86_MCE_INTEL
+CONFIG_SCHED_CORE          # The enclave owns whole cores, so there is no sibling to isolate from.
+
+# No policy-based LSM: nothing in the enclave supplies a policy.
+CONFIG_LSM                 # Has lockdown and yama; lacks landlock and selinux.
+CONFIG_SECURITY_LANDLOCK
+CONFIG_SECURITY_SELINUX
+CONFIG_LSM_MMAP_MIN_ADDR   # Needs SELinux; DEFAULT_MMAP_MIN_ADDR=65536 is set.
+
+# Reproducible builds publish the seed, so the randomized layout is public.
+CONFIG_RANDSTRUCT_FULL
+
+# Pivot binaries or debugging may need these; sysctls block unprivileged use where possible.
+CONFIG_IO_URING
+CONFIG_AIO
+CONFIG_USERFAULTFD         # vm.unprivileged_userfaultfd defaults to 0.
+CONFIG_BPF_SYSCALL         # kernel.unprivileged_bpf_disabled=1.
+CONFIG_RSEQ                # glibc registers rseq at thread start.
+CONFIG_KALLSYMS            # Keeps symbol names in panic traces.
+CONFIG_X86_USER_SHADOW_STACK  # Needs userspace opt-in; not evaluated yet.

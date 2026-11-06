@@ -9,8 +9,8 @@ for common and x86-64 options:
 - `src/init/hardening.rs`: sysctls. Boot aborts if one does not apply.
 
 CI also runs [kernel-hardening-checker](https://github.com/a13xp0p0v/kernel-hardening-checker)
-on the resolved config. Its failures must match the reviewed exceptions in
-`src/images/linux_nitro/kernel-hardening-checker.allow`.
+on the resolved config. Kconfig recommendations it reports as failing are
+listed with their reasons in `src/images/linux_nitro/kernel-hardening-checker.allow`.
 
 Changing any of these changes the enclave measurements.
 
@@ -21,11 +21,7 @@ architectures are covered by their current equivalents or don't apply.
 
 | KSPP recommendation | Decision |
 | --- | --- |
-| `RANDSTRUCT_FULL` | Not enabled: reproducible builds publish the seed, so the layout is public. |
 | `kernel.perf_event_paranoid=3` | Left at the default `2`: `3` needs a distro patch. |
-| `nosmt`, `SCHED_CORE` | Not applied: the enclave owns whole cores, so this would halve CPUs for no isolation gain. |
-| IOMMU options | Not applied: `pci=off`, and Nitro exposes no DMA-capable device. |
+| `nosmt` | Not applied: the enclave owns whole cores, so this would halve CPUs for no isolation gain. |
 | `pti=on` | Not applied: `auto` enables PTI only on CPUs affected by Meltdown. |
 | `slub_debug=ZF` | Not applied: expensive and overlaps freelist hardening, KFENCE, and allocation wiping. |
-| SELinux, AppArmor, Landlock, etc. | Not enabled: the enclave has no policy for them to enforce. |
-| `HW_RANDOM_TPM` | Not enabled: Nitro has no TPM, and NSM must be the only [hwrng](randomness.md). |
