@@ -37,7 +37,7 @@ To produce the `qos_enclave` OCI container image, run:
 make out/qos_enclave/index.json
 ```
 
-The enclave kernel is built from pinned kernel.org source by [`linux_nitro`](./src/images/linux_nitro/Containerfile). See [enclave randomness](./docs/randomness.md) for how QOS gets entropy.
+The enclave kernel is built from pinned kernel.org source by [`linux_nitro`](./src/images/linux_nitro/Containerfile). See [enclave randomness](./docs/randomness.md) for how QOS gets entropy and [enclave kernel hardening](./docs/kernel_hardening.md) for the KSPP baseline.
 
 To reproduce the QOS build and print the associated PCR measurements, run:
 ```

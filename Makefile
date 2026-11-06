@@ -221,7 +221,8 @@ out/common/index.json: \
 
 out/linux_nitro/index.json: \
 	src/images/linux_nitro/Containerfile \
-	src/images/linux_nitro/nitro.config
+	src/images/linux_nitro/nitro.config \
+	src/images/linux_nitro/hardening.config
 	$(call build,linux_nitro)
 
 out/.common-loaded: out/common/index.json
