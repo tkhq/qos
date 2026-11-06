@@ -475,8 +475,12 @@ async fn standard_boot_e2e() {
 
 	let enclave_info_url =
 		format!("http://{LOCAL_HOST}:{host_port}/qos/enclave-info");
-	let enclave_info: EnclaveInfo =
-		ureq::get(&enclave_info_url).call().unwrap().into_json().unwrap();
+	let enclave_info: EnclaveInfo = ureq::get(&enclave_info_url)
+		.call()
+		.unwrap()
+		.into_body()
+		.read_json()
+		.unwrap();
 	assert_eq!(enclave_info.phase, ProtocolPhase::QuorumKeyProvisioned);
 
 	// Give the enclave time to start the pivot

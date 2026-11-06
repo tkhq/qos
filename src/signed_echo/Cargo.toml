@@ -20,7 +20,7 @@ qos_p256 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal"] }
-ureq = { workspace = true, features = ["tls"] }
+ureq = { workspace = true, features = ["rustls"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["sync"] }

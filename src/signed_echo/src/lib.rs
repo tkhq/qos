@@ -294,18 +294,20 @@ struct FetchedUrl {
 }
 
 fn fetch(url: &str) -> Result<FetchedUrl, AppError> {
-	let response = ureq::AgentBuilder::new()
-		.timeout(Duration::from_secs(15))
+	let response = ureq::Agent::config_builder()
+		.timeout_global(Some(Duration::from_secs(15)))
 		.build()
+		.new_agent()
 		.get(url)
 		.call()
 		.map_err(|err| AppError::Fetch(err.to_string()))?;
-	let status = response.status();
+	let status = response.status().as_u16();
 	if !(200..300).contains(&status) {
 		return Err(AppError::FetchStatus(status));
 	}
 	let body = response
-		.into_string()
+		.into_body()
+		.read_to_string()
 		.map_err(|err| AppError::FetchRead(err.to_string()))?;
 	Ok(FetchedUrl { status, body })
 }
