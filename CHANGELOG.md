@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.16.1](https://github.com/tkhq/qos/compare/qos_client-v0.16.0...qos_client-v0.16.1) - 2026-11-06
+
+### Other
+- update Cargo.lock dependencies
+
+## `qos_attestation` - [0.16.1](https://github.com/tkhq/qos/compare/qos_attestation-v0.15.2-alpha.0...qos_attestation-v0.16.1) - 2026-11-06
+
+### Added
+- *(qos_attestation)* add attestation crate
+
+### Other
+- Merge pull request #867 from tkhq/zeke/rust-1.97.1
+- Move the toolchain to Rust 1.97.1 and fix new clippy lints.
+
+## `qos_test_primitives` - [0.16.1](https://github.com/tkhq/qos/compare/qos_test_primitives-v0.15.1...qos_test_primitives-v0.16.1) - 2026-11-06
+
+### Other
+- Add a blocking cargo-machete CI check and remove the unused dependencies it finds.
+
+## `qos_net` - [0.16.1](https://github.com/tkhq/qos/compare/qos_net-v0.15.1...qos_net-v0.16.1) - 2026-11-06
+
+### Other
+- Merge pull request #862 from tkhq/zeke/cargo-machete
+- Add a blocking cargo-machete CI check and remove the unused dependencies it finds.
+
+## `qos_core` - [0.16.1](https://github.com/tkhq/qos/compare/qos_core-v0.16.0...qos_core-v0.16.1) - 2026-11-06
+
+### Other
+- update Cargo.lock dependencies
+
+## `qos_p256` - [0.16.1](https://github.com/tkhq/qos/compare/qos_p256-v0.15.2-alpha.0...qos_p256-v0.16.1) - 2026-11-06
+
+### Other
+- Pin qos_p256 key derivation, signature and encryption outputs with byte-exact vectors
+
 ## `qos_attestation` - [0.16.0](https://github.com/tkhq/qos/compare/qos_attestation-v0.15.1...qos_attestation-v0.16.0) - 2026-11-06
 
 ### Added
