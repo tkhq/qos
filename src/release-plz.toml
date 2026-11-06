@@ -39,6 +39,9 @@ name = "qos_core"
 changelog_update = true
 publish = true
 version_group = "qos"
+# Releases are immutable once published, so stagex-release.yml uploads the PCRs
+# to the draft and then publishes it.
+git_release_draft = true
 
 [[package]]
 name = "qos_crypto"
