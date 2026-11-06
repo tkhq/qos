@@ -8,7 +8,9 @@ use super::{AttestError, ByteBuf};
 
 const MIN_PCR_COUNT: usize = 1;
 const MAX_PRC_COUNT: usize = 32;
-const MAX_PCR_INDEX: usize = 32;
+/// Nitro attestation documents carry PCR indexes 0 through 31 (see
+/// [`super::ATTESTABLE_PCR_COUNT`]).
+const MAX_PCR_INDEX: usize = super::ATTESTABLE_PCR_COUNT as usize - 1;
 const VALID_PCR_LENS: [usize; 3] = [32, 48, 64];
 
 const MIN_PUB_KEY_LEN: usize = 1;
@@ -255,15 +257,27 @@ mod tests {
 
 	#[test]
 	fn invalid_index() {
+		for idx in [32, 33] {
+			let attestation_doc = AttestationDoc {
+				pcrs: BTreeMap::from([(idx, pcr::<32>())]),
+				..valid_attestation_doc()
+			};
+
+			assert!(matches!(
+				validate_attestation_doc(&attestation_doc),
+				Err(AttestError::InvalidPcr)
+			));
+		}
+	}
+
+	#[test]
+	fn max_index_is_valid() {
 		let attestation_doc = AttestationDoc {
-			pcrs: BTreeMap::from([(33, pcr::<32>())]),
+			pcrs: BTreeMap::from([(31, pcr::<32>())]),
 			..valid_attestation_doc()
 		};
 
-		assert!(matches!(
-			validate_attestation_doc(&attestation_doc),
-			Err(AttestError::InvalidPcr)
-		));
+		assert!(validate_attestation_doc(&attestation_doc).is_ok());
 	}
 
 	#[test]
@@ -306,7 +320,7 @@ mod tests {
 	}
 
 	fn valid_pcrs() -> BTreeMap<usize, ByteBuf> {
-		BTreeMap::from([(0, pcr::<48>()), (32, pcr::<32>()), (5, pcr::<64>())])
+		BTreeMap::from([(0, pcr::<48>()), (31, pcr::<32>()), (5, pcr::<64>())])
 	}
 
 	fn pcr<const N: usize>() -> ByteBuf {
