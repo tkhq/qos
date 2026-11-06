@@ -6,10 +6,8 @@ for common and x86-64 options. Hardening does not replace timely kernel upgrades
 
 ## Enforcement
 
-- `src/images/linux_nitro/minimal.config` removes StageX baseline features the
-  enclave never uses: netfilter, bridging, traffic control, IPsec, block
-  devices and disk filesystems, and devices Nitro does not expose. The build
-  fails if any of them come back.
+- `src/images/linux_nitro/minimal.config` disables features the enclave does
+  not use. The build fails if any come back.
 - `src/images/linux_nitro/hardening.config` overrides the StageX baseline in
   `nitro.config`. The build fails if the resolved config drops any setting.
 - `src/images/linux_nitro/hardening.cmdline` holds boot arguments with no config
@@ -18,15 +16,6 @@ for common and x86-64 options. Hardening does not replace timely kernel upgrades
   them before platform setup; any error aborts boot.
 
 Changing any of these changes the enclave measurements.
-
-## What the enclave uses
-
-- Console: the 8250 serial port (`console=ttyS0`).
-- Devices: vsock and NSM over virtio-mmio.
-- Filesystems: the initramfs, devtmpfs, devpts, proc, sysfs, and tmpfs.
-- Networking: loopback, `AF_UNIX`, IPv4 and IPv6 TCP and UDP sockets,
-  rtnetlink for `ip`, and a TUN device for egress. IPv6 stays because pivots
-  may bind IPv6 sockets.
 
 ## Exceptions
 
