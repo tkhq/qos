@@ -200,6 +200,8 @@ pub enum ProtocolError {
 	/// Genesis messages are only supported on the canonical JSON wire
 	/// encoding; legacy Borsh genesis is not supported.
 	LegacyGenesisNotSupported,
+	/// A quorum key share that was already accepted was posted again.
+	DuplicateShare,
 }
 
 impl From<std::io::Error> for ProtocolError {
@@ -408,6 +410,9 @@ impl std::fmt::Display for ProtocolError {
 					f,
 					"genesis messages are only supported on the JSON wire encoding"
 				)
+			}
+			Self::DuplicateShare => {
+				write!(f, "quorum key share was already accepted")
 			}
 		}
 	}
