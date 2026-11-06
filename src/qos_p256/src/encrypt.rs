@@ -140,12 +140,8 @@ impl P256EncryptPublic {
 		let ephemeral_sender_public: [u8; PUB_KEY_LEN_UNCOMPRESSED as usize] =
 			ephemeral_sender_private
 				.public_key()
-				.to_sec1_point(false)
-				.as_ref()
-				.try_into()
-				.map_err(|_| {
-					P256Error::FailedToCoercePublicKeyToIntendedLength
-				})?;
+				.to_uncompressed_point()
+				.into();
 
 		let sender_public_typed = SenderPublic(&ephemeral_sender_public);
 		let receiver_encoded_point = self.public.to_sec1_point(false);
@@ -161,11 +157,7 @@ impl P256EncryptPublic {
 			&receiver_public_typed,
 		)?;
 
-		let nonce = {
-			let random_bytes =
-				crate::bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
-			Nonce::from(*random_bytes)
-		};
+		let nonce = *bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
 
 		let aad = create_additional_associated_data(
 			&sender_public_typed,
@@ -174,10 +166,9 @@ impl P256EncryptPublic {
 		let payload = Payload { aad: &aad, msg: message };
 
 		let encrypted_message = cipher
-			.encrypt(&nonce, payload)
+			.encrypt(&Nonce::from(nonce), payload)
 			.map_err(|_| P256Error::AesGcm256EncryptError)?;
 
-		let nonce = nonce.into();
 		let envelope =
 			Envelope { nonce, ephemeral_sender_public, encrypted_message };
 
@@ -407,24 +398,15 @@ impl AesGcm256Secret {
 	/// # Errors
 	///
 	/// Returns [`P256Error`] if encryption or envelope serialization fails.
-	///
-	/// # Panics
-	/// Panics if `self.secret` is an invalid AES256 secret. This should never
-	/// happen in practice.
 	pub fn encrypt(&self, msg: &[u8]) -> Result<Vec<u8>, P256Error> {
-		let nonce = {
-			let random_bytes = bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
-			Nonce::from(*random_bytes)
-		};
+		let nonce = *bytes_os_rng::<{ BITS_96_AS_BYTES as usize }>();
 		let payload = Payload { aad: AES_GCM_256_HMAC_SHA512_TAG, msg };
 
-		let cipher = Aes256Gcm::new_from_slice(&self.secret[..])
-			.expect("secret is a valid aes256 key len. qed.");
+		let cipher = Aes256Gcm::new((&*self.secret).into());
 		let encrypted_message = cipher
-			.encrypt(&nonce, payload)
+			.encrypt(&Nonce::from(nonce), payload)
 			.map_err(|_| P256Error::AesGcm256EncryptError)?;
 
-		let nonce = nonce.into();
 		let envelope = SymmetricEnvelope { nonce, encrypted_message };
 		borsh::to_vec(&envelope)
 			.map_err(|_| P256Error::FailedToSerializeEnvelope)
@@ -438,9 +420,6 @@ impl AesGcm256Secret {
 	///
 	/// Returns [`P256Error`] if the envelope cannot be deserialized or
 	/// decryption fails.
-	///
-	/// # Panics
-	/// Panics if the secret is invalid. This should never happen in practice.
 	pub fn decrypt(
 		&self,
 		serialized_envelope: &[u8],
@@ -455,8 +434,7 @@ impl AesGcm256Secret {
 			msg: &encrypted_message,
 		};
 
-		let cipher = Aes256Gcm::new_from_slice(&self.secret[..])
-			.expect("secret is a valid aes256 key len. qed.");
+		let cipher = Aes256Gcm::new((&*self.secret).into());
 		cipher
 			.decrypt(&nonce, payload)
 			.map(Zeroizing::new)
