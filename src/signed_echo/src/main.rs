@@ -1,6 +1,8 @@
 //! Signed echo pivot application binary.
 
-use std::{net::SocketAddr, path::Path, sync::Arc};
+use std::{future::IntoFuture, net::SocketAddr, path::Path, sync::Arc};
+
+use tokio::net::TcpListener;
 
 use qos_core::{EPHEMERAL_KEY_FILE, MANIFEST_FILE};
 use qos_nsm::Nsm;
@@ -98,7 +100,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	if cli.boot_proof == BootProofMode::Off {
 		let app = signed_echo::router(cli.config());
 		eprintln!("signed_echo listening on {addr}");
-		axum::Server::bind(&addr).serve(app.into_make_service()).await?;
+		axum::serve(TcpListener::bind(addr).await?, app).await?;
 		return Ok(());
 	}
 
@@ -119,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	eprintln!("signed_echo listening on {addr}, serving its boot proof");
 	serve_with_refresh(
-		axum::Server::bind(&addr).serve(app.into_make_service()),
+		axum::serve(TcpListener::bind(addr).await?, app).into_future(),
 		refresh_task,
 	)
 	.await

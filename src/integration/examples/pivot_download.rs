@@ -62,10 +62,9 @@ async fn serve() {
 
 	println!("axum server running, listening on http://127.0.0.1:3000");
 	// run it with hyper on localhost:3000
-	axum::Server::bind(&"127.0.0.1:3000".parse().unwrap())
-		.serve(app.into_make_service())
-		.await
-		.unwrap();
+	let listener =
+		tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
+	axum::serve(listener, app).await.unwrap();
 }
 
 async fn download(
