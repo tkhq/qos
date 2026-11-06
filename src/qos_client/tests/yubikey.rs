@@ -124,7 +124,7 @@ fn key_agreement_works(yubikey: &mut YubiKey) {
 		yubikey,
 		KEY_AGREEMENT_SLOT,
 		DEFAULT_PIN,
-		MgmKey::default(),
+		&MgmKey::get_default(yubikey).unwrap(),
 		TouchPolicy::Never,
 	)
 	.unwrap();
@@ -160,7 +160,7 @@ fn signing_works(yubikey: &mut YubiKey) {
 		yubikey,
 		SIGNING_SLOT,
 		DEFAULT_PIN,
-		MgmKey::default(),
+		&MgmKey::get_default(yubikey).unwrap(),
 		TouchPolicy::Never,
 	)
 	.unwrap();
@@ -185,7 +185,7 @@ fn import_signing_works(yubikey: &mut YubiKey) {
 		&secret[..],
 		SIGNING_SLOT,
 		DEFAULT_PIN,
-		MgmKey::default(),
+		&MgmKey::get_default(yubikey).unwrap(),
 		TouchPolicy::Never,
 	)
 	.unwrap();
@@ -207,7 +207,7 @@ fn import_key_agreement_works(yubikey: &mut YubiKey) {
 		&secret[..],
 		KEY_AGREEMENT_SLOT,
 		DEFAULT_PIN,
-		MgmKey::default(),
+		&MgmKey::get_default(yubikey).unwrap(),
 		TouchPolicy::Never,
 	)
 	.unwrap();
@@ -381,7 +381,9 @@ fn provision_sign_and_verify() {
 fn piv_reset(yubikey: &mut YubiKey) {
 	// Pins need to be blocked before device can be reset
 	for _ in 0..3 {
-		assert!(yubikey.authenticate(MgmKey::generate()).is_err());
+		let wrong_key =
+			MgmKey::generate_for(yubikey, &mut getrandom::SysRng).unwrap();
+		assert!(yubikey.authenticate(&wrong_key).is_err());
 		assert!(yubikey.verify_pin(b"000000").is_err());
 	}
 

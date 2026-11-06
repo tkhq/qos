@@ -25,16 +25,13 @@ qos_json = { workspace = true }
 ureq = { workspace = true }
 aws-nitro-enclaves-nsm-api = { workspace = true }
 borsh = { workspace = true}
-getrandom = { workspace = true, optional = true }
+getrandom = { workspace = true, features = ["sys_rng"], optional = true }
 zeroize = { workspace = true, features = ["alloc"] }
 rpassword = { workspace = true }
 serde_json = { workspace = true }
 
-# yubikey 0.8 is built on the RustCrypto 0.13 line and takes these types in
-# its API, so the smartcard code keeps its own copies until yubikey 0.9.
-der_v07 = { workspace = true, optional = true }
-p256_v013 = { workspace = true, features = ["ecdsa", "pkcs8", "std"], optional = true }
-x509_cert_v02 = { workspace = true, optional = true }
+p256 = { workspace = true, features = ["ecdsa", "pkcs8", "std"], optional = true }
+x509-cert = { workspace = true, optional = true }
 yubikey = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -46,4 +43,4 @@ qos_p256 = { workspace = true, features = ["mock"] }
 
 [features]
 default = ["smartcard"]
-smartcard = ["der_v07", "getrandom", "p256_v013", "x509_cert_v02", "yubikey"]
+smartcard = ["getrandom", "p256", "x509-cert", "yubikey"]

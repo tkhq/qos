@@ -1,17 +1,15 @@
 //! Yubikey interfaces
 
 use borsh::BorshDeserialize;
-use der_v07::{asn1::BitStringRef, referenced::OwnedToRef};
-use p256_v013::{
-	EncodedPoint, NistP256, SecretKey,
+use p256::{
+	NistP256, Sec1Point, SecretKey,
 	ecdsa::{Signature, VerifyingKey, signature::Verifier},
 	pkcs8::SubjectPublicKeyInfo,
 };
 use qos_p256::encrypt::Envelope;
 use std::{error::Error, fmt, str::FromStr, time::Duration};
-use x509_cert_v02::{
-	name::RdnSequence, serial_number::SerialNumber, time::Validity,
-};
+use x509_cert::der::{asn1::BitStringRef, referenced::OwnedToRef};
+use x509_cert::{name::Name, serial_number::SerialNumber, time::Validity};
 use yubikey::{
 	MgmKey, PinPolicy, TouchPolicy, YubiKey,
 	certificate::Certificate,
@@ -73,7 +71,7 @@ pub enum YubiKeyError {
 	InvalidSecret,
 	/// The pin could not be changed.
 	FailedToChangePin,
-	/// See [`der_v07::Error`] for inner string contents.
+	/// See [`x509_cert::der::Error`] for inner string contents.
 	DerError(String),
 	/// Problem extracting the public key data
 	EmptyPublicKeyInfo,
@@ -148,8 +146,8 @@ impl Error for YubiKeyError {
 	}
 }
 
-impl From<der_v07::Error> for YubiKeyError {
-	fn from(from: der_v07::Error) -> Self {
+impl From<x509_cert::der::Error> for YubiKeyError {
+	fn from(from: x509_cert::der::Error) -> Self {
 		// add a debug-print of the inner error
 		Self::DerError(format!("{from:?}"))
 	}
@@ -170,7 +168,7 @@ pub fn generate_signed_certificate(
 	yubikey: &mut YubiKey,
 	slot: SlotId,
 	pin: &[u8],
-	mgm_key: MgmKey,
+	mgm_key: &MgmKey,
 	touch_policy: TouchPolicy,
 ) -> Result<Box<[u8]>, YubiKeyError> {
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
@@ -202,7 +200,7 @@ pub fn generate_signed_certificate(
 		Validity::from_now(Duration::from_secs(
 			CERTIFICATE_VALIDITY_SECS.into(),
 		))?,
-		RdnSequence::from_str(CERTIFICATE_DISTINGUISHED_NAME)?,
+		Name::from_str(CERTIFICATE_DISTINGUISHED_NAME)?,
 		public_key_info,
 		|_| Ok(()),
 	)
@@ -226,7 +224,7 @@ pub fn import_key_and_generate_signed_certificate(
 	key_data: &[u8],
 	slot: SlotId,
 	pin: &[u8],
-	mgm_key: MgmKey,
+	mgm_key: &MgmKey,
 	touch_policy: TouchPolicy,
 ) -> Result<(), YubiKeyError> {
 	yubikey.verify_pin(pin).map_err(YubiKeyError::FailedToVerifyPin)?;
@@ -241,7 +239,7 @@ pub fn import_key_and_generate_signed_certificate(
 
 	let public_key_info = SecretKey::from_slice(key_data)
 		.ok()
-		.and_then(|sk| SubjectPublicKeyInfo::from_key(sk.public_key()).ok())
+		.and_then(|sk| SubjectPublicKeyInfo::from_key(&sk.public_key()).ok())
 		.ok_or(YubiKeyError::InvalidSecret)?;
 
 	// Import a key in the slot
@@ -266,7 +264,7 @@ pub fn import_key_and_generate_signed_certificate(
 		Validity::from_now(Duration::from_secs(
 			CERTIFICATE_VALIDITY_SECS.into(),
 		))?,
-		RdnSequence::from_str(CERTIFICATE_DISTINGUISHED_NAME)?,
+		Name::from_str(CERTIFICATE_DISTINGUISHED_NAME)?,
 		public_key_info,
 		|_| Ok(()),
 	)
@@ -443,7 +441,11 @@ pub fn yubikey_piv_reset() -> Result<(), YubiKeyError> {
 	let mut yubikey = open_single()?;
 	// Pins need to be blocked before device can be reset
 	for _ in 0..3 {
-		let _ = yubikey.authenticate(yubikey::MgmKey::generate());
+		if let Ok(wrong_key) =
+			MgmKey::generate_for(&yubikey, &mut getrandom::SysRng)
+		{
+			let _ = yubikey.authenticate(&wrong_key);
+		}
 		let _ = yubikey.verify_pin(b"000000");
 	}
 	let _ = yubikey.block_puk();
@@ -453,10 +455,10 @@ pub fn yubikey_piv_reset() -> Result<(), YubiKeyError> {
 
 fn extract_encoded_point(
 	public_key_info: BitStringRef,
-) -> Result<EncodedPoint, YubiKeyError> {
+) -> Result<Sec1Point, YubiKeyError> {
 	public_key_info.as_bytes().ok_or(YubiKeyError::EmptyPublicKeyInfo).and_then(
 		|el| {
-			EncodedPoint::from_bytes(el)
+			Sec1Point::from_bytes(el)
 				.map_err(|_err| YubiKeyError::FoundNonP256Key)
 		},
 	)
@@ -485,11 +487,11 @@ fn generate_random_rfc5280_serial() -> [u8; 20] {
 #[cfg(test)]
 mod tests {
 	use crate::yubikey::generate_random_rfc5280_serial;
-	use x509_cert_v02::serial_number::SerialNumber;
+	use x509_cert::serial_number::SerialNumber;
 
 	#[test]
 	fn test_rfc5280_serial_generation_success() {
-		use x509_cert_v02::certificate::Rfc5280;
+		use x509_cert::certificate::Rfc5280;
 
 		// the generation behavior is non-deterministic by design, try it a few dozen times
 		const TEST_ITERATIONS: usize = 100;
