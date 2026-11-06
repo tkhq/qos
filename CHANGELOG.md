@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_attestation` - [0.16.1](https://github.com/tkhq/qos/compare/qos_attestation-v0.16.0...qos_attestation-v0.16.1) - 2026-11-06
+
+### Other
+- *(qos_attestation)* build cache test certificates by editing DER directly so the fixtures no longer depend on x509-cert struct internals.
+
 ## `qos_attestation` - [0.16.0](https://github.com/tkhq/qos/compare/qos_attestation-v0.15.1...qos_attestation-v0.16.0) - 2026-11-06
 
 ### Added
