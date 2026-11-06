@@ -1,4 +1,5 @@
-FROM common AS base
+# Built locally from src/images/common; see src/macros.mk.
+FROM qos.localhost/common AS base
 
 # Directory for Rust artifacts.
 ENV RELEASE_DIR=/src/target/${TARGET}/release
