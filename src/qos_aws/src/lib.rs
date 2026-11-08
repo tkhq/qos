@@ -1,4 +1,4 @@
-use qos_system::{check_hwrng, dmesg, poweroff};
+use qos_system::{check_hwrng, dmesg, poweroff, reseed_crng};
 
 /// Signal to Nitro hypervisor that booting was successful
 fn nitro_heartbeat() {
@@ -23,13 +23,18 @@ fn nitro_heartbeat() {
 
 /// Initialize nitro device
 pub fn init_platform() {
-	nitro_heartbeat();
-
-	match check_hwrng("nsm-hwrng") {
-		Ok(()) => dmesg("Validated entropy source is nsm-hwrng".to_string()),
+	// The NSM driver registers its hwrng with quality 1000. Reseeding puts NSM
+	// output in the CRNG before anything generates keys. This runs before the
+	// heartbeat, so a failure or hang shows up as a failed enclave boot.
+	match check_hwrng("nsm-hwrng", 1000).and_then(|s| reseed_crng(&s)) {
+		Ok(()) => {
+			dmesg("Validated nsm-hwrng and reseeded the CRNG".to_string())
+		}
 		Err(e) => {
 			eprintln!("{}", e);
 			poweroff();
 		}
 	};
+
+	nitro_heartbeat();
 }

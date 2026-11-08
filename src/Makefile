@@ -103,6 +103,10 @@ test:
 	@# The workspace build leaves qos_attestation's optional features off, so
 	@# test the cache explicitly.
 	cargo test --locked -p qos_attestation --all-features
+	@# qos_system is outside the workspace because it only builds on Linux.
+	if [ "$$(uname)" = Linux ]; then \
+		cargo test --locked --manifest-path ./qos_system/Cargo.toml; \
+	fi
 
 .PHONY: build-linux-only
 build-linux-only: qos_system qos_aws init qos_enclave qos_bridge
