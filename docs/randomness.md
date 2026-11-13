@@ -12,8 +12,9 @@ key shares, and application keys. All of them come from the kernel's CRNG.
   1000/1024 of full entropy (about 7.8 of 8 bits).
 - **CPU and boot.** The kernel also mixes in RDRAND/RDSEED, interrupt timing,
   and jitter entropy, and trusts the CPU RNG by default.
-- **Other hwrng drivers.** virtio-rng and TPM drivers are compiled in, but
-  Nitro exposes neither device (`pci=off`), so NSM is the only hwrng.
+- **Other hwrng drivers.** The kernel config disables the virtio-rng, TPM,
+  and CPU vendor hwrng drivers (`src/images/linux_nitro/hardening.config`), so
+  NSM is the only hwrng.
 
 ## What QOS checks
 

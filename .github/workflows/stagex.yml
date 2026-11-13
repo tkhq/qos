@@ -85,6 +85,28 @@ jobs:
         shell: 'script -q -e -c "bash {0}"'
         run: make -j$(nproc) "out/${{ matrix.name }}/index.json"
 
+      # kernel-hardening-checker exits 0 even when checks fail, so CI compares
+      # its failures with the reviewed exceptions instead.
+      - name: Check kernel hardening
+        if: matrix.name == 'linux_nitro' || matrix.name == 'qos_enclave' || matrix.name == 'qos_enclave_egress'
+        run: |
+          set -euo pipefail
+          git clone -q https://github.com/a13xp0p0v/kernel-hardening-checker /tmp/khc
+          git -C /tmp/khc checkout -q afc376f2a935994793343cfeb05953583cc30191 # v0.6.17.1
+          sh src/scripts/extract_oci_file.sh out/linux_nitro linux.config > /tmp/linux.config
+
+          # Options the built kernel fails.
+          /tmp/khc/bin/kernel-hardening-checker -c /tmp/linux.config -m json \
+            | jq -r '.[] | select(.check_result_bool | not) | .option_name' \
+            | sort -u > /tmp/failing
+
+          # Options we reviewed and accepted.
+          grep -o '^CONFIG_[A-Z0-9_]*' src/images/linux_nitro/kernel-hardening-checker.allow \
+            | sort -u > /tmp/allowed
+
+          # "+" = new failure to fix or allow; "-" = allowed option that now passes.
+          diff -u /tmp/allowed /tmp/failing
+
       # Publish PR images so they can be deployed for testing; main is build-only.
       - name: Push PR image to GHCR and ECR
         if: github.event_name == 'pull_request'
