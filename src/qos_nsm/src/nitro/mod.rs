@@ -83,6 +83,9 @@ pub trait ManifestCommitmentKind: private::Sealed + Copy {
 	const DOMAIN: &'static str;
 }
 
+/// A manifest commitment that also binds an ephemeral public key.
+pub trait KeyCommitmentKind: ManifestCommitmentKind {}
+
 /// Setup/boot key commitment used for provisioning and key-forwarding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Setup;
@@ -94,6 +97,8 @@ impl ManifestCommitmentKind for Setup {
 	const DOMAIN: &'static str = SETUP_MANIFEST_PCR_COMMITMENT_DOMAIN;
 }
 
+impl KeyCommitmentKind for Setup {}
+
 /// Live/app key commitment used after the quorum key is installed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Live;
@@ -104,6 +109,8 @@ impl ManifestCommitmentKind for Live {
 	const PCR_INDEX: u16 = LIVE_MANIFEST_COMMITMENT_PCR_INDEX;
 	const DOMAIN: &'static str = LIVE_MANIFEST_PCR_COMMITMENT_DOMAIN;
 }
+
+impl KeyCommitmentKind for Live {}
 
 /// Commitment to only the manifest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,7 +148,7 @@ struct ManifestPcrCommitmentPreimage<'a> {
 	ephemeral_public_key: &'a [u8],
 }
 
-fn manifest_pcr_commitment_preimage<K: ManifestCommitmentKind>(
+fn manifest_pcr_commitment_preimage<K: KeyCommitmentKind>(
 	manifest_hash: &[u8],
 	ephemeral_public_key: &[u8],
 ) -> Vec<u8> {
@@ -177,8 +184,15 @@ impl<K> Deref for PcrCommitment<K> {
 }
 
 /// Compute the domain-separated manifest PCR commitment input.
+///
+/// PCR18 uses [`manifest_only_pcr_commitment`] instead.
+///
+/// ```compile_fail,E0277
+/// use qos_nsm::nitro::{manifest_pcr_commitment, ManifestOnly};
+/// manifest_pcr_commitment::<ManifestOnly>(&[0; 32], &[]);
+/// ```
 #[must_use]
-pub fn manifest_pcr_commitment<K: ManifestCommitmentKind>(
+pub fn manifest_pcr_commitment<K: KeyCommitmentKind>(
 	manifest_hash: &[u8],
 	ephemeral_public_key: &[u8],
 ) -> PcrCommitment<K> {
@@ -247,7 +261,7 @@ pub fn pcr_extend_sha384(
 ///
 /// Returns [`AttestError::InvalidPcr`] if the pinned initial PCR value is
 /// malformed.
-pub fn expected_manifest_commitment_pcr<K: ManifestCommitmentKind>(
+pub fn expected_manifest_commitment_pcr<K: KeyCommitmentKind>(
 	manifest_hash: &[u8],
 	ephemeral_public_key: &[u8],
 ) -> Result<[u8; PCR_SHA384_LEN], AttestError> {
@@ -272,7 +286,7 @@ pub fn expected_manifest_only_commitment_pcr(
 /// # Errors
 ///
 /// Returns [`AttestError`] if validation fails.
-pub fn verify_attestation_doc_manifest_commitment<K: ManifestCommitmentKind>(
+pub fn verify_attestation_doc_manifest_commitment<K: KeyCommitmentKind>(
 	attestation_doc: &AttestationDoc,
 	manifest_hash: &[u8],
 ) -> Result<(), AttestError> {
@@ -347,7 +361,7 @@ fn verify_attestation_doc_pcr(
 /// # Errors
 ///
 /// Returns [`AttestError`] if validation fails.
-pub fn verify_attestation_doc_against_manifest<K: ManifestCommitmentKind>(
+pub fn verify_attestation_doc_against_manifest<K: KeyCommitmentKind>(
 	attestation_doc: &AttestationDoc,
 	expected: ManifestAttestationInput<'_>,
 ) -> Result<(), AttestError> {
@@ -713,7 +727,7 @@ mod test {
 	// Public domain work: Pride and Prejudice by Jane Austen, taken from https://www.gutenberg.org/files/1342/1342.txt
 	const TEXT: &[u8] = b"It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.";
 
-	fn manifest_commitment_attestation_doc<K: ManifestCommitmentKind>(
+	fn manifest_commitment_attestation_doc<K: KeyCommitmentKind>(
 		manifest_hash: &[u8],
 		public_key: &[u8],
 	) -> AttestationDoc {
