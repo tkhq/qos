@@ -556,6 +556,8 @@ fn v2_commands_generate_approve_and_envelope_use_json_hash() {
 		"[{\"type\":\"server\",\"port\":3000,\"host\":\"0.0.0.0\"}]",
 		"--dns-resolvers",
 		"[1.1.1.1,2606:4700:4700::1111]",
+		"--peer-discovery",
+		"true",
 	]));
 
 	let manifest_json: serde_json::Value =
@@ -565,6 +567,7 @@ fn v2_commands_generate_approve_and_envelope_use_json_hash() {
 	assert!(manifest_json.get("patchSet").is_none());
 	assert_eq!(manifest_json["dns"]["resolvers"][0], "1.1.1.1");
 	assert_eq!(manifest_json["dns"]["resolvers"][1], "2606:4700:4700::1111");
+	assert_eq!(manifest_json["peerDiscovery"]["enabled"], true);
 
 	let manifest: ManifestV2 =
 		serde_json::from_value(manifest_json.clone()).unwrap();
