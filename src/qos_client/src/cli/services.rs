@@ -1136,7 +1136,7 @@ where
 	// Check the namespace name
 	{
 		let prompt = format!(
-			"Is this the correct namespace name: {}? (y/n)",
+			"Is this the correct namespace name: {:?}? (y/n)",
 			manifest.namespace().name
 		);
 		if !prompter.prompt_is_yes(&prompt) {
@@ -1741,7 +1741,7 @@ where
 	// Check the namespace name
 	{
 		let prompt = format!(
-			"Is this the correct namespace name: {}? (y/n)",
+			"Is this the correct namespace name: {:?}? (y/n)",
 			manifest.namespace().name
 		);
 		if !prompter.prompt_is_yes(&prompt) {
@@ -1776,7 +1776,7 @@ where
 			.iter()
 			.cloned()
 			.map(|m| m.member.alias)
-			.map(|a| format!("\talias: {a}"))
+			.map(|a| format!("\talias: {a:?}"))
 			.collect::<Vec<_>>();
 		approvers.sort();
 		let approvers = approvers.join("\n");
@@ -3266,7 +3266,44 @@ mod tests {
 
 			assert_eq!(
 				output[1],
-				"Is this the correct namespace name: test-namespace? (y/n)"
+				"Is this the correct namespace name: \"test-namespace\"? (y/n)"
+			);
+		}
+
+		#[test]
+		fn escapes_control_characters_in_the_namespace_name() {
+			let Setup { manifest, .. } = setup();
+			let VersionedManifest::V1(mut manifest) = manifest else {
+				panic!("setup builds a v1 manifest");
+			};
+			// A name that would clear the line and redraw a different one if
+			// it reached the terminal unescaped.
+			manifest.namespace.name =
+				"good-namespace\u{1b}[2K\rEVERYTHING-IS-FINE".to_string();
+			let manifest = VersionedManifest::V1(manifest);
+
+			let mut vec_out: Vec<u8> = vec![];
+			let vec_in = "yes\nno\n".as_bytes();
+
+			let mut prompter =
+				Prompter { reader: vec_in, writer: &mut vec_out };
+
+			assert!(!super::approve_manifest_human_verifications(
+				&manifest,
+				&mut prompter
+			));
+
+			assert!(
+				!vec_out.contains(&0x1b),
+				"escape byte reached the prompt: {}",
+				String::from_utf8_lossy(&vec_out)
+			);
+			let output = String::from_utf8(vec_out).unwrap();
+			assert!(
+				output.contains(
+					"Is this the correct namespace name: \"good-namespace\\u{1b}[2K\\rEVERYTHING-IS-FINE\"? (y/n)"
+				),
+				"{output}"
 			);
 		}
 
@@ -3591,14 +3628,14 @@ mod tests {
 			assert_eq!(
 				output,
 				vec![
-					"Is this the correct namespace name: test-namespace? (y/n)",
+					"Is this the correct namespace name: \"test-namespace\"? (y/n)",
 					"Is this the correct namespace nonce: 2? (y/n)",
 					"Does this AWS IAM role belong to the intended organization: pr3? (y/n)",
 					"Please answer with either \"yes\" (y) or \"no\" (n)",
 					"Please answer with either \"yes\" (y) or \"no\" (n)",
 					"The following manifest set members approved:",
-					"\talias: 0",
-					"\talias: 1",
+					"\talias: \"0\"",
+					"\talias: \"1\"",
 					"Is this ok? (y/n)",
 				]
 			);
@@ -3623,7 +3660,7 @@ mod tests {
 			let output = String::from_utf8(vec_out).unwrap();
 			assert_eq!(
 				&output,
-				"Is this the correct namespace name: test-namespace? (y/n)\n"
+				"Is this the correct namespace name: \"test-namespace\"? (y/n)\n"
 			);
 		}
 
@@ -3698,8 +3735,8 @@ mod tests {
 				output[3],
 				"The following manifest set members approved:"
 			);
-			assert_eq!(output[4], "\talias: 0");
-			assert_eq!(output[5], "\talias: 1");
+			assert_eq!(output[4], "\talias: \"0\"");
+			assert_eq!(output[5], "\talias: \"1\"");
 			assert_eq!(output[6], "Is this ok? (y/n)");
 			assert_eq!(output.len(), 7);
 		}
@@ -3726,7 +3763,7 @@ mod tests {
 			assert_eq!(
 				output,
 				vec![
-					"Is this the correct namespace name: test-namespace? (y/n)",
+					"Is this the correct namespace name: \"test-namespace\"? (y/n)",
 					"Please answer with either \"yes\" (y) or \"no\" (n)",
 					"Please answer with either \"yes\" (y) or \"no\" (n)",
 				]
