@@ -98,7 +98,7 @@ thiserror = { version = "2.0.12", features = ["std"], default-features = false }
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"], default-features = false }
 tokio-rustls = { version = "0.26.2" }
 tokio-vsock = { version = "0.7.2" }
-ureq = { version = "2.9", default-features = false }
+ureq = { version = "3", default-features = false }
 vsss-rs = { version = "5.4", default-features = false, features = ["std", "zeroize"] }
 webpki = { version = "0.22.4", default-features = false }
 webpki-roots = { version = "1.0.10" }
