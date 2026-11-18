@@ -24,8 +24,8 @@ impl P256SignPair {
 		Self { private: SigningKey::random(&mut OsRng) }
 	}
 
-	/// Sign the message and return the. Signs the SHA512 digest of
-	/// the message.
+	/// Sign the message and return the signature. Signs the SHA-256 digest
+	/// of the message, the digest P-256 is defined with.
 	///
 	/// # Errors
 	///
@@ -70,7 +70,7 @@ pub struct P256SignPublic {
 
 impl P256SignPublic {
 	/// Verify a `signature` and `message` against this private key. Verifies
-	/// the SHA512 digest of the message.
+	/// the SHA-256 digest of the message.
 	///
 	/// Returns Ok if the signature is good.
 	///
@@ -134,6 +134,27 @@ mod tests {
 			.collect::<Vec<_>>()
 			.windows(2)
 			.for_each(|slice| assert_eq!(slice[0], slice[1]));
+	}
+
+	#[test]
+	fn signs_the_sha256_digest_of_the_message() {
+		use p256::ecdsa::signature::hazmat::PrehashVerifier;
+		use sha2::{Digest, Sha256};
+
+		let message = b"a message to authenticate";
+
+		let pair = P256SignPair::generate();
+		let signature =
+			Signature::try_from(&pair.sign(message).unwrap()[..]).unwrap();
+
+		// The documented digest, and the one SPEC.md pins.
+		let digest = Sha256::digest(message);
+		assert!(
+			pair.public_key()
+				.public
+				.verify_prehash(&digest, &signature)
+				.is_ok()
+		);
 	}
 
 	#[test]
