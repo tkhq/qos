@@ -263,6 +263,21 @@ pub enum ProtocolMsg {
 		/// Pivot binary.
 		pivot: Vec<u8>,
 	},
+
+	/// Add IPs to the untrusted host-provided peer list.
+	AddPeersRequest {
+		/// Peer IP addresses.
+		ips: Vec<std::net::IpAddr>,
+	},
+	/// The peer list is published.
+	AddPeersResponse,
+	/// Remove IPs from the untrusted host-provided peer list.
+	RemovePeersRequest {
+		/// Peer IP addresses.
+		ips: Vec<std::net::IpAddr>,
+	},
+	/// The peer list is published.
+	RemovePeersResponse,
 }
 
 impl ProtocolMsg {
@@ -445,6 +460,12 @@ impl std::fmt::Display for ProtocolMsg {
 				write!(f, "ManifestEnvelopeResponse")
 			}
 			Self::VersionRequest => write!(f, "VersionRequest"),
+			Self::AddPeersRequest { .. } => write!(f, "AddPeersRequest"),
+			Self::AddPeersResponse => write!(f, "AddPeersResponse"),
+			Self::RemovePeersRequest { .. } => {
+				write!(f, "RemovePeersRequest")
+			}
+			Self::RemovePeersResponse => write!(f, "RemovePeersResponse"),
 			Self::VersionResponse { version, commit } => {
 				write!(
 					f,
@@ -588,6 +609,7 @@ mod test {
 				qos_commit: "commit".to_string(),
 			},
 			dns: None,
+			peer_discovery: None,
 		};
 		let msg = ProtocolMsg::BootStandardRequest {
 			manifest_envelope: Box::new(VersionedManifestEnvelope::V2(
@@ -637,6 +659,7 @@ mod test {
 					qos_commit: "commit".to_string(),
 				},
 				dns: None,
+				peer_discovery: None,
 			},
 			manifest_set_approvals: vec![],
 			share_set_approvals: vec![],

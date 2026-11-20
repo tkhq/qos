@@ -20,6 +20,14 @@ pub struct DnsConfig {
 	pub resolvers: Vec<IpAddr>,
 }
 
+/// Peer discovery configuration (v2).
+#[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PeerDiscoveryConfig {
+	/// Whether the guest accepts and publishes the host-provided peer list.
+	pub enabled: bool,
+}
+
 /// JSON-only pivot binary configuration (v2).
 #[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -62,6 +70,9 @@ pub struct ManifestV2 {
 	/// DNS resolver configuration for the enclave.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub dns: Option<DnsConfig>,
+	/// Peer discovery configuration. Absent means disabled.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub peer_discovery: Option<PeerDiscoveryConfig>,
 }
 
 /// Accept only `"v2"`. [`ManifestVersion`] doubles as the schema selector for
