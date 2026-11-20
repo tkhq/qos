@@ -49,6 +49,8 @@ b26733f9... PCR1
 
 This builds `out/qos_enclave` if needed, then reads `nitro.pcrs` from the OCI layout with `jq` and `tar`. Use `make pcrs-egress` for the egress variant (`out/qos_enclave_egress`).
 
+Each `qos_core` GitHub release publishes both sets of measurements as assets: `nitro.pcrs` for `qos_enclave` and `nitro-egress.pcrs` for `qos_enclave_egress`.
+
 These PCR values can be referenced against the content of [AWS remote attestations](https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#pcr012).
 
 To extract any other file from a built OCI layout, use the `scripts/extract_oci_file.sh` helper directly:

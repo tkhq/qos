@@ -148,16 +148,21 @@ jobs:
             done
           } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
-      - name: Extract PCRs (qos_enclave)
-        if: matrix.name == 'qos_enclave'
-        run: sh src/scripts/extract_oci_file.sh out/qos_enclave nitro.pcrs > out/nitro.pcrs
+      # qos_enclave publishes nitro.pcrs; qos_enclave_egress publishes nitro-egress.pcrs.
+      - name: Extract PCRs
+        if: matrix.name == 'qos_enclave' || matrix.name == 'qos_enclave_egress'
+        env:
+          name: ${{ matrix.name }}
+          pcrs_file: ${{ matrix.name == 'qos_enclave_egress' && 'nitro-egress.pcrs' || 'nitro.pcrs' }}
+        run: sh src/scripts/extract_oci_file.sh "out/${name}" nitro.pcrs > "out/${pcrs_file}"
 
-      - name: Upload PCRs to GitHub release (qos_enclave)
-        if: matrix.name == 'qos_enclave'
+      - name: Upload PCRs to GitHub release
+        if: matrix.name == 'qos_enclave' || matrix.name == 'qos_enclave_egress'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          pcrs_file: ${{ matrix.name == 'qos_enclave_egress' && 'nitro-egress.pcrs' || 'nitro.pcrs' }}
         # upload to qos_core release tag
-        run: gh release upload "${release_tag}" out/nitro.pcrs --clobber
+        run: gh release upload "${release_tag}" "out/${pcrs_file}" --clobber
 
   # Publish the draft release after its PCRs are uploaded. Published releases are immutable.
   publish-release:
