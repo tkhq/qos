@@ -14,7 +14,7 @@ use p256::{
 use sha2::Sha512;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
-use crate::{P256Error, PUB_KEY_LEN_UNCOMPRESSED, bytes_os_rng};
+use crate::{P256Error, PUB_KEY_LEN_UNCOMPRESSED, SecretBytes, bytes_os_rng};
 
 const AES256_KEY_LEN: usize = 32;
 const BITS_96_AS_BYTES: u8 = 12;
@@ -35,17 +35,20 @@ pub struct Envelope {
 }
 
 /// P256 key pair.
-#[derive(ZeroizeOnDrop)]
 #[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct P256EncryptPair {
-	pub(crate) private: SecretKey,
+	// Boxed so moving the pair does not copy the scalar.
+	pub(crate) private: Box<SecretKey>,
 }
+
+// `SecretKey` zeroizes itself on drop, and dropping the `Box` drops it in place.
+impl ZeroizeOnDrop for P256EncryptPair {}
 
 impl P256EncryptPair {
 	/// Generate a new private key using the OS randomness source.
 	#[must_use]
 	pub fn generate() -> Self {
-		Self { private: SecretKey::random(&mut OsRng) }
+		Self { private: Box::new(SecretKey::random(&mut OsRng)) }
 	}
 
 	/// Decrypt a message encoded to this pair's public key.
@@ -111,8 +114,10 @@ impl P256EncryptPair {
 	/// valid P256 scalar.
 	pub fn from_bytes(bytes: &Zeroizing<Vec<u8>>) -> Result<Self, P256Error> {
 		Ok(Self {
-			private: SecretKey::from_slice(bytes)
-				.map_err(|_| P256Error::FailedToReadSecret)?,
+			private: Box::new(
+				SecretKey::from_slice(bytes)
+					.map_err(|_| P256Error::FailedToReadSecret)?,
+			),
 		})
 	}
 
@@ -368,7 +373,7 @@ pub struct SymmetricEnvelope {
 /// Secret for performing encryption and decryption using a AES GCM 256 Cipher.
 #[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct AesGcm256Secret {
-	secret: Zeroizing<[u8; AES256_KEY_LEN]>,
+	secret: SecretBytes<AES256_KEY_LEN>,
 }
 
 impl Zeroize for AesGcm256Secret {
@@ -386,7 +391,7 @@ impl AesGcm256Secret {
 
 	/// The secret as bytes.
 	#[must_use]
-	pub fn to_bytes(&self) -> &Zeroizing<[u8; AES256_KEY_LEN]> {
+	pub fn to_bytes(&self) -> &SecretBytes<AES256_KEY_LEN> {
 		&self.secret
 	}
 
@@ -396,8 +401,10 @@ impl AesGcm256Secret {
 	///
 	/// Returns [`P256Error::FailedToCreateAes256GcmCipher`] if the key is
 	/// invalid.
-	pub fn from_bytes(bytes: [u8; AES256_KEY_LEN]) -> Result<Self, P256Error> {
-		Ok(Self { secret: Zeroizing::new(bytes) })
+	pub fn from_bytes(
+		bytes: SecretBytes<AES256_KEY_LEN>,
+	) -> Result<Self, P256Error> {
+		Ok(Self { secret: bytes })
 	}
 
 	/// Encrypt the given `msg`.
@@ -677,7 +684,7 @@ mod test_symmetric {
 		let bytes_original = key_original.to_bytes();
 
 		let key_reconstructed =
-			AesGcm256Secret::from_bytes(**bytes_original).unwrap();
+			AesGcm256Secret::from_bytes(bytes_original.clone()).unwrap();
 		let bytes_reconstructed = key_reconstructed.to_bytes();
 
 		assert!(key_original == key_reconstructed);

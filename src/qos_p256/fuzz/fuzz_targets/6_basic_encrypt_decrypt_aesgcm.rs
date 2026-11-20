@@ -2,6 +2,7 @@
 
 use libfuzzer_sys::fuzz_target;
 
+use qos_p256::SecretBytes;
 use qos_p256::encrypt::AesGcm256Secret;
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
@@ -16,12 +17,13 @@ fuzz_target!(|input: FuzzKeyDataStruct| {
 	// let the fuzzer control a message plaintext that is encrypted and then decrypted again
 	// the fuzzer also controls the encryption key
 
-	let random_key = match AesGcm256Secret::from_bytes(input.key) {
-		Ok(pair) => pair,
-		Err(_err) => {
-			return;
-		}
-	};
+	let random_key =
+		match AesGcm256Secret::from_bytes(SecretBytes::from(&input.key)) {
+			Ok(pair) => pair,
+			Err(_err) => {
+				return;
+			}
+		};
 
 	let data = input.data.to_vec();
 
