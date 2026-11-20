@@ -368,7 +368,7 @@ pub struct SymmetricEnvelope {
 /// Secret for performing encryption and decryption using a AES GCM 256 Cipher.
 #[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct AesGcm256Secret {
-	secret: Zeroizing<[u8; AES256_KEY_LEN]>,
+	secret: Box<Zeroizing<[u8; AES256_KEY_LEN]>>,
 }
 
 impl Zeroize for AesGcm256Secret {
@@ -396,8 +396,10 @@ impl AesGcm256Secret {
 	///
 	/// Returns [`P256Error::FailedToCreateAes256GcmCipher`] if the key is
 	/// invalid.
-	pub fn from_bytes(bytes: [u8; AES256_KEY_LEN]) -> Result<Self, P256Error> {
-		Ok(Self { secret: Zeroizing::new(bytes) })
+	pub fn from_bytes(
+		bytes: Box<Zeroizing<[u8; AES256_KEY_LEN]>>,
+	) -> Result<Self, P256Error> {
+		Ok(Self { secret: bytes })
 	}
 
 	/// Encrypt the given `msg`.
@@ -677,7 +679,8 @@ mod test_symmetric {
 		let bytes_original = key_original.to_bytes();
 
 		let key_reconstructed =
-			AesGcm256Secret::from_bytes(**bytes_original).unwrap();
+			AesGcm256Secret::from_bytes(Box::new(bytes_original.clone()))
+				.unwrap();
 		let bytes_reconstructed = key_reconstructed.to_bytes();
 
 		assert!(key_original == key_reconstructed);

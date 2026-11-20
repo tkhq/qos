@@ -40,16 +40,16 @@ pub(in crate::protocol) fn inject_key(
 
 	// 2. Decrypt the encrypted Quorum Key in the request with the Ephemeral
 	// Key.
-	let quorum_master_seed: zeroize::Zeroizing<
-		[u8; qos_p256::MASTER_SEED_LEN],
-	> = {
+	let quorum_master_seed = {
 		let ephemeral_pair = state.handles.get_ephemeral_key()?;
 		let bytes = ephemeral_pair.decrypt(&encrypted_quorum_key)?;
-		zeroize::Zeroizing::new(
-			bytes[..]
-				.try_into()
-				.map_err(|_| ProtocolError::EncryptedQuorumKeyInvalidLen)?,
-		)
+		let seed_bytes: &[u8; qos_p256::MASTER_SEED_LEN] = bytes[..]
+			.try_into()
+			.map_err(|_| ProtocolError::EncryptedQuorumKeyInvalidLen)?;
+		let mut seed =
+			Box::new(zeroize::Zeroizing::new([0u8; qos_p256::MASTER_SEED_LEN]));
+		seed.copy_from_slice(seed_bytes);
+		seed
 	};
 
 	// 3. Check that the decrypted Quorum Key public key matches the one
