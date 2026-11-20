@@ -3,6 +3,7 @@
 use libfuzzer_sys::fuzz_target;
 
 use qos_p256::encrypt::AesGcm256Secret;
+use zeroize::Zeroizing;
 
 #[derive(Clone, Debug, arbitrary::Arbitrary)]
 pub struct FuzzKeyDataStruct {
@@ -17,7 +18,9 @@ fuzz_target!(|input: FuzzKeyDataStruct| {
 
 	// private key generation is non-deterministic: not ideal
 	// let random_key = AesGcm256Secret::generate();
-	let key = match AesGcm256Secret::from_bytes(input.key) {
+	let key = match AesGcm256Secret::from_bytes(Box::new(Zeroizing::new(
+		input.key,
+	))) {
 		Ok(pair) => pair,
 		Err(_err) => {
 			return;

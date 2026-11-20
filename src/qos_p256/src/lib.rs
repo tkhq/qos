@@ -109,11 +109,11 @@ impl From<qos_hex::HexError> for P256Error {
 pub fn derive_secret(
 	seed: &Zeroizing<[u8; MASTER_SEED_LEN]>,
 	derive_path: &[u8],
-) -> Result<Zeroizing<[u8; P256_SECRET_LEN]>, P256Error> {
+) -> Result<Box<Zeroizing<[u8; P256_SECRET_LEN]>>, P256Error> {
 	let hk = Hkdf::<Sha512>::new(Some(derive_path), &seed[..]);
 
-	let mut buf = Zeroizing::new([0u8; P256_SECRET_LEN]);
-	hk.expand(&[], &mut *buf).map_err(|_| P256Error::HkdfExpansionFailed)?;
+	let mut buf = Box::new(Zeroizing::new([0u8; P256_SECRET_LEN]));
+	hk.expand(&[], &mut buf[..]).map_err(|_| P256Error::HkdfExpansionFailed)?;
 
 	Ok(buf)
 }
@@ -135,12 +135,15 @@ fn write_owner_only(path: &Path, buf: &[u8]) -> std::io::Result<()> {
 }
 
 /// Helper function to generate a `N` length byte buffer.
+///
+/// The bytes are written directly to the heap so moving the result does not
+/// leave copies on the stack.
 #[must_use]
-pub fn bytes_os_rng<const N: usize>() -> Zeroizing<[u8; N]> {
-	let mut key = [0u8; N];
-	OsRng.fill_bytes(&mut key);
+pub fn bytes_os_rng<const N: usize>() -> Box<Zeroizing<[u8; N]>> {
+	let mut bytes = Box::new(Zeroizing::new([0u8; N]));
+	OsRng.fill_bytes(&mut bytes[..]);
 
-	Zeroizing::new(key)
+	bytes
 }
 
 /// P256 private key pair for signing and encryption. Internally this uses a
@@ -150,7 +153,7 @@ pub fn bytes_os_rng<const N: usize>() -> Zeroizing<[u8; N]> {
 pub struct P256Pair {
 	p256_encrypt_private: P256EncryptPair,
 	sign_private: P256SignPair,
-	master_seed: Zeroizing<[u8; MASTER_SEED_LEN]>,
+	master_seed: Box<Zeroizing<[u8; MASTER_SEED_LEN]>>,
 	aes_gcm_256_secret: AesGcm256Secret,
 }
 
@@ -177,7 +180,7 @@ impl P256Pair {
 				p256_sign_secret.to_vec(),
 			))?,
 			master_seed,
-			aes_gcm_256_secret: AesGcm256Secret::from_bytes(*aes_gcm_secret)?,
+			aes_gcm_256_secret: AesGcm256Secret::from_bytes(aes_gcm_secret)?,
 		})
 	}
 
@@ -247,6 +250,9 @@ impl P256Pair {
 			derive_secret(master_seed, P256_ENCRYPT_DERIVE_PATH)?;
 		let sign_secret = derive_secret(master_seed, P256_SIGN_DERIVE_PATH)?;
 		let aes_gcm_256_encrypt = derive_secret(master_seed, AES_GCM_256_PATH)?;
+		let mut boxed_master_seed =
+			Box::new(Zeroizing::new([0u8; MASTER_SEED_LEN]));
+		boxed_master_seed.copy_from_slice(&master_seed[..]);
 
 		Ok(Self {
 			p256_encrypt_private: P256EncryptPair::from_bytes(
@@ -255,9 +261,9 @@ impl P256Pair {
 			sign_private: P256SignPair::from_bytes(&Zeroizing::new(
 				sign_secret.to_vec(),
 			))?,
-			master_seed: master_seed.clone(),
+			master_seed: boxed_master_seed,
 			aes_gcm_256_secret: AesGcm256Secret::from_bytes(
-				*aes_gcm_256_encrypt,
+				aes_gcm_256_encrypt,
 			)?,
 		})
 	}
@@ -310,8 +316,8 @@ impl P256Pair {
 
 		let hex_str = std::str::from_utf8(&hex_bytes)
 			.map_err(|_| P256Error::InvalidMasterSeed)?;
-		let mut master_seed = Zeroizing::new([0u8; MASTER_SEED_LEN]);
-		qos_hex::decode_to_buf(hex_str.trim(), &mut *master_seed)
+		let mut master_seed = Box::new(Zeroizing::new([0u8; MASTER_SEED_LEN]));
+		qos_hex::decode_to_buf(hex_str.trim(), &mut master_seed[..])
 			.map_err(|_| P256Error::InvalidMasterSeed)?;
 		Self::from_master_seed(&master_seed)
 	}
@@ -644,7 +650,7 @@ mod test {
 
 		assert!(
 			std::any::type_name_of_val(&master_seed)
-				.starts_with("zeroize::Zeroizing<")
+				.starts_with("alloc::boxed::Box<zeroize::Zeroizing<")
 		);
 		assert!(
 			std::any::type_name_of_val(
@@ -656,7 +662,7 @@ mod test {
 		);
 		assert!(
 			std::any::type_name_of_val(&derived_secret)
-				.starts_with("zeroize::Zeroizing<")
+				.starts_with("alloc::boxed::Box<zeroize::Zeroizing<")
 		);
 		assert!(
 			std::any::type_name_of_val(&hex_master_seed)

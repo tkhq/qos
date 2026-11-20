@@ -107,12 +107,12 @@ pub(in crate::protocol) fn provision(
 	let master_seed = state.provisioner.build()?;
 	state.provisioner.clear();
 
-	let master_seed: Zeroizing<[u8; qos_p256::MASTER_SEED_LEN]> =
-		Zeroizing::new(
-			master_seed[..]
-				.try_into()
-				.map_err(|_| ProtocolError::IncorrectSecretLen)?,
-		);
+	let seed_bytes: &[u8; qos_p256::MASTER_SEED_LEN] = master_seed[..]
+		.try_into()
+		.map_err(|_| ProtocolError::IncorrectSecretLen)?;
+	let mut master_seed =
+		Box::new(Zeroizing::new([0u8; qos_p256::MASTER_SEED_LEN]));
+	master_seed.copy_from_slice(seed_bytes);
 	let pair = qos_p256::P256Pair::from_master_seed(&master_seed)?;
 	let public_key_bytes = pair.public_key().to_bytes();
 
