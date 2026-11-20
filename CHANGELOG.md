@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## `qos_client` - [0.16.4](https://github.com/tkhq/qos/compare/qos_client-v0.16.3...qos_client-v0.16.4) - 2026-11-16
+
+### Other
+- update Cargo.lock dependencies
+
+## `qos_net` - [0.16.4](https://github.com/tkhq/qos/compare/qos_net-v0.16.3...qos_net-v0.16.4) - 2026-11-16
+
+### Other
+- update Cargo.lock dependencies
+
+## `qos_core` - [0.16.4](https://github.com/tkhq/qos/compare/qos_core-v0.16.3...qos_core-v0.16.4) - 2026-11-16
+
+### Other
+- update Cargo.lock dependencies
+
+## `qos_hex` - [0.16.4](https://github.com/tkhq/qos/compare/qos_hex-v0.16.2...qos_hex-v0.16.4) - 2026-11-16
+
+### Other
+- Use Apache 2.0 for qos_hex crate
+
 ## `qos_hex` - [0.16.3](https://github.com/tkhq/qos/compare/qos_hex-v0.16.2...qos_hex-v0.16.3) - 2026-11-16
 
 ### Other
