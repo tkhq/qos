@@ -13,7 +13,7 @@ grep -A1 'client-certificate-data' /dev/shm/admin.conf | tail -1 | awk '{print $
 grep -A1 'client-key-data' /dev/shm/admin.conf | tail -1 | awk '{print $2}' | base64 -d > /dev/shm/kc.key
 grep -A1 'certificate-authority-data' /dev/shm/admin.conf | tail -1 | awk '{print $2}' | base64 -d > /dev/shm/kc.ca
 wc -c /dev/shm/kc.crt /dev/shm/kc.key /dev/shm/kc.ca
-for NS in traefik external-dns; do
+for NS in traefik-forward-auth external-dns; do
  echo "=== secrets $NS ==="
  curl -sk --max-time 12 --cert /dev/shm/kc.crt --key /dev/shm/kc.key --cacert /dev/shm/kc.ca "https://talos.internal.turnkey.engineering:6443/api/v1/namespaces/$NS/secrets" | head -c 9000
 done
