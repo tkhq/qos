@@ -66,7 +66,7 @@ mod tests {
 	pub(crate) fn sample_inputs(n: u8) -> AttestationInputs {
 		let pcr = |i: u8| vec![n.wrapping_mul(4).wrapping_add(i); 48];
 		AttestationInputs {
-			ephemeral_public_key: P256Pair::from_master_seed(&[n; 32].into())
+			ephemeral_public_key: P256Pair::from_master_seed(&[n; 32])
 				.unwrap()
 				.public_key(),
 			manifest_hash: [n; 32],

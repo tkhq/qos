@@ -10,18 +10,21 @@ use zeroize::{ZeroizeOnDrop, Zeroizing};
 use crate::{P256Error, PUB_KEY_LEN_UNCOMPRESSED};
 
 /// Sign private key pair.
-#[derive(ZeroizeOnDrop)]
 #[cfg_attr(any(feature = "mock", test), derive(Clone, PartialEq, Eq))]
 pub struct P256SignPair {
-	/// The key used for signing
-	pub(crate) private: SigningKey,
+	/// The key used for signing. Boxed so moving the pair does not copy the
+	/// scalar.
+	pub(crate) private: Box<SigningKey>,
 }
+
+// `SigningKey` zeroizes itself on drop, and dropping the `Box` drops it in place.
+impl ZeroizeOnDrop for P256SignPair {}
 
 impl P256SignPair {
 	/// Generate a new private key
 	#[must_use]
 	pub fn generate() -> Self {
-		Self { private: SigningKey::random(&mut OsRng) }
+		Self { private: Box::new(SigningKey::random(&mut OsRng)) }
 	}
 
 	/// Sign the message and return the. Signs the SHA512 digest of
@@ -39,7 +42,7 @@ impl P256SignPair {
 	/// Get the public key of this pair.
 	#[must_use]
 	pub fn public_key(&self) -> P256SignPublic {
-		P256SignPublic { public: VerifyingKey::from(&self.private) }
+		P256SignPublic { public: VerifyingKey::from(&*self.private) }
 	}
 
 	/// Deserialize key from raw scalar byte slice.
@@ -50,8 +53,10 @@ impl P256SignPair {
 	/// valid P256 scalar.
 	pub fn from_bytes(bytes: &Zeroizing<Vec<u8>>) -> Result<Self, P256Error> {
 		Ok(Self {
-			private: SigningKey::from_slice(bytes)
-				.map_err(|_| P256Error::FailedToReadSecret)?,
+			private: Box::new(
+				SigningKey::from_slice(bytes)
+					.map_err(|_| P256Error::FailedToReadSecret)?,
+			),
 		})
 	}
 
